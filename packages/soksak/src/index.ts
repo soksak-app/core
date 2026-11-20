@@ -12,6 +12,7 @@ export type {
   Rule,
   Side,
   SnapMode,
+  FrameMode,
   SoksakOptions,
   SoksakState,
   TreeNode,

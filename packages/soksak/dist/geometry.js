@@ -8,7 +8,7 @@
  *
  * Every function here is pure and takes the plane as an argument.
  */
-import { AXES, SPAN, fixedSize, other } from './card.js';
+import { AXES, SPAN, fixedSize, other, spanOf } from './card.js';
 /** The frames of a card on the lo or the hi side of an axis. */
 function frameSide(frames, axis, side) {
     if (!frames)
@@ -122,7 +122,7 @@ function blank(plane, axis, slot) {
         return false;
     const [lo] = SPAN[axis];
     for (const card of plane.cards) {
-        if (card[lo] === slot && fixedSize(card, axis) !== null)
+        if (card[lo] === slot && spanOf(card, axis) === 1 && fixedSize(card, axis) !== null)
             return false;
     }
     return true;
@@ -133,7 +133,8 @@ export function heldSizes(plane, axis) {
     const [lo] = SPAN[axis];
     const held = new Array(lines(plane, axis).length - 1).fill(null);
     for (const card of plane.cards) {
-        const size = fixedSize(card, axis);
+        // A cell declares a size only when a card spans exactly it; a card that spans more keeps its size in its node of the tree.
+        const size = spanOf(card, axis) === 1 ? fixedSize(card, axis) : null;
         if (size === null)
             continue;
         // default: a null slot holds no fixed card yet, so the first fixed size is taken as is.

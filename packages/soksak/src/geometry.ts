@@ -9,7 +9,7 @@
  * Every function here is pure and takes the plane as an argument.
  */
 
-import { AXES, SPAN, fixedSize, other } from './card.js';
+import { AXES, SPAN, fixedSize, other, spanOf } from './card.js';
 import type { Axis, Card, Rect, Side } from './card.js';
 
 /** Everything a coordinate depends on. */
@@ -163,7 +163,7 @@ function blank(plane: Plane, axis: Axis, slot: number): boolean {
   if (a[slot + 1] - a[slot] >= 1e-9) return false;
   const [lo] = SPAN[axis];
   for (const card of plane.cards) {
-    if (card[lo] === slot && fixedSize(card, axis) !== null) return false;
+    if (card[lo] === slot && spanOf(card, axis) === 1 && fixedSize(card, axis) !== null) return false;
   }
   return true;
 }
@@ -173,7 +173,8 @@ export function heldSizes(plane: Plane, axis: Axis): (number | null)[] {
   const [lo] = SPAN[axis];
   const held = new Array<number | null>(lines(plane, axis).length - 1).fill(null);
   for (const card of plane.cards) {
-    const size = fixedSize(card, axis);
+    // A cell declares a size only when a card spans exactly it; a card that spans more keeps its size in its node of the tree.
+    const size = spanOf(card, axis) === 1 ? fixedSize(card, axis) : null;
     if (size === null) continue;
     // default: a null slot holds no fixed card yet, so the first fixed size is taken as is.
     held[card[lo]] = Math.max(held[card[lo]] ?? 0, size);

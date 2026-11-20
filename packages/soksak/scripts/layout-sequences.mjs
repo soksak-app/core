@@ -96,9 +96,21 @@ export function assertInvariants(grid, profile = "constrained") {
       gaps.set(a[hi], gap);
     }
     if (profile === "fixed") {
+      // A cut scales the px sizes of its kids by one factor, so the cards that are kids of one cut along the axis are drawn at
+      // one ratio to what they declare; two cuts scale their own declarations, each by its own factor.
       const asked = axis === "x" ? "width" : "height";
-      const ratios = cards.filter((c) => c[hi] - c[lo] === 1 && c[asked] > 0.01).map((c) => rects.get(c.id)[size] / c[asked]);
-      if (ratios.length) require(Math.max(...ratios) - Math.min(...ratios) < 0.001, "fixed-size-ratio", axis);
+      const cuts = [];
+      const visit = (node) => {
+        if (node.box !== undefined) return visit(node.inner);
+        if (node.cut === undefined) return;
+        if (node.cut === axis) cuts.push(node.kids.map((kid) => kid.node).filter((kid) => kid.card !== undefined && kid[asked] > 0.01));
+        for (const kid of node.kids) visit(kid.node);
+      };
+      visit(grid.toJSON().root);
+      for (const held of cuts) {
+        const ratios = held.map((c) => rects.get(c.card)[size] / c[asked]);
+        if (ratios.length) require(Math.max(...ratios) - Math.min(...ratios) < 0.001, "fixed-size-ratio", axis);
+      }
     }
   }
   let refused = null;
@@ -147,7 +159,8 @@ export function generateOperation(grid, next, step, { profile = "ordinary", meth
       args = divider ? [divider.axis, divider.line, grid.boundaryPos(divider.axis, divider.line) + (next() - 0.5) * 0.4 * (divider.axis === "x" ? grid.width : grid.height)] : [axis, 0, 0];
       break;
     }
-    case "setSize": args = [id(), axis, next() < 0.3 ? null : Math.floor(next() * 400)]; break;
+    // A negative size is the size that setSize refuses: a px size belongs to its card, whatever cells it spans.
+    case "setSize": { const roll = next(); args = [id(), axis, roll < 0.3 ? null : roll < 0.4 ? -1 : Math.floor(((roll - 0.4) / 0.6) * 400)]; break; }
     case "setFixed": args = [id(), next() < 0.5]; break;
     case "resize": args = [Math.floor(next() * 1700), Math.floor(next() * 1000)]; break;
     default: throw new Error(`unknown layout operation: ${method}`);

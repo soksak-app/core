@@ -76,15 +76,15 @@ test("an unknown id is answered, not thrown on, and changes nothing", () => {
   assert.equal(JSON.stringify(grid.toJSON()), before, "and none of them changed anything");
 });
 
-test("a size a slot cannot hold is refused", () => {
+test("a size that is no size is refused, and a card spanning two slots takes one", () => {
   const grid = three();
-  // A card spanning two slots has no px size to set: R5 defines the size as
-  // one slot.
+  // A px size belongs to the card of the tree (R5), so a card that spans the
+  // cells of another cut takes one.
   const wide = grid.cards.find((c) => c.c1 - c.c0 > 1 || c.r1 - c.r0 > 1);
   assert.ok(wide, "the fixture has a card spanning more than one slot");
   const axis = wide.c1 - wide.c0 > 1 ? "x" : "y";
-  assert.equal(grid.setSize(wide.id, axis, 100), false, `${wide.id} spans more than one slot`);
-  assert.equal(grid.card(wide.id)[axis === "x" ? "width" : "height"], undefined);
+  assert.equal(grid.setSize(wide.id, axis, 100), true, `${wide.id} spans more than one slot`);
+  assert.equal(grid.card(wide.id)[axis === "x" ? "width" : "height"], 100);
 
   for (const bad of [-1, NaN, Infinity, -Infinity]) {
     assert.equal(grid.setSize("sidebar", "x", bad), false, String(bad));

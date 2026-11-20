@@ -356,3 +356,14 @@ test("a close gives a share to a sibling cut that holds a fixed card", () => {
   assert.equal(grid.rect("a").h, 600);
   assert.equal(grid.rect("f").w, 200);
 });
+
+test("a withdraw that leaves only fixed cards in its cut is refused, and the fixed cards keep their fractions", () => {
+  const state = { root: { cut: "y", kids: [
+    { share: 0.5, node: { cut: "x", kids: [{ share: 0.4, node: { card: "a" } }, { share: 0.3, node: { card: "f1", fixed: true } }, { share: 0.3, node: { card: "f2", fixed: true } }] } },
+    { share: 0.5, node: { card: "b" } },
+  ] } };
+  const grid = new Soksak(state, { width: 1000, height: 600, gap: 24, minSize: 96 });
+  const before = JSON.stringify(grid.toJSON());
+  assert.throws(() => grid.withdraw("a"), /card a leaves no card of its cut that takes its space/);
+  assert.equal(JSON.stringify(grid.toJSON()), before, "a refusal changes nothing");
+});
