@@ -1043,7 +1043,9 @@ export class GroupTree {
     const placed = ids.find(isPlace);
     if (placed !== undefined) return new Error(`card ${placed} is a window sidebar; a card does not move beside it`);
     const inside = (card) => card === id || (this.find(card)?.path ?? []).some((node) => node.card === id);
-    if (ids.every(inside)) return new Error(`card ${id} cannot move into itself`);
+    // The card itself names its vacated slot, which is no change; a target inside it is refused (docs/spec/groups.md#vacated-slot).
+    const itself = ids.length === 1 && ids[0] === id && side !== "strip";
+    if (!itself && ids.every(inside)) return new Error(`card ${id} cannot move into itself`);
     if ((side === "centre" || side === "strip") && ids.length > 1) return new Error(`card ${id} moves to the ${side} of one card, not of ${ids.join(", ")}`);
     if (side === "strip" && this.isGroup(id)) return new Error(`card ${id} is a group and holds no tabs`);
     if (side === "strip" && this.isGroup(ids[0])) return new Error(`card ${ids[0]} is a group and has no tab strip`);
@@ -1071,12 +1073,14 @@ export class GroupTree {
   }
 
   /**
-   * Whether the card id already stands where a move to side of target puts it (docs/spec/groups.md#idempotency); a move beside the kids
-   * of a cut is never already done.
+   * Whether the card id already stands where a move to side of target puts it (docs/spec/groups.md#idempotency): target and side name its
+   * vacated slot (docs/spec/groups.md#vacated-slot), or it is the neighbour of target toward side in the level of target, or with centre
+   * the member of the group card target at the right edge of its rectangle.
    */
   moved(id, at, side) {
     const found = this.find(id);
     const ids = targetIds(at);
+    if (found && this.grid.vacates(id, ids, side)) return true;
     if (!found || ids.length !== 1) return false;
     const [target] = ids;
     if (side === "centre") {
@@ -1097,16 +1101,17 @@ export class GroupTree {
   move(id, target, side) {
     const refused = this.checkMove(id, target, side);
     if (refused) throw refused;
-    if (side === "centre" && this.find(targetIds(target)[0]) && !this.isGroup(targetIds(target)[0])) {
-      this.exchange(id, targetIds(target)[0]);
-      return true;
-    }
     const names = targetIds(target).join(", ");
     const refusal = () => new Error(`card ${id} cannot move to ${side} of ${names}`);
     if (side !== "centre" && !SIDES.includes(side)) throw refusal();
     const found = this.find(id);
     if (!found || !targetIds(target).every((card) => this.find(card))) throw refusal();
+    // A move that names the vacated slot or the place where the card stands is no change, before an exchange with a content card.
     if (this.moved(id, target, side)) return false;
+    if (side === "centre" && !this.isGroup(targetIds(target)[0])) {
+      this.exchange(id, targetIds(target)[0]);
+      return true;
+    }
     const operation = `move to ${side} of ${names}`;
     // The target is the node after the withdraw of the moving card (docs/spec/groups.md#target-search): a cut or a run that holds the
     // moving card names the kids that remain.

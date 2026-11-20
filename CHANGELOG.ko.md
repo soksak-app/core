@@ -5,6 +5,17 @@
 
 ## 2026-11-20
 
+- F966-1-1-3 (seed drop 검사, page): page의 seed 검사가 I5와 I9도 판정하고, page의 `core.card.move`와 `core.tab.move`가 layout library의 `vacatedSlot`으로 commit 뒤에 정한 target을 답하므로 그 답으로 되풀이해도 변화가 없다. `exposure.json`의 두 사본이 `core.tab.move`의 결과를 object로 선언한다.
+- F966-3-3-3 (최소 아래의 거부, page): group tree의 모든 operation이 가장 깊은 node를 밝히는 layout library의 판정에 이르므로, page는 바꾸지 않은 채 F966-3-3-2의 공유 case 다섯을 통과한다. library와 group tree의 판정, 그리고 boundary move의 범위를 빼는 fault injection은 그 case를 실패시킨다.
+- F966-3-3-5 (바뀌지 않은 box, page): page layout library가 Go처럼 그 안 card의 범위가 바뀔 때만 box를 판정하므로, 창 크기가 최소 아래로 남긴 box 안에서 box의 사각형을 지키는 split은 더 이상 거부되지 않는다.
+- F966-1-1-2 (seed drop 검사, Go): Go workbench의 seed 검사가 생성한 layout 셋에서 I3, I5, I6, I9를 판정하고, `core.card.move`와 `core.tab.move`는 commit 뒤에 정한 target, 곧 옮긴 card의 빈 slot이나 card를 함께 쓰는 tab의 card와 index로 답하므로 답으로 되풀이하면 변경이 없다. exchange는 toggle로서 `{card}`로 답한다.
+- F966-3-3-4 (바뀌지 않은 box, Go): Go layout model이 그 안 card의 범위가 바뀔 때만 box를 판정하므로, 창 크기가 최소 아래로 남긴 box 안에서 box의 사각형을 지키는 split은 더 이상 거부되지 않는다.
+- F966-3-3-2 (최소 아래의 거부): specification이 거부가 밝히는 가장 깊은 node, 곧 그 안의 어떤 node도 최소 아래가 아닌데 재귀적 최소 아래인 깊이 우선 순서의 tree의 첫 node를 정하고, `groups.json`의 공유 case 다섯이 모든 operation의 거부, boundary move의 멈춤, 그리고 어떤 card도 더 작게 그리지 않는 dissolve와 close를 판정한다. Go가 이를 통과한다.
+- F966-3-3-1 (exchange의 frame, Go): Go grid의 보관된 frame이 이제 각 card의 id를 그 span과 함께 비교하므로, exchange로 서로의 cell에 들어간 두 card는 새 자리의 frame으로 그려진다. 전에는 group card의 member와 exchange한 root level의 card가 group card의 frame 안에 그려져 최소 크기 아래로 거부되었다.
+- F966-3-2 (commit에서의 수축): `groups.json`의 공유 case 다섯이 중첩된 group에서, member 하나만 남은 group card가 operation의 target이 정해진 뒤 그 member로 바뀌는 것을 두 workbench에서 판정하며, 두 구현은 바뀌지 않은 채 이를 통과했다.
+- F966-3-1-5-1 (빈 slot, Go): target이 움직이는 card나 box의 빈 slot, 곧 어느 side든 node 자신이나 그 가운데, 또는 그 쪽으로 그 앞이나 뒤의 kid를 가리키는 move는 변경이 없으므로, 자기 card 옆에 놓은 card의 유일한 tab은 그 card를 미리 보이고 아무것도 바꾸지 않는다. `core.card.move`는 card 안의 target만 거부한다.
+- F966-3-1-5-2 (vacated slot, page): target이 움직이는 card나 box의 vacated slot, 곧 그 node 자신이나 그쪽을 향한 그 옆의 kid를 가리키는 이동은 변화 없음이다. layout library의 `vacates`가 그것을 알리고 group tree의 `moved`가 그것을 먼저 답한다. `core.card.move`는 card 안의 target만 거부하고, card의 유일한 tab을 그 card 옆으로 끌면 card를 preview로 보이며 놓을 때 아무것도 바꾸지 않는다. seeded 검사는 `vacates`가 가리키는 drop에서 I6을 판정한다.
+- F966-1-1-1-2 (card를 닫는 drop의 preview, page): card의 유일한 tab을 content card의 가운데나 tab strip에 놓는 drop의 preview는 그 tab이 떠난 card가 닫힌 뒤의 target이다. release와 preview가 합류의 한 layout 단계를 실행하기 때문이다. seeded 검사는 생성된 layout 셋의 모든 tab과 모든 group card를 pointer로 서로 다른 모든 target 위로 끌고, `core.drag`의 preview를 결과와(I3), card 자신이나 그것이 선 side에의 drop을 변화 없음과(I6) 비교한다.
 - F1003: 두 host에서 `service-messages`의 wake는 그 줄의 종류의 routine(`service-messages.reply`, `.process`, `.closed`, `.image`, `.message`, `.dropped`)으로도 세므로, 표본 추출이 persistent service 줄의 작업을 메시지 종류로 나눈다.
 - F1000-2.1: Go host와 Rust host는 `agent.surface`를 connection의 process의 surface로 답한다. socket에서 peer process를 읽고, parent가 실행 중인 sidecar인 첫 process까지 parent process를 따라가며, `processes`를 선언한 sidecar에 process query로 묻고 사슬을 다시 읽으며, 1014로 거부한다(`docs/spec/sidecars.md#process-identity`). `packages/plugin-api`는 `sidecar.json`의 `processes` `true`를 받아들인다.
 - F1002: Go host는 `endpoint.json`의 pid가 게시자를 가리키는지 정할 때 종료 중인 프로세스(`P_WEXIT`)를 끝난 것으로 보므로, exit 이벤트 뒤의 프로세스가 좀비가 되기 전에 게시자를 가리키지 않는다. 같은 계약의 Rust 시험은 exit 이벤트를 기다린다.

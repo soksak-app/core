@@ -3923,6 +3923,18 @@
           "properties": {
             "card": {
               "type": "string"
+            },
+            "target": {
+              "type": [
+                "string",
+                "array"
+              ],
+              "items": {
+                "type": "string"
+              }
+            },
+            "side": {
+              "type": "string"
             }
           }
         }
@@ -4152,7 +4164,27 @@
           "required": ["tab", "card", "zone"]
         },
         "result": {
-          "type": "null"
+          "type": "object",
+          "properties": {
+            "tab": {
+              "type": "string"
+            },
+            "card": {
+              "type": [
+                "string",
+                "array"
+              ],
+              "items": {
+                "type": "string"
+              }
+            },
+            "zone": {
+              "type": "string"
+            },
+            "index": {
+              "type": "integer"
+            }
+          }
         }
       },
       {

@@ -492,6 +492,18 @@ box는 거기 섰던 카드의 fraction이 아닌 자리의 크기로 들어가�
 카드가 선언한 px 크기를 받는다. 다른 모든 node는 사각형을 유지한다. 하나가 다른 하나를 담는 두 node,
 `fixed` 카드, layout이 담지 않은 id는 거부되고, 결과는 `insert`처럼 판정된다.
 
+`vacates(id, target, side)`는 `target`과 `side`가 카드나 box인 node `id`의 vacated
+slot을 가리키는지다(`docs/spec/groups.md#vacated-slot`). 곧 그 node 자신, 또는 그
+cut에서 그 앞의 kid와 그쪽을 향한 side `right`나 `bottom`, 또는 그 뒤의 kid와 그쪽을
+향한 side `left`나 `top`이며, kid는 그 id로, cut이면 그 member로 가리킨다. 거기로의
+move는 `id`의 `withdraw`의 역이므로 workbench는 그것을 변화 없음으로 한다.
+
+`vacatedSlot(id)`는 node `id`의 그런 slot 하나를 `{target, side}`로 준다
+(`docs/spec/groups.ko.md#idempotency`). 곧 그 cut에서 그 앞의 kid와 그쪽을 향한 side,
+없으면 그 뒤의 kid와 그쪽을 향한 side이며, kid는 그 id로, cut이면 그 member로
+가리키고, 곁에 `fixed` 카드가 아닌 kid가 없으면 `{target: id, side: "right"}`다.
+workbench는 move를 그것으로 답하므로, 그 답으로 되풀이해도 변화가 없다.
+
 `group(target, side, node, {box, data?, head})`는 카드나 box인 `target`의 group
 split이다. id가 `box`이고 페이로드가 `data`이며 head가 `head` px인 box가 그 cut에서
 `target`의 자리를 그 fraction과 함께 차지하고, 그 inner node는 `side`의 축을 따르는

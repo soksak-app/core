@@ -341,6 +341,21 @@ export declare class Soksak {
      */
     insert(target: string | readonly string[], side: Side, node: TreeNode): string;
     /**
+     * Whether `target` and `side` name the vacated slot of the node `id`, a card or a box (docs/spec/groups.md#vacated-slot): the node
+     * itself, or the kid beside it in its cut with the side toward it, named by its id or by the members of a cut. A move there is no
+     * change.
+     */
+    vacates(id: string, target: string | readonly string[], side: string): boolean;
+    /**
+     * The vacated slot of the node `id`, a card or a box, as `{target, side}` (docs/spec/groups.md#idempotency): the kid before it in its cut
+     * with the side toward it, or else the kid after it, by its id or by the members of a cut, and the node itself with `right` when no kid
+     * that is no fixed card is beside it. A move answers it, so that a repeat with the reply is no change.
+     */
+    vacatedSlot(id: string): {
+        target: string | string[];
+        side: string;
+    };
+    /**
      * EXCHANGE (packages/soksak/docs/layout.md#add-and-remove): puts the node `a`,
      * a card or a box, where the node `b` stands and `b` where `a` stood. Each
      * place keeps its fraction and the px size that a card there declares, and
@@ -396,8 +411,11 @@ export declare class Soksak {
      */
     private measure;
     /**
-     * The text of the deepest node that the last operation moved and that is
-     * drawn below its minimum, or null. The minimum of a node is recursive: a card
+     * The text of the deepest node whose drawn rectangle the last operation
+     * changed and that is drawn below its minimum, or null: the first such node in
+     * the depth-first order of the tree, a box after the nodes inside it. The
+     * rectangle of a card is its own, that of a box the extent of the cards inside
+     * it. The minimum of a node is recursive: a card
      * needs `minSize` and on y the heads drawn inside its rectangle, a card that
      * keeps a px size the smaller of that size and `minSize`, a fixed card with a
      * px size the smaller of that size and the size it had, another fixed card the

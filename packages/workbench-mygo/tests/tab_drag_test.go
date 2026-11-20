@@ -297,11 +297,15 @@ func TestTheMoveCommandRefusesWhatADropCannotDo(t *testing.T) {
 		{map[string]string{"tab": tab, "card": other, "zone": "middle"}, "invalid params for core.tab.move"},
 		{map[string]string{"tab": tab, "card": "absent", "zone": "centre"}, "no card absent"},
 		{map[string]string{"tab": "absent", "card": other, "zone": "centre"}, "no tab absent"},
-		{map[string]string{"tab": only, "card": other, "zone": "left"}, "cannot move to the left of " + other},
 	} {
 		if _, err := f.answer("core.tab.move", refused.params); err == nil || !strings.Contains(err.Error(), refused.text) {
 			t.Fatalf("%v answered %v", refused.params, err)
 		}
+	}
+	// The only tab of a card toward a side of its own card names the vacated slot of the card and changes nothing
+	// (docs/spec/groups.md#vacated-slot).
+	if _, err := f.answer("core.tab.move", map[string]string{"tab": only, "card": other, "zone": "left"}); err != nil || !hasTab(f, other, only) {
+		t.Fatalf("the only tab toward a side of its own card answered %v with the tabs %v", err, f.tabsOf(other))
 	}
 	if _, err := f.answer("core.tab.move", map[string]string{"tab": tab, "card": other, "zone": "centre"}); err != nil {
 		t.Fatal(err)

@@ -772,7 +772,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
     event.preventDefault();
     return registry.run("core.tab.menu", { tab: button.dataset.tabId, x: event.clientX, y: event.clientY });
   });
-  registry.command("core.tab.move", ({ tab, card, zone, index }) => { moveTab(tab, card, zone, index); });
+  registry.command("core.tab.move", ({ tab, card, zone, index }) => moveTab(tab, card, zone, index));
   registry.command("core.picker.pick", ({ index }) => { pickItem(index); });
   registry.command("core.picker.close", () => { closePicker("command"); });
   // Escape in the native menu answers with this command (card.js). The menu is the picker, the only native menu.

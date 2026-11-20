@@ -1039,7 +1039,14 @@ let dropShown = false;
  */
 function dropRect(fromId, hit) {
   const ids = targetIds(hit.card);
-  if (hit.zone === "strip" || (hit.zone === "centre" && !tree.isGroup(ids[0]))) return tree.rect(ids[0]);
+  // A join puts the tab into the target, and the card that it leaves without tabs closes, so the preview is the target after the same
+  // close of the release (docs/spec/groups.md#invariants, I3).
+  if (hit.zone === "strip" || (hit.zone === "centre" && !tree.isGroup(ids[0]))) {
+    return tree.probe(() => {
+      leaveJoined(fromId, ids[0], tabsOf(grid.card(fromId)).length - 1);
+      return tree.rect(ids[0]);
+    });
+  }
   const only = tabsOf(grid.card(fromId)).length === 1;
   return tree.probe(() => {
     try {
@@ -1140,6 +1147,17 @@ function hideDrop() {
 }
 
 /**
+ * The layout step of a join of a tab of the card fromId into the card targetId, which left tabs remain in fromId after: a card left
+ * without tabs closes when it can. The release and the preview of a join both run it, so the preview is the result. Returns whether the
+ * card closed.
+ */
+function leaveJoined(fromId, targetId, left) {
+  if (targetId === fromId || left > 0 || !tree.canClose(fromId)) return false;
+  tree.close(fromId);
+  return true;
+}
+
+/**
  * T4 and T5 decide the layout operation.
  * The origin card has 1 tab    → move the card. No empty card remains.            move()
  * It has 2 or more tabs        → keep the card and move only the tab.             splitToward()
@@ -1159,8 +1177,7 @@ function dropTab(fromId, tabId, hit) {
     target.data.tabs.splice(hit.index, 0, moving);
     target.data.activeId = moving.id;
     focusOn(target.id);
-    if (target.id !== fromId && tabsOf(from).length === 0 && tree.canClose(fromId)) tree.close(fromId);
-    else settleActiveTab(from);
+    if (!leaveJoined(fromId, target.id, tabsOf(from).length)) settleActiveTab(from);
     return settle();
   }
 
@@ -1169,8 +1186,7 @@ function dropTab(fromId, tabId, hit) {
     removeTab(from, tabId);
     appendTab(target, moving);
     focusOn(target.id);
-    if (tabsOf(from).length === 0 && tree.canClose(fromId)) tree.close(fromId);
-    else settleActiveTab(from);
+    if (!leaveJoined(fromId, target.id, tabsOf(from).length)) settleActiveTab(from);
     return settle();
   }
 
@@ -2788,6 +2804,20 @@ export function moveTab(tabId, cardId, zone, index) {
   }
   restoreFullscreen();
   dropTab(from.id, tabId, hit);
+  return movedTab(tabId);
+}
+
+/**
+ * The reply of core.tab.move, the target of the tab as resolved after the commit (docs/spec/groups.md#idempotency): a tab that shares its
+ * card with other tabs is answered by that card with the zone strip and its index, and the only tab of a card by the vacated slot of its
+ * card.
+ */
+function movedTab(tabId) {
+  const card = cardOfTab(tabId);
+  const held = tabsOf(card);
+  if (held.length > 1) return { tab: tabId, card: card.id, zone: "strip", index: held.findIndex((t) => t.id === tabId) };
+  const { target, side } = grid.vacatedSlot(card.id);
+  return { tab: tabId, card: target, zone: side };
 }
 
 /** Chooses one item of the open picker layer. */
@@ -3028,11 +3058,17 @@ export function moveCard(id, target, side, index) {
   layoutChangeable(card);
   if (index !== undefined && side !== "strip") throw new Error("index is given with side strip only");
   if (side === "strip") return joinStrip(card, to, index);
+  const place = to.length === 1 ? to[0] : to;
+  // A move to the centre of a content card is an exchange, a toggle that answers the card alone; every other move answers its target as
+  // resolved after the commit, the vacated slot of the card (docs/spec/groups.md#idempotency).
+  const exchange = side === "centre" && !tree.isGroup(to[0]) && !grid.vacates(card, place, side);
   // A move that changes the layout focuses the moved card, as the drop of the only tab of a card does; a move to where the card
   // stands changes nothing and keeps the focus (docs/spec/groups.md#focus).
-  if (tree.move(card, to.length === 1 ? to[0] : to, side)) focusCard(card);
+  if (tree.move(card, place, side)) focusCard(card);
   else settle();
-  return { card };
+  if (exchange) return { card };
+  const { target: slot, side: toward } = grid.vacatedSlot(card);
+  return { card, target: slot, side: toward };
 }
 
 /** Joins every tab of the content card card, in its order, to the content card of the list to at index, and closes card. */
@@ -3053,7 +3089,8 @@ function joinStrip(card, to, index) {
   tree.close(card);
   focusOn(into.id);
   settle();
-  return { card };
+  // The join closes card, so the reply names the card that holds its tabs (docs/spec/groups.md#idempotency).
+  return { card: into.id };
 }
 
 /**

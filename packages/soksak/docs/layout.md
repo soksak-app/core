@@ -561,6 +561,20 @@ its rectangle. Two nodes of which one holds the other, a
 `fixed` card and an id that the layout does not hold are refused, and the
 result is judged as an `insert` is.
 
+`vacates(id, target, side)` is whether `target` and `side` name the vacated slot
+of the node `id`, a card or a box (`docs/spec/groups.md#vacated-slot`): the node
+itself, or the kid before it in its cut with the side toward it, `right` or
+`bottom`, or the kid after it with the side toward it, `left` or `top`, named by
+its id or by the members of a cut. A move there is the inverse of the `withdraw`
+of `id`, so a workbench makes it no change.
+
+`vacatedSlot(id)` is one such slot of the node `id` as `{target, side}`
+(`docs/spec/groups.md#idempotency`): the kid before it in its cut with the side
+toward it, or else the kid after it with the side toward it, by its id or by the
+members of a cut, and `{target: id, side: "right"}` when no kid that is no
+`fixed` card is beside it. A workbench answers a move with it, so that a repeat
+with the reply is no change.
+
 `group(target, side, node, {box, data?, head})` is the group split of the card
 or box `target`: a box with the id `box`, the payload `data` and a head of
 `head` px takes the place of `target` in its cut, with its fraction, and its
