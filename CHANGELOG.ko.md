@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F899-8, F911: 체크리스트가 F899-8과 F911을 완료로 표시한다. 그 항목들과 연결된 plugin·sidecar 항목이 완료되었다.
 - F969-9: page와 mygo workbench가 layout library 저장 tree의 `withdraw(id)`, `insert(target, side, node)`, `even()`으로 배치를 계획하고 적용한다. library는 더 이상 box 인자를 받지 않는다. plan test는 저장 tree로 space를 만들고, 한국어 skill은 plan, apply, `core.layout.move`를 설명한다. 검증: rebase된 branch에서 page test 31개 중 5개와 mygo test build의 Red, page test 31/31과 mygo package의 Green.
 - F1006-12: Go와 Rust role file writer가 `role.md` 옆에 `role.ko.md`를 쓴다. 내용은 fingerprint 사례의 `texts_ko`에 고정한 한국어 첫 줄, `ko` 텍스트, `role.md`의 fingerprint다. 검증: `ko`가 없는 writer에 대한 Go와 Rust role file test의 Red, Go host package와 Rust role file, roles, workspace test의 Green.
 - F1006-12: `docs/spec/cases/agent-roles/fingerprint.json`의 non-ASCII 지문 사례 `reviewer`가 지어낸 한국어 단어 대신 영어 용어 `reviewer`로 역할을 부르고, 기대 지문을 다시 계산했다. 검증: Go와 Rust role file test가 새 값으로 통과한다.

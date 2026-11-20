@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F899-8, F911: The checklist marks F899-8 and F911 complete, whose items and linked plugin and sidecar items are complete.
 - F969-9: The page and the mygo workbench plan and apply an arrangement through `withdraw(id)`, `insert(target, side, node)` and `even()` of the stored tree of the layout library, which no longer takes a box argument; the plan tests build their spaces from stored trees, and the Korean skill states the plan, the apply and `core.layout.move`. Verification: Red of 5 of 31 page tests and of the build of the mygo tests on the rebased branch; Green of the page tests 31 of 31 and of the mygo package.
 - F1006-12: The Go and Rust role file writers write `role.ko.md` beside `role.md`, with the Korean first line pinned in `texts_ko` of the fingerprint cases, the `ko` text and the fingerprint of `role.md`. Verification: Red of the Go and Rust role file tests against the writer without `ko`; Green of the Go host package and the Rust role file, roles and workspace tests.
 - F1006-12: The non-ASCII fingerprint case `reviewer` of `docs/spec/cases/agent-roles/fingerprint.json` names the role with the English term `reviewer` instead of a coined Korean word, and its expected fingerprint is recomputed. Verification: the Go and Rust role file tests pass with the new value.
