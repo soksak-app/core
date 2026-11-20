@@ -227,6 +227,7 @@ func (t *GroupTree) within(side Side, line, x, y, strip float64) float64 {
 // TargetAt resolves a drop at x, y by the target search of the rule of sizes (docs/spec/groups.md#target-search), or nil for a point on
 // a window sidebar or in no card or box, as a drag that enters at that point.
 func (t *GroupTree) TargetAt(x, y float64, options TargetOptions) *DropTarget {
+	// silent: a drop at one point continues no drag, so it keeps no anchor.
 	hit, _ := t.DragAt(nil, x, y, options)
 	return hit
 }

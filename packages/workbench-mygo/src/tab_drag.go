@@ -175,6 +175,7 @@ func (s *Shell) dragTabTo(drag *tabDrag, x, y float32) {
 		drag.index = s.stripIndex(drag.hit.Card, x, drag.tab)
 	}
 	if drag.hit != nil {
+		// silent: the preview is refused only for a target on a window sidebar, which the cards of the target name without the zone.
 		if card, _ := zoneOf(drag.hit); !slices.ContainsFunc(card, isPlace) {
 			drag.preview = s.dropRect(drag.card, drag.hit)
 		}

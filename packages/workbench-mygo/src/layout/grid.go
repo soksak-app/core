@@ -1294,6 +1294,7 @@ func (g *Grid) standing(axis Axis, line int) (int, bool) {
 		return 0, false
 	}
 	for j, kid := range g.root.Kids {
+		// silent: a kid of the root cut starts at its low line, so the search reads only that line.
 		if lo, _ := g.at[kid.Node].on(axis); lo == line {
 			return j, true
 		}

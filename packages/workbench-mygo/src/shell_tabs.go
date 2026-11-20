@@ -294,6 +294,7 @@ func (s *Shell) activityProjects() ([]ActivityProject, error) {
 		for _, space := range project.Spaces {
 			stored := space.Layout
 			if project.ID == s.active && space.ID == project.ActiveSpaceID && s.plane != nil && s.planes != nil {
+				// silent: the activities read the cards and tabs of the state; the leader and the last card number name no activity.
 				state, _, _ := s.planes.Stored()
 				drawn, err := json.Marshal(map[string]any{"state": state})
 				if err != nil {

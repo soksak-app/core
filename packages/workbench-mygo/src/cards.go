@@ -258,6 +258,7 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides 
 	mark := spanWidth(c, ui.Span{Text: tabCloseMark, Size: size, Font: family})
 	chrome := 2*m.tabPadX + m.tabGap + mark + 2*m.tabXPad
 	widths := make([]float64, len(tabs))
+	// silent: shownActivities gives the activities of the tabs, the group cards, the projects and the spaces; the tab widths read only those of the tabs.
 	tabActivities, _, _, _ := s.shownActivities()
 	activeWidth, activeLeft, left := 0.0, 0.0, 0.0
 	for i, tab := range tabs {
@@ -604,6 +605,7 @@ func (s *Shell) drawTab(c *ui.Context, card string, tab layout.Tab, on bool, siz
 			start += m.noticeDot + m.tabGap
 		}
 		// The icon of the activity of the tab stands after the notice and before the name (docs/spec/activity.md#drawing).
+		// silent: shownActivities gives the activities of the tabs, the group cards, the projects and the spaces; a tab reads only those of the tabs.
 		tabs, _, _, _ := s.shownActivities()
 		activity, iconAt := tabs[tab.ID], start
 		if activity != "" {

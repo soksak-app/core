@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1016-10.7: The mygo workbench reads the leader of a level through one reader with its stated reason, and its other ignored results state which result they read.
 - F1016-10.5: The group tree reads the member of a card through one helper with its stated reason, and its other defaults state their reasons; a move reads the paths of its targets without a default after it refused unknown targets.
 - F1016-10.4: The fallback check reads a `||` between two membership tests `.has(…)` or `.includes(…)` as a boolean, not as a value fallback.
 - F1016-10.3: `headsAbove` of the layout library refuses an id that is no card or box of the grid instead of answering 0, the head of a box and the frames of a card are read without a default, and the other defaults of the library state their reasons.

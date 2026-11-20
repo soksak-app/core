@@ -205,6 +205,7 @@ func (s *Shell) planeRules() []planeRule {
 			continue
 		}
 		frame, _ := s.planes.Rect(id) // silent: id is a group card of the tree.
+		// silent: id is a group card of the tree, so it has a header.
 		head, _ := s.planes.HeadRect(id)
 		frames = append(frames, frame)
 		inner = append(inner, layout.Rect{X: frame.X, Y: head.Y + head.H, W: frame.W, H: frame.Y + frame.H - head.Y - head.H})
@@ -320,6 +321,7 @@ func (s *Shell) drawGroupHead(c *ui.Context, id, name string, width, height floa
 	nameWidth := spanWidth(c, ui.Span{Text: name, Size: size, Font: family}) + 2*m.tabPadX
 	// The icon of the activity of the group card stands before its name, so the name takes its width and the gap of the header with it
 	// (docs/spec/activity.md#drawing).
+	// silent: shownActivities gives the activities of the tabs, the group cards, the projects and the spaces; a group header reads only those of the group cards.
 	_, groupActivities, _, _ := s.shownActivities()
 	activity := groupActivities[id]
 	if activity != "" {

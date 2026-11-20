@@ -205,6 +205,12 @@ func (t *GroupTree) Leader(key string) (string, bool) {
 	return "", false
 }
 
+// leaderOf is the leader of the level key, or "" for a level without a leader.
+func (t *GroupTree) leaderOf(key string) string {
+	lead, _ := t.Leader(key) // silent: Leader gives "" for a level without a leader.
+	return lead
+}
+
 // setLeader sets the leader of the level key.
 func (t *GroupTree) setLeader(key, id string) {
 	if key == "" {
@@ -279,7 +285,9 @@ func (t *GroupTree) span(n *node) (c0, c1, r0, r1 int) {
 func (t *GroupTree) ordered(nodes []*node) []*node {
 	out := slices.Clone(nodes)
 	sort.SliceStable(out, func(i, j int) bool {
+		// silent: the order reads only the first column line and the first row line of each member.
 		ac0, _, ar0, _ := t.span(out[i])
+		// silent: the order reads only the first column line and the first row line of each member.
 		bc0, _, br0, _ := t.span(out[j])
 		if ar0 != br0 {
 			return ar0 < br0
@@ -593,7 +601,7 @@ func (t *GroupTree) detach(id string) string {
 	t.rev++
 	members, key := t.container(id)
 	*members = slices.DeleteFunc(*members, func(n *node) bool { return n.card == id })
-	if lead, _ := t.Leader(key); lead == id {
+	if t.leaderOf(key) == id {
 		t.setLeader(key, "")
 		for _, n := range t.ordered(t.level(key)) {
 			if n.card != id && !IsWindowSide(n.card) {
@@ -615,7 +623,7 @@ func (t *GroupTree) attach(key string, n *node) {
 	} else if parent := t.groupNode(key); parent != nil {
 		parent.members = append(parent.members, n)
 	}
-	if lead, _ := t.Leader(key); lead == "" && !IsWindowSide(n.card) {
+	if t.leaderOf(key) == "" && !IsWindowSide(n.card) {
 		t.setLeader(key, n.card)
 	}
 }
@@ -636,7 +644,7 @@ func (t *GroupTree) collapse(key string) (string, error) {
 	} else {
 		*members = slices.Delete(*members, at, at+1)
 	}
-	if lead, _ := t.Leader(outer); lead == key {
+	if t.leaderOf(outer) == key {
 		t.setLeader(outer, sole.card)
 	}
 	if err := t.grid.Unwrap(key); err != nil {
@@ -688,6 +696,7 @@ func (t *GroupTree) splitCard(target string, side Side, id string, data json.Raw
 	fresh := false
 	if axisOf(side) == "y" {
 		drawn, _ := t.Rect(target) // silent: requireCard found the card.
+		// silent: requireCard found the card, so the grid draws it.
 		grid, _ := t.grid.Rect(target)
 		fresh = drawn.Y > grid.Y
 	}
@@ -710,11 +719,14 @@ func (t *GroupTree) levelSplit(target string, side Side, id string) {
 		upper, lower = id, target
 	}
 	up, _ := t.Rect(upper) // silent: both cards are in the tree after the split.
+	// silent: both cards are in the tree after the split.
 	down, _ := t.Rect(lower)
+	// silent: lower is in the tree after the split; a content card of the root level has a nil node, which the next lines make.
 	_, n, _ := t.find(lower)
 	if n == nil {
 		n = &node{card: lower}
 	}
+	// silent: the split reads only the first row line of the lower card.
 	_, _, line, _ := t.span(n)
 	// A line that other cards stand on stays, so that a split moves no line of another card.
 	pieces := idSet(append(t.inside(t.nodeOf(upper)), t.inside(n)...))
@@ -761,7 +773,7 @@ func (t *GroupTree) CreateGroup(id string, side Side, data json.RawMessage) (str
 		} else {
 			*members = append(*members, n)
 		}
-		if lead, _ := t.Leader(key); lead == id {
+		if t.leaderOf(key) == id {
 			t.setLeader(key, group)
 		}
 		return nil
@@ -797,7 +809,7 @@ func (t *GroupTree) Dissolve(id string) error {
 		}
 	}
 	*members = slices.Concat((*members)[:at], inner, (*members)[at+1:])
-	if lead, _ := t.Leader(key); lead == id {
+	if t.leaderOf(key) == id {
 		t.setLeader(key, n.leader)
 	}
 	if err := t.grid.Unwrap(id); err != nil {
@@ -1082,8 +1094,7 @@ func (t *GroupTree) exchange(id, other string) error {
 		}
 		ma, ka := t.container(id)
 		mb, kb := t.container(other)
-		la, _ := t.Leader(ka)
-		lb, _ := t.Leader(kb)
+		la, lb := t.leaderOf(ka), t.leaderOf(kb)
 		na, nb := t.nodeOf(id), t.nodeOf(other)
 		ia := slices.IndexFunc(*ma, func(n *node) bool { return n.card == id })
 		ib := slices.IndexFunc(*mb, func(n *node) bool { return n.card == other })
@@ -1195,7 +1206,7 @@ func (t *GroupTree) Move(id string, target Target, side string) error {
 		// A card that moves inside its own level does not leave it, so it keeps the leader mark of the level that detach passes on
 		// (docs/spec/groups.md#leader).
 		_, level := t.container(id)
-		lead, _ := t.Leader(level)
+		lead := t.leaderOf(level)
 		// A move is a withdraw and an insert: the card or the box of the group card leaves its cut, whose other kids take its space in
 		// proportion, and lands beside the target, or with centre at the right edge of the tree of the group card target
 		// (docs/spec/groups.md#closing).
@@ -1292,6 +1303,7 @@ func (t *GroupTree) MoveBoundary(axis Axis, line int, px float64, allowSnap bool
 	before := t.drawn()
 	kept := t.snapshot()
 	moved := t.grid.MoveBoundary(axis, line, px, allowSnap)
+	// silent: the check reads only whether a card is drawn below minSize, not its rectangle.
 	if card, _ := t.below(before); card == "" {
 		return moved
 	}
@@ -1302,6 +1314,7 @@ func (t *GroupTree) MoveBoundary(axis Axis, line int, px float64, allowSnap bool
 		middle := (good + bad) / 2
 		t.restore(kept)
 		t.grid.MoveBoundary(axis, line, middle, false)
+		// silent: the check reads only whether a card is drawn below minSize, not its rectangle.
 		if card, _ := t.below(before); card == "" {
 			good = middle
 		} else {
@@ -1320,6 +1333,7 @@ func (t *GroupTree) CenterBoundary(axis Axis, line int) float64 {
 	kept := t.snapshot()
 	at := t.grid.CenterBoundary(axis, line)
 	t.keepLines()
+	// silent: the check reads only whether a card is drawn below minSize, not its rectangle.
 	if card, _ := t.below(before); card != "" {
 		t.restore(kept)
 		return t.grid.BoundaryPos(axis, line)

@@ -266,6 +266,7 @@ type projectTabDrag struct{ id string }
 // projectTab describes the tab of a project. The tab of the shown project has the color of the project.
 func (s *Shell) projectTab(c *ui.Context, project projectRecord) barTab {
 	radius := s.radiusSmall()
+	// silent: shownActivities gives the activities of the tabs, the group cards, the projects and the spaces; a project tab reads only those of the projects.
 	_, _, activities, _ := s.shownActivities()
 	return barTab{key: "project-" + project.ID, title: project.Title, on: project.ID == s.active, tint: project.Color, rename: renameTarget{"project", project.ID},
 		id: project.ID, activity: activities[project.ID], activityName: "core.activity.project",
