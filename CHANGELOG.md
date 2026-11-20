@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F899-7.5-11: An injected message names its sender by the text that the sending tab shows at the injection, its label or its name, on one line and cut to 40 characters (`docs/spec/messaging.md#injected-message`).
 - F899-7.5-7: `sok message send` adds the request for a report to the folder of the sender, `--reply` writes a report with no request under the token prefix `report-`, and the agent skill, the MCP descriptions and the usage state both and that an agent in a soksak terminal receives each message as injected input (`docs/spec/messaging.md#report-request`).
 - F899-7.5-10: The layout of a new space carries the origin member of each tab, so the window of a project that another page opened starts its view tabs (`docs/spec/projects.md#tab-origin`).
 - F899-7.5-9: The layout stores the name of a new tab as `탭 <n>` without the mark of its plugin, `core.grid` reports that name as `title`, and the strip, the tab list and the question about unsaved changes draw the mark before it, in the page and the mygo workbench (`docs/spec/example-model.md#card-tabs`).

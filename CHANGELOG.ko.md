@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F899-7.5-11: 주입 message는 보낸 쪽을 주입할 때 보내는 tab이 보이는 text, 즉 label이나 이름으로 한 줄에 40자까지 부른다(`docs/spec/messaging.md#injected-message`).
 - F899-7.5-7: `sok message send`는 보내는 쪽 folder로의 보고 요청을 덧붙이고, `--reply`는 요청 없는 보고를 token 접두사 `report-`로 쓰며, agent skill, MCP 설명, usage는 둘과 soksak terminal 안의 agent가 각 message를 주입된 입력으로 받음을 밝힌다(`docs/spec/messaging.md#report-request`).
 - F899-7.5-10: 새 space의 layout은 각 tab의 origin member를 담으므로, 다른 page가 연 project의 window가 view tab을 시작한다(`docs/spec/projects.md#tab-origin`).
 - F899-7.5-9: layout은 새 탭의 이름을 plugin의 mark 없이 `탭 <n>`으로 저장하고, `core.grid`는 그 이름을 `title`로 알리며, 탭 줄, 탭 목록, 저장하지 않은 변경에 대한 질문은 그 앞에 mark를 그린다. Page와 mygo workbench 모두 그렇다(`docs/spec/example-model.md#card-tabs`).
