@@ -5,6 +5,8 @@
 
 ## 2026-11-20
 
+- F1006-5.3: Registers the registration of the commands `core.tab.role {tab, role}` and `core.tab.role.confirm {fingerprint}` as four units (page, mygo shell, Go host, Rust host); the units wait for F1006-5.2.
+- F1006-4: The paste form for agents that cannot read files is removed from `docs/spec/agent-roles.md` (en and ko) and from the case file `docs/spec/cases/agent-roles/fingerprint.json`, because no declaration selects it and every launched CLI reads files. The first message of every agent CLI is done; its evidence is in the row.
 - F1006-6: The agent skill, the MCP instructions and `docs/spec/cli.md` state how an agent opens a tab with an agent CLI and a role through `core.layout.open` with `program`, `args` and `role`, and the line form of confirmation. The sentences name only the refusals that the code gives and omit the planned role commands that no code implements.
 - F1006-2: The terminal checklist row P192 starts an agent CLI through `program` and `args` of the sidecar `open`. The vt and alacritty sidecars already implement the members and the `program not found` error on their `origin/main` (S233, S241); their `open_program_test` passes 10 of 10 with the real PATH. The core rows F1006-2, F1006-2-1 and F1006-2-2 are `[o]`, and the spec `docs/spec/agent-roles.md#start-parameters` needed no change.
 - F1016-13: The plane of the mygo workbench is the element `core.plane` of the element tree and of the window snapshot, covers the plane without the margin of the stage, so a press on that margin keeps the focus as on the page, and a test presses the plane outside every card.
