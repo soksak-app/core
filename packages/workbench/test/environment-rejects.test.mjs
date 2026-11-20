@@ -4,9 +4,7 @@ import test from "node:test";
 // An environment.json with a reference that does not match registers nothing and fails.
 const environmentFile = {
   runtime: "runtime",
-  workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [
-    { id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: "side", title: "m" }] },
-  ] } },
+  workspace: { focus: "main", grid: { root: { card: "main", tabs: [{ plugin: "side", title: "m" }] } } },
   sidebars: { sets: [], links: [] },
 };
 const installed = { plugins: [{ id: "side", package: "@fixture/side", version: "0.0.1",

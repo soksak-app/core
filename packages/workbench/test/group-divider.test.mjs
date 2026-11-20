@@ -16,16 +16,20 @@ const { registry } = await import("../exposure.js");
 await installCoreExposure({ library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
   memorySaver: await pageMemorySaver() });
 
-const content = (id, c0, c1, r0, r1) => {
+const content = (id) => {
   const tabs = [{ id: `tab-${id}`, plugin: "fixture-verify", title: id }];
-  return { id, c0, c1, r0, r1, data: { tabs, activeId: tabs[0].id } };
+  return { card: id, data: { tabs, activeId: tabs[0].id } };
 };
 
 /** The group card-4 of card-1 above card-2 in the left half, beside card-3 across the whole height. */
 function arrange() {
   plane.adopt({
-    state: { xs: [0, 0.5, 1], ys: [0, 0.5, 1], cards: [content("card-1", 0, 1, 0, 1), content("card-2", 0, 1, 1, 2), content("card-3", 1, 2, 0, 2)] },
-    groups: [{ card: "card-4", name: "그룹 1", leader: "card-1", members: ["card-1", "card-2"] }],
+    state: { root: { cut: "x", kids: [
+      { share: 0.5, node: { box: "card-4", data: { name: "그룹 1", leader: "card-1" }, inner: { cut: "y", kids: [
+        { share: 0.5, node: content("card-1") }, { share: 0.5, node: content("card-2") },
+      ] } } },
+      { share: 0.5, node: content("card-3") },
+    ] } },
     leader: "card-4", lastCard: 4, focusedId: "card-1", named: 0, windowSidebars: {}, sidebars: {},
   }, "spc-aaaaaa");
   page.redraw();

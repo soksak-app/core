@@ -135,12 +135,14 @@ export declare class Soksak {
     private keptOf;
     /**
      * The px size of each kid of a cut along its axis, from the room inside the
-     * cut: the corridors between the kids first, then the px sizes of the kids
-     * that keep one, and the rest to the other kids by their fractions. A kid gets
-     * at least the costs inside it, its own corridors, px sizes, frames and heads,
-     * and the others share what is left. When the room does not hold the px sizes
-     * and one `minSize` for the kids that take a fraction, the px sizes are drawn
-     * scaled by one factor; when no kid takes a fraction, they divide the room in
+     * cut (packages/soksak/docs/layout.md#the-model): the corridors between the
+     * kids first, then the px sizes of the kids that keep one, and the rest to the
+     * other kids by their fractions. A kid gets at least the costs inside it, its
+     * own corridors, px sizes, frames and heads, and the others share what is left.
+     * A fixed card with a px size is a cost of its level and keeps it while the
+     * room holds the costs and one `minSize` for the kids that share; the px sizes
+     * of the kids that share are scaled by one factor to leave the kids that take a
+     * fraction one `minSize`; when no kid takes a fraction, they divide the room in
      * their proportion. Null when the room does not hold the costs of the kids.
      */
     private kidSizes;
@@ -199,7 +201,7 @@ export declare class Soksak {
     get cards(): readonly Card[];
     card(id: string): Card | undefined;
     /**
-     * Replace a card's payload.
+     * Replace the payload of a card or a box.
      *
      * `data` is opaque to this library.
      */
@@ -249,6 +251,8 @@ export declare class Soksak {
      * on its top line are drawn inside its top, as inside the top of a card.
      */
     rect(id: string): Rect | undefined;
+    /** The px of the heads of the boxes around the card or the box `id` that the grid draws inside the top of its rectangle. */
+    headsAbove(id: string): number;
     rects(): Map<string, Rect>;
     /**
      * Where a drop lands — which card, and whether on it or beside it.
@@ -343,6 +347,23 @@ export declare class Soksak {
      * Throws its refusal and changes nothing.
      */
     withdraw(id: string): TreeNode;
+    /**
+     * The group split of the card or box `target` (packages/soksak/docs/layout.md#add-and-remove): the box `init.box` with the payload
+     * `init.data` and a head of `init.head` px takes the place of `target` in its cut, with its fraction, and its inner node is a cut of two
+     * halves along the axis of `side` that holds `target` and `node` toward `side`. The result is judged once with the head and the frames of
+     * the new box, so a refusal names the deepest node that the group would draw below its minimum. Throws its refusal and changes nothing.
+     */
+    group(target: string, side: Side, node: TreeNode, init: {
+        box: string;
+        data?: unknown;
+        head: number;
+    }): void;
+    /**
+     * Takes the box `id` out of the tree (packages/soksak/docs/layout.md#add-and-remove): its inner node takes its place in its cut, and a
+     * cut along the axis of that cut joins it with every kid drawn at the size it had. The head of the box leaves with it. Throws its refusal
+     * and changes nothing.
+     */
+    unwrap(id: string): void;
     /** Gives the kids of every cut that take a fraction equal fractions (packages/soksak/docs/layout.md#cuts). */
     even(): void;
     /** Whether a node keeps its size on an axis whatever its fraction: a fixed card, or a node drawn at a px size there. */
@@ -413,7 +434,7 @@ export declare class Soksak {
      * card elsewhere on the plane.
      */
     private stillFits;
-    /** True when the cut leaves every card the smaller of its current size and `minSize`. */
+    /** Whether `split` of the card `id` along `axis` would succeed. */
     canSplit(id: string, axis: Axis): boolean;
     /**
      * Cut one card in two.
@@ -429,27 +450,30 @@ export declare class Soksak {
      * `init.newLine` cuts at a new line at the centre even where a line that the
      * card spans across lies inside it, for a host that places the line itself.
      *
-     * Returns the new card's id, or null when the halves do not fit.
+     * Returns the new card's id. Throws its refusal and changes nothing: an
+     * unknown axis, an id that the layout holds, an unknown or fixed card, a card
+     * drawn no wider than the corridor of the cut, and a cut that draws a node
+     * below its minimum, which names the deepest such node.
      */
     split(id: string, axis: Axis, init?: {
         id?: string;
         data?: unknown;
         newLine?: boolean;
-    }): string | null;
+    }): string;
     /**
      * Cut a card and put the new one on a named side. The ids are not swapped:
-     * toward `left` and `top` the new card takes the near part.
+     * toward `left` and `top` the new card takes the near part. Its refusal is
+     * the refusal of `split`.
      */
     splitToward(id: string, side: Side, init?: {
         id?: string;
         data?: unknown;
         newLine?: boolean;
-    }): string | null;
+    }): string;
     /**
      * Cuts the card `id` along `axis` at the position of `cutAt`: the card keeps
      * its part of the extent before the cut and the new card takes the part after
-     * it, or with `first` the new card takes the part before it. The new card is
-     * recorded as paid by the card.
+     * it, or with `first` the new card takes the part before it.
      */
     private splitAt;
     private nextId;
@@ -460,8 +484,13 @@ export declare class Soksak {
      */
     private holdsFixed;
     private removable;
-    /** Whether `close` would remove the card. */
+    /** Whether `close` would remove the card or the box `id`. */
     canClose(id: string): boolean;
+    /**
+     * Whether the box `id` can close: a card that is not fixed stands outside it, and its cut holds another kid that is no fixed card,
+     * which takes its share.
+     */
+    private boxClosing;
     /**
      * The cut that holds the node leaving with the card `id` and its index in
      * that cut, or null when the card cannot close: it is fixed or the last card,
@@ -469,12 +498,12 @@ export declare class Soksak {
      */
     private closing;
     /**
-     * Remove a card (packages/soksak/docs/layout.md#boundaries): the node that
+     * Remove a card, or a box with every card inside it (packages/soksak/docs/layout.md#add-and-remove): the node that
      * leaves with it goes out of its cut, and the fractions of the other kids of
      * the cut that are no fixed card scale by one factor, so their ratios hold; a
-     * fixed card keeps the size it is drawn at. Returns false when the card is `fixed`,
-     * when it is the last card, or when every other kid of its cut holds a fixed
-     * card.
+     * fixed card keeps the size it is drawn at. Returns false, and changes nothing,
+     * when the card is `fixed`, when it is the last card or the box holds every card
+     * that is not fixed, or when every other kid of its cut is a fixed card.
      */
     close(id: string): boolean;
     private closeAlong;

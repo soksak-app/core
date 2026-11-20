@@ -30,6 +30,11 @@ function idsOf(node, out = []) {
 }
 
 /** The stored tree with every card and box id renamed. */
+/** A refusal text with every card id that it names given back its original id. */
+function normalizeText(text, normalize) {
+  return text.replace(/\bcard (\S+)/g, (_, id) => `card ${normalize(id)}`);
+}
+
 function renameTree(node, rename) {
   if (node.cut) return { ...node, kids: node.kids.map((kid) => ({ ...kid, node: renameTree(kid.node, rename) })) };
   if (node.box) return { ...node, box: rename(node.box), inner: renameTree(node.inner, rename) };
@@ -69,10 +74,19 @@ export function assertRoleIndependence({ state, options, operations, check, seed
       for (const index of idArguments[operation.method]) args[index] = rename(args[index]);
       const bornAt = createdArgument[operation.method];
       if (bornAt !== undefined && args[bornAt]?.id !== undefined) args[bornAt].id = rename(args[bornAt].id);
-      const result = grid[operation.method](...args);
+      let result;
+      let refusal = null;
+      try {
+        result = grid[operation.method](...args);
+      } catch (error) {
+        // A split throws its refusal; every other method answers a refusal with false or null.
+        if (operation.method !== "split" && operation.method !== "splitToward") throw error;
+        refusal = error.message;
+      }
       check?.(grid);
       const after = snapshot(grid, normalize);
-      const outcome = result === null || result === false ? "refused" : "successful";
+      const outcome = refusal !== null || result === null || result === false ? "refused" : "successful";
+      if (refusal !== null) result = { throws: normalizeText(refusal, normalize) };
       if (outcome === "refused") {
         assert.deepEqual(grid.toJSON(), beforeState, `refused operation changed state: ${operation.method}`);
         assert.deepEqual(after, observations.at(-1).state, `refused operation changed state: ${operation.method}`);

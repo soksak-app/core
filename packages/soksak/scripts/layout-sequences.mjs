@@ -4,6 +4,9 @@ import { Soksak, checkState } from "../dist/index.js";
 export const W = 1600;
 export const H = 1200;
 const sides = ["left", "right", "top", "bottom"];
+/** The methods of a sequence that throw their refusal. */
+const throwsRefusal = new Set(["split", "splitToward"]);
+
 export const ordinaryOperations = ["split", "close", "moveBoundary"];
 export const fixedOperations = ["splitToward", "close", "move", "insertAt", "moveTo", "moveBoundary"];
 export const allOperations = [...new Set([...ordinaryOperations, ...fixedOperations, "setSize", "setFixed", "resize"])];
@@ -96,14 +99,18 @@ export function assertInvariants(grid, profile = "constrained") {
       gaps.set(a[hi], gap);
     }
     if (profile === "fixed") {
-      // A cut scales the px sizes of its kids by one factor, so the cards that are kids of one cut along the axis are drawn at
-      // one ratio to what they declare; two cuts scale their own declarations, each by its own factor.
+      // A cut scales the px sizes of its fixed cards by one factor and the px sizes of its other kids by another
+      // (packages/soksak/docs/layout.md#the-model), so the fixed cards of one cut along the axis are drawn at one ratio to what they
+      // declare, and so are its other cards; two cuts scale their own declarations, each by its own factors.
       const asked = axis === "x" ? "width" : "height";
       const cuts = [];
       const visit = (node) => {
         if (node.box !== undefined) return visit(node.inner);
         if (node.cut === undefined) return;
-        if (node.cut === axis) cuts.push(node.kids.map((kid) => kid.node).filter((kid) => kid.card !== undefined && kid[asked] > 0.01));
+        if (node.cut === axis) {
+          const sized = node.kids.map((kid) => kid.node).filter((kid) => kid.card !== undefined && kid[asked] > 0.01);
+          cuts.push(sized.filter((kid) => kid.fixed === true), sized.filter((kid) => kid.fixed !== true));
+        }
         for (const kid of node.kids) visit(kid.node);
       };
       visit(grid.toJSON().root);
@@ -189,9 +196,17 @@ export function runSequence(grid, { seed = 0, steps = 0, profile = "ordinary", m
       report.trace.push(entry);
       const methodCounts = report.byMethod[operation.method] ??= counts();
       try {
-        const result = grid[operation.method](...operation.args);
-        entry.result = result;
-        entry.outcome = result === false || result === null ? "refused" : "successful";
+        let result;
+        let refusal = null;
+        try {
+          result = grid[operation.method](...operation.args);
+        } catch (error) {
+          // A split throws its refusal; every other method of a sequence answers a refusal with false or null.
+          if (!throwsRefusal.has(operation.method)) throw error;
+          refusal = error.message;
+        }
+        entry.result = refusal === null ? result : { throws: refusal };
+        entry.outcome = refusal !== null || result === false || result === null ? "refused" : "successful";
         report.counts[entry.outcome]++;
         methodCounts[entry.outcome]++;
         const after = JSON.stringify({ state: grid.toJSON(), width: grid.width, height: grid.height });

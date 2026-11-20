@@ -465,7 +465,11 @@ grid.visits;                      // even이 방문한 node 수
 `withdraw(id)`는 카드나 box인 node `id`를 그 cut에서 꺼낸다. cut의 다른 kid의 fraction은
 close와 같이 한 인수로 늘어나며, kid가 하나만 남은 cut은 그 kid로 바뀐다. 그 kid의 kid
 가운데 그것을 담는 cut의 축을 따르는 cut은 그 cut에 합쳐지고, 모든 kid는 그려진 크기를
-유지한다. 떠난 node, 곧
+유지한다. px 크기를 유지하는 kid는 fraction과 상관없이 그 크기로 그려지고, 모든 kid가 px
+크기를 유지하는 cut은 그 공간을 그 비율로 나누므로, 합쳐지기 전에 선언보다 크게 그려질 수
+있다. 그래서 cut에서 `fixed`가 아니고 px 크기를 유지하는 각 카드는 px 크기를 유지하는
+node를 거쳐 그려진 크기로 기록되고, `fixed` 카드는 그 px 크기로 cut의 비용으로 남는다.
+합쳐지는 kid는 남은 것의 fraction을 받으므로 두 cut 밖의 어떤 kid도 바뀌지 않는다. 떠난 node, 곧
 카드 node이거나 inner node를 가진 box node를 돌려주고 `insert`가 그것을 받으므로,
 box는 member의 비율을 유지한 채 놓인다. 마지막 카드와 `fixed` 카드는 거부된다.
 
@@ -568,7 +572,8 @@ grid.move("terminal", "browser", "right");      // 거절되면 false 이고 아
 새 카드에 주므로 `left` 와 `top` 은 두 구간을 맞바꾼다. id 는 맞바꾸지 않는다.
 거부된 split은 throw하고 아무것도 바꾸지 않는다. 모르는 축이나 쪽, layout이 가진 id,
 모르는 카드나 `fixed` 카드, cut의 corridor보다 넓지 않게 그려진 카드(`card <id> would
-be 0x<h>, below its minimum <m>x<m>`, `y`에서는 `<w>x0`), 그리고 node를 최소보다 작게
+be 0x<h>, below its minimum <m>x<m>`, `y`에서는 `<w>x0`. `minSize`가 0이면 `card <id> would be
+<w>x<h> and have no area`), 그리고 node를 최소보다 작게
 그리는 cut이며, 마지막은 그런 가장 깊은 node를 가리킨다.
 
 ## 드롭이 내려앉는 곳
@@ -657,8 +662,10 @@ share를 받지 않는다. fixed 카드를 담은 cut이나 box는 다른 kid처
 | `gap`, `minSize`, `grabSize`, `snapDistance`, `snap`, `frames` | 옵션. 생성 후에도 읽고 쓸 수 있다 |
 
 축을 받는 모든 메서드는 `"x"` 나 `"y"` 가 아닌 값을 거절한다. 방향을 받는 모든
-메서드는 `left`, `right`, `top`, `bottom` 이 아닌 값을 거절한다. 거절은 `null`,
-`false` 또는 빈 답을 반환하고 아무것도 바꾸지 않는다.
+메서드는 `left`, `right`, `top`, `bottom` 이 아닌 값을 거절한다. 거절은 아무것도
+바꾸지 않는다. `split`, `splitToward`, `insert`, `withdraw`, `group`, `unwrap` 은
+거절을 그 text와 함께 throw하고, 다른 모든 메서드는 `null`, `false` 또는 빈 답을
+반환한다.
 
 `toJSON()` 은 `{root}` 를 돌려주며, close는 tree만 읽으므로 그것으로 다시 만든 grid 는
 카드를 같은 방식으로 닫는다. `checkState` 는 생성자가

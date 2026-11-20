@@ -19,7 +19,7 @@
 import { axisOf } from './card.js';
 import type { Axis, Side } from './card.js';
 import { cardsOf, cloneNode, isBox, isCard, isCut } from './tree.js';
-import type { CardNode, CutNode, Kid, TreeNode } from './tree.js';
+import type { BoxNode, CardNode, CutNode, Kid, TreeNode } from './tree.js';
 
 /** What an operation of the cuts reads of the grid. */
 export interface Input {
@@ -67,6 +67,22 @@ class Index {
     }
   }
 
+  /** Writes each card of `node` that keeps a px size on `axis`, through nodes that keep one, and is no fixed card at the px size it is drawn at. */
+  private keepDrawn(node: TreeNode, axis: Axis): void {
+    if (!this.input.keeps(node, axis)) return;
+    if (isCard(node)) {
+      if (node.fixed === true || (axis === 'x' ? node.width : node.height) === undefined) return;
+      const drawn = this.input.content(node, axis);
+      if (drawn > 0) {
+        if (axis === 'x') node.width = drawn;
+        else node.height = drawn;
+      }
+      return;
+    }
+    if (isBox(node)) return this.keepDrawn(node.inner, axis);
+    for (const kid of node.kids) this.keepDrawn(kid.node, axis);
+  }
+
   /** Puts `next` where `node` stands: in its cut, inside its box, or as the root. */
   replace(node: TreeNode, next: TreeNode): void {
     const holder = this.parent.get(node);
@@ -75,6 +91,11 @@ class Index {
       // A cut along the axis of its cut gives that cut its kids, so the tree stays canonical.
       if (isCut(next) && next.cut === holder.cut) {
         const axis = holder.cut;
+        // A node that keeps a px size is drawn at its px size whatever its fraction, and a cut whose kids all keep one divides its room
+        // in their proportion, so a px size can be drawn larger than it declares. Each card of the cut that is no fixed card and keeps a
+        // px size is written at the size it is drawn at, so the kids of the cut keep their drawn sizes when the join brings kids that
+        // take a fraction (packages/soksak/docs/layout.md#add-and-remove). A fixed card is a cost of the cut and keeps its px size.
+        for (const kid of holder.kids) if (kid.node !== node) this.keepDrawn(kid.node, axis);
         const share = holder.kids[at].share;
         holder.kids.splice(at, 1, ...next.kids.map((kid) => ({ share: share * kid.share, node: kid.node })));
         for (const kid of next.kids) this.enter(kid.node, holder);
@@ -269,6 +290,37 @@ export function insertNode(input: Input, target: string | readonly string[], sid
 export function insertBeside(input: Input, target: TreeNode, side: Side, node: TreeNode): TreeNode {
   const index = new Index(input.root, input);
   addBeside(index, target, side, cloneNode(node), input);
+  return index.root;
+}
+
+/**
+ * The group split (packages/soksak/docs/layout.md#add-and-remove): the stored tree with the box `box` and its `data` in the place of
+ * `target`, with its fraction, around a cut of two halves along the axis of `side` that holds `target` and `node` toward `side`.
+ */
+export function groupNode(input: Input, target: string, side: Side, node: TreeNode, box: string, data: unknown): TreeNode {
+  if (!SIDES.includes(side)) throw new Error(`unknown side ${String(side)}; use left, right, top or bottom`);
+  const ids = [box, ...(isCut(node) ? [] : [isBox(node) ? node.box : node.card]), ...cardsOf(node).map((c) => c.card)];
+  const member = ids.find((id) => input.taken(id));
+  if (member !== undefined) throw new Error(`card ${member} is a member of the layout`);
+  const index = new Index(input.root, input);
+  const at = index.byId.get(target);
+  if (!at) throw new Error(`card ${target} is not a member of the layout`);
+  const pair = side === 'right' || side === 'bottom' ? [at, cloneNode(node)] : [cloneNode(node), at];
+  const inner: CutNode = { cut: axisOf(side), kids: pair.map((kid) => ({ share: 0.5, node: kid })) };
+  const wrapped: BoxNode = { box, inner };
+  if (data !== undefined) wrapped.data = data;
+  index.replace(at, wrapped);
+  return index.root;
+}
+
+/**
+ * The inverse of the group split: the stored tree with the inner node of the box `id` in its place; a cut along the axis of the cut
+ * that holds the box joins that cut with every kid drawn at the size it had.
+ */
+export function unwrapNode(input: Input, id: string): TreeNode {
+  const index = new Index(input.root, input);
+  const box = index.byId.get(id) as BoxNode;
+  index.replace(box, box.inner);
   return index.root;
 }
 

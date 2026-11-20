@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { Soksak, checkState, outline } from "../dist/index.js";
-import { H, W, three } from "./helpers.mjs";
+import { H, W, three, trySplit } from "./helpers.mjs";
 
 /**
  * What the API hands back, and what it refuses.
@@ -55,7 +55,7 @@ test("everything the API hands back is a copy the host may keep", () => {
   assert.notEqual(grid.lines("x")[1], 0.99);
 });
 
-test("an unknown id is answered, not thrown on, and changes nothing", () => {
+test("an unknown id is answered, a split throws it, and nothing changes", () => {
   const grid = three();
   const before = JSON.stringify(grid.toJSON());
 
@@ -64,8 +64,8 @@ test("an unknown id is answered, not thrown on, and changes nothing", () => {
   assert.equal(grid.canClose("nobody"), false);
   assert.equal(grid.close("nobody"), false);
   assert.equal(grid.canSplit("nobody", "x"), false);
-  assert.equal(grid.split("nobody", "x"), null);
-  assert.equal(grid.splitToward("nobody", "left"), null);
+  assert.throws(() => grid.split("nobody", "x"), { message: "card nobody is not a member of the layout" });
+  assert.throws(() => grid.splitToward("nobody", "left"), { message: "card nobody is not a member of the layout" });
   assert.equal(grid.setFixed("nobody", true), false);
   assert.equal(grid.setSize("nobody", "x", 100), false);
   assert.equal(grid.setData("nobody", { a: 1 }), false);
@@ -316,7 +316,7 @@ test("a card cannot be inserted at the size of the plane or more", () => {
       const t = ids[Math.floor(rnd() * ids.length)];
       const k = rnd();
       if (k < 0.5) {
-        const n = grid.split(t, rnd() < 0.5 ? "x" : "y");
+        const n = trySplit(grid, t, rnd() < 0.5 ? "x" : "y");
         if (n) ids.push(n);
       } else if (k < 0.7) {
         grid.setSize(t, rnd() < 0.5 ? "x" : "y", 20 + Math.floor(rnd() * 300));

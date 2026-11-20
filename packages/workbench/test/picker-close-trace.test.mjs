@@ -52,8 +52,7 @@ test("closing the picker writes picker.close with the reason of the close", { ti
     const installErrors = installEnvironment({
       runtime: "runtime",
       workspace: { focus: "main", grid: {
-        xs: [0, 1], ys: [0, 1],
-        cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: "fixture-picker-close", title: "main" }] }],
+        root: { card: "main", tabs: [{ plugin: "fixture-picker-close", title: "main" }] },
       } },
       sidebars: { sets: [], links: [] },
     }, { plugins: [] });

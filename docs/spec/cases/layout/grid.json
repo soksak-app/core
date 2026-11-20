@@ -599,7 +599,7 @@
   {"call":"insert","args":["g","bottom",{"card":"n"}],"throws":"card b would be 140x40, below its minimum 96x96"}
  ]},
  {"name":"a group puts a box with its head in the place of the card and adds the new card inside it, and a refusal names the card at its drawn size under the head","options":{"width":400,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"c"}}]}},"steps":[
-  {"call":"group","args":["a","right",{"card":"b"},{"box":"g","data":{"name":"그룹 1"},"head":32}],"returns":null},
+  {"call":"group","args":["a","right",{"card":"b"},{"box":"g","data":{"name":"그룹 1"},"head":32}]},
   {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"box":"g","data":{"name":"그룹 1"},"inner":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"b","fixed":false}}]}}},{"share":0.5,"node":{"card":"c","fixed":false}}]}}},
   {"call":"rects","returns":{"a":{"x":24,"y":0,"w":164,"h":292},"b":{"x":212,"y":0,"w":164,"h":292},"c":{"x":0,"y":340,"w":400,"h":260}}},
   {"call":"group","args":["b","right",{"card":"d"},{"box":"h","data":{"name":"그룹 2"},"head":32}],"throws":"card b would be 58x204, below its minimum 96x96"},
@@ -614,7 +614,7 @@
   {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"box":"g","data":{"name":"그룹 2"},"inner":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"b","fixed":false}}]}}},{"share":0.5,"node":{"card":"c","fixed":false}}]}}},
   {"call":"unwrap","args":["a"],"throws":"card a is no box"},
   {"call":"unwrap","args":["z"],"throws":"card z is not a member of the layout"},
-  {"call":"unwrap","args":["g"],"returns":null},
+  {"call":"unwrap","args":["g"]},
   {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"b","fixed":false}}]}},{"share":0.5,"node":{"card":"c","fixed":false}}]}}},
   {"call":"rects","returns":{"a":{"x":0,"y":0,"w":288,"h":188},"b":{"x":0,"y":212,"w":288,"h":188},"c":{"x":312,"y":0,"w":288,"h":400}}},
   {"call":"headsAbove","args":["a"],"returns":0}
@@ -644,6 +644,28 @@
   {"call":"rect","args":["s"],"returns":{"x":0,"y":0,"w":198,"h":400}},
   {"call":"insert","args":["a","right",{"card":"n"}],"throws":"card a would be 48x400, below its minimum 96x96"},
   {"call":"rect","args":["s"],"returns":{"x":0,"y":0,"w":198,"h":400}}
+ ]},
+ {"name":"a close whose join brings kids that take a fraction into a cut of px sizes keeps the drawn rectangles of every other kid","options":{"width":1600,"height":1200,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.1709643101258794,"node":{"cut":"y","kids":[{"share":0.29331783979879716,"node":{"card":"generated-50","width":79.7140604103262}},{"share":0.7066821602012029,"node":{"cut":"x","kids":[{"share":0.5882131547726743,"node":{"card":"generated-38","height":219.12007680535316}},{"share":0.4117868452273256,"node":{"card":"generated-41"}}]}}]}},{"share":0.11171255042736834,"node":{"card":"left","fixed":true,"width":168.015675842762}},{"share":0.06382978723404256,"node":{"card":"rail","fixed":true,"width":181.96159198109513}},{"share":0.5896635649786671,"node":{"cut":"y","kids":[{"share":0.1609947841610824,"node":{"card":"generated-31","width":18.548127497754027}},{"share":0.3018918784083041,"node":{"card":"generated-47","width":18.548127497754027}},{"share":0.08510638297872346,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"generated-7"}},{"share":0.5,"node":{"card":"generated-33","width":79.7140604103262}}]}},{"share":0.4520069544518901,"node":{"card":"generated-39"}}]}},{"share":0.06382978723404255,"node":{"card":"right","fixed":true,"width":96}}]}},"steps":[
+  {"call":"rect","args":["generated-38"],"returns":{"x":0,"y":980.8799231946468,"w":490.75133587357067,"h":219.12007680535316}},
+  {"call":"rect","args":["generated-41"],"returns":{"x":514.7513358735707,"y":980.8799231946468,"w":343.557335892246,"h":219.12007680535316}},
+  {"call":"rect","args":["generated-31"],"returns":{"x":1280.2859395896737,"y":0,"w":199.71406041032628,"h":181.60211653370095}},
+  {"call":"rect","args":["generated-47"],"returns":{"x":1280.2859395896737,"y":205.60211653370095,"w":199.71406041032628,"h":340.534038844567}},
+  {"call":"rect","args":["generated-7"],"returns":{"x":1280.2859395896737,"y":570.136155378268,"w":96,"h":96.00000000000011}},
+  {"call":"rect","args":["generated-33"],"returns":{"x":1400.2859395896737,"y":570.136155378268,"w":79.71406041032628,"h":96.00000000000011}},
+  {"call":"rect","args":["generated-39"],"returns":{"x":1280.2859395896737,"y":690.1361553782681,"w":199.71406041032628,"h":509.8638446217319}},
+  {"call":"close","args":["generated-50"],"returns":true},
+  {"call":"rect","args":["generated-38"],"returns":{"x":0,"y":0,"w":490.75133587357067,"h":1200}},
+  {"call":"rect","args":["generated-41"],"returns":{"x":514.7513358735707,"y":0,"w":343.557335892246,"h":1200}},
+  {"call":"rect","args":["generated-31"],"returns":{"x":1280.2859395896737,"y":0,"w":199.71406041032628,"h":181.60211653370095}},
+  {"call":"rect","args":["generated-47"],"returns":{"x":1280.2859395896737,"y":205.60211653370095,"w":199.71406041032628,"h":340.534038844567}},
+  {"call":"rect","args":["generated-7"],"returns":{"x":1280.2859395896737,"y":570.136155378268,"w":96,"h":96.00000000000011}},
+  {"call":"rect","args":["generated-33"],"returns":{"x":1400.2859395896737,"y":570.136155378268,"w":79.71406041032628,"h":96.00000000000011}},
+  {"call":"rect","args":["generated-39"],"returns":{"x":1280.2859395896737,"y":690.1361553782681,"w":199.71406041032628,"h":509.8638446217319}}
+ ]},
+ {"name":"a split at minSize 0 that would draw a card with no area names it with no minimum","options":{"width":1200,"height":800,"gap":400,"minSize":0},"state":{"root":{"card":"card"}},"steps":[
+  {"call":"split","args":["card","y",{"id":"card-1"}],"returns":"card-1"},
+  {"call":"split","args":["card","y"],"throws":"card card would be 1200x0 and have no area"},
+  {"call":"rect","args":["card"],"returns":{"x":0,"y":0,"w":1200,"h":200}}
  ]},
  {"name":"a state of the earlier form with lines and cells is refused","state":{"xs":[0,1],"ys":[0,1],"cards":[{"id":"a","c0":0,"c1":1,"r0":0,"r1":1}]},"throws":"soksak: the state holds xs, ys and cards, which is the earlier form; the state is {root}","steps":[]},
  {"name":"a state that records a payer is refused","state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"b"}}]},"paidBy":{"b":"a"}},"throws":"soksak: the state holds paidBy, which the layout does not record; the state is {root}","steps":[]},

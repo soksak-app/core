@@ -525,7 +525,13 @@ grid.visits;                      // the nodes that even visited
 fractions of the other kids of the cut scale by one factor, as a close does,
 and a cut left with one kid is replaced by that kid. A kid of that kid that is a
 cut along the axis of the cut that holds it joins that cut, and every kid keeps
-the size it is drawn at. It returns the node that left, a card
+the size it is drawn at. A kid that keeps a px size is drawn at that size
+whatever its fraction, and a cut whose kids all keep one divides its room in
+their proportion, so before the join it can be drawn larger than it declares:
+each card of the cut that is not `fixed` and keeps a px size, through the nodes
+that keep one, is written at the size it is drawn at, and a `fixed` card stays a
+cost of the cut with its px size. The kids that join take a fraction of what is
+left, so no kid outside the two cuts changes. It returns the node that left, a card
 node or a box node with its inner node, which `insert` takes, so a box lands
 with its members in their proportions. The last card and a `fixed` card are
 refused.
@@ -640,7 +646,8 @@ the far half to the new card, so `left` and `top` swap the two spans. Ids are
 not swapped. A refused split throws and changes nothing: an unknown axis or
 side, an id that the layout holds, an unknown or `fixed` card, a card drawn no
 wider than the corridor of the cut (`card <id> would be 0x<h>, below its
-minimum <m>x<m>`, or `<w>x0` on `y`), and a cut that draws a node below its
+minimum <m>x<m>`, or `<w>x0` on `y`; with a `minSize` of 0, `card <id> would be
+<w>x<h> and have no area`), and a cut that draws a node below its
 minimum, which names the deepest such node.
 
 ## Where a drop lands
@@ -734,7 +741,9 @@ first.
 
 Every method taking an axis refuses one that is not `"x"` or `"y"`; every method
 taking a side refuses one that is not `left`, `right`, `top` or `bottom`. A
-refusal returns `null`, `false` or an empty answer and changes nothing.
+refusal changes nothing: `split`, `splitToward`, `insert`, `withdraw`, `group`
+and `unwrap` throw it with its text, and every other method returns `null`,
+`false` or an empty answer.
 
 `toJSON()` returns `{root}`, and a grid rebuilt from it closes cards the same way,
 because a close reads only the tree. `checkState` is what the

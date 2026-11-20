@@ -4,7 +4,7 @@ import test from "node:test";
 
 import { Soksak } from "../dist/index.js";
 import { guillotine } from "./slicing-oracle.mjs";
-import { H, W, fuzz, three } from "./helpers.mjs";
+import { H, W, fuzz, three, trySplitToward } from "./helpers.mjs";
 
 /**
  * One test per rule in the layout specification.
@@ -90,7 +90,13 @@ test("R2 — identifiers do not determine layout behavior", { timeout: 10000 }, 
     const grid = new Soksak(build(n), { width: W, height: H });
     const steps = [{ snapshot: snapshot(grid) }];
     for (const operation of operations) {
-      const result = operation(grid, n);
+      // A split throws its refusal, which names the card by its identifier.
+      let result;
+      try {
+        result = operation(grid, n);
+      } catch (error) {
+        result = { throws: error.message.replace(/renamed-/g, "") };
+      }
       steps.push({ result: typeof result === "string" ? unalias(result) : result, snapshot: snapshot(grid) });
     }
     return steps;
@@ -98,7 +104,7 @@ test("R2 — identifiers do not determine layout behavior", { timeout: 10000 }, 
   const plain = trace((name) => name);
   const renamed = trace(alias);
   assert.deepEqual(renamed, plain);
-  assert.deepEqual(plain.slice(1, 5).map((s) => s.result), [null, false, false, "branch"]);
+  assert.deepEqual(plain.slice(1, 5).map((s) => s.result), [{ throws: "card left is fixed and does not split" }, false, false, "branch"]);
   assert.equal(plain[8].result, "strip");
   assert.equal(plain[9].result, true);
 });
@@ -422,7 +428,7 @@ test("R7 — only a fixed card leaves another with nowhere to go", () => {
       const pick = () => open[Math.floor(next() * open.length)];
       const side = ["left", "right", "top", "bottom"][Math.floor(next() * 4)];
       const roll = next();
-      if (roll < 0.35) grid.splitToward(pick().id, side, { data: {} });
+      if (roll < 0.35) trySplitToward(grid, pick().id, side, { data: {} });
       else if (roll < 0.55) grid.close(pick().id);
       else if (roll < 0.8) grid.move(pick().id, pick().id, side);
       else {

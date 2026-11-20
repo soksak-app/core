@@ -33,8 +33,7 @@ test("folding, selecting and sizing a section lay out the plane again", { timeou
   assert.deepEqual(installEnvironment({
     runtime: "runtime",
     workspace: { focus: "main", grid: {
-      xs: [0, 1], ys: [0, 1],
-      cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: "fixture-choice", title: "main" }] }],
+      root: { card: "main", tabs: [{ plugin: "fixture-choice", title: "main" }] },
     } },
     sidebars: { sets: [], links: [] },
   }, { plugins: [{ id: "fixture-choice", package: "@fixture/choice", version: "0.0.1", manifest: {

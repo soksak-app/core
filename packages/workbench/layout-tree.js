@@ -1,40 +1,35 @@
-// The tree of the content cards of a layout and the reading of its lines that the layout operations use
-// (docs/spec/exposure.md#window-snapshot, docs/spec/cli.md#acting-on-a-layout). The layout stores lines and cards and no split, so the
-// splits are derived from the lines at each reading; the workbench of the mygo host derives the same tree by the cases of
-// docs/spec/cases/layout/tree.json.
-import { sliceTree } from "soksak";
-
-const SPAN = { x: ["c0", "c1"], y: ["r0", "r1"] };
+// The tree of the content cards of a layout that the window description reports (docs/spec/exposure.md#window-snapshot,
+// docs/spec/cli.md#acting-on-a-layout), read from the stored tree of the layout; the workbench of the mygo host reads the same tree by
+// the cases of docs/spec/cases/layout/tree.json.
+import { isPlace } from "./registry.js";
 
 /**
- * The tree of cards over the line positions xs and ys: a split is {direction, size, frame, children} and a card is the value that
- * leaf(card, size) returns, with its frame {x, y, width, height}. The frame of a split is the smallest rectangle that holds the frames
- * of its children, so an agent reads the extent of each row and column in window points. A region is a row when a vertical line crosses it from edge to edge (sliceTree tries the x axis
- * first), and size is the share of a node in the extent of its parent along the direction of the parent, 1 for the root.
- * Cards that are not slicing have no tree, which no layout of the plane holds, so it is an error.
+ * The tree of a node of the stored tree: a split is {direction, size, frame, children} and a card is the value that leaf(id, size)
+ * returns, with its frame {x, y, width, height}. A cut along x is a row and a cut along y a column; a box is a leaf by its id when
+ * boxed and else the node inside it, and a window sidebar is a place card and is outside the tree, so a cut that holds one gives its
+ * share to its other kids in proportion and a cut left with one kid is that kid. size is the share of a node among the kids of its split
+ * that the tree holds, and 1 for the root. The frame of a split is the smallest rectangle that holds the frames of its children. A node
+ * without a content card or a box has no tree, null.
  */
-export function layoutTree(cards, xs, ys, leaf) {
-  if (cards.length === 0) throw new Error("the layout holds no content card");
-  const slice = sliceTree(cards);
-  if (!slice) throw new Error("the content cards of the layout are not a slicing arrangement");
-  const lines = { x: xs, y: ys };
-  const extent = (node, axis) => {
-    const [lo, hi] = SPAN[axis];
-    const of = "card" in node ? [node.card] : cardsOf(node);
-    return [Math.min(...of.map((card) => card[lo])), Math.max(...of.map((card) => card[hi]))];
+export function layoutTree(node, boxed, leaf) {
+  const of = (at, size) => {
+    if (at.box !== undefined) return boxed ? leaf(at.box, size) : of(at.inner, size);
+    if (at.cut === undefined) return isPlace(at.card) ? null : leaf(at.card, size);
+    const kept = at.kids.filter((kid) => holds(kid.node, boxed));
+    if (kept.length === 0) return null;
+    if (kept.length === 1) return of(kept[0].node, size);
+    const total = kept.reduce((sum, kid) => sum + kid.share, 0);
+    const children = kept.map((kid) => of(kid.node, kid.share / total));
+    return { direction: at.cut === "x" ? "row" : "column", size, frame: frameAround(children.map((child) => child.frame)), children };
   };
-  const build = (node, size) => {
-    if ("card" in node) return leaf(node.card, size);
-    const axis = node.axis;
-    const [start, end] = extent(node, axis);
-    const whole = lines[axis][end] - lines[axis][start];
-    const children = node.sides.map((side) => {
-      const [from, to] = extent(side, axis);
-      return build(side, (lines[axis][to] - lines[axis][from]) / whole);
-    });
-    return { direction: axis === "x" ? "row" : "column", size, frame: frameAround(children.map((child) => child.frame)), children };
-  };
-  return build(slice, 1);
+  return holds(node, boxed) ? of(node, 1) : null;
+}
+
+/** Whether a node holds a node of the tree: a content card, or a box when boxed. */
+function holds(node, boxed) {
+  if (node.box !== undefined) return boxed || holds(node.inner, boxed);
+  if (node.cut === undefined) return !isPlace(node.card);
+  return node.kids.some((kid) => holds(kid.node, boxed));
 }
 
 /** The smallest rectangle {x, y, width, height} that holds the frames. */
@@ -45,9 +40,32 @@ function frameAround(frames) {
     height: Math.max(...frames.map((frame) => frame.y + frame.height)) - y };
 }
 
-/** The cards under a slice. */
-function cardsOf(node) {
-  return "card" in node ? [node.card] : node.sides.flatMap(cardsOf);
+/**
+ * The cards of a stored tree state in tree order, each {id, data?, fixed?, width?, height?} as the cards of a grid name them, so a reader of
+ * the cards of a stored layout and of a grid reads one form.
+ */
+export function stateCards(state) {
+  const out = [];
+  const walk = (node) => {
+    if (node.box !== undefined) walk(node.inner);
+    else if (node.cut !== undefined) for (const kid of node.kids) walk(kid.node);
+    else {
+      const { card, ...rest } = node;
+      out.push({ id: card, ...rest });
+    }
+  };
+  walk(state.root);
+  return out;
+}
+
+/** The state with each card node replaced by what change returns for it; the cuts and the boxes stay. */
+export function mapStateCards(state, change) {
+  const map = (node) => {
+    if (node.box !== undefined) return { ...node, inner: map(node.inner) };
+    if (node.cut !== undefined) return { ...node, kids: node.kids.map((kid) => ({ ...kid, node: map(kid.node) })) };
+    return change(node);
+  };
+  return { ...state, root: map(state.root) };
 }
 
 /**

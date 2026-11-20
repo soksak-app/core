@@ -1,8 +1,9 @@
 // Checks a stored space layout. Opening a layout and the library preview use the same check, so the preview
 // filters out a layout that cannot be opened and does not draw it (docs/spec/projects.md).
-import { Soksak } from "soksak";
+import { Soksak, checkState } from "soksak";
 import { pluginUnits } from "./environment.js";
 import { readGroupTree } from "./group-tree.js";
+import { stateCards } from "./layout-tree.js";
 import { reportError, restoreOrigin } from "./tab-reports.js";
 import { windowSidebar } from "./window-sidebars.js";
 
@@ -15,7 +16,7 @@ const viewPlugin = (id) => pluginUnits().find(unit => unit.id === id)?.compositi
  */
 export function recordStoredOrigins(kept, isViewTab = viewPlugin) {
   const refused = [];
-  for (const card of kept.state.cards) {
+  for (const card of stateCards(kept.state)) {
     // default: a format-1 card with no tab list has no tabs to restore.
     for (const tab of card.data?.tabs ?? []) {
       const text = restoreOrigin(tab, isViewTab(tab.plugin));
@@ -36,8 +37,10 @@ export function checkStoredLayout(kept) {
   if (Object.hasOwn(kept, "sidebars") && (!kept.sidebars || typeof kept.sidebars !== "object" || Array.isArray(kept.sidebars)))
     throw new Error("invalid stored sidebar choices");
   if (Object.hasOwn(kept, "railWidth") || Object.hasOwn(kept, "edgeWidth")) throw new Error("obsolete window sidebar state");
+  // The tree of the layout is read first, so a state in an earlier form is refused with what it holds before its cards are read.
+  checkState(kept.state);
   const units = pluginUnits();
-  for (const card of kept.state.cards) {
+  for (const card of stateCards(kept.state)) {
     if (card.id.startsWith("window:")) throw new Error(`obsolete stored window sidebar ${card.id}`);
     if (card.id.startsWith("rail-")) throw new Error(`obsolete stored rail card ${card.id}`);
     const descriptor = windowSidebar(card.id);
@@ -58,7 +61,7 @@ export function checkStoredLayout(kept) {
       if (!tabs.some(tab => tab.id === card.data.activeId)) throw new Error(`invalid stored active tab ${card.id}`);
     }
   }
-  const content = new Set(kept.state.cards.filter((card) => card.data).map((card) => card.id));
+  const content = new Set(stateCards(kept.state).filter((card) => card.data).map((card) => card.id));
   // default: sidebars is an optional field of a stored layout.
   for (const id of Object.keys(kept.sidebars ?? {})) {
     if (id.startsWith("rail-") || id.startsWith("window:")) throw new Error(`obsolete stored sidebar ${id}`);

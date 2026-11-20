@@ -8,11 +8,10 @@ const files = {
     workspace: {
       focus: "main",
       grid: {
-        xs: [0, 0.3, 1], ys: [0, 1],
-        cards: [
-          { id: "left", c0: 0, c1: 1, r0: 0, r1: 1, width: 190, fixed: true },
-          { id: "main", c0: 1, c1: 2, r0: 0, r1: 1, tabs: [{ plugin: "card", title: "c 1" }, { plugin: "card", title: "c 2" }] },
-        ],
+        root: { cut: "x", kids: [
+          { share: 0.3, node: { card: "left", width: 190, fixed: true } },
+          { share: 0.7, node: { card: "main", tabs: [{ plugin: "card", title: "c 1" }, { plugin: "card", title: "c 2" }] } },
+        ] },
       },
     },
     sidebars: {

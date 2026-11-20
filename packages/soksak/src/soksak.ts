@@ -39,7 +39,7 @@ import {
 import type { Divider, Frames, Plane, Rule, ZoneHit, ZoneOptions } from './geometry.js';
 
 export type { Divider, Rule, Zone, ZoneHit, ZoneOptions } from './geometry.js';
-import { evenCuts, insertBeside, insertNode, withdrawNode } from './cuts.js';
+import { evenCuts, groupNode, insertBeside, insertNode, unwrapNode, withdrawNode } from './cuts.js';
 import type { Input } from './cuts.js';
 import { EPS, cardsOf, checkState, cloneNode, isBox, isCard, isCut } from './tree.js';
 import type { BoxNode, CardNode, CutNode, SoksakState, TreeNode } from './tree.js';
@@ -367,28 +367,53 @@ export class Soksak {
 
   /**
    * The px size of each kid of a cut along its axis, from the room inside the
-   * cut: the corridors between the kids first, then the px sizes of the kids
-   * that keep one, and the rest to the other kids by their fractions. A kid gets
-   * at least the costs inside it, its own corridors, px sizes, frames and heads,
-   * and the others share what is left. When the room does not hold the px sizes
-   * and one `minSize` for the kids that take a fraction, the px sizes are drawn
-   * scaled by one factor; when no kid takes a fraction, they divide the room in
+   * cut (packages/soksak/docs/layout.md#the-model): the corridors between the
+   * kids first, then the px sizes of the kids that keep one, and the rest to the
+   * other kids by their fractions. A kid gets at least the costs inside it, its
+   * own corridors, px sizes, frames and heads, and the others share what is left.
+   * A fixed card with a px size is a cost of its level and keeps it while the
+   * room holds the costs and one `minSize` for the kids that share; the px sizes
+   * of the kids that share are scaled by one factor to leave the kids that take a
+   * fraction one `minSize`; when no kid takes a fraction, they divide the room in
    * their proportion. Null when the room does not hold the costs of the kids.
    */
   private kidSizes(node: CutNode, room: number, unit: Record<Axis, number>): number[] | null {
     const axis = node.cut;
     const held = node.kids.map((kid) => this.keptOf(kid.node, axis, unit));
     const costs = node.kids.map((kid, i) => (held[i] === null ? this.costOf(kid.node, axis, unit) : 0));
-    const asked = held.reduce<number>((a, kept) => a + (kept?.px ?? 0), 0);
+    // A fixed card with a px size is a cost of its level, as a corridor is: it is no kid that shares.
+    const leaf = node.kids.map((kid, i) => held[i] !== null && isCard(kid.node) && kid.node.fixed === true);
+    const fixedAsked = held.reduce<number>((a, kept, i) => a + (kept && leaf[i] ? kept.px : 0), 0);
+    const asked = held.reduce<number>((a, kept, i) => a + (kept && !leaf[i] ? kept.px : 0), 0);
     // The corridors between the kids and the costs inside the kids that keep a px size are drawn whatever the scale.
-    const free = room - (node.kids.length - 1) * unit[axis] - held.reduce<number>((a, kept) => a + (kept?.cost ?? 0), 0);
+    let free = room - (node.kids.length - 1) * unit[axis] - held.reduce<number>((a, kept) => a + (kept?.cost ?? 0), 0);
     if (free < -EPS) return null;
     const sharingAny = held.some((kept) => kept === null);
-    const floor = sharingAny ? costs.reduce((a, c) => a + c, 0) + this.min : 0;
+    const costSum = costs.reduce((a, c) => a + c, 0);
+    // The fixed cards keep their px sizes while the room holds them, the corridors and the costs, and one minSize for the kids that share:
+    // a corridor or a cost that an operation adds or removes is paid by the kids that share. Only a room that does not hold them scales
+    // the fixed cards, by one factor; a cut of fixed cards alone divides the room in their proportion.
+    let fixedScale = 1;
+    if (fixedAsked > 0) {
+      const need = Math.max(this.min, costSum);
+      if (!sharingAny && asked === 0) fixedScale = Math.max(0, free) / fixedAsked;
+      else if (free - fixedAsked < need) fixedScale = Math.max(0, free - Math.min(need, Math.max(0, free))) / fixedAsked;
+    }
+    free -= fixedAsked * fixedScale;
+    // The px sizes of the kids that share are scaled by one factor, so their proportions survive, to leave the kids that take a fraction
+    // one minSize, which does not count the costs inside them; only a room that does not hold those costs scales them further. Without a
+    // kid that takes a fraction, they divide the room in their proportion.
     let scale = 1;
-    if (asked > 0 && (!sharingAny || free - asked < floor)) scale = Math.max(0, free - Math.min(floor, Math.max(0, free))) / asked;
+    if (asked > 0 && !sharingAny) scale = Math.max(0, free) / asked;
+    if (asked > 0 && sharingAny) {
+      if (free - asked < this.min) scale = Math.max(0, free - Math.min(this.min, Math.max(0, free))) / asked;
+      if (free - asked * scale < costSum) scale = Math.max(0, free - costSum) / asked;
+    }
     let rest = free - asked * scale;
-    const sizes = node.kids.map((_, i) => (held[i] ? (held[i] as { px: number }).px * scale + (held[i] as { cost: number }).cost : 0));
+    const sizes = node.kids.map((_, i) => {
+      const kept = held[i];
+      return kept ? kept.px * (leaf[i] ? fixedScale : scale) + kept.cost : 0;
+    });
     const open = new Set(node.kids.map((_, i) => i).filter((i) => held[i] === null));
     if (rest < costs.reduce((a, c) => a + c, 0) - EPS) return null;
     // The frames and heads of a kid are fixed costs of the cut: each kid that takes a fraction is drawn its frames and its
@@ -747,11 +772,16 @@ export class Soksak {
   }
 
   /**
-   * Replace a card's payload.
+   * Replace the payload of a card or a box.
    *
    * `data` is opaque to this library.
    */
   setData(id: string, data: unknown): boolean {
+    const box = this.boxes.get(id);
+    if (box) {
+      box.data = data;
+      return true;
+    }
     const card = this.find(id);
     if (!card) return false;
     card.data = data;
@@ -879,6 +909,11 @@ export class Soksak {
     const x = at('x', c0) + inset.x0;
     const y = at('y', r0) + inset.y0 - (this.above.get(id) ?? 0);
     return { x, y, w: Math.max(0, at('x', c1) - inset.x1 - x), h: Math.max(0, at('y', r1) - inset.y1 - y) };
+  }
+
+  /** The px of the heads of the boxes around the card or the box `id` that the grid draws inside the top of its rectangle. */
+  headsAbove(id: string): number {
+    return this.above.get(id) ?? 0;
   }
 
   rects(): Map<string, Rect> {
@@ -1221,6 +1256,62 @@ export class Soksak {
     });
   }
 
+  /**
+   * The group split of the card or box `target` (packages/soksak/docs/layout.md#add-and-remove): the box `init.box` with the payload
+   * `init.data` and a head of `init.head` px takes the place of `target` in its cut, with its fraction, and its inner node is a cut of two
+   * halves along the axis of `side` that holds `target` and `node` toward `side`. The result is judged once with the head and the frames of
+   * the new box, so a refusal names the deepest node that the group would draw below its minimum. Throws its refusal and changes nothing.
+   */
+  group(target: string, side: Side, node: TreeNode, init: { box: string; data?: unknown; head: number }): void {
+    this.run(() => {
+      if (!node || typeof node !== 'object' || isCut(node) || !(isBox(node) ? node.box : node.card)) {
+        throw new Error('soksak: a group takes a card or a box node');
+      }
+      if (!init.box) throw new Error('soksak: a group names no box');
+      if (!Number.isFinite(init.head) || init.head < 0) throw new Error(`soksak: the head of ${JSON.stringify(init.box)} is ${String(init.head)}`);
+      const heads = this.heads;
+      try {
+        this.byCuts((input) => {
+          const root = groupNode(input, target, side, node, init.box, init.data);
+          this.heads = new Map(heads).set(init.box, init.head);
+          return root;
+        });
+      } catch (error) {
+        this.heads = heads;
+        this.derive();
+        throw error;
+      }
+    });
+  }
+
+  /**
+   * Takes the box `id` out of the tree (packages/soksak/docs/layout.md#add-and-remove): its inner node takes its place in its cut, and a
+   * cut along the axis of that cut joins it with every kid drawn at the size it had. The head of the box leaves with it. Throws its refusal
+   * and changes nothing.
+   */
+  unwrap(id: string): void {
+    this.run(() => {
+      if (!this.boxes.has(id)) {
+        if (this.leaves.has(id)) throw new Error(`card ${id} is no box`);
+        throw new Error(`card ${id} is not a member of the layout`);
+      }
+      const heads = this.heads;
+      try {
+        this.byCuts((input) => {
+          const root = unwrapNode(input, id);
+          const next = new Map(heads);
+          next.delete(id);
+          this.heads = next;
+          return root;
+        });
+      } catch (error) {
+        this.heads = heads;
+        this.derive();
+        throw error;
+      }
+    });
+  }
+
   /** Gives the kids of every cut that take a fraction equal fractions (packages/soksak/docs/layout.md#cuts). */
   even(): void {
     this.run(() => this.byCuts((input) => evenCuts(input)));
@@ -1473,11 +1564,17 @@ export class Soksak {
     const per = own !== null ? own / (a[card[hi]] - a[card[lo]] || 1) : this.sharedExtent(axis);
 
     const half = halfCorridor(this.plane, axis);
-    const lowest = a[card[lo]] + (this.min + cardInset(this.plane, axis, card, 'lo') + half) / per;
-    const highest = a[card[hi]] - (this.min + half + cardInset(this.plane, axis, card, 'hi')) / per;
-    if (lowest > highest) return null;
-
     const mid = (a[card[lo]] + a[card[hi]]) / 2;
+    let lowest = a[card[lo]] + (this.min + cardInset(this.plane, axis, card, 'lo') + half) / per;
+    let highest = a[card[hi]] - (this.min + half + cardInset(this.plane, axis, card, 'hi')) / per;
+    // Where the halves cannot both have their minimum, the cut is at the centre and the check of the split names the node that it draws
+    // below its minimum; a card drawn no wider than the corridor of the cut has no extent for a half.
+    if (lowest > highest) {
+      if (a[card[lo]] + (cardInset(this.plane, axis, card, 'lo') + half) / per >= mid
+        || a[card[hi]] - (half + cardInset(this.plane, axis, card, 'hi')) / per <= mid) return null;
+      lowest = mid;
+      highest = mid;
+    }
     let line = -1;
     for (let i = card[lo] + 1; i < card[hi] && !newLine; i++) {
       if (a[i] < lowest || a[i] > highest) continue;
@@ -1542,7 +1639,7 @@ export class Soksak {
     return true;
   }
 
-  /** True when the cut leaves every card the smaller of its current size and `minSize`. */
+  /** Whether `split` of the card `id` along `axis` would succeed. */
   canSplit(id: string, axis: Axis): boolean {
     if (this.noAxis(axis)) return false;
     // canSplit performs a trial split, copying the state twice. The result is
@@ -1558,7 +1655,13 @@ export class Soksak {
       const before = this.toJSON();
       const seq = this.seq;               // a trial must not consume an id
       this.probing = true;
-      ok = this.split(id, axis) !== null;
+      try {
+        this.split(id, axis);
+        ok = true;
+      } catch {
+        // silent: the probe answers whether the split succeeds; the refusal is the answer false.
+        ok = false;
+      }
       this.restore(before);
       this.probing = false;
       this.seq = seq;
@@ -1581,44 +1684,57 @@ export class Soksak {
    * `init.newLine` cuts at a new line at the centre even where a line that the
    * card spans across lies inside it, for a host that places the line itself.
    *
-   * Returns the new card's id, or null when the halves do not fit.
+   * Returns the new card's id. Throws its refusal and changes nothing: an
+   * unknown axis, an id that the layout holds, an unknown or fixed card, a card
+   * drawn no wider than the corridor of the cut, and a cut that draws a node
+   * below its minimum, which names the deepest such node.
    */
-  split(id: string, axis: Axis, init: { id?: string; data?: unknown; newLine?: boolean } = {}): string | null {
-    if (this.noAxis(axis)) return null;
+  split(id: string, axis: Axis, init: { id?: string; data?: unknown; newLine?: boolean } = {}): string {
+    if (this.noAxis(axis)) throw new Error(`unknown axis ${String(axis)}; use x or y`);
     return this.run(() => this.splitAt(id, axis, init, false));
   }
 
   /**
    * Cut a card and put the new one on a named side. The ids are not swapped:
-   * toward `left` and `top` the new card takes the near part.
+   * toward `left` and `top` the new card takes the near part. Its refusal is
+   * the refusal of `split`.
    */
-  splitToward(id: string, side: Side, init: { id?: string; data?: unknown; newLine?: boolean } = {}): string | null {
+  splitToward(id: string, side: Side, init: { id?: string; data?: unknown; newLine?: boolean } = {}): string {
     // axisOf returns 'y' for any value that is not left or right, so a misspelled
     // side would split downward instead of failing.
-    if (!SIDES.includes(side)) return null;
+    if (!SIDES.includes(side)) throw new Error(`unknown side ${String(side)}; use left, right, top or bottom`);
     return this.run(() => this.splitAt(id, axisOf(side), init, isAhead(side)));
   }
 
   /**
    * Cuts the card `id` along `axis` at the position of `cutAt`: the card keeps
    * its part of the extent before the cut and the new card takes the part after
-   * it, or with `first` the new card takes the part before it. The new card is
-   * recorded as paid by the card.
+   * it, or with `first` the new card takes the part before it.
    */
   private splitAt(
     id: string,
     axis: Axis,
     init: { id?: string; data?: unknown; newLine?: boolean },
     first: boolean,
-  ): string | null {
+  ): string {
     // An id already in use would give two nodes the same key. `rects` and the
     // view are both keyed by id, so one card would have no rect and no element.
-    if (init.id !== undefined && this.taken(init.id)) return null;
+    if (init.id !== undefined && this.taken(init.id)) throw new Error(`card ${init.id} is a member of the layout`);
     const card = this.find(id);
-    const cut = card && this.cutAt(card, axis, init.newLine === true);
-    if (!card || !cut) return null;
-    const was = this.extents(axis);
-    const empty = this.flat();
+    if (!card) throw new Error(`card ${id} is not a member of the layout`);
+    if (card.fixed) throw new Error(`card ${id} is fixed and does not split`);
+    const cut = this.cutAt(card, axis, init.newLine === true);
+    if (!cut) {
+      // The card is drawn no wider than the corridor of the cut, so a half would have no extent on the axis.
+      const r = this.rect(id) as Rect;
+      const w = axis === 'x' ? 0 : r.w;
+      const h = axis === 'y' ? 0 : r.h - (this.above.get(id) ?? 0);
+      const size = `${Math.round(w)}x${Math.round(h)}`;
+      // A minSize of zero is no minimum to fall below: the refusal is the area that the half would not have.
+      if (this.min === 0) throw new Error(`card ${id} would be ${size} and have no area`);
+      const m = String(Math.round(this.min));
+      throw new Error(`card ${id} would be ${size}, below its minimum ${m}x${m}`);
+    }
     const undo = this.toJSON();
     const leaf = this.leaves.get(id) as CardNode;
     const drawnBefore = this.rects();
@@ -1663,12 +1779,10 @@ export class Soksak {
     this.derive();
     this.changed();
     this.keepFixed(drawnBefore);
-    // The new card is drawn at least `minSize` on the axis of the cut, the heads above it left out.
-    const made = this.rect(fresh.card) as Rect;
-    const drawn = axis === 'x' ? made.w : made.h - (this.above.get(fresh.card) ?? 0);
-    if (!this.stillFits(axis, was, empty) || (whole === null && drawn < this.min - 0.01)) {
+    const below = this.belowMinimum(drawnBefore);
+    if (below) {
       this.restore(undo);
-      return null;
+      throw new Error(below);
     }
     return fresh.card;
   }
@@ -1700,9 +1814,24 @@ export class Soksak {
     return null;
   }
 
-  /** Whether `close` would remove the card. */
+  /** Whether `close` would remove the card or the box `id`. */
   canClose(id: string): boolean {
+    if (this.boxes.has(id)) return this.boxClosing(id);
     return this.closing(id) !== null;
+  }
+
+  /**
+   * Whether the box `id` can close: a card that is not fixed stands outside it, and its cut holds another kid that is no fixed card,
+   * which takes its share.
+   */
+  private boxClosing(id: string): boolean {
+    const box = this.boxes.get(id) as BoxNode;
+    const inside = new Set(cardsOf(box).map((leaf) => leaf.card));
+    if (!this.list.some((c) => !c.fixed && !inside.has(c.id))) return false;
+    const holding = this.up.get(box);
+    if (!holding || holding.at < 0) return false;
+    const holder = holding.node as CutNode;
+    return holder.kids.some((kid, k) => k !== holding.at && !this.holdsFixed(kid.node));
   }
 
   /**
@@ -1721,20 +1850,22 @@ export class Soksak {
   }
 
   /**
-   * Remove a card (packages/soksak/docs/layout.md#boundaries): the node that
+   * Remove a card, or a box with every card inside it (packages/soksak/docs/layout.md#add-and-remove): the node that
    * leaves with it goes out of its cut, and the fractions of the other kids of
    * the cut that are no fixed card scale by one factor, so their ratios hold; a
-   * fixed card keeps the size it is drawn at. Returns false when the card is `fixed`,
-   * when it is the last card, or when every other kid of its cut holds a fixed
-   * card.
+   * fixed card keeps the size it is drawn at. Returns false, and changes nothing,
+   * when the card is `fixed`, when it is the last card or the box holds every card
+   * that is not fixed, or when every other kid of its cut is a fixed card.
    */
   close(id: string): boolean {
     return this.run(() => this.closeAlong(id));
   }
 
   private closeAlong(id: string): boolean {
-    if (!this.closing(id)) return false;
-    const leaving = this.departing(this.leaves.get(id) as TreeNode);
+    if (this.boxes.has(id)) {
+      if (!this.boxClosing(id)) return false;
+    } else if (!this.closing(id)) return false;
+    const leaving = this.boxes.get(id) ?? this.departing(this.leaves.get(id) as TreeNode);
     const drawnBefore = this.rects();
     this.root = withdrawNode(this.input(), isBox(leaving) ? leaving.box : id, this.list).root;
     this.derive();

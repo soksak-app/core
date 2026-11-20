@@ -51,6 +51,7 @@ import { onTabReports, tabError, tabFooter, tabLabel, tabModified, tabNotice } f
 import { appUpdate, followActivation, followPluginChanges, followSidecarChanges, onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { pageIdentity } from "./page-identity.js";
 import { PLACEMENT_LAST, placementLast } from "./page-layout.js";
+import { stateCards } from "./layout-tree.js";
 
 /* Receivers of the watched core statuses. */
 const watchers = new Set();
@@ -165,7 +166,7 @@ function surfacePlugin(surface) {
   }
   for (const project of projects.local()) {
     for (const space of project.spaces) {
-      for (const card of space.layout.state.cards) {
+      for (const card of stateCards(space.layout.state)) {
         // default: a seat card has null data, so it has no tabs.
         const tab = (card.data?.tabs ?? []).find((t) => t.id === surface);
         if (tab) return tab.plugin;
@@ -402,7 +403,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
     return project && !projects.inLibrary() ? withOpen(project) : null;
   });
   // The stored form of the layout with the level of each group node (docs/spec/groups.md#status-and-queries).
-  status("core.layout", () => (currentGrid() ? { ...capture(), groups: currentTree().tree() } : null));
+  status("core.layout", () => (currentGrid() ? capture() : null));
   status("core.grid", gridState);
   status("core.sidebars", sidebarsState);
   onSectionsChange(coreChanged);

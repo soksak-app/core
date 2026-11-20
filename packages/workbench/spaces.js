@@ -1,6 +1,7 @@
 // The spaces of a stored project record (docs/spec/projects.md#persistence): the functions that read and change the spaces, the
 // active space and the space counter of one record. They do not touch the plane or the store; projects.js checks and keeps the
 // layouts around them. The Go layout model of packages/workbench-mygo meets the same cases (docs/spec/cases/layout/spaces.json).
+import { stateCards } from "./layout-tree.js";
 
 /** The space id of project. An id that is not a space of project is an error. */
 export function spaceIn(project, id) {
@@ -46,5 +47,5 @@ export function renameSpace(project, id, title) {
 /** The tab ids of the layouts of all spaces of project, in the order of the spaces, their cards and their tabs. */
 export function spaceTabIds(project) {
   // default: a seat card has null data, so it has no tabs.
-  return project.spaces.flatMap((space) => space.layout.state.cards.flatMap((card) => (card.data?.tabs ?? []).map((tab) => tab.id)));
+  return project.spaces.flatMap((space) => stateCards(space.layout.state).flatMap((card) => (card.data?.tabs ?? []).map((tab) => tab.id)));
 }

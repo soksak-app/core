@@ -122,8 +122,6 @@ export class GroupTree {
     this.groups = groups;
     this.rootLeader = leader;
     this.last = last;
-    /** The frames of each content card by id that reframe gave the grid. */
-    this.frames = {};
     /** The number of trial operations that probe ran. */
     this.probes = 0;
     /** The answers of canSplit, canGroup and canClose by key for the layout that answersToken describes. */
@@ -161,13 +159,9 @@ export class GroupTree {
     return node.members.flatMap((member) => (typeof member === "string" ? [member] : this.contents(member)));
   }
 
-  /**
-   * The cards of the grid that hold the cells of a group node: its content cards, or the card of a group node inside it that an operation in
-   * progress merged into one card; a card that the operation took out of the grid is left out.
-   */
+  /** The cards of the grid inside a group node; a card that an operation in progress took out of the grid is left out. */
   held(node) {
-    if (this.grid.card(node.card)) return [this.grid.card(node.card)];
-    return node.members.flatMap((member) => (typeof member === "string" ? [this.grid.card(member)].filter(Boolean) : this.held(member)));
+    return this.contents(node).map((id) => this.grid.card(id)).filter(Boolean);
   }
 
   /** The rectangle of a group node in line indices: the span of the content cards inside it. */
@@ -193,8 +187,7 @@ export class GroupTree {
   }
 
   /**
-   * Every group node of the tree in workbench order. The members of a group node that an operation in progress merged into one card are
-   * not in the grid, so the walk does not enter it.
+   * Every group node of the tree in workbench order.
    */
   nodes() {
     const out = [];
@@ -202,7 +195,7 @@ export class GroupTree {
       for (const member of this.readingOrder(members)) {
         if (typeof member === "string") continue;
         out.push(member);
-        if (!this.grid.card(member.card)) walk(member.members);
+        walk(member.members);
       }
     };
     walk(this.groups);
@@ -306,24 +299,18 @@ export class GroupTree {
     else this.rootLeader = id;
   }
 
-  /** The drawn rectangle {x, y, w, h} of the card id (docs/spec/groups.md#drawn-rectangles), or undefined for no card of the space. */
+  /**
+   * The drawn rectangle {x, y, w, h} of the card id (docs/spec/groups.md#drawn-rectangles), or undefined for no card of the space: the
+   * rectangle of the card or the box in the grid, which the frames of the boxes around it inset, moved down and shortened by the headers
+   * of the group cards that hold it and start on its first row line.
+   */
   rect(id) {
     const found = this.find(id);
     if (!found) return undefined;
-    if (found.node) return this.frameRect(found.node, found.path);
-    // A content card is drawn below the headers of the group cards that hold it and start on its first row line.
     const r = this.grid.rect(id);
-    const headers = this.headersAbove(found.path, this.grid.card(id).r0) * this.headStep();
-    return { x: r.x, y: r.y + headers, w: r.w, h: r.h - headers };
-  }
-
-  /**
-   * The frame of a group node that the group nodes path hold (docs/spec/groups.md#drawn-rectangles): the rectangle between its lines, each
-   * inset by its corridor and by one gap for each node of path that ends on it, the top line by the headers of the nodes of path that start
-   * on it.
-   */
-  frameRect(node, path) {
-    return this.place(null, null, path, this.rectangle(node));
+    const r0 = found.node ? this.rectangle(found.node).r0 : this.grid.card(id).r0;
+    const headers = this.headersAbove(found.path, r0) * this.headStep();
+    return { x: r.x, y: r.y + headers, w: r.w, h: Math.max(0, r.h - headers) };
   }
 
   /**
@@ -432,44 +419,33 @@ export class GroupTree {
 
   /**
    * The length that one frame takes on axis, which the layout library reduces with the corridor when the plane cannot hold the corridors
-   * and the frames (R5): read off a content card with a frame on its left or its bottom side that is drawn with a size on axis, as the
-   * distance between its edge and the edge of the same span without frames; 0 when no such card stands.
+   * and the frames (R5), and none at the seam, where a frame takes no gap: read off a group card drawn with a size on axis, as the
+   * distance between the edge of its first content card and the edge of the same span without frames, over the group cards that hold that
+   * card and start on that line; 0 when no such card stands.
    */
   frameUnit(axis) {
-    for (const [id, frames] of Object.entries(this.frames)) {
-      const card = this.grid.card(id);
-      // An operation in progress can take a card out of the grid before the next reframe.
-      if (!card) continue;
-      const drawn = this.grid.rect(id);
+    if (this.options.seam) return 0;
+    for (const node of this.nodes()) {
+      const span = this.rectangle(node);
+      const card = this.held(node).find((one) => (axis === "x" ? one.c0 === span.c0 : one.r1 === span.r1));
+      const drawn = card && this.grid.rect(card.id);
+      if (!drawn || (axis === "x" ? drawn.w : drawn.h) <= 0) continue;
       const bare = this.grid.rectOf({ ...card, id: "" });
-      if (axis === "x" && frames.left > 0 && drawn.w > 0) return (drawn.x - bare.x) / frames.left;
-      if (axis === "y" && frames.bottom > 0 && drawn.h > 0) return (bare.y + bare.h - drawn.y - drawn.h) / frames.bottom;
+      const path = this.find(card.id).path;
+      const count = path.filter((holder) => (axis === "x" ? this.rectangle(holder).c0 === card.c0 : this.rectangle(holder).r1 === card.r1)).length;
+      return axis === "x" ? (drawn.x - bare.x) / count : (bare.y + bare.h - drawn.y - drawn.h) / count;
     }
     return 0;
   }
 
   /**
-   * Gives the grid the frames of every content card (docs/spec/groups.md#drawn-rectangles): on its left, right and bottom side the number of
-   * group cards that hold it and end on the line of that side. The top takes no frame, because the header of a group card stands inside its
-   * frame at the top. A card of no group, a window sidebar among them, has none, and at the seam, where a frame takes no gap, no card has
-   * a frame.
+   * Gives the grid the head of every group card (docs/spec/groups.md#drawn-rectangles): the header of a group card and the corridor below
+   * it, which the library counts inside the top of its box. The library derives the frames from the boxes of the tree: one corridor on each
+   * side but the top, and none at the seam (frames none), where the corridor is the one border line that two boxes share.
    */
   reframe() {
-    const frames = {};
-    for (const card of this.options.seam ? [] : this.grid.cards) {
-      // default: a card that the walk does not meet holds no group.
-      const path = this.find(card.id)?.path ?? [];
-      const counts = { left: 0, right: 0, top: 0, bottom: 0 };
-      for (const node of path) {
-        const span = this.rectangle(node);
-        if (span.c0 === card.c0) counts.left++;
-        if (span.c1 === card.c1) counts.right++;
-        if (span.r1 === card.r1) counts.bottom++;
-      }
-      if (counts.left || counts.right || counts.bottom) frames[card.id] = counts;
-    }
-    this.frames = frames;
-    this.grid.setFrames(frames);
+    this.grid.frames = this.options.seam ? "none" : "corridor";
+    this.grid.setHeads(Object.fromEntries(this.nodes().map((node) => [node.card, this.headStep()])));
   }
 
   /** The header of the group card id: a row of the head height at the top of its drawn rectangle, across its whole width. */
@@ -493,11 +469,7 @@ export class GroupTree {
 
   /** The whole state as it stands, which restore puts back. */
   snapshot() {
-    const state = this.grid.toJSON();
-    return {
-      state: { ...state, paidBy: Object.fromEntries(Object.entries(state.paidBy).map(([id, record]) => [id, { ...record }])) },
-      groups: structuredClone(this.groups), rootLeader: this.rootLeader, last: this.last,
-    };
+    return { state: this.grid.toJSON(), groups: structuredClone(this.groups), rootLeader: this.rootLeader, last: this.last };
   }
 
   restore(kept) {
@@ -554,12 +526,7 @@ export class GroupTree {
     let result;
     try {
       result = change();
-      // The space holds a group after the change also when the change made the first one.
-      this.keepForm();
-      const broken = this.nodes().find((node) => !this.covers(node));
-      if (broken) throw new Error(`card ${id} cannot ${operation}: group ${broken.card} would not cover one rectangle`);
-      const breach = this.formBreach();
-      if (breach) throw new Error(`card ${id} cannot ${operation}: ${this.breachText(breach)}`);
+      this.reframe();
       const below = this.belowMinimum(before);
       if (below) throw new Error(`card ${id} cannot ${operation}: ${this.minimumText(below)}`);
     } catch (error) {
@@ -570,67 +537,12 @@ export class GroupTree {
   }
 
   /**
-   * Removes the lines that no card uses and every paidBy record of the grid while the space holds a group card, so a later close gives its
-   * cells to the neighbours that the layout library chooses and a later split lands in the middle of its card
-   * (docs/spec/groups.md#model). A space without groups keeps what the library keeps.
-   */
-  keepForm() {
-    this.reframe();
-    if (this.groups.length === 0) return;
-    this.grid.tidy();
-    const state = this.grid.toJSON();
-    if (Object.keys(state.paidBy).length) this.grid.replace({ ...state, paidBy: {} });
-    // Two lines at one coordinate, which a space without groups can hold, become one line.
-    for (const axis of ["x", "y"]) {
-      for (let k = this.grid.lines(axis).length - 2; k >= 1; k--) {
-        const lines = this.grid.lines(axis);
-        if (k < lines.length - 1 && Math.abs(lines[k] - lines[k - 1]) < EPSILON) this.grid.mergeCoincident(axis, k);
-      }
-    }
-    this.reframe();
-  }
-
-  /**
-   * The first breach of the form of a space with groups other than a group that does not cover its rectangle, or null: two lines of an
-   * axis at one coordinate around a slot that no card with a px size holds, {axis, line}, the first of them, x before y, or two group cards
-   * that overlap without one holding the other, {groups: [a, b]} in workbench order (docs/spec/groups.md#model).
-   */
-  formBreach() {
-    if (this.groups.length === 0) return null;
-    const state = this.grid.toJSON();
-    for (const [axis, lines, lo, hi, size] of [["x", state.xs, "c0", "c1", "width"], ["y", state.ys, "r0", "r1", "height"]]) {
-      for (let k = 0; k + 1 < lines.length; k++) {
-        const sized = state.cards.some((card) => card[lo] === k && card[hi] === k + 1 && card[size] !== undefined);
-        if (!sized && !(lines[k + 1] > lines[k])) return { axis, line: k };
-      }
-    }
-    const boxes = this.nodes().map((node) => ({ card: node.card, ...this.rectangle(node) }));
-    const holds = (p, q) => p.c0 <= q.c0 && p.c1 >= q.c1 && p.r0 <= q.r0 && p.r1 >= q.r1;
-    for (let i = 0; i < boxes.length; i++) {
-      for (let j = i + 1; j < boxes.length; j++) {
-        const a = boxes[i], b = boxes[j];
-        const apart = a.c1 <= b.c0 || b.c1 <= a.c0 || a.r1 <= b.r0 || b.r1 <= a.r0;
-        if (!apart && !holds(a, b) && !holds(b, a)) return { groups: [a.card, b.card] };
-      }
-    }
-    return null;
-  }
-
-  /** The text of a breach of formBreach after an operation. */
-  breachText(breach) {
-    return breach.groups ? `groups ${breach.groups[0]} and ${breach.groups[1]} would overlap`
-      : `the ${breach.axis} lines ${breach.line} and ${breach.line + 1} would stand at one coordinate`;
-  }
-
-  /**
    * Moves the boundary line of axis toward px, as moveBoundary of the grid does across every group, and stops at the last position at
    * which every content card that the move changes is drawn at least minSize (docs/spec/groups.md#minimum-size). In a space with groups a
    * line that ends on the coordinate of another line merges onto it, as at the end of a drag. Returns where the boundary stands.
    */
   moveBoundary(axis, line, px, allowSnap) {
-    const at = this.placeBoundary(axis, line, px, allowSnap);
-    this.keepForm();
-    return at;
+    return this.placeBoundary(axis, line, px, allowSnap);
   }
 
   /**
@@ -646,7 +558,6 @@ export class GroupTree {
       this.restore(kept);
       return this.grid.boundaryPos(axis, line);
     }
-    this.keepForm();
     return at;
   }
 
@@ -689,14 +600,9 @@ export class GroupTree {
     }
     // The frames follow the tree first, so the drawn rectangles that the balance measures are the ones that the space draws after it.
     this.reframe();
-    // Each group card is a box of the layout library with its header above its members, so no cut crosses a group card.
-    const box = (node) => ({
-      id: node.card,
-      head: this.headStep(),
-      members: node.members.map((member) => (typeof member === "string" ? member : box(member))),
-    });
+    // Each group card is a box of the tree with its header inside the top of its box, so a group card is one kid of its cut.
     try {
-      this.grid.even(this.groups.map(box));
+      this.grid.even();
     } catch (error) {
       throw new Error(`the layout cannot balance: ${error.message}`);
     }
@@ -744,12 +650,12 @@ export class GroupTree {
   }
 
   /**
-   * Everything that an answer of canSplit, canGroup or canClose reads: the arrangement of the grid with its paidBy records, the size,
-   * gap, smallest edge and fill order of the plane, the head height and the group cards with their members.
+   * Everything that an answer of canSplit, canGroup or canClose reads: the tree of the grid, the size, gap and smallest edge of the plane,
+   * the head height and the seam, and the group cards with their members.
    */
   layoutToken() {
     const { grid } = this;
-    return JSON.stringify([grid.toJSON(), grid.width, grid.height, grid.gap, grid.minSize, grid.fillOrder, this.options, this.groups]);
+    return JSON.stringify([grid.toJSON(), grid.width, grid.height, grid.gap, grid.minSize, this.options, this.groups]);
   }
 
   /** Runs change and puts everything back, and returns what change returned or throws what it threw. */
@@ -1016,40 +922,19 @@ export class GroupTree {
     const pieces = new Set([...inside(upper), ...inside(lower)]);
     if (this.grid.cards.some((card) => (card.r0 === line || card.r1 === line) && !pieces.has(card.id))) return;
     const delta = (down.h - up.h) / 2;
-    if (Math.abs(delta) > EPSILON) this.grid.moveLinePast("y", line, this.grid.boundaryPos("y", line) + delta);
+    if (Math.abs(delta) > EPSILON) this.grid.moveBoundary("y", line, this.grid.boundaryPos("y", line) + delta, false);
   }
 
   /**
-   * Closes the card id of the grid for the operation text op and returns the fill sides it closed with: a row of neighbours takes its
-   * cells, the sides are tried in the fill order of the layout library with the sides whose row lies inside the level of the card first,
-   * and the first result that keeps every group card one rectangle is kept; without such a row the slots of the card are removed, as the
-   * library removes them (R7), and the sides are empty. A refusal names its cause (docs/spec/groups.md#closing). parent is the group node
-   * of the level of the card, or null for the root level; a move passes the level that the card had before it left it.
+   * Closes the card id of the grid for the operation text op: its node, the card or the box around it that holds nothing else, leaves its
+   * cut, and the other kids of the cut that are no fixed card take its share by one factor (R7). A refusal names its cause
+   * (docs/spec/groups.md#closing).
    */
-  closeCell(id, op, parent = this.parentOf(id)) {
+  closeCell(id, op) {
     const refused = (why) => new Error(`card ${id} cannot ${op}: ${why}`);
     const card = this.grid.card(id);
     if (!card || card.fixed || this.grid.cards.filter((other) => !other.fixed).length <= 1) throw refused("it is the last card of the layout");
-    const level = new Set(this.levelMembers(parent).flatMap((member) => (typeof member === "string" ? [member] : this.contents(member))));
-    const inLevel = (side) => this.grid.fill(id, [side])?.cards.every((other) => level.has(other.id)) ?? false;
-    const sides = [...this.grid.fillSides].sort((a, b) => Number(inLevel(b)) - Number(inLevel(a)));
-    // The group cards in workbench order, read before a close takes a card out of the grid that the reading order measures.
-    const groups = this.nodes();
-    let broken = null;
-    for (const side of sides) {
-      if (!this.grid.fill(id, [side])) continue;
-      // Only the grid is put back: the nodes of the tree stay the objects that the caller holds.
-      const kept = this.snapshot().state;
-      if (this.grid.close(id, [side])) {
-        const group = groups.find((node) => !this.covers(node));
-        if (!group) return [side];
-        broken ??= group.card;
-      }
-      this.grid.replace(kept);
-    }
-    if (broken !== null) throw refused(`group ${broken} would not cover one rectangle`);
-    if (this.grid.close(id, [])) return [];
-    throw refused("no row of cards that can grow covers a side of it, and its slots hold other cards");
+    if (!this.grid.close(id)) throw refused("no kid of its cut can grow");
   }
 
   /** Whether close of the card id would succeed. */
@@ -1270,20 +1155,11 @@ export class GroupTree {
   }
 
   /**
-   * The stored form of the layout (docs/spec/groups.md#storage): {state, groups, leader, lastCard}, the grid, the group nodes of the root
-   * level in reading order, the leader of the root level or null, and lastCard.
+   * The stored form of the layout (docs/spec/groups.md#storage): {state, leader, lastCard}, the tree of the grid with the group cards as
+   * boxes, the leader of the root level or null, and lastCard.
    */
   stored() {
-    return {
-      state: this.grid.toJSON(),
-      groups: this.readingOrder(this.groups).map((node) => this.storedNode(node, false, 1)),
-      leader: this.rootLeader, lastCard: this.last,
-    };
-  }
-
-  /** The group nodes of the root level as core.layout reports them, each with the level of its members. */
-  tree() {
-    return this.readingOrder(this.groups).map((node) => this.storedNode(node, true, 1));
+    return { state: this.grid.toJSON(), leader: this.rootLeader, lastCard: this.last };
   }
 
   /** The node of the group card id as core.card.get reports it: {name, level, leader, members} with the level of its members. */
@@ -1302,43 +1178,21 @@ export class GroupTree {
 export const newGroupTree = (grid, options, leader, last) => new GroupTree(grid, options, [], leader, last);
 
 /**
- * Reads the stored layout of a space, {state, groups, leader, lastCard}, into grid and returns its group tree; each refusal throws the
- * text of docs/spec/groups.md#storage without the prefix that names the file, the project and the space. A member that is absent is
- * undefined.
+ * Reads the stored layout of a space, {state, leader, lastCard}, the tree of the grid with its group cards as boxes, into grid and
+ * returns its group tree; each refusal throws the text of docs/spec/groups.md#storage without the prefix that names the file, the
+ * project and the space. groups is the group list of the earlier form, which is refused. A member that is absent is undefined.
  */
 export function readGroupTree({ state, groups, leader, lastCard }, options, grid) {
   checkState(state);
-  const cards = new Set(state.cards.map((card) => card.id));
-  if (!Array.isArray(groups)) throw new Error(`layout stores groups ${JSON.stringify(groups) ?? "undefined"}, which is not a list of groups`);
-  const seen = new Set();
-  const nodes = groups.map((node) => readNode(node, cards, seen));
-  const tree = new GroupTree(grid, options, nodes, null, 0);
+  if (groups !== undefined) throw new Error("layout stores groups, the group list of the earlier form; the group cards are boxes of state");
   grid.replace(state);
-  const members = [...nodes.map((node) => node.card), ...state.cards.map((card) => card.id).filter((id) => !seen.has(id))];
-  tree.rootLeader = readLeader("root", members, leader, true);
-  for (const node of tree.nodes()) {
-    if (!tree.covers(node)) throw new Error(`group ${node.card} does not cover one rectangle of the grid`);
-  }
-  if (nodes.length) {
-    // default: paidBy is an optional member of a grid state.
-    const [paid] = Object.keys(state.paidBy ?? {}).sort();
-    if (paid !== undefined) throw new Error(`layout with groups stores the paidBy record of card ${paid}; a layout with groups keeps none`);
-    for (const [axis, lines, lo, hi] of [["x", state.xs, "c0", "c1"], ["y", state.ys, "r0", "r1"]]) {
-      const used = new Set(state.cards.flatMap((card) => [card[lo], card[hi]]));
-      const unused = lines.findIndex((_, k) => !used.has(k));
-      if (unused >= 0) throw new Error(`layout with groups stores the ${axis} line ${unused}, which no card uses; a layout with groups keeps none`);
-    }
-    const breach = tree.formBreach();
-    if (breach?.groups) {
-      throw new Error(`layout with groups stores the groups ${breach.groups[0]} and ${breach.groups[1]}, which overlap; two groups are disjoint or one holds the other`);
-    }
-    if (breach) {
-      throw new Error(`layout with groups stores the ${breach.axis} lines ${breach.line} and ${breach.line + 1} at one coordinate; a layout with groups keeps none`);
-    }
-  }
+  const seen = new Set();
+  const level = readLevel(state.root, seen);
+  const tree = new GroupTree(grid, options, level.filter((member) => typeof member !== "string"), null, 0);
+  tree.rootLeader = readLeader("root", level.map(memberId), leader, true);
   const refused = new Error(`layout stores lastCard ${JSON.stringify(lastCard) ?? "undefined"}, which is not the largest issued card number`);
   if (!Number.isInteger(lastCard) || lastCard < 1 || lastCard > LAST_LIMIT) throw refused;
-  for (const id of [...cards, ...seen]) {
+  for (const id of seen) {
     const n = cardNumber(id);
     if (n !== null && n > lastCard) throw refused;
   }
@@ -1347,28 +1201,31 @@ export function readGroupTree({ state, groups, leader, lastCard }, options, grid
   return tree;
 }
 
-/** Reads one stored group node and the nodes inside it; seen collects the identifiers of the tree. */
-function readNode(node, cards, seen) {
-  const keys = isObject(node) ? Object.keys(node).sort().join(",") : "";
-  if (keys !== "card,leader,members,name" || typeof node.card !== "string" || !Array.isArray(node.members)) {
-    throw new Error(`layout stores the group ${JSON.stringify(node)}, which is not {card, name, leader, members}`);
+/**
+ * Reads the members of a level from its node: the cards and the boxes that no box inside it holds, a card as its id and a box as a group
+ * node with the members of its inner node. seen collects every id.
+ */
+function readLevel(node, seen) {
+  if (node.cut) return node.kids.flatMap((kid) => readLevel(kid.node, seen));
+  if (node.box === undefined) {
+    seen.add(node.card);
+    return [node.card];
   }
-  const { card: id, name } = node;
+  const id = node.box;
+  seen.add(id);
+  const { data } = node;
+  if (!isObject(data) || Object.keys(data).sort().join(",") !== "leader,name") {
+    throw new Error(`layout stores the group ${id} with the data ${JSON.stringify(data) ?? "undefined"}, which is not {name, leader}`);
+  }
+  const { name } = data;
   if (typeof name !== "string" || [...name].length < 1 || [...name].length > 40 || name.trim() !== name) {
     throw new Error(`group ${id} stores the name ${JSON.stringify(name)}, which is not 1 to 40 characters`);
   }
-  if (cards.has(id) || seen.has(id)) throw new Error(`card ${id} is stored twice`);
-  seen.add(id);
-  if (node.members.length < 2) throw new Error(`group ${id} holds fewer than two cards`);
-  const members = node.members.map((member) => {
-    if (isObject(member)) return readNode(member, cards, seen);
-    if (typeof member === "string" && isPlace(member)) throw new Error(`group ${id} holds the window sidebar ${member}`);
-    if (typeof member !== "string" || !cards.has(member)) throw new Error(`group ${id} holds ${JSON.stringify(member)}, which is not a content card of the layout`);
-    if (seen.has(member)) throw new Error(`card ${member} is stored twice`);
-    seen.add(member);
-    return member;
-  });
-  return { card: id, name, leader: readLeader(`group ${id}`, members.map(memberId), node.leader, false), members };
+  const members = readLevel(node.inner, seen);
+  const side = members.find((member) => typeof member === "string" && isPlace(member));
+  if (side !== undefined) throw new Error(`group ${id} holds the window sidebar ${side}`);
+  if (!node.inner.cut) throw new Error(`group ${id} holds fewer than two cards`);
+  return [{ card: id, name, leader: readLeader(`group ${id}`, members.map(memberId), data.leader, false), members }];
 }
 
 /** Reads the stored leader of a level, named label in a refusal, among the identifiers of its members. */
