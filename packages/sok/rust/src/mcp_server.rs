@@ -274,6 +274,8 @@ struct PendingWatch {
 enum Prepared {
     Done(String),
     Watch(PendingWatch),
+    /// The answer of the command of messages_read or messages_wait, which a thread of its own waits for.
+    Command(oneshot::Receiver<Answer>),
 }
 
 struct ServerState {
@@ -589,6 +591,9 @@ impl Server {
             }
             _ => {}
         }
+        if let Some(operation) = name.strip_prefix("messages_") {
+            return messages_call(&connection, operation, args);
+        }
         let (window, home) = self.select_window(&connection, args)?;
         // The params of an endpoint request: the window and each named argument of the call that is present, with the text that
         // the agent wrote without the white space between its tokens.
@@ -865,6 +870,124 @@ fn limit_argument(args: &ToolArguments, fallback: usize, max: usize) -> Result<u
         .ok_or_else(|| Failure::Other(format!("limit must be an integer from 1 to {max}")))
 }
 
+/// A group of exposure.snapshot, with the members that messages_call reads.
+#[derive(serde::Deserialize)]
+struct SnapshotGroup {
+    #[serde(default)]
+    owner: String,
+    #[serde(default)]
+    surface: String,
+    #[serde(default)]
+    plugin: String,
+    #[serde(default)]
+    commands: Vec<SnapshotCommand>,
+}
+
+#[derive(serde::Deserialize)]
+struct SnapshotCommand {
+    #[serde(default)]
+    name: String,
+}
+
+#[derive(serde::Deserialize)]
+struct Snapshot {
+    #[serde(default)]
+    groups: Vec<SnapshotGroup>,
+}
+
+#[derive(serde::Deserialize)]
+struct Home {
+    #[serde(default)]
+    window: String,
+}
+
+/// Prepares messages_read or messages_wait (docs/spec/messaging.md#path-of-the-reads): the window of the terminal from
+/// surface.window, its plugin from the group of the surface in exposure.snapshot, and command.run of
+/// <plugin>.messages.<operation> on the surface in a thread of its own. The call has no time limit; a cancelled call ends without a
+/// result and leaves its endpoint request open, whose later answer the thread drops.
+fn messages_call(
+    connection: &Arc<Connection>,
+    operation: &str,
+    args: &ToolArguments,
+) -> Result<Prepared, Failure> {
+    let terminal = args.text("terminal").to_string();
+    let result = match connection.request(
+        "surface.window",
+        Some(serde_json::json!({ "surface": terminal })),
+    ) {
+        Err(Failure::Endpoint { code: 1012, .. }) => {
+            return Err(Failure::Other(format!(
+                "unknown-terminal: surface {terminal} is in no window"
+            )));
+        }
+        other => other?,
+    };
+    let window = serde_json::from_str::<Home>(&result)
+        .ok()
+        .map(|home| home.window)
+        .filter(|window| !window.is_empty())
+        .ok_or_else(|| {
+            Failure::Other(format!(
+                "surface.window returned an unexpected value: {result}"
+            ))
+        })?;
+    let result = connection.request(
+        "exposure.snapshot",
+        Some(serde_json::json!({ "window": window, "surface": terminal })),
+    )?;
+    let snapshot = serde_json::from_str::<Snapshot>(&result).map_err(|_| {
+        Failure::Other(format!(
+            "exposure.snapshot returned an unexpected value: {result}"
+        ))
+    })?;
+    let Some(group) = snapshot
+        .groups
+        .iter()
+        .find(|group| group.owner == "surface" && group.surface == terminal)
+    else {
+        return Err(Failure::Other(format!(
+            "exposure.snapshot of window {window} holds no group of surface {terminal}"
+        )));
+    };
+    let command = format!("{}.messages.{operation}", group.plugin);
+    if !group.commands.iter().any(|entry| entry.name == command) {
+        return Err(Failure::Other(format!(
+            "unknown-terminal: surface {terminal} of plugin {} registers no command {command}",
+            group.plugin
+        )));
+    }
+    let mut params = BTreeMap::new();
+    for member in ["after", "registration"] {
+        if let Some(value) = args.raw.get(member) {
+            params.insert(member.to_string(), compacted(value)?);
+        }
+    }
+    let mut request = BTreeMap::new();
+    for (member, value) in [
+        ("window", &window),
+        ("surface", &terminal),
+        ("name", &command),
+    ] {
+        request.insert(
+            member.to_string(),
+            serde_json::value::to_raw_value(value).map_err(unwritten)?,
+        );
+    }
+    request.insert(
+        "params".to_string(),
+        serde_json::value::to_raw_value(&params).map_err(unwritten)?,
+    );
+    let (sender, receiver) = oneshot::channel();
+    let connection = connection.clone();
+    routine::spawn_named("mcp messages", move || {
+        // A call that the client cancelled has dropped its receiver, so the later answer has no call to go to.
+        if let Err(unsent) = sender.send(connection.request("command.run", Some(request))) {
+            drop(unsent);
+        }
+    });
+    Ok(Prepared::Command(receiver))
+}
+
 /// Runs a body in a thread of its own and returns its result to the protocol thread.
 async fn in_thread<T: Send + 'static>(name: &str, body: impl FnOnce() -> T + Send + 'static) -> T {
     let (sender, receiver) = oneshot::channel();
@@ -904,6 +1027,18 @@ impl Handler {
             Err(failure) => return Some(Err(failure.to_string())),
             Ok(Prepared::Done(text)) => return Some(Ok(text)),
             Ok(Prepared::Watch(pending)) => pending,
+            Ok(Prepared::Command(answer)) => {
+                return tokio::select! {
+                    // default: a dropped sender means the thread of the command ended without an answer, which the call reports.
+                    answer = answer => Some(
+                        answer
+                            .unwrap_or_else(|_| Err(Failure::Other("the command ended without an answer".into())))
+                            .and_then(|value| compact_raw(&value))
+                            .map_err(|failure| failure.to_string()),
+                    ),
+                    () = context.ct.cancelled() => None,
+                };
+            }
         };
         let PendingWatch {
             watch,

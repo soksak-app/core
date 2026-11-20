@@ -20,6 +20,7 @@ import (
 	"reflect"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"unicode/utf8"
 
@@ -127,10 +128,11 @@ const mcpLineLimit = 16 * 1024 * 1024
 // as a line longer than mcpLineLimit, once the input ended, and nil before.
 func mcpInput(in io.Reader, out io.Writer, report func(string)) (transport *mcp.IOTransport, ended func() error) {
 	reader, writer := io.Pipe()
-	output := &lockedWriter{out: out}
+	calls := &openCalls{cancelled: map[string]bool{}}
+	output := &lockedWriter{out: out, calls: calls}
 	result := make(chan error, 1)
 	Go("mcp input", func() {
-		err := filterMessages(in, writer, output, report)
+		err := filterMessages(in, writer, output, calls, report)
 		result <- err
 		writer.CloseWithError(err)
 	})
@@ -145,13 +147,64 @@ func mcpInput(in io.Reader, out io.Writer, report func(string)) (transport *mcp.
 	return &mcp.IOTransport{Reader: reader, Writer: output}, ended
 }
 
-// lockedWriter writes each Write to out whole, one at a time.
+// openCalls holds the requests of the client that the library has not answered yet, each with whether the client cancelled it. A
+// cancelled call gets no answer (docs/spec/cli.md#mcp-server): the library of Go writes the answer of every call, also of a call
+// whose cancellation it received, so the server drops that answer when the library writes it.
+type openCalls struct {
+	mu        sync.Mutex
+	cancelled map[string]bool
+}
+
+// messageHead is the part of a message line that names a request, its answer or a cancellation.
+type messageHead struct {
+	ID     json.RawMessage `json:"id"`
+	Method string          `json:"method"`
+	Params struct {
+		RequestID json.RawMessage `json:"requestId"`
+	} `json:"params"`
+}
+
+// read notes a request of the client, and the cancellation of a request that is open, from a line that the library will read.
+func (c *openCalls) read(line []byte) {
+	var head messageHead
+	if json.Unmarshal(line, &head) != nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(head.ID) > 0 && head.Method != "" {
+		c.cancelled[string(head.ID)] = false
+	} else if head.Method == "notifications/cancelled" && len(head.Params.RequestID) > 0 {
+		if _, open := c.cancelled[string(head.Params.RequestID)]; open {
+			c.cancelled[string(head.Params.RequestID)] = true
+		}
+	}
+}
+
+// answered ends the call that the answer data names and tells whether the client had cancelled it.
+func (c *openCalls) answered(data []byte) bool {
+	var head messageHead
+	if json.Unmarshal(data, &head) != nil || len(head.ID) == 0 || head.Method != "" {
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	cancelled := c.cancelled[string(head.ID)]
+	delete(c.cancelled, string(head.ID))
+	return cancelled
+}
+
+// lockedWriter writes each Write to out whole, one at a time, except the answer of a call that the client cancelled.
 type lockedWriter struct {
-	mu  sync.Mutex
-	out io.Writer
+	mu    sync.Mutex
+	out   io.Writer
+	calls *openCalls
 }
 
 func (w *lockedWriter) Write(data []byte) (int, error) {
+	if w.calls.answered(data) {
+		return len(data), nil
+	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return w.out.Write(data)
@@ -161,7 +214,7 @@ func (w *lockedWriter) Close() error { return nil }
 
 // filterMessages copies the lines of in to pass until in ends, except a line that mcpRefusal refuses: its answer goes to out, and
 // a refused line without an answer is reported. A line longer than mcpLineLimit ends the input with an error.
-func filterMessages(in io.Reader, pass io.Writer, out io.Writer, report func(string)) error {
+func filterMessages(in io.Reader, pass io.Writer, out io.Writer, calls *openCalls, report func(string)) error {
 	scanner := bufio.NewScanner(in)
 	scanner.Buffer(make([]byte, 0, 64*1024), mcpLineLimit)
 	for scanner.Scan() {
@@ -175,6 +228,7 @@ func filterMessages(in io.Reader, pass io.Writer, out io.Writer, report func(str
 		case reason != "":
 			report("sok: mcp: " + reason)
 		default:
+			calls.read(line)
 			if _, err := pass.Write(append(line, '\n')); err != nil {
 				return err
 			}
@@ -688,6 +742,9 @@ func (s *mcpServer) call(ctx context.Context, name string, args toolArguments) (
 		}
 		return encodeJSON(context)
 	}
+	if name == "messages_read" || name == "messages_wait" {
+		return messagesCall(ctx, connection, strings.TrimPrefix(name, "messages_"), args)
+	}
 	window, home, err := s.selectWindow(request, args)
 	if err != nil {
 		return nil, err
@@ -736,6 +793,79 @@ func (s *mcpServer) call(ctx context.Context, name string, args toolArguments) (
 		return passed(request("input.text", withArguments(window, args, "phase", "text", "selection", "replacement")))
 	}
 	return nil, fmt.Errorf("unknown tool %s", name)
+}
+
+// messagesCall runs messages_read or messages_wait (docs/spec/messaging.md#path-of-the-reads): the window of the terminal from
+// surface.window, its plugin from the group of the surface in exposure.snapshot, and command.run of <plugin>.messages.<operation> on
+// the surface. The call has no time limit; a cancelled call ends without a result and leaves its endpoint request open, whose later
+// answer the reader of the connection discards.
+func messagesCall(ctx context.Context, connection *endpointConnection, operation string, args toolArguments) ([]byte, error) {
+	terminal := args.text("terminal")
+	result, err := connection.request("surface.window", map[string]any{"surface": terminal})
+	var endpointErr *EndpointError
+	if errors.As(err, &endpointErr) && endpointErr.Code == 1012 {
+		return nil, fmt.Errorf("unknown-terminal: surface %s is in no window", terminal)
+	}
+	if err != nil {
+		return nil, err
+	}
+	var home struct {
+		Window string `json:"window"`
+	}
+	if json.Unmarshal(result, &home) != nil || home.Window == "" {
+		return nil, fmt.Errorf("surface.window returned an unexpected value: %s", result)
+	}
+	result, err = connection.request("exposure.snapshot", map[string]any{"window": home.Window, "surface": terminal})
+	if err != nil {
+		return nil, err
+	}
+	var snapshot struct {
+		Groups []struct {
+			Owner    string `json:"owner"`
+			Surface  string `json:"surface"`
+			Plugin   string `json:"plugin"`
+			Commands []struct {
+				Name string `json:"name"`
+			} `json:"commands"`
+		} `json:"groups"`
+	}
+	if json.Unmarshal(result, &snapshot) != nil {
+		return nil, fmt.Errorf("exposure.snapshot returned an unexpected value: %s", result)
+	}
+	for _, group := range snapshot.Groups {
+		if group.Owner != "surface" || group.Surface != terminal {
+			continue
+		}
+		command := group.Plugin + ".messages." + operation
+		registered := false
+		for _, entry := range group.Commands {
+			registered = registered || entry.Name == command
+		}
+		if !registered {
+			return nil, fmt.Errorf("unknown-terminal: surface %s of plugin %s registers no command %s", terminal, group.Plugin, command)
+		}
+		params := map[string]any{}
+		for _, member := range []string{"after", "registration"} {
+			if value, ok := args[member]; ok {
+				params[member] = value
+			}
+		}
+		answer := make(chan endpointAnswer, 1)
+		Go("mcp messages", func() {
+			result, err := connection.request("command.run", map[string]any{"window": home.Window, "surface": terminal, "name": command, "params": params})
+			answer <- endpointAnswer{result, err}
+		})
+		select {
+		case got := <-answer:
+			if got.err != nil {
+				return nil, got.err
+			}
+			return compactRaw(got.result)
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	return nil, fmt.Errorf("exposure.snapshot of window %s holds no group of surface %s", home.Window, terminal)
 }
 
 // limitArgument reads limit, an integer from 1 to max with the default fallback when it is absent.
