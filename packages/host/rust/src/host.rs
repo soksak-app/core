@@ -110,6 +110,7 @@ pub mod windows;
 #[cfg(test)]
 #[path = "windows_front_test.rs"]
 mod windows_front_test;
+pub mod role_file;
 pub mod workspace;
 
 use application_log::{log_error, log_failure};
