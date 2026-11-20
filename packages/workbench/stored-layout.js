@@ -7,6 +7,9 @@ import { stateCards } from "./layout-tree.js";
 import { reportError, restoreOrigin } from "./tab-reports.js";
 import { windowSidebar } from "./window-sidebars.js";
 
+// The members of a stored space layout (docs/spec/groups.md#storage), with groups, the earlier group list that readGroupTree refuses.
+const LAYOUT_MEMBERS = ["state", "leader", "lastCard", "focusedId", "named", "sidebars", "windowSidebars", "groups"];
+
 // A plugin whose declared surface is a view (docs/spec/native-surfaces.md#view-surfaces). A plugin that is not loaded is not a view.
 const viewPlugin = (id) => pluginUnits().find(unit => unit.id === id)?.composition === "view";
 
@@ -37,6 +40,10 @@ export function checkStoredLayout(kept) {
   if (Object.hasOwn(kept, "sidebars") && (!kept.sidebars || typeof kept.sidebars !== "object" || Array.isArray(kept.sidebars)))
     throw new Error("invalid stored sidebar choices");
   if (Object.hasOwn(kept, "railWidth") || Object.hasOwn(kept, "edgeWidth")) throw new Error("obsolete window sidebar state");
+  // A member that the storage does not define is refused, so a member of an earlier form is not dropped at the next write;
+  // groups is refused by readGroupTree with the text of the earlier group list (docs/spec/groups.md#storage).
+  const unknown = Object.keys(kept).filter((key) => !LAYOUT_MEMBERS.includes(key)).sort();
+  if (unknown.length) throw new Error(`layout stores ${unknown.join(", ")}, which a space layout does not hold`);
   // The tree of the layout is read first, so a state in an earlier form is refused with what it holds before its cards are read.
   checkState(kept.state);
   const units = pluginUnits();

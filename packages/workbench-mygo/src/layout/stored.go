@@ -178,6 +178,10 @@ func list(raw json.RawMessage) ([]json.RawMessage, bool) {
 // isWindowSidebar is whether id names a fixed window sidebar.
 func isWindowSidebar(id string) bool { return IsWindowSide(id) }
 
+// layoutMembers are the members of a stored space layout (docs/spec/groups.md#storage), with groups, the earlier group list that ReadTree
+// refuses.
+var layoutMembers = []string{"state", "leader", "lastCard", "focusedId", "named", "sidebars", "windowSidebars", "groups"}
+
 // CheckStoredLayout is the reason the stored layout of a space cannot be opened with the loaded plugins units, or nil when it can.
 func CheckStoredLayout(layout json.RawMessage, units []PluginUnit) error {
 	kept, _, ok := object(layout)
@@ -194,6 +198,18 @@ func CheckStoredLayout(layout json.RawMessage, units []PluginUnit) error {
 	}
 	if _, edge := kept["edgeWidth"]; edge {
 		return errors.New("obsolete window sidebar state")
+	}
+	// A member that the storage does not define is refused, so a member of an earlier form is not dropped at the next write; groups is
+	// refused by ReadTree with the text of the earlier group list (docs/spec/groups.md#storage).
+	var unknown []string
+	for key := range kept {
+		if !slices.Contains(layoutMembers, key) {
+			unknown = append(unknown, key)
+		}
+	}
+	if len(unknown) > 0 {
+		slices.Sort(unknown)
+		return fmt.Errorf("layout stores %s, which a space layout does not hold", strings.Join(unknown, ", "))
 	}
 	if jsonKind(kept["state"]) != '{' {
 		return errors.New("a stored layout has no state")

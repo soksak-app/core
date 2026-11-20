@@ -20,7 +20,7 @@ const sidebarsEnvironment = `{"sidebars":{"sets":[
 	"links":[{"place":"left","plugin":null,"set":"set-install"},{"place":"window-right","plugin":"boxprobe","set":"set-boxprobe"}]}}`
 
 const sidebarsInstalled = `{"plugins":[
-	{"id":"boxprobe","package":"b","version":"1.0.0","manifest":{"id":"boxprobe","name":"브라우저","description":"boxprobe","sections":[
+	{"id":"boxprobe","package":"b","version":"1.0.0","manifest":{"id":"boxprobe","name":"브라우저","description":"boxprobe","mark":"www","icon":"<path d=\"M1 1h14\"/>","surface":{"composition":{"kind":"view","page":"ui/index.html"}},"sections":[
 		{"id":"boxprobe.tabs","name":"탭","composition":{"kind":"view","page":"ui/section.html"},"height":160},
 		{"id":"boxprobe.history","name":"기록","composition":{"kind":"view","page":"ui/section.html"},"height":"fill"},
 		{"id":"boxprobe.dom","name":"DOM","composition":{"kind":"view","page":"ui/section.html"},"height":"fill"},

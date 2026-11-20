@@ -163,7 +163,7 @@ focus ring은 어느 level의 content card 하나 위에 있고, keyboard는 [ke
 
 ## 저장
 
-`projects.json`의 space layout([persistence](projects.ko.md#저장))은 group card를 box로 가진 grid의 tree를 `state`로, space가 낸 가장 큰 card 번호를 `lastCard`로, root level의 leader를 `leader`로 저장한다. `lastCard`는 tree의 모든 card 식별자의 번호 이상인 양의 정수다. `leader`는 root level의 member의 식별자이거나, root level이 window sidebar만 가지는 동안 `null`이다. box의 `data`는 정확히 `{name, leader}`다. `name`은 group의 이름이고 `leader`는 그 member 하나의 식별자다. level은 box의 깊이가 주므로 저장되지 않는다.
+`projects.json`의 space layout([persistence](projects.ko.md#저장))은 group card를 box로 가진 grid의 tree를 `state`로, space가 낸 가장 큰 card 번호를 `lastCard`로, root level의 leader를 `leader`로 저장한다. `lastCard`는 tree의 모든 card 식별자의 번호 이상인 양의 정수다. `leader`는 root level의 member의 식별자이거나, root level이 window sidebar만 가지는 동안 `null`이다. box의 `data`는 정확히 `{name, leader}`다. `name`은 group의 이름이고 `leader`는 그 member 하나의 식별자다. level은 box의 깊이가 주므로 저장되지 않는다. 이 member 곁에 space layout은 `focusedId`, `named`, `sidebars`, `windowSidebars`를 가지며([persistence](projects.ko.md#저장)), 다른 member는 가지지 않는다.
 
 저장된 layout은 이 형태로만 읽힌다. 각 거부는 [persistence](projects.ko.md#저장)가 저장된 layout에 대해 말하듯 space의 거부다. 그 space를 여는 것은 실패하고 library 미리보기가 오류를 보이며, registry와 다른 space는 계속 읽힌다. 각 거부의 앞머리는 `projects.json: project <root> space <space>: `이며, `<level>`은 `root` 또는 `group <id>`다.
 
@@ -171,6 +171,7 @@ focus ring은 어느 level의 content card 하나 위에 있고, keyboard는 [ke
 | --- | --- |
 | layout library가 거부하는 tree, 이전 형태 `{xs, ys, cards}` 포함 | `checkState`의 오류 |
 | 이전 형태의 group 목록인 `groups`를 저장한 layout | `layout stores groups, the group list of the earlier form; the group cards are boxes of state` |
+| `state`, `leader`, `lastCard`, `focusedId`, `named`, `sidebars`, `windowSidebars` 밖의 member를 저장한 layout. 단 `groups`와 이전 형태의 member `railWidth`, `edgeWidth`는 제 문구를 가진다 | `layout stores <members>, which a space layout does not hold`. member는 이름 순서로 `, `로 나뉜다 |
 | `data`가 다른 형태인 box | `layout stores the group <id> with the data <value>, which is not {name, leader}` |
 | 다른 형태의 이름 | `group <id> stores the name <value>, which is not 1 to 40 characters` |
 | window sidebar를 담은 box | `group <id> holds the window sidebar <side>` |
