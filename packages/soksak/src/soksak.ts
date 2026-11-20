@@ -1393,6 +1393,7 @@ export class Soksak {
         return (slot[hi] - slot[lo]) * this.size(axis) - inset[lo] - inset[hi] - frames;
       },
       corridor: (axis) => this.unit[axis],
+      frame: (node, axis) => this.frameOf(node, axis, this.unit),
       visit: () => {
         this.visited++;
       },

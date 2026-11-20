@@ -36,6 +36,8 @@ export interface Input {
   content(node: TreeNode, axis: Axis): number;
   /** The corridor of an axis in px. */
   corridor(axis: Axis): number;
+  /** The px that the frames and the heads of a box take on an axis, of the boxes inside it included; 0 for a card or a cut. */
+  frame(node: TreeNode, axis: Axis): number;
   /** Counts each node that an operation visits (packages/soksak/docs/layout.md#cuts). */
   visit(): void;
 }
@@ -348,8 +350,9 @@ export function withdrawNode(input: Input, id: string, cards: readonly { id: str
 
 /**
  * EXCHANGE (packages/soksak/docs/layout.md#add-and-remove): the stored tree with the node `a`, a card or a box, where the node `b` stands
- * and `b` where `a` stood. Each place keeps its fraction and the px size that a card there declares: a card takes the px size of the place
- * it enters, and a box, which declares none, its fraction. Two nodes of which one holds the other and a fixed card are refused.
+ * and `b` where `a` stood. Each place keeps the size it is drawn at: a node that enters a place takes that size less its own frames and
+ * head, which are a cost of the place, and a card takes the px size that the card of that place declared. Two nodes of which one holds
+ * the other and a fixed card are refused.
  */
 export function exchangeNodes(input: Input, a: string, b: string): TreeNode {
   const index = new Index(input.root, input);
@@ -364,9 +367,15 @@ export function exchangeNodes(input: Input, a: string, b: string): TreeNode {
     return outer.card === id;
   };
   if (holds(na as TreeNode, b) || holds(nb as TreeNode, a)) throw new Error(`card ${a} and card ${b} hold one another and do not exchange`);
+  // The size belongs to the place: each kid of the cuts of the two places keeps the size it is drawn at with its frames, read before
+  // the exchange, and a node that enters a place takes that size less its own frames.
+  const holders = [...new Set([index.parent.get(na as TreeNode), index.parent.get(nb as TreeNode)].filter((h): h is CutNode => h !== undefined))];
+  const sizes = holders.map((holder) => holder.kids.map((kid) =>
+    input.content(kid.node, holder.cut) + (input.keeps(kid.node, holder.cut) ? 0 : input.frame(kid.node, holder.cut))));
   const putA = placeOf(index, na as TreeNode), putB = placeOf(index, nb as TreeNode);
   putA(nb as TreeNode);
   putB(na as TreeNode);
+  holders.forEach((holder, h) => sharePlaces(input, holder, sizes[h]));
   if (isCard(na as TreeNode) && isCard(nb as TreeNode)) {
     const ca = na as CardNode, cb = nb as CardNode;
     const [wa, ha, wb, hb] = [ca.width, ca.height, cb.width, cb.height];
@@ -375,6 +384,23 @@ export function exchangeNodes(input: Input, a: string, b: string): TreeNode {
   } else if (isCard(na as TreeNode)) setSize(na as CardNode, undefined, undefined);
   else if (isCard(nb as TreeNode)) setSize(nb as CardNode, undefined, undefined);
   return index.root;
+}
+
+/**
+ * Gives each kid of the cut holder that takes a fraction the share that draws its place at the size of sizes, its content that size less
+ * its own frames, out of the fractions that those kids hold together. A place too small for the frames of its node keeps the fractions,
+ * and the judge of the result refuses it.
+ */
+function sharePlaces(input: Input, holder: CutNode, sizes: readonly number[]): void {
+  const axis = holder.cut;
+  const taking = holder.kids.map((kid, i) => (input.keeps(kid.node, axis) ? null : sizes[i] - input.frame(kid.node, axis)));
+  if (taking.some((want) => want !== null && want <= 0)) return;
+  const total = taking.reduce<number>((a, want) => a + (want ?? 0), 0);
+  const shared = holder.kids.reduce((a, kid, i) => (taking[i] !== null ? a + kid.share : a), 0);
+  if (total <= 0) return;
+  holder.kids.forEach((kid, i) => {
+    if (taking[i] !== null) kid.share = ((taking[i] as number) / total) * shared;
+  });
 }
 
 /** Writes the px sizes width and height of a card, an undefined size leaving the card without it. */

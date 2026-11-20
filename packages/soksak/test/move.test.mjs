@@ -150,7 +150,7 @@ test("no existing id is reassigned", () => {
   assert.equal(new Set(grid.cards.map((c) => c.id)).size, grid.cards.length, "no name twice");
 });
 
-test("exchange puts two nodes in each other's place, each place keeping its fraction and the px size of a card there", () => {
+test("exchange puts two nodes in each other's place, each place keeping the size it is drawn at and the px size of a card there", () => {
   const state = { root: { cut: "x", kids: [
     { share: 0.4, node: { card: "a", width: 300 } },
     { share: 0.6, node: { box: "g", inner: { cut: "y", kids: [{ share: 0.5, node: { card: "b" } }, { share: 0.5, node: { card: "c", width: 200 } }] } } },

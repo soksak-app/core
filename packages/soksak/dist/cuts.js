@@ -343,8 +343,9 @@ export function withdrawNode(input, id, cards) {
 }
 /**
  * EXCHANGE (packages/soksak/docs/layout.md#add-and-remove): the stored tree with the node `a`, a card or a box, where the node `b` stands
- * and `b` where `a` stood. Each place keeps its fraction and the px size that a card there declares: a card takes the px size of the place
- * it enters, and a box, which declares none, its fraction. Two nodes of which one holds the other and a fixed card are refused.
+ * and `b` where `a` stood. Each place keeps the size it is drawn at: a node that enters a place takes that size less its own frames and
+ * head, which are a cost of the place, and a card takes the px size that the card of that place declared. Two nodes of which one holds
+ * the other and a fixed card are refused.
  */
 export function exchangeNodes(input, a, b) {
     const index = new Index(input.root, input);
@@ -364,9 +365,14 @@ export function exchangeNodes(input, a, b) {
     };
     if (holds(na, b) || holds(nb, a))
         throw new Error(`card ${a} and card ${b} hold one another and do not exchange`);
+    // The size belongs to the place: each kid of the cuts of the two places keeps the size it is drawn at with its frames, read before
+    // the exchange, and a node that enters a place takes that size less its own frames.
+    const holders = [...new Set([index.parent.get(na), index.parent.get(nb)].filter((h) => h !== undefined))];
+    const sizes = holders.map((holder) => holder.kids.map((kid) => input.content(kid.node, holder.cut) + (input.keeps(kid.node, holder.cut) ? 0 : input.frame(kid.node, holder.cut))));
     const putA = placeOf(index, na), putB = placeOf(index, nb);
     putA(nb);
     putB(na);
+    holders.forEach((holder, h) => sharePlaces(input, holder, sizes[h]));
     if (isCard(na) && isCard(nb)) {
         const ca = na, cb = nb;
         const [wa, ha, wb, hb] = [ca.width, ca.height, cb.width, cb.height];
@@ -378,6 +384,25 @@ export function exchangeNodes(input, a, b) {
     else if (isCard(nb))
         setSize(nb, undefined, undefined);
     return index.root;
+}
+/**
+ * Gives each kid of the cut holder that takes a fraction the share that draws its place at the size of sizes, its content that size less
+ * its own frames, out of the fractions that those kids hold together. A place too small for the frames of its node keeps the fractions,
+ * and the judge of the result refuses it.
+ */
+function sharePlaces(input, holder, sizes) {
+    const axis = holder.cut;
+    const taking = holder.kids.map((kid, i) => (input.keeps(kid.node, axis) ? null : sizes[i] - input.frame(kid.node, axis)));
+    if (taking.some((want) => want !== null && want <= 0))
+        return;
+    const total = taking.reduce((a, want) => a + (want !== null && want !== void 0 ? want : 0), 0);
+    const shared = holder.kids.reduce((a, kid, i) => (taking[i] !== null ? a + kid.share : a), 0);
+    if (total <= 0)
+        return;
+    holder.kids.forEach((kid, i) => {
+        if (taking[i] !== null)
+            kid.share = (taking[i] / total) * shared;
+    });
 }
 /** Writes the px sizes width and height of a card, an undefined size leaving the card without it. */
 function setSize(card, width, height) {
