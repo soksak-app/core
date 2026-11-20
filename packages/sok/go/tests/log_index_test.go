@@ -467,6 +467,64 @@ func TestLogIndexUpdateAllocatesForTheAppendedBytesOnly(t *testing.T) {
 	}
 }
 
+// contract: log.index.update-reads-the-appended-bytes-only
+func TestLogIndexUpdateReadsTheAppendedBytesOnly(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "host-a.jsonl")
+	partial := eventLineOf(4002)
+	first := linesOf(1, 4001) + partial[:30]
+	if err := os.WriteFile(path, []byte(first), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sok.UpdateLogIndex(path); err != nil {
+		t.Fatal(err)
+	}
+	indexed := int64(len(linesOf(1, 4001)))
+	// The partial segment holds 4,001 lines; the update reads the bytes after the last indexed line feed, not the segment again, and the
+	// record of the partial segment grows by the new lines across the end of the segment.
+	appended := partial[30:] + "\n" + linesOf(4003, 4200)
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := file.WriteString(appended); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	update, err := sok.UpdateLogIndex(path)
+	if err != nil || update.Rebuilt {
+		t.Fatalf("append update %+v err %v", update, err)
+	}
+	if want := int64(len(first)+len(appended)) - indexed; update.Bytes != want || update.Lines != 199 || update.Announcing != 199 {
+		t.Fatalf("the update read %d bytes and indexed %d lines, %d announcing; want the %d bytes after the indexed part and 199 lines",
+			update.Bytes, update.Lines, update.Announcing, want)
+	}
+	// The records that the updates grew are the records that one build of the whole file writes: the full records after the state
+	// blocks and the record of the partial segment in the valid block. The blocks differ in their generation.
+	whole := filepath.Join(dir, "host-b.jsonl")
+	if err := os.WriteFile(whole, []byte(linesOf(1, 4200)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sok.UpdateLogIndex(whole); err != nil {
+		t.Fatal(err)
+	}
+	records := func(path string, generation int) ([]byte, []byte) {
+		data, err := os.ReadFile(path + ".idx")
+		if err != nil {
+			t.Fatal(err)
+		}
+		block := data[(generation%2)*stateBlockBytes:]
+		return data[2*stateBlockBytes:], block[88 : 88+recordBytes]
+	}
+	grownFull, grownTail := records(path, 2)
+	builtFull, builtTail := records(whole, 1)
+	if string(grownFull) != string(builtFull) || string(grownTail) != string(builtTail) {
+		t.Fatalf("the records grown by updates differ from the records built from the whole file")
+	}
+}
+
 // A head read that fails fails the index update with the read error. The update does not rebuild with a reason that the file
 // does not show, such as the first line changed.
 // contract: log.index.head-read-error-is-reported

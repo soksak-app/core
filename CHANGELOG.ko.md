@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F996-5.2 (실행 중인 log의 index 갱신): Go와 Rust의 index 갱신은 부분 segment를 다시 읽지 않고 `indexed_bytes` 뒤의 줄을 부분 segment의 기록에 더한다. 그래서 쓰기 뒤의 갱신은 덧붙은 바이트만 읽는다. 꾸준히 출력하는 terminal 셋과 넓은 event log 정책의 mygo debug host는 processor 하나의 15~17% 대신 8.8%를 쓴다(`docs/spec/logging.md#index`).
 - F996-5.1 (routine의 작업): performance trace가 켜진 동안 Go와 Rust host의 표본 추출은 표본마다 프로세스의 벽시계 시간과 processor 시간, 그리고 `log-index`와 `service-messages`의 wake 수, 작업 시간, 바이트를 담은 `host.sampler.routines`를 저장한다(`docs/spec/performance-trace.md`).
 - F899-7.5-9: layout은 새 탭의 이름을 plugin의 mark 없이 `탭 <n>`으로 저장하고, `core.grid`는 그 이름을 `title`로 알리며, 탭 줄, 탭 목록, 저장하지 않은 변경에 대한 질문은 그 앞에 mark를 그린다. Page와 mygo workbench 모두 그렇다(`docs/spec/example-model.md#card-tabs`).
 - F899-7.5-8: 주입 message는 보낸 쪽을 tab name, 즉 `core.grid`에서 tab의 `title`로 부르며, tab의 program이 정한 제목으로 결코 부르지 않는다(`docs/spec/messaging.md#injected-message`).

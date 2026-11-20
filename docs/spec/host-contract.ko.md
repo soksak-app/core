@@ -1093,6 +1093,7 @@ fn invalid_json_closes_connection() {
 | `log.index.refuses-a-damaged-index-and-a-broken-line` | 다른 버전의 색인, 검사합이 맞지 않는 block이나 기록, block보다 짧은 파일은 색인을 밝히는 오류이고, event 구조를 어기는 줄과 schema 2의 `log.open`이 아닌 첫 줄은 파일과 줄을 밝히는 오류이며 색인은 이전 상태를 유지한다. | all |
 | `log.index.moves-with-the-generations-of-a-rotation` | 회전은 가득 찬 파일의 색인을 최신으로 맞추고 색인 파일을 세대와 함께 바꾸어, 닫힌 세대가 만들기 없이 색인으로 답하게 하고 지워진 세대의 색인을 지운다. | all |
 | `log.index.update-reads-with-a-buffer-of-the-new-bytes` | index의 갱신은 읽는 byte만큼, 많아야 한 번 읽는 chunk만큼 읽기 buffer를 할당하므로, 덧붙은 두 줄의 갱신은 1 MiB보다 적게 할당한다. | all |
+| `log.index.update-reads-the-appended-bytes-only` | 파일보다 오래된 index의 갱신은 `indexed_bytes` 뒤의 바이트만 읽고 그 앞의 바이트는 읽지 않으며, 새 줄만 색인하고 알리고, 부분 segment의 기록을 segment의 끝을 넘어서까지 파일 전체를 한 번 만든 기록과 같게 키운다. | all |
 | `log.writer.indexes-each-batch-it-wrote` | host의 writer가 batch를 쓴 뒤 질의 없이도 그 파일의 색인이 batch의 줄을 덮고, writer의 회전은 닫힌 세대의 색인을 완전하게 남긴다. | all |
 | `log.writer.stores-an-event-for-each-index-built-from-the-file` | 파일 전체로 만든 색인은 파일, 이유, 줄 수, 바이트, 마이크로초를 가진 event `host.log.index_rebuilt`이고, 증분 갱신은 event를 저장하지 않으며, 실패한 갱신은 문구마다 한 번 장소 `log index`의 `error` 기록으로 보인다. | all |
 | `log.endpoint.query-answers-one-page` | diagnostics가 없는 빌드의 endpoint 메서드 `log.query`가 질의의 page로 답하고, 매개변수를 invalid-params 오류와 질의의 문구로 거절하며, `window`를 받지 않는다. | all |

@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F996-5.2 (index update of a running log): the Go and the Rust update of an index add the lines after `indexed_bytes` to the record of the partial segment instead of reading the partial segment again, so an update after a write reads only the appended bytes; on the mygo debug host with three terminals of steady output and a wide event log policy the host takes 8.8% of a processor instead of 15 to 17% (`docs/spec/logging.md#index`).
 - F996-5.1 (work of the routines): while the performance trace is on, the sampler of the Go and the Rust host stores `host.sampler.routines` at each sample with the wall time and the processor time of the process and the wakes, work time and bytes of `log-index` and `service-messages` (`docs/spec/performance-trace.md`).
 - F899-7.5-9: The layout stores the name of a new tab as `탭 <n>` without the mark of its plugin, `core.grid` reports that name as `title`, and the strip, the tab list and the question about unsaved changes draw the mark before it, in the page and the mygo workbench (`docs/spec/example-model.md#card-tabs`).
 - F899-7.5-8: An injected message names its sender by the tab name, the `title` of the tab in `core.grid`, and never by the title that the program of the tab set (`docs/spec/messaging.md#injected-message`).

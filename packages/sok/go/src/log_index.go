@@ -721,21 +721,23 @@ func readAll(file *os.File) ([]byte, error) {
 }
 
 // indexFrom indexes the lines of the source after the indexed part (from the start when rebuild is set), writes the new full
-// records and then the new state block. It returns the bytes it read and the lines it indexed.
+// records and then the new state block. It returns the bytes it read, the lines it indexed and the lines among them that announce a
+// change. The lines after the indexed part are added to the record of the partial segment, so an update reads only the bytes that
+// were appended: every member of a record is a count, a sum, a least or greatest value or a set of bits, which grows by each line
+// in the same way whether the earlier lines were added by this update or by an earlier one.
 func indexFrom(name string, state indexState, source, idx *os.File, size uint64, mtime int64, rebuild bool) (int64, int64, int64, error) {
-	start := state.indexedBytes
-	events := uint64(state.fullSegments) * indexSegmentEvents
 	if rebuild {
-		start, events, state = 0, 0, indexState{}
-	} else if state.tail != nil {
-		start = state.tail.offset
+		state = indexState{}
 	}
+	start := state.indexedBytes
+	events := state.events
 	firstEvent := events
-	// A line before this offset was indexed by an earlier update (the update reads the partial segment again), so it announced its change then.
-	announcedBefore := state.indexedBytes
 	next := state
 	next.tail = nil
 	acc := newSegment(start)
+	if state.tail != nil {
+		acc = state.tail
+	}
 	var carry []byte
 	position := start
 	// The buffer holds at most the bytes that the update reads. An update of a running log reads a few lines, and a buffer of the full chunk
@@ -793,7 +795,7 @@ func indexFrom(name string, state indexState, source, idx *os.File, size uint64,
 				next.firstSeq = uint64(line.seq)
 			}
 			acc.add(line, lineSize)
-			if !line.readsLog && lineStart >= announcedBefore {
+			if !line.readsLog {
 				announcing++
 			}
 			next.lastSeq = uint64(line.seq)
