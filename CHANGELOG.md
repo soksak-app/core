@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F899-7.5-3 (injection of the plugin term): the plugin term injects and holds the messages of its registration as the plugin terminal does and reports `held` and `last` in `term.messages` (term P133).
 - F899-7.5-2 (injection of the plugin terminal): the plugin terminal injects each arrived message as the paste of `[메시지 from <title>] <text>` and Enter, holds it by the reasons of `docs/spec/messaging.md#hold-for-the-person` and reports `held` and `last` in `terminal.messages` (terminal P180); `docs/spec/messaging.md#injected-message` states the reason `message <seq> is not in the folder` of `skipped` and that the page waits for the reply of the paste and of the Enter.
 - F996-1 (activation frames): the mygo workbench asks for a frame after a read of the plugin state or the application update only when the read changed the state or its failure, so a window activation that reads the same state draws nothing (`docs/spec/installation.md`).
 - F899-7.5-6 (status query of the observation): `docs/spec/cases/messaging/permission-prompts.json` and `docs/spec/messaging.md#injected-message` no longer state that Claude Code received the answer of `OSC 7501;?` and sent no report; the pseudo terminal of the observation answered without ESC and terminator after its reply to `CSI c`, so the run states nothing about the reports of Claude Code.
