@@ -159,14 +159,33 @@ test("core.card.move moves a card into a group and the add, split and close of a
   assert.deepEqual(await run("core.card.move", { card: "card-3", target: "card-4", side: "centre" }), { card: "card-3" });
   assert.deepEqual((await stored()).groups[0].members, ["card-1", "card-2", "card-5", "card-3"]);
   await refuses(run("core.card.move", { card: "card-4", target: "card-1", side: "right" }), "card card-4 cannot move into itself");
-  // The split of a group card puts the new card beside its box in the level that holds it, so the cards inside keep their tree.
-  const split = await run("core.card.split", { card: "card-4", side: "bottom", plugin: PLAIN });
+  // The split of a group card puts the new card beside its box in the level that holds it, so the cards inside keep their tree. The box is
+  // the whole root, so the ADD across it wraps the box and the new card in a cut of two halves.
+  const split = await run("core.card.split", { card: "card-4", side: "right", plugin: PLAIN });
   assert.equal(split.card, "card-6");
+  // The halves take one fraction each, so the new card is drawn at the width of the content of the box, whose frames are costs of the cut.
+  assert.deepEqual(plane.currentGrid().rect("card-4"), { x: 0, y: 0, w: 806, h: 1200 });
+  assert.deepEqual(plane.currentGrid().rect("card-6"), { x: 818, y: 0, w: 782, h: 1200 });
   assert.deepEqual((await stored()).groups[0].members, ["card-1", "card-2", "card-5", "card-3"]);
   assert.deepEqual((await status("core.layout")).state.root.kids.map((kid) => kid.node.box ?? kid.node.card), ["card-4", "card-6"]);
   assert.deepEqual(await run("core.card.close", { card: "card-4" }), { closed: true });
   assert.deepEqual(await stored(), { groups: [], leader: "card-6", lastCard: 6 });
   assert.deepEqual(plane.currentGrid().cards.map((card) => card.id), ["card-6"]);
+});
+
+// A group card too narrow for the ADD beside its box is refused with the deepest node that the split would draw below its minimum, and
+// nothing changes.
+test("a split of a group card too narrow for the new card names the card inside it that would be drawn below its minimum", { timeout: 5000 }, async () => {
+  arrange();
+  plane.adopt({ focusedId: "card-3", named: 0, windowSidebars: {}, sidebars: {}, lastCard: 4, leader: "card-3",
+    state: { root: row([
+      [0.85, content("card-3", [view("tab-aaaaa3", PLAIN)])],
+      [0.15, box("card-4", "그룹 1", "card-1", [[0.5, content("card-1", [view("tab-aaaaa1", PLAIN)])], [0.5, content("card-2", [view("tab-aaaaa2", PLAIN)])]])],
+    ]) } }, "spc-aaaaaa");
+  const before = await status("core.layout");
+  await refuses(run("core.card.split", { card: "card-4", side: "right", plugin: PLAIN }),
+    "card card-4 cannot split toward right: card card-1 would be 52x1144, below its minimum 96x96");
+  assert.deepEqual(await status("core.layout"), before, "the refused split changed the layout");
 });
 
 test("core.layout.open on a group card selects an equal tab inside it, adds a card to it and splits its rectangle", { timeout: 5000 }, async () => {
