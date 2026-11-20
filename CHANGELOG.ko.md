@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F899-7.5-8: 주입 message는 보낸 쪽을 tab name, 즉 `core.grid`에서 tab의 `title`로 부르며, tab의 program이 정한 제목으로 결코 부르지 않는다(`docs/spec/messaging.md#injected-message`).
 - F996-3 (활성화의 index 읽기): Go와 Rust fetcher는 연결을 열어 두는 process의 HTTP client 하나를 쓰고, `If-None-Match`와 `If-Modified-Since`로 바뀌지 않은 registry index를 304와 둔 본문으로 받으며, index URL 읽기 중에 시작한 그 URL의 읽기에 그 결과를 준다. 그래서 창 활성화는 plugin 상태와 application update에 요청 하나를 보내고, index가 바뀌지 않았으면 본문을 받지 않는다(`docs/spec/installation.md#fetching`).
 - F899-7.5-5 (주입의 window check, 첫 부분): plugin term의 `e2e/messages.test.mjs`(term P135)가 mygo, Wails, Tauri에서 통과한다: 10초보다 긴 `messages_wait`는 `request_waiting` 없이 message로 끝나고(sidecar alacritty S229), `sok message send`는 `{path, receiver}`를 출력하며, reader의 page는 message를 주입한다.
 - F899-7.5-3 (plugin term의 주입): plugin term은 plugin terminal과 같이 자기 registration의 message를 주입하고 보류하며, `term.messages`에 `held`와 `last`를 보고한다(term P133).
