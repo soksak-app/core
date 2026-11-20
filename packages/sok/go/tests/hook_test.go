@@ -243,3 +243,88 @@ func TestRoleIdentityOutsideAWindowPrintsNothing(t *testing.T) {
 		t.Fatalf("code %d stdout %q stderr %q", code, stdout, stderr)
 	}
 }
+
+// sharedHookCases reads the cases that the Go and Rust tests both run (docs/spec/cases/setup/hook-files.json).
+func sharedHookCases(t *testing.T) (placeholder string, cases []struct {
+	Name, Input, Install, Remove string
+}) {
+	t.Helper()
+	data, err := os.ReadFile(repositoryFile(t, "docs/spec/cases/setup/hook-files.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Placeholder string `json:"placeholder"`
+		Cases       []struct {
+			Name    string `json:"name"`
+			Input   string `json:"input"`
+			Install string `json:"install"`
+			Remove  string `json:"remove"`
+		} `json:"cases"`
+	}
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range doc.Cases {
+		cases = append(cases, struct{ Name, Input, Install, Remove string }{c.Name, c.Input, c.Install, c.Remove})
+	}
+	return doc.Placeholder, cases
+}
+
+// contract: cli.setup.hook-files-match-the-shared-cases
+func TestSetupHookFilesMatchTheSharedCases(t *testing.T) {
+	placeholder, cases := sharedHookCases(t)
+	for _, c := range cases {
+		t.Run(c.Name, func(t *testing.T) {
+			f := hookFixture(t)
+			mkdirs(t, filepath.Join(f.home, ".claude"))
+			writeText(t, settingsFile(f), c.Input)
+			if code, stdout, stderr := f.run(t, "setup", "install", "hook"); code != 0 {
+				t.Fatalf("install: code %d stdout %s stderr %q", code, stdout, stderr)
+			}
+			installed, err := os.ReadFile(settingsFile(f))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := strings.ReplaceAll(c.Install, placeholder, f.running); string(installed) != want {
+				t.Fatalf("install bytes\n%s\nwant\n%s", installed, want)
+			}
+			g := hookFixture(t)
+			mkdirs(t, filepath.Join(g.home, ".claude"))
+			writeText(t, settingsFile(g), c.Input)
+			if code, stdout, stderr := g.run(t, "setup", "remove", "hook"); code != 0 {
+				t.Fatalf("remove: code %d stdout %s stderr %q", code, stdout, stderr)
+			}
+			removed, err := os.ReadFile(settingsFile(g))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(removed) != c.Remove {
+				t.Fatalf("remove bytes\n%s\nwant\n%s", removed, c.Remove)
+			}
+		})
+	}
+}
+
+// contract: cli.setup.hook-escapes-the-command-as-encoding-json-does
+func TestSetupInstallHookEscapesTheCommandAsEncodingJSONDoes(t *testing.T) {
+	f := hookFixture(t)
+	mkdirs(t, filepath.Join(f.home, ".claude"))
+	sok := copyExecutable(t, builtSok(t), filepath.Join(t.TempDir(), "A&<B>.app", "Contents", "MacOS", "sok"))
+	env := []string{"HOME=" + f.home, "PATH=/usr/bin:/bin"}
+	if code, stdout, stderr := runProgram(t, sok, env, "setup", "install", "hook"); code != 0 {
+		t.Fatalf("code %d stdout %s stderr %q", code, stdout, stderr)
+	}
+	data, err := os.ReadFile(settingsFile(f))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, escape := range []string{`\u0026`, `\u003c`, `\u003e`} {
+		if !strings.Contains(string(data), escape) {
+			t.Fatalf("the command has no %s:\n%s", escape, data)
+		}
+	}
+	if want := `[ -n "$SOKSAK_CONFIG_DIR" ] || exit 0; exec ` + "'" + sok + "'" + hookMark; soksakCommands(t, settingsFile(f))["SessionStart"][0] != want {
+		t.Fatalf("command %q, want %q", soksakCommands(t, settingsFile(f))["SessionStart"][0], want)
+	}
+}

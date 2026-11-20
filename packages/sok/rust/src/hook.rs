@@ -1,17 +1,19 @@
 //! The session restart hook (docs/spec/agent-roles.md#session-restart-hook): the command `sok role identity` that the hook runs, and
 //! the setup part `hook`, which writes the hook entries of the user agent folders and removes them.
 //!
-//! A hook file is parsed into `Ordered`, which keeps the members of each object in the order that the file wrote them. serde_json's
-//! `Value` sorts the members of an object unless its preserve_order feature is on, and that feature would change every JSON that this
-//! crate prints, so the order is kept here. The output is the two-space form that serde_json::to_string_pretty writes, which the Go
-//! twin writes with encoding/json.Indent. A scalar is written by serde_json, so a number or a string that the file wrote in another
-//! form, for example "\/", is written in the form serde_json uses.
+//! A hook file is read into objects whose members keep their exact bytes. serde_json reads each member's key and value, and
+//! `serde_json::value::RawValue` keeps the text of each value. The text of a key is not returned by serde_json, so the key span is
+//! located in the object text, and the located span is checked against the value text of serde_json before it is used. An edit
+//! rebuilds only the objects and arrays on the path to the changed entries; every other member is written as it was read. The
+//! rebuilt text is indented by `jsonxf`, which, like the `encoding/json.Indent` of the Go twin, changes only the insignificant
+//! whitespace and keeps every string and number as it was written (docs/spec/agent-roles.md#session-restart-hook).
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
+use serde::de::{Deserialize, Deserializer, MapAccess, Visitor};
 use serde_json::Value;
+use serde_json::value::RawValue;
 
 use crate::Error;
 use crate::Options;
@@ -33,105 +35,60 @@ const HOOK_EVENT: &str = "SessionStart";
 /// The stable identity of a tab (docs/spec/agent-roles.md#stable-identity), with `{file}` for the path of its role file.
 const IDENTITY_TEXT: &str = "[soksak role] Your role is defined in the file {file}. Read the whole file before your first answer. Read the file again when a message starts with [soksak role] and says that the role changed. Do not save your role in any persistent memory. The role file is the only record of your role.";
 
-/// A JSON value whose objects keep the order of their members as the file wrote them.
-#[derive(Clone, Debug)]
-enum Ordered {
-    Object(Vec<(String, Ordered)>),
-    Array(Vec<Ordered>),
-    Scalar(Value),
+/// One member of an object: the text of its key, the key, and the text of its value. Members keep the order of the file, and a key
+/// that appears twice is kept twice, as the file wrote it.
+struct Member {
+    raw_key: String,
+    key: String,
+    value: Box<RawValue>,
 }
 
-impl<'de> Deserialize<'de> for Ordered {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Ordered, D::Error> {
-        struct Shape;
+type Members = Vec<Member>;
 
-        impl<'de> Visitor<'de> for Shape {
-            type Value = Ordered;
+/// The members of an object read by serde_json, before the key texts are located.
+struct Pairs(Vec<(String, Box<RawValue>)>);
+
+impl<'de> Deserialize<'de> for Pairs {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Pairs, D::Error> {
+        struct Object;
+
+        impl<'de> Visitor<'de> for Object {
+            type Value = Pairs;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("a JSON value")
+                formatter.write_str("a JSON object")
             }
 
-            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Ordered, A::Error> {
-                let mut members = Vec::new();
-                while let Some((key, value)) = map.next_entry::<String, Ordered>()? {
-                    members.push((key, value));
+            fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Pairs, A::Error> {
+                let mut pairs = Vec::new();
+                while let Some((key, value)) = map.next_entry::<String, Box<RawValue>>()? {
+                    pairs.push((key, value));
                 }
-                Ok(Ordered::Object(members))
-            }
-
-            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Ordered, A::Error> {
-                let mut items = Vec::new();
-                while let Some(item) = seq.next_element::<Ordered>()? {
-                    items.push(item);
-                }
-                Ok(Ordered::Array(items))
-            }
-
-            fn visit_bool<E>(self, value: bool) -> Result<Ordered, E> {
-                Ok(Ordered::Scalar(Value::Bool(value)))
-            }
-
-            fn visit_i64<E>(self, value: i64) -> Result<Ordered, E> {
-                Ok(Ordered::Scalar(Value::from(value)))
-            }
-
-            fn visit_u64<E>(self, value: u64) -> Result<Ordered, E> {
-                Ok(Ordered::Scalar(Value::from(value)))
-            }
-
-            fn visit_f64<E>(self, value: f64) -> Result<Ordered, E> {
-                Ok(Ordered::Scalar(Value::from(value)))
-            }
-
-            fn visit_str<E>(self, value: &str) -> Result<Ordered, E> {
-                Ok(Ordered::Scalar(Value::String(value.to_string())))
-            }
-
-            fn visit_string<E>(self, value: String) -> Result<Ordered, E> {
-                Ok(Ordered::Scalar(Value::String(value)))
-            }
-
-            fn visit_unit<E>(self) -> Result<Ordered, E> {
-                Ok(Ordered::Scalar(Value::Null))
+                Ok(Pairs(pairs))
             }
         }
 
-        deserializer.deserialize_any(Shape)
+        deserializer.deserialize_map(Object)
     }
 }
 
-/// An object with the members in the given order.
-fn object(members: Vec<(&str, Ordered)>) -> Ordered {
-    Ordered::Object(
-        members
-            .into_iter()
-            .map(|(key, value)| (key.to_string(), value))
-            .collect(),
-    )
-}
-
-/// A string value.
-fn text(value: &str) -> Ordered {
-    Ordered::Scalar(Value::String(value.to_string()))
-}
-
-/// The member of an object with the key, when the value is an object that has it.
-fn member<'a>(value: &'a Ordered, key: &str) -> Option<&'a Ordered> {
-    match value {
-        Ordered::Object(members) => members
-            .iter()
-            .find(|(name, _)| name == key)
-            .map(|(_, member)| member),
-        _ => None,
+/// The end of the JSON whitespace at or after `at`.
+fn skip_whitespace(text: &[u8], mut at: usize) -> usize {
+    while at < text.len() && matches!(text[at], b' ' | b'\t' | b'\n' | b'\r') {
+        at += 1;
     }
+    at
 }
 
-/// The text of a string value.
-fn as_text(value: &Ordered) -> Option<&str> {
-    match value {
-        Ordered::Scalar(Value::String(text)) => Some(text),
-        _ => None,
+/// The end of the string literal that starts at `at`, which holds a quote. The text is valid JSON, so the literal ends.
+fn string_end(text: &[u8], at: usize) -> usize {
+    let mut i = at + 1;
+    loop {
+        match text[i] {
+            b'\\' => i += 2,
+            b'"' => return i + 1,
+            _ => i += 1,
+        }
     }
 }
 
@@ -176,221 +133,264 @@ fn hook_files(setup: &Setup) -> Result<Vec<PathBuf>, String> {
     Ok(files)
 }
 
-/// Parses a hook file and checks that it is an object whose `hooks` member, when present, is an object whose events are arrays.
-fn hook_document(file: &Path, data: &[u8]) -> Result<Ordered, String> {
-    let document: Ordered = serde_json::from_slice(data)
-        .map_err(|_| format!("{}: hook file does not parse as JSON", file.display()))?;
-    let Ordered::Object(members) = &document else {
-        return Err(format!(
-            "{}: hook file must hold a JSON object",
-            file.display()
-        ));
-    };
-    if let Some((_, hooks)) = members.iter().find(|(name, _)| name == "hooks") {
-        let Ordered::Object(events) = hooks else {
-            return Err(format!("{}: hooks must be an object", file.display()));
-        };
-        for (event, value) in events {
-            if !matches!(value, Ordered::Array(_)) {
-                return Err(format!(
-                    "{}: hooks.{event} must be an array",
-                    file.display()
-                ));
-            }
-        }
+/// Parses an object whose members keep their text. The text of each key is the span of the key string in the object text, and
+/// the span is accepted only when the value text that serde_json read follows it.
+fn members_of(text: &str) -> Result<Members, String> {
+    let Pairs(pairs) = serde_json::from_str(text).map_err(|error| error.to_string())?;
+    let bytes = text.as_bytes();
+    let mut at = skip_whitespace(bytes, 0);
+    if bytes.get(at) != Some(&b'{') {
+        return Err("an object must start with {".to_string());
     }
-    Ok(document)
+    at += 1;
+    let mut members = Vec::with_capacity(pairs.len());
+    for (key, value) in pairs {
+        at = skip_whitespace(bytes, at);
+        if bytes.get(at) != Some(&b'"') {
+            return Err(format!("the key {key} is not at the expected place"));
+        }
+        let end = string_end(bytes, at);
+        let raw_key = text[at..end].to_string();
+        at = skip_whitespace(bytes, end);
+        if bytes.get(at) != Some(&b':') {
+            return Err(format!("the key {key} has no colon"));
+        }
+        at = skip_whitespace(bytes, at + 1);
+        if !text[at..].starts_with(value.get()) {
+            return Err(format!("the value of {key} is not at the expected place"));
+        }
+        at += value.get().len();
+        at = skip_whitespace(bytes, at);
+        if bytes.get(at) == Some(&b',') {
+            at += 1;
+        }
+        members.push(Member {
+            raw_key,
+            key,
+            value,
+        });
+    }
+    Ok(members)
 }
 
-/// Reports whether a hook entry carries the mark of soksak.
-fn is_soksak_hook(hook: &Ordered) -> bool {
-    member(hook, "type").and_then(as_text) == Some("command")
-        && member(hook, "command")
-            .and_then(as_text)
-            .is_some_and(|command| command.ends_with(HOOK_MARK))
+/// The value of the first member with the key.
+fn get<'a>(members: &'a Members, key: &str) -> Option<&'a RawValue> {
+    members
+        .iter()
+        .find(|member| member.key == key)
+        .map(|member| member.value.as_ref())
+}
+
+/// Sets the value of the first member with the key, or appends the member when there is none.
+fn set(members: &mut Members, key: &str, value: Box<RawValue>) {
+    match members.iter_mut().find(|member| member.key == key) {
+        Some(member) => member.value = value,
+        None => members.push(Member {
+            raw_key: Value::String(key.to_string()).to_string(),
+            key: key.to_string(),
+            value,
+        }),
+    }
+}
+
+/// Removes the first member with the key.
+fn remove(members: &mut Members, key: &str) {
+    if let Some(at) = members.iter().position(|member| member.key == key) {
+        members.remove(at);
+    }
+}
+
+/// Parses an array whose items keep their text.
+fn items_of(text: &str) -> Result<Vec<Box<RawValue>>, String> {
+    serde_json::from_str(text).map_err(|error| error.to_string())
+}
+
+/// Wraps text that is valid JSON as the value of a member.
+fn raw(text: String) -> Result<Box<RawValue>, String> {
+    RawValue::from_string(text).map_err(|error| error.to_string())
+}
+
+/// Writes an object from its members, in their order, with the key text of each member.
+fn object_text(members: &Members) -> String {
+    let parts: Vec<String> = members
+        .iter()
+        .map(|member| format!("{}:{}", member.raw_key, member.value.get()))
+        .collect();
+    format!("{{{}}}", parts.join(","))
+}
+
+/// Writes an array from its items, in their order.
+fn array_text(items: &[Box<RawValue>]) -> String {
+    let parts: Vec<&str> = items.iter().map(|item| item.get()).collect();
+    format!("[{}]", parts.join(","))
+}
+
+/// Writes a string as encoding/json.Marshal does: serde_json's form, with `<`, `>`, `&`, U+2028 and U+2029 escaped as
+/// `<`, `>`, `&`, ` ` and ` `, which the Go twin escapes so that a command is read the same in HTML.
+fn json_string(text: &str) -> String {
+    Value::String(text.to_string())
+        .to_string()
+        .replace('<', "\\u003c")
+        .replace('>', "\\u003e")
+        .replace('&', "\\u0026")
+        .replace('\u{2028}', "\\u2028")
+        .replace('\u{2029}', "\\u2029")
+}
+
+/// Parses a hook file into its members. The text must be one JSON object whose `hooks` member, when present, is an object whose
+/// events are arrays.
+fn hook_document(file: &Path, data: &[u8]) -> Result<Members, String> {
+    if serde_json::from_slice::<Box<RawValue>>(data).is_err() {
+        return Err(format!(
+            "{}: hook file does not parse as JSON",
+            file.display()
+        ));
+    }
+    let text = std::str::from_utf8(data)
+        .map_err(|_| format!("{}: hook file does not parse as JSON", file.display()))?;
+    let root = members_of(text)
+        .map_err(|_| format!("{}: hook file must hold a JSON object", file.display()))?;
+    if let Some(hooks) = get(&root, "hooks") {
+        let events = members_of(hooks.get())
+            .map_err(|_| format!("{}: hooks must be an object", file.display()))?;
+        for event in &events {
+            items_of(event.value.get())
+                .map_err(|_| format!("{}: hooks.{} must be an array", file.display(), event.key))?;
+        }
+    }
+    Ok(root)
+}
+
+/// Reports whether a hook entry carries the mark of soksak: an object of type command whose command ends with the mark.
+fn is_soksak_hook(hook: &str) -> bool {
+    let Ok(fields) = members_of(hook) else {
+        return false;
+    };
+    let kind =
+        get(&fields, "type").and_then(|value| serde_json::from_str::<String>(value.get()).ok());
+    let command =
+        get(&fields, "command").and_then(|value| serde_json::from_str::<String>(value.get()).ok());
+    kind.as_deref() == Some("command")
+        && command.is_some_and(|command| command.ends_with(HOOK_MARK))
 }
 
 /// Removes the entries that soksak registered under every event. A group whose hooks the removal emptied is dropped, and so is an
-/// event that the removal emptied and the `hooks` member that the removal emptied; every other member keeps its place.
-fn without_soksak_hooks(document: &mut Ordered) -> Result<(), String> {
-    let Ordered::Object(root) = document else {
+/// event that the removal emptied and the `hooks` member that the removal emptied; every other member keeps its place and its text.
+fn without_soksak_hooks(root: &mut Members) -> Result<(), String> {
+    let Some(hooks) = get(root, "hooks") else {
         return Ok(());
     };
-    let Some(hooks_at) = root.iter().position(|(name, _)| name == "hooks") else {
-        return Ok(());
-    };
-    let empty_events = {
-        let Ordered::Object(events) = &mut root[hooks_at].1 else {
-            return Ok(());
+    let mut events = Members::new();
+    let mut edited = false;
+    for event in members_of(hooks.get())? {
+        let shape = || {
+            format!(
+                "hooks.{} holds a group that is not an object with an array of hooks",
+                event.key
+            )
         };
-        let mut emptied = Vec::new();
-        let mut edited = false;
-        for (event, list) in events.iter_mut() {
-            let Ordered::Array(groups) = &mut *list else {
-                continue;
+        let groups = items_of(event.value.get())?;
+        let mut kept: Vec<Box<RawValue>> = Vec::new();
+        let mut changed = false;
+        for group in groups {
+            let mut members = members_of(group.get()).map_err(|_| shape())?;
+            let Some(hook_list) = get(&members, "hooks") else {
+                return Err(shape());
             };
-            let mut kept = Vec::new();
-            let mut changed = false;
-            for group in std::mem::take(groups) {
-                let Ordered::Object(mut members) = group else {
-                    return Err(format!(
-                        "hooks.{event} holds a group that is not an object with an array of hooks"
-                    ));
-                };
-                let Some(hooks_index) = members.iter().position(|(name, _)| name == "hooks") else {
-                    return Err(format!(
-                        "hooks.{event} holds a group that is not an object with an array of hooks"
-                    ));
-                };
-                let Ordered::Array(hooks) = &members[hooks_index].1 else {
-                    return Err(format!(
-                        "hooks.{event} holds a group that is not an object with an array of hooks"
-                    ));
-                };
-                if !hooks.iter().any(is_soksak_hook) {
-                    kept.push(Ordered::Object(members));
-                    continue;
-                }
-                changed = true;
-                let keep: Vec<Ordered> = hooks
-                    .iter()
-                    .filter(|hook| !is_soksak_hook(hook))
-                    .cloned()
-                    .collect();
-                if keep.is_empty() {
-                    continue;
-                }
-                members[hooks_index].1 = Ordered::Array(keep);
-                kept.push(Ordered::Object(members));
+            let hooks = items_of(hook_list.get()).map_err(|_| shape())?;
+            if !hooks.iter().any(|hook| is_soksak_hook(hook.get())) {
+                kept.push(group);
+                continue;
             }
-            if !changed {
-                *list = Ordered::Array(kept);
-            } else {
-                edited = true;
-                if kept.is_empty() {
-                    emptied.push(event.clone());
-                } else {
-                    *list = Ordered::Array(kept);
-                }
+            changed = true;
+            let keep: Vec<Box<RawValue>> = hooks
+                .into_iter()
+                .filter(|hook| !is_soksak_hook(hook.get()))
+                .collect();
+            if keep.is_empty() {
+                continue;
             }
+            set(&mut members, "hooks", raw(array_text(&keep))?);
+            kept.push(raw(object_text(&members))?);
         }
-        events.retain(|(event, _)| !emptied.contains(event));
-        edited && events.is_empty()
-    };
-    if empty_events {
-        root.remove(hooks_at);
+        if !changed {
+            events.push(event);
+            continue;
+        }
+        edited = true;
+        if !kept.is_empty() {
+            set(&mut events, &event.key, raw(array_text(&kept))?);
+        }
+    }
+    if edited && events.is_empty() {
+        remove(root, "hooks");
+    } else {
+        set(root, "hooks", raw(object_text(&events))?);
     }
     Ok(())
 }
 
 /// Adds the group of the command to the SessionStart array, which is created when it is absent.
-fn with_soksak_hook(document: &mut Ordered, command: &str) -> Result<(), String> {
-    let group = object(vec![
-        ("matcher", text("")),
-        (
-            "hooks",
-            Ordered::Array(vec![object(vec![
-                ("type", text("command")),
-                ("command", text(command)),
-            ])]),
-        ),
-    ]);
-    let Ordered::Object(root) = document else {
-        return Err("hook file must hold a JSON object".to_string());
+fn with_soksak_hook(root: &mut Members, command: &str) -> Result<(), String> {
+    let group = format!(
+        "{{\"matcher\":\"\",\"hooks\":[{{\"type\":\"command\",\"command\":{}}}]}}",
+        json_string(command)
+    );
+    let mut events = match get(root, "hooks") {
+        Some(hooks) => members_of(hooks.get())?,
+        None => Members::new(),
     };
-    let Some(hooks_at) = root.iter().position(|(name, _)| name == "hooks") else {
-        root.push((
-            "hooks".to_string(),
-            object(vec![(HOOK_EVENT, Ordered::Array(vec![group]))]),
-        ));
-        return Ok(());
+    let mut list = match get(&events, HOOK_EVENT) {
+        Some(list) => items_of(list.get())?,
+        None => Vec::new(),
     };
-    let Ordered::Object(events) = &mut root[hooks_at].1 else {
-        return Err("hooks must be an object".to_string());
-    };
-    match events.iter().position(|(event, _)| event == HOOK_EVENT) {
-        Some(at) => {
-            let Ordered::Array(list) = &mut events[at].1 else {
-                return Err(format!("hooks.{HOOK_EVENT} must be an array"));
-            };
-            list.push(group);
-        }
-        None => events.push((HOOK_EVENT.to_string(), Ordered::Array(vec![group]))),
-    }
+    list.push(raw(group)?);
+    set(&mut events, HOOK_EVENT, raw(array_text(&list))?);
+    set(root, "hooks", raw(object_text(&events))?);
     Ok(())
 }
 
-/// Writes a value in the two-space form with the members in their order.
-fn write_pretty(value: &Ordered, depth: usize, out: &mut String) {
-    match value {
-        Ordered::Object(members) if members.is_empty() => out.push_str("{}"),
-        Ordered::Object(members) => {
-            out.push_str("{\n");
-            for (at, (key, member)) in members.iter().enumerate() {
-                push_indent(depth + 1, out);
-                out.push_str(&Value::String(key.clone()).to_string());
-                out.push_str(": ");
-                write_pretty(member, depth + 1, out);
-                if at + 1 < members.len() {
-                    out.push(',');
-                }
-                out.push('\n');
-            }
-            push_indent(depth, out);
-            out.push('}');
-        }
-        Ordered::Array(items) if items.is_empty() => out.push_str("[]"),
-        Ordered::Array(items) => {
-            out.push_str("[\n");
-            for (at, item) in items.iter().enumerate() {
-                push_indent(depth + 1, out);
-                write_pretty(item, depth + 1, out);
-                if at + 1 < items.len() {
-                    out.push(',');
-                }
-                out.push('\n');
-            }
-            push_indent(depth, out);
-            out.push(']');
-        }
-        Ordered::Scalar(scalar) => out.push_str(&scalar.to_string()),
-    }
-}
-
-/// Writes two spaces for each level of depth.
-fn push_indent(depth: usize, out: &mut String) {
-    for _ in 0..depth {
-        out.push_str("  ");
-    }
-}
-
-/// Writes a document in the two-space form with a final line feed.
-fn format_document(document: &Ordered) -> Vec<u8> {
-    let mut text = String::new();
-    write_pretty(document, 0, &mut text);
+/// Indents a document in the two-space form with a final line feed, keeping the text of every string and number.
+fn format_document(compact: &str) -> Result<Vec<u8>, String> {
+    let mut text = jsonxf::pretty_print(compact)?;
     text.push('\n');
-    text.into_bytes()
+    Ok(text.into_bytes())
 }
 
-/// The event and command of each entry that soksak registered in the document.
-fn soksak_hook_entries(document: &Ordered) -> Vec<(String, String)> {
+/// The event and command of each entry that soksak registered in the document. A group that is not in the shape of a group holds
+/// no entry, as the setup check reads it.
+fn soksak_hook_entries(root: &Members) -> Vec<(String, String)> {
     let mut entries = Vec::new();
-    let Some(Ordered::Object(events)) = member(document, "hooks") else {
+    let Some(hooks) = get(root, "hooks") else {
         return entries;
     };
-    for (event, groups) in events {
-        let Ordered::Array(groups) = groups else {
+    let Ok(events) = members_of(hooks.get()) else {
+        return entries;
+    };
+    for event in &events {
+        let Ok(groups) = items_of(event.value.get()) else {
             continue;
         };
         for group in groups {
-            let Some(Ordered::Array(hooks)) = member(group, "hooks") else {
+            let Ok(members) = members_of(group.get()) else {
+                continue;
+            };
+            let Some(hook_list) = get(&members, "hooks") else {
+                continue;
+            };
+            let Ok(hooks) = items_of(hook_list.get()) else {
                 continue;
             };
             for hook in hooks {
-                if is_soksak_hook(hook) {
-                    let command = member(hook, "command").and_then(as_text).unwrap_or("");
-                    entries.push((event.clone(), command.to_string()));
+                if !is_soksak_hook(hook.get()) {
+                    continue;
                 }
+                let command = members_of(hook.get())
+                    .ok()
+                    .and_then(|fields| get(&fields, "command").map(|value| value.get().to_string()))
+                    .and_then(|text| serde_json::from_str::<String>(&text).ok())
+                    .unwrap_or_default();
+                entries.push((event.key.clone(), command));
             }
         }
     }
@@ -419,8 +419,8 @@ fn hook_part(file: &Path, sok: &str) -> Part {
             return part;
         }
     };
-    let document = match hook_document(file, &data) {
-        Ok(document) => document,
+    let root = match hook_document(file, &data) {
+        Ok(root) => root,
         Err(error) => {
             part.state = State::Error;
             part.reason = None;
@@ -428,7 +428,7 @@ fn hook_part(file: &Path, sok: &str) -> Part {
             return part;
         }
     };
-    match soksak_hook_entries(&document).as_slice() {
+    match soksak_hook_entries(&root).as_slice() {
         [] => {}
         [(event, found)] if event == HOOK_EVENT && *found == command => {
             part.state = State::Ok;
@@ -490,11 +490,10 @@ fn keep_mode(file: &Path, mode: std::fs::Permissions, written: Written) -> Writt
 
 /// The bytes of a hook file after an install: the file without the soksak entries, with the current entry added.
 fn rewrite_for_install(file: &Path, data: &[u8], command: &str) -> Result<Vec<u8>, String> {
-    let mut document = hook_document(file, data)?;
-    without_soksak_hooks(&mut document).map_err(|error| format!("{}: {error}", file.display()))?;
-    with_soksak_hook(&mut document, command)
-        .map_err(|error| format!("{}: {error}", file.display()))?;
-    Ok(format_document(&document))
+    let mut root = hook_document(file, data)?;
+    without_soksak_hooks(&mut root).map_err(|error| format!("{}: {error}", file.display()))?;
+    with_soksak_hook(&mut root, command).map_err(|error| format!("{}: {error}", file.display()))?;
+    format_document(&object_text(&root))
 }
 
 /// Writes the current soksak entry into a hook file, creating a missing file and keeping every other entry.
@@ -534,10 +533,9 @@ fn remove_hook_file(file: &Path) -> Written {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Written::unchanged(),
         Err(error) => return Written::failed(file_error(file.display(), &error)),
     };
-    let out = match hook_document(file, &data).and_then(|mut document| {
-        without_soksak_hooks(&mut document)
-            .map_err(|error| format!("{}: {error}", file.display()))?;
-        Ok(format_document(&document))
+    let out = match hook_document(file, &data).and_then(|mut root| {
+        without_soksak_hooks(&mut root).map_err(|error| format!("{}: {error}", file.display()))?;
+        format_document(&object_text(&root))
     }) {
         Ok(out) => out,
         Err(error) => return Written::failed(error),

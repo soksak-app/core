@@ -264,3 +264,126 @@ fn role_identity_outside_a_window_prints_nothing() {
         (0, "", "")
     );
 }
+
+/// One case of docs/spec/cases/setup/hook-files.json, which the Go tests run too.
+struct SharedCase {
+    name: String,
+    input: String,
+    install: String,
+    remove: String,
+}
+
+/// Reads the shared hook cases and the placeholder that the install output writes for the sok path.
+fn shared_hook_cases() -> (String, Vec<SharedCase>) {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../docs/spec/cases/setup/hook-files.json");
+    let text = std::fs::read_to_string(&path).expect("hook-files.json");
+    let document: Value = serde_json::from_str(&text).expect("json");
+    let placeholder = document["placeholder"]
+        .as_str()
+        .expect("placeholder")
+        .to_string();
+    let cases = document["cases"]
+        .as_array()
+        .expect("cases")
+        .iter()
+        .map(|case| SharedCase {
+            name: case["name"].as_str().expect("name").to_string(),
+            input: case["input"].as_str().expect("input").to_string(),
+            install: case["install"].as_str().expect("install").to_string(),
+            remove: case["remove"].as_str().expect("remove").to_string(),
+        })
+        .collect();
+    (placeholder, cases)
+}
+
+// contract: cli.setup.hook-files-match-the-shared-cases
+#[test]
+fn hook_files_match_the_shared_cases() {
+    let (placeholder, cases) = shared_hook_cases();
+    for case in cases {
+        let machine = Machine::new(&format!("hook-shared-{}", case.name));
+        let sok = machine.bundle_sok("Test.app");
+        std::fs::create_dir_all(machine.home.join(".claude")).expect("claude folder");
+        std::fs::write(settings_file(&machine), &case.input).expect("settings");
+        let variables = [
+            ("HOME", machine.home_text()),
+            ("PATH", "/usr/bin:/bin".to_string()),
+        ];
+        let variables: Vec<(&str, &str)> =
+            variables.iter().map(|(n, v)| (*n, v.as_str())).collect();
+        let installed = run_sok(&sok, &["setup", "install", "hook"], &variables);
+        assert_eq!(
+            (installed.code, installed.stderr.as_str()),
+            (0, ""),
+            "{}: {}",
+            case.name,
+            installed.stdout
+        );
+        let want = case
+            .install
+            .replace(&placeholder, &sok.display().to_string());
+        assert_eq!(
+            std::fs::read_to_string(settings_file(&machine)).expect("settings"),
+            want,
+            "{}: install bytes",
+            case.name
+        );
+
+        let machine = Machine::new(&format!("hook-shared-remove-{}", case.name));
+        let sok = machine.bundle_sok("Test.app");
+        std::fs::create_dir_all(machine.home.join(".claude")).expect("claude folder");
+        std::fs::write(settings_file(&machine), &case.input).expect("settings");
+        let variables = [
+            ("HOME", machine.home_text()),
+            ("PATH", "/usr/bin:/bin".to_string()),
+        ];
+        let variables: Vec<(&str, &str)> =
+            variables.iter().map(|(n, v)| (*n, v.as_str())).collect();
+        let removed = run_sok(&sok, &["setup", "remove", "hook"], &variables);
+        assert_eq!(
+            (removed.code, removed.stderr.as_str()),
+            (0, ""),
+            "{}: {}",
+            case.name,
+            removed.stdout
+        );
+        assert_eq!(
+            std::fs::read_to_string(settings_file(&machine)).expect("settings"),
+            case.remove,
+            "{}: remove bytes",
+            case.name
+        );
+    }
+}
+
+// contract: cli.setup.hook-escapes-the-command-as-encoding-json-does
+#[test]
+fn hook_install_escapes_the_command_as_encoding_json_does() {
+    let machine = Machine::new("hook-escape");
+    let sok = machine.bundle_sok("A&<B>.app");
+    std::fs::create_dir_all(machine.home.join(".claude")).expect("claude folder");
+    let variables = [
+        ("HOME", machine.home_text()),
+        ("PATH", "/usr/bin:/bin".to_string()),
+    ];
+    let variables: Vec<(&str, &str)> = variables.iter().map(|(n, v)| (*n, v.as_str())).collect();
+    let run = run_sok(&sok, &["setup", "install", "hook"], &variables);
+    assert_eq!((run.code, run.stderr.as_str()), (0, ""), "{}", run.stdout);
+    let data = std::fs::read_to_string(settings_file(&machine)).expect("settings");
+    for escape in [r"\u0026", r"\u003c", r"\u003e"] {
+        assert!(
+            data.contains(escape),
+            "the command has no {escape}:\n{data}"
+        );
+    }
+    let want = format!(
+        "[ -n \"$SOKSAK_CONFIG_DIR\" ] || exit 0; exec {}{}",
+        soksak_sok::setup::step_of(&sok.display().to_string()),
+        HOOK_MARK
+    );
+    assert_eq!(
+        soksak_commands(&settings_file(&machine)),
+        vec![("SessionStart".to_string(), want)]
+    );
+}

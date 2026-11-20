@@ -1,0 +1,77 @@
+{
+  "placeholder": "{sok}",
+  "cases": [
+    {
+      "name": "canonical-person-hooks",
+      "input": "{\n  \"model\": \"opus\",\n  \"hooks\": {\n    \"Stop\": [\n      {\"matcher\": \"\", \"hooks\": [{\"type\": \"command\", \"command\": \"echo person-stop\"}]},\n      {\"matcher\": \"\", \"hooks\": [{\"type\": \"command\", \"command\": \"[ -n \\\"$SOKSAK_CONFIG_DIR\\\" ] || exit 0; exec /old/sok role identity --soksak-hook\"}]}\n    ],\n    \"PreToolUse\": [\n      {\"matcher\": \"Bash\", \"hooks\": [{\"type\": \"command\", \"command\": \"echo person-pre\"}]}\n    ]\n  }\n}\n",
+      "install": "{\n  \"model\": \"opus\",\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"matcher\": \"\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"echo person-stop\"\n          }\n        ]\n      }\n    ],\n    \"PreToolUse\": [\n      {\n        \"matcher\": \"Bash\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"echo person-pre\"\n          }\n        ]\n      }\n    ],\n    \"SessionStart\": [\n      {\n        \"matcher\": \"\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"[ -n \\\"$SOKSAK_CONFIG_DIR\\\" ] || exit 0; exec {sok} role identity --soksak-hook\"\n          }\n        ]\n      }\n    ]\n  }\n}\n",
+      "remove": "{\n  \"model\": \"opus\",\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"matcher\": \"\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"echo person-stop\"\n          }\n        ]\n      }\n    ],\n    \"PreToolUse\": [\n      {\n        \"matcher\": \"Bash\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"echo person-pre\"\n          }\n        ]\n      }\n    ]\n  }\n}\n"
+    },
+    {
+      "name": "non-canonical-escapes-and-numbers",
+      "input": "{\"model\":\"op\\/us\",\"ratio\":1.0e3,\"big\":12345678901234567890,\"neg\":-0.5E-2,\"text\":\"\\u00e9\\u2028 \\u003c\\u003e\\u0026 \\t\\\"q\\\"\",\"hooks\":{\"Stop\":[{\"matcher\":\"\",\"hooks\":[{\"type\":\"command\",\"command\":\"echo \\u003c\\u003e\\u0026 \\/tmp/x\"}]}]}}\n",
+      "install": "{\n  \"model\": \"op\\/us\",\n  \"ratio\": 1.0e3,\n  \"big\": 12345678901234567890,\n  \"neg\": -0.5E-2,\n  \"text\": \"\\u00e9\\u2028 \\u003c\\u003e\\u0026 \\t\\\"q\\\"\",\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"matcher\": \"\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"echo \\u003c\\u003e\\u0026 \\/tmp/x\"\n          }\n        ]\n      }\n    ],\n    \"SessionStart\": [\n      {\n        \"matcher\": \"\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"[ -n \\\"$SOKSAK_CONFIG_DIR\\\" ] || exit 0; exec {sok} role identity --soksak-hook\"\n          }\n        ]\n      }\n    ]\n  }\n}\n",
+      "remove": "{\n  \"model\": \"op\\/us\",\n  \"ratio\": 1.0e3,\n  \"big\": 12345678901234567890,\n  \"neg\": -0.5E-2,\n  \"text\": \"\\u00e9\\u2028 \\u003c\\u003e\\u0026 \\t\\\"q\\\"\",\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"matcher\": \"\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"echo \\u003c\\u003e\\u0026 \\/tmp/x\"\n          }\n        ]\n      }\n    ]\n  }\n}\n"
+    },
+    {
+      "name": "markers-in-person-commands",
+      "input": "{\"hooks\":{\"Stop\":[{\"matcher\":\"\",\"hooks\":[{\"type\":\"command\",\"command\":\"a<b>&c && d\"},{\"type\":\"prompt\",\"command\":\"x role identity --soksak-hook\"}]}]}}\n",
+      "install": "{\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"matcher\": \"\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"a<b>&c && d\"\n          },\n          {\n            \"type\": \"prompt\",\n            \"command\": \"x role identity --soksak-hook\"\n          }\n        ]\n      }\n    ],\n    \"SessionStart\": [\n      {\n        \"matcher\": \"\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"[ -n \\\"$SOKSAK_CONFIG_DIR\\\" ] || exit 0; exec {sok} role identity --soksak-hook\"\n          }\n        ]\n      }\n    ]\n  }\n}\n",
+      "remove": "{\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"matcher\": \"\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"a<b>&c && d\"\n          },\n          {\n            \"type\": \"prompt\",\n            \"command\": \"x role identity --soksak-hook\"\n          }\n        ]\n      }\n    ]\n  }\n}\n"
+    },
+    {
+      "name": "whitespace-between-tokens",
+      "input": "{ \"hooks\" : { \"Stop\" : [ { \"matcher\" : \"\" , \"hooks\" : [ { \"type\" : \"command\" , \"command\" : \"echo ok\" } ] } ] } , \"model\" : \"opus\" }",
+      "install": "{\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"matcher\": \"\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"echo ok\"\n          }\n        ]\n      }\n    ],\n    \"SessionStart\": [\n      {\n        \"matcher\": \"\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"[ -n \\\"$SOKSAK_CONFIG_DIR\\\" ] || exit 0; exec {sok} role identity --soksak-hook\"\n          }\n        ]\n      }\n    ]\n  },\n  \"model\": \"opus\"\n}\n",
+      "remove": "{\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"matcher\": \"\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"echo ok\"\n          }\n        ]\n      }\n    ]\n  },\n  \"model\": \"opus\"\n}\n"
+    },
+    {
+      "name": "empty-containers",
+      "input": "{\"empty\":{},\"list\":[],\"hooks\":{\"Stop\":[]}}\n",
+      "install": "{\n  \"empty\": {},\n  \"list\": [],\n  \"hooks\": {\n    \"Stop\": [],\n    \"SessionStart\": [\n      {\n        \"matcher\": \"\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"[ -n \\\"$SOKSAK_CONFIG_DIR\\\" ] || exit 0; exec {sok} role identity --soksak-hook\"\n          }\n        ]\n      }\n    ]\n  }\n}\n",
+      "remove": "{\n  \"empty\": {},\n  \"list\": [],\n  \"hooks\": {\n    \"Stop\": []\n  }\n}\n"
+    },
+    {
+      "name": "unicode-text",
+      "input": "{\"name\":\"한국어 🙂 é\",\"hooks\":{}}\n",
+      "install": "{\n  \"name\": \"한국어 🙂 é\",\n  \"hooks\": {\n    \"SessionStart\": [\n      {\n        \"matcher\": \"\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"[ -n \\\"$SOKSAK_CONFIG_DIR\\\" ] || exit 0; exec {sok} role identity --soksak-hook\"\n          }\n        ]\n      }\n    ]\n  }\n}\n",
+      "remove": "{\n  \"name\": \"한국어 🙂 é\",\n  \"hooks\": {}\n}\n"
+    },
+    {
+      "name": "empty-object",
+      "input": "{}\n",
+      "install": "{\n  \"hooks\": {\n    \"SessionStart\": [\n      {\n        \"matcher\": \"\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"[ -n \\\"$SOKSAK_CONFIG_DIR\\\" ] || exit 0; exec {sok} role identity --soksak-hook\"\n          }\n        ]\n      }\n    ]\n  }\n}\n",
+      "remove": "{}\n"
+    },
+    {
+      "name": "only-stale-soksak-entry",
+      "input": "{\"hooks\":{\"SessionStart\":[{\"matcher\":\"\",\"hooks\":[{\"type\":\"command\",\"command\":\"[ -n \\\"$SOKSAK_CONFIG_DIR\\\" ] || exit 0; exec /old/sok role identity --soksak-hook\"}]}]}}\n",
+      "install": "{\n  \"hooks\": {\n    \"SessionStart\": [\n      {\n        \"matcher\": \"\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"[ -n \\\"$SOKSAK_CONFIG_DIR\\\" ] || exit 0; exec {sok} role identity --soksak-hook\"\n          }\n        ]\n      }\n    ]\n  }\n}\n",
+      "remove": "{}\n"
+    },
+    {
+      "name": "escaped-member-keys",
+      "input": "{\"\\u006dodel\":\"opus\",\"hooks\":{\"\\u0053top\":[{\"matcher\":\"\",\"hooks\":[{\"type\":\"command\",\"command\":\"echo a\"}]}]}}\n",
+      "install": "{\n  \"\\u006dodel\": \"opus\",\n  \"hooks\": {\n    \"\\u0053top\": [\n      {\n        \"matcher\": \"\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"echo a\"\n          }\n        ]\n      }\n    ],\n    \"SessionStart\": [\n      {\n        \"matcher\": \"\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"[ -n \\\"$SOKSAK_CONFIG_DIR\\\" ] || exit 0; exec {sok} role identity --soksak-hook\"\n          }\n        ]\n      }\n    ]\n  }\n}\n",
+      "remove": "{\n  \"\\u006dodel\": \"opus\",\n  \"hooks\": {\n    \"\\u0053top\": [\n      {\n        \"matcher\": \"\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"echo a\"\n          }\n        ]\n      }\n    ]\n  }\n}\n"
+    },
+    {
+      "name": "escaped-hook-event-key-with-soksak-entry",
+      "input": "{\"hooks\":{\"\\u0053essionStart\":[{\"matcher\":\"\",\"hooks\":[{\"type\":\"command\",\"command\":\"echo b\"}]}]}}\n",
+      "install": "{\n  \"hooks\": {\n    \"\\u0053essionStart\": [\n      {\n        \"matcher\": \"\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"echo b\"\n          }\n        ]\n      },\n      {\n        \"matcher\": \"\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"[ -n \\\"$SOKSAK_CONFIG_DIR\\\" ] || exit 0; exec {sok} role identity --soksak-hook\"\n          }\n        ]\n      }\n    ]\n  }\n}\n",
+      "remove": "{\n  \"hooks\": {\n    \"\\u0053essionStart\": [\n      {\n        \"matcher\": \"\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"echo b\"\n          }\n        ]\n      }\n    ]\n  }\n}\n"
+    },
+    {
+      "name": "duplicate-member-keys",
+      "input": "{\"model\":\"a\",\"model\":\"b\",\"hooks\":{\"Stop\":[{\"matcher\":\"\",\"hooks\":[{\"type\":\"command\",\"command\":\"echo c\"}]}]}}\n",
+      "install": "{\n  \"model\": \"a\",\n  \"model\": \"b\",\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"matcher\": \"\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"echo c\"\n          }\n        ]\n      }\n    ],\n    \"SessionStart\": [\n      {\n        \"matcher\": \"\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"[ -n \\\"$SOKSAK_CONFIG_DIR\\\" ] || exit 0; exec {sok} role identity --soksak-hook\"\n          }\n        ]\n      }\n    ]\n  }\n}\n",
+      "remove": "{\n  \"model\": \"a\",\n  \"model\": \"b\",\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"matcher\": \"\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"echo c\"\n          }\n        ]\n      }\n    ]\n  }\n}\n"
+    },
+    {
+      "name": "duplicate-hooks-member",
+      "input": "{\"hooks\":{},\"hooks\":{\"Stop\":[{\"matcher\":\"\",\"hooks\":[{\"type\":\"command\",\"command\":\"echo d\"}]}]}}\n",
+      "install": "{\n  \"hooks\": {\n    \"SessionStart\": [\n      {\n        \"matcher\": \"\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"[ -n \\\"$SOKSAK_CONFIG_DIR\\\" ] || exit 0; exec {sok} role identity --soksak-hook\"\n          }\n        ]\n      }\n    ]\n  },\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"matcher\": \"\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"echo d\"\n          }\n        ]\n      }\n    ]\n  }\n}\n",
+      "remove": "{\n  \"hooks\": {},\n  \"hooks\": {\n    \"Stop\": [\n      {\n        \"matcher\": \"\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"echo d\"\n          }\n        ]\n      }\n    ]\n  }\n}\n"
+    }
+  ]
+}

@@ -313,7 +313,7 @@ Hook은 `hooks` member의 `SessionStart` 배열에 있는 group 하나다: `{"ma
 - Parse되지 않는 파일, 또는 `hooks`나 `SessionStart` member의 type이 다른 파일은 `<file>: <reason>`으로 실패하며 아무것도 쓰지 않는다. 없는 파일은 항목 하나를 담아 만들며, 모드는 0600이다.
 - 명령이 `sok`의 경로 뒤에 단어 `role identity --soksak-hook`으로 끝나는 항목은 soksak의 것이다. 설치는 먼저 모든 event와 matcher에서 soksak 항목을 모두 지운다. 그래서 오래되었거나 이름이 바뀌었거나 중복된 soksak 항목도 남지 않는다. Group은 제거로 비게 된 경우에만 지운다. 그다음 현재 group을 `SessionStart` 배열에 더하므로, 파일은 현재 soksak 집합과 사람의 항목을 그대로 담는다.
 - 두 번 설치하면 같은 바이트가 된다. 두 번째 설치는 첫 번째 설치의 항목을 지우고 같은 자리에 다시 더한다.
-- 다른 program의 항목과 다른 member는 값과 순서를 유지한다. 파일은 들여쓰기 두 칸과 끝 line feed로 쓴다.
+- 다른 program의 항목과 다른 member는 key와 값의 text를 바이트 그대로, 그리고 순서대로 유지한다. 문자열과 숫자는 파일이 쓴 escape와 형식을 유지한다. 파일은 들여쓰기 두 칸과 끝 line feed로 쓰며, 문자열 밖의 공백만 바뀐다. Go와 Rust의 `sok`은 `docs/spec/cases/setup/hook-files.json`의 case에 대해 같은 바이트를 쓴다.
 - 쓰기는 원자적이다. 임시 파일은 같은 폴더에 있고 파일 위로 이름을 바꾼다. 있던 파일은 모드를 유지한다.
 
 `sok setup check`는 설치가 쓸 파일마다 part `hook`을 나열한다. 상태는 파일이 정확히 현재 soksak 집합을 담을 때 `ok`다. 사유는 soksak 항목이 없으면 `absent`, soksak 항목이 현재 집합 밖에 있거나, 다른 event 아래에 있거나, 다른 `sok`을 가리키면 `differs`다. 제거는 setup 명령 `sok setup remove hook`이다. 설치와 같은 파일에 적용하며 soksak의 항목만 바꾼다. 모든 event와 matcher 아래의 soksak 항목을 모두 지우고, 제거로 비게 된 group이나 event 배열만 지운다. 다른 값과 순서는 모두 유지한다. 파일이 없으면 만들지 않는다. 그래서 soksak을 제거하면 hook이 남지 않으며, 사람의 항목은 바뀌지 않는다.
