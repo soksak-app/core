@@ -302,6 +302,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F942",
+    implementation: [
+      { file: "packages/soksak/src/soksak.ts", symbol: "withdraw(id: string): TreeNode {" },
+      { file: "packages/workbench-mygo/src/layout/cuts.go", symbol: "func (g *Grid) Withdraw(id string) (*Node, error) {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/layout-operations.test.mjs", id: "a closed card gives its share to its split, and the cards of other splits keep their frames" },
+      { file: "packages/workbench-mygo/tests/layout_operations_test.go", id: "TestAClosedCardGivesItsShareToItsSplitAndOtherCardsKeepTheirFrames" },
+    ],
+    expected: "A close gives the share of the closed card to the other children of its split, and the cards of other splits keep their frames.",
+    levels: ["unit"],
+  },
+  {
     id: "F1011",
     implementation: [{ file: "Makefile", symbol: "@$(MAKE) --no-print-directory check-rust-format" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs the commit message, checklist history and format checks, and ci runs them on the range of its event with the structure, format and clippy checks" }],

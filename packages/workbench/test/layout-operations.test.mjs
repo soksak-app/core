@@ -399,6 +399,26 @@ test("core.layout.close closes the tab once, answers closed again, and no new ta
   await refuses(run("core.layout.close", { tab: "tab-zzzzzz" }), `tab tab-zzzzzz is not in the layout of window ${WINDOW}`);
 });
 
+// contract: layout.close.keeps-other-cuts
+test("a closed card gives its share to its split, and the cards of other splits keep their frames", { timeout: 5000 }, async () => {
+  arrange({ cut: "y", kids: [
+    { share: 0.5, node: { cut: "x", kids: [
+      { share: 0.3, node: { card: "a", tabs: [view("tab-aaaaa1", PLAIN)] } },
+      { share: 0.7, node: { card: "b", tabs: [view("tab-aaaaa2", PLAIN)] } },
+    ] } },
+    { share: 0.5, node: { cut: "x", kids: [
+      { share: 0.6, node: { card: "c", tabs: [view("tab-aaaaa3", PLAIN)] } },
+      { share: 0.4, node: { card: "d", tabs: [view("tab-aaaaa4", PLAIN)] } },
+    ] } },
+  ] }, "a");
+  const before = layout().root;
+  const top = before.children[0].frame;
+  assert.deepEqual(await run("core.card.close", { card: "a" }), { closed: true });
+  const after = layout().root;
+  assert.deepEqual(cardNode(after, "b").frame, top);
+  assert.deepEqual(["c", "d"].map((id) => cardNode(after, id).frame), ["c", "d"].map((id) => cardNode(before, id).frame));
+});
+
 // contract: layout.close.unsaved-tab-answers-at-once
 test("core.layout.close of a modified tab opens one question and answers closed false at once", { timeout: 5000 }, async () => {
   single([view("tab-aaaaa1", PLAIN), view("tab-aaaaa2", SESSION)]);

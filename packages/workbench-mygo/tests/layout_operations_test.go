@@ -776,6 +776,34 @@ func TestARepeatedLayoutCloseAnswersClosed(t *testing.T) {
 	}
 }
 
+// contract: layout.close.keeps-other-cuts
+func TestAClosedCardGivesItsShareToItsSplitAndOtherCardsKeepTheirFrames(t *testing.T) {
+	f := layoutShell(t, treeSpace("spc-aaaaaa", cutNode("y",
+		kidNode(0.5, cutNode("x", kidNode(0.3, cardNode("a", tab("tab-aaaaaa", "notes"))), kidNode(0.7, cardNode("b", tab("tab-bbbbbb", "notes"))))),
+		kidNode(0.5, cutNode("x", kidNode(0.6, cardNode("c", tab("tab-cccccc", "notes"))), kidNode(0.4, cardNode("d", tab("tab-dddddd", "notes"))))))))
+	before := f.layout()
+	top := *before.Root.Children[0].Frame
+	if answer, err := f.apply("core.card.close", `{"card":"a"}`); err != nil || answer != `{"closed":true}` {
+		t.Fatalf("the close answered %s, %v", answer, err)
+	}
+	after := f.layout()
+	frame := func(l describedLayout, id string) any {
+		node, ok := l.card(id)
+		if !ok || node.Frame == nil {
+			t.Fatalf("the layout holds no frame of %s", id)
+		}
+		return *node.Frame
+	}
+	if got := frame(after, "b"); got != any(top) {
+		t.Fatalf("b is %v, want the top row %v", got, top)
+	}
+	for _, id := range []string{"c", "d"} {
+		if got, want := frame(after, id), frame(before, id); got != want {
+			t.Fatalf("%s moved from %v to %v", id, want, got)
+		}
+	}
+}
+
 // contract: layout.close.unsaved-tab-answers-at-once
 func TestALayoutCloseOfAnUnsavedTabAnswersAtOnce(t *testing.T) {
 	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "notes"), tab("tab-bbbbbb", "notes")))
