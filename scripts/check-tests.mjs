@@ -717,7 +717,7 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/workbench/group-tree.js", symbol: "export function readGroupTree" },
       { file: "packages/workbench/group-tree.js", symbol: "splitCard(target, side, id, data)" },
-      { file: "packages/workbench/group-tree.js", symbol: "dropAt(x, y, options)" },
+      { file: "packages/workbench/group-tree.js", symbol: "targetAt(x, y, options)" },
       { file: "packages/workbench/group-tree.js", symbol: "closeCell(id, op)" },
       { file: "packages/workbench/group-tree.js", symbol: "moveBoundary(axis, line, px, allowSnap)" },
       { file: "packages/workbench/group-tree.js", symbol: "centerBoundary(axis, line)" },
@@ -742,7 +742,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/plane.js", symbol: "export function moveCard(id, target, side)" },
       { file: "packages/workbench/plane.js", symbol: "export function cardState(id, summary)" },
       { file: "packages/workbench/plane.js", symbol: "targets = tree.order().map((entry) => entry.id).filter((entry) => inside.has(entry));" },
-      { file: "packages/workbench/plane.js", symbol: "export function dropHit(x, y, fromId, band)" },
+      { file: "packages/workbench/plane.js", symbol: "export function dropHit(x, y, band)" },
       { file: "packages/workbench/plane.js", symbol: "return { space: heldSpace, focused: focusedId, root: level(null), groups };" },
       { file: "packages/workbench/core-exposure.js", symbol: "registry.command(\"core.group.create\"" },
       { file: "packages/workbench/core-exposure.js", symbol: "function watchLayout(name, params)" },
@@ -766,7 +766,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/group-commands.test.mjs", id: "core.group.dissolve, rename and leader change the tree and answer again without a change" },
       { file: "packages/workbench/test/group-commands.test.mjs", id: "core.card.move moves a card into a group and the add, split and close of a group card act on its rectangle" },
       { file: "packages/workbench/test/group-commands.test.mjs", id: "core.layout.open on a group card selects an equal tab inside it, adds a card to it and splits its rectangle" },
-      { file: "packages/workbench/test/group-commands.test.mjs", id: "a drop resolves on the rectangles of the group cards and core.tab.move puts a tab into and beside a group card" },
+      { file: "packages/workbench/test/group-commands.test.mjs", id: "a drop resolves by the bands of the target search and core.tab.move puts a tab into and beside a group card" },
       { file: "packages/workbench/test/group-commands.test.mjs", id: "the layout of the window description holds each group card as a node of its tree and lists every group once" },
       { file: "packages/workbench/test/group-commands.test.mjs", id: "core.card.get reads a content card with its group path and a group card with its node" },
       { file: "packages/workbench/test/group-commands.test.mjs", id: "core.grid lists the content cards with their tabs in cards and the group cards in groups" },
@@ -14579,14 +14579,14 @@ const FEATURE_LINKS = [
   {
     id: "F936",
     implementation: [
-      { file: "packages/host/go/src/workspace.go", symbol: "projectsFormat = 2" },
-      { file: "packages/host/rust/src/workspace.rs", symbol: "pub(crate) const PROJECTS_FORMAT: u64 = 2;" },
+      { file: "packages/host/go/src/workspace.go", symbol: "projectsFormat = 3" },
+      { file: "packages/host/rust/src/workspace.rs", symbol: "pub(crate) const PROJECTS_FORMAT: u64 = 3;" },
     ],
     tests: [
       { file: "packages/host/go/tests/workspace_test.go", id: "TestEarlierStoredFormsAreReportedBySnapshotAndRefusedByWrites" },
       { file: "packages/host/rust/tests/workspace_test.rs", id: "earlier_stored_forms_are_reported_by_snapshot_and_refused_by_writes" },
     ],
-    expected: "Both hosts refuse as a whole a projects.json of format 1, the only form whose spaces held the removed member parties.",
+    expected: "Both hosts refuse as a whole a projects.json of another format than the current 3, format 1 among them, the only form whose spaces held the removed member parties.",
     levels: ["unit"],
   },
   {

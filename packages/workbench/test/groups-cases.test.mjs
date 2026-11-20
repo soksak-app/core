@@ -46,7 +46,7 @@ function difference(actual, expected, where) {
  * commands core.group.create, core.card.split, core.card.close, core.group.dissolve, core.group.rename, core.group.leader and core.card.move
  * without tabs, add as the add of a card to a group card, and boundary as core.boundary.move.
  */
-function call(tree, grid, { call: name, args = {} }) {
+function call(tree, grid, { call: name, args = {} }, { band, bandMargin }) {
   switch (name) {
     case "create": return tree.create(args.card, args.side, undefined, false);
     case "split": return { card: tree.split(args.card, args.side, undefined) };
@@ -64,7 +64,14 @@ function call(tree, grid, { call: name, args = {} }) {
     case "rect": return tree.rect(args.card);
     case "path": return tree.path(args.card);
     case "level": return tree.level(args.card);
-    case "drop": return tree.dropAt(args.x, args.y, {});
+    // The target search measures the bands of the case and no tab strip, as the cases give no card a tab strip.
+    case "drop": return tree.targetAt(args.x, args.y, { headerPx: 0, edge: 0.25, band, bandMargin });
+    // A drag runs its points in order with the anchor that each point leaves to the next, and answers the target at the last point.
+    case "drag": {
+      let hit = null, anchor = null;
+      for (const [x, y] of args.points) ({ hit, anchor } = tree.dragAt(anchor, x, y, { headerPx: 0, edge: 0.25, band, bandMargin }));
+      return hit;
+    }
     // default: a balance step without arrange balances without the even arrangement.
     case "balance": tree.balance(args.arrange ?? false); return null;
     case "boundary": return { position: tree.moveBoundary(args.axis, args.line, args.position, false) };
@@ -85,10 +92,10 @@ for (const kase of file.cases) {
     kase.steps.forEach((step, i) => {
       const where = `step ${i + 1} ${step.call}`;
       if (Object.hasOwn(step, "throws")) {
-        assert.throws(() => call(tree, grid, structuredClone(step)), (error) => error.message === step.throws, `${where}: does not throw ${step.throws}`);
+        assert.throws(() => call(tree, grid, structuredClone(step), kase.options), (error) => error.message === step.throws, `${where}: does not throw ${step.throws}`);
         return;
       }
-      const value = call(tree, grid, structuredClone(step));
+      const value = call(tree, grid, structuredClone(step), kase.options);
       // A step without returns, such as balance, answers no value.
       if (!Object.hasOwn(step, "returns")) return;
       const found = difference(JSON.parse(JSON.stringify(value)), step.returns, where);

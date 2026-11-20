@@ -63,7 +63,7 @@ space의 layout을 바꾸는 모든 operation은 slicing tree에 대한 규칙 �
 - hit 영역은 현재 layout에 그려지고, 결과는 REMOVE(moving) 뒤의 tree에서 계산된다.
 - 점의 사슬은 그리는 사각형이 점을 담는 저장된 tree의 node이며, root에서 가장 안쪽 card까지 각 box의 inner node를 거친다. side의 side stack은 사슬의 가장 안쪽 node와, 그 위에서 그 side 쪽으로 같은 화면 line에서 끝나는 각 node다. 곧 node의 box, 그 side 쪽 kid가 아래 node인 cut, 그 side의 축을 가로지르는 cut이다. side stack의 line은 가장 바깥 node의 가장자리이므로, line의 각 조각은 그 위에서 끝나는 level에 속하고, level을 넘어 이어지는 line은 각각 target을 가진 별개의 조각이다.
 - side stack의 각 node는 window sidebar와 그것을 담은 cut을 빼고 그 side의 target이다. window sidebar를 담은 root cut은 plane의 content, 곧 window sidebar가 아닌 그 kid로서 target이다. 결과가 같은 target은 한 띠다.
-- side의 띠는 gap과 관계없이 그 line 안쪽에 가장 바깥 node부터 각각 5 point 폭으로 선다. side가 가진 거리는 그 line에서 가장 안쪽 card의 그리는 사각형 가운데까지의 거리에서 3 point를 뺀 것이며 적어도 1 point다. 그 거리가 side의 띠를 담지 못하면 그 side의 모든 띠가 한 비율로 그 거리를 띠 수로 나눈 폭으로 좁아지므로, 띠는 가운데 앞에서 끝나고 모든 띠와 가운데에 닿을 수 있다(I4). 위 line에서의 거리는 line과 점 사이의 tab strip과 group header를 빼며, 그것은 각각 자기 target이다.
+- side의 띠는 gap과 관계없이 그 line 안쪽에 가장 바깥 node부터 각각 `drop-band` point 폭으로 선다(`workbench.json` chrome metric의 `drop-band`, 5, [배치 값](settings.ko.md#배치-값)). side가 가진 거리는 그 line에서 가장 안쪽 card의 그리는 사각형 가운데까지의 거리에서 `drop-band-margin`(3)을 뺀 것이며 적어도 1 point다. 그 거리가 side의 띠를 담지 못하면 그 side의 모든 띠가 한 비율로 그 거리를 띠 수로 나눈 폭으로 좁아지므로, 띠는 가운데 앞에서 끝나고 모든 띠와 가운데에 닿을 수 있다(I4). 위 line에서의 거리는 line과 점 사이의 tab strip과 group header를 빼며, 그것은 각각 자기 target이다.
 - 점의 side는 점의 거리를 그 side가 가진 거리로 나눈 값이 가장 작은 side다. 고정된 띠 폭으로는 최소 크기의 card에서 모든 side에 닿을 수 없기 때문이다. 점의 거리가 그 side의 띠 폭 합보다 작거나, 점이 어느 content card에도 없고 group header 위에도 없으면 점은 그 side의 띠에 있다. 띠는 거리를 띠 폭으로 나눈 index의 띠이며 가장 바깥이 처음이고, 그 target은 ADD(moving, node, side)다.
 - 띠에 없는 content card의 tab strip 위의 점은 점의 index에서의 그 card의 tab strip이다. index는 움직이는 tab을 뺀 그 card의 tab 가운데 그 가운데가 점 앞에 있는 tab의 수다. group card는 tab이 아닌 card를 담으므로 tab strip은 group card의 target이 아니다. 끌리는 group card에게 tab strip은 그 card 본문의 일부이므로, 그 위의 점은 그 card의 띠와 본문으로 정해지고 drop은 거부되지 않는다. group card의 header 위의 점은 side stack이 그 box에서 시작하는 그 group card의 왼쪽이나 오른쪽 side의 띠에 있고, 그렇지 않으면 ADD(moving, group card의 plane의 root, right)다. 띠에 없는 content card 본문의 점은 본문의 가장자리 몫 0.25로 정한다. 가운데에서는 card의 가운데이고, 바깥 4분의 1에서는 가장 가까운 side의 ADD(moving, card, side)다.
 - run은 drag가 line에 들어온 점과 현재 점으로 고른다. drag가 line에 들어온 띠의 node가 그 anchor이며, drag가 그 line의 그 띠에 머무는 동안, node가 side의 축을 가로지르는 anchor의 cut의 다른 kid인 띠는 둘 사이 kid의 run, 곧 ADD(moving, run, side)다.
@@ -227,7 +227,7 @@ focus ring은 어느 level의 content card 하나 위에 있고, keyboard는 [ke
 
 ## 저장
 
-`projects.json`의 space layout([persistence](projects.ko.md#저장))은 group card를 box로 가진 grid의 tree를 `state`로, space가 낸 가장 큰 card 번호를 `lastCard`로, root level의 leader를 `leader`로 저장한다. `lastCard`는 tree의 모든 card 식별자의 번호 이상인 양의 정수다. `leader`는 root level의 member의 식별자이거나, root level이 window sidebar만 가지는 동안 `null`이다. box의 `data`는 정확히 `{name, leader}`다. `name`은 group의 이름이고 `leader`는 그 member 하나의 식별자다. level은 box의 깊이가 주므로 저장되지 않는다.
+`projects.json`의 space layout([persistence](projects.ko.md#저장))은 group card를 box로 가진 grid의 tree를 `state`로, space가 낸 가장 큰 card 번호를 `lastCard`로, root level의 leader를 `leader`로 저장한다. `lastCard`는 tree의 모든 card 식별자의 번호 이상인 양의 정수다. `leader`는 root level의 member의 식별자이거나, root level이 window sidebar만 가지는 동안 `null`이다. box의 `data`는 정확히 `{name, leader}`다. `name`은 group의 이름이고 `leader`는 그 member 하나의 식별자다. level은 box의 깊이가 주므로 저장되지 않는다. 이 member 곁에 space layout은 `focusedId`, `named`, `sidebars`, `windowSidebars`를 가지며([persistence](projects.ko.md#저장)), 다른 member는 가지지 않는다.
 
 저장된 layout은 이 형태로만 읽힌다. 각 거부는 [persistence](projects.ko.md#저장)가 저장된 layout에 대해 말하듯 space의 거부다. 그 space를 여는 것은 실패하고 library 미리보기가 오류를 보이며, registry와 다른 space는 계속 읽힌다. 각 거부의 앞머리는 `projects.json: project <root> space <space>: `이며, `<level>`은 `root` 또는 `group <id>`다.
 
@@ -235,6 +235,7 @@ focus ring은 어느 level의 content card 하나 위에 있고, keyboard는 [ke
 | --- | --- |
 | layout library가 거부하는 tree, 이전 형태 `{xs, ys, cards}` 포함 | `checkState`의 오류 |
 | 이전 형태의 group 목록인 `groups`를 저장한 layout | `layout stores groups, the group list of the earlier form; the group cards are boxes of state` |
+| `state`, `leader`, `lastCard`, `focusedId`, `named`, `sidebars`, `windowSidebars` 밖의 member를 저장한 layout. 단 `groups`와 이전 형태의 member `railWidth`, `edgeWidth`는 제 문구를 가진다 | `layout stores <members>, which a space layout does not hold`. member는 이름 순서로 `, `로 나뉜다 |
 | `data`가 다른 형태인 box | `layout stores the group <id> with the data <value>, which is not {name, leader}` |
 | 다른 형태의 이름 | `group <id> stores the name <value>, which is not 1 to 40 characters` |
 | window sidebar를 담은 box | `group <id> holds the window sidebar <side>` |

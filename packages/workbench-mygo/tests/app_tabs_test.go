@@ -336,7 +336,8 @@ func TestAnAttachThatTheHostAnswersAfterItsProjectClosedKeepsNoRegion(t *testing
 const sectionsDocument = `{"plugins": [
 	{"id": "notes", "package": "@scope/plugin-notes", "version": "1.0.0", "manifest": {"id": "notes", "name": "노트", "description": "notes",
 		"mark": "n", "icon": "<path d=\"M1 1h14\"/>", "surface": {"unload": {"format": 1, "maxBytes": 1024}, "composition": {"kind": "view", "page": "ui/index.html"}}}},
-	{"id": "boxprobe", "package": "b", "version": "1.0.0", "manifest": {"id": "boxprobe", "name": "브라우저", "description": "boxprobe", "sections": [
+	{"id": "boxprobe", "package": "b", "version": "1.0.0", "manifest": {"id": "boxprobe", "name": "브라우저", "description": "boxprobe", "mark": "www", "icon": "<path d=\"M1 1h14\"/>",
+		"surface": {"composition": {"kind": "view", "page": "ui/index.html"}}, "sections": [
 		{"id": "boxprobe.tabs", "name": "탭", "composition": {"kind": "view", "page": "ui/section.html"}, "height": 160, "unload": {"format": 2, "maxBytes": 16}},
 		{"id": "boxprobe.history", "name": "기록", "composition": {"kind": "view", "page": "ui/section.html"}, "height": "fill"},
 		{"id": "boxprobe.dom", "name": "DOM", "composition": {"kind": "view", "page": "ui/section.html"}, "height": "fill"},

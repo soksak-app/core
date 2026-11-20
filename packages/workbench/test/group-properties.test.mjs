@@ -92,9 +92,10 @@ function step(tree, grid, next) {
       case "leader": tree.setLeader(args.card); break;
       case "boundary": tree.moveBoundary(args.axis, args.line, args.px, args.snap); break;
       case "drop": {
-        const hit = tree.dropAt(args.x, args.y, { headerPx: OPTIONS.head, footerPx: 0, centreOnly: args.card });
+        // The drop of the card is the move to the add that the target search gives; a strip or a centre moves no card.
+        const hit = tree.targetAt(args.x, args.y, { headerPx: OPTIONS.head, edge: 0.25, band: 5, bandMargin: 3 });
         call.hit = hit;
-        if (hit && hit.card !== args.card) tree.move(args.card, hit.card, hit.zone);
+        if (hit?.kind === "add") tree.move(args.card, hit.target, hit.side);
         break;
       }
       case "balance": tree.balance(); break;

@@ -217,17 +217,34 @@ test("core.layout.open toward a side from the last card of a group finds its nei
   assert.deepEqual((await stored()).groups[0].members, ["card-1", "card-2", opened.card]);
 });
 
-test("a drop resolves on the rectangles of the group cards and core.tab.move puts a tab into and beside a group card", { timeout: 5000 }, async () => {
+test("a drag along the bottom line selects the run from the card where it entered the line to the current card", { timeout: 5000 }, () => {
+  arrange();
+  const band = plane.dropBands();
+  const first = plane.currentTree().rect("card-1"), second = plane.currentTree().rect("card-2");
+  // The bottom line of card-1 holds four bands, the root cut, the group card, the cut of its members and card-1; the innermost band is
+  // 15 to 20 points inside the line (docs/spec/groups.md#target-search).
+  const y = 1200 - 17;
+  const entered = plane.dragHit(null, first.x + first.w / 2, y, band);
+  assert.deepEqual(entered.hit, { card: "card-1", zone: "bottom" });
+  const along = plane.dragHit(entered.anchor, second.x + second.w / 2, y, band);
+  assert.deepEqual(along.hit, { card: ["card-1", "card-2"], zone: "bottom" });
+  assert.deepEqual(along.anchor, entered.anchor, "the drag that stays on the band keeps its anchor");
+  // Without the anchor the same point is the band of card-2 alone.
+  assert.deepEqual(plane.dropHit(second.x + second.w / 2, y, band), { card: "card-2", zone: "bottom" });
+});
+
+test("a drop resolves by the bands of the target search and core.tab.move puts a tab into and beside a group card", { timeout: 5000 }, async () => {
   arrange();
   const tree = plane.currentTree();
   const band = plane.dropBands();
   const group = tree.rect("card-4");
   const first = tree.rect("card-1");
-  // The header of a group card is its centre, the outer quarter of its rectangle a side, and a point inside goes on to its members.
-  assert.deepEqual(plane.dropHit(group.x + group.w / 2, group.y + 1, "card-3", band), { id: "card-4", zone: "centre" });
-  assert.deepEqual(plane.dropHit(group.x + 2, group.y + group.h / 2, "card-3", band), { id: "card-4", zone: "left" });
-  // A point of card-1 outside the outer quarter of the group card resolves on card-1 by zoneAt.
-  assert.deepEqual(plane.dropHit(group.x + group.w * 0.4, first.y + first.h / 2, "card-3", band), { id: "card-1", zone: "right" });
+  // The header of a group card is the add to the right of the root of its plane, the members of the group; a point on the left line of
+  // the group card is in the band of the group card, the outermost node on that line, and a point in the outer quarter of the body of
+  // card-1 is the side of card-1 (docs/spec/groups.md#target-search).
+  assert.deepEqual(plane.dropHit(group.x + group.w / 2, group.y + 1, band), { card: ["card-1", "card-2"], zone: "right" });
+  assert.deepEqual(plane.dropHit(group.x + 2, group.y + group.h / 2, band), { card: "card-4", zone: "left" });
+  assert.deepEqual(plane.dropHit(group.x + group.w * 0.4, first.y + first.h / 2, band), { card: "card-1", zone: "right" });
   // A drop on the centre of a group card puts the tab into a new content card inside it; the only tab of a card moves its card.
   const { tab } = await run("core.card.add-tab", { card: "card-3", plugin: PLAIN });
   await run("core.tab.move", { tab, card: "card-4", zone: "centre" });
