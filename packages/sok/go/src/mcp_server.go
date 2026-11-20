@@ -654,32 +654,32 @@ func sameValue(value json.RawMessage, equals any) bool {
 }
 
 // selectWindow is the window of a call: its window argument, else the [window] of the start, else the window of the surface that
-// SOKSAK_SURFACE names, else the key window of windows.list, else its first window (docs/spec/cli.md#mcp-server). It returns the
-// window and the space of the agent's surface too when it asked for them, so a description does not ask twice.
-func (s *mcpServer) selectWindow(request requester, args toolArguments) (window string, home *surfaceHome, err error) {
+// agent.surface answers for the process of the server, else the key window of windows.list, else its first window
+// (docs/spec/cli.md#mcp-server). It returns the home of the agent's surface too and whether it asked agent.surface, so a description
+// does not ask twice.
+func (s *mcpServer) selectWindow(request requester, args toolArguments) (window string, home *surfaceHome, asked bool, err error) {
 	if args.has("window") {
-		return args.text("window"), nil, nil
+		return args.text("window"), nil, false, nil
 	}
 	if s.hasWindow {
 		if s.project == "" {
-			return s.window, nil, nil
+			return s.window, nil, false, nil
 		}
 		windows, err := readWindows(request)
 		if err != nil {
-			return "", nil, err
+			return "", nil, false, err
 		}
 		window, err := projectWindow(windows, s.project)
-		return window, nil, err
+		return window, nil, false, err
 	}
-	if surface := agentSurface(); surface != "" {
-		found, err := surfaceWindow(request, surface)
-		if err != nil {
-			return "", nil, err
-		}
-		return found.Window, &found, nil
+	if home, err = agentHome(request); err != nil {
+		return "", nil, true, err
+	}
+	if home != nil {
+		return home.Window, home, true, nil
 	}
 	window, err = keyWindow(request)
-	return window, nil, err
+	return window, nil, true, err
 }
 
 // withArguments is the params of an endpoint request: the window and each named argument of the call that is present.
@@ -714,13 +714,6 @@ func (s *mcpServer) call(ctx context.Context, name string, args toolArguments) (
 			return nil, err
 		}
 	}
-	if name == "agent_context" && agentSurface() == "" {
-		context, err := agentContext(nil, s.configDir)
-		if err != nil {
-			return nil, err
-		}
-		return encodeJSON(context)
-	}
 	connection, err := s.endpoint()
 	if err != nil {
 		return nil, err
@@ -745,13 +738,13 @@ func (s *mcpServer) call(ctx context.Context, name string, args toolArguments) (
 	if name == "messages_read" || name == "messages_wait" {
 		return messagesCall(ctx, connection, strings.TrimPrefix(name, "messages_"), args)
 	}
-	window, home, err := s.selectWindow(request, args)
+	window, home, asked, err := s.selectWindow(request, args)
 	if err != nil {
 		return nil, err
 	}
 	switch name {
 	case "window_describe":
-		return describeRequest(request, window, home, args.text("surface"), string(args["full"]) == "true", args.text("after"), limit)
+		return describeRequest(request, window, home, asked, args.text("surface"), string(args["full"]) == "true", args.text("after"), limit)
 	case "exposure_search", "exposure_describe":
 		result, err := request("exposure.list", map[string]any{"window": window})
 		if err != nil {
@@ -880,23 +873,28 @@ func limitArgument(args toolArguments, fallback, max int) (int, error) {
 	return limit, nil
 }
 
-// describeRequest asks for the window and the space of the agent's surface when they are not known yet, then for the snapshot, and
-// writes the page.
-func describeRequest(request requester, window string, home *surfaceHome, surface string, full bool, after string, limit int) ([]byte, error) {
+// describeRequest asks for the agent's surface and its window and space when asked tells that the caller did not ask agent.surface,
+// then for the snapshot, and writes the page. The own surface of a window given by name may be in no window, which leaves agent null.
+func describeRequest(request requester, window string, home *surfaceHome, asked bool, surface string, full bool, after string, limit int) ([]byte, error) {
 	var agent any
-	if own := agentSurface(); own != "" {
-		if home == nil {
+	if !asked {
+		own, refused, err := ownSurface(request)
+		if err != nil {
+			return nil, err
+		}
+		if refused == nil {
 			found, err := surfaceWindow(request, own)
-			if err != nil && !isNoWindowOf(err) {
+			var noWindow *noWindowError
+			if err != nil && !errors.As(err, &noWindow) {
 				return nil, err
 			}
 			if err == nil {
 				home = &found
 			}
 		}
-		if home != nil && home.Window == window {
-			agent = own
-		}
+	}
+	if home != nil && home.Window == window {
+		agent = home.Surface
 	}
 	params := map[string]any{"window": window}
 	if surface != "" {
@@ -939,11 +937,6 @@ func skillFailure(err error) map[string]any {
 		return map[string]any{"file": write.File, "reason": write.Err.Error()}
 	}
 	return map[string]any{"reason": err.Error()}
-}
-
-// isNoWindowOf tells whether err is the error of a surface in no window.
-func isNoWindowOf(err error) bool {
-	return err != nil && err.Error() == fmt.Sprintf("%s names surface %s, which is in no window of the application", SurfaceVariable, agentSurface())
 }
 
 // watchOnce is status_watch_once: the calls that wait on one status of a window and surface share one endpoint watch, and the

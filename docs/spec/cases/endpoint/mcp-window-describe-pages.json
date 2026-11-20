@@ -4,16 +4,19 @@
   "replay": false,
   "reason": "The snapshots change between calls and hold a value whose length the test gives, which a running application does not show on demand.",
   "variables": {
+    "refusal": { "type": "string", "example": "process 1 is not a process of a surface: no parent process of it is a running sidecar of the application that started it for a surface" },
     "big": {
       "type": "string",
       "example": "x"
     }
   },
   "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "agent.surface"}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "error": {"code": 1014, "message": "$refusal"}}},
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 1,
+        "id": 2,
         "method": "exposure.snapshot",
         "params": {
           "window": "main"
@@ -23,7 +26,7 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 1,
+        "id": 2,
         "result": {
           "window": {
             "window": "main",
@@ -466,10 +469,12 @@
         }
       }
     },
+    {"send": {"jsonrpc": "2.0", "id": 3, "method": "agent.surface"}},
+    {"reply": {"jsonrpc": "2.0", "id": 3, "error": {"code": 1014, "message": "$refusal"}}},
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 2,
+        "id": 4,
         "method": "exposure.snapshot",
         "params": {
           "window": "main"
@@ -479,7 +484,7 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 2,
+        "id": 4,
         "result": {
           "window": {
             "window": "main",
@@ -922,10 +927,12 @@
         }
       }
     },
+    {"send": {"jsonrpc": "2.0", "id": 5, "method": "agent.surface"}},
+    {"reply": {"jsonrpc": "2.0", "id": 5, "error": {"code": 1014, "message": "$refusal"}}},
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 3,
+        "id": 6,
         "method": "exposure.snapshot",
         "params": {
           "window": "main"
@@ -935,7 +942,7 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 3,
+        "id": 6,
         "result": {
           "window": {
             "window": "main",

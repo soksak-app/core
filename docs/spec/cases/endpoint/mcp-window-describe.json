@@ -1,8 +1,8 @@
 {
   "name": "mcp-window-describe",
-  "description": "window_describe of sok mcp with SOKSAK_SURFACE asks surface.window and exposure.snapshot at each call and answers the window, the layout, the plugins and the place of the agent on the first page, then one row per entry of each group and of unregistered: in the compact form with the first sentence of each description, the status values as JSON text cut at 200 characters, the command parameters as name and type and the first 20 items of an element, and in the full form as the snapshot gives them; after and limit page the rows, and surface describes one surface; the place of the agent has the space that surface.window answers and no card when that space is not the active space of the layout, and a section surface, whose space surface.window answers null, has neither space nor card.",
+  "description": "window_describe of sok mcp asks agent.surface, surface.window and exposure.snapshot at each call and answers the window, the layout, the plugins and the place of the agent on the first page, then one row per entry of each group and of unregistered: in the compact form with the first sentence of each description, the status values as JSON text cut at 200 characters, the command parameters as name and type and the first 20 items of an element, and in the full form as the snapshot gives them; after and limit page the rows, and surface describes one surface; the place of the agent has the space that surface.window answers and no card when that space is not the active space of the layout, and a section surface, whose space surface.window answers null, has neither space nor card.",
   "replay": false,
-  "reason": "The snapshot of the case holds plugins, surfaces and values that a running application does not show on demand, and the server needs SOKSAK_SURFACE, which a window check does not set.",
+  "reason": "The snapshot of the case holds plugins, surfaces and values that a running application does not show on demand, and the case answers agent.surface with a surface, while the process of the server that the test starts belongs to no surface of a running application, so agent.surface refuses it.",
   "variables": {
     "snapshot": {
       "type": "object",
@@ -892,10 +892,12 @@
     }
   },
   "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "agent.surface"}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": {"surface": "terminal-1"}}},
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 1,
+        "id": 2,
         "method": "surface.window",
         "params": {
           "surface": "terminal-1"
@@ -905,7 +907,7 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 1,
+        "id": 2,
         "result": {
           "window": "main",
           "space": "space-1"
@@ -915,7 +917,7 @@
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 2,
+        "id": 3,
         "method": "exposure.snapshot",
         "params": {
           "window": "main"
@@ -925,14 +927,16 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 2,
+        "id": 3,
         "result": "$snapshot"
       }
     },
+    {"send": {"jsonrpc": "2.0", "id": 4, "method": "agent.surface"}},
+    {"reply": {"jsonrpc": "2.0", "id": 4, "result": {"surface": "terminal-1"}}},
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 3,
+        "id": 5,
         "method": "surface.window",
         "params": {
           "surface": "terminal-1"
@@ -942,7 +946,7 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 3,
+        "id": 5,
         "result": {
           "window": "main",
           "space": null
@@ -952,7 +956,7 @@
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 4,
+        "id": 6,
         "method": "exposure.snapshot",
         "params": {
           "window": "main"
@@ -962,14 +966,16 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 4,
+        "id": 6,
         "result": "$snapshot"
       }
     },
+    {"send": {"jsonrpc": "2.0", "id": 7, "method": "agent.surface"}},
+    {"reply": {"jsonrpc": "2.0", "id": 7, "result": {"surface": "terminal-1"}}},
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 5,
+        "id": 8,
         "method": "surface.window",
         "params": {
           "surface": "terminal-1"
@@ -979,7 +985,7 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 5,
+        "id": 8,
         "result": {
           "window": "main",
           "space": "space-1"
@@ -989,7 +995,7 @@
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 6,
+        "id": 9,
         "method": "exposure.snapshot",
         "params": {
           "window": "main"
@@ -999,14 +1005,16 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 6,
+        "id": 9,
         "result": "$snapshot"
       }
     },
+    {"send": {"jsonrpc": "2.0", "id": 10, "method": "agent.surface"}},
+    {"reply": {"jsonrpc": "2.0", "id": 10, "result": {"surface": "terminal-1"}}},
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 7,
+        "id": 11,
         "method": "surface.window",
         "params": {
           "surface": "terminal-1"
@@ -1016,7 +1024,7 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 7,
+        "id": 11,
         "result": {
           "window": "main",
           "space": "space-2"
@@ -1026,7 +1034,7 @@
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 8,
+        "id": 12,
         "method": "exposure.snapshot",
         "params": {
           "window": "main",
@@ -1037,14 +1045,16 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 8,
+        "id": 12,
         "result": "$surfaces"
       }
     },
+    {"send": {"jsonrpc": "2.0", "id": 13, "method": "agent.surface"}},
+    {"reply": {"jsonrpc": "2.0", "id": 13, "result": {"surface": "terminal-1"}}},
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 9,
+        "id": 14,
         "method": "surface.window",
         "params": {
           "surface": "terminal-1"
@@ -1054,7 +1064,7 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 9,
+        "id": 14,
         "result": {
           "window": "main",
           "space": "space-1"
@@ -1064,7 +1074,7 @@
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 10,
+        "id": 15,
         "method": "exposure.snapshot",
         "params": {
           "window": "other"
@@ -1074,14 +1084,16 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 10,
+        "id": 15,
         "result": "$snapshot"
       }
     },
+    {"send": {"jsonrpc": "2.0", "id": 16, "method": "agent.surface"}},
+    {"reply": {"jsonrpc": "2.0", "id": 16, "result": {"surface": "terminal-1"}}},
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 11,
+        "id": 17,
         "method": "surface.window",
         "params": {
           "surface": "terminal-1"
@@ -1091,7 +1103,7 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 11,
+        "id": 17,
         "result": {
           "window": "main",
           "space": "space-1"
@@ -1101,7 +1113,7 @@
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 12,
+        "id": 18,
         "method": "exposure.snapshot",
         "params": {
           "window": "main"
@@ -1111,15 +1123,12 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 12,
+        "id": 18,
         "result": "$snapshot"
       }
     }
   ],
   "mcp": {
-    "environment": {
-      "SOKSAK_SURFACE": "terminal-1"
-    },
     "steps": [
       {
         "tool": "window_describe",

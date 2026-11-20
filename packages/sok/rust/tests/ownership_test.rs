@@ -47,7 +47,6 @@ fn run_cli(config: &Path, args: &[&str]) -> (i32, String, String) {
         paths_dir: Ok(Path::new("/nonexistent/paths.d")),
         core_version: "0.0.2",
         config_dir_variable: None,
-        surface_variable: None,
     };
     let code = soksak_sok::run(&full, &mut stdout, &mut stderr, &options);
     (

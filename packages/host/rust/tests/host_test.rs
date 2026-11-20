@@ -11,23 +11,22 @@ use std::process::Command;
 /// The environment variable that tells that the process is the child that runs the start.
 const CHILD: &str = "SOKSAK_AGENT_VARIABLES_START";
 
-/// The variables of an agent, as the sok of another application sets them.
-const VARIABLES: [&str; 2] = ["SOKSAK_CONFIG_DIR", "SOKSAK_SURFACE"];
+/// The variable of an agent, as the sidecar of another application sets it.
+const VARIABLE: &str = "SOKSAK_CONFIG_DIR";
 
-// The child inherits SOKSAK_CONFIG_DIR and SOKSAK_SURFACE of another application, runs the start of the host and then starts a
-// process, as the host starts the sok of an application update or a sidecar; that process holds neither variable.
-// contract: host.environment.removes-the-agent-variables
-fn the_start_removes_the_agent_variables_before_it_starts_a_process() -> Result<(), String> {
+// The child inherits SOKSAK_CONFIG_DIR of another application, runs the start of the host and then starts a process, as the host
+// starts the sok of an application update or a sidecar; that process does not hold the variable.
+// contract: host.environment.removes-the-agent-variable
+fn the_start_removes_the_agent_variable_before_it_starts_a_process() -> Result<(), String> {
     let output = Command::new(std::env::current_exe().map_err(|error| error.to_string())?)
         .env(CHILD, "1")
         .env("SOKSAK_CONFIG_DIR", "/other/config")
-        .env("SOKSAK_SURFACE", "other-surface")
         .output()
         .map_err(|error| format!("child: {error}"))?;
     let stdout = String::from_utf8_lossy(&output.stdout);
-    if !output.status.success() || stdout != "SOKSAK_CONFIG_DIR: absent\nSOKSAK_SURFACE: absent\n" {
+    if !output.status.success() || stdout != "SOKSAK_CONFIG_DIR: absent\n" {
         return Err(format!(
-            "child ended with {:?}, output {stdout:?}, error output {:?}, want both variables absent",
+            "child ended with {:?}, output {stdout:?}, error output {:?}, want the variable absent",
             output.status,
             String::from_utf8_lossy(&output.stderr)
         ));
@@ -35,32 +34,31 @@ fn the_start_removes_the_agent_variables_before_it_starts_a_process() -> Result<
     Ok(())
 }
 
-/// Runs the start of the process, then starts /usr/bin/printenv for each variable of an agent and prints its value or `absent`.
+/// Runs the start of the process, then starts /usr/bin/printenv for SOKSAK_CONFIG_DIR and prints its value or `absent`.
 fn environment_after_the_start() {
     soksak_host::start_process();
-    for name in VARIABLES {
-        let output = match Command::new("/usr/bin/printenv").arg(name).output() {
-            Ok(output) => output,
-            Err(error) => {
-                println!("printenv {name}: {error}");
-                std::process::exit(2);
-            }
-        };
-        match output.status.code() {
-            Some(0) => print!("{name}: {}", String::from_utf8_lossy(&output.stdout)),
-            // printenv ends with the status 1 for a variable that the environment does not hold.
-            Some(1) => println!("{name}: absent"),
-            _ => {
-                println!("printenv {name} ended with {:?}", output.status);
-                std::process::exit(2);
-            }
+    let name = VARIABLE;
+    let output = match Command::new("/usr/bin/printenv").arg(name).output() {
+        Ok(output) => output,
+        Err(error) => {
+            println!("printenv {name}: {error}");
+            std::process::exit(2);
+        }
+    };
+    match output.status.code() {
+        Some(0) => print!("{name}: {}", String::from_utf8_lossy(&output.stdout)),
+        // printenv ends with the status 1 for a variable that the environment does not hold.
+        Some(1) => println!("{name}: absent"),
+        _ => {
+            println!("printenv {name} ended with {:?}", output.status);
+            std::process::exit(2);
         }
     }
 }
 
 const TESTS: &[main_thread::MainTest] = &[(
-    "the_start_removes_the_agent_variables_before_it_starts_a_process",
-    the_start_removes_the_agent_variables_before_it_starts_a_process,
+    "the_start_removes_the_agent_variable_before_it_starts_a_process",
+    the_start_removes_the_agent_variable_before_it_starts_a_process,
 )];
 
 fn main() {

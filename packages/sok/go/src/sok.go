@@ -42,7 +42,7 @@ commands:
   debug replay SESSION [--until SEQUENCE]
                             replays the session with the replay executable of its sidecar and compares every stored screen hash
   capture [window]          (diagnostic builds) writes a still image of the window without focusing it
-  context                   prints the configuration directory, the surface of SOKSAK_SURFACE and its window
+  context                   prints the configuration directory, the surface of this process and its window
   path install|remove       writes or deletes the PATH entry of this application (needs sudo)
   skill print|install       writes the agent skill to standard output or into the skill folder of each agent folder
   mcp install               registers sok mcp with the claude command in its user scope
@@ -59,7 +59,7 @@ commands:
   conversation read --agent claude-code|codex --cwd PATH
                             prints the messages of the agent conversation of the working directory, read from its session file
   message send [--reply] FOLDER TEXT
-                            writes TEXT as a message of the surface SOKSAK_SURFACE into the folder FOLDER, and prints its file name and the hold of the receiver; sok message send FOLDER TEXT adds to TEXT the request to report the result with sok message send --reply to the folder of the sender, so a sender writes no request; a report is sent with --reply, which adds none, and a report is never answered.
+                            writes TEXT as a message of the surface of this process into the folder FOLDER, and prints its file name and the hold of the receiver; sok message send FOLDER TEXT adds to TEXT the request to report the result with sok message send --reply to the folder of the sender, so a sender writes no request; a report is sent with --reply, which adds none, and a report is never answered.
   registry build DIRECTORY  checks a registry and writes its index.json
   registry use INDEX        sets the registry index that installation reads
   plugin install|update|remove|enable|disable ID
@@ -67,7 +67,7 @@ commands:
   plugin list               prints plugins/installed.json
 
 window:
-  --window NAME | --project DIRECTORY   without either, the window of the surface SOKSAK_SURFACE, else the only window of the application
+  --window NAME | --project DIRECTORY   without either, the window of the surface of this process, else the only window of the application
 
 common options:
   --config-dir DIR          configuration directory of the running application (default: this application's)`
@@ -443,32 +443,44 @@ type windowEntry struct {
 	Key     bool    `json:"key"`
 }
 
-// selectWindow chooses the window to request with --window, --project, the window of the surface that SOKSAK_SURFACE names, or
-// the only window (docs/spec/cli.md#windows).
+// selectWindow chooses the window to request with --window, --project, the window of the surface that agent.surface answers for the
+// process of this sok, or the only window (docs/spec/cli.md#windows).
 func selectWindow(a arguments, client *Client) (string, error) {
+	window, _, _, err := selectWindowHome(a, client)
+	return window, err
+}
+
+// selectWindowHome is selectWindow with the home of the surface of this process, nil for a process of no surface; asked tells whether it
+// asked agent.surface, which it does without --window and --project.
+func selectWindowHome(a arguments, client *Client) (window string, home *surfaceHome, asked bool, err error) {
 	name, byName := a.values["window"]
 	project, byProject := a.values["project"]
 	if byName && byProject {
-		return "", usage("--window and --project select the window in two ways; give one")
+		return "", nil, false, usage("--window and --project select the window in two ways; give one")
 	}
 	if byName {
-		return name, nil
+		return name, nil, false, nil
 	}
-	if surface := agentSurface(); surface != "" && !byProject {
-		home, err := surfaceWindow(client.Request, surface)
-		return home.Window, err
+	if !byProject {
+		if home, err = agentHome(client.Request); err != nil {
+			return "", nil, true, err
+		}
+		if home != nil {
+			return home.Window, home, true, nil
+		}
 	}
 	windows, err := readWindows(client.Request)
 	if err != nil {
-		return "", err
+		return "", home, !byProject, err
 	}
 	if byProject {
-		return projectWindow(windows, project)
+		window, err = projectWindow(windows, project)
+		return window, nil, false, err
 	}
 	if len(windows) != 1 {
-		return "", usage("the application has %d windows (%s); select one with --window or --project", len(windows), strings.Join(windowNames(windows), ", "))
+		return "", nil, true, usage("the application has %d windows (%s); select one with --window or --project", len(windows), strings.Join(windowNames(windows), ", "))
 	}
-	return windows[0].Window, nil
+	return windows[0].Window, nil, true, nil
 }
 
 // windowNames are the names of the windows in the order of their text.

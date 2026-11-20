@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1000-2.2: Go `sok`과 Rust `sok`은 agent의 window, `sok context`, `sok message send`, MCP tool을 위해 자기 process의 surface를 `agent.surface`에서 받고, `SOKSAK_SURFACE`를 어디서도 읽지 않는다. `sok message send`는 실행 중인 application이 없을 때와 거부 1014일 때 실패하며, `CODEX_THREAD_ID`가 있으면 거부 뒤에 `--no-daemon` 안내가 붙고, 그때 파일을 쓰지 않는다(`docs/spec/cli.md#the-window-of-an-agent`). Host는 `SOKSAK_SURFACE`를 더는 지우지 않고 sidecar를 `SOKSAK_CONFIG_DIR`만으로 시작한다.
 - F1003: 두 host에서 `service-messages`의 wake는 그 줄의 종류의 routine(`service-messages.reply`, `.process`, `.closed`, `.image`, `.message`, `.dropped`)으로도 세므로, 표본 추출이 persistent service 줄의 작업을 메시지 종류로 나눈다.
 - F1000-2.1: Go host와 Rust host는 `agent.surface`를 connection의 process의 surface로 답한다. socket에서 peer process를 읽고, parent가 실행 중인 sidecar인 첫 process까지 parent process를 따라가며, `processes`를 선언한 sidecar에 process query로 묻고 사슬을 다시 읽으며, 1014로 거부한다(`docs/spec/sidecars.md#process-identity`). `packages/plugin-api`는 `sidecar.json`의 `processes` `true`를 받아들인다.
 - F1002: Go host는 `endpoint.json`의 pid가 게시자를 가리키는지 정할 때 종료 중인 프로세스(`P_WEXIT`)를 끝난 것으로 보므로, exit 이벤트 뒤의 프로세스가 좀비가 되기 전에 게시자를 가리키지 않는다. 같은 계약의 Rust 시험은 exit 이벤트를 기다린다.

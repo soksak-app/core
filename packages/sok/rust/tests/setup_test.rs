@@ -558,7 +558,6 @@ fn setup_install_records_the_path_step() {
             paths_dir: Ok(&test.paths),
             core_version: "0.0.2",
             config_dir_variable: None,
-            surface_variable: None,
         };
         let args: Vec<String> = ["setup", "install", "path", "--config-dir", config.text()]
             .iter()

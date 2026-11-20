@@ -1,0 +1,13 @@
+{
+  "name": "sok-message-send-terminal",
+  "description": "sok message send into the folder of the terminal app-2 asks agent.surface for the sender app-1, writes the message and asks surface.window for the receiver, whose answer 1012 gives receiver null.",
+  "replay": false,
+  "reason": "The case answers agent.surface with a surface and needs folders that the test creates, and the process of the sok that the test starts belongs to no surface of a running application, so agent.surface refuses it.",
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "agent.surface" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": { "surface": "app-1" } } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "surface.window", "params": { "surface": "app-2" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "error": { "code": 1012, "message": "surface app-2 is in no window" } } },
+    { "close": "client" }
+  ]
+}

@@ -627,14 +627,22 @@ fn the_mcp_server_replays_the_endpoint_cases() {
 // contract: cli.mcp.lists-the-fixed-tools
 #[test]
 fn the_mcp_server_lists_the_fixed_tools() {
+    // The only endpoint request of the case is agent.surface of its call of agent_context; tools/list sends none.
     let mut run = run_case("mcp-protocol-2025-11-25", &[]);
     let methods = run.player.as_ref().expect("the player").methods();
-    assert!(
-        methods.is_empty(),
-        "tools/list sent the endpoint requests {methods:?}"
+    assert_eq!(
+        methods,
+        ["agent.surface"],
+        "the case sent the endpoint requests"
     );
     let id = run.session.request("tools/list", None);
     let reply = run.session.response(&id);
+    let methods = run.player.as_ref().expect("the player").methods();
+    assert_eq!(
+        methods,
+        ["agent.surface"],
+        "tools/list sent endpoint requests"
+    );
     let tools = &reply["result"]["tools"];
     assert!(
         same_json(tools, &run.values["$tools"]),

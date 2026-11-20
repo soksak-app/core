@@ -232,7 +232,7 @@ pub(crate) fn run_command(
         values: parsed.common.clone(),
         flags: HashMap::new(),
     };
-    let window = select_window(&arguments, &mut client, options.surface())?;
+    let window = select_window(&arguments, &mut client)?;
     // A host command is checked against the host entries, which the host lists without the main page, so it runs while the
     // page has not started (docs/spec/exposure.md).
     let request = if parsed.name.starts_with("host.") {

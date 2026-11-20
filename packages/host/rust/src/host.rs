@@ -195,18 +195,13 @@ pub fn start_process() {
     }
 }
 
-/// Removes SOKSAK_CONFIG_DIR and SOKSAK_SURFACE from the environment of the process. An application started from a process of
-/// another application inherits them, and a sok that the host starts, such as the sok of an application update, would act on the
-/// configuration directory of that application.
+/// Removes SOKSAK_CONFIG_DIR from the environment of the process. An application started from a process of another application
+/// inherits it, and a sok that the host starts, such as the sok of an application update, would act on the configuration directory
+/// of that application.
 fn remove_agent_variables() {
-    for name in [
-        soksak_sok::CONFIG_DIR_VARIABLE,
-        soksak_sok::SURFACE_VARIABLE,
-    ] {
-        // SAFETY: start_process runs at the start of main before the panic hook starts the first thread of the process, so no
-        // other thread reads or writes the environment during the removal.
-        unsafe { std::env::remove_var(name) };
-    }
+    // SAFETY: start_process runs at the start of main before the panic hook starts the first thread of the process, so no other
+    // thread reads or writes the environment during the removal.
+    unsafe { std::env::remove_var(soksak_sok::CONFIG_DIR_VARIABLE) };
 }
 
 /// The page files of the application: the bundled frontend under the installed plugins, which report a file that neither

@@ -19,21 +19,19 @@ import (
 // messageLimit is the largest text that the command accepts, in bytes (docs/spec/cli.md#commands).
 const messageLimit = 64 * 1024
 
-// messageSend runs `sok message send` with args, with SOKSAK_SURFACE set to surface when it is not empty and HOME set to home, and
-// returns the status and both outputs.
-func messageSend(t *testing.T, home, surface string, args ...string) (int, string, string) {
+// messageSend runs `sok message send` with the configuration directory config and args, with HOME set to home and CODEX_THREAD_ID
+// set to thread when it is not empty, and returns the status and both outputs.
+func messageSend(t *testing.T, home, config, thread string, args ...string) (int, string, string) {
 	t.Helper()
 	t.Setenv("HOME", home)
-	if surface == "" {
-		t.Setenv("SOKSAK_SURFACE", "")
-		if err := os.Unsetenv("SOKSAK_SURFACE"); err != nil {
+	t.Setenv("CODEX_THREAD_ID", thread)
+	if thread == "" {
+		if err := os.Unsetenv("CODEX_THREAD_ID"); err != nil {
 			t.Fatal(err)
 		}
-	} else {
-		t.Setenv("SOKSAK_SURFACE", surface)
 	}
 	var stdout, stderr bytes.Buffer
-	all := append([]string{"message", "send"}, args...)
+	all := append([]string{"message", "send", "--config-dir", config}, args...)
 	code := sok.Run(all, &stdout, &stderr, sok.Options{Identifier: "app.soksak.wails"})
 	return code, stdout.String(), stderr.String()
 }
@@ -69,7 +67,7 @@ func TestSendRefusesATextOneByteOverTheLimitWithNoFile(t *testing.T) {
 	home := t.TempDir()
 	folder := t.TempDir()
 	text := strings.Repeat("a", messageLimit+1)
-	code, stdout, stderr := messageSend(t, home, "app-1", "--reply", folder, text)
+	code, stdout, stderr := messageSend(t, home, playCase(t, "sok-message-send-sender").configDir, "", "--reply", folder, text)
 	if code == 0 {
 		t.Fatalf("an oversized text must fail; stdout: %s", stdout)
 	}
@@ -85,7 +83,7 @@ func TestSendAcceptsATextOfExactlyTheLimit(t *testing.T) {
 	home := t.TempDir()
 	folder := t.TempDir()
 	text := strings.Repeat("b", messageLimit)
-	code, stdout, stderr := messageSend(t, home, "app-1", "--reply", folder, text)
+	code, stdout, stderr := messageSend(t, home, playCase(t, "sok-message-send-sender").configDir, "", "--reply", folder, text)
 	if code != 0 {
 		t.Fatalf("stdout: %s stderr: %s", stdout, stderr)
 	}
@@ -103,13 +101,13 @@ func TestSendWritesTheWholeTextUnderTheSenderNameAndLeavesNoTemporaryFile(t *tes
 	root := terminalFolders(t, "app-2")
 	folder := filepath.Join(root, ".soksak", "messages", "app-2")
 	text := "hello 안녕 terminal"
-	code, stdout, stderr := messageSend(t, home, "app-1", folder, text)
+	code, stdout, stderr := messageSend(t, home, playCase(t, "sok-message-send-terminal").configDir, "", folder, text)
 	if code != 0 {
 		t.Fatalf("stdout: %s stderr: %s", stdout, stderr)
 	}
 	name := messageName(t, stdout)
 	if !strings.HasPrefix(name, "app-1.") || !strings.HasSuffix(name, ".txt") {
-		t.Fatalf("the name must be <from>.<token>.txt with the sender of SOKSAK_SURFACE; name: %s", name)
+		t.Fatalf("the name must be <from>.<token>.txt with the sender that agent.surface answers; name: %s", name)
 	}
 	token := strings.TrimSuffix(strings.TrimPrefix(name, "app-1."), ".txt")
 	if token == "" || strings.Contains(token, ".") {
@@ -133,7 +131,7 @@ func TestSendReplyWritesTheTextAloneAsAReport(t *testing.T) {
 	home := t.TempDir()
 	root := terminalFolders(t, "app-2")
 	folder := filepath.Join(root, ".soksak", "messages", "app-2")
-	code, stdout, stderr := messageSend(t, home, "app-1", "--reply", folder, "done 안녕")
+	code, stdout, stderr := messageSend(t, home, playCase(t, "sok-message-send-terminal").configDir, "", "--reply", folder, "done 안녕")
 	if code != 0 {
 		t.Fatalf("stdout: %s stderr: %s", stdout, stderr)
 	}
@@ -154,7 +152,7 @@ func TestSendReplyWritesTheTextAloneAsAReport(t *testing.T) {
 func TestSendRefusesAFolderOfNoTerminalWithoutReplyWithNoFile(t *testing.T) {
 	home := t.TempDir()
 	folder := t.TempDir()
-	code, stdout, stderr := messageSend(t, home, "app-1", folder, "text")
+	code, stdout, stderr := messageSend(t, home, playCase(t, "sok-message-send-sender").configDir, "", folder, "text")
 	if code == 0 {
 		t.Fatalf("stdout: %s", stdout)
 	}
@@ -166,15 +164,26 @@ func TestSendRefusesAFolderOfNoTerminalWithoutReplyWithNoFile(t *testing.T) {
 	}
 }
 
+// contract: cli.message.send-requires-the-surface-of-its-process
 func TestSendRefusesWithoutASurfaceWithNoFile(t *testing.T) {
 	home := t.TempDir()
 	folder := t.TempDir()
-	code, stdout, stderr := messageSend(t, home, "", folder, "text")
-	if code == 0 {
-		t.Fatalf("stdout: %s", stdout)
+	code, stdout, stderr := messageSend(t, home, t.TempDir(), "", "--reply", folder, "text")
+	if code != 1 || stdout != "" || stderr != "sok: message send requires a running application, which answers the surface of this process\n" {
+		t.Fatalf("without an application: code %d stdout %q stderr %q", code, stdout, stderr)
 	}
-	if !strings.Contains(stderr, "message send requires SOKSAK_SURFACE") {
-		t.Fatalf("the refusal must name the variable of the send; stderr: %s", stderr)
+	refusal := "process 1 is not a process of a surface"
+	player := playCase(t, "sok-message-send-refused", withText("refusal", refusal))
+	hint := "; start codex with --no-daemon, so that the commands of its agent run in processes of the surface"
+	for _, thread := range []string{"", "thread-1"} {
+		want := "sok: message send: " + refusal + "\n"
+		if thread != "" {
+			want = "sok: message send: " + refusal + hint + "\n"
+		}
+		code, stdout, stderr = messageSend(t, home, player.configDir, thread, "--reply", folder, "text")
+		if code != 1 || stdout != "" || stderr != want {
+			t.Fatalf("a refusal with CODEX_THREAD_ID %q: code %d stdout %q stderr %q, want stderr %q", thread, code, stdout, stderr, want)
+		}
 	}
 	if names := messageEntries(t, folder); len(names) != 0 {
 		t.Fatalf("a refused send must write no file; entries: %v", names)
@@ -225,7 +234,7 @@ func TestSendReportsTheHoldOfTheReceiver(t *testing.T) {
 		{"t4", `null`},
 	}
 	for _, want := range wants {
-		code, stdout, stderr := messageSend(t, home, "t1", "--config-dir", player.configDir, folder(want.surface), "hello")
+		code, stdout, stderr := messageSend(t, home, player.configDir, "", folder(want.surface), "hello")
 		if code != 0 {
 			t.Fatalf("send to %s: code %d stdout %q stderr %q", want.surface, code, stdout, stderr)
 		}
@@ -236,27 +245,24 @@ func TestSendReportsTheHoldOfTheReceiver(t *testing.T) {
 			t.Fatalf("send to %s: entries %v", want.surface, names)
 		}
 	}
-	code, stdout, stderr := messageSend(t, home, "t1", "--config-dir", player.configDir, folder("t5"), "hello")
+	code, stdout, stderr := messageSend(t, home, player.configDir, "", folder("t5"), "hello")
 	names := messageEntries(t, folder("t5"))
 	if code != 1 || stdout != "" || len(names) != 1 || !strings.Contains(stderr, "message "+names[0]+" was written") ||
 		!strings.Contains(stderr, "status terminal.messages of surface t5 is not {folder, registration, held, last}") {
 		t.Fatalf("a status without held: code %d stdout %q stderr %q entries %v", code, stdout, stderr, names)
 	}
-	code, stdout, stderr = messageSend(t, home, "t1", "--config-dir", player.configDir, folder("gone"), "hello")
+	code, stdout, stderr = messageSend(t, home, player.configDir, "", folder("gone"), "hello")
 	if code != 0 || messageReceiver(t, stdout) != "null" {
 		t.Fatalf("a surface in no window: code %d stdout %q stderr %q", code, stdout, stderr)
 	}
 }
 
-// contract: cli.message.send-without-application-has-no-receiver
-func TestSendWithoutAnApplicationOrToAnotherFolderHasNoReceiver(t *testing.T) {
+// contract: cli.message.send-into-another-folder-has-no-receiver
+func TestSendToAnotherFolderHasNoReceiver(t *testing.T) {
 	home := t.TempDir()
-	config := t.TempDir()
-	root := terminalFolders(t, "t2")
-	for _, folder := range []string{filepath.Join(root, ".soksak", "messages", "t2"), t.TempDir()} {
-		code, stdout, stderr := messageSend(t, home, "t1", "--config-dir", config, "--reply", folder, "hello")
-		if code != 0 || messageReceiver(t, stdout) != "null" {
-			t.Fatalf("send to %s: code %d stdout %q stderr %q", folder, code, stdout, stderr)
-		}
+	folder := t.TempDir()
+	code, stdout, stderr := messageSend(t, home, playCase(t, "sok-message-send-sender", withText("sender", "t1")).configDir, "", "--reply", folder, "hello")
+	if code != 0 || messageReceiver(t, stdout) != "null" || !strings.HasPrefix(messageName(t, stdout), "t1.report-") {
+		t.Fatalf("send to %s: code %d stdout %q stderr %q", folder, code, stdout, stderr)
 	}
 }

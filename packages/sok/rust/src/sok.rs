@@ -47,7 +47,7 @@ pub mod routine;
 pub mod setup;
 pub mod skill;
 pub mod version;
-pub use agent_window::{CONFIG_DIR_VARIABLE, SURFACE_VARIABLE};
+pub use agent_window::CONFIG_DIR_VARIABLE;
 pub use logged::{Command, logged, run_logged, start_tool_event_log};
 pub use output::current_platform;
 pub use routine::PANIC_STATUS;
@@ -78,7 +78,7 @@ commands:
   debug replay SESSION [--until SEQUENCE]
                             replays the session with the replay executable of its sidecar and compares every stored screen hash
   capture [window]          (diagnostic builds) writes a still image of the window without focusing it
-  context                   prints the configuration directory, the surface of SOKSAK_SURFACE and its window
+  context                   prints the configuration directory, the surface of this process and its window
   path install|remove       writes or deletes the PATH entry of this application (needs sudo)
   skill print|install       writes the agent skill to standard output or into the skill folder of each agent folder
   mcp install               registers sok mcp with the claude command in its user scope
@@ -95,7 +95,7 @@ commands:
   conversation read --agent claude-code|codex --cwd PATH
                             prints the messages of the agent conversation of the working directory, read from its session file
   message send [--reply] FOLDER TEXT
-                            writes TEXT as a message of the surface SOKSAK_SURFACE into the folder FOLDER, and prints its file name and the hold of the receiver; sok message send FOLDER TEXT adds to TEXT the request to report the result with sok message send --reply to the folder of the sender, so a sender writes no request; a report is sent with --reply, which adds none, and a report is never answered.
+                            writes TEXT as a message of the surface of this process into the folder FOLDER, and prints its file name and the hold of the receiver; sok message send FOLDER TEXT adds to TEXT the request to report the result with sok message send --reply to the folder of the sender, so a sender writes no request; a report is sent with --reply, which adds none, and a report is never answered.
   registry build DIRECTORY  checks a registry and writes its index.json
   registry use INDEX        sets the registry index that installation reads
   plugin install|update|remove|enable|disable ID
@@ -103,7 +103,7 @@ commands:
   plugin list               prints plugins/installed.json
 
 window:
-  --window NAME | --project DIRECTORY   without either, the window of the surface SOKSAK_SURFACE, else the only window of the application
+  --window NAME | --project DIRECTORY   without either, the window of the surface of this process, else the only window of the application
 
 common options:
   --config-dir DIR          configuration directory of the running application (default: this application's)";
@@ -588,24 +588,18 @@ fn no_notify(_: &str, _: &RawValue) -> Result<(), String> {
     Ok(())
 }
 
-/// The window whose layout holds the surface now, through `surface.window` (docs/spec/cli.md#the-window-of-an-agent). A surface in
-/// no window of ready windows (1012) fails with the text that names `SOKSAK_SURFACE`, and no other window is chosen.
-pub fn surface_window(
-    client: &mut Client,
-    surface: &str,
-) -> Result<agent_window::SurfaceHome, Failure> {
-    agent_window::surface_window(
-        &mut |method: &str, params: Option<Value>| client.request(method, params, &mut no_notify),
-        surface,
-    )
+/// Chooses the window to request from --window, --project, the window of the surface that `agent.surface` answers for the process of
+/// this sok, or the only window (docs/spec/cli.md#windows).
+fn select_window(a: &Arguments, client: &mut Client) -> Result<String, Error> {
+    Ok(select_window_home(a, client)?.0)
 }
 
-/// Chooses the window to request from --window, --project, the window of the surface of `SOKSAK_SURFACE` or the only window.
-fn select_window(
+/// select_window with the home of the surface of this process, None for a process of no surface, and whether it asked
+/// `agent.surface`, which it does without --window and --project.
+fn select_window_home(
     a: &Arguments,
     client: &mut Client,
-    surface: Option<&str>,
-) -> Result<String, Error> {
+) -> Result<(String, Option<agent_window::SurfaceHome>, bool), Error> {
     let by_name = a.values.get("window");
     let by_project = a.values.get("project");
     if by_name.is_some() && by_project.is_some() {
@@ -614,18 +608,22 @@ fn select_window(
         ));
     }
     if let Some(name) = by_name {
-        return Ok(name.clone());
+        return Ok((name.clone(), None, false));
     }
+    let mut request =
+        |method: &str, params: Option<Value>| client.request(method, params, &mut no_notify);
     if by_project.is_none()
-        && let Some(surface) = surface
+        && let Some(home) = agent_window::agent_home(&mut request)?
     {
-        return Ok(surface_window(client, surface)?.window);
+        return Ok((home.window.clone(), Some(home), true));
     }
-    let windows = agent_window::read_windows(&mut |method: &str, params: Option<Value>| {
-        client.request(method, params, &mut no_notify)
-    })?;
+    let windows = agent_window::read_windows(&mut request)?;
     if let Some(project) = by_project {
-        return Ok(agent_window::project_window(&windows, project)?);
+        return Ok((
+            agent_window::project_window(&windows, project)?,
+            None,
+            false,
+        ));
     }
     if windows.len() != 1 {
         return Err(usage!(
@@ -634,7 +632,7 @@ fn select_window(
             agent_window::window_names(&windows).join(", ")
         ));
     }
-    Ok(windows[0].window.clone())
+    Ok((windows[0].window.clone(), None, true))
 }
 
 /// Writes JSON with two-space indentation and keeps the key order. The result equals json.Indent of Go.
@@ -836,15 +834,6 @@ pub struct Options<'a> {
     /// `SOKSAK_CONFIG_DIR` of the environment: the configuration directory when `--config-dir` is not given and it is not empty
     /// (docs/spec/cli.md#the-window-of-an-agent).
     pub config_dir_variable: Option<&'a str>,
-    /// `SOKSAK_SURFACE` of the environment: the surface whose window a command without a window uses when it is not empty.
-    pub surface_variable: Option<&'a str>,
-}
-
-impl Options<'_> {
-    /// The surface that `SOKSAK_SURFACE` names, or None when it is not set or empty.
-    pub fn surface(&self) -> Option<&str> {
-        self.surface_variable.filter(|surface| !surface.is_empty())
-    }
 }
 
 /// Runs one command and returns the exit status.
@@ -983,7 +972,7 @@ fn execute(
         _ => {}
     }
     if let Some(viewed) =
-        agent_window::run_agent_view(&a, stdout, options, &mut || connect_to(&a.values, options))
+        agent_window::run_agent_view(&a, stdout, &mut || connect_to(&a.values, options))
     {
         return viewed;
     }
@@ -997,11 +986,7 @@ fn execute(
     let request = {
         let mut choose = || -> Result<String, Error> {
             connect(&mut client)?;
-            select_window(
-                &a,
-                client.as_mut().expect("connected above"),
-                options.surface(),
-            )
+            select_window(&a, client.as_mut().expect("connected above"))
         };
         plan(&a, &mut choose)?
     };
@@ -1014,8 +999,9 @@ fn execute(
     closed.map_err(Error::Failed)
 }
 
-/// Prints `{configDirectory, surface, window}`: the configuration directory that the command uses, the surface of `SOKSAK_SURFACE`
-/// and the window of that surface through `surface.window`, or `null` for both without it.
+/// Prints `{configDirectory, surface, window}`: the configuration directory that the command uses, the surface that `agent.surface`
+/// answers for the process of this sok and the window of that surface through `surface.window`, or `null` for both when
+/// `agent.surface` refuses with 1014.
 fn context(a: &Arguments, stdout: &mut dyn Write, options: &Options) -> Result<(), Error> {
     if let Some(extra) = a.positionals.get(1) {
         return Err(usage!("context takes no argument: {extra}"));
@@ -1024,25 +1010,15 @@ fn context(a: &Arguments, stdout: &mut dyn Write, options: &Options) -> Result<(
         return Err(usage!("context takes only --config-dir"));
     }
     let config_dir = config_dir_of(&a.values, options)?;
-    let surface = options.surface();
-    let window = match surface {
-        None => None,
-        Some(surface) => {
-            let mut client = connect_to(&a.values, options)?;
-            let outcome = surface_window(&mut client, surface);
-            let closed = client.close();
-            let home = outcome?;
-            closed.map_err(Error::Failed)?;
-            Some(home.window)
-        }
-    };
-    let out = serde_json::to_string_pretty(&serde_json::json!({
-        "configDirectory": config_dir.display().to_string(),
-        "surface": surface,
-        "window": window,
-    }))
-    .map_err(|error| error.to_string())?;
-    writeln!(stdout, "{out}").map_err(|error| Error::Failed(error.to_string()))
+    let mut client = connect_to(&a.values, options)?;
+    let outcome = agent_window::agent_context(
+        &mut |method: &str, params: Option<Value>| client.request(method, params, &mut no_notify),
+        &config_dir.display().to_string(),
+    );
+    let closed = client.close();
+    let context = outcome?;
+    closed.map_err(Error::Failed)?;
+    write!(stdout, "{}", indent(&context)?).map_err(|error| Error::Failed(error.to_string()))
 }
 
 #[cfg(test)]

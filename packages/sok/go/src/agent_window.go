@@ -11,42 +11,81 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
 	"unicode/utf8"
 )
 
-// SurfaceVariable is the variable that names the surface whose process started the agent.
-const SurfaceVariable = "SOKSAK_SURFACE"
-
-// agentSurface is the surface that SOKSAK_SURFACE names, or "" when the variable is not set or empty.
-func agentSurface() string { return os.Getenv(SurfaceVariable) }
-
 // requester sends one endpoint request and returns its result.
 type requester func(method string, params any) (json.RawMessage, error)
 
-// surfaceHome is the answer of surface.window: the window and the space whose layout holds a surface, nil for a section surface,
-// which a sidebar of the window draws and no layout of a space holds.
-type surfaceHome struct {
-	Window string
-	Space  *string
+// codeNoSurfaceOf is the endpoint error of agent.surface for a process that belongs to no surface
+// (docs/spec/sidecars.md#process-identity).
+const codeNoSurfaceOf = 1014
+
+// ownSurface asks the endpoint for the surface of the process of this sok with agent.surface (docs/spec/sidecars.md#process-identity).
+// A process that belongs to no surface is refused with 1014, and ownSurface returns "" and that refusal.
+func ownSurface(request requester) (string, *EndpointError, error) {
+	result, err := request("agent.surface", nil)
+	var endpointErr *EndpointError
+	if errors.As(err, &endpointErr) && endpointErr.Code == codeNoSurfaceOf {
+		return "", endpointErr, nil
+	}
+	if err != nil {
+		return "", nil, err
+	}
+	var answer struct {
+		Surface string `json:"surface"`
+	}
+	if json.Unmarshal(result, &answer) != nil || answer.Surface == "" {
+		return "", nil, fmt.Errorf("agent.surface returned an unexpected value: %s", result)
+	}
+	return answer.Surface, nil, nil
 }
 
-// surfaceWindow asks the endpoint for the window and the space whose layout holds surface. An answer 1012 is the error that names the
-// variable, because a request of an agent never falls back to another window.
+// agentHome asks agent.surface and, for a surface, surface.window: the home of the surface of this process, or nil when agent.surface
+// refuses with 1014 (docs/spec/cli.md#the-window-of-an-agent).
+func agentHome(request requester) (*surfaceHome, error) {
+	surface, refused, err := ownSurface(request)
+	if err != nil || refused != nil {
+		return nil, err
+	}
+	home, err := surfaceWindow(request, surface)
+	if err != nil {
+		return nil, err
+	}
+	return &home, nil
+}
+
+// surfaceHome is a surface with the answer of surface.window: the window and the space whose layout holds it, nil for a section
+// surface, which a sidebar of the window draws and no layout of a space holds.
+type surfaceHome struct {
+	Surface string
+	Window  string
+	Space   *string
+}
+
+// noWindowError is the error of an own surface that is in no window of the application.
+type noWindowError struct{ surface string }
+
+func (e *noWindowError) Error() string {
+	return fmt.Sprintf("surface %s of this process is in no window of the application", e.surface)
+}
+
+// surfaceWindow asks the endpoint for the window and the space whose layout holds surface. An answer 1012 is a *noWindowError,
+// because a request of an agent never falls back to another window.
 func surfaceWindow(request requester, surface string) (surfaceHome, error) {
 	result, err := request("surface.window", map[string]any{"surface": surface})
 	var endpointErr *EndpointError
 	if errors.As(err, &endpointErr) && endpointErr.Code == 1012 {
-		return surfaceHome{}, fmt.Errorf("%s names surface %s, which is in no window of the application", SurfaceVariable, surface)
+		return surfaceHome{}, &noWindowError{surface: surface}
 	}
 	if err != nil {
 		return surfaceHome{}, err
 	}
 	var answer map[string]json.RawMessage
-	var home surfaceHome
+	home := surfaceHome{Surface: surface}
 	if json.Unmarshal(result, &answer) != nil || json.Unmarshal(answer["window"], &home.Window) != nil || home.Window == "" ||
 		answer["space"] == nil || json.Unmarshal(answer["space"], &home.Space) != nil {
 		return surfaceHome{}, fmt.Errorf("surface.window returned an unexpected value: %s", result)
@@ -87,15 +126,13 @@ func keyWindow(request requester) (string, error) {
 // agentContext is `{configDirectory, surface, window}` of `sok context` and the tool agent_context.
 func agentContext(request requester, configDir string) (map[string]any, error) {
 	context := map[string]any{"configDirectory": configDir, "surface": nil, "window": nil}
-	surface := agentSurface()
-	if surface == "" {
-		return context, nil
-	}
-	home, err := surfaceWindow(request, surface)
+	home, err := agentHome(request)
 	if err != nil {
 		return nil, err
 	}
-	context["surface"], context["window"] = surface, home.Window
+	if home != nil {
+		context["surface"], context["window"] = home.Surface, home.Window
+	}
 	return context, nil
 }
 
@@ -910,14 +947,12 @@ func runAgentView(a arguments, stdout io.Writer, options Options, connect func()
 		if err != nil {
 			return true, err
 		}
-		// Without SOKSAK_SURFACE the context needs no request, so it connects only for surface.window.
-		context, err := agentContext(func(method string, params any) (json.RawMessage, error) {
-			client, err := connect()
-			if err != nil {
-				return nil, err
-			}
-			return client.Request(method, params)
-		}, configDir)
+		// The context asks agent.surface, so it connects to the running application.
+		client, err := connect()
+		if err != nil {
+			return true, err
+		}
+		context, err := agentContext(client.Request, configDir)
 		if err != nil {
 			return true, err
 		}
@@ -938,23 +973,11 @@ func runAgentView(a arguments, stdout io.Writer, options Options, connect func()
 	switch command {
 	case "describe":
 		// The window of the agent's surface is asked once, and its answer gives the space of the agent too.
-		var home *surfaceHome
-		_, byName := a.values["window"]
-		_, byProject := a.values["project"]
-		if own := agentSurface(); own != "" && !byName && !byProject {
-			found, err := surfaceWindow(client.Request, own)
-			if err != nil {
-				return true, err
-			}
-			home = &found
-		}
-		var window string
-		if home != nil {
-			window = home.Window
-		} else if window, err = selectWindow(a, client); err != nil {
+		window, home, asked, err := selectWindowHome(a, client)
+		if err != nil {
 			return true, err
 		}
-		if out, err = describeRequest(client.Request, window, home, a.values["surface"], a.flags["full"], a.values["after"], limit); err != nil {
+		if out, err = describeRequest(client.Request, window, home, asked, a.values["surface"], a.flags["full"], a.values["after"], limit); err != nil {
 			return true, err
 		}
 	default:

@@ -60,33 +60,27 @@ func TestSidecarProcessDoesNotReceiveItsDisplayNameFromTheHost(t *testing.T) {
 	}
 }
 
-// agentEnvironment is the control text of the sidecar fixture that records the values of SOKSAK_CONFIG_DIR and SOKSAK_SURFACE in
-// the files config-dir and surface of directory, and reads them after the sidecar recorded them.
+// agentEnvironment is the control text of the sidecar fixture that records the value of SOKSAK_CONFIG_DIR in the file config-dir of
+// directory, and reads it after the sidecar recorded it.
 type agentEnvironment struct{ directory string }
 
 func (e agentEnvironment) control() string {
-	return "record-env SOKSAK_CONFIG_DIR " + filepath.Join(e.directory, "config-dir") + "\n" +
-		"record-env SOKSAK_SURFACE " + filepath.Join(e.directory, "surface") + "\n"
+	return "record-env SOKSAK_CONFIG_DIR " + filepath.Join(e.directory, "config-dir") + "\n"
 }
 
-func (e agentEnvironment) values(t *testing.T) (string, string) {
+func (e agentEnvironment) value(t *testing.T) string {
 	t.Helper()
 	config, err := os.ReadFile(filepath.Join(e.directory, "config-dir"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	surface, err := os.ReadFile(filepath.Join(e.directory, "surface"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(config), string(surface)
+	return string(config)
 }
 
 // contract: sidecars.environment.names-the-configuration-directory
-func TestSidecarsStartWithTheConfigurationDirectoryAndWithoutASurface(t *testing.T) {
-	// The environment of the host holds the values of another application, which an application started from its process inherits.
+func TestSidecarsStartWithTheConfigurationDirectory(t *testing.T) {
+	// The environment of the host holds the value of another application, which an application started from its process inherits.
 	t.Setenv("SOKSAK_CONFIG_DIR", "/other/config")
-	t.Setenv("SOKSAK_SURFACE", "other-surface")
 	config, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -104,8 +98,8 @@ func TestSidecarsStartWithTheConfigurationDirectoryAndWithoutASurface(t *testing
 		t.Fatal(err)
 	}
 	owner.Next(t)
-	if directory, surface := stdio.values(t); directory != config || surface != "" {
-		t.Fatalf("standard input and output sidecar: SOKSAK_CONFIG_DIR %q, SOKSAK_SURFACE %q, want %q and none", directory, surface, config)
+	if directory := stdio.value(t); directory != config {
+		t.Fatalf("standard input and output sidecar: SOKSAK_CONFIG_DIR %q, want %q", directory, config)
 	}
 	// A persistent service records its environment and ends before it prints an endpoint, so its start fails after the record.
 	service := agentEnvironment{t.TempDir()}
@@ -118,8 +112,8 @@ func TestSidecarsStartWithTheConfigurationDirectoryAndWithoutASurface(t *testing
 	if err := support.SendOpen(persistent, support.NewSidecarRecorder(t, "/projects/b")); err == nil || !strings.Contains(err.Error(), "service exited before endpoint") {
 		t.Fatalf("persistent start = %v, want the end before the endpoint", err)
 	}
-	if directory, surface := service.values(t); directory != config || surface != "" {
-		t.Fatalf("persistent service: SOKSAK_CONFIG_DIR %q, SOKSAK_SURFACE %q, want %q and none", directory, surface, config)
+	if directory := service.value(t); directory != config {
+		t.Fatalf("persistent service: SOKSAK_CONFIG_DIR %q, want %q", directory, config)
 	}
 	// A host without a configuration directory starts its sidecars without SOKSAK_CONFIG_DIR.
 	unnamed := agentEnvironment{t.TempDir()}
@@ -134,8 +128,8 @@ func TestSidecarsStartWithTheConfigurationDirectoryAndWithoutASurface(t *testing
 		t.Fatal(err)
 	}
 	other.Next(t)
-	if directory, surface := unnamed.values(t); directory != "" || surface != "" {
-		t.Fatalf("sidecar of a host without a configuration directory: SOKSAK_CONFIG_DIR %q, SOKSAK_SURFACE %q, want none", directory, surface)
+	if directory := unnamed.value(t); directory != "" {
+		t.Fatalf("sidecar of a host without a configuration directory: SOKSAK_CONFIG_DIR %q, want none", directory)
 	}
 }
 

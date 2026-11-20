@@ -30,7 +30,6 @@ fn run(args: &[&str]) -> (i32, String, String) {
         paths_dir: Ok(&paths),
         core_version: "0.0.2",
         config_dir_variable: None,
-        surface_variable: None,
     };
     let code = soksak_sok::run(&args, &mut stdout, &mut stderr, &options);
     (
@@ -91,7 +90,6 @@ fn an_error_that_cannot_be_written_exits_with_status_3() {
         paths_dir: Ok(&paths),
         core_version: "0.0.2",
         config_dir_variable: None,
-        surface_variable: None,
     };
     let mut stdout = Vec::new();
     assert_eq!(
@@ -592,7 +590,6 @@ fn path_entries_fail_where_the_operating_system_has_no_folder() {
         paths_dir: Err("path entries are not implemented on linux".to_string()),
         core_version: "0.0.2",
         config_dir_variable: None,
-        surface_variable: None,
     };
     let code = soksak_sok::run(&args, &mut stdout, &mut stderr, &options);
     assert_eq!(
@@ -687,14 +684,14 @@ fn a_gesture_sends_one_press_on_one_connection() {
             r#"{"button":"right","phase":"up","pointer":"second","window":"main","x":5,"y":6}"#,
         ]
     );
-    // windows.list chose the window on the same connection, so every step has the id that follows the one before.
+    // agent.surface and windows.list chose the window on the same connection, so every step has the id that follows the one before.
     let ids: Vec<u64> = requests
         .iter()
         .map(|request| request["id"].as_u64().expect("id"))
         .collect();
     assert_eq!(
         ids,
-        [1, 2, 3, 4, 5],
+        [1, 2, 3, 4, 5, 6],
         "the gesture used more than one connection"
     );
 
@@ -753,7 +750,12 @@ fn a_failed_gesture_step_ends_the_command() {
     );
     assert_eq!(
         player.methods(),
-        ["windows.list", "input.pointer", "input.pointer"]
+        [
+            "agent.surface",
+            "windows.list",
+            "input.pointer",
+            "input.pointer"
+        ]
     );
 }
 

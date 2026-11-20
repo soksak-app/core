@@ -7,7 +7,6 @@ fn options() -> Options<'static> {
         paths_dir: Ok(Path::new("/tmp")),
         core_version: super::version::CORE_VERSION,
         config_dir_variable: None,
-        surface_variable: None,
     }
 }
 

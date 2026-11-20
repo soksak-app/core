@@ -4,6 +4,7 @@
   "replay": false,
   "reason": "A case file holds decoded JSON values, and a lone surrogate escape is no character of a decoded value, so the test gives the snapshot as raw text.",
   "variables": {
+    "refusal": { "type": "string", "example": "process 1 is not a process of a surface: no parent process of it is a running sidecar of the application that started it for a surface" },
     "snapshot": {
       "type": "object",
       "keys": [
@@ -45,17 +46,19 @@
     }
   },
   "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "agent.surface"}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "error": {"code": 1014, "message": "$refusal"}}},
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 1,
+        "id": 2,
         "method": "windows.list"
       }
     },
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 1,
+        "id": 2,
         "result": [
           {
             "window": "main",
@@ -70,7 +73,7 @@
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 2,
+        "id": 3,
         "method": "exposure.snapshot",
         "params": {
           "window": "main"
@@ -80,7 +83,7 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 2,
+        "id": 3,
         "result": "$snapshot"
       }
     },

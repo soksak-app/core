@@ -202,7 +202,6 @@ fn a_run_stores_only_the_events_that_the_specification_names() {
         paths_dir: Ok(std::path::Path::new("/nonexistent/paths.d")),
         core_version: "0.0.2",
         config_dir_variable: None,
-        surface_variable: None,
     };
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
     soksak_sok::logged(&args, &mut stdout, &mut stderr, &options, &soksak_sok::run);

@@ -1,0 +1,17 @@
+{
+  "name": "sok-message-send-refused",
+  "description": "sok message send from a process of no surface gets the refusal 1014 of agent.surface twice, once without and once with CODEX_THREAD_ID, and writes no file.",
+  "replay": false,
+  "reason": "The case checks the environment of the sok that the test starts and folders that the test creates.",
+  "variables": {
+    "refusal": { "type": "string", "example": "process 1 is not a process of a surface: no parent process of it is a running sidecar of the application that started it for a surface" }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "agent.surface" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "error": { "code": 1014, "message": "$refusal" } } },
+    { "close": "client" },
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "agent.surface" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "error": { "code": 1014, "message": "$refusal" } } },
+    { "close": "client" }
+  ]
+}

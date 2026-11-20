@@ -1,11 +1,19 @@
 {
   "name": "sok-context",
-  "description": "sok context with SOKSAK_SURFACE asks surface.window once and prints the configuration directory, the surface and its window.",
+  "description": "sok context asks agent.surface and surface.window once and prints the configuration directory, the surface and its window, and for a refusal 1014 of agent.surface it prints the configuration directory with surface and window null.",
   "replay": false,
-  "reason": "The case needs the environment variable SOKSAK_SURFACE of the sok that the test starts, which a window check of the application does not set.",
+  "reason": "The case answers agent.surface with a surface, and the process of the sok that the test starts belongs to no surface of a running application, so agent.surface refuses it.",
+  "variables": {
+    "refusal": { "type": "string", "example": "process 1 is not a process of a surface: no parent process of it is a running sidecar of the application that started it for a surface" }
+  },
   "steps": [
-    { "send": { "jsonrpc": "2.0", "id": 1, "method": "surface.window", "params": { "surface": "terminal-1" } } },
-    { "reply": { "jsonrpc": "2.0", "id": 1, "result": { "window": "project-a", "space": "space-1" } } },
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "agent.surface" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": { "surface": "terminal-1" } } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "surface.window", "params": { "surface": "terminal-1" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": { "window": "project-a", "space": "space-1" } } },
+    { "close": "client" },
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "agent.surface" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "error": { "code": 1014, "message": "$refusal" } } },
     { "close": "client" }
   ]
 }

@@ -25,7 +25,6 @@ fn logged(config: &Path, command: Command2, args: &[&str]) -> (i32, String) {
         paths_dir: Ok(Path::new("/nonexistent/paths.d")),
         core_version: "0.0.2",
         config_dir_variable: None,
-        surface_variable: None,
     };
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
     let code = soksak_sok::logged(&all, &mut stdout, &mut stderr, &options, command);
@@ -145,7 +144,6 @@ fn path_entry_commands_open_no_event_file() {
         paths_dir: Ok(paths.path()),
         core_version: "0.0.2",
         config_dir_variable: None,
-        surface_variable: None,
     };
     for action in ["install", "remove"] {
         let args: Vec<String> = ["path", action, "--config-dir", config.text()]

@@ -17,12 +17,9 @@ import (
 	"github.com/soksak-app/core/packages/sok/go/tests/support"
 )
 
-// The agent variables of a soksak window (docs/spec/cli.md#the-window-of-an-agent). TestMain removes them, so a test run inside a
-// soksak window never reaches the application of that window, and each test that needs them sets them.
-const (
-	configDirVariable = "SOKSAK_CONFIG_DIR"
-	surfaceVariable   = "SOKSAK_SURFACE"
-)
+// configDirVariable is the agent variable of a soksak window (docs/spec/cli.md#the-window-of-an-agent). TestMain removes it, so a
+// test run inside a soksak window never reaches the application of that window, and each test that needs it sets it.
+const configDirVariable = "SOKSAK_CONFIG_DIR"
 
 // builtSokDir holds the sok executable that builtSok builds once for the test process; TestMain removes it.
 var (
@@ -39,7 +36,6 @@ var (
 
 func TestMain(m *testing.M) {
 	os.Unsetenv(configDirVariable)
-	os.Unsetenv(surfaceVariable)
 	startEnvironment = os.Environ()
 	goTool, goToolErr = exec.LookPath("go")
 	code := m.Run()

@@ -3,6 +3,7 @@
   "description": "exposure_search of sok mcp without a window reads windows.list for the key window, then exposure.list of that window, and answers every declared entry in the order of exposure.list.",
   "replay": true,
   "variables": {
+    "refusal": { "type": "string", "example": "process 1 is not a process of a surface: no parent process of it is a running sidecar of the application that started it for a surface" },
     "title": { "type": "string", "example": "soksak" },
     "project": { "type": ["string", "null"], "example": null },
     "key": { "type": "boolean", "example": true },
@@ -10,10 +11,12 @@
     "exposure": { "type": "object", "keys": ["status", "commands", "element"], "example": { "status": [{ "name": "core.screen", "description": "Current screen.", "schema": { "type": "string" }, "registered": true }, { "name": "host.window", "description": "Window state.", "schema": { "type": "object" }, "registered": true }], "commands": [{ "name": "core.project.open", "description": "Opens a project.", "params": { "type": "object", "properties": { "root": { "type": "string" } } }, "result": { "type": "null" }, "registered": true }, { "name": "host.window.reload", "description": "Starts the workbench of the window again.", "params": { "type": "object" }, "result": { "type": "null" }, "registered": true }], "element": [{ "name": "core.tab", "description": "A tab.", "many": true, "registered": true }] } }
   },
   "steps": [
-    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
-    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } },
-    { "send": { "jsonrpc": "2.0", "id": 2, "method": "exposure.list", "params": { "window": "main" } } },
-    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$exposure" } }
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "agent.surface" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "error": { "code": 1014, "message": "$refusal" } } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } },
+    { "send": { "jsonrpc": "2.0", "id": 3, "method": "exposure.list", "params": { "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 3, "result": "$exposure" } }
   ],
   "mcp": {
     "steps": [

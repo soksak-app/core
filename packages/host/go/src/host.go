@@ -37,14 +37,12 @@ type Options struct {
 	RegistryCA string
 }
 
-// removeAgentVariables removes SOKSAK_CONFIG_DIR and SOKSAK_SURFACE from the environment of the process. An application started
-// from a process of another application inherits them, and a sok that the host starts, such as the sok of an application update,
-// would act on the configuration directory of that application.
+// removeAgentVariables removes SOKSAK_CONFIG_DIR from the environment of the process. An application started from a process of
+// another application inherits it, and a sok that the host starts, such as the sok of an application update, would act on the
+// configuration directory of that application.
 func removeAgentVariables() error {
-	for _, name := range []string{sok.ConfigDirVariable, sok.SurfaceVariable} {
-		if err := os.Unsetenv(name); err != nil {
-			return fmt.Errorf("environment %s: %w", name, err)
-		}
+	if err := os.Unsetenv(sok.ConfigDirVariable); err != nil {
+		return fmt.Errorf("environment %s: %w", sok.ConfigDirVariable, err)
 	}
 	return nil
 }
