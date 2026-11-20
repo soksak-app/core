@@ -302,6 +302,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F915",
+    implementation: [
+      { file: "scripts/test-discovery.mjs", symbol: "args: ['-test.list', '.'], cwd: pkg.dir, env: selectedEnv } });" },
+      { file: "scripts/test-discovery.mjs", symbol: "name: `list ${id} ${target} (${executable})`, command: executable, args: ['--list', '--format', 'terse'], cwd: dir," },
+    ],
+    tests: [
+      { file: "scripts/test/test-discovery.test.mjs", id: "a Go test binary whose listing ends after the limit of a test is still listed, because its listing ends by its own exit" },
+      { file: "scripts/test/test-discovery.test.mjs", id: "a Rust test binary whose listing ends after the limit of a test is still listed, because its listing ends by its own exit" },
+    ],
+    expected: "A listing of the discovery ends when its process exits, without the limit of a test, so a listing that the load of a run delays is not killed.",
+    levels: ["unit"],
+  },
+  {
     id: "F806",
     implementation: [
       { file: "packages/plugin-api/view.js", symbol: "if (batcher !== null) batcher.flush().catch(recordError(\"log batch flush\"));" },
