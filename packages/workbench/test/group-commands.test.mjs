@@ -217,6 +217,22 @@ test("core.layout.open toward a side from the last card of a group finds its nei
   assert.deepEqual((await stored()).groups[0].members, ["card-1", "card-2", opened.card]);
 });
 
+test("a drag along the bottom line selects the run from the card where it entered the line to the current card", { timeout: 5000 }, () => {
+  arrange();
+  const band = plane.dropBands();
+  const first = plane.currentTree().rect("card-1"), second = plane.currentTree().rect("card-2");
+  // The bottom line of card-1 holds four bands, the root cut, the group card, the cut of its members and card-1; the innermost band is
+  // 15 to 20 points inside the line (docs/spec/groups.md#target-search).
+  const y = 1200 - 17;
+  const entered = plane.dragHit(null, first.x + first.w / 2, y, band);
+  assert.deepEqual(entered.hit, { card: "card-1", zone: "bottom" });
+  const along = plane.dragHit(entered.anchor, second.x + second.w / 2, y, band);
+  assert.deepEqual(along.hit, { card: ["card-1", "card-2"], zone: "bottom" });
+  assert.deepEqual(along.anchor, entered.anchor, "the drag that stays on the band keeps its anchor");
+  // Without the anchor the same point is the band of card-2 alone.
+  assert.deepEqual(plane.dropHit(second.x + second.w / 2, y, band), { card: "card-2", zone: "bottom" });
+});
+
 test("a drop resolves by the bands of the target search and core.tab.move puts a tab into and beside a group card", { timeout: 5000 }, async () => {
   arrange();
   const tree = plane.currentTree();

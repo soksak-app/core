@@ -66,6 +66,12 @@ function call(tree, grid, { call: name, args = {} }, { band, bandMargin }) {
     case "level": return tree.level(args.card);
     // The target search measures the bands of the case and no tab strip, as the cases give no card a tab strip.
     case "drop": return tree.targetAt(args.x, args.y, { headerPx: 0, edge: 0.25, band, bandMargin });
+    // A drag runs its points in order with the anchor that each point leaves to the next, and answers the target at the last point.
+    case "drag": {
+      let hit = null, anchor = null;
+      for (const [x, y] of args.points) ({ hit, anchor } = tree.dragAt(anchor, x, y, { headerPx: 0, edge: 0.25, band, bandMargin }));
+      return hit;
+    }
     // default: a balance step without arrange balances without the even arrangement.
     case "balance": tree.balance(args.arrange ?? false); return null;
     case "boundary": return { position: tree.moveBoundary(args.axis, args.line, args.position, false) };

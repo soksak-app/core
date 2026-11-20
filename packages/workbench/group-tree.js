@@ -62,6 +62,19 @@ function sideStack(chain, side) {
 }
 
 /**
+ * The kid of the cut across the axis of side that holds the node of the band at the link at of stack, through the cuts along the axis of
+ * side, which give no band: {cut, kid}, the members of that cut joined by a space and the index of the kid, or the cut null when a box or
+ * the root comes first.
+ */
+function kidOf(stack, at, side) {
+  for (let j = at; j > 0 && stack[j].at >= 0; j--) {
+    const holder = stack[j - 1].node;
+    if (holder.cut !== axisOf(side)) return { cut: nodeMembers(holder).join(" "), kid: stack[j].at };
+  }
+  return { cut: null, kid: 0 };
+}
+
+/**
  * The target of a link of a side stack as a list of ids, or null: a card that is no window sidebar and not fixed, a box, a cut across the
  * axis of side that holds no window sidebar, and the root cut that holds one as the content of the plane. A cut along the axis of side
  * has the result of its kid toward side, so it gives no band of its own.
@@ -1187,7 +1200,17 @@ export class GroupTree {
    * bandMargin, the margin that the bands of a side keep before the centre of the card.
    */
   targetAt(x, y, options) {
-    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    return this.dragAt(null, x, y, options).hit;
+  }
+
+  /**
+   * Resolves the drop of a drag at x, y whose anchor is anchor, null before the drag enters a line, and returns {hit, anchor}: the target
+   * of targetAt and the anchor of the next point, the anchor while the point stays on its band of its line, the band of the point when
+   * it enters another, and null off the bands. A band whose node is another kid of the cut of the anchor across the axis of the side is
+   * the run of the kids between the two (docs/spec/groups.md#target-search).
+   */
+  dragAt(anchor, x, y, options) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return { hit: null, anchor: null };
     const holds = (r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
     let content = null, group = null, frame = null;
     for (const { id, node } of this.order()) {
@@ -1200,14 +1223,19 @@ export class GroupTree {
       }
     }
     const root = this.grid.toJSON().root;
-    if (content === null && group === null && !holds(this.drawnRect(root))) return null;
+    if (content === null && group === null && !holds(this.drawnRect(root))) return { hit: null, anchor: null };
     const body = content === null ? null : this.rect(content);
     const inStrip = content !== null && !isPlace(content) && y < body.y + options.headerPx;
     const inHead = content === null && group !== null && y <= this.headRect(group).y + this.options.head;
     if (!inStrip) {
-      const hit = this.bandAt(root, x, y, options, inHead ? group : null, content === null && !inHead);
-      if (hit) return hit;
+      const found = this.bandAt(root, x, y, options, inHead ? group : null, content === null && !inHead, anchor);
+      if (found) return found;
     }
+    return { hit: this.bodyAt(root, x, y, options, content, group, body, inStrip, inHead), anchor: null };
+  }
+
+  /** The target of a point in no band: the tab strip, the centre or the outer quarter of a content card, or the header of a group card. */
+  bodyAt(root, x, y, options, content, group, body, inStrip, inHead) {
     if (inStrip) return { kind: "strip", card: content };
     if (content !== null && isPlace(content)) return null;
     if (content !== null) {
@@ -1226,10 +1254,11 @@ export class GroupTree {
 
   /**
    * The band of the side of the point whose distance divided by the distance that side has is the smallest, when the point lies in it,
-   * or always when anywhere is set. On the header of the group card head the chain ends at its box, so the bands are those of its left and
-   * its right side (docs/spec/groups.md#target-search).
+   * or always when anywhere is set, as {hit, anchor} with the anchor of the next point of a drag whose anchor is anchor, or null. On the
+   * header of the group card head the chain ends at its box, so the bands are those of its left and its right side
+   * (docs/spec/groups.md#target-search).
    */
-  bandAt(root, x, y, options, head, anywhere) {
+  bandAt(root, x, y, options, head, anywhere, anchor) {
     let chain = this.chain(root, x, y);
     if (head !== null) chain = chain.slice(0, chain.findIndex((link) => isBoxNode(link.node) && link.node.box === head) + 1);
     const leaf = chain[chain.length - 1];
@@ -1240,17 +1269,39 @@ export class GroupTree {
     for (const side of head !== null ? ["left", "right"] : SIDES) {
       const stack = sideStack(chain, side);
       const line = edgeOf(stack[0].rect, side);
-      const bands = stack.map((link) => stackTarget(link, side)).filter((target) => target !== null);
+      const bands = [], links = [];
+      stack.forEach((link, j) => {
+        const target = stackTarget(link, side);
+        if (target !== null) {
+          bands.push(target);
+          links.push(j);
+        }
+      });
       if (!bands.length) continue;
       const dist = this.within(side, line, x, y, options.headerPx);
       const have = Math.max(1, this.within(side, line, cx, cy, options.headerPx) - options.bandMargin);
       const width = Math.min(options.band, have / bands.length);
       const score = dist / have;
-      if (best === null || score < best.score) best = { side, dist, width, score, bands };
+      if (best === null || score < best.score) best = { side, dist, width, score, line, bands, stack, links };
     }
     if (best === null || !(best.dist < best.bands.length * best.width || anywhere)) return null;
     const at = Math.min(best.bands.length - 1, Math.floor(best.dist / best.width));
-    return { kind: "add", target: targetText(best.bands[at]), side: best.side, band: at, of: best.bands.length };
+    const hit = { kind: "add", target: targetText(best.bands[at]), side: best.side, band: at, of: best.bands.length };
+    const { cut, kid } = kidOf(best.stack, best.links[at], best.side);
+    if (anchor === null || anchor.side !== best.side || anchor.line !== best.line || anchor.band !== at) {
+      return { hit, anchor: { side: best.side, line: best.line, band: at, cut, kid } };
+    }
+    if (cut !== null && cut === anchor.cut && kid !== anchor.kid) {
+      let holder = best.stack[best.links[at]];
+      for (let j = best.links[at]; j > 0; j--) {
+        if (nodeMembers(best.stack[j - 1].node).join(" ") === cut) {
+          holder = best.stack[j - 1];
+          break;
+        }
+      }
+      hit.target = targetText(holder.node.kids.slice(Math.min(kid, anchor.kid), Math.max(kid, anchor.kid) + 1).flatMap((k) => nodeMembers(k.node)));
+    }
+    return { hit, anchor };
   }
 
   /** A group node in its stored form, its members in reading order; level adds the level of its members. */

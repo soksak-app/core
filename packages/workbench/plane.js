@@ -677,7 +677,7 @@ function beginTabDrag(e, cardId, tabId) {
   e.preventDefault();
   // The border does not change during one drag, so it is measured once at the start.
   const band = dropBands();
-  tabDrag = { cardId, tabId, from: { x: e.clientX, y: e.clientY }, moved: false, hit: null };
+  tabDrag = { cardId, tabId, from: { x: e.clientX, y: e.clientY }, moved: false, hit: null, anchor: null };
   const el = e.currentTarget;
   el.setPointerCapture(e.pointerId);
   el.dataset.dragging = "true";
@@ -691,7 +691,7 @@ function beginTabDrag(e, cardId, tabId) {
     // a press that did not move (a click) keeps fullscreen (docs/spec/example-model.md#card-fullscreen).
     if (!tabDrag.stood) { tabDrag.stood = true; restoreFullscreen(); standIn(true); }
     const host = plane.getBoundingClientRect();
-    tabDrag.hit = dropHit(ev.clientX - host.left, ev.clientY - host.top, band);
+    ({ hit: tabDrag.hit, anchor: tabDrag.anchor } = dragHit(tabDrag.anchor, ev.clientX - host.left, ev.clientY - host.top, band));
     // A drop with no zone is rejected by the layout even if released. That position is not taken.
     if (!showDrop(tabDrag.cardId, tabDrag.hit)) tabDrag.hit = null;
     dragChanged();
@@ -955,9 +955,20 @@ function dropRect(fromId, hit) {
  * dropBands gave.
  */
 export function dropHit(x, y, band) {
-  const hit = tree.targetAt(x, y, band);
-  if (!hit) return null;
-  return hit.kind === "add" ? { card: hit.target, zone: hit.side } : { card: hit.card, zone: "centre" };
+  return dragHit(null, x, y, band).hit;
+}
+
+/**
+ * The drop target of a point of a drag whose anchor is anchor, null before the drag enters a line, as {hit, anchor}: hit the {card, zone}
+ * of dropHit, which names the run between the anchor and the current band while the drag stays on the band of its line, and anchor the
+ * anchor of the next point (docs/spec/groups.md#target-search). The drag keeps the anchor, so the preview and the release name the same
+ * run.
+ */
+export function dragHit(anchor, x, y, band) {
+  const found = tree.dragAt(anchor, x, y, band);
+  const { hit } = found;
+  if (!hit) return { hit: null, anchor: found.anchor };
+  return { hit: hit.kind === "add" ? { card: hit.target, zone: hit.side } : { card: hit.card, zone: "centre" }, anchor: found.anchor };
 }
 
 /**
