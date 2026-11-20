@@ -409,6 +409,11 @@
   {"call":"rects","returns":{"a":{"x":24,"y":0,"w":464,"h":576},"b":{"x":536,"y":0,"w":464,"h":600}}},
   {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"box":"g","inner":{"card":"a","fixed":false}}},{"share":0.5,"node":{"card":"b","fixed":false}}]}}}
  ]},
+ {"name":"at frames none a box takes no frame, so two boxes on the two sides of a line stand one corridor apart however many boxes end on it","state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"box":"outer","inner":{"box":"inner","inner":{"card":"a"}}}},{"share":0.5,"node":{"box":"side","inner":{"card":"b"}}}]}},"options":{"gap":4,"frames":"none"},"steps":[
+  {"call":"resize","args":[1000,600]},
+  {"call":"rects","returns":{"a":{"x":0,"y":0,"w":498,"h":600},"b":{"x":502,"y":0,"w":498,"h":600}}},
+  {"call":"rect","args":["outer"],"returns":{"x":0,"y":0,"w":498,"h":600}}
+ ]},
  {"name":"the frames of boxes on the two sides of a line are costs of the cut, and the kids share the rest by their fractions","state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"box":"g1","inner":{"card":"a"}}},{"share":0.5,"node":{"box":"g2","inner":{"box":"g3","inner":{"card":"b"}}}}]}},"steps":[
   {"call":"resize","args":[1000,600]},
   {"call":"rects","returns":{"a":{"x":24,"y":0,"w":416,"h":576},"b":{"x":536,"y":0,"w":416,"h":552}}}

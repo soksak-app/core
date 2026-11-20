@@ -63,6 +63,14 @@ reduced with it when the plane cannot hold the corridors and the frames. A px
 size is the drawn size of a card inside the frames around it. The frames follow
 from the tree and are no part of the state.
 
+The option `frames` states what a frame takes: `"corridor"`, the default, one
+corridor as above; `"none"` nothing, so a box is drawn at the rectangle of its
+inner node, its head still inside its top, and the corridor between two boxes on
+the two sides of a line is one corridor however many boxes end on the line. A
+host whose corridor is the one border line that two boxes share sets `"none"`.
+A change of `frames` keeps every fraction, and a value that is no frame mode
+throws `soksak: frames is <value>; use "corridor" or "none"`.
+
 The slots always sum to the plane, and a px size is reduced to keep that true.
 It is drawn as declared while some slot on the axis shares and the plane has the
 room.
@@ -652,6 +660,7 @@ first.
 | `minSize` | `96` | Smallest card edge, px. |
 | `grabSize` | `11` | Smallest grab area, px. Apart from `gap`, so `gap: 0` is still draggable. |
 | `snap` | `"merge"` | A dragged boundary snaps onto a line it nearly meets, and the two are then one line. `"off"`: no snap. |
+| `frames` | `"corridor"` | What the frame of a box takes on its left, right and bottom side (R5). `"none"`: nothing. |
 | `snapDistance` | `7` | How close it must come, px. |
 | `width`, `height` | `0` | Plane size. `resize(w, h)` updates it; the view does this for you. |
 
@@ -677,7 +686,7 @@ first.
 | `insert(target, side, node)` | add a card beside a target: 1/(k+1) of an even cut, half of the target in an uneven cut, a wrap of two halves across ([add and remove](#add-and-remove)) |
 | `crossings(card)`, `cardsCrossing(axis, line)` | the lines a card crosses, and the cards that cross a line |
 | `lines(axis)`, `toJSON()`, `Soksak.from(state, options?)`, `checkState(state)`, `replace(state)` | inspection and state |
-| `gap`, `minSize`, `grabSize`, `snapDistance`, `snap` | the options, readable and writable after construction |
+| `gap`, `minSize`, `grabSize`, `snapDistance`, `snap`, `frames` | the options, readable and writable after construction |
 
 Every method taking an axis refuses one that is not `"x"` or `"y"`; every method
 taking a side refuses one that is not `left`, `right`, `top` or `bottom`. A

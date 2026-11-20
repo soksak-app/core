@@ -25,6 +25,12 @@ export type { BoxNode, CardNode, CutNode, Kid, SoksakState, TreeNode } from './t
 export { checkState } from './tree.js';
 /** `merge`: a dragged boundary snaps onto a neighbouring line and the two combine. */
 export type SnapMode = 'merge' | 'off';
+/**
+ * What the frame of a box takes on its left, right and bottom side: `corridor` one corridor, so a box stands one corridor around
+ * its inner node; `none` nothing, so a box is drawn at the rectangle of its inner node and the corridor between two boxes is one
+ * corridor, as at a seam where the corridor is the one border line that two boxes share.
+ */
+export type FrameMode = 'corridor' | 'none';
 export interface SoksakOptions {
     /** Gap between two cards, in px. Half of it insets every inner edge. Default 24. */
     gap?: number;
@@ -36,6 +42,8 @@ export interface SoksakOptions {
     snapDistance?: number;
     /** How a dragged boundary snaps. Default `merge`. */
     snap?: SnapMode;
+    /** What the frame of a box takes on each side but its top. Default `corridor`. */
+    frames?: FrameMode;
     /** Plane width in px. Default 0 until `resize`. */
     width?: number;
     /** Plane height in px. Default 0 until `resize`. */
@@ -92,6 +100,11 @@ export declare class Soksak {
     get snapDistance(): number;
     set snapDistance(px: number);
     private snapMode;
+    private frameAt;
+    /** What the frame of a box takes on its left, right and bottom side (R5). */
+    get frames(): FrameMode;
+    /** Assigning it keeps every fraction and lays the tree with the new frames. */
+    set frames(mode: FrameMode);
     /** Whether a dragged boundary lands on a neighbour it nearly meets. */
     get snap(): SnapMode;
     set snap(mode: SnapMode);
@@ -136,6 +149,8 @@ export declare class Soksak {
      * and on y its head above and one corridor below. They are costs of the cut that holds the node (R5).
      */
     private frameOf;
+    /** The px that the frame of a box takes on each axis at the corridor `unit`. */
+    private frameIn;
     /** The px that a node takes on an axis at no size of its cards: its corridors, px sizes, frames and heads. */
     private costOf;
     private lay;

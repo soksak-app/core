@@ -51,6 +51,19 @@ export { checkState } from './tree.js';
 /** `merge`: a dragged boundary snaps onto a neighbouring line and the two combine. */
 export type SnapMode = 'merge' | 'off';
 
+/**
+ * What the frame of a box takes on its left, right and bottom side: `corridor` one corridor, so a box stands one corridor around
+ * its inner node; `none` nothing, so a box is drawn at the rectangle of its inner node and the corridor between two boxes is one
+ * corridor, as at a seam where the corridor is the one border line that two boxes share.
+ */
+export type FrameMode = 'corridor' | 'none';
+
+/** Refuses a value that is no frame mode, naming it. */
+function frameMode(mode: unknown): FrameMode {
+  if (mode !== 'corridor' && mode !== 'none') throw new Error(`soksak: frames is ${JSON.stringify(mode)}; use "corridor" or "none"`);
+  return mode;
+}
+
 export interface SoksakOptions {
   /** Gap between two cards, in px. Half of it insets every inner edge. Default 24. */
   gap?: number;
@@ -62,6 +75,8 @@ export interface SoksakOptions {
   snapDistance?: number;
   /** How a dragged boundary snaps. Default `merge`. */
   snap?: SnapMode;
+  /** What the frame of a box takes on each side but its top. Default `corridor`. */
+  frames?: FrameMode;
   /** Plane width in px. Default 0 until `resize`. */
   width?: number;
   /** Plane height in px. Default 0 until `resize`. */
@@ -212,6 +227,20 @@ export class Soksak {
 
   private snapMode: SnapMode;
 
+  private frameAt: FrameMode;
+
+  /** What the frame of a box takes on its left, right and bottom side (R5). */
+  get frames(): FrameMode {
+    return this.frameAt;
+  }
+
+  /** Assigning it keeps every fraction and lays the tree with the new frames. */
+  set frames(mode: FrameMode) {
+    this.frameAt = frameMode(mode);
+    this.splitMemo.clear();
+    if (this.list.length) this.derive();
+  }
+
   /** Whether a dragged boundary lands on a neighbour it nearly meets. */
   get snap(): SnapMode {
     return this.snapMode;
@@ -240,6 +269,8 @@ export class Soksak {
     this.snapMode = 'merge';
     // default: documented in SoksakOptions.
     this.snap = options.snap ?? 'merge';
+    // default: documented in SoksakOptions.
+    this.frameAt = frameMode(options.frames ?? 'corridor');
     // default: documented in SoksakOptions.
     this.w = 0;
     this.h = 0;
@@ -391,7 +422,13 @@ export class Soksak {
    */
   private frameOf(node: TreeNode, axis: Axis, unit: Record<Axis, number>): number {
     if (!isBox(node)) return 0;
-    return this.frameOf(node.inner, axis, unit) + (axis === 'x' ? 2 * unit.x : unit.y + (this.heads.get(node.box) ?? 0));
+    const frame = this.frameIn(unit);
+    return this.frameOf(node.inner, axis, unit) + (axis === 'x' ? 2 * frame.x : frame.y + (this.heads.get(node.box) ?? 0));
+  }
+
+  /** The px that the frame of a box takes on each axis at the corridor `unit`. */
+  private frameIn(unit: Record<Axis, number>): Record<Axis, number> {
+    return this.frameAt === 'none' ? { x: 0, y: 0 } : unit;
   }
 
   /** The px that a node takes on an axis at no size of its cards: its corridors, px sizes, frames and heads. */
@@ -399,7 +436,10 @@ export class Soksak {
     const held = this.heldOf(node, axis, unit);
     if (held !== null) return held;
     if (isCard(node)) return 0;
-    if (isBox(node)) return this.costOf(node.inner, axis, unit) + (axis === 'x' ? 2 * unit.x : unit.y + (this.heads.get(node.box) ?? 0));
+    if (isBox(node)) {
+      const frame = this.frameIn(unit);
+      return this.costOf(node.inner, axis, unit) + (axis === 'x' ? 2 * frame.x : frame.y + (this.heads.get(node.box) ?? 0));
+    }
     const kids = node.kids.map((kid) => this.costOf(kid.node, axis, unit));
     if (node.cut !== axis) return Math.max(...kids);
     return kids.reduce((a, c) => a + c, 0) + (node.kids.length - 1) * unit[axis];
@@ -452,10 +492,11 @@ export class Soksak {
         paths.set(node, path);
         up.set(node.inner, { node, at: -1 });
         const head = sized ? this.heads.get(node.box) ?? 0 : 0;
+        const frame = this.frameIn(unit);
         place(
           node.inner,
           slot,
-          { x0: inset.x0 + unit.x, x1: inset.x1 + unit.x, y0: inset.y0 + head, y1: inset.y1 + unit.y },
+          { x0: inset.x0 + frame.x, x1: inset.x1 + frame.x, y0: inset.y0 + head, y1: inset.y1 + frame.y },
           [...path, node],
         );
       } else {
@@ -525,7 +566,7 @@ export class Soksak {
         if (s1 === r1) counts.bottom++;
         if (s0 === r0 && sized) heads += this.heads.get(box.box) ?? 0;
       }
-      if (counts.left || counts.right || counts.bottom) frames.set(leaf.card, counts);
+      if (this.frameAt === 'corridor' && (counts.left || counts.right || counts.bottom)) frames.set(leaf.card, counts);
       above.set(leaf.card, heads);
     }
     // The heads of the boxes around a box that start on its top line, which are drawn inside its rectangle as inside a card's.

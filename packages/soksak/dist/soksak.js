@@ -21,6 +21,12 @@ import { cardInset, crossing, dividers, frameOf, linesRead, halfCorridor, heldSi
 import { evenCuts, insertBeside, insertNode, withdrawNode } from './cuts.js';
 import { EPS, cardsOf, checkState, cloneNode, isBox, isCard, isCut } from './tree.js';
 export { checkState } from './tree.js';
+/** Refuses a value that is no frame mode, naming it. */
+function frameMode(mode) {
+    if (mode !== 'corridor' && mode !== 'none')
+        throw new Error(`soksak: frames is ${JSON.stringify(mode)}; use "corridor" or "none"`);
+    return mode;
+}
 const ENDS = { x: ['x0', 'x1'], y: ['y0', 'y1'] };
 /**
  * The lines of coordinates: coordinates within EPS of the line before are that
@@ -102,6 +108,17 @@ export class Soksak {
             return;
         this.snapAt = px;
     }
+    /** What the frame of a box takes on its left, right and bottom side (R5). */
+    get frames() {
+        return this.frameAt;
+    }
+    /** Assigning it keeps every fraction and lays the tree with the new frames. */
+    set frames(mode) {
+        this.frameAt = frameMode(mode);
+        this.splitMemo.clear();
+        if (this.list.length)
+            this.derive();
+    }
     /** Whether a dragged boundary lands on a neighbour it nearly meets. */
     get snap() {
         return this.snapMode;
@@ -112,7 +129,7 @@ export class Soksak {
         this.snapMode = mode;
     }
     constructor(state, options = {}) {
-        var _a, _b, _c, _d, _e, _f, _g;
+        var _a, _b, _c, _d, _e, _f, _g, _h;
         /** The state: the slicing tree of the plane. */
         this.root = { card: 'card', fixed: false };
         // Derived from the tree by `derive` after every change.
@@ -168,10 +185,12 @@ export class Soksak {
         // default: documented in SoksakOptions.
         this.snap = (_e = options.snap) !== null && _e !== void 0 ? _e : 'merge';
         // default: documented in SoksakOptions.
+        this.frameAt = frameMode((_f = options.frames) !== null && _f !== void 0 ? _f : 'corridor');
+        // default: documented in SoksakOptions.
         this.w = 0;
         this.h = 0;
         // default: a plane made before its host has a size starts empty; `resize` sets it.
-        this.resize((_f = options.width) !== null && _f !== void 0 ? _f : 0, (_g = options.height) !== null && _g !== void 0 ? _g : 0);
+        this.resize((_g = options.width) !== null && _g !== void 0 ? _g : 0, (_h = options.height) !== null && _h !== void 0 ? _h : 0);
         if (state) {
             checkState(state);
             this.load(state);
@@ -322,7 +341,12 @@ export class Soksak {
         var _a;
         if (!isBox(node))
             return 0;
-        return this.frameOf(node.inner, axis, unit) + (axis === 'x' ? 2 * unit.x : unit.y + ((_a = this.heads.get(node.box)) !== null && _a !== void 0 ? _a : 0));
+        const frame = this.frameIn(unit);
+        return this.frameOf(node.inner, axis, unit) + (axis === 'x' ? 2 * frame.x : frame.y + ((_a = this.heads.get(node.box)) !== null && _a !== void 0 ? _a : 0));
+    }
+    /** The px that the frame of a box takes on each axis at the corridor `unit`. */
+    frameIn(unit) {
+        return this.frameAt === 'none' ? { x: 0, y: 0 } : unit;
     }
     /** The px that a node takes on an axis at no size of its cards: its corridors, px sizes, frames and heads. */
     costOf(node, axis, unit) {
@@ -332,8 +356,10 @@ export class Soksak {
             return held;
         if (isCard(node))
             return 0;
-        if (isBox(node))
-            return this.costOf(node.inner, axis, unit) + (axis === 'x' ? 2 * unit.x : unit.y + ((_a = this.heads.get(node.box)) !== null && _a !== void 0 ? _a : 0));
+        if (isBox(node)) {
+            const frame = this.frameIn(unit);
+            return this.costOf(node.inner, axis, unit) + (axis === 'x' ? 2 * frame.x : frame.y + ((_a = this.heads.get(node.box)) !== null && _a !== void 0 ? _a : 0));
+        }
         const kids = node.kids.map((kid) => this.costOf(kid.node, axis, unit));
         if (node.cut !== axis)
             return Math.max(...kids);
@@ -384,7 +410,8 @@ export class Soksak {
                 paths.set(node, path);
                 up.set(node.inner, { node, at: -1 });
                 const head = sized ? (_a = this.heads.get(node.box)) !== null && _a !== void 0 ? _a : 0 : 0;
-                place(node.inner, slot, { x0: inset.x0 + unit.x, x1: inset.x1 + unit.x, y0: inset.y0 + head, y1: inset.y1 + unit.y }, [...path, node]);
+                const frame = this.frameIn(unit);
+                place(node.inner, slot, { x0: inset.x0 + frame.x, x1: inset.x1 + frame.x, y0: inset.y0 + head, y1: inset.y1 + frame.y }, [...path, node]);
             }
             else {
                 leaves.push(node);
@@ -462,7 +489,7 @@ export class Soksak {
                 if (s0 === r0 && sized)
                     heads += (_a = this.heads.get(box.box)) !== null && _a !== void 0 ? _a : 0;
             }
-            if (counts.left || counts.right || counts.bottom)
+            if (this.frameAt === 'corridor' && (counts.left || counts.right || counts.bottom))
                 frames.set(leaf.card, counts);
             above.set(leaf.card, heads);
         }

@@ -101,3 +101,34 @@ test("a kid whose fraction is less than the corridors inside it is drawn those c
   assert.equal(grid.rect("d").x, 48);
   assert.equal(grid.rect("d").w, 952);
 });
+
+test("at frames none a box takes no frame, so boxes on the two sides of a line stand one corridor apart", () => {
+  const state = { root: { cut: "x", kids: [
+    { share: 0.5, node: { box: "outer", inner: { box: "inner", inner: { card: "a" } } } },
+    { share: 0.5, node: { box: "side", inner: { card: "b" } } },
+  ] } };
+  const grid = new Soksak(state, { width: 1000, height: 600, gap: 4, minSize: 96, frames: "none" });
+  assert.equal(grid.frames, "none");
+  // Two boxes end on the left border and on the line, and one box on each side of the line: none of them takes a corridor.
+  near(grid.rect("a").x, 0, "a stands at the edge of its boxes");
+  near(grid.rect("a").w, 498, "a is drawn to the line");
+  near(grid.rect("b").x, 502, "b stands one corridor past the line");
+  near(grid.rect("b").w, 498, "b is drawn to the border");
+  assert.deepEqual(grid.rect("outer"), grid.rect("a"), "a box is drawn at the rectangle of its inner node");
+  assert.deepEqual(grid.rect("a").h, 600);
+  // The frames change no fraction.
+  const stored = JSON.stringify(grid.toJSON());
+  grid.frames = "corridor";
+  assert.equal(JSON.stringify(grid.toJSON()), stored, "a frames change keeps every fraction");
+  near(grid.rect("a").x, 8, "at frames corridor each box stands one corridor inside the next");
+  grid.frames = "none";
+  near(grid.rect("a").x, 0);
+});
+
+test("the frames option refuses a value that is no frames mode", () => {
+  assert.throws(() => new Soksak(undefined, { frames: "some" }), /soksak: frames is "some"; use "corridor" or "none"/);
+  const grid = new Soksak(undefined, { width: 100, height: 100 });
+  assert.equal(grid.frames, "corridor", "the default is a frame of one corridor");
+  assert.throws(() => { grid.frames = 0; }, /soksak: frames is 0; use "corridor" or "none"/);
+  assert.equal(grid.frames, "corridor");
+});

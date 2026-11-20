@@ -59,6 +59,13 @@ box([모델](#모델))는 그 inner node 둘레에 프레임을 그린다: 프�
 판이 통로와 프레임을 담을 수 없으면 그와 함께 줄어든다. px 크기는 둘레의 프레임 안에서
 카드가 그려지는 크기다. 프레임은 tree에서 따라 나오며 상태의 일부가 아니다.
 
+옵션 `frames`는 프레임이 차지하는 것을 정한다: 기본값 `"corridor"`는 위와 같이 통로 하나이고,
+`"none"`은 아무것도 차지하지 않는다. 그때 box는 그 inner node의 사각형으로 그려지고 head는 여전히
+그 위쪽 안에 서며, 선 양쪽의 두 box 사이 통로는 그 선에서 끝나는 box의 수와 무관하게 통로
+하나다. 통로가 두 box가 공유하는 테두리 선 하나인 호스트는 `"none"`을 정한다. `frames` 변경은
+모든 fraction을 유지하고, frame mode가 아닌 값은 `soksak: frames is <value>; use "corridor" or "none"`을
+throw한다.
+
 슬롯의 합은 언제나 판이고, 그것을 유지하기 위해 px 크기가 줄어든다. 축의 어떤 슬롯이
 지분을 갖고 판에 자리가 있는 동안 px 크기는 선언한 값으로 그려진다. 판에 자리가 없으면 모든 px
 크기가 하나의 배율로 줄어들어 서로의 비율이 유지되고 지분을 가진 슬롯은 하한을
@@ -585,6 +592,7 @@ share를 받지 않는다. fixed 카드를 담은 cut이나 box는 다른 kid처
 | `minSize` | `96` | 카드 변의 최소 길이, px. |
 | `grabSize` | `11` | 잡는 영역의 최소 크기, px. `gap` 과 별개이므로 `gap: 0` 에서도 끌 수 있다. |
 | `snap` | `"merge"` | 끌린 경계가 거의 만난 선에 내려앉고, 둘은 그때부터 한 선이다. `"off"` 면 내려앉지 않는다. |
+| `frames` | `"corridor"` | box의 프레임이 왼쪽, 오른쪽, 아래쪽에서 차지하는 것 (R5). `"none"` 이면 아무것도 차지하지 않는다. |
 | `snapDistance` | `7` | 얼마나 가까워야 하는지, px. |
 | `width`, `height` | `0` | 판의 크기. `resize(w, h)` 가 갱신하며 뷰가 대신 해 준다. |
 
@@ -610,7 +618,7 @@ share를 받지 않는다. fixed 카드를 담은 cut이나 box는 다른 kid처
 | `insert(target, side, node)` | target 옆에 카드를 더한다. 고른 cut에서는 1/(k+1), 고르지 않은 cut에서는 target의 절반, 가로질러서는 두 절반으로 감싼다 ([add and remove](#add-and-remove)) |
 | `crossings(card)`, `cardsCrossing(axis, line)` | 카드가 가로지르는 선, 그리고 선을 가로지르는 카드 |
 | `lines(axis)`, `toJSON()`, `Soksak.from(state, options?)`, `checkState(state)`, `replace(state)` | 검사와 상태 |
-| `gap`, `minSize`, `grabSize`, `snapDistance`, `snap` | 옵션. 생성 후에도 읽고 쓸 수 있다 |
+| `gap`, `minSize`, `grabSize`, `snapDistance`, `snap`, `frames` | 옵션. 생성 후에도 읽고 쓸 수 있다 |
 
 축을 받는 모든 메서드는 `"x"` 나 `"y"` 가 아닌 값을 거절한다. 방향을 받는 모든
 메서드는 `left`, `right`, `top`, `bottom` 이 아닌 값을 거절한다. 거절은 `null`,
