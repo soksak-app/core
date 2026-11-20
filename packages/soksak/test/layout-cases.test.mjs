@@ -70,8 +70,7 @@ function check(run, step, where) {
 }
 
 for (const kase of read("grid.json").cases) {
-  // A pending case waits for the decision that it names and does not run.
-  test(`grid: ${kase.name}`, { skip: kase.pending ?? false }, () => {
+  test(`grid: ${kase.name}`, () => {
     let grid;
     check(() => { grid = new Soksak(kase.state, kase.options); }, kase, "the construction");
     if (Object.hasOwn(kase, "throws")) return;

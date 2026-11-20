@@ -38,7 +38,7 @@ const manifest = (id, surface) => ({ id, name: id, description: "검사용 표�
 const { installEnvironment } = await import("../environment.js");
 assert.deepEqual(installEnvironment({
   runtime: "runtime",
-  workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: PLAIN, title: "t" }] }] } },
+  workspace: { focus: "main", grid: { root: { card: "main", tabs: [{ plugin: PLAIN, title: "t" }] } } },
   sidebars: { sets: [], links: [] },
 }, { plugins: [
   { id: SESSION, package: "@fixture/session", version: "0.0.1", manifest: manifest(SESSION, {
@@ -65,20 +65,29 @@ await installCoreExposure({ library: { state: () => null }, renames: barTabs.ren
 plane.nameWindow(WINDOW);
 
 const view = (id, plugin) => ({ id, plugin, title: id, origin: { directory: null } });
-const content = (id, c0, c1, r0, r1, tabs) => ({ id, c0, c1, r0, r1, data: { tabs, activeId: tabs[0].id } });
+const content = (id, tabs) => ({ card: id, data: { tabs, activeId: tabs[0].id } });
+/** A cut along x of the kids, each [share, node]. */
+const row = (kids) => ({ cut: "x", kids: kids.map(([share, node]) => ({ share, node })) });
 projects.begin({ common: {}, open: [], projects: [{ id: "prj-aaaaaa", root: "/work/project", spaces: [
-  { id: "spc-aaaaaa", title: "SPACE1", layout: { focusedId: "main", named: 0, windowSidebars: {}, sidebars: {}, groups: [], leader: "main",
-    lastCard: 1, state: { xs: [0, 1], ys: [0, 1], cards: [content("main", 0, 1, 0, 1, [view("tab-aaaaa1", PLAIN)])] } } },
+  { id: "spc-aaaaaa", title: "SPACE1", layout: { focusedId: "main", named: 0, windowSidebars: {}, sidebars: {}, leader: "main",
+    lastCard: 1, state: { root: content("main", [view("tab-aaaaa1", PLAIN)]) } } },
 ], activeSpaceId: "spc-aaaaaa", named: 1 }] });
 
 /** Shows three cards in a row, card-1, card-2 and card-3, whose first two are the group card-4 named 그룹 1, with card-3 focused. */
 function arrange() {
   plane.closePicker("fixture reset");
   plane.adopt({ focusedId: "card-3", named: 0, windowSidebars: {}, sidebars: {}, lastCard: 4, leader: "card-4",
-    groups: [{ card: "card-4", name: "그룹 1", leader: "card-1", members: ["card-1", "card-2"] }],
-    state: { xs: [0, 0.375, 0.75, 1], ys: [0, 1], cards: [content("card-1", 0, 1, 0, 1, [view("tab-aaaaa1", PLAIN)]),
-      content("card-2", 1, 2, 0, 1, [view("tab-aaaaa2", PLAIN)]), content("card-3", 2, 3, 0, 1, [view("tab-aaaaa3", PLAIN)])] } }, "spc-aaaaaa");
+    state: { root: row([
+      [0.75, { box: "card-4", data: { name: "그룹 1", leader: "card-1" }, inner: row([[0.5, content("card-1", [view("tab-aaaaa1", PLAIN)])],
+        [0.5, content("card-2", [view("tab-aaaaa2", PLAIN)])]]) }],
+      [0.25, content("card-3", [view("tab-aaaaa3", PLAIN)])],
+    ]) } }, "spc-aaaaaa");
 }
+/** The name of the group card id in the stored tree of the layout layout, which its box holds as data. */
+const groupName = (layout, id) => {
+  const find = (node) => (node.box === id ? node : node.box ? find(node.inner) : node.cut ? node.kids.map((kid) => find(kid.node)).find(Boolean) : undefined);
+  return find(layout.state.root)?.data.name;
+};
 const status = async (name) => (await registry.handle({ id: 1, method: "status.get", params: { name } })).result;
 const refuses = (promise, text) => assert.rejects(promise, (error) => error.message === text, `does not fail with ${text}`);
 const groupElement = (id) => document.querySelector(`#plane > .group[data-group-card="${id}"]`);
@@ -106,13 +115,13 @@ test("a double-click on the name of a group card begins its rename, and the comm
   await run("core.rename.commit");
   await settled();
   assert.equal(await status("core.rename"), null);
-  assert.equal((await status("core.layout")).groups[0].name, "작업", "the commit did not rename the group");
+  assert.equal(groupName(await status("core.layout"), "card-4"), "작업", "the commit did not rename the group");
   assert.equal(groupElement("card-4").querySelector(".group__name").textContent, "작업");
   assert.equal(groupElement("card-4").querySelector("[data-expose='core.rename.input']"), null, "the rename field stays after the commit");
   await run("core.rename.begin", { kind: "group", id: "card-4" });
   await run("core.rename.set", { value: "   " });
   await run("core.rename.commit");
-  assert.equal((await status("core.layout")).groups[0].name, "작업", "an empty name changed the name");
+  assert.equal(groupName(await status("core.layout"), "card-4"), "작업", "an empty name changed the name");
   await refuses(run("core.rename.begin", { kind: "group", id: "card-1" }), "no group card-1");
 });
 

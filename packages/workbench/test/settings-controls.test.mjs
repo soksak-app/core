@@ -15,7 +15,7 @@ test("every setting form is drawn with its one control", async (t) => {
   const surface = { composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } };
   assert.deepEqual(installEnvironment({
     runtime: "runtime",
-    workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: "fixture", title: "Fixture" }] }] } },
+    workspace: { focus: "main", grid: { root: { card: "main", tabs: [{ plugin: "fixture", title: "Fixture" }] } } },
     sidebars: { sets: [{ id: "set-1", title: "탐색기", sections: [], layout: "list" }], links: [] },
   }, { plugins: [{ id: "fixture", package: "@fixture/fixture", version: "1.0.0", manifest: {
     id: "fixture", name: "Fixture", description: "Fixture card.", mark: "f", icon: "<path/>", surface,

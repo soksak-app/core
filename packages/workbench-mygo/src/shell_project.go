@@ -28,49 +28,81 @@ type storedLayout struct {
 	Sidebars       json.RawMessage `json:"sidebars"`
 }
 
-// newLayout returns the layout of a new space, from the grid of the environment declaration.
+// newLayout returns the layout of a new space, from the grid of the environment declaration: its tree, each card node with the tabs that
+// it declares as its data.
 func (s *Shell) newLayout() (json.RawMessage, error) {
-	cards := make([]map[string]any, 0, len(s.grid.Cards))
-	for _, raw := range s.grid.Cards {
-		var card map[string]any
-		if err := json.Unmarshal(raw, &card); err != nil {
-			return nil, err
-		}
-		tabs, ok := card["tabs"].([]any)
-		delete(card, "tabs")
-		if ok {
-			made := make([]layout.Tab, 0, len(tabs))
-			for _, item := range tabs {
-				declared := item.(map[string]any)
-				plugin, _ := declared["plugin"].(string) // silent: the environment test holds the form of these tabs.
-				title, _ := declared["title"].(string)   // silent: the environment test holds the form of these tabs.
-				// A first tab of a space has no source tab, so its origin is null, written with the layout that creates it
-				// (docs/spec/projects.md#tab-origin).
-				made = append(made, layout.Tab{ID: s.issueTab(made), Plugin: plugin, Title: title,
-					Rest: map[string]json.RawMessage{"origin": json.RawMessage(`{"directory":null}`)}})
-			}
-			card["data"] = tabData(made, made[0].ID)
-		}
-		cards = append(cards, card)
-	}
-	// The leader of the root level is its first card that is not a window sidebar, and lastCard the largest card number of the
-	// declared cards, at least 1 (docs/spec/groups.md#storage).
 	var leader *string
 	last := 1
-	for _, card := range cards {
-		id, ok := card["id"].(string)
-		if !ok {
-			return nil, fmt.Errorf("the grid of the environment declares a card without an id")
+	var node func(raw json.RawMessage) (map[string]any, error)
+	node = func(raw json.RawMessage) (map[string]any, error) {
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &fields); err != nil {
+			return nil, fmt.Errorf("the grid of the environment declares the node %s: %w", raw, err)
 		}
-		if leader == nil && !layout.IsWindowSide(id) {
-			leader = &id
+		out := map[string]any{}
+		for key, value := range fields {
+			out[key] = value
 		}
-		if n, ok := layout.CardNumber(id); ok {
-			last = max(last, n)
+		switch {
+		case fields["kids"] != nil:
+			var kids []struct {
+				Share json.RawMessage `json:"share"`
+				Node  json.RawMessage `json:"node"`
+			}
+			if err := json.Unmarshal(fields["kids"], &kids); err != nil {
+				return nil, fmt.Errorf("the grid of the environment declares the kids %s: %w", fields["kids"], err)
+			}
+			made := []map[string]any{}
+			for _, kid := range kids {
+				inner, err := node(kid.Node)
+				if err != nil {
+					return nil, err
+				}
+				made = append(made, map[string]any{"share": kid.Share, "node": inner})
+			}
+			out["kids"] = made
+		case fields["card"] != nil:
+			var id string
+			if err := json.Unmarshal(fields["card"], &id); err != nil {
+				return nil, fmt.Errorf("the grid of the environment declares the card %s: %w", fields["card"], err)
+			}
+			// The leader of the root level is its first card that is not a window sidebar, and lastCard the largest card number of the
+			// declared cards, at least 1 (docs/spec/groups.md#storage).
+			if leader == nil && !layout.IsWindowSide(id) {
+				leader = &id
+			}
+			if n, ok := layout.CardNumber(id); ok {
+				last = max(last, n)
+			}
+			delete(out, "tabs")
+			if fields["tabs"] != nil {
+				var tabs []struct {
+					Plugin string `json:"plugin"`
+					Title  string `json:"title"`
+				}
+				if err := json.Unmarshal(fields["tabs"], &tabs); err != nil {
+					return nil, fmt.Errorf("the grid of the environment declares the tabs of %s: %w", id, err)
+				}
+				made := make([]layout.Tab, 0, len(tabs))
+				for _, tab := range tabs {
+					// A first tab of a space has no source tab, so its origin is null, written with the layout that creates it
+					// (docs/spec/projects.md#tab-origin).
+					made = append(made, layout.Tab{ID: s.issueTab(made), Plugin: tab.Plugin, Title: tab.Title,
+						Rest: map[string]json.RawMessage{"origin": json.RawMessage(`{"directory":null}`)}})
+				}
+				if len(made) > 0 {
+					out["data"] = tabData(made, made[0].ID)
+				}
+			}
 		}
+		return out, nil
 	}
-	return json.Marshal(map[string]any{"state": map[string]any{"xs": s.grid.Xs, "ys": s.grid.Ys, "cards": cards}, "groups": []any{},
-		"leader": leader, "lastCard": last, "named": 0})
+	root, err := node(s.grid.Root)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(map[string]any{"state": map[string]any{"root": root}, "leader": leader,
+		"lastCard": last, "named": 0})
 }
 
 // issueTab returns a new tab id that also differs from the tabs of the card that is being made.
@@ -575,11 +607,8 @@ func (s *Shell) keepPlane(project *projectRecord) error {
 	if err := json.Unmarshal(space.Layout, &kept); err != nil {
 		return err
 	}
-	groups, leader, last := s.planes.Stored()
-	if kept["state"], err = json.Marshal(s.plane.ToJSON()); err != nil {
-		return err
-	}
-	if kept["groups"], err = json.Marshal(groups); err != nil {
+	state, leader, last := s.planes.Stored()
+	if kept["state"], err = json.Marshal(state); err != nil {
 		return err
 	}
 	if kept["leader"], err = json.Marshal(leader); err != nil {
@@ -891,7 +920,11 @@ func (s *Shell) closeSpace(id string) error {
 	if err := json.Unmarshal(removed.Layout, &stored); err != nil {
 		return fmt.Errorf("space %s: %w", id, err)
 	}
-	eachTab(stored.State.Cards, func(tab layout.Tab, _ bool) { dropped = append(dropped, tab.ID) })
+	cards, err := stored.State.Cards()
+	if err != nil {
+		return fmt.Errorf("space %s: %w", id, err)
+	}
+	eachTab(cards, func(tab layout.Tab, _ bool) { dropped = append(dropped, tab.ID) })
 	for surface, held := range s.surfaces.held {
 		if held.section != nil && strings.HasPrefix(surface, id+"/") {
 			dropped = append(dropped, surface)
@@ -1080,7 +1113,7 @@ func (s *Shell) splitTab(id, side string, known *LoadedPlugin, params json.RawMe
 	if err != nil {
 		return nil, err
 	}
-	born, err := s.planes.Split(id, side, encoded, s.cardSplitEven())
+	born, err := s.planes.Split(id, side, encoded)
 	if err != nil {
 		// A refused split changes nothing, so the number of the title of the new tab is not taken.
 		s.tabsNamed--

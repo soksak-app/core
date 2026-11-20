@@ -6,9 +6,9 @@
   "variables": {},
   "steps": [
     {"call":{"name":"workspace","payload":{"kind":"snapshot"}}},
-    {"reply":{"result":{"common":{},"projects":[{"id":"prj-one","root":"/work/one","identity":"1:1","title":"one","color":"#fff","named":1,"activeSpaceId":"spc-one","spaces":[{"id":"spc-one","title":"SPACE1","layout":{"state":{"cards":[],"name":"one"}}}],"settings":{}}],"open":[]}}},
+    {"reply":{"result":{"common":{},"projects":[{"id":"prj-one","root":"/work/one","identity":"1:1","title":"one","color":"#fff","named":1,"activeSpaceId":"spc-one","spaces":[{"id":"spc-one","title":"SPACE1","layout":{"state":{"root":{"card":"main"},"name":"one"}}}],"settings":{}}],"open":[]}}},
     {"call":{"name":"workspace","payload":{"kind":"snapshot"}}},
-    {"reply":{"result":{"common":{},"projects":[{"id":"prj-one","root":"/work/one","identity":"1:1","title":"one","color":"#fff","named":1,"activeSpaceId":"spc-one","spaces":[{"id":"spc-one","title":"SPACE1","layout":{"state":{"cards":[],"name":"one"}}}],"settings":{}}],"open":[]}}},
+    {"reply":{"result":{"common":{},"projects":[{"id":"prj-one","root":"/work/one","identity":"1:1","title":"one","color":"#fff","named":1,"activeSpaceId":"spc-one","spaces":[{"id":"spc-one","title":"SPACE1","layout":{"state":{"root":{"card":"main"},"name":"one"}}}],"settings":{}}],"open":[]}}},
     {"call":{"name":"workspace","payload":{"kind":"tabState"}}},
     {"reply":{"result":null}},
     {"call":{"name":"workspace","payload":{"kind":"tabSessions"}}},
@@ -17,6 +17,6 @@
     {"reply":{"result":null}},
     {"notice":{"event":"workspace-changed"}},
     {"call":{"name":"workspace","payload":{"kind":"snapshot"}}},
-    {"reply":{"result":{"common":{},"projects":[{"id":"prj-one","root":"/work/one","identity":"1:1","title":"one","color":"#fff","named":1,"activeSpaceId":"spc-one","spaces":[{"id":"spc-one","title":"SPACE1","layout":{"state":{"cards":[],"name":"one"}}}],"settings":{}}],"open":[]},"held":true}}
+    {"reply":{"result":{"common":{},"projects":[{"id":"prj-one","root":"/work/one","identity":"1:1","title":"one","color":"#fff","named":1,"activeSpaceId":"spc-one","spaces":[{"id":"spc-one","title":"SPACE1","layout":{"state":{"root":{"card":"main"},"name":"one"}}}],"settings":{}}],"open":[]},"held":true}}
   ]
 }

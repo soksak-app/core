@@ -49,7 +49,10 @@ export declare const axisOf: (side: Side) => Axis;
 export declare const isAhead: (side: Side) => boolean;
 /** Number of slots the card spans on an axis. */
 export declare const spanOf: (card: Card, axis: Axis) => number;
-/** The px size set on an axis, or null when the card takes a share. */
+/**
+ * The px size set on an axis, or null when the card takes a share. The size belongs to the card of the tree, so the cells that the
+ * lines of other cuts draw across the card do not change it.
+ */
 export declare function fixedSize(card: Card, axis: Axis): number | null;
 /** The axis that is not this one. */
 export declare function other(axis: Axis): Axis;

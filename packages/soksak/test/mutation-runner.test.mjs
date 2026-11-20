@@ -145,8 +145,8 @@ for (const [title, name, mutation, expectedCode, expectedOutput] of [
   ["required mutation command rejects invalid evidence and handles ambiguous", "ambiguous", { find: "value", source: "export const value = 1; // value" }, 1, /2 SITES/],
   ["required mutation command rejects invalid evidence and handles baseline", "baseline", { source: "export const value = 0;" }, 2, /FAIL baseline/],
   ["required mutation command rejects invalid evidence and handles snapshot", "snapshot", {}, 0, /result=assertion-failure/],
-  ["required mutation command rejects invalid evidence and handles required assertion", "required assertion", {}, 0, /PASS break=state result=assertion-failure/],
-  ["required mutation command rejects invalid evidence and handles required survivor", "required survivor", { to: "export const value = 1 + 0;" }, 1, /FAIL break=state result=survived/],
+  ["required mutation command rejects invalid evidence and handles required assertion", "required assertion", {}, 0, /PASS break=insert-fits result=assertion-failure/],
+  ["required mutation command rejects invalid evidence and handles required survivor", "required survivor", { to: "export const value = 1 + 0;" }, 1, /FAIL break=insert-fits result=survived/],
   ["required mutation command rejects invalid evidence and handles required baseline", "required baseline", { source: "export const value = 0;" }, 2, /FAIL baseline/],
 ]) {
   test(title, { timeout: 15000 }, async (t) => {
@@ -155,7 +155,7 @@ for (const [title, name, mutation, expectedCode, expectedOutput] of [
     t.after(() => rm(root, { recursive: true, force: true }));
     const packageRoot = join(root, "packages/soksak");
     const selected = name.startsWith("required ");
-    const testFile = selected ? "test/soksak.test.mjs" : "test/case.test.mjs";
+    const testFile = selected ? "test/fixedSize.test.mjs" : "test/case.test.mjs";
     for (const folder of ["dist", "test", "scripts", "src", "docs"]) await mkdir(join(packageRoot, folder), { recursive: true });
     // The command reads its declared dependencies, the group rule of @soksak/window-check among them, from the package's node_modules.
     await symlink(fileURLToPath(new URL("../node_modules", import.meta.url)), join(packageRoot, "node_modules"));
@@ -166,7 +166,7 @@ for (const [title, name, mutation, expectedCode, expectedOutput] of [
     for (const file of ["check-breaks.mjs", "bounded.mjs", "mutation-runner.mjs", "required-breaks.mjs", "workspace-copy.mjs"]) await cp(new URL(`../scripts/${file}`, import.meta.url), join(packageRoot, "scripts", file));
     for (const file of ["node-test-evidence.mjs", "test-event-reporter.mjs"]) await cp(new URL(`../../../scripts/${file}`, import.meta.url), join(root, "scripts", file));
     const original = mutation.source ?? "export const value = 1;";
-    const entry = { id: selected ? "state" : "value", file: "dist/soksak.js", find: "export const value = 1;", to: "export const value = 2;", what: "return the wrong value", ...mutation };
+    const entry = { id: selected ? "insert-fits" : "value", file: "dist/soksak.js", find: "export const value = 1;", to: "export const value = 2;", what: "return the wrong value", ...mutation };
     const breaksFile = join(packageRoot, "scripts/breaks.mjs");
     const mutatedFile = join(packageRoot, "dist/soksak.js");
     const breaks = `export const BREAKS = ${JSON.stringify([entry])};`;

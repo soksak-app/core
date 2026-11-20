@@ -111,6 +111,9 @@ test('settings stored in an earlier form are refused with the file that holds th
   const { beginSettings } = await import('../settings.js?test=removed-project-keys');
   assert.throws(() => beginSettings({ common: {}, projects: [{ id: 'prj-a', root: '/work/a', settings: { rail: 'flow' } }] }, 'prj-a'),
     /^Error: \/work\/a\/\.soksak\/settings\.json: unknown setting rail$/);
+  // cardSplit chose the sizes after a split; a split divides only the node that it splits, so the setting is removed.
+  const { beginSettings: beginRemoved } = await import('../settings.js?test=removed-card-split');
+  assert.throws(() => beginRemoved({ common: { cardSplit: 'even' }, projects: [] }, null), /^Error: settings\.json: unknown setting cardSplit$/);
   assert.deepEqual(settingsWrites(wire), []);
   // A report of the page leaves in a batch of the call log; the case has no call of the log.
   assert.deepEqual(logCalls(wire), []);

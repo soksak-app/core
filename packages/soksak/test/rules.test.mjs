@@ -4,8 +4,7 @@ import test from "node:test";
 
 import { Soksak } from "../dist/index.js";
 import { guillotine } from "./slicing-oracle.mjs";
-import { assertRoleIndependence } from "../scripts/layout-equivalence.mjs";
-import { H, W, fuzz, three } from "./helpers.mjs";
+import { H, W, fuzz, three, trySplitToward } from "./helpers.mjs";
 
 /**
  * One test per rule in the layout specification.
@@ -30,57 +29,84 @@ test("R1 — two cards that meet report the same coordinate, exactly", () => {
         const starts = grid.cards
           .filter((c) => c[lo] === line)
           .map((c) => (axis === "x" ? grid.rectOf(c).x : grid.rectOf(c).y));
-        for (const group of [ends, starts]) {
-          if (group.length < 2) continue;
-          assert.equal(
-            Math.max(...group) - Math.min(...group),
-            0,
-            `seed ${seed}: ${axis}${line} is in two places`,
-          );
+        // A rect is a start and a width, so an end read as their sum carries the
+        // one rounding of that addition: the far edge the library computes is
+        // one number, and x + w lands within one unit in the last place of it.
+        // A start is read as the library computes it and matches exactly.
+        if (starts.length > 1) {
+          assert.equal(Math.max(...starts) - Math.min(...starts), 0, `seed ${seed}: ${axis}${line} starts in two places`);
+        }
+        if (ends.length > 1) {
+          const end = Math.max(...ends);
+          assert.ok(end - Math.min(...ends) <= Number.EPSILON * end, `seed ${seed}: ${axis}${line} ends in two places: ${ends}`);
         }
       }
     }
   }
 });
 
-test("R2 — identifiers and card order do not determine layout behavior", { timeout: 10000 }, () => {
-  const result = assertRoleIndependence({
-    state: {
-      xs: [0, 0.18, 0.36, 0.8, 1], ys: [0, 0.5, 1],
-      cards: [
-        { id: "left", c0: 0, c1: 1, r0: 0, r1: 2, width: 180, fixed: true },
-        { id: "rail", c0: 1, c1: 2, r0: 0, r1: 2, width: 190, fixed: true },
-        { id: "upper", c0: 2, c1: 3, r0: 0, r1: 1 },
-        { id: "lower", c0: 2, c1: 3, r0: 1, r1: 2 },
-        { id: "right", c0: 3, c1: 4, r0: 0, r1: 2, width: 200, fixed: true },
-      ],
-    },
-    options: { width: W, height: H },
-    operations: [
-      { method: "split", args: ["left", "x", { id: "blocked" }] },
-      { method: "close", args: ["left"] },
-      { method: "move", args: ["left", "upper", "right"] },
-      { method: "splitToward", args: ["upper", "bottom", { id: "branch", data: { role: "upper" } }] },
-      { method: "move", args: ["branch", "lower", "right"] },
-      { method: "setSize", args: ["rail", "x", 210] },
-      { method: "moveTo", args: ["rail", "x", 4] },
-      { method: "insertAt", args: ["x", 0, { id: "strip", size: 80 }] },
-      { method: "close", args: ["strip"] },
-      { method: "moveBoundary", args: ["x", 1, 300] },
-      { method: "mergeCoincident", args: ["x", 1] },
-      { method: "close", args: ["branch"] },
-      { method: "tidy", args: [] },
-      { method: "setFixed", args: ["upper", true] },
-      { method: "close", args: ["upper"] },
-      { method: "setFixed", args: ["upper", false] },
-      { method: "resize", args: [240, 150] },
-      { method: "resize", args: [W, H] },
-    ],
+test("R2 — identifiers do not determine layout behavior", { timeout: 10000 }, () => {
+  // The tree has no card array, so the order of input cards is no input. What
+  // R2 still rests on is the identifier: every call runs once with the
+  // identifiers as written and once with each identifier renamed, and the two
+  // runs must agree at every step on the lines, the rects and the results.
+  const alias = (name) => `renamed-${name}`;
+  const unalias = (id) => id.replace(/^renamed-/, "");
+  const build = (n) => ({
+    root: { cut: "x", kids: [
+      { share: 0.18, node: { card: n("left"), fixed: true, width: 180 } },
+      { share: 0.18, node: { card: n("rail"), fixed: true, width: 190 } },
+      { share: 0.44000000000000006, node: { cut: "y", kids: [
+        { share: 0.5, node: { card: n("upper") } },
+        { share: 0.5, node: { card: n("lower") } },
+      ] } },
+      { share: 0.19999999999999996, node: { card: n("right"), fixed: true, width: 200 } },
+    ] },
   });
-  assert.equal(result.variants, 239, "all 120 card orders, with original and renamed identifiers, against one baseline");
-  assert.deepEqual(result.outcomes.slice(0, 4), [null, false, false, "branch"]);
-  assert.equal(result.outcomes[7], "strip");
-  assert.equal(result.outcomes[8], true);
+  const operations = [
+    (grid, n) => grid.split(n("left"), "x", { id: n("blocked") }),
+    (grid, n) => grid.close(n("left")),
+    (grid, n) => grid.move(n("left"), n("upper"), "right"),
+    (grid, n) => grid.splitToward(n("upper"), "bottom", { id: n("branch"), data: { role: "upper" } }),
+    (grid, n) => grid.move(n("branch"), n("lower"), "right"),
+    (grid, n) => grid.setSize(n("rail"), "x", 210),
+    (grid, n) => grid.moveTo(n("rail"), "x", 4),
+    (grid, n) => grid.insertAt("x", 0, { id: n("strip"), size: 80 }),
+    (grid, n) => grid.close(n("strip")),
+    (grid, n) => grid.moveBoundary("x", 1, 300),
+    (grid, n) => grid.close(n("branch")),
+    (grid, n) => grid.setFixed(n("upper"), true),
+    (grid, n) => grid.close(n("upper")),
+    (grid, n) => grid.setFixed(n("upper"), false),
+    (grid, n) => grid.resize(240, 150),
+    (grid, n) => grid.resize(W, H),
+  ];
+  const snapshot = (grid) => ({
+    lines: { x: grid.lines("x"), y: grid.lines("y") },
+    rects: [...grid.rects()].map(([id, r]) => [unalias(id), r]),
+    closable: grid.cards.map((c) => [unalias(c.id), grid.canClose(c.id)]),
+  });
+  const trace = (n) => {
+    const grid = new Soksak(build(n), { width: W, height: H });
+    const steps = [{ snapshot: snapshot(grid) }];
+    for (const operation of operations) {
+      // A split throws its refusal, which names the card by its identifier.
+      let result;
+      try {
+        result = operation(grid, n);
+      } catch (error) {
+        result = { throws: error.message.replace(/renamed-/g, "") };
+      }
+      steps.push({ result: typeof result === "string" ? unalias(result) : result, snapshot: snapshot(grid) });
+    }
+    return steps;
+  };
+  const plain = trace((name) => name);
+  const renamed = trace(alias);
+  assert.deepEqual(renamed, plain);
+  assert.deepEqual(plain.slice(1, 5).map((s) => s.result), [{ throws: "card left is fixed and does not split" }, false, false, "branch"]);
+  assert.equal(plain[8].result, "strip");
+  assert.equal(plain[9].result, true);
 });
 
 test("R3 — no card ever spans over a card, and the check is integers", () => {
@@ -126,52 +152,7 @@ test("R4 — nothing reachable is outside what splitting could build", () => {
     fuzz(grid, seed, 60);
     const spans = grid.cards.map(({ c0, c1, r0, r1 }) => ({ c0, c1, r0, r1 }));
     assert.ok(guillotine(spans), `seed ${seed}: no cut separates ${JSON.stringify(spans)}`);
-    assert.equal(grid.isSlicing(), true, `seed ${seed}: and the grid agrees`);
   }
-});
-
-test("R4 — a pinwheel is not reachable, and isSlicing returns false", () => {
-  // Four cards around a hole: no whole-width or whole-height cut separates any
-  // of them. Without this the fuzz above would prove nothing about the check.
-  const pinwheel = [
-    { c0: 0, c1: 2, r0: 0, r1: 1 },
-    { c0: 2, c1: 3, r0: 0, r1: 2 },
-    { c0: 1, c1: 3, r0: 2, r1: 3 },
-    { c0: 0, c1: 1, r0: 1, r1: 3 },
-  ];
-  assert.equal(guillotine(pinwheel), false, "the check can fail");
-  const grid = new Soksak(
-    {
-      xs: [0, 0.3, 0.6, 1],
-      ys: [0, 0.3, 0.6, 1],
-      cards: pinwheel.map((s, i) => ({ id: `p${i}`, ...s })),
-    },
-    { width: 900, height: 900 },
-  );
-  assert.equal(grid.isSlicing(), false, "and so does the grid");
-});
-
-test("R4 — a cut counts only when both halves are themselves sliceable", () => {
-  // The top row is one card across the plane, so the plane cuts in two there.
-  // Below it sits a pinwheel, which no cut separates. A check that accepted the
-  // top cut without looking under it would call this sliceable.
-  const spans = [
-    { c0: 0, c1: 3, r0: 0, r1: 1 },
-    { c0: 0, c1: 2, r0: 1, r1: 2 },
-    { c0: 2, c1: 3, r0: 1, r1: 3 },
-    { c0: 1, c1: 3, r0: 3, r1: 4 },
-    { c0: 0, c1: 1, r0: 2, r1: 4 },
-  ];
-  assert.equal(guillotine(spans), false, "the cut under the top row is missing");
-  const grid = new Soksak(
-    {
-      xs: [0, 0.3, 0.6, 1],
-      ys: [0, 0.25, 0.5, 0.75, 1],
-      cards: spans.map((s, i) => ({ id: `c${i}`, ...s })),
-    },
-    { width: 900, height: 900 },
-  );
-  assert.equal(grid.isSlicing(), false, "and the grid does not stop at the top cut");
 });
 
 test("R5 — the corridor is half a gap inside, and nothing at the plane's border", () => {
@@ -212,17 +193,7 @@ test("R5 — the corridor is half a gap inside, and nothing at the plane's borde
     // size draws that size at the border, between two cards, and at any gap.
     for (let seed = 0; seed < 12; seed++) {
       const grid = new Soksak(
-        {
-          xs: [0, 0.25, 0.5, 0.75, 1],
-          ys: [0, 0.5, 1],
-          cards: [
-            { id: "left", c0: 0, c1: 1, r0: 0, r1: 2, width: 180, fixed: true },
-            { id: "rail", c0: 1, c1: 2, r0: 0, r1: 2, width: 190, fixed: true },
-            { id: "main", c0: 2, c1: 3, r0: 0, r1: 1 },
-            { id: "under", c0: 2, c1: 3, r0: 1, r1: 2 },
-            { id: "right", c0: 3, c1: 4, r0: 0, r1: 2, width: 200, fixed: true },
-          ],
-        },
+        { root: { cut: "x", kids: [{ share: 0.25, node: { card: "left", fixed: true, width: 180 } }, { share: 0.25, node: { card: "rail", fixed: true, width: 190 } }, { share: 0.25, node: { cut: "y", kids: [{ share: 0.5, node: { card: "main" } }, { share: 0.5, node: { card: "under" } }] } }, { share: 0.25, node: { card: "right", fixed: true, width: 200 } }] } },
         { width: 1200, height: 600, gap },
       );
       // Dragging a sidebar's own boundary is the user resizing it, so the
@@ -259,7 +230,7 @@ test("R6 — no coordinate is assembled outside geometry.ts", () => {
   // an object literal carrying all four rect fields is a rect being built by hand
   assert.doesNotMatch(code, /\bx:\s*[^,]+,\s*y:\s*[^,]+,\s*w:\s*[^,]+,\s*h:/, "soksak.ts builds a rect");
   assert.doesNotMatch(code, /\bw:\s*[^,]+,\s*h:\s*[^,}]+\s*}/, "soksak.ts sizes a rect");
-  for (const file of ["src/card.ts", "src/slicing.ts"]) {
+  for (const file of ["src/card.ts", "src/tree.ts"]) {
     const other = read(file).replace(/\/\*[\s\S]*?\*\//g, " ");
     assert.doesNotMatch(other, /\bx:\s*[^,]+,\s*y:/, `${file} builds a rect`);
   }
@@ -345,18 +316,11 @@ test("a line no card reads costs nothing, and a corridor never outgrows the plan
   grid.split("card", "x");
   // Two rows, so the bottom one still spans the line after the close.
   const rows = new Soksak(
-    { xs: [0, 0.5, 1], ys: [0, 0.5, 1], cards: [
-      { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
-      { id: "b", c0: 1, c1: 2, r0: 0, r1: 1 },
-      { id: "under", c0: 0, c1: 2, r0: 1, r1: 2 },
-    ] },
+    { root: { cut: "y", kids: [{ share: 0.5, node: { cut: "x", kids: [{ share: 0.5, node: { card: "a" } }, { share: 0.5, node: { card: "b" } }] } }, { share: 0.5, node: { card: "under" } }] } },
     { width: 1200, height: 600, gap: 24 },
   );
   rows.close("b");
-  assert.ok(
-    rows.lines("x").some((_, i) => i > 0 && i < rows.lines("x").length - 1 && rows.isVirtual("x", i)),
-    "the closed card left its line",
-  );
+  assert.deepEqual(rows.lines("x"), [0, 1], "the closed card left its line: no line is left that no card reads");
   assert.equal(rows.rect("a").w, rows.width, "and the line takes no width from the row above");
   assert.equal(rows.rect("under").w, rows.width, "nor from the row below");
 
@@ -392,9 +356,10 @@ test("R7 — a card stays only when the layout was told not to touch what would 
   assert.equal(grid.canClose("card-4"), true, "and it leaves the moment that is lifted");
 });
 
-test("a card added and closed leaves the plane as it was", () => {
-  // split, splitToward and insertAt each take the new card's span from one
-  // neighbour. Closing it returns the span to that neighbour.
+test("a card inserted on an even level and closed leaves the plane as it was", () => {
+  // On a level whose kids without a px size are drawn at one size, insertAt
+  // takes the new card's size from all of them in proportion, and closing it
+  // returns the size to all of them in proportion.
   const start = () => {
     const grid = new Soksak(undefined, { width: 1200, height: 600, gap: 24 });
     grid.split("card", "x");
@@ -403,8 +368,6 @@ test("a card added and closed leaves the plane as it was", () => {
   const widths = (grid) => grid.cards.map((c) => +grid.rect(c.id).w.toFixed(3));
 
   for (const [name, round] of [
-    ["split", (g) => { const b = g.split("card", "x"); return b && g.close(b); }],
-    ["splitToward left", (g) => { const b = g.splitToward("card", "left", {}); return b && g.close(b); }],
     ["insertAt 0", (g) => { const b = g.insertAt("x", 0, { size: 190 }); return b && g.close(b); }],
     ["insertAt 1", (g) => { const b = g.insertAt("x", 1, { size: 190 }); return b && g.close(b); }],
     ["insertAt last", (g) => {
@@ -421,18 +384,35 @@ test("a card added and closed leaves the plane as it was", () => {
   }
 });
 
+test("a card inserted on an uneven level takes its size from the kid before the boundary alone", () => {
+  const grid = new Soksak(
+    { root: { cut: "x", kids: [{ share: 0.5, node: { card: "card" } }, { share: 0.25, node: { card: "b" } }, { share: 0.25, node: { card: "c" } }] } },
+    { width: 1200, height: 600, gap: 24 },
+  );
+  const before = new Map(grid.cards.map((c) => [c.id, grid.rect(c.id).w]));
+  const first = grid.cards[0].id;
+  const added = grid.insertAt("x", 1, { size: 100 });
+  assert.ok(added, "the insert went in");
+  for (const [id, w] of before) {
+    if (id === first) assert.ok(grid.rect(id).w < w - 99, `${id} paid for the new card`);
+    else assert.equal(grid.rect(id).w, w, `${id} kept its width`);
+  }
+});
+
 test("R7 — only a fixed card leaves another with nowhere to go", () => {
   // Random operations from a layout with no fixed cards: every open card but
   // the last can always be closed. Add fixed cards and the exception appears.
   const start = (fixed) =>
     new Soksak(
-      { xs: [0, 0.16, 0.32, 0.84, 1], ys: [0, 0.5, 1], cards: [
-        { id: "left", c0: 0, c1: 1, r0: 0, r1: 2, fixed },
-        { id: "rail", c0: 1, c1: 2, r0: 0, r1: 2, fixed },
-        { id: "upper", c0: 2, c1: 3, r0: 0, r1: 1 },
-        { id: "lower", c0: 2, c1: 3, r0: 1, r1: 2 },
-        { id: "right", c0: 3, c1: 4, r0: 0, r1: 2, fixed },
-      ] },
+      { root: { cut: "x", kids: [
+        { share: 0.16, node: { card: "left", fixed } },
+        { share: 0.16, node: { card: "rail", fixed } },
+        { share: 0.52, node: { cut: "y", kids: [
+          { share: 0.5, node: { card: "upper" } },
+          { share: 0.5, node: { card: "lower" } },
+        ] } },
+        { share: 0.16, node: { card: "right", fixed } },
+      ] } },
       { width: 1440, height: 900 },
     );
 
@@ -448,7 +428,7 @@ test("R7 — only a fixed card leaves another with nowhere to go", () => {
       const pick = () => open[Math.floor(next() * open.length)];
       const side = ["left", "right", "top", "bottom"][Math.floor(next() * 4)];
       const roll = next();
-      if (roll < 0.35) grid.splitToward(pick().id, side, { data: {} });
+      if (roll < 0.35) trySplitToward(grid, pick().id, side, { data: {} });
       else if (roll < 0.55) grid.close(pick().id);
       else if (roll < 0.8) grid.move(pick().id, pick().id, side);
       else {
@@ -478,12 +458,10 @@ test("R7 — a card whose only filler is fixed stays, and canClose returns false
   grid.setFixed(below, true);
   grid.setFixed(midR, true);
 
-  // The exception R7 names: no row of neighbours may grow over it, and its
-  // slots hold another card, so removing them is not open either.
-  assert.equal(grid.fill(boxed), null, "no row of neighbours can grow over it");
+  // The exception R7 names: every other kid of its cut holds a fixed card, so
+  // none of them takes its share.
   assert.equal(grid.canClose(boxed), false);
   assert.equal(grid.close(boxed), false, "and it refuses rather than corrupting");
-  assert.equal(grid.isSlicing(), true);
 
   // A fixed card returns false because the layout does not move it. Clearing
   // the flag is what a host does to close one.
@@ -513,43 +491,43 @@ test("R1 — where a line stands does not depend on which cards read it", () => 
   // number slides the line half a corridor onto the edge of the card that grew
   // over it, and the place a person set is lost.
   const grid = new Soksak(
-    { xs: [0, 1 / 3, 0.432086, 2 / 3, 1], ys: [0, 0.52, 1], cards: [
-      { id: "left", c0: 0, c1: 1, r0: 0, r1: 2, width: 190, fixed: true },
-      { id: "rail", c0: 1, c1: 2, r0: 0, r1: 2, width: 280, fixed: true },
-      { id: "upper", c0: 2, c1: 3, r0: 0, r1: 1 },
-      { id: "lower", c0: 2, c1: 3, r0: 1, r1: 2 },
-      { id: "right", c0: 3, c1: 4, r0: 0, r1: 2, width: 210, fixed: true },
-    ] },
+    { root: { cut: "x", kids: [{ share: 0.3333333333333333, node: { card: "left", fixed: true, width: 190 } }, { share: 0.09875266666666671, node: { card: "rail", fixed: true, width: 280 } }, { share: 0.2345806666666666, node: { cut: "y", kids: [{ share: 0.52, node: { card: "upper" } }, { share: 0.48, node: { card: "lower" } }] } }, { share: 0.33333333333333337, node: { card: "right", fixed: true, width: 210 } }] } },
     { width: 1950, height: 560, gap: 24 },
   );
   const before = grid.lines("x").map((_, k) => grid.boundaryPos("x", k));
-  assert.equal(grid.isVirtual("x", 2), false, "the rail reads the line");
+  const edge = before[1];
 
   grid.setFixed("rail", false);
   assert.equal(grid.close("rail"), true);
 
-  assert.equal(grid.isVirtual("x", 2), true, "and now nobody does");
-  assert.equal(grid.lines("x").length, before.length, "the line is still there");
-  for (let k = 0; k < before.length; k++) {
+  // The line the rail read at its right edge is gone, since no card reads it
+  // any more. Every line that remains stands where it stood.
+  const after = grid.lines("x").map((_, k) => grid.boundaryPos("x", k));
+  for (const px of after) {
     assert.ok(
-      Math.abs(grid.boundaryPos("x", k) - before[k]) < 1e-6,
-      `line ${k} moved from ${before[k]} to ${grid.boundaryPos("x", k)}`,
+      before.some((b) => Math.abs(b - px) < 1e-6),
+      `line moved to ${px}, which no line stood at before: [${before}]`,
     );
   }
+  assert.ok(
+    after.some((px) => Math.abs(px - edge) < 1e-6),
+    `the boundary at ${edge} the person set is still there: [${after}]`,
+  );
 });
 
 test("a rule reaches into the corridor of the axis it runs along", () => {
   // Eleven columns in 200px: the ten interior lines cannot each hold the 24px
   // gap, so the drawn gap on x is 20 and on y it is the declared 24. A rule that
   // runs along y reaches half of x's gap into the corridor beside it.
-  const xs = Array.from({ length: 12 }, (_, i) => i / 11);
-  const cards = [{ id: "side", c0: 0, c1: 1, r0: 0, r1: 2 }];
+  const kids = [{ share: 1 / 11, node: { card: "side" } }];
   for (let c = 1; c < 11; c++) {
-    cards.push({ id: `t${c}`, c0: c, c1: c + 1, r0: 0, r1: 1 });
-    cards.push({ id: `b${c}`, c0: c, c1: c + 1, r0: 1, r1: 2 });
+    kids.push({ share: 1 / 11, node: { cut: "y", kids: [
+      { share: 0.5, node: { card: `t${c}` } },
+      { share: 0.5, node: { card: `b${c}` } },
+    ] } });
   }
   const grid = new Soksak(
-    { xs, ys: [0, 0.5, 1], cards },
+    { root: { cut: "x", kids } },
     { width: 200, height: 800, gap: 24, minSize: 1 },
   );
 

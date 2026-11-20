@@ -1,7 +1,9 @@
 package layout_test
 
 import (
+	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 
@@ -16,7 +18,7 @@ func TestWindowSidebarsPlacedFollowsTheOrder(t *testing.T) {
 	arrange := func(t *testing.T, order []string) *layout.Grid {
 		t.Helper()
 		width, height := 1000.0, 800.0
-		grid, err := layout.New(&layout.State{Xs: []float64{0, 1}, Ys: []float64{0, 1}, Cards: []layout.Card{{ID: "main", C0: 0, C1: 1, R0: 0, R1: 1}}},
+		grid, err := layout.New(&layout.State{Root: &layout.Node{Card: "main"}},
 			layout.Options{Width: &width, Height: &height})
 		if err != nil {
 			t.Fatal(err)
@@ -44,17 +46,16 @@ func TestWindowSidebarsPlacedFollowsTheOrder(t *testing.T) {
 func TestASidebarWithoutRoomDocksAtTheLargestFittingSize(t *testing.T) {
 	order := []string{"left", "right", "top", "bottom"}
 	width, height := 1000.0, 800.0
-	grid, err := layout.New(&layout.State{
-		Xs: []float64{0, 0.5, 1},
-		Ys: []float64{0, 0.25, 0.5, 0.75, 1},
-		Cards: []layout.Card{
-			{ID: "main", C0: 0, C1: 1, R0: 0, R1: 1},
-			{ID: "second", C0: 0, C1: 1, R0: 2, R1: 3},
-			{ID: "third", C0: 0, C1: 2, R0: 1, R1: 2},
-			{ID: "fourth", C0: 1, C1: 2, R0: 2, R1: 3},
-			{ID: "fifth", C0: 1, C1: 2, R0: 0, R1: 1},
-		},
-	}, layout.Options{Width: &width, Height: &height})
+	row := func(ids ...string) *layout.Node {
+		cut := &layout.Node{Cut: "x"}
+		for _, id := range ids {
+			cut.Kids = append(cut.Kids, layout.Kid{Share: 1 / float64(len(ids)), Node: &layout.Node{Card: id}})
+		}
+		return cut
+	}
+	grid, err := layout.New(&layout.State{Root: &layout.Node{Cut: "y", Kids: []layout.Kid{
+		{Share: 0.25, Node: row("main", "fifth")}, {Share: 0.25, Node: &layout.Node{Card: "third"}}, {Share: 0.5, Node: row("second", "fourth")},
+	}}}, layout.Options{Width: &width, Height: &height})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,16 +90,11 @@ func TestASidebarWithoutRoomDocksAtTheLargestFittingSize(t *testing.T) {
 	// The plane that holds no size for a sidebar docks the others, names the side it cannot place, and a quiet settle does not
 	// attempt the refused arrangement again.
 	full := []string{"main", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth"}
-	tight, err := layout.New(&layout.State{
-		Xs: []float64{0, 1},
-		Ys: []float64{0, 0.11, 0.22, 0.33, 0.44, 0.55, 0.66, 0.77, 0.88, 1},
-		Cards: []layout.Card{
-			{ID: full[0], C0: 0, C1: 1, R0: 0, R1: 1}, {ID: full[1], C0: 0, C1: 1, R0: 1, R1: 2},
-			{ID: full[2], C0: 0, C1: 1, R0: 2, R1: 3}, {ID: full[3], C0: 0, C1: 1, R0: 3, R1: 4},
-			{ID: full[4], C0: 0, C1: 1, R0: 4, R1: 5}, {ID: full[5], C0: 0, C1: 1, R0: 5, R1: 6},
-			{ID: full[6], C0: 0, C1: 1, R0: 6, R1: 7}, {ID: full[7], C0: 0, C1: 1, R0: 7, R1: 8},
-		},
-	}, layout.Options{Width: &width, Height: &height})
+	column := &layout.Node{Cut: "y"}
+	for _, id := range full {
+		column.Kids = append(column.Kids, layout.Kid{Share: 1 / float64(len(full)), Node: &layout.Node{Card: id}})
+	}
+	tight, err := layout.New(&layout.State{Root: column}, layout.Options{Width: &width, Height: &height})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +119,7 @@ func TestTheLastWindowSidebarLeavesWhenItsSwitchTurnsOff(t *testing.T) {
 	order := []string{"left", "right", "top", "bottom"}
 	for _, side := range order {
 		width, height := 1000.0, 800.0
-		grid, err := layout.New(&layout.State{Xs: []float64{0, 1}, Ys: []float64{0, 1}, Cards: []layout.Card{{ID: "main", C0: 0, C1: 1, R0: 0, R1: 1}}},
+		grid, err := layout.New(&layout.State{Root: &layout.Node{Card: "main"}},
 			layout.Options{Width: &width, Height: &height})
 		if err != nil {
 			t.Fatal(err)
@@ -159,19 +155,12 @@ func TestAGridHoldsOneSidebarOfASide(t *testing.T) {
 	order := []string{"left", "right", "top", "bottom"}
 	width, height := 1000.0, 800.0
 	options := layout.Options{Width: &width, Height: &height}
-	two := map[string][2]layout.Card{
-		"left":   {{ID: "left", C0: 0, C1: 1, R0: 0, R1: 3}, {ID: "left", C0: 1, C1: 2, R0: 0, R1: 3}},
-		"right":  {{ID: "right", C0: 2, C1: 3, R0: 0, R1: 3}, {ID: "right", C0: 1, C1: 2, R0: 0, R1: 3}},
-		"top":    {{ID: "top", C0: 0, C1: 3, R0: 0, R1: 1}, {ID: "top", C0: 0, C1: 3, R0: 1, R1: 2}},
-		"bottom": {{ID: "bottom", C0: 0, C1: 3, R0: 2, R1: 3}, {ID: "bottom", C0: 0, C1: 3, R0: 1, R1: 2}},
-	}
-	lines := []float64{0, .2, .8, 1}
 	for _, side := range order {
-		cards := two[side]
-		if _, err := layout.New(&layout.State{Xs: lines, Ys: lines, Cards: cards[:]}, options); err == nil || err.Error() != "soksak: two cards are called "+side {
+		twice := &layout.Node{Cut: layout.WindowAxis(side), Kids: []layout.Kid{{Share: 0.5, Node: &layout.Node{Card: side}}, {Share: 0.5, Node: &layout.Node{Card: side}}}}
+		if _, err := layout.New(&layout.State{Root: twice}, options); err == nil || err.Error() != "soksak: card "+side+" is stored twice" {
 			t.Fatalf("a state with two %s sidebars: %v", side, err)
 		}
-		grid, err := layout.New(&layout.State{Xs: []float64{0, 1}, Ys: []float64{0, 1}, Cards: []layout.Card{{ID: "main", C0: 0, C1: 1, R0: 0, R1: 1}}}, options)
+		grid, err := layout.New(&layout.State{Root: &layout.Node{Card: "main"}}, options)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -184,6 +173,74 @@ func TestAGridHoldsOneSidebarOfASide(t *testing.T) {
 		}
 		if !layout.WindowSidebarsPlaced(grid, order) {
 			t.Fatalf("the refused %s sidebar changed the arrangement", side)
+		}
+	}
+}
+
+// TestAHiddenWindowSidebarGivesItsRoomInProportion checks that a window sidebar that leaves is withdrawn: the other kids of its cut take
+// its room in proportion to their sizes, not its neighbour alone (docs/spec/external-sidebars.md).
+func TestAHiddenWindowSidebarGivesItsRoomInProportion(t *testing.T) {
+	var state layout.State
+	if err := json.Unmarshal([]byte(`{"root":{"cut":"x","kids":[
+		{"share":0.2,"node":{"card":"left","fixed":true,"width":200}},
+		{"share":0.6,"node":{"card":"a"}},{"share":0.2,"node":{"card":"b"}}]}}`), &state); err != nil {
+		t.Fatal(err)
+	}
+	width, height, gap := 1000.0, 800.0, 0.0
+	grid, err := layout.New(&state, layout.Options{Width: &width, Height: &height, Gap: &gap})
+	if err != nil {
+		t.Fatal(err)
+	}
+	order := []string{"left", "right", "top", "bottom"}
+	records := map[string]layout.WindowSidebar{"left": layout.SidebarSize("left", 200)}
+	if _, err := layout.ArrangeWindowSidebars(grid, order, order, records, 190, func(string) bool { return false }); err != nil {
+		t.Fatal(err)
+	}
+	a, _ := grid.Rect("a") // silent: a is a card of the grid.
+	b, _ := grid.Rect("b") // silent: b is a card of the grid.
+	if math.Abs(a.W-750) > 0.5 || math.Abs(b.W-250) > 0.5 {
+		t.Fatalf("after the hide a is %v and b %v wide, not 750 and 250", a.W, b.W)
+	}
+}
+
+// TestADockAndAHideRestoreTheWidthsOfTheCards checks that the dock of a window sidebar adds a fixed leaf, whose room the cards that are
+// not fixed give by one factor, and its hide withdraws it, so a dock and a hide restore every width (docs/spec/external-sidebars.md).
+func TestADockAndAHideRestoreTheWidthsOfTheCards(t *testing.T) {
+	for _, gap := range []float64{0, 24} {
+		var state layout.State
+		if err := json.Unmarshal([]byte(`{"root":{"cut":"x","kids":[{"share":0.75,"node":{"cut":"y","kids":[
+			{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"c"}}]}},{"share":0.25,"node":{"card":"b"}}]}}`), &state); err != nil {
+			t.Fatal(err)
+		}
+		width, height := 1400.0, 900.0
+		grid, err := layout.New(&state, layout.Options{Width: &width, Height: &height, Gap: &gap})
+		if err != nil {
+			t.Fatal(err)
+		}
+		widths := func() [2]float64 {
+			a, _ := grid.Rect("a") // silent: a is a card of the grid.
+			b, _ := grid.Rect("b") // silent: b is a card of the grid.
+			return [2]float64{a.W, b.W}
+		}
+		before := widths()
+		order := []string{"left", "right", "top", "bottom"}
+		sides := []string{"left", "right"}
+		records := map[string]layout.WindowSidebar{}
+		shown := true
+		if _, err := layout.ArrangeWindowSidebars(grid, order, sides, records, 190, func(string) bool { return shown }); err != nil {
+			t.Fatal(err)
+		}
+		docked := widths()
+		// The dock scales the fractions of the cards by one factor, and the corridors are costs of the cut, so the drawn ratio holds.
+		if ratio := docked[0] / docked[1]; math.Abs(ratio-before[0]/before[1]) > 1e-6 {
+			t.Fatalf("gap %v: the docked cards are %v wide, whose ratio %v is not the ratio of %v", gap, docked, ratio, before)
+		}
+		shown = false
+		if _, err := layout.ArrangeWindowSidebars(grid, order, sides, records, 190, func(string) bool { return shown }); err != nil {
+			t.Fatal(err)
+		}
+		if after := widths(); math.Abs(after[0]-before[0]) > 1e-6 || math.Abs(after[1]-before[1]) > 1e-6 {
+			t.Fatalf("gap %v: a dock and a hide leave the cards %v wide, not %v (docked %v)", gap, after, before, docked)
 		}
 	}
 }

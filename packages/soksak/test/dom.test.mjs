@@ -243,23 +243,6 @@ test("the view places every element on the grid rect", () => {
   assert.equal(grab.getAttribute("tabindex"), "0", "and a key reaches it");
 });
 
-test("a line no card reads is not drawn", () => {
-  const { host, grid, view } = mount();
-  grid.close("card");
-  view.render();
-
-  assert.equal(grid.lines("x").length, 3, "the line stays in the array");
-  assert.equal(grid.isVirtual("x", 1), true, "and no card reads it");
-  assert.equal(grid.rules().length, 0, "so there is no rule for it");
-  assert.equal(host.querySelectorAll(".sp-rule").length, 0, "and nothing is drawn");
-
-  // The line is what the card that paid comes back to.
-  grid.split("card-1", "x");
-  view.render();
-  assert.equal(grid.boundaryPos("x", 1), 600, "the boundary comes back where it was");
-  assert.ok(host.querySelectorAll(".sp-rule").length > 0, "and its rule is drawn again");
-});
-
 test("a press that follows a drag whose release was lost is not the second of a pair", () => {
   const { window, host, grid, view } = mount();
   const divider = host.querySelector('[role="separator"]');
@@ -485,7 +468,8 @@ test("a move with no button down ends the drag", () => {
   pointer(window, el, "pointerdown", 1, from, 300);
   pointer(window, el, "pointermove", 1, from - 100, 300);
   const held = grid.boundaryPos("x", 1);
-  assert.equal(held, from - 100, "a move with the button down drags");
+  // The line is drawn from the fractions that the drag stored, so it stands at the pointer within the rounding of those fractions.
+  assert.ok(Math.abs(held - (from - 100)) < 1e-9, `a move with the button down drags, to ${held}`);
 
   // The pointerup never arrives — the element lost the capture. The next move
   // has no button down, and must end the drag rather than keep dragging.
@@ -610,77 +594,6 @@ test("rules: false draws no rules and still draws the grab areas", () => {
   const { host, grid, view } = mount({ rules: false });
   assert.equal(host.querySelectorAll(".sp-rule").length, 0);
   assert.equal(host.querySelectorAll(".sp-divider").length, grid.dividers().length);
-  view.destroy();
-});
-
-test("releasing the pointer folds a pair the drag brought together", () => {
-  const reasons = [];
-  const { window, host, grid, view } = mount({ onChange: (reason) => reasons.push(reason) });
-  // A line no card reads is a snap target with no minimum to respect, which is
-  // the case a drag can actually bring together.
-  grid.split("card", "y");
-  const spare = grid.split("card", "x");
-  grid.close(spare);
-  const virtual = [1, 2].find((k) => grid.isVirtual("x", k));
-  assert.ok(virtual, "a line no card reads");
-  view.render();
-
-  const lines = grid.lines("x").length;
-  const beside = grid
-    .dividers()
-    .find((d) => d.axis === "x" && Math.abs(d.line - virtual) === 1);
-  assert.ok(beside, "a divider next to it");
-  const el = host.querySelector(`.sp-divider[data-axis="x"][data-line="${beside.line}"]`);
-  assert.ok(el, "with an element");
-
-  const from = grid.boundaryPos("x", beside.line);
-  const onto = grid.boundaryPos("x", virtual);
-  pointer(window, el, "pointerdown", 1, from, 300);
-  pointer(window, el, "pointermove", 1, onto - 2, 300);   // inside snapDistance
-  reasons.length = 0;
-  pointer(window, el, "pointerup", 1, onto - 2, 300);
-
-  assert.equal(grid.lines("x").length, lines - 1, "the two lines were folded into one");
-  assert.ok(reasons.includes("merge"), "and the host was told it was a merge");
-  view.destroy();
-});
-
-test("releasing the mouse folds a pair the drag brought together", () => {
-  // The pointer path is held above. A host that delivers a press as mouse
-  // events reaches the same fold through its own release, and a merge the
-  // mouse never performs leaves two lines where the drag put one.
-  const reasons = [];
-  const { window, host, grid, view } = mount({ onChange: (reason) => reasons.push(reason) });
-  grid.split("card", "y");
-  const spare = grid.split("card", "x");
-  grid.close(spare);
-  const virtual = [1, 2].find((k) => grid.isVirtual("x", k));
-  assert.ok(virtual, "a line no card reads");
-  view.render();
-
-  const lines = grid.lines("x").length;
-  const beside = grid
-    .dividers()
-    .find((d) => d.axis === "x" && Math.abs(d.line - virtual) === 1);
-  assert.ok(beside, "a divider next to it");
-  const el = host.querySelector(`.sp-divider[data-axis="x"][data-line="${beside.line}"]`);
-  assert.ok(el, "with an element");
-
-  const from = grid.boundaryPos("x", beside.line);
-  const onto = grid.boundaryPos("x", virtual);
-  el.dispatchEvent(new window.MouseEvent("mousedown", {
-    clientX: from, clientY: 300, bubbles: true, button: 0, buttons: 1,
-  }));
-  window.document.dispatchEvent(new window.MouseEvent("mousemove", {
-    clientX: onto - 2, clientY: 300, bubbles: true, buttons: 1,   // inside snapDistance
-  }));
-  reasons.length = 0;
-  window.document.dispatchEvent(new window.MouseEvent("mouseup", {
-    clientX: onto - 2, clientY: 300, bubbles: true, button: 0, buttons: 0,
-  }));
-
-  assert.equal(grid.lines("x").length, lines - 1, "the two lines were folded into one");
-  assert.ok(reasons.includes("merge"), "and the host was told it was a merge");
   view.destroy();
 });
 
@@ -1412,48 +1325,6 @@ test("a hold whose release never arrived does not stop the divider being centred
   view.destroy();
 });
 
-test("a drag that passes a line no card reads keeps the divider it holds", () => {
-  const { window, host, grid, view } = mount();
-  grid.split("card", "y");
-  grid.close("card");
-  grid.split("card-1", "x");
-  grid.split("card-2", "y");
-  grid.split("card-2", "y");
-  grid.close("card-2");
-  view.render();
-  assert.equal(grid.isVirtual("y", 1), true, "line 1 is read by no card");
-
-  const divider = host.querySelector('.sp-divider[data-axis="y"][data-line="2"]');
-  assert.ok(divider, "the boundary on line 2 has a grab area");
-  const at = grid.boundaryPos("y", 2);
-  const past = grid.boundaryPos("y", 1) - 30;
-
-  pointer(window, divider, "pointerdown", 1, 300, at);
-  pointer(window, divider, "pointermove", 1, 300, past);
-  assert.equal(grid.lines("y").length, 3, "the line the move passed is gone");
-  assert.ok(host.contains(divider), "the gesture still holds its element");
-  assert.equal(divider.dataset.dragging, "true", "and the element is still held");
-  assert.equal(divider.dataset.line, "1", "filed under the line the boundary now has");
-
-  // The drag keeps driving the boundary, down to where the range stops it.
-  const target = grid.boundaryPos("y", 1) - 20;
-  pointer(window, divider, "pointermove", 1, 300, target);
-  const floor = grid.boundaryRange("y", 1)[0];
-  assert.ok(
-    Math.abs(grid.boundaryPos("y", 1) - Math.max(floor, target)) < 1e-9,
-    `it follows to ${grid.boundaryPos("y", 1)}, not ${Math.max(floor, target)}`,
-  );
-
-  pointer(window, divider, "pointerup", 1, 300, target);
-  assert.equal(divider.dataset.dragging, undefined, "the release lets it go");
-  assert.equal(
-    host.querySelectorAll(".sp-divider").length,
-    grid.dividers().length,
-    "one element per divider",
-  );
-  view.destroy();
-});
-
 test("each commit callback draws its own prepared layout exactly once", () => {
   const pending = [];
   const { grid, view } = mount({ commit: (rects, draw) => pending.push({ rects, draw }) });
@@ -1563,149 +1434,6 @@ test("a paint writes the rects its commit reported when the ratio changes before
   view.destroy();
 });
 
-/**
- * Two boundaries on one axis, with a line no card reads below both.
- *
- * A move that passes that line drops it, which renumbers the boundary above.
- */
-function stacked() {
-  const it = mount();
-  it.grid.split("card", "y");
-  const spare = it.grid.split("card", "x");
-  it.grid.close(spare);
-  it.grid.split("card-1", "x");
-  it.view.render();
-  assert.equal(it.grid.isVirtual("x", 1), true, "line 1 is read by no card");
-  return it;
-}
-
-test("a drag past a line no card reads keeps the divider another finger holds", () => {
-  const { window, host, grid, view } = stacked();
-  const near = host.querySelector('.sp-divider[data-axis="x"][data-line="2"]');
-  const far = host.querySelector('.sp-divider[data-axis="x"][data-line="3"]');
-
-  // The second finger takes the boundary above and holds it.
-  pointer(window, far, "pointerdown", 2, grid.boundaryPos("x", 3), 300);
-  pointer(window, far, "pointermove", 2, grid.boundaryPos("x", 3) + 10, 300);
-  const held = grid.boundaryPos("x", 3);
-
-  // The first finger takes the boundary below past the line no card reads.
-  pointer(window, near, "pointerdown", 1, grid.boundaryPos("x", 2), 100);
-  pointer(window, near, "pointermove", 1, grid.boundaryPos("x", 1) - 20, 100);
-  assert.equal(grid.lines("x").length, 4, "the line the move passed is gone");
-
-  assert.equal(far.isConnected, true, "the second finger still holds its element");
-  assert.equal(far.dataset.dragging, "true", "and the element is still held");
-  assert.equal(far.dataset.line, "2", "filed under the line its boundary now has");
-
-  pointer(window, far, "pointermove", 2, held + 60, 300);
-  assert.ok(
-    Math.abs(grid.boundaryPos("x", 2) - (held + 60)) < 1e-6,
-    `it still drives its own boundary, to ${grid.boundaryPos("x", 2)} and not ${held + 60}`,
-  );
-  view.destroy();
-});
-
-test("a merge on release keeps the divider another finger holds", () => {
-  const { window, host, grid, view } = stacked();
-  const near = host.querySelector('.sp-divider[data-axis="x"][data-line="2"]');
-  const far = host.querySelector('.sp-divider[data-axis="x"][data-line="3"]');
-
-  pointer(window, far, "pointerdown", 2, grid.boundaryPos("x", 3), 300);
-  pointer(window, far, "pointermove", 2, grid.boundaryPos("x", 3) + 10, 300);
-  const held = grid.boundaryPos("x", 3);
-
-  // The boundary below snaps onto the line no card reads, and the release folds
-  // the pair into one line, which renumbers the boundary above.
-  const onto = grid.boundaryPos("x", 1);
-  pointer(window, near, "pointerdown", 1, grid.boundaryPos("x", 2), 100);
-  pointer(window, near, "pointermove", 1, onto + 2, 100);
-  pointer(window, near, "pointerup", 1, onto + 2, 100);
-  assert.equal(grid.lines("x").length, 4, "the pair was folded into one line");
-
-  assert.equal(far.isConnected, true, "the second finger still holds its element");
-  assert.equal(far.dataset.dragging, "true", "and the element is still held");
-
-  pointer(window, far, "pointermove", 2, held + 60, 300);
-  assert.ok(
-    Math.abs(grid.boundaryPos("x", 2) - (held + 60)) < 1e-6,
-    `it still drives its own boundary, to ${grid.boundaryPos("x", 2)} and not ${held + 60}`,
-  );
-  view.destroy();
-});
-
-test("a drag on one axis keeps the divider a finger holds on the other", () => {
-  const { window, host, grid, view } = mount();
-  // One card across the top, two side by side below it, and a line no card
-  // reads inside the top card. A divider's key carries where its stretch starts
-  // on the other axis, so dropping that line renumbers the key of the vertical
-  // divider as well.
-  grid.replace({
-    xs: [0, 0.5, 1],
-    ys: [0, 0.25, 0.5, 1],
-    cards: [
-      { id: "top", c0: 0, c1: 2, r0: 0, r1: 2 },
-      { id: "left", c0: 0, c1: 1, r0: 2, r1: 3 },
-      { id: "right", c0: 1, c1: 2, r0: 2, r1: 3 },
-    ],
-    paidBy: {},
-  });
-  view.render();
-  assert.equal(grid.isVirtual("y", 1), true, "line 1 is read by no card");
-  const down = host.querySelector('.sp-divider[data-axis="x"]');
-  const across = host.querySelector('.sp-divider[data-axis="y"]');
-
-  pointer(window, down, "pointerdown", 1, 600, 450);
-  pointer(window, down, "pointermove", 1, 610, 450);
-  const held = grid.boundaryPos("x", 1);
-
-  pointer(window, across, "pointerdown", 2, 600, 300);
-  pointer(window, across, "pointermove", 2, 600, 140);
-  assert.equal(grid.lines("y").length, 3, "the line the move passed is gone");
-
-  assert.equal(down.isConnected, true, "the first finger still holds its element");
-  assert.equal(down.dataset.dragging, "true", "and the element is still held");
-
-  pointer(window, down, "pointermove", 1, held + 50, 450);
-  assert.ok(
-    Math.abs(grid.boundaryPos("x", 1) - (held + 50)) < 1e-6,
-    `it still drives its own boundary, to ${grid.boundaryPos("x", 1)} and not ${held + 50}`,
-  );
-  view.destroy();
-});
-
-test("a key past a line no card reads keeps the divider under the focus", () => {
-  const { window, host, grid, view } = mount();
-  grid.split("card", "y");
-  grid.close("card");
-  grid.split("card-1", "x");
-  grid.split("card-2", "y");
-  grid.split("card-2", "y");
-  grid.close("card-2");
-  view.render();
-  assert.equal(grid.isVirtual("y", 1), true, "line 1 is read by no card");
-
-  const divider = host.querySelector('.sp-divider[data-axis="y"][data-line="2"]');
-  const key = (name) =>
-    window.document.activeElement.dispatchEvent(
-      new window.KeyboardEvent("keydown", { key: name, bubbles: true, cancelable: true }),
-    );
-
-  divider.focus();
-  for (let i = 0; i < 19; i++) key("ArrowUp");
-  assert.equal(grid.lines("y").length, 3, "the line the keys passed is gone");
-
-  assert.equal(divider.isConnected, true, "the divider under the focus is still there");
-  assert.equal(divider.dataset.line, "1", "filed under the line its boundary now has");
-  assert.equal(window.document.activeElement, divider, "and it still has the focus");
-
-  const at = grid.boundaryPos("y", 1);
-  assert.ok(at - 8 > grid.boundaryRange("y", 1)[0], "the boundary has room for another step");
-  key("ArrowUp");
-  assert.equal(grid.boundaryPos("y", 1), at - 8, "and the next key moves it");
-  view.destroy();
-});
-
 test("onChange reports a centring driven by the mouse", () => {
   const changes = [];
   const { window, host, grid, view } = mount({ onChange: (reason) => changes.push(reason) });
@@ -1794,18 +1522,7 @@ test("a change on one stretch of a line carries the anchor of a gesture on the o
   const { window, host, grid, view } = mount();
   // A card spanning the line breaks it into two stretches, so two gestures hold
   // one boundary through two elements.
-  grid.replace({
-    xs: [0, 0.5, 1],
-    ys: [0, 1 / 3, 2 / 3, 1],
-    cards: [
-      { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
-      { id: "b", c0: 1, c1: 2, r0: 0, r1: 1 },
-      { id: "band", c0: 0, c1: 2, r0: 1, r1: 2 },
-      { id: "c", c0: 0, c1: 1, r0: 2, r1: 3 },
-      { id: "d", c0: 1, c1: 2, r0: 2, r1: 3 },
-    ],
-    paidBy: {},
-  });
+  grid.replace({ root: { cut: "y", kids: [{ share: 0.3333333333333333, node: { cut: "x", kids: [{ share: 0.5, node: { card: "a" } }, { share: 0.5, node: { card: "b" } }] } }, { share: 0.3333333333333333, node: { card: "band" } }, { share: 0.33333333333333337, node: { cut: "x", kids: [{ share: 0.5, node: { card: "c" } }, { share: 0.5, node: { card: "d" } }] } }] } });
   view.render();
   const both = [...host.querySelectorAll('.sp-divider[data-axis="x"][data-line="1"]')].sort(
     (p, q) => parseFloat(p.style.top) - parseFloat(q.style.top),
@@ -1833,18 +1550,7 @@ test("a change on one stretch of a line carries the anchor of a gesture on the o
 
 test("two stretches that become one divider stay with the gesture that kept it", () => {
   const { window, host, grid, view } = mount();
-  grid.replace({
-    xs: [0, 0.5, 1],
-    ys: [0, 1 / 3, 2 / 3, 1],
-    cards: [
-      { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
-      { id: "b", c0: 1, c1: 2, r0: 0, r1: 1 },
-      { id: "band", c0: 0, c1: 2, r0: 1, r1: 2 },
-      { id: "c", c0: 0, c1: 1, r0: 2, r1: 3 },
-      { id: "d", c0: 1, c1: 2, r0: 2, r1: 3 },
-    ],
-    paidBy: {},
-  });
+  grid.replace({ root: { cut: "y", kids: [{ share: 0.3333333333333333, node: { cut: "x", kids: [{ share: 0.5, node: { card: "a" } }, { share: 0.5, node: { card: "b" } }] } }, { share: 0.3333333333333333, node: { card: "band" } }, { share: 0.33333333333333337, node: { cut: "x", kids: [{ share: 0.5, node: { card: "c" } }, { share: 0.5, node: { card: "d" } }] } }] } });
   view.render();
   const both = [...host.querySelectorAll('.sp-divider[data-axis="x"][data-line="1"]')].sort(
     (p, q) => parseFloat(p.style.top) - parseFloat(q.style.top),
@@ -1868,149 +1574,14 @@ test("two stretches that become one divider stay with the gesture that kept it",
   view.destroy();
 });
 
-test("a re-filed divider takes the stretch it covers most, not the one it starts in", () => {
-  // The commit hook lets a host hold the draw, so two moves can land in one
-  // paint. One takes a stretch's start past where the element it holds is drawn;
-  // the other renumbers that stretch's key. Only the length the element covers
-  // then says which stretch is its own.
-  let hold = false;
-  let pending = null;
-  const { window, host, grid, view } = mount({
-    commit: (_rects, draw) => {
-      if (hold) pending = draw;
-      else draw();
-    },
-  });
-  grid.replace({
-    xs: [0, 0.5, 1],
-    ys: [0, 0.2, 0.25, 0.4, 0.7, 1],
-    cards: [
-      { id: "a", c0: 0, c1: 1, r0: 0, r1: 2 },
-      { id: "b", c0: 1, c1: 2, r0: 0, r1: 2 },
-      { id: "band", c0: 0, c1: 2, r0: 2, r1: 3 },
-      { id: "c", c0: 0, c1: 1, r0: 3, r1: 5 },
-      { id: "d", c0: 1, c1: 2, r0: 3, r1: 5 },
-    ],
-    paidBy: {},
-  });
-  view.render();
-  assert.deepEqual([1, 4].filter((k) => grid.isVirtual("y", k)), [1, 4], "two lines no card reads");
-  const down = [...host.querySelectorAll('.sp-divider[data-axis="x"][data-line="1"]')].sort(
-    (p, q) => parseFloat(p.style.top) - parseFloat(q.style.top),
-  );
-  assert.equal(down.length, 2, "the vertical line is drawn as two stretches");
-  const lower = down[1];
-  const [top, bottom] = [...host.querySelectorAll('.sp-divider[data-axis="y"]')].sort(
-    (p, q) => parseFloat(p.style.top) - parseFloat(q.style.top),
-  );
-
-  // A finger holds the lower stretch and never moves.
-  pointer(window, lower, "pointerdown", 3, grid.boundaryPos("x", 1), 500);
-  const was = parseFloat(lower.style.top);
-
-  hold = true;
-  // The lower stretch's start goes past where that element is drawn.
-  pointer(window, bottom, "pointerdown", 2, 600, grid.boundaryPos("y", 3));
-  pointer(window, bottom, "pointermove", 2, 600, 450);
-  // And this renumbers its key, so the element has to be filed again.
-  pointer(window, top, "pointerdown", 1, 600, grid.boundaryPos("y", 2));
-  pointer(window, top, "pointermove", 1, 600, 100);
-  hold = false;
-  pending();
-
-  const mine = grid.dividers().find((d) => d.key === "x:1:2");
-  assert.ok(mine.y > was, "the stretch now starts past where the element was drawn");
-  assert.equal(view.drags.has(3), true, "the finger still holds its divider");
-  assert.equal(lower.isConnected, true, "and its element is still in the host");
-  assert.equal(lower.dataset.line, "1");
-  assert.equal(
-    parseFloat(lower.style.top),
-    Math.round(mine.y),
-    "and it is drawn on the stretch it covers, not on the one above it",
-  );
-  view.destroy();
-});
-
-test("a re-filed divider keeps the stretch it overlaps, not the one it only reaches toward", () => {
-  // The other way round. The stretch the element belongs to comes up and
-  // shrinks, so the element reaches past its foot, and a second stretch stands
-  // further down that the element does not reach at all. The overlap has to be
-  // measured from where the two meet, not from whichever starts first.
-  let hold = false;
-  let pending = null;
-  const { window, host, grid, view } = mount({
-    commit: (_rects, draw) => {
-      if (hold) pending = draw;
-      else draw();
-    },
-  });
-  grid.replace({
-    xs: [0, 0.5, 1],
-    ys: [0, 0.2, 0.25, 2 / 3, 23 / 30, 1], // 0 120 150 400 460 600
-    cards: [
-      { id: "band0", c0: 0, c1: 2, r0: 0, r1: 2 },
-      { id: "p", c0: 0, c1: 1, r0: 2, r1: 3 },
-      { id: "q", c0: 1, c1: 2, r0: 2, r1: 3 },
-      { id: "band1", c0: 0, c1: 2, r0: 3, r1: 4 },
-      { id: "u", c0: 0, c1: 1, r0: 4, r1: 5 },
-      { id: "v", c0: 1, c1: 2, r0: 4, r1: 5 },
-    ],
-    paidBy: {},
-  });
-  view.render();
-  assert.deepEqual([1, 2, 3, 4].filter((k) => grid.isVirtual("y", k)), [1], "one line no card reads");
-  const near = [...host.querySelectorAll('.sp-divider[data-axis="x"][data-line="1"]')].sort(
-    (a, b) => parseFloat(a.style.top) - parseFloat(b.style.top),
-  )[0];
-  const [head, foot] = [...host.querySelectorAll('.sp-divider[data-axis="y"]')].sort(
-    (a, b) => parseFloat(a.style.top) - parseFloat(b.style.top),
-  );
-
-  // A finger holds the upper stretch and never moves.
-  pointer(window, near, "pointerdown", 3, grid.boundaryPos("x", 1), 300);
-  const reaches = parseFloat(near.style.top) + parseFloat(near.style.height);
-
-  hold = true;
-  // The stretch's foot comes up, so the element reaches past it.
-  pointer(window, foot, "pointerdown", 2, 600, grid.boundaryPos("y", 3));
-  pointer(window, foot, "pointermove", 2, 600, 280);
-  // And its head comes up past the line no card reads, which renumbers its key.
-  pointer(window, head, "pointerdown", 1, 600, grid.boundaryPos("y", 2));
-  pointer(window, head, "pointermove", 1, 600, 110);
-  hold = false;
-  pending();
-
-  const own = grid.dividers().find((d) => d.key === "x:1:1");
-  const other = grid.dividers().find((d) => d.key === "x:1:3");
-  assert.ok(own.y + own.h < reaches, "the element reaches past the foot of its own stretch");
-  assert.ok(other.y > reaches, "and does not reach the other stretch at all");
-  assert.equal(view.drags.has(3), true, "the finger still holds a divider");
-  assert.equal(
-    parseFloat(near.style.top),
-    Math.round(own.y),
-    "and it is the one it overlaps, not the one further down",
-  );
-  view.destroy();
-});
-
 test("a re-filed divider takes the stretch it covers most when it covers two", () => {
   // A rail cuts the stretch the element holds in two, and a split above it
   // renumbers the key. Two changes the host makes before one render, which is
   // how a host batches. The element covers part of both halves, so how much of
-  // each it covers is what picks one.
+  // each it covers is what picks one. The pair above the rail is the kid that
+  // pays for it, so it is drawn tall enough to keep its minimum size.
   const { window, host, grid, view } = mount();
-  grid.replace({
-    xs: [0, 0.5, 1],
-    ys: [0, 0.42, 0.64, 1],
-    cards: [
-      { id: "band", c0: 0, c1: 2, r0: 0, r1: 1 },
-      { id: "p1", c0: 0, c1: 1, r0: 1, r1: 2 },
-      { id: "q1", c0: 1, c1: 2, r0: 1, r1: 2 },
-      { id: "p2", c0: 0, c1: 1, r0: 2, r1: 3 },
-      { id: "q2", c0: 1, c1: 2, r0: 2, r1: 3 },
-    ],
-    paidBy: {},
-  });
+  grid.replace({ root: { cut: "y", kids: [{ share: 0.4, node: { card: "band" } }, { share: 0.35, node: { cut: "x", kids: [{ share: 0.5, node: { card: "p1" } }, { share: 0.5, node: { card: "q1" } }] } }, { share: 0.25, node: { cut: "x", kids: [{ share: 0.5, node: { card: "p2" } }, { share: 0.5, node: { card: "q2" } }] } }] } });
   view.render();
   const down = [...host.querySelectorAll('.sp-divider[data-axis="x"]')];
   assert.equal(down.length, 1, "the vertical line is drawn as one stretch");
@@ -2041,15 +1612,7 @@ test("a re-filed divider takes the stretch it covers most when it covers two", (
 
 test("a gesture ends when a change the host makes takes its boundary away", () => {
   const { window, host, grid, view } = mount();
-  grid.replace({
-    xs: [0, 0.4, 1],
-    ys: [0, 1],
-    cards: [
-      { id: "left", c0: 0, c1: 1, r0: 0, r1: 1 },
-      { id: "right", c0: 1, c1: 2, r0: 0, r1: 1 },
-    ],
-    paidBy: {},
-  });
+  grid.replace({ root: { cut: "x", kids: [{ share: 0.4, node: { card: "left" } }, { share: 0.6, node: { card: "right" } }] } });
   view.render();
   const el = host.querySelector('.sp-divider[data-axis="x"]');
   const held = grid.boundaryPos("x", 1);
@@ -2071,15 +1634,7 @@ test("a gesture ends when a change the host makes takes its boundary away", () =
 
 test("a gesture ends when a card the host puts in shifts the boundary it holds", () => {
   const { window, host, grid, view } = mount();
-  grid.replace({
-    xs: [0, 0.4, 1],
-    ys: [0, 1],
-    cards: [
-      { id: "left", c0: 0, c1: 1, r0: 0, r1: 1 },
-      { id: "right", c0: 1, c1: 2, r0: 0, r1: 1 },
-    ],
-    paidBy: {},
-  });
+  grid.replace({ root: { cut: "x", kids: [{ share: 0.4, node: { card: "left" } }, { share: 0.6, node: { card: "right" } }] } });
   view.render();
   const el = host.querySelector('.sp-divider[data-axis="x"]');
   const held = grid.boundaryPos("x", 1);
@@ -2099,22 +1654,17 @@ test("a gesture ends when a card the host puts in shifts the boundary it holds",
 
 test("a gesture survives a change that leaves its boundary where it stands", () => {
   const { window, host, grid, view } = mount();
-  grid.replace({
-    xs: [0, 0.4, 1],
-    ys: [0, 1],
-    cards: [
-      { id: "left", c0: 0, c1: 1, r0: 0, r1: 1 },
-      { id: "right", c0: 1, c1: 2, r0: 0, r1: 1 },
-    ],
-    paidBy: {},
-  });
+  grid.replace({ root: { cut: "x", kids: [
+    { share: 0.4, node: { card: "left" } },
+    { share: 0.6, node: { cut: "y", kids: [{ share: 0.5, node: { card: "right" } }, { share: 0.5, node: { card: "below" } }] } },
+  ] } });
   view.render();
   const el = host.querySelector('.sp-divider[data-axis="x"]');
   const held = grid.boundaryPos("x", 1);
   pointer(window, el, "pointerdown", 1, held, 300);
 
-  // The cut goes in above the line the finger holds, so a line is added and
-  // that line keeps both its number and its place.
+  // The cut goes in inside the kid after the line the finger holds, so a line is
+  // added above it and that line keeps both its number and its place.
   grid.split("right", "x");
   view.render();
   assert.equal(grid.boundaryPos("x", 1), held, "the boundary is where it was");
@@ -2143,7 +1693,7 @@ test("a host that renders between a drag and the draw it is holding keeps the dr
 
   hold = true;
   pointer(window, el, "pointermove", 1, held + 300, 300);
-  assert.equal(grid.boundaryPos("x", 1), held + 300, "the drag moved it, and nothing is drawn yet");
+  assert.ok(Math.abs(grid.boundaryPos("x", 1) - (held + 300)) < 1e-9, "the drag moved it, and nothing is drawn yet");
   view.render(); // the host renders for reasons of its own
   assert.equal(el.dataset.dragging, "true", "the change was the view's own, so the gesture stands");
 
@@ -2159,15 +1709,7 @@ test("a host that renders between a drag and the draw it is holding keeps the dr
 
 test("a gesture the host's change ends does not leave the next press centring", () => {
   const { window, host, grid, view } = mount();
-  grid.replace({
-    xs: [0, 0.4, 1],
-    ys: [0, 1],
-    cards: [
-      { id: "left", c0: 0, c1: 1, r0: 0, r1: 1 },
-      { id: "right", c0: 1, c1: 2, r0: 0, r1: 1 },
-    ],
-    paidBy: {},
-  });
+  grid.replace({ root: { cut: "x", kids: [{ share: 0.4, node: { card: "left" } }, { share: 0.6, node: { card: "right" } }] } });
   view.render();
   const el = host.querySelector('.sp-divider[data-axis="x"]');
   const held = grid.boundaryPos("x", 1);
@@ -2481,105 +2023,6 @@ test("a press takes no hold across a host change made while a draw of the view's
 });
 
 /**
- * A plane with a line no card reads below two the cards do read, and a host that
- * holds every draw.
- *
- * A drag that passes the unread line drops it, and every line above it is
- * renumbered. The number a divider element carries is written by the paint, so
- * until the host performs the draw every element still carries the number it had.
- */
-function renumbering() {
-  const dom = createDOM();
-  const { window } = dom;
-  for (const name of ["PointerEvent", "Event", "Node", "HTMLElement"]) {
-    globalThis[name] = window[name];
-  }
-  globalThis.document = window.document;
-  delete globalThis.ResizeObserver;
-
-  const host = window.document.getElementById("host");
-  Object.defineProperty(host, "clientWidth", { value: 1200, configurable: true });
-  Object.defineProperty(host, "clientHeight", { value: 1000, configurable: true });
-
-  const grid = new Soksak(undefined, { width: 1200, height: 1000, gap: 24 });
-  let pending = null;
-  const view = new SoksakView(host, grid, {
-    createCard: () => window.document.createElement("div"),
-    commit: (_rects, draw) => {
-      pending = draw;
-    },
-  });
-  grid.replace({
-    xs: [0, 1],
-    ys: [0, 0.2, 0.4, 0.6, 0.8, 1],
-    cards: [
-      { id: "a", c0: 0, c1: 1, r0: 0, r1: 2 },
-      { id: "b", c0: 0, c1: 1, r0: 2, r1: 3 },
-      { id: "c", c0: 0, c1: 1, r0: 3, r1: 4 },
-      { id: "d", c0: 0, c1: 1, r0: 4, r1: 5 },
-    ],
-    paidBy: {},
-  });
-  view.render();
-  pending();
-  assert.equal(grid.isVirtual("y", 1), true, "line 1 is read by no card");
-
-  const held = host.querySelector('.sp-divider[data-axis="y"][data-line="2"]');
-  const other = host.querySelector('.sp-divider[data-axis="y"][data-line="3"]');
-  assert.ok(held && other, "both boundaries have a grab area");
-
-  // The drag passes the line no card reads. The host holds the draw, so no
-  // element is renumbered and none is moved.
-  pointer(window, held, "pointerdown", 1, 600, grid.boundaryPos("y", 2));
-  pointer(window, held, "pointermove", 1, 600, 170);
-  assert.equal(grid.lines("y").length, 5, "the line the move passed is gone");
-  return { window, host, grid, view, held, other, draw: () => pending() };
-}
-
-test("a press takes no hold on a divider a change the host is holding the draw of renumbered", () => {
-  const { window, grid, view, other, draw } = renumbering();
-  const drawn = parseFloat(other.style.top) + parseFloat(other.style.height) / 2;
-  assert.equal(other.dataset.line, "3", "the element still carries the number the paint gave it");
-  assert.ok(
-    Math.abs(grid.boundaryPos("y", 3) - drawn) > Math.max(grid.gap, grid.grabSize),
-    "and line 3 now names a boundary further off than the divider is grabbed at",
-  );
-
-  const was = grid.lines("y").slice();
-  pointer(window, other, "pointerdown", 2, 600, drawn);
-  assert.equal(other.dataset.dragging, undefined, "the press takes no hold");
-  pointer(window, other, "pointermove", 2, 600, drawn + 60);
-  assert.deepEqual(grid.lines("y"), was, "and the move that follows drives nothing");
-  draw();
-  view.destroy();
-});
-
-test("a second finger drives the boundary the gesture holds after a change the host is holding the draw of renumbered", () => {
-  const { window, grid, view, held, draw } = renumbering();
-  const drawn = parseFloat(held.style.top) + parseFloat(held.style.height) / 2;
-  assert.equal(held.dataset.line, "2", "the element still carries the number the paint gave it");
-  const own = grid.boundaryPos("y", 1);
-  assert.ok(Math.abs(own - 170) < 1e-6, `the gesture carried its boundary to line 1, at ${own}`);
-
-  // The second finger lands on the divider the first one holds. The gesture on
-  // it was carried through the change, so the boundary it addresses is that
-  // gesture's, not the one the number the element carries now names.
-  pointer(window, held, "pointerdown", 2, 600, drawn);
-  assert.equal(held.dataset.dragging, "true", "the press takes hold");
-  pointer(window, held, "pointermove", 2, 600, drawn + 60);
-  assert.ok(
-    Math.abs(grid.boundaryPos("y", 1) - (own + 60)) < 1e-6,
-    `it drives the gesture's own boundary, to ${grid.boundaryPos("y", 1)} not ${own + 60}`,
-  );
-  assert.ok(
-    Math.abs(grid.boundaryPos("y", 2) - 600) < 1e-6,
-    `and leaves the one the old number names at ${grid.boundaryPos("y", 2)}`,
-  );
-  draw();
-  view.destroy();
-});
-
-/**
  * A finger holding a y boundary the host has since moved out from under it.
  *
  * The host makes the change and does not render, so nothing has told the
@@ -2760,7 +2203,7 @@ test("the boundary option moves, centres and ends every divider gesture", () => 
     move: (axis, line, px) => (calls.push(["move", axis, line]), grid.moveBoundary(axis, line, px)),
     step: (axis, line, px) => (calls.push(["step", axis, line]), grid.moveBoundary(axis, line, px)),
     center: (axis, line) => (calls.push(["center", axis, line]), grid.centerBoundary(axis, line)),
-    end: (axis, line) => (calls.push(["end", axis, line]), grid.mergeCoincident(axis, line)),
+    end: (axis, line) => (calls.push(["end", axis, line]), false),
   };
   const mounted = mount({ boundary });
   grid = mounted.grid;
@@ -2838,7 +2281,9 @@ function crossed(options) {
   const mounted = mount(options);
   const { grid, view } = mounted;
   const [right] = grid.cards.filter((card) => card.id !== "card").map((card) => card.id);
+  // A render after each split creates the element of below before the element of left, which reading order puts first.
   const below = grid.split(right, "y");
+  view.render();
   const left = grid.split("card", "y");
   view.render();
   return { ...mounted, right, below, left };
@@ -2874,7 +2319,7 @@ test("the card elements stand in the order that the host gives, and a reorder le
   assert.ok(!moved.includes(left), `the reorder moved the element of ${left} that holds the focus: ${moved.join(", ")}`);
   assert.equal(window.document.activeElement, field, "the reorder took the focus from the field");
   order = ["card", right];
-  assert.throws(() => view.render(), (error) => error.message === `order gave 2 cards for the 4 cards of the grid: missing ${below}, ${left}`);
+  assert.throws(() => view.render(), (error) => error.message === `order gave 2 cards for the 4 cards of the grid: missing ${left}, ${below}`);
   assert.ok(grid.cards.length === 4);
   view.destroy();
 });

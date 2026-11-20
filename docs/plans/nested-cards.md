@@ -6,7 +6,7 @@ This proposal replaces parties (F908) with nested cards in release 0.0.45. It is
 
 ## Model
 
-- A group card is a card of a plane whose body is a plane of its own. A plane is one grid of the layout library `packages/soksak` (`xs`, `ys`, `cards`, `paidBy`); the library stays a library of one plane, and the workbench holds the tree of planes.
+- A group card is a card of a plane whose body is a plane of its own. A plane is one grid of the layout library `packages/soksak` (the slicing tree `{root}`); the library stays a library of one plane, and the workbench holds the tree of planes.
 - The space has one root plane. A card of a plane is either a content card, which holds tabs, or a group card, which holds a child plane. Each tab of a content card is independent of the other cards, as today.
 - The card and tab structure stays as it is; the group card is the only addition. Its header follows the existing card header design and holds its name, the leader mark and its buttons; its level (the depth of its plane, the root plane being level 0) is reported in status. Its body is its child plane, inset by the corridor of that plane. The mockup that introduced the idea is not a design to copy.
 - A group holds at least two cards. Creating a group from a card turns that card into a group card that holds two cards: the card with its tabs and a new card, split toward a side. When a close or a move leaves one card in a group, that card replaces the group card in the parent plane.
@@ -15,7 +15,7 @@ This proposal replaces parties (F908) with nested cards in release 0.0.45. It is
 - The buttons of a header act on the box of that header. In the header of a content card, `+` adds a tab and the two split buttons put a new card beside the card in the same plane. In the header of a group card, `+` adds a content card inside the group and the two split buttons split the group card in its parent plane. A split never creates a group. The group button turns the card into a group of two cards; it is shown only when the card can hold the group header and give its cards `minSize`. Dissolving a group is in the close menu of the group header.
 - A card keeps its identifier when it moves between planes. Every command that names a card (`core.layout.open`, `core.layout.select`, `core.layout.close`, `core.card.get`) works for a card in any plane.
 
-- The setting `cardSplit` decides the sizes after a split: `exact` (the default) divides only the rect of the card that is split; `even` rearranges the cards of that plane to fair sizes with `balance()`. It applies to the split buttons, the inner split of the group button and `core.layout.open` with `side`.
+- A split divides only the node that it splits, for the split buttons, the inner split of the group button and `core.layout.open` with `side`.
 
 ## Commands and statuses
 

@@ -4,6 +4,7 @@ package workbench_test
 
 import (
 	"encoding/json"
+	"math"
 	"reflect"
 	"slices"
 	"strconv"
@@ -104,11 +105,22 @@ func TestAGroupCreateWrapsTheCardAndFocusesTheNewCard(t *testing.T) {
 	if layout["leader"] != "card-2" || layout["lastCard"] != float64(3) {
 		t.Fatalf("core.layout holds the leader %v and lastCard %v", layout["leader"], layout["lastCard"])
 	}
-	want := []any{map[string]any{"card": "card-2", "name": "그룹 1", "level": float64(1), "leader": "main", "members": []any{"main", "card-3"}}}
-	if !reflect.DeepEqual(layout["groups"], want) {
-		t.Fatalf("core.layout holds the groups %v, want %v", layout["groups"], want)
+	// core.layout reports the stored tree, whose box holds the group card with its name and leader.
+	if _, has := layout["groups"]; has {
+		t.Fatalf("core.layout reports groups beside its tree: %v", layout["groups"])
 	}
-	if cards := len(layout["state"].(map[string]any)["cards"].([]any)); cards != 4 {
+	box := treeBox(layout["state"].(map[string]any)["root"].(map[string]any), "card-2")
+	if box == nil || !reflect.DeepEqual(box["data"], map[string]any{"name": "그룹 1", "leader": "main"}) {
+		t.Fatalf("core.layout holds the box %v of card-2", box)
+	}
+	members := []string{}
+	for _, card := range treeCards(box["inner"].(map[string]any)) {
+		members = append(members, card["card"].(string))
+	}
+	if !slices.Equal(members, []string{"main", "card-3"}) {
+		t.Fatalf("the box of card-2 holds %v", members)
+	}
+	if cards := len(treeCards(layout["state"].(map[string]any)["root"].(map[string]any))); cards != 4 {
 		t.Fatalf("the grid holds %d cards, not main, card-3 and the two window sidebars", cards)
 	}
 }
@@ -271,8 +283,7 @@ func TestARenameAndALeaderAnswerTheSameAgain(t *testing.T) {
 }
 
 func TestACardMoveOutOfAGroupReplacesTheGroupOfOneCard(t *testing.T) {
-	f := layoutShell(t, gridSpace("spc-aaaaaa", []float64{0, 0.5, 1}, []float64{0, 1},
-		gridCard("main", 0, 1, 0, 1, tab("t1", "notes")), gridCard("side", 1, 2, 0, 1, tab("t2", "plain"))))
+	f := layoutShell(t, treeSpace("spc-aaaaaa", cutNode("x", kidNode(0.5, cardNode("main", tab("t1", "notes"))), kidNode(0.5, cardNode("side", tab("t2", "plain"))))))
 	if _, err := f.apply("core.group.create", `{"card": "main", "side": "bottom", "plugin": "plain"}`); err != nil {
 		t.Fatal(err)
 	}
@@ -355,8 +366,7 @@ func TestACardGetReadsAContentCardWithItsGroupPathAndAGroupCardWithItsMembers(t 
 }
 
 func TestACardGetOfAWindowSidebarIsRefused(t *testing.T) {
-	f := layoutShell(t, gridSpace("spc-aaaaaa", []float64{0, 0.2, 1}, []float64{0, 1},
-		map[string]any{"id": "left", "c0": 0, "c1": 1, "r0": 0, "r1": 1, "fixed": true}, gridCard("main", 1, 2, 0, 1, tab("t1", "notes"))))
+	f := layoutShell(t, treeSpace("spc-aaaaaa", cutNode("x", kidNode(0.2, map[string]any{"card": "left", "fixed": true}), kidNode(0.8, cardNode("main", tab("t1", "notes"))))))
 	if _, err := f.cardGet("left"); err == nil || err.Error() != "card left is a window sidebar" {
 		t.Fatalf("core.card.get of a window sidebar fails with %v", err)
 	}
@@ -427,9 +437,9 @@ func TestACardGetCarriesTheSummaryStatusesOfEachTab(t *testing.T) {
 	}
 }
 
-// With cardSplit even a split balances the grid, so the three columns of one row take equal widths; with exact the split divides only
-// the card that it splits (docs/spec/groups.md#split-setting).
-func TestTheSplitSettingBalancesTheGrid(t *testing.T) {
+// A split of a card of an even row adds the new card as one more equal kid, so each of the k + 1 kids takes 1/(k + 1) and the three
+// columns of one row take equal widths; no setting chooses another division (docs/spec/groups.md#commands).
+func TestASplitOfAnEvenRowGivesEveryCardAnEqualShare(t *testing.T) {
 	f := layoutShell(t, oneCard(tab("t1", "notes")))
 	f.tester.SetSize(1400, 900)
 	f.settle()
@@ -439,18 +449,10 @@ func TestTheSplitSettingBalancesTheGrid(t *testing.T) {
 		}
 	}
 	cards := f.gridCards()
-	if w := cards["card-2"]["w"].(float64); w < 1.5*cards["main"]["w"].(float64) {
-		t.Fatalf("with cardSplit exact card-2 is %v wide and main %v", w, cards["main"]["w"])
-	}
-	f.shellFixture.run("core.settings.set", map[string]any{"patch": map[string]any{"cardSplit": "even"}})
-	if _, err := f.apply("core.card.split", `{"card": "main", "side": "bottom", "plugin": "plain"}`); err != nil {
-		t.Fatal(err)
-	}
-	cards = f.gridCards()
 	width := cards["main"]["w"].(float64)
 	for _, id := range []string{"card-2", "card-3"} {
-		if w := cards[id]["w"].(float64); w < width-1 || w > width+1 {
-			t.Fatalf("with cardSplit even card %s is %v wide and main %v", id, w, width)
+		if w := cards[id]["w"].(float64); math.Abs(w-width) > 1e-6 {
+			t.Fatalf("card %s is %v wide and main %v", id, w, width)
 		}
 	}
 }
@@ -458,19 +460,20 @@ func TestTheSplitSettingBalancesTheGrid(t *testing.T) {
 // The close of a nested group card at the left of its group gives its cells to the card of the same group beside it, although the
 // fill order of the layout library tries the card of another group above it first (docs/spec/groups.md#closing).
 func TestTheCloseOfANestedGroupGivesItsCellsToItsGroup(t *testing.T) {
-	space := gridSpace("spc-aaaaaa", []float64{0, 0.11567838541666667, 0.23510416666666664, 0.5, 1}, []float64{0, 0.33127317676143386, 0.6687268232385661, 1},
-		gridCard("terminal", 0, 2, 0, 1, tab("t1", "notes")), gridCard("browser", 0, 1, 1, 2, tab("t2", "notes")),
-		gridCard("card-8", 3, 4, 2, 3, tab("t3", "notes")), gridCard("card-7", 3, 4, 1, 2, tab("t4", "notes")),
-		gridCard("card-3", 0, 3, 2, 3, tab("t5", "notes")), gridCard("card-5", 3, 4, 0, 1, tab("t6", "notes")),
-		gridCard("card-10", 2, 3, 0, 1, tab("t7", "notes")), gridCard("card-12", 1, 2, 1, 2, tab("t8", "notes")),
-		gridCard("card-13", 2, 3, 1, 2, tab("t9", "notes")))
+	// The stored tree holds the two window sidebars beside the content, as the workbench stores it, so the shell docks none.
+	space := treeSpace("spc-aaaaaa", cutNode("x", kidNode(1./3, map[string]any{"card": "left", "width": 190, "fixed": true}), kidNode(1./3, cutNode("y",
+		kidNode(0.33127317676143386, cutNode("x",
+			kidNode(0.5, boxNode("card-9", "그룹 1", "terminal", cutNode("x", kidNode(0.4702083333333333, cardNode("terminal", tab("t1", "notes"))), kidNode(0.5297916666666667, cardNode("card-10", tab("t7", "notes")))))),
+			kidNode(0.5, cardNode("card-5", tab("t6", "notes"))))),
+		kidNode(0.6687268232385661, boxNode("card-4", "그룹 2", "card-11", cutNode("x",
+			kidNode(0.5, cutNode("y",
+				kidNode(0.5046210720887246, cutNode("x",
+					kidNode(0.4702083333333333, boxNode("card-11", "그룹 3", "browser", cutNode("x", kidNode(0.49203035002215334, cardNode("browser", tab("t2", "notes"))), kidNode(0.5079696499778467, cardNode("card-12", tab("t8", "notes")))))),
+					kidNode(0.5297916666666667, cardNode("card-13", tab("t9", "notes"))))),
+				kidNode(0.4953789279112754, cardNode("card-3", tab("t5", "notes"))))),
+			kidNode(0.5, cutNode("y", kidNode(0.5046210720887246, cardNode("card-7", tab("t4", "notes"))), kidNode(0.4953789279112754, cardNode("card-8", tab("t3", "notes")))))))))),
+		kidNode(1./3, map[string]any{"card": "right", "width": 210, "fixed": true})))
 	stored := space["layout"].(map[string]any)
-	stored["groups"] = []any{
-		map[string]any{"card": "card-9", "name": "그룹 1", "leader": "terminal", "members": []any{"terminal", "card-10"}},
-		map[string]any{"card": "card-4", "name": "그룹 2", "leader": "card-11", "members": []any{
-			map[string]any{"card": "card-11", "name": "그룹 3", "leader": "browser", "members": []any{"browser", "card-12"}},
-			"card-13", "card-7", "card-3", "card-8"}},
-	}
 	stored["leader"], stored["lastCard"] = "card-9", 13
 	f := layoutShell(t, space)
 	f.tester.SetSize(1908, 900)
@@ -584,7 +587,7 @@ func TestEachPressOfTheGroupMenuGroupsTheCard(t *testing.T) {
 		if _, err := f.apply("core.picker.pick", `{"index": `+strconv.Itoa(index)+`}`); err != nil {
 			t.Fatal(err)
 		}
-		if groups := strings.Count(f.status("core.layout"), `"name":"그룹 `); groups != press {
+		if groups := strings.Count(f.status("core.layout"), `"box":`); groups != press {
 			t.Fatalf("after press %d the layout holds %d group cards: %s", press, groups, f.status("core.layout"))
 		}
 	}
@@ -617,18 +620,15 @@ func TestOpenTowardASideFromAGroupMemberStaysInsideTheGroup(t *testing.T) {
 	if strings.Contains(outside, `"`+result.Card+`"`) {
 		t.Fatalf("core.layout.open from %s answered %s, the card outside the group %s", created.Card, opened, outside)
 	}
-	for _, group := range f.read("core.layout")["groups"].([]any) {
-		entry := group.(map[string]any)
-		if entry["card"] == created.Group && !slices.Contains(entry["members"].([]any), any(result.Card)) {
-			t.Fatalf("the new card %s is not a member of %s: %v", result.Card, created.Group, entry["members"])
-		}
+	box := treeBox(f.read("core.layout")["state"].(map[string]any)["root"].(map[string]any), created.Group)
+	if box == nil || !slices.ContainsFunc(treeCards(box["inner"].(map[string]any)), func(card map[string]any) bool { return card["card"] == result.Card }) {
+		t.Fatalf("the new card %s is not a member of %s: %v", result.Card, created.Group, box)
 	}
 }
 
 // contract: layout.move.focuses-the-moved-card
 func TestACardMoveFocusesTheMovedCardAndAMoveThatChangesNothingKeepsTheFocus(t *testing.T) {
-	f := layoutShell(t, gridSpace("spc-aaaaaa", []float64{0, 0.5, 1}, []float64{0, 1},
-		gridCard("main", 0, 1, 0, 1, tab("t1", "notes")), gridCard("side", 1, 2, 0, 1, tab("t2", "plain"))))
+	f := layoutShell(t, treeSpace("spc-aaaaaa", cutNode("x", kidNode(0.5, cardNode("main", tab("t1", "notes"))), kidNode(0.5, cardNode("side", tab("t2", "plain"))))))
 	if _, err := f.apply("core.group.create", `{"card": "main", "side": "bottom", "plugin": "plain"}`); err != nil {
 		t.Fatal(err)
 	}
@@ -668,10 +668,10 @@ func TestACardMoveFocusesTheMovedCardAndAMoveThatChangesNothingKeepsTheFocus(t *
 // disabled button is refused with the text of the page instead of opening a menu whose pick fails (docs/spec/groups.md#headers).
 func TestTheMenuOfADisabledGroupSplitButtonIsRefused(t *testing.T) {
 	f := groupedShell(t)
-	f.tester.SetSize(1200, 380)
+	f.tester.SetSize(1200, 330)
 	f.settle()
 	if _, err := f.apply("core.card.split", `{"card": "card-2", "side": "bottom", "plugin": "plain"}`); err == nil {
-		t.Fatal("the split of the group card card-2 toward bottom succeeded in a window of 380 points")
+		t.Fatal("the split of the group card card-2 toward bottom succeeded in a window of 330 points")
 	}
 	if _, err := f.apply("core.card.menu", `{"card": "card-2", "menu": "split-y"}`); err == nil || err.Error() != "card card-2 cannot split-y" {
 		t.Fatalf("core.card.menu of the disabled split button of card-2 answered %v", err)
@@ -686,10 +686,7 @@ func TestTheMenuOfADisabledGroupSplitButtonIsRefused(t *testing.T) {
 // refusal of the layout, and the request is refused only where the layout takes the group (docs/spec/groups.md#commands).
 // contract: group.create.request-after-the-layout
 func TestAGroupCreateRefusesTheDrawnMinimumBeforeTheRequestAndThePlugin(t *testing.T) {
-	space := gridSpace("spc-aaaaaa", []float64{0, 1}, []float64{0, 0.9, 1},
-		gridCard("card-1", 0, 1, 0, 1, tab("t1", "notes")), gridCard("card-2", 0, 1, 1, 2, tab("t2", "notes")))
-	space["layout"].(map[string]any)["leader"], space["layout"].(map[string]any)["lastCard"] = "card-1", 2
-	f := layoutShell(t, space)
+	f := layoutShell(t, treeSpace("spc-aaaaaa", cutNode("y", kidNode(0.9, cardNode("card-1", tab("t1", "notes"))), kidNode(0.1, cardNode("card-2", tab("t2", "notes"))))))
 	f.tester.SetSize(1400, 1300)
 	f.settle()
 	_, refused := f.apply("core.group.create", `{"card": "card-2", "side": "bottom", "plugin": "plain"}`)

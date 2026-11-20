@@ -1,4 +1,5 @@
 // The project preview of the library. It draws the stored layout of the active space as a card grid.
+import { Soksak } from "soksak";
 import { hasPlugin, isPlace, plugin } from "./registry.js";
 import { checkStoredLayout } from "./stored-layout.js";
 import { showError } from "./shown-errors.js";
@@ -28,8 +29,10 @@ export function preview(project) {
     showError(reason, `library preview ${project.id}`, text);
     return el;
   }
-  const {cards,xs,ys}=layout.state;
-  // The split position is kept as a grid index, and the display ratio is decided in the preview.
+  // The layout library places the cards of the stored tree between its lines; the preview keeps the order of the lines and decides the
+  // display ratio itself.
+  const drawn=new Soksak(layout.state);
+  const cards=drawn.cards, xs=drawn.lines('x'), ys=drawn.lines('y');
   el.style.gridTemplateColumns=xs.slice(1).map((_,column)=>
     cards.some(c=>!aside(c.id)&&c.c0<=column&&column<c.c1)?'minmax(0,1fr)':'minmax(0,.22fr)').join(' ');
   el.style.gridTemplateRows=`repeat(${ys.length-1},minmax(0,1fr))`;

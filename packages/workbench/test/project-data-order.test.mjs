@@ -8,7 +8,7 @@ import { JSDOM } from "jsdom";
 import { host, selectPageWire } from "@soksak/runtime";
 import { drained } from "./support/drained.mjs";
 
-const layout = { state: { cards: [] } };
+const layout = { state: { root: { card: "main" } } };
 const projectsSnapshot = [
   { id: "prj-alpha", root: "/work/alpha", identity: "alpha", title: "alpha", color: "#fff", named: 1,
     activeSpaceId: "spc-alpha", spaces: [{ id: "spc-alpha", title: "SPACE1", layout }],

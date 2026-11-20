@@ -50,11 +50,9 @@ test(behaviorName, { timeout: 5000 }, async (t) => {
   const { installEnvironment } = await import("../environment.js");
   assert.deepEqual(installEnvironment({
     runtime: "runtime",
-    workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [
-      { id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [
+    workspace: { focus: "main", grid: { root: { card: "main", tabs: [
         { plugin: pluginId, title: "document" }, { plugin: pluginId, title: "other" },
-      ] },
-    ] } },
+      ] } } },
     sidebars: { sets: [], links: [] },
   }, { plugins: [{ id: pluginId, package: "@fixture/close-modified", version: "0.0.1", manifest: {
     id: pluginId, name: "Fixture", description: "Fixture surface.", mark: "f", icon: "<path/>",

@@ -164,17 +164,12 @@ func TestGridCases(t *testing.T) {
 			Options json.RawMessage  `json:"options"`
 			State   *json.RawMessage `json:"state"`
 			Throws  *string          `json:"throws"`
-			Pending string           `json:"pending"`
 			Steps   []step           `json:"steps"`
 		} `json:"cases"`
 	}
 	caseFile(t, "grid.json", &file)
 	for _, kase := range file.Cases {
 		t.Run(kase.Name, func(t *testing.T) {
-			// A pending case waits for the decision that it names and does not run.
-			if kase.Pending != "" {
-				t.Skip(kase.Pending)
-			}
 			options := layout.DefaultOptions()
 			if kase.Options != nil {
 				decoder := json.NewDecoder(bytes.NewReader(kase.Options))
@@ -223,16 +218,14 @@ func gridCall(t *testing.T, g *layout.Grid, s step) (any, bool, error) {
 			return g.Gap(), true, nil
 		case "minSize":
 			return g.MinSize(), true, nil
-		case "fillOrder":
-			return g.FillOrder(), true, nil
-		case "fillSides":
-			return g.FillSides(), true, nil
 		case "grabSize":
 			return g.GrabSize(), true, nil
 		case "snapDistance":
 			return g.SnapDistance(), true, nil
 		case "snap":
 			return g.Snap(), true, nil
+		case "frames":
+			return g.Frames(), true, nil
 		case "width":
 			return g.Width(), true, nil
 		case "height":
@@ -247,11 +240,15 @@ func gridCall(t *testing.T, g *layout.Grid, s step) (any, bool, error) {
 			arg(t, s, 1, &px)
 			map[string]func(float64){"gap": g.SetGap, "minSize": g.SetMinSize, "grabSize": g.SetGrabSize, "snapDistance": g.SetSnapDistance}[name](px)
 			return nil, false, nil
-		case "fillOrder", "snap":
+		case "snap":
 			var value string
 			arg(t, s, 1, &value)
-			map[string]func(string){"fillOrder": g.SetFillOrder, "snap": g.SetSnap}[name](value)
+			g.SetSnap(value)
 			return nil, false, nil
+		case "frames":
+			var value string
+			arg(t, s, 1, &value)
+			return nil, false, g.SetFrames(value)
 		}
 	case "resize":
 		arg(t, s, 0, &x)
@@ -278,15 +275,6 @@ func gridCall(t *testing.T, g *layout.Grid, s step) (any, bool, error) {
 		arg(t, s, 0, &id)
 		arg(t, s, 1, &fixed)
 		return g.SetFixed(id, fixed), true, nil
-	case "shareLines":
-		var extra []float64
-		arg(t, s, 0, &axis)
-		arg(t, s, 1, &extra)
-		return nil, false, g.ShareLines(layout.Axis(axis), extra)
-	case "setFrames":
-		var frames map[string]layout.Frames
-		arg(t, s, 0, &frames)
-		return nil, false, g.SetFrames(frames)
 	case "setSize":
 		var size *float64
 		arg(t, s, 0, &id)
@@ -316,14 +304,6 @@ func gridCall(t *testing.T, g *layout.Grid, s step) (any, bool, error) {
 		arg(t, s, 0, &axis)
 		arg(t, s, 1, &line)
 		return g.CardsCrossing(axis, line), true, nil
-	case "isVirtual":
-		arg(t, s, 0, &axis)
-		arg(t, s, 1, &line)
-		return g.IsVirtual(axis, line), true, nil
-	case "virtualCount":
-		return g.VirtualCount(), true, nil
-	case "isSlicing":
-		return g.IsSlicing(), true, nil
 	case "rules":
 		return g.Rules(), true, nil
 	case "dividers":
@@ -352,23 +332,48 @@ func gridCall(t *testing.T, g *layout.Grid, s step) (any, bool, error) {
 		arg(t, s, 1, &line)
 		return g.CenterBoundary(axis, line), true, nil
 	case "even":
-		var boxes []layout.Member
-		arg(t, s, 0, &boxes)
-		return nil, false, g.Even(boxes)
-	case "balance":
-		balanced, err := g.Balance()
-		return balanced, true, err
+		return nil, false, g.Even()
+	case "setHeads":
+		var heads map[string]float64
+		arg(t, s, 0, &heads)
+		return nil, false, g.SetHeads(heads)
+	case "insert":
+		var (
+			to   layout.Target
+			side layout.Side
+			node layout.Node
+		)
+		arg(t, s, 0, &to)
+		arg(t, s, 1, &side)
+		arg(t, s, 2, &node)
+		born, err := g.Insert(to, side, &node)
+		return born, true, err
+	case "group":
+		var (
+			side layout.Side
+			node layout.Node
+			init layout.GroupInit
+		)
+		arg(t, s, 0, &id)
+		arg(t, s, 1, &side)
+		arg(t, s, 2, &node)
+		arg(t, s, 3, &init)
+		return nil, false, g.Group(id, side, &node, init)
+	case "unwrap":
+		arg(t, s, 0, &id)
+		return nil, false, g.Unwrap(id)
+	case "headsAbove":
+		arg(t, s, 0, &id)
+		return g.HeadsAbove(id), true, nil
+	case "withdraw":
+		arg(t, s, 0, &id)
+		left, err := g.Withdraw(id)
+		return left, true, err
 	case "arrange":
 		var mode string
 		arg(t, s, 0, &mode)
 		arranged, err := g.Arrange(mode)
 		return arranged, true, err
-	case "mergeCoincident":
-		arg(t, s, 0, &axis)
-		arg(t, s, 1, &line)
-		return g.MergeCoincident(axis, line), true, nil
-	case "tidy":
-		return g.Tidy(), true, nil
 	case "canSplit":
 		arg(t, s, 0, &id)
 		arg(t, s, 1, &axis)
@@ -382,40 +387,18 @@ func gridCall(t *testing.T, g *layout.Grid, s step) (any, bool, error) {
 		if s.Call == "splitToward" {
 			split = g.SplitToward
 		}
-		if born, ok := split(id, side, init); ok {
-			return born, true, nil
-		}
-		return nil, true, nil
-	case "fill":
-		arg(t, s, 0, &id)
-		sides := g.FillSides()
-		arg(t, s, 1, &sides)
-		fill, err := g.Fill(id, sides)
-		if fill == nil {
-			return nil, true, err
-		}
-		return fill, true, err
-	case "moveLinePast":
-		var px float64
-		arg(t, s, 0, &axis)
-		arg(t, s, 1, &line)
-		arg(t, s, 2, &px)
-		g.MoveLinePast(axis, line, px)
-		return nil, false, nil
+		born, err := split(id, side, init)
+		return born, true, err
 	case "canClose":
 		arg(t, s, 0, &id)
 		return g.CanClose(id), true, nil
 	case "close":
 		arg(t, s, 0, &id)
-		sides := g.FillSides()
-		arg(t, s, 1, &sides)
-		closed, err := g.Close(id, sides)
-		return closed, true, err
+		return g.Close(id), true, nil
 	case "canInsertAt":
 		arg(t, s, 0, &axis)
 		arg(t, s, 1, &line)
-		arg(t, s, 2, &id)
-		return g.CanInsertAt(axis, line, id), true, nil
+		return g.CanInsertAt(axis, line), true, nil
 	case "insertAt":
 		var init layout.InsertInit
 		arg(t, s, 0, &axis)
@@ -432,8 +415,7 @@ func gridCall(t *testing.T, g *layout.Grid, s step) (any, bool, error) {
 		return g.MoveTo(id, axis, line), true, nil
 	case "standings":
 		arg(t, s, 0, &axis)
-		arg(t, s, 1, &id)
-		return g.Standings(axis, id), true, nil
+		return g.Standings(axis), true, nil
 	case "move", "canMove":
 		arg(t, s, 0, &id)
 		arg(t, s, 1, &target)
@@ -441,10 +423,7 @@ func gridCall(t *testing.T, g *layout.Grid, s step) (any, bool, error) {
 		if s.Call == "canMove" {
 			return g.CanMove(id, target, side), true, nil
 		}
-		sides := g.FillSides()
-		arg(t, s, 3, &sides)
-		moved, err := g.Move(id, target, side, sides)
-		return moved, true, err
+		return g.Move(id, target, side), true, nil
 	}
 	t.Fatalf("the grid has no call %s %s", s.Call, name)
 	return nil, false, nil
@@ -538,9 +517,11 @@ func TestWindowSidebarCases(t *testing.T) {
 	caseFile(t, "window-sidebars.json", &file)
 	for _, kase := range file.Cases {
 		t.Run(kase.Name, func(t *testing.T) {
-			state := kase.State
-			grid, err := layout.New(&state, file.Options)
+			grid, err := layout.New(nil, file.Options)
 			if err != nil {
+				t.Fatal(err)
+			}
+			if err := grid.Replace(kase.State); err != nil {
 				t.Fatal(err)
 			}
 			changed, err := layout.ArrangeWindowSidebars(grid, kase.Order, kase.Sides, kase.Records, kase.Initial, func(side string) bool {

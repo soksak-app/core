@@ -139,7 +139,8 @@ func TestCoreCardSplitRefuses(t *testing.T) {
 	for range 4 {
 		card := f.tabbedCards()[len(f.tabbedCards())-1]
 		if _, err := f.answer("core.card.split", map[string]string{"card": card, "side": "right", "plugin": "textprobe"}); err != nil {
-			// The refusal names the card that a half would draw below the minimum and the size that it would get.
+			// The refusal names the card that a half would draw below the minimum and the size that it would get; the window sidebars keep
+			// their drawn widths (packages/soksak/docs/layout.md#cuts).
 			if want := regexp.MustCompile(`^card ` + regexp.QuoteMeta(card) + ` cannot split toward right: card \S+ would be \d+x\d+, below its minimum 96x96$`); !want.MatchString(err.Error()) {
 				t.Fatalf("the split failed with %v, want %s", err, want)
 			}
@@ -156,8 +157,7 @@ var thinRefusal = regexp.MustCompile(`^card thin cannot split toward right: card
 // without the refused split, and the stored project does not change.
 func TestARefusedSplitLeavesTheTabNumberUnchanged(t *testing.T) {
 	// The card thin is narrower than two cards of the minimum size and the gap, so it cannot split across.
-	f := layoutShell(t, gridSpace("spc-aaaaaa", []float64{0, 0.44, 0.56, 1}, []float64{0, 1}, gridCard("main", 0, 1, 0, 1, tab("tab-bbbbbb", "notes")),
-		gridCard("thin", 1, 2, 0, 1, tab("tab-aaaaaa", "notes")), gridCard("rest", 2, 3, 0, 1, tab("tab-cccccc", "notes"))))
+	f := layoutShell(t, treeSpace("spc-aaaaaa", cutNode("x", kidNode(0.44, cardNode("main", tab("tab-bbbbbb", "notes"))), kidNode(0.12, cardNode("thin", tab("tab-aaaaaa", "notes"))), kidNode(0.44, cardNode("rest", tab("tab-cccccc", "notes"))))))
 	stored := f.stored()
 	if _, err := f.apply("core.card.split", `{"card":"thin","side":"right","plugin":"notes"}`); err == nil || !thinRefusal.MatchString(err.Error()) {
 		t.Fatalf("the split of thin failed with %v", err)
@@ -347,9 +347,10 @@ func TestASplitEndsTheHoldOfADivider(t *testing.T) {
 	}
 }
 
-// A line that no card uses any more drops when a drag passes it, which renumbers the held line and the lines above it, and the same
-// press goes on holding the boundary to its end. The element of the press keeps its key, so no other divider repeats it.
-func TestDividerDragGoesOnPastALineThatItDrops(t *testing.T) {
+// A drag beside a card that closed holds its boundary to its end: the tree holds no line that no card uses, so the lines after the close
+// are the lines of the cards, the card follows each move of the press, and the element of the press keeps its key, so no other divider
+// repeats it.
+func TestADividerDragAfterACloseHoldsItsBoundaryToItsEnd(t *testing.T) {
 	f, left, middle := splitShell(t)
 	made, err := f.answer("core.card.split", map[string]string{"card": middle, "side": "right", "plugin": "textprobe"})
 	if err != nil {
@@ -381,9 +382,6 @@ func TestDividerDragGoesOnPastALineThatItDrops(t *testing.T) {
 	f.settle()
 	if got := dividerItems(f); len(got) != len(lines) {
 		t.Fatalf("the dividers were %v and are %v", lines, got)
-	}
-	if slices.Equal(dividerItems(f), lines) {
-		t.Fatalf("no line dropped: the dividers stay %v", lines)
 	}
 	f.audit()
 }
@@ -512,9 +510,8 @@ func narrowCard(t *testing.T, tabs int, title string) *shellFixture {
 	}
 	project := storedProject(list...)
 	state := project["spaces"].([]map[string]any)[0]["layout"].(map[string]any)["state"].(map[string]any)
-	state["xs"] = []float64{0, 0.5, 1}
-	state["cards"] = append(state["cards"].([]map[string]any), map[string]any{"id": "other", "c0": 1, "c1": 2, "r0": 0, "r1": 1, "data": map[string]any{
-		"tabs": []map[string]any{{"id": "tab-bbbbbb", "plugin": "notes", "title": "b"}}, "activeId": "tab-bbbbbb"}})
+	state["root"] = cutNode("x", kidNode(0.5, state["root"].(map[string]any)),
+		kidNode(0.5, cardNode("other", map[string]any{"id": "tab-bbbbbb", "plugin": "notes", "title": "b"})))
 	// The window shows no sidebars, so the width of the card is half of the plane and its head holds its tabs.
 	f := newShell(t, &storedHost{common: map[string]any{"left": false, "right": false}, projects: []map[string]any{project}})
 	if _, err := f.answer("core.project.activate", map[string]string{"id": "prj-a"}); err != nil {

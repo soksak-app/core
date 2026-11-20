@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { Soksak } from "../dist/index.js";
-import { assertTiling, fuzz, H, make, three, W } from "./helpers.mjs";
+import { assertTiling, fuzz, H, three, W } from "./helpers.mjs";
 
 test("dragging a line moves every card referencing it", () => {
   const grid = three();
@@ -24,42 +24,6 @@ test("a drag stops where a card would fall under minSize", () => {
   assertTiling(grid, "pushed to the end");
 });
 
-/** A line no card reads, made the way one is really made: split, then close. */
-function withVirtualLine() {
-  // Two rows. Splitting the top row and closing the new card leaves the line
-  // for the bottom row, which still spans it. In a single-row plane the close
-  // restores the previous spans and there is no line left over.
-  const grid = new Soksak(
-    { xs: [0, 0.5, 1], ys: [0, 0.5, 1], cards: [
-      { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
-      { id: "b", c0: 1, c1: 2, r0: 0, r1: 1 },
-      { id: "under", c0: 0, c1: 2, r0: 1, r1: 2 },
-    ] },
-    { width: W, height: H },
-  );
-  grid.split("b", "x");
-  grid.close(grid.cards.at(-1).id);
-  const line = [1, 2].find((k) => grid.isVirtual("x", k));
-  assert.ok(line !== undefined, "the closed card left its line");
-  return { grid, virtual: line };
-}
-
-test("an unreferenced line does not limit a drag", () => {
-  const { grid, virtual } = withVirtualLine();
-  const boundary = virtual - 1;
-  const [, max] = grid.boundaryRange("x", boundary);
-  assert.ok(
-    max > grid.boundaryPos("x", virtual),
-    "the range reaches past it to the nearest line a card actually reads",
-  );
-
-  const lines = grid.lines("x").length;
-  grid.moveBoundary("x", boundary, W);
-  assert.equal(grid.lines("x").length, lines - 1, "and passing it removes it");
-  assert.ok(grid.lines("x").every((v, i, all) => i === 0 || v >= all[i - 1]), "the lines stay in order");
-  assertTiling(grid, "after passing a virtual line");
-});
-
 test("a drag stops at a line a card references", () => {
   const grid = three({ snap: "off" });
   const boundary = 1;
@@ -69,45 +33,6 @@ test("a drag stops at a line a card references", () => {
   grid.moveBoundary("x", boundary, W);
   assert.ok(grid.boundaryPos("x", boundary) <= next + 0.01);
   assertTiling(grid, "stopped at a real boundary");
-});
-
-test("coincident lines merge and no card loses its size", () => {
-  // snap brings the boundary exactly onto its neighbour; merge folds the two
-  const { grid, virtual } = withVirtualLine();
-  const boundary = virtual - 1;
-  const target = grid.boundaryPos("x", virtual);
-  grid.moveBoundary("x", boundary, target - 3);   // inside snapDistance
-  assert.equal(grid.boundaryPos("x", boundary), target, "snapped exactly onto it");
-
-  const cards = grid.cards.length;
-  const lines = grid.lines("x").length;
-  assert.equal(grid.mergeCoincident("x", boundary), true);
-  assert.equal(grid.lines("x").length, lines - 1);
-  assert.equal(grid.cards.length, cards, "no card was lost");
-  assertTiling(grid, "after merging two lines");
-});
-
-test("merge is refused when snap is off", () => {
-  const { grid, virtual } = withVirtualLine();
-  const boundary = virtual - 1;
-  // The pair must coincide before snap decides anything. A drag with snap off
-  // leaves the boundary short of its neighbour, and the refusal is then the one
-  // for a neighbour that is not there.
-  grid.moveBoundary("x", boundary, grid.boundaryPos("x", virtual) - 3);
-  assert.equal(
-    grid.boundaryPos("x", boundary), grid.boundaryPos("x", virtual),
-    "snapped onto the line it nearly met",
-  );
-
-  grid.snap = "off";
-  const lines = grid.lines("x").length;
-  assert.equal(grid.mergeCoincident("x", boundary), false);
-  assert.equal(grid.lines("x").length, lines);
-
-  // The same pair folds once snapping is back on, so the refusal above is snap's.
-  grid.snap = "merge";
-  assert.equal(grid.mergeCoincident("x", boundary), true);
-  assert.equal(grid.lines("x").length, lines - 1);
 });
 
 test("centring makes the two cards beside a line the same size", () => {
@@ -123,49 +48,6 @@ test("centring makes the two cards beside a line the same size", () => {
   const bottom = grid.rect("lower");
   assert.ok(Math.abs(top.h - bottom.h) < 0.01, `${top.h} vs ${bottom.h}`);
   assertTiling(grid, "after centring");
-});
-
-test("centring past a line no card reads moves that boundary and no other", () => {
-  const grid = make({ gap: 24 });
-  grid.split("card", "x");
-  grid.split("card", "y");
-  // A line no card reads, between the boundary to centre and the one before it.
-  const spare = grid.split("card", "x");
-  grid.close(spare);
-  grid.split("card-1", "x");
-  grid.moveBoundary("x", 2, 0.66 * W, false);
-  grid.moveBoundary("x", 1, 0.58 * W, false);
-  assert.equal(grid.isVirtual("x", 1), true, "the line the centring passes is read by no card");
-  const far = grid.boundaryPos("x", 3);
-
-  grid.centerBoundary("x", 2);
-
-  const a = grid.rect("card");
-  const b = grid.rect("card-1");
-  assert.ok(Math.abs(a.w - b.w) < 0.01, `the two cards beside it come out ${a.w} and ${b.w}`);
-  assert.equal(grid.lines("x").length, 4, "the line the centring passed is gone");
-  assert.ok(
-    Math.abs(grid.boundaryPos("x", 2) - far) < 0.01,
-    `the boundary above it stays at ${far}, not ${grid.boundaryPos("x", 2)}`,
-  );
-});
-
-test("an unreferenced line survives a close and is removed by tidy", () => {
-  const grid = three();
-  grid.split("upper", "y");
-  grid.split("upper", "y");
-  assert.equal(grid.virtualCount(), 0);
-  const lines = grid.lines("y").length;
-
-  const spare = grid.cards.find((p) => p.id.startsWith("card-"));
-  grid.close(spare.id);
-  assert.equal(grid.lines("y").length, lines, "the line stays as a snap target");
-  assert.equal(grid.virtualCount(), 1);
-
-  assert.equal(grid.tidy(), 1);
-  assert.equal(grid.lines("y").length, lines - 1);
-  assert.equal(grid.virtualCount(), 0);
-  assertTiling(grid, "after tidy");
 });
 
 test("dividers cover referenced lines; rules cover every line", () => {
@@ -203,20 +85,11 @@ test("dividers cover referenced lines; rules cover every line", () => {
 
 test("a boundary range is never inverted, so the lines stay in order", () => {
   // Two cards can ask for more room than the plane holds. The drag then has no
-  // position that satisfies both, but it must not put a line past its
-  // neighbour: that draws a card wider than one spanning more slots than it.
+  // position that satisfies both. The seam of the upper row moves within its own
+  // row: the seam of the lower row is a line of another cut and no limit.
   const railed = () =>
     Soksak.from(
-      {
-        xs: [0, 0.12, 0.23, 1],
-        ys: [0, 0.5, 1],
-        cards: [
-          { id: "A", c0: 0, c1: 1, r0: 0, r1: 1 },
-          { id: "B", c0: 1, c1: 3, r0: 0, r1: 1 },
-          { id: "C", c0: 0, c1: 2, r0: 1, r1: 2 },
-          { id: "D", c0: 2, c1: 3, r0: 1, r1: 2 },
-        ],
-      },
+      { root: { cut: "y", kids: [{ share: 0.5, node: { cut: "x", kids: [{ share: 0.12, node: { card: "A" } }, { share: 0.88, node: { card: "B" } }] } }, { share: 0.5, node: { cut: "x", kids: [{ share: 0.23, node: { card: "C" } }, { share: 0.77, node: { card: "D" } }] } }] } },
       { width: 454, height: 400, gap: 24, minSize: 200 },
     );
 
@@ -230,7 +103,7 @@ test("a boundary range is never inverted, so the lines stay in order", () => {
     for (let k = 1; k < xs.length; k++) {
       assert.ok(xs[k] >= xs[k - 1], `lines out of order: ${xs.join(", ")}`);
     }
-    assert.ok(grid.rect("C").w >= grid.rect("A").w - 1e-9, "C spans more slots than A");
+    assert.ok(Math.abs(grid.rect("C").w - railed().rect("C").w) < 1e-9, "the lower row keeps its seam");
   }
 });
 
@@ -274,11 +147,7 @@ test("a rule covers exactly where cards break on the line", () => {
   // boundary. The solid stretch must be the overlap of the two sides, not the
   // union: the wrong end would draw a rule where nothing meets.
   const grid = new Soksak(
-    { xs: [0, 0.5, 1], ys: [0, 0.5, 1], cards: [
-      { id: "topLeft", c0: 0, c1: 1, r0: 0, r1: 1 },
-      { id: "topRight", c0: 1, c1: 2, r0: 0, r1: 1 },
-      { id: "under", c0: 0, c1: 2, r0: 1, r1: 2 },
-    ] },
+    { root: { cut: "y", kids: [{ share: 0.5, node: { cut: "x", kids: [{ share: 0.5, node: { card: "topLeft" } }, { share: 0.5, node: { card: "topRight" } }] } }, { share: 0.5, node: { card: "under" } }] } },
     { width: 1200, height: 600, gap: 24 },
   );
   const solid = grid.rules().filter((r) => !r.virtual && r.axis === "x");
@@ -324,16 +193,7 @@ test("a card reaching over coincident lines keeps a full gap either side", () =>
   // it is drawn with none — but `held` and `far` still stand a gap away from
   // it, not the half gap the run charges when it is read as a single slot.
   const grid = new Soksak(
-    {
-      xs: [0, 0.3, 0.45, 0.5, 0.5, 1],
-      ys: [0, 1],
-      cards: [
-        { id: "share", c0: 0, c1: 1, r0: 0, r1: 1 },
-        { id: "held", c0: 1, c1: 2, r0: 0, r1: 1, width: 100 },
-        { id: "over", c0: 2, c1: 4, r0: 0, r1: 1 },
-        { id: "far", c0: 4, c1: 5, r0: 0, r1: 1, width: 100 },
-      ],
-    },
+    { root: { cut: "x", kids: [{ share: 0.3, node: { card: "share" } }, { share: 0.15000000000000002, node: { card: "held", width: 100 } }, { share: 0.04999999999999999, node: { card: "over" } }, { share: 0.5, node: { card: "far", width: 100 } }] } },
     { width: 400, height: 300, gap: 24, minSize: 96 },
   );
   const held = grid.rect("held");
@@ -342,54 +202,6 @@ test("a card reaching over coincident lines keeps a full gap either side", () =>
   assert.ok(over.w >= 0, `over is inside out at ${over.w}`);
   assert.ok(Math.abs(over.x - (held.x + held.w) - grid.gap) < 0.01, `${over.x - (held.x + held.w)} before it`);
   assert.ok(Math.abs(far.x - (over.x + over.w) - grid.gap) < 0.01, `${far.x - (over.x + over.w)} after it`);
-});
-
-test("a card between coincident lines is drawn with nothing where they stand", () => {
-  // `flat` has both its lines at one place. It has no width to draw and no
-  // corridor of its own; it sits at that place, inside the one gap that keeps
-  // its neighbours apart.
-  const grid = new Soksak(
-    {
-      xs: [0, 0.4, 0.7, 0.7, 1],
-      ys: [0, 1],
-      cards: [
-        { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
-        { id: "b", c0: 1, c1: 2, r0: 0, r1: 1 },
-        { id: "flat", c0: 2, c1: 3, r0: 0, r1: 1 },
-        { id: "c", c0: 3, c1: 4, r0: 0, r1: 1 },
-      ],
-    },
-    { width: 1600, height: 300, gap: 24, minSize: 96 },
-  );
-  const b = grid.rect("b");
-  const flat = grid.rect("flat");
-  const c = grid.rect("c");
-  assert.equal(flat.w, 0, "it has nothing to draw");
-  assert.equal(flat.x, grid.boundaryPos("x", 2), "and stands where its lines do");
-  assert.ok(Math.abs(c.x - (b.x + b.w) - grid.gap) < 0.01, `its neighbours are ${c.x - (b.x + b.w)} apart`);
-});
-
-test("a px size on a slot with no span is still drawn at that size", () => {
-  // The slot takes no share, so its width is the size the card declares and
-  // the corridor on top. Reading the slot as empty drew the card a gap short.
-  const grid = new Soksak(
-    {
-      xs: [0, 0.5, 0.5, 1],
-      ys: [0, 1],
-      cards: [
-        { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
-        { id: "z", c0: 1, c1: 2, r0: 0, r1: 1, width: 100 },
-        { id: "b", c0: 2, c1: 3, r0: 0, r1: 1 },
-      ],
-    },
-    { width: 1600, height: 400, gap: 24, minSize: 96 },
-  );
-  const a = grid.rect("a");
-  const z = grid.rect("z");
-  const b = grid.rect("b");
-  assert.equal(z.w, 100, "the size it was given");
-  assert.ok(Math.abs(z.x - (a.x + a.w) - grid.gap) < 0.01);
-  assert.ok(Math.abs(b.x - (z.x + z.w) - grid.gap) < 0.01);
 });
 
 test("insertAt refuses a size the plane cannot hold", () => {
@@ -402,76 +214,6 @@ test("insertAt refuses a size the plane cannot hold", () => {
   assert.equal(grid.lines("x").length, lines, "and nothing was written");
   assert.ok(grid.lines("x").every((v) => v >= 0 && v <= 1), "the lines stay inside the plane");
   assert.ok(grid.insertAt("x", 1, { size: 200, id: "fits" }) !== null, "one that fits is taken");
-});
-
-test("a card with no width sits inside the corridor, not beside it", () => {
-  // Its own two lines stand at one coordinate, so it is drawn at that
-  // coordinate with nothing. The two cards that do have width are still a full
-  // gap apart: the empty one is inside that gap, not another thing in the row.
-  const grid = new Soksak(
-    { xs: [0, 0.591717, 0.665638, 0.665638, 1], ys: [0, 1], cards: [
-      { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
-      { id: "b", c0: 1, c1: 2, r0: 0, r1: 1 },
-      { id: "none", c0: 2, c1: 3, r0: 0, r1: 1 },
-      { id: "c", c0: 3, c1: 4, r0: 0, r1: 1 },
-    ] },
-    { width: 1602, height: 600, gap: 24, minSize: 0 },
-  );
-  assert.equal(grid.rect("none").w, 0, "its two lines are at one coordinate");
-
-  const drawn = [...grid.rects()].filter(([, r]) => r.w > 0).sort((x, y) => x[1].x - y[1].x);
-  for (let i = 1; i < drawn.length; i++) {
-    const [before, a] = drawn[i - 1];
-    const [after, b] = drawn[i];
-    assert.ok(
-      Math.abs(b.x - (a.x + a.w) - grid.gap) < 1e-9,
-      `${before} to ${after} is ${b.x - (a.x + a.w)}, not ${grid.gap}`,
-    );
-  }
-  const none = grid.rect("none");
-  const b = grid.rect("b");
-  const c = grid.rect("c");
-  assert.ok(none.x > b.x + b.w && none.x < c.x, "and the empty one is between them");
-});
-
-test("merging onto the plane's own border keeps the border", () => {
-  // Two lines at the plane's edge: the border and one a drag brought onto it.
-  // Folding them must drop the interior one. Dropping the border promoted a
-  // coordinate a rounding short of the edge, and the plane came out
-  // 0.9999999999999999 wide from then on.
-  // The interior line stands a rounding short of the edge, the way arithmetic
-  // leaves it. Folding must keep the border's exact 1, not promote this.
-  const almost = 0.9999999999999999;
-  assert.notEqual(almost, 1, "the fixture carries the rounding");
-  const grid = new Soksak(
-    { xs: [0, 0.2, 0.4, almost, 1], ys: [0, 1], cards: [
-      { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
-      { id: "b", c0: 1, c1: 2, r0: 0, r1: 1 },
-      { id: "c", c0: 2, c1: 4, r0: 0, r1: 1 },
-    ] },
-    { width: 900, height: 600, gap: 12 },
-  );
-  const last = grid.lines("x").length - 1;
-  assert.equal(grid.mergeCoincident("x", last), true, "the pair folds");
-
-  const xs = grid.lines("x");
-  assert.equal(xs[0], 0, "it still starts at 0");
-  assert.equal(xs[xs.length - 1], 1, "and ends at 1, exactly");
-  assert.equal(xs.length, 4, "one line went");
-  assert.equal(grid.rect("c").x + grid.rect("c").w, 900, "so the last card reaches the edge");
-  assertTiling(grid, "after folding onto the border");
-
-  // The same from the other end.
-  const left = new Soksak(
-    { xs: [0, Number.MIN_VALUE, 0.6, 1], ys: [0, 1], cards: [
-      { id: "a", c0: 0, c1: 2, r0: 0, r1: 1 },
-      { id: "b", c0: 2, c1: 3, r0: 0, r1: 1 },
-    ] },
-    { width: 900, height: 600, gap: 12 },
-  );
-  assert.equal(left.mergeCoincident("x", 0), true);
-  assert.equal(left.lines("x")[0], 0, "it still starts at 0, exactly");
-  assert.equal(left.rect("a").x, 0, "so the first card starts at the edge");
 });
 
 test("split keeps the line array in order, so the state it writes reads back", () => {
@@ -501,27 +243,6 @@ test("split keeps the line array in order, so the state it writes reads back", (
   assert.doesNotThrow(() => grid.replace(grid.toJSON()), "the state it writes is one it accepts");
 });
 
-test("a line no card reads does not change where the cards are drawn", () => {
-  const grid = new Soksak(undefined, {
-    width: 1300, height: 693, gap: 30, minSize: 118, snap: "off", fillOrder: "h",
-  });
-  grid.splitToward("card", "left", { id: "n0" });
-  grid.splitToward("n0", "right", { id: "n1" });
-  grid.close("card");
-  grid.insertAt("x", 0, { size: 294, id: "n4" });
-  assert.equal(grid.isVirtual("x", 3), true, "line 3 is read by no card");
-
-  const before = [...grid.cards].map((c) => ({ id: c.id, ...grid.rect(c.id) }));
-  grid.tidy();
-  for (const was of before) {
-    const now = grid.rect(was.id);
-    assert.ok(
-      Math.abs(now.x - was.x) < 0.01 && Math.abs(now.w - was.w) < 0.01,
-      `${was.id} moved from ${was.x}/${was.w} to ${now.x}/${now.w} when the line was removed`,
-    );
-  }
-});
-
 test("boundaryRange refuses a line that carries no boundary", () => {
   const grid = new Soksak(undefined, { width: 800, height: 600 });
   grid.split("card", "x");
@@ -533,18 +254,15 @@ test("boundaryRange refuses a line that carries no boundary", () => {
 });
 
 test("a drag snaps only when snapping is on and the caller allows it", () => {
-  // `wide` spans lines 1 to 3, so line 2 is read by no card and a drag of line 1
-  // that comes within snapDistance of it snaps onto it.
+  // The top row's seam is line 1 at half the plane. The bottom row's seam is
+  // line 2, a little further right, so a drag of line 1 that comes within
+  // snapDistance of line 2 snaps onto it.
   const build = (snap) =>
     new Soksak(
-      {
-        xs: [0, 0.5, 0.75, 1],
-        ys: [0, 1],
-        cards: [
-          { id: "narrow", c0: 0, c1: 1, r0: 0, r1: 1 },
-          { id: "wide", c0: 1, c1: 3, r0: 0, r1: 1 },
-        ],
-      },
+      { root: { cut: "y", kids: [
+        { share: 0.5, node: { cut: "x", kids: [{ share: 0.5, node: { card: "narrow" } }, { share: 0.5, node: { card: "wide" } }] } },
+        { share: 0.5, node: { cut: "x", kids: [{ share: 0.7, node: { card: "p" } }, { share: 0.3, node: { card: "q" } }] } },
+      ] } },
       { width: 1200, height: 800, gap: 24, minSize: 50, snap, snapDistance: 12 },
     );
   const drag = (snap, allowSnap) => {
@@ -567,16 +285,7 @@ test("the state a resize writes is one the library accepts", () => {
   // The last slot has almost no span, so the coordinates the rewrite accumulates
   // can pass the border it restores by one rounding.
   const grid = new Soksak(
-    {
-      xs: [0, 0.09123679935012186, 0.1922217709179529, 0.7847345858406022, 1, 1],
-      ys: [0, 0.901174168297456, 0.9564579256360078, 1],
-      cards: [
-        { id: "card", c0: 0, c1: 5, r0: 0, r1: 1, fixed: true },
-        { id: "card-3", c0: 2, c1: 5, r0: 2, r1: 3 },
-        { id: "card-7", c0: 0, c1: 2, r0: 1, r1: 3 },
-        { id: "card-4", c0: 2, c1: 5, r0: 1, r1: 2 },
-      ],
-    },
+    { root: { cut: "y", kids: [{ share: 0.901174168297456, node: { card: "card", fixed: true } }, { share: 0.098825831702544, node: { cut: "x", kids: [{ share: 0.1922217709179529, node: { card: "card-7" } }, { share: 0.8077782290820471, node: { cut: "y", kids: [{ share: 0.5594059405940595, node: { card: "card-4" } }, { share: 0.4405940594059406, node: { card: "card-3" } }] } }] } }] } },
     { width: 1231, height: 712, gap: 24, minSize: 0 },
   );
   grid.insertAt("x", 0, { size: 158 });
@@ -593,16 +302,7 @@ test("a slot stopped at its corridor does not bend a drag", () => {
   // the px a unit of span is worth comes from the slots that do flex.
   const build = () =>
     new Soksak(
-      {
-        xs: [0, 1],
-        ys: [0, 0.2, 0.6, 0.75, 1],
-        cards: [
-          { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
-          { id: "b", c0: 0, c1: 1, r0: 1, r1: 2 },
-          { id: "c", c0: 0, c1: 1, r0: 2, r1: 3 },
-          { id: "d", c0: 0, c1: 1, r0: 3, r1: 4, height: 250 },
-        ],
-      },
+      { root: { cut: "y", kids: [{ share: 0.2, node: { card: "a" } }, { share: 0.39999999999999997, node: { card: "b" } }, { share: 0.15000000000000002, node: { card: "c" } }, { share: 0.25, node: { card: "d", height: 250 } }] } },
       { width: 400, height: 350, gap: 24, minSize: 0 },
     );
 
@@ -618,25 +318,18 @@ test("a slot stopped at its corridor does not bend a drag", () => {
   );
 });
 
-test("a drag lands where it asked while a slot is stopped at its corridor", () => {
-  // The slot the starvation rule stopped does not flex with its span, and it
-  // flexes again as soon as the move gives it room, so one conversion of px into
-  // span lands short. The plane holds what this axis declares before and after.
-  const state = {
-    xs: [0, 0.20150587381823687, 0.608, 0.624, 0.64, 0.7840677966101695, 1],
-    ys: [0, 0.25604838709677413, 0.2560483870967742, 1],
-    cards: [
-      { id: "card-1", c0: 0, c1: 2, r0: 0, r1: 1 },
-      { id: "card-9", c0: 0, c1: 2, r0: 1, r1: 3 },
-      { id: "card-10", c0: 2, c1: 4, r0: 0, r1: 3 },
-      { id: "card-11", c0: 5, c1: 6, r0: 0, r1: 3, width: 180 },
-      { id: "card-12", c0: 4, c1: 5, r0: 0, r1: 3, width: 85 },
-    ],
-  };
-  for (const ask of [115, 130.57, 160]) {
+test("a seam beside two kids drawn at their minimum or below holds where it stands", () => {
+  // card-10 is drawn below `minSize` because the plane is too small, and card-12
+  // declares 85, below it as well. Neither kid of the cut can give room, so the
+  // range is the position the seam stands at and a drag moves nothing.
+  const state = { root: { cut: "x", kids: [{ share: 0.608, node: { cut: "y", kids: [{ share: 0.25604838709677413, node: { card: "card-1" } }, { share: 0.7439516129032259, node: { card: "card-9" } }] } }, { share: 0.03200000000000003, node: { card: "card-10" } }, { share: 0.14406779661016944, node: { card: "card-12", width: 85 } }, { share: 0.21593220338983055, node: { card: "card-11", width: 180 } }] } };
+  for (const ask of [295, 310, 325]) {
     const grid = new Soksak(state, { width: 590, height: 531, gap: 24, minSize: 96 });
-    const at = grid.moveBoundary("x", 2, ask, false);
-    assert.ok(Math.abs(at - ask) < 0.01, `the boundary reaches ${ask}, not ${at}`);
+    const at = grid.boundaryPos("x", 2);
+    const was = grid.rects();
+    assert.deepEqual(grid.boundaryRange("x", 2), [at, at]);
+    assert.equal(grid.moveBoundary("x", 2, ask, false), at, `the ask ${ask} moves nothing`);
+    assert.deepEqual(grid.rects(), was);
   }
 });
 
@@ -658,16 +351,7 @@ test("the range takes in where the boundary stands, so a drag that does not move
 
 test("centring halves the two cards, not the two lines beside them", () => {
   const grid = new Soksak(
-    {
-      xs: [0, 0.5, 1],
-      ys: [0, 0.5, 0.75, 1],
-      cards: [
-        { id: "top", c0: 0, c1: 1, r0: 0, r1: 1 },
-        { id: "bottom", c0: 0, c1: 1, r0: 1, r1: 3 },   // reaches past line 2
-        { id: "r-top", c0: 1, c1: 2, r0: 0, r1: 2 },
-        { id: "r-bottom", c0: 1, c1: 2, r0: 2, r1: 3 },
-      ],
-    },
+    { root: { cut: "x", kids: [{ share: 0.5, node: { cut: "y", kids: [{ share: 0.5, node: { card: "top" } }, { share: 0.5, node: { card: "bottom" } }] } }, { share: 0.5, node: { cut: "y", kids: [{ share: 0.75, node: { card: "r-top" } }, { share: 0.25, node: { card: "r-bottom" } }] } }] } },
     { width: 800, height: 600, gap: 24, minSize: 40 },
   );
   grid.centerBoundary("y", 1);
@@ -679,11 +363,7 @@ test("a drag on an axis where nothing flexes leaves the line where it stands", (
   // px and the boundary reports one position. A drag must leave it there rather
   // than fold it onto the line before it.
   const grid = new Soksak(
-    { xs: [0, 1 / 3, 2 / 3, 1], ys: [0, 1], cards: [
-      { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
-      { id: "b", c0: 1, c1: 2, r0: 0, r1: 1 },
-      { id: "c", c0: 2, c1: 3, r0: 0, r1: 1 },
-    ] },
+    { root: { cut: "x", kids: [{ share: 0.3333333333333333, node: { card: "a" } }, { share: 0.3333333333333333, node: { card: "b" } }, { share: 0.33333333333333337, node: { card: "c" } }] } },
     { width: 100, height: 100, gap: 50, minSize: 1 },
   );
   const at = grid.boundaryPos("x", 1);
@@ -695,36 +375,12 @@ test("a drag on an axis where nothing flexes leaves the line where it stands", (
   assert.deepEqual(grid.lines("x"), was);
 });
 
-test("a grab area over a run of coincident lines has no length, not a negative one", () => {
-  const grid = new Soksak(
-    { xs: [0, 0.5, 1], ys: [0, 0.4, 0.4, 1], cards: [
-      { id: "top", c0: 0, c1: 2, r0: 0, r1: 1 },
-      { id: "thinL", c0: 0, c1: 1, r0: 1, r1: 2 },
-      { id: "thinR", c0: 1, c1: 2, r0: 1, r1: 2 },
-      { id: "bottom", c0: 0, c1: 2, r0: 2, r1: 3 },
-    ] },
-    { width: 600, height: 400, gap: 24, minSize: 0 },
-  );
-  for (const d of grid.dividers()) {
-    assert.ok(d.w >= 0 && d.h >= 0, `${d.key} is ${d.w}x${d.h}`);
-  }
-});
-
 test("centring measures again from where the boundary landed", () => {
   // `wide` declares more width than the plane can give, so every declared size is
   // drawn scaled and each move changes that scale. One conversion of the middle
   // into a move lands short of it.
   const grid = new Soksak(
-    {
-      xs: [0, 0.5, 0.75, 0.777542372881356, 1],
-      ys: [0, 1],
-      cards: [
-        { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
-        { id: "wide", c0: 1, c1: 2, r0: 0, r1: 1, width: 296 },
-        { id: "b", c0: 2, c1: 3, r0: 0, r1: 1 },
-        { id: "c", c0: 3, c1: 4, r0: 0, r1: 1 },
-      ],
-    },
+    { root: { cut: "x", kids: [{ share: 0.5, node: { card: "a" } }, { share: 0.25, node: { card: "wide", width: 296 } }, { share: 0.02754237288135597, node: { card: "b" } }, { share: 0.22245762711864403, node: { card: "c" } }] } },
     { width: 472, height: 324, gap: 10, minSize: 3 },
   );
   grid.centerBoundary("x", 3);
@@ -735,10 +391,10 @@ test("centring measures again from where the boundary landed", () => {
 });
 
 test("a drag never leaves the boundary further from the target than it stood", () => {
-  // A plane too narrow for what it holds. The px position of a line does not
-  // follow its coordinate there: a slot the starvation rule stopped does not
-  // move with its span, so a step can pass the target and the step after it
-  // come back past it.
+  // A plane too narrow for what it holds: the cut of four cards cannot hold its
+  // corridors, so its cards are drawn with no width, and the lines beside them
+  // have no room. A drag toward either end of the range of each line lands no
+  // further from where it was asked than where it stood.
   const grid = new Soksak(undefined, { width: 800, height: 300, gap: 21, minSize: 8 });
   for (const [id, axis, born] of [
     ["card", "x", "c0"],
@@ -753,246 +409,53 @@ test("a drag never leaves the boundary further from the target than it stood", (
   grid.setSize("c2", "y", 196);
   grid.resize(140, 300);
 
-  const from = grid.boundaryPos("x", 3);
-  const [, max] = grid.boundaryRange("x", 3);
-  assert.equal(from, 52.5);
-  assert.ok(max > from, "the range reports room above where it stands");
-
-  const to = grid.moveBoundary("x", 3, max, false);
-  assert.ok(
-    Math.abs(to - max) <= Math.abs(from - max) + 1e-9,
-    `asked ${max}, stood at ${from}, landed ${to}`,
-  );
-  assert.ok(to <= max + 0.01, `landed ${to}, past the range it reported`);
-});
-
-test("a centring stays inside the range it reported", () => {
-  // A plane too narrow for what it holds. `boundaryRange` measures where every
-  // card still holds `minSize`, and every move changes where the range's own
-  // ends stand, so a pass measured against the range as it then stood carried
-  // the boundary further out than the range this call reported, and `left` came
-  // out below `minSize`. A drag asking for the same place stops at 14.
-  const state = {
-    xs: [0, 0.2, 0.2, 0.24, 0.7, 0.8, 0.9, 1],
-    ys: [0, 0.5, 0.6, 1],
-    cards: [
-      { id: "a", c0: 1, c1: 2, r0: 0, r1: 1 },
-      { id: "d", c0: 1, c1: 3, r0: 1, r1: 2 },
-      { id: "e", c0: 3, c1: 5, r0: 1, r1: 2 },
-      { id: "c", c0: 3, c1: 7, r0: 0, r1: 1 },
-      { id: "f", c0: 5, c1: 7, r0: 1, r1: 2 },
-      { id: "h", c0: 4, c1: 7, r0: 2, r1: 3 },
-      { id: "g", c0: 1, c1: 4, r0: 2, r1: 3 },
-      { id: "left", c0: 0, c1: 1, r0: 0, r1: 3 },
-      { id: "b", c0: 2, c1: 3, r0: 0, r1: 1 },
-    ],
-  };
-  const options = { width: 230, height: 680, gap: 20, minSize: 4 };
-  const grid = new Soksak(state, options);
-  const [min] = grid.boundaryRange("x", 1);
-  assert.equal(min, 14);
-  assert.equal(grid.rect("left").w, 33.75);
-  assert.equal(
-    new Soksak(state, options).moveBoundary("x", 1, 0, false),
-    min,
-    "a drag past the range stops at it",
-  );
-
-  const at = grid.centerBoundary("x", 1);
-  assert.ok(at >= min - 0.01, `centred to ${at}, below the ${min} the range named`);
-  assert.ok(
-    grid.rect("left").w >= grid.minSize - 0.01,
-    `left is drawn ${grid.rect("left").w}, below minSize ${grid.minSize}`,
-  );
-});
-
-test("a range bounds a drag; it does not list where the drag can stop", () => {
-  // No card on this axis declares a px size, and the plane is too small for what
-  // it holds: the starvation rule stops a sharing slot at its corridor and a
-  // stopped slot does not move with its span, so the px the boundary stands at
-  // stops following its coordinate. The whole coordinate span draws three
-  // positions and nothing between them, so no pair of numbers names them, and a
-  // drag to the range's own min lands on one of the three, outside the range.
-  const state = {
-    xs: [0, 0.09740259740259741, 0.09740259740259741, 0.09740259740259741, 0.1948051948051947, 0.6935483870967741, 1],
-    ys: [0, 0.25, 0.5, 1],
-    cards: [
-      { id: "n1", c0: 2, c1: 3, r0: 0, r1: 2 },
-      { id: "n5", c0: 0, c1: 6, r0: 2, r1: 3 },
-      { id: "n7", c0: 0, c1: 2, r0: 0, r1: 1 },
-      { id: "n8", c0: 0, c1: 1, r0: 1, r1: 2 },
-      { id: "n10", c0: 3, c1: 6, r0: 0, r1: 2 },
-      { id: "n11", c0: 1, c1: 2, r0: 1, r1: 2 },
-    ],
-  };
-  const options = { width: 124, height: 557, gap: 16, minSize: 79 };
-  const grid = new Soksak(state, options);
-  assert.equal(grid.cards.every((c) => c.width === undefined), true, "no px size on this axis");
-  const [min, max] = grid.boundaryRange("x", 1);
-  assert.equal(grid.boundaryPos("x", 1), max, "the boundary stands at the top of its range");
-
-  const drawn = new Set();
-  for (let i = 0; i <= 200; i++) {
-    const xs = [...state.xs];
-    // one ulp past the line above it is a state `checkState` refuses
-    xs[1] = Math.min((state.xs[2] * i) / 200, state.xs[2]);
-    drawn.add(Number(new Soksak({ ...state, xs }, options).boundaryPos("x", 1).toFixed(6)));
+  let moved = 0;
+  const start = grid.toJSON();
+  for (let line = 1; line < grid.lines("x").length - 1; line++) {
+    for (const end of [0, 1]) {
+      grid.replace(start);
+      const from = grid.boundaryPos("x", line);
+      const range = grid.boundaryRange("x", line);
+      const asked = range[end];
+      const to = grid.moveBoundary("x", line, asked, false);
+      assert.ok(Math.abs(to - asked) <= Math.abs(from - asked) + 1e-9, `line ${line}: asked ${asked}, stood at ${from}, landed ${to}`);
+      assert.ok(to >= range[0] - 0.01 && to <= range[1] + 0.01, `line ${line}: landed ${to}, outside the range ${range}`);
+      if (Math.abs(to - from) > 1) moved++;
+    }
   }
-  assert.deepEqual([...drawn].sort((a, b) => a - b), [0, 8, 12.077922],
-                   "the whole coordinate span draws three positions");
-  assert.ok(min > 0 && min < 8, `the range names ${min}, which the plane cannot draw`);
-
-  assert.equal(
-    new Soksak(state, options).moveBoundary("x", 1, min, false),
-    0,
-    "a drag asking for it lands on one the plane can draw, outside the range",
-  );
+  assert.ok(moved > 0, "a line with room moved");
 });
 
-test("a line no card reads decides nothing drawn, and tidy takes nothing with it", () => {
-  // A plane too small for what it holds. R5 says the card that ran out of room
-  // is drawn with no width against its near edge. `right` spans two slots with a
-  // line no card reads between them, and the starvation rule stopped the slot
-  // before that line only: the slot after it went on dividing what the stop
-  // released, so `right` was drawn 3.878 instead of 0 and `tidy` moved both
-  // cards. The slots between two lines the cards read are one slot to every
-  // card, so the whole run stops.
-  const options = { width: 200, height: 400, gap: 20, minSize: 50 };
-  const cut = new Soksak(
-    {
-      xs: [0, 0.96, 0.98, 1],
-      ys: [0, 1],
-      cards: [
-        { id: "left", c0: 0, c1: 1, r0: 0, r1: 1 },
-        { id: "right", c0: 1, c1: 3, r0: 0, r1: 1 },
-      ],
-    },
-    options,
-  );
-  assert.equal(cut.isVirtual("x", 2), true, "no card reads the line between right's slots");
-  assert.equal(cut.rect("right").w, 0, "the card that ran out of room is drawn with no width");
-  assert.equal(cut.rect("left").w, 180);
-
-  // The same arrangement, without the line no card reads.
-  const whole = new Soksak(
-    {
-      xs: [0, 0.96, 1],
-      ys: [0, 1],
-      cards: [
-        { id: "left", c0: 0, c1: 1, r0: 0, r1: 1 },
-        { id: "right", c0: 1, c1: 2, r0: 0, r1: 1 },
-      ],
-    },
-    options,
-  );
-  assert.deepEqual([...cut.rects()], [...whole.rects()], "the line decides nothing drawn");
-
-  assert.equal(cut.tidy(), 1);
-  assert.deepEqual([...cut.rects()], [...whole.rects()], "and removing it decides nothing either");
-});
-
-test("a run of coincident lines at the plane's border takes no corridor", () => {
-  // Two cards drawn at nothing, one against each border, with two cards between
-  // them. A run ending at the border has nothing to inset into, so the card
-  // there is flush — and the range its boundary can be dragged in says so.
-  const grid = new Soksak(
-    { xs: [0, 0, 0.5, 1, 1], ys: [0, 1], cards: [
-      { id: "z0", c0: 0, c1: 1, r0: 0, r1: 1 },
-      { id: "a", c0: 1, c1: 2, r0: 0, r1: 1 },
-      { id: "b", c0: 2, c1: 3, r0: 0, r1: 1 },
-      { id: "z1", c0: 3, c1: 4, r0: 0, r1: 1 },
-    ] },
-    { width: 300, height: 220, gap: 24, minSize: 96 },
-  );
-  assert.deepEqual(grid.rect("z0"), { x: 0, y: 0, w: 0, h: 220 }, "flush against the near border");
-  assert.deepEqual(grid.rect("z1"), { x: 300, y: 0, w: 0, h: 220 }, "and against the far one");
-  // Half a gap each way is what an inset into the run would cost, and there is
-  // nothing there to inset into.
-  assert.deepEqual(grid.boundaryRange("x", 1), [0, 63], "the near boundary reaches the border");
-  assert.deepEqual(grid.boundaryRange("x", 3), [237, 300], "and the far one reaches the other");
-});
-
-test("a close re-stands only the lines no card reads", () => {
-  // `z0` sits inside a run of coincident lines. Closing it must leave the pair
-  // coincident: a line a card reads is placed by the slots, and putting it back
-  // where it stood in px pulls the run apart.
-  const grid = new Soksak(
-    { xs: [0, 0.5, 0.5, 1, 1], ys: [0, 1], cards: [
-      { id: "z0", c0: 1, c1: 2, r0: 0, r1: 1 },
-      { id: "b", c0: 2, c1: 3, r0: 0, r1: 1 },
-      { id: "z1", c0: 3, c1: 4, r0: 0, r1: 1 },
-      { id: "a", c0: 0, c1: 1, r0: 0, r1: 1, fixed: true },
-    ] },
-    { width: 120, height: 90, gap: 40, minSize: 96 },
-  );
-  assert.equal(grid.close("z0"), true);
-  const xs = grid.lines("x");
-  assert.equal(xs[1], xs[2], `lines 1 and 2 came apart: ${xs[1]} and ${xs[2]}`);
-  assert.deepEqual(grid.rect("a"), { x: 0, y: 0, w: 40, h: 90 });
-});
-
-test("a split with newLine cuts at a new line inside the card instead of an existing line", () => {
-  const state = () => ({ xs: [0, 0.5, 1], ys: [0, 0.5, 1], cards: [
-    { id: "a", c0: 0, c1: 2, r0: 0, r1: 1 }, { id: "b", c0: 0, c1: 1, r0: 1, r1: 2 }, { id: "c", c0: 1, c1: 2, r0: 1, r1: 2 },
-  ] });
+test("a split with newLine cuts the card as its own cut, drawing the line the other row holds", () => {
+  const state = () => ({ root: { cut: "y", kids: [{ share: 0.5, node: { card: "a" } }, { share: 0.5, node: { cut: "x", kids: [{ share: 0.5, node: { card: "b" } }, { share: 0.5, node: { card: "c" } }] } }] } });
   const taken = new Soksak(state(), { width: 1000, height: 1000, gap: 0 });
   assert.notEqual(taken.split("a", "x", { id: "n" }), null);
   assert.equal(taken.lines("x").length, 3, "the plain split takes the line that a spans across");
   const fresh = new Soksak(state(), { width: 1000, height: 1000, gap: 0 });
   assert.notEqual(fresh.splitToward("a", "left", { id: "n", newLine: true }), null);
-  assert.equal(fresh.lines("x").length, 4, "the split with newLine adds a line");
+  assert.equal(fresh.lines("x").length, 3, "the new cut stands on the line the bottom row holds, so one line is drawn");
   assert.equal(fresh.card("n").c0, 0);
 });
 
-test("moveLinePast moves a line past the lines it reaches where no card lies between them and merges onto a line it stops on", () => {
-  const state = () => ({ xs: [0, 0.4, 0.6, 1], ys: [0, 0.5, 1], cards: [
-    { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 }, { id: "b", c0: 1, c1: 3, r0: 0, r1: 1 },
-    { id: "c", c0: 0, c1: 2, r0: 1, r1: 2 }, { id: "d", c0: 2, c1: 3, r0: 1, r1: 2 },
-  ] });
-  const past = new Soksak(state(), { width: 1000, height: 1000, gap: 0, minSize: 10 });
-  past.moveLinePast("x", 1, 800);
-  assert.ok(Math.abs(past.rect("a").w - 800) < 1e-6, `a is ${past.rect("a").w} wide`);
-  assert.ok(Math.abs(past.rect("c").w - 600) < 1e-6, `c is ${past.rect("c").w} wide`);
-  const onto = new Soksak(state(), { width: 1000, height: 1000, gap: 0, minSize: 10 });
-  onto.moveLinePast("x", 1, 600);
-  assert.equal(onto.lines("x").length, 3, "the line that stops on another line merges onto it");
-  assert.equal(onto.card("a").c1, onto.card("c").c1);
-});
 
-test("shareLines keeps every line index and gives each slot its corridor, its extra and an equal share of the free length", () => {
-  const cards = (width) => [
-    { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
-    { id: "b", c0: 1, c1: 2, r0: 0, r1: 1, ...(width === undefined ? {} : { width }) },
-    { id: "c", c0: 2, c1: 3, r0: 0, r1: 1 },
-  ];
-  const grid = new Soksak({ xs: [0, 0.2, 0.5, 1], ys: [0, 1], cards: cards() }, { width: 1000, height: 600, gap: 10 });
-  grid.shareLines("x");
-  assert.deepEqual(grid.cards.map((card) => [card.id, card.c0, card.c1]), [["a", 0, 1], ["b", 1, 2], ["c", 2, 3]], "the line indices stay");
-  const share = (1000 - 20) / 3;
-  for (const id of ["a", "b", "c"]) assert.ok(Math.abs(grid.rect(id).w - share) < 1e-9, `${id} is ${grid.rect(id).w} wide, not ${share}`);
-
-  grid.shareLines("x", [0, 30, 0]);
-  const less = (1000 - 20 - 30) / 3;
-  assert.ok(Math.abs(grid.rect("a").w - less) < 1e-9 && Math.abs(grid.rect("c").w - less) < 1e-9, "a and c take the share");
-  assert.ok(Math.abs(grid.rect("b").w - (less + 30)) < 1e-9, `b takes the share and its extra: ${grid.rect("b").w}`);
-
-  const held = new Soksak({ xs: [0, 0.2, 0.5, 1], ys: [0, 1], cards: cards(200) }, { width: 1000, height: 600, gap: 10 });
-  held.shareLines("x");
-  assert.ok(Math.abs(held.rect("b").w - 200) < 1e-9, `a slot that a card with a size in px holds keeps that size: ${held.rect("b").w}`);
-  assert.ok(Math.abs(held.rect("a").w - held.rect("c").w) < 1e-9, "the other slots share the rest equally");
-
-  assert.throws(() => grid.shareLines("z"), { message: "unknown axis z" });
-  assert.throws(() => grid.shareLines("x", [0, 1]), { message: "shareLines takes one extra for each of the 3 slots of x, found 2" });
-});
-
-// A count below zero is refused as below zero before its fraction is judged, as the Go port judges it (R5 of docs/layout.md).
-test("setFrames refuses a count below zero as below zero, a fraction included, and keeps the frames it had", () => {
-  const grid = new Soksak({ xs: [0, 0.5, 1], ys: [0, 1], cards: [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1 }, { id: "b", c0: 1, c1: 2, r0: 0, r1: 1 }] });
-  grid.resize(1000, 600);
-  grid.setFrames({ a: { right: 1 } });
-  const before = grid.rect("a");
-  assert.throws(() => grid.setFrames({ a: { right: -1.5 } }), { message: 'soksak: the frames of "a" count below zero' });
-  assert.throws(() => grid.setFrames({ a: { right: -Infinity } }), { message: 'soksak: the frames of "a" count below zero' });
-  assert.throws(() => grid.setFrames({ a: { right: Number.NaN } }), { message: 'soksak: the frames of "a" count no whole number' });
-  assert.deepEqual(grid.rect("a"), before);
+test("a boundary's range and its move come from its own cut, not from a line of another cut", () => {
+  // The head of the group is a cost of its column, so the seam of the left column stands at 310 and the seam of the right
+  // column at 300: two derived lines. The left seam stops where its upper card is drawn its minimum and its head.
+  const state = { root: { cut: "x", kids: [
+    { share: 0.5, node: { box: "g", inner: { cut: "y", kids: [{ share: 0.5, node: { card: "c1" } }, { share: 0.5, node: { card: "c2" } }] } } },
+    { share: 0.5, node: { cut: "y", kids: [{ share: 0.5, node: { card: "c3" } }, { share: 0.5, node: { card: "c4" } }] } },
+  ] } };
+  const grid = new Soksak(state, { width: 1000, height: 600, gap: 24, minSize: 96 });
+  grid.setHeads({ g: 44 });
+  const line = grid.card("c1").r1;
+  const other = { c3: grid.rect("c3"), c4: grid.rect("c4") };
+  assert.notEqual(line, grid.card("c3").r1, "the two seams are two lines");
+  assert.deepEqual(grid.boundaryRange("y", line), [96 + 44 + 12, 576 - 96 - 12], "the minimums of the two kids of the cut bound the range");
+  // The kids take fractions, so the positions carry the rounding of a fraction of the rest.
+  assert.ok(Math.abs(grid.moveBoundary("y", line, 0, false) - 152) < 1e-9);
+  assert.ok(Math.abs(grid.rect("c1").h - (96 + 44)) < 1e-9, "the upper card is drawn its minimum and the head inside it");
+  // The seam now stands before the seam of the other column, so it has another index.
+  assert.ok(Math.abs(grid.moveBoundary("y", grid.card("c1").r1, 600, false) - 468) < 1e-9);
+  assert.ok(Math.abs(grid.rect("c2").h - 96) < 1e-9, "the lower card is drawn its minimum");
+  assert.deepEqual({ c3: grid.rect("c3"), c4: grid.rect("c4") }, other, "the seam of the other column stays");
 });

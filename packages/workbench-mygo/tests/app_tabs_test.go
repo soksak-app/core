@@ -531,8 +531,7 @@ func TestAHiddenTabOfAnotherSpaceReadsTheTextScaleOfItsCard(t *testing.T) {
 	stored.installed = hiddenTabsDocument
 	stored.common = map[string]any{"memorySaver": false}
 	project := storedProject(tab("tab-aaaaaa", "notes"))
-	other := map[string]any{"xs": []float64{0, 1}, "ys": []float64{0, 1}, "paidBy": map[string]any{}, "cards": []map[string]any{{
-		"id": "main", "c0": 0, "c1": 1, "r0": 0, "r1": 1, "data": map[string]any{"tabs": []map[string]any{tab("tab-dddddd", "plain")}, "activeId": "tab-dddddd", "textSize": 1.5}}}}
+	other := map[string]any{"card": "main", "data": map[string]any{"tabs": []map[string]any{tab("tab-dddddd", "plain")}, "activeId": "tab-dddddd", "textSize": 1.5}}
 	project["spaces"] = append(project["spaces"].([]map[string]any), map[string]any{"id": "spc-bbbbbb", "title": "other", "layout": storedRoot(other)})
 	stored.projects = []map[string]any{project}
 	f := newTabApp(t, stored, hiddenTabsDocument)

@@ -16,18 +16,18 @@ const svg = (path) => `<svg viewBox="0 0 16 16" aria-hidden="true">${path}</svg>
  * their group succeeds, the leader button in a level of two or more members, fullscreen and close; a group header holds no add button.
  * Each is {do, expose, command, params, title, icon, enabled, pressed}. A fullscreen card holds the layout, so every button that changes it waits.
  */
-export function groupHeadTools(tree, id, { fullscreen, even }) {
+export function groupHeadTools(tree, id, { fullscreen }) {
   const held = fullscreen !== null;
   const changes = (tool, can) => ({ ...tool, enabled: !held && can, title: held ? names["layout-held"] : tool.title, pressed: false });
   const tools = [
     changes({ do: "x", expose: "core.group.split-x", command: "core.card.menu", params: { card: id, menu: "split-x" }, title: names["split-x"],
-      icon: "card-split-x" }, tree.canSplit(id, "right", even)),
+      icon: "card-split-x" }, tree.canSplit(id, "right")),
     changes({ do: "y", expose: "core.group.split-y", command: "core.card.menu", params: { card: id, menu: "split-y" }, title: names["split-y"],
-      icon: "card-split-y" }, tree.canSplit(id, "bottom", even)),
+      icon: "card-split-y" }, tree.canSplit(id, "bottom")),
     changes({ do: "gx", expose: "core.group.group-x", command: "core.card.menu", params: { card: id, menu: "group-x" }, title: names["group-x"],
-      icon: "card-group-x" }, tree.canGroup(id, "right", even)),
+      icon: "card-group-x" }, tree.canGroup(id, "right")),
     changes({ do: "gy", expose: "core.group.group-y", command: "core.card.menu", params: { card: id, menu: "group-y" }, title: names["group-y"],
-      icon: "card-group-y" }, tree.canGroup(id, "bottom", even)),
+      icon: "card-group-y" }, tree.canGroup(id, "bottom")),
   ];
   const parent = tree.parentOf(id);
   if (tree.leadCount(parent) >= 2) {
@@ -147,7 +147,7 @@ function markHeldFocus(el, d) {
  * renaming is the rename in progress of core.rename: the header of the group card that it names shows the field that renameField
  * creates in the place of its name (docs/spec/groups.md#headers).
  */
-export function drawGroupCards(planeEl, tree, rects, { head, fullscreen, even, focused, renaming, renameField }) {
+export function drawGroupCards(planeEl, tree, rects, { head, fullscreen, focused, renaming, renameField }) {
   const live = new Set();
   const order = tree.order();
   const elementOf = (id, node) => planeEl.querySelector(node ? `:scope > .group[data-group-card="${CSS.escape(id)}"]` : `:scope > .card[data-card-id="${CSS.escape(id)}"]`);
@@ -180,7 +180,7 @@ export function drawGroupCards(planeEl, tree, rects, { head, fullscreen, even, f
       name.title = node.name;
     }
     drawRename(header, name, renaming?.kind === "group" && renaming.id === id, renameField);
-    drawTools(header.querySelector(".chrome__acts"), groupHeadTools(tree, id, { fullscreen, even }));
+    drawTools(header.querySelector(".chrome__acts"), groupHeadTools(tree, id, { fullscreen }));
   }
   for (const el of planeEl.querySelectorAll(":scope > .group")) if (!live.has(el.dataset.groupCard)) el.remove();
 }

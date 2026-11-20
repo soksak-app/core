@@ -922,6 +922,31 @@ export function validateSidecar(sidecar) {
 }
 
 /**
+ * The card nodes of the tree of `workspace.grid` in the order of the tree. A node is a cut `{cut, kids}`, whose
+ * kids are `{share, node}`, or a card node; the layout library checks the shares and the axes of the tree when a space opens it
+ * (docs/spec/plugins.md#environmentjson). Throws on a node of another form.
+ */
+function gridCards(grid) {
+  const cards = [];
+  const visit = (node) => {
+    if (isObject(node) && node.cut !== undefined) {
+      only("environment.json workspace.grid cut", node, ["cut", "kids"]);
+      if (!Array.isArray(node.kids)) throw new Error("environment.json: a cut of workspace.grid requires kids");
+      for (const kid of node.kids) {
+        if (!isObject(kid)) throw new Error("environment.json: a kid of workspace.grid is not an object");
+        only("environment.json workspace.grid kid", kid, ["share", "node"]);
+        visit(kid.node);
+      }
+      return;
+    }
+    if (!isObject(node) || !isText(node.card)) throw new Error("environment.json: every card requires an id");
+    cards.push(node);
+  };
+  visit(grid.root);
+  return cards;
+}
+
+/**
  * Validates one environment.json. Throws when the format is wrong and returns the received value otherwise.
  *
  *     runtime    runtime module directory. A path relative to the application directory that contains index.js
@@ -960,34 +985,31 @@ export function validateEnvironment(environment) {
   if (!isObject(workspace)) throw new Error("environment.json: workspace is required");
   only("environment.json workspace", workspace, ["focus", "grid"]);
   const { grid } = workspace;
-  if (!isObject(grid) || !Array.isArray(grid.xs) || !Array.isArray(grid.ys) || !Array.isArray(grid.cards)) {
-    throw new Error("environment.json: workspace.grid requires xs, ys, and cards");
-  }
-  only("environment.json workspace.grid", grid, ["xs", "ys", "cards"]);
-  for (const card of grid.cards) {
-    if (!isObject(card) || !isText(card.id)) throw new Error("environment.json: every card requires an id");
+  if (!isObject(grid) || !isObject(grid.root)) throw new Error("environment.json: workspace.grid requires root");
+  only("environment.json workspace.grid", grid, ["root"]);
+  for (const card of gridCards(grid)) {
     // The card named by a side is the window sidebar of that side: it holds no tabs, and its size is the width of a left or
     // right sidebar and the height of a top or bottom sidebar (docs/spec/external-sidebars.md).
-    const side = WINDOW_SIDES.includes(card.id);
-    if (side && card.tabs !== undefined) throw new Error(`environment.json: card ${card.id} is a window sidebar and declares no tabs`);
-    const size = card.id === "top" || card.id === "bottom" ? "height" : "width";
-    only(`environment.json card ${card.id}`, card, ["id", "c0", "c1", "r0", "r1", size, "fixed", ...(side ? [] : ["tabs"])]);
+    const side = WINDOW_SIDES.includes(card.card);
+    if (side && card.tabs !== undefined) throw new Error(`environment.json: card ${card.card} is a window sidebar and declares no tabs`);
+    const size = card.card === "top" || card.card === "bottom" ? "height" : "width";
+    only(`environment.json card ${card.card}`, card, ["card", size, "fixed", ...(side ? [] : ["tabs"])]);
     if (card[size] !== undefined && !(Number.isFinite(card[size]) && card[size] > 0)) {
-      throw new Error(`environment.json: card ${card.id} ${size} must be a finite positive number`);
+      throw new Error(`environment.json: card ${card.card} ${size} must be a finite positive number`);
     }
     if (card.tabs !== undefined) {
       if (!Array.isArray(card.tabs) || card.tabs.length === 0) {
-        throw new Error(`environment.json: card ${card.id} tabs must be a non-empty array`);
+        throw new Error(`environment.json: card ${card.card} tabs must be a non-empty array`);
       }
       for (const tab of card.tabs) {
         if (!isObject(tab) || !isText(tab.plugin) || !isText(tab.title)) {
-          throw new Error(`environment.json: card ${card.id} tabs require plugin and title`);
+          throw new Error(`environment.json: card ${card.card} tabs require plugin and title`);
         }
-        only(`environment.json card ${card.id} tab`, tab, ["plugin", "title"]);
+        only(`environment.json card ${card.card} tab`, tab, ["plugin", "title"]);
       }
     }
   }
-  if (!grid.cards.some((card) => card.id === workspace.focus && card.tabs)) {
+  if (!gridCards(grid).some((card) => card.card === workspace.focus && card.tabs)) {
     throw new Error("environment.json: workspace.focus must name a card with tabs");
   }
   if (environment.sidebars !== undefined) validateSidebars(environment.sidebars, "environment.json");
@@ -1017,7 +1039,7 @@ export function checkReferences(environment, manifests) {
       checkSettingValue(`environment.json: settings ${pluginId}.${key}`, declaration, value);
     }
   }
-  for (const card of environment.workspace.grid.cards) {
+  for (const card of gridCards(environment.workspace.grid)) {
     // default: tabs is an optional field of an environment.json card; a card without it is an empty slot.
     for (const tab of card.tabs ?? []) {
       // The tab of a plugin that is not loaded opens as a placeholder card (docs/spec/plugins.md).

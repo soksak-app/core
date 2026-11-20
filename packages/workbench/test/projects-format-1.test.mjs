@@ -17,9 +17,7 @@ const plainManifest = {
 };
 const environmentFile = {
   runtime: "runtime",
-  workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [
-    { id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: "probe-plain", title: "p" }] },
-  ] } },
+  workspace: { focus: "main", grid: { root: { card: "main", tabs: [{ plugin: "probe-plain", title: "p" }] } } },
   sidebars: { sets: [], links: [] },
 };
 const { installEnvironment } = await import("../environment.js");
@@ -36,7 +34,7 @@ const spaceOf = (projectId) => file.projects.find((project) => project.id === pr
 
 test("the format-1 fixture is the form 1 file with origin members on view tabs", () => {
   assert.equal(file.format, 1);
-  const origin = file.projects[0].spaces[0].layout.state.cards[0].data.tabs[0];
+  const origin = file.projects[0].spaces[0].layout.state.root.data.tabs[0];
   assert.deepEqual(origin.origin, { directory: "/work/origin" });
 });
 

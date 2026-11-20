@@ -294,10 +294,7 @@ func (s *Shell) openSpaceApps(id string) error {
 		return nil
 	}
 	holdsTabs := func(card layout.Card) bool { return len(card.Data) > 0 && string(card.Data) != "null" }
-	order, ok := s.plane.Sliced(holdsTabs)
-	if !ok {
-		return errors.New("the cards of the space are not a slicing arrangement")
-	}
+	order := s.plane.Sliced(holdsTabs)
 	metrics := s.readPickerMetrics()
 	groups := make([]pickerGroup, 0, len(order))
 	items := []pickerItem{}

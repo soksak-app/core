@@ -121,8 +121,7 @@ func activityWindow(tabs ...string) []workbench.ActivityProject {
 	for _, tab := range tabs {
 		held = append(held, map[string]string{"id": tab, "plugin": "textprobe"})
 	}
-	layout, err := json.Marshal(map[string]any{"state": map[string]any{"cards": []any{map[string]any{"id": "card-1", "data": map[string]any{"tabs": held}}}},
-		"groups": []any{}})
+	layout, err := json.Marshal(map[string]any{"state": map[string]any{"root": map[string]any{"card": "card-1", "data": map[string]any{"tabs": held}}}})
 	if err != nil {
 		panic(err)
 	}

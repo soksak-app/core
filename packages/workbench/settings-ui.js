@@ -314,7 +314,6 @@ function drawGeneral() {
   body.append(group("표시", "배치는 그대로 두고 보이는 모습만 바꾼다.", [
     row("포커스 표시", choose("focusInd", named("focusInd", { border: "테두리", corner: "꺽쇠" }), value("focusInd"))),
     row("카드 자동 정렬", choose("cardArrange", named("cardArrange", { resize: "크기맞춤", even: "균등" }), value("cardArrange"))),
-    row("카드 분할", choose("cardSplit", named("cardSplit", { exact: "정확히 분할", even: "균등" }), value("cardSplit"))),
     row("경계선", choose("fullRule", named("fullRule", { under: "가림", over: "보임", none: "숨김" }), value("fullRule"))),
     row("포커스 밖 흐리게", toggle("dim", value("dim"))),
   ]));

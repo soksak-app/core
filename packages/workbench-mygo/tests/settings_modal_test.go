@@ -1695,22 +1695,6 @@ func TestTheDisplayGroupDrawsTheCardArrangeChoice(t *testing.T) {
 	t.Fatalf("no control for cardArrange")
 }
 
-// The display group of the general section draws the card split choice, exact by default, and the choice runs core.settings.change
-// (docs/spec/settings.md#values).
-func TestTheDisplayGroupDrawsTheCardSplitChoice(t *testing.T) {
-	f := opened(t)
-	status := f.modal()
-	for _, control := range status.Controls {
-		if control.Name == "core.settings-modal.set" && control.Key != nil && *control.Key == "cardSplit" {
-			if !slices.Equal(control.Options, []string{"exact", "even"}) || *control.Value != "exact" || control.Command.Name != "core.settings.change" {
-				t.Fatalf("cardSplit %+v", control)
-			}
-			return
-		}
-	}
-	t.Fatalf("no control for cardSplit")
-}
-
 // The balance button draws the icon of the arrangement that its command runs: layout-grid for even, columns-3 for resize
 // (docs/spec/settings.md#controls).
 func TestTheBalanceButtonDrawsTheIconOfItsArrangement(t *testing.T) {

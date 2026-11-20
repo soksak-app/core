@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { PLAIN, openLayoutChangePage } from "./support/layout-change-page.mjs";
+import { stateCards } from "../layout-tree.js";
 
 const { wire, registry, plane, flushEvents } = await openLayoutChangePage("layout-change-commands");
 
@@ -34,10 +35,10 @@ test("a command that changes the layout is the event workbench.layout.change wit
   assert.equal(events[1].fields.result, '{"group":"card-3","name":"그룹 2"}');
   assert.equal(events[2].fields.result, "null");
   const layouts = events.map(({ fields }) => JSON.parse(fields.layout));
-  assert.deepEqual(layouts.map((layout) => Object.keys(layout)), [["state", "groups", "leader", "lastCard"], ["state", "groups", "leader", "lastCard"],
-    ["state", "groups", "leader", "lastCard"]]);
-  assert.deepEqual(layouts[0].state.cards.map((card) => card.id), ["card-1", "card-2", split.card]);
-  assert.deepEqual(layouts.map((layout) => layout.groups[0].name), ["그룹 1", "그룹 2", "그룹 3"]);
+  assert.deepEqual(layouts.map((layout) => Object.keys(layout)), [["state", "leader", "lastCard"], ["state", "leader", "lastCard"],
+    ["state", "leader", "lastCard"]]);
+  assert.deepEqual(stateCards(layouts[0].state).map((card) => card.id), ["card-1", "card-2", split.card]);
+  assert.deepEqual(layouts.map((layout) => layout.state.root.data.name), ["그룹 1", "그룹 2", "그룹 3"]);
   assert.equal(layouts[0].lastCard, 4);
   wire.finish();
 });

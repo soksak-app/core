@@ -10,8 +10,8 @@ const OPTIONS = { gap: 12, minSize: 96, head: 28 };
 
 test("the head answers of a group tree hold until the layout changes", { timeout: 5000 }, () => {
   const grid = new Soksak(undefined, { gap: OPTIONS.gap, minSize: OPTIONS.minSize, width: 1600, height: 1200 });
-  const tree = readGroupTree({ state: { xs: [0, 1], ys: [0, 1], cards: [{ id: "card-1", c0: 0, c1: 1, r0: 0, r1: 1 }], paidBy: {} },
-    groups: [], leader: "card-1", lastCard: 1 }, OPTIONS, grid);
+  const tree = readGroupTree({ state: { root: { card: "card-1" } },
+    leader: "card-1", lastCard: 1 }, OPTIONS, grid);
   tree.create("card-1", "right", undefined, false);
   const ask = () => {
     for (const { id } of tree.order()) {

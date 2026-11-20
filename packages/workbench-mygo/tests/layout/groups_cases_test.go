@@ -11,8 +11,8 @@ import (
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
-// storedGroups is the stored form of a space layout: the grid, the group tree, the leader of the root level and lastCard, each absent
-// as nil.
+// storedGroups is the stored form of a space layout: the tree of the grid with the group cards as boxes, the leader of the root level and
+// lastCard, each absent as nil, and groups, the group list of the earlier form, which the reader refuses.
 type storedGroups struct {
 	State    layout.State    `json:"state"`
 	Groups   json.RawMessage `json:"groups"`
@@ -41,7 +41,6 @@ type groupArgs struct {
 	X        float64     `json:"x"`
 	Y        float64     `json:"y"`
 	Arrange  bool        `json:"arrange"`
-	Even     bool        `json:"even"`
 }
 
 // TestGroupCases runs each case of groups.json.
@@ -104,10 +103,10 @@ func groupCall(t *testing.T, tree *layout.GroupTree, call string, a groupArgs) (
 	case "balance":
 		return nil, false, tree.Balance(a.Arrange)
 	case "create":
-		group, born, err := tree.CreateGroup(a.Card, a.Side, nil, false)
+		group, born, err := tree.CreateGroup(a.Card, a.Side, nil)
 		return map[string]string{"group": group, "card": born}, true, err
 	case "split":
-		born, err := tree.Split(a.Card, a.Side, nil, a.Even)
+		born, err := tree.Split(a.Card, a.Side, nil)
 		return map[string]string{"card": born}, true, err
 	case "close":
 		_, err := tree.Close(a.Card)
@@ -125,20 +124,20 @@ func groupCall(t *testing.T, tree *layout.GroupTree, call string, a groupArgs) (
 		}
 		return map[string]any{"card": a.Card, "group": holder}, true, err
 	case "add":
-		born, err := tree.AddCard(a.Group, nil, a.Even)
+		born, err := tree.AddCard(a.Group, nil)
 		return map[string]string{"card": born}, true, err
 	case "move":
 		return map[string]string{"card": a.Card}, true, tree.Move(a.Card, a.Target, a.Side)
 	case "grid":
-		state := tree.Grid().ToJSON()
+		grid := tree.Grid()
 		cards := []map[string]any{}
-		for _, card := range state.Cards {
+		for _, card := range grid.Cards() {
 			cards = append(cards, map[string]any{"id": card.ID, "c0": card.C0, "c1": card.C1, "r0": card.R0, "r1": card.R1, "fixed": card.Fixed})
 		}
-		return map[string]any{"xs": state.Xs, "ys": state.Ys, "cards": cards}, true, nil
+		return map[string]any{"xs": grid.Lines("x"), "ys": grid.Lines("y"), "cards": cards}, true, nil
 	case "stored":
-		groups, leader, last := tree.Stored()
-		return map[string]any{"groups": groups, "leader": leader, "lastCard": last}, true, nil
+		state, leader, last := tree.Stored()
+		return map[string]any{"state": state, "leader": leader, "lastCard": last}, true, nil
 	case "rect":
 		rect, ok := tree.Rect(a.Card)
 		return rect, ok, nil

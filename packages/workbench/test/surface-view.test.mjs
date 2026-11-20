@@ -547,7 +547,7 @@ test("a view whose origin is missing names the tab, its plugin, space, project, 
   const { forgetTabsLeft, recordOrigin, storedLayoutState } = await import("../tab-reports.js");
   recordOrigin("tab-pruned", null, "new tab");
   const previous = [{ id: "card-pruned", data: { tabs: [{ id: "tab-pruned", plugin: "fixture-view" }] } }];
-  storedLayoutState({ cards: previous });
+  storedLayoutState({ root: { card: "card-pruned", data: previous[0].data } });
   forgetTabsLeft(previous, [{ id: "card-kept", data: { tabs: [{ id: "tab-kept", plugin: "fixture-view" }] } }],
     "saved layout of space spc-pruned, project prj-pruned");
   assert.throws(() => viewStartValues({ surfaceId: "tab-pruned", pluginId: "fixture-view", declarations: {} }, null), (error) => {
@@ -1290,7 +1290,7 @@ test("a page-start view waits for the initial project context and a disposed pre
   const projects = await import("../projects.js");
   const { HostWorkspaceStore } = await import("../host-store.js");
   const { connectSettings } = await import("../settings.js");
-  const layout = { state: { cards: [], name: "startup" } };
+  const layout = { state: { root: { card: "main" }, name: "startup" } };
   const PROJECT = {
     id: "prj-startup", root: "/work/startup", identity: "1:1", title: "startup", color: "#fff", named: 1,
     activeSpaceId: "spc-startup", spaces: [{ id: "spc-startup", title: "SPACE1", layout }], settings: {},

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { readdirSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,8 +10,8 @@ import { BREAKS } from "../scripts/breaks.mjs";
 test("changed implementation owners select only their required defects", { timeout: 1000 }, async () => {
   const { selectRequiredBreaks } = await import("../scripts/required-breaks.mjs");
   assert.deepEqual(selectRequiredBreaks(["unrelated/fixture.js", "docs/features.md"]), []);
-  assert.deepEqual(selectRequiredBreaks(["packages/soksak/src/soksak.ts"]).map(({ id }) => id), ["state"]);
-  assert.deepEqual(selectRequiredBreaks(["packages/soksak/src/slicing.ts", "packages/soksak/dist/slicing.js"]).map(({ id }) => id), ["slicing"]);
+  assert.deepEqual(selectRequiredBreaks(["packages/soksak/src/soksak.ts"]).map(({ id }) => id), ["insert-fits"]);
+  assert.deepEqual(selectRequiredBreaks(["packages/soksak/src/tree.ts", "packages/soksak/dist/tree.js"]).map(({ id }) => id), ["state"]);
   assert.throws(() => selectRequiredBreaks(["packages/soksak/src/unregistered.ts"]), /no required mutation owner/);
   assert.throws(() => selectRequiredBreaks(["pnpm-lock.yaml", "packages/soksak/src/unregistered.ts"]), /no required mutation owner/);
   assert.deepEqual(selectRequiredBreaks(["packages/soksak/dist/soksak.d.ts"]), []);
@@ -21,7 +22,11 @@ test("changed owning tests and shared inputs select a bounded declared set", { t
   assert.deepEqual(selectRequiredBreaks(["packages/soksak/test/dom.test.mjs"]).map(({ id }) => id), ["place", "grip-active"]);
   assert.deepEqual(selectRequiredBreaks(["pnpm-lock.yaml"]), REQUIRED_BREAKS);
   assert.deepEqual(selectRequiredBreaks(["packages/soksak/scripts/required-breaks.mjs"]), REQUIRED_BREAKS);
-  assert.ok(REQUIRED_BREAKS.length <= 8, "the required gate became an exploratory sweep");
+  // One defect per implementation owner keeps the gate bounded: the set grows only with a source file.
+  const owners = REQUIRED_BREAKS.map(({ owner }) => owner);
+  assert.equal(new Set(owners).size, owners.length, "the required gate became an exploratory sweep");
+  const sources = readdirSync(new URL("../src/", import.meta.url)).filter((file) => file.endsWith(".ts")).map((file) => file.slice(0, -3));
+  assert.deepEqual([...owners].sort(), sources.filter((source) => source !== "index").sort(), "every source file owns one required defect");
   for (const entry of REQUIRED_BREAKS) {
     assert.ok(BREAKS.some(({ id }) => id === entry.id), `unknown required mutation ${entry.id}`);
     assert.ok(entry.tests.length > 0 && entry.tests.length <= 3, `${entry.id} has no bounded owner selection`);

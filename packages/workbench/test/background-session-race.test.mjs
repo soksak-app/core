@@ -41,9 +41,8 @@ test("a background session whose tab closes before its subscription finished end
   assert.deepEqual(installEnvironment({
     runtime: "runtime",
     workspace: { focus: "main", grid: {
-      xs: [0, 1], ys: [0, 1],
-      cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [
-        { plugin: owner, title: "shown" }, { plugin: owner, title: "hidden" }] }],
+      root: { card: "main", tabs: [
+        { plugin: owner, title: "shown" }, { plugin: owner, title: "hidden" }] },
     } },
     sidebars: { sets: [], links: [] },
   }, { plugins: [{ id: owner, package: "@scope/fixture-session", version: "0.0.1", manifest: {

@@ -34,8 +34,9 @@ export interface BoundaryModel {
   /** The second press of a pair and Enter: as `centerBoundary(axis, line)` of the grid. Returns where the boundary stands. */
   center(axis: Axis, line: number): number;
   /**
-   * The end of a drag that moved the boundary: as `mergeCoincident(axis, line)` of the grid. Returns whether a line merged. A host
-   * that stores the result of a drag through an operation of its own runs it here, from where the drag left the boundary.
+   * The end of a drag that moved the boundary. Returns whether the end merged a line, which the operations of the grid never do: a
+   * move onto another line joins the two lines as it reaches it, because the derived lines hold one coordinate once. A host that
+   * stores the result of a drag through an operation of its own runs it here, from where the drag left the boundary.
    */
   end(axis: Axis, line: number): boolean;
 }
@@ -317,7 +318,7 @@ export class SoksakView {
       move: (axis, line, px) => grid.moveBoundary(axis, line, px),
       step: (axis, line, px) => grid.moveBoundary(axis, line, px),
       center: (axis, line) => grid.centerBoundary(axis, line),
-      end: (axis, line) => grid.mergeCoincident(axis, line),
+      end: () => false,
     };
     // default: `drawn` is optional and documented as the grid's own arrangement: a fullscreen card covers the plane.
     this.drawn = options.drawn ?? {

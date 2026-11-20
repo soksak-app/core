@@ -81,11 +81,10 @@ type WindowView struct {
 	Scale, Width, Height float64
 }
 
-// environmentGrid is the grid of a new space of the environment declaration.
+// environmentGrid is the grid of a new space of the environment declaration: the root node of its slicing tree, whose card nodes declare
+// their tabs (docs/spec/groups.md#storage).
 type environmentGrid struct {
-	Xs    []float64         `json:"xs"`
-	Ys    []float64         `json:"ys"`
-	Cards []json.RawMessage `json:"cards"`
+	Root json.RawMessage `json:"root"`
 }
 
 // lineBox returns the height of a line of text of size at the line height multiple, as the text of the fork lays it out and as

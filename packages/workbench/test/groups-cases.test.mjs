@@ -49,23 +49,18 @@ function difference(actual, expected, where) {
 function call(tree, grid, { call: name, args = {} }) {
   switch (name) {
     case "create": return tree.create(args.card, args.side, undefined, false);
-    // default: a split step without even divides as cardSplit exact.
-    case "split": return { card: tree.split(args.card, args.side, undefined, args.even ?? false) };
+    case "split": return { card: tree.split(args.card, args.side, undefined) };
     case "close": tree.close(args.card); return { closed: true };
     case "dissolve": tree.dissolve(args.group); return { dissolved: true };
     case "rename": return { group: args.group, name: tree.rename(args.group, args.name) };
     case "leader": return { card: args.card, group: tree.setLeader(args.card) };
     case "move": tree.move(args.card, args.target, args.side); return { card: args.card };
-    case "add": return { card: tree.addCard(args.group, undefined, args.even ?? false) };
-    case "grid": {
-      // The cards of the grid with their place and whether they are fixed, as the cases write them.
-      const { xs, ys, cards } = grid.toJSON();
-      return { xs, ys, cards: cards.map(({ id, c0, c1, r0, r1, fixed }) => ({ id, c0, c1, r0, r1, fixed })) };
-    }
-    case "stored": {
-      const { groups, leader, lastCard } = tree.stored();
-      return { groups, leader, lastCard };
-    }
+    case "add": return { card: tree.addCard(args.group, undefined) };
+    case "grid":
+      // The lines of the grid and its cards in the order of the tree with their place and whether they are fixed, as the cases write them.
+      return { xs: grid.lines("x"), ys: grid.lines("y"),
+        cards: grid.cards.map(({ id, c0, c1, r0, r1, fixed }) => ({ id, c0, c1, r0, r1, fixed })) };
+    case "stored": return tree.stored();
     case "rect": return tree.rect(args.card);
     case "path": return tree.path(args.card);
     case "level": return tree.level(args.card);

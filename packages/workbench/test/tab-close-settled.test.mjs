@@ -34,9 +34,7 @@ test("core.tab.close answers after the tab close and its draw", { timeout: 5000 
   const { installEnvironment } = await import("../environment.js");
   assert.deepEqual(installEnvironment({
     runtime: "runtime",
-    workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [
-      { id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: pluginId, title: "first" }, { plugin: pluginId, title: "second" }] },
-    ] } },
+    workspace: { focus: "main", grid: { root: { card: "main", tabs: [{ plugin: pluginId, title: "first" }, { plugin: pluginId, title: "second" }] } } },
     sidebars: { sets: [], links: [] },
   }, { plugins: [{ id: pluginId, package: "@fixture/tab-close", version: "0.0.1", manifest: {
     id: pluginId, name: "Fixture", description: "Fixture surface.", mark: "f", icon: "<path/>",

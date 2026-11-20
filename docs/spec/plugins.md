@@ -281,7 +281,7 @@ The browser back, forward, and reload buttons draw `chevron-left`, `chevron-righ
 | Field | Meaning |
 | --- | --- |
 | `runtime` | Optional. Directory inside the application that contains the runtime module `index.js`. Staging a main page requires it; an application whose host has no main page has none ([staged layout](#staged-layout)) |
-| `workspace.grid` | Grid lines and cards of a new space. A card with `tabs` lists `{ plugin, title }` entries. An optional card `width`, for a card other than `top` and `bottom`, and `height`, only for `top` and `bottom`, is a finite positive number of points; the window sidebar cards, named by their side, start at that size and use `sidebarWidth` when it is omitted, and declare no `tabs` |
+| `workspace.grid` | The slicing tree of a new space, `{root}` in the state form of the layout library ([the model](../../packages/soksak/docs/layout.md#the-model)); a card node is `{card, tabs?, width?, height?, fixed?}`. A card with `tabs` lists `{ plugin, title }` entries. An optional card `width`, for a card other than `top` and `bottom`, and `height`, only for `top` and `bottom`, is a finite positive number of points; the window sidebar cards, named by their side, start at that size and use `sidebarWidth` when it is omitted, and declare no `tabs` |
 | `workspace.focus` | Card focused in a new space; it must have tabs |
 | `sidebars.sets` | Optional explicit override of plugin defaults: section sets `{id, title, sections, layout}`; `layout` is `list` or `tabs` |
 | `sidecars` | Optional. `false` states that the runtime cannot run [sidecars](sidecars.md), as in the browser example. The default is `true` |

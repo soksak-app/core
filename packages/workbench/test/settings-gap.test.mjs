@@ -28,11 +28,10 @@ test("the gap setting is the distance between two adjacent cards", { timeout: 50
   const refused = installEnvironment({
     runtime: "runtime",
     workspace: { focus: "one", grid: {
-      xs: [0, 0.5, 1], ys: [0, 1],
-      cards: [
-        { id: "one", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: "fixture-gap", title: "one" }] },
-        { id: "two", c0: 1, c1: 2, r0: 0, r1: 1, tabs: [{ plugin: "fixture-gap", title: "two" }] },
-      ],
+      root: { cut: "x", kids: [
+        { share: 0.5, node: { card: "one", tabs: [{ plugin: "fixture-gap", title: "one" }] } },
+        { share: 0.5, node: { card: "two", tabs: [{ plugin: "fixture-gap", title: "two" }] } },
+      ] },
     } },
     sidebars: { sets: [], links: [] },
   }, { plugins: [] });

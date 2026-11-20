@@ -39,7 +39,7 @@ const manifest = (id, surface) => ({ id, name: id, description: "검사용 표�
 const { installEnvironment } = await import("../environment.js");
 assert.deepEqual(installEnvironment({
   runtime: "runtime",
-  workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: PLAIN, title: "t" }] }] } },
+  workspace: { focus: "main", grid: { root: { card: "main", tabs: [{ plugin: PLAIN, title: "t" }] } } },
   sidebars: { sets: [], links: [] },
 }, { plugins: [
   { id: SESSION, package: "@fixture/session", version: "0.0.1", manifest: manifest(SESSION, {
@@ -60,13 +60,16 @@ await installCoreExposure({ library: { state: () => null }, renames: { state: ()
 plane.nameWindow(WINDOW);
 
 const view = (id, plugin) => ({ id, plugin, title: id, origin: { directory: null } });
-const content = (id, c0, c1, r0, r1, tabs) => ({ id, c0, c1, r0, r1, data: { tabs, activeId: tabs[0].id } });
+const content = (id, tabs) => ({ card: id, data: { tabs, activeId: tabs[0].id } });
+/** A box of the group card id with its name and leader around the cut along x of the kids, each [share, node]. */
+const box = (id, name, leader, kids) => ({ box: id, data: { name, leader }, inner: row(kids) });
+/** A cut along x of the kids, each [share, node]. */
+const row = (kids) => ({ cut: "x", kids: kids.map(([share, node]) => ({ share, node })) });
 begin({ common: {}, open: [], projects: [{ id: "prj-aaaaaa", root: "/work/project", spaces: [
-  { id: "spc-aaaaaa", title: "SPACE1", layout: { focusedId: "main", named: 0, windowSidebars: {}, sidebars: {}, groups: [], leader: "main",
-    lastCard: 1, state: { xs: [0, 1], ys: [0, 1], cards: [content("main", 0, 1, 0, 1, [view("tab-aaaaa1", PLAIN)])] } } },
+  { id: "spc-aaaaaa", title: "SPACE1", layout: { focusedId: "main", named: 0, windowSidebars: {}, sidebars: {}, leader: "main",
+    lastCard: 1, state: { root: content("main", [view("tab-aaaaa1", PLAIN)]) } } },
   { id: "spc-bbbbbb", title: "SPACE2", layout: { focusedId: "card-8", named: 0, windowSidebars: {}, sidebars: {}, lastCard: 10, leader: "card-10",
-    groups: [{ card: "card-10", name: "그룹 1", leader: "card-8", members: ["card-8", "card-9"] }],
-    state: { xs: [0, 0.5, 1], ys: [0, 1], cards: [content("card-8", 0, 1, 0, 1, [view("tab-ooooo1", PLAIN)]), content("card-9", 1, 2, 0, 1, [view("tab-ooooo2", PLAIN)])] } } },
+    state: { root: box("card-10", "그룹 1", "card-8", [[0.5, content("card-8", [view("tab-ooooo1", PLAIN)])], [0.5, content("card-9", [view("tab-ooooo2", PLAIN)])]]) } } },
 ], activeSpaceId: "spc-aaaaaa", named: 2 }] });
 
 /** Shows three cards in a row, card-1, card-2 and card-3, whose first two are the group card-4 named 그룹 1, with card-1 focused. */
@@ -74,9 +77,10 @@ function arrange() {
   plane.closePicker("fixture reset");
   if (plane.currentGrid()) for (const card of plane.currentGrid().cards) for (const tab of plane.tabsOf(card)) reports.forgetTab(tab.id);
   plane.adopt({ focusedId: "card-1", named: 0, windowSidebars: {}, sidebars: {}, lastCard: 4, leader: "card-4",
-    groups: [{ card: "card-4", name: "그룹 1", leader: "card-1", members: ["card-1", "card-2"] }],
-    state: { xs: [0, 0.375, 0.75, 1], ys: [0, 1], cards: [content("card-1", 0, 1, 0, 1, [view("tab-aaaaa1", PLAIN)]),
-      content("card-2", 1, 2, 0, 1, [view("tab-aaaaa2", PLAIN)]), content("card-3", 2, 3, 0, 1, [view("tab-aaaaa3", PLAIN)])] } }, "spc-aaaaaa");
+    state: { root: row([
+      [0.75, box("card-4", "그룹 1", "card-1", [[0.5, content("card-1", [view("tab-aaaaa1", PLAIN)])], [0.5, content("card-2", [view("tab-aaaaa2", PLAIN)])]])],
+      [0.25, content("card-3", [view("tab-aaaaa3", PLAIN)])],
+    ]) } }, "spc-aaaaaa");
   plane.settle();
 }
 const run = (name, params) => registry.run(name, params);
@@ -138,11 +142,13 @@ function arrangeNested(focusedId) {
   plane.closePicker("fixture reset");
   if (plane.currentGrid()) for (const card of plane.currentGrid().cards) for (const tab of plane.tabsOf(card)) reports.forgetTab(tab.id);
   plane.adopt({ focusedId, named: 0, windowSidebars: {}, sidebars: {}, lastCard: 6, leader: "card-6",
-    groups: [{ card: "card-6", name: "그룹 2", leader: "card-5", members: [
-      { card: "card-5", name: "그룹 1", leader: "card-1", members: ["card-1", "card-2"] }, "card-3"] }],
-    state: { xs: [0, 0.25, 0.5, 0.75, 1], ys: [0, 1], cards: [content("card-1", 0, 1, 0, 1, [view("tab-aaaaa1", PLAIN)]),
-      content("card-2", 1, 2, 0, 1, [view("tab-aaaaa2", PLAIN)]), content("card-3", 2, 3, 0, 1, [view("tab-aaaaa3", PLAIN)]),
-      content("card-4", 3, 4, 0, 1, [view("tab-aaaaa4", PLAIN)])] } }, "spc-aaaaaa");
+    state: { root: row([
+      [0.75, box("card-6", "그룹 2", "card-5", [
+        [2 / 3, box("card-5", "그룹 1", "card-1", [[0.5, content("card-1", [view("tab-aaaaa1", PLAIN)])], [0.5, content("card-2", [view("tab-aaaaa2", PLAIN)])]])],
+        [1 / 3, content("card-3", [view("tab-aaaaa3", PLAIN)])],
+      ])],
+      [0.25, content("card-4", [view("tab-aaaaa4", PLAIN)])],
+    ]) } }, "spc-aaaaaa");
   plane.settle();
 }
 

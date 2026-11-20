@@ -617,6 +617,49 @@ func environment(t testing.TB) []byte {
 	return text
 }
 
+// treeCards is the card nodes of a stored tree whose root node is root, in the order of the tree, each with its id as id as well.
+func treeCards(root map[string]any) []map[string]any {
+	cards := []map[string]any{}
+	var visit func(node map[string]any)
+	visit = func(node map[string]any) {
+		switch {
+		case node["kids"] != nil:
+			for _, kid := range node["kids"].([]any) {
+				visit(kid.(map[string]any)["node"].(map[string]any))
+			}
+		case node["inner"] != nil:
+			visit(node["inner"].(map[string]any))
+		default:
+			card := map[string]any{"id": node["card"]}
+			for key, value := range node {
+				card[key] = value
+			}
+			cards = append(cards, card)
+		}
+	}
+	visit(root)
+	return cards
+}
+
+// treeBox is the box id in a stored tree whose root node is root, or nil.
+func treeBox(root map[string]any, id string) map[string]any {
+	if root["box"] == id {
+		return root
+	}
+	if inner, ok := root["inner"].(map[string]any); ok {
+		if box := treeBox(inner, id); box != nil {
+			return box
+		}
+	}
+	kids, _ := root["kids"].([]any) // silent: a card or a box has no kids.
+	for _, kid := range kids {
+		if box := treeBox(kid.(map[string]any)["node"].(map[string]any), id); box != nil {
+			return box
+		}
+	}
+	return nil
+}
+
 func newShell(t testing.TB, stored *storedHost) *shellFixture {
 	t.Helper()
 	f := startedShell(t, stored)
@@ -809,7 +852,7 @@ func (f *shellFixture) cardsOf() []map[string]any {
 		Spaces        []struct {
 			ID     string
 			Layout struct {
-				State struct{ Cards []map[string]any }
+				State struct{ Root map[string]any }
 			}
 		}
 	}
@@ -818,7 +861,7 @@ func (f *shellFixture) cardsOf() []map[string]any {
 	}
 	for _, space := range record.Spaces {
 		if space.ID == record.ActiveSpaceID {
-			return space.Layout.State.Cards
+			return treeCards(space.Layout.State.Root)
 		}
 	}
 	f.t.Fatalf("no active space in %s", encoded)

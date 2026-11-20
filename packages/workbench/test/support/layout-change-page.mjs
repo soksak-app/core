@@ -33,7 +33,7 @@ export async function openLayoutChangePage(caseName) {
   const { installEnvironment } = await import("../../environment.js");
   assert.deepEqual(installEnvironment({
     runtime: "runtime",
-    workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: PLAIN, title: "t" }] }] } },
+    workspace: { focus: "main", grid: { root: { card: "main", tabs: [{ plugin: PLAIN, title: "t" }] } } },
     sidebars: { sets: [], links: [] },
   }, { plugins: [{ id: PLAIN, package: "@fixture/plain", version: "0.0.1", manifest: { id: PLAIN, name: PLAIN, description: "검사용 표면.",
     mark: "f", icon: "<path/>", surface: { composition: { kind: "view", page: "ui/index.html" } } } }] }), []);
@@ -50,12 +50,13 @@ export async function openLayoutChangePage(caseName) {
   // The event is of the class call at the level debug, which this policy stores.
   logGate.set({ lifecycle: "error", input: "error", call: "debug", io: "error", frame: "error" });
 
-  const content = (id, c0, c1, r0, r1) => {
+  const content = (id) => {
     const tabs = [{ id: `tab-${id.slice(5)}aaaa`, plugin: PLAIN, title: id, origin: { directory: null } }];
-    return { id, c0, c1, r0, r1, data: { tabs, activeId: tabs[0].id } };
+    return { card: id, data: { tabs, activeId: tabs[0].id } };
   };
   plane.adopt({ focusedId: "card-1", named: 0, windowSidebars: {}, sidebars: {}, lastCard: 3, leader: "card-3",
-    groups: [{ card: "card-3", name: "그룹 1", leader: "card-1", members: ["card-1", "card-2"] }],
-    state: { xs: [0, 0.5, 1], ys: [0, 1], cards: [content("card-1", 0, 1, 0, 1), content("card-2", 1, 2, 0, 1)] } }, "spc-aaaaaa");
+    state: { root: { box: "card-3", data: { name: "그룹 1", leader: "card-1" }, inner: { cut: "x", kids: [
+      { share: 0.5, node: content("card-1") }, { share: 0.5, node: content("card-2") },
+    ] } } } }, "spc-aaaaaa");
   return { wire, registry, plane, flushEvents };
 }

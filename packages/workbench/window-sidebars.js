@@ -188,7 +188,7 @@ export function windowSidebarsArranged(grid, arranged) {
  * Arranges the window sidebars in the order (docs/spec/external-sidebars.md#fixed-placement-and-persistence). order lists the four sides,
  * sides are the sides that have a choice, and shown(side) is the switch of a side. When the window sidebars of the plane already stand
  * where the order places them, nothing moves, so a change of focus or of the override does not move a sidebar. Otherwise every window
- * sidebar is closed, the lines that no card references are removed, and the arranged sides are inserted in the reverse of the order at the
+ * sidebar is closed, its node leaving the tree, and the arranged sides are inserted in the reverse of the order at the
  * border line of their side with their saved size and set fixed, so the first side reaches across the plane; the plane may not hold a
  * saved size with every card above the layout's minimum, so a sidebar stands at the largest size that an insertion holds, a side whose
  * sidebar no size holds is skipped with an error that names it, and a dock that the same plane state already refused is not attempted
@@ -213,9 +213,6 @@ export function arrangeWindowSidebars(grid, order, sides, records, initialWidth,
       return false;
     });
     if (!closed) throw new Error(`cannot remove window sidebars ${left.map(card => card.id).join(", ")}`);
-    // After a card is closed, nothing references the lines that card referenced; a sidebar that opens again adds new lines, so they
-    // would accumulate in one slot.
-    grid.tidy();
   }
   const unplaceable = [];
   for (const side of [...arranged].reverse()) {

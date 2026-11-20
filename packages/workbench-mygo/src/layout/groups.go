@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"maps"
 	"math"
 	"slices"
 	"sort"
@@ -208,6 +207,8 @@ func (t *GroupTree) setLeader(key, id string) {
 		t.leader = id
 	} else if n := t.groupNode(key); n != nil {
 		n.leader = id
+		// The leader of a group card is in the data of its box.
+		t.grid.SetData(key, boxData(n.name, n.leader))
 	}
 }
 
@@ -314,91 +315,23 @@ func (t *GroupTree) Card(id string) (Card, bool) {
 	return Card{ID: id, C0: c0, C1: c1, R0: r0, R1: r1}, true
 }
 
-// SetData sets the data of the content card id.
-func (t *GroupTree) SetData(id string, data json.RawMessage) bool { return t.grid.SetData(id, data) }
-
-// heads is the number of group cards of path that start on the row line r0.
-func (t *GroupTree) heads(path []*node, r0 int) int {
-	k := 0
-	for _, n := range path {
-		if _, _, start, _ := t.span(n); start == r0 {
-			k++
-		}
-	}
-	return k
+// SetData sets the data of the content card id; the data of the box of a group card is its name and its leader, which no caller sets.
+func (t *GroupTree) SetData(id string, data json.RawMessage) bool {
+	return !t.IsGroup(id) && t.grid.SetData(id, data)
 }
 
 // Rect is the drawn rectangle of the card id (docs/spec/groups.md#drawn-rectangles): for a content card its rectangle in the grid, for
-// a group card its frame, each moved down and shortened by the headers of the group cards that hold it and start on its first row line.
+// a group card its frame, the rectangle of its box, each moved down and shortened by the headers of the group cards that hold it and
+// start on its first row line.
 func (t *GroupTree) Rect(id string) (Rect, bool) {
-	path, n, ok := t.find(id)
-	if !ok {
+	if _, _, ok := t.find(id); !ok {
 		return Rect{}, false
 	}
-	if n == nil || !n.group {
-		rect, ok := t.grid.Rect(id)
-		card, _ := t.grid.Card(id) // silent: the grid holds the card.
-		k := float64(t.heads(path, card.R0))
-		rect.Y += k * t.headStep()
-		rect.H -= k * t.headStep()
-		return rect, ok
-	}
-	// A group card is its frame: the lines around it inset by the corridor and by one gap for each group card that holds it on that
-	// line, and at the top by the headers of the group cards that hold it and start on its first row line.
-	c0, c1, r0, r1 := t.span(n)
-	return t.place(nil, n, path, c0, c1, r0, r1), true
-}
-
-// place is the rectangle between the lines c0, c1, r0 and r1 of a card that the group cards holders hold
-// (docs/spec/groups.md#drawn-rectangles): each line inset by its corridor and by one gap for each holder that ends on it, the top
-// line by the headers of the holders that start on it. With onto, the lines of the group card whole, the first of holders or the card
-// itself, are stretched onto onto and its own lines take no corridor, as the border of the plane takes none.
-func (t *GroupTree) place(onto *Rect, whole *node, holders []*node, c0, c1, r0, r1 int) Rect {
-	f := frameOf(t.grid.plane())
-	w0, w1, v0, v1 := t.span(whole)
-	pos := func(a *axle, line, lo, hi int, from, size float64) float64 {
-		if onto == nil {
-			return a.at[line]
-		}
-		return from + (a.at[line]-a.at[lo])*size/(a.at[hi]-a.at[lo])
-	}
-	inset := func(a []float64, line, lo, hi int) float64 {
-		if onto != nil && (line == lo || line == hi) {
-			return 0
-		}
-		return a[line]
-	}
-	var left, right, bottom int
-	for _, g := range holders {
-		g0, g1, _, h1 := t.span(g)
-		if g0 == c0 {
-			left++
-		}
-		if g1 == c1 {
-			right++
-		}
-		if h1 == r1 {
-			bottom++
-		}
-	}
-	var ox, ow, oy, oh float64
-	if onto != nil {
-		ox, ow, oy, oh = onto.X, onto.W, onto.Y, onto.H
-	}
-	x0 := pos(&f.x, c0, w0, w1, ox, ow) + inset(f.x.lo, c0, w0, w1) + float64(left)*t.frameUnit(&f.x)
-	x1 := pos(&f.x, c1, w0, w1, ox, ow) - inset(f.x.hi, c1, w0, w1) - float64(right)*t.frameUnit(&f.x)
-	y0 := pos(&f.y, r0, v0, v1, oy, oh) + inset(f.y.lo, r0, v0, v1) + float64(t.heads(holders, r0))*t.headStep()
-	y1 := pos(&f.y, r1, v0, v1, oy, oh) - inset(f.y.hi, r1, v0, v1) - float64(bottom)*t.frameUnit(&f.y)
-	return Rect{X: x0, Y: y0, W: math.Max(0, x1-x0), H: math.Max(0, y1-y0)}
-}
-
-// frameUnit is the length that one frame takes on the axle a: the corridor of the library, and none at the seam, where a frame takes no
-// gap (docs/spec/groups.md#drawn-rectangles).
-func (t *GroupTree) frameUnit(a *axle) float64 {
-	if t.seam {
-		return 0
-	}
-	return a.unit
+	rect, ok := t.grid.Rect(id)
+	k := t.grid.HeadsAbove(id)
+	rect.Y += k
+	rect.H -= k
+	return rect, ok
 }
 
 // headStep is how far one header moves the boxes below it down: the header and the corridor that separates it from them, as between
@@ -501,42 +434,41 @@ func (t *GroupTree) snapshot() snapshot {
 }
 
 func (t *GroupTree) restore(s snapshot) {
-	t.grid.reload(s.state)
+	if err := t.grid.Replace(s.state); err != nil {
+		panic("soksak: a snapshot of the grid was refused: " + err.Error())
+	}
 	t.roots, t.leader, t.last = copyNodes(s.roots), s.leader, s.last
 	t.reframe()
 }
 
-// reframe gives the grid the frames of every content card (docs/spec/groups.md#drawn-rectangles): on its left, right and bottom
-// side the number of group cards that hold it and end on the line of that side. The top takes no frame, because the header of a group
-// card stands inside its frame at the top. At the seam a frame takes no gap, so no card has a frame.
+// reframe gives the grid the head of every group card (docs/spec/groups.md#drawn-rectangles): the header of a group card and the
+// corridor below it, which the library lays inside the top of its box. The library derives the frames from the boxes of the tree: one
+// corridor on each side but the top, and none at the seam (frames none), where the corridor is the one border line that two boxes share.
 func (t *GroupTree) reframe() {
-	frames := map[string]Frames{}
+	heads := map[string]float64{}
+	var walk func(n *Node)
+	walk = func(n *Node) {
+		if n.Box != "" {
+			heads[n.Box] = t.headStep()
+			walk(n.Inner)
+		}
+		for _, kid := range n.Kids {
+			walk(kid.Node)
+		}
+	}
+	if root := t.grid.ToJSON().Root; root != nil {
+		walk(root)
+	}
+	mode := "corridor"
 	if t.seam {
-		t.grid.cardFrames = frames
-		t.grid.changed()
-		return
+		mode = "none"
 	}
-	for _, card := range t.grid.Cards() {
-		path, _, _ := t.find(card.ID) // silent: a card outside the tree, a window sidebar, has no path and no frames.
-		var f Frames
-		for _, n := range path {
-			c0, c1, _, r1 := t.span(n)
-			if c0 == card.C0 {
-				f.Left++
-			}
-			if c1 == card.C1 {
-				f.Right++
-			}
-			if r1 == card.R1 {
-				f.Bottom++
-			}
-		}
-		if f != (Frames{}) {
-			frames[card.ID] = f
-		}
+	if err := t.grid.SetFrames(mode); err != nil {
+		panic("soksak: " + err.Error())
 	}
-	t.grid.cardFrames = frames
-	t.grid.changed()
+	if err := t.grid.SetHeads(heads); err != nil {
+		panic("soksak: the heads of the boxes of the grid were refused: " + err.Error())
+	}
 }
 
 // Probes is the number of trial operations that Probe ran: an answer of CanSplit, CanGroup or CanClose that the tree kept runs none.
@@ -575,25 +507,14 @@ func (t *GroupTree) try(id, op string, change func() error) error {
 	return nil
 }
 
-// keepLines removes the paidBy records and the lines that no card uses while the space holds a group card, so a later close gives the
-// cells of a card to its neighbours without moving the lines of other groups, and a later split does not land on a seam of another
-// group (docs/spec/groups.md#model).
+// keepLines gives the grid the heads of the group cards after an operation (docs/spec/groups.md#model).
 func (t *GroupTree) keepLines() {
 	t.reframe()
-	if len(t.roots) == 0 {
-		return
-	}
-	clear(t.grid.paidBy)
-	t.grid.Tidy()
-	// Two lines at one coordinate, which a space without groups can hold, become one line.
-	for _, axis := range axes {
-		for k := len(t.grid.arr(axis)) - 2; k >= 1; k-- {
-			if a := t.grid.arr(axis); k < len(a)-1 && math.Abs(a[k]-a[k-1]) < eps {
-				t.grid.MergeCoincident(axis, k)
-			}
-		}
-	}
-	t.reframe()
+}
+
+// boxData is the data {name, leader} of the box of a group card.
+func boxData(name, leader string) json.RawMessage {
+	return json.RawMessage(`{"name":` + strconv.Quote(name) + `,"leader":` + strconv.Quote(leader) + `}`)
 }
 
 // issue returns the next card id of the space.
@@ -607,86 +528,6 @@ func sizeText(w, h float64) string {
 	return strconv.Itoa(int(math.Round(w))) + "x" + strconv.Itoa(int(math.Round(h)))
 }
 
-// cellBox is a card of the grid with the coordinates of its lines.
-type cellBox struct {
-	card           Card
-	x0, x1, y0, y1 float64
-}
-
-// boxes is the cards of the grid with their coordinates.
-func (t *GroupTree) boxes() ([]cellBox, map[string]Paid) {
-	state := t.grid.ToJSON()
-	out := []cellBox{}
-	for _, card := range state.Cards {
-		out = append(out, cellBox{card: card, x0: state.Xs[card.C0], x1: state.Xs[card.C1], y0: state.Ys[card.R0], y1: state.Ys[card.R1]})
-	}
-	return out, state.PaidBy
-}
-
-// install makes the grid of the boxes: the lines are the coordinates that the boxes use, so a line that no card uses is removed (tidy),
-// and the paidBy records of the cards in laid are dropped, because their lines moved. Replace checks the result.
-func (t *GroupTree) install(boxes []cellBox, paid map[string]Paid, laid map[string]bool) error {
-	lines := func(of func(b cellBox) [2]float64) ([]float64, map[float64]int) {
-		set := map[float64]bool{}
-		for _, b := range boxes {
-			ends := of(b)
-			set[ends[0]], set[ends[1]] = true, true
-		}
-		values := []float64{}
-		for v := range set {
-			values = append(values, v)
-		}
-		sort.Float64s(values)
-		// Two ends closer than eps are one line, so that a computed middle at the coordinate of a line takes that line.
-		out := []float64{}
-		index := map[float64]int{}
-		for _, v := range values {
-			if len(out) == 0 || v-out[len(out)-1] >= eps {
-				out = append(out, v)
-			}
-			index[v] = len(out) - 1
-		}
-		return out, index
-	}
-	xs, xi := lines(func(b cellBox) [2]float64 { return [2]float64{b.x0, b.x1} })
-	ys, yi := lines(func(b cellBox) [2]float64 { return [2]float64{b.y0, b.y1} })
-	state := State{Xs: xs, Ys: ys, PaidBy: map[string]Paid{}}
-	for _, b := range boxes {
-		card := b.card
-		card.C0, card.C1, card.R0, card.R1 = xi[b.x0], xi[b.x1], yi[b.y0], yi[b.y1]
-		state.Cards = append(state.Cards, card)
-	}
-	for id, record := range paid {
-		if !laid[id] && !laid[record.To] {
-			state.PaidBy[id] = record
-		}
-	}
-	return t.grid.Replace(state)
-}
-
-// mapped is the coordinate v of the span [a0, b0] used in the span [a, b] (docs/spec/groups.md#the-rectangle-of-a-group-card). The ends of
-// the span are the ends of the new span exactly.
-func mapped(v, a0, b0, a, b float64) float64 {
-	switch v {
-	case a0:
-		return a
-	case b0:
-		return b
-	}
-	return a + (b-a)*(v-a0)/(b0-a0)
-}
-
-// bounds is the coordinates of the rectangle of the cards in ids among boxes.
-func bounds(boxes []cellBox, ids map[string]bool) (x0, x1, y0, y1 float64) {
-	x0, y0, x1, y1 = math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(-1)
-	for _, b := range boxes {
-		if ids[b.card.ID] {
-			x0, x1, y0, y1 = math.Min(x0, b.x0), math.Max(x1, b.x1), math.Min(y0, b.y0), math.Max(y1, b.y1)
-		}
-	}
-	return x0, x1, y0, y1
-}
-
 func idSet(ids []string) map[string]bool {
 	out := map[string]bool{}
 	for _, id := range ids {
@@ -695,83 +536,29 @@ func idSet(ids []string) map[string]bool {
 	return out
 }
 
-// splitRect splits the rectangle of the group node toward side: the new card id with data takes the half toward side, and the members
-// of the node are laid into the other half.
-func (t *GroupTree) splitRect(n *node, side Side, id string, data json.RawMessage) error {
-	boxes, paid := t.boxes()
-	ids := idSet(t.inside(n))
-	x0, x1, y0, y1 := bounds(boxes, ids)
-	born := cellBox{card: Card{ID: id, Data: data}, x0: x0, x1: x1, y0: y0, y1: y1}
-	tx0, tx1, ty0, ty1 := x0, x1, y0, y1
-	switch side {
-	case "right":
-		mid := (x0 + x1) / 2
-		born.x0, tx1 = mid, mid
-	case "left":
-		mid := (x0 + x1) / 2
-		born.x1, tx0 = mid, mid
-	case "bottom":
-		mid := (y0 + y1) / 2
-		born.y0, ty1 = mid, mid
-	default:
-		mid := (y0 + y1) / 2
-		born.y1, ty0 = mid, mid
-	}
-	for i, b := range boxes {
-		if ids[b.card.ID] {
-			boxes[i].x0, boxes[i].x1 = mapped(b.x0, x0, x1, tx0, tx1), mapped(b.x1, x0, x1, tx0, tx1)
-			boxes[i].y0, boxes[i].y1 = mapped(b.y0, y0, y1, ty0, ty1), mapped(b.y1, y0, y1, ty0, ty1)
-		}
-	}
-	ids[id] = true
-	return t.install(append(boxes, born), paid, ids)
+// splitRect splits the rectangle of the group node toward side: the new card id with data stands beside its box toward side, added to the
+// cut that holds the box as insert of the layout library adds a card (docs/spec/groups.md#commands), so the tree inside the box stays.
+func (t *GroupTree) splitRect(n *node, side Side, id string, data json.RawMessage, op string) error {
+	return t.insert(n.card, op, Target{n.card}, side, &Node{Card: id, Data: data})
 }
 
-// merged is the cards inside a group card that merge replaced with one card, with the rectangle they had.
-type merged struct {
-	boxes          []cellBox
-	x0, x1, y0, y1 float64
+// addInto puts the new card id with data into the group node at the right edge of its rectangle: beside the members of its box toward
+// right, added to the inner node of the box as insert adds a card, so the tree of the members stays.
+func (t *GroupTree) addInto(n *node, id string, data json.RawMessage) error {
+	members := Target{}
+	for _, m := range n.members {
+		members = append(members, m.card)
+	}
+	return t.insert(n.card, "split toward right", members, "right", &Node{Card: id, Data: data})
 }
 
-// merge replaces the content cards inside the group node with one card of the id of the node that covers its rectangle.
-func (t *GroupTree) merge(n *node) (merged, error) {
-	boxes, paid := t.boxes()
-	ids := idSet(t.inside(n))
-	saved := merged{}
-	saved.x0, saved.x1, saved.y0, saved.y1 = bounds(boxes, ids)
-	kept := []cellBox{}
-	for _, b := range boxes {
-		if ids[b.card.ID] {
-			saved.boxes = append(saved.boxes, b)
-		} else {
-			kept = append(kept, b)
-		}
+// insert is Insert of the grid inside the operation op of the card id: its refusal, which names the deepest node that the insert would
+// draw below its minimum, is the refusal of the operation (docs/spec/groups.md#commands).
+func (t *GroupTree) insert(id, op string, target Target, side Side, node *Node) error {
+	if _, err := t.grid.Insert(target, side, node); err != nil {
+		return fmt.Errorf("card %s cannot %s: %w", id, op, err)
 	}
-	kept = append(kept, cellBox{card: Card{ID: n.card}, x0: saved.x0, x1: saved.x1, y0: saved.y0, y1: saved.y1})
-	ids[n.card] = true
-	return saved, t.install(kept, paid, ids)
-}
-
-// unmerge lays the cards that merge saved into the rectangle of the card id, which replaced them.
-func (t *GroupTree) unmerge(id string, saved merged) error {
-	boxes, paid := t.boxes()
-	kept := []cellBox{}
-	var at cellBox
-	for _, b := range boxes {
-		if b.card.ID == id {
-			at = b
-		} else {
-			kept = append(kept, b)
-		}
-	}
-	ids := map[string]bool{id: true}
-	for _, b := range saved.boxes {
-		ids[b.card.ID] = true
-		kept = append(kept, cellBox{card: b.card,
-			x0: mapped(b.x0, saved.x0, saved.x1, at.x0, at.x1), x1: mapped(b.x1, saved.x0, saved.x1, at.x0, at.x1),
-			y0: mapped(b.y0, saved.y0, saved.y1, at.y0, at.y1), y1: mapped(b.y1, saved.y0, saved.y1, at.y0, at.y1)})
-	}
-	return t.install(kept, paid, ids)
+	return nil
 }
 
 // container is the members of the level that holds the card id, as a pointer that a change of the level writes through.
@@ -816,11 +603,11 @@ func (t *GroupTree) attach(key string, n *node) {
 }
 
 // collapse replaces the group card key, when it holds one member, with that member, which takes its slot and its leader mark
-// (docs/spec/groups.md#closing). It returns the member, or key.
-func (t *GroupTree) collapse(key string) string {
+// (docs/spec/groups.md#closing), and its box gives its place to the member. It returns the member, or key.
+func (t *GroupTree) collapse(key string) (string, error) {
 	n := t.groupNode(key)
 	if n == nil || len(n.members) != 1 {
-		return key
+		return key, nil
 	}
 	sole := n.members[0]
 	members, outer := t.container(key)
@@ -833,7 +620,10 @@ func (t *GroupTree) collapse(key string) string {
 	if lead, _ := t.Leader(outer); lead == key {
 		t.setLeader(outer, sole.card)
 	}
-	return sole.card
+	if err := t.grid.Unwrap(key); err != nil {
+		return "", err
+	}
+	return sole.card, nil
 }
 
 // nodeOf is the node of the card id: its group node, or a node of a content card.
@@ -869,32 +659,27 @@ func (t *GroupTree) requireCard(id string) error {
 }
 
 // splitCard puts the new card id with data beside the card target toward side: the split of the layout for a content card, or the
-// split of its rectangle for a group card. A split toward top or bottom whose upper card is drawn below headers, which a group always
-// is, cuts at a new line (docs/spec/groups.md#split-setting). It is false when the layout refuses.
-func (t *GroupTree) splitCard(target string, side Side, id string, data json.RawMessage, grouping bool) (bool, error) {
+// split of its rectangle for a group card. A split toward top or bottom whose upper card is drawn below headers cuts at a new line
+// (docs/spec/groups.md#splitting). The refusal of the layout, which names the deepest node that the split would draw below its minimum,
+// is the refusal of the operation.
+func (t *GroupTree) splitCard(target string, side Side, id string, data json.RawMessage) error {
 	if n := t.groupNode(target); n != nil {
-		return true, t.splitRect(n, side, id, data)
+		return t.splitRect(n, side, id, data, "split toward "+side)
 	}
 	fresh := false
 	if axisOf(side) == "y" {
 		drawn, _ := t.Rect(target) // silent: requireCard found the card.
 		grid, _ := t.grid.Rect(target)
-		fresh = grouping || drawn.Y > grid.Y
+		fresh = drawn.Y > grid.Y
 	}
-	if _, ok := t.grid.SplitToward(target, side, SplitInit{ID: &id, Data: data, NewLine: fresh}); ok {
-		return true, nil
+	if _, err := t.grid.SplitToward(target, side, SplitInit{ID: &id, Data: data, NewLine: fresh}); err != nil {
+		return fmt.Errorf("card %s cannot split toward %s: %w", target, side, err)
 	}
-	// The library refuses a split whose halves fall below its minimum. The split is made again without the minimum, so the check of try
-	// names the content card that would be drawn below it and the size it would get (docs/spec/groups.md#commands).
-	min := t.grid.MinSize()
-	t.grid.SetMinSize(0)
-	defer t.grid.SetMinSize(min)
-	_, ok := t.grid.SplitToward(target, side, SplitInit{ID: &id, Data: data, NewLine: fresh})
-	return ok, nil
+	return nil
 }
 
 // level moves the line between the card target and the new card id of a split toward top or bottom, so that both are drawn at one
-// height below the headers that the upper one stands under (docs/spec/groups.md#split-setting). A split across does not change it.
+// height below the headers that the upper one stands under (docs/spec/groups.md#splitting). A split across does not change it.
 func (t *GroupTree) levelSplit(target string, side Side, id string) {
 	if axisOf(side) != "y" {
 		return
@@ -920,23 +705,8 @@ func (t *GroupTree) levelSplit(target string, side Side, id string) {
 		}
 	}
 	if delta := (down.H - up.H) / 2; math.Abs(delta) > eps {
-		t.grid.MoveLinePast("y", line, t.grid.BoundaryPos("y", line)+delta)
+		t.grid.MoveBoundary("y", line, t.grid.BoundaryPos("y", line)+delta, false)
 	}
-}
-
-// balanced runs the balance of cardSplit even after the split of the card id toward side (docs/spec/groups.md#split-setting), in the
-// change of the split, and refuses it when a content card that the split and the balance changed from before is drawn below minSize; the
-// halves of the split alone are not judged, because the balance gives them their size.
-func (t *GroupTree) balanced(id string, side Side, before map[string]Rect) error {
-	if err := t.balance(false); err != nil {
-		return fmt.Errorf("card %s cannot split toward %s: cardSplit even cannot balance the grid: %w", id, side, err)
-	}
-	if card, rect := t.below(before); card != "" {
-		minimum := t.grid.MinSize()
-		return fmt.Errorf("card %s cannot split toward %s: cardSplit even would draw card %s at %s, below its minimum %s", id, side, card,
-			sizeText(rect.W, rect.H), sizeText(minimum, minimum))
-	}
-	return nil
 }
 
 // CheckGroup is the refusal of a group of the card id toward side before the layout is asked, or nil.
@@ -950,22 +720,19 @@ func (t *GroupTree) CheckGroup(id string, side Side) error {
 	return t.requireCard(id)
 }
 
-// CreateGroup groups the card id with a new content card with data toward side, and returns the group card and the new card. even
-// balances the grid after the split (cardSplit even).
-func (t *GroupTree) CreateGroup(id string, side Side, data json.RawMessage, even bool) (string, string, error) {
+// CreateGroup groups the card id with a new content card with data toward side, and returns the group card and the new card.
+func (t *GroupTree) CreateGroup(id string, side Side, data json.RawMessage) (string, string, error) {
 	if err := t.CheckGroup(id, side); err != nil {
 		return "", "", err
 	}
-	before := t.drawn()
 	var group, born string
 	err := t.try(id, "hold a group toward "+side, func() error {
 		name := t.groupName()
 		group, born = t.issue(), t.issue()
-		if ok, err := t.splitCard(id, side, born, data, true); err != nil || !ok {
-			if err == nil {
-				err = fmt.Errorf("card %s cannot hold a group toward %s: %s", id, side, t.noRoomText(id, side))
-			}
-			return err
+		// The group split is one operation of the layout, judged on the box with its head (docs/spec/groups.md#commands).
+		box := GroupInit{Box: group, Data: boxData(name, id), Head: t.headStep()}
+		if err := t.grid.Group(id, side, &Node{Card: born, Data: data}, box); err != nil {
+			return fmt.Errorf("card %s cannot hold a group toward %s: %w", id, side, err)
 		}
 		members, key := t.container(id)
 		n := &node{card: group, group: true, name: name, leader: id, members: []*node{t.nodeOf(id), {card: born}}}
@@ -977,30 +744,12 @@ func (t *GroupTree) CreateGroup(id string, side Side, data json.RawMessage, even
 		if lead, _ := t.Leader(key); lead == id {
 			t.setLeader(key, group)
 		}
-		t.levelSplit(id, side, born)
-		if even {
-			return t.balanced(id, side, before)
-		}
 		return nil
 	})
 	if err != nil {
 		return "", "", err
 	}
 	return group, born, nil
-}
-
-// noRoomText is the text of a split of the card id toward side that the layout library refuses at any minimum: the card is drawn
-// narrower than the corridor that the split adds, so its halves would have no extent on the axis of side.
-func (t *GroupTree) noRoomText(id string, side Side) string {
-	rect, _ := t.Rect(id) // silent: the operation found the card before it split it.
-	w, h := rect.W, rect.H
-	if axisOf(side) == "x" {
-		w = 0
-	} else {
-		h = 0
-	}
-	minimum := t.grid.MinSize()
-	return fmt.Sprintf("card %s would be %s, below its minimum %s", id, sizeText(w, h), sizeText(minimum, minimum))
 }
 
 // requireGroup refuses an id that is no group card.
@@ -1030,6 +779,10 @@ func (t *GroupTree) Dissolve(id string) error {
 	if lead, _ := t.Leader(key); lead == id {
 		t.setLeader(key, n.leader)
 	}
+	if err := t.grid.Unwrap(id); err != nil {
+		return err
+	}
+	t.reframe()
 	return nil
 }
 
@@ -1044,6 +797,7 @@ func (t *GroupTree) Rename(id, name string) (string, error) {
 		return "", fmt.Errorf("group name must be 1 to 40 characters: %s", trimmed)
 	}
 	n.name = trimmed
+	t.grid.SetData(id, boxData(n.name, n.leader))
 	return trimmed, nil
 }
 
@@ -1061,30 +815,22 @@ func (t *GroupTree) SetLeader(id string) (string, error) {
 }
 
 // Split puts a new content card with data beside the card id toward side and returns its id: the new card of a content card joins the
-// group that holds the card, and the new card of a group card joins the level that holds the group card. even balances the grid after
-// the split (cardSplit even).
-func (t *GroupTree) Split(id string, side Side, data json.RawMessage, even bool) (string, error) {
+// group that holds the card, and the new card of a group card joins the level that holds the group card.
+func (t *GroupTree) Split(id string, side Side, data json.RawMessage) (string, error) {
 	if !isSide(side) {
 		return "", fmt.Errorf("unknown side %s; use left, right, top or bottom", side)
 	}
 	if err := t.requireCard(id); err != nil {
 		return "", err
 	}
-	before := t.drawn()
 	var born string
 	err := t.try(id, "split toward "+side, func() error {
 		born = t.issue()
-		if ok, err := t.splitCard(id, side, born, data, false); err != nil || !ok {
-			if err == nil {
-				err = fmt.Errorf("card %s cannot split toward %s: %s", id, side, t.noRoomText(id, side))
-			}
+		if err := t.splitCard(id, side, born, data); err != nil {
 			return err
 		}
 		t.attach(t.Parent(id), &node{card: born})
 		t.levelSplit(id, side, born)
-		if even {
-			return t.balanced(id, side, before)
-		}
 		return nil
 	})
 	if err != nil {
@@ -1096,7 +842,7 @@ func (t *GroupTree) Split(id string, side Side, data json.RawMessage, even bool)
 // CanSplit tells whether Split of the card id toward side would succeed.
 func (t *GroupTree) CanSplit(id string, side Side) bool {
 	return t.answer("split:"+id+":"+string(side), func() error {
-		_, err := t.Split(id, side, nil, false)
+		_, err := t.Split(id, side, nil)
 		return err
 	})
 }
@@ -1120,11 +866,11 @@ func (t *GroupTree) answer(key string, change func() error) bool {
 }
 
 // layoutToken describes everything that an answer of CanSplit, CanGroup or CanClose reads: the lines, the cards with their spans and
-// sizes, the paidBy records, the size, gap, minimum size, fill order, head and seam of the plane, and the group cards with their members.
+// sizes, the size, gap, minimum size, head and seam of the plane, and the group cards with their members.
 func (t *GroupTree) layoutToken() string {
 	g := t.grid
 	var b strings.Builder
-	fmt.Fprintf(&b, "%v|%v|%v|%v|%v|%v|%s|%v|%v|%v|", g.xs, g.ys, g.w, g.h, g.gap, g.min, g.order, t.head, t.seam, g.paidBy)
+	fmt.Fprintf(&b, "%v|%v|%v|%v|%v|%v|%v|%v|", g.xs, g.ys, g.w, g.h, g.gap, g.min, t.head, t.seam)
 	size := func(px *float64) string {
 		if px == nil {
 			return "-"
@@ -1150,24 +896,19 @@ func (t *GroupTree) layoutToken() string {
 	return b.String()
 }
 
-// AddCard puts a new content card with data into the group card id at the right edge of its rectangle and returns its id. even balances
-// the grid after the add (cardSplit even, docs/spec/groups.md#split-setting).
-func (t *GroupTree) AddCard(id string, data json.RawMessage, even bool) (string, error) {
+// AddCard puts a new content card with data into the group card id at the right edge of its rectangle and returns its id.
+func (t *GroupTree) AddCard(id string, data json.RawMessage) (string, error) {
 	n, err := t.requireGroup(id)
 	if err != nil {
 		return "", err
 	}
-	before := t.drawn()
 	var born string
 	err = t.try(id, "split toward right", func() error {
 		born = t.issue()
-		if err := t.splitRect(n, "right", born, data); err != nil {
+		if err := t.addInto(n, born, data); err != nil {
 			return err
 		}
 		t.attach(id, &node{card: born})
-		if even {
-			return t.balanced(id, "right", before)
-		}
 		return nil
 	})
 	return born, err
@@ -1181,16 +922,16 @@ func (t *GroupTree) Close(id string) ([]string, error) {
 	}
 	closed := t.ContentInside(id)
 	err := t.try(id, "close", func() error {
-		if n := t.groupNode(id); n != nil {
-			if _, err := t.merge(n); err != nil {
-				return err
+		if t.groupNode(id) != nil {
+			// A group card leaves as its box with every card inside it, so the tree around it stays as it is.
+			if !t.grid.Close(id) {
+				return fmt.Errorf("card %s cannot close: no kid of its cut can grow", id)
 			}
-		}
-		if err := t.closeCell(id, "close"); err != nil {
+		} else if err := t.closeCell(id, "close"); err != nil {
 			return err
 		}
-		t.collapse(t.detach(id))
-		return nil
+		_, err := t.collapse(t.detach(id))
+		return err
 	})
 	if err != nil {
 		return nil, err
@@ -1198,68 +939,24 @@ func (t *GroupTree) Close(id string) ([]string, error) {
 	return closed, nil
 }
 
-// closeCell closes the card id of the grid for the operation op. A row of neighbours takes its cells: the sides are tried in the fill
-// order of the layout library, the sides whose row lies in the level of the card first, and the first result that keeps every group card
-// one rectangle is kept; without such a row the slots of the card are removed, as the library removes them (R7). The refusal names the
-// cause (docs/spec/groups.md#closing).
+// closeCell closes the card id of the grid for the operation op: its node, the card or the box around it that holds nothing else, leaves
+// its cut, and the other kids of the cut that are no fixed card take its share by one factor (R7). The refusal names the cause
+// (docs/spec/groups.md#closing).
 func (t *GroupTree) closeCell(id, op string) error {
 	refused := func(why string) error { return fmt.Errorf("card %s cannot %s: %s", id, op, why) }
-	if t.grid.removable(id) == nil {
+	free := 0
+	for _, card := range t.grid.Cards() {
+		if !card.Fixed {
+			free++
+		}
+	}
+	if card, _ := t.grid.Card(id); card.Fixed || free <= 1 { // silent: requireCard found the card.
 		return refused("it is the last card of the layout")
 	}
-	level := map[string]bool{}
-	for _, n := range t.level(t.Parent(id)) {
-		for _, inner := range t.inside(n) {
-			level[inner] = true
-		}
-	}
-	inLevel := func(side string) bool {
-		found := t.grid.fillAlong(id, []string{side})
-		if found == nil {
-			return false
-		}
-		for _, c := range found.cards {
-			if !level[c.ID] {
-				return false
-			}
-		}
-		return true
-	}
-	sides := slices.Clone(fillOrders[t.grid.order])
-	slices.SortStableFunc(sides, func(a, b string) int {
-		ia, ib := inLevel(a), inLevel(b)
-		switch {
-		case ia && !ib:
-			return -1
-		case ib && !ia:
-			return 1
-		}
-		return 0
-	})
-	broken := ""
-	for _, side := range sides {
-		if t.grid.fillAlong(id, []string{side}) == nil {
-			continue
-		}
-		kept := t.snapshot()
-		if t.grid.closeAlong(id, []string{side}) {
-			group := t.broken()
-			if group == "" {
-				return nil
-			}
-			if broken == "" {
-				broken = group
-			}
-		}
-		t.restore(kept)
-	}
-	if broken != "" {
-		return refused("group " + broken + " would not cover one rectangle")
-	}
-	if t.grid.closeAlong(id, nil) {
+	if t.grid.Close(id) {
 		return nil
 	}
-	return refused("no row of cards that can grow covers a side of it, and its slots hold other cards")
+	return refused("no kid of its cut can grow")
 }
 
 // CanClose tells whether Close of the card id would succeed.
@@ -1342,84 +1039,47 @@ func (t *GroupTree) Move(id, target, side string) error {
 		return nil
 	}
 	op := "move to " + side + " of " + target
-	refused := fmt.Errorf("card %s cannot %s", id, op)
 	return t.try(id, op, func() error {
 		moving := t.nodeOf(id)
 		// A card that moves inside its own level does not leave it, so it keeps the leader mark of the level that detach passes on
 		// (docs/spec/groups.md#leader).
 		_, level := t.container(id)
 		lead, _ := t.Leader(level)
-		keep := func(into string) {
-			if lead == id && into == level {
-				t.setLeader(into, id)
-			}
+		// A move is a withdraw and an insert: the card or the box of the group card leaves its cut, whose other kids take its space in
+		// proportion, and lands beside the target, or with centre at the right edge of the tree of the group card target
+		// (docs/spec/groups.md#closing).
+		left, err := t.grid.Withdraw(id)
+		if err != nil {
+			return fmt.Errorf("card %s cannot %s: %w", id, op, err)
 		}
-		if !moving.group && !t.IsGroup(target) && side != "centre" {
-			into := t.Parent(target)
-			var closing error
-			if !t.grid.moveWith(id, target, side, func() bool {
-				closing = t.closeCell(id, op)
-				return closing == nil
-			}) {
-				if closing != nil {
-					return closing
-				}
-				return refused
-			}
-			from := t.detach(id)
-			t.attach(into, moving)
-			keep(into)
-			t.collapse(from)
-			return nil
-		}
-		var saved merged
-		var data json.RawMessage
-		if moving.group {
-			var err error
-			if saved, err = t.merge(moving); err != nil {
-				return err
-			}
-		} else {
-			card, _ := t.grid.Card(id) // silent: CheckMove found the card.
-			data = card.Data
-		}
-		if err := t.closeCell(id, op); err != nil {
-			return err
-		}
-		// The target is decided before a group that the card leaves is replaced by its one member: a move beside that group lands
-		// beside the member, and a move into it keeps the group until the card is back.
+		// The card leaves the group tree before the insert, so the insert measures every card with the heads that it is drawn with.
+		into, at, toward := t.Parent(target), Target{target}, Side(side)
 		from := t.detach(id)
-		if side != "centre" || from != target {
-			if member := t.collapse(from); from == target {
-				target = member
-			}
-		}
-		into := t.Parent(target)
+		t.reframe()
 		if side == "centre" {
-			into = target
-			if err := t.splitRect(t.groupNode(target), "right", id, data); err != nil {
-				return err
-			}
-		} else if ok, err := t.splitCard(target, side, id, data, false); err != nil || !ok {
-			if err == nil {
-				err = refused
-			}
-			return err
-		}
-		if moving.group {
-			if err := t.unmerge(id, saved); err != nil {
-				return err
+			into, at, toward = target, Target{}, "right"
+			for _, member := range t.Members(target) {
+				if member != id {
+					at = append(at, member)
+				}
 			}
 		}
+		if _, err := t.grid.Insert(at, toward, left); err != nil {
+			return fmt.Errorf("card %s cannot %s: %w", id, op, err)
+		}
+		// The group that the card leaves is replaced by its one member after the insert, so a move beside that group lands beside it
+		// and the member takes its place.
 		t.attach(into, moving)
-		keep(into)
-		t.collapse(from)
-		return nil
+		if lead == id && into == level {
+			t.setLeader(into, id)
+		}
+		_, err = t.collapse(from)
+		return err
 	})
 }
 
-// balance gives every child of every cut an equal share, with each group card as a box of the layout library (Grid.Even), and refuses a
-// grid that is not a slicing arrangement; in a space without groups, arrange runs the even arrangement of the library instead
+// balance gives every child of every cut an equal share, with each group card as a box of the layout library (Grid.Even); in a space
+// without groups, arrange runs the even arrangement of the library instead
 // (cardArrange even), which refuses when no equal grid keeps every card at its minimum size and raises lastCard to the empty card that it
 // adds (docs/spec/groups.md#card-commands-on-a-group-card).
 func (t *GroupTree) balance(arrange bool) error {
@@ -1440,23 +1100,16 @@ func (t *GroupTree) balance(arrange bool) error {
 	}
 	// The frames follow the tree first, so the drawn rectangles that the balance measures are the ones that the space draws after it.
 	t.reframe()
-	// Each group card is a box of the layout library with its header above its members, so no cut crosses a group card.
-	var box func(n *node) Member
-	box = func(n *node) Member {
-		if !n.group {
-			return Member{Card: n.card}
+	heads := map[string]float64{}
+	for _, id := range t.Cards() {
+		if t.IsGroup(id) {
+			heads[id] = t.headStep()
 		}
-		b := &Box{ID: n.card, Head: t.headStep(), Members: []Member{}}
-		for _, m := range n.members {
-			b.Members = append(b.Members, box(m))
-		}
-		return Member{Box: b}
 	}
-	boxes := []Member{}
-	for _, n := range t.roots {
-		boxes = append(boxes, box(n))
+	if err := t.grid.SetHeads(heads); err != nil {
+		return err
 	}
-	if err := t.grid.Even(boxes); err != nil {
+	if err := t.grid.Even(); err != nil {
 		return fmt.Errorf("the layout cannot balance: %w", err)
 	}
 	return nil
@@ -1515,7 +1168,6 @@ func (t *GroupTree) CenterBoundary(axis Axis, line int) float64 {
 	before := t.drawn()
 	kept := t.snapshot()
 	at := t.grid.CenterBoundary(axis, line)
-	t.grid.MergeCoincident(axis, line)
 	t.keepLines()
 	if card, _ := t.below(before); card != "" {
 		t.restore(kept)
@@ -1533,12 +1185,11 @@ func (t *GroupTree) MoveBoundaryTo(axis Axis, line int, px float64) float64 {
 	return at
 }
 
-// MergeCoincident merges the boundary line of axis onto a neighbour at its coordinate at the end of a drag, as Grid.MergeCoincident
-// does, and keeps no line that no card uses while the space holds a group card.
+// MergeCoincident ends a drag of the boundary line of axis and keeps no line that no card uses while the space holds a group card. It
+// reports false: the grid holds a line at a coordinate once, so a boundary that reached a neighbour is already one line with it.
 func (t *GroupTree) MergeCoincident(axis Axis, line int) bool {
-	merged := t.grid.MergeCoincident(axis, line)
 	t.keepLines()
-	return merged
+	return false
 }
 
 // Focusable is the content card that a focus of the card id gives: the card itself, or for a group card the first content card
@@ -1554,7 +1205,7 @@ func (t *GroupTree) Focusable(id string) string {
 // would succeed (docs/spec/groups.md#headers).
 func (t *GroupTree) CanGroup(id string, side Side) bool {
 	return t.answer("group:"+id+":"+string(side), func() error {
-		_, _, err := t.CreateGroup(id, side, nil, false)
+		_, _, err := t.CreateGroup(id, side, nil)
 		return err
 	})
 }
@@ -1618,26 +1269,64 @@ func (t *GroupTree) DropAt(x, y float64, options ZoneOptions, without string) *Z
 // while every corridor and frame keeps the gap, and each card inside it stands below the headers of the group cards between it and id
 // that start on its first row line.
 func (t *GroupTree) Fullscreen(id string, rect Rect) map[string]Rect {
-	whole := t.groupNode(id)
-	if whole == nil {
+	box := t.boxOf(t.grid.ToJSON().Root, id)
+	if box == nil {
 		return nil
 	}
-	out := map[string]Rect{id: rect}
+	// The box is laid as the root of a plane of the size of rect with the options, the frames and the heads of the grid.
+	gap, minimum, w, h := t.grid.Gap(), t.grid.MinSize(), rect.W, rect.H
+	plane, err := New(&State{Root: box}, Options{Gap: &gap, MinSize: &minimum, Width: &w, Height: &h})
+	if err != nil {
+		panic("soksak: the box of group " + id + " was refused as a state: " + err.Error())
+	}
+	if err := plane.SetFrames(t.grid.Frames()); err != nil {
+		panic("soksak: " + err.Error())
+	}
+	heads := map[string]float64{}
 	for _, card := range t.Cards() {
-		path, inner, _ := t.find(card)
-		at := slices.IndexFunc(path, func(g *node) bool { return g == whole })
-		if card == id || at < 0 {
-			continue
+		if t.IsGroup(card) && t.boxOf(box, card) != nil {
+			heads[card] = t.headStep()
 		}
-		if inner != nil && inner.group {
-			c0, c1, r0, r1 := t.span(inner)
-			out[card] = t.place(&rect, whole, path[at:], c0, c1, r0, r1)
-			continue
+	}
+	if err := plane.SetHeads(heads); err != nil {
+		panic("soksak: " + err.Error())
+	}
+	out := map[string]Rect{id: rect}
+	for card := range heads {
+		if card != id {
+			r, _ := plane.Rect(card) // silent: the plane holds the box.
+			out[card] = t.onto(rect, r, plane.HeadsAbove(card))
 		}
-		c, _ := t.grid.Card(card) // silent: card is a content card of the grid.
-		out[card] = t.place(&rect, whole, path[at:], c.C0, c.C1, c.R0, c.R1)
+	}
+	for _, card := range plane.Cards() {
+		r, _ := plane.Rect(card.ID) // silent: the plane holds the card.
+		out[card.ID] = t.onto(rect, r, plane.HeadsAbove(card.ID))
 	}
 	return out
+}
+
+// onto is the rectangle r of a plane laid at the origin, moved onto rect and below the heads drawn inside its top.
+func (t *GroupTree) onto(rect, r Rect, heads float64) Rect {
+	return Rect{X: rect.X + r.X, Y: rect.Y + r.Y + heads, W: r.W, H: r.H - heads}
+}
+
+// boxOf is the box id inside the node n, or nil.
+func (t *GroupTree) boxOf(n *Node, id string) *Node {
+	if n == nil {
+		return nil
+	}
+	if n.Box == id {
+		return n
+	}
+	if n.Box != "" {
+		return t.boxOf(n.Inner, id)
+	}
+	for _, kid := range n.Kids {
+		if found := t.boxOf(kid.Node, id); found != nil {
+			return found
+		}
+	}
+	return nil
 }
 
 // storedNode is the stored form of a group card (docs/spec/groups.md#storage).
@@ -1667,20 +1356,19 @@ func (t *GroupTree) nodes(level []*node, depth int, withLevel bool) []any {
 	return out
 }
 
-// Stored is the stored form of the group tree: the group cards of the root level, the leader of the root level, or nil, and lastCard.
-func (t *GroupTree) Stored() ([]any, *string, int) {
+// Stored is the stored form of the layout (docs/spec/groups.md#storage): the tree of the grid with the group cards as boxes, the leader of
+// the root level, or nil, and lastCard.
+func (t *GroupTree) Stored() (State, *string, int) {
 	var leader *string
 	if t.leader != "" {
 		lead := t.leader
 		leader = &lead
 	}
-	return t.nodes(t.roots, 0, false), leader, t.last
+	return t.grid.ToJSON(), leader, t.last
 }
 
-// Reported is the group tree that core.layout reports: the stored form with the level of each node.
-func (t *GroupTree) Reported() []any { return t.nodes(t.roots, 0, true) }
-
-// ReportedMembers is the members of the group card id in the form of Reported.
+// ReportedMembers is the members of the group card id as core.card.get reports them: each content card by its id, and each group card
+// as {card, name, level, leader, members}.
 func (t *GroupTree) ReportedMembers(id string) []any {
 	path, n, _ := t.find(id) // silent: an id that is no card has no members.
 	if n == nil || !n.group {
@@ -1711,43 +1399,32 @@ func compact(raw json.RawMessage) string {
 	return out.String()
 }
 
-// ReadTree reads the stored layout of a space: the grid state, the group tree, the leader of the root level and lastCard as stored,
-// each refused with the text of docs/spec/groups.md#storage. A member that is absent is nil.
-func ReadTree(state State, groups, leader, lastCard json.RawMessage, options GroupOptions, grid *Grid) (*GroupTree, error) {
-	if err := grid.Replace(state); err != nil {
+// ReadTree reads the stored layout of a space: the tree of the grid with its group cards as boxes, the leader of the root level and
+// lastCard as stored, each refused with the text of docs/spec/groups.md#storage; groups is the group list of the earlier form, which is
+// refused. A member that is absent is nil.
+func ReadTree(stored State, groups, leader, lastCard json.RawMessage, options GroupOptions, grid *Grid) (*GroupTree, error) {
+	if err := CheckState(stored); err != nil {
+		return nil, err
+	}
+	if groups != nil {
+		return nil, errors.New("layout stores groups, the group list of the earlier form; the group cards are boxes of state")
+	}
+	if err := grid.Replace(stored); err != nil {
 		return nil, err
 	}
 	t := &GroupTree{grid: grid, head: options.Head, seam: options.Seam}
-	items, ok := list(groups)
-	if !ok {
-		return nil, fmt.Errorf("layout stores groups %s, which is not a list of groups", compact(groups))
-	}
 	seen := map[string]bool{}
-	content := map[string]bool{}
-	for _, card := range state.Cards {
-		seen[card.ID] = true
-		content[card.ID] = !card.Fixed
+	level, err := t.readLevel(grid.root, seen)
+	if err != nil {
+		return nil, err
 	}
-	held := map[string]bool{}
-	for _, raw := range items {
-		n, err := t.readNode(raw, seen, content, held)
-		if err != nil {
-			return nil, err
+	for _, n := range level {
+		if n.group {
+			t.roots = append(t.roots, n)
 		}
-		t.roots = append(t.roots, n)
 	}
 	if err := t.readLeader(leader); err != nil {
 		return nil, err
-	}
-	for _, id := range t.Cards() {
-		if n := t.groupNode(id); n != nil && !t.covers(n) {
-			return nil, fmt.Errorf("group %s does not cover one rectangle of the grid", id)
-		}
-	}
-	if len(t.roots) > 0 {
-		if err := t.readLines(state); err != nil {
-			return nil, err
-		}
 	}
 	if err := t.readLast(lastCard, seen); err != nil {
 		return nil, err
@@ -1756,80 +1433,52 @@ func ReadTree(state State, groups, leader, lastCard json.RawMessage, options Gro
 	return t, nil
 }
 
-// readLines refuses a paidBy record and a line that no card uses in a layout with groups.
-func (t *GroupTree) readLines(state State) error {
-	if len(state.PaidBy) > 0 {
-		ids := slices.Sorted(maps.Keys(state.PaidBy))
-		return fmt.Errorf("layout with groups stores the paidBy record of card %s; a layout with groups keeps none", ids[0])
-	}
-	for _, axis := range axes {
-		for k := 1; k < len(t.grid.arr(axis))-1; k++ {
-			if t.grid.IsVirtual(axis, k) {
-				return fmt.Errorf("layout with groups stores the %s line %d, which no card uses; a layout with groups keeps none", axis, k)
+// readLevel reads the members of a level from its node: the cards and the boxes that no box inside it holds, each box a group card
+// with the members of its inner node. Every id goes into seen.
+func (t *GroupTree) readLevel(n *Node, seen map[string]bool) ([]*node, error) {
+	switch {
+	case n.isCut():
+		out := []*node{}
+		for _, kid := range n.Kids {
+			members, err := t.readLevel(kid.Node, seen)
+			if err != nil {
+				return nil, err
 			}
+			out = append(out, members...)
 		}
+		return out, nil
+	case !n.isBox():
+		seen[n.Card] = true
+		return []*node{{card: n.Card}}, nil
 	}
-	return nil
-}
-
-// readNode reads one stored group card.
-func (t *GroupTree) readNode(raw json.RawMessage, seen, content, held map[string]bool) (*node, error) {
-	refused := fmt.Errorf("layout stores the group %s, which is not {card, name, leader, members}", compact(raw))
-	fields, keys, ok := object(raw)
-	if !ok || len(keys) != 4 {
-		return nil, refused
-	}
-	var id string
-	members, listed := list(fields["members"])
-	_, hasLeader := fields["leader"]
-	_, hasName := fields["name"]
-	if jsonKind(fields["card"]) != '"' || json.Unmarshal(fields["card"], &id) != nil || !listed || !hasLeader || !hasName {
-		return nil, refused
+	id := n.Box
+	seen[id] = true
+	fields, keys, ok := object(n.Data)
+	if !ok || len(keys) != 2 || fields["name"] == nil || fields["leader"] == nil {
+		return nil, fmt.Errorf("layout stores the group %s with the data %s, which is not {name, leader}", id, compact(n.Data))
 	}
 	var name string
 	if jsonKind(fields["name"]) != '"' || json.Unmarshal(fields["name"], &name) != nil || utf8.RuneCountInString(name) < 1 ||
 		utf8.RuneCountInString(name) > 40 || strings.TrimSpace(name) != name {
 		return nil, fmt.Errorf("group %s stores the name %s, which is not 1 to 40 characters", id, compact(fields["name"]))
 	}
-	if seen[id] {
-		return nil, fmt.Errorf("card %s is stored twice", id)
-	}
-	seen[id] = true
-	if len(members) < 2 {
-		return nil, fmt.Errorf("group %s holds fewer than two cards", id)
-	}
-	n := &node{card: id, group: true, name: name}
-	for _, member := range members {
-		if jsonKind(member) != '"' {
-			inner, err := t.readNode(member, seen, content, held)
-			if err != nil {
-				return nil, err
-			}
-			n.members = append(n.members, inner)
-			continue
-		}
-		var card string
-		if err := json.Unmarshal(member, &card); err != nil {
-			return nil, refused
-		}
-		if IsWindowSide(card) {
-			return nil, fmt.Errorf("group %s holds the window sidebar %s", id, card)
-		}
-		if !content[card] {
-			return nil, fmt.Errorf("group %s holds %s, which is not a content card of the layout", id, compact(member))
-		}
-		if held[card] {
-			return nil, fmt.Errorf("card %s is stored twice", card)
-		}
-		held[card] = true
-		n.members = append(n.members, &node{card: card})
-	}
-	lead, err := readLeader("group "+id, fields["leader"], n.members)
+	members, err := t.readLevel(n.Inner, seen)
 	if err != nil {
 		return nil, err
 	}
-	n.leader = lead
-	return n, nil
+	for _, m := range members {
+		if IsWindowSide(m.card) {
+			return nil, fmt.Errorf("group %s holds the window sidebar %s", id, m.card)
+		}
+	}
+	if !n.Inner.isCut() {
+		return nil, fmt.Errorf("group %s holds fewer than two cards", id)
+	}
+	group := &node{card: id, group: true, name: name, members: members}
+	if group.leader, err = readLeader("group "+id, fields["leader"], members); err != nil {
+		return nil, err
+	}
+	return []*node{group}, nil
 }
 
 // readLeader reads the stored leader of the level label among its members.

@@ -294,8 +294,8 @@ func (s *Shell) activityProjects() ([]ActivityProject, error) {
 		for _, space := range project.Spaces {
 			stored := space.Layout
 			if project.ID == s.active && space.ID == project.ActiveSpaceID && s.plane != nil && s.planes != nil {
-				groups, _, _ := s.planes.Stored()
-				drawn, err := json.Marshal(map[string]any{"state": map[string]any{"cards": s.contentCards()}, "groups": groups})
+				state, _, _ := s.planes.Stored()
+				drawn, err := json.Marshal(map[string]any{"state": state})
 				if err != nil {
 					return nil, fmt.Errorf("the drawn layout of space %s: %w", space.ID, err)
 				}
@@ -324,7 +324,11 @@ func (s *Shell) eachLayoutTab(visit func(project, space string, tab layout.Tab, 
 			if err := json.Unmarshal(space.Layout, &stored); err != nil {
 				return fmt.Errorf("space %s: %w", space.ID, err)
 			}
-			eachTab(stored.State.Cards, func(tab layout.Tab, _ bool) { visit(project.ID, space.ID, tab, false) })
+			cards, err := stored.State.Cards()
+			if err != nil {
+				return fmt.Errorf("space %s: %w", space.ID, err)
+			}
+			eachTab(cards, func(tab layout.Tab, _ bool) { visit(project.ID, space.ID, tab, false) })
 		}
 	}
 	return nil

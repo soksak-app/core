@@ -140,12 +140,10 @@ func TestAGroupIsRenamedInPlace(t *testing.T) {
 // card-2 at its right, in a window large enough for both headers.
 func nestedSideShell(t *testing.T) *tabShell {
 	t.Helper()
-	space := gridSpace("spc-aaaaaa", []float64{0, 0.5, 1}, []float64{0, 0.5, 1},
-		gridCard("card-1", 0, 1, 0, 1, tab("t1", "notes")), gridCard("card-2", 1, 2, 0, 2, tab("t2", "notes")),
-		gridCard("card-3", 0, 1, 1, 2, tab("t3", "notes")))
+	space := treeSpace("spc-aaaaaa", boxNode("card-6", "그룹 2", "card-5", cutNode("x",
+		kidNode(0.5, boxNode("card-5", "그룹 1", "card-1", cutNode("y", kidNode(0.5, cardNode("card-1", tab("t1", "notes"))), kidNode(0.5, cardNode("card-3", tab("t3", "notes")))))),
+		kidNode(0.5, cardNode("card-2", tab("t2", "notes"))))))
 	stored := space["layout"].(map[string]any)
-	stored["groups"] = []any{map[string]any{"card": "card-6", "name": "그룹 2", "leader": "card-5", "members": []any{
-		map[string]any{"card": "card-5", "name": "그룹 1", "leader": "card-1", "members": []any{"card-1", "card-3"}}, "card-2"}}}
 	stored["leader"], stored["lastCard"] = "card-6", 6
 	f := layoutShell(t, space)
 	f.tester.SetSize(1400, 900)

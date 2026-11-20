@@ -3,9 +3,7 @@ import test from "node:test";
 
 // The consumer fixture uses the declared manifest boundary instead of the implementation of the plugin.
 const files = {
-  "/environment.json": { runtime: "runtime", workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [
-      { id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: "fixture", title: "Fixture" }] },
-    ] } } },
+  "/environment.json": { runtime: "runtime", workspace: { focus: "main", grid: { root: { card: "main", tabs: [{ plugin: "fixture", title: "Fixture" }] } } } },
   card: { id: "fixture", name: "Fixture", description: "Fixture card.",
     mark: "f", icon: "<path/>", surface: { composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } },
     sidebars: { sets: [{ id: "main", title: "Main", sections: ["sections.tree"], layout: "list" }],

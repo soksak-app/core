@@ -65,12 +65,6 @@ func (s *Shell) groupCard(id string) error {
 	return nil
 }
 
-// cardSplitEven tells whether a split balances the grid (cardSplit even, docs/spec/groups.md#split-setting).
-func (s *Shell) cardSplitEven() bool {
-	value, _ := s.settings.Value("cardSplit").(string) // silent: the settings store checks the type of the value.
-	return value == "even"
-}
-
 type groupCreateParam struct {
 	Card    string          `json:"card"`
 	Side    string          `json:"side"`
@@ -214,7 +208,7 @@ func (s *Shell) createGroup(value groupCreateParam) (any, error) {
 		return nil, err
 	}
 	if err := s.planes.Probe(func() error {
-		_, _, err := s.planes.CreateGroup(value.Card, value.Side, nil, s.cardSplitEven())
+		_, _, err := s.planes.CreateGroup(value.Card, value.Side, nil)
 		return err
 	}); err != nil {
 		return nil, err
@@ -249,7 +243,7 @@ func (s *Shell) createGroup(value groupCreateParam) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	group, born, err := s.planes.CreateGroup(value.Card, value.Side, encoded, s.cardSplitEven())
+	group, born, err := s.planes.CreateGroup(value.Card, value.Side, encoded)
 	if err != nil {
 		// A refused command changes nothing, so the number of the title of the new tab is not taken.
 		s.tabsNamed--
@@ -323,7 +317,7 @@ func (s *Shell) addGroupCard(id, plugin string, params json.RawMessage) (string,
 	if err != nil {
 		return "", err
 	}
-	born, err := s.planes.AddCard(id, encoded, s.cardSplitEven())
+	born, err := s.planes.AddCard(id, encoded)
 	if err != nil {
 		// A refused command changes nothing, so the number of the title of the new tab is not taken.
 		s.tabsNamed--

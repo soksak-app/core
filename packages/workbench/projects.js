@@ -14,6 +14,7 @@ import { createTabSessions } from "./tab-session.js";
 import { documentRegions } from "./document-regions.js";
 import { sectionSurfacePlugin } from "./registry.js";
 import { spaceSectionSurfaces, storedSurfaceKept } from "./section-surfaces.js";
+import { stateCards } from "./layout-tree.js";
 
 let store;
 let projects = [];
@@ -105,8 +106,8 @@ export function layoutSurfaces() {
   return projects.flatMap((project) => {
     const { sets, links } = projectSidebars(project);
     return project.spaces.flatMap((space) => {
-      const cards = space.layout?.state?.cards;
-      if (!Array.isArray(cards)) throw new Error(`project ${project.id} space ${space.id} has no layout cards`);
+      if (!space.layout?.state?.root) throw new Error(`project ${project.id} space ${space.id} has no layout tree`);
+      const cards = stateCards(space.layout.state);
       // default: a seat card has null data, so it has no tabs.
       const tabs = cards.flatMap((card) => (card.data?.tabs ?? []).map((tab) => ({ surface: tab.id, plugin: tab.plugin, root: project.root })));
       // The plugin is the one that declares the section. A section that no loaded plugin declares has no surface (docs/spec/plugins.md).
@@ -121,7 +122,7 @@ export function layoutSurfaces() {
 /** The ids of the cards of the layouts of all spaces of all projects, which the stored section surface entries name. */
 /** The card ids of the layout of each space of every project, by space id. */
 function spaceCards() {
-  return new Map(projects.flatMap((project) => project.spaces.map((space) => [space.id, new Set(space.layout.state.cards.map((card) => card.id))])));
+  return new Map(projects.flatMap((project) => project.spaces.map((space) => [space.id, new Set(stateCards(space.layout.state).map((card) => card.id))])));
 }
 // default: a window without an active project (the library) has null.
 export const active = () => projects.find((p) => p.id === activeProjectId) ?? null;
@@ -257,7 +258,7 @@ export function begin(snapshot) {
   const recreated = opened.spaces.find((s) => s.id === opened.activeSpaceId);
   const previousRecreated = recreated.layout;
   recreated.layout = listener.save("recreate");
-  forgetTabsLeft(previousRecreated.state.cards, recreated.layout.state.cards, `recreate of space ${recreated.id}, project ${opened.id}`);
+  forgetTabsLeft(stateCards(previousRecreated.state), stateCards(recreated.layout.state), `recreate of space ${recreated.id}, project ${opened.id}`);
   savedLayout = JSON.stringify({ spaces: opened.spaces, activeSpaceId: opened.activeSpaceId, named: opened.named });
 }
 
@@ -439,7 +440,7 @@ export function keep(path) {
   space.layout = listener.save(path);
   // The tabs that the previous stored layout of this space held and the saved one does not hold leave their origins (docs/spec/projects.md#tab-origin).
   // default: a keep without a writing path is the store of the drawn layout after a render.
-  forgetTabsLeft(previous.state.cards, space.layout.state.cards, `${path ?? "drawn layout"} of space ${space.id}, project ${project.id}`);
+  forgetTabsLeft(stateCards(previous.state), stateCards(space.layout.state), `${path ?? "drawn layout"} of space ${space.id}, project ${project.id}`);
   const patch = { spaces: project.spaces, activeSpaceId: project.activeSpaceId, named: project.named };
   const key = JSON.stringify(patch);
   if (key === savedLayout) return writing;
@@ -650,7 +651,7 @@ export function closeSpace(id) {
   keep("saved layout");
   const removed = removeSpace(project, id);
   // The tabs of the removed space leave its stored layout, so their origins end (docs/spec/projects.md#tab-origin).
-  forgetTabsLeft(removed.layout.state.cards, [], `close space ${removed.id}, project ${project.id}`);
+  forgetTabsLeft(stateCards(removed.layout.state), [], `close space ${removed.id}, project ${project.id}`);
   restore("saved layout");
   // The tabs of the closed space are in no layout, so their sidecar sessions end.
   retainSidecarSessions(layoutSurfaces()).catch(failed);

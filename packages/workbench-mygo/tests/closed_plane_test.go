@@ -120,8 +120,8 @@ func TestAFocusedDividerTakesNoKeyAfterItsProjectClosed(t *testing.T) {
 			focused = true
 			break
 		}
-		// The stop on the boundary at the other side of the card, which the arrow moves into the card.
-		if now == from-8 {
+		// The stop on another boundary, which changes the card as its cut shares the move; the left arrow moves it back.
+		if now != from {
 			f.tester.Key(0, ui.KeyLeft)
 			f.settle()
 		}

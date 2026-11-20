@@ -10,7 +10,7 @@ import { host, selectPageWire } from "@soksak/runtime";
 import { drained } from "./support/drained.mjs";
 
 const stored = [{ id: "prj-alpha", root: "/work/alpha", identity: "alpha", title: "alpha", color: "#fff", named: 1,
-  activeSpaceId: "spc-alpha", spaces: [{ id: "spc-alpha", title: "SPACE1", layout: { state: { cards: [] } } }], settings: {} }];
+  activeSpaceId: "spc-alpha", spaces: [{ id: "spc-alpha", title: "SPACE1", layout: { state: { root: { card: "main" } } } }], settings: {} }];
 const project = { id: "prj-alpha", root: "/work/alpha" };
 // The stored values and bases that every host answers alike.
 const VALUES = JSON.parse(readFileSync(new URL("../../../docs/spec/cases/project-data/values.json", import.meta.url), "utf8"));

@@ -27,9 +27,8 @@ const plane = await import("../plane.js");
 const environmentFile = {
   runtime: "runtime",
   workspace: { focus: "main", grid: {
-    xs: [0, 1], ys: [0, 1],
-    cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [
-      { plugin: owner, title: "first" }, { plugin: owner, title: "second" }] }],
+    root: { card: "main", tabs: [
+      { plugin: owner, title: "first" }, { plugin: owner, title: "second" }] },
   } },
   sidebars: { sets: [], links: [] },
 };
@@ -37,9 +36,7 @@ const environmentFile = {
 // A stored project whose layout holds the tab tab-bbbbbb; the window knows its tabs from the project list it starts with.
 const storedProject = {
   id: "prj-aaaaaa",
-  spaces: [{ id: "spc-aaaaaa", layout: { focusedId: "stored", named: 0, state: { xs: [0, 1], ys: [0, 1], cards: [
-    { id: "stored", c0: 0, c1: 1, r0: 0, r1: 1, data: { tabs: [{ id: "tab-bbbbbb", plugin: owner, title: "stored" }], activeId: "tab-bbbbbb" } },
-  ] } } }],
+  spaces: [{ id: "spc-aaaaaa", layout: { focusedId: "stored", named: 0, state: { root: { card: "stored", data: { tabs: [{ id: "tab-bbbbbb", plugin: owner, title: "stored" }], activeId: "tab-bbbbbb" } } } } }],
   activeSpaceId: "spc-aaaaaa",
   named: 0,
 };
@@ -53,6 +50,6 @@ test("a new tab avoids the ids of held surfaces, stored tabs and tabs issued bef
   // that the first tab took, then tab-dddddd.
   const draws = [0, 1, 2, 0, 2, 3];
   const fresh = plane.fresh((buf) => buf.fill(draws.shift()));
-  assert.deepEqual(fresh.state.cards[0].data.tabs.map((tab) => tab.id), ["tab-cccccc", "tab-dddddd"]);
+  assert.deepEqual(fresh.state.root.data.tabs.map((tab) => tab.id), ["tab-cccccc", "tab-dddddd"]);
   assert.deepEqual(draws, []);
 });

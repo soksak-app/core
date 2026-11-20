@@ -976,17 +976,10 @@ func (s *Shell) LayoutDescription() (*LayoutDescription, error) {
 	return description, nil
 }
 
-// describeLevel is the tree of the members of the level key, content cards and group cards, from the lines of the grid inside the
-// rectangle of the level (layout.Tree), and nil for a level without a card.
+// describeLevel is the tree of the members of the level key, content cards and group cards, from the stored tree of the grid: the root
+// node for the root level and the inner node of the box of a group card (layout.Grid.LevelTree), and nil for a level without a card.
 func (s *Shell) describeLevel(key string) (*LayoutNode, error) {
-	state := s.plane.ToJSON()
-	var members []layout.Card
-	for _, id := range s.planes.Members(key) {
-		if card, ok := s.planes.Card(id); ok {
-			members = append(members, card)
-		}
-	}
-	tree, err := layout.Tree(layout.State{Xs: state.Xs, Ys: state.Ys, Cards: members})
+	tree, err := s.plane.LevelTree(key)
 	if err != nil || tree == nil {
 		return nil, err
 	}
@@ -1366,7 +1359,11 @@ func (s *Shell) outOfLayout(kind, id string, holds func(cards []layout.Card) boo
 		if err := json.Unmarshal(space.Layout, &stored); err != nil {
 			return fmt.Errorf("space %s: %w", space.ID, err)
 		}
-		if holds(stored.State.Cards) {
+		cards, err := stored.State.Cards()
+		if err != nil {
+			return fmt.Errorf("space %s: %w", space.ID, err)
+		}
+		if holds(cards) {
 			return fmt.Errorf("%s %s is in space %s, which is not active", kind, id, space.ID)
 		}
 	}

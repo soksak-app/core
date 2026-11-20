@@ -12,10 +12,7 @@ import { layoutCaseSeeds, makeLayoutCase } from "../scripts/layout-role-cases.mj
 import { assertInvariants } from "../scripts/layout-sequences.mjs";
 import { guillotine } from "./slicing-oracle.mjs";
 
-const state = { xs: [0, 0.5, 1], ys: [0, 1], cards: [
-  { id: "held", c0: 0, c1: 1, r0: 0, r1: 1, fixed: true },
-  { id: "open", c0: 1, c1: 2, r0: 0, r1: 1 },
-] };
+const state = { root: { cut: "x", kids: [{ share: 0.5, node: { card: "held", fixed: true } }, { share: 0.5, node: { card: "open" } }] } };
 const options = { width: 1000, height: 800 };
 
 test("transformed sequences reject a refused operation that changes state", { timeout: 3000 }, () => {
@@ -39,12 +36,6 @@ test("transformed sequences reject a refused operation that changes state", { ti
   });
 });
 
-test("explicit permutation selection bounds transformed sequence work", { timeout: 3000 }, () => {
-  const result = assertRoleIndependence({ state, options, operations: [], orders: [[0, 1]] });
-  assert.equal(result.variants, 1, "only the requested identity order and its renamed counterpart run");
-  assert.throws(() => assertRoleIndependence({ state, options, operations: [], orders: [[0, 0]] }), /invalid permutation/);
-});
-
 function checkLayout(grid) {
   assert.doesNotThrow(() => assertInvariants(grid, "constrained"), "public layout invariants");
   assert.ok(guillotine(grid.cards), "independent slicing oracle rejected the spans");
@@ -57,12 +48,11 @@ test("varied layout cases cover the declared input classes and operation outcome
     const value = makeLayoutCase(seed);
     assert.deepEqual(makeLayoutCase(seed), value, "seed reproduces the initial state and full trace");
     const { state, options } = value;
-    const topology = state.xs.length === 2 ? "rows" : state.ys.length === 2 ? "columns" : "mixed";
-    assert.equal(topology, value.topology);
-    assert.equal(state.cards.length, [2, 3, 4, 5, 6, 7, 8, 2, 3, 4, 5, 6, 7, 8, 3, 3, 4, 5, 6, 7, 8][seed]);
-    assert.equal(value.operations.length, 34);
-    assert.ok(value.orders.length <= state.cards.length + 3);
     const initial = Soksak.from(state, options);
+    const topology = initial.lines("x").length === 2 ? "rows" : initial.lines("y").length === 2 ? "columns" : "mixed";
+    assert.equal(topology, value.topology);
+    assert.equal(initial.cards.length, [2, 3, 4, 5, 6, 7, 8, 2, 3, 4, 5, 6, 7, 8, 3, 3, 4, 5, 6, 7, 8][seed]);
+    assert.equal(value.operations.length, 34);
     checkLayout(initial);
     const result = assertRoleIndependence({ ...value, check: checkLayout });
     assert.equal(result.transitions.length, value.operations.length);
@@ -73,9 +63,9 @@ test("varied layout cases cover the declared input classes and operation outcome
       total.successful += counts.successful;
       total.refused += counts.refused;
     }
-    observed.push({ seed, topology, cards: state.cards.length, ...options, ...result.counts, variants: result.variants,
-      fixed: state.cards.filter((card) => card.fixed).length,
-      sized: state.cards.filter((card) => card.width !== undefined || card.height !== undefined).length,
+    observed.push({ seed, topology, cards: initial.cards.length, ...options, ...result.counts,
+      fixed: initial.cards.filter((card) => card.fixed).length,
+      sized: initial.cards.filter((card) => card.width !== undefined || card.height !== undefined).length,
       zeroSize: [...initial.rects().values()].filter((rect) => rect.w === 0 || rect.h === 0).length,
     });
   });
@@ -89,7 +79,6 @@ test("varied layout cases cover the declared input classes and operation outcome
   assert.deepEqual(unique("snap"), ["merge", "off"]);
   assert.deepEqual(unique("snapDistance"), [3, 29]);
   assert.deepEqual(unique("grabSize"), [7, 23]);
-  assert.deepEqual(unique("fillOrder"), ["h", "v"]);
   for (const topology of unique("topology")) assert.equal(new Set(observed.filter((entry) => entry.topology === topology).map((entry) => entry.width)).size, 3);
   assert.ok(observed.some((entry) => entry.fixed > 0) && observed.some((entry) => entry.sized > 0));
   assert.ok(observed.some((entry) => entry.zeroSize > 0) && observed.some((entry) => entry.zeroSize === 0));
@@ -104,26 +93,13 @@ test("layout option changes affect geometry and refusal decisions", { timeout: 3
   const plain = new Soksak(undefined, { width: 320, height: 180, gap: 0, minSize: 24 });
   const crowded = new Soksak(undefined, { width: 320, height: 180, gap: 64, minSize: 160 });
   assert.equal(plain.split("card", "x", { id: "other" }), "other");
-  assert.equal(crowded.split("card", "x", { id: "other" }), null);
+  assert.throws(() => crowded.split("card", "x", { id: "other" }), { message: "card card would be 128x180, below its minimum 160x160" });
   const before = plain.rect("card").w;
   plain.gap = 64;
   assert.ok(plain.rect("card").w < before);
-  const square = { xs: [0, 0.5, 1], ys: [0, 0.5, 1], cards: [
-    { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 }, { id: "b", c0: 1, c1: 2, r0: 0, r1: 1 },
-    { id: "c", c0: 0, c1: 1, r0: 1, r1: 2 }, { id: "d", c0: 1, c1: 2, r0: 1, r1: 2 },
-  ] };
-  const vertical = new Soksak(square, { width: 1000, height: 800, fillOrder: "v" });
-  const horizontal = new Soksak(square, { width: 1000, height: 800, fillOrder: "h" });
-  assert.equal(vertical.close("a"), true);
-  assert.equal(horizontal.close("a"), true);
-  assert.notDeepEqual(vertical.rect("b"), horizontal.rect("b"));
-  const virtual = { xs: [0, 0.5, 0.75, 1], ys: [0, 0.5, 1], cards: [
-    { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
-    { id: "b", c0: 1, c1: 3, r0: 0, r1: 1 },
-    { id: "under", c0: 0, c1: 3, r0: 1, r1: 2 },
-  ] };
+  const rows = { root: { cut: "y", kids: [{ share: 0.5, node: { cut: "x", kids: [{ share: 0.5, node: { card: "a" } }, { share: 0.5, node: { card: "b" } }] } }, { share: 0.5, node: { cut: "x", kids: [{ share: 0.75, node: { card: "under" } }, { share: 0.25, node: { card: "right" } }] } }] } };
   for (const [snap, snapDistance, expected] of [["merge", 29, 240], ["merge", 3, 220], ["off", 29, 220]]) {
-    const grid = new Soksak(virtual, { width: 320, height: 180, gap: 0, minSize: 24, snap, snapDistance, grabSize: 23 });
+    const grid = new Soksak(rows, { width: 320, height: 180, gap: 0, minSize: 24, snap, snapDistance, grabSize: 23 });
     assert.equal(grid.dividers().find((divider) => divider.axis === "x").w, 23);
     grid.grabSize = 7;
     assert.equal(grid.dividers().find((divider) => divider.axis === "x").w, 7);
@@ -131,14 +107,13 @@ test("layout option changes affect geometry and refusal decisions", { timeout: 3
   }
 });
 
-test("varied layout checks reject ID, array-order and size implementation mutants", async (t) => {
+test("varied layout checks reject ID and size implementation mutants", async (t) => {
   const root = fileURLToPath(new URL("../", import.meta.url));
   const value = makeLayoutCase(0);
   checkLayout(Soksak.from(value.state, value.options));
   assert.doesNotThrow(() => assertRoleIndependence({ ...value, check: checkLayout }));
   const mutants = [
-    { name: "identifier", file: "soksak.js", find: "return card && this.rectOf(card);", to: "const r = card && this.rectOf(card); return r && this.w < 400 && this.h >= 180 && id === 'card' ? { ...r, x: r.x + 1 } : r;", error: /role independence/ },
-    { name: "array order", file: "soksak.js", find: "return card && this.rectOf(card);", to: "const r = card && this.rectOf(card); return r && this.w < 400 && this.h >= 180 && card === this.list[0] ? { ...r, x: r.x + 1 } : r;", error: /role independence/ },
+    { name: "identifier", file: "soksak.js", find: "            return this.rectOf(card);", to: "            return ((r) => this.w < 400 && this.h >= 180 && id === 'card' ? { ...r, x: r.x + 1 } : r)(this.rectOf(card));", error: /role independence/ },
     { name: "size", file: "geometry.js", find: "    return { x, y, w, h };", to: "    return { x, y, w: frame.x.at.at(-1) < 400 && frame.y.at.at(-1) >= 180 ? -1 : w, h };", error: /public layout invariants/ },
   ];
   for (const mutant of mutants) await t.test(mutant.name, async (t) => {
@@ -160,7 +135,7 @@ test("varied layout checks reject ID, array-order and size implementation mutant
     const env = { ...process.env };
     delete env.NODE_TEST_CONTEXT;
     const legacy = await promisify(execFile)(process.execPath, ["--test", "--test-reporter=tap", "--test-name-pattern=^R2", "test/rules.test.mjs"], { cwd: directory, env });
-    assert.match(legacy.stdout, /^ok \d+ - R2 — identifiers and card order do not determine layout behavior$/m, "the legacy control owns an executed passing test");
+    assert.match(legacy.stdout, /^ok \d+ - R2 — identifiers do not determine layout behavior$/m, "the legacy control owns an executed passing test");
     assert.match(legacy.stdout, /^# tests 1$/m);
     assert.match(legacy.stdout, /^# pass 1$/m);
     const { Soksak: Mutated } = await import(pathToFileURL(join(directory, "dist/index.js")).href);

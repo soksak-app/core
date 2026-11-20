@@ -2,11 +2,11 @@
 import { execFileSync } from "node:child_process";
 
 export const REQUIRED_BREAKS = Object.freeze([
-  { owner: "soksak", id: "state", tests: ["test/soksak.test.mjs"] },
-  { owner: "slicing", id: "slicing", tests: ["test/rules.test.mjs"] },
+  { owner: "soksak", id: "insert-fits", tests: ["test/fixedSize.test.mjs"] },
+  { owner: "tree", id: "state", tests: ["test/contract.test.mjs", "test/soksak.test.mjs"] },
+  { owner: "cuts", id: "cut-gaps", tests: ["test/layout-invariants.test.mjs", "test/layout-cases.test.mjs"] },
   { owner: "geometry", id: "corridor", tests: ["test/fixedSize.test.mjs"] },
   { owner: "card", id: "spanning-size", tests: ["test/fixedSize.test.mjs", "test/rules.test.mjs"] },
-  { owner: "balance", id: "balance-share", tests: ["test/balance.test.mjs"] },
   { owner: "outline", id: "radius", tests: ["test/outline.test.mjs"] },
   { owner: "dom", id: "place", tests: ["test/dom.test.mjs"] },
   { owner: "theme", id: "grip-active", tests: ["test/dom.test.mjs"] },

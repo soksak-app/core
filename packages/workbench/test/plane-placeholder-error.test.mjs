@@ -48,8 +48,7 @@ test("a placeholder whose install state cannot be read is an error shown once, a
   installEnvironment({
     runtime: "runtime",
     workspace: { focus: "main", grid: {
-      xs: [0, 1], ys: [0, 1],
-      cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: missingId, title: "gone" }, { plugin: pluginId, title: "main" }] }],
+      root: { card: "main", tabs: [{ plugin: missingId, title: "gone" }, { plugin: pluginId, title: "main" }] },
     } },
     sidebars: { sets: [], links: [] },
   }, {

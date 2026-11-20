@@ -195,23 +195,23 @@ func CheckStoredLayout(layout json.RawMessage, units []PluginUnit) error {
 	if _, edge := kept["edgeWidth"]; edge {
 		return errors.New("obsolete window sidebar state")
 	}
-	state, _, ok := object(kept["state"])
-	if !ok {
+	if jsonKind(kept["state"]) != '{' {
 		return errors.New("a stored layout has no state")
 	}
-	cards, ok := list(state["cards"])
-	if !ok {
-		return errors.New("a stored layout has no cards")
+	var state State
+	if err := json.Unmarshal(kept["state"], &state); err != nil {
+		return err
+	}
+	if err := CheckState(state); err != nil {
+		return err
 	}
 	content := map[string]bool{}
-	for _, raw := range cards {
-		card, _, ok := object(raw)
-		if !ok {
-			return errors.New("a stored card is not an object")
-		}
-		var id string
-		if err := json.Unmarshal(card["id"], &id); err != nil {
-			return fmt.Errorf("a stored card has no id: %w", err)
+	// The cards are checked in the order of the tree, each card node as its id and its data.
+	for _, leaf := range cardsOf(state.Root) {
+		id := leaf.Card
+		card := map[string]json.RawMessage{}
+		if leaf.Data != nil {
+			card["data"] = leaf.Data
 		}
 		if strings.HasPrefix(id, "window:") {
 			return fmt.Errorf("obsolete stored window sidebar %s", id)

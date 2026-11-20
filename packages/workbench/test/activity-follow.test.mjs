@@ -19,7 +19,7 @@ imports.finish();
 const STATE = { name: "probe.state", description: "The activity of the probe.", schema: { type: ["string", "null"] }, activity: true };
 
 /** The window of one project whose one space holds the tabs in one card, in the stored form. */
-const windowOf = (tabs) => [{ id: "p1", spaces: [{ id: "s1", layout: { state: { cards: [{ id: "card-1", data: { tabs } }] }, groups: [] } }] }];
+const windowOf = (tabs) => [{ id: "p1", spaces: [{ id: "s1", layout: { state: { root: { card: "card-1", data: { tabs } } } } }] }];
 
 test("the activity of a tab follows the watch of its surface, which starts when the surface registers and ends when the tab leaves", { timeout: 5000 }, async () => {
   const wire = selectPageWire("activity-follow-watches");

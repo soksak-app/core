@@ -56,34 +56,20 @@
                 "title": "SPACE1",
                 "layout": {
                   "state": {
-                    "xs": [
-                      0,
-                      1
-                    ],
-                    "ys": [
-                      0,
-                      1
-                    ],
-                    "cards": [
-                      {
-                        "id": "main",
-                        "c0": 0,
-                        "c1": 1,
-                        "r0": 0,
-                        "r1": 1,
-                        "data": {
-                          "tabs": [
-                            {
-                              "id": "tab-bbbbbb",
-                              "plugin": "fixture-space-close",
-                              "title": "document"
-                            }
-                          ],
-                          "activeId": "tab-bbbbbb"
-                        }
+                    "root": {
+                      "card": "main",
+                      "data": {
+                        "tabs": [
+                          {
+                            "id": "tab-bbbbbb",
+                            "plugin": "fixture-space-close",
+                            "title": "document"
+                          }
+                        ],
+                        "activeId": "tab-bbbbbb"
                       }
-                    ]
-                  }, "groups": [], "leader": "main", "lastCard": 1,
+                    }
+                  }, "leader": "main", "lastCard": 1,
                   "focusedId": "main",
                   "windowSidebars": {},
                   "named": 0,
@@ -95,34 +81,20 @@
                 "title": "SPACE2",
                 "layout": {
                   "state": {
-                    "xs": [
-                      0,
-                      1
-                    ],
-                    "ys": [
-                      0,
-                      1
-                    ],
-                    "cards": [
-                      {
-                        "id": "main",
-                        "c0": 0,
-                        "c1": 1,
-                        "r0": 0,
-                        "r1": 1,
-                        "data": {
-                          "tabs": [
-                            {
-                              "id": "tab-cccccc",
-                              "plugin": "fixture-space-close",
-                              "title": "document"
-                            }
-                          ],
-                          "activeId": "tab-cccccc"
-                        }
+                    "root": {
+                      "card": "main",
+                      "data": {
+                        "tabs": [
+                          {
+                            "id": "tab-cccccc",
+                            "plugin": "fixture-space-close",
+                            "title": "document"
+                          }
+                        ],
+                        "activeId": "tab-cccccc"
                       }
-                    ]
-                  }, "groups": [], "leader": "main", "lastCard": 1,
+                    }
+                  }, "leader": "main", "lastCard": 1,
                   "focusedId": "main",
                   "windowSidebars": {},
                   "named": 0,
@@ -134,34 +106,20 @@
                 "title": "SPACE3",
                 "layout": {
                   "state": {
-                    "xs": [
-                      0,
-                      1
-                    ],
-                    "ys": [
-                      0,
-                      1
-                    ],
-                    "cards": [
-                      {
-                        "id": "main",
-                        "c0": 0,
-                        "c1": 1,
-                        "r0": 0,
-                        "r1": 1,
-                        "data": {
-                          "tabs": [
-                            {
-                              "id": "tab-dddddd",
-                              "plugin": "fixture-space-close",
-                              "title": "document"
-                            }
-                          ],
-                          "activeId": "tab-dddddd"
-                        }
+                    "root": {
+                      "card": "main",
+                      "data": {
+                        "tabs": [
+                          {
+                            "id": "tab-dddddd",
+                            "plugin": "fixture-space-close",
+                            "title": "document"
+                          }
+                        ],
+                        "activeId": "tab-dddddd"
                       }
-                    ]
-                  }, "groups": [], "leader": "main", "lastCard": 1,
+                    }
+                  }, "leader": "main", "lastCard": 1,
                   "focusedId": "main",
                   "windowSidebars": {},
                   "named": 0,
@@ -672,39 +630,24 @@
                 "title": "SPACE1",
                 "layout": {
                   "state": {
-                    "xs": [
-                      0,
-                      1
-                    ],
-                    "ys": [
-                      0,
-                      1
-                    ],
-                    "cards": [
-                      {
-                        "id": "main",
-                        "c0": 0,
-                        "c1": 1,
-                        "r0": 0,
-                        "r1": 1,
-                        "data": {
-                          "tabs": [
-                            {
-                              "id": "tab-bbbbbb",
-                              "plugin": "fixture-space-close",
-                              "title": "document",
-                              "origin": {
-                                "directory": null
-                              }
+                    "root": {
+                      "card": "main",
+                      "data": {
+                        "tabs": [
+                          {
+                            "id": "tab-bbbbbb",
+                            "plugin": "fixture-space-close",
+                            "title": "document",
+                            "origin": {
+                              "directory": null
                             }
-                          ],
-                          "activeId": "tab-bbbbbb"
-                        },
-                        "fixed": false
-                      }
-                    ],
-                    "paidBy": {}
-                  }, "groups": [], "leader": "main", "lastCard": 1,
+                          }
+                        ],
+                        "activeId": "tab-bbbbbb"
+                      },
+                      "fixed": false
+                    }
+                  }, "leader": "main", "lastCard": 1,
                   "focusedId": "main",
                   "windowSidebars": {},
                   "named": 0,
@@ -716,34 +659,20 @@
                 "title": "SPACE2",
                 "layout": {
                   "state": {
-                    "xs": [
-                      0,
-                      1
-                    ],
-                    "ys": [
-                      0,
-                      1
-                    ],
-                    "cards": [
-                      {
-                        "id": "main",
-                        "c0": 0,
-                        "c1": 1,
-                        "r0": 0,
-                        "r1": 1,
-                        "data": {
-                          "tabs": [
-                            {
-                              "id": "tab-cccccc",
-                              "plugin": "fixture-space-close",
-                              "title": "document"
-                            }
-                          ],
-                          "activeId": "tab-cccccc"
-                        }
+                    "root": {
+                      "card": "main",
+                      "data": {
+                        "tabs": [
+                          {
+                            "id": "tab-cccccc",
+                            "plugin": "fixture-space-close",
+                            "title": "document"
+                          }
+                        ],
+                        "activeId": "tab-cccccc"
                       }
-                    ]
-                  }, "groups": [], "leader": "main", "lastCard": 1,
+                    }
+                  }, "leader": "main", "lastCard": 1,
                   "focusedId": "main",
                   "windowSidebars": {},
                   "named": 0,
@@ -755,34 +684,20 @@
                 "title": "SPACE3",
                 "layout": {
                   "state": {
-                    "xs": [
-                      0,
-                      1
-                    ],
-                    "ys": [
-                      0,
-                      1
-                    ],
-                    "cards": [
-                      {
-                        "id": "main",
-                        "c0": 0,
-                        "c1": 1,
-                        "r0": 0,
-                        "r1": 1,
-                        "data": {
-                          "tabs": [
-                            {
-                              "id": "tab-dddddd",
-                              "plugin": "fixture-space-close",
-                              "title": "document"
-                            }
-                          ],
-                          "activeId": "tab-dddddd"
-                        }
+                    "root": {
+                      "card": "main",
+                      "data": {
+                        "tabs": [
+                          {
+                            "id": "tab-dddddd",
+                            "plugin": "fixture-space-close",
+                            "title": "document"
+                          }
+                        ],
+                        "activeId": "tab-dddddd"
                       }
-                    ]
-                  }, "groups": [], "leader": "main", "lastCard": 1,
+                    }
+                  }, "leader": "main", "lastCard": 1,
                   "focusedId": "main",
                   "windowSidebars": {},
                   "named": 0,
@@ -814,39 +729,24 @@
                 "title": "SPACE1",
                 "layout": {
                   "state": {
-                    "xs": [
-                      0,
-                      1
-                    ],
-                    "ys": [
-                      0,
-                      1
-                    ],
-                    "cards": [
-                      {
-                        "id": "main",
-                        "c0": 0,
-                        "c1": 1,
-                        "r0": 0,
-                        "r1": 1,
-                        "data": {
-                          "tabs": [
-                            {
-                              "id": "tab-bbbbbb",
-                              "plugin": "fixture-space-close",
-                              "title": "document",
-                              "origin": {
-                                "directory": null
-                              }
+                    "root": {
+                      "card": "main",
+                      "data": {
+                        "tabs": [
+                          {
+                            "id": "tab-bbbbbb",
+                            "plugin": "fixture-space-close",
+                            "title": "document",
+                            "origin": {
+                              "directory": null
                             }
-                          ],
-                          "activeId": "tab-bbbbbb"
-                        },
-                        "fixed": false
-                      }
-                    ],
-                    "paidBy": {}
-                  }, "groups": [], "leader": "main", "lastCard": 1,
+                          }
+                        ],
+                        "activeId": "tab-bbbbbb"
+                      },
+                      "fixed": false
+                    }
+                  }, "leader": "main", "lastCard": 1,
                   "focusedId": "main",
                   "windowSidebars": {},
                   "named": 0,
@@ -858,34 +758,20 @@
                 "title": "SPACE3",
                 "layout": {
                   "state": {
-                    "xs": [
-                      0,
-                      1
-                    ],
-                    "ys": [
-                      0,
-                      1
-                    ],
-                    "cards": [
-                      {
-                        "id": "main",
-                        "c0": 0,
-                        "c1": 1,
-                        "r0": 0,
-                        "r1": 1,
-                        "data": {
-                          "tabs": [
-                            {
-                              "id": "tab-dddddd",
-                              "plugin": "fixture-space-close",
-                              "title": "document"
-                            }
-                          ],
-                          "activeId": "tab-dddddd"
-                        }
+                    "root": {
+                      "card": "main",
+                      "data": {
+                        "tabs": [
+                          {
+                            "id": "tab-dddddd",
+                            "plugin": "fixture-space-close",
+                            "title": "document"
+                          }
+                        ],
+                        "activeId": "tab-dddddd"
                       }
-                    ]
-                  }, "groups": [], "leader": "main", "lastCard": 1,
+                    }
+                  }, "leader": "main", "lastCard": 1,
                   "focusedId": "main",
                   "windowSidebars": {},
                   "named": 0,
@@ -986,39 +872,24 @@
                 "title": "SPACE3",
                 "layout": {
                   "state": {
-                    "xs": [
-                      0,
-                      1
-                    ],
-                    "ys": [
-                      0,
-                      1
-                    ],
-                    "cards": [
-                      {
-                        "id": "main",
-                        "c0": 0,
-                        "c1": 1,
-                        "r0": 0,
-                        "r1": 1,
-                        "data": {
-                          "tabs": [
-                            {
-                              "id": "tab-dddddd",
-                              "plugin": "fixture-space-close",
-                              "title": "document",
-                              "origin": {
-                                "directory": null
-                              }
+                    "root": {
+                      "card": "main",
+                      "data": {
+                        "tabs": [
+                          {
+                            "id": "tab-dddddd",
+                            "plugin": "fixture-space-close",
+                            "title": "document",
+                            "origin": {
+                              "directory": null
                             }
-                          ],
-                          "activeId": "tab-dddddd"
-                        },
-                        "fixed": false
-                      }
-                    ],
-                    "paidBy": {}
-                  }, "groups": [], "leader": "main", "lastCard": 1,
+                          }
+                        ],
+                        "activeId": "tab-dddddd"
+                      },
+                      "fixed": false
+                    }
+                  }, "leader": "main", "lastCard": 1,
                   "focusedId": "main",
                   "windowSidebars": {},
                   "named": 0,

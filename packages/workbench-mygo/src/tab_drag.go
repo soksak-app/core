@@ -196,9 +196,9 @@ func (s *Shell) dropCard(from string, hit *layout.ZoneHit, data json.RawMessage)
 		}
 		return from, nil
 	case hit.Zone == "centre":
-		return s.planes.AddCard(hit.ID, data, s.cardSplitEven())
+		return s.planes.AddCard(hit.ID, data)
 	}
-	return s.planes.Split(hit.ID, hit.Zone, data, s.cardSplitEven())
+	return s.planes.Split(hit.ID, hit.Zone, data)
 }
 
 // moveTab moves a tab to the centre or an edge of a card, as a drop does.

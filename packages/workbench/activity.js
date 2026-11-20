@@ -34,6 +34,9 @@ export function tabActivity(plugin, tab, statuses) {
   return { activity: highestActivity(activities), error };
 }
 
+/** The card nodes of the stored tree under node, in tree order (docs/spec/groups.md#storage). */
+const cardNodes = (node) => (node.box !== undefined ? cardNodes(node.inner) : node.cut !== undefined ? node.kids.flatMap((kid) => cardNodes(kid.node)) : [node]);
+
 /**
  * The activities of the projects of a window, each {id, spaces} with the stored layout of each space, from the activity of each tab
  * (tabs, by tab id): {spaces, tabs}, where spaces holds for each project the activities of its spaces that the window publishes with
@@ -47,24 +50,25 @@ export function windowActivity(projects, tabs) {
     for (const space of project.spaces) {
       const cards = {};
       const groups = {};
-      for (const card of space.layout.state.cards) {
-        // default: a seat card has null data, so it holds no tabs.
-        const held = (card.data?.tabs ?? []).map(({ id }) => {
-          const activity = Object.hasOwn(tabs, id) ? tabs[id] : null;
-          if (activity !== null) out.tabs[id] = activity;
+      // The activity of a node of the stored tree is the highest activity of the cards inside it; a box records it as the activity of
+      // its group card (docs/spec/groups.md#storage).
+      const held = (node) => {
+        if (node.box !== undefined) {
+          const activity = held(node.inner);
+          if (activity !== null) groups[node.box] = activity;
           return activity;
-        });
-        const activity = highestActivity(held);
-        if (activity !== null) cards[card.id] = activity;
-      }
-      // A member is a content card by its identifier or the node of a group card (docs/spec/groups.md#storage).
-      const member = (node) => (typeof node === "string" ? (cards[node] ?? null) : group(node));
-      const group = (node) => {
-        const activity = highestActivity(node.members.map(member));
-        if (activity !== null) groups[node.card] = activity;
+        }
+        if (node.cut !== undefined) return highestActivity(node.kids.map((kid) => held(kid.node)));
+        // default: a seat card and a window sidebar have null data or no tabs, so they hold no tabs.
+        const activity = highestActivity((node.data?.tabs ?? []).map(({ id }) => {
+          const value = Object.hasOwn(tabs, id) ? tabs[id] : null;
+          if (value !== null) out.tabs[id] = value;
+          return value;
+        }));
+        if (activity !== null) cards[node.card] = activity;
         return activity;
       };
-      for (const node of space.layout.groups) group(node);
+      held(space.layout.state.root);
       const activity = highestActivity(Object.values(cards));
       if (activity !== null) spaces[space.id] = { activity, cards, groups };
     }
@@ -195,7 +199,7 @@ export function createActivity({ observe, statuses, projects, changed, failed, p
     const wanted = new Map();
     for (const project of projects()) {
       for (const space of project.spaces) {
-        for (const card of space.layout.state.cards) {
+        for (const card of cardNodes(space.layout.state.root)) {
           // default: a seat card has null data, so it holds no tabs.
           for (const tab of card.data?.tabs ?? []) {
             const names = statuses(tab.plugin);

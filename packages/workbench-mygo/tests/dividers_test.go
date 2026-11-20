@@ -150,14 +150,14 @@ func TestADividerTakesTheKeys(t *testing.T) {
 			focused = true
 			break
 		}
-		// The stop on the boundary at the other side of the card, which the arrow moves into the card.
-		if now == from-8 {
+		// The stop on another boundary, which changes the card as its cut shares the move: the boundary at the other side of the card,
+		// and the boundary of the window sidebar, whose move the two cards of the row share. The left arrow moves it back.
+		if now != from {
 			f.tester.Key(0, ui.KeyLeft)
 			f.settle()
-			continue
-		}
-		if now != from {
-			t.Fatalf("an arrow moved the boundary from %v to %v", from, now)
+			if back := f.box("core.card", left).W; back != from {
+				t.Fatalf("the left arrow left the card at %v after another boundary moved it to %v, it was %v", back, now, from)
+			}
 		}
 	}
 	if !focused {
@@ -261,8 +261,15 @@ func TestAStageHasALineAround(t *testing.T) {
 	if got, want := f.pixelOf(root.W-0.5, y), opaque(palette.Rule); !near(got, want) {
 		t.Fatalf("the right edge of the stage is %v, want %v", got, want)
 	}
-	bottom := card.Y + card.H + palette.StagePad() + palette.BorderWidth - 0.5
-	if got, want := f.pixelOf(card.X+card.W/2, bottom), opaque(palette.Rule); !near(got, want) {
+	// The bottom edge stands below the lowest card, which is not the card of the split: the layout holds a card below the row of the split.
+	lowest := card
+	for _, other := range exposedAll(f.tester.ElementTree(), "core.card") {
+		if other.Y+other.H > lowest.Y+lowest.H {
+			lowest = other
+		}
+	}
+	bottom := lowest.Y + lowest.H + palette.StagePad() + palette.BorderWidth - 0.5
+	if got, want := f.pixelOf(lowest.X+lowest.W/2, bottom), opaque(palette.Rule); !near(got, want) {
 		t.Fatalf("the bottom edge of the stage at %v of %v is %v, want %v", bottom, root.H, got, want)
 	}
 	if got := f.pixelOf(palette.BorderWidth+1, y); near(got, opaque(palette.Rule)) {

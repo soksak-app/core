@@ -36,7 +36,7 @@ A change redraws the window and keeps the scroll position of the shown content; 
 | 위치 | 프로젝트 탭 위치 `projectTabs` |
 | 사이드바 | 왼쪽 사이드바 보이기 `left`, 오른쪽 사이드바 보이기 `right`, 위 사이드바 보이기 `top`, 아래 사이드바 보이기 `bottom`; 왼쪽 사이드바 세트, 오른쪽 사이드바 세트, 위 사이드바 세트 and 아래 사이드바 세트 (each a select of all sets and 사용 안 함, `core.settings.link {place, plugin: null, set}`); 사이드바 순서 `sidebarOrder` |
 | 사이드바 크기 | the width settings of [layout values](#layout-values) |
-| 표시 | 포커스 표시 `focusInd`, 카드 자동 정렬 `cardArrange`, 카드 분할 `cardSplit`, 경계선 `fullRule`, 포커스 밖 흐리게 `dim` |
+| 표시 | 포커스 표시 `focusInd`, 카드 자동 정렬 `cardArrange`, 경계선 `fullRule`, 포커스 밖 흐리게 `dim` |
 | 언어 | 언어 `language` |
 | 메모리 (common scope only) | 보기 프로세스 `viewProcess`, 메모리 절약 `memorySaver`, 숨긴 뒤 내리기까지 `memorySaverDelay` |
 | 진단 | 디버그 (a switch that runs `core.settings.debug {on}`) |
@@ -109,7 +109,7 @@ The window draws every setting with one control of a fixed set, chosen by the fo
 | Form | Control | Command |
 |---|---|---|
 | A boolean (`left`, `right`, `top`, `bottom`, `dim`, `memorySaver`) | Switch: a checkbox drawn as a switch | `core.settings.change {key, value, scope}` |
-| A choice of listed values (`projectOpening`, `viewProcess`, `mode`, `font`, `projectTabs`, `focusInd`, `fullRule`, `cardArrange`, `cardSplit`, `language`, a plugin `enum`) | Select box with one option per value in the declared order | `core.settings.change {key, value, scope}` |
+| A choice of listed values (`projectOpening`, `viewProcess`, `mode`, `font`, `projectTabs`, `focusInd`, `fullRule`, `cardArrange`, `language`, a plugin `enum`) | Select box with one option per value in the declared order | `core.settings.change {key, value, scope}` |
 | A theme of the catalog (`theme`) | Swatch grid with one swatch per theme, drawn with that theme's colors and shape | `core.settings.theme {name, scope}` |
 | A bounded integer (`gap`, `radius`, `size`, `memorySaverDelay`, the [layout values](#layout-values), a plugin `integer`) | Slider between the bounds, followed by the value and its unit; a drag shows each value beside the slider and runs the command once, with the value at its release | `core.settings.change {key, value, scope}` |
 | A string or an address (a plugin `string` or `address`) | One-line text field | `core.settings.change {key, value, scope}` |
@@ -150,7 +150,6 @@ Each core setting accepts one form. Reading the settings files and every change 
 | `focusInd` | `border` or `corner` |
 | `fullRule` | `under`, `over` or `none` |
 | `cardArrange` | `resize` (keeps the arrangement and gives the cards fair sizes, the default) or `even` (an equal grid of the cards, `arrange(\"even\")`); the card auto-arrange command runs the value of this setting, and its toolbar icon shows it |
-| `cardSplit` | `exact` (a split divides only the rectangle of the card that it splits, R4 of the layout library, the default) or `even` (after the split, `balance()` gives the cards of the grid fair sizes and keeps the arrangement); with `exact` the split of a group card divides only its rectangle; it applies to `core.card.split` and the split buttons, to the split of `core.group.create` and the group split buttons, to the add of a card to a group, and to `core.layout.open` with `side` ([group cards](groups.md#split-setting)) |
 | `language` | `auto` or a language of the application menu (`ko`, `en`) |
 | `sidebarMinWidth`, `sidebarMaxWidth`, `sidebarWidth` | [Layout values](#layout-values) |
 | `viewProcess` | `plugin` or `view`, common scope, default `plugin`: the WebContent process of a view that the host creates afterwards, shared by the views of its plugin or its own ([view processes](plugin-processes.md#view-processes)) |
@@ -166,7 +165,7 @@ Plugin settings take the form of their declaration ([plugins](plugins.md)).
 
 The settings files carry their form in the member `format` (format 1 is the current form; a file of another form, or without the member, is refused, [stored data formats](installation.md#stored-data-formats)). The member is the carrier of the stored form, not a setting: the workspace hides it from the snapshot and preserves it when it writes, and a settings key named `format` is refused like any other unknown key. The rest of this section holds for the settings of the file after the carrier.
 
-The settings files are read only in their current form, and the page does not convert them. A key that is not a declared setting, including the keys of earlier settings (`cardSidebar`, `rail`, `railWidth`, `sidebarFoldedWidth`, `latency`, `skew`), fails with `settings.json: unknown setting <key>` for the common settings and `<project root>/.soksak/settings.json: unknown setting <key>` for the settings of the project that the window opens. A `rail` link, a side link (`left`, `right`, `top` or `bottom`) that names a plugin, and a link to a set that the scope does not hold fail the check of sets and links below. A failure replaces nothing and writes nothing.
+The settings files are read only in their current form, and the page does not convert them. A key that is not a declared setting, including the keys of earlier settings (`cardSidebar`, `rail`, `railWidth`, `sidebarFoldedWidth`, `latency`, `skew`, `cardSplit`), fails with `settings.json: unknown setting <key>` for the common settings and `<project root>/.soksak/settings.json: unknown setting <key>` for the settings of the project that the window opens. A `rail` link, a side link (`left`, `right`, `top` or `bottom`) that names a plugin, and a link to a set that the scope does not hold fail the check of sets and links below. A failure replaces nothing and writes nothing.
 
 ## Stored sets and links
 

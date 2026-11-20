@@ -10,10 +10,13 @@ import (
 // The answers of CanSplit hold until the arrangement or the size of the plane changes: the workbench sizes the plane in each frame,
 // and a frame at the same size asks again without a trial split of each card.
 func TestAResizeToTheSameSizeKeepsTheAnswersOfCanSplit(t *testing.T) {
-	grid := slicedGrid(t, []layout.Card{
-		{ID: "a", C0: 0, C1: 1, R0: 0, R1: 2},
-		{ID: "b", C0: 1, C1: 2, R0: 0, R1: 2},
-	}, 3)
+	size := 300.0
+	grid, err := layout.New(&layout.State{Root: &layout.Node{Cut: "x", Kids: []layout.Kid{
+		{Share: 0.5, Node: &layout.Node{Card: "a"}}, {Share: 0.5, Node: &layout.Node{Card: "b"}},
+	}}}, layout.Options{Width: &size, Height: &size})
+	if err != nil {
+		t.Fatal(err)
+	}
 	ask := func() {
 		for _, id := range []string{"a", "b"} {
 			for _, axis := range []layout.Axis{"x", "y"} {
@@ -46,14 +49,13 @@ func TestTheHeaderAnswersOfAGroupTreeHoldUntilTheLayoutChanges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	state := layout.State{Xs: []float64{0, 1}, Ys: []float64{0, 1}, Cards: []layout.Card{{ID: "card-1", C0: 0, C1: 1, R0: 0, R1: 1}},
-		PaidBy: map[string]layout.Paid{}}
-	tree, err := layout.ReadTree(state, json.RawMessage(`[]`), json.RawMessage(`"card-1"`), json.RawMessage(`1`),
+	state := layout.State{Root: &layout.Node{Card: "card-1"}}
+	tree, err := layout.ReadTree(state, nil, json.RawMessage(`"card-1"`), json.RawMessage(`1`),
 		layout.GroupOptions{Head: 32}, grid)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := tree.CreateGroup("card-1", "right", nil, false); err != nil {
+	if _, _, err := tree.CreateGroup("card-1", "right", nil); err != nil {
 		t.Fatal(err)
 	}
 	ask := func() {
@@ -74,7 +76,7 @@ func TestTheHeaderAnswersOfAGroupTreeHoldUntilTheLayoutChanges(t *testing.T) {
 	if got := tree.Probes(); got != first {
 		t.Fatalf("a second draw without a layout change ran %d trial operations, want none", got-first)
 	}
-	if _, err := tree.Split("card-1", "bottom", nil, false); err != nil {
+	if _, err := tree.Split("card-1", "bottom", nil); err != nil {
 		t.Fatal(err)
 	}
 	ask()

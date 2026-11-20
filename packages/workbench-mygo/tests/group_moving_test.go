@@ -12,9 +12,7 @@ import (
 // quadShell is a layout shell of four cards in two rows, a, b over c, d, in a window large enough for groups inside it.
 func quadShell(t *testing.T) *tabShell {
 	t.Helper()
-	f := layoutShell(t, gridSpace("spc-aaaaaa", []float64{0, 0.5, 1}, []float64{0, 0.5, 1},
-		gridCard("card-1", 0, 1, 0, 1, tab("t1", "notes")), gridCard("card-2", 1, 2, 0, 1, tab("t2", "notes")),
-		gridCard("card-3", 0, 1, 1, 2, tab("t3", "notes")), gridCard("card-4", 1, 2, 1, 2, tab("t4", "notes"))))
+	f := layoutShell(t, treeSpace("spc-aaaaaa", cutNode("x", kidNode(0.5, cutNode("y", kidNode(0.5, cardNode("card-1", tab("t1", "notes"))), kidNode(0.5, cardNode("card-3", tab("t3", "notes"))))), kidNode(0.5, cutNode("y", kidNode(0.5, cardNode("card-2", tab("t2", "notes"))), kidNode(0.5, cardNode("card-4", tab("t4", "notes"))))))))
 	f.tester.SetSize(1400, 900)
 	f.settle()
 	return f
@@ -62,14 +60,13 @@ func TestABoundaryStopsAtTheDrawnMinimumUnderAHeader(t *testing.T) {
 	}
 }
 
-// A move of a card of the root level beside a member of a group closes the card with the neighbour that keeps the group one rectangle
-// and puts the card into that group (docs/spec/groups.md#closing).
+// A move of a card of the root level beside a member of a group withdraws the card, whose cut gives its space to its other kids in
+// proportion, and inserts it into that group (docs/spec/groups.md#commands).
 func TestAMoveBesideAMemberKeepsTheGroupOneRectangle(t *testing.T) {
-	space := gridSpace("spc-aaaaaa", []float64{0, 0.5, 1}, []float64{0, 0.5, 1},
-		gridCard("card-1", 0, 1, 0, 1, tab("t1", "notes")), gridCard("card-2", 1, 2, 0, 1, tab("t2", "notes")),
-		gridCard("card-3", 0, 1, 1, 2, tab("t3", "notes")), gridCard("card-4", 1, 2, 1, 2, tab("t4", "notes")))
+	space := treeSpace("spc-aaaaaa", cutNode("y",
+		kidNode(0.5, boxNode("card-5", "그룹 1", "card-1", cutNode("x", kidNode(0.5, cardNode("card-1", tab("t1", "notes"))), kidNode(0.5, cardNode("card-2", tab("t2", "notes")))))),
+		kidNode(0.5, cutNode("x", kidNode(0.5, cardNode("card-3", tab("t3", "notes"))), kidNode(0.5, cardNode("card-4", tab("t4", "notes")))))))
 	stored := space["layout"].(map[string]any)
-	stored["groups"] = []any{map[string]any{"card": "card-5", "name": "그룹 1", "leader": "card-1", "members": []any{"card-1", "card-2"}}}
 	stored["leader"], stored["lastCard"] = "card-5", 5
 	f := layoutShell(t, space)
 	f.tester.SetSize(1400, 900)
@@ -251,13 +248,10 @@ func TestTheOnlyTabOutOfAGroupMovesItsCardAndDissolvesTheGroup(t *testing.T) {
 // A group card that moves inside its own level does not leave it, so it keeps the leader mark of the level, and every level names one
 // of its members as its leader (docs/spec/groups.md#leader).
 func TestAGroupCardMovedInsideItsLevelKeepsItsLeaderMark(t *testing.T) {
-	space := gridSpace("spc-aaaaaa", []float64{0, 0.5, 1}, []float64{0, 0.5, 1},
-		gridCard("card-1", 0, 1, 0, 1, tab("t1", "notes")), gridCard("card-2", 1, 2, 0, 1, tab("t2", "notes")),
-		gridCard("card-3", 0, 1, 1, 2, tab("t3", "notes")), gridCard("card-4", 1, 2, 1, 2, tab("t4", "notes")))
-	stored := space["layout"].(map[string]any)
-	stored["groups"] = []any{map[string]any{"card": "card-5", "name": "그룹 1", "leader": "card-1", "members": []any{"card-1", "card-2"}}}
-	stored["leader"], stored["lastCard"] = "card-5", 5
-	f := layoutShell(t, space)
+	f := layoutShell(t, treeSpace("spc-aaaaaa", cutNode("y",
+		kidNode(0.5, boxNode("card-5", "그룹 1", "card-1", cutNode("x", kidNode(0.5, cardNode("card-1", tab("t1", "notes"))),
+			kidNode(0.5, cardNode("card-2", tab("t2", "notes")))))),
+		kidNode(0.5, cutNode("x", kidNode(0.5, cardNode("card-3", tab("t3", "notes"))), kidNode(0.5, cardNode("card-4", tab("t4", "notes"))))))))
 	f.tester.SetSize(1400, 900)
 	f.settle()
 	if _, err := f.apply("core.card.move", `{"card": "card-5", "target": "card-4", "side": "bottom"}`); err != nil {

@@ -20,7 +20,7 @@ import { copyWorkspace } from "./workspace-copy.mjs";
 // there for good.
 const { top: TOP, root: HERE } = copyWorkspace("soksak-mutants-");
 
-const FILES = ["card.js", "slicing.js", "geometry.js", "outline.js", "soksak.js", "dom.js"];
+const FILES = ["card.js", "tree.js", "cuts.js", "geometry.js", "outline.js", "soksak.js", "dom.js"];
 // `node --test <dir>` picks up files that are not tests and fails on its own,
 // which would score every mutant as caught. Name them.
 const TESTS = readdirSync(`${HERE}test`)

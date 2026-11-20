@@ -37,7 +37,7 @@ const manifest = (id, surface) => ({ id, name: id, description: "검사용 표�
 const { installEnvironment } = await import("../environment.js");
 assert.deepEqual(installEnvironment({
   runtime: "runtime",
-  workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: PLAIN, title: "t" }] }] } },
+  workspace: { focus: "main", grid: { root: { card: "main", tabs: [{ plugin: PLAIN, title: "t" }] } } },
   sidebars: { sets: [], links: [] },
 }, { plugins: [
   { id: SESSION, package: "@fixture/session", version: "0.0.1", manifest: manifest(SESSION, {
@@ -58,13 +58,16 @@ await installCoreExposure({ library: { state: () => null }, renames: { state: ()
 plane.nameWindow(WINDOW);
 
 const view = (id, plugin) => ({ id, plugin, title: id, origin: { directory: null } });
-const content = (id, c0, c1, r0, r1, tabs) => ({ id, c0, c1, r0, r1, data: { tabs, activeId: tabs[0].id } });
+const content = (id, tabs) => ({ card: id, data: { tabs, activeId: tabs[0].id } });
+/** A box of the group card id with its name and leader around the cut along x of the kids, each [share, node]. */
+const box = (id, name, leader, kids) => ({ box: id, data: { name, leader }, inner: row(kids) });
+/** A cut along x of the kids, each [share, node]. */
+const row = (kids) => ({ cut: "x", kids: kids.map(([share, node]) => ({ share, node })) });
 begin({ common: {}, open: [], projects: [{ id: "prj-aaaaaa", root: "/work/project", spaces: [
-  { id: "spc-aaaaaa", title: "SPACE1", layout: { focusedId: "main", named: 0, windowSidebars: {}, sidebars: {}, groups: [], leader: "main",
-    lastCard: 1, state: { xs: [0, 1], ys: [0, 1], cards: [content("main", 0, 1, 0, 1, [view("tab-aaaaa1", PLAIN)])] } } },
+  { id: "spc-aaaaaa", title: "SPACE1", layout: { focusedId: "main", named: 0, windowSidebars: {}, sidebars: {}, leader: "main",
+    lastCard: 1, state: { root: content("main", [view("tab-aaaaa1", PLAIN)]) } } },
   { id: "spc-bbbbbb", title: "SPACE2", layout: { focusedId: "card-8", named: 0, windowSidebars: {}, sidebars: {}, lastCard: 10, leader: "card-10",
-    groups: [{ card: "card-10", name: "그룹 1", leader: "card-8", members: ["card-8", "card-9"] }],
-    state: { xs: [0, 0.5, 1], ys: [0, 1], cards: [content("card-8", 0, 1, 0, 1, [view("tab-ooooo1", PLAIN)]), content("card-9", 1, 2, 0, 1, [view("tab-ooooo2", PLAIN)])] } } },
+    state: { root: box("card-10", "그룹 1", "card-8", [[0.5, content("card-8", [view("tab-ooooo1", PLAIN)])], [0.5, content("card-9", [view("tab-ooooo2", PLAIN)])]]) } } },
 ], activeSpaceId: "spc-aaaaaa", named: 2 }] });
 
 /** Shows three cards in a row, card-1, card-2 and card-3, whose first two are the group card-4 named 그룹 1, with card-1 focused. */
@@ -72,16 +75,27 @@ function arrange() {
   plane.closePicker("fixture reset");
   if (plane.currentGrid()) for (const card of plane.currentGrid().cards) for (const tab of plane.tabsOf(card)) reports.forgetTab(tab.id);
   plane.adopt({ focusedId: "card-1", named: 0, windowSidebars: {}, sidebars: {}, lastCard: 4, leader: "card-4",
-    groups: [{ card: "card-4", name: "그룹 1", leader: "card-1", members: ["card-1", "card-2"] }],
-    state: { xs: [0, 0.375, 0.75, 1], ys: [0, 1], cards: [content("card-1", 0, 1, 0, 1, [view("tab-aaaaa1", PLAIN)]),
-      content("card-2", 1, 2, 0, 1, [view("tab-aaaaa2", PLAIN)]), content("card-3", 2, 3, 0, 1, [view("tab-aaaaa3", PLAIN)])] } }, "spc-aaaaaa");
+    state: { root: row([
+      [0.75, box("card-4", "그룹 1", "card-1", [[0.5, content("card-1", [view("tab-aaaaa1", PLAIN)])], [0.5, content("card-2", [view("tab-aaaaa2", PLAIN)])]])],
+      [0.25, content("card-3", [view("tab-aaaaa3", PLAIN)])],
+    ]) } }, "spc-aaaaaa");
 }
 const run = (name, params) => registry.run(name, params);
 const refuses = (promise, text) => assert.rejects(promise, (error) => error.message === text, `does not fail with ${text}`);
 const status = async (name) => (await registry.handle({ id: 1, method: "status.get", params: { name } })).result;
+/** The members of a node of the stored tree in tree order: its cards and the boxes that no box inside it holds. */
+const membersOf = (node) => (node.cut ? node.kids.flatMap((kid) => membersOf(kid.node)) : [node.box ?? node.card]);
+/** The group cards of the stored tree in tree order, each {card, name, level, leader, members}, read from its boxes. */
+const groupsOf = (node, level = 1) => {
+  if (node.cut) return node.kids.flatMap((kid) => groupsOf(kid.node, level));
+  if (node.box === undefined) return [];
+  return [{ card: node.box, name: node.data.name, level, leader: node.data.leader, members: membersOf(node.inner) },
+    ...groupsOf(node.inner, level + 1)];
+};
+/** The groups that the stored tree of core.layout holds, with the leader of the root level and lastCard. */
 const stored = async () => {
-  const { groups, leader, lastCard } = await status("core.layout");
-  return { groups, leader, lastCard };
+  const { state, leader, lastCard } = await status("core.layout");
+  return { groups: groupsOf(state.root), leader, lastCard };
 };
 
 test("core.group.create groups a content card with a new card and answers the same when applied again", { timeout: 5000 }, async () => {
@@ -146,14 +160,33 @@ test("core.card.move moves a card into a group and the add, split and close of a
   assert.deepEqual(await run("core.card.move", { card: "card-3", target: "card-4", side: "centre" }), { card: "card-3" });
   assert.deepEqual((await stored()).groups[0].members, ["card-1", "card-2", "card-5", "card-3"]);
   await refuses(run("core.card.move", { card: "card-4", target: "card-1", side: "right" }), "card card-4 cannot move into itself");
-  await refuses(run("core.card.split", { card: "card-4", side: "right", plugin: PLAIN }),
-    "card card-4 cannot split toward right: card card-1 would be 57x1144, below its minimum 96x96");
-  const split = await run("core.card.split", { card: "card-4", side: "bottom", plugin: PLAIN });
+  // The split of a group card puts the new card beside its box in the level that holds it, so the cards inside keep their tree. The box is
+  // the whole root, so the ADD across it wraps the box and the new card in a cut of two halves.
+  const split = await run("core.card.split", { card: "card-4", side: "right", plugin: PLAIN });
   assert.equal(split.card, "card-6");
+  // The halves take one fraction each, so the new card is drawn at the width of the content of the box, whose frames are costs of the cut.
+  assert.deepEqual(plane.currentGrid().rect("card-4"), { x: 0, y: 0, w: 806, h: 1200 });
+  assert.deepEqual(plane.currentGrid().rect("card-6"), { x: 818, y: 0, w: 782, h: 1200 });
   assert.deepEqual((await stored()).groups[0].members, ["card-1", "card-2", "card-5", "card-3"]);
+  assert.deepEqual((await status("core.layout")).state.root.kids.map((kid) => kid.node.box ?? kid.node.card), ["card-4", "card-6"]);
   assert.deepEqual(await run("core.card.close", { card: "card-4" }), { closed: true });
   assert.deepEqual(await stored(), { groups: [], leader: "card-6", lastCard: 6 });
   assert.deepEqual(plane.currentGrid().cards.map((card) => card.id), ["card-6"]);
+});
+
+// A group card too narrow for the ADD beside its box is refused with the deepest node that the split would draw below its minimum, and
+// nothing changes.
+test("a split of a group card too narrow for the new card names the card inside it that would be drawn below its minimum", { timeout: 5000 }, async () => {
+  arrange();
+  plane.adopt({ focusedId: "card-3", named: 0, windowSidebars: {}, sidebars: {}, lastCard: 4, leader: "card-3",
+    state: { root: row([
+      [0.85, content("card-3", [view("tab-aaaaa3", PLAIN)])],
+      [0.15, box("card-4", "그룹 1", "card-1", [[0.5, content("card-1", [view("tab-aaaaa1", PLAIN)])], [0.5, content("card-2", [view("tab-aaaaa2", PLAIN)])]])],
+    ]) } }, "spc-aaaaaa");
+  const before = await status("core.layout");
+  await refuses(run("core.card.split", { card: "card-4", side: "right", plugin: PLAIN }),
+    "card card-4 cannot split toward right: card card-1 would be 52x1144, below its minimum 96x96");
+  assert.deepEqual(await status("core.layout"), before, "the refused split changed the layout");
 });
 
 test("core.layout.open on a group card selects an equal tab inside it, adds a card to it and splits its rectangle", { timeout: 5000 }, async () => {
@@ -249,9 +282,10 @@ test("core.grid lists the content cards with their tabs in cards and the group c
   // The content cards come in workbench order, each with its tabs, parent, null at the root level, and leader a boolean, and the group
   // cards stand in groups, so a reader of cards sees one shape (docs/spec/groups.md#status-and-queries).
   plane.adopt({ focusedId: "card-1", named: 0, windowSidebars: {}, sidebars: {}, lastCard: 4, leader: "card-3",
-    groups: [{ card: "card-4", name: "그룹 1", leader: "card-1", members: ["card-1", "card-2"] }],
-    state: { xs: [0, 0.25, 0.5, 1], ys: [0, 1], cards: [content("card-3", 0, 1, 0, 1, [view("tab-aaaaa3", PLAIN)]),
-      content("card-1", 1, 2, 0, 1, [view("tab-aaaaa1", PLAIN)]), content("card-2", 2, 3, 0, 1, [view("tab-aaaaa2", PLAIN)])] } }, "spc-aaaaaa");
+    state: { root: row([
+      [0.25, content("card-3", [view("tab-aaaaa3", PLAIN)])],
+      [0.75, box("card-4", "그룹 1", "card-1", [[1 / 3, content("card-1", [view("tab-aaaaa1", PLAIN)])], [2 / 3, content("card-2", [view("tab-aaaaa2", PLAIN)])]])],
+    ]) } }, "spc-aaaaaa");
   const { cards, groups } = await status("core.grid");
   assert.deepEqual(cards.map(({ id, parent, leader }) => ({ id, parent, leader })), [
     { id: "card-3", parent: null, leader: true }, { id: "card-1", parent: "card-4", leader: true },
@@ -268,26 +302,30 @@ test("core.grid lists the content cards with their tabs in cards and the group c
 test("core.layout.balance in a space with groups gives every child of every cut an equal share, a group card as one child", { timeout: 5000 }, async () => {
   plane.closePicker("fixture reset");
   plane.adopt({ focusedId: "card-9", named: 0, windowSidebars: {}, sidebars: {}, lastCard: 13, leader: "card-12",
-    groups: [{ card: "card-12", name: "그룹 1", leader: "browser", members: ["browser", "card-13"] },
-      { card: "card-10", name: "그룹 3", leader: "card-9", members: ["card-9", "card-11"] }],
-    state: { xs: [0, 0.3319982198486871, 0.6680017801513128, 1], ys: [0, 0.33085808580858084, 0.6691419141914192, 1], cards: [
-      content("terminal", 2, 3, 1, 3, [view("tab-bbbbb1", PLAIN)]), content("browser", 0, 2, 0, 1, [view("tab-bbbbb2", PLAIN)]),
-      content("card-9", 0, 1, 1, 2, [view("tab-bbbbb3", PLAIN)]), content("card-11", 1, 2, 1, 2, [view("tab-bbbbb4", PLAIN)]),
-      content("card-7", 0, 2, 2, 3, [view("tab-bbbbb5", PLAIN)]), content("card-13", 2, 3, 0, 1, [view("tab-bbbbb6", PLAIN)])] } }, "spc-aaaaaa");
+    state: { root: { cut: "y", kids: [
+      { share: 0.33085808580858084, node: box("card-12", "그룹 1", "browser", [[0.6680017801513128, content("browser", [view("tab-bbbbb2", PLAIN)])],
+        [0.33199821984868716, content("card-13", [view("tab-bbbbb6", PLAIN)])]]) },
+      { share: 0.6691419141914192, node: row([
+        [0.6680017801513128, { cut: "y", kids: [
+          { share: 0.5055487053020963, node: box("card-10", "그룹 3", "card-9", [[0.4970019986675549, content("card-9", [view("tab-bbbbb3", PLAIN)])],
+            [0.5029980013324451, content("card-11", [view("tab-bbbbb4", PLAIN)])]]) },
+          { share: 0.4944512946979037, node: content("card-7", [view("tab-bbbbb5", PLAIN)]) },
+        ] }],
+        [0.33199821984868716, content("terminal", [view("tab-bbbbb1", PLAIN)])],
+      ]) },
+    ] } } }, "spc-aaaaaa");
   await run("core.layout.balance", {});
   const tree = plane.currentTree();
   const same = (ids, key) => {
     const sizes = ids.map((id) => tree.rect(id)[key]);
     for (const size of sizes) assert.ok(Math.abs(size - sizes[0]) < 1e-6, `${ids} are drawn ${key} ${sizes}, not one size`);
   };
-  // The plane is a column of the group card card-12 and a row of the column of card-10 and card-7 beside terminal; the header of
-  // card-12 is inside its share.
-  const head = tree.rect("browser").y - tree.rect("card-12").y;
-  assert.ok(Math.abs(tree.rect("browser").h + head - tree.rect("terminal").h) < 1e-6,
-    `card-12 is drawn ${tree.rect("browser").h} below a header of ${head} beside terminal at ${tree.rect("terminal").h}, not one size`);
+  // The plane is a column of the group card card-12 and a row of the column of card-10 and card-7 beside terminal; the frames and the
+  // header of a group card are fixed costs of its cut, so the members of a group card are drawn at the size of the children beside it, as
+  // the balance cases of docs/spec/cases/layout/groups.json state.
+  same(["browser", "terminal"], "h");
   same(["card-10", "terminal"], "w");
-  assert.ok(Math.abs(tree.rect("card-9").h + head - tree.rect("card-7").h) < 1e-6,
-    `card-10 is drawn ${tree.rect("card-9").h} below a header of ${head} above card-7 at ${tree.rect("card-7").h}, not one size`);
+  same(["card-9", "card-7"], "h");
   same(["browser", "card-13"], "w");
   same(["card-9", "card-11"], "w");
 });
@@ -310,16 +348,15 @@ test("core.card.move focuses the moved card, the first card inside a moved group
 
 // The document of the plane holds the cards in workbench order, each group card before the cards inside it, whatever the order in which
 // the grid holds the cards, so the lists of the elements and the Tab key follow the workbench order (docs/spec/groups.md#model,
-// docs/spec/exposure.md#workbench-statuses). The grid holds card-5 and card-3 of the group card card-6 first and card-2 before card-1
-// of the group card card-4, and a move of card-1 below card-5 puts it after card-5.
+// docs/spec/exposure.md#workbench-statuses), and a move of card-2 below card-5 puts it after card-5.
 test("the plane holds the cards and the group cards in workbench order", { timeout: 5000 }, async () => {
   plane.closePicker("fixture reset");
   plane.adopt({ focusedId: "card-1", named: 0, windowSidebars: {}, sidebars: {}, lastCard: 6, leader: "card-4",
-    groups: [{ card: "card-4", name: "그룹 1", leader: "card-1", members: ["card-1", "card-2"] },
-      { card: "card-6", name: "그룹 2", leader: "card-3", members: ["card-3", "card-5"] }],
-    state: { xs: [0, 0.375, 0.75, 1], ys: [0, 0.5, 1], cards: [content("card-5", 2, 3, 1, 2, [view("tab-aaaaa5", PLAIN)]),
-      content("card-3", 2, 3, 0, 1, [view("tab-aaaaa3", PLAIN)]), content("card-2", 1, 2, 0, 2, [view("tab-aaaaa2", PLAIN)]),
-      content("card-1", 0, 1, 0, 2, [view("tab-aaaaa1", PLAIN)])] } }, "spc-aaaaaa");
+    state: { root: row([
+      [0.75, box("card-4", "그룹 1", "card-1", [[0.5, content("card-1", [view("tab-aaaaa1", PLAIN)])], [0.5, content("card-2", [view("tab-aaaaa2", PLAIN)])]])],
+      [0.25, { box: "card-6", data: { name: "그룹 2", leader: "card-3" }, inner: { cut: "y", kids: [
+        { share: 0.5, node: content("card-3", [view("tab-aaaaa3", PLAIN)]) }, { share: 0.5, node: content("card-5", [view("tab-aaaaa5", PLAIN)]) }] } }],
+    ]) } }, "spc-aaaaaa");
   await new Promise((resolve) => setTimeout(resolve, 50));
   const documentOrder = () => [...document.querySelectorAll("#plane > .card, #plane > .group")]
     .map((el) => el.dataset.cardId ?? el.dataset.groupCard);
@@ -340,9 +377,9 @@ test("the plane holds the cards and the group cards in workbench order", { timeo
 // contract: group.create.request-after-the-layout
 test("core.group.create refuses the drawn minimum before the request and the plugin", { timeout: 5000 }, async () => {
   plane.closePicker("fixture reset");
-  plane.adopt({ focusedId: "card-1", named: 0, windowSidebars: {}, sidebars: {}, lastCard: 2, leader: "card-1", groups: [],
-    state: { xs: [0, 1], ys: [0, 0.9, 1], cards: [content("card-1", 0, 1, 0, 1, [view("tab-aaaaa1", PLAIN)]),
-      content("card-2", 0, 1, 1, 2, [view("tab-aaaaa2", PLAIN)])] } }, "spc-aaaaaa");
+  plane.adopt({ focusedId: "card-1", named: 0, windowSidebars: {}, sidebars: {}, lastCard: 2, leader: "card-1",
+    state: { root: { cut: "y", kids: [{ share: 0.9, node: content("card-1", [view("tab-aaaaa1", PLAIN)]) },
+      { share: 0.1, node: content("card-2", [view("tab-aaaaa2", PLAIN)]) }] } } }, "spc-aaaaaa");
   const refusal = await registry.handle({ id: 1, method: "command.run", params: { name: "core.group.create",
     params: { card: "card-2", side: "bottom", plugin: PLAIN } } });
   const minimum = refusal.error?.message ?? "";
@@ -387,10 +424,13 @@ test("the verification of the plane fails no row when a member of a group card a
   plane.closePicker("fixture reset");
   if (plane.currentGrid()) for (const card of plane.currentGrid().cards) for (const tab of plane.tabsOf(card)) reports.forgetTab(tab.id);
   plane.adopt({ focusedId: "card-1", named: 0, windowSidebars: {}, sidebars: {}, lastCard: 5, leader: "card-4",
-    groups: [{ card: "card-4", name: "그룹 1", leader: "card-1", members: ["card-1", "card-2"] }],
-    state: { xs: [0, 0.4, 0.7, 1], ys: [0, 0.5, 1], cards: [content("card-1", 0, 1, 0, 1, [view("tab-aaaaa1", PLAIN)]),
-      content("card-2", 1, 2, 0, 1, [view("tab-aaaaa2", PLAIN)]), content("card-3", 0, 2, 1, 2, [view("tab-aaaaa3", PLAIN)]),
-      content("card-5", 2, 3, 0, 2, [view("tab-aaaaa5", PLAIN)])] } }, "spc-aaaaaa");
+    state: { root: row([
+      [0.7, { cut: "y", kids: [
+        { share: 0.5, node: box("card-4", "그룹 1", "card-1", [[4 / 7, content("card-1", [view("tab-aaaaa1", PLAIN)])], [3 / 7, content("card-2", [view("tab-aaaaa2", PLAIN)])]]) },
+        { share: 0.5, node: content("card-3", [view("tab-aaaaa3", PLAIN)]) },
+      ] }],
+      [0.3, content("card-5", [view("tab-aaaaa5", PLAIN)])],
+    ]) } }, "spc-aaaaaa");
   await new Promise((resolve) => setTimeout(resolve, 50));
   const { verify } = await import("../verify.js");
   const failed = verify().filter((row) => row.ok === false && /^V[1-5] /.test(row.name)).map((row) => `${row.name}: ${row.note}`);

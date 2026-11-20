@@ -6,7 +6,7 @@
 
 ## 모델
 
-- group card는 body가 자기 plane인 plane의 card다. plane은 layout library `packages/soksak`의 grid 하나(`xs`, `ys`, `cards`, `paidBy`)다. library는 plane 하나의 library로 남고, workbench가 plane의 tree를 가진다.
+- group card는 body가 자기 plane인 plane의 card다. plane은 layout library `packages/soksak`의 grid 하나(slicing tree `{root}`)다. library는 plane 하나의 library로 남고, workbench가 plane의 tree를 가진다.
 - space는 root plane 하나를 가진다. plane의 card는 tab을 가진 content card이거나, child plane을 가진 group card다. content card의 각 tab은 지금처럼 다른 card와 독립이다.
 - card와 tab 구조는 그대로이고, 더하는 것은 group card뿐이다.
   - header는 기존 card header design을 따르며, 이름, leader mark, button을 가진다.
@@ -29,10 +29,7 @@
   - group 해제는 group header의 close menu에 있다.
 - card는 plane 사이를 옮겨도 identifier를 유지한다. card를 지정하는 모든 command(`core.layout.open`, `core.layout.select`, `core.layout.close`, `core.card.get`)는 어느 plane의 card에도 동작한다.
 
-- setting `cardSplit`은 split 뒤의 크기를 정한다. 값은 둘이다.
-  - `exact`(기본값): split되는 card의 rect만 나눈다.
-  - `even`: 그 plane의 card들을 `balance()`로 고른 크기로 다시 배치한다.
-  - 이 setting은 split button, group button의 안쪽 split, `side`를 준 `core.layout.open`에 적용된다.
+- split은 split button, group button의 안쪽 split, `side`를 준 `core.layout.open`에서 자기가 split하는 node만 나눈다.
 
 ## Command와 status
 

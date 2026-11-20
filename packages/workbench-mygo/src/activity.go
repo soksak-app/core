@@ -73,43 +73,45 @@ type ActivitySpace struct {
 	Layout json.RawMessage `json:"layout"`
 }
 
-// activityLayout is what the activities read of a stored layout: the tabs of each card and the group tree.
+// activityLayout is what the activities read of a stored layout: its stored tree (docs/spec/groups.md#storage).
 type activityLayout struct {
 	State struct {
-		Cards []struct {
-			ID   string `json:"id"`
-			Data *struct {
-				Tabs []struct {
-					ID     string `json:"id"`
-					Plugin string `json:"plugin"`
-				} `json:"tabs"`
-			} `json:"data"`
-		} `json:"cards"`
+		Root activityNode `json:"root"`
 	} `json:"state"`
-	Groups []activityNode `json:"groups"`
 }
 
-// activityNode is a member of a level: a content card by its identifier, or the node of a group card with its members.
+// activityNode is a node of the stored tree: a card with the tabs of its data, a cut with its kids, or the box of a group card around
+// its inner node.
 type activityNode struct {
-	Card    string
-	Members []activityNode
-	group   bool
+	Card string `json:"card"`
+	// A window sidebar or a seat card has null data, so it holds no tabs.
+	Data *struct {
+		Tabs []struct {
+			ID     string `json:"id"`
+			Plugin string `json:"plugin"`
+		} `json:"tabs"`
+	} `json:"data"`
+	Kids []struct {
+		Node activityNode `json:"node"`
+	} `json:"kids"`
+	Box   string        `json:"box"`
+	Inner *activityNode `json:"inner"`
 }
 
-// UnmarshalJSON reads a member: a string is a content card and an object the node of a group card.
-func (n *activityNode) UnmarshalJSON(text []byte) error {
-	if err := json.Unmarshal(text, &n.Card); err == nil {
-		return nil
+// eachCard calls visit with each card node of the tree under n that holds data, in tree order.
+func (n activityNode) eachCard(visit func(card activityNode)) {
+	switch {
+	case n.Box != "":
+		if n.Inner != nil {
+			n.Inner.eachCard(visit)
+		}
+	case n.Kids != nil:
+		for _, kid := range n.Kids {
+			kid.Node.eachCard(visit)
+		}
+	case n.Data != nil:
+		visit(n)
 	}
-	var node struct {
-		Card    string         `json:"card"`
-		Members []activityNode `json:"members"`
-	}
-	if err := json.Unmarshal(text, &node); err != nil {
-		return fmt.Errorf("a group member is neither a card nor a group node: %w", err)
-	}
-	n.Card, n.Members, n.group = node.Card, node.Members, true
-	return nil
 }
 
 // ActivitySpaceState is a space of core.activity: its activity and those of its content cards and group cards by card identifier.
@@ -159,39 +161,37 @@ func WindowActivity(projects []ActivityProject, tabs map[string]string) (WindowA
 				return WindowActivities{}, fmt.Errorf("project %s space %s: %w", project.ID, space.ID, err)
 			}
 			state := ActivitySpaceState{Cards: map[string]string{}, Groups: map[string]string{}}
-			for _, card := range stored.State.Cards {
-				// A seat card has null data, so it holds no tabs.
-				if card.Data == nil {
-					continue
-				}
-				held := ""
-				for _, tab := range card.Data.Tabs {
-					if activity := tabs[tab.ID]; activity != "" {
-						out.Tabs[tab.ID] = activity
-						held = HighestActivity(held, activity)
+			// The activity of a node is the highest activity of the cards inside it; a box records it as the activity of its group card.
+			var held func(node activityNode) string
+			held = func(node activityNode) string {
+				highest := ""
+				switch {
+				case node.Box != "":
+					if node.Inner == nil {
+						return ""
+					}
+					highest = held(*node.Inner)
+					if highest != "" {
+						state.Groups[node.Box] = highest
+					}
+				case node.Kids != nil:
+					for _, kid := range node.Kids {
+						highest = HighestActivity(highest, held(kid.Node))
+					}
+				case node.Data != nil:
+					for _, tab := range node.Data.Tabs {
+						if activity := tabs[tab.ID]; activity != "" {
+							out.Tabs[tab.ID] = activity
+							highest = HighestActivity(highest, activity)
+						}
+					}
+					if highest != "" {
+						state.Cards[node.Card] = highest
 					}
 				}
-				if held != "" {
-					state.Cards[card.ID] = held
-				}
+				return highest
 			}
-			var member func(node activityNode) string
-			member = func(node activityNode) string {
-				if !node.group {
-					return state.Cards[node.Card]
-				}
-				held := ""
-				for _, inner := range node.Members {
-					held = HighestActivity(held, member(inner))
-				}
-				if held != "" {
-					state.Groups[node.Card] = held
-				}
-				return held
-			}
-			for _, node := range stored.Groups {
-				member(node)
-			}
+			held(stored.State.Root)
 			for _, activity := range state.Cards {
 				state.Activity = HighestActivity(state.Activity, activity)
 			}
@@ -373,17 +373,13 @@ func (a *ActivityFollow) Sync() {
 				a.failed(fmt.Errorf("project %s space %s: %w", project.ID, space.ID, err))
 				return
 			}
-			for _, card := range stored.State.Cards {
-				// A seat card has null data, so it holds no tabs.
-				if card.Data == nil {
-					continue
-				}
+			stored.State.Root.eachCard(func(card activityNode) {
 				for _, tab := range card.Data.Tabs {
 					if names := a.statuses(tab.Plugin); len(names) > 0 {
 						wanted[tab.ID] = &activityTab{plugin: tab.Plugin, names: names}
 					}
 				}
-			}
+			})
 		}
 	}
 	a.syncing = true

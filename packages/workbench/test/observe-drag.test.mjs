@@ -35,11 +35,10 @@ const { installEnvironment } = await import("../environment.js");
 installEnvironment({
   runtime: "runtime",
   workspace: { focus: "main", grid: {
-    xs: [0, 0.5, 1], ys: [0, 1],
-    cards: [
-      { id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: "fixture-drag", title: "left" }] },
-      { id: "second", c0: 1, c1: 2, r0: 0, r1: 1, tabs: [{ plugin: "fixture-drag", title: "right" }] },
-    ],
+    root: { cut: "x", kids: [
+      { share: 0.5, node: { card: "main", tabs: [{ plugin: "fixture-drag", title: "left" }] } },
+      { share: 0.5, node: { card: "second", tabs: [{ plugin: "fixture-drag", title: "right" }] } },
+    ] },
   } },
   sidebars: { sets: [], links: [] },
 }, { plugins: [{ id: "fixture-drag", package: "@scope/fixture-drag", version: "0.0.1", manifest: {

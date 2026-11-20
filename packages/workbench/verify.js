@@ -96,10 +96,10 @@ export function verify(controls = null) {
 
   // V1 — cards that read the same line have exactly the same boundary (no tolerance). The frames of the group cards hold a member one
   // gap inside the line for each frame on that side, so the cards with the same frames on that side read the same boundary
-  // (docs/spec/groups.md#drawn-rectangles).
-  // default: a card that no group card frames has no frames.
-  const frames = currentTree().frames;
-  const framesOn = (c, side) => frames[c.id]?.[side] ?? 0;
+  // (docs/spec/groups.md#drawn-rectangles); the top of a card under the headers of the group cards that start on its line stands below
+  // them, so the cards under the same heads read the same top.
+  const tree = currentTree();
+  const framesOn = (c, side) => (side === "top" ? grid.headsAbove(c.id) : tree.framesOf(c.id)[side]);
   let drift = 0, shared = 0;
   for (const axis of ["x", "y"]) {
     const [lo, hi] = axis === "x" ? ["c0", "c1"] : ["r0", "r1"];
@@ -171,16 +171,14 @@ export function verify(controls = null) {
   // measured by test/resizeTrip.test.mjs.
   const trip = new Soksak(grid.toJSON(),
     { gap: grid.gap, minSize: grid.minSize, width: grid.width, height: grid.height });
-  // The frames of the group cards are no part of the stored state: the group tree gives them to the plane after each restore, so the
-  // copy takes the same frames (docs/spec/groups.md#drawn-rectangles).
-  trip.setFrames(currentTree().frames);
+  // The frame mode and the heads of the group cards are no part of the stored state: the group tree gives them to the plane after each
+  // restore, so the copy takes the same ones (docs/spec/groups.md#drawn-rectangles).
+  tree.reframe(trip);
   let rebuilt = 0;
   for (const [id, was] of trip.rects()) rebuilt = Math.max(rebuilt, maxDelta(was, box.get(id)));
   const smallest = Math.min(...rects.flatMap((r) => [r.w, r.h]));
   add("V4 담았다 되돌리면 그대로", rebuilt === 0,
       `사본 ${rebuilt.toFixed(4)}px · 그려진 최소 변 ${smallest.toFixed(0)}px`);
-
-  add("V5 배치가 slicing", grid.isSlicing(), "한 영역을 통째로 자른 결과만 가능");
 
   const open = cards.filter((c) => !c.fixed);
   if (open.length <= 1) skip("V6 마지막 하나 빼고 전부 닫힌다", "열린 카드가 하나뿐이다");
