@@ -265,17 +265,23 @@ fn hook_document(file: &Path, data: &[u8]) -> Result<Members, String> {
     Ok(root)
 }
 
-/// Reports whether a hook entry carries the mark of soksak: an object of type command whose command ends with the mark.
-fn is_soksak_hook(hook: &str) -> bool {
+/// The command of a hook entry that carries the mark of soksak: an object of type command whose command ends with the mark. Any
+/// other entry gives None, and the file keeps it as it is.
+fn soksak_hook_command(hook: &str) -> Option<String> {
     let Ok(fields) = members_of(hook) else {
-        return false;
+        return None;
     };
-    let kind =
-        get(&fields, "type").and_then(|value| serde_json::from_str::<String>(value.get()).ok());
-    let command =
-        get(&fields, "command").and_then(|value| serde_json::from_str::<String>(value.get()).ok());
-    kind.as_deref() == Some("command")
-        && command.is_some_and(|command| command.ends_with(HOOK_MARK))
+    let text = |key: &str| {
+        // default: a type or a command that is no string belongs to no entry of soksak, so its text is None.
+        get(&fields, key).and_then(|value| serde_json::from_str::<String>(value.get()).ok())
+    };
+    let command = text("command")?;
+    (text("type").as_deref() == Some("command") && command.ends_with(HOOK_MARK)).then_some(command)
+}
+
+/// Reports whether a hook entry carries the mark of soksak.
+fn is_soksak_hook(hook: &str) -> bool {
+    soksak_hook_command(hook).is_some()
 }
 
 /// Removes the entries that soksak registered under every event. A group whose hooks the removal emptied is dropped, and so is an
@@ -386,14 +392,9 @@ fn soksak_hook_entries(root: &Members) -> Vec<(String, String)> {
                 continue;
             };
             for hook in hooks {
-                if !is_soksak_hook(hook.get()) {
+                let Some(command) = soksak_hook_command(hook.get()) else {
                     continue;
-                }
-                let command = members_of(hook.get())
-                    .ok()
-                    .and_then(|fields| get(&fields, "command").map(|value| value.get().to_string()))
-                    .and_then(|text| serde_json::from_str::<String>(&text).ok())
-                    .unwrap_or_default();
+                };
                 entries.push((event.key.clone(), command));
             }
         }

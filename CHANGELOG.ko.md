@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1016-12: sok의 hook 파일 reader가 entry의 type과 command를 이유를 적고 한 번 읽으므로 kit 0.0.16의 event source 검사가 통과한다. 결과는 바뀌지 않는다.
 - F1016-1부터 F1016-9: main의 node test가 열 개 파일 중 아홉에서 다시 통과한다. roles format 기본값이 이유를 적고, doc comment가 더 이상 reason marker로 읽히지 않으며, comment 일곱 개가 영어이고, 공통 platform module과 실행 단계가 bundle을 이름 짓지 않으며, event class table과 window check의 배포 catalog가 catalog를 따르고, group header check가 window의 순서를 바꾸지 않으며, linked sidebar checker fixture가 저장된 tree를 주고, break inventory test가 `dist/tree.js`를 이름 짓는다. 이유 없는 기본값 93개인 F1016-10은 기다린다.
 - F1015: core가 kit 0.0.16을 pin하고, F916과 F686-6-1의 link는 version 없는 kit release 파일을 가리킨다.
 - F1013 (알림 고리): class `frame`의 기록은 event log의 변경을 알리지 않아서, 알림 `debug-log-changed`를 창에 전달할 때 저장되는 기록(`host.frame.step`, `native.observe.counted`, `host.frame.record`, `host.frame.complete`)이 다음 알림을 부르지 않는다. 전에는 쉬는 mygo application이 초당 알림 네 개를 끝없이 발행하고 분마다 step 기록 약 240개와 count 기록 약 120개를 썼다. 후속 F1013-1(따라가는 창에만 알림)과 F1013-2(쉬는 창의 window check)를 등록했다. 검증: `TestLogIndexFrameRecordsAnnounceNoChange`와 `index_frame_records_announce_no_change`는 frame 기록이 변경을 알릴 때 알리는 줄 다섯 개로 실패했고 지금은 하나로 통과한다. host의 writer, indexer, 발행자를 frame 기록을 저장하는 전달과 함께 돌리는 `TestTheRecordsOfTheDeliveryOfANoticeCauseNoNotice`와 `the_records_of_the_delivery_of_a_notice_cause_no_notice`는 전달 기록에 대한 두 번째 알림으로 실패했고, 지금은 두 번째 알림이 다음 변경에 오고 합쳐진 것이 없어 통과한다(Go 20회). 다시 빌드한 mygo debug build는 62 s 동안 CPU 0.0 percent를, terminal과 browser tab이 있는 project로는 92 s 동안 0.16 percent를 썼고, 고리를 되돌린 build는 1.6 percent를 썼다.
