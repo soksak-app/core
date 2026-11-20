@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F966-3-2 (contraction at the commit): five shared cases of `groups.json` judge that a group card left with one member is replaced by that member after the target of the operation is resolved, on a nested group, in both workbenches, whose implementations passed them unchanged.
 - F966-3-1-5-1 (the vacated slot, Go): a move whose target names the vacated slot of the moving card or box, the node itself on any side or its centre, or the kid before or after it toward it, is no change, so the only tab of a card dropped beside its own card previews the card and changes nothing; `core.card.move` refuses only a target inside the card.
 - F966-1-1-1-1 (the preview of a drop that closes its card, Go): the preview of a drop of the only tab of a card on the centre or the tab strip of another card is the rectangle of the target after the card that the tab leaves closes, as the release makes it.
 - F966-3-1-4-6 (exchange, page layout library): `exchange` keeps the size that each place is drawn at: before the exchange it reads the size of the place of each kid of the cuts of the two places, and a node that enters a place takes that size less its own frames and head, so a group card exchanged with a content card no longer grows its place by its frame. `Input` of the cuts reads the frames of a node with its new member `frame`.
