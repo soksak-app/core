@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1002: the Go host treats a process in its exit (`P_WEXIT`) as ended when it decides whether the pid of `endpoint.json` names the publisher, so a process after its exit event no longer names it before it is a zombie; the Rust test of the same contract waits for the exit event.
 - F1001: the Rust host setup test leaves every directory that holds a `codex` command out of the login PATH of its disposable home, as the Go test does, so the result no longer depends on an installed `codex`.
 - F996-8 (follow-up of F996-5.1): the processor time of the process for `host.sampler.routines` is an operation of the host platform interface, which macOS implements with `getrusage` and Windows answers as not implemented, so the Go host library and its framework adapters build for Windows again; the Rust work of the routines is `routine/work.rs`, the counterpart of the Go file.
 - F996-5.3 (one decode of a sidecar line): the Go and the Rust host decode a message line of a sidecar once into its members, the body of the message once and its member `image` once, and the readers, the reply record, the detach acknowledgement and the image decision read these members; a message without an image costs two decodes and a message with one three, which `MessageDecodes` and `message_decodes` count (`docs/spec/sidecars.md#messages`).

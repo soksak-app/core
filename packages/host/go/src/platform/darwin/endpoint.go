@@ -107,7 +107,8 @@ func (implementation) Listen(directory, application string) (net.Listener, platf
 // ServiceProcessExists checks whether pid is the live process that published the persistent service endpoint whose modification
 // time is published (docs/spec/persistent-services.md#endpoint-publisher). It reads the process from the process table of the
 // kern.proc.pid sysctl. A pid that the table does not list has ended; a zombie has ended too, as a spawn that was not waited for
-// stays one (V5-106); a process of another user did not publish the endpoint, because the service runs as the user of the host;
+// stays one (V5-106), and so has a process in its exit (P_WEXIT), which the table lists after its exit event and before it is a
+// zombie; a process of another user did not publish the endpoint, because the service runs as the user of the host;
 // and a process that started later than published received the pid after the publisher ended. It is an error when the table
 // cannot be read.
 func (implementation) ServiceProcessExists(pid int, published time.Time) (bool, error) {
@@ -124,7 +125,7 @@ func (implementation) ServiceProcessExists(pid int, published time.Time) (bool, 
 	process := processes[0].Proc
 	started := time.Unix(process.P_starttime.Sec, int64(process.P_starttime.Usec)*int64(time.Microsecond))
 	owned := processes[0].Eproc.Ucred.Uid == uint32(os.Geteuid())
-	return owned && process.P_stat != sZomb && !started.After(published), nil
+	return owned && process.P_stat != sZomb && process.P_flag&pWExit == 0 && !started.After(published), nil
 }
 
 // stopEvent is the identifier of the user event that wakes the wait for a service process when its stop closes.
