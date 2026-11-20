@@ -144,7 +144,7 @@ fn send_writes_the_whole_text_under_the_sender_name_and_leaves_no_temporary_file
     assert_eq!(
         written,
         format!(
-            "{text} (끝나면 결과를 sok message send --reply {} \"<보고>\"로 보고하라)",
+            "{text} (When done, report the result with sok message send --reply {} \"<report>\")",
             sender.display()
         )
     );

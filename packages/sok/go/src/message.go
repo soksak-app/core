@@ -172,13 +172,14 @@ func readReceiver(client *Client, terminal string) (any, error) {
 
 // reportRequest returns the request for a report that a message carries after its text: the folder of the sender is
 // <root>/.soksak/messages/<surface>, beside the folder of the receiver, <root>/.soksak/messages/<receiver>
-// (docs/spec/messaging.md#report-request). A folder of another form names no root, and the send is refused.
+// (docs/spec/messaging.md#report-request). The request is English, because every text addressed to an agent is English. A folder
+// of another form names no root, and the send is refused.
 func reportRequest(folder, surface string) (string, error) {
 	messages := filepath.Dir(filepath.Clean(folder))
 	if filepath.Base(messages) != "messages" || filepath.Base(filepath.Dir(messages)) != ".soksak" {
 		return "", fmt.Errorf("message send: %s is not the folder of a terminal, <root>/.soksak/messages/<surface>, so it names no folder of the sender for the report; a report is sent with --reply", folder)
 	}
-	return ` (끝나면 결과를 sok message send --reply ` + filepath.Join(messages, surface) + ` "<보고>"로 보고하라)`, nil
+	return ` (When done, report the result with sok message send --reply ` + filepath.Join(messages, surface) + ` "<report>")`, nil
 }
 
 // sendMessage writes text as a message of surface into folder and returns the name of the message file; the token of a report starts

@@ -231,7 +231,7 @@ fn report_request(folder: &str, surface: &str) -> Result<String, Error> {
         )));
     };
     Ok(format!(
-        " (끝나면 결과를 sok message send --reply {} \"<보고>\"로 보고하라)",
+        " (When done, report the result with sok message send --reply {} \"<report>\")",
         messages.join(surface).display()
     ))
 }

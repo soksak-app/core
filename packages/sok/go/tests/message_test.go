@@ -121,7 +121,7 @@ func TestSendWritesTheWholeTextUnderTheSenderNameAndLeavesNoTemporaryFile(t *tes
 		t.Fatal(err)
 	}
 	// The send adds the request for a report to the folder of the sender (docs/spec/messaging.md#report-request).
-	want := text + ` (끝나면 결과를 sok message send --reply ` + filepath.Join(root, ".soksak", "messages", "app-1") + ` "<보고>"로 보고하라)`
+	want := text + ` (When done, report the result with sok message send --reply ` + filepath.Join(root, ".soksak", "messages", "app-1") + ` "<report>")`
 	if string(written) != want {
 		t.Fatalf("the message is %q, want %q", written, want)
 	}
