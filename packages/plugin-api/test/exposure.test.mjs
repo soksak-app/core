@@ -670,10 +670,36 @@ test("the snapshot cuts the text of an item to 120 Unicode scalar values without
   const { window } = new JSDOM("<p></p>");
   const row = window.document.querySelector("p");
   row.textContent = `${"a".repeat(119)}\u{1F600}b`;
+  row.getBoundingClientRect = () => ({ left: 1, top: 2, width: 3, height: 4, right: 4, bottom: 6 });
   const entries = exposureEntries(declared);
   entries.element("probe.row", () => [row]);
   const [item] = (await entries.snapshot({ withInert: false })).element[0].items;
   assert.equal(item.text, `${"a".repeat(119)}\u{1F600}`);
   assert.equal([...item.text].length, 120);
+  window.close();
+});
+
+// An element entry of a snapshot lists only the elements that the document draws (docs/spec/exposure.md#window-snapshot): an element
+// that is hidden, under a hidden ancestor, of hidden visibility or of an empty box leaves the items and keeps its element.rect index in
+// the others, and a name whose elements are all undrawn stays as an entry with no item.
+test("the snapshot lists only the drawn elements of an element entry with their element.rect indexes", async () => {
+  const declared = declarationMap({ element: [{ name: "probe.row", description: "Rows.", many: true }, { name: "probe.tools", description: "Tools." }] });
+  const { window } = new JSDOM("<ul><li id='a'>a</li><li id='b' hidden>b</li><li id='c' style='visibility:hidden'>c</li><li id='d'>d</li><li id='e'>e</li></ul><div hidden><p id='t'>t</p></div>");
+  const rows = [...window.document.querySelectorAll("li")];
+  for (const row of rows) {
+    const width = row.id === "d" ? 0 : 3;
+    row.getBoundingClientRect = () => ({ left: 1, top: 2, width, height: 4, right: 1 + width, bottom: 6 });
+  }
+  const tools = window.document.querySelector("#t");
+  tools.getBoundingClientRect = () => ({ left: 1, top: 2, width: 3, height: 4, right: 4, bottom: 6 });
+  const entries = exposureEntries(declared);
+  entries.element("probe.row", () => rows);
+  entries.element("probe.tools", () => [tools]);
+  const group = await entries.snapshot({ withInert: false });
+  assert.deepEqual(group.element.map(({ name, items }) => ({ name, items: items.map(({ index, text }) => ({ index, text })) })), [
+    { name: "probe.row", items: [{ index: 0, text: "a" }, { index: 4, text: "e" }] },
+    { name: "probe.tools", items: [] },
+  ]);
+  for (const item of group.element[0].items) assert.equal("visible" in item, false, `the item ${item.index} carries visible`);
   window.close();
 });

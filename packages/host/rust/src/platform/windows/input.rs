@@ -22,13 +22,13 @@ pub fn pointer(
     window: Handle,
     pointer: Pointer,
     receive: Duration,
-    done: Box<dyn FnOnce(Delivery) + Send>,
+    done: Box<dyn FnOnce(Delivery, Option<Handle>) + Send>,
 ) -> Result<(), String> {
     let view = view_of(window)?;
     let call = match view.presses.borrow().call(&pointer) {
         Ok(call) => call,
         Err(delivery) => {
-            done(delivery);
+            done(delivery, None);
             return Ok(());
         }
     };
@@ -44,7 +44,8 @@ pub fn pointer(
                 crate::application_log::log_error("input.pointer", format!("{failure:?}"))
             }
         }
-        done(pointer_delivery(&result));
+        // The web view of a Windows window holds the whole page; no native web view of a surface receives a press.
+        done(pointer_delivery(&result), None);
     });
     view.queue.push(call, receive, Some(answer))
 }

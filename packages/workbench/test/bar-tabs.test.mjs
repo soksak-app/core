@@ -12,6 +12,7 @@ function strips() {
   const { document } = new JSDOM(`<div id="projectBar"></div><main id="workarea"></main><div id="spaceBar"></div>`).window;
   globalThis.document = document;
   const state = {
+    activities: { projects: {}, tabs: {} },
     library: false,
     all: [{ id: "p1", title: "first", color: "#111", activeSpaceId: "s1", spaces: SPACES }, { id: "p2", title: "second", color: "#222", spaces: [] }],
   };
@@ -26,7 +27,7 @@ function strips() {
   const workarea = document.getElementById("workarea");
   const runs = [];
   const tabs = createBarTabs({ projects, projectBar, spaceBar, workarea, bind: () => {}, run: async (name, params) => { runs.push([name, params]); }, keyboardOwed: () => {},
-    redraw: () => { redraws += 1; }, changed: () => {} });
+    redraw: () => { redraws += 1; }, changed: () => {}, activities: () => state.activities });
   const texts = (strip) => [...strip.children].map((child) => child.textContent);
   return { state, tabs, projectBar, spaceBar, workarea, texts, runs, redraws: () => redraws };
 }
@@ -152,4 +153,22 @@ test("a rename puts the field in the place of its tab and a cancel gives the tab
   tabs.draw(false);
   assert.equal(spaceBar.children[1].tagName, "BUTTON");
   assert.equal(tabs.renames.state(), null);
+});
+
+test("a project tab and a space tab show the icon of their activity before the name, and none without one", () => {
+  const { state, tabs, projectBar, spaceBar } = strips();
+  state.activities = { projects: { p1: { activity: "attention", spaces: { s2: { activity: "attention", cards: {}, groups: {} } } } }, tabs: {} };
+  tabs.draw(false);
+  const icons = (strip, expose) => [...strip.querySelectorAll(`[data-expose="${expose}"]`)]
+    .map((icon) => [icon.parentElement.querySelector(".bar-tab__name").textContent, icon.dataset.activity, icon.getAttribute("aria-label")]);
+  assert.deepEqual(icons(projectBar, "core.activity.project"), [["first", "attention", "응답 대기"]]);
+  assert.deepEqual(icons(spaceBar, "core.activity.space"), [["two", "attention", "응답 대기"]]);
+  assert.equal(spaceBar.querySelector(".activity").nextElementSibling.className, "bar-tab__name", "the icon does not stand before the name");
+  // A change of activity draws the tab again with the next icon, and an ended activity removes it.
+  state.activities = { projects: { p1: { activity: "running", spaces: { s2: { activity: "running", cards: {}, groups: {} } } } }, tabs: {} };
+  tabs.draw(false);
+  assert.deepEqual(icons(projectBar, "core.activity.project"), [["first", "running", "실행 중"]]);
+  state.activities = { projects: {}, tabs: {} };
+  tabs.draw(false);
+  assert.equal(projectBar.querySelector(".activity") ?? spaceBar.querySelector(".activity"), null);
 });

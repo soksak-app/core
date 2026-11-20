@@ -135,6 +135,7 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .bar-tab--add:hover{background:var(--chip-hover)}
 .bar-tab__root{padding:0 var(--bar-tab-root-pad);border:var(--bw) solid var(--focus);border-radius:var(--r-xs);
   background:var(--bg);color:var(--fg);font:inherit;font-size:var(--text-control);width:var(--bar-tab-root-w);height:var(--bar-tab-root-h)}
+.bar-tab__root::selection{background:color-mix(in srgb,var(--focus) var(--rename-selection-mix),var(--bg));color:var(--fg)}
 
 /* Icon switches. */
 .act{display:inline-flex;align-items:center;justify-content:center;width:var(--act-w);height:var(--act-h);
@@ -195,6 +196,29 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
    without an order only the outer edge of the group would take the rail color and the four sides of a card would have
    different colors. The rail has z 3 in .rail. */
 .card[data-focused=true]{z-index:4}
+/* A group card is one container (docs/spec/groups.md#drawing): its frame has the border and the radius of a card and the fill of its level,
+   which the plane sets, and stands below the cards; its header is the band of head-h at the top of the frame, whose name and button row take the
+   style of the head of a content card. */
+.group{position:absolute;z-index:0;border-radius:var(--r);overflow:hidden}
+/* The header is the band of head-h at the top of the frame rectangle (docs/spec/groups.md#drawn-rectangles), so the frame element has no
+   border, and the line of the frame is drawn over the ends of the header, as the border of a card runs around its whole box. */
+.group::after{content:"";position:absolute;inset:0;border:var(--bw) solid var(--edge);border-radius:inherit;pointer-events:none}
+.group[hidden]{display:none}
+/* A group card that holds the focused card mixes the focus color into the color of its frame by the share --group-focus, which the
+   plane sets to group-focus-fade to the power of the levels up to it (docs/spec/groups.md#focus). Only the color of the frame line
+   changes, so the mark adds no line, also at the seam. */
+:root[data-focus-ind=border] .group[data-focus]::after{border-color:color-mix(in srgb,var(--focus) var(--group-focus),var(--edge))}
+/* The rename field of a group takes the place of the name: its text starts where the text of the name started in the size of the name,
+   and it grows over the place of the name (docs/spec/groups.md#headers). */
+.group__rename{flex:1 1 0px;min-width:0;font-size:var(--text-small);margin-left:calc(var(--tab-pad-x) - var(--bw) - var(--bar-tab-root-pad))}
+/* The header draws the line below it as the head of a card does, in the color that the plane writes from groupLook of group-look.js:
+   edge with a gap and rule at the seam (docs/spec/groups.md#drawing). */
+.group__head{display:flex;align-items:center;gap:var(--card-head-gap);padding:0 calc(var(--card-head-pad) + var(--bw));overflow:hidden;
+  border-bottom:var(--bw) solid}
+.group__name{flex:1 1 auto;min-width:0;padding-left:var(--tab-pad-x);padding-right:var(--tab-pad-x);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--text-small);
+  color:var(--fg);cursor:grab;user-select:none}
+/* The fit of a group header measures the name at the width of its text (docs/spec/groups.md#headers). */
+.group__head[data-measure] .group__name{flex:0 0 auto}
 
 /* The focus mark is shown only at the four corners of the body. A native surface is outside the CSS stack, so a mark drawn inside the
    card would be hidden under the surface; it is placed on the same layer as the surface. */
@@ -235,6 +259,17 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 :root[data-seam=line][data-focus-ind=border] .card[data-focused=true]{
   outline:var(--bw) solid var(--focus)}
 :root[data-seam=line] .drop{border-radius:0;border:var(--bw) solid var(--focus)}
+/* At the seam a group card draws no border either: the line around it is the line of the plane, its header draws the line between it
+   and the box below it in rule, and the mark of a group card that holds the focus paints the line outside the frame, as the focus of a card does.
+   A nested group card and the focused card stand later in the paint order, so the innermost mark owns a line that several marked boxes
+   end on (docs/spec/groups.md#drawing). The stage starts on the bottom line of the space bar and on the right line of the project
+   column and draws its own line over them, so the edge of the plane is one line on each side. */
+:root[data-seam=line] .group{border-radius:0}
+:root[data-seam=line] .group::after{border-width:0}
+:root[data-seam=line][data-focus-ind=border] .group[data-focus]{
+  outline-width:var(--bw);outline-style:solid;outline-color:color-mix(in srgb,var(--focus) var(--group-focus),var(--edge))}
+:root[data-seam=line] .stage{margin-top:calc(0px - var(--bw))}
+:root[data-seam=line] .project-column + .work > .stage{margin-left:calc(0px - var(--bw))}
 
 /* Card head */
 .chrome{display:flex;align-items:center;gap:var(--card-head-gap);padding:0 var(--card-head-pad);overflow:hidden;
@@ -268,8 +303,14 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
   flex:0 0 auto;background:transparent;color:var(--muted);border-radius:var(--r-xs);cursor:pointer}
 .chrome__more svg{width:var(--card-icon);height:var(--card-icon);fill:currentColor;stroke:none}
 .chrome__more:hover{background:var(--inset);color:var(--fg)}
-.chrome[data-tools=menu] .chrome__more{display:grid}
-.chrome[data-tools=menu] .chrome__acts{display:none}
+/* The folded head keeps the fullscreen toggle and, on the leader, the leader mark beside ⋯ (docs/spec/example-model.md#card-tools); a
+   group header folds by the same rule (docs/spec/groups.md#headers). */
+:is(.chrome,.group__head):is([data-tools=menu],[data-tools=all]) .chrome__more{display:grid;margin-left:0}
+/* In the stage all the kept tools fold into ⋯ as well, so a part of the tab stays (docs/spec/example-model.md#card-tabs). */
+:is(.chrome,.group__head)[data-tools=all] .chrome__acts{display:none}
+:is(.chrome,.group__head)[data-tools=menu] .chrome__acts{display:flex;gap:var(--card-head-gap);padding:0;border-color:transparent}
+:is(.chrome,.group__head)[data-tools=menu] .chrome__acts > :not([data-do=fullscreen]):not([data-do=leader]){display:none}
+:is(.chrome,.group__head)[data-tools=menu]:not([data-mark=leader]) .chrome__acts > [data-do=leader]{display:none}
 .chrome[data-fit=ham] .chrome__tabs{display:none}
 /* A tab is at most 200 points wide, so one long title leaves the width of the strip to the other tabs; the name is cut with
    an ellipsis inside that bound, and the tab shows the whole name as its tooltip (docs/spec/example-model.md#card-tabs). */
@@ -284,6 +325,14 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .tab[data-notice=true]::before,.chrome__ham[data-notice=true]::after,.picker__item[data-notice=true]::before{
   content:"";width:var(--notice-dot);height:var(--notice-dot);border-radius:var(--circle);background:var(--focus);flex:0 0 auto}
 .chrome__ham{position:relative}
+/* The icon of an activity before the name of a tab, a group header, a space tab or a project tab (docs/spec/activity.md#drawing).
+   No activity uses the error color. */
+.activity{display:inline-grid;flex:0 0 auto;width:var(--activity-icon);height:var(--activity-icon)}
+.activity svg{width:var(--fill);height:var(--fill);fill:none;stroke:currentColor;stroke-width:var(--activity-stroke);stroke-linecap:round;stroke-linejoin:round}
+.activity[data-activity=attention]{color:var(--focus)}
+.activity[data-activity=failed]{color:var(--fg)}
+.activity[data-activity=running]{color:var(--rail)}
+.activity[data-activity=idle]{color:var(--muted)}
 .chrome__ham[data-notice=true]::after{position:absolute;top:var(--notice-dot-inset);right:var(--notice-dot-inset)}
 /* At the one level, the active tab uses only the remaining width and truncates the title with an ellipsis.
    Showing it only when the whole title fits would hide the tab unnecessarily. */
@@ -369,8 +418,12 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
   border-top:var(--bw) solid var(--edge);color:var(--muted);
   overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .status__text{min-width:0;overflow:hidden;text-overflow:ellipsis}
-.surface-status{display:inline-flex;align-items:center;gap:var(--surface-status-gap);flex:0 0 auto;margin-right:var(--surface-status-margin);color:var(--muted)}
-.surface-status::before{content:"";width:var(--spinner);height:var(--spinner);border:var(--spinner-border) solid currentColor;border-top-color:transparent;
+/* The state of the surface and the error of the tab shrink with the row and cut their text with an ellipsis, so an error stays on the
+   one line of the row; the whole text is the tooltip of the element. An ellipsis needs a block container, so the spinner is an inline block. */
+.surface-status,.status__error{display:block;flex:0 1 auto;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.surface-status{margin-right:var(--surface-status-margin);color:var(--muted)}
+.surface-status::before{content:"";display:inline-block;vertical-align:middle;margin-right:var(--surface-status-gap);
+  width:var(--spinner);height:var(--spinner);border:var(--spinner-border) solid currentColor;border-top-color:transparent;
   border-radius:var(--circle);animation:surface-status-spin var(--spinner-turn) linear infinite}
 .surface-status[data-surface-status=error]::before{border:0;background:currentColor;animation:none}
 .surface-status[hidden]{display:none}
@@ -386,6 +439,8 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 :root[data-full-rule=over] .sp-rule[data-virtual=true]{z-index:70}
 :root[data-full-rule=none] .sp-rule[data-virtual=true]{display:none}
 .sp-divider{z-index:4}
+/* A stretch of a divider shorter than its grip draws none, so no grip reaches into a header (docs/spec/groups.md#drawing). */
+.sp-divider[data-grip=false]::after{content:none}
 
 /* The rail outline is drawn only inside the passage. A fill that covers the inside of a card would be hidden by the native surface
    in the application, so it is not drawn here either. */

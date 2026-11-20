@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { TEXT_STEPS, effectiveTextScope, nextTextSize, onTextScope, setTextScope, textScope } from "../text-size.js";
+import { readFileSync } from "node:fs";
+import { JSDOM } from "jsdom";
+import { TEXT_STEPS, effectiveTextScope, nextTextSize, onTextScope, pressesFrame, setTextScope, textScope } from "../text-size.js";
 
 test("text size moves through the declared steps and stops at the ends", () => {
   assert.deepEqual(TEXT_STEPS, [0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3]);
@@ -34,4 +36,13 @@ test("without a pressed place the scope is the focused card, and the frame when 
   assert.deepEqual(effectiveTextScope(null, null), { kind: "frame" }, "a window without a card, such as the library, has no card to enlarge");
   assert.deepEqual(effectiveTextScope(null, undefined), { kind: "frame" });
   assert.deepEqual(effectiveTextScope({ kind: "frame" }, "c1"), { kind: "frame" });
+});
+
+// The stage around the plane is the frame, as the bars are, and a press inside the plane is not (docs/spec/text-size.md#scope).
+test("a press on the stage around the plane or on a bar presses the frame, and a press inside the plane does not", () => {
+  const { document } = new JSDOM(readFileSync(new URL("../index.html", import.meta.url), "utf8")).window;
+  const stage = document.querySelector(".stage");
+  assert.equal(pressesFrame(document.querySelector(".chrome-bar")), true, "a press on the frame bar does not press the frame");
+  assert.equal(pressesFrame(stage), true, "a press on the stage around the plane does not press the frame");
+  assert.equal(pressesFrame(document.getElementById("plane")), false, "a press inside the plane presses the frame");
 });

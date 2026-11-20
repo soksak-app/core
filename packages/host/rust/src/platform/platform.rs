@@ -342,8 +342,9 @@ pub enum FullscreenResult {
 pub enum Delivery {
     /// It was delivered to the window.
     Delivered,
-    /// The window, coordinates or phase are not valid.
-    Rejected,
+    /// The window, coordinates or phase are not valid. The value is the reason that the platform names, empty on a platform that
+    /// names none.
+    Rejected(String),
     /// A move without a button, and the window is not the key window.
     Inactive,
     /// A press or a release was delivered, but the document did not receive it within the time limit.
@@ -1025,12 +1026,15 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// Delivers pointer input to the window and returns the result. activate is not used. Call it on the main thread.
     /// For a press and a release, done is called on the main thread after the document at the coordinates received the
     /// event, or with Delivery::Unreceived at the event that ended the wait without the receipt; no wait has a limit
-    /// (docs/spec/exposure.md#methods). For the other phases it is called as soon as the input is delivered.
+    /// (docs/spec/exposure.md#methods). For the other phases it is called as soon as the input is delivered. The handle with the
+    /// delivery is the native web view that a delivered press or release reached, which can differ from the web view at the
+    /// coordinates when the call was made, because a press waits for an open layout to reach the screen; it is None for other
+    /// input, for another result and on a platform without native web views of surfaces.
     fn input_pointer(
         &self,
         window: Handle,
         pointer: Pointer,
-        done: Box<dyn FnOnce(Delivery) + Send>,
+        done: Box<dyn FnOnce(Delivery, Option<Handle>) + Send>,
     ) -> Result<(), String>;
     /// Makes the window the key window of an application that answers as active, as activating the application does, without
     /// activating it (docs/spec/exposure.md#methods). On the main thread it calls done(Ok) when the

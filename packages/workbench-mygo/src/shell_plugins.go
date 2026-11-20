@@ -280,7 +280,7 @@ func (s *Shell) placeholderRows() ([]placeholderStatus, error) {
 	if s.plane == nil {
 		return rows, nil
 	}
-	for _, card := range s.plane.Cards() {
+	for _, card := range s.contentCards() {
 		if s.fullscreen != "" && card.ID != s.fullscreen {
 			continue
 		}

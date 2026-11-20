@@ -86,3 +86,12 @@ test("the columns of the headings and the items are measured relative to the pic
   assert.deepEqual(columns.groups, [{ icon: 8, name: 38 }, { icon: 20, name: 50 }]);
   assert.deepEqual(columns.items, [{ icon: 8, name: 38 }, { icon: 20, name: 50 }]);
 });
+
+// A picker without a question, such as the menu of a tab without a title, draws no head, so it opens with no empty first row.
+test("a picker without a question draws no head", () => {
+  const { document } = new JSDOM("<div id=picker></div>").window;
+  const el = document.getElementById("picker");
+  fillPicker(el, "", [{ heading: null, items: [{ key: "t1", name: "터미널", mark: ">", svg: "" }] }], () => {});
+  assert.equal(el.querySelector(".picker__head"), null, "the picker without a question draws a head");
+  assert.deepEqual(pickerItems(el), [{ key: "t1", name: "터미널", active: false, group: null }]);
+});

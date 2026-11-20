@@ -63,6 +63,22 @@ void sp_log_error(const char *where, const char *text) { storeRecord(SP_EVENT_ER
 
 void sp_log_info(const char *where, const char *text) { storeRecord(SP_EVENT_INFO, "native.record.info", where, text); }
 
+NSString *sp_log_callers(unsigned long skip, unsigned long count) {
+    NSArray<NSString *> *stack = NSThread.callStackSymbols;
+    NSMutableArray<NSString *> *callers = [NSMutableArray array];
+    // Frame 0 is this function and frame 1 is its caller.
+    for (NSUInteger index = 2 + skip; index < stack.count && callers.count < count; index++) {
+        NSMutableArray<NSString *> *parts = [NSMutableArray array];
+        for (NSString *part in [stack[index] componentsSeparatedByString:@" "]) if (part.length) [parts addObject:part];
+        // A frame reads "<index> <image> <address> <symbol> + <offset>".
+        if (parts.count < 4) continue;
+        NSUInteger end = [parts indexOfObject:@"+"];
+        NSRange symbol = NSMakeRange(3, (end == NSNotFound ? parts.count : end) - 3);
+        [callers addObject:[NSString stringWithFormat:@"%@ %@", parts[1], [[parts subarrayWithRange:symbol] componentsJoinedByString:@" "]]];
+    }
+    return [callers componentsJoinedByString:@" < "];
+}
+
 // An uncaught exception ends the process by an abort. Its line is written once, so the abort does not add a second.
 static volatile sig_atomic_t exceptionReported = 0;
 

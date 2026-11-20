@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	host "github.com/soksak-app/core/packages/host/go/src"
 )
 
 // Command is the handler of a declared command. params is the JSON of its parameters, which is empty when it has none.
@@ -87,6 +88,8 @@ type Registry struct {
 	parts func() (SnapshotParts, error)
 	// recorder receives every command request that ended.
 	recorder func(name string, elapsed time.Duration, failure error)
+	// watcher observes each command from its start to its answer (Watch).
+	watcher func(name string, params json.RawMessage) func(value any, err error)
 	// follow returns the answer of one command name that starts now, which waits until the window shows what the command changed.
 	follow func(name string, answer func(value any, err error)) func(value any, err error)
 }
@@ -150,6 +153,10 @@ func (r *Registry) Status(name string, read Status) {
 // (docs/spec/logging.md#entrances).
 func (r *Registry) Run(name string, params json.RawMessage) (any, error) {
 	started := time.Now()
+	if err := r.checkParams(name, params); err != nil {
+		r.record(name, started, err)
+		return nil, err
+	}
 	result, err := r.run(name, params)
 	r.record(name, started, err)
 	return result, err
@@ -173,7 +180,10 @@ func (r *Registry) run(name string, params json.RawMessage) (any, error) {
 	if run == nil {
 		return nil, Refuse(Unregistered, "command %s is not registered", name)
 	}
-	return run(params)
+	ended := r.watched(name, params)
+	result, err := run(params)
+	ended(result, err)
+	return result, err
 }
 
 // RunLater runs the command name with params and gives answer its result: at once for a command that returns, and in a later
@@ -184,11 +194,19 @@ func (r *Registry) RunLater(name string, params json.RawMessage, answer func(val
 		r.record(name, started, err)
 		answered(value, err)
 	})
+	if err := r.checkParams(name, params); err != nil {
+		answer(nil, err)
+		return
+	}
 	r.mu.Lock()
 	later := r.later[name]
 	r.mu.Unlock()
 	if later != nil {
-		later(params, answer)
+		ended := r.watched(name, params)
+		later(params, func(value any, err error) {
+			ended(value, err)
+			answer(value, err)
+		})
 		return
 	}
 	answer(r.run(name, params))
@@ -300,6 +318,20 @@ func (r *Registry) Answer(method string, params json.RawMessage, changed Changed
 // (docs/spec/logging.md#entrances).
 func (r *Registry) Record(recorder func(name string, elapsed time.Duration, failure error)) {
 	r.recorder = recorder
+}
+
+// Watch installs what observes each command that runs: it is called with the name and the parameters when the command starts and
+// returns what is called with its answer when the command ends, for a command that answers at once and for one that answers later.
+func (r *Registry) Watch(watch func(name string, params json.RawMessage) func(value any, err error)) {
+	r.watcher = watch
+}
+
+// watched is what the watcher calls when the command name that starts now with params ends.
+func (r *Registry) watched(name string, params json.RawMessage) func(value any, err error) {
+	if r.watcher == nil {
+		return func(any, error) {}
+	}
+	return r.watcher(name, params)
 }
 
 // Follow installs what holds the answer of each command that runs through RunLater or Reply until the window shows what the
@@ -496,12 +528,31 @@ func (r *Registry) checkRequest(name string, fields map[string]json.RawMessage) 
 	if json.Unmarshal(fields["params"], &input) != nil || input == nil {
 		return Refuse(InvalidParams, "command.run for %s requires params", name)
 	}
-	if !MatchesSchema(r.declared.params[name], input) {
-		return Refuse(InvalidParams, "invalid params for %s", name)
+	if refusal := host.CommandParamsRefusal(name, r.declared.params[name], fields["params"]); refusal != "" {
+		return Refuse(InvalidParams, "%s", refusal)
 	}
 	// The handlers of the workbench take no cause, and an invalid list is refused also for a handler that ignores it.
 	if cids, present := fields["cids"]; present && !validCauses(cids) {
 		return Refuse(InvalidParams, "command.run for %s: command cids must be an array of non-empty strings without a quote, a backslash or a control character", name)
+	}
+	return nil
+}
+
+// checkParams refuses the params of a run of the workbench by the params schema of the command, as a request is refused
+// (docs/spec/exposure.md#command-parameters); a run without params runs with an empty object, as a run of the page does. A command
+// that is not registered is refused by the run, as the page refuses it before its params.
+func (r *Registry) checkParams(name string, params json.RawMessage) error {
+	r.mu.Lock()
+	registered := r.commands[name] != nil || r.later[name] != nil
+	r.mu.Unlock()
+	if !registered {
+		return nil
+	}
+	if len(params) == 0 || string(params) == "null" {
+		params = json.RawMessage(`{}`)
+	}
+	if refusal := host.CommandParamsRefusal(name, r.declared.params[name], params); refusal != "" {
+		return Refuse(InvalidParams, "%s", refusal)
 	}
 	return nil
 }

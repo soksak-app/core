@@ -4,6 +4,7 @@ import test from "node:test";
 import { APPS, holdCovered, keepCommonSettings, open, recordingSummary } from "@soksak/window-check/app.mjs";
 import { fresh, joinedFailure } from "./fixture.mjs";
 import { turnOffCardSidebars } from "./card-sidebar-choices.mjs";
+import { storedCard } from "./stored-layout.mjs";
 
 const geometry = (grid) =>
   grid.cards.map(({ id, x, y, w, h }) => ({ id, x, y, w, h })).sort((a, b) => a.id.localeCompare(b.id));
@@ -67,7 +68,7 @@ for (const app of Object.values(APPS))
         assert.deepEqual(layout.windowSidebars, savedRecords, `${label}: saved edge width changed`);
         assert.deepEqual((await s.get("core.settings")).values, savedSettings, `${label}: links or settings changed`);
         assert.deepEqual(
-          layout.state.cards.find((card) => card.id === target.id).data.sidebars,
+          storedCard(layout, target.id).data.sidebars,
           savedSides,
           `${label}: card choices changed`,
         );
@@ -220,7 +221,7 @@ for (const app of Object.values(APPS))
         assert.equal(savedRecords[windowBar.sidebar].width, 215);
         assert.equal(savedRecords.left.width, 207);
         savedSettings = (await s.get("core.settings")).values;
-        savedSides = (await s.get("core.layout")).state.cards.find((card) => card.id === target.id).data.sidebars;
+        savedSides = storedCard(await s.get("core.layout"), target.id).data.sidebars;
         assert.equal(Object.hasOwn(savedSides.left, "set"), false, "derived link became an explicit card assignment");
       });
       await phase(

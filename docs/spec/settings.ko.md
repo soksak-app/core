@@ -36,7 +36,7 @@ chrome 버튼과 app 메뉴의 항목 설정…(Settings…), 단축키 `cmd+,`�
 | 위치 | 프로젝트 탭 위치 `projectTabs` |
 | 사이드바 | 왼쪽 사이드바 보이기 `left`, 오른쪽 사이드바 보이기 `right`, 위 사이드바 보이기 `top`, 아래 사이드바 보이기 `bottom`; 왼쪽 사이드바 세트, 오른쪽 사이드바 세트, 위 사이드바 세트, 아래 사이드바 세트(각각 모든 세트와 사용 안 함의 선택 상자, `core.settings.link {place, plugin: null, set}`); 사이드바 순서 `sidebarOrder` |
 | 사이드바 크기 | [배치 값](#배치-값)의 폭 설정 |
-| 표시 | 포커스 표시 `focusInd`, 경계선 `fullRule`, 포커스 밖 흐리게 `dim` |
+| 표시 | 포커스 표시 `focusInd`, 카드 자동 정렬 `cardArrange`, 경계선 `fullRule`, 포커스 밖 흐리게 `dim` |
 | 언어 | 언어 `language` |
 | 메모리 (전역 범위에서만) | 보기 프로세스 `viewProcess`, 메모리 절약 `memorySaver`, 숨긴 뒤 내리기까지 `memorySaverDelay` |
 | 진단 | 디버그 (`core.settings.debug {on}`을 실행하는 switch) |
@@ -109,7 +109,7 @@ chrome 버튼과 app 메뉴의 항목 설정…(Settings…), 단축키 `cmd+,`�
 | 형식 | 컨트롤 | 명령 |
 |---|---|---|
 | Boolean (`left`, `right`, `top`, `bottom`, `dim`, `memorySaver`) | 스위치: 스위치로 그린 체크 상자 | `core.settings.change {key, value, scope}` |
-| 나열된 값 중 하나 (`projectOpening`, `viewProcess`, `mode`, `font`, `projectTabs`, `focusInd`, `fullRule`, `cardArrange`, `cardSplit`, `language`, plugin `enum`) | 선언 순서대로 값마다 항목 하나가 있는 선택 상자 | `core.settings.change {key, value, scope}` |
+| 나열된 값 중 하나 (`projectOpening`, `viewProcess`, `mode`, `font`, `projectTabs`, `focusInd`, `fullRule`, `cardArrange`, `language`, plugin `enum`) | 선언 순서대로 값마다 항목 하나가 있는 선택 상자 | `core.settings.change {key, value, scope}` |
 | Catalog의 theme (`theme`) | Theme마다 그 theme의 색과 형태로 그린 견본 하나가 있는 견본 격자 | `core.settings.theme {name, scope}` |
 | 경계가 있는 정수 (`gap`, `radius`, `size`, `memorySaverDelay`, [배치 값](#배치-값), plugin `integer`) | 경계 사이의 슬라이더와 그 뒤의 값과 단위. drag는 각 값을 슬라이더 옆에 보이고, 놓을 때의 값으로 command를 한 번 실행한다 | `core.settings.change {key, value, scope}` |
 | 문자열 또는 주소 (plugin `string` 또는 `address`) | 한 줄 글자 입력 | `core.settings.change {key, value, scope}` |
@@ -139,7 +139,7 @@ core 설정은 저마다 한 형식을 받는다. 설정 파일을 읽을 때와
 | `theme` | `midnight`, `nord`, `solar`, `forest`, `ember`, `slate`, `mist`, `grape`, `sand`, `paper` 중 하나 |
 | `mode` | `dark` 또는 `light` |
 | `font` | `mono-system`, `mono-sf`, `mono-jet`, `sans-system`, `sans-inter` 중 하나 |
-| `gap` | 0에서 48까지의 정수(px): 이웃한 두 card 사이의 gap, 곧 둘 사이의 전체 거리다. plane과 stage 가장자리 사이의 margin은 gap의 절반이다. 0에서는 두 card가 선 하나를 공유한다: plane gap은 border width이고, card는 자기 border와 radius를 그리지 않으며, 탭 drag의 drop zone은 radius 없이 border width의 border를 그리고, stage에는 margin이 없다(seam) |
+| `gap` | 0에서 48까지의 정수(px): 이웃한 두 card 사이의 gap, 곧 둘 사이의 전체 거리다. plane과 stage 가장자리 사이의 margin은 gap의 절반이다. 0에서는 두 card가 선 하나를 공유한다: plane gap은 border width이고, card는 자기 border와 radius를 그리지 않으며, 탭 drag의 drop zone은 radius 없이 border width의 border를 그리고, stage에는 margin이 없고 그 위 선을 space bar의 아래 선과, project tab이 왼쪽에 서는 동안 그 왼쪽 선을 project column의 오른쪽 선과 공유하므로, plane 가장자리는 각 변에서 선 하나다(seam) |
 | `radius` | 0에서 24까지의 정수(px) |
 | `size` | 10에서 18까지의 정수(px) |
 | `textSize` | [글자 크기 단계](text-size.ko.md) 하나 |
@@ -150,7 +150,6 @@ core 설정은 저마다 한 형식을 받는다. 설정 파일을 읽을 때와
 | `focusInd` | `border` 또는 `corner` |
 | `fullRule` | `under`, `over`, `none` 중 하나 |
 | `cardArrange` | `resize`(구조를 유지하고 카드에 공정한 크기를 준다, 기본값) 또는 `even`(카드를 같은 크기의 격자로 배치한다, `arrange(\"even\")`) 중 하나. 카드 자동 정렬 명령은 이 설정 값을 실행하고, 툴바 아이콘이 이 값을 보인다 |
-| `cardSplit` | `exact`(split은 자기가 나누는 카드의 사각형만 나눈다, layout library의 R4, 기본값) 또는 `even`(split 뒤에 `balance()`가 split이 일어난 plane의 카드에 구조를 유지한 채 공정한 크기를 준다. 다른 plane은 바뀌지 않는다) 중 하나. `core.card.split`과 split 버튼, `core.group.create`와 group 버튼의 split, `side`가 있는 `core.layout.open`에 적용된다([group card](groups.ko.md#split-설정)) |
 | `language` | `auto` 또는 애플리케이션 메뉴의 언어(`ko`, `en`) |
 | `sidebarMinWidth`, `sidebarMaxWidth`, `sidebarWidth` | [배치 값](#배치-값) |
 | `viewProcess` | `plugin` 또는 `view`, 전역 범위, 기본값 `plugin`: host가 그 뒤 만드는 view의 WebContent process로, 그 plugin의 view들과 함께 쓰거나 자기 것을 쓴다([View 프로세스](plugin-processes.ko.md#view-프로세스)) |
@@ -166,7 +165,7 @@ theme catalog와 mode, font, menu 언어와 기본 언어, 그리고 이 설정�
 
 설정 file은 자기 형태를 member `format`에 실는다(형식 1이 현재 형태이고, 다른 형태의 file이나 member가 없는 file은 거부된다, [저장 데이터 형식](installation.ko.md#저장-데이터-형식)). 이 member는 저장 형태의 운반자이지 설정이 아니다. workspace는 snapshot에서 이것을 감추고 쓸 때 보존하며, `format`이라는 이름의 설정 key는 다른 알 수 없는 key처럼 거부된다. 아래는 운반자를 뺀 나머지 설정에 대해 성립한다.
 
-설정 파일은 현재 형식으로만 읽으며, page는 이를 변환하지 않는다. 선언한 설정이 아닌 키는, 이전 설정의 키(`cardSidebar`, `rail`, `railWidth`, `sidebarFoldedWidth`, `latency`, `skew`)를 포함해, 공통 설정이면 `settings.json: unknown setting <key>`로, 창이 여는 프로젝트의 설정이면 `<project root>/.soksak/settings.json: unknown setting <key>`로 실패한다. `rail` 연결, 플러그인을 가리키는 변(`left`, `right`, `top`, `bottom`) 연결, 그 범위가 갖지 않은 세트를 가리키는 연결은 아래 세트와 연결 검사에서 실패한다. 실패는 아무것도 바꾸지 않고 아무것도 쓰지 않는다.
+설정 파일은 현재 형식으로만 읽으며, page는 이를 변환하지 않는다. 선언한 설정이 아닌 키는, 이전 설정의 키(`cardSidebar`, `rail`, `railWidth`, `sidebarFoldedWidth`, `latency`, `skew`, `cardSplit`)를 포함해, 공통 설정이면 `settings.json: unknown setting <key>`로, 창이 여는 프로젝트의 설정이면 `<project root>/.soksak/settings.json: unknown setting <key>`로 실패한다. `rail` 연결, 플러그인을 가리키는 변(`left`, `right`, `top`, `bottom`) 연결, 그 범위가 갖지 않은 세트를 가리키는 연결은 아래 세트와 연결 검사에서 실패한다. 실패는 아무것도 바꾸지 않고 아무것도 쓰지 않는다.
 
 ## 저장되는 세트와 연결
 
@@ -211,7 +210,7 @@ theme catalog와 mode, font, menu 언어와 기본 언어, 그리고 이 설정�
 
 `sidebarMinWidth` ≤ `sidebarWidth` ≤ `sidebarMaxWidth`를 깨는 변경은 -32602(invalid params)로 실패하고 아무것도 바꾸지 않는다. 현재 범위를 벗어난 저장된 카드 폭은 손잡이로 바꿀 때까지 저장된 대로 그린다.
 
-두 workbench가 읽는 배치 값의 원천은 하나, `workbench.json`의 chrome metric이다. 카드 머리 `head-h`와 바닥 `foot-h`는 drop zone의 경계이기도 하고, 탭 줄의 기준 폭은 `tab-peek-w`와 `tab-min-w`다. 각 workbench의 code에 적은 값은 처음 값에서 벗어나는 두 번째 사본이 된다. 새 스페이스의 창 사이드바 크기는 `environment.json`의 `workspace.grid` 카드에서 온다.
+두 workbench가 읽는 배치 값의 원천은 하나, `workbench.json`의 chrome metric이다. 카드 머리 `head-h`와 바닥 `foot-h`가 있고 머리는 target search의 tab strip이기도 하다. target search 띠의 폭 `drop-band`와 margin `drop-band-margin`이 있고([target 찾기](groups.ko.md#target-찾기)), 탭 줄의 기준 폭은 `tab-peek-w`, `tab-min-w`, `tab-grab-w`다. 각 workbench의 code에 적은 값은 처음 값에서 벗어나는 두 번째 사본이 된다. 새 스페이스의 창 사이드바 크기는 `environment.json`의 `workspace.grid` 카드에서 온다.
 
 워크벤치 stylesheet(`app.css`, `library.css`, `overlay.html`)의 길이, 비율, 지속 시간은 `packages/workbench/workbench.json`의 chrome metric이다. 워크벤치는 page가 그리기 전에 그 각각을 document root의 custom property로 정하고, stylesheet는 그 custom property를 읽는다. stylesheet는 literal 길이, 비율, 지속 시간을 담지 않는다. media condition은 custom property를 읽지 못하므로, 워크벤치는 window 폭이 `library-narrow-w` 이하인 동안 document root에 `data-library-narrow`를 표시하고, `library.css`는 그 표시로 library를 좁힌다. focus mark는 focus된 카드의 body 밖으로 사방 `focus-mark-t`만큼, 곧 stroke 두께만큼 나와 있어서 stroke가 surface를 덮지 않는다.
 

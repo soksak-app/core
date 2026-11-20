@@ -99,7 +99,8 @@ type section struct {
 // drawnSidebar is a sidebar of the build.
 type drawnSidebar struct {
 	frame SidebarFrame
-	set   string
+	// set is the shown set, nil for a fixed sidebar place that shows none.
+	set   *string
 	owner FocusedSurface
 	rect  layout.Rect
 }
@@ -400,10 +401,16 @@ func windowSidebarStatus(place, plugin string) string {
 // Frame returns the frame of the fixed sidebar place in the space, and records the sidebar in the build.
 func (s *Sidebars) Frame(place, space string, focused FocusedSurface) (SidebarFrame, error) {
 	frame, set, owner, err := s.windowFrame(place, space, focused)
-	if err != nil || set == nil {
+	if err != nil {
 		return frame, err
 	}
-	s.drawn = append(s.drawn, &drawnSidebar{frame: frame, set: set.ID, owner: owner})
+	// A place without a set draws its status line, and core.sidebars reports it with a null set
+	// (docs/spec/external-sidebars.md#override-context-and-rail-border).
+	drawn := &drawnSidebar{frame: frame, owner: owner}
+	if set != nil {
+		drawn.set = &set.ID
+	}
+	s.drawn = append(s.drawn, drawn)
 	return frame, nil
 }
 
@@ -476,7 +483,7 @@ func (s *Sidebars) CardFrame(set *SidebarSet, space, side string, owner FocusedS
 		frame.SetInsets.Top = inset
 	}
 	s.fill(&frame, set)
-	s.drawn = append(s.drawn, &drawnSidebar{frame: frame, set: set.ID, owner: owner})
+	s.drawn = append(s.drawn, &drawnSidebar{frame: frame, set: &set.ID, owner: owner})
 	return frame
 }
 
@@ -750,8 +757,8 @@ type sectionStatus struct {
 // sidebarStatus is a sidebar in core.sidebars.
 type sidebarStatus struct {
 	Sidebar     string          `json:"sidebar"`
-	Set         string          `json:"set"`
-	Layout      string          `json:"layout"`
+	Set         *string         `json:"set"`
+	Layout      *string         `json:"layout"`
 	Orientation string          `json:"orientation"`
 	Tab         *string         `json:"tab"`
 	Card        *string         `json:"card"`
@@ -795,7 +802,7 @@ func (s *Sidebars) status() []sidebarStatus {
 		if frame.Side == "" {
 			placement, plugin = "card", nil // The context of a card sidebar has no plugin and no side of a window sidebar.
 		}
-		sidebars = append(sidebars, sidebarStatus{Sidebar: frame.Sidebar, Set: drawn.set, Layout: frame.Layout, Orientation: frame.Orientation,
+		sidebars = append(sidebars, sidebarStatus{Sidebar: frame.Sidebar, Set: drawn.set, Layout: nullable(frame.Layout), Orientation: frame.Orientation,
 			Tab: nullable(frame.Tab), Card: nullable(drawn.owner.Card), Surface: surface, Placement: placement, Plugin: plugin,
 			Side: nullable(frame.Side), Rect: sidebarRect{drawn.rect.X, drawn.rect.Y, drawn.rect.W, drawn.rect.H}, Sections: sections})
 	}

@@ -185,3 +185,42 @@ func TestTextChangeOfACardOutsideTheLayoutFails(t *testing.T) {
 		t.Fatalf("the failed change wrote %v", place.cards)
 	}
 }
+
+// A press on the outline of the window around the plane, the frame outside every card, makes the frame the scope, and two presses
+// of Command = enlarge the frame twice with a group card in the plane (docs/spec/text-size.md#scope).
+func TestAPressOnTheOutlineKeepsTheFrameScopeForTwoChanges(t *testing.T) {
+	f, _ := surfaceShell(t)
+	card := f.tabbedCards()[0]
+	if _, err := f.answer("core.group.create", map[string]string{"card": card, "side": "right", "plugin": "textprobe"}); err != nil {
+		t.Fatal(err)
+	}
+	f.settle()
+	var grid struct {
+		Plane struct{ X, Y, W, H float64 } `json:"plane"`
+	}
+	if err := json.Unmarshal([]byte(f.status("core.grid")), &grid); err != nil {
+		t.Fatal(err)
+	}
+	x, y := float32(grid.Plane.X+grid.Plane.W/2), float32(grid.Plane.Y+grid.Plane.H)+1
+	f.tester.Move(x, y)
+	f.tester.Press(x, y)
+	f.tester.Release(x, y)
+	f.settle()
+	if got := textScope(t, f); got != workbench.FrameScope() {
+		t.Fatalf("after the press on the outline at %v,%v the scope is %+v", x, y, got)
+	}
+	for range 2 {
+		f.run("core.text.larger", nil)
+		f.settle()
+	}
+	var text struct {
+		Scope workbench.TextScope `json:"scope"`
+		Frame float64             `json:"frame"`
+	}
+	if err := json.Unmarshal([]byte(f.status("core.text")), &text); err != nil {
+		t.Fatal(err)
+	}
+	if text.Scope != workbench.FrameScope() || text.Frame != 1.25 {
+		t.Fatalf("after two changes the scope is %+v and the frame factor %v, not the frame and 1.25", text.Scope, text.Frame)
+	}
+}

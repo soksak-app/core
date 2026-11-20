@@ -927,7 +927,7 @@
           "reason"
         ]
       },
-      "description": "The presentation wait of a view ended without its presentation: surface names the view and reason is the end, one of process-ended, hidden or unresponsive (docs/spec/native-surfaces.md#view-surfaces)."
+      "description": "The presentation wait of a view ended without its presentation: surface names the view and reason is the end, one of input, closed, hidden, process-ended or unresponsive. A press or a key down that ends the hold before the view presented its change is ordinary input of a person, so this record and not an error records it (docs/spec/native-surfaces.md#layout-transaction)."
     },
     "host.trace.view.presentation-join": {
       "layer": "host",
@@ -2705,6 +2705,26 @@
         ]
       },
       "description": "A command request that the workbench answered; `error` names a failed command."
+    },
+    "workbench.layout.change": {
+      "layer": "workbench",
+      "class": "call",
+      "level": ["debug"],
+      "result": false,
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "command": { "type": "string" },
+          "params": { "type": "string" },
+          "paramsTruncated": { "type": "boolean" },
+          "result": { "type": "string" },
+          "layout": { "type": "string" },
+          "layoutTruncated": { "type": "boolean" }
+        },
+        "required": ["command", "params", "paramsTruncated", "result", "layout", "layoutTruncated"]
+      },
+      "description": "A command that changed the layout of the active space; `params` and `result` are the JSON text of its parameters and of its answer cut to 1024 bytes, `layout` is the JSON text of the stored layout of the space after it, {state, groups, leader, lastCard}, cut to 61440 bytes so that the fields stay within the bound of an event."
     },
     "workbench.background.session": {
       "layer": "workbench",
@@ -4750,6 +4770,30 @@
       },
       "description": "The occlusion state of a window changed. A covered window (visible false) names in inFront the windows in front of it over a part of it, from front to back, as the window list of the window server holds them: their window number, owning application, process, window level and bounds in screen coordinates."
     },
+    "native.surface.hidden": {
+      "layer": "native",
+      "class": "input",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "hidden": { "type": "boolean" },
+          "was": { "type": "boolean" },
+          "before": { "type": "string" },
+          "after": { "type": "string" },
+          "view": { "type": "string" },
+          "surface": { "type": "string" },
+          "inside": { "type": "boolean" },
+          "host": { "type": "boolean" },
+          "awaitsRegion": { "type": "boolean" },
+          "wanted": { "type": "boolean" },
+          "restored": { "type": "boolean" }
+        },
+        "required": ["hidden", "was", "before", "after", "view", "surface", "inside", "host", "awaitsRegion", "wanted", "restored"]
+      },
+      "description": "A surface whose view held the keyboard, or whose change moved the keyboard, was hidden or shown (docs/spec/native-surfaces.md#keyboard-of-a-surface): hidden is the requested state and was the state before, before and after are the classes of the first responder around the change, view and surface are the classes of the view of the handle and of the surface, inside tells whether the first responder was inside the surface, host tells whether the surface has a host, awaitsRegion and wanted are the state of the host after the change, and restored tells whether the host took the keyboard back after the hide moved it."
+    },
     "native.surface.key_kept": {
       "layer": "native",
       "class": "input",
@@ -4844,15 +4888,72 @@
           },
           "to": {
             "type": "string"
+          },
+          "callers": {
+            "type": "string"
           }
         },
         "required": [
           "window",
           "from",
-          "to"
+          "to",
+          "callers"
         ]
       },
-      "description": "The first responder of a window that a host observes changed, from the key-value observation that also sends window-responder."
+      "description": "The first responder of a window that a host observes changed, from the key-value observation that also sends window-responder. callers names the frames above the observation, `<image> <symbol>` joined by ` < `, so the record shows which code moved the keyboard, a move of AppKit at the hide or the removal of a view included."
+    },
+    "native.input.held": {
+      "layer": "native",
+      "class": "input",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "number"
+          },
+          "piece": {
+            "type": "number"
+          },
+          "step": {
+            "type": "string",
+            "enum": [
+              "held",
+              "waited",
+              "returned",
+              "ran",
+              "dropped"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "call",
+              "event"
+            ]
+          },
+          "key": {
+            "type": "boolean"
+          },
+          "press": {
+            "type": "boolean"
+          },
+          "type": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "window",
+          "piece",
+          "step",
+          "kind",
+          "key",
+          "press",
+          "type"
+        ]
+      },
+      "description": "One step of a piece of input that the layout hold or the key wait of a window keeps (docs/spec/native-surfaces.md#keyboard-of-a-surface): held when the layout hold keeps it, waited when the key wait keeps it, returned when a release posts it back to the event queue, ran when its injected call runs and dropped when the close of its window drops it. piece numbers the pieces of the process in the order they arrived; kind is call for an injected call and event for an event of the queue, whose NSEventType is type (-1 for a call)."
     },
     "native.capture.lifecycle": {
       "layer": "native",

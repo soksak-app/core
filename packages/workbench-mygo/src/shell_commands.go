@@ -1,9 +1,11 @@
 package workbench
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 
+	sok "github.com/soksak-app/core/packages/sok/go/src"
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
@@ -27,6 +29,37 @@ func command[T any](s *Shell, name string, run func(value T) (any, error)) {
 	})
 }
 
+// watchLayout is the watcher of the registry that records each command name with its parameters raw that changed the layout of the
+// active space, whether it answers at once or later: the event workbench.layout.change (docs/spec/events.json). It reads the layout
+// only while the gate stores the event.
+func (s *Shell) watchLayout(name string, raw json.RawMessage) func(result any, err error) {
+	if s.events == nil || !s.events.Admits(sok.LevelDebug, "workbench.layout.change") {
+		return func(any, error) {}
+	}
+	before := s.layoutText()
+	return func(result any, err error) {
+		if err != nil {
+			return
+		}
+		if after := s.layoutText(); !bytes.Equal(after, before) {
+			s.events.LayoutChange(name, raw, result, after)
+		}
+	}
+}
+
+// layoutText is the JSON text of the stored layout of the active space, {state, leader, lastCard}, or nil without a plane.
+func (s *Shell) layoutText() []byte {
+	if s.plane == nil || s.planes == nil {
+		return nil
+	}
+	state, leader, last := s.planes.Stored()
+	text, err := json.Marshal(map[string]any{"state": state, "leader": leader, "lastCard": last})
+	if err != nil {
+		return []byte(fmt.Sprintf("unserializable: %v", err))
+	}
+	return text
+}
+
 // later registers name with a function of its parameters that answers in a later step.
 func later[T any](s *Shell, name string, run func(value T, answer func(any, error))) {
 	s.registry.CommandLater(name, func(raw json.RawMessage, answer func(any, error)) {
@@ -45,9 +78,10 @@ func act[T any](s *Shell, name string, run func(value T) error) {
 }
 
 type cardParam struct {
-	Card   string `json:"card"`
-	Side   string `json:"side"`
-	Plugin string `json:"plugin"`
+	Card string `json:"card"`
+	// Side and Plugin are omitted when empty, so a run of the workbench gives a command only the members that it declares.
+	Side   string `json:"side,omitempty"`
+	Plugin string `json:"plugin,omitempty"`
 }
 
 // splitCardParam retains the side field's presence until its declared error is
@@ -67,7 +101,7 @@ type addTabParam struct {
 type boundaryParam struct {
 	Axis     layout.Axis `json:"axis"`
 	Line     int         `json:"line"`
-	Position *float64    `json:"position"`
+	Position *float64    `json:"position,omitempty"`
 }
 
 type tabParam struct {
@@ -94,6 +128,7 @@ func (s *Shell) register() {
 	s.registerPicker()
 	Functions{Text: s.text, Focus: s.exposedFocus, Pointer: s.pointer, Contributions: s.contributions}.Register(s.registry)
 	s.registerTabDrag()
+	s.registerGroups()
 	s.registerCardSidebars()
 	s.registerPlugins()
 	s.registerSetup()
@@ -184,7 +219,10 @@ func (s *Shell) register() {
 		if err := s.requirePlane(); err != nil {
 			return err
 		}
-		if _, err := s.plane.Balance(); err != nil {
+		// The setting cardArrange chooses the operation: resize keeps the layout and gives every card a fair share, even replaces it with
+		// an equal grid in a space without groups (docs/spec/groups.md#card-commands-on-a-group-card).
+		arrange, _ := s.settings.Value("cardArrange").(string) // silent: the settings store checks the type of the value.
+		if err := s.planes.Balance(arrange == "even"); err != nil {
 			return err
 		}
 		s.settle()
@@ -195,11 +233,14 @@ func (s *Shell) register() {
 		if err := s.requirePlane(); err != nil {
 			return err
 		}
-		if _, ok := s.plane.Card(value.Card); !ok {
+		if _, ok := s.findCard(value.Card); !ok {
 			return fmt.Errorf("Unknown card: %s", value.Card)
 		}
-		s.focusCard(value.Card)
-		if s.fullscreen != value.Card {
+		// A group card takes no focus ring: its focus is the first content card inside it (docs/spec/groups.md#focus).
+		focused := s.planes.Focusable(value.Card)
+		s.focusCard(focused)
+		// A card inside a fullscreen group card keeps the fullscreen (docs/spec/groups.md#card-commands-on-a-group-card).
+		if !s.shownFullscreen(focused) {
 			s.fullscreen = ""
 		}
 		s.options.Invalidate()
@@ -212,7 +253,8 @@ func (s *Shell) register() {
 		if err := s.paneCard(value.Card); err != nil {
 			return err
 		}
-		s.focusCard(value.Card)
+		// A group card shows across the work area with the cards inside it, and its focus is its first content card.
+		s.focusCard(s.planes.Focusable(value.Card))
 		if s.fullscreen == value.Card {
 			s.fullscreen = ""
 		} else {
@@ -249,12 +291,21 @@ func (s *Shell) register() {
 		if !s.plane.HasBoundary(value.Axis, value.Line) {
 			return nil, fmt.Errorf("no %s boundary at line %d", value.Axis, value.Line)
 		}
-		if value.Position == nil {
-			return nil, fmt.Errorf("core.boundary.move: position is missing")
-		}
-		moved := s.plane.MoveBoundary(value.Axis, value.Line, *value.Position, false)
+		// The registry refused params without the required position before the run (docs/spec/exposure.md#command-parameters).
+		moved := s.planes.MoveBoundaryTo(value.Axis, value.Line, *value.Position)
 		s.settle()
 		return map[string]float64{"position": moved}, nil
+	})
+	command(s, "core.boundary.center", func(value boundaryParam) (any, error) {
+		if err := s.requirePlane(); err != nil {
+			return nil, err
+		}
+		if !s.plane.HasBoundary(value.Axis, value.Line) {
+			return nil, fmt.Errorf("no %s boundary at line %d", value.Axis, value.Line)
+		}
+		centred := s.planes.CenterBoundary(value.Axis, value.Line)
+		s.settle()
+		return map[string]float64{"position": centred}, nil
 	})
 	command(s, "core.card.add-tab", func(value addTabParam) (any, error) {
 		if err := s.requirePlane(); err != nil {

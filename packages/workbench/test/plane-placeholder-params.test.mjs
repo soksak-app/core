@@ -46,11 +46,10 @@ test("a stored tab whose params do not match its plugin is an error shown once, 
   assert.deepEqual(installEnvironment({
     runtime: "runtime",
     workspace: { focus: "main", grid: {
-      xs: [0, 1], ys: [0, 1],
-      cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [
+      root: { card: "main", tabs: [
         { plugin: pluginId, title: "bad" },
         { plugin: pluginId, title: "good" },
-      ] }],
+      ] },
     } },
     sidebars: { sets: [], links: [] },
   }, { plugins: [{ id: pluginId, package: "@fixture/placeholder-params", version, manifest: {
@@ -74,7 +73,7 @@ test("a stored tab whose params do not match its plugin is an error shown once, 
     // The ids of the tabs are drawn from the bytes of this source, which counts, so the lines of the page name the same tabs in every run: the first tab is tab-bbbbbb.
     let draws = 0;
     const kept = plane.fresh((bytes) => bytes.fill(++draws));
-    for (const tab of kept.state.cards.find((card) => card.id === "main").data.tabs) {
+    for (const tab of kept.state.root.data.tabs) {
       tab.params = tab.title === "bad" ? mismatched : { path: "ok" };
     }
     plane.adopt(kept, "spc-aaaaaa");

@@ -25,18 +25,18 @@ const (
 
 // InjectPointer delivers a pointer input through the DevTools protocol of the web view of the window. It uses no real pointer and no
 // system focus, so a window behind others takes it. Call it on the UI thread.
-func (implementation) InjectPointer(window platform.Window, pointer string, x, y float64, phase, button int, deltaX, deltaY float64, clicks int, done func(platform.PointerResult, platform.ButtonHeld)) error {
+func (implementation) InjectPointer(window platform.Window, pointer string, x, y float64, phase, button int, deltaX, deltaY float64, clicks int, done func(platform.PointerResult, platform.ButtonHeld, uintptr)) error {
 	view, err := webviewOf(uintptr(window))
 	if err != nil {
 		return err
 	}
 	call, result := view.presses.call(pointer, x, y, phase, button, deltaX, deltaY, clicks)
 	if result == platform.PointerHeld {
-		done(result, platform.ButtonHeld{Pointer: view.presses.holder, Reason: pointerHeldReason})
+		done(result, platform.ButtonHeld{Pointer: view.presses.holder, Reason: pointerHeldReason}, 0)
 		return nil
 	}
 	if result != platform.PointerDelivered {
-		done(result, platform.ButtonHeld{})
+		done(result, platform.ButtonHeld{}, 0)
 		return nil
 	}
 	return view.queue.push(call, receiveWait, func(err error) {
@@ -45,7 +45,8 @@ func (implementation) InjectPointer(window platform.Window, pointer string, x, y
 		} else {
 			fmt.Fprintf(os.Stderr, "input.pointer: %v\n", err)
 		}
-		done(pointerResult(err), platform.ButtonHeld{})
+		// The web view of a Windows window holds the whole page; no native web view of a surface receives a press.
+		done(pointerResult(err), platform.ButtonHeld{}, 0)
 	})
 }
 

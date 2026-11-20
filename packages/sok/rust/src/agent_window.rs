@@ -798,7 +798,7 @@ fn parameter_list(schema: Option<&RawValue>) -> Result<Vec<String>, String> {
     Ok(params)
 }
 
-/// An element item of the compact form: index, role, text, visible, inert and command.
+/// An element item of the compact form: index, role, text, inert and command.
 fn brief_item(item: &RawValue) -> Result<Raw, Failure> {
     let fields = object_of(item.get())
         // default: an item that is no object is reported below as an item that is not an object.
@@ -806,7 +806,7 @@ fn brief_item(item: &RawValue) -> Result<Raw, Failure> {
         .flatten()
         .ok_or_else(|| Failure::Other("an item is not an object".into()))?;
     let mut brief = Object::new();
-    for member in ["index", "role", "text", "visible", "inert", "command"] {
+    for member in ["index", "role", "text", "inert", "command"] {
         if let Some(value) = fields.get(member) {
             brief.insert(member.into(), compacted(value)?);
         }

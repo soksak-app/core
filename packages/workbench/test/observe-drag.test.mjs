@@ -35,11 +35,10 @@ const { installEnvironment } = await import("../environment.js");
 installEnvironment({
   runtime: "runtime",
   workspace: { focus: "main", grid: {
-    xs: [0, 0.5, 1], ys: [0, 1],
-    cards: [
-      { id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: "fixture-drag", title: "left" }] },
-      { id: "second", c0: 1, c1: 2, r0: 0, r1: 1, tabs: [{ plugin: "fixture-drag", title: "right" }] },
-    ],
+    root: { cut: "x", kids: [
+      { share: 0.5, node: { card: "main", tabs: [{ plugin: "fixture-drag", title: "left" }] } },
+      { share: 0.5, node: { card: "second", tabs: [{ plugin: "fixture-drag", title: "right" }] } },
+    ] },
   } },
   sidebars: { sets: [], links: [] },
 }, { plugins: [{ id: "fixture-drag", package: "@scope/fixture-drag", version: "0.0.1", manifest: {
@@ -49,6 +48,11 @@ installEnvironment({
 const { registry } = await import("../exposure.js");
 registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
 const plane = await import("../plane.js");
+// The release of a divider drag runs core.boundary.move, which the core exposure of the page registers.
+const { installCoreExposure } = await import("../core-exposure.js");
+const { pageMemorySaver } = await import("./support/memory-saver.mjs");
+await installCoreExposure({ library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
+  memorySaver: await pageMemorySaver() });
 plane.onLayout((made, draw) => draw());
 plane.adopt(plane.fresh(), "spc-aaaaaa");
 const divider = document.querySelector(".sp-divider[data-axis=\"x\"]");

@@ -55,9 +55,8 @@ test("a held tab is neither mounted nor given a background session until its det
   assert.deepEqual(installEnvironment({
     runtime: "runtime",
     workspace: { focus: "main", grid: {
-      xs: [0, 1], ys: [0, 1],
-      cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [
-        { plugin: owner, title: "shown" }, { plugin: owner, title: "hidden" }] }],
+      root: { card: "main", tabs: [
+        { plugin: owner, title: "shown" }, { plugin: owner, title: "hidden" }] },
     } },
     sidebars: { sets: [], links: [] },
   }, { plugins: [{ id: owner, package: "@scope/fixture-session", version: "0.0.1", manifest: {
@@ -78,7 +77,7 @@ test("a held tab is neither mounted nor given a background session until its det
   try {
     plane.onLayout((made, draw) => draw());
     const fresh = plane.fresh();
-    const [shown, hidden] = fresh.state.cards[0].data.tabs.map((tab) => tab.id);
+    const [shown, hidden] = fresh.state.root.data.tabs.map((tab) => tab.id);
     waits.holdImageDetachSurfaces([shown, hidden]);
     plane.adopt(fresh, "spc-aaaaaa");
     const slot = document.querySelector('[data-card-id="main"] .slot');

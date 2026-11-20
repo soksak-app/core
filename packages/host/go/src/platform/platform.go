@@ -716,8 +716,10 @@ type Platform interface {
 	// For a press and a release, it calls done on the UI thread after the document at the coordinates received the event, or with
 	// PointerUnreceived at the event that ended the wait without the receipt; no wait has a limit (docs/spec/exposure.md#methods).
 	// For other phases, it calls done immediately after delivery. held is the state of the rejection when the result is PointerButtonHeld
-	// or PointerHeld.
-	InjectPointer(window Window, pointer string, x, y float64, phase, button int, deltaX, deltaY float64, clicks int, done func(result PointerResult, held ButtonHeld)) error
+	// or PointerHeld. view is the native web view that a delivered press or release reached, which can differ from the web view at
+	// the coordinates when the call was made, because a press waits for an open layout to reach the screen; it is 0 for other input,
+	// for another result and on a platform without native web views of surfaces.
+	InjectPointer(window Window, pointer string, x, y float64, phase, button int, deltaX, deltaY float64, clicks int, done func(result PointerResult, held ButtonHeld, view uintptr)) error
 	// ActivateWindow makes the window the key window of an application that answers as active without activating the application
 	// (docs/spec/exposure.md#methods). It calls done(nil) on the UI thread after only the web view at the coordinates received the active state,
 	// or calls done with an error that names the stage where it stopped at the event that ended that stage; no stage has a limit.
@@ -925,8 +927,8 @@ const (
 )
 
 // ButtonHeld is the state of a rejection: for PointerButtonHeld what AppKit reported at the time of the rejection, for PointerHeld
-// the pointer whose press rejected the input and the reason, and for PointerResizeEdge and PointerInterrupted the message of the
-// refusal.
+// the pointer whose press rejected the input and the reason, for PointerResizeEdge and PointerInterrupted the message of the
+// refusal, and for PointerRejected the reason that the platform names, empty on a platform that names none.
 type ButtonHeld struct {
 	// Mask is the value of NSEvent.pressedMouseButtons.
 	Mask uint64
@@ -934,7 +936,8 @@ type ButtonHeld struct {
 	Frontmost *FrontmostApplication
 	// Pointer is the pointer that holds the press of a PointerHeld rejection.
 	Pointer string
-	// Reason is the state that the press of Pointer holds, or the message of a PointerResizeEdge or PointerInterrupted refusal.
+	// Reason is the state that the press of Pointer holds, the message of a PointerResizeEdge or PointerInterrupted refusal, or the
+	// reason of a PointerRejected refusal.
 	Reason string
 }
 

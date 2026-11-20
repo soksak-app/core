@@ -152,6 +152,17 @@ test("the tab view reports its start values, declares its footer and loads its r
   await bare.close();
 });
 
+test("layoutprobe.activity sets the value of the status layoutprobe.activity and refuses a value that is neither a string nor null", { timeout: 5000 }, async () => {
+  const view = await startTab("layout-probe-fixture-tab-activity");
+  assert.equal(await view.status("layoutprobe.activity"), null);
+  assert.equal(await view.run("layoutprobe.activity", { value: "attention" }), null);
+  assert.equal(await view.status("layoutprobe.activity"), "attention");
+  await view.run("layoutprobe.activity", { value: null });
+  assert.equal(await view.status("layoutprobe.activity"), null);
+  await assert.rejects(view.run("layoutprobe.activity", { value: 3 }), /layoutprobe.activity requires a string or null value/);
+  await view.close();
+});
+
 test("the tab report commands run their view calls and the view status follows them", { timeout: 5000 }, async () => {
   const view = await startTab("layout-probe-fixture-tab-reports");
   await view.exposed("status.watch", { name: "layoutprobe.view" });

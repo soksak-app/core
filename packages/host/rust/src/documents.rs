@@ -3738,17 +3738,32 @@ fn report_ended_presentation_waits(
     reason: &str,
     result: Result<usize, String>,
 ) {
+    report_ended_presentation_waits_to(
+        &mut |payload| {
+            emit_window(window, "view-presentation-abandoned", payload)
+                .map_err(|error| error.to_string())
+        },
+        surface,
+        reason,
+        result,
+    );
+}
+
+/// Reports the waits of surface that ended with reason: each wait that ended without presentation sends the
+/// view-presentation-abandoned notice through `notify`, and an error of the end or of a notice is written to the application log. A
+/// wait that input ended is ordinary input of a person, a key down before the view presented its change, so its record is the gated
+/// host.trace.view.presentation-abandoned that the end wrote and not an error.
+pub(crate) fn report_ended_presentation_waits_to(
+    notify: &mut dyn FnMut(Value) -> Result<(), String>,
+    surface: &str,
+    reason: &str,
+    result: Result<usize, String>,
+) {
     match result {
         Ok(ended) if reason != "presented" => {
-            if reason == "input" && ended > 0 {
-                log_error(
-                    "view presentation",
-                    format!("surface {surface} had not presented when input ended the hold"),
-                );
-            }
             for _ in 0..ended {
                 let payload = presentation_abandoned_payload(surface, reason);
-                if let Err(error) = emit_window(window, "view-presentation-abandoned", payload) {
+                if let Err(error) = notify(payload) {
                     log_error("view channel", error);
                 }
             }

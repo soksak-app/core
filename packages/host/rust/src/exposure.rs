@@ -162,9 +162,9 @@ fn host_declarations() -> Value {
         }],
         "commands": [
             {"name": "host.dock.select", "description": "Performs the Dock menu item with the title.",
-             "params": {"type": "object", "properties": {"title": {"type": "string"}}}, "result": nothing},
+             "params": {"type": "object", "properties": {"title": {"type": "string"}}, "required": ["title"]}, "result": nothing},
             {"name": "host.hit", "description": "Returns the owner and native hit-view class and frame of a point in window coordinates.",
-             "params": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}}},
+             "params": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}}, "required": ["x", "y"]},
              "result": {"type": "object", "properties": {
                  "kind": {"type": "string", "enum": ["workbench", "document", "native"]},
                  "surface": {"type": "string"}, "document": {"type": "string"},
@@ -172,7 +172,7 @@ fn host_declarations() -> Value {
                  "view": {"type": ["object", "null"], "properties": {
                      "class": {"type": "string"}, "frame": rect}}}}},
             {"name": "host.menu.select", "description": "Performs the application menu item with the title in the submenu with the menu title.",
-             "params": {"type": "object", "properties": {"menu": {"type": "string"}, "title": {"type": "string"}}}, "result": nothing},
+             "params": {"type": "object", "properties": {"menu": {"type": "string"}, "title": {"type": "string"}}, "required": ["menu", "title"]}, "result": nothing},
             {"name": "host.quit", "description": "Requests normal application termination, including pending saves.",
              "params": empty, "result": nothing},
             {"name": "host.window.close", "description": "Closes the window through its normal close action.",
@@ -184,7 +184,7 @@ fn host_declarations() -> Value {
             {"name": "host.window.maximize", "description": "Maximizes the window, or restores it with on false.",
              "params": {"type": "object", "properties": {"on": {"type": "boolean"}}}, "result": nothing},
             {"name": "host.window.move", "description": "Moves the window frame origin to a point in screen coordinates.",
-             "params": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}}},
+             "params": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}}, "required": ["x", "y"]},
              "result": nothing},
             {"name": "host.window.presented", "description": "Resolves after the main page and the shown modal have presented their current geometry and every visible image region has presented its exact current raster, with the display time of that frame.",
              "params": empty, "result": {"type": "object", "properties": {"displayed": {"type": "number"}}}},
@@ -193,7 +193,7 @@ fn host_declarations() -> Value {
             {"name": "host.window.reload", "description": "Starts the workbench of the window again.",
              "params": empty, "result": nothing},
             {"name": "host.window.resize", "description": "Resizes the content area.",
-             "params": {"type": "object", "properties": {"width": {"type": "number"}, "height": {"type": "number"}}},
+             "params": {"type": "object", "properties": {"width": {"type": "number"}, "height": {"type": "number"}}, "required": ["width", "height"]},
              "result": nothing},
         ],
         "element": [],
@@ -228,6 +228,30 @@ pub fn check_host_name(method: &str, name: &str) -> Result<(), Failure> {
         Ok(())
     } else {
         Err(Failure::new(UNKNOWN_NAME, undeclared_text(method, name)))
+    }
+}
+
+/// Checks the params of the declared host command name against its params schema before the command runs
+/// (docs/spec/exposure.md#command-parameters); absent or null params are an empty object.
+pub fn check_host_params(name: &str, params: Option<&Value>) -> Result<(), Failure> {
+    let declared = host_declarations();
+    let schema = declared["commands"]
+        .as_array()
+        .and_then(|entries| entries.iter().find(|entry| entry["name"] == name))
+        .and_then(|entry| entry["params"].as_object())
+        .ok_or_else(|| {
+            Failure::new(
+                -32603,
+                format!("the host command {name} declares no params schema"),
+            )
+        })?;
+    let given = match params {
+        Some(Value::Object(given)) => given.clone(),
+        _ => Map::new(),
+    };
+    match crate::command_params::command_params_refusal(name, schema, &given) {
+        Some(refusal) => Err(Failure::params(refusal)),
+        None => Ok(()),
     }
 }
 
@@ -371,6 +395,17 @@ pub fn with_host_entries(listed: &RawValue) -> Result<Box<RawValue>, Failure> {
     serde_json::value::to_raw_value(&lists).map_err(|error| Failure::new(-32603, error.to_string()))
 }
 
+/// Reads the {width, height} of host.window.resize, which the endpoint checked against its params schema. A width or a height
+/// below 1 point is refused (docs/spec/exposure.md#host-entries).
+pub fn content_size(arguments: &Map<String, Value>) -> Result<(f64, f64), Failure> {
+    let width = number(arguments, "width")?;
+    let height = number(arguments, "height")?;
+    if width < 1.0 || height < 1.0 {
+        return Err(Failure::params("width and height must be at least 1"));
+    }
+    Ok((width, height))
+}
+
 fn number(params: &Map<String, Value>, name: &str) -> Result<f64, Failure> {
     params
         .get(name)
@@ -403,6 +438,16 @@ pub fn button_held_message(held: &ButtonHeld) -> String {
         "AppKit reports NSEvent.pressedMouseButtons mask {:#x} while {frontmost} is frontmost; the synthetic press or release was not delivered",
         held.mask
     )
+}
+
+/// Builds the message of the -32602 refusal of a pointer input from the reason of the platform, which the native library of
+/// macOS names (docs/spec/exposure.md#methods). A platform that names no reason gives the empty reason.
+pub fn rejected_message(reason: &str) -> String {
+    if reason.is_empty() {
+        "the window did not accept the input".to_string()
+    } else {
+        format!("the window did not accept the input: {reason}")
+    }
 }
 
 /// Builds the message of error 1011: the pointer whose open press rejected the input and the state that the press
@@ -2678,7 +2723,10 @@ fn reload(
                         crate::windows::emit_window(window, "page-reload", serde_json::json!({}))
                             .map_err(|error| error.to_string())
                     },
-                    || crate::windows::removal_page_ended(window),
+                    || {
+                        crate::windows::removal_page_ended(window);
+                        crate::windows::activities_page_ended(window);
+                    },
                     || crate::surfaces::keys_page_ended(window),
                     || crate::windows::close_window(window),
                 )
@@ -3214,14 +3262,8 @@ impl Host {
                 Some(Value::Bool(false)) => fullscreen(window, false),
                 Some(_) => Err(Failure::params("on must be a boolean")),
             },
-            "host.window.resize" => (|| {
-                let width = number(arguments, "width")?;
-                let height = number(arguments, "height")?;
-                if width <= 0.0 || height <= 0.0 {
-                    return Err(Failure::params("width and height must be positive"));
-                }
-                done(window.set_size(LogicalSize::new(width, height)))
-            })(),
+            "host.window.resize" => content_size(arguments)
+                .and_then(|(width, height)| done(window.set_size(LogicalSize::new(width, height)))),
             "host.window.reload" => reload(self, window, reply),
             "host.window.presented" => window_presented(self, window, reply)
                 .map(|displayed| json!({"displayed": displayed})),
@@ -3349,40 +3391,39 @@ impl Host {
         }
         let (tx, rx) = mpsc::channel();
         let target = window.clone();
-        // The delivery takes the pointer, so the press reading and the answer keep their own copies.
-        let (phase, x, y) = (pointer.phase, pointer.x, pointer.y);
+        // The delivery takes the pointer, so the answer keeps its own copy of the name.
+        let phase = pointer.phase;
         let name = pointer.pointer.clone();
-        let pressed = with_native_owner(window, move |handle| {
-            crate::surfaces::read_press_then_deliver(
-                || {
-                    if phase != 1 {
-                        return Ok(None);
+        with_native_owner(window, move |handle| {
+            platform.input_pointer(
+                handle,
+                pointer,
+                Box::new(move |delivery, view| {
+                    // A direct injection does not pass through the AppKit local event monitor, so the host publishes its surface
+                    // press from the web view that the delivered press reached, while the window is open in this main thread step.
+                    let pressed = match view {
+                        Some(view) if phase == 1 => crate::surfaces::surface_of_view(&target, view),
+                        _ => Ok(None),
+                    };
+                    if tx.send((delivery, pressed)).is_err() {
+                        crate::application_log::log_info(
+                            "exposure",
+                            "pointer delivery arrived after its request ended",
+                        );
                     }
-                    crate::surfaces::surface_at(platform, handle, &target, x, y)
-                },
-                || {
-                    platform.input_pointer(
-                        handle,
-                        pointer,
-                        Box::new(move |delivery| {
-                            if tx.send(delivery).is_err() {
-                                crate::application_log::log_info(
-                                    "exposure",
-                                    "pointer delivery arrived after its request ended",
-                                );
-                            }
-                        }),
-                    )
-                },
+                }),
             )
         })
         .map_err(native_failure(window.label(), NO_INPUT))?;
         // The library calls done with Unreceived at the event that ended the wait without the receipt, so the result always arrives.
-        match rx
+        let (delivery, pressed) = rx
             .recv()
-            .map_err(|e| Failure::new(NO_INPUT, e.to_string()))?
-        {
+            .map_err(|e| Failure::new(NO_INPUT, e.to_string()))?;
+        match delivery {
             Delivery::Delivered => {
+                let pressed = pressed.map_err(|error| {
+                    native_failure(window.label(), NO_INPUT)(NativeFailure::Failed(error))
+                })?;
                 if let Some(id) = pressed {
                     crate::windows::emit_window(window, "surface-pressed", id).map_err(
                         |error| {
@@ -3395,10 +3436,9 @@ impl Host {
                 Ok(Value::Null)
             }
             Delivery::Inactive => Err(Failure::new(NOT_ACTIVE, "the window is not active")),
-            Delivery::Rejected => Err(Failure::new(
-                INVALID_PARAMS,
-                "the window did not accept the input",
-            )),
+            Delivery::Rejected(reason) => {
+                Err(Failure::new(INVALID_PARAMS, rejected_message(&reason)))
+            }
             Delivery::Unreceived => Err(Failure::new(
                 TIMED_OUT,
                 "the document did not receive the input",

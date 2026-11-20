@@ -141,9 +141,11 @@ static void checkActivityWaitRegistrationEnd(void) {
 }
 
 /// Whether one line of records holds every part.
-static BOOL hasRecord(NSString *records, NSArray<NSString *> *parts) {
+// Whether records hold an input record of level (`info` or `error`) whose line holds every part.
+static BOOL hasRecord(NSString *records, NSString *level, NSArray<NSString *> *parts) {
+    NSString *prefix = [NSString stringWithFormat:@" %@ native input inject: ", level];
     for (NSString *line in [records componentsSeparatedByString:@"\n"]) {
-        BOOL all = [line containsString:@" info native input inject: "];
+        BOOL all = [line containsString:prefix];
         for (NSString *part in parts) if (![line containsString:part]) all = NO;
         if (all) return YES;
     }
@@ -220,7 +222,7 @@ static void awaitPage(WKWebView *view, NSString *what, NSString *type, NSString 
 
 typedef struct { BOOL done; sp_input_result result; NSUInteger seen; WKWebView *view; BOOL held; } SPReceipt;
 
-static void received(void *context, sp_input_result result, const sp_input_held *held) {
+static void received(void *context, sp_input_result result, const sp_input_held *held, void *view) {
     SPReceipt *receipt = context;
     receipt->result = result;
     receipt->held = held != NULL;
@@ -235,7 +237,7 @@ static void received(void *context, sp_input_result result, const sp_input_held 
 // answers, and busyEndedAtAnswer keeps whether it had ended when the press answered.
 typedef struct { BOOL done; sp_input_result result; BOOL busyEnded; BOOL busyEndedAtAnswer; } SPAnswer;
 
-static void answered(void *context, sp_input_result result, const sp_input_held *held) {
+static void answered(void *context, sp_input_result result, const sp_input_held *held, void *view) {
     SPAnswer *state = context;
     state->result = result;
     state->busyEndedAtAnswer = state->busyEnded;
@@ -371,7 +373,7 @@ static void checkReceipts(void) {
 // before it answered, and a request whose window closes before it starts answers in the close turn (docs/spec/exposure.md#named-pointers).
 typedef struct { NSMutableArray<NSString *> *order; NSString *name; BOOL done; sp_input_result result; } SPQueued;
 
-static void queued(void *context, sp_input_result result, const sp_input_held *held) {
+static void queued(void *context, sp_input_result result, const sp_input_held *held, void *view) {
     (void)held;
     SPQueued *state = context;
     state->result = result;
@@ -686,11 +688,56 @@ static void checkHiddenWindowRefusesPointer(void) {
     check(move == SP_INPUT_REJECTED && down == SP_INPUT_REJECTED && up == SP_INPUT_REJECTED && target.downs == 0 && target.ups == 0,
         [NSString stringWithFormat:@"a move, a press and a release of a window that is not shown are refused (%d %d %d, downs %lu, ups %lu)",
             move, down, up, (unsigned long)target.downs, (unsigned long)target.ups]);
-    check(hasRecord(records, @[@"\"kind\":\"pointer\"", @"\"phase\":1", @"\"result\":\"rejected\"", @"\"reason\":\"the window is not shown\""]),
-        [NSString stringWithFormat:@"the refusal of a window that is not shown is recorded with its reason (got %@)", records]);
+    check(hasRecord(records, @"error", @[@"\"kind\":\"pointer\"", @"\"phase\":1", @"\"result\":\"rejected\"", @"\"reason\":\"the window is not shown\""]),
+        [NSString stringWithFormat:@"the refusal of a window that is not shown is recorded as an error with its reason (got %@)", records]);
     [window orderBack:nil];
     check(sp_input_pointer(window, 20, 20, 1, 0, 0, 0) == SP_INPUT_DELIVERED && sp_input_pointer(window, 20, 20, 3, 0, 0, 0) == SP_INPUT_DELIVERED
         && target.downs == 1 && target.ups == 1, @"the window takes the press and its release once it is shown");
+    [window close];
+}
+
+// The answer of a refused pointer input carries the reason of the refusal, which the hosts put in their error, and the record of the
+// refusal is an error (docs/spec/exposure.md#methods). A release without a press of its pointer and button is the release of a
+// gesture whose press ended, and a press of a window that is not shown is refused before any view.
+typedef struct {
+    BOOL done;
+    sp_input_result result;
+    char reason[256];
+} SPRefusal;
+
+static void refused(void *context, sp_input_result result, const sp_input_held *held, void *view) {
+    (void)view;
+    SPRefusal *state = context;
+    state->result = result;
+    if (held && held->reason) strlcpy(state->reason, held->reason, sizeof state->reason);
+    state->done = YES;
+}
+
+static SPRefusal refusalOf(NSWindow *window, int phase) {
+    SPRefusal refusal = {NO, SP_INPUT_DELIVERED, ""};
+    SPRefusal *state = &refusal;
+    sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 20, 20, phase, 0, 0, 0, 1, refused, state);
+    eventWait(@"the refused pointer input answers", ^BOOL { return state->done; });
+    return refusal;
+}
+
+static void checkRefusedPointerAnswersItsReason(void) {
+    NSWindow *window = [[[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(200, 100))
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO] autorelease];
+    window.releasedWhenClosed = NO;
+    window.contentView = [[[SPPointerTarget alloc] initWithFrame:NSMakeRect(0, 0, 200, 100)] autorelease];
+    __block SPRefusal hidden, release;
+    NSString *records = capturedRecords(^{
+        hidden = refusalOf(window, 1);
+        [window orderBack:nil];
+        release = refusalOf(window, 3);
+    });
+    check(hidden.result == SP_INPUT_REJECTED && strcmp(hidden.reason, "the window is not shown") == 0,
+        [NSString stringWithFormat:@"a press of a window that is not shown answers its reason (%d, \"%s\")", hidden.result, hidden.reason]);
+    check(release.result == SP_INPUT_REJECTED && strcmp(release.reason, "no open press of the pointer and button in the window") == 0,
+        [NSString stringWithFormat:@"a release without a press answers its reason (%d, \"%s\")", release.result, release.reason]);
+    check(hasRecord(records, @"error", @[@"\"kind\":\"pointer\"", @"\"phase\":3", @"\"result\":\"rejected\""]),
+        [NSString stringWithFormat:@"the refused release is recorded as an error (got %@)", records]);
     [window close];
 }
 
@@ -938,6 +985,7 @@ int main(void) { @autoreleasepool {
     checkActivityWaitDelayedRegistration();
     checkActivityWaitRegistrationEnd();
     checkHiddenWindowRefusesPointer();
+    checkRefusedPointerAnswersItsReason();
     checkPointerTargetAcrossViews();
     checkMoveReachesEveryOwner();
     check(pressedButtonsImplementation() != appKitButtons, @"a delivered press shows its button to WebKit");
@@ -1011,14 +1059,14 @@ int main(void) { @autoreleasepool {
             sp_input_key(recorded, "Escape", NULL, 1, false);
             sp_input_pointer(recorded, 10, 10, 2, 0, 0, 0);
         });
-        check(hasRecord(records, @[@"\"kind\":\"key\"", @"\"key\":\"NoSuchKey\"", @"\"result\":\"rejected\"", @"\"reason\":\"unknown key name\""]),
+        check(hasRecord(records, @"info", @[@"\"kind\":\"key\"", @"\"key\":\"NoSuchKey\"", @"\"result\":\"rejected\"", @"\"reason\":\"unknown key name\""]),
             [NSString stringWithFormat:@"a rejected key is recorded with its reason (got %@)", records]);
-        check(hasRecord(records, @[@"\"kind\":\"key\"", @"\"key\":\"Escape\"", @"\"text\":null", @"\"modifiers\":1", @"\"down\":true", @"\"result\":\"delivered\""]),
+        check(hasRecord(records, @"info", @[@"\"kind\":\"key\"", @"\"key\":\"Escape\"", @"\"text\":null", @"\"modifiers\":1", @"\"down\":true", @"\"result\":\"delivered\""]),
             [NSString stringWithFormat:@"a delivered key is recorded with its arguments (got %@)", records]);
-        check(hasRecord(records, @[@"\"kind\":\"key\"", @"\"key\":\"Escape\"", @"\"responder\":"]),
+        check(hasRecord(records, @"info", @[@"\"kind\":\"key\"", @"\"key\":\"Escape\"", @"\"responder\":"]),
             [NSString stringWithFormat:@"a key record names the first responder that receives the key (got %@)", records]);
-        check(hasRecord(records, @[@"\"kind\":\"pointer\"", @"\"pointer\":\"main\"", @"\"phase\":2", @"\"result\":\"rejected\"", @"\"reason\":\"no open press of the pointer and button in the window\""]),
-            [NSString stringWithFormat:@"a rejected pointer input is recorded with its reason (got %@)", records]);
+        check(hasRecord(records, @"error", @[@"\"kind\":\"pointer\"", @"\"pointer\":\"main\"", @"\"phase\":2", @"\"result\":\"rejected\"", @"\"reason\":\"no open press of the pointer and button in the window\""]),
+            [NSString stringWithFormat:@"a rejected pointer input is recorded as an error with its reason (got %@)", records]);
         [recorded orderOut:nil];
     }
     awaitPage(view, @"the page receives both keydown events", @"keydown", @"probe.events.filter(e=>e.type==='keydown').length >= 2");

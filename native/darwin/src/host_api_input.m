@@ -18,8 +18,8 @@ void activateWindowAt(uintptr_t window, double x, double y, uintptr_t handle) {
     hostRunOnMain(^{ sp_input_activate_at((void *)window, x, y, activated, (void *)handle); });
 }
 
-static void delivered(void *context, sp_input_result result, const sp_input_held *held) {
-    hostRunOnWorker(^{ sp_host_callback_input_delivered((uintptr_t)context, (int)result, (sp_input_held *)held); });
+static void delivered(void *context, sp_input_result result, const sp_input_held *held, void *view) {
+    hostRunOnWorker(^{ sp_host_callback_input_delivered((uintptr_t)context, (int)result, (sp_input_held *)held, (uintptr_t)view); });
 }
 // pointer is a C string that the block frees after the delivery took it.
 void injectPointer(uintptr_t window, char *pointer, double x, double y, int phase, int button, double deltaX, double deltaY, int clicks,
@@ -47,13 +47,10 @@ static int surfaceWalk(uintptr_t owner, NSView* view, NSView* content) {
     return 0;
 }
 
-// A surface is a native view, so input over a surface does not reach the page. One monitor of the app
-// receives all presses, drags and key inputs and announces the target view and the position of the input.
-//
-// The target of a press is found with hitTest:. The target of a key input is the first responder of the window, and a page that
-// took the focus by itself becomes the first responder. A page that focuses a search field when it loads would otherwise leave the page model
-// pointing at the surface pressed last without this handling. In both cases
-// the coordinates are not converted, so they do not drift from the region of the page.
+// A surface is a native view, so a press over a surface does not reach the page. One monitor of the app receives the presses and
+// drags of the left button and announces the target view and the position of the input. The target of a press is found with
+// hitTest:. A key input is not a press (docs/spec/text-size.md#scope), so the monitor reports none: the keyboard follows the focus
+// ring, and a change of the first responder is reported through the responder facts of the window.
 //
 // The position of a drag must be converted. The grab region of a boundary is wider than the passage between two cards, so when the passage
 // width is one line, that whole region is over a surface and a press inside it does not reach the page.
@@ -67,29 +64,21 @@ static int surfaceWalk(uintptr_t owner, NSView* view, NSView* content) {
 static uintptr_t surfaceWatchMouseOnMain(void* nsWindow, uintptr_t owner) {
     __block int surfaceDragging = 0;
     NSWindow* window = (NSWindow*)nsWindow;
-    NSEventMask mask = NSEventMaskLeftMouseDown | NSEventMaskLeftMouseDragged
-                     | NSEventMaskLeftMouseUp | NSEventMaskKeyDown;
+    NSEventMask mask = NSEventMaskLeftMouseDown | NSEventMaskLeftMouseDragged | NSEventMaskLeftMouseUp;
     return (uintptr_t)sp_observe_local_monitor("host_input.surface", SP_OBSERVE_COUNT, mask, ^NSEvent*(NSEvent* event) {
         if ([event window] == window) {
             NSView* content = [window contentView];
             NSEventType type = [event type];
-            if (type == NSEventTypeKeyDown) {
-                NSResponder* first = [window firstResponder];
-                if ([first isKindOfClass:[NSView class]]) {
-                    surfaceWalk(owner, (NSView*)first, content);
-                }
-            } else {
-                NSPoint at = [event locationInWindow];
-                double x = at.x;
-                double y = [content bounds].size.height - at.y;
-                if (type == NSEventTypeLeftMouseDown) {
-                    surfaceDragging = surfaceWalk(owner, [content hitTest:at], content);
-                    if (surfaceDragging) hostRunOnWorker(^{ sp_host_callback_surface_point(owner, 0, x, y); });
-                } else if (surfaceDragging) {
-                    int phase = type == NSEventTypeLeftMouseDragged ? 1 : 2;
-                    hostRunOnWorker(^{ sp_host_callback_surface_point(owner, phase, x, y); });
-                    if (type == NSEventTypeLeftMouseUp) surfaceDragging = 0;
-                }
+            NSPoint at = [event locationInWindow];
+            double x = at.x;
+            double y = [content bounds].size.height - at.y;
+            if (type == NSEventTypeLeftMouseDown) {
+                surfaceDragging = surfaceWalk(owner, [content hitTest:at], content);
+                if (surfaceDragging) hostRunOnWorker(^{ sp_host_callback_surface_point(owner, 0, x, y); });
+            } else if (surfaceDragging) {
+                int phase = type == NSEventTypeLeftMouseDragged ? 1 : 2;
+                hostRunOnWorker(^{ sp_host_callback_surface_point(owner, phase, x, y); });
+                if (type == NSEventTypeLeftMouseUp) surfaceDragging = 0;
             }
         }
         return event;

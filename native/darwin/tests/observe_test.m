@@ -187,8 +187,8 @@ int main(void) { @autoreleasepool {
         && [inputRegistration[@"kind"] isEqual:@"local_monitor"] && [inputRegistration[@"mode"] isEqual:@"count"],
         @"the host input monitor registers through the observer entrance in count mode");
     // A windowless event reaches the monitor but not this window's Go callback owner.
-    NSEvent *inputEvent = [NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:0
-        timestamp:0 windowNumber:0 context:nil characters:@"a" charactersIgnoringModifiers:@"a" isARepeat:NO keyCode:0];
+    NSEvent *inputEvent = [NSEvent mouseEventWithType:NSEventTypeLeftMouseUp location:NSZeroPoint modifierFlags:0
+        timestamp:0 windowNumber:0 context:nil eventNumber:0 clickCount:1 pressure:0];
     [NSApp sendEvent:inputEvent];
     check(sp_observe_count("host_input.surface") == 1, @"the host input monitor counts one delivered event");
     surfaceUnwatchMouse(inputMonitor);

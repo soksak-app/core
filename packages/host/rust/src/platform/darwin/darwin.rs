@@ -715,7 +715,7 @@ impl Platform for Darwin {
         &self,
         window: Handle,
         pointer: Pointer,
-        done: Box<dyn FnOnce(Delivery) + Send>,
+        done: Box<dyn FnOnce(Delivery, Option<Handle>) + Send>,
     ) -> Result<(), String> {
         input::pointer(window, pointer, done);
         Ok(())

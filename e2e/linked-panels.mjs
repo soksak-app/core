@@ -1,6 +1,7 @@
 // Checks that a card sidebar made only by a link receives the collapse and size commands without an explicit specification. A window check and the unit check of that checker
 // share this function.
 import assert from "node:assert/strict";
+import { storedCard } from "./stored-layout.mjs";
 
 /** Checks the linked sidebars of the four sides on the first active plugin card of session s. name is the application name used in diagnostics. */
 export async function checkLinkedPanels(s, t, name) {
@@ -37,7 +38,7 @@ export async function checkLinkedPanels(s, t, name) {
           return panel?.set === set.id && panel.requestedCollapsed === stored && (command !== "core.card.sidebar.size" || panel.size === 260);
         }, `linked ${side} panel did not apply ${command}`);
         const layout=await s.get('core.layout');
-        const saved=layout.state.cards.find(item=>item.id===card.id).data.sidebars[side];
+        const saved=storedCard(layout,card.id).data.sidebars[side];
         assert.equal(Object.hasOwn(saved,'set'),false,`${command} made the ${side} derived set explicit`);
         assert.equal(saved.collapsed,stored,`${command} did not save the ${side} fold choice ${stored}`);
         if(command==='core.card.sidebar.size')assert.equal(saved.size,260,`${side} resized presentation was not saved`);

@@ -106,6 +106,10 @@ type Frontend interface {
 	// AfterPresentation is the presentation notice: done runs after the workbench presented the state of this step, with the
 	// failure when it cannot present that state. Call it on the main thread.
 	AfterPresentation(done func(err error)) error
+	// AfterInput is the input notice: done runs after the workbench handled the pointer input that the platform delivered before the
+	// call, with the failure when it cannot handle it (docs/spec/exposure.md#methods). A main page handled it when the receipt of the
+	// platform answered; a workbench in native UI handles it in the next frame that it builds. Call it on the main thread.
+	AfterInput(done func(err error)) error
 	// SettledPresentation is the settled presentation: it makes the block that brings the content of the window to the screen in
 	// its current state, which the caller passes to the settled wait of the platform. Call it on the main thread.
 	SettledPresentation() (unsafe.Pointer, error)

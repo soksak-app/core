@@ -103,6 +103,9 @@ export function installEnvironment(environmentDocument, installedDocument) {
         save: manifest.surface.save ?? null,
         // default: surface.menu is optional; a right click on a surface of a plugin without it opens the page menu (null).
         menu: manifest.surface.menu ?? null,
+        // The statuses that declare activity, which the activity of each tab of the plugin follows (docs/spec/activity.md).
+        // default: exposes and its status are optional; a plugin without them declares no activity.
+        activity: (exposes?.status ?? []).filter((entry) => entry.activity === true).map(({ name }) => name),
         surface: surfaceOf(name, manifest.id, {
           ...manifest.surface,
           // default: exposes is an optional field of plugin.json; without it there is no declaration.

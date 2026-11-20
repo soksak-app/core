@@ -453,6 +453,13 @@ func (f *Frontend) AfterPresentation(done func(err error)) error {
 	})
 }
 
+// AfterInput is the input notice of the workbench: the workbench reads a pointer input in the next frame that it builds, so done
+// runs after a frame of the window built after the call presented; a frame that the window holds, as a layout transaction holds it,
+// is asked for again after the release (docs/spec/exposure.md#methods).
+func (f *Frontend) AfterInput(done func(err error)) error {
+	return f.presented(true, done)
+}
+
 // opensLayout reports whether the layout transaction that owner starts opens in the frame being built of the window: the view of the
 // window runs, which opens the layout of its frame (OpenLayout), and nothing holds the frames of the window.
 func (f *Frontend) opensLayout(owner platform.Window) bool {

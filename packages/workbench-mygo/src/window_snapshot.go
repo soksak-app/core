@@ -177,7 +177,9 @@ func (r *Registry) mainGroup() (snapshotGroup, error) {
 			if err != nil {
 				return nil, err
 			}
-			items = append(items, item)
+			if item != nil {
+				items = append(items, item)
+			}
 		}
 		row["items"] = items
 		element = append(element, row)
@@ -197,11 +199,12 @@ func statusEntry(row map[string]any, read Status) map[string]any {
 	return row
 }
 
-// snapshotItem is one element of an element name: its role and its rectangle as element.rect gives them, its text, whether it has a
-// box that is not empty, whether it is behind the open dialog, and the command and the params that it runs, or null.
+// snapshotItem is one element of an element name: its role and its rectangle as element.rect gives them, its text content, whether it is
+// behind the open dialog, and the command and the params that it runs, or null. An element with an empty box, which the window does
+// not draw, has no item and answers nil.
 func (r *Registry) snapshotItem(name string, index int, node ui.ElementNode) (map[string]any, error) {
-	if node.Bounds.W == 0 && node.Bounds.H == 0 {
-		node.Bounds = ui.Rect{} // An element that the window does not show has no place, as for element.rect.
+	if node.Bounds.W <= 0 || node.Bounds.H <= 0 {
+		return nil, nil
 	}
 	var command, params any
 	if key, keyed := node.Key.(Exposed); keyed && key.Command != "" {
@@ -219,9 +222,9 @@ func (r *Registry) snapshotItem(name string, index int, node ui.ElementNode) (ma
 		}
 	}
 	return map[string]any{
-		"index": index, "role": ElementRole(node.Role), "text": snapshotText(node.Label),
-		"rect":    map[string]any{"x": node.Bounds.X, "y": node.Bounds.Y, "width": node.Bounds.W, "height": node.Bounds.H},
-		"visible": node.Bounds.W > 0 && node.Bounds.H > 0, "inert": node.Inert, "command": command, "params": params,
+		"index": index, "role": ElementRole(node.Role), "text": snapshotText(node.Text),
+		"rect":  map[string]any{"x": node.Bounds.X, "y": node.Bounds.Y, "width": node.Bounds.W, "height": node.Bounds.H},
+		"inert": node.Inert, "command": command, "params": params,
 	}, nil
 }
 

@@ -17,7 +17,7 @@
     {"reply":{"result":null}},
     {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":"$ts-us-6","mono_ns":"$mono-ns-6","start":"$page-identity","level":"info","event":"workbench.log.gated","fields":{"class":"call","level":"debug","count":5}},{"ts_us":"$ts-us-6","mono_ns":"$mono-ns-6","start":"$page-identity","level":"info","event":"workbench.log.gated","fields":{"class":"call","level":"warn","count":1}}]}}},
     {"reply":{"result":null}},
-    {"notice":{"event":"view-call","payload":{"surface":"probe-surface","plugin":"probe","generation":1,"id":3,"command":"core.tab.select","params":{}}}},
+    {"notice":{"event":"view-call","payload":{"surface":"probe-surface","plugin":"probe","generation":1,"id":3,"command":"core.tab.select","params":{"tab":"current"}}}},
     {"call":{"name":"viewReply","payload":{"id":3,"error":{"code":-32000,"message":"no focus target"},"page":"$page-identity","generation":1,"surface":"probe-surface"}}},
     {"reply":{"result":null}},
     {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":"$ts-us-6","mono_ns":"$mono-ns-6","start":"$page-identity","level":"info","event":"workbench.log.gated","fields":{"class":"call","level":"debug","count":2}},{"ts_us":"$ts-us-6","mono_ns":"$mono-ns-6","start":"$page-identity","level":"info","event":"workbench.log.gated","fields":{"class":"call","level":"warn","count":1}}]}}},

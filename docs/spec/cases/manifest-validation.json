@@ -624,6 +624,37 @@
           "k": {
             "schema": {
               "type": "object",
+              "additionalProperties": false
+            },
+            "default": {}
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe data k schema: unknown field additionalProperties",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "data.schema-required-names-no-property",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "data": {
+          "k": {
+            "schema": {
+              "type": "object",
               "required": [
                 "a"
               ]
@@ -633,7 +664,7 @@
         }
       },
       "accepted": false,
-      "error": "plugin probe data k schema: unknown field required",
+      "error": "plugin probe data k schema: required must be a non-empty list of distinct names of properties",
       "packageFiles": [
         "plugin.json",
         "ui/page.html"
@@ -2567,16 +2598,14 @@
           },
           "params": {
             "type": "object",
-            "required": [
-              "path"
-            ]
+            "additionalProperties": false
           }
         },
         "mark": "P",
         "icon": "<svg></svg>"
       },
       "accepted": false,
-      "error": "plugin probe surface params: unknown field required",
+      "error": "plugin probe surface params: unknown field additionalProperties",
       "packageFiles": [
         "plugin.json",
         "ui/page.html"
@@ -4633,6 +4662,250 @@
       ]
     },
     {
+      "id": "exposes.status-summary-accepted",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": "object"
+              },
+              "summary": true
+            }
+          ]
+        }
+      },
+      "accepted": true,
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.status-summary-not-boolean",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": "object"
+              },
+              "summary": "yes"
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes probe.s: summary must be a boolean",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.status-activity-accepted",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "attention",
+                  "failed",
+                  "running",
+                  "idle",
+                  null
+                ]
+              },
+              "activity": true
+            }
+          ]
+        }
+      },
+      "accepted": true,
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.status-activity-false",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "attention",
+                  "failed",
+                  "running",
+                  "idle",
+                  null
+                ]
+              },
+              "activity": false
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes probe.s: activity must be true",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.status-activity-map",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "attention",
+                  "failed",
+                  "running",
+                  "idle",
+                  null
+                ]
+              },
+              "activity": {
+                "busy": "running"
+              }
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes probe.s: activity must be true",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.status-activity-text",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "attention",
+                  "failed",
+                  "running",
+                  "idle",
+                  null
+                ]
+              },
+              "activity": "running"
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes probe.s: activity must be true",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
       "id": "exposes.description-missing",
       "manifest": {
         "id": "probe",
@@ -4862,6 +5135,136 @@
       },
       "accepted": false,
       "error": "probe exposes probe.run: params must be an object schema",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.command-required-accepted",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "commands": [
+            {
+              "name": "probe.run",
+              "description": "Runs.",
+              "params": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path"
+                ]
+              },
+              "result": {
+                "type": "null"
+              }
+            }
+          ]
+        }
+      },
+      "accepted": true,
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.command-required-not-a-list",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "commands": [
+            {
+              "name": "probe.run",
+              "description": "Runs.",
+              "params": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  }
+                },
+                "required": "path"
+              },
+              "result": {
+                "type": "null"
+              }
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes probe.run params: required must be a non-empty list of distinct names of properties",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.command-required-repeated",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "commands": [
+            {
+              "name": "probe.run",
+              "description": "Runs.",
+              "params": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path",
+                  "path"
+                ]
+              },
+              "result": {
+                "type": "null"
+              }
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes probe.run params: required must be a non-empty list of distinct names of properties",
       "packageFiles": [
         "plugin.json",
         "ui/page.html"

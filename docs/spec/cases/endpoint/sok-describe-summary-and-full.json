@@ -24,6 +24,12 @@
           "root": {
             "direction": "row",
             "size": 1,
+            "frame": {
+              "x": 0,
+              "y": 40,
+              "width": 1200,
+              "height": 760
+            },
             "children": [
               {
                 "card": "a",
@@ -34,6 +40,8 @@
                   "width": 600,
                   "height": 760
                 },
+                "parent": null,
+                "leader": true,
                 "tabs": [
                   {
                     "id": "t-a",
@@ -50,6 +58,8 @@
                   "width": 600,
                   "height": 760
                 },
+                "parent": null,
+                "leader": false,
                 "tabs": [
                   {
                     "id": "t-b",
@@ -58,7 +68,8 @@
                 ]
               }
             ]
-          }
+          },
+          "groups": []
         },
         "plugins": [],
         "groups": [

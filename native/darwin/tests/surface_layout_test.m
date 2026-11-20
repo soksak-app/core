@@ -530,12 +530,14 @@ static void checkRecordedComposition(WKWebViewConfiguration *configuration, BOOL
     [window close]; [window release];
 }
 
-// held keeps the buttons that AppKit reported and the frontmost application of a rejection for a button held.
-typedef struct { BOOL done; sp_input_result result; unsigned long long mask; int pid; char front[256]; } PointerDone;
+// held keeps the buttons that AppKit reported and the frontmost application of a rejection for a button held; view is the web view
+// that a delivered press or release reached.
+typedef struct { BOOL done; sp_input_result result; unsigned long long mask; int pid; char front[256]; void *view; } PointerDone;
 
-static void pointerDone(void *context, sp_input_result result, const sp_input_held *held) {
+static void pointerDone(void *context, sp_input_result result, const sp_input_held *held, void *view) {
     PointerDone *state = context;
     state->result = result;
+    state->view = view;
     if (held) {
         state->mask = held->mask;
         state->pid = held->pid;
@@ -583,6 +585,80 @@ static BOOL presentRegionRaster(void *region, uint64_t raster) {
     BOOL presented = sp_region_present(region, IOSurfaceGetID(surface), nonce, width, height, size[2], 1, raster, 1);
     CFRelease(surface);
     return presented;
+}
+
+// Dispatches the events of the queue up to a marker that it posts behind them: the turns that a layout commit gives back to the
+// start of the queue run before it, and posted events do not wake the run loop source of eventWait.
+static void runQueue(void) {
+    [NSApp postEvent:[NSEvent otherEventWithType:NSEventTypeApplicationDefined location:NSZeroPoint modifierFlags:0 timestamp:0
+        windowNumber:0 context:nil subtype:0x7f18 data1:0 data2:0] atStart:NO];
+    for (;;) {
+        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:[NSDate distantFuture] inMode:NSDefaultRunLoopMode
+            dequeue:YES];
+        if (event.type == NSEventTypeApplicationDefined && event.subtype == 0x7f18) return;
+        [NSApp sendEvent:event];
+    }
+}
+
+// A press that comes while a layout of its window prepares waits until that layout reaches the screen and then reaches the view
+// under it in that layout, so the web view at the coordinates when the press arrived is not the one that receives it. The host
+// attributes the press to the web view that received it (docs/spec/native-surfaces.md#layout-transaction).
+static void checkPressAttribution(WKWebViewConfiguration *configuration) {
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(120, 320, 400, 200)
+        styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
+    window.releasedWhenClosed = NO;
+    window.animationBehavior = NSWindowAnimationBehaviorNone;
+    WKWebView *main = page(window, configuration, NSMakeRect(0, 0, 400, 200), @"sptest://app/press-main");
+    WKWebView *tab = page(window, [[configuration copy] autorelease], NSMakeRect(0, 0, 20, 20), @"sptest://app/press-tab");
+    void *composition = sp_window_set_main_webview(window, main);
+    void *surface = composition ? sp_surface_create(composition) : NULL;
+    check(surface != NULL, @"press attribution: the fixture creates its native surface");
+    if (surface == NULL) { [window close]; [window release]; return; }
+    webviewSetFrame(surface, 200, 0, 200, 200);
+    webviewSetSurfaceHidden(surface, false);
+    check(sp_surface_place_view(surface, tab), @"press attribution: the tab web view is placed in the surface");
+    __block BOOL listening = NO;
+    [tab evaluateJavaScript:@"window.pressed=0;addEventListener('pointerdown',function(){window.pressed++;},true);"
+        completionHandler:^(id value, NSError *error) {
+            check(error == nil, @"press attribution: the tab page counts its presses"); listening = YES;
+        }];
+    eventWait(@"the tab page counts its presses", ^BOOL { return listening; });
+    [window orderFrontRegardless];
+    __block double shown = 0;
+    surfaceLayoutAfterSettled(window, surfaceLayoutMainPresentation(main), ^(double at, const char *error) {
+        check(error == NULL, @"press attribution: the fixture is presented"); shown = at;
+    });
+    eventWait(@"the settled wait of the press attribution fixture ends", ^BOOL { return shown != 0; });
+
+    surfaceLayoutBegin(window, 401, ^(int allowed) { check(allowed, @"press attribution: the layout of the press starts"); });
+    // The web view at the coordinates while the layout prepares is the main page, which does not receive the press.
+    char *hit = sp_window_hit(window, composition, 300, 100);
+    NSDictionary *read = hit ? [NSJSONSerialization JSONObjectWithData:[NSData dataWithBytes:hit length:strlen(hit)] options:0 error:nil] : nil;
+    free(hit);
+    check([read[@"view"] unsignedLongLongValue] == (uintptr_t)main,
+        @"press attribution: the main page is at the coordinates while the layout of the press prepares");
+    PointerDone press = {NO, SP_INPUT_REJECTED};
+    sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 300, 100, 1, 0, 0, 0, 1, pointerDone, &press);
+    check(surfaceLayoutCommit(window, 401), @"press attribution: the layout of the press commits");
+    // The commit gives the held press back through the start of the event queue, so the queue runs up to a marker behind it.
+    runQueue();
+    check(press.done, @"press attribution: the held press is answered in its turn of the event queue");
+    check(press.result == SP_INPUT_DELIVERED, @"press attribution: the press during the layout is delivered");
+    __block id pressed = nil;
+    [tab evaluateJavaScript:@"window.pressed" completionHandler:^(id value, NSError *error) { pressed = [value retain] ?: [NSNull.null retain]; }];
+    eventWait(@"the tab page answers its press count", ^BOOL { return pressed != nil; });
+    check([pressed isEqual:@1], [NSString stringWithFormat:@"press attribution: the tab page received the press (%@)", pressed]);
+    [pressed release];
+    uintptr_t attributed = (uintptr_t)press.view;
+    check(attributed == (uintptr_t)tab, [NSString stringWithFormat:@"press attribution: the press is attributed to the web view "
+        "that received it (attributed %#lx, tab %p, main %p)", (unsigned long)attributed, tab, main]);
+    PointerDone release = {NO, SP_INPUT_REJECTED};
+    sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, 300, 100, 3, 0, 0, 0, 1, pointerDone, &release);
+    eventWait(@"the release after the press attribution is answered", ^BOOL { return release.done; });
+    surfaceLayoutCancel(window);
+    sp_surface_close(surface);
+    [window close];
+    [window release];
 }
 
 // A drag of the main page through the input path of the host: each move opens a transaction, the page moves its DOM border
@@ -976,6 +1052,7 @@ int main(void) { @autoreleasepool {
     checkCommitFrame([[configuration copy] autorelease], @"tab of its own process, an image region raster after two refreshes",
         YES, 2, YES);
     checkFirstShowPublication([[configuration copy] autorelease]);
+    checkPressAttribution([[configuration copy] autorelease]);
     checkSettledWaitsForLayout(window, main);
     checkSettledWaitsForModal(window, main, [[configuration copy] autorelease]);
     checkViewJoin([[configuration copy] autorelease]);

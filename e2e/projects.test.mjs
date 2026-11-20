@@ -9,6 +9,7 @@ import test from "node:test";
 import { APPS, failure, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { fresh, replacePlaceholders, settingsClosed, settingsShown, START_PLUGIN, startTab } from "./fixture.mjs";
 import { projectRecords } from "./projects-file.mjs";
+import { storedCard, storedCards } from "./stored-layout.mjs";
 // A plugin that the fixture registry never installs (e2e/fixtures/absent-plugins.json).
 import absentPlugins from "./fixtures/absent-plugins.json" with { type: "json" };
 import { frontmostApp } from "@soksak/window-check/frontmost.mjs";
@@ -486,9 +487,9 @@ for (const app of Object.values(APPS)) {
     const [ABSENT] = absentPlugins.ids;
     const records = read(join(config, "projects.json"));
     const record = projectRecords(records, "projects.json").find((p) => p.id === saved.id);
-    const shell = record.spaces.find((x) => x.id === record.activeSpaceId).layout.state.cards.find((c) => c.data?.tabs?.length > 0);
+    const shell = storedCards(record.spaces.find((x) => x.id === record.activeSpaceId).layout).find((c) => c.data?.tabs?.length > 0);
     assert.ok(shell, "the saved layout holds no card with tabs");
-    assert.deepEqual(record.spaces.flatMap((x) => x.layout.state.cards.flatMap((c) => c.data?.tabs ?? [])).filter((tab) => tab.plugin !== START_PLUGIN), [],
+    assert.deepEqual(record.spaces.flatMap((x) => storedCards(x.layout).flatMap((c) => c.data?.tabs ?? [])).filter((tab) => tab.plugin !== START_PLUGIN), [],
     "the saved layout holds a tab that is not a probe tab");
     shell.data.tabs[0].plugin = ABSENT;
     write(join(config, "projects.json"), records);
@@ -510,7 +511,7 @@ for (const app of Object.values(APPS)) {
     // Saving does not change that tab.
     await s.run("core.projects.flush");
     const after = projectRecords(read(join(config, "projects.json")), "projects.json").find((p) => p.id === saved.id);
-    const kept = after.spaces.find((x) => x.id === after.activeSpaceId).layout.state.cards.find((c) => c.id === shell.id);
+    const kept = storedCard(after.spaces.find((x) => x.id === after.activeSpaceId).layout, shell.card);
     assert.equal(kept.data.tabs[0].plugin, ABSENT, "saving changed the tab of the plugin that is not loaded");
     assert.ok(stored.length > 0);
     await s.run("core.project.activate", { id: first.id });

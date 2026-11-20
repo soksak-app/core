@@ -32,6 +32,8 @@ import { chooseLink, resolveSidebar } from "./sidebar-sets.js";
 import { TEXT_STEPS, notifyTextSize } from "./text-size.js";
 import { reportTraceAtStart, setTraceEnabled } from "./performance.js";
 import { setLogPolicy } from "./log-policy.js";
+import { groupLook } from "./group-look.js";
+import { CHROME } from "./chrome-metrics.js";
 import { logPolicyOf } from "./log-gate.js";
 import { CLASSES } from "./event-classes.js";
 import { beginOperation } from "./operations.js";
@@ -104,6 +106,7 @@ export const defaults = {
 
 /* The range of memorySaverDelay in minutes (docs/spec/settings.md#values). */
 export const MEMORY_SAVER_DELAY = declaration.settings.memorySaverDelay;
+
 
 /* The range of the layout values. Only integers are accepted. The three values share one range so that the same value is at the same slider position. */
 export const LAYOUT_RANGES = declaration.settings.layoutRanges;
@@ -469,7 +472,7 @@ function fontOf(id) {
  * There is no separate setting for it. With two values there could be a state with gap 0 and a seam of gap, and
  * there is nothing to draw in that state.
  */
-const seam = () => (settings.gap === 0 ? "line" : "gap");
+export const seam = () => (settings.gap === 0 ? "line" : "gap");
 
 /* A page that the application serves is a separate document and does not inherit the style sheet of this document.
    It receives the token values that are sent and sets them on its own root. */
@@ -636,6 +639,13 @@ export const linkedSet = (place, plugin) => resolveSidebar(settings.links, setti
 
 /** Returns the current theme name and mode. */
 export const themeName = () => settings.theme;
+
+/** The share of bg in the body of a group card for each level, the chrome value group-fill-fade (docs/spec/groups.md#drawing). */
+const GROUP_FILL_FADE = Number(CHROME["group-fill-fade"]);
+
+/** The colors of a group card whose members stand on level in the current theme, mode and gap (groupLook of group-look.js). */
+export const currentGroupLook = (level) => groupLook(themeOf(settings.theme)[settings.mode], level,
+  { seam: settings.gap === 0, fade: GROUP_FILL_FADE });
 export const modeName = () => settings.mode;
 
 /**

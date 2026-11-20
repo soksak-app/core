@@ -495,6 +495,12 @@ fn command_unknown_host() {
     play("command-unknown-host", &["main"]);
 }
 
+// contract: endpoint.command-params.checked-before-the-run
+#[test]
+fn command_host_params() {
+    play("command-host-params", &["main"]);
+}
+
 /// The cases that this runner plays.
 const PLAYED: &[&str] = &[
     "framing-http-request-line",
@@ -507,6 +513,7 @@ const PLAYED: &[&str] = &[
     "error-window-missing",
     "command-window-missing",
     "command-unknown-host",
+    "command-host-params",
 ];
 
 /// The cases with replay true that this runner does not play, with the reason.

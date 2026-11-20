@@ -14,20 +14,22 @@ import (
 // fullscreen was measured: unlike an earlier measurement that said the system adds it to the View menu by itself, in these apps it does not
 // appear even when the menu opens (2026-09-30, V5-112), so it is created here.
 var menuRoles = map[string]application.Role{
-	"about":              application.About,
-	"services":           application.ServicesMenu,
-	"hide":               application.Hide,
-	"hide-others":        application.HideOthers,
-	"show-all":           application.ShowAll,
-	"quit":               application.Quit,
-	"close-window":       application.CloseWindow,
-	"undo":               application.Undo,
-	"redo":               application.Redo,
-	"cut":                application.Cut,
-	"copy":               application.Copy,
-	"paste":              application.Paste,
-	"select-all":         application.SelectAll,
-	"fullscreen":         application.FullScreen,
+	"about":        application.About,
+	"services":     application.ServicesMenu,
+	"hide":         application.Hide,
+	"hide-others":  application.HideOthers,
+	"show-all":     application.ShowAll,
+	"quit":         application.Quit,
+	"close-window": application.CloseWindow,
+	"undo":         application.Undo,
+	"redo":         application.Redo,
+	"cut":          application.Cut,
+	"copy":         application.Copy,
+	"paste":        application.Paste,
+	"select-all":   application.SelectAll,
+	// FullScreen of Wails is a plain item titled Fullscreen without a shortcut that only enters full screen; ToggleFullscreen is the toggle
+	// item with the Control-Command F shortcut that the other hosts build (docs/spec/host-contract.md#application-menu).
+	"fullscreen":         application.ToggleFullscreen,
 	"bring-all-to-front": application.BringAllToFront,
 }
 

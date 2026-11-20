@@ -78,7 +78,7 @@ func TestACommandRequestRunsInAStepAndItsResultReachesTheHost(t *testing.T) {
 		return map[string]any{"card": "c2", "tab": "t2"}, nil
 	})
 	r.requests.Deliver(map[string]any{"id": uint64(7), "method": "command.run",
-		"params": json.RawMessage(`{"name":"core.card.split","params":{"card":"c1","side":"right"}}`)})
+		"params": json.RawMessage(`{"name":"core.card.split","params":{"card":"c1","side":"right","plugin":"p"}}`)})
 	if received != "" {
 		t.Fatal("the command ran outside a step")
 	}
@@ -88,7 +88,7 @@ func TestACommandRequestRunsInAStepAndItsResultReachesTheHost(t *testing.T) {
 	if !inStep {
 		t.Fatal("the command did not run in a step")
 	}
-	if received != `{"card":"c1","side":"right"}` {
+	if received != `{"card":"c1","side":"right","plugin":"p"}` {
 		t.Fatalf("the command received %s", received)
 	}
 	var reply map[string]any
@@ -119,9 +119,11 @@ func TestARequestIsRefusedAsThePageRefusesIt(t *testing.T) {
 		{"command.run", `[]`, -32602, "command.run requires name"},
 		{"command.run", `{"name":"core.card.split"}`, -32602, "command.run for core.card.split requires params"},
 		{"command.run", `{"name":"core.card.split","params":[]}`, -32602, "command.run for core.card.split requires params"},
-		{"command.run", `{"name":"core.card.split","params":{"side":"middle"}}`, -32602, "invalid params for core.card.split"},
-		{"command.run", `{"name":"core.card.split","params":{},"cids":[""]}`, -32602, "command.run for core.card.split: " + cidsText},
-		{"command.run", `{"name":"core.card.split","params":{},"cids":"a"}`, -32602, "command.run for core.card.split: " + cidsText},
+		{"command.run", `{"name":"core.card.split","params":{"card":"a","side":"middle","plugin":"p"}}`, -32602, "invalid params for core.card.split"},
+		{"command.run", `{"name":"core.card.split","params":{"card":"a","side":"left","plugin":"p","zone":"x","Card":"y"}}`, -32602, "command core.card.split: unknown parameter Card"},
+		{"command.run", `{"name":"core.card.split","params":{"card":"a","plugin":"p"}}`, -32602, "command core.card.split: parameter side is required"},
+		{"command.run", `{"name":"core.card.split","params":{"card":"a","side":"left","plugin":"p"},"cids":[""]}`, -32602, "command.run for core.card.split: " + cidsText},
+		{"command.run", `{"name":"core.card.split","params":{"card":"a","side":"left","plugin":"p"},"cids":"a"}`, -32602, "command.run for core.card.split: " + cidsText},
 		{"status.get", `{"name":"core.screen"}`, 1002, "status core.screen is not registered"},
 		{"status.get", `{"name":"core.absent"}`, 1001, "unknown status core.absent"},
 		{"status.watch", `{"name":"core.screen"}`, 1002, "status core.screen is not registered"},
@@ -147,10 +149,10 @@ func TestAFailedCommandAnswersWithItsCode(t *testing.T) {
 	})
 	declared.Command("core.card.close", func(json.RawMessage) (any, error) { return nil, errors.New("the grid refused") })
 	r := newRelay(t, declared)
-	if code, message := r.refused(r.ask("command.run", `{"name":"core.card.split","params":{}}`)); code != -32602 || message != "card c9 does not exist" {
+	if code, message := r.refused(r.ask("command.run", `{"name":"core.card.split","params":{"card":"c9","side":"left","plugin":"p"}}`)); code != -32602 || message != "card c9 does not exist" {
 		t.Fatalf("a refusal answered %d %q", code, message)
 	}
-	if code, message := r.refused(r.ask("command.run", `{"name":"core.card.close","params":{}}`)); code != -32000 || message != "the grid refused" {
+	if code, message := r.refused(r.ask("command.run", `{"name":"core.card.close","params":{"card":"c1"}}`)); code != -32000 || message != "the grid refused" {
 		t.Fatalf("a failure answered %d %q", code, message)
 	}
 }
@@ -159,7 +161,7 @@ func TestACommandWithoutAResultAnswersNull(t *testing.T) {
 	declared := registry(t)
 	declared.Command("core.card.close", func(json.RawMessage) (any, error) { return nil, nil })
 	r := newRelay(t, declared)
-	reply := r.ask("command.run", `{"name":"core.card.close","params":{}}`)
+	reply := r.ask("command.run", `{"name":"core.card.close","params":{"card":"c1"}}`)
 	if value, carries := reply["result"]; !carries || value != nil {
 		t.Fatalf("the reply is %v", reply)
 	}

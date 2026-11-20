@@ -40,6 +40,12 @@ func newViewRelay(t *testing.T) *viewRelay {
 
 func newViewRelayOn(t *testing.T, stored *surfaceHost) *viewRelay {
 	t.Helper()
+	return newViewRelayWith(t, stored, installedDocument)
+}
+
+// newViewRelayWith is a relay whose window reads the installed plugins of document.
+func newViewRelayWith(t *testing.T, stored *surfaceHost, document string) *viewRelay {
+	t.Helper()
 	r := &viewRelay{t: t, stored: stored, open: map[uint64]*mailbox[map[string]any]{}, answers: map[float64]map[string]any{},
 		post: func(map[string]any) (any, error) { return nil, nil }}
 	read := func(argument json.RawMessage) map[string]any {
@@ -102,7 +108,7 @@ func newViewRelayOn(t *testing.T, stored *surfaceHost) *viewRelay {
 			return nil, nil
 		},
 	}
-	r.f = surfaceShellOn(t, installedDocument, r.stored)
+	r.f = surfaceShellOn(t, document, r.stored)
 	return r
 }
 

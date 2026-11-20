@@ -644,6 +644,9 @@ struct Presses {
     /// The number of events that lifted each refusal, `BUTTON_HELD` first and `POINTER_HELD` second, so a release that was
     /// refused while such an event came is delivered again at once instead of waiting for the next one.
     lifts: [u64; 2],
+    /// Each press whose release the close of its connection delivered, until the next delivered `down` of its pointer and
+    /// button in its window, so a refused `drag` or `up` of it names that close (`close_refusal`).
+    close_released: HashSet<PressKey>,
 }
 
 /// The place of the refusal code in `Presses::lifts`.
@@ -1690,6 +1693,12 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
                 Some(peer_process) => agent_surface(&shared, request.params, peer_process),
                 None => run(&shared, &request.method, request.params, Some(reply)),
             };
+            let outcome = match (&input, outcome) {
+                (Some((window, input)), Err(failure)) => {
+                    Err(close_refusal(&shared, window, input, failure))
+                }
+                (_, outcome) => outcome,
+            };
             // The press is the connection's before the answer goes, so a request that follows the answer finds it.
             if outcome.is_ok()
                 && let Some((window, input)) = input
@@ -2173,6 +2182,9 @@ fn host_request(method: &str, params: &Map<String, Value>) -> Result<(), Failure
             "params of {name} must be an object"
         )));
     }
+    if method == "command.run" {
+        crate::exposure::check_host_params(&name, params.get("params"))?;
+    }
     Ok(())
 }
 
@@ -2345,6 +2357,7 @@ fn delivered(shared: &Shared, peer: u64, window: String, input: &crate::platform
                     // A release that waits for an earlier press of this pointer and button found that press ended, since a
                     // new press of them was delivered.
                     presses.waiting.retain(|release| release.key != key);
+                    presses.close_released.remove(&key);
                     presses.open.insert(key, press);
                     return;
                 }
@@ -2380,6 +2393,45 @@ fn delivered(shared: &Shared, peer: u64, window: String, input: &crate::platform
         }
         _ => {}
     }
+}
+
+/// The error of a `drag` or `up` that the window refused with -32602: when the close of the connection that delivered the
+/// `down` of its pointer and button in its window released that press, and no `down` of them was delivered since, the message
+/// names that close, because a `down` and an `up` of two connections, such as two commands of the command line, are refused
+/// for it (docs/spec/exposure.md#methods). Any other failure is returned as it is.
+fn close_refusal(
+    shared: &Shared,
+    window: &str,
+    input: &crate::platform::Pointer,
+    failure: Failure,
+) -> Failure {
+    if (input.phase != 2 && input.phase != 3) || failure.code != INVALID_PARAMS {
+        return failure;
+    }
+    let key = PressKey {
+        window: window.to_string(),
+        pointer: input.pointer.clone(),
+        button: input.button,
+    };
+    let released = shared
+        .presses
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the presses, which are only read; the panic hook
+        // records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .close_released
+        .contains(&key);
+    if !released {
+        return failure;
+    }
+    Failure::new(
+        INVALID_PARAMS,
+        format!(
+            "{}; the close of the connection that delivered the down released the press of {}, so a gesture sends its down, drags and up through one connection",
+            failure.message,
+            press_text(&key)
+        ),
+    )
 }
 
 /// The text of a press in the application log.
@@ -2418,6 +2470,14 @@ fn release(shared: &Shared, key: PressKey, press: Press) {
             .call(&key.window, "input.pointer", params.clone(), None)
         {
             Ok(_) => {
+                shared
+                    .presses
+                    .lock()
+                    // default: a lock that a panicking thread poisoned still holds the presses, which keep the press that
+                    // the close released; the panic hook records the panic.
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .close_released
+                    .insert(key);
                 release_waiting(shared, POINTER_HELD);
                 return;
             }

@@ -108,6 +108,11 @@ func (s *Shell) beginRename(target renameTarget) error {
 			return fmt.Errorf("no space %s", target.ID)
 		}
 		title = space.Title
+	case "group":
+		if !s.isGroup(target.ID) {
+			return fmt.Errorf("no group %s", target.ID)
+		}
+		title = s.planes.GroupName(target.ID)
 	default:
 		return fmt.Errorf("unknown rename target %s", target.Kind)
 	}
@@ -130,6 +135,8 @@ func (s *Shell) commitRename(done func(error)) {
 		done(nil)
 	case target.Kind == "project":
 		s.renameProject(target.ID, title, done)
+	case target.Kind == "group":
+		done(s.renameGroup(target.ID, title))
 	default:
 		done(s.renameSpace(target.ID, title))
 	}
@@ -198,15 +205,17 @@ func (s *Shell) moveProject(id string, delta int, done func(error)) {
 	})
 }
 
-// drawRenameField draws the field in the place of the tab being renamed.
-func (s *Shell) drawRenameField(c *ui.Context, width float32) {
+// drawRenameField draws the field in the place of the tab being renamed, with its text in size, the size of the name that it replaces.
+func (s *Shell) drawRenameField(c *ui.Context, width, size float32) ui.Element {
 	m := s.metrics
 	held := s.renaming
 	value := held.Value
 	s.binder.Control(c, "core.rename.input", "core.rename.set", "")
 	field := s.binder.Bound(ui.TextInputBase(c, &value), "core.rename.input").Label(value).AutoFocus().Shrink(0).Width(width).Height(s.frameLength(m.barTabRootH)).PaddingX(s.frameLength(m.barTabRootPad)).
 		Border(s.palette.BorderWidth, s.palette.Focus).Radius(s.radiusSmall()).Background(s.palette.Bg).TextColor(s.palette.Fg).
-		FontSize(s.frameFont(s.textControl())).LineHeight(m.lineHeight).
+		FontSize(size).LineHeight(m.lineHeight).
+		// The selection is the focus color mixed into bg (docs/spec/groups.md#headers).
+		SelectionColor(mixed(s.palette.Focus, s.palette.Bg, m.renameSelectionMix)).
 		HandleInput(func(event ui.InputEvent) bool {
 			if event.Kind != ui.InputKeyDown || event.Key != ui.KeyEscape {
 				return false
@@ -228,4 +237,5 @@ func (s *Shell) drawRenameField(c *ui.Context, width float32) {
 	case held.held:
 		s.binder.run("core.rename.commit", nil)
 	}
+	return field
 }

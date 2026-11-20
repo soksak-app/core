@@ -135,8 +135,11 @@ func (s *Shell) askedCloseCard(id string) (bool, error) {
 	if err := s.paneCard(id); err != nil {
 		return false, err
 	}
-	if !s.plane.CanClose(id) {
+	if !s.planes.CanClose(id) {
 		return false, fmt.Errorf("card %s cannot close", id)
+	}
+	if s.isGroup(id) {
+		return s.closeGroupAsked(id)
 	}
 	data, err := s.cardData(id)
 	if err != nil {
@@ -153,7 +156,7 @@ func (s *Shell) askedCloseCard(id string) (bool, error) {
 						s.fail(err)
 						return
 					}
-					if _, still := s.plane.Card(id); still {
+					if _, still := s.findCard(id); still {
 						_, err := s.askedCloseCard(id)
 						s.showFailure(err)
 					}
@@ -174,7 +177,7 @@ func (s *Shell) settleModified(words modifiedAnswers, done func(settled bool)) {
 	}
 	var modified []asked
 	if s.plane != nil && !s.browsing {
-		for _, card := range s.plane.Cards() {
+		for _, card := range s.contentCards() {
 			data, err := s.cardData(card.ID)
 			if err != nil || data == nil {
 				continue // A card without tabs has nothing to ask, and the plane shows the error of a card that does not read.

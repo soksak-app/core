@@ -8,7 +8,9 @@
 
 Request-local declaration table은 [native surfaces](native-surfaces.ko.md)에서 정의한다.
 
-Plane, level, group card, child plane, plane의 leader는 [group card](groups.ko.md#모델)에서 정의한다.
+tab과 tab을 담는 것들의 activity와 네 activity는 [activity](activity.ko.md#activity의-종류)에서 정의한다.
+
+Group card, 그 사각형, 그 member, level, level의 leader는 [group card](groups.ko.md#모델)에서 정의한다.
 
 Agent, agent skill, agent folder, setup part, MCP registration은 [command line](cli.ko.md#에이전트)에서 정의한다.
 Agent role, role file, change message, stable identity, launch adapter는 [agent role](agent-roles.ko.md)에서 정의한다.

@@ -16,7 +16,7 @@ import (
 // watchers are the input receiver handles of each monitor number. They are read and changed only in main-thread steps.
 var watchers = map[uintptr]handles.Handle{}
 
-// goHost_surface_pressed receives the surface host that a press or a key input passed through. The library already decided that
+// goHost_surface_pressed receives the surface host that a press passed through; a key input is no press. The library already decided that
 // the view is a surface host, so the answer of Press is not returned.
 func goHost_surface_pressed(owner uintptr, view unsafe.Pointer) {
 	handles.Handle(owner).Value().(platform.Input).Press(uintptr(view))
@@ -35,37 +35,40 @@ func (implementation) WatchInput(window platform.Window, input platform.Input) (
 
 // InjectPointer delivers input with sp_input_pointer_then of native/darwin. It does not activate the application. The library
 // starts each request after the answer of the request before it, so this step returns without waiting for an earlier delivery.
-func (implementation) InjectPointer(window platform.Window, pointer string, x, y float64, phase, button int, deltaX, deltaY float64, clicks int, done func(platform.PointerResult, platform.ButtonHeld)) error {
+func (implementation) InjectPointer(window platform.Window, pointer string, x, y float64, phase, button int, deltaX, deltaY float64, clicks int, done func(platform.PointerResult, platform.ButtonHeld, uintptr)) error {
 	native.InjectPointer(uintptr(window), native.CString(pointer), float64(x), float64(y), int32(phase), int32(button), float64(deltaX), float64(deltaY), int32(clicks),
 		uintptr(handles.NewHandle(done)))
 	return nil
 }
 
-// goHost_input_delivered announces the result of sp_input_pointer_then. The library passes held only when the result is SP_INPUT_BUTTON_HELD,
-// SP_INPUT_POINTER_HELD or SP_INPUT_RESIZE_EDGE and keeps it valid until done returns.
-func goHost_input_delivered(context uintptr, result int32, held *abi.SpInputHeld) {
+// goHost_input_delivered announces the result of sp_input_pointer_then. The library passes held only when the result is SP_INPUT_REJECTED,
+// SP_INPUT_BUTTON_HELD, SP_INPUT_POINTER_HELD, SP_INPUT_RESIZE_EDGE or SP_INPUT_INTERRUPTED and keeps it valid until done returns, and view is the web view that
+// a delivered press or release reached.
+func goHost_input_delivered(context uintptr, result int32, held *abi.SpInputHeld, view uintptr) {
 	handle := handles.Handle(uintptr(context))
-	done := handle.Value().(func(platform.PointerResult, platform.ButtonHeld))
+	done := handle.Value().(func(platform.PointerResult, platform.ButtonHeld, uintptr))
 	handle.Delete()
 	switch int32(result) {
 	case abi.SP_INPUT_DELIVERED:
-		done(platform.PointerDelivered, platform.ButtonHeld{})
+		done(platform.PointerDelivered, platform.ButtonHeld{}, view)
 	case abi.SP_INPUT_INACTIVE:
-		done(platform.PointerInactive, platform.ButtonHeld{})
+		done(platform.PointerInactive, platform.ButtonHeld{}, 0)
 	case abi.SP_INPUT_UNRECEIVED:
-		done(platform.PointerUnreceived, platform.ButtonHeld{})
+		done(platform.PointerUnreceived, platform.ButtonHeld{}, 0)
 	case abi.SP_INPUT_BUTTON_HELD:
-		done(platform.PointerButtonHeld, buttonHeld(held))
+		done(platform.PointerButtonHeld, buttonHeld(held), 0)
 	case abi.SP_INPUT_PRESS_OPEN:
-		done(platform.PointerPressOpen, platform.ButtonHeld{})
+		done(platform.PointerPressOpen, platform.ButtonHeld{}, 0)
 	case abi.SP_INPUT_POINTER_HELD:
-		done(platform.PointerHeld, pointerHeld(held))
+		done(platform.PointerHeld, pointerHeld(held), 0)
 	case abi.SP_INPUT_RESIZE_EDGE:
-		done(platform.PointerResizeEdge, resizeEdge(held))
+		done(platform.PointerResizeEdge, resizeEdge(held), 0)
 	case abi.SP_INPUT_INTERRUPTED:
-		done(platform.PointerInterrupted, interruption(held))
+		done(platform.PointerInterrupted, interruption(held), 0)
+	case abi.SP_INPUT_REJECTED:
+		done(platform.PointerRejected, rejection(held), 0)
 	default:
-		done(platform.PointerRejected, platform.ButtonHeld{})
+		panic(fmt.Sprintf("sp_input_pointer_then reported the unknown result %d", result))
 	}
 }
 
@@ -99,6 +102,15 @@ func pointerHeld(held *abi.SpInputHeld) platform.ButtonHeld {
 func resizeEdge(held *abi.SpInputHeld) platform.ButtonHeld {
 	if held == nil || held.Reason == nil {
 		panic("sp_input_pointer_then reported SP_INPUT_RESIZE_EDGE without its message")
+	}
+	return platform.ButtonHeld{Reason: native.GoString(held.Reason)}
+}
+
+// rejection reads the reason of an SP_INPUT_REJECTED refusal from sp_input_held. A notification of this result without it is a
+// contract violation of the library, so it stops and names the violation.
+func rejection(held *abi.SpInputHeld) platform.ButtonHeld {
+	if held == nil || held.Reason == nil {
+		panic("sp_input_pointer_then reported SP_INPUT_REJECTED without its reason")
 	}
 	return platform.ButtonHeld{Reason: native.GoString(held.Reason)}
 }

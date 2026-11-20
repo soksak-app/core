@@ -44,7 +44,7 @@ func (s *Shell) registerDrag() {
 
 // dragDivider finds the first divider of the boundary of plan and the centre of its grab area in window content coordinates.
 func (s *Shell) dragDivider(plan dragPlan) (layout.Divider, layout.Point, error) {
-	for _, divider := range s.plane.Dividers() {
+	for _, divider := range s.planeDividers() {
 		if divider.Axis == plan.Axis && divider.Line == plan.Line {
 			origin := s.planeOrigin()
 			return divider, layout.Point{X: origin.X + divider.X + divider.W/2, Y: origin.Y + divider.Y + divider.H/2}, nil

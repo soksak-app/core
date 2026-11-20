@@ -924,6 +924,31 @@ export function validateSidecar(sidecar) {
 }
 
 /**
+ * The card nodes of the tree of `workspace.grid` in the order of the tree. A node is a cut `{cut, kids}`, whose
+ * kids are `{share, node}`, or a card node; the layout library checks the shares and the axes of the tree when a space opens it
+ * (docs/spec/plugins.md#environmentjson). Throws on a node of another form.
+ */
+function gridCards(grid) {
+  const cards = [];
+  const visit = (node) => {
+    if (isObject(node) && node.cut !== undefined) {
+      only("environment.json workspace.grid cut", node, ["cut", "kids"]);
+      if (!Array.isArray(node.kids)) throw new Error("environment.json: a cut of workspace.grid requires kids");
+      for (const kid of node.kids) {
+        if (!isObject(kid)) throw new Error("environment.json: a kid of workspace.grid is not an object");
+        only("environment.json workspace.grid kid", kid, ["share", "node"]);
+        visit(kid.node);
+      }
+      return;
+    }
+    if (!isObject(node) || !isText(node.card)) throw new Error("environment.json: every card requires an id");
+    cards.push(node);
+  };
+  visit(grid.root);
+  return cards;
+}
+
+/**
  * Validates one environment.json. Throws when the format is wrong and returns the received value otherwise.
  *
  *     runtime    runtime module directory. A path relative to the application directory that contains index.js
@@ -962,34 +987,31 @@ export function validateEnvironment(environment) {
   if (!isObject(workspace)) throw new Error("environment.json: workspace is required");
   only("environment.json workspace", workspace, ["focus", "grid"]);
   const { grid } = workspace;
-  if (!isObject(grid) || !Array.isArray(grid.xs) || !Array.isArray(grid.ys) || !Array.isArray(grid.cards)) {
-    throw new Error("environment.json: workspace.grid requires xs, ys, and cards");
-  }
-  only("environment.json workspace.grid", grid, ["xs", "ys", "cards"]);
-  for (const card of grid.cards) {
-    if (!isObject(card) || !isText(card.id)) throw new Error("environment.json: every card requires an id");
+  if (!isObject(grid) || !isObject(grid.root)) throw new Error("environment.json: workspace.grid requires root");
+  only("environment.json workspace.grid", grid, ["root"]);
+  for (const card of gridCards(grid)) {
     // The card named by a side is the window sidebar of that side: it holds no tabs, and its size is the width of a left or
     // right sidebar and the height of a top or bottom sidebar (docs/spec/external-sidebars.md).
-    const side = WINDOW_SIDES.includes(card.id);
-    if (side && card.tabs !== undefined) throw new Error(`environment.json: card ${card.id} is a window sidebar and declares no tabs`);
-    const size = card.id === "top" || card.id === "bottom" ? "height" : "width";
-    only(`environment.json card ${card.id}`, card, ["id", "c0", "c1", "r0", "r1", size, "fixed", ...(side ? [] : ["tabs"])]);
+    const side = WINDOW_SIDES.includes(card.card);
+    if (side && card.tabs !== undefined) throw new Error(`environment.json: card ${card.card} is a window sidebar and declares no tabs`);
+    const size = card.card === "top" || card.card === "bottom" ? "height" : "width";
+    only(`environment.json card ${card.card}`, card, ["card", size, "fixed", ...(side ? [] : ["tabs"])]);
     if (card[size] !== undefined && !(Number.isFinite(card[size]) && card[size] > 0)) {
-      throw new Error(`environment.json: card ${card.id} ${size} must be a finite positive number`);
+      throw new Error(`environment.json: card ${card.card} ${size} must be a finite positive number`);
     }
     if (card.tabs !== undefined) {
       if (!Array.isArray(card.tabs) || card.tabs.length === 0) {
-        throw new Error(`environment.json: card ${card.id} tabs must be a non-empty array`);
+        throw new Error(`environment.json: card ${card.card} tabs must be a non-empty array`);
       }
       for (const tab of card.tabs) {
         if (!isObject(tab) || !isText(tab.plugin) || !isText(tab.title)) {
-          throw new Error(`environment.json: card ${card.id} tabs require plugin and title`);
+          throw new Error(`environment.json: card ${card.card} tabs require plugin and title`);
         }
-        only(`environment.json card ${card.id} tab`, tab, ["plugin", "title"]);
+        only(`environment.json card ${card.card} tab`, tab, ["plugin", "title"]);
       }
     }
   }
-  if (!grid.cards.some((card) => card.id === workspace.focus && card.tabs)) {
+  if (!gridCards(grid).some((card) => card.card === workspace.focus && card.tabs)) {
     throw new Error("environment.json: workspace.focus must name a card with tabs");
   }
   if (environment.sidebars !== undefined) validateSidebars(environment.sidebars, "environment.json");
@@ -1019,7 +1041,7 @@ export function checkReferences(environment, manifests) {
       checkSettingValue(`environment.json: settings ${pluginId}.${key}`, declaration, value);
     }
   }
-  for (const card of environment.workspace.grid.cards) {
+  for (const card of gridCards(environment.workspace.grid)) {
     // default: tabs is an optional field of an environment.json card; a card without it is an empty slot.
     for (const tab of card.tabs ?? []) {
       // The tab of a plugin that is not loaded opens as a placeholder card (docs/spec/plugins.md).
@@ -1207,10 +1229,10 @@ const SCHEMA_TYPES = {
   null: (v) => v === null,
 };
 
-/** Validates one schema. The allowed keywords are type, properties, items and enum. */
+/** Validates one schema. The allowed keywords are type, properties, required, items and enum (docs/spec/exposure.md#entry-fields). */
 function checkSchema(where, schema) {
   if (!isObject(schema)) throw new Error(`${where}: schema must be an object`);
-  only(where, schema, ["type", "properties", "items", "enum"]);
+  only(where, schema, ["type", "properties", "required", "items", "enum"]);
   if (schema.type !== undefined) {
     const types = [].concat(schema.type);
     if (types.length === 0 || types.some((type) => typeof type !== "string" || !Object.hasOwn(SCHEMA_TYPES, type))) {
@@ -1221,6 +1243,11 @@ function checkSchema(where, schema) {
     if (!isObject(schema.properties)) throw new Error(`${where}: properties must be an object`);
     for (const [key, value] of sortedEntries(schema.properties)) checkSchema(`${where}.${key}`, value);
   }
+  if (schema.required !== undefined && (!Array.isArray(schema.required) || schema.required.length === 0
+    || new Set(schema.required).size !== schema.required.length
+    || schema.required.some((key) => typeof key !== "string" || !isObject(schema.properties) || !Object.hasOwn(schema.properties, key)))) {
+    throw new Error(`${where}: required must be a non-empty list of distinct names of properties`);
+  }
   if (schema.items !== undefined) checkSchema(`${where}[]`, schema.items);
   if (schema.enum !== undefined && (!Array.isArray(schema.enum) || schema.enum.length === 0)) {
     throw new Error(`${where}: enum must be a non-empty array`);
@@ -1228,11 +1255,13 @@ function checkSchema(where, schema) {
 }
 
 /**
- * Returns whether the value satisfies the schema. properties checks only the keys that the value has.
+ * Returns whether the value satisfies the schema. properties checks only the keys that the value has, and an object lacks no key
+ * that required names.
  */
 export function matchesSchema(schema, value) {
   if (schema.enum !== undefined && !schema.enum.some((item) => sameJson(item, value))) return false;
   if (schema.type !== undefined && ![].concat(schema.type).some((type) => SCHEMA_TYPES[type](value))) return false;
+  if (schema.required !== undefined && isObject(value) && schema.required.some((key) => !Object.hasOwn(value, key))) return false;
   if (schema.properties !== undefined && isObject(value)) {
     for (const [key, sub] of Object.entries(schema.properties)) {
       if (Object.hasOwn(value, key) && !matchesSchema(sub, value[key])) return false;
@@ -1243,10 +1272,26 @@ export function matchesSchema(schema, value) {
 }
 
 /**
+ * The refusal of the members of the parameters of a command by their names, or null (docs/spec/exposure.md#command-parameters): the first
+ * member in code point order that properties of the schema does not name, then the first member of required that the parameters lack.
+ * The check is written here and not taken from a JSON Schema library, because the registries of the Go and Rust hosts answer the same
+ * texts, which the libraries of the three languages word differently.
+ */
+function parameterRefusal(name, schema, params) {
+  // default: a schema without properties declares no parameter.
+  const declared = schema.properties ?? {};
+  const unknown = Object.keys(params).sort().find((key) => !Object.hasOwn(declared, key));
+  if (unknown !== undefined) return `command ${name}: unknown parameter ${unknown}`;
+  // default: a schema without required requires no parameter.
+  const missing = (schema.required ?? []).find((key) => !Object.hasOwn(params, key));
+  return missing === undefined ? null : `command ${name}: parameter ${missing} is required`;
+}
+
+/**
  * Validates one `exposes` declaration. Throws when the format is wrong and returns the received value otherwise.
  *
  *     owner   first part of the name: core, host or a plugin id
- *   status  {name, description, schema}
+ *   status  {name, description, schema, summary?, activity?}
  *     commands {name, description, params, result}. params is a schema of type object. A command has no time limit: its
  *                     reply or the end of its peer ends it, so a declaration with timeout is refused.
  *   element {name, description, many?}
@@ -1275,7 +1320,7 @@ export function validateExposes(owner, exposes) {
       // A command ends by its reply or by the end of its peer (docs/spec/exposure.md, command timeout), so the former member is
       // refused by its own name.
       if (key === "commands" && Object.hasOwn(entry, "timeout")) throw new Error(`${at}: timeout is not a member of a command declaration`);
-      only(at, entry, ["name", "description", ...fields[key], ...(key === "element" ? ["many"] : [])]);
+      only(at, entry, ["name", "description", ...fields[key], ...(key === "element" ? ["many"] : []), ...(key === "status" ? ["summary", "activity"] : [])]);
       if (!isText(entry.description)) throw new Error(`${at}: description is required`);
       for (const field of fields[key]) {
         if (entry[field] === undefined) throw new Error(`${at}: ${field} is required`);
@@ -1283,10 +1328,17 @@ export function validateExposes(owner, exposes) {
       }
       if (key === "commands" && entry.params.type !== "object") throw new Error(`${at}: params must be an object schema`);
       if (entry.many !== undefined && typeof entry.many !== "boolean") throw new Error(`${at}: many must be a boolean`);
+      // A status with summary true is a tab summary (docs/spec/exposure.md#entry-fields).
+      if (entry.summary !== undefined && typeof entry.summary !== "boolean") throw new Error(`${at}: summary must be a boolean`);
+      // A status with activity true reports the activity of its surface as its value (docs/spec/activity.md#declaration).
+      if (entry.activity !== undefined && entry.activity !== true) throw new Error(`${at}: activity must be true`);
     }
   }
   return exposes;
 }
+
+/** The activities from the highest to the lowest (docs/spec/activity.md#activities). */
+export const ACTIVITIES = Object.freeze(["attention", "failed", "running", "idle"]);
 
 /**
  * Validates the diagnostics.json of a plugin together with the manifest. It is `{module, exposes}`; module is the
@@ -1614,13 +1666,14 @@ export function exposureEntries(declared, { place = () => null, inert = () => fa
 
   /**
    * One element of an element entry in a window snapshot: its role and rectangle as element.rect gives them, its text with runs of white
-   * space joined into one space and cut to its first 120 Unicode scalar values, so a cut never splits a character, whether it has a box
-   * that is not empty and is not hidden, and the command and the params that it runs, or null.
+   * space joined into one space and cut to its first 120 Unicode scalar values, so a cut never splits a character, and the command and
+   * the params that it runs, or null. An element that the document does not draw, one with an empty box, of hidden visibility or under
+   * the hidden attribute, has no item and answers null.
    */
   const snapshotItem = (name, element, index, withInert) => {
     const { x, y, width, height, role } = rectOf(element);
     const view = element.ownerDocument.defaultView;
-    const shown = width > 0 && height > 0 && view.getComputedStyle(element).visibility !== "hidden" && element.closest("[hidden]") === null;
+    if (width <= 0 || height <= 0 || view.getComputedStyle(element).visibility === "hidden" || element.closest("[hidden]") !== null) return null;
     const paramsText = element.getAttribute("data-params");
     let params = null;
     if (paramsText !== null) {
@@ -1631,7 +1684,7 @@ export function exposureEntries(declared, { place = () => null, inert = () => fa
       }
     }
     return {
-      index, role, text: firstScalars(element.textContent.replace(/\s+/g, " "), 120), rect: { x, y, width, height }, visible: shown,
+      index, role, text: firstScalars(element.textContent.replace(/\s+/g, " "), 120), rect: { x, y, width, height },
       ...(withInert ? { inert: inert(element) } : {}),
       command: element.getAttribute("data-command"), params,
     };
@@ -1695,7 +1748,8 @@ export function exposureEntries(declared, { place = () => null, inert = () => fa
       .map(({ declaration }) => ({ ...declaration }));
     const elementList = entries.filter(({ kind, declaration }) => kind === "element" && elements(declaration.name).length > 0)
       .map(({ declaration }) => ({ ...declaration,
-        items: elements(declaration.name).map((element, index) => snapshotItem(declaration.name, element, index, withInert)) }));
+        items: elements(declaration.name).map((element, index) => snapshotItem(declaration.name, element, index, withInert))
+          .filter((item) => item !== null) }));
     return Promise.all(reads).then((status) => ({ status, commands: commandList, element: elementList }));
   }
 
@@ -1825,6 +1879,8 @@ export function exposureEntries(declared, { place = () => null, inert = () => fa
           throw new ExposureError(EXPOSURE_ERRORS.invalidParams, `command.run for ${name} requires params`);
         }
         const input = params.params;
+        const named = parameterRefusal(name, found.declaration.params, input);
+        if (named) throw new ExposureError(EXPOSURE_ERRORS.invalidParams, named);
         if (!matchesSchema(found.declaration.params, input)) {
           throw new ExposureError(EXPOSURE_ERRORS.invalidParams, `invalid params for ${name}`);
         }

@@ -97,7 +97,7 @@ const coreExposes = () => ({
 
 const probeExposes = () => ({
   status: [{ name: "probe.lines", description: "Lines.", schema: { type: "array" } }],
-  commands: [{ name: "probe.send", description: "Sends.", params: { type: "object" }, result: {} }],
+  commands: [{ name: "probe.send", description: "Sends.", params: { type: "object", properties: { n: { type: "number" } } }, result: {} }],
   element: [{ name: "probe.lines", description: "Output." }],
 });
 
@@ -313,7 +313,9 @@ test("surface registrations are checked against the declarations and the surface
   plugins["tab-y"] = "probe";
   made.revisit();
   assert.deepEqual(made.namesOf("tab-y"), [], "a closed surface drops its held registrations");
-  assert.deepEqual(made.namesOf("tab-a"), ["status probe.lines", "element probe.lines"]);
+  // The entries of a surface are listed as "<kind> <name>" in sorted order, not in the order of their registration, which the timing of
+  // the surface decides (docs/spec/exposure.md#plugin-processes).
+  assert.deepEqual(made.namesOf("tab-a"), ["element probe.lines", "status probe.lines"]);
   assert.equal(changes, 4, "each accepted registration and closed surface is reported");
   made.registered({ surface: "tab-a", closed: true });
   assert.equal(changes, 5, "a closed surface is reported");
@@ -949,7 +951,7 @@ test("a window snapshot holds the layout, the plugins, the group of the main doc
     made.registered({ surface, kind: "status", name: "probe.lines" });
     made.registered({ surface, kind: "element", name: "probe.lines" });
   }
-  // JSDOM has no layout: the button has a box and is visible, the rows have an empty box and are not visible.
+  // JSDOM has no layout: the button has a box and is drawn, the rows have an empty box, are not drawn and have no item.
   const button = document.querySelector('[data-expose="core.fixture.button"]');
   const rows = [...document.querySelectorAll('[data-expose="core.fixture.row"]')];
   const earlier = [button, ...rows].map((element) => [element, Object.getOwnPropertyDescriptor(element, "getBoundingClientRect")]);
@@ -964,16 +966,15 @@ test("a window snapshot holds the layout, the plugins, the group of the main doc
       { name: "core.fixture.unread", description: "Unread.", schema: { type: "integer" }, error: "the value is unread" }]);
     assert.deepEqual(main.commands.map(({ name, params }) => ({ name, params })),
       [{ name: "core.fixture.add", params: { type: "object", properties: { n: { type: "integer" } } } }]);
-    assert.deepEqual(main.element.map(({ name, items }) => [name, items.map(({ index, role, text, visible, inert, command, params }) =>
-      ({ index, role, text, visible, inert, command, params }))]), [
-      ["core.fixture.button", [{ index: 0, role: "button", text: "b", visible: true, inert: false, command: null, params: null }]],
-      ["core.fixture.row", [0, 1].map((index) => ({ index, role: null, text: `r${index}`, visible: false, inert: false, command: null, params: null }))],
+    assert.deepEqual(main.element.map(({ name, items }) => [name, items.map(({ rect, ...item }) => item)]), [
+      ["core.fixture.button", [{ index: 0, role: "button", text: "b", inert: false, command: null, params: null }]],
+      ["core.fixture.row", []],
     ]);
     assert.deepEqual(rest, [
       { owner: "surface", surface: "tab-a", plugin: "probe", kind: "tab", state: "loaded", visible: true,
         status: [{ name: "probe.lines", description: "Lines.", schema: { type: "array" }, value: ["x"] }], commands: [],
         element: [{ name: "probe.lines", description: "Output.", items: [{ index: 0, role: null, text: "x",
-          rect: { x: 112, y: 74, width: 80, height: 30 }, visible: true, inert: true, command: null, params: null }] }] },
+          rect: { x: 112, y: 74, width: 80, height: 30 }, inert: true, command: null, params: null }] }] },
       { owner: "surface", surface: "tab-b", plugin: "probe", kind: "tab", state: "loaded", visible: false, error: EXPOSURE_ERRORS.gone,
         status: [], commands: [], element: [] },
       { owner: "surface", surface: "tab-c", plugin: "probe", kind: "tab", state: "unloaded", visible: false, status: [], commands: [], element: [] },

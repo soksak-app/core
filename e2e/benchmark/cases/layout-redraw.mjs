@@ -15,11 +15,12 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { drag } from "@soksak/window-check/app.mjs";
+import { transactionCadence } from "@soksak/window-check/drag-measurement.mjs";
 import { frames } from "@soksak/window-check/frame.mjs";
 import { traceSettings } from "../../../scripts/measure-trace.mjs";
 import { fresh } from "../../fixture.mjs";
 import { imagePoint } from "../../input-probe.mjs";
-import { presentedFrame } from "../../raster-probe.mjs";
+import { presentedFrame, REGION } from "../../raster-probe.mjs";
 import { fixtureSettings } from "./b3-run.mjs";
 import { colourCounts, pixelAt, readFrame } from "./frame-pixels.mjs";
 import { openRasterGrid } from "./raster-cards.mjs";
@@ -73,17 +74,52 @@ export function blankFigures(cards, base, counts) {
 }
 
 /**
- * Waits until every raster probe tab `surfaces` presents a frame of the device size of its region (rasterprobe.view) and the window
+ * The raster of the image region of the raster probe tab `surface` in the value `host` of host.window: its frame in device pixels,
+ * each side rounded as the host rounds it (sp_region_raster of native/darwin/src/image_region.m). The size of the view
+ * (rasterprobe.view) is no measure of it, because the view reports a whole point where the region stands a half point wider.
+ */
+export function regionRaster(host, surface) {
+  const region = host.regions.find((item) => item.surface === surface && item.name === REGION);
+  if (region === undefined) throw new Error(`host.window names no image region raster of ${surface}`);
+  return { width: Math.round(region.frame.width * host.scale), height: Math.round(region.frame.height * host.scale) };
+}
+
+/**
+ * Waits until every raster probe tab `surfaces` presents a frame of the raster of its region (regionRaster) and the window
  * presented that state, and returns the display time (ms) of the presented state.
  */
 async function settled(s, surfaces) {
   await s.presented();
+  const host = await s.get("host.window");
   for (const surface of surfaces) {
-    const view = await s.get("rasterprobe.view", surface);
-    await presentedFrame(s, surface, (frame) => frame.width === view.deviceWidth && frame.height === view.deviceHeight,
-      `a frame of ${view.deviceWidth}x${view.deviceHeight} pixels`);
+    const { width, height } = regionRaster(host, surface);
+    await presentedFrame(s, surface, (frame) => frame.width === width && frame.height === height, `a frame of ${width}x${height} pixels`);
   }
   return (await s.presented()).displayed;
+}
+
+/**
+ * The stages of the layout transactions `layouts` of a divider drag (the layouts of the reply of diagnostics.drag,
+ * docs/spec/endpoint.md): the number of transactions of each commit path, `none` for one that did not commit, and the spread of
+ * their stages (transactionCadence of @soksak/window-check/drag-measurement.mjs), so a slow drag names the stage that took its time.
+ */
+export function dragStages(layouts) {
+  const paths = {};
+  for (const layout of layouts) {
+    const path = layout.commitPath ?? "none";
+    paths[path] = (paths[path] ?? 0) + 1;
+  }
+  return { paths, cadence: transactionCadence(layouts) };
+}
+
+/**
+ * The report line of the stages `stages` (dragStages). A workbench that draws a drag without a native layout transaction, as the
+ * mygo workbench does, has no stage to spread, and the line says so instead of printing empty figures.
+ */
+export function stageLine(stages) {
+  if (stages.cadence.total.count === 0) return "no layout transaction: the workbench drew the drag without a native layout transaction";
+  const spread = (name) => `${name} ${stages.cadence[name].count} median ${stages.cadence[name].median.toFixed(1)} p90 ${stages.cadence[name].p90.toFixed(1)} ms`;
+  return `transactions by commit path ${JSON.stringify(stages.paths)}; ` + ["interval", "drawing", "waiting", "committing", "total"].map(spread).join("; ");
 }
 
 /** The actions of the benchmark for the grid `grid` (rows of {card}), with the leader actions when `leader` is declared. */
@@ -115,7 +151,7 @@ export async function runRedraw(s) {
     await presentedFrame(s, surface, (frame) => frame.color === CARD_COLOURS[index] && frame.rows === BANDS, `a frame in ${CARD_COLOURS[index]}`);
   }
   const leader = (await s.request("exposure.list")).commands.some((entry) => entry.name === "core.group.leader");
-  const line = (await s.get("core.layout")).state.cards.find((card) => card.id === grid[0][0].card).c1;
+  const line = (await s.get("core.grid")).cards.find((card) => card.id === grid[0][0].card).c1;
   const recording = await s.record();
   const windows = [];
   let displayed = await settled(s, cards.map(({ surface }) => surface));
@@ -124,14 +160,14 @@ export async function runRedraw(s) {
     for (const { surface } of cards) points.push(await imagePoint(s, surface));
     const from = await clockMs(s);
     s.step(`action ${action}`);
-    await run(s);
+    const result = await run(s);
     displayed = await settled(s, cards.map(({ surface }) => surface));
-    windows.push({ action, from, to: displayed, points });
+    windows.push({ action, from, to: displayed, points, stages: action === "divider drag" ? dragStages(result.layouts) : null });
   }
   const stopped = await recording.stop({ after: displayed });
   if (stopped === null) throw new Error(`the recording ${recording.frames} did not stop; its notes tell why`);
   const times = frames(recording.frames).map(frameTimes);
-  const actions = windows.map(({ action, from, to, points }) => {
+  const actions = windows.map(({ action, from, to, points, stages }) => {
     const { before, during } = actionFrames(times, { action, from, to });
     const first = readFrame(before.path);
     const colours = points.map((point) => pixelAt(first, point));
@@ -139,7 +175,7 @@ export async function runRedraw(s) {
     if (distinct.size !== colours.length) throw new Error(`the cards show the colours ${JSON.stringify(colours)} before ${action}, not one colour each`);
     const base = colourCounts(first, colours, TOLERANCE);
     const counts = during.map(({ path }) => colourCounts(readFrame(path), colours, TOLERANCE));
-    return { action, frames: during.length, cards: blankFigures(cards.map(({ card }) => card), base, counts) };
+    return { action, frames: during.length, cards: blankFigures(cards.map(({ card }) => card), base, counts), stages };
   });
   return { leader, frames: times.length, folder: join(recording.frames), actions };
 }

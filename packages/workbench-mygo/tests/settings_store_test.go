@@ -118,6 +118,9 @@ func TestAValueOfAnotherFormIsRefusedWithItsReason(t *testing.T) {
 		{"sidebarOrder", "left,right,top,bottom", `Invalid setting sidebarOrder: "left,right,top,bottom" is not an order of "left", "right", "top", "bottom"`},
 		{"gap", 99.0, `Invalid setting gap: 99 is not an integer from 0 to 48`},
 		{"memorySaverDelay", 1.0, `Invalid setting memorySaverDelay: 1`},
+		// group.tint mixed the group colors of a theme into the fill of a group card, which the tokens of a card now give
+		// (docs/spec/groups.md#drawing).
+		{"group.tint", 50.0, `Unknown setting: group.tint`},
 		{"acme.level", 9.0, `Invalid setting acme.level: integer value is outside its declared range`},
 		{"nothing", 1.0, `Unknown setting: nothing`},
 	}
@@ -352,6 +355,17 @@ func TestAStoredSettingOfALoadedPluginMustBeDeclared(t *testing.T) {
 	store.Loaded(workbench.LoadedPlugin{ID: "acme"})
 	err := store.Begin(map[string]any{"acme.gone": 1.0}, nil, "")
 	if err == nil || !strings.Contains(err.Error(), "unknown setting acme.gone") {
+		t.Fatalf("the error is %v", err)
+	}
+}
+
+// cardSplit is a key of an earlier setting: every split adds the card as an insert of the layout does (docs/spec/settings.md#earlier-formats), so a
+// settings file that holds it is refused.
+func TestAStoredCardSplitIsAnUnknownSetting(t *testing.T) {
+	var writes []saved
+	store := settingsStore(t, &writes)
+	err := store.Begin(map[string]any{"cardSplit": "even"}, nil, "")
+	if err == nil || err.Error() != "settings.json: unknown setting cardSplit" {
 		t.Fatalf("the error is %v", err)
 	}
 }

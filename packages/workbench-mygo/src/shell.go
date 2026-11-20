@@ -81,11 +81,10 @@ type WindowView struct {
 	Scale, Width, Height float64
 }
 
-// environmentGrid is the grid of a new space of the environment declaration.
+// environmentGrid is the grid of a new space of the environment declaration: the root node of its slicing tree, whose card nodes declare
+// their tabs (docs/spec/groups.md#storage).
 type environmentGrid struct {
-	Xs    []float64         `json:"xs"`
-	Ys    []float64         `json:"ys"`
-	Cards []json.RawMessage `json:"cards"`
+	Root json.RawMessage `json:"root"`
 }
 
 // lineBox returns the height of a line of text of size at the line height multiple, as the text of the fork lays it out and as
@@ -101,10 +100,10 @@ type metrics struct {
 	libraryPreviewH, libraryMark, libraryMarkStroke, previewLineH, previewLineStep, previewLineOpacity, previewSidebarOpacity, libraryAddH,
 	libraryFormW, fieldPadY, selectArrowRoom, selectArrowInset, previewBorderMix, previewFillMix, previewInkMix, previewLineW,
 	lineHeight, lineHeightTight, projectColumnW, projectColumnGap, projectColumnPad, projectTabH, projectTabPad, projectTabXInset, projectTabAddH,
-	barTabRootPad, barTabRootW, barTabRootH, dropMix, dropBorder, tabDraggingOpacity, actStroke, chromeActsGap, brandGap, brandLogoAtBase, chromeH, chromeRowH, spaceGap, spacePad, chromeGap, barGap, barXPad, barXOpacity, barAddText, barAddPad, textControlAtBase, textCaptionAtBase, chipMix, chipHoverMix, chipOnMix, projectTabMix float32
-	headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW float32
+	barTabRootPad, barTabRootW, barTabRootH, dropMix, dropBorder, dropBand, dropBandMargin, groupFocusFade, tabDraggingOpacity, actStroke, chromeActsGap, brandGap, brandLogoAtBase, chromeH, chromeRowH, spaceGap, spacePad, chromeGap, barGap, barXPad, barXOpacity, barAddText, barAddPad, textControlAtBase, textCaptionAtBase, chipMix, chipHoverMix, chipOnMix, projectTabMix float32
+	headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, activityIcon, activityStroke, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW, tabGrabW float32
 	// The card head (.chrome of packages/workbench/app.css).
-	cardHeadGap, cardHeadPad, cardTabsGap, cardButton, cardIcon, cardActsGap, cardActsPad, cardActHalfOpacity, tabGap, tabPadY, tabPadX, tabXPad, tabXOpacity, iconStroke, disabledOpacity, noticeDotInset, radiusMiddleRatio, radiusSmallRatio, textSmallAtBase, textBase, chipSelMix, insetMix, tabXHoverMix float32
+	cardHeadGap, cardHeadPad, cardTabsGap, cardButton, cardIcon, cardActsGap, cardActsPad, cardActHalfOpacity, tabGap, tabPadY, tabPadX, tabXPad, tabXOpacity, iconStroke, disabledOpacity, noticeDotInset, radiusMiddleRatio, radiusSmallRatio, textSmallAtBase, textBase, chipSelMix, renameSelectionMix, insetMix, tabXHoverMix float32
 	// The error line (#applicationError of packages/workbench/app.css).
 	errorPadY, errorPadX, errorBorder float32
 	// debugW is the width of the debug view, and debugH its largest share of the window height.
@@ -116,6 +115,9 @@ type metrics struct {
 	// The state of the surface of the active tab in the status row of its card (.surface-status of packages/workbench/app.css).
 	surfaceStatusGap, surfaceStatusMargin, spinner, spinnerBorder float32
 	spinnerTurn                                                   time.Duration
+	// groupFillFade is the share of bg in the body of a group card for each level, the chrome value group-fill-fade, read at the precision
+	// of the page, which mixes in float64 (docs/spec/groups.md#drawing).
+	groupFillFade float64
 }
 
 func readMetrics(declared *Declarations) (metrics, error) {
@@ -150,6 +152,10 @@ func readMetrics(declared *Declarations) (metrics, error) {
 	read("project-tab-x-inset", &m.projectTabXInset)
 	read("project-tab-add-h", &m.projectTabAddH)
 	read("drop-border", &m.dropBorder)
+	// The width and the margin of the bands of the target search (docs/spec/groups.md#target-search).
+	read("drop-band", &m.dropBand)
+	read("drop-band-margin", &m.dropBandMargin)
+	read("group-focus-fade", &m.groupFocusFade)
 	read("tab-dragging-opacity", &m.tabDraggingOpacity)
 	read("act-stroke", &m.actStroke)
 	read("chrome-acts-gap", &m.chromeActsGap)
@@ -178,6 +184,8 @@ func readMetrics(declared *Declarations) (metrics, error) {
 	read("space-tab-h", &m.spaceTabH)
 	read("act-w", &m.actW)
 	read("notice-dot", &m.noticeDot)
+	read("activity-icon", &m.activityIcon)
+	read("activity-stroke", &m.activityStroke)
 	read("act-h", &m.actH)
 	read("act-icon", &m.actIcon)
 	read("tabs-gap", &m.tabsGap)
@@ -187,6 +195,7 @@ func readMetrics(declared *Declarations) (metrics, error) {
 	read("tab-max-w", &m.tabMaxW)
 	read("tab-peek-w", &m.tabPeekW)
 	read("tab-min-w", &m.tabMinW)
+	read("tab-grab-w", &m.tabGrabW)
 	read("card-head-gap", &m.cardHeadGap)
 	read("card-head-pad", &m.cardHeadPad)
 	read("card-tabs-gap", &m.cardTabsGap)
@@ -218,6 +227,7 @@ func readMetrics(declared *Declarations) (metrics, error) {
 		*into = float32(value)
 	}
 	mix("chip-sel-mix", &m.chipSelMix)
+	mix("rename-selection-mix", &m.renameSelectionMix)
 	mix("preview-border-mix", &m.previewBorderMix)
 	mix("preview-fill-mix", &m.previewFillMix)
 	mix("preview-ink-mix", &m.previewInkMix)
@@ -249,7 +259,15 @@ func readMetrics(declared *Declarations) (metrics, error) {
 		failed = errors.New("the chrome metric spinner-turn has no time")
 	}
 	m.spinnerTurn = time.Duration(turn * float64(time.Second))
-	return m, failed
+	fade, ok := declared.Metric("group-fill-fade")
+	if !ok {
+		failed = errors.New("the chrome metric group-fill-fade has no number")
+	}
+	m.groupFillFade = fade
+	if failed != nil {
+		return m, fmt.Errorf("workbench.json: %w", failed)
+	}
+	return m, nil
 }
 
 // projectRecord is a stored project with the members that the shell shows.
@@ -351,6 +369,13 @@ type Shell struct {
 	// savedGeometry is the geometry that this window last stored for each project.
 	savedGeometry map[string]json.RawMessage
 	plane         *layout.Grid
+	// planes is the group tree of the shown space beside its grid, plane (docs/spec/groups.md#model).
+	planes *layout.GroupTree
+	// dissolved holds the group cards that this window dissolved since its workbench started (docs/spec/groups.md#idempotency).
+	dissolved map[string]bool
+	// groupRequests holds, per space, the answer of each request of core.group.create while the window is open
+	// (docs/spec/groups.md#idempotency).
+	groupRequests map[string]map[string]map[string]string
 	focused       string
 	// columnsChanged tells that the next frame matches the columns of the window sidebars to the settings.
 	columnsChanged bool
@@ -368,6 +393,8 @@ type Shell struct {
 	doublePressed renameTarget
 	// dragging is the drag of a tab in progress.
 	dragging *tabDrag
+	// tabBoxes is the rectangle in the window of each drawn tab in the last drawing, which the tab index of a tab strip reads.
+	tabBoxes map[string]ui.Rect
 	// workBanner is the height of the error line over the row of the spaces in the last drawing.
 	workBanner float32
 	// planeBox is the rectangle of the plane in the window in the last drawing, on the device pixel grid (alignPlane).
@@ -400,7 +427,13 @@ type Shell struct {
 	// windowSidebars holds the widths of the fixed sidebars of the shown space, which outlive their columns.
 	windowSidebars map[string]layout.WindowSidebar
 
-	units         map[string]*installedUnit
+	units map[string]*installedUnit
+	// activity follows the statuses that declare activity on the surface of each tab of the window (docs/spec/activity.md).
+	activity *ActivityFollow
+	// projectRecord is the record of the project activities of the application that the host sent last, revision -1 before the first
+	// (docs/spec/activity.md#activity-of-a-project), and publications are the publications of this window that wait for their answer.
+	projectRecord ActivityRecord
+	publications  []activityPublication
 	processes     pluginProcesses
 	contributions *Contributions
 	// lastDrop is the status core.drop, and notices the state of the notification center.
@@ -498,7 +531,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	if err := json.Unmarshal(options.Environment, &environment); err != nil {
 		return nil, fmt.Errorf("environment declaration: %w", err)
 	}
-	s := &Shell{closedTabs: map[string]bool{}, asked: map[string]bool{}, windowProjects: map[string]bool{}, savedGeometry: map[string]json.RawMessage{}, cardReads: map[string]cardRead{}, options: options, metrics: read, palette: palette, registry: NewRegistry(options.Declared), calls: options.Calls,
+	s := &Shell{closedTabs: map[string]bool{}, dissolved: map[string]bool{}, groupRequests: map[string]map[string]map[string]string{}, asked: map[string]bool{}, windowProjects: map[string]bool{}, savedGeometry: map[string]json.RawMessage{}, cardReads: map[string]cardRead{}, options: options, metrics: read, palette: palette, registry: NewRegistry(options.Declared), calls: options.Calls,
 		grid: environment.Workspace.Grid, focus: environment.Workspace.Focus, browsing: true, library: newLibraryState(), strips: map[string]*stripPlace{}, icons: map[string]*ui.SVG{}, heads: map[string]layout.HeadFit{}}
 	// Every frame that the shell asks for passes this count: a command answers after the frame that its run asked for.
 	invalidate := options.Invalidate
@@ -515,6 +548,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.exposedFocus.OnTransition(s.events.Info)
 	s.registry.Record(s.events.Command)
 	s.registry.Follow(s.followCommand)
+	s.registry.Watch(s.watchLayout)
 	s.errors = NewShownErrors(s.events.Error)
 	s.binder = NewBinder(s.registry, func(_ string, err error) { s.fail(err) })
 	s.pointer = NewPointerSequence(options.Elements, func() { s.options.Invalidate() }, s.fail)
@@ -538,6 +572,11 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	if s.units, err = readSurfaceUnits(installed); err != nil {
 		return nil, err
 	}
+	s.activity = NewActivityFollow(func(name, surface string, fn func(value any)) func() {
+		return s.registry.Observe(name, &surface, true, fn)
+	},
+		s.activityStatuses, s.activityProjects, s.options.Invalidate, s.activityError, s.fail, s.publishActivity)
+	s.projectRecord = ActivityRecord{Revision: -1, Projects: map[string]ActivityProjectState{}}
 	s.contributions = NewContributions()
 	if err := s.contributions.Install(s.installed); err != nil {
 		return nil, err

@@ -6,7 +6,7 @@
   "variables": {"ts-us-1":{"type":"integer","example":1791000001132590,"source":"page"},"mono-ns-1":{"type":"integer","example":6132134497,"source":"page"},"page-identity":{"type":"string","example":"0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e","source":"page"}},
   "steps": [
     {"call":{"name":"workspace","payload":{"kind":"snapshot"}}},
-    {"reply":{"result":{"common":{},"projects":[{"id":"p1","root":"/projects/p1","identity":"p1","title":"p1","color":"#fff","named":1,"activeSpaceId":"spc-p1","spaces":[{"id":"spc-p1","title":"SPACE1","layout":{"state":{"cards":[]}}}],"settings":{}}],"open":[]}}},
+    {"reply":{"result":{"common":{},"projects":[{"id":"p1","root":"/projects/p1","identity":"p1","title":"p1","color":"#fff","named":1,"activeSpaceId":"spc-p1","spaces":[{"id":"spc-p1","title":"SPACE1","layout":{"state":{"root":{"card":"main"}}}}],"settings":{}}],"open":[]}}},
     {"call":{"name":"workspace","payload":{"kind":"tabState"}}},
     {"reply":{"result":null}},
     {"call":{"name":"workspace","payload":{"kind":"tabSessions"}}},

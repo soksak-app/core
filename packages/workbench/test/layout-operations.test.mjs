@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { Soksak } from "soksak";
 import { pageMemorySaver } from "./support/memory-saver.mjs";
 
 const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
@@ -38,7 +39,7 @@ const manifest = (id, surface) => ({ id, name: id, description: "검사용 표�
 const { installEnvironment } = await import("../environment.js");
 assert.deepEqual(installEnvironment({
   runtime: "runtime",
-  workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: PLAIN, title: "t" }] }] } },
+  workspace: { focus: "main", grid: { root: { card: "main", tabs: [{ plugin: PLAIN, title: "t" }] } } },
   sidebars: { sets: [], links: [] },
 }, { plugins: [
   { id: SESSION, package: "@fixture/session", version: "0.0.1", manifest: manifest(SESSION, {
@@ -60,22 +61,38 @@ plane.nameWindow(WINDOW);
 
 // The project of the window has the shown space and a space that is not active, which holds the card other and the tab tab-ooooo1.
 const view = (id, plugin, params) => ({ id, plugin, title: id, origin: { directory: null }, ...(params === undefined ? {} : { params }) });
-const OTHER_SPACE = { id: "spc-bbbbbb", title: "SPACE2", layout: { focusedId: "other", named: 0, windowSidebars: {}, sidebars: {}, state: {
-  xs: [0, 1], ys: [0, 1], cards: [{ id: "other", c0: 0, c1: 1, r0: 0, r1: 1, data: { tabs: [view("tab-ooooo1", PLAIN)], activeId: "tab-ooooo1" } }] } } };
+const OTHER_SPACE = { id: "spc-bbbbbb", title: "SPACE2", layout: { focusedId: "other", named: 0, windowSidebars: {}, sidebars: {}, leader: "other", lastCard: 1, state: {
+  root: { card: "other", data: { tabs: [view("tab-ooooo1", PLAIN)], activeId: "tab-ooooo1" } } } } };
 begin({ common: {}, open: [], projects: [{ id: "prj-aaaaaa", root: "/work/project", spaces: [
-  { id: "spc-aaaaaa", title: "SPACE1", layout: { focusedId: "main", named: 0, windowSidebars: {}, sidebars: {}, state: {
-    xs: [0, 1], ys: [0, 1], cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, data: { tabs: [view("tab-aaaaa1", PLAIN)], activeId: "tab-aaaaa1" } }] } } },
+  { id: "spc-aaaaaa", title: "SPACE1", layout: { focusedId: "main", named: 0, windowSidebars: {}, sidebars: {}, leader: "main", lastCard: 1, state: {
+    root: { card: "main", data: { tabs: [view("tab-aaaaa1", PLAIN)], activeId: "tab-aaaaa1" } } } } },
   OTHER_SPACE,
 ], activeSpaceId: "spc-aaaaaa", named: 2 }] });
 
-/** Shows the layout of cards ({id, c0, c1, r0, r1, tabs, active}) over the lines xs and ys with the card focused in the shown space. */
-function arrange(xs, ys, cards, focused) {
+/** The members of a stored layout without groups over state: the first card in reading order leads, and lastCard is the largest card number or 1. */
+const emptyTree = (state) => {
+  const cards = new Soksak(state).cards;
+  return {
+    leader: [...cards].sort((a, b) => (a.r0 - b.r0) || (a.c0 - b.c0))[0].id,
+    lastCard: Math.max(1, ...cards.map(({ id }) => Number(/^card-(\d+)$/.exec(id)?.[1] ?? 0))),
+  };
+};
+
+/** The tree root with each card node {card, tabs, active} given the card data of its tabs. */
+const withData = (node) => {
+  if (node.cut !== undefined) return { ...node, kids: node.kids.map((kid) => ({ ...kid, node: withData(kid.node) })) };
+  const { tabs, active, ...card } = node;
+  return { ...card, data: { tabs, activeId: active ?? tabs[0].id } };
+};
+
+/** Shows the layout of the tree root, whose card nodes are {card, tabs, active}, with the card focused in the shown space. */
+function arrange(root, focused) {
   plane.closePicker("fixture reset");
   if (plane.currentGrid()) for (const card of plane.currentGrid().cards) for (const tab of plane.tabsOf(card)) reports.forgetTab(tab.id);
-  plane.adopt({ focusedId: focused, named: 0, windowSidebars: {}, sidebars: {}, state: { xs, ys, cards: cards.map(({ tabs, active, ...card }) =>
-    ({ ...card, data: { tabs, activeId: active ?? tabs[0].id } })) } }, "spc-aaaaaa");
+  const state = { root: withData(root) };
+  plane.adopt({ focusedId: focused, named: 0, windowSidebars: {}, sidebars: {}, ...emptyTree(state), state }, "spc-aaaaaa");
 }
-const single = (tabs) => arrange([0, 1], [0, 1], [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs }], "main");
+const single = (tabs) => arrange({ card: "main", tabs }, "main");
 const run = (name, params) => registry.run(name, params);
 const layout = () => plane.layoutDescription();
 /** Applies the operation twice and returns the result of the first after it checks that the second answers and leaves the same. */
@@ -146,33 +163,47 @@ test("core.layout.open with a side applied twice splits the card once toward the
       [{ tab: result.tab, plugin: SESSION, active: true }], side);
   }
   // A card whose parent split has the other direction: the right card of a row splits toward the bottom.
-  arrange([0, 0.5, 1], [0, 1], [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [view("tab-aaaaa1", PLAIN)] },
-    { id: "b", c0: 1, c1: 2, r0: 0, r1: 1, tabs: [view("tab-aaaaa2", PLAIN)] }], "a");
+  arrange({ cut: "x", kids: [
+    { share: 0.5, node: { card: "a", tabs: [view("tab-aaaaa1", PLAIN)] } },
+    { share: 0.5, node: { card: "b", tabs: [view("tab-aaaaa2", PLAIN)] } },
+  ] }, "a");
   const below = await twice("core.layout.open", { card: "b", side: "bottom", plugin: SESSION });
   assert.deepEqual(layout().root.children.map((node) => node.card ?? node.children.map(({ card, size }) => ({ card, size }))),
     ["a", [{ card: "b", size: 0.5 }, { card: below.card, size: 0.5 }]]);
-  // A split that makes a line cross the whole window changes the tree from a column of a row and a card to a row of two columns.
-  arrange([0, 0.5, 1], [0, 0.5, 1], [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [view("tab-aaaaa1", PLAIN)] },
-    { id: "b", c0: 1, c1: 2, r0: 0, r1: 1, tabs: [view("tab-aaaaa2", PLAIN)] },
-    { id: "c", c0: 0, c1: 2, r0: 1, r1: 2, tabs: [view("tab-aaaaa3", PLAIN)] }], "c");
+  // A split adds the new card beside the card in the cut that holds it, so the tree keeps its column of a row and a card, and the card
+  // becomes a row of itself and the new card, also where the new line stands on the line of the row above it.
+  arrange({ cut: "y", kids: [
+    { share: 0.5, node: { cut: "x", kids: [
+      { share: 0.5, node: { card: "a", tabs: [view("tab-aaaaa1", PLAIN)] } },
+      { share: 0.5, node: { card: "b", tabs: [view("tab-aaaaa2", PLAIN)] } },
+    ] } },
+    { share: 0.5, node: { card: "c", tabs: [view("tab-aaaaa3", PLAIN)] } },
+  ] }, "c");
   assert.equal(layout().root.direction, "column");
   const crossing = await twice("core.layout.open", { card: "c", side: "right", plugin: SESSION });
   const { root } = layout();
-  assert.equal(root.direction, "row");
-  assert.deepEqual(root.children.map((node) => node.children.map(({ card }) => card)), [["a", "c"], ["b", crossing.card]]);
+  assert.equal(root.direction, "column");
+  assert.deepEqual(root.children.map((node) => [node.direction, node.children.map(({ card }) => card)]),
+    [["row", ["a", "b"]], ["row", ["c", crossing.card]]]);
 });
 
 // contract: layout.open.split-beside-another-neighbour
 test("core.layout.open splits beside a neighbour without the tab, and the new card becomes the neighbour", { timeout: 5000 }, async () => {
-  arrange([0, 0.5, 1], [0, 1], [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [view("tab-aaaaa1", PLAIN)] },
-    { id: "b", c0: 1, c1: 2, r0: 0, r1: 1, tabs: [view("tab-aaaaa2", PLAIN)] }], "a");
+  arrange({ cut: "x", kids: [
+    { share: 0.5, node: { card: "a", tabs: [view("tab-aaaaa1", PLAIN)] } },
+    { share: 0.5, node: { card: "b", tabs: [view("tab-aaaaa2", PLAIN)] } },
+  ] }, "a");
   const made = await twice("core.layout.open", { card: "a", side: "right", plugin: SESSION });
   assert.ok(!["a", "b"].includes(made.card));
   assert.deepEqual(layout().root.children.map(({ card }) => card), ["a", made.card, "b"]);
   // A card on that side that does not span the same two lines is no neighbour: b spans only the top row of a.
-  arrange([0, 0.5, 1], [0, 0.5, 1], [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 2, tabs: [view("tab-aaaaa1", PLAIN)] },
-    { id: "b", c0: 1, c1: 2, r0: 0, r1: 1, tabs: [view("tab-aaaaa2", SESSION)] },
-    { id: "c", c0: 1, c1: 2, r0: 1, r1: 2, tabs: [view("tab-aaaaa3", PLAIN)] }], "a");
+  arrange({ cut: "x", kids: [
+    { share: 0.5, node: { card: "a", tabs: [view("tab-aaaaa1", PLAIN)] } },
+    { share: 0.5, node: { cut: "y", kids: [
+      { share: 0.5, node: { card: "b", tabs: [view("tab-aaaaa2", SESSION)] } },
+      { share: 0.5, node: { card: "c", tabs: [view("tab-aaaaa3", PLAIN)] } },
+    ] } },
+  ] }, "a");
   const split = await twice("core.layout.open", { card: "a", side: "right", plugin: SESSION });
   assert.ok(!["a", "b", "c"].includes(split.card));
   assert.deepEqual(cardIds(layout().root), ["a", split.card, "b", "c"]);
@@ -211,8 +242,10 @@ test("two applications of core.layout.open sent at once add one tab and answer t
 
 // contract: layout.open.refusal-changes-nothing
 test("a refused core.layout.open fails with its error and leaves the layout", { timeout: 5000 }, async () => {
-  arrange([0, 0.5, 1], [0, 1], [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [view("tab-aaaaa1", PLAIN)] },
-    { id: "b", c0: 1, c1: 2, r0: 0, r1: 1, tabs: [view("tab-aaaaa2", PLAIN)] }], "a");
+  arrange({ cut: "x", kids: [
+    { share: 0.5, node: { card: "a", tabs: [view("tab-aaaaa1", PLAIN)] } },
+    { share: 0.5, node: { card: "b", tabs: [view("tab-aaaaa2", PLAIN)] } },
+  ] }, "a");
   const before = layout();
   const refusals = [
     [{ card: "nothing", plugin: SESSION }, `card nothing is not in the layout of window ${WINDOW}`],
@@ -231,11 +264,17 @@ test("a refused core.layout.open fails with its error and leaves the layout", { 
   }
   await refuses(run("core.layout.open", { card: "a", side: "middle", plugin: SESSION }), "invalid params for core.layout.open");
   assert.deepEqual(layout(), before);
-  // A card narrower than two cards of the minimum size cannot split across.
-  arrange([0, 0.97, 1], [0, 1], [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [view("tab-aaaaa1", PLAIN)] },
-    { id: "b", c0: 1, c1: 2, r0: 0, r1: 1, tabs: [view("tab-aaaaa2", PLAIN)] }], "a");
+  // The registry names an unknown member and a missing member of the declaration (docs/spec/exposure.md#command-parameters).
+  await refuses(run("core.layout.open", { card: "a", plugin: SESSION, zone: "left" }), "command core.layout.open: unknown parameter zone");
+  await refuses(run("core.layout.move", { card: "a" }), "command core.layout.move: parameter tab is required");
+  assert.deepEqual(layout(), before);
+  // A card narrower than two cards of the minimum size cannot split across, and the refusal names the size that a half would get.
+  arrange({ cut: "x", kids: [
+    { share: 0.97, node: { card: "a", tabs: [view("tab-aaaaa1", PLAIN)] } },
+    { share: 0.03, node: { card: "b", tabs: [view("tab-aaaaa2", PLAIN)] } },
+  ] }, "a");
   const narrow = layout();
-  await refuses(run("core.layout.open", { card: "b", side: "right", plugin: SESSION }), "card b cannot split toward right");
+  await refuses(run("core.layout.open", { card: "b", side: "right", plugin: SESSION }), "card b cannot split toward right: card b would be 24x1200, below its minimum 96x96");
   assert.deepEqual(layout(), narrow);
   // A card of a fullscreen arrangement does not change the layout.
   plane.toggleCardFullscreen("a");
@@ -260,8 +299,10 @@ test("current names the focused card and the active tab of the focused card at e
 
 // contract: layout.select.twice-is-the-same
 test("core.layout.select applied twice makes the tab active in its focused card and answers the same", { timeout: 5000 }, async () => {
-  arrange([0, 0.5, 1], [0, 1], [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [view("tab-aaaaa1", PLAIN)] },
-    { id: "b", c0: 1, c1: 2, r0: 0, r1: 1, tabs: [view("tab-aaaaa2", PLAIN), view("tab-aaaaa3", SESSION)] }], "a");
+  arrange({ cut: "x", kids: [
+    { share: 0.5, node: { card: "a", tabs: [view("tab-aaaaa1", PLAIN)] } },
+    { share: 0.5, node: { card: "b", tabs: [view("tab-aaaaa2", PLAIN), view("tab-aaaaa3", SESSION)] } },
+  ] }, "a");
   assert.deepEqual(await twice("core.layout.select", { tab: "tab-aaaaa3" }), { card: "b", tab: "tab-aaaaa3" });
   assert.equal(layout().focused, "b");
   assert.deepEqual(cardNode(layout().root, "b").tabs.map(({ active }) => active), [false, true]);
@@ -269,10 +310,64 @@ test("core.layout.select applied twice makes the tab active in its focused card 
   await refuses(run("core.layout.select", { tab: "tab-zzzzzz" }), `tab tab-zzzzzz is not in the layout of window ${WINDOW}`);
 });
 
+// contract: layout.move.into-a-card-once
+test("core.layout.move applied twice moves a tab into a card once, active in its focused card, with its identifier", { timeout: 5000 }, async () => {
+  arrange({ cut: "x", kids: [
+    { share: 0.5, node: { card: "a", tabs: [view("tab-aaaaa1", PLAIN), view("tab-aaaaa2", SESSION, { name: "s" })] } },
+    { share: 0.5, node: { card: "b", tabs: [view("tab-aaaaa3", PLAIN)] } },
+  ] }, "a");
+  assert.deepEqual(await twice("core.layout.move", { tab: "tab-aaaaa2", card: "b" }), { card: "b", tab: "tab-aaaaa2" });
+  const { root, focused } = layout();
+  assert.equal(focused, "b");
+  assert.deepEqual(cardNode(root, "a").tabs.map(({ tab }) => tab), ["tab-aaaaa1"]);
+  assert.deepEqual(cardNode(root, "b").tabs.map(({ tab, active, params }) => ({ tab, active, params })),
+    [{ tab: "tab-aaaaa3", active: false, params: null }, { tab: "tab-aaaaa2", active: true, params: { name: "s" } }]);
+  // A tab that its card already holds is selected and moves nowhere.
+  assert.deepEqual(await twice("core.layout.move", { tab: "tab-aaaaa3", card: "b" }), { card: "b", tab: "tab-aaaaa3" });
+  assert.deepEqual(cardNode(layout().root, "b").tabs.map(({ tab, active }) => [tab, active]), [["tab-aaaaa3", true], ["tab-aaaaa2", false]]);
+});
+
+// contract: layout.move.beside-a-card-once
+test("core.layout.move with a side applied twice puts the tab once into the neighbour toward the side, and the only tab moves its card", { timeout: 5000 }, async () => {
+  single([view("tab-aaaaa1", PLAIN), view("tab-aaaaa2", SESSION)]);
+  const moved = await twice("core.layout.move", { tab: "tab-aaaaa2", card: "main", side: "right" });
+  assert.equal(moved.tab, "tab-aaaaa2");
+  assert.notEqual(moved.card, "main");
+  assert.deepEqual(layout().root.children.map(({ card, tabs }) => [card, tabs.map(({ tab }) => tab)]),
+    [["main", ["tab-aaaaa1"]], [moved.card, ["tab-aaaaa2"]]]);
+  assert.equal(layout().focused, moved.card);
+  // The only tab of a card moves the card: its identifier stays, and the card stands toward the side.
+  const below = await twice("core.layout.move", { tab: "tab-aaaaa1", card: moved.card, side: "bottom" });
+  assert.deepEqual(below, { card: "main", tab: "tab-aaaaa1" });
+  const { root } = layout();
+  assert.equal(root.direction, "column");
+  assert.deepEqual(root.children.map(({ card }) => card), [moved.card, "main"]);
+});
+
+// contract: layout.move.refusal-changes-nothing
+test("a refused core.layout.move fails with its error and leaves the layout", { timeout: 5000 }, async () => {
+  arrange({ cut: "x", kids: [
+    { share: 0.5, node: { card: "a", tabs: [view("tab-aaaaa1", PLAIN)] } },
+    { share: 0.5, node: { card: "b", tabs: [view("tab-aaaaa2", PLAIN)] } },
+  ] }, "a");
+  const before = layout();
+  for (const [params, text] of [
+    [{ tab: "tab-zzzzzz", card: "b" }, `tab tab-zzzzzz is not in the layout of window ${WINDOW}`],
+    [{ tab: "tab-ooooo1", card: "b" }, "tab tab-ooooo1 is in space spc-bbbbbb, which is not active"],
+    [{ tab: "tab-aaaaa1", card: "nothing" }, `card nothing is not in the layout of window ${WINDOW}`],
+    [{ tab: "tab-aaaaa1", card: "a", side: "right" }, "tab tab-aaaaa1 cannot move to the right of a"],
+  ]) {
+    await refuses(run("core.layout.move", params), text);
+    assert.deepEqual(layout(), before, text);
+  }
+});
+
 // contract: layout.close.repeated-close-answers-closed
 test("core.layout.close closes the tab once, answers closed again, and no new tab takes its identifier", { timeout: 5000 }, async () => {
-  arrange([0, 0.5, 1], [0, 1], [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [view("tab-aaaaaa", PLAIN)] },
-    { id: "b", c0: 1, c1: 2, r0: 0, r1: 1, tabs: [view("tab-aaaaa2", PLAIN), view("tab-aaaaa3", PLAIN)] }], "b");
+  arrange({ cut: "x", kids: [
+    { share: 0.5, node: { card: "a", tabs: [view("tab-aaaaaa", PLAIN)] } },
+    { share: 0.5, node: { card: "b", tabs: [view("tab-aaaaa2", PLAIN), view("tab-aaaaa3", PLAIN)] } },
+  ] }, "b");
   assert.deepEqual(await twice("core.layout.close", { tab: "tab-aaaaa3" }), { closed: true });
   assert.deepEqual(cardNode(layout().root, "b").tabs.map(({ tab }) => tab), ["tab-aaaaa2"]);
   // A card that loses its last tab closes.
@@ -281,7 +376,7 @@ test("core.layout.close closes the tab once, answers closed again, and no new ta
   // The identifier of the closed tab is taken: a source that draws its bytes first gives the next tab another identifier.
   let draws = 0;
   const made = plane.fresh((bytes) => bytes.fill(draws++ === 0 ? 0 : 1));
-  assert.deepEqual(made.state.cards.flatMap((card) => card.data?.tabs ?? []).map(({ id }) => id), ["tab-bbbbbb"]);
+  assert.deepEqual(made.state.root.data.tabs.map(({ id }) => id), ["tab-bbbbbb"]);
   await refuses(run("core.layout.close", { tab: "tab-zzzzzz" }), `tab tab-zzzzzz is not in the layout of window ${WINDOW}`);
 });
 
@@ -316,10 +411,12 @@ test("core.layout.close of a modified tab opens one question and answers closed 
 // A split that the layout refuses leaves the layout and the tab-name counter as they were: the tab of the new card is made only for a
 // split that the layout takes.
 test("a refused split of a card leaves the number of the next tab name unchanged", { timeout: 5000 }, async () => {
-  arrange([0, 0.97, 1], [0, 1], [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [view("tab-aaaaa1", PLAIN)] },
-    { id: "b", c0: 1, c1: 2, r0: 0, r1: 1, tabs: [view("tab-aaaaa2", PLAIN)] }], "a");
+  arrange({ cut: "x", kids: [
+    { share: 0.97, node: { card: "a", tabs: [view("tab-aaaaa1", PLAIN)] } },
+    { share: 0.03, node: { card: "b", tabs: [view("tab-aaaaa2", PLAIN)] } },
+  ] }, "a");
   const before = layout();
-  assert.throws(() => plane.splitCard("b", "right", SESSION), { message: "card b cannot split toward right" });
+  assert.throws(() => plane.splitCard("b", "right", SESSION), { message: "card b cannot split toward right: card b would be 24x1200, below its minimum 96x96" });
   assert.deepEqual(layout(), before);
   const { tab } = await run("core.layout.open", { card: "a", plugin: SESSION });
   assert.equal(cardNode(layout().root, "a").tabs.find((item) => item.tab === tab).title, "탭 1");
@@ -338,8 +435,10 @@ test("a new tab stores its name without the mark of its plugin, and the strip dr
 // The close of a modified tab of a fullscreen card closes the card with its last tab after the answer, so the answer restores the
 // arrangement before the tab closes: a fullscreen presentation of a card that left the layout fails the next draw.
 test("the answer to the question about a modified tab of a fullscreen card restores the arrangement before the tab closes", { timeout: 5000 }, async () => {
-  arrange([0, 0.5, 1], [0, 1], [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [view("tab-aaaaa1", PLAIN)] },
-    { id: "b", c0: 1, c1: 2, r0: 0, r1: 1, tabs: [view("tab-aaaaa2", SESSION)] }], "b");
+  arrange({ cut: "x", kids: [
+    { share: 0.5, node: { card: "a", tabs: [view("tab-aaaaa1", PLAIN)] } },
+    { share: 0.5, node: { card: "b", tabs: [view("tab-aaaaa2", SESSION)] } },
+  ] }, "b");
   reports.reportModified("tab-aaaaa2", true);
   try {
     plane.toggleCardFullscreen("b");
@@ -378,11 +477,15 @@ test("the lines and cards of each arrangement of tree.json without a window side
     }
   };
   const sidebar = (id) => ["left", "right", "top", "bottom"].includes(id);
-  const plain = cases.filter(({ layout: { cards } }) => !cards.some(({ id }) => sidebar(id)));
+  const ids = (node) => (node.cut !== undefined ? node.kids.flatMap((kid) => ids(kid.node)) : [node.card]);
+  const plain = cases.filter(({ layout }) => !ids(layout.root).some(sidebar));
   assert.ok(plain.length >= 3, "tree.json holds fewer than three arrangements without a window sidebar");
-  for (const { name, layout: { xs, ys, cards }, root } of plain) {
-    arrange(xs, ys, cards.map((card, i) => ({ ...card, tabs: [view(`tab-tree${String(i).padStart(2, "0")}`, PLAIN)] })), cards[0].id);
-    assert.deepEqual(plane.currentGrid().cards.map(({ id }) => id), cards.map(({ id }) => id), `${name}: the plane did not keep the cards of the case`);
+  for (const { name, layout: stored, root } of plain) {
+    let i = 0;
+    const tabbed = (node) => (node.cut !== undefined ? { ...node, kids: node.kids.map((kid) => ({ ...kid, node: tabbed(kid.node) })) }
+      : { ...node, tabs: [view(`tab-tree${String(i++).padStart(2, "0")}`, PLAIN)] });
+    arrange(tabbed(stored.root), ids(stored.root)[0]);
+    assert.deepEqual(plane.currentGrid().cards.map(({ id }) => id).sort(), ids(stored.root).sort(), `${name}: the plane did not keep the cards of the case`);
     const strip = (node) => (node.card ? { card: node.card, size: node.size }
       : { direction: node.direction, size: node.size, children: node.children.map(strip) });
     close(strip(layout().root), root, name);
@@ -393,6 +496,31 @@ test("the lines and cards of each arrangement of tree.json without a window side
       assert.equal(leaf.tabs.length, 1, name);
     }
   }
+});
+
+// contract: layout.tree.splits-carry-frames
+test("each split of the description carries the frame in window points that holds the frames of its children", { timeout: 5000 }, () => {
+  arrange({ cut: "x", kids: [
+    { share: 0.5, node: { card: "a", tabs: [view("tab-aaaaa1", PLAIN)] } },
+    { share: 0.5, node: { cut: "y", kids: [
+      { share: 0.5, node: { card: "b", tabs: [view("tab-aaaaa2", PLAIN)] } },
+      { share: 0.5, node: { card: "c", tabs: [view("tab-aaaaa3", PLAIN)] } },
+    ] } },
+  ] }, "a");
+  const check = (node, where) => {
+    if (node.card) return;
+    assert.deepEqual(Object.keys(node), ["direction", "size", "frame", "children"], `${where}: the split has no frame`);
+    const frames = node.children.map((child) => child.frame);
+    const left = Math.min(...frames.map(({ x }) => x));
+    const top = Math.min(...frames.map(({ y }) => y));
+    assert.deepEqual(node.frame, { x: left, y: top, width: Math.max(...frames.map(({ x, width }) => x + width)) - left,
+      height: Math.max(...frames.map(({ y, height }) => y + height)) - top }, where);
+    node.children.forEach((child, i) => check(child, `${where}/${i}`));
+  };
+  const { root } = layout();
+  assert.equal(root.direction, "row");
+  assert.equal(root.children[1].direction, "column");
+  check(root, "root");
 });
 
 // contract: layout.surface-window.answers-the-space
@@ -435,8 +563,10 @@ test("surface.window answers the space null for a section surface that a sidebar
 // The part of the main page in a window snapshot takes its layout and its plugins from the window (snapshotParts of core-exposure.js).
 // contract: endpoint.exposure-snapshot.groups-the-window
 test("exposure.snapshot holds the layout of the description as a tree of splits and cards and the plugins with their surface params and opens", { timeout: 5000 }, async () => {
-  arrange([0, 0.5, 1], [0, 1], [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [view("tab-aaaaa1", PLAIN)] },
-    { id: "b", c0: 1, c1: 2, r0: 0, r1: 1, tabs: [view("tab-aaaaa2", EDITOR, { path: "a.html" })] }], "b");
+  arrange({ cut: "x", kids: [
+    { share: 0.5, node: { card: "a", tabs: [view("tab-aaaaa1", PLAIN)] } },
+    { share: 0.5, node: { card: "b", tabs: [view("tab-aaaaa2", EDITOR, { path: "a.html" })] } },
+  ] }, "b");
   const { result } = await registry.handle({ id: 1, method: "exposure.snapshot", params: {} });
   assert.deepEqual(result.layout, layout());
   const { space, focused, root } = result.layout;

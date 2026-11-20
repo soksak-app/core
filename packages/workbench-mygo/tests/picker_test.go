@@ -216,14 +216,18 @@ func TestANarrowHeadHasTheToolMenuAndTheTabList(t *testing.T) {
 	f := projectWithPlugins(t)
 	card := f.tabbedCards()[0]
 	f.run("core.card.add-tab", map[string]string{"card": card, "plugin": "acme"})
-	f.tester.SetSize(150, 500)
+	// The window holds a head too narrow for its tools and wide enough for tab-min-w beside the kept tools
+	// (docs/spec/example-model.md#card-tabs).
+	f.tester.SetSize(220, 500)
 	f.settle()
 	if f.has("core.card.add", card) || !f.has("core.card.tools", card) || !f.has("core.card.tab-list", card) {
 		t.Fatalf("the head has the tools %v, the menu %v and the list %v", f.has("core.card.add", card), f.has("core.card.tools", card), f.has("core.card.tab-list", card))
 	}
 	f.click("core.card.tools", card)
 	menu := f.menu()
-	if menu.Title != "카드 도구" || !slices.Equal(menu.keys()[:3], []string{"add", "y", "fullscreen"}) {
+	// The plane holds two cards and card leads it, so its head keeps the leader mark beside the menu and the menu does not hold it
+	// (docs/spec/groups.md#headers).
+	if menu.Title != "카드 도구" || !slices.Equal(menu.keys()[:3], []string{"add", "x", "y"}) || !f.has("core.card.leader", card) {
 		t.Fatalf("the menu is %+v", menu)
 	}
 	f.click("core.picker.item", "add")
@@ -250,7 +254,7 @@ func TestANarrowHeadHasTheToolMenuAndTheTabList(t *testing.T) {
 func TestCardMenuRefusesAMenuThatTheCardDoesNotHave(t *testing.T) {
 	f := projectWithPlugins(t)
 	card := f.tabbedCards()[0]
-	if _, err := f.answer("core.card.menu", map[string]string{"card": card, "menu": "other"}); err == nil || !strings.Contains(err.Error(), "unknown menu other") {
+	if _, err := f.answer("core.card.menu", map[string]string{"card": card, "menu": "other"}); err == nil || err.Error() != "invalid params for core.card.menu" {
 		t.Fatalf("the menu answered %v", err)
 	}
 	if _, err := f.answer("core.card.menu", map[string]string{"card": "none", "menu": "add"}); err == nil {
@@ -420,13 +424,10 @@ func TestAddTabStoresTheDeclaredParamsAndFocusesTheCard(t *testing.T) {
 	if got := len(f.tabsOf(first)); got != before {
 		t.Fatalf("a refused tab was added: %d tabs, was %d", got, before)
 	}
-	// A null is no params.
-	if _, err := f.answer("core.card.add-tab", map[string]any{"card": first, "plugin": "acme", "params": nil}); err != nil {
-		t.Fatal(err)
-	}
-	tabs = f.tabsOf(first)
-	if _, stored := tabs[len(tabs)-1].(map[string]any)["params"]; stored {
-		t.Fatalf("a null is stored: %v", tabs[len(tabs)-1])
+	// A null is no object, so the params schema refuses it (docs/spec/exposure.md#command-parameters).
+	if _, err := f.answer("core.card.add-tab", map[string]any{"card": first, "plugin": "acme", "params": nil}); err == nil ||
+		err.Error() != "invalid params for core.card.add-tab" {
+		t.Fatalf("a null params answered %v", err)
 	}
 }
 
@@ -1221,5 +1222,79 @@ func TestAMenuWiderThanItsLeastWidthWidensByItsThinClassicBar(t *testing.T) {
 	f.settle()
 	if again := element(t, f.tester, "core.picker.item", "p00").Bounds; again != overlay {
 		t.Fatalf("an item is %+v back under the overlay style, %+v before", again, overlay)
+	}
+}
+
+// Every menu of the card head asks its question, the text of PICKER_ASK of packages/workbench/plane.js, so no menu opens with an empty
+// first row.
+func TestEveryCardMenuAsksItsQuestion(t *testing.T) {
+	f := layoutShell(t, oneCard(tab("t1", "notes")))
+	f.tester.SetSize(1600, 900)
+	f.settle()
+	for menu, want := range map[string]string{"add": "새 탭에 무엇을 띄울까", "split-x": "새 위치에 무엇을 띄울까", "split-y": "새 위치에 무엇을 띄울까",
+		"group-x": "새 위치에 무엇을 띄울까", "group-y": "새 위치에 무엇을 띄울까"} {
+		if _, err := f.apply("core.card.menu", `{"card": "main", "menu": "`+menu+`"}`); err != nil {
+			t.Fatal(err)
+		}
+		if got := f.read("core.picker")["title"]; got != want {
+			t.Errorf("the menu %s asks %q, not %q", menu, got, want)
+		}
+		if _, err := f.apply("core.picker.close", `{}`); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// A layer without a question draws no head, so its first item stands one outer padding inside the border, above the end of the top
+// padding of a head: a tab without a title opens its menu with the title of the tab, which is empty.
+func TestALayerWithoutAQuestionDrawsNoHead(t *testing.T) {
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pad, _ := declared.Metric("picker-outer-pad")
+	headTop, _ := declared.Metric("picker-head-pad-top")
+	// The layer at y stands the anchor gap below it.
+	gap, _ := declared.Metric("picker-anchor-gap")
+	untitled := tab("tab-aaaaaa", "notes")
+	untitled["title"] = ""
+	f := newTabShell(t, &storedHost{projects: []map[string]any{storedProject(untitled)}})
+	f.open(t)
+	f.run(t, "core.tab.menu", `{"tab":"tab-aaaaaa","x":10,"y":10}`)
+	f.settle()
+	if got := f.read("core.picker")["title"]; got != "" {
+		t.Fatalf("the menu of the tab without a title asks %q", got)
+	}
+	keep, ok := exposedNode(f.tester.ElementTree(), "core.tab.menu-keep", "keep")
+	if !ok {
+		t.Fatal("no item of the menu")
+	}
+	if top, head := keep.Bounds.Y-10-float32(gap), float32(pad+headTop); top >= head {
+		t.Fatalf("the first item stands %v below the top of the layer, below the top padding %v of a head", top, head)
+	}
+}
+
+// A head too narrow for its tools keeps the fullscreen button immediately before the tool menu button, and the menu does not hold it
+// (docs/spec/example-model.md#card-tools).
+func TestANarrowHeadKeepsTheFullscreenButtonBesideTheToolMenu(t *testing.T) {
+	f := projectWithPlugins(t)
+	card := f.tabbedCards()[0]
+	// The window holds a head too narrow for its tools and wide enough for tab-min-w beside the kept tools
+	// (docs/spec/example-model.md#card-tabs).
+	f.tester.SetSize(220, 500)
+	f.settle()
+	if f.has("core.card.add", card) || !f.has("core.card.tools", card) {
+		t.Fatalf("the head of %s is not folded into its tool menu", card)
+	}
+	if !f.has("core.card.fullscreen", card) {
+		t.Fatalf("the narrow head of %s shows no fullscreen button", card)
+	}
+	full, more := f.box("core.card.fullscreen", card), f.box("core.card.tools", card)
+	if full.X+full.W > more.X || more.X-(full.X+full.W) > 8 {
+		t.Fatalf("the fullscreen button at %v does not stand immediately before the tool menu button at %v", full, more)
+	}
+	f.click("core.card.tools", card)
+	if slices.Contains(f.menu().keys(), "fullscreen") {
+		t.Fatalf("the tool menu holds the fullscreen button: %v", f.menu().keys())
 	}
 }

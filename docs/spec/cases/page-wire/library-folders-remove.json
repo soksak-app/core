@@ -53,33 +53,19 @@
                   "title": "SPACE1",
                   "layout": {
                     "state": {
-                      "cards": [
-                        {
-                          "id": "main",
-                          "c0": 0,
-                          "c1": 1,
-                          "r0": 0,
-                          "r1": 1,
-                          "data": {
-                            "tabs": [
-                              {
-                                "id": "tab-a",
-                                "plugin": "fixture-library"
-                              }
-                            ],
-                            "activeId": "tab-a"
-                          }
+                      "root": {
+                        "card": "main",
+                        "data": {
+                          "tabs": [
+                            {
+                              "id": "tab-a",
+                              "plugin": "fixture-library"
+                            }
+                          ],
+                          "activeId": "tab-a"
                         }
-                      ],
-                      "xs": [
-                        0,
-                        1
-                      ],
-                      "ys": [
-                        0,
-                        1
-                      ]
-                    }
+                      }
+                    }, "leader": "main", "lastCard": 1
                   }
                 }
               ],
@@ -99,33 +85,19 @@
                   "title": "SPACE1",
                   "layout": {
                     "state": {
-                      "cards": [
-                        {
-                          "id": "main",
-                          "c0": 0,
-                          "c1": 1,
-                          "r0": 0,
-                          "r1": 1,
-                          "data": {
-                            "tabs": [
-                              {
-                                "id": "tab-b",
-                                "plugin": "fixture-library"
-                              }
-                            ],
-                            "activeId": "tab-b"
-                          }
+                      "root": {
+                        "card": "main",
+                        "data": {
+                          "tabs": [
+                            {
+                              "id": "tab-b",
+                              "plugin": "fixture-library"
+                            }
+                          ],
+                          "activeId": "tab-b"
                         }
-                      ],
-                      "xs": [
-                        0,
-                        1
-                      ],
-                      "ys": [
-                        0,
-                        1
-                      ]
-                    }
+                      }
+                    }, "leader": "main", "lastCard": 1
                   }
                 }
               ],
@@ -266,33 +238,19 @@
                   "title": "SPACE1",
                   "layout": {
                     "state": {
-                      "cards": [
-                        {
-                          "id": "main",
-                          "c0": 0,
-                          "c1": 1,
-                          "r0": 0,
-                          "r1": 1,
-                          "data": {
-                            "tabs": [
-                              {
-                                "id": "tab-b",
-                                "plugin": "fixture-library"
-                              }
-                            ],
-                            "activeId": "tab-b"
-                          }
+                      "root": {
+                        "card": "main",
+                        "data": {
+                          "tabs": [
+                            {
+                              "id": "tab-b",
+                              "plugin": "fixture-library"
+                            }
+                          ],
+                          "activeId": "tab-b"
                         }
-                      ],
-                      "xs": [
-                        0,
-                        1
-                      ],
-                      "ys": [
-                        0,
-                        1
-                      ]
-                    }
+                      }
+                    }, "leader": "main", "lastCard": 1
                   }
                 }
               ],

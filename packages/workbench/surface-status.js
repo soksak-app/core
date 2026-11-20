@@ -32,9 +32,35 @@ export function setSurfaceStatus(status, surface, state) {
   // default: a status row that does not belong to a card is written without a card name.
   const where = `surface status ${card?.dataset.cardId ?? "outside a card"} ${surface}`;
   if (phase === "error") {
-    showError(indicator, where, `표면 오류 · ${surfaceErrorText(state)}`);
+    const text = `표면 오류 · ${surfaceErrorText(state)}`;
+    showError(indicator, where, text);
+    // The row cuts the text with an ellipsis, so the tooltip holds the whole text.
+    indicator.title = text;
     return;
   }
   hideError(indicator, where);
+  indicator.removeAttribute("title");
   indicator.textContent = phase === "loading" ? "불러오는 중" : "";
+}
+
+/**
+ * Shows the operation error `text` of the active tab `tab` in the card status row `status`, or withdraws it for null
+ * (docs/spec/plugins.md#tab-reports). The row cuts the text with an ellipsis, so the tooltip holds the whole text.
+ */
+export function setTabError(status, tab, text) {
+  let line = status.querySelector(".status__error");
+  if (!line) {
+    line = document.createElement("span");
+    line.className = "status__error";
+    status.appendChild(line);
+  }
+  const where = `tab error ${tab}`;
+  if (text !== null) {
+    showError(line, where, text);
+    line.title = text;
+    return;
+  }
+  line.hidden = true;
+  line.removeAttribute("title");
+  hideError(line, where);
 }

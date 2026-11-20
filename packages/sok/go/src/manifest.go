@@ -7,6 +7,7 @@ package sok
 // the version regular expressions of the reader and the UTF-16 length that the reader's string length counts.
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -207,10 +208,11 @@ func sameJSON(a, b any) bool {
 var schemaTypes = []string{"string", "number", "integer", "boolean", "object", "array", "null"}
 
 // schemaKeywords are the keywords that a schema may hold (checkSchema of packages/plugin-api).
-var schemaKeywords = []string{"type", "properties", "items", "enum"}
+var schemaKeywords = []string{"type", "properties", "required", "items", "enum"}
 
 // checkSchema checks a schema the way the reader does: only the keywords of schemaKeywords, a type that is a name of
-// schemaTypes or a non-empty list of them, an object of properties, a schema of items, and a non-empty list of enum.
+// schemaTypes or a non-empty list of them, an object of properties, a non-empty list of distinct names of properties as required,
+// a schema of items, and a non-empty list of enum.
 // where names the schema in the error.
 func checkSchema(where string, value any) error {
 	schema, ok := value.(map[string]any)
@@ -234,6 +236,9 @@ func checkSchema(where string, value any) error {
 			}
 		}
 	}
+	if raw, ok := schema["required"]; ok && !validRequired(raw, schema["properties"]) {
+		return fmt.Errorf("%s: required must be a non-empty list of distinct names of properties", where)
+	}
 	if raw, ok := schema["items"]; ok {
 		if err := checkSchema(where+"[]", raw); err != nil {
 			return err
@@ -245,6 +250,24 @@ func checkSchema(where string, value any) error {
 		}
 	}
 	return nil
+}
+
+// validRequired reports whether required is a non-empty list of distinct names of the members of properties.
+func validRequired(raw, properties any) bool {
+	names, ok := raw.([]any)
+	members, declared := properties.(map[string]any)
+	if !ok || len(names) == 0 || !declared {
+		return false
+	}
+	seen := map[string]bool{}
+	for _, name := range names {
+		key, ok := name.(string)
+		if _, member := members[key]; !ok || !member || seen[key] {
+			return false
+		}
+		seen[key] = true
+	}
+	return true
 }
 
 // validSchemaType reports whether a type is a name of schemaTypes, or a non-empty list of such names.
@@ -295,9 +318,18 @@ func schemaTypeMatches(name string, value any) bool {
 	return false
 }
 
-// matchesSchema reports whether a value satisfies a schema that checkSchema accepted (matchesSchema of the reader).
-// properties checks only the members that the value has.
-func matchesSchema(schema map[string]any, value any) bool {
+// MatchesSchema reports whether a value satisfies a schema that checkSchema accepted (matchesSchema of the reader).
+// properties checks only the members that the value has, and an object lacks no member that required names.
+func MatchesSchema(schema map[string]any, value any) bool {
+	if raw, ok := schema["required"]; ok {
+		if object, isObject := value.(map[string]any); isObject {
+			// default: checkSchema refused a required list of other values before a value is matched.
+			names, _ := raw.([]any)
+			if slices.ContainsFunc(names, func(name any) bool { key, _ := name.(string); _, has := object[key]; return !has }) {
+				return false
+			}
+		}
+	}
 	if raw, ok := schema["enum"]; ok {
 		// default: checkSchema refused an enum that is not a non-empty list before a value is matched.
 		list, _ := raw.([]any)
@@ -323,7 +355,7 @@ func matchesSchema(schema map[string]any, value any) bool {
 			// default: checkSchema refused properties that are not an object before a value is matched.
 			properties, _ := raw.(map[string]any)
 			for _, key := range sortedKeys(properties) {
-				if sub, has := object[key]; has && !matchesSchema(properties[key].(map[string]any), sub) {
+				if sub, has := object[key]; has && !MatchesSchema(properties[key].(map[string]any), sub) {
 					return false
 				}
 			}
@@ -332,13 +364,37 @@ func matchesSchema(schema map[string]any, value any) bool {
 	if raw, ok := schema["items"]; ok {
 		if list, isList := value.([]any); isList {
 			for _, item := range list {
-				if !matchesSchema(raw.(map[string]any), item) {
+				if !MatchesSchema(raw.(map[string]any), item) {
 					return false
 				}
 			}
 		}
 	}
 	return true
+}
+
+// MatchesSchemaText reports whether the JSON text value matches the JSON text schema, both read with their numbers as json.Number
+// as the reader reads a manifest, so a reader that holds decoded values checks them with the one matcher of the subset.
+func MatchesSchemaText(schema, value []byte) (bool, error) {
+	var keywords map[string]any
+	if err := decodeNumbered(schema, &keywords); err != nil {
+		return false, fmt.Errorf("schema: %w", err)
+	}
+	if keywords == nil {
+		return false, fmt.Errorf("schema: %s is not an object", schema)
+	}
+	var decoded any
+	if err := decodeNumbered(value, &decoded); err != nil {
+		return false, fmt.Errorf("value: %w", err)
+	}
+	return MatchesSchema(keywords, decoded), nil
+}
+
+// decodeNumbered decodes JSON text into into with its numbers as json.Number.
+func decodeNumbered(text []byte, into any) error {
+	decoder := json.NewDecoder(bytes.NewReader(text))
+	decoder.UseNumber()
+	return decoder.Decode(into)
 }
 
 // installedPluginsFile names the installed plugin document in the errors of its checks.
@@ -649,7 +705,7 @@ func checkData(where string, manifest map[string]any) error {
 		if err := checkSchema(where+" data "+key+" schema", entry["schema"]); err != nil {
 			return err
 		}
-		if !matchesSchema(schema, entry["default"]) {
+		if !MatchesSchema(schema, entry["default"]) {
 			return fmt.Errorf("%s: data %s default does not match its schema", where, key)
 		}
 		if format, has := entry["format"]; has {
@@ -1265,6 +1321,9 @@ func checkExposes(owner string, raw any) error {
 			if kind == "element" {
 				allowed = append(allowed, "many")
 			}
+			if kind == "status" {
+				allowed = append(allowed, "summary", "activity")
+			}
 			if err := only(at, entry, allowed...); err != nil {
 				return err
 			}
@@ -1290,6 +1349,16 @@ func checkExposes(owner string, raw any) error {
 				if _, isBool := raw.(bool); !isBool {
 					return fmt.Errorf("%s: many must be a boolean", at)
 				}
+			}
+			// A status with summary true is a tab summary (docs/spec/exposure.md#entry-fields).
+			if raw, has := entry["summary"]; has {
+				if _, isBool := raw.(bool); !isBool {
+					return fmt.Errorf("%s: summary must be a boolean", at)
+				}
+			}
+			// A status with activity true reports the activity of its surface as its value (docs/spec/activity.md#declaration).
+			if raw, has := entry["activity"]; has && raw != true {
+				return fmt.Errorf("%s: activity must be true", at)
 			}
 		}
 	}

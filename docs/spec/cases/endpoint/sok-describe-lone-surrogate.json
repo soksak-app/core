@@ -22,7 +22,8 @@
         "layout": {
           "space": "space-1",
           "focused": null,
-          "root": null
+          "root": null,
+          "groups": []
         },
         "plugins": [],
         "groups": [

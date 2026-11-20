@@ -1,5 +1,6 @@
 import { isLocalAbsolutePath, originFault } from "@soksak/plugin-api";
 import { tabName } from "./card-data.js";
+import { mapStateCards, stateCards } from "./layout-tree.js";
 import { hasPlugin, plugin } from "./registry.js";
 
 // The tab title, the bottom text, and the working directory that a surface reported (docs/spec/plugins.md#tab-reports). They are not stored in the layout.
@@ -254,7 +255,7 @@ export function missingOriginRecords(state, path) {
   if (path === null) return [];
   if (!WRITING_PATHS.includes(path)) throw new TypeError(`unknown layout writing path: ${String(path)}`);
   const records = [];
-  for (const card of state.cards) {
+  for (const card of stateCards(state)) {
     // default: a card without tabs has no view tab to record.
     for (const tab of card.data?.tabs ?? []) {
       if (storedOriginMember(tab.id) === null) records.push(`${path} stores tab ${tab.id} of plugin ${tab.plugin} without an origin member`);
@@ -268,7 +269,7 @@ export function missingOriginRecords(state, path) {
  * origins of the tabs of the other spaces are not read or changed here (docs/spec/projects.md#tab-origin).
  */
 export function storedLayoutState(state) {
-  const cards = state.cards.map((card) => {
+  return mapStateCards(state, (card) => {
     if (!Array.isArray(card.data?.tabs)) return card;
     const tabs = card.data.tabs.map((tab) => {
       // The member of the layout is replaced by the origin that the tab holds, so a stored value is never read twice.
@@ -278,7 +279,6 @@ export function storedLayoutState(state) {
     });
     return { ...card, data: { ...card.data, tabs } };
   });
-  return { ...state, cards };
 }
 
 /**

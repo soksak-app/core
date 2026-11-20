@@ -27,10 +27,7 @@
                 "id": "spc-one",
                 "title": "SPACE1",
                 "layout": {
-                  "state": {
-                    "cards": [],
-                    "name": "one"
-                  }
+                  "state": {"root": {"card": "main"}, "name": "one"}
                 }
               }
             ],
@@ -305,10 +302,7 @@
                 "id": "spc-one",
                 "title": "SPACE1",
                 "layout": {
-                  "state": {
-                    "cards": [],
-                    "name": "one"
-                  }
+                  "state": {"root": {"card": "main"}, "name": "one"}
                 }
               }
             ],

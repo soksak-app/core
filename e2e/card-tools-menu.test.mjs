@@ -16,9 +16,8 @@ for (const app of Object.values(APPS)) {
     const own = cardOf(await s.get("core.grid"), surface);
     const born = (await s.run("core.card.split", { card: own, side: "right", plugin })).card;
     await s.until("core.grid", (grid) => card(grid, born) !== undefined, "the split did not add a card");
-    const layout = await s.get("core.layout");
-    const lines = layout.state.cards.find((item) => item.id === own);
     const grid = await s.get("core.grid");
+    const lines = card(grid, own);
     // Narrows the start card to 130pt. At this width five tools and the title do not fit on one line.
     await s.run("core.boundary.move", { axis: "x", line: lines.c1, position: grid.lines.x[lines.c0] + 136 });
     const narrow = await s.until("core.grid", (value) => card(value, own).w <= 140 && card(value, own).acts?.tools === "menu",

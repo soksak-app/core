@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
+	"math"
 	"strconv"
 	"strings"
 	"sync"
@@ -42,10 +44,12 @@ type Declarations struct {
 	Icons map[string]string
 	// CardTools are the names of the card tools and the reasons of their refusals (docs/spec/example-model.md#card-tools).
 	CardTools map[string]string
+	// ActivityNames are the names of the activities, which their icons carry (docs/spec/activity.md#drawing).
+	ActivityNames map[string]string
 	// surface holds the entries of surfaceNames under the keys of the declaration file, and params the parameter schema of each
 	// command.
 	surface map[string][]map[string]any
-	params  map[string]any
+	params  map[string]json.RawMessage
 	many    map[string]bool
 	chrome  map[string]string
 	plain   map[string]string
@@ -81,6 +85,15 @@ func (d *Declarations) ChromeValue(name string) string {
 		panic(fmt.Sprintf("the chrome value %s is not declared", name))
 	}
 	return value
+}
+
+// WithChrome returns a copy of the declarations whose chrome value name is value, as a build whose workbench.json declares that value
+// reads it.
+func (d *Declarations) WithChrome(name, value string) *Declarations {
+	out := *d
+	out.chrome = maps.Clone(d.chrome)
+	out.chrome[name] = value
+	return &out
 }
 
 // ChromeNumber returns the number of the chrome value name, which holds the unit or no unit.
@@ -143,6 +156,27 @@ type Palette struct {
 	Bg, Card, Fg, Muted, Edge, Rule, Rail, Focus, No ui.Color
 	// Gap is the gap setting: the full distance between two adjacent cards, 0 for the seam (docs/spec/settings.md#values).
 	Radius, Gap, BorderWidth float32
+}
+
+// GroupLook is the colors of a group card (docs/spec/groups.md#drawing): Head is its header, Line the line under its header and Body the
+// area inside its frame around its members.
+type GroupLook struct {
+	Head, Line, Body ui.Color
+}
+
+// GroupLook is the colors of a group card whose members stand on level with the chrome value group-fill-fade (fade), groupLook of
+// packages/workbench/group-look.js (docs/spec/cases/group-look.json): the header is card, as the head of a content card; the line under
+// it is edge with a gap and rule at the seam, as under the head of a content card; the body is bg mixed into card by fade to the power
+// of level, each channel rounded, so each nesting level stands one step nearer to card.
+func (p Palette) GroupLook(level int, fade float64) GroupLook {
+	share := math.Pow(fade, float64(level))
+	blend := func(a, b uint8) uint8 { return uint8(math.Round(float64(a)*share + float64(b)*(1-share))) }
+	body := ui.Color{R: blend(p.Bg.R, p.Card.R), G: blend(p.Bg.G, p.Card.G), B: blend(p.Bg.B, p.Card.B), A: 255}
+	line := p.Edge
+	if p.Seam() {
+		line = p.Rule
+	}
+	return GroupLook{Head: p.Card, Line: line, Body: body}
 }
 
 // Seam is whether the cards share one line: the gap is 0 (seam of packages/workbench/settings.js).
@@ -228,11 +262,12 @@ func ReadDeclarations() (*Declarations, error) {
 		return nil, fmt.Errorf("shortcuts.json: %w", err)
 	}
 	var values struct {
-		Icons     map[string]string `json:"icons"`
-		CardTools map[string]string `json:"cardTools"`
-		Chrome    map[string]string `json:"chrome"`
-		Plain     map[string]string `json:"plainControls"`
-		Themes    []declaredTheme   `json:"themes"`
+		Icons      map[string]string `json:"icons"`
+		CardTools  map[string]string `json:"cardTools"`
+		Activities map[string]string `json:"activities"`
+		Chrome     map[string]string `json:"chrome"`
+		Plain      map[string]string `json:"plainControls"`
+		Themes     []declaredTheme   `json:"themes"`
 	}
 	if err := json.Unmarshal(workbenchFile, &values); err != nil {
 		return nil, fmt.Errorf("workbench.json: %w", err)
@@ -242,6 +277,11 @@ func ReadDeclarations() (*Declarations, error) {
 			return nil, fmt.Errorf("workbench.json: cardTools declares no %s", key)
 		}
 	}
+	for _, activity := range Activities {
+		if values.Activities[activity] == "" || values.Icons["activity-"+activity] == "" {
+			return nil, fmt.Errorf("workbench.json: activities or icons declare no %s", activity)
+		}
+	}
 	names := func(entries []map[string]any) map[string]bool {
 		set := make(map[string]bool, len(entries))
 		for _, entry := range entries {
@@ -249,9 +289,14 @@ func ReadDeclarations() (*Declarations, error) {
 		}
 		return set
 	}
-	params := make(map[string]any, len(exposes["commands"]))
+	// A schema is kept as its JSON text, which the check of the parameters of a request decodes (host.CommandParamsRefusal).
+	params := make(map[string]json.RawMessage, len(exposes["commands"]))
 	for _, entry := range exposes["commands"] {
-		params[entry["name"].(string)] = entry["params"]
+		text, err := json.Marshal(entry["params"])
+		if err != nil {
+			return nil, fmt.Errorf("exposure.json: params of %v: %w", entry["name"], err)
+		}
+		params[entry["name"].(string)] = text
 	}
 	many := map[string]bool{}
 	for _, entry := range exposes["element"] {
@@ -267,7 +312,7 @@ func ReadDeclarations() (*Declarations, error) {
 	}
 	return &Declarations{
 		Statuses: names(exposes["status"]), Commands: names(exposes["commands"]), Elements: names(exposes["element"]),
-		Icons: values.Icons, CardTools: values.CardTools, Shortcuts: shortcuts.Shortcuts, surface: surface, params: params, many: many, chrome: values.Chrome, plain: values.Plain, themes: values.Themes,
+		Icons: values.Icons, CardTools: values.CardTools, ActivityNames: values.Activities, Shortcuts: shortcuts.Shortcuts, surface: surface, params: params, many: many, chrome: values.Chrome, plain: values.Plain, themes: values.Themes,
 	}, nil
 }
 

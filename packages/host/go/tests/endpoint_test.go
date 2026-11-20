@@ -306,6 +306,18 @@ func TestPointerHeldMessage(t *testing.T) {
 	}
 }
 
+// contract: endpoint.input.rejection-reason
+func TestRejectedMessage(t *testing.T) {
+	for _, c := range []struct{ reason, want string }{
+		{"the window is not shown", "the window did not accept the input: the window is not shown"},
+		{"", "the window did not accept the input"},
+	} {
+		if got := host.RejectedMessage(c.reason); got != c.want {
+			t.Errorf("RejectedMessage(%q) = %q, want %q", c.reason, got, c.want)
+		}
+	}
+}
+
 // contract: endpoint.discovery.writes-endpoint-json, endpoint.discovery.endpoint-json-mode-0600, endpoint.discovery.removes-endpoint-json-on-close
 func TestEndpointFileIsWrittenAndRemoved(t *testing.T) {
 	endpoint, address, config := serve(t, newTierBackend([]string{"main"}))

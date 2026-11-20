@@ -30,9 +30,7 @@ const { installEnvironment } = await import("../environment.js");
 const first = stored.plugins.find((plugin) => plugin.surface);
 const installErrors = installEnvironment({
   runtime: "runtime",
-  workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [
-    { id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: first.id, title: "t" }] },
-  ] } },
+  workspace: { focus: "main", grid: { root: { card: "main", tabs: [{ plugin: first.id, title: "t" }] } } },
   sidebars: { sets: [], links: [] },
 }, { plugins: stored.plugins.map((plugin) => ({ id: plugin.id, package: `@fixture/${plugin.id}`, version: "0.0.1", manifest: manifestOf(plugin) })) });
 assert.deepEqual(installErrors, [], "the plugins of the cases are not loaded");

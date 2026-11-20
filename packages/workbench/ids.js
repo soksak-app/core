@@ -17,6 +17,7 @@ const PREFIX = {
   project: "prj-",
   space: "spc-",
   tab: "tab-",
+  request: "req-",
 };
 
 /**

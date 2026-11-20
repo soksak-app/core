@@ -35,11 +35,11 @@ export function makeLayoutCase(seed) {
     gap: [0, 17, 64][Math.floor(seed / 2) % 3],
     minSize: [24, 96, 160][seed % 3],
     snap: seed % 2 ? "off" : "merge", snapDistance: seed % 2 ? 3 : 29,
-    grabSize: seed % 2 ? 7 : 23, fillOrder: Math.floor(seed / 2) % 2 ? "h" : "v",
+    grabSize: seed % 2 ? 7 : 23,
   };
   const initial = Soksak.from(grid.toJSON(), options);
   const state = initial.toJSON();
-  const target = state.cards[0].id;
+  const target = initial.cards[0].id;
   const operations = [
     { method: "setFixed", args: [target, true] },
     { method: "split", args: [target, "x", { id: "fixed-recovery" }] },
@@ -57,20 +57,13 @@ export function makeLayoutCase(seed) {
     { method: "resize", args: [options.width, options.height] },
   ];
   const prefix = assertSequence(runSequence(initial, { seed, profile: "constrained", operations }));
-  assert.deepEqual([1, 6, 7, 9, 11, 12].map((step) => prefix.trace[step].result), [null, "fixed-recovery", true, null, "size-recovery", true], `seed ${seed}: refusal/recovery preconditions changed`);
+  const refusal = (step) => prefix.trace[step].outcome === "refused" && typeof prefix.trace[step].result?.throws === "string";
+  assert.deepEqual(
+    [prefix.trace[1].result, refusal(9), ...[6, 7, 11, 12].map((step) => prefix.trace[step].result)],
+    [{ throws: `card ${target} is fixed and does not split` }, true, "fixed-recovery", true, "size-recovery", true],
+    `seed ${seed}: refusal/recovery preconditions changed`,
+  );
   const generated = assertSequence(runSequence(initial, { seed, steps: 20, profile: "constrained" }));
   operations.push(...generated.trace.map(({ method, args }) => ({ method, args })));
-  const indices = state.cards.map((_, index) => index);
-  const orders = indices.map((_, offset) => [...indices.slice(offset), ...indices.slice(0, offset)]);
-  orders.push([...indices].reverse());
-  for (let sample = 0; sample < 2; sample++) {
-    const order = [...indices];
-    for (let index = order.length - 1; index > 0; index--) {
-      const other = Math.floor(next() * (index + 1));
-      [order[index], order[other]] = [order[other], order[index]];
-    }
-    orders.push(order);
-  }
-  const uniqueOrders = [...new Map(orders.map((order) => [order.join(","), order])).values()];
-  return { seed, topology, state, options, operations, orders: uniqueOrders };
+  return { seed, topology, state, options, operations };
 }

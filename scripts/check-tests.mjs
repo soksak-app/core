@@ -289,6 +289,323 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F985",
+    implementation: [
+      { file: "packages/workbench/head-fit.js", symbol: "if (withMore >= Math.min(widest, head.grab)) return { fit: \"one\", tools: \"all\" };" },
+      { file: "packages/workbench/plane.js", symbol: "const shownKept = (row, acts) =>" },
+      { file: "packages/workbench-mygo/src/layout/head.go", symbol: "case withMore >= math.Min(widest, head.Grab):" },
+      { file: "packages/workbench-mygo/src/cards.go", symbol: "func shownKept(fit layout.HeadFit, kept []headTool) []headTool" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/layout-cases.test.mjs", id: "head: ${kase.name}" },
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "a head at the minimum width of a card keeps a part of its tab and folds the fullscreen toggle into its tool menu" },
+      { file: "packages/workbench-mygo/tests/layout/cases_test.go", id: "TestHeadCases" },
+      { file: "packages/workbench-mygo/tests/head_elements_test.go", id: "TestACardAtItsMinimumWidthKeepsAPartOfItsTab" },
+    ],
+    expected: "At every width down to the minimum width of a card, a card head keeps a part of its active tab at least `tab-grab-w` wide: the fullscreen toggle and the leader mark fold into the tool menu before the tab, and the tab drops only when less than `tab-grab-w` stays beside ⋯, in the page workbench and in mygo alike.",
+    levels: ["unit"],
+  },
+  {
+    id: "F958-1",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "WKWebView *view = final == SP_INPUT_DELIVERED ? target : nil;" },
+      { file: "packages/host/go/src/exposure.go", symbol: "s.press(got.view)" },
+      { file: "packages/host/rust/src/surfaces.rs", symbol: "pub(crate) fn surface_of_view" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/surface_layout_test.m", id: "press attribution: the press is attributed to the web view" },
+      { file: "packages/host/go/src/platform/darwin/input_test.go", id: "TestADeliveredPressAnswersTheViewThatItReached" },
+      { file: "packages/host/rust/src/platform/darwin/input_test.rs", id: "a_delivered_press_answers_the_view_that_it_reached" },
+    ],
+    expected: "A press that waits for an open layout is attributed to the web view that it reached, so it moves the focus to its card in both page hosts.",
+    levels: ["unit"],
+  },
+  {
+    id: "F967",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "function parameterRefusal(name, schema, params) {" },
+      { file: "packages/host/go/src/command_params.go", symbol: "func CommandParamsRefusal(name string, schema any, raw json.RawMessage) string {" },
+      { file: "packages/host/rust/src/command_params.rs", symbol: "pub fn command_params_refusal(" },
+      { file: "packages/workbench-mygo/src/registry.go", symbol: "host.CommandParamsRefusal(name, r.declared.params[name], fields[\"params\"])" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/command-params.test.mjs", id: "the registry of a document refuses the parameters of each case before the command runs, with the text of the case" },
+      { file: "packages/host/go/tests/command_params_test.go", id: "TestTheHostRefusesTheParamsOfEachCase" },
+      { file: "packages/host/rust/tests/command_params_test.rs", id: "the_host_refuses_the_params_of_each_case" },
+      { file: "packages/workbench-mygo/tests/requests_test.go", id: "TestARequestIsRefusedAsThePageRefusesIt" },
+    ],
+    expected: "Every registry refuses an unknown member and a missing required member of a command with the same text before the command runs.",
+    levels: ["unit"],
+  },
+  {
+    id: "F937-20",
+    implementation: [
+      { file: "packages/workbench/plane.js", symbol: 'head.dataset.measure = "";' },
+      { file: "packages/workbench/app.css", symbol: ".group__head[data-measure] .group__name{flex:0 0 auto}" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "a group header too narrow for its buttons folds them into its tool menu, which runs them" },
+    ],
+    expected: "The page fits a group header with its name measured at the width of its text, so a header with room shows its buttons in one row.",
+    levels: ["unit"],
+  },
+  {
+    id: "F986",
+    implementation: [
+      { file: "packages/workbench-mygo/src/rename.go", symbol: "SelectionColor(mixed(s.palette.Focus, s.palette.Bg, m.renameSelectionMix))." },
+      { file: "packages/workbench-mygo/src/group_cards.go", symbol: "s.drawRenameField(c, 0, size).Grow(1).Shrink(1).MarginStart(" },
+      { file: "packages/workbench/app.css", symbol: ".bar-tab__root::selection{" },
+      { file: "packages/workbench/app.css", symbol: ".group__rename{flex:1 1 0px;" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestTheRenameFieldOfAGroupTakesThePlaceOfItsName" },
+      { file: "packages/workbench/test/group-rename-field.test.mjs", id: "the rename field of a group takes the place of the name with its text where the text of the name started" },
+      { file: "packages/workbench/test/group-rename-field.test.mjs", id: "the rename field selects in the focus color mixed into bg" },
+    ],
+    expected: "The rename field of a group header is the rename field of a tab in the size of the name, with its text where the text of the name started, the header height kept and the selection of the theme.",
+    levels: ["unit"],
+  },
+  {
+    id: "F937-56",
+    implementation: [
+      { file: "packages/workbench/plane.js", symbol: "const name = e.target.closest?.(\".group__head\")?.querySelector(\":scope > .group__name\");" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/group-header.test.mjs", id: "a double-click on the name of a group card that its header captured begins the rename" },
+    ],
+    expected: "A double-click on the name of a group card begins its rename on the page, also when the header holds the pointer capture of the press.",
+    levels: ["unit"],
+  },
+  {
+    id: "F937-57",
+    implementation: [
+      { file: "packages/workbench/group-tree.js", symbol: "if (into !== found.parent) this.leaderLeft(found.parent, id);" },
+      { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "if lead == id && into == level {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/group-header.test.mjs", id: "a drag of a group header previews its move, reports the drag and runs core.card.move at the release" },
+      { file: "packages/workbench-mygo/tests/group_moving_test.go", id: "TestAGroupCardMovedInsideItsLevelKeepsItsLeaderMark" },
+    ],
+    expected: "A card that moves inside its own level keeps the leader mark of the level, and every stored level names one of its members as its leader.",
+    levels: ["unit"],
+  },
+  {
+    id: "F937-49",
+    implementation: [
+      { file: "packages/workbench-mygo/src/window_snapshot.go", symbol: "snapshotText(node.Text)" },
+      { file: "packages/workbench-mygo/go.mod", symbol: "replace github.com/egoist/mygo => github.com/min-0-max/mygo v0.7.4-244-g4abb83d-soksak.16" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/window_snapshot_test.go", id: "TestAWindowSnapshotHoldsTheLayoutThePluginsTheMainGroupTheSurfaceGroupsAndTheUnregisteredEntries" },
+    ],
+    expected: "The text of an element item of a window snapshot in mygo is the text content of the element, as on the page, not its accessible label.",
+    levels: ["unit"],
+  },
+  {
+    id: "F937-53",
+    implementation: [
+      { file: "packages/workbench-mygo/src/group_cards.go", symbol: "Border(s.palette.CardBorder(), s.frameColor(id)).Radius(radius).PassThrough()" },
+      { file: "packages/workbench/app.css", symbol: ".group::after{content:\"\";position:absolute;inset:0;" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestTheFrameOfAGroupCardRunsAroundItsHeader" },
+      { file: "packages/workbench/test/group-frame.test.mjs", id: "the header of a group card is the band at the top of its frame and the line of the frame runs over it" },
+    ],
+    expected: "The header of a group card is the band of head-h at the top of its frame, and the line and the radius of the frame run around the whole card over the ends of the header, in mygo and on the page.",
+    levels: ["unit"],
+  },
+  {
+    id: "F937-55",
+    implementation: [
+      { file: "packages/workbench-mygo/src/shell_text.go", symbol: "func drawCutText(" },
+      { file: "packages/workbench/app.css", symbol: ".tab__name{overflow:hidden;text-overflow:ellipsis;" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/head_elements_test.go", id: "TestTheCutNameOfATabKeepsItsFirstCharacter" },
+      { file: "packages/workbench/test/tab-name-cut.test.mjs", id: "the name of the active tab of a head that fits one tab is cut with an ellipsis on one line" },
+    ],
+    expected: "A cut tab name keeps as many leading characters as fit beside the ellipsis, and its first character is cut rather than replaced by the ellipsis, in mygo and on the page.",
+    levels: ["unit"],
+  },
+  {
+    id: "F937-50",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: ".filter((item) => item !== null) }));" },
+      { file: "packages/workbench-mygo/src/window_snapshot.go", symbol: "if node.Bounds.W <= 0 || node.Bounds.H <= 0 {" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/exposure.test.mjs", id: "the snapshot lists only the drawn elements of an element entry with their element.rect indexes" },
+      { file: "packages/workbench-mygo/tests/window_snapshot_test.go", id: "TestAWindowSnapshotHoldsTheLayoutThePluginsTheMainGroupTheSurfaceGroupsAndTheUnregisteredEntries" },
+    ],
+    expected: "An element entry of a window snapshot lists only the elements that the window draws, with their element.rect indexes, on the page and in mygo.",
+    levels: ["unit"],
+  },
+  {
+    id: "F955",
+    implementation: [
+      { file: "packages/workbench/group-tree.js", symbol: "drawnDividers(dividers, gripLength) {" },
+      { file: "packages/workbench/plane.js", symbol: "updateDivider: (el, divider) => {" },
+      { file: "packages/workbench-mygo/src/dividers.go", symbol: "if float32(length) < m.gripLength {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/group-drawn.test.mjs", id: "a divider draws its grip only on a drawn stretch that holds the grip" },
+      { file: "packages/workbench/test/group-divider.test.mjs", id: "each divider element of the plane says whether its stretch draws the grip" },
+      { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestAGripStandsOnlyOnAStretchThatHoldsIt" },
+    ],
+    expected: "Each drawn stretch of a divider draws its grip at its center while it holds the grip length, and a shorter stretch draws none, so no grip reaches into a header.",
+    levels: ["unit"],
+  },
+  {
+    id: "F937-18",
+    implementation: [
+      { file: "packages/workbench/plane.js", symbol: "function fitGroupHead(head) {" },
+      { file: "packages/workbench/plane.js", symbol: "function foldHead(row, { lead, tabWidths, tabGap }) {" },
+      { file: "packages/workbench/plane.js", symbol: 'if (key === "leader") return run("core.group.leader", { card: id });' },
+    ],
+    tests: [
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "a group header too narrow for its buttons folds them into its tool menu, which runs them" },
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "the leader keeps its leader mark in a head too narrow for its tools, and its tool menu does not hold it" },
+    ],
+    expected: "The page folds a group header by fitHead with its name as the one tab, keeping the fullscreen toggle, the leader mark and the tool menu, whose items run the folded buttons.",
+    levels: ["unit"],
+  },
+  {
+    id: "F963",
+    implementation: [
+      { file: "packages/workbench/card-tools.js", symbol: 'export const CARD_TOOL_MENUS = { add: "add", x: "split-x", y: "split-y", gx: "group-x", gy: "group-y" };' },
+      { file: "packages/workbench/group-tree.js", symbol: "canGroup(id, side) {" },
+      { file: "packages/workbench-mygo/src/cards.go", symbol: "func (s *Shell) groupTools(id, header string, changes func(tool headTool, can bool) headTool) []headTool {" },
+      { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) CanGroup(id string, side Side) bool {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "a content card head shows the split and group split buttons toward each direction and the leader button pressed on its leader" },
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "core.card.menu group-x and group-y group the card with a new card toward right and toward bottom" },
+      { file: "packages/workbench/test/card-tool-names.test.mjs", id: "the tooltip of a card tool is its name and a refusal states its reason" },
+      { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestEachGroupSplitButtonGroupsTowardItsSide" },
+    ],
+    expected: "A card head and a group head hold four split buttons named by result and direction: two splits and two group splits toward right and bottom, each enabled while its operation succeeds and never hidden.",
+    levels: ["unit"],
+  },
+  {
+    id: "F937-11",
+    implementation: [
+      { file: "packages/workbench/plane.js", symbol: "if (group && what === \"add\") throw new Error(`card ${id} is a group; a group header has no add menu`);" },
+      { file: "packages/workbench-mygo/src/picker.go", symbol: "return fmt.Errorf(\"card %s is a group; a group header has no add menu\", card)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "core.card.menu on a group card opens the menu of its header, whose items act on the group card" },
+      { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestAGroupHeaderShowsItsNameAndItsButtons" },
+    ],
+    expected: "A group header holds no add button, and the add menu of a group card is refused with its reason.",
+    levels: ["unit"],
+  },
+  {
+    id: "F937-19",
+    implementation: [
+      { file: "packages/workbench/plane.js", symbol: "export const newGroupRequest = () =>" },
+      { file: "packages/workbench/plane.js", symbol: "export function createGroup(id, side, kind, params, request)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/group-commands.test.mjs", id: "a request makes core.group.create idempotent by that request" },
+    ],
+    expected: "The page core.group.create takes request as mygo does: a repeat of an answered request answers its first answer, a new request groups again, and each press of a group menu item sends a new request.",
+    levels: ["unit"],
+  },
+  {
+    id: "F970",
+    implementation: [
+      { file: "packages/workbench/group-look.js", symbol: "export function groupLook(colors, level, { seam, fade })" },
+      { file: "packages/workbench-mygo/src/declarations.go", symbol: "func (p Palette) GroupLook(level int, fade float64) GroupLook {" },
+      { file: "packages/workbench/workbench.json", symbol: "\"group-fill-fade\": \".6\"," },
+    ],
+    tests: [
+      { file: "packages/workbench/test/group-look.test.mjs", id: "group look: ${kase.name}" },
+      { file: "packages/workbench-mygo/tests/group_look_test.go", id: "TestGroupLookCases" },
+      { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestAGroupDrawsItsHeaderAndBodyFromTheCardTokens" },
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "a group card is one container at its drawn rectangle with the fill of its level and its header inside the frame" },
+      { file: "packages/workbench/test/settings.test.mjs", id: "stored settings of a plugin that is not loaded are kept and not applied" },
+    ],
+    expected: "A group card draws its header in card, the line under it as under the head of a card and its body in bg mixed into card by group-fill-fade to the power of the level of its members in both workbenches, by the shared cases of docs/spec/cases/group-look.json, and group.tint is no setting.",
+    levels: ["unit"],
+  },
+  {
+    id: "F937-17",
+    implementation: [
+      { file: "packages/workbench/group-look.js", symbol: "line: seam ? colors.rule : colors.edge" },
+      { file: "packages/workbench-mygo/src/declarations.go", symbol: "return GroupLook{Head: p.Card, Line: line, Body: body}" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/group-look.test.mjs", id: "group look: ${kase.name}" },
+      { file: "packages/workbench-mygo/tests/group_look_test.go", id: "TestGroupLookCases" },
+      { file: "packages/workbench/test/group-seam.test.mjs", id: "with a gap a group card keeps its border, its header draws the line below it as the head of a card, and the stage stands apart from the bars" },
+    ],
+    expected: "The header of a group card draws the line below it as the head of a content card, in edge with a gap and in rule at the seam, in both workbenches, by the shared cases of docs/spec/cases/group-look.json.",
+    levels: ["unit"],
+  },
+  {
+    id: "F968",
+    implementation: [
+      { file: "packages/workbench-mygo/src/layout/head.go", symbol: "widest = math.Max(widest, w)" },
+      { file: "packages/workbench/head-fit.js", symbol: "const widest = Math.max(0, ...head.tabWidths);" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/layout-cases.test.mjs", id: "head: ${kase.name}" },
+      { file: "packages/workbench-mygo/tests/head_elements_test.go", id: "TestTheStageOfAHeadIsTheSameForEverySelectedTab" },
+    ],
+    expected: "The fold stage of a card head takes the widest tab in both workbenches, so it is the same whichever tab is selected.",
+    levels: ["unit"],
+  },
+  {
+    id: "F937-16",
+    implementation: [
+      { file: "packages/workbench-mygo/src/cards.go", symbol: "func keptTools(tools []headTool) []headTool" },
+      { file: "packages/workbench/plane.js", symbol: "const keptTools = (acts) =>" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/picker_test.go", id: "TestANarrowHeadKeepsTheFullscreenButtonBesideTheToolMenu" },
+      { file: "packages/workbench-mygo/tests/card_sidebars_test.go", id: "TestTheToolMenuHoldsTheSidesAndTheHeadKeepsTheFullScreen" },
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "a narrow head keeps the fullscreen toggle beside its tool menu, and the menu does not hold it" },
+    ],
+    expected: "A head too narrow for its tools keeps the fullscreen toggle beside its tool menu in both workbenches, and the menu does not hold it.",
+    levels: ["unit"],
+  },
+  {
+    id: "F973",
+    implementation: [
+      { file: "native/darwin/src/surface_layout.m", symbol: "if (event.type != NSEventTypeKeyUp && event.type != NSEventTypeFlagsChanged) endHoldByInput();" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/surface_layout_observe_test.m", id: "checkKeyUpLeavesTheHold" },
+    ],
+    expected: "A press or a key down ends the layout hold; a key up or a modifier change ends none.",
+    levels: ["unit"],
+  },
+  {
+    id: "F960",
+    implementation: [
+      { file: "e2e/benchmark/cases/raster-cards.mjs", symbol: "export async function openRasterGrid(s, { rows, columns, balance })" },
+      { file: "e2e/benchmark/cases/raster-cards.mjs", symbol: "export function boundaryMoves(start, now)" },
+      { file: "e2e/benchmark/cases/click-cpu.mjs", symbol: "export function clickOrder(cards, focused, count)" },
+      { file: "e2e/benchmark/cases/scroll-cpu.mjs", symbol: "export function wheelDelta(frame, lines)" },
+      { file: "e2e/benchmark/cases/layout-redraw.mjs", symbol: "export function actionFrames(times, { action, from, to })" },
+      { file: "e2e/benchmark/cases/layout-redraw.mjs", symbol: "export function blankFigures(cards, base, counts)" },
+      { file: "e2e/benchmark/cases/layout-redraw.mjs", symbol: "export function redrawActions(grid, line, leader)" },
+      { file: "e2e/benchmark/cases/layout-redraw.mjs", symbol: "export function regionRaster(host, surface)" },
+    ],
+    tests: [
+      { file: "e2e/test/raster-benchmarks-case.test.mjs", id: "the rows of the grid are the first content cards of one column of the start layout" },
+      { file: "e2e/test/raster-benchmarks-case.test.mjs", id: "a row splits at its widest card, and the cleanup moves back each line that stands elsewhere" },
+      { file: "e2e/test/raster-benchmarks-case.test.mjs", id: "the clicks visit each card in turn from the card after the focused one" },
+      { file: "e2e/test/raster-benchmarks-case.test.mjs", id: "a wheel toward older lines has a negative distance of whole points, and a wheel that does not move that way fails" },
+      { file: "e2e/test/raster-benchmarks-case.test.mjs", id: "an action takes the last frame completed before it and the frames requested during it" },
+      { file: "e2e/test/raster-benchmarks-case.test.mjs", id: "a frame is blank for a card that keeps no pixel of its colour" },
+      { file: "e2e/test/raster-benchmarks-case.test.mjs", id: "the leader actions run only where the build declares core.group.leader" },
+      { file: "e2e/test/raster-benchmarks-case.test.mjs", id: "the raster of a region is its frame in device pixels, also where the view rounds a half point" },
+    ],
+    expected: "The raster benchmarks open a grid of probe cards with the sidebars off, visit the cards, wheel toward older lines and count the blank card frames of each action from the recorded frames.",
+    levels: ["unit"],
+  },
+  {
     id: "F974",
     implementation: [
       { file: "e2e/fixtures/raster-probe/probe/plugin.json", symbol: "\"id\": \"rasterprobe\"" },
@@ -353,6 +670,71 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F937-2.1",
+    implementation: [
+      { file: "packages/window-check/core-events.json", symbol: "\"workbench.layout.change\": {" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/catalog.test.mjs", id: "the core catalog that the package ships is docs/spec/events.json" },
+    ],
+    expected: "The catalog copy of the window checks equals docs/spec/events.json.",
+    levels: ["unit"],
+  },
+  {
+    id: "F983",
+    implementation: [
+      { file: "native/darwin/src/surface_layout.m", symbol: "if (!layoutOf(owner) && ![returning containsObject:[NSValue valueWithPointer:owner]]) releaseInput(owner);" },
+      { file: "native/darwin/src/webview_geometry.m", symbol: "if (!holding || window.firstResponder == holding) return NO;" },
+      { file: "native/darwin/src/surface_layout.m", symbol: "sp_event(SP_CLASS_INPUT, SP_EVENT_DEBUG, \"native.input.held\", fields.UTF8String);" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/surface_layout_observe_test.m", id: "checkCommitDuringAReturnKeepsTheKeyOrder" },
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "a surface that holds the keyboard for its region keeps it through a hide" },
+      { file: "native/darwin/tests/surface_layout_observe_test.m", id: "checkHeldKeysRecordTheirSteps" },
+    ],
+    expected: "Keys typed right after a press on a tab reach its image region whole and in order: a commit during a return keeps the key order (F983-1) and a surface that holds the keyboard keeps it through a hide (F983-2), and each step of a held key is recorded as native.input.held.",
+    levels: ["unit"],
+  },
+  {
+    id: "F983-1",
+    implementation: [
+      { file: "native/darwin/src/surface_layout.m", symbol: "if (!layoutOf(owner) && ![returning containsObject:[NSValue valueWithPointer:owner]]) releaseInput(owner);" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/surface_layout_observe_test.m", id: "checkCommitDuringAReturnKeepsTheKeyOrder" },
+    ],
+    expected: "A commit during the return of earlier keys gives no later key back ahead of them.",
+    levels: ["unit"],
+  },
+  {
+    id: "F983-2",
+    implementation: [
+      { file: "native/darwin/src/webview_geometry.m", symbol: "if (!holding || window.firstResponder == holding) return NO;" },
+      { file: "native/darwin/src/image_region.m", symbol: "sp_view_set_hidden(self, !self.wanted || width < 1 || height < 1);" },
+      { file: "native/darwin/src/document_view.m", symbol: "sp_view_set_hidden(self, !self.wanted || width < 1 || height < 1 || surface.isHiddenOrHasHiddenAncestor);" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "the hide of another surface leaves the keyboard with the hidden surface that holds it" },
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "a surface that holds the keyboard for its region keeps it through a hide" },
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "the hide of a region of another surface leaves the keyboard with the hidden surface that holds it" },
+    ],
+    expected: "A hide of a surface, an image region or a document view leaves the keyboard with a surface that holds it for its region, shown or hidden.",
+    levels: ["unit"],
+  },
+  {
+    id: "F973-1",
+    implementation: [
+      { file: "packages/host/go/src/presentation_wait.go", symbol: "func (s *Surfaces) presentationWaitEnded(surface, reason string, abandoned bool, err error) {" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "pub(crate) fn report_ended_presentation_waits_to(" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/view_join_test.go", id: "TestKeysBeforeThePresentationWriteOneDiagnosticRecordAndNoError" },
+      { file: "packages/host/rust/src/presentation_end_test.rs", id: "keys_before_the_presentation_write_no_error_record" },
+    ],
+    expected: "A key down that ends the hold before a view presented writes the gated host.trace.view.presentation-abandoned record and no error.",
+    levels: ["unit"],
+  },
+  {
     id: "F972",
     implementation: [
       { file: "scripts/platform/darwin/prepare-app-bundle.mjs", symbol: "function workingDirectory(pid, run) {" },
@@ -361,6 +743,328 @@ const FEATURE_LINKS = [
       { file: "scripts/test/platform/darwin/bundle-preparation.test.mjs", id: "bundle preparation attributes a relative executable path by the working directory of its process" },
     ],
     expected: "A running process is attributed to a bundle only by its absolute executable path, a relative one resolved against the working directory of the process.",
+    levels: ["unit"],
+  },
+  {
+    id: "F937-4",
+    implementation: [
+      { file: "packages/workbench/settings.js", symbol: "const pageTheme = () => ({ scheme: settings.mode, tokens: themeTokens() });" },
+      { file: "packages/workbench-mygo/src/settings_modal.go", symbol: "func (s *SettingsStore) pageTheme() (map[string]any, error) {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestTheThemeOfTheViewsCarriesTheCardBackground" },
+      { file: "packages/workbench/test/view-theme-card.test.mjs", id: "the theme of the views carries the card background of the theme as --card" },
+    ],
+    expected: "The theme of the views is the window theme with --card, the same for every view, and carries no tokens of single surfaces.",
+    levels: ["unit"],
+  },
+  {
+    id: "F945",
+    implementation: [
+      { file: "packages/workbench-mygo/src/sidebars.go", symbol: "drawn := &drawnSidebar{frame: frame, owner: owner}" },
+      { file: "packages/workbench/sidebar-sections.js", symbol: "drawn.set(container, { container, sidebar, key: null, set: null, layout: null, context, entries: [] });" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/shell_sidebars_test.go", id: "TestCoreSidebarsReportsAWindowSidebarThatShowsNoSet" },
+      { file: "packages/workbench/test/window-sidebar-unset.test.mjs", id: "core.sidebars reports a window sidebar that shows no set with its rectangle and a null set" },
+    ],
+    expected: "core.sidebars reports a fixed window sidebar that shows no set with a null set and layout, no sections and its rectangle in both workbenches.",
+    levels: ["unit"],
+  },
+  {
+    id: "F954",
+    implementation: [
+      { file: "packages/workbench-mygo/src/cards.go", symbol: "ui.Row(c).Shrink(1).MinWidth(0).AlignItems(ui.Center).Gap(m.surfaceStatusGap)" },
+      { file: "packages/workbench/surface-status.js", symbol: "export function setTabError(status, tab, text)" },
+      { file: "packages/workbench/app.css", symbol: ".surface-status,.status__error{display:block;flex:0 1 auto;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestALongErrorStaysOnOneLineInsideTheStatusRow" },
+      { file: "packages/workbench/test/status-errors.test.mjs", id: "an error of the status row stays on one line and is cut with an ellipsis" },
+      { file: "packages/workbench/test/status-errors.test.mjs", id: "an error of the status row carries its whole text as its tooltip until it is withdrawn" },
+    ],
+    expected: "The error of a surface and the operation error of a tab stay on the one line of the card footer in both workbenches, cut with an ellipsis, with the whole text as the tooltip.",
+    levels: ["unit"],
+  },
+  {
+    id: "F956",
+    implementation: [
+      { file: "packages/workbench-mygo/src/cards.go", symbol: "planeX, planeY := shiftX-shareLeft+inset, shiftY-shareTop+inset" },
+      { file: "packages/workbench/text-size.js", symbol: "export function pressesFrame(target)" },
+      { file: "native/darwin/src/host_api_input.m", symbol: "NSEventMask mask = NSEventMaskLeftMouseDown | NSEventMaskLeftMouseDragged | NSEventMaskLeftMouseUp;" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/text_size_test.go", id: "TestAPressOnTheOutlineKeepsTheFrameScopeForTwoChanges" },
+      { file: "packages/workbench/test/text-size.test.mjs", id: "a press on the stage around the plane or on a bar presses the frame, and a press inside the plane does not" },
+      { file: "native/darwin/tests/surface_monitor_test.m", id: "a key down whose first responder is in a surface reports no press" },
+    ],
+    expected: "A press on the stage around the plane makes the frame the scope of the text size in both workbenches, and the native input monitor reports no press for a key input.",
+    levels: ["unit"],
+  },
+  {
+    id: "F937-14",
+    implementation: [
+      { file: "packages/workbench-mygo/src/shell_statuses.go", symbol: "Groups []gridGroupCardStatus `json:\"groups\"`" },
+      { file: "packages/workbench/core-exposure.js", symbol: "lines: { x: lines(\"x\"), y: lines(\"y\") }, cards, groups," },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/groups_test.go", id: "TestTheCardsOfTheGridHoldContentCardsAndTheGroupsTheGroupCards" },
+      { file: "packages/workbench/test/group-commands.test.mjs", id: "core.grid lists the content cards with their tabs in cards and the group cards in groups" },
+    ],
+    expected: "The cards of core.grid hold content cards only, each with its tabs, and the group cards stand in groups in both workbenches.",
+    levels: ["unit"],
+  },
+  {
+    id: "F964",
+    implementation: [
+      { file: "packages/workbench-mygo/src/picker.go", symbol: "var pickerAsk = map[string]string{" },
+      { file: "packages/workbench/picker-layer.js", symbol: "export function fillPicker(el, ask, groups, mark)" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/picker_test.go", id: "TestEveryCardMenuAsksItsQuestion" },
+      { file: "packages/workbench-mygo/tests/picker_test.go", id: "TestALayerWithoutAQuestionDrawsNoHead" },
+      { file: "packages/workbench/test/picker-layer.test.mjs", id: "a picker without a question draws no head" },
+    ],
+    expected: "Every menu of a card head asks its question, and a layer without a question draws no head in both workbenches.",
+    levels: ["unit"],
+  },
+  {
+    id: "F937-15",
+    implementation: [
+      { file: "packages/workbench-mygo/src/group_cards.go", symbol: "func (s *Shell) frameColor(id string) ui.Color" },
+      { file: "packages/workbench/group-cards.js", symbol: "function markHeldFocus(el, d)" },
+      { file: "packages/workbench/group-tree.js", symbol: "focusDistance(id, focused) {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestEveryGroupCardThatHoldsTheFocusMarksItsFrame" },
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "each group card that holds the focused card marks its frame with the focus faded by group-focus-fade for each level" },
+    ],
+    expected: "Each group card that holds the focused card mixes the focus color into its frame line by group-focus-fade to the power of the levels up to the focused card in both workbenches, also at the seam without a line of its own, and core.card.get of a group card reports that number of levels as focus.",
+    levels: ["unit"],
+  },
+  {
+    id: "F937-9",
+    implementation: [
+      { file: "packages/workbench-mygo/src/cards.go", symbol: "func (s *Shell) describeLevel(key string) (*LayoutNode, error)" },
+      { file: "packages/workbench/plane.js", symbol: "export function layoutDescription()" },
+      { file: "packages/sok/go/src/agents/SKILL.md", symbol: "read `layout` again right before each step" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/groups_test.go", id: "TestTheDescriptionHoldsTheGroupCardsInItsTree" },
+      { file: "packages/workbench/test/group-commands.test.mjs", id: "the layout of the window description holds each group card as a node of its tree and lists every group once" },
+      { file: "scripts/test/skill-groups.test.mjs", id: "the agent skill describes group cards after acting on a layout" },
+    ],
+    expected: "The layout of the window description in both workbenches is the tree of the root level with each group card as a node of its group and the tree of its members, and groups lists every group card once with the identifiers of its members; the skill says to read the layout again before each step.",
+    levels: ["unit"],
+  },
+  {
+    id: "F953",
+    implementation: [
+      { file: "packages/workbench-mygo/src/cards.go", symbol: "func (s *Shell) drawKeptTools(c *ui.Context, id string, kept []headTool)" },
+      { file: "packages/workbench/plane.js", symbol: "const leaderMark = (acts) =>" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestTheLeaderMarkStaysInANarrowHeader" },
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "the leader keeps its leader mark in a head too narrow for its tools, and its tool menu does not hold it" },
+    ],
+    expected: "The leader keeps its leader mark in a header too narrow for its tools in both workbenches, and its tool menu does not hold the mark.",
+    levels: ["unit"],
+  },
+  {
+    id: "F937-10",
+    implementation: [
+      { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) answer(key string, change func() error) bool" },
+      { file: "packages/workbench/group-tree.js", symbol: "answer(key, ask) {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/layout/split_probes_test.go", id: "TestTheHeaderAnswersOfAGroupTreeHoldUntilTheLayoutChanges" },
+      { file: "packages/workbench/test/group-answers.test.mjs", id: "the head answers of a group tree hold until the layout changes" },
+    ],
+    expected: "The group tree of both workbenches answers the split, group and close buttons of the heads once per layout, so a draw without a layout change runs no trial operation.",
+    levels: ["unit"],
+  },
+  {
+    id: "F937-7",
+    implementation: [
+      { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) Neighbour(card, side string) string" },
+      { file: "packages/workbench/group-tree.js", symbol: "neighbour(card, side) {" },
+      { file: "packages/sok/go/src/agents/SKILL.md", symbol: "looks for the neighbour toward `side` only among the cards of that plane" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/groups_test.go", id: "TestOpenTowardASideFromAGroupMemberStaysInsideTheGroup" },
+      { file: "packages/workbench/test/group-commands.test.mjs", id: "core.layout.open toward a side from the last card of a group finds its neighbour only inside the group" },
+      { file: "scripts/test/skill-groups.test.mjs", id: "the agent skill describes group cards after acting on a layout" },
+    ],
+    expected: "core.layout.open with side on a card inside a group takes its neighbour only among the members of the level of the card in both workbenches, so the row recipe of the agent skill grows the group, and the skill states that rule.",
+    levels: ["unit"],
+  },
+  {
+    id: "F937-2",
+    implementation: [
+      { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func ReadTree" },
+      { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) Split(id string, side Side, data json.RawMessage)" },
+      { file: "packages/workbench-mygo/src/groups.go", symbol: "func (s *Shell) registerGroups" },
+      { file: "packages/workbench-mygo/src/group_cards.go", symbol: "func (s *Shell) drawGroupCard" },
+      { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) MoveBoundary" },
+      { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) splitRect" },
+      { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) keepLines" },
+      { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) closeCell" },
+      { file: "packages/workbench-mygo/src/group_cards.go", symbol: "func clearOfHeads" },
+      { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) levelSplit" },
+      { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) headStep" },
+      { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) CenterBoundary" },
+      { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) MoveBoundaryTo" },
+      { file: "packages/workbench-mygo/src/shell_commands.go", symbol: "func (s *Shell) watchLayout" },
+      { file: "packages/workbench-mygo/src/tab_drag.go", symbol: "func (s *Shell) dragGroupTo" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/layout/groups_cases_test.go", id: "TestGroupCases" },
+      { file: "packages/workbench-mygo/tests/groups_test.go", id: "TestAGroupCreateWrapsTheCardAndFocusesTheNewCard" },
+      { file: "packages/workbench-mygo/tests/groups_test.go", id: "TestACardGetCarriesTheSummaryStatusesOfEachTab" },
+      { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestAGroupHeaderShowsItsNameAndItsButtons" },
+      { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestTheCloseMenuOfAGroupDissolvesIt" },
+      { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestNoDividerCrossesAGroupHeader" },
+      { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestABoxBelowAGroupHeaderStandsAGapBelowIt" },
+      { file: "packages/workbench-mygo/tests/layout/groups_property_test.go", id: "TestRandomGroupOperationsKeepTheInvariants" },
+      { file: "packages/workbench-mygo/tests/layout_operations_test.go", id: "TestALayoutCommandRecordsTheLayoutItLeaves" },
+      { file: "packages/workbench-mygo/tests/layout_operations_test.go", id: "TestEveryLayoutCommandRecordsTheLayout" },
+      { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestAFullscreenGroupIsLaidOutAsTheWholeArea" },
+      { file: "packages/workbench-mygo/tests/layout_operations_test.go", id: "TestADividerDragEndsWithTheBoundaryCommand" },
+      { file: "packages/workbench-mygo/tests/layout_operations_test.go", id: "TestADividerKeyRunsTheBoundaryCommand" },
+      { file: "packages/workbench-mygo/tests/layout_operations_test.go", id: "TestADividerDoubleClickRunsTheCentreCommand" },
+      { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestEveryBoxStandsOneGapFromTheBoxBesideIt" },
+      { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestAGroupDrawsItsHeaderAndBodyFromTheCardTokens" },
+      { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestARuleInsideAGroupStaysInsideItsFrame" },
+      { file: "packages/workbench-mygo/tests/groups_test.go", id: "TestTheGridReportsEveryCardInTheGroupForm" },
+      { file: "packages/workbench-mygo/tests/groups_test.go", id: "TestARequestMakesAGroupCreateIdempotentByThatRequest" },
+      { file: "packages/workbench-mygo/tests/groups_test.go", id: "TestEachPressOfTheGroupMenuGroupsTheCard" },
+      { file: "packages/workbench-mygo/tests/group_moving_test.go", id: "TestALineAcrossAGroupIsOneLine" },
+      { file: "packages/workbench-mygo/tests/group_fullscreen_test.go", id: "TestAGroupCardGoesFullscreenWithTheCardsInsideIt" },
+      { file: "packages/workbench-mygo/tests/groups_test.go", id: "TestASplitOfAnEvenRowGivesEveryCardAnEqualShare" },
+      { file: "packages/workbench-mygo/tests/groups_test.go", id: "TestTheCloseOfANestedGroupGivesItsCellsToItsGroup" },
+      { file: "packages/workbench-mygo/tests/group_moving_test.go", id: "TestABoundaryStopsAtTheDrawnMinimumUnderAHeader" },
+      { file: "packages/workbench-mygo/tests/group_moving_test.go", id: "TestATabDropResolvesIntoTheGroup" },
+      { file: "packages/workbench-mygo/tests/group_moving_test.go", id: "TestATabOutOfAGroupSplitsACardOfTheRootLevel" },
+    ],
+    expected: "The layout model of the mygo workbench holds one grid with the group tree beside it, keeps each group card one rectangle and passes every case of the group layout cases, and its shell registers the group commands, the card query and the group members of its statuses.",
+    levels: ["unit"],
+  },
+  {
+    id: "F937-3",
+    implementation: [
+      { file: "packages/workbench/group-tree.js", symbol: "export function readGroupTree" },
+      { file: "packages/workbench/group-tree.js", symbol: "splitCard(target, side, id, data)" },
+      { file: "packages/workbench/group-tree.js", symbol: "targetAt(x, y, options)" },
+      { file: "packages/workbench/group-tree.js", symbol: "closeCell(id, op)" },
+      { file: "packages/workbench/group-tree.js", symbol: "moveBoundary(axis, line, px, allowSnap)" },
+      { file: "packages/workbench/group-tree.js", symbol: "centerBoundary(axis, line)" },
+      { file: "packages/workbench/plane.js", symbol: "function endBoundary(axis, line)" },
+      { file: "packages/workbench/plane.js", symbol: "function boundaryCommand(preview, name, params)" },
+      { file: "packages/workbench/core-exposure.js", symbol: "registry.command(\"core.boundary.center\"" },
+      { file: "packages/plugin-api/log-batch.js", symbol: "const admits = (level, event) => {" },
+      { file: "packages/workbench/group-tree.js", symbol: "share(arrange)" },
+      { file: "packages/soksak/src/soksak.ts", symbol: "private frameOf(node: TreeNode, axis: Axis, unit: Record<Axis, number>): number" },
+      { file: "packages/workbench/group-tree.js", symbol: "reframe()" },
+      { file: "packages/workbench/group-tree.js", symbol: "headersAbove(path, r0)" },
+      { file: "packages/workbench/group-tree.js", symbol: "fullscreen(id, area)" },
+      { file: "packages/workbench/group-tree.js", symbol: "drawnRules(rules)" },
+      { file: "packages/workbench/settings.js", symbol: "export const currentGroupLook = (level) =>" },
+      { file: "packages/workbench/group-cards.js", symbol: "export function drawGroupCards(planeEl, tree, rects, { head, fullscreen, focused, renaming, renameField })" },
+      { file: "packages/workbench/plane.js", symbol: "export function drawnCardRects()" },
+      { file: "packages/workbench/card-tools.js", symbol: "export function updateCardTools(toolbar, { canClose, canSplitX, canSplitY, canGroupX, canGroupY, leads, leader, fullscreen })" },
+      { file: "packages/workbench/stored-layout.js", symbol: "readGroupTree(kept, { gap: 0, minSize: 0, head: 0 }, new Soksak());" },
+      { file: "packages/workbench/plane.js", symbol: "tree = readGroupTree(kept, treeOptions(), grid);" },
+      { file: "packages/workbench/plane.js", symbol: "const { leader, lastCard } = tree.stored();" },
+      { file: "packages/workbench/plane.js", symbol: "export function createGroup(id, side, kind, params, request)" },
+      { file: "packages/workbench/plane.js", symbol: "export function moveCard(id, target, side, index)" },
+      { file: "packages/workbench/plane.js", symbol: "export function cardState(id, summary)" },
+      { file: "packages/workbench/plane.js", symbol: "targets = tree.order().map((entry) => entry.id).filter((entry) => inside.has(entry));" },
+      { file: "packages/workbench/plane.js", symbol: "export function dropHit(x, y, band)" },
+      { file: "packages/workbench/plane.js", symbol: "return { space: heldSpace, focused: focusedId, root: level(null), groups };" },
+      { file: "packages/workbench/core-exposure.js", symbol: "registry.command(\"core.group.create\"" },
+      { file: "packages/workbench/core-exposure.js", symbol: "function watchLayout(name, params)" },
+      { file: "packages/workbench/exposure.js", symbol: "const ended = watcher ? watcher(name, params) : null;" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/groups-cases.test.mjs", id: "groups: ${kase.name}" },
+      { file: "packages/workbench/test/group-divider.test.mjs", id: "a divider drag in a space with groups stops where the card below the header is drawn at its minimum" },
+      { file: "packages/workbench/test/layout-change.test.mjs", id: "a command that changes the layout is the event workbench.layout.change with the layout that it left" },
+      { file: "packages/workbench/test/layout-change-drag.test.mjs", id: "a divider drag stores its result through core.boundary.move, which is one workbench.layout.change" },
+      { file: "packages/workbench/test/layout-change-keys.test.mjs", id: "an arrow key, Enter and a double click on a divider are each one workbench.layout.change of their command" },
+      { file: "packages/workbench/test/page-log.test.mjs", id: "eventAdmits judges an event as the writers do: the events that pass every gate are admitted under a closed policy" },
+      { file: "packages/workbench/test/group-commands.test.mjs", id: "core.layout.balance in a space with groups gives every child of every cut an equal share, a group card as one child" },
+      { file: "packages/plugin-api/test/log-batch-gated.test.mjs", id: "admits answers as the writers judge an event, the events that pass every gate included, and counts nothing" },
+      { file: "packages/workbench/test/group-divider.test.mjs", id: "a centring that would draw the card below the header below its minimum leaves the line" },
+      { file: "packages/workbench/test/stored-groups.test.mjs", id: "the stored check reads the group cards from the boxes of the tree with the refusals of the storage" },
+      { file: "packages/workbench/test/group-properties.test.mjs", id: "group form holds after random operations, seed ${seed}" },
+      { file: "packages/workbench/test/stored-groups.test.mjs", id: "a new space stores the tree without a box, the first content card as its leader and a lastCard" },
+      { file: "packages/workbench/test/stored-groups.test.mjs", id: "the plane writes back the boxes of the tree it opened and issues a split card from lastCard" },
+      { file: "packages/workbench/test/group-commands.test.mjs", id: "core.group.create groups a content card with a new card and answers the same when applied again" },
+      { file: "packages/workbench/test/group-commands.test.mjs", id: "core.group.dissolve, rename and leader change the tree and answer again without a change" },
+      { file: "packages/workbench/test/group-commands.test.mjs", id: "core.card.move moves a card into a group and the add, split and close of a group card act on its rectangle" },
+      { file: "packages/workbench/test/group-commands.test.mjs", id: "core.layout.open on a group card selects an equal tab inside it, adds a card to it and splits its rectangle" },
+      { file: "packages/workbench/test/group-commands.test.mjs", id: "a drop resolves by the bands of the target search and core.tab.move puts a tab into and beside a group card" },
+      { file: "packages/workbench/test/group-commands.test.mjs", id: "the layout of the window description holds each group card as a node of its tree and lists every group once" },
+      { file: "packages/workbench/test/group-commands.test.mjs", id: "core.card.get reads a content card with its group path and a group card with its node" },
+      { file: "packages/workbench/test/group-commands.test.mjs", id: "core.grid lists the content cards with their tabs in cards and the group cards in groups" },
+      { file: "packages/soksak/test/layout-cases.test.mjs", id: "grid: ${kase.name}" },
+      { file: "packages/soksak/test/fractions.test.mjs", id: "equal fractions draw equal sizes beside a box, inside its frame" },
+      { file: "packages/soksak/test/dom.test.mjs", id: "the drawn option places the cards, rules and dividers of the host and shows a host box fullscreen" },
+      { file: "packages/workbench/test/group-drawn.test.mjs", id: "a fullscreen group card is laid out as the whole area with every frame and header one gap inside it" },
+      { file: "packages/workbench/test/group-drawn.test.mjs", id: "no divider crosses a group header, and a rule inside a group card stays inside its frame below its header" },
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "a group card is one container at its drawn rectangle with the fill of its level and its header inside the frame" },
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "a group card that the tree no longer holds is removed from the plane" },
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "a fullscreen group card is laid out as the whole area and a focus inside it keeps it fullscreen" },
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "a content card head shows the split and group split buttons toward each direction and the leader button pressed on its leader" },
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "core.card.menu group-x and group-y group the card with a new card toward right and toward bottom" },
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "core.card.menu on a group card opens the menu of its header, whose items act on the group card" },
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "core.grid reports the drawn rectangle of each card and group card, and the fullscreen layout of a group card" },
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "the layout of the window snapshot gives each card and group card the frame that the plane draws" },
+    ],
+    expected: "The group tree of the page workbench holds the groups of a space beside its one grid and passes every case of the group layout cases, the page reads, writes and issues the cards of the group tree of a stored space layout, and its registry runs the group commands, the card query of any level, core.layout.open on a group card, the drop resolution on group cards and the group members of core.layout and core.grid.",
+    levels: ["unit"],
+  },
+  {
+    id: "F939",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "summary must be a boolean" },
+      { file: "packages/sok/go/src/manifest.go", symbol: "summary must be a boolean" },
+      { file: "packages/sok/rust/src/manifest.rs", symbol: "summary must be a boolean" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/manifest-validation.test.mjs", id: "manifest validation" },
+      { file: "packages/sok/go/tests/manifest_cases_test.go", id: "TestPluginInstallReplaysTheManifestCases" },
+      { file: "packages/sok/rust/tests/manifest_cases_test.rs", id: "plugin_install_replays_the_manifest_cases" },
+    ],
+    expected: "A status declaration takes a boolean summary and refuses another value in the plugin-api, sok Go and sok Rust manifest checks.",
+    levels: ["unit"],
+  },
+  {
+    id: "F982",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "activity must be true" },
+      { file: "packages/sok/go/src/manifest.go", symbol: "activity must be true" },
+      { file: "packages/sok/rust/src/manifest.rs", symbol: "activity must be true" },
+      { file: "packages/workbench/activity.js", symbol: "export function createActivity(" },
+      { file: "packages/workbench/activity.js", symbol: "export function drawActivity(" },
+      { file: "packages/workbench-mygo/src/activity.go", symbol: "func NewActivityFollow(" },
+      { file: "packages/workbench-mygo/src/activity.go", symbol: "func (s *Shell) drawActivity(" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/manifest-validation.test.mjs", id: "manifest validation" },
+      { file: "packages/sok/go/tests/manifest_cases_test.go", id: "TestPluginInstallReplaysTheManifestCases" },
+      { file: "packages/sok/rust/tests/manifest_cases_test.rs", id: "plugin_install_replays_the_manifest_cases" },
+      { file: "packages/workbench/test/activity.test.mjs", id: "activity of a tab: ${kase.name}" },
+      { file: "packages/workbench/test/activity.test.mjs", id: "activity of a window: ${kase.name}" },
+      { file: "packages/workbench/test/activity-follow.test.mjs", id: "the activity of a tab follows the watch of its surface, which starts when the surface registers and ends when the tab leaves" },
+      { file: "packages/workbench/test/activity-draw.test.mjs", id: "each activity draws its declared icon as an image named by the activity before the name" },
+      { file: "packages/workbench/test/activity-draw.test.mjs", id: "a change of activity redraws the one icon, an unchanged activity keeps it, and no activity removes it" },
+      { file: "packages/workbench/test/bar-tabs.test.mjs", id: "a project tab and a space tab show the icon of their activity before the name, and none without one" },
+      { file: "packages/workbench-mygo/tests/activity_test.go", id: "TestActivityCases" },
+      { file: "packages/workbench-mygo/tests/activity_test.go", id: "TestTheActivityOfATabFollowsTheWatchOfItsSurface" },
+      { file: "packages/workbench-mygo/tests/activity_test.go", id: "TestTheIconsOfAnActivityStandOnItsHolders" },
+    ],
+    expected: "A status marked activity: true reports the activity of its surface, the manifest checks refuse another form, and both workbenches derive the activities of the tabs, cards, group cards, spaces and projects of a window, report them as core.activity, show an invalid value in the error banner and draw the icon of each activity on its holder.",
     levels: ["unit"],
   },
   {
@@ -2273,9 +2977,8 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/soksak/test/layout-role-cases.test.mjs", id: "varied layout cases cover the declared input classes and operation outcomes", covers: ["normal", "failure", "recovery"] },
       { file: "packages/soksak/test/layout-role-cases.test.mjs", id: "transformed sequences reject a refused operation that changes state", covers: ["failure"] },
-      { file: "packages/soksak/test/layout-role-cases.test.mjs", id: "explicit permutation selection bounds transformed sequence work" },
       { file: "packages/soksak/test/layout-role-cases.test.mjs", id: "layout option changes affect geometry and refusal decisions" },
-      { file: "packages/soksak/test/layout-role-cases.test.mjs", id: "varied layout checks reject ID, array-order and size implementation mutants" },
+      { file: "packages/soksak/test/layout-role-cases.test.mjs", id: "varied layout checks reject ID and size implementation mutants" },
     ],
     expected: "A deterministic bounded corpus varies topology, card count, dimensions, options and traces while preserving per-transition role independence, refused state and recovery assertions, and the independent slicing oracle.",
     levels: ["unit"],
@@ -2313,13 +3016,11 @@ const FEATURE_LINKS = [
     id: "F655-3",
     implementation: [{ file: "packages/soksak/scripts/layout-equivalence.mjs", symbol: "export function assertRoleIndependence" }],
     tests: [
-      { file: "packages/soksak/test/layout-equivalence.test.mjs", id: "role comparison sends renamed and permuted inputs to the public layout API" },
+      { file: "packages/soksak/test/layout-equivalence.test.mjs", id: "role comparison sends renamed inputs to the public layout API" },
       { file: "packages/soksak/test/layout-equivalence.test.mjs", id: "role comparison rejects an injected identifier-dependent operation choice" },
-      { file: "packages/soksak/test/layout-equivalence.test.mjs", id: "role comparison rejects geometry chosen from the first input card" },
-      { file: "packages/soksak/test/layout-equivalence.test.mjs", id: "role comparison renames payer references before following a restored close" },
-      { file: "packages/soksak/test/rules.test.mjs", id: "R2 — identifiers and card order do not determine layout behavior" },
+      { file: "packages/soksak/test/rules.test.mjs", id: "R2 — identifiers do not determine layout behavior" },
     ],
-    expected: "Public layout operations preserve geometry and outcomes under identifier renaming and input-card permutations; comparison normalizes identifiers and catches injected identifier or array-position dependence.",
+    expected: "Public layout operations preserve geometry and outcomes under identifier renaming; comparison normalizes identifiers and catches injected identifier dependence.",
     levels: ["unit"],
   },
   {
@@ -4901,6 +5602,33 @@ const FEATURE_LINKS = [
       { file: "packages/plugin-api/test/view-clipboard.test.mjs", id: "persistPNG uploads the bytes as image/png and sends the binary id of the upload" },
     ],
     expected: "A view uploads the PNG of persistPNG to its binary store and sends the id, which the host takes, and the host puts the PNG of a png read into that store and replies the id, which the view downloads; a native put keeps the bounds of an upload.",
+    levels: ["unit"],
+  },
+  {
+    id: "F982-9",
+    implementation: [
+      { file: "native/darwin/src/image_region.m", symbol: "- (void)observeWindow:(NSWindow *)window {" },
+      { file: "native/darwin/src/image_region.m", symbol: "- (void)windowKeyChanged:(NSNotification *)notification {" },
+      { file: "native/darwin/src/image_region.m", symbol: "BOOL focused = self.hasFocus && !self.closed && self.window.isKeyWindow;" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_region_test.m", id: "TEST 7b: the region reports the loss of the focus when its window resigns the key status" },
+      { file: "native/darwin/tests/image_region_test.m", id: "TEST 7b: the region reports the focus when its window becomes key again" },
+    ],
+    expected: "The image region reports the loss of its focus when its window resigns the key status and the focus again when the window becomes key, in mygo, Wails and Tauri alike.",
+    levels: ["unit"],
+  },
+  {
+    id: "F982-11",
+    implementation: [
+      { file: "native/darwin/src/image_region.m", symbol: "- (void)reportFocusState {" },
+      { file: "native/darwin/src/image_region.m", symbol: "BOOL opened = [self enterInput];" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_region_test.m", id: "TEST 7b: the region reports the loss of the focus when its window resigns the key status" },
+      { file: "native/darwin/tests/image_region_test.m", id: "TEST 7b: the region reports the focus when its window becomes key again" },
+    ],
+    expected: "A focus change that the key status of a window causes reaches the page inside one input transaction, as the callbacks of the first responder report it.",
     levels: ["unit"],
   },
   {
@@ -10666,11 +11394,11 @@ const FEATURE_LINKS = [
   {
     id: "F80",
     implementation: [
-      { file: "packages/soksak/src/balance.ts", symbol: "export function sliceTree" },
+      { file: "packages/soksak/src/cuts.ts", symbol: "export function evenCuts" },
       { file: "packages/workbench/core-exposure.js", symbol: "core.layout.balance" },
     ],
     tests: [
-      { file: "packages/soksak/test/balance.test.mjs", id: "three cards over four give a third and a quarter each, and the rows halve the height" },
+      { file: "packages/soksak/test/even.test.mjs", id: "three cards over four give a third and a quarter each, and the rows halve the height" },
       { file: "e2e/balance.test.mjs", id: "the auto-arrange button gives three over four cards a fair share" },
     ],
     expected: "The card auto-arrange button gives every card a fair share and keeps the arrangement.",
@@ -13063,7 +13791,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/mygo/src/frontend.go", symbol: "func (f *Frontend) AfterPresentation(done func(err error)) error {" },
       { file: "packages/host/go/src/surfaces.go", symbol: "func (s *Surfaces) apply(win Frontend, req SyncRequest) ([]string, []Placement, error) {" },
       { file: "packages/workbench-mygo/src/project_data.go", symbol: "func (s *Shell) refreshSettings(value any) error {" },
-      { file: "packages/workbench-mygo/src/tab_drag.go", symbol: "func (s *Shell) moveTab(tab, card, zone string) error {" },
+      { file: "packages/workbench-mygo/src/tab_drag.go", symbol: "func (s *Shell) moveTab(tab string, card layout.Target, zone string, index *int) error {" },
       { file: "packages/workbench-mygo/src/picker.go", symbol: "func (s *Shell) tabOf(id string) (layout.Tab, error) {" },
       { file: "packages/workbench-mygo/src/shell_plugins.go", symbol: "s.appUpdates.Refresh(func() { answer(err) })" },
       { file: "packages/workbench-mygo/src/view_calls.go", symbol: "func (s *Shell) statusesAfterFrame() {" },
@@ -13518,9 +14246,9 @@ const FEATURE_LINKS = [
   },
   {
     id: "F417",
-    implementation: [{ file: "packages/host/go/src/surfaces.go", symbol: "func readPressThenDeliver" }],
-    tests: [{ file: "packages/host/go/src/surfaces_test.go", id: "TestAPressReadsItsTargetBeforeItsDelivery" }],
-    expected: "An injected press reads its target before its delivery.",
+    implementation: [{ file: "packages/host/go/src/platform/darwin/input.go", symbol: "done(platform.PointerDelivered, platform.ButtonHeld{}, view)" }],
+    tests: [{ file: "packages/host/go/src/platform/darwin/input_test.go", id: "TestADeliveredPressAnswersTheViewThatItReached" }],
+    expected: "An injected press is attributed to the web view that its delivery reached (F958-1).",
     levels: ["unit"],
   },
   {
@@ -14119,7 +14847,7 @@ const FEATURE_LINKS = [
     id: "F965",
     implementation: [
       { file: "native/darwin/src/input_inject.m", symbol: "static const char *resizeEdgeAt(NSWindow *window, NSPoint point)" },
-      { file: "packages/host/go/src/platform/darwin/input.go", symbol: "done(platform.PointerResizeEdge, resizeEdge(held))" },
+      { file: "packages/host/go/src/platform/darwin/input.go", symbol: "done(platform.PointerResizeEdge, resizeEdge(held), 0)" },
       { file: "packages/host/rust/src/platform/darwin/input.rs", symbol: "SP_INPUT_RESIZE_EDGE => Delivery::ResizeEdge(resize_edge(" },
     ],
     tests: [
@@ -14147,7 +14875,7 @@ const FEATURE_LINKS = [
     id: "F962-2",
     implementation: [
       { file: "native/darwin/src/input_inject.m", symbol: "static void interruptGestures(NSEvent *event)" },
-      { file: "packages/host/go/src/platform/darwin/input.go", symbol: "done(platform.PointerInterrupted, interruption(held))" },
+      { file: "packages/host/go/src/platform/darwin/input.go", symbol: "done(platform.PointerInterrupted, interruption(held), 0)" },
       { file: "packages/host/rust/src/platform/darwin/input.rs", symbol: "SP_INPUT_INTERRUPTED => Delivery::Interrupted(interruption(" },
     ],
     tests: [
@@ -14191,14 +14919,14 @@ const FEATURE_LINKS = [
   {
     id: "F936",
     implementation: [
-      { file: "packages/workbench/projects.js", symbol: "obsolete member parties" },
-      { file: "packages/workbench-mygo/src/shell_project.go", symbol: "obsolete member parties" },
+      { file: "packages/host/go/src/workspace.go", symbol: "projectsFormat = 3" },
+      { file: "packages/host/rust/src/workspace.rs", symbol: "pub(crate) const PROJECTS_FORMAT: u64 = 3;" },
     ],
     tests: [
-      { file: "packages/workbench/test/stored-space.test.mjs", id: "a space that holds the member parties is refused with an error that names projects.json, the project, the space and the member" },
-      { file: "packages/workbench-mygo/tests/stored_space_test.go", id: "TestASpaceThatHoldsPartiesIsRefusedByName" },
+      { file: "packages/host/go/tests/workspace_test.go", id: "TestEarlierStoredFormsAreReportedBySnapshotAndRefusedByWrites" },
+      { file: "packages/host/rust/tests/workspace_test.rs", id: "earlier_stored_forms_are_reported_by_snapshot_and_refused_by_writes" },
     ],
-    expected: "Both workbenches refuse a stored space that holds the removed member parties with an error that names projects.json, the project, the space and the member.",
+    expected: "Both hosts refuse as a whole a projects.json of another format than the current 3, format 1 among them, the only form whose spaces held the removed member parties.",
     levels: ["unit"],
   },
   {
@@ -16012,7 +16740,12 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // F993 corrects the cursor column of the prompt region in the two terminal sidecars; core holds its spec, cases and the measurement of F993-2.
 // F897 makes a host test wait for the page call that it judges; it changes no runtime capability.
 // F907 corrects a term of a Korean checklist row; it changes no runtime capability.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F993", "F989", "F904", "F907", "F897", "F887", "F886", "F883-1", "F873", "F872", "F871", "F870", "F869", "F867-11", "F867-10", "F867-9", "F867-8", "F867-7", "F867", "F523", "F866", "F865", "F864", "F863","F862", "F861", "F860", "F859", "F858", "F857", "F856", "F855", "F854", "F853", "F852", "F851", "F850", "F849", "F848", "F847", "F846", "F845", "F835", "F843", "F842", "F841", "F840", "F839", "F838", "F837", "F836", "F834", "F833", "F832", "F830-3", "F830-2", "F830-1", "F830", "F825-1", "F829", "F827-1", "F827", "F828", "F826", "F825", "F820-1", "F823-1", "F824", "F822", "F823", "F821", "F819", "F818", "F817", "F816", "F814", "F813", "F812", "F811", "F810", "F809", "F808", "F805", "F804", "F803", "F802", "F801", "F800", "F799", "F795-5", "F798", "F795-1-1", "F795-7", "F796", "F795-2", "F795-1", "F788", "F676", "F673", "F510", "F664-1", "F648", "F646", "F582", "F497", "F496", "F494", "F492", "F495", "F493", "F491", "F490", "F489", "F488", "F639", "F637", "F629", "F486", "F487", "F485", "F484", "F435-8-2", "F483-1", "F435-8-1", "F435-7", "F483", "F482", "F435-6", "F631", "F481", "F479", "F435-5", "F478", "F477", "F476", "F474", "F475", "F473", "F472", "F471", "F239-276", "F97", "F16", "F470", "F469", "F468", "F466", "F467", "F465", "F463", "F464", "F561", "F581", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
+// F982-7 defines the program status of a terminal; the two terminal sidecars and the two terminal plugins implement it and core
+// holds only its spec and cases.
+// F982-8 keeps the failure of a command until the next command in the two terminal plugins; core holds only its spec.
+// F982-10 keeps the exit code on the idle after a failed command in the two terminal sidecars and derives the failure from it in the
+// two terminal plugins; core holds only its spec.
+const NON_CAPABILITY_COMPLETIONS = new Set(["F982-7", "F982-8", "F982-10", "F993", "F989", "F904", "F907", "F897", "F887", "F886", "F883-1", "F873", "F872", "F871", "F870", "F869", "F867-11", "F867-10", "F867-9", "F867-8", "F867-7", "F867", "F523", "F866", "F865", "F864", "F863","F862", "F861", "F860", "F859", "F858", "F857", "F856", "F855", "F854", "F853", "F852", "F851", "F850", "F849", "F848", "F847", "F846", "F845", "F835", "F843", "F842", "F841", "F840", "F839", "F838", "F837", "F836", "F834", "F833", "F832", "F830-3", "F830-2", "F830-1", "F830", "F825-1", "F829", "F827-1", "F827", "F828", "F826", "F825", "F820-1", "F823-1", "F824", "F822", "F823", "F821", "F819", "F818", "F817", "F816", "F814", "F813", "F812", "F811", "F810", "F809", "F808", "F805", "F804", "F803", "F802", "F801", "F800", "F799", "F795-5", "F798", "F795-1-1", "F795-7", "F796", "F795-2", "F795-1", "F788", "F676", "F673", "F510", "F664-1", "F648", "F646", "F582", "F497", "F496", "F494", "F492", "F495", "F493", "F491", "F490", "F489", "F488", "F639", "F637", "F629", "F486", "F487", "F485", "F484", "F435-8-2", "F483-1", "F435-8-1", "F435-7", "F483", "F482", "F435-6", "F631", "F481", "F479", "F435-5", "F478", "F477", "F476", "F474", "F475", "F473", "F472", "F471", "F239-276", "F97", "F16", "F470", "F469", "F468", "F466", "F467", "F465", "F463", "F464", "F561", "F581", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66), the window checks of plugins (F110) and the registry listing of the hwp plugin (F141, registry items G37 and G38). Core cannot read

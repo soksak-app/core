@@ -280,10 +280,13 @@ type Endpoint struct {
 	// that topic exists. queueMu protects it.
 	queueMu sync.Mutex
 	queues  map[topic][]func()
-	// presses are the open presses that delivered downs of the connections opened (releasePresses). pressMu protects them
-	// and the pressesReleased mark of each connection.
+	// presses are the open presses that delivered downs of the connections opened (releasePresses). pressMu protects them,
+	// closeReleased and the pressesReleased mark of each connection.
 	pressMu sync.Mutex
 	presses map[pressKey]*openPress
+	// closeReleased holds each press whose release the close of its connection delivered, until the next delivered down of its
+	// pointer and button in its window, so a refused drag or up of it names that close (closeRefusal).
+	closeReleased map[pressKey]bool
 }
 
 // LockOwner is the owner that process.lock holds: the process identifier and the boot identifier of its host run
@@ -1750,6 +1753,9 @@ func commandRun(e *Endpoint, _ *endpointConn, params json.RawMessage, reply *Rep
 		if fields.Params[0] != '{' {
 			return nil, rpcError(codeInvalidParams, "params of %s must be an object", name)
 		}
+		if refusal := CommandParamsRefusal(name, hostCommands[name].Params, fields.Params); refusal != "" {
+			return nil, rpcError(codeInvalidParams, "%s", refusal)
+		}
 		return e.backend.HostCommand(window, name, fields.Params, reply)
 	}
 	return e.backend.PageRequest(reply.Context(), window, "command.run", withoutWindow(params))
@@ -1780,7 +1786,7 @@ func inputPointer(e *Endpoint, c *endpointConn, params json.RawMessage, _ *Reply
 		return nil, err
 	}
 	if err := e.backend.Pointer(window, input); err != nil {
-		return nil, err
+		return nil, e.closeRefusal(window, input, err)
 	}
 	e.pointerDelivered(c, window, input)
 	return nil, nil
@@ -2063,6 +2069,7 @@ func (e *Endpoint) pointerDelivered(c *endpointConn, window string, input Pointe
 	switch input.Phase {
 	case "down":
 		e.presses[key] = &openPress{owner: c, x: input.X, y: input.Y, clicks: input.Clicks}
+		delete(e.closeReleased, key)
 		closed = c != nil && c.pressesReleased
 	case "drag":
 		if p := e.presses[key]; p != nil {
@@ -2155,6 +2162,12 @@ func (e *Endpoint) release(key pressKey) {
 	} else if current {
 		delete(e.presses, key)
 	}
+	if err == nil {
+		if e.closeReleased == nil {
+			e.closeReleased = map[pressKey]bool{}
+		}
+		e.closeReleased[key] = true
+	}
 	e.pressMu.Unlock()
 	if err == nil {
 		e.retryReleases(codePointerHeld)
@@ -2166,6 +2179,27 @@ func (e *Endpoint) release(key pressKey) {
 	}
 	LogInfo("endpoint press", fmt.Sprintf("the release of the press of pointer %s button %s in window %s of a closed connection %s: %d %v",
 		key.pointer, key.button, key.window, outcome, code, err))
+}
+
+// closeRefusal is the error of a drag or up that the window refused with -32602: when the close of the connection that delivered
+// the down of its pointer and button in its window released that press, and no down of them was delivered since, the message
+// names that close, because a down and an up of two connections, such as two commands of the command line, are refused for it
+// (docs/spec/exposure.md#methods). Any other error is returned as it is.
+func (e *Endpoint) closeRefusal(window string, input PointerInput, err error) error {
+	var coded *RPCError
+	if (input.Phase != "drag" && input.Phase != "up") || !errors.As(err, &coded) || coded.Code != codeInvalidParams {
+		return err
+	}
+	key := pressKey{window, input.Pointer, input.Button}
+	e.pressMu.Lock()
+	released := e.closeReleased[key]
+	e.pressMu.Unlock()
+	if !released {
+		return err
+	}
+	return rpcError(codeInvalidParams, "%s; the close of the connection that delivered the down released the press of pointer %s "+
+		"button %s in window %s, so a gesture sends its down, drags and up through one connection", coded.Message, key.pointer,
+		key.button, key.window)
 }
 
 // buttonsChanged retries the releases that wait for host.buttons to become mask 0.

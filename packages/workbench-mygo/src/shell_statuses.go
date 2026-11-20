@@ -21,7 +21,9 @@ type gridStatus struct {
 	Gap        float64              `json:"gap"`
 	Plane      layout.Rect          `json:"plane"`
 	Lines      map[string][]float64 `json:"lines"`
-	Cards      []gridCardStatus     `json:"cards"`
+	// Cards holds the content cards and Groups the group cards, each in workbench order (docs/spec/groups.md#status-and-queries).
+	Cards  []gridCardStatus      `json:"cards"`
+	Groups []gridGroupCardStatus `json:"groups"`
 }
 
 // gridCardStatus is a card of core.grid.
@@ -45,6 +47,29 @@ type gridCardStatus struct {
 	Active     *string                                 `json:"active"`
 	Acts       map[string]any                          `json:"acts"`
 	Sidebars   map[layout.Side]layout.PresentedSidebar `json:"sidebars"`
+	// Parent is the group card that holds the card, null in the root level, and Leader whether it is the leader of its level
+	// (docs/spec/groups.md#status-and-queries).
+	Parent *string `json:"parent"`
+	Leader bool    `json:"leader"`
+}
+
+// gridGroupCardStatus is a group card of core.grid: its drawn rectangle, the members of its level and its group record, and no tabs.
+type gridGroupCardStatus struct {
+	ID     string          `json:"id"`
+	X      float64         `json:"x"`
+	Y      float64         `json:"y"`
+	W      float64         `json:"w"`
+	H      float64         `json:"h"`
+	Parent *string         `json:"parent"`
+	Leader bool            `json:"leader"`
+	Group  gridGroupStatus `json:"group"`
+}
+
+// gridGroupStatus is the group record of a group card of core.grid.
+type gridGroupStatus struct {
+	Name   string `json:"name"`
+	Level  int    `json:"level"`
+	Leader string `json:"leader"`
 }
 
 // gridTabStatus is a tab of a card of core.grid.
@@ -164,8 +189,13 @@ func (s *Shell) cardRect(id string) (layout.Rect, bool) {
 	if s.fullscreen == id {
 		return layout.Rect{W: s.plane.Width(), H: s.plane.Height()}, true
 	}
-	rect, ok := s.plane.Rect(id)
+	rect, ok := s.planes.Rect(id)
 	if ok && s.fullscreen != "" {
+		// A fullscreen group card shows the cards inside it in its rectangle stretched onto the plane
+		// (docs/spec/groups.md#card-commands-on-a-group-card).
+		if shown, inside := s.planes.Fullscreen(s.fullscreen, layout.Rect{W: s.plane.Width(), H: s.plane.Height()})[id]; inside {
+			return shown, true
+		}
 		return layout.Rect{}, true
 	}
 	return rect, ok
@@ -178,8 +208,14 @@ func (s *Shell) cardActs(id string) map[string]any {
 		return nil
 	}
 	acts := map[string]any{"fit": fit.Fit, "tools": fit.Tools}
-	for _, tool := range s.headTools(id) {
-		acts[tool.Status] = cardTool{Enabled: tool.Enabled, Hidden: fit.Tools != "bar", Title: tool.Title}
+	tools := s.headTools(id)
+	if s.isGroup(id) {
+		tools = s.groupHeadTools(id)
+	}
+	kept := shownKept(fit, keptTools(tools))
+	for _, tool := range tools {
+		hidden := fit.Tools != "bar" && !keeps(kept, tool.Do)
+		acts[tool.Status] = cardTool{Enabled: tool.Enabled, Hidden: hidden, Title: tool.Title}
 	}
 	return acts
 }
@@ -202,14 +238,27 @@ func (s *Shell) gridState() (any, error) {
 	origin := s.planeOrigin()
 	plane := layout.Rect{X: origin.X, Y: origin.Y, W: s.plane.Width(), H: s.plane.Height()}
 	status := gridStatus{Width: s.plane.Width(), Height: s.plane.Height(), Gap: s.plane.Gap(), Plane: plane,
-		Lines: map[string][]float64{"x": linePositions(s.plane, "x"), "y": linePositions(s.plane, "y")}, Cards: []gridCardStatus{}}
+		Lines: map[string][]float64{"x": linePositions(s.plane, "x"), "y": linePositions(s.plane, "y")}, Cards: []gridCardStatus{},
+		Groups: []gridGroupCardStatus{}}
 	if s.fullscreen != "" {
 		status.Fullscreen = &s.fullscreen
 	}
 	pane := 0
-	for _, card := range s.plane.Cards() {
+	// The content cards and the group cards, each in workbench order (docs/spec/groups.md#status-and-queries).
+	for _, id := range s.planes.Cards() {
+		card, _ := s.planes.Card(id) // silent: Cards lists cards of the space.
 		rect, ok := s.cardRect(card.ID)
 		if !ok {
+			continue
+		}
+		var parent *string
+		if holder := s.planes.Parent(card.ID); holder != "" {
+			parent = &holder
+		}
+		leader, _ := s.planes.Leader(s.planes.Parent(card.ID)) // silent: a level without a leader has no card that leads it.
+		if record, ok := s.planes.Group(card.ID); ok {
+			status.Groups = append(status.Groups, gridGroupCardStatus{ID: card.ID, X: rect.X, Y: rect.Y, W: rect.W, H: rect.H, Parent: parent,
+				Leader: leader == card.ID, Group: gridGroupStatus{Name: record.Name, Level: record.Level, Leader: record.Leader}})
 			continue
 		}
 		data, err := layout.DecodeCardData(card.Data)
@@ -218,7 +267,8 @@ func (s *Shell) gridState() (any, error) {
 		}
 		entry := gridCardStatus{Fullscreen: card.ID == s.fullscreen, ID: card.ID, X: rect.X, Y: rect.Y, W: rect.W, H: rect.H,
 			C0: card.C0, C1: card.C1, R0: card.R0, R1: card.R1, Fixed: card.Fixed, Width: card.Width, Focused: card.ID == s.focused,
-			Tabs: []gridTabStatus{}, Status: s.cardStatusText(data), Acts: s.cardActs(card.ID), Sidebars: map[layout.Side]layout.PresentedSidebar{}}
+			Tabs: []gridTabStatus{}, Status: s.cardStatusText(data), Acts: s.cardActs(card.ID), Sidebars: map[layout.Side]layout.PresentedSidebar{},
+			Parent: parent, Leader: leader == card.ID}
 		if data != nil {
 			if entry.Sidebars, err = s.presentCard(card.ID, data, rect); err != nil {
 				return nil, fmt.Errorf("card %s: %w", card.ID, err)
@@ -269,6 +319,7 @@ func (s *Shell) layoutState() (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	// core.layout reports the stored form, whose tree holds the group cards as boxes (docs/spec/groups.md#status-and-queries).
 	var kept map[string]json.RawMessage
 	if err := json.Unmarshal(space.Layout, &kept); err != nil {
 		return nil, err
@@ -287,7 +338,7 @@ func (s *Shell) railGroups() []railGroup {
 	// The four window sides in their order, as railSidebars of the page reads them (docs/spec/external-sidebars.md).
 	for _, side := range layout.WindowSides {
 		if _, plugin := s.sidebars.windowSet(side, focused); plugin != "" {
-			if _, ok := s.plane.Card(side); ok {
+			if _, ok := s.findCard(side); ok {
 				sidebars = append(sidebars, side)
 			}
 		}
@@ -297,7 +348,7 @@ func (s *Shell) railGroups() []railGroup {
 	}
 	rects := make([]layout.Rect, 0, len(sidebars)+1)
 	for _, id := range append([]string{s.focused}, sidebars...) {
-		if rect, ok := s.plane.Rect(id); ok && rect.W > 0 && rect.H > 0 {
+		if rect, ok := s.planes.Rect(id); ok && rect.W > 0 && rect.H > 0 {
 			rects = append(rects, rect)
 		}
 	}
@@ -322,8 +373,8 @@ func (s *Shell) focusMark() *layout.Rect {
 	if s.plane == nil || s.browsing || s.settings.Value("focusInd") != "corner" {
 		return nil
 	}
-	card, ok := s.plane.Card(s.focused)
-	if !ok {
+	card, ok := s.findCard(s.focused)
+	if !ok || s.isGroup(s.focused) {
 		return nil
 	}
 	data, err := s.readCard(card)
@@ -529,6 +580,7 @@ func (s *Shell) registerStatuses() {
 		}
 		return entry
 	})
+	s.registry.Status("core.activity", func() any { return s.activityState() })
 	s.registry.Status("core.layout", func() any {
 		value, err := s.layoutState()
 		if err != nil {

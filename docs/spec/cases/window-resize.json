@@ -1,0 +1,11 @@
+{
+  "description": "The content size of host.window.resize (docs/spec/exposure.md#host-entries). Each case gives the params of a request and the error text that both hosts refuse them with, or null when the hosts resize the content area to that size.",
+  "cases": [
+    {"name": "a size of whole points resizes", "params": {"width": 800, "height": 600}, "error": null},
+    {"name": "a size of one point resizes", "params": {"width": 1, "height": 1}, "error": null},
+    {"name": "a fraction of a point above one resizes", "params": {"width": 1.5, "height": 640.25}, "error": null},
+    {"name": "a width below one point is refused", "params": {"width": 0.5, "height": 600}, "error": "width and height must be at least 1"},
+    {"name": "a height of zero is refused", "params": {"width": 800, "height": 0}, "error": "width and height must be at least 1"},
+    {"name": "a negative width is refused", "params": {"width": -800, "height": 600}, "error": "width and height must be at least 1"}
+  ]
+}

@@ -62,6 +62,14 @@ export function effectiveTextScope(pressed, focused) {
   return typeof focused === "string" && focused ? { kind: "card", card: focused } : { kind: "frame" };
 }
 
+/**
+ * Whether a press on target is a press on the frame outside the plane (docs/spec/text-size.md#scope): a bar, or the stage around the
+ * plane, whose own element is the target of a press outside the plane.
+ */
+export function pressesFrame(target) {
+  return Boolean(target.closest?.(".chrome-bar, .tabs--space, .tabs--project")) || Boolean(target.matches?.(".stage"));
+}
+
 /** Changes the scope and notifies. */
 export function setTextScope(next) {
   if (next?.kind === "card") {

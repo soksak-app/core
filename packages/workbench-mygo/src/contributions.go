@@ -1,10 +1,9 @@
 package workbench
 
 import (
+	"encoding/json"
 	"fmt"
 	"maps"
-	"math"
-	"reflect"
 	"slices"
 	"strings"
 
@@ -100,9 +99,15 @@ func ResolveContributions(installed []InstalledPlugin) ([]ResolvedContribution, 
 					resolved = append(resolved, fail("invalid", providerID+" "+provider.Version+" declares no extension point "+name))
 				case !sok.Satisfies(declaration.Version, itemRange):
 					resolved = append(resolved, fail("version-mismatch", "range "+itemRange+" does not contain "+point+" "+declaration.Version))
-				case !MatchesSchema(declaration.Schema, item):
-					resolved = append(resolved, fail("invalid", "item does not match the schema of "+point))
 				default:
+					matched, err := matchesSchema(declaration.Schema, item)
+					if err != nil {
+						return nil, fmt.Errorf("plugin %s contributes %s: %w", plugin.ID, point, err)
+					}
+					if !matched {
+						resolved = append(resolved, fail("invalid", "item does not match the schema of "+point))
+						continue
+					}
 					base.State = "connected"
 					resolved = append(resolved, ResolvedContribution{ContributionStatus: base, Provider: providerID, Item: item,
 						Module: "/modules/" + plugin.Package + "/" + module})
@@ -113,66 +118,18 @@ func ResolveContributions(installed []InstalledPlugin) ([]ResolvedContribution, 
 	return resolved, nil
 }
 
-// MatchesSchema reports whether value, as JSON decodes it, matches schema: the keywords enum, type, properties and items.
-func MatchesSchema(schema, value any) bool {
-	keywords, ok := schema.(map[string]any)
-	if !ok {
-		return false
+// matchesSchema reports whether value, as JSON decodes it, matches schema, with the matcher of the manifest reader
+// (sok.MatchesSchemaText). Both are JSON text again for it, which reads their numbers as the reader does.
+func matchesSchema(schema, value any) (bool, error) {
+	schemaText, err := json.Marshal(schema)
+	if err != nil {
+		return false, fmt.Errorf("schema: %w", err)
 	}
-	if options, ok := keywords["enum"].([]any); ok && !slices.ContainsFunc(options, func(option any) bool { return reflect.DeepEqual(option, value) }) {
-		return false
+	valueText, err := json.Marshal(value)
+	if err != nil {
+		return false, fmt.Errorf("value: %w", err)
 	}
-	if types, ok := keywords["type"]; ok && !matchesType(types, value) {
-		return false
-	}
-	if properties, ok := keywords["properties"].(map[string]any); ok {
-		if object, ok := value.(map[string]any); ok {
-			for key, sub := range properties {
-				if member, ok := object[key]; ok && !MatchesSchema(sub, member) {
-					return false
-				}
-			}
-		}
-	}
-	if items, ok := keywords["items"]; ok {
-		if list, ok := value.([]any); ok {
-			return !slices.ContainsFunc(list, func(item any) bool { return !MatchesSchema(items, item) })
-		}
-	}
-	return true
-}
-
-// matchesType reports whether value has the type or one of the types of a schema.
-func matchesType(types, value any) bool {
-	list, ok := types.([]any)
-	if !ok {
-		list = []any{types}
-	}
-	return slices.ContainsFunc(list, func(name any) bool {
-		switch name {
-		case "string":
-			_, ok := value.(string)
-			return ok
-		case "number":
-			_, ok := value.(float64)
-			return ok
-		case "integer":
-			number, ok := value.(float64)
-			return ok && number == math.Trunc(number)
-		case "boolean":
-			_, ok := value.(bool)
-			return ok
-		case "object":
-			_, ok := value.(map[string]any)
-			return ok
-		case "array":
-			_, ok := value.([]any)
-			return ok
-		case "null":
-			return value == nil
-		}
-		return false
-	})
+	return sok.MatchesSchemaText(schemaText, valueText)
 }
 
 // Contributions holds the resolved contributions of a workbench.

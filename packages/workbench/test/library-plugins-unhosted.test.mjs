@@ -24,7 +24,7 @@ test("the plugin page of a window without a host lists the loaded plugin and off
   const { installEnvironment } = await import("../environment.js");
   assert.deepEqual(installEnvironment({
     runtime: "runtime",
-    workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: "tty", title: "t" }] }] } },
+    workspace: { focus: "main", grid: { root: { card: "main", tabs: [{ plugin: "tty", title: "t" }] } } },
     sidebars: { sets: [], links: [] },
   }, { plugins: [{ id: "tty", package: "@scope/tty", version: "0.1.0", manifest: {
     id: "tty", name: "터미널", description: "명령을 실행하는 표면.", mark: "t", icon: "<path/>",

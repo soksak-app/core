@@ -33,11 +33,10 @@ test("the scope of a pressed card ends with the card and its space", { timeout: 
   const installErrors = installEnvironment({
     runtime: "runtime",
     workspace: { focus: "main", grid: {
-      xs: [0, 0.5, 1], ys: [0, 1],
-      cards: [
-        { id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: pluginId, title: "main" }] },
-        { id: "other", c0: 1, c1: 2, r0: 0, r1: 1, tabs: [{ plugin: pluginId, title: "other" }] },
-      ],
+      root: { cut: "x", kids: [
+        { share: 0.5, node: { card: "main", tabs: [{ plugin: pluginId, title: "main" }] } },
+        { share: 0.5, node: { card: "other", tabs: [{ plugin: pluginId, title: "other" }] } },
+      ] },
     } },
     sidebars: { sets: [], links: [] },
   }, { plugins: [{ id: pluginId, package: `@fixture/${pluginId}`, version: "0.0.1", manifest: {

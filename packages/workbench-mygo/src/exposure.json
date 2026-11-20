@@ -120,6 +120,22 @@
         }
       },
       {
+        "name": "core.activity",
+        "description": "The activities of the window: for each project that the window opened, each of its spaces and each card and group card of a space, the highest activity that it holds, and the activity of each tab, each listed only with an activity (docs/spec/activity.md#status).",
+        "schema": {
+          "type": "object",
+          "required": ["projects", "tabs"],
+          "properties": {
+            "projects": {
+              "type": "object"
+            },
+            "tabs": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      {
         "name": "core.projects",
         "description": "Every saved project with its open state.",
         "schema": {
@@ -141,7 +157,7 @@
       },
       {
         "name": "core.layout",
-        "description": "The saved form of the current space layout: grid state, focus, and restore widths, or null.",
+        "description": "The stored form of the current space layout with the level of each group node, or null.",
         "schema": {
           "type": [
             "object",
@@ -151,7 +167,7 @@
       },
       {
         "name": "core.sidebars",
-        "description": "The drawn sidebars in workbench order: the sidebar (`left`, `right`, `top` or `bottom` for the fixed window sidebar of that side, `<card>:<side>` for an internal card sidebar), placement (`window` or `card`), its set, layout, horizontal or vertical orientation (horizontal for a top or bottom window sidebar), selected tab or null, the card and active tab its sections receive (for a fixed window sidebar, the focused content card and its active tab while a plugin override applies, otherwise null), the overriding plugin and side of a fixed window sidebar or null, its rectangle, and each section's id, name, fold state, whether its tab text is clipped (always false in list layout), `surfaceId` (the section surface `<space>/<sidebar>/<section>`), `surface` (the surface that the section follows, as the sidebar reports it), its declared `height` (`fill` or pixels), `size` (the height that the person dragged the section to, or null), `mounted` (whether the section view is mounted), `phase` (the page status of the section view or null before its mount) and `error` (its mount error or null).",
+        "description": "The drawn sidebars in workbench order: the sidebar (`left`, `right`, `top` or `bottom` for the fixed window sidebar of that side, `<card>:<side>` for an internal card sidebar), placement (`window` or `card`), its set and layout (both null for a fixed window sidebar that shows no set and draws only its status line), horizontal or vertical orientation (horizontal for a top or bottom window sidebar), selected tab or null, the card and active tab its sections receive (for a fixed window sidebar, the focused content card and its active tab while a plugin override applies, otherwise null), the overriding plugin and side of a fixed window sidebar or null, its rectangle, and each section's id, name, fold state, whether its tab text is clipped (always false in list layout), `surfaceId` (the section surface `<space>/<sidebar>/<section>`), `surface` (the surface that the section follows, as the sidebar reports it), its declared `height` (`fill` or pixels), `size` (the height that the person dragged the section to, or null), `mounted` (whether the section view is mounted), `phase` (the page status of the section view or null before its mount) and `error` (its mount error or null).",
         "schema": {
           "type": "array",
           "items": {
@@ -160,16 +176,8 @@
               "sidebar": {
                 "type": "string"
               },
-              "set": {
-                "type": "string"
-              },
-              "layout": {
-                "type": "string",
-                "enum": [
-                  "list",
-                  "tabs"
-                ]
-              },
+              "set": { "type": ["string", "null"] },
+              "layout": { "type": ["string", "null"], "enum": ["list", "tabs", null] },
               "orientation": { "type": "string", "enum": ["horizontal", "vertical"] },
               "placement": { "enum": ["window", "card"] },
               "plugin": { "type": ["string", "null"] },
@@ -212,7 +220,7 @@
       },
       {
         "name": "core.grid",
-        "description": "The current grid: size, gap, boundary positions, and cards in workbench order with their rectangles in plane coordinates, or null, with each card's tabs (with the title a surface reported as label, its notice, the footer text it reported, whether it holds unsaved changes as modified, and the operation error it shows as error or null) and the text its content footer shows as status, tool buttons (enabled, hidden, title), header fit, and effective card sidebars by side with set, size, actual collapsed state, requestedCollapsed, autoCollapsed and collapseReason (null or insufficient-width/insufficient-height); fullscreen is the presented card ID or null, and card rectangles describe current presentation.",
+        "description": "The current grid: size, gap, boundary positions, and cards in workbench order with their rectangles in plane coordinates, or null, with each card's tabs (with the title a surface reported as label, its notice, the footer text it reported, whether it holds unsaved changes as modified, and the operation error it shows as error or null) and the text its content footer shows as status, tool buttons (enabled, hidden, title), header fit, and effective card sidebars by side with set, size, actual collapsed state, requestedCollapsed, autoCollapsed and collapseReason (null or insufficient-width/insufficient-height); fullscreen is the presented card ID or null, and card rectangles describe current presentation. cards holds the content cards only, each with its tabs, the group card that holds it as parent and whether it leads its level as leader; groups holds the group cards in workbench order with their rectangles, parent, leader and group (name, level, leader), empty without group cards.",
         "schema": {
           "type": [
             "object",
@@ -439,9 +447,33 @@
                       "tools": {
                         "enum": [
                           "bar",
-                          "menu"
+                          "menu",
+                          "all"
                         ]
                       }
+                    }
+                  }
+                }
+              }
+            },
+            "groups": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "string" },
+                  "x": { "type": "number" },
+                  "y": { "type": "number" },
+                  "w": { "type": "number" },
+                  "h": { "type": "number" },
+                  "parent": { "type": ["string", "null"] },
+                  "leader": { "type": "boolean" },
+                  "group": {
+                    "type": "object",
+                    "properties": {
+                      "name": { "type": "string" },
+                      "level": { "type": "integer" },
+                      "leader": { "type": "string" }
                     }
                   }
                 }
@@ -1755,7 +1787,7 @@
       },
       {
         "name": "core.drag",
-        "description": "The tab drag in progress: the dragged tab, its card, whether it moved, the drop target, and the drop preview in plane coordinates; null without a drag.",
+        "description": "The tab drag in progress: the dragged tab, its card, whether it moved, the drop target with the tab index of a tab strip, and the drop preview in plane coordinates; null without a drag.",
         "schema": {
           "type": [
             "object",
@@ -1778,7 +1810,8 @@
               ],
               "properties": {
                 "card": {
-                  "type": "string"
+                  "type": ["string", "array"],
+                  "items": { "type": "string" }
                 },
                 "zone": {
                   "enum": [
@@ -1786,8 +1819,12 @@
                     "left",
                     "right",
                     "top",
-                    "bottom"
+                    "bottom",
+                    "strip"
                   ]
+                },
+                "index": {
+                  "type": "integer"
                 }
               }
             },
@@ -2046,7 +2083,8 @@
                 "project"
               ]
             }
-          }
+          },
+          "required": ["patch"]
         },
         "result": {
           "type": "null"
@@ -2061,7 +2099,8 @@
             "key": {
               "type": "string"
             }
-          }
+          },
+          "required": ["key"]
         },
         "result": {
           "type": "null"
@@ -2076,7 +2115,8 @@
             "on": {
               "type": "boolean"
             }
-          }
+          },
+          "required": ["on"]
         },
         "result": {
           "type": "null"
@@ -2154,7 +2194,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": ["parts"]
         },
         "result": {
           "type": "object",
@@ -2258,7 +2299,8 @@
             "path": {
               "type": "string"
             }
-          }
+          },
+          "required": ["path"]
         },
         "result": {
           "type": "object",
@@ -2316,7 +2358,8 @@
             "path": {
               "type": "string"
             }
-          }
+          },
+          "required": ["path"]
         },
         "result": {
           "type": "null"
@@ -2342,7 +2385,8 @@
             "path": {
               "type": "string"
             }
-          }
+          },
+          "required": ["path"]
         },
         "result": {
           "type": "null"
@@ -2357,7 +2401,8 @@
             "with": {
               "type": "string"
             }
-          }
+          },
+          "required": ["with"]
         },
         "result": {
           "type": "null"
@@ -2383,7 +2428,8 @@
             "on": {
               "type": "boolean"
             }
-          }
+          },
+          "required": ["on"]
         },
         "result": {
           "type": "null"
@@ -2412,7 +2458,8 @@
             "selected": {
               "type": "boolean"
             }
-          }
+          },
+          "required": ["row", "selected"]
         },
         "result": {
           "type": "null"
@@ -2427,7 +2474,8 @@
             "row": {
               "type": "integer"
             }
-          }
+          },
+          "required": ["row"]
         },
         "result": {
           "type": "null"
@@ -2518,7 +2566,8 @@
             "color": {
               "type": "string"
             }
-          }
+          },
+          "required": ["root"]
         },
         "result": {
           "type": "object"
@@ -2533,7 +2582,8 @@
             "id": {
               "type": "string"
             }
-          }
+          },
+          "required": ["id"]
         },
         "result": {
           "type": "null"
@@ -2548,7 +2598,8 @@
             "id": {
               "type": "string"
             }
-          }
+          },
+          "required": ["id"]
         },
         "result": {
           "type": "object",
@@ -2571,7 +2622,8 @@
             "title": {
               "type": "string"
             }
-          }
+          },
+          "required": ["id", "title"]
         },
         "result": {
           "type": "null"
@@ -2589,7 +2641,8 @@
             "delta": {
               "type": "integer"
             }
-          }
+          },
+          "required": ["id", "delta"]
         },
         "result": {
           "type": "null"
@@ -2607,7 +2660,8 @@
             "pinned": {
               "type": "boolean"
             }
-          }
+          },
+          "required": ["id", "pinned"]
         },
         "result": {
           "type": "null"
@@ -2636,7 +2690,8 @@
             "name": {
               "type": "string"
             }
-          }
+          },
+          "required": ["parent", "name"]
         },
         "result": {
           "type": "object",
@@ -2678,7 +2733,8 @@
             "id": {
               "type": "string"
             }
-          }
+          },
+          "required": ["id"]
         },
         "result": {
           "type": "null"
@@ -2696,7 +2752,8 @@
             "title": {
               "type": "string"
             }
-          }
+          },
+          "required": ["id", "title"]
         },
         "result": {
           "type": "null"
@@ -2711,7 +2768,8 @@
             "id": {
               "type": "string"
             }
-          }
+          },
+          "required": ["id"]
         },
         "result": {
           "type": "object",
@@ -2740,7 +2798,8 @@
             "size": {
               "type": "number"
             }
-          }
+          },
+          "required": ["card", "axis", "size"]
         },
         "result": {
           "type": "null"
@@ -2764,7 +2823,35 @@
             "position": {
               "type": "number"
             }
+          },
+          "required": ["axis", "line", "position"]
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "position": {
+              "type": "number"
+            }
           }
+        }
+      },
+      {
+        "name": "core.boundary.center",
+        "description": "Centres boundary line on axis between its neighbouring lines, as a double click or Enter on its divider does, and redraws; returns the resulting position.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "axis": {
+              "enum": [
+                "x",
+                "y"
+              ]
+            },
+            "line": {
+              "type": "integer"
+            }
+          },
+          "required": ["axis", "line"]
         },
         "result": {
           "type": "object",
@@ -2802,7 +2889,8 @@
                 "project"
               ]
             }
-          }
+          },
+          "required": ["key", "value"]
         },
         "result": {
           "type": "null"
@@ -2829,7 +2917,8 @@
                 "project"
               ]
             }
-          }
+          },
+          "required": ["name"]
         },
         "result": {
           "type": "null"
@@ -2872,7 +2961,8 @@
                 "project"
               ]
             }
-          }
+          },
+          "required": ["place", "set"]
         },
         "result": {
           "type": "null"
@@ -2911,7 +3001,8 @@
                 "project"
               ]
             }
-          }
+          },
+          "required": ["id"]
         },
         "result": {
           "type": "null"
@@ -2947,7 +3038,8 @@
                 "project"
               ]
             }
-          }
+          },
+          "required": ["id", "action"]
         },
         "result": {
           "type": "null"
@@ -2958,7 +3050,8 @@
         "description": "Removes a sidebar set and every link to it in the scope in one change.",
         "params": {
           "type": "object",
-          "properties": { "id": { "type": "string" }, "scope": { "enum": ["common", "project"] } }
+          "properties": { "id": { "type": "string" }, "scope": { "enum": ["common", "project"] } },
+          "required": ["id"]
         },
         "result": {
           "type": "null"
@@ -2977,7 +3070,8 @@
                 "sidebars"
               ]
             }
-          }
+          },
+          "required": ["section"]
         },
         "result": {
           "type": "null"
@@ -2995,7 +3089,8 @@
                 "project"
               ]
             }
-          }
+          },
+          "required": ["scope"]
         },
         "result": {
           "type": "null"
@@ -3013,7 +3108,8 @@
             "dy": {
               "type": "number"
             }
-          }
+          },
+          "required": ["dx", "dy"]
         },
         "result": {
           "type": "null"
@@ -3028,7 +3124,8 @@
             "plugin": {
               "type": "string"
             }
-          }
+          },
+          "required": ["plugin"]
         },
         "result": {
           "type": "null"
@@ -3043,7 +3140,8 @@
             "plugin": {
               "type": "string"
             }
-          }
+          },
+          "required": ["plugin"]
         },
         "result": {
           "type": "null"
@@ -3058,7 +3156,8 @@
             "plugin": {
               "type": "string"
             }
-          }
+          },
+          "required": ["plugin"]
         },
         "result": {
           "type": "null"
@@ -3073,7 +3172,8 @@
             "plugin": {
               "type": "string"
             }
-          }
+          },
+          "required": ["plugin"]
         },
         "result": {
           "type": "null"
@@ -3088,7 +3188,8 @@
             "plugin": {
               "type": "string"
             }
-          }
+          },
+          "required": ["plugin"]
         },
         "result": {
           "type": "null"
@@ -3163,7 +3264,8 @@
             "sidecar": {
               "type": "string"
             }
-          }
+          },
+          "required": ["sidecar"]
         },
         "result": {
           "type": "null"
@@ -3178,7 +3280,8 @@
             "index": {
               "type": "string"
             }
-          }
+          },
+          "required": ["index"]
         },
         "result": {
           "type": "null"
@@ -3222,7 +3325,8 @@
             "query": {
               "type": "string"
             }
-          }
+          },
+          "required": ["query"]
         },
         "result": {
           "type": "null"
@@ -3281,7 +3385,8 @@
             "card": {
               "type": "string"
             }
-          }
+          },
+          "required": ["card"]
         },
         "result": {
           "type": "null"
@@ -3289,14 +3394,15 @@
       },
       {
         "name": "core.card.fullscreen",
-        "description": "Toggles one content card across the work area without changing the saved arrangement or OS window state.",
+        "description": "Shows a content card or a group card across the work area, or restores the arrangement.",
         "params": {
           "type": "object",
           "properties": {
             "card": {
               "type": "string"
             }
-          }
+          },
+          "required": ["card"]
         },
         "result": {
           "type": "null"
@@ -3304,7 +3410,7 @@
       },
       {
         "name": "core.card.menu",
-        "description": "Opens or closes a card's add or split menu.",
+        "description": "Opens or closes the add, split or group split menu of a card, or the split or group split menu of a group card.",
         "params": {
           "type": "object",
           "properties": {
@@ -3315,10 +3421,13 @@
               "enum": [
                 "add",
                 "split-x",
-                "split-y"
+                "split-y",
+                "group-x",
+                "group-y"
               ]
             }
-          }
+          },
+          "required": ["card", "menu"]
         },
         "result": {
           "type": "null"
@@ -3345,7 +3454,8 @@
             "set": {
               "type": "string"
             }
-          }
+          },
+          "required": ["card", "side", "set"]
         },
         "result": {
           "type": "null"
@@ -3369,7 +3479,8 @@
                 "right"
               ]
             }
-          }
+          },
+          "required": ["card", "side"]
         },
         "result": {
           "type": "null"
@@ -3396,7 +3507,8 @@
             "size": {
               "type": "number"
             }
-          }
+          },
+          "required": ["card", "side", "size"]
         },
         "result": {
           "type": "null"
@@ -3414,7 +3526,8 @@
             "section": {
               "type": "string"
             }
-          }
+          },
+          "required": ["sidebar", "section"]
         },
         "result": {
           "type": "null"
@@ -3435,7 +3548,8 @@
             "height": {
               "type": "integer"
             }
-          }
+          },
+          "required": ["sidebar", "section", "height"]
         },
         "result": {
           "type": "null"
@@ -3453,7 +3567,8 @@
             "section": {
               "type": "string"
             }
-          }
+          },
+          "required": ["sidebar", "section"]
         },
         "result": {
           "type": "null"
@@ -3468,7 +3583,8 @@
             "card": {
               "type": "string"
             }
-          }
+          },
+          "required": ["card"]
         },
         "result": {
           "type": "null"
@@ -3476,14 +3592,15 @@
       },
       {
         "name": "core.card.tools",
-        "description": "Opens or closes a card's tool menu, which a narrow card header shows instead of its tools; its items run the same commands as the sidebar buttons and the enabled tools.",
+        "description": "Opens or closes the tool menu of a card or a group card, which a narrow header shows instead of its tools; its items run the same commands as the sidebar buttons and the enabled tools.",
         "params": {
           "type": "object",
           "properties": {
             "card": {
               "type": "string"
             }
-          }
+          },
+          "required": ["card"]
         },
         "result": {
           "type": "null"
@@ -3498,7 +3615,8 @@
             "card": {
               "type": "string"
             }
-          }
+          },
+          "required": ["card"]
         },
         "result": {
           "type": "null"
@@ -3519,7 +3637,8 @@
             "y": {
               "type": "number"
             }
-          }
+          },
+          "required": ["surface", "x", "y"]
         },
         "result": {
           "type": "null"
@@ -3534,7 +3653,8 @@
             "name": {
               "type": "string"
             }
-          }
+          },
+          "required": ["name"]
         },
         "result": {
           "type": "object",
@@ -3557,7 +3677,8 @@
             "card": {
               "type": "string"
             }
-          }
+          },
+          "required": ["path"]
         },
         "result": {
           "type": "object",
@@ -3586,7 +3707,8 @@
             "params": {
               "type": "object"
             }
-          }
+          },
+          "required": ["card", "plugin"]
         },
         "result": {
           "type": "object",
@@ -3617,7 +3739,8 @@
             "plugin": {
               "type": "string"
             }
-          }
+          },
+          "required": ["card", "side", "plugin"]
         },
         "result": {
           "type": "object",
@@ -3632,6 +3755,195 @@
         }
       },
       {
+        "name": "core.group.create",
+        "description": "Groups a card with a new content card toward side.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            },
+            "side": {
+              "enum": [
+                "left",
+                "right",
+                "top",
+                "bottom"
+              ]
+            },
+            "plugin": {
+              "type": "string"
+            },
+            "params": {
+              "type": "object"
+            },
+            "request": {
+              "type": "string"
+            }
+          },
+          "required": ["card", "side", "plugin"]
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "group": {
+              "type": "string"
+            },
+            "card": {
+              "type": "string"
+            },
+            "tab": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "core.group.dissolve",
+        "description": "Replaces a group card with its members in the level that holds it.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "group": {
+              "type": "string"
+            }
+          },
+          "required": ["group"]
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "dissolved": {
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      {
+        "name": "core.group.rename",
+        "description": "Renames a group card.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "group": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": ["group", "name"]
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "group": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "core.group.leader",
+        "description": "Makes a card the leader of its level.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            }
+          },
+          "required": ["card"]
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            },
+            "group": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "core.group.menu",
+        "description": "Opens or closes the close menu of a group header.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "group": {
+              "type": "string"
+            }
+          },
+          "required": ["group"]
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.card.move",
+        "description": "Moves a content card or a group card beside a card, a box, a cut or a run of any level, named by one identifier or a list, into a group, or into the place of a content card, which takes its place, or joins every tab of a content card to the tab strip of a content card at index, as a drop does.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            },
+            "target": {
+              "type": ["string", "array"],
+              "items": { "type": "string" }
+            },
+            "side": {
+              "enum": [
+                "left",
+                "right",
+                "top",
+                "bottom",
+                "centre",
+                "strip"
+              ]
+            },
+            "index": {
+              "type": "integer"
+            }
+          },
+          "required": ["card", "target", "side"]
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "core.card.get",
+        "description": "Reads the state of one content card of any level with its group path, or one group card.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            }
+          },
+          "required": ["card"]
+        },
+        "result": {
+          "type": "object"
+        }
+      },
+      {
         "name": "core.card.close",
         "description": "Closes a card with all its tabs. When a tab of the card is modified, the workbench asks about that tab first, the result is closed false, and the card closes after its modified tabs are saved or discarded.",
         "params": {
@@ -3640,7 +3952,8 @@
             "card": {
               "type": "string"
             }
-          }
+          },
+          "required": ["card"]
         },
         "result": {
           "type": "object",
@@ -3677,7 +3990,8 @@
                 "bottom"
               ]
             }
-          }
+          },
+          "required": ["card"]
         },
         "result": {
           "type": "object",
@@ -3700,7 +4014,43 @@
             "tab": {
               "type": "string"
             }
+          },
+          "required": ["tab"]
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            },
+            "tab": {
+              "type": "string"
+            }
           }
+        }
+      },
+      {
+        "name": "core.layout.move",
+        "description": "Moves an existing tab, with its surface, into card, or with side into the neighbour of card toward side: a target that already holds the tab selects it, else the tab joins card as a drop on its centre does or card splits toward side into a new card with the tab, and the only tab of a card moves its card. tab is a tab identifier or current and card a card identifier or current. The tab never closes; the result names its card and the tab, selected and its card focused, and the same operation applied again answers the same.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "tab": {
+              "type": "string"
+            },
+            "card": {
+              "type": "string"
+            },
+            "side": {
+              "enum": [
+                "left",
+                "right",
+                "top",
+                "bottom"
+              ]
+            }
+          },
+          "required": ["tab", "card"]
         },
         "result": {
           "type": "object",
@@ -3723,7 +4073,8 @@
             "tab": {
               "type": "string"
             }
-          }
+          },
+          "required": ["tab"]
         },
         "result": {
           "type": "object",
@@ -3743,7 +4094,8 @@
             "tab": {
               "type": "string"
             }
-          }
+          },
+          "required": ["tab"]
         },
         "result": {
           "type": "null"
@@ -3758,7 +4110,8 @@
             "tab": {
               "type": "string"
             }
-          }
+          },
+          "required": ["tab"]
         },
         "result": {
           "type": "object",
@@ -3771,7 +4124,7 @@
       },
       {
         "name": "core.tab.move",
-        "description": "Moves a tab to the centre (as a tab) or an edge (as a new card) of a card, as a drop does.",
+        "description": "Moves a tab to the centre (as a tab at the end) or to the tab strip (as a tab at index) of a card, or to an edge (as a new card) of a card, a box, a cut or a run named by one identifier or a list, as a drop does.",
         "params": {
           "type": "object",
           "properties": {
@@ -3779,7 +4132,8 @@
               "type": "string"
             },
             "card": {
-              "type": "string"
+              "type": ["string", "array"],
+              "items": { "type": "string" }
             },
             "zone": {
               "enum": [
@@ -3787,10 +4141,15 @@
                 "left",
                 "right",
                 "top",
-                "bottom"
+                "bottom",
+                "strip"
               ]
+            },
+            "index": {
+              "type": "integer"
             }
-          }
+          },
+          "required": ["tab", "card", "zone"]
         },
         "result": {
           "type": "null"
@@ -3805,7 +4164,8 @@
             "tab": {
               "type": "string"
             }
-          }
+          },
+          "required": ["tab"]
         },
         "result": {
           "type": "null"
@@ -3823,7 +4183,8 @@
             "keep": {
               "type": "boolean"
             }
-          }
+          },
+          "required": ["tab", "keep"]
         },
         "result": {
           "type": "null"
@@ -3844,7 +4205,8 @@
             "y": {
               "type": "number"
             }
-          }
+          },
+          "required": ["tab", "x", "y"]
         },
         "result": {
           "type": "null"
@@ -3859,7 +4221,8 @@
             "index": {
               "type": "integer"
             }
-          }
+          },
+          "required": ["index"]
         },
         "result": {
           "type": "null"
@@ -3899,7 +4262,8 @@
                 "plugins"
               ]
             }
-          }
+          },
+          "required": ["page"]
         },
         "result": {
           "type": "null"
@@ -3914,7 +4278,8 @@
             "query": {
               "type": "string"
             }
-          }
+          },
+          "required": ["query"]
         },
         "result": {
           "type": "null"
@@ -3929,7 +4294,8 @@
             "query": {
               "type": "string"
             }
-          }
+          },
+          "required": ["query"]
         },
         "result": {
           "type": "null"
@@ -3960,7 +4326,8 @@
                 "open"
               ]
             }
-          }
+          },
+          "required": ["order"]
         },
         "result": {
           "type": "null"
@@ -3975,7 +4342,8 @@
             "id": {
               "type": "string"
             }
-          }
+          },
+          "required": ["id"]
         },
         "result": {
           "type": "null"
@@ -3993,7 +4361,8 @@
             "pinned": {
               "type": "boolean"
             }
-          }
+          },
+          "required": ["id", "pinned"]
         },
         "result": {
           "type": "null"
@@ -4008,7 +4377,8 @@
             "id": {
               "type": "string"
             }
-          }
+          },
+          "required": ["id"]
         },
         "result": {
           "type": "null"
@@ -4048,7 +4418,8 @@
                 "open"
               ]
             }
-          }
+          },
+          "required": ["mode"]
         },
         "result": {
           "type": "null"
@@ -4080,7 +4451,8 @@
             "value": {
               "type": "string"
             }
-          }
+          },
+          "required": ["field", "value"]
         },
         "result": {
           "type": "null"
@@ -4110,20 +4482,22 @@
       },
       {
         "name": "core.rename.begin",
-        "description": "Starts renaming a project or space tab in place.",
+        "description": "Starts renaming a project or space tab, or a group name, in place.",
         "params": {
           "type": "object",
           "properties": {
             "kind": {
               "enum": [
                 "project",
-                "space"
+                "space",
+                "group"
               ]
             },
             "id": {
               "type": "string"
             }
-          }
+          },
+          "required": ["kind", "id"]
         },
         "result": {
           "type": "null"
@@ -4138,7 +4512,8 @@
             "value": {
               "type": "string"
             }
-          }
+          },
+          "required": ["value"]
         },
         "result": {
           "type": "null"
@@ -4178,7 +4553,8 @@
             "index": {
               "type": "integer"
             }
-          }
+          },
+          "required": ["name"]
         },
         "result": {
           "type": "null"
@@ -4196,7 +4572,8 @@
             "y": {
               "type": "number"
             }
-          }
+          },
+          "required": ["x", "y"]
         },
         "result": {
           "type": "boolean"
@@ -4233,6 +4610,26 @@
       {
         "name": "core.chrome.bar",
         "description": "The window chrome row."
+      },
+      {
+        "name": "core.activity.project",
+        "description": "The activity icons before the names of the project tabs that have an activity, in workbench order; each is an image named by its activity (docs/spec/activity.md#drawing).",
+        "many": true
+      },
+      {
+        "name": "core.activity.space",
+        "description": "The activity icons before the names of the space tabs that have an activity, in workbench order; each is an image named by its activity.",
+        "many": true
+      },
+      {
+        "name": "core.activity.group",
+        "description": "The activity icons before the names of the group headers that have an activity, in workbench order; each is an image named by its activity.",
+        "many": true
+      },
+      {
+        "name": "core.activity.tab",
+        "description": "The activity icons before the names of the tabs of the cards that have an activity, in workbench order; each is an image named by its activity.",
+        "many": true
       },
       {
         "name": "core.chrome.balance",
@@ -4376,6 +4773,66 @@
       {
         "name": "core.card.split-x",
         "description": "The vertical split buttons of pane cards in workbench order.",
+        "many": true
+      },
+      {
+        "name": "core.group",
+        "description": "The frames of the group cards in workbench order.",
+        "many": true
+      },
+      {
+        "name": "core.group.header",
+        "description": "The headers of the group cards in workbench order.",
+        "many": true
+      },
+      {
+        "name": "core.group.name",
+        "description": "The names in the group headers in workbench order; a double-click renames.",
+        "many": true
+      },
+      {
+        "name": "core.group.split-x",
+        "description": "The vertical split buttons of the group headers in workbench order.",
+        "many": true
+      },
+      {
+        "name": "core.group.split-y",
+        "description": "The horizontal split buttons of the group headers in workbench order.",
+        "many": true
+      },
+      {
+        "name": "core.group.group-x",
+        "description": "The group split buttons toward right of the group headers in workbench order, enabled while the group card can be split into a new group toward right.",
+        "many": true
+      },
+      {
+        "name": "core.group.group-y",
+        "description": "The group split buttons toward bottom of the group headers in workbench order, enabled while the group card can be split into a new group toward bottom.",
+        "many": true
+      },
+      {
+        "name": "core.group.fullscreen",
+        "description": "The fullscreen buttons of the group headers in workbench order.",
+        "many": true
+      },
+      {
+        "name": "core.group.close",
+        "description": "The close buttons of the group headers in workbench order; each opens the close menu of its group.",
+        "many": true
+      },
+      {
+        "name": "core.card.group-x",
+        "description": "The group split buttons toward right of the content card headers in workbench order, enabled while the card can be split into a new group toward right.",
+        "many": true
+      },
+      {
+        "name": "core.card.group-y",
+        "description": "The group split buttons toward bottom of the content card headers in workbench order, enabled while the card can be split into a new group toward bottom.",
+        "many": true
+      },
+      {
+        "name": "core.card.leader",
+        "description": "The leader buttons of the card and group headers of levels of two or more members in workbench order; pressed on the leader.",
         "many": true
       },
       {
@@ -4869,7 +5326,7 @@
       },
       {
         "name": "core.card.tools",
-        "description": "The tool menu buttons of the cards, in card order.",
+        "description": "The tool menu buttons of the headers of the cards and the group cards, in workbench order.",
         "many": true
       },
       {

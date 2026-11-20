@@ -20,7 +20,7 @@ const sidebarsEnvironment = `{"sidebars":{"sets":[
 	"links":[{"place":"left","plugin":null,"set":"set-install"},{"place":"window-right","plugin":"boxprobe","set":"set-boxprobe"}]}}`
 
 const sidebarsInstalled = `{"plugins":[
-	{"id":"boxprobe","package":"b","version":"1.0.0","manifest":{"id":"boxprobe","name":"브라우저","description":"boxprobe","sections":[
+	{"id":"boxprobe","package":"b","version":"1.0.0","manifest":{"id":"boxprobe","name":"브라우저","description":"boxprobe","mark":"www","icon":"<path d=\"M1 1h14\"/>","surface":{"composition":{"kind":"view","page":"ui/index.html"}},"sections":[
 		{"id":"boxprobe.tabs","name":"탭","composition":{"kind":"view","page":"ui/section.html"},"height":160},
 		{"id":"boxprobe.history","name":"기록","composition":{"kind":"view","page":"ui/section.html"},"height":"fill"},
 		{"id":"boxprobe.dom","name":"DOM","composition":{"kind":"view","page":"ui/section.html"},"height":"fill"},
@@ -218,8 +218,11 @@ func TestTheSectionCommandsRefuseWhatTheSidebarDoesNotHold(t *testing.T) {
 		}
 	}
 	f.frame(t, "right", workbench.FocusedSurface{Card: "c1", Tab: "tab-1", Plugin: "boxprobe"})
-	for _, name := range []string{"core.sidebar.section.fold", "core.sidebar.section.size"} {
-		err := f.run(name, `{"sidebar":"right","section":"boxprobe.tabs","height":100}`)
+	for name, params := range map[string]string{
+		"core.sidebar.section.fold": `{"sidebar":"right","section":"boxprobe.tabs"}`,
+		"core.sidebar.section.size": `{"sidebar":"right","section":"boxprobe.tabs","height":100}`,
+	} {
+		err := f.run(name, params)
 		if err == nil || err.Error() != "sidebar right does not use the list layout" {
 			t.Fatalf("%s: %v", name, err)
 		}

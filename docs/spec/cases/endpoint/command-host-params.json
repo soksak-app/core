@@ -1,0 +1,9 @@
+{
+  "name": "command-host-params",
+  "description": "command.run of a host command checks its parameters against the params schema of the host declaration before the command runs (docs/spec/exposure.md#command-parameters): a missing member of required is refused with -32602 and the text of docs/spec/cases/command-params.json, and the command does not run. The registry of each host runs the other cases of that file.",
+  "replay": true,
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "command.run", "params": { "window": "main", "name": "host.window.move", "params": { "x": 1 } } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "error": { "code": -32602, "message": "command host.window.move: parameter y is required" } } }
+  ]
+}

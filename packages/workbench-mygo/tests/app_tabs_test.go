@@ -336,7 +336,8 @@ func TestAnAttachThatTheHostAnswersAfterItsProjectClosedKeepsNoRegion(t *testing
 const sectionsDocument = `{"plugins": [
 	{"id": "notes", "package": "@scope/plugin-notes", "version": "1.0.0", "manifest": {"id": "notes", "name": "노트", "description": "notes",
 		"mark": "n", "icon": "<path d=\"M1 1h14\"/>", "surface": {"unload": {"format": 1, "maxBytes": 1024}, "composition": {"kind": "view", "page": "ui/index.html"}}}},
-	{"id": "boxprobe", "package": "b", "version": "1.0.0", "manifest": {"id": "boxprobe", "name": "브라우저", "description": "boxprobe", "sections": [
+	{"id": "boxprobe", "package": "b", "version": "1.0.0", "manifest": {"id": "boxprobe", "name": "브라우저", "description": "boxprobe", "mark": "www", "icon": "<path d=\"M1 1h14\"/>",
+		"surface": {"composition": {"kind": "view", "page": "ui/index.html"}}, "sections": [
 		{"id": "boxprobe.tabs", "name": "탭", "composition": {"kind": "view", "page": "ui/section.html"}, "height": 160, "unload": {"format": 2, "maxBytes": 16}},
 		{"id": "boxprobe.history", "name": "기록", "composition": {"kind": "view", "page": "ui/section.html"}, "height": "fill"},
 		{"id": "boxprobe.dom", "name": "DOM", "composition": {"kind": "view", "page": "ui/section.html"}, "height": "fill"},
@@ -531,9 +532,8 @@ func TestAHiddenTabOfAnotherSpaceReadsTheTextScaleOfItsCard(t *testing.T) {
 	stored.installed = hiddenTabsDocument
 	stored.common = map[string]any{"memorySaver": false}
 	project := storedProject(tab("tab-aaaaaa", "notes"))
-	other := map[string]any{"xs": []float64{0, 1}, "ys": []float64{0, 1}, "paidBy": map[string]any{}, "cards": []map[string]any{{
-		"id": "main", "c0": 0, "c1": 1, "r0": 0, "r1": 1, "data": map[string]any{"tabs": []map[string]any{tab("tab-dddddd", "plain")}, "activeId": "tab-dddddd", "textSize": 1.5}}}}
-	project["spaces"] = append(project["spaces"].([]map[string]any), map[string]any{"id": "spc-bbbbbb", "title": "other", "layout": map[string]any{"state": other}})
+	other := map[string]any{"card": "main", "data": map[string]any{"tabs": []map[string]any{tab("tab-dddddd", "plain")}, "activeId": "tab-dddddd", "textSize": 1.5}}
+	project["spaces"] = append(project["spaces"].([]map[string]any), map[string]any{"id": "spc-bbbbbb", "title": "other", "layout": storedRoot(other)})
 	stored.projects = []map[string]any{project}
 	f := newTabApp(t, stored, hiddenTabsDocument)
 	f.command("core.project.activate", map[string]string{"id": "prj-a"})

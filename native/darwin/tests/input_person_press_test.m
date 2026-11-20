@@ -74,7 +74,7 @@ typedef struct {
     char reason[512];
 } SPAnswer;
 
-static void answered(void *context, sp_input_result result, const sp_input_held *held) {
+static void answered(void *context, sp_input_result result, const sp_input_held *held, void *view) {
     SPAnswer *answer = context;
     answer->result = result;
     snprintf(answer->reason, sizeof answer->reason, "%s", held && held->reason ? held->reason : "");

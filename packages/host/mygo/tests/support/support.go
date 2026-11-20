@@ -68,6 +68,8 @@ type SceneWorkbench struct {
 	holding bool
 	// drawing runs in the next draw of the scene (InNextDraw).
 	drawing func()
+	// pressable draws the scene as one button that records each click (Pressable).
+	pressable bool
 	// recorded holds the functions that OnRecord added, each called after each record.
 	recorded map[uint64]func()
 	next     uint64
@@ -96,6 +98,14 @@ func (w *SceneWorkbench) InNextDraw(step func()) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.drawing = step
+}
+
+// Pressable draws the scene of the windows built after it as one button over the window, which records `click <window>` in the
+// frame that reads its click.
+func (w *SceneWorkbench) Pressable() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.pressable = true
 }
 
 // HoldFirstScreen makes the starts after it show no first screen until the test calls FirstScreen of the window.
@@ -160,6 +170,15 @@ func (w *SceneWorkbench) Build(window host.Frontend) func(c *ui.Context) {
 		w.mu.Unlock()
 		if step != nil {
 			step()
+		}
+		w.mu.Lock()
+		pressable := w.pressable
+		w.mu.Unlock()
+		if pressable {
+			if ui.ButtonBase(c).Grow(1).Label("scene").Clicked() {
+				w.Record("click %s", window.Name())
+			}
+			return
 		}
 		ui.Text(c, "scene")
 	}

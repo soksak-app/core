@@ -244,7 +244,7 @@ func TestAStartThatTheHostRefusedShowsItsFailureAsItsFirstScreen(t *testing.T) {
 // (docs/spec/projects.md#settings).
 func TestAStartWithRefusedStoredFilesShowsTheirErrorsAndStarts(t *testing.T) {
 	stored := &storedHost{startFails: true, refusedFiles: map[string]string{
-		"projectsError": "/config/projects.json: projects.json: format must be 1",
+		"projectsError": "/config/projects.json: projects.json: format must be 3",
 		"settingsError": "/config/settings.json: settings.json: format must be 1",
 	}}
 	app, window, queue, _ := fixtureApp(t, stored)

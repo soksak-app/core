@@ -117,7 +117,7 @@ static void event(void *context, const char *text) {
     latestNativeEvent = [[NSJSONSerialization JSONObjectWithData:data options:0 error:nil] retain];
     nativeEvents++;
 }
-static void scrollDone(void *context, sp_input_result result, const sp_input_held *held) {
+static void scrollDone(void *context, sp_input_result result, const sp_input_held *held, void *view) {
     *(sp_input_result *)context = result;
 }
 

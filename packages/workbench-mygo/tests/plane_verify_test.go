@@ -116,7 +116,7 @@ func TestTheVerificationReadsTheDrawnPlane(t *testing.T) {
 	resized(f, 1000)
 	verify := status[workbench.VerifyStatus](t, f, "core.verify")
 	// These measure a plane with one card and one surface. The other checks of the page workbench are listed as skipped.
-	for _, name := range []string{"V2 ", "V4 ", "V5 ", "V7a ", "V7b ", "V10 ", "R ", "D ", "T5 ", "W "} {
+	for _, name := range []string{"V2 ", "V4 ", "V7a ", "V7b ", "V10 ", "R ", "D ", "T5 ", "W "} {
 		verifyRow(t, verify, name)
 	}
 	if verify.Failed != 0 {

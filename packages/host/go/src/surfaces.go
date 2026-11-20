@@ -976,38 +976,15 @@ func (s *Surfaces) press(view uintptr) bool {
 		}
 	}
 	if !ok {
+		EmitHost(LevelDebug, "host.surface.press", map[string]any{"view": uint64(view), "surface": nil})
 		return false
 	}
+	EmitHost(LevelDebug, "host.surface.press", map[string]any{"view": uint64(view), "surface": id})
 	// If Wails EmitEvent ran synchronously inside the local mouse monitor of AppKit,
 	// the handling of the current NSEvent would be re-entered and the next button event could be
 	// delivered to the WebView as a move. It is published in the same main run loop order after the original event returns.
 	mainThreadPost(func() { s.Emit("surface-pressed", id) })
 	return true
-}
-
-// readPressThenDeliver reads the view under a press and then delivers the press, in one step of the UI thread. A read
-// after the delivery runs after a later layout may have moved the views, and then names another view as the target.
-func readPressThenDeliver(read, deliver func() error) error {
-	if err := read(); err != nil {
-		return err
-	}
-	return deliver()
-}
-
-// viewAt reads the web view under the coordinates of a directly injected press. A direct injection does not pass through
-// the local event monitor of AppKit, so the host publishes its surface press separately from the monitor.
-func viewAt(window platform.Window, x, y float64) (uintptr, error) {
-	text, err := system.WindowHit(window, x, y)
-	if err != nil {
-		return 0, err
-	}
-	var got struct {
-		View uint64 `json:"view"`
-	}
-	if err := json.Unmarshal([]byte(text), &got); err != nil {
-		return 0, err
-	}
-	return uintptr(got.View), nil
 }
 
 // SurfaceOwnerID finds the logical surface to which the native view that received the input belongs.
@@ -1749,6 +1726,8 @@ func (h *Host) answerPage(s *Surfaces, end string) {
 	h.relay.Abandon(func(t relayTarget) bool { return t.owner == s })
 	// The page that a removal asked ended, so the removal is allowed (docs/spec/projects.md).
 	h.removals.Abandon(s.name)
+	// The surfaces of the page ended, so the project activities that the page published end with them.
+	h.endProjectActivities(s)
 	if asked {
 		s.window.Close()
 	}

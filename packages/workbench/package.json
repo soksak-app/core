@@ -20,6 +20,9 @@
     "card-sidebars.js",
     "device-grid.js",
     "card-tools.js",
+    "group-cards.js",
+    "group-look.js",
+    "activity.js",
     "card-insets.js",
     "sidebar-grip.js",
     "window-sidebars.js",
@@ -71,6 +74,7 @@
     "closed-tabs.js",
     "page-layout.js",
     "plane.js",
+    "group-tree.js",
     "picker-layer.js",
     "projects.js",
     "spaces.js",
@@ -121,6 +125,7 @@
     "replace-file.mjs"
   ],
   "exports": {
+    "./activity.js": "./activity.js",
     "./host-store.js": "./host-store.js",
     "./host-windows.js": "./host-windows.js",
     "./host-calls.js": "./host-calls.js",
@@ -132,6 +137,8 @@
     "test": "node --test --experimental-test-module-mocks 'test/**/*.test.mjs'"
   },
   "specFiles": [
+    "docs/spec/cases/activity.json",
+    "docs/spec/cases/group-look.json",
     "docs/spec/cases/layout/",
     "docs/spec/cases/log-contract/query/",
     "docs/spec/cases/project-data/",

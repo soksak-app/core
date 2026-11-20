@@ -7,7 +7,7 @@
   "steps": [
     {"call":{"name":"compositionDeclare","payload":{"plugin":"probe","composition":{"kind":"view","page":"ui/page.html","regions":[],"overlays":[]},"surface":"probe-surface"}}},
     {"reply":{"result":null}},
-    {"notice":{"event":"view-call","payload":{"surface":"probe-surface","plugin":"probe","generation":1,"id":1,"command":"core.tab.select","params":{},"cids":["p1700000000000.5"]}}},
+    {"notice":{"event":"view-call","payload":{"surface":"probe-surface","plugin":"probe","generation":1,"id":1,"command":"core.tab.select","params":{"tab":"current"},"cids":["p1700000000000.5"]}}},
     {"call":{"name":"viewReply","payload":{"id":1,"result":null,"page":"$page-identity","generation":1,"surface":"probe-surface"}}},
     {"reply":{"result":null}},
     {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":"$ts-us-2","mono_ns":"$mono-ns-2","start":"$page-identity","level":"info","event":"workbench.log.gated","fields":{"class":"call","level":"debug","count":3}}]}}},

@@ -15,9 +15,6 @@ type Space struct {
 	ID     string          `json:"id"`
 	Title  string          `json:"title"`
 	Layout json.RawMessage `json:"layout"`
-	// Parties is the member parties, which no current form of a space object holds (docs/spec/projects.md#persistence). The shell
-	// refuses a space that holds it, and a write keeps the member as it is stored, so the file is not converted.
-	Parties json.RawMessage `json:"parties,omitempty"`
 }
 
 // Project is a project record of projects.json. The members that the space functions read and change are fields, and Rest holds
@@ -157,25 +154,31 @@ func SpaceTabIDs(p *Project) ([]string, error) {
 	out := []string{}
 	for _, space := range p.Spaces {
 		var layout struct {
-			State struct {
-				Cards []struct {
-					Data *struct {
-						Tabs []struct {
-							ID string `json:"id"`
-						} `json:"tabs"`
-					} `json:"data"`
-				} `json:"cards"`
-			} `json:"state"`
+			State State `json:"state"`
 		}
 		if err := json.Unmarshal(space.Layout, &layout); err != nil {
 			return nil, fmt.Errorf("space %s: %w", space.ID, err)
 		}
-		for _, card := range layout.State.Cards {
+		cards, err := layout.State.Cards()
+		if err != nil {
+			return nil, fmt.Errorf("space %s: %w", space.ID, err)
+		}
+		for _, card := range cards {
+			var data *struct {
+				Tabs []struct {
+					ID string `json:"id"`
+				} `json:"tabs"`
+			}
+			if card.Data != nil {
+				if err := json.Unmarshal(card.Data, &data); err != nil {
+					return nil, fmt.Errorf("space %s: card %s: %w", space.ID, card.ID, err)
+				}
+			}
 			// A seat card has null data, so it has no tabs.
-			if card.Data == nil {
+			if data == nil {
 				continue
 			}
-			for _, tab := range card.Data.Tabs {
+			for _, tab := range data.Tabs {
 				out = append(out, tab.ID)
 			}
 		}

@@ -43,7 +43,7 @@ export class SoksakView {
     fullscreen(id) {
         if (this.disposed)
             throw new Error('cannot fullscreen a destroyed view');
-        if (id !== null && (typeof id !== 'string' || !this.grid.card(id))) {
+        if (id !== null && (typeof id !== 'string' || !this.drawn.has(id))) {
             throw new Error(`unknown fullscreen card ${String(id)}`);
         }
         if (this.drags.size > 0 || this.mouseDrag !== null) {
@@ -89,7 +89,7 @@ export class SoksakView {
         this.resolution.addEventListener('change', this.resolutionChanged);
     }
     constructor(host, grid, options) {
-        var _a;
+        var _a, _b, _c;
         this.fullscreenId = null;
         this.cardEls = new Map();
         /** The device-pixel rects the last paint wrote to the card elements. */
@@ -163,6 +163,21 @@ export class SoksakView {
         this.options = options;
         // default: `classPrefix` is optional and documented as `sp`.
         this.prefix = (_a = options.classPrefix) !== null && _a !== void 0 ? _a : 'sp';
+        // default: `boundary` is optional and documented as the grid's own operations.
+        this.boundary = (_b = options.boundary) !== null && _b !== void 0 ? _b : {
+            move: (axis, line, px) => grid.moveBoundary(axis, line, px),
+            step: (axis, line, px) => grid.moveBoundary(axis, line, px),
+            center: (axis, line) => grid.centerBoundary(axis, line),
+            end: () => false,
+        };
+        // default: `drawn` is optional and documented as the grid's own arrangement: a fullscreen card covers the plane.
+        this.drawn = (_c = options.drawn) !== null && _c !== void 0 ? _c : {
+            has: (id) => grid.card(id) !== undefined,
+            rects: (fullscreen) => fullscreen === null ? grid.rects()
+                : new Map([[fullscreen, { x: 0, y: 0, w: grid.width, h: grid.height }]]),
+            rules: () => grid.rules().map((rule) => ({ ...rule, bleed: true })),
+            dividers: () => grid.dividers(),
+        };
         this.observeResolution();
         // The start waits for an animation frame, which runs before that frame's
         // observation round: an observation that starts during the round defers its
@@ -244,19 +259,19 @@ export class SoksakView {
         if (this.disposed)
             return;
         const fullscreen = this.fullscreenId;
-        if (fullscreen !== null && !this.grid.card(fullscreen)) {
+        if (fullscreen !== null && !this.drawn.has(fullscreen)) {
             throw new Error(`unknown fullscreen card ${fullscreen}`);
         }
-        const rects = fullscreen === null ? new Map(this.grid.rects())
-            : new Map(this.grid.cards.map((card) => [card.id, card.id === fullscreen
-                    ? { x: 0, y: 0, w: this.grid.width, h: this.grid.height }
-                    : { x: 0, y: 0, w: 0, h: 0 }]));
+        // A card that a fullscreen box does not show is hidden with an empty rect.
+        const shown = this.drawn.rects(fullscreen);
+        const rects = new Map(this.grid.cards.map((card) => { var _a; return [card.id, (_a = shown.get(card.id)) !== null && _a !== void 0 ? _a : { x: 0, y: 0, w: 0, h: 0 }]; }));
         const snapshot = {
             fullscreen,
             cards: [...this.grid.cards],
+            shown: new Set(shown.keys()),
             rects,
-            rules: fullscreen === null ? [...this.grid.rules()] : [],
-            dividers: fullscreen === null ? [...this.grid.dividers()] : [],
+            rules: fullscreen === null ? [...this.drawn.rules()] : [],
+            dividers: fullscreen === null ? [...this.drawn.dividers()] : [],
             width: this.grid.width,
             height: this.grid.height,
             step: this.step,
@@ -335,13 +350,14 @@ export class SoksakView {
             }
             held.card = card;
             const rect = onGrid(box.get(card.id), step);
-            held.el.hidden = snapshot.fullscreen !== null && card.id !== snapshot.fullscreen;
+            held.el.hidden = snapshot.fullscreen !== null && !snapshot.shown.has(card.id);
             held.el.dataset.fullscreen = String(card.id === snapshot.fullscreen);
             place(held.el, rect);
             this.paintedRects.set(card.id, rect);
             // default: `updateCard` is an optional hook; without it the view only places the card.
             (_b = (_a = this.options).updateCard) === null || _b === void 0 ? void 0 : _b.call(_a, held.el, card, rect);
         }
+        this.arrange(snapshot.cards);
         // The card is gone from the grid, so `destroyCard` receives the last copy
         // the view held.
         for (const [id, held] of this.cardEls) {
@@ -369,8 +385,8 @@ export class SoksakView {
                     this.host.appendChild(el);
                     this.ruleEls.set(rule.key, el);
                 }
-                // default: `bleed` is optional and documented as 0.
-                place(el, onGrid(reach(rule, snapshot.width, snapshot.height, (_j = this.options.bleed) !== null && _j !== void 0 ? _j : 0), step));
+                // default: `bleed` is optional and documented as 0; a rule the host keeps off the frame takes none.
+                place(el, onGrid(reach(rule, snapshot.width, snapshot.height, rule.bleed ? (_j = this.options.bleed) !== null && _j !== void 0 ? _j : 0 : 0), step));
             }
             this.sweep(this.ruleEls, keep);
         }
@@ -398,6 +414,45 @@ export class SoksakView {
         this.renumbered = false;
         // default: `onChange` is an optional listener.
         (_h = (_g = this.options).onChange) === null || _h === void 0 ? void 0 : _h.call(_g, reason);
+    }
+    /**
+     * Put the card elements in the order of `order`, the reading order of the
+     * grid by default.
+     *
+     * The elements of the cards whose places agree with the order keep their
+     * place, and only the others move: the longest run of elements that already
+     * stand in that order stays, and it always holds the element that holds the
+     * focus. Moving that element would take the focus from it, and moving any
+     * element tears down a frame or a plugin document inside it, so the view
+     * moves as few as the order allows.
+     */
+    arrange(cards) {
+        const order = this.options.order
+            ? this.options.order(cards)
+            : [...cards].sort((a, b) => a.r0 - b.r0 || a.c0 - b.c0).map((card) => card.id);
+        const ids = new Set(cards.map((card) => card.id));
+        const listed = new Set(order);
+        if (order.length !== ids.size || listed.size !== ids.size || order.some((id) => !ids.has(id))) {
+            const missing = [...ids].filter((id) => !listed.has(id));
+            const unknown = [...listed].filter((id) => !ids.has(id));
+            throw new Error(`order gave ${order.length} cards for the ${ids.size} cards of the grid` +
+                (missing.length ? `: missing ${missing.join(', ')}` : '') +
+                (unknown.length ? `${missing.length ? ';' : ':'} unknown ${unknown.join(', ')}` : '') +
+                (order.length !== listed.size ? `${missing.length || unknown.length ? ';' : ':'} a card given twice` : ''));
+        }
+        const rank = new Map(order.map((id, index) => [id, index]));
+        const standing = [...this.host.children].filter((el) => { var _a, _b; var _c; return ((_b = this.cardEls.get((_c = (_a = el.dataset) === null || _a === void 0 ? void 0 : _a.cardId) !== null && _c !== void 0 ? _c : '')) === null || _b === void 0 ? void 0 : _b.el) === el; });
+        const ranks = standing.map((el) => rank.get(el.dataset.cardId));
+        const active = this.host.ownerDocument.activeElement;
+        const pinned = standing.findIndex((el) => active !== null && el.contains(active));
+        const kept = new Set(keptRun(ranks, pinned).map((index) => standing[index]));
+        let next = this.firstOverlay();
+        for (let index = order.length - 1; index >= 0; index--) {
+            const el = this.cardEls.get(order[index]).el;
+            if (!kept.has(el) && el.nextElementSibling !== next)
+                this.host.insertBefore(el, next);
+            next = el;
+        }
     }
     /**
      * The first rule or divider element in the host, or null when there is none.
@@ -707,7 +762,7 @@ export class SoksakView {
         // merge addresses; a drag that stood where it stood keeps it.
         let merged = false;
         this.carry(() => {
-            merged = this.grid.mergeCoincident(drag.axis, drag.line);
+            merged = this.boundary.end(drag.axis, drag.line);
             return 0;
         }, null);
         this.draw(merged ? 'merge' : 'drag');
@@ -729,7 +784,7 @@ export class SoksakView {
         // merge addresses; a drag that stood where it stood keeps it.
         let merged = false;
         this.carry(() => {
-            merged = this.grid.mergeCoincident(drag.axis, drag.line);
+            merged = this.boundary.end(drag.axis, drag.line);
             return 0;
         }, null);
         this.draw(merged ? 'merge' : 'drag');
@@ -781,7 +836,7 @@ export class SoksakView {
             // finger, not the second press of a pair.
             if (((_a = this.drags.get(tapId)) === null || _a === void 0 ? void 0 : _a.on) !== el && e.timeStamp - lastTap < DOUBLE_TAP_MS) {
                 lastTap = -Infinity;
-                this.carry(() => this.grid.centerBoundary(axis, line), el);
+                this.carry(() => this.boundary.center(axis, line), el);
                 this.draw('center');
                 return;
             }
@@ -827,7 +882,7 @@ export class SoksakView {
             const now = drag.axis === 'x' ? e.clientX : e.clientY;
             if (Math.abs(now - drag.from) > 2)
                 drag.moved = true;
-            this.commit('drag', () => this.carry(() => this.grid.moveBoundary(drag.axis, drag.line, drag.base + (now - drag.from)), el));
+            this.commit('drag', () => this.carry(() => this.boundary.move(drag.axis, drag.line, drag.base + (now - drag.from)), el));
         });
         const stop = (e) => {
             var _a;
@@ -869,7 +924,7 @@ export class SoksakView {
                 this.disarm(stale.on);
             if (e.timeStamp - lastPress < DOUBLE_TAP_MS) {
                 lastPress = -Infinity;
-                this.carry(() => this.grid.centerBoundary(axis, line), el);
+                this.carry(() => this.boundary.center(axis, line), el);
                 this.draw('center');
                 return;
             }
@@ -901,7 +956,7 @@ export class SoksakView {
             const now = drag.axis === 'x' ? e.clientX : e.clientY;
             if (Math.abs(now - drag.from) > 2)
                 drag.moved = true;
-            this.commit('drag', () => this.carry(() => this.grid.moveBoundary(drag.axis, drag.line, drag.base + (now - drag.from)), el));
+            this.commit('drag', () => this.carry(() => this.boundary.move(drag.axis, drag.line, drag.base + (now - drag.from)), el));
         };
         const mouseUp = (e) => {
             var _a;
@@ -955,7 +1010,7 @@ export class SoksakView {
                 e.preventDefault();
                 this.pressed = held;
                 try {
-                    this.carry(() => this.grid.centerBoundary(axis, line), el);
+                    this.carry(() => this.boundary.center(axis, line), el);
                     this.draw('center');
                 }
                 finally {
@@ -969,7 +1024,7 @@ export class SoksakView {
             e.preventDefault();
             this.pressed = held;
             try {
-                this.commit('drag', () => this.carry(() => this.grid.moveBoundary(axis, line, this.grid.boundaryPos(axis, line) + step * 8), el));
+                this.commit('drag', () => this.carry(() => this.boundary.step(axis, line, this.grid.boundaryPos(axis, line) + step * 8), el));
             }
             finally {
                 this.pressed = null;
@@ -1097,4 +1152,34 @@ function place(el, rect) {
         s.width = width;
     if (s.height !== height)
         s.height = height;
+}
+/**
+ * The indexes of a longest increasing run of `ranks`, in order, that holds the
+ * index `pinned` when it is 0 or above: the elements that keep their place
+ * while the others move around them.
+ */
+function keptRun(ranks, pinned) {
+    const fits = (index) => pinned < 0 || index === pinned || (index < pinned ? ranks[index] < ranks[pinned] : ranks[index] > ranks[pinned]);
+    const length = [];
+    const before = [];
+    let best = -1;
+    for (let index = 0; index < ranks.length; index++) {
+        length[index] = 0;
+        before[index] = -1;
+        if (!fits(index))
+            continue;
+        length[index] = 1;
+        for (let earlier = 0; earlier < index; earlier++) {
+            if (length[earlier] > 0 && ranks[earlier] < ranks[index] && length[earlier] + 1 > length[index]) {
+                length[index] = length[earlier] + 1;
+                before[index] = earlier;
+            }
+        }
+        if (best < 0 || length[index] > length[best])
+            best = index;
+    }
+    const run = [];
+    for (let index = best; index >= 0; index = before[index])
+        run.unshift(index);
+    return run;
 }

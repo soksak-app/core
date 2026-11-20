@@ -285,7 +285,7 @@ func (s *Shell) drawProjectGrid(c *ui.Context, width float32) {
 	if width+2*m.space3 < m.libraryNarrowW {
 		least = m.libraryCardMinWNarrow
 	}
-	drawn := map[string]*layout.State{}
+	drawn := map[string]*previewLayout{}
 	errors := map[string]string{}
 	ui.Grid(c).ColumnTracks(ui.Fr(1).Min(least).AutoFill()).FillWidth().Gap(2 * s.palette.HalfGap()).Children(func() {
 		for _, project := range shown {
@@ -317,9 +317,9 @@ func (s *Shell) drawLibraryAdd(c *ui.Context) {
 
 // drawProjectCard draws the card of project in the cell of the grid, and returns the layout of its preview, nil for a preview without
 // panes, and the reason its stored layout cannot be opened.
-func (s *Shell) drawProjectCard(c *ui.Context, project *projectRecord) (*layout.State, string) {
+func (s *Shell) drawProjectCard(c *ui.Context, project *projectRecord) (*previewLayout, string) {
 	m := s.metrics
-	var state *layout.State
+	var state *previewLayout
 	failure := ""
 	_, folderFailed := s.library.folderErrors[project.Root]
 	open := s.isOpen(project.ID)
@@ -394,7 +394,7 @@ func (s *Shell) libraryAct(c *ui.Context, button ui.Element, icon, label, title 
 // grid of .library-preview of packages/workbench/library-preview.js. A column that holds only window sidebars is narrower, and a layout
 // that cannot be opened by the check that opens it shows the reason. It returns the layout whose panes it drew, nil for none, and that
 // reason.
-func (s *Shell) drawPreview(c *ui.Context, project *projectRecord) (*layout.State, string) {
+func (s *Shell) drawPreview(c *ui.Context, project *projectRecord) (*previewLayout, string) {
 	m := s.metrics
 	margin := s.palette.HalfGap()
 	// The frame takes the width of the control less its margins, as a block of the page does.
@@ -415,26 +415,68 @@ func (s *Shell) drawPreview(c *ui.Context, project *projectRecord) (*layout.Stat
 	if err := json.Unmarshal(space.Layout, &stored); err != nil {
 		return nil, err.Error()
 	}
-	shares := previewShares(stored.State)
+	// The group tree is read as the space opens it, so the preview shows the refusal of a stored group (docs/spec/groups.md#storage).
+	tree, err := s.readStoredTree(stored)
+	if err != nil {
+		failure := fmt.Sprintf("projects.json: project %s space %s: %s", project.Root, project.ActiveSpaceID, err)
+		frame.Children(func() {
+			ui.Text(c, failure).Wrap().LineHeight(s.metrics.lineHeight).FontSize(s.textCaption()).TextColor(s.palette.No).Margin(padY, padX, padY, padX)
+		})
+		return nil, failure
+	}
+	grid := tree.Grid()
+	drawn := previewLayout{Xs: grid.Lines("x"), Ys: grid.Lines("y"), Cards: grid.Cards()}
+	s.drawPreviewGrid(frame.Padding(padY, padX, padY, padX), c, drawn, tree)
+	return &drawn, ""
+}
+
+// previewLayout is the lines and the cells that a preview lays its panes on, derived from the tree of the stored layout.
+type previewLayout struct {
+	Xs, Ys []float64
+	Cards  []layout.Card
+}
+
+// readStoredTree reads the stored layout of stored on a grid of its own, as loadSpace reads it.
+func (s *Shell) readStoredTree(stored storedLayout) (*layout.GroupTree, error) {
+	gap := s.palette.PlaneGap()
+	grid, err := layout.New(nil, layout.Options{Gap: &gap})
+	if err != nil {
+		return nil, err
+	}
+	return layout.ReadTree(stored.State, stored.Groups, stored.Leader, stored.LastCard, s.groupOptions(), grid)
+}
+
+// drawPreviewGrid lays the cards of the grid state out in box as the grid of a preview, and draws each group card of tree as a frame
+// around the panes inside it (docs/spec/groups.md#drawing).
+func (s *Shell) drawPreviewGrid(box ui.Element, c *ui.Context, state previewLayout, tree *layout.GroupTree) {
+	m := s.metrics
+	shares := previewShares(state)
 	columns := make([]ui.Track, len(shares))
 	for i, share := range shares {
 		columns[i] = ui.Fr(share)
 	}
-	rows := make([]ui.Track, len(stored.State.Ys)-1)
+	rows := make([]ui.Track, len(state.Ys)-1)
 	for i := range rows {
 		rows[i] = ui.Fr(1)
 	}
-	frame.Grid().ColumnTracks(columns...).RowTracks(rows...).Gap(m.space2).Padding(padY, padX, padY, padX).Children(func() {
-		for _, card := range stored.State.Cards {
+	box.Grid().ColumnTracks(columns...).RowTracks(rows...).Gap(m.space2).Children(func() {
+		for _, card := range state.Cards {
 			s.drawPreviewPane(c, card)
 		}
+		for _, id := range tree.Cards() {
+			if !tree.IsGroup(id) {
+				continue
+			}
+			span, _ := tree.Card(id) // silent: Cards lists cards of the tree.
+			ui.Box(c.Key(id)).ColumnStart(span.C0+1).ColumnSpan(span.C1-span.C0).RowStart(span.R0+1).RowSpan(span.R1-span.R0).
+				Radius(s.radiusSmall()).Border(s.palette.BorderWidth, mixed(s.palette.Muted, s.palette.Card, m.previewBorderMix)).PassThrough()
+		}
 	})
-	return &stored.State, ""
 }
 
 // previewShares are the shares of the columns of state in the grid of a preview, where a column with only window sidebars takes less, as
 // minmax(0,1fr) and minmax(0,.22fr) of the page.
-func previewShares(state layout.State) []float32 {
+func previewShares(state previewLayout) []float32 {
 	const sidebarShare = .22
 	shares := make([]float32, len(state.Xs)-1)
 	for column := range shares {
@@ -451,7 +493,7 @@ func previewShares(state layout.State) []float32 {
 // previewPanes are the panes of a preview of state at their places in an open control that is width wide, where the grid of drawPreview
 // lays them out: the frame at its margin, and in it the columns sharing the room less the padding and the gaps by previewShares, and the
 // rows sharing the height.
-func (s *Shell) previewPanes(state layout.State, width float32) []previewPane {
+func (s *Shell) previewPanes(state previewLayout, width float32) []previewPane {
 	m := s.metrics
 	margin, gap := s.palette.HalfGap(), m.space2
 	padX, padY := 2*m.space4, m.space4

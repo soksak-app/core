@@ -21,6 +21,26 @@ import type { Axis, Card, Divider, Rect, Rule } from './soksak.js';
 
 export type ChangeReason = 'drag' | 'center' | 'merge' | 'resize' | 'render';
 
+/**
+ * The boundary operations that the divider gestures run. A host whose model
+ * draws the cards at other rectangles than the grid, and keeps rules of its own
+ * for a line, supplies them; the default is the grid's own.
+ */
+export interface BoundaryModel {
+  /** A drag step: as `moveBoundary(axis, line, px)` of the grid. Returns where the boundary stands. */
+  move(axis: Axis, line: number, px: number): number;
+  /** An arrow key: as `moveBoundary(axis, line, px)` of the grid, one step away. Returns where the boundary stands. */
+  step(axis: Axis, line: number, px: number): number;
+  /** The second press of a pair and Enter: as `centerBoundary(axis, line)` of the grid. Returns where the boundary stands. */
+  center(axis: Axis, line: number): number;
+  /**
+   * The end of a drag that moved the boundary. Returns whether the end merged a line, which the operations of the grid never do: a
+   * move onto another line joins the two lines as it reaches it, because the derived lines hold one coordinate once. A host that
+   * stores the result of a drag through an operation of its own runs it here, from where the drag left the boundary.
+   */
+  end(axis: Axis, line: number): boolean;
+}
+
 export interface ViewOptions {
   /**
    * Build the element for a card. Called once per card. The element is reused
@@ -60,6 +80,43 @@ export interface ViewOptions {
    * not move absolutely positioned children. Default 0.
    */
   bleed?: number;
+  /** The boundary operations of the divider gestures. Default: those of the grid. */
+  boundary?: BoundaryModel;
+  /** The drawn arrangement of a host that draws the cards elsewhere than the grid's rects. Default: that of the grid. */
+  drawn?: DrawnModel;
+  /**
+   * The order of the card elements in the host element, every card id of the
+   * grid once: the order in which the keyboard and a reader of the document
+   * meet the cards. A host that arranges the cards in a structure of its own,
+   * as boxes that hold several cards, gives the order of that structure.
+   * Default: the reading order of the grid, by the first row line and then by
+   * the first column line.
+   */
+  order?(cards: readonly Card[]): readonly string[];
+}
+
+/** A rule as a host draws it: `bleed` false keeps it off the frame around the plane. */
+export interface DrawnRule extends Rule {
+  bleed: boolean;
+}
+
+/**
+ * The arrangement the view draws: the rect of each card, the rules and the
+ * dividers, and the boxes it may show fullscreen. A host whose cards stand
+ * elsewhere than the grid's rects, as below headers of its own, supplies its own.
+ */
+export interface DrawnModel {
+  /** Whether the view may show `id` fullscreen: a card of the grid or a box of the host. */
+  has(id: string): boolean;
+  /**
+   * The rect of each card to draw. With `fullscreen` only the cards shown with
+   * it; every other card is hidden.
+   */
+  rects(fullscreen: string | null): ReadonlyMap<string, Rect>;
+  /** The rules to draw while nothing is fullscreen. */
+  rules(): readonly DrawnRule[];
+  /** The dividers to draw while nothing is fullscreen. */
+  dividers(): readonly Divider[];
 }
 
 /**
@@ -103,8 +160,10 @@ interface DragState {
 interface PaintSnapshot {
   fullscreen: string | null;
   cards: readonly Card[];
+  /** The cards the drawn model shows; the others are hidden while something is fullscreen. */
+  shown: ReadonlySet<string>;
   rects: ReadonlyMap<string, Rect>;
-  rules: readonly Rule[];
+  rules: readonly DrawnRule[];
   dividers: readonly Divider[];
   width: number;
   height: number;
@@ -123,6 +182,8 @@ export class SoksakView {
   private host: HTMLElement;
   private grid: Soksak;
   private options: ViewOptions;
+  private boundary: BoundaryModel;
+  private drawn: DrawnModel;
   private fullscreenId: string | null = null;
 
   /** The chosen fullscreen presentation; it does not change the grid. */
@@ -131,7 +192,7 @@ export class SoksakView {
   /** Present a card across the plane, or restore normal presentation with null. */
   fullscreen(id: string | null): void {
     if (this.disposed) throw new Error('cannot fullscreen a destroyed view');
-    if (id !== null && (typeof id !== 'string' || !this.grid.card(id))) {
+    if (id !== null && (typeof id !== 'string' || !this.drawn.has(id))) {
       throw new Error(`unknown fullscreen card ${String(id)}`);
     }
     if (this.drags.size > 0 || this.mouseDrag !== null) {
@@ -252,6 +313,21 @@ export class SoksakView {
     this.options = options;
     // default: `classPrefix` is optional and documented as `sp`.
     this.prefix = options.classPrefix ?? 'sp';
+    // default: `boundary` is optional and documented as the grid's own operations.
+    this.boundary = options.boundary ?? {
+      move: (axis, line, px) => grid.moveBoundary(axis, line, px),
+      step: (axis, line, px) => grid.moveBoundary(axis, line, px),
+      center: (axis, line) => grid.centerBoundary(axis, line),
+      end: () => false,
+    };
+    // default: `drawn` is optional and documented as the grid's own arrangement: a fullscreen card covers the plane.
+    this.drawn = options.drawn ?? {
+      has: (id) => grid.card(id) !== undefined,
+      rects: (fullscreen) => fullscreen === null ? grid.rects()
+        : new Map([[fullscreen, { x: 0, y: 0, w: grid.width, h: grid.height }]]),
+      rules: () => grid.rules().map((rule) => ({ ...rule, bleed: true })),
+      dividers: () => grid.dividers(),
+    };
     this.observeResolution();
 
     // The start waits for an animation frame, which runs before that frame's
@@ -335,19 +411,19 @@ export class SoksakView {
     // plane that is gone.
     if (this.disposed) return;
     const fullscreen = this.fullscreenId;
-    if (fullscreen !== null && !this.grid.card(fullscreen)) {
+    if (fullscreen !== null && !this.drawn.has(fullscreen)) {
       throw new Error(`unknown fullscreen card ${fullscreen}`);
     }
-    const rects = fullscreen === null ? new Map(this.grid.rects())
-      : new Map(this.grid.cards.map((card) => [card.id, card.id === fullscreen
-        ? { x: 0, y: 0, w: this.grid.width, h: this.grid.height }
-        : { x: 0, y: 0, w: 0, h: 0 }]));
+    // A card that a fullscreen box does not show is hidden with an empty rect.
+    const shown = this.drawn.rects(fullscreen);
+    const rects = new Map(this.grid.cards.map((card) => [card.id, shown.get(card.id) ?? { x: 0, y: 0, w: 0, h: 0 }]));
     const snapshot: PaintSnapshot = {
       fullscreen,
       cards: [...this.grid.cards],
+      shown: new Set(shown.keys()),
       rects,
-      rules: fullscreen === null ? [...this.grid.rules()] : [],
-      dividers: fullscreen === null ? [...this.grid.dividers()] : [],
+      rules: fullscreen === null ? [...this.drawn.rules()] : [],
+      dividers: fullscreen === null ? [...this.drawn.dividers()] : [],
       width: this.grid.width,
       height: this.grid.height,
       step: this.step,
@@ -424,13 +500,14 @@ export class SoksakView {
       }
       held.card = card;
       const rect = onGrid(box.get(card.id) as Rect, step);
-      held.el.hidden = snapshot.fullscreen !== null && card.id !== snapshot.fullscreen;
+      held.el.hidden = snapshot.fullscreen !== null && !snapshot.shown.has(card.id);
       held.el.dataset.fullscreen = String(card.id === snapshot.fullscreen);
       place(held.el, rect);
       this.paintedRects.set(card.id, rect);
       // default: `updateCard` is an optional hook; without it the view only places the card.
       this.options.updateCard?.(held.el, card, rect);
     }
+    this.arrange(snapshot.cards);
     // The card is gone from the grid, so `destroyCard` receives the last copy
     // the view held.
     for (const [id, held] of this.cardEls) {
@@ -458,8 +535,8 @@ export class SoksakView {
           this.host.appendChild(el);
           this.ruleEls.set(rule.key, el);
         }
-        // default: `bleed` is optional and documented as 0.
-        place(el, onGrid(reach(rule, snapshot.width, snapshot.height, this.options.bleed ?? 0), step));
+        // default: `bleed` is optional and documented as 0; a rule the host keeps off the frame takes none.
+        place(el, onGrid(reach(rule, snapshot.width, snapshot.height, rule.bleed ? this.options.bleed ?? 0 : 0), step));
       }
       this.sweep(this.ruleEls, keep);
     }
@@ -489,6 +566,49 @@ export class SoksakView {
 
     // default: `onChange` is an optional listener.
     this.options.onChange?.(reason);
+  }
+
+  /**
+   * Put the card elements in the order of `order`, the reading order of the
+   * grid by default.
+   *
+   * The elements of the cards whose places agree with the order keep their
+   * place, and only the others move: the longest run of elements that already
+   * stand in that order stays, and it always holds the element that holds the
+   * focus. Moving that element would take the focus from it, and moving any
+   * element tears down a frame or a plugin document inside it, so the view
+   * moves as few as the order allows.
+   */
+  private arrange(cards: readonly Card[]): void {
+    const order = this.options.order
+      ? this.options.order(cards)
+      : [...cards].sort((a, b) => a.r0 - b.r0 || a.c0 - b.c0).map((card) => card.id);
+    const ids = new Set(cards.map((card) => card.id));
+    const listed = new Set(order);
+    if (order.length !== ids.size || listed.size !== ids.size || order.some((id) => !ids.has(id))) {
+      const missing = [...ids].filter((id) => !listed.has(id));
+      const unknown = [...listed].filter((id) => !ids.has(id));
+      throw new Error(
+        `order gave ${order.length} cards for the ${ids.size} cards of the grid` +
+          (missing.length ? `: missing ${missing.join(', ')}` : '') +
+          (unknown.length ? `${missing.length ? ';' : ':'} unknown ${unknown.join(', ')}` : '') +
+          (order.length !== listed.size ? `${missing.length || unknown.length ? ';' : ':'} a card given twice` : ''),
+      );
+    }
+    const rank = new Map(order.map((id, index) => [id, index]));
+    const standing = [...this.host.children].filter(
+      (el): el is HTMLElement => this.cardEls.get((el as HTMLElement).dataset?.cardId ?? '')?.el === el,
+    );
+    const ranks = standing.map((el) => rank.get(el.dataset.cardId as string) as number);
+    const active = this.host.ownerDocument.activeElement;
+    const pinned = standing.findIndex((el) => active !== null && el.contains(active));
+    const kept = new Set(keptRun(ranks, pinned).map((index) => standing[index]));
+    let next: Element | null = this.firstOverlay();
+    for (let index = order.length - 1; index >= 0; index--) {
+      const el = (this.cardEls.get(order[index]) as { el: HTMLElement }).el;
+      if (!kept.has(el) && el.nextElementSibling !== next) this.host.insertBefore(el, next);
+      next = el;
+    }
   }
 
   /**
@@ -785,7 +905,7 @@ export class SoksakView {
     // merge addresses; a drag that stood where it stood keeps it.
     let merged = false;
     this.carry(() => {
-      merged = this.grid.mergeCoincident(drag.axis, drag.line);
+      merged = this.boundary.end(drag.axis, drag.line);
       return 0;
     }, null);
     this.draw(merged ? 'merge' : 'drag');
@@ -806,7 +926,7 @@ export class SoksakView {
     // merge addresses; a drag that stood where it stood keeps it.
     let merged = false;
     this.carry(() => {
-      merged = this.grid.mergeCoincident(drag.axis, drag.line);
+      merged = this.boundary.end(drag.axis, drag.line);
       return 0;
     }, null);
     this.draw(merged ? 'merge' : 'drag');
@@ -857,7 +977,7 @@ export class SoksakView {
       // finger, not the second press of a pair.
       if (this.drags.get(tapId)?.on !== el && e.timeStamp - lastTap < DOUBLE_TAP_MS) {
         lastTap = -Infinity;
-        this.carry(() => this.grid.centerBoundary(axis, line), el);
+        this.carry(() => this.boundary.center(axis, line), el);
         this.draw('center');
         return;
       }
@@ -900,7 +1020,7 @@ export class SoksakView {
       if (Math.abs(now - drag.from) > 2) drag.moved = true;
       this.commit('drag', () =>
         this.carry(
-          () => this.grid.moveBoundary(drag.axis, drag.line, drag.base + (now - drag.from)),
+          () => this.boundary.move(drag.axis, drag.line, drag.base + (now - drag.from)),
           el,
         ),
       );
@@ -941,7 +1061,7 @@ export class SoksakView {
       if (stale?.moved) this.disarm(stale.on);
       if (e.timeStamp - lastPress < DOUBLE_TAP_MS) {
         lastPress = -Infinity;
-        this.carry(() => this.grid.centerBoundary(axis, line), el);
+        this.carry(() => this.boundary.center(axis, line), el);
         this.draw('center');
         return;
       }
@@ -971,7 +1091,7 @@ export class SoksakView {
       if (Math.abs(now - drag.from) > 2) drag.moved = true;
       this.commit('drag', () =>
         this.carry(
-          () => this.grid.moveBoundary(drag.axis, drag.line, drag.base + (now - drag.from)),
+          () => this.boundary.move(drag.axis, drag.line, drag.base + (now - drag.from)),
           el,
         ),
       );
@@ -1021,7 +1141,7 @@ export class SoksakView {
         e.preventDefault();
         this.pressed = held;
         try {
-          this.carry(() => this.grid.centerBoundary(axis, line), el);
+          this.carry(() => this.boundary.center(axis, line), el);
           this.draw('center');
         } finally {
           this.pressed = null;
@@ -1035,7 +1155,7 @@ export class SoksakView {
       try {
         this.commit('drag', () =>
           this.carry(
-            () => this.grid.moveBoundary(axis, line, this.grid.boundaryPos(axis, line) + step * 8),
+            () => this.boundary.step(axis, line, this.grid.boundaryPos(axis, line) + step * 8),
             el,
           ),
         );
@@ -1162,4 +1282,33 @@ function place(el: HTMLElement, rect: Rect): void {
   if (s.top !== top) s.top = top;
   if (s.width !== width) s.width = width;
   if (s.height !== height) s.height = height;
+}
+
+/**
+ * The indexes of a longest increasing run of `ranks`, in order, that holds the
+ * index `pinned` when it is 0 or above: the elements that keep their place
+ * while the others move around them.
+ */
+function keptRun(ranks: readonly number[], pinned: number): number[] {
+  const fits = (index: number): boolean =>
+    pinned < 0 || index === pinned || (index < pinned ? ranks[index] < ranks[pinned] : ranks[index] > ranks[pinned]);
+  const length: number[] = [];
+  const before: number[] = [];
+  let best = -1;
+  for (let index = 0; index < ranks.length; index++) {
+    length[index] = 0;
+    before[index] = -1;
+    if (!fits(index)) continue;
+    length[index] = 1;
+    for (let earlier = 0; earlier < index; earlier++) {
+      if (length[earlier] > 0 && ranks[earlier] < ranks[index] && length[earlier] + 1 > length[index]) {
+        length[index] = length[earlier] + 1;
+        before[index] = earlier;
+      }
+    }
+    if (best < 0 || length[index] > length[best]) best = index;
+  }
+  const run: number[] = [];
+  for (let index = best; index >= 0; index = before[index]) run.unshift(index);
+  return run;
 }

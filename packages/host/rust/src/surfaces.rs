@@ -571,38 +571,15 @@ pub fn surface_owner_id(named: &HashMap<Handle, String>, view: Handle) -> Option
         .map(String::as_str)
 }
 
-/// Reads the view under a press and then delivers the press, in one step of the main thread. A read after the delivery
-/// runs after a later layout may have moved the views, and then names another view as the target.
-pub(crate) fn read_press_then_deliver<T>(
-    read: impl FnOnce() -> Result<T, String>,
-    deliver: impl FnOnce() -> Result<(), String>,
-) -> Result<T, String> {
-    let target = read()?;
-    deliver()?;
-    Ok(target)
-}
-
-/// Returns the surface under the coordinates of a directly injected press. A direct injection does not pass through the
-/// AppKit local event monitor, so the host publishes its surface press separately from the monitor. It runs on the main
-/// thread.
-pub(crate) fn surface_at(
-    platform: &dyn platform::Platform,
-    handle: platform::Handle,
-    window: &Window,
-    x: f64,
-    y: f64,
-) -> Result<Option<String>, String> {
-    let hit = platform.hit(handle, x, y)?;
+/// Returns the surface that owns the web view `view`, which a directly injected press reached: a surface web view or a document
+/// web view of a surface. A direct injection does not pass through the AppKit local event monitor, so the host publishes its
+/// surface press separately from the monitor. It runs on the main thread, while the window is open.
+pub(crate) fn surface_of_view(window: &Window, view: Handle) -> Result<Option<String>, String> {
     // Destroyed deletes the registration, so it is read in this step, while the window is open.
     let data = window_data(window)?;
-    // default: a lock that a panicking thread poisoned still holds the surface names, which are only read here; the panic
-    // hook records the panic.
-    let named = data.views.0.lock().unwrap_or_else(PoisonError::into_inner);
     let documents = data.documents.names();
-    Ok(hit.chain.iter().find_map(|view| {
-        surface_owner_id(&named, *view)
-            .map(str::to_owned)
-            .or_else(|| documents.get(view).map(|(surface, _)| surface.clone()))
+    Ok(pressed_surface(&data.views.0, &[view], |view| {
+        documents.get(view).map(|(surface, _)| surface.clone())
     }))
 }
 
@@ -1371,11 +1348,22 @@ fn pressed_surface(
     // default: a lock that a panicking thread poisoned still holds the surface registrations, which are only read; the panic
     // hook records the panic.
     let map = named.lock().unwrap_or_else(PoisonError::into_inner);
-    chain.iter().find_map(|view| {
+    let found = chain.iter().find_map(|view| {
         surface_owner_id(&map, *view)
-            .map(str::to_owned)
-            .or_else(|| documents(view))
-    })
+            .map(|id| (*view, id.to_owned()))
+            .or_else(|| documents(view).map(|id| (*view, id)))
+    });
+    // The record names the view that the host read: the one of the surface, or the view under the press when no surface owns one.
+    let (view, surface) = match found {
+        Some((view, id)) => (view, Some(id)),
+        None => (chain.first().copied().unwrap_or(0), None),
+    };
+    crate::event_record::emit_host(
+        crate::event_log::Level::Debug,
+        "host.surface.press",
+        json!({ "view": view, "surface": surface }),
+    );
+    surface
 }
 
 /// Marks the first commit of the page of the window, and returns whether this call is that commit.

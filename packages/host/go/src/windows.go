@@ -77,8 +77,11 @@ type Host struct {
 	// steps runs the recording of the steps of the main thread.
 	steps *stepRecording
 	// update is the command of an application update or a relaunch that the shutdown starts; h.mu guards it.
-	update     *pendingStart
-	removals   Removals
+	update   *pendingStart
+	removals Removals
+	// activities is the record of the activities of the projects of the application (docs/spec/activity.md#activity-of-a-project);
+	// a change of it happens while h.mu is held, so a publication and the release of its project do not cross.
+	activities ProjectActivities
 	nextWindow uint64
 	workspace  *Workspace
 	opening    sync.Mutex
@@ -220,6 +223,32 @@ func (h *Host) announceToWindows(name string, payload any) {
 	}
 }
 
+// announceProjectActivity sends the record of the project activities to every window as project-activity. Two announcements may
+// arrive in either order, so a window keeps the record of the highest revision (docs/spec/activity.md#activity-of-a-project).
+func (h *Host) announceProjectActivity() {
+	record := h.activities.Record()
+	h.mu.Lock()
+	windows := make([]*Surfaces, 0, len(h.windows))
+	for _, s := range h.windows {
+		windows = append(windows, s)
+	}
+	h.mu.Unlock()
+	for _, s := range windows {
+		s.windowEvent("project-activity", record)
+	}
+}
+
+// endProjectActivities removes the entries of the project activities that the window s published, because its page or the window
+// ended with the surfaces that gave them.
+func (h *Host) endProjectActivities(s *Surfaces) {
+	h.mu.Lock()
+	ended := h.activities.End(s.name)
+	h.mu.Unlock()
+	if ended {
+		h.announceProjectActivity()
+	}
+}
+
 func (h *Host) notifyWorkspace() {
 	h.mu.Lock()
 	windows := make([]*Surfaces, 0, len(h.windows))
@@ -253,6 +282,8 @@ func (h *Host) WindowReady(ctx context.Context) error {
 	h.mu.Lock()
 	s.ready = true
 	h.mu.Unlock()
+	// The ready page receives the record of the project activities, so a new window starts with the projects of the other windows.
+	s.windowEvent("project-activity", h.activities.Record())
 	s.first.Do(func() { s.Emit("page-ready") })
 	s.imageDetachPageReady()
 	s.responderWorkbenchReady()
@@ -811,6 +842,7 @@ func (s *Surfaces) WindowControls() (Rect, error) {
 func (s *Surfaces) close() {
 	// A window that ends keeps no tab, so a removal that asked it is allowed.
 	s.host.removals.Abandon(s.name)
+	s.host.endProjectActivities(s)
 	mainThreadStep(func() {
 		s.closed = true
 		// The close cancels the layouts of the window in its own step, while the framework still holds the window: a work queued for a

@@ -181,7 +181,7 @@ func TestLayoutStatusIsTheSavedFormOfTheSpace(t *testing.T) {
 	f, _ := surfaceShell(t)
 	layout := status[map[string]any](t, f, "core.layout")
 	state, ok := layout["state"].(map[string]any)
-	if !ok || state["cards"] == nil || layout["focusedId"] == nil {
+	if !ok || state["root"] == nil || layout["focusedId"] == nil {
 		t.Fatalf("core.layout is %v", layout)
 	}
 }

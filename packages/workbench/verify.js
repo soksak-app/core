@@ -7,7 +7,7 @@
 import { Soksak } from "soksak";
 
 import { ahead, latest, placementPending, seated } from "./compositor.js";
-import { currentGrid, dropBands, plane, presentedCardRect, railOutline, tabsOf } from "./plane.js";
+import { currentGrid, currentTree, dropBands, plane, presentedCardRect, railOutline, tabsOf } from "./plane.js";
 import { isPlace } from "./registry.js";
 import { expectedRailLoops, seatScale, windowSidebarsPlaced } from "./verify-checks.js";
 import { cardRadius, value } from "./settings.js";
@@ -94,18 +94,25 @@ export function verify(controls = null) {
   else add("V0 레일 외곽선", shape.sharp === (square ? shape.corners : 0) && shape.loops.length === expectedLoops,
       `${shape.loops.length}/${expectedLoops}개 루프 · ${groups.length}개 연결 묶음 · ${railRects.length}개 사각형`);
 
-  // V1 — cards that read the same line have exactly the same boundary (no tolerance)
+  // V1 — cards that read the same line have exactly the same boundary (no tolerance). The frames of the group cards hold a member one
+  // gap inside the line for each frame on that side, so the cards with the same frames on that side read the same boundary
+  // (docs/spec/groups.md#drawn-rectangles); the top of a card under the headers of the group cards that start on its line stands below
+  // them, so the cards under the same heads read the same top.
+  const tree = currentTree();
+  const framesOn = (c, side) => (side === "top" ? grid.headsAbove(c.id) : tree.framesOf(c.id)[side]);
   let drift = 0, shared = 0;
   for (const axis of ["x", "y"]) {
     const [lo, hi] = axis === "x" ? ["c0", "c1"] : ["r0", "r1"];
+    const [loSide, hiSide] = axis === "x" ? ["left", "right"] : ["top", "bottom"];
     for (let k = 1; k < grid.lines(axis).length - 1; k++) {
-      const ends = cards.filter((c) => c[hi] === k).map((c) => {
-        const r = box.get(c.id); return axis === "x" ? r.x + r.w : r.y + r.h;
-      });
-      const starts = cards.filter((c) => c[lo] === k).map((c) => {
-        const r = box.get(c.id); return axis === "x" ? r.x : r.y;
-      });
-      for (const arr of [ends, starts]) {
+      const edges = new Map();
+      const edge = (key, at) => edges.set(key, [...(edges.get(key) ?? []), at]);
+      for (const c of cards) {
+        const r = box.get(c.id);
+        if (c[hi] === k) edge(`end ${framesOn(c, hiSide)}`, axis === "x" ? r.x + r.w : r.y + r.h);
+        if (c[lo] === k) edge(`start ${framesOn(c, loSide)}`, axis === "x" ? r.x : r.y);
+      }
+      for (const arr of edges.values()) {
         if (arr.length > 1) {
           drift = Math.max(drift, Math.max(...arr) - Math.min(...arr));
           shared++;
@@ -164,13 +171,14 @@ export function verify(controls = null) {
   // measured by test/resizeTrip.test.mjs.
   const trip = new Soksak(grid.toJSON(),
     { gap: grid.gap, minSize: grid.minSize, width: grid.width, height: grid.height });
+  // The frame mode and the heads of the group cards are no part of the stored state: the group tree gives them to the plane after each
+  // restore, so the copy takes the same ones (docs/spec/groups.md#drawn-rectangles).
+  tree.reframe(trip);
   let rebuilt = 0;
   for (const [id, was] of trip.rects()) rebuilt = Math.max(rebuilt, maxDelta(was, box.get(id)));
   const smallest = Math.min(...rects.flatMap((r) => [r.w, r.h]));
   add("V4 담았다 되돌리면 그대로", rebuilt === 0,
       `사본 ${rebuilt.toFixed(4)}px · 그려진 최소 변 ${smallest.toFixed(0)}px`);
-
-  add("V5 배치가 slicing", grid.isSlicing(), "한 영역을 통째로 자른 결과만 가능");
 
   const open = cards.filter((c) => !c.fixed);
   if (open.length <= 1) skip("V6 마지막 하나 빼고 전부 닫힌다", "열린 카드가 하나뿐이다");

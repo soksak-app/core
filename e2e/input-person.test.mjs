@@ -14,6 +14,8 @@ const ACTIONS = [["press", "down of the left button"], ["move", "move"], ["scrol
 for (const app of Object.values(APPS)) {
   test(`${app.name}: an action of a person ends the synthetic gesture and the next drag answers 1013`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
+    // Each drag after an action of a person is refused on purpose, and a refused input is an error record of the native library.
+    s.expectError(/^error native input inject: \{"kind":"pointer","pointer":"main",.*"phase":2,.*"result":"interrupted"/);
     // A press of a person reaches only the key window of the application without an activation, so the check makes the window
     // the virtual key window first (docs/spec/exposure.md#virtual-key-window).
     const content = (await s.get("host.window")).content;

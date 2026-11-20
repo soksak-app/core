@@ -111,6 +111,9 @@ test('settings stored in an earlier form are refused with the file that holds th
   const { beginSettings } = await import('../settings.js?test=removed-project-keys');
   assert.throws(() => beginSettings({ common: {}, projects: [{ id: 'prj-a', root: '/work/a', settings: { rail: 'flow' } }] }, 'prj-a'),
     /^Error: \/work\/a\/\.soksak\/settings\.json: unknown setting rail$/);
+  // cardSplit chose the sizes after a split; a split divides only the node that it splits, so the setting is removed.
+  const { beginSettings: beginRemoved } = await import('../settings.js?test=removed-card-split');
+  assert.throws(() => beginRemoved({ common: { cardSplit: 'even' }, projects: [] }, null), /^Error: settings\.json: unknown setting cardSplit$/);
   assert.deepEqual(settingsWrites(wire), []);
   // A report of the page leaves in a batch of the call log; the case has no call of the log.
   assert.deepEqual(logCalls(wire), []);
@@ -131,6 +134,9 @@ test('stored settings of a plugin that is not loaded are kept and not applied', 
   // and no write reaches the settings file of the project.
   assert.deepEqual(settingsWrites(wire).map(({ payload }) => payload), [{ kind: 'settings', id: null, patch: { gap: 9 }, remove: [] }]);
   assert.throws(() => change({ 'absent.option': 5 }, 'common', 'test'), /Unknown setting: absent.option/);
+  // group.tint mixed the group colors of a theme into the fill of a group card, which the tokens of a card now give, so it is no setting of
+  // core (docs/spec/groups.md#drawing).
+  assert.throws(() => change({ 'group.tint': 40 }, 'common', 'test'), /^Error: Unknown setting: group\.tint$/);
   wire.finish();
 });
 

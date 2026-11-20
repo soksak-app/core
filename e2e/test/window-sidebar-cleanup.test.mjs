@@ -18,7 +18,10 @@ test("turning off card sidebars restores the saved selections after setup fails"
     presented: async () => {},
     get: async (name) => {
       assert.equal(name, "core.layout");
-      return { state: { cards: [{ id: "card", data: { sidebars: structuredClone(saved) } }] } };
+      // The card stands inside a box of the stored tree, above another card of its group card and beside a card outside it.
+      return { state: { root: { cut: "x", kids: [{ share: 0.5, node: { card: "other", data: { sidebars: {} } } },
+        { share: 0.5, node: { box: "group", data: { name: "group", leader: "card" }, inner: { cut: "y", kids: [
+          { share: 0.5, node: { card: "card", data: { sidebars: structuredClone(saved) } } }, { share: 0.5, node: { card: "below", data: { sidebars: {} } } }] } } }] } } };
     },
     run: async (name, params) => {
       assert.equal(name, "core.card.sidebar.set");

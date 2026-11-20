@@ -66,7 +66,8 @@ import { onTabReports, reportTabState, reportTitle, setMountedTab, settleLeftTab
 
 /* One plane. This document does not know how the plane renders and only receives the render completion. */
 import {
-  activeTab, currentGrid, nameWindow, onLayout, onRender, plane, setGap, settle, settleModifiedTabsToClose, tabsOf,
+  activeTab, currentGrid, groupRenames, nameWindow, onLayout, onRender, plane, redrawActivities, setActivityReader, setGap, settle,
+  settleModifiedTabsToClose, tabsOf, useGroupRename,
 } from "./plane.js";
 import { observePlaneGrid } from "./device-grid.js";
 
@@ -80,11 +81,11 @@ import { createErrorDisplay, createErrorWithdrawal, createPageLayout, reportUnca
 /* Application interface. When it is absent, an implementation that does nothing is used. */
 import { chrome, log, onDocumentState, onImageDetachEnded, onMemoryPressure, onMenuCommand, retainSidecarSessions, surfaces as host } from "./host.js";
 import { holdImageDetachSurfaces, imageDetachEnded } from "./image-detach-waits.js";
-import { setTextScope } from "./text-size.js";
+import { pressesFrame, setTextScope } from "./text-size.js";
 import { applyFrameText, chromeRow, drawnFrameText } from "./frame-text.js";
 
 /* Public entries and diagnostic methods of the core. The registry answers requests of the host. */
-import { coreChanged, followPlugins, installCoreExposure, redrawSettings, setVerify } from "./core-exposure.js";
+import { activityState, coreChanged, followPlugins, installCoreExposure, onActivity, onActivityError, redrawSettings, setVerify, syncActivity } from "./core-exposure.js";
 /* The setup parts of the agents of this machine, which the settings window shows (docs/spec/settings.md#agents). */
 import { installSetupExposure } from "./setup-exposure.js";
 /* Only a diagnostic build contains the diagnostic methods. In other builds this is an empty module. */
@@ -389,6 +390,8 @@ onRender(() => {
     if (latest() !== record) return false;
     pageLayout.clearFailure();
     check();
+    // The drawn layout decides the tabs whose statuses the activities follow (docs/spec/activity.md).
+    syncActivity();
     coreChanged();
     if (record?.settled !== false) {
       projects.keep();
@@ -399,8 +402,11 @@ onRender(() => {
 });
 
 /* Layout queue. It marks the layout of the plane, the first row of a window without a plane, and the empty plane of a project switch, one by one. */
+const withdrawError = createErrorWithdrawal({ document, changed: coreChanged });
+// A value of an activity status that is no activity is shown in the error banner with the tab as its source (docs/spec/activity.md).
+onActivityError((tab, text) => (text === null ? withdrawError(`activity ${tab}`) : showError(text, "", `activity ${tab}`)));
 const pageLayout = createPageLayout({
-  document, showError, withdrawError: createErrorWithdrawal({ document, changed: coreChanged }), setVerify, log, surfaces: host,
+  document, showError, withdrawError, setVerify, log, surfaces: host,
   plane: { currentGrid, settle, clear },
   compositor: { publishAhead, publish, cancelPrepared },
   textSize: () => value("textSize"),
@@ -494,7 +500,17 @@ function act(name, title, on, command, params, expose) {
   return b;
 }
 
-const barTabs = createBarTabs({ projects, projectBar, spaceBar, workarea, bind, run, redraw: () => drawBars(), keyboardOwed, changed: () => coreChanged() });
+const barTabs = createBarTabs({ projects, projectBar, spaceBar, workarea, bind, run, redraw: () => drawBars(), keyboardOwed, changed: () => coreChanged(),
+  activities: activityState, groups: groupRenames });
+useGroupRename(barTabs.renames);
+// The plane draws the activities of the tabs and the group cards of the shown space (docs/spec/activity.md#drawing).
+setActivityReader(() => {
+  const shown = projects.inLibrary() ? null : projects.active();
+  const space = shown ? activityState().projects[shown.id]?.spaces[shown.activeSpaceId] : undefined;
+  // default: a space without an activity is not listed in core.activity.
+  return { tabs: activityState().tabs, groups: space?.groups ?? {} };
+});
+onActivity(() => { redrawActivities(); drawBars(); });
 
 function drawBars() {
   const browsing = projects.inLibrary();
@@ -566,7 +582,7 @@ const library = createLibrary(document.getElementById("library"), coreChanged);
    WebKit keeps the previous page of a reload on screen until the new page first draws visible content, so the first frame is
    this screen (docs/spec/native-host.md#page-start). The layout queue is connected after it so that the first draw of the plane does not wait for
    the native preparation. The plugin content and the native surfaces are filled in afterwards. */
-projects.onChange(() => { drawBars(); redrawSettings(); library.refreshFolders(); library.render(); coreChanged(); });
+projects.onChange(() => { drawBars(); redrawSettings(); library.refreshFolders(); library.render(); syncActivity(); coreChanged(); });
 prepareSourceOriginIngress();
 // The surfaces whose image detach is pending wait for its end before they mount (docs/spec/sidecars.md).
 holdImageDetachSurfaces(start.pendingSurfaces);
@@ -642,7 +658,7 @@ addEventListener("keydown", (event) => {
 });
 /* When a frame outside the plane is pressed, the scope of the text size is the frame (docs/spec/text-size.md). */
 addEventListener("pointerdown", (event) => {
-  if (event.target.closest?.(".chrome-bar, .tabs--space, .tabs--project")) setTextScope({ kind: "frame" });
+  if (pressesFrame(event.target)) setTextScope({ kind: "frame" });
 }, true);
 /* The text size items of the application menu and the Debug item of Help request only these commands. Another name is reported as an error. */
 const MENU_COMMANDS = ["core.text.larger", "core.text.smaller", "core.text.reset", "core.debug.open"];

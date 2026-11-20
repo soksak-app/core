@@ -5,6 +5,7 @@
 // A change of a status is announced by calling coreChanged(). The document calls it after the render of the
 // plane, after changes of projects and settings, and after the drawing of modals and the library; the
 // registry sends only the watched values that changed to the host.
+import { createActivity } from "./activity.js";
 import { contributionsState, onContributionsChange } from "./contributions.js";
 import { checkOpenPath } from "./file-open.js";
 import { registry, connectExposure, revisitRegistrations, whenRepliesSent } from "./exposure.js";
@@ -21,10 +22,13 @@ import * as projects from "./projects.js";
 import {
   activeTab, addTabTo, assignSidebar, openFile, capture, cardActs, cardTextSizes, changeTextSize, closeCard, closePicker, closeTabById,
   currentGrid, currentTextScope, dragState, focusCard, foldSidebar,
-  focused, fresh, fullscreenCard, moveTab, presentedCardRect, toggleCardFullscreen, onPicker, onSurfaceState, openCardMenu, openCardTabs, openCardTools, openSpaceApps, openSurfaceMenu, openTabMenu, onSurfaceContextMenu, pickItem, pickerState, plane, railState, selectTab,
+  drawnCardRects, focused, fresh, fullscreenCard, moveTab, presentedCardRect, toggleCardFullscreen, onPicker, onSurfaceState, openCardMenu, openCardTabs, openCardTools, openSpaceApps, openSurfaceMenu, openTabMenu, onSurfaceContextMenu, pickItem, pickerState, plane, railState, selectTab,
   cardSidebars, resizeSidebar, settle, settleModifiedTabs, settleModifiedTabsToClose, splitCard, surfaceState, tabsOf,
-  openInLayout, selectInLayout, closeInLayout, layoutDescription, surfaceSpace,
+  openInLayout, selectInLayout, moveInLayout, closeInLayout, layoutDescription, surfaceSpace, activityLayout,
+  cardState, createGroup, currentTree, dissolveGroup, leadLevel, moveCard, openGroupMenu, renameGroup, storedLayoutText,
 } from "./plane.js";
+import { emitEvent, eventAdmits } from "./page-log.js";
+import { boundedJson, cutBytes } from "@soksak/plugin-api/bounded-json.js";
 import {
   applyTheme, controlValue, defaults, link, onSaved, overridden, reset, saving, scopedValue, set, setDebug, settingProject, THEMES, value,
 } from "./settings.js";
@@ -35,7 +39,7 @@ import {
   behindDialog, filePlace, modalState, onFilesDropped, onModalState, onWindowResponder, orderedCallsAnswered, overlayElementRect,
 } from "./host.js";
 import { keyboardResponder } from "./keyboard.js";
-import { plugin, sectionSurfacePlugin } from "./registry.js";
+import { hasPlugin, plugin, sectionSurfacePlugin } from "./registry.js";
 import { compositionKindOf } from "./surface-composition-kind.js";
 import { retainedSurfaceEntries, surfaceKindOf } from "./surface-listing.js";
 import { liveMounts, onMountedChange, surfaceLeftOut } from "./surface-modules.js";
@@ -48,6 +52,7 @@ import { onTabReports, tabError, tabFooter, tabLabel, tabModified, tabNotice } f
 import { appUpdate, followActivation, followPluginChanges, followSidecarChanges, onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { pageIdentity } from "./page-identity.js";
 import { PLACEMENT_LAST, placementLast } from "./page-layout.js";
+import { stateCards } from "./layout-tree.js";
 
 /* Receivers of the watched core statuses. */
 const watchers = new Set();
@@ -64,6 +69,78 @@ export function coreChanged() {
     scheduled = false;
     for (const run of watchers) run();
   });
+}
+
+/**
+ * The projects of this window for its activities (docs/spec/activity.md): the projects that the window opened, the shown space with
+ * its drawn layout.
+ */
+function activityProjects() {
+  const shown = projects.inLibrary() ? null : projects.active();
+  const drawn = activityLayout();
+  return projects.local().map((project) => (project.id !== shown?.id || drawn === null ? project : {
+    ...project, spaces: project.spaces.map((space) => (space.id === project.activeSpaceId ? { ...space, layout: drawn } : space)),
+  }));
+}
+
+/* The receivers of a change of the activities: the drawings of the icons. */
+const activityListeners = new Set();
+/* The receiver of the error of the activity values of a tab, which the error display of the page shows (docs/spec/activity.md). */
+let activityFailed = null;
+
+const activityChanged = () => {
+  for (const listener of activityListeners) listener();
+  coreChanged();
+};
+
+/* The record of the activities of the projects of the application that the host sent last, by its revision
+   (docs/spec/activity.md#activity-of-a-project); -1 until the first record arrives. */
+let projectRecord = { revision: -1, projects: {} };
+/* The publications of this window, one after the other, so that the host receives the activities of a project in the order of their
+   changes. */
+let publishing = Promise.resolve();
+
+/* The activities of this window, which follow the statuses of the plugins that declare activity on each surface and publish the
+   activities of the spaces of each project of the window to the host. */
+const activity = createActivity({
+  observe: (name, surface, fn) => registry.observe(name, surface, fn, { exact: true }),
+  // default: a tab of a plugin that is not loaded, and a plugin record without activity, follow no status.
+  statuses: (id) => (hasPlugin(id) ? plugin(id).activity ?? [] : []),
+  projects: activityProjects,
+  failed: (tab, text) => activityFailed(tab, text),
+  changed: activityChanged,
+  publish: (id, spaces) => {
+    publishing = publishing.then(() => windows.projectActivity({ id, spaces })).catch((error) => {
+      dispatchEvent(new ErrorEvent("error", { message: `projectActivity ${id}: ${error.message}` }));
+    });
+  },
+});
+
+/** Starts and ends the watches of the activities after the layout, the projects or the plugins of the window changed. */
+export const syncActivity = () => activity.sync();
+
+/**
+ * The value of core.activity: the record of the projects of the application and the activities of the tabs of this window
+ * (docs/spec/activity.md#status).
+ */
+export const activityState = () => ({ projects: projectRecord.projects, tabs: activity.state().tabs });
+
+/** Keeps the record of the project activities of the highest revision that the host sent. */
+function receivedProjectRecord(record) {
+  if (record.revision <= projectRecord.revision) return;
+  projectRecord = record;
+  activityChanged();
+}
+projects.onProjectActivity(receivedProjectRecord);
+
+/** Sets the receiver of the error text of the activity values of a tab, null when it is withdrawn. */
+export function onActivityError(receiver) {
+  activityFailed = receiver;
+}
+
+/** Calls listener after the activities of this window changed. */
+export function onActivity(listener) {
+  activityListeners.add(listener);
 }
 
 /* The file last dropped on the window and the result of its handling: core.drop of docs/spec/native-surfaces.md. */
@@ -162,7 +239,7 @@ function surfacePlugin(surface) {
   }
   for (const project of projects.local()) {
     for (const space of project.spaces) {
-      for (const card of space.layout.state.cards) {
+      for (const card of stateCards(space.layout.state)) {
         // default: a seat card has null data, so it has no tabs.
         const tab = (card.data?.tabs ?? []).find((t) => t.id === surface);
         if (tab) return tab.plugin;
@@ -185,36 +262,55 @@ function preferred() {
 function gridState() {
   const grid = currentGrid();
   if (!grid) return null;
-  const rects = grid.rects();
+  const tree = currentTree();
+  // The rectangles that the plane draws: below the headers of the group cards, and the fullscreen layout of a fullscreen group card.
+  const rects = drawnCardRects();
   const fullscreen = fullscreenCard();
   let pane = 0;
-  const cards = [...plane.querySelectorAll(".card[data-card-id]")].map((el) => {
-    const card = grid.card(el.dataset.cardId);
-    if (!card) return null;
-    const rect = fullscreen === null ? rects.get(card.id) : presentedCardRect(card.id);
+  // The cards of the grid in workbench order (docs/spec/groups.md#status-and-queries); a card that has no element yet is not reported.
+  const cards = tree.order().filter(({ node }) => !node).map(({ id }) => {
+    const card = grid.card(id);
+    const el = plane.querySelector(`.card[data-card-id="${CSS.escape(id)}"]`);
+    if (!card || !el) return null;
+    const rect = rects.get(card.id);
     const tabs = tabsOf(card);
+    // A card that a fullscreen card hides shows no head and no pane (docs/spec/example-model.md#card-fullscreen).
+    const drawn = !el.hidden && el.querySelector(".chrome__acts") !== null;
     return {
       fullscreen: card.id === fullscreen,
       id: card.id, x: rect.x, y: rect.y, w: rect.w, h: rect.h,
       c0: card.c0, c1: card.c1, r0: card.r0, r1: card.r1,
       // default: a card without a fixed px width has null width.
       fixed: Boolean(card.fixed), width: card.width ?? null, focused: card.id === focused(),
-      pane: el.querySelector(".chrome__acts") ? pane++ : null,
+      pane: drawn ? pane++ : null,
       tabs: tabs.map(({ id, plugin, title }) => ({ id, plugin, title, label: tabLabel(id), notice: tabNotice(id), footer: tabFooter(id),
         modified: tabModified(id), error: tabError(id) })),
       // Text that the content footer shows (docs/spec/example-model.md). default: a card that is not drawn yet has no footer text element, so the text is empty.
       status: el.querySelector(":scope > .status .status__text")?.textContent ?? "",
       active: tabs.length ? activeTab(card).id : null,
-      acts: cardActs(card.id),
+      acts: drawn ? cardActs(card.id) : null,
       sidebars: cardSidebars(card, presentedCardRect(card.id)),
+      ...levelMembers(tree, card.id),
     };
   }).filter(Boolean);
+  // The group cards stand in groups in workbench order, each with its drawn rectangle, so cards holds one shape (docs/spec/groups.md#status-and-queries).
+  const groups = tree.nodes().map((node) => {
+    const { x, y, w, h } = rects.get(node.card);
+    return { id: node.card, x, y, w, h, ...levelMembers(tree, node.card),
+      group: { name: node.name, level: tree.level(node.card) + 1, leader: node.leader } };
+  });
   const lines = (axis) => grid.lines(axis).map((_, k) => grid.boundaryPos(axis, k));
   return {
     fullscreen,
     width: grid.width, height: grid.height, gap: grid.gap, plane: planeOrigin(),
-    lines: { x: lines("x"), y: lines("y") }, cards,
+    lines: { x: lines("x"), y: lines("y") }, cards, groups,
   };
+}
+
+/** The members of a card of core.grid for its level: parent, the group card that holds it or null in the root level, and leader, whether it leads its level. */
+function levelMembers(tree, id) {
+  const parent = tree.parentOf(id);
+  return { parent: parent ? parent.card : null, leader: tree.leaderOf(parent) === id };
 }
 
 /* The memory saver of the page (memory-saver.js), given at installCoreExposure. */
@@ -318,6 +414,34 @@ function need(project, id) {
 /**
  * drawn returns a promise that is fulfilled when the plane has finished all scheduled drawing. A core command waits for that drawing after it ran and then replies. When a command changes the layout, the receiver of the reply reads the layout that is already drawn.
  */
+// The bounds of the texts of workbench.layout.change in UTF-8 bytes: the parameters and the answer, and the layout, which keeps the
+// fields within the bound of an event (docs/spec/events.json).
+const LAYOUT_CALL_BYTES = 1024;
+const LAYOUT_BYTES = 61440;
+
+/**
+ * Observes the command name with params: when it succeeded and the stored layout of the active space differs from the one before it,
+ * the command is the event workbench.layout.change with its parameters, its answer and the layout that it left (docs/spec/events.json).
+ * The layout is read only while the gate stores the event.
+ */
+function watchLayout(name, params) {
+  if (!eventAdmits("debug", "workbench.layout.change")) return null;
+  const before = storedLayoutText();
+  return (result) => {
+    const after = storedLayoutText();
+    if (after === before) return;
+    emitEvent("debug", "workbench.layout.change", () => {
+      const given = boundedJson(params, LAYOUT_CALL_BYTES);
+      // default: a command that answers nothing replies null, as the endpoint answers it.
+      const answered = boundedJson(result ?? null, LAYOUT_CALL_BYTES);
+      // default: the window shows no layout after the command, and its layout is the JSON text null.
+      const layout = cutBytes(after ?? "null", LAYOUT_BYTES);
+      return { command: name, params: given.text, paramsTruncated: given.truncated, result: answered.text,
+        layout: layout.text, layoutTruncated: layout.truncated };
+    });
+  };
+}
+
 export async function installCoreExposure({ library, renames, chrome, drawn, memorySaver }) {
   // The core entries read the memory saver (core.tab.memory, core.surfaces, the tab commands), so a page without it is refused
   // before any entry is registered.
@@ -325,6 +449,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
     throw new TypeError("installCoreExposure requires memorySaver, the memory saver of the page (memory-saver.js)");
   }
   memory = memorySaver;
+  registry.watch(watchLayout);
   // On this host the workbench is the main page: a start is its page identity, and it started at its time origin.
   status("core.window.workbench", () => ({
     start: pageIdentity,
@@ -347,11 +472,13 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   onBinding(coreChanged);
   // default: core.workbench.error of a workbench that shows no error is null (exposure.json).
   status("core.workbench.error", () => document.getElementById("applicationError")?.textContent ?? null);
+  status("core.activity", activityState);
   status("core.projects", () => projects.all().map(withOpen));
   status("core.project", () => {
     const project = projects.active();
     return project && !projects.inLibrary() ? withOpen(project) : null;
   });
+  // The stored form of the layout with the level of each group node (docs/spec/groups.md#status-and-queries).
   status("core.layout", () => (currentGrid() ? capture() : null));
   status("core.grid", gridState);
   status("core.sidebars", sidebarsState);
@@ -601,9 +728,28 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   });
   registry.command("core.card.split", ({ card, side, plugin }) => splitCard(card, side, plugin));
   registry.command("core.card.close", ({ card }) => closeCard(card));
+  // The group commands and the card query of any level (docs/spec/groups.md#commands).
+  registry.command("core.group.create", ({ card, side, plugin: kind, params, request }) => createGroup(card, side, kind, params, request));
+  registry.command("core.group.dissolve", ({ group }) => dissolveGroup(group));
+  registry.command("core.group.rename", ({ group, name }) => renameGroup(group, name));
+  registry.command("core.group.leader", ({ card }) => leadLevel(card));
+  registry.command("core.group.menu", ({ group }) => openGroupMenu(group));
+  registry.command("core.card.move", ({ card, target, side, index }) => moveCard(card, target, side, index));
+  registry.command("core.card.get", async ({ card }) => {
+    // The card is checked before the window is read, so a refused card reads nothing.
+    cardState(card, new Map());
+    const reply = await registry.handle({ id: null, method: "exposure.snapshot", params: {} });
+    if (reply.error) throw new Error(`core.card.get ${card}: exposure.snapshot: ${reply.error.message}`);
+    // The statuses that each surface declares with summary true are the status of its tab (docs/spec/exposure.md#entry-fields).
+    // default: a status whose read failed has no value, which is written as null.
+    const summary = new Map(reply.result.groups.filter((group) => group.owner === "surface")
+      .map((group) => [group.surface, Object.fromEntries(group.status.filter((entry) => entry.summary === true).map((entry) => [entry.name, entry.value ?? null]))]));
+    return cardState(card, summary);
+  });
   // The layout operations of an agent (docs/spec/cli.md#acting-on-a-layout). Each decides and changes the layout in the turn that runs it.
   registry.command("core.layout.open", (params) => openInLayout(params));
   registry.command("core.layout.select", (params) => selectInLayout(params));
+  registry.command("core.layout.move", (params) => moveInLayout(params));
   registry.command("core.layout.close", (params) => closeInLayout(params));
   registry.command("core.tab.select", ({ tab }) => { trace("action", { kind: "tab.select", tab }); selectTab(tab); });
   registry.command("core.tab.close", ({ tab }) => closeTabById(tab));
@@ -626,7 +772,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
     event.preventDefault();
     return registry.run("core.tab.menu", { tab: button.dataset.tabId, x: event.clientX, y: event.clientY });
   });
-  registry.command("core.tab.move", ({ tab, card, zone }) => { moveTab(tab, card, zone); });
+  registry.command("core.tab.move", ({ tab, card, zone, index }) => { moveTab(tab, card, zone, index); });
   registry.command("core.picker.pick", ({ index }) => { pickItem(index); });
   registry.command("core.picker.close", () => { closePicker("command"); });
   // Escape in the native menu answers with this command (card.js). The menu is the picker, the only native menu.
@@ -668,21 +814,30 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   registry.command("core.boundary.move", ({ axis, line, position }) => {
     const grid = currentGrid();
     if (!grid?.hasBoundary(axis, line)) throw new Error(`no ${axis} boundary at line ${line}`);
-    const moved = grid.moveBoundary(axis, line, position, false);
+    // The group tree moves the whole line and stops where a card would be drawn below its minimum or the groups would lose their form
+    // (docs/spec/groups.md#minimum-size).
+    const moved = currentTree().moveBoundary(axis, line, position, false);
     settle();
     return { position: moved };
+  });
+
+  registry.command("core.boundary.center", ({ axis, line }) => {
+    const grid = currentGrid();
+    if (!grid?.hasBoundary(axis, line)) throw new Error(`no ${axis} boundary at line ${line}`);
+    // The group tree centres the line, leaves it where a card would be drawn below its minimum and merges the lines that meet
+    // (docs/spec/groups.md#commands).
+    const centred = currentTree().centerBoundary(axis, line);
+    settle();
+    return { position: centred };
   });
 
   // The setting cardArrange chooses the operation: resize keeps the layout and gives every card a fair share
   // (packages/soksak/docs/layout.md#balancing), even replaces it with an equal grid (packages/soksak/docs/layout.md#even-arrangement).
   registry.command("core.layout.balance", () => {
-    const grid = currentGrid();
-    if (!grid) throw new Error("the window shows no layout");
-    if (value("cardArrange") === "even") {
-      if (!grid.arrange("even")) throw new Error("no equal grid keeps every card at its minimum size");
-    } else if (!grid.balance()) {
-      throw new Error("the layout is not slicing");
-    }
+    if (!currentGrid()) throw new Error("the window shows no layout");
+    // The group tree balances a space with groups by equal shares, which keep every group card on its rectangle
+    // (docs/spec/groups.md#card-commands-on-a-group-card).
+    currentTree().balance(value("cardArrange") === "even");
     settle();
   });
 

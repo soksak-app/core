@@ -81,7 +81,8 @@ func TestTheStatusOfASidebarNamesTheRectOfItsSet(t *testing.T) {
 	f, card := cardSidebar(t, "left")
 	f.run("core.card.sidebar.set", map[string]string{"card": card, "side": "right", "set": "set-install"})
 	var sidebars []struct {
-		Sidebar string `json:"sidebar"`
+		Sidebar string  `json:"sidebar"`
+		Set     *string `json:"set"`
 		Rect    struct{ X, Y, W, H float32 }
 	}
 	if err := json.Unmarshal([]byte(f.status("core.sidebars")), &sidebars); err != nil {
@@ -89,6 +90,10 @@ func TestTheStatusOfASidebarNamesTheRectOfItsSet(t *testing.T) {
 	}
 	seen := map[string]bool{}
 	for _, drawn := range sidebars {
+		// A window sidebar that shows no set has no element of its set (TestCoreSidebarsReportsAWindowSidebarThatShowsNoSet).
+		if drawn.Set == nil {
+			continue
+		}
 		set := f.box("core.sidebar", drawn.Sidebar)
 		if got := (ui.Rect{X: drawn.Rect.X, Y: drawn.Rect.Y, W: drawn.Rect.W, H: drawn.Rect.H}); got != set {
 			t.Errorf("core.sidebars names %s at %+v, and its set stands at %+v", drawn.Sidebar, got, set)
@@ -131,15 +136,19 @@ func TestATopSideLiesInTheContentColumn(t *testing.T) {
 
 // The tool menu of a narrow head lists a sidebar item for each side that the card shows, in the order top, bottom, left, right and
 // before the tools, as the page lists the sidebar buttons of the head; a pick folds the side, and the fullscreen item covers the plane.
-func TestTheToolMenuHoldsTheSidesAndTheFullScreen(t *testing.T) {
+// The tool menu of a narrow head holds the sides, and the head keeps the fullscreen toggle beside the menu button
+// (docs/spec/example-model.md#card-tools).
+func TestTheToolMenuHoldsTheSidesAndTheHeadKeepsTheFullScreen(t *testing.T) {
 	f, card := cardSidebar(t, "left")
 	f.run("core.card.sidebar.set", map[string]string{"card": card, "side": "top", "set": "set-install"})
-	f.tester.SetSize(480, 700)
+	// The window leaves the card too narrow for its tools and for its left side, and wide enough for tab-min-w beside the kept tools
+	// (docs/spec/example-model.md#card-tabs).
+	f.tester.SetSize(640, 700)
 	f.settle()
 	f.click("core.card.tools", card)
 	menu := f.menu()
 	keys := menu.keys()
-	if len(keys) < 3 || !slices.Equal(keys[:2], []string{"side-top", "side-left"}) || !slices.Contains(keys, "fullscreen") {
+	if len(keys) < 3 || !slices.Equal(keys[:2], []string{"side-top", "side-left"}) || slices.Contains(keys, "fullscreen") {
 		t.Fatalf("the tool menu is %v", keys)
 	}
 	// The narrow card has no room for the left side, so the side is folded for lack of room, and its item unfolds it.
@@ -150,8 +159,7 @@ func TestTheToolMenuHoldsTheSidesAndTheFullScreen(t *testing.T) {
 	if sides := f.storedSides(card); sides["top"].(map[string]any)["collapsed"] != true {
 		t.Fatalf("the pick of the top side stored %v", sides)
 	}
-	f.click("core.card.tools", card)
-	f.click("core.picker.item", "fullscreen")
+	f.click("core.card.fullscreen", card)
 	value, err := f.shell.Registry().Read("core.grid")
 	if err != nil {
 		t.Fatal(err)

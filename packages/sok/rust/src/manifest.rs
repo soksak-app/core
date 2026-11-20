@@ -41,7 +41,7 @@ const TOP_LEVEL_KEYS: [&str; 17] = [
 ];
 
 /// The keywords that a schema may hold (checkSchema of packages/plugin-api).
-const SCHEMA_KEYWORDS: [&str; 4] = ["type", "properties", "items", "enum"];
+const SCHEMA_KEYWORDS: [&str; 5] = ["type", "properties", "required", "items", "enum"];
 
 /// The names that a schema type may use (SCHEMA_TYPES of packages/plugin-api).
 const SCHEMA_TYPES: [&str; 7] = [
@@ -291,8 +291,17 @@ fn schema_type_matches(name: &str, value: &Value) -> bool {
 }
 
 /// Whether a value satisfies a schema that check_schema accepted (matchesSchema of the reader). Properties check only the
-/// members that the value has.
-fn matches_schema(schema: &Map<String, Value>, value: &Value) -> bool {
+/// members that the value has, and an object lacks no member that required names.
+pub fn matches_schema(schema: &Map<String, Value>, value: &Value) -> bool {
+    if let (Some(names), Some(object)) = (
+        schema.get("required").and_then(Value::as_array),
+        value.as_object(),
+    ) && names
+        .iter()
+        .any(|name| name.as_str().is_none_or(|key| !object.contains_key(key)))
+    {
+        return false;
+    }
     if let Some(list) = schema.get("enum").and_then(Value::as_array)
         && !list.iter().any(|item| same_json(item, value))
     {
@@ -349,6 +358,20 @@ fn valid_schema_type(raw: &Value) -> bool {
         })
 }
 
+/// Whether required is a non-empty list of distinct names of the members of properties.
+fn valid_required(raw: &Value, properties: Option<&Value>) -> bool {
+    let (Some(names), Some(members)) = (raw.as_array(), properties.and_then(Value::as_object))
+    else {
+        return false;
+    };
+    let mut seen = BTreeSet::new();
+    !names.is_empty()
+        && names.iter().all(|name| {
+            name.as_str()
+                .is_some_and(|key| members.contains_key(key) && seen.insert(key))
+        })
+}
+
 /// Checks a schema the way the reader does (checkSchema of packages/plugin-api). `at` names the schema in the error.
 fn check_schema(at: &str, value: Option<&Value>) -> Result<(), String> {
     let schema = value
@@ -367,6 +390,13 @@ fn check_schema(at: &str, value: Option<&Value>) -> Result<(), String> {
         for key in sorted_keys(properties) {
             check_schema(&format!("{at}.{key}"), properties.get(key))?;
         }
+    }
+    if let Some(raw) = schema.get("required")
+        && !valid_required(raw, schema.get("properties"))
+    {
+        return Err(format!(
+            "{at}: required must be a non-empty list of distinct names of properties"
+        ));
     }
     if let Some(raw) = schema.get("items") {
         check_schema(&format!("{at}[]"), Some(raw))?;
@@ -433,6 +463,9 @@ fn check_exposes(owner: &str, exposes: &Value) -> Result<(), String> {
             if kind == "element" {
                 allowed.push("many");
             }
+            if kind == "status" {
+                allowed.extend_from_slice(&["summary", "activity"]);
+            }
             only(&at_entry, entry, &allowed)?;
             if !is_text(entry.get("description")) {
                 return Err(format!("{at_entry}: description is required"));
@@ -454,6 +487,18 @@ fn check_exposes(owner: &str, exposes: &Value) -> Result<(), String> {
             }
             if entry.get("many").is_some_and(|raw| !raw.is_boolean()) {
                 return Err(format!("{at_entry}: many must be a boolean"));
+            }
+            // A status with summary true is a tab summary (docs/spec/exposure.md#entry-fields).
+            if entry.get("summary").is_some_and(|raw| !raw.is_boolean()) {
+                return Err(format!("{at_entry}: summary must be a boolean"));
+            }
+            // A status with activity true reports the activity of its surface as its value
+            // (docs/spec/activity.md#declaration).
+            if entry
+                .get("activity")
+                .is_some_and(|raw| raw != &Value::Bool(true))
+            {
+                return Err(format!("{at_entry}: activity must be true"));
             }
         }
     }

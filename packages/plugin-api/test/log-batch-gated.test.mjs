@@ -54,3 +54,33 @@ test("the batch that carries a count follows from the instants that the page pas
   assert.deepEqual(batches.flatMap((request) => request.events).filter(({ event }) => event === "page.log.gated").map(({ fields }) => fields.count), [3]);
   assert.equal(batches.length, 1);
 });
+
+// A producer asks before it reads costly fields whether the event would be stored. The answer is that of the writers
+// (PassesEveryGate of sok, passes_every_gate of soksak_sok::event_log): an event without a class, an event that passes every gate and
+// an event that the policy stores (docs/spec/logging.md#policy).
+test("admits answers as the writers judge an event, the events that pass every gate included, and counts nothing", async () => {
+  const batches = [];
+  const classes = { "workbench.start": "lifecycle", "workbench.log.clock": "lifecycle", "workbench.fixture.step": "lifecycle",
+    "workbench.command": "call", "workbench.layout.change": "call", "workbench.keyboard.follow": "input" };
+  const batcher = createEventBatcher({ writer: { layer: "workbench", member: "start", identity: PAGE },
+    call: async (request) => {
+      if (request.action === "clock") return hostClock;
+      batches.push(request);
+      return undefined;
+    },
+    report: assert.ifError,
+    classify: (event) => classes[event],
+    gate: { enabled: (klass, level) => klass === "call" && (level === "warn" || level === "error") },
+  });
+  assert.deepEqual(["workbench.start", "workbench.log.clock", "workbench.fixture.step"].map((event) => batcher.admits("info", event)),
+    [true, true, true], "an event that passes every gate is admitted under a closed gate");
+  assert.equal(batcher.admits("debug", "workbench.layout.change"), false, "the policy refuses call at debug");
+  assert.equal(batcher.admits("warn", "workbench.command"), true, "the policy stores call at warn");
+  assert.equal(batcher.admits("debug", "workbench.keyboard.follow"), false);
+  assert.equal(batcher.admits("debug", "workbench.undeclared"), true, "an event without a class is not gated");
+  assert.throws(() => batcher.admits("loud", "workbench.command"), { message: 'event level "loud" is not one of error, warn, info, debug, trace' });
+  batcher.emit("error", "workbench.command", { name: "x" });
+  await batcher.flush();
+  const events = batches.flatMap((batch) => batch.events ?? []).map(({ event }) => event);
+  assert.equal(events.includes("workbench.log.gated"), false, `admits counted a refusal: ${events}`);
+});

@@ -15,10 +15,10 @@ const sidecar = "@scope/fixture-sidecar";
 const COMMON = { "diagnostics.log": { lifecycle: "info" } };
 // The stored layout of the space of the project: one card with two tabs of the plugin that declares the background session; the first is shown.
 const STORED_LAYOUT = {
-  state: { xs: [0, 1], ys: [0, 1], cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, data: {
+  state: { root: { card: "main", data: {
     tabs: [{ id: "tab-aaaaaa", plugin: owner, title: "shown", origin: { directory: "/work/session" } },
-    { id: "tab-bbbbbb", plugin: owner, title: "hidden", origin: { directory: "/work/session" } }], activeId: "tab-aaaaaa" } }] },
-  focusedId: "main", windowSidebars: {}, named: 0, sidebars: {},
+    { id: "tab-bbbbbb", plugin: owner, title: "hidden", origin: { directory: "/work/session" } }], activeId: "tab-aaaaaa" } } },
+  leader: "main", lastCard: 1, focusedId: "main", windowSidebars: {}, named: 0, sidebars: {},
 };
 // The replies of the host settle in the turns that follow the call.
 const settled = () => new Promise((resolve) => setImmediate(resolve));
@@ -57,9 +57,8 @@ test("a background session opens only for a tab without a mounted surface and en
   assert.deepEqual(installEnvironment({
     runtime: "runtime",
     workspace: { focus: "main", grid: {
-      xs: [0, 1], ys: [0, 1],
-      cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [
-        { plugin: owner, title: "shown" }, { plugin: owner, title: "hidden" }] }],
+      root: { card: "main", tabs: [
+        { plugin: owner, title: "shown" }, { plugin: owner, title: "hidden" }] },
     } },
     sidebars: { sets: [], links: [] },
   }, { plugins: [

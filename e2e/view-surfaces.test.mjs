@@ -82,9 +82,8 @@ for (const app of Object.values(APPS)) {
     for (const raster of rasters) await sessionOf(s, raster.surface);
     const regionsOf = (host) => rasters.map((raster) => regionOf(host, raster.surface));
     for (let round = 1; round <= 5; round++) {
-      const layout = await s.get("core.layout");
       const grid = await s.get("core.grid");
-      const own = layout.state.cards.find((item) => item.id === grid.cards.find((card) => card.tabs.some((tab) => tab.id === rasters[0].surface)).id);
+      const own = grid.cards.find((card) => card.tabs.some((tab) => tab.id === rasters[0].surface));
       // The first raster card narrows by a third of its width, so the balance changes the size of every card of the row.
       const width = grid.lines.x[own.c1] - grid.lines.x[own.c0];
       await s.run("core.boundary.move", { axis: "x", line: own.c1, position: grid.lines.x[own.c1] - Math.round(width / 3) });

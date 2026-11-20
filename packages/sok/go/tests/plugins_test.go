@@ -1041,10 +1041,10 @@ func TestPluginInstallRefusesAManifestWithASchemaOutsideTheSubset(t *testing.T) 
 	runJSON(t, "registry", "use", index, "--config-dir", config)
 	writeTree(t, filepath.Join(config, "plugins/probe/0.2.0"), map[string]string{
 		"package.json": `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"}, "files": ["plugin.json"]}`,
-		"plugin.json":  `{"id": "probe", "name": "Probe", "description": "Sample.", "surface": {"params": {"type": "object", "required": ["path"]}}}`,
+		"plugin.json":  `{"id": "probe", "name": "Probe", "description": "Sample.", "surface": {"params": {"type": "object", "additionalProperties": false}}}`,
 	})
 	_, err := sok.RunPluginAction(config, "install", "probe", "0.0.2", mustPlatform(t))
-	rejects(t, err, "plugin probe surface params: unknown field required")
+	rejects(t, err, "plugin probe surface params: unknown field additionalProperties")
 	if exists(filepath.Join(config, "plugins", "installed.json")) {
 		t.Fatal("a refused install wrote installed.json")
 	}

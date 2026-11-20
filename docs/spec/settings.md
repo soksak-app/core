@@ -36,7 +36,7 @@ A change redraws the window and keeps the scroll position of the shown content; 
 | 위치 | 프로젝트 탭 위치 `projectTabs` |
 | 사이드바 | 왼쪽 사이드바 보이기 `left`, 오른쪽 사이드바 보이기 `right`, 위 사이드바 보이기 `top`, 아래 사이드바 보이기 `bottom`; 왼쪽 사이드바 세트, 오른쪽 사이드바 세트, 위 사이드바 세트 and 아래 사이드바 세트 (each a select of all sets and 사용 안 함, `core.settings.link {place, plugin: null, set}`); 사이드바 순서 `sidebarOrder` |
 | 사이드바 크기 | the width settings of [layout values](#layout-values) |
-| 표시 | 포커스 표시 `focusInd`, 경계선 `fullRule`, 포커스 밖 흐리게 `dim` |
+| 표시 | 포커스 표시 `focusInd`, 카드 자동 정렬 `cardArrange`, 경계선 `fullRule`, 포커스 밖 흐리게 `dim` |
 | 언어 | 언어 `language` |
 | 메모리 (common scope only) | 보기 프로세스 `viewProcess`, 메모리 절약 `memorySaver`, 숨긴 뒤 내리기까지 `memorySaverDelay` |
 | 진단 | 디버그 (a switch that runs `core.settings.debug {on}`) |
@@ -109,7 +109,7 @@ The window draws every setting with one control of a fixed set, chosen by the fo
 | Form | Control | Command |
 |---|---|---|
 | A boolean (`left`, `right`, `top`, `bottom`, `dim`, `memorySaver`) | Switch: a checkbox drawn as a switch | `core.settings.change {key, value, scope}` |
-| A choice of listed values (`projectOpening`, `viewProcess`, `mode`, `font`, `projectTabs`, `focusInd`, `fullRule`, `cardArrange`, `cardSplit`, `language`, a plugin `enum`) | Select box with one option per value in the declared order | `core.settings.change {key, value, scope}` |
+| A choice of listed values (`projectOpening`, `viewProcess`, `mode`, `font`, `projectTabs`, `focusInd`, `fullRule`, `cardArrange`, `language`, a plugin `enum`) | Select box with one option per value in the declared order | `core.settings.change {key, value, scope}` |
 | A theme of the catalog (`theme`) | Swatch grid with one swatch per theme, drawn with that theme's colors and shape | `core.settings.theme {name, scope}` |
 | A bounded integer (`gap`, `radius`, `size`, `memorySaverDelay`, the [layout values](#layout-values), a plugin `integer`) | Slider between the bounds, followed by the value and its unit; a drag shows each value beside the slider and runs the command once, with the value at its release | `core.settings.change {key, value, scope}` |
 | A string or an address (a plugin `string` or `address`) | One-line text field | `core.settings.change {key, value, scope}` |
@@ -139,7 +139,7 @@ Each core setting accepts one form. Reading the settings files and every change 
 | `theme` | `midnight`, `nord`, `solar`, `forest`, `ember`, `slate`, `mist`, `grape`, `sand` or `paper` |
 | `mode` | `dark` or `light` |
 | `font` | `mono-system`, `mono-sf`, `mono-jet`, `sans-system` or `sans-inter` |
-| `gap` | An integer from 0 to 48 (px): the gap between two adjacent cards: the full distance between them. The margin between the plane and the edge of the stage is half the gap. At 0 the two cards share one line: the plane gap is the border width, a card draws no border and no radius of its own, the drop zone of a tab drag draws no radius and a border of the border width, and the stage has no margin (the seam) |
+| `gap` | An integer from 0 to 48 (px): the gap between two adjacent cards: the full distance between them. The margin between the plane and the edge of the stage is half the gap. At 0 the two cards share one line: the plane gap is the border width, a card draws no border and no radius of its own, the drop zone of a tab drag draws no radius and a border of the border width, and the stage has no margin and shares its top line with the bottom line of the space bar and, while the project tabs stand at the left, its left line with the right line of the project column, so the edge of the plane is one line on each side (the seam) |
 | `radius` | An integer from 0 to 24 (px) |
 | `size` | An integer from 10 to 18 (px) |
 | `textSize` | A [text size step](text-size.md) |
@@ -150,7 +150,6 @@ Each core setting accepts one form. Reading the settings files and every change 
 | `focusInd` | `border` or `corner` |
 | `fullRule` | `under`, `over` or `none` |
 | `cardArrange` | `resize` (keeps the arrangement and gives the cards fair sizes, the default) or `even` (an equal grid of the cards, `arrange(\"even\")`); the card auto-arrange command runs the value of this setting, and its toolbar icon shows it |
-| `cardSplit` | `exact` (a split divides only the rectangle of the card that it splits, R4 of the layout library, the default) or `even` (after the split, `balance()` gives the cards of the plane of the split fair sizes and keeps the arrangement; other planes do not change); it applies to `core.card.split` and the split buttons, to the split of `core.group.create` and the group button, and to `core.layout.open` with `side` ([group cards](groups.md#split-setting)) |
 | `language` | `auto` or a language of the application menu (`ko`, `en`) |
 | `sidebarMinWidth`, `sidebarMaxWidth`, `sidebarWidth` | [Layout values](#layout-values) |
 | `viewProcess` | `plugin` or `view`, common scope, default `plugin`: the WebContent process of a view that the host creates afterwards, shared by the views of its plugin or its own ([view processes](plugin-processes.md#view-processes)) |
@@ -166,7 +165,7 @@ Plugin settings take the form of their declaration ([plugins](plugins.md)).
 
 The settings files carry their form in the member `format` (format 1 is the current form; a file of another form, or without the member, is refused, [stored data formats](installation.md#stored-data-formats)). The member is the carrier of the stored form, not a setting: the workspace hides it from the snapshot and preserves it when it writes, and a settings key named `format` is refused like any other unknown key. The rest of this section holds for the settings of the file after the carrier.
 
-The settings files are read only in their current form, and the page does not convert them. A key that is not a declared setting, including the keys of earlier settings (`cardSidebar`, `rail`, `railWidth`, `sidebarFoldedWidth`, `latency`, `skew`), fails with `settings.json: unknown setting <key>` for the common settings and `<project root>/.soksak/settings.json: unknown setting <key>` for the settings of the project that the window opens. A `rail` link, a side link (`left`, `right`, `top` or `bottom`) that names a plugin, and a link to a set that the scope does not hold fail the check of sets and links below. A failure replaces nothing and writes nothing.
+The settings files are read only in their current form, and the page does not convert them. A key that is not a declared setting, including the keys of earlier settings (`cardSidebar`, `rail`, `railWidth`, `sidebarFoldedWidth`, `latency`, `skew`, `cardSplit`), fails with `settings.json: unknown setting <key>` for the common settings and `<project root>/.soksak/settings.json: unknown setting <key>` for the settings of the project that the window opens. A `rail` link, a side link (`left`, `right`, `top` or `bottom`) that names a plugin, and a link to a set that the scope does not hold fail the check of sets and links below. A failure replaces nothing and writes nothing.
 
 ## Stored sets and links
 
@@ -211,7 +210,7 @@ The three values share one range, 60 to 800 points, and their sliders use that r
 
 A change that leaves `sidebarMinWidth` ≤ `sidebarWidth` ≤ `sidebarMaxWidth` false fails with -32602 (invalid params) and changes nothing. A stored card width outside the current range is drawn as stored until the grip changes it.
 
-The layout values that both workbenches read have one source, the chrome metrics of `workbench.json`: the card head `head-h` and foot `foot-h`, which also bound the drop zones, and the tab strip thresholds `tab-peek-w` and `tab-min-w`. A value written in the code of each workbench would be a second copy that drifts from the first. The window sidebar sizes of a new space come from the `workspace.grid` cards of `environment.json`.
+The layout values that both workbenches read have one source, the chrome metrics of `workbench.json`: the card head `head-h` and foot `foot-h`, the head of which is also the tab strip of the target search, the width `drop-band` and the margin `drop-band-margin` of the bands of the target search ([target search](groups.md#target-search)), and the tab strip thresholds `tab-peek-w`, `tab-min-w` and `tab-grab-w`. A value written in the code of each workbench would be a second copy that drifts from the first. The window sidebar sizes of a new space come from the `workspace.grid` cards of `environment.json`.
 
 The lengths, ratios and durations of the workbench stylesheets (`app.css`, `library.css` and `overlay.html`) are the chrome metrics of `packages/workbench/workbench.json`. The workbench sets each of them as a custom property of the document root before the page draws, and the stylesheets read the custom properties; a stylesheet holds no literal length, ratio or duration. A media condition cannot read a custom property, so the workbench marks the document root with `data-library-narrow` while the window is at most `library-narrow-w` wide, and `library.css` narrows the library by that mark. The focus mark stands outside the body of the focused card on every side by `focus-mark-t`, the thickness of its stroke, so the stroke does not cover the surface.
 

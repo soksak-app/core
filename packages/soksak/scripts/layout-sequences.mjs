@@ -1,16 +1,19 @@
 import assert from "node:assert/strict";
-import { Soksak } from "../dist/index.js";
+import { Soksak, checkState } from "../dist/index.js";
 
 export const W = 1600;
 export const H = 1200;
 const sides = ["left", "right", "top", "bottom"];
-export const ordinaryOperations = ["split", "close", "tidy", "moveBoundary", "mergeCoincident"];
+/** The methods of a sequence that throw their refusal. */
+const throwsRefusal = new Set(["split", "splitToward"]);
+
+export const ordinaryOperations = ["split", "close", "moveBoundary"];
 export const fixedOperations = ["splitToward", "close", "move", "insertAt", "moveTo", "moveBoundary"];
 export const allOperations = [...new Set([...ordinaryOperations, ...fixedOperations, "setSize", "setFixed", "resize"])];
 export const operationWeights = {
-  ordinary: { split: 50, close: 20, tidy: 5, moveBoundary: 25 },
+  ordinary: { split: 50, close: 25, moveBoundary: 25 },
   fixed: { splitToward: 30, close: 20, move: 25, insertAt: 5, moveTo: 8, moveBoundary: 12 },
-  constrained: { split: 24, splitToward: 10, insertAt: 10, close: 12, move: 8, moveTo: 8, moveBoundary: 10, mergeCoincident: 5, setSize: 7, setFixed: 3, resize: 3 },
+  constrained: { split: 24, splitToward: 10, insertAt: 10, close: 12, move: 8, moveTo: 8, moveBoundary: 15, setSize: 7, setFixed: 3, resize: 3 },
 };
 
 /** One seeded generator serves all profiles; values are always below one. */
@@ -27,20 +30,11 @@ export function random(seed) {
 export function createProfile(profile, seed = 0) {
   const next = random(seed);
   if (profile === "ordinary") return new Soksak(undefined, { width: W, height: H });
-  if (profile === "fixed") return new Soksak({
-    xs: [0, 0.18, 0.36, 0.8, 1], ys: [0, 0.5, 1],
-    cards: [
-      { id: "left", c0: 0, c1: 1, r0: 0, r1: 2, width: 180, fixed: true },
-      { id: "rail", c0: 1, c1: 2, r0: 0, r1: 2, width: 190, fixed: true },
-      { id: "upper", c0: 2, c1: 3, r0: 0, r1: 1 },
-      { id: "lower", c0: 2, c1: 3, r0: 1, r1: 2 },
-      { id: "right", c0: 3, c1: 4, r0: 0, r1: 2, width: 200, fixed: true },
-    ],
-  }, { width: W, height: H });
+  if (profile === "fixed") return new Soksak({ root: { cut: "x", kids: [{ share: 0.18, node: { card: "left", fixed: true, width: 180 } }, { share: 0.18, node: { card: "rail", fixed: true, width: 190 } }, { share: 0.44000000000000006, node: { cut: "y", kids: [{ share: 0.5, node: { card: "upper" } }, { share: 0.5, node: { card: "lower" } }] } }, { share: 0.19999999999999996, node: { card: "right", fixed: true, width: 200 } }] } }, { width: W, height: H });
   if (profile === "constrained") return new Soksak(undefined, {
     width: 200 + Math.floor(next() * 1600), height: 150 + Math.floor(next() * 1000),
     gap: Math.floor(next() * 40), minSize: Math.floor(next() * 120),
-    snap: next() < 0.8 ? "merge" : "off", fillOrder: next() < 0.5 ? "v" : "h",
+    snap: next() < 0.8 ? "merge" : "off",
   });
   throw new Error(`unknown layout profile: ${profile}`);
 }
@@ -105,12 +99,30 @@ export function assertInvariants(grid, profile = "constrained") {
       gaps.set(a[hi], gap);
     }
     if (profile === "fixed") {
+      // A cut scales the px sizes of its fixed cards by one factor and the px sizes of its other kids by another
+      // (packages/soksak/docs/layout.md#the-model), so the fixed cards of one cut along the axis are drawn at one ratio to what they
+      // declare, and so are its other cards; two cuts scale their own declarations, each by its own factors.
       const asked = axis === "x" ? "width" : "height";
-      const ratios = cards.filter((c) => c[hi] - c[lo] === 1 && c[asked] > 0.01).map((c) => rects.get(c.id)[size] / c[asked]);
-      if (ratios.length) require(Math.max(...ratios) - Math.min(...ratios) < 0.001, "fixed-size-ratio", axis);
+      const cuts = [];
+      const visit = (node) => {
+        if (node.box !== undefined) return visit(node.inner);
+        if (node.cut === undefined) return;
+        if (node.cut === axis) {
+          const sized = node.kids.map((kid) => kid.node).filter((kid) => kid.card !== undefined && kid[asked] > 0.01);
+          cuts.push(sized.filter((kid) => kid.fixed === true), sized.filter((kid) => kid.fixed !== true));
+        }
+        for (const kid of node.kids) visit(kid.node);
+      };
+      visit(grid.toJSON().root);
+      for (const held of cuts) {
+        const ratios = held.map((c) => rects.get(c.card)[size] / c[asked]);
+        if (ratios.length) require(Math.max(...ratios) - Math.min(...ratios) < 0.001, "fixed-size-ratio", axis);
+      }
     }
   }
-  require(grid.isSlicing(), "slicing", "arrangement is not slicing");
+  let refused = null;
+  try { checkState(grid.toJSON()); } catch (error) { refused = error.message; }
+  require(refused === null, "canonical", `the state is refused: ${refused}`);
   if (profile === "fixed") {
     const open = cards.filter((c) => !c.fixed);
     if (open.length > 1) require(open.some((c) => grid.canClose(c.id)), "closable-card", "no open card can close");
@@ -145,7 +157,6 @@ export function generateOperation(grid, next, step, { profile = "ordinary", meth
     case "split": args = [id(), axis, { id: born }]; break;
     case "splitToward": args = [id(), pick(sides), { id: born, data: { n: step } }]; break;
     case "close": args = [id()]; break;
-    case "tidy": args = []; break;
     case "move": args = [id(), id(), pick(sides)]; break;
     case "insertAt": args = [axis, profile === "constrained" ? Math.floor(next() * (grid.lines(axis).length + 1)) : pick(grid.standings(axis)), { id: born, size: profile === "fixed" ? 40 + Math.floor(next() * 120) : Math.floor(next() * 400) }]; break;
     case "moveTo": args = profile === "fixed" ? ["rail", "x", pick(grid.standings("x"))] : [id(), axis, line()]; break;
@@ -155,8 +166,8 @@ export function generateOperation(grid, next, step, { profile = "ordinary", meth
       args = divider ? [divider.axis, divider.line, grid.boundaryPos(divider.axis, divider.line) + (next() - 0.5) * 0.4 * (divider.axis === "x" ? grid.width : grid.height)] : [axis, 0, 0];
       break;
     }
-    case "mergeCoincident": args = [axis, line()]; break;
-    case "setSize": args = [id(), axis, next() < 0.3 ? null : Math.floor(next() * 400)]; break;
+    // A negative size is the size that setSize refuses: a px size belongs to its card, whatever cells it spans.
+    case "setSize": { const roll = next(); args = [id(), axis, roll < 0.3 ? null : roll < 0.4 ? -1 : Math.floor(((roll - 0.4) / 0.6) * 400)]; break; }
     case "setFixed": args = [id(), next() < 0.5]; break;
     case "resize": args = [Math.floor(next() * 1700), Math.floor(next() * 1000)]; break;
     default: throw new Error(`unknown layout operation: ${method}`);
@@ -167,7 +178,7 @@ export function generateOperation(grid, next, step, { profile = "ordinary", meth
 /** A refusal is a null/false return; a successful no-op is counted separately. */
 export function runSequence(grid, { seed = 0, steps = 0, profile = "ordinary", methods, operations, check = assertInvariants, afterOperation } = {}) {
   const next = random(seed);
-  const initial = structuredClone({ state: grid.toJSON(), options: { width: grid.width, height: grid.height, gap: grid.gap, minSize: grid.minSize, snap: grid.snap, snapDistance: grid.snapDistance, grabSize: grid.grabSize, fillOrder: grid.fillOrder } });
+  const initial = structuredClone({ state: grid.toJSON(), options: { width: grid.width, height: grid.height, gap: grid.gap, minSize: grid.minSize, snap: grid.snap, snapDistance: grid.snapDistance, grabSize: grid.grabSize } });
   const counts = () => ({ successful: 0, refused: 0, changed: 0, unchanged: 0 });
   const report = { seed, profile, initial, trace: [], counts: counts(), byMethod: {}, failure: null };
   const inspect = () => check(grid, profile);
@@ -177,9 +188,7 @@ export function runSequence(grid, { seed = 0, steps = 0, profile = "ordinary", m
   }
   sequence: for (let step = 0; step < (operations?.length ?? steps); step++) {
     const selected = operations?.[step] ?? generateOperation(grid, next, step, { profile, methods });
-    // Ordinary drags retain their original follow-up merge, audited separately.
-    const calls = !operations && !methods && profile === "ordinary" && selected.method === "moveBoundary"
-      ? [selected, { method: "mergeCoincident", args: selected.args.slice(0, 2) }] : [selected];
+    const calls = [selected];
     for (const call of calls) {
       const operation = structuredClone({ method: call.method, args: call.args });
       const before = JSON.stringify({ state: grid.toJSON(), width: grid.width, height: grid.height });
@@ -187,9 +196,17 @@ export function runSequence(grid, { seed = 0, steps = 0, profile = "ordinary", m
       report.trace.push(entry);
       const methodCounts = report.byMethod[operation.method] ??= counts();
       try {
-        const result = grid[operation.method](...operation.args);
-        entry.result = result;
-        entry.outcome = result === false || result === null ? "refused" : "successful";
+        let result;
+        let refusal = null;
+        try {
+          result = grid[operation.method](...operation.args);
+        } catch (error) {
+          // A split throws its refusal; every other method of a sequence answers a refusal with false or null.
+          if (!throwsRefusal.has(operation.method)) throw error;
+          refusal = error.message;
+        }
+        entry.result = refusal === null ? result : { throws: refusal };
+        entry.outcome = refusal !== null || result === false || result === null ? "refused" : "successful";
         report.counts[entry.outcome]++;
         methodCounts[entry.outcome]++;
         const after = JSON.stringify({ state: grid.toJSON(), width: grid.width, height: grid.height });

@@ -80,12 +80,13 @@ type dividerGrip struct {
 	color ui.Color
 }
 
-// drawDividers draws the grab area of each boundary over the cards and returns the grips to paint over the rail. inset is the origin
-// of the plane in its parent. The grab area takes the pointer over its whole area, also over the edges of the native views of the
+// drawDividers draws the grab area of each boundary over the cards and returns the grips to paint over the rail: each stretch of a
+// divider draws its grip at its center while it holds the grip, so no grip reaches into a header (docs/spec/groups.md#drawing). inset is
+// the origin of the plane in its parent. The grab area takes the pointer over its whole area, also over the edges of the native views of the
 // cards beside it, which it covers, as the window overlays give that area to the page of the Wails and Tauri hosts
 // (docs/spec/native-surfaces.md#surface-host-container).
 func (s *Shell) drawDividers(c *ui.Context, inset float32) []dividerGrip {
-	dividers := s.plane.Dividers()
+	dividers := s.planeDividers()
 	items := s.items(dividers)
 	grips := make([]dividerGrip, 0, len(dividers))
 	m := s.metrics
@@ -102,6 +103,13 @@ func (s *Shell) drawDividers(c *ui.Context, inset float32) []dividerGrip {
 		color := faded(s.palette.Muted, m.gripMix)
 		if box.Hovered() || box.FocusVisible() || (s.held != nil && s.held.item == items[i]) {
 			color = s.palette.Focus
+		}
+		length := divider.H
+		if divider.Axis == "y" {
+			length = divider.W
+		}
+		if float32(length) < m.gripLength {
+			continue
 		}
 		grips = append(grips, dividerGrip{
 			rect:  ui.Rect{X: float32(divider.X) + (float32(divider.W)-across)/2, Y: float32(divider.Y) + (float32(divider.H)-along)/2, W: across, H: along},
@@ -136,8 +144,11 @@ const ruleEdge = 0.5
 
 // ruleRect is where a rule of the plane stands in the stage, whose margin around the plane is inset. A rule at the edge of the plane
 // goes on across the padding of the stage, bleed, to the line around the stage.
-func ruleRect(rule layout.Rule, width, height float64, stage ui.Rect, inset, padding float32) ui.Rect {
+func ruleRect(rule planeRule, width, height float64, stage ui.Rect, inset, padding float32) ui.Rect {
 	bleed := float64(padding)
+	if !rule.Bleed {
+		bleed = 0
+	}
 	x, y, w, h := rule.X, rule.Y, rule.W, rule.H
 	if rule.Axis == "x" {
 		if rule.Y <= ruleEdge {
@@ -159,7 +170,7 @@ func ruleRect(rule layout.Rule, width, height float64, stage ui.Rect, inset, pad
 
 // drawRules paints the boundary lines. The solid stretches lie under the cards. The rest of a line, where a card crosses it, follows the
 // fullRule setting: it lies under the cards, over them and their surfaces, or is not drawn. over tells which of the two layers this is.
-func (s *Shell) drawRules(p *ui.Painter, stage ui.Rect, inset float32, rules []layout.Rule, over bool) {
+func (s *Shell) drawRules(p *ui.Painter, stage ui.Rect, inset float32, rules []planeRule, over bool) {
 	place, _ := s.settings.Value("fullRule").(string) // silent: the settings store checks the type of the value.
 	for _, rule := range rules {
 		color := s.palette.Rule
@@ -193,8 +204,7 @@ func (s *Shell) dividerInput(divider layout.Divider, item string) func(ui.InputE
 			}
 			if event.Clicks == 2 {
 				s.held = nil
-				s.plane.CenterBoundary(divider.Axis, divider.Line)
-				s.settle()
+				s.binder.run("core.boundary.center", boundaryParam{Axis: divider.Axis, Line: divider.Line})
 				return true
 			}
 			s.held = &heldDivider{item: item, axis: divider.Axis, line: divider.Line, from: at,
@@ -205,7 +215,7 @@ func (s *Shell) dividerInput(divider layout.Divider, item string) func(ui.InputE
 			if held == nil || held.item != item {
 				return false
 			}
-			s.carry(func() float64 { return s.plane.MoveBoundary(held.axis, held.line, held.base+at-held.from, true) })
+			s.carry(func() float64 { return s.planes.MoveBoundary(held.axis, held.line, held.base+at-held.from, true) })
 			s.dragStepped(held)
 			s.options.Invalidate()
 			return true
@@ -214,7 +224,12 @@ func (s *Shell) dividerInput(divider layout.Divider, item string) func(ui.InputE
 			if held == nil || held.item != item {
 				return false
 			}
-			s.plane.MergeCoincident(held.axis, held.line)
+			// The drag shows the boundary while it moves; its result is the command core.boundary.move from the start of the drag to
+			// where it ends, which gives the result of every move of a boundary and its record (docs/spec/exposure.md).
+			end := s.plane.BoundaryPos(held.axis, held.line)
+			s.planes.MoveBoundary(held.axis, held.line, held.base, false)
+			s.held = nil
+			s.binder.run("core.boundary.move", boundaryParam{Axis: held.axis, Line: held.line, Position: &end})
 			s.settle()
 			return true
 		case ui.InputKeyDown:
@@ -232,8 +247,7 @@ func (s *Shell) dividerKey(divider layout.Divider, key ui.Key) bool {
 	step := 0.0
 	switch key {
 	case ui.KeyEnter, ui.KeySpace:
-		s.plane.CenterBoundary(divider.Axis, divider.Line)
-		s.settle()
+		s.binder.run("core.boundary.center", boundaryParam{Axis: divider.Axis, Line: divider.Line})
 		return true
 	case ui.KeyLeft, ui.KeyUp:
 		step = -dividerKeyStep
@@ -242,7 +256,7 @@ func (s *Shell) dividerKey(divider layout.Divider, key ui.Key) bool {
 	default:
 		return false
 	}
-	s.plane.MoveBoundary(divider.Axis, divider.Line, s.plane.BoundaryPos(divider.Axis, divider.Line)+step, true)
-	s.settle()
+	position := s.plane.BoundaryPos(divider.Axis, divider.Line) + step
+	s.binder.run("core.boundary.move", boundaryParam{Axis: divider.Axis, Line: divider.Line, Position: &position})
 	return true
 }

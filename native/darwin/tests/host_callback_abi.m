@@ -63,7 +63,7 @@ int sp_test_callback_run(void) {
     sp_host_callback_native_fullscreen_done(token, -37, text);
     sp_host_callback_surface_pressed(token, &context);
     sp_host_callback_surface_point(token, -37, -12.5, -12.5);
-    sp_host_callback_input_delivered(token, -37, &held);
+    sp_host_callback_input_delivered(token, -37, &held, token);
     sp_host_callback_input_activated(token, -37, text);
     sp_host_callback_document_changed(token, text);
     sp_host_callback_document_message(token, text);

@@ -69,7 +69,8 @@ func TestAHiddenTabLeavesTheActiveTabInItsPlace(t *testing.T) {
 	f.settle()
 	list, first := f.box("core.card.tab-list", "main"), f.box("core.card.tab", "tab-000000")
 	gap := first.X - (list.X + list.W)
-	f.tester.SetSize(300, 600)
+	// The head keeps the leader mark and the fullscreen toggle beside ⋯, and the active tab fits beside them.
+	f.tester.SetSize(360, 600)
 	f.settle()
 	card := status[gridRead](t, f, "core.grid").Cards[0]
 	active := *card.Active
@@ -275,5 +276,116 @@ func TestAToolOfACardHeadShowsItsCursor(t *testing.T) {
 	}
 	if got := cursorOver("core.card.fullscreen", left); got != ui.CursorPointer {
 		t.Errorf("the cursor over the restore of a full screen card is %v, want the hand %v", got, ui.CursorPointer)
+	}
+}
+
+// The stage of a head follows from its width and its tabs alone: at every width the head shows the same tabs whichever tab is
+// active, and the active tab among them (docs/spec/example-model.md#card-tabs).
+func TestTheStageOfAHeadIsTheSameForEverySelectedTab(t *testing.T) {
+	long, short := tab("t1", "notes"), tab("t2", "notes")
+	long["title"], short["title"] = "www 문서", "탭 4"
+	f := layoutShell(t, oneCard(long, short))
+	fit := func(selected string) (string, bool) {
+		if _, err := f.apply("core.tab.select", `{"tab": "`+selected+`"}`); err != nil {
+			t.Fatal(err)
+		}
+		main := f.gridCards()["main"]
+		return main["acts"].(map[string]any)["fit"].(string), f.has("core.card.tab", selected)
+	}
+	for width := 400; width <= 1000; width += 2 {
+		f.tester.SetSize(width, 600)
+		f.settle()
+		withLong, longShown := fit("t1")
+		withShort, shortShown := fit("t2")
+		if withLong != withShort {
+			t.Fatalf("at a window of %d the head shows the stage %s with t1 selected and %s with t2 selected", width, withLong, withShort)
+		}
+		if withLong != "ham" && (!longShown || !shortShown) {
+			t.Fatalf("at a window of %d in the stage %s the selected tab is not shown: t1 %v, t2 %v", width, withLong, longShown, shortShown)
+		}
+	}
+}
+
+// A card dragged to its minimum width keeps a part of its active tab at least tab-grab-w wide, the part that a press grabs to drag
+// the tab, and folds the fullscreen toggle into the tool menu before the tab, so only ⋯ stands after the tab
+// (docs/spec/example-model.md#card-tabs).
+func TestACardAtItsMinimumWidthKeepsAPartOfItsTab(t *testing.T) {
+	f, left, right := splitShell(t)
+	box, _ := f.divider(left, right)
+	x, y := box.X+box.W/2, box.Y+box.H/2
+	f.tester.Press(x, y)
+	f.tester.Frame()
+	f.tester.Move(0, y)
+	f.tester.Frame()
+	f.tester.Release(0, y)
+	f.settle()
+	if card := f.box("core.card", left); card.W > 100 {
+		t.Fatalf("the drag left the card %v wide, not at its minimum", card.W)
+	}
+	active := f.tabsOf(left)[0].(map[string]any)["id"].(string)
+	if !f.has("core.card.tab", active) {
+		t.Fatalf("the head of the card at its minimum width shows no tab")
+	}
+	if tab := f.box("core.card.tab", active); tab.W < 32 {
+		t.Fatalf("the tab of the card at its minimum width is %v wide, below the grab width 32", tab.W)
+	}
+	if f.has("core.card.fullscreen", left) || !f.has("core.card.tools", left) {
+		t.Fatalf("the head shows the fullscreen toggle %v and the tool menu %v", f.has("core.card.fullscreen", left), f.has("core.card.tools", left))
+	}
+	f.click("core.card.tools", left)
+	if keys := f.menu().keys(); !slices.Contains(keys, "fullscreen") {
+		t.Fatalf("the tool menu of the card at its minimum width is %v, without the fullscreen item", keys)
+	}
+}
+
+// A cut name keeps its first character, cut at the end of its room, as CSS text-overflow: ellipsis does: at the minimum width of a
+// card the room of the name of its tab is narrower than the first character and the ellipsis, and the tab shows the character, not
+// the ellipsis alone (docs/spec/example-model.md#card-tabs). The ink of a letter stands higher than the dots of an ellipsis, whose
+// height is that of one dot.
+func TestTheCutNameOfATabKeepsItsFirstCharacter(t *testing.T) {
+	f, left, right := splitShell(t)
+	box, _ := f.divider(left, right)
+	x, y := box.X+box.W/2, box.Y+box.H/2
+	f.tester.Press(x, y)
+	f.tester.Frame()
+	f.tester.Move(0, y)
+	f.tester.Frame()
+	f.tester.Release(0, y)
+	f.settle()
+	active := f.tabsOf(left)[0].(map[string]any)["id"].(string)
+	tab, closing := f.box("core.card.tab", active), f.box("core.card.tab-close", active)
+	palette := f.palette()
+	image := f.tester.Image()
+	scale := float32(image.Bounds().Dx()) / f.tester.ElementTree()[0].Bounds.W
+	distance := func(a, b color.RGBA) int {
+		d := func(x, y uint8) int { return (int(x) - int(y)) * (int(x) - int(y)) }
+		return d(a.R, b.R) + d(a.G, b.G) + d(a.B, b.B)
+	}
+	ground := image.RGBAAt(int((tab.X+1)*scale), int((tab.Y+tab.H/2)*scale))
+	top, bottom := -1, -1
+	for py := int(tab.Y * scale); py < int((tab.Y+tab.H)*scale); py++ {
+		for px := int((tab.X + 1) * scale); px < int(closing.X*scale); px++ {
+			if p := image.RGBAAt(px, py); distance(p, opaque(palette.Fg)) < distance(p, ground) {
+				if top < 0 {
+					top = py
+				}
+				bottom = py
+				break
+			}
+		}
+	}
+	if top < 0 {
+		t.Fatalf("the tab %+v of the card at its minimum width shows no name before its close button %+v", tab, closing)
+	}
+	// The room of the name ends a tab gap before the close button, and the cut name draws nothing past it.
+	for py := int(tab.Y * scale); py < int((tab.Y+tab.H)*scale); py++ {
+		for px := int((closing.X - 3) * scale); px < int(closing.X*scale); px++ {
+			if p := image.RGBAAt(px, py); distance(p, opaque(palette.Fg)) < distance(p, ground) {
+				t.Fatalf("the name of the tab %+v draws at %v, past its room before the close button %+v", tab, float32(px)/scale, closing)
+			}
+		}
+	}
+	if height := float32(bottom-top+1) / scale; height < 4 {
+		t.Fatalf("the name of the tab %+v stands %v points high, the height of the dots of an ellipsis: the cut name lost its first character", tab, height)
 	}
 }

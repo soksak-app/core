@@ -194,7 +194,7 @@ func readProjects(path string) ([]Record, error) {
 // projectsFormat and settingsFormat are the current format numbers of the stored files that the host writes
 // (docs/spec/installation.md#stored-data-formats).
 const (
-	projectsFormat = 1
+	projectsFormat = 3
 	settingsFormat = 1
 )
 

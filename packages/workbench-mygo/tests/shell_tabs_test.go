@@ -57,6 +57,9 @@ type tabShell struct {
 	events   *stateEvents
 	failed   []string
 	keptPuts []string
+	// building runs once in the next build of the window, after the view of the shell, as input that the platform delivers while the
+	// window builds a frame (InBuild).
+	building func()
 	// sessionPuts holds the tab of each write of the stored sessions, and sessionReads the tab of each read of them.
 	sessionPuts  []string
 	sessionReads []string
@@ -184,7 +187,13 @@ func newTabShellWithState(t *testing.T, stored *storedHost, refused error) *tabS
 		t.Fatal(err)
 	}
 	f.shell = shell
-	f.tester = ui.NewTester(shell.View, 1200, 800)
+	f.tester = ui.NewTester(func(c *ui.Context) {
+		shell.View(c)
+		if step := f.building; step != nil {
+			f.building = nil
+			step()
+		}
+	}, 1200, 800)
 	shell.Start()
 	if refused != nil || stored.startFails {
 		f.pending.drain(t)
@@ -196,10 +205,9 @@ func newTabShellWithState(t *testing.T, stored *storedHost, refused error) *tabS
 }
 
 func storedProject(tabs ...map[string]any) map[string]any {
-	state := map[string]any{"xs": []float64{0, 1}, "ys": []float64{0, 1}, "paidBy": map[string]any{}, "cards": []map[string]any{{
-		"id": "main", "c0": 0, "c1": 1, "r0": 0, "r1": 1, "data": map[string]any{"tabs": tabs, "activeId": tabs[0]["id"]}}}}
+	state := cardNode("main", tabs...)
 	return map[string]any{"id": "prj-a", "named": 1, "title": "a", "root": "/a", "identity": "identity of /a", "color": "#ffb36b", "activeSpaceId": "spc-aaaaaa",
-		"spaces": []map[string]any{{"id": "spc-aaaaaa", "title": "main", "layout": map[string]any{"state": state}}}}
+		"spaces": []map[string]any{{"id": "spc-aaaaaa", "title": "main", "layout": storedRoot(state)}}}
 }
 
 // attach attaches the document region "page" of the tab through the view call of its surface, as the page of the plugin does.
@@ -520,7 +528,7 @@ func TestAStoreChangeGivesTheStoredLayoutOfAProjectThatTheWindowDoesNotHold(t *t
 	stored := &storedHost{common: map[string]any{"projectOpening": "tabs"}, projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes")), other}}
 	f := newTabShell(t, stored)
 	f.open(t)
-	tabs := other["spaces"].([]map[string]any)[0]["layout"].(map[string]any)["state"].(map[string]any)["cards"].([]map[string]any)[0]["data"].(map[string]any)
+	tabs := other["spaces"].([]map[string]any)[0]["layout"].(map[string]any)["state"].(map[string]any)["root"].(map[string]any)["data"].(map[string]any)
 	tabs["tabs"] = []map[string]any{tab("tab-dddddd", "absent")}
 	f.shell.Event("workspace-changed", nil)
 	f.settle()

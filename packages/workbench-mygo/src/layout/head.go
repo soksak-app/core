@@ -14,44 +14,54 @@ type Head struct {
 	// Lead is the width of the button at the start of the head, and Gap is the gap between the elements of the head.
 	Lead float64 `json:"lead"`
 	Gap  float64 `json:"gap"`
-	// ToolsWidth is the width of the tools, and MoreWidth is the width of the ⋯ button that holds them in the menu stage.
+	// ToolsWidth is the width of the tools, MoreWidth is the width of the ⋯ button that holds them in the menu stage, and KeptWidth is
+	// the width of the tools that the menu stage keeps beside ⋯ with their gaps: the fullscreen toggle and the leader mark.
 	ToolsWidth float64 `json:"toolsWidth"`
 	MoreWidth  float64 `json:"moreWidth"`
-	// TabWidths are the widths of the tabs, TabGap is the gap between them, and ActiveWidth is the width of the active tab, 0 without one.
-	TabWidths   []float64 `json:"tabWidths"`
-	TabGap      float64   `json:"tabGap"`
-	ActiveWidth float64   `json:"activeWidth"`
+	KeptWidth  float64 `json:"keptWidth"`
+	// TabWidths are the widths of the tabs and TabGap is the gap between them. The stage takes the widest tab in place of the active
+	// tab, so it is the same whichever tab is active (docs/spec/example-model.md#card-tabs).
+	TabWidths []float64 `json:"tabWidths"`
+	TabGap    float64   `json:"tabGap"`
 	// Peek is the chrome metric tab-peek-w: the spare width beside the active tab that keeps every tab. MinTab is the chrome metric
-	// tab-min-w: the width under which the active tab drops.
+	// tab-min-w: the width under which the kept tools fold into the menu. Grab is the chrome metric tab-grab-w: the width under which
+	// the active tab drops, the part of a tab that a press grabs to drag it.
 	Peek   float64 `json:"peek"`
 	MinTab float64 `json:"minTab"`
+	Grab   float64 `json:"grab"`
 }
 
-// HeadFit is the stage of a card head: Fit is strip (every tab), one (the active tab) or ham (no tab), and Tools is bar or menu.
+// HeadFit is the stage of a card head: Fit is strip (every tab), one (the active tab) or ham (no tab), and Tools is bar, menu (⋯ with the
+// kept tools beside it) or all (⋯ alone).
 type HeadFit struct {
 	Fit   string `json:"fit"`
 	Tools string `json:"tools"`
 }
 
-// FitHead returns the stage of a card head. The head folds in this order: the other tabs, the tools (into the ⋯ menu) down to the
-// minimum width of the title, then the title. The first stage whose condition holds is used.
+// FitHead returns the stage of a card head. The head folds in this order: the other tabs, the tools into the ⋯ menu beside the kept
+// tools down to the minimum width of the title, the kept tools into the menu down to the grab width of the title, then the title. The
+// first stage whose condition holds is used.
 func FitHead(head Head) HeadFit {
 	inner := head.Width - head.PaddingLeft - head.PaddingRight - (head.Lead + head.Gap)
-	whole := 0.0
+	whole, widest := 0.0, 0.0
 	for _, w := range head.TabWidths {
 		whole += w
+		widest = math.Max(widest, w)
 	}
 	// float64 rounds each product before it is added, as JavaScript does; without it Go may fuse them (number.go).
 	whole += float64(float64(max(0, len(head.TabWidths)-1)) * head.TabGap)
 	withTools := inner - head.ToolsWidth - head.Gap
-	withMenu := inner - head.MoreWidth - head.Gap
+	withKept := inner - head.MoreWidth - head.KeptWidth - head.Gap
+	withMore := inner - head.MoreWidth - head.Gap
 	switch {
-	case withTools >= math.Min(whole, head.ActiveWidth+head.Peek):
+	case withTools >= math.Min(whole, widest+head.Peek):
 		return HeadFit{Fit: "strip", Tools: "bar"}
-	case withTools >= head.ActiveWidth:
+	case withTools >= widest:
 		return HeadFit{Fit: "one", Tools: "bar"}
-	case withMenu >= math.Min(head.ActiveWidth, head.MinTab):
+	case withKept >= math.Min(widest, head.MinTab):
 		return HeadFit{Fit: "one", Tools: "menu"}
+	case withMore >= math.Min(widest, head.Grab):
+		return HeadFit{Fit: "one", Tools: "all"}
 	}
-	return HeadFit{Fit: "ham", Tools: "menu"}
+	return HeadFit{Fit: "ham", Tools: "all"}
 }

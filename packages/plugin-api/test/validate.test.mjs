@@ -19,11 +19,13 @@ const environment = () => ({
   workspace: {
     focus: "main",
     grid: {
-      xs: [0, 0.2, 1], ys: [0, 1],
-      cards: [
-        { id: "left", c0: 0, c1: 1, r0: 0, r1: 1, width: 190, fixed: true },
-        { id: "main", c0: 1, c1: 2, r0: 0, r1: 1, tabs: [{ plugin: "probe", title: "p 1" }] },
-      ],
+      root: {
+        cut: "x",
+        kids: [
+          { share: 0.2, node: { card: "left", width: 190, fixed: true } },
+          { share: 0.8, node: { card: "main", tabs: [{ plugin: "probe", title: "p 1" }] } },
+        ],
+      },
     },
   },
   sidebars: {
@@ -183,24 +185,24 @@ test("an environment is rejected for each invalid field", () => {
     [(e) => { e.runtime = null; }, /runtime must be a directory/],
     [(e) => { e.plugins = ["@scope/plugin-probe"]; }, /unknown field plugins/],
     [(e) => { e.workspace.focus = "left"; }, /focus must name a card with tabs/],
-    [(e) => { e.workspace.grid.cards[1].tabs = []; }, /non-empty array/],
+    [(e) => { e.workspace.grid.root.kids[1].node.tabs = []; }, /non-empty array/],
     [(e) => { e.sidebars.links[0].set = "missing"; }, /known set/],
     [(e) => { e.sidebars.links[0].set = null; }, /known set/],
     [(e) => { e.sidebars.sets.push(e.sidebars.sets[0]); }, /duplicate set/],
     [(e) => { delete e.sidebars.sets[0].layout; }, /set set-side layout must be list or tabs/],
     [(e) => { e.sidebars.sets[0].layout = "grid"; }, /set set-side layout must be list or tabs/],
-    [(e) => { e.workspace.grid.cards[0].width = "190"; }, /width must be a finite positive number/],
-    [(e) => { e.workspace.grid.cards[0].width = 0; }, /width must be a finite positive number/],
-    [(e) => { e.workspace.grid.cards[0].width = -190; }, /width must be a finite positive number/],
-    [(e) => { e.workspace.grid.cards[0].width = Infinity; }, /width must be a finite positive number/],
+    [(e) => { e.workspace.grid.root.kids[0].node.width = "190"; }, /width must be a finite positive number/],
+    [(e) => { e.workspace.grid.root.kids[0].node.width = 0; }, /width must be a finite positive number/],
+    [(e) => { e.workspace.grid.root.kids[0].node.width = -190; }, /width must be a finite positive number/],
+    [(e) => { e.workspace.grid.root.kids[0].node.width = Infinity; }, /width must be a finite positive number/],
     // The sides of the window are reserved card ids of the window sidebars, which hold no tabs and the size of their axis
     // (docs/spec/external-sidebars.md).
-    [(e) => { e.workspace.grid.cards[0].tabs = [{ plugin: "probe", title: "p 2" }]; }, /environment.json: card left is a window sidebar and declares no tabs/],
-    [(e) => { e.workspace.grid.cards.push({ id: "top", c0: 0, c1: 2, r0: 0, r1: 1, tabs: [{ plugin: "probe", title: "p 2" }] }); }, /environment.json: card top is a window sidebar and declares no tabs/],
-    [(e) => { e.workspace.grid.cards.push({ id: "bottom", c0: 0, c1: 2, r0: 0, r1: 1, width: 80 }); }, /environment.json card bottom: unknown field width/],
-    [(e) => { e.workspace.grid.cards[0].height = 80; }, /environment.json card left: unknown field height/],
-    [(e) => { e.workspace.grid.cards[1].height = 80; }, /environment.json card main: unknown field height/],
-    [(e) => { e.workspace.grid.cards.push({ id: "top", c0: 0, c1: 2, r0: 0, r1: 1, height: 0 }); }, /environment.json: card top height must be a finite positive number/],
+    [(e) => { e.workspace.grid.root.kids[0].node.tabs = [{ plugin: "probe", title: "p 2" }]; }, /environment.json: card left is a window sidebar and declares no tabs/],
+    [(e) => { e.workspace.grid.root.kids.push({ share: 0, node: { card: "top", tabs: [{ plugin: "probe", title: "p 2" }] } }); }, /environment.json: card top is a window sidebar and declares no tabs/],
+    [(e) => { e.workspace.grid.root.kids.push({ share: 0, node: { card: "bottom", width: 80 } }); }, /environment.json card bottom: unknown field width/],
+    [(e) => { e.workspace.grid.root.kids[0].node.height = 80; }, /environment.json card left: unknown field height/],
+    [(e) => { e.workspace.grid.root.kids[1].node.height = 80; }, /environment.json card main: unknown field height/],
+    [(e) => { e.workspace.grid.root.kids.push({ share: 0, node: { card: "top", height: 0 } }); }, /environment.json: card top height must be a finite positive number/],
   ];
   for (const [change, message] of cases) {
     const value = environment();
@@ -211,7 +213,7 @@ test("an environment is rejected for each invalid field", () => {
 
 test("a top or bottom window sidebar card of the environment declares its height (docs/spec/external-sidebars.md)", () => {
   const value = environment();
-  value.workspace.grid.cards.push({ id: "top", c0: 0, c1: 2, r0: 0, r1: 1, height: 96, fixed: true }, { id: "bottom", c0: 0, c1: 2, r0: 0, r1: 1, fixed: true });
+  value.workspace.grid.root.kids.push({ share: 0, node: { card: "top", height: 96, fixed: true } }, { share: 0, node: { card: "bottom", fixed: true } });
   assert.doesNotThrow(() => validateEnvironment(value));
 });
 
@@ -223,7 +225,7 @@ test("environment setting values are checked against the owning manifest", () =>
 
 test("references to missing sections, surfaceless tabs and repeated ids are rejected", () => {
   const cases = [
-    [(e) => { e.workspace.grid.cards[1].tabs[0].plugin = "side"; }, /tab plugin side has no surface/],
+    [(e) => { e.workspace.grid.root.kids[1].node.tabs[0].plugin = "side"; }, /tab plugin side has no surface/],
     [(e) => { e.sidebars.sets[0].sections.push("side.missing"); }, /unknown section side.missing/],
   ];
   for (const [change, message] of cases) {
@@ -428,7 +430,7 @@ test("references to a loaded plugin still name its declared sections and surface
   surfaceless.sidebars.links.push({ place: "card-left", plugin: "side", set: "set-side" });
   assert.throws(() => checkSidebarReferences(surfaceless.sidebars, [card, side], "settings"), /plugin side without a surface/);
   const tab = environment();
-  tab.workspace.grid.cards[1].tabs[0].plugin = "side";
+  tab.workspace.grid.root.kids[1].node.tabs[0].plugin = "side";
   assert.throws(() => checkReferences(tab, [card, side]), /tab plugin side has no surface/);
 });
 

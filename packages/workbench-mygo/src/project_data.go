@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
+
+	sok "github.com/soksak-app/core/packages/sok/go/src"
 )
 
 // The project data of a plugin (docs/spec/plugins.md#project-data): a view reads and writes the keys that its plugin declares, in the
@@ -80,11 +82,15 @@ func checkProjectData(unit *installedUnit, key string, value json.RawMessage) er
 	if !ok {
 		return fmt.Errorf("%s data %s is not declared", unit.ID, key)
 	}
-	var decoded any
-	if err := json.Unmarshal(value, &decoded); err != nil {
+	schema, err := json.Marshal(declared.Schema)
+	if err != nil {
+		return fmt.Errorf("%s data %s: schema: %w", unit.ID, key, err)
+	}
+	matched, err := sok.MatchesSchemaText(schema, value)
+	if err != nil {
 		return fmt.Errorf("%s data %s: %w", unit.ID, key, err)
 	}
-	if !MatchesSchema(declared.Schema, decoded) {
+	if !matched {
 		return fmt.Errorf("%s data %s does not match its schema", unit.ID, key)
 	}
 	return nil

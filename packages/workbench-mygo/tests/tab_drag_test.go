@@ -1,11 +1,15 @@
 package workbench_test
 
 import (
+	"encoding/json"
 	"errors"
 	"math"
 	"strings"
 	"testing"
 	"time"
+
+	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
+	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
 // dragRead is the status core.drag.
@@ -14,8 +18,9 @@ type dragRead struct {
 	Card   string `json:"card"`
 	Moved  bool   `json:"moved"`
 	Target *struct {
-		Card string `json:"card"`
-		Zone string `json:"zone"`
+		Card  layout.Target `json:"card"`
+		Zone  string        `json:"zone"`
+		Index *int          `json:"index"`
 	} `json:"target"`
 	Preview *struct {
 		X float64 `json:"x"`
@@ -69,7 +74,7 @@ func TestDroppingATabOnTheCentreOfACardMovesItThere(t *testing.T) {
 	box := f.box("core.card", other)
 	x, y := box.X+box.W/2, box.Y+box.H/2
 	drag := dragTab(t, f, tab, x, y)
-	if drag == nil || drag.Tab != tab || drag.Card != card || !drag.Moved || drag.Target == nil || drag.Target.Card != other || drag.Target.Zone != "centre" {
+	if drag == nil || drag.Tab != tab || drag.Card != card || !drag.Moved || drag.Target == nil || strings.Join(drag.Target.Card, " ") != other || drag.Target.Zone != "centre" {
 		t.Fatalf("the drag is %+v", drag)
 	}
 	plane := status[gridRead](t, f, "core.grid").Plane
@@ -93,16 +98,94 @@ func TestDroppingATabOnTheCentreOfACardMovesItThere(t *testing.T) {
 func TestDroppingATabOnTheEdgeOfACardMakesACard(t *testing.T) {
 	f, card, tab, other := cardWithTwoTabs(t)
 	before := len(f.tabbedCards())
+	// The point lies in the outer quarter of the body, outside the bands of the line, which are targets of the nodes on it
+	// (docs/spec/groups.md#target-search).
 	box := f.box("core.card", other)
-	x, y := box.X+box.W-4, box.Y+box.H/2
+	x, y := box.X+box.W*0.9, box.Y+box.H/2
 	drag := dragTab(t, f, tab, x, y)
-	if drag == nil || drag.Target == nil || drag.Target.Zone != "right" || drag.Preview == nil {
+	if drag == nil || drag.Target == nil || strings.Join(drag.Target.Card, " ") != other || drag.Target.Zone != "right" || drag.Preview == nil {
 		t.Fatalf("the drag is %+v", drag)
 	}
 	f.tester.Release(x, y)
 	f.settle()
 	if got := len(f.tabbedCards()); got != before+1 || hasTab(f, card, tab) {
 		t.Fatalf("the plane holds %v with the tabs %v", f.tabbedCards(), f.tabsOf(card))
+	}
+}
+
+// A drag that enters the left line on the band of one card and stays on that band into the band of the card below it selects the run of
+// both, and the release adds the new card beside the run (docs/spec/groups.md#target-search).
+func TestADragAlongALineSelectsTheRunFromItsAnchor(t *testing.T) {
+	f, card, tab, other := cardWithTwoTabs(t)
+	first, second := f.box("core.card", card), f.box("core.card", other)
+	if first.X != second.X || second.Y <= first.Y {
+		t.Fatalf("the cards stand at %v and %v, not one above the other", first, second)
+	}
+	drag := dragTab(t, f, tab, first.X+8, first.Y+first.H/2)
+	if drag == nil || drag.Target == nil || strings.Join(drag.Target.Card, " ") != card || drag.Target.Zone != "left" {
+		t.Fatalf("the drag at the anchor is %+v", drag)
+	}
+	x, y := second.X+8, second.Y+second.H/2
+	f.tester.Move(x, y)
+	f.tester.Frame()
+	drag = status[*dragRead](t, f, "core.drag")
+	if drag == nil || drag.Target == nil || strings.Join(drag.Target.Card, " ") != card+" "+other || drag.Target.Zone != "left" {
+		t.Fatalf("the drag along the line is %+v with the target %+v", drag, drag.Target)
+	}
+	f.tester.Release(x, y)
+	f.settle()
+	cards := f.tabbedCards()
+	if len(cards) != 3 {
+		t.Fatalf("the plane holds %v", cards)
+	}
+	added := ""
+	for _, id := range cards {
+		if id != card && id != other {
+			added = id
+		}
+	}
+	box, top, bottom := f.box("core.card", added), f.box("core.card", card), f.box("core.card", other)
+	if box.X >= top.X || box.Y != top.Y || math.Abs(float64(box.Y+box.H-(bottom.Y+bottom.H))) > 0.01 {
+		t.Fatalf("the new card stands at %v beside %v and %v", box, top, bottom)
+	}
+}
+
+// The width of the bands is the chrome metric drop-band of workbench.json, the one source of both workbenches
+// (docs/spec/settings.md#layout-values): with bands of 40 points, a point 20 points inside the left line of a card lies on the outer
+// band, the content of the plane, where bands of 5 points leave it in the outer quarter of the card.
+func TestTheBandsHaveTheDeclaredWidth(t *testing.T) {
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := startedShellOf(t, acme(), declared.WithChrome("drop-band", "40px"))
+	f.settle()
+	f.run("core.library.form.open", map[string]string{"mode": "open"})
+	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
+	f.run("core.library.form.submit", nil)
+	cards := f.tabbedCards()
+	card, other := cards[0], cards[1]
+	f.click("core.card.add", card)
+	f.click("core.picker.item", "acme")
+	tab := f.tabsOf(card)[1].(map[string]any)["id"].(string)
+	box := f.box("core.card", card)
+	drag := dragTab(t, f, tab, box.X+20, box.Y+box.H/2)
+	if drag == nil || drag.Target == nil || strings.Join(drag.Target.Card, " ") != card+" "+other || drag.Target.Zone != "left" {
+		t.Fatalf("the drag is %+v with the target %+v", drag, drag.Target)
+	}
+}
+
+// A shell whose workbench.json holds no number for a metric of the bands is refused with the file and the metric.
+func TestABandMetricWithoutANumberIsRefused(t *testing.T) {
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"drop-band", "drop-band-margin"} {
+		_, err := workbench.NewShell(workbench.ShellOptions{Name: "main", Random: strings.NewReader(""), Declared: declared.WithChrome(name, "wide")})
+		if want := "workbench.json: the chrome metric " + name + " has no number"; err == nil || err.Error() != want {
+			t.Errorf("the shell starts with %v, not %q", err, want)
+		}
 	}
 }
 
@@ -211,7 +294,7 @@ func TestTheMoveCommandRefusesWhatADropCannotDo(t *testing.T) {
 		params map[string]string
 		text   string
 	}{
-		{map[string]string{"tab": tab, "card": other, "zone": "middle"}, "unknown zone middle"},
+		{map[string]string{"tab": tab, "card": other, "zone": "middle"}, "invalid params for core.tab.move"},
 		{map[string]string{"tab": tab, "card": "absent", "zone": "centre"}, "no card absent"},
 		{map[string]string{"tab": "absent", "card": other, "zone": "centre"}, "no tab absent"},
 		{map[string]string{"tab": only, "card": other, "zone": "left"}, "cannot move to the left of " + other},
@@ -292,4 +375,52 @@ func TestATabDragUnderTheErrorLineDropsWhereItEnds(t *testing.T) {
 	if hasTab(f, card, tab) || !hasTab(f, other, tab) {
 		t.Fatalf("the cards hold %v and %v", f.tabsOf(card), f.tabsOf(other))
 	}
+}
+
+// A drag of a tab resolves its drop where the pointer is in the window when its move comes right after the frame that moved the tab:
+// the move arrives while that frame builds, so it applies after it, when the handler of the tab holds the Bounds of the frame before
+// and the move measures from the box of the frame that moved it.
+func TestATabDragResolvesItsDropAtThePointerAfterTheTabMoved(t *testing.T) {
+	f := layoutShell(t, oneCard(tab("t1", "notes"), tab("t2", "notes")))
+	f.tester.SetSize(1400, 900)
+	f.settle()
+	split, err := f.apply("core.card.split", `{"card": "main", "side": "left", "plugin": "plain"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var created struct{ Card string }
+	if err := json.Unmarshal([]byte(split), &created); err != nil || created.Card == "" {
+		t.Fatalf("the split answered %s: %v", split, err)
+	}
+	// The left zone of the new card in the narrower window, where the move goes.
+	f.tester.SetSize(1000, 900)
+	f.settle()
+	narrow, target := f.box("core.card.tab", "t2"), f.box("core.card", created.Card)
+	x, y := target.X+4, target.Y+target.H/2
+	f.tester.SetSize(1400, 900)
+	f.settle()
+	pill := f.box("core.card.tab", "t2")
+	if narrow.X == pill.X {
+		t.Fatalf("the tab t2 stands at x %v in both windows", pill.X)
+	}
+	from, at := pill.X+pill.W/2, pill.Y+pill.H/2
+	f.tester.Move(from, at)
+	f.tester.Press(from, at)
+	f.tester.Move(from+20, at+20)
+	// The resize builds the frame that moves the tab, and the move comes while it builds.
+	f.building = func() { f.tester.Move(x, y) }
+	f.tester.SetSize(1000, 900)
+	if moved := f.box("core.card", created.Card); moved != target {
+		t.Fatalf("card %s stands at %+v after the window narrowed, not at %+v as before", created.Card, moved, target)
+	}
+	drag := status[*dragRead](t, f.shellFixture, "core.drag")
+	if drag == nil {
+		t.Fatal("the press and the moves of the tab t2 began no drag")
+	}
+	if drag.Tab != "t2" || drag.Target == nil || strings.Join(drag.Target.Card, " ") != created.Card || drag.Target.Zone != "left" {
+		t.Fatalf("the drag of the tab t2, which moved from x %v to %v, to the left zone of %s at %v,%v is %+v with the target %+v",
+			pill.X, narrow.X, created.Card, x, y, drag, drag.Target)
+	}
+	f.tester.Release(x, y)
+	f.settle()
 }

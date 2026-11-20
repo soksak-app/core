@@ -810,11 +810,34 @@ fn earlier_stored_forms_are_reported_by_snapshot_and_refused_by_writes() {
     let projects = config.path().join("projects.json");
     let bare = r#"[{"id":"prj-a","root":"/x","identity":"1:1"}]"#;
     fs::write(&projects, bare).unwrap();
-    let refusal = format!("{}: projects.json: format must be 1", projects.display());
+    let refusal = format!("{}: projects.json: format must be 3", projects.display());
     assert_eq!(
         apply(json!({"kind":"snapshot"})).unwrap(),
         json!({"projects": [], "common": {}, "projectsError": refusal})
     );
+    // A file of format 2 holds space layouts as lines and cells beside a group list, not as the slicing tree
+    // (docs/spec/groups.md#storage), so it is refused as a whole.
+    let earlier = concat!(
+        r#"{"format":2,"projects":[{"id":"prj-a","root":"/x","identity":"1:1","spaces":[{"id":"s1","layout":"#,
+        r#"{"state":{"xs":[0,1],"ys":[0,1],"cards":[{"id":"c1","c0":0,"c1":1,"r0":0,"r1":1}]},"groups":[],"lastCard":1,"leader":"c1"}}]}]}"#
+    );
+    fs::write(&projects, earlier).unwrap();
+    assert_eq!(
+        apply(json!({"kind":"snapshot"})).unwrap(),
+        json!({"projects": [], "common": {}, "projectsError": refusal})
+    );
+    assert_eq!(
+        apply(json!({"kind":"add","project":{"id":"prj-b","root":"/y","identity":"1:2"}}))
+            .unwrap_err(),
+        refusal
+    );
+    assert_eq!(fs::read_to_string(&projects).unwrap(), earlier);
+    // A write into a missing projects.json stores the current form, format 3.
+    fs::remove_file(&projects).unwrap();
+    apply(json!({"kind":"add","project":{"id":"prj-b","root":"/y","identity":"1:2"}})).unwrap();
+    let written: Value = serde_json::from_str(&fs::read_to_string(&projects).unwrap()).unwrap();
+    assert_eq!(written["format"], json!(3));
+    fs::write(&projects, bare).unwrap();
     assert_eq!(
         apply(json!({"kind":"add","project":{"id":"prj-b","root":"/y","identity":"1:2"}}))
             .unwrap_err(),

@@ -35,6 +35,12 @@
   "exposes": {
     "status": [
       {
+        "name": "layoutprobe.activity",
+        "description": "The activity of the tab that layoutprobe.activity last set (docs/spec/activity.md), or null.",
+        "schema": { "type": ["string", "null"] },
+        "activity": true
+      },
+      {
         "name": "layoutprobe.view",
         "description": "The start values of the tab view (surface, params, path, origin, project and the directory it starts in), the plugin settings, and the title, footer, directory and notice it reported.",
         "schema": {
@@ -106,6 +112,7 @@
       }
     ],
     "commands": [
+      { "name": "layoutprobe.activity", "description": "Sets the status layoutprobe.activity of the tab to a value, an activity or another value that core refuses, or null.", "params": { "type": "object", "properties": { "value": { "type": ["string", "null"] } } }, "result": { "type": "null" } },
       { "name": "layoutprobe.title", "description": "Sets the title of the tab with tab.title, or removes it with null.",
         "params": { "type": "object", "properties": { "text": { "type": ["string", "null"] } } }, "result": { "type": "null" } },
       { "name": "layoutprobe.footer", "description": "Sets the footer text of the tab with tab.footer, or removes it with null.",

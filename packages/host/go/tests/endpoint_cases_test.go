@@ -145,6 +145,7 @@ var endpointTierCases = []endpointTierCase{
 	{name: "error-window-missing"},
 	{name: "command-window-missing"},
 	{name: "command-unknown-host", windows: []string{"main"}},
+	{name: "command-host-params", windows: []string{"main"}},
 }
 
 // endpointCasesOutsideTier are the cases with replay true that this runner does not play, with the reason. Each of them needs a
@@ -183,7 +184,7 @@ const caseFrameLimit = 16 << 20
 const caseReadLimit = 10 * time.Second
 
 // TestEndpointCases plays each endpoint case of the tier and checks that the cases of docs/spec/cases/endpoint are all covered.
-// contract: endpoint.transport.http-request-line-closes, endpoint.transport.invalid-json-closes, endpoint.transport.non-jsonrpc-object-closes, endpoint.transport.undeclared-method-closes, endpoint.names.owner-form-required, endpoint.rpc.target-params-are-checked-in-order, endpoint.rpc.unknown-window-1003, endpoint.names.unknown-host-name-1001, endpoint.errors.unknown-name-text, endpoint.transport.length-over-limit-closes, endpoint.cases.replayed-cases-are-covered
+// contract: endpoint.transport.http-request-line-closes, endpoint.transport.invalid-json-closes, endpoint.transport.non-jsonrpc-object-closes, endpoint.transport.undeclared-method-closes, endpoint.names.owner-form-required, endpoint.rpc.target-params-are-checked-in-order, endpoint.rpc.unknown-window-1003, endpoint.names.unknown-host-name-1001, endpoint.errors.unknown-name-text, endpoint.transport.length-over-limit-closes, endpoint.cases.replayed-cases-are-covered, endpoint.command-params.checked-before-the-run
 func TestEndpointCases(t *testing.T) {
 	directory := endpointCaseDirectory(t)
 	t.Run("coverage", func(t *testing.T) {

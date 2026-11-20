@@ -307,8 +307,10 @@ func TestViewShowsAnImageOfTheDataURL(t *testing.T) {
 
 func TestACommandOfAClosedViewIsRefused(t *testing.T) {
 	f, _ := surfaceShell(t)
-	for _, name := range []string{"core.debug.view", "core.debug.state", "core.debug.timeline", "core.debug.save"} {
-		if err := f.later(name, map[string]string{"path": "x"}); err == nil || err.Error() != "the debug view is not open" {
+	for name, params := range map[string]map[string]string{
+		"core.debug.view": {"path": "x"}, "core.debug.state": {"path": "x"}, "core.debug.timeline": {}, "core.debug.save": {"path": "x"},
+	} {
+		if err := f.later(name, params); err == nil || err.Error() != "the debug view is not open" {
 			t.Errorf("%s fails with %v", name, err)
 		}
 	}
@@ -430,9 +432,9 @@ func TestTheFilterRefusesWhatItDoesNotHold(t *testing.T) {
 		change map[string]any
 		want   string
 	}{
-		{map[string]any{"none": "x"}, "timeline filter has no member none"},
+		{map[string]any{"none": "x"}, "command core.debug.timeline.filter: unknown parameter none"},
 		{map[string]any{}, "timeline filter needs channel, level, class, layer, text, event, event_prefix, surface, session, cid, run, from, to"},
-		{map[string]any{"text": 1}, "log query text must be a string, found 1"},
+		{map[string]any{"text": 1}, "invalid params for core.debug.timeline.filter"},
 		{map[string]any{"from": "2026-02-30T00:00:00Z"}, `log query from "2026-02-30T00:00:00Z" is not a UTC time like 2026-10-08T22:53:20.123456Z`},
 	} {
 		if err := f.later("core.debug.timeline.filter", test.change); err == nil || err.Error() != test.want {

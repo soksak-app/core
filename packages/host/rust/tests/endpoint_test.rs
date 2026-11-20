@@ -1221,6 +1221,67 @@ fn a_release_refused_while_a_button_is_held_waits_for_mask_zero() {
 }
 
 // A release refused with 1011 is delivered at the next end of a press, and not at an input that ends no press.
+// A release that the window refuses because the close of the connection of its down released the press names that close, so a
+// down and an up sent through two connections, such as two commands of the command line, are refused with their cause; a new
+// press of the pointer and button ends the cause.
+// contract: endpoint.input.release-after-connection-close
+#[test]
+fn a_refused_up_after_the_close_of_its_connection_names_the_close() {
+    let refusal = "the window did not accept the input: no open press of the pointer and button in the window";
+    let served = serve_page(
+        "test-press-close-refusal",
+        vec![
+            exchange(
+                "input.pointer",
+                main_pointer("down", json!(5), json!(6)),
+                Value::Null,
+            ),
+            exchange("input.pointer", main_release(5.0, 6.0), Value::Null),
+            refused_exchange(
+                "input.pointer",
+                main_pointer("up", json!(5), json!(6)),
+                endpoint::INVALID_PARAMS,
+                refusal,
+            ),
+            exchange(
+                "input.pointer",
+                main_pointer("down", json!(5), json!(6)),
+                Value::Null,
+            ),
+            exchange(
+                "input.pointer",
+                main_pointer("up", json!(5), json!(6)),
+                Value::Null,
+            ),
+            refused_exchange(
+                "input.pointer",
+                main_pointer("up", json!(5), json!(6)),
+                endpoint::INVALID_PARAMS,
+                refusal,
+            ),
+        ],
+    );
+    let mut owner = served.open();
+    let main = |phase: &str| json!({"window": "main", "x": 5, "y": 6, "phase": phase});
+    request(&mut owner, 1, "input.pointer", main("down"));
+    drop(owner);
+    assert!(served.page.await_total(2), "the close released no press");
+    let mut other = served.open();
+    assert_eq!(
+        request(&mut other, 1, "input.pointer", main("up"))["error"],
+        json!({"code": endpoint::INVALID_PARAMS, "message": format!("{refusal}; the close of the connection that delivered the down released the press of pointer main button left in window main, so a gesture sends its down, drags and up through one connection")}),
+        "the up after the close"
+    );
+    request(&mut other, 2, "input.pointer", main("down"));
+    request(&mut other, 3, "input.pointer", main("up"));
+    assert_eq!(
+        request(&mut other, 4, "input.pointer", main("up"))["error"],
+        json!({"code": endpoint::INVALID_PARAMS, "message": refusal}),
+        "an up after a delivered up"
+    );
+    served.finish();
+}
+
 // contract: endpoint.input.close-releases-presses
 #[test]
 fn a_release_refused_for_another_pointer_is_delivered_at_the_end_of_a_press() {

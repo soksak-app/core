@@ -39,6 +39,8 @@
 @property(nonatomic, copy) void (^dropped)(void);
 @property(nonatomic, assign) BOOL key;
 @property(nonatomic, assign) BOOL press;
+// The number of the piece in the process, which its records of native.input.held carry.
+@property(nonatomic, assign) unsigned long number;
 @end
 @implementation SPHeldInput
 - (void)dealloc { [_event release]; [_call release]; [_dropped release]; [super dealloc]; }
@@ -282,18 +284,33 @@ static BOOL inputHeld(void *owner) {
 }
 
 static SPHeldInput *heldPiece(void *owner, NSEvent *event, void (^call)(void), BOOL key, BOOL press) {
+    static unsigned long pieces;
     SPHeldInput *input = [[[SPHeldInput alloc] init] autorelease];
     input.owner = owner;
     input.event = event;
     input.call = call;
     input.key = key;
     input.press = press;
+    input.number = ++pieces;
     return input;
+}
+
+// Records one step of a held piece as native.input.held: held (the layout hold keeps it), waited (the key wait keeps it), returned
+// (a release posts it back to the event queue), ran (its injected call runs) or dropped (the close of its window drops it). The
+// numbers of the pieces of one window show the order in which the steps took them (docs/spec/native-surfaces.md#keyboard-of-a-surface).
+static void recordPiece(SPHeldInput *piece, const char *step) {
+    if (!sp_event_gate(SP_CLASS_INPUT, SP_EVENT_DEBUG)) return;
+    NSString *kind = piece.call ? @"call" : @"event";
+    NSString *fields = [NSString stringWithFormat:@"{\"window\":%ld,\"piece\":%lu,\"step\":\"%s\",\"kind\":\"%@\",\"key\":%s,\"press\":%s,\"type\":%ld}",
+        (long)((__bridge NSWindow *)piece.owner).windowNumber, piece.number, step, kind, piece.key ? "true" : "false",
+        piece.press ? "true" : "false", piece.event ? (long)piece.event.type : -1L];
+    sp_event(SP_CLASS_INPUT, SP_EVENT_DEBUG, "native.input.held", fields.UTF8String);
 }
 
 static void keepInput(SPHeldInput *input) {
     if (!heldInput) heldInput = [[NSMutableArray alloc] init];
     [heldInput addObject:input];
+    recordPiece(input, "held");
 }
 
 static SPWindowLayout *layoutOf(void *owner) {
@@ -350,9 +367,11 @@ static void (*applicationSendEvent)(id, SEL, NSEvent *);
 static void releaseInput(void *owner);
 static void returnInput(void *owner, NSArray<SPHeldInput *> *pieces);
 
-// Gives the input of owner back when no open transaction of owner holds it.
+// Gives the input of owner back when no open transaction of owner holds it and no earlier release of owner is on its way back. A
+// release posts its turns at the start of the queue, so a release during another would put later input ahead of the turns that the
+// earlier release posted; the end of that earlier release gives the input back instead, in its order.
 static void releaseWhenFree(void *owner) {
-    if (!layoutOf(owner)) releaseInput(owner);
+    if (!layoutOf(owner) && ![returning containsObject:[NSValue valueWithPointer:owner]]) releaseInput(owner);
 }
 
 static SPKeyWait *keyWait(void *owner) {
@@ -392,6 +411,7 @@ static BOOL keyWaitTakes(void *owner, SPHeldInput *piece) {
     if (piece.key) {
         if (!wait.keys) wait.keys = [NSMutableArray array];
         [wait.keys addObject:piece];
+        recordPiece(piece, "waited");
         return YES;
     }
     return piece.press && wait.decision && endDecision(owner, piece);
@@ -407,7 +427,10 @@ static void runHeldTurn(long turn) {
     if (!input) return;
     [heldTurns removeObjectForKey:@(turn)];
     if (input.call) {
-        if (!keyWaitTakes(input.owner, input)) input.call();
+        if (!keyWaitTakes(input.owner, input)) {
+            recordPiece(input, "ran");
+            input.call();
+        }
     } else {
         [returning removeObject:[NSValue valueWithPointer:input.owner]];
         if (![returning containsObject:[NSValue valueWithPointer:input.owner]]) forgetReturnedActions(input.owner);
@@ -559,9 +582,13 @@ static void watchInput(void) {
         Method discard = class_getInstanceMethod(application, @selector(discardEventsMatchingMask:beforeEvent:));
         applicationDiscard = (void (*)(id, SEL, NSEventMask, NSEvent *))method_getImplementation(discard);
         method_setImplementation(discard, (IMP)discardAfterLayout);
-        // A press or key event ends the layout hold at once (docs/spec/native-surfaces.md#layout-transaction).
+        // A press or a key down ends the layout hold at once; a key up and a modifier change continue an action that came before
+        // them and end no hold, so the key up of a keystroke that changed the layout does not commit it before its views presented
+        // (docs/spec/native-surfaces.md#layout-transaction).
         if (!actionObservers) actionObservers = [[NSMutableArray alloc] init];
-        [actionObservers addObject:[[^(NSEvent *event) { endHoldByInput(); } copy] autorelease]];
+        [actionObservers addObject:[[^(NSEvent *event) {
+            if (event.type != NSEventTypeKeyUp && event.type != NSEventTypeFlagsChanged) endHoldByInput();
+        } copy] autorelease]];
     });
 }
 
@@ -585,6 +612,7 @@ static void returnInput(void *owner, NSArray<SPHeldInput *> *pieces) {
     SPHeldInput *end = [[[SPHeldInput alloc] init] autorelease];
     end.owner = owner;
     postHeldTurn(end);
+    for (SPHeldInput *input in pieces) recordPiece(input, "returned");
     for (SPHeldInput *input in pieces.reverseObjectEnumerator) {
         if (input.event) {
             // Each press, key event, move and scroll was told when it first reached the application; its return is not told again.
@@ -793,6 +821,7 @@ static void dropKeyWait(void *owner) {
     if (!wait) return;
     [keyWaits removeObjectForKey:[NSValue valueWithPointer:owner]];
     for (SPHeldInput *input in wait.keys) {
+        recordPiece(input, "dropped");
         if (input.dropped) input.dropped();
     }
     if (wait.keys.count == 0) return;

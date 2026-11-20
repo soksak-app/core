@@ -19,35 +19,90 @@ import (
 // storedLayout is a stored layout: the state of the plane with the other members as they are stored.
 type storedLayout struct {
 	State          layout.State    `json:"state"`
+	Groups         json.RawMessage `json:"groups"`
+	Leader         json.RawMessage `json:"leader"`
+	LastCard       json.RawMessage `json:"lastCard"`
 	Named          int             `json:"named"`
 	FocusedID      string          `json:"focusedId"`
 	WindowSidebars json.RawMessage `json:"windowSidebars"`
 	Sidebars       json.RawMessage `json:"sidebars"`
 }
 
-// newLayout returns the layout of a new space, from the grid of the environment declaration.
+// newLayout returns the layout of a new space, from the grid of the environment declaration: its tree, each card node with the tabs that
+// it declares as its data.
 func (s *Shell) newLayout() (json.RawMessage, error) {
-	cards := make([]map[string]any, 0, len(s.grid.Cards))
-	for _, raw := range s.grid.Cards {
-		var card map[string]any
-		if err := json.Unmarshal(raw, &card); err != nil {
-			return nil, err
+	var leader *string
+	last := 1
+	var node func(raw json.RawMessage) (map[string]any, error)
+	node = func(raw json.RawMessage) (map[string]any, error) {
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &fields); err != nil {
+			return nil, fmt.Errorf("the grid of the environment declares the node %s: %w", raw, err)
 		}
-		tabs, ok := card["tabs"].([]any)
-		delete(card, "tabs")
-		if ok {
-			made := make([]layout.Tab, 0, len(tabs))
-			for _, item := range tabs {
-				declared := item.(map[string]any)
-				plugin, _ := declared["plugin"].(string) // silent: the environment test holds the form of these tabs.
-				title, _ := declared["title"].(string)   // silent: the environment test holds the form of these tabs.
-				made = append(made, layout.Tab{ID: s.issueTab(made), Plugin: plugin, Title: title})
+		out := map[string]any{}
+		for key, value := range fields {
+			out[key] = value
+		}
+		switch {
+		case fields["kids"] != nil:
+			var kids []struct {
+				Share json.RawMessage `json:"share"`
+				Node  json.RawMessage `json:"node"`
 			}
-			card["data"] = tabData(made, made[0].ID)
+			if err := json.Unmarshal(fields["kids"], &kids); err != nil {
+				return nil, fmt.Errorf("the grid of the environment declares the kids %s: %w", fields["kids"], err)
+			}
+			made := []map[string]any{}
+			for _, kid := range kids {
+				inner, err := node(kid.Node)
+				if err != nil {
+					return nil, err
+				}
+				made = append(made, map[string]any{"share": kid.Share, "node": inner})
+			}
+			out["kids"] = made
+		case fields["card"] != nil:
+			var id string
+			if err := json.Unmarshal(fields["card"], &id); err != nil {
+				return nil, fmt.Errorf("the grid of the environment declares the card %s: %w", fields["card"], err)
+			}
+			// The leader of the root level is its first card that is not a window sidebar, and lastCard the largest card number of the
+			// declared cards, at least 1 (docs/spec/groups.md#storage).
+			if leader == nil && !layout.IsWindowSide(id) {
+				leader = &id
+			}
+			if n, ok := layout.CardNumber(id); ok {
+				last = max(last, n)
+			}
+			delete(out, "tabs")
+			if fields["tabs"] != nil {
+				var tabs []struct {
+					Plugin string `json:"plugin"`
+					Title  string `json:"title"`
+				}
+				if err := json.Unmarshal(fields["tabs"], &tabs); err != nil {
+					return nil, fmt.Errorf("the grid of the environment declares the tabs of %s: %w", id, err)
+				}
+				made := make([]layout.Tab, 0, len(tabs))
+				for _, tab := range tabs {
+					// A first tab of a space has no source tab, so its origin is null, written with the layout that creates it
+					// (docs/spec/projects.md#tab-origin).
+					made = append(made, layout.Tab{ID: s.issueTab(made), Plugin: tab.Plugin, Title: tab.Title,
+						Rest: map[string]json.RawMessage{"origin": json.RawMessage(`{"directory":null}`)}})
+				}
+				if len(made) > 0 {
+					out["data"] = tabData(made, made[0].ID)
+				}
+			}
 		}
-		cards = append(cards, card)
+		return out, nil
 	}
-	return json.Marshal(map[string]any{"state": map[string]any{"xs": s.grid.Xs, "ys": s.grid.Ys, "cards": cards}, "named": 0})
+	root, err := node(s.grid.Root)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(map[string]any{"state": map[string]any{"root": root}, "leader": leader,
+		"lastCard": last, "named": 0})
 }
 
 // issueTab returns a new tab id that also differs from the tabs of the card that is being made.
@@ -439,9 +494,10 @@ func (s *Shell) loadSpace(project *projectRecord) error {
 	if err != nil {
 		return err
 	}
-	// The same refusal as readStoredSpace of packages/workbench/projects.js (docs/spec/projects.md#persistence).
-	if space.Parties != nil {
-		return fmt.Errorf("projects.json: project %s, space %s: obsolete member parties", project.Root, space.ID)
+	// The space opens after the check of its stored layout that the library preview runs, as build of packages/workbench/plane.js
+	// does, with the prefix of docs/spec/groups.md#storage.
+	if err := layout.CheckStoredLayout(space.Layout, s.pluginUnits()); err != nil {
+		return fmt.Errorf("projects.json: project %s space %s: %w", project.Root, space.ID, err)
 	}
 	var stored storedLayout
 	if err := json.Unmarshal(space.Layout, &stored); err != nil {
@@ -457,9 +513,14 @@ func (s *Shell) loadSpace(project *projectRecord) error {
 	if s.plane != nil {
 		width, height = s.plane.Width(), s.plane.Height()
 	}
-	plane, err := layout.New(&stored.State, layout.Options{Gap: &gap, Width: &width, Height: &height})
+	grid, err := layout.New(nil, layout.Options{Gap: &gap, Width: &width, Height: &height})
 	if err != nil {
 		return fmt.Errorf("space %s: %w", space.ID, err)
+	}
+	// The refusals of the stored layout carry the prefix of docs/spec/groups.md#storage.
+	plane, err := layout.ReadTree(stored.State, stored.Groups, stored.Leader, stored.LastCard, s.groupOptions(), grid)
+	if err != nil {
+		return fmt.Errorf("projects.json: project %s space %s: %w", project.Root, space.ID, err)
 	}
 	if err := s.sidebars.Restore(stored.Sidebars); err != nil {
 		return fmt.Errorf("space %s: %w", space.ID, err)
@@ -474,8 +535,8 @@ func (s *Shell) loadSpace(project *projectRecord) error {
 	s.fullscreen = ""
 	// A new space stores no focus, and the stored focus of a card that left the layout names no card.
 	focused := stored.FocusedID
-	if _, known := plane.Card(focused); !known {
-		focused = s.firstCard(plane)
+	if _, known := plane.Card(focused); !known || plane.IsGroup(focused) {
+		focused = s.firstCard()
 	}
 	s.focusCard(focused)
 	if _, err := s.arrangeWindowSidebars(); err != nil {
@@ -501,17 +562,17 @@ func (s *Shell) arrangeWindowSidebars() (bool, error) {
 	width, _ := s.settings.Value("sidebarWidth").(float64) // silent: the settings store checks the type of the value.
 	// The sides that have a choice hold a sidebar while their switch is on, arranged in the order (docs/spec/external-sidebars.md).
 	changed, err := layout.ArrangeWindowSidebars(s.plane, s.sidebarOrder(), s.sidebars.Sides(), s.windowSidebars, width, shown)
-	if _, ok := s.plane.Card(s.focused); !ok {
-		s.focusCard(s.firstCard(s.plane))
+	if _, ok := s.findCard(s.focused); !ok {
+		s.focusCard(s.firstCard())
 	}
 	return changed, err
 }
 
 // firstCard returns the card that takes the focus when a space shows: the first card with a tab of the plugin that the environment
 // names, or the first card with a tab.
-func (s *Shell) firstCard(plane *layout.Grid) string {
+func (s *Shell) firstCard() string {
 	first := ""
-	for _, card := range plane.Cards() {
+	for _, card := range s.contentCards() {
 		data, err := layout.DecodeCardData(card.Data)
 		if err != nil || data == nil || len(data.TabList()) == 0 {
 			continue
@@ -551,11 +612,16 @@ func (s *Shell) keepPlane(project *projectRecord) error {
 	if err := json.Unmarshal(space.Layout, &kept); err != nil {
 		return err
 	}
-	state, err := json.Marshal(s.plane.ToJSON())
-	if err != nil {
+	state, leader, last := s.planes.Stored()
+	if kept["state"], err = json.Marshal(state); err != nil {
 		return err
 	}
-	kept["state"] = state
+	if kept["leader"], err = json.Marshal(leader); err != nil {
+		return err
+	}
+	if kept["lastCard"], err = json.Marshal(last); err != nil {
+		return err
+	}
 	if kept["named"], err = json.Marshal(s.tabsNamed); err != nil {
 		return err
 	}
@@ -651,7 +717,7 @@ func (s *Shell) settleThen(stored func()) {
 	s.held = nil
 	if s.plane != nil {
 		s.text.KeepPressedCard(func(card string) bool {
-			_, ok := s.plane.Card(card)
+			_, ok := s.findCard(card)
 			return ok
 		})
 	}
@@ -742,6 +808,7 @@ func (s *Shell) dropProject(id string) {
 	}
 	s.forgetSurfaces(tabs)
 	delete(s.windowProjects, id)
+	defer s.activity.Sync()
 	for i := range s.projects {
 		if s.projects[i].ID == id {
 			s.projects = append(s.projects[:i:i], s.projects[i+1:]...)
@@ -773,10 +840,13 @@ func (s *Shell) dropProject(id string) {
 	})
 }
 
-// showPlane makes plane, or none, the plane of the window. A gesture and a layer belong to the plane that they started on, so they end
-// here, as settle ends a layer: a question about a tab of a plane that left has nothing to close.
-func (s *Shell) showPlane(plane *layout.Grid) {
-	s.plane, s.held, s.dragging = plane, nil, nil
+// showPlane makes the group tree planes, or none, the layout of the window. A gesture and a layer belong to the plane that they started on, so
+// they end here, as settle ends a layer: a question about a tab of a plane that left has nothing to close.
+func (s *Shell) showPlane(planes *layout.GroupTree) {
+	s.planes, s.plane, s.held, s.dragging = planes, nil, nil, nil
+	if planes != nil {
+		s.plane = planes.Grid()
+	}
 	s.closePicker()
 }
 
@@ -855,7 +925,11 @@ func (s *Shell) closeSpace(id string) error {
 	if err := json.Unmarshal(removed.Layout, &stored); err != nil {
 		return fmt.Errorf("space %s: %w", id, err)
 	}
-	eachTab(stored.State.Cards, func(tab layout.Tab, _ bool) { dropped = append(dropped, tab.ID) })
+	cards, err := stored.State.Cards()
+	if err != nil {
+		return fmt.Errorf("space %s: %w", id, err)
+	}
+	eachTab(cards, func(tab layout.Tab, _ bool) { dropped = append(dropped, tab.ID) })
 	for surface, held := range s.surfaces.held {
 		if held.section != nil && strings.HasPrefix(surface, id+"/") {
 			dropped = append(dropped, surface)
@@ -877,7 +951,7 @@ func (s *Shell) cardOfTab(id string) string {
 	if s.plane == nil {
 		return ""
 	}
-	for _, card := range s.plane.Cards() {
+	for _, card := range s.contentCards() {
 		data, err := layout.DecodeCardData(card.Data)
 		if err != nil || data == nil {
 			continue
@@ -921,9 +995,12 @@ func (s *Shell) forgetCardReads(cards []layout.Card) {
 
 // cardData reads the data of the card id.
 func (s *Shell) cardData(id string) (*layout.CardData, error) {
-	card, ok := s.plane.Card(id)
+	card, ok := s.findCard(id)
 	if !ok {
 		return nil, fmt.Errorf("Unknown card: %s", id)
+	}
+	if s.isGroup(id) {
+		return nil, fmt.Errorf("card %s is a group and holds no tabs", id)
 	}
 	data, err := layout.DecodeCardData(card.Data)
 	if err != nil {
@@ -940,7 +1017,7 @@ func (s *Shell) storeCard(id string, data *layout.CardData) error {
 	if err != nil {
 		return err
 	}
-	if !s.plane.SetData(id, encoded) {
+	if !s.planes.SetData(id, encoded) {
 		return fmt.Errorf("Unknown card: %s", id)
 	}
 	return nil
@@ -980,7 +1057,7 @@ func (s *Shell) paneCard(id string) error {
 	if s.plane == nil {
 		return s.requirePlane()
 	}
-	if _, ok := s.plane.Card(id); !ok || isPlace(id) {
+	if _, ok := s.findCard(id); !ok || isPlace(id) {
 		return fmt.Errorf("no card %s", id)
 	}
 	return nil
@@ -1021,18 +1098,16 @@ func (s *Shell) splitCard(id, side, plugin string) (map[string]string, error) {
 // splitTab splits the card id toward side into a new card with a new tab of the known plugin with params, nil for none, focuses the
 // new card, and returns the card and its tab. A split that the layout refuses names no tab, so it changes nothing.
 func (s *Shell) splitTab(id, side string, known *LoadedPlugin, params json.RawMessage) (map[string]string, error) {
-	data, err := s.cardData(id)
-	if err != nil {
-		return nil, err
+	// A split of a group card puts the new card beside it in its parent plane; the group card has no tab to take the origin from.
+	var from *layout.Tab
+	if !s.isGroup(id) {
+		data, err := s.cardData(id)
+		if err != nil {
+			return nil, err
+		}
+		from = data.ActiveTab()
 	}
-	axis := "y"
-	if side == "left" || side == "right" {
-		axis = "x"
-	}
-	if !s.plane.CanSplit(id, axis) {
-		return nil, fmt.Errorf("card %s cannot split toward %s", id, side)
-	}
-	tab, err := s.newTabOf(known, data.ActiveTab())
+	tab, err := s.newTabOf(known, from)
 	if err != nil {
 		return nil, err
 	}
@@ -1043,9 +1118,11 @@ func (s *Shell) splitTab(id, side string, known *LoadedPlugin, params json.RawMe
 	if err != nil {
 		return nil, err
 	}
-	born, ok := s.plane.SplitToward(id, side, layout.SplitInit{Data: encoded})
-	if !ok {
-		return nil, fmt.Errorf("card %s cannot split toward %s", id, side)
+	born, err := s.planes.Split(id, side, encoded)
+	if err != nil {
+		// A refused split changes nothing, so the number of the title of the new tab is not taken.
+		s.tabsNamed--
+		return nil, err
 	}
 	s.focusCard(born)
 	s.settle()
@@ -1061,18 +1138,20 @@ func (s *Shell) closeCard(id string) error {
 		return err
 	}
 	var dropped []string
-	if data, err := s.cardData(id); err == nil && data != nil {
-		for _, tab := range data.TabList() {
-			dropped = append(dropped, tab.ID)
+	for _, card := range s.planes.ContentInside(id) {
+		if data, err := s.cardData(card); err == nil && data != nil {
+			for _, tab := range data.TabList() {
+				dropped = append(dropped, tab.ID)
+			}
 		}
 	}
-	if !s.plane.CanClose(id) {
-		return fmt.Errorf("card %s cannot close", id)
+	ended, err := s.planes.Close(id)
+	if err != nil {
+		return err
 	}
-	s.plane.Close(id)
 	delete(s.operated, id)
-	if s.focused == id {
-		s.focusCard(s.firstCard(s.plane))
+	if slices.Contains(ended, s.focused) {
+		s.focusCard(s.firstCard())
 	}
 	s.settleThen(s.droppedTabs(dropped))
 	return nil
@@ -1082,6 +1161,9 @@ func (s *Shell) closeCard(id string) error {
 func (s *Shell) addTab(id, plugin string, params json.RawMessage) (string, error) {
 	if err := s.layoutChangeable(id); err != nil {
 		return "", err
+	}
+	if s.isGroup(id) {
+		return s.addGroupCard(id, plugin, params)
 	}
 	data, err := s.cardData(id)
 	if err != nil {
@@ -1126,7 +1208,11 @@ func checkTabParams(plugin *LoadedPlugin, params json.RawMessage) (json.RawMessa
 	if plugin.Params == nil {
 		return nil, fmt.Errorf("plugin %s declares no tab params", plugin.ID)
 	}
-	if !MatchesSchema(plugin.Params, value) {
+	matched, err := matchesSchema(plugin.Params, value)
+	if err != nil {
+		return nil, fmt.Errorf("params of %s: %w", plugin.ID, err)
+	}
+	if !matched {
 		return nil, fmt.Errorf("params do not match %s surface.params", plugin.ID)
 	}
 	return params, nil
@@ -1166,7 +1252,7 @@ func (s *Shell) closeTab(id string) error {
 	if err != nil {
 		return err
 	}
-	if len(data.TabList()) == 1 && s.plane.CanClose(card) {
+	if len(data.TabList()) == 1 && s.planes.CanClose(card) {
 		return s.closeCard(card)
 	}
 	data.RemoveTab(id)
@@ -1191,7 +1277,7 @@ func (s *Shell) closeTab(id string) error {
 func (s *Shell) refillTab(id string) (layout.Tab, error) {
 	plugin := ""
 	if s.focused != id {
-		if _, ok := s.plane.Card(s.focused); ok && !isPlace(s.focused) {
+		if _, ok := s.findCard(s.focused); ok && !isPlace(s.focused) {
 			focused, err := s.cardData(s.focused)
 			if err != nil {
 				return layout.Tab{}, err

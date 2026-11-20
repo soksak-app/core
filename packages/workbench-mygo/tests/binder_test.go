@@ -49,8 +49,8 @@ func TestTheRegistryRunsACommandAndReadsAStatus(t *testing.T) {
 	r := registry(t)
 	r.Command("core.space.add", func(params json.RawMessage) (any, error) { return string(params), nil })
 	r.Status("core.layout", func() any { return "the layout" })
-	result, err := r.Run("core.space.add", json.RawMessage(`{"a":1}`))
-	if err != nil || result != `{"a":1}` {
+	result, err := r.Run("core.space.add", json.RawMessage(`{}`))
+	if err != nil || result != `{}` {
 		t.Fatalf("the command gave %v, %v", result, err)
 	}
 	if value, err := r.Read("core.layout"); err != nil || value != "the layout" {
@@ -81,18 +81,18 @@ func TestTheBinderRefusesAnUndeclaredNameWhenTheViewBuilds(t *testing.T) {
 func TestAPressRunsTheCommandOfTheElementWithItsParams(t *testing.T) {
 	r := registry(t)
 	var received string
-	r.Command("core.space.add", func(params json.RawMessage) (any, error) {
+	r.Command("core.card.focus", func(params json.RawMessage) (any, error) {
 		received = string(params)
 		return nil, nil
 	})
 	binder := workbench.NewBinder(r, nil)
 	tester := ui.NewTester(func(c *ui.Context) {
-		binder.Press(c, "core.chrome.left", "core.space.add", "", map[string]any{"side": "left"}).Children(func() { ui.Text(c, "Add") })
+		binder.Press(c, "core.chrome.left", "core.card.focus", "", map[string]any{"card": "c1"}).Children(func() { ui.Text(c, "Add") })
 	}, 200, 100)
 	if err := tester.Click("Add"); err != nil {
 		t.Fatal(err)
 	}
-	if received != `{"side":"left"}` {
+	if received != `{"card":"c1"}` {
 		t.Fatalf("the command received %q", received)
 	}
 }

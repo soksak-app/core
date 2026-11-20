@@ -178,6 +178,10 @@ func list(raw json.RawMessage) ([]json.RawMessage, bool) {
 // isWindowSidebar is whether id names a fixed window sidebar.
 func isWindowSidebar(id string) bool { return IsWindowSide(id) }
 
+// layoutMembers are the members of a stored space layout (docs/spec/groups.md#storage), with groups, the earlier group list that ReadTree
+// refuses.
+var layoutMembers = []string{"state", "leader", "lastCard", "focusedId", "named", "sidebars", "windowSidebars", "groups"}
+
 // CheckStoredLayout is the reason the stored layout of a space cannot be opened with the loaded plugins units, or nil when it can.
 func CheckStoredLayout(layout json.RawMessage, units []PluginUnit) error {
 	kept, _, ok := object(layout)
@@ -195,23 +199,35 @@ func CheckStoredLayout(layout json.RawMessage, units []PluginUnit) error {
 	if _, edge := kept["edgeWidth"]; edge {
 		return errors.New("obsolete window sidebar state")
 	}
-	state, _, ok := object(kept["state"])
-	if !ok {
+	// A member that the storage does not define is refused, so a member of an earlier form is not dropped at the next write; groups is
+	// refused by ReadTree with the text of the earlier group list (docs/spec/groups.md#storage).
+	var unknown []string
+	for key := range kept {
+		if !slices.Contains(layoutMembers, key) {
+			unknown = append(unknown, key)
+		}
+	}
+	if len(unknown) > 0 {
+		slices.Sort(unknown)
+		return fmt.Errorf("layout stores %s, which a space layout does not hold", strings.Join(unknown, ", "))
+	}
+	if jsonKind(kept["state"]) != '{' {
 		return errors.New("a stored layout has no state")
 	}
-	cards, ok := list(state["cards"])
-	if !ok {
-		return errors.New("a stored layout has no cards")
+	var state State
+	if err := json.Unmarshal(kept["state"], &state); err != nil {
+		return err
+	}
+	if err := CheckState(state); err != nil {
+		return err
 	}
 	content := map[string]bool{}
-	for _, raw := range cards {
-		card, _, ok := object(raw)
-		if !ok {
-			return errors.New("a stored card is not an object")
-		}
-		var id string
-		if err := json.Unmarshal(card["id"], &id); err != nil {
-			return fmt.Errorf("a stored card has no id: %w", err)
+	// The cards are checked in the order of the tree, each card node as its id and its data.
+	for _, leaf := range cardsOf(state.Root) {
+		id := leaf.Card
+		card := map[string]json.RawMessage{}
+		if leaf.Data != nil {
+			card["data"] = leaf.Data
 		}
 		if strings.HasPrefix(id, "window:") {
 			return fmt.Errorf("obsolete stored window sidebar %s", id)

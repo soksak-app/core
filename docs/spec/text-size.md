@@ -9,7 +9,8 @@ The example application changes the text size of one card or of the whole window
 The scope is the place the user pressed last:
 
 - A press on a card, including its native terminal region or browser document, selects that card.
-- A press on the frame outside the plane (the project bar, the space bar, or the frame chrome) selects the frame.
+- A press on the frame outside the plane (the project bar, the space bar, the frame chrome, or the stage around the plane) selects the frame. A press inside the plane that no card takes, such as on a gap between cards, leaves the scope as it is.
+- A key input is not a press: it leaves the scope as it is, also when it goes to the native region of a card.
 
 A press on a card stops being the scope when that card leaves the layout or the window stops showing its space, and the focused card is the scope again. A press on the frame stays the scope.
 

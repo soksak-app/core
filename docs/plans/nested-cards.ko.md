@@ -6,7 +6,7 @@
 
 ## 모델
 
-- group card는 body가 자기 plane인 plane의 card다. plane은 layout library `packages/soksak`의 grid 하나(`xs`, `ys`, `cards`, `paidBy`)다. library는 plane 하나의 library로 남고, workbench가 plane의 tree를 가진다.
+- group card는 body가 자기 plane인 plane의 card다. plane은 layout library `packages/soksak`의 grid 하나(slicing tree `{root}`)다. library는 plane 하나의 library로 남고, workbench가 plane의 tree를 가진다.
 - space는 root plane 하나를 가진다. plane의 card는 tab을 가진 content card이거나, child plane을 가진 group card다. content card의 각 tab은 지금처럼 다른 card와 독립이다.
 - card와 tab 구조는 그대로이고, 더하는 것은 group card뿐이다.
   - header는 기존 card header design을 따르며, 이름, leader mark, button을 가진다.
@@ -29,10 +29,7 @@
   - group 해제는 group header의 close menu에 있다.
 - card는 plane 사이를 옮겨도 identifier를 유지한다. card를 지정하는 모든 command(`core.layout.open`, `core.layout.select`, `core.layout.close`, `core.card.get`)는 어느 plane의 card에도 동작한다.
 
-- setting `cardSplit`은 split 뒤의 크기를 정한다. 값은 둘이다.
-  - `exact`(기본값): split되는 card의 rect만 나눈다.
-  - `even`: 그 plane의 card들을 `balance()`로 고른 크기로 다시 배치한다.
-  - 이 setting은 split button, group button의 안쪽 split, `side`를 준 `core.layout.open`에 적용된다.
+- split은 split button, group button의 안쪽 split, `side`를 준 `core.layout.open`에서 자기가 split하는 node만 나눈다.
 
 ## Command와 status
 
@@ -44,7 +41,7 @@
 
 ## 그리기
 
-- 각 plane은 corridor를 그 level의 background로 그린다. theme token `group-1`부터 `group-n`에 setting `group.tint`(opacity 0~100 percent)를 적용한다. corridor가 0이면 group은 header와 tint로 구분된다.
+- 각 plane은 corridor를 그 level의 몸통, 곧 stage 색을 level마다 `group-fill-fade`만큼 card 색에 섞은 색으로 그린다([그리기](../spec/groups.ko.md#그리기)). corridor가 0이면 group은 header와 몸통으로 구분된다.
 - 각 content card surface는 token `--card`를 받는다. `--card`는 card background에 그 plane의 tint를 섞은 값이고, per-surface theme channel(F926-5 `setTheme {scheme, tokens, surfaces}`)로 전달된다. plugin은 `--card`를 칠하고 자기 background를 칠하지 않는다.
 - rail은 지금처럼 focus된 content card의 외곽선을 그린다. leader border는 theme token `group-leader`를 쓴다.
 

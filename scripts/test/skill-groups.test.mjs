@@ -19,13 +19,17 @@ function sections(text) {
 }
 
 // The phrases that the guidance of group cards states (docs/spec/groups.md#commands): the command that makes a group, that it
-// nests a group when it is run on a card of a group, the two ways to add a card to the plane of a group, the dissolve and the move.
+// nests a group when it is run on a card of a group, the two ways to add a card to the plane of a group, that the neighbour of an open
+// is a card of the plane (docs/spec/groups.md#card-commands-on-a-group-card), the dissolve and the move.
 const PHRASES = [
   "`core.group.create {card, side, plugin, params?}`",
   "nests a new group",
   "once per group",
   "`core.layout.open {card: <a card of the group>, side, plugin}`",
   "`core.card.add-tab {card: <group>, plugin}`",
+  "looks for the neighbour toward `side` only among the cards of that plane",
+  "lists every group card once",
+  "read `layout` again right before each step",
   "`core.group.dissolve {group}`",
   "`core.card.move {card, target, side}`",
   "A split never creates a group",

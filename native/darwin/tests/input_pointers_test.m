@@ -81,7 +81,7 @@ typedef struct {
     char holder[64];
     char reason[256];
 } SPAnswer;
-static void answered(void *context, sp_input_result result, const sp_input_held *held) {
+static void answered(void *context, sp_input_result result, const sp_input_held *held, void *view) {
     SPAnswer *answer = context;
     answer->result = result;
     answer->holder[0] = answer->reason[0] = 0;

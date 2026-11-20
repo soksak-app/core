@@ -16,13 +16,18 @@ import (
 // them. It is native UI, drawn over the window (docs/spec/hosts.md#native-views).
 
 // pickerAsk are the questions of the add menu by its tool.
-var pickerAsk = map[string]string{"add": "새 탭에 무엇을 띄울까", "x": "새 위치에 무엇을 띄울까", "y": "새 위치에 무엇을 띄울까"}
+var pickerAsk = map[string]string{"add": "새 탭에 무엇을 띄울까", "x": "새 위치에 무엇을 띄울까", "y": "새 위치에 무엇을 띄울까",
+	"gx": "새 위치에 무엇을 띄울까", "gy": "새 위치에 무엇을 띄울까"}
 
 // The view box of the map of a group heading (fillPicker of packages/workbench/picker-layer.js).
 const pickerMapWidth, pickerMapHeight = 16, 10
 
 // menuTools are the menus of the card head, with the tool of each and the side that its split takes.
-var menuTools = map[string]struct{ tool, side string }{"add": {tool: "add"}, "split-x": {"x", "right"}, "split-y": {"y", "bottom"}}
+var menuTools = map[string]struct{ tool, side string }{"add": {tool: "add"}, "split-x": {"x", "right"}, "split-y": {"y", "bottom"},
+	"group-x": {"gx", "right"}, "group-y": {"gy", "bottom"}}
+
+// toolSides are the sides of the tools that split: the splits and the group splits.
+var toolSides = map[string]string{"x": "right", "y": "bottom", "gx": "right", "gy": "bottom"}
 
 // pickerItem is an item of the layer. Expose is the element name of an item that has its own, and Icon the SVG elements of a
 // 16-unit view box.
@@ -136,11 +141,12 @@ func (s *Shell) openAddMenu(anchor, tool, card string) {
 			_, err := s.addTab(card, plugin, nil)
 			return err
 		}
-		side := "right"
-		if tool == "y" {
-			side = "bottom"
+		if tool == "gx" || tool == "gy" {
+			// Each press sends a new request, so it groups the card again where its group stands (docs/spec/groups.md#idempotency).
+			s.binder.run("core.group.create", groupCreateParam{Card: card, Side: toolSides[tool], Plugin: plugin, Request: s.newGroupRequest()})
+			return nil
 		}
-		_, err := s.splitCard(card, side, plugin)
+		_, err := s.splitCard(card, toolSides[tool], plugin)
 		return err
 	}).anchor = anchor
 }
@@ -157,14 +163,28 @@ func (s *Shell) openCardMenu(card, menu string) error {
 	if !known {
 		return fmt.Errorf("unknown menu %s", menu)
 	}
-	anchor := "core.card." + menu + "/" + card
+	// A group header holds no add button: a group card holds no tab (docs/spec/groups.md#headers).
+	if menu == "add" && s.isGroup(card) {
+		return fmt.Errorf("card %s is a group; a group header has no add menu", card)
+	}
+	anchor := s.cardMenuElement(card, menu) + "/" + card
 	if _, drawn := s.picker.drawn[anchor]; !drawn {
 		return fmt.Errorf("card %s has no %s button", card, menu)
+	}
+	// The command is the press of the button, and a disabled button takes no press (docs/spec/groups.md#headers).
+	tools := s.headTools(card)
+	if s.isGroup(card) {
+		tools = s.groupHeadTools(card)
+	}
+	for _, head := range tools {
+		if head.Do == tool.tool && !head.Enabled {
+			return fmt.Errorf("card %s cannot %s", card, menu)
+		}
 	}
 	if s.toggled(anchor) {
 		return nil
 	}
-	s.focusCard(card)
+	s.focusCard(s.planes.Focusable(card))
 	s.settle()
 	s.openAddMenu(anchor, tool.tool, card)
 	return nil
@@ -186,14 +206,28 @@ func (s *Shell) openCardTools(card string) error {
 	if err != nil {
 		return err
 	}
-	for _, tool := range s.headTools(card) {
-		if tool.Enabled {
+	tools := s.headTools(card)
+	if s.isGroup(card) {
+		tools = s.groupHeadTools(card)
+	}
+	// The header keeps the leader mark and the fullscreen toggle in the stage menu, so the menu does not hold them then; in the stage all
+	// it holds them (docs/spec/groups.md#headers, docs/spec/example-model.md#card-tabs).
+	kept := shownKept(s.heads[card], keptTools(tools))
+	for _, tool := range tools {
+		if tool.Enabled && !keeps(kept, tool.Do) {
 			items = append(items, pickerItem{Key: tool.Do, Name: tool.Title, Icon: s.headIconElements(tool.Icon), Active: tool.Pressed})
 		}
 	}
-	s.focusCard(card)
+	s.focusCard(s.planes.Focusable(card))
 	s.settle()
 	s.openPicker("카드 도구", items, func(key string) error {
+		if key == "close" && s.isGroup(card) {
+			return s.openGroupMenu(card, anchor)
+		}
+		if key == "leader" {
+			s.binder.run("core.group.leader", cardParam{Card: card})
+			return nil
+		}
 		if key == "close" {
 			_, err := s.askedCloseCard(card)
 			return err
@@ -260,10 +294,7 @@ func (s *Shell) openSpaceApps(id string) error {
 		return nil
 	}
 	holdsTabs := func(card layout.Card) bool { return len(card.Data) > 0 && string(card.Data) != "null" }
-	order, ok := s.plane.Sliced(holdsTabs)
-	if !ok {
-		return errors.New("the cards of the space are not a slicing arrangement")
-	}
+	order := s.plane.Sliced(holdsTabs)
 	metrics := s.readPickerMetrics()
 	groups := make([]pickerGroup, 0, len(order))
 	items := []pickerItem{}
@@ -568,8 +599,9 @@ type menuParam struct {
 }
 
 type pointParam struct {
-	Surface string  `json:"surface"`
-	Tab     string  `json:"tab"`
+	// Surface and Tab are omitted when empty, so a run of the workbench gives a command only the members that it declares.
+	Surface string  `json:"surface,omitempty"`
+	Tab     string  `json:"tab,omitempty"`
 	X       float64 `json:"x"`
 	Y       float64 `json:"y"`
 }
@@ -676,9 +708,12 @@ func (s *Shell) drawPicker(c *ui.Context, width, height float32) {
 		panel.Margin(metrics.anchorGap, 0, 0, 0).KeepAll().MinWidth(metrics.minW).MaxWidth(maxW).MaxHeight(maxH).Column().Padding(metrics.outerPad).LineHeight(float32(lineHeight)).
 			Background(s.palette.Card).Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.radiusMiddle()).Label(layer.title).
 			Shadow(0, metrics.shadowY, metrics.shadowBlur, 0, ui.RGBA(0, 0, 0, metrics.shadowAlpha)).Children(func() {
-			ui.Box(c).Padding(metrics.headTop, metrics.headX, metrics.headBottom, metrics.headX).Children(func() {
-				ui.Text(c, layer.title).FontSize(s.textCaption()).LetterSpacing(s.textCaption() * s.sectionTracking()).TextColor(s.palette.Muted)
-			})
+			// A layer without a question, such as the menu of a tab without a title, draws no head, so it opens with no empty first row.
+			if layer.title != "" {
+				ui.Box(c).Padding(metrics.headTop, metrics.headX, metrics.headBottom, metrics.headX).Children(func() {
+					ui.Text(c, layer.title).FontSize(s.textCaption()).LetterSpacing(s.textCaption() * s.sectionTracking()).TextColor(s.palette.Muted)
+				})
+			}
 			ui.Scroll(c).Grow(1).Column().ThinScrollbars(true).Children(func() {
 				heading := ""
 				for index, item := range layer.items {

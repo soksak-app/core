@@ -20,7 +20,25 @@ export interface Plane {
     gap: number;
     /** Minimum card size, in px. */
     minSize: number;
+    /** The frames of each card by id (R5); a card without an entry has none. */
+    frames?: ReadonlyMap<string, Frames>;
+    /** The corridor of each axis that the grid laid its tree with; without it, the gap capped at what the plane holds. */
+    unit?: Readonly<Record<Axis, number>>;
+    /** The px position of each line per axis, as the grid laid its tree; without it, each line at its fraction of the extent. */
+    at?: Readonly<Record<Axis, readonly number[]>>;
 }
+/** The number of frames between a card and each of its four lines (R5): each takes one gap of the corridor on that side. */
+export interface Frames {
+    left: number;
+    right: number;
+    top: number;
+    bottom: number;
+}
+/**
+ * How far the edge of a card on a side stands from its line: the corridor of the
+ * line on that side and one gap for each frame of the card on that side.
+ */
+export declare function cardInset(plane: Plane, axis: Axis, card: Card, side: 'lo' | 'hi', read?: Set<number>): number;
 /**
  * The gap a slot holds: half a gap for every card edge that insets into it.
  *
@@ -51,34 +69,7 @@ export declare function slotWidths(plane: Plane, axis: Axis): number[];
  * never holds them: the declared numbers are proportions there.
  */
 export declare function holdsSizes(plane: Plane, axis: Axis): boolean;
-/**
- * The px size a slot has to declare to be drawn `drawn` px wide.
- *
- * While the plane holds what the slots declare, that is `drawn` itself. When it
- * does not, every declared size is drawn scaled by one factor, so the size read
- * off the plane is smaller than the size that produced it: writing the read size
- * back would shrink the declaration on every drag, including one that moves
- * nothing.
- *
- * In that regime the slot is drawn `d * left / (other + d)`, where `other` is
- * what the remaining slots declare and `left` is the px the scaled sizes divide.
- * Solving it for `d` gives the size below. `left` does not depend on any
- * declared size, so one slot's declaration is enough to solve.
- *
- * Two cases have no answer and keep the size the slot declares now: no other
- * slot declares one, which makes the drawn size the same whatever this slot
- * declares, and a request of `left` or more, which no declaration reaches.
- */
-export declare function declaredFor(plane: Plane, axis: Axis, slot: number, drawn: number): number;
-/**
- * Width in px of every slot on an axis.
- *
- * A slot with a px size takes that size; the rest divide the remainder in
- * proportion to their spans, down to `minSize` each.
- *
- * When the px sizes do not fit, they are scaled by one factor so the slots still
- * sum to the plane size.
- */
+/** Width in px of every slot on an axis: its span of the extent of the plane. */
 export declare function slotSizes(plane: Plane, axis: Axis): number[];
 /**
  * The px a sharing slot is drawn at per unit of its span.
@@ -110,11 +101,14 @@ export interface Axle {
     lo: number[];
     /** How far a card ending at each line insets from it. */
     hi: number[];
+    /** The gap that one frame takes on this axis. */
+    unit: number;
 }
-/** Frames for both axes. */
+/** Frames for both axes, and the frames of the cards. */
 export interface Frame {
     x: Axle;
     y: Axle;
+    frames?: ReadonlyMap<string, Frames>;
 }
 /**
  * Line positions and edge insets for both axes.

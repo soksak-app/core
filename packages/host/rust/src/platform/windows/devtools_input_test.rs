@@ -99,12 +99,18 @@ fn a_pointer_that_breaks_the_press_rules_is_not_sent() {
     let closed = [false, false];
     for (open, phase, button, clicks, want) in [
         ([true, false], PHASE_PRESS, 0, 1, Delivery::PressOpen),
-        (closed, PHASE_DRAG, 0, 0, Delivery::Rejected),
-        (closed, PHASE_RELEASE, 0, 1, Delivery::Rejected),
-        (closed, PHASE_PRESS, 0, 0, Delivery::Rejected),
-        (closed, PHASE_PRESS, 0, 4, Delivery::Rejected),
-        (closed, 5, 0, 1, Delivery::Rejected),
-        (closed, PHASE_PRESS, 2, 1, Delivery::Rejected),
+        (closed, PHASE_DRAG, 0, 0, Delivery::Rejected(String::new())),
+        (
+            closed,
+            PHASE_RELEASE,
+            0,
+            1,
+            Delivery::Rejected(String::new()),
+        ),
+        (closed, PHASE_PRESS, 0, 0, Delivery::Rejected(String::new())),
+        (closed, PHASE_PRESS, 0, 4, Delivery::Rejected(String::new())),
+        (closed, 5, 0, 1, Delivery::Rejected(String::new())),
+        (closed, PHASE_PRESS, 2, 1, Delivery::Rejected(String::new())),
     ] {
         let holder = open.contains(&true).then(|| "main".to_string());
         let got = PressState { open, holder }.call(&pointer(phase, button, clicks));
@@ -217,7 +223,10 @@ fn a_key_becomes_its_key_event() {
 #[test]
 fn a_key_that_is_no_name_and_no_character_is_not_sent() {
     for name in ["", "Enterr", "ab"] {
-        assert_eq!(key_call(&key(name, None, 0, true)), Err(Delivery::Rejected));
+        assert_eq!(
+            key_call(&key(name, None, 0, true)),
+            Err(Delivery::Rejected(String::new()))
+        );
     }
 }
 
@@ -411,7 +420,7 @@ fn an_answer_of_a_call_becomes_the_pointer_result() {
     );
     assert_eq!(
         pointer_delivery(&Err(InputFailure::Failed("refused".to_string()))),
-        Delivery::Rejected
+        Delivery::Rejected(String::new())
     );
 }
 

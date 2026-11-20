@@ -35,7 +35,7 @@ type Callbacks struct {
 	NativeFullscreenDone      func(uintptr, int32, *byte)
 	SurfacePressed            func(uintptr, unsafe.Pointer)
 	SurfacePoint              func(uintptr, int32, float64, float64)
-	InputDelivered            func(uintptr, int32, *SpInputHeld)
+	InputDelivered            func(uintptr, int32, *SpInputHeld, uintptr)
 	InputActivated            func(uintptr, int32, *byte)
 	DocumentChanged           func(uintptr, *byte)
 	DocumentMessage           func(uintptr, *byte)

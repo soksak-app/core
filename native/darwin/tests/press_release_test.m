@@ -83,7 +83,7 @@ static BOOL testIsActive(id self, SEL selector) { return reallyActive; }
 @implementation SPFirstClickPage
 - (BOOL)acceptsFirstMouse:(NSEvent *)event { return YES; }
 @end
-static void pressDone(void *context, sp_input_result result, const sp_input_held *held) {
+static void pressDone(void *context, sp_input_result result, const sp_input_held *held, void *view) {
     int *out = context;
     *out = result + 1;
     eventWake();

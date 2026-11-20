@@ -19,6 +19,19 @@ import (
 // stageInset is the space around the plane: the margin of the stage, half the gap, and the border of the stage.
 func (s *Shell) stageInset() float32 { return s.palette.StagePad() + s.palette.BorderWidth }
 
+// stageShare is how far the stage reaches over the bottom line of the space bar above it and over the right line of the project column
+// at its left: at the seam the stage shares those lines and draws its own line on them, so the edge of the plane is one line on each
+// side (docs/spec/settings.md#values); with a gap the stage stands beside the bars.
+func (s *Shell) stageShare() (left, top float32) {
+	if !s.palette.Seam() {
+		return 0, 0
+	}
+	if s.projectColumnWidth() > 0 {
+		left = s.palette.BorderWidth
+	}
+	return left, s.palette.BorderWidth
+}
+
 // drawWork draws the spaces and the stage of the shown project.
 func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 	s.surfaces.drawnPlane = s.plane
@@ -30,6 +43,7 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 	// The plane stands on the device pixel grid, so the stage holds it moved by the part of a device pixel that the rows above and
 	// left of it leave.
 	shiftX, shiftY := s.alignPlane(width, stage)
+	shareLeft, shareTop := s.stageShare()
 	s.plane.Resize(s.planeBox.W, s.planeBox.H)
 	held := float32(s.planeBox.W) + 2*inset
 	heldHeight := float32(s.planeBox.H) + 2*inset
@@ -44,21 +58,39 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 	}
 	origin := s.planeOrigin()
 	originX, originY := float32(origin.X), float32(origin.Y)
-	rules := s.plane.Rules()
+	rules := s.planeRules()
 	var grips []dividerGrip
-	ui.Box(c).Size(width, stage).Children(func() {
-		ui.Box(c).Absolute().Left(shiftX).Top(shiftY).Size(held, heldHeight).Draw(func(p *ui.Painter, r ui.Rect) { s.drawRules(p, r, inset, rules, false) }).DrawOver(func(p *ui.Painter, r ui.Rect) {
+	// The stage around the plane is the frame: a press there makes the frame the scope of the text size, and a press inside the plane
+	// leaves it to the cards (docs/spec/text-size.md#scope).
+	planeX, planeY := shiftX-shareLeft+inset, shiftY-shareTop+inset
+	ui.Box(c).Size(width, stage).ObserveInput(func(ev ui.InputEvent) {
+		inside := ev.X >= planeX && ev.X < planeX+float32(s.planeBox.W) && ev.Y >= planeY && ev.Y < planeY+float32(s.planeBox.H)
+		if ev.Kind == ui.InputPointerDown && !inside {
+			s.pressPlace(FrameScope())
+		}
+	}).Children(func() {
+		ui.Box(c).Absolute().Left(shiftX-shareLeft).Top(shiftY-shareTop).Size(held, heldHeight).Draw(func(p *ui.Painter, r ui.Rect) { s.drawRules(p, r, inset, rules, false) }).DrawOver(func(p *ui.Painter, r ui.Rect) {
 			s.drawRail(p, r, inset)
 			paintGrips(p, r, inset, grips)
 			s.drawRules(p, r, inset, rules, true)
 		}).Children(func() {
-			// The line around the stage stands where the stage does, outside the box that holds the plane on the grid.
-			s.drawStageEdge(c, -shiftX, -shiftY, width, stage)
-			cards := s.plane.Cards()
+			// The line around the stage stands where the stage does, outside the box that holds the plane on the grid, and at the seam over
+			// the lines of the bars that it shares.
+			s.drawStageEdge(c, -shiftX, -shiftY, width+shareLeft, stage+shareTop)
+			// Every card of every level in workbench order: a group card stands before the cards inside it, which lie over its rectangle.
+			cards := s.allCards()
 			s.forgetCardReads(cards)
 			for _, card := range cards {
 				rect, ok := s.cardRect(card.ID)
 				if !ok {
+					continue
+				}
+				if s.isGroup(card.ID) {
+					if !s.shownFullscreen(card.ID) {
+						ui.Box(c).Absolute().Size(0, 0).Children(func() { s.binder.Absent(c, "core.group", "core.card.focus", card.ID, cardParam{Card: card.ID}) })
+						continue
+					}
+					s.drawGroupCard(c, card.ID, rect, inset)
 					continue
 				}
 				data, err := s.readCard(card)
@@ -67,7 +99,7 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 					DrawError(c, s.errors, card.ID)
 					continue
 				}
-				if s.fullscreen != "" && card.ID != s.fullscreen {
+				if !s.shownFullscreen(card.ID) {
 					s.drawAbsentCard(c, card.ID, data, rect)
 					continue
 				}
@@ -91,13 +123,15 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 
 // alignPlane puts the plane of the stage of width by height on the device pixel grid of the window, as alignPlane of
 // packages/workbench/device-grid.js does: whatever lies above or left of the stage, the plane starts and ends on a grid line. It
-// is the one place that sets planeBox. It returns how far the plane moved right and down from where the rows leave it. A window
-// whose scale cannot be read shows that failure and keeps the plane where the rows leave it.
+// is the one place that sets planeBox. At the seam the stage starts on the lines of the bars that it shares (stageShare). It returns
+// how far the plane moved right and down from where the rows and the shared lines leave it. A window whose scale cannot be read shows
+// that failure and keeps the plane where the rows leave it.
 func (s *Shell) alignPlane(width, stage float32) (float32, float32) {
 	inset := s.stageInset()
+	left, top := s.stageShare()
 	area := layout.Rect{
-		X: float64(s.projectColumnWidth() + inset), Y: float64(s.chromeHeight() + s.workBanner + s.spaceRowHeight() + inset),
-		W: float64(width - 2*inset), H: float64(stage - 2*inset),
+		X: float64(s.projectColumnWidth() + inset - left), Y: float64(s.chromeHeight() + s.workBanner + s.spaceRowHeight() + inset - top),
+		W: float64(width - 2*inset + left), H: float64(stage - 2*inset + top),
 	}
 	s.planeBox = area
 	window, err := s.windowView()
@@ -205,9 +239,6 @@ func (s *Shell) drawCard(c *ui.Context, id string, data *layout.CardData, rect l
 // tabCloseMark is the mark of the close button of a tab, as the page draws it.
 const tabCloseMark = "✕"
 
-// cardToolTotal is the count of the tools of a card head: add, split x, split y, full screen and close.
-const cardToolTotal = 5
-
 // drawHead draws the head of a card: its tab list button, its tabs and its tools in one group, folded as the width of the head allows
 // (.chrome of packages/workbench/app.css).
 func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides cardSides, width, height float32) {
@@ -218,6 +249,7 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides 
 	mark := spanWidth(c, ui.Span{Text: tabCloseMark, Size: size, Font: family})
 	chrome := 2*m.tabPadX + m.tabGap + mark + 2*m.tabXPad
 	widths := make([]float64, len(tabs))
+	tabActivities, _, _, _ := s.shownActivities()
 	activeWidth, activeLeft, left := 0.0, 0.0, 0.0
 	for i, tab := range tabs {
 		measured := spanWidth(c, ui.Span{Text: s.tabName(tab), Size: size, Font: family})
@@ -225,19 +257,25 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides 
 		if s.tabNoticeText(tab.ID) != "" {
 			spare += m.noticeDot + m.tabGap
 		}
+		if tabActivities[tab.ID] != "" {
+			spare += m.activityIcon + m.tabGap
+		}
 		widths[i] = float64(min(measured+spare, m.tabMaxW))
 		if active != nil && tab.ID == active.ID {
 			activeWidth, activeLeft = widths[i], left
 		}
 		left += widths[i] + float64(m.cardTabsGap)
 	}
-	buttons := float32(cardToolTotal + len(sides.shown))
+	buttons := float32(len(s.headTools(id)) + len(sides.shown))
 	group := buttons*m.cardButton + (buttons-1)*m.cardActsGap + 2*m.cardActsPad + 2*s.palette.BorderWidth
+	kept := keptTools(s.headTools(id))
 	fit := layout.FitHead(layout.Head{Width: float64(width), PaddingLeft: float64(m.cardHeadPad), PaddingRight: float64(m.cardHeadPad),
 		Lead: float64(m.cardButton), Gap: float64(m.cardHeadGap), ToolsWidth: float64(group), MoreWidth: float64(m.cardButton),
-		TabWidths: widths, TabGap: float64(m.cardTabsGap), ActiveWidth: activeWidth, Peek: float64(m.tabPeekW), MinTab: float64(m.tabMinW)})
+		KeptWidth: float64(s.keptWidth(kept)), TabWidths: widths, TabGap: float64(m.cardTabsGap), Peek: float64(m.tabPeekW),
+		MinTab: float64(m.tabMinW), Grab: float64(m.tabGrabW)})
 	s.heads[id] = fit
-	tools := m.cardButton
+	kept = shownKept(fit, kept)
+	tools := s.moreWidth(kept)
 	if fit.Tools == "bar" {
 		tools = group
 	}
@@ -255,7 +293,7 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides 
 			if fit.Tools == "bar" {
 				s.binder.Absent(c, "core.card.tools", "core.card.tools", id, cardParam{Card: id})
 			} else {
-				s.drawAbsentTools(c, id, sides)
+				s.drawAbsentTools(c, id, sides, kept)
 			}
 		})
 		if s.fullscreen == id {
@@ -292,8 +330,58 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides 
 			})
 			return
 		}
+		s.drawKeptTools(c, id, kept)
 		s.headButton(c, "core.card.tools", "core.card.tools", id, cardParam{Card: id}, "카드 도구", s.headIcon("card-more", true), true, false)
 	})
+}
+
+// keptTools are the tools that a header keeps beside its tool menu when the other tools fold into it, in the order of tools: the leader
+// button while it is pressed, the leader mark (docs/spec/groups.md#headers), and the fullscreen toggle
+// (docs/spec/example-model.md#card-tools).
+func keptTools(tools []headTool) []headTool {
+	var kept []headTool
+	for _, tool := range tools {
+		if tool.Do == "fullscreen" || (tool.Do == "leader" && tool.Pressed) {
+			kept = append(kept, tool)
+		}
+	}
+	return kept
+}
+
+// shownKept are the kept tools that a head of the stage fit shows beside its tool menu: all of kept in the stage menu, and none in the
+// stage all, where the menu holds them so that a part of the tab stays (docs/spec/example-model.md#card-tabs).
+func shownKept(fit layout.HeadFit, kept []headTool) []headTool {
+	if fit.Tools == "menu" {
+		return kept
+	}
+	return nil
+}
+
+// keeps tells whether kept holds the tool that do names.
+func keeps(kept []headTool, do string) bool {
+	for _, tool := range kept {
+		if tool.Do == do {
+			return true
+		}
+	}
+	return false
+}
+
+// moreWidth is the width that a header gives its tools in the menu stage: the menu button and before it the kept tools.
+func (s *Shell) moreWidth(kept []headTool) float32 {
+	return s.metrics.cardButton + s.keptWidth(kept)
+}
+
+// keptWidth is the width of the kept tools beside the menu button, each with the gap of the head.
+func (s *Shell) keptWidth(kept []headTool) float32 {
+	return float32(len(kept)) * (s.metrics.cardButton + s.metrics.cardHeadGap)
+}
+
+// drawKeptTools draws the kept tools of the header of id before its tool menu button, while the other tools stand in the menu.
+func (s *Shell) drawKeptTools(c *ui.Context, id string, kept []headTool) {
+	for _, tool := range kept {
+		s.headButton(c, tool.Name, tool.Command, id, tool.Params, tool.Title, s.headIcon(tool.Icon, false), tool.Enabled, tool.Pressed).Checked(tool.Pressed)
+	}
 }
 
 // cardLine is the color of the lines below the head of a card and above its foot: the rule of the plane when the cards share one line
@@ -314,13 +402,16 @@ func (s *Shell) drawAbsentTabs(c *ui.Context, tabs []layout.Tab) {
 }
 
 // drawAbsentTools draws the elements of the tools of a card that the head does not show.
-func (s *Shell) drawAbsentTools(c *ui.Context, id string, sides cardSides) {
+func (s *Shell) drawAbsentTools(c *ui.Context, id string, sides cardSides, kept []headTool) {
 	for _, side := range layout.SidebarSides {
 		if _, shown := sides.shown[side]; shown {
 			s.binder.Absent(c, "core.card.sidebar.fold", "core.card.sidebar.toggle", id+":"+side, cardSideParam{Card: id, Side: side})
 		}
 	}
 	for _, tool := range s.headTools(id) {
+		if keeps(kept, tool.Do) {
+			continue
+		}
 		s.binder.Absent(c, tool.Name, tool.Command, id, tool.Params).Disabled(!tool.Enabled)
 	}
 }
@@ -347,7 +438,7 @@ func (s *Shell) drawAbsentCard(c *ui.Context, id string, data *layout.CardData, 
 		s.binder.Absent(c, "core.card.tab-list", "core.card.tab-list", id, cardParam{Card: id})
 		s.binder.Absent(c, "core.card.space-apps", "core.space.apps", id, cardParam{Card: id})
 		s.drawAbsentTabs(c, data.TabList())
-		s.drawAbsentTools(c, id, sides)
+		s.drawAbsentTools(c, id, sides, nil)
 		s.binder.Absent(c, "core.card.tools", "core.card.tools", id, cardParam{Card: id})
 	})
 }
@@ -495,20 +586,32 @@ func (s *Shell) drawTab(c *ui.Context, card string, tab layout.Tab, on bool, siz
 			pill.Background(faded(s.palette.Fg, m.chipSelMix))
 		}
 		s.tabContextMenu(pill, tab.ID)
-		pill.HandleInput(s.tabInput(card, tab.ID, pill.Bounds()))
+		pill.HandleInput(s.tabInput(card, tab.ID))
+		s.tabBoxes[tab.ID] = pill.Bounds()
 		s.anchored("core.card.tab/"+tab.ID, pill)
 		noticed := s.tabNoticeText(tab.ID) != ""
 		start := m.tabPadX
 		if noticed {
 			start += m.noticeDot + m.tabGap
 		}
+		// The icon of the activity of the tab stands after the notice and before the name (docs/spec/activity.md#drawing).
+		tabs, _, _, _ := s.shownActivities()
+		activity, iconAt := tabs[tab.ID], start
+		if activity != "" {
+			start += m.activityIcon + m.tabGap
+		}
 		pill.Children(func() {
 			ui.Row(c).Padding(0, m.tabGap+mark+2*m.tabXPad+m.tabPadX, 0, start).Children(func() {
-				ui.Text(c, name).SingleLine().Ellipsis("…").LineHeight(m.lineHeight).FontSize(size).MaxWidth(width).TextColor(color)
+				drawCutText(c, name, size, m.lineHeight, family, color, width)
 			})
 		})
 		if noticed {
 			ui.Box(c).Absolute().Left(m.tabPadX).Top(m.tabPadY + (line-m.noticeDot)/2).Children(func() { s.noticeMark(c, tab.ID) })
+		}
+		if activity != "" {
+			ui.Box(c).Absolute().Left(iconAt).Top(m.tabPadY + (line-m.activityIcon)/2).Children(func() {
+				s.drawActivity(c, "core.activity.tab", tab.ID, activity, m.activityIcon)
+			})
 		}
 		closing := s.binder.Press(c, "core.card.tab-close", "core.tab.close", tab.ID, tabParam{tab.ID})
 		closing.Absolute().Top(m.tabPadY + (line-lineBox(size, m.lineHeightTight))/2).Right(m.tabPadX).PaddingX(m.tabXPad).Radius(s.radiusSmall()).Label("닫기").Tooltip("닫기")
@@ -547,7 +650,7 @@ func (s *Shell) headTools(id string) []headTool {
 	}
 	closing := headTool{Do: "close", Status: "close", Name: "core.card.close", Command: "core.card.close", Params: cardParam{Card: id},
 		Title: names["close"], Icon: "card-close"}
-	canClose := s.plane.CanClose(id)
+	canClose := s.planes.CanClose(id)
 	if !canClose {
 		closing.Title = names["close-refused"]
 	}
@@ -556,23 +659,43 @@ func (s *Shell) headTools(id string) []headTool {
 	if fullscreen {
 		whole.Title, whole.Icon = names["restore"], "card-restore"
 	}
-	return []headTool{
+	tools := []headTool{
 		changes(headTool{Do: "add", Status: "add", Name: "core.card.add", Command: "core.card.menu", Params: menuParam{Card: id, Menu: "add"},
 			Title: names["add"], Icon: "card-add"}, true),
 		changes(headTool{Do: "x", Status: "split-x", Name: "core.card.split-x", Command: "core.card.menu", Params: menuParam{Card: id, Menu: "split-x"},
-			Title: names["split-x"], Icon: "card-split-x"}, s.plane.CanSplit(id, "x")),
+			Title: names["split-x"], Icon: "card-split-x"}, s.planes.CanSplit(id, "right")),
 		changes(headTool{Do: "y", Status: "split-y", Name: "core.card.split-y", Command: "core.card.menu", Params: menuParam{Card: id, Menu: "split-y"},
-			Title: names["split-y"], Icon: "card-split-y"}, s.plane.CanSplit(id, "y")),
-		whole,
-		changes(closing, canClose),
+			Title: names["split-y"], Icon: "card-split-y"}, s.planes.CanSplit(id, "bottom")),
 	}
+	tools = append(tools, s.groupTools(id, "core.card", changes)...)
+	return append(tools, whole, changes(closing, canClose))
+}
+
+// groupTools are the group split buttons of the card id toward right and toward bottom, enabled while the group of it toward that side
+// would succeed, and its leader button, shown in a plane of two or more cards and pressed on the leader (docs/spec/groups.md#headers).
+// header is the prefix of the elements of its kind of header, core.card or core.group.
+func (s *Shell) groupTools(id, header string, changes func(tool headTool, can bool) headTool) []headTool {
+	names := s.options.Declared.CardTools
+	tools := []headTool{
+		changes(headTool{Do: "gx", Status: "group-x", Name: header + ".group-x", Command: "core.card.menu", Params: menuParam{Card: id, Menu: "group-x"},
+			Title: names["group-x"], Icon: "card-group-x"}, s.planes.CanGroup(id, "right")),
+		changes(headTool{Do: "gy", Status: "group-y", Name: header + ".group-y", Command: "core.card.menu", Params: menuParam{Card: id, Menu: "group-y"},
+			Title: names["group-y"], Icon: "card-group-y"}, s.planes.CanGroup(id, "bottom")),
+	}
+	key := s.planes.Parent(id)
+	if s.planes.LeadCount(key) >= 2 {
+		leader, _ := s.planes.Leader(key) // silent: a level of two cards that can lead has a leader.
+		tools = append(tools, changes(headTool{Do: "leader", Status: "leader", Name: "core.card.leader", Command: "core.group.leader", Params: cardParam{Card: id},
+			Title: names["leader"], Icon: "card-leader", Pressed: leader == id}, true))
+	}
+	return tools
 }
 
 // drawTools draws the tools of a card.
 func (s *Shell) drawTools(c *ui.Context, id string) {
 	for _, tool := range s.headTools(id) {
 		button := s.headButton(c, tool.Name, tool.Command, id, tool.Params, tool.Title, s.headIcon(tool.Icon, false), tool.Enabled, tool.Pressed)
-		if tool.Do == "fullscreen" {
+		if tool.Do == "fullscreen" || tool.Do == "leader" {
 			button.Checked(tool.Pressed)
 		}
 	}
@@ -683,7 +806,9 @@ func (s *Shell) drawSurfaceStatus(c *ui.Context, card, tab string) {
 		color, text = s.palette.No, "표면 오류 · "+reason
 		s.errors.Show(where, text, "")
 	}
-	ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(m.surfaceStatusGap).Margin(0, m.surfaceStatusMargin, 0, 0).Children(func() {
+	// The state shrinks with the status row and cuts its text with an ellipsis, so an error stays on the one line of the row; its whole
+	// text is the label and the tooltip of the text.
+	ui.Row(c).Shrink(1).MinWidth(0).AlignItems(ui.Center).Gap(m.surfaceStatusGap).Margin(0, m.surfaceStatusMargin, 0, 0).Children(func() {
 		size, border, turn := m.spinner, m.spinnerBorder, m.spinnerTurn
 		ui.Box(c).Size(size, size).Shrink(0).Draw(func(p *ui.Painter, r ui.Rect) {
 			cx, cy, radius := r.X+r.W/2, r.Y+r.H/2, r.W/2
@@ -710,7 +835,7 @@ func (s *Shell) drawSurfaceStatus(c *ui.Context, card, tab string) {
 			}
 			p.StrokePath(&ring, border, color)
 		})
-		ui.Text(c, text).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).FontSize(s.textCaption()).TextColor(color).Label(text)
+		ui.Text(c, text).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).FontSize(s.textCaption()).TextColor(color).Label(text).Tooltip(text)
 	})
 }
 
@@ -734,7 +859,9 @@ func (s *Shell) drawStatus(c *ui.Context, id string, data *layout.CardData, fold
 			where := "tab error " + active.ID
 			if report := s.surfaces.reports[active.ID]; report != nil && report.Error != "" {
 				s.errors.Show(where, report.Error, "")
-				ui.Text(c, report.Error).FontSize(s.textCaption()).TextColor(s.palette.No)
+				// The error stays on the one line of the row, cut with an ellipsis; its whole text is the label and the tooltip.
+				ui.Text(c, report.Error).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).FontSize(s.textCaption()).TextColor(s.palette.No).
+					Label(report.Error).Tooltip(report.Error)
 			} else {
 				s.errors.Hide(where)
 			}
@@ -745,12 +872,14 @@ func (s *Shell) drawStatus(c *ui.Context, id string, data *layout.CardData, fold
 // LayoutDescription is the member layout of the window snapshot: the active space, the focused card and the tree of the content cards
 // (docs/spec/exposure.md#window-snapshot).
 type LayoutDescription struct {
-	Space   string      `json:"space"`
-	Focused *string     `json:"focused"`
-	Root    *LayoutNode `json:"root"`
+	Space   string        `json:"space"`
+	Focused *string       `json:"focused"`
+	Root    *LayoutNode   `json:"root"`
+	Groups  []LayoutGroup `json:"groups"`
 }
 
-// LayoutNode is a split, {direction, size, children}, or a card, {card, size, frame, tabs}, of the tree of a layout description.
+// LayoutNode is a split, {direction, size, frame, children}, or a card, {card, size, frame, tabs}, of the tree of a layout description;
+// the frame of a split is the smallest rectangle that holds the frames of its children.
 type LayoutNode struct {
 	Direction string
 	Size      float64
@@ -758,6 +887,33 @@ type LayoutNode struct {
 	Card      string
 	Frame     LayoutFrame
 	Tabs      []LayoutTab
+	// Leader tells that the card is the leader of its level, and Parent is the group card that holds it, or ""
+	// (docs/spec/groups.md#status-and-queries).
+	Leader bool
+	Parent string
+	// Group is the group of a group card node, with the tree of its members, and nil for a content card.
+	Group *LayoutGroupNode
+}
+
+// LayoutGroupNode is the group of a group card node of a layout description: its name, the level and the leader of its members, and
+// Root, the tree of its members inside its rectangle.
+type LayoutGroupNode struct {
+	Name   string      `json:"name"`
+	Level  int         `json:"level"`
+	Leader string      `json:"leader"`
+	Root   *LayoutNode `json:"root"`
+}
+
+// LayoutGroup is a group card of the list of the group cards of a layout description: its id, name, frame, the level and the leader of
+// its members, and the identifiers of its members. Leading tells that the group card leads its own level.
+type LayoutGroup struct {
+	Card    string      `json:"card"`
+	Name    string      `json:"name"`
+	Level   int         `json:"level"`
+	Leader  string      `json:"leader"`
+	Leading bool        `json:"leading"`
+	Frame   LayoutFrame `json:"frame"`
+	Members []string    `json:"members"`
 }
 
 // LayoutFrame is the frame of a card in window points.
@@ -777,25 +933,39 @@ type LayoutTab struct {
 	Params json.RawMessage `json:"params"`
 }
 
-// MarshalJSON writes a split as {direction, size, children} and a card as {card, size, frame, tabs}.
+// MarshalJSON writes a split as {direction, size, frame, children}, a group card as {card, size, frame, leader, group} and a content
+// card as {card, size, frame, tabs} with parent inside a group card and leader on the member that leads its level
+// (docs/spec/exposure.md#window-snapshot).
 func (n LayoutNode) MarshalJSON() ([]byte, error) {
 	if n.Direction != "" {
 		return json.Marshal(struct {
 			Direction string       `json:"direction"`
 			Size      float64      `json:"size"`
+			Frame     LayoutFrame  `json:"frame"`
 			Children  []LayoutNode `json:"children"`
-		}{n.Direction, n.Size, n.Children})
+		}{n.Direction, n.Size, n.Frame, n.Children})
+	}
+	if n.Group != nil {
+		return json.Marshal(struct {
+			Card   string           `json:"card"`
+			Size   float64          `json:"size"`
+			Frame  LayoutFrame      `json:"frame"`
+			Leader bool             `json:"leader"`
+			Group  *LayoutGroupNode `json:"group"`
+		}{n.Card, n.Size, n.Frame, n.Leader, n.Group})
 	}
 	tabs := n.Tabs
 	if tabs == nil {
 		tabs = []LayoutTab{}
 	}
 	return json.Marshal(struct {
-		Card  string      `json:"card"`
-		Size  float64     `json:"size"`
-		Frame LayoutFrame `json:"frame"`
-		Tabs  []LayoutTab `json:"tabs"`
-	}{n.Card, n.Size, n.Frame, tabs})
+		Card   string      `json:"card"`
+		Size   float64     `json:"size"`
+		Frame  LayoutFrame `json:"frame"`
+		Leader bool        `json:"leader,omitempty"`
+		Parent string      `json:"parent,omitempty"`
+		Tabs   []LayoutTab `json:"tabs"`
+	}{n.Card, n.Size, n.Frame, n.Leader, n.Parent, tabs})
 }
 
 // LayoutDescription describes the layout of the shown space, and nil while the window shows no project. The tree comes from the lines
@@ -805,23 +975,60 @@ func (s *Shell) LayoutDescription() (*LayoutDescription, error) {
 	if project == nil || s.plane == nil || s.browsing {
 		return nil, nil
 	}
-	tree, err := layout.Tree(s.plane.ToJSON())
-	if err != nil {
-		return nil, fmt.Errorf("the layout of space %s: %w", project.ActiveSpaceID, err)
-	}
 	description := &LayoutDescription{Space: project.ActiveSpaceID}
-	if _, ok := s.plane.Card(s.focused); ok && !isPlace(s.focused) {
+	if _, ok := s.findCard(s.focused); ok && !isPlace(s.focused) {
 		focused := s.focused
 		description.Focused = &focused
 	}
-	if tree != nil {
-		root, err := s.describeNode(*tree)
-		if err != nil {
-			return nil, err
-		}
-		description.Root = &root
+	root, err := s.describeLevel("")
+	if err != nil {
+		return nil, fmt.Errorf("the layout of space %s: %w", project.ActiveSpaceID, err)
 	}
+	description.Root = root
+	description.Groups = s.describeGroups("", []LayoutGroup{})
 	return description, nil
+}
+
+// describeLevel is the tree of the members of the level key, content cards and group cards, from the stored tree of the grid: the root
+// node for the root level and the inner node of the box of a group card (layout.Grid.LevelTree), and nil for a level without a card.
+func (s *Shell) describeLevel(key string) (*LayoutNode, error) {
+	tree, err := s.plane.LevelTree(key)
+	if err != nil || tree == nil {
+		return nil, err
+	}
+	node, err := s.describeNode(*tree)
+	if err != nil {
+		return nil, err
+	}
+	return &node, nil
+}
+
+// describeGroups appends to out the group cards of the level key and of the levels inside them in workbench order, each with its
+// frame and the identifiers of its members.
+func (s *Shell) describeGroups(key string, out []LayoutGroup) []LayoutGroup {
+	origin := s.planeOrigin()
+	lead, _ := s.planes.Leader(key) // silent: a level without a leader has no member that carries the mark.
+	for _, id := range s.planes.Members(key) {
+		record, ok := s.planes.Group(id)
+		if !ok {
+			continue
+		}
+		rect, _ := s.cardRect(id) // silent: a group card has a rectangle.
+		out = append(out, LayoutGroup{Card: id, Name: record.Name, Level: record.Level, Leader: record.Leader, Leading: lead == id,
+			Frame: LayoutFrame{X: origin.X + rect.X, Y: origin.Y + rect.Y, Width: rect.W, Height: rect.H}, Members: s.planes.Members(id)})
+		out = s.describeGroups(id, out)
+	}
+	return out
+}
+
+// frameAround is the smallest rectangle that holds the frames of nodes.
+func frameAround(nodes []LayoutNode) LayoutFrame {
+	left, top, right, bottom := math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(-1)
+	for _, node := range nodes {
+		left, top = min(left, node.Frame.X), min(top, node.Frame.Y)
+		right, bottom = max(right, node.Frame.X+node.Frame.Width), max(bottom, node.Frame.Y+node.Frame.Height)
+	}
+	return LayoutFrame{X: left, Y: top, Width: right - left, Height: bottom - top}
 }
 
 // describeNode is the node of the description of a node of the tree.
@@ -835,15 +1042,27 @@ func (s *Shell) describeNode(node layout.TreeNode) (LayoutNode, error) {
 			}
 			described.Children = append(described.Children, part)
 		}
+		described.Frame = frameAround(described.Children)
+		return described, nil
+	}
+	rect, _ := s.cardRect(node.Card) // silent: the tree holds only cards of the plane, which have a rectangle.
+	origin := s.planeOrigin()
+	parent := s.planes.Parent(node.Card)
+	leader, _ := s.planes.Leader(parent) // silent: a level without a leader has no card that carries the mark.
+	described := LayoutNode{Card: node.Card, Size: node.Size, Frame: LayoutFrame{X: origin.X + rect.X, Y: origin.Y + rect.Y, Width: rect.W, Height: rect.H},
+		Leader: leader == node.Card, Parent: parent}
+	if record, ok := s.planes.Group(node.Card); ok {
+		inside, err := s.describeLevel(node.Card)
+		if err != nil {
+			return LayoutNode{}, err
+		}
+		described.Group = &LayoutGroupNode{Name: record.Name, Level: record.Level, Leader: record.Leader, Root: inside}
 		return described, nil
 	}
 	data, err := s.cardData(node.Card)
 	if err != nil {
 		return LayoutNode{}, err
 	}
-	rect, _ := s.cardRect(node.Card) // silent: the tree holds only cards of the plane, which have a rectangle.
-	origin := s.planeOrigin()
-	described := LayoutNode{Card: node.Card, Size: node.Size, Frame: LayoutFrame{X: origin.X + rect.X, Y: origin.Y + rect.Y, Width: rect.W, Height: rect.H}}
 	active := data.ActiveTab()
 	for _, tab := range data.TabList() {
 		params := tab.Rest["params"]
@@ -860,7 +1079,7 @@ func (s *Shell) describeNode(node layout.TreeNode) (LayoutNode, error) {
 	return described, nil
 }
 
-// The layout operations core.layout.open, core.layout.select and core.layout.close (docs/spec/cli.md#acting-on-a-layout). Each runs in
+// The layout operations core.layout.open, core.layout.select, core.layout.move and core.layout.close (docs/spec/cli.md#acting-on-a-layout). Each runs in
 // one step of the main thread, which decides and changes the layout, so the window applies them one at a time.
 
 // currentTarget is the name of the focused card, or of the active tab of the focused card, in a layout operation.
@@ -895,6 +1114,12 @@ func (s *Shell) registerLayout() {
 		}
 		return map[string]string{"card": card, "tab": tab}, nil
 	})
+	command(s, "core.layout.move", func(value layoutMoveParam) (any, error) {
+		if err := s.requirePlane(); err != nil {
+			return nil, err
+		}
+		return s.moveLayoutTab(value)
+	})
 	command(s, "core.layout.close", func(value tabParam) (any, error) {
 		if err := s.requirePlane(); err != nil {
 			return nil, err
@@ -910,6 +1135,50 @@ func (s *Shell) registerLayout() {
 		done, err := s.askedCloseTab(tab)
 		return closed(done), err
 	})
+}
+
+type layoutMoveParam struct {
+	Tab  string  `json:"tab"`
+	Card string  `json:"card"`
+	Side *string `json:"side"`
+}
+
+// moveLayoutTab moves an existing tab with its surface into the target card, card or its neighbour toward the side. A target that
+// already holds the tab selects it; otherwise the tab joins card as a drop on its centre does, or card splits toward the side into a
+// new card with the tab as a drop on that edge does, and the only tab of a card moves its card. The tab never closes.
+func (s *Shell) moveLayoutTab(value layoutMoveParam) (map[string]string, error) {
+	if value.Side != nil && !splitSide(*value.Side) {
+		return nil, fmt.Errorf("unknown side %s; use left, right, top or bottom", *value.Side)
+	}
+	from, tab, err := s.layoutTab(value.Tab)
+	if err != nil {
+		return nil, err
+	}
+	card, err := s.layoutCard(value.Card)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.layoutChangeable(card); err != nil {
+		return nil, err
+	}
+	target, zone := card, "centre"
+	if value.Side != nil {
+		target, zone = s.planes.Neighbour(card, *value.Side), *value.Side
+	}
+	holds := target == from
+	if s.isGroup(target) {
+		holds = slices.Contains(s.planes.ContentInside(target), from)
+	}
+	if target != "" && !isPlace(target) && holds {
+		if err := s.showLayoutTab(from, tab); err != nil {
+			return nil, err
+		}
+		return map[string]string{"card": from, "tab": tab}, nil
+	}
+	if err := s.moveTab(tab, layout.Target{card}, zone, nil); err != nil {
+		return nil, err
+	}
+	return map[string]string{"card": s.cardOfTab(tab), "tab": tab}, nil
 }
 
 // openLayoutTab selects the first tab of the plugin with the params in the target card, or adds one to the card, or splits the card
@@ -956,11 +1225,18 @@ func (s *Shell) openLayoutTab(value layoutOpenParam) (map[string]string, error) 
 	if err != nil {
 		return nil, err
 	}
-	target := card
+	targets := []string{card}
 	if value.Side != nil {
-		target = s.neighbour(card, *value.Side)
+		targets = []string{s.neighbour(card, *value.Side)}
+	} else if s.isGroup(card) {
+		// A group card selects the first equal tab among the content cards inside it in workbench order
+		// (docs/spec/groups.md#card-commands-on-a-group-card).
+		targets = s.planes.ContentInside(card)
 	}
-	if target != "" {
+	for _, target := range targets {
+		if target == "" || s.isGroup(target) {
+			continue
+		}
 		tab, err := s.equalTab(target, plugin, checked)
 		if err != nil {
 			return nil, err
@@ -1018,22 +1294,14 @@ func jsonValue(text json.RawMessage) (any, error) {
 	return value, err
 }
 
-// neighbour returns the content card whose edge lies on the line of the edge of card toward side and which spans the same two lines
+// neighbour returns the content card of the plane of card whose edge lies on the line of the edge of card toward side and which spans the same two lines
 // across that side, compared by the lines of the layout, or "" when none does.
 func (s *Shell) neighbour(card, side string) string {
-	from, _ := s.plane.Card(card) // silent: layoutCard resolved card to a card of the plane.
-	for _, other := range s.plane.Cards() {
-		if other.ID == card || isPlace(other.ID) {
-			continue
-		}
-		rows := other.R0 == from.R0 && other.R1 == from.R1
-		columns := other.C0 == from.C0 && other.C1 == from.C1
-		if side == "right" && rows && other.C0 == from.C1 || side == "left" && rows && other.C1 == from.C0 ||
-			side == "bottom" && columns && other.R0 == from.R1 || side == "top" && columns && other.R1 == from.R0 {
-			return other.ID
-		}
+	other := s.planes.Neighbour(card, side)
+	if isPlace(other) || s.isGroup(other) {
+		return ""
 	}
-	return ""
+	return other
 }
 
 // showLayoutTab makes tab the active tab of card and focuses card, and leaves a tab that is already active in the focused card as it is.
@@ -1052,12 +1320,12 @@ func (s *Shell) showLayoutTab(card, tab string) error {
 // fails with the place where it is.
 func (s *Shell) layoutCard(id string) (string, error) {
 	if id == currentTarget {
-		if _, ok := s.plane.Card(s.focused); !ok || isPlace(s.focused) {
+		if _, ok := s.findCard(s.focused); !ok || isPlace(s.focused) {
 			return "", fmt.Errorf("card current names no card: window %s has no focused card", s.options.Name)
 		}
 		return s.focused, nil
 	}
-	if _, ok := s.plane.Card(id); ok && !isPlace(id) {
+	if _, ok := s.findCard(id); ok && !isPlace(id) {
 		return id, nil
 	}
 	return "", s.outOfLayout("card", id, func(cards []layout.Card) bool {
@@ -1104,7 +1372,11 @@ func (s *Shell) outOfLayout(kind, id string, holds func(cards []layout.Card) boo
 		if err := json.Unmarshal(space.Layout, &stored); err != nil {
 			return fmt.Errorf("space %s: %w", space.ID, err)
 		}
-		if holds(stored.State.Cards) {
+		cards, err := stored.State.Cards()
+		if err != nil {
+			return fmt.Errorf("space %s: %w", space.ID, err)
+		}
+		if holds(cards) {
 			return fmt.Errorf("%s %s is in space %s, which is not active", kind, id, space.ID)
 		}
 	}

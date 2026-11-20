@@ -14,6 +14,7 @@ import { createTabSessions } from "./tab-session.js";
 import { documentRegions } from "./document-regions.js";
 import { sectionSurfacePlugin } from "./registry.js";
 import { spaceSectionSurfaces, storedSurfaceKept } from "./section-surfaces.js";
+import { stateCards } from "./layout-tree.js";
 
 let store;
 let projects = [];
@@ -105,8 +106,8 @@ export function layoutSurfaces() {
   return projects.flatMap((project) => {
     const { sets, links } = projectSidebars(project);
     return project.spaces.flatMap((space) => {
-      const cards = space.layout?.state?.cards;
-      if (!Array.isArray(cards)) throw new Error(`project ${project.id} space ${space.id} has no layout cards`);
+      if (!space.layout?.state?.root) throw new Error(`project ${project.id} space ${space.id} has no layout tree`);
+      const cards = stateCards(space.layout.state);
       // default: a seat card has null data, so it has no tabs.
       const tabs = cards.flatMap((card) => (card.data?.tabs ?? []).map((tab) => ({ surface: tab.id, plugin: tab.plugin, root: project.root })));
       // The plugin is the one that declares the section. A section that no loaded plugin declares has no surface (docs/spec/plugins.md).
@@ -121,7 +122,7 @@ export function layoutSurfaces() {
 /** The ids of the cards of the layouts of all spaces of all projects, which the stored section surface entries name. */
 /** The card ids of the layout of each space of every project, by space id. */
 function spaceCards() {
-  return new Map(projects.flatMap((project) => project.spaces.map((space) => [space.id, new Set(space.layout.state.cards.map((card) => card.id))])));
+  return new Map(projects.flatMap((project) => project.spaces.map((space) => [space.id, new Set(stateCards(space.layout.state).map((card) => card.id))])));
 }
 // default: a window without an active project (the library) has null.
 export const active = () => projects.find((p) => p.id === activeProjectId) ?? null;
@@ -185,6 +186,9 @@ export const newWindow = () => windows.newWindow(beginOperation("workbench.windo
 export const pin = (id, pinned) => store.patch(id, { pinned });
 export function onSwitch(callbacks) { listener = callbacks; }
 export function onChange(fn) { changed = fn; }
+/* The receiver of the record of the project activities that the host sends (docs/spec/activity.md#activity-of-a-project). */
+let projectActivity = () => {};
+export function onProjectActivity(fn) { projectActivity = fn; }
 
 /** Stores the plugin data key of plugin for project id with value (docs/spec/plugins.md#project-data). */
 async function setPluginData(id, plugin, key, value) {
@@ -250,12 +254,11 @@ export function begin(snapshot) {
   begun = opened.id;
   // The work area screen gives the plane its size, so the screen changes first and then the plane is drawn. A plane drawn without a size is drawn again on the next frame.
   changed();
-  readStoredSpace(opened, opened.spaces.find((s) => s.id === opened.activeSpaceId));
   listener.load(layout, opened.activeSpaceId);
   const recreated = opened.spaces.find((s) => s.id === opened.activeSpaceId);
   const previousRecreated = recreated.layout;
   recreated.layout = listener.save("recreate");
-  forgetTabsLeft(previousRecreated.state.cards, recreated.layout.state.cards, `recreate of space ${recreated.id}, project ${opened.id}`);
+  forgetTabsLeft(stateCards(previousRecreated.state), stateCards(recreated.layout.state), `recreate of space ${recreated.id}, project ${opened.id}`);
   savedLayout = JSON.stringify({ spaces: opened.spaces, activeSpaceId: opened.activeSpaceId, named: opened.named });
 }
 
@@ -307,6 +310,8 @@ async function initialiseWindow(storage, unloadOf) {
   await windows.onActivate((id) => activateHere(id).catch(failed));
   await windows.onCloseRequest(() => closeWindow().catch(failed));
   await windows.onRemoveProjectRequest((id) => answerRemoval(id).catch(failed));
+  // The host sends the record at each change and when this window reports ready below.
+  await windows.onProjectActivity((record) => projectActivity(record));
   const requested = new URL(location.href).searchParams.get("project");
   const first = requested ? projects.find((p) => p.id === requested) : null;
   if (first) {
@@ -426,15 +431,6 @@ async function readProjects(readSnapshot = () => store.snapshot()) {
   return ended;
 }
 
-/**
- * Reads a stored space of projects.json (docs/spec/projects.md#persistence). No current form of a space object holds the member
- * `parties`, so a space that holds it is refused with an error that names the file, the project root, the space and the member.
- */
-export function readStoredSpace(project, space) {
-  if (Object.hasOwn(space, "parties")) throw new Error(`projects.json: project ${project.root}, space ${space.id}: obsolete member parties`);
-  return space;
-}
-
 export function keep(path) {
   const project = active();
   if (!project || !listener || browsing) return writing;
@@ -444,7 +440,7 @@ export function keep(path) {
   space.layout = listener.save(path);
   // The tabs that the previous stored layout of this space held and the saved one does not hold leave their origins (docs/spec/projects.md#tab-origin).
   // default: a keep without a writing path is the store of the drawn layout after a render.
-  forgetTabsLeft(previous.state.cards, space.layout.state.cards, `${path ?? "drawn layout"} of space ${space.id}, project ${project.id}`);
+  forgetTabsLeft(stateCards(previous.state), stateCards(space.layout.state), `${path ?? "drawn layout"} of space ${space.id}, project ${project.id}`);
   const patch = { spaces: project.spaces, activeSpaceId: project.activeSpaceId, named: project.named };
   const key = JSON.stringify(patch);
   if (key === savedLayout) return writing;
@@ -510,7 +506,6 @@ async function showProject(id, openedProject = null, stagedOwner = false) {
   history.replaceState(null, "", `${location.pathname}?project=${encodeURIComponent(id)}`);
   changed();
   savedLayout = "";
-  readStoredSpace(project, project.spaces.find((s) => s.id === project.activeSpaceId));
   listener.load(project.spaces.find((s) => s.id === project.activeSpaceId).layout, project.activeSpaceId);
   changed();
   // Replace the start-document preview synchronously before waking mounts that could declare native composition.
@@ -623,7 +618,6 @@ export const move = (id, delta) => store.move(id, delta);
 
 function restore(path) {
   const p = active();
-  readStoredSpace(p, p.spaces.find((s) => s.id === p.activeSpaceId));
   listener.load(p.spaces.find((s) => s.id === p.activeSpaceId).layout, p.activeSpaceId);
   changed();
   keep(path);
@@ -657,7 +651,7 @@ export function closeSpace(id) {
   keep("saved layout");
   const removed = removeSpace(project, id);
   // The tabs of the removed space leave its stored layout, so their origins end (docs/spec/projects.md#tab-origin).
-  forgetTabsLeft(removed.layout.state.cards, [], `close space ${removed.id}, project ${project.id}`);
+  forgetTabsLeft(stateCards(removed.layout.state), [], `close space ${removed.id}, project ${project.id}`);
   restore("saved layout");
   // The tabs of the closed space are in no layout, so their sidecar sessions end.
   retainSidecarSessions(layoutSurfaces()).catch(failed);

@@ -1,9 +1,9 @@
 /**
  * Can these spans be cut apart by whole-width and whole-height cuts?
  *
- * Worked out here rather than asked of the grid: `isSlicing` is the answer
- * under test, and a test that asks the implementation for it passes whatever
- * the implementation defines.
+ * Worked out here from the derived cells rather than read from the stored
+ * tree: the cells are the answer under test, and a test that reads the tree
+ * the implementation keeps passes whatever the implementation derives.
  */
 export function guillotine(spans) {
   if (spans.length <= 1) return true;

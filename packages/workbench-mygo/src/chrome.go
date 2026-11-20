@@ -155,6 +155,8 @@ type barTab struct {
 	// drag is the value that the tab drags, and drop takes a value dropped on it, for a tab that can change places.
 	drag any
 	drop func(chip ui.Element)
+	// activity is the activity of the project or the space id of the tab, "" for none, and activityName the element name of its icon.
+	id, activity, activityName string
 }
 
 // barTabColors returns the text color and the fill of a tab.
@@ -192,7 +194,7 @@ func (s *Shell) renameOnDoubleClick(name ui.Element, target renameTarget) {
 
 func (s *Shell) drawBarTab(c *ui.Context, tab barTab) {
 	if s.renaming != nil && s.renaming.renameTarget == tab.rename {
-		s.drawRenameField(c, s.frameLength(s.metrics.barTabRootW))
+		s.drawRenameField(c, s.frameLength(s.metrics.barTabRootW), s.frameFont(s.textControl()))
 		return
 	}
 	m := s.metrics
@@ -219,11 +221,20 @@ func (s *Shell) drawBarTab(c *ui.Context, tab barTab) {
 			mark := spanWidth(c, ui.Span{Text: tabCloseMark, Size: size, Font: s.fontFamily()})
 			room = s.frameLength(m.barGap) + mark + 2*s.frameLength(m.barXPad) + pad
 		}
+		// The icon of the activity of the project or the space stands before the name, over the room that the chip keeps for it
+		// (docs/spec/activity.md#drawing).
+		icon, start := s.frameLength(m.activityIcon), pad
+		if tab.activity != "" {
+			start += icon + s.frameLength(m.barGap)
+		}
 		chip.Children(func() {
-			ui.Row(c).Padding(0, room, 0, pad).Children(func() {
+			ui.Row(c).Padding(0, room, 0, start).Children(func() {
 				ui.Text(c, tab.title).SingleLine().Ellipsis("…").FontSize(size).MaxWidth(s.frameLength(m.barTabMaxW)).TextColor(color)
 			})
 		})
+		if tab.activity != "" {
+			ui.Box(c).Absolute().Left(pad).Top((high - icon) / 2).Children(func() { s.drawActivity(c, tab.activityName, tab.id, tab.activity, icon) })
+		}
 		if tab.close == nil {
 			return
 		}
@@ -255,7 +266,9 @@ type projectTabDrag struct{ id string }
 // projectTab describes the tab of a project. The tab of the shown project has the color of the project.
 func (s *Shell) projectTab(c *ui.Context, project projectRecord) barTab {
 	radius := s.radiusSmall()
+	_, _, activities, _ := s.shownActivities()
 	return barTab{key: "project-" + project.ID, title: project.Title, on: project.ID == s.active, tint: project.Color, rename: renameTarget{"project", project.ID},
+		id: project.ID, activity: activities[project.ID], activityName: "core.activity.project",
 		radius: [4]float32{radius, radius, radius, radius}, drag: projectTabDrag{project.ID},
 		drop: func(chip ui.Element) {
 			if held, ok := ui.Drop[projectTabDrag](chip); ok {
@@ -333,7 +346,7 @@ func (s *Shell) drawProjectColumn(c *ui.Context, width, height float32) {
 // the pointer or the focus is on the tab.
 func (s *Shell) drawColumnTab(c *ui.Context, tab barTab, width float32) {
 	if s.renaming != nil && s.renaming.renameTarget == tab.rename {
-		s.drawRenameField(c, width)
+		s.drawRenameField(c, width, s.frameFont(s.textControl()))
 		return
 	}
 	m := s.metrics
@@ -345,9 +358,22 @@ func (s *Shell) drawColumnTab(c *ui.Context, tab barTab, width float32) {
 	chip.Background(fill).Children(func() {
 		name := tab.pick()
 		s.renameOnDoubleClick(name, tab.rename)
-		name.Drag(tab.drag).Fill().PaddingX(s.frameLength(m.projectTabPad)).Center().Label(tab.title).Tooltip(tab.title).Children(func() {
+		// The icon of the activity and the name stand centred together: the name is centred in the room after the icon and its gap, and
+		// the icon stands before the name over that room (docs/spec/activity.md#drawing).
+		pad, icon, gap := s.frameLength(m.projectTabPad), s.frameLength(m.activityIcon), s.frameLength(m.barGap)
+		lead := float32(0)
+		if tab.activity != "" {
+			lead = icon + gap
+		}
+		name.Drag(tab.drag).Fill().Padding(0, pad, 0, pad+lead).Center().Label(tab.title).Tooltip(tab.title).Children(func() {
 			ui.Text(c, tab.title).SingleLine().Ellipsis("…").FontSize(size).TextColor(color)
 		})
+		if tab.activity != "" {
+			text := min(spanWidth(c, ui.Span{Text: tab.title, Size: size, Font: s.fontFamily()}), width-2*pad-lead)
+			ui.Box(c).Absolute().Left((width - lead - text) / 2).Top((s.frameLength(m.projectTabH) - icon) / 2).Children(func() {
+				s.drawActivity(c, tab.activityName, tab.id, tab.activity, icon)
+			})
+		}
 		closing := tab.close()
 		closing.Absolute().Top(inset).Right(inset).PaddingX(s.frameLength(m.barXPad)).Label("닫기").Tooltip("닫기")
 		if !chip.Hovered() && !closing.FocusVisible() {
@@ -373,7 +399,9 @@ func (s *Shell) drawSpaces(c *ui.Context, project *projectRecord, width float32)
 
 func (s *Shell) drawSpaceTab(c *ui.Context, project *projectRecord, space layout.Space) {
 	radius := s.radiusSmall()
+	_, _, _, activities := s.shownActivities()
 	tab := barTab{key: "space-" + space.ID, title: space.Title, on: space.ID == project.ActiveSpaceID, rename: renameTarget{"space", space.ID}, radius: [4]float32{radius, radius, 0, 0},
+		id: space.ID, activity: activities[space.ID], activityName: "core.activity.space",
 		pick: func() ui.Element {
 			return s.binder.Press(c, "core.space-tab", "core.space.activate", space.ID, idParam{space.ID})
 		}}

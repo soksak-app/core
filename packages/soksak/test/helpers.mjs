@@ -12,15 +12,7 @@ export function make(options = {}) {
 /** A sidebar on the left and two stacked cards on the right. */
 export function three(options = {}) {
   const grid = new Soksak(
-    {
-      xs: [0, 0.28, 1],
-      ys: [0, 0.52, 1],
-      cards: [
-        { id: "sidebar", c0: 0, c1: 1, r0: 0, r1: 2, fixed: true },
-        { id: "upper", c0: 1, c1: 2, r0: 0, r1: 1 },
-        { id: "lower", c0: 1, c1: 2, r0: 1, r1: 2 },
-      ],
-    },
+    { root: { cut: "x", kids: [{ share: 0.28, node: { card: "sidebar", fixed: true } }, { share: 0.72, node: { cut: "y", kids: [{ share: 0.52, node: { card: "upper" } }, { share: 0.48, node: { card: "lower" } }] } }] } },
     { width: W, height: H, ...options },
   );
   return grid;
@@ -37,4 +29,27 @@ export { random } from "../scripts/layout-sequences.mjs";
 export function fuzz(grid, seed, steps) {
   assertSequence(runSequence(grid, { seed, steps, profile: "ordinary" }));
   return grid;
+}
+
+/**
+ * Splits a card as a random build does: returns the new id, or null for a split that the grid refuses. A split throws its
+ * refusal, and a build that walks many arrangements takes a refusal as one of its outcomes.
+ */
+export function trySplit(grid, ...args) {
+  try {
+    return grid.split(...args);
+  } catch (error) {
+    if (!/would be|does not split|is not a member|is a member/.test(error.message)) throw error;
+    return null;
+  }
+}
+
+/** As `trySplit`, for `splitToward`. */
+export function trySplitToward(grid, ...args) {
+  try {
+    return grid.splitToward(...args);
+  } catch (error) {
+    if (!/would be|does not split|is not a member|is a member/.test(error.message)) throw error;
+    return null;
+  }
 }

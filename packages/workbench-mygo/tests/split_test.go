@@ -6,6 +6,7 @@ import (
 	"image/color"
 	"math"
 	"os"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -126,7 +127,7 @@ func TestCoreCardSplitRefuses(t *testing.T) {
 	}{
 		{"none", "right", "no card none"},
 		{"left", "right", "no card left"},
-		{source, "middle", "unknown side middle; use left, right, top or bottom"},
+		{source, "middle", "invalid params for core.card.split"},
 	} {
 		if _, err := f.answer("core.card.split", map[string]string{"card": c.card, "side": c.side, "plugin": "textprobe"}); err == nil || err.Error() != c.want {
 			t.Errorf("the split of %s toward %s failed with %v, want %s", c.card, c.side, err, c.want)
@@ -138,7 +139,9 @@ func TestCoreCardSplitRefuses(t *testing.T) {
 	for range 4 {
 		card := f.tabbedCards()[len(f.tabbedCards())-1]
 		if _, err := f.answer("core.card.split", map[string]string{"card": card, "side": "right", "plugin": "textprobe"}); err != nil {
-			if want := "card " + card + " cannot split toward right"; err.Error() != want {
+			// The refusal names the card that a half would draw below the minimum and the size that it would get; the window sidebars keep
+			// their drawn widths (packages/soksak/docs/layout.md#cuts).
+			if want := regexp.MustCompile(`^card ` + regexp.QuoteMeta(card) + ` cannot split toward right: card \S+ would be \d+x\d+, below its minimum 96x96$`); !want.MatchString(err.Error()) {
 				t.Fatalf("the split failed with %v, want %s", err, want)
 			}
 			return
@@ -147,14 +150,16 @@ func TestCoreCardSplitRefuses(t *testing.T) {
 	t.Fatal("no split was refused")
 }
 
+// thinRefusal is the refusal of a split of the card thin, which names the card that a half would draw below the minimum and its size.
+var thinRefusal = regexp.MustCompile(`^card thin cannot split toward right: card \S+ would be \d+x\d+, below its minimum 96x96$`)
+
 // A split that the minimum size refuses names no tab, so the number of the next new tab of the layout is the number that it would have had
 // without the refused split, and the stored project does not change.
 func TestARefusedSplitLeavesTheTabNumberUnchanged(t *testing.T) {
 	// The card thin is narrower than two cards of the minimum size and the gap, so it cannot split across.
-	f := layoutShell(t, gridSpace("spc-aaaaaa", []float64{0, 0.44, 0.56, 1}, []float64{0, 1}, gridCard("main", 0, 1, 0, 1, tab("tab-bbbbbb", "notes")),
-		gridCard("thin", 1, 2, 0, 1, tab("tab-aaaaaa", "notes")), gridCard("rest", 2, 3, 0, 1, tab("tab-cccccc", "notes"))))
+	f := layoutShell(t, treeSpace("spc-aaaaaa", cutNode("x", kidNode(0.44, cardNode("main", tab("tab-bbbbbb", "notes"))), kidNode(0.12, cardNode("thin", tab("tab-aaaaaa", "notes"))), kidNode(0.44, cardNode("rest", tab("tab-cccccc", "notes"))))))
 	stored := f.stored()
-	if _, err := f.apply("core.card.split", `{"card":"thin","side":"right","plugin":"notes"}`); err == nil || err.Error() != "card thin cannot split toward right" {
+	if _, err := f.apply("core.card.split", `{"card":"thin","side":"right","plugin":"notes"}`); err == nil || !thinRefusal.MatchString(err.Error()) {
 		t.Fatalf("the split of thin failed with %v", err)
 	}
 	if f.stored() != stored {
@@ -220,7 +225,7 @@ func TestCoreBoundaryMove(t *testing.T) {
 	if _, err := f.answer("core.boundary.move", map[string]any{"axis": "x", "line": 99, "position": 340}); err == nil || err.Error() != "no x boundary at line 99" {
 		t.Fatalf("a boundary that does not exist failed with %v", err)
 	}
-	if _, err := f.answer("core.boundary.move", map[string]any{"axis": "x", "line": 1}); err == nil || err.Error() != "core.boundary.move: position is missing" {
+	if _, err := f.answer("core.boundary.move", map[string]any{"axis": "x", "line": 1}); err == nil || err.Error() != "command core.boundary.move: parameter position is required" {
 		t.Fatalf("a move without a position failed with %v", err)
 	}
 }
@@ -342,9 +347,10 @@ func TestASplitEndsTheHoldOfADivider(t *testing.T) {
 	}
 }
 
-// A line that no card uses any more drops when a drag passes it, which renumbers the held line and the lines above it, and the same
-// press goes on holding the boundary to its end. The element of the press keeps its key, so no other divider repeats it.
-func TestDividerDragGoesOnPastALineThatItDrops(t *testing.T) {
+// A drag beside a card that closed holds its boundary to its end: the tree holds no line that no card uses, so the lines after the close
+// are the lines of the cards, the card follows each move of the press, and the element of the press keeps its key, so no other divider
+// repeats it.
+func TestADividerDragAfterACloseHoldsItsBoundaryToItsEnd(t *testing.T) {
 	f, left, middle := splitShell(t)
 	made, err := f.answer("core.card.split", map[string]string{"card": middle, "side": "right", "plugin": "textprobe"})
 	if err != nil {
@@ -376,9 +382,6 @@ func TestDividerDragGoesOnPastALineThatItDrops(t *testing.T) {
 	f.settle()
 	if got := dividerItems(f); len(got) != len(lines) {
 		t.Fatalf("the dividers were %v and are %v", lines, got)
-	}
-	if slices.Equal(dividerItems(f), lines) {
-		t.Fatalf("no line dropped: the dividers stay %v", lines)
 	}
 	f.audit()
 }
@@ -511,9 +514,8 @@ func narrowCard(t *testing.T, tabs int, title string) *shellFixture {
 	}
 	project := storedProject(list...)
 	state := project["spaces"].([]map[string]any)[0]["layout"].(map[string]any)["state"].(map[string]any)
-	state["xs"] = []float64{0, 0.5, 1}
-	state["cards"] = append(state["cards"].([]map[string]any), map[string]any{"id": "other", "c0": 1, "c1": 2, "r0": 0, "r1": 1, "data": map[string]any{
-		"tabs": []map[string]any{{"id": "tab-bbbbbb", "plugin": "notes", "title": "b"}}, "activeId": "tab-bbbbbb"}})
+	state["root"] = cutNode("x", kidNode(0.5, state["root"].(map[string]any)),
+		kidNode(0.5, cardNode("other", map[string]any{"id": "tab-bbbbbb", "plugin": "notes", "title": "b"})))
 	// The window shows no sidebars, so the width of the card is half of the plane and its head holds its tabs.
 	f := newShell(t, &storedHost{common: map[string]any{"left": false, "right": false}, projects: []map[string]any{project}})
 	if _, err := f.answer("core.project.activate", map[string]string{"id": "prj-a"}); err != nil {
@@ -703,10 +705,10 @@ func TestTheToolsOfAHeadFollowWhatTheCardCanDo(t *testing.T) {
 	if !ok || node.Actions&ui.ActionPress != 0 {
 		t.Fatalf("the close tool of the last card takes a press: %+v", node)
 	}
-	if enabled, title := f.tool(t, "main", "split-x"); !enabled || title != "세로로 나누기" {
+	if enabled, title := f.tool(t, "main", "split-x"); !enabled || title != "좌우로 분할" {
 		t.Fatalf("the split tool is %v %q", enabled, title)
 	}
-	for key, name := range map[string]string{"add": "탭 추가", "split-y": "가로로 나누기", "fullscreen": "카드 전체 화면"} {
+	for key, name := range map[string]string{"add": "탭 추가", "split-y": "상하로 분할", "fullscreen": "카드 전체 화면"} {
 		if _, title := f.tool(t, "main", key); title != name {
 			t.Fatalf("the tool %s is %q, want %q", key, title, name)
 		}
@@ -745,11 +747,13 @@ func TestATooNarrowCardCannotSplitAndItsMenuHoldsWhatItCan(t *testing.T) {
 	}
 	f.click("core.card.tools", card)
 	keys := f.menu().keys()
-	if slices.Contains(keys, "x") || !slices.Contains(keys, "y") || !slices.Contains(keys, "fullscreen") {
-		t.Fatalf("the tool menu holds %q", keys)
+	// The menu holds the fullscreen toggle exactly when the head does not keep it beside the menu, as the narrowest heads fold it before
+	// the tab (docs/spec/example-model.md#card-tabs).
+	if slices.Contains(keys, "x") || !slices.Contains(keys, "y") || slices.Contains(keys, "fullscreen") == f.has("core.card.fullscreen", card) {
+		t.Fatalf("the tool menu holds %q, and the head shows the fullscreen toggle %v", keys, f.has("core.card.fullscreen", card))
 	}
 	// The menu takes the names of the tools as their tooltips hold them.
-	names := map[string]string{"add": "탭 추가", "y": "가로로 나누기", "fullscreen": "카드 전체 화면", "close": "카드 닫기"}
+	names := map[string]string{"add": "탭 추가", "y": "상하로 분할", "fullscreen": "카드 전체 화면", "close": "카드 닫기"}
 	for _, item := range f.menu().Items {
 		if want, ok := names[item.Key]; ok && item.Name != want {
 			t.Fatalf("the menu item %s is %q, want %q", item.Key, item.Name, want)
@@ -757,8 +761,8 @@ func TestATooNarrowCardCannotSplitAndItsMenuHoldsWhatItCan(t *testing.T) {
 	}
 }
 
-// themeToken returns the color token of a theme in its mode, as workbench.json declares it.
-func themeToken(t *testing.T, name, mode, token string) color.RGBA {
+// declaredThemes returns the themes that workbench.json declares.
+func declaredThemes(t *testing.T) []map[string]any {
 	t.Helper()
 	text, err := os.ReadFile("../src/workbench.json")
 	if err != nil {
@@ -770,7 +774,13 @@ func themeToken(t *testing.T, name, mode, token string) color.RGBA {
 	if err := json.Unmarshal(text, &declared); err != nil {
 		t.Fatal(err)
 	}
-	for _, theme := range declared.Themes {
+	return declared.Themes
+}
+
+// themeToken returns the color token of a theme in its mode, as workbench.json declares it.
+func themeToken(t *testing.T, name, mode, token string) color.RGBA {
+	t.Helper()
+	for _, theme := range declaredThemes(t) {
 		if theme["name"] == name {
 			parsed := ui.Hex(theme[mode].(map[string]any)[token].(string))
 			return color.RGBA{parsed.R, parsed.G, parsed.B, 255}
@@ -781,6 +791,8 @@ func themeToken(t *testing.T, name, mode, token string) color.RGBA {
 }
 
 // The first row and the row of the spaces are bands of the card color, each with its edge under it, over the background of the stage.
+// At the seam (gap 0) the stage shares its top line with the line under the row of the spaces (docs/spec/settings.md#values), and the
+// focus ring of a focused card at the top of the plane colors that shared line, as it colors each line of the card.
 func TestTheBarsOfTheWindowTakeTheCardColorOfTheTheme(t *testing.T) {
 	declared, err := workbench.Declared()
 	if err != nil {
@@ -812,12 +824,28 @@ func TestTheBarsOfTheWindowTakeTheCardColorOfTheTheme(t *testing.T) {
 			if got := at(first + 1); got != card {
 				t.Fatalf("the row of the spaces is %v, want %v", got, card)
 			}
-			if got := at(second - 0.5); got != edge {
-				t.Fatalf("the edge of the row of the spaces is %v, want %v", got, edge)
+			grid := status[struct {
+				Plane struct{ X, Y float64 } `json:"plane"`
+				Cards []struct {
+					Y       float64
+					Focused bool
+				}
+			}](t, f, "core.grid")
+			plane, under := grid.Plane, edge
+			seam := slices.ContainsFunc(declaredThemes(t), func(declared map[string]any) bool {
+				return declared["name"] == theme[0] && declared["shape"].(map[string]any)["gap"] == "0px"
+			})
+			if seam && slices.ContainsFunc(grid.Cards, func(card struct {
+				Y       float64
+				Focused bool
+			}) bool {
+				return card.Focused && card.Y < 1
+			}) {
+				under = themeToken(t, theme[0], theme[1], "focus")
 			}
-			plane := status[struct {
-				Plane struct{ X float64 } `json:"plane"`
-			}](t, f, "core.grid").Plane
+			if got := at(second - 0.5); got != under {
+				t.Fatalf("the line under the row of the spaces is %v, want %v with the seam %v", got, under, seam)
+			}
 			if got := at(second + 1); plane.X > 1 && got != stage {
 				t.Fatalf("the stage is %v, want %v", got, stage)
 			}
@@ -1057,9 +1085,9 @@ func TestCardSplitDistinguishesMissingEmptyAndNullSide(t *testing.T) {
 		present  bool
 		expected string
 	}{
-		{name: "missing", expected: "unknown side undefined; use left, right, top or bottom"},
-		{name: "empty", side: "", present: true, expected: "unknown side ; use left, right, top or bottom"},
-		{name: "null", present: true, expected: "unknown side null; use left, right, top or bottom"},
+		{name: "missing", expected: "command core.card.split: parameter side is required"},
+		{name: "empty", side: "", present: true, expected: "invalid params for core.card.split"},
+		{name: "null", present: true, expected: "invalid params for core.card.split"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			argument := map[string]any{"card": card, "plugin": "textprobe"}

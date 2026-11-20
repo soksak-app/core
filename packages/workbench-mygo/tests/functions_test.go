@@ -83,7 +83,7 @@ func TestFunctionsAnswerTheRegistry(t *testing.T) {
 	for params, want := range map[string]string{
 		`{"name":"core.none"}`:           "unknown element core.none",
 		`{"name":"core.card","index":9}`: "element core.card has no element at index 9",
-		`{"name":3}`:                     "core.focus.set: json: cannot unmarshal number into Go struct field .name of type string",
+		`{"name":3}`:                     "invalid params for core.focus.set",
 	} {
 		if _, err := registry.Run("core.focus.set", json.RawMessage(params)); err == nil || err.Error() != want {
 			t.Errorf("core.focus.set %s failed with %v, want %s", params, err, want)

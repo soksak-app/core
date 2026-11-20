@@ -19,6 +19,12 @@ type plane struct {
 	height  float64
 	gap     float64
 	minSize float64
+	// frames is the frames of each card by id; a card without an entry has none.
+	frames map[string]Frames
+	// unit is the corridor of each axis that the grid laid its tree with; without it, the gap capped at what the plane holds.
+	unit *perAxis
+	// linesAt is the px position of each line per axis, as the grid laid its tree; without it, each line at its fraction of the extent.
+	linesAt map[Axis][]float64
 	// read keeps the last frame of a plane, for a plane of a grid.
 	read *frameRead
 }
@@ -70,7 +76,46 @@ func corridorOf(p *plane, axis Axis, slot int, read lineSet) float64 {
 	for k := slot + 2; k < len(a) && blank(p, axis, k-1); k++ {
 		hi = math.Max(hi, inset(p, axis, k, "hi", read))
 	}
-	return lo + hi
+	return lo + hi + slotFrames(p, axis, slot)*corridor(p, axis, read)
+}
+
+// slotFrames is the number of frames a slot carries: the most frames of a card that starts on its lower line on that side, and the
+// most of a card that ends on its upper line on that side, a run of lines at one position counting as its slot.
+func slotFrames(p *plane, axis Axis, slot int) float64 {
+	if len(p.frames) == 0 {
+		return 0
+	}
+	a := p.lines(axis)
+	lo, hi := span(axis)
+	from, to := slot, slot+1
+	for from > 0 && blank(p, axis, from-1) {
+		from--
+	}
+	for to < len(a)-1 && blank(p, axis, to) {
+		to++
+	}
+	low, high := 0.0, 0.0
+	for _, card := range p.cards {
+		f := p.frames[card.ID]
+		if start := card.get(lo); start >= from && start <= slot {
+			low = max(low, f.side(axis, "lo"))
+		}
+		if end := card.get(hi); end >= slot+1 && end <= to {
+			high = max(high, f.side(axis, "hi"))
+		}
+	}
+	return low + high
+}
+
+// cardInset is how far the edge of card on side stands from its line: the corridor of the line on that side and one gap for each
+// frame of the card on that side.
+func cardInset(p *plane, axis Axis, card *Card, side string, read lineSet) float64 {
+	lo, hi := span(axis)
+	line := card.get(hi)
+	if side == "lo" {
+		line = card.get(lo)
+	}
+	return inset(p, axis, line, side, read) + p.frames[card.ID].side(axis, side)*corridor(p, axis, read)
 }
 
 // corridorWhenWide is the corridor a slot holds once it has a width.
@@ -94,7 +139,7 @@ func corridorWhenWide(p *plane, axis Axis, slot int, read lineSet) float64 {
 	for k := slot + 2; k < len(a) && blank(p, axis, k-1); k++ {
 		hi = math.Max(hi, edge(k, k == len(a)-1))
 	}
-	return lo + hi
+	return lo + hi + slotFrames(p, axis, slot)*corridor(p, axis, read)
 }
 
 // blank is true when a slot draws at zero width: no span to take a share with and no px size.
@@ -105,7 +150,7 @@ func blank(p *plane, axis Axis, slot int) bool {
 	}
 	lo := low(axis)
 	for _, card := range p.cards {
-		if card.get(lo) == slot && fixedSize(card, axis) != nil {
+		if card.get(lo) == slot && spanOf(card, axis) == 1 && fixedSize(card, axis) != nil {
 			return false
 		}
 	}
@@ -117,7 +162,11 @@ func heldSizes(p *plane, axis Axis) []opt {
 	lo := low(axis)
 	held := make([]opt, len(p.lines(axis))-1)
 	for _, card := range p.cards {
+		// A cell declares a size only when a card spans exactly it; a card that spans more keeps its size in its node of the tree.
 		size := fixedSize(card, axis)
+		if spanOf(card, axis) != 1 {
+			size = nil
+		}
 		if size == nil {
 			continue
 		}
@@ -169,26 +218,6 @@ func holdsSizes(p *plane, axis Axis) bool {
 	return sharedSpan > 1e-9 && p.extent(axis)-asked-taken >= floor
 }
 
-// declaredFor is the px size a slot has to declare to be drawn `drawn` px wide.
-func declaredFor(p *plane, axis Axis, slot int, drawn float64) float64 {
-	now := heldSizes(p, axis)[slot].v
-	if math.Abs(slotWidths(p, axis)[slot]-drawn) <= 1e-9 {
-		return now
-	}
-	asked, taken, sharedSpan, floor := demand(p, axis)
-	room := p.extent(axis)
-	if sharedSpan > 1e-9 && room-(asked-now+drawn)-taken >= floor-1e-9 {
-		return drawn
-	}
-	other := asked - now
-	keep := math.Min(floor, math.Max(0, room-taken))
-	left := math.Max(0, room-keep-taken)
-	if other <= 1e-9 || drawn >= left-1e-9 {
-		return now
-	}
-	return math.Max(drawn, (drawn*other)/(left-drawn))
-}
-
 // slotSizes is the width in px of every slot on an axis.
 func slotSizes(p *plane, axis Axis) []float64 {
 	// silent: a caller of this function reads the sizes and not the worth of a unit of shared span.
@@ -202,143 +231,19 @@ func sharePerSpan(p *plane, axis Axis) float64 {
 	return each
 }
 
-// divide is the size of every slot on an axis, and what one unit of shared span is worth.
+// divide is the size of every slot on an axis, and what one unit of span is worth. The grid derives its lines from the tree laid in px,
+// each line at its px over the extent of the plane, so a slot is its span of the extent: the px sizes, the corridors, the frames and the
+// heads are costs that the tree lays before it gives the kids of a cut their fractions (packages/soksak/docs/layout.md#the-model).
 func divide(p *plane, axis Axis) ([]float64, float64) {
 	a := p.lines(axis)
-	count := len(a) - 1
-	read := linesRead(p, axis)
-	corridor := make([]float64, count)
-	for i := 0; i < count; i++ {
-		corridor[i] = corridorOf(p, axis, i, read)
-	}
-	held := heldSizes(p, axis)
-	var asked, taken, sharedSpan, floor float64
-	for i := 0; i < count; i++ {
-		if held[i].ok {
-			asked += held[i].v
-			taken += corridor[i]
+	each := math.Max(0, p.extent(axis))
+	at := p.linesAt[axis]
+	size := make([]float64, len(a)-1)
+	for i := range size {
+		if at != nil {
+			size[i] = at[i+1] - at[i]
 		} else {
-			sharedSpan += a[i+1] - a[i]
-			floor += corridor[i]
-		}
-	}
-	if sharedSpan > 1e-9 {
-		floor += p.minSize
-	}
-	usable := p.extent(axis) - asked - taken
-	if sharedSpan > 1e-9 && usable >= floor {
-		size := make([]float64, count)
-		for i := range held {
-			if held[i].ok {
-				size[i] = held[i].v + corridor[i]
-			}
-		}
-		lo, hi := span(axis)
-		stopped := make([]bool, count)
-		runFrom := make([]int, count)
-		runTo := make([]int, count)
-		for i := 0; i < count; {
-			end := i + 1
-			for end < count && !read.has(end) {
-				end++
-			}
-			for k := i; k < end; k++ {
-				runFrom[k] = i
-				runTo[k] = end
-			}
-			i = end
-		}
-		room := usable
-		pool := sharedSpan
-		for {
-			each := room / pool
-			starved := -1
-			for _, card := range p.cards {
-				fixed, spanned, need, first := 0.0, 0.0, 0.0, -1
-				for i := card.get(lo); i < card.get(hi); i++ {
-					need += corridor[i]
-					if held[i].ok || stopped[i] {
-						fixed += size[i]
-						continue
-					}
-					spanned += a[i+1] - a[i]
-					if first < 0 {
-						first = i
-					}
-				}
-				// float64 rounds each product before it is added, as JavaScript does; without it Go may fuse them (number.go).
-				if first >= 0 && fixed+float64(spanned*each) < need-1e-9 {
-					starved = first
-					break
-				}
-			}
-			if starved < 0 {
-				for i := 0; i < count; i++ {
-					if held[i].ok || stopped[i] {
-						continue
-					}
-					size[i] = (a[i+1] - a[i]) * each
-				}
-				return size, each
-			}
-			for i := runFrom[starved]; i < runTo[starved]; i++ {
-				stopped[i] = true
-				size[i] = corridor[i]
-				room -= corridor[i]
-				pool -= a[i+1] - a[i]
-			}
-		}
-	}
-
-	// The requested sizes do not fit, or no slot shares: the sharing slots keep their floor and the px sizes scale by one factor.
-	keep := math.Min(floor, math.Max(0, p.extent(axis)-taken))
-	left := math.Max(0, p.extent(axis)-keep-taken)
-	scale := 0.0
-	if asked > 1e-9 {
-		scale = left / asked
-	}
-	floors := 0.0
-	for i := 0; i < count; i++ {
-		if !held[i].ok {
-			floors += corridor[i]
-		}
-	}
-	spare := math.Max(0, keep-floors)
-	each := 0.0
-	if sharedSpan > 1e-9 {
-		each = spare / sharedSpan
-	}
-	size := make([]float64, count)
-	if asked <= 1e-9 {
-		heldSpan, heldSlots := 0.0, 0
-		for i := 0; i < count; i++ {
-			if !held[i].ok {
-				continue
-			}
-			heldSpan += a[i+1] - a[i]
-			heldSlots++
-		}
-		for i := range held {
-			if held[i].ok {
-				if heldSpan > 1e-9 {
-					size[i] = corridor[i] + (left*(a[i+1]-a[i]))/heldSpan
-				} else {
-					size[i] = corridor[i] + left/float64(heldSlots)
-				}
-			} else {
-				// float64 rounds each product before it is added, as JavaScript does; without it Go may fuse them (number.go).
-				size[i] = corridor[i] + float64((a[i+1]-a[i])*each)
-			}
-		}
-		return size, each
-	}
-	for i := range held {
-		if held[i].ok {
-			// float64 rounds each product before it is added, as JavaScript does; without it Go may fuse them (number.go).
-			size[i] = float64(held[i].v*scale) + corridor[i]
-		} else {
-			// float64 rounds each product before it is added, as JavaScript does; without it Go may fuse them (number.go).
-			size[i] = corridor[i] + float64((a[i+1]-a[i])*each)
+			size[i] = (a[i+1] - a[i]) * each
 		}
 	}
 	return size, each
@@ -346,6 +251,10 @@ func divide(p *plane, axis Axis) ([]float64, float64) {
 
 // linePositions is every line position in px, index for index with the line array.
 func linePositions(p *plane, axis Axis) []float64 {
+	// The positions that the layout drew are read as they are: summing their differences again adds a rounding per slot.
+	if at, ok := p.linesAt[axis]; ok {
+		return slices.Clone(at)
+	}
 	sizes := slotSizes(p, axis)
 	out := make([]float64, 1, len(sizes)+1)
 	for _, size := range sizes {
@@ -356,18 +265,26 @@ func linePositions(p *plane, axis Axis) []float64 {
 
 // corridor is the gap width for this axis, capped at what the plane can hold.
 func corridor(p *plane, axis Axis, read lineSet) float64 {
+	if p.unit != nil {
+		return p.unit.of(axis)
+	}
 	a := p.lines(axis)
-	real := len(read)
+	real := float64(len(read))
 	if read.has(0) {
 		real--
 	}
 	if read.has(len(a) - 1) {
 		real--
 	}
+	for slot := 0; slot < len(a)-1; slot++ {
+		if !blank(p, axis, slot) {
+			real += slotFrames(p, axis, slot)
+		}
+	}
 	if real <= 0 {
 		return p.gap
 	}
-	return math.Min(p.gap, math.Max(0, p.extent(axis))/float64(real))
+	return math.Min(p.gap, math.Max(0, p.extent(axis))/real)
 }
 
 // linesRead is the set of line indices that at least one card references.
@@ -412,14 +329,16 @@ func halfCorridor(p *plane, axis Axis, read lineSet) float64 {
 	return corridor(p, axis, read) / 2
 }
 
-// axle is the line positions and edge insets of one axis.
+// axle is the line positions and edge insets of one axis, and the gap that one frame takes on it.
 type axle struct {
 	at, lo, hi []float64
+	unit       float64
 }
 
-// frame is the axles of both axes.
+// frame is the axles of both axes and the frames of the cards.
 type frame struct {
-	x, y axle
+	x, y   axle
+	frames map[string]Frames
 }
 
 func (f *frame) of(axis Axis) *axle {
@@ -435,6 +354,9 @@ type frameRead struct {
 	held                        bool
 	xs, ys                      []float64
 	width, height, gap, minSize float64
+	unit                        *perAxis
+	atX, atY                    []float64
+	hasAt                       bool
 	spans                       []cardSpan
 	frame                       frame
 }
@@ -444,10 +366,11 @@ type cardSpan struct {
 	c0, c1, r0, r1 int
 	width, height  opt
 	fixed          bool
+	frames         Frames
 }
 
-func cardSpanOf(card *Card) cardSpan {
-	span := cardSpan{c0: card.C0, c1: card.C1, r0: card.R0, r1: card.R1, fixed: card.Fixed}
+func cardSpanOf(p *plane, card *Card) cardSpan {
+	span := cardSpan{c0: card.C0, c1: card.C1, r0: card.R0, r1: card.R1, fixed: card.Fixed, frames: p.frames[card.ID]}
 	if card.Width != nil {
 		span.width = some(*card.Width)
 	}
@@ -463,8 +386,12 @@ func (r *frameRead) holds(p *plane) bool {
 		!slices.Equal(r.xs, p.xs) || !slices.Equal(r.ys, p.ys) || len(r.spans) != len(p.cards) {
 		return false
 	}
+	if (r.unit == nil) != (p.unit == nil) || (r.unit != nil && *r.unit != *p.unit) || r.hasAt != (p.linesAt != nil) ||
+		(r.hasAt && (!slices.Equal(r.atX, p.linesAt["x"]) || !slices.Equal(r.atY, p.linesAt["y"]))) {
+		return false
+	}
 	for i, card := range p.cards {
-		if r.spans[i] != cardSpanOf(card) {
+		if r.spans[i] != cardSpanOf(p, card) {
 			return false
 		}
 	}
@@ -475,10 +402,15 @@ func (r *frameRead) holds(p *plane) bool {
 func (r *frameRead) take(p *plane, f frame) {
 	spans := r.spans[:0]
 	for _, card := range p.cards {
-		spans = append(spans, cardSpanOf(card))
+		spans = append(spans, cardSpanOf(p, card))
 	}
 	*r = frameRead{held: true, xs: append(r.xs[:0], p.xs...), ys: append(r.ys[:0], p.ys...), width: p.width, height: p.height,
-		gap: p.gap, minSize: p.minSize, spans: spans, frame: f}
+		gap: p.gap, minSize: p.minSize, spans: spans, frame: f, atX: append(r.atX[:0], p.linesAt["x"]...),
+		atY: append(r.atY[:0], p.linesAt["y"]...), hasAt: p.linesAt != nil}
+	if p.unit != nil {
+		unit := *p.unit
+		r.unit = &unit
+	}
 }
 
 // frameOf is the frame of p. A frame is read and never changed, so the callers share it.
@@ -508,22 +440,23 @@ func computeFrame(p *plane) frame {
 			lo[i] = inset(p, axis, i, "lo", read)
 			hi[i] = inset(p, axis, i, "hi", read)
 		}
-		return axle{at: at, lo: lo, hi: hi}
+		return axle{at: at, lo: lo, hi: hi, unit: corridor(p, axis, read)}
 	}
-	return frame{x: axleOf("x"), y: axleOf("y")}
+	return frame{x: axleOf("x"), y: axleOf("y"), frames: p.frames}
 }
 
 func rectIn(f frame, card *Card) Rect {
-	x, w := spanIn(&f.x, card.C0, card.C1)
-	y, h := spanIn(&f.y, card.R0, card.R1)
+	frames := f.frames[card.ID]
+	x, w := spanIn(&f.x, card.C0, card.C1, frames.Left, frames.Right)
+	y, h := spanIn(&f.y, card.R0, card.R1, frames.Top, frames.Bottom)
 	return Rect{X: x, Y: y, W: w, H: h}
 }
 
-// spanIn is one axis of a rect: the card's start position and size. A card whose two lines are at one position is drawn at zero
-// width in the middle of the slots it spans.
-func spanIn(a *axle, lo, hi int) (float64, float64) {
-	near := a.at[lo] + a.lo[lo]
-	far := a.at[hi] - a.hi[hi]
+// spanIn is one axis of a rect: the card's start position and size, inset by one gap for each of its frames on each side. A card
+// whose two edges cross is drawn at zero width in the middle of the slots it spans.
+func spanIn(a *axle, lo, hi int, framesLo, framesHi float64) (float64, float64) {
+	near := a.at[lo] + a.lo[lo] + framesLo*a.unit
+	far := a.at[hi] - a.hi[hi] - framesHi*a.unit
 	if far >= near-1e-6 {
 		return near, math.Max(0, far-near)
 	}

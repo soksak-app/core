@@ -485,7 +485,11 @@
                       "y": {
                         "type": "number"
                       }
-                    }
+                    },
+                    "required": [
+                      "x",
+                      "y"
+                    ]
                   },
                   "result": {
                     "type": "boolean"
@@ -665,8 +669,8 @@
                   }
                 ],
                 "outcome": "accepted",
-                "declarationInlineBytes": 2247,
-                "declarationTableBytes": 2249
+                "declarationInlineBytes": 2268,
+                "declarationTableBytes": 2270
               }
             }
           ]
@@ -1161,7 +1165,11 @@
                       "y": {
                         "type": "number"
                       }
-                    }
+                    },
+                    "required": [
+                      "x",
+                      "y"
+                    ]
                   },
                   "result": {
                     "type": "boolean"

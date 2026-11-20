@@ -9,7 +9,7 @@ import { allOperations, assertInvariants, assertSequence, createProfile, runSequ
 test("random sequences detect an invalid intermediate state before a later operation repairs it", { timeout: 5000 }, () => {
   const grid = three();
   let transitions = 0;
-  for (const method of ["split", "close", "tidy", "moveBoundary", "mergeCoincident"]) {
+  for (const method of ["split", "close", "moveBoundary"]) {
     const original = grid[method].bind(grid);
     grid[method] = (...args) => { transitions++; return original(...args); };
   }
@@ -36,7 +36,7 @@ test("sequence reports retain deterministic calls and successful and refused out
   assert.deepEqual(report.counts, { successful: 2, refused: 1, changed: 2, unchanged: 1 });
   assert.deepEqual(report.byMethod.close, { successful: 1, refused: 1, changed: 1, unchanged: 1 });
   assert.deepEqual(report.trace.map(({ outcome }) => outcome), ["successful", "refused", "successful"]);
-  assert.deepEqual(report.initial.state.cards.map(({ id }) => id), ["card"]);
+  assert.deepEqual(report.initial.state.root, { card: "card", fixed: false });
   for (const profile of ["ordinary", "fixed", "constrained"]) {
     const run = () => assertSequence(runSequence(createProfile(profile, 7), { seed: 7, steps: 30, profile }));
     assert.deepEqual(run(), run(), profile);
@@ -80,25 +80,6 @@ test("shared profiles exercise every operation and both transition outcomes", { 
     }
   }
   assert.deepEqual([...seen].sort(), [...allOperations].sort());
-});
-
-test("sequence evidence distinguishes an accepted merge from a refused merge", { timeout: 5000 }, () => {
-  const grid = new Soksak({
-    xs: [0, 0.5, 0.75, 1], ys: [0, 0.5, 1],
-    cards: [
-      { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
-      { id: "b", c0: 1, c1: 3, r0: 0, r1: 1 },
-      { id: "under", c0: 0, c1: 3, r0: 1, r1: 2 },
-    ],
-  }, { width: 1600, height: 1200 });
-  const report = assertSequence(runSequence(grid, { operations: [
-    { method: "mergeCoincident", args: ["x", 1] },
-    { method: "moveBoundary", args: ["x", 1, 1197] },
-    { method: "mergeCoincident", args: ["x", 1] },
-  ] }));
-  assert.deepEqual(report.byMethod.mergeCoincident, { successful: 1, refused: 1, changed: 1, unchanged: 1 });
-  assert.equal(grid.lines("x").length, 3);
-  assert.equal(grid.cards.length, 3);
 });
 
 function reductionFixture() {
@@ -169,22 +150,17 @@ test("shrinking refuses untagged assertions instead of conflating distinct failu
   assert.throws(() => sequences.reduceSequence(report, options), /requires a named invariant/);
 });
 
+
 test("replay preserves nondefault snapping and every recorded layout option", { timeout: 5000 }, () => {
-  const grid = new Soksak({
-    xs: [0, 0.5, 0.75, 1], ys: [0, 0.5, 1],
-    cards: [
-      { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
-      { id: "b", c0: 1, c1: 3, r0: 0, r1: 1 },
-      { id: "under", c0: 0, c1: 3, r0: 1, r1: 2 },
-    ],
-  }, { width: 1600, height: 1200, gap: 17, minSize: 51, snapDistance: 40, grabSize: 23, snap: "merge", fillOrder: "h" });
-  const report = assertSequence(runSequence(grid, { operations: [
-    { method: "moveBoundary", args: ["x", 1, 1180] },
-    { method: "mergeCoincident", args: ["x", 1] },
-  ] }));
-  assert.equal(report.trace[1].result, true, "20px distance snaps only with the recorded 40px option");
+  const grid = new Soksak({ root: { cut: "y", kids: [
+    { share: 0.5, node: { cut: "x", kids: [{ share: 0.5, node: { card: "a" } }, { share: 0.5, node: { card: "b" } }] } },
+    { share: 0.5, node: { cut: "x", kids: [{ share: 0.75, node: { card: "c" } }, { share: 0.25, node: { card: "d" } }] } },
+  ] } }, { width: 1600, height: 1200, gap: 17, minSize: 51, snapDistance: 40, grabSize: 23, snap: "merge", fillOrder: "h" });
+  const report = assertSequence(runSequence(grid, { operations: [{ method: "moveBoundary", args: ["x", 1, 1180] }] }));
+  // The line of the lower row stands half a corridor after the 0.75 of the 1583 px that c and d share: 1195.75.
+  assert.equal(report.trace[0].result, 1195.75, "a 15.75px distance snaps onto the line of the lower row only with the recorded 40px option");
   assert.deepEqual(sequences.replaySequence(JSON.parse(JSON.stringify(report))), report);
   const changed = structuredClone(report);
   changed.initial.options.snapDistance = 7;
-  assert.equal(sequences.replaySequence(changed).trace[1].result, false);
+  assert.equal(sequences.replaySequence(changed).trace[0].result, 1180);
 });

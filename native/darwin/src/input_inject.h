@@ -72,8 +72,11 @@ unsigned long sp_input_pointer_buttons(const char *name);
 // (input_virtual.h), whose pages never see a real button.
 unsigned long sp_input_person_buttons(void);
 
-// State of a rejection with SP_INPUT_BUTTON_HELD, SP_INPUT_POINTER_HELD, SP_INPUT_RESIZE_EDGE or SP_INPUT_INTERRUPTED.
+// State of a rejection with SP_INPUT_REJECTED, SP_INPUT_BUTTON_HELD, SP_INPUT_POINTER_HELD, SP_INPUT_RESIZE_EDGE or
+// SP_INPUT_INTERRUPTED.
 //
+// For SP_INPUT_REJECTED, reason names why the window did not accept the input, such as `the window is not shown` or `no open
+// press of the pointer and button in the window`; pointer is NULL, mask is 0, pid is -1 and bundleIdentifier is NULL.
 // For SP_INPUT_BUTTON_HELD it is measured in the same turn that rejected the input. This state alone does not identify the
 // cause, so the rejection is reported for the receiver to find the cause; pointer and reason are NULL.
 // For SP_INPUT_POINTER_HELD, pointer names the pointer whose open press rejected the input and reason states the shared state;
@@ -89,9 +92,11 @@ typedef struct {
     const char *reason; // the state that the press of that pointer holds
 } sp_input_held;
 
-// held is non-NULL only when result is SP_INPUT_BUTTON_HELD, SP_INPUT_POINTER_HELD, SP_INPUT_RESIZE_EDGE or SP_INPUT_INTERRUPTED,
-// and it is valid only until done returns.
-typedef void (*sp_input_done)(void *context, sp_input_result result, const sp_input_held *held);
+// held is non-NULL only when result is SP_INPUT_REJECTED, SP_INPUT_BUTTON_HELD, SP_INPUT_POINTER_HELD, SP_INPUT_RESIZE_EDGE or
+// SP_INPUT_INTERRUPTED, and it is valid only until done returns. view is the web view that a delivered press or release reached when it was sent, which
+// can differ from the web view at the coordinates when the request started, because a press waits for an open layout to reach the
+// screen; it is NULL for any other input or result.
+typedef void (*sp_input_done)(void *context, sp_input_result result, const sp_input_held *held, void *view);
 
 // Same as sp_input_pointer, except that for a press and a release done is called after the document that owns the gesture
 // has received the event. When an input field has focus, WebKit first passes mouse events to the input method

@@ -1,0 +1,171 @@
+{
+  "description": "Cases of the schema subset of exposure declarations (docs/spec/exposure.md#entry-fields): each keyword over each kind of JSON value. matchesSchema of packages/plugin-api/index.js, MatchesSchemaText of packages/sok/go/src and matches_schema of packages/sok/rust/src replay every case: a value matches its schema exactly when matches is true.",
+  "cases": [
+    {
+      "id": "string-takes-a-string",
+      "schema": {
+        "type": "string"
+      },
+      "value": "a",
+      "matches": true
+    },
+    {
+      "id": "string-refuses-a-number",
+      "schema": {
+        "type": "string"
+      },
+      "value": 1,
+      "matches": false
+    },
+    {
+      "id": "type-list-takes-null",
+      "schema": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "value": null,
+      "matches": true
+    },
+    {
+      "id": "integer-refuses-a-fraction",
+      "schema": {
+        "type": "integer"
+      },
+      "value": 2.5,
+      "matches": false
+    },
+    {
+      "id": "integer-takes-a-whole-number",
+      "schema": {
+        "type": "integer"
+      },
+      "value": 2,
+      "matches": true
+    },
+    {
+      "id": "number-takes-a-fraction",
+      "schema": {
+        "type": "number"
+      },
+      "value": 2.5,
+      "matches": true
+    },
+    {
+      "id": "boolean-takes-true",
+      "schema": {
+        "type": "boolean"
+      },
+      "value": true,
+      "matches": true
+    },
+    {
+      "id": "items-refuse-an-item",
+      "schema": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "value": [
+        "a",
+        1
+      ],
+      "matches": false
+    },
+    {
+      "id": "properties-refuse-a-member",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "a": {
+            "type": "string"
+          }
+        }
+      },
+      "value": {
+        "a": 1
+      },
+      "matches": false
+    },
+    {
+      "id": "properties-leave-another-member",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "a": {
+            "type": "string"
+          }
+        }
+      },
+      "value": {
+        "b": 1
+      },
+      "matches": true
+    },
+    {
+      "id": "enum-takes-an-equal-value",
+      "schema": {
+        "enum": [
+          "a",
+          {
+            "b": [
+              1
+            ]
+          }
+        ]
+      },
+      "value": {
+        "b": [
+          1
+        ]
+      },
+      "matches": true
+    },
+    {
+      "id": "enum-refuses-another-value",
+      "schema": {
+        "enum": [
+          "a"
+        ]
+      },
+      "value": "b",
+      "matches": false
+    },
+    {
+      "id": "required-refuses-a-missing-member",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "a": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "a"
+        ]
+      },
+      "value": {},
+      "matches": false
+    },
+    {
+      "id": "required-takes-the-member",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "a": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "a"
+        ]
+      },
+      "value": {
+        "a": "x"
+      },
+      "matches": true
+    }
+  ]
+}
