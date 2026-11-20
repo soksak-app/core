@@ -648,12 +648,14 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "native/darwin/src/surface_layout.m", symbol: "if (!layoutOf(owner) && ![returning containsObject:[NSValue valueWithPointer:owner]]) releaseInput(owner);" },
       { file: "native/darwin/src/webview_geometry.m", symbol: "if (!holding || window.firstResponder == holding) return NO;" },
+      { file: "native/darwin/src/surface_layout.m", symbol: "sp_event(SP_CLASS_INPUT, SP_EVENT_DEBUG, \"native.input.held\", fields.UTF8String);" },
     ],
     tests: [
       { file: "native/darwin/tests/surface_layout_observe_test.m", id: "checkCommitDuringAReturnKeepsTheKeyOrder" },
       { file: "native/darwin/tests/surface_keyboard_test.m", id: "a surface that holds the keyboard for its region keeps it through a hide" },
+      { file: "native/darwin/tests/surface_layout_observe_test.m", id: "checkHeldKeysRecordTheirSteps" },
     ],
-    expected: "Keys typed right after a press on a tab reach its image region whole and in order: a commit during a return keeps the key order (F983-1) and a surface that holds the keyboard keeps it through a hide (F983-2).",
+    expected: "Keys typed right after a press on a tab reach its image region whole and in order: a commit during a return keeps the key order (F983-1) and a surface that holds the keyboard keeps it through a hide (F983-2), and each step of a held key is recorded as native.input.held.",
     levels: ["unit"],
   },
   {
