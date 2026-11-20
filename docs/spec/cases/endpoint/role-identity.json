@@ -1,0 +1,28 @@
+{
+  "name": "role-identity",
+  "description": "A client asks agent.surface once from a process of tab-a, the request of sok role identity.",
+  "replay": false,
+  "page": "scripted",
+  "processSurface": {
+    "surface": "tab-a"
+  },
+  "steps": [
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "agent.surface"
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "surface": "tab-a"
+        }
+      }
+    }
+  ],
+  "reason": "the surface of the process of a connection comes from the sidecars of the application, which the case states with processSurface"
+}

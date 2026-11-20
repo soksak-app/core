@@ -684,6 +684,10 @@ func run(args []string, stdout, stderr io.Writer, options Options) (err error) {
 	if len(args) > 0 && args[0] == "message" {
 		return runMessage(args[1:], stdout, options)
 	}
+	// `sok role identity` takes the mark of the session restart hook, which no other command takes (docs/spec/cli.md#commands).
+	if len(args) > 0 && args[0] == "role" {
+		return runRoleCommand(args[1:], stdout, options)
+	}
 	// A command word with a dot is a declared command (docs/spec/cli.md).
 	if strings.Contains(commandWord(args), ".") {
 		return runCommand(args, stdout, options)

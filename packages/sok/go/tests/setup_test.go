@@ -262,7 +262,7 @@ func TestMcpInstallReadsTheClaudeConfigDir(t *testing.T) {
 	}
 	_, stdout, _ = f.run(t, "setup", "check")
 	parts := decodeParts(t, stdout)
-	if mcp := parts[len(parts)-1]; mcp.Part != "mcp" || mcp.File != filepath.Join(dir, ".claude.json") || mcp.State != "ok" {
+	if mcp := parts[len(parts)-2]; mcp.Part != "mcp" || mcp.File != filepath.Join(dir, ".claude.json") || mcp.State != "ok" {
 		t.Fatalf("parts %s", stdout)
 	}
 }
@@ -315,14 +315,15 @@ func TestSetupCheckReportsEachPart(t *testing.T) {
 	running := f.running
 	code, stdout, stderr := f.run(t, "setup", "check")
 	parts := decodeParts(t, stdout)
-	if code != 1 || describeParts(parts) != "path missing absent\nskill missing absent\nmcp missing absent" {
+	if code != 1 || describeParts(parts) != "path missing absent\nskill missing absent\nmcp missing absent\nhook missing absent" {
 		t.Fatalf("code %d parts %s", code, stdout)
 	}
 	if parts[0].File != entry || parts[1].File != skill || parts[2].File != f.config ||
 		parts[0].Step != "sudo "+running+" path install" || parts[1].Step != running+" skill install" || parts[2].Step != running+" mcp install" {
 		t.Fatalf("parts %s", stdout)
 	}
-	if want := fmt.Sprintf("sok: setup parts are not current: path %s, skill %s, mcp %s\n", entry, skill, f.config); stderr != want {
+	settings := filepath.Join(f.home, ".claude", "settings.json")
+	if want := fmt.Sprintf("sok: setup parts are not current: path %s, skill %s, mcp %s, hook %s\n", entry, skill, f.config, settings); stderr != want {
 		t.Fatalf("stderr %q, want %q", stderr, want)
 	}
 	if !strings.HasPrefix(stdout, "{\n  \"parts\": [\n    {\n      \"part\": \"path\",\n      \"file\": ") {
@@ -332,14 +333,18 @@ func TestSetupCheckReportsEachPart(t *testing.T) {
 	writeText(t, entry, filepath.Dir(running)+"\n")
 	writeText(t, skill, skillSource(t))
 	writeRegistration(t, f.config, fmt.Sprintf(`{"type": "stdio", "command": %q, "args": ["mcp"], "env": {}}`, f.running))
-	if code, stdout, stderr := f.run(t, "setup", "check"); code != 0 || stderr != "" || describeParts(decodeParts(t, stdout)) != "path ok\nskill ok\nmcp ok" {
+	if code, stdout, stderr := f.run(t, "setup", "install", "hook"); code != 0 {
+		t.Fatalf("install hook: code %d stdout %s stderr %q", code, stdout, stderr)
+	}
+	if code, stdout, stderr := f.run(t, "setup", "check"); code != 0 || stderr != "" || describeParts(decodeParts(t, stdout)) != "path ok\nskill ok\nmcp ok\nhook ok" {
 		t.Fatalf("code %d stdout %s stderr %q", code, stdout, stderr)
 	}
 	// Each part differs.
 	writeText(t, entry, "/elsewhere\n")
 	writeText(t, skill, "edited\n")
 	writeRegistration(t, f.config, `{"type": "stdio", "command": "/elsewhere/sok", "args": ["mcp"]}`)
-	if code, stdout, _ := f.run(t, "setup", "check"); code != 1 || describeParts(decodeParts(t, stdout)) != "path missing differs\nskill missing differs\nmcp missing differs" {
+	writeText(t, filepath.Join(f.home, ".claude", "settings.json"), `{"hooks": {"SessionStart": [{"matcher": "", "hooks": [{"type": "command", "command": "[ -n \"$SOKSAK_CONFIG_DIR\" ] || exit 0; exec /elsewhere/sok role identity --soksak-hook"}]}]}}`+"\n")
+	if code, stdout, _ := f.run(t, "setup", "check"); code != 1 || describeParts(decodeParts(t, stdout)) != "path missing differs\nskill missing differs\nmcp missing differs\nhook missing differs" {
 		t.Fatalf("code %d stdout %s", code, stdout)
 	}
 	// A part that cannot be read is an error with its text.
@@ -385,16 +390,16 @@ func TestSetupInstallInstallsMissingParts(t *testing.T) {
 	writeText(t, entry, filepath.Dir(running)+"\n")
 	// Named kinds limit the install to those kinds.
 	code, stdout, stderr := f.run(t, "setup", "install", "skill")
-	if code != 0 || describeParts(decodeParts(t, stdout)) != "path ok changed=false\nskill ok changed=true\nmcp missing absent changed=false" || f.commands(t) != nil {
+	if code != 0 || describeParts(decodeParts(t, stdout)) != "path ok changed=false\nskill ok changed=true\nmcp missing absent changed=false\nhook missing absent changed=false" || f.commands(t) != nil {
 		t.Fatalf("code %d stdout %s stderr %q", code, stdout, stderr)
 	}
 	writeText(t, skill, "edited\n")
 	code, stdout, stderr = f.run(t, "setup", "install")
-	if code != 0 || describeParts(decodeParts(t, stdout)) != "path ok changed=false\nskill ok changed=true\nmcp ok changed=true" {
+	if code != 0 || describeParts(decodeParts(t, stdout)) != "path ok changed=false\nskill ok changed=true\nmcp ok changed=true\nhook ok changed=true" {
 		t.Fatalf("code %d stdout %s stderr %q", code, stdout, stderr)
 	}
 	code, stdout, stderr = f.run(t, "setup", "install")
-	if code != 0 || describeParts(decodeParts(t, stdout)) != "path ok changed=false\nskill ok changed=false\nmcp ok changed=false" || len(f.commands(t)) != 1 {
+	if code != 0 || describeParts(decodeParts(t, stdout)) != "path ok changed=false\nskill ok changed=false\nmcp ok changed=false\nhook ok changed=false" || len(f.commands(t)) != 1 {
 		t.Fatalf("code %d stdout %s stderr %q commands %v", code, stdout, stderr, f.commands(t))
 	}
 	if code, _, stderr := f.run(t, "setup", "install", "nothing"); code != 2 || !strings.HasPrefix(stderr, "sok: unknown setup part: nothing\n") {

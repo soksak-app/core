@@ -366,16 +366,18 @@ fn setup_check_reports_each_part() {
         {"part": "skill", "file": claude.join("skills/soksak/SKILL.md").display().to_string(), "state": "missing", "step": format!("{quoted} skill install"), "reason": "absent"},
         {"part": "skill", "file": agents.join("skills/soksak/SKILL.md").display().to_string(), "state": "missing", "step": format!("{quoted} skill install"), "reason": "differs"},
         {"part": "mcp", "file": machine.home.join(".claude.json").display().to_string(), "state": "missing", "step": format!("{quoted} mcp install"), "reason": "differs"},
+        {"part": "hook", "file": claude.join("settings.json").display().to_string(), "state": "missing", "step": format!("{quoted} setup install hook"), "reason": "absent"},
     ]);
     assert_eq!(parts_value(&parts), expected);
     assert_eq!(
         soksak_sok::setup::not_current(&parts, &[]),
         Some(format!(
-            "setup parts are not current: path {}, skill {}, skill {}, mcp {}",
+            "setup parts are not current: path {}, skill {}, skill {}, mcp {}, hook {}",
             entry.display(),
             claude.join("skills/soksak/SKILL.md").display(),
             agents.join("skills/soksak/SKILL.md").display(),
-            machine.home.join(".claude.json").display()
+            machine.home.join(".claude.json").display(),
+            claude.join("settings.json").display()
         ))
     );
     // The check changed nothing.
@@ -407,7 +409,11 @@ fn setup_check_reports_each_part() {
     .expect("entry");
     let installed = soksak_sok::setup::install(
         &test.setup(),
-        &[soksak_sok::setup::Kind::Skill, soksak_sok::setup::Kind::Mcp],
+        &[
+            soksak_sok::setup::Kind::Skill,
+            soksak_sok::setup::Kind::Mcp,
+            soksak_sok::setup::Kind::Hook,
+        ],
         false,
     )
     .expect("install");
@@ -459,6 +465,7 @@ fn setup_install_installs_missing_parts() {
             ("path".into(), "ok".into(), false),
             ("skill".into(), "ok".into(), true),
             ("mcp".into(), "missing".into(), false),
+            ("hook".into(), "missing".into(), false),
         ]
     );
     assert!(!machine.home.join(".claude.json").exists());
@@ -469,6 +476,7 @@ fn setup_install_installs_missing_parts() {
             ("path".into(), "ok".into(), false),
             ("skill".into(), "ok".into(), false),
             ("mcp".into(), "ok".into(), true),
+            ("hook".into(), "ok".into(), true),
         ]
     );
     let repeated = soksak_sok::setup::install(&test.setup(), &Kind::ALL, false).expect("install");
@@ -478,6 +486,7 @@ fn setup_install_installs_missing_parts() {
             ("path".into(), "ok".into(), false),
             ("skill".into(), "ok".into(), false),
             ("mcp".into(), "ok".into(), false),
+            ("hook".into(), "ok".into(), false),
         ]
     );
     let config: Value =
@@ -629,6 +638,7 @@ fn setup_install_leaves_the_path_entry_without_a_terminal() {
     let mut expected = vec![
         (Value::from("skill"), Value::from("ok"), Value::from(true)),
         (Value::from("mcp"), Value::from("ok"), Value::from(true)),
+        (Value::from("hook"), Value::from("ok"), Value::from(true)),
     ];
     let Some(entry) = entry else {
         assert_eq!((states, run.code), (expected, 0), "{}", run.stderr);

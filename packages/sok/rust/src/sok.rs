@@ -22,6 +22,7 @@ pub mod event_classes;
 pub mod event_log;
 pub mod fetch;
 mod files;
+mod hook;
 pub mod identity;
 pub mod install;
 pub mod log_index;
@@ -927,6 +928,10 @@ fn execute(
     // The arguments after the word are parsed by the command, which takes its own options (docs/spec/agent-conversation.md).
     if args.first().map(String::as_str) == Some("conversation") {
         return conversation::run(&args[1..], stdout);
+    }
+    // `sok role identity` is the command of the session restart hook (docs/spec/agent-roles.md#session-restart-hook).
+    if args.first().map(String::as_str) == Some("role") {
+        return hook::run_role(&args[1..], stdout, options);
     }
     // The arguments after the word `message` are parsed by the message commands (docs/spec/cli.md#commands).
     if args.first().map(String::as_str) == Some("message") {

@@ -183,7 +183,7 @@ func TestSetupInstallLeavesThePathEntryWithoutATerminal(t *testing.T) {
 	running := copyExecutable(t, program, filepath.Join(t.TempDir(), "Mine.app", "Contents", "MacOS", "sok"))
 	code, stdout, stderr := h.run(t, running, []string{h.fixtures, filepath.Dir(running)}, "setup", "install")
 	list := parts(t, stdout)
-	if code != 1 || len(list) != 3 || list[0].Part != "path" || list[0].State != "missing" || list[1].State != "ok" || list[2].State != "ok" {
+	if code != 1 || len(list) != 4 || list[0].Part != "path" || list[0].State != "missing" || list[1].State != "ok" || list[2].State != "ok" || list[3].Part != "hook" || list[3].State != "ok" {
 		t.Fatalf("code %d stdout %s stderr %q", code, stdout, stderr)
 	}
 	// The entry is named by the identifier of the build, so the sok of the test is the build of the tested package.

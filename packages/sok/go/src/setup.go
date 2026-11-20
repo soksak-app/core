@@ -118,7 +118,7 @@ type SetupParts struct {
 }
 
 // setupKinds are the kinds of setup parts in their order.
-var setupKinds = []string{"path", "skill", "mcp"}
+var setupKinds = []string{"path", "skill", "mcp", "hook"}
 
 // plainStep matches a <sok> that a step writes as it is.
 var plainStep = regexp.MustCompile(`^[A-Za-z0-9/._-]+$`)
@@ -177,7 +177,11 @@ func (s Setup) Check() (SetupParts, error) {
 	if applies {
 		parts = append(parts, part)
 	}
-	return SetupParts{Parts: parts}, nil
+	hooks, err := s.hookParts()
+	if err != nil {
+		return SetupParts{}, err
+	}
+	return SetupParts{Parts: append(parts, hooks...)}, nil
 }
 
 // NotCurrent is the error that names each part of the kinds (every kind for none) that is not ok, or nil.
@@ -245,6 +249,27 @@ func (s Setup) Install(kinds []string, terminal bool) (SetupParts, error) {
 				return SetupParts{}, err
 			}
 			changed[file] = true
+		}
+	}
+	// The hook files are read after the registration too, which can create the Codex folder, as the skills are.
+	if named("hook") {
+		hooks, err := s.hookParts()
+		if err != nil {
+			return SetupParts{}, err
+		}
+		for _, part := range hooks {
+			if part.State != "ok" {
+				pending["hook"] = true
+			}
+		}
+	}
+	if pending["hook"] {
+		hookChanged, err := s.InstallHooks()
+		for file, ok := range hookChanged {
+			changed[file] = ok
+		}
+		if err != nil {
+			failures = append(failures, err.Error())
 		}
 	}
 	// The skills are written after the registration, which can create an agent folder, such as the Codex folder that codex mcp
@@ -360,6 +385,9 @@ func runAgentSetup(a arguments, stdout io.Writer, options Options) (bool, error)
 	if word != "skill" && word != "setup" && !(word == "mcp" && len(a.positionals) > 1 && a.positionals[1] == "install") {
 		return false, nil
 	}
+	if word == "setup" && len(a.positionals) > 1 && a.positionals[1] == "remove" {
+		return true, runRemoveHook(a, stdout, options)
+	}
 	action, err := a.positional(1, word+" action")
 	if err != nil {
 		return true, err
@@ -424,4 +452,24 @@ func runAgentSetup(a arguments, stdout io.Writer, options Options) (bool, error)
 		return true, err
 	}
 	return true, installErr
+}
+
+// runRemoveHook is `sok setup remove hook`: it removes the soksak entries of the hook files and prints the hook parts after the
+// removal, as `sok setup check` prints them (docs/spec/agent-roles.md#session-restart-hook).
+func runRemoveHook(a arguments, stdout io.Writer, options Options) error {
+	if len(a.positionals) != 3 || a.positionals[2] != "hook" {
+		return usage("setup remove takes the part hook")
+	}
+	setup, err := commandSetup(options)
+	if err != nil {
+		return err
+	}
+	if _, err := setup.RemoveHooks(); err != nil {
+		return err
+	}
+	parts, err := setup.hookParts()
+	if err != nil {
+		return err
+	}
+	return printJSON(stdout, SetupParts{Parts: parts})
 }

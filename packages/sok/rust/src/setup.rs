@@ -164,16 +164,18 @@ pub enum Kind {
     Path,
     Skill,
     Mcp,
+    Hook,
 }
 
 impl Kind {
-    pub const ALL: [Kind; 3] = [Kind::Path, Kind::Skill, Kind::Mcp];
+    pub const ALL: [Kind; 4] = [Kind::Path, Kind::Skill, Kind::Mcp, Kind::Hook];
 
     pub fn as_str(self) -> &'static str {
         match self {
             Kind::Path => "path",
             Kind::Skill => "skill",
             Kind::Mcp => "mcp",
+            Kind::Hook => "hook",
         }
     }
 
@@ -296,6 +298,7 @@ pub fn check(setup: &Setup) -> Result<Vec<Part>, String> {
             mcp.state,
         ));
     }
+    parts.extend(crate::hook::hook_parts(setup)?);
     Ok(parts)
 }
 
@@ -368,6 +371,16 @@ pub fn install(setup: &Setup, kinds: &[Kind], terminal: bool) -> Result<Installe
             }
             Err(error) => failures.push(error),
         }
+    }
+    // The hook files are read after the registration too, which can create the Codex folder, as the skills are.
+    if named(Kind::Hook)
+        && check(setup)?
+            .iter()
+            .any(|part| part.part == Kind::Hook.as_str() && part.state != State::Ok)
+    {
+        let hooks = crate::hook::install_hooks(setup)?;
+        changed.extend(hooks.changed);
+        failures.extend(hooks.failures);
     }
     let mut parts = check(setup)?;
     for part in &mut parts {
@@ -492,6 +505,22 @@ pub(crate) fn run_agent_setup(
     let action = positionals
         .get(1)
         .ok_or_else(|| Error::Usage(format!("{word} action is required")))?;
+    if word == "setup" && action == "remove" {
+        if positionals.len() != 3 || positionals[2] != "hook" {
+            return Err(Error::Usage("setup remove takes the part hook".into()));
+        }
+        let environment = Environment::current()?;
+        let sok = running_sok()?;
+        let setup = Setup {
+            environment: &environment,
+            sok: &sok,
+            identifier: options.identifier,
+            paths_dir: options.paths_dir.clone(),
+        };
+        crate::hook::remove_hooks(&setup)?;
+        let parts = crate::hook::hook_parts(&setup)?;
+        return print(stdout, &json!({ "parts": parts }));
+    }
     let extra = &positionals[2..];
     let mut kinds = Vec::new();
     if word == "setup" && action == "install" {
