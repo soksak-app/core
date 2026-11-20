@@ -1693,9 +1693,13 @@ export function adopt(kept, space) {
   settle();
 }
 
-/** Returns an empty space state. A new space starts with this value. `random` is the random source of its tab ids (ids.js), the platform source by default. */
+/**
+ * Returns an empty space state. A new space starts with this value. `random` is the random source of its tab ids (ids.js), the platform
+ * source by default. The state is the stored form, with the origin member of each tab, because a new project is stored by this page and
+ * shown by the page of another window, which reads each origin from the stored layout (docs/spec/projects.md#tab-origin).
+ */
 export const fresh = (random) => ({
-  state: initial(random),
+  state: storedLayoutState(initial(random)),
   focusedId: environment().workspace.focus,
   windowSidebars: Object.fromEntries(environment().workspace.grid.cards
     .filter(card => windowSidebar(card.id))

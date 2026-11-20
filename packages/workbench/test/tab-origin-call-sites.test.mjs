@@ -71,6 +71,15 @@ function setup() {
   return { ...loaded, from: wire.calls.length };
 }
 
+// A new project is stored by the page that opens it and is shown by another window, whose page reads the origin of each tab from
+// the stored layout, so the layout of a new space carries the origin member of each tab (docs/spec/projects.md#tab-origin).
+test("the layout of a new space carries the null origin member of each tab", { timeout: 5000 }, () => {
+  const { state } = loaded.plane.fresh();
+  const tabs = state.cards.flatMap((card) => card.data?.tabs ?? []);
+  assert.equal(tabs.length, 1, "the fixture grid declares one tab");
+  assert.deepEqual(tabs.map((tab) => tab.origin), [{ directory: null }], "each tab of the new layout stores its origin member");
+});
+
 test("a restored view tab starts with its stored origin on the first build of the plane (F238-a-10)", { timeout: 5000 }, async () => {
   const env = setup();
   // The first call of adopt builds the plane (grid is absent), so this test is the one that reaches the build call site.

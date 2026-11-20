@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F899-7.5-10: The layout of a new space carries the origin member of each tab, so the window of a project that another page opened starts its view tabs (`docs/spec/projects.md#tab-origin`).
 - F899-7.5-9: The layout stores the name of a new tab as `탭 <n>` without the mark of its plugin, `core.grid` reports that name as `title`, and the strip, the tab list and the question about unsaved changes draw the mark before it, in the page and the mygo workbench (`docs/spec/example-model.md#card-tabs`).
 - F899-7.5-8: An injected message names its sender by the tab name, the `title` of the tab in `core.grid`, and never by the title that the program of the tab set (`docs/spec/messaging.md#injected-message`).
 - F996-3 (index reads of an activation): the Go and Rust fetchers keep one HTTP client of the process with open connections, answer an unchanged registry index with 304 and the kept body through `If-None-Match` and `If-Modified-Since`, and give a read of an index URL that starts during a read of it that result, so a window activation sends one request for the plugin state and the application update and receives no body when the index is unchanged (`docs/spec/installation.md#fetching`).
