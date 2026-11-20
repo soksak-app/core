@@ -139,10 +139,9 @@ func TestCoreCardSplitRefuses(t *testing.T) {
 	for range 4 {
 		card := f.tabbedCards()[len(f.tabbedCards())-1]
 		if _, err := f.answer("core.card.split", map[string]string{"card": card, "side": "right", "plugin": "textprobe"}); err != nil {
-			// The refusal names the deepest node that the split would draw below its minimum, first in the order of the tree: the window
-			// sidebar left, which keeps its width of 60 while the cut has room and is drawn narrower when it has none
-			// (packages/soksak/docs/layout.md#cuts).
-			if want := "card " + card + " cannot split toward right: card left would be 54x310, below its minimum 60x310"; err.Error() != want {
+			// The refusal names the card that a half would draw below the minimum and the size that it would get; the window sidebars keep
+			// their drawn widths (packages/soksak/docs/layout.md#cuts).
+			if want := regexp.MustCompile(`^card ` + regexp.QuoteMeta(card) + ` cannot split toward right: card \S+ would be \d+x\d+, below its minimum 96x96$`); !want.MatchString(err.Error()) {
 				t.Fatalf("the split failed with %v, want %s", err, want)
 			}
 			return

@@ -146,7 +146,7 @@ func (g *Grid) keptOf(n *Node, axis Axis, unit perAxis) kept {
 // kidSizes is the px size of each kid of a cut along its axis, from the room inside the cut: the corridors between the kids first, then
 // the px sizes of the kids that keep one, and the rest to the other kids by their fractions. A kid gets at least the costs inside it, and
 // the others share what is left. When the room does not hold the px sizes and one minSize for the kids that take a fraction, the px sizes
-// are drawn scaled by one factor; when no kid takes a fraction, they divide the room in their proportion. Nil when the room does not hold
+// are drawn scaled by one factor, and further only where the room does not hold the costs inside the kids that take a fraction; when no kid takes a fraction, they divide the room in their proportion. Nil when the room does not hold
 // the costs of the kids.
 func (g *Grid) kidSizes(n *Node, room float64, unit perAxis) []float64 {
 	axis := n.Cut
@@ -171,13 +171,19 @@ func (g *Grid) kidSizes(n *Node, room float64, unit perAxis) []float64 {
 	if free < -eps {
 		return nil
 	}
+	// A px size is scaled to leave the kids that take a fraction one minSize, which does not count the costs inside them: a cost that an
+	// operation adds or removes inside a kid is paid by the kids that take a fraction, so a px size is drawn the same before and after
+	// it. Only a room that does not hold those costs scales the px sizes further.
 	floor := 0.0
 	if sharingAny {
-		floor = costSum + g.min
+		floor = g.min
 	}
 	scale := 1.0
 	if asked > 0 && (!sharingAny || free-asked < floor) {
 		scale = math.Max(0, free-math.Min(floor, math.Max(0, free))) / asked
+	}
+	if asked > 0 && sharingAny && free-asked*scale < costSum {
+		scale = math.Max(0, free-costSum) / asked
 	}
 	rest := free - float64(asked*scale)
 	sizes := make([]float64, count)

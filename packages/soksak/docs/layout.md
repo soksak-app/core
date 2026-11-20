@@ -75,7 +75,11 @@ The slots always sum to the plane, and a px size is reduced to keep that true.
 It is drawn as declared while some slot on the axis shares and the plane has the
 room.
 When the plane does not, every px size is scaled down by one factor, so their
-proportions survive and the sharing slots keep a floor. When no slot on the axis
+proportions survive and the sharing slots keep a floor of one `minSize`. The
+floor does not count the corridors, frames and heads inside the sharing kids, so
+an operation that adds or removes one there is paid by the sharing kids and a
+px size is drawn the same before and after it; only a room that does not hold
+those costs scales the px sizes further. When no slot on the axis
 shares, the px sizes are the only thing that can cover the plane, so they are
 scaled to it in both directions and the declared numbers become proportions:
 one card declaring 200 in a 1600 plane is drawn 1600, and two declaring 200 and
@@ -429,7 +433,9 @@ or leaves beside it. So a sidebar switched off and back on leaves every other
 card the width it had when the root is even; on an uneven root the kid that paid
 for it keeps less than it gave.
 Where the plane does not hold what the axis declares, every declared size is
-drawn scaled by one factor; that factor changes when a card arrives or leaves.
+drawn scaled by one factor; that factor changes when a card arrives or leaves
+in the cut of the px sizes, and not for a change inside a kid that takes a
+fraction.
 
 A px size is declared by the host. A drag changes one, and a cut divides one
 between the halves; a close gives the span to the other kids of its cut, and an
