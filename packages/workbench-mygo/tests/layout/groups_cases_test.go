@@ -30,17 +30,17 @@ type groupStep struct {
 
 // groupArgs are the named arguments of a step.
 type groupArgs struct {
-	Card     string      `json:"card"`
-	Group    string      `json:"group"`
-	Target   string      `json:"target"`
-	Side     string      `json:"side"`
-	Name     string      `json:"name"`
-	Axis     layout.Axis `json:"axis"`
-	Line     int         `json:"line"`
-	Position float64     `json:"position"`
-	X        float64     `json:"x"`
-	Y        float64     `json:"y"`
-	Arrange  bool        `json:"arrange"`
+	Card     string        `json:"card"`
+	Group    string        `json:"group"`
+	Target   layout.Target `json:"target"`
+	Side     string        `json:"side"`
+	Name     string        `json:"name"`
+	Axis     layout.Axis   `json:"axis"`
+	Line     int           `json:"line"`
+	Position float64       `json:"position"`
+	X        float64       `json:"x"`
+	Y        float64       `json:"y"`
+	Arrange  bool          `json:"arrange"`
 }
 
 // TestGroupCases runs each case of groups.json.
@@ -55,6 +55,8 @@ func TestGroupCases(t *testing.T) {
 				Head    float64 `json:"head"`
 				Width   float64 `json:"width"`
 				Height  float64 `json:"height"`
+				Band    float64 `json:"band"`
+				Margin  float64 `json:"bandMargin"`
 			} `json:"options"`
 			Layout storedGroups `json:"layout"`
 			Throws *string      `json:"throws"`
@@ -80,6 +82,7 @@ func TestGroupCases(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			drop := layout.TargetOptions{Edge: layout.DropEdge, Band: o.Band, BandMargin: o.Margin}
 			for i, s := range kase.Steps {
 				var args groupArgs
 				decoder := json.NewDecoder(bytes.NewReader(s.Args))
@@ -88,14 +91,14 @@ func TestGroupCases(t *testing.T) {
 					t.Fatalf("step %d %s: %v", i+1, s.Call, err)
 				}
 				checkStep(t, step{Call: s.Call, Returns: s.Returns, Throws: s.Throws}, fmt.Sprintf("step %d %s", i+1, s.Call),
-					func() (any, bool, error) { return groupCall(t, tree, s.Call, args) })
+					func() (any, bool, error) { return groupCall(t, tree, s.Call, args, drop) })
 			}
 		})
 	}
 }
 
 // groupCall runs one step on the group tree.
-func groupCall(t *testing.T, tree *layout.GroupTree, call string, a groupArgs) (any, bool, error) {
+func groupCall(t *testing.T, tree *layout.GroupTree, call string, a groupArgs, drop layout.TargetOptions) (any, bool, error) {
 	t.Helper()
 	switch call {
 	case "boundary":
@@ -150,11 +153,14 @@ func groupCall(t *testing.T, tree *layout.GroupTree, call string, a groupArgs) (
 	case "level":
 		return tree.Level(a.Card), true, nil
 	case "drop":
-		hit := tree.DropAt(a.X, a.Y, layout.ZoneOptions{}, "")
-		if hit == nil {
+		hit := tree.TargetAt(a.X, a.Y, drop)
+		switch {
+		case hit == nil:
 			return nil, true, nil
+		case hit.Kind == "add":
+			return map[string]any{"kind": hit.Kind, "target": hit.Target, "side": hit.Side, "band": hit.Band, "of": hit.Of}, true, nil
 		}
-		return map[string]string{"card": hit.ID, "zone": hit.Zone}, true, nil
+		return map[string]any{"kind": hit.Kind, "card": hit.Card}, true, nil
 	}
 	t.Fatalf("unknown call %s", call)
 	return nil, false, nil

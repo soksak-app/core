@@ -39,6 +39,14 @@ func (t *Target) UnmarshalJSON(raw []byte) error {
 	return json.Unmarshal(raw, (*[]string)(t))
 }
 
+// MarshalJSON writes one id as that id and more ids as a list, the forms that UnmarshalJSON reads.
+func (t Target) MarshalJSON() ([]byte, error) {
+	if len(t) == 1 {
+		return json.Marshal(t[0])
+	}
+	return json.Marshal([]string(t))
+}
+
 type extent struct{ x0, x1, y0, y1 float64 }
 
 func (e extent) get(k string) float64 {

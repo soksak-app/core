@@ -1131,7 +1131,7 @@ func (s *Shell) moveLayoutTab(value layoutMoveParam) (map[string]string, error) 
 		}
 		return map[string]string{"card": from, "tab": tab}, nil
 	}
-	if err := s.moveTab(tab, card, zone); err != nil {
+	if err := s.moveTab(tab, layout.Target{card}, zone); err != nil {
 		return nil, err
 	}
 	return map[string]string{"card": s.cardOfTab(tab), "tab": tab}, nil

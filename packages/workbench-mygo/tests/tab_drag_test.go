@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
 // dragRead is the status core.drag.
@@ -14,8 +16,8 @@ type dragRead struct {
 	Card   string `json:"card"`
 	Moved  bool   `json:"moved"`
 	Target *struct {
-		Card string `json:"card"`
-		Zone string `json:"zone"`
+		Card layout.Target `json:"card"`
+		Zone string        `json:"zone"`
 	} `json:"target"`
 	Preview *struct {
 		X float64 `json:"x"`
@@ -69,7 +71,7 @@ func TestDroppingATabOnTheCentreOfACardMovesItThere(t *testing.T) {
 	box := f.box("core.card", other)
 	x, y := box.X+box.W/2, box.Y+box.H/2
 	drag := dragTab(t, f, tab, x, y)
-	if drag == nil || drag.Tab != tab || drag.Card != card || !drag.Moved || drag.Target == nil || drag.Target.Card != other || drag.Target.Zone != "centre" {
+	if drag == nil || drag.Tab != tab || drag.Card != card || !drag.Moved || drag.Target == nil || strings.Join(drag.Target.Card, " ") != other || drag.Target.Zone != "centre" {
 		t.Fatalf("the drag is %+v", drag)
 	}
 	plane := status[gridRead](t, f, "core.grid").Plane
@@ -93,10 +95,12 @@ func TestDroppingATabOnTheCentreOfACardMovesItThere(t *testing.T) {
 func TestDroppingATabOnTheEdgeOfACardMakesACard(t *testing.T) {
 	f, card, tab, other := cardWithTwoTabs(t)
 	before := len(f.tabbedCards())
+	// The point lies in the outer quarter of the body, outside the bands of the line, which are targets of the nodes on it
+	// (docs/spec/groups.md#target-search).
 	box := f.box("core.card", other)
-	x, y := box.X+box.W-4, box.Y+box.H/2
+	x, y := box.X+box.W*0.9, box.Y+box.H/2
 	drag := dragTab(t, f, tab, x, y)
-	if drag == nil || drag.Target == nil || drag.Target.Zone != "right" || drag.Preview == nil {
+	if drag == nil || drag.Target == nil || strings.Join(drag.Target.Card, " ") != other || drag.Target.Zone != "right" || drag.Preview == nil {
 		t.Fatalf("the drag is %+v", drag)
 	}
 	f.tester.Release(x, y)

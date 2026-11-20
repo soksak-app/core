@@ -3760,13 +3760,15 @@
    ]
   },
   {
-   "name": "a drop resolves on the innermost box that holds the point, so a point in the gap inside a frame is on that group card",
+   "name": "a drop on a line resolves on the bands of the nodes that end on it, from the outermost in, and elsewhere on the body of a card or the header of a group card",
    "options": {
     "gap": 24,
     "minSize": 96,
     "head": 32,
     "width": 1000,
-    "height": 600
+    "height": 600,
+    "band": 5,
+    "bandMargin": 3
    },
    "layout": {
     "state": {
@@ -3841,12 +3843,33 @@
     {
      "call": "drop",
      "args": {
-      "x": 500,
-      "y": 270
+      "x": 1,
+      "y": 400
      },
      "returns": {
-      "card": "card-5",
-      "zone": "centre"
+      "kind": "add",
+      "target": "card-6",
+      "side": "left",
+      "band": 0,
+      "of": 3
+     }
+    },
+    {
+     "call": "drop",
+     "args": {
+      "x": 6,
+      "y": 400
+     },
+     "returns": {
+      "kind": "add",
+      "target": [
+       "card-5",
+       "card-3",
+       "card-4"
+      ],
+      "side": "left",
+      "band": 1,
+      "of": 3
      }
     },
     {
@@ -3856,19 +3879,82 @@
       "y": 400
      },
      "returns": {
-      "card": "card-6",
-      "zone": "left"
+      "kind": "add",
+      "target": "card-3",
+      "side": "left",
+      "band": 2,
+      "of": 3
      }
     },
     {
      "call": "drop",
      "args": {
-      "x": 36,
-      "y": 200
+      "x": 50,
+      "y": 470
      },
      "returns": {
-      "card": "card-5",
-      "zone": "left"
+      "kind": "add",
+      "target": "card-3",
+      "side": "left",
+      "band": 0,
+      "of": 0
+     }
+    },
+    {
+     "call": "drop",
+     "args": {
+      "x": 700,
+      "y": 340
+     },
+     "returns": {
+      "kind": "add",
+      "target": "card-5",
+      "side": "bottom",
+      "band": 0,
+      "of": 3
+     }
+    },
+    {
+     "call": "drop",
+     "args": {
+      "x": 998,
+      "y": 300
+     },
+     "returns": {
+      "kind": "add",
+      "target": "card-6",
+      "side": "right",
+      "band": 0,
+      "of": 4
+     }
+    },
+    {
+     "call": "drop",
+     "args": {
+      "x": 268,
+      "y": 216
+     },
+     "returns": {
+      "kind": "centre",
+      "card": "card-1"
+     }
+    },
+    {
+     "call": "drop",
+     "args": {
+      "x": 300,
+      "y": 20
+     },
+     "returns": {
+      "kind": "add",
+      "target": [
+       "card-5",
+       "card-3",
+       "card-4"
+      ],
+      "side": "right",
+      "band": 0,
+      "of": 0
      }
     }
    ]
@@ -4000,181 +4086,120 @@
    ]
   },
   {
-   "name": "a drop resolves on the box under the point, a content card before the group card that holds it",
+   "name": "the bands of a card too narrow for their standard width narrow by one factor to end before its centre",
    "options": {
-    "gap": 24,
-    "minSize": 96,
-    "head": 32,
+    "gap": 0,
+    "minSize": 8,
+    "head": 0,
     "width": 1000,
-    "height": 600
+    "height": 600,
+    "band": 5,
+    "bandMargin": 3
    },
    "layout": {
     "state": {
      "root": {
-      "cut": "y",
+      "cut": "x",
       "kids": [
        {
-        "share": 0.5,
+        "share": 0.99,
         "node": {
-         "box": "card-4",
-         "data": {
-          "name": "그룹 1",
-          "leader": "card-1"
-         },
-         "inner": {
-          "cut": "x",
-          "kids": [
-           {
-            "share": 0.5,
-            "node": {
-             "card": "card-1",
-             "fixed": false
-            }
-           },
-           {
-            "share": 0.5,
-            "node": {
-             "card": "card-2",
-             "fixed": false
-            }
-           }
-          ]
-         }
+         "card": "card-1"
         }
        },
        {
-        "share": 0.5,
+        "share": 0.01,
         "node": {
-         "card": "card-3",
-         "fixed": false
+         "cut": "y",
+         "kids": [
+          {
+           "share": 0.5,
+           "node": {
+            "card": "card-2"
+           }
+          },
+          {
+           "share": 0.5,
+           "node": {
+            "card": "card-3"
+           }
+          }
+         ]
         }
        }
       ]
      }
     },
-    "leader": "card-4",
-    "lastCard": 4
+    "leader": "card-1",
+    "lastCard": 3
    },
    "steps": [
     {
-     "call": "drop",
+     "call": "rect",
      "args": {
-      "x": 500,
-      "y": 10
+      "card": "card-2"
      },
      "returns": {
-      "card": "card-4",
-      "zone": "centre"
+      "x": 990,
+      "y": 0,
+      "w": 10,
+      "h": 300
      }
     },
     {
      "call": "drop",
      "args": {
-      "x": 500,
-      "y": 50
-     },
-     "returns": {
-      "card": "card-4",
-      "zone": "top"
-     }
-    },
-    {
-     "call": "drop",
-     "args": {
-      "x": 12,
+      "x": 999.5,
       "y": 150
      },
      "returns": {
-      "card": "card-4",
-      "zone": "left"
+      "kind": "add",
+      "target": [
+       "card-2",
+       "card-3"
+      ],
+      "side": "right",
+      "band": 0,
+      "of": 2
      }
     },
     {
      "call": "drop",
      "args": {
-      "x": 988,
+      "x": 998.5,
       "y": 150
      },
      "returns": {
-      "card": "card-4",
-      "zone": "right"
+      "kind": "add",
+      "target": "card-2",
+      "side": "right",
+      "band": 1,
+      "of": 2
      }
     },
     {
      "call": "drop",
      "args": {
-      "x": 500,
-      "y": 250
-     },
-     "returns": {
-      "card": "card-4",
-      "zone": "bottom"
-     }
-    },
-    {
-     "call": "drop",
-     "args": {
-      "x": 300,
+      "x": 997.5,
       "y": 150
      },
      "returns": {
-      "card": "card-1",
-      "zone": "centre"
+      "kind": "add",
+      "target": "card-2",
+      "side": "right",
+      "band": 0,
+      "of": 0
      }
     },
     {
      "call": "drop",
      "args": {
-      "x": 100,
+      "x": 995,
       "y": 150
      },
      "returns": {
-      "card": "card-1",
-      "zone": "left"
-     }
-    },
-    {
-     "call": "drop",
-     "args": {
-      "x": 460,
-      "y": 150
-     },
-     "returns": {
-      "card": "card-1",
-      "zone": "right"
-     }
-    },
-    {
-     "call": "drop",
-     "args": {
-      "x": 600,
-      "y": 150
-     },
-     "returns": {
-      "card": "card-2",
-      "zone": "left"
-     }
-    },
-    {
-     "call": "drop",
-     "args": {
-      "x": 300,
-      "y": 450
-     },
-     "returns": {
-      "card": "card-3",
-      "zone": "centre"
-     }
-    },
-    {
-     "call": "drop",
-     "args": {
-      "x": 900,
-      "y": 450
-     },
-     "returns": {
-      "card": "card-3",
-      "zone": "right"
+      "kind": "centre",
+      "card": "card-2"
      }
     }
    ]
