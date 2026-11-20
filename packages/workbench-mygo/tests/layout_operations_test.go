@@ -587,7 +587,7 @@ func TestALayoutCloseOfAnUnsavedTabAnswersAtOnce(t *testing.T) {
 			t.Fatalf("the close answered %s, %v", answer, err)
 		}
 		menu := f.menu()
-		if !menu.Open || menu.Title != "● tab-aaaaaa 탭에 저장하지 않은 변경이 있습니다" || !slices.Equal(menu.keys(), []string{"save", "discard", "keep"}) {
+		if !menu.Open || menu.Title != "● n tab-aaaaaa 탭에 저장하지 않은 변경이 있습니다" || !slices.Equal(menu.keys(), []string{"save", "discard", "keep"}) {
 			t.Fatalf("the question is %+v", menu)
 		}
 		if got := f.layout().tabs(t, "main"); !slices.Equal(got, []string{"tab-aaaaaa*", "tab-bbbbbb"}) {

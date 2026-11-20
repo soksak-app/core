@@ -183,7 +183,7 @@ const tabName = (t) => tabButtonData(t).name;
 function newTab(kind, params, fromTabId, path) {
   if (fromTabId === undefined) throw new TypeError("newTab requires fromTabId, null when there is no source tab");
   const t = tab(kind, "", params);
-  t.title = `${plugin(kind).mark} 탭 ${++named}`;
+  t.title = `탭 ${++named}`;
   recordOrigin(t.id, fromTabId, path);
   return t;
 }

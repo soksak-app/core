@@ -135,9 +135,10 @@ test("the memory state of a tab is loaded until the memory saver reports another
   off();
 });
 
-test("the data of a tab button carries the memory state and the label that the tab reports or caches", () => {
-  const tab = { id: "tab-button", title: "Shell" };
-  assert.deepEqual(tabButtonData(tab), { name: "Shell", tabState: "loaded" });
+test("the data of a tab button carries the memory state and the label that the tab reports or caches, and the mark before the stored name", () => {
+  // The plugin of the tab is not registered, so the strip draws the mark "?" before the stored name.
+  const tab = { id: "tab-button", plugin: "unregistered", title: "Shell" };
+  assert.deepEqual(tabButtonData(tab), { name: "? Shell", tabState: "loaded" });
   reportTitle("tab-button", "vim notes.md");
   reportTabState("tab-button", "unloaded");
   assert.deepEqual(tabButtonData(tab), { name: "vim notes.md", tabState: "unloaded" });
@@ -145,7 +146,7 @@ test("the data of a tab button carries the memory state and the label that the t
   reportTabState("tab-button", "restoring");
   assert.deepEqual(tabButtonData(tab), { name: "● vim notes.md", tabState: "restoring" });
   forgetTab("tab-button");
-  assert.deepEqual(tabButtonData(tab), { name: "Shell", tabState: "loaded" });
+  assert.deepEqual(tabButtonData(tab), { name: "? Shell", tabState: "loaded" });
 });
 
 test("a reported directory is refused unless it is a local absolute path", () => {

@@ -232,7 +232,7 @@ func (s *Shell) openTabList(card string) error {
 	active := data.ActiveTab()
 	items := make([]pickerItem, 0, len(tabs))
 	for _, tab := range tabs {
-		item := pickerItem{Key: tab.ID, Name: layout.TabName(tab, nil, false), Mark: "?", Notice: tab.ID, Active: active != nil && tab.ID == active.ID}
+		item := pickerItem{Key: tab.ID, Name: layout.TabName(s.markedTab(tab), nil, false), Mark: "?", Notice: tab.ID, Active: active != nil && tab.ID == active.ID}
 		if plugin := s.loadedPlugin(tab.Plugin); plugin != nil {
 			item.Mark, item.Icon = plugin.Mark, plugin.Icon
 		}

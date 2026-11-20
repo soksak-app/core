@@ -590,7 +590,7 @@
         "name": "overlayShow",
         "payload": {
           "id": "picker",
-          "title": "● document 탭에 저장하지 않은 변경이 있습니다",
+          "title": "● f document 탭에 저장하지 않은 변경이 있습니다",
           "rect": {
             "x": 2,
             "y": 2,
@@ -605,7 +605,7 @@
             "h": 0
           },
           "className": "picker",
-          "html": "<div class=\"picker__head\">● document 탭에 저장하지 않은 변경이 있습니다</div><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"discard\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:0}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">저장하지 않고 닫기</span><small></small></button><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"keep\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:1}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">닫지 않기</span><small></small></button>",
+          "html": "<div class=\"picker__head\">● f document 탭에 저장하지 않은 변경이 있습니다</div><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"discard\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:0}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">저장하지 않고 닫기</span><small></small></button><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"keep\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:1}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">닫지 않기</span><small></small></button>",
           "css": ".card { --bw: 1px; --divider: 1px; }",
           "border": "rgb(255, 255, 255)",
           "radius": 0
@@ -909,7 +909,7 @@
         "name": "overlayShow",
         "payload": {
           "id": "picker",
-          "title": "● document 탭에 저장하지 않은 변경이 있습니다",
+          "title": "● f document 탭에 저장하지 않은 변경이 있습니다",
           "rect": {
             "x": 2,
             "y": 2,
@@ -924,7 +924,7 @@
             "h": 0
           },
           "className": "picker",
-          "html": "<div class=\"picker__head\">● document 탭에 저장하지 않은 변경이 있습니다</div><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"discard\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:0}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">저장하지 않고 닫기</span><small></small></button><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"keep\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:1}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">닫지 않기</span><small></small></button>",
+          "html": "<div class=\"picker__head\">● f document 탭에 저장하지 않은 변경이 있습니다</div><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"discard\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:0}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">저장하지 않고 닫기</span><small></small></button><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"keep\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:1}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">닫지 않기</span><small></small></button>",
           "css": ".card { --bw: 1px; --divider: 1px; }",
           "border": "rgb(255, 255, 255)",
           "radius": 0

@@ -322,7 +322,17 @@ test("a refused split of a card leaves the number of the next tab name unchanged
   assert.throws(() => plane.splitCard("b", "right", SESSION), { message: "card b cannot split toward right" });
   assert.deepEqual(layout(), before);
   const { tab } = await run("core.layout.open", { card: "a", plugin: SESSION });
-  assert.equal(cardNode(layout().root, "a").tabs.find((item) => item.tab === tab).title, "f 탭 1");
+  assert.equal(cardNode(layout().root, "a").tabs.find((item) => item.tab === tab).title, "탭 1");
+});
+
+// The layout stores the name of a new tab without the mark of its plugin, which the strip draws before the name
+// (docs/spec/example-model.md#card-tabs), so core.grid reports the name alone as the title of the tab.
+test("a new tab stores its name without the mark of its plugin, and the strip draws the mark before the name", { timeout: 5000 }, async () => {
+  arrange([0, 1], [0, 1], [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [view("tab-aaaaa1", PLAIN)] }], "a");
+  const { tab } = await run("core.layout.open", { card: "a", plugin: SESSION });
+  const stored = cardNode(layout().root, "a").tabs.find((item) => item.tab === tab);
+  assert.match(stored.title, /^탭 \d+$/, "the stored title is the name alone");
+  assert.equal(reports.tabButtonData({ id: tab, plugin: SESSION, title: stored.title }).name, `f ${stored.title}`, "the strip draws the mark before the name");
 });
 
 // The close of a modified tab of a fullscreen card closes the card with its last tab after the answer, so the answer restores the

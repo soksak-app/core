@@ -497,7 +497,7 @@ func TestAModifiedTabAsksBeforeItCloses(t *testing.T) {
 	}
 	f.settle()
 	menu := f.menu()
-	if menu.Title != "● tab-aaaaaa 탭에 저장하지 않은 변경이 있습니다" || !slices.Equal(menu.keys(), []string{"save", "discard", "keep"}) {
+	if menu.Title != "● N tab-aaaaaa 탭에 저장하지 않은 변경이 있습니다" || !slices.Equal(menu.keys(), []string{"save", "discard", "keep"}) {
 		t.Fatalf("the question is %+v", menu)
 	}
 	f.click("core.picker.item", "keep")
@@ -528,7 +528,7 @@ func TestClosingACardAsksAboutEachModifiedTab(t *testing.T) {
 	f.settle()
 	f.click("core.picker.item", "discard")
 	menu := f.menu()
-	if !menu.Open || !strings.HasPrefix(menu.Title, "● tab-bbbbbb ") {
+	if !menu.Open || !strings.HasPrefix(menu.Title, "● N tab-bbbbbb ") {
 		t.Fatalf("the next question is %+v", menu)
 	}
 	f.click("core.picker.item", "discard")

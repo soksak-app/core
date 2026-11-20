@@ -449,13 +449,25 @@ func (s *Shell) radiusSmall() float32 {
 	return float32(math.Round(float64(s.palette.Radius * s.metrics.radiusSmallRatio)))
 }
 
-// tabName is the name that the head shows for a tab: the title its view reported, with the mark of a modified tab.
+// tabName is the name that the head shows for a tab: the title its view reported, or the mark of its plugin and its stored name,
+// with the mark of a modified tab.
 func (s *Shell) tabName(tab layout.Tab) string {
 	report := s.surfaces.reports[tab.ID]
 	if report == nil {
-		return layout.TabName(tab, nil, false)
+		return layout.TabName(s.markedTab(tab), nil, false)
 	}
-	return layout.TabName(tab, optionalText(report.Title), report.Modified)
+	return layout.TabName(s.markedTab(tab), optionalText(report.Title), report.Modified)
+}
+
+// markedTab returns the tab with the mark of its plugin before its stored name, which the layout stores without the mark
+// (docs/spec/example-model.md#card-tabs); an unknown plugin has the mark "?".
+func (s *Shell) markedTab(tab layout.Tab) layout.Tab {
+	mark := "?"
+	if plugin := s.loadedPlugin(tab.Plugin); plugin != nil {
+		mark = plugin.Mark
+	}
+	tab.Title = mark + " " + tab.Title
+	return tab
 }
 
 // drawTab draws a tab: a pill, filled only on the active tab, with its name cut to width and its close button.

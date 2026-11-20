@@ -1,5 +1,6 @@
 import { isLocalAbsolutePath, originFault } from "@soksak/plugin-api";
 import { tabName } from "./card-data.js";
+import { hasPlugin, plugin } from "./registry.js";
 
 // The tab title, the bottom text, and the working directory that a surface reported (docs/spec/plugins.md#tab-reports). They are not stored in the layout.
 const labels = new Map();
@@ -347,8 +348,11 @@ export const tabMemoryState = (tabId) => memoryStates.get(tabId) ?? "loaded";
  * The data of the button of tab {id, title}: the name, with the modified mark and the reported or cached label, and the
  * memory saver state of `data-tab-state` (docs/spec/exposure.md#tab-memory).
  */
+// The strip draws the mark of the plugin before the stored name of a tab that reported no title; an unknown plugin has the mark "?"
+// (docs/spec/example-model.md#card-tabs).
 export function tabButtonData(tab) {
-  return { name: tabName(tab, labels.get(tab.id), modified.has(tab.id)), tabState: tabMemoryState(tab.id) };
+  const marked = { ...tab, title: `${hasPlugin(tab.plugin) ? plugin(tab.plugin).mark : "?"} ${tab.title}` };
+  return { name: tabName(marked, labels.get(tab.id), modified.has(tab.id)), tabState: tabMemoryState(tab.id) };
 }
 
 /**

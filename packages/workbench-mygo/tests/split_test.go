@@ -164,8 +164,8 @@ func TestARefusedSplitLeavesTheTabNumberUnchanged(t *testing.T) {
 		t.Fatal(err)
 	}
 	main, _ := f.layout().card("main")
-	if len(main.Tabs) != 2 || main.Tabs[1].Title != "n 탭 1" {
-		t.Fatalf("after the refused split the card main holds the tabs %+v, want the new tab n 탭 1 last", main.Tabs)
+	if len(main.Tabs) != 2 || main.Tabs[1].Title != "탭 1" {
+		t.Fatalf("after the refused split the card main holds the tabs %+v, want the new tab 탭 1 last", main.Tabs)
 	}
 }
 
@@ -437,7 +437,7 @@ func viewShell(t *testing.T) *shellFixture {
 }
 
 // A new tab is named by the mark of its plugin and the counter of its layout, which is stored with the layout.
-func TestANewTabCarriesTheMarkOfItsPlugin(t *testing.T) {
+func TestANewTabShowsTheMarkOfItsPluginBeforeItsStoredName(t *testing.T) {
 	f := viewShell(t)
 	card := f.tabbedCards()[0]
 	f.run("core.card.add-tab", map[string]string{"card": card, "plugin": "boxprobe"})
@@ -453,6 +453,10 @@ func TestANewTabCarriesTheMarkOfItsPlugin(t *testing.T) {
 	encoded, err := json.Marshal(f.host.projects[0]["spaces"].([]any)[0].(map[string]any)["layout"])
 	if err != nil {
 		t.Fatal(err)
+	}
+	// The layout stores the name without the mark, which the strip draws from the plugin (docs/spec/example-model.md#card-tabs).
+	if !strings.Contains(string(encoded), `"title":"탭 2"`) || strings.Contains(string(encoded), "◊ 탭") || strings.Contains(string(encoded), "www 탭") {
+		t.Fatalf("the stored layout %s does not store the tab names without the mark of their plugin", encoded)
 	}
 	var kept struct{ Named int }
 	if err := json.Unmarshal(encoded, &kept); err != nil {

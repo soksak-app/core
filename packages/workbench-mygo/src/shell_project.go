@@ -960,7 +960,7 @@ func (s *Shell) newTabOf(plugin *LoadedPlugin, from *layout.Tab) (layout.Tab, er
 		return layout.Tab{}, err
 	}
 	s.tabsNamed++
-	return layout.Tab{ID: s.newTabID(), Plugin: plugin.ID, Title: fmt.Sprintf("%s 탭 %d", plugin.Mark, s.tabsNamed),
+	return layout.Tab{ID: s.newTabID(), Plugin: plugin.ID, Title: fmt.Sprintf("탭 %d", s.tabsNamed),
 		Rest: map[string]json.RawMessage{"origin": origin}}, nil
 }
 
