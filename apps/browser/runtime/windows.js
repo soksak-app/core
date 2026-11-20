@@ -1,6 +1,17 @@
 // Window interface of the browser runtime. A window is a browser tab.
 //
 // A folder cannot be verified, so the entered path is used as it is, and the identifier is derived from the path.
+import { createProjectActivities } from "@soksak/workbench/activity.js";
+
+// The tab is the only window, so it holds each project that it opened, and the record of the project activities is the record of this
+// tab (docs/spec/activity.md#activity-of-a-project).
+const PAGE = "page";
+const activities = createProjectActivities();
+const activityListeners = new Set();
+const sendActivities = () => {
+  const record = activities.record();
+  for (const listener of activityListeners) listener(record);
+};
 
 export const windows = {
   createsFolders: false,
@@ -11,7 +22,7 @@ export const windows = {
   },
   onActivate: async () => {},
   onCloseRequest: async () => {},
-  ready: async () => {},
+  ready: async () => sendActivities(),
   close: async () => {},
   closeKept: async () => {},
   askRemoveProject: async () => true,
@@ -33,5 +44,17 @@ export const windows = {
     return { local: false, staged: false };
   },
   projectShown: async () => {},
-  releaseProject: async () => {},
+  async releaseProject(id) {
+    const { revision } = activities.record();
+    activities.release(id);
+    if (activities.record().revision !== revision) sendActivities();
+  },
+  async projectActivity({ id, spaces }) {
+    const { revision } = activities.record();
+    activities.publish(PAGE, PAGE, id, spaces);
+    if (activities.record().revision !== revision) sendActivities();
+  },
+  onProjectActivity: async (fn) => {
+    activityListeners.add(fn);
+  },
 };

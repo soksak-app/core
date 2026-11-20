@@ -36,6 +36,7 @@ func hostCalls(h *host.Host) map[string]HostCall {
 		"projectRelease":           send(h.ProjectRelease),
 		"projectRemoveAsk":         answerOf(h.ProjectRemoveAsk),
 		"projectRemoveAnswer":      send(h.ProjectRemoveAnswer),
+		"projectActivity":          doneOf(h.ProjectActivity),
 		"windowState":              readOf(h.WindowState),
 		"windowReady":              actOf(h.WindowReady),
 		"windowClose":              actOf(h.WindowClose),

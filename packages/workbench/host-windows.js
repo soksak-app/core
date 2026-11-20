@@ -35,5 +35,9 @@ export function hostWindows(host) {
     askRemoveProject: (id, cids) => host.call("projectRemoveAsk", id, { cids }),
     onRemoveProjectRequest: (fn) => host.on("project-remove-request", fn),
     answerRemoveProject: (id, allowed) => host.call("projectRemoveAnswer", { id, allowed }),
+    /** Publishes the activities of the spaces of a project that this window holds (docs/spec/activity.md#activity-of-a-project). */
+    projectActivity: ({ id, spaces }) => host.call("projectActivity", { id, spaces }),
+    /** Receives the record {revision, projects} of the project activities of the application at each change and at windowReady. */
+    onProjectActivity: (fn) => host.on("project-activity", fn),
   };
 }

@@ -272,7 +272,11 @@ func (h *Host) ProjectRelease(idJSON json.RawMessage) error {
 	}
 	delete(h.owners, id)
 	empty := owner != nil && len(owner.projects) == 0
+	released := h.activities.Release(id)
 	h.mu.Unlock()
+	if released {
+		h.announceProjectActivity()
+	}
 	// A release of the shown project clears the shown root at once, even when another project is still held: the window shows no
 	// project until the page shows one explicitly. A window with no project left shows
 	// the library, so the title is cleared with it.
@@ -288,6 +292,39 @@ func (h *Host) ProjectRelease(idJSON json.RawMessage) error {
 		}
 	}
 	h.notifyWorkspace()
+	return nil
+}
+
+// ProjectActivityRequest is the publication of the activities of the spaces of a project (docs/spec/activity.md#activity-of-a-project).
+type ProjectActivityRequest struct {
+	ID     string                   `json:"id"`
+	Spaces map[string]SpaceActivity `json:"spaces"`
+}
+
+// ProjectActivity records the activities of the spaces of a project that the calling window holds, and sends the record to every
+// window when it changed.
+func (h *Host) ProjectActivity(ctx context.Context, reqJSON json.RawMessage) error {
+	req, err := argument[ProjectActivityRequest]("request", reqJSON)
+	if err != nil {
+		return err
+	}
+	current, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	h.mu.Lock()
+	owner := ""
+	if held := h.owners[req.ID]; held != nil {
+		owner = held.name
+	}
+	changed, err := h.activities.Publish(current.name, owner, req.ID, req.Spaces)
+	h.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	if changed {
+		h.announceProjectActivity()
+	}
 	return nil
 }
 

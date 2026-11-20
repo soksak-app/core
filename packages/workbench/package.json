@@ -125,6 +125,7 @@
     "replace-file.mjs"
   ],
   "exports": {
+    "./activity.js": "./activity.js",
     "./host-store.js": "./host-store.js",
     "./host-windows.js": "./host-windows.js",
     "./host-calls.js": "./host-calls.js",

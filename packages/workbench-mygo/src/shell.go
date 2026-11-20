@@ -422,7 +422,11 @@ type Shell struct {
 
 	units map[string]*installedUnit
 	// activity follows the statuses that declare activity on the surface of each tab of the window (docs/spec/activity.md).
-	activity      *ActivityFollow
+	activity *ActivityFollow
+	// projectRecord is the record of the project activities of the application that the host sent last, revision -1 before the first
+	// (docs/spec/activity.md#activity-of-a-project), and publications are the publications of this window that wait for their answer.
+	projectRecord ActivityRecord
+	publications  []activityPublication
 	processes     pluginProcesses
 	contributions *Contributions
 	// lastDrop is the status core.drop, and notices the state of the notification center.
@@ -564,7 +568,8 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.activity = NewActivityFollow(func(name, surface string, fn func(value any)) func() {
 		return s.registry.Observe(name, &surface, true, fn)
 	},
-		s.activityStatuses, s.activityProjects, s.options.Invalidate, s.activityError, s.fail)
+		s.activityStatuses, s.activityProjects, s.options.Invalidate, s.activityError, s.fail, s.publishActivity)
+	s.projectRecord = ActivityRecord{Revision: -1, Projects: map[string]ActivityProjectState{}}
 	s.contributions = NewContributions()
 	if err := s.contributions.Install(s.installed); err != nil {
 		return nil, err

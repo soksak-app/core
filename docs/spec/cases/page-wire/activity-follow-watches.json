@@ -1,6 +1,6 @@
 {
   "name": "activity-follow-watches",
-  "description": "The page watches a status that declares activity on the surface of each tab of the window once the surface registered it, and ends the watch of a tab that left the layouts.",
+  "description": "The page watches a status that declares activity on the surface of each tab of the window once the surface registered it, and ends the watch of each tab that left the layouts, also of the last tab when its project leaves the window.",
   "replay": false,
   "reason": "A forwarded request reaches a surface document that a window of the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
   "steps": [
@@ -9,6 +9,8 @@
     {"call":{"name":"exposureForward","payload":{"id":2,"surface":"tab-b","method":"status.watch","params":{"name":"probe.state"}}}},
     {"reply":{"result":{"result":null}}},
     {"call":{"name":"exposureForward","payload":{"id":3,"surface":"tab-a","method":"status.unwatch","params":{"name":"probe.state"}}}},
+    {"reply":{"result":{"result":null}}},
+    {"call":{"name":"exposureForward","payload":{"id":4,"surface":"tab-b","method":"status.unwatch","params":{"name":"probe.state"}}}},
     {"reply":{"result":{"result":null}}}
   ]
 }

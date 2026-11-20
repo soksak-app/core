@@ -380,6 +380,94 @@ func TestProjectOpenKeepsTheCommittedProjectUntilThePageSelectsTheNewOne(t *test
 	}
 }
 
+// projectActivityWindow is a second window of a test host, which records the events that it receives.
+func projectActivityWindow(t *testing.T, h *Host, name string, id uint) (*Surfaces, *[]ProjectActivityRecord) {
+	t.Helper()
+	received := &[]ProjectActivityRecord{}
+	s := &Surfaces{name: name, invoke: func(task func()) { task() }, theme: Theme{Tokens: map[string]string{}}, projects: map[string]string{},
+		events: func(event string, data any) {
+			if event == "project-activity" {
+				*received = append(*received, data.(ProjectActivityRecord))
+			}
+		}}
+	s.titles = &titleRecord{}
+	s.window = &frontendNumbered{id: id}
+	s.host = h
+	h.windows[id] = s
+	return s, received
+}
+
+// The window that holds a project publishes the activities of its spaces, the host sends the record to every window, and the
+// release of the project removes its entry (docs/spec/activity.md#activity-of-a-project).
+// contract: project-activity.publish.held-by-the-window
+func TestTheProjectActivityOfTheHoldingWindowReachesEveryWindow(t *testing.T) {
+	h, _, _ := projectOpenFixture(t)
+	h.windows = map[uint]*Surfaces{}
+	first, toFirst := projectActivityWindow(t, h, "main", 1)
+	second, toSecond := projectActivityWindow(t, h, "project-p2", 2)
+	h.owners["p1"], h.owners["p2"] = first, second
+	publish := func(window *Surfaces, request string) error {
+		return h.ProjectActivity(WithFrontend(context.Background(), window.window), json.RawMessage(request))
+	}
+	spaces := `{"s1":{"activity":"failed","cards":{"card-1":"failed"},"groups":{}}}`
+	if err := publish(second, `{"id":"p2","spaces":`+spaces+`}`); err != nil {
+		t.Fatalf("the holding window was refused: %v", err)
+	}
+	want := ProjectActivityRecord{Revision: 1, Projects: map[string]ProjectActivityState{"p2": {Activity: "failed", Spaces: map[string]SpaceActivity{
+		"s1": {Activity: "failed", Cards: map[string]string{"card-1": "failed"}, Groups: map[string]string{}}}}}}
+	for name, received := range map[string]*[]ProjectActivityRecord{"the first window": toFirst, "the second window": toSecond} {
+		if len(*received) != 1 || !equalRecords((*received)[0], want) {
+			t.Fatalf("%s received %+v, want %+v", name, *received, want)
+		}
+	}
+	if err := publish(first, `{"id":"p2","spaces":`+spaces+`}`); err == nil || err.Error() != "project p2 is not owned by this window" {
+		t.Fatalf("a window that does not hold the project was answered %v", err)
+	}
+	if len(*toFirst) != 1 {
+		t.Fatalf("a refused publication sent %+v", *toFirst)
+	}
+	id, err := json.Marshal("p2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.ProjectRelease(id); err != nil {
+		t.Fatal(err)
+	}
+	empty := ProjectActivityRecord{Revision: 2, Projects: map[string]ProjectActivityState{}}
+	if len(*toFirst) != 2 || !equalRecords((*toFirst)[1], empty) {
+		t.Fatalf("the release sent %+v, want %+v", *toFirst, empty)
+	}
+	// The end of the page of a window removes what it published.
+	if err := publish(first, `{"id":"p1","spaces":`+spaces+`}`); err != nil {
+		t.Fatal(err)
+	}
+	h.endProjectActivities(first)
+	if got := h.activities.Record(); got.Revision != 4 || len(got.Projects) != 0 || len(*toSecond) != 4 {
+		t.Fatalf("after the end of the page the record is %+v and the second window received %d records", got, len(*toSecond))
+	}
+}
+
+// frontendNumbered is the window of a test with its own identifier; a call that needs a native window panics.
+type frontendNumbered struct {
+	frontendRecord
+	id uint
+}
+
+func (f *frontendNumbered) ID() uint { return f.id }
+
+// Emit takes the notices that the host sends to the window without its events function, such as workspace-changed; the window of a
+// test has no page that reads them.
+func (f *frontendNumbered) Emit(string, ...any) {}
+
+func equalRecords(a, b ProjectActivityRecord) bool {
+	left, err := json.Marshal(a)
+	if err != nil {
+		return false
+	}
+	right, err := json.Marshal(b)
+	return err == nil && string(left) == string(right)
+}
+
 // frameworkRecord is the framework of a test: it names the host, and a call that needs a framework panics.
 type frameworkRecord struct{ Framework }
 

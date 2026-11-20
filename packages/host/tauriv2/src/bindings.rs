@@ -156,6 +156,16 @@ fn project_remove_answer(window: Window, answer: Argument<RemovalAnswer>) -> Res
     windows::project_remove_answer(&window, &answer.id, answer.allowed)
 }
 
+/// Records the activities of the spaces of a project that this window holds (docs/spec/activity.md#activity-of-a-project).
+#[tauri::command]
+fn project_activity(
+    window: Window,
+    request: Argument<soksak_host::project_activity::ProjectActivityRequest>,
+) -> Result<(), String> {
+    let Argument(request) = request;
+    windows::project_activity(&window, request)
+}
+
 /// The answer of a window to a removal request.
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]

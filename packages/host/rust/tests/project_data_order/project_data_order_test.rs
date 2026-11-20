@@ -483,3 +483,38 @@ fn shown_project_ignores_unknown_nested_fields() {
         "unknown nested field was rejected: {decoded:?}"
     );
 }
+
+// The window that holds a project publishes the activities of its spaces, another window is refused, and the end of the window
+// removes what it published (docs/spec/activity.md#activity-of-a-project).
+// contract: project-activity.publish.held-by-the-window
+#[test]
+fn the_project_activity_of_the_holding_window_is_recorded_until_the_window_ends() {
+    let registry = Windows::default();
+    registry
+        .owners
+        .lock()
+        .unwrap()
+        .insert("p2".into(), "project-p2".into());
+    let request = || {
+        serde_json::from_value::<crate::project_activity::ProjectActivityRequest>(json!({
+            "id": "p2",
+            "spaces": {"s1": {"activity": "failed", "cards": {"card-1": "failed"}, "groups": {}}},
+        }))
+        .unwrap()
+    };
+    assert_eq!(
+        publish_project_activity(&registry, "main", request()).unwrap_err(),
+        "project p2 is not owned by this window"
+    );
+    assert!(publish_project_activity(&registry, "project-p2", request()).unwrap());
+    assert_eq!(
+        serde_json::to_value(registry.activities.record()).unwrap(),
+        json!({"revision": 1, "projects": {"p2": {"activity": "failed", "spaces": {
+            "s1": {"activity": "failed", "cards": {"card-1": "failed"}, "groups": {}}}}}})
+    );
+    remove_window_records(&registry, "project-p2");
+    assert_eq!(
+        serde_json::to_value(registry.activities.record()).unwrap(),
+        json!({"revision": 2, "projects": {}})
+    );
+}
