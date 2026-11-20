@@ -3375,6 +3375,758 @@
    ]
   },
   {
+   "name": "a group card that a move leaves with one member contracts at the commit into that member, a group card too, which takes its place and its share",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1400,
+    "height": 700
+   },
+   "layout": {
+    "state": {
+     "root": {
+      "cut": "x",
+      "kids": [
+       {
+        "share": 0.3,
+        "node": {
+         "card": "card-1",
+         "fixed": false
+        }
+       },
+       {
+        "share": 0.7,
+        "node": {
+         "box": "card-5",
+         "data": {
+          "name": "그룹 1",
+          "leader": "card-6"
+         },
+         "inner": {
+          "cut": "x",
+          "kids": [
+           {
+            "share": 0.6,
+            "node": {
+             "box": "card-6",
+             "data": {
+              "name": "그룹 2",
+              "leader": "card-2"
+             },
+             "inner": {
+              "cut": "y",
+              "kids": [
+               {
+                "share": 0.5,
+                "node": {
+                 "card": "card-2",
+                 "fixed": false
+                }
+               },
+               {
+                "share": 0.5,
+                "node": {
+                 "card": "card-3",
+                 "fixed": false
+                }
+               }
+              ]
+             }
+            }
+           },
+           {
+            "share": 0.4,
+            "node": {
+             "card": "card-4",
+             "fixed": false
+            }
+           }
+          ]
+         }
+        }
+       }
+      ]
+     }
+    },
+    "leader": "card-1",
+    "lastCard": 6
+   },
+   "steps": [
+    {
+     "call": "move",
+     "args": {
+      "card": "card-4",
+      "target": "card-1",
+      "side": "left"
+     },
+     "returns": {
+      "card": "card-4"
+     }
+    },
+    {
+     "call": "stored",
+     "args": {},
+     "returns": {
+      "state": {
+       "root": {
+        "cut": "x",
+        "kids": [
+         {
+          "share": 0.15,
+          "node": {
+           "card": "card-4",
+           "fixed": false
+          }
+         },
+         {
+          "share": 0.15,
+          "node": {
+           "card": "card-1",
+           "fixed": false
+          }
+         },
+         {
+          "share": 0.7,
+          "node": {
+           "box": "card-6",
+           "data": {
+            "name": "그룹 2",
+            "leader": "card-2"
+           },
+           "inner": {
+            "cut": "y",
+            "kids": [
+             {
+              "share": 0.5,
+              "node": {
+               "card": "card-2",
+               "fixed": false
+              }
+             },
+             {
+              "share": 0.5,
+              "node": {
+               "card": "card-3",
+               "fixed": false
+              }
+             }
+            ]
+           }
+          }
+         }
+        ]
+       }
+      },
+      "leader": "card-1",
+      "lastCard": 6
+     }
+    }
+   ]
+  },
+  {
+   "name": "a move of a member of a nested group card into the centre of the group that holds it contracts the nested group card after the insert, and its member takes the leader mark",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1400,
+    "height": 700
+   },
+   "layout": {
+    "state": {
+     "root": {
+      "cut": "x",
+      "kids": [
+       {
+        "share": 0.3,
+        "node": {
+         "card": "card-1",
+         "fixed": false
+        }
+       },
+       {
+        "share": 0.7,
+        "node": {
+         "box": "card-5",
+         "data": {
+          "name": "그룹 1",
+          "leader": "card-6"
+         },
+         "inner": {
+          "cut": "x",
+          "kids": [
+           {
+            "share": 0.6,
+            "node": {
+             "box": "card-6",
+             "data": {
+              "name": "그룹 2",
+              "leader": "card-2"
+             },
+             "inner": {
+              "cut": "y",
+              "kids": [
+               {
+                "share": 0.5,
+                "node": {
+                 "card": "card-2",
+                 "fixed": false
+                }
+               },
+               {
+                "share": 0.5,
+                "node": {
+                 "card": "card-3",
+                 "fixed": false
+                }
+               }
+              ]
+             }
+            }
+           },
+           {
+            "share": 0.4,
+            "node": {
+             "card": "card-4",
+             "fixed": false
+            }
+           }
+          ]
+         }
+        }
+       }
+      ]
+     }
+    },
+    "leader": "card-1",
+    "lastCard": 6
+   },
+   "steps": [
+    {
+     "call": "move",
+     "args": {
+      "card": "card-2",
+      "target": "card-5",
+      "side": "centre"
+     },
+     "returns": {
+      "card": "card-2"
+     }
+    },
+    {
+     "call": "stored",
+     "args": {},
+     "returns": {
+      "state": {
+       "root": {
+        "cut": "x",
+        "kids": [
+         {
+          "share": 0.3,
+          "node": {
+           "card": "card-1",
+           "fixed": false
+          }
+         },
+         {
+          "share": 0.7,
+          "node": {
+           "box": "card-5",
+           "data": {
+            "name": "그룹 1",
+            "leader": "card-3"
+           },
+           "inner": {
+            "cut": "x",
+            "kids": [
+             {
+              "share": 0.3,
+              "node": {
+               "card": "card-3",
+               "fixed": false
+              }
+             },
+             {
+              "share": 0.2,
+              "node": {
+               "card": "card-4",
+               "fixed": false
+              }
+             },
+             {
+              "share": 0.5,
+              "node": {
+               "card": "card-2",
+               "fixed": false
+              }
+             }
+            ]
+           }
+          }
+         }
+        ]
+       }
+      },
+      "leader": "card-1",
+      "lastCard": 6
+     }
+    }
+   ]
+  },
+  {
+   "name": "a target named by the kids of a cut that holds a group card that the move contracts is resolved before the contraction",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1400,
+    "height": 700
+   },
+   "layout": {
+    "state": {
+     "root": {
+      "cut": "x",
+      "kids": [
+       {
+        "share": 0.3,
+        "node": {
+         "card": "card-1",
+         "fixed": false
+        }
+       },
+       {
+        "share": 0.7,
+        "node": {
+         "box": "card-5",
+         "data": {
+          "name": "그룹 1",
+          "leader": "card-6"
+         },
+         "inner": {
+          "cut": "x",
+          "kids": [
+           {
+            "share": 0.6,
+            "node": {
+             "box": "card-6",
+             "data": {
+              "name": "그룹 2",
+              "leader": "card-2"
+             },
+             "inner": {
+              "cut": "y",
+              "kids": [
+               {
+                "share": 0.5,
+                "node": {
+                 "card": "card-2",
+                 "fixed": false
+                }
+               },
+               {
+                "share": 0.5,
+                "node": {
+                 "card": "card-3",
+                 "fixed": false
+                }
+               }
+              ]
+             }
+            }
+           },
+           {
+            "share": 0.4,
+            "node": {
+             "card": "card-4",
+             "fixed": false
+            }
+           }
+          ]
+         }
+        }
+       }
+      ]
+     }
+    },
+    "leader": "card-1",
+    "lastCard": 6
+   },
+   "steps": [
+    {
+     "call": "move",
+     "args": {
+      "card": "card-2",
+      "target": [
+       "card-6",
+       "card-4"
+      ],
+      "side": "right"
+     },
+     "returns": {
+      "card": "card-2"
+     }
+    },
+    {
+     "call": "stored",
+     "args": {},
+     "returns": {
+      "state": {
+       "root": {
+        "cut": "x",
+        "kids": [
+         {
+          "share": 0.3,
+          "node": {
+           "card": "card-1",
+           "fixed": false
+          }
+         },
+         {
+          "share": 0.7,
+          "node": {
+           "box": "card-5",
+           "data": {
+            "name": "그룹 1",
+            "leader": "card-3"
+           },
+           "inner": {
+            "cut": "x",
+            "kids": [
+             {
+              "share": 0.3,
+              "node": {
+               "card": "card-3",
+               "fixed": false
+              }
+             },
+             {
+              "share": 0.2,
+              "node": {
+               "card": "card-4",
+               "fixed": false
+              }
+             },
+             {
+              "share": 0.5,
+              "node": {
+               "card": "card-2",
+               "fixed": false
+              }
+             }
+            ]
+           }
+          }
+         }
+        ]
+       }
+      },
+      "leader": "card-1",
+      "lastCard": 6
+     }
+    }
+   ]
+  },
+  {
+   "name": "a close that leaves a group card with one group card contracts it into that group card, which takes its whole place",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1400,
+    "height": 700
+   },
+   "layout": {
+    "state": {
+     "root": {
+      "cut": "x",
+      "kids": [
+       {
+        "share": 0.3,
+        "node": {
+         "card": "card-1",
+         "fixed": false
+        }
+       },
+       {
+        "share": 0.7,
+        "node": {
+         "box": "card-5",
+         "data": {
+          "name": "그룹 1",
+          "leader": "card-6"
+         },
+         "inner": {
+          "cut": "x",
+          "kids": [
+           {
+            "share": 0.6,
+            "node": {
+             "box": "card-6",
+             "data": {
+              "name": "그룹 2",
+              "leader": "card-2"
+             },
+             "inner": {
+              "cut": "y",
+              "kids": [
+               {
+                "share": 0.5,
+                "node": {
+                 "card": "card-2",
+                 "fixed": false
+                }
+               },
+               {
+                "share": 0.5,
+                "node": {
+                 "card": "card-3",
+                 "fixed": false
+                }
+               }
+              ]
+             }
+            }
+           },
+           {
+            "share": 0.4,
+            "node": {
+             "card": "card-4",
+             "fixed": false
+            }
+           }
+          ]
+         }
+        }
+       }
+      ]
+     }
+    },
+    "leader": "card-1",
+    "lastCard": 6
+   },
+   "steps": [
+    {
+     "call": "close",
+     "args": {
+      "card": "card-4"
+     },
+     "returns": {
+      "closed": true
+     }
+    },
+    {
+     "call": "stored",
+     "args": {},
+     "returns": {
+      "state": {
+       "root": {
+        "cut": "x",
+        "kids": [
+         {
+          "share": 0.3,
+          "node": {
+           "card": "card-1",
+           "fixed": false
+          }
+         },
+         {
+          "share": 0.7,
+          "node": {
+           "box": "card-6",
+           "data": {
+            "name": "그룹 2",
+            "leader": "card-2"
+           },
+           "inner": {
+            "cut": "y",
+            "kids": [
+             {
+              "share": 0.5,
+              "node": {
+               "card": "card-2",
+               "fixed": false
+              }
+             },
+             {
+              "share": 0.5,
+              "node": {
+               "card": "card-3",
+               "fixed": false
+              }
+             }
+            ]
+           }
+          }
+         }
+        ]
+       }
+      },
+      "leader": "card-1",
+      "lastCard": 6
+     }
+    }
+   ]
+  },
+  {
+   "name": "a move of a member beside the group card that it leaves inserts beside the box and then contracts the group card into its other member",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1400,
+    "height": 700
+   },
+   "layout": {
+    "state": {
+     "root": {
+      "cut": "x",
+      "kids": [
+       {
+        "share": 0.3,
+        "node": {
+         "card": "card-1",
+         "fixed": false
+        }
+       },
+       {
+        "share": 0.7,
+        "node": {
+         "box": "card-5",
+         "data": {
+          "name": "그룹 1",
+          "leader": "card-6"
+         },
+         "inner": {
+          "cut": "x",
+          "kids": [
+           {
+            "share": 0.6,
+            "node": {
+             "box": "card-6",
+             "data": {
+              "name": "그룹 2",
+              "leader": "card-2"
+             },
+             "inner": {
+              "cut": "y",
+              "kids": [
+               {
+                "share": 0.5,
+                "node": {
+                 "card": "card-2",
+                 "fixed": false
+                }
+               },
+               {
+                "share": 0.5,
+                "node": {
+                 "card": "card-3",
+                 "fixed": false
+                }
+               }
+              ]
+             }
+            }
+           },
+           {
+            "share": 0.4,
+            "node": {
+             "card": "card-4",
+             "fixed": false
+            }
+           }
+          ]
+         }
+        }
+       }
+      ]
+     }
+    },
+    "leader": "card-1",
+    "lastCard": 6
+   },
+   "steps": [
+    {
+     "call": "move",
+     "args": {
+      "card": "card-3",
+      "target": "card-6",
+      "side": "top"
+     },
+     "returns": {
+      "card": "card-3"
+     }
+    },
+    {
+     "call": "stored",
+     "args": {},
+     "returns": {
+      "state": {
+       "root": {
+        "cut": "x",
+        "kids": [
+         {
+          "share": 0.3,
+          "node": {
+           "card": "card-1",
+           "fixed": false
+          }
+         },
+         {
+          "share": 0.7,
+          "node": {
+           "box": "card-5",
+           "data": {
+            "name": "그룹 1",
+            "leader": "card-2"
+           },
+           "inner": {
+            "cut": "x",
+            "kids": [
+             {
+              "share": 0.6,
+              "node": {
+               "cut": "y",
+               "kids": [
+                {
+                 "share": 0.5,
+                 "node": {
+                  "card": "card-3",
+                  "fixed": false
+                 }
+                },
+                {
+                 "share": 0.5,
+                 "node": {
+                  "card": "card-2",
+                  "fixed": false
+                 }
+                }
+               ]
+              }
+             },
+             {
+              "share": 0.4,
+              "node": {
+               "card": "card-4",
+               "fixed": false
+              }
+             }
+            ]
+           }
+          }
+         }
+        ]
+       }
+      },
+      "leader": "card-1",
+      "lastCard": 6
+     }
+    }
+   ]
+  },
+  {
    "name": "an operation in a space with groups removes the lines that no card uses",
    "options": {
     "gap": 24,
