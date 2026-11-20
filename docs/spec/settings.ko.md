@@ -165,7 +165,7 @@ theme catalog와 mode, font, menu 언어와 기본 언어, 그리고 이 설정�
 
 설정 file은 자기 형태를 member `format`에 실는다(형식 1이 현재 형태이고, 다른 형태의 file이나 member가 없는 file은 거부된다, [저장 데이터 형식](installation.ko.md#저장-데이터-형식)). 이 member는 저장 형태의 운반자이지 설정이 아니다. workspace는 snapshot에서 이것을 감추고 쓸 때 보존하며, `format`이라는 이름의 설정 key는 다른 알 수 없는 key처럼 거부된다. 아래는 운반자를 뺀 나머지 설정에 대해 성립한다.
 
-설정 파일은 현재 형식으로만 읽으며, page는 이를 변환하지 않는다. 선언한 설정이 아닌 키는, 이전 설정의 키(`cardSidebar`, `rail`, `railWidth`, `sidebarFoldedWidth`, `latency`, `skew`)를 포함해, 공통 설정이면 `settings.json: unknown setting <key>`로, 창이 여는 프로젝트의 설정이면 `<project root>/.soksak/settings.json: unknown setting <key>`로 실패한다. `rail` 연결, 플러그인을 가리키는 변(`left`, `right`, `top`, `bottom`) 연결, 그 범위가 갖지 않은 세트를 가리키는 연결은 아래 세트와 연결 검사에서 실패한다. 실패는 아무것도 바꾸지 않고 아무것도 쓰지 않는다.
+설정 파일은 현재 형식으로만 읽으며, page는 이를 변환하지 않는다. 선언한 설정이 아닌 키는, 이전 설정의 키(`cardSidebar`, `rail`, `railWidth`, `sidebarFoldedWidth`, `latency`, `skew`, `cardSplit`)를 포함해, 공통 설정이면 `settings.json: unknown setting <key>`로, 창이 여는 프로젝트의 설정이면 `<project root>/.soksak/settings.json: unknown setting <key>`로 실패한다. `rail` 연결, 플러그인을 가리키는 변(`left`, `right`, `top`, `bottom`) 연결, 그 범위가 갖지 않은 세트를 가리키는 연결은 아래 세트와 연결 검사에서 실패한다. 실패는 아무것도 바꾸지 않고 아무것도 쓰지 않는다.
 
 ## 저장되는 세트와 연결
 
