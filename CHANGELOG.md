@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F899-7.5-13: The submit guidance of the agent skill, the usage texts and the command reference states that a submit command sends its text as a paste and Enter after the reply of the paste. F899-7.5-5: the window checks of the injection pass in mygo, Wails and Tauri for both terminal plugins.
 - F899-7.5-12: The agent skill states how an agent observes a window: a still capture without activation, `occluded` of `host.window` before an empty view is judged, `diagnostics.window.draw-covered` for a covered window, and that these methods exist only in diagnostic builds.
 - F899-7.5-11: An injected message names its sender by the text that the sending tab shows at the injection, its label or its name, on one line and cut to 40 characters (`docs/spec/messaging.md#injected-message`).
 - F899-7.5-7: `sok message send` adds the request for a report to the folder of the sender, `--reply` writes a report with no request under the token prefix `report-`, and the agent skill, the MCP descriptions and the usage state both and that an agent in a soksak terminal receives each message as injected input (`docs/spec/messaging.md#report-request`).

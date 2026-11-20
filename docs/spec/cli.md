@@ -48,7 +48,7 @@ The current Linux and Windows platform implementations report that process exit 
 
 A declared command name contains a dot (`core.card.split`, `terminal.input`), so it never collides with the command words above.
 
-A declared submit command sends its text as one input and Enter as a separate key input, refuses text that contains CR or LF, and returns only that the input was sent; confirm acceptance from the status of the input line and of the agent busy state, never by waiting with a timer.
+A declared submit command sends its text as one paste, which the sidecar brackets when the program enabled bracketed paste mode, and Enter as a separate input after the reply of the paste, refuses text that contains CR or LF, and returns only that the sidecar answered both inputs; confirm acceptance from the status of the input line and of the agent busy state, never by waiting with a timer.
 
 ## Windows
 

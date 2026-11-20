@@ -55,7 +55,7 @@ Example, after a description: two cards `A` above `B` each hold a process sessio
 ## Running and observing
 
 - Run a declared command with the parameters of its schema: `sok <command> [--<parameter> <value>]... [--params <json>]`, or `command_run {name, params}`.
-- A declared submit command sends its text as one input and Enter as a separate key input, refuses text that contains CR or LF, and returns only that the input was sent; confirm acceptance from the status of the input line and of the agent busy state, never by waiting with a timer.
+- A declared submit command sends its text as one paste, which the sidecar brackets when the program enabled bracketed paste mode, and Enter as a separate input after the reply of the paste, refuses text that contains CR or LF, and returns only that the sidecar answered both inputs; confirm acceptance from the status of the input line and of the agent busy state, never by waiting with a timer.
 - Read a status with `sok status <name>` or `status_get`; wait for a value with `sok status <name> --watch` or `status_watch_once {name, equals}`.
 - Act on an element with `sok element rect|click|input|dispatch <name>`, `element_rect` or `element_act`.
 - A still capture (`diagnostics.capture.still`, `sok capture`) shows what the window draws and needs no activation. A fully occluded window draws no image region and its terminals open no session, so read `occluded` in `host.window` before judging an empty view. To observe a covered window, turn on `diagnostics.window.draw-covered {window, draw: true}` and turn it off afterwards. These diagnostic methods exist only in diagnostic builds; a release build rejects them.

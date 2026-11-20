@@ -23,7 +23,7 @@ const Usage = `usage: sok <command> [options]
 
 commands:
   <declared command> [window] [--surface S] [--<parameter> VALUE]... [--params JSON]
-                            A declared submit command sends its text as one input and Enter as a separate key input, refuses text that contains CR or LF, and returns only that the input was sent; confirm acceptance from the status of the input line and of the agent busy state, never by waiting with a timer.
+                            A declared submit command sends its text as one paste, which the sidecar brackets when the program enabled bracketed paste mode, and Enter as a separate input after the reply of the paste, refuses text that contains CR or LF, and returns only that the sidecar answered both inputs; confirm acceptance from the status of the input line and of the agent busy state, never by waiting with a timer.
   commands [window]
   windows
   exposures [window]

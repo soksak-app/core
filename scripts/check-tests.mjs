@@ -14093,7 +14093,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F932",
-    implementation: [{ file: "packages/sok/go/src/sok.go", symbol: "A declared submit command sends its text as one input and Enter as a separate key input" }],
+    implementation: [{ file: "packages/sok/go/src/sok.go", symbol: "A declared submit command sends its text as one paste" }],
     tests: [{ file: "scripts/test/submit-guidance.test.mjs", id: "the submit guidance sentence is identical in both sok usage texts, the agent skill and the command reference" }],
     expected: "The sok usage texts, the agent skill and the command reference state the contract of a declared submit command.",
     levels: ["unit"],

@@ -48,7 +48,7 @@
 
 선언된 command 이름에는 점이 있으므로(`core.card.split`, `terminal.input`) 위의 명령 단어와 겹치지 않는다.
 
-선언된 submit command는 텍스트를 하나의 input으로 보내고 Enter는 별도의 key input으로 보낸다. CR 또는 LF가 들어 있는 텍스트는 거부하며, 반환 값은 input이 보내졌다는 뜻만 가진다. 수락은 입력 줄과 agent busy 상태의 status로 확인하며, timer로 기다리지 않는다.
+선언된 submit command는 텍스트를 program이 bracketed paste mode를 켰을 때 sidecar가 bracket하는 하나의 paste로 보내고, Enter는 paste의 reply 뒤에 별도의 input으로 보낸다. CR 또는 LF가 들어 있는 텍스트는 거부하며, 반환 값은 sidecar가 두 input에 답했다는 뜻만 가진다. 수락은 입력 줄과 agent busy 상태의 status로 확인하며, timer로 기다리지 않는다.
 
 ## 창
 
