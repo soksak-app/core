@@ -54,22 +54,37 @@ Message는 소비되지 않는다. `messages_read`는 `after`보다 큰 sequence
 
 ## Report request
 
-Message는 받는 쪽에 보고를 요청하고, 보고는 아무것도 요청하지 않는다. `sok message send <folder> <text>`는 `<text> (When done, report the result with sok message send --reply <sender folder> "<report>")`를 쓴다. `<sender folder>`는 `agent.surface`가 보내는 쪽의 process에 답하는 surface의 `<root>/.soksak/messages/<sender>`, 즉 받는 쪽의 folder `<root>/.soksak/messages/<surface>` 옆에 있는 보내는 surface의 folder다([folder of a terminal](messaging.md#folder-of-a-terminal)). Agent에게 보내는 모든 text는 영어이므로 요청은 영어다. 명령은 요청을 정확히 하나 덧붙이고 text 안에서 요청을 찾지 않으므로, 보내는 쪽은 요청을 쓰지 않는다. 다른 형식의 folder는 root를 밝히지 않으므로 send는 명시적 error로 실패하며 파일을 쓰지 않는다. `sok message send --reply <folder> <text>`는 `<text>`만 쓰고 파일 이름을 `<from>.report-<token>.txt`로 한다.
+Message는 받는 쪽에 보고를 요청하고, 보고는 아무것도 요청하지 않는다. `sok message send <folder> <text>`는 message file의 token을 만들고, `<text> (When done, report the result with sok message send --reply <sender folder> --answers <token> "<report>")`를 쓴 뒤 그 token으로 file을 쓴다. `<sender folder>`는 `<root>/.soksak/messages/<sender>`이며, `<sender>`는 보내는 process의 `agent.surface`가 답하는 surface다. `<token>`은 그 message를 가리키므로 요청이 자기 message를 이름 붙인다. 요청은 영어다. 모든 agent에게 가는 text가 영어이기 때문이다. 명령은 요청을 정확히 하나 더한다. 다른 형식의 folder는 root를 이름하지 않으므로 send는 명시적 오류로 실패하고 file을 쓰지 않는다.
 
-- 요청이 파일 안에 있는 이유: 요청은 message의 일부이므로, `messages_read`나 `messages_wait`로 읽는 agent는 주입된 paste와 같은 요청을 읽는다([injected message](messaging.md#injected-message)). 주입된 paste의 text는 파일의 text다. 각 message에 요청이 있으므로 받는 쪽은 별도의 지시가 필요 없고, 보내는 쪽은 결과를 알기 위한 두 번째 submit이 필요 없다.
-- Token에 표시하는 이유: 보고는 reader가 해석하지 않는 이름 부분에 표시한다. Sidecar는 마지막 `.` 앞의 text를 `from`으로 받고, `.` 없는 비어 있지 않은 token을 요구한다([message](messaging.md#message)). `report-<token>`은 그런 token이므로 folder 계약의 모든 reader가 바뀌지 않고 보고를 message로 읽으며, 이름은 여전히 파일이 보고임을 밝힌다. 첫 줄처럼 text 안의 표시는 받는 쪽 terminal에 paste된다.
+`sok message send --reply <folder> [--answers <token>] <text>`는 보고를 쓴다. 보고는 `<text>`만 가지며 `<from>.report-<key>.txt`라는 이름을 받는다. `<from>`은 보고하는 process의 surface이고, `<key>`는 `--answers`가 있으면 `<token>`, 없으면 새 무작위 token이다. `--answers <token>`은 비어 있지 않고 `.`과 path 구분자가 없는 token을 요구하며, 그 밖의 값은 명시적 오류로 실패하고 file을 쓰지 않는다. `--answers`가 있는 보고는 영수증도 쓴다. 보고 뒤에 명령은 빈 file `<from>.receipt-<token>.txt`를 보고하는 surface의 folder `<root>/.soksak/messages/<from>`에 쓴다. 받는 쪽의 sidecar는 영수증을 자기 folder의 file event로 보고하므로, 받는 쪽 page는 다른 surface를 거치지 않고 보고를 안다.
+
+- 요청의 token 이유: 보고는 답하는 message를 이름 붙이므로, 보낸 쪽은 token으로 답한 message를 찾는다. 보낸 쪽의 page는 보고 file이 도착하면 그 message의 state를 `reported`로 설정한다([delivery](#delivery)).
+- 영수증의 이유: 받는 쪽 page는 자기 message에 답이 왔음을 알고 보고 요청을 멈춘다([보고 없음](#보고-없음)). 보고 file은 보낸 쪽 folder에 떨어지며, 받는 쪽 page는 그 folder를 보지 않는다.
+- 영수증은 token 접두사 `receipt-`를 가진 받는 surface의 message file이다. Page는 이를 영수증으로 받고 주입하지 않는다([delivery](#delivery)).
+- Token 검사의 이유: reader는 이름의 token 부분을 해석하지 않으며, token의 `.`이나 path 구분자는 [message](#message)의 이름 규칙을 깨므로, 명령은 쓰기 전에 token을 검사한다.
 - soksak terminal 안의 agent는 각 message를 주입된 입력으로 받으므로, 요청에 `--reply`로 한 번 답하고 보고에는 답하지 않는다. `messages_read`와 `messages_wait`는 soksak terminal 밖의 agent를 위한 것이거나 기록을 읽는다([agent skill](cli.md#agent-skill)).
+- 보고 path는 folder 하나를 이름한다: `--reply <folder>`는 surface 하나의 folder를 이름하며, surface는 folder를 하나 가진다([Terminal의 folder](#terminal의-folder)). Surface 식별자는 무작위로 만들고 애플리케이션에서 살아 있는 식별자와 비교한다([identifier 생성](../../packages/workbench/ids.js), `packages/workbench-mygo/src/shell.go`의 `newTabID`). 검사는 현재 session에서 살아 있는 식별자만 대상으로 하므로 재시작 뒤의 반복을 막지 않는다. 그래서 명세는 surface 식별자가 유일하다고 말하지 않는다.
 
 ## 완료 notice
 
-message를 받은 tab은 자기 message로 완료를 보고하지 않으며, notice에는 답의 text를 싣지 않는다. Terminal의 program이 message를 받은 뒤 `working`에서 `done` 또는 `idle`로 옮겨 가면([terminal state](terminal-state.md#program-status), OSC 7501), terminal sidecar는 그 보낸 쪽의 folder에 notice를 하나 쓴다.
+받는 terminal의 working 기간이 끝나면, page는 그 기간에 주입한 message마다 그 message의 보낸 쪽에게 notice를 하나씩 보낸다. Notice는 program의 끝 상태와, 그 message에 보고가 도착했는지를 담는다. 답의 text는 담지 않는다.
 
-- 이름: `<receiver>.notice-<token>.txt`. `<receiver>`는 받은 terminal의 surface이고, `<token>`은 message와 같이 `.`이 없는 비어 있지 않은 text다([message](messaging.md#message)). 표시 `notice-`는 token에 있으며, 보고의 token에 `report-`가 있는 것과 같다([report request](messaging.md#report-request)).
-- Text: 영어 notice `[soksak notice] Tab <title> (<surface>) moved from working to <state>. The notice carries no report of its work.`다. `<title>`은 받은 tab의 title, `<surface>`는 그 surface, `<state>`는 `done` 또는 `idle`이다.
-- 쓰는 쪽: terminal sidecar가 message의 쓰기 규칙으로 쓴다([message](messaging.md#message)). page는 파일 연산이 없기 때문이다([folder of a terminal](messaging.md#folder-of-a-terminal)).
-- 기점: working 기간마다 보낸 쪽 하나당 notice를 하나 쓰며, 기간이 끝날 때 그 기간에 그 보낸 쪽의 message를 받았을 때만 쓴다. 되풀이된 전이는 두 번째 notice를 쓰지 않는다.
-- Notice는 보낸 쪽에 대한 받는 surface의 message다. 보낸 쪽의 page는 [injected message](messaging.md#injected-message)의 규칙으로 주입한다. 명시적 보고 `sok message send --reply`는 결과의 유일한 보고로 남는다.
-- 이유: message를 쓴 보낸 쪽은 완료 신호가 없다. receiver의 상태는 program의 사실이며, 보낸 쪽은 답의 text 없이 이를 안다. 답은 receiver가 스스로 보고한다([report request](messaging.md#report-request)).
+- 끝 상태: working 기간이 끝날 때 program status의 `state`이며, `done`, `error`, `blocked`, `idle` 중 하나다([terminal state](terminal-state.md#program-status)). 기간은 `working`이 다른 상태로 처음 바뀔 때 끝난다.
+- 보고 표시: 기간이 끝날 때 page가 그 message token의 영수증을 알면 `reported`는 `true`, 아니면 `false`다.
+- 요청: page는 `messages.notice`를 `{title, answers, from, state, reported}`로 자기 terminal sidecar에 보내며, 모든 sidecar 요청과 같이 terminal의 `surface`를 싣는다([sidecars](sidecars.md#messages)). `title`은 tab의 title, `answers`는 message의 token, `from`은 보낸 쪽의 surface, `state`는 끝 상태, `reported`는 보고 표시다.
+- 쓰는 쪽: sidecar는 notice를 보낸 쪽 folder `<root>/.soksak/messages/<from>`에 `<surface>.notice-<answers>.txt`로 쓴다. `<surface>`는 받는 surface이며, 쓰기는 message의 쓰기 규칙을 따른다([message](#message)). 응답은 `{path}`다. 보낸 쪽 folder가 없으면 folder를 밝힌 `folder-missing`으로 실패하며 아무것도 쓰지 않는다. `from`이 비었거나 `.`, path 구분자, 제어 문자를 가지면 `invalid-sender`로, `answers`가 올바른 token이 아니면 `invalid-token`으로 실패한다.
+- Text: `[soksak notice] Tab <title> (<surface>) ended its work in state <state>. Message <answers>: report <received or not received>. The notice carries no report of its work.`이며 영어다([AGENTS](../../AGENTS.md#documentation)).
+- 주입: 보낸 쪽의 page는 notice를 자기 folder의 message로서 [injected message](#injected-message)에 따라 주입한다.
+- 이유: 보낸 쪽은 자기 message의 작업이 어떻게 끝났는지 안다. 결과는 notice에 담기지 않으며 보고로 도착한다.
+
+## 보고 없음
+
+받는 terminal의 working 기간이 끝났을 때 영수증이 없는 주입 message는 아직 보고가 없다. 그러면 page는 영수증이 도착할 때까지 program의 at-rest 보고마다 보고를 요청한다([program status](terminal-state.md#program-status)).
+
+- 기점: program 보고 중 `done` 또는 `idle`인 것마다, 영수증이 없는 주입 message마다 요청 하나.
+- 요청: page는 session에 영어 요청 `[soksak request] Message <token> has no report yet. Report its result with sok message send --reply <sender folder> --answers <token> "<report>". This request is from the application, not input from the person.`을 주입한다. `<sender folder>`는 [report request](#report-request)와 같다. 주입은 [injected message](#injected-message)를 따르며, 파괴적 명령 guard가 이를 판단한다.
+- 끝: 그 token의 영수증이 도착한다. Timer는 요청을 끝내지 않는다([AGENTS](../../AGENTS.md#implementation)).
+- 이유: 보고가 결과의 통로이며 notice는 내용을 싣지 않으므로, role reread와 같이 도착할 때까지 보고를 요청한다([agent roles](agent-roles.md)).
 
 ## Folder 제거 또는 이름 변경
 
@@ -132,9 +147,12 @@ Record도 notice도 없는 실행 중인 command는 기다림을 알 수 없는 
 
 #### Delivery
 
-Status `<plugin>.messages`는 registration 옆에 message의 delivery를 담는다: `{folder, registration, held, last}`. `held`는 주입을 보류하는 것이 없으면 `null`이고, 보류 중이면 `{reason, kind, pending}`이다. `reason`은 위 목록의 첫 이유, `kind`는 `blocked` record의 `kind`이며 다른 이유에서는 `null`, `pending`은 기다리는 message의 수다. `last`는 첫 결정 전에는 `null`이고, 그 뒤에는 page가 결정한 마지막 message의 `{kind, seq, path, from, state, reason}`이다. `state`는 `injected`, `refused` 또는 `skipped`이고, `injected`의 `reason`은 `null`이다. 각 결정은 `{kind, seq, path, from, state, reason}`을 가진 record `plugin.<plugin>.messages.delivered`를 `info`로 쓴다. `kind`는 folder의 file이면 `message`, session의 첫 message이면 `first`, 변경 message이면 `role-change`, reread request이면 `role-reread`다. File이 없는 kind에서는 `seq`와 `path`가 `null`이고, `from`은 application의 발신자인 `soksak`이다. 보류의 각 시작과 끝은 보류의 각 시작과 끝은 `{reason, kind, pending}`을 가진 record `plugin.<plugin>.messages.held`를 `info`로 쓰며, 끝의 `reason`은 `null`이다. 따라서 각 delivery는 status와 event log에서 관찰된다.
+Status `<plugin>.messages`는 registration 옆에 message의 delivery를 담는다: `{folder, registration, held, last, decided, dropped}`. `held`는 주입을 보류하는 것이 없으면 `null`이고, 보류 중이면 `{reason, kind, pending}`이다. `reason`은 위 목록의 첫 이유, `kind`는 `blocked` record의 `kind`이며 다른 이유에서는 `null`, `pending`은 기다리는 message의 수다. `last`는 첫 결정 전에는 `null`이고, 그 뒤에는 page가 마지막으로 결정한 `{kind, seq, path, from, state, reason}`이다. `decided`는 registration의 마지막 message 64개 각각에 대한 항목 `{path, state, reason}`을 도착 순서, 가장 오래된 것부터 담는다. `state`는 `held`(보류 중 도착해 받는 쪽을 기다림), `delivered`(주입됨), `reported`(그 token의 영수증이 도착함, [report request](#report-request) 참조), `refused`(guard가 거부함, 이유 포함), `skipped`다. `dropped`는 registration 이후 `decided`를 떠난 항목의 수로, 읽는 쪽이 손실을 알게 한다. 보내는 쪽은 자기 `path`로 message의 state를 읽는다. `sok status <plugin>.messages --surface <receiver>`가 `decided`를 돌려주며, 그 path의 항목이 state를 가진다. 항목이 없는 path는 아직 결정이 없거나 항목이 버려진 것이며, 후자는 `dropped`가 센다.
 
-`sok message send`는 message를 쓴 뒤 receiver의 보류를 읽고 `{path, receiver}`를 출력한다([cli](cli.md#commands)). `receiver`는 `{surface, plugin, held}`이며 `held`는 받는 surface의 status `<plugin>.messages`의 값이다. 따라서 `null`이 아닌 `held`는 message가 주입되지 않았음과 그 이유를, 이유와 record kind로 밝힌다. 애플리케이션이 실행되지 않거나, folder가 terminal의 folder(`<root>/.soksak/messages/<surface>`)가 아니거나, 그 surface가 어떤 window에도 없거나, surface의 status `<plugin>.messages`가 `null`이어서 surface가 registration을 갖지 않으면 `receiver`는 `null`이다. 어느 경우에도 message는 쓰이며, 보내는 쪽은 receiver의 `<plugin>.messages`의 `last`를 따라 자기 path의 결정을 안다.
+- `reported` state는 token의 영수증이 도착하면 받는 쪽 page가, 보고 file이 자기 folder에 도착하면 보내는 쪽 page가 설정한다. 항목을 가진 page가 설정한다.
+- 각 결정은 `{kind, seq, path, from, state, reason}`을 가진 record `plugin.<plugin>.messages.delivered`를 `info`로 쓴다. `kind`는 folder의 file이면 `message`, session의 첫 message이면 `first`, 변경 message이면 `role-change`, reread request이면 `role-reread`, [보고 없음](#보고-없음)의 요청이면 `report-request`, 영수증이면 `receipt`다. File이 없는 kind에서는 `seq`와 `path`가 `null`이고 `from`은 `soksak`이다. 보류의 각 시작과 끝은 `{reason, kind, pending}`을 가진 record `plugin.<plugin>.messages.held`를 `info`로 쓰며, 끝의 `reason`은 `null`이다. 따라서 각 delivery는 status와 event log에서 관찰된다.
+
+`sok message send`는 message를 쓴 뒤 receiver의 보류를 읽고 `{path, receiver}`를 출력한다([cli](cli.md#commands)). `receiver`는 `{surface, plugin, held}`이며 `held`는 받는 surface의 status `<plugin>.messages`의 값이다. 따라서 `null`이 아닌 `held`는 message가 주입되지 않았음과 그 이유를, 이유와 record kind로 밝힌다. 애플리케이션이 실행되지 않거나, folder가 terminal의 folder(`<root>/.soksak/messages/<surface>`)가 아니거나, 그 surface가 어떤 window에도 없거나, surface의 status `<plugin>.messages`가 `null`이어서 surface가 registration을 갖지 않으면 `receiver`는 `null`이다. 어느 경우에도 message는 쓰이며, 보내는 쪽은 위와 같이 receiver의 `decided`에서 자기 path의 state를 읽는다.
 
 #### Role confirmation
 
