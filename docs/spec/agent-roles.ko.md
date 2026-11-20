@@ -331,7 +331,7 @@ person이 tab의 shell에서 직접 시작한 두 번째 agent CLI는 soksak의 
 - 붙여 넣기 형식: 파일을 읽을 수 없는 agent의 변경 message와 첫 message는 lead 문구, 정의 텍스트 그대로, fingerprint 줄을 담고, fingerprint은 붙여 넣은 정의로 계산한다.
 - 구조와 fingerprint: 구조는 첫 줄, 정의, 마지막 줄을 가진다. 마지막 line feed가 없는 정의는 구조에서 line feed를 얻고 fingerprint은 저장된 텍스트로 계산한다. Go host와 Rust host가 `docs/spec/cases/agent-roles/fingerprint.json`의 각 사례 fingerprint을 계산하고 값이 같다. 사례에는 non-ASCII 텍스트와 줄바꿈이 있다.
 - 길이: 긴 정의(5,000자)는 전체가 쓰이고 fingerprint은 전체를 덮는다.
-- 경로: 따옴표나 제어 문자가 있는 configuration directory 경로는 launch를 거부한다. 경로 구분자, `..` 구간 또는 제어 문자가 있는 surface 식별자도 [role 파일](#role-file)의 surface 오류로 거부한다.
+- 경로: 따옴표나 제어 문자가 있는 configuration directory 경로는 launch를 거부한다. 경로 구분자, `..` 구간 또는 제어 문자가 있는 surface 식별자도 `surface "<value>" holds a path part or a control character`로 거부하며 아무것도 쓰지 않는다.
 - launch 실패: launch의 identity 또는 role 파일 쓰기가 실패하면 어떤 program도 시작하지 않는다.
 - 남은 파일: launch는 쓰기 전에 surface 폴더의 `.role-*.tmp` 파일을 지운다.
 - 제거: 제거된 tab은 program을 멈추고, 이후 변경을 거부하며, 보류 message를 각각 `skipped` 기록으로 버린다.

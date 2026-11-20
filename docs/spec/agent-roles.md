@@ -329,7 +329,7 @@ A CLI that the person starts by hand in a tab, as a second agent in the same she
 - Paste form: a change to an agent that cannot read files, and its first message, contain the lead text, the definition text exactly and the fingerprint line, and the fingerprint is computed over the pasted definition.
 - Layout and fingerprint: the layout has the first line, the definition and the last line; a definition without a final line feed gets one in the layout and its fingerprint is computed over the stored text. The Go host and the Rust host compute the fingerprint of each case in `docs/spec/cases/agent-roles/fingerprint.json`, and the values are equal. The cases include non-ASCII text and line breaks.
 - Length: a long definition (5,000 characters) is written whole, and its fingerprint covers all of it.
-- Path: a configuration directory path with a quote or a control character makes the launch refuse; a surface identifier with a path separator, a `..` segment or a control character is refused with the surface error of the [role file](#role-file).
+- Path: a configuration directory path with a quote or a control character makes the launch refuse; a surface identifier with a path separator, a `..` segment or a control character is refused with `surface "<value>" holds a path part or a control character`, and nothing is written.
 - Launch failure: a failed identity or role file write at a launch starts no program.
 - Leftover files: a launch deletes the `.role-*.tmp` files of its surface folder before it writes.
 - Removal: a removed tab stops its program, refuses a later change, and discards its held messages with one `skipped` record each.
