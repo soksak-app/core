@@ -1599,6 +1599,123 @@
    ]
   },
   {
+   "name": "a box whose drawn rectangle stays is not judged, so a box and a card inside it that the size of the window left below their minimum refuse no split of another card inside it",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1200,
+    "height": 600
+   },
+   "layout": {
+    "state": {
+     "root": {
+      "cut": "x",
+      "kids": [
+       {
+        "share": 0.83,
+        "node": {
+         "card": "card-1",
+         "fixed": false
+        }
+       },
+       {
+        "share": 0.17,
+        "node": {
+         "box": "card-4",
+         "data": {
+          "name": "그룹 1",
+          "leader": "card-2"
+         },
+         "inner": {
+          "cut": "x",
+          "kids": [
+           {
+            "share": 0.2,
+            "node": {
+             "card": "card-2",
+             "fixed": false
+            }
+           },
+           {
+            "share": 0.8,
+            "node": {
+             "card": "card-3",
+             "fixed": false
+            }
+           }
+          ]
+         }
+        }
+       }
+      ]
+     }
+    },
+    "leader": "card-1",
+    "lastCard": 4
+   },
+   "steps": [
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-4"
+     },
+     "returns": {
+      "x": 960.24,
+      "y": 0,
+      "w": 239.76,
+      "h": 600
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-2"
+     },
+     "returns": {
+      "x": 984.24,
+      "y": 56,
+      "w": 33.55199999999991,
+      "h": 520
+     }
+    },
+    {
+     "call": "split",
+     "args": {
+      "card": "card-3",
+      "side": "bottom"
+     },
+     "returns": {
+      "card": "card-5"
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-4"
+     },
+     "returns": {
+      "x": 960.24,
+      "y": 0,
+      "w": 239.76,
+      "h": 600
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-2"
+     },
+     "returns": {
+      "x": 984.24,
+      "y": 56,
+      "w": 33.55199999999991,
+      "h": 520
+     }
+    }
+   ]
+  },
+  {
    "name": "a window sidebar holds no group and leads no level",
    "options": {
     "gap": 24,
