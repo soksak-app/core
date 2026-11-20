@@ -729,7 +729,7 @@ export class GroupTree {
     return `card-${this.last}`;
   }
 
-  /** The name 그룹 <n> with the smallest positive n that no group of the space has. */
+  /** The default group name with the smallest positive number n that no group of the space has. */
   nextGroupName() {
     const taken = new Set(this.nodes().map((node) => node.name));
     for (let n = 1; ; n++) if (!taken.has(`그룹 ${n}`)) return `그룹 ${n}`;

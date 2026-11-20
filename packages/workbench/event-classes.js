@@ -79,6 +79,7 @@ const EXACT = new Map([
   ["native.capture.lifecycle", "lifecycle"],
   ["native.connection.activity", "lifecycle"],
   ["native.document.backforward_cleared", "lifecycle"],
+  ["native.image.present", "frame"],
   ["native.image.spare_released", "lifecycle"],
   ["native.input.callback", "input"],
   ["native.input.held", "input"],

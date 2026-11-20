@@ -120,7 +120,7 @@ test("the plan prepares, starts the three applications, checks and quits them in
     ...["wailsv3", "tauriv2", "mygo"].flatMap((app) => [
       ["prepare", `registry ${app}`], ["prepare", `install probe ${app}`], ["prepare", `install probe2 ${app}`]]),
     // Each start follows the verification of the signature of its bundle (docs/operations/examples.md#end-to-end-run).
-    ...["wailsv3", "tauriv2", "mygo"].flatMap((app) => [["prepare", `verify bundle ${app}`], ["prepare", `start ${app}`]]),
+    ...["wailsv3", "tauriv2", "mygo"].flatMap((app) => [["prepare", `verify artifact ${app}`], ["prepare", `start ${app}`]]),
     ["check", "window checks"],
     ["check", "native end-to-end tests"],
     ["cleanup", "quit wailsv3"],
@@ -135,7 +135,7 @@ test("the plan prepares, starts the three applications, checks and quits them in
     "--config-dir", "/work/target/e2e/run/soksak-check-wailsv3",
     "--registry-ca", "/work/target/e2e/run/soksak-check-registry-tls/ca.pem",
   ]);
-  assert.deepEqual(plan.find((item) => item.name === "verify bundle tauriv2"), { name: "verify bundle tauriv2", phase: "prepare", kind: "verify",
+  assert.deepEqual(plan.find((item) => item.name === "verify artifact tauriv2"), { name: "verify artifact tauriv2", phase: "prepare", kind: "verify",
     artifact: "/work/target/debug/sok-tauriv2.app", platform: "darwin" });
   const checks = plan.find((item) => item.name === "window checks");
   assert.equal(checks.env.SOKSAK_BINARY_TAURIV2, "/work/target/debug/sok-tauriv2.app/Contents/MacOS/sok-tauriv2");
@@ -275,13 +275,13 @@ test("a bundle whose executable no longer matches its signature fails its verifi
   const { lines, write } = recorder();
   const children = new Map();
   const failures = await runPlan([
-    { name: "verify bundle probe", phase: "prepare", kind: "verify", artifact: bundle, platform: "darwin" },
+    { name: "verify artifact probe", phase: "prepare", kind: "verify", artifact: bundle, platform: "darwin" },
     { name: "start probe", phase: "prepare", kind: "start", app: "probe", argv: node("setInterval(() => {}, 1000)"), configDir, output: join(folder, "probe.out") },
   ], { write, children });
   assert.equal(failures.length, 1, lines.join("\n"));
-  assert.ok(failures[0].startsWith(`verify bundle probe: the bundle ${bundle} does not verify: `), failures[0]);
+  assert.ok(failures[0].startsWith(`verify artifact probe: the bundle ${bundle} does not verify: `), failures[0]);
   assert.match(failures[0], /main executable failed strict validation/);
-  assert.ok(lines.includes("skipped start probe: verify bundle probe failed"), lines.join("\n"));
+  assert.ok(lines.includes("skipped start probe: verify artifact probe failed"), lines.join("\n"));
   assert.equal(children.size, 0);
 });
 
@@ -297,7 +297,7 @@ test("a bundle whose signature verifies passes its verification", { timeout: 200
   const signed = spawnSync("codesign", ["--sign", "-", "--force", "--deep", bundle], { encoding: "utf8" });
   assert.equal(signed.status, 0, signed.stderr);
   const { lines, write } = recorder();
-  const failures = await runPlan([{ name: "verify bundle probe", phase: "prepare", kind: "verify", artifact: bundle, platform: "darwin" }], { write });
+  const failures = await runPlan([{ name: "verify artifact probe", phase: "prepare", kind: "verify", artifact: bundle, platform: "darwin" }], { write });
   assert.deepEqual(failures, [], lines.join("\n"));
 });
 

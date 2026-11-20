@@ -1,10 +1,10 @@
 // A group header takes native pointer input without any activation of the application or of its window: a press on the header,
 // drags over another card and the release move the group card (docs/spec/groups.md#moving-and-dropping), and a double-click on
 // the name of the group begins its rename (docs/spec/groups.md#headers), in a new window and after a dissolve and a create in the
-// same window. The window stands behind the windows of the person (`host.window.lower`), and no input of the check is a move or an
-// activation, so the window never becomes the key window or the virtual key window: each press goes directly to the view under
-// the point (docs/spec/exposure.md#methods). The group card leads the root level and moves inside it, so it keeps the leader mark
-// (docs/spec/groups.md#leader).
+// same window. The window opens inactive and stays where it opens (docs/spec/exposure.md#order-of-a-window), and no input of the
+// check is a move or an activation, so the window never becomes the key window or the virtual key window: each press goes
+// directly to the view under the point (docs/spec/exposure.md#methods). The group card leads the root level and moves inside it,
+// so it keeps the leader mark (docs/spec/groups.md#leader).
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -50,14 +50,13 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a group header takes a drag and a double-click on its name without activation`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app, { inactive: true });
     await fresh(s);
-    await s.run("host.window.lower");
     // The group card of the leader of the root level takes its leader mark (docs/spec/groups.md#leader).
     const start = await s.get("core.layout");
     const created = await s.run("core.group.create", { card: start.leader, side: "right", plugin: START_PLUGIN });
     const { group } = created;
     await s.until("core.grid", (grid) => grid.groups.some((item) => item.id === group), `the group ${group} was not created`);
     await s.presented();
-    await notActivated(s, "after the window was lowered");
+    await notActivated(s, "after the group was created");
 
     await doubleClickName(s, group, "a new window");
     await notActivated(s, "after the double-click");

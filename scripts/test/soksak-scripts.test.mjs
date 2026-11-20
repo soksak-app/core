@@ -874,7 +874,7 @@ test("break inventory lists only requested, known entries", { timeout: 5000 }, a
     "--list",
   ]);
   assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
-  assert.match(result.stdout, /^state\tdist\/soksak\.js\t/m);
+  assert.match(result.stdout, /^state\tdist\/tree\.js\t/m);
   assert.doesNotMatch(result.stdout, /^frozen\t/m);
 
   const invalid = await run(node, [

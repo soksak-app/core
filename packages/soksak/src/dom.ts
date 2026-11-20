@@ -89,8 +89,8 @@ export interface ViewOptions {
    * grid once: the order in which the keyboard and a reader of the document
    * meet the cards. A host that arranges the cards in a structure of its own,
    * as boxes that hold several cards, gives the order of that structure.
-   * Default: the reading order of the grid, by the first row line and then by
-   * the first column line.
+   * Without it, the order is the reading order of the grid, by the first row
+   * line and then by the first column line.
    */
   order?(cards: readonly Card[]): readonly string[];
 }

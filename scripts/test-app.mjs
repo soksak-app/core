@@ -102,7 +102,7 @@ export async function e2ePlan({ root, configRoot, script, native, only, platform
     // Each application starts right after the verification of the signature of its artifact, so a run never starts an artifact that a
     // build left half written (docs/operations/examples.md#end-to-end-run).
     ...APPS.flatMap((app) => [
-      { name: `verify bundle ${app}`, phase: 'prepare', kind: 'verify', artifact: located.get(app), platform },
+      { name: `verify artifact ${app}`, phase: 'prepare', kind: 'verify', artifact: located.get(app), platform },
       {
         name: `start ${app}`, phase: 'prepare', kind: 'start', app, configDir: configDir(configRoot, app), output: join(configRoot, `${app}.out`),
         argv: [appBinary(app), '--config-dir', configDir(configRoot, app), '--registry-ca', ca,

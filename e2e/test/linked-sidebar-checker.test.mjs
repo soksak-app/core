@@ -8,7 +8,8 @@ async function check(fault) {
   const card = { id: "card", active: "tab", tabs: [{ id: "tab", plugin: "fixture" }], sidebars: {} };
   const saved = {};
   const values = { sets: [{ id: "fixture-set" }], links: [] };
-  const state = { cards: [{ id: card.id, data: { sidebars: saved } }] };
+  // The stored layout tree of one card node (docs/spec/groups.md#storage).
+  const state = { root: { card: card.id, data: { sidebars: saved } } };
   const s = {
     client: { endpoint: { application: "fixture" } },
     get: async (name) => {

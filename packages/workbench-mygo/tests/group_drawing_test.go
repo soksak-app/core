@@ -99,7 +99,7 @@ func TestEachGroupSplitButtonGroupsTowardItsSide(t *testing.T) {
 	}
 }
 
-// The close button of a group header opens its menu, whose 그룹 풀기 dissolves the group and keeps its cards.
+// The close button of a group header opens its menu, whose dissolve item dissolves the group and keeps its cards.
 func TestTheCloseMenuOfAGroupDissolvesIt(t *testing.T) {
 	f := groupedShell(t)
 	f.settle()

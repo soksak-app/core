@@ -134,6 +134,7 @@ pub fn class_of(name: &str) -> Option<Class> {
         "native.capture.lifecycle" => Some(Class::Lifecycle),
         "native.connection.activity" => Some(Class::Lifecycle),
         "native.document.backforward_cleared" => Some(Class::Lifecycle),
+        "native.image.present" => Some(Class::Frame),
         "native.image.spare_released" => Some(Class::Lifecycle),
         "native.input.callback" => Some(Class::Input),
         "native.input.held" => Some(Class::Input),

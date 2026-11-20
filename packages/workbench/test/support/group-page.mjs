@@ -69,7 +69,7 @@ begin({ common: {}, open: [], projects: [{ id: "prj-aaaaaa", root: "/work/projec
     state: { root: box("card-10", "그룹 1", "card-8", [[0.5, content("card-8", [view("tab-ooooo1", PLAIN)])], [0.5, content("card-9", [view("tab-ooooo2", PLAIN)])]]) } } },
 ], activeSpaceId: "spc-aaaaaa", named: 2 }] });
 
-/** Shows three cards in a row, card-1, card-2 and card-3, whose first two are the group card-4 named 그룹 1, with card-1 focused. */
+/** Shows three cards in a row, card-1, card-2 and card-3, whose first two are the group card-4 with the default group name of number 1, with card-1 focused. */
 export function arrange() {
   plane.closePicker("fixture reset");
   if (plane.currentGrid()) for (const card of plane.currentGrid().cards) for (const tab of plane.tabsOf(card)) reports.forgetTab(tab.id);

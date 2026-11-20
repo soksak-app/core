@@ -92,6 +92,7 @@ var eventClasses = map[string]Class{
 	"native.capture.lifecycle":               ClassLifecycle,
 	"native.connection.activity":             ClassLifecycle,
 	"native.document.backforward_cleared":    ClassLifecycle,
+	"native.image.present":                   ClassFrame,
 	"native.image.spare_released":            ClassLifecycle,
 	"native.input.callback":                  ClassInput,
 	"native.input.held":                      ClassInput,

@@ -502,6 +502,7 @@ fn write_roles(path: &Path, roles: Option<Map<String, Value>>) -> Result<Value, 
 /// Checks a decoded roles.json document. Each refusal names the file. The members are checked in a fixed order: the format,
 /// the unknown members, the roles object, then each role in identifier order.
 fn check_roles(path: &Path, value: &Value) -> Result<(), String> {
+    // default: the refusal names an absent format member as null, as docs/spec/agent-roles.md#role-definitions defines.
     let format = value.get("format").unwrap_or(&Value::Null);
     if format.as_f64() != Some(ROLES_FORMAT as f64) {
         return Err(format!(

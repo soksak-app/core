@@ -57,9 +57,9 @@ export async function applicationArtifact(folder, app, { platform = process.plat
 }
 
 /**
- * Verifies that the declared application artifact `artifact` is complete as its build signed it, and rejects with
- * `the bundle <artifact> does not verify: <reason>` otherwise, so a run never starts an artifact that a build left half written
- * (docs/operations/examples.md#end-to-end-run).
+ * Verifies that the declared application artifact `artifact` is complete as its build signed it, and rejects with an error
+ * that names the artifact and the reason otherwise, so a run never starts an artifact that a build left half written
+ * (docs/operations/examples.md#end-to-end-run). The text of the error belongs to the platform module.
  */
 export async function verifyApplicationArtifact(artifact, { platform = process.platform } = {}) {
   return (await implementation('verifyApplicationArtifact', platform))(artifact);

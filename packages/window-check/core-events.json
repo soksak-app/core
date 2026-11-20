@@ -811,6 +811,38 @@
       },
       "description": "One decision of the keyboard of the page workbench: `cause` is what asked for it (`ring` a move of the focus ring, `press` the release of a left press of the page, `placed` the answer of a drawn placement, `responder` a first responder that reached the workbench, `modal` a change of the modal state, `focusin` and `focusout` the element focus), `target` the surface it chose or null for the workbench, `sent` and `owed` the state before it, `decided` whether a released press waits for this decision, and `decision` whether it sent the call `surfaceFocus` (`send`), sent it for the same target (`same`), waited for a placement that holds the target (`wait`), or kept the keyboard in an open modal (`modal`)."
     },
+    "host.surface.press": {
+      "layer": "host",
+      "class": "input",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "view": { "type": "integer", "minimum": 0 },
+          "surface": { "type": ["string", "null"] }
+        },
+        "required": ["view", "surface"]
+      },
+      "description": "One press of the left button that the host read over a native view of a window: `view` the handle of the web view under the press, 0 when the press reached none, and `surface` the surface that owns that view, which the host passes to the page as `surface-pressed`, or null when no surface owns it and the host passes nothing."
+    },
+    "workbench.surface.press": {
+      "layer": "workbench",
+      "class": "input",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "surface": { "type": "string" },
+          "card": { "type": ["string", "null"] },
+          "focused": { "type": ["string", "null"] },
+          "decision": { "enum": ["focus", "focused", "no-slot"] }
+        },
+        "required": ["surface", "card", "focused", "decision"]
+      },
+      "description": "One press on a surface that the host passed to the page workbench (`surface-pressed`): `surface` the tab of the surface, `card` the card that holds its slot or null, `focused` the focused card before the press, and `decision` whether the press runs `core.card.focus` (`focus`), finds its card focused (`focused`) or finds no slot of the surface (`no-slot`)."
+    },
     "host.trace.exposure.request": {
       "layer": "host",
       "class": "call",
@@ -1244,7 +1276,8 @@
             "enum": [
               "selector",
               "block",
-              "callback"
+              "callback",
+              "closure"
             ]
           },
           "callback": {
@@ -1279,7 +1312,7 @@
         ],
         "additionalProperties": false
       },
-      "description": "The U7 record of a step of the main thread: the window with the keyboard focus when the record is written, without one the only open window, otherwise null, what the step entered, when it entered and returned, the calls it forwarded and the time the main thread slept waiting for the worker."
+      "description": "The U7 record of a step of the main thread: the window with the keyboard focus when the record is written, without one the only open window, otherwise null, what the step entered (a selector, a block, a C callback, or a closure posted to the main thread named by the first function of the posting stack outside the framework), when it entered and returned, the calls it forwarded and the time the main thread slept waiting for the worker."
     },
     "host.frame.surface.dispatch": {
       "layer": "host",
@@ -2289,10 +2322,33 @@
                 }
               ]
             }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "wall_us": { "type": "number" },
+              "cpu_us": { "type": "number" },
+              "routines": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": { "type": "string" },
+                    "wakes": { "type": "number" },
+                    "micros": { "type": "number" },
+                    "bytes": { "type": "number" }
+                  },
+                  "required": ["name", "wakes", "micros", "bytes"],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["wall_us", "cpu_us", "routines"],
+            "additionalProperties": false
           }
         ]
       },
-      "description": "The sampler of the host, while the trace is on. The memory event `host.sampler.memory` is one reading every five seconds: role is host (rss_host_kb), a registered process role with name, page (the page web content process of the window `window`), document (the web content process of the document web view `surface` of the window `window`). The host reading and each process reading hold footprint_kb with its parts internal_kb, compressed_kb, purgeable_kb, graphics_kb, media_kb, network_kb and neural_kb (docs/spec/performance-trace.md), and each process reading holds pid and rss_kb; a reading that cannot obtain a size holds error instead of the sizes, and a window whose facts cannot be read holds role, window and error. Rows identify owners, not unique processes: repeated PIDs refer to the same physical process and consumers deduplicate by PID when totaling process memory."
+      "description": "The sampler of the host, while the trace is on. The work event `host.sampler.routines` is one reading at each sample: wall_us and cpu_us are the wall time and the processor time of the process since the previous sample, and routines holds for each named routine that worked in that time its name, its wakes, the microseconds of their work and the bytes they handled (docs/spec/performance-trace.md). The memory event `host.sampler.memory` is one reading every five seconds: role is host (rss_host_kb), a registered process role with name, page (the page web content process of the window `window`), document (the web content process of the document web view `surface` of the window `window`). The host reading and each process reading hold footprint_kb with its parts internal_kb, compressed_kb, purgeable_kb, graphics_kb, media_kb, network_kb and neural_kb (docs/spec/performance-trace.md), and each process reading holds pid and rss_kb; a reading that cannot obtain a size holds error instead of the sizes, and a window whose facts cannot be read holds role, window and error. Rows identify owners, not unique processes: repeated PIDs refer to the same physical process and consumers deduplicate by PID when totaling process memory."
     },
     "host.buffer.dropped": {
       "layer": "host",
@@ -3815,6 +3871,28 @@
       },
       "description": "The host could not bring the agent skill current after it read the environment of the login shell, one event for each failure: file is the skill file that it could not write and reason the error of the system, or file is null when the environment or the agent folders could not be read (docs/spec/cli.md#agents-in-the-application)."
     },
+    "host.sidecar.path": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "folder": {
+            "type": "string"
+          },
+          "sok": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "folder",
+          "sok"
+        ]
+      },
+      "description": "The host created the channel of its installed sidecars at its start: folder is the folder of the host executable, which the environment of every sidecar puts first on PATH, and sok is the sok of the application bundle in that folder (docs/spec/sidecars.md#processes-of-a-surface)."
+    },
     "host.sidecar.restart-limit": {
       "layer": "host",
       "class": "lifecycle",
@@ -5285,6 +5363,68 @@
         ]
       },
       "description": "One delivery of a registration of the mode `record`; `count` is the exact number of deliveries of the source so far."
+    },
+    "native.image.present": {
+      "layer": "native",
+      "class": "frame",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "number"
+          },
+          "width": {
+            "type": "number"
+          },
+          "height": {
+            "type": "number"
+          },
+          "bytes": {
+            "type": "number"
+          },
+          "lookup_ns": {
+            "type": "number"
+          },
+          "cached": {
+            "type": "boolean"
+          },
+          "check_ns": {
+            "type": "number"
+          },
+          "copy_ns": {
+            "type": "number"
+          },
+          "swap_ns": {
+            "type": "number"
+          },
+          "commit_ns": {
+            "type": "number"
+          },
+          "total_ns": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "mode",
+          "surface",
+          "width",
+          "height",
+          "bytes",
+          "lookup_ns",
+          "cached",
+          "check_ns",
+          "copy_ns",
+          "swap_ns",
+          "commit_ns",
+          "total_ns"
+        ]
+      },
+      "description": "An image region presented an accepted frame on the main thread (docs/spec/native-surfaces.md#image-regions). mode is copy or lease, surface the global identifier of the IOSurface of the frame, width and height the size of the frame in pixels and bytes the bytes that the copy mode copied (0 in the lease mode). lookup_ns is the time of the lookup of the surface by its identifier and of the read of its nonce, or of the match in the surfaces that the region looked up before when cached is true, check_ns of the other checks of the frame, copy_ns of the copy into host-owned storage or of the retain of the lease, swap_ns of the change of the layer contents, commit_ns of the commit of its transaction, and total_ns of the whole present."
     },
     "native.observe.counted": {
       "layer": "native",

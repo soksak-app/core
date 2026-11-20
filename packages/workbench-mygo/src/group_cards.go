@@ -387,8 +387,9 @@ func (s *Shell) drawGroupHead(c *ui.Context, id, name string, width, height floa
 	})
 }
 
-// openGroupMenu opens the close menu of the group card id under its close button, and closes it when it is open: 그룹 닫기 closes the
-// group with its cards, and 그룹 풀기, shown while the dissolve would succeed, dissolves it (docs/spec/groups.md#headers).
+// openGroupMenu opens the close menu of the group card id under its close button, and closes it when it is open: the close
+// item runs core.card.close on the group with its cards, and the dissolve item, shown while the dissolve would succeed, runs
+// core.group.dissolve (docs/spec/groups.md#headers).
 func (s *Shell) openGroupMenu(id, anchor string) error {
 	if err := s.groupCard(id); err != nil {
 		return err

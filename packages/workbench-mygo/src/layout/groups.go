@@ -653,7 +653,7 @@ func (t *GroupTree) nodeOf(id string) *node {
 	return &node{card: id}
 }
 
-// groupName is the name 그룹 <n> with the smallest positive n that no group of the space has.
+// groupName is the default group name with the smallest positive number n that no group of the space has.
 func (t *GroupTree) groupName() string {
 	taken := map[string]bool{}
 	for _, id := range t.Cards() {
