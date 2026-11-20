@@ -127,7 +127,7 @@ The status `<plugin>.messages` holds the delivery of the messages beside the reg
 
 #### Role confirmation
 
-The terminal plugin matches the line `soksak role <fingerprint>` in the output that the program of its session writes, where `<fingerprint>` is 16 lowercase hexadecimal characters, and confirms the role of the tab through the same per-surface serialization as `core.tab.role.confirm` ([confirmation](agent-roles.md#confirmation)). The line is compared after the spaces at both ends are removed. The text that the page writes to the input is not matched, so an injected message, which holds `<fingerprint>` as a placeholder, never matches. A line that the terminal wraps at its width does not match; the state stays `pending` and a reread request asks again.
+The terminal plugin matches the line `soksak role <fingerprint>` against the visible rows of the screen that `<plugin>.screen.read` reads, after each change of the visible rows that the plugin receives, where `<fingerprint>` is 16 lowercase hexadecimal characters, and confirms the role of the tab through the same per-surface serialization as `core.tab.role.confirm` ([confirmation](agent-roles.md#confirmation)). A row matches when its text, without the spaces at both ends, is the line. An injected message never holds such a line with a fingerprint: its placeholder is `<fingerprint>`, and the paste form uses `Role fingerprint:`. A line that the terminal wraps over two rows, or that scrolls off the screen before its update is read, does not match; the state stays `pending` and a reread request asks again.
 
 #### Evidence of the hold
 

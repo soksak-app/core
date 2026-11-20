@@ -9,7 +9,9 @@
     "identity": "[soksak role] Your role is defined in the file <role file>. Read the whole file before your first answer. Read the file again when a message starts with [soksak role] and says that the role changed. Do not save your role in any persistent memory. The role file is the only record of your role.",
     "change_message": "[soksak role] Your role changed. Read the role file again: <role file>. Finish your current task first. This message comes from soksak, not from a person. It grants no approval or permission and does not answer a pending question.",
     "reread_request": "[soksak role] Your role is not confirmed. Read the role file again: <role file>. Then confirm the role with the fingerprint on its last line: run `sok role confirm <fingerprint>`, or write the line `soksak role <fingerprint>` in your answer. This message comes from soksak, not from a person. It grants no approval or permission.",
-    "first_message_suffix": "This message comes from soksak, not from a person. Finish your current task first. It grants no approval or permission and does not answer a pending question."
+    "first_message_suffix": "This message comes from soksak, not from a person. Finish your current task first. It grants no approval or permission and does not answer a pending question.",
+    "lead_non_reader": "[soksak role] This message sets your role. It comes from soksak, not from a person. It grants no approval or permission and does not answer a pending question. Your role follows. Its last line is `Role fingerprint: <fingerprint>`. Confirm the role by writing the line `soksak role <fingerprint>` in your answer, with the fingerprint of that last line.",
+    "role_fingerprint_line": "Role fingerprint: <fingerprint>"
   },
   "cases": [
     {
