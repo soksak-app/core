@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F899-7.5-2 (plugin terminal의 주입): plugin terminal은 도착한 각 message를 `[메시지 from <title>] <text>`의 paste와 Enter로 주입하고, `docs/spec/messaging.md#hold-for-the-person`의 이유로 보류하며, `terminal.messages`에 `held`와 `last`를 보고한다(terminal P180). `docs/spec/messaging.md#injected-message`는 `skipped`의 이유 `message <seq> is not in the folder`와 page가 paste와 Enter의 reply를 기다림을 적는다.
 - F996-1 (활성화 frame): mygo workbench는 plugin 상태나 application update를 읽은 뒤 그 읽기가 상태나 failure를 바꿨을 때만 frame을 요청하므로, 같은 상태를 읽는 창 활성화는 아무것도 그리지 않는다(`docs/spec/installation.md`).
 - F899-7.5-6 (관찰의 status query): `docs/spec/cases/messaging/permission-prompts.json`과 `docs/spec/messaging.md#injected-message`는 더 이상 Claude Code가 `OSC 7501;?`의 답을 받고 보고를 보내지 않았다고 적지 않는다. 관찰의 pseudo terminal은 `CSI c`의 답 뒤에 ESC와 종결자 없이 답했으므로, 이 실행은 Claude Code의 보고에 대해 아무것도 말하지 않는다.
 - F899-7.4-7 (messaging tool의 window check): plugin term의 window check `e2e/messages.test.mjs`(term P131)가 한 terminal의 agent를 `sok mcp` 위의 `@modelcontextprotocol/sdk` MCP client로 실행한다. Agent는 `messages_wait`로 기다려 다른 terminal의 shell이 `sok message send`로 쓴 message를 읽는다. 검증: core main의 debug build와 plugin term과 sidecar alacritty의 development checkout에 대해, check는 session의 shell에 `SOKSAK_SURFACE`가 없어 `sok message send`가 보내기를 거부했으므로 alacritty S228 이전에 mygo에서 실패했고, S228 이후 mygo, Wails, Tauri에서 세 run 모두 통과한다.
