@@ -78,7 +78,7 @@ group card `G`는 tree의 box이므로 layout library의 operation은 card에 �
 | Command | Parameter | 결과 | 규칙 |
 | --- | --- | --- | --- |
 | `core.group.create` | `{card, side, plugin, params?, request?}` | `{group, card, tab}` | content card 또는 group card인 `card`를 새 content card와 묶는다. 새 card는 `card`를 `side`(`left`, `right`, `top`, `bottom`) 쪽으로 나눈 것에서 오며, content card는 library의 split(`splitToward`), group card는 사각형의 split이고, `plugin`의 tab을 `params`로 담는다. 새 group card는 다음 card 식별자를, 새 card는 그 다음 식별자를 받고, 이름 `그룹 <n>`을 받는다. `n`은 space의 어떤 group도 이름 `그룹 <n>`으로 갖지 않는 가장 작은 양의 정수다. group card는 그 level에서 `card`의 자리와 leader mark를 받고, member `card`와 새 card를 가지며 `card`가 그 leader다. 결과는 group card, 새 card, 그 tab을 가리키고, focus는 새 card로 옮긴다 |
-| `core.group.dissolve` | `{group}` | `{dissolved: true}` | group card를 그것을 담은 level에서 그 member로 바꾼다. grid는 바뀌지 않는다. group 첫 row의 card는 group이 내놓은 header만큼 길게 그려진다. dissolve의 leader 규칙이 적용된다 |
+| `core.group.dissolve` | `{group}` | `{dissolved: true}` | group card를 그것을 담은 level에서 그 member로 바꾼다. 그 box는 layout library의 `unwrap`으로 자리를 inner node에 내주므로, 모든 card는 그려진 너비를 유지하고 group 첫 row의 card는 group이 내놓은 header만큼 길게 그려진다. dissolve의 leader 규칙이 적용된다 |
 | `core.group.rename` | `{group, name}` | `{group, name}` | group의 이름을 양끝 공백을 지운 `name`으로 정한다 |
 | `core.group.leader` | `{card}` | `{card, group}` | content card 또는 group card인 `card`를 그 level의 leader로 만든다. header의 leader 버튼은 그 header의 card로 이것을 실행한다. `group`은 `card`를 담은 group card의 식별자이며, root level에서는 `null`이다 |
 | `core.group.menu` | `{group}` | `null` | group의 닫기 menu를 열고, 열려 있으면 닫는다 |
@@ -134,7 +134,7 @@ split은 새 card를 자기가 나누는 상자의 cut에 layout library의 `ins
 
 ### 닫기
 
-group card는 member 하나를 담지 않는다. close, move, tab drop이 group card에 member 하나를 남기면, move의 target이 정해진 뒤 같은 변경에서 그 member가 그 group card를 담은 level에서 group card를 대신한다. 그 member는 group card의 자리와 leader mark를 받고 식별자를 유지하며, group card는 dissolve처럼 끝난다. 이 대체에서 grid는 바뀌지 않으므로 거부되지 않는다. group card 안의 모든 card를 닫는 것은 group card의 close, 곧 `core.card.close {card: <group>}`다. grid의 마지막 card를 닫으려는 close는 layout의 마지막 card 규칙(layout library의 R7)을 따른다.
+group card는 member 하나를 담지 않는다. close, move, tab drop이 group card에 member 하나를 남기면, move의 target이 정해진 뒤 같은 변경에서 그 member가 그 group card를 담은 level에서 group card를 대신한다. 그 member는 group card의 자리와 leader mark를 받고 식별자를 유지하며, group card는 dissolve처럼 끝난다. group card의 box는 layout library의 `unwrap`으로 자리를 member에 내주고, 그것은 어떤 card도 작게 그리지 않으므로 이 대체는 거부되지 않는다. group card 안의 모든 card를 닫는 것은 group card의 close, 곧 `core.card.close {card: <group>}`다. grid의 마지막 card를 닫으려는 close는 layout의 마지막 card 규칙(layout library의 R7)을 따른다.
 
 card나 group card의 box의 close는, 그 자체로든 move의 withdraw로든, layout library의 R7이 말하는 대로 그 node를 그 cut에서 꺼낸다. 같은 cut의 `fixed` 카드가 아닌 다른 kid가 한 인수로 그 share를 받으므로 그 비율이 유지된다. kid가 하나만 남은 cut은 그 kid로 바뀐다. 그래서 group 안의 card는 자기 level의 member에게 자리를 주고, root level의 card는 group을 키우지 않는다. group card는 그 card의 cut의 kid로서만 자라기 때문이다. 어느 것도 허용하지 않는 close는 그 원인과 함께 거부된다: `card <id> cannot <operation>: it is the last card of the layout`, 또는 `card <id> cannot <operation>: no kid of its cut can grow`.
 

@@ -274,7 +274,7 @@ test("a refused core.layout.open fails with its error and leaves the layout", { 
     { share: 0.03, node: { card: "b", tabs: [view("tab-aaaaa2", PLAIN)] } },
   ] }, "a");
   const narrow = layout();
-  await refuses(run("core.layout.open", { card: "b", side: "right", plugin: SESSION }), "card b cannot split toward right: card b would be 12x1200, below its minimum 96x96");
+  await refuses(run("core.layout.open", { card: "b", side: "right", plugin: SESSION }), "card b cannot split toward right: card b would be 24x1200, below its minimum 96x96");
   assert.deepEqual(layout(), narrow);
   // A card of a fullscreen arrangement does not change the layout.
   plane.toggleCardFullscreen("a");
@@ -416,7 +416,7 @@ test("a refused split of a card leaves the number of the next tab name unchanged
     { share: 0.03, node: { card: "b", tabs: [view("tab-aaaaa2", PLAIN)] } },
   ] }, "a");
   const before = layout();
-  assert.throws(() => plane.splitCard("b", "right", SESSION), { message: "card b cannot split toward right: card b would be 12x1200, below its minimum 96x96" });
+  assert.throws(() => plane.splitCard("b", "right", SESSION), { message: "card b cannot split toward right: card b would be 24x1200, below its minimum 96x96" });
   assert.deepEqual(layout(), before);
   const { tab } = await run("core.layout.open", { card: "a", plugin: SESSION });
   assert.equal(cardNode(layout().root, "a").tabs.find((item) => item.tab === tab).title, "f 탭 1");

@@ -2690,9 +2690,9 @@ const dissolvedGroups = new Set();
 function treeCard(id) {
   if (id === "current") return layoutCard("current").id;
   if (typeof id === "string" && tree?.find(id)) return id;
-  const inGroups = (nodes) => nodes.some((node) => node.card === id || inGroups(node.members.filter((member) => typeof member !== "string")));
-  // default: a stored layout read by the check of its space holds groups; a space that never opened holds the list it was stored with.
-  const space = inactiveSpaceOf((cards, layout) => cards.some((entry) => entry.id === id) || inGroups(layout.groups ?? []));
+  // A group card of a stored layout is a box of its tree.
+  const holdsBox = (node) => node.box === id || (node.box !== undefined && holdsBox(node.inner)) || (node.kids ?? []).some((kid) => holdsBox(kid.node));
+  const space = inactiveSpaceOf((cards, layout) => cards.some((entry) => entry.id === id) || holdsBox(layout.state.root));
   if (space !== null) throw new Error(`card ${id} is in space ${space}, which is not active`);
   throw new Error(`card ${id} is not in the layout of window ${nameOfWindow()}`);
 }

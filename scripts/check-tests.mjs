@@ -716,7 +716,7 @@ const FEATURE_LINKS = [
     id: "F937-3",
     implementation: [
       { file: "packages/workbench/group-tree.js", symbol: "export function readGroupTree" },
-      { file: "packages/workbench/group-tree.js", symbol: "splitRectangle(node, side, id, data)" },
+      { file: "packages/workbench/group-tree.js", symbol: "splitCard(target, side, id, data)" },
       { file: "packages/workbench/group-tree.js", symbol: "dropAt(x, y, options)" },
       { file: "packages/workbench/group-tree.js", symbol: "closeCell(id, op)" },
       { file: "packages/workbench/group-tree.js", symbol: "moveBoundary(axis, line, px, allowSnap)" },

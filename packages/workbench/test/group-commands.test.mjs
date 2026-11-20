@@ -83,9 +83,19 @@ function arrange() {
 const run = (name, params) => registry.run(name, params);
 const refuses = (promise, text) => assert.rejects(promise, (error) => error.message === text, `does not fail with ${text}`);
 const status = async (name) => (await registry.handle({ id: 1, method: "status.get", params: { name } })).result;
+/** The members of a node of the stored tree in tree order: its cards and the boxes that no box inside it holds. */
+const membersOf = (node) => (node.cut ? node.kids.flatMap((kid) => membersOf(kid.node)) : [node.box ?? node.card]);
+/** The group cards of the stored tree in tree order, each {card, name, level, leader, members}, read from its boxes. */
+const groupsOf = (node, level = 1) => {
+  if (node.cut) return node.kids.flatMap((kid) => groupsOf(kid.node, level));
+  if (node.box === undefined) return [];
+  return [{ card: node.box, name: node.data.name, level, leader: node.data.leader, members: membersOf(node.inner) },
+    ...groupsOf(node.inner, level + 1)];
+};
+/** The groups that the stored tree of core.layout holds, with the leader of the root level and lastCard. */
 const stored = async () => {
-  const { groups, leader, lastCard } = await status("core.layout");
-  return { groups, leader, lastCard };
+  const { state, leader, lastCard } = await status("core.layout");
+  return { groups: groupsOf(state.root), leader, lastCard };
 };
 
 test("core.group.create groups a content card with a new card and answers the same when applied again", { timeout: 5000 }, async () => {
@@ -149,11 +159,11 @@ test("core.card.move moves a card into a group and the add, split and close of a
   assert.deepEqual(await run("core.card.move", { card: "card-3", target: "card-4", side: "centre" }), { card: "card-3" });
   assert.deepEqual((await stored()).groups[0].members, ["card-1", "card-2", "card-5", "card-3"]);
   await refuses(run("core.card.move", { card: "card-4", target: "card-1", side: "right" }), "card card-4 cannot move into itself");
-  await refuses(run("core.card.split", { card: "card-4", side: "right", plugin: PLAIN }),
-    "card card-4 cannot split toward right: card card-1 would be 57x1144, below its minimum 96x96");
+  // The split of a group card puts the new card beside its box in the level that holds it, so the cards inside keep their tree.
   const split = await run("core.card.split", { card: "card-4", side: "bottom", plugin: PLAIN });
   assert.equal(split.card, "card-6");
   assert.deepEqual((await stored()).groups[0].members, ["card-1", "card-2", "card-5", "card-3"]);
+  assert.deepEqual((await status("core.layout")).state.root.kids.map((kid) => kid.node.box ?? kid.node.card), ["card-4", "card-6"]);
   assert.deepEqual(await run("core.card.close", { card: "card-4" }), { closed: true });
   assert.deepEqual(await stored(), { groups: [], leader: "card-6", lastCard: 6 });
   assert.deepEqual(plane.currentGrid().cards.map((card) => card.id), ["card-6"]);
