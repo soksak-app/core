@@ -61,10 +61,14 @@ space의 layout을 바꾸는 모든 operation은 slicing tree에 대한 규칙 �
 ### target 찾기
 
 - hit 영역은 현재 layout에 그려지고, 결과는 REMOVE(moving) 뒤의 tree에서 계산된다.
-- line의 각 조각은 tree의 한 level에 속한다. level을 넘어 이어지는 line은 각각 preview를 가진 별개의 조각이다. line 조각의 면은 pointer 쪽이다.
+- 점의 사슬은 그리는 사각형이 점을 담는 저장된 tree의 node이며, root에서 가장 안쪽 card까지 각 box의 inner node를 거친다. side의 side stack은 사슬의 가장 안쪽 node와, 그 위에서 그 side 쪽으로 같은 화면 line에서 끝나는 각 node다. 곧 node의 box, 그 side 쪽 kid가 아래 node인 cut, 그 side의 축을 가로지르는 cut이다. side stack의 line은 가장 바깥 node의 가장자리이므로, line의 각 조각은 그 위에서 끝나는 level에 속하고, level을 넘어 이어지는 line은 각각 target을 가진 별개의 조각이다.
+- side stack의 각 node는 window sidebar와 그것을 담은 cut을 빼고 그 side의 target이다. window sidebar를 담은 root cut은 plane의 content, 곧 window sidebar가 아닌 그 kid로서 target이다. 결과가 같은 target은 한 띠다.
+- side의 띠는 gap과 관계없이 그 line 안쪽에 가장 바깥 node부터 각각 `drop-band` point 폭으로 선다(`packages/workbench/workbench.json` chrome 값의 `drop-band`, 5). side가 가진 거리는 그 line에서 가장 안쪽 card의 그리는 사각형 가운데까지의 거리에서 `drop-band-margin`(3)을 뺀 것이며 적어도 1 point다. 그 거리가 side의 띠를 담지 못하면 그 side의 모든 띠가 한 비율로 그 거리를 띠 수로 나눈 폭으로 좁아지므로, 띠는 가운데 앞에서 끝나고 모든 띠와 가운데에 닿을 수 있다(I4). 위 line에서의 거리는 line과 점 사이의 tab strip과 group header를 빼며, 그것은 각각 자기 target이다.
+- 점의 side는 점의 거리를 그 side가 가진 거리로 나눈 값이 가장 작은 side다. 고정된 띠 폭으로는 최소 크기의 card에서 모든 side에 닿을 수 없기 때문이다. 점의 거리가 그 side의 띠 폭 합보다 작거나, 점이 어느 content card에도 없고 group header 위에도 없으면 점은 그 side의 띠에 있다. 띠는 거리를 띠 폭으로 나눈 index의 띠이며 가장 바깥이 처음이고, 그 target은 ADD(moving, node, side)다.
+- 띠에 없는 content card의 tab strip 위의 점은 그 card의 tab strip이다. group card의 header 위의 점은 그 왼쪽이나 오른쪽 side의 띠에 있고, 그렇지 않으면 ADD(moving, group card의 plane의 root, right)다. 띠에 없는 content card 본문의 점은 본문의 가장자리 몫 0.25로 정한다. 가운데에서는 card의 가운데이고, 바깥 4분의 1에서는 가장 가까운 side의 ADD(moving, card, side)다.
+- run은 drag가 line에 들어온 점과 현재 점으로 고른다. drag가 line에 들어온 띠의 node가 그 anchor이며, drag가 그 line의 그 띠에 머무는 동안, node가 side의 축을 가로지르는 anchor의 cut의 다른 kid인 띠는 둘 사이 kid의 run, 곧 ADD(moving, run, side)다.
 - 움직이는 node나 그 빈 자리를 가리키는 target은 빈 slot(level, index, fraction)에 대응하며, 그 ADD는 REMOVE의 역이므로 제자리 drop은 변경이 없다. pointer가 끌리는 card 위에 있다는 이유로 제외되는 target은 없다. drop은 그 결과가 현재 layout과 같을 때 정확히 변경이 없다.
-- 한 화면 line을 공유하는 중첩된 side는 gap과 관계없이 바깥에서 안쪽으로 깊이 순서인 띠를 받는다. 결과가 같은 target은 한 띠다. card가 그 띠를 모두 담는 동안 그 card의 띠는 point 단위의 표준 폭을 가지며, 그렇지 않으면 그 card의 모든 띠가 한 비율로 좁아져 card의 가운데 앞에서 끝난다. side는 점이 그 side에서 떨어진 거리를 그 side가 가진 거리로 나눈 값으로 고른다. 고정된 띠 폭으로는 최소 크기의 card에서 모든 side에 닿을 수 없기(I4) 때문이다.
-- run은 drag가 line에 들어온 점과 현재 점으로 고른다.
+- window sidebar 위의 점이나 어느 card나 box에도 없는 점은 target이 없다.
 
 ### 불변식
 
@@ -197,12 +201,11 @@ card나 group card의 box의 close는, 그 자체로든 move의 withdraw로든, 
 
 ## 이동과 drop
 
-tab drag와 `core.tab.move`는 어느 level의 target card든 받는다. drop은 점을 담는 가장 안쪽 box, 곧 사람이 겨누는 box에서 결정되며, 그 box의 zone만 쓰인다. content card의 그리는 사각형 안의 점은 그 card가 그것을 담은 group card의 바깥 4분의 1에 있어도 그 card에서 grid의 `zoneAt`으로 다섯 zone을 가지고 결정된다. content card에는 없지만 group card의 테두리 안, 곧 그 header 위나 테두리와 그 안 card 사이 gap에 있는 점은 그런 group card 중 가장 안쪽의 것에서 결정된다. 그 header 위나 테두리 가운데의 점은 group card의 `centre`이고, 테두리의 한 side 쪽 바깥 4분의 1(`zoneAt`이 card body를 재듯 테두리의 `edge` 0.25) 안의 점은 group card의 그 side다. 어떤 box에도 없는 점은 zone이 아니다. 그래서 drop은 group 없는 space의 card 사이처럼 group 안에서, 밖에서, 다른 group에서 모든 level의 모든 content card의 모든 side와 centre, 그리고 모든 group card의 모든 side와 centre에 닿는다.
+tab drag와 `core.tab.move`는 어느 level의 target이든 받고, drop은 크기 규칙의 [target 찾기](#target-찾기)로 정해진다. 그 target은 node를 side 쪽으로 하는 ADD, content card의 tab strip, 또는 그 가운데다. `core.tab.move {tab, card, zone}`과 `core.card.move {card, target, side}`는 ADD의 node를 `card`와 `target`으로 가리킨다. 곧 card나 box의 식별자, 또는 한 cut의 이웃한 kid가 담은 card와 box의 식별자 목록이며, layout library의 `insert`가 target을 받듯([add and remove](../../packages/soksak/docs/layout.ko.md#add-and-remove)) 그것이 cut의 모든 kid이면 그 cut을, 그렇지 않으면 그 run을 가리킨다. 그래서 drop은 group 없는 space의 card 사이처럼 group 안에서, 밖에서, 다른 group에서 모든 level의 모든 node의 모든 side에 닿는다.
 
-- content card의 `centre` 위 drop은 지금처럼 tab을 그 card로 옮긴다.
-- content card의 side 위 drop은 library의 split으로 tab을 그 옆 새 card에 넣고, 새 card는 target을 담은 group의 member가 된다. card의 유일한 tab은 `move`로 그 card를 그리로 옮기고, card는 그 group의 member가 된다.
-- group card의 `centre` 위 drop은 `core.card.add-tab`처럼 tab을 group 안, 그 사각형의 오른쪽 가장자리의 새 content card에 넣는다. card의 유일한 tab은 그 card를 그리로 옮긴다.
-- group card의 side 위 drop은 사각형의 split으로 tab을 group card 사각형 옆, 그 group card를 담은 level의 새 card에 넣는다. card의 유일한 tab은 `core.card.move`가 옮기듯 그 card를 그리로 옮긴다.
+- content card의 가운데나 tab strip 위 tab의 drop은 tab을 그 card로 옮긴다.
+- ADD(node, side) 위 tab의 drop은 tab을 node 옆 side 쪽에 더한 새 card에 넣는다. card의 유일한 tab은 `move`로 그 card를 그리로 옮기고, card는 그 node의 level의 member가 된다.
+- group card의 header 위 drop과, group `target`에 대한 `side` `centre`는 ADD(moving, group card의 plane의 root, right)다. 새 card나 옮긴 card는 `core.card.add-tab`이 두듯 group 안 그 사각형의 오른쪽 가장자리에 선다.
 
 card의 유일한 tab은 지금처럼 그 card를 옮기며, card는 식별자를 유지한다. group card header의 control 밖을 누르고 끌면 group card를 옮긴다. drop은 tab처럼 결정되고, 놓으면 `core.card.move {card, target, side}`를 실행한다. 끌리는 node나 그 빈 자리를 가리키는 target은 빈 slot이며, pointer가 끌리는 card 위에 있다는 이유로 제외되는 target은 없다([target 찾기](#target-찾기)). zone 없이 놓으면 아무것도 바꾸지 않고 오류를 보이지 않는다.
 
@@ -291,7 +294,7 @@ group card는 기존 card 디자인의 container 하나로 그린다. 그 테두
 - `projects.json`은 format 3을 받는다. group card를 box로 가진 grid의 tree는 format 2 파일에 없는 상태이며, 저장 형식 규칙은 새 format 번호를 요구하고 migration을 두지 않는다.
 - card 식별자는 기존 형태 `card-<n>`으로 남고, layout이 저장하는 `lastCard`에서 workbench가 낸다. 그래서 재시작을 지나도 식별자는 두 번 나오지 않는다. 무작위 식별자는 content card 식별자의 형태를 바꾸므로 거부되었다. 저장된 식별자에서 도출한 번호는 가장 큰 번호의 card가 끝난 뒤 끝난 식별자를 다시 내므로 거부되었다.
 - kid가 같은 fraction을 받는 cut의 split은 모든 kid에 1/(k + 1)을 준다. 이것이 layout library `insert`의 규칙이므로, split한 card만 나누는 것과 grid를 balance하는 것 사이를 고르는 설정은 없다: grid 전체의 balance는 split이 건드리지 않은 card를 바꾸었고, 고른 row는 규칙 자체로 고르게 남는다.
-- drop은 점을 담는 가장 안쪽 box에서 결정된다: content card는 grid의 `zoneAt`으로, 그 밖에는 가장 안쪽 group 테두리가 `zoneAt`의 edge 비율로 결정한다. 사람은 pointer 아래의 box를 겨누므로, group card의 바깥 4분의 1은 그 안의 card나 테두리 안에 있는 점을 가져가지 않는다. group card의 side는 그 테두리와 그 card 사이 gap에서 닿으며, 새 종류의 zone은 더해지지 않는다.
+- drop은 가장 안쪽 box 하나가 아니라 한 화면 line을 공유하는 side의 띠로, 가장 바깥 node부터 정해진다. 가장 안쪽 box는 pointer 아래의 box에만 side를 주었으므로, card와 같은 line에서 끝나는 level, 중첩된 group의 cut, plane의 root에 닿는 점이 없었고 kid의 run은 target이 없었다. 띠는 card가 그것을 담는 동안 표준 폭을 유지하고 그렇지 않으면 한 비율로 좁아지며, side는 거리를 그 side가 가진 거리로 나눈 값으로 고른다. 고정 폭으로는 한 line에 중첩된 side가 많은 최소 크기의 card에서 모든 side에 닿을 수 없기(I4) 때문이다.
 - group card는 group으로서 전체 화면이 된다. 사람은 card 하나를 보이듯 작업의 상자 하나를 보이므로, 그 사각형이 그 안의 모든 card와 header와 함께 작업 영역을 덮는다. 전체 화면인 동안 layout은 전체 화면 card의 규칙 하나대로 그 안에서도 밖에서도 바뀌지 않는다.
 - group card는 focus ring을 받지 않는다. ring은 surface의 keyboard를 쥐는데 group card에는 surface가 없기 때문이다. group card의 focus는 그 첫 content card로 간다.
 - focus를 받은 card를 담은 group card는 frame에 그것을 보이며, level마다 `group-focus-fade`만큼 옅어진다. 중첩된 group에서 card 하나의 ring만으로는 지금 일하는 곳을 어느 group이 담는지 보이지 않고, 모든 frame에 온전한 색의 ring을 그리면 어느 card가 keyboard를 쥐는지 보이지 않기 때문이다. 비율은 0.6이므로 card에서 두 level 위의 frame도 focus 색의 36 percent를 받는다. 이 표시는 frame의 선 색을 바꾸고 자기 선을 그리지 않는다. seam에서 frame 옆에 두 번째 선이 있으면 선이 seam보다 두꺼워지기 때문이다.
