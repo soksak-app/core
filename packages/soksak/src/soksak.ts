@@ -39,7 +39,7 @@ import {
 import type { Divider, Frames, Plane, Rule, ZoneHit, ZoneOptions } from './geometry.js';
 
 export type { Divider, Rule, Zone, ZoneHit, ZoneOptions } from './geometry.js';
-import { evenCuts, exchangeNodes, groupNode, insertBeside, insertNode, unwrapNode, vacatesNode, withdrawNode } from './cuts.js';
+import { evenCuts, exchangeNodes, groupNode, insertBeside, insertNode, unwrapNode, vacatedSlotOf, vacatesNode, withdrawNode } from './cuts.js';
 import type { Input } from './cuts.js';
 import { EPS, cardsOf, checkState, cloneNode, isBox, isCard, isCut } from './tree.js';
 import type { BoxNode, CardNode, CutNode, SoksakState, TreeNode } from './tree.js';
@@ -1245,6 +1245,15 @@ export class Soksak {
    */
   vacates(id: string, target: string | readonly string[], side: string): boolean {
     return vacatesNode(this.input(), id, target, side);
+  }
+
+  /**
+   * The vacated slot of the node `id`, a card or a box, as `{target, side}` (docs/spec/groups.md#idempotency): the kid before it in its cut
+   * with the side toward it, or else the kid after it, by its id or by the members of a cut, and the node itself with `right` when no kid
+   * that is no fixed card is beside it. A move answers it, so that a repeat with the reply is no change.
+   */
+  vacatedSlot(id: string): { target: string | string[]; side: string } {
+    return vacatedSlotOf(this.input(), id);
   }
 
   /**

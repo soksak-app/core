@@ -347,6 +347,15 @@ export declare class Soksak {
      */
     vacates(id: string, target: string | readonly string[], side: string): boolean;
     /**
+     * The vacated slot of the node `id`, a card or a box, as `{target, side}` (docs/spec/groups.md#idempotency): the kid before it in its cut
+     * with the side toward it, or else the kid after it, by its id or by the members of a cut, and the node itself with `right` when no kid
+     * that is no fixed card is beside it. A move answers it, so that a repeat with the reply is no change.
+     */
+    vacatedSlot(id: string): {
+        target: string | string[];
+        side: string;
+    };
+    /**
      * EXCHANGE (packages/soksak/docs/layout.md#add-and-remove): puts the node `a`,
      * a card or a box, where the node `b` stands and `b` where `a` stood. Each
      * place keeps its fraction and the px size that a card there declares, and

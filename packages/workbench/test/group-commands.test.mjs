@@ -63,8 +63,11 @@ test("core.card.move moves a card into a group and the add, split and close of a
   const { tab } = await run("core.card.add-tab", { card: "card-4", plugin: PLAIN });
   assert.equal(plane.currentGrid().cards.find((card) => plane.tabsOf(card).some((t) => t.id === tab)).id, "card-5");
   assert.deepEqual((await stored()).groups[0].members, ["card-1", "card-2", "card-5"]);
-  assert.deepEqual(await run("core.card.move", { card: "card-3", target: "card-4", side: "centre" }), { card: "card-3" });
-  assert.deepEqual(await run("core.card.move", { card: "card-3", target: "card-4", side: "centre" }), { card: "card-3" });
+  // The reply names the target as resolved after the commit, the vacated slot of card-3 beside card-5 (docs/spec/groups.md#idempotency).
+  const moved = { card: "card-3", target: "card-5", side: "right" };
+  assert.deepEqual(await run("core.card.move", { card: "card-3", target: "card-4", side: "centre" }), moved);
+  assert.deepEqual(await run("core.card.move", { card: "card-3", target: "card-4", side: "centre" }), moved);
+  assert.deepEqual(await run("core.card.move", moved), moved, "the move with its reply answered another target");
   assert.deepEqual((await stored()).groups[0].members, ["card-1", "card-2", "card-5", "card-3"]);
   await refuses(run("core.card.move", { card: "card-4", target: "card-1", side: "right" }), "card card-4 cannot move into itself");
   // The split of a group card puts the new card beside its box in the level that holds it, so the cards inside keep their tree. The box is
@@ -187,7 +190,8 @@ test("core.card.move exchanges a card with a content card and joins its tabs at 
   await refuses(run("core.card.move", { card: "card-3", target: "card-1", side: "strip", index: 2 }), "index 2 is outside the tabs of card card-1, 0 to 1");
   // Every tab of the card joins the target at the index in its order, and the card is closed.
   const { tab } = await run("core.card.add-tab", { card: "card-3", plugin: PLAIN });
-  assert.deepEqual(await run("core.card.move", { card: "card-3", target: "card-1", side: "strip", index: 0 }), { card: "card-3" });
+  // The join closes card-3, so the reply names the card that holds its tabs (docs/spec/groups.md#idempotency).
+  assert.deepEqual(await run("core.card.move", { card: "card-3", target: "card-1", side: "strip", index: 0 }), { card: "card-1" });
   assert.deepEqual(tabIds("card-1"), ["tab-aaaaa3", tab, "tab-aaaaa1"]);
   assert.equal(plane.currentGrid().card("card-3"), undefined, "the card that joined is closed");
 });
@@ -199,8 +203,12 @@ test("core.tab.move joins a tab at the index of a tab strip, and a point on a ta
   // The index is the place in the tab list of the card after the tab leaves it (docs/spec/groups.md#moving-and-dropping).
   await run("core.tab.move", { tab: "tab-aaaaa1", card: "card-1", zone: "strip", index: 1 });
   assert.deepEqual(tabIds("card-1"), [tab, "tab-aaaaa1"]);
-  await run("core.tab.move", { tab: "tab-aaaaa3", card: "card-1", zone: "strip", index: 1 });
+  // A tab that shares its card is answered by that card and its index (docs/spec/groups.md#idempotency).
+  const joined = { tab: "tab-aaaaa3", card: "card-1", zone: "strip", index: 1 };
+  assert.deepEqual(await run("core.tab.move", { tab: "tab-aaaaa3", card: "card-1", zone: "strip", index: 1 }), joined);
   assert.deepEqual(tabIds("card-1"), [tab, "tab-aaaaa3", "tab-aaaaa1"]);
+  assert.deepEqual(await run("core.tab.move", joined), joined, "the move with its reply answered another target");
+  assert.deepEqual(tabIds("card-1"), [tab, "tab-aaaaa3", "tab-aaaaa1"], "the move with its reply changed the tabs");
   assert.equal(plane.currentGrid().card("card-3"), undefined, "the card left without tabs is removed");
   assert.equal(plane.currentGrid().card("card-1").data.activeId, "tab-aaaaa3", "the moved tab is the selected tab of the card");
   await refuses(run("core.tab.move", { tab, card: "card-2", zone: "strip", index: 3 }), "index 3 is outside the tabs of card card-2, 0 to 2");
@@ -266,7 +274,7 @@ test("the only tab of a card dropped beside its own card names its vacated slot:
   assert.deepEqual(drag.target, { card: "card-3", zone: "right" });
   assert.deepEqual(drag.preview, own, "the preview is the drawn rectangle of the card");
   assert.deepEqual((await status("core.layout")).state, before, "the release changed the layout");
-  assert.deepEqual(await run("core.card.move", { card: "card-3", target: "card-3", side: "left" }), { card: "card-3" });
+  assert.deepEqual(await run("core.card.move", { card: "card-3", target: "card-3", side: "left" }), { card: "card-3", target: "card-4", side: "right" });
   assert.deepEqual((await status("core.layout")).state, before, "core.card.move of the card beside itself changed the layout");
 });
 
