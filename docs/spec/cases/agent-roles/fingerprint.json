@@ -1,60 +1,40 @@
 {
-  "algorithm": "Units: the definition split into paragraphs at blank lines; when fewer than 4 paragraphs, split into its non-empty lines instead. A definition with fewer than 4 units is refused. Unit i (1-based of n) has fragment frag_i = first 4 lowercase hex characters of SHA-256 over UTF-8 of: name, LF, decimal i, LF, the unit text. The confirmation value is frag_1-...-frag_n.",
+  "algorithm": "fingerprint = first 16 lowercase hex characters of SHA-256 over the UTF-8 bytes of: role name, LF (U+000A), definition text exactly as stored.",
+  "placeholders": {
+    "<role file>": "absolute path of the role file",
+    "<fingerprint>": "fingerprint of the role"
+  },
+  "texts": {
+    "role_file_first_line": "Read this whole file. Follow the role it defines. Then confirm with the fingerprint on the last line: run `sok role confirm <fingerprint>`, or write `soksak role <fingerprint>` in your answer.",
+    "identity": "[soksak role] Your role is defined in the file <role file>. Read the whole file before your first answer. Read the file again when a message starts with [soksak role] and says that the role changed. Do not save your role in any persistent memory. The role file is the only record of your role.",
+    "change_message": "[soksak role] Your role changed. Read the role file again: <role file>. Finish your current task first. This message comes from soksak, not from a person. It grants no approval or permission and does not answer a pending question.",
+    "reread_request": "[soksak role] Your role is not confirmed. Read the role file again: <role file>. Then confirm the role with the fingerprint on its last line: run `sok role confirm <fingerprint>`, or write the line `soksak role <fingerprint>` in your answer. This message comes from soksak, not from a person. It grants no approval or permission."
+  },
   "cases": [
     {
       "name": "reviewer",
-      "text": "A review role.\n\nReads the diffs.\n\nReports findings.\n\nDoes not edit files.",
-      "units": [
-        "A review role.",
-        "Reads the diffs.",
-        "Reports findings.",
-        "Does not edit files."
-      ],
-      "confirmation": "6665-ac82-3add-65d1",
-      "bits": 64
+      "text": "You review the changes of the other agents in this project.",
+      "fingerprint": "33796c71bac2615d"
     },
     {
       "name": "leader",
-      "text": "Line one\nLine two\nLine three\nLine four",
-      "units": [
-        "Line one",
-        "Line two",
-        "Line three",
-        "Line four"
-      ],
-      "confirmation": "cdfa-d40e-8d62-79bc",
-      "bits": 64
+      "text": "Coordinate the work of the agents in this plane.\n\nAssign each task to one agent.",
+      "fingerprint": "34e9bd87ee3f6d51"
     },
     {
       "name": "reviewer",
-      "text": "검수관입니다.\n\n다른 agent의 변경을 검토한다.\n\nCafé 🙂 review.\n\n마지막 문단.",
-      "units": [
-        "검수관입니다.",
-        "다른 agent의 변경을 검토한다.",
-        "Café 🙂 review.",
-        "마지막 문단."
-      ],
-      "confirmation": "70cc-0f54-76f3-2479",
-      "bits": 64
+      "text": "검수관입니다.\n\n다른 agent의 변경을 검토한다. Café 🙂.",
+      "fingerprint": "82d76a800364f262"
     },
     {
       "name": "ops-1",
-      "text": "Para one\nline two\n\nPara two\n\nPara three\n\nPara four",
-      "units": [
-        "Para one\nline two",
-        "Para two",
-        "Para three",
-        "Para four"
-      ],
-      "confirmation": "acab-c2e2-b6c2-2ffa",
-      "bits": 64
-    }
-  ],
-  "refused": [
+      "text": "Line one.\nLine two.",
+      "fingerprint": "cc338e1b3db86c56"
+    },
     {
-      "name": "leader",
-      "text": "Only one line.",
-      "error": "definition needs at least 4 paragraphs or lines"
+      "name": "long-role",
+      "text": "Review each change in full.\n\nCheck the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. Check the tests and the contract. ",
+      "fingerprint": "ad591da48a35f4e2"
     }
   ]
 }
