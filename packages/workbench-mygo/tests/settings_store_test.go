@@ -359,6 +359,17 @@ func TestAStoredSettingOfALoadedPluginMustBeDeclared(t *testing.T) {
 	}
 }
 
+// cardSplit is a key of an earlier setting: every split adds the card as an insert of the layout does (docs/spec/settings.md#earlier-formats), so a
+// settings file that holds it is refused.
+func TestAStoredCardSplitIsAnUnknownSetting(t *testing.T) {
+	var writes []saved
+	store := settingsStore(t, &writes)
+	err := store.Begin(map[string]any{"cardSplit": "even"}, nil, "")
+	if err == nil || err.Error() != "settings.json: unknown setting cardSplit" {
+		t.Fatalf("the error is %v", err)
+	}
+}
+
 // The application is written in the languages of its menu, its default language first, so the language it shows follows the system.
 func TestTheApplicationIsWrittenInTheLanguagesOfItsMenu(t *testing.T) {
 	catalog, err := workbench.ReadSettingsCatalog()

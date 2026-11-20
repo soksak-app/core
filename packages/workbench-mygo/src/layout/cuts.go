@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -20,38 +22,6 @@ import (
 // target, an even cut gives the node 1/(k+1) and keeps every ratio, and a cut that is not even gives the node half of the fraction of the
 // target; across it, the target is wrapped in a new cut of two halves. Even gives the kids of every cut equal fractions. An operation
 // changes the stored tree; the grid lays it and refuses a result that draws a changed node below its minimum.
-
-// Box is a rectangle of the host that the tree keeps as one child, with the px of its head above its members.
-type Box struct {
-	ID      string   `json:"id"`
-	Head    float64  `json:"head"`
-	Members []Member `json:"members"`
-}
-
-// Member is a member of the plane or of a box: a card id, or a box.
-type Member struct {
-	Card string
-	Box  *Box
-}
-
-// UnmarshalJSON reads a card id or a box.
-func (m *Member) UnmarshalJSON(raw []byte) error {
-	if bytes.HasPrefix(bytes.TrimSpace(raw), []byte(`"`)) {
-		return json.Unmarshal(raw, &m.Card)
-	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	m.Box = &Box{}
-	return decoder.Decode(m.Box)
-}
-
-// MarshalJSON writes a card id or a box.
-func (m Member) MarshalJSON() ([]byte, error) {
-	if m.Box != nil {
-		return json.Marshal(m.Box)
-	}
-	return json.Marshal(m.Card)
-}
 
 // Target is the target of an insert: one member id, or the ids that neighbouring children of one cut hold.
 type Target []string
@@ -104,19 +74,6 @@ func ends(axis Axis) (string, string) {
 }
 
 func notMember(id string) error { return fmt.Errorf("card %s is not a member of the layout", id) }
-
-// contentsOf is the card ids inside a box, through the boxes that it holds.
-func contentsOf(b *Box) []string {
-	out := []string{}
-	for _, m := range b.Members {
-		if m.Box != nil {
-			out = append(out, contentsOf(m.Box)...)
-		} else {
-			out = append(out, m.Card)
-		}
-	}
-	return out
-}
 
 // evenWithin is the difference of fractions under which two kids are of one size, so their cut is even.
 const evenWithin = 1e-9
@@ -588,6 +545,104 @@ func (g *Grid) Insert(target Target, side Side, node *Node) (string, error) {
 	return node.id(), nil
 }
 
+// GroupInit names the box of a group: its id, the data of the host and the px of its head, which the host draws inside its top.
+type GroupInit struct {
+	Box  string          `json:"box"`
+	Data json.RawMessage `json:"data,omitempty"`
+	Head float64         `json:"head"`
+}
+
+// Group is the group split of the card or box target (packages/soksak/docs/layout.md#add-and-remove): the box of init takes the place
+// of target in its cut, and its inner node is ADD of node beside target toward side, two halves. The result is judged once, with the
+// head and the frames of the new box, and a refusal names the deepest node that it would draw below its minimum and changes nothing.
+func (g *Grid) Group(target string, side Side, node *Node, init GroupInit) error {
+	defer g.begin()()
+	if node == nil || node.isCut() || node.id() == "" {
+		return errors.New("soksak: a group takes a card or a box node")
+	}
+	if init.Box == "" {
+		return errors.New("soksak: a group names no box")
+	}
+	if !finite(init.Head) || init.Head < 0 {
+		return errors.New("soksak: the head of " + strconv.Quote(init.Box) + " is " + jsString(init.Head))
+	}
+	heads := g.heads
+	err := g.byCuts(func() (*Node, error) {
+		root, err := g.groupNode(target, side, node, init)
+		if err == nil {
+			g.heads = maps.Clone(heads)
+			if g.heads == nil {
+				g.heads = map[string]float64{}
+			}
+			g.heads[init.Box] = init.Head
+		}
+		return root, err
+	})
+	if err != nil {
+		g.heads = heads
+		g.derive()
+	}
+	return err
+}
+
+// groupNode is the stored tree with a box around target and node beside it toward side.
+func (g *Grid) groupNode(target string, side Side, node *Node, init GroupInit) (*Node, error) {
+	if !isSide(side) {
+		return nil, fmt.Errorf("unknown side %s; use left, right, top or bottom", side)
+	}
+	ids := []string{init.Box}
+	if !node.isCut() {
+		ids = append(ids, node.id())
+	}
+	for _, leaf := range cardsOf(node) {
+		ids = append(ids, leaf.Card)
+	}
+	for _, id := range ids {
+		if g.taken(id) {
+			return nil, fmt.Errorf("card %s is a member of the layout", id)
+		}
+	}
+	x := newIndex(g)
+	at := x.byID[target]
+	if at == nil {
+		return nil, notMember(target)
+	}
+	pair := []*Node{at, cloneNode(node)}
+	if !(side == "right" || side == "bottom") {
+		pair = []*Node{pair[1], at}
+	}
+	inner := &Node{Cut: axisOf(side), Kids: []Kid{{Share: 0.5, Node: pair[0]}, {Share: 0.5, Node: pair[1]}}}
+	x.replace(at, &Node{Box: init.Box, Data: slices.Clone(init.Data), Inner: inner})
+	return x.root, nil
+}
+
+// Unwrap takes the box id out of the tree: its inner node takes its place in its cut, and a cut along the axis of that cut joins it with
+// every kid drawn at the size it had (packages/soksak/docs/layout.md#add-and-remove). The head of the box leaves with it. A refusal
+// changes nothing.
+func (g *Grid) Unwrap(id string) error {
+	defer g.begin()()
+	if g.boxByID[id] == nil {
+		if g.byID[id] != nil {
+			return fmt.Errorf("card %s is no box", id)
+		}
+		return notMember(id)
+	}
+	heads := g.heads
+	err := g.byCuts(func() (*Node, error) {
+		x := newIndex(g)
+		box := x.byID[id]
+		x.replace(box, box.Inner)
+		g.heads = maps.Clone(heads)
+		delete(g.heads, id)
+		return x.root, nil
+	})
+	if err != nil {
+		g.heads = heads
+		g.derive()
+	}
+	return err
+}
+
 // Withdraw is REMOVE (packages/soksak/docs/layout.md#add-and-remove): it takes the node id, a card or a box, out of its cut; the other
 // kids that are no fixed card take its fraction by one factor. It returns the node that left, which Insert takes, or its refusal, and
 // changes nothing then.
@@ -732,14 +787,9 @@ func (g *Grid) byCuts(change func() (*Node, error)) error {
 	return nil
 }
 
-// belowMinimum is the text of the deepest node that the last operation moved and that is drawn below its minimum, or "". The minimum
-// of a node is recursive: a card needs minSize and on y the heads drawn inside its rectangle, a card that keeps a px size the smaller of
-// that size and minSize, a fixed card with a px size the smaller of that size and the size it had, another fixed card the size it is
-// drawn at, a box the minimum of its inner node, a cut along an axis the minimums of its kids and the corridors between them, and a cut
-// across it the largest minimum of its kids.
-func (g *Grid) belowMinimum(before map[string]Rect) string {
-	now := g.Rects()
-	text := func(v float64) string { return jsString(jsRound(v)) }
+// measure is the drawn extent of a node, the extent of the drawn rectangles of its cards, and its recursive minimum on an axis
+// (packages/soksak/docs/layout.md#cuts), read from the rectangles now; before holds the rectangles that a fixed card had.
+func (g *Grid) measure(now, before map[string]Rect) (func(n *Node) extent, func(n *Node, axis Axis) float64) {
 	extentOfNode := func(n *Node) extent {
 		e := extent{math.Inf(1), math.Inf(-1), math.Inf(1), math.Inf(-1)}
 		for _, leaf := range cardsOf(n) {
@@ -805,6 +855,18 @@ func (g *Grid) belowMinimum(before map[string]Rect) string {
 		}
 		return sum + corridors
 	}
+	return extentOfNode, need
+}
+
+// belowMinimum is the text of the deepest node that the last operation moved and that is drawn below its minimum, or "". The minimum
+// of a node is recursive: a card needs minSize and on y the heads drawn inside its rectangle, a card that keeps a px size the smaller of
+// that size and minSize, a fixed card with a px size the smaller of that size and the size it had, another fixed card the size it is
+// drawn at, a box the minimum of its inner node, a cut along an axis the minimums of its kids and the corridors between them, and a cut
+// across it the largest minimum of its kids.
+func (g *Grid) belowMinimum(before map[string]Rect) string {
+	now := g.Rects()
+	text := func(v float64) string { return jsString(jsRound(v)) }
+	extentOfNode, need := g.measure(now, before)
 	moved := func(n *Node) bool {
 		for _, leaf := range cardsOf(n) {
 			was, ok := before[leaf.Card]

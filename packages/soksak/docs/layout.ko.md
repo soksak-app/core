@@ -468,6 +468,17 @@ cut에 더해지고, run은 자기 cut으로 감싸지지 않는다. cut을 가�
 target을 두 절반의 새 cut으로 감싼다. operation이 바꾼 cut만 다시 놓으므로 다른 모든
 카드는 사각형을 유지한다. move는 `withdraw`와 `insert`다.
 
+`group(target, side, node, {box, data?, head})`는 카드나 box인 `target`의 group
+split이다. id가 `box`이고 페이로드가 `data`이며 head가 `head` px인 box가 그 cut에서
+`target`의 자리를 그 fraction과 함께 차지하고, 그 inner node는 `side`의 축을 따르는
+두 절반의 새 cut으로 `target`과 `side` 쪽의 `node`를 담는다. head는 `setHeads`의
+head에 더해지고, 결과는 새 box의 head와 frame과 함께 한 번 판정되므로, 거부는 group이
+최소보다 작게 그릴 가장 깊은 node를 head 아래 content 크기로 가리킨다. layout이 가진
+id는 거부된다.
+`unwrap(id)`는 그 반대다. box `id`의 inner node가 그 자리를 차지하고 head는 box와 함께
+떠나며, box를 담은 cut의 축을 따르는 cut은 모든 kid를 그려진 크기로 두고 그 cut에
+합쳐진다. box의 `close(id)`는 카드의 close와 같이 그 안의 모든 카드와 함께 box를 꺼낸다.
+
 ```js
 const left = grid.withdraw("card-3");             // row가 비율대로 빈자리를 메운다
 grid.insert("card-1", "right", left);             // card-3이 card-1 오른쪽에 놓인다
@@ -542,6 +553,10 @@ grid.move("terminal", "browser", "right");      // 거절되면 false 이고 아
 
 `splitToward(id, side, init)` 는 지정한 쪽에 새 카드를 놓는다. `split` 은 먼 절반을
 새 카드에 주므로 `left` 와 `top` 은 두 구간을 맞바꾼다. id 는 맞바꾸지 않는다.
+거부된 split은 throw하고 아무것도 바꾸지 않는다. 모르는 축이나 쪽, layout이 가진 id,
+모르는 카드나 `fixed` 카드, cut의 corridor보다 넓지 않게 그려진 카드(`card <id> would
+be 0x<h>, below its minimum <m>x<m>`, `y`에서는 `<w>x0`), 그리고 node를 최소보다 작게
+그리는 cut이며, 마지막은 그런 가장 깊은 node를 가리킨다.
 
 ## 드롭이 내려앉는 곳
 
@@ -612,9 +627,10 @@ share를 받지 않는다. fixed 카드를 담은 cut이나 box는 다른 kid처
 | `resize(w, h)`, `width`, `height` | 판의 크기 |
 | `canSplit(id, axis)`, `split(id, axis, {id?, data?, newLine?})` | 카드 하나를 둘로 자른다 |
 | `splitToward(id, side, {id?, data?, newLine?})` | 자르고 새 카드를 지정한 쪽에 놓는다. `newLine` 은 카드가 가로지르는 line이 안에 있어도 가운데의 새 line에서 자른다 |
-| `canClose(id)`, `close(id)` | 카드를 제거한다. 그 cut의 다른 kid가 한 인수로 그 share를 가진다(R7) |
+| `canClose(id)`, `close(id)` | 카드를, 또는 그 안의 모든 카드와 함께 box를 제거한다. 그 cut의 다른 kid가 한 인수로 그 share를 가지고 `fixed` 카드는 그려진 크기를 유지한다(R7). 카드가 `fixed`이거나 마지막 카드일 때, box가 `fixed`가 아닌 모든 카드를 담을 때, 또는 cut의 다른 모든 kid가 `fixed` 카드일 때 false다 |
 | `canMove(id, targetId, side)`, `move(id, targetId, side)` | 카드를 다른 카드의 옆으로 옮긴다. close와 insert다 |
-| `setFixed(id, on)`, `setSize(id, axis, px)`, `setData(id, data)` | 카드를 변경한다. 반환된 사본은 동결되어 있다 |
+| `setFixed(id, on)`, `setSize(id, axis, px)`, `setData(id, data)` | 카드를 변경하고, `setData`는 box의 페이로드도 바꾼다. 반환된 사본은 동결되어 있다 |
+| `unwrap(id)`, `headsAbove(id)` | box `id`의 inner node를 head 없이 그 자리에 놓고, 그 cut의 축을 따르는 cut은 모든 kid를 그려진 크기로 두고 그 cut에 합쳐진다. 카드나 box 안쪽 위에 그려지는 head의 px ([add and remove](#add-and-remove)) |
 | `standings(axis)`, `canInsertAt(axis, line)`, `insertAt`, `moveTo` | 판을 가로지르는 카드: 판의 가장자리와 그 축을 따르는 root cut의 seam |
 | `zoneAt(x, y, options)` | 드롭이 내려앉는 곳 |
 | `dividers()`, `rules()` | 잡는 영역과 그릴 경계 |
@@ -622,6 +638,7 @@ share를 받지 않는다. fixed 카드를 담은 cut이나 box는 다른 kid처
 | `even()`, `setHeads(heads)`, `visits` | 모든 cut에서 fraction을 받는 모든 kid에 하나의 fraction을 준다. box의 head. 마지막 operation이 방문한 node 수 ([cuts](#cuts)) |
 | `withdraw(id)` | 카드나 box를 그 cut에서 꺼낸다. 나머지의 fraction이 한 인수로 늘어난다 ([add and remove](#add-and-remove)) |
 | `insert(target, side, node)` | target 옆에 카드를 더한다. 고른 cut에서는 1/(k+1), 고르지 않은 cut에서는 target의 절반, 가로질러서는 두 절반으로 감싼다 ([add and remove](#add-and-remove)) |
+| `group(target, side, node, {box, data?, head})` | target 자리에 head를 가진 box를 놓고 그 안에서 target 옆에 node를 더하며, 한 번 판정한다 ([add and remove](#add-and-remove)) |
 | `crossings(card)`, `cardsCrossing(axis, line)` | 카드가 가로지르는 선, 그리고 선을 가로지르는 카드 |
 | `lines(axis)`, `toJSON()`, `Soksak.from(state, options?)`, `checkState(state)`, `replace(state)` | 검사와 상태 |
 | `gap`, `minSize`, `grabSize`, `snapDistance`, `snap`, `frames` | 옵션. 생성 후에도 읽고 쓸 수 있다 |

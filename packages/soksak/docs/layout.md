@@ -527,6 +527,19 @@ is wrapped in a new cut of two halves.
 Only the cuts that the operation changes are laid again, so every other card
 keeps its rectangle. A move is a `withdraw` and an `insert`.
 
+`group(target, side, node, {box, data?, head})` is the group split of the card
+or box `target`: a box with the id `box`, the payload `data` and a head of
+`head` px takes the place of `target` in its cut, with its fraction, and its
+inner node is a new cut of two halves along the axis of `side` that holds
+`target` and `node` toward `side`. The head joins the heads of `setHeads`, and
+the result is judged once with the head and the frames of the new box, so a
+refusal names the deepest node that the group would draw below its minimum at
+the size of its content under the head. Ids that the layout holds are refused.
+`unwrap(id)` is the inverse: the inner node of the box `id` takes its place and
+its head leaves with it, and a cut along the axis of the cut that holds the box
+joins that cut with every kid drawn at the size it had. `close(id)` of a box
+withdraws it with every card inside it, as a close of a card does.
+
 ```js
 const left = grid.withdraw("card-3");             // the row closes the gap in proportion
 grid.insert("card-1", "right", left);             // card-3 lands to the right of card-1
@@ -606,7 +619,11 @@ that it comes to fill alone, where it has no size of its own (R7).
 
 `splitToward(id, side, init)` places a new card on a named side. `split` gives
 the far half to the new card, so `left` and `top` swap the two spans. Ids are
-not swapped.
+not swapped. A refused split throws and changes nothing: an unknown axis or
+side, an id that the layout holds, an unknown or `fixed` card, a card drawn no
+wider than the corridor of the cut (`card <id> would be 0x<h>, below its
+minimum <m>x<m>`, or `<w>x0` on `y`), and a cut that draws a node below its
+minimum, which names the deepest such node.
 
 ## Where a drop lands
 
@@ -681,9 +698,10 @@ first.
 | `resize(w, h)`, `width`, `height` | plane size |
 | `canSplit(id, axis)`, `split(id, axis, {id?, data?, newLine?})` | cut one card in two; `newLine` cuts at a new line at the centre even where a line that the card spans across lies inside it |
 | `splitToward(id, side, {id?, data?, newLine?})` | cut it and put the new one on a named side |
-| `canClose(id)`, `close(id)` | remove a card; the other kids of its cut take its share by one factor (R7) |
+| `canClose(id)`, `close(id)` | remove a card, or a box with every card inside it; the other kids of its cut take its share by one factor and a fixed card keeps its drawn size (R7); false when the card is fixed or the last card, when the box holds every card that is not fixed, or when every other kid of the cut is a fixed card |
 | `canMove(id, targetId, side)`, `move(id, targetId, side)` | take a card to another card's side: a close and an insert |
-| `setFixed(id, on)`, `setSize(id, axis, px)`, `setData(id, data)` | change a card; the returned copies are frozen |
+| `setFixed(id, on)`, `setSize(id, axis, px)`, `setData(id, data)` | change a card, and with `setData` the payload of a box; the returned copies are frozen |
+| `unwrap(id)`, `headsAbove(id)` | put the inner node of the box `id` in its place without its head, a cut along the axis of its cut joining that cut with every kid at its drawn size; the px of the heads drawn inside the top of a card or a box ([add and remove](#add-and-remove)) |
 | `standings(axis)`, `canInsertAt(axis, line)`, `insertAt`, `moveTo` | a card that reaches across the plane: the edges of the plane and the seams of the root cut along the axis |
 | `zoneAt(x, y, options)` | where a drop lands |
 | `dividers()`, `rules()` | grab areas, and boundaries to draw |
@@ -691,6 +709,7 @@ first.
 | `even()`, `setHeads(heads)`, `visits` | give every kid of every cut that takes a fraction one fraction; the heads of the boxes; the nodes that the last operation visited ([cuts](#cuts)) |
 | `withdraw(id)` | take a card or a box out of its cut; the fractions of the others scale by one factor ([add and remove](#add-and-remove)) |
 | `insert(target, side, node)` | add a card beside a target: 1/(k+1) of an even cut, half of the target in an uneven cut, a wrap of two halves across ([add and remove](#add-and-remove)) |
+| `group(target, side, node, {box, data?, head})` | put a box with its head in the place of a target and add the node inside it beside the target, judged once ([add and remove](#add-and-remove)) |
 | `crossings(card)`, `cardsCrossing(axis, line)` | the lines a card crosses, and the cards that cross a line |
 | `lines(axis)`, `toJSON()`, `Soksak.from(state, options?)`, `checkState(state)`, `replace(state)` | inspection and state |
 | `gap`, `minSize`, `grabSize`, `snapDistance`, `snap`, `frames` | the options, readable and writable after construction |

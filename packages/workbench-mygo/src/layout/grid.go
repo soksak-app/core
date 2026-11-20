@@ -297,8 +297,12 @@ func (g *Grid) Card(id string) (Card, bool) {
 	return copyCard(found), true
 }
 
-// SetData replaces a card's payload, which the grid does not read.
+// SetData replaces the payload of a card or a box, which the grid does not read.
 func (g *Grid) SetData(id string, data json.RawMessage) bool {
+	if box := g.boxByID[id]; box != nil {
+		box.Data = slices.Clone(data)
+		return true
+	}
 	card := g.find(id)
 	if card == nil {
 		return false
@@ -449,6 +453,9 @@ func (g *Grid) Rect(id string) (Rect, bool) {
 	return Rect{X: x, Y: y, W: math.Max(0, g.BoundaryPos("x", l[1])-inset.x1-x), H: math.Max(0, g.BoundaryPos("y", l[3])-inset.y1-y)}, true
 }
 
+// HeadsAbove is the px of the heads of the boxes around the card or the box id that the grid draws inside the top of its rectangle.
+func (g *Grid) HeadsAbove(id string) float64 { return g.above[id] }
+
 // Rects is the rect of every card, by id.
 func (g *Grid) Rects() map[string]Rect {
 	f := frameOf(g.plane())
@@ -476,81 +483,41 @@ func (g *Grid) CardsCrossing(axis Axis, line int) []Card {
 	return out
 }
 
-// resizeCard draws the card holder, which declares a px size on axis, delta px larger by moving the boundary line at one of its edges.
-// A px size belongs to its card of the tree, whatever cells the lines of other cuts draw across the card. The drag moves every seam that
-// stands on the line, so every card that declares a px size and has its edge on that side of the line takes the same difference. When
-// cards on the other side declare px sizes as well, they give the difference and every declaration on the two sides changes by it at
-// the scale it is drawn at: a plane that draws its declared sizes scaled keeps its scale, and no third card is redrawn. The line moves by
-// the difference, so the commit reads the fractions of a kid that pays from it.
-func (g *Grid) resizeCard(axis Axis, holder *Card, line int, delta float64) {
-	lo, hi := span(axis)
-	ends := holder.get(hi) == line
-	declared := func(near bool) []*Card {
-		out := []*Card{}
-		for _, c := range g.list {
-			edge := c.get(lo) == line
-			if near == ends {
-				edge = c.get(hi) == line
-			}
-			if edge && fixedSize(c, axis) != nil {
-				out = append(out, c)
+// grow draws n, which keeps a px size on axis, delta px larger at the edge that a seam moves, the end with end or else the start: a card
+// takes the delta at the scale it is drawn at, a box gives it to its inner node, a cut along the axis to its kid at that edge, and a cut
+// across it to each of its kids that keeps a size.
+func (g *Grid) grow(n *Node, axis Axis, delta float64, end bool) {
+	switch {
+	case n.isBox():
+		g.grow(n.Inner, axis, delta, end)
+		return
+	case n.isCut():
+		kids := n.Kids
+		if n.Cut == axis {
+			kids = n.Kids[:1]
+			if end {
+				kids = n.Kids[len(n.Kids)-1:]
 			}
 		}
-		return out
-	}
-	near, far := declared(true), declared(false)
-	type size struct{ own, now float64 }
-	sizes := map[*Card]size{}
-	frame := frameOf(g.plane())
-	for _, c := range append(slices.Clone(near), far...) {
-		r := rectIn(frame, c)
-		now := r.H
-		if axis == "x" {
-			now = r.W
-		}
-		sizes[c] = size{*fixedSize(c, axis), now}
-	}
-	change := func(c *Card, by float64) {
-		s := sizes[c]
-		next := s.now + by
-		if len(far) > 0 {
-			rate := 1.0
-			if s.now > eps {
-				rate = s.own / s.now
+		for _, kid := range kids {
+			if _, held := g.heldOf(kid.Node, axis, g.unit); held {
+				g.grow(kid.Node, axis, delta, end)
 			}
-			next = s.own + float64(by*rate)
 		}
-		setSizeOn(c, axis, math.Max(0, next))
+		return
 	}
-	for _, c := range near {
-		change(c, delta)
+	card := g.byID[n.Card]
+	own := fixedSize(card, axis)
+	if own == nil {
+		return
 	}
-	for _, c := range far {
-		change(c, -delta)
+	now := g.content(n, axis)
+	// The new content over the drawn content is the scale of the declaration; a card drawn at its size takes the delta as it is.
+	next := *own + delta
+	if now > eps && math.Abs(now-*own) >= 1e-6 {
+		next = *own * (now + delta) / now
 	}
-	a := g.arr(axis)
-	step := delta
-	if !ends {
-		step = -delta
-	}
-	g.moved = true
-	a[line] = clamp(a[line]+step/g.size(axis), a[line-1], a[line+1])
-}
-
-// holderAt is the card whose px size a drag at this boundary changes, or nil.
-func (g *Grid) holderAt(axis Axis, line int) *Card {
-	lo, hi := span(axis)
-	for _, c := range g.list {
-		if c.get(hi) == line && fixedSize(c, axis) != nil {
-			return c
-		}
-	}
-	for _, c := range g.list {
-		if c.get(lo) == line && fixedSize(c, axis) != nil {
-			return c
-		}
-	}
-	return nil
+	setSizeOn(card, axis, math.Max(0, next))
 }
 
 // Rules is everything to draw for the boundaries.
@@ -581,8 +548,8 @@ func (g *Grid) HasBoundary(axis Axis, line int) bool {
 
 func clamp(v, lo, hi float64) float64 { return math.Min(hi, math.Max(lo, v)) }
 
-// BoundaryRange is the px range a boundary may move within while every card keeps its minimum size. It always contains the position
-// the boundary stands at.
+// BoundaryRange is the px range a boundary may move within while every card keeps its minimum size (packages/soksak/docs/layout.md#boundaries).
+// It always contains the position the boundary stands at.
 func (g *Grid) BoundaryRange(axis Axis, line int) [2]float64 {
 	if noAxis(axis) || !g.HasBoundary(axis, line) {
 		return [2]float64{0, 0}
@@ -594,33 +561,109 @@ func (g *Grid) BoundaryRange(axis Axis, line int) [2]float64 {
 			return [2]float64{at, at}
 		}
 	}
-	along := linePositions(g.plane(), axis)
-	lo, hi := span(axis)
-	first := along[line-1]
-	last := along[line+1]
-	low, high := first, last
-	p := g.plane()
-	read := linesRead(p, axis)
-	for _, card := range g.list {
-		near := cardInset(p, axis, card, "lo", read)
-		far := cardInset(p, axis, card, "hi", read)
-		if card.get(hi) == line {
-			low = math.Max(low, along[card.get(lo)]+g.min+near+far)
+	// The boundary is the seams of the cuts along the axis that stand on the line, and a drag moves every one of them. Each seam bounds the
+	// move by the two kids of its own cut: each can give what it can lose before a card inside it is drawn below its minimum. A line of
+	// another cut is no limit, because the kids of another cut do not change.
+	now := g.Rects()
+	extentOf, need := g.measure(now, now)
+	drawn := func(n *Node) float64 {
+		e := extentOf(n)
+		if axis == "x" {
+			return e.x1 - e.x0
 		}
-		if card.get(lo) == line {
-			high = math.Min(high, along[card.get(hi)]-g.min-near-far)
+		return e.y1 - e.y0
+	}
+	// What a node can lose on the axis: a card or a node that keeps a px size down to its minimum; a cut across the axis loses it in
+	// every kid; a cut along it shares the loss among its kids that take a fraction in proportion to their contents.
+	var loses func(n *Node) float64
+	loses = func(n *Node) float64 {
+		if n.isBox() {
+			return loses(n.Inner)
 		}
+		// A drag sets the size of a card that the person moves, a fixed card or one that declares a px size included, so a card can lose
+		// down to minSize and the heads inside it.
+		if n.isCard() {
+			heads := 0.0
+			if axis == "y" {
+				heads = g.above[n.Card]
+			}
+			return math.Max(0, drawn(n)-g.min-heads)
+		}
+		if _, held := g.heldOf(n, axis, g.unit); held {
+			return math.Max(0, drawn(n)-need(n, axis))
+		}
+		if n.Cut != axis {
+			least := math.Inf(1)
+			for _, kid := range n.Kids {
+				least = math.Min(least, loses(kid.Node))
+			}
+			return least
+		}
+		total := 0.0
+		open := []*Node{}
+		for _, kid := range n.Kids {
+			if _, held := g.heldOf(kid.Node, axis, g.unit); !held {
+				open = append(open, kid.Node)
+				total += g.content(kid.Node, axis)
+			}
+		}
+		most := math.Inf(1)
+		for _, kid := range open {
+			if part := g.content(kid, axis); part > eps {
+				most = math.Min(most, loses(kid)*total/part)
+			}
+		}
+		if math.IsInf(most, 1) {
+			return 0
+		}
+		return most
 	}
-	at := along[line]
-	if low > high {
-		mid := clamp((low+high)/2, first, last)
-		return [2]float64{math.Min(mid, at), math.Max(mid, at)}
+	at := g.BoundaryPos(axis, line)
+	toward, away := math.Inf(1), math.Inf(1)
+	for _, seam := range g.seams(axis, line) {
+		toward = math.Min(toward, loses(seam.cut.Kids[seam.i].Node))
+		away = math.Min(away, loses(seam.cut.Kids[seam.i+1].Node))
 	}
-	return [2]float64{math.Min(low, at), math.Max(high, at)}
+	if math.IsInf(toward, 1) {
+		return [2]float64{at, at}
+	}
+	return [2]float64{at - toward, at + away}
 }
 
-// MoveBoundary moves a boundary to a position in px and returns the position it reaches. When either adjacent slot has a px size,
-// that size changes; otherwise the line itself moves.
+// seam is a seam of a cut: the cut and the index of the kid before the seam.
+type seam struct {
+	cut *Node
+	i   int
+}
+
+// seams is the seams of the cuts along axis that stand on the derived line line.
+func (g *Grid) seams(axis Axis, line int) []seam {
+	out := []seam{}
+	var visit func(n *Node)
+	visit = func(n *Node) {
+		g.visit()
+		switch {
+		case n.isBox():
+			visit(n.Inner)
+		case n.isCut():
+			if n.Cut == axis {
+				for i := 0; i < len(n.Kids)-1; i++ {
+					if _, end := g.at[n.Kids[i].Node].on(axis); end == line {
+						out = append(out, seam{n, i})
+					}
+				}
+			}
+			for _, kid := range n.Kids {
+				visit(kid.Node)
+			}
+		}
+	}
+	visit(g.root)
+	return out
+}
+
+// MoveBoundary moves a boundary to a position in px inside its range and returns the position it reaches: every seam on the line
+// moves by the same px (packages/soksak/docs/layout.md#boundaries).
 func (g *Grid) MoveBoundary(axis Axis, line int, px float64, allowSnap bool) float64 {
 	defer g.begin()()
 	if noAxis(axis) {
@@ -644,28 +687,61 @@ func (g *Grid) MoveBoundary(axis Axis, line int, px float64, allowSnap bool) flo
 	if math.Abs(target-g.BoundaryPos(axis, line)) < 1e-9 {
 		return g.BoundaryPos(axis, line)
 	}
-	if holder := g.holderAt(axis, line); holder != nil {
-		// The card is drawn larger by what its far edge moves toward the target, or smaller by what its near edge does.
-		_, hi := span(axis)
-		off := target - g.BoundaryPos(axis, line)
-		if holder.get(hi) != line {
-			off = -off
+	// Each seam on the line moves by the same px. The contents of the kids of each cut are read before anything changes: the kid before
+	// the seam is drawn off larger and the kid after it off smaller, and every other kid keeps its content. A kid that keeps a px size
+	// takes the new size at the scale it is drawn at, so a plane that draws its declared sizes scaled keeps its scale; the kids that take
+	// a fraction take the fractions of their new contents.
+	off := target - g.BoundaryPos(axis, line)
+	seams := g.seams(axis, line)
+	kept := g.ToJSON()
+	contents := make([][]float64, len(seams))
+	held := make([][]bool, len(seams))
+	for k, sm := range seams {
+		for _, kid := range sm.cut.Kids {
+			contents[k] = append(contents[k], g.content(kid.Node, axis))
+			_, h := g.heldOf(kid.Node, axis, g.unit)
+			held[k] = append(held[k], h)
 		}
-		g.resizeCard(axis, holder, line, off)
-	} else {
-		// Once a line moves, every line stands at its coordinate over the extent of the plane, and the commit reads the fractions of
-		// the kids beside it from there, so the coordinate of the target is where the line stands. The neighbouring lines bound it, so
-		// the line array stays in order.
-		a := g.arr(axis)
-		g.moved = true
-		a[line] = clamp(target/g.size(axis), a[line-1], a[line+1])
 	}
-	// The position is read before the tree takes the lines, because a boundary that reached a neighbouring line joins it there and the
-	// index line then names the next line.
-	at := g.BoundaryPos(axis, line)
-	g.moved = true
+	for k, sm := range seams {
+		cut, i := sm.cut, sm.i
+		if held[k][i] {
+			g.grow(cut.Kids[i].Node, axis, off, true)
+		}
+		if held[k][i+1] {
+			g.grow(cut.Kids[i+1].Node, axis, -off, false)
+		}
+		want := slices.Clone(contents[k])
+		want[i] += off
+		want[i+1] -= off
+		shared, pool := 0.0, 0.0
+		for n := range cut.Kids {
+			if !held[k][n] {
+				shared += cut.Kids[n].Share
+				pool += math.Max(0, want[n])
+			}
+		}
+		if pool <= eps {
+			continue
+		}
+		for n := range cut.Kids {
+			if !held[k][n] {
+				cut.Kids[n].Share = math.Max(0, want[n]) / pool * shared
+			}
+		}
+	}
 	g.changed()
-	return at
+	// A move that leaves a card with no area changes nothing: the range lets a card reach minSize, and a minSize of 0 is no area.
+	if !g.hasArea(nil) {
+		g.restore(kept)
+		return g.BoundaryPos(axis, line)
+	}
+	// The seam keeps its cut, and the line it now stands on can have another index.
+	if len(seams) > 0 {
+		_, end := g.at[seams[0].cut.Kids[seams[0].i].Node].on(axis)
+		return g.BoundaryPos(axis, end)
+	}
+	return g.BoundaryPos(axis, line)
 }
 
 // CenterBoundary moves a boundary so the two cards beside it are drawn at the same size, and returns the position it reaches.
@@ -791,7 +867,9 @@ func (g *Grid) middleOf(axis Axis, line int) float64 {
 }
 
 // cutAt is the position to cut a card at: the unreferenced line nearest the card's centre that leaves both halves their minimum, or a
-// new line at the centre (line -1), clamped to the range where both halves fit. It is false when the card cannot be cut.
+// new line at the centre (line -1), clamped to the range where both halves fit. Where the halves cannot both have their minimum, it is
+// the centre, and the check of the split names the node that the cut draws below its minimum. It is false when the card is fixed or is
+// drawn no wider than the corridor that the cut adds, so that a half would have no extent.
 // A fresh cut takes no existing line: it cuts at the middle of the card.
 func (g *Grid) cutAt(card *Card, axis Axis, fresh bool) (int, float64, bool) {
 	if card.Fixed {
@@ -812,12 +890,16 @@ func (g *Grid) cutAt(card *Card, axis Axis, fresh bool) (int, float64, bool) {
 	p := g.plane()
 	read := linesRead(p, axis)
 	half := halfCorridor(p, axis, read)
+	mid := (a[card.get(lo)] + a[card.get(hi)]) / 2
 	lowest := a[card.get(lo)] + (g.min+cardInset(p, axis, card, "lo", read)+half)/per
 	highest := a[card.get(hi)] - (g.min+half+cardInset(p, axis, card, "hi", read))/per
 	if lowest > highest {
-		return 0, 0, false
+		if a[card.get(lo)]+(cardInset(p, axis, card, "lo", read)+half)/per >= mid ||
+			a[card.get(hi)]-(half+cardInset(p, axis, card, "hi", read))/per <= mid {
+			return 0, 0, false
+		}
+		lowest, highest = mid, mid
 	}
-	mid := (a[card.get(lo)] + a[card.get(hi)]) / 2
 	line := -1
 	for i := card.get(lo) + 1; i < card.get(hi) && !fresh; i++ {
 		if a[i] < lowest || a[i] > highest {
@@ -898,7 +980,7 @@ func (g *Grid) stillFits(axis Axis, before map[string]float64, flat map[string]b
 	return true
 }
 
-// CanSplit is true when the cut leaves every card the smaller of its current size and the minimum size.
+// CanSplit is true when Split of the card id along axis would succeed.
 func (g *Grid) CanSplit(id string, axis Axis) bool {
 	if noAxis(axis) {
 		return false
@@ -915,7 +997,8 @@ func (g *Grid) CanSplit(id string, axis Axis) bool {
 			seq := g.seq
 			g.probing = true
 			g.probes++
-			_, ok = g.Split(id, axis, SplitInit{})
+			_, err := g.Split(id, axis, SplitInit{})
+			ok = err == nil
 			g.restore(before)
 			g.probing = false
 			g.seq = seq
@@ -926,12 +1009,12 @@ func (g *Grid) CanSplit(id string, axis Axis) bool {
 }
 
 // Split cuts one card in two and returns the new card's id. The original keeps its id and the near half; the new card takes the far
-// half. It is false when the halves do not fit.
+// half. Its refusal names the deepest node that the cut would draw below its minimum, and changes nothing.
 // With init.NewLine the cut takes a new position at the centre instead of a line that the card spans across.
-func (g *Grid) Split(id string, axis Axis, init SplitInit) (string, bool) {
+func (g *Grid) Split(id string, axis Axis, init SplitInit) (string, error) {
 	defer g.begin()()
 	if noAxis(axis) {
-		return "", false
+		return "", fmt.Errorf("unknown axis %s; use x or y", axis)
 	}
 	return g.splitAt(id, axis, init, false)
 }
@@ -945,11 +1028,11 @@ func isSide(side Side) bool {
 	return false
 }
 
-// SplitToward cuts a card and puts the new one on a named side. The ids are not swapped.
-func (g *Grid) SplitToward(id string, side Side, init SplitInit) (string, bool) {
+// SplitToward cuts a card and puts the new one on a named side. The ids are not swapped. Its refusal is the refusal of Split.
+func (g *Grid) SplitToward(id string, side Side, init SplitInit) (string, error) {
 	defer g.begin()()
 	if !isSide(side) {
-		return "", false
+		return "", fmt.Errorf("unknown side %s; use left, right, top or bottom", side)
 	}
 	return g.splitAt(id, axisOf(side), init, isAhead(side))
 }
@@ -958,20 +1041,30 @@ func (g *Grid) SplitToward(id string, side Side, init SplitInit) (string, bool) 
 // takes the part after it, or with first the new card takes the part before it. A px size of the card on the axis is divided between
 // the two parts in the proportion of the cut, and one across it is given to the new card as well. A cut at the middle of a card without
 // a px size on the axis is the ADD of the new card beside the card (packages/soksak/docs/layout.md#add-and-remove).
-func (g *Grid) splitAt(id string, axis Axis, init SplitInit, first bool) (string, bool) {
+func (g *Grid) splitAt(id string, axis Axis, init SplitInit, first bool) (string, error) {
 	if init.ID != nil && g.taken(*init.ID) {
-		return "", false
+		return "", fmt.Errorf("card %s is a member of the layout", *init.ID)
 	}
 	card := g.find(id)
 	if card == nil {
-		return "", false
+		return "", notMember(id)
+	}
+	if card.Fixed {
+		return "", fmt.Errorf("card %s is fixed and does not split", id)
 	}
 	cutLine, _, cuts := g.cutAt(card, axis, init.NewLine)
 	if !cuts {
-		return "", false
+		// The card is drawn no wider than the corridor of the cut, so a half would have no extent on the axis.
+		r, _ := g.Rect(id) // silent: find found the card.
+		w, h := r.W, r.H-g.above[id]
+		if axis == "x" {
+			w = 0
+		} else {
+			h = 0
+		}
+		m := jsString(jsRound(g.min))
+		return "", fmt.Errorf("card %s would be %sx%s, below its minimum %sx%s", id, jsString(jsRound(w)), jsString(jsRound(h)), m, m)
 	}
-	was := g.extents(axis)
-	empty := g.flat()
 	undo := g.ToJSON()
 	leaf := g.leaves[id]
 	drawnBefore := g.Rects()
@@ -1028,7 +1121,7 @@ func (g *Grid) splitAt(id string, axis Axis, init SplitInit, first bool) (string
 		root, err := g.insertBeside(leaf, side, fresh)
 		if err != nil {
 			g.restore(undo)
-			return "", false
+			return "", err
 		}
 		g.root = root
 	} else {
@@ -1041,17 +1134,11 @@ func (g *Grid) splitAt(id string, axis Axis, init SplitInit, first bool) (string
 	g.derive()
 	g.changed()
 	g.keepFixed(drawnBefore)
-	// The new card is drawn at least minSize on the axis of the cut, the heads above it left out.
-	made, _ := g.Rect(freshID)
-	drawn := made.H - g.above[freshID]
-	if axis == "x" {
-		drawn = made.W
-	}
-	if !g.stillFits(axis, was, empty) || (whole == nil && drawn < g.min-0.01) {
+	if below := g.belowMinimum(drawnBefore); below != "" {
 		g.restore(undo)
-		return "", false
+		return "", errors.New(below)
 	}
-	return freshID, true
+	return freshID, nil
 }
 
 func (g *Grid) nextID() string {
@@ -1093,8 +1180,11 @@ func (g *Grid) removable(id string) *Card {
 	return card
 }
 
-// CanClose is whether Close would remove the card.
+// CanClose is whether Close would remove the card or the box id.
 func (g *Grid) CanClose(id string) bool {
+	if g.boxByID[id] != nil {
+		return g.boxClosing(id)
+	}
 	return g.closing(id)
 }
 
@@ -1116,16 +1206,19 @@ func (g *Grid) leaving(n *Node) bool {
 	return slices.ContainsFunc(h.Kids, func(k Kid) bool { return k.Node != h.Kids[i].Node && !(k.Node.isCard() && k.Node.Fixed) })
 }
 
-// Close removes a card (packages/soksak/docs/layout.md#boundaries): the node that leaves with it goes out of its cut, and the fractions
-// of the other kids of the cut that are no fixed card scale by one factor, so their ratios hold; a fixed card keeps the size it is drawn
-// at. It is false when the card is fixed, when it is the last card, or when every other kid of its cut is a fixed card.
+// Close removes a card or a box with every card inside it (packages/soksak/docs/layout.md#add-and-remove): the node that leaves with
+// it goes out of its cut, and the fractions of the other kids of the cut that are no fixed card scale by one factor, so their ratios
+// hold; a fixed card keeps the size it is drawn at. It is false, and changes nothing, when the card is fixed, when it is the last card
+// or the box holds every card that is not fixed, or when every other kid of its cut is a fixed card.
 func (g *Grid) Close(id string) bool {
 	defer g.begin()()
-	return g.closeAlong(id)
-}
-
-// closeAlong is Close inside another operation.
-func (g *Grid) closeAlong(id string) bool {
+	if box := g.boxByID[id]; box != nil {
+		if !g.boxClosing(id) {
+			return false
+		}
+		g.withdrawAlong(box)
+		return true
+	}
 	if !g.closing(id) {
 		return false
 	}
@@ -1146,23 +1239,15 @@ func (g *Grid) withdrawAlong(n *Node) {
 	g.keepFixed(drawnBefore)
 }
 
-// closeBox closes the box id with every card inside it as one node of the tree: the node leaves its cut and the other kids of the cut
-// that are no fixed card take its share by one factor (R7). It is false, and changes nothing, when the box is no box, when it holds
-// every card that is not fixed, or when no other kid of its cut takes the share.
-func (g *Grid) closeBox(id string) bool {
+// boxClosing is whether the box id can close: a card that is not fixed stands outside it, and its cut holds another kid that is no
+// fixed card, which takes its share.
+func (g *Grid) boxClosing(id string) bool {
 	box := g.boxByID[id]
-	if box == nil {
-		return false
-	}
 	inside := map[string]bool{}
 	for _, leaf := range cardsOf(box) {
 		inside[leaf.Card] = true
 	}
-	if !slices.ContainsFunc(g.list, func(c *Card) bool { return !c.Fixed && !inside[c.ID] }) || !g.leaving(box) {
-		return false
-	}
-	g.withdrawAlong(box)
-	return true
+	return slices.ContainsFunc(g.list, func(c *Card) bool { return !c.Fixed && !inside[c.ID] }) && g.leaving(box)
 }
 
 // CanInsertAt is whether a card spanning the whole plane can be placed on this boundary: the line is an edge of the plane or a seam
@@ -1340,7 +1425,7 @@ func (g *Grid) Move(id, targetID string, side Side) bool {
 	}
 	node := cloneNode(g.leaves[id])
 	before := g.ToJSON()
-	if !g.closeAlong(id) {
+	if !g.Close(id) {
 		return false
 	}
 	if err := g.byCuts(func() (*Node, error) { return g.insertNode(Target{targetID}, side, node) }); err != nil {

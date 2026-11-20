@@ -252,8 +252,8 @@
       ],
       "ys": [
        0,
-       0.3844831804281345,
-       0.6893333333333332,
+       0.32,
+       0.54,
        1
       ]
      }
@@ -267,7 +267,7 @@
         "cut": "y",
         "kids": [
          {
-          "share": 0.6666666666666665,
+          "share": 0.5,
           "node": {
            "box": "card-5",
            "data": {
@@ -278,7 +278,7 @@
             "cut": "y",
             "kids": [
              {
-              "share": 0.4793577981651376,
+              "share": 0.5,
               "node": {
                "box": "card-4",
                "data": {
@@ -307,7 +307,7 @@
               }
              },
              {
-              "share": 0.5206422018348624,
+              "share": 0.5,
               "node": {
                "card": "card-6",
                "fixed": false
@@ -318,7 +318,7 @@
           }
          },
          {
-          "share": 0.3333333333333334,
+          "share": 0.5,
           "node": {
            "card": "card-3",
            "fixed": false
@@ -340,7 +340,7 @@
       "x": 48,
       "y": 112,
       "w": 440,
-      "h": 236.48318042813452
+      "h": 172
      }
     },
     {
@@ -352,7 +352,7 @@
       "x": 512,
       "y": 112,
       "w": 440,
-      "h": 236.48318042813452
+      "h": 172
      }
     },
     {
@@ -362,9 +362,9 @@
      },
      "returns": {
       "x": 24,
-      "y": 396.4831804281345,
+      "y": 332,
       "w": 952,
-      "h": 256.85015290519874
+      "h": 172
      }
     },
     {
@@ -374,9 +374,9 @@
      },
      "returns": {
       "x": 0,
-      "y": 701.3333333333333,
+      "y": 552,
       "w": 1000,
-      "h": 298.66666666666674
+      "h": 448
      }
     },
     {
@@ -388,7 +388,7 @@
       "x": 24,
       "y": 56,
       "w": 952,
-      "h": 316.4831804281345
+      "h": 252
      }
     },
     {
@@ -400,7 +400,7 @@
       "x": 0,
       "y": 0,
       "w": 1000,
-      "h": 677.3333333333333
+      "h": 528
      }
     }
    ]
@@ -468,7 +468,7 @@
       "card": "card-4",
       "side": "bottom"
      },
-     "throws": "card card-4 cannot hold a group toward bottom: card card-1 would be 440x72, below its minimum 96x96"
+     "throws": "card card-4 cannot hold a group toward bottom: card card-1 would be 440x47, below its minimum 96x96"
     },
     {
      "call": "stored",
@@ -579,7 +579,7 @@
       "card": "card-1",
       "side": "bottom"
      },
-     "throws": "card card-1 cannot hold a group toward bottom: card card-1 would be 464x74, below its minimum 96x96"
+     "throws": "card card-1 cannot hold a group toward bottom: card card-1 would be 464x67, below its minimum 96x96"
     }
    ]
   },
@@ -645,7 +645,7 @@
       "x": 48,
       "y": 112,
       "w": 440,
-      "h": 170.0425531914894
+      "h": 148
      }
     },
     {
@@ -655,9 +655,9 @@
      },
      "returns": {
       "x": 48,
-      "y": 306.0425531914894,
+      "y": 284,
       "w": 440,
-      "h": 125.95744680851061
+      "h": 148
      }
     },
     {
@@ -6170,7 +6170,7 @@
       "position": 445.0061652281134
      },
      "returns": {
-      "position": 478.3564356435644
+      "position": 445.00616522811345
      }
     },
     {
@@ -6192,7 +6192,7 @@
         "fixed": false,
         "id": "card-26",
         "r0": 3,
-        "r1": 6
+        "r1": 7
        },
        {
         "c0": 1,
@@ -6208,7 +6208,7 @@
         "fixed": false,
         "id": "card-13",
         "r0": 1,
-        "r1": 4
+        "r1": 5
        },
        {
         "c0": 2,
@@ -6216,23 +6216,23 @@
         "fixed": false,
         "id": "terminal",
         "r0": 0,
-        "r1": 4
+        "r1": 5
        },
        {
         "c0": 1,
         "c1": 2,
         "fixed": false,
         "id": "card-3",
-        "r0": 4,
-        "r1": 6
+        "r0": 5,
+        "r1": 7
        },
        {
         "c0": 2,
         "c1": 3,
         "fixed": false,
         "id": "card-12",
-        "r0": 4,
-        "r1": 6
+        "r0": 5,
+        "r1": 7
        },
        {
         "c0": 3,
@@ -6240,7 +6240,7 @@
         "fixed": false,
         "id": "browser",
         "r0": 0,
-        "r1": 6
+        "r1": 7
        },
        {
         "c0": 4,
@@ -6264,15 +6264,15 @@
         "fixed": false,
         "id": "card-27",
         "r0": 2,
-        "r1": 5
+        "r1": 6
        },
        {
         "c0": 4,
         "c1": 6,
         "fixed": false,
         "id": "card-10",
-        "r0": 5,
-        "r1": 6
+        "r0": 6,
+        "r1": 7
        },
        {
         "c0": 6,
@@ -6280,15 +6280,15 @@
         "fixed": false,
         "id": "card-23",
         "r0": 0,
-        "r1": 3
+        "r1": 4
        },
        {
         "c0": 6,
         "c1": 7,
         "fixed": false,
         "id": "card-7",
-        "r0": 3,
-        "r1": 6
+        "r0": 4,
+        "r1": 7
        }
       ],
       "xs": [
@@ -6304,10 +6304,11 @@
       "ys": [
        0,
        0.34309906582606403,
-       0.4010683343303505,
+       0.40106833433035044,
+       0.49445129469790383,
        0.5315071507150716,
        0.5616941694169417,
-       0.5689683518290178,
+       0.5689683518290177,
        1
       ]
      }
@@ -7266,7 +7267,7 @@
       "card": "card-2",
       "side": "right"
      },
-     "throws": "card card-2 cannot hold a group toward right: card card-2 would be 0x600, below its minimum 96x96"
+     "throws": "card card-2 cannot hold a group toward right: card card-2 would be 0x520, below its minimum 96x96"
     }
    ]
   },
