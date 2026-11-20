@@ -5,7 +5,7 @@
 //! its validators, so an unchanged index is answered with 304 and no body. It writes nothing to disk.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Condvar, LazyLock, Mutex, MutexGuard};
+use std::sync::{Arc, Condvar, LazyLock, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
 use ureq::tls::{Certificate, RootCerts, TlsConfig};
@@ -148,9 +148,18 @@ impl Fetcher {
                 .waiters
                 .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             drop(state);
-            let mut result = running.result.lock().expect("index read result");
+            let mut result = running
+                .result
+                .lock()
+                // default: a lock that a panicking thread poisoned still holds the result of the read, which the waiter
+                // reads; the panic of the reading thread is reported where it happened.
+                .unwrap_or_else(PoisonError::into_inner);
             while result.is_none() {
-                result = running.done.wait(result).expect("index read result");
+                result = running
+                    .done
+                    .wait(result)
+                    // default: a wait that a poisoned lock ends still returns the guard of the result, which the waiter reads.
+                    .unwrap_or_else(PoisonError::into_inner);
             }
             return result.clone().expect("index read result");
         }
@@ -160,7 +169,11 @@ impl Fetcher {
         drop(state);
         let result = self.get(location, self.index, true, kept.as_ref());
         shared().flights.remove(location);
-        *running.result.lock().expect("index read result") = Some(result.clone());
+        *running
+            .result
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the result of the read, which the reader sets.
+            .unwrap_or_else(PoisonError::into_inner) = Some(result.clone());
         running.done.notify_all();
         result
     }
@@ -335,7 +348,9 @@ struct Shared {
 static SHARED: LazyLock<Mutex<Shared>> = LazyLock::new(Mutex::default);
 
 fn shared() -> MutexGuard<'static, Shared> {
-    SHARED.lock().expect("fetch state")
+    // default: a lock that a panicking thread poisoned still holds the clients, the kept indexes and the running reads, which
+    // the caller reads and amends; the panic is reported where it happened.
+    SHARED.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 /// Reports how many reads of the index at location wait for the running read of that location. A check uses it to start a read while another one
