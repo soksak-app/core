@@ -11,3 +11,4 @@ The request-local declaration table is defined in [native surfaces](native-surfa
 The plane, the level, the group card, the child plane and the leader of a plane are defined in [group cards](groups.md#model).
 
 The agent, the agent skill, the agent folder, the setup part and the MCP registration are defined in [command line](cli.md#agents).
+The agent role, the role file, the change message, the stable identity and the launch adapter are defined in [agent roles](agent-roles.md).

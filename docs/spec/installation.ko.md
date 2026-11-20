@@ -119,6 +119,8 @@ Core version과 플랫폼에 맞춰 plugin을 설치하면, `engines.soksak`이 
 | `projects.json` | 코어 | `format` | numbered |
 | `tab-state.json` | 코어 | `format` | numbered |
 | `tab-sessions/<tab>.json` | 코어 | `format` | numbered |
+| `roles.json` | 코어 | `format` | numbered |
+| `agents/<surface>/role.md`, `agents/<surface>/identity.txt` | 코어 | host가 launch와 역할 변경마다 다시 쓴다 | transient |
 | `logs/<role>-<boot>.jsonl`과 그 색인 | 코어 | file마다(`log.open`, 색인 머리) | log |
 | `endpoint.json`, `process.lock`, `performance` | 코어 | 실행마다 다시 쓴다 | transient |
 | `plugins/<id>/<version>/`, `sidecars/<file name>/`, `updates/` | release 내용 | 경로의 version | external |

@@ -119,6 +119,8 @@ The stored files of the contract, with their owner, the member that carries thei
 | `projects.json` | core | `format` | numbered |
 | `tab-state.json` | core | `format` | numbered |
 | `tab-sessions/<tab>.json` | core | `format` | numbered |
+| `roles.json` | core | `format` | numbered |
+| `agents/<surface>/role.md`, `agents/<surface>/identity.txt` | core | rewritten by the host at each launch and role change | transient |
 | `logs/<role>-<boot>.jsonl` and their index | core | per file (`log.open`, the index header) | log |
 | `endpoint.json`, `process.lock`, `performance` | core | rewritten each run | transient |
 | `plugins/<id>/<version>/`, `sidecars/<file name>/`, `updates/` | the release payload | the version in the path | external |
