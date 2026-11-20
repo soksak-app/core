@@ -348,6 +348,17 @@ func gridCall(t *testing.T, g *layout.Grid, s step) (any, bool, error) {
 		arg(t, s, 2, &node)
 		born, err := g.Insert(to, side, &node)
 		return born, true, err
+	case "group":
+		var (
+			side layout.Side
+			node layout.Node
+			init layout.GroupInit
+		)
+		arg(t, s, 0, &id)
+		arg(t, s, 1, &side)
+		arg(t, s, 2, &node)
+		arg(t, s, 3, &init)
+		return nil, true, g.Group(id, side, &node, init)
 	case "withdraw":
 		arg(t, s, 0, &id)
 		left, err := g.Withdraw(id)
@@ -370,10 +381,8 @@ func gridCall(t *testing.T, g *layout.Grid, s step) (any, bool, error) {
 		if s.Call == "splitToward" {
 			split = g.SplitToward
 		}
-		if born, ok := split(id, side, init); ok {
-			return born, true, nil
-		}
-		return nil, true, nil
+		born, err := split(id, side, init)
+		return born, true, err
 	case "canClose":
 		arg(t, s, 0, &id)
 		return g.CanClose(id), true, nil

@@ -791,7 +791,9 @@ func (g *Grid) middleOf(axis Axis, line int) float64 {
 }
 
 // cutAt is the position to cut a card at: the unreferenced line nearest the card's centre that leaves both halves their minimum, or a
-// new line at the centre (line -1), clamped to the range where both halves fit. It is false when the card cannot be cut.
+// new line at the centre (line -1), clamped to the range where both halves fit. Where the halves cannot both have their minimum, it is
+// the centre, and the check of the split names the node that the cut draws below its minimum. It is false when the card is fixed or is
+// drawn no wider than the corridor that the cut adds, so that a half would have no extent.
 // A fresh cut takes no existing line: it cuts at the middle of the card.
 func (g *Grid) cutAt(card *Card, axis Axis, fresh bool) (int, float64, bool) {
 	if card.Fixed {
@@ -812,12 +814,16 @@ func (g *Grid) cutAt(card *Card, axis Axis, fresh bool) (int, float64, bool) {
 	p := g.plane()
 	read := linesRead(p, axis)
 	half := halfCorridor(p, axis, read)
+	mid := (a[card.get(lo)] + a[card.get(hi)]) / 2
 	lowest := a[card.get(lo)] + (g.min+cardInset(p, axis, card, "lo", read)+half)/per
 	highest := a[card.get(hi)] - (g.min+half+cardInset(p, axis, card, "hi", read))/per
 	if lowest > highest {
-		return 0, 0, false
+		if a[card.get(lo)]+(cardInset(p, axis, card, "lo", read)+half)/per >= mid ||
+			a[card.get(hi)]-(half+cardInset(p, axis, card, "hi", read))/per <= mid {
+			return 0, 0, false
+		}
+		lowest, highest = mid, mid
 	}
-	mid := (a[card.get(lo)] + a[card.get(hi)]) / 2
 	line := -1
 	for i := card.get(lo) + 1; i < card.get(hi) && !fresh; i++ {
 		if a[i] < lowest || a[i] > highest {
@@ -898,7 +904,7 @@ func (g *Grid) stillFits(axis Axis, before map[string]float64, flat map[string]b
 	return true
 }
 
-// CanSplit is true when the cut leaves every card the smaller of its current size and the minimum size.
+// CanSplit is true when Split of the card id along axis would succeed.
 func (g *Grid) CanSplit(id string, axis Axis) bool {
 	if noAxis(axis) {
 		return false
@@ -915,7 +921,8 @@ func (g *Grid) CanSplit(id string, axis Axis) bool {
 			seq := g.seq
 			g.probing = true
 			g.probes++
-			_, ok = g.Split(id, axis, SplitInit{})
+			_, err := g.Split(id, axis, SplitInit{})
+			ok = err == nil
 			g.restore(before)
 			g.probing = false
 			g.seq = seq
@@ -926,12 +933,12 @@ func (g *Grid) CanSplit(id string, axis Axis) bool {
 }
 
 // Split cuts one card in two and returns the new card's id. The original keeps its id and the near half; the new card takes the far
-// half. It is false when the halves do not fit.
+// half. Its refusal names the deepest node that the cut would draw below its minimum, and changes nothing.
 // With init.NewLine the cut takes a new position at the centre instead of a line that the card spans across.
-func (g *Grid) Split(id string, axis Axis, init SplitInit) (string, bool) {
+func (g *Grid) Split(id string, axis Axis, init SplitInit) (string, error) {
 	defer g.begin()()
 	if noAxis(axis) {
-		return "", false
+		return "", fmt.Errorf("unknown axis %s; use x or y", axis)
 	}
 	return g.splitAt(id, axis, init, false)
 }
@@ -945,11 +952,11 @@ func isSide(side Side) bool {
 	return false
 }
 
-// SplitToward cuts a card and puts the new one on a named side. The ids are not swapped.
-func (g *Grid) SplitToward(id string, side Side, init SplitInit) (string, bool) {
+// SplitToward cuts a card and puts the new one on a named side. The ids are not swapped. Its refusal is the refusal of Split.
+func (g *Grid) SplitToward(id string, side Side, init SplitInit) (string, error) {
 	defer g.begin()()
 	if !isSide(side) {
-		return "", false
+		return "", fmt.Errorf("unknown side %s; use left, right, top or bottom", side)
 	}
 	return g.splitAt(id, axisOf(side), init, isAhead(side))
 }
@@ -958,20 +965,30 @@ func (g *Grid) SplitToward(id string, side Side, init SplitInit) (string, bool) 
 // takes the part after it, or with first the new card takes the part before it. A px size of the card on the axis is divided between
 // the two parts in the proportion of the cut, and one across it is given to the new card as well. A cut at the middle of a card without
 // a px size on the axis is the ADD of the new card beside the card (packages/soksak/docs/layout.md#add-and-remove).
-func (g *Grid) splitAt(id string, axis Axis, init SplitInit, first bool) (string, bool) {
+func (g *Grid) splitAt(id string, axis Axis, init SplitInit, first bool) (string, error) {
 	if init.ID != nil && g.taken(*init.ID) {
-		return "", false
+		return "", fmt.Errorf("card %s is a member of the layout", *init.ID)
 	}
 	card := g.find(id)
 	if card == nil {
-		return "", false
+		return "", notMember(id)
+	}
+	if card.Fixed {
+		return "", fmt.Errorf("card %s is fixed and does not split", id)
 	}
 	cutLine, _, cuts := g.cutAt(card, axis, init.NewLine)
 	if !cuts {
-		return "", false
+		// The card is drawn no wider than the corridor of the cut, so a half would have no extent on the axis.
+		r, _ := g.Rect(id) // silent: find found the card.
+		w, h := r.W, r.H-g.above[id]
+		if axis == "x" {
+			w = 0
+		} else {
+			h = 0
+		}
+		m := jsString(jsRound(g.min))
+		return "", fmt.Errorf("card %s would be %sx%s, below its minimum %sx%s", id, jsString(jsRound(w)), jsString(jsRound(h)), m, m)
 	}
-	was := g.extents(axis)
-	empty := g.flat()
 	undo := g.ToJSON()
 	leaf := g.leaves[id]
 	drawnBefore := g.Rects()
@@ -1028,7 +1045,7 @@ func (g *Grid) splitAt(id string, axis Axis, init SplitInit, first bool) (string
 		root, err := g.insertBeside(leaf, side, fresh)
 		if err != nil {
 			g.restore(undo)
-			return "", false
+			return "", err
 		}
 		g.root = root
 	} else {
@@ -1041,17 +1058,11 @@ func (g *Grid) splitAt(id string, axis Axis, init SplitInit, first bool) (string
 	g.derive()
 	g.changed()
 	g.keepFixed(drawnBefore)
-	// The new card is drawn at least minSize on the axis of the cut, the heads above it left out.
-	made, _ := g.Rect(freshID)
-	drawn := made.H - g.above[freshID]
-	if axis == "x" {
-		drawn = made.W
-	}
-	if !g.stillFits(axis, was, empty) || (whole == nil && drawn < g.min-0.01) {
+	if below := g.belowMinimum(drawnBefore); below != "" {
 		g.restore(undo)
-		return "", false
+		return "", errors.New(below)
 	}
-	return freshID, true
+	return freshID, nil
 }
 
 func (g *Grid) nextID() string {

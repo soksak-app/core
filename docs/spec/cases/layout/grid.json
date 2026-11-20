@@ -140,9 +140,9 @@
   {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":599.5,"y":0,"w":1,"h":800},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":599.5,"y":0,"w":1,"h":800},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":399.5,"w":1200,"h":1},{"key":"sy:1:0","axis":"y","line":1,"virtual":false,"x":0,"y":399.5,"w":600,"h":1}]},
   {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":592,"y":0,"w":16,"h":800},{"key":"y:1:0","axis":"y","line":1,"x":0,"y":392,"w":592,"h":16}]},
   {"call":"split","args":["card-1","x"],"returns":"card-2"},
-  {"call":"split","args":["card","x",{"id":"lower"}],"returns":null},
-  {"call":"split","args":["none","x"],"returns":null},
-  {"call":"split","args":["card","q"],"returns":null},
+  {"call":"split","args":["card","x",{"id":"lower"}],"throws":"card lower is a member of the layout"},
+  {"call":"split","args":["none","x"],"throws":"card none is not a member of the layout"},
+  {"call":"split","args":["card","q"],"throws":"unknown axis q; use x or y"},
   {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.3333333333333333,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"card","fixed":false}},{"share":0.5,"node":{"card":"lower","fixed":false,"data":{"kind":"note"}}}]}},{"share":0.3333333333333333,"node":{"card":"card-1","fixed":false}},{"share":0.3333333333333333,"node":{"card":"card-2","fixed":false}}]}}},
   {"call":"rects","returns":{"card":{"x":0,"y":0,"w":389.3333333333333,"h":392},"lower":{"x":0,"y":408,"w":389.3333333333333,"h":392},"card-1":{"x":405.3333333333333,"y":0,"w":389.3333333333333,"h":800},"card-2":{"x":810.6666666666666,"y":0,"w":389.33333333333337,"h":800}}},
   {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":396.8333333333333,"y":0,"w":1,"h":800},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":396.8333333333333,"y":0,"w":1,"h":800},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":802.1666666666666,"y":0,"w":1,"h":800},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":802.1666666666666,"y":0,"w":1,"h":800},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":399.5,"w":1200,"h":1},{"key":"sy:1:0","axis":"y","line":1,"virtual":false,"x":0,"y":399.5,"w":397.3333333333333,"h":1}]},
@@ -163,7 +163,7 @@
   {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":444.5,"y":0,"w":11,"h":700},{"key":"y:1:1","axis":"y","line":1,"x":455,"y":344.5,"w":445,"h":11}]},
   {"call":"splitToward","args":["card","right"],"returns":"card-2"},
   {"call":"splitToward","args":["up","bottom"],"returns":"card-3"},
-  {"call":"splitToward","args":["card","middle"],"returns":null},
+  {"call":"splitToward","args":["card","middle"],"throws":"unknown side middle; use left, right, top or bottom"},
   {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"card-1","fixed":false}},{"share":0.5,"node":{"cut":"y","kids":[{"share":0.3333333333333333,"node":{"card":"up","fixed":false}},{"share":0.3333333333333333,"node":{"card":"card-3","fixed":false}},{"share":0.3333333333333333,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"card","fixed":false}},{"share":0.5,"node":{"card":"card-2","fixed":false}}]}}]}}]}}},
   {"call":"rects","returns":{"card-1":{"x":0,"y":0,"w":445,"h":700},"up":{"x":455,"y":0,"w":445,"h":226.66666666666666},"card-3":{"x":455,"y":236.66666666666666,"w":445,"h":226.66666666666666},"card":{"x":455,"y":473.3333333333333,"w":217.5,"h":226.66666666666669},"card-2":{"x":682.5,"y":473.3333333333333,"w":217.5,"h":226.66666666666669}}},
   {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":449.5,"y":0,"w":1,"h":700},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":449.5,"y":0,"w":1,"h":700},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":677,"y":0,"w":1,"h":700},{"key":"sx:2:2","axis":"x","line":2,"virtual":false,"x":677,"y":468.3333333333333,"w":1,"h":231.66666666666669},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":231.16666666666666,"w":900,"h":1},{"key":"sy:1:1","axis":"y","line":1,"virtual":false,"x":450,"y":231.16666666666666,"w":450,"h":1},{"key":"vy:2","axis":"y","line":2,"virtual":true,"x":0,"y":467.8333333333333,"w":900,"h":1},{"key":"sy:2:1","axis":"y","line":2,"virtual":false,"x":450,"y":467.8333333333333,"w":450,"h":1}]},
@@ -173,7 +173,7 @@
   {"call":"canSplit","args":["card","x"],"returns":true},
   {"call":"split","args":["card","x"],"returns":"card-1"},
   {"call":"canSplit","args":["card","y"],"returns":false},
-  {"call":"split","args":["card","y"],"returns":null},
+  {"call":"split","args":["card","y"],"throws":"card card would be 146x96, below its minimum 120x120"},
   {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"card","fixed":false}},{"share":0.5,"node":{"card":"card-1","fixed":false}}]}}}
  ]},
  {"name":"a split of a card with a px size divides the size","options":{"width":1000,"height":800,"gap":8,"minSize":40},"state":{"root":{"cut":"x","kids":[{"share":0.3,"node":{"card":"side","width":240}},{"share":0.7,"node":{"card":"main"}}]}},"steps":[
@@ -597,6 +597,13 @@
  {"name":"an add that would draw a card inside a box below its minimum names that card at the size of its content, under the head of the box","options":{"width":400,"height":300,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"box":"g","inner":{"cut":"y","kids":[{"share":0.5,"node":{"card":"b"}},{"share":0.5,"node":{"card":"c"}}]}}}]}},"steps":[
   {"call":"setHeads","args":[{"g":44}]},
   {"call":"insert","args":["g","bottom",{"card":"n"}],"throws":"card b would be 140x40, below its minimum 96x96"}
+ ]},
+ {"name":"a group puts a box with its head in the place of the card and adds the new card inside it, and a refusal names the card at its drawn size under the head","options":{"width":400,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"c"}}]}},"steps":[
+  {"call":"group","args":["a","right",{"card":"b"},{"box":"g","data":{"name":"그룹 1"},"head":32}],"returns":null},
+  {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"box":"g","data":{"name":"그룹 1"},"inner":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"b","fixed":false}}]}}},{"share":0.5,"node":{"card":"c","fixed":false}}]}}},
+  {"call":"rects","returns":{"a":{"x":24,"y":0,"w":164,"h":292},"b":{"x":212,"y":0,"w":164,"h":292},"c":{"x":0,"y":340,"w":400,"h":260}}},
+  {"call":"group","args":["b","right",{"card":"d"},{"box":"h","data":{"name":"그룹 2"},"head":32}],"throws":"card b would be 58x204, below its minimum 96x96"},
+  {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"box":"g","data":{"name":"그룹 1"},"inner":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"b","fixed":false}}]}}},{"share":0.5,"node":{"card":"c","fixed":false}}]}}}
  ]},
  {"name":"a state of the earlier form with lines and cells is refused","state":{"xs":[0,1],"ys":[0,1],"cards":[{"id":"a","c0":0,"c1":1,"r0":0,"r1":1}]},"throws":"soksak: the state holds xs, ys and cards, which is the earlier form; the state is {root}","steps":[]},
  {"name":"a state that records a payer is refused","state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"b"}}]},"paidBy":{"b":"a"}},"throws":"soksak: the state holds paidBy, which the layout does not record; the state is {root}","steps":[]},

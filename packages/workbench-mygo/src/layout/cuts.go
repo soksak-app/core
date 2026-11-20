@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -586,6 +588,77 @@ func (g *Grid) Insert(target Target, side Side, node *Node) (string, error) {
 		return "", err
 	}
 	return node.id(), nil
+}
+
+// GroupInit names the box of a group: its id, the data of the host and the px of its head, which the host draws inside its top.
+type GroupInit struct {
+	Box  string          `json:"box"`
+	Data json.RawMessage `json:"data,omitempty"`
+	Head float64         `json:"head"`
+}
+
+// Group is the group split of the card or box target (packages/soksak/docs/layout.md#add-and-remove): the box of init takes the place
+// of target in its cut, and its inner node is ADD of node beside target toward side, two halves. The result is judged once, with the
+// head and the frames of the new box, and a refusal names the deepest node that it would draw below its minimum and changes nothing.
+func (g *Grid) Group(target string, side Side, node *Node, init GroupInit) error {
+	defer g.begin()()
+	if node == nil || node.isCut() || node.id() == "" {
+		return errors.New("soksak: a group takes a card or a box node")
+	}
+	if init.Box == "" {
+		return errors.New("soksak: a group names no box")
+	}
+	if !finite(init.Head) || init.Head < 0 {
+		return errors.New("soksak: the head of " + strconv.Quote(init.Box) + " is " + jsString(init.Head))
+	}
+	heads := g.heads
+	err := g.byCuts(func() (*Node, error) {
+		root, err := g.groupNode(target, side, node, init)
+		if err == nil {
+			g.heads = maps.Clone(heads)
+			if g.heads == nil {
+				g.heads = map[string]float64{}
+			}
+			g.heads[init.Box] = init.Head
+		}
+		return root, err
+	})
+	if err != nil {
+		g.heads = heads
+		g.derive()
+	}
+	return err
+}
+
+// groupNode is the stored tree with a box around target and node beside it toward side.
+func (g *Grid) groupNode(target string, side Side, node *Node, init GroupInit) (*Node, error) {
+	if !isSide(side) {
+		return nil, fmt.Errorf("unknown side %s; use left, right, top or bottom", side)
+	}
+	ids := []string{init.Box}
+	if !node.isCut() {
+		ids = append(ids, node.id())
+	}
+	for _, leaf := range cardsOf(node) {
+		ids = append(ids, leaf.Card)
+	}
+	for _, id := range ids {
+		if g.taken(id) {
+			return nil, fmt.Errorf("card %s is a member of the layout", id)
+		}
+	}
+	x := newIndex(g)
+	at := x.byID[target]
+	if at == nil {
+		return nil, notMember(target)
+	}
+	pair := []*Node{at, cloneNode(node)}
+	if !(side == "right" || side == "bottom") {
+		pair = []*Node{pair[1], at}
+	}
+	inner := &Node{Cut: axisOf(side), Kids: []Kid{{Share: 0.5, Node: pair[0]}, {Share: 0.5, Node: pair[1]}}}
+	x.replace(at, &Node{Box: init.Box, Data: slices.Clone(init.Data), Inner: inner})
+	return x.root, nil
 }
 
 // Withdraw is REMOVE (packages/soksak/docs/layout.md#add-and-remove): it takes the node id, a card or a box, out of its cut; the other

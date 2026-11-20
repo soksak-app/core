@@ -91,8 +91,8 @@ grid의 모든 operation은 각 group card를 tree의 box 하나로 유지하므
 | Command | 조건 | 문구 |
 | --- | --- | --- |
 | `core.group.create` | `card`가 window sidebar | `card <id> is a window sidebar; a group holds content cards and group cards` |
-| `core.group.create` | layout이 어떤 최소에서도 `card`의 `side` 쪽 split을 거부 | `card <id> cannot hold a group toward <side>: card <id> would be 0x<h>, below its minimum <m>x<m>`, `top`, `bottom` 쪽이면 `<w>x0` |
-| `core.group.create` | content card가 최소보다 작게 그려짐 | `card <id> cannot hold a group toward <side>: card <c> would be <w>x<h>, below its minimum <m>x<m>`. `<c>`는 workbench order로 그런 첫 card, `<m>`은 `minSize` |
+| `core.group.create` | `card`가 `side` 축에서 group이 더하는 frame과 corridor보다 넓지 않게 그려짐 | `card <id> cannot hold a group toward <side>: card <id> would be 0x<h>, below its minimum <m>x<m>`, `top`, `bottom` 쪽이면 `<w>x0` |
+| `core.group.create` | content card가 최소보다 작게 그려짐 | `card <id> cannot hold a group toward <side>: card <c> would be <w>x<h>, below its minimum <m>x<m>`. `<c>`는 group이 최소보다 작게 그릴 가장 깊은 node이고 새 group card의 head 아래 content 크기로 나타나며, `<m>`은 `minSize` |
 | `core.group.create` | `request`가 1자보다 짧거나 128자보다 긴 문자열임. 문자열이 아닌 `request`는 params schema가 `invalid params for core.group.create`로 거부한다(`docs/spec/exposure.md#command-parameters`) | `core.group.create: request must be a string of 1 to 128 characters` |
 | `core.group.create` | `plugin`이나 `params`가 거부됨 | 그 plugin이나 parameter에 대한 `core.card.split`의 문구([layout에 대한 동작](cli.ko.md#레이아웃에-동작하기)) |
 | `core.group.dissolve`, `core.group.rename`, `core.group.menu` | `group`이 content card나 window sidebar | `card <id> is not a group` |
@@ -105,7 +105,7 @@ grid의 모든 operation은 각 group card를 tree의 box 하나로 유지하므
 | `core.card.move` | layout이 move를 거부 | `card <id> cannot move to <side> of <target>` |
 | 모든 operation | content card가 최소보다 작게 그려짐 | `card <id> cannot <operation>: card <c> would be <w>x<h>, below its minimum <m>x<m>` |
 
-`<operation>`은 layout 거부 문구의 operation 문구다. 곧 `split toward <side>`, `close`, `move to <side> of <target>`이다. 카드의 절반이 `minSize` 아래로 떨어져 layout library가 거부한 split은 trial 사본에서 그 한계 없이 다시 실행되므로, 거부 문구는 split이 최소 아래로 그릴 content card와 그것이 받을 크기를 `card <id> cannot split toward <side>: card <c> would be <w>x<h>, below its minimum <m>x<m>`로 두 workbench에서 같게 밝힌다. library가 어떤 최소에서도 거부하는 split, 곧 split이 더하는 corridor보다 좁게 그려진 card의 split은 `side` 축에서 절반에 남는 범위가 없는 card를 `card <id> cannot split toward <side>: card <id> would be 0x<h>, below its minimum <m>x<m>`(`left`, `right` 쪽)과 `<w>x0`(`top`, `bottom` 쪽)으로 밝힌다.
+`<operation>`은 layout 거부 문구의 operation 문구다. 곧 `split toward <side>`, `close`, `move to <side> of <target>`이다. split과 group은 각각 layout library의 operation 하나이고, library는 그려진 결과를 한 번 판정한다. group은 library의 `group`이며, card 자리에 새 group card의 head를 가진 box를 놓고 그 안에 새 card를 더한다([add and remove](../../packages/soksak/docs/layout.ko.md#add-and-remove)). library의 거부는 operation이 최소보다 작게 그릴 가장 깊은 node를 content 크기로 가리키고, workbench는 operation 뒤에 그것을 `card <id> cannot split toward <side>: card <c> would be <w>x<h>, below its minimum <m>x<m>`로 두 workbench에서 같게 밝힌다. library가 어떤 최소에서도 거부하는 split, 곧 split이 더하는 corridor보다 좁게 그려진 card의 split은 `side` 축에서 절반에 남는 범위가 없는 card를 `card <id> cannot split toward <side>: card <id> would be 0x<h>, below its minimum <m>x<m>`(`left`, `right` 쪽)과 `<w>x0`(`top`, `bottom` 쪽)으로 밝힌다.
 
 ### Idempotency
 
@@ -258,4 +258,4 @@ review는 다음 반론에 답했다.
 - header가 그 아래 card나 nested header에 바로 붙어 그려져서, 다른 모든 상자 쌍을 떼어 놓는 corridor 없이 상자가 맞닿았다: header 뒤에는 card처럼 gap이 온다.
 - layout library의 balance는 배치를 유지한다고 여겨졌지만 card를 다른 line에 놓을 수 있고, group이 있는 space의 balance가 group card를 다른 group의 cell 위에 두었다. 그것을 대신한 모든 slot의 같은 몫은 모든 line index를 유지했으므로, 절반씩 만든 row는 그 line의 절반들로 남았고 header를 가진 group card는 그 member를 형제보다 짧게 그렸다. balance는 child가 card와 group card인 tree에서 모든 cut의 모든 child에 같은 몫을 준다. 그래서 어떤 cut도 group card를 가로지르지 않고, group card의 header는 그 몫 안에 있으며, 결과는 배치를 만든 operation의 순서가 아니라 배치에 달려 있다. balance와 boundary 가운데 맞춤을 포함한 grid의 모든 결과는 같은 group 사각형 검사를 거치며, seed가 정해진 무작위 operation 순서가 매 단계 뒤에 불변식을 검사한다.
 - 반론: 모든 child의 같은 몫은 중첩된 group card 안의 card를 바깥 group 옆의 card보다 짧게 그린다. 각 header가 자기 group card의 몫 안에 있기 때문이다. 답: 몫은 cut의 child의 몫이고, 사람은 그것을 group card의 사각형으로 본다. content card를 최소 아래로 그릴 balance는 모든 operation처럼 거부되며 그 card를 밝힌다.
-- 반론: 거부된 split을 최소 없이 다시 실행하는 것은 두 번째 operation이다. 답: 그것은 모든 operation이 이미 실행되는 trial 사본에서 실행되고 그것과 함께 되돌려진다. 그것은 library의 거부가 알리지 않는, split이 그릴 크기를 재므로 문구가 두 workbench에서 card와 그 크기를 밝힌다.
+- 거부된 split이나 group은 거부 문구가 content card를 가리키도록 최소 없이 다시 실행되었다. library가 group card가 box와 head를 더하기 전에 split을 판정했기 때문이다. 두 번째 실행은 library의 답을 우회한다. group은 box와 그 head를 포함하는 library의 operation 하나이고, library는 최소보다 작은 가장 깊은 node를 그려진 크기로 가리키므로 한 번의 실행이 거부를 준다.

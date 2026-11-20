@@ -81,7 +81,7 @@ func visitsOn(t *testing.T, columns, rows int) map[string]int {
 			return err
 		}},
 		{"split", func() error {
-			if _, ok := grid.Split(id(.45, .35), "y", layout.SplitInit{}); !ok {
+			if _, err := grid.Split(id(.45, .35), "y", layout.SplitInit{}); err != nil {
 				return fmt.Errorf("the split of %s is refused", id(.45, .35))
 			}
 			return nil

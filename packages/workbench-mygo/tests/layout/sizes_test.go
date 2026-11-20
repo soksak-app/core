@@ -65,8 +65,8 @@ func TestAnInsertThatLeavesACardWithNoAreaIsRefusedWhereMinSizeIsZero(t *testing
 	}
 	id := func(s string) *string { return &s }
 	split := func(card string, axis layout.Axis, born string) {
-		if _, ok := grid.Split(card, axis, layout.SplitInit{ID: id(born)}); !ok {
-			t.Fatalf("the split of %s toward %s was refused", card, axis)
+		if _, err := grid.Split(card, axis, layout.SplitInit{ID: id(born)}); err != nil {
+			t.Fatalf("the split of %s toward %s was refused: %v", card, axis, err)
 		}
 	}
 	split("card", "x", "n0")
@@ -99,8 +99,8 @@ func TestAnInsertThatLeavesACardWithNoAreaIsRefusedWhereMinSizeIsZero(t *testing
 func TestAPxSizeIsKeptWhenALineOfAnotherCutFallsInsideItsCard(t *testing.T) {
 	grid := sizesGrid(t, `{"root":{"cut":"x","kids":[{"share":0.25,"node":{"card":"side","width":400}},{"share":0.75,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"b"}}]}}]}}`,
 		layout.Options{Width: px(1600), Height: px(800), Gap: px(24), MinSize: px(96)})
-	if _, ok := grid.Split("a", "x", layout.SplitInit{}); !ok {
-		t.Fatal("the split of a was refused")
+	if _, err := grid.Split("a", "x", layout.SplitInit{}); err != nil {
+		t.Fatalf("the split of a was refused: %v", err)
 	}
 	if !grid.SetSize("side", "y", px(300)) {
 		t.Fatal("setSize of side was refused")
