@@ -116,9 +116,11 @@ function hasOrDefault(line) {
     const booleanName = /^(?:const|let|var)\s+(?:is|has|can)[A-Z_]/i.test(before.trim());
     const booleanCalls = /(?:^|\W)(?:is|has|can)[A-Z_]\w*\s*\([^)]*\)\s*$/.test(before) &&
       /^(?:is|has|can)[A-Z_]\w*\s*\(/.test(after);
+    // A membership test of a Map, a Set or an array, `.has(…)` or `.includes(…)`, gives a boolean on both sides.
+    const membership = /\.(?:has|includes)\s*\([^)]*\)\s*$/.test(before) && /^[\w$.]*\.(?:has|includes)\s*\(/.test(after);
     const literalFallback = /^(?:["'`]|-?\d|\[\]|\{\}|null\b|false\b|true\b|undefined\b)/.test(after);
     const namedFallback = /^(?:[\w$.]*)(?:fallback|default|empty|unknown|placeholder)[\w$]*/i.test(after);
-    if (literalFallback || namedFallback || (valuePosition && !booleanName && !booleanCalls)) return true;
+    if (literalFallback || namedFallback || (valuePosition && !booleanName && !booleanCalls && !membership)) return true;
   }
   return false;
 }

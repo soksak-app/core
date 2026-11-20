@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1016-10.4: The fallback check reads a `||` between two membership tests `.has(…)` or `.includes(…)` as a boolean, not as a value fallback.
 - F1016-10.3: `headsAbove` of the layout library refuses an id that is no card or box of the grid instead of answering 0, the head of a box and the frames of a card are read without a default, and the other defaults of the library state their reasons.
 - F1016-10.2: The eight defaults of the small workbench modules state their reasons.
 - F1016-10.1: The five defaults of the host and sok packages state their reasons.

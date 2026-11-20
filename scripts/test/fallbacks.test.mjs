@@ -97,6 +97,8 @@ test("ordinary boolean OR conditions are not value fallbacks", () => {
       "return !!card && (!!fillOf(id) || soleSlots(card) !== null);",
       "const callback = readCallback() || fallbackCallback;",
       "button.textContent = entry.title || entry.url;",
+      "return this.cards.has(id) || this.boxes.has(id);",
+      "const listed = names.includes(id) || extra.includes(id);",
     ].join("\n"),
   }).map(({ line, pattern }) => `${line} ${pattern}`), ["5 or default", "6 or default"]);
 });

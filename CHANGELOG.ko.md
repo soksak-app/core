@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1016-10.4: fallback 검사가 두 membership 검사 `.has(…)`나 `.includes(…)` 사이의 `||`를 값 fallback이 아니라 boolean으로 읽는다.
 - F1016-10.3: layout library의 `headsAbove`가 grid의 card나 box가 아닌 id에 0을 답하지 않고 거부하며, box의 head와 card의 frame을 기본값 없이 읽고, library의 나머지 기본값이 이유를 적는다.
 - F1016-10.2: 작은 workbench module의 기본값 여덟 개가 이유를 적는다.
 - F1016-10.1: host와 sok package의 기본값 다섯 개가 이유를 적는다.
