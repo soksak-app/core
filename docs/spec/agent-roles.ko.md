@@ -113,7 +113,7 @@ role 파일이 담는 정의 텍스트는 soksak이 `<config-dir>/roles.json` �
 - `text`는 UTF-8 텍스트이며 role 파일에 그대로 쓴다.
 - tab이 이름을 댄 role이 `roles.json`에 없으면 `unknown agent role <id>`로 거부하고, tab은 이전 role을 유지한다.
 
-`<file>`은 `roles.json`의 경로다. 읽기나 쓰기는 다음 문장 중 하나로 파일 전체를 거부하며, 문장은 파일을 적고 아무것도 쓰지 않는다:
+`<file>`은 `roles.json`의 경로다. 읽기나 쓰기는 아래 줄 중 맞는 문장으로 파일 전체를 거부하며, 예를 들면 `<file>: roles: format must be 1, found <value>`이다. 문장은 파일을 적고 아무것도 쓰지 않는다:
 
 - `<file>: roles: format must be 1, found <value>`: `<value>`는 member `format`의 compact JSON 텍스트이며, member가 없거나 문서가 객체가 아니면 `null`이다.
 - `<file>: roles: unknown field <name>`: `format`과 `roles`가 아닌 최상위 member.

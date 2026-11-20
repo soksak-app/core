@@ -113,7 +113,7 @@ A role definition is the text that a role file holds. soksak holds the definitio
 - `text` is UTF-8 text, written into the role file as it is.
 - A role that a tab names and `roles.json` does not define is refused with `unknown agent role <id>`, and the tab keeps its earlier role.
 
-`<file>` is the path of `roles.json`. A read or a write refuses the whole file with one of these texts, which names the file, and writes nothing:
+`<file>` is the path of `roles.json`. A read or a write refuses the whole file with the text of the matching line below, such as `<file>: roles: format must be 1, found <value>`, which names the file, and writes nothing:
 
 - `<file>: roles: format must be 1, found <value>`: `<value>` is the compact JSON text of the member `format`, or `null` when the member is absent or the document is not an object.
 - `<file>: roles: unknown field <name>`: a top-level member other than `format` and `roles`.
