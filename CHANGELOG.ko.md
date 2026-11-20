@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F937-69 (group card 안 card의 rail, page): 오른쪽 창 sidebar를 override하는 card를 group card로 감싼 뒤에도 `core.rail`이 그 card의 group 하나와 outline 두 개의 path를 보인다는 것을 F937-67의 mygo test처럼 page test가 판정한다. 동작은 바뀌지 않았다.
 - F937-67 (group card 안의 focus된 card의 ring): 창 sidebar를 override하는 card의 rail이 group card 안에서도 card와 함께 남고, card의 focus ring 옆에 card를 두른 outline 하나와 sidebar를 두른 outline 하나를 그린다는 것을 mygo test가 판정한다. 동작은 바뀌지 않았다.
 - F1005: `AGENTS.md`와 `AGENTS.ko.md`는 36,043 bytes와 39,287 bytes에서 17,095 bytes와 17,954 bytes로 줄어 Codex가 읽는 32,768 bytes 한도 아래가 된다. 모든 규칙은 같은 의미를 유지한다. 절차는 `docs/operations/`와 `docs/spec/`의 소유 문서로 옮기고, 명세에는 대상 문서에 없던 규칙을 더했다. F239로 끝난 five-group 단계 규칙과 workspace version 줄을 지웠으며, F718-6이 명령 시간 제한을 없앴으므로 그 규칙도 지웠다.
 - F966-2-9와 F937-63 (main merge의 test): 새 space, 새 tab 이름, group command의 page test가 저장된 tree와 공유 support module을 읽고, page와 mygo의 focus test는 move 답의 card를 판단하고, leader mark의 좁은 header test는 plugin의 mark를 가진 tab이 자리를 지키는 820 point로 창을 좁히며, card의 유일한 tab의 그 card 쪽 이동은 변화 없음으로 판단되고, `docs/spec/hosts.md`의 row H103이 mygo framework adapter의 input notice test를 나열하며, F937-49의 feature link는 fork version `soksak.17`을 이름한다. 검증: 여섯 page test, 두 mygo test와 `make check-host-files`가 merge에서 실패했고 통과한다.
