@@ -5496,6 +5496,107 @@
    ]
   },
   {
+   "name": "a card of the root level exchanged with a member of a group card is drawn without the frames of the group card, and the member is drawn inside them",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1200,
+    "height": 600
+   },
+   "layout": {
+    "state": {
+     "root": {
+      "cut": "x",
+      "kids": [
+       {
+        "share": 0.1,
+        "node": {
+         "card": "card-1",
+         "fixed": false
+        }
+       },
+       {
+        "share": 0.6,
+        "node": {
+         "box": "card-4",
+         "data": {
+          "name": "그룹 1",
+          "leader": "card-2"
+         },
+         "inner": {
+          "cut": "x",
+          "kids": [
+           {
+            "share": 0.5,
+            "node": {
+             "card": "card-2",
+             "fixed": false
+            }
+           },
+           {
+            "share": 0.5,
+            "node": {
+             "card": "card-3",
+             "fixed": false
+            }
+           }
+          ]
+         }
+        }
+       },
+       {
+        "share": 0.3,
+        "node": {
+         "card": "card-5",
+         "fixed": false
+        }
+       }
+      ]
+     }
+    },
+    "leader": "card-1",
+    "lastCard": 5
+   },
+   "steps": [
+    {
+     "call": "move",
+     "args": {
+      "card": "card-1",
+      "target": "card-2",
+      "side": "centre"
+     },
+     "returns": {
+      "card": "card-1"
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-2"
+     },
+     "returns": {
+      "x": 0,
+      "y": 0,
+      "w": 110.4,
+      "h": 600
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-1"
+     },
+     "returns": {
+      "x": 158.4,
+      "y": 56,
+      "w": 319.2,
+      "h": 520
+     }
+    }
+   ]
+  },
+  {
    "name": "a tab strip is no target of a dragged group card, which holds cards and no tabs, so a point on the strip resolves by the bands and the body of its card",
    "options": {
     "gap": 0,
