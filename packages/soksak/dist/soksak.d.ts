@@ -367,7 +367,7 @@ export declare class Soksak {
      */
     private measure;
     /**
-     * The text of the outermost node that the last operation moved and that is
+     * The text of the deepest node that the last operation moved and that is
      * drawn below its minimum, or null. The minimum of a node is recursive: a card
      * needs `minSize` and on y the heads drawn inside its rectangle, a card that
      * keeps a px size the smaller of that size and `minSize`, a fixed card with a

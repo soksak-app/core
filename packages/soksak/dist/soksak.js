@@ -1293,7 +1293,7 @@ export class Soksak {
         return { extentOf, need };
     }
     /**
-     * The text of the outermost node that the last operation moved and that is
+     * The text of the deepest node that the last operation moved and that is
      * drawn below its minimum, or null. The minimum of a node is recursive: a card
      * needs `minSize` and on y the heads drawn inside its rectangle, a card that
      * keeps a px size the smaller of that size and `minSize`, a fixed card with a
@@ -1312,26 +1312,39 @@ export class Soksak {
             return !was || Math.abs(was.x - is.x) > 1e-6 || Math.abs(was.y - is.y) > 1e-6 || Math.abs(was.w - is.w) > 1e-6
                 || Math.abs(was.h - is.h) > 1e-6;
         });
+        // The deepest node below its minimum names the refusal, because the minimum of a box or a cut is the sum of the minimums
+        // inside it: a box is below its minimum where a node inside it is, and the node inside it is the one that has no room.
         const visit = (node) => {
-            if (!isCut(node) && moved(node)) {
-                const has = extentOf(node);
-                const w = has.x1 - has.x0;
-                const h = has.y1 - has.y0;
-                const needs = { x: need(node, 'x'), y: need(node, 'y') };
-                if (w < needs.x - 0.5 || h < needs.y - 0.5) {
-                    return `card ${isBox(node) ? node.box : node.card} would be ${text(w)}x${text(h)}, below its minimum ${text(needs.x)}x${text(needs.y)}`;
-                }
-            }
-            if (isBox(node))
-                return visit(node.inner);
+            var _a, _b;
             if (isCut(node)) {
                 for (const kid of node.kids) {
                     const found = visit(kid.node);
                     if (found)
                         return found;
                 }
+                return null;
             }
-            return null;
+            if (isBox(node)) {
+                const found = visit(node.inner);
+                if (found)
+                    return found;
+            }
+            if (!moved(node))
+                return null;
+            const has = extentOf(node);
+            const w = has.x1 - has.x0;
+            let h = has.y1 - has.y0;
+            const nx = need(node, 'x');
+            let ny = need(node, 'y');
+            if (w >= nx - 0.5 && h >= ny - 0.5)
+                return null;
+            // A card is named at the size of its content, the heads drawn inside the top of its rectangle taken out of what it has
+            // and of what it needs.
+            if (isCard(node)) {
+                h -= (_a = this.above.get(node.card)) !== null && _a !== void 0 ? _a : 0;
+                ny -= (_b = this.above.get(node.card)) !== null && _b !== void 0 ? _b : 0;
+            }
+            return `card ${isBox(node) ? node.box : node.card} would be ${text(w)}x${text(h)}, below its minimum ${text(nx)}x${text(ny)}`;
         };
         return visit(this.root);
     }
