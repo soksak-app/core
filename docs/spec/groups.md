@@ -72,7 +72,7 @@ Each command answers after the placement that shows its change. A card or a grou
 A group card `G` is a box of the tree, so the operations of the layout library act on it as on a card ([the model](../../packages/soksak/docs/layout.md#the-model)):
 
 - The members of `G` keep their shares inside its box, so a change of the rectangle of `G` lays them into the new rectangle in their proportions, and no card outside `G` moves.
-- The split of the rectangle of `G` toward `side` is the split of the library (R4) with the box as the card: the box and the new card divide the rectangle of the box at the middle of the axis of `side`, and the new card takes the half toward `side`; along a cut whose kids take equal fractions it is one more equal kid ([splitting](#splitting)).
+- The split of the rectangle of `G` toward `side` is the split of the library (R4) with the box as the card: the box and the new card divide the rectangle of the box at the middle of the axis of `side`, and the new card takes the half toward `side`; along a cut whose kids take equal fractions it is one more equal kid ([splitting](#splitting)). The split is the `insert` of the new card beside the box, so the tree inside the box stays.
 - The close of `G` takes its box out of its cut; the move of `G` withdraws its box and inserts it beside the target, with its members inside it.
 
 | Command | Parameters | Result | Rule |
@@ -118,7 +118,7 @@ The same command with the same identifiers applied a second time leaves the same
 
 ### Card commands on a group card
 
-- `core.card.add-tab {card: <group>, plugin, params?}` adds a content card with the tab inside the group at the right edge of its rectangle: the split of the rectangle toward `right`, where the new card becomes a member of the group, and returns `{tab}` as for a content card.
+- `core.card.add-tab {card: <group>, plugin, params?}` adds a content card with the tab inside the group at the right edge of its rectangle: the `insert` of the layout library beside the members of the group toward `right`, so the new card becomes a member of the group and the tree of the members stays ([add and remove](../../packages/soksak/docs/layout.md#add-and-remove)), and returns `{tab}` as for a content card.
 - `core.layout.open {card: <group>, plugin, params?}` selects the first tab of `plugin` with `params` among the content cards inside the group in workbench order, and otherwise adds a card as `core.card.add-tab` does. With `side`, it splits the rectangle of the group card toward `side` in the level that holds it.
 - `core.layout.open {card, side, plugin, params?}` of a card of any level takes the neighbour toward `side` only among the members of the level of `card`: a card of another level whose edge lies on the same line and spans the same two lines is no neighbour, so an open from the last card of a group toward the edge of the group splits that card inside the group, also beside a card outside the group that holds an equal tab. The repetition of `core.group.create` and of `core.layout.open` with `side` finds its card by the same rule.
 - `core.card.menu {card: <group>, menu}` opens the split or group split menu of the group header, whose items run `core.card.split` and `core.group.create {card: <group>, side, plugin, request}` on the group card, as the menus of a content card run them on the content card; the menu `add` of a group card is refused ([headers](#headers)).

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math"
 	"slices"
-	"sort"
 	"strings"
 )
 
@@ -104,93 +103,7 @@ func ends(axis Axis) (string, string) {
 	return "y0", "y1"
 }
 
-// cutNode is a node of the tree that treeOfCells reads from lines and cells: a leaf, a card or a box with the tree of its members, or a
-// cut along axis into kids, with the coordinates old of its rectangle.
-type cutNode struct {
-	leaf  bool
-	id    string
-	card  *Card
-	box   *Box
-	inner *cutNode
-	axis  Axis
-	kids  []*cutNode
-	old   extent
-}
-
-func unionOf(es []extent) extent {
-	out := extent{math.Inf(1), math.Inf(-1), math.Inf(1), math.Inf(-1)}
-	for _, e := range es {
-		out.x0, out.x1, out.y0, out.y1 = math.Min(out.x0, e.x0), math.Max(out.x1, e.x1), math.Min(out.y0, e.y0), math.Max(out.y1, e.y1)
-	}
-	return out
-}
-
-// newCut is the cut of kids along axis.
-func newCut(axis Axis, kids []*cutNode) *cutNode {
-	olds := make([]extent, len(kids))
-	for i, k := range kids {
-		olds[i] = k.old
-	}
-	return &cutNode{axis: axis, kids: kids, old: unionOf(olds)}
-}
-
-var errNotSlicing = errors.New("the grid is not a slicing arrangement")
-
-// buildCuts is the tree of a set of children, the cut of prefer[0] taken first where the lines allow both.
-func buildCuts(nodes []*cutNode, prefer []Axis) (*cutNode, error) {
-	if len(nodes) == 1 {
-		return nodes[0], nil
-	}
-	for _, axis := range prefer {
-		lo, hi := ends(axis)
-		end := math.Inf(-1)
-		start := math.Inf(1)
-		for _, n := range nodes {
-			end = math.Max(end, n.old.get(hi))
-			start = math.Min(start, n.old.get(lo))
-		}
-		seen := map[float64]bool{}
-		at := []float64{}
-		for _, n := range nodes {
-			v := n.old.get(hi)
-			if seen[v] || v >= end {
-				continue
-			}
-			seen[v] = true
-			clear := true
-			for _, m := range nodes {
-				if !(m.old.get(hi) <= v || m.old.get(lo) >= v) {
-					clear = false
-					break
-				}
-			}
-			if clear {
-				at = append(at, v)
-			}
-		}
-		if len(at) == 0 {
-			continue
-		}
-		sort.Float64s(at)
-		bounds := append(append([]float64{start}, at...), end)
-		kids := []*cutNode{}
-		for i := 0; i+1 < len(bounds); i++ {
-			part := []*cutNode{}
-			for _, n := range nodes {
-				if n.old.get(lo) >= bounds[i] && n.old.get(hi) <= bounds[i+1] {
-					part = append(part, n)
-				}
-			}
-			kid, err := buildCuts(part, prefer)
-			if err != nil {
-				return nil, err
-			}
-			kids = append(kids, kid)
-		}
-		return newCut(axis, kids), nil
-	}
-	return nil, errNotSlicing
-}
+func notMember(id string) error { return fmt.Errorf("card %s is not a member of the layout", id) }
 
 // contentsOf is the card ids inside a box, through the boxes that it holds.
 func contentsOf(b *Box) []string {
@@ -203,79 +116,6 @@ func contentsOf(b *Box) []string {
 		}
 	}
 	return out
-}
-
-func extentOf(s cells, c Card) extent {
-	return extent{s.Xs[c.C0], s.Xs[c.C1], s.Ys[c.R0], s.Ys[c.R1]}
-}
-
-func notMember(id string) error { return fmt.Errorf("card %s is not a member of the layout", id) }
-
-// leavesOf is the leaves of the members of one box or of the plane, read from the lines and the cells.
-func leavesOf(members []Member, s cells, byID map[string]Card, prefer []Axis) ([]*cutNode, error) {
-	out := []*cutNode{}
-	for _, m := range members {
-		if m.Box == nil {
-			c, ok := byID[m.Card]
-			if !ok {
-				return nil, notMember(m.Card)
-			}
-			card := c
-			out = append(out, &cutNode{leaf: true, id: c.ID, card: &card, old: extentOf(s, c)})
-			continue
-		}
-		ids := contentsOf(m.Box)
-		if len(ids) == 0 {
-			return nil, notMember(m.Box.ID)
-		}
-		olds := []extent{}
-		for _, id := range ids {
-			c, ok := byID[id]
-			if !ok {
-				return nil, notMember(m.Box.ID)
-			}
-			olds = append(olds, extentOf(s, c))
-		}
-		kids, err := leavesOf(m.Box.Members, s, byID, prefer)
-		if err != nil {
-			return nil, err
-		}
-		inner, err := buildCuts(kids, prefer)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, &cutNode{leaf: true, id: m.Box.ID, box: m.Box, inner: inner, old: unionOf(olds)})
-	}
-	return out, nil
-}
-
-// planeTree is the tree of the plane: the cards that no box holds and the boxes, each box with the tree of its members.
-func planeTree(s cells, boxes []Member, prefer []Axis) (*cutNode, error) {
-	byID := map[string]Card{}
-	for _, c := range s.Cards {
-		byID[c.ID] = c
-	}
-	boxed := map[string]bool{}
-	for _, m := range boxes {
-		if m.Box == nil {
-			return nil, fmt.Errorf("the boxes hold the card %s, which is no box", m.Card)
-		}
-		for _, id := range contentsOf(m.Box) {
-			boxed[id] = true
-		}
-	}
-	members := []Member{}
-	for _, c := range s.Cards {
-		if !boxed[c.ID] {
-			members = append(members, Member{Card: c.ID})
-		}
-	}
-	members = append(members, boxes...)
-	kids, err := leavesOf(members, s, byID, prefer)
-	if err != nil {
-		return nil, err
-	}
-	return buildCuts(kids, prefer)
 }
 
 // evenWithin is the difference of fractions under which two kids are of one size, so their cut is even.

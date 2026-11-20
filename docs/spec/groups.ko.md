@@ -72,7 +72,7 @@ header의 버튼은 그 header의 상자에 동작한다. content card header에
 group card `G`는 tree의 box이므로 layout library의 operation은 card에 하듯 그것에 동작한다([모델](../../packages/soksak/docs/layout.ko.md#모델)).
 
 - `G`의 member는 그 box 안에서 자기 share를 유지하므로, `G`의 사각형이 바뀌면 member는 비율대로 새 사각형에 놓이고 `G` 밖의 어떤 card도 움직이지 않는다.
-- `G`의 사각형을 `side` 쪽으로 나누는 것은 box를 card로 하는 library의 split(R4)이다. box와 새 card가 box의 사각형을 `side` 축의 가운데에서 나누고, 새 card가 `side` 쪽 절반을 받는다. kid가 같은 fraction을 받는 cut을 따라서는 같은 kid 하나가 더해진다([splitting](#splitting)).
+- `G`의 사각형을 `side` 쪽으로 나누는 것은 box를 card로 하는 library의 split(R4)이다. box와 새 card가 box의 사각형을 `side` 축의 가운데에서 나누고, 새 card가 `side` 쪽 절반을 받는다. kid가 같은 fraction을 받는 cut을 따라서는 같은 kid 하나가 더해진다([splitting](#splitting)). split은 box 옆으로의 새 card의 `insert`이므로 box 안의 tree가 유지된다.
 - `G`의 close는 그 box를 그 cut에서 꺼낸다. `G`의 move는 그 box를 withdraw하고 member를 담은 채 target 옆에 insert한다.
 
 | Command | Parameter | 결과 | 규칙 |
@@ -118,7 +118,7 @@ grid의 모든 operation은 각 group card를 tree의 box 하나로 유지하므
 
 ### Group card에 대한 card command
 
-- `core.card.add-tab {card: <group>, plugin, params?}`는 tab을 담은 content card를 group 안, 그 사각형의 오른쪽 가장자리에 더한다. 곧 새 card가 group의 member가 되는 `right` 쪽 사각형 split이며, content card와 같이 `{tab}`을 돌려준다.
+- `core.card.add-tab {card: <group>, plugin, params?}`는 tab을 담은 content card를 group 안, 그 사각형의 오른쪽 가장자리에 더한다. 곧 group의 member 옆 `right` 쪽으로의 layout library `insert`이므로 새 card가 group의 member가 되고 member의 tree가 유지되며([add and remove](../../packages/soksak/docs/layout.ko.md#add-and-remove)), content card와 같이 `{tab}`을 돌려준다.
 - `core.layout.open {card: <group>, plugin, params?}`는 group 안의 content card 중에서 workbench order로 `plugin`과 `params`의 첫 tab을 고르고, 없으면 `core.card.add-tab`처럼 card를 더한다. `side`가 있으면 group card를 담은 level에서 그 사각형을 `side` 쪽으로 나눈다.
 - 어떤 level의 card든 `core.layout.open {card, side, plugin, params?}`는 `side` 쪽 이웃을 `card`의 level의 member 중에서만 찾는다: 가장자리가 같은 line 위에 있고 같은 두 line에 걸친 다른 level의 card는 이웃이 아니므로, group의 마지막 card에서 group 가장자리 쪽으로의 open은 group 밖 card가 같은 tab을 가져도 그 card를 group 안에서 나눈다. `core.group.create`와 `side`를 가진 `core.layout.open`의 반복도 같은 규칙으로 card를 찾는다.
 - `core.card.menu {card: <group>, menu}`는 group header의 split 또는 group split menu를 연다. content card의 menu가 content card에 실행하듯, 그 item은 group card에 `core.card.split`과 `core.group.create {card: <group>, side, plugin, request}`를 실행한다. group card의 menu `add`는 거부된다([header](#header)).
