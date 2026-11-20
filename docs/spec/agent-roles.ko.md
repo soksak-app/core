@@ -294,7 +294,7 @@ Session 시작 hook은 CLI session의 시작, 재개, `clear`, compaction마다 
 - Role이 있을 때: 표준 출력에 JSON 한 줄 `{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"<identity 텍스트>"}}`을 쓰고 종료 상태는 0이다. identity 텍스트는 [stable identity](#stable-identity)의 텍스트이며 `<role file>`은 `<configuration directory>/agents/<surface>/role.md`다. Claude Code와 Codex는 SessionStart hook에서 이 형식을 읽으며, 둘 다 주입된 텍스트가 model context에 들어간다는 것을 측정했다([측정 사실](#measured-facts), 24행과 25행).
 - Hook 명령: soksak terminal 안에서만 `sok`을 실행하는 shell 줄이다. `[ -n "$SOKSAK_CONFIG_DIR" ] || exit 0`에 이어 `exec <sok> role identity --soksak-hook`를 쓰며, `<sok>`은 위와 같이 인용한 실행 중인 `sok`이다. Host는 surface를 위해 sidecar가 시작하는 모든 process에 `SOKSAK_CONFIG_DIR`을 설정하므로([sidecar](sidecars.ko.md#surface의-프로세스)), 이 변수는 soksak tab의 session에만 있다. Tab 밖에서는 줄이 `sok`을 실행하지 않고 바로 0으로 끝나므로, soksak을 쓰지 않는 project는 `sok`이 설치되지 않았거나 `PATH`에 없어도 `sok` 시작이나 hook 오류를 보지 않는다. Login shell에서 `SOKSAK_CONFIG_DIR`을 export한 사람에게는 줄이 `sok`을 실행하며, 그러면 `sok`이 자기 오류를 보고하거나 tab 밖에서는 아무것도 출력하지 않는다.
 - Role이 없거나 어느 surface에도 속하지 않을 때: 표준 출력은 비고 종료 상태는 0이다. Hook은 tab 밖을 포함해 agent의 모든 session에서 실행된다. tab 밖에는 tab 환경이 없으므로 명령은 surface를 찾지 못하고, 애플리케이션에 닿지 않은 채 아무것도 출력하지 않고 바로 종료 상태 0으로 끝난다.
-- 오류일 때(예: 거부된 surface 식별자, 응답하지 않는 애플리케이션): 표준 출력은 비고, 표준 오류에 `sok: <message>`를 쓰며 종료 상태는 1이다. Claude Code는 0도 2도 아닌 종료 상태의 hook을 막지 않는 오류로 다루므로, session은 identity 없이 시작하며 CLI는 막히지 않는다. Codex에서 종료 상태 1의 효과는 측정하지 않았다.
+- 오류일 때(예: 거부된 surface 식별자, 응답하지 않는 애플리케이션): 표준 출력은 비고, 표준 오류에 `sok: <message>`를 쓰며 종료 상태는 1이다. Claude Code는 이 상태로 session을 막지 않으므로, session은 identity 없이 시작한다. Claude Code 참조 문서에 따르면 `SessionStart` hook의 종료 상태 2는 stderr를 사람에게만 보이고 session을 막지 않으며, 그 밖의 0이 아닌 종료 상태는 막지 않는 오류다([Claude Code hooks](https://code.claude.com/docs/en/hooks)). Codex가 명령을 실행하는 형식과 0이 아닌 종료 상태의 효과는 아직 정해지지 않았다.
 - Hook은 role 정의를 절대 보내지 않는다. 지문 루프와 변경 message는 그대로다. Session 시작 hook이 없는 CLI는 루프에만 기댄다.
 
 Terminal에 입력하는 message 대신 hook을 쓰는 이유: 텍스트가 context 초기화 직후에 도착한다. TUI에 아무것도 입력하지 않으므로 person의 입력, 입력 방식, 권한 prompt와 부딪히지 않는다. 대화 turn을 더하지 않는다. Compaction 뒤에 더해지므로 compaction을 견딘다. 정의는 파일에 남는다. Role은 session 중에 바뀔 수 있고, 주입된 context는 나중의 변경으로 거둘 수 없으며(측정하지 않음), 지문은 파일을 읽어야 나오기 때문이다.
@@ -304,7 +304,7 @@ Hook은 user 수준에서, skill과 MCP setup이 이미 쓰는 agent 폴더에 �
 등록은 setup part `hook`이다([setup part](cli.ko.md#setup-part)). `sok setup install hook`은 존재하는 agent 폴더마다 hook을 쓴다.
 
 - Claude Code: 존재하는 각 Claude 폴더의 `settings.json`. 폴더는 `<home>/.claude`와, 설정되어 비지 않았을 때의 `$CLAUDE_CONFIG_DIR`이며 skill part와 같다.
-- Codex: `<home>/.codex`가 있으면 그 폴더의 `hooks.json`.
+- Codex: Codex user 폴더의 `hooks.json`. Codex user 폴더는 `CODEX_HOME`이 설정되어 비지 않았으면 그 값, 아니면 `<home>/.codex`이며, 그 폴더가 있을 때 파일을 쓴다. Codex는 이 파일을 user 폴더에서 읽는다: `$CODEX_HOME/hooks.json`, 또는 `CODEX_HOME`이 없으면 `~/.codex/hooks.json`([Codex hooks](https://learn.chatgpt.com/docs/hooks); Codex 0.171.0은 config layer 폴더마다 `hooks.json`을 읽는다, `codex-rs/hooks/src/engine/discovery.rs` 395행).
 
 Hook은 `hooks` member의 `SessionStart` 배열에 있는 group 하나다: `{"matcher": "", "hooks": [{"type": "command", "command": "<sok> role identity --soksak-hook"}]}`. `<sok>`은 MCP 등록이 밝히는 실행 중인 `sok`이며, 경로에 공백이나 shell 문자가 있으면 shell용으로 인용한다. 빈 matcher는 모든 source에서 hook을 실행한다. 고정 인자 `--soksak-hook`은 soksak이 등록한 항목의 표지다. `sok role identity`는 이 인자만 받고 다른 인자는 거부한다. 항목은 문서화된 필드 `type`과 `command`만 담으므로, 항목을 구별하려고 member를 더할 필요가 없다.
 
