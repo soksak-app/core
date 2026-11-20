@@ -7,16 +7,16 @@ import { fileURLToPath } from "node:url";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const flat = (text) => text.replace(/\s+/g, " ");
 
-// The rule of delegation (docs/spec/cli.md#agent-skill, docs/spec/messaging.md#report-request): an agent gives a task to another agent
-// with a message, whose report arrives as injected input, and does not poll for a result or delegate with a submit command.
-const RULE = "To give another agent a task and get its result, send a message with `sok message send` to the folder of its terminal: the message carries the report request, and the report arrives as your own injected input, so end your turn and wait at the prompt. Never poll files or statuses for a result. A submit command types a line as a person would; it is not for delegating.";
+// The rule by purpose (docs/spec/cli.md#agent-skill, docs/spec/messaging.md#report-request): a submit command imitates the input of a
+// person, and agents talk through messages, whose answer arrives as injected input, and poll nothing for a result.
+const RULE = "A submit command imitates the input of a person: use it to type a line that a person would type into a program, such as a shell command or the answer to a program's question. Agents talk through messages: to give another agent a task, ask it something or report to it, send a message with `sok message send` to the folder of its terminal. The message carries the report request, and the answer arrives as your own injected input, so end your turn and wait at the prompt. Never poll files or statuses for a result.";
 
-test("the agent skill and the MCP instructions state the rule of delegation through messages", { timeout: 5000 }, () => {
+test("the agent skill and the MCP instructions state the purpose of a submit command and that agents talk through messages", { timeout: 5000 }, () => {
   const mcp = JSON.parse(readFileSync(join(ROOT, "packages/sok/go/src/agents/mcp.json"), "utf8"));
   const places = {
     "the agent skill": flat(readFileSync(join(ROOT, "packages/sok/go/src/agents/SKILL.md"), "utf8")),
     "the MCP instructions": flat(mcp.instructions),
   };
   const missing = Object.entries(places).filter(([, text]) => !text.includes(RULE)).map(([place]) => place);
-  assert.deepEqual(missing, [], `the rule of delegation is missing from ${missing.join(", ")}`);
+  assert.deepEqual(missing, [], `the rule by purpose is missing from ${missing.join(", ")}`);
 });

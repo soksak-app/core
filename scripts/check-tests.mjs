@@ -14065,9 +14065,9 @@ const FEATURE_LINKS = [
   },
   {
     id: "F1000-1",
-    implementation: [{ file: "packages/sok/go/src/agents/SKILL.md", symbol: "To give another agent a task and get its result, send a message with `sok message send`" }],
-    tests: [{ file: "scripts/test/skill-delegation.test.mjs", id: "the agent skill and the MCP instructions state the rule of delegation through messages" }],
-    expected: "The agent skill and the MCP instructions state that an agent delegates with a message, waits at its prompt for the injected report, polls nothing for a result and does not delegate with a submit command.",
+    implementation: [{ file: "packages/sok/go/src/agents/SKILL.md", symbol: "Agents talk through messages" }],
+    tests: [{ file: "scripts/test/skill-delegation.test.mjs", id: "the agent skill and the MCP instructions state the purpose of a submit command and that agents talk through messages" }],
+    expected: "The agent skill and the MCP instructions state that a submit command imitates the input of a person and that agents talk through messages, wait at the prompt for the injected answer and poll nothing for a result.",
     levels: ["unit"],
   },
   {
