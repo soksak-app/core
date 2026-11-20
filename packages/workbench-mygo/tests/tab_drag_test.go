@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
@@ -144,6 +145,45 @@ func TestADragAlongALineSelectsTheRunFromItsAnchor(t *testing.T) {
 	box, top, bottom := f.box("core.card", added), f.box("core.card", card), f.box("core.card", other)
 	if box.X >= top.X || box.Y != top.Y || math.Abs(float64(box.Y+box.H-(bottom.Y+bottom.H))) > 0.01 {
 		t.Fatalf("the new card stands at %v beside %v and %v", box, top, bottom)
+	}
+}
+
+// The width of the bands is the chrome metric drop-band of workbench.json, the one source of both workbenches
+// (docs/spec/settings.md#layout-values): with bands of 40 points, a point 20 points inside the left line of a card lies on the outer
+// band, the content of the plane, where bands of 5 points leave it in the outer quarter of the card.
+func TestTheBandsHaveTheDeclaredWidth(t *testing.T) {
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := startedShellOf(t, acme(), declared.WithChrome("drop-band", "40px"))
+	f.settle()
+	f.run("core.library.form.open", map[string]string{"mode": "open"})
+	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
+	f.run("core.library.form.submit", nil)
+	cards := f.tabbedCards()
+	card, other := cards[0], cards[1]
+	f.click("core.card.add", card)
+	f.click("core.picker.item", "acme")
+	tab := f.tabsOf(card)[1].(map[string]any)["id"].(string)
+	box := f.box("core.card", card)
+	drag := dragTab(t, f, tab, box.X+20, box.Y+box.H/2)
+	if drag == nil || drag.Target == nil || strings.Join(drag.Target.Card, " ") != card+" "+other || drag.Target.Zone != "left" {
+		t.Fatalf("the drag is %+v with the target %+v", drag, drag.Target)
+	}
+}
+
+// A shell whose workbench.json holds no number for a metric of the bands is refused with the file and the metric.
+func TestABandMetricWithoutANumberIsRefused(t *testing.T) {
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"drop-band", "drop-band-margin"} {
+		_, err := workbench.NewShell(workbench.ShellOptions{Name: "main", Random: strings.NewReader(""), Declared: declared.WithChrome(name, "wide")})
+		if want := "workbench.json: the chrome metric " + name + " has no number"; err == nil || err.Error() != want {
+			t.Errorf("the shell starts with %v, not %q", err, want)
+		}
 	}
 }
 

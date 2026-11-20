@@ -158,10 +158,10 @@ func (s *Shell) dragTabTo(drag *tabDrag, x, y float32) {
 }
 
 // targetOptions are the measures of the target search: the tab strip of a content card with its border, the edge share of a body and
-// the width and the margin of the bands (docs/spec/groups.md#target-search).
+// the width and the margin of the bands, the chrome metrics drop-band and drop-band-margin (docs/spec/groups.md#target-search).
 func (s *Shell) targetOptions() layout.TargetOptions {
 	header := float64(s.metrics.headH) + float64(s.palette.CardBorder())
-	return layout.TargetOptions{HeaderPx: header, Edge: layout.DropEdge, Band: layout.DropBand, BandMargin: layout.DropBandMargin}
+	return layout.TargetOptions{HeaderPx: header, Edge: layout.DropEdge, Band: float64(s.metrics.dropBand), BandMargin: float64(s.metrics.dropBandMargin)}
 }
 
 // dropRect is the rectangle of the card that a drop produces, in the coordinates of the plane, and nil when the layout refuses the

@@ -30,13 +30,10 @@ type TargetOptions struct {
 	Group      bool
 }
 
-// The measures of the target search (docs/spec/groups.md#target-search): the width of a band and the margin before the centre of a
-// card in points, and the edge share of the body of a card whose outer quarter is a side.
-const (
-	DropBand       = 5
-	DropBandMargin = 3
-	DropEdge       = 0.25
-)
+// DropEdge is the edge share of the body of a card whose outer quarter is a side (docs/spec/groups.md#target-search); the width and the
+// margin of the bands are the chrome metrics drop-band and drop-band-margin of workbench.json, which the workbench passes in
+// TargetOptions.
+const DropEdge = 0.25
 
 // link is a node of the chain of a point: the node, the cut that holds it with its index there, and its drawn rectangle.
 type link struct {
