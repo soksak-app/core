@@ -6,6 +6,7 @@
 ## 2026-11-20
 
 - F1006-2: The terminal checklist row P192 starts an agent CLI through `program` and `args` of the sidecar `open`. The vt and alacritty sidecars already implement the members and the `program not found` error on their `origin/main` (S233, S241); their `open_program_test` passes 10 of 10 with the real PATH. The core rows F1006-2, F1006-2-1 and F1006-2-2 are `[o]`, and the spec `docs/spec/agent-roles.md#start-parameters` needed no change.
+- F1016-13: The plane of the mygo workbench is the element `core.plane` of the element tree and of the window snapshot, covers the plane without the margin of the stage, so a press on that margin keeps the focus as on the page, and a test presses the plane outside every card.
 - F1016-10.6: The plane reads the fullscreen card through one reader and the kids of a cut node without a default, and its other defaults state their reasons.
 - F1016-10.7: The mygo workbench reads the leader of a level through one reader with its stated reason, and its other ignored results state which result they read.
 - F1016-10.5: The group tree reads the member of a card through one helper with its stated reason, and its other defaults state their reasons; a move reads the paths of its targets without a default after it refused unknown targets.

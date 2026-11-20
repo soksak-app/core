@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/egoist/mygo/ui"
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
@@ -806,6 +807,53 @@ func TestAPressOutsideEveryContentCardClearsTheFocus(t *testing.T) {
 	f.run(t, "core.card.focus", `{"card": "`+group+`"}`)
 	if got := focused(); got != first {
 		t.Errorf("core.card.focus on the group card focused %q, not its first card %s", got, first)
+	}
+}
+
+// The plane of the shown space is the element core.plane of the element tree, and a left press on it that lands on no card, such as on
+// the gap between two cards, runs core.card.focus {"card": null}, so the plane stores no focused card; a press on the margin of the
+// stage around the plane keeps the focus (docs/spec/groups.md#focus).
+func TestAPressOnThePlaneOutsideEveryCardClearsTheFocus(t *testing.T) {
+	f := groupedShell(t)
+	f.settle()
+	plane := f.box("core.plane", "")
+	all := exposedAll(f.tester.ElementTree(), "core.card")
+	var first, second string
+	for id, rect := range all {
+		if id == "left" || id == "right" {
+			continue
+		}
+		if first == "" || rect.X < all[first].X {
+			first, second = id, first
+		} else {
+			second = id
+		}
+	}
+	if first == "" || second == "" {
+		t.Fatalf("the fixture shows the cards %v", all)
+	}
+	x, y := (all[first].X+all[first].W+all[second].X)/2, all[first].Y+all[first].H/4
+	inside := func(r ui.Rect) bool { return x >= r.X && x < r.X+r.W && y >= r.Y && y < r.Y+r.H }
+	if !inside(plane) {
+		t.Fatalf("the point %v, %v between %s and %s lies outside the plane %v", x, y, first, second, plane)
+	}
+	for id, rect := range all {
+		if inside(rect) {
+			t.Fatalf("the point %v, %v lies on the card %s", x, y, id)
+		}
+	}
+	f.run(t, "core.card.focus", `{"card": "`+second+`"}`)
+	f.tester.ClickAt(x, y)
+	f.settle()
+	if got := f.read("core.layout")["focusedId"]; got != nil {
+		t.Errorf("a press on the plane between %s and %s left the focus on %v", first, second, got)
+	}
+	// The margin of the stage around the plane is no part of the plane, as on the page, so a press on it keeps the focus.
+	f.run(t, "core.card.focus", `{"card": "`+second+`"}`)
+	f.tester.ClickAt(plane.X-1, plane.Y+plane.H/2)
+	f.settle()
+	if got := f.read("core.layout")["focusedId"]; got != second {
+		t.Errorf("a press on the margin left of the plane moved the focus from %s to %v", second, got)
 	}
 }
 

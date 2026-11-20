@@ -71,11 +71,14 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 	}).Children(func() {
 		// A left press on the plane that lands on no card and on no header of a group card, such as on the frame or the body of a group
 		// card, a gap, a seam or a divider, clears the focus (docs/spec/groups.md#focus); the name of a group header clears it by its own
-		// binding, and a press on a card, a window sidebar included, keeps it.
-		blur := s.binder.Control(c, "core.plane", "core.card.focus", "")
+		// binding, and a press on a card, a window sidebar included, keeps it. The margin of the stage around the plane is no part of the
+		// plane, as on the page, where it is the padding of the stage.
+		var blur func(params any)
 		ui.Box(c).Absolute().Left(shiftX-shareLeft).Top(shiftY-shareTop).Size(held, heldHeight).ObserveInput(func(ev ui.InputEvent) {
+			x, y := float64(ev.X-inset), float64(ev.Y-inset)
+			onPlane := x >= 0 && x < s.planeBox.W && y >= 0 && y < s.planeBox.H
 			// A press that reaches the plane of a frame drawn before its project closed finds no plane and changes nothing.
-			if ev.Kind == ui.InputPointerDown && ev.Button == 0 && s.requirePlane() == nil && !s.onCardOrHeader(float64(ev.X-inset), float64(ev.Y-inset)) {
+			if ev.Kind == ui.InputPointerDown && ev.Button == 0 && onPlane && s.requirePlane() == nil && !s.onCardOrHeader(x, y) {
 				blur(focusParam{})
 			}
 		}).Draw(func(p *ui.Painter, r ui.Rect) { s.drawRules(p, r, inset, rules, false) }).DrawOver(func(p *ui.Painter, r ui.Rect) {
@@ -86,6 +89,10 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 			// The line around the stage stands where the stage does, outside the box that holds the plane on the grid, and at the seam over
 			// the lines of the bars that it shares.
 			s.drawStageEdge(c, -shiftX, -shiftY, width+shareLeft, stage+shareTop)
+			// The plane is the element core.plane below every card. The element tree holds only an element with a role, so the role group
+			// shows it there and in the window snapshot.
+			blur = s.binder.Control(c, "core.plane", "core.card.focus", "")
+			ui.Box(c).Absolute().Left(inset).Top(inset).Size(float32(s.planeBox.W), float32(s.planeBox.H)).Role(ui.RoleGroup).Label("core.plane")
 			// Every card of every level in workbench order: a group card stands before the cards inside it, which lie over its rectangle.
 			cards := s.allCards()
 			s.forgetCardReads(cards)
