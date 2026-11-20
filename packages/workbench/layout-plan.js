@@ -160,11 +160,12 @@ export function resolveCards(cards, planeTabs, { close = false } = {}) {
 
 /**
  * Builds `tree` through `ops`, the operations of the size rule of the layout library on the content cards of the space: `cards()`, the
- * content card ids, `withdraw(id)`, which returns what left, `insert(target, side, card)`, `even()` and `frame(id)`. `ids[k]` is the
- * card of the k-th card of the tree in tree order: an id of the plane that the card keeps, or a new id. One card of the plane stays and
- * every other card is withdrawn; the first card of the tree takes its place, the first card of each split stands where the split stands
- * and the other children are inserted beside it toward right or bottom from the root inward, and every cut is made even. A withdrawn
- * card that the tree keeps arrives with its data. It returns the frames of the cards of the tree in tree order.
+ * content card ids, `withdraw(id)`, which returns what left, `insert(target, side, node)` with a node `{card}` or what withdraw
+ * returned, `even()` and `frame(id)`. `ids[k]` is the card of the k-th card of the tree in tree order: an id of the plane that the card
+ * keeps, or a new id. One card of the plane stays and every other card is withdrawn; the first card of the tree takes its place, the
+ * first card of each split stands where the split stands and the other children are inserted beside it toward right or bottom from the
+ * root inward, and every cut is made even. A withdrawn card that the tree keeps arrives with its data. It returns the frames of the
+ * cards of the tree in tree order.
  */
 export function buildTree(ops, tree, ids) {
   const leaves = treeCards(tree);
@@ -175,7 +176,7 @@ export function buildTree(ops, tree, ids) {
   for (const id of plane) {
     if (id !== stay) left.set(id, ops.withdraw(id));
   }
-  const arriving = (id) => left.get(id) ?? { id };
+  const arriving = (id) => left.get(id) ?? { card: id };
   if (ids[0] !== stay) {
     ops.insert(stay, "left", arriving(ids[0]));
     left.set(stay, ops.withdraw(stay));

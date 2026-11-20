@@ -263,10 +263,10 @@ func TestAPlanBelowTheMinimumStatesThePlaneAndTheNearestGrid(t *testing.T) {
 
 // contract: layout.apply.moves-existing-tabs
 func TestALayoutApplyMovesTheTabsWithTheirIdentifiers(t *testing.T) {
-	a := gridCard("a", 0, 1, 0, 1, tab("tab-aaaaaa", "plain"), paramTab("tab-bbbbbb", "notes", map[string]any{"path": "s.md"}))
+	a := cardNode("a", tab("tab-aaaaaa", "plain"), paramTab("tab-bbbbbb", "notes", map[string]any{"path": "s.md"}))
 	// The text size of a card is part of its data, which a kept card keeps.
 	a["data"].(map[string]any)["textSize"] = 1.25
-	f := layoutShell(t, gridSpace("spc-aaaaaa", []float64{0, 0.5, 1}, []float64{0, 1}, a, gridCard("b", 1, 2, 0, 1, tab("tab-cccccc", "plain"))))
+	f := layoutShell(t, treeSpace("spc-aaaaaa", cutNode("x", kidNode(0.5, a), kidNode(0.5, cardNode("b", tab("tab-cccccc", "plain"))))))
 	tree := `{"tree":{"direction":"column","children":[{"tabs":[{"tab":"tab-cccccc"}]},` +
 		`{"tabs":[{"plugin":"notes","params":{"path":"s.md"}},{"tab":"tab-aaaaaa"}],"active":1}]}}`
 	answer, layout := f.twice("core.layout.apply", tree)
@@ -309,9 +309,9 @@ func TestALayoutApplyMovesTheTabsWithTheirIdentifiers(t *testing.T) {
 
 // contract: layout.plan.refusals
 func TestAPlanThatCannotResolveItsTreeStatesTheReason(t *testing.T) {
-	f := layoutShell(t, gridSpace("spc-aaaaaa", []float64{0, 0.5, 1}, []float64{0, 1},
-		gridCard("a", 0, 1, 0, 1, tab("tab-aaaaaa", "plain")), gridCard("b", 1, 2, 0, 1, tab("tab-bbbbbb", "plain"))),
-		gridSpace("spc-bbbbbb", []float64{0, 1}, []float64{0, 1}, gridCard("other", 0, 1, 0, 1, tab("tab-oooooo", "plain"))))
+	f := layoutShell(t, treeSpace("spc-aaaaaa", cutNode("x", kidNode(0.5, cardNode("a", tab("tab-aaaaaa", "plain"))),
+		kidNode(0.5, cardNode("b", tab("tab-bbbbbb", "plain"))))),
+		treeSpace("spc-bbbbbb", cardNode("other", tab("tab-oooooo", "plain"))))
 	before := f.described()
 	for _, refusal := range []struct{ tree, reason string }{
 		{`{"tabs":[{"tab":"tab-zzzzzz"}]}`, "tab tab-zzzzzz is not a tab of the active space"},

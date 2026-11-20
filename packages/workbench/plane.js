@@ -2751,20 +2751,16 @@ export async function closeInLayout({ tab: tabId }) {
 
 /* ── Planning an arrangement (docs/spec/cli.md#planning-an-arrangement) ───────────────────────────── */
 
-/**
- * The operations of the size rule of the layout library on the content cards of the plane: the content cards are the members of one
- * box without a head, so every cut that the plan makes is a cut of content cards and a window sidebar keeps its span.
- */
-const contentBox = () => ({ id: "content", head: 0, members: contentCards().map((card) => card.id) });
+/** The operations of the size rule of the layout library (packages/soksak/docs/layout.md#add-and-remove) on the content cards of the plane. */
 function windowFrame(rect) {
   const origin = plane.getBoundingClientRect();
   return { x: origin.left + rect.x, y: origin.top + rect.y, width: rect.w, height: rect.h };
 }
 const planOperations = {
   cards: () => contentCards().map((card) => card.id),
-  withdraw: (id) => grid.withdraw([contentBox()], id),
-  insert: (target, side, card) => grid.insert([contentBox()], target, side, card),
-  even: () => grid.even([contentBox()]),
+  withdraw: (id) => grid.withdraw(id),
+  insert: (target, side, node) => grid.insert(target, side, node),
+  even: () => grid.even(),
   frame: (id) => windowFrame(grid.rect(id)),
 };
 

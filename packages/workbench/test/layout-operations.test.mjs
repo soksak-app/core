@@ -649,7 +649,6 @@ test("a plan below the minimum states the card, the plane it needs and the neare
   assert.deepEqual(planned(plan.proposal.cards), planned(plan.cards));
   await refuses(run("core.layout.apply", { tree }), plan.reason);
   assert.deepEqual(layout(), before);
-  // Of more cards than any grid fits, the proposal is the most even grid of the largest count that fits, whose last card takes the rest.
   // Of more cards than any grid fits, the proposal is the most even grid of the largest count that fits, whose last card takes the rest:
   // with cards of at least 400 points, a plane of 1600 × 1200 holds three cards across and two down.
   const grid = plane.currentGrid();
@@ -665,25 +664,27 @@ test("a plan below the minimum states the card, the plane it needs and the neare
   } finally {
     grid.minSize = 96;
   }
-  // A tree whose corridors of 500 points leave its cards no extent states the plane, and the proposal is the most even grid of the
-  // largest count that fits, two by two, whose last card takes the entries of the fifth card.
+  // A tree whose corridors of 500 points leave its cards no extent states the plane. The proposal is the most even grid of the five
+  // cards: three across are (1600 - 2 × 500) / 3 = 200 points wide and two down (1200 - 500) / 2 = 350 points high, both above 96.
   grid.gap = 500;
   try {
     const wide = await run("core.layout.plan", { tree: { direction: "row", children: terminals(5) } });
     assert.deepEqual([wide.feasible, wide.reason, wide.needed, wide.cards], [false, "the cards of the tree have no extent in the plane of 1600 × 1200 points", null, []]);
-    assert.deepEqual(rowSizes(wide.proposal.cards), [2, 2]);
-    assert.deepEqual(wide.proposal.cards.map(({ tabs }) => tabs.length), [2, 1, 1, 2]);
+    assert.deepEqual(rowSizes(wide.proposal.cards), [3, 2]);
+    assert.deepEqual(wide.proposal.cards.map(({ tabs }) => tabs.length), [2, 1, 1, 1, 1]);
+    assert.ok(wide.proposal.cards.every(({ frame }) => frame.width >= 96 && frame.height >= 96));
   } finally {
     grid.gap = 12;
   }
-  assert.deepEqual(layout(), before);
   assert.deepEqual(layout(), before);
 });
 
 // contract: layout.apply.moves-existing-tabs
 test("core.layout.apply moves each existing tab with its identifier into its card and closes only what close names", { timeout: 5000 }, async () => {
-  arrange([0, 0.5, 1], [0, 1], [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [view("tab-aaaaa1", PLAIN), view("tab-aaaaa2", SESSION, { name: "s" })] },
-    { id: "b", c0: 1, c1: 2, r0: 0, r1: 1, tabs: [view("tab-aaaaa3", PLAIN)] }], "a");
+  arrange({ cut: "x", kids: [
+    { share: 0.5, node: { card: "a", tabs: [view("tab-aaaaa1", PLAIN), view("tab-aaaaa2", SESSION, { name: "s" })] } },
+    { share: 0.5, node: { card: "b", tabs: [view("tab-aaaaa3", PLAIN)] } },
+  ] }, "a");
   // The text size of a card is part of its data, which a kept card keeps.
   plane.currentGrid().card("a").data.textSize = 1.25;
   const tree = { direction: "column", children: [{ tabs: [{ tab: "tab-aaaaa3" }] }, { tabs: [{ plugin: SESSION, params: { name: "s" } }, { tab: "tab-aaaaa1" }], active: 1 }] };
@@ -711,8 +712,10 @@ test("core.layout.apply moves each existing tab with its identifier into its car
 
 // contract: layout.plan.refusals
 test("a plan that cannot resolve its tree states the reason and changes nothing", { timeout: 5000 }, async () => {
-  arrange([0, 0.5, 1], [0, 1], [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [view("tab-aaaaa1", PLAIN)] },
-    { id: "b", c0: 1, c1: 2, r0: 0, r1: 1, tabs: [view("tab-aaaaa2", PLAIN)] }], "a");
+  arrange({ cut: "x", kids: [
+    { share: 0.5, node: { card: "a", tabs: [view("tab-aaaaa1", PLAIN)] } },
+    { share: 0.5, node: { card: "b", tabs: [view("tab-aaaaa2", PLAIN)] } },
+  ] }, "a");
   const before = layout();
   for (const [tree, reason] of [
     [{ tabs: [{ tab: "tab-zzzzzz" }] }, "tab tab-zzzzzz is not a tab of the active space"],

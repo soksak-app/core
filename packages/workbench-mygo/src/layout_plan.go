@@ -449,8 +449,8 @@ func resolvePlanCards(cards []*planNode, plane []planTab, close bool) ([]*resolv
 // them: the content card ids, withdraw, insert, even and the frame of a card.
 type planOperations struct {
 	cards    func() []string
-	withdraw func(id string) (layout.Piece, error)
-	insert   func(target, side string, piece layout.Piece) error
+	withdraw func(id string) (*layout.Node, error)
+	insert   func(target, side string, node *layout.Node) error
 	even     func() error
 	frame    func(id string) planFrame
 }
@@ -470,7 +470,7 @@ func buildPlanTree(ops planOperations, tree *planNode, ids []string) ([]planFram
 	if index := slices.IndexFunc(ids, func(id string) bool { return slices.Contains(plane, id) }); index >= 0 {
 		stay = ids[index]
 	}
-	left := map[string]layout.Piece{}
+	left := map[string]*layout.Node{}
 	for _, id := range plane {
 		if id == stay {
 			continue
@@ -481,11 +481,11 @@ func buildPlanTree(ops planOperations, tree *planNode, ids []string) ([]planFram
 		}
 		left[id] = piece
 	}
-	arriving := func(id string) layout.Piece {
+	arriving := func(id string) *layout.Node {
 		if piece, ok := left[id]; ok {
 			return piece
 		}
-		return layout.Piece{ID: id}
+		return &layout.Node{Card: id}
 	}
 	if ids[0] != stay {
 		if err := ops.insert(stay, "left", arriving(ids[0])); err != nil {

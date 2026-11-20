@@ -28,16 +28,6 @@ func (s *Shell) registerLayoutPlan() {
 	})
 }
 
-// planContentBox is the content cards of the plane as the members of one box without a head, so every cut that the plan makes is a
-// cut of content cards and a window sidebar keeps its span.
-func (s *Shell) planContentBox() []layout.Member {
-	members := []layout.Member{}
-	for _, id := range s.planContent() {
-		members = append(members, layout.Member{Card: id})
-	}
-	return []layout.Member{{Box: &layout.Box{ID: "content", Head: 0, Members: members}}}
-}
-
 // planContent is the ids of the content cards of the plane in the order of the grid.
 func (s *Shell) planContent() []string {
 	ids := []string{}
@@ -54,12 +44,12 @@ func (s *Shell) planOperations() planOperations {
 	origin := s.planeOrigin()
 	return planOperations{
 		cards:    s.planContent,
-		withdraw: func(id string) (layout.Piece, error) { return s.plane.Withdraw(s.planContentBox(), id) },
-		insert: func(target, side string, piece layout.Piece) error {
-			_, err := s.plane.Insert(s.planContentBox(), layout.Target{target}, side, piece)
+		withdraw: s.plane.Withdraw,
+		insert: func(target, side string, node *layout.Node) error {
+			_, err := s.plane.Insert(layout.Target{target}, side, node)
 			return err
 		},
-		even: func() error { return s.plane.Even(s.planContentBox()) },
+		even: s.plane.Even,
 		frame: func(id string) planFrame {
 			rect, _ := s.plane.Rect(id) // silent: buildPlanTree asks only for the cards that it built.
 			return planFrame{X: origin.X + rect.X, Y: origin.Y + rect.Y, Width: rect.W, Height: rect.H}

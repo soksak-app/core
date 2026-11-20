@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F969-9: page와 mygo workbench가 layout library 저장 tree의 `withdraw(id)`, `insert(target, side, node)`, `even()`으로 배치를 계획하고 적용한다. library는 더 이상 box 인자를 받지 않는다. plan test는 저장 tree로 space를 만들고, 한국어 skill은 plan, apply, `core.layout.move`를 설명한다. 검증: rebase된 branch에서 page test 31개 중 5개와 mygo test build의 Red, page test 31/31과 mygo package의 Green.
 - F1006-12: Go와 Rust role file writer가 `role.md` 옆에 `role.ko.md`를 쓴다. 내용은 fingerprint 사례의 `texts_ko`에 고정한 한국어 첫 줄, `ko` 텍스트, `role.md`의 fingerprint다. 검증: `ko`가 없는 writer에 대한 Go와 Rust role file test의 Red, Go host package와 Rust role file, roles, workspace test의 Green.
 - F1006-12: `docs/spec/cases/agent-roles/fingerprint.json`의 non-ASCII 지문 사례 `reviewer`가 지어낸 한국어 단어 대신 영어 용어 `reviewer`로 역할을 부르고, 기대 지문을 다시 계산했다. 검증: Go와 Rust role file test가 새 값으로 통과한다.
 - F1006-12: `roles.json`은 형식 2다. 각 role 정의는 `text` 옆에 한국어 번역 `ko`를 요구하고, Go와 Rust store는 형식 1과 없거나 문자열이 아닌 `ko`를 거부한다. 검증: 형식 1 store에서 형식 2 사례에 대한 Go와 Rust roles test의 Red, Go host package와 Rust roles, role file, workspace test의 Green.
