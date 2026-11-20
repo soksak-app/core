@@ -1041,6 +1041,12 @@ Items:
 | `roles.reads-shared-cases` | `roles` reads the role definitions of `roles.json` as the read cases of `docs/spec/cases/agent-roles/roles.json` state: a missing file reads `{}`, and each refusal names the file with the text of the case. | all |
 | `roles.writes-shared-cases` | `rolesPut` writes the write cases of `docs/spec/cases/agent-roles/roles.json` as `{format: 1, roles}`, and a refused definition writes no file. | all |
 | `roles.reads-absent-file-without-creating` | `roles` on a configuration directory without `roles.json` answers `{}` and does not create the file. | all |
+| `roles.fingerprint-shared-cases` | The fingerprint of each case of `docs/spec/cases/agent-roles/fingerprint.json` is the first 16 lowercase hexadecimal characters of the SHA-256 digest of the identifier, one line feed and the text. | all |
+| `roles.role-file-layout` | The role file holds the first line, the definition with one line feed at its end, and the fingerprint on the last line, each line ending with one line feed; a definition of 5,000 characters is written whole. | all |
+| `roles.role-file-phrases` | The identity, the change message, the reread request and the first message suffix equal the texts of `fingerprint.json` with `<role file>` filled, and the first line equals its text. | all |
+| `roles.role-file-write` | A role file is written to `agents/<surface>/role.md` with mode 0600 for the file and 0700 for the folder, replaces an earlier file atomically, and reads as the layout. | all |
+| `roles.role-file-removes-leftovers` | A write removes the `.role-*.tmp` files of the folder of its surface before it writes. | all |
+| `roles.role-file-refuses-surface` | A surface that is empty, names `.` or `..`, or holds a path separator or a control character is refused, and no folder is created. | all |
 | `workspace.settings.invalid-common-file-not-overwritten` | An invalid common settings file makes a settings change fail and stays byte-identical. | all |
 | `workspace.settings.concurrent-patches-preserved` | Concurrent common settings changes of different keys are all kept. | all |
 | `workspace.settings.records-each-change` | Each settings change is the event `host.workspace.settings` with the `scope` (`common` or the project id), the `set` keys and the `removed` keys that were present, each as a sorted list separated by commas. | all |
