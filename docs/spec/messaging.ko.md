@@ -74,7 +74,7 @@ Hand-off는 작업을 다른 terminal에 넘기고 결과를 받는 것이다. �
 
 - 파일: task 하나의 record는 등록된 folder, 곧 task를 받는 terminal의 folder 바로 아래의 파일 `<task>.handoff.json`이다. 이름이 `.txt`로 끝나지 않으므로 file event와 message를 만들지 않는다([wire 결정](messaging.md#wire-decisions), 항목 12). `task`는 `/`, `.`, NUL이 없는 비어 있지 않은 이름이며, 다른 이름은 그 이름을 밝히는 `invalid-task`로 거부된다.
 - 내용: JSON object `{task, attempt, state, result}`다. `attempt`는 1 이상의 정수, `state`는 다섯 상태 중 하나, `result`는 결과 text로, `result`와 `integrated` 상태에서는 string이고 다른 상태에서는 `null`이다. 다른 형태의 파일은 경로와 발견한 것을 밝히는 `invalid-record`로 거부되며, 새 record로 대체되지 않는다.
-- 쓰기: module은 message를 쓰는 것과 같이([message](messaging.md#message)) 같은 folder의 임시 이름 `.tmp-<random>`으로 record를 쓰고 그 이름으로 rename한다. 그래서 reader는 이전 record나 새 record 중 하나를 읽는다.
+- 쓰기: module은 message를 쓰는 것과 같이([message](messaging.md#message)) 같은 folder의 임시 이름 `.tmp-<random>`으로 record를 쓰고 그 이름으로 rename한다. 그래서 reader는 이전 record나 새 record 중 하나를 읽는다. 실패한 쓰기는 record와 system의 이유를 밝히는 `record-write-failed`로 거부되며, 실패한 rename은 임시 파일을 지운다.
 - 할당: `assign`은 task에 record가 없으면 `attempt` 1과 `assigned`를, 현재 attempt가 `abandoned`이면 다음 attempt와 `assigned`를 쓴다. 현재 attempt가 `assigned`, `started`, `result`인 동안, 또는 `integrated` 뒤에는 attempt와 그 상태를 밝히는 `invalid-transition`으로 거부된다.
 - 변경: `update`는 task, 그 attempt, 새 상태를 밝히며, `result`에는 text를 함께 준다. 현재가 아닌 attempt는 상태를 판단하기 전에, 주어진 attempt와 현재 attempt를 밝히는 `stale-attempt`로 거부된다. 변경은 `assigned`에서 `started`, `started`에서 `result`, `result`에서 `integrated`, 그리고 `assigned`, `started`, `result`에서 `abandoned`이며, 다른 변경은 attempt, 그 상태, 요청한 상태를 밝히는 `invalid-transition`으로 거부된다. Record가 없는 task는 `unknown-task`로 거부된다.
 - Attempt 하나: record는 현재 attempt만 담는다. 그래서 이전 attempt의 결과는 바꿀 record가 없고 거부된다.
