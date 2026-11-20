@@ -325,6 +325,7 @@ func MatchesSchema(schema map[string]any, value any) bool {
 		if object, isObject := value.(map[string]any); isObject {
 			// default: checkSchema refused a required list of other values before a value is matched.
 			names, _ := raw.([]any)
+			// default: checkSchema refused a required list whose members are not names, so each member is a string.
 			if slices.ContainsFunc(names, func(name any) bool { key, _ := name.(string); _, has := object[key]; return !has }) {
 				return false
 			}

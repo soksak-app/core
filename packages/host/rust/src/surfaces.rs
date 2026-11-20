@@ -1356,6 +1356,7 @@ fn pressed_surface(
     // The record names the view that the host read: the one of the surface, or the view under the press when no surface owns one.
     let (view, surface) = match found {
         Some((view, id)) => (view, Some(id)),
+        // default: a press that reached no view names the view 0, as host.surface.press declares in docs/spec/events.json.
         None => (chain.first().copied().unwrap_or(0), None),
     };
     crate::event_record::emit_host(

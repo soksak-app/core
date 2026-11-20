@@ -40,8 +40,10 @@ func CommandParamsRefusal(name string, schema any, raw json.RawMessage) string {
 			return fmt.Sprintf("command %s: unknown parameter %s", name, key)
 		}
 	}
+	// default: a schema without required requires none.
 	required, _ := declared["required"].([]any)
 	for _, key := range required {
+		// default: required is a list of property names in a declared schema (the manifest reader checkSchema and the host tables).
 		member, _ := key.(string)
 		if _, present := params[member]; !present {
 			return fmt.Sprintf("command %s: parameter %s is required", name, member)

@@ -58,6 +58,7 @@ func writeRoles(path string, roles Record) (Record, error) {
 // checkRoles checks a decoded roles.json document and returns its role definitions. Each refusal names the file. The members
 // are checked in a fixed order: the format, the unknown members, the roles object, then each role in identifier order.
 func checkRoles(path string, value any) (Record, error) {
+	// default: a document that is not an object has no format, which the refusal names as null (docs/spec/agent-roles.md#role-definitions).
 	document, _ := value.(map[string]any)
 	format := document["format"]
 	if number, ok := format.(float64); !ok || number != rolesFormat {
