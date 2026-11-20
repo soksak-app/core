@@ -5,6 +5,9 @@
 
 ## 2026-11-20
 
+- F966-3-3-4 (바뀌지 않은 box, Go): Go layout model이 그 안 card의 범위가 바뀔 때만 box를 판정하므로, 창 크기가 최소 아래로 남긴 box 안에서 box의 사각형을 지키는 split은 더 이상 거부되지 않는다.
+- F966-3-3-2 (최소 아래의 거부): specification이 거부가 밝히는 가장 깊은 node, 곧 그 안의 어떤 node도 최소 아래가 아닌데 재귀적 최소 아래인 깊이 우선 순서의 tree의 첫 node를 정하고, `groups.json`의 공유 case 다섯이 모든 operation의 거부, boundary move의 멈춤, 그리고 어떤 card도 더 작게 그리지 않는 dissolve와 close를 판정한다. Go가 이를 통과한다.
+- F966-3-3-1 (exchange의 frame, Go): Go grid의 보관된 frame이 이제 각 card의 id를 그 span과 함께 비교하므로, exchange로 서로의 cell에 들어간 두 card는 새 자리의 frame으로 그려진다. 전에는 group card의 member와 exchange한 root level의 card가 group card의 frame 안에 그려져 최소 크기 아래로 거부되었다.
 - F966-3-2 (commit에서의 수축): `groups.json`의 공유 case 다섯이 중첩된 group에서, member 하나만 남은 group card가 operation의 target이 정해진 뒤 그 member로 바뀌는 것을 두 workbench에서 판정하며, 두 구현은 바뀌지 않은 채 이를 통과했다.
 - F966-3-1-5-1 (빈 slot, Go): target이 움직이는 card나 box의 빈 slot, 곧 어느 side든 node 자신이나 그 가운데, 또는 그 쪽으로 그 앞이나 뒤의 kid를 가리키는 move는 변경이 없으므로, 자기 card 옆에 놓은 card의 유일한 tab은 그 card를 미리 보이고 아무것도 바꾸지 않는다. `core.card.move`는 card 안의 target만 거부한다.
 - F966-3-1-5-2 (vacated slot, page): target이 움직이는 card나 box의 vacated slot, 곧 그 node 자신이나 그쪽을 향한 그 옆의 kid를 가리키는 이동은 변화 없음이다. layout library의 `vacates`가 그것을 알리고 group tree의 `moved`가 그것을 먼저 답한다. `core.card.move`는 card 안의 target만 거부하고, card의 유일한 tab을 그 card 옆으로 끌면 card를 preview로 보이며 놓을 때 아무것도 바꾸지 않는다. seeded 검사는 `vacates`가 가리키는 drop에서 I6을 판정한다.

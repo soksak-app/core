@@ -1056,16 +1056,27 @@ func (g *Grid) belowMinimum(before map[string]Rect) string {
 	now := g.Rects()
 	text := func(v float64) string { return jsString(jsRound(v)) }
 	extentOfNode, need := g.measure(now, before)
+	// Only a node whose rectangle changes is judged (docs/spec/groups.md#minimum-size): a card by its rectangle, and a box by the extent
+	// of the cards inside it, which a change of a card inside it that keeps that extent leaves as it was.
 	moved := func(n *Node) bool {
-		for _, leaf := range cardsOf(n) {
-			was, ok := before[leaf.Card]
-			is := now[leaf.Card]
-			if !ok || math.Abs(was.X-is.X) > 1e-6 || math.Abs(was.Y-is.Y) > 1e-6 || math.Abs(was.W-is.W) > 1e-6 ||
-				math.Abs(was.H-is.H) > 1e-6 {
-				return true
-			}
+		if n.isCard() {
+			was, ok := before[n.Card]
+			is := now[n.Card]
+			return !ok || math.Abs(was.X-is.X) > 1e-6 || math.Abs(was.Y-is.Y) > 1e-6 || math.Abs(was.W-is.W) > 1e-6 ||
+				math.Abs(was.H-is.H) > 1e-6
 		}
-		return false
+		was := extent{math.Inf(1), math.Inf(-1), math.Inf(1), math.Inf(-1)}
+		for _, leaf := range cardsOf(n) {
+			r, ok := before[leaf.Card]
+			if !ok {
+				continue
+			}
+			was.x0, was.x1 = math.Min(was.x0, r.X), math.Max(was.x1, r.X+r.W)
+			was.y0, was.y1 = math.Min(was.y0, r.Y), math.Max(was.y1, r.Y+r.H)
+		}
+		is := extentOfNode(n)
+		return math.Abs(was.x0-is.x0) > 1e-6 || math.Abs(was.x1-is.x1) > 1e-6 || math.Abs(was.y0-is.y0) > 1e-6 ||
+			math.Abs(was.y1-is.y1) > 1e-6
 	}
 	// The deepest node below its minimum names the refusal, because the minimum of a box or a cut is the sum of the minimums inside it: a
 	// box is below its minimum where a node inside it is, and the node inside it is the one that has no room.

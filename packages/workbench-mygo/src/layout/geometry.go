@@ -361,8 +361,10 @@ type frameRead struct {
 	frame                       frame
 }
 
-// cardSpan is what a coordinate reads of a card. It compares with ==, so a value added here counts.
+// cardSpan is what a coordinate reads of a card. It compares with ==, so a value added here counts. The frame keeps the frames of each
+// card by its id, so the id counts: an exchange puts two cards into each other's cells, which keeps every span but moves the frames.
 type cardSpan struct {
+	id             string
 	c0, c1, r0, r1 int
 	width, height  opt
 	fixed          bool
@@ -370,7 +372,7 @@ type cardSpan struct {
 }
 
 func cardSpanOf(p *plane, card *Card) cardSpan {
-	span := cardSpan{c0: card.C0, c1: card.C1, r0: card.R0, r1: card.R1, fixed: card.Fixed, frames: p.frames[card.ID]}
+	span := cardSpan{id: card.ID, c0: card.C0, c1: card.C1, r0: card.R0, r1: card.R1, fixed: card.Fixed, frames: p.frames[card.ID]}
 	if card.Width != nil {
 		span.width = some(*card.Width)
 	}

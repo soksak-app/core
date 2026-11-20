@@ -24,7 +24,7 @@ layout library는 grid의 각 card의 사각형을 준다(R5). group card는 그
 
 ### 최소 크기
 
-content card는 두 축에서 적어도 `minSize`로 그려진다. layout library는 자기 사각형에 대해 이 한계를 지킨다. header는 card를 짧게 그리므로, workbench는 각 operation(split, close, insert, move, balance, arrange, 경계 drag, group 변경)을 오늘의 drop 미리보기처럼 먼저 grid와 group tree의 복사본에 적용하고, 그 operation이 바꾸는 content card가 어느 축에서 `minSize`보다 작게 그려지면 그 operation을 거부한다. window 크기 변경이 이미 작게 남긴 card는 그 card를 바꾸지 않는 operation을 거부하지 않는다. drop 미리보기와 drop 놓기는 같은 검사를 쓰므로, 검사가 거부하는 위치는 미리보기를 보이지 않고 놓아도 아무것도 바꾸지 않는다. 경계 drag는 library의 drag이며 모든 group을 가로질러 line 전체를 옮긴다. line 옆의 모든 content card가 적어도 `minSize`로 그려지는 마지막 위치에서 멈춘다. operation이 아닌 변경, 곧 window 크기 변경, `gap`, `size`, 글자 크기의 변경은 R5가 말하듯 grid의 비율을 다시 표현하고 아무것도 거부하지 않는다. 그때 card는 공간이 돌아올 때까지 최소보다 작게 그려진다.
+content card는 두 축에서 적어도 `minSize`로 그려진다. layout library는 자기 사각형에 대해 이 한계를 지킨다. header는 card를 짧게 그리므로, workbench는 각 operation(split, close, insert, move, balance, arrange, 경계 drag, group 변경)을 오늘의 drop 미리보기처럼 먼저 grid와 group tree의 복사본에 적용하고, 그 operation이 바꾸는 content card가 어느 축에서 `minSize`보다 작게 그려지면 그 operation을 거부한다. window 크기 변경이 이미 작게 남긴 card는 그 card를 바꾸지 않는 operation을 거부하지 않는다. 사각형이 바뀌는 node만 판정한다. 그려진 사각형이 그대로인 box는 그 안의 card가 바뀌어도 판정하지 않으므로, window 크기 변경이 최소 아래로 남긴 그 안의 card는 아무것도 거부하지 않는다. 거부가 밝히는 가장 깊은 node는 box 안의 node를 box보다 먼저 검사하는 tree의 깊이 우선 순회에서 최소 아래인 첫 node다. box는 그 안의 어떤 node도 최소 아래가 아닐 때만 밝혀지고, 서로를 담지 않는 node 가운데서는 순회의 첫 node가 밝혀진다. card의 위쪽 안에 그려지는 head는 그것이 가진 크기와 필요한 크기에서 뺀다. 밝혀진 node는 사람이 크기를 바꿀 수 있는 원인이며, 순회는 한 결과에 node 하나를 밝힌다. drop 미리보기와 drop 놓기는 같은 검사를 쓰므로, 검사가 거부하는 위치는 미리보기를 보이지 않고 놓아도 아무것도 바꾸지 않는다. 경계 drag는 library의 drag이며 모든 group을 가로질러 line 전체를 옮긴다. line 옆의 모든 content card가 적어도 `minSize`로 그려지는 마지막 위치에서 멈춘다. operation이 아닌 변경, 곧 window 크기 변경, `gap`, `size`, 글자 크기의 변경은 R5가 말하듯 grid의 비율을 다시 표현하고 아무것도 거부하지 않는다. 그때 card는 공간이 돌아올 때까지 최소보다 작게 그려진다.
 
 ## 크기 규칙
 
@@ -36,7 +36,7 @@ space의 layout을 바꾸는 모든 operation은 slicing tree에 대한 규칙 �
 - ADD(M, N, side). N은 card, box, 한 level의 이웃한 kid의 run, level, 또는 plane의 root이고 `a`는 side의 축이다.
   - 따라서: N을 담은 level이, 또는 N이 축 `a`의 level이고 side가 그 끝이면 N 자신이 축 `a`를 가지며, M은 N 옆 side 쪽에 들어간다. fraction을 받는 kid k개의 고른 level에서 M은 1/(k + 1)을 받고 모든 kid는 비율을 유지하므로 level은 고르게 남는다. 고르지 않은 level에서는 N만 지불한다. M은 N의 절반을 받고 다른 모든 kid는 fraction을 유지한다.
   - 가로질러: N은 N과 M을 side 쪽으로 담는 축 `a`의 새 level로 감싸지며, 각각 1/2이다.
-- 거부: 사각형이 바뀌는 node가 head와 corridor를 고정 비용으로 한 재귀적 최소([최소 크기](#최소-크기)) 아래로 그려지면 operation은 거부되고 아무것도 바꾸지 않는다. 거부는 그런 node 가운데 가장 깊은 것을 그 content의 크기로 `card <id> would be <w>x<h>, below its minimum <w>x<h>`로 밝히고, 어떤 크기도 그 아래로 떨어지지 않는 `minSize` 0에서는 split이 넓이 없이 남길 card를 `card <id> would be <w>x<h> and have no area`로 밝힌다. group card의 생성은 box와 그 head를 포함하는 library의 operation 하나이며, 그 그려진 결과로 한 번 판정된다.
+- 거부: 사각형이 바뀌는 node가 head와 corridor를 고정 비용으로 한 재귀적 최소([최소 크기](#최소-크기)) 아래로 그려지면 operation은 거부되고 아무것도 바꾸지 않는다. 거부는 그런 node 가운데 가장 깊은 것을 그 content의 크기로 `card <id> would be <w>x<h>, below its minimum <w>x<h>`로 밝힌다([최소 크기](#최소-크기)의 규칙). 모든 operation이 이렇게 판정된다. split, group, ADD, move, exchange, close, dissolve, balance는 그런 결과를 거부하고, boundary move는 어떤 node도 최소 아래가 아닌 마지막 위치에서 멈춘다. 또 어떤 크기도 그 아래로 떨어지지 않는 `minSize` 0에서는 split이 넓이 없이 남길 card를 `card <id> would be <w>x<h> and have no area`로 밝힌다. group card의 생성은 box와 그 head를 포함하는 library의 operation 하나이며, 그 그려진 결과로 한 번 판정된다.
 
 ### 모든 operation은 조합이다
 
