@@ -78,7 +78,7 @@ if (!defaultTheme) throw new Error(`the default theme ${declaration.settings.def
  *   focusInd         how the focused card is shown. border = a border, corner = marks at the four corners
  *   cardArrange      what the card auto-arrange command does. resize = keeps the arrangement and gives the cards fair sizes (balance);
  *                    even = replaces the arrangement with an equal grid of the cards (arrange "even")
- *   cardSplit        the sizes after a split (docs/spec/groups.md#split-setting). exact = a split divides only the box that it splits;
+ *   cardSplit        the sizes after a split (docs/spec/groups.md#splitting). exact = a split divides only the box that it splits;
  *                    even = the split balances the grid in the same change
  *   fullRule         where the boundary line of the section that a card crosses is drawn. over = over the surface, under = under the card,
  *                    none = not drawn

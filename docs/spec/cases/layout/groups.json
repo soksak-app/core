@@ -1,5 +1,5 @@
 {
- "description": "The groups of a space (docs/spec/groups.md): the stored checks, the drawn rectangles, the group commands and their refusals, the rectangle operations and the drop resolution. A case reads its layout, the stored form {state, leader, lastCard} whose state is the tree of the grid with the group cards as boxes, with the options gap, minSize, head and the size of the plane, then runs its steps; a case with throws refuses its layout with that text, which the reader of projects.json prefixes with the project and the space. A step runs call with args and returns its result or throws its text. create, split, close, dissolve, rename, leader and move are the commands core.group.create, core.card.split, core.card.close, core.group.dissolve, core.group.rename, core.group.leader and core.card.move without tabs, add is the add of a card to a group card, a split or add step with even true divides as cardSplit even, balance is core.layout.balance, and boundary is core.boundary.move with axis, line and position; grid returns xs, ys and the cards of the grid in the order of the tree; stored returns state, leader and lastCard; rect returns the drawn rectangle of a card; path returns the group path of core.card.get; level returns the level of a card; drop returns the card and the zone that a drop at a point resolves to. A value in a refusal text is its JSON text.",
+ "description": "The groups of a space (docs/spec/groups.md): the stored checks, the drawn rectangles, the group commands and their refusals, the rectangle operations and the drop resolution. A case reads its layout, the stored form {state, leader, lastCard} whose state is the tree of the grid with the group cards as boxes, with the options gap, minSize, head and the size of the plane, then runs its steps; a case with throws refuses its layout with that text, which the reader of projects.json prefixes with the project and the space. A step runs call with args and returns its result or throws its text. create, split, close, dissolve, rename, leader and move are the commands core.group.create, core.card.split, core.card.close, core.group.dissolve, core.group.rename, core.group.leader and core.card.move without tabs, add is the add of a card to a group card, balance is core.layout.balance, and boundary is core.boundary.move with axis, line and position; grid returns xs, ys and the cards of the grid in the order of the tree; stored returns state, leader and lastCard; rect returns the drawn rectangle of a card; path returns the group path of core.card.get; level returns the level of a card; drop returns the card and the zone that a drop at a point resolves to. A value in a refusal text is its JSON text.",
  "cases": [
   {
    "name": "a group of a card holds the card and a new card toward side, takes its slot and its leader mark, and issues the next ids",
@@ -140,7 +140,7 @@
    ]
   },
   {
-   "name": "a group of a group card splits its rectangle, lays its members into the half away from side and stacks the headers",
+   "name": "a group of a group card adds the new card beside its box, holds both in the new group card and stacks the headers",
    "options": {
     "gap": 24,
     "minSize": 96,
@@ -252,8 +252,8 @@
       ],
       "ys": [
        0,
-       0.26,
-       0.5,
+       0.3844831804281345,
+       0.6893333333333332,
        1
       ]
      }
@@ -267,7 +267,7 @@
         "cut": "y",
         "kids": [
          {
-          "share": 0.5,
+          "share": 0.6666666666666665,
           "node": {
            "box": "card-5",
            "data": {
@@ -278,7 +278,7 @@
             "cut": "y",
             "kids": [
              {
-              "share": 0.52,
+              "share": 0.4793577981651376,
               "node": {
                "box": "card-4",
                "data": {
@@ -307,7 +307,7 @@
               }
              },
              {
-              "share": 0.48,
+              "share": 0.5206422018348624,
               "node": {
                "card": "card-6",
                "fixed": false
@@ -318,7 +318,7 @@
           }
          },
          {
-          "share": 0.5,
+          "share": 0.3333333333333334,
           "node": {
            "card": "card-3",
            "fixed": false
@@ -340,7 +340,7 @@
       "x": 48,
       "y": 112,
       "w": 440,
-      "h": 112
+      "h": 236.48318042813452
      }
     },
     {
@@ -352,7 +352,7 @@
       "x": 512,
       "y": 112,
       "w": 440,
-      "h": 112
+      "h": 236.48318042813452
      }
     },
     {
@@ -362,9 +362,9 @@
      },
      "returns": {
       "x": 24,
-      "y": 272,
+      "y": 396.4831804281345,
       "w": 952,
-      "h": 192
+      "h": 256.85015290519874
      }
     },
     {
@@ -374,9 +374,9 @@
      },
      "returns": {
       "x": 0,
-      "y": 512,
+      "y": 701.3333333333333,
       "w": 1000,
-      "h": 488
+      "h": 298.66666666666674
      }
     },
     {
@@ -388,7 +388,7 @@
       "x": 24,
       "y": 56,
       "w": 952,
-      "h": 192
+      "h": 316.4831804281345
      }
     },
     {
@@ -400,7 +400,7 @@
       "x": 0,
       "y": 0,
       "w": 1000,
-      "h": 488
+      "h": 677.3333333333333
      }
     }
    ]
@@ -412,7 +412,7 @@
     "minSize": 96,
     "head": 32,
     "width": 1000,
-    "height": 600
+    "height": 500
    },
    "layout": {
     "state": {
@@ -468,7 +468,7 @@
       "card": "card-4",
       "side": "bottom"
      },
-     "throws": "card card-4 cannot hold a group toward bottom: card card-1 would be 440x8, below its minimum 96x96"
+     "throws": "card card-4 cannot hold a group toward bottom: card card-1 would be 440x72, below its minimum 96x96"
     },
     {
      "call": "stored",
@@ -579,7 +579,7 @@
       "card": "card-1",
       "side": "bottom"
      },
-     "throws": "card card-1 cannot hold a group toward bottom: card card-1 would be 440x57, below its minimum 96x96"
+     "throws": "card card-1 cannot hold a group toward bottom: card card-1 would be 464x74, below its minimum 96x96"
     }
    ]
   },
@@ -644,8 +644,8 @@
      "returns": {
       "x": 48,
       "y": 112,
-      "w": 416,
-      "h": 148
+      "w": 440,
+      "h": 170.0425531914894
      }
     },
     {
@@ -655,9 +655,9 @@
      },
      "returns": {
       "x": 48,
-      "y": 284,
-      "w": 416,
-      "h": 148
+      "y": 306.0425531914894,
+      "w": 440,
+      "h": 125.95744680851061
      }
     },
     {
@@ -676,9 +676,9 @@
       "card": "card-2"
      },
      "returns": {
-      "x": 512,
+      "x": 536,
       "y": 56,
-      "w": 464,
+      "w": 440,
       "h": 188
      }
     },
@@ -688,9 +688,9 @@
       "card": "card-6"
      },
      "returns": {
-      "x": 512,
+      "x": 536,
       "y": 268,
-      "w": 464,
+      "w": 440,
       "h": 188
      }
     }
@@ -1068,8 +1068,8 @@
       ],
       "xs": [
        0,
-       0.25,
-       0.5,
+       0.256,
+       0.524,
        1
       ],
       "ys": [
@@ -1153,7 +1153,7 @@
      "returns": {
       "x": 24,
       "y": 56,
-      "w": 214,
+      "w": 220,
       "h": 208
      }
     },
@@ -1163,9 +1163,9 @@
       "card": "card-2"
      },
      "returns": {
-      "x": 262,
+      "x": 268,
       "y": 56,
-      "w": 202,
+      "w": 220,
       "h": 208
      }
     },
@@ -1175,9 +1175,9 @@
       "card": "card-5"
      },
      "returns": {
-      "x": 512,
+      "x": 536,
       "y": 0,
-      "w": 488,
+      "w": 464,
       "h": 288
      }
     },
@@ -1201,7 +1201,7 @@
      "returns": {
       "x": 0,
       "y": 0,
-      "w": 488,
+      "w": 512,
       "h": 288
      }
     }
@@ -1317,7 +1317,7 @@
    ]
   },
   {
-   "name": "a close whose first fill side would break a group takes the next side that keeps it one rectangle",
+   "name": "a close in a group gives the space of the card to the other kids of its cut, so the group stays one rectangle",
    "options": {
     "gap": 24,
     "minSize": 96,
@@ -1434,7 +1434,7 @@
       ],
       "ys": [
        0,
-       0.5,
+       0.5666666666666667,
        1
       ]
      }
@@ -1587,7 +1587,7 @@
    ]
   },
   {
-   "name": "a close takes the neighbours of the side whose result keeps every group one rectangle",
+   "name": "a close gives the share of the card to the other kids of its cut in proportion, so every group stays one rectangle",
    "options": {
     "gap": 24,
     "minSize": 96,
@@ -1756,8 +1756,8 @@
       ],
       "ys": [
        0,
-       0.3,
-       0.65,
+       0.34088888888888885,
+       0.694888888888889,
        1
       ]
      }
@@ -1995,10 +1995,10 @@
       "card": "card-1"
      },
      "returns": {
-      "x": 24,
+      "x": 0,
       "y": 0,
-      "w": 464,
-      "h": 264
+      "w": 488,
+      "h": 288
      }
     },
     {
@@ -3542,8 +3542,8 @@
       ],
       "ys": [
        0,
-       0.3,
-       0.65,
+       0.27599999999999997,
+       0.6655000000000001,
        1
       ]
      }
@@ -3846,7 +3846,7 @@
      },
      "returns": {
       "card": "card-5",
-      "zone": "bottom"
+      "zone": "centre"
      }
     },
     {
@@ -5080,8 +5080,8 @@
       ],
       "ys": [
        0,
-       0.5075,
-       0.7649999999999999,
+       0.535,
+       0.80625,
        1
       ]
      }
@@ -5093,9 +5093,9 @@
      },
      "returns": {
       "x": 706,
-      "y": 411.99999999999994,
+      "y": 434,
       "w": 694,
-      "h": 388.00000000000006
+      "h": 366
      }
     },
     {
@@ -5107,7 +5107,7 @@
       "x": 12,
       "y": 44,
       "w": 682,
-      "h": 343.99999999999994
+      "h": 366
      }
     },
     {
@@ -5117,9 +5117,9 @@
      },
      "returns": {
       "x": 12,
-      "y": 455.99999999999994,
+      "y": 478,
       "w": 329,
-      "h": 137.99999999999994
+      "h": 149
      }
     },
     {
@@ -5129,9 +5129,9 @@
      },
      "returns": {
       "x": 353,
-      "y": 455.99999999999994,
+      "y": 478,
       "w": 329,
-      "h": 137.99999999999994
+      "h": 149
      }
     },
     {
@@ -5141,9 +5141,9 @@
      },
      "returns": {
       "x": 0,
-      "y": 617.9999999999999,
+      "y": 651,
       "w": 694,
-      "h": 182.0000000000001
+      "h": 149
      }
     },
     {
@@ -5155,7 +5155,7 @@
       "x": 706,
       "y": 44,
       "w": 682,
-      "h": 343.99999999999994
+      "h": 366
      }
     },
     {
@@ -5167,7 +5167,7 @@
       "x": 0,
       "y": 0,
       "w": 1400,
-      "h": 399.99999999999994
+      "h": 422
      }
     },
     {
@@ -5177,9 +5177,9 @@
      },
      "returns": {
       "x": 0,
-      "y": 411.99999999999994,
+      "y": 434,
       "w": 694,
-      "h": 193.99999999999994
+      "h": 205
      }
     }
    ]
@@ -5354,15 +5354,15 @@
       ],
       "xs": [
        0,
-       0.3321487594467711,
-       0.43216381340657944,
-       0.6680017801513128,
+       0.38857142857142857,
+       0.5,
+       0.7814285714285715,
        1
       ],
       "ys": [
        0,
-       0.5075,
-       0.7649999999999999,
+       0.535,
+       0.80625,
        1
       ]
      }
@@ -5373,10 +5373,10 @@
       "card": "terminal"
      },
      "returns": {
-      "x": 1088,
-      "y": 411.99999999999994,
-      "w": 312,
-      "h": 388.00000000000006
+      "x": 1100,
+      "y": 434,
+      "w": 300,
+      "h": 366
      }
     },
     {
@@ -5386,9 +5386,9 @@
      },
      "returns": {
       "x": 12,
-      "y": 455.99999999999994,
-      "w": 520,
-      "h": 137.99999999999994
+      "y": 478,
+      "w": 526,
+      "h": 149
      }
     },
     {
@@ -5397,10 +5397,10 @@
       "card": "card-11"
      },
      "returns": {
-      "x": 544,
-      "y": 455.99999999999994,
-      "w": 520,
-      "h": 137.99999999999994
+      "x": 550,
+      "y": 478,
+      "w": 526,
+      "h": 149
      }
     }
    ]
@@ -5602,7 +5602,7 @@
       ],
       "ys": [
        0,
-       0.315,
+       0.337,
        0.516,
        1
       ]
@@ -5653,7 +5653,7 @@
       "x": 718,
       "y": 176,
       "w": 311,
-      "h": 121
+      "h": 143
      }
     },
     {
@@ -5663,9 +5663,9 @@
      },
      "returns": {
       "x": 706,
-      "y": 321,
+      "y": 343,
       "w": 658,
-      "h": 165
+      "h": 143
      }
     },
     {
@@ -5677,7 +5677,7 @@
       "x": 1041,
       "y": 176,
       "w": 311,
-      "h": 121
+      "h": 143
      }
     },
     {
@@ -5689,7 +5689,7 @@
       "x": 706,
       "y": 132,
       "w": 658,
-      "h": 177
+      "h": 199
      }
     },
     {
@@ -5863,7 +5863,7 @@
     {
      "call": "balance",
      "args": {},
-     "throws": "the layout cannot balance: card card-6 would be 1340x248, below its minimum 324x392"
+     "throws": "the layout cannot balance: card card-7 would be 311x18, below its minimum 96x96"
     },
     {
      "call": "grid",
@@ -5880,15 +5880,15 @@
        },
        {
         "c0": 1,
-        "c1": 2,
+        "c1": 3,
         "fixed": false,
         "id": "card-7",
         "r0": 0,
         "r1": 1
        },
        {
-        "c0": 2,
-        "c1": 3,
+        "c0": 3,
+        "c1": 4,
         "fixed": false,
         "id": "card-11",
         "r0": 0,
@@ -5896,7 +5896,7 @@
        },
        {
         "c0": 1,
-        "c1": 3,
+        "c1": 4,
         "fixed": false,
         "id": "card-9",
         "r0": 1,
@@ -5904,15 +5904,15 @@
        },
        {
         "c0": 0,
-        "c1": 1,
+        "c1": 2,
         "fixed": false,
         "id": "card-3",
         "r0": 2,
         "r1": 3
        },
        {
-        "c0": 1,
-        "c1": 3,
+        "c0": 2,
+        "c1": 4,
         "fixed": false,
         "id": "card-5",
         "r0": 2,
@@ -5921,14 +5921,15 @@
       ],
       "xs": [
        0,
+       0.49142857142857144,
        0.5,
-       0.75,
+       0.7392857142857143,
        1
       ],
       "ys": [
        0,
-       0.3250619903853242,
-       0.6501239807706484,
+       0.47203967384660744,
+       0.6280793476932149,
        1
       ]
      }
@@ -6169,7 +6170,7 @@
       "position": 445.0061652281134
      },
      "returns": {
-      "position": 445.0061652281134
+      "position": 478.3564356435644
      }
     },
     {
@@ -6183,15 +6184,15 @@
         "fixed": false,
         "id": "card-5",
         "r0": 0,
-        "r1": 4
+        "r1": 3
        },
        {
         "c0": 0,
         "c1": 1,
         "fixed": false,
         "id": "card-26",
-        "r0": 4,
-        "r1": 5
+        "r0": 3,
+        "r1": 6
        },
        {
         "c0": 1,
@@ -6207,7 +6208,7 @@
         "fixed": false,
         "id": "card-13",
         "r0": 1,
-        "r1": 3
+        "r1": 4
        },
        {
         "c0": 2,
@@ -6215,23 +6216,23 @@
         "fixed": false,
         "id": "terminal",
         "r0": 0,
-        "r1": 3
+        "r1": 4
        },
        {
         "c0": 1,
         "c1": 2,
         "fixed": false,
         "id": "card-3",
-        "r0": 3,
-        "r1": 5
+        "r0": 4,
+        "r1": 6
        },
        {
         "c0": 2,
         "c1": 3,
         "fixed": false,
         "id": "card-12",
-        "r0": 3,
-        "r1": 5
+        "r0": 4,
+        "r1": 6
        },
        {
         "c0": 3,
@@ -6239,7 +6240,7 @@
         "fixed": false,
         "id": "browser",
         "r0": 0,
-        "r1": 5
+        "r1": 6
        },
        {
         "c0": 4,
@@ -6263,15 +6264,15 @@
         "fixed": false,
         "id": "card-27",
         "r0": 2,
-        "r1": 3
+        "r1": 5
        },
        {
         "c0": 4,
         "c1": 6,
         "fixed": false,
         "id": "card-10",
-        "r0": 3,
-        "r1": 5
+        "r0": 5,
+        "r1": 6
        },
        {
         "c0": 6,
@@ -6287,25 +6288,26 @@
         "fixed": false,
         "id": "card-7",
         "r0": 3,
-        "r1": 5
+        "r1": 6
        }
       ],
       "xs": [
        0,
-       0.1980911983032874,
-       0.2987274655355249,
-       0.3993637327677625,
-       0.6006362672322376,
-       0.7012725344644751,
-       0.8019088016967126,
+       0.19187194994739445,
+       0.2871025528458757,
+       0.38233315574435695,
+       0.5727943615413196,
+       0.6765963930112294,
+       0.7889698530525678,
        1
       ],
       "ys": [
        0,
-       0.2853611722192079,
-       0.29796822160637765,
-       0.49445129469790383,
-       0.5272277227722773,
+       0.34309906582606403,
+       0.4010683343303505,
+       0.5315071507150716,
+       0.5616941694169417,
+       0.5689683518290178,
        1
       ]
      }
@@ -6552,7 +6554,7 @@
       "position": 651.2376237623763
      },
      "returns": {
-      "position": 548.019801980198
+      "position": 651.2376237623764
      }
     },
     {
@@ -6667,22 +6669,22 @@
       ],
       "xs": [
        0,
-       0.0990455991516437,
-       0.1980911983032874,
-       0.3993637327677625,
-       0.5,
-       0.6006362672322376,
-       0.7012725344644751,
-       0.8019088016967126,
-       0.9009544008483563,
+       0.11109468262384488,
+       0.20076079381911832,
+       0.40025359793970616,
+       0.5070898910411623,
+       0.6053547555711899,
+       0.6993339058155031,
+       0.7933130560598163,
+       0.8816565280299081,
        1
       ],
       "ys": [
        0,
-       0.33085808580858084,
-       0.43976897689768973,
-       0.6089108910891089,
-       0.7235973597359736,
+       0.3408287495416208,
+       0.4777851118445178,
+       0.7235973597359738,
+       0.7462225893777213,
        1
       ]
      }
@@ -7000,7 +7002,7 @@
       "card": "card-2",
       "side": "right"
      },
-     "throws": "card card-2 cannot split toward right: card card-2 would be 69x600, below its minimum 96x96"
+     "throws": "card card-2 cannot split toward right: card card-2 would be 89x600, below its minimum 96x96"
     },
     {
      "call": "create",
@@ -7008,7 +7010,7 @@
       "card": "card-2",
       "side": "left"
      },
-     "throws": "card card-2 cannot hold a group toward left: card card-4 would be 45x520, below its minimum 96x96"
+     "throws": "card card-2 cannot hold a group toward left: card card-4 would be 76x520, below its minimum 96x96"
     },
     {
      "call": "grid",
@@ -7034,7 +7036,7 @@
       ],
       "xs": [
        0,
-       0.85,
+       0.8432258064516128,
        1
       ],
       "ys": [
@@ -7354,266 +7356,6 @@
       "y": 194,
       "w": 464,
       "h": 102
-     }
-    }
-   ]
-  },
-  {
-   "name": "a split with cardSplit even of a card of a row beside window sidebars whose exact halves fall below the minimum is made when every card of the balanced row fits",
-   "options": {
-    "gap": 24,
-    "minSize": 96,
-    "head": 44,
-    "width": 1400,
-    "height": 800
-   },
-   "layout": {
-    "state": {
-     "root": {
-      "cut": "x",
-      "kids": [
-       {
-        "share": 0.17142857142857143,
-        "node": {
-         "card": "left",
-         "fixed": true
-        }
-       },
-       {
-        "share": 0.1314285714285714,
-        "node": {
-         "card": "card-1",
-         "fixed": false
-        }
-       },
-       {
-        "share": 0.13142857142857145,
-        "node": {
-         "card": "card-2",
-         "fixed": false
-        }
-       },
-       {
-        "share": 0.13142857142857145,
-        "node": {
-         "card": "card-3",
-         "fixed": false
-        }
-       },
-       {
-        "share": 0.13142857142857134,
-        "node": {
-         "card": "card-4",
-         "fixed": false
-        }
-       },
-       {
-        "share": 0.13142857142857145,
-        "node": {
-         "card": "card-5",
-         "fixed": false
-        }
-       },
-       {
-        "share": 0.17142857142857149,
-        "node": {
-         "card": "right",
-         "fixed": true
-        }
-       }
-      ]
-     }
-    },
-    "leader": "card-1",
-    "lastCard": 5
-   },
-   "steps": [
-    {
-     "call": "split",
-     "args": {
-      "card": "card-3",
-      "side": "right",
-      "even": true
-     },
-     "returns": {
-      "card": "card-6"
-     }
-    },
-    {
-     "call": "rect",
-     "args": {
-      "card": "card-1"
-     },
-     "returns": {
-      "x": 252,
-      "y": 0,
-      "w": 129.33333333333337,
-      "h": 800
-     }
-    },
-    {
-     "call": "rect",
-     "args": {
-      "card": "card-3"
-     },
-     "returns": {
-      "x": 558.6666666666667,
-      "y": 0,
-      "w": 129.33333333333337,
-      "h": 800
-     }
-    },
-    {
-     "call": "rect",
-     "args": {
-      "card": "card-5"
-     },
-     "returns": {
-      "x": 1018.6666666666666,
-      "y": 0,
-      "w": 129.33333333333337,
-      "h": 800
-     }
-    },
-    {
-     "call": "rect",
-     "args": {
-      "card": "card-6"
-     },
-     "returns": {
-      "x": 712,
-      "y": 0,
-      "w": 129.33333333333326,
-      "h": 800
-     }
-    }
-   ]
-  },
-  {
-   "name": "an add of a card to a group with cardSplit even balances the grid",
-   "options": {
-    "gap": 24,
-    "minSize": 96,
-    "head": 44,
-    "width": 1000,
-    "height": 600
-   },
-   "layout": {
-    "state": {
-     "root": {
-      "cut": "x",
-      "kids": [
-       {
-        "share": 0.5,
-        "node": {
-         "box": "card-3",
-         "data": {
-          "name": "그룹 1",
-          "leader": "card-1"
-         },
-         "inner": {
-          "cut": "x",
-          "kids": [
-           {
-            "share": 0.5,
-            "node": {
-             "card": "card-1",
-             "fixed": false
-            }
-           },
-           {
-            "share": 0.5,
-            "node": {
-             "card": "card-2",
-             "fixed": false
-            }
-           }
-          ]
-         }
-        }
-       },
-       {
-        "share": 0.5,
-        "node": {
-         "card": "card-4",
-         "fixed": false
-        }
-       }
-      ]
-     }
-    },
-    "leader": "card-3",
-    "lastCard": 4
-   },
-   "steps": [
-    {
-     "call": "add",
-     "args": {
-      "group": "card-3",
-      "even": true
-     },
-     "returns": {
-      "card": "card-5"
-     }
-    },
-    {
-     "call": "rect",
-     "args": {
-      "card": "card-1"
-     },
-     "returns": {
-      "x": 24,
-      "y": 68,
-      "w": 138.66666666666666,
-      "h": 508
-     }
-    },
-    {
-     "call": "rect",
-     "args": {
-      "card": "card-2"
-     },
-     "returns": {
-      "x": 186.66666666666666,
-      "y": 68,
-      "w": 138.66666666666666,
-      "h": 508
-     }
-    },
-    {
-     "call": "rect",
-     "args": {
-      "card": "card-5"
-     },
-     "returns": {
-      "x": 349.3333333333333,
-      "y": 68,
-      "w": 138.66666666666669,
-      "h": 508
-     }
-    },
-    {
-     "call": "rect",
-     "args": {
-      "card": "card-3"
-     },
-     "returns": {
-      "x": 0,
-      "y": 0,
-      "w": 512,
-      "h": 600
-     }
-    },
-    {
-     "call": "rect",
-     "args": {
-      "card": "card-4"
-     },
-     "returns": {
-      "x": 536,
-      "y": 0,
-      "w": 464,
-      "h": 600
      }
     }
    ]

@@ -13,15 +13,11 @@ import (
 )
 
 // groupInvariants is the first broken invariant of a space with groups (docs/spec/groups.md#model), or "": the rectangle of every group
-// card holds exactly the cells of the cards inside it, two group cards are disjoint or one holds the other, no paidBy record stays, no
+// card holds exactly the cells of the cards inside it, two group cards are disjoint or one holds the other, no
 // line is unused and no two lines of an axis stand at one coordinate, which hold in a space with groups.
 func groupInvariants(tree *layout.GroupTree) string {
 	grid := tree.Grid()
-	stored := grid.ToJSON()
 	grouped := slices.ContainsFunc(tree.Cards(), tree.IsGroup)
-	if grouped && len(stored.PaidBy) > 0 {
-		return fmt.Sprintf("paidBy records %v", stored.PaidBy)
-	}
 	for _, axis := range []layout.Axis{"x", "y"} {
 		lines := grid.Lines(axis)
 		for k := 1; k < len(lines) && grouped; k++ {
@@ -100,7 +96,7 @@ func TestRandomGroupOperationsKeepTheInvariants(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		state := layout.State{Root: &layout.Node{Card: "card-1"}, PaidBy: map[string]string{}}
+		state := layout.State{Root: &layout.Node{Card: "card-1"}}
 		tree, err := layout.ReadTree(state, nil, json.RawMessage(`"card-1"`), json.RawMessage(`1`),
 			layout.GroupOptions{Head: 32}, grid)
 		if err != nil {
@@ -116,11 +112,11 @@ func TestRandomGroupOperationsKeepTheInvariants(t *testing.T) {
 			switch random.IntN(14) {
 			case 0, 1:
 				id := pick()
-				_, _, err := tree.CreateGroup(id, side, nil, random.IntN(4) == 0)
+				_, _, err := tree.CreateGroup(id, side, nil)
 				step = fmt.Sprintf("create %s %s: %v", id, side, err)
 			case 2, 3:
 				id := pick()
-				_, err := tree.Split(id, side, nil, random.IntN(4) == 0)
+				_, err := tree.Split(id, side, nil)
 				step = fmt.Sprintf("split %s %s: %v", id, side, err)
 			case 4, 5:
 				id := pick()
@@ -163,7 +159,7 @@ func TestRandomGroupOperationsKeepTheInvariants(t *testing.T) {
 				step = fmt.Sprintf("balance: %v", tree.Balance(false))
 			case 12:
 				id := pick()
-				_, err := tree.AddCard(id, nil, false)
+				_, err := tree.AddCard(id, nil)
 				step = fmt.Sprintf("add %s: %v", id, err)
 			case 13:
 				axis := layout.Axis([]string{"x", "y"}[random.IntN(2)])

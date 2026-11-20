@@ -41,7 +41,6 @@ type groupArgs struct {
 	X        float64     `json:"x"`
 	Y        float64     `json:"y"`
 	Arrange  bool        `json:"arrange"`
-	Even     bool        `json:"even"`
 }
 
 // TestGroupCases runs each case of groups.json.
@@ -104,10 +103,10 @@ func groupCall(t *testing.T, tree *layout.GroupTree, call string, a groupArgs) (
 	case "balance":
 		return nil, false, tree.Balance(a.Arrange)
 	case "create":
-		group, born, err := tree.CreateGroup(a.Card, a.Side, nil, false)
+		group, born, err := tree.CreateGroup(a.Card, a.Side, nil)
 		return map[string]string{"group": group, "card": born}, true, err
 	case "split":
-		born, err := tree.Split(a.Card, a.Side, nil, a.Even)
+		born, err := tree.Split(a.Card, a.Side, nil)
 		return map[string]string{"card": born}, true, err
 	case "close":
 		_, err := tree.Close(a.Card)
@@ -125,7 +124,7 @@ func groupCall(t *testing.T, tree *layout.GroupTree, call string, a groupArgs) (
 		}
 		return map[string]any{"card": a.Card, "group": holder}, true, err
 	case "add":
-		born, err := tree.AddCard(a.Group, nil, a.Even)
+		born, err := tree.AddCard(a.Group, nil)
 		return map[string]string{"card": born}, true, err
 	case "move":
 		return map[string]string{"card": a.Card}, true, tree.Move(a.Card, a.Target, a.Side)

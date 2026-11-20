@@ -135,7 +135,7 @@ let tree = null;
 // At the seam a frame and a header of a group card take no gap (docs/spec/groups.md#drawn-rectangles).
 const treeOptions = () => ({ gap: grid.gap, minSize: grid.minSize, head: HEADER, seam: seam() === "line" });
 
-/** Whether a split balances the grid in the same change (cardSplit even, docs/spec/groups.md#split-setting). */
+/** Whether a split balances the grid in the same change (cardSplit even, docs/spec/groups.md#splitting). */
 const splitsEven = () => value("cardSplit") === "even";
 
 // The name of the window of this page, which its start document carries and the errors of the layout operations name

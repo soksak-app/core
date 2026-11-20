@@ -14,8 +14,19 @@ import (
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
-// sameSize is the difference in px under which two drawn sizes are one size, as the layout model judges an even cut.
+// sameSize is the difference in px under which two drawn sizes are one size.
 const sameSize = 0.5
+
+// ulp is the relative difference under which two fractions are one fraction. The rules of sizes work on the fractions of the stored
+// tree (packages/soksak/docs/layout.md#add-and-remove): a drawn size is a fraction of what a level holds after its corridors, and a
+// corridor of a deeper level is drawn inside one kid, so equal fractions are not equal drawn sizes on every level, and ratios of drawn
+// sizes are not the ratios that the rules keep.
+const ulp = 1e-9
+
+// near tells whether two fractions are one fraction.
+func near(a, b float64) bool {
+	return math.Abs(a-b) <= ulp*math.Max(1, math.Max(math.Abs(a), math.Abs(b)))
+}
 
 // keptRect is the difference in px under which a rectangle that an operation does not change is unchanged.
 const keptRect = 1e-6
@@ -36,11 +47,12 @@ type span struct{ x0, x1, y0, y1 float64 }
 
 // slicing is a node of the stored slicing tree of a grid: a card by its id, or a cut along axis, with the ids of its cards and its extent.
 type slicing struct {
-	id   string
-	axis string
-	kids []*slicing
-	ids  []string
-	at   span
+	id    string
+	axis  string
+	kids  []*slicing
+	ids   []string
+	at    span
+	share float64
 }
 
 func (s span) lo(axis string) float64 {
@@ -80,6 +92,7 @@ func treeOf(grid *layout.Grid) readTree {
 				}
 				from += kid.Share * extent
 				node := build(kid.Node, part)
+				node.share = kid.Share
 				cut.kids = append(cut.kids, node)
 				cut.ids = append(cut.ids, node.ids...)
 			}
@@ -125,9 +138,29 @@ func holderOf(n *slicing, ids []string) *slicing {
 	return nil
 }
 
+// even tells whether a cut is even: its kids have one fraction. The generated cards have no px size, so every kid takes a fraction.
 func (r readTree) even(cut *slicing) bool {
 	for _, kid := range cut.kids {
-		if math.Abs(r.size(kid, cut.axis)-r.size(cut.kids[0], cut.axis)) >= sameSize {
+		if !near(kid.share, cut.kids[0].share) {
+			return false
+		}
+	}
+	return true
+}
+
+// sameTree tells whether two stored trees have the same nodes in the same order and the same fractions.
+func sameTree(a, b *layout.Node) bool {
+	if a.Cut == "" || b.Cut == "" {
+		if a.Inner != nil || b.Inner != nil {
+			return a.Box == b.Box && a.Inner != nil && b.Inner != nil && sameTree(a.Inner, b.Inner)
+		}
+		return a.Cut == b.Cut && a.Card == b.Card
+	}
+	if a.Cut != b.Cut || len(a.Kids) != len(b.Kids) {
+		return false
+	}
+	for i, kid := range a.Kids {
+		if !near(kid.Share, b.Kids[i].Share) || !sameTree(kid.Node, b.Kids[i].Node) {
 			return false
 		}
 	}
@@ -263,7 +296,7 @@ func runSeed(t *testing.T, file invariantFile, seed uint32) map[string][]failure
 	}
 	ratiosDiffer := func(factors []float64) bool {
 		for _, f := range factors {
-			if math.IsNaN(f) || math.Abs(f-factors[0]) > 1e-6 {
+			if math.IsNaN(f) || !near(f, factors[0]) {
 				return true
 			}
 		}
@@ -304,7 +337,7 @@ func runSeed(t *testing.T, file invariantFile, seed uint32) map[string][]failure
 					for _, kid := range kept {
 						f := math.NaN()
 						if prior, ok := old[idsKey(kid.ids)]; ok {
-							f = after.size(kid, axis) / before.size(prior, axis)
+							f = kid.share / prior.share
 						}
 						factors = append(factors, f)
 					}
@@ -318,12 +351,22 @@ func runSeed(t *testing.T, file invariantFile, seed uint32) map[string][]failure
 					changed := []string{}
 					for _, kid := range kept {
 						prior, ok := old[idsKey(kid.ids)]
-						if !slices.Contains(kid.ids, target) && (!ok || math.Abs(after.size(kid, axis)-before.size(prior, axis)) > sameSize) {
+						if !slices.Contains(kid.ids, target) && (!ok || !near(kid.share, prior.share)) {
 							changed = append(changed, idsKey(kid.ids))
 						}
 					}
 					if len(changed) > 0 {
 						fail("I7", step, fmt.Sprintf("the add of %s beside %s in an uneven cut changed %v", id, target, changed))
+					}
+					pair := []float64{}
+					for _, kid := range now.kids {
+						if slices.Contains(kid.ids, target) || slices.Contains(kid.ids, id) {
+							pair = append(pair, kid.share)
+						}
+					}
+					paid := old[idsKey([]string{target})].share
+					if len(pair) != 2 || !near(pair[0], pair[1]) || !near(pair[0]+pair[1], paid) {
+						fail("I7", step, fmt.Sprintf("the add of %s does not take half of %s: %v of %v", id, target, pair, paid))
 					}
 				}
 				if outside := movedCards(rects, beforeOrder, grid, now.ids); len(outside) > 0 {
@@ -332,20 +375,22 @@ func runSeed(t *testing.T, file invariantFile, seed uint32) map[string][]failure
 			} else {
 				pair := []float64{}
 				for _, kid := range now.kids {
-					pair = append(pair, after.size(kid, axis))
+					pair = append(pair, kid.share)
 				}
-				if len(now.kids) != 2 || math.Abs(pair[0]-pair[1]) > sameSize {
+				if len(now.kids) != 2 || !near(pair[0], pair[1]) {
 					fail("I7", step, fmt.Sprintf("the wrap of %s is not two halves: %v", target, pair))
 				}
 				if outside := movedCards(rects, beforeOrder, grid, now.ids); len(outside) > 0 {
 					fail("I8", step, fmt.Sprintf("the wrap of %s moved %v", target, outside))
 				}
 			}
-			// I10: the withdraw of the card just added restores the layout of an even cut and of a wrap.
+			// I10: the withdraw of the card just added restores the stored tree of an even cut and of a wrap, and with it the rectangles.
 			if !along || before.even(was) {
 				copied := newGrid(grid.ToJSON())
 				if _, err := copied.Withdraw(id); err != nil {
 					fail("I10", step, fmt.Sprintf("the withdraw of %s is refused: %s", id, err))
+				} else if !sameTree(copied.ToJSON().Root, state.Root) {
+					fail("I10", step, fmt.Sprintf("the withdraw of %s does not restore the tree", id))
 				} else if back := movedCards(rects, beforeOrder, copied, nil); len(back) > 0 {
 					fail("I10", step, fmt.Sprintf("the withdraw of %s does not restore %v", id, back))
 				}
@@ -377,7 +422,7 @@ func runSeed(t *testing.T, file invariantFile, seed uint32) map[string][]failure
 					if holder := holderOf(after.root, kid.ids); holder != nil {
 						for _, k := range holder.kids {
 							if idsKey(k.ids) == idsKey(kid.ids) {
-								f = after.size(k, was.axis) / before.size(kid, was.axis)
+								f = k.share / kid.share
 							}
 						}
 					}

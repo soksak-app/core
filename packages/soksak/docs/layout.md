@@ -481,9 +481,14 @@ with a px size the smaller of that size and the size it had, another `fixed`
 card the size it is drawn at, a box what its inner node needs, a cut on its own
 axis the needs of its kids and the corridors between them and across it the
 largest need of its kids.
-After an operation, every card and box whose rectangle changed is judged from
-the outside in, and the first one drawn below its need throws `card <id> would
-be <w>x<h>, below its minimum <w>x<h>`, which names that card or box.
+After an operation, every card and box whose rectangle changed is judged, and
+the deepest one drawn below its need throws `card <id> would be <w>x<h>, below
+its minimum <w>x<h>`: a box is below its need only where a node inside it is,
+so the refusal names the node that has no room, a content card inside a box
+before the box. A card is named at the size of its content: the heads drawn
+inside its rectangle are taken out of the size it would have and of its need,
+so its need is `minSize` or its px size. A box is named when no node inside it
+is below its need, at its rectangle and its need.
 
 Every operation is linear in the nodes that it touches: the tree keeps a map
 from each id to its node and from each coordinate to its line, so no operation

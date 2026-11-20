@@ -1,7 +1,9 @@
 package layout_test
 
 import (
+	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 
@@ -171,6 +173,74 @@ func TestAGridHoldsOneSidebarOfASide(t *testing.T) {
 		}
 		if !layout.WindowSidebarsPlaced(grid, order) {
 			t.Fatalf("the refused %s sidebar changed the arrangement", side)
+		}
+	}
+}
+
+// TestAHiddenWindowSidebarGivesItsRoomInProportion checks that a window sidebar that leaves is withdrawn: the other kids of its cut take
+// its room in proportion to their sizes, not its neighbour alone (docs/spec/external-sidebars.md).
+func TestAHiddenWindowSidebarGivesItsRoomInProportion(t *testing.T) {
+	var state layout.State
+	if err := json.Unmarshal([]byte(`{"root":{"cut":"x","kids":[
+		{"share":0.2,"node":{"card":"left","fixed":true,"width":200}},
+		{"share":0.6,"node":{"card":"a"}},{"share":0.2,"node":{"card":"b"}}]}}`), &state); err != nil {
+		t.Fatal(err)
+	}
+	width, height, gap := 1000.0, 800.0, 0.0
+	grid, err := layout.New(&state, layout.Options{Width: &width, Height: &height, Gap: &gap})
+	if err != nil {
+		t.Fatal(err)
+	}
+	order := []string{"left", "right", "top", "bottom"}
+	records := map[string]layout.WindowSidebar{"left": layout.SidebarSize("left", 200)}
+	if _, err := layout.ArrangeWindowSidebars(grid, order, order, records, 190, func(string) bool { return false }); err != nil {
+		t.Fatal(err)
+	}
+	a, _ := grid.Rect("a") // silent: a is a card of the grid.
+	b, _ := grid.Rect("b") // silent: b is a card of the grid.
+	if math.Abs(a.W-750) > 0.5 || math.Abs(b.W-250) > 0.5 {
+		t.Fatalf("after the hide a is %v and b %v wide, not 750 and 250", a.W, b.W)
+	}
+}
+
+// TestADockAndAHideRestoreTheWidthsOfTheCards checks that the dock of a window sidebar adds a fixed leaf, whose room the cards that are
+// not fixed give by one factor, and its hide withdraws it, so a dock and a hide restore every width (docs/spec/external-sidebars.md).
+func TestADockAndAHideRestoreTheWidthsOfTheCards(t *testing.T) {
+	for _, gap := range []float64{0, 24} {
+		var state layout.State
+		if err := json.Unmarshal([]byte(`{"root":{"cut":"x","kids":[{"share":0.75,"node":{"cut":"y","kids":[
+			{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"c"}}]}},{"share":0.25,"node":{"card":"b"}}]}}`), &state); err != nil {
+			t.Fatal(err)
+		}
+		width, height := 1400.0, 900.0
+		grid, err := layout.New(&state, layout.Options{Width: &width, Height: &height, Gap: &gap})
+		if err != nil {
+			t.Fatal(err)
+		}
+		widths := func() [2]float64 {
+			a, _ := grid.Rect("a") // silent: a is a card of the grid.
+			b, _ := grid.Rect("b") // silent: b is a card of the grid.
+			return [2]float64{a.W, b.W}
+		}
+		before := widths()
+		order := []string{"left", "right", "top", "bottom"}
+		sides := []string{"left", "right"}
+		records := map[string]layout.WindowSidebar{}
+		shown := true
+		if _, err := layout.ArrangeWindowSidebars(grid, order, sides, records, 190, func(string) bool { return shown }); err != nil {
+			t.Fatal(err)
+		}
+		docked := widths()
+		// The dock scales the fractions of the cards by one factor, and the corridors are costs of the cut, so the drawn ratio holds.
+		if ratio := docked[0] / docked[1]; math.Abs(ratio-before[0]/before[1]) > 1e-6 {
+			t.Fatalf("gap %v: the docked cards are %v wide, whose ratio %v is not the ratio of %v", gap, docked, ratio, before)
+		}
+		shown = false
+		if _, err := layout.ArrangeWindowSidebars(grid, order, sides, records, 190, func(string) bool { return shown }); err != nil {
+			t.Fatal(err)
+		}
+		if after := widths(); math.Abs(after[0]-before[0]) > 1e-6 || math.Abs(after[1]-before[1]) > 1e-6 {
+			t.Fatalf("gap %v: a dock and a hide leave the cards %v wide, not %v (docked %v)", gap, after, before, docked)
 		}
 	}
 }

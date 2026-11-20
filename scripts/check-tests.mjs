@@ -665,7 +665,7 @@ const FEATURE_LINKS = [
     id: "F937-2",
     implementation: [
       { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func ReadTree" },
-      { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "cardSplit even would draw card" },
+      { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) Split(id string, side Side, data json.RawMessage)" },
       { file: "packages/workbench-mygo/src/groups.go", symbol: "func (s *Shell) registerGroups" },
       { file: "packages/workbench-mygo/src/group_cards.go", symbol: "func (s *Shell) drawGroupCard" },
       { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) MoveBoundary" },
@@ -703,7 +703,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/groups_test.go", id: "TestEachPressOfTheGroupMenuGroupsTheCard" },
       { file: "packages/workbench-mygo/tests/group_moving_test.go", id: "TestALineAcrossAGroupIsOneLine" },
       { file: "packages/workbench-mygo/tests/group_fullscreen_test.go", id: "TestAGroupCardGoesFullscreenWithTheCardsInsideIt" },
-      { file: "packages/workbench-mygo/tests/groups_test.go", id: "TestTheSplitSettingBalancesTheGrid" },
+      { file: "packages/workbench-mygo/tests/groups_test.go", id: "TestASplitOfAnEvenRowGivesEveryCardAnEqualShare" },
       { file: "packages/workbench-mygo/tests/groups_test.go", id: "TestTheCloseOfANestedGroupGivesItsCellsToItsGroup" },
       { file: "packages/workbench-mygo/tests/group_moving_test.go", id: "TestABoundaryStopsAtTheDrawnMinimumUnderAHeader" },
       { file: "packages/workbench-mygo/tests/group_moving_test.go", id: "TestATabDropResolvesIntoTheGroup" },

@@ -594,9 +594,9 @@
   {"call":"insert","args":["b","right",{"card":"n"}],"throws":"card b would be 53x600, below its minimum 96x96"},
   {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.238,"node":{"card":"a","fixed":false}},{"share":0.262,"node":{"card":"b","fixed":false}},{"share":0.262,"node":{"card":"c","fixed":false}},{"share":0.238,"node":{"card":"d","fixed":false}}]}}}
  ]},
- {"name":"an add that would draw a box below the minimum of its members and its head names the box","options":{"width":400,"height":300,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"box":"g","inner":{"cut":"y","kids":[{"share":0.5,"node":{"card":"b"}},{"share":0.5,"node":{"card":"c"}}]}}}]}},"steps":[
+ {"name":"an add that would draw a card inside a box below its minimum names that card at the size of its content, under the head of the box","options":{"width":400,"height":300,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"box":"g","inner":{"cut":"y","kids":[{"share":0.5,"node":{"card":"b"}},{"share":0.5,"node":{"card":"c"}}]}}}]}},"steps":[
   {"call":"setHeads","args":[{"g":44}]},
-  {"call":"insert","args":["g","bottom",{"card":"n"}],"throws":"card g would be 140x148, below its minimum 96x260"}
+  {"call":"insert","args":["g","bottom",{"card":"n"}],"throws":"card b would be 140x40, below its minimum 96x96"}
  ]},
  {"name":"a state of the earlier form with lines and cells is refused","state":{"xs":[0,1],"ys":[0,1],"cards":[{"id":"a","c0":0,"c1":1,"r0":0,"r1":1}]},"throws":"soksak: the state holds xs, ys and cards, which is the earlier form; the state is {root}","steps":[]},
  {"name":"a state that records a payer is refused","state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"b"}}]},"paidBy":{"b":"a"}},"throws":"soksak: the state holds paidBy, which the layout does not record; the state is {root}","steps":[]},

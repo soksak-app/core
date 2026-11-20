@@ -60,8 +60,8 @@ func TestABoundaryStopsAtTheDrawnMinimumUnderAHeader(t *testing.T) {
 	}
 }
 
-// A move of a card of the root level beside a member of a group closes the card with the neighbour that keeps the group one rectangle
-// and puts the card into that group (docs/spec/groups.md#closing).
+// A move of a card of the root level beside a member of a group withdraws the card, whose cut gives its space to its other kids in
+// proportion, and inserts it into that group (docs/spec/groups.md#commands).
 func TestAMoveBesideAMemberKeepsTheGroupOneRectangle(t *testing.T) {
 	space := treeSpace("spc-aaaaaa", cutNode("y",
 		kidNode(0.5, boxNode("card-5", "그룹 1", "card-1", cutNode("x", kidNode(0.5, cardNode("card-1", tab("t1", "notes"))), kidNode(0.5, cardNode("card-2", tab("t2", "notes")))))),

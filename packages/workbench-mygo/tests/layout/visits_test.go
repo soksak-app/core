@@ -31,7 +31,7 @@ func wideTree(columns, rows int) (layout.State, int) {
 		}
 		root.Kids = append(root.Kids, layout.Kid{Share: 1 / float64(columns), Node: column})
 	}
-	return layout.State{Root: root, PaidBy: map[string]string{}}, nodes
+	return layout.State{Root: root}, nodes
 }
 
 // TestEachTreeOperationVisitsTheNodesOfTheTreeAFewTimes runs each operation on a tree of 500 cards and bounds the nodes that it
@@ -87,18 +87,16 @@ func visitsOn(t *testing.T, columns, rows int) map[string]int {
 			return nil
 		}},
 		{"close", func() error {
-			closed, err := grid.Close(id(.55, .1), nil)
-			if err == nil && !closed {
-				err = fmt.Errorf("the close of %s is refused", id(.55, .1))
+			if !grid.Close(id(.55, .1)) {
+				return fmt.Errorf("the close of %s is refused", id(.55, .1))
 			}
-			return err
+			return nil
 		}},
 		{"move", func() error {
-			moved, err := grid.Move(id(.1, .1), id(.45, .35), "left", nil)
-			if err == nil && !moved {
-				err = fmt.Errorf("the move of %s is refused", id(.1, .1))
+			if !grid.Move(id(.1, .1), id(.45, .35), "left") {
+				return fmt.Errorf("the move of %s is refused", id(.1, .1))
 			}
-			return err
+			return nil
 		}},
 		{"boundary move", func() error {
 			grid.MoveBoundary("x", 5, grid.BoundaryPos("x", 5)+3, false)

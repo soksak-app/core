@@ -319,12 +319,9 @@ func (s *Shell) layoutState() (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	// core.layout reports the stored form, whose tree holds the group cards as boxes (docs/spec/groups.md#status-and-queries).
 	var kept map[string]json.RawMessage
 	if err := json.Unmarshal(space.Layout, &kept); err != nil {
-		return nil, err
-	}
-	// core.layout reports the stored form with the level of each group node (docs/spec/groups.md#status-and-queries).
-	if kept["groups"], err = json.Marshal(s.planes.Reported()); err != nil {
 		return nil, err
 	}
 	return kept, nil
