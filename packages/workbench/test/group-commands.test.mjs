@@ -252,6 +252,24 @@ test("a drag of the header of a group card moves the group card beside a card an
   assert.equal(await status("core.drag"), null, "the release ends the drag");
 });
 
+test("the only tab of a card dropped beside its own card names its vacated slot: the preview is the card and the release changes nothing", { timeout: 5000 }, async () => {
+  arrange();
+  const own = plane.currentTree().rect("card-3");
+  const at = { x: own.x + own.w - 40, y: own.y + own.h / 2 };
+  const before = (await status("core.layout")).state;
+  const tab = document.querySelector(`.tab[data-tab-id="tab-aaaaa3"]`);
+  pointer(tab, "pointerdown", -100, -100);
+  pointer(tab, "pointermove", at.x, at.y);
+  const drag = await status("core.drag");
+  pointer(tab, "pointerup", at.x, at.y);
+  // docs/spec/groups.md#vacated-slot
+  assert.deepEqual(drag.target, { card: "card-3", zone: "right" });
+  assert.deepEqual(drag.preview, own, "the preview is the drawn rectangle of the card");
+  assert.deepEqual((await status("core.layout")).state, before, "the release changed the layout");
+  assert.deepEqual(await run("core.card.move", { card: "card-3", target: "card-3", side: "left" }), { card: "card-3" });
+  assert.deepEqual((await status("core.layout")).state, before, "core.card.move of the card beside itself changed the layout");
+});
+
 test("the layout of the window description holds each group card as a node of its tree and lists every group once", { timeout: 5000 }, async () => {
   arrange();
   // card-2 becomes the group card card-5 with card-6 below it, nested in card-4 (docs/spec/groups.md#status-and-queries).

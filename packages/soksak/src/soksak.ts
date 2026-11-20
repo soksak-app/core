@@ -39,7 +39,7 @@ import {
 import type { Divider, Frames, Plane, Rule, ZoneHit, ZoneOptions } from './geometry.js';
 
 export type { Divider, Rule, Zone, ZoneHit, ZoneOptions } from './geometry.js';
-import { evenCuts, exchangeNodes, groupNode, insertBeside, insertNode, unwrapNode, withdrawNode } from './cuts.js';
+import { evenCuts, exchangeNodes, groupNode, insertBeside, insertNode, unwrapNode, vacatesNode, withdrawNode } from './cuts.js';
 import type { Input } from './cuts.js';
 import { EPS, cardsOf, checkState, cloneNode, isBox, isCard, isCut } from './tree.js';
 import type { BoxNode, CardNode, CutNode, SoksakState, TreeNode } from './tree.js';
@@ -1236,6 +1236,15 @@ export class Soksak {
       this.byCuts((input) => insertNode(input, target, side, node));
       return isBox(node) ? node.box : (node as CardNode).card;
     });
+  }
+
+  /**
+   * Whether `target` and `side` name the vacated slot of the node `id`, a card or a box (docs/spec/groups.md#vacated-slot): the node
+   * itself, or the kid beside it in its cut with the side toward it, named by its id or by the members of a cut. A move there is no
+   * change.
+   */
+  vacates(id: string, target: string | readonly string[], side: string): boolean {
+    return vacatesNode(this.input(), id, target, side);
   }
 
   /**

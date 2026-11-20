@@ -88,7 +88,7 @@ async function dropAt(source, x, y) {
 
 // I3 and I6 of docs/spec/groups.md#invariants on the page: over generated layouts, for every tab and every group card and every distinct
 // target of the points of the plane, the preview that core.drag shows is the drawn rectangle of the result, and a drop of a card that
-// moves whole on its vacated place, the card itself or the side where it already stands, leaves the stored layout as it was. Each source
+// moves whole on its vacated slot leaves the stored layout as it was. Each source
 // of each layout is one test with its own time limit; the layouts are generated once, before the tests run, and each test adopts a copy.
 // The node test runner starts a registered test while the module still awaits, so every layout is made before the first test is
 // registered; a generation that ran beside a test would change the plane under its drops.
@@ -110,8 +110,8 @@ for (const { seed, refused, kept, sources } of layouts) {
       const failures = [];
       const hits = distinctHits(source);
       for (const { hit, x, y } of hits) {
-        const ids = targetIdsOf(hit.card);
-        const vacated = source.alone && ((ids.length === 1 && ids[0] === source.card) || plane.currentTree().moved(source.card, hit.card, hit.zone));
+        // A card that moves whole, a content card with one tab or a group card, vacates its slot (docs/spec/groups.md#vacated-slot).
+        const vacated = source.alone && plane.currentGrid().vacates(source.card, hit.card, hit.zone);
         const { target, preview, before, after, rect } = await dropAt(source, x, y);
         const where = `${JSON.stringify(hit)} at ${x}, ${y}`;
         if (target && JSON.stringify(preview) !== JSON.stringify(rect)) failures.push(`I3 ${where}: preview ${JSON.stringify(preview)}, result ${JSON.stringify(rect)}`);
@@ -124,7 +124,3 @@ for (const { seed, refused, kept, sources } of layouts) {
   }
 }
 
-/** The ids that a target names, one id or a list. */
-function targetIdsOf(card) {
-  return Array.isArray(card) ? card : [card];
-}

@@ -60,6 +60,12 @@ export declare function withdrawNode(input: Input, id: string, cards: readonly {
     left: TreeNode;
 };
 /**
+ * Whether `target` and `side` name the vacated slot of the node `id`, a card or a box (docs/spec/groups.md#vacated-slot): the node itself
+ * on any side or its centre, or the kid before it in its cut with the side toward it, `right` or `bottom`, or the kid after it with the
+ * side toward it, `left` or `top`, named by its id or by the members of a cut. A move there is the inverse of the withdraw of `id`.
+ */
+export declare function vacatesNode(input: Input, id: string, target: string | readonly string[], side: string): boolean;
+/**
  * EXCHANGE (packages/soksak/docs/layout.md#add-and-remove): the stored tree with the node `a`, a card or a box, where the node `b` stands
  * and `b` where `a` stood. Each place keeps the size it is drawn at: a node that enters a place takes that size less its own frames and
  * head, which are a cost of the place, and a card takes the px size that the card of that place declared. Two nodes of which one holds

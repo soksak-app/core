@@ -349,6 +349,28 @@ export function withdrawNode(input: Input, id: string, cards: readonly { id: str
 }
 
 /**
+ * Whether `target` and `side` name the vacated slot of the node `id`, a card or a box (docs/spec/groups.md#vacated-slot): the node itself
+ * on any side or its centre, or the kid before it in its cut with the side toward it, `right` or `bottom`, or the kid after it with the
+ * side toward it, `left` or `top`, named by its id or by the members of a cut. A move there is the inverse of the withdraw of `id`.
+ */
+export function vacatesNode(input: Input, id: string, target: string | readonly string[], side: string): boolean {
+  const list = typeof target === 'string' ? [target] : [...target];
+  if (list.length === 1 && list[0] === id) return true;
+  const index = new Index(input.root, input);
+  const node = index.byId.get(id);
+  const holder = node && index.parent.get(node);
+  if (!holder) return false;
+  const at = holder.kids.findIndex((kid) => kid.node === node);
+  const names = (k: number): boolean => {
+    if (k < 0 || k >= holder.kids.length) return false;
+    const held = members(holder.kids[k].node);
+    return held.length === list.length && held.every((member, i) => member === list[i]);
+  };
+  const [near, far] = holder.cut === 'x' ? ['left', 'right'] : ['top', 'bottom'];
+  return (side === far && names(at - 1)) || (side === near && names(at + 1));
+}
+
+/**
  * EXCHANGE (packages/soksak/docs/layout.md#add-and-remove): the stored tree with the node `a`, a card or a box, where the node `b` stands
  * and `b` where `a` stood. Each place keeps the size it is drawn at: a node that enters a place takes that size less its own frames and
  * head, which are a cost of the place, and a card takes the px size that the card of that place declared. Two nodes of which one holds

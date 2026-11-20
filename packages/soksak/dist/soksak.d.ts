@@ -341,6 +341,12 @@ export declare class Soksak {
      */
     insert(target: string | readonly string[], side: Side, node: TreeNode): string;
     /**
+     * Whether `target` and `side` name the vacated slot of the node `id`, a card or a box (docs/spec/groups.md#vacated-slot): the node
+     * itself, or the kid beside it in its cut with the side toward it, named by its id or by the members of a cut. A move there is no
+     * change.
+     */
+    vacates(id: string, target: string | readonly string[], side: string): boolean;
+    /**
      * EXCHANGE (packages/soksak/docs/layout.md#add-and-remove): puts the node `a`,
      * a card or a box, where the node `b` stands and `b` where `a` stood. Each
      * place keeps its fraction and the px size that a card there declares, and
