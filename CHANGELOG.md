@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F966-3-3-2 (refusal below the minimum): the specification defines the deepest node that a refusal names, the first node of the tree in depth-first order that is below its recursive minimum while no node inside it is, and five shared cases of `groups.json` judge the refusal of every operation, the stop of a boundary move and the dissolve and close that draw no card smaller; Go passes them.
 - F966-3-3-1 (exchange frames, Go): two cards that an exchange puts into each other's cells are drawn with the frames of their new places, because the kept frame of the Go grid now compares the id of each card with its span; a card of the root level exchanged with a member of a group card was drawn inside the frames of the group card and refused below its minimum.
 - F966-3-2 (contraction at the commit): five shared cases of `groups.json` judge that a group card left with one member is replaced by that member after the target of the operation is resolved, on a nested group, in both workbenches, whose implementations passed them unchanged.
 - F966-3-1-5-1 (the vacated slot, Go): a move whose target names the vacated slot of the moving card or box, the node itself on any side or its centre, or the kid before or after it toward it, is no change, so the only tab of a card dropped beside its own card previews the card and changes nothing; `core.card.move` refuses only a target inside the card.

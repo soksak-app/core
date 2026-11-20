@@ -727,6 +727,878 @@
    ]
   },
   {
+   "name": "every operation that would draw a card below its recursive minimum, with the heads and the corridors as fixed costs, is refused with the deepest such card at the size of its content and changes nothing",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1200,
+    "height": 200
+   },
+   "layout": {
+    "state": {
+     "root": {
+      "cut": "x",
+      "kids": [
+       {
+        "share": 0.12,
+        "node": {
+         "card": "card-1",
+         "fixed": false
+        }
+       },
+       {
+        "share": 0.25,
+        "node": {
+         "box": "card-4",
+         "data": {
+          "name": "그룹 1",
+          "leader": "card-2"
+         },
+         "inner": {
+          "cut": "x",
+          "kids": [
+           {
+            "share": 0.5,
+            "node": {
+             "card": "card-2",
+             "fixed": false
+            }
+           },
+           {
+            "share": 0.5,
+            "node": {
+             "card": "card-3",
+             "fixed": false
+            }
+           }
+          ]
+         }
+        }
+       },
+       {
+        "share": 0.63,
+        "node": {
+         "card": "card-5",
+         "fixed": false
+        }
+       }
+      ]
+     }
+    },
+    "leader": "card-1",
+    "lastCard": 5
+   },
+   "steps": [
+    {
+     "call": "move",
+     "args": {
+      "card": "card-4",
+      "target": "card-1",
+      "side": "centre"
+     },
+     "throws": "card card-4 cannot move to centre of card-1: card card-2 would be 30x120, below its minimum 96x96"
+    },
+    {
+     "call": "move",
+     "args": {
+      "card": "card-2",
+      "target": "card-1",
+      "side": "right"
+     },
+     "throws": "card card-2 cannot move to right of card-1: card card-1 would be 65x200, below its minimum 96x96"
+    },
+    {
+     "call": "move",
+     "args": {
+      "card": "card-5",
+      "target": "card-1",
+      "side": "top"
+     },
+     "throws": "card card-5 cannot move to top of card-1: card card-5 would be 366x88, below its minimum 96x96"
+    },
+    {
+     "call": "move",
+     "args": {
+      "card": "card-1",
+      "target": "card-4",
+      "side": "bottom"
+     },
+     "throws": "card card-1 cannot move to bottom of card-4: card card-2 would be 131x48, below its minimum 96x96"
+    },
+    {
+     "call": "move",
+     "args": {
+      "card": "card-1",
+      "target": "card-4",
+      "side": "centre"
+     },
+     "throws": "card card-1 cannot move to centre of card-4: card card-2 would be 91x120, below its minimum 96x96"
+    },
+    {
+     "call": "add",
+     "args": {
+      "group": "card-4"
+     },
+     "throws": "card card-4 cannot split toward right: card card-2 would be 76x120, below its minimum 96x96"
+    },
+    {
+     "call": "split",
+     "args": {
+      "card": "card-2",
+      "side": "bottom"
+     },
+     "throws": "card card-2 cannot split toward bottom: card card-2 would be 126x48, below its minimum 96x96"
+    },
+    {
+     "call": "split",
+     "args": {
+      "card": "card-2",
+      "side": "right"
+     },
+     "throws": "card card-2 cannot split toward right: card card-2 would be 76x120, below its minimum 96x96"
+    },
+    {
+     "call": "create",
+     "args": {
+      "card": "card-1",
+      "side": "right"
+     },
+     "throws": "card card-1 cannot hold a group toward right: card card-1 would be 51x120, below its minimum 96x96"
+    },
+    {
+     "call": "stored",
+     "args": {},
+     "returns": {
+      "state": {
+       "root": {
+        "cut": "x",
+        "kids": [
+         {
+          "share": 0.12,
+          "node": {
+           "card": "card-1",
+           "fixed": false
+          }
+         },
+         {
+          "share": 0.25,
+          "node": {
+           "box": "card-4",
+           "data": {
+            "name": "그룹 1",
+            "leader": "card-2"
+           },
+           "inner": {
+            "cut": "x",
+            "kids": [
+             {
+              "share": 0.5,
+              "node": {
+               "card": "card-2",
+               "fixed": false
+              }
+             },
+             {
+              "share": 0.5,
+              "node": {
+               "card": "card-3",
+               "fixed": false
+              }
+             }
+            ]
+           }
+          }
+         },
+         {
+          "share": 0.63,
+          "node": {
+           "card": "card-5",
+           "fixed": false
+          }
+         }
+        ]
+       }
+      },
+      "leader": "card-1",
+      "lastCard": 5
+     }
+    }
+   ]
+  },
+  {
+   "name": "a refusal names the first node in the order of the tree that is below its minimum while no node inside it is, at the size of its content under the heads, and a split, a move across the root and a balance are judged so",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1200,
+    "height": 300
+   },
+   "layout": {
+    "state": {
+     "root": {
+      "cut": "x",
+      "kids": [
+       {
+        "share": 0.15,
+        "node": {
+         "card": "card-1",
+         "fixed": false
+        }
+       },
+       {
+        "share": 0.55,
+        "node": {
+         "box": "card-4",
+         "data": {
+          "name": "그룹 1",
+          "leader": "card-2"
+         },
+         "inner": {
+          "cut": "x",
+          "kids": [
+           {
+            "share": 0.5,
+            "node": {
+             "card": "card-2",
+             "fixed": false
+            }
+           },
+           {
+            "share": 0.5,
+            "node": {
+             "box": "card-6",
+             "data": {
+              "name": "그룹 2",
+              "leader": "card-3"
+             },
+             "inner": {
+              "cut": "x",
+              "kids": [
+               {
+                "share": 0.5,
+                "node": {
+                 "card": "card-3",
+                 "fixed": false
+                }
+               },
+               {
+                "share": 0.5,
+                "node": {
+                 "card": "card-7",
+                 "fixed": false
+                }
+               }
+              ]
+             }
+            }
+           }
+          ]
+         }
+        }
+       },
+       {
+        "share": 0.3,
+        "node": {
+         "card": "card-5",
+         "fixed": false
+        }
+       }
+      ]
+     }
+    },
+    "leader": "card-1",
+    "lastCard": 7
+   },
+   "steps": [
+    {
+     "call": "move",
+     "args": {
+      "card": "card-5",
+      "target": [
+       "card-1",
+       "card-4"
+      ],
+      "side": "top"
+     },
+     "throws": "card card-5 cannot move to top of card-1, card-4: card card-2 would be 407x80, below its minimum 96x96"
+    },
+    {
+     "call": "split",
+     "args": {
+      "card": "card-4",
+      "side": "top"
+     },
+     "throws": "card card-4 cannot split toward top: card card-3 would be 116x18, below its minimum 96x96"
+    },
+    {
+     "call": "balance",
+     "args": {},
+     "throws": "the layout cannot balance: card card-3 would be 62x140, below its minimum 96x96"
+    },
+    {
+     "call": "stored",
+     "args": {},
+     "returns": {
+      "state": {
+       "root": {
+        "cut": "x",
+        "kids": [
+         {
+          "share": 0.15,
+          "node": {
+           "card": "card-1",
+           "fixed": false
+          }
+         },
+         {
+          "share": 0.55,
+          "node": {
+           "box": "card-4",
+           "data": {
+            "name": "그룹 1",
+            "leader": "card-2"
+           },
+           "inner": {
+            "cut": "x",
+            "kids": [
+             {
+              "share": 0.5,
+              "node": {
+               "card": "card-2",
+               "fixed": false
+              }
+             },
+             {
+              "share": 0.5,
+              "node": {
+               "box": "card-6",
+               "data": {
+                "name": "그룹 2",
+                "leader": "card-3"
+               },
+               "inner": {
+                "cut": "x",
+                "kids": [
+                 {
+                  "share": 0.5,
+                  "node": {
+                   "card": "card-3",
+                   "fixed": false
+                  }
+                 },
+                 {
+                  "share": 0.5,
+                  "node": {
+                   "card": "card-7",
+                   "fixed": false
+                  }
+                 }
+                ]
+               }
+              }
+             }
+            ]
+           }
+          }
+         },
+         {
+          "share": 0.3,
+          "node": {
+           "card": "card-5",
+           "fixed": false
+          }
+         }
+        ]
+       }
+      },
+      "leader": "card-1",
+      "lastCard": 7
+     }
+    }
+   ]
+  },
+  {
+   "name": "a boundary move stops at the last position at which the cards of a nested group card, with its frames and heads as fixed costs, are drawn at their minimum",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1200,
+    "height": 300
+   },
+   "layout": {
+    "state": {
+     "root": {
+      "cut": "x",
+      "kids": [
+       {
+        "share": 0.15,
+        "node": {
+         "card": "card-1",
+         "fixed": false
+        }
+       },
+       {
+        "share": 0.55,
+        "node": {
+         "box": "card-4",
+         "data": {
+          "name": "그룹 1",
+          "leader": "card-2"
+         },
+         "inner": {
+          "cut": "x",
+          "kids": [
+           {
+            "share": 0.5,
+            "node": {
+             "card": "card-2",
+             "fixed": false
+            }
+           },
+           {
+            "share": 0.5,
+            "node": {
+             "box": "card-6",
+             "data": {
+              "name": "그룹 2",
+              "leader": "card-3"
+             },
+             "inner": {
+              "cut": "x",
+              "kids": [
+               {
+                "share": 0.5,
+                "node": {
+                 "card": "card-3",
+                 "fixed": false
+                }
+               },
+               {
+                "share": 0.5,
+                "node": {
+                 "card": "card-7",
+                 "fixed": false
+                }
+               }
+              ]
+             }
+            }
+           }
+          ]
+         }
+        }
+       },
+       {
+        "share": 0.3,
+        "node": {
+         "card": "card-5",
+         "fixed": false
+        }
+       }
+      ]
+     }
+    },
+    "leader": "card-1",
+    "lastCard": 7
+   },
+   "steps": [
+    {
+     "call": "boundary",
+     "args": {
+      "axis": "x",
+      "line": 1,
+      "position": 700
+     },
+     "returns": {
+      "position": 280.79999999999984
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-3"
+     },
+     "returns": {
+      "x": 580.8,
+      "y": 112,
+      "w": 96,
+      "h": 140
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-7"
+     },
+     "returns": {
+      "x": 700.8,
+      "y": 112,
+      "w": 96.00000000000011,
+      "h": 140
+     }
+    }
+   ]
+  },
+  {
+   "name": "a dissolve of a nested group card under a tight size draws no card smaller and is not refused",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1200,
+    "height": 300
+   },
+   "layout": {
+    "state": {
+     "root": {
+      "cut": "x",
+      "kids": [
+       {
+        "share": 0.15,
+        "node": {
+         "card": "card-1",
+         "fixed": false
+        }
+       },
+       {
+        "share": 0.55,
+        "node": {
+         "box": "card-4",
+         "data": {
+          "name": "그룹 1",
+          "leader": "card-2"
+         },
+         "inner": {
+          "cut": "x",
+          "kids": [
+           {
+            "share": 0.5,
+            "node": {
+             "card": "card-2",
+             "fixed": false
+            }
+           },
+           {
+            "share": 0.5,
+            "node": {
+             "box": "card-6",
+             "data": {
+              "name": "그룹 2",
+              "leader": "card-3"
+             },
+             "inner": {
+              "cut": "x",
+              "kids": [
+               {
+                "share": 0.5,
+                "node": {
+                 "card": "card-3",
+                 "fixed": false
+                }
+               },
+               {
+                "share": 0.5,
+                "node": {
+                 "card": "card-7",
+                 "fixed": false
+                }
+               }
+              ]
+             }
+            }
+           }
+          ]
+         }
+        }
+       },
+       {
+        "share": 0.3,
+        "node": {
+         "card": "card-5",
+         "fixed": false
+        }
+       }
+      ]
+     }
+    },
+    "leader": "card-1",
+    "lastCard": 7
+   },
+   "steps": [
+    {
+     "call": "dissolve",
+     "args": {
+      "group": "card-6"
+     },
+     "returns": {
+      "dissolved": true
+     }
+    },
+    {
+     "call": "stored",
+     "args": {},
+     "returns": {
+      "state": {
+       "root": {
+        "cut": "x",
+        "kids": [
+         {
+          "share": 0.15,
+          "node": {
+           "card": "card-1",
+           "fixed": false
+          }
+         },
+         {
+          "share": 0.55,
+          "node": {
+           "box": "card-4",
+           "data": {
+            "name": "그룹 1",
+            "leader": "card-2"
+           },
+           "inner": {
+            "cut": "x",
+            "kids": [
+             {
+              "share": 0.5234741784037559,
+              "node": {
+               "card": "card-2",
+               "fixed": false
+              }
+             },
+             {
+              "share": 0.23826291079812195,
+              "node": {
+               "card": "card-3",
+               "fixed": false
+              }
+             },
+             {
+              "share": 0.23826291079812223,
+              "node": {
+               "card": "card-7",
+               "fixed": false
+              }
+             }
+            ]
+           }
+          }
+         },
+         {
+          "share": 0.3,
+          "node": {
+           "card": "card-5",
+           "fixed": false
+          }
+         }
+        ]
+       }
+      },
+      "leader": "card-1",
+      "lastCard": 7
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-3"
+     },
+     "returns": {
+      "x": 530.3267605633803,
+      "y": 56,
+      "w": 133.23661971830984,
+      "h": 220
+     }
+    }
+   ]
+  },
+  {
+   "name": "a close of a card beside a nested group card gives its space to the group card and is not refused",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1200,
+    "height": 300
+   },
+   "layout": {
+    "state": {
+     "root": {
+      "cut": "x",
+      "kids": [
+       {
+        "share": 0.15,
+        "node": {
+         "card": "card-1",
+         "fixed": false
+        }
+       },
+       {
+        "share": 0.55,
+        "node": {
+         "box": "card-4",
+         "data": {
+          "name": "그룹 1",
+          "leader": "card-2"
+         },
+         "inner": {
+          "cut": "x",
+          "kids": [
+           {
+            "share": 0.5,
+            "node": {
+             "card": "card-2",
+             "fixed": false
+            }
+           },
+           {
+            "share": 0.5,
+            "node": {
+             "box": "card-6",
+             "data": {
+              "name": "그룹 2",
+              "leader": "card-3"
+             },
+             "inner": {
+              "cut": "x",
+              "kids": [
+               {
+                "share": 0.5,
+                "node": {
+                 "card": "card-3",
+                 "fixed": false
+                }
+               },
+               {
+                "share": 0.5,
+                "node": {
+                 "card": "card-7",
+                 "fixed": false
+                }
+               }
+              ]
+             }
+            }
+           }
+          ]
+         }
+        }
+       },
+       {
+        "share": 0.3,
+        "node": {
+         "card": "card-5",
+         "fixed": false
+        }
+       }
+      ]
+     }
+    },
+    "leader": "card-1",
+    "lastCard": 7
+   },
+   "steps": [
+    {
+     "call": "close",
+     "args": {
+      "card": "card-1"
+     },
+     "returns": {
+      "closed": true
+     }
+    },
+    {
+     "call": "stored",
+     "args": {},
+     "returns": {
+      "state": {
+       "root": {
+        "cut": "x",
+        "kids": [
+         {
+          "share": 0.6470588235294117,
+          "node": {
+           "box": "card-4",
+           "data": {
+            "name": "그룹 1",
+            "leader": "card-2"
+           },
+           "inner": {
+            "cut": "x",
+            "kids": [
+             {
+              "share": 0.5,
+              "node": {
+               "card": "card-2",
+               "fixed": false
+              }
+             },
+             {
+              "share": 0.5,
+              "node": {
+               "box": "card-6",
+               "data": {
+                "name": "그룹 2",
+                "leader": "card-3"
+               },
+               "inner": {
+                "cut": "x",
+                "kids": [
+                 {
+                  "share": 0.5,
+                  "node": {
+                   "card": "card-3",
+                   "fixed": false
+                  }
+                 },
+                 {
+                  "share": 0.5,
+                  "node": {
+                   "card": "card-7",
+                   "fixed": false
+                  }
+                 }
+                ]
+               }
+              }
+             }
+            ]
+           }
+          }
+         },
+         {
+          "share": 0.35294117647058815,
+          "node": {
+           "card": "card-5",
+           "fixed": false
+          }
+         }
+        ]
+       }
+      },
+      "leader": "card-4",
+      "lastCard": 7
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-3"
+     },
+     "returns": {
+      "x": 400.94117647058823,
+      "y": 112,
+      "w": 152.4705882352941,
+      "h": 140
+     }
+    }
+   ]
+  },
+  {
    "name": "a window sidebar holds no group and leads no level",
    "options": {
     "gap": 24,
