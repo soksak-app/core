@@ -319,6 +319,43 @@ test("core.tab.move joins a tab at the index of a tab strip, and a point on a ta
   assert.deepEqual(plane.dragHit(null, first.x + 170, y, band, tab).hit, { card: "card-1", zone: "strip", index: 1 });
 });
 
+/** Sends the pointer event type at x, y of the plane to element, which captures the pointer as a press of a person does; jsdom does not. */
+const pointer = (element, type, x, y) => {
+  element.setPointerCapture ??= () => {};
+  element.hasPointerCapture ??= () => true;
+  element.releasePointerCapture ??= () => {};
+  element.dispatchEvent(new window.MouseEvent(type, { bubbles: true, cancelable: true, button: 0, buttons: 1, clientX: x, clientY: y }));
+};
+/** The ids of the kids of the root cut of the stored layout. */
+const rootKids = async () => (await status("core.layout")).state.root.kids.map((kid) => kid.node.box ?? kid.node.card);
+
+test("a drag of the header of a group card moves the group card beside a card and exchanges it on the centre of a content card", { timeout: 5000 }, async () => {
+  arrange();
+  const head = () => document.querySelector(`.group[data-group-card="card-4"] > .group__head`);
+  const drag = async (to) => {
+    const group = plane.currentTree().rect("card-4");
+    pointer(head(), "pointerdown", group.x + 30, group.y + 10);
+    pointer(head(), "pointermove", to.x, to.y);
+    const during = await status("core.drag");
+    pointer(head(), "pointerup", to.x, to.y);
+    return during;
+  };
+  // A press on a button of the header starts no drag.
+  pointer(head().querySelector("button"), "pointerdown", 10, 10);
+  assert.equal(await status("core.drag"), null, "a press on a header button started a drag");
+  const third = plane.currentTree().rect("card-3");
+  const beside = await drag({ x: third.x + third.w - 40, y: third.y + third.h / 2 });
+  assert.deepEqual([beside.tab, beside.card, beside.moved, beside.target], ["", "card-4", true, { card: "card-3", zone: "right" }]);
+  assert.notEqual(beside.preview, null, "the drag shows the drop preview");
+  assert.deepEqual(await rootKids(), ["card-3", "card-4"]);
+  // On the centre of a content card the group card exchanges places with it (docs/spec/groups.md#moving-and-dropping).
+  const left = plane.currentTree().rect("card-3");
+  const centre = await drag({ x: left.x + left.w / 2, y: left.y + left.h / 2 });
+  assert.deepEqual(centre.target, { card: "card-3", zone: "centre" });
+  assert.deepEqual(await rootKids(), ["card-4", "card-3"]);
+  assert.equal(await status("core.drag"), null, "the release ends the drag");
+});
+
 test("the layout of the window description holds each group card as a node of its tree and lists every group once", { timeout: 5000 }, async () => {
   arrange();
   // card-2 becomes the group card card-5 with card-6 below it, nested in card-4 (docs/spec/groups.md#status-and-queries).
