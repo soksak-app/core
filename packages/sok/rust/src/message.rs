@@ -3,7 +3,6 @@
 //! carries the text alone under the token prefix `report-` (docs/spec/messaging.md#report-request). The text is written under a temporary name that does not end in `.txt`, and the file is renamed
 //! to `<from>.<token>.txt`, the rename being the point at which the message becomes visible.
 
-use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -21,8 +20,9 @@ use crate::files::file_error;
 /// The largest text of a message, in bytes; a larger text is refused before a file is written (docs/spec/messaging.md#message).
 const MAX_TEXT_BYTES: usize = 64 * 1024;
 
-/// The variable that names the sending surface (docs/spec/sidecars.md#processes-of-a-surface).
-const SURFACE_VARIABLE: &str = "SOKSAK_SURFACE";
+/// The end of a refusal of `agent.surface` when `CODEX_THREAD_ID` is in the environment: codex runs the commands of its agent in a
+/// shared server that detaches from the terminal, which is no process of a surface (docs/spec/cli.md#commands).
+const NO_DAEMON_HINT: &str = "; start codex with --no-daemon, so that the commands of its agent run in processes of the surface";
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 
@@ -51,28 +51,26 @@ pub(crate) fn run(
             "message send requires a folder and a text".into(),
         ));
     };
-    let surface = match std::env::var(SURFACE_VARIABLE) {
-        Ok(surface) if !surface.is_empty() => surface,
-        _ => {
-            return Err(Error::Failed(format!(
-                "message send requires {SURFACE_VARIABLE}, which names the sending surface"
-            )));
+    let config_dir = crate::config_dir_of(&parsed.values, options)?;
+    let endpoint = match read_running_endpoint(&config_dir)? {
+        Ok(endpoint) => endpoint,
+        Err(_) => {
+            return Err(Error::Failed(
+                "message send requires a running application, which answers the surface of this process"
+                    .into(),
+            ));
         }
     };
-    if surface.contains(['/', '\\', '\0']) {
-        return Err(Error::Failed(format!(
-            "{SURFACE_VARIABLE} is not a valid surface identifier: {surface}"
-        )));
-    }
-    let report = parsed.flags.contains_key("reply");
-    let text = if report {
-        text.clone()
-    } else {
-        format!("{text}{}", report_request(folder, &surface)?)
-    };
-    let name = send(folder, &surface, &text, report)?;
-    let receiver = receiver(folder, &parsed.values, options)
-        .map_err(|error| Error::Failed(format!("message {name} was written; {error}")))?;
+    let mut client = Client::dial(&endpoint)?;
+    let written = write_message(
+        &mut client,
+        folder,
+        text,
+        parsed.flags.contains_key("reply"),
+    );
+    let closed = client.close();
+    let (name, receiver) = written?;
+    closed?;
     let output = json!({ "path": name, "receiver": receiver });
     writeln!(stdout, "{output}").map_err(|error| error.to_string())?;
     Ok(())
@@ -100,14 +98,49 @@ struct Home {
     window: String,
 }
 
+/// Asks the application for the surface of this process, writes the message of that surface into `folder` and reads the hold of its
+/// receiver. A refusal of `agent.surface` writes no file.
+fn write_message(
+    client: &mut Client,
+    folder: &str,
+    text: &str,
+    report: bool,
+) -> Result<(String, Value), Error> {
+    let own = crate::agent_window::own_surface(&mut |method: &str, params: Option<Value>| {
+        client.request(method, params, &mut |_: &str, _: &RawValue| Ok(()))
+    })
+    .map_err(|failure| Error::Failed(failure.to_string()))?;
+    let surface = match own {
+        crate::agent_window::OwnSurface::Surface(surface) => surface,
+        crate::agent_window::OwnSurface::Refused(refusal) => {
+            // default: without CODEX_THREAD_ID the refusal has no hint.
+            let hint = match std::env::var_os("CODEX_THREAD_ID") {
+                Some(thread) if !thread.is_empty() => NO_DAEMON_HINT,
+                _ => "",
+            };
+            return Err(Error::Failed(format!("message send: {refusal}{hint}")));
+        }
+    };
+    if surface.contains(['/', '\\', '\0']) {
+        return Err(Error::Failed(format!(
+            "agent.surface answered {surface}, which is not a valid surface identifier"
+        )));
+    }
+    let text = if report {
+        text.to_string()
+    } else {
+        format!("{text}{}", report_request(folder, &surface)?)
+    };
+    let name = send(folder, &surface, &text, report)?;
+    let receiver = receiver(client, folder)
+        .map_err(|error| Error::Failed(format!("message {name} was written; {error}")))?;
+    Ok((name, receiver))
+}
+
 /// Reads the hold of the terminal whose folder is `folder` (docs/spec/messaging.md#delivery): `{surface, plugin, held}` from
 /// surface.window, exposure.snapshot and the status `<plugin>.messages` of the surface. It is null when `folder` is not
-/// `<root>/.soksak/messages/<surface>`, when no application runs, when the surface is in no window and when the status is null.
-fn receiver(
-    folder: &str,
-    values: &HashMap<String, String>,
-    options: &crate::Options,
-) -> Result<Value, String> {
+/// `<root>/.soksak/messages/<surface>`, when the surface is in no window and when the status is null.
+fn receiver(client: &mut Client, folder: &str) -> Result<Value, String> {
     let clean: PathBuf = Path::new(folder).components().collect();
     let parent = clean.parent();
     let named = |path: Option<&Path>, name: &str| {
@@ -120,18 +153,7 @@ fn receiver(
     let Some(terminal) = clean.file_name().and_then(|name| name.to_str()) else {
         return Ok(Value::Null);
     };
-    let config_dir = crate::config_dir_of(values, options).map_err(|error| match error {
-        Error::Failed(text) | Error::Usage(text) => text,
-    })?;
-    let Ok(endpoint) = read_running_endpoint(&config_dir)? else {
-        return Ok(Value::Null);
-    };
-    let mut client = Client::dial(&endpoint)?;
-    let receiver = read_receiver(&mut client, terminal);
-    let closed = client.close();
-    let receiver = receiver?;
-    closed?;
-    Ok(receiver)
+    read_receiver(client, terminal)
 }
 
 /// Asks the application for the window, the plugin and the status `<plugin>.messages` of the surface `terminal`.
@@ -149,7 +171,9 @@ fn read_receiver(client: &mut Client, terminal: &str) -> Result<Value, String> {
         .map_err(|error| format!("surface.window returned an unexpected value: {error}: {result}"))?
         .window;
     if window.is_empty() {
-        return Err(format!("surface.window returned an unexpected value: {result}"));
+        return Err(format!(
+            "surface.window returned an unexpected value: {result}"
+        ));
     }
     let result = client
         .request(

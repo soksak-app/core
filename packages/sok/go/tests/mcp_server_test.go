@@ -539,11 +539,15 @@ func TestTheMCPServerReplaysTheEndpointCases(t *testing.T) {
 
 // contract: cli.mcp.lists-the-fixed-tools
 func TestTheMCPServerListsTheFixedTools(t *testing.T) {
+	// The only endpoint request of the case is agent.surface of its call of agent_context; tools/list sends none.
 	run := runMCPCase(t, "mcp-protocol-2025-11-25")
-	if methods := run.player.methods(); len(methods) != 0 {
-		t.Fatalf("tools/list sent the endpoint requests %v", methods)
+	if methods := run.player.methods(); fmt.Sprint(methods) != "[agent.surface]" {
+		t.Fatalf("the case sent the endpoint requests %v", methods)
 	}
 	reply := run.session.response(run.session.request("tools/list", nil))
+	if methods := run.player.methods(); fmt.Sprint(methods) != "[agent.surface]" {
+		t.Fatalf("tools/list sent endpoint requests: %v", methods)
+	}
 	tools := reply["result"].(map[string]any)["tools"]
 	if !reflect.DeepEqual(tools, run.values["$tools"]) {
 		t.Fatalf("tools/list answered %v, want the tools of mcp.json", tools)

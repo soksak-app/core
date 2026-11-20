@@ -1,11 +1,13 @@
 {
   "name": "sok-surface-in-no-window",
-  "description": "A SOKSAK_SURFACE whose surface is in no window fails the request with the text that names the surface, and sok sends no request for another window.",
+  "description": "An own surface, which agent.surface answers, that is in no window fails the request with the text that names the surface, and sok sends no request for another window.",
   "replay": false,
-  "reason": "The case needs the environment variable SOKSAK_SURFACE of the sok that the test starts, which a window check of the application does not set.",
+  "reason": "The case answers agent.surface with a surface, and the process of the sok that the test starts belongs to no surface of a running application, so agent.surface refuses it.",
   "steps": [
-    { "send": { "jsonrpc": "2.0", "id": 1, "method": "surface.window", "params": { "surface": "terminal-9" } } },
-    { "reply": { "jsonrpc": "2.0", "id": 1, "error": { "code": 1012, "message": "surface terminal-9 is in no window" } } },
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "agent.surface" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": { "surface": "terminal-9" } } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "surface.window", "params": { "surface": "terminal-9" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "error": { "code": 1012, "message": "surface terminal-9 is in no window" } } },
     { "close": "client" }
   ]
 }

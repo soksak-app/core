@@ -1,8 +1,8 @@
 {
   "name": "sok-describe",
-  "description": "sok describe with SOKSAK_SURFACE asks surface.window and exposure.snapshot in each run and prints the page that window_describe of mcp-window-describe answers for the same arguments: --full, --limit, --after, --surface and --window as the arguments full, limit, after, surface and window; four more runs with --limit 2 and --after page the window until next is null.",
+  "description": "sok describe asks agent.surface, surface.window and exposure.snapshot in each run and prints the page that window_describe of mcp-window-describe answers for the same arguments: --full, --limit, --after, --surface and --window as the arguments full, limit, after, surface and window; four more runs with --limit 2 and --after page the window until next is null.",
   "replay": false,
-  "reason": "The snapshot of the case holds plugins, surfaces and values that a running application does not show on demand, and sok needs SOKSAK_SURFACE, which a window check does not set.",
+  "reason": "The snapshot of the case holds plugins, surfaces and values that a running application does not show on demand, and the case answers agent.surface with a surface, while the process of the sok that the test starts belongs to no surface of a running application, so agent.surface refuses it.",
   "variables": {
     "snapshot": {
       "type": "object",
@@ -908,10 +908,12 @@
     }
   },
   "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "agent.surface"}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": {"surface": "terminal-1"}}},
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 1,
+        "id": 2,
         "method": "surface.window",
         "params": {
           "surface": "terminal-1"
@@ -921,7 +923,7 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 1,
+        "id": 2,
         "result": {
           "window": "main",
           "space": "space-1"
@@ -931,7 +933,7 @@
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 2,
+        "id": 3,
         "method": "exposure.snapshot",
         "params": {
           "window": "main"
@@ -941,17 +943,19 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 2,
+        "id": 3,
         "result": "$snapshot"
       }
     },
     {
       "close": "client"
     },
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "agent.surface"}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": {"surface": "terminal-1"}}},
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 1,
+        "id": 2,
         "method": "surface.window",
         "params": {
           "surface": "terminal-1"
@@ -961,7 +965,7 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 1,
+        "id": 2,
         "result": {
           "window": "main",
           "space": null
@@ -971,7 +975,7 @@
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 2,
+        "id": 3,
         "method": "exposure.snapshot",
         "params": {
           "window": "main"
@@ -981,17 +985,19 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 2,
+        "id": 3,
         "result": "$snapshot"
       }
     },
     {
       "close": "client"
     },
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "agent.surface"}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": {"surface": "terminal-1"}}},
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 1,
+        "id": 2,
         "method": "surface.window",
         "params": {
           "surface": "terminal-1"
@@ -1001,7 +1007,7 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 1,
+        "id": 2,
         "result": {
           "window": "main",
           "space": "space-1"
@@ -1011,7 +1017,7 @@
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 2,
+        "id": 3,
         "method": "exposure.snapshot",
         "params": {
           "window": "main"
@@ -1021,17 +1027,19 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 2,
+        "id": 3,
         "result": "$snapshot"
       }
     },
     {
       "close": "client"
     },
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "agent.surface"}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": {"surface": "terminal-1"}}},
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 1,
+        "id": 2,
         "method": "surface.window",
         "params": {
           "surface": "terminal-1"
@@ -1041,7 +1049,7 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 1,
+        "id": 2,
         "result": {
           "window": "main",
           "space": "space-2"
@@ -1051,7 +1059,7 @@
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 2,
+        "id": 3,
         "method": "exposure.snapshot",
         "params": {
           "window": "main",
@@ -1062,17 +1070,19 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 2,
+        "id": 3,
         "result": "$surfaces"
       }
     },
     {
       "close": "client"
     },
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "agent.surface"}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": {"surface": "terminal-1"}}},
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 1,
+        "id": 2,
         "method": "surface.window",
         "params": {
           "surface": "terminal-1"
@@ -1082,7 +1092,7 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 1,
+        "id": 2,
         "result": {
           "window": "main",
           "space": "space-1"
@@ -1092,7 +1102,7 @@
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 2,
+        "id": 3,
         "method": "exposure.snapshot",
         "params": {
           "window": "other"
@@ -1102,17 +1112,19 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 2,
+        "id": 3,
         "result": "$snapshot"
       }
     },
     {
       "close": "client"
     },
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "agent.surface"}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": {"surface": "terminal-1"}}},
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 1,
+        "id": 2,
         "method": "surface.window",
         "params": {
           "surface": "terminal-1"
@@ -1122,7 +1134,7 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 1,
+        "id": 2,
         "result": {
           "window": "main",
           "space": "space-1"
@@ -1132,7 +1144,7 @@
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 2,
+        "id": 3,
         "method": "exposure.snapshot",
         "params": {
           "window": "main"
@@ -1142,17 +1154,19 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 2,
+        "id": 3,
         "result": "$snapshot"
       }
     },
     {
       "close": "client"
     },
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "agent.surface"}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": {"surface": "terminal-1"}}},
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 1,
+        "id": 2,
         "method": "surface.window",
         "params": {
           "surface": "terminal-1"
@@ -1162,7 +1176,7 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 1,
+        "id": 2,
         "result": {
           "window": "main",
           "space": "space-1"
@@ -1172,7 +1186,7 @@
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 2,
+        "id": 3,
         "method": "exposure.snapshot",
         "params": {
           "window": "main"
@@ -1182,17 +1196,19 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 2,
+        "id": 3,
         "result": "$snapshot"
       }
     },
     {
       "close": "client"
     },
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "agent.surface"}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": {"surface": "terminal-1"}}},
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 1,
+        "id": 2,
         "method": "surface.window",
         "params": {
           "surface": "terminal-1"
@@ -1202,7 +1218,7 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 1,
+        "id": 2,
         "result": {
           "window": "main",
           "space": "space-1"
@@ -1212,7 +1228,7 @@
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 2,
+        "id": 3,
         "method": "exposure.snapshot",
         "params": {
           "window": "main"
@@ -1222,17 +1238,19 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 2,
+        "id": 3,
         "result": "$snapshot"
       }
     },
     {
       "close": "client"
     },
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "agent.surface"}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": {"surface": "terminal-1"}}},
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 1,
+        "id": 2,
         "method": "surface.window",
         "params": {
           "surface": "terminal-1"
@@ -1242,7 +1260,7 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 1,
+        "id": 2,
         "result": {
           "window": "main",
           "space": "space-1"
@@ -1252,7 +1270,7 @@
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 2,
+        "id": 3,
         "method": "exposure.snapshot",
         "params": {
           "window": "main"
@@ -1262,17 +1280,19 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 2,
+        "id": 3,
         "result": "$snapshot"
       }
     },
     {
       "close": "client"
     },
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "agent.surface"}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": {"surface": "terminal-1"}}},
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 1,
+        "id": 2,
         "method": "surface.window",
         "params": {
           "surface": "terminal-1"
@@ -1282,7 +1302,7 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 1,
+        "id": 2,
         "result": {
           "window": "main",
           "space": "space-1"
@@ -1292,7 +1312,7 @@
     {
       "send": {
         "jsonrpc": "2.0",
-        "id": 2,
+        "id": 3,
         "method": "exposure.snapshot",
         "params": {
           "window": "main"
@@ -1302,7 +1322,7 @@
     {
       "reply": {
         "jsonrpc": "2.0",
-        "id": 2,
+        "id": 3,
         "result": "$snapshot"
       }
     },

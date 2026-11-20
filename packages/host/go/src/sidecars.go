@@ -2175,8 +2175,8 @@ func (c *Sidecars) SetEnvironment(source func() (map[string]string, error)) {
 	c.declarations.Unlock()
 }
 
-// environment is the environment of a sidecar: the base, the environment of the login shell, without SOKSAK_SURFACE, with
-// SOKSAK_CONFIG_DIR set to the configuration directory, whatever values of both the base holds, and with the folder of sok first on
+// environment is the environment of a sidecar: the base, the environment of the login shell, with SOKSAK_CONFIG_DIR set to the
+// configuration directory, whatever value the base holds, and with the folder of sok first on
 // PATH and in no other entry; a host without a configuration directory starts its sidecars without SOKSAK_CONFIG_DIR
 // (docs/spec/sidecars.md#processes-of-a-surface). Without a source, which only a channel of a test has, the base is the
 // environment of the test process.
@@ -2200,7 +2200,7 @@ func (c *Sidecars) environment() ([]string, error) {
 	for _, entry := range base {
 		name, value, _ := strings.Cut(entry, "=") // silent: an entry of the environment has the form name=value.
 		switch name {
-		case sok.ConfigDirVariable, sok.SurfaceVariable:
+		case sok.ConfigDirVariable:
 		case "PATH":
 			for _, folder := range filepath.SplitList(value) {
 				if folder != c.sokFolder {

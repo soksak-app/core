@@ -1694,8 +1694,8 @@ pub fn sok_folder() -> Result<PathBuf, String> {
         .ok_or_else(|| format!("host executable {} has no folder", executable.display()))
 }
 
-/// Sets the environment of a sidecar: base, the environment of the login shell, without SOKSAK_SURFACE, with SOKSAK_CONFIG_DIR set
-/// to the configuration directory, whatever values of both base holds, and with the folder of the host executable, where the
+/// Sets the environment of a sidecar: base, the environment of the login shell, with SOKSAK_CONFIG_DIR set to the configuration
+/// directory, whatever value base holds, and with the folder of the host executable, where the
 /// application bundle holds sok, first on PATH and in no other entry (docs/spec/sidecars.md#processes-of-a-surface). Without a base,
 /// which only a channel of a test has, the sidecar starts in the environment of the test process.
 fn sidecar_environment(
@@ -1719,7 +1719,6 @@ fn sidecar_environment(
     let path = std::env::join_paths(folders).map_err(|error| format!("sidecar PATH: {error}"))?;
     command
         .env(soksak_sok::CONFIG_DIR_VARIABLE, config_directory)
-        .env_remove(soksak_sok::SURFACE_VARIABLE)
         .env("PATH", path);
     Ok(())
 }

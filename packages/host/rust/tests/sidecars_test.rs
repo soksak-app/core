@@ -113,37 +113,31 @@ fn echo_sidecars() -> (Sidecars<SidecarRecorder>, folder::Folder) {
 /// The environment variable that tells that the process is the child that inherits the variables of an agent.
 const AGENT_ENVIRONMENT_CHILD: &str = "SOKSAK_SIDECAR_AGENT_ENVIRONMENT_CHILD";
 
-/// The control text of the sidecar fixture that records the values of SOKSAK_CONFIG_DIR and SOKSAK_SURFACE in the files
-/// `config-dir` and `surface` of `folder`.
+/// The control text of the sidecar fixture that records the value of SOKSAK_CONFIG_DIR in the file `config-dir` of `folder`.
 fn record_agent_environment(folder: &Path) -> String {
     format!(
-        "record-env SOKSAK_CONFIG_DIR {}\nrecord-env SOKSAK_SURFACE {}\n",
-        folder.join("config-dir").display(),
-        folder.join("surface").display()
+        "record-env SOKSAK_CONFIG_DIR {}\n",
+        folder.join("config-dir").display()
     )
 }
 
-/// The values that the sidecar fixture recorded in `folder`: SOKSAK_CONFIG_DIR and SOKSAK_SURFACE.
-fn recorded_agent_environment(folder: &Path) -> (String, String) {
-    (
-        std::fs::read_to_string(folder.join("config-dir")).unwrap(),
-        std::fs::read_to_string(folder.join("surface")).unwrap(),
-    )
+/// The value of SOKSAK_CONFIG_DIR that the sidecar fixture recorded in `folder`.
+fn recorded_agent_environment(folder: &Path) -> String {
+    std::fs::read_to_string(folder.join("config-dir")).unwrap()
 }
 
 // A test of the harness runs on a thread of its own and does not change the environment of its process, so the test runs in a
-// child of the same binary whose environment holds the values of another application, which an application started from its
+// child of the same binary whose environment holds the value of another application, which an application started from its
 // process inherits.
 // contract: sidecars.environment.names-the-configuration-directory
 #[test]
-fn sidecars_start_with_the_configuration_directory_and_without_a_surface() {
-    const NAME: &str = "sidecars_start_with_the_configuration_directory_and_without_a_surface";
+fn sidecars_start_with_the_configuration_directory() {
+    const NAME: &str = "sidecars_start_with_the_configuration_directory";
     if std::env::var_os(AGENT_ENVIRONMENT_CHILD).is_none() {
         let output = std::process::Command::new(std::env::current_exe().unwrap())
             .args(["--exact", NAME, "--nocapture", "--test-threads=1"])
             .env(AGENT_ENVIRONMENT_CHILD, "1")
             .env("SOKSAK_CONFIG_DIR", "/other/config")
-            .env("SOKSAK_SURFACE", "other-surface")
             .output()
             .unwrap();
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -180,8 +174,8 @@ fn sidecars_start_with_the_configuration_directory_and_without_a_surface() {
     events.recv().unwrap();
     assert_eq!(
         recorded_agent_environment(stdio.path()),
-        (config_text.clone(), String::new()),
-        "standard input and output sidecar: SOKSAK_CONFIG_DIR and SOKSAK_SURFACE"
+        config_text.clone(),
+        "standard input and output sidecar: SOKSAK_CONFIG_DIR"
     );
     sidecars.stop();
     // A persistent service records its environment and ends before it prints an endpoint, so its start fails after the record.
@@ -204,8 +198,8 @@ fn sidecars_start_with_the_configuration_directory_and_without_a_surface() {
     assert!(error.contains("service exited before endpoint"), "{error}");
     assert_eq!(
         recorded_agent_environment(service.path()),
-        (config_text, String::new()),
-        "persistent service: SOKSAK_CONFIG_DIR and SOKSAK_SURFACE"
+        config_text,
+        "persistent service: SOKSAK_CONFIG_DIR"
     );
     persistent.stop();
 }

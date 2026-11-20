@@ -1,7 +1,7 @@
 package tests
 
 // Checks the window of an agent (docs/spec/cli.md#the-window-of-an-agent): SOKSAK_CONFIG_DIR names the configuration directory,
-// SOKSAK_SURFACE selects the window of its surface, sok context prints both, and a sok whose directory belongs to an application
+// the surface that agent.surface answers selects its window, sok context prints both, and a sok whose directory belongs to an application
 // of another sok hands the command to that sok.
 
 import (
@@ -88,20 +88,15 @@ func TestTheConfigurationDirectoryComesFromTheEnvironment(t *testing.T) {
 	}
 }
 
-// contract: cli.window.surface-variable-selects-its-window
-func TestTheSurfaceVariableSelectsItsWindow(t *testing.T) {
+// contract: cli.window.own-surface-selects-its-window
+func TestTheOwnSurfaceSelectsItsWindow(t *testing.T) {
 	player := playCase(t, "sok-surface-window")
-	t.Setenv(surfaceVariable, "terminal-1")
-	for _, args := range [][]string{{"status", "core.screen"}, {"status", "core.screen"}, {"status", "core.screen", "--window", "project-a"}} {
+	for _, args := range [][]string{{"status", "core.screen"}, {"status", "core.screen"}, {"status", "core.screen", "--window", "project-a"}, {"status", "core.screen"}} {
 		if code, stdout, stderr := run(append(args, "--config-dir", player.configDir)...); code != 0 || stdout != "\"ok\"\n" {
 			t.Fatalf("%v: code %d stdout %q stderr %q", args, code, stdout, stderr)
 		}
 	}
-	t.Setenv(surfaceVariable, "")
-	if code, stdout, stderr := run("status", "core.screen", "--config-dir", player.configDir); code != 0 || stdout != "\"ok\"\n" {
-		t.Fatalf("code %d stdout %q stderr %q", code, stdout, stderr)
-	}
-	if methods := player.methods(); fmt.Sprint(methods) != "[surface.window status.get surface.window status.get status.get windows.list status.get]" {
+	if methods := player.methods(); fmt.Sprint(methods) != "[agent.surface surface.window status.get agent.surface surface.window status.get status.get agent.surface windows.list status.get]" {
 		t.Fatalf("methods %v", methods)
 	}
 }
@@ -109,9 +104,8 @@ func TestTheSurfaceVariableSelectsItsWindow(t *testing.T) {
 // contract: cli.window.surface-in-no-window-fails
 func TestASurfaceInNoWindowFails(t *testing.T) {
 	player := playCase(t, "sok-surface-in-no-window")
-	t.Setenv(surfaceVariable, "terminal-9")
 	code, stdout, stderr := run("status", "core.screen", "--config-dir", player.configDir)
-	if code != 1 || stdout != "" || stderr != "sok: SOKSAK_SURFACE names surface terminal-9, which is in no window of the application\n" {
+	if code != 1 || stdout != "" || stderr != "sok: surface terminal-9 of this process is in no window of the application\n" {
 		t.Fatalf("code %d stdout %q stderr %q", code, stdout, stderr)
 	}
 }
@@ -120,17 +114,20 @@ func TestASurfaceInNoWindowFails(t *testing.T) {
 func TestContextPrintsTheAgentContext(t *testing.T) {
 	config := t.TempDir()
 	code, stdout, stderr := run("context", "--config-dir", config)
-	want := fmt.Sprintf("{\n  \"configDirectory\": %q,\n  \"surface\": null,\n  \"window\": null\n}\n", config)
+	if code != 1 || stdout != "" || stderr != "sok: "+filepath.Join(config, "endpoint.json")+" does not exist; the application is not running\n" {
+		t.Fatalf("without an application: code %d stdout %q stderr %q", code, stdout, stderr)
+	}
+	player := playCase(t, "sok-context")
+	t.Setenv(configDirVariable, player.configDir)
+	code, stdout, stderr = run("context")
+	want := fmt.Sprintf("{\n  \"configDirectory\": %q,\n  \"surface\": \"terminal-1\",\n  \"window\": \"project-a\"\n}\n", player.configDir)
 	if code != 0 || stdout != want {
 		t.Fatalf("code %d stdout %q stderr %q", code, stdout, stderr)
 	}
-	player := playCase(t, "sok-context")
-	t.Setenv(surfaceVariable, "terminal-1")
-	t.Setenv(configDirVariable, player.configDir)
 	code, stdout, stderr = run("context")
-	want = fmt.Sprintf("{\n  \"configDirectory\": %q,\n  \"surface\": \"terminal-1\",\n  \"window\": \"project-a\"\n}\n", player.configDir)
+	want = fmt.Sprintf("{\n  \"configDirectory\": %q,\n  \"surface\": null,\n  \"window\": null\n}\n", player.configDir)
 	if code != 0 || stdout != want {
-		t.Fatalf("code %d stdout %q stderr %q", code, stdout, stderr)
+		t.Fatalf("a process of no surface: code %d stdout %q stderr %q", code, stdout, stderr)
 	}
 }
 
@@ -145,9 +142,9 @@ func TestTheCommandIsHandedToTheSokOfTheApplication(t *testing.T) {
 	writeText(t, filepath.Join(config, "endpoint.json"), endpoint)
 	home := t.TempDir()
 	env := []string{"HOME=" + home, "PATH=/usr/bin:/bin", configDirVariable + "=" + config}
-	code, stdout, stderr := runProgram(t, running, env, "context")
-	want := fmt.Sprintf("{\n  \"configDirectory\": %q,\n  \"surface\": null,\n  \"window\": null\n}\n", config)
-	if code != 0 || stdout != want || stderr != "" {
+	// plugin list reads only the configuration directory, so the handed command succeeds without a running application.
+	code, stdout, stderr := runProgram(t, running, env, "plugin", "list")
+	if code != 0 || stdout == "" || stderr != "" {
 		t.Fatalf("code %d stdout %q stderr %q", code, stdout, stderr)
 	}
 	execs := storedEvents(t, config, "sok.exec")
@@ -155,17 +152,18 @@ func TestTheCommandIsHandedToTheSokOfTheApplication(t *testing.T) {
 		t.Fatalf("sok.exec events %v", execs)
 	}
 	commands := storedEvents(t, config, "sok.command")
-	if len(commands) != 2 || commands[0]["status"] != float64(0) || commands[0]["args"] != "context" || commands[1]["args"] != "context" {
+	if len(commands) != 2 || commands[0]["status"] != float64(0) || commands[0]["args"] != "plugin list" || commands[1]["args"] != "plugin list" {
 		t.Fatalf("sok.command events %v", commands)
 	}
 	// --config-dir takes precedence, so no replacement happens.
-	code, _, _ = runProgram(t, running, env, "context", "--config-dir", config)
-	if code != 0 || len(storedEvents(t, config, "sok.exec")) != 1 {
+	handed := stdout
+	code, stdout, _ = runProgram(t, running, env, "plugin", "list", "--config-dir", config)
+	if code != 0 || stdout != handed || len(storedEvents(t, config, "sok.exec")) != 1 {
 		t.Fatalf("code %d sok.exec %v", code, storedEvents(t, config, "sok.exec"))
 	}
 	// An endpoint.json that does not parse fails the run with its position.
 	writeText(t, filepath.Join(config, "endpoint.json"), "{\n  \"executable\": nope}")
-	code, stdout, stderr = runProgram(t, running, env, "context")
+	code, stdout, stderr = runProgram(t, running, env, "plugin", "list")
 	if code != 1 || stdout != "" || stderr != "sok: "+filepath.Join(config, "endpoint.json")+" is not valid JSON at line 2 column 18\n" {
 		t.Fatalf("code %d stdout %q stderr %q", code, stdout, stderr)
 	}
@@ -234,7 +232,6 @@ func describeFlags(t *testing.T, arguments map[string]any) []string {
 // contract: cli.describe.lists-every-entry, cli.describe.compact-form-and-pages
 func TestDescribePrintsThePagesOfWindowDescribe(t *testing.T) {
 	player := playCase(t, "sok-describe")
-	t.Setenv(surfaceVariable, "terminal-1")
 	for n, step := range windowDescribeSteps(t) {
 		args := append([]string{"describe", "--config-dir", player.configDir}, describeFlags(t, step.Arguments)...)
 		code, stdout, stderr := run(args...)
@@ -294,7 +291,7 @@ func TestDescribePrintsThePagesOfWindowDescribe(t *testing.T) {
 	if fmt.Sprint(keys) != want {
 		t.Fatalf("rows %v\nwant %s", keys, want)
 	}
-	if methods := player.methods(); len(methods) != 20 {
+	if methods := player.methods(); len(methods) != 30 {
 		t.Fatalf("methods %v", methods)
 	}
 }

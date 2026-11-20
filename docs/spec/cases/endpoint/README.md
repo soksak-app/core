@@ -53,7 +53,7 @@ A case of the MCP server `sok mcp` ([MCP server](../../cli.md#mcp-server)) has t
 | Member | Required | Meaning |
 | --- | --- | --- |
 | `arguments` | no | The arguments that follow `sok mcp --config-dir <the directory of the case>`, such as `["--window", "main"]`. |
-| `environment` | no | The variables of the environment of the server, such as `{"SOKSAK_SURFACE": "terminal-1"}`; an empty value sets the variable empty. |
+| `environment` | no | The variables of the environment of the server, such as `{"CODEX_THREAD_ID": "thread-1"}`; an empty value sets the variable empty. |
 | `endpoint` | no | `"later"` starts the endpoint of the case only at the step `start`, so the server first runs without an application. |
 | `steps` | yes | The ordered steps of the client. |
 

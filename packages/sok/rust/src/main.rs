@@ -22,13 +22,11 @@ fn main() {
         }
     };
     let config_dir_variable = variable(soksak_sok::CONFIG_DIR_VARIABLE);
-    let surface_variable = variable(soksak_sok::SURFACE_VARIABLE);
     let options = soksak_sok::Options {
         identifier,
         paths_dir: paths.as_deref().map_err(Clone::clone),
         core_version: soksak_sok::version::CORE_VERSION,
         config_dir_variable: config_dir_variable.as_deref(),
-        surface_variable: surface_variable.as_deref(),
     };
     let code = soksak_sok::run_logged(
         &args,

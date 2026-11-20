@@ -1,5 +1,5 @@
 //! Checks `sok message send <folder> <text>` (docs/spec/cli.md#commands, docs/spec/messaging.md#message) with the built sok and folders
-//! that each test creates. The surface of the sender is set through SOKSAK_SURFACE in the environment of the child process only.
+//! that each test creates. The surface of the sender is the answer of `agent.surface` of a case that the test plays.
 
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -12,28 +12,35 @@ mod folder;
 #[path = "support/case_player.rs"]
 mod case_player;
 
-use case_player::play_case;
+use case_player::{play_case, play_case_with_text};
 
 use folder::Folder;
 
 /// The largest text that the command accepts, in bytes (docs/spec/cli.md#commands).
 const LIMIT: usize = 64 * 1024;
 
-/// Runs `sok message send` with `args`, with SOKSAK_SURFACE set to `surface` when it is Some and HOME set to `home`, and returns the
-/// status and both outputs.
-fn run_send(home: &Path, surface: Option<&str>, args: &[&str]) -> (i32, String, String) {
+/// Runs `sok message send` with the configuration directory `config` and `args`, with HOME set to `home` and CODEX_THREAD_ID set to
+/// `thread` when it is Some, and returns the status and both outputs.
+fn run_send(
+    home: &Path,
+    config: &str,
+    thread: Option<&str>,
+    args: &[&str],
+) -> (i32, String, String) {
     let mut command = Command::new(env!("CARGO_BIN_EXE_sok"));
     command
         .arg("message")
         .arg("send")
+        .arg("--config-dir")
+        .arg(config)
         .args(args)
         .env_clear()
         .env("HOME", home)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    if let Some(surface) = surface {
-        command.env("SOKSAK_SURFACE", surface);
+    if let Some(thread) = thread {
+        command.env("CODEX_THREAD_ID", thread);
     }
     let output = command.output().expect("sok runs");
     (
@@ -61,11 +68,16 @@ fn entries(folder: &Path) -> Vec<String> {
 
 #[test]
 fn send_refuses_a_text_one_byte_over_the_limit_with_no_file() {
+    let player = play_case("sok-message-send-sender");
     let home = Folder::new("message-home");
     let folder = Folder::new("message-over-limit");
     let text = "a".repeat(LIMIT + 1);
-    let (status, stdout, stderr) =
-        run_send(&home, Some("app-1"), &["--reply", folder.text(), &text]);
+    let (status, stdout, stderr) = run_send(
+        &home,
+        &player.dir(),
+        None,
+        &["--reply", folder.text(), &text],
+    );
     assert_ne!(status, 0, "an oversized text must fail; stdout: {stdout}");
     assert!(
         stderr.contains("65536"),
@@ -80,11 +92,16 @@ fn send_refuses_a_text_one_byte_over_the_limit_with_no_file() {
 
 #[test]
 fn send_accepts_a_text_of_exactly_the_limit() {
+    let player = play_case("sok-message-send-sender");
     let home = Folder::new("message-home");
     let folder = Folder::new("message-at-limit");
     let text = "b".repeat(LIMIT);
-    let (status, stdout, stderr) =
-        run_send(&home, Some("app-1"), &["--reply", folder.text(), &text]);
+    let (status, stdout, stderr) = run_send(
+        &home,
+        &player.dir(),
+        None,
+        &["--reply", folder.text(), &text],
+    );
     assert_eq!(status, 0, "stdout: {stdout} stderr: {stderr}");
     let name = message_name(&stdout);
     let written = std::fs::read_to_string(folder.path().join(&name)).expect("message file");
@@ -93,6 +110,7 @@ fn send_accepts_a_text_of_exactly_the_limit() {
 
 #[test]
 fn send_writes_the_whole_text_under_the_sender_name_and_leaves_no_temporary_file() {
+    let player = play_case("sok-message-send-terminal");
     let home = Folder::new("message-home");
     let root = Folder::new("message-whole");
     terminal_folders(root.path(), &["app-2"]);
@@ -100,14 +118,15 @@ fn send_writes_the_whole_text_under_the_sender_name_and_leaves_no_temporary_file
     let text = "hello 안녕 terminal";
     let (status, stdout, stderr) = run_send(
         &home,
-        Some("app-1"),
+        &player.dir(),
+        None,
         &[folder.to_str().expect("folder"), text],
     );
     assert_eq!(status, 0, "stdout: {stdout} stderr: {stderr}");
     let name = message_name(&stdout);
     assert!(
         name.starts_with("app-1.") && name.ends_with(".txt"),
-        "the name must be <from>.<token>.txt with the sender of SOKSAK_SURFACE; name: {name}"
+        "the name must be <from>.<token>.txt with the sender that agent.surface answers; name: {name}"
     );
     let token = &name["app-1.".len()..name.len() - ".txt".len()];
     assert!(
@@ -133,13 +152,15 @@ fn send_writes_the_whole_text_under_the_sender_name_and_leaves_no_temporary_file
 
 #[test]
 fn send_reply_writes_the_text_alone_as_a_report() {
+    let player = play_case("sok-message-send-terminal");
     let home = Folder::new("message-home");
     let root = Folder::new("message-report");
     terminal_folders(root.path(), &["app-2"]);
     let folder = root.path().join(".soksak").join("messages").join("app-2");
     let (status, stdout, stderr) = run_send(
         &home,
-        Some("app-1"),
+        &player.dir(),
+        None,
         &["--reply", folder.to_str().expect("folder"), "done 안녕"],
     );
     assert_eq!(status, 0, "stdout: {stdout} stderr: {stderr}");
@@ -155,9 +176,10 @@ fn send_reply_writes_the_text_alone_as_a_report() {
 
 #[test]
 fn send_refuses_a_folder_of_no_terminal_without_reply_with_no_file() {
+    let player = play_case("sok-message-send-sender");
     let home = Folder::new("message-home");
     let folder = Folder::new("message-no-terminal");
-    let (status, stdout, stderr) = run_send(&home, Some("app-1"), &[folder.text(), "text"]);
+    let (status, stdout, stderr) = run_send(&home, &player.dir(), None, &[folder.text(), "text"]);
     assert_ne!(status, 0, "stdout: {stdout}");
     assert!(
         stderr.contains("is not the folder of a terminal"),
@@ -166,16 +188,49 @@ fn send_refuses_a_folder_of_no_terminal_without_reply_with_no_file() {
     assert!(entries(folder.path()).is_empty());
 }
 
+// contract: cli.message.send-requires-the-surface-of-its-process
 #[test]
 fn send_refuses_without_a_surface_with_no_file() {
     let home = Folder::new("message-home");
     let folder = Folder::new("message-no-surface");
-    let (status, stdout, stderr) = run_send(&home, None, &[folder.text(), "text"]);
-    assert_ne!(status, 0, "stdout: {stdout}");
-    assert!(
-        stderr.contains("message send requires SOKSAK_SURFACE"),
-        "the refusal must name the variable of the send; stderr: {stderr}"
+    let config = Folder::new("message-no-application");
+    let (status, stdout, stderr) = run_send(
+        &home,
+        config.text(),
+        None,
+        &["--reply", folder.text(), "text"],
     );
+    assert_eq!(
+        (status, stdout.as_str(), stderr.as_str()),
+        (
+            1,
+            "",
+            "sok: message send requires a running application, which answers the surface of this process\n"
+        ),
+        "without an application"
+    );
+    let refusal = "process 1 is not a process of a surface";
+    let player = play_case_with_text("sok-message-send-refused", "refusal", refusal);
+    let hint = "; start codex with --no-daemon, so that the commands of its agent run in processes of the surface";
+    for (thread, want) in [
+        (None, format!("sok: message send: {refusal}\n")),
+        (
+            Some("thread-1"),
+            format!("sok: message send: {refusal}{hint}\n"),
+        ),
+    ] {
+        let (status, stdout, stderr) = run_send(
+            &home,
+            &player.dir(),
+            thread,
+            &["--reply", folder.text(), "text"],
+        );
+        assert_eq!(
+            (status, stdout.as_str(), stderr),
+            (1, "", want),
+            "a refusal with CODEX_THREAD_ID {thread:?}"
+        );
+    }
     assert!(entries(folder.path()).is_empty());
 }
 
@@ -230,11 +285,8 @@ fn send_reports_the_hold_of_the_receiver() {
     ];
     for (surface, want) in wants {
         let path = folder(surface);
-        let (status, stdout, stderr) = run_send(
-            &home,
-            Some("t1"),
-            &["--config-dir", &dir, path.to_str().expect("path"), "hello"],
-        );
+        let (status, stdout, stderr) =
+            run_send(&home, &dir, None, &[path.to_str().expect("path"), "hello"]);
         assert_eq!(
             status, 0,
             "send to {surface}: stdout {stdout} stderr {stderr}"
@@ -247,11 +299,8 @@ fn send_reports_the_hold_of_the_receiver() {
         );
     }
     let path = folder("t5");
-    let (status, stdout, stderr) = run_send(
-        &home,
-        Some("t1"),
-        &["--config-dir", &dir, path.to_str().expect("path"), "hello"],
-    );
+    let (status, stdout, stderr) =
+        run_send(&home, &dir, None, &[path.to_str().expect("path"), "hello"]);
     let names = entries(&path);
     assert!(
         status == 1
@@ -264,44 +313,29 @@ fn send_reports_the_hold_of_the_receiver() {
         "a status without held: status {status} stdout {stdout:?} stderr {stderr:?} entries {names:?}"
     );
     let path = folder("gone");
-    let (status, stdout, stderr) = run_send(
-        &home,
-        Some("t1"),
-        &["--config-dir", &dir, path.to_str().expect("path"), "hello"],
-    );
+    let (status, stdout, stderr) =
+        run_send(&home, &dir, None, &[path.to_str().expect("path"), "hello"]);
     assert!(
         status == 0 && receiver(&stdout).is_null(),
         "a surface in no window: status {status} stdout {stdout:?} stderr {stderr:?}"
     );
 }
 
-// contract: cli.message.send-without-application-has-no-receiver
+// contract: cli.message.send-into-another-folder-has-no-receiver
 #[test]
-fn send_without_an_application_or_to_another_folder_has_no_receiver() {
+fn send_to_another_folder_has_no_receiver() {
+    let player = play_case_with_text("sok-message-send-sender", "sender", "t1");
     let home = Folder::new("message-home");
-    let config = Folder::new("message-config");
-    let root = Folder::new("message-root");
-    terminal_folders(root.path(), &["t2"]);
     let other = Folder::new("message-other");
-    for path in [
-        root.path().join(".soksak").join("messages").join("t2"),
-        other.path().to_path_buf(),
-    ] {
-        let (status, stdout, stderr) = run_send(
-            &home,
-            Some("t1"),
-            &[
-                "--config-dir",
-                config.text(),
-                "--reply",
-                path.to_str().expect("path"),
-                "hello",
-            ],
-        );
-        assert!(
-            status == 0 && receiver(&stdout).is_null(),
-            "send to {}: status {status} stdout {stdout:?} stderr {stderr:?}",
-            path.display()
-        );
-    }
+    let (status, stdout, stderr) = run_send(
+        &home,
+        &player.dir(),
+        None,
+        &["--reply", other.text(), "hello"],
+    );
+    assert!(
+        status == 0 && receiver(&stdout).is_null() && reply_path(&stdout).starts_with("t1.report-"),
+        "send to {}: status {status} stdout {stdout:?} stderr {stderr:?}",
+        other.text()
+    );
 }

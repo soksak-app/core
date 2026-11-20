@@ -1,0 +1,14 @@
+{
+  "name": "sok-message-send-sender",
+  "description": "sok message send asks agent.surface once and writes a message of the surface that it answers into a folder that is not the folder of a terminal, which asks no receiver.",
+  "replay": false,
+  "reason": "The case answers agent.surface with a surface and needs folders that the test creates, and the process of the sok that the test starts belongs to no surface of a running application, so agent.surface refuses it.",
+  "variables": {
+    "sender": { "type": "string", "example": "app-1" }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "agent.surface" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": { "surface": "$sender" } } },
+    { "close": "client" }
+  ]
+}

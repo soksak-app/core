@@ -8,7 +8,6 @@ pub fn run(args: &[&str]) -> (i32, String, String) {
         paths_dir: Ok(Path::new("/tmp")),
         core_version: "0.0.21",
         config_dir_variable: None,
-        surface_variable: None,
     };
     let code = soksak_sok::run(&args, &mut stdout, &mut stderr, &options);
     (

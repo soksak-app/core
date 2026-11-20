@@ -2,8 +2,14 @@
   "name": "mcp-tools-call-rejected",
   "description": "sok mcp answers a tools/call whose arguments are present, not null and no object with the JSON-RPC error -32602 arguments must be an object, a tools/call without params or without a string name with -32602 name must be a string, a request with a string that holds a lone surrogate escape, a member name or a value, with -32602 and the path of that string, and a tools/call of a tool that mcp.json does not list with the JSON-RPC error -32602 unknown tool and the name, each with the id of the call. A notification with such a string is reported on the standard error with the path and dropped, and a surrogate pair is a character. A line that is not valid JSON, and a ping line whose string holds the byte ff, which is not valid UTF-8, are answered with the JSON-RPC parse error -32700 and the id null, and so is a line nested 128 levels deep, while a line nested 127 levels deep reaches the library, which answers its unknown tool. None of them reaches the endpoint, and the server answers the next call.",
   "replay": false,
-  "reason": "The case has no endpoint frame: it holds the messages of the MCP protocol of the server.",
-  "steps": [],
+  "reason": "The case holds the messages of the MCP protocol of the server; its one endpoint frame answers agent.surface of the tool agent_context for a process outside every surface.",
+  "variables": {
+    "refusal": { "type": "string", "example": "process 1 is not a process of a surface: no parent process of it is a running sidecar of the application that started it for a surface" }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "agent.surface" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "error": { "code": 1014, "message": "$refusal" } } }
+  ],
   "mcp": {
     "steps": [
       { "client": { "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": { "protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": { "name": "case", "version": "0" } } }, "server": { "jsonrpc": "2.0", "id": 1, "result": { "protocolVersion": "2025-11-25" } } },

@@ -53,7 +53,7 @@ MCP server `sok mcp`([MCP server](../../cli.ko.md#mcp-server))의 case는 멤버
 | 멤버 | 필수 | 의미 |
 | --- | --- | --- |
 | `arguments` | 아니오 | `sok mcp --config-dir <case의 디렉터리>` 뒤에 오는 인자. 예: `["--window", "main"]`. |
-| `environment` | 아니오 | Server 환경의 variable. 예: `{"SOKSAK_SURFACE": "terminal-1"}`. 빈 값은 variable을 빈 값으로 정한다. |
+| `environment` | 아니오 | Server 환경의 variable. 예: `{"CODEX_THREAD_ID": "thread-1"}`. 빈 값은 variable을 빈 값으로 정한다. |
 | `endpoint` | 아니오 | `"later"`이면 case의 endpoint를 step `start`에서야 시작하므로, server는 먼저 application 없이 실행된다. |
 | `steps` | 예 | client의 순서 있는 step. |
 

@@ -4,6 +4,7 @@
   "replay": false,
   "reason": "The command fixture.do exists only in the fixture of this case, and the window check application does not declare it.",
   "variables": {
+    "refusal": { "type": "string", "example": "process 1 is not a process of a surface: no parent process of it is a running sidecar of the application that started it for a surface" },
     "exposures": {
       "type": "object",
       "keys": ["status", "commands", "element"],
@@ -23,20 +24,24 @@
     }
   },
   "steps": [
-    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
-    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "main", "title": "t", "project": null, "key": false, "ready": true }] } },
-    { "send": { "jsonrpc": "2.0", "id": 2, "method": "exposure.list", "params": { "window": "main" } } },
-    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$exposures" } },
-    { "send": { "jsonrpc": "2.0", "id": 3, "method": "command.run", "params": { "name": "fixture.do", "params": { "choice": "two", "count": 1.5, "flag": true, "list": [1], "maybe": null, "object": { "a": 1 }, "text": "--x", "whole": 3 }, "surface": "tab-1", "window": "main" } } },
-    { "reply": { "jsonrpc": "2.0", "id": 3, "result": { "name": "fixture.do", "params": { "choice": "two", "count": 1.5, "flag": true, "list": [1], "maybe": null, "object": { "a": 1 }, "text": "--x", "whole": 3 }, "surface": "tab-1", "window": "main" } } },
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "agent.surface" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "error": { "code": 1014, "message": "$refusal" } } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": [{ "window": "main", "title": "t", "project": null, "key": false, "ready": true }] } },
+    { "send": { "jsonrpc": "2.0", "id": 3, "method": "exposure.list", "params": { "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 3, "result": "$exposures" } },
+    { "send": { "jsonrpc": "2.0", "id": 4, "method": "command.run", "params": { "name": "fixture.do", "params": { "choice": "two", "count": 1.5, "flag": true, "list": [1], "maybe": null, "object": { "a": 1 }, "text": "--x", "whole": 3 }, "surface": "tab-1", "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 4, "result": { "name": "fixture.do", "params": { "choice": "two", "count": 1.5, "flag": true, "list": [1], "maybe": null, "object": { "a": 1 }, "text": "--x", "whole": 3 }, "surface": "tab-1", "window": "main" } } },
     { "close": "client" },
 
-    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
-    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "main", "title": "t", "project": null, "key": false, "ready": true }] } },
-    { "send": { "jsonrpc": "2.0", "id": 2, "method": "exposure.list", "params": { "window": "main" } } },
-    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$exposures" } },
-    { "send": { "jsonrpc": "2.0", "id": 3, "method": "command.run", "params": { "name": "fixture.do", "params": { "text": "x" }, "window": "main" } } },
-    { "reply": { "jsonrpc": "2.0", "id": 3, "result": { "name": "fixture.do", "params": { "text": "x" }, "window": "main" } } },
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "agent.surface" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "error": { "code": 1014, "message": "$refusal" } } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": [{ "window": "main", "title": "t", "project": null, "key": false, "ready": true }] } },
+    { "send": { "jsonrpc": "2.0", "id": 3, "method": "exposure.list", "params": { "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 3, "result": "$exposures" } },
+    { "send": { "jsonrpc": "2.0", "id": 4, "method": "command.run", "params": { "name": "fixture.do", "params": { "text": "x" }, "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 4, "result": { "name": "fixture.do", "params": { "text": "x" }, "window": "main" } } },
     { "close": "client" }
   ]
 }

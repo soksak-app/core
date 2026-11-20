@@ -160,7 +160,6 @@ fn run_replay_with(entrance: Entrance, config: &Path, args: &[&str]) -> (String,
         paths_dir: Err("not used".to_string()),
         core_version: "0.0.2",
         config_dir_variable: None,
-        surface_variable: None,
     };
     let code = entrance(&all, &mut stdout, &mut stderr, &options);
     (

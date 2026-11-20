@@ -40,9 +40,9 @@ use tokio::io::{
 use tokio::sync::{mpsc, oneshot};
 
 use crate::agent_window::{
-    DESCRIBE_DEFAULT_LIMIT, DESCRIBE_MAX_LIMIT, SurfaceHome, agent_context, compact_raw,
-    describe_entry, describe_request, is_kind, key_window, lone_surrogate, project_window,
-    read_exposure, read_windows, search_exposure, surface_window,
+    DESCRIBE_DEFAULT_LIMIT, DESCRIBE_MAX_LIMIT, SurfaceHome, agent_context, agent_home,
+    compact_raw, describe_entry, describe_request, is_kind, key_window, lone_surrogate,
+    project_window, read_exposure, read_windows, search_exposure,
 };
 use crate::endpoint::{Client, Failure, Reader, read_endpoint};
 use crate::event_log::Level;
@@ -290,8 +290,6 @@ struct Server {
     /// The [window] of the start.
     window: Option<String>,
     project: Option<String>,
-    /// The surface of `SOKSAK_SURFACE`.
-    own: Option<String>,
     stderr: mpsc::UnboundedSender<String>,
     next_waiter: AtomicU64,
     state: Mutex<ServerState>,
@@ -517,29 +515,29 @@ impl Server {
     }
 
     /// The window of a call: its window argument, else the [window] of the start, else the window of the surface that
-    /// `SOKSAK_SURFACE` names, else the key window of windows.list, else its first window (docs/spec/cli.md#mcp-server). It returns
-    /// the window and the space of the agent's surface too when it asked for them, so a description does not ask twice.
+    /// `agent.surface` answers for the process of the server, else the key window of windows.list, else its first window
+    /// (docs/spec/cli.md#mcp-server). It returns the home of the agent's surface too and whether it asked `agent.surface`, so a
+    /// description does not ask twice.
     fn select_window(
         &self,
         connection: &Connection,
         args: &ToolArguments,
-    ) -> Result<(String, Option<SurfaceHome>), Failure> {
+    ) -> Result<(String, Option<SurfaceHome>, bool), Failure> {
         let mut request = |method: &str, params: Option<Value>| connection.request(method, params);
         if args.has("window") {
-            return Ok((args.text("window").to_string(), None));
+            return Ok((args.text("window").to_string(), None, false));
         }
         if let Some(window) = &self.window {
-            return Ok((window.clone(), None));
+            return Ok((window.clone(), None, false));
         }
         if let Some(project) = &self.project {
             let windows = read_windows(&mut request)?;
-            return Ok((project_window(&windows, project)?, None));
+            return Ok((project_window(&windows, project)?, None, false));
         }
-        if let Some(own) = &self.own {
-            let home = surface_window(&mut request, own)?;
-            return Ok((home.window.clone(), Some(home)));
+        if let Some(home) = agent_home(&mut request)? {
+            return Ok((home.window.clone(), Some(home), true));
         }
-        Ok((key_window(&mut request)?, None))
+        Ok((key_window(&mut request)?, None, true))
     }
 
     /// Runs one tool up to its result, or up to the wait of a watch.
@@ -562,19 +560,6 @@ impl Server {
             }
             _ => {}
         }
-        let own = self.own.as_deref();
-        if name == "agent_context" && own.is_none() {
-            let mut unused = |_: &str, _: Option<Value>| -> Answer {
-                Err(Failure::Other(
-                    "agent_context without a surface sends no request".into(),
-                ))
-            };
-            return Ok(Prepared::Done(agent_context(
-                &mut unused,
-                &self.config_dir,
-                None,
-            )?));
-        }
         let connection = self.endpoint()?;
         let mut request = |method: &str, params: Option<Value>| connection.request(method, params);
         let passed = |answer: Answer| -> Result<Prepared, Failure> {
@@ -586,7 +571,6 @@ impl Server {
                 return Ok(Prepared::Done(agent_context(
                     &mut request,
                     &self.config_dir,
-                    own,
                 )?));
             }
             _ => {}
@@ -594,7 +578,7 @@ impl Server {
         if let Some(operation) = name.strip_prefix("messages_") {
             return messages_call(&connection, operation, args);
         }
-        let (window, home) = self.select_window(&connection, args)?;
+        let (window, home, asked) = self.select_window(&connection, args)?;
         // The params of an endpoint request: the window and each named argument of the call that is present, with the text that
         // the agent wrote without the white space between its tokens.
         let with = |names: &[&str]| -> Result<BTreeMap<String, Box<RawValue>>, Failure> {
@@ -618,7 +602,7 @@ impl Server {
                 &mut request,
                 &window,
                 home,
-                own,
+                asked,
                 args.text("surface"),
                 args.values.get("full") == Some(&Value::Bool(true)),
                 args.text("after"),
@@ -1544,7 +1528,6 @@ pub(crate) fn run(a: &Arguments, stderr: &mut dyn Write, options: &Options) -> R
         config_dir: config_dir.display().to_string(),
         window,
         project,
-        own: options.surface().map(String::from),
         stderr: lines,
         next_waiter: AtomicU64::new(0),
         state: Mutex::new(ServerState {

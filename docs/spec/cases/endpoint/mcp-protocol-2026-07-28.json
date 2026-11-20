@@ -2,8 +2,14 @@
   "name": "mcp-protocol-2026-07-28",
   "description": "sok mcp answers the revision 2026-07-28, whose requests carry the revision, the client and its capabilities in _meta: server/discover names the two revisions and the tools capability without listChanged, and tools/list and tools/call answer without an initialize. A member that the case does not state is the library's own.",
   "replay": false,
-  "reason": "The case has no endpoint frame: it holds the messages of the MCP protocol of the server.",
-  "steps": [],
+  "reason": "The case holds the messages of the MCP protocol of the server; its one endpoint frame answers agent.surface of the tool agent_context for a process outside every surface.",
+  "variables": {
+    "refusal": { "type": "string", "example": "process 1 is not a process of a surface: no parent process of it is a running sidecar of the application that started it for a surface" }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "agent.surface" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "error": { "code": 1014, "message": "$refusal" } } }
+  ],
   "mcp": {
     "steps": [
       { "client": { "jsonrpc": "2.0", "id": 1, "method": "server/discover", "params": { "_meta": { "io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientInfo": { "name": "case", "version": "0" }, "io.modelcontextprotocol/clientCapabilities": {} } } }, "server": { "jsonrpc": "2.0", "id": 1, "result": { "supportedVersions": ["2026-07-28", "2025-11-25"], "capabilities": { "tools": {} }, "instructions": "$instructions", "_meta": { "io.modelcontextprotocol/serverInfo": { "name": "soksak", "version": "$version" } } } } },

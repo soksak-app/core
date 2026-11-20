@@ -14,13 +14,10 @@ use serde_json::Value;
 use serde_json::value::RawValue;
 
 use crate::endpoint::{Client, Failure};
-use crate::{Arguments, Error, Options, indent, select_window};
+use crate::{Arguments, Error, indent};
 
 /// The variable that names the configuration directory of the application whose surface started the process.
 pub const CONFIG_DIR_VARIABLE: &str = "SOKSAK_CONFIG_DIR";
-
-/// The variable that names the surface whose process started the agent.
-pub const SURFACE_VARIABLE: &str = "SOKSAK_SURFACE";
 
 /// Sends one endpoint request and returns its result as JSON text.
 pub type Requester<'a> = dyn FnMut(&str, Option<Value>) -> Result<String, Failure> + 'a;
@@ -257,16 +254,57 @@ impl<'de> serde::Deserialize<'de> for OrderedMembers {
     }
 }
 
-/// The answer of `surface.window` for the surface that `SOKSAK_SURFACE` names: the error of a surface in no window (1012) names
-/// the variable, because a request of an agent never falls back to another window.
-fn no_window_text(surface: &str) -> String {
-    format!("{SURFACE_VARIABLE} names surface {surface}, which is in no window of the application")
+/// The endpoint error of `agent.surface` for a process that belongs to no surface (docs/spec/sidecars.md#process-identity).
+pub const NO_SURFACE_OF: i64 = 1014;
+
+/// The answer of `agent.surface` for the process of this sok: its surface, or the text of the refusal 1014 of a process that belongs
+/// to no surface.
+pub enum OwnSurface {
+    Surface(String),
+    Refused(String),
 }
 
-/// The answer of `surface.window`: the window and the space whose layout holds a surface; the space is None for a section surface
-/// that a sidebar of the window draws, which no space holds.
+/// Asks the endpoint for the surface of the process of this sok with `agent.surface` (docs/spec/sidecars.md#process-identity).
+pub fn own_surface(request: &mut Requester) -> Result<OwnSurface, Failure> {
+    let result = match request("agent.surface", None) {
+        Err(Failure::Endpoint {
+            code: NO_SURFACE_OF,
+            message,
+        }) => return Ok(OwnSurface::Refused(message)),
+        other => other?,
+    };
+    #[derive(serde::Deserialize)]
+    struct Answer {
+        surface: String,
+    }
+    match serde_json::from_str::<Answer>(&result) {
+        Ok(answer) if !answer.surface.is_empty() => Ok(OwnSurface::Surface(answer.surface)),
+        _ => Err(Failure::Other(format!(
+            "agent.surface returned an unexpected value: {result}"
+        ))),
+    }
+}
+
+/// Asks `agent.surface` and, for a surface, `surface.window`: the home of the surface of this process, or None when `agent.surface`
+/// refuses with 1014 (docs/spec/cli.md#the-window-of-an-agent).
+pub fn agent_home(request: &mut Requester) -> Result<Option<SurfaceHome>, Failure> {
+    match own_surface(request)? {
+        OwnSurface::Refused(_) => Ok(None),
+        OwnSurface::Surface(surface) => Ok(Some(surface_window(request, &surface)?)),
+    }
+}
+
+/// The error of an own surface that is in no window (1012 of `surface.window`), because a request of an agent never falls back to
+/// another window.
+fn no_window_text(surface: &str) -> String {
+    format!("surface {surface} of this process is in no window of the application")
+}
+
+/// A surface with the answer of `surface.window`: the window and the space whose layout holds it; the space is None for a section
+/// surface that a sidebar of the window draws, which no space holds.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SurfaceHome {
+    pub surface: String,
     pub window: String,
     pub space: Option<String>,
 }
@@ -304,7 +342,11 @@ pub fn surface_window(request: &mut Requester, surface: &str) -> Result<SurfaceH
             serde_json::from_str::<Option<String>>(value.get()).map_err(|_| unexpected())?
         }
     };
-    Ok(SurfaceHome { window, space })
+    Ok(SurfaceHome {
+        surface: surface.to_string(),
+        window,
+        space,
+    })
 }
 
 /// One window of `windows.list`.
@@ -391,20 +433,15 @@ pub fn key_window(request: &mut Requester) -> Result<String, Failure> {
         .ok_or_else(|| Failure::Other("the application has no window".into()))
 }
 
-/// `{configDirectory, surface, window}` of the tool agent_context: the surface of `SOKSAK_SURFACE` and its window, or null for both
-/// without it. Without the surface it sends no request.
-pub fn agent_context(
-    request: &mut Requester,
-    config_dir: &str,
-    surface: Option<&str>,
-) -> Result<String, Failure> {
+/// `{configDirectory, surface, window}` of `sok context` and the tool agent_context: the surface that `agent.surface` answers and its
+/// window, or null for both when `agent.surface` refuses with 1014.
+pub fn agent_context(request: &mut Requester, config_dir: &str) -> Result<String, Failure> {
     let mut context = Object::new();
     context.insert("configDirectory".into(), raw(config_dir)?);
     context.insert("surface".into(), null());
     context.insert("window".into(), null());
-    if let Some(surface) = surface {
-        let home = surface_window(request, surface)?;
-        context.insert("surface".into(), raw(surface)?);
+    if let Some(home) = agent_home(request)? {
+        context.insert("surface".into(), raw(&home.surface)?);
         context.insert("window".into(), raw(&home.window)?);
     }
     encode(&context)
@@ -1200,33 +1237,30 @@ fn describe_window(
     encode(&page)
 }
 
-/// Asks for the window and the space of the agent's surface when they are not known yet, then for the snapshot, and writes the page.
-/// own is the surface of `SOKSAK_SURFACE`; home is its window and space when the caller asked for them already.
+/// Asks for the agent's surface and its window and space when asked tells that the caller did not ask `agent.surface`, then for the
+/// snapshot, and writes the page. The own surface of a window given by name may be in no window, which leaves the agent null.
 #[allow(clippy::too_many_arguments)]
 pub fn describe_request(
     request: &mut Requester,
     window: &str,
     home: Option<SurfaceHome>,
-    own: Option<&str>,
+    asked: bool,
     surface: &str,
     full: bool,
     after: &str,
     limit: usize,
 ) -> Result<String, Failure> {
-    let mut agent = None;
-    if let Some(own) = own {
-        let mut home = home;
-        if home.is_none() {
-            match surface_window(request, own) {
-                Ok(found) => home = Some(found),
-                Err(Failure::Other(text)) if text == no_window_text(own) => {}
-                Err(failure) => return Err(failure),
-            }
-        }
-        if let Some(home) = home.filter(|home| home.window == window) {
-            agent = Some((own, home.space));
+    let mut home = home;
+    if !asked && let OwnSurface::Surface(own) = own_surface(request)? {
+        match surface_window(request, &own) {
+            Ok(found) => home = Some(found),
+            Err(Failure::Other(text)) if text == no_window_text(&own) => {}
+            Err(failure) => return Err(failure),
         }
     }
+    let agent = home
+        .filter(|home| home.window == window)
+        .map(|home| (home.surface, home.space));
     let mut params = serde_json::json!({ "window": window });
     if !surface.is_empty() {
         params["surface"] = Value::String(surface.to_string());
@@ -1245,7 +1279,7 @@ pub fn describe_request(
                 .unwrap_or_default();
             Some(agent_place(
                 parts.get("layout").map(AsRef::as_ref),
-                own,
+                &own,
                 space.as_deref(),
             )?)
         }
@@ -1258,7 +1292,6 @@ pub fn describe_request(
 pub(crate) fn run_agent_view(
     a: &Arguments,
     stdout: &mut dyn Write,
-    options: &Options,
     connect: &mut dyn FnMut() -> Result<Client, Error>,
 ) -> Option<Result<(), Error>> {
     // default: a run without a positional names no view command and continues to the command dispatch, which reports it.
@@ -1277,14 +1310,13 @@ pub(crate) fn run_agent_view(
         }
         return None;
     }
-    Some(view(command, a, stdout, options, connect))
+    Some(view(command, a, stdout, connect))
 }
 
 fn view(
     command: &str,
     a: &Arguments,
     stdout: &mut dyn Write,
-    options: &Options,
     connect: &mut dyn FnMut() -> Result<Client, Error>,
 ) -> Result<(), Error> {
     if a.positionals.len() > 1 {
@@ -1313,7 +1345,7 @@ fn view(
             })? as usize;
     }
     let mut client = connect()?;
-    let outcome = view_with(command, a, kind, limit, options, &mut client);
+    let outcome = view_with(command, a, kind, limit, &mut client);
     // When the command succeeded, the code also reports the result of closing the connection. When it failed, that failure is the result.
     let closed = client.close();
     let out = outcome?;
@@ -1329,24 +1361,10 @@ fn view_with(
     a: &Arguments,
     kind: &str,
     limit: usize,
-    options: &Options,
     client: &mut Client,
 ) -> Result<String, Error> {
-    // The window of the agent's surface is asked once for a description, and its answer gives the space of the agent too.
-    let home = match options.surface() {
-        Some(own)
-            if command == "describe"
-                && !a.values.contains_key("window")
-                && !a.values.contains_key("project") =>
-        {
-            Some(crate::surface_window(client, own)?)
-        }
-        _ => None,
-    };
-    let window = match &home {
-        Some(home) => home.window.clone(),
-        None => select_window(a, client, options.surface())?,
-    };
+    // The window of the agent's surface is asked once, and its answer gives the space of the agent too.
+    let (window, home, asked) = crate::select_window_home(a, client)?;
     let mut request = |method: &str, params: Option<Value>| {
         client.request(method, params, &mut |_: &str, _: &RawValue| Ok(()))
     };
@@ -1357,7 +1375,7 @@ fn view_with(
             &mut request,
             &window,
             home,
-            options.surface(),
+            asked,
             text("surface"),
             a.flag("full"),
             text("after"),

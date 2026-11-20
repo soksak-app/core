@@ -1,5 +1,5 @@
 //! Checks the window of an agent (docs/spec/cli.md#the-window-of-an-agent): `SOKSAK_CONFIG_DIR` names the configuration directory,
-//! `SOKSAK_SURFACE` selects the window of its surface, `sok context` prints both, and a sok hands its command to the sok of the
+//! the surface that `agent.surface` answers selects its window, `sok context` prints both, and a sok hands its command to the sok of the
 //! application of `SOKSAK_CONFIG_DIR`. The endpoint tests play the cases of docs/spec/cases/endpoint with the case player.
 
 use std::path::{Path, PathBuf};
@@ -21,12 +21,7 @@ use folder::Folder;
 
 /// Runs sok in this process with the variables of an agent, and returns the status and the outputs. `logged` runs it with the
 /// record of the tool; two such runs of one process in one second would name the same event file, so one test uses it.
-fn run_with(
-    logged: bool,
-    args: &[&str],
-    config_dir: Option<&str>,
-    surface: Option<&str>,
-) -> (i32, String, String) {
+fn run_with(logged: bool, args: &[&str], config_dir: Option<&str>) -> (i32, String, String) {
     let args: Vec<String> = args.iter().map(|arg| arg.to_string()).collect();
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
     let paths = PathBuf::from("/nonexistent-paths.d");
@@ -35,7 +30,6 @@ fn run_with(
         paths_dir: Ok(&paths),
         core_version: "0.0.2",
         config_dir_variable: config_dir,
-        surface_variable: surface,
     };
     let code = if logged {
         soksak_sok::run_logged(&args, &mut stdout, &mut stderr, &options)
@@ -49,8 +43,8 @@ fn run_with(
     )
 }
 
-fn run(args: &[&str], config_dir: Option<&str>, surface: Option<&str>) -> (i32, String, String) {
-    run_with(false, args, config_dir, surface)
+fn run(args: &[&str], config_dir: Option<&str>) -> (i32, String, String) {
+    run_with(false, args, config_dir)
 }
 
 /// The events of the event files of the configuration directory, in the order of the files and their lines.
@@ -91,7 +85,7 @@ fn config_dir_variable_names_the_directory() {
     let dir = player.dir();
     policy::store_every_level(Path::new(&dir));
     // The first connection of the case: two windows and no selection end the command before its method.
-    let (code, _, stderr) = run_with(true, &["status", "core.screen"], Some(&dir), None);
+    let (code, _, stderr) = run_with(true, &["status", "core.screen"], Some(&dir));
     assert_eq!(code, 2, "{stderr}");
     assert!(
         stderr.starts_with("sok: the application has 2 windows (main, project-a); select one with --window or --project\n"),
@@ -111,24 +105,19 @@ fn config_dir_variable_names_the_directory() {
             &dir,
         ],
         Some(other.text()),
-        None,
     );
     assert_eq!((code, stderr.as_str()), (0, ""));
     assert!(!other.path().join("logs").exists());
     drop(player);
 }
 
-// contract: cli.window.surface-variable-selects-its-window
+// contract: cli.window.own-surface-selects-its-window
 #[test]
-fn surface_variable_selects_its_window() {
+fn own_surface_selects_its_window() {
     let player = play_case("sok-surface-window");
     let dir = player.dir();
     for window in ["project-a", "main"] {
-        let (code, stdout, stderr) = run(
-            &["status", "core.screen", "--config-dir", &dir],
-            None,
-            Some("terminal-1"),
-        );
+        let (code, stdout, stderr) = run(&["status", "core.screen", "--config-dir", &dir], None);
         assert_eq!((code, stderr.as_str()), (0, ""), "{window}: {stdout}");
     }
     let (code, _, stderr) = run(
@@ -141,15 +130,25 @@ fn surface_variable_selects_its_window() {
             &dir,
         ],
         None,
-        Some("terminal-1"),
     );
     assert_eq!((code, stderr.as_str()), (0, ""));
-    let (code, _, stderr) = run(
-        &["status", "core.screen", "--config-dir", &dir],
-        None,
-        Some(""),
-    );
+    let (code, _, stderr) = run(&["status", "core.screen", "--config-dir", &dir], None);
     assert_eq!((code, stderr.as_str()), (0, ""));
+    assert_eq!(
+        player.methods(),
+        [
+            "agent.surface",
+            "surface.window",
+            "status.get",
+            "agent.surface",
+            "surface.window",
+            "status.get",
+            "status.get",
+            "agent.surface",
+            "windows.list",
+            "status.get"
+        ]
+    );
     drop(player);
 }
 
@@ -158,17 +157,13 @@ fn surface_variable_selects_its_window() {
 fn surface_in_no_window_fails() {
     let player = play_case("sok-surface-in-no-window");
     let dir = player.dir();
-    let (code, stdout, stderr) = run(
-        &["status", "core.screen", "--config-dir", &dir],
-        None,
-        Some("terminal-9"),
-    );
+    let (code, stdout, stderr) = run(&["status", "core.screen", "--config-dir", &dir], None);
     assert_eq!(
         (code, stdout.as_str(), stderr.as_str()),
         (
             1,
             "",
-            "sok: SOKSAK_SURFACE names surface terminal-9, which is in no window of the application\n"
+            "sok: surface terminal-9 of this process is in no window of the application\n"
         )
     );
     drop(player);
@@ -179,22 +174,34 @@ fn surface_in_no_window_fails() {
 fn context_prints_the_agent_context() {
     let player = play_case("sok-context");
     let dir = player.dir();
-    let (code, stdout, stderr) = run(&["context"], Some(&dir), Some("terminal-1"));
+    let (code, stdout, stderr) = run(&["context"], Some(&dir));
     assert_eq!((code, stderr.as_str()), (0, ""));
     assert_eq!(
         serde_json::from_str::<Value>(&stdout).expect("context"),
         serde_json::json!({"configDirectory": dir, "surface": "terminal-1", "window": "project-a"})
     );
-    drop(player);
-    let config = Folder::new("context-none");
-    let (code, stdout, stderr) = run(&["context"], Some(config.text()), None);
-    assert_eq!((code, stderr.as_str()), (0, ""));
+    let (code, stdout, stderr) = run(&["context"], Some(&dir));
+    assert_eq!((code, stderr.as_str()), (0, ""), "a process of no surface");
     assert_eq!(
         stdout,
         format!(
-            "{{\n  \"configDirectory\": \"{}\",\n  \"surface\": null,\n  \"window\": null\n}}\n",
-            config.text()
+            "{{\n  \"configDirectory\": \"{dir}\",\n  \"surface\": null,\n  \"window\": null\n}}\n"
         )
+    );
+    drop(player);
+    let config = Folder::new("context-none");
+    let (code, stdout, stderr) = run(&["context"], Some(config.text()));
+    assert_eq!(
+        (code, stdout.as_str(), stderr),
+        (
+            1,
+            "",
+            format!(
+                "sok: {}/endpoint.json does not exist; the application is not running\n",
+                config.text()
+            )
+        ),
+        "without an application"
     );
 }
 
@@ -265,12 +272,10 @@ fn hands_the_command_to_the_application_sok() {
         .to_string(),
     )
     .expect("endpoint.json");
-    let (code, stdout, stderr) = run_sok(&running, &["context"], &variables);
+    // plugin list reads only the configuration directory, so the handed command succeeds without a running application.
+    let (code, handed, stderr) = run_sok(&running, &["plugin", "list"], &variables);
     assert_eq!((code, stderr.as_str()), (0, ""));
-    assert_eq!(
-        serde_json::from_str::<Value>(&stdout).expect("context"),
-        serde_json::json!({"configDirectory": config_text, "surface": null, "window": null})
-    );
+    assert!(!handed.is_empty());
     let recorded = events(&config);
     let exec = named(&recorded, "sok.exec");
     assert_eq!(exec.len(), 1, "{recorded:?}");
@@ -290,7 +295,7 @@ fn hands_the_command_to_the_application_sok() {
         "{}",
         exec[0]
     );
-    // The first run stored its failed status command; the handed-over context stores its command twice with the status 0, once
+    // The first run stored its failed status command; the handed-over plugin list stores its command twice with the status 0, once
     // from the sok that handed over and once from the application sok.
     let commands = named(&recorded, "sok.command");
     let statuses: Vec<(Value, Value)> = commands
@@ -306,18 +311,18 @@ fn hands_the_command_to_the_application_sok() {
         statuses,
         vec![
             (Value::from("status"), Value::from(1)),
-            (Value::from("context"), Value::from(0)),
-            (Value::from("context"), Value::from(0))
+            (Value::from("plugin"), Value::from(0)),
+            (Value::from("plugin"), Value::from(0))
         ],
         "{recorded:?}"
     );
     // With --config-dir no replacement happens.
-    let (code, _, stderr) = run_sok(
+    let (code, stdout, stderr) = run_sok(
         &running,
-        &["context", "--config-dir", &config_text],
+        &["plugin", "list", "--config-dir", &config_text],
         &variables,
     );
-    assert_eq!((code, stderr.as_str()), (0, ""));
+    assert_eq!((code, stdout, stderr.as_str()), (0, handed, ""));
     assert_eq!(named(&events(&config), "sok.exec").len(), 1);
 }
 
@@ -367,7 +372,7 @@ fn describe_prints_the_pages_of_window_describe() {
         ];
         args.extend(describe_flags(&step["arguments"]));
         let args: Vec<&str> = args.iter().map(String::as_str).collect();
-        let (code, stdout, stderr) = run(&args, None, Some("terminal-1"));
+        let (code, stdout, stderr) = run(&args, None);
         match step["error"].as_str() {
             Some("limit must be an integer from 1 to 500") => assert!(
                 code == 2
@@ -402,7 +407,7 @@ fn describe_prints_the_pages_of_window_describe() {
         if !after.is_empty() {
             args.extend(["--after", &after]);
         }
-        let (code, stdout, stderr) = run(&args, None, Some("terminal-1"));
+        let (code, stdout, stderr) = run(&args, None);
         let printed: Value = serde_json::from_str(&stdout).unwrap_or_else(|error| {
             panic!("page {page}: code {code} stdout {stdout:?} stderr {stderr:?}: {error}")
         });
@@ -434,7 +439,7 @@ fn describe_prints_the_pages_of_window_describe() {
             "unregistered command browser.reload",
         ]
     );
-    assert_eq!(player.methods().len(), 20, "{:?}", player.methods());
+    assert_eq!(player.methods().len(), 30, "{:?}", player.methods());
 }
 
 // contract: cli.exposures.query-filters-entries
@@ -511,7 +516,7 @@ fn a_query_keeps_the_entries_that_hold_each_word() {
     ] {
         let mut all: Vec<&str> = args.to_vec();
         all.extend(["--config-dir", &config]);
-        let (code, stdout, stderr) = run(&all, None, None);
+        let (code, stdout, stderr) = run(&all, None);
         assert!(
             code == 0 && stderr.is_empty(),
             "{args:?}: code {code} stdout {stdout:?} stderr {stderr:?}"
@@ -520,7 +525,6 @@ fn a_query_keeps_the_entries_that_hold_each_word() {
     }
     let (code, stdout, stderr) = run(
         &["exposures", "--kind", "screen", "--config-dir", &config],
-        None,
         None,
     );
     assert!(
@@ -541,7 +545,7 @@ fn describe_refuses_a_lone_surrogate_escape() {
     );
     let player = play_case_with_raw("sok-describe-lone-surrogate", "snapshot", snapshot);
     let config = player.dir();
-    let (code, stdout, stderr) = run(&["describe", "--config-dir", &config], None, None);
+    let (code, stdout, stderr) = run(&["describe", "--config-dir", &config], None);
     assert!(
         code == 1
             && stdout.is_empty()
@@ -573,7 +577,7 @@ fn context_takes_only_the_configuration_directory() {
             "sok: context takes only --config-dir\n",
         ),
     ] {
-        let (code, stdout, stderr) = run(&args, Some(config.text()), None);
+        let (code, stdout, stderr) = run(&args, Some(config.text()));
         assert!(
             code == 2 && stdout.is_empty() && stderr.starts_with(want),
             "{args:?}: code {code} stdout {stdout:?} stderr {stderr:?}"
@@ -585,7 +589,7 @@ fn context_takes_only_the_configuration_directory() {
 #[test]
 fn describe_summary_holds_summary_statuses_and_full_holds_every_status() {
     let player = play_case("sok-describe-summary-and-full");
-    let (_, summary, stderr) = run(&["describe", "--config-dir", &player.dir()], None, None);
+    let (_, summary, stderr) = run(&["describe", "--config-dir", &player.dir()], None);
     assert!(
         summary.contains("\"probe.busy\""),
         "summary lacks the summary status: {stderr} {summary}"
@@ -594,11 +598,7 @@ fn describe_summary_holds_summary_statuses_and_full_holds_every_status() {
         !summary.contains("\"probe.detail\""),
         "summary holds a status that is not a summary: {summary}"
     );
-    let (_, full, stderr) = run(
-        &["describe", "--full", "--config-dir", &player.dir()],
-        None,
-        None,
-    );
+    let (_, full, stderr) = run(&["describe", "--full", "--config-dir", &player.dir()], None);
     assert!(
         full.contains("\"probe.detail\"") && full.contains("\"probe.busy\""),
         "full lacks the tab statuses: {stderr} {full}"
