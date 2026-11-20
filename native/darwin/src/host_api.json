@@ -73,6 +73,7 @@
     "main_sp_region_raster",
     "main_sp_region_surface_placed",
     "main_sp_region_text",
+    "main_sp_region_want_frame",
     "main_sp_screens",
     "main_sp_surface_close",
     "main_sp_surface_create",

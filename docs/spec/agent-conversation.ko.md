@@ -65,6 +65,8 @@ Codex는 `<home>/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`에 쓴다. 각 파�
 | `--agent`가 `claude-code` 또는 `codex`가 아니다 | `unknown agent <agent>` |
 | `--cwd`가 절대 경로가 아니다 | `cwd is not an absolute path: <cwd>` |
 | `HOME`이 설정되지 않았거나 비어 있다 | `HOME is not set` |
+| `HOME`에 UTF-8이 아닌 byte가 있다 | `HOME is not UTF-8: <escaped>` |
+| reader가 나열하는 folder의 항목 이름에 UTF-8이 아닌 byte가 있다 | `<escaped>: the path is not UTF-8`, 전체 path |
 | 어느 후보도 작업 디렉터리와 일치하지 않는다 | `no <agent> session file has the working directory <cwd>` |
 | 후보 또는 선택된 파일을 읽을 수 없다 | `<path>: <reason>`, 운영체제 사유를 소문자로 쓴다 |
 | 후보 또는 선택된 파일의 한 줄이 JSON 객체가 아니다 | `<path>: line <n> is not a JSON object` |
@@ -74,7 +76,7 @@ Codex는 `<home>/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`에 쓴다. 각 파�
 | `claude-code` text 블록의 `text`, 또는 `codex` 항목 중 타입이 `input_text` 또는 `output_text`인 항목의 `text`가 문자열이 아니다 | `<path>: line <n> has a text that is not a string` |
 | `claude-code` 또는 `codex` 메시지의 content 항목이 문자열 `type`을 가진 JSON 객체가 아니다 | `<path>: line <n> has a content item that is not an object with a string type` |
 
-`<n>`은 빈 줄을 포함한 파일의 물리 줄 번호다.
+`<n>`은 빈 줄을 포함한 파일의 물리 줄 번호다. `<escaped>`는 0x20부터 0x7e까지의 byte 중 `\`가 아닌 것은 그대로, `\`는 `\\`로, 그 밖의 모든 byte는 `\x`와 소문자 16진 숫자 두 개로 쓴다. 그래서 UTF-8이 아닌 path는 바뀐 문자로 쓰이지 않고 그 byte와 함께 거부되며, 출력과 메시지의 다른 모든 path는 UTF-8이므로 그대로 쓰인다.
 
 ## 담당 패키지
 

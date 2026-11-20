@@ -48,6 +48,18 @@ test("hook files and extensionless scripts are checked, and other extensionless 
   }), [".githooks/commit-msg:2", "scripts/run-tool:2"]);
 });
 
+test("bash and zsh scripts are checked by their extension or the name of a zsh start file", () => {
+  assert.deepEqual(scan({
+    "src/shell-integration/bash-integration.bash": "_soksak_mark() {\n  # 표시를 보낸다\n  printf '# 문자열'\n}\n",
+    "src/shell-integration/zsh-integration.zsh": "# 훅을 설치한다\n",
+    "src/shell-integration/zshenv": "# 시작 파일을 읽는다\n",
+    "src/shell-integration/.zshrc": "# 설정\n",
+  }), [
+    "src/shell-integration/bash-integration.bash:2", "src/shell-integration/zsh-integration.zsh:1",
+    "src/shell-integration/zshenv:1", "src/shell-integration/.zshrc:1",
+  ]);
+});
+
 test("a Rust lifetime does not start a string", () => {
   assert.deepEqual(comments("a.rs", "fn f<'a>(x: &'a str) {} // returns the slice\n").map((item) => item.line), [1]);
 });

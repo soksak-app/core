@@ -65,6 +65,8 @@ Each refusal is an explicit error with exit status 1. Nothing is dropped silentl
 | `--agent` is not `claude-code` or `codex` | `unknown agent <agent>` |
 | `--cwd` is not an absolute path | `cwd is not an absolute path: <cwd>` |
 | `HOME` is not set or empty | `HOME is not set` |
+| `HOME` holds bytes that are not UTF-8 | `HOME is not UTF-8: <escaped>` |
+| The name of an entry of a folder that the reader lists holds bytes that are not UTF-8 | `<escaped>: the path is not UTF-8`, the whole path |
 | No candidate matches the working directory | `no <agent> session file has the working directory <cwd>` |
 | A candidate or the chosen file cannot be read | `<path>: <reason>`, the operating system reason in lower case |
 | A line of a candidate or of the chosen file is not a JSON object | `<path>: line <n> is not a JSON object` |
@@ -74,7 +76,7 @@ Each refusal is an explicit error with exit status 1. Nothing is dropped silentl
 | A `text` of a `claude-code` text block, or of a `codex` item of type `input_text` or `output_text`, is not a string | `<path>: line <n> has a text that is not a string` |
 | A content item of a `claude-code` or `codex` message is not a JSON object with a string `type` | `<path>: line <n> has a content item that is not an object with a string type` |
 
-`<n>` counts the physical lines of the file, blank lines included.
+`<n>` counts the physical lines of the file, blank lines included. `<escaped>` writes each byte from 0x20 to 0x7e other than `\` as itself, `\` as `\\`, and every other byte as `\x` with two lowercase hexadecimal digits, so that a path that is not UTF-8 is refused with its bytes instead of being written with replaced characters; every other path of the output and of the messages is then UTF-8 and is written as it is.
 
 ## Owning package
 

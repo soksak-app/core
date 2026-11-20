@@ -1648,6 +1648,17 @@ pub struct OutdatedSidecar {
     pub sessions: usize,
 }
 
+/// The folder of the host executable, where the application bundle holds sok, which the environment of every sidecar puts
+/// first on PATH (docs/spec/sidecars.md#processes-of-a-surface).
+pub fn sok_folder() -> Result<PathBuf, String> {
+    let executable =
+        std::env::current_exe().map_err(|error| format!("host executable: {error}"))?;
+    executable
+        .parent()
+        .map(Path::to_path_buf)
+        .ok_or_else(|| format!("host executable {} has no folder", executable.display()))
+}
+
 /// Sets the environment of a sidecar: base, the environment of the login shell, without SOKSAK_SURFACE, with SOKSAK_CONFIG_DIR set
 /// to the configuration directory, whatever values of both base holds, and with the folder of the host executable, where the
 /// application bundle holds sok, first on PATH and in no other entry (docs/spec/sidecars.md#processes-of-a-surface). Without a base,
@@ -1657,11 +1668,8 @@ fn sidecar_environment(
     config_directory: &Path,
     base: Option<std::collections::BTreeMap<String, String>>,
 ) -> Result<(), String> {
-    let executable =
-        std::env::current_exe().map_err(|error| format!("host executable: {error}"))?;
-    let folder = executable
-        .parent()
-        .ok_or_else(|| format!("host executable {} has no folder", executable.display()))?;
+    let folder = sok_folder()?;
+    let folder = folder.as_path();
     let inherited = match base {
         Some(base) => {
             command.env_clear().envs(&base);

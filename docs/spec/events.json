@@ -3847,6 +3847,28 @@
       },
       "description": "The host could not bring the agent skill current after it read the environment of the login shell, one event for each failure: file is the skill file that it could not write and reason the error of the system, or file is null when the environment or the agent folders could not be read (docs/spec/cli.md#agents-in-the-application)."
     },
+    "host.sidecar.path": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "folder": {
+            "type": "string"
+          },
+          "sok": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "folder",
+          "sok"
+        ]
+      },
+      "description": "The host created the channel of its installed sidecars at its start: folder is the folder of the host executable, which the environment of every sidecar puts first on PATH, and sok is the sok of the application bundle in that folder (docs/spec/sidecars.md#processes-of-a-surface)."
+    },
     "host.sidecar.restart-limit": {
       "layer": "host",
       "class": "lifecycle",

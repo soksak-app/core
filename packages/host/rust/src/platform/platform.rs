@@ -902,6 +902,10 @@ pub trait Platform: CoreRootHost + Send + Sync {
     fn text_image(&self, image: Handle, utf8: &str) -> Result<(), String>;
     /// Removes the image region. event is not called afterwards. Call it on the main thread.
     fn close_image(&self, image: Handle) -> Result<(), String>;
+    /// Asks for the next display frame of the window of the image region, which the region reports to its event as
+    /// {"type":"frame","refreshRate":N}, or with a null refreshRate at once for a window on no screen. A request while one
+    /// waits asks nothing more (docs/spec/native-surfaces.md#copy-path-frames). Call it on the main thread.
+    fn want_image_frame(&self, image: Handle) -> Result<(), String>;
 
     // Surface placement
 

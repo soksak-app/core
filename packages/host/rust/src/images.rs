@@ -99,8 +99,6 @@ struct Inner {
     /// Whether the window is occluded or minimized; the host reads it from AppKit before it attaches a region and at each
     /// change (docs/spec/native-surfaces.md#image-regions).
     off_screen: bool,
-    /// The ticks of the window clock; each call of Images::tick is one tick.
-    clock_sequence: u64,
     /// Whether the regions of the window draw while it is not on screen. Only the diagnostic method
     /// diagnostics.window.draw-covered sets it (images_draw_covered.rs); a build without the diagnostics feature has no such
     /// state.
@@ -278,6 +276,11 @@ struct RasterState {
     screen_request: Option<ScreenRequest>,
     /// The generation and the raster of the screen that the host accepted last: the baseline of the rows of the next request.
     screen_baseline: Option<(u64, u64)>,
+    /// Whether a frame request asked the native region for the display frame that it reports, whether a read request waits for it,
+    /// and the ticks of the region (docs/spec/native-surfaces.md#copy-path-frames).
+    frame_wanted: bool,
+    frame_read: bool,
+    frame_sequence: u64,
 }
 
 /// The raster, its size and the sequence number to which a frame that a supplier sent belongs.
@@ -329,8 +332,9 @@ pub struct ScreenRequest {
     pub sidecar: String,
 }
 
-/// The clock tick of a drawing region (docs/spec/native-surfaces.md#copy-path-frames). The sequence counts the ticks of the window
-/// clock from 1, and the refresh rate is the value that the caller read at the tick.
+/// The answer to the frame request of a drawing region at a display frame of its window (docs/spec/native-surfaces.md#copy-path-frames).
+/// The sequence counts the ticks of the region from 1 for each attachment, and the refresh rate is that of the screen that showed the
+/// window at that display frame.
 #[derive(Clone, Debug, Serialize)]
 pub struct Tick {
     pub name: String,
@@ -342,6 +346,46 @@ pub struct Tick {
     pub key: Key,
     #[serde(skip)]
     pub sidecar: String,
+}
+
+/// The answer of the display frame of a frame request: the tick, or no_screen for a read request of a window on no screen, which has
+/// no display frame (docs/spec/native-surfaces.md#copy-path-frames). The tick names the region and its supplier in both cases.
+#[derive(Clone, Debug)]
+pub struct Frame {
+    pub tick: Tick,
+    pub no_screen: bool,
+}
+
+impl Frame {
+    /// Returns the image message of the answer to the supplier; window is the window identifier of the endpoint, which the refusal
+    /// noScreen names.
+    pub fn body(&self, window: &str) -> serde_json::Value {
+        if self.no_screen {
+            return serde_json::json!({ "image": { "want": {
+                "error": "noScreen", "name": self.tick.name, "generation": self.tick.generation,
+                "purpose": FramePurpose::Read.name(), "window": window,
+            } } });
+        }
+        serde_json::json!({ "image": { "tick": &self.tick } })
+    }
+}
+
+/// The purpose of a frame request: a draw of the region, or a read that counts display frames
+/// (docs/spec/native-surfaces.md#copy-path-frames).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FramePurpose {
+    Draw,
+    Read,
+}
+
+impl FramePurpose {
+    /// Returns the wire name of the purpose.
+    pub fn name(self) -> &'static str {
+        match self {
+            FramePurpose::Draw => "draw",
+            FramePurpose::Read => "read",
+        }
+    }
 }
 
 /// The age of a user input at which its screen request is sent at once (docs/spec/native-surfaces.md#copy-path-frames).
@@ -380,35 +424,84 @@ pub struct Drawing {
 }
 
 impl Images {
-    /// Advances the window clock by one tick and returns the tick of each drawing region, sorted by surface and name.
-    /// refresh_rate is the refresh rate of the screen of the window that the caller read for this tick.
-    pub fn tick(&self, refresh_rate: u32) -> Vec<Tick> {
+    /// Answers the frame request of sender for a region (docs/spec/native-surfaces.md#copy-path-frames). It returns the refusal reason,
+    /// notAttached when sender does not own the attached region and stale when generation is not the current one, or Ok with whether
+    /// the caller asks the native region for one display frame: the region waits for no display frame yet, and it is drawing or the
+    /// request is a read. A request while one waits and a draw request for a region that is not drawing ask nothing.
+    pub fn want_frame(
+        &self,
+        key: &Key,
+        sender: &str,
+        generation: u64,
+        purpose: FramePurpose,
+    ) -> Result<bool, &'static str> {
         let mut guard = self.lock();
         let inner = &mut *guard;
-        inner.clock_sequence += 1;
-        let sequence = inner.clock_sequence;
-        let mut ticks = Vec::new();
-        for (key, state) in &inner.states {
-            let Some(sidecar) = inner.sidecars.get(key) else {
-                continue;
-            };
-            // default: the address of a region that is not registered is 0, the same as a region that is not attached.
-            if inner.handles.get(key).copied().unwrap_or_default() == 0
-                || !inner.drawing(key, state)
-            {
-                continue;
-            }
-            ticks.push(Tick {
-                name: key.1.clone(),
-                generation: state.generation,
-                sequence,
-                refresh_rate,
-                key: key.clone(),
-                sidecar: sidecar.clone(),
-            });
+        // default: the address of a region that is not registered is 0, the same as a region that is not attached.
+        let attached = inner.handles.get(key).copied().unwrap_or_default() != 0;
+        let sender_matches = inner.sidecars.get(key).is_some_and(|owner| owner == sender);
+        let Some(state) = inner.states.get(key) else {
+            return Err("notAttached");
+        };
+        if !attached || !sender_matches {
+            return Err("notAttached");
         }
-        ticks.sort_by(|a, b| a.key.cmp(&b.key));
-        ticks
+        if generation != state.generation {
+            return Err("stale");
+        }
+        let read = purpose == FramePurpose::Read;
+        if !read && !inner.drawing(key, state) {
+            return Ok(false);
+        }
+        let Some(state) = inner.states.get_mut(key) else {
+            return Err("notAttached");
+        };
+        state.frame_read |= read;
+        if state.frame_wanted {
+            return Ok(false);
+        }
+        state.frame_wanted = true;
+        Ok(true)
+    }
+
+    /// Ends the frame requests of a region at the display frame that the native region reported, and returns the answer: the tick of
+    /// the region when it is drawing or a read request waited, or the refusal noScreen of a waiting read request when refresh_rate is
+    /// None. refresh_rate is the refresh rate that the native region read, or None for a window on no screen, which has no display
+    /// frame and sends no tick.
+    pub fn frame_tick(&self, key: &Key, refresh_rate: Option<u32>) -> Option<Frame> {
+        let mut guard = self.lock();
+        let inner = &mut *guard;
+        let state = inner.states.get_mut(key)?;
+        let read = state.frame_read;
+        state.frame_wanted = false;
+        state.frame_read = false;
+        let sidecar = inner.sidecars.get(key)?.clone();
+        let state = inner.states.get(key)?;
+        if !read && (refresh_rate.is_none() || !inner.drawing(key, state)) {
+            return None;
+        }
+        let state = inner.states.get_mut(key)?;
+        let mut tick = Tick {
+            name: key.1.clone(),
+            generation: state.generation,
+            sequence: 0,
+            refresh_rate: 0,
+            key: key.clone(),
+            sidecar,
+        };
+        let Some(refresh_rate) = refresh_rate else {
+            return Some(Frame {
+                tick,
+                no_screen: true,
+            });
+        };
+        state.frame_sequence += 1;
+        tick.sequence = state.frame_sequence;
+        tick.refresh_rate = refresh_rate;
+        Some(Frame {
+            tick,
+            no_screen: false,
+        })
     }
 
     /// Returns a screen request for each drawing region that has no unanswered request, sorted by surface and name, and
@@ -1468,6 +1561,38 @@ fn send_released(
     })
 }
 
+/// Ends the frame requests of a region at the display frame that the native region reported, and sends their answer to the supplier:
+/// the tick, or the refusal noScreen of a read request of a window on no screen, which names the window
+/// (docs/spec/native-surfaces.md#copy-path-frames). refresh_rate is the refresh rate of the report, null for a window
+/// on no screen. The send does not wait for the sidecar connection, so the main thread that reports the frame sends it.
+fn send_frame_tick(
+    window: &crate::framework::Window,
+    key: &Key,
+    refresh_rate: Option<&serde_json::Value>,
+) -> Result<(), String> {
+    let refresh_rate = match refresh_rate {
+        None | Some(serde_json::Value::Null) => None,
+        Some(value) => {
+            let invalid = || format!("the display frame has no valid refresh rate: {value}");
+            let rate = value.as_u64().ok_or_else(invalid)?;
+            Some(u32::try_from(rate).map_err(|_| invalid())?)
+        }
+    };
+    let Some(data) = crate::windows::window_data_if_registered(window) else {
+        // The window closed after the frame was requested; its supplier ended the surface, so no tick is sent.
+        return Ok(());
+    };
+    let Some(frame) = data.images.frame_tick(key, refresh_rate) else {
+        return Ok(());
+    };
+    let body = serde_json::value::to_raw_value(&frame.body(window.label()))
+        .map_err(|error| error.to_string())?;
+    window
+        .state::<WindowSidecars>()
+        .send(window, &frame.tick.sidecar, &key.0, &body)
+        .map_err(|error| format!("image {:?} tick: {error}", frame.tick.name))
+}
+
 /// Creates the image region of key in its surface and returns the handle. Call it on the main thread.
 fn create(
     window: &crate::framework::Window,
@@ -1479,6 +1604,7 @@ fn create(
     let surface = surface_handle(window, &key.0)?;
     let (surface_id, name) = key.clone();
     let host = window.clone();
+    let frame_window = window.clone();
     let event_name = name.clone();
     // A region in the lease mode tells its supplier each surface that it stops holding
     // (docs/spec/native-surfaces.md#image-regions). The native region reports it on the main thread, and the message is
@@ -1522,6 +1648,11 @@ fn create(
         let result = (|| {
             let event: serde_json::Value = serde_json::from_str(&json)
                 .map_err(|error| format!("{event_surface}/{event_name}: {error}"))?;
+            if event.get("type").and_then(serde_json::Value::as_str) == Some("frame") {
+                let key = (event_surface.clone(), event_name.clone());
+                return send_frame_tick(&frame_window, &key, event.get("refreshRate"))
+                    .map_err(|error| format!("{event_surface}/{event_name}: {error}"));
+            }
             crate::event_record::record_input_relay(&event_surface, &event_name, &json);
             // Every event of a native region is recorded with its whole body before it is relayed
             // (docs/spec/diagnostics.md). It writes nothing while the performance trace is off.
@@ -1807,6 +1938,19 @@ pub enum Decision {
         text: String,
         echo: serde_json::Map<String, serde_json::Value>,
     },
+    /// The frame request of a supplier for a region.
+    FrameRequest {
+        name: String,
+        generation: u64,
+        purpose: FramePurpose,
+    },
+    /// A frame request with a missing or mistyped member. Member names it, text states it, and name is the name of the region, or None
+    /// when the request has no valid name.
+    MalformedFrameRequest {
+        member: String,
+        text: String,
+        name: Option<String>,
+    },
     /// The image to display.
     Present {
         id: u32,
@@ -1944,6 +2088,56 @@ fn decide_screen(screen: &serde_json::Value) -> Decision {
     }
 }
 
+/// Validates the members of a frame request in their order: name, generation and purpose, which is draw when it is absent. A null
+/// value is mistyped.
+fn decide_want(want: &serde_json::Value) -> Decision {
+    let malformed =
+        |member: &str, text: &str, name: Option<&str>| Decision::MalformedFrameRequest {
+            member: member.to_string(),
+            text: text.to_string(),
+            name: name.map(str::to_string),
+        };
+    let Some(members) = want.as_object() else {
+        return malformed("want", "image frame request has no want object", None);
+    };
+    let Some(name) = members
+        .get("name")
+        .and_then(serde_json::Value::as_str)
+        .filter(|name| !name.is_empty())
+    else {
+        return malformed("name", "image frame request has no image name", None);
+    };
+    let Some(generation) = members
+        .get("generation")
+        .and_then(serde_json::Value::as_u64)
+    else {
+        return malformed(
+            "generation",
+            "image frame request has no valid generation",
+            Some(name),
+        );
+    };
+    let purpose = match members.get("purpose") {
+        None => FramePurpose::Draw,
+        Some(value) => match value.as_str() {
+            Some("draw") => FramePurpose::Draw,
+            Some("read") => FramePurpose::Read,
+            _ => {
+                return malformed(
+                    "purpose",
+                    "image frame request has a purpose that is neither draw nor read",
+                    Some(name),
+                );
+            }
+        },
+    };
+    Decision::FrameRequest {
+        name: name.to_string(),
+        generation,
+        purpose,
+    }
+}
+
 /// Returns the members that identify a screen request, as the host answers them.
 fn screen_echo(
     request: &str,
@@ -1975,6 +2169,9 @@ pub fn decide(body_str: &str, sender: &str, surface: &str, images: &Images) -> D
         return Decision::NotImage;
     };
 
+    if let Some(want) = image_val.get("want") {
+        return decide_want(want);
+    }
     if let Some(screen) = image_val.get("screen") {
         return decide_screen(screen);
     }
@@ -2240,6 +2437,72 @@ where
             log_answer_error(
                 &format!("image screen {name}"),
                 send_response(&name, serde_json::json!({ "image": { "screen": screen } })),
+            );
+            true
+        }
+        Decision::FrameRequest {
+            name,
+            generation,
+            purpose,
+        } => {
+            let key = (surface.to_string(), name.clone());
+            let ask = match images.want_frame(&key, sender, generation, purpose) {
+                Ok(ask) => ask,
+                Err(reason) => {
+                    log_answer_error(
+                        &format!("image want {name}"),
+                        send_response(
+                            &name,
+                            serde_json::json!({ "image": { "want": {
+                                "error": reason, "name": name, "generation": generation,
+                            } } }),
+                        ),
+                    );
+                    return true;
+                }
+            };
+            if !ask {
+                return true;
+            }
+            let requested = images.get(&key).and_then(|handle| {
+                on_main(Box::new(move || {
+                    platform::current()?.want_image_frame(handle)
+                }))
+            });
+            if let Err(error) = requested {
+                // The native region asked for no display frame, so the request ends here and the next request asks again.
+                images.frame_tick(&key, None);
+                log_error(
+                    &format!("image want {name}"),
+                    format!(
+                        "surface={surface} sender={sender} the display frame was not requested: {error}"
+                    ),
+                );
+            }
+            true
+        }
+        Decision::MalformedFrameRequest { member, text, name } => {
+            let Some(name) = name else {
+                log_error(
+                    "image want",
+                    format!(
+                        "surface={surface} sender={sender} {text}; the message names no image, so no answer is sent"
+                    ),
+                );
+                return true;
+            };
+            log_error(
+                "image want",
+                format!("surface={surface} sender={sender} {text}"),
+            );
+            log_answer_error(
+                &format!("image want {name}"),
+                send_response(
+                    &name,
+                    serde_json::json!({ "image": { "want": {
+                        "error": "malformed", "member": member, "name": name,
+                    } } }),
+                ),
             );
             true
         }

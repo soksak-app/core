@@ -517,7 +517,10 @@ Items:
 | `images.invalidate.sidecar-connection-loss-resends-configure` | Invalidating a sidecar's images re-sends its configure at the same size and leaves other sidecars' images untouched. | all |
 | `images.copy-path.screen-request` | A drawing region receives a screen request while none of its requests is unanswered, and receives no new request until the host answers the one it holds or that request ends. | all |
 | `images.copy-path.screen-request-ends` | An unanswered screen request ends without an answer at a new generation, at a new raster and at the end of the supplier connection, which also drops the accepted screen; the next request is `full: true`, and a message that answers the ended request is `stale`. | all |
-| `images.copy-path.clock-tick` | Each drawing region receives one tick at each tick of the window clock, with its sequence and the refresh rate of the window; a region that is not drawing receives no tick. | all |
+| `images.copy-path.frame-request-tick` | A frame request of the owner of a drawing region asks the native region for one display frame, and a second request before the tick asks nothing more; the display frame sends one tick with the sequence of the region from 1 and the refresh rate that the native region read, and a display frame without a refresh rate sends no tick and ends the request. | all |
+| `images.copy-path.frame-request-refused` | A frame request from a sender that does not own the region is answered `notAttached`, one of a generation that is not current `stale`, and a request for a region that is not drawing asks no display frame. | all |
+| `images.copy-path.frame-request-malformed` | A frame request with a missing, mistyped or `null` `generation` is answered `error` with `malformed` and `member`, and a request without a valid `name` is consumed with no answer and one error record that states that no answer is sent. | all |
+| `images.copy-path.frame-request-read` | A frame request with `purpose` `read` asks the native region for one display frame also for a region that is not drawing and while the window is occluded, and its display frame sends the tick; a read request and a draw request that wait together ask one display frame and receive one tick; the display frame of a read request without a refresh rate is answered `error` with `noScreen`, `purpose` `read` and `window`, the window identifier of the endpoint; a `purpose` that is neither `draw` nor `read` is answered `malformed` with `member` `purpose`. | all |
 | `images.copy-path.input-draw` | A user input that reaches a drawing region with no unanswered request sends the screen request at once, carrying the correlation identifiers of the input. | all |
 | `images.copy-path.screen-answer-accepted` | A screen message of the supplier that answers the unanswered request of a region is answered `accepted` over the wire, ends the request, and makes its rows the baseline of the next request. | all |
 | `images.copy-path.screen-answer-refused` | A screen message with an out-of-date generation, raster or request identifier, or from a sender that does not own the region, is answered `stale` or `notAttached` and leaves the unanswered request unanswered. | all |
@@ -1463,11 +1466,13 @@ Items:
 | `conversation.reads-an-unchosen-file-only-to-its-session-record` | A candidate file that is not chosen is read only up to its session record, so a malformed line after that record is not read. | all |
 | `conversation.refuses-a-relative-cwd` | A `--cwd` that is not an absolute path is refused with `cwd is not an absolute path: <cwd>`. | all |
 | `conversation.refuses-a-session-working-directory-that-is-not-a-string` | A session file whose working directory is missing or not a string is refused with the working directory message. | all |
+| `conversation.refuses-a-home-that-is-not-utf-8` | A `HOME` whose bytes are not UTF-8 is refused with `HOME is not UTF-8: <escaped>`, which shows its bytes escaped. | all |
 | `conversation.refuses-an-unknown-agent` | An agent that is neither `claude-code` nor `codex` is refused with `unknown agent <agent>`. | all |
 | `conversation.refuses-an-unreadable-file-with-its-reason` | A candidate or chosen file that cannot be read is refused with its path and the operating system reason in lower case. | all |
 | `conversation.refuses-when-no-file-matches` | When no candidate matches the working directory, the read is refused with `no <agent> session file has the working directory <cwd>`. | all |
 | `conversation.selects-the-most-recently-modified-file` | When two or more candidates match, the most recently modified file is chosen. | all |
 | `sidecars.environment.sok-folder-first-on-path` | A sidecar process starts with the folder of the sok application first on PATH, and that folder appears in no other PATH entry. | all |
+| `sidecars.environment.start-records-the-sok-folder` | The start of the sidecar channel of the installed sidecars records one event `host.sidecar.path` at the level `info` whose `folder` is the folder of the host executable and whose `sok` is the `sok` in that folder. | all |
 
 ## Workbench cases
 

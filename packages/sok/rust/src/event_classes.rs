@@ -84,6 +84,7 @@ pub fn class_of(name: &str) -> Option<Class> {
         "host.sidecar.disconnect" => Some(Class::Lifecycle),
         "host.sidecar.exit" => Some(Class::Lifecycle),
         "host.sidecar.first_output" => Some(Class::Lifecycle),
+        "host.sidecar.path" => Some(Class::Lifecycle),
         "host.sidecar.reply" => Some(Class::Io),
         "host.sidecar.request" => Some(Class::Io),
         "host.sidecar.restart-limit" => Some(Class::Lifecycle),

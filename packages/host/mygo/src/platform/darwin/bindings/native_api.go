@@ -742,6 +742,16 @@ func Functions(library uintptr) (abi.NativeFunctions, error) {
 		purego.RegisterFunc(&functions.MainSpRegionText, address)
 	}
 	{
+		address, err := purego.Dlsym(library, "main_sp_region_want_frame")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_region_want_frame: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_region_want_frame: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.MainSpRegionWantFrame, address)
+	}
+	{
 		address, err := purego.Dlsym(library, "main_sp_screens")
 		if err != nil {
 			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_screens: %w", err)

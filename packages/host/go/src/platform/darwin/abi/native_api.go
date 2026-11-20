@@ -189,6 +189,7 @@ type NativeFunctions struct {
 	MainSpRegionRaster                     func(unsafe.Pointer, *float64) bool
 	MainSpRegionSurfacePlaced              func(unsafe.Pointer) bool
 	MainSpRegionText                       func(unsafe.Pointer, *byte)
+	MainSpRegionWantFrame                  func(unsafe.Pointer)
 	MainSpScreens                          func() *byte
 	MainSpSurfaceClose                     func(unsafe.Pointer)
 	MainSpSurfaceCreate                    func(uintptr) unsafe.Pointer
@@ -514,6 +515,9 @@ func (functions NativeFunctions) Validate() error {
 	}
 	if functions.MainSpRegionText == nil {
 		return fmt.Errorf("native API function is missing: main_sp_region_text")
+	}
+	if functions.MainSpRegionWantFrame == nil {
+		return fmt.Errorf("native API function is missing: main_sp_region_want_frame")
 	}
 	if functions.MainSpScreens == nil {
 		return fmt.Errorf("native API function is missing: main_sp_screens")

@@ -42,6 +42,7 @@ var eventClasses = map[string]Class{
 	"host.sidecar.disconnect":                ClassLifecycle,
 	"host.sidecar.exit":                      ClassLifecycle,
 	"host.sidecar.first_output":              ClassLifecycle,
+	"host.sidecar.path":                      ClassLifecycle,
 	"host.sidecar.reply":                     ClassIo,
 	"host.sidecar.request":                   ClassIo,
 	"host.sidecar.restart-limit":             ClassLifecycle,

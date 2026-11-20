@@ -120,7 +120,7 @@ export function loadLines(text) {
   return text.split("\n").filter((line) => /^(Load Avg|CPU usage):/.test(line)).map((line) => line.trim());
 }
 
-async function readLoad() {
+export async function readLoad() {
   const result = await execute("top", ["-l", "1", "-n", "0"]);
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`top exited with ${result.status}: ${String(result.stderr).trim()}`);
@@ -142,13 +142,13 @@ export function intervalFigures({ measurement, actions }) {
 }
 
 /** Reads presentedFrames of the region of `tab` in the window of `s` and the host.window value. */
-async function presented(s, tab) {
+export async function presented(s, tab) {
   const status = await s.get("host.window");
   return { frames: presentedFramesOf(status, tab, s.window), status };
 }
 
 /** Gives the image region of `tab` the native keyboard of the virtual key window, as a person who presses it does. */
-async function focusRegion(s, tab) {
+export async function focusRegion(s, tab) {
   const region = (await s.get("host.window")).regions.find((item) => item.surface === tab);
   if (!region?.frame) throw new Error(`the image region of ${tab} has no frame`);
   const x = region.frame.x + region.frame.width / 2;
@@ -164,7 +164,7 @@ async function focusRegion(s, tab) {
  * does not watch it, because the host sends a watcher of host.window a new value for each presented frame, which the measurement would
  * count as a cost of the key.
  */
-async function untilPresented(s, tab, before, periodMs) {
+export async function untilPresented(s, tab, before, periodMs) {
   for (let read = 0; read < 1000; read++) {
     const { frames } = await presented(s, tab);
     if (frames > before) return frames;
@@ -200,7 +200,7 @@ async function prepareText(s, plugin, root) {
  * occlusion of the window, runs `span` or waits `seconds`, and reads them again. Returns the measurement with `load`, `presented` and
  * `occluded`, the occlusion of the window at the start and at the end.
  */
-async function interval({ s, tab, sok, configDir, footprints, seconds, span }) {
+export async function interval({ s, tab, sok, configDir, footprints, seconds, span }) {
   let load;
   const measurement = await measureApps({
     sok, configDirs: [configDir], interval: seconds ?? 1, footprints, span,
@@ -217,7 +217,7 @@ async function interval({ s, tab, sok, configDir, footprints, seconds, span }) {
 }
 
 /** Clears the line of the shell with Control-U. */
-async function clearLine(s) {
+export async function clearLine(s) {
   await s.key("u", "down", { modifiers: ["control"] });
   await s.key("u", "up", { modifiers: ["control"] });
 }
@@ -262,13 +262,18 @@ async function measureAmount({ s, sok, configDir, plugin, tab, root, amount, wri
   return result;
 }
 
-async function measureText({ sok, configDir, plugin, amounts, frames, keys }) {
+/**
+ * Connects to the application of `configDir`, sets the trace state 0, opens the window and the tab of `plugin` on a new project folder
+ * (prepareText), gives the tab the keyboard (focusRegion) and runs `body` with `{s, tab}`, the session of the window and the tab.
+ * Afterwards it closes the project and the window and removes the folder, also when `body` failed; a failed cleanup is reported with
+ * the failure of `body`. Returns the value of `body`.
+ */
+export async function withTerminalTab({ configDir, plugin, prefix }, body) {
   const client = await connect({ configDir });
-  const root = mkdtempSync(join(tmpdir(), "terminal-text-project-"));
-  writeFileSync(join(root, TEXT_FILE), "");
+  const root = mkdtempSync(join(tmpdir(), prefix));
   const s = new Session({ name: basename(configDir), configDir }, client);
   let prepared = null;
-  const results = [];
+  let value;
   let failure = null;
   try {
     const windows = await client.request("windows.list");
@@ -277,11 +282,7 @@ async function measureText({ sok, configDir, plugin, amounts, frames, keys }) {
     await applyTrace((name, params) => s.run(name, params), 0, configDir, { ended: s.client.ended });
     prepared = await prepareText(s, plugin, root);
     await focusRegion(prepared.s, prepared.tab);
-    let written = 0;
-    for (const amount of amounts) {
-      results.push(await measureAmount({ s: prepared.s, sok, configDir, plugin, tab: prepared.tab, root, amount, written, frames, keys }));
-      written = amount;
-    }
+    value = await body({ s: prepared.s, tab: prepared.tab, root });
   } catch (error) {
     failure = error;
   }
@@ -301,6 +302,20 @@ async function measureText({ sok, configDir, plugin, amounts, frames, keys }) {
   const errors = [failure, ...cleanup].filter((error) => error !== null);
   if (errors.length > 1) throw new AggregateError(errors, errors.map((error) => error.message).join("; "));
   if (errors.length === 1) throw errors[0];
+  return value;
+}
+
+async function measureText({ sok, configDir, plugin, amounts, frames, keys }) {
+  const results = await withTerminalTab({ configDir, plugin, prefix: "terminal-text-project-" }, async ({ s, tab, root }) => {
+    writeFileSync(join(root, TEXT_FILE), "");
+    const measured = [];
+    let written = 0;
+    for (const amount of amounts) {
+      measured.push(await measureAmount({ s, sok, configDir, plugin, tab, root, amount, written, frames, keys }));
+      written = amount;
+    }
+    return measured;
+  });
   return { plugin, frames, keys, results };
 }
 

@@ -76,6 +76,9 @@ func runConversation(args []string, stdout io.Writer) error {
 	if home == "" {
 		return fmt.Errorf("HOME is not set")
 	}
+	if !utf8.ValidString(home) {
+		return fmt.Errorf("HOME is not UTF-8: %s", escapedBytes(home))
+	}
 	file, messages, skipped, err := readConversation(agent, home, cwd)
 	if err != nil {
 		return err
@@ -217,7 +220,11 @@ func listFolder(folder string) ([]string, error) {
 	}
 	paths := make([]string, 0, len(entries))
 	for _, entry := range entries {
-		paths = append(paths, filepath.Join(folder, entry.Name()))
+		path := filepath.Join(folder, entry.Name())
+		if !utf8.ValidString(path) {
+			return nil, fmt.Errorf("%s: the path is not UTF-8", escapedBytes(path))
+		}
+		paths = append(paths, path)
 	}
 	return paths, nil
 }
@@ -517,4 +524,22 @@ func codexMessages(path string, records []numberedRecord) ([]any, int, error) {
 		}
 	}
 	return messages, skipped, nil
+}
+
+// escapedBytes writes bytes for a message: each byte from 0x20 to 0x7e other than `\` as itself, `\` as `\\`, and every other
+// byte as `\x` with two lowercase hexadecimal digits (docs/spec/agent-conversation.md#refusals).
+func escapedBytes(text string) string {
+	var out strings.Builder
+	for index := 0; index < len(text); index++ {
+		b := text[index]
+		switch {
+		case b == '\\':
+			out.WriteString(`\\`)
+		case b >= 0x20 && b <= 0x7e:
+			out.WriteByte(b)
+		default:
+			fmt.Fprintf(&out, `\x%02x`, b)
+		}
+	}
+	return out.String()
 }
