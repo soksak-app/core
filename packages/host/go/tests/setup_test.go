@@ -231,6 +231,8 @@ func TestSetupReadsTheLoginShellEnvironmentAndBringsTheSkillCurrent(t *testing.T
 		"skill | " + filepath.Join(h.home, ".claude", "skills", "soksak", "SKILL.md") + " | ok |  | " + step + " skill install",
 		"skill | " + differing + " | ok |  | " + step + " skill install",
 		"mcp | " + filepath.Join(h.config, ".claude.json") + " | missing | absent | " + step + " mcp install",
+		"hook | " + filepath.Join(h.home, ".claude", "settings.json") + " | missing | absent | " + step + " setup install hook",
+		"hook | " + filepath.Join(h.config, "settings.json") + " | missing | absent | " + step + " setup install hook",
 	}
 	// The path entry applies on macOS; it stands first and names the bundle.
 	if len(parts.Parts) > 0 && parts.Parts[0].Part == "path" {
@@ -356,7 +358,8 @@ func TestSetupInstallsTheSkillAndTheRegistrationOneAtATime(t *testing.T) {
 			states = append(states, fmt.Sprintf("%s %s %v", part.Part, part.State, *part.Changed))
 		}
 	}
-	if want := []string{"skill ok false", "skill ok false", "mcp ok true"}; !slices.Equal(states, want) {
+	// The install lists every part as the check reads it afterwards; hook is not named, so it stays missing.
+	if want := []string{"skill ok false", "skill ok false", "mcp ok true", "hook missing false", "hook missing false"}; !slices.Equal(states, want) {
 		// The skill files were written by the start, which ends before the install takes the environment.
 		t.Fatalf("the install answered %q, not %q", states, want)
 	}
@@ -370,8 +373,14 @@ func TestSetupInstallsTheSkillAndTheRegistrationOneAtATime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if mcp := state.Parts[len(state.Parts)-1]; mcp.Part != "mcp" || mcp.State != "ok" {
-		t.Fatalf("setupState after the install reports %+v", mcp)
+	var mcpState string
+	for _, part := range state.Parts {
+		if part.Part == "mcp" {
+			mcpState = part.State
+		}
+	}
+	if mcpState != "ok" {
+		t.Fatalf("setupState after the install reports mcp as %q", mcpState)
 	}
 
 	want := "the path entry needs administrator rights: run sudo '" + h.sok + "' path install in a terminal"

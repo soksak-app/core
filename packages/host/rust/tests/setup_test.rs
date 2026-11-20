@@ -266,6 +266,14 @@ fn setup_reads_the_login_shell_environment_and_brings_the_skill_current() {
                 "mcp | {} | missing | absent | {step} mcp install",
                 h.config.join(".claude.json").display()
             ),
+            format!(
+                "hook | {} | missing | absent | {step} setup install hook",
+                h.home().join(".claude/settings.json").display()
+            ),
+            format!(
+                "hook | {} | missing | absent | {step} setup install hook",
+                h.config.join("settings.json").display()
+            ),
         ]
     );
 }
@@ -439,7 +447,17 @@ fn setup_installs_the_skill_and_the_registration_one_at_a_time() {
         })
         .collect();
     // The skill files were written by the start, which ends before the install takes the environment.
-    assert_eq!(states, ["skill ok false", "skill ok false", "mcp ok true"]);
+    // The install lists every part as the check reads it afterwards; hook is not named, so it stays missing.
+    assert_eq!(
+        states,
+        [
+            "skill ok false",
+            "skill ok false",
+            "mcp ok true",
+            "hook missing false",
+            "hook missing false"
+        ]
+    );
     let registration = format!(
         "claude mcp add --scope user soksak -- {} mcp",
         h.sok.display()
@@ -453,8 +471,14 @@ fn setup_installs_the_skill_and_the_registration_one_at_a_time() {
     changed.recv().unwrap();
     changed.recv().unwrap();
     let state = serde_json::to_value(setups.state().unwrap()).unwrap();
-    let mcp = state["parts"].as_array().unwrap().last().unwrap().clone();
-    assert_eq!([&mcp["part"], &mcp["state"]], [&json!("mcp"), &json!("ok")]);
+    let mcp = state["parts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|part| part["part"] == "mcp")
+        .unwrap()
+        .clone();
+    assert_eq!(mcp["state"], json!("ok"));
 
     let want = format!(
         "the path entry needs administrator rights: run sudo '{}' path install in a terminal",
