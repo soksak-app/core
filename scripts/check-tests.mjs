@@ -289,6 +289,19 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F911",
+    implementation: [
+      { file: "packages/sok/go/src/message.go", symbol: "os.Rename(temporary, filepath.Join(folder, name))" },
+      { file: "packages/sok/rust/src/message.rs", symbol: "std::fs::rename(&temporary, folder.join(name))" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/message_test.go", id: "TestSendWritesTheWholeTextUnderTheSenderNameAndLeavesNoTemporaryFile" },
+      { file: "packages/sok/rust/tests/message_test.rs", id: "send_writes_the_whole_text_under_the_sender_name_and_leaves_no_temporary_file" },
+    ],
+    expected: "A message is written under a temporary name and renamed to its message name, so a reader sees the whole text or no file.",
+    levels: ["unit"],
+  },
+  {
     id: "F1011",
     implementation: [{ file: "Makefile", symbol: "@$(MAKE) --no-print-directory check-rust-format" }],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs the commit message, checklist history and format checks, and ci runs them on the range of its event with the structure, format and clippy checks" }],
