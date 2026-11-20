@@ -252,6 +252,17 @@ pub trait Connection: Read + Write + Send {
     fn try_clone(&self) -> Result<Box<dyn Connection>, String>;
     /// Closes both reading and writing of the connection.
     fn close(&self) -> Result<(), String>;
+    /// The process that made the connection, read from the socket and not from a value of the peer
+    /// (docs/spec/sidecars.md#process-identity).
+    fn peer_process(&self) -> Result<u32, String>;
+}
+
+/// The parent and the start time of a process in the process table. `started` is in milliseconds since the Unix epoch, the
+/// form of the `started` of a process query answer (docs/spec/sidecars.md#messages).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ProcessEntry {
+    pub parent: u32,
+    pub started: i64,
 }
 
 /// The listening address of the local endpoint.
@@ -1361,6 +1372,9 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// exist has ended. No time limit ends the wait. The wait uses the kernel notification of the end of a process, which
     /// also reports a process that stays as a zombie, so it does not poll (docs/spec/persistent-services.md#updates).
     fn wait_service_process_end(&self, pid: u32, stop: &StopSignal) -> Result<bool, String>;
+    /// Reads the parent and the start time of `pid` from the process table, or None when the table does not list it. It
+    /// describes the processes of every user (docs/spec/sidecars.md#process-identity).
+    fn process_entry(&self, pid: u32) -> Result<Option<ProcessEntry>, String>;
     /// Makes command start in a new session. A persistent service belongs to the configuration directory and not to the
     /// application process, so it does not receive the signals of the process group of the application and of the
     /// terminal. Call it before command starts.

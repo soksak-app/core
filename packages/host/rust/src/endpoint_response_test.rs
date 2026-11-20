@@ -54,6 +54,10 @@ impl Connection for FailedFlush {
     fn try_clone(&self) -> Result<Box<dyn Connection>, String> {
         Ok(Box::new(self.clone()))
     }
+    fn peer_process(&self) -> Result<u32, String> {
+        Ok(std::process::id())
+    }
+
     fn close(&self) -> Result<(), String> {
         Ok(())
     }

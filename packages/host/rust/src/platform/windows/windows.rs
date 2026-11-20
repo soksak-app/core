@@ -867,6 +867,9 @@ impl Platform for Windows {
     ) -> Result<bool, String> {
         unsupported::service_process_exists(pid, published)
     }
+    fn process_entry(&self, pid: u32) -> Result<Option<super::ProcessEntry>, String> {
+        unsupported::process_entry(pid)
+    }
     fn wait_service_process_end(&self, pid: u32, stop: &super::StopSignal) -> Result<bool, String> {
         unsupported::wait_service_process_end(pid, stop)
     }

@@ -28,6 +28,13 @@ import (
 // (docs/spec/performance-trace.md). The parts do not sum to Total exactly: the footprint also counts mapped IOKit memory and
 // page tables, which the system does not report per process, and subtracts the internal memory that it also counts as mapped
 // IOKit memory.
+// ProcessEntry is the parent and the start time of a process in the process table. Started is in milliseconds since the Unix
+// epoch, the form of the `started` of a process query answer (docs/spec/sidecars.md#messages).
+type ProcessEntry struct {
+	Parent  int
+	Started int64
+}
+
 type ProcessFootprint struct {
 	Total      uint64
 	Internal   uint64
@@ -746,6 +753,12 @@ type Platform interface {
 	NewProcessGroup(command *exec.Cmd) error
 	// EndProcessGroup sends the force-kill signal to the process group whose leader is pid. A group without a process has ended.
 	EndProcessGroup(pid int) error
+	// PeerProcess is the process that made the connection conn of the endpoint listener, read from the socket and not from a
+	// value of the peer (docs/spec/sidecars.md#process-identity).
+	PeerProcess(conn net.Conn) (int, error)
+	// ProcessEntry reads the parent and the start time of pid from the process table; found is false when the table does not
+	// list pid. It describes the processes of every user (docs/spec/sidecars.md#process-identity).
+	ProcessEntry(pid int) (entry ProcessEntry, found bool, err error)
 	// TerminateProcessGroup sends the terminate signal to the process group whose leader is pid, the stop of a sidecar
 	// (docs/spec/sidecars.md#declaration-and-startup). A group without a process has ended.
 	TerminateProcessGroup(pid int) error

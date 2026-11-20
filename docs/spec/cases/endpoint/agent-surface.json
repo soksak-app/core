@@ -1,0 +1,16 @@
+{
+  "name": "agent-surface",
+  "description": "agent.surface answers {surface} of the process that made the connection, which the host reads from the socket; it takes no params or an empty object, and any member is answered with the invalid-params error -32602.",
+  "replay": false,
+  "reason": "the surface of the process of a connection comes from the sidecars of the application, which the case states with processSurface",
+  "page": "scripted",
+  "processSurface": { "surface": "tab-a" },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "agent.surface" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": { "surface": "tab-a" } } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "agent.surface", "params": {} } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": { "surface": "tab-a" } } },
+    { "send": { "jsonrpc": "2.0", "id": 3, "method": "agent.surface", "params": { "surface": "tab-b" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 3, "error": { "code": -32602, "message": "agent.surface takes no params" } } }
+  ]
+}

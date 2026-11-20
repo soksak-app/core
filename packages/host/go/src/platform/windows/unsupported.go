@@ -612,6 +612,14 @@ func (implementation) NewProcessGroup(*exec.Cmd) error {
 	return unsupported("new process group")
 }
 
+func (implementation) PeerProcess(net.Conn) (int, error) {
+	return 0, unsupported("peer process")
+}
+
+func (implementation) ProcessEntry(int) (platform.ProcessEntry, bool, error) {
+	return platform.ProcessEntry{}, false, unsupported("process entry")
+}
+
 func (implementation) EndProcessGroup(int) error {
 	return unsupported("process group end")
 }

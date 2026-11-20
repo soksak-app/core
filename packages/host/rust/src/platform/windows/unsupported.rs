@@ -748,6 +748,10 @@ pub fn want_image_frame(_image: Handle) -> Result<(), String> {
     missing("image frame request")
 }
 
+pub fn process_entry(_pid: u32) -> Result<Option<super::super::ProcessEntry>, String> {
+    missing("process entry")
+}
+
 pub fn service_process_exists(
     _pid: u32,
     _published: std::time::SystemTime,

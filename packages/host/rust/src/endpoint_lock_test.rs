@@ -34,6 +34,10 @@ impl Connection for Sink {
         Ok(Box::new(self.clone()))
     }
 
+    fn peer_process(&self) -> Result<u32, String> {
+        Ok(std::process::id())
+    }
+
     fn close(&self) -> Result<(), String> {
         Ok(())
     }
@@ -70,6 +74,12 @@ impl Service for Pages {
             return Err(Failure::new(HANDLER_FAILED, "the page refused the call"));
         }
         raw(&Value::Null)
+    }
+
+    fn process_surface(&self, _pid: u32) -> Result<String, crate::sidecars::ProcessSurfaceError> {
+        Err(crate::sidecars::ProcessSurfaceError::Failed(
+            "this service has no sidecars".into(),
+        ))
     }
 
     fn unwatched(&self, _window: &str, _name: &str) {}

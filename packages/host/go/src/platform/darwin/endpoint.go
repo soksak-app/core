@@ -128,6 +128,48 @@ func (implementation) ServiceProcessExists(pid int, published time.Time) (bool, 
 	return owned && process.P_stat != sZomb && process.P_flag&pWExit == 0 && !started.After(published), nil
 }
 
+// PeerProcess reads the process that connected conn with getsockopt SOL_LOCAL LOCAL_PEERPID, which the kernel records when the
+// peer connects (docs/spec/sidecars.md#process-identity).
+func (implementation) PeerProcess(conn net.Conn) (int, error) {
+	unixConn, ok := conn.(*net.UnixConn)
+	if !ok {
+		return 0, fmt.Errorf("the endpoint connection is not a unix socket")
+	}
+	raw, err := unixConn.SyscallConn()
+	if err != nil {
+		return 0, err
+	}
+	var pid int
+	var readErr error
+	if err := raw.Control(func(fd uintptr) {
+		pid, readErr = unix.GetsockoptInt(int(fd), unix.SOL_LOCAL, unix.LOCAL_PEERPID)
+	}); err != nil {
+		return 0, err
+	}
+	if readErr != nil {
+		return 0, fmt.Errorf("cannot read the peer process of the connection: %w", systemError(readErr))
+	}
+	return pid, nil
+}
+
+// ProcessEntry reads pid from the process table of the kern.proc.pid sysctl, which describes the processes of every user, as
+// a sudo parent of a process; proc_pidinfo refuses those (docs/spec/sidecars.md#process-identity).
+func (implementation) ProcessEntry(pid int) (platform.ProcessEntry, bool, error) {
+	if pid <= 0 || pid > math.MaxInt32 {
+		return platform.ProcessEntry{}, false, nil
+	}
+	processes, err := unix.SysctlKinfoProcSlice("kern.proc.pid", pid)
+	if err != nil {
+		return platform.ProcessEntry{}, false, fmt.Errorf("cannot read process %d: %w", pid, systemError(err))
+	}
+	if len(processes) == 0 {
+		return platform.ProcessEntry{}, false, nil
+	}
+	process := processes[0]
+	started := process.Proc.P_starttime.Sec*1000 + int64(process.Proc.P_starttime.Usec)/1000
+	return platform.ProcessEntry{Parent: int(process.Eproc.Ppid), Started: started}, true, nil
+}
+
 // stopEvent is the identifier of the user event that wakes the wait for a service process when its stop closes.
 const stopEvent = 1
 

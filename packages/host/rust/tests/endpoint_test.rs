@@ -288,6 +288,18 @@ fn request(connection: &mut Connection, id: u64, method: &str, params: Value) ->
 
 // The cases with a scripted page. The cases that the endpoint answers without a page are played by endpoint_cases_test.rs.
 
+// contract: endpoint.agent-surface.answers-the-surface-of-the-connection
+#[test]
+fn scripted_agent_surface() {
+    endpoint_case::play("scripted_agent_surface", "agent-surface");
+}
+
+// contract: endpoint.agent-surface.refusal-is-1014
+#[test]
+fn scripted_agent_surface_refused() {
+    endpoint_case::play("scripted_agent_surface_refused", "agent-surface-refused");
+}
+
 // contract: endpoint.transport.close-reason-is-recorded
 #[test]
 fn scripted_close_reason_recorded() {
@@ -452,6 +464,8 @@ fn scripted_watch_surface_separate() {
 
 /// The scripted cases that this file plays.
 const SCRIPTED: &[&str] = &[
+    "agent-surface",
+    "agent-surface-refused",
     "close-reason-recorded",
     "connection-end-ends-page-request",
     "element-rect-role",
@@ -1016,6 +1030,15 @@ impl Service for QuitOwner {
 
     fn exists(&self, window: &str) -> bool {
         self.page.exists(window)
+    }
+
+    fn process_surface(
+        &self,
+        _pid: u32,
+    ) -> Result<String, soksak_host::sidecars::ProcessSurfaceError> {
+        Err(soksak_host::sidecars::ProcessSurfaceError::Failed(
+            "this service has no sidecars".into(),
+        ))
     }
 
     fn unwatched(&self, window: &str, name: &str) {

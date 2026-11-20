@@ -125,6 +125,16 @@ pub struct CasePage {
     /// Whether the window owner delivers the input that the endpoint passes to it with the result null. A page of exchanges states
     /// each input as an exchange of its own.
     delivers_input: bool,
+    /// The surface that the window owner answers for the process of a connection, from the member `processSurface` of the case.
+    process_surface: Option<CaseProcessSurface>,
+}
+
+/// The member `processSurface` of a case: the surface that the window owner answers for the process of a connection of the case,
+/// or the text of its refusal (docs/spec/sidecars.md#process-identity).
+#[derive(Clone, Debug)]
+pub enum CaseProcessSurface {
+    Surface(String),
+    Refused(String),
 }
 
 fn locked<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -136,7 +146,7 @@ fn locked<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 impl CasePage {
     /// A page with the windows and the exchanges.
     pub fn new(windows: &[&str], script: Vec<Exchange>) -> Arc<CasePage> {
-        CasePage::with_input(windows, &[], script, false)
+        CasePage::with_input(windows, &[], script, false, None)
     }
 
     fn with_input(
@@ -144,6 +154,7 @@ impl CasePage {
         ready: &[String],
         script: Vec<Exchange>,
         delivers_input: bool,
+        process_surface: Option<CaseProcessSurface>,
     ) -> Arc<CasePage> {
         let (calls, awaited) = mpsc::channel();
         Arc::new(CasePage {
@@ -161,6 +172,7 @@ impl CasePage {
             awaited: Mutex::new((awaited, 0)),
             host_watches: Mutex::new(Vec::new()),
             delivers_input,
+            process_surface,
         })
     }
 
@@ -175,11 +187,12 @@ impl CasePage {
     }
 
     /// Reads the page steps of a case into the exchanges of its page: each call is followed at once by its reply. The windows of
-    /// ready report a ready page.
+    /// ready report a ready page, and the page answers process_surface for the process of a connection.
     fn from_steps(
         windows: &[String],
         ready: &[String],
         steps: &[Value],
+        process_surface: Option<CaseProcessSurface>,
     ) -> Result<Arc<CasePage>, String> {
         let mut script = Vec::new();
         let mut pending: Option<(Option<String>, String, Option<Value>)> = None;
@@ -254,7 +267,13 @@ impl CasePage {
             return Err("the last call of the page has no reply".into());
         }
         let windows: Vec<&str> = windows.iter().map(String::as_str).collect();
-        Ok(CasePage::with_input(&windows, ready, script, true))
+        Ok(CasePage::with_input(
+            &windows,
+            ready,
+            script,
+            true,
+            process_surface,
+        ))
     }
 
     /// Adds a window, as the registration of a window does.
@@ -450,6 +469,28 @@ impl Service for CasePage {
         })
     }
 
+    /// The process of each connection of a case is this process, which the host reads from the socket.
+    fn process_surface(
+        &self,
+        pid: u32,
+    ) -> Result<String, soksak_host::sidecars::ProcessSurfaceError> {
+        use soksak_host::sidecars::ProcessSurfaceError;
+        if pid != std::process::id() {
+            return Err(ProcessSurfaceError::Failed(format!(
+                "process {pid} is not the process of the case"
+            )));
+        }
+        match &self.process_surface {
+            None => Err(ProcessSurfaceError::Failed(
+                "the case has no processSurface".into(),
+            )),
+            Some(CaseProcessSurface::Surface(surface)) => Ok(surface.clone()),
+            Some(CaseProcessSurface::Refused(text)) => {
+                Err(ProcessSurfaceError::Refused(text.clone()))
+            }
+        }
+    }
+
     /// The end of the last watch of a status is no request of the page, and the cases state the requests of the page.
     fn unwatched(&self, _window: &str, _name: &str) {}
 }
@@ -520,6 +561,7 @@ pub struct Case {
     pub ready: Vec<String>,
     pub variables: Map<String, Value>,
     pub steps: Vec<Value>,
+    pub process_surface: Option<CaseProcessSurface>,
 }
 
 impl Case {
@@ -595,8 +637,28 @@ pub fn read_case(path: &Path) -> Result<Case, String> {
             }
         }
     }
+    let process_surface = match case.get("processSurface") {
+        None => None,
+        Some(member) => match (
+            member.get("surface").and_then(Value::as_str),
+            member.get("refused").and_then(Value::as_str),
+            member.as_object().map(Map::len),
+        ) {
+            (Some(surface), None, Some(1)) => {
+                Some(CaseProcessSurface::Surface(surface.to_string()))
+            }
+            (None, Some(text), Some(1)) => Some(CaseProcessSurface::Refused(text.to_string())),
+            _ => {
+                return Err(format!(
+                    "{}: processSurface must be an object with exactly one string surface or refused",
+                    path.display()
+                ));
+            }
+        },
+    };
     Ok(Case {
         name: name.unwrap_or_default().to_string(),
+        process_surface,
         replay,
         scripted,
         windows,
@@ -663,8 +725,13 @@ fn run(case: &Case, windows: &[String], config: &Path, with_log: bool) {
         soksak_host::application_log::start_standard_error(config, "com.soksak.test").unwrap();
         records::start_writer(config)
     });
-    let page = CasePage::from_steps(windows, &case.ready, &case.steps)
-        .unwrap_or_else(|error| panic!("{}: {error}", case.name));
+    let page = CasePage::from_steps(
+        windows,
+        &case.ready,
+        &case.steps,
+        case.process_surface.clone(),
+    )
+    .unwrap_or_else(|error| panic!("{}: {error}", case.name));
     let endpoint = Endpoint::start(
         &config.join("sockets"),
         config,

@@ -1,0 +1,12 @@
+{
+  "name": "agent-surface-refused",
+  "description": "agent.surface answers the refusal of the surface of the process of the connection with the error 1014 and the text of the refusal.",
+  "replay": false,
+  "reason": "the surface of the process of a connection comes from the sidecars of the application, which the case states with processSurface",
+  "page": "scripted",
+  "processSurface": { "refused": "process 7 is not a process of a surface: no parent process of it is a running sidecar of the application that started it for a surface" },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "agent.surface" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "error": { "code": 1014, "message": "process 7 is not a process of a surface: no parent process of it is a running sidecar of the application that started it for a surface" } } }
+  ]
+}

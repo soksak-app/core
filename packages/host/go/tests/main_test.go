@@ -2,6 +2,7 @@ package host_test
 
 import (
 	"os"
+	"path/filepath"
 	"runtime"
 	"testing"
 
@@ -15,6 +16,10 @@ func init() { runtime.LockOSThread() }
 // TestMain installs the test main-thread function for both functions, because the tests of this package run the darwin layer
 // without a framework adapter and a call of a function that is not installed ends the process (main_thread.h).
 func TestMain(m *testing.M) {
+	// The test binary started under the name of the process sidecar is that sidecar (process_identity_test.go).
+	if filepath.Base(os.Args[0]) == processSidecarName {
+		os.Exit(runProcessSidecar())
+	}
 	testplatform.InstallMainThread()
 	os.Exit(m.Run())
 }

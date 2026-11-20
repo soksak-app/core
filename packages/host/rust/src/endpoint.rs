@@ -58,6 +58,8 @@ pub const POINTER_HELD: i64 = 1011;
 pub const NO_SURFACE: i64 = 1012;
 /// The press of a person ended the synthetic gesture of the pointer and button, so a drag or a release was not delivered.
 pub const INTERRUPTED: i64 = 1013;
+/// The process of the connection of `agent.surface` is no process of a surface (docs/spec/sidecars.md#process-identity).
+pub const NO_SURFACE_OF: i64 = 1014;
 /// A registered command or state handler failed.
 pub const HANDLER_FAILED: i64 = -32000;
 
@@ -68,6 +70,7 @@ const METHODS: &[&str] = &[
     "exposure.list",
     "exposure.snapshot",
     "surface.window",
+    "agent.surface",
     "status.get",
     "status.watch",
     "status.unwatch",
@@ -411,6 +414,8 @@ pub trait Service: Send + Sync + 'static {
     /// Called when the last connection stops watching the status name of the window window without a surface
     /// specification, after the change that ended the watch is queued.
     fn unwatched(&self, window: &str, name: &str);
+    /// The surface of the process `pid` of an endpoint connection (docs/spec/sidecars.md#process-identity).
+    fn process_surface(&self, pid: u32) -> Result<String, crate::sidecars::ProcessSurfaceError>;
 }
 
 /// One watch. surface is the surface that the watch specified, and a watch that specified one differs from a watch that
@@ -1677,9 +1682,14 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
         let input = (request.method == "input.pointer")
             .then(|| pointer_input(request.params.as_ref()))
             .flatten();
+        // The peer of the socket is the process that made the connection; agent.surface answers its surface.
+        let peer_process = (request.method == "agent.surface").then(|| connection.peer_process());
         let shared = shared.clone();
         crate::routine::spawn_named("endpoint-run", move || {
-            let outcome = run(&shared, &request.method, request.params, Some(reply));
+            let outcome = match peer_process {
+                Some(peer_process) => agent_surface(&shared, request.params, peer_process),
+                None => run(&shared, &request.method, request.params, Some(reply)),
+            };
             // The press is the connection's before the answer goes, so a request that follows the answer finds it.
             if outcome.is_ok()
                 && let Some((window, input)) = input
@@ -2035,6 +2045,30 @@ fn run(
         _ => {}
     }
     shared.service.call(&window, method, params, reply)
+}
+
+/// Answers `agent.surface`: `{surface}` of the process that made the connection, which the host reads from the socket and
+/// not from a value of the request (docs/spec/sidecars.md#process-identity). A refusal is the error 1014 with its text.
+fn agent_surface(
+    shared: &Shared,
+    params: Option<Value>,
+    peer_process: Result<u32, String>,
+) -> Result<Box<RawValue>, Failure> {
+    match params {
+        None | Some(Value::Null) => {}
+        Some(Value::Object(params)) if params.is_empty() => {}
+        Some(_) => return Err(Failure::params("agent.surface takes no params")),
+    }
+    let pid = peer_process.map_err(|error| Failure::new(-32603, error))?;
+    match shared.service.process_surface(pid) {
+        Ok(surface) => raw(&json!({"surface": surface})),
+        Err(crate::sidecars::ProcessSurfaceError::Refused(text)) => {
+            Err(Failure::new(NO_SURFACE_OF, text))
+        }
+        Err(crate::sidecars::ProcessSurfaceError::Failed(error)) => {
+            Err(Failure::new(-32603, error))
+        }
+    }
 }
 
 /// Answers `surface.window {surface}`: `{window, space}` of the first window in the order of `windows.list` whose main page answers

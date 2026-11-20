@@ -863,7 +863,9 @@ export function validateSidecar(sidecar) {
   if (!isObject(sidecar)) throw new Error("sidecar.json: expected an object");
   // The host read operations are removed with the plugin host that read them (docs/spec/sidecars.md#messages).
   if (sidecar.hostReadOperations !== undefined) throw new Error("sidecar.json: hostReadOperations is removed");
-  only("sidecar.json", sidecar, ["executable", "displayName", "protocol", "helpers", "transport", "events", "replay", "message"]);
+  only("sidecar.json", sidecar, ["executable", "displayName", "protocol", "helpers", "transport", "events", "replay", "message", "processes"]);
+  // A sidecar that starts processes for surfaces answers process queries (docs/spec/sidecars.md#process-identity).
+  if (sidecar.processes !== undefined && sidecar.processes !== true) throw new Error("sidecar.json: processes must be true when it is present");
   if (typeof sidecar.displayName !== "string" || !/^soksak:\/\/sidecar\/[a-z][a-z0-9-]*$/.test(sidecar.displayName)) {
     throw new Error("sidecar.json: displayName must be soksak://sidecar/ followed by one lowercase identifier");
   }

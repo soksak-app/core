@@ -66,6 +66,15 @@ impl Service for TierService {
         ))
     }
 
+    fn process_surface(
+        &self,
+        _pid: u32,
+    ) -> Result<String, soksak_host::sidecars::ProcessSurfaceError> {
+        Err(soksak_host::sidecars::ProcessSurfaceError::Failed(
+            "this service has no sidecars".into(),
+        ))
+    }
+
     /// No test of this service watches a status, so no watch ends here.
     fn unwatched(&self, _window: &str, _name: &str) {}
 }

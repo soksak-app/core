@@ -49,6 +49,7 @@ const (
 	codePointerHeld   = 1011
 	codeNoSurface     = 1012
 	codeInterrupted   = 1013
+	codeNoSurfaceOf   = 1014
 )
 
 // RPCError is the JSON-RPC error object.
@@ -195,6 +196,9 @@ type Backend interface {
 	HostWatched(window, name string, on bool)
 	// DialogAnswer answers a dialog request of window (docs/spec/exposure.md#dialogs).
 	DialogAnswer(window string, answer DialogAnswer) error
+	// ProcessSurface answers the surface of the process pid of an endpoint connection; a refusal is a *ProcessIdentityError
+	// (docs/spec/sidecars.md#process-identity). The end of ctx ends the wait.
+	ProcessSurface(ctx context.Context, pid int) (string, error)
 }
 
 // SocketDirectory is the directory in which the application places its socket. It is under the temporary directory of the user.
@@ -1389,8 +1393,39 @@ var endpointMethods = map[string]endpointMethod{
 	// surface.window answers the window and the space whose layout holds a surface (docs/spec/exposure.md#methods).
 	"surface.window": surfaceWindow,
 
+	// agent.surface answers the surface of the process of the connection (docs/spec/sidecars.md#process-identity).
+	"agent.surface": agentSurface,
+
 	// input.dialog.answer answers a request of host.dialog (docs/spec/exposure.md#dialogs).
 	"input.dialog.answer": inputDialogAnswer,
+}
+
+// agentSurface answers agent.surface: {surface} of the process that made the connection, which the host reads from the socket
+// and not from params (docs/spec/sidecars.md#process-identity). A refusal is the error 1014 with its text.
+func agentSurface(e *Endpoint, conn *endpointConn, params json.RawMessage, scope *ReplyScope) (any, error) {
+	if len(params) > 0 {
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(params, &fields); err != nil || len(fields) > 0 {
+			return nil, rpcError(codeInvalidParams, "agent.surface takes no params")
+		}
+	}
+	current, err := platform.Current()
+	if err != nil {
+		return nil, err
+	}
+	pid, err := current.PeerProcess(conn.conn)
+	if err != nil {
+		return nil, err
+	}
+	surface, err := e.backend.ProcessSurface(scope.Context(), pid)
+	var refusal *ProcessIdentityError
+	if errors.As(err, &refusal) {
+		return nil, rpcError(codeNoSurfaceOf, "%s", refusal.Text)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return map[string]string{"surface": surface}, nil
 }
 
 // surfaceWindow answers surface.window {surface}: {window, space} of the first window in the order of windows.list whose main page

@@ -688,6 +688,20 @@ fn a_declaration_with_host_read_operations_is_not_declared() {
     assert!(error.ends_with("hostReadOperations is removed"), "{error}");
 }
 
+// contract: sidecars.declaration.rejects-processes-other-than-true
+#[test]
+fn a_declaration_with_processes_false_is_not_declared() {
+    let config = folder::Folder::new();
+    let error = refusal(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"processes":false}"#,
+        config.path(),
+    );
+    assert!(
+        error.ends_with("processes must be true when it is present"),
+        "{error}"
+    );
+}
+
 // contract: sidecars.declaration.rejects-unknown-transport
 #[test]
 fn an_unknown_transport_is_not_declared() {

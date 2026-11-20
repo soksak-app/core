@@ -3460,6 +3460,12 @@ impl Service for Host {
         windows::find(&self.0, window).is_some()
     }
 
+    fn process_surface(&self, pid: u32) -> Result<String, crate::sidecars::ProcessSurfaceError> {
+        self.0
+            .state::<crate::sidecars::WindowSidecars>()
+            .process_surface(pid)
+    }
+
     fn unwatched(&self, window: &str, name: &str) {
         if name == "host.window" {
             window_unwatched(&self.0, window);

@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1000-2.1: Go host와 Rust host는 `agent.surface`를 connection의 process의 surface로 답한다. socket에서 peer process를 읽고, parent가 실행 중인 sidecar인 첫 process까지 parent process를 따라가며, `processes`를 선언한 sidecar에 process query로 묻고 사슬을 다시 읽으며, 1014로 거부한다(`docs/spec/sidecars.md#process-identity`). `packages/plugin-api`는 `sidecar.json`의 `processes` `true`를 받아들인다.
 - F1002: Go host는 `endpoint.json`의 pid가 게시자를 가리키는지 정할 때 종료 중인 프로세스(`P_WEXIT`)를 끝난 것으로 보므로, exit 이벤트 뒤의 프로세스가 좀비가 되기 전에 게시자를 가리키지 않는다. 같은 계약의 Rust 시험은 exit 이벤트를 기다린다.
 - F1001: Rust host의 setup 시험은 Go 시험처럼 일회용 home의 login PATH에서 `codex` 명령이 있는 모든 directory를 빼므로, 결과가 설치된 `codex`에 달려 있지 않다.
 - F996-8 (F996-5.1의 후속): `host.sampler.routines`를 위한 프로세스의 processor 시간은 host platform interface의 동작이며, macOS는 `getrusage`로 구현하고 Windows는 구현하지 않았다고 답한다. 그래서 Go host library와 framework adapter가 다시 Windows용으로 build된다. routine 작업의 Rust 코드는 Go 파일의 짝인 `routine/work.rs`다.

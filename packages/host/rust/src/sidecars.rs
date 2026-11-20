@@ -17,6 +17,11 @@ use std::sync::mpsc::{Receiver, RecvError, SyncSender, TryRecvError, TrySendErro
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError, RwLock};
 use std::time::{Duration, Instant};
 
+#[path = "process_identity.rs"]
+mod process_identity;
+pub use process_identity::ProcessSurfaceError;
+use process_identity::{ProcessQueries, end_process_queries, process_answer};
+
 use crate::application_log::{log_error, log_failure};
 use crate::buffer_bounds::{HELD_LINES, PendingLines, record_buffer_drop};
 use crate::event_log::Level;
@@ -1486,6 +1491,8 @@ struct State<O> {
     restarts: HashMap<String, RestartRecord>,
     /// The exact image detach requests waiting for supplier acknowledgements.
     image_detaches: HashMap<String, ImageDetachWaiter>,
+    /// The process queries that wait for their answers (docs/spec/sidecars.md#process-identity).
+    process_queries: ProcessQueries,
 }
 
 /// The record of a stopping standard-I/O sidecar. The read thread reads the output to its end even after stop emptied
@@ -1548,6 +1555,9 @@ struct Declarations {
     /// The version that installed.json records for each declared sidecar.
     versions: HashMap<String, String>,
     persistent: HashMap<String, bool>,
+    /// The sidecars whose sidecar.json declares processes: they start processes for surfaces and answer process queries
+    /// (docs/spec/sidecars.md#process-identity).
+    processes: HashSet<String>,
     basenames: HashMap<String, String>,
     /// The plugins that list each declared sidecar in dependencies.
     dependents: HashMap<String, Vec<String>>,
@@ -1633,6 +1643,7 @@ struct CheckedDeclaration {
     program: PathBuf,
     display_name: String,
     persistent: bool,
+    processes: bool,
     basename: String,
 }
 
@@ -1822,6 +1833,7 @@ impl<O: Owner> Sidecars<O> {
                     clock: Arc::new(Instant::now),
                     restarts: HashMap::new(),
                     image_detaches: HashMap::new(),
+                    process_queries: ProcessQueries::default(),
                 })),
                 started: Condvar::new(),
                 stop_signal: crate::platform::StopSignal::new(),
@@ -1902,6 +1914,8 @@ impl<O: Owner> Sidecars<O> {
             protocol: u64,
             #[serde(default)]
             transport: Option<String>,
+            #[serde(default)]
+            processes: Option<bool>,
             #[serde(rename = "hostReadOperations", default)]
             host_read_operations: Option<serde_json::Value>,
         }
@@ -1933,6 +1947,9 @@ impl<O: Owner> Sidecars<O> {
                 "{path}: displayName must be soksak://sidecar/ followed by one lowercase identifier"
             ));
         }
+        if sidecar.processes == Some(false) {
+            return Err(format!("{path}: processes must be true when it is present"));
+        }
         let persistent = match sidecar.transport.as_deref() {
             None => false,
             Some("persistent") => true,
@@ -1958,6 +1975,7 @@ impl<O: Owner> Sidecars<O> {
             program: item.folder.join(executable),
             display_name,
             persistent,
+            processes: sidecar.processes.is_some(),
             basename,
         })
     }
@@ -1984,6 +2002,9 @@ impl<O: Owner> Sidecars<O> {
                         .insert(name.clone(), checked.display_name);
                     next.versions.insert(name.clone(), item.version.clone());
                     next.persistent.insert(name.clone(), checked.persistent);
+                    if checked.processes {
+                        next.processes.insert(name.clone());
+                    }
                     next.dependents.insert(name, item.dependents.clone());
                 }
                 Err(error) => {
@@ -3714,6 +3735,7 @@ impl<O: Owner> Core<O> {
             });
             let mut reader = BufReader::new(stdout);
             let violation = relay(&mut reader, &state, &sidecar, pid, &tx_clone, &mut ready);
+            end_process_queries(&state, &sidecar, pid);
             // The read end is closed so that a process that is still writing is not blocked in a write.
             drop(reader);
             drop(tx_clone);
@@ -4141,6 +4163,11 @@ impl<O: Owner> Core<O> {
                         }
                         continue;
                     }
+                    match process_answer(&state, &sidecar, reader_service_pid, &members) {
+                        Ok(true) => continue,
+                        Ok(false) => {}
+                        Err(violation) => return Some(violation),
+                    }
                     match close_answer(&state, &sidecar, reader_service_pid, &members) {
                         Ok(true) => continue,
                         Ok(false) => {}
@@ -4256,6 +4283,7 @@ impl<O: Owner> Core<O> {
                 ),
             );
             crate::performance::process_remove(reader_service_pid);
+            end_process_queries(&state, &sidecar, reader_service_pid);
             let close_error =
                 Err("persistent service disconnected before close-owner ack".to_string());
             let error = Err("persistent service disconnected before shutdown ack".to_string());
@@ -4803,6 +4831,11 @@ fn relay<O: Owner>(
             Ok(members) => members,
             Err(error) => return Some(format!("invalid message: {error}")),
         };
+        match process_answer(state, sidecar, pid, &members) {
+            Ok(true) => continue,
+            Ok(false) => {}
+            Err(violation) => return Some(violation),
+        }
         match close_answer(state, sidecar, pid, &members) {
             Ok(true) => continue,
             Ok(false) => {}

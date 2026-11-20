@@ -33,6 +33,8 @@ type sidecarLine struct {
 	Surface   json.RawMessage `json:"surface"`
 	Body      json.RawMessage `json:"body"`
 	Cids      json.RawMessage `json:"cids"`
+	Process   json.RawMessage `json:"process"`
+	Started   json.RawMessage `json:"started"`
 }
 
 // decodeSidecarLine decodes a message line of a sidecar; it is an error when the line is not a JSON object.
@@ -42,14 +44,22 @@ func decodeSidecarLine(line []byte) (sidecarLine, error) {
 	return decoded, err
 }
 
-// output reads the members of a message of a surface: the surface, the answer to closed with its error, the body and the correlation
-// identifiers. A member that is present with another type is an error.
+// output reads the members of a message of a surface: the surface, the answer to closed with its error, the body, the correlation
+// identifiers and the members of an answer to a process query, whose request is read only on a line with process. A member that is
+// present with another type is an error.
 func (l sidecarLine) output() (sidecarOutput, error) {
 	var output sidecarOutput
-	for _, member := range []struct {
+	members := []struct {
 		raw    json.RawMessage
 		target any
-	}{{l.Surface, &output.Surface}, {l.Closed, &output.Closed}, {l.Error, &output.Error}, {l.Cids, &output.Cids}} {
+	}{{l.Surface, &output.Surface}, {l.Closed, &output.Closed}, {l.Error, &output.Error}, {l.Cids, &output.Cids}, {l.Process, &output.Process}}
+	if l.Process != nil && string(l.Process) != "null" {
+		members = append(members, []struct {
+			raw    json.RawMessage
+			target any
+		}{{l.Request, &output.Request}, {l.Started, &output.Started}}...)
+	}
+	for _, member := range members {
 		if member.raw == nil {
 			continue
 		}

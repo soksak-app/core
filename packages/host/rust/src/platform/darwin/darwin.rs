@@ -1043,6 +1043,9 @@ impl Platform for Darwin {
     ) -> Result<bool, String> {
         endpoint::service_process_exists(pid, published)
     }
+    fn process_entry(&self, pid: u32) -> Result<Option<super::ProcessEntry>, String> {
+        endpoint::process_entry(pid)
+    }
     fn wait_service_process_end(&self, pid: u32, stop: &super::StopSignal) -> Result<bool, String> {
         endpoint::wait_service_process_end(pid, stop)
     }

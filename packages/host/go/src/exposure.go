@@ -1194,6 +1194,11 @@ func (b hostBackend) HostWatched(window, name string, on bool) {
 }
 
 // DialogAnswer answers a dialog request of window. An answer that the request does not take is refused with -32602.
+// ProcessSurface answers the surface of the process pid from the running sidecars (docs/spec/sidecars.md#process-identity).
+func (b hostBackend) ProcessSurface(ctx context.Context, pid int) (string, error) {
+	return b.h.sidecars.ProcessSurface(ctx, pid)
+}
+
 func (b hostBackend) DialogAnswer(window string, answer DialogAnswer) error {
 	if _, err := b.window(window); err != nil {
 		return err

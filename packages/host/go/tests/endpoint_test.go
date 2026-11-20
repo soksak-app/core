@@ -64,14 +64,31 @@ func servePage(t *testing.T, exchanges ...casePageExchange) (*host.Endpoint, str
 	return endpoint, address, config, page
 }
 
-// serve starts the endpoint with a loopback listener and, when the window main exists, writes endpoint.json. The transport of the endpoint is created by the operating system implementation,
-// and this check verifies the request handling, which is independent of the transport.
-func serve(t *testing.T, backend host.Backend) (*host.Endpoint, string, string) {
+// listenUnix listens on a unix socket in a new folder that the test removes when it ends.
+func listenUnix(t *testing.T) net.Listener {
 	t.Helper()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	sockets, err := os.MkdirTemp("", "endpoint")
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(sockets); err != nil {
+			t.Error(err)
+		}
+	})
+	listener, err := net.Listen("unix", filepath.Join(sockets, "endpoint.sock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return listener
+}
+
+// serve starts the endpoint with a unix socket listener and, when the window main exists, writes endpoint.json. The socket is a
+// unix socket as the one of the application, so the host reads the process of a connection from it (agent.surface); the folder
+// of the socket comes from os.MkdirTemp because the folder of t.TempDir can exceed the length limit of a socket path.
+func serve(t *testing.T, backend host.Backend) (*host.Endpoint, string, string) {
+	t.Helper()
+	listener := listenUnix(t)
 	config := t.TempDir()
 	endpoint := host.NewEndpoint(backend)
 	info := host.EndpointInfo{Transport: "unix", Address: listener.Addr().String(), PID: os.Getpid(),
@@ -128,7 +145,7 @@ func TestProcessLockIsOwnerOnly(t *testing.T) {
 
 func dial(t *testing.T, address string) net.Conn {
 	t.Helper()
-	conn, err := net.Dial("tcp", address)
+	conn, err := net.Dial("unix", address)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -733,7 +750,7 @@ func (l shutWriteListener) Accept() (net.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := conn.(*net.TCPConn).CloseWrite(); err != nil {
+	if err := conn.(*net.UnixConn).CloseWrite(); err != nil {
 		return nil, errors.Join(err, conn.Close())
 	}
 	return conn, nil
@@ -743,10 +760,7 @@ func (l shutWriteListener) Accept() (net.Conn, error) {
 // contract: endpoint.close.reply-after-peer-close
 func TestEndpointRecordsAWriteThatThePeerClosedAsNotSent(t *testing.T) {
 	written, await := support.CaptureLogAwait(t)
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
+	listener := listenUnix(t)
 	endpoint := host.NewEndpoint(newTierBackend([]string{"main"}))
 	info := host.EndpointInfo{Transport: "unix", Address: listener.Addr().String(), PID: os.Getpid(),
 		Application: "fixture", Version: "0.0.2", Started: time.Now()}

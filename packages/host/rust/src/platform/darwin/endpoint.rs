@@ -8,6 +8,7 @@
 use std::fs;
 use std::io::{Read, Write};
 use std::net::Shutdown;
+use std::os::fd::AsRawFd;
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
@@ -35,6 +36,67 @@ const SOCKET_PATH_LIMIT: usize = 103;
 /// another user did not publish the endpoint, because the service runs as the user of the host, and the kernel refuses
 /// (EPERM) to describe a process of another user to a host that root does not run; and a process that started later than
 /// `published` received the pid after the publisher ended. It is an error when the table cannot be read.
+/// The size of `struct kinfo_proc` of `sys/sysctl.h` and the offsets of `kp_proc.p_starttime` (a `struct timeval` of an
+/// 8-byte second and a 4-byte microsecond) and of `kp_eproc.e_ppid` in it. The crate libc declares no `kinfo_proc` for
+/// Apple platforms, so these values come from the header; a sysctl answer of another size is an error.
+const KINFO_PROC_SIZE: usize = 648;
+const KINFO_PROC_STARTED: usize = 0;
+const KINFO_PROC_PARENT: usize = 560;
+
+/// Reads `pid` from the process table of the `kern.proc.pid` sysctl, which describes the processes of every user, as a
+/// `sudo` parent of a process; `proc_pidinfo` refuses those (docs/spec/sidecars.md#process-identity).
+pub fn process_entry(pid: u32) -> Result<Option<super::super::ProcessEntry>, String> {
+    if pid == 0 || pid > i32::MAX as u32 {
+        return Ok(None);
+    }
+    let mut name = [
+        libc::CTL_KERN,
+        libc::KERN_PROC,
+        libc::KERN_PROC_PID,
+        pid as libc::c_int,
+    ];
+    let mut buffer = [0u8; KINFO_PROC_SIZE];
+    let mut size = KINFO_PROC_SIZE;
+    // SAFETY: name has the four integers of the request, and buffer has the size that size states.
+    let result = unsafe {
+        libc::sysctl(
+            name.as_mut_ptr(),
+            name.len() as libc::c_uint,
+            buffer.as_mut_ptr().cast(),
+            &raw mut size,
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    if result != 0 {
+        return Err(format!(
+            "cannot read process {pid}: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    if size == 0 {
+        return Ok(None);
+    }
+    if size != KINFO_PROC_SIZE {
+        return Err(format!(
+            "cannot read process {pid}: the process table answered {size} of {KINFO_PROC_SIZE} bytes"
+        ));
+    }
+    // The process table holds the integers in the byte order of the machine, which is little-endian on every Mac.
+    let integer = |at: usize, length: usize| {
+        let mut bytes = [0u8; 8];
+        bytes[..length].copy_from_slice(&buffer[at..at + length]);
+        i64::from_le_bytes(bytes)
+    };
+    let seconds = integer(KINFO_PROC_STARTED, 8);
+    let microseconds = integer(KINFO_PROC_STARTED + 8, 4);
+    let parent = integer(KINFO_PROC_PARENT, 4);
+    Ok(Some(super::super::ProcessEntry {
+        parent: parent as u32,
+        started: seconds * 1000 + microseconds / 1000,
+    }))
+}
+
 pub fn service_process_exists(pid: u32, published: SystemTime) -> Result<bool, String> {
     if pid == 0 || pid > i32::MAX as u32 {
         return Ok(false);
@@ -339,6 +401,28 @@ impl Connection for Stream {
         )))
     }
 
+    fn peer_process(&self) -> Result<u32, String> {
+        let mut pid: libc::pid_t = 0;
+        let mut length = std::mem::size_of::<libc::pid_t>() as libc::socklen_t;
+        // SAFETY: the descriptor belongs to the stream, and pid and length are a buffer of the size that length states.
+        let result = unsafe {
+            libc::getsockopt(
+                self.0.as_raw_fd(),
+                libc::SOL_LOCAL,
+                libc::LOCAL_PEERPID,
+                (&raw mut pid).cast(),
+                &raw mut length,
+            )
+        };
+        if result != 0 {
+            return Err(format!(
+                "cannot read the peer process of the connection: {}",
+                std::io::Error::last_os_error()
+            ));
+        }
+        Ok(pid as u32)
+    }
+
     fn close(&self) -> Result<(), String> {
         match self.0.shutdown(Shutdown::Both) {
             // A connection that the peer closed first or that was already closed is in the closed state, so it is not a
@@ -397,3 +481,7 @@ mod tests {
         listener.remove();
     }
 }
+
+#[cfg(test)]
+#[path = "peer_process_test.rs"]
+mod peer_process_test;

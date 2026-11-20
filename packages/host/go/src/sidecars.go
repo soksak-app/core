@@ -85,6 +85,11 @@ type sidecarOutput struct {
 	Error   *string         `json:"error"`
 	// Cids are the correlation identifiers of the requests that this message answers (docs/spec/sidecars.md#messages).
 	Cids []string `json:"cids"`
+	// Process, Request and Started are the members of the answer to a process query; a line with process is that answer, and
+	// its surface may be null (docs/spec/sidecars.md#process-identity).
+	Process *int   `json:"process"`
+	Request *int64 `json:"request"`
+	Started *int64 `json:"started"`
 }
 
 // ClosingSurface is a surface for which the host sent closed and the sidecar has not replied yet (host.sidecars).
@@ -129,6 +134,8 @@ type sidecar struct {
 	// Each item is kept so that a reply with a different sequence does not overwrite another.
 	pendingReplies pendingLines
 	closeWaiters   map[string]chan error
+	// processQueries are the process queries sent to this process that wait for their answer, by request. c.mu protects it.
+	processQueries map[int64]processQuery
 	// ownerMutex serializes the close of the owner of a persistent service, and transportClosed is true once it closed the
 	// transport, so the close of a replacement and the close of a stop run once between them.
 	ownerMutex sync.Mutex
@@ -227,10 +234,15 @@ type Sidecars struct {
 	// versions holds the version that installed.json records for each declared sidecar.
 	versions   map[string]string
 	persistent map[string]bool
+	// processes holds the sidecars whose sidecar.json declares processes: they start processes for surfaces and answer process
+	// queries (docs/spec/sidecars.md#process-identity).
+	processes map[string]bool
 	// persistentSurfaces records, for each layout surface session owned by a persistent service, the persistent sidecars
 	// that the surface sent to, including while a service is disconnected; a connection notice reaches only those surfaces.
 	persistentSurfaces map[string]map[string]bool
 	running            map[string]*sidecar
+	// processRequests is the request of the last process query; c.mu protects it.
+	processRequests int64
 	// starting is a sidecar that is starting. The start happens outside the lock, and when it ends, the channel is closed.
 	starting map[string]chan struct{}
 	// closing holds, for each sidecar, the surfaces whose closed was sent and not answered, with the number of those
@@ -450,6 +462,7 @@ func NewSidecars(declarations []SidecarDeclaration, configDirectory string) (*Si
 		displayNames:        map[string]string{},
 		versions:            map[string]string{},
 		persistent:          map[string]bool{},
+		processes:           map[string]bool{},
 		persistentSurfaces:  map[string]map[string]bool{},
 		running:             map[string]*sidecar{},
 		starting:            map[string]chan struct{}{},
@@ -552,6 +565,7 @@ func (c *Sidecars) declare(declarations []SidecarDeclaration) ([]string, error) 
 	displayNames := map[string]string{}
 	versions := map[string]string{}
 	persistent := map[string]bool{}
+	processes := map[string]bool{}
 	basenames := map[string]string{}
 	dependents := map[string][]string{}
 	refused := map[string]string{}
@@ -574,6 +588,9 @@ func (c *Sidecars) declare(declarations []SidecarDeclaration) ([]string, error) 
 			basenames[checked.basename] = name
 			persistent[name] = true
 		}
+		if checked.processes {
+			processes[name] = true
+		}
 		declared[name] = checked.program
 		displayNames[name] = checked.displayName
 		versions[name] = item.Version
@@ -585,7 +602,7 @@ func (c *Sidecars) declare(declarations []SidecarDeclaration) ([]string, error) 
 			changed = append(changed, name)
 		}
 	}
-	c.declared, c.displayNames, c.versions, c.persistent, c.basenames, c.dependents, c.refused = declared, displayNames, versions, persistent, basenames, dependents, refused
+	c.declared, c.displayNames, c.versions, c.persistent, c.processes, c.basenames, c.dependents, c.refused = declared, displayNames, versions, persistent, processes, basenames, dependents, refused
 	return changed, nil
 }
 
@@ -594,6 +611,7 @@ type checkedDeclaration struct {
 	program     string
 	displayName string
 	persistent  bool
+	processes   bool
 	basename    string
 }
 
@@ -606,6 +624,7 @@ func (c *Sidecars) checkDeclaration(item SidecarDeclaration, basenames map[strin
 		DisplayName any    `json:"displayName"`
 		Protocol    int    `json:"protocol"`
 		Transport   string `json:"transport"`
+		Processes   *bool  `json:"processes"`
 		// HostReadOperations is decoded only to refuse it: the removed plugin host read it, so a declaration that still carries it
 		// is of an earlier form.
 		HostReadOperations json.RawMessage `json:"hostReadOperations"`
@@ -632,6 +651,9 @@ func (c *Sidecars) checkDeclaration(item SidecarDeclaration, basenames map[strin
 	if sidecar.Executable == "" || path.IsAbs(sidecar.Executable) || strings.Contains("/"+sidecar.Executable+"/", "/../") {
 		return checkedDeclaration{}, fmt.Errorf("%s: executable %s is not a path inside the package", file, sidecar.Executable)
 	}
+	if sidecar.Processes != nil && !*sidecar.Processes {
+		return checkedDeclaration{}, fmt.Errorf("%s: processes must be true when it is present", file)
+	}
 	isPersistent := sidecar.Transport == "persistent"
 	base := path.Base(sidecar.Executable)
 	if isPersistent && c.configDir == "" {
@@ -640,7 +662,7 @@ func (c *Sidecars) checkDeclaration(item SidecarDeclaration, basenames map[strin
 	if other, exists := basenames[base]; isPersistent && exists {
 		return checkedDeclaration{}, fmt.Errorf("%s: executable basename %s is already used by %s", file, base, other)
 	}
-	return checkedDeclaration{program: filepath.Join(item.Folder, filepath.FromSlash(sidecar.Executable)), displayName: displayName, persistent: isPersistent, basename: base}, nil
+	return checkedDeclaration{program: filepath.Join(item.Folder, filepath.FromSlash(sidecar.Executable)), displayName: displayName, persistent: isPersistent, processes: sidecar.Processes != nil, basename: base}, nil
 }
 
 // undeclared is the error of a request for the sidecar name that is not declared: the error of its refused declaration,
@@ -2675,6 +2697,12 @@ func (c *Sidecars) relay(process *sidecar, stdout io.Reader) string {
 		if err != nil {
 			return fmt.Sprintf("invalid message: %v", err)
 		}
+		if output.Process != nil {
+			if violation := c.processAnswered(process, output); violation != "" {
+				return violation
+			}
+			continue
+		}
 		if output.Surface == nil {
 			return "invalid message: surface is missing"
 		}
@@ -2911,6 +2939,12 @@ func (c *Sidecars) handlePersistentLine(process *sidecar, line []byte) (string, 
 	output, err := value.output()
 	if err != nil {
 		return fmt.Sprintf("invalid message: %v", err), true
+	}
+	if output.Process != nil {
+		if violation := c.processAnswered(process, output); violation != "" {
+			return violation, true
+		}
+		return "", false
 	}
 	if output.Surface == nil {
 		return "invalid message: surface is missing", true

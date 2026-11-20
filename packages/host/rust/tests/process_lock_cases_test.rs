@@ -27,6 +27,15 @@ struct LockCase {
 struct NoWindow;
 
 impl Service for NoWindow {
+    fn process_surface(
+        &self,
+        _pid: u32,
+    ) -> Result<String, soksak_host::sidecars::ProcessSurfaceError> {
+        Err(soksak_host::sidecars::ProcessSurfaceError::Failed(
+            "this service has no sidecars".into(),
+        ))
+    }
+
     fn unwatched(&self, _window: &str, _name: &str) {}
 
     fn windows(&self) -> Result<Value, Failure> {

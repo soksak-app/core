@@ -273,6 +273,14 @@ test("a persistent sidecar declares its transport explicitly", () => {
   }
 });
 
+test("a sidecar that starts processes for surfaces declares processes true", () => {
+  const declaration = { executable: "build/worker", displayName: "soksak://sidecar/probe", protocol: 1, processes: true };
+  assert.equal(validateSidecar(declaration), declaration);
+  for (const processes of [false, null, "true", 1]) {
+    assert.throws(() => validateSidecar({ ...declaration, processes }), /processes must be true/);
+  }
+});
+
 test("a sidecar manifest may include optional helpers with name and executable", () => {
   const base = { executable: "build/worker", displayName: "soksak://sidecar/probe", protocol: 1 };
   const withHelpers = {

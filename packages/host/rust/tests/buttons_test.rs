@@ -33,6 +33,15 @@ struct ButtonsOwner {
 }
 
 impl Service for ButtonsOwner {
+    fn process_surface(
+        &self,
+        _pid: u32,
+    ) -> Result<String, soksak_host::sidecars::ProcessSurfaceError> {
+        Err(soksak_host::sidecars::ProcessSurfaceError::Failed(
+            "this service has no sidecars".into(),
+        ))
+    }
+
     fn unwatched(&self, window: &str, name: &str) {
         self.page.unwatched(window, name)
     }

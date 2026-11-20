@@ -43,6 +43,15 @@ type endpointCase struct {
 	Ready       []string                `json:"ready"`
 	Variables   map[string]caseVariable `json:"variables"`
 	Steps       []caseStep              `json:"steps"`
+	// ProcessSurface is the surface that the page answers for the process of a connection of the case, or the text of its
+	// refusal (docs/spec/sidecars.md#process-identity).
+	ProcessSurface *caseProcessSurface `json:"processSurface"`
+}
+
+// caseProcessSurface is the member processSurface of a case: exactly one of Surface and Refused.
+type caseProcessSurface struct {
+	Surface *string `json:"surface"`
+	Refused *string `json:"refused"`
 }
 
 // casePageScripted is the value of the member page of a case whose page is a script.
@@ -240,7 +249,7 @@ func TestEndpointCases(t *testing.T) {
 // TestEndpointScriptedCases plays each case with a scripted page of docs/spec/cases/endpoint: the endpoint relays its requests to a
 // page that follows the page steps of the case, and every frame, page call, log record and watch of the case must be as the case
 // has it (docs/spec/cases/endpoint/README.md).
-// contract: endpoint.transport.undeclared-method-closes, endpoint.rpc.unknown-window-1003, endpoint.rpc.missing-window-param-invalid, endpoint.rpc.round-trip-by-id, endpoint.rpc.page-params-omit-window, endpoint.rpc.element-rect-role, endpoint.rpc.target-params-are-checked-in-order, endpoint.names.unknown-host-name-1001, endpoint.errors.unknown-name-text, endpoint.names.missing-name-invalid, endpoint.names.owner-form-required, endpoint.names.valid-name-examples, endpoint.input.pointer-invalid-phase, endpoint.transport.close-reason-is-recorded, endpoint.close.reply-after-peer-close, endpoint.no-result.is-recorded, exposure.command.ends-by-reply-or-peer-end, exposure.relay.connection-end-ends-its-requests, endpoint.watch.notifies-watching-connection, endpoint.watch.non-watching-connection-not-notified, endpoint.watch.unwatch-is-per-connection, endpoint.watch.page-watch-deduplicated, endpoint.watch.no-page-unwatch-while-watched, endpoint.watch.last-watcher-close-unwatches-page, endpoint.watch.registry-reflects-watches, endpoint.watch.surface-and-plain-forwarded-separately, endpoint.watch.empty-surface-invalid, endpoint.watch.surface-change-names-surface, endpoint.watch.surface-unwatch-forwarded-with-surface, endpoint.watch.surface-unwatch-keeps-plain-watch, endpoint.watch.subscription-arrival-order, endpoint.watch.reply-before-current-value, endpoint.watch.unwatch-enters-the-queue-only-after-a-watch, endpoint.watch.other-requests-not-blocked-by-pending-subscription, endpoint.dialog.watch-reaches-the-host, exposure.list.host-owner-without-page, exposure.list.non-object-list-rejected, endpoint.input.dialog-answer, endpoint.surface-window.resolves-the-owner, endpoint.surface-window.answers-1003-while-a-window-loads
+// contract: endpoint.transport.undeclared-method-closes, endpoint.rpc.unknown-window-1003, endpoint.rpc.missing-window-param-invalid, endpoint.rpc.round-trip-by-id, endpoint.rpc.page-params-omit-window, endpoint.rpc.element-rect-role, endpoint.rpc.target-params-are-checked-in-order, endpoint.names.unknown-host-name-1001, endpoint.errors.unknown-name-text, endpoint.names.missing-name-invalid, endpoint.names.owner-form-required, endpoint.names.valid-name-examples, endpoint.input.pointer-invalid-phase, endpoint.transport.close-reason-is-recorded, endpoint.close.reply-after-peer-close, endpoint.no-result.is-recorded, exposure.command.ends-by-reply-or-peer-end, exposure.relay.connection-end-ends-its-requests, endpoint.watch.notifies-watching-connection, endpoint.watch.non-watching-connection-not-notified, endpoint.watch.unwatch-is-per-connection, endpoint.watch.page-watch-deduplicated, endpoint.watch.no-page-unwatch-while-watched, endpoint.watch.last-watcher-close-unwatches-page, endpoint.watch.registry-reflects-watches, endpoint.watch.surface-and-plain-forwarded-separately, endpoint.watch.empty-surface-invalid, endpoint.watch.surface-change-names-surface, endpoint.watch.surface-unwatch-forwarded-with-surface, endpoint.watch.surface-unwatch-keeps-plain-watch, endpoint.watch.subscription-arrival-order, endpoint.watch.reply-before-current-value, endpoint.watch.unwatch-enters-the-queue-only-after-a-watch, endpoint.watch.other-requests-not-blocked-by-pending-subscription, endpoint.dialog.watch-reaches-the-host, exposure.list.host-owner-without-page, exposure.list.non-object-list-rejected, endpoint.input.dialog-answer, endpoint.surface-window.resolves-the-owner, endpoint.surface-window.answers-1003-while-a-window-loads, endpoint.agent-surface.answers-the-surface-of-the-connection, endpoint.agent-surface.refusal-is-1014
 func TestEndpointScriptedCases(t *testing.T) {
 	directory := endpointCaseDirectory(t)
 	entries, err := os.ReadDir(directory)
@@ -278,6 +287,7 @@ func playEndpointCase(t *testing.T, kase endpointCase) (map[string]any, error) {
 		return nil, fmt.Errorf("%s: %w", kase.Name, err)
 	}
 	page.ready = slices.Clone(kase.Ready)
+	page.processSurface = kase.ProcessSurface
 	log := support.UseEventLog(t)
 	wrote := make(chan struct{}, 1)
 	log.SetOnWrite(func(string, int64) {
@@ -338,6 +348,9 @@ func loadEndpointCase(path string) (endpointCase, error) {
 	}
 	if !kase.Replay && kase.Reason == "" {
 		return endpointCase{}, fmt.Errorf("%s: a case with replay false must give its reason", path)
+	}
+	if member := kase.ProcessSurface; member != nil && (member.Surface == nil) == (member.Refused == nil) {
+		return endpointCase{}, fmt.Errorf("%s: processSurface must be an object with exactly one string surface or refused", path)
 	}
 	for _, window := range kase.Ready {
 		if !slices.Contains(kase.Windows, window) {
@@ -435,7 +448,7 @@ func (r *caseRun) connection(step caseStep) (net.Conn, error) {
 	if conn, open := r.conns[name]; open {
 		return conn, nil
 	}
-	conn, err := net.Dial("tcp", r.address)
+	conn, err := net.Dial("unix", r.address)
 	if err != nil {
 		return nil, err
 	}
@@ -777,12 +790,14 @@ type casePage struct {
 	mu      sync.Mutex
 	windows []string
 	// ready are the windows whose page reports that it is ready; the other windows are listed as loading.
-	ready    []string
-	next     int
-	held     []heldPageReply
-	watches  []string
-	problems []string
-	ended    bool
+	ready []string
+	// processSurface is the surface that the page answers for the process of a connection.
+	processSurface *caseProcessSurface
+	next           int
+	held           []heldPageReply
+	watches        []string
+	problems       []string
+	ended          bool
 
 	// calls receives a signal for each request that the endpoint relayed to the page, after the request is waiting.
 	calls chan struct{}
@@ -1010,3 +1025,17 @@ func (p *casePage) Key(_ string, _ host.KeyInput) error { return nil }
 func (p *casePage) Text(_ string, _ host.TextInput) error { return nil }
 
 func (p *casePage) DialogAnswer(_ string, _ host.DialogAnswer) error { return nil }
+
+// ProcessSurface answers the member processSurface of the case. The process of each connection of a case is this process, which
+// the host reads from the socket.
+func (p *casePage) ProcessSurface(_ context.Context, pid int) (string, error) {
+	switch {
+	case pid != os.Getpid():
+		return "", fmt.Errorf("process %d is not the process of the case", pid)
+	case p.processSurface == nil:
+		return "", errors.New("the case has no processSurface")
+	case p.processSurface.Refused != nil:
+		return "", &host.ProcessIdentityError{Text: *p.processSurface.Refused}
+	}
+	return *p.processSurface.Surface, nil
+}

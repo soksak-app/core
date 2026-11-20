@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"strconv"
@@ -29,6 +30,10 @@ func (diagnosticsClockBackend) Key(string, KeyInput) error              { return
 func (diagnosticsClockBackend) Text(string, TextInput) error            { return nil }
 func (diagnosticsClockBackend) HostWatched(string, string, bool)        {}
 func (diagnosticsClockBackend) DialogAnswer(string, DialogAnswer) error { return nil }
+
+func (diagnosticsClockBackend) ProcessSurface(context.Context, int) (string, error) {
+	return "", errors.New("the clock backend has no sidecars")
+}
 
 type diagnosticsClockReply struct {
 	JSONRPC string          `json:"jsonrpc"`
