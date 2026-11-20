@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F899-7.5-15: The Rust `sok` reports the parser error of a `surface.window` answer that does not parse in `sok message send` and the MCP tools, and states the reason of the dropped command answer on the line above its call.
 - F996-4 (sender of a posted closure): the mygo host takes the fork version `v0.7.4-244-g4abb83d-soksak.17` and writes each closure posted to the main thread as a step of the kind `closure` in `host.frame.step`, named after the function that posted it (`docs/spec/hosts.md`).
 - F1000-3: The agent skill and the MCP instructions state that a submit command imitates the input of a person and that agents talk through messages.
 - F996-6 (follow-up of F996-3): the Rust fetcher recovers the guard of its shared state and of a running index read from a lock that a panicking thread poisoned instead of ending the process.

@@ -146,10 +146,11 @@ fn read_receiver(client: &mut Client, terminal: &str) -> Result<Value, String> {
         other => other.map_err(|error| error.to_string())?,
     };
     let window = serde_json::from_str::<Home>(&result)
-        .ok()
-        .map(|home| home.window)
-        .filter(|window| !window.is_empty())
-        .ok_or_else(|| format!("surface.window returned an unexpected value: {result}"))?;
+        .map_err(|error| format!("surface.window returned an unexpected value: {error}: {result}"))?
+        .window;
+    if window.is_empty() {
+        return Err(format!("surface.window returned an unexpected value: {result}"));
+    }
     let result = client
         .request(
             "exposure.snapshot",

@@ -923,14 +923,17 @@ fn messages_call(
         other => other?,
     };
     let window = serde_json::from_str::<Home>(&result)
-        .ok()
-        .map(|home| home.window)
-        .filter(|window| !window.is_empty())
-        .ok_or_else(|| {
+        .map_err(|error| {
             Failure::Other(format!(
-                "surface.window returned an unexpected value: {result}"
+                "surface.window returned an unexpected value: {error}: {result}"
             ))
-        })?;
+        })?
+        .window;
+    if window.is_empty() {
+        return Err(Failure::Other(format!(
+            "surface.window returned an unexpected value: {result}"
+        )));
+    }
     let result = connection.request(
         "exposure.snapshot",
         Some(serde_json::json!({ "window": window, "surface": terminal })),
@@ -1029,9 +1032,9 @@ impl Handler {
             Ok(Prepared::Watch(pending)) => pending,
             Ok(Prepared::Command(answer)) => {
                 return tokio::select! {
-                    // default: a dropped sender means the thread of the command ended without an answer, which the call reports.
                     answer = answer => Some(
                         answer
+                            // default: a dropped sender means the thread of the command ended without an answer, which the call reports.
                             .unwrap_or_else(|_| Err(Failure::Other("the command ended without an answer".into())))
                             .and_then(|value| compact_raw(&value))
                             .map_err(|failure| failure.to_string()),
