@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F966-3-6-15 (합침이 그려진 px 크기를 유지한다, Go): Go layout의 withdraw가 cut을 그것을 담는 cut에 합칠 때, 다른 kid 가운데 fixed가 아니고 px 크기를 유지하는 각 card는 그려진 크기로 쓰이고 fixed card는 비용으로 남으므로, 합쳐지는 kid는 남은 것의 fraction을 받고 두 cut 밖의 card는 바뀌지 않는다.
 - F966-3-5 (명세의 크기 규칙): `docs/spec/groups.md`가 space의 모든 layout operation의 크기 규칙을 현재 contract로 기술한다. 비용과 fraction, 그려진 크기를 유지하는 canonical 병합을 가진 두 primitive REMOVE와 ADD, 거부, 조합 표, target 찾기, 불변식이며, 그 결정은 규칙의 선택을 그 이유와 review가 답한 반론과 함께 기술한다. group card의 drag는 더 이상 끌리는 card를 빼지 않는다. layout 크기 plan에 대한 모든 참조가 명세를 가리키고, plan 파일은 지워졌으며, 보류 조건인 기록된 선택이 충족되었으므로 F966-1이 재개된다.
 - F966-2-3-2-1 (page가 tree를 읽는다): page workbench가 저장 layout `{state: {root}, leader, lastCard}`와 그 group card를 저장의 거부와 함께 tree의 box에서 읽고, `setHeads`로 head를, `frames` `"none"`으로 seam을 주며, `core.layout`에 저장 형태를 보고하고, 창 description의 tree를 저장된 tree에서 읽으며, 저장 layout을 읽는 모든 곳(새 space, space app 목록, library preview, 저장 검사, tab origin, space의 surface)이 tree를 읽는다. page fixture와 page-wire case는 tree 형태로 쓰인다. 검증: 바뀌지 않은 page에서 읽기 test는 load되지 않거나 실패했고, 변경 뒤 F966-2-3-2-2가 정할 거부된 split 문구 둘을 빼고 통과한다.
 - F966-2-3-2-7 (최소가 없는 거부): `minSize` 0에서 거부된 split은 0x0 최소를 말하는 대신 `card <id> would be <w>x<h> and have no area`이다. 검증: `grid.json`의 새 case와 `soksak.test.mjs`의 test가 바뀌지 않은 library에서 실패했고 통과한다.
