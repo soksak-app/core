@@ -1670,6 +1670,96 @@
       },
       "activity": "attention",
       "rejected": 0
+    },
+    {
+      "name": "a failed command stays failed at the next prompt",
+      "steps": [
+        {
+          "output": "\u001b]133;C\u0007\u001b]133;D;1\u0007\u001b]133;A\u0007"
+        }
+      ],
+      "events": [
+        {
+          "event": "shell.state",
+          "from": null,
+          "to": "running",
+          "source": "osc133",
+          "sequence": 1,
+          "exit": null
+        },
+        {
+          "event": "shell.state",
+          "from": "running",
+          "to": "exited",
+          "source": "osc133",
+          "sequence": 2,
+          "exit": 1
+        },
+        {
+          "event": "shell.state",
+          "from": "exited",
+          "to": "idle",
+          "source": "osc133",
+          "sequence": 3,
+          "exit": null
+        }
+      ],
+      "read": {
+        "records": [],
+        "notice": false,
+        "sequence": 0
+      },
+      "activity": "failed",
+      "rejected": 0
+    },
+    {
+      "name": "the next command ends the failure of the last command",
+      "steps": [
+        {
+          "output": "\u001b]133;C\u0007\u001b]133;D;1\u0007\u001b]133;A\u0007\u001b]133;C\u0007"
+        }
+      ],
+      "events": [
+        {
+          "event": "shell.state",
+          "from": null,
+          "to": "running",
+          "source": "osc133",
+          "sequence": 1,
+          "exit": null
+        },
+        {
+          "event": "shell.state",
+          "from": "running",
+          "to": "exited",
+          "source": "osc133",
+          "sequence": 2,
+          "exit": 1
+        },
+        {
+          "event": "shell.state",
+          "from": "exited",
+          "to": "idle",
+          "source": "osc133",
+          "sequence": 3,
+          "exit": null
+        },
+        {
+          "event": "shell.state",
+          "from": "idle",
+          "to": "running",
+          "source": "osc133",
+          "sequence": 4,
+          "exit": null
+        }
+      ],
+      "read": {
+        "records": [],
+        "notice": false,
+        "sequence": 0
+      },
+      "activity": "running",
+      "rejected": 0
     }
   ]
 }

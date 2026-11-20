@@ -87,9 +87,9 @@ tracker는 session의 notice 하나를 `true`나 `false`로 지닌다:
 
 - surface가 keyboard focus를 갖지 않은 동안 OSC 9 notification, OSC 777 `notify`, BEL이 오면 `true`가 된다. focus는 surface의 image region의 keyboard focus이며, page는 그것을 자기 input의 `focus` action으로 보고하고 session이 열리거나 attach될 때마다 다시 보낸다. region이 없는 surface에는 focus가 없다. surface가 focus를 가진 동안의 notice는 아무것도 바꾸지 않는다. 사람이 terminal에 있기 때문이며, 그래서 사람이 줄을 편집하는 동안 bell을 울리는 shell은 notice를 주지 않는다.
 - surface가 keyboard focus를 얻을 때, 사람이 거기에 입력할 때, 곧 text, key, command action을 가진 region의 input transaction이 올 때(command action은 `insertNewline:`처럼 사람의 key가 주는 text system의 편집 command다), command 종료 mark `D`와 prompt 시작 mark(`A`, 또는 kind `i`의 `P`)에서(부른 program이 끝났기 때문이다), full reset에서, 그리고 session이 끝날 때 `false`가 된다. paste operation, menu의 action, 그리고 region의 input transaction에서 오지 않은 다른 쓰기는 그것을 그대로 둔다. 그런 쓰기는 사람이 terminal을 본 것이 아니기 때문이다.
-- region은 그 창이 key window가 아닌 동안에도 가진 focus를 지니므로, region이 focus를 가진 동안 다른 application 뒤에 있는 창의 program은 notice를 주지 않는다. 이 한계는 region의 focus가 창의 key 상태를 따를 때까지 남으며, [features](../features.md)가 그것을 추적한다.
+- region의 focus는 그 창의 key 상태를 따르므로([그림 영역](native-surfaces.ko.md#그림-영역)), 다른 application 뒤에 있는 창의 program은 notice를 주고, sidecar는 그 program에 DEC 1004 focus-out을 보낸다.
 
-첫 field가 `4`인 OSC 9는 ConEmu의 progress report `ESC ] 9 ; 4 ; <state> [; <progress>]`이며 다른 terminal과 program도 쓴다. 이것은 notification이 아니다. engine은 그것을 event `progress` `{state, progress}`로 준다. `state`는 0부터 4까지의 한 자리 숫자이고 `progress`는 0부터 100까지의 값을 나타내는 한 자리에서 세 자리 숫자이거나 `null`이다. terminal은 그것에서 상태를 가져오지 않으므로 그것은 record도 notice도 바꾸지 않는다: progress report에는 기다림을 나타내는 상태도 program이 끝날 때의 끝도 없고, record의 protocol은 terminal이 OSC 7501 report를 받은 뒤에는 OSC 9;4를 반영하기를 멈추어야 한다(SHOULD)고 하며, progress를 보고하는 command는 mark로 이미 `running`이다. page는 마지막 notification을 `vendor.notification`에 지니듯 마지막 progress report를 `<plugin>.session`의 `vendor.progress`에 `{state, progress}`로, 첫 report 전에는 `null`로 지닌다. 그 밖의 형식은 `sequence.rejected`로 거부하며 notice가 아니다. 첫 field가 `notify`가 아닌 OSC 777과 OSC 99는 읽지 않는다: 그것들은 `sequence.rejected`를 주는 지원하지 않는 selector로 남는다. program은 이름이나 답으로 kitty나 foot라고 알아본 terminal에만 OSC 99를 보내며, 이 terminal은 어느 쪽이라고도 하지 않는다.
+첫 field가 `4`인 OSC 9는 ConEmu의 progress report `ESC ] 9 ; 4 ; <state> [; <progress>]`이며 다른 terminal과 program도 쓴다. 이것은 notification이 아니다. engine은 그것을 event `progress` `{state, progress}`로 준다. `state`는 0부터 4까지의 한 자리 숫자이고 `progress`는 0부터 100까지의 값을 나타내는 한 자리에서 세 자리 숫자이거나 `null`이다. terminal은 그것에서 상태를 가져오지 않으므로 그것은 record도 notice도 바꾸지 않는다: progress report에는 기다림을 나타내는 상태도 program이 끝날 때의 끝도 없고, record의 protocol은 terminal이 OSC 7501 report를 받은 뒤에는 OSC 9;4를 반영하기를 멈추어야 한다(SHOULD)고 하며, progress를 보고하는 command는 mark로 이미 `running`이다. 이 terminal은 OSC 9;4를 보여 주지도 그것에서 상태를 가져오지도 않으므로 멈출 반영이 없다: `progress` event는 report를 page에 전할 뿐이며, page는 마지막 notification을 `vendor.notification`에 지니듯 마지막 report를 `<plugin>.session`의 `vendor.progress`에 `{state, progress}`로 지니고 surface의 각 session이 시작할 때 `null`로 둔다. 그 밖의 형식은 `sequence.rejected`로 거부하며 notice가 아니다. 첫 field가 `notify`가 아닌 OSC 777과 OSC 99는 읽지 않는다: 그것들은 `sequence.rejected`를 주는 지원하지 않는 selector로 남는다. program은 이름이나 답으로 kitty나 foot라고 알아본 terminal에만 OSC 99를 보내며, 이 terminal은 어느 쪽이라고도 하지 않는다.
 
 ### Program status event
 
@@ -144,9 +144,10 @@ program이 답을 기다린다는 것과 얼마나 기다리는지는 `blocked` 
    | `idle` | `idle` |
    | `running` | `running` |
    | 0이 아닌 `exit`를 가진 `exited` | `failed` |
+   | 0이 아닌 `exit`를 가진 `exited` 뒤의, 다음 `running` 전의 `idle` | `failed` |
    | `exit` 0 또는 `exit` `null`을 가진 `exited` | `null` |
 
-mark가 exit code를 주지 않은 `exited` 상태는 실패를 보고하지 않는다. 실패를 보여 주는 code가 없기 때문이다. program의 record는 그 command의 exit code보다도 앞선다: `done`을 보고했고 command가 0이 아닌 code로 끝난 program은 다음 command가 시작할 때까지 `idle`을 주고, `error`를 보고한 program은 `failed`를 준다. `error` record는 가장 높은 level이 정하므로 `working` record 옆에서도 `failed`를 준다. status는 값이 바뀔 때만 바뀌며, surface의 새 session은 다시 `null`에서 시작한다.
+mark가 exit code를 주지 않은 `exited` 상태는 실패를 보고하지 않는다. 실패를 보여 주는 code가 없기 때문이다. 마지막 command의 실패는 `error` record처럼 다음 command가 시작할 때까지 간다: zsh의 `precmd`가 보내는 `A`처럼 shell이 `D` 바로 뒤에 보내는 prompt 시작은 상태에 `idle`을 주고 activity에는 `failed`를 지니게 하며, 다음 `running`이 그것을 끝낸다. program의 record는 그 command의 exit code보다도 앞선다: `done`을 보고했고 command가 0이 아닌 code로 끝난 program은 다음 command가 시작할 때까지 `idle`을 주고, `error`를 보고한 program은 `failed`를 준다. `error` record는 가장 높은 level이 정하므로 `working` record 옆에서도 `failed`를 준다. status는 값이 바뀔 때만 바뀌며, surface의 새 session은 다시 `null`에서 시작한다.
 
 `attention`은 정확히 session에 `blocked` record가 있는 동안, 또는 record가 없고 notice가 `true`인 동안 유지된다. 그래서 `blocked` record의 report와 record가 없는 session의 notice에서 들어가고, program이 마지막 `blocked` record를 바꾸거나 지울 때, 그 record와 notice를 끝내는 command 종료 mark와 prompt 시작 mark에서, full reset에서, session이 끝날 때, 그리고 notice라면 사람이 terminal에 focus를 주거나 입력할 때 나온다. record의 report는 notice를 바꾸지 않는다: record가 있는 session은 notice에서 `attention`을 얻지 않으며, notice가 `true`인 동안 record가 지워지면 `attention`이 돌아온다. record의 `failed`는 program이 그 record를 바꾸거나 지울 때, command가 시작할 때, full reset에서, session이 끝날 때 나온다.
 
@@ -154,7 +155,7 @@ mark가 exit code를 주지 않은 `exited` 상태는 실패를 보고하지 않
 
 이 규칙은 실행 중인 program의 상태를 program이 선언하는 신호, 곧 OSC 7501의 record와 notification에서만 가져온다. OSC 7501은 program이 아니라 sequence로 정의된다: terminal(kitty, libghostty-vt의 parser, tuios, xterm.js의 addon)이 그것을 읽고, 여러 종류의 program(Codex CLI, opencode, Crush, omp 같은 agent, query의 답을 받은 뒤의 Claude Code, 그리고 bubbletea, Symfony, Composer, Pulumi 같은 library와 tool)이 그것을 쓰므로, 그것을 읽는 일은 어떤 program도 읽지 않는다. notification은 turn이 끝날 때 bell을 울리는 program처럼 record를 쓰지 않는 program의 대체 신호다. 다음 후보는 각각 한 program에서 짐작하므로 거부했다: 한 window 동안의 출력 정적과 prompt를 보여 주는 화면은 timer인 고정 window와 program을 가리키는 prompt pattern이 필요하다. 제목이나 화면의 spinner는 한 program의 그림이다. agent의 hook event는 그 agent의 설정과 agent에서 terminal로 가는 경로가 필요하고, 그 event는 agent마다 다르다. core level은 새 level 없이 이 상태들을 나타낸다: 자기 prompt에 있는 program은 일하지 않고 대기 중인 승인이나 답이 없으며, 그것이 `idle`이다.
 
-adversarial review는 다섯 round에 걸쳐 다음 반론을 냈고, 각 반론을 그 근거로 판정했다:
+adversarial review는 여섯 round에 걸쳐 다음 반론을 냈고, 각 반론을 그 근거로 판정했다:
 
 - *record 옆의 notice는 사람이 자리를 비운 동안 program이 끝낸 각 turn 뒤에 `attention`을 주므로, prompt에 있는 program이 기다림을 보이고 terminal에 쓰는 operation이 멈춘다.* 받아들인다: record가 notice보다 앞선다. 자기 상태를 보고하는 program은 부른 뒤에도 기다리는지를 말하기 때문이다. notice는 record가 없는 session에서만 정한다.
 - *focus나 입력에서 끝나는 notice는 아직 보이는 prompt에 대해 `attention`을 믿을 수 없게 만든다.* 한계로 받아들이고 적는다: 기다림을 말하는 것은 `blocked` record뿐이며, prompt에 답하면 안 되는 consumer는 `<plugin>.program`과 `<plugin>.state`를 읽는다([실행 중인 terminal의 상태](#실행-중인-terminal의-상태)). notice에는 program이 보고하는 끝이 없으며, 사람의 주의에서 그것을 끝내는 것은 kitty(focus에서 `clear_needs_attention`), tmux(창을 고를 때 `winlink_clear_flags`), iTerm2(session에 key를 보낼 때 bell이 끝남), Ghostty(focus나 key에서 bell 제목이 끝남)의 규칙이다.
@@ -167,11 +168,12 @@ adversarial review는 다섯 round에 걸쳐 다음 반론을 냈고, 각 반론
 - *record의 report가 끝내는 notice는 record가 없고 notice가 `true`인 동안 정확히 `attention`이 유지된다는 규칙과 어긋나고, 다른 key를 가진 clear는 모호하다.* 받아들인다: record의 report는 notice를 그대로 두고, clear는 다른 key 없이 적용된다.
 - *record가 온 뒤에는 engine이 `progress` event를 주지 않아야 한다.* 거부한다: 그 event는 program의 report를 page에 전하고 page는 그것을 `<plugin>.session`의 `vendor.progress`에 지니며, terminal은 어느 경우에도 그것에서 상태를 가져오지 않는다. protocol은 terminal에게 OSC 9;4의 반영을 멈추라고 하며, 이 terminal은 그것에서 어떤 상태도 반영하지 않는다.
 - *길이를 넘거나 decode되지 않는 `msg`를 가진 clear를 한 해석은 적용하고 다른 해석은 거부하며, protocol은 상태를 가져오는 것이 아니라 OSC 9;4의 반영을 말하고, page가 progress report를 지니는 곳이 이름 붙지 않았다.* 받아들인다: 한계는 어떤 report든 통째로 거부하고, protocol의 조항을 적으며, `vendor.progress`를 이름 붙인다.
+- *여섯 번째 round가 이 세 수정을 확인했다: `vendor.progress`에 새 session의 규칙이 없고, "상태를 반영하지 않는다"는 event가 반영인지를 열어 둔다.* 받아들인다: `vendor.progress`는 각 session이 시작할 때 `null`이고, 본문은 이 terminal이 progress를 보여 주지 않고 그것에서 상태를 가져오지 않으므로 event는 protocol이 멈추라고 하는 반영이 아니라고 적는다.
 - *OSC 133 mark가 없는 session은 record를 끝내지 않고, 뒤에 있는 창은 notice를 주지 않는다.* 한계로 받아들이고 본문에 적는다.
 - *paste나 주입된 쓰기가 사람이 보지 않은 notice를 끝낸다.* 받아들인다: region의 input transaction만 그것을 끝낸다.
 - *아무 kind의 `P`나 prompt 시작이 살아 있는 record를 지우고, protocol이 말하는 process의 끝은 command 종료 mark다.* 받아들인다: `D`, `A`, kind `i`의 `P`가 실행 중인 program의 record를 끝낸다.
-- *0이 아닌 exit의 level은 `D`부터 zsh가 곧바로 보내는 다음 `A`까지만 간다.* 이 변경이 바꾸지 않는 mark 규칙의 결함으로 받아들인다. [features](../features.md)가 그것을 추적한다.
-- *창이 key 상태를 잃어도 region의 focus는 바뀌지 않으므로, 뒤에 있는 창의 bell은 notice를 주지 않고 DEC 1004는 focus-out을 보고하지 않는다.* 이 변경이 바꾸지 않는 region focus의 결함으로 받아들인다. [features](../features.md)가 그것을 추적한다.
+- *0이 아닌 exit의 level은 `D`부터 zsh가 곧바로 보내는 다음 `A`까지만 간다.* 받아들인다: 마지막 command의 실패는 `error` record를 끝내는 때인 다음 command 시작까지 간다.
+- *창이 key 상태를 잃어도 region의 focus는 바뀌지 않으므로, 뒤에 있는 창의 bell은 notice를 주지 않고 DEC 1004는 focus-out을 보고하지 않는다.* 받아들인다: region의 focus는 그 창의 key 상태를 따른다([그림 영역](native-surfaces.ko.md#그림-영역)).
 - *`done`은 "끝났고 보지 않음"인데 `idle`이 된다.* 일부 받아들인다. 자기 prompt에서 쉬는 program은 대기 중인 승인이나 답이 없으며 그것이 `idle`의 의미다. 다섯 번째 level은 program이 스스로 끝내는 상태 때문에 core의 순서와 icon을 바꾼다(program은 사람이 확인하면 `idle`을 보고한다). [activity](activity.ko.md#activity의-종류)의 `idle` 의미가 이를 적는다.
 - *다음 command 시작에서 `done`과 `error`를 지우는 것은 protocol을 어긴다.* 거부한다: protocol은 그것들을 끝과 prompt 뒤에도 지니게 하고 언제 보여 주기를 멈출지는 terminal에 맡기며, 사람이 같은 terminal에서 시작한 command는 사람이 결과를 보았다는 것을 보여 준다.
 - *`blocked` record의 축출은 prompt가 보이는 동안 `attention`을 끝내므로 축출되면 안 된다.* 두 round에서 두 번 거부한다: protocol은 한계를 넘으면 가장 오래전에 갱신된 record를 지운다고 정한다. program은 자기 record가 256개를 넘어야 거기에 이르고, 축출은 `warn`으로 log에 남고 변화 event가 보여 주며, protocol을 어기고 `blocked` record를 지니면 한 program이 session의 record를 차지할 수 있다.
