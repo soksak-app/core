@@ -289,6 +289,17 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F1009",
+    implementation: [
+      { file: "native/darwin/src/image_region.m", symbol: "static IOSurfaceRef takeKeptSurface(" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_region_lease_test.m", id: "a frame of a kept surface is presented without a lookup" },
+    ],
+    expected: "An image region presents a frame of a surface that it looked up for the same generation and raster revision without a new lookup, and drops its kept surfaces at another raster revision or generation and at its close.",
+    levels: ["unit"],
+  },
+  {
     id: "F1007",
     implementation: [
       { file: "native/darwin/src/image_region.m", symbol: "sp_event(SP_CLASS_FRAME, SP_EVENT_DEBUG, \"native.image.present\", fields);" },

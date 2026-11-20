@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1009: 그림 영역은 현재 generation과 raster revision에서 조회한 표면을 최대 16개 지니고, 식별자와 nonce가 같은 지닌 표면의 frame을 새 조회 없이 보인다. 다른 generation이나 raster revision, 영역 닫기는 그것들을 버리며, `native.image.present`는 `surface`와 `cached`를 지닌다. 검증: `image_region_lease_test`의 Red와 Green(5회 중 5회)과 그림 영역 test. term surface 둘의 lease mode에서 조회 평균이 79–83 µs에서 1 µs로, present 전체가 184–194 µs에서 106–113 µs로 줄었다.
 - F1007: image region의 받아들인 present는 mode, 크기, 복사한 바이트, surface 조회, 검사, 복사나 lease retain, layer 교체, transaction commit의 시간을 담은 `native.image.present`를 저장한다.
 - F1004: `sok setup install`은 skill 파일을 쓰기 전에 MCP server를 등록하고 등록 뒤에 agent 폴더를 다시 읽으므로, `codex mcp add`가 agent 폴더로 만드는 `<home>/.agents`의 skill 파일을 두 구현 모두 같은 install에서 쓴다.
 - F1003: 두 host에서 `service-messages`의 wake는 그 줄의 종류의 routine(`service-messages.reply`, `.process`, `.closed`, `.image`, `.message`, `.dropped`)으로도 세므로, 표본 추출이 persistent service 줄의 작업을 메시지 종류로 나눈다.

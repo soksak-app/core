@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1009: An image region keeps up to 16 surfaces that it looked up for its current generation and raster revision and presents a frame of a kept surface with the same identifier and nonce without a new lookup; another generation or raster revision and the close of the region drop them, and `native.image.present` carries `surface` and `cached`. Verification: Red and Green of `image_region_lease_test` (5 of 5 runs) and the image region tests; in the lease mode of two term surfaces the mean lookup fell from 79–83 µs to 1 µs and the whole present from 184–194 µs to 106–113 µs.
 - F1007: an accepted present of an image region stores `native.image.present` with its mode, size, copied bytes and the times of the surface lookup, the checks, the copy or lease retain, the layer swap and the transaction commit.
 - F1004: `sok setup install` registers the MCP server before it writes the skill files and reads the agent folders again after the registration, so the skill file of `<home>/.agents`, which `codex mcp add` makes an agent folder, is written by the same install in both implementations.
 - F1003: a wake of `service-messages` also counts as the routine of the kind of its line (`service-messages.reply`, `.process`, `.closed`, `.image`, `.message`, `.dropped`) in both hosts, so the sampler attributes the work of the lines of a persistent service to the kinds of messages.

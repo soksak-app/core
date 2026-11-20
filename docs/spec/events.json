@@ -5242,6 +5242,9 @@
           "mode": {
             "type": "string"
           },
+          "surface": {
+            "type": "number"
+          },
           "width": {
             "type": "number"
           },
@@ -5253,6 +5256,9 @@
           },
           "lookup_ns": {
             "type": "number"
+          },
+          "cached": {
+            "type": "boolean"
           },
           "check_ns": {
             "type": "number"
@@ -5272,10 +5278,12 @@
         },
         "required": [
           "mode",
+          "surface",
           "width",
           "height",
           "bytes",
           "lookup_ns",
+          "cached",
           "check_ns",
           "copy_ns",
           "swap_ns",
@@ -5283,7 +5291,7 @@
           "total_ns"
         ]
       },
-      "description": "An image region presented an accepted frame on the main thread (docs/spec/native-surfaces.md#image-regions). mode is copy or lease, width and height the size of the frame in pixels and bytes the bytes that the copy mode copied (0 in the lease mode). lookup_ns is the time of the lookup of the surface by its identifier and of the read of its nonce, check_ns of the other checks of the frame, copy_ns of the copy into host-owned storage or of the retain of the lease, swap_ns of the change of the layer contents, commit_ns of the commit of its transaction, and total_ns of the whole present."
+      "description": "An image region presented an accepted frame on the main thread (docs/spec/native-surfaces.md#image-regions). mode is copy or lease, surface the global identifier of the IOSurface of the frame, width and height the size of the frame in pixels and bytes the bytes that the copy mode copied (0 in the lease mode). lookup_ns is the time of the lookup of the surface by its identifier and of the read of its nonce, or of the match in the surfaces that the region looked up before when cached is true, check_ns of the other checks of the frame, copy_ns of the copy into host-owned storage or of the retain of the lease, swap_ns of the change of the layer contents, commit_ns of the commit of its transaction, and total_ns of the whole present."
     },
     "native.observe.counted": {
       "layer": "native",
