@@ -41,6 +41,7 @@ type groupArgs struct {
 	X        float64       `json:"x"`
 	Y        float64       `json:"y"`
 	Points   [][2]float64  `json:"points"`
+	Moving   string        `json:"moving"`
 	Arrange  bool          `json:"arrange"`
 }
 
@@ -58,6 +59,7 @@ func TestGroupCases(t *testing.T) {
 				Height  float64 `json:"height"`
 				Band    float64 `json:"band"`
 				Margin  float64 `json:"bandMargin"`
+				Strip   float64 `json:"strip"`
 			} `json:"options"`
 			Layout storedGroups `json:"layout"`
 			Throws *string      `json:"throws"`
@@ -83,7 +85,7 @@ func TestGroupCases(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			drop := layout.TargetOptions{Edge: layout.DropEdge, Band: o.Band, BandMargin: o.Margin}
+			drop := layout.TargetOptions{HeaderPx: o.Strip, Edge: layout.DropEdge, Band: o.Band, BandMargin: o.Margin}
 			for i, s := range kase.Steps {
 				var args groupArgs
 				decoder := json.NewDecoder(bytes.NewReader(s.Args))
@@ -154,6 +156,13 @@ func groupCall(t *testing.T, tree *layout.GroupTree, call string, a groupArgs, d
 	case "level":
 		return tree.Level(a.Card), true, nil
 	case "drop", "drag":
+		switch a.Moving {
+		case "":
+		case "group":
+			drop.Group = true
+		default:
+			t.Fatalf("unknown moving %s", a.Moving)
+		}
 		hit := tree.TargetAt(a.X, a.Y, drop)
 		if call == "drag" {
 			var anchor *layout.Anchor

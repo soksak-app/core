@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F966-3-1-4-1 (exchange와 group drop, Go layout model): Go grid의 `Exchange`가 두 node를 서로의 자리에 두고, 각 자리는 그 fraction과 거기 card가 선언한 px 크기를 유지한다. `side` `centre`와 content card `target`을 가진 `core.card.move`는 각 level의 leader 표시를 그 자리에 둔 채 두 node를 바꾼다. tab strip은 끌리는 group card의 target이 아니다. `TargetOptions.Group`이 strip을 그 card 본문의 일부로 만들므로 점은 그 띠와 본문으로 정해진다.
 - F966-3-1-3-1 (drag의 run, Go): Go workbench가 drag의 anchor, 즉 drag가 line에 들어온 띠를 유지하고, drag가 그 line의 그 띠에 머무는 동안 side의 axis를 가로지르는 anchor의 cut의 다른 kid의 띠는 둘 사이 kid의 run을 가리킨다. 띠를 떠난 drag는 다시 띠에 들어오는 곳에서 새 anchor를 잡는다. `docs/spec/cases/layout/groups.json`의 공유 call `drag`는 그 점들의 마지막 점에서의 target을 돌려준다.
 - F966-3-1-1 (target 찾기의 띠, Go): Go workbench가 점의 side stack으로 drop을 정한다. side의 line에서 끝나는 각 node는 가장 바깥부터 5 point의 띠를 받고, 띠에 너무 작은 card의 띠는 한 비율로 좁아져 그 가운데 3 point 앞에서 끝나며, side는 거리를 그 side가 가진 거리로 나눈 가장 작은 값이고, header는 그 group card의 side를, 본문은 그 4분의 1과 가운데를 유지한다. `core.tab.move`, `core.card.move`, status `core.drag`는 cut이나 run을 식별자 목록으로 가리키며, target이 움직이는 card를 담은 move는 그 withdraw 뒤 남는 kid를 가리킨다.
 - F966-1 (tree에서의 불변식): `docs/spec/cases/layout/invariants.json`의 operation 40개 seed 32개에서 TypeScript와 Go layout library의 불변식 test가 저장된 tree에서 I1 0, I2 0, I7 0, I8 0, I10 0을 보고한다. line model은 I7 11번, I8 19번, I10 33번 실패했다. workbench의 불변식은 F966-1-1로 등록되었다.

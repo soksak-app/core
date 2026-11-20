@@ -1024,13 +1024,67 @@ func (t *GroupTree) CheckMove(id string, target Target, side string) error {
 	if !slices.ContainsFunc(target, func(card string) bool { return card != id && !slices.Contains(t.Groups(card), id) }) {
 		return fmt.Errorf("card %s cannot move into itself", id)
 	}
-	if side == "centre" && (len(target) > 1 || !t.IsGroup(target[0])) {
-		return fmt.Errorf("card %s is not a group; a card moves beside it", strings.Join(target, ", "))
+	if side == "centre" && len(target) > 1 {
+		return fmt.Errorf("card %s moves to the centre of one card, not of %s", id, strings.Join(target, ", "))
 	}
 	if side != "centre" && !isSide(side) {
 		return fmt.Errorf("unknown side %s; use left, right, top, bottom or centre", side)
 	}
 	return nil
+}
+
+// exchange puts the card id, a content card or a group card, where the content card other stands and other where id stood, by Exchange
+// of the grid: each place keeps its size and the leader mark of its level (docs/spec/groups.md#commands).
+func (t *GroupTree) exchange(id, other string) error {
+	return t.try(id, "move to centre of "+other, func() error {
+		if err := t.grid.Exchange(id, other); err != nil {
+			return fmt.Errorf("card %s cannot move to centre of %s: %w", id, other, err)
+		}
+		ma, ka := t.container(id)
+		mb, kb := t.container(other)
+		la, _ := t.Leader(ka)
+		lb, _ := t.Leader(kb)
+		na, nb := t.nodeOf(id), t.nodeOf(other)
+		ia := slices.IndexFunc(*ma, func(n *node) bool { return n.card == id })
+		ib := slices.IndexFunc(*mb, func(n *node) bool { return n.card == other })
+		if ka == kb {
+			if ia >= 0 && ib >= 0 {
+				(*ma)[ia], (*ma)[ib] = (*ma)[ib], (*ma)[ia]
+			}
+		} else {
+			t.put(ma, ia, ka, nb)
+			t.put(mb, ib, kb, na)
+		}
+		// The leader mark stays with its place.
+		switch {
+		case ka == kb && la == id:
+			t.setLeader(ka, other)
+		case ka == kb && la == other:
+			t.setLeader(ka, id)
+		default:
+			if la == id {
+				t.setLeader(ka, other)
+			}
+			if lb == other {
+				t.setLeader(kb, id)
+			}
+		}
+		return nil
+	})
+}
+
+// put records the node n at the index at of the members of the level key, in place of the card that stood there, or with at -1 where
+// that card had no record: a content card of the root level has none, so there n is recorded only when it is a group card.
+func (t *GroupTree) put(members *[]*node, at int, key string, n *node) {
+	record := key != "" || n.group
+	switch {
+	case at >= 0 && record:
+		(*members)[at] = n
+	case at >= 0:
+		*members = slices.Delete(*members, at, at+1)
+	case record:
+		*members = append(*members, n)
+	}
 }
 
 // Moved tells whether the card id already stands where a move to side of target puts it.
@@ -1077,6 +1131,9 @@ func (t *GroupTree) Neighbour(card, side string) string {
 func (t *GroupTree) Move(id string, target Target, side string) error {
 	if err := t.CheckMove(id, target, side); err != nil {
 		return err
+	}
+	if side == "centre" && !t.IsGroup(target[0]) {
+		return t.exchange(id, target[0])
 	}
 	if t.Moved(id, target, side) {
 		return nil

@@ -20,12 +20,14 @@ type DropTarget struct {
 }
 
 // TargetOptions are the measures of the target search: the height of the tab strip of a content card, the edge share of the body of a
-// card, the standard width of a band and the margin that the bands of a side keep before the centre of the card.
+// card, the standard width of a band and the margin that the bands of a side keep before the centre of the card. Group is set for a
+// dragged group card, which holds cards and no tabs, so a tab strip is no target of it and is part of the body of its card.
 type TargetOptions struct {
 	HeaderPx   float64
 	Edge       float64
 	Band       float64
 	BandMargin float64
+	Group      bool
 }
 
 // The measures of the target search (docs/spec/groups.md#target-search): the width of a band and the margin before the centre of a
@@ -238,6 +240,11 @@ func (t *GroupTree) TargetAt(x, y float64, options TargetOptions) *DropTarget {
 func (t *GroupTree) DragAt(anchor *Anchor, x, y float64, options TargetOptions) (*DropTarget, *Anchor) {
 	if math.IsNaN(x) || math.IsInf(x, 0) || math.IsNaN(y) || math.IsInf(y, 0) {
 		return nil, nil
+	}
+	// A group card holds cards and no tabs, so a tab strip is no target of it and is part of the body of its card
+	// (docs/spec/groups.md#target-search).
+	if options.Group {
+		options.HeaderPx = 0
 	}
 	holds := func(r Rect) bool { return x >= r.X && x <= r.X+r.W && y >= r.Y && y <= r.Y+r.H }
 	content, group := "", ""
