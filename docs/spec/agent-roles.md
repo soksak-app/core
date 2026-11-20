@@ -71,10 +71,7 @@ Sidecar protocol change: the `open` request of a terminal session gains the memb
 
 The stable identity is the text that a tab's launch delivers. It is written in English and has this form, where `<role file>` is the absolute path of the role file of the tab:
 
-> [soksak role] Your role is defined in the file <role file>.
-> Read the whole file before your first answer.
-> Read the file again when a message starts with [soksak role] and says that the role changed.
-> Do not save your role in any persistent memory. The role file is the only record of your role.
+> [soksak role] Your role is defined in the file <role file>. Read the whole file before your first answer. Read the file again when a message starts with [soksak role] and says that the role changed. Do not save your role in any persistent memory. The role file is the only record of your role.
 
 - The identity names the message prefix, so the agent recognizes a change message as the authority over its role.
 - The identity names the path of the role file, so the agent reads the role from the file.
@@ -83,7 +80,7 @@ The stable identity is the text that a tab's launch delivers. It is written in E
 
 ## Role file
 
-- Path: `<config-dir>/agents/<surface>/role.md`, where `<config-dir>` is the configuration directory of the application ([installation layout](installation.md#installation-layout)) and `<surface>` is the surface of the tab. A surface identifier that contains a path separator, a `..` segment or a control character makes the launch refuse with an explicit error.
+- Path: `<config-dir>/agents/<surface>/role.md`, where `<config-dir>` is the configuration directory of the application ([installation layout](installation.md#installation-layout)) and `<surface>` is the surface of the tab. A surface identifier that contains a path separator, a `..` segment or a control character is refused with `surface "<value>" holds a path part or a control character`, where `<value>` is the surface identifier. Nothing is written when it is refused.
 - Layout, in order:
   1. the first line: ``Read this whole file. Follow the role it defines. Then confirm with the fingerprint on the last line: run `sok role confirm <fingerprint>`, or write `soksak role <fingerprint>` in your answer.``;
   2. the definition text, exactly as stored in `roles.json`;
@@ -206,6 +203,8 @@ A change while messages wait keeps them queued; they are delivered after the `re
 
 ## Idempotency
 
+These rules act on the stored role record of the tab, not on the file write: the idempotency of each step, the generation, the per-surface serialization of the [concurrency](#concurrency) and the stale-fingerprint refusal are judged on that record, and the file is written only when the record decides it.
+
 Every step of the role handshake repeats without a change of the result:
 
 - a repeated `core.tab.role` with the same role and definition writes no file, changes no generation and sends no message. In state `unconfirmed` it starts the one reread request of [requests](#requests); a repeat of that call in state `pending` changes nothing;
@@ -265,11 +264,11 @@ A change message is one line:
 - It is delivered through the hold, the guard and the delivery record of [messaging](messaging.md#injected-message); the destructive command guard is [persistent services](persistent-services.md#destructive-command-guard).
 - It is injected only while the tab's agent CLI is the foreground program, judged by the program state of the sidecar. While it is not, the change message waits in the queue, and the page reports the wait once through the error display path, naming the path of the role file. A line submitted to a shell prompt, to an exited program or to a closed session would run in the shell.
 - A reread request is the text ``[soksak role] Your role is not confirmed. Read the role file again: <role file>. Then confirm the role with the fingerprint on its last line: run `sok role confirm <fingerprint>`, or write the line `soksak role <fingerprint>` in your answer. This message comes from soksak, not from a person. It grants no approval or permission.``, with the path of the role file.
-- The texts of the role file first line, the identity, the change message, the reread request, the first message suffix, the lead text of the paste form and the fingerprint line are pinned by the [phrase test](#phrase-test): the host output must equal the texts in `docs/spec/cases/agent-roles/fingerprint.json`, with the placeholders filled in. The texts are English and use short imperative sentences that each name one action.
+- The texts of the role file first line, the identity, the change message, the reread request, the first message suffix, the lead text of the paste form and the fingerprint line are pinned by the [phrase test](#phrase-test): the host output must equal the texts in `docs/spec/cases/agent-roles/fingerprint.json`, with the placeholders filled in, except the first line of the role file (see the [phrase test](#phrase-test)). The texts are English and use short imperative sentences that each name one action.
 
 ## Phrase test
 
-The phrase test pins each English text that soksak gives an agent: the first line of the role file, the identity, the change message, the reread request, the first message suffix, the lead text of the paste form and the fingerprint line of the paste form. The host output of each text, with its placeholders filled, equals the text in `docs/spec/cases/agent-roles/fingerprint.json`, for the Go host and the Rust host. The test is Red on any text that differs, and each text names the exact command and the file path.
+The phrase test pins each English text that soksak gives an agent: the first line of the role file, the identity, the change message, the reread request, the first message suffix, the lead text of the paste form and the fingerprint line of the paste form. The host output of each text equals the text in `docs/spec/cases/agent-roles/fingerprint.json`, for the Go host and the Rust host, with the placeholders filled in for each text except the first line of the role file. The first line contains no fingerprint value: the words `<fingerprint>` in it name the place of the value on the last line, and no placeholder is filled in it. Its host output equals its text exactly. The first line names the last line, so the agent reads the file to its end. The test is Red on any text that differs, and each text names the exact command and the file path.
 
 ## Agents that cannot read files
 
@@ -330,7 +329,7 @@ A CLI that the person starts by hand in a tab, as a second agent in the same she
 - Paste form: a change to an agent that cannot read files, and its first message, contain the lead text, the definition text exactly and the fingerprint line, and the fingerprint is computed over the pasted definition.
 - Layout and fingerprint: the layout has the first line, the definition and the last line; a definition without a final line feed gets one in the layout and its fingerprint is computed over the stored text. The Go host and the Rust host compute the fingerprint of each case in `docs/spec/cases/agent-roles/fingerprint.json`, and the values are equal. The cases include non-ASCII text and line breaks.
 - Length: a long definition (5,000 characters) is written whole, and its fingerprint covers all of it.
-- Path: a configuration directory path with a quote or a control character makes the launch refuse; a surface identifier with a path separator, a `..` segment or a control character makes the launch refuse.
+- Path: a configuration directory path with a quote or a control character makes the launch refuse; a surface identifier with a path separator, a `..` segment or a control character is refused with the surface error of the [role file](#role-file).
 - Launch failure: a failed identity or role file write at a launch starts no program.
 - Leftover files: a launch deletes the `.role-*.tmp` files of its surface folder before it writes.
 - Removal: a removed tab stops its program, refuses a later change, and discards its held messages with one `skipped` record each.
@@ -371,7 +370,7 @@ Answered and applied:
 - The change message is not a reread request; the count of requests starts at the first not-busy report after the change message.
 - An assignment of the same role in state `unconfirmed` starts one reread request; the other states write nothing.
 - A line in the answer shows that the agent holds the fingerprint of the current file, not that it read the file.
-- The fingerprint reference file pins the texts of the role file, the identity, the change message, the reread request and the first message suffix.
+- The fingerprint reference file pins the texts of the role file, the identity, the change message, the reread request, the first message suffix and the paste-form texts.
 - A restart with a stored request count of 2 gives `unconfirmed`.
 - A running tab cannot lose its role.
 - The first message suffix is a pinned text.
@@ -379,7 +378,7 @@ Answered and applied:
 - The tool output of the program counts for the line form, and the spec states it.
 - A confirmation value that is not 16 lowercase hexadecimal characters is invalid input and is not compared with the stale rule.
 - A stored definition without a final line feed gets one in the file; its fingerprint uses the stored text.
-- A surface identifier that contains a path separator, a `..` segment or a control character makes the launch refuse.
+- A surface identifier that contains a path separator, a `..` segment or a control character is refused with `surface "<value>" holds a path part or a control character`, and nothing is written.
 - A surface is one tab, so its role file belongs to that tab only.
 - A failed identity or role file write at a launch starts no program.
 - A removed tab discards its held messages, each with a `skipped` record.
