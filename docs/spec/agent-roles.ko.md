@@ -37,10 +37,20 @@ Claude Code 2.1.329와 Codex 0.171.0을 대화형 TUI로 측정했다. 측정은
 | 13 | Claude Code 2.1.329, 12행 session에 `claude -p --resume ID` | hook이 `source` `resume`으로 실행되었다. |
 | 14 | Codex 0.171.0, `codex exec --trust`로 신뢰한 folder에서 새 `codex exec`(probe 전용 configuration home). `.codex/hooks.json`에 `SessionStart` command hook | hook이 `source` `startup`으로 실행되었다. 이후 실행은 로그인이 없어 첫 model 호출에서 HTTP 401로 멈추었다. |
 | 15 | Codex 0.171.0, 14행 session에 `codex exec resume --last` | hook이 `source` `resume`으로 실행되었다. |
+| 16 | Claude Code 2.1.329, TUI, 기본 로그인으로 새로 시작. `.claude/settings.json`에 `SessionStart` command hook이 있음 | hook이 `source` `startup`으로 실행되었다. |
+| 17 | Claude Code 2.1.329, TUI, 16행 session에서 `/clear` | hook이 `source` `clear`로 실행되었다. |
+| 18 | Claude Code 2.1.329, TUI, 17행 session에서 prompt 하나 뒤 `/compact` | `PreCompact`가 `trigger` `manual`로 실행된 뒤 `SessionStart`가 `source` `compact`로 실행되었다. |
+| 19 | Claude Code 2.1.329, TUI, probe 전용 환경 변수 `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=1`로 강제한 auto-compaction. prompt 하나 뒤 | `PreCompact`가 `trigger` `auto`로 실행된 뒤 `SessionStart`가 `source` `compact`로 실행되었다. |
+| 20 | Codex 0.171.0, `--no-daemon --dangerously-bypass-hook-trust`로 한 TUI, 기본 로그인으로 새로 시작. `.codex/hooks.json`에 `SessionStart` command hook이 있음 | 첫 prompt를 제출할 때 hook이 `source` `startup`으로 실행되었다. |
+| 21 | Codex 0.171.0, TUI, 20행 session에서 `/clear` | hook이 `source` `clear`로 실행되었다. |
+| 22 | Codex 0.171.0, TUI, 21행 session에서 prompt 하나 뒤 `/compact` | hook이 `source` `compact`로 실행되었다. |
+| 23 | Codex 0.171.0, auto-compaction | 측정하지 않았다: 0.171 binary에는 auto-compaction 임계값의 설정 key가 없다(binary의 문자열로 확인). Codex 문서 요약은 compaction이 `source` `compact`의 `SessionStart`를 실행한다고 말하지만, 그 문장은 검증하지 않았다. |
+| 24 | Claude Code 2.1.329, `{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"The probe word is ZEBRA-7."}}`를 출력하는 `SessionStart` command hook. 새로 시작, `/clear`, `/compact` 뒤 "What is the probe word?"라고 묻음 | 세 source 각각의 뒤에 model이 `ZEBRA-7`로 답했다. |
+| 25 | Codex 0.171.0, `.codex/hooks.json`에 같은 hook 출력. 새로 시작, `/clear`, `/compact` 뒤 같은 질문 | 세 source 각각의 뒤에 model이 `ZEBRA-7`로 답했다. |
 
 3행과 7행은 agent가 새 role을 지정하는 변경 message를 따른다는 것만 보여준다. 파일을 읽는다는 사실은 보여주지 않는다. 각 행은 한 번의 실행이다. persistent memory를 쓰지 말라는 규칙은 지시일 뿐이다. 측정된 launch 옵션 중 두 CLI의 memory를 끄는 옵션은 없다.
 
-`SessionStart`의 `clear`와 `compact` 값, `PreCompact`와 `PostCompact`의 `trigger` 값, 대화형 session의 hook은 측정하지 않았다. probe 전용 configuration home에는 자격 증명이 없어서 대화형 Claude Code session은 로그인 화면에서 멈추었고, Codex TUI는 첫 입력 전에 끝났다. 자격 증명은 기본 configuration folder에 있으며 probe는 그것을 쓰지 않는다. Codex 0.171.0은 신뢰하지 않은 folder의 project 설정을 경고와 함께 끄며, `codex exec --trust`가 이를 켠다.
+측정은 기본 로그인으로 대화형 TUI에서 두 CLI의 `SessionStart` source 값을 다뤘다(16행부터 22행). Claude Code는 `PreCompact`도 `trigger` `manual`과 `auto`로 실행했다. Codex 0.171.0은 25행이 보이듯 `SessionStart` hook 출력의 `additionalContext` 필드를 받는다. Codex의 auto-compaction은 측정하지 않았다(23행). Codex 0.171.0은 신뢰하지 않은 folder의 project 설정을 경고와 함께 끄며, `codex exec --trust`가 이를 켠다. `--dangerously-bypass-hook-trust`를 쓰면 `--no-daemon`을 함께 쓰지 않는 한 Codex TUI는 그 flag가 embedded mode를 요구한다는 경고를 보인다.
 
 Claude Code는 permission prompt를 [terminal state](terminal-state.md)의 프로그램 상태로 `blocked`라고 보고한다(11행). 그래서 [messaging](messaging.md#hold-for-the-person)의 `blocked` 보류가 prompt가 열린 동안 변경 message와 reread request을 보류한다.
 

@@ -37,10 +37,20 @@ Measured with Claude Code 2.1.329 and Codex 0.171.0, both as interactive TUIs, i
 | 13 | Claude Code 2.1.329, `claude -p --resume ID` of the session of row 12 | The hook ran with `source` `resume`. |
 | 14 | Codex 0.171.0, a new `codex exec` in a folder trusted with `codex exec --trust` (probe-local configuration home); `.codex/hooks.json` with a `SessionStart` command hook | The hook ran with `source` `startup`; the run then stopped at the first model call with HTTP 401, because no login was present. |
 | 15 | Codex 0.171.0, `codex exec resume --last` of the session of row 14 | The hook ran with `source` `resume`. |
+| 16 | Claude Code 2.1.329, TUI, new start with the default login; `.claude/settings.json` has a `SessionStart` command hook | The hook ran with `source` `startup`. |
+| 17 | Claude Code 2.1.329, TUI, `/clear` in the session of row 16 | The hook ran with `source` `clear`. |
+| 18 | Claude Code 2.1.329, TUI, `/compact` in the session of row 17 after one prompt | `PreCompact` ran with `trigger` `manual`, then `SessionStart` ran with `source` `compact`. |
+| 19 | Claude Code 2.1.329, TUI, auto-compaction forced by the probe-only environment variable `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=1` after one prompt | `PreCompact` ran with `trigger` `auto`, then `SessionStart` ran with `source` `compact`. |
+| 20 | Codex 0.171.0, TUI with `--no-daemon --dangerously-bypass-hook-trust`, new start with the default login; `.codex/hooks.json` has a `SessionStart` command hook | The hook ran with `source` `startup` when the first prompt was submitted. |
+| 21 | Codex 0.171.0, TUI, `/clear` in the session of row 20 | The hook ran with `source` `clear`. |
+| 22 | Codex 0.171.0, TUI, `/compact` in the session of row 21 after one prompt | The hook ran with `source` `compact`. |
+| 23 | Codex 0.171.0, auto-compaction | Not measured: the 0.171 binary has no configuration key for the auto-compaction threshold (searched in its strings). The Codex documentation summary says compaction runs `SessionStart` with `source` `compact`; that statement is not verified. |
+| 24 | Claude Code 2.1.329, `SessionStart` command hook that prints `{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"The probe word is ZEBRA-7."}}`; the question "What is the probe word?" after new start, `/clear` and `/compact` | The model answered `ZEBRA-7` after each of the three sources. |
+| 25 | Codex 0.171.0, the same hook output in `.codex/hooks.json`; the same question after new start, `/clear` and `/compact` | The model answered `ZEBRA-7` after each of the three sources. |
 
 Rows 3 and 7 show only that the agent follows a change message that names the new role; they do not show that the agent reads a file. Each row is one run. The rule against persistent memory is an instruction only; no measured launch option of either CLI disables memory.
 
-The `clear` and `compact` values of `SessionStart`, the `trigger` values of `PreCompact` and `PostCompact`, and the hooks of interactive sessions are not measured. The probe-local configuration homes hold no credentials, so the interactive Claude Code session stopped at its login screen and the Codex TUI exited before its first input. The credentials are in the default configuration folders, which the probe does not use. Codex 0.171.0 disables project-local configuration in an untrusted folder with a warning, and `codex exec --trust` enables it.
+The probe measured the `SessionStart` values of both CLIs in the interactive TUI with the default login (rows 16 to 22). Claude Code also fired `PreCompact` with `trigger` `manual` and `auto`. Codex 0.171.0 accepts the `additionalContext` field of the `SessionStart` hook output, as row 25 shows. Codex auto-compaction is not measured (row 23). Codex 0.171.0 disables project-local configuration in an untrusted folder with a warning, and `codex exec --trust` enables it. With `--dangerously-bypass-hook-trust`, the Codex TUI shows the warning that the flag requires embedded mode unless `--no-daemon` is set.
 
 Claude Code reports a permission prompt as `blocked` through the program status of [terminal state](terminal-state.md) (row 11), so the `blocked` hold of [messaging](messaging.md#hold-for-the-person) holds the change messages and reread requests while the prompt is open.
 
