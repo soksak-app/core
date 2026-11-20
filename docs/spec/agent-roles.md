@@ -32,10 +32,11 @@ Measured with Claude Code 2.1.329 and Codex 0.171.0, both as interactive TUIs, i
 | 8 | Codex with a launch that only points to a role file; the file changed; a change message sent | The agent read the file at its first answer and read it again after the change message, and took the new role. |
 | 9 | Claude Code with no flag and the pointer in its first message; the file changed; a change message sent | The agent read the file, and after the change it read the file again and took the new role. |
 | 10 | `claude --model haiku --append-system-prompt-file <identity file>`, the identity file holding only the pointer and the rule to read it again after a change message | The agent read the role file; after the file changed and a change message was sent, it read the file again and took the new role. |
+| 11 | Claude Code 2.1.329 with `--permission-mode default`, with a Bash permission prompt open, and a change message sent during the prompt | `<plugin>.program` showed `{state: blocked, kind: permission}` and `<plugin>.messages` held the message with `{reason: blocked, kind: permission}` and `pending` 1, with nothing pasted. When the person closed the prompt with Esc, the message was injected and Claude Code acted on it. |
 
 Rows 3 and 7 show only that the agent follows a change message that names the new role; they do not show that the agent reads a file. Each row is one run. Not measured for either CLI: a context compaction, a change message after a resume, a change message while the agent is busy, a subagent or a second session in the same tab, the confirmation commands and reread requests of this contract, and whether auto memory or the Codex memories are shared between sessions. The rule against persistent memory is an instruction only; no measured launch option of either CLI disables memory.
 
-The `blocked` hold of Claude Code is not measured: whether Claude Code reports a permission prompt as `blocked` through the program state of [terminal state](terminal-state.md). Until it is measured, requests are not sent to Claude Code while a prompt may be open.
+Claude Code reports a permission prompt as `blocked` through the program status of [terminal state](terminal-state.md) (row 11), so the `blocked` hold of [messaging](messaging.md#hold-for-the-person) holds the change messages and reread requests while the prompt is open.
 
 ## Launch adapters
 
@@ -262,7 +263,7 @@ The page has one queue for each registration. It holds the agent messages of the
 
 [Messaging](messaging.md#injected-message) defines the framing of the agent messages. This document gives the same framing clauses to the change message, the request and the first message: the text is not input of the person, it is handled after the current task, and it grants no approval or permission and answers no pending question. The framing states the origin of a text and never grants what the text asks.
 
-A change message or request cannot approve a permission prompt, and the hold of [messaging](messaging.md#hold-for-the-person) applies to it. The hold does not cover a prompt that writes no record; the `blocked` hold of Claude Code is the open measurement named in [measured facts](#measured-facts).
+A change message or request cannot approve a permission prompt, and the hold of [messaging](messaging.md#hold-for-the-person) applies to it. The `blocked` hold covers a prompt that Claude Code reports (row 11). A prompt that writes no record is not covered; its measurement is in [messaging](messaging.md#evidence-of-the-hold).
 
 ## Resume
 
@@ -313,7 +314,7 @@ The target judges the role state only. For each CLI it:
 5. for an agent declared to use only line form (b), repeats step 2 with the answer line, and for an agent with a shell, repeats it with `sok role confirm`;
 6. requires that no nonce appears in the persistent memory files of the CLI or in `AGENTS.md` and `CLAUDE.md` of the project folder.
 
-An agent that never confirms ends in `unconfirmed` and the target reports the error with its text; the target never reports a pass for an unconfirmed state. Steps 3 and 4 for Claude Code are held until the `blocked` measurement is recorded; a held step is reported as `held` with its condition.
+An agent that never confirms ends in `unconfirmed` and the target reports the error with its text; the target never reports a pass for an unconfirmed state.
 
 A missing `claude` or `codex` command fails the target with the error that names it, and no test is skipped. Each test has its own time limit and prints `running`, `finished`, `passed` or `failed` with its elapsed time ([AGENTS](../../AGENTS.md#verification)).
 
@@ -325,4 +326,4 @@ The adapter table is verified for each CLI when the acceptance target runs for i
 
 The decision was reviewed by adversarial reviewers, who argued against drafts with evidence and gave an answer to each objection. The rounds are summarized in the history of the checklist item. Round 4 has not run on this revision, and the revision is therefore not reviewed.
 
-Open objections, not resolved by this document: the `blocked` hold of Claude Code is unmeasured, so steps 3 and 4 for Claude Code are held; the leader-to-role question is for the person; the messaging, cli and projects.json changes belong to the implementing items; and the Go and Rust hosts must pass the shared vectors.
+Open objections, not resolved by this document: the leader-to-role question is for the person; the projects.json change and the implementation belong to the implementing items; and the Go and Rust hosts must pass the shared vectors.

@@ -32,10 +32,11 @@ Claude Code 2.1.329와 Codex 0.171.0을 대화형 TUI로 측정했다. 측정은
 | 8 | role 파일 경로만 주는 Codex launch. 파일을 바꾸고 변경 message를 보냄 | agent는 첫 답변에서 파일을 읽었고, 변경 message 뒤에 다시 읽어 새 role을 따랐다. |
 | 9 | flag 없이 첫 message에 경로를 넣은 Claude Code. 파일을 바꾸고 변경 message를 보냄 | agent는 파일을 읽었고, 변경 뒤에 다시 읽어 새 role을 따랐다. |
 | 10 | `claude --model haiku --append-system-prompt-file <identity file>`. identity 파일에는 경로와 변경 뒤 다시 읽으라는 규칙만 있음 | agent는 role 파일을 읽었고, 파일이 바뀌고 변경 message가 간 뒤 다시 읽어 새 role을 따랐다. |
+| 11 | 열린 Bash permission prompt가 있는 Claude Code 2.1.329(`--permission-mode default`)에, prompt 중에 변경 message를 보냄 | `<plugin>.program`이 `{state: blocked, kind: permission}`을 보였고, `<plugin>.messages`는 `{reason: blocked, kind: permission}`와 `pending` 1로 message를 보류했으며 아무것도 붙여 넣지 않았다. 사람이 Esc로 prompt를 닫자 message가 주입되었고 Claude Code가 그에 따라 행동했다. |
 
 3행과 7행은 agent가 새 role을 지정하는 변경 message를 따른다는 것만 보여준다. 파일을 읽는다는 사실은 보여주지 않는다. 각 행은 한 번의 실행이다. 두 CLI 모두 측정하지 않은 것: context compaction, resume 뒤의 변경 message, agent가 바쁠 때의 변경 message, subagent나 같은 tab의 두 번째 session, 이 계약의 확인 명령과 재읽기 요청, 자동 memory나 Codex memories가 session 사이에 공유되는지 여부. persistent memory를 쓰지 말라는 규칙은 지시일 뿐이다. 측정된 launch 옵션으로 두 CLI의 memory를 끄는 방법은 없다.
 
-Claude Code의 `blocked` 보류는 측정하지 않았다. Claude Code가 권한 프롬프트를 [terminal state](terminal-state.md)의 프로그램 상태로 `blocked`라고 보고하는지 알 수 없다. 측정할 때까지 프롬프트가 열려 있을 수 있는 Claude Code에는 요청을 보내지 않는다.
+Claude Code는 permission prompt를 [terminal state](terminal-state.md)의 프로그램 상태로 `blocked`라고 보고한다(11행). 그래서 [messaging](messaging.md#hold-for-the-person)의 `blocked` 보류가 prompt가 열린 동안 변경 message와 재읽기 요청을 보류한다.
 
 ## 실행 adapter
 
@@ -262,7 +263,7 @@ page는 등록마다 대기열 하나를 가진다. 폴더의 agent message는 `
 
 [messaging](messaging.md#injected-message)은 agent message의 틀을 정의한다. 이 문서는 변경 message, 요청, 첫 message에 같은 틀 조항을 준다. 문구는 person의 입력이 아니며, 현재 작업을 마친 뒤 처리하고, 승인이나 권한을 주지 않으며, 대기 중인 질문에 답하지 않는다. 틀은 문구의 출처를 밝힐 뿐, 문구가 요구하는 것을 허락하지 않는다.
 
-변경 message나 요청은 권한 프롬프트를 승인할 수 없다. [messaging](messaging.md#hold-for-the-person)의 보류는 여기에도 적용된다. 보류는 기록을 남기지 않는 프롬프트에는 닿지 않는다. Claude Code의 `blocked` 보류는 [측정된 사실](#측정된-사실)에 남은 측정이다.
+변경 message나 요청은 권한 프롬프트를 승인할 수 없다. [messaging](messaging.md#hold-for-the-person)의 보류가 여기에 적용된다. `blocked` 보류는 Claude Code가 보고하는 prompt를 덮는다(11행). 기록을 남기지 않는 prompt는 덮지 않으며, 그 측정은 [messaging](messaging.md#evidence-of-the-hold)에 있다.
 
 ## resume
 
@@ -313,7 +314,7 @@ target은 role 상태만 판정한다. CLI마다 다음을 한다.
 5. 답변 줄 방식(b)만 선언한 agent는 답변 줄로 2단계를 반복하고, shell이 있는 agent는 `sok role confirm`으로 반복한다;
 6. CLI의 persistent memory 파일과 project 폴더의 `AGENTS.md`, `CLAUDE.md`에 nonce가 나타나지 않음을 요구한다.
 
-확인하지 않는 agent는 `unconfirmed`로 끝나며 target은 오류와 그 문장을 보고한다. target은 `unconfirmed` 상태를 통과로 보고하지 않는다. Claude Code의 3단계와 4단계는 `blocked` 측정이 기록될 때까지 보류하며, 보류된 단계는 조건과 함께 `held`로 보고한다.
+확인하지 않는 agent는 `unconfirmed`로 끝나며 target은 오류와 그 문장을 보고한다. target은 `unconfirmed` 상태를 통과로 보고하지 않는다.
 
 `claude`나 `codex` 명령이 없으면 target은 그 이름을 적은 오류로 실패하며, 어떤 테스트도 건너뛰지 않는다. 각 테스트는 자신의 시간 제한을 가지며, `running`, `finished`, `passed`, `failed`와 경과 시간을 출력한다([AGENTS](../../AGENTS.md#verification)).
 
@@ -325,4 +326,4 @@ target은 role 상태만 판정한다. CLI마다 다음을 한다.
 
 이 결정은 적대적 검토자들이 초안을 근거로 반박하고, 각 반론에 답하는 방식으로 검토했다. 라운드는 checklist 항목의 이력에 요약한다. 이 개정에 대한 4라운드 검토는 아직 실행하지 않았으므로, 이 개정은 검토되지 않았다.
 
-이 문서가 해결하지 않은 열린 반론: Claude Code의 `blocked` 보류는 측정하지 않았으므로 Claude Code의 3단계와 4단계는 보류된다. leader와 role의 관계는 person의 질문이다. messaging, cli, projects.json 변경은 구현 항목에 속한다. Go host와 Rust host는 공유 사례를 통과해야 한다.
+이 문서가 해결하지 않은 열린 반론: leader와 role의 관계는 person의 질문이다. projects.json 변경과 구현은 구현 항목에 속한다. Go host와 Rust host는 공유 사례를 통과해야 한다.
