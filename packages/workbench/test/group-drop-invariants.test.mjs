@@ -1,9 +1,10 @@
-// I3, I5, I6 and I9 of docs/spec/groups.md#invariants on the page workbench, over layouts that a seeded generator makes from the plane of
+// I3, I4, I5, I6 and I9 of docs/spec/groups.md#invariants on the page workbench, over layouts that a seeded generator makes from the plane of
 // arrange(). The layouts are made once, before the tests run, so this file holds no other test: the generation leaves the state of the
 // page modules, which a test of another file does not share.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { isDeepStrictEqual } from "node:util";
+import { CHROME } from "../chrome-metrics.js";
 import { arrange, PLAIN, plane, pointer, run, status } from "./support/group-page.mjs";
 
 /**
@@ -156,3 +157,185 @@ for (const { seed, refused, kept, sources } of layouts) {
   }
 }
 
+
+/** The width and the height of the plane of the support, over which the drag paths of I4 move. */
+const [WIDTH, HEIGHT] = [1600, 1200];
+
+/** The text of a target of core.drag, with the card as a list and no index as null, as the key of the targets of I4. */
+const keyOf = (target) => JSON.stringify([[].concat(target.card), target.zone, target.index ?? null]);
+
+/** The stored layout of core.layout that a result is compared by: its tree, its leader and lastCard. */
+async function result() {
+  const { state, leader, lastCard } = await status("core.layout");
+  return JSON.stringify({ state, leader, lastCard });
+}
+
+/**
+ * The targets that I4 requires of the drag of source over the stored layout (docs/spec/groups.md#invariants): every side of every node
+ * of the tree, a card by its id, a group card by the id of its box and a cut by its members, its window sidebars left out, except a side
+ * along the axis of a cut, which is the target of its kid toward that side (packages/soksak/docs/layout.md), the members of such a cut
+ * naming the run of all its kids, which no line of a drag holds; the centre of every content card; and, for a tab, the tab strip of every
+ * content card at its end. JSDOM lays out no element, so every tab box of a strip stands at 0 with no width, and a point of a strip has
+ * the index of its end; the indexes between the tabs are judged by the Go check over drawn tabs. Each vacated slot is among them as a
+ * side of the moving node.
+ */
+function requiredTargets(root, source) {
+  const targets = new Map();
+  const add = (target) => targets.set(keyOf(target), target);
+  const members = (node) => {
+    if (node.card !== undefined) return node.fixed ? [] : [node.card];
+    if (node.box !== undefined) return [node.box];
+    return node.kids.flatMap((kid) => members(kid.node));
+  };
+  const visit = (node) => {
+    const named = members(node);
+    if (named.length > 0) {
+      for (const side of SIDES) {
+        const along = node.cut === "x" && (side === "left" || side === "right") || node.cut === "y" && (side === "top" || side === "bottom");
+        if (!along) add({ card: named.length === 1 ? named[0] : named, zone: side });
+      }
+    }
+    if (node.card !== undefined) {
+      if (node.fixed) return;
+      add({ card: node.card, zone: "centre" });
+      if (!source.group) {
+        const tabs = (node.data?.tabs ?? []).filter((t) => t.id !== source.id);
+        add({ card: node.card, zone: "strip", index: tabs.length });
+      }
+    } else if (node.box !== undefined) visit(node.inner);
+    else node.kids.forEach((kid) => visit(kid.node));
+  };
+  visit(root);
+  return [...targets.values()];
+}
+
+/**
+ * The targets that the drag of source selects over the plane (docs/spec/groups.md#target-search), through the pointer on its tab or its
+ * header. From the middle of each side of each content card and group card, the drag moves inward a point at a time from 16 points
+ * outside the line, so it enters every band of the side stack and of the boxes around the card, until it reaches the centre of the card
+ * or stays on one target or on none for 12 points inside the line; a tab strip or a group header between the line and the bands is
+ * passed. From each band that it enters first, the drag moves along that line to both ends of the plane, which keeps the anchor of the
+ * band, so the anchor selects the runs of its cut. The drag enters the centre of each content card, and the drag of a tab moves along
+ * the tab strip of each content card 4 points at a time. The drag enters a point fresh by leaving the plane first.
+ */
+async function reachedTargets(source) {
+  const element = source.group ? document.querySelector(`.group[data-group-card="${source.id}"] > .group__head`)
+    : document.querySelector(`.tab[data-tab-id="${source.id}"]`);
+  const reached = new Map();
+  const at = async (x, y, fresh) => {
+    if (x < 0 || y < 0 || x >= WIDTH || y >= HEIGHT) return null;
+    if (fresh) pointer(element, "pointermove", -100, -100);
+    pointer(element, "pointermove", x, y);
+    const { target } = await status("core.drag");
+    if (target) reached.set(keyOf(target), target);
+    return target;
+  };
+  const slide = async (x, y, ux, uy) => {
+    for (const way of [-1, 1]) {
+      await at(x, y, true);
+      for (let step = 50; ; step += 50) {
+        const [ax, ay] = [x + way * step * ux, y + way * step * uy];
+        if (ax < 0 || ay < 0 || ax >= WIDTH || ay >= HEIGHT) break;
+        await at(ax, ay, false);
+      }
+    }
+    await at(x, y, true);
+  };
+  const tree = plane.currentTree();
+  const cards = plane.currentGrid().cards.map((card) => card.id);
+  const groups = tree.order().filter((entry) => entry.node).map((entry) => entry.id);
+  // The tab strip of a content card is the head of the card, head-h of the chrome metrics (docs/spec/settings.md#layout-values).
+  const strip = parseFloat(CHROME["head-h"]);
+  pointer(element, "pointerdown", -100, -100);
+  const slid = new Set();
+  for (const id of [...cards, ...groups]) {
+    const rect = tree.rect(id);
+    const sides = [
+      { name: "top", x: rect.x + rect.w / 2, y: rect.y, dx: 0, dy: 1, length: rect.h / 2 },
+      { name: "bottom", x: rect.x + rect.w / 2, y: rect.y + rect.h, dx: 0, dy: -1, length: rect.h / 2 },
+      { name: "left", x: rect.x, y: rect.y + rect.h / 2, dx: 1, dy: 0, length: rect.w / 2 },
+      { name: "right", x: rect.x + rect.w, y: rect.y + rect.h / 2, dx: -1, dy: 0, length: rect.w / 2 },
+    ];
+    for (const side of sides) {
+      let [same, last] = [0, "passed"];
+      for (let d = -16; d < side.length && same < 12; d += 1) {
+        const [x, y] = [side.x + side.dx * (d + 0.5), side.y + side.dy * (d + 0.5)];
+        const target = await at(x, y, d === -16);
+        let key = ""; // no target: a point in no card, or a target that the drag cannot enter.
+        if (target?.zone === "centre") break;
+        if (target && target.zone !== side.name) key = "passed";
+        else if (target) {
+          key = keyOf(target);
+          if (!slid.has(key)) {
+            slid.add(key);
+            await slide(x, y, side.dy * side.dy, side.dx * side.dx);
+          }
+        }
+        if (d >= 0 && key !== "passed" && key === last) same += 1;
+        else [same, last] = [0, key];
+      }
+    }
+    if (groups.includes(id)) continue;
+    await at(rect.x + rect.w / 2, rect.y + rect.h / 2, true);
+    if (!source.group) {
+      await at(rect.x + 1, rect.y + strip / 2, true);
+      for (let x = rect.x + 1; x < rect.x + rect.w; x += 4) await at(x, rect.y + strip / 2, false);
+    }
+  }
+  pointer(element, "pointermove", -100, -100);
+  pointer(element, "pointerup", -100, -100);
+  return reached;
+}
+
+// I4 of docs/spec/groups.md#invariants on the page, by the sources, the drag paths and the required targets of the Go check
+// packages/workbench-mygo/tests/group_drop_invariants_test.go: over each generated layout, for the first group card, the first tab that
+// is the only tab of its card and the first tab that shares its card, each required target is selected by the drag, or its result equals
+// the result of a target that the drag selects, the results compared as the stored layouts after the command of the release; a target
+// whose command is refused has no result and is not required.
+const KINDS = { group: (s) => s.group, alone: (s) => !s.group && s.alone, shared: (s) => !s.group && !s.alone };
+for (const { seed, refused, kept, sources } of layouts) {
+  for (const [kind, matches] of Object.entries(KINDS)) {
+    const source = sources.find(matches);
+    test(`over the generated layout of seed ${seed}, every required target of the drag of the first ${kind} source is reachable`, { timeout: 120000 }, async () => {
+      assert.ok(source, `the generated layout of seed ${seed} has no ${kind} source`);
+      plane.adopt(structuredClone(kept), "spc-aaaaaa");
+      const current = await result();
+      const root = (await status("core.layout")).state.root;
+      const reached = await reachedTargets(source);
+      const results = new Map();
+      const resultOf = async (target) => {
+        const key = keyOf(target);
+        if (!results.has(key)) {
+          plane.adopt(structuredClone(kept), "spc-aaaaaa");
+          try {
+            if (source.group) await run("core.card.move", { card: source.id, target: target.card, side: target.zone });
+            else await run("core.tab.move", { tab: source.id, ...target });
+            results.set(key, await result());
+          } catch {
+            results.set(key, ""); // silent: a refused target has no result and is not required.
+          }
+        }
+        return results.get(key);
+      };
+      const failures = [];
+      let required = 0;
+      for (const target of requiredTargets(root, source)) {
+        if (reached.has(keyOf(target))) {
+          required += 1;
+          continue;
+        }
+        const want = await resultOf(target);
+        if (want === "") continue;
+        required += 1;
+        // The reached targets of the same zone are compared first, because a merged band is mostly a node of the same side.
+        const order = [...reached.values()].sort((a, b) => (a.zone !== target.zone) - (b.zone !== target.zone));
+        let found = false;
+        for (const other of order) if (await resultOf(other) === want) { found = true; break; }
+        if (!found) failures.push(`I4 ${source.id}: no anchor and point select ${keyOf(target)} or a target of its result ${want}; the layout is ${current}`);
+      }
+      plane.adopt(structuredClone(kept), "spc-aaaaaa");
+      assert.ok(required > 0, "no target was required");
+      assert.deepEqual(failures, [], `${failures.length} failures over ${required} required targets (${refused} generated steps refused)`);
+    });
+  }
+}
