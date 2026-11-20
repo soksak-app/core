@@ -15042,8 +15042,8 @@ const FEATURE_LINKS = [
   {
     id: "F936",
     implementation: [
-      { file: "packages/host/go/src/workspace.go", symbol: "projectsFormat = 3" },
-      { file: "packages/host/rust/src/workspace.rs", symbol: "pub(crate) const PROJECTS_FORMAT: u64 = 3;" },
+      { file: "packages/host/go/src/workspace.go", symbol: "projectsFormat = 4" },
+      { file: "packages/host/rust/src/workspace.rs", symbol: "pub(crate) const PROJECTS_FORMAT: u64 = 4;" },
     ],
     tests: [
       { file: "packages/host/go/tests/workspace_test.go", id: "TestEarlierStoredFormsAreReportedBySnapshotAndRefusedByWrites" },
