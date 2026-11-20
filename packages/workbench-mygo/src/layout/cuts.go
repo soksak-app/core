@@ -824,6 +824,30 @@ func (g *Grid) Vacates(id string, target Target, side Side) bool {
 	return side == far(holder.Cut) && names(at-1) || side == near(holder.Cut) && names(at+1)
 }
 
+// VacatedSlot is a target and a side that name the vacated slot of the node id, a card or a box: the kid before it in its cut with the
+// side toward it, or else the kid after it with the side toward it, each by its id or the members of a cut, and the node itself with
+// right when no such kid is there. A fixed card, a window sidebar, is no target of a move, so it is no such kid. A move answers it, so
+// that a repeat with the reply is no change (docs/spec/groups.md#idempotency).
+func (g *Grid) VacatedSlot(id string) (Target, Side) {
+	x := newIndex(g)
+	n := x.byID[id]
+	holder := x.parent[n]
+	if n == nil || holder == nil {
+		return Target{id}, "right"
+	}
+	at := slices.IndexFunc(holder.Kids, func(k Kid) bool { return k.Node == n })
+	kid := func(k int) bool {
+		return k >= 0 && k < len(holder.Kids) && !(holder.Kids[k].Node.isCard() && holder.Kids[k].Node.Fixed)
+	}
+	switch {
+	case kid(at - 1):
+		return members(holder.Kids[at-1].Node), far(holder.Cut)
+	case kid(at + 1):
+		return members(holder.Kids[at+1].Node), near(holder.Cut)
+	}
+	return Target{id}, "right"
+}
+
 // holdsBox is whether the box id stands inside the node n.
 func holdsBox(n *Node, id string) bool {
 	switch {

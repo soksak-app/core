@@ -96,11 +96,14 @@ func (s *Shell) registerTabDrag() {
 		}
 		return status
 	})
-	act(s, "core.tab.move", func(value tabMoveParam) error {
+	command(s, "core.tab.move", func(value tabMoveParam) (any, error) {
 		if err := s.requirePlane(); err != nil {
-			return err
+			return nil, err
 		}
-		return s.moveTab(value.Tab, value.Card, value.Zone, value.Index)
+		if err := s.moveTab(value.Tab, value.Card, value.Zone, value.Index); err != nil {
+			return nil, err
+		}
+		return s.movedTab(value.Tab)
 	})
 }
 
@@ -259,6 +262,24 @@ func (s *Shell) dropCard(from string, hit *layout.DropTarget, data json.RawMessa
 		return s.planes.AddCard(target[0], data)
 	}
 	return s.planes.SplitBeside(target, zone, data)
+}
+
+// movedTab is the reply of core.tab.move, the target of the tab as resolved after the commit (docs/spec/groups.md#idempotency): a tab
+// that shares its card with other tabs is answered by that card with the zone strip and its index, and the only tab of a card by the
+// vacated slot of its card.
+func (s *Shell) movedTab(tab string) (any, error) {
+	card := s.cardOfTab(tab)
+	data, err := s.cardData(card)
+	if err != nil {
+		return nil, err
+	}
+	held := data.TabList()
+	if len(held) > 1 {
+		index := slices.IndexFunc(held, func(entry layout.Tab) bool { return entry.ID == tab })
+		return map[string]any{"tab": tab, "card": card, "zone": "strip", "index": index}, nil
+	}
+	target, side := s.planes.Grid().VacatedSlot(card)
+	return map[string]any{"tab": tab, "card": target, "zone": side}, nil
 }
 
 // moveTab moves a tab to the centre, to the tab strip at index or to an edge of a card, as a drop does; it refuses in the order of

@@ -254,7 +254,8 @@ func TestACardMoveOutOfAGroupReplacesTheGroupOfOneCard(t *testing.T) {
 		t.Fatal(err)
 	}
 	for range 2 {
-		if answer, err := f.apply("core.card.move", `{"card": "card-3", "target": "side", "side": "bottom"}`); err != nil || answer != `{"card":"card-3"}` {
+		// The reply names the target as resolved after the commit, the vacated slot of card-3 (docs/spec/groups.md#idempotency).
+		if answer, err := f.apply("core.card.move", `{"card": "card-3", "target": "side", "side": "bottom"}`); err != nil || answer != `{"card":"card-3","side":"bottom","target":"side"}` {
 			t.Fatalf("core.card.move answered %s, %v", answer, err)
 		}
 	}
@@ -267,8 +268,13 @@ func TestACardMoveOutOfAGroupReplacesTheGroupOfOneCard(t *testing.T) {
 	}
 	// A target that is the card itself names its vacated slot, so the move is no change (docs/spec/groups.md#vacated-slot).
 	before := f.gridCards()
-	if answer, err := f.apply("core.card.move", `{"card": "main", "target": "main", "side": "left"}`); err != nil || answer != `{"card":"main"}` {
+	answer, err := f.apply("core.card.move", `{"card": "main", "target": "main", "side": "left"}`)
+	if err != nil || !strings.HasPrefix(answer, `{"card":"main","side":`) {
 		t.Fatalf("a move beside itself answers %s, %v", answer, err)
+	}
+	// The reply names the vacated slot of main, so the move with the reply is no change either.
+	if again, err := f.apply("core.card.move", answer); err != nil || again != answer {
+		t.Fatalf("the move with the reply %s answers %s, %v", answer, again, err)
 	}
 	if after := f.gridCards(); !reflect.DeepEqual(after, before) {
 		t.Fatalf("a move beside itself changed core.grid from %v to %v", before, after)
