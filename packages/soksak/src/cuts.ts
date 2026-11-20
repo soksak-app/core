@@ -346,6 +346,66 @@ export function withdrawNode(input: Input, id: string, cards: readonly { id: str
   return { root: index.root, left: node };
 }
 
+/**
+ * EXCHANGE (packages/soksak/docs/layout.md#add-and-remove): the stored tree with the node `a`, a card or a box, where the node `b` stands
+ * and `b` where `a` stood. Each place keeps its fraction and the px size that a card there declares: a card takes the px size of the place
+ * it enters, and a box, which declares none, its fraction. Two nodes of which one holds the other and a fixed card are refused.
+ */
+export function exchangeNodes(input: Input, a: string, b: string): TreeNode {
+  const index = new Index(input.root, input);
+  const na = index.byId.get(a), nb = index.byId.get(b);
+  for (const [id, node] of [[a, na], [b, nb]] as const) {
+    if (!node) throw new Error(`card ${id} is not a member of the layout`);
+    if (isCard(node) && node.fixed) throw new Error(`card ${id} is fixed and does not leave`);
+  }
+  const holds = (outer: TreeNode, id: string): boolean => {
+    if (isBox(outer)) return outer.box === id || holds(outer.inner, id);
+    if (isCut(outer)) return outer.kids.some((kid) => holds(kid.node, id));
+    return outer.card === id;
+  };
+  if (holds(na as TreeNode, b) || holds(nb as TreeNode, a)) throw new Error(`card ${a} and card ${b} hold one another and do not exchange`);
+  const putA = placeOf(index, na as TreeNode), putB = placeOf(index, nb as TreeNode);
+  putA(nb as TreeNode);
+  putB(na as TreeNode);
+  if (isCard(na as TreeNode) && isCard(nb as TreeNode)) {
+    const ca = na as CardNode, cb = nb as CardNode;
+    const [wa, ha, wb, hb] = [ca.width, ca.height, cb.width, cb.height];
+    setSize(ca, wb, hb);
+    setSize(cb, wa, ha);
+  } else if (isCard(na as TreeNode)) setSize(na as CardNode, undefined, undefined);
+  else if (isCard(nb as TreeNode)) setSize(nb as CardNode, undefined, undefined);
+  return index.root;
+}
+
+/** Writes the px sizes width and height of a card, an undefined size leaving the card without it. */
+function setSize(card: CardNode, width: number | undefined, height: number | undefined): void {
+  if (width === undefined) delete card.width;
+  else card.width = width;
+  if (height === undefined) delete card.height;
+  else card.height = height;
+}
+
+/** The setter of the place where `node` stands: its kid in its cut, the inner node of its box, or the root. */
+function placeOf(index: Index, node: TreeNode): (next: TreeNode) => void {
+  const holder = index.parent.get(node);
+  if (holder) {
+    const at = holder.kids.findIndex((kid) => kid.node === node);
+    return (next) => {
+      holder.kids[at].node = next;
+    };
+  }
+  for (const box of index.byId.values()) {
+    if (isBox(box) && box.inner === node) {
+      return (next) => {
+        box.inner = next;
+      };
+    }
+  }
+  return (next) => {
+    index.root = next;
+  };
+}
+
 /** Even: the stored tree with equal fractions for the kids of every cut that take one. */
 export function evenCuts(input: Input): TreeNode {
   const visit = (node: TreeNode): void => {

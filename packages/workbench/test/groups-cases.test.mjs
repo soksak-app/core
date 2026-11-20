@@ -46,7 +46,7 @@ function difference(actual, expected, where) {
  * commands core.group.create, core.card.split, core.card.close, core.group.dissolve, core.group.rename, core.group.leader and core.card.move
  * without tabs, add as the add of a card to a group card, and boundary as core.boundary.move.
  */
-function call(tree, grid, { call: name, args = {} }, { band, bandMargin }) {
+function call(tree, grid, { call: name, args = {} }, { band, bandMargin, strip }) {
   switch (name) {
     case "create": return tree.create(args.card, args.side, undefined, false);
     case "split": return { card: tree.split(args.card, args.side, undefined) };
@@ -65,11 +65,15 @@ function call(tree, grid, { call: name, args = {} }, { band, bandMargin }) {
     case "path": return tree.path(args.card);
     case "level": return tree.level(args.card);
     // The target search measures the bands of the case and no tab strip, as the cases give no card a tab strip.
-    case "drop": return tree.targetAt(args.x, args.y, { headerPx: 0, edge: 0.25, band, bandMargin });
+    // A drop measures the tab strip of the case, none without one, and moving "group" is the drop of a dragged group card.
+    case "drop": {
+      if (args.moving !== undefined && args.moving !== "group") throw new Error(`unknown moving ${args.moving}`);
+      return tree.targetAt(args.x, args.y, { headerPx: strip ?? 0, edge: 0.25, band, bandMargin, group: args.moving === "group" });
+    }
     // A drag runs its points in order with the anchor that each point leaves to the next, and answers the target at the last point.
     case "drag": {
       let hit = null, anchor = null;
-      for (const [x, y] of args.points) ({ hit, anchor } = tree.dragAt(anchor, x, y, { headerPx: 0, edge: 0.25, band, bandMargin }));
+      for (const [x, y] of args.points) ({ hit, anchor } = tree.dragAt(anchor, x, y, { headerPx: strip ?? 0, edge: 0.25, band, bandMargin }));
       return hit;
     }
     // default: a balance step without arrange balances without the even arrangement.

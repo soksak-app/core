@@ -1021,7 +1021,9 @@ export class GroupTree {
     if (placed !== undefined) return new Error(`card ${placed} is a window sidebar; a card does not move beside it`);
     const inside = (card) => card === id || (this.find(card)?.path ?? []).some((node) => node.card === id);
     if (ids.every(inside)) return new Error(`card ${id} cannot move into itself`);
-    if (side === "centre" && (ids.length > 1 || !this.isGroup(ids[0]))) return new Error(`card ${ids.join(", ")} is not a group; a card moves beside it`);
+    if ((side === "centre" || side === "strip") && ids.length > 1) return new Error(`card ${id} moves to the ${side} of one card, not of ${ids.join(", ")}`);
+    if (side === "strip" && this.isGroup(id)) return new Error(`card ${id} is a group and holds no tabs`);
+    if (side === "strip" && this.isGroup(ids[0])) return new Error(`card ${ids[0]} is a group and has no tab strip`);
     return null;
   }
 
@@ -1064,13 +1066,14 @@ export class GroupTree {
   }
 
   /**
-   * Moves the card id, a content card or a group card, beside target on side into the level of target, or with side centre into the group
-   * card target at the right edge of its rectangle (docs/spec/groups.md#commands). target is one id or the ids of the kids of a cut. The
-   * card keeps its id.
+   * Moves the card id, a content card or a group card, beside target on side into the level of target, with side centre into the group
+   * card target at the right edge of its rectangle, or with side centre and a content card target into the place of target, which takes
+   * the place of id (docs/spec/groups.md#commands). target is one id or the ids of the kids of a cut. The card keeps its id.
    */
   move(id, target, side) {
     const refused = this.checkMove(id, target, side);
     if (refused) throw refused;
+    if (side === "centre" && this.find(targetIds(target)[0]) && !this.isGroup(targetIds(target)[0])) return this.exchange(id, targetIds(target)[0]);
     const names = targetIds(target).join(", ");
     const refusal = () => new Error(`card ${id} cannot move to ${side} of ${names}`);
     if (side !== "centre" && !SIDES.includes(side)) throw refusal();
@@ -1105,6 +1108,49 @@ export class GroupTree {
       this.leaderEntered(into, id);
       this.collapse();
     });
+  }
+
+  /**
+   * Puts the card id, a content card or a group card, where the content card other stands and other where id stood, by exchange of the
+   * grid: each place keeps its size and the leader mark of its level (docs/spec/groups.md#commands).
+   */
+  exchange(id, other) {
+    if (!this.find(id)) throw new Error(`card ${id} cannot move to centre of ${other}`);
+    this.attempt(id, `move to centre of ${other}`, () => {
+      try {
+        this.grid.exchange(id, other);
+      } catch (error) {
+        throw new Error(`card ${id} cannot move to centre of ${other}: ${error.message}`);
+      }
+      const a = this.find(id), b = this.find(other);
+      const la = this.leaderOf(a.parent), lb = this.leaderOf(b.parent);
+      const ma = a.node ?? id, mb = b.node ?? other;
+      if (a.parent !== b.parent) {
+        this.putMember(a.parent, id, mb);
+        this.putMember(b.parent, other, ma);
+      }
+      // The leader mark stays with its place.
+      if (a.parent === b.parent) {
+        if (la === id) this.setLeaderOf(a.parent, other);
+        else if (la === other) this.setLeaderOf(a.parent, id);
+        return;
+      }
+      if (la === id) this.setLeaderOf(a.parent, other);
+      if (lb === other) this.setLeaderOf(b.parent, id);
+    });
+  }
+
+  /**
+   * Records member in the level of parent in place of the member id, or takes the record of id out when member is a content card of the
+   * root level, which is held by no node; a member that enters the place of an unrecorded content card of the root level is recorded.
+   */
+  putMember(parent, id, member) {
+    const members = parent ? parent.members : this.groups;
+    const at = members.findIndex((entry) => memberId(entry) === id);
+    const record = parent !== null || typeof member !== "string";
+    if (at >= 0 && record) members.splice(at, 1, member);
+    else if (at >= 0) members.splice(at, 1);
+    else if (record) members.push(member);
   }
 
   /** Whether move of the card id to side of target would succeed. */
@@ -1197,7 +1243,8 @@ export class GroupTree {
    * of a cut, band the index of the band from the outermost and of the number of bands on its line, or {kind: "strip" | "centre", card} for
    * the tab strip and the centre of a content card, or null for a point on a window sidebar or in no card or box. options are headerPx,
    * the height of the tab strip of a content card, edge, the edge share of the body of a card, band, the standard width of a band, and
-   * bandMargin, the margin that the bands of a side keep before the centre of the card.
+   * bandMargin, the margin that the bands of a side keep before the centre of the card. options.group is set for a dragged group card,
+   * which holds cards and no tabs, so a tab strip is no target of it and is part of the body of its card.
    */
   targetAt(x, y, options) {
     return this.dragAt(null, x, y, options).hit;
@@ -1211,6 +1258,9 @@ export class GroupTree {
    */
   dragAt(anchor, x, y, options) {
     if (!Number.isFinite(x) || !Number.isFinite(y)) return { hit: null, anchor: null };
+    // A group card holds cards and no tabs, so a tab strip is no target of it and is part of the body of its card
+    // (docs/spec/groups.md#target-search).
+    if (options.group) options = { ...options, headerPx: 0 };
     const holds = (r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
     let content = null, group = null, frame = null;
     for (const { id, node } of this.order()) {

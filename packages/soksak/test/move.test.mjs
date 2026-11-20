@@ -149,3 +149,25 @@ test("no existing id is reassigned", () => {
   );
   assert.equal(new Set(grid.cards.map((c) => c.id)).size, grid.cards.length, "no name twice");
 });
+
+test("exchange puts two nodes in each other's place, each place keeping its fraction and the px size of a card there", () => {
+  const state = { root: { cut: "x", kids: [
+    { share: 0.4, node: { card: "a", width: 300 } },
+    { share: 0.6, node: { box: "g", inner: { cut: "y", kids: [{ share: 0.5, node: { card: "b" } }, { share: 0.5, node: { card: "c", width: 200 } }] } } },
+  ] } };
+  const grid = new Soksak(state, { width: 1000, height: 600, gap: 0, minSize: 8 });
+  grid.exchange("a", "c");
+  const root = grid.toJSON().root;
+  assert.deepEqual(root.kids.map((kid) => kid.share), [0.4, 0.6], "each place keeps its fraction");
+  assert.deepEqual(root.kids[0].node, { card: "c", fixed: false, width: 300 }, "c takes the place and the px size of a");
+  assert.deepEqual(root.kids[1].node.inner.kids[1].node, { card: "a", fixed: false, width: 200 }, "a takes the place and the px size of c");
+  // A box in the place of a card takes the fraction of the place, and the card that enters the place of the box declares no px size.
+  grid.exchange("g", "c");
+  const after = grid.toJSON().root;
+  assert.equal(after.kids[0].node.box, "g");
+  assert.deepEqual(after.kids[1].node, { card: "c", fixed: false });
+  const before = JSON.stringify(grid.toJSON());
+  assert.throws(() => grid.exchange("g", "a"), /card g and card a hold one another and do not exchange/);
+  assert.throws(() => grid.exchange("a", "z"), /card z is not a member of the layout/);
+  assert.equal(JSON.stringify(grid.toJSON()), before, "a refusal changes nothing");
+});
