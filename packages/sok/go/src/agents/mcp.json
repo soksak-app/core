@@ -351,6 +351,58 @@
       }
     },
     {
+      "name": "messages_read",
+      "description": "Returns {registration, messages: [{seq, path, text, from}], last}: the messages of the folder of the terminal with a seq greater than after. Pass last as the next after with the registration of the reply; a registration that is not current fails with epoch-changed, after which the caller reads again from after 0.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "terminal": {
+            "type": "string",
+            "description": "Surface identifier of the terminal, from window_describe or agent_context."
+          },
+          "after": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "The last seq that the caller read. Defaults to 0."
+          },
+          "registration": {
+            "type": "string",
+            "description": "The registration of the reply that gave after. Required when after is above 0."
+          }
+        },
+        "required": [
+          "terminal"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "messages_wait",
+      "description": "Waits until the folder of the terminal holds a message with a seq greater than after and returns it as messages_read does. The wait has no time limit; it fails with registration-closed when the folder is removed.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "terminal": {
+            "type": "string",
+            "description": "Surface identifier of the terminal, from window_describe or agent_context."
+          },
+          "after": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "The last seq that the caller read. Defaults to 0."
+          },
+          "registration": {
+            "type": "string",
+            "description": "The registration of the reply that gave after. Required when after is above 0."
+          }
+        },
+        "required": [
+          "terminal"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "status_get",
       "description": "Returns the current value of a status.",
       "inputSchema": {

@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  BLANK_PER_POINT, caseInput, colourAt, dividerOf, formatReport, missingFrames, parseOptions, screenRows, textBands, textLines, textProfile,
-  zeroRows,
+  BLANK_PER_POINT, caseInput, colourAt, cursorCell, cursorFrames, dividerOf, formatReport, missingFrames, parseOptions, screenRows, textBands,
+  textLines, textProfile, zeroRows,
 } from "../measure-terminal-resize.mjs";
 
 /** The screen rows of `lines`, one cell for each character. */
@@ -103,14 +103,60 @@ test("a prompt frame misses text below the share of coloured pixels, and an alt 
   assert.throws(() => missingFrames("prompt", [null], blank), /no frame of the recording shows the divider/);
 });
 
+/** Paints a hollow cursor box of the cell x0..x0 + 4, y0..y0 + 8 (window points) with an outline of one point. */
+function hollowCursor(frame, x0, y0, colour) {
+  paint(frame, { x0, x1: x0 + 4, y0, y1: y0 + 1 }, colour);
+  paint(frame, { x0, x1: x0 + 4, y0: y0 + 7, y1: y0 + 8 }, colour);
+  paint(frame, { x0, x1: x0 + 1, y0, y1: y0 + 8 }, colour);
+  paint(frame, { x0: x0 + 3, x1: x0 + 4, y0, y1: y0 + 8 }, colour);
+}
+
+test("a frame shows the cursor off the prompt when its cursor has no ink left of it and ink right of it on its row", () => {
+  const text = [220, 220, 220];
+  const span = { x0: 0, x1: 40, y0: 0, y1: 20, background: BACKGROUND };
+  // The prompt of two glyphs of six points in cells of four points, and the cursor of eight points after it or on its first cell.
+  const prompt = (frame) => {
+    paint(frame, { x0: 1, x1: 3, y0: 3, y1: 9 }, text);
+    paint(frame, { x0: 5, x1: 7, y0: 3, y1: 9 }, text);
+  };
+  const after = frameOf(40, 20, BACKGROUND);
+  prompt(after);
+  hollowCursor(after, 12, 2, text);
+  const first = cursorCell(after, span, null);
+  assert.deepEqual(first, { x0: 24, x1: 32, y0: 4, y1: 20, height: 16, left: 2 * 2 * 12 * 2, right: 0 });
+  const onFirstCell = frameOf(40, 20, BACKGROUND);
+  prompt(onFirstCell);
+  paint(onFirstCell, { x0: 0, x1: 4, y0: 2, y1: 10 }, text);
+  const off = cursorCell(onFirstCell, span, first.height);
+  assert.deepEqual(off, { x0: 0, x1: 8, y0: 4, y1: 20, height: 16, left: 0, right: 2 * 2 * 12 });
+  // A prompt that fills its row leaves the cursor alone on the first cell of the next row.
+  const wrapped = frameOf(40, 20, BACKGROUND);
+  paint(wrapped, { x0: 1, x1: 7, y0: 1, y1: 5 }, text);
+  hollowCursor(wrapped, 0, 8, text);
+  const alone = cursorCell(wrapped, span, first.height);
+  assert.deepEqual(alone, { x0: 0, x1: 8, y0: 16, y1: 32, height: 16, left: 0, right: 0 });
+  // The dim scrollbar and a frame that does not draw the cursor show no cursor.
+  const dim = frameOf(40, 20, BACKGROUND);
+  prompt(dim);
+  paint(dim, { x0: 36, x1: 38, y0: 0, y1: 20 }, [85, 90, 97]);
+  assert.equal(cursorCell(dim, span, first.height), null);
+  assert.equal(cursorCell(frameOf(40, 20, BACKGROUND), span, null), null);
+  assert.deepEqual(cursorFrames("prompt", [first, null, off, first, alone]), { judged: true, off: [2], unjudged: 1 });
+  assert.deepEqual(cursorFrames("output", [first, off]), { judged: true, off: [1], unjudged: 0 });
+  assert.deepEqual(cursorFrames("alt", [first, off]), { judged: false, off: [], unjudged: 0 });
+  assert.deepEqual(cursorFrames("prompt", [null, off]), { judged: false, off: [], unjudged: 0 });
+});
+
 test("the report names each case, terminal and a wrapped line that does not join", () => {
   const report = formatReport({
     plugin: "p", distance: 200, ms: 900, times: 2,
     results: [{
       name: "output", folder: "/f", notes: ["lost 1"], took: 3600, asked: 3600, frames: 450, moves: 300, withoutDivider: 0,
       terminals: [
-        { tab: "t1", bands: 30, judged: true, missing: [1, 2], zerosBefore: [57, 15], zerosAfter: [57, 15] },
-        { tab: "t2", bands: 30, judged: false, missing: [], zerosBefore: [57, 15], zerosAfter: [57, 10, 5] },
+        { tab: "t1", bands: 30, judged: true, missing: [1, 2], zerosBefore: [57, 15], zerosAfter: [57, 15],
+          cursor: { judged: true, off: [4, 5, 6], unjudged: 2 } },
+        { tab: "t2", bands: 30, judged: false, missing: [], zerosBefore: [57, 15], zerosAfter: [57, 10, 5],
+          cursor: { judged: false, off: [], unjudged: 0 } },
       ],
     }],
   });
@@ -118,7 +164,7 @@ test("the report names each case, terminal and a wrapped line that does not join
     "p: divider 200 points left and back 2 times, 900 ms each way",
     "output: 450 frames, 300 divider moves, 0 without the divider, drag 3600 ms of 3600 ms; /f",
     "  recording: lost 1",
-    "  left t1: 2 frames miss text (first 1, 2), 30 text bands, zero rows [57,15] -> [57,15]",
-    "  right t2: not judged (no coloured prompt), 30 text bands, zero rows [57,15] -> [57,10,5] NOT REJOINED",
+    "  left t1: 2 frames miss text (first 1, 2), 3 frames show the cursor off the prompt (first 4, 5, 6), 2 not judged, 30 text bands, zero rows [57,15] -> [57,15]",
+    "  right t2: not judged (no coloured prompt), cursor not judged, 30 text bands, zero rows [57,15] -> [57,10,5] NOT REJOINED",
   ].join("\n"));
 });

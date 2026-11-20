@@ -618,6 +618,7 @@ fn the_mcp_server_replays_the_endpoint_cases() {
         "mcp-agent-context",
         "mcp-window-describe",
         "mcp-tools-call-rejected",
+        "mcp-messages",
     ] {
         run_case(name, &[]);
     }

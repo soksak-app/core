@@ -227,6 +227,8 @@ Server는 표준 입력이 열려 있는 동안, 실행 중인 애플리케이�
 | `status_get` | `window?`, `name`, `surface?` | `status.get` |
 | `status_watch_once` | `window?`, `name`, `surface?`, `equals?` | `status.watch`, `status.get`, `status.unwatch`: 현재 값을 포함해 `equals`와 같은 값, `equals`가 없으면 다음 변경의 값. 시간 제한 없음 |
 | `element_rect` | `window?`, `name`, `surface?`, `index?` | `element.rect` |
+| `messages_read` | `terminal`, `after?`, `registration?` | `surface.window`, 그 window와 surface의 `exposure.snapshot`, surface에서 `<plugin>.messages.read`의 `command.run`; terminal의 message ([read 경로](messaging.md#path-of-the-reads)) |
+| `messages_wait` | `terminal`, `after?`, `registration?` | `<plugin>.messages.wait`로 같은 request; `after` 뒤의 message가 도착하면 그 message; 시간 제한 없음 ([MCP tools](messaging.md#mcp-tools)) |
 | `element_act` | `window?`, `name`, `surface?`, `index?`, `action`, `value?`, `event?` | `element.act` |
 | `input_pointer` | `window?`, `x`, `y`, `phase`, `button?`, `deltaX?`, `deltaY?`, `clicks?`, `activate?` | `input.pointer` |
 | `input_key` | `window?`, `key`, `text?`, `modifiers?`, `phase` | `input.key` |
@@ -236,7 +238,7 @@ Server는 표준 입력이 열려 있는 동안, 실행 중인 애플리케이�
 
 `status_watch_once`의 watch는 그 호출의 것이다. Server는 기다리는 호출들을 위해 창, status, surface마다 엔드포인트 watch 하나를 두고, 그 마지막 호출이 끝나면 `status.unwatch`를 보낸다. Client가 취소한 호출은 결과 없이 끝나고 같은 방식으로 watch의 자기 몫을 끝낸다.
 
-`docs/spec/cases/endpoint/`의 엔드포인트 case `mcp-*`는 server의 계약 case이고, 두 구현이 그것을 재생한다([검사](endpoint.ko.md#검사)). `mcp-exposure-search`는 window 없는 `exposure_search`의 엔드포인트 요청(`windows.list` 다음 `exposure.list`)을 담는다. `mcp-exposure-without-element`와 `mcp-exposure-without-params`는 `exposure_search`와 `exposure_describe`가 거부하는 응답을 밝힌다. `mcp-tools-call`은 command를 `command_run`으로 보낸다. `mcp-watch-shared`는 한 status의 두 기다림을 한 watch에 둔다. `mcp-reconnect`는 엔드포인트 파일 없이 시작한다. Case의 `mcp` member는 server의 message를 밝힌다([엔드포인트 case](cases/endpoint/README.ko.md)).
+`docs/spec/cases/endpoint/`의 엔드포인트 case `mcp-*`는 server의 계약 case이고, 두 구현이 그것을 재생한다([검사](endpoint.ko.md#검사)). `mcp-exposure-search`는 window 없는 `exposure_search`의 엔드포인트 요청(`windows.list` 다음 `exposure.list`)을 담는다. `mcp-exposure-without-element`와 `mcp-exposure-without-params`는 `exposure_search`와 `exposure_describe`가 거부하는 응답을 밝힌다. `mcp-tools-call`은 command를 `command_run`으로 보낸다. `mcp-watch-shared`는 한 status의 두 기다림을 한 watch에 둔다. `mcp-reconnect`는 엔드포인트 파일 없이 시작한다. `mcp-messages`는 `messages_read`와 `messages_wait`의 request, 어떤 window에도 없는 terminal, messaging command가 없는 surface를 담는다. Case의 `mcp` member는 server의 message를 밝힌다([엔드포인트 case](cases/endpoint/README.ko.md)).
 
 ### 에이전트의 창
 

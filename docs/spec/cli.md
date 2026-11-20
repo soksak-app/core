@@ -227,6 +227,8 @@ The tools are a fixed set; no tool is made from the exposure:
 | `status_get` | `window?`, `name`, `surface?` | `status.get` |
 | `status_watch_once` | `window?`, `name`, `surface?`, `equals?` | `status.watch`, `status.get`, `status.unwatch`: the value that equals `equals`, also the current one, or without `equals` the value of the next change; no time limit |
 | `element_rect` | `window?`, `name`, `surface?`, `index?` | `element.rect` |
+| `messages_read` | `terminal`, `after?`, `registration?` | `surface.window`, `exposure.snapshot` of that window and surface, and `command.run` of `<plugin>.messages.read` on the surface; the messages of the terminal ([path of the reads](messaging.md#path-of-the-reads)) |
+| `messages_wait` | `terminal`, `after?`, `registration?` | The same requests with `<plugin>.messages.wait`; the messages after `after` when they arrive; no time limit ([MCP tools](messaging.md#mcp-tools)) |
 | `element_act` | `window?`, `name`, `surface?`, `index?`, `action`, `value?`, `event?` | `element.act` |
 | `input_pointer` | `window?`, `x`, `y`, `phase`, `button?`, `deltaX?`, `deltaY?`, `clicks?`, `activate?` | `input.pointer` |
 | `input_key` | `window?`, `key`, `text?`, `modifiers?`, `phase` | `input.key` |
@@ -236,7 +238,7 @@ The tools are a fixed set; no tool is made from the exposure:
 
 A watch of `status_watch_once` belongs to its call. The server holds one endpoint watch per window, status and surface for the calls that wait on it, and sends `status.unwatch` when the last of them ends; a call that the client cancels ends without a result and ends its share of the watch in the same way.
 
-The endpoint cases `mcp-*` of `docs/spec/cases/endpoint/` are the contract cases of the server, and both implementations replay them ([checks](endpoint.md#checks)): `mcp-exposure-search` holds the endpoint requests of `exposure_search` without a window (`windows.list`, then `exposure.list`); `mcp-exposure-without-element` and `mcp-exposure-without-params` state the replies that `exposure_search` and `exposure_describe` refuse; `mcp-tools-call` sends a command through `command_run`; `mcp-watch-shared` holds two waits of one status on one watch; and `mcp-reconnect` starts without an endpoint file. The `mcp` member of a case states the messages of the server ([the endpoint cases](cases/endpoint/README.md)).
+The endpoint cases `mcp-*` of `docs/spec/cases/endpoint/` are the contract cases of the server, and both implementations replay them ([checks](endpoint.md#checks)): `mcp-exposure-search` holds the endpoint requests of `exposure_search` without a window (`windows.list`, then `exposure.list`); `mcp-exposure-without-element` and `mcp-exposure-without-params` state the replies that `exposure_search` and `exposure_describe` refuse; `mcp-tools-call` sends a command through `command_run`; `mcp-watch-shared` holds two waits of one status on one watch; `mcp-reconnect` starts without an endpoint file; and `mcp-messages` holds the requests of `messages_read` and `messages_wait`, a terminal in no window and a surface without the messaging commands. The `mcp` member of a case states the messages of the server ([the endpoint cases](cases/endpoint/README.md)).
 
 ### The window of an agent
 

@@ -59,6 +59,7 @@ Example, after a description: two cards `A` above `B` each hold a process sessio
 - Read a status with `sok status <name>` or `status_get`; wait for a value with `sok status <name> --watch` or `status_watch_once {name, equals}`.
 - Act on an element with `sok element rect|click|input|dispatch <name>`, `element_rect` or `element_act`.
 - Use native input (`sok input pointer|gesture|key|text`, `input_pointer`, `input_key`, `input_text`) only when a request needs real input events; a command or an element action is the normal path.
+- Exchange messages between terminals: read the messages of a terminal with `messages_read {terminal, after, registration}` and wait for the next one with `messages_wait`, passing `last` and `registration` of the reply as the next cursor; send one with `sok message send <folder> <text>`, where `<folder>` is the `folder` of the status `<plugin>.messages` of the receiving terminal.
 - Change plugins through the declared commands `core.plugins.*` of the running application; `sok plugin` beside a running application is refused.
 
 ## Rules
