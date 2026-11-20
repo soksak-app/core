@@ -76,12 +76,6 @@ func (t *GroupTree) Grid() *Grid { return t.grid }
 // Head is the head height of a group card.
 func (t *GroupTree) Head() float64 { return t.head }
 
-// SetHead changes the head height of a group card. It changes no arrangement.
-func (t *GroupTree) SetHead(head float64) {
-	t.head = head
-	t.rev++
-}
-
 // SetSeam changes whether the cards share one line, and gives the grid the frames of that drawing. It changes no arrangement.
 func (t *GroupTree) SetSeam(seam bool) {
 	t.seam = seam
