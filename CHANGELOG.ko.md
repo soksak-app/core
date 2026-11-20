@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1006-2: terminal checklist의 P192가 sidecar `open`의 `program`과 `args`로 agent CLI를 시작한다. vt와 alacritty sidecar는 멤버와 `program not found` 오류를 이미 `origin/main`(S233, S241)에 구현했고, 두 `open_program_test`가 실제 PATH로 10 of 10 통과한다. core의 F1006-2, F1006-2-1, F1006-2-2 행은 `[o]`이며, 명세 `docs/spec/agent-roles.md#start-parameters`는 바꿀 필요가 없었다.
 - F1016-10.6: plane이 fullscreen card를 reader 하나로 읽고 cut node의 kids를 기본값 없이 읽으며, 나머지 기본값이 이유를 적는다.
 - F1016-10.7: mygo workbench가 level의 leader를 이유를 적은 reader 하나로 읽고, 나머지 무시한 결과가 어느 결과를 읽는지 적는다.
 - F1016-10.5: group tree가 card의 member를 이유를 적은 helper 하나로 읽고 나머지 기본값이 이유를 적는다. move는 알 수 없는 target을 거부한 뒤 target의 path를 기본값 없이 읽는다.
