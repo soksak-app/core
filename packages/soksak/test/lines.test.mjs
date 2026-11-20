@@ -85,8 +85,8 @@ test("dividers cover referenced lines; rules cover every line", () => {
 
 test("a boundary range is never inverted, so the lines stay in order", () => {
   // Two cards can ask for more room than the plane holds. The drag then has no
-  // position that satisfies both, but it must not put a line past its
-  // neighbour: that draws a card wider than one spanning more slots than it.
+  // position that satisfies both. The seam of the upper row moves within its own
+  // row: the seam of the lower row is a line of another cut and no limit.
   const railed = () =>
     Soksak.from(
       { root: { cut: "y", kids: [{ share: 0.5, node: { cut: "x", kids: [{ share: 0.12, node: { card: "A" } }, { share: 0.88, node: { card: "B" } }] } }, { share: 0.5, node: { cut: "x", kids: [{ share: 0.23, node: { card: "C" } }, { share: 0.77, node: { card: "D" } }] } }] } },
@@ -103,7 +103,7 @@ test("a boundary range is never inverted, so the lines stay in order", () => {
     for (let k = 1; k < xs.length; k++) {
       assert.ok(xs[k] >= xs[k - 1], `lines out of order: ${xs.join(", ")}`);
     }
-    assert.ok(grid.rect("C").w >= grid.rect("A").w - 1e-9, "C spans more slots than A");
+    assert.ok(Math.abs(grid.rect("C").w - railed().rect("C").w) < 1e-9, "the lower row keeps its seam");
   }
 });
 
@@ -318,17 +318,18 @@ test("a slot stopped at its corridor does not bend a drag", () => {
   );
 });
 
-test("a drag lands where it asked while a slot is stopped at its corridor", () => {
-  // The slot the starvation rule stopped does not flex with its span, and it
-  // flexes again as soon as the move gives it room, so one conversion of px into
-  // span lands short. The plane holds what this axis declares before and after.
-  // card-10 is drawn with no width, so the boundary can only move right: the
-  // range it reports starts at its present position, and each ask lies in it.
+test("a seam beside two kids drawn at their minimum or below holds where it stands", () => {
+  // card-10 is drawn below `minSize` because the plane is too small, and card-12
+  // declares 85, below it as well. Neither kid of the cut can give room, so the
+  // range is the position the seam stands at and a drag moves nothing.
   const state = { root: { cut: "x", kids: [{ share: 0.608, node: { cut: "y", kids: [{ share: 0.25604838709677413, node: { card: "card-1" } }, { share: 0.7439516129032259, node: { card: "card-9" } }] } }, { share: 0.03200000000000003, node: { card: "card-10" } }, { share: 0.14406779661016944, node: { card: "card-12", width: 85 } }, { share: 0.21593220338983055, node: { card: "card-11", width: 180 } }] } };
   for (const ask of [295, 310, 325]) {
     const grid = new Soksak(state, { width: 590, height: 531, gap: 24, minSize: 96 });
-    const at = grid.moveBoundary("x", 2, ask, false);
-    assert.ok(Math.abs(at - ask) < 0.01, `the boundary reaches ${ask}, not ${at}`);
+    const at = grid.boundaryPos("x", 2);
+    const was = grid.rects();
+    assert.deepEqual(grid.boundaryRange("x", 2), [at, at]);
+    assert.equal(grid.moveBoundary("x", 2, ask, false), at, `the ask ${ask} moves nothing`);
+    assert.deepEqual(grid.rects(), was);
   }
 });
 
@@ -436,3 +437,25 @@ test("a split with newLine cuts the card as its own cut, drawing the line the ot
   assert.equal(fresh.card("n").c0, 0);
 });
 
+
+test("a boundary's range and its move come from its own cut, not from a line of another cut", () => {
+  // The head of the group is a cost of its column, so the seam of the left column stands at 310 and the seam of the right
+  // column at 300: two derived lines. The left seam stops where its upper card is drawn its minimum and its head.
+  const state = { root: { cut: "x", kids: [
+    { share: 0.5, node: { box: "g", inner: { cut: "y", kids: [{ share: 0.5, node: { card: "c1" } }, { share: 0.5, node: { card: "c2" } }] } } },
+    { share: 0.5, node: { cut: "y", kids: [{ share: 0.5, node: { card: "c3" } }, { share: 0.5, node: { card: "c4" } }] } },
+  ] } };
+  const grid = new Soksak(state, { width: 1000, height: 600, gap: 24, minSize: 96 });
+  grid.setHeads({ g: 44 });
+  const line = grid.card("c1").r1;
+  const other = { c3: grid.rect("c3"), c4: grid.rect("c4") };
+  assert.notEqual(line, grid.card("c3").r1, "the two seams are two lines");
+  assert.deepEqual(grid.boundaryRange("y", line), [96 + 44 + 12, 576 - 96 - 12], "the minimums of the two kids of the cut bound the range");
+  // The kids take fractions, so the positions carry the rounding of a fraction of the rest.
+  assert.ok(Math.abs(grid.moveBoundary("y", line, 0, false) - 152) < 1e-9);
+  assert.ok(Math.abs(grid.rect("c1").h - (96 + 44)) < 1e-9, "the upper card is drawn its minimum and the head inside it");
+  // The seam now stands before the seam of the other column, so it has another index.
+  assert.ok(Math.abs(grid.moveBoundary("y", grid.card("c1").r1, 600, false) - 468) < 1e-9);
+  assert.ok(Math.abs(grid.rect("c2").h - 96) < 1e-9, "the lower card is drawn its minimum");
+  assert.deepEqual({ c3: grid.rect("c3"), c4: grid.rect("c4") }, other, "the seam of the other column stays");
+});

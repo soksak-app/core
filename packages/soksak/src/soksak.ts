@@ -909,31 +909,23 @@ export class Soksak {
   // ---- boundaries --------------------------------------------------------
 
   /**
-   * Draws the card `holder`, which declares a px size on `axis`, `delta` px larger by moving the boundary `line` at one of its
-   * edges. A px size belongs to its card of the tree, whatever cells the lines of other cuts draw across the card. The drag moves
-   * every seam that stands on the line, so every card that declares a px size and has its edge on that side of the line takes
-   * the same difference, as the kids of a column do. When cards on the other side declare px sizes as well, they give the
-   * difference and every declaration on the two sides changes by it at the scale it is drawn at: a plane that draws its declared
-   * sizes scaled keeps its scale, and no third card is redrawn. The line moves by the difference, so the commit reads the
-   * fractions of a kid that pays from it.
+   * Draws `node`, which keeps a px size on `axis`, `delta` px larger at the edge `side` that a seam moves: a card takes the
+   * delta at the scale it is drawn at, a box gives it to its inner node, a cut along the axis to its kid at that edge, and a cut
+   * across it to each of its kids that keeps a size.
    */
-  private resizeCard(axis: Axis, holder: Card, line: number, delta: number): void {
-    const [lo, hi] = SPAN[axis];
-    const ends = holder[hi] === line;
-    const drawn = (card: Card) => (axis === 'x' ? this.rectOf(card).w : this.rectOf(card).h);
-    const declared = (near: boolean) => this.list.filter((c) => (near === ends ? c[hi] === line : c[lo] === line) && fixedSize(c, axis) !== null);
-    const near = declared(true);
-    const far = declared(false);
-    const sizes = new Map([...near, ...far].map((c) => [c, { own: fixedSize(c, axis) as number, now: drawn(c) }]));
-    const change = (card: Card, by: number) => {
-      const { own, now } = sizes.get(card) as { own: number; now: number };
-      this.declareOn(axis, card, Math.max(0, far.length ? own + by * (now > EPS ? own / now : 1) : now + by));
-    };
-    for (const card of near) change(card, delta);
-    for (const card of far) change(card, -delta);
-    const a = this.arr(axis);
-    this.moved = true;
-    a[line] = clamp(a[line] + (ends ? delta : -delta) / this.size(axis), a[line - 1], a[line + 1]);
+  private grow(node: TreeNode, axis: Axis, delta: number, side: 'start' | 'end'): void {
+    if (isBox(node)) return this.grow(node.inner, axis, delta, side);
+    if (isCut(node)) {
+      const kids = node.cut === axis ? [side === 'end' ? node.kids[node.kids.length - 1] : node.kids[0]] : node.kids;
+      for (const kid of kids) if (this.heldOf(kid.node, axis, this.unit) !== null) this.grow(kid.node, axis, delta, side);
+      return;
+    }
+    const card = this.byId.get(node.card) as Card;
+    const own = fixedSize(card, axis);
+    if (own === null) return;
+    const now = this.input().content(node, axis);
+    // The new content over the drawn content is the scale of the declaration; a card drawn at its size takes the delta as it is.
+    this.declareOn(axis, card, Math.max(0, now > EPS ? (Math.abs(now - own) < 1e-6 ? own + delta : (own * (now + delta)) / now) : own + delta));
   }
 
   /** Declares the px size `size` of the card on `axis`. */
@@ -942,17 +934,6 @@ export class Soksak {
     else card.height = size;
   }
 
-
-  /**
-   * The card whose px size a drag at this boundary changes, if either slot
-   * meeting there has one. Every card in that slot takes the new size.
-   */
-  private holderAt(axis: Axis, line: number): Card | undefined {
-    const [lo, hi] = SPAN[axis];
-    const before = this.list.find((c) => c[hi] === line && fixedSize(c, axis) !== null);
-    if (before) return before;
-    return this.list.find((c) => c[lo] === line && fixedSize(c, axis) !== null);
-  }
 
   /** Everything to draw for the boundaries. */
   rules(): Rule[] {
@@ -1008,39 +989,62 @@ export class Soksak {
         return [at, at];
       }
     }
-    const along = linePositions(this.plane, axis);
-    const [lo, hi] = SPAN[axis];
+    // The boundary is the seams of the cuts along the axis that stand on the line, and a drag moves every one of them. Each
+    // seam bounds the move by the two kids of its own cut: each can give what it can lose before a card inside it is drawn
+    // below its minimum. A line of another cut is no limit, because the kids of another cut do not change.
+    const now = this.rects();
+    const { extentOf, need } = this.measure(now, now);
+    const input = this.input();
+    const drawn = (node: TreeNode) => {
+      const e = extentOf(node);
+      return axis === 'x' ? e.x1 - e.x0 : e.y1 - e.y0;
+    };
+    // What a node can lose on the axis: a card or a node that keeps a px size down to its minimum; a cut across the axis loses
+    // it in every kid; a cut along it shares the loss among its kids that take a fraction in proportion to their contents.
+    const loses = (node: TreeNode): number => {
+      if (isBox(node)) return loses(node.inner);
+      // A drag sets the size of a card that the person moves, a fixed card or one that declares a px size included, so a card
+      // can lose down to `minSize` and the heads inside it.
+      if (isCard(node)) return Math.max(0, drawn(node) - this.min - (axis === 'y' ? this.above.get(node.card) ?? 0 : 0));
+      if (!isCut(node) || this.heldOf(node, axis, this.unit) !== null) return Math.max(0, drawn(node) - need(node, axis));
+      if (node.cut !== axis) return Math.min(...node.kids.map((kid) => loses(kid.node)));
+      const open = node.kids.filter((kid) => this.heldOf(kid.node, axis, this.unit) === null);
+      const total = open.reduce((a, kid) => a + input.content(kid.node, axis), 0);
+      let most = Infinity;
+      for (const kid of open) {
+        const part = input.content(kid.node, axis);
+        if (part > EPS) most = Math.min(most, (loses(kid.node) * total) / part);
+      }
+      return most === Infinity ? 0 : most;
+    };
+    const at = this.boundaryPos(axis, line);
+    let toward = Infinity;
+    let away = Infinity;
+    for (const { cut, i } of this.seams(axis, line)) {
+      toward = Math.min(toward, loses(cut.kids[i].node));
+      away = Math.min(away, loses(cut.kids[i + 1].node));
+    }
+    if (toward === Infinity) return [at, at];
+    return [at - toward, at + away];
+  }
 
-    // The neighbouring lines are hard limits. Past one of them the line array is
-    // out of order and a card is drawn wider than one spanning more slots.
-    const first = along[line - 1];
-    const last = along[line + 1];
-    let min = first;
-    let max = last;
-    const plane = this.plane;
-    const read = linesRead(plane, axis);   // one pass, not two per card
-    for (const card of this.list) {
-      const near = cardInset(plane, axis, card, 'lo', read);
-      const far = cardInset(plane, axis, card, 'hi', read);
-      if (card[hi] === line) min = Math.max(min, along[card[lo]] + this.min + near + far);
-      if (card[lo] === line) max = Math.min(max, along[card[hi]] - this.min - near - far);
-    }
-    // The range takes in where the boundary stands. A plane too small for its
-    // cards leaves it outside the span where every card holds `minSize`, and a
-    // range that excludes it moves the boundary on a drag that did not: the
-    // caller clamps the position it read back to a range without it in.
-    //
-    // The two cards can need more than the plane holds. Neither reaches its
-    // minimum, so `min` is past `max` and there is no span between them; their
-    // midpoint is where the two come out the same size, which is the one
-    // position still worth reaching, and it is the other end of the range rather
-    // than an inverted pair.
-    const at = along[line];
-    if (min > max) {
-      const mid = clamp((min + max) / 2, first, last);
-      return [Math.min(mid, at), Math.max(mid, at)];
-    }
-    return [Math.min(min, at), Math.max(max, at)];
+  /** The seams of the cuts along `axis` that stand on the derived line `line`: each cut and the index of the kid before the seam. */
+  private seams(axis: Axis, line: number): { cut: CutNode; i: number }[] {
+    const end = axis === 'x' ? 1 : 3;
+    const out: { cut: CutNode; i: number }[] = [];
+    const visit = (node: TreeNode): void => {
+      this.visited++;
+      if (isBox(node)) return visit(node.inner);
+      if (!isCut(node)) return;
+      if (node.cut === axis) {
+        for (let i = 0; i < node.kids.length - 1; i++) {
+          if ((this.at.get(node.kids[i].node) as NodeLines)[end] === line) out.push({ cut: node, i });
+        }
+      }
+      for (const kid of node.kids) visit(kid.node);
+    };
+    visit(this.root);
+    return out;
   }
 
   /**
@@ -1073,25 +1077,38 @@ export class Soksak {
 
     // A move to where the boundary stands changes nothing, a declared size that the plane draws scaled included.
     if (Math.abs(target - this.boundaryPos(axis, line)) < 1e-9) return this.boundaryPos(axis, line);
-    const holder = this.holderAt(axis, line);
-    if (holder) {
-      // The card is drawn larger by what its far edge moves toward the target, or smaller by what its near edge does.
-      const ends = holder[SPAN[axis][1]] === line;
-      const off = target - this.boundaryPos(axis, line);
-      this.resizeCard(axis, holder, line, ends ? off : -off);
-    } else {
-      // Once a line moves, every line stands at its coordinate over the extent of the plane, and the commit reads the fractions
-      // of the kids beside it from there, so the coordinate of the target is where the line stands. The neighbouring lines bound
-      // it, so the line array stays in order.
-      const a = this.arr(axis);
-      this.moved = true;
-      a[line] = clamp(target / this.size(axis), a[line - 1], a[line + 1]);
-    }
-    // The position is read before the commit: a line that reached another joins it there, and its index then names another line.
-    const at = this.boundaryPos(axis, line);
-    this.moved = true;
+    // Each seam on the line moves by the same px. The contents of the kids of each cut are read before anything changes: the
+    // kid before the seam is drawn `off` larger and the kid after it `off` smaller, and every other kid keeps its content. A kid
+    // that keeps a px size takes the new size at the scale it is drawn at, so a plane that draws its declared sizes scaled keeps
+    // its scale; the kids that take a fraction take the fractions of their new contents.
+    const off = target - this.boundaryPos(axis, line);
+    const seams = this.seams(axis, line);
+    const kept = this.toJSON();
+    const input = this.input();
+    const contents = seams.map(({ cut }) => cut.kids.map((kid) => input.content(kid.node, axis)));
+    const held = seams.map(({ cut }) => cut.kids.map((kid) => this.heldOf(kid.node, axis, this.unit) !== null));
+    seams.forEach(({ cut, i }, k) => {
+      if (held[k][i]) this.grow(cut.kids[i].node, axis, off, 'end');
+      if (held[k][i + 1]) this.grow(cut.kids[i + 1].node, axis, -off, 'start');
+      const want = contents[k].slice();
+      want[i] += off;
+      want[i + 1] -= off;
+      const open = cut.kids.map((_, n) => (held[k][n] ? -1 : n)).filter((n) => n >= 0);
+      const shared = open.reduce((a, n) => a + cut.kids[n].share, 0);
+      const pool = open.reduce((a, n) => a + Math.max(0, want[n]), 0);
+      if (pool <= EPS) return;
+      for (const n of open) cut.kids[n].share = (Math.max(0, want[n]) / pool) * shared;
+    });
     this.changed();
-    return at;
+    // A move that leaves a card with no area changes nothing: the range lets a card reach `minSize`, and a `minSize` of 0 is
+    // no area.
+    if (!this.hasArea()) {
+      this.restore(kept);
+      return this.boundaryPos(axis, line);
+    }
+    // The seam keeps its cut, and the line it now stands on can have another index.
+    const first = seams[0];
+    return first ? this.boundaryPos(axis, (this.at.get(first.cut.kids[first.i].node) as NodeLines)[axis === 'x' ? 1 : 3]) : this.boundaryPos(axis, line);
   }
 
   /** px per unit of normalised span across the sharing slots. */
@@ -1300,18 +1317,10 @@ export class Soksak {
   }
 
   /**
-   * The text of the outermost node that the last operation moved and that is
-   * drawn below its minimum, or null. The minimum of a node is recursive: a card
-   * needs `minSize` and on y the heads drawn inside its rectangle, a card that
-   * keeps a px size the smaller of that size and `minSize`, a fixed card with a
-   * px size the smaller of that size and the size it had, another fixed card the
-   * size it is drawn at, a box the minimum of its
-   * inner node, a cut along an axis the minimums of its kids and the corridors
-   * between them, and a cut across it the largest minimum of its kids.
+   * The drawn extent of a node, the extent of the drawn rectangles of its cards, and its recursive minimum on an axis
+   * (packages/soksak/docs/layout.md#cuts), read from the rectangles `now`; `before` holds the rectangles that a fixed card had.
    */
-  private belowMinimum(before: Map<string, Rect>): string | null {
-    const now = this.rects();
-    const text = (n: number) => String(Math.round(n));
+  private measure(now: Map<string, Rect>, before: Map<string, Rect>): { extentOf: (node: TreeNode) => Extent; need: (node: TreeNode, axis: Axis) => number } {
     const extentOf = (node: TreeNode): Extent => {
       const all = cardsOf(node).map((leaf) => now.get(leaf.card) as Rect);
       return {
@@ -1343,6 +1352,23 @@ export class Soksak {
       const corridors = along(extentOf(node), axis) - node.kids.reduce((a, kid) => a + along(extentOf(kid.node), axis), 0);
       return kids.reduce((a, n) => a + n, 0) + corridors;
     };
+    return { extentOf, need };
+  }
+
+  /**
+   * The text of the outermost node that the last operation moved and that is
+   * drawn below its minimum, or null. The minimum of a node is recursive: a card
+   * needs `minSize` and on y the heads drawn inside its rectangle, a card that
+   * keeps a px size the smaller of that size and `minSize`, a fixed card with a
+   * px size the smaller of that size and the size it had, another fixed card the
+   * size it is drawn at, a box the minimum of its
+   * inner node, a cut along an axis the minimums of its kids and the corridors
+   * between them, and a cut across it the largest minimum of its kids.
+   */
+  private belowMinimum(before: Map<string, Rect>): string | null {
+    const now = this.rects();
+    const { extentOf, need } = this.measure(now, before);
+    const text = (n: number) => String(Math.round(n));
     const moved = (node: TreeNode): boolean =>
       cardsOf(node).some((leaf) => {
         const was = before.get(leaf.card);

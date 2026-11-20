@@ -380,14 +380,16 @@ outside the card. Give the children `min-width: 0`.
 
 ## Boundaries
 
-A drag changes the two slots that meet at the boundary and no others. A boundary
-dragged onto another line of its axis joins that line: the lines are derived from
-the tree and hold one coordinate once, so the seams of both stand on one line,
-and a later drag moves them together. `moveBoundary` returns the position the
-boundary reached, read before the lines are derived again. Next to a
-card holding its slot at a fixed size it changes that size and the slot on the
-other side is reduced by the same amount; anywhere else it moves the line and
-both sides follow.
+A boundary is the seams of the cuts along its axis that stand on its line, and a
+drag moves each of them by the same px. Each seam changes the two kids of its
+own cut that meet at it and no others: the kid before it is drawn larger by the
+move and the kid after it smaller. A kid that keeps a px size takes the new size
+at the scale it is drawn at; the kids that take a fraction take the fractions of
+their new contents. A line of another cut is no limit, because the kids of
+another cut do not change: a seam dragged past it passes it, and a seam dragged
+onto it joins it, so the two seams stand on one line and a later drag moves them
+together. `moveBoundary` returns the position the seam reached, read after the
+lines are derived again, on the line it then stands on.
 
 Where the plane holds less than the px sizes an axis declares, every declared
 size is drawn scaled by one factor, and a boundary with such a size on exactly
@@ -398,18 +400,18 @@ boundary stands at twice, and centring it does nothing for the same reason. A
 boundary with a declared size on both sides still moves, because the pair keeps
 the size it declares between them.
 
-Beside a card with a px size, the range a boundary can reach also ends where the
-sharing slots hit their floor — a gap each plus one card's minimum.
-`boundaryRange` measures the two cards that meet the boundary, so on a plane
-close to that floor it can report a little more room than the boundary can take,
-and a target past it leaves the boundary where it is.
-
-A drag moves the line between two kids of one cut, and the commit reads the
-fraction of each kid that takes one from its drawn size, so the kids on the two
-sides take the difference and every other kid keeps its fraction. A kid that is
-drawn the costs inside it has no room to give, so a line beside it does not move
-toward it. `boundaryRange` bounds a drag; it does not list where the drag can
-stop.
+`boundaryRange` comes from the same seams. Each kid beside a seam can give what
+it can lose before a card inside it is drawn below `minSize` and the heads inside
+it: a card loses down to that, a box gives what its inner node gives, a cut across
+the axis what its kid that can give least gives, and a cut along the axis shares
+the loss among its kids that take a fraction in proportion to their contents. A
+node that keeps a px size and is no card gives down to its recursive minimum
+([cuts](#cuts)). The range is the position of the boundary less the smallest
+amount the kids before the seams give and plus the smallest amount the kids
+after them give. A kid drawn at its minimum or below gives nothing, so the range
+always holds the position the boundary stands at. A move that would leave a card
+with no area, as `minSize: 0` allows, changes nothing. `boundaryRange` bounds a
+drag; it does not list where the drag can stop.
 
 The same rule settles a card that appears or disappears. A card inserted at the
 boundary between kids i and i+1 of the root is added beside kid i toward kid
