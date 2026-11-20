@@ -1810,7 +1810,8 @@
               ],
               "properties": {
                 "card": {
-                  "type": "string"
+                  "type": ["string", "array"],
+                  "items": { "type": "string" }
                 },
                 "zone": {
                   "enum": [
@@ -3886,7 +3887,7 @@
       },
       {
         "name": "core.card.move",
-        "description": "Moves a content card or a group card beside a card of any level, or into a group, as a drop does.",
+        "description": "Moves a content card or a group card beside a card, a box, a cut or a run of any level, named by one identifier or a list, or into a group, as a drop does.",
         "params": {
           "type": "object",
           "properties": {
@@ -3894,7 +3895,8 @@
               "type": "string"
             },
             "target": {
-              "type": "string"
+              "type": ["string", "array"],
+              "items": { "type": "string" }
             },
             "side": {
               "enum": [
@@ -4114,7 +4116,7 @@
       },
       {
         "name": "core.tab.move",
-        "description": "Moves a tab to the centre (as a tab) or an edge (as a new card) of a card, as a drop does.",
+        "description": "Moves a tab to the centre (as a tab) of a card, or to an edge (as a new card) of a card, a box, a cut or a run named by one identifier or a list, as a drop does.",
         "params": {
           "type": "object",
           "properties": {
@@ -4122,7 +4124,8 @@
               "type": "string"
             },
             "card": {
-              "type": "string"
+              "type": ["string", "array"],
+              "items": { "type": "string" }
             },
             "zone": {
               "enum": [

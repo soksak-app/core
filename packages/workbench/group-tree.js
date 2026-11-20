@@ -10,6 +10,85 @@ import { isPlace } from "./registry.js";
 /** The sides of a split, a group and a move beside a card. */
 const SIDES = ["left", "right", "top", "bottom"];
 
+/** Whether a node of the stored tree is a card, a box or a cut. */
+const isCardNode = (n) => typeof n.card === "string";
+const isBoxNode = (n) => typeof n.box === "string";
+const isCutNode = (n) => n.cut === "x" || n.cut === "y";
+
+/** The id of a card or a box node. */
+const nodeKey = (n) => (isBoxNode(n) ? n.box : n.card);
+
+/** The cards and boxes of the node n, the kids of its cuts in their order without the inside of a box. */
+const nodeMembers = (n) => (isCutNode(n) ? n.kids.flatMap((kid) => nodeMembers(kid.node)) : [nodeKey(n)]);
+
+/** The box id in the node n, or null. */
+function boxIn(n, id) {
+  if (isBoxNode(n)) return n.box === id ? n : boxIn(n.inner, id);
+  if (isCutNode(n)) for (const kid of n.kids) {
+    const found = boxIn(kid.node, id);
+    if (found) return found;
+  }
+  return null;
+}
+
+/** A target of a drop or a move as the commands write it: one id as that id, more ids as their list. */
+const targetText = (ids) => (ids.length === 1 ? ids[0] : ids);
+
+/** The ids of a target that names one id or a list of ids. */
+export const targetIds = (target) => (typeof target === "string" ? [target] : target);
+
+/** The axis of a side and the sides at the start and at the end of an axis. */
+const axisOf = (side) => (side === "left" || side === "right" ? "x" : "y");
+const nearSide = (axis) => (axis === "y" ? "top" : "left");
+const farSide = (axis) => (axis === "y" ? "bottom" : "right");
+
+/** The coordinate of the side of a rectangle. */
+const edgeOf = (r, side) => (side === "left" ? r.x : side === "right" ? r.x + r.w : side === "top" ? r.y : r.y + r.h);
+
+/**
+ * The side stack of side in chain: its innermost link and each link above it that ends on the same screen line toward side, from the
+ * outermost in: the box of a node, a cut whose kid toward side is the node below it, and a cut across the axis of side.
+ */
+function sideStack(chain, side) {
+  const axis = axisOf(side), after = side === "right" || side === "bottom";
+  const stack = [chain[chain.length - 1]];
+  for (let j = chain.length - 1; j > 0; j--) {
+    const link = chain[j], holder = chain[j - 1];
+    const shares = link.at < 0 || holder.node.cut !== axis || (after && link.at === holder.node.kids.length - 1) || (!after && link.at === 0);
+    if (!shares) break;
+    stack.unshift(holder);
+  }
+  return stack;
+}
+
+/**
+ * The kid of the cut across the axis of side that holds the node of the band at the link at of stack, through the cuts along the axis of
+ * side, which give no band: {cut, kid}, the members of that cut joined by a space and the index of the kid, or the cut null when a box or
+ * the root comes first.
+ */
+function kidOf(stack, at, side) {
+  for (let j = at; j > 0 && stack[j].at >= 0; j--) {
+    const holder = stack[j - 1].node;
+    if (holder.cut !== axisOf(side)) return { cut: nodeMembers(holder).join(" "), kid: stack[j].at };
+  }
+  return { cut: null, kid: 0 };
+}
+
+/**
+ * The target of a link of a side stack as a list of ids, or null: a card that is no window sidebar and not fixed, a box, a cut across the
+ * axis of side that holds no window sidebar, and the root cut that holds one as the content of the plane. A cut along the axis of side
+ * has the result of its kid toward side, so it gives no band of its own.
+ */
+function stackTarget(link, side) {
+  const n = link.node;
+  if (isCardNode(n)) return n.fixed || isPlace(n.card) ? null : [n.card];
+  if (isBoxNode(n)) return [n.box];
+  if (n.cut === axisOf(side)) return null;
+  const ids = nodeMembers(n);
+  if (!ids.some(isPlace)) return ids;
+  return link.holder === null ? ids.filter((id) => !isPlace(id)) : null;
+}
+
 /** The difference under which two drawn sizes are the same. */
 const EPSILON = 1e-6;
 
@@ -758,6 +837,32 @@ export class GroupTree {
     });
   }
 
+  /**
+   * Puts a new content card with data beside target toward side and returns its id: the split of one card, or the insert of the layout
+   * library beside the cut or the run of neighbouring kids that the ids name, whose new card joins the level of those kids
+   * (docs/spec/groups.md#moving-and-dropping).
+   */
+  splitBeside(target, side, data) {
+    const ids = targetIds(target);
+    if (ids.length === 1) return this.split(ids[0], side, data);
+    if (!SIDES.includes(side)) throw new Error(`unknown side ${side}; use left, right, top or bottom`);
+    if (!ids.length) throw new Error("a split names no card");
+    for (const id of ids) this.require(id);
+    const names = ids.join(", ");
+    const parent = this.parentOf(ids[0]);
+    return this.attempt(ids[0], `split toward ${side}`, () => {
+      const born = this.issue();
+      try {
+        this.grid.insert(ids, side, data === undefined ? { card: born } : { card: born, data });
+      } catch (error) {
+        throw new Error(`cards ${names} cannot split toward ${side}: ${error.message}`);
+      }
+      this.attach(parent, born);
+      this.leaderEntered(parent, born);
+      return born;
+    });
+  }
+
   /** Whether split of the card id toward side would succeed. */
   canSplit(id, side) {
     return this.splitRefusal(id, side) === null;
@@ -927,12 +1032,19 @@ export class GroupTree {
     return parent ? parent.card : null;
   }
 
-  /** The refusal of a move of the card id to side of target, or null (docs/spec/groups.md#commands). */
+  /**
+   * The refusal of a move of the card id to side of target, one id or the ids of the kids of a cut, or null
+   * (docs/spec/groups.md#commands).
+   */
   checkMove(id, target, side) {
     if (isPlace(id)) return new Error(`card ${id} is a window sidebar and does not move`);
-    if (isPlace(target)) return new Error(`card ${target} is a window sidebar; a card does not move beside it`);
-    if (target === id || (this.find(target)?.path ?? []).some((node) => node.card === id)) return new Error(`card ${id} cannot move into itself`);
-    if (side === "centre" && !this.isGroup(target)) return new Error(`card ${target} is not a group; a card moves beside it`);
+    const ids = targetIds(target);
+    if (!ids.length) return new Error(`card ${id} cannot move beside no card`);
+    const placed = ids.find(isPlace);
+    if (placed !== undefined) return new Error(`card ${placed} is a window sidebar; a card does not move beside it`);
+    const inside = (card) => card === id || (this.find(card)?.path ?? []).some((node) => node.card === id);
+    if (ids.every(inside)) return new Error(`card ${id} cannot move into itself`);
+    if (side === "centre" && (ids.length > 1 || !this.isGroup(ids[0]))) return new Error(`card ${ids.join(", ")} is not a group; a card moves beside it`);
     return null;
   }
 
@@ -956,10 +1068,15 @@ export class GroupTree {
     return null;
   }
 
-  /** Whether the card id already stands where a move to side of target puts it (docs/spec/groups.md#idempotency). */
-  moved(id, target, side) {
+  /**
+   * Whether the card id already stands where a move to side of target puts it (docs/spec/groups.md#idempotency); a move beside the kids
+   * of a cut is never already done.
+   */
+  moved(id, at, side) {
     const found = this.find(id);
-    if (!found) return false;
+    const ids = targetIds(at);
+    if (!found || ids.length !== 1) return false;
+    const [target] = ids;
     if (side === "centre") {
       if (found.parent?.card !== target) return false;
       const box = this.box(found.node ?? id);
@@ -971,18 +1088,22 @@ export class GroupTree {
 
   /**
    * Moves the card id, a content card or a group card, beside target on side into the level of target, or with side centre into the group
-   * card target at the right edge of its rectangle (docs/spec/groups.md#commands). The card keeps its id. Returns false when the card
-   * already stands where the move puts it, which changes nothing, and true after a move.
+   * card target at the right edge of its rectangle (docs/spec/groups.md#commands). target is one id or the ids of the kids of a cut. The
+   * card keeps its id. Returns false when the card already stands where the move puts it, which changes nothing, and true after a move.
    */
   move(id, target, side) {
     const refused = this.checkMove(id, target, side);
     if (refused) throw refused;
-    const refusal = () => new Error(`card ${id} cannot move to ${side} of ${target}`);
+    const names = targetIds(target).join(", ");
+    const refusal = () => new Error(`card ${id} cannot move to ${side} of ${names}`);
     if (side !== "centre" && !SIDES.includes(side)) throw refusal();
     const found = this.find(id);
-    if (!found || !this.find(target)) throw refusal();
+    if (!found || !targetIds(target).every((card) => this.find(card))) throw refusal();
     if (this.moved(id, target, side)) return false;
-    const operation = `move to ${side} of ${target}`;
+    const operation = `move to ${side} of ${names}`;
+    // The target is the node after the withdraw of the moving card (docs/spec/groups.md#target-search): a cut or a run that holds the
+    // moving card names the kids that remain.
+    const ids = targetIds(target).filter((card) => card !== id && !(this.find(card)?.path ?? []).some((node) => node.card === id));
     this.attempt(id, operation, () => {
       const moving = found.node ?? id;
       // A move is a withdraw and an insert: the card or the box of the group card leaves its cut, whose other kids take its space in
@@ -997,8 +1118,8 @@ export class GroupTree {
       // The card leaves the group tree before the insert, so the insert measures every card with the heads that it is drawn with.
       this.detach(found.parent, id);
       this.reframe();
-      const into = side === "centre" ? this.node(target) : this.parentOf(target);
-      const at = side === "centre" ? into.members.map(memberId).filter((member) => member !== id) : target;
+      const into = side === "centre" ? this.node(ids[0]) : this.parentOf(ids[0]);
+      const at = side === "centre" ? into.members.map(memberId).filter((member) => member !== id) : ids;
       this.insert(id, operation, at, side === "centre" ? "right" : side, left);
       // The group that the card leaves is replaced by its one member after the insert, so a move beside that group lands beside it and
       // the member takes its place.
@@ -1038,43 +1159,176 @@ export class GroupTree {
   }
 
   /**
-   * Resolves a drop at x, y on the innermost box that holds the point (docs/spec/groups.md#moving-and-dropping) and returns {card, zone} or
-   * null: a content card whose drawn rectangle holds the point gives the zone of zoneAt of the grid; otherwise the innermost group card
-   * whose frame holds it gives its own zones, the centre on its header and in its middle and a side in the outer edge fraction of its
-   * frame; a point in no box is no zone. options are the headerPx and edge of zoneAt and without, a dragged group card that the resolution
-   * leaves out with the cards inside it.
+   * The drawn rectangle of the node n of the stored tree: of a card or a box its drawn rectangle, of a cut the smallest rectangle that
+   * holds the drawn rectangles of its kids.
    */
-  dropAt(x, y, options) {
-    const { without = null, ...zone } = options;
-    // default: edge is an optional option of zoneAt, documented as 0.25.
-    const edge = zone.edge ?? 0.25;
-    // The dragged group card and the cards inside it are no target.
-    const excluded = (id) => without !== null && (id === without || (this.find(id)?.path ?? []).some((node) => node.card === without));
+  drawnRect(n) {
+    if (!isCutNode(n)) return this.rect(nodeKey(n));
+    return n.kids.map((kid) => this.drawnRect(kid.node)).reduce((out, r) => {
+      const x0 = Math.min(out.x, r.x), y0 = Math.min(out.y, r.y);
+      const x1 = Math.max(out.x + out.w, r.x + r.w), y1 = Math.max(out.y + out.h, r.y + r.h);
+      return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+    });
+  }
+
+  /**
+   * The chain of the point x, y: the nodes of the stored tree that hold it, from the root to the innermost card, through the inner node of
+   * each box, each as {node, holder, at, rect} with the cut that holds it and its index there (-1 for the inner node of a box). The kids of
+   * a cut divide its extent at the middle of each corridor between their drawn rectangles, so every point of the plane lies in one kid.
+   */
+  chain(root, x, y) {
+    const out = [{ node: root, holder: null, at: -1, rect: this.drawnRect(root) }];
+    for (let cur = root; ;) {
+      if (isBoxNode(cur)) {
+        out.push({ node: cur.inner, holder: cur, at: -1, rect: this.drawnRect(cur.inner) });
+        cur = cur.inner;
+      } else if (isCutNode(cur)) {
+        const p = cur.cut === "y" ? y : x;
+        const rects = cur.kids.map((kid) => this.drawnRect(kid.node));
+        let at = cur.kids.length - 1;
+        for (let i = 0; i < cur.kids.length - 1; i++) {
+          if (p < (edgeOf(rects[i], farSide(cur.cut)) + edgeOf(rects[i + 1], nearSide(cur.cut))) / 2) {
+            at = i;
+            break;
+          }
+        }
+        out.push({ node: cur.kids[at].node, holder: cur, at, rect: rects[at] });
+        cur = cur.kids[at].node;
+      } else {
+        return out;
+      }
+    }
+  }
+
+  /**
+   * The distance of the point x, y inside the line toward side; from a top line it leaves out the tab strips of the height strip and the
+   * group headers between the line and the point, which are targets of their own.
+   */
+  within(side, line, x, y, strip) {
+    let dist = side === "left" ? x - line : side === "right" ? line - x : side === "top" ? y - line : line - y;
+    if (side === "top") {
+      for (const { id, node } of this.order()) {
+        const r = this.rect(id);
+        if (isPlace(id) || x < r.x || x > r.x + r.w) continue;
+        const high = node ? this.options.head : strip;
+        const a = Math.max(line, r.y), b = Math.min(y, r.y + high);
+        if (b > a) dist -= b - a;
+      }
+    }
+    return Math.max(0, dist);
+  }
+
+  /**
+   * Resolves a drop at x, y by the target search of the rule of sizes (docs/spec/groups.md#target-search) and returns
+   * {kind: "add", target, side, band, of} for the add of the moving card beside target toward side, target one id or the ids of the kids
+   * of a cut, band the index of the band from the outermost and of the number of bands on its line, or {kind: "strip" | "centre", card} for
+   * the tab strip and the centre of a content card, or null for a point on a window sidebar or in no card or box. options are headerPx,
+   * the height of the tab strip of a content card, edge, the edge share of the body of a card, band, the standard width of a band, and
+   * bandMargin, the margin that the bands of a side keep before the centre of the card.
+   */
+  targetAt(x, y, options) {
+    return this.dragAt(null, x, y, options).hit;
+  }
+
+  /**
+   * Resolves the drop of a drag at x, y whose anchor is anchor, null before the drag enters a line, and returns {hit, anchor}: the target
+   * of targetAt and the anchor of the next point, the anchor while the point stays on its band of its line, the band of the point when
+   * it enters another, and null off the bands. A band whose node is another kid of the cut of the anchor across the axis of the side is
+   * the run of the kids between the two (docs/spec/groups.md#target-search).
+   */
+  dragAt(anchor, x, y, options) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return { hit: null, anchor: null };
     const holds = (r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
-    let hit = null;
-    let frame = null;
+    let content = null, group = null, frame = null;
     for (const { id, node } of this.order()) {
       const r = this.rect(id);
       if (!holds(r)) continue;
-      if (!node) {
-        if (excluded(id)) return null;
-        const found = this.grid.zoneAt(x, y, zone);
-        return found && { card: found.id, zone: found.zone };
-      }
-      // The innermost frame that holds the point is the smallest one.
-      if (hit === null || r.w * r.h < frame.w * frame.h) {
-        hit = id;
+      if (!node) content = id;
+      else if (group === null || r.w * r.h < frame.w * frame.h) {
+        group = id;
         frame = r;
       }
     }
-    if (hit === null || excluded(hit)) return null;
-    const head = this.headRect(hit);
-    if (y <= head.y + head.h) return { card: hit, zone: "centre" };
-    const px = (x - frame.x) / frame.w;
-    const py = (y - frame.y) / frame.h;
-    if (px > edge && px < 1 - edge && py > edge && py < 1 - edge) return { card: hit, zone: "centre" };
-    const nearest = Math.min(px, 1 - px, py, 1 - py);
-    return { card: hit, zone: nearest === px ? "left" : nearest === 1 - px ? "right" : nearest === py ? "top" : "bottom" };
+    const root = this.grid.toJSON().root;
+    if (content === null && group === null && !holds(this.drawnRect(root))) return { hit: null, anchor: null };
+    const body = content === null ? null : this.rect(content);
+    const inStrip = content !== null && !isPlace(content) && y < body.y + options.headerPx;
+    const inHead = content === null && group !== null && y <= this.headRect(group).y + this.options.head;
+    if (!inStrip) {
+      const found = this.bandAt(root, x, y, options, inHead ? group : null, content === null && !inHead, anchor);
+      if (found) return found;
+    }
+    return { hit: this.bodyAt(root, x, y, options, content, group, body, inStrip, inHead), anchor: null };
+  }
+
+  /** The target of a point in no band: the tab strip, the centre or the outer quarter of a content card, or the header of a group card. */
+  bodyAt(root, x, y, options, content, group, body, inStrip, inHead) {
+    if (inStrip) return { kind: "strip", card: content };
+    if (content !== null && isPlace(content)) return null;
+    if (content !== null) {
+      const top = body.y + options.headerPx, bottom = body.y + body.h;
+      if (bottom <= top || !(body.w > 0)) return { kind: "centre", card: content };
+      const px = (x - body.x) / body.w, py = (y - top) / (bottom - top);
+      const { edge } = options;
+      if (px > edge && px < 1 - edge && py > edge && py < 1 - edge) return { kind: "centre", card: content };
+      const nearest = Math.min(px, 1 - px, py, 1 - py);
+      const side = nearest === px ? "left" : nearest === 1 - px ? "right" : nearest === py ? "top" : "bottom";
+      return { kind: "add", target: content, side, band: 0, of: 0 };
+    }
+    if (inHead) return { kind: "add", target: targetText(nodeMembers(boxIn(root, group).inner)), side: "right", band: 0, of: 0 };
+    return null;
+  }
+
+  /**
+   * The band of the side of the point whose distance divided by the distance that side has is the smallest, when the point lies in it,
+   * or always when anywhere is set, as {hit, anchor} with the anchor of the next point of a drag whose anchor is anchor, or null. On the
+   * header of the group card head the chain ends at its box, so the bands are those of its left and its right side
+   * (docs/spec/groups.md#target-search).
+   */
+  bandAt(root, x, y, options, head, anywhere, anchor) {
+    let chain = this.chain(root, x, y);
+    if (head !== null) chain = chain.slice(0, chain.findIndex((link) => isBoxNode(link.node) && link.node.box === head) + 1);
+    const leaf = chain[chain.length - 1];
+    const r = leaf.rect;
+    const top = isCardNode(leaf.node) && !isPlace(leaf.node.card) ? options.headerPx : 0;
+    const cx = r.x + r.w / 2, cy = r.y + top + (r.h - top) / 2;
+    let best = null;
+    for (const side of head !== null ? ["left", "right"] : SIDES) {
+      const stack = sideStack(chain, side);
+      const line = edgeOf(stack[0].rect, side);
+      const bands = [], links = [];
+      stack.forEach((link, j) => {
+        const target = stackTarget(link, side);
+        if (target !== null) {
+          bands.push(target);
+          links.push(j);
+        }
+      });
+      if (!bands.length) continue;
+      const dist = this.within(side, line, x, y, options.headerPx);
+      const have = Math.max(1, this.within(side, line, cx, cy, options.headerPx) - options.bandMargin);
+      const width = Math.min(options.band, have / bands.length);
+      const score = dist / have;
+      if (best === null || score < best.score) best = { side, dist, width, score, line, bands, stack, links };
+    }
+    if (best === null || !(best.dist < best.bands.length * best.width || anywhere)) return null;
+    const at = Math.min(best.bands.length - 1, Math.floor(best.dist / best.width));
+    const hit = { kind: "add", target: targetText(best.bands[at]), side: best.side, band: at, of: best.bands.length };
+    const { cut, kid } = kidOf(best.stack, best.links[at], best.side);
+    if (anchor === null || anchor.side !== best.side || anchor.line !== best.line || anchor.band !== at) {
+      return { hit, anchor: { side: best.side, line: best.line, band: at, cut, kid } };
+    }
+    if (cut !== null && cut === anchor.cut && kid !== anchor.kid) {
+      let holder = best.stack[best.links[at]];
+      for (let j = best.links[at]; j > 0; j--) {
+        if (nodeMembers(best.stack[j - 1].node).join(" ") === cut) {
+          holder = best.stack[j - 1];
+          break;
+        }
+      }
+      hit.target = targetText(holder.node.kids.slice(Math.min(kid, anchor.kid), Math.max(kid, anchor.kid) + 1).flatMap((k) => nodeMembers(k.node)));
+    }
+    return { hit, anchor };
   }
 
   /** A group node in its stored form, its members in reading order; level adds the level of its members. */

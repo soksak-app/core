@@ -1,5 +1,5 @@
 {
- "description": "The groups of a space (docs/spec/groups.md): the stored checks, the drawn rectangles, the group commands and their refusals, the rectangle operations and the drop resolution. A case reads its layout, the stored form {state, leader, lastCard} whose state is the tree of the grid with the group cards as boxes, with the options gap, minSize, head and the size of the plane, then runs its steps; a case with throws refuses its layout with that text, which the reader of projects.json prefixes with the project and the space. A step runs call with args and returns its result or throws its text. create, split, close, dissolve, rename, leader and move are the commands core.group.create, core.card.split, core.card.close, core.group.dissolve, core.group.rename, core.group.leader and core.card.move without tabs, add is the add of a card to a group card, balance is core.layout.balance, and boundary is core.boundary.move with axis, line and position; grid returns xs, ys and the cards of the grid in the order of the tree; stored returns state, leader and lastCard; rect returns the drawn rectangle of a card; path returns the group path of core.card.get; level returns the level of a card; drop returns the card and the zone that a drop at a point resolves to. A value in a refusal text is its JSON text.",
+ "description": "The groups of a space (docs/spec/groups.md): the stored checks, the drawn rectangles, the group commands and their refusals, the rectangle operations and the drop resolution. A case reads its layout, the stored form {state, leader, lastCard} whose state is the tree of the grid with the group cards as boxes, with the options gap, minSize, head, the size of the plane and for a drop band, bandMargin and strip, the height of the tab strip of a content card, then runs its steps; a case with throws refuses its layout with that text, which the reader of projects.json prefixes with the project and the space. A step runs call with args and returns its result or throws its text. create, split, close, dissolve, rename, leader and move are the commands core.group.create, core.card.split, core.card.close, core.group.dissolve, core.group.rename, core.group.leader and core.card.move without tabs, add is the add of a card to a group card, balance is core.layout.balance, and boundary is core.boundary.move with axis, line and position; grid returns xs, ys and the cards of the grid in the order of the tree; stored returns state, leader and lastCard; rect returns the drawn rectangle of a card; path returns the group path of core.card.get; level returns the level of a card; drop returns the target that a drop at a point resolves to, of a tab or with moving group of a group card, whose tab strip is part of the body of its card, {kind, target, side, band, of} of an add and {kind, card} of a tab strip and of a centre, and drag returns the target at the last point of a drag through its points in order, whose anchor is the band where the drag entered the line. A value in a refusal text is its JSON text.",
  "cases": [
   {
    "name": "a group of a card holds the card and a new card toward side, takes its slot and its leader mark, and issues the next ids",
@@ -2711,15 +2711,6 @@
     {
      "call": "move",
      "args": {
-      "card": "card-3",
-      "target": "card-1",
-      "side": "centre"
-     },
-     "throws": "card card-1 is not a group; a card moves beside it"
-    },
-    {
-     "call": "move",
-     "args": {
       "card": "card-4",
       "target": "card-1",
       "side": "right"
@@ -3760,13 +3751,15 @@
    ]
   },
   {
-   "name": "a drop resolves on the innermost box that holds the point, so a point in the gap inside a frame is on that group card",
+   "name": "a drop on a line resolves on the bands of the nodes that end on it, from the outermost in, and elsewhere on the body of a card or the header of a group card",
    "options": {
     "gap": 24,
     "minSize": 96,
     "head": 32,
     "width": 1000,
-    "height": 600
+    "height": 600,
+    "band": 5,
+    "bandMargin": 3
    },
    "layout": {
     "state": {
@@ -3841,12 +3834,33 @@
     {
      "call": "drop",
      "args": {
-      "x": 500,
-      "y": 270
+      "x": 1,
+      "y": 400
      },
      "returns": {
-      "card": "card-5",
-      "zone": "centre"
+      "kind": "add",
+      "target": "card-6",
+      "side": "left",
+      "band": 0,
+      "of": 3
+     }
+    },
+    {
+     "call": "drop",
+     "args": {
+      "x": 6,
+      "y": 400
+     },
+     "returns": {
+      "kind": "add",
+      "target": [
+       "card-5",
+       "card-3",
+       "card-4"
+      ],
+      "side": "left",
+      "band": 1,
+      "of": 3
      }
     },
     {
@@ -3856,19 +3870,82 @@
       "y": 400
      },
      "returns": {
-      "card": "card-6",
-      "zone": "left"
+      "kind": "add",
+      "target": "card-3",
+      "side": "left",
+      "band": 2,
+      "of": 3
      }
     },
     {
      "call": "drop",
      "args": {
-      "x": 36,
-      "y": 200
+      "x": 50,
+      "y": 470
      },
      "returns": {
-      "card": "card-5",
-      "zone": "left"
+      "kind": "add",
+      "target": "card-3",
+      "side": "left",
+      "band": 0,
+      "of": 0
+     }
+    },
+    {
+     "call": "drop",
+     "args": {
+      "x": 700,
+      "y": 340
+     },
+     "returns": {
+      "kind": "add",
+      "target": "card-5",
+      "side": "bottom",
+      "band": 0,
+      "of": 3
+     }
+    },
+    {
+     "call": "drop",
+     "args": {
+      "x": 998,
+      "y": 300
+     },
+     "returns": {
+      "kind": "add",
+      "target": "card-6",
+      "side": "right",
+      "band": 0,
+      "of": 4
+     }
+    },
+    {
+     "call": "drop",
+     "args": {
+      "x": 268,
+      "y": 216
+     },
+     "returns": {
+      "kind": "centre",
+      "card": "card-1"
+     }
+    },
+    {
+     "call": "drop",
+     "args": {
+      "x": 300,
+      "y": 20
+     },
+     "returns": {
+      "kind": "add",
+      "target": [
+       "card-5",
+       "card-3",
+       "card-4"
+      ],
+      "side": "right",
+      "band": 0,
+      "of": 0
      }
     }
    ]
@@ -4000,7 +4077,385 @@
    ]
   },
   {
-   "name": "a drop resolves on the box under the point, a content card before the group card that holds it",
+   "name": "the bands of a card too narrow for their standard width narrow by one factor to end before its centre",
+   "options": {
+    "gap": 0,
+    "minSize": 8,
+    "head": 0,
+    "width": 1000,
+    "height": 600,
+    "band": 5,
+    "bandMargin": 3
+   },
+   "layout": {
+    "state": {
+     "root": {
+      "cut": "x",
+      "kids": [
+       {
+        "share": 0.99,
+        "node": {
+         "card": "card-1"
+        }
+       },
+       {
+        "share": 0.01,
+        "node": {
+         "cut": "y",
+         "kids": [
+          {
+           "share": 0.5,
+           "node": {
+            "card": "card-2"
+           }
+          },
+          {
+           "share": 0.5,
+           "node": {
+            "card": "card-3"
+           }
+          }
+         ]
+        }
+       }
+      ]
+     }
+    },
+    "leader": "card-1",
+    "lastCard": 3
+   },
+   "steps": [
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-2"
+     },
+     "returns": {
+      "x": 990,
+      "y": 0,
+      "w": 10,
+      "h": 300
+     }
+    },
+    {
+     "call": "drop",
+     "args": {
+      "x": 999.5,
+      "y": 150
+     },
+     "returns": {
+      "kind": "add",
+      "target": [
+       "card-2",
+       "card-3"
+      ],
+      "side": "right",
+      "band": 0,
+      "of": 2
+     }
+    },
+    {
+     "call": "drop",
+     "args": {
+      "x": 998.5,
+      "y": 150
+     },
+     "returns": {
+      "kind": "add",
+      "target": "card-2",
+      "side": "right",
+      "band": 1,
+      "of": 2
+     }
+    },
+    {
+     "call": "drop",
+     "args": {
+      "x": 997.5,
+      "y": 150
+     },
+     "returns": {
+      "kind": "add",
+      "target": "card-2",
+      "side": "right",
+      "band": 0,
+      "of": 0
+     }
+    },
+    {
+     "call": "drop",
+     "args": {
+      "x": 995,
+      "y": 150
+     },
+     "returns": {
+      "kind": "centre",
+      "card": "card-2"
+     }
+    }
+   ]
+  },
+  {
+   "name": "a drag that stays on the bands of one line selects the run between the kid where it entered the line and the current kid, and a drag that leaves the band takes a new anchor where it enters again",
+   "options": {
+    "gap": 0,
+    "minSize": 96,
+    "head": 0,
+    "width": 1000,
+    "height": 600,
+    "band": 5,
+    "bandMargin": 3
+   },
+   "layout": {
+    "state": {
+     "root": {
+      "cut": "x",
+      "kids": [
+       {
+        "share": 0.25,
+        "node": {
+         "card": "card-1"
+        }
+       },
+       {
+        "share": 0.25,
+        "node": {
+         "card": "card-2"
+        }
+       },
+       {
+        "share": 0.25,
+        "node": {
+         "card": "card-3"
+        }
+       },
+       {
+        "share": 0.25,
+        "node": {
+         "card": "card-4"
+        }
+       }
+      ]
+     }
+    },
+    "leader": "card-1",
+    "lastCard": 4
+   },
+   "steps": [
+    {
+     "call": "drag",
+     "args": {
+      "points": [
+       [
+        125,
+        593
+       ]
+      ]
+     },
+     "returns": {
+      "kind": "add",
+      "target": "card-1",
+      "side": "bottom",
+      "band": 1,
+      "of": 2
+     }
+    },
+    {
+     "call": "drag",
+     "args": {
+      "points": [
+       [
+        125,
+        593
+       ],
+       [
+        625,
+        593
+       ]
+      ]
+     },
+     "returns": {
+      "kind": "add",
+      "target": [
+       "card-1",
+       "card-2",
+       "card-3"
+      ],
+      "side": "bottom",
+      "band": 1,
+      "of": 2
+     }
+    },
+    {
+     "call": "drag",
+     "args": {
+      "points": [
+       [
+        875,
+        593
+       ],
+       [
+        375,
+        593
+       ]
+      ]
+     },
+     "returns": {
+      "kind": "add",
+      "target": [
+       "card-2",
+       "card-3",
+       "card-4"
+      ],
+      "side": "bottom",
+      "band": 1,
+      "of": 2
+     }
+    },
+    {
+     "call": "drag",
+     "args": {
+      "points": [
+       [
+        125,
+        593
+       ],
+       [
+        625,
+        593
+       ],
+       [
+        125,
+        593
+       ]
+      ]
+     },
+     "returns": {
+      "kind": "add",
+      "target": "card-1",
+      "side": "bottom",
+      "band": 1,
+      "of": 2
+     }
+    },
+    {
+     "call": "drag",
+     "args": {
+      "points": [
+       [
+        125,
+        593
+       ],
+       [
+        625,
+        300
+       ],
+       [
+        375,
+        593
+       ],
+       [
+        875,
+        593
+       ]
+      ]
+     },
+     "returns": {
+      "kind": "add",
+      "target": [
+       "card-2",
+       "card-3",
+       "card-4"
+      ],
+      "side": "bottom",
+      "band": 1,
+      "of": 2
+     }
+    },
+    {
+     "call": "drag",
+     "args": {
+      "points": [
+       [
+        125,
+        593
+       ],
+       [
+        625,
+        597
+       ]
+      ]
+     },
+     "returns": {
+      "kind": "add",
+      "target": [
+       "card-1",
+       "card-2",
+       "card-3",
+       "card-4"
+      ],
+      "side": "bottom",
+      "band": 0,
+      "of": 2
+     }
+    },
+    {
+     "call": "drag",
+     "args": {
+      "points": [
+       [
+        125,
+        597
+       ],
+       [
+        875,
+        597
+       ]
+      ]
+     },
+     "returns": {
+      "kind": "add",
+      "target": [
+       "card-1",
+       "card-2",
+       "card-3",
+       "card-4"
+      ],
+      "side": "bottom",
+      "band": 0,
+      "of": 2
+     }
+    },
+    {
+     "call": "drag",
+     "args": {
+      "points": [
+       [
+        125,
+        593
+       ],
+       [
+        625,
+        597
+       ],
+       [
+        875,
+        593
+       ]
+      ]
+     },
+     "returns": {
+      "kind": "add",
+      "target": "card-4",
+      "side": "bottom",
+      "band": 1,
+      "of": 2
+     }
+    }
+   ]
+  },
+  {
+   "name": "a card or a group card moved to the centre of a content card exchanges places with it, and each place keeps its fraction and the leader mark of its level",
    "options": {
     "gap": 24,
     "minSize": 96,
@@ -4011,15 +4466,22 @@
    "layout": {
     "state": {
      "root": {
-      "cut": "y",
+      "cut": "x",
       "kids": [
        {
-        "share": 0.5,
+        "share": 0.4,
+        "node": {
+         "card": "card-1",
+         "fixed": false
+        }
+       },
+       {
+        "share": 0.6,
         "node": {
          "box": "card-4",
          "data": {
           "name": "그룹 1",
-          "leader": "card-1"
+          "leader": "card-2"
          },
          "inner": {
           "cut": "x",
@@ -4027,154 +4489,374 @@
            {
             "share": 0.5,
             "node": {
-             "card": "card-1",
+             "card": "card-2",
              "fixed": false
             }
            },
            {
             "share": 0.5,
             "node": {
-             "card": "card-2",
+             "card": "card-3",
              "fixed": false
             }
            }
           ]
          }
         }
+       }
+      ]
+     }
+    },
+    "leader": "card-1",
+    "lastCard": 4
+   },
+   "steps": [
+    {
+     "call": "move",
+     "args": {
+      "card": "card-1",
+      "target": "card-3",
+      "side": "centre"
+     },
+     "returns": {
+      "card": "card-1"
+     }
+    },
+    {
+     "call": "stored",
+     "args": {},
+     "returns": {
+      "state": {
+       "root": {
+        "cut": "x",
+        "kids": [
+         {
+          "share": 0.4,
+          "node": {
+           "card": "card-3",
+           "fixed": false
+          }
+         },
+         {
+          "share": 0.6,
+          "node": {
+           "box": "card-4",
+           "data": {
+            "name": "그룹 1",
+            "leader": "card-2"
+           },
+           "inner": {
+            "cut": "x",
+            "kids": [
+             {
+              "share": 0.5,
+              "node": {
+               "card": "card-2",
+               "fixed": false
+              }
+             },
+             {
+              "share": 0.5,
+              "node": {
+               "card": "card-1",
+               "fixed": false
+              }
+             }
+            ]
+           }
+          }
+         }
+        ]
+       }
+      },
+      "leader": "card-3",
+      "lastCard": 4
+     }
+    },
+    {
+     "call": "path",
+     "args": {
+      "card": "card-1"
+     },
+     "returns": [
+      {
+       "card": "card-4",
+       "name": "그룹 1"
+      }
+     ]
+    },
+    {
+     "call": "move",
+     "args": {
+      "card": "card-2",
+      "target": "card-1",
+      "side": "centre"
+     },
+     "returns": {
+      "card": "card-2"
+     }
+    },
+    {
+     "call": "stored",
+     "args": {},
+     "returns": {
+      "state": {
+       "root": {
+        "cut": "x",
+        "kids": [
+         {
+          "share": 0.4,
+          "node": {
+           "card": "card-3",
+           "fixed": false
+          }
+         },
+         {
+          "share": 0.6,
+          "node": {
+           "box": "card-4",
+           "data": {
+            "name": "그룹 1",
+            "leader": "card-1"
+           },
+           "inner": {
+            "cut": "x",
+            "kids": [
+             {
+              "share": 0.5,
+              "node": {
+               "card": "card-1",
+               "fixed": false
+              }
+             },
+             {
+              "share": 0.5,
+              "node": {
+               "card": "card-2",
+               "fixed": false
+              }
+             }
+            ]
+           }
+          }
+         }
+        ]
+       }
+      },
+      "leader": "card-3",
+      "lastCard": 4
+     }
+    },
+    {
+     "call": "move",
+     "args": {
+      "card": "card-4",
+      "target": "card-3",
+      "side": "centre"
+     },
+     "returns": {
+      "card": "card-4"
+     }
+    },
+    {
+     "call": "stored",
+     "args": {},
+     "returns": {
+      "state": {
+       "root": {
+        "cut": "x",
+        "kids": [
+         {
+          "share": 0.4,
+          "node": {
+           "box": "card-4",
+           "data": {
+            "name": "그룹 1",
+            "leader": "card-1"
+           },
+           "inner": {
+            "cut": "x",
+            "kids": [
+             {
+              "share": 0.5,
+              "node": {
+               "card": "card-1",
+               "fixed": false
+              }
+             },
+             {
+              "share": 0.5,
+              "node": {
+               "card": "card-2",
+               "fixed": false
+              }
+             }
+            ]
+           }
+          }
+         },
+         {
+          "share": 0.6,
+          "node": {
+           "card": "card-3",
+           "fixed": false
+          }
+         }
+        ]
+       }
+      },
+      "leader": "card-4",
+      "lastCard": 4
+     }
+    },
+    {
+     "call": "move",
+     "args": {
+      "card": "card-4",
+      "target": "card-2",
+      "side": "centre"
+     },
+     "throws": "card card-4 cannot move into itself"
+    },
+    {
+     "call": "move",
+     "args": {
+      "card": "card-3",
+      "target": "card-3",
+      "side": "centre"
+     },
+     "throws": "card card-3 cannot move into itself"
+    },
+    {
+     "call": "move",
+     "args": {
+      "card": "card-3",
+      "target": [
+       "card-1",
+       "card-2"
+      ],
+      "side": "centre"
+     },
+     "throws": "card card-3 moves to the centre of one card, not of card-1, card-2"
+    }
+   ]
+  },
+  {
+   "name": "a tab strip is no target of a dragged group card, which holds cards and no tabs, so a point on the strip resolves by the bands and the body of its card",
+   "options": {
+    "gap": 0,
+    "minSize": 96,
+    "head": 0,
+    "width": 1000,
+    "height": 600,
+    "band": 5,
+    "bandMargin": 3,
+    "strip": 32
+   },
+   "layout": {
+    "state": {
+     "root": {
+      "cut": "x",
+      "kids": [
+       {
+        "share": 0.5,
+        "node": {
+         "card": "card-1"
+        }
        },
        {
         "share": 0.5,
         "node": {
-         "card": "card-3",
-         "fixed": false
+         "card": "card-2"
         }
        }
       ]
      }
     },
-    "leader": "card-4",
-    "lastCard": 4
+    "leader": "card-1",
+    "lastCard": 2
    },
    "steps": [
     {
      "call": "drop",
      "args": {
-      "x": 500,
-      "y": 10
+      "x": 250,
+      "y": 20
      },
      "returns": {
-      "card": "card-4",
-      "zone": "centre"
+      "kind": "strip",
+      "card": "card-1"
      }
     },
     {
      "call": "drop",
      "args": {
-      "x": 500,
-      "y": 50
+      "x": 250,
+      "y": 20,
+      "moving": "group"
      },
      "returns": {
-      "card": "card-4",
-      "zone": "top"
+      "kind": "add",
+      "target": "card-1",
+      "side": "top",
+      "band": 0,
+      "of": 0
      }
     },
     {
      "call": "drop",
      "args": {
-      "x": 12,
-      "y": 150
+      "x": 250,
+      "y": 3
      },
      "returns": {
-      "card": "card-4",
-      "zone": "left"
+      "kind": "strip",
+      "card": "card-1"
      }
     },
     {
      "call": "drop",
      "args": {
-      "x": 988,
-      "y": 150
+      "x": 250,
+      "y": 3,
+      "moving": "group"
      },
      "returns": {
-      "card": "card-4",
-      "zone": "right"
+      "kind": "add",
+      "target": [
+       "card-1",
+       "card-2"
+      ],
+      "side": "top",
+      "band": 0,
+      "of": 2
      }
     },
     {
      "call": "drop",
      "args": {
-      "x": 500,
-      "y": 250
+      "x": 250,
+      "y": 7,
+      "moving": "group"
      },
      "returns": {
-      "card": "card-4",
-      "zone": "bottom"
+      "kind": "add",
+      "target": "card-1",
+      "side": "top",
+      "band": 1,
+      "of": 2
      }
     },
     {
      "call": "drop",
      "args": {
-      "x": 300,
-      "y": 150
+      "x": 250,
+      "y": 300,
+      "moving": "group"
      },
      "returns": {
-      "card": "card-1",
-      "zone": "centre"
-     }
-    },
-    {
-     "call": "drop",
-     "args": {
-      "x": 100,
-      "y": 150
-     },
-     "returns": {
-      "card": "card-1",
-      "zone": "left"
-     }
-    },
-    {
-     "call": "drop",
-     "args": {
-      "x": 460,
-      "y": 150
-     },
-     "returns": {
-      "card": "card-1",
-      "zone": "right"
-     }
-    },
-    {
-     "call": "drop",
-     "args": {
-      "x": 600,
-      "y": 150
-     },
-     "returns": {
-      "card": "card-2",
-      "zone": "left"
-     }
-    },
-    {
-     "call": "drop",
-     "args": {
-      "x": 300,
-      "y": 450
-     },
-     "returns": {
-      "card": "card-3",
-      "zone": "centre"
-     }
-    },
-    {
-     "call": "drop",
-     "args": {
-      "x": 900,
-      "y": 450
-     },
-     "returns": {
-      "card": "card-3",
-      "zone": "right"
+      "kind": "centre",
+      "card": "card-1"
      }
     }
    ]

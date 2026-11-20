@@ -551,6 +551,14 @@ is wrapped in a new cut of two halves.
 Only the cuts that the operation changes are laid again, so every other card
 keeps its rectangle. A move is a `withdraw` and an `insert`.
 
+`exchange(a, b)` puts the node `a`, a card or a box, where the node `b` stands
+and `b` where `a` stood, at any two places of the tree. Each place keeps its
+fraction and the px size that a card there declares, so a card takes the px
+size of the place it enters and a box takes the fraction of its place; every
+other node keeps its rectangle. Two nodes of which one holds the other, a
+`fixed` card and an id that the layout does not hold are refused, and the
+result is judged as an `insert` is.
+
 `group(target, side, node, {box, data?, head})` is the group split of the card
 or box `target`: a box with the id `box`, the payload `data` and a head of
 `head` px takes the place of `target` in its cut, with its fraction, and its

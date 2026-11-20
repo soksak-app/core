@@ -92,9 +92,9 @@ type groupParam struct {
 }
 
 type cardMoveParam struct {
-	Card   string `json:"card"`
-	Target string `json:"target"`
-	Side   string `json:"side"`
+	Card   string        `json:"card"`
+	Target layout.Target `json:"target"`
+	Side   string        `json:"side"`
 }
 
 // registerGroups registers the commands of group cards and the card query.
@@ -155,8 +155,10 @@ func (s *Shell) registerGroups() {
 		if err := s.groupCard(value.Card); err != nil {
 			return nil, err
 		}
-		if err := s.groupCard(value.Target); err != nil {
-			return nil, err
+		for _, target := range value.Target {
+			if err := s.groupCard(target); err != nil {
+				return nil, err
+			}
 		}
 		if err := s.layoutChangeable(value.Card); err != nil {
 			return nil, err

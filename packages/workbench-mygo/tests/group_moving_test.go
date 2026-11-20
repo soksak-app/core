@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -81,7 +82,7 @@ func TestAMoveBesideAMemberKeepsTheGroupOneRectangle(t *testing.T) {
 }
 
 // A tab dropped on a card inside a group moves into that card, and a tab dropped on the header of a group card goes into a new card
-// at the right edge of its rectangle.
+// at the right edge of its rectangle, the add to the right of the root of its plane.
 func TestATabDropResolvesIntoTheGroup(t *testing.T) {
 	f := layoutShell(t, oneCard(tab("t1", "notes"), tab("t2", "notes"), tab("t3", "notes")))
 	if _, err := f.apply("core.group.create", `{"card": "main", "side": "right", "plugin": "plain"}`); err != nil {
@@ -91,7 +92,7 @@ func TestATabDropResolvesIntoTheGroup(t *testing.T) {
 	box := f.box("core.card", "card-3")
 	x, y := box.X+box.W*0.35, box.Y+box.H/2
 	drag := dragTab(t, f.shellFixture, "t2", x, y)
-	if drag == nil || drag.Target == nil || drag.Target.Card != "card-3" || drag.Target.Zone != "centre" {
+	if drag == nil || drag.Target == nil || strings.Join(drag.Target.Card, " ") != "card-3" || drag.Target.Zone != "centre" {
 		t.Fatalf("the drag over card-3 is %+v with the target %+v", drag, drag.Target)
 	}
 	f.tester.Release(x, y)
@@ -102,8 +103,10 @@ func TestATabDropResolvesIntoTheGroup(t *testing.T) {
 	head := f.box("core.group.header", "card-2")
 	x, y = head.X+head.W/2, head.Y+head.H/2
 	drag = dragTab(t, f.shellFixture, "t3", x, y)
-	if drag == nil || drag.Target == nil || drag.Target.Card != "card-2" || drag.Target.Zone != "centre" {
-		t.Fatalf("the drag over the group header is %+v", drag)
+	// The header of a group card is the add to the right of the root of its plane, the members of the group
+	// (docs/spec/groups.md#target-search).
+	if drag == nil || drag.Target == nil || strings.Join(drag.Target.Card, " ") != "main card-3" || drag.Target.Zone != "right" {
+		t.Fatalf("the drag over the group header is %+v with the target %+v", drag, drag.Target)
 	}
 	f.tester.Release(x, y)
 	f.settle()
@@ -171,7 +174,7 @@ func TestAGroupCardIsDraggedByItsHeader(t *testing.T) {
 	f.tester.Move(x, y)
 	f.tester.Frame()
 	drag := status[*dragRead](t, f.shellFixture, "core.drag")
-	if drag == nil || drag.Card != "card-2" || drag.Target == nil || drag.Target.Card != "card-4" || drag.Target.Zone != "right" || drag.Preview == nil {
+	if drag == nil || drag.Card != "card-2" || drag.Target == nil || strings.Join(drag.Target.Card, " ") != "card-4" || drag.Target.Zone != "right" || drag.Preview == nil {
 		t.Fatalf("the drag of the group header is %+v", drag)
 	}
 	f.tester.Release(x, y)
@@ -216,7 +219,7 @@ func TestATabOutOfAGroupSplitsACardOfTheRootLevel(t *testing.T) {
 	// The narrow head of main shows its active tab only, so t2 is shown first.
 	f.shellFixture.run("core.tab.select", map[string]string{"tab": "t2"})
 	drag := f.dropOnRightOf(t, "t2", "card-4")
-	if drag == nil || drag.Target == nil || drag.Target.Card != "card-4" || drag.Target.Zone != "right" || drag.Preview == nil {
+	if drag == nil || drag.Target == nil || strings.Join(drag.Target.Card, " ") != "card-4" || drag.Target.Zone != "right" || drag.Preview == nil {
 		t.Fatalf("the drag over the right of card-4 is %+v", drag)
 	}
 	cards := f.gridCards()
@@ -235,7 +238,7 @@ func TestTheOnlyTabOutOfAGroupMovesItsCardAndDissolvesTheGroup(t *testing.T) {
 	f := outsideShell(t)
 	only := f.gridCards()["card-3"]["tabs"].([]any)[0].(map[string]any)["id"].(string)
 	drag := f.dropOnRightOf(t, only, "card-4")
-	if drag == nil || drag.Target == nil || drag.Target.Card != "card-4" || drag.Target.Zone != "right" || drag.Preview == nil {
+	if drag == nil || drag.Target == nil || strings.Join(drag.Target.Card, " ") != "card-4" || drag.Target.Zone != "right" || drag.Preview == nil {
 		t.Fatalf("the drag over the right of card-4 is %+v", drag)
 	}
 	cards := f.gridCards()
@@ -296,7 +299,7 @@ func TestADragResolvesItsDropAtThePointerAfterTheHeaderMoved(t *testing.T) {
 		t.Fatalf("card-4 stands at %+v after the window narrowed, not at %+v as before", moved, target)
 	}
 	drag := status[*dragRead](t, f.shellFixture, "core.drag")
-	if drag == nil || drag.Card != "card-2" || drag.Target == nil || drag.Target.Card != "card-4" || drag.Target.Zone != "left" {
+	if drag == nil || drag.Card != "card-2" || drag.Target == nil || strings.Join(drag.Target.Card, " ") != "card-4" || drag.Target.Zone != "left" {
 		t.Fatalf("the drag of the header of card-2, which moved from x %v to %v, to the left zone of card-4 at %v,%v is %+v", name.X,
 			narrow.X, x, y, drag)
 	}

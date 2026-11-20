@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"strconv"
 	"strings"
@@ -84,6 +85,15 @@ func (d *Declarations) ChromeValue(name string) string {
 		panic(fmt.Sprintf("the chrome value %s is not declared", name))
 	}
 	return value
+}
+
+// WithChrome returns a copy of the declarations whose chrome value name is value, as a build whose workbench.json declares that value
+// reads it.
+func (d *Declarations) WithChrome(name, value string) *Declarations {
+	out := *d
+	out.chrome = maps.Clone(d.chrome)
+	out.chrome[name] = value
+	return &out
 }
 
 // ChromeNumber returns the number of the chrome value name, which holds the unit or no unit.

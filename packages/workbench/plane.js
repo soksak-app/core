@@ -22,7 +22,7 @@ import { SIDEBAR_SIDES, deviceGridSize, presentSidebars, effectiveSidebar, resol
 import { arrangeWindowSidebars, SIDE_NAMES, FOLD_ICONS, keepWindowSidebarWidths, railSidebars, restoreWindowSidebars, sizeKey, standingLink, windowOrientation, windowSidebar, windowSidebarCards } from "./window-sidebars.js";
 import { environment, pluginUnits } from "./environment.js";
 import { checkStoredLayout, recordStoredOrigins } from "./stored-layout.js";
-import { cardNumber, memberId, readGroupTree } from "./group-tree.js";
+import { cardNumber, memberId, readGroupTree, targetIds } from "./group-tree.js";
 import { drawGroupCards } from "./group-cards.js";
 import { checkTabParams, storedParamsProblem } from "./tab-params.js";
 import { checkOpenPath, chooseOpener } from "./file-open.js";
@@ -648,34 +648,40 @@ let dropPreview = null;
 /** The tab drag in progress: the dragged tab, the origin card, the drop position, and the preview rectangle. */
 export const dragState = () => (tabDrag ? {
   tab: tabDrag.tabId, card: tabDrag.cardId, moved: tabDrag.moved,
-  target: tabDrag.hit ? { card: tabDrag.hit.id, zone: tabDrag.hit.zone } : null,
+  target: tabDrag.hit ? { card: tabDrag.hit.card, zone: tabDrag.hit.zone } : null,
   preview: dropPreview,
 } : null);
 
-/* The thickness of the card border. The head and the foot are rows inside the border, and zoneAt measures with the rect of
-   the card, which includes the border, so the border is added for the zone boundary to stand at the end of the drawn head.
-   At the seam the border is 0, so the value is not written but measured from the drawn card. */
+/* The thickness of the card border. The head is a row inside the border, and the target search measures with the rect of the card,
+   which includes the border, so the border is added for the tab strip to end where the drawn head ends. At the seam the border is 0, so
+   the value is not written but measured from the drawn card. */
 const cardBorder = () => {
   const el = plane.querySelector(".card");
   return el ? parseFloat(getComputedStyle(el).borderTopWidth) : 0;
 };
 
 /**
- * The height (px) that the drop zones leave to the head and the foot of a card.
+ * The measures of the target search (docs/spec/groups.md#target-search): the height of the tab strip of a content card with its border,
+ * the edge share of the body of a card, and the width of a band and the margin before the centre of a card, the chrome values drop-band
+ * and drop-band-margin; and the height of the foot of a card with its border, which the verification compares with the drawn foot.
  *
- * The plane passes this value to `zoneAt`, and verification compares it with the drawn head and foot. If each computed it
- * alone, a fix in only one place would leave the zones misaligned while verification still passed.
+ * The plane passes these values to `targetAt`, and verification compares the tab strip and the foot with the drawn head and foot. If each
+ * computed it alone, a fix in only one place would leave the targets misaligned while verification still passed.
  */
 export const dropBands = () => {
   const edge = cardBorder();
-  return { headerPx: HEADER + edge, footerPx: FOOTER + edge };
+  return { headerPx: HEADER + edge, footerPx: FOOTER + edge, edge: DROP_EDGE,
+    band: parseFloat(CHROME["drop-band"]), bandMargin: parseFloat(CHROME["drop-band-margin"]) };
 };
+
+/** The edge share of the body of a content card whose outer quarter is a side of the target search (docs/spec/groups.md#target-search). */
+const DROP_EDGE = 0.25;
 
 function beginTabDrag(e, cardId, tabId) {
   e.preventDefault();
   // The border does not change during one drag, so it is measured once at the start.
   const band = dropBands();
-  tabDrag = { cardId, tabId, from: { x: e.clientX, y: e.clientY }, moved: false, hit: null };
+  tabDrag = { cardId, tabId, from: { x: e.clientX, y: e.clientY }, moved: false, hit: null, anchor: null };
   const el = e.currentTarget;
   el.setPointerCapture(e.pointerId);
   el.dataset.dragging = "true";
@@ -689,7 +695,7 @@ function beginTabDrag(e, cardId, tabId) {
     // a press that did not move (a click) keeps fullscreen (docs/spec/example-model.md#card-fullscreen).
     if (!tabDrag.stood) { tabDrag.stood = true; restoreFullscreen(); standIn(true); }
     const host = plane.getBoundingClientRect();
-    tabDrag.hit = dropHit(ev.clientX - host.left, ev.clientY - host.top, tabDrag.cardId, band);
+    ({ hit: tabDrag.hit, anchor: tabDrag.anchor } = dragHit(tabDrag.anchor, ev.clientX - host.left, ev.clientY - host.top, band));
     // A drop with no zone is rejected by the layout even if released. That position is not taken.
     if (!showDrop(tabDrag.cardId, tabDrag.hit)) tabDrag.hit = null;
     dragChanged();
@@ -706,7 +712,7 @@ function beginTabDrag(e, cardId, tabId) {
     el.removeEventListener("pointerup", onUp);
     el.removeEventListener("pointercancel", onUp);
     dragChanged();
-    if (drag.moved && drag.hit) return run("core.tab.move", { tab: drag.tabId, card: drag.hit.id, zone: drag.hit.zone });
+    if (drag.moved && drag.hit) return run("core.tab.move", { tab: drag.tabId, card: drag.hit.card, zone: drag.hit.zone });
     settle();
   };
   el.addEventListener("pointermove", onMove);
@@ -719,10 +725,12 @@ function beginTabDrag(e, cardId, tabId) {
  * move runs on the group tree and the tree puts the grid back (probe).
  */
 function groupDropRect(groupId, hit) {
-  if (tree.checkMove(groupId, hit.id, hit.zone)) return undefined;
+  const target = targetIds(hit.card);
+  const to = target.length === 1 ? target[0] : target;
+  if (tree.checkMove(groupId, to, hit.zone)) return undefined;
   return tree.probe(() => {
     try {
-      tree.move(groupId, hit.id, hit.zone);
+      tree.move(groupId, to, hit.zone);
       return tree.rect(groupId);
     } catch {
       // A refused move is a drop with no slot, which the caller reads as undefined; the release then changes nothing.
@@ -732,14 +740,15 @@ function groupDropRect(groupId, hit) {
 }
 
 /**
- * Starts the drag of the group card groupId by a press on its header (docs/spec/groups.md#moving-and-dropping). The drop resolves
- * without the group card and the cards inside it, the preview is the rectangle that the move gives the group card, core.drag reports
- * the drag with the tab "", and the release runs core.card.move toward the drop; a release with no zone changes nothing.
+ * Starts the drag of the group card groupId by a press on its header (docs/spec/groups.md#moving-and-dropping). The drop resolves by
+ * the bands of the target search with the anchor of the drag, as a tab drag does (docs/spec/groups.md#target-search), the preview is
+ * the rectangle that the move gives the group card, core.drag reports the drag with the tab "", and the release runs core.card.move
+ * toward the drop; a release with no zone or a move that the layout refuses changes nothing.
  */
 function beginGroupDrag(e, header, groupId) {
   e.preventDefault();
   const band = dropBands();
-  tabDrag = { cardId: groupId, tabId: "", from: { x: e.clientX, y: e.clientY }, moved: false, hit: null };
+  tabDrag = { cardId: groupId, tabId: "", from: { x: e.clientX, y: e.clientY }, moved: false, hit: null, anchor: null };
   header.setPointerCapture(e.pointerId);
   dragChanged();
   const onMove = (ev) => {
@@ -748,8 +757,9 @@ function beginGroupDrag(e, header, groupId) {
     if (!tabDrag.moved) return;
     if (!tabDrag.stood) { tabDrag.stood = true; restoreFullscreen(); standIn(true); }
     const host = plane.getBoundingClientRect();
-    const hit = tree.dropAt(ev.clientX - host.left, ev.clientY - host.top, { headerPx: band.headerPx, footerPx: band.footerPx, without: groupId });
-    tabDrag.hit = hit && !isPlace(hit.card) ? { id: hit.card, zone: hit.zone } : null;
+    const found = dragHit(tabDrag.anchor, ev.clientX - host.left, ev.clientY - host.top, band);
+    tabDrag.anchor = found.anchor;
+    tabDrag.hit = found.hit && !targetIds(found.hit.card).some(isPlace) ? found.hit : null;
     const rect = tabDrag.hit ? groupDropRect(groupId, tabDrag.hit) : undefined;
     if (!rect) {
       tabDrag.hit = null;
@@ -770,7 +780,7 @@ function beginGroupDrag(e, header, groupId) {
     header.removeEventListener("pointerup", onUp);
     header.removeEventListener("pointercancel", onUp);
     dragChanged();
-    if (drag.moved && drag.hit) return run("core.card.move", { card: groupId, target: drag.hit.id, side: drag.hit.zone });
+    if (drag.moved && drag.hit) return run("core.card.move", { card: groupId, target: drag.hit.card, side: drag.hit.zone });
     settle();
   };
   header.addEventListener("pointermove", onMove);
@@ -1023,20 +1033,21 @@ let dropShown = false;
  *
  * The operation runs on the group tree and the tree puts the grid back (probe), so the live plane does not change. Computing half of
  * the target card differs from the drawn position: the two cut pieces share the gap between them, so each is not half of the rect, and
- * a move closes first and cuts afterward, so the size of the target differs from before the cut. A target may be a group card
- * (docs/spec/groups.md#moving-and-dropping).
+ * a move closes first and cuts afterward, so the size of the target differs from before the cut. A target may be a group card or the
+ * kids of a cut (docs/spec/groups.md#moving-and-dropping). hit is {card, zone}, card one id or a list of ids.
  */
 function dropRect(fromId, hit) {
-  if (hit.zone === "centre" && !tree.isGroup(hit.id)) return tree.rect(hit.id);
+  const ids = targetIds(hit.card);
+  if (hit.zone === "centre" && !tree.isGroup(ids[0])) return tree.rect(ids[0]);
   const only = tabsOf(grid.card(fromId)).length === 1;
   return tree.probe(() => {
     try {
       // T5 — a card with only one tab moves as a whole card.
       if (only) {
-        tree.move(fromId, hit.id, hit.zone);
+        tree.move(fromId, hit.card, hit.zone);
         return tree.rect(fromId);
       }
-      const born = hit.zone === "centre" ? tree.addCard(hit.id, undefined) : tree.split(hit.id, hit.zone, undefined);
+      const born = hit.zone === "centre" ? tree.addCard(ids[0], undefined) : tree.splitBeside(hit.card, hit.zone, undefined);
       return tree.rect(born);
     } catch {
       // A refused operation is a drop with no slot, which the caller reads as undefined; the release then changes nothing.
@@ -1046,14 +1057,26 @@ function dropRect(fromId, hit) {
 }
 
 /**
- * The drop target of a point of the plane in a drag of a tab of the card fromId, {id, zone}, or null: the group tree resolves it on the
- * rectangles of the group cards from the root level inward and ends in zoneAt of the grid (docs/spec/groups.md#moving-and-dropping).
- * band is the head and foot height that dropBands measured.
+ * The drop target of a point of the plane in a tab drag, {card, zone} or null: the target search of the group tree resolves it by the
+ * bands of the nodes that end on the line of the point, from the outermost in (docs/spec/groups.md#target-search). card is one id or the
+ * ids of the kids of a cut, and zone the side of an add or the centre of a tab strip or of a content card. band is the measures that
+ * dropBands gave.
  */
-export function dropHit(x, y, fromId, band) {
-  const only = tabsOf(grid.card(fromId)).length === 1 ? fromId : undefined;
-  const hit = tree.dropAt(x, y, { headerPx: band.headerPx, footerPx: band.footerPx, centreOnly: only });
-  return hit && { id: hit.card, zone: hit.zone };
+export function dropHit(x, y, band) {
+  return dragHit(null, x, y, band).hit;
+}
+
+/**
+ * The drop target of a point of a drag whose anchor is anchor, null before the drag enters a line, as {hit, anchor}: hit the {card, zone}
+ * of dropHit, which names the run between the anchor and the current band while the drag stays on the band of its line, and anchor the
+ * anchor of the next point (docs/spec/groups.md#target-search). The drag keeps the anchor, so the preview and the release name the same
+ * run.
+ */
+export function dragHit(anchor, x, y, band) {
+  const found = tree.dragAt(anchor, x, y, band);
+  const { hit } = found;
+  if (!hit) return { hit: null, anchor: found.anchor };
+  return { hit: hit.kind === "add" ? { card: hit.target, zone: hit.side } : { card: hit.card, zone: "centre" }, anchor: found.anchor };
 }
 
 /**
@@ -1063,7 +1086,7 @@ export function dropHit(x, y, fromId, band) {
  * position where releasing does nothing.
  */
 function showDrop(fromId, hit) {
-  const half = hit && !isPlace(hit.id) ? dropRect(fromId, hit) : undefined;
+  const half = hit && !targetIds(hit.card).some(isPlace) ? dropRect(fromId, hit) : undefined;
   if (!half) { hideDrop(); return null; }
   return showDropRect(half);
 }
@@ -1109,9 +1132,10 @@ function hideDrop() {
  */
 function dropTab(fromId, tabId, hit) {
   const from = grid.card(fromId);
-  const group = tree.isGroup(hit.id);
-  const target = group ? null : grid.card(hit.id);
-  if (!from || (!group && !target) || isPlace(hit.id)) return settle();
+  const ids = targetIds(hit.card);
+  const group = ids.length === 1 && tree.isGroup(ids[0]);
+  const target = ids.length === 1 && !group ? grid.card(ids[0]) : null;
+  if (!from || (ids.length === 1 && !group && !target) || ids.some(isPlace)) return settle();
   const moving = tabsOf(from).find((t) => t.id === tabId);
   if (!moving) return settle();
 
@@ -1126,8 +1150,8 @@ function dropTab(fromId, tabId, hit) {
   }
 
   if (tabsOf(from).length === 1) {                               // T5 — nothing is left to keep
-    if (fromId === hit.id) return settle();
-    if (tree.canMove(fromId, hit.id, hit.zone)) tree.move(fromId, hit.id, hit.zone);
+    if (ids.length === 1 && fromId === ids[0]) return settle();
+    if (tree.canMove(fromId, hit.card, hit.zone)) tree.move(fromId, hit.card, hit.zone);
     focusOn(fromId);
     return settle();
   }
@@ -1137,7 +1161,7 @@ function dropTab(fromId, tabId, hit) {
   removeTab(from, tabId);
   settleActiveTab(from);
   const data = { tabs: [moving], activeId: moving.id };
-  const born = !slot ? null : hit.zone === "centre" ? tree.addCard(hit.id, data) : tree.split(hit.id, hit.zone, data);
+  const born = !slot ? null : hit.zone === "centre" ? tree.addCard(ids[0], data) : tree.splitBeside(hit.card, hit.zone, data);
   if (born === null) {                                           // If there is no slot, revert
     appendTab(from, moving);
   } else {
@@ -2710,15 +2734,20 @@ export function layoutDescription() {
 
 const ZONES = ["centre", "left", "right", "top", "bottom"];
 
-/** Moves a tab to the center or an edge of a card. It is the same as the result of releasing a drag. */
+/**
+ * Moves a tab to the centre of a card, or to an edge of a card, a box, a cut or a run named by one id or a list of ids. It is the same as
+ * the result of releasing a drag.
+ */
 export function moveTab(tabId, cardId, zone) {
   const from = cardOfTab(tabId);
-  const group = tree?.isGroup(cardId);
-  if (!group) paneCard(cardId);
+  const ids = targetIds(cardId);
+  if (!ids.length) throw new Error(`tab ${tabId} moves to no card`);
+  for (const id of ids) if (!tree?.isGroup(id)) paneCard(id);
   if (!ZONES.includes(zone)) throw new Error(`unknown zone ${zone}`);
-  const hit = { id: cardId, zone };
-  if ((zone !== "centre" || group) && dropRect(from.id, hit) === undefined) {
-    throw new Error(`tab ${tabId} cannot move to the ${zone} of ${cardId}`);
+  if (zone === "centre" && ids.length > 1) throw new Error(`tab ${tabId} moves to the centre of one card, not of ${ids.join(", ")}`);
+  const hit = { card: cardId, zone };
+  if ((zone !== "centre" || tree.isGroup(ids[0])) && dropRect(from.id, hit) === undefined) {
+    throw new Error(`tab ${tabId} cannot move to the ${zone} of ${ids.join(", ")}`);
   }
   restoreFullscreen();
   dropTab(from.id, tabId, hit);
@@ -2951,14 +2980,17 @@ export function leadLevel(id) {
   return { card, group };
 }
 
-/** Moves the card id, a content card or a group card, beside target on side, or into the group target with side centre. */
+/**
+ * Moves the card id, a content card or a group card, beside target on side, or into the group target with side centre; target is one id
+ * or the ids of the kids of a cut or a run.
+ */
 export function moveCard(id, target, side) {
   const card = treeCard(id);
-  const to = treeCard(target);
+  const to = targetIds(target).map(treeCard);
   layoutChangeable(card);
   // A move that changes the layout focuses the moved card, as the drop of the only tab of a card does; a move to where the card
   // stands changes nothing and keeps the focus (docs/spec/groups.md#focus).
-  if (tree.move(card, to, side)) focusCard(card);
+  if (tree.move(card, to.length === 1 ? to[0] : to, side)) focusCard(card);
   else settle();
   return { card };
 }

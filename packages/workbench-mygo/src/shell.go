@@ -100,7 +100,7 @@ type metrics struct {
 	libraryPreviewH, libraryMark, libraryMarkStroke, previewLineH, previewLineStep, previewLineOpacity, previewSidebarOpacity, libraryAddH,
 	libraryFormW, fieldPadY, selectArrowRoom, selectArrowInset, previewBorderMix, previewFillMix, previewInkMix, previewLineW,
 	lineHeight, lineHeightTight, projectColumnW, projectColumnGap, projectColumnPad, projectTabH, projectTabPad, projectTabXInset, projectTabAddH,
-	barTabRootPad, barTabRootW, barTabRootH, dropMix, dropBorder, groupFocusFade, tabDraggingOpacity, actStroke, chromeActsGap, brandGap, brandLogoAtBase, chromeH, chromeRowH, spaceGap, spacePad, chromeGap, barGap, barXPad, barXOpacity, barAddText, barAddPad, textControlAtBase, textCaptionAtBase, chipMix, chipHoverMix, chipOnMix, projectTabMix float32
+	barTabRootPad, barTabRootW, barTabRootH, dropMix, dropBorder, dropBand, dropBandMargin, groupFocusFade, tabDraggingOpacity, actStroke, chromeActsGap, brandGap, brandLogoAtBase, chromeH, chromeRowH, spaceGap, spacePad, chromeGap, barGap, barXPad, barXOpacity, barAddText, barAddPad, textControlAtBase, textCaptionAtBase, chipMix, chipHoverMix, chipOnMix, projectTabMix float32
 	headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, activityIcon, activityStroke, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW, tabGrabW float32
 	// The card head (.chrome of packages/workbench/app.css).
 	cardHeadGap, cardHeadPad, cardTabsGap, cardButton, cardIcon, cardActsGap, cardActsPad, cardActHalfOpacity, tabGap, tabPadY, tabPadX, tabXPad, tabXOpacity, iconStroke, disabledOpacity, noticeDotInset, radiusMiddleRatio, radiusSmallRatio, textSmallAtBase, textBase, chipSelMix, renameSelectionMix, insetMix, tabXHoverMix float32
@@ -152,6 +152,9 @@ func readMetrics(declared *Declarations) (metrics, error) {
 	read("project-tab-x-inset", &m.projectTabXInset)
 	read("project-tab-add-h", &m.projectTabAddH)
 	read("drop-border", &m.dropBorder)
+	// The width and the margin of the bands of the target search (docs/spec/groups.md#target-search).
+	read("drop-band", &m.dropBand)
+	read("drop-band-margin", &m.dropBandMargin)
 	read("group-focus-fade", &m.groupFocusFade)
 	read("tab-dragging-opacity", &m.tabDraggingOpacity)
 	read("act-stroke", &m.actStroke)
@@ -261,7 +264,10 @@ func readMetrics(declared *Declarations) (metrics, error) {
 		failed = errors.New("the chrome metric group-fill-fade has no number")
 	}
 	m.groupFillFade = fade
-	return m, failed
+	if failed != nil {
+		return m, fmt.Errorf("workbench.json: %w", failed)
+	}
+	return m, nil
 }
 
 // projectRecord is a stored project with the members that the shell shows.

@@ -39,6 +39,14 @@ func (t *Target) UnmarshalJSON(raw []byte) error {
 	return json.Unmarshal(raw, (*[]string)(t))
 }
 
+// MarshalJSON writes one id as that id and more ids as a list, the forms that UnmarshalJSON reads.
+func (t Target) MarshalJSON() ([]byte, error) {
+	if len(t) == 1 {
+		return json.Marshal(t[0])
+	}
+	return json.Marshal([]string(t))
+}
+
 type extent struct{ x0, x1, y0, y1 float64 }
 
 func (e extent) get(k string) float64 {
@@ -698,6 +706,68 @@ func (g *Grid) Withdraw(id string) (*Node, error) {
 		return nil, err
 	}
 	return cloneNode(left), nil
+}
+
+// Exchange puts the node a, a card or a box, where the node b stands and b where a stood (packages/soksak/docs/layout.md#add-and-remove):
+// each place keeps its fraction and the px size that a card there declares, and every other node keeps its rectangle. Two nodes of which
+// one holds the other and a fixed card are refused, the result is judged as an insert is, and an error changes nothing.
+func (g *Grid) Exchange(a, b string) error {
+	defer g.begin()()
+	return g.byCuts(func() (*Node, error) { return g.exchangeNodes(a, b) })
+}
+
+// exchangeNodes is the stored tree with the nodes a and b in each other's place.
+func (g *Grid) exchangeNodes(a, b string) (*Node, error) {
+	x := newIndex(g)
+	na, nb := x.byID[a], x.byID[b]
+	for id, n := range map[string]*Node{a: na, b: nb} {
+		if n == nil {
+			return nil, notMember(id)
+		}
+		if n.isCard() && n.Fixed {
+			return nil, fmt.Errorf("card %s is fixed and does not leave", id)
+		}
+	}
+	if slices.Contains(cardsOf(na), nb) || slices.Contains(cardsOf(nb), na) || holdsBox(na, b) || holdsBox(nb, a) {
+		return nil, fmt.Errorf("card %s and card %s hold one another and do not exchange", a, b)
+	}
+	putA, putB := x.place(na), x.place(nb)
+	putA(nb)
+	putB(na)
+	// The px size belongs to the place: a card takes the px size of the place it enters, and a box, which declares none, its fraction.
+	wa, ha, wb, hb := na.Width, na.Height, nb.Width, nb.Height
+	if na.isCard() {
+		na.Width, na.Height = wb, hb
+	}
+	if nb.isCard() {
+		nb.Width, nb.Height = wa, ha
+	}
+	return x.root, nil
+}
+
+// holdsBox is whether the box id stands inside the node n.
+func holdsBox(n *Node, id string) bool {
+	switch {
+	case n.isBox():
+		return n.Box == id || holdsBox(n.Inner, id)
+	case n.isCut():
+		return slices.ContainsFunc(n.Kids, func(k Kid) bool { return holdsBox(k.Node, id) })
+	}
+	return false
+}
+
+// place is the setter of the place where n stands: its kid in its cut, the inner node of its box, or the root.
+func (x *index) place(n *Node) func(*Node) {
+	if holder := x.parent[n]; holder != nil {
+		at := slices.IndexFunc(holder.Kids, func(k Kid) bool { return k.Node == n })
+		return func(next *Node) { holder.Kids[at].Node = next }
+	}
+	for _, box := range x.byID {
+		if box.isBox() && box.Inner == n {
+			return func(next *Node) { box.Inner = next }
+		}
+	}
+	return func(next *Node) { x.root = next }
 }
 
 // Even gives the kids of every cut that take a fraction equal fractions (packages/soksak/docs/layout.md#cuts). An error changes nothing.
