@@ -10,7 +10,7 @@ This document defines how a tab of a terminal agent receives its role, and how s
 - A surface is the surface of one tab, so the role file of a surface belongs to one tab. The role file lies in the configuration directory of the application, never in a repository of the person. Keep a role definition short, because the agent reads the whole file at each change; soksak accepts a definition of any length. Its last line is the fingerprint of the role.
 - The fingerprint is deterministic: the same role name and definition always give the same fingerprint. The agent reads it from the last line of the file; it never computes it.
 - The agent confirms by one of two ways: the command `sok role confirm <fingerprint>`, or a line `soksak role <fingerprint>` in its answer. A role is `ready` only when soksak has received the current fingerprint. The line form serves every CLI; a CLI that puts a letter or digit before the line confirms with `sok role confirm` ([confirmation](#confirmation)).
-- An agent that does not confirm gets a reread request at each not-busy report until it confirms, with no limit; the count is observable as `requests` in the status. No timer decides any step.
+- An agent that does not confirm gets a reread request at each not-busy report until it confirms, with no limit; each request is written to the record `plugin.<plugin>.messages.delivered` with kind `role-reread`. No timer decides any step.
 - A role assignment or change rewrites the role file atomically and sends a change message that names the path of the file; an agent that cannot read files receives the paste form instead ([agents that cannot read files](#agents-that-cannot-read-files)). Operations of one surface are serialized in arrival order.
 - An agent does not write its role into any persistent memory of its CLI.
 
@@ -159,7 +159,7 @@ A change runs in this order, and each step starts only when the previous one suc
 
 Failure rules: a failure in step 1, with the text `role file <path>: write failed: <os error>`, removes the temporary file and stores nothing. A failure in step 2 removes the temporary file, leaves the stored role unchanged and is reported with `role file <path>: write failed: <os error>`. A failure in step 3 removes the temporary file and then restores the earlier record in `projects.json`; when the restore also fails, both errors are reported: the write error and `projects.json <path>: restore failed: <os error>`. When the host ends between steps, the next launch writes the role file from the record in `projects.json` and the definition text in `roles.json` before the CLI starts; a fingerprint that differs from the record refuses the write with `role file <path>: fingerprint differs from the record`.
 
-The status `core.tab.role` has the value `{role, generation, state, seq, fingerprint, requests}`: `state` is `pending` or `ready`, `null` without a role; `requests` is the count of [requests](#requests), `0` without a role; `fingerprint` is the fingerprint of the current role file, `null` without a role; and `seq` rises at each change. The replies of the role commands carry `fingerprint` too. The page composes the reread request from the `fingerprint` of the status, and no error text carries a fingerprint. The page follows the status with the view call `runtime.status.watch` with `{name: "core.tab.role", surface}`, where `surface` is the terminal's own surface, and does not poll ([view surfaces](native-surfaces.md#view-surfaces)).
+The status `core.tab.role` has the value `{role, generation, state, seq, fingerprint, path}`: `state` is `pending` or `ready`, `null` without a role; `fingerprint` is the fingerprint of the current role file, `null` without a role; `path` is the absolute path of the role file of the tab, `<config-dir>/agents/<surface>/role.md`, `null` without a role; and `seq` rises at each change. The replies of the role commands carry `fingerprint` and `path` too. The page composes the change message and the reread request from the `path` and the `fingerprint` of the status, and no error text carries a fingerprint. The page follows the status with the view call `runtime.status.watch` with `{name: "core.tab.role", surface}`, where `surface` is the terminal's own surface, and does not poll ([view surfaces](native-surfaces.md#view-surfaces)).
 
 ## Confirmation
 
@@ -181,16 +181,16 @@ The line form applies to every CLI, and the command form applies to an agent wit
 soksak judges a confirmation inside the serialization of the surface, against the state at its turn:
 
 - a value that is not 16 lowercase hexadecimal characters is refused as an invalid-argument error with `fingerprint <value> is not 16 lowercase hexadecimal characters` before the serialization. The stale rule below applies only to valid values;
-- the fingerprint equals the current one, in state `pending`: `confirmedFingerprint` is stored, the state becomes `ready`, `seq` rises, the requests counter is reset, and the held work messages are released;
+- the fingerprint equals the current one, in state `pending`: `confirmedFingerprint` is stored, the state becomes `ready`, `seq` rises, and the held work messages are released;
 - the fingerprint equals the current one, in state `ready`: nothing changes, and the answer is a success;
 - the fingerprint differs from the current one, because it belongs to an earlier file: refused as stale with `stale fingerprint: read the role file again at <path>`, without a retry. The error is `stale fingerprint: read the role file again at <path>`, which names the path of the current role file. It names no fingerprint. The state stays `pending`; the next not-busy report sends a reread request with the current path and fingerprint, so a wrong fingerprint repeats the request;
 - a tab without a role, or a surface without a tab: refused with `surface "<value>" has no tab`, or, for a tab without a role, with `tab <tab> has no role`.
 
 ### Requests
 
-The page watches the program state of the tab ([terminal state](terminal-state.md)). A reread request is a message that names the path of the role file and asks the agent to read the file and confirm with its last line. The change message and the first message are not counted as requests. While the state is `pending`, the page sends one reread request at each report of the program that it is not busy and adds one to `requests`. The requests repeat until the agent confirms, with no limit.
+The page watches the program state of the tab ([terminal state](terminal-state.md)). A reread request is a message that names the path of the role file and asks the agent to read the file and confirm with its last line. The change message and the first message are not counted as requests. While the state is `pending`, the page sends one reread request at each report of the program that it is not busy. The requests repeat until the agent confirms, with no limit, and each one is written to the record `plugin.<plugin>.messages.delivered` with kind `role-reread`.
 
-Each request names the path and the current fingerprint from the status. A wrong fingerprint leaves the state `pending`, so the next not-busy report sends a request with the current path and fingerprint. No timer decides these steps. The counter is part of the stored record, so a restart does not reset it.
+Each request names the path and the current fingerprint from the status. A wrong fingerprint leaves the state `pending`, so the next not-busy report sends a request with the current path and fingerprint. No timer decides these steps.
 
 The not-busy report that the CLI gives is verified for each CLI. An agent whose CLI gives no such report stays `pending` and shows through the error display with the text `pending role: tab <tab> waits for a not-busy report of the agent CLI` instead of passing.
 
@@ -211,8 +211,8 @@ Every step of the role handshake repeats without a change of the result:
 - `sok role confirm` or the answer line with the current fingerprint, repeated, answers `ready` and changes nothing, including `seq`;
 - a reread request that is sent again names the same path and the same fingerprint, so reading the file again and confirming again gives the same `ready`;
 - a work message is delivered exactly once, even when `ready` is reached twice;
-- after a restart of the application while the program keeps running, the state is rebuilt from the stored record and the file: `ready` when `confirmedFingerprint` equals the fingerprint of the file; otherwise `pending` with the stored request count. A file whose fingerprint differs from the record is rewritten from `roles.json` first, and a rewrite whose fingerprint still differs from the record is refused with `role file <path>: fingerprint differs from the record`;
-- a resume gives `pending` with the same fingerprint, because a resume keeps the session but not the proof that the agent read the file. The host clears `confirmedFingerprint` and the requests counter at the resume, and the resumed tab sends a reread request at each not-busy report until it confirms, counted from 1; a new launch clears `confirmedFingerprint` and the counter as a resume does.
+- after a restart of the application while the program keeps running, the state is rebuilt from the stored record and the file: `ready` when `confirmedFingerprint` equals the fingerprint of the file; otherwise `pending`. A file whose fingerprint differs from the record is rewritten from `roles.json` first, and a rewrite whose fingerprint still differs from the record is refused with `role file <path>: fingerprint differs from the record`;
+- a resume gives `pending` with the same fingerprint, because a resume keeps the session but not the proof that the agent read the file. The host clears `confirmedFingerprint` at the resume, and the resumed tab sends a reread request at each not-busy report until it confirms; a new launch clears `confirmedFingerprint` as a resume does.
 
 A role A changed to B and back to A has the fingerprint of A again, so a confirmation of it is correct: the content is the same.
 
@@ -224,10 +224,10 @@ A role A changed to B and back to A has the fingerprint of A again, so a confirm
 - Repeated confirmation with the current fingerprint: `ready` both times, and `seq` unchanged after the second.
 - Confirmation of an earlier fingerprint after a change: refused as stale with `stale fingerprint: read the role file again at <path>`; the error names no fingerprint.
 - A confirmation value that is not 16 lowercase hexadecimal characters: refused as invalid input with `fingerprint <value> is not 16 lowercase hexadecimal characters`, and the text `stale fingerprint: read the role file again at <path>` is not sent.
-- Reread requests without confirmation: one request at each not-busy report, each counted in `requests`, with no limit; each names the same path and the current fingerprint.
+- Reread requests without confirmation: one request at each not-busy report, each written to `plugin.<plugin>.messages.delivered` with kind `role-reread`, with no limit; each names the same path and the current fingerprint.
 - Work message with `ready` reached twice: injected once, keyed by its file name.
-- Restart with a stored confirmation: `ready` without input; with a stored counter of 5: `pending` with that counter.
-- Resume: `pending`, the same fingerprint, the confirmation and the counter cleared, one reread request.
+- Restart with a stored confirmation: `ready` without input; without one: `pending` without input.
+- Resume: `pending`, the same fingerprint, the confirmation cleared, one reread request.
 
 These are unit tests with real files and the real `sok` command; no agent CLI runs in them. The host tests run in the Go host package and in the Rust host package. The page tests run in the terminal plugin repository, which owns the page.
 
@@ -372,7 +372,7 @@ The target judges the role state only. For each CLI it:
 5. repeats step 2 with the answer line, and for an agent with a shell, repeats it with `sok role confirm`;
 6. requires that no nonce appears in the persistent memory files of the CLI or in `AGENTS.md` and `CLAUDE.md` of the project folder.
 
-An agent that never confirms stays `pending` with a rising `requests` count, which the target reports; the target never reports a pass for a `pending` state.
+An agent that never confirms stays `pending`; the target never reports a pass for a `pending` state.
 
 A missing `claude` or `codex` command fails the target with `command not found: <program>`, and no test is skipped. Each test has its own time limit and prints `running`, `finished`, `passed` or `failed` with its elapsed time ([AGENTS](../../AGENTS.md#verification)).
 
@@ -387,7 +387,7 @@ Objections were raised against each revision of this decision and are answered b
 Answered and applied:
 
 - Launch adapters are removed: every CLI starts with its `program` and `args`, and receives its identity as its first message. One path needs no code for each CLI. The measured trade-off is that a first message can be lost to context compaction; the reread requests and the change messages restore the role.
-- The reread requests repeat at each not-busy report until the agent confirms, with no limit. The reason is convergence by repetition: the file holds the current role, and each request names that path and the current fingerprint, so a repeated request reaches the same confirmation. A cap would end the loop before the agent confirms. The status counts the requests.
+- The reread requests repeat at each not-busy report until the agent confirms, with no limit. The reason is convergence by repetition: the file holds the current role, and each request names that path and the current fingerprint, so a repeated request reaches the same confirmation. A cap would end the loop before the agent confirms.
 - Held work messages wait for `ready`, because the role play proceeds only after the fingerprint is confirmed.
 - `roles.json` holds the role text, because a role named by its identifier needs one place for its text.
 - Both confirmation ways stay. The line form serves every CLI; `sok role confirm` serves a CLI that puts a letter or digit before the line, since the line matcher refuses such a row.
@@ -397,11 +397,11 @@ Answered and applied:
 - The leadership paragraph is removed; it stated a question that the design does not settle.
 - The queue order, the sender rule, the foreground rule and the framing move to [role messages](messaging.md#role-messages).
 
-- The change message is not a reread request; the count of requests starts at the first not-busy report after the change message.
+- The change message is not a reread request; the first request after the change message is the first request of the generation.
 - An assignment of the same role writes no file and changes no state.
 - A line in the answer shows that the agent holds the fingerprint of the current file, not that it read the file.
 - The fingerprint reference file pins the texts of the role file, the identity, the change message, the reread request, the first message suffix and the paste-form texts.
-- A restart with a stored request count of 5 gives `pending` with that count.
+- A restart without a stored confirmation gives `pending`.
 - A running tab cannot lose its role.
 - The first message suffix is a pinned text.
 - The hold reason `role-pending` is named in the hold list of messaging.
