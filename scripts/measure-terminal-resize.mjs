@@ -18,7 +18,10 @@
 // coloured text of these screens, and a raster of the last drawn size that the new size crops keeps more than that share of it. A shell
 // whose prompt has no coloured text is reported as not judged. For the alt case, whose screen `less` fills at every width, a frame
 // misses text when a band of pixel rows that showed text in the first frame is blank (fewer than BLANK_PER_POINT text pixels per square
-// point of the scale); a band that shows other text after the program redrew it is no miss. After the drag of the output case it
+// point of the scale); a band that shows other text after the program redrew it is no miss. For the prompt and output cases it also
+// counts the frames that show the cursor off the prompt (cursorCell, cursorFrames): the cursor is the mark whose columns hold ink over
+// the full height of a text row, and a frame whose cursor has no ink left of it and ink right of it on its row shows it on the first
+// cell of the prompt. After the drag of the output case it
 // compares the rows of zeros of each screen with those before the drag: a wrapped line that does not join into its rows at the
 // original width is reported. It prints, per case and terminal, the frames, the frames in which the divider moved, the frames that
 // miss text with their indexes and the comparison, and the folder of each recording, which stays in the logs folder of the
@@ -203,6 +206,83 @@ export function textBands(profile, join) {
 
 const sum = (values) => values.reduce((total, value) => total + value, 0);
 
+/** The sum of the red, green and blue differences from the background above which a pixel is ink of a glyph or of the cursor. */
+export const CURSOR_DISTANCE = 300;
+/** The share of the cursor height of the first frame that a column of the cursor holds as one vertical run of ink. */
+export const CURSOR_HEIGHT_SHARE = 0.9;
+
+/**
+ * The cursor cell of the terminal in `span` of `frame`. A block or hollow cursor is the one mark of a terminal screen whose columns hold
+ * ink over the full height of a text row; a glyph is shorter. `height` is the cursor height in pixels that the first frame showed, or
+ * null for the first frame, whose tallest vertical run of ink is the cursor. Ink is a pixel farther than CURSOR_DISTANCE from the
+ * background, which leaves out anti-aliased edges and the dim scrollbar. Returns {x0, x1, y0, y1, height, left, right} in pixels from
+ * the top left of the span, where x0..x1 reaches from the first to the last column of the cursor, which are both edges of a hollow
+ * cursor, and `left` and `right` are the ink of the pixel rows y0..y1 left of x0 and right of x1, or null when no column holds a run of
+ * CURSOR_HEIGHT_SHARE of `height`, as in a frame that does not draw the cursor.
+ */
+export function cursorCell(frame, span, height) {
+  const k = frame.scale * frame.contentScale;
+  const px0 = Math.max(0, Math.floor(frame.content.x * frame.scale + span.x0 * k));
+  const px1 = Math.min(frame.width, Math.floor(frame.content.x * frame.scale + span.x1 * k));
+  const py0 = Math.max(0, Math.floor(frame.content.y * frame.scale + span.y0 * k));
+  const py1 = Math.min(frame.height, Math.floor(frame.content.y * frame.scale + span.y1 * k));
+  const ink = (px, py) => {
+    const at = py * frame.stride + px * 4;
+    return Math.abs(frame.data[at + 2] - span.background[0]) + Math.abs(frame.data[at + 1] - span.background[1]) +
+      Math.abs(frame.data[at] - span.background[2]) > CURSOR_DISTANCE;
+  };
+  // The longest vertical run of ink of each column, with the pixel row where it starts.
+  const runs = [];
+  for (let px = px0; px < px1; px++) {
+    let best = { length: 0, start: 0 };
+    let start = null;
+    for (let py = py0; py <= py1; py++) {
+      if (py < py1 && ink(px, py)) {
+        if (start === null) start = py;
+        continue;
+      }
+      if (start !== null && py - start > best.length) best = { length: py - start, start };
+      start = null;
+    }
+    runs.push(best);
+  }
+  const tallest = Math.max(0, ...runs.map((run) => run.length));
+  const target = height ?? tallest;
+  if (target === 0) return null;
+  const column = runs.findIndex((run) => run.length >= CURSOR_HEIGHT_SHARE * target);
+  if (column < 0) return null;
+  let end = runs.length;
+  while (runs[end - 1].length < CURSOR_HEIGHT_SHARE * target) end--;
+  const y0 = runs[column].start;
+  const y1 = y0 + runs[column].length;
+  let left = 0;
+  let right = 0;
+  for (let py = y0; py < y1; py++) {
+    for (let px = px0; px < px0 + column; px++) if (ink(px, py)) left++;
+    for (let px = px0 + end; px < px1; px++) if (ink(px, py)) right++;
+  }
+  return { x0: column, x1: end, y0: y0 - py0, y1: y1 - py0, height: runs[column].length, left, right };
+}
+
+/**
+ * The frames of one terminal in case `name` that show the cursor off the prompt: `cells` holds the cursorCell of each frame, or null for
+ * a frame without the divider or without a cursor. The shell leaves the cursor after its prompt: the row of the cursor holds the prompt
+ * left of it, or nothing when the prompt fills the row above and the cursor wraps to the first cell. A frame whose cursor has no ink
+ * left of it and ink right of it on its row shows the cursor on the first cell of the prompt, off the prompt. A frame without a found
+ * cursor is counted in `unjudged`. The alt case and a first frame without a cursor are not judged. Returns
+ * {judged, off, unjudged}.
+ */
+export function cursorFrames(name, cells) {
+  if (name === "alt" || !cells[0]) return { judged: false, off: [], unjudged: 0 };
+  const off = [];
+  let unjudged = 0;
+  cells.forEach((cell, index) => {
+    if (cell === null) unjudged++;
+    else if (cell.left === 0 && cell.right > 0) off.push(index);
+  });
+  return { judged: true, off, unjudged };
+}
+
 /**
  * The judgment of the frames of one terminal in case `name`: `counts` holds, for each frame, `{bands, coloured}`, the text pixels of each
  * band of the first frame and the coloured text pixels, or null for a frame whose divider was not found; `blank` is the count below which
@@ -249,6 +329,8 @@ export function measureRecording(folder, regions) {
   ];
   const bands = spans(divider0).map((span) => textBands(textProfile(first, span).profile, 1));
   const counts = [[], []];
+  const cells = [[], []];
+  const cursorHeights = spans(divider0).map((span) => cursorCell(first, span, null)?.height ?? null);
   let lost = 0;
   let moves = 0;
   let previous = divider0.start;
@@ -259,6 +341,8 @@ export function measureRecording(folder, regions) {
       lost++;
       counts[0].push(null);
       counts[1].push(null);
+      cells[0].push(null);
+      cells[1].push(null);
       continue;
     }
     if (divider.start !== previous) moves++;
@@ -266,10 +350,11 @@ export function measureRecording(folder, regions) {
     spans(divider).forEach((span, side) => {
       const { profile, coloured } = textProfile(frame, span);
       counts[side].push({ bands: bands[side].map((band) => sum(profile.slice(band.start, band.end))), coloured });
+      cells[side].push(cursorHeights[side] === null ? null : cursorCell(frame, span, cursorHeights[side]));
     });
   }
   const k = first.scale * first.contentScale;
-  return { frames: files.length, withoutDivider: lost, moves, bands: bands.map((list) => list.length), counts, blank: BLANK_PER_POINT * k * k };
+  return { frames: files.length, withoutDivider: lost, moves, bands: bands.map((list) => list.length), counts, cells, blank: BLANK_PER_POINT * k * k };
 }
 
 /** Opens the window and the two tabs of the measurement in a new project of `root`. */
@@ -323,6 +408,7 @@ async function measureCase({ s, plugin, tabs, cards, root, name, distance, ms, t
     moves: measured.moves,
     terminals: tabs.map((tab, side) => ({
       tab, bands: measured.bands[side], ...missingFrames(name, measured.counts[side], measured.blank),
+      cursor: cursorFrames(name, measured.cells[side]),
       zerosBefore: zeroRows(before[side]), zerosAfter: zeroRows(after[side]),
     })),
   };
@@ -374,7 +460,11 @@ export function formatReport({ plugin, distance, ms, times, results }) {
       const judged = terminal.judged
         ? `${terminal.missing.length} frames miss text${terminal.missing.length > 0 ? ` (first ${terminal.missing.slice(0, 8).join(", ")})` : ""}`
         : "not judged (no coloured prompt)";
-      lines.push(`  ${side === 0 ? "left" : "right"} ${terminal.tab}: ${judged}, ${terminal.bands} text bands` +
+      const { cursor } = terminal;
+      const cursorJudged = cursor.judged
+        ? `${cursor.off.length} frames show the cursor off the prompt${cursor.off.length > 0 ? ` (first ${cursor.off.slice(0, 8).join(", ")})` : ""}, ${cursor.unjudged} not judged`
+        : "cursor not judged";
+      lines.push(`  ${side === 0 ? "left" : "right"} ${terminal.tab}: ${judged}, ${cursorJudged}, ${terminal.bands} text bands` +
         (result.name === "output" ? `, zero rows ${JSON.stringify(terminal.zerosBefore)} -> ${JSON.stringify(terminal.zerosAfter)}${rejoined ? "" : " NOT REJOINED"}` : ""));
     });
   }
