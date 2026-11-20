@@ -1138,6 +1138,48 @@ func TestADividerDoubleClickRunsTheCentreCommand(t *testing.T) {
 	}
 }
 
+// The tabs that a shell creates are stored with the member role null, so the stored layout holds the member of every tab
+// (docs/spec/agent-roles.md#tab-role-state).
+func TestTheTabsOfANewSpaceAreStoredWithANullRole(t *testing.T) {
+	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
+	f.shellFixture.run("core.space.add", nil)
+	var stored []struct {
+		Spaces []struct {
+			ID     string `json:"id"`
+			Layout struct {
+				State struct {
+					Root map[string]any `json:"root"`
+				} `json:"state"`
+			} `json:"layout"`
+		} `json:"spaces"`
+	}
+	if err := json.Unmarshal([]byte(f.stored()), &stored); err != nil {
+		t.Fatal(err)
+	}
+	tabs := 0
+	for _, project := range stored {
+		for _, space := range project.Spaces {
+			if space.ID == "spc-aaaaaa" {
+				continue
+			}
+			for _, card := range treeCards(space.Layout.State.Root) {
+				data, _ := card["data"].(map[string]any)
+				held, _ := data["tabs"].([]any)
+				for _, entry := range held {
+					item := entry.(map[string]any)
+					tabs++
+					if role, has := item["role"]; !has || role != nil {
+						t.Errorf("the tab %v of the new space %s is stored with the role %v", item["id"], space.ID, item["role"])
+					}
+				}
+			}
+		}
+	}
+	if tabs == 0 {
+		t.Fatal("the new space holds no tab to check")
+	}
+}
+
 // The tabs of a new space are written with their origin, null for the first tabs of a space, which have no source tab, so every tab of
 // the stored layout carries the member that the layout write that created it wrote (docs/spec/projects.md#tab-origin).
 func TestTheTabsOfANewSpaceAreStoredWithANullOrigin(t *testing.T) {
