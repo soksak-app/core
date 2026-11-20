@@ -71,3 +71,55 @@ fn mcp_install_registers_the_sok_with_codex_when_codex_is_on_path() {
         "the second install runs the claude command only"
     );
 }
+
+// The registration with codex creates `<home>/.codex`, which makes `<home>/.agents` the Codex agent folder, so the install
+// registers before it writes the skills and writes the skill file of that folder too: the install that creates the folder
+// leaves its skill current.
+// contract: cli.setup.install-writes-the-skill-of-the-folder-that-the-registration-creates
+#[test]
+fn setup_install_writes_the_skill_of_the_codex_folder_that_the_registration_creates() {
+    let machine = Machine::new("codex-setup");
+    let sok = machine.bundle_sok("Test.app");
+    machine.folder(".claude");
+    let tools = machine.tools(&["claude", "codex"]);
+    let path = path_of(&[&tools, Path::new("/usr/bin"), Path::new("/bin")]);
+    let home = machine.home_text();
+    let run = run_sok(
+        &sok,
+        &["setup", "install", "skill", "mcp"],
+        &[("HOME", home.as_str()), ("PATH", path.as_str())],
+    );
+    let skills: Vec<(String, String, bool)> = run.json()["parts"]
+        .as_array()
+        .expect("parts")
+        .iter()
+        .filter(|part| part["part"] == "skill")
+        .map(|part| {
+            (
+                part["file"].as_str().unwrap_or_default().to_string(),
+                part["state"].as_str().unwrap_or_default().to_string(),
+                part["changed"] == true,
+            )
+        })
+        .collect();
+    let file = |folder: &str| {
+        machine
+            .home
+            .join(folder)
+            .join("skills/soksak/SKILL.md")
+            .display()
+            .to_string()
+    };
+    assert_eq!(
+        (run.code, skills),
+        (
+            0,
+            vec![
+                (file(".claude"), "ok".to_string(), true),
+                (file(".agents"), "ok".to_string(), true)
+            ]
+        ),
+        "{}",
+        run.stderr
+    );
+}

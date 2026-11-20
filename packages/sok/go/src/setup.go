@@ -235,15 +235,6 @@ func (s Setup) Install(kinds []string, terminal bool) (SetupParts, error) {
 			changed[file] = true
 		}
 	}
-	if pending["skill"] {
-		files, err := s.InstallSkills()
-		for _, file := range files {
-			changed[file.File] = file.State == "written"
-		}
-		if err != nil {
-			failures = append(failures, err.Error())
-		}
-	}
 	if pending["mcp"] {
 		result, err := s.InstallMCP()
 		if err != nil {
@@ -256,26 +247,32 @@ func (s Setup) Install(kinds []string, terminal bool) (SetupParts, error) {
 			changed[file] = true
 		}
 	}
+	// The skills are written after the registration, which can create an agent folder, such as the Codex folder that codex mcp
+	// add creates; the skill parts are read again, so the skill file of that folder is written too (docs/spec/cli.md#agent-skill).
+	if named("skill") {
+		registered, err := s.Check()
+		if err != nil {
+			return SetupParts{}, err
+		}
+		for _, part := range registered.Parts {
+			if part.Part == "skill" && part.State != "ok" {
+				pending["skill"] = true
+			}
+		}
+	}
+	if pending["skill"] {
+		files, err := s.InstallSkills()
+		for _, file := range files {
+			changed[file.File] = file.State == "written"
+		}
+		if err != nil {
+			failures = append(failures, err.Error())
+		}
+	}
 	after, err := s.Check()
 	if err != nil {
 		return SetupParts{}, err
 	}
-	// The skill folders are decided when the install starts: a folder that a later step creates, such as the Codex folder that the
-	// registration creates, is not written by this install and is not judged by it (docs/spec/cli.md#agent-skill).
-	decided := map[string]bool{}
-	for _, part := range before.Parts {
-		if part.Part == "skill" {
-			decided[part.File] = true
-		}
-	}
-	kept := after.Parts[:0]
-	for _, part := range after.Parts {
-		if part.Part == "skill" && !decided[part.File] {
-			continue
-		}
-		kept = append(kept, part)
-	}
-	after.Parts = kept
 	for n := range after.Parts {
 		value := changed[after.Parts[n].File]
 		after.Parts[n].Changed = &value

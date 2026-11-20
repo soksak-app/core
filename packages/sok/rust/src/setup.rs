@@ -332,21 +332,6 @@ pub fn install(setup: &Setup, kinds: &[Kind], terminal: bool) -> Result<Installe
             Err(error) => failures.push(error),
         }
     }
-    if pending(Kind::Skill) {
-        match skill::install_skill_files(setup.environment) {
-            Ok((files, skill_failures)) => {
-                for file in files {
-                    if file.state == skill::SkillState::Written {
-                        changed.push(file.file);
-                    }
-                }
-                if !skill_failures.is_empty() {
-                    failures.push(skill::failures_text(&skill_failures));
-                }
-            }
-            Err(error) => failures.push(error),
-        }
-    }
     if pending(Kind::Mcp) {
         match registration::install(setup.environment, setup.sok) {
             Ok(done) => {
@@ -358,6 +343,27 @@ pub fn install(setup: &Setup, kinds: &[Kind], terminal: bool) -> Result<Installe
                         registration::codex_config_file(setup.environment)?
                     };
                     changed.push(file.display().to_string());
+                }
+            }
+            Err(error) => failures.push(error),
+        }
+    }
+    // The skills are written after the registration, which can create an agent folder, such as the Codex folder that `codex mcp
+    // add` creates; the skill parts are read again, so the skill file of that folder is written too (docs/spec/cli.md#agent-skill).
+    if named(Kind::Skill)
+        && check(setup)?
+            .iter()
+            .any(|part| part.part == Kind::Skill.as_str() && part.state != State::Ok)
+    {
+        match skill::install_skill_files(setup.environment) {
+            Ok((files, skill_failures)) => {
+                for file in files {
+                    if file.state == skill::SkillState::Written {
+                        changed.push(file.file);
+                    }
+                }
+                if !skill_failures.is_empty() {
+                    failures.push(skill::failures_text(&skill_failures));
                 }
             }
             Err(error) => failures.push(error),

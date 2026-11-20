@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1004: `sok setup install`은 skill 파일을 쓰기 전에 MCP server를 등록하고 등록 뒤에 agent 폴더를 다시 읽으므로, `codex mcp add`가 agent 폴더로 만드는 `<home>/.agents`의 skill 파일을 두 구현 모두 같은 install에서 쓴다.
 - F1003: 두 host에서 `service-messages`의 wake는 그 줄의 종류의 routine(`service-messages.reply`, `.process`, `.closed`, `.image`, `.message`, `.dropped`)으로도 세므로, 표본 추출이 persistent service 줄의 작업을 메시지 종류로 나눈다.
 - F1000-2.1: Go host와 Rust host는 `agent.surface`를 connection의 process의 surface로 답한다. socket에서 peer process를 읽고, parent가 실행 중인 sidecar인 첫 process까지 parent process를 따라가며, `processes`를 선언한 sidecar에 process query로 묻고 사슬을 다시 읽으며, 1014로 거부한다(`docs/spec/sidecars.md#process-identity`). `packages/plugin-api`는 `sidecar.json`의 `processes` `true`를 받아들인다.
 - F1002: Go host는 `endpoint.json`의 pid가 게시자를 가리키는지 정할 때 종료 중인 프로세스(`P_WEXIT`)를 끝난 것으로 보므로, exit 이벤트 뒤의 프로세스가 좀비가 되기 전에 게시자를 가리키지 않는다. 같은 계약의 Rust 시험은 exit 이벤트를 기다린다.

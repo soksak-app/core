@@ -58,3 +58,23 @@ func containsCommand(commands []string, want string) bool {
 	}
 	return false
 }
+
+// The registration with codex creates <home>/.codex, which makes <home>/.agents the Codex agent folder, so the install registers
+// before it writes the skills and writes the skill file of that folder too: the install that creates the folder leaves its skill
+// current.
+// contract: cli.setup.install-writes-the-skill-of-the-folder-that-the-registration-creates
+func TestSetupInstallWritesTheSkillOfTheCodexFolderThatTheRegistrationCreates(t *testing.T) {
+	f, entry, _ := partsFixture(t)
+	writeText(t, entry, filepath.Dir(f.running)+"\n")
+	codexDir := setupFixture(t, "codex")
+	t.Setenv("PATH", filepath.Dir(f.sok)+string(os.PathListSeparator)+f.claudeDir+string(os.PathListSeparator)+codexDir)
+	code, stdout, stderr := f.run(t, "setup", "install")
+	want := "path ok changed=false\nskill ok changed=true\nskill ok changed=true\nmcp ok changed=true"
+	if code != 0 || describeParts(decodeParts(t, stdout)) != want {
+		t.Fatalf("code %d stdout %s stderr %q, want the parts\n%s", code, stdout, stderr, want)
+	}
+	codexSkill := filepath.Join(f.home, ".agents", "skills", "soksak", "SKILL.md")
+	if parts := decodeParts(t, stdout); parts[2].File != codexSkill {
+		t.Fatalf("parts %s, want the skill %s", stdout, codexSkill)
+	}
+}
