@@ -14,6 +14,7 @@ import (
 	"math/bits"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"sync"
 	"syscall"
@@ -352,6 +353,15 @@ type scannedLine struct {
 	// of `log.query`. Such a line does not announce a change of the log (docs/spec/logging.md#index).
 	readsLog bool
 }
+
+// frameClass is the index of the class frame in indexClasses.
+var frameClass = slices.Index(indexClasses, "frame")
+
+// announces tells whether the line announces a change of the log (docs/spec/logging.md#index): every line except the record of a call
+// that only reads the log and a record of the class frame. A record of the class frame describes how a process ran its main thread and
+// drew its frames, which the delivery of each notice to a window and the drawing of what a following view read produce, so a notice for
+// it would cause the next notice.
+func (l *scannedLine) announces() bool { return !l.readsLog && l.class != frameClass }
 
 // lineShape is the typed view of a line: a member of another type fails the decoding, and the line is then read again by the
 // reader whose error names the file and the line. The members that may be missing are raw, so a null is not taken for a missing one.
@@ -809,7 +819,7 @@ func indexFrom(name string, state indexState, source, idx *os.File, size uint64,
 				next.firstSeq = uint64(line.seq)
 			}
 			acc.add(line, lineSize)
-			if !line.readsLog {
+			if line.announces() {
 				announcing++
 			}
 			next.lastSeq = uint64(line.seq)

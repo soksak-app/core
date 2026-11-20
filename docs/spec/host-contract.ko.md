@@ -1110,7 +1110,7 @@ fn invalid_json_closes_connection() {
 | `log.query.matches-the-class-the-writer-stored` | 질의 필터 `class`는 색인의 class 비트를 통해 writer가 줄에 저장한 class와 맞는다. | all |
 | `log.index.matches-the-golden-digest` | 구현이 각 golden event 파일에서 만든 색인의 SHA-256이 golden 값과 같고, 최신 색인의 갱신은 아무것도 바꾸지 않는다. | all |
 | `log.index.follows-appended-lines-and-is-rebuilt-when-stale` | 색인을 만든 뒤 덧붙은 줄은 부분 segment부터 색인하고, 마지막 줄바꿈 뒤의 바이트는 줄바꿈이 쓰인 뒤 색인하며, 더 작은 파일, 다른 첫 줄, 같은 크기에서 다른 수정 시각은 색인을 처음부터 다시 만든다. | all |
-| `log.index.counts-the-lines-that-announce-a-change` | 색인 갱신은 `announcing`, 곧 앞선 갱신 뒤에 색인한 줄에서 log만 읽는 호출의 기록(`logQuery`의 `host.binding.call`과 `log.query`의 `host.endpoint.call`)을 뺀 수와, 덮는 파일의 크기 `size`를 보고한다. 갱신이 다시 읽는 부분 segment는 두 번 세지 않고, 최신 색인의 갱신은 아무것도 알리지 않는다. | all |
+| `log.index.counts-the-lines-that-announce-a-change` | 색인 갱신은 `announcing`, 곧 앞선 갱신 뒤에 색인한 줄에서 log만 읽는 호출의 기록(`logQuery`의 `host.binding.call`과 `log.query`의 `host.endpoint.call`)과 class `frame`의 기록을 뺀 수와, 덮는 파일의 크기 `size`를 보고한다. 갱신이 다시 읽는 부분 segment는 두 번 세지 않고, 최신 색인의 갱신은 아무것도 알리지 않는다. | all |
 | `log.index.head-read-error-is-reported` | head를 읽는 색인 갱신이 읽기 오류로 실패하면 그 오류를 반환하며, `the first line changed` 이유로 색인을 다시 만들지 않는다. | all |
 | `log.writer.unwritable-line-is-dropped` | writer가 쓸 수 없는 줄(직렬화할 수 없거나 파일을 열 수 없는 줄)은 seq를 간격으로 남기고, 그 간격을 `from_seq`와 `to_seq`, `count` 1, `reason`의 원인을 가진 `log.dropped`로 main 파일에 바로 기록한다. 같은 방식으로 실패하는 `log.dropped` 줄은 표준 오류에만 보고한다. | all |
 | `log.index.refuses-a-damaged-index-and-a-broken-line` | 다른 버전의 색인, 검사합이 맞지 않는 block이나 기록, block보다 짧은 파일은 색인을 밝히는 오류이고, event 구조를 어기는 줄과 schema 2의 `log.open`이 아닌 첫 줄은 파일과 줄을 밝히는 오류이며 색인은 이전 상태를 유지한다. | all |
@@ -1118,6 +1118,7 @@ fn invalid_json_closes_connection() {
 | `log.index.update-reads-with-a-buffer-of-the-new-bytes` | index의 갱신은 읽는 byte만큼, 많아야 한 번 읽는 chunk만큼 읽기 buffer를 할당하므로, 덧붙은 두 줄의 갱신은 1 MiB보다 적게 할당한다. | all |
 | `log.index.update-reads-the-appended-bytes-only` | 파일보다 오래된 index의 갱신은 `indexed_bytes` 뒤의 바이트만 읽고 그 앞의 바이트는 읽지 않으며, 새 줄만 색인하고 알리고, 부분 segment의 기록을 segment의 끝을 넘어서까지 파일 전체를 한 번 만든 기록과 같게 키운다. | all |
 | `log.index.update-reads-the-state-blocks-only` | 덧붙은 줄 뒤의 색인 갱신은 색인이 기록을 하나도 갖지 않든 다섯을 갖든 색인의 상태 block 둘을 쓰기 전과 뒤에 한 번씩 읽고 가득 찬 segment의 기록은 읽지 않는다. 갱신의 `IndexBytes`(`index_bytes`)가 읽은 바이트를 보고한다. | all |
+| `log.index.frame-records-announce-no-change` | 색인 갱신은 class `frame`의 기록(`host.frame.step`, `native.observe.counted`, `host.frame.record`, `host.frame.complete`)을 `announcing`에 세지 않고, 그 옆의 다른 class 기록은 센다. | all |
 | `log.writer.indexes-each-batch-it-wrote` | host의 writer가 batch를 쓴 뒤 질의 없이도 그 파일의 색인이 batch의 줄을 덮고, writer의 회전은 닫힌 세대의 색인을 완전하게 남긴다. | all |
 | `log.writer.stores-an-event-for-each-index-built-from-the-file` | 파일 전체로 만든 색인은 파일, 이유, 줄 수, 바이트, 마이크로초를 가진 event `host.log.index_rebuilt`이고, 증분 갱신은 event를 저장하지 않으며, 실패한 갱신은 문구마다 한 번 장소 `log index`의 `error` 기록으로 보인다. | all |
 | `log.endpoint.query-answers-one-page` | diagnostics가 없는 빌드의 endpoint 메서드 `log.query`가 질의의 page로 답하고, 매개변수를 invalid-params 오류와 질의의 문구로 거절하며, `window`를 받지 않는다. | all |
@@ -1126,6 +1127,7 @@ fn invalid_json_closes_connection() {
 | `debug.follow.coalesces-writes-into-a-notice` | event log의 변경 알림은 창을 기다리지 않고 돌아오며, 알림은 250 ms 이상 간격으로 발행되고(시험은 더 짧은 간격으로 확인한다), 그동안 온 알림은 마지막 경로와 크기를 가진 알림 하나가 된다. `notices`는 발행한 알림 수이고 `notices + coalesced`는 알림 전체 수이며, `host.log`의 값은 가장 최근 알림이고 첫 알림 전에는 0 값이다. | all |
 | `debug.follow.announces-only-changes-that-are-not-log-reads` | `announcing`이 0인 색인 갱신은 알림을 발행하지 않고, `announcing`이 0보다 큰 갱신은 그 갱신의 파일과 크기를 담은 알림을 발행한다. | all |
 | `debug.follow.query-announces-the-lines-it-indexes` | 색인을 최신으로 만든 질의는 그 줄의 알림을 발행하고, 이미 최신인 색인의 질의는 발행하지 않는다. | all |
+| `debug.follow.a-notice-does-not-cause-itself` | host의 writer, indexer, 발행자가 돌고 각 알림의 전달이 창이 그 전달에 저장하는 class `frame`의 기록(`host.frame.step`, `host.frame.record`, `host.frame.complete`)을 저장할 때, 첫 알림의 전달 기록은 알림을 발행하지 않고, 다음 변경이 아무것도 합쳐지지 않은 두 번째 알림이 된다. | all |
 | `log.writer.announces-each-write-to-the-observer` | host의 기록기는 한 묶음을 쓴 뒤 파일의 경로와 크기로 observer를 부른다. | all |
 | `debug.read.returns-the-end-of-a-text-file` | `debugRead`는 `logs/` 아래 글 파일의 전체 내용을, 더 크면 문자 경계에서 시작하는 마지막 262144 byte를 `truncated` true와 함께 `kind` `text`인 `{path, size, truncated, kind, text}`로 답한다. | all |
 | `debug.read.returns-a-png-file-as-an-image` | `debugRead`는 PNG 파일 전체의 `data:image/png;base64,` 주소를 `kind` `image`인 `{path, size, truncated, kind, image}`로 답하고, PNG signature로 시작하지 않는 `.png` 파일과 16 MB보다 큰 PNG 파일은 거부한다. | all |

@@ -224,6 +224,41 @@ func TestLogIndexCountsTheLinesThatAnnounceAChange(t *testing.T) {
 	}
 }
 
+// contract: log.index.frame-records-announce-no-change
+//
+// The delivery of a notice to a window is a step of its main thread and a wake of its run loop, and a following view draws what it
+// read; the records of the class frame describe these, so a notice for them would cause the next notice. The steps, the counts of the
+// run loop and the drawn frames below announce no change, and a record of another class beside them does.
+func TestLogIndexFrameRecordsAnnounceNoChange(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "host-a.jsonl")
+	line := func(seq int, class, layer, event string) string {
+		return fmt.Sprintf(`{"ts_us":%d,"mono_ns":%d,"seq":%d,"level":"debug","class":%q,"layer":%q,"event":%q,"fields":{}}`+"\n", 1000+seq, seq,
+			seq, class, layer, event)
+	}
+	text := eventLineOf(1) + "\n" + line(2, "frame", "host", "host.frame.step") + line(3, "frame", "native", "native.observe.counted") +
+		line(4, "frame", "host", "host.frame.record") + line(5, "frame", "host", "host.frame.complete")
+	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	update, err := sok.UpdateLogIndex(path)
+	if err != nil || update.Lines != 5 || update.Announcing != 1 {
+		t.Fatalf("the update of log.open and four frame records is %+v err %v, want only log.open to announce a change", update, err)
+	}
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := file.WriteString(line(6, "frame", "host", "host.frame.step") + line(7, "lifecycle", "host", "host.window.event")); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if update, err = sok.UpdateLogIndex(path); err != nil || update.Lines != 2 || update.Announcing != 1 {
+		t.Fatalf("the update of a step and a window event is %+v err %v, want the window event to announce a change", update, err)
+	}
+}
+
 func writeFile(t *testing.T, path, text string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {

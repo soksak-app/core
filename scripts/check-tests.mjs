@@ -667,6 +667,23 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1013",
+    implementation: [
+      { file: "packages/sok/go/src/log_index.go", symbol: "func readIndex(file *os.File, records bool) ([]byte, int64, error) {" },
+      { file: "packages/sok/go/src/log_index.go", symbol: "func (l *scannedLine) announces() bool { return !l.readsLog && l.class != frameClass }" },
+      { file: "packages/sok/rust/src/log_index.rs", symbol: "pub(crate) fn announces(&self) -> bool {" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/log_index_test.go", id: "TestLogIndexUpdateReadsTheStateBlocksOfTheIndexOnly" },
+      { file: "packages/sok/go/tests/log_index_test.go", id: "TestLogIndexFrameRecordsAnnounceNoChange" },
+      { file: "packages/host/go/tests/debug_follow_test.go", id: "TestTheRecordsOfTheDeliveryOfANoticeCauseNoNotice" },
+      { file: "packages/sok/rust/tests/log_index_test.rs", id: "index_update_reads_the_state_blocks_of_the_index_only" },
+      { file: "packages/host/rust/tests/debug_follow_test.rs", id: "the_records_of_the_delivery_of_a_notice_cause_no_notice" },
+    ],
+    expected: "An update of an index reads only the two state blocks of the index, and the records of the class frame that the delivery of a notice stores cause no next notice, in Go and Rust.",
+    levels: ["unit"],
+  },
+  {
     id: "F1012",
     implementation: [
       { file: "packages/soksak/src/cuts.ts", symbol: "function targetOf(index: Index, target: string | readonly string[], axis: Axis): TreeNode | Run {" },

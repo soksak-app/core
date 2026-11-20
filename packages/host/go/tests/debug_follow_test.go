@@ -1,10 +1,14 @@
 package host_test
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
+	"github.com/soksak-app/core/packages/host/go/tests/support"
 	sok "github.com/soksak-app/core/packages/sok/go/src"
 )
 
@@ -110,4 +114,89 @@ func TestAQueryThatIndexesLinesAnnouncesThemOnce(t *testing.T) {
 	if next := nextNotice(t, published); next.Path != "logs/after.jsonl" || next.Notices != 2 || next.Coalesced != 0 {
 		t.Fatalf("a query of a current index announced a change for %s: the next notice is %+v", path, next)
 	}
+}
+
+// contract: debug.follow.a-notice-does-not-cause-itself
+//
+// The delivery of a notice to a window is a step of its main thread and a wake of its run loop, and a following view draws the rows it
+// read; the host stores these as records of the class frame. The writer, the indexer and the publisher of the host run here with a
+// delivery that stores those records, as a window that follows does with no other activity: the records of the delivery of the first
+// notice cause no second notice, and the next change is the second notice with nothing coalesced into it.
+func TestTheRecordsOfTheDeliveryOfANoticeCauseNoNotice(t *testing.T) {
+	config := t.TempDir()
+	log, err := host.StartEventLog(support.EventLogOptions(filepath.Join(config, "logs")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	support.StoreEveryLevel(t, log)
+	t.Cleanup(log.Close)
+	spaced := make(chan struct{}, 8)
+	ends := make(chan struct{})
+	published := make(chan host.LogNotice, 8)
+	notices := host.NewLogNoticesSpacedBy(func() {
+		spaced <- struct{}{}
+		<-ends
+	}, func(notice host.LogNotice) {
+		published <- notice
+		log.Emit(host.LevelDebug, "host.frame.step", map[string]any{"window": "main", "kind": "callback", "callback": "deliver",
+			"entry_ns": "1", "return_ns": "2", "forwarded": 0, "wait_ns": "0"})
+		log.Emit(host.LevelDebug, "host.frame.record", map[string]any{"window": "main", "outcome": "drawn"})
+		log.Emit(host.LevelDebug, "host.frame.complete", map[string]any{"window": "main", "commit_ns": "1", "complete_ns": "2"})
+		if err := log.Flush(); err != nil {
+			t.Error(err)
+		}
+	})
+	t.Cleanup(notices.Stop)
+	t.Cleanup(func() { close(ends) })
+	updates := make(chan error, 64)
+	observe, stop := host.StartLogIndexer(func(_ string, update sok.IndexUpdate, err error) {
+		notices.ObserveUpdate(update)
+		updates <- err
+	})
+	t.Cleanup(stop)
+	log.SetOnWrite(observe)
+	// The records of the delivery and the changes are stored at the level debug, so they are lines of the debug file alone and each
+	// update announces one file.
+	path := strings.TrimSuffix(log.Path(), ".jsonl") + ".debug.jsonl"
+	change := func() int64 {
+		t.Helper()
+		log.Emit(host.LevelDebug, "host.x.y", map[string]any{"n": 1})
+		if err := log.Flush(); err != nil {
+			t.Fatal(err)
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return info.Size()
+	}
+	// covered waits for the updates of the index until it covers every line of the file.
+	covered := func() {
+		t.Helper()
+		for {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if info, err := sok.ReadLogIndex(path); err == nil && info.Events == int64(strings.Count(string(data), "\n")) {
+				return
+			}
+			if err := <-updates; err != nil {
+				t.Fatalf("an update of the index failed: %v", err)
+			}
+		}
+	}
+	first := change()
+	if notice := nextNotice(t, published); notice.Notices != 1 || notice.Size < first {
+		t.Fatalf("the first notice is %+v, want the change of %d bytes", notice, first)
+	}
+	enterSpacing(t, spaced)
+	covered()
+	// The index covers the records of the delivery; an announcement of them is a notice as soon as the spacing ends.
+	ends <- struct{}{}
+	second := change()
+	if notice := nextNotice(t, published); notice != (host.LogNotice{Path: "logs/" + filepath.Base(path), Size: second, Notices: 2}) {
+		t.Fatalf("the notice after the delivery of the first is %+v, want the next change at %d bytes with nothing coalesced", notice, second)
+	}
+	enterSpacing(t, spaced)
 }

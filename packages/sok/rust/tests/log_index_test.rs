@@ -196,6 +196,56 @@ fn index_follows_appended_lines_and_is_rebuilt_when_stale() {
     assert_eq!(read_log_index(&path).expect("info").events, 40);
 }
 
+// contract: log.index.frame-records-announce-no-change
+//
+// The delivery of a notice to a window is a step of its main thread and a wake of its run loop, and a following view draws what it read;
+// the records of the class frame describe these, so a notice for them would cause the next notice. The steps, the counts of the run loop
+// and the drawn frames below announce no change, and a record of another class beside them does.
+#[test]
+fn index_frame_records_announce_no_change() {
+    let (_config, path) = temp_file("index-frame-records");
+    std::fs::create_dir_all(path.parent().expect("parent")).expect("dir");
+    let line = |seq: i64, class: &str, layer: &str, event: &str| {
+        format!(
+            r#"{{"ts_us":{},"mono_ns":{seq},"seq":{seq},"level":"debug","class":"{class}","layer":"{layer}","event":"{event}","fields":{{}}}}"#,
+            1000 + seq
+        ) + "\n"
+    };
+    let text = format!(
+        "{}{}{}{}{}",
+        event_line_of(1) + "\n",
+        line(2, "frame", "host", "host.frame.step"),
+        line(3, "frame", "native", "native.observe.counted"),
+        line(4, "frame", "host", "host.frame.record"),
+        line(5, "frame", "host", "host.frame.complete")
+    );
+    std::fs::write(&path, &text).expect("write");
+    let update = update_log_index(&path).expect("first update");
+    assert_eq!(
+        (update.lines, update.announcing),
+        (5, 1),
+        "the update of log.open and four frame records, want only log.open to announce a change: {update:?}"
+    );
+    let mut file = std::fs::OpenOptions::new()
+        .append(true)
+        .open(&path)
+        .expect("append");
+    write!(
+        file,
+        "{}{}",
+        line(6, "frame", "host", "host.frame.step"),
+        line(7, "lifecycle", "host", "host.window.event")
+    )
+    .expect("write");
+    drop(file);
+    let update = update_log_index(&path).expect("second update");
+    assert_eq!(
+        (update.lines, update.announcing),
+        (2, 1),
+        "the update of a step and a window event, want the window event to announce a change: {update:?}"
+    );
+}
+
 // contract: log.index.counts-the-lines-that-announce-a-change
 #[test]
 fn index_counts_the_lines_that_announce_a_change() {

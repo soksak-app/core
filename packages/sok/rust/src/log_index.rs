@@ -438,6 +438,16 @@ pub(crate) struct ScannedLine {
     pub reads_log: bool,
 }
 
+impl ScannedLine {
+    /// Whether the line announces a change of the log (docs/spec/logging.md#index): every line except the record of a call that only reads
+    /// the log and a record of the class frame. A record of the class frame describes how a process ran its main thread and drew its
+    /// frames, which the delivery of each notice to a window and the drawing of what a following view read produce, so a notice for it
+    /// would cause the next notice.
+    pub(crate) fn announces(&self) -> bool {
+        !self.reads_log && self.class.map(|class| CLASSES[class]) != Some("frame")
+    }
+}
+
 /// A member of a line whose type the scan checks. `Other` is any value that is not a string and not an integer that fits i64.
 enum Loose<'a> {
     Str(Cow<'a, str>),
@@ -1186,7 +1196,7 @@ fn index_from(
                 next.first_seq = line.seq as u64;
             }
             acc.add(&line, line_size);
-            if !line.reads_log {
+            if line.announces() {
                 announcing += 1;
             }
             next.last_seq = line.seq as u64;
