@@ -646,7 +646,8 @@ the far half to the new card, so `left` and `top` swap the two spans. Ids are
 not swapped. A refused split throws and changes nothing: an unknown axis or
 side, an id that the layout holds, an unknown or `fixed` card, a card drawn no
 wider than the corridor of the cut (`card <id> would be 0x<h>, below its
-minimum <m>x<m>`, or `<w>x0` on `y`), and a cut that draws a node below its
+minimum <m>x<m>`, or `<w>x0` on `y`; with a `minSize` of 0, `card <id> would be
+<w>x<h> and have no area`), and a cut that draws a node below its
 minimum, which names the deepest such node.
 
 ## Where a drop lands

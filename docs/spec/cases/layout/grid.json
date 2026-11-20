@@ -662,6 +662,11 @@
   {"call":"rect","args":["generated-33"],"returns":{"x":1400.2859395896737,"y":570.136155378268,"w":79.71406041032628,"h":96.00000000000011}},
   {"call":"rect","args":["generated-39"],"returns":{"x":1280.2859395896737,"y":690.1361553782681,"w":199.71406041032628,"h":509.8638446217319}}
  ]},
+ {"name":"a split at minSize 0 that would draw a card with no area names it with no minimum","options":{"width":1200,"height":800,"gap":400,"minSize":0},"state":{"root":{"card":"card"}},"steps":[
+  {"call":"split","args":["card","y",{"id":"card-1"}],"returns":"card-1"},
+  {"call":"split","args":["card","y"],"throws":"card card would be 1200x0 and have no area"},
+  {"call":"rect","args":["card"],"returns":{"x":0,"y":0,"w":1200,"h":200}}
+ ]},
  {"name":"a state of the earlier form with lines and cells is refused","state":{"xs":[0,1],"ys":[0,1],"cards":[{"id":"a","c0":0,"c1":1,"r0":0,"r1":1}]},"throws":"soksak: the state holds xs, ys and cards, which is the earlier form; the state is {root}","steps":[]},
  {"name":"a state that records a payer is refused","state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"b"}}]},"paidBy":{"b":"a"}},"throws":"soksak: the state holds paidBy, which the layout does not record; the state is {root}","steps":[]},
  {"name":"a node that is no card, box or cut is refused","state":{"root":{"id":"a"}},"throws":"soksak: the node {\"id\":\"a\"} is not a card, a box or a cut","steps":[]},

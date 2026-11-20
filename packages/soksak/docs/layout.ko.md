@@ -572,7 +572,8 @@ grid.move("terminal", "browser", "right");      // 거절되면 false 이고 아
 새 카드에 주므로 `left` 와 `top` 은 두 구간을 맞바꾼다. id 는 맞바꾸지 않는다.
 거부된 split은 throw하고 아무것도 바꾸지 않는다. 모르는 축이나 쪽, layout이 가진 id,
 모르는 카드나 `fixed` 카드, cut의 corridor보다 넓지 않게 그려진 카드(`card <id> would
-be 0x<h>, below its minimum <m>x<m>`, `y`에서는 `<w>x0`), 그리고 node를 최소보다 작게
+be 0x<h>, below its minimum <m>x<m>`, `y`에서는 `<w>x0`. `minSize`가 0이면 `card <id> would be
+<w>x<h> and have no area`), 그리고 node를 최소보다 작게
 그리는 cut이며, 마지막은 그런 가장 깊은 node를 가리킨다.
 
 ## 드롭이 내려앉는 곳

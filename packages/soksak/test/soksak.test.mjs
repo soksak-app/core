@@ -323,7 +323,7 @@ test("no change leaves a card with no area, whatever minSize allows", () => {
   assert.equal(grid.rect("card").h, 200, "two cards, each with room");
 
   assert.equal(grid.canSplit("card", "y"), false, "a third would have no height");
-  assert.throws(() => grid.split("card", "y"), { message: "card card would be 1200x0, below its minimum 0x0" });
+  assert.throws(() => grid.split("card", "y"), { message: "card card would be 1200x0 and have no area" });
   assert.equal(grid.cards.length, 2, "and the refusal left the plane alone");
   for (const [id, r] of grid.rects()) {
     assert.ok(r.w > 0 && r.h > 0, `${id} is drawn at ${r.w}x${r.h}`);

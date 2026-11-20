@@ -1678,8 +1678,12 @@ export class Soksak {
             const r = this.rect(id);
             const w = axis === 'x' ? 0 : r.w;
             const h = axis === 'y' ? 0 : r.h - ((_a = this.above.get(id)) !== null && _a !== void 0 ? _a : 0);
+            const size = `${Math.round(w)}x${Math.round(h)}`;
+            // A minSize of zero is no minimum to fall below: the refusal is the area that the half would not have.
+            if (this.min === 0)
+                throw new Error(`card ${id} would be ${size} and have no area`);
             const m = String(Math.round(this.min));
-            throw new Error(`card ${id} would be ${Math.round(w)}x${Math.round(h)}, below its minimum ${m}x${m}`);
+            throw new Error(`card ${id} would be ${size}, below its minimum ${m}x${m}`);
         }
         const undo = this.toJSON();
         const leaf = this.leaves.get(id);
