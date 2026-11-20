@@ -251,6 +251,10 @@ func divide(p *plane, axis Axis) ([]float64, float64) {
 
 // linePositions is every line position in px, index for index with the line array.
 func linePositions(p *plane, axis Axis) []float64 {
+	// The positions that the layout drew are read as they are: summing their differences again adds a rounding per slot.
+	if at, ok := p.linesAt[axis]; ok {
+		return slices.Clone(at)
+	}
 	sizes := slotSizes(p, axis)
 	out := make([]float64, 1, len(sizes)+1)
 	for _, size := range sizes {

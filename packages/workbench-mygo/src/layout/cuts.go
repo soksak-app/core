@@ -805,14 +805,9 @@ func (g *Grid) byCuts(change func() (*Node, error)) error {
 	return nil
 }
 
-// belowMinimum is the text of the deepest node that the last operation moved and that is drawn below its minimum, or "". The minimum
-// of a node is recursive: a card needs minSize and on y the heads drawn inside its rectangle, a card that keeps a px size the smaller of
-// that size and minSize, a fixed card with a px size the smaller of that size and the size it had, another fixed card the size it is
-// drawn at, a box the minimum of its inner node, a cut along an axis the minimums of its kids and the corridors between them, and a cut
-// across it the largest minimum of its kids.
-func (g *Grid) belowMinimum(before map[string]Rect) string {
-	now := g.Rects()
-	text := func(v float64) string { return jsString(jsRound(v)) }
+// measure is the drawn extent of a node, the extent of the drawn rectangles of its cards, and its recursive minimum on an axis
+// (packages/soksak/docs/layout.md#cuts), read from the rectangles now; before holds the rectangles that a fixed card had.
+func (g *Grid) measure(now, before map[string]Rect) (func(n *Node) extent, func(n *Node, axis Axis) float64) {
 	extentOfNode := func(n *Node) extent {
 		e := extent{math.Inf(1), math.Inf(-1), math.Inf(1), math.Inf(-1)}
 		for _, leaf := range cardsOf(n) {
@@ -878,6 +873,18 @@ func (g *Grid) belowMinimum(before map[string]Rect) string {
 		}
 		return sum + corridors
 	}
+	return extentOfNode, need
+}
+
+// belowMinimum is the text of the deepest node that the last operation moved and that is drawn below its minimum, or "". The minimum
+// of a node is recursive: a card needs minSize and on y the heads drawn inside its rectangle, a card that keeps a px size the smaller of
+// that size and minSize, a fixed card with a px size the smaller of that size and the size it had, another fixed card the size it is
+// drawn at, a box the minimum of its inner node, a cut along an axis the minimums of its kids and the corridors between them, and a cut
+// across it the largest minimum of its kids.
+func (g *Grid) belowMinimum(before map[string]Rect) string {
+	now := g.Rects()
+	text := func(v float64) string { return jsString(jsRound(v)) }
+	extentOfNode, need := g.measure(now, before)
 	moved := func(n *Node) bool {
 		for _, leaf := range cardsOf(n) {
 			was, ok := before[leaf.Card]
