@@ -7,7 +7,7 @@
 ## Decision
 
 - agent CLI를 시작하는 tab은 launch adapter를 통해 stable identity를 CLI에 준다. identity에는 tab의 role 파일 절대 경로가 적힌다. agent가 파일을 읽을 수 있으면 role 문장은 terminal에 붙여 넣지 않고 agent가 파일에서 읽는다.
-- surface는 tab 하나의 surface이므로, surface의 role 파일은 tab 하나에 속한다. role 파일은 application의 configuration directory에 있으며 person의 repository에는 두지 않는다. 정의를 짧게 유지한다. agent는 변경 때마다 파일 전체를 읽으므로 짧은 정의를 권장하지만, soksak은 길이로 정의를 거부하지 않는다. role 파일의 마지막 줄은 role의 fingerprint(fingerprint)이다.
+- surface는 tab 하나의 surface이므로, surface의 role 파일은 tab 하나에 속한다. role 파일은 application의 configuration directory에 있으며 person의 repository에는 두지 않는다. 정의를 짧게 유지한다. agent는 변경 때마다 파일 전체를 읽으므로 짧은 정의를 권장하지만, soksak은 어떤 길이의 정의든 받아들인다. role 파일의 마지막 줄은 role의 fingerprint(fingerprint)이다.
 - fingerprint은 결정적이다. 같은 role 이름과 같은 정의는 언제나 같은 fingerprint을 낸다. agent는 파일 마지막 줄에서 fingerprint을 읽고, 계산하지 않는다.
 - agent는 두 방식 중 하나로 확인한다. 명령 `sok role confirm <fingerprint>`, 또는 답변 안의 줄 `soksak role <fingerprint>`다. soksak이 현재 fingerprint을 받았을 때만 role은 `ready`다.
 - 확인하지 않는 agent는 reread request을 두 번 받는다. 각 요청은 event로 센다. 그 뒤 상태 `unconfirmed`가 `unconfirmed role: tab <tab> did not confirm the role file <path>` 문장과 함께 error display로 나타나며, person이 role을 다시 할당할 때까지 그대로 있다. 어떤 단계도 timer로 정하지 않는다.
@@ -80,7 +80,7 @@ sidecar 프로토콜 변경: terminal session의 `open` 요청은 `directory` �
 
 ## Role file
 
-- 경로: `<config-dir>/agents/<surface>/role.md`. `<config-dir>`은 application의 configuration directory([installation layout](installation.md#installation-layout))이고 `<surface>`는 tab의 surface다. 경로 구분자, `..` 구간 또는 제어 문자를 담은 surface 식별자는 `surface "<value>" holds a path part or a control character`로 거부하며, `<value>`는 surface 식별자다. 거부할 때는 아무것도 쓰지 않는다.
+- 경로: `<config-dir>/agents/<surface>/role.md`. `<config-dir>`은 application의 configuration directory([installation layout](installation.md#installation-layout))이고 `<surface>`는 tab의 surface다. 경로 구분자, `..` 구간 또는 제어 문자를 담은 surface 식별자는 `surface "<value>" holds a path part or a control character`로 거부하며, `<value>`는 surface 식별자다. 그 문장으로 거부할 때는 아무것도 쓰지 않는다.
 - 구조, 순서대로:
   1. 첫 줄: ``Read this whole file. Follow the role it defines. Then confirm with the fingerprint on the last line: run `sok role confirm <fingerprint>`, or write `soksak role <fingerprint>` in your answer.``;
   2. 정의 텍스트. `roles.json`에 저장된 그대로다.
@@ -91,9 +91,9 @@ sidecar 프로토콜 변경: terminal session의 `open` 요청은 `directory` �
 - 파일은 configuration directory에 속하며 person의 repository에는 속하지 않는다.
 - 모드: 디렉터리 `<config-dir>/agents/<surface>/`는 모드 0700으로 만든다. `role.md`와 identity 파일은 모드 0600으로 쓴다. 임시 파일의 모드는 이름을 바꾸기 전에 확인한다. 모드가 다르면 최종 이름으로는 보이지 않으며, 쓰기는 `role file <path>: mode <mode> is not 0600`으로 실패하고 임시 파일을 지운다. 각 쓰기 단계의 실패는 `role file <path>: write failed: <os error>`로 실패하며, `<path>`는 그 단계가 쓴 경로다.
 - 원자적 쓰기: host는 같은 폴더에 `.role-<random>.tmp` 이름의 임시 파일에 새 내용을 쓰고 `role.md` 위로 이름을 바꾼다. 읽는 쪽은 이전 파일 전체 또는 새 파일 전체만 본다. launch는 첫 쓰기 전에 surface 폴더에서 `.role-*.tmp`와 맞는 파일을 지운다. 이전 충돌이 남긴 파일이다.
-- 쓰는 주체: host가 파일을 쓴다. terminal page는 파일을 만들지 않는다. 실패한 쓰기는 `role file <path>: write failed: <os error>`라는 문장으로 경로와 이유를 적는다. launch의 role 파일이나 identity 파일 쓰기가 실패하면 그 문장으로 launch를 거부하며 어떤 program도 시작하지 않는다.
+- 쓰는 주체: host가 파일을 쓴다. terminal page는 파일을 만들지 않는다. 실패한 쓰기는 `role file <path>: write failed: <os error>`라는 문장으로 경로와 이유를 적는다. launch의 role 파일이나 identity 파일 쓰기가 실패하면 `role file <path>: write failed: <os error>` 문장으로 launch를 거부하며 어떤 program도 시작하지 않는다.
 - 수명: host는 launch 전에 디렉터리를 만든다. tab이 layout에서 제거되면 host는 tab의 프로그램을 멈추고, 진행 중인 쓰기가 끝나기를 기다리고, 그 tab의 이후 role 변경을 `tab <tab> was removed; its role cannot change`로 거부하며, 디렉터리를 지운다. 제거 뒤의 이름 바꾸기가 실패하면 임시 파일을 지우고 `role file <path>: rename failed: <os error>` 문장으로 기록한다. 제거된 tab의 보류 message는 버린다. 각 message마다 state `skipped`와 reason `tab removed`의 delivery record를 쓴다. 제거된 tab은 resume할 수 없다.
-- launch 기록: 각 launch는 identity 경로를 tab의 session 기록에 저장한다. identity를 flag로 받은 session의 resume은 저장된 경로가 현재 경로와 같고 파일이 있는지 확인한다. adapter가 없는 session은 현재 경로로 첫 message를 다시 보내므로 이 확인이 없다. configuration directory가 옮겨졌거나 파일이 없으면 resume은 경로가 다르면 `identity path <stored> is not the current path <current>`, 파일이 없으면 `identity file <path> is missing`으로 실패한다.
+- launch 기록: 각 launch는 identity 경로를 tab의 session 기록에 저장한다. identity를 flag로 받은 session의 resume은 저장된 경로가 현재 경로와 같고 파일이 있는지 확인한다. adapter가 없는 session은 현재 경로로 첫 message를 다시 보내므로 이 검사는 적용하지 않는다. configuration directory가 옮겨졌거나 파일이 없으면 resume은 경로가 다르면 `identity path <stored> is not the current path <current>`, 파일이 없으면 `identity file <path> is missing`으로 실패한다.
 
 Claude Code adapter의 identity 파일은 `<config-dir>/agents/<surface>/identity.txt`이며, launch 때 role 파일 옆에 같은 쓰기 규칙으로 쓴다. Codex adapter는 identity 텍스트를 TOML 문자열로 인용해 인라인으로 넘긴다.
 
@@ -149,7 +149,7 @@ role 변경은 registry를 거치는 명령 `core.tab.role {tab, role}`이다. t
 4. host가 상태 `core.tab.role`을 `{role, generation, state: "pending", seq, fingerprint}`로 게시한다;
 5. terminal page가 변경 message를 보낸다([Change message](#change-message)).
 
-실패 규칙: 1단계 실패는 임시 파일을 지우고 아무것도 저장하지 않는다. 2단계 실패는 임시 파일을 지우고, 저장된 role은 그대로 두며, `role file <path>: write failed: <os error>` 오류로 보고한다. 3단계 실패는 임시 파일을 지운 뒤 `projects.json`의 이전 기록을 복원한다. 복원도 실패하면 쓰기 오류와 `projects.json <path>: restore failed: <os error>`를 함께 보고한다. 단계 사이에 host가 끝나면, 다음 launch가 CLI를 시작하기 전에 `projects.json`의 기록과 `roles.json`의 정의 텍스트로 role 파일을 다시 쓴다. fingerprint이 기록과 다르면 `role file <path>: fingerprint differs from the record`로 쓰기를 거부한다.
+실패 규칙: 1단계 실패는 `role file <path>: write failed: <os error>` 문장으로 임시 파일을 지우고 아무것도 저장하지 않는다. 2단계 실패는 임시 파일을 지우고, 저장된 role은 그대로 두며, `role file <path>: write failed: <os error>` 오류로 보고한다. 3단계 실패는 임시 파일을 지운 뒤 `projects.json`의 이전 기록을 복원한다. 복원도 실패하면 쓰기 오류와 `projects.json <path>: restore failed: <os error>`를 함께 보고한다. 단계 사이에 host가 끝나면, 다음 launch가 CLI를 시작하기 전에 `projects.json`의 기록과 `roles.json`의 정의 텍스트로 role 파일을 다시 쓴다. fingerprint이 기록과 다르면 `role file <path>: fingerprint differs from the record`로 쓰기를 거부한다.
 
 상태 `core.tab.role`의 값은 `{role, generation, state, seq, fingerprint}`다. `state`는 `pending`, `ready`, `unconfirmed`이며 role이 없으면 `null`이다. `fingerprint`는 현재 role 파일의 fingerprint이고 role이 없으면 `null`이다. `seq`는 변경마다 오른다. role 명령의 답도 `fingerprint`를 담는다. page는 상태의 `fingerprint`로 reread request을 만들며, 오류 문장은 fingerprint을 담지 않는다. page는 `runtime.status.watch`로 상태를 받으며 polling하지 않는다.
 
@@ -227,7 +227,7 @@ role A를 B로 바꾸고 다시 A로 바꾸면 A의 fingerprint이 다시 나온
 - A에서 B로, 다시 A로 바꿈: A의 fingerprint이 돌아오고, 그 fingerprint의 confirmation은 `ready`가 된다.
 - 현재 fingerprint의 confirmation을 반복: 두 번 모두 `ready`이며, 두 번째 뒤에 `seq`는 바뀌지 않는다.
 - 변경 뒤 이전 fingerprint의 confirmation: `stale fingerprint: read the role file again at <path>`로 거부된다. fingerprint은 적지 않는다.
-- 16자리 소문자 16진수가 아닌 confirmation 값: `fingerprint <value> is not 16 lowercase hexadecimal characters`로 invalid input으로 거부하며, 오래된 confirmation 오류를 보내지 않는다.
+- 16자리 소문자 16진수가 아닌 confirmation 값: `fingerprint <value> is not 16 lowercase hexadecimal characters`로 invalid input으로 거부하며, `stale fingerprint: read the role file again at <path>` 오류를 보내지 않는다.
 - confirmation 없이 reread request 두 번: `unconfirmed`, error display 기록 하나(`unconfirmed role: tab <tab> did not confirm the role file <path>`)와 log 기록 하나, 세 번째 요청은 없다.
 - 작업 message에서 `ready`가 두 번 도달: 파일 이름으로 구분해 한 번만 주입한다.
 - confirmation이 저장된 상태에서 재시작: 입력 없이 `ready`. 계수 1이 저장되어 있으면 그 계수의 `pending`. 계수 2가 저장되어 있으면 입력 없이 `unconfirmed`.
@@ -340,6 +340,7 @@ person이 tab의 shell에서 직접 시작한 두 번째 agent CLI는 soksak의 
 - 요청: 첫 요청과 두 번째 요청, `unconfirmed` 상태, 각각의 error display 기록(`unconfirmed role: tab <tab> did not confirm the role file <path>`).
 - 형식: `projects.json` reader는 형식 2를 `<file>: projects: format must be 3, found 2`로 거부하고, writer는 형식 3을 쓴다.
 - 반복과 동시성: [Tests of the repetitions](#tests-of-the-repetitions)와 [Tests of the concurrency](#tests-of-the-concurrency).
+- sidecar open: 네 refusal을 각 문장 `open program must be a non-empty text`, `open args must be an array of texts`, `open args require program`, `open program and shell are both set`으로, `openFailed` 답을 `program not found: <program>`으로, program session에는 shell integration이 없다는 규칙을 확인한다.
 - `roles.json`: 형식 번호, 식별자 규칙, 알 수 없는 role 거부. 각 오류 문장을 확인한다: `<file>: roles: format must be 1, found <value>`, `<file>: roles: invalid role identifier <id>`, `unknown agent role <id>`.
 
 ### Acceptance
