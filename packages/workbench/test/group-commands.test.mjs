@@ -4,99 +4,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { JSDOM } from "jsdom";
-import { pageMemorySaver } from "./support/memory-saver.mjs";
-
-const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
-const dom = new JSDOM(markup, { url: "http://localhost/", pretendToBeVisual: true });
-dom.window.matchMedia = (query) => ({ media: query, matches: true, addEventListener: () => {}, removeEventListener: () => {} });
-for (const [name, value] of Object.entries({ window: dom.window, document: dom.window.document, location: dom.window.location,
-  getComputedStyle: dom.window.getComputedStyle.bind(dom.window), CSS: dom.window.CSS, PointerEvent: dom.window.PointerEvent,
-  MouseEvent: dom.window.MouseEvent, ErrorEvent: dom.window.ErrorEvent,
-  addEventListener: dom.window.addEventListener.bind(dom.window), dispatchEvent: dom.window.dispatchEvent.bind(dom.window),
-  // The plane aligns itself to the device pixel grid of this scale on every draw (device-grid.js).
-  devicePixelRatio: dom.window.devicePixelRatio })) {
-  Object.defineProperty(globalThis, name, { value, configurable: true, writable: true });
-}
-// JSDOM has no layout engine and does not load the application stylesheet: the plane gets a size with room to split.
-const planeElement = document.getElementById("plane");
-Object.defineProperty(planeElement, "clientWidth", { value: 1600 });
-Object.defineProperty(planeElement, "clientHeight", { value: 1200 });
-const style = document.createElement("style");
-style.textContent = ".card { --bw: 1px; --divider: 1px; }";
-document.head.appendChild(style);
-Object.defineProperty(document, "adoptedStyleSheets", { value: [] });
-
-const SESSION = "fixture-session";
-const EDITOR = "fixture-editor";
-const PLAIN = "fixture-plain";
-const WINDOW = "main";
-const manifest = (id, surface) => ({ id, name: id, description: "검사용 표면.", mark: "f", icon: "<path/>",
-  surface: { composition: { kind: "view", page: "ui/index.html" }, ...surface } });
-
-const { installEnvironment } = await import("../environment.js");
-assert.deepEqual(installEnvironment({
-  runtime: "runtime",
-  workspace: { focus: "main", grid: { root: { card: "main", tabs: [{ plugin: PLAIN, title: "t" }] } } },
-  sidebars: { sets: [], links: [] },
-}, { plugins: [
-  { id: SESSION, package: "@fixture/session", version: "0.0.1", manifest: manifest(SESSION, {
-    params: { type: "object", properties: { name: { type: "string" }, size: { type: "number" }, flags: { type: "object" } } } }) },
-  { id: EDITOR, package: "@fixture/editor", version: "0.0.1", manifest: manifest(EDITOR, {
-    params: { type: "object", properties: { path: { type: "string" } } }, opens: { extensions: ["html"] } }) },
-  { id: PLAIN, package: "@fixture/plain", version: "0.0.1", manifest: manifest(PLAIN, {}) },
-] }), [], "the fixture environment refused a plugin");
-const { registry } = await import("../exposure.js");
-registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
-const { begin } = await import("../projects.js");
-const reports = await import("../tab-reports.js");
-const plane = await import("../plane.js");
-const { coreChanged, installCoreExposure } = await import("../core-exposure.js");
-await installCoreExposure({ library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
-  memorySaver: await pageMemorySaver() });
-// The window of the page has the name that its start document carries (docs/spec/native-host.md#page-start).
-plane.nameWindow(WINDOW);
-
-const view = (id, plugin) => ({ id, plugin, title: id, origin: { directory: null } });
-const content = (id, tabs) => ({ card: id, data: { tabs, activeId: tabs[0].id } });
-/** A box of the group card id with its name and leader around the cut along x of the kids, each [share, node]. */
-const box = (id, name, leader, kids) => ({ box: id, data: { name, leader }, inner: row(kids) });
-/** A cut along x of the kids, each [share, node]. */
-const row = (kids) => ({ cut: "x", kids: kids.map(([share, node]) => ({ share, node })) });
-begin({ common: {}, open: [], projects: [{ id: "prj-aaaaaa", root: "/work/project", spaces: [
-  { id: "spc-aaaaaa", title: "SPACE1", layout: { focusedId: "main", named: 0, windowSidebars: {}, sidebars: {}, leader: "main",
-    lastCard: 1, state: { root: content("main", [view("tab-aaaaa1", PLAIN)]) } } },
-  { id: "spc-bbbbbb", title: "SPACE2", layout: { focusedId: "card-8", named: 0, windowSidebars: {}, sidebars: {}, lastCard: 10, leader: "card-10",
-    state: { root: box("card-10", "그룹 1", "card-8", [[0.5, content("card-8", [view("tab-ooooo1", PLAIN)])], [0.5, content("card-9", [view("tab-ooooo2", PLAIN)])]]) } } },
-], activeSpaceId: "spc-aaaaaa", named: 2 }] });
-
-/** Shows three cards in a row, card-1, card-2 and card-3, whose first two are the group card-4 named 그룹 1, with card-1 focused. */
-function arrange() {
-  plane.closePicker("fixture reset");
-  if (plane.currentGrid()) for (const card of plane.currentGrid().cards) for (const tab of plane.tabsOf(card)) reports.forgetTab(tab.id);
-  plane.adopt({ focusedId: "card-1", named: 0, windowSidebars: {}, sidebars: {}, lastCard: 4, leader: "card-4",
-    state: { root: row([
-      [0.75, box("card-4", "그룹 1", "card-1", [[0.5, content("card-1", [view("tab-aaaaa1", PLAIN)])], [0.5, content("card-2", [view("tab-aaaaa2", PLAIN)])]])],
-      [0.25, content("card-3", [view("tab-aaaaa3", PLAIN)])],
-    ]) } }, "spc-aaaaaa");
-}
-const run = (name, params) => registry.run(name, params);
-const refuses = (promise, text) => assert.rejects(promise, (error) => error.message === text, `does not fail with ${text}`);
-const status = async (name) => (await registry.handle({ id: 1, method: "status.get", params: { name } })).result;
-/** The members of a node of the stored tree in tree order: its cards and the boxes that no box inside it holds. */
-const membersOf = (node) => (node.cut ? node.kids.flatMap((kid) => membersOf(kid.node)) : [node.box ?? node.card]);
-/** The group cards of the stored tree in tree order, each {card, name, level, leader, members}, read from its boxes. */
-const groupsOf = (node, level = 1) => {
-  if (node.cut) return node.kids.flatMap((kid) => groupsOf(kid.node, level));
-  if (node.box === undefined) return [];
-  return [{ card: node.box, name: node.data.name, level, leader: node.data.leader, members: membersOf(node.inner) },
-    ...groupsOf(node.inner, level + 1)];
-};
-/** The groups that the stored tree of core.layout holds, with the leader of the root level and lastCard. */
-const stored = async () => {
-  const { state, leader, lastCard } = await status("core.layout");
-  return { groups: groupsOf(state.root), leader, lastCard };
-};
+import { arrange, box, content, PLAIN, plane, pointer, refuses, rootKids, row, run, SESSION, status, stored, tabIds, view } from "./support/group-page.mjs";
 
 test("core.group.create groups a content card with a new card and answers the same when applied again", { timeout: 5000 }, async () => {
   arrange();
@@ -258,9 +166,6 @@ test("a drop resolves by the bands of the target search and core.tab.move puts a
   assert.deepEqual((await stored()).groups[0].members, ["card-1", "card-2", "card-5"]);
 });
 
-/** The tab ids of the content card id in their order. */
-const tabIds = (id) => plane.tabsOf(plane.currentGrid().card(id)).map((t) => t.id);
-
 test("core.card.move exchanges a card with a content card and joins its tabs at an index of a tab strip", { timeout: 5000 }, async () => {
   arrange();
   // The two cards exchange places, and the leader mark of the group stays with its place (docs/spec/groups.md#commands).
@@ -320,16 +225,6 @@ test("core.tab.move joins a tab at the index of a tab strip, and a point on a ta
   assert.deepEqual(plane.dragHit(null, first.x + 170, y, band, tab).hit, { card: "card-1", zone: "strip", index: 1 });
 });
 
-/** Sends the pointer event type at x, y of the plane to element, which captures the pointer as a press of a person does; jsdom does not. */
-const pointer = (element, type, x, y) => {
-  element.setPointerCapture ??= () => {};
-  element.hasPointerCapture ??= () => true;
-  element.releasePointerCapture ??= () => {};
-  element.dispatchEvent(new window.MouseEvent(type, { bubbles: true, cancelable: true, button: 0, buttons: 1, clientX: x, clientY: y }));
-};
-/** The ids of the kids of the root cut of the stored layout. */
-const rootKids = async () => (await status("core.layout")).state.root.kids.map((kid) => kid.node.box ?? kid.node.card);
-
 test("a drag of the header of a group card moves the group card beside a card and exchanges it on the centre of a content card", { timeout: 5000 }, async () => {
   arrange();
   const head = () => document.querySelector(`.group[data-group-card="card-4"] > .group__head`);
@@ -355,6 +250,24 @@ test("a drag of the header of a group card moves the group card beside a card an
   assert.deepEqual(centre.target, { card: "card-3", zone: "centre" });
   assert.deepEqual(await rootKids(), ["card-4", "card-3"]);
   assert.equal(await status("core.drag"), null, "the release ends the drag");
+});
+
+test("the only tab of a card dropped beside its own card names its vacated slot: the preview is the card and the release changes nothing", { timeout: 5000 }, async () => {
+  arrange();
+  const own = plane.currentTree().rect("card-3");
+  const at = { x: own.x + own.w - 40, y: own.y + own.h / 2 };
+  const before = (await status("core.layout")).state;
+  const tab = document.querySelector(`.tab[data-tab-id="tab-aaaaa3"]`);
+  pointer(tab, "pointerdown", -100, -100);
+  pointer(tab, "pointermove", at.x, at.y);
+  const drag = await status("core.drag");
+  pointer(tab, "pointerup", at.x, at.y);
+  // docs/spec/groups.md#vacated-slot
+  assert.deepEqual(drag.target, { card: "card-3", zone: "right" });
+  assert.deepEqual(drag.preview, own, "the preview is the drawn rectangle of the card");
+  assert.deepEqual((await status("core.layout")).state, before, "the release changed the layout");
+  assert.deepEqual(await run("core.card.move", { card: "card-3", target: "card-3", side: "left" }), { card: "card-3" });
+  assert.deepEqual((await status("core.layout")).state, before, "core.card.move of the card beside itself changed the layout");
 });
 
 test("the layout of the window description holds each group card as a node of its tree and lists every group once", { timeout: 5000 }, async () => {

@@ -18,7 +18,7 @@
  */
 import { SIDES, SPAN, axisOf, fixedSize, isAhead, other } from './card.js';
 import { cardInset, crossing, dividers, frameOf, linesRead, halfCorridor, heldSizes, holdsSizes, inset, linePositions, rectIn, rectOf, rules, sharePerSpan, zoneAt, } from './geometry.js';
-import { evenCuts, exchangeNodes, groupNode, insertBeside, insertNode, unwrapNode, withdrawNode } from './cuts.js';
+import { evenCuts, exchangeNodes, groupNode, insertBeside, insertNode, unwrapNode, vacatesNode, withdrawNode } from './cuts.js';
 import { EPS, cardsOf, checkState, cloneNode, isBox, isCard, isCut } from './tree.js';
 export { checkState } from './tree.js';
 /** Refuses a value that is no frame mode, naming it. */
@@ -1172,6 +1172,14 @@ export class Soksak {
             this.byCuts((input) => insertNode(input, target, side, node));
             return isBox(node) ? node.box : node.card;
         });
+    }
+    /**
+     * Whether `target` and `side` name the vacated slot of the node `id`, a card or a box (docs/spec/groups.md#vacated-slot): the node
+     * itself, or the kid beside it in its cut with the side toward it, named by its id or by the members of a cut. A move there is no
+     * change.
+     */
+    vacates(id, target, side) {
+        return vacatesNode(this.input(), id, target, side);
     }
     /**
      * EXCHANGE (packages/soksak/docs/layout.md#add-and-remove): puts the node `a`,
