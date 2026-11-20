@@ -94,7 +94,7 @@ commands:
                             waits for the operating system to report that PID ended
   conversation read --agent claude-code|codex --cwd PATH
                             prints the messages of the agent conversation of the working directory, read from its session file
-  message send FOLDER TEXT  writes TEXT as a message of the surface SOKSAK_SURFACE into the folder FOLDER, and prints its file name
+  message send FOLDER TEXT  writes TEXT as a message of the surface SOKSAK_SURFACE into the folder FOLDER, and prints its file name and the hold of the receiver
   registry build DIRECTORY  checks a registry and writes its index.json
   registry use INDEX        sets the registry index that installation reads
   plugin install|update|remove|enable|disable ID
@@ -939,7 +939,7 @@ fn execute(
     }
     // The arguments after the word `message` are parsed by the message commands (docs/spec/cli.md#commands).
     if args.first().map(String::as_str) == Some("message") {
-        return message::run(&args[1..], stdout);
+        return message::run(&args[1..], stdout, options);
     }
     // A command word with a dot is a declared command (docs/spec/cli.md).
     if command::command_word(args).is_some_and(|word| word.contains('.')) {

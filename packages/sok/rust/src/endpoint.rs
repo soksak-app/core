@@ -43,14 +43,20 @@ impl From<String> for Failure {
 
 /// Reads endpoint.json of config_dir and checks that its transport belongs to this platform and that its process is running.
 pub fn read_endpoint(config_dir: &Path) -> Result<Endpoint, String> {
+    read_running_endpoint(config_dir)?
+}
+
+/// Reads endpoint.json of config_dir as read_endpoint does, and returns the inner error, the text that names the file, when the
+/// directory names no running application: endpoint.json does not exist, or its process is not running.
+pub fn read_running_endpoint(config_dir: &Path) -> Result<Result<Endpoint, String>, String> {
     let file = config_dir.join("endpoint.json");
     let text = match std::fs::read_to_string(&file) {
         Ok(text) => text,
         Err(error) if error.kind() == ErrorKind::NotFound => {
-            return Err(format!(
+            return Ok(Err(format!(
                 "{} does not exist; the application is not running",
                 file.display()
-            ));
+            )));
         }
         Err(error) => return Err(crate::files::file_error(file.display(), &error)),
     };
@@ -73,16 +79,16 @@ pub fn read_endpoint(config_dir: &Path) -> Result<Endpoint, String> {
     }
     let pid =
         i32::try_from(pid).map_err(|_| format!("{} has no address or pid", file.display()))?;
-    platform::current()?.process_running(pid).map_err(|_| {
-        format!(
+    if platform::current()?.process_running(pid).is_err() {
+        return Ok(Err(format!(
             "{} names process {pid}, which is not running",
             file.display()
-        )
-    })?;
-    Ok(Endpoint {
+        )));
+    }
+    Ok(Ok(Endpoint {
         address: address.to_string(),
         pid,
-    })
+    }))
 }
 
 /// One connection to the endpoint. It sends requests one at a time, waits for each response, and passes notifications that arrive in between to notify.

@@ -25,7 +25,7 @@ const messageLimit = 64 * 1024
 var messageCounter atomic.Uint64
 
 // runMessage runs the message commands; args are the arguments after the word message.
-func runMessage(args []string, stdout io.Writer) error {
+func runMessage(args []string, stdout io.Writer, options Options) error {
 	if len(args) == 1 && args[0] == "--help" {
 		_, err := fmt.Fprintln(stdout, Usage)
 		return err
@@ -36,10 +36,14 @@ func runMessage(args []string, stdout io.Writer) error {
 	if args[0] != "send" {
 		return usage("unknown command: message %s", strings.Join(args, " "))
 	}
-	if len(args) != 3 {
+	parsed, err := parseAllowed(args[1:], map[string]bool{}, map[string]bool{"config-dir": true})
+	if err != nil {
+		return err
+	}
+	if len(parsed.positionals) != 2 {
 		return usage("message send requires a folder and a text")
 	}
-	folder, text := args[1], args[2]
+	folder, text := parsed.positionals[0], parsed.positionals[1]
 	surface := agentSurface()
 	if surface == "" {
 		return fmt.Errorf("message send requires %s, which names the sending surface", SurfaceVariable)
@@ -51,12 +55,90 @@ func runMessage(args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	output, err := json.Marshal(map[string]string{"path": name})
+	receiver, err := messageReceiver(folder, parsed.values, options)
+	if err != nil {
+		return fmt.Errorf("message %s was written; %w", name, err)
+	}
+	output, err := json.Marshal(map[string]any{"path": name, "receiver": receiver})
 	if err != nil {
 		return err
 	}
 	_, err = fmt.Fprintln(stdout, string(output))
 	return err
+}
+
+// messageReceiver reads the hold of the terminal whose folder is folder (docs/spec/messaging.md#delivery): {surface, plugin, held}
+// from surface.window, exposure.snapshot and the status <plugin>.messages of the surface. It returns nil when folder is not
+// <root>/.soksak/messages/<surface>, when no application runs, when the surface is in no window and when the status is null.
+func messageReceiver(folder string, values map[string]string, options Options) (any, error) {
+	clean := filepath.Clean(folder)
+	parent := filepath.Dir(clean)
+	if filepath.Base(parent) != "messages" || filepath.Base(filepath.Dir(parent)) != ".soksak" {
+		return nil, nil
+	}
+	terminal := filepath.Base(clean)
+	client, err := connectTo(values, options)
+	if errors.Is(err, ErrNotRunning) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	receiver, err := readReceiver(client, terminal)
+	return receiver, errors.Join(err, client.Close())
+}
+
+// readReceiver asks the application for the window, the plugin and the status <plugin>.messages of the surface terminal.
+func readReceiver(client *Client, terminal string) (any, error) {
+	result, err := client.Request("surface.window", map[string]any{"surface": terminal})
+	var endpointErr *EndpointError
+	if errors.As(err, &endpointErr) && endpointErr.Code == 1012 {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var home surfaceHome
+	if json.Unmarshal(result, &home) != nil || home.Window == "" {
+		return nil, fmt.Errorf("surface.window returned an unexpected value: %s", result)
+	}
+	result, err = client.Request("exposure.snapshot", map[string]any{"window": home.Window, "surface": terminal})
+	if err != nil {
+		return nil, err
+	}
+	var snapshot struct {
+		Groups []struct {
+			Owner   string `json:"owner"`
+			Surface string `json:"surface"`
+			Plugin  string `json:"plugin"`
+		} `json:"groups"`
+	}
+	if json.Unmarshal(result, &snapshot) != nil {
+		return nil, fmt.Errorf("exposure.snapshot returned an unexpected value: %s", result)
+	}
+	for _, group := range snapshot.Groups {
+		if group.Owner != "surface" || group.Surface != terminal {
+			continue
+		}
+		name := group.Plugin + ".messages"
+		value, err := client.Request("status.get", map[string]any{"name": name, "surface": terminal, "window": home.Window})
+		if err != nil {
+			return nil, err
+		}
+		if string(value) == "null" {
+			return nil, nil
+		}
+		var status map[string]json.RawMessage
+		held, present := json.RawMessage(nil), false
+		if json.Unmarshal(value, &status) == nil {
+			held, present = status["held"]
+		}
+		if !present {
+			return nil, fmt.Errorf("the status %s of surface %s is not {folder, registration, held, last}: %s", name, terminal, value)
+		}
+		return map[string]any{"surface": terminal, "plugin": group.Plugin, "held": held}, nil
+	}
+	return nil, fmt.Errorf("exposure.snapshot of window %s holds no group of surface %s", home.Window, terminal)
 }
 
 // sendMessage writes text as a message of surface into folder and returns the name of the message file. A text over the limit

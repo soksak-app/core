@@ -140,3 +140,83 @@ func TestSendRefusesWithoutASurfaceWithNoFile(t *testing.T) {
 		t.Fatalf("a refused send must write no file; entries: %v", names)
 	}
 }
+
+// terminalFolders creates <root>/.soksak/messages/<surface> for each surface and returns root.
+func terminalFolders(t *testing.T, surfaces ...string) string {
+	t.Helper()
+	root := t.TempDir()
+	for _, surface := range surfaces {
+		if err := os.MkdirAll(filepath.Join(root, ".soksak", "messages", surface), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return root
+}
+
+// messageReceiver returns the receiver member of the reply of sok message send as compact JSON.
+func messageReceiver(t *testing.T, stdout string) string {
+	t.Helper()
+	var reply struct {
+		Receiver json.RawMessage `json:"receiver"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(stdout)), &reply); err != nil || reply.Receiver == nil {
+		t.Fatalf("reply has no receiver: %v: %s", err, stdout)
+	}
+	var value any
+	if err := json.Unmarshal(reply.Receiver, &value); err != nil {
+		t.Fatal(err)
+	}
+	compact, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(compact)
+}
+
+// contract: cli.message.send-reports-the-hold-of-the-receiver
+func TestSendReportsTheHoldOfTheReceiver(t *testing.T) {
+	player := playCase(t, "sok-message-send-receiver")
+	home := t.TempDir()
+	root := terminalFolders(t, "t2", "t3", "t4", "t5", "gone")
+	folder := func(surface string) string { return filepath.Join(root, ".soksak", "messages", surface) }
+	wants := []struct{ surface, receiver string }{
+		{"t2", `{"held":{"kind":"permission","pending":1,"reason":"blocked"},"plugin":"terminal","surface":"t2"}`},
+		{"t3", `{"held":null,"plugin":"terminal","surface":"t3"}`},
+		{"t4", `null`},
+	}
+	for _, want := range wants {
+		code, stdout, stderr := messageSend(t, home, "t1", "--config-dir", player.configDir, folder(want.surface), "hello")
+		if code != 0 {
+			t.Fatalf("send to %s: code %d stdout %q stderr %q", want.surface, code, stdout, stderr)
+		}
+		if got := messageReceiver(t, stdout); got != want.receiver {
+			t.Fatalf("send to %s: receiver %s, want %s", want.surface, got, want.receiver)
+		}
+		if names := messageEntries(t, folder(want.surface)); len(names) != 1 || names[0] != messageName(t, stdout) {
+			t.Fatalf("send to %s: entries %v", want.surface, names)
+		}
+	}
+	code, stdout, stderr := messageSend(t, home, "t1", "--config-dir", player.configDir, folder("t5"), "hello")
+	names := messageEntries(t, folder("t5"))
+	if code != 1 || stdout != "" || len(names) != 1 || !strings.Contains(stderr, "message "+names[0]+" was written") ||
+		!strings.Contains(stderr, "status terminal.messages of surface t5 is not {folder, registration, held, last}") {
+		t.Fatalf("a status without held: code %d stdout %q stderr %q entries %v", code, stdout, stderr, names)
+	}
+	code, stdout, stderr = messageSend(t, home, "t1", "--config-dir", player.configDir, folder("gone"), "hello")
+	if code != 0 || messageReceiver(t, stdout) != "null" {
+		t.Fatalf("a surface in no window: code %d stdout %q stderr %q", code, stdout, stderr)
+	}
+}
+
+// contract: cli.message.send-without-application-has-no-receiver
+func TestSendWithoutAnApplicationOrToAnotherFolderHasNoReceiver(t *testing.T) {
+	home := t.TempDir()
+	config := t.TempDir()
+	root := terminalFolders(t, "t2")
+	for _, folder := range []string{filepath.Join(root, ".soksak", "messages", "t2"), t.TempDir()} {
+		code, stdout, stderr := messageSend(t, home, "t1", "--config-dir", config, folder, "hello")
+		if code != 0 || messageReceiver(t, stdout) != "null" {
+			t.Fatalf("send to %s: code %d stdout %q stderr %q", folder, code, stdout, stderr)
+		}
+	}
+}

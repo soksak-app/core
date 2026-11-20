@@ -55,13 +55,23 @@ func (e *EndpointError) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// ErrNotRunning is the error of ReadEndpoint when the configuration directory names no running application: endpoint.json does
+// not exist, or its process is not running.
+var ErrNotRunning = errors.New("the application is not running")
+
+// notRunning is an error of ReadEndpoint whose text names the file, and which is ErrNotRunning.
+type notRunning struct{ text string }
+
+func (e notRunning) Error() string        { return e.text }
+func (e notRunning) Is(target error) bool { return target == ErrNotRunning }
+
 // ReadEndpoint reads endpoint.json of configDir and checks that its transport belongs to this platform and that its
 // process is running.
 func ReadEndpoint(configDir string) (Endpoint, error) {
 	file := filepath.Join(configDir, "endpoint.json")
 	data, err := os.ReadFile(file)
 	if errors.Is(err, os.ErrNotExist) {
-		return Endpoint{}, fmt.Errorf("%s does not exist; the application is not running", file)
+		return Endpoint{}, notRunning{fmt.Sprintf("%s does not exist; the application is not running", file)}
 	}
 	if err != nil {
 		return Endpoint{}, fileError(file, err)
@@ -81,7 +91,7 @@ func ReadEndpoint(configDir string) (Endpoint, error) {
 		return Endpoint{}, err
 	}
 	if err := current.ProcessRunning(endpoint.PID); err != nil {
-		return Endpoint{}, fmt.Errorf("%s names process %d, which is not running", file, endpoint.PID)
+		return Endpoint{}, notRunning{fmt.Sprintf("%s names process %d, which is not running", file, endpoint.PID)}
 	}
 	return endpoint, nil
 }

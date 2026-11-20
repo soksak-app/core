@@ -9,6 +9,11 @@ use serde_json::Value;
 #[path = "support/folder.rs"]
 mod folder;
 
+#[path = "support/case_player.rs"]
+mod case_player;
+
+use case_player::play_case;
+
 use folder::Folder;
 
 /// The largest text that the command accepts, in bytes (docs/spec/cli.md#commands).
@@ -127,4 +132,124 @@ fn send_refuses_without_a_surface_with_no_file() {
 fn message_name(stdout: &str) -> String {
     let reply: Value = serde_json::from_str(stdout.trim()).expect("reply is JSON");
     reply["path"].as_str().expect("path member").to_string()
+}
+
+/// Creates `<root>/.soksak/messages/<surface>` for each surface in `root`.
+fn terminal_folders(root: &Path, surfaces: &[&str]) {
+    for surface in surfaces {
+        std::fs::create_dir_all(root.join(".soksak").join("messages").join(surface))
+            .expect("terminal folder");
+    }
+}
+
+/// The receiver member of the reply of sok message send.
+fn receiver(stdout: &str) -> Value {
+    let reply: Value = serde_json::from_str(stdout.trim()).expect("reply is JSON");
+    reply
+        .get("receiver")
+        .cloned()
+        .unwrap_or_else(|| panic!("reply has no receiver: {stdout}"))
+}
+
+/// The path member of the reply of sok message send.
+fn reply_path(stdout: &str) -> String {
+    let reply: Value = serde_json::from_str(stdout.trim()).expect("reply is JSON");
+    reply["path"].as_str().expect("path").to_string()
+}
+
+// contract: cli.message.send-reports-the-hold-of-the-receiver
+#[test]
+fn send_reports_the_hold_of_the_receiver() {
+    let player = play_case("sok-message-send-receiver");
+    let dir = player.dir();
+    let home = Folder::new("message-home");
+    let root = Folder::new("message-root");
+    terminal_folders(root.path(), &["t2", "t3", "t4", "t5", "gone"]);
+    let folder = |surface: &str| root.path().join(".soksak").join("messages").join(surface);
+    let wants = [
+        (
+            "t2",
+            serde_json::json!({"surface": "t2", "plugin": "terminal", "held": {"reason": "blocked", "kind": "permission", "pending": 1}}),
+        ),
+        (
+            "t3",
+            serde_json::json!({"surface": "t3", "plugin": "terminal", "held": null}),
+        ),
+        ("t4", Value::Null),
+    ];
+    for (surface, want) in wants {
+        let path = folder(surface);
+        let (status, stdout, stderr) = run_send(
+            &home,
+            Some("t1"),
+            &["--config-dir", &dir, path.to_str().expect("path"), "hello"],
+        );
+        assert_eq!(
+            status, 0,
+            "send to {surface}: stdout {stdout} stderr {stderr}"
+        );
+        assert_eq!(receiver(&stdout), want, "send to {surface}");
+        assert_eq!(
+            entries(&path),
+            vec![reply_path(&stdout)],
+            "send to {surface}"
+        );
+    }
+    let path = folder("t5");
+    let (status, stdout, stderr) = run_send(
+        &home,
+        Some("t1"),
+        &["--config-dir", &dir, path.to_str().expect("path"), "hello"],
+    );
+    let names = entries(&path);
+    assert!(
+        status == 1
+            && stdout.is_empty()
+            && names.len() == 1
+            && stderr.contains(&format!("message {} was written", names[0]))
+            && stderr.contains(
+                "status terminal.messages of surface t5 is not {folder, registration, held, last}"
+            ),
+        "a status without held: status {status} stdout {stdout:?} stderr {stderr:?} entries {names:?}"
+    );
+    let path = folder("gone");
+    let (status, stdout, stderr) = run_send(
+        &home,
+        Some("t1"),
+        &["--config-dir", &dir, path.to_str().expect("path"), "hello"],
+    );
+    assert!(
+        status == 0 && receiver(&stdout).is_null(),
+        "a surface in no window: status {status} stdout {stdout:?} stderr {stderr:?}"
+    );
+}
+
+// contract: cli.message.send-without-application-has-no-receiver
+#[test]
+fn send_without_an_application_or_to_another_folder_has_no_receiver() {
+    let home = Folder::new("message-home");
+    let config = Folder::new("message-config");
+    let root = Folder::new("message-root");
+    terminal_folders(root.path(), &["t2"]);
+    let other = Folder::new("message-other");
+    for path in [
+        root.path().join(".soksak").join("messages").join("t2"),
+        other.path().to_path_buf(),
+    ] {
+        let (status, stdout, stderr) = run_send(
+            &home,
+            Some("t1"),
+            &[
+                "--config-dir",
+                config.text(),
+                path.to_str().expect("path"),
+                "hello",
+            ],
+        );
+        assert!(
+            status == 0 && receiver(&stdout).is_null(),
+            "send to {}: status {status} stdout {stdout:?} stderr {stderr:?}",
+            path.display()
+        );
+    }
 }
