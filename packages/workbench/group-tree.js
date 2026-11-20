@@ -103,6 +103,10 @@ const sizeText = (w, h) => `${Math.round(w)}x${Math.round(h)}`;
 /** The identifier of a member: a content card id, or the id of a group node. */
 export const memberId = (member) => (typeof member === "string" ? member : member.card);
 
+/** The member of the card id that find gave found: the group node of a group card, or the id of any other card. */
+// default: a card that is no group card has no node, and its id is its member.
+const memberOf = (found, id) => found.node ?? id;
+
 /** n of a card id card-<n>, or null. */
 export function cardNumber(id) {
   const match = /^card-([1-9][0-9]*)$/.exec(id);
@@ -204,6 +208,7 @@ export class GroupTree {
   readingOrder(members) {
     return [...members].sort((a, b) => {
       const p = this.box(a), q = this.box(b);
+      // default: members whose boxes start on one row line are ordered by their first column line.
       return (p.r0 - q.r0) || (p.c0 - q.c0);
     });
   }
@@ -300,6 +305,7 @@ export class GroupTree {
 
   /** The group node of the group card id, or null. */
   node(id) {
+    // default: a card that is no group card, or no card of the space, has no group node.
     return this.find(id)?.node ?? null;
   }
 
@@ -760,6 +766,7 @@ export class GroupTree {
   leaderLeft(parent, id) {
     if (this.leaderOf(parent) !== id) return;
     const next = this.readingOrder(this.levelMembers(parent)).map(memberId).find((member) => !isPlace(member));
+    // default: a level whose remaining members are all window sidebars has no leader.
     this.setLeaderOf(parent, next ?? null);
   }
 
@@ -812,7 +819,7 @@ export class GroupTree {
         throw new Error(`card ${id} cannot hold a group toward ${side}: ${error.message}`);
       }
       const parent = this.parentOf(id);
-      const node = { card: group, name, leader: id, members: [found.node ?? id, born] };
+      const node = { card: group, name, leader: id, members: [memberOf(found, id), born] };
       this.replaceMember(parent, id, node);
       if (this.leaderOf(parent) === id) this.setLeaderOf(parent, group);
       return { group, card: born };
@@ -1042,7 +1049,8 @@ export class GroupTree {
     if (!ids.length) return new Error(`card ${id} cannot move beside no card`);
     const placed = ids.find(isPlace);
     if (placed !== undefined) return new Error(`card ${placed} is a window sidebar; a card does not move beside it`);
-    const inside = (card) => card === id || (this.find(card)?.path ?? []).some((node) => node.card === id);
+    // A card of no space is inside no card; move refuses it as a target.
+    const inside = (card) => card === id || (this.find(card)?.path.some((node) => node.card === id) === true);
     // The card itself names its vacated slot, which is no change; a target inside it is refused (docs/spec/groups.md#vacated-slot).
     const itself = ids.length === 1 && ids[0] === id && side !== "strip";
     if (!itself && ids.every(inside)) return new Error(`card ${id} cannot move into itself`);
@@ -1059,7 +1067,7 @@ export class GroupTree {
   neighbour(card, side) {
     const found = this.find(card);
     if (!found) return null;
-    const from = this.box(found.node ?? card);
+    const from = this.box(memberOf(found, card));
     for (const member of this.levelMembers(found.parent)) {
       const id = memberId(member);
       if (id === card || isPlace(id)) continue;
@@ -1085,7 +1093,7 @@ export class GroupTree {
     const [target] = ids;
     if (side === "centre") {
       if (found.parent?.card !== target) return false;
-      const box = this.box(found.node ?? id);
+      const box = this.box(memberOf(found, id));
       const outer = this.rectangle(found.parent);
       return box.c1 === outer.c1 && box.r0 === outer.r0 && box.r1 === outer.r1;
     }
@@ -1115,9 +1123,9 @@ export class GroupTree {
     const operation = `move to ${side} of ${names}`;
     // The target is the node after the withdraw of the moving card (docs/spec/groups.md#target-search): a cut or a run that holds the
     // moving card names the kids that remain.
-    const ids = targetIds(target).filter((card) => card !== id && !(this.find(card)?.path ?? []).some((node) => node.card === id));
+    const ids = targetIds(target).filter((card) => card !== id && !this.find(card).path.some((node) => node.card === id));
     this.attempt(id, operation, () => {
-      const moving = found.node ?? id;
+      const moving = memberOf(found, id);
       // A move is a withdraw and an insert: the card or the box of the group card leaves its cut, whose other kids take its space in
       // proportion, and lands beside the target, or with centre at the right edge of the tree of the group card target
       // (docs/spec/groups.md#closing).
@@ -1160,7 +1168,7 @@ export class GroupTree {
       }
       const a = this.find(id), b = this.find(other);
       const la = this.leaderOf(a.parent), lb = this.leaderOf(b.parent);
-      const ma = a.node ?? id, mb = b.node ?? other;
+      const ma = memberOf(a, id), mb = memberOf(b, other);
       if (a.parent !== b.parent) {
         this.putMember(a.parent, id, mb);
         this.putMember(b.parent, other, ma);
@@ -1436,6 +1444,7 @@ export function readGroupTree({ state, groups, leader, lastCard }, options, grid
   const level = readLevel(state.root, seen);
   const tree = new GroupTree(grid, options, level.filter((member) => typeof member !== "string"), null, 0);
   tree.rootLeader = readLeader("root", level.map(memberId), leader, true);
+  // default: JSON.stringify gives undefined for an absent lastCard, which the refusal names as undefined.
   const refused = new Error(`layout stores lastCard ${JSON.stringify(lastCard) ?? "undefined"}, which is not the largest issued card number`);
   if (!Number.isInteger(lastCard) || lastCard < 1 || lastCard > LAST_LIMIT) throw refused;
   for (const id of seen) {
@@ -1461,6 +1470,7 @@ function readLevel(node, seen) {
   seen.add(id);
   const { data } = node;
   if (!isObject(data) || Object.keys(data).sort().join(",") !== "leader,name") {
+    // default: JSON.stringify gives undefined for absent data, which the refusal names as undefined.
     throw new Error(`layout stores the group ${id} with the data ${JSON.stringify(data) ?? "undefined"}, which is not {name, leader}`);
   }
   const { name } = data;
