@@ -14065,7 +14065,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F899-7.5-12",
-    implementation: [{ file: "packages/sok/go/src/agents/SKILL.md", symbol: "These diagnostic methods exist only in diagnostic builds; a release build rejects them." }],
+    implementation: [{ file: "packages/sok/go/src/agents/SKILL.md", symbol: "These diagnostic methods exist only in diagnostic builds, which every 0.0.x release is" }],
     tests: [{ file: "scripts/test/skill-captures.test.mjs", id: "the agent skill states how to observe a window that is covered, and that the methods exist only in diagnostic builds" }],
     expected: "The agent skill states that a still capture needs no activation, that an occluded window draws no image region and opens no terminal session, how draw-covered makes a covered window draw, and that these methods exist only in diagnostic builds.",
     levels: ["unit"],

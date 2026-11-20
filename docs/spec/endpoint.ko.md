@@ -97,7 +97,7 @@ host는 선언된 메서드를 부른 client의 모든 요청을 성능 trace가
 
 ## 진단 빌드
 
-다음 메서드는 진단 빌드(Go 빌드 태그 `diagnostics`, cargo feature `diagnostics`)에만 있다. 다른 빌드는 이 메서드를 선언되지 않은 메서드로 거부한다. `make build-wailsv3`, `make build-tauriv2`, `make build-mygo`는 진단 빌드를 만들고, 배포 대상은 진단 빌드를 만들지 않는다.
+다음 메서드는 진단 빌드(Go 빌드 태그 `diagnostics`, cargo feature `diagnostics`)에만 있다. 다른 빌드는 이 메서드를 선언되지 않은 메서드로 거부한다. `make build-wailsv3`, `make build-tauriv2`, `make build-mygo`는 진단 빌드를 만든다. 배포 대상은 선언된 release, 즉 `scripts/check-versions.mjs`의 `RELEASE`가 0.0.x 버전인 동안(Makefile의 `DIAGNOSTIC_RELEASE`) 진단 빌드를 만들므로 모든 0.0.x release가 이 메서드에 답하며, 이후 버전 계열에는 이 메서드 없는 빌드를 만든다. 측정: 배포된 `v0.0.41` mygo bundle은 `diagnostics.capture.still`에 still의 경로로 답한다.
 
 요청이 연 진단 hold나 기록은 자기 끝, 그 창의 닫힘, 그것을 가진 page나 workbench의 끝, 그것을 연 요청의 endpoint 연결의 닫힘 가운데 먼저 오는 것으로 끝나며, 어떤 제한도 그것을 끝내지 않는다. 끝날 때 붙잡은 것을 붙잡은 순서대로 보내고, 그것을 기다리는 각 요청은 그 turn에 답한다. 이것은 `diagnostics.modal.hold`의 모달 내용 hold, `diagnostics.surface.hold`의 답 hold, `diagnostics.drag`부터 `diagnostics.drag.end`까지의 workbench drag 기록이다. 호스트는 native library의 callback을 제한 없이 기다린다. library는 모든 경로에서 각 호출에 한 번 답하며, 오지 않을 수 있는 event를 기다리는 native 대기(`diagnostics.native.objects`, `diagnostics.process.exit`)는 그 event로 끝나거나, hold처럼 그 창, 그 page, 그 요청의 연결의 끝으로 끝난다.
 
