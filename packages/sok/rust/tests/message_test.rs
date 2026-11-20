@@ -380,7 +380,7 @@ fn send_reply_with_answers_names_the_report_and_writes_the_receipt() {
 /// A token that holds a dot is refused before any file is written.
 #[test]
 fn send_reply_with_answers_refuses_a_token_with_a_dot_with_no_file() {
-    let player = play_case("sok-message-send-sender");
+    let config = Folder::new("message-dot-config");
     let home = Folder::new("message-dot-home");
     let root = Folder::new("message-dot");
     terminal_folders(root.path(), &["app-1", "app-2"]);
@@ -388,7 +388,7 @@ fn send_reply_with_answers_refuses_a_token_with_a_dot_with_no_file() {
     let own = root.path().join(".soksak").join("messages").join("app-1");
     let (status, stdout, stderr) = run_send(
         &home,
-        &player.dir(),
+        config.path().to_str().expect("config folder"),
         None,
         &[
             "--reply",
@@ -399,7 +399,7 @@ fn send_reply_with_answers_refuses_a_token_with_a_dot_with_no_file() {
         ],
     );
     assert_ne!(status, 0, "stdout: {stdout}");
-    assert!(stderr.contains("answers"), "stderr: {stderr}");
+    assert!(stderr.contains("is not a token"), "stderr: {stderr}");
     assert!(
         entries(&folder).is_empty(),
         "a refused report writes no file"
@@ -446,7 +446,7 @@ fn send_answers_without_reply_is_refused_with_no_file() {
     let root = Folder::new("message-noreply");
     terminal_folders(root.path(), &["app-1", "app-2"]);
     let folder = root.path().join(".soksak").join("messages").join("app-2");
-    let (status, stdout, _stderr) = run_send(
+    let (status, stdout, stderr) = run_send(
         &home,
         config.path().to_str().expect("config folder"),
         None,
@@ -458,5 +458,6 @@ fn send_answers_without_reply_is_refused_with_no_file() {
         ],
     );
     assert_ne!(status, 0, "stdout: {stdout}");
+    assert!(stderr.contains("requires --reply"), "stderr: {stderr}");
     assert!(entries(&folder).is_empty(), "a refused send writes no file");
 }

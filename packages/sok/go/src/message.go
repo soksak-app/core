@@ -55,6 +55,11 @@ func runMessage(args []string, stdout io.Writer, options Options) error {
 	if answered && !parsed.flags["reply"] {
 		return usage("message send --answers requires --reply")
 	}
+	if answered {
+		if err := checkAnswers(answers); err != nil {
+			return err
+		}
+	}
 	client, err := connectTo(parsed.values, options)
 	if errors.Is(err, ErrNotRunning) {
 		return errors.New("message send requires a running application, which answers the surface of this process")
@@ -195,15 +200,21 @@ func reportRequest(folder, surface, token string) (string, error) {
 	return ` (When done, report the result with sok message send --reply ` + filepath.Join(messages, surface) + ` --answers ` + token + ` "<report>")`, nil
 }
 
+// checkAnswers refuses a value of --answers that is empty or holds a dot or a path separator, before the command connects or writes
+// (docs/spec/messaging.md#report-request).
+func checkAnswers(answers string) error {
+	if answers == "" || strings.ContainsAny(answers, "./\\\x00") {
+		return usage("message send --answers %q is not a token: it must be non-empty and hold no dot or path separator", answers)
+	}
+	return nil
+}
+
 // writeReport writes a report of surface into the folder of the sender. Without answers the report is named by a new token. With
 // answers the report is named by the answered token, and the empty receipt of that token is written into the folder of surface
 // after the report. The token and the folder of the receipt are checked before any file is written (docs/spec/messaging.md#report-request).
 func writeReport(folder, surface, text, answers string) (string, error) {
 	if answers == "" {
 		return writeNamedFile(folder, surface+".report-"+messageToken()+".txt", text)
-	}
-	if strings.ContainsAny(answers, "./\\\x00") {
-		return "", fmt.Errorf("message send: --answers %q is not a token: it must be non-empty and hold no dot or path separator", answers)
 	}
 	messages := filepath.Dir(filepath.Clean(folder))
 	if filepath.Base(messages) != "messages" || filepath.Base(filepath.Dir(messages)) != ".soksak" {

@@ -306,12 +306,12 @@ func TestSendReplyWithAnswersRefusesATokenWithADotWithNoFile(t *testing.T) {
 	root := terminalFolders(t, "app-1", "app-2")
 	folder := filepath.Join(root, ".soksak", "messages", "app-2")
 	own := filepath.Join(root, ".soksak", "messages", "app-1")
-	code, stdout, stderr := messageSend(t, home, playCase(t, "sok-message-send-sender").configDir, "", "--reply", "--answers", "a.b", folder, "done")
+	code, stdout, stderr := messageSend(t, home, t.TempDir(), "", "--reply", "--answers", "a.b", folder, "done")
 	if code == 0 {
 		t.Fatalf("stdout: %s", stdout)
 	}
-	if !strings.Contains(stderr, "answers") {
-		t.Fatalf("the refusal must name the answers token; stderr: %s", stderr)
+	if !strings.Contains(stderr, "is not a token") {
+		t.Fatalf("the refusal must name the token rule; stderr: %s", stderr)
 	}
 	if names := messageEntries(t, folder); len(names) != 0 {
 		t.Fatalf("a refused report must write no file; entries: %v", names)
@@ -344,9 +344,12 @@ func TestSendAnswersWithoutReplyIsRefusedWithNoFile(t *testing.T) {
 	home := t.TempDir()
 	root := terminalFolders(t, "app-1", "app-2")
 	folder := filepath.Join(root, ".soksak", "messages", "app-2")
-	code, stdout, _ := messageSend(t, home, t.TempDir(), "", "--answers", "tok42", folder, "text")
+	code, stdout, stderr := messageSend(t, home, t.TempDir(), "", "--answers", "tok42", folder, "text")
 	if code == 0 {
 		t.Fatalf("stdout: %s", stdout)
+	}
+	if !strings.Contains(stderr, "requires --reply") {
+		t.Fatalf("the refusal must name the --reply rule; stderr: %s", stderr)
 	}
 	if names := messageEntries(t, folder); len(names) != 0 {
 		t.Fatalf("a refused send must write no file; entries: %v", names)

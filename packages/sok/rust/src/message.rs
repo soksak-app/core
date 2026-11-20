@@ -57,6 +57,9 @@ pub(crate) fn run(
             "message send --answers requires --reply".into(),
         ));
     }
+    if let Some(answers) = answers {
+        check_answers(answers)?;
+    }
     let config_dir = crate::config_dir_of(&parsed.values, options)?;
     let endpoint = match read_running_endpoint(&config_dir)? {
         Ok(endpoint) => endpoint,
@@ -256,6 +259,17 @@ fn report_request(folder: &str, surface: &str, token: &str) -> Result<String, Er
     ))
 }
 
+/// Refuses a value of `--answers` that is empty or holds a dot or a path separator, before the command connects or writes
+/// (docs/spec/messaging.md#report-request).
+fn check_answers(answers: &str) -> Result<(), Error> {
+    if answers.is_empty() || answers.contains(['.', '/', '\\', '\0']) {
+        return Err(Error::Usage(format!(
+            "message send --answers {answers:?} is not a token: it must be non-empty and hold no dot or path separator"
+        )));
+    }
+    Ok(())
+}
+
 /// Writes a report of `surface` into the folder of the sender. Without `answers` the report is named by a new token. With `answers`
 /// the report is named by the answered token, and the empty receipt of that token is written into the folder of `surface` after the
 /// report. The token and the receipt folder are checked before any file is written (docs/spec/messaging.md#report-request).
@@ -272,11 +286,6 @@ fn write_report(
             text,
         );
     };
-    if answers.is_empty() || answers.contains(['.', '/', '\\', '\0']) {
-        return Err(Error::Failed(format!(
-            "message send: --answers {answers:?} is not a token: it must be non-empty and hold no dot or path separator"
-        )));
-    }
     let messages = terminal_messages(folder).ok_or_else(|| {
         Error::Failed(format!(
             "message send: {folder} is not the folder of a terminal, so the receipt of --answers has no folder of the reporting surface; a report is sent with --reply"
