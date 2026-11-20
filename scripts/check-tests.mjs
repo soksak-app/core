@@ -41,7 +41,7 @@ const MATRIX = [
   lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/repeat-rust.test.mjs", "scripts/test/platform/darwin/system/repeat-rust.test.mjs", "scripts/test/check-windows-build.test.mjs", "scripts/test/host-debug-check.test.mjs", "scripts/test/create-test-certificates.test.mjs", "scripts/test/macos-minimum-commands.test.mjs", "scripts/test/makefile-recipes.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("macOS application bundle preparation", "js-ts", ["scripts/platform/darwin/prepare-app-bundle.mjs"], ["scripts/test/platform/darwin/bundle-preparation.test.mjs"], { sharedTests: true }),
   lane("macOS application bundle exchange", "objective-c", ["native/darwin/src/tools/swap_bundle.m"], ["scripts/test/platform/darwin/bundle-preparation.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
-  lane("sok agent guidance", "document", ["packages/sok/go/src/agents/SKILL.md", "packages/sok/go/src/agents/mcp.json", "docs/spec/cli.md"], ["scripts/test/submit-guidance.test.mjs", "scripts/test/skill-groups.test.mjs", "scripts/test/message-report-guidance.test.mjs"], { testLanguage: "js-ts" }),
+  lane("sok agent guidance", "document", ["packages/sok/go/src/agents/SKILL.md", "packages/sok/go/src/agents/mcp.json", "docs/spec/cli.md"], ["scripts/test/submit-guidance.test.mjs", "scripts/test/skill-groups.test.mjs", "scripts/test/message-report-guidance.test.mjs", "scripts/test/skill-captures.test.mjs"], { testLanguage: "js-ts" }),
   lane("preflight check", "js-ts", ["scripts/check-preflight.mjs"], ["scripts/test/check-preflight.test.mjs"]),
   lane("CI workflows", "workflow", [".github/workflows/*.yml"], ["scripts/test/workflows.test.mjs", "scripts/test/test-kinds.test.mjs"], { testLanguage: "js-ts" }),
   lane("CI toolchain setup actions", "workflow", [".github/actions/setup-*/action.yml"], ["scripts/test/workflow-setup.test.mjs"], { testLanguage: "js-ts" }),
@@ -14061,6 +14061,13 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/plugin-api/view.js", symbol: "const { log } = createPluginRuntime({ pluginId: plugin, hooks: {" }],
     tests: [{ file: "packages/plugin-api/test/view.test.mjs", id: "a plugin record of a surface view reaches the host without a surface field" }],
     expected: "The view bridge sends the plugin records of a surface view without fields.surface, and the host adds the surface bound to the view channel.",
+    levels: ["unit"],
+  },
+  {
+    id: "F899-7.5-12",
+    implementation: [{ file: "packages/sok/go/src/agents/SKILL.md", symbol: "These diagnostic methods exist only in diagnostic builds; a release build rejects them." }],
+    tests: [{ file: "scripts/test/skill-captures.test.mjs", id: "the agent skill states how to observe a window that is covered, and that the methods exist only in diagnostic builds" }],
+    expected: "The agent skill states that a still capture needs no activation, that an occluded window draws no image region and opens no terminal session, how draw-covered makes a covered window draw, and that these methods exist only in diagnostic builds.",
     levels: ["unit"],
   },
   {

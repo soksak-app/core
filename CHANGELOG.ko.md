@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F899-7.5-12: agent skill은 agent가 창을 관찰하는 방법을 밝힌다. 활성화 없는 still capture, 빈 view를 판단하기 전의 `host.window` `occluded`, 가려진 창을 위한 `diagnostics.window.draw-covered`, 그리고 이 method가 diagnostic build에만 있음.
 - F899-7.5-11: 주입 message는 보낸 쪽을 주입할 때 보내는 tab이 보이는 text, 즉 label이나 이름으로 한 줄에 40자까지 부른다(`docs/spec/messaging.md#injected-message`).
 - F899-7.5-7: `sok message send`는 보내는 쪽 folder로의 보고 요청을 덧붙이고, `--reply`는 요청 없는 보고를 token 접두사 `report-`로 쓰며, agent skill, MCP 설명, usage는 둘과 soksak terminal 안의 agent가 각 message를 주입된 입력으로 받음을 밝힌다(`docs/spec/messaging.md#report-request`).
 - F899-7.5-10: 새 space의 layout은 각 tab의 origin member를 담으므로, 다른 page가 연 project의 window가 view tab을 시작한다(`docs/spec/projects.md#tab-origin`).

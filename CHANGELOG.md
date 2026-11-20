@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F899-7.5-12: The agent skill states how an agent observes a window: a still capture without activation, `occluded` of `host.window` before an empty view is judged, `diagnostics.window.draw-covered` for a covered window, and that these methods exist only in diagnostic builds.
 - F899-7.5-11: An injected message names its sender by the text that the sending tab shows at the injection, its label or its name, on one line and cut to 40 characters (`docs/spec/messaging.md#injected-message`).
 - F899-7.5-7: `sok message send` adds the request for a report to the folder of the sender, `--reply` writes a report with no request under the token prefix `report-`, and the agent skill, the MCP descriptions and the usage state both and that an agent in a soksak terminal receives each message as injected input (`docs/spec/messaging.md#report-request`).
 - F899-7.5-10: The layout of a new space carries the origin member of each tab, so the window of a project that another page opened starts its view tabs (`docs/spec/projects.md#tab-origin`).
