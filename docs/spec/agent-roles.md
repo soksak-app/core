@@ -7,7 +7,7 @@ This document defines how a tab of a terminal agent receives its role, and how s
 ## Decision
 
 - A tab that starts an agent CLI gives the CLI a stable identity through its launch adapter. The identity names the absolute path of the role file of the tab. The agent reads the role from that file; the role text is not pasted into the terminal when the agent can read files.
-- The role file belongs to one surface and lies in the configuration directory of the application, never in a repository of the person. Keep a role definition short, because the agent reads the whole file at each change; soksak accepts a definition of any length. Its last line is the fingerprint of the role.
+- A surface is the surface of one tab, so the role file of a surface belongs to one tab. The role file lies in the configuration directory of the application, never in a repository of the person. Keep a role definition short, because the agent reads the whole file at each change; soksak accepts a definition of any length. Its last line is the fingerprint of the role.
 - The fingerprint is deterministic: the same role name and definition always give the same fingerprint. The agent reads it from the last line of the file; it never computes it.
 - The agent confirms by one of two declared ways: the command `sok role confirm <fingerprint>`, or a line `soksak role <fingerprint>` in its answer. A role is `ready` only when soksak has received the current fingerprint.
 - An agent that does not confirm gets two reread requests, each counted by an event, and then the state `unconfirmed` shows through the error display and waits for the person. No timer decides any step.
@@ -34,7 +34,7 @@ Measured with Claude Code 2.1.329 and Codex 0.171.0, both as interactive TUIs, i
 | 10 | `claude --model haiku --append-system-prompt-file <identity file>`, the identity file holding only the pointer and the rule to read it again after a change message | The agent read the role file; after the file changed and a change message was sent, it read the file again and took the new role. |
 | 11 | Claude Code 2.1.329 with `--permission-mode default`, with a Bash permission prompt open, and a change message sent during the prompt | `<plugin>.program` showed `{state: blocked, kind: permission}` and `<plugin>.messages` held the message with `{reason: blocked, kind: permission}` and `pending` 1, with nothing pasted. When the person closed the prompt with Esc, the message was injected and Claude Code acted on it. |
 
-Rows 3 and 7 show only that the agent follows a change message that names the new role; they do not show that the agent reads a file. Each row is one run. Not measured for either CLI: a context compaction, a change message after a resume, a change message while the agent is busy, a subagent or a second session in the same tab, the confirmation commands and reread requests of this contract, and whether auto memory or the Codex memories are shared between sessions. The rule against persistent memory is an instruction only; no measured launch option of either CLI disables memory.
+Rows 3 and 7 show only that the agent follows a change message that names the new role; they do not show that the agent reads a file. Each row is one run. The rule against persistent memory is an instruction only; no measured launch option of either CLI disables memory.
 
 Claude Code reports a permission prompt as `blocked` through the program status of [terminal state](terminal-state.md) (row 11), so the `blocked` hold of [messaging](messaging.md#hold-for-the-person) holds the change messages and reread requests while the prompt is open.
 
@@ -46,13 +46,8 @@ A launch adapter is the part of a CLI launch that carries the stable identity. O
 | --- | --- | --- | --- |
 | Claude Code | `claude --append-system-prompt-file <identity file>` | Adds to the system prompt. The identity-only launch applies and the agent reads the role file (row 10). | In use |
 | Codex | `codex --no-daemon -c developer_instructions="<identity>"` | Adds developer instructions beside the global `AGENTS.md`. The agent reads the role file after a change message (rows 4 and 8). | In use |
-| Kimi | `--agent-file` | Not measured. | Candidate, not in use |
-| Copilot | `--agent <name>` | Not measured. | Candidate, not in use |
-| OpenClaw | `tui --local agent:<name>` | Not measured. | Candidate, not in use |
-| Qwen | `--append-system-prompt` | Not measured. | Candidate, not in use |
-| Goose | `session --system` | Not measured; the flag may replace the instructions. | Candidate, not in use |
 
-A candidate is added after its launch behaviour is verified in the TUI: the instructions apply to a new session, they add to the built-in instructions, and a change message makes the agent read the role file again. A candidate that replaces the built-in instructions is not added.
+A CLI is added to this table after its launch behaviour is measured in the TUI: the instructions apply to a new session, they add to the built-in instructions, and a change message makes the agent read the role file again. A flag that replaces the built-in instructions is not used.
 
 Resume: `claude --resume <id>` and `codex resume --no-daemon <id>` keep the instructions of the session start and ignore the adapter flags of the resume command (rows 2 and 6). A launch adapter is used only at a new launch.
 
@@ -76,26 +71,26 @@ The stable identity is the text that a tab's launch delivers. It is written in E
 
 ## Role file
 
-- Path: `<config-dir>/agents/<surface>/role.md`, where `<config-dir>` is the configuration directory of the application ([installation layout](installation.md#installation-layout)) and `<surface>` is the surface of the tab.
+- Path: `<config-dir>/agents/<surface>/role.md`, where `<config-dir>` is the configuration directory of the application ([installation layout](installation.md#installation-layout)) and `<surface>` is the surface of the tab. A surface identifier that contains a path separator, a `..` segment or a control character makes the launch refuse with an explicit error.
 - Layout, in order:
   1. the first line: ``Read this whole file. Follow the role it defines. Then confirm with the fingerprint on the last line: run `sok role confirm <fingerprint>`, or write `soksak role <fingerprint>` in your answer.``;
   2. the definition text, exactly as stored in `roles.json`;
   3. the last line: the fingerprint.
-  Each line ends with one line feed. A tab without a role has a file whose only line is the first line, followed by an empty last line; the fingerprint is then the empty string, which soksak treats as `null`.
+  Each line ends with one line feed. A definition whose stored text lacks a final line feed gets one in the file; the fingerprint is computed over the stored text unchanged. A tab without a role has no role file and no identity ([tab role state](#tab-role-state)).
 - Fingerprint: the first 16 lowercase hexadecimal characters of the SHA-256 digest of the UTF-8 bytes of the role identifier, one line feed (U+000A), and the definition text as stored. The identifier has no line break, so the separator is unambiguous. The fingerprint depends only on the identifier and the text: the same definition always gives the same fingerprint.
 - Length: soksak writes the definition as it is, whatever its length. The spec recommends a short definition, because the agent reads the whole file at each change.
 - The file belongs to the configuration directory and never to a repository of the person.
 - Mode: the directory `<config-dir>/agents/<surface>/` is created with mode 0700, and `role.md` and the identity file are written with mode 0600. The mode of the temporary file is checked before the rename, so a file with another mode is never visible under the final name; the write then fails with an explicit error and removes the temporary file.
-- Atomic write: the host writes the new content to a temporary file in the same folder and renames it over `role.md`. A reader sees the whole earlier file or the whole new one.
-- Writer: the host writes the file; the terminal page creates no file. A failed write is an error that names the path and the reason.
-- Lifecycle: the host creates the directory before the launch. When the tab is removed from the layout, the host stops the program of the tab, waits for a write in progress to end, refuses a later role change of that tab with an explicit error, and removes the directory. A removed tab cannot be resumed.
+- Atomic write: the host writes the new content to a temporary file named `.role-<random>.tmp` in the same folder and renames it over `role.md`. A reader sees the whole earlier file or the whole new one. Before its first write, a launch deletes the files of its surface folder whose names match `.role-*.tmp`, which an earlier crash left.
+- Writer: the host writes the file; the terminal page creates no file. A failed write is an error that names the path and the reason. A failed role file or identity file write at a launch refuses the launch, and no program starts.
+- Lifecycle: the host creates the directory before the launch. When the tab is removed from the layout, the host stops the program of the tab, waits for a write in progress to end, refuses a later role change of that tab with an explicit error, and removes the directory. A failed rename after the removal removes the temporary file and is logged. The held messages of the removed tab are discarded, each with a delivery record of state `skipped` and reason `tab removed`. A removed tab cannot be resumed.
 - Launch record: each launch stores the identity path in the session record of the tab. A resume checks that the stored path equals the current path and that the file exists; a mismatch, which happens when the configuration directory was moved, or a missing file fails the resume with an explicit error that names the path.
 
 The identity file of the Claude Code adapter is `<config-dir>/agents/<surface>/identity.txt`, written at the launch beside the role file by the same write rule. The Codex adapter passes the identity text inline, quoted as a TOML string.
 
 ## Fingerprint reference cases
 
-The algorithm is tested by the shared case file `docs/spec/cases/agent-roles/fingerprint.json`. Each case gives the identifier, the definition text and the expected fingerprint, and The Go host and the Rust host each run every case and compare the fingerprint they compute. The cases include non-ASCII text and line breaks, so the UTF-8 encoding and the separator are both checked. The values are the same for both hosts.
+The algorithm is tested by the shared case file `docs/spec/cases/agent-roles/fingerprint.json`. Each case gives the identifier, the definition text and the expected fingerprint. The same file pins the texts of the role file first line, the identity, the change message, the reread request and the first message suffix, and the phrase test compares the host output with them after the placeholders are filled. The Go host and the Rust host each run every case and compare the fingerprint they compute. The cases include non-ASCII text and line breaks, so the UTF-8 encoding and the separator are both checked. The values are the same for both hosts.
 
 ## Role definitions
 
@@ -123,7 +118,9 @@ Each tab of an agent CLI has one agent role, or none. The stored role record of 
 
 Adding this record changes the form of `projects.json`, so its format number rises from 2 to 3 as [stored data formats](installation.md#stored-data-formats) requires. No migration is written, and the reader refuses format 2.
 
-A role change is the command `core.tab.role {tab, role}`, which runs through the registry. Setting the role the tab already has, with the same definition, writes no file, changes no generation and sends no message; it answers the current `{role, generation, state}`.
+A role change is the command `core.tab.role {tab, role}`, which runs through the registry. Setting the role the tab already has, with the same definition, writes no file, changes no generation and sends no message, and answers the current `{role, generation, state}`. The one exception is state `unconfirmed`, where the same assignment sets the state to `pending` with `requests` at 0 and sends one reread request ([requests](#requests)).
+
+A running tab cannot lose its role: `core.tab.role` with `role` `null` on a tab with a role is refused with the error `a running tab keeps its role; close the tab to remove it`. A tab launched without a role has no role file and no identity.
 
 A change runs in this order, and each step starts only when the previous one succeeds:
 
@@ -152,13 +149,14 @@ A change sets the state back to `pending`, because its generation and fingerprin
 
 An agent confirms in one of two declared ways, and either one counts. The command form runs the declared command `core.tab.role.confirm {fingerprint}`, which [cli](cli.md#commands) exposes as `sok role confirm`:
 
-- (a) the command `sok role confirm <fingerprint>`, for an agent with a shell. `sok` sends the request to the application with the surface that the process chain of the agent gives ([processes of a surface](sidecars.md#processes-of-a-surface)), so a process outside the tab cannot confirm for it.
-- (b) a line `soksak role <fingerprint>` in the answer of the agent. The terminal plugin matches that line in the output of the session and confirms through the same per-surface serialization. The fingerprint exists only as the last line of the file, and the file does not show a joined or echoed form that could be pasted, so the line shows that the agent read the fingerprint from the file.
+- (a) the command `sok role confirm <fingerprint>`, for an agent with a shell. `sok` sends the request to the application with the surface that `agent.surface` answers for the process ([processes of a surface](sidecars.md#processes-of-a-surface)), so a process outside the tab cannot confirm for it.
+- (b) a line `soksak role <fingerprint>` in the answer of the agent. The terminal plugin matches the line in the program output of the session, which includes tool output, so a line copied from tool output also counts. The pattern is the exact line form with 16 lowercase hexadecimal characters; the bare fingerprint line of the file does not match. The match confirms through the same per-surface serialization. The line shows that the agent holds the fingerprint of the current file; it does not show that the agent read the file.
 
 Each adapter and each CLI declares which of the two ways apply ([launch adapters](#launch-adapters)). A way that does not apply to an agent is not offered to it.
 
 soksak judges a confirmation inside the serialization of the surface, against the state at its turn:
 
+- a value that is not 16 lowercase hexadecimal characters is refused with an invalid-argument error before the serialization. The stale rule below applies only to valid values;
 - the fingerprint equals the current one, in state `pending` or `unconfirmed`: `confirmedFingerprint` is stored, the state becomes `ready`, `seq` rises, the requests counter is reset, and the held work messages are released;
 - the fingerprint equals the current one, in state `ready`: nothing changes, and the answer is a success;
 - the fingerprint differs from the current one, because it belongs to an earlier file: refused as stale, without a retry. The error names the path of the current role file and says to read it again. It names no fingerprint. The state stays as it was;
@@ -166,12 +164,13 @@ soksak judges a confirmation inside the serialization of the surface, against th
 
 ### Requests
 
-The page watches the program state of the tab ([terminal state](terminal-state.md)). A reread request is a message that names the path of the role file and asks the agent to read the file and confirm with its last line. It is sent when the state is `pending` and:
+The page watches the program state of the tab ([terminal state](terminal-state.md)). A reread request is a message that names the path of the role file and asks the agent to read the file and confirm with its last line. The change message and the first message are not counted as requests. While the state is `pending`, the page counts each report of the program that it is not busy:
 
-- the change message or the first message has been injected and the program has reported that it is not busy: this is the first request, counted by one;
-- the program reports that it is not busy again after the first request, with the state still `pending`: this is the second request.
+- the first such report after the change message or the first message sends request 1 and sets the counter to 1;
+- the next such report sends request 2 and sets the counter to 2;
+- the next such report, with the counter at 2, sets the state to `unconfirmed` and sends nothing.
 
-After the second request, a program that reports that it is not busy again with the state still `pending` moves the state to `unconfirmed`. The host reports `unconfirmed` through the error display path, writes it to the application log, and sends no further request. The state waits for the person. The person can assign the role again; that reissues the change message once and resets the requests counter to 0, with no file write and no generation change ([idempotency](#idempotency)).
+The host reports `unconfirmed` through the error display path and writes it to the application log. The state waits for the person. The person can assign the role again; that sets the state to `pending` with the counter at 0 and sends one reread request, with no file write and no generation change ([idempotency](#idempotency)).
 
 Each request names the same path and the same fingerprint, so it repeats without a change of result. No timer decides these steps. The counter is part of the stored record, so a restart does not reset it.
 
@@ -179,7 +178,7 @@ The not-busy report that each CLI gives is part of its adapter verification. An 
 
 ## Held messages
 
-While the state is not `ready`, the page holds the work messages of the tab, which are the agent messages of the registration. Held messages keep their order and are injected one at a time when the state becomes `ready`. Each is delivered once: the delivery record keys it by its file name. The first message of a session and the requests are not held. The hold reason is `role-pending`, which [messaging](messaging.md#hold-for-the-person) must name in its list of holds; that change belongs to the implementation.
+While the state is not `ready`, the page holds the work messages of the tab, which are the agent messages of the registration. Held messages keep their order and are injected one at a time when the state becomes `ready`. Each is delivered once: the delivery record keys it by its file name. The first message of a session and the requests are not held. The hold reason `role-pending` is named in the hold list of [messaging](messaging.md#hold-for-the-person).
 
 A change while messages wait keeps them queued; they are delivered after the `ready` of the new generation.
 
@@ -187,46 +186,47 @@ A change while messages wait keeps them queued; they are delivered after the `re
 
 Every step of the role handshake repeats without a change of the result:
 
-- a repeated `core.tab.role` with the same role and definition writes no file, changes no generation and sends no message;
+- a repeated `core.tab.role` with the same role and definition writes no file, changes no generation and sends no message. In state `unconfirmed` it starts the one reread request of [requests](#requests); a repeat of that call in state `pending` changes nothing;
 - a new generation is made only when the role or its definition changes;
 - `sok role confirm` or the answer line with the current fingerprint, repeated, answers `ready` and changes nothing, including `seq`;
 - a reread request that is sent again names the same path and the same fingerprint, so reading the file again and confirming again gives the same `ready`;
 - a work message is delivered exactly once, even when `ready` is reached twice;
-- after a restart of the application or of the agent, the state is rebuilt from the stored record and the file: `ready` when `confirmedFingerprint` equals the fingerprint of the file, otherwise `pending` with the stored request count. A file whose fingerprint differs from the record is rewritten from the record first;
+- after a restart of the application while the program keeps running, the state is rebuilt from the stored record and the file: `ready` when `confirmedFingerprint` equals the fingerprint of the file; otherwise `pending` with the stored request count when that count is 0 or 1, and `unconfirmed` when it is 2. A file whose fingerprint differs from the record is rewritten from the record first;
 - a resume gives `pending` with the same fingerprint, because a resume keeps the launch text but not the proof that the agent read the file. The host clears `confirmedFingerprint` and the requests counter at the resume, and the resumed tab sends one reread request.
 
 A role A changed to B and back to A has the fingerprint of A again, so a confirmation of it is correct: the content is the same.
 
 ### Tests of the repetitions
 
-- Repeated assignment of the same role and definition: no write of the role file (its inode and content stay the same), no new generation, no change message, and the answer equals the current `{role, generation, state}`.
+- Repeated assignment of the same role and definition in state `pending` or `ready`: no write of the role file (its inode and content stay the same), no new generation, no change message, and the answer equals the current `{role, generation, state}`.
+- Repeated assignment in state `unconfirmed`: the state becomes `pending` with the counter at 0, one reread request is sent, and no file is written and no generation changes; a repeat of that assignment in `pending` writes nothing.
 - Changed definition with the same role: a new generation and one change message.
 - Changes A to B to A: the fingerprint of A returns, and a confirmation of it gives `ready`.
 - Repeated confirmation with the current fingerprint: `ready` both times, and `seq` unchanged after the second.
 - Confirmation of an earlier fingerprint after a change: refused as stale; the error names the file and no fingerprint.
+- A confirmation value that is not 16 lowercase hexadecimal characters: refused as invalid input, and the stale error is not sent.
 - Two reread requests without confirmation: `unconfirmed`, one error-display record and one log record, and no third request.
-- Repeated assignment in state `unconfirmed`: one change message, no file write, no generation change, and the counter reset.
 - Work message with `ready` reached twice: injected once, keyed by its file name.
-- Restart with a stored confirmation: `ready` without input; with a stored counter of 1: `pending` with one request counted.
+- Restart with a stored confirmation: `ready` without input; with a stored counter of 1: `pending` with that counter; with a stored counter of 2: `unconfirmed` without input.
 - Resume: `pending`, the same fingerprint, the confirmation and the counter cleared, one reread request.
 
-These are unit tests of the host and of the page with real files and the real `sok` command; no agent CLI runs in them.
+These are unit tests with real files and the real `sok` command; no agent CLI runs in them. The host tests run in the Go host package and in the Rust host package. The page tests run in the terminal plugin repository, which owns the page.
 
 ## Concurrency
 
-Role operations of one surface are serialized by one owner in the host, in arrival order. The operations are the assignment or change of the role, the confirmation (both ways), the request and the re-read. Each change raises the generation, and a confirmation is judged under the same serialization, so it is judged against the state at its turn.
+Role operations of one surface are serialized by one owner in the host, in arrival order. The operations are the assignment or change of the role, the confirmation (both ways), the request and the reread. Each change raises the generation, and a confirmation is judged under the same serialization, so it is judged against the state at its turn.
 
 - The role file is written atomically, so a reader sees the whole earlier file or the whole new one.
-- Changes A to B to C in a row: each sends its change message; each message points to the same file, which always holds the latest role, so a re-read on any of them reaches C. One confirmation of the fingerprint of C gives `ready`.
-- Confirmations of B and C that cross: the confirmation of B is refused as stale and that of C is accepted; the order does not change the end state.
+- Consecutive changes A to B to C: each sends its change message; each message points to the same file, which always holds the latest role, so a reread on any of them reaches C. One confirmation of the fingerprint of C gives `ready`.
+- Confirmations of B and C that interleave: the confirmation of B is refused as stale and that of C is accepted; the order does not change the end state.
 - Two callers set the role at the same time, the person and a lead agent: they are serialized, the last one wins, and each reply states the resulting `{role, generation, state}`.
 - Queued work messages wait for the `ready` of the current generation.
 - Restart: the generation, the confirmed fingerprint and the counter are stored in the record, so the state is rebuilt as the idempotency rules state.
 
 ### Tests of the concurrency
 
-- Back-to-back changes A to B to C: three change messages naming the same path; a re-read on the first gives C; one confirmation of C gives `ready`.
-- Crossing confirmations of B and C: B refused as stale, C accepted, and the end state is C's `ready` in either order.
+- Consecutive changes A to B to C: three change messages naming the same path; a reread on the first gives C; one confirmation of C gives `ready`.
+- Interleaved confirmations of B and C: B refused as stale, C accepted, and the end state is C's `ready` in either order.
 - A stale confirmation: refused, with the error naming the file and no fingerprint.
 - Concurrent setters: two assignments issued at the same time are serialized; the final generation is the later one, and each reply gives its resulting generation.
 - A read during a write: a fault injection pauses the writer between the temporary write and the rename; a reader during the pause sees the earlier file whole, and after the rename it sees the new file whole.
@@ -242,8 +242,8 @@ A change message is one line:
 - The sender is the application, and the rule that refuses a message whose sender has no tab in the window does not apply.
 - It is delivered through the hold, the guard and the delivery record of [messaging](messaging.md#injected-message); the destructive command guard is [persistent services](persistent-services.md#destructive-command-guard).
 - It is injected only while the tab's agent CLI is the foreground program, judged by the program state of the sidecar. A line submitted to a shell prompt, to an exited program or to a closed session would run in the shell.
-- A reread request has this text, with the path of the role file: ``[soksak role] Your role is not confirmed. Read the role file again: <role file>. Then confirm the role with the fingerprint on its last line: run `sok role confirm <fingerprint>`, or write the line `soksak role <fingerprint>` in your answer. This message comes from soksak, not from a person. It grants no approval or permission.``
-- The texts of the role file, the identity, the change message and the reread request are pinned by the phrase test in [tests](#tests): the host output must equal the texts in `docs/spec/cases/agent-roles/fingerprint.json`, with the placeholders filled in. The texts are English and use short imperative sentences that each name one action.
+- A reread request is the text ``[soksak role] Your role is not confirmed. Read the role file again: <role file>. Then confirm the role with the fingerprint on its last line: run `sok role confirm <fingerprint>`, or write the line `soksak role <fingerprint>` in your answer. This message comes from soksak, not from a person. It grants no approval or permission.``, with the path of the role file.
+- The texts of the role file first line, the identity, the change message, the reread request and the first message suffix are pinned by the phrase test in [tests](#tests): the host output must equal the texts in `docs/spec/cases/agent-roles/fingerprint.json`, with the placeholders filled in. The texts are English and use short imperative sentences that each name one action.
 
 ## Agents that cannot read files
 
@@ -290,16 +290,19 @@ A CLI that the person starts by hand in a tab, as a second agent in the same she
 - The terminal launch path: a recording program that the launch starts as the agent command. It records the arguments and the first input and does nothing else; the launch starts it as a real process.
 - The role file write: real files. A fault point in the host writer fails the write at step 1, step 2 and step 3, and each case states the stored record and the file afterwards.
 - Mode: the temporary file is created with mode 0600 and the directory with 0700; a changed mode before the rename makes the write refuse without renaming.
-- Phrase test: the host output for the role file first line, the identity, the change message and the reread request equals the texts pinned in `docs/spec/cases/agent-roles/fingerprint.json`, for the Go host and the Rust host. The test is Red on any text that differs, and each text names the exact command and the file path.
-- Layout and fingerprint: the layout has the first line, the definition and the last line; the Go host and the Rust host compute the fingerprint of each case in `docs/spec/cases/agent-roles/fingerprint.json`, and the values are equal. The cases include non-ASCII text and line breaks.
+- Phrase test: the host output for the role file first line, the identity, the change message, the reread request and the first message suffix equals the texts pinned in `docs/spec/cases/agent-roles/fingerprint.json`, for the Go host and the Rust host. The test is Red on any text that differs, and each text names the exact command and the file path.
+- Layout and fingerprint: the layout has the first line, the definition and the last line; a definition without a final line feed gets one in the layout and its fingerprint is computed over the stored text. The Go host and the Rust host compute the fingerprint of each case in `docs/spec/cases/agent-roles/fingerprint.json`, and the values are equal. The cases include non-ASCII text and line breaks.
 - Length: a long definition (5,000 characters) is written whole, and its fingerprint covers all of it.
-- Path: a configuration directory path with a quote or a control character makes the launch refuse.
+- Path: a configuration directory path with a quote or a control character makes the launch refuse; a surface identifier with a path separator, a `..` segment or a control character makes the launch refuse.
+- Launch failure: a failed identity or role file write at a launch starts no program.
+- Leftover files: a launch deletes the `.role-*.tmp` files of its surface folder before it writes.
+- Removal: a removed tab stops its program, refuses a later change, and discards its held messages with one `skipped` record each.
 - Resume: the stored path equal to the current one and the file present start the program; a different path or a missing file fails the resume with the error that names the path.
 - Confirmation: both ways, `sok role confirm` and the answer line, give `ready` for the current fingerprint and the stale error for an older one; each way is tested only where its adapter declares it.
 - Requests: the first and second request, the `unconfirmed` state, and the error-display record for each.
 - Format: the `projects.json` reader refuses format 2 with the stored data error, and the writer writes format 3.
 - Repetition and concurrency: the tests of [idempotency](#tests-of-the-repetitions) and [concurrency](#tests-of-the-concurrency).
-- `roles.json`: format number, identifier rule, text limit and unknown role refusal, each with its error text.
+- `roles.json`: format number, identifier rule and unknown role refusal, each with its error text.
 
 ### Acceptance
 
@@ -321,9 +324,3 @@ A missing `claude` or `codex` command fails the target with the error that names
 ## Verification boundaries
 
 The adapter table is verified for each CLI when the acceptance target runs for it, and again for each new version of the CLI that changes its launch options. Until the target exists and its run is recorded in [features](../features.md), the claims that depend on it are unverified.
-
-## Review
-
-The decision was reviewed by adversarial reviewers, who argued against drafts with evidence and gave an answer to each objection. The rounds are summarized in the history of the checklist item. Round 4 has not run on this revision, and the revision is therefore not reviewed.
-
-Open objections, not resolved by this document: the leader-to-role question is for the person; the projects.json change and the implementation belong to the implementing items; and the Go and Rust hosts must pass the shared vectors.

@@ -2,12 +2,12 @@
 
 [English](agent-roles.md)
 
-이 문서는 terminal tab의 terminal agent가 role을 받는 방법과, soksak이 agent가 role을 가졌다고 확인하는 방법을 정의한다. 구현과 검증은 [features](../features.ko.md)에서 추적한다. 메시지는 [messaging](messaging.md#injected-message)의 주입 경로로 agent에게 닿는다.
+이 문서는 terminal agent의 tab이 role을 받는 방법과, soksak이 agent가 role을 가졌다고 확인하는 방법을 정의한다. 구현과 검증은 [features](../features.ko.md)에서 추적한다. 메시지는 [messaging](messaging.ko.md#injected-message)의 주입 경로로 agent에게 닿는다.
 
 ## 결정
 
 - agent CLI를 시작하는 tab은 launch adapter를 통해 stable identity를 CLI에 준다. identity에는 tab의 role 파일 절대 경로가 적힌다. agent가 파일을 읽을 수 있으면 role 문장은 terminal에 붙여 넣지 않고 agent가 파일에서 읽는다.
-- role 파일은 surface 하나에 속하며 application의 configuration directory에 있다. person의 repository에는 두지 않는다. role 파일의 마지막 줄은 role의 지문(fingerprint)이다. 정의를 짧게 유지한다. agent는 변경 때마다 파일 전체를 읽으므로 짧은 정의를 권장하지만, soksak은 길이로 정의를 거부하지 않는다.
+- surface는 tab 하나의 surface이므로, surface의 role 파일은 tab 하나에 속한다. role 파일은 application의 configuration directory에 있으며 person의 repository에는 두지 않는다. 정의를 짧게 유지한다. agent는 변경 때마다 파일 전체를 읽으므로 짧은 정의를 권장하지만, soksak은 길이로 정의를 거부하지 않는다. role 파일의 마지막 줄은 role의 지문(fingerprint)이다.
 - 지문은 결정적이다. 같은 role 이름과 같은 정의는 언제나 같은 지문을 낸다. agent는 파일 마지막 줄에서 지문을 읽고, 계산하지 않는다.
 - agent는 두 방식 중 하나로 확인한다. 명령 `sok role confirm <fingerprint>`, 또는 답변 안의 줄 `soksak role <fingerprint>`다. soksak이 현재 지문을 받았을 때만 role은 `ready`다.
 - 확인하지 않는 agent는 재읽기 요청을 두 번 받는다. 각 요청은 event로 센다. 그 뒤 상태 `unconfirmed`가 오류 표시로 나타나고 person을 기다린다. 어떤 단계도 timer로 정하지 않는다.
@@ -34,9 +34,9 @@ Claude Code 2.1.329와 Codex 0.171.0을 대화형 TUI로 측정했다. 측정은
 | 10 | `claude --model haiku --append-system-prompt-file <identity file>`. identity 파일에는 경로와 변경 뒤 다시 읽으라는 규칙만 있음 | agent는 role 파일을 읽었고, 파일이 바뀌고 변경 message가 간 뒤 다시 읽어 새 role을 따랐다. |
 | 11 | 열린 Bash permission prompt가 있는 Claude Code 2.1.329(`--permission-mode default`)에, prompt 중에 변경 message를 보냄 | `<plugin>.program`이 `{state: blocked, kind: permission}`을 보였고, `<plugin>.messages`는 `{reason: blocked, kind: permission}`와 `pending` 1로 message를 보류했으며 아무것도 붙여 넣지 않았다. 사람이 Esc로 prompt를 닫자 message가 주입되었고 Claude Code가 그에 따라 행동했다. |
 
-3행과 7행은 agent가 새 role을 지정하는 변경 message를 따른다는 것만 보여준다. 파일을 읽는다는 사실은 보여주지 않는다. 각 행은 한 번의 실행이다. 두 CLI 모두 측정하지 않은 것: context compaction, resume 뒤의 변경 message, agent가 바쁠 때의 변경 message, subagent나 같은 tab의 두 번째 session, 이 계약의 확인 명령과 재읽기 요청, 자동 memory나 Codex memories가 session 사이에 공유되는지 여부. persistent memory를 쓰지 말라는 규칙은 지시일 뿐이다. 측정된 launch 옵션으로 두 CLI의 memory를 끄는 방법은 없다.
+3행과 7행은 agent가 새 role을 지정하는 변경 message를 따른다는 것만 보여준다. 파일을 읽는다는 사실은 보여주지 않는다. 각 행은 한 번의 실행이다. persistent memory를 쓰지 말라는 규칙은 지시일 뿐이다. 측정된 launch 옵션 중 두 CLI의 memory를 끄는 옵션은 없다.
 
-Claude Code는 permission prompt를 [terminal state](terminal-state.md)의 프로그램 상태로 `blocked`라고 보고한다(11행). 그래서 [messaging](messaging.md#hold-for-the-person)의 `blocked` 보류가 prompt가 열린 동안 변경 message와 재읽기 요청을 보류한다.
+Claude Code는 permission prompt를 [terminal state](terminal-state.md)의 프로그램 상태로 `blocked`라고 보고한다(11행). 그래서 [messaging](messaging.ko.md#hold-for-the-person)의 `blocked` 보류가 prompt가 열린 동안 변경 message와 재읽기 요청을 보류한다.
 
 ## 실행 adapter
 
@@ -46,53 +46,51 @@ Claude Code는 permission prompt를 [terminal state](terminal-state.md)의 프�
 | --- | --- | --- | --- |
 | Claude Code | `claude --append-system-prompt-file <identity file>` | system prompt에 덧붙인다. identity만 주는 실행이 적용되고 agent는 role 파일을 읽는다(10행). | 사용 중 |
 | Codex | `codex --no-daemon -c developer_instructions="<identity>"` | 전역 `AGENTS.md` 옆에 developer instructions를 덧붙인다. agent는 변경 message 뒤에 role 파일을 읽는다(4행과 8행). | 사용 중 |
-| Kimi | `--agent-file` | 측정하지 않음. | 후보, 미사용 |
-| Copilot | `--agent <name>` | 측정하지 않음. | 후보, 미사용 |
-| OpenClaw | `tui --local agent:<name>` | 측정하지 않음. | 후보, 미사용 |
-| Qwen | `--append-system-prompt` | 측정하지 않음. | 후보, 미사용 |
-| Goose | `session --system` | 측정하지 않음. flag가 기본 지시를 대체할 수 있다. | 후보, 미사용 |
 
-후보는 TUI에서 실행 동작을 검증한 뒤에 추가한다. 지시가 새 session에 적용되고, 기본 지시에 덧붙고, 변경 message가 agent에게 role 파일을 다시 읽게 해야 한다. 기본 지시를 대체하는 후보는 추가하지 않는다.
+CLI는 TUI에서 실행 동작을 측정한 뒤에 이 표에 추가한다. 지시가 새 session에 적용되고, 기본 지시에 덧붙고, 변경 message가 agent에게 role 파일을 다시 읽게 해야 한다. 기본 지시를 대체하는 flag는 쓰지 않는다.
 
 Resume: `claude --resume <id>`와 `codex resume --no-daemon <id>`는 session 시작의 지시를 유지하며 resume 명령의 adapter flag는 무시한다(2행과 6행). launch adapter는 새 실행에서만 쓴다.
 
 각 adapter와 각 CLI는 두 확인 방식 중 어느 것이 적용되는지 선언한다([확인](#확인)). 파일을 읽을 수 없는 agent는 role 문장을 첫 message로 받고, 답변 줄로 확인한다.
 
-agent CLI는 CLI가 이미 신뢰하는 폴더에서만 시작한다. 폴더 신뢰나 업데이트를 묻는 CLI는, 주입이 자기 프롬프트에 Enter를 보낸다. 이는 [보류 근거](messaging.md#evidence-of-the-hold)에 측정되어 있다.
+agent CLI는 CLI가 이미 신뢰하는 폴더에서만 시작한다. 폴더 신뢰나 업데이트를 묻는 CLI는, 주입이 자기 프롬프트에 Enter를 보낸다. 이는 [보류 근거](messaging.ko.md#evidence-of-the-hold)에 측정되어 있다.
 
 ## 안정 identity
 
 안정 identity는 tab의 launch가 전달하는 텍스트다. 영어로 쓰며 다음 형식이다. `<role file>`은 tab의 role 파일 절대 경로다.
 
-> [soksak role] Your role is defined in the file <role file>. Read the whole file before your first answer. Read the file again when a message starts with [soksak role] and says that the role changed. Do not save your role in any persistent memory. The role file is the only record of your role.
+> [soksak role] Your role is defined in the file <role file>.
+> Read the whole file before your first answer.
+> Read the file again when a message starts with [soksak role] and says that the role changed.
+> Do not save your role in any persistent memory. The role file is the only record of your role.
 
 - identity는 message 접두어를 적으므로 agent는 그 접두어가 붙은 변경 message를 role의 권한으로 알아본다.
 - identity는 role 파일 경로를 적으므로 agent는 role을 파일에서 읽는다.
 - 경로는 절대 경로이며 application의 configuration directory에서 온다. 따옴표나 제어 문자가 있는 경로는 launch를 명시적 오류로 거부한다.
-- launch adapter가 없는 CLI에서는 같은 텍스트를 첫 message로 보낸다.
+- identity는 launch와 adapter가 없는 CLI의 첫 message에서 같은 텍스트다.
 
 ## role 파일
 
-- 경로: `<config-dir>/agents/<surface>/role.md`. `<config-dir>`은 application의 configuration directory([설치 layout](installation.md#installation-layout))이고 `<surface>`는 tab의 surface다.
+- 경로: `<config-dir>/agents/<surface>/role.md`. `<config-dir>`은 application의 configuration directory([설치 layout](installation.md#installation-layout))이고 `<surface>`는 tab의 surface다. 경로 구분자, `..` 구간 또는 제어 문자를 담은 surface 식별자는 launch를 명시적 오류로 거부한다.
 - 구조, 순서대로:
   1. 첫 줄: ``Read this whole file. Follow the role it defines. Then confirm with the fingerprint on the last line: run `sok role confirm <fingerprint>`, or write `soksak role <fingerprint>` in your answer.``
   2. 정의 텍스트. `roles.json`에 저장된 그대로다.
   3. 마지막 줄: 지문.
-  각 줄은 line feed 하나로 끝난다. role이 없는 tab의 파일은 첫 줄과 빈 마지막 줄만 가진다. 이때 지문은 빈 문자열이며 soksak은 이를 `null`로 본다.
+  각 줄은 line feed 하나로 끝난다. 저장된 텍스트에 마지막 line feed가 없는 정의는 파일에 line feed 하나가 붙는다. 지문은 저장된 텍스트 그대로 계산한다. role이 없는 tab은 role 파일도 identity도 없다([tab의 역할 상태](#tab의-역할-상태)).
 - 지문: role 식별자, line feed 하나(U+000A), 저장된 정의 텍스트를 이어 붙인 UTF-8 바이트의 SHA-256 digest에서 앞 16자리 소문자 16진수. 식별자에는 줄바꿈이 없으므로 구분자가 모호하지 않다. 지문은 식별자와 텍스트에만 의존한다. 같은 정의는 언제나 같은 지문을 낸다.
 - 길이: soksak은 정의를 길이와 상관없이 그대로 쓴다. 짧은 정의를 권장하며 그 이유는 위에 적었다.
 - 파일은 configuration directory에 속하며 person의 repository에는 속하지 않는다.
 - 모드: 디렉터리 `<config-dir>/agents/<surface>/`는 모드 0700으로 만든다. `role.md`와 identity 파일은 모드 0600으로 쓴다. 임시 파일의 모드는 이름을 바꾸기 전에 확인한다. 모드가 다르면 최종 이름으로는 보이지 않으며, 쓰기는 명시적 오류로 실패하고 임시 파일을 지운다.
-- 원자적 쓰기: host는 같은 폴더의 임시 파일에 새 내용을 쓰고 `role.md` 위로 이름을 바꾼다. 읽는 쪽은 이전 파일 전체 또는 새 파일 전체만 본다.
-- 쓰는 주체: host가 파일을 쓴다. terminal page는 파일을 만들지 않는다. 실패한 쓰기는 경로와 이유를 적은 오류다.
-- 수명: host는 launch 전에 디렉터리를 만든다. tab이 layout에서 제거되면 host는 tab의 프로그램을 멈추고, 진행 중인 쓰기가 끝나기를 기다리고, 그 tab의 이후 role 변경을 명시적 오류로 거부하며, 디렉터리를 지운다. 제거된 tab은 resume할 수 없다.
+- 원자적 쓰기: host는 같은 폴더에 `.role-<random>.tmp` 이름의 임시 파일에 새 내용을 쓰고 `role.md` 위로 이름을 바꾼다. 읽는 쪽은 이전 파일 전체 또는 새 파일 전체만 본다. launch는 첫 쓰기 전에 surface 폴더에서 `.role-*.tmp`와 맞는 파일을 지운다. 이전 충돌이 남긴 파일이다.
+- 쓰는 주체: host가 파일을 쓴다. terminal page는 파일을 만들지 않는다. 실패한 쓰기는 경로와 이유를 적은 오류다. launch의 role 파일이나 identity 파일 쓰기가 실패하면 launch를 거부하며 어떤 program도 시작하지 않는다.
+- 수명: host는 launch 전에 디렉터리를 만든다. tab이 layout에서 제거되면 host는 tab의 프로그램을 멈추고, 진행 중인 쓰기가 끝나기를 기다리고, 그 tab의 이후 role 변경을 명시적 오류로 거부하며, 디렉터리를 지운다. 제거 뒤의 이름 바꾸기가 실패하면 임시 파일을 지우고 기록한다. 제거된 tab의 보류 message는 버린다. 각 message마다 state `skipped`와 reason `tab removed`의 delivery record를 쓴다. 제거된 tab은 resume할 수 없다.
 - launch 기록: 각 launch는 identity 경로를 tab의 session 기록에 저장한다. resume은 저장된 경로가 현재 경로와 같고 파일이 있는지 확인한다. configuration directory가 옮겨졌거나 파일이 없으면 resume은 경로를 적은 명시적 오류로 실패한다.
 
 Claude Code adapter의 identity 파일은 `<config-dir>/agents/<surface>/identity.txt`이며, launch 때 role 파일 옆에 같은 쓰기 규칙으로 쓴다. Codex adapter는 identity 텍스트를 TOML 문자열로 인용해 인라인으로 넘긴다.
 
 ## 지문 참조 사례
 
-알고리즘은 공유 사례 파일 `docs/spec/cases/agent-roles/fingerprint.json`으로 검사한다. 각 사례는 식별자, 정의 텍스트, 기대 지문을 준다. 같은 파일은 고정 문구(`texts`)도 담는다. Go host와 Rust host는 모든 사례를 실행해 계산한 지문을 비교하고, 고정 문구는 placeholder를 채운 뒤 출력과 비교한다. 사례에는 non-ASCII 텍스트와 줄바꿈이 있어 UTF-8 인코딩과 구분자를 모두 검사한다. 두 host의 값은 같다.
+알고리즘은 공유 사례 파일 `docs/spec/cases/agent-roles/fingerprint.json`으로 검사한다. 각 사례는 식별자, 정의 텍스트, 기대 지문을 준다. 같은 파일은 role 파일 첫 줄, identity, 변경 message, 재읽기 요청, 첫 message의 접미 줄의 고정 문구(`texts`)도 담는다. 고정 문구 테스트는 placeholder를 채운 뒤 host 출력과 비교한다. Go host와 Rust host는 모든 사례를 실행해 계산한 지문을 비교한다. 사례에는 non-ASCII 텍스트와 줄바꿈이 있어 UTF-8 인코딩과 구분자를 모두 검사한다. 두 host의 값은 같다.
 
 ## 역할 정의
 
@@ -120,7 +118,9 @@ agent CLI의 각 tab은 agent role을 하나 가지거나 없다. tab의 저장�
 
 이 기록을 더하면 `projects.json`의 형식이 바뀌므로, [저장 데이터 형식](installation.md#stored-data-formats)에 따라 형식 번호를 2에서 3으로 올린다. migration은 쓰지 않는다. reader는 형식 2를 거부한다.
 
-role 변경은 registry를 거치는 명령 `core.tab.role {tab, role}`이다. tab이 이미 가진 role과 같은 정의를 설정하면 파일을 쓰지 않고, generation을 바꾸지 않고, message를 보내지 않는다. 답은 현재 `{role, generation, state}`다.
+role 변경은 registry를 거치는 명령 `core.tab.role {tab, role}`이다. tab이 이미 가진 role과 같은 정의를 설정하면 파일을 쓰지 않고, generation을 바꾸지 않고, message를 보내지 않으며, 답은 현재 `{role, generation, state}`다. 예외는 상태 `unconfirmed`다. 이때 같은 할당은 상태를 `pending`으로 바꾸고 `requests`를 0으로 하며, 재읽기 요청을 하나 보낸다([재읽기 요청](#재읽기-요청)).
+
+실행 중인 tab은 role을 잃을 수 없다. role이 있는 tab에 `role`을 `null`로 하는 `core.tab.role`은 `a running tab keeps its role; close the tab to remove it` 오류로 거부한다. role 없이 launch한 tab은 role 파일도 identity도 없다.
 
 변경은 다음 순서로 실행하며, 각 단계는 앞 단계가 성공해야 시작한다.
 
@@ -147,15 +147,16 @@ plane의 leader는 이 계약에서 role을 바꾸지 않는다. [groups](groups
 
 변경은 generation과 지문이 새것이므로 상태를 `pending`으로 되돌린다.
 
-agent는 두 방식 중 하나로 확인하며, 어느 쪽이든 인정된다.
+agent는 두 방식 중 하나로 확인하며, 어느 쪽이든 인정된다. 명령 방식은 선언된 명령 `core.tab.role.confirm {fingerprint}`를 실행하며, [cli](cli.md#commands)가 이를 `sok role confirm`으로 노출한다.
 
-- (a) 명령 `sok role confirm <fingerprint>`. shell이 있는 agent가 쓴다. 이 명령은 선언된 명령 `core.tab.role.confirm {fingerprint}`을 실행하며, [cli](cli.md#commands)가 이를 `sok role confirm`으로 노출한다. `sok`은 요청을 agent의 프로세스 체인이 가리키는 surface로 application에 보낸다([surface의 프로세스](sidecars.md#processes-of-a-surface)). 그래서 tab 밖의 프로세스는 그 tab 대신 확인할 수 없다.
-- (b) agent 답변 안의 줄 `soksak role <fingerprint>`. terminal plugin이 session 출력에서 이 줄을 찾아, 같은 surface 직렬화를 거쳐 확인한다. 지문은 파일 마지막 줄에만 있고, 파일에는 붙여 넣을 수 있는 합쳐진 형태나 에코된 형태가 없으므로, 줄이 있으면 agent가 파일에서 지문을 읽었다는 뜻이다.
+- (a) 명령 `sok role confirm <fingerprint>`. shell이 있는 agent가 쓴다. `sok`은 요청을 `agent.surface`가 프로세스에 대해 답하는 surface와 함께 application에 보낸다([surface의 프로세스](sidecars.md#processes-of-a-surface)). 그래서 tab 밖의 프로세스는 그 tab 대신 확인할 수 없다.
+- (b) agent 답변 안의 줄 `soksak role <fingerprint>`. terminal plugin은 session의 program 출력에서 이 줄을 찾는다. 출력에는 도구 출력도 들어가므로, 도구 출력에서 복사한 줄도 인정된다. 형식은 소문자 16진수 16자리의 정확한 줄이며, 파일의 지문만 있는 줄은 맞지 않는다. 찾은 줄은 같은 surface별 직렬화를 거쳐 확인한다. 줄은 현재 파일의 지문을 agent가 가졌음을 보이며, 파일을 읽었음은 보이지 않는다.
 
 각 adapter와 각 CLI는 두 방식 중 무엇이 적용되는지 선언한다([실행 adapter](#실행-adapter)). 적용되지 않는 방식은 그 agent에게 제시하지 않는다.
 
 soksak은 확인을 surface의 직렬화 안에서, 차례가 왔을 때의 상태에 맞춰 판정한다.
 
+- 16자리 소문자 16진수가 아닌 값은 직렬화 전에 invalid-argument 오류로 거부한다. 아래 오래된 확인 규칙은 유효한 값에만 적용된다;
 - 지문이 현재 지문과 같고 상태가 `pending` 또는 `unconfirmed`이면: `confirmedFingerprint`를 저장하고, 상태를 `ready`로 바꾸고, `seq`를 올리고, 요청 계수를 0으로 되돌리고, 보류된 작업 message를 풀어준다;
 - 지문이 현재 지문과 같고 상태가 `ready`이면: 아무것도 바꾸지 않으며 답은 성공이다;
 - 지문이 현재 지문과 다르면, 즉 이전 파일의 지문이면: 재시도 없이 오래된 확인으로 거부한다. 오류는 현재 role 파일의 경로를 적고 다시 읽으라고 말한다. 지문은 적지 않는다. 상태는 그대로 둔다;
@@ -163,12 +164,13 @@ soksak은 확인을 surface의 직렬화 안에서, 차례가 왔을 때의 상�
 
 ### 재읽기 요청
 
-page는 tab의 프로그램 상태([terminal state](terminal-state.md))를 지켜본다. 재읽기 요청은 role 파일 경로를 적고, agent에게 파일을 읽고 마지막 줄로 확인하라고 요청하는 message다. 요청은 상태가 `pending`이고 다음 중 하나일 때 보낸다.
+page는 tab의 프로그램 상태([terminal state](terminal-state.ko.md))를 지켜본다. 재읽기 요청은 role 파일 경로를 적고, agent에게 파일을 읽고 마지막 줄로 확인하라고 요청하는 message다. 변경 message와 첫 message는 요청으로 세지 않는다. 상태가 `pending`인 동안 page는 프로그램이 바쁘지 않다고 보고할 때마다 셈한다.
 
-- 변경 message나 첫 message를 주입했고, 프로그램이 바쁘지 않다고 보고했다: 첫 요청이며 계수는 1이다;
-- 첫 요청 뒤에 프로그램이 다시 바쁘지 않다고 보고했고 상태가 여전히 `pending`이다: 두 번째 요청이며 계수는 2다.
+- 변경 message나 첫 message 뒤의 첫 보고는 요청 1을 보내고 계수를 1로 한다;
+- 다음 보고는 요청 2를 보내고 계수를 2로 한다;
+- 그다음 보고는 계수가 2일 때 상태를 `unconfirmed`로 바꾸고 아무것도 보내지 않는다.
 
-두 번째 요청 뒤에 프로그램이 다시 바쁘지 않다고 보고했고 상태가 여전히 `pending`이면, 상태를 `unconfirmed`로 옮긴다. host는 `unconfirmed`를 오류 표시 경로로 보고하고 application log에 쓰며, 더 이상 요청을 보내지 않는다. 상태는 person을 기다린다. person이 role을 다시 할당하면 변경 message를 한 번 다시 보내고 요청 계수를 0으로 되돌린다. 파일은 쓰지 않으며 generation도 바꾸지 않는다([멱등성](#멱등성)).
+host는 `unconfirmed`를 오류 표시 경로로 보고하고 application log에 쓴다. 상태는 person을 기다린다. person이 role을 다시 할당하면 상태는 계수 0의 `pending`이 되고 재읽기 요청을 하나 보낸다. 이때 파일은 쓰지 않고 generation도 바꾸지 않는다([멱등성](#멱등성)).
 
 각 요청은 같은 경로와 같은 지문을 적으므로 결과를 바꾸지 않고 반복된다. 이 단계들은 timer로 정하지 않는다. 계수는 저장된 기록의 일부이므로 재시작해도 0으로 돌아가지 않는다.
 
@@ -176,7 +178,7 @@ page는 tab의 프로그램 상태([terminal state](terminal-state.md))를 지�
 
 ## 보류 message
 
-상태가 `ready`가 아니면 page는 tab의 작업 message, 즉 등록의 agent message를 보류한다. 보류된 message는 순서를 지키며, 상태가 `ready`가 되면 한 번에 하나씩 주입한다. 각 message는 한 번만 전달된다. 전달 기록은 파일 이름으로 message를 구분한다. session의 첫 message와 재읽기 요청은 보류하지 않는다. 보류 근거 `role-pending`은 [messaging](messaging.md#hold-for-the-person)의 보류 목록에 적어야 하며, 그 변경은 구현 항목에 속한다.
+상태가 `ready`가 아니면 page는 tab의 작업 message, 즉 등록의 agent message를 보류한다. 보류된 message는 순서를 지키며, 상태가 `ready`가 되면 한 번에 하나씩 주입한다. 각 message는 한 번만 전달된다. 전달 기록은 파일 이름으로 message를 구분한다. session의 첫 message와 재읽기 요청은 보류하지 않는다. 보류 근거 `role-pending`은 [messaging](messaging.ko.md#hold-for-the-person)의 보류 목록에 있다.
 
 보류된 message가 있는 동안 변경이 일어나면 message는 대기열에 남고, 새 generation의 `ready` 뒤에 전달한다.
 
@@ -184,30 +186,31 @@ page는 tab의 프로그램 상태([terminal state](terminal-state.md))를 지�
 
 역할 handshake의 모든 단계는 결과를 바꾸지 않고 반복된다.
 
-- 같은 role과 정의로 `core.tab.role`을 반복하면 파일을 쓰지 않고, generation을 바꾸지 않고, message를 보내지 않는다;
+- 같은 role과 정의로 `core.tab.role`을 반복하면 파일을 쓰지 않고, generation을 바꾸지 않고, message를 보내지 않는다. 상태 `unconfirmed`에서는 [재읽기 요청](#재읽기-요청)의 재읽기 요청 하나를 시작한다. 상태 `pending`에서 그 호출을 반복하면 아무것도 바꾸지 않는다;
 - 새 generation은 role이나 정의가 바뀔 때만 만든다;
 - 현재 지문으로 `sok role confirm` 또는 답변 줄을 반복하면 `ready`를 답하며 아무것도 바꾸지 않는다. `seq`도 바꾸지 않는다;
 - 다시 보내는 재읽기 요청은 같은 경로와 같은 지문을 적으므로, 파일을 다시 읽고 다시 확인하면 같은 `ready`가 된다;
 - 작업 message는 `ready`가 두 번 도달해도 정확히 한 번 전달된다;
-- application이나 agent를 재시작하면 상태는 저장된 기록과 파일에서 다시 만든다. `confirmedFingerprint`가 파일의 지문과 같으면 `ready`, 아니면 저장된 요청 계수를 가진 `pending`이다. 파일의 지문이 기록과 다르면 먼저 기록에서 파일을 다시 쓴다;
+- program이 계속 실행되는 동안 application을 재시작하면 상태는 저장된 기록과 파일에서 다시 만든다. `confirmedFingerprint`가 파일의 지문과 같으면 `ready`다. 아니면 저장된 계수가 0 또는 1이면 그 계수를 가진 `pending`, 2이면 `unconfirmed`다. 파일의 지문이 기록과 다르면 먼저 기록에서 파일을 다시 쓴다;
 - resume은 같은 지문을 가진 `pending`을 준다. resume은 launch 텍스트를 유지하지만 agent가 파일을 읽었다는 증거는 유지하지 않기 때문이다. host는 resume에서 `confirmedFingerprint`와 요청 계수를 지우고, resume된 tab은 재읽기 요청을 한 번 보낸다.
 
 role A를 B로 바꾸고 다시 A로 바꾸면 A의 지문이 다시 나온다. 내용이 같으므로 그 지문의 확인은 올바르다.
 
 ### 반복 테스트
 
-- 같은 role과 정의를 다시 할당: role 파일을 쓰지 않는다(inode와 내용이 그대로), 새 generation이 없고, 변경 message가 없으며, 답은 현재 `{role, generation, state}`와 같다.
+- 같은 role과 정의를 상태 `pending` 또는 `ready`에서 다시 할당: role 파일을 쓰지 않는다(inode와 내용이 그대로), 새 generation이 없고, 변경 message가 없으며, 답은 현재 `{role, generation, state}`와 같다.
+- 상태 `unconfirmed`에서 같은 할당: 상태는 계수 0의 `pending`이 되고, 재읽기 요청 하나를 보내며, 파일 쓰기와 generation 변경은 없다. `pending`에서 같은 할당을 반복하면 아무것도 쓰지 않는다.
 - 같은 role의 정의를 바꿈: 새 generation과 변경 message 하나.
 - A에서 B로, 다시 A로 바꿈: A의 지문이 돌아오고, 그 지문의 확인은 `ready`가 된다.
 - 현재 지문의 확인을 반복: 두 번 모두 `ready`이며, 두 번째 뒤에 `seq`는 바뀌지 않는다.
 - 변경 뒤 이전 지문의 확인: 오래된 확인으로 거부된다. 오류는 파일을 적고 지문은 적지 않는다.
+- 16자리 소문자 16진수가 아닌 확인 값: invalid input으로 거부하며, 오래된 확인 오류를 보내지 않는다.
 - 확인 없이 재읽기 요청 두 번: `unconfirmed`, 오류 표시 기록 하나와 log 기록 하나, 세 번째 요청은 없다.
-- `unconfirmed` 상태에서 같은 role을 다시 할당: 변경 message 하나, 파일 쓰기 없음, generation 변경 없음, 계수 0으로 되돌림.
-- `ready`가 두 번 도달한 작업 message: 파일 이름으로 구분해 한 번만 주입한다.
-- 확인이 저장된 상태에서 재시작: 입력 없이 `ready`. 계수 1이 저장되어 있으면 요청 하나가 셈해진 `pending`.
+- 작업 message에서 `ready`가 두 번 도달: 파일 이름으로 구분해 한 번만 주입한다.
+- 확인이 저장된 상태에서 재시작: 입력 없이 `ready`. 계수 1이 저장되어 있으면 그 계수의 `pending`. 계수 2가 저장되어 있으면 입력 없이 `unconfirmed`.
 - resume: `pending`, 같은 지문, 확인과 계수는 지워짐, 재읽기 요청 하나.
 
-이 테스트는 실제 파일과 실제 `sok` 명령을 쓰는 host와 page의 단위 테스트다. agent CLI는 실행하지 않는다.
+이 테스트는 실제 파일과 실제 `sok` 명령을 쓰는 단위 테스트다. agent CLI는 실행하지 않는다. host 테스트는 Go host 패키지와 Rust host 패키지에서 실행한다. page 테스트는 page를 소유하는 terminal plugin 저장소에서 실행한다.
 
 ## 동시성
 
@@ -230,7 +233,7 @@ role A를 B로 바꾸고 다시 A로 바꾸면 A의 지문이 다시 나온다. 
 
 ## 고정 문구 테스트
 
-role 파일 첫 줄, identity, 변경 message, 재읽기 요청의 host 출력은 `docs/spec/cases/agent-roles/fingerprint.json`의 `texts`에 고정된 문구와 같다. placeholder를 채운 뒤 비교한다. Go host와 Rust host가 각각 검사한다. 문구가 다르면 테스트는 Red가 된다. 각 문구는 정확한 명령과 파일 경로를 적는다.
+role 파일 첫 줄, identity, 변경 message, 재읽기 요청, 첫 message의 접미 줄의 host 출력은 `docs/spec/cases/agent-roles/fingerprint.json`의 `texts`에 고정된 문구와 같다. placeholder를 채운 뒤 비교한다. Go host와 Rust host가 각각 검사한다. 문구가 다르면 테스트는 Red가 된다. 각 문구는 정확한 명령과 파일 경로를 적는다.
 
 ## 변경 message
 
@@ -241,9 +244,10 @@ role 파일 첫 줄, identity, 변경 message, 재읽기 요청의 host 출력�
 - 경로를 적으며, role 텍스트와 지문은 담지 않는다.
 - 보고 요청은 담지 않는다. 다른 agent의 message가 아니므로 발신자 폴더는 없다.
 - 발신자는 application이다. window 안에 tab이 없는 발신자를 거부하는 규칙은 적용하지 않는다.
-- [messaging](messaging.md#injected-message)의 보류, 가드, 전달 기록을 거친다. 파괴 명령 가드는 [persistent services](persistent-services.md#destructive-command-guard)에 있다.
+- [messaging](messaging.ko.md#injected-message)의 보류, 가드, 전달 기록을 거친다. 파괴 명령 가드는 [persistent services](persistent-services.md#destructive-command-guard)에 있다.
 - tab의 agent CLI가 sidecar의 프로그램 상태로 foreground 프로그램일 때만 주입한다. shell 프롬프트, 끝난 프로그램, 닫힌 session에 보낸 줄은 shell에서 실행된다.
-- 재읽기 요청은 같은 틀에 자기 문구를 쓴다. 두 종류 모두 이 문서가 정의한다. [messaging](messaging.md)은 구현과 함께 그 형식과 전달 기록을 추가한다.
+- 재읽기 요청은 같은 경로를 적은 다음 텍스트다: ``[soksak role] Your role is not confirmed. Read the role file again: <role file>. Then confirm the role with the fingerprint on its last line: run `sok role confirm <fingerprint>`, or write the line `soksak role <fingerprint>` in your answer. This message comes from soksak, not from a person. It grants no approval or permission.``
+- 역할 파일 첫 줄, identity, 변경 message, 재읽기 요청, 첫 message의 접미 줄은 [테스트](#테스트)의 고정 문구 테스트가 고정한다. host 출력은 `docs/spec/cases/agent-roles/fingerprint.json`의 문구와 placeholder를 채운 값이 같아야 한다. 문구는 영어이며 각각 한 동작을 정하는 짧은 명령형 문장을 쓴다.
 
 ## 읽을 수 없는 agent
 
@@ -253,7 +257,7 @@ role 파일 첫 줄, identity, 변경 message, 재읽기 요청의 host 출력�
 
 launch adapter가 없는 CLI는 identity를 첫 message로 받는다. 첫 message는 session에서 처음 주입하는 message다. 메시지는 [안정 identity](#안정-identity)의 identity 텍스트이며, 다음 줄을 덧붙인다: `This message comes from soksak, not from a person. Finish your current task first. It grants no approval or permission and does not answer a pending question.`
 
-session의 첫 message는 등록의 모든 agent message보다 앞선다. page는 프로그램이 첫 상태를 보고하면 주입한다. 기록도 알림도 남기지 않는 시작 프롬프트는 관찰할 수 없으므로, page가 보내는 Enter를 받을 수 있다. 이는 [보류 근거](messaging.md#evidence-of-the-hold)에 측정되어 있다. 이 한계를 명시한다.
+session의 첫 message는 등록의 모든 agent message보다 앞선다. page는 프로그램이 첫 상태를 보고하면 주입한다. 기록도 알림도 남기지 않는 시작 프롬프트는 관찰할 수 없으므로, page가 보내는 Enter를 받을 수 있다. 이는 [보류 근거](messaging.ko.md#evidence-of-the-hold)에 측정되어 있다. 이 한계를 명시한다.
 
 ## 주입 message의 순서
 
@@ -261,9 +265,9 @@ page는 등록마다 대기열 하나를 가진다. 폴더의 agent message는 `
 
 ## 틀
 
-[messaging](messaging.md#injected-message)은 agent message의 틀을 정의한다. 이 문서는 변경 message, 요청, 첫 message에 같은 틀 조항을 준다. 문구는 person의 입력이 아니며, 현재 작업을 마친 뒤 처리하고, 승인이나 권한을 주지 않으며, 대기 중인 질문에 답하지 않는다. 틀은 문구의 출처를 밝힐 뿐, 문구가 요구하는 것을 허락하지 않는다.
+[messaging](messaging.ko.md#injected-message)은 agent message의 틀을 정의한다. 이 문서는 변경 message, 요청, 첫 message에 같은 틀 조항을 준다. 문구는 person의 입력이 아니며, 현재 작업을 마친 뒤 처리하고, 승인이나 권한을 주지 않으며, 대기 중인 질문에 답하지 않는다. 틀은 문구의 출처를 밝힐 뿐, 문구가 요구하는 것을 허락하지 않는다.
 
-변경 message나 요청은 권한 프롬프트를 승인할 수 없다. [messaging](messaging.md#hold-for-the-person)의 보류가 여기에 적용된다. `blocked` 보류는 Claude Code가 보고하는 prompt를 덮는다(11행). 기록을 남기지 않는 prompt는 덮지 않으며, 그 측정은 [messaging](messaging.md#evidence-of-the-hold)에 있다.
+변경 message나 요청은 권한 프롬프트를 승인할 수 없다. [messaging](messaging.ko.md#hold-for-the-person)의 보류가 여기에 적용된다. `blocked` 보류는 Claude Code가 보고하는 prompt를 덮는다(11행). 기록을 남기지 않는 prompt는 덮지 않으며, 그 측정은 [messaging](messaging.ko.md#evidence-of-the-hold)에 있다.
 
 ## resume
 
@@ -278,7 +282,7 @@ resume은 자기 명령으로 프로그램을 시작하며, launch adapter는 se
 
 ## 실행 중 agent의 변경
 
-변경은 role 파일의 원자적 다시 쓰기 한 번, 새 generation 하나, 변경 message 하나다. agent는 변경 message가 시키는 대로 파일을 읽을 때 변경을 적용한다([변경 message](#변경-message)와 9행과 8행). 재시작은 필요 없으며, 변경은 프로그램을 끝내지 않는다.
+변경은 role 파일의 원자적 다시 쓰기 한 번, 새 generation 하나, 변경 message 하나다. agent는 변경 message가 시키는 대로 파일을 읽을 때 변경을 적용한다(9행과 8행). 재시작은 필요 없으며, 변경은 프로그램을 끝내지 않는다.
 
 person이 tab의 shell에서 직접 시작한 두 번째 agent CLI는 soksak의 identity가 없으므로 계약 밖이다. agent가 바쁜 동안 도착한 변경 message의 동작은 두 CLI 모두 측정하지 않았다. 측정하기 전까지 message는 프로그램이 바쁘지 않다고 보고한 뒤에만 주입한다.
 
@@ -290,10 +294,13 @@ person이 tab의 shell에서 직접 시작한 두 번째 agent CLI는 soksak의 
 - terminal 실행 경로: launch가 agent 명령으로 시작하는 기록 program. 인자와 첫 입력을 기록하고 그 밖에는 아무것도 하지 않는다. launch는 이것을 실제 프로세스로 시작한다.
 - role 파일 쓰기: 실제 파일을 쓴다. host writer의 fault point가 1, 2, 3단계에서 쓰기를 실패시키고, 각 경우는 뒤의 저장 기록과 파일을 적는다.
 - 모드: 임시 파일은 모드 0600, 디렉터리는 0700으로 만든다. 이름을 바꾸기 전에 모드가 바뀌면 쓰기는 이름을 바꾸지 않고 거부한다.
-- 고정 문구: role 파일 첫 줄, identity, 변경 message, 재읽기 요청의 출력이 `texts`와 같다. [고정 문구 테스트](#고정-문구-테스트)를 본다.
-- 구조와 지문: role 파일의 구조는 첫 줄, 정의, 마지막 줄을 가진다. Go host와 Rust host가 `docs/spec/cases/agent-roles/fingerprint.json`의 각 사례 지문을 계산하고 값이 같다. 사례에는 non-ASCII 텍스트와 줄바꿈이 있다.
+- 고정 문구 테스트: role 파일 첫 줄, identity, 변경 message, 재읽기 요청, 첫 message의 접미 줄의 host 출력이 `texts`와 같다. [고정 문구 테스트](#고정-문구-테스트)를 본다.
+- 구조와 지문: 구조는 첫 줄, 정의, 마지막 줄을 가진다. 마지막 line feed가 없는 정의는 구조에서 line feed를 얻고 지문은 저장된 텍스트로 계산한다. Go host와 Rust host가 `docs/spec/cases/agent-roles/fingerprint.json`의 각 사례 지문을 계산하고 값이 같다. 사례에는 non-ASCII 텍스트와 줄바꿈이 있다.
 - 길이: 긴 정의(5,000자)는 전체가 쓰이고 지문은 전체를 덮는다.
-- 경로: 따옴표나 제어 문자가 있는 configuration directory 경로는 launch를 거부한다.
+- 경로: 따옴표나 제어 문자가 있는 configuration directory 경로는 launch를 거부한다. 경로 구분자, `..` 구간 또는 제어 문자가 있는 surface 식별자도 launch를 거부한다.
+- launch 실패: launch의 identity 또는 role 파일 쓰기가 실패하면 어떤 program도 시작하지 않는다.
+- 남은 파일: launch는 쓰기 전에 surface 폴더의 `.role-*.tmp` 파일을 지운다.
+- 제거: 제거된 tab은 program을 멈추고, 이후 변경을 거부하며, 보류 message를 각각 `skipped` 기록으로 버린다.
 - resume: 저장된 경로가 현재 경로와 같고 파일이 있으면 프로그램을 시작한다. 경로가 다르거나 파일이 없으면 경로를 적은 오류로 resume이 실패한다.
 - 확인: 두 방식, `sok role confirm`과 답변 줄이 현재 지문에 `ready`를 주고, 이전 지문에는 오래된 확인 오류를 준다. 각 방식은 그것을 선언한 adapter에서만 테스트한다.
 - 요청: 첫 요청과 두 번째 요청, `unconfirmed` 상태, 각각의 오류 표시 기록.
@@ -321,9 +328,3 @@ target은 role 상태만 판정한다. CLI마다 다음을 한다.
 ## 검증 경계
 
 실행 adapter 표는 해당 CLI에 대해 인수 target이 실행될 때마다 검증하며, 실행 옵션을 바꾸는 CLI의 새 버전마다 다시 검증한다. target이 생기고 그 실행이 [features](../features.ko.md)에 기록되기 전까지 그에 의존하는 주장은 검증되지 않았다.
-
-## 검토
-
-이 결정은 적대적 검토자들이 초안을 근거로 반박하고, 각 반론에 답하는 방식으로 검토했다. 라운드는 checklist 항목의 이력에 요약한다. 이 개정에 대한 4라운드 검토는 아직 실행하지 않았으므로, 이 개정은 검토되지 않았다.
-
-이 문서가 해결하지 않은 열린 반론: leader와 role의 관계는 person의 질문이다. projects.json 변경과 구현은 구현 항목에 속한다. Go host와 Rust host는 공유 사례를 통과해야 한다.
