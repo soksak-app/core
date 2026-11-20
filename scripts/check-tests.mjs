@@ -14239,7 +14239,7 @@ const FEATURE_LINKS = [
   {
     id: "F943",
     implementation: [
-      { file: "packages/host/go/src/platform/darwin/endpoint.go", symbol: "return owned && process.P_stat != sZomb && !started.After(published), nil" },
+      { file: "packages/host/go/src/platform/darwin/endpoint.go", symbol: "return owned && process.P_stat != sZomb && process.P_flag&pWExit == 0 && !started.After(published), nil" },
       { file: "packages/host/rust/src/platform/darwin/endpoint.rs", symbol: "Ok(owned && info.pbi_status != libc::SZOMB && started <= published)" },
     ],
     tests: [

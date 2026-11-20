@@ -10,13 +10,36 @@ fn a_zombie_service_process_does_not_exist() {
     let pid = child.id();
     child.kill().expect("kill sleep");
     let platform = soksak_host::platform::current().expect("platform");
-    // The exit makes it a zombie: the parent did not wait, so it remains in the table even after it died. The wait for
-    // the exit does not reap it.
-    platform.wait_process_exit(pid).expect("wait for the exit");
+    // The exit event makes it a zombie: the parent did not wait, so it remains in the table after it died. A process
+    // after its exit event is in its exit or a zombie, and either has ended.
+    assert!(
+        platform
+            .wait_service_process_end(pid, &soksak_host::platform::StopSignal::new())
+            .expect("wait for the exit event"),
+        "the killed sleep did not end"
+    );
     let exists = platform
         .service_process_exists(pid, std::time::SystemTime::now())
         .expect("inspect");
-    assert!(!exists, "a zombie service process must not exist");
+    if exists {
+        // The state of the table at the failure: SZOMB is 5 and PROC_FLAG_INEXIT is 4 in <sys/proc_info.h>.
+        let mut info: libc::proc_bsdinfo = unsafe { std::mem::zeroed() };
+        let size = std::mem::size_of::<libc::proc_bsdinfo>() as libc::c_int;
+        // SAFETY: proc_pidinfo writes at most size bytes of the description of pid into info.
+        let written = unsafe {
+            libc::proc_pidinfo(
+                pid as libc::c_int,
+                libc::PROC_PIDTBSDINFO,
+                0,
+                (&raw mut info).cast(),
+                size,
+            )
+        };
+        panic!(
+            "a process that ended must not exist after its exit event: written {written} status {} flags {:#x}",
+            info.pbi_status, info.pbi_flags
+        );
+    }
     child.wait().expect("reap sleep");
 }
 

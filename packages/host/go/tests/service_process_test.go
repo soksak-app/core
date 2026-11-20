@@ -2,11 +2,13 @@ package host_test
 
 import (
 	"errors"
+	"fmt"
 	"os/exec"
 	"testing"
 	"time"
 
 	platform "github.com/soksak-app/core/packages/host/go/src/platform"
+	"golang.org/x/sys/unix"
 )
 
 // contract: sidecars-transport.endpoint.zombie-service-does-not-exist
@@ -34,7 +36,14 @@ func TestAZombieServiceProcessDoesNotExist(t *testing.T) {
 		t.Fatalf("inspect the zombie: %v", err)
 	}
 	if exists {
-		t.Fatal("a zombie service process must not exist")
+		// The state of the table at the failure: SZOMB is 5 and P_WEXIT is 0x2000 in <sys/proc.h>.
+		state := "not listed"
+		if processes, err := unix.SysctlKinfoProcSlice("kern.proc.pid", sleep.Process.Pid); err != nil {
+			state = err.Error()
+		} else if len(processes) > 0 {
+			state = fmt.Sprintf("p_stat %d p_flag %#x", processes[0].Proc.P_stat, processes[0].Proc.P_flag)
+		}
+		t.Fatalf("a process that ended must not exist after its exit event: %s", state)
 	}
 	if err := sleep.Wait(); err == nil {
 		t.Fatal("the killed sleep exited successfully")
