@@ -286,6 +286,37 @@ Every CLI that can read files receives the identity in its first message, which 
 
 The first message of a session precedes every agent message of its registration. The page injects it when the program reports its first state. A startup prompt that writes no record and gives no notice is not observable, so it can take the Enter the page sends, as measured in [evidence of the hold](messaging.md#evidence-of-the-hold). This limit is stated. A first message can also be lost to context compaction; the reread requests and the change messages restore the role then.
 
+## Session restart hook
+
+A session-start hook gives the stable identity of the tab to the CLI at each start, resume, clear and compaction of its session. The identity is then in the context directly after the context is reset. The hook delivers the identity text of [stable identity](#stable-identity) and never the role definition: the definition stays in the role file, which the agent reads.
+
+- Command: `sok role identity`, with no argument. The process of the command asks `agent.surface` for its surface, as `sok role confirm` does ([processes of a surface](sidecars.md#processes-of-a-surface)). The hook process is a child of the CLI process, so its ancestor chain reaches the surface of the tab.
+- With a role: standard output holds one line of JSON, `{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"<identity text>"}}`. The identity text is the text of [stable identity](#stable-identity) with `<role file>` set to `<configuration directory>/agents/<surface>/role.md`. The exit status is 0. Claude Code and Codex read this form from a SessionStart hook; both were measured to put the injected text in the model context ([measured facts](#measured-facts), rows 24 and 25).
+- Without a role, or outside every surface: nothing on standard output, exit status 0. A hook runs in every session of the agent, including sessions outside a soksak tab. Outside a tab no tab environment exists, so the command finds no surface, prints nothing and exits 0 at once, without contacting the application.
+- On an error, such as a refused surface identifier or an application that does not answer: nothing on standard output, `sok: <message>` on standard error, and exit status 1. Claude Code treats an exit status other than 0 or 2 from a hook as a non-blocking error, so the session starts without the identity and the CLI is not blocked. The effect of exit status 1 on Codex is not measured.
+- The hook never sends the role definition. The fingerprint loop and the change message are unchanged: a CLI without a session-start hook uses the loop alone.
+
+Reasons for the hook, against a message typed into the terminal: the text arrives right after the context reset; nothing is typed into the TUI, so it does not clash with input of the person, an input method or a permission prompt; it adds no conversation turn; it survives compaction because it is added after the compaction. The definition stays in the file, because a role can change during a session, injected context cannot be withdrawn by a later change (not measured), and the fingerprint needs the file to be read.
+
+The hook is installed at user level, in the agent folders that the skill and MCP setup already use, and never in a project folder. A project folder receives no file from soksak, and Codex runs project hooks only in trusted folders, which a soksak tab does not need: a tab can open in any folder.
+
+Registration is the setup part `hook` ([setup parts](cli.md#setup-parts)). `sok setup install hook` writes the hook of each agent folder that exists:
+
+- Claude Code: the file `settings.json` of each existing Claude folder, `<home>/.claude` and `$CLAUDE_CONFIG_DIR` when that variable is set and not empty, the same folders as the skill part.
+- Codex: the file `hooks.json` of `<home>/.codex`, when that folder exists.
+
+The hook is one group in the `SessionStart` array of the `hooks` member: `{"matcher": "", "hooks": [{"type": "command", "command": "<sok> role identity --soksak-hook"}]}`, where `<sok>` is the running `sok`, as the MCP registration names it, quoted for the shell when its path holds a space or a shell character. An empty matcher runs the hook for every source. The fixed argument `--soksak-hook` is the mark of an entry that soksak registered: `sok role identity` accepts exactly this argument and refuses any other. The entry carries only the documented fields `type` and `command`, so no extra member is needed to tell the entry apart.
+
+The merge keeps every other value of the file:
+
+- A file that does not parse, or whose `hooks` or `SessionStart` member has another type, fails with `<file>: <reason>` and nothing is written. A missing file is created with the one entry; its mode is 0600.
+- An entry belongs to soksak when its command ends with the words `role identity --soksak-hook` after a path to `sok`. Install first removes every soksak entry under every event and matcher, which removes stale, renamed and duplicated soksak entries too, and removes a group only when the removal emptied it. Then it adds the current group to the `SessionStart` array, so the file holds exactly the current soksak set plus the entries of the person, which are untouched.
+- Installing twice gives the same bytes: the second install removes the entries of the first and adds them again in the same place.
+- Entries of other programs and other members keep their values and their order. The file is written with two-space indentation and a final line feed.
+- The write is atomic: the temporary file is in the same folder and is renamed over the file. An existing file keeps its mode.
+
+`sok setup check` lists the part `hook` for each file that the install would write. Its state is `ok` when the file holds exactly the current soksak set. Its reason is `absent` when no soksak entry exists, and `differs` when a soksak entry is outside the current set, under another event, or names another `sok`. Setup has no removal of hooks: a person removes an entry by editing the file.
+
 ## Resume
 
 A resume starts the program with its own command. The resumed tab sends the first message again, then one reread request, which names its role file and counts as request 1; the state is `pending` with the same fingerprint.

@@ -286,6 +286,37 @@ phrase test의 lead 문구 `lead_non_reader`는 고정 문구이며 다음과 �
 
 session의 첫 message는 등록의 모든 agent message보다 앞선다. page는 프로그램이 첫 상태를 보고하면 주입한다. 기록도 알림도 남기지 않는 시작 프롬프트는 관찰할 수 없으므로, page가 보내는 Enter를 받을 수 있다. 이는 [evidence of the hold](messaging.md#evidence-of-the-hold)에 측정되어 있다. 이 한계를 명시한다. 첫 message는 context compaction으로 대화에서 사라질 수 있으며, 그때는 reread request와 변경 message가 role을 되돌린다.
 
+## 세션 재시작 hook
+
+Session 시작 hook은 CLI session의 시작, 재개, `clear`, compaction마다 tab의 stable identity를 CLI에 준다. 그래서 context가 초기화된 직후에 identity가 context 안에 있다. Hook은 [stable identity](#stable-identity)의 identity 텍스트를 주며, role 정의는 절대 주지 않는다. 정의는 agent가 읽는 role 파일에 남는다.
+
+- 명령: `sok role identity`이며 인자가 없다. 명령의 process는 `sok role confirm`처럼 자기 surface를 `agent.surface`에 묻는다([surface의 process](sidecars.md#processes-of-a-surface)). Hook process는 CLI process의 자식이므로 그 조상 사슬이 tab의 surface에 닿는다.
+- Role이 있을 때: 표준 출력에 JSON 한 줄 `{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"<identity 텍스트>"}}`을 쓰고 종료 상태는 0이다. identity 텍스트는 [stable identity](#stable-identity)의 텍스트이며 `<role file>`은 `<configuration directory>/agents/<surface>/role.md`다. Claude Code와 Codex는 SessionStart hook에서 이 형식을 읽으며, 둘 다 주입된 텍스트가 model context에 들어간다는 것을 측정했다([측정 사실](#measured-facts), 24행과 25행).
+- Role이 없거나 어느 surface에도 속하지 않을 때: 표준 출력은 비고 종료 상태는 0이다. Hook은 tab 밖을 포함해 agent의 모든 session에서 실행된다. tab 밖에는 tab 환경이 없으므로 명령은 surface를 찾지 못하고, 애플리케이션에 닿지 않은 채 아무것도 출력하지 않고 바로 종료 상태 0으로 끝난다.
+- 오류일 때(예: 거부된 surface 식별자, 응답하지 않는 애플리케이션): 표준 출력은 비고, 표준 오류에 `sok: <message>`를 쓰며 종료 상태는 1이다. Claude Code는 0도 2도 아닌 종료 상태의 hook을 막지 않는 오류로 다루므로, session은 identity 없이 시작하며 CLI는 막히지 않는다. Codex에서 종료 상태 1의 효과는 측정하지 않았다.
+- Hook은 role 정의를 절대 보내지 않는다. 지문 루프와 변경 message는 그대로다. Session 시작 hook이 없는 CLI는 루프에만 기댄다.
+
+Terminal에 입력하는 message 대신 hook을 쓰는 이유: 텍스트가 context 초기화 직후에 도착한다. TUI에 아무것도 입력하지 않으므로 person의 입력, 입력 방식, 권한 prompt와 부딪히지 않는다. 대화 turn을 더하지 않는다. Compaction 뒤에 더해지므로 compaction을 견딘다. 정의는 파일에 남는다. Role은 session 중에 바뀔 수 있고, 주입된 context는 나중의 변경으로 거둘 수 없으며(측정하지 않음), 지문은 파일을 읽어야 나오기 때문이다.
+
+Hook은 user 수준에서, skill과 MCP setup이 이미 쓰는 agent 폴더에 설치하며, project 폴더에는 절대 설치하지 않는다. soksak은 project 폴더에 파일을 더하지 않는다. Codex는 신뢰된 폴더에서만 project hook을 실행하며, soksak tab은 어느 폴더에서든 열릴 수 있으므로 project hook은 필요하지 않다.
+
+등록은 setup part `hook`이다([setup part](cli.ko.md#setup-part)). `sok setup install hook`은 존재하는 agent 폴더마다 hook을 쓴다.
+
+- Claude Code: 존재하는 각 Claude 폴더의 `settings.json`. 폴더는 `<home>/.claude`와, 설정되어 비지 않았을 때의 `$CLAUDE_CONFIG_DIR`이며 skill part와 같다.
+- Codex: `<home>/.codex`가 있으면 그 폴더의 `hooks.json`.
+
+Hook은 `hooks` member의 `SessionStart` 배열에 있는 group 하나다: `{"matcher": "", "hooks": [{"type": "command", "command": "<sok> role identity --soksak-hook"}]}`. `<sok>`은 MCP 등록이 밝히는 실행 중인 `sok`이며, 경로에 공백이나 shell 문자가 있으면 shell용으로 인용한다. 빈 matcher는 모든 source에서 hook을 실행한다. 고정 인자 `--soksak-hook`은 soksak이 등록한 항목의 표지다. `sok role identity`는 이 인자만 받고 다른 인자는 거부한다. 항목은 문서화된 필드 `type`과 `command`만 담으므로, 항목을 구별하려고 member를 더할 필요가 없다.
+
+병합은 파일의 다른 값을 모두 보존한다.
+
+- Parse되지 않는 파일, 또는 `hooks`나 `SessionStart` member의 type이 다른 파일은 `<file>: <reason>`으로 실패하며 아무것도 쓰지 않는다. 없는 파일은 항목 하나를 담아 만들며, 모드는 0600이다.
+- 명령이 `sok`의 경로 뒤에 단어 `role identity --soksak-hook`으로 끝나는 항목은 soksak의 것이다. 설치는 먼저 모든 event와 matcher에서 soksak 항목을 모두 지운다. 그래서 오래되었거나 이름이 바뀌었거나 중복된 soksak 항목도 남지 않는다. Group은 제거로 비게 된 경우에만 지운다. 그다음 현재 group을 `SessionStart` 배열에 더하므로, 파일은 현재 soksak 집합과 사람의 항목을 그대로 담는다.
+- 두 번 설치하면 같은 바이트가 된다. 두 번째 설치는 첫 번째 설치의 항목을 지우고 같은 자리에 다시 더한다.
+- 다른 program의 항목과 다른 member는 값과 순서를 유지한다. 파일은 들여쓰기 두 칸과 끝 line feed로 쓴다.
+- 쓰기는 원자적이다. 임시 파일은 같은 폴더에 있고 파일 위로 이름을 바꾼다. 있던 파일은 모드를 유지한다.
+
+`sok setup check`는 설치가 쓸 파일마다 part `hook`을 나열한다. 상태는 파일이 정확히 현재 soksak 집합을 담을 때 `ok`다. 사유는 soksak 항목이 없으면 `absent`, soksak 항목이 현재 집합 밖에 있거나, 다른 event 아래에 있거나, 다른 `sok`을 가리키면 `differs`다. Setup에는 hook 제거가 없다. 사람은 파일을 고쳐 항목을 지운다.
+
 ## Resume
 
 resume은 자기 명령으로 프로그램을 시작한다. resume된 tab은 첫 message를 다시 보내고, 그다음 role 파일 경로를 적은 reread request을 한 번 보내며, 그 요청은 요청 1로 센다. 상태는 같은 fingerprint을 가진 `pending`이다.

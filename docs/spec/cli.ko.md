@@ -22,6 +22,7 @@
 | `sok exposures [window] [--kind status\|command\|element] [--query <text>]` | 선언된 모든 status, command, element 항목을 나열한다. `--kind`는 목록 하나만, `--query`는 query에 맞는 항목만 남긴다([탐색](#탐색)) |
 | `sok status <name> [window] [--surface <id>] [--watch]` | Status 값을 출력한다. `--watch`는 값과 이후 바뀔 때마다 JSON 한 줄씩 출력한다. SIGINT나 SIGTERM은 watch를 끝낸다: signal을 받은 routine이 연결을 닫고, 닫힘의 결과와 함께 명령을 기록하고, 상태 0으로, 또는 닫힘의 오류와 함께 1로 프로세스를 끝낸다. 명령이 표준 출력 쓰기에서 기다리는 동안에도 같다 |
 | `sok role confirm <fingerprint> [window]` | 프로세스에 대해 `agent.surface`가 답하는 surface의 role을 확인한다. `sok`을 실행하는 terminal의 role을 확인하며, 명령 `core.tab.role.confirm {fingerprint}`를 실행한다. 답은 `{role, generation, state, fingerprint}`다. 현재 지문이 아니면 현재 role 파일을 적고 다시 읽으라고 말하는 오래된 확인 오류로 실패한다. Role이 없는 surface는 명시적 오류로 실패한다([확인](agent-roles.ko.md#confirmation)) |
+| `sok role identity` | 탭 안에서 실행하면 그 탭의 stable identity를 SessionStart hook의 `additionalContext`로 출력하고, 탭 밖이나 role이 없으면 아무것도 출력하지 않는다. Session 재시작 hook이 이 명령을 실행한다([session 재시작 hook](agent-roles.ko.md#세션-재시작-hook)) |
 | `sok element rect\|click\|input\|dispatch <name> [window] [--surface <id>] [--index <n>] [--value <text>] [--event <json>]` | 선언된 element 항목에 동작한다 |
 | `sok input pointer [window] --x <x> --y <y> --phase move\|down\|drag\|up\|scroll [--button left\|right] [--delta-x <n>] [--delta-y <n>] [--clicks <n>] [--activate]` | Native pointer 입력을 보낸다. 누름은 그 명령의 연결의 것이므로 `--phase down` 명령이 끝나면 그 점에서 누름을 떼고, 그 뒤 명령의 `up`이나 `drag`는 그 연결이 닫히며 누름을 뗐다는 이유와 함께 거부된다([메서드](exposure.ko.md#메서드)). 여러 점에 걸친 제스처는 `sok input gesture`다 |
 | `sok input gesture [window] [--pointer <name>] [--button left\|right] [--clicks <n>] --points <x>,<y>[;<x>,<y>]...` | 연결 하나로 native 제스처 하나를 보낸다: 첫 점에서 `down`, 뒤의 각 점으로 `drag`, 마지막 점에서 `up`이므로 점 하나는 click이다. 아무것도 출력하지 않고 전달된 `up` 뒤에 끝난다. 실패한 단계는 그 단계의 오류와 번호로 명령을 끝내고, 연결의 끝이 누름을 뗀다 |
@@ -279,6 +280,7 @@ MCP 등록은 `claude` 명령의 user scope에 있는 항목 `soksak`이고, `cl
 | `path` | 경로 항목 폴더가 있는 platform | `/etc/paths.d/<application identifier>` | 내용이 `sok path install`이 `<sok>`에 대해 쓰는 내용이다 | `sudo <sok> path install` |
 | `skill` | 있는 agent folder마다 | `<agent folder>/skills/soksak/SKILL.md` | byte가 skill 글과 같다 | `<sok> skill install` |
 | `mcp` | `claude` 명령이 `PATH`에 있을 때 | `claude` 명령의 설정 파일 | 등록이 최신이다 | `<sok> mcp install` |
+| `hook` | 존재하는 user agent 폴더마다: Claude 폴더의 `settings.json`, Codex 폴더의 `hooks.json` | 현재 soksak의 `SessionStart` hook 집합과 다른 soksak hook이 없음 | `<sok> setup install hook` |
 
 `sok setup check`는 `{"parts": [{part, file, state, step, reason?, error?}]}`를 이 member 순서로, part는 표의 순서로, skill 파일은 agent folder의 순서로 출력한다. `state`는 `ok`, `missing`, `error`다. 빠진 part는 `reason`을 가진다. 없는 파일이나 등록은 `absent`, 등록되는 것이 아닌 `sok`을 가리키는 등록처럼 설치가 쓰는 것과 다른 것은 `differs`다. 상태를 읽을 수 없는 part는 실패의 글인 `error`를 가진다. 해당하지 않는 part는 나열하지 않는다. Linux에는 `path` part가 없다. 이 명령은 아무것도 바꾸지 않으며, 나열된 모든 part가 `ok`이면 0으로, 아니면 표준 출력의 JSON 뒤에 표준 오류에 `sok: setup parts are not current: <part> <file>, ...`를 쓰고 1로 끝난다.
 
