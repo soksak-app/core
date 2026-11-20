@@ -10,6 +10,8 @@
 #import "webview_geometry.h"
 #import "window_facts.h"
 #import "support/surface_view.h"
+#import "support/records.h"
+#import "event_ring.h"
 
 static int failures = 0;
 
@@ -45,6 +47,26 @@ static IOSurfaceRef createSurface(size_t width, size_t height, unsigned char *no
 }
 
 // The identifier of the IOSurface that the image layer of the region presents, or 0 when it presents none.
+// The single record native.image.present of the events, which states the mode, the size, the bytes that the presentation copied
+// and the time of each step of the present, the steps within its whole time.
+static void checkPresentRecord(NSArray<NSDictionary *> *events, NSString *mode, size_t width, size_t height, size_t bytes) {
+    NSArray *records = [events filteredArrayUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(NSDictionary *event, id bindings) {
+        (void)bindings;
+        return [event[@"name"] isEqual:@"native.image.present"];
+    }]];
+    NSDictionary *fields = records.count == 1 ? records[0][@"fields"] : nil;
+    unsigned long long steps = 0;
+    BOOL numbers = fields != nil;
+    for (NSString *name in @[@"lookup_ns", @"check_ns", @"copy_ns", @"swap_ns", @"commit_ns"]) {
+        numbers = numbers && [fields[name] isKindOfClass:NSNumber.class];
+        steps += [fields[name] unsignedLongLongValue];
+    }
+    check(numbers && [fields[@"mode"] isEqual:mode] && [fields[@"width"] unsignedLongValue] == width &&
+        [fields[@"height"] unsignedLongValue] == height && [fields[@"bytes"] unsignedLongValue] == bytes &&
+        [records[0][@"class"] intValue] == SP_CLASS_FRAME && steps <= [fields[@"total_ns"] unsignedLongLongValue],
+        [NSString stringWithFormat:@"a %@ present stores one record of its steps (%@)", mode, records]);
+}
+
 static IOSurfaceID presentedSurface(void *region) {
     CALayer *imageLayer = ((NSView *)region).layer.sublayers.firstObject;
     id contents = imageLayer.contents;
@@ -84,8 +106,18 @@ int main(int argc, char **argv) { @autoreleasepool {
     IOSurfaceRef first = createSurface(width, height, firstNonce);
     IOSurfaceRef second = createSurface(width, height, secondNonce);
     IOSurfaceRef third = createSurface(width, height, thirdNonce);
-    check(sp_region_present(lease, IOSurfaceGetID(first), firstNonce, raster[0], raster[1], raster[2], 5, 1, 1),
-        @"the lease region accepts the first frame");
+    // The records of the class frame at the level debug, which the default policy refuses (docs/spec/logging.md#policy).
+    const int8_t frames[SP_CLASS_COUNT] = {SP_EVENT_ERROR, SP_EVENT_ERROR, SP_EVENT_ERROR, SP_EVENT_ERROR, SP_EVENT_DEBUG};
+    check(sp_event_set_policy(frames), @"the policy stores the records of the class frame");
+    // A block cannot refer to an array, so the blocks read the nonces and the raster through pointers.
+    const unsigned char *firstBytes = firstNonce, *thirdBytes = thirdNonce;
+    const double *size = raster;
+    __block BOOL firstPresented = NO;
+    NSArray *leaseEvents = capturedEvents(^{
+        firstPresented = sp_region_present(lease, IOSurfaceGetID(first), firstBytes, size[0], size[1], size[2], 5, 1, 1);
+    });
+    check(firstPresented, @"the lease region accepts the first frame");
+    checkPresentRecord(leaseEvents, @"lease", width, height, 0);
     check(presentedSurface(lease) == IOSurfaceGetID(first),
         [NSString stringWithFormat:@"the image layer presents the surface of the supplier without a copy (presented %u, sent %u)",
             presentedSurface(lease), IOSurfaceGetID(first)]);
@@ -113,8 +145,12 @@ int main(int argc, char **argv) { @autoreleasepool {
     // The copy mode: the layer presents a host-owned copy and nothing is released.
     void *copy = sp_region_create(surface, "copy", ignoreEvent, NULL);
     sp_region_place(copy, 10, 20, 120, 80, true);
-    check(sp_region_present(copy, IOSurfaceGetID(third), thirdNonce, raster[0], raster[1], raster[2], 6, 1, 1),
-        @"the copy region accepts a frame");
+    __block BOOL thirdPresented = NO;
+    NSArray *copyEvents = capturedEvents(^{
+        thirdPresented = sp_region_present(copy, IOSurfaceGetID(third), thirdBytes, size[0], size[1], size[2], 6, 1, 1);
+    });
+    check(thirdPresented, @"the copy region accepts a frame");
+    checkPresentRecord(copyEvents, @"copy", width, height, width * height * 4);
     check(presentedSurface(copy) != 0 && presentedSurface(copy) != IOSurfaceGetID(third),
         @"the copy region presents a host-owned copy");
     sp_region_close(copy);

@@ -1707,6 +1707,7 @@ void sp_region_lease(void *handle, sp_region_released released, void *context) {
 bool sp_region_present(void *handle, unsigned int token_id, const unsigned char *nonce, double width, double height,
     double scale, uint64_t generation, uint64_t raster, int sequence) {
     NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
+    uint64_t started = sp_mono_ns();
     SPImageRegion *view = (SPImageRegion *)handle;
     if (!nonce) return false;
 
@@ -1727,6 +1728,7 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
     }
 
     if (nonceRef) CFRelease(nonceRef);
+    uint64_t looked = sp_mono_ns();
 
     if (!nonceMatches) {
         [view reject:@"forbidden"];
@@ -1780,6 +1782,8 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
     }
 
     char declaredColorSpaceName[256] = {0};
+    BOOL leased = view.released != NULL;
+    uint64_t checked = sp_mono_ns();
     // In the lease mode the layer presents the retained surface of the supplier; otherwise a host-owned copy.
     IOSurfaceRef presentation = view.released ? leasePresentation(surface, declaredColorSpaceName, sizeof(declaredColorSpaceName))
         : copyPresentation(view, surface, declaredColorSpaceName, sizeof(declaredColorSpaceName));
@@ -1797,13 +1801,16 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
     IOSurfaceRef previous = view.presented;
     uint64_t previousGeneration = view.presentedGeneration, previousRaster = view.presentedRaster;
     int previousSequence = view.presentedSequence;
+    uint64_t copied = sp_mono_ns();
     surfaceTransactionBegin();
     [CATransaction setDisableActions:YES];
     [view applyInsetsInTransaction];
     view.imageLayer.contents = displayContents;
     view.shownPixelsPerUnit = [view backingPixelsPerUnit];
     [view updateContentsScale];
+    uint64_t swapped = sp_mono_ns();
     surfaceTransactionCommit();
+    uint64_t committed = sp_mono_ns();
     view.presented = presentation;
     view.presentedWidth = surfaceWidth;
     view.presentedHeight = surfaceHeight;
@@ -1821,6 +1828,20 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
         view.spare = previous;
         view.lastSpareTime = CACurrentMediaTime();
         if (!view.runningSpareDelay) [view waitForSpareDelay:spareDelay];
+    }
+    // The steps of an accepted present (docs/spec/events.json, native.image.present): the lookup of the surface and of its nonce,
+    // the other checks of the frame, the copy into
+    // host-owned storage or the retain of the lease, the swap of the layer contents and the commit of its transaction.
+    if (sp_event_gate(SP_CLASS_FRAME, SP_EVENT_DEBUG)) {
+        char fields[320];
+        snprintf(fields, sizeof fields,
+            "{\"mode\":\"%s\",\"width\":%zu,\"height\":%zu,\"bytes\":%zu,\"lookup_ns\":%llu,\"check_ns\":%llu,\"copy_ns\":%llu,"
+            "\"swap_ns\":%llu,\"commit_ns\":%llu,\"total_ns\":%llu}",
+            leased ? "lease" : "copy", surfaceWidth, surfaceHeight, leased ? (size_t)0 : surfaceWidth * surfaceHeight * 4,
+            (unsigned long long)(looked - started), (unsigned long long)(checked - looked), (unsigned long long)(copied - checked),
+            (unsigned long long)(swapped - copied), (unsigned long long)(committed - swapped),
+            (unsigned long long)(sp_mono_ns() - started));
+        sp_event(SP_CLASS_FRAME, SP_EVENT_DEBUG, "native.image.present", fields);
     }
 
     return true;

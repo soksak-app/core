@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1007: an accepted present of an image region stores `native.image.present` with its mode, size, copied bytes and the times of the surface lookup, the checks, the copy or lease retain, the layer swap and the transaction commit.
 - F1004: `sok setup install` registers the MCP server before it writes the skill files and reads the agent folders again after the registration, so the skill file of `<home>/.agents`, which `codex mcp add` makes an agent folder, is written by the same install in both implementations.
 - F1003: a wake of `service-messages` also counts as the routine of the kind of its line (`service-messages.reply`, `.process`, `.closed`, `.image`, `.message`, `.dropped`) in both hosts, so the sampler attributes the work of the lines of a persistent service to the kinds of messages.
 - F1000-2.1: The Go and the Rust host answer `agent.surface` with the surface of the process of the connection: they read the peer process from the socket, walk its parent processes to the first one whose parent is a running sidecar, ask a sidecar that declares `processes` with a process query and read the chain again, and refuse with 1014 (`docs/spec/sidecars.md#process-identity`); `packages/plugin-api` accepts `processes` `true` in `sidecar.json`.
