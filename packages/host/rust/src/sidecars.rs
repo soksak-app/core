@@ -4089,8 +4089,9 @@ impl<O: Owner> Core<O> {
                             return None;
                         }
                     }
-                    // The handling of the line is one wake of the routine `service-messages` (docs/spec/performance-trace.md).
-                    let _wake = crate::routine::Wake::start("service-messages", line.len());
+                    // The handling of the line is one wake of the routine `service-messages`, which also counts as the routine of
+                    // its kind; a line that violates the protocol has no kind (docs/spec/performance-trace.md).
+                    let mut wake = crate::routine::Wake::start("service-messages", line.len());
                     let members = match decode_members(&line) {
                         Ok(members) => members,
                         Err(error) => return Some(format!("invalid message: {error}")),
@@ -4161,15 +4162,22 @@ impl<O: Owner> Core<O> {
                                 }
                             }
                         }
+                        wake.count_as("service-messages.reply");
                         continue;
                     }
                     match process_answer(&state, &sidecar, reader_service_pid, &members) {
-                        Ok(true) => continue,
+                        Ok(true) => {
+                            wake.count_as("service-messages.process");
+                            continue;
+                        }
                         Ok(false) => {}
                         Err(violation) => return Some(violation),
                     }
                     match close_answer(&state, &sidecar, reader_service_pid, &members) {
-                        Ok(true) => continue,
+                        Ok(true) => {
+                            wake.count_as("service-messages.closed");
+                            continue;
+                        }
                         Ok(false) => {}
                         Err(violation) => return Some(violation),
                     }
@@ -4212,6 +4220,7 @@ impl<O: Owner> Core<O> {
                                 )
                             },
                         ) {
+                            wake.count_as("service-messages.image");
                             continue;
                         }
                         owner.deliver(Message {
@@ -4220,6 +4229,7 @@ impl<O: Owner> Core<O> {
                             body: event.body,
                             cids: event.cids,
                         });
+                        wake.count_as("service-messages.message");
                     } else {
                         let response_sender = ReadThreadResponseSender {
                             sidecar_name: sidecar.clone(),
@@ -4227,6 +4237,7 @@ impl<O: Owner> Core<O> {
                             state: Arc::clone(&state),
                         };
                         drop_message(&response_sender, &sidecar, &event.surface, event.body.get());
+                        wake.count_as("service-messages.dropped");
                     }
                 }
             })();
