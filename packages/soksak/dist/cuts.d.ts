@@ -57,6 +57,12 @@ export declare function withdrawNode(input: Input, id: string, cards: readonly {
     root: TreeNode;
     left: TreeNode;
 };
+/**
+ * EXCHANGE (packages/soksak/docs/layout.md#add-and-remove): the stored tree with the node `a`, a card or a box, where the node `b` stands
+ * and `b` where `a` stood. Each place keeps its fraction and the px size that a card there declares: a card takes the px size of the place
+ * it enters, and a box, which declares none, its fraction. Two nodes of which one holds the other and a fixed card are refused.
+ */
+export declare function exchangeNodes(input: Input, a: string, b: string): TreeNode;
 /** Even: the stored tree with equal fractions for the kids of every cut that take one. */
 export declare function evenCuts(input: Input): TreeNode;
 export type { CardNode };

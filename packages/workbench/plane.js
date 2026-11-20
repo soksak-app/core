@@ -648,7 +648,7 @@ let dropPreview = null;
 /** The tab drag in progress: the dragged tab, the origin card, the drop position, and the preview rectangle. */
 export const dragState = () => (tabDrag ? {
   tab: tabDrag.tabId, card: tabDrag.cardId, moved: tabDrag.moved,
-  target: tabDrag.hit ? { card: tabDrag.hit.card, zone: tabDrag.hit.zone } : null,
+  target: tabDrag.hit ? { ...tabDrag.hit } : null,
   preview: dropPreview,
 } : null);
 
@@ -695,7 +695,7 @@ function beginTabDrag(e, cardId, tabId) {
     // a press that did not move (a click) keeps fullscreen (docs/spec/example-model.md#card-fullscreen).
     if (!tabDrag.stood) { tabDrag.stood = true; restoreFullscreen(); standIn(true); }
     const host = plane.getBoundingClientRect();
-    ({ hit: tabDrag.hit, anchor: tabDrag.anchor } = dragHit(tabDrag.anchor, ev.clientX - host.left, ev.clientY - host.top, band));
+    ({ hit: tabDrag.hit, anchor: tabDrag.anchor } = dragHit(tabDrag.anchor, ev.clientX - host.left, ev.clientY - host.top, band, tabDrag.tabId));
     // A drop with no zone is rejected by the layout even if released. That position is not taken.
     if (!showDrop(tabDrag.cardId, tabDrag.hit)) tabDrag.hit = null;
     dragChanged();
@@ -712,7 +712,7 @@ function beginTabDrag(e, cardId, tabId) {
     el.removeEventListener("pointerup", onUp);
     el.removeEventListener("pointercancel", onUp);
     dragChanged();
-    if (drag.moved && drag.hit) return run("core.tab.move", { tab: drag.tabId, card: drag.hit.card, zone: drag.hit.zone });
+    if (drag.moved && drag.hit) return run("core.tab.move", { tab: drag.tabId, ...drag.hit });
     settle();
   };
   el.addEventListener("pointermove", onMove);
@@ -757,7 +757,8 @@ function beginGroupDrag(e, header, groupId) {
     if (!tabDrag.moved) return;
     if (!tabDrag.stood) { tabDrag.stood = true; restoreFullscreen(); standIn(true); }
     const host = plane.getBoundingClientRect();
-    const found = dragHit(tabDrag.anchor, ev.clientX - host.left, ev.clientY - host.top, band);
+    // A group card holds cards and no tabs, so a tab strip is part of the body of its card (docs/spec/groups.md#target-search).
+    const found = dragHit(tabDrag.anchor, ev.clientX - host.left, ev.clientY - host.top, { ...band, group: true }, null);
     tabDrag.anchor = found.anchor;
     tabDrag.hit = found.hit && !targetIds(found.hit.card).some(isPlace) ? found.hit : null;
     const rect = tabDrag.hit ? groupDropRect(groupId, tabDrag.hit) : undefined;
@@ -1038,7 +1039,7 @@ let dropShown = false;
  */
 function dropRect(fromId, hit) {
   const ids = targetIds(hit.card);
-  if (hit.zone === "centre" && !tree.isGroup(ids[0])) return tree.rect(ids[0]);
+  if (hit.zone === "strip" || (hit.zone === "centre" && !tree.isGroup(ids[0]))) return tree.rect(ids[0]);
   const only = tabsOf(grid.card(fromId)).length === 1;
   return tree.probe(() => {
     try {
@@ -1057,13 +1058,13 @@ function dropRect(fromId, hit) {
 }
 
 /**
- * The drop target of a point of the plane in a tab drag, {card, zone} or null: the target search of the group tree resolves it by the
- * bands of the nodes that end on the line of the point, from the outermost in (docs/spec/groups.md#target-search). card is one id or the
- * ids of the kids of a cut, and zone the side of an add or the centre of a tab strip or of a content card. band is the measures that
- * dropBands gave.
+ * The drop target of a point of the plane in a tab drag, {card, zone, index?} or null: the target search of the group tree resolves it by
+ * the bands of the nodes that end on the line of the point, from the outermost in (docs/spec/groups.md#target-search). card is one id or
+ * the ids of the kids of a cut, and zone the side of an add, the centre of a content card, or strip, the tab strip of a content card at
+ * index, the number of its tabs whose middle lies before the point. band is the measures that dropBands gave.
  */
 export function dropHit(x, y, band) {
-  return dragHit(null, x, y, band).hit;
+  return dragHit(null, x, y, band, null).hit;
 }
 
 /**
@@ -1072,11 +1073,26 @@ export function dropHit(x, y, band) {
  * anchor of the next point (docs/spec/groups.md#target-search). The drag keeps the anchor, so the preview and the release name the same
  * run.
  */
-export function dragHit(anchor, x, y, band) {
+export function dragHit(anchor, x, y, band, tabId) {
   const found = tree.dragAt(anchor, x, y, band);
   const { hit } = found;
   if (!hit) return { hit: null, anchor: found.anchor };
-  return { hit: hit.kind === "add" ? { card: hit.target, zone: hit.side } : { card: hit.card, zone: "centre" }, anchor: found.anchor };
+  if (hit.kind === "add") return { hit: { card: hit.target, zone: hit.side }, anchor: found.anchor };
+  if (hit.kind === "strip") return { hit: { card: hit.card, zone: "strip", index: stripIndex(hit.card, x, tabId) }, anchor: found.anchor };
+  return { hit: { card: hit.card, zone: "centre" }, anchor: found.anchor };
+}
+
+/**
+ * The index of a point x of the plane on the tab strip of the content card cardId: the number of the drawn tabs of the card whose middle
+ * lies before x, the tab tabId of the drag left out (docs/spec/groups.md#target-search).
+ */
+function stripIndex(cardId, x, tabId) {
+  const host = plane.getBoundingClientRect();
+  const tabs = [...cardElement(cardId).querySelectorAll(".chrome__tabs .tab[data-tab-id]")].filter((b) => b.dataset.tabId !== tabId);
+  return tabs.filter((b) => {
+    const r = b.getBoundingClientRect();
+    return r.left - host.left + r.width / 2 < x;
+  }).length;
 }
 
 /**
@@ -1138,6 +1154,16 @@ function dropTab(fromId, tabId, hit) {
   if (!from || (ids.length === 1 && !group && !target) || ids.some(isPlace)) return settle();
   const moving = tabsOf(from).find((t) => t.id === tabId);
   if (!moving) return settle();
+
+  if (hit.zone === "strip") {                                    // the tab joins at the index of the strip
+    removeTab(from, tabId);
+    target.data.tabs.splice(hit.index, 0, moving);
+    target.data.activeId = moving.id;
+    focusOn(target.id);
+    if (target.id !== fromId && tabsOf(from).length === 0 && tree.canClose(fromId)) tree.close(fromId);
+    else settleActiveTab(from);
+    return settle();
+  }
 
   if (hit.zone === "centre" && !group) {                        // T3
     if (target.id === fromId) { from.data.activeId = tabId; return settle(); }
@@ -2732,20 +2758,28 @@ export function layoutDescription() {
   return { space: heldSpace, focused: focusedId, root: level(null), groups };
 }
 
-const ZONES = ["centre", "left", "right", "top", "bottom"];
+const ZONES = ["centre", "left", "right", "top", "bottom", "strip"];
 
 /**
- * Moves a tab to the centre of a card, or to an edge of a card, a box, a cut or a run named by one id or a list of ids. It is the same as
- * the result of releasing a drag.
+ * Moves a tab to the centre of a card, to the tab strip of a content card at index, or to an edge of a card, a box, a cut or a run named
+ * by one id or a list of ids. It is the same as the result of releasing a drag.
  */
-export function moveTab(tabId, cardId, zone) {
+export function moveTab(tabId, cardId, zone, index) {
   const from = cardOfTab(tabId);
   const ids = targetIds(cardId);
   if (!ids.length) throw new Error(`tab ${tabId} moves to no card`);
   for (const id of ids) if (!tree?.isGroup(id)) paneCard(id);
   if (!ZONES.includes(zone)) throw new Error(`unknown zone ${zone}`);
-  if (zone === "centre" && ids.length > 1) throw new Error(`tab ${tabId} moves to the centre of one card, not of ${ids.join(", ")}`);
-  const hit = { card: cardId, zone };
+  if (index !== undefined && zone !== "strip") throw new Error("index is given with zone strip only");
+  if ((zone === "centre" || zone === "strip") && ids.length > 1) throw new Error(`tab ${tabId} moves to the ${zone} of one card, not of ${ids.join(", ")}`);
+  if (zone === "strip") {
+    if (tree.isGroup(ids[0])) throw new Error(`card ${ids[0]} is a group and has no tab strip`);
+    if (index === undefined) throw new Error("index is required with zone strip");
+    // The index is the place in the tab list of the card after the tab leaves it (docs/spec/groups.md#moving-and-dropping).
+    const others = tabsOf(grid.card(ids[0])).filter((t) => t.id !== tabId).length;
+    if (index < 0 || index > others) throw new Error(`index ${index} is outside the tabs of card ${ids[0]}, 0 to ${others}`);
+  }
+  const hit = zone === "strip" ? { card: ids[0], zone, index } : { card: cardId, zone };
   if ((zone !== "centre" || tree.isGroup(ids[0])) && dropRect(from.id, hit) === undefined) {
     throw new Error(`tab ${tabId} cannot move to the ${zone} of ${ids.join(", ")}`);
   }
@@ -2981,17 +3015,41 @@ export function leadLevel(id) {
 }
 
 /**
- * Moves the card id, a content card or a group card, beside target on side, or into the group target with side centre; target is one id
- * or the ids of the kids of a cut or a run.
+ * Moves the card id, a content card or a group card, beside target on side, into the group target or into the place of the content card
+ * target with side centre, or joins every tab of the content card id to the content card target at index with side strip
+ * (docs/spec/groups.md#commands); target is one id or the ids of the kids of a cut or a run.
  */
-export function moveCard(id, target, side) {
+export function moveCard(id, target, side, index) {
   const card = treeCard(id);
   const to = targetIds(target).map(treeCard);
   layoutChangeable(card);
+  if (index !== undefined && side !== "strip") throw new Error("index is given with side strip only");
+  if (side === "strip") return joinStrip(card, to, index);
   // A move that changes the layout focuses the moved card, as the drop of the only tab of a card does; a move to where the card
   // stands changes nothing and keeps the focus (docs/spec/groups.md#focus).
   if (tree.move(card, to.length === 1 ? to[0] : to, side)) focusCard(card);
   else settle();
+  return { card };
+}
+
+/** Joins every tab of the content card card, in its order, to the content card of the list to at index, and closes card. */
+function joinStrip(card, to, index) {
+  const refused = tree.checkMove(card, to.length === 1 ? to[0] : to, "strip");
+  if (refused) throw refused;
+  if (index === undefined) throw new Error("index is required with side strip");
+  const from = grid.card(card), into = grid.card(to[0]);
+  const count = tabsOf(into).length;
+  if (index < 0 || index > count) throw new Error(`index ${index} is outside the tabs of card ${into.id}, 0 to ${count}`);
+  if (!tree.canClose(card)) throw new Error(`card ${card} cannot move to strip of ${into.id}`);
+  const tabs = [...tabsOf(from)];
+  const active = from.data.activeId;
+  for (const t of tabs) removeTab(from, t.id);
+  into.data.tabs.splice(index, 0, ...tabs);
+  // default: a card without an active tab gives the target no selected tab, and the target keeps its own.
+  if (active) into.data.activeId = active;
+  tree.close(card);
+  focusOn(into.id);
+  settle();
   return { card };
 }
 

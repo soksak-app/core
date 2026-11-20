@@ -734,7 +734,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   registry.command("core.group.rename", ({ group, name }) => renameGroup(group, name));
   registry.command("core.group.leader", ({ card }) => leadLevel(card));
   registry.command("core.group.menu", ({ group }) => openGroupMenu(group));
-  registry.command("core.card.move", ({ card, target, side }) => moveCard(card, target, side));
+  registry.command("core.card.move", ({ card, target, side, index }) => moveCard(card, target, side, index));
   registry.command("core.card.get", async ({ card }) => {
     // The card is checked before the window is read, so a refused card reads nothing.
     cardState(card, new Map());
@@ -772,7 +772,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
     event.preventDefault();
     return registry.run("core.tab.menu", { tab: button.dataset.tabId, x: event.clientX, y: event.clientY });
   });
-  registry.command("core.tab.move", ({ tab, card, zone }) => { moveTab(tab, card, zone); });
+  registry.command("core.tab.move", ({ tab, card, zone, index }) => { moveTab(tab, card, zone, index); });
   registry.command("core.picker.pick", ({ index }) => { pickItem(index); });
   registry.command("core.picker.close", () => { closePicker("command"); });
   // Escape in the native menu answers with this command (card.js). The menu is the picker, the only native menu.

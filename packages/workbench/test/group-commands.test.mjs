@@ -259,6 +259,67 @@ test("a drop resolves by the bands of the target search and core.tab.move puts a
   assert.deepEqual((await stored()).groups[0].members, ["card-1", "card-2", "card-5"]);
 });
 
+/** The tab ids of the content card id in their order. */
+const tabIds = (id) => plane.tabsOf(plane.currentGrid().card(id)).map((t) => t.id);
+
+test("core.card.move exchanges a card with a content card and joins its tabs at an index of a tab strip", { timeout: 5000 }, async () => {
+  arrange();
+  // The two cards exchange places, and the leader mark of the group stays with its place (docs/spec/groups.md#commands).
+  assert.deepEqual(await run("core.card.move", { card: "card-3", target: "card-1", side: "centre" }), { card: "card-3" });
+  assert.deepEqual((await stored()).groups, [{ card: "card-4", name: "그룹 1", level: 1, leader: "card-3", members: ["card-3", "card-2"] }]);
+  assert.deepEqual((await status("core.layout")).state.root.kids.map((kid) => kid.share), [0.75, 0.25], "each place keeps its fraction");
+  // An exchange applied again exchanges them back.
+  await run("core.card.move", { card: "card-3", target: "card-1", side: "centre" });
+  assert.deepEqual((await stored()).groups[0], { card: "card-4", name: "그룹 1", level: 1, leader: "card-1", members: ["card-1", "card-2"] });
+  await refuses(run("core.card.move", { card: "card-3", target: ["card-1", "card-2"], side: "centre" }),
+    "card card-3 moves to the centre of one card, not of card-1, card-2");
+  await refuses(run("core.card.move", { card: "card-3", target: ["card-1", "card-2"], side: "strip", index: 0 }),
+    "card card-3 moves to the strip of one card, not of card-1, card-2");
+  await refuses(run("core.card.move", { card: "card-4", target: "card-3", side: "strip", index: 0 }), "card card-4 is a group and holds no tabs");
+  await refuses(run("core.card.move", { card: "card-3", target: "card-4", side: "strip", index: 0 }), "card card-4 is a group and has no tab strip");
+  await refuses(run("core.card.move", { card: "card-3", target: "card-1", side: "right", index: 0 }), "index is given with side strip only");
+  await refuses(run("core.card.move", { card: "card-3", target: "card-1", side: "strip" }), "index is required with side strip");
+  await refuses(run("core.card.move", { card: "card-3", target: "card-1", side: "strip", index: 2 }), "index 2 is outside the tabs of card card-1, 0 to 1");
+  // Every tab of the card joins the target at the index in its order, and the card is closed.
+  const { tab } = await run("core.card.add-tab", { card: "card-3", plugin: PLAIN });
+  assert.deepEqual(await run("core.card.move", { card: "card-3", target: "card-1", side: "strip", index: 0 }), { card: "card-3" });
+  assert.deepEqual(tabIds("card-1"), ["tab-aaaaa3", tab, "tab-aaaaa1"]);
+  assert.equal(plane.currentGrid().card("card-3"), undefined, "the card that joined is closed");
+});
+
+test("core.tab.move joins a tab at the index of a tab strip, and a point on a tab strip names the index of the tabs before it", { timeout: 5000 }, async () => {
+  arrange();
+  const { tab } = await run("core.card.add-tab", { card: "card-1", plugin: PLAIN });
+  await run("core.card.add-tab", { card: "card-2", plugin: PLAIN });
+  // The index is the place in the tab list of the card after the tab leaves it (docs/spec/groups.md#moving-and-dropping).
+  await run("core.tab.move", { tab: "tab-aaaaa1", card: "card-1", zone: "strip", index: 1 });
+  assert.deepEqual(tabIds("card-1"), [tab, "tab-aaaaa1"]);
+  await run("core.tab.move", { tab: "tab-aaaaa3", card: "card-1", zone: "strip", index: 1 });
+  assert.deepEqual(tabIds("card-1"), [tab, "tab-aaaaa3", "tab-aaaaa1"]);
+  assert.equal(plane.currentGrid().card("card-3"), undefined, "the card left without tabs is removed");
+  assert.equal(plane.currentGrid().card("card-1").data.activeId, "tab-aaaaa3", "the moved tab is the selected tab of the card");
+  await refuses(run("core.tab.move", { tab, card: "card-2", zone: "strip", index: 3 }), "index 3 is outside the tabs of card card-2, 0 to 2");
+  await refuses(run("core.tab.move", { tab, card: "card-1", zone: "strip", index: 3 }), "index 3 is outside the tabs of card card-1, 0 to 2");
+  await refuses(run("core.tab.move", { tab, card: "card-2", zone: "centre", index: 0 }), "index is given with zone strip only");
+  await refuses(run("core.tab.move", { tab, card: "card-2", zone: "strip" }), "index is required with zone strip");
+  await refuses(run("core.tab.move", { tab, card: "card-4", zone: "strip", index: 0 }), "card card-4 is a group and has no tab strip");
+  await refuses(run("core.tab.move", { tab, card: ["card-1", "card-2"], zone: "strip", index: 0 }),
+    "tab " + tab + " moves to the strip of one card, not of card-1, card-2");
+  // JSDOM draws no layout: each tab of card-1 is given a rectangle 100 points wide on its strip, so their middles are 60, 160 and 260
+  // points right of the card.
+  const first = plane.currentTree().rect("card-1");
+  const tabs = [...document.querySelectorAll(`.card[data-card-id="card-1"] .chrome__tabs .tab[data-tab-id]`)];
+  assert.equal(tabs.length, 3);
+  tabs.forEach((element, i) => {
+    element.getBoundingClientRect = () => ({ left: first.x + 10 + 100 * i, top: first.y, width: 100, height: 30, right: first.x + 110 + 100 * i, bottom: first.y + 30 });
+  });
+  const band = plane.dropBands();
+  const y = first.y + band.headerPx - 2;
+  assert.deepEqual(plane.dropHit(first.x + 170, y, band), { card: "card-1", zone: "strip", index: 2 });
+  // The moving tab is left out of the count.
+  assert.deepEqual(plane.dragHit(null, first.x + 170, y, band, tab).hit, { card: "card-1", zone: "strip", index: 1 });
+});
+
 test("the layout of the window description holds each group card as a node of its tree and lists every group once", { timeout: 5000 }, async () => {
   arrange();
   // card-2 becomes the group card card-5 with card-6 below it, nested in card-4 (docs/spec/groups.md#status-and-queries).

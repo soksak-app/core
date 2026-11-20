@@ -168,6 +168,12 @@ The refusals, in the order in which each command checks them:
 | `core.card.move` | `side` `strip` and `index` outside 0 to the number of the tabs of `target` | `index <index> is outside the tabs of card <target>, 0 to <n>` |
 | `core.card.move` | `index` with a `side` other than `strip` | `index is given with side strip only` |
 | `core.card.move` | `side` `centre` or `strip` with a list `target` | `card <id> moves to the <side> of one card, not of <targets>` |
+| `core.card.move` | `side` `strip` without `index` | `index is required with side strip` |
+| `core.tab.move` | zone `centre` or `strip` with a list `card` | `tab <tab> moves to the <zone> of one card, not of <cards>` |
+| `core.tab.move` | zone `strip` with a group card `card` | `card <card> is a group and has no tab strip` |
+| `core.tab.move` | zone `strip` without `index` | `index is required with zone strip` |
+| `core.tab.move` | `index` with a zone other than `strip` | `index is given with zone strip only` |
+| `core.tab.move` | zone `strip` and `index` outside 0 to the number of the tabs of `card` other than `tab` | `index <index> is outside the tabs of card <card>, 0 to <n>` |
 | `core.card.move` | the layout refuses the move | `card <id> cannot move to <side> of <target>` |
 | every operation | a content card would be drawn below its minimum | `card <id> cannot <operation>: card <c> would be <w>x<h>, below its minimum <m>x<m>` |
 
