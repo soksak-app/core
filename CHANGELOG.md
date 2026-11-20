@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F969-1: The contract case `layout.open.rule-of-sizes` holds that `core.layout.open` with `side` adds a card by the rule of sizes in the page and in the mygo workbench: one more equal child of an even split, and half of the card of an uneven one. The insert of the stored tree of F966-2 already behaves so, and no production code changes. Verification: both tests pass.
 - F911: `scripts/check-tests.mjs` links the completed F911 to the rename of the message writers of `sok` in Go and Rust and to their tests, which the audit of completed items requires.
 - F969-10: The measure of a plan in the page and in the mygo workbench takes only the size refusal of the layout library for a tree that does not fit, and passes every other error of the library on as the reason of the refusal or a failure of the command. Verification: with the defect of F969-9 restored for one run, the plan of ten cards answered `the cards of the tree have no extent` before the change and `unknown side main; use left, right, top or bottom` after it in both workbenches; the page tests 31 of 31 and the mygo package 1152 of 1152 pass.
 - F899-8, F911: The checklist marks F899-8 and F911 complete, whose items and linked plugin and sidecar items are complete.

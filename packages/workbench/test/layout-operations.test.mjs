@@ -209,6 +209,23 @@ test("core.layout.open splits beside a neighbour without the tab, and the new ca
   assert.deepEqual(cardIds(layout().root), ["a", split.card, "b", "c"]);
 });
 
+// contract: layout.open.rule-of-sizes
+test("core.layout.open adds a card by the rule of sizes: one more equal child of an even split, half of the card of an uneven one", { timeout: 5000 }, async () => {
+  arrange({ cut: "x", kids: [
+    { share: 0.5, node: { card: "a", tabs: [view("tab-aaaaa1", PLAIN)] } },
+    { share: 0.5, node: { card: "b", tabs: [view("tab-aaaaa2", PLAIN)] } },
+  ] }, "a");
+  const even = await twice("core.layout.open", { card: "a", side: "right", plugin: SESSION });
+  const sizes = () => layout().root.children.map(({ card, size }) => [card, Math.round(size * 1e6) / 1e6]);
+  assert.deepEqual(sizes(), [["a", 0.333333], [even.card, 0.333333], ["b", 0.333333]]);
+  arrange({ cut: "x", kids: [
+    { share: 0.7, node: { card: "a", tabs: [view("tab-aaaaa1", PLAIN)] } },
+    { share: 0.3, node: { card: "b", tabs: [view("tab-aaaaa2", PLAIN)] } },
+  ] }, "a");
+  const uneven = await twice("core.layout.open", { card: "a", side: "right", plugin: SESSION });
+  assert.deepEqual(sizes(), [["a", 0.35], [uneven.card, 0.35], ["b", 0.3]]);
+});
+
 // contract: layout.open.path-chooses-the-plugin
 test("core.layout.open with a path opens the plugin of its extension with the path in normal form", { timeout: 5000 }, async () => {
   single([view("tab-aaaaa1", PLAIN)]);

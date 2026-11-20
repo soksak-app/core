@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F969-1: contract case `layout.open.rule-of-sizes`가 page와 mygo workbench에서 `side`를 가진 `core.layout.open`이 크기 규칙으로 카드를 더하는지 확인한다. 고른 split에서는 같은 자식 하나가 더해지고, 고르지 않은 split에서는 카드의 절반을 받는다. F966-2의 저장 tree의 insert가 이미 이렇게 동작하므로 production 코드는 바뀌지 않는다. 검증: 두 test가 통과한다.
 - F911: `scripts/check-tests.mjs`가 완료된 F911을 Go와 Rust `sok` message writer의 rename과 그 test에 연결한다. 완료 항목 감사가 이 연결을 요구한다.
 - F969-10: page와 mygo workbench의 plan measure가 layout library의 크기 거부만 plane에 맞지 않는 tree로 받고, library의 다른 오류는 거부 이유나 명령의 실패로 넘긴다. 검증: F969-9의 결함을 한 번 되돌려 놓고, 카드 열 장의 plan은 두 workbench에서 변경 전에 `the cards of the tree have no extent`로, 변경 후에 `unknown side main; use left, right, top or bottom`으로 답했다. page test 31/31과 mygo package 1152/1152가 통과한다.
 - F899-8, F911: 체크리스트가 F899-8과 F911을 완료로 표시한다. 그 항목들과 연결된 plugin·sidecar 항목이 완료되었다.

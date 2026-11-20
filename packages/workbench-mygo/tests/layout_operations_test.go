@@ -447,6 +447,26 @@ func TestALayoutOpenSplitsOnce(t *testing.T) {
 	})
 }
 
+// contract: layout.open.rule-of-sizes
+func TestALayoutOpenAddsACardByTheRuleOfSizes(t *testing.T) {
+	row := func(a, b float64) map[string]any {
+		return treeSpace("spc-aaaaaa", cutNode("x", kidNode(a, cardNode("a", tab("tab-aaaaaa", "notes"))),
+			kidNode(b, cardNode("b", tab("tab-bbbbbb", "notes")))))
+	}
+	// Beside a card of an even split, the split holds one more equal child.
+	f := layoutShell(t, row(0.5, 0.5))
+	answer, layout := f.twice("core.layout.open", `{"card":"a","side":"right","plugin":"notes","params":{"path":"x.md"}}`)
+	if got, want := layout.Root.shape(), fmt.Sprintf("row[a 0.3333, %s 0.3333, b 0.3333]", answer["card"]); got != want {
+		t.Fatalf("the tree of the even split is %s, want %s", got, want)
+	}
+	// Beside a card of an uneven split, the new card and the card share the extent of the card in halves.
+	f = layoutShell(t, row(0.7, 0.3))
+	answer, layout = f.twice("core.layout.open", `{"card":"a","side":"right","plugin":"notes","params":{"path":"x.md"}}`)
+	if got, want := layout.Root.shape(), fmt.Sprintf("row[a 0.35, %s 0.35, b 0.3]", answer["card"]); got != want {
+		t.Fatalf("the tree of the uneven split is %s, want %s", got, want)
+	}
+}
+
 // contract: layout.open.split-beside-another-neighbour
 func TestALayoutOpenSplitsBesideAnotherNeighbour(t *testing.T) {
 	pair := func() map[string]any {
