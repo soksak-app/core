@@ -53,23 +53,15 @@ rect is never inside out.
 The slot carries the corridor, so a px size is the drawn size: `width: 180`
 draws 180 at the plane's edge, between two cards, and at any `gap`.
 
-A host can draw frames around sets of cards. `setFrames({id: {left, right, top,
-bottom}})` gives each card the number of frames between it and each of its four
-lines, and each frame takes one gap on that side: the edge of a card stands its
-corridor and one gap for each of its frames from the line, and a slot carries the
-most frames of the cards that start on its lower line and the most of the cards
-that end on its upper line. So the corridor of a line is one gap and one gap for
-each frame on it, and a card stands one gap from a frame around it, a frame one
-gap from the next frame, and a card or a frame one gap from its neighbour across
-the line. A frame takes the gap of the corridor, reduced with it when the plane
-cannot hold the corridors and the frames. A card without an entry has no frames,
-the frames are no part of the state, and `setFrames` throws
-`soksak: frames name "<id>", which is no card` for an id that is no card,
-`soksak: the frames of "<id>" count below zero` for a count below zero and
-`soksak: the frames of "<id>" count no whole number` for a count that is no whole
-number. A px size is the drawn
-size of a card with the most frames of its slot; a card with fewer is drawn wider
-by a gap for each frame it lacks.
+A box ([the model](#the-model)) draws a frame around its inner node: the frame
+stands one corridor inside the box on its left, right and bottom side, and the
+head of the box (`setHeads`) on its top. The frames and the heads are fixed costs
+of the cut that holds the box, so a card stands one corridor from the frame
+around it, the frame one corridor from the next frame, and a box one corridor
+from its neighbour across the line. A frame takes the corridor of its axis,
+reduced with it when the plane cannot hold the corridors and the frames. A px
+size is the drawn size of a card inside the frames around it. The frames follow
+from the tree and are no part of the state.
 
 The slots always sum to the plane, and a px size is reduced to keep that true.
 It is drawn as declared while some slot on the axis shares and the plane has the
@@ -82,21 +74,24 @@ one card declaring 200 in a 1600 plane is drawn 1600, and two declaring 200 and
 300 are drawn 630 and 946. Read `rect(id)` for what a card is drawn at.
 
 A plane too small for what it holds cannot give every card its minimum. The
-card's width is reduced and the gap beside it is not: a sharing slot stops at the
-corridor it carries, the rest divide what is left, and the card that ran out of
-room is drawn with no width against its near edge. The corridor between any two
-neighbours is still exactly `gap`, and the plane is still covered exactly.
+corridor of an axis is the gap capped at the extent over the lines and frames
+that hold one, and a cut that still cannot hold its corridors and frames narrows
+the corridor of its axis by halves, down to none. Each kid is drawn at least the
+corridors, px sizes, frames and heads inside it, and the kids that take a
+fraction divide the rest by their fractions, so a small fraction is drawn below
+`minSize` and the plane is still covered exactly.
 
 `minSize` binds the operations, not the plane. Splitting, closing, inserting and
 dragging each refuse to take a card below it; `gap`, `minSize` and `resize`
-re-express the same proportions at the new scale instead. So a sharing card
-standing on the floor is drawn below it once the gap grows — by half a gap for
-every interior line it touches — even where the plane still has the room. Nothing
-is rewritten: set the gap back and the card is drawn what it was, to the last
-bit. A card that must keep a size whatever the gap declares one with `setSize`,
+re-express the same fractions at the new scale instead. So a sharing card
+standing on the floor is drawn below it once the gap grows — by its fraction of
+the corridors that the gap adds — even where the plane still has the room.
+Nothing is rewritten: set the gap back and the card is drawn what it was, to the
+last bit. A card that must keep a size whatever the gap declares one with `setSize`,
 which is drawn as declared at any `gap`.
 
-A card that arrives takes its width from the slot next to it, as a drag does.
+A card that arrives takes its size by the rule of an ADD
+([add and remove](#add-and-remove)).
 
 A px size describes one slot, so a cut divides it between the halves. A card
 spanning two slots carries no px size.
@@ -400,28 +395,28 @@ sharing slots hit their floor — a gap each plus one card's minimum.
 close to that floor it can report a little more room than the boundary can take,
 and a target past it leaves the boundary where it is.
 
-The same happens with no px size on the axis at all. A plane too small for what
-it holds stops a sharing slot at its corridor, and a stopped slot does not move
-with its span, so the px a boundary stands at stops following its coordinate:
-positions inside the range cannot be drawn, and a whole coordinate span can
-produce only a few positions in all. A drag asking for one that cannot be drawn
-lands on one that can, which may be outside the range. `boundaryRange` bounds a
-drag; it does not list where the drag can stop.
+A drag moves the line between two kids of one cut, and the commit reads the
+fraction of each kid that takes one from its drawn size, so the kids on the two
+sides take the difference and every other kid keeps its fraction. A kid that is
+drawn the costs inside it has no room to give, so a line beside it does not move
+toward it. `boundaryRange` bounds a drag; it does not list where the drag can
+stop.
 
 The same rule settles a card that appears or disappears. A card inserted at the
 boundary between kids i and i+1 of the root is added beside kid i toward kid
-i+1 ([add and remove](#add-and-remove)): when the kids of the root that hold no
-px size on the axis have one drawn size (within half a px), or kid i holds a px
-size, every kid without a px size gives a share in proportion and keeps its
-ratio; otherwise kid i alone gives the span, and every other kid keeps its size.
-When every kid holds a px size, every kid gives a share.
+i+1 ([add and remove](#add-and-remove)): when the kids of the root that take a
+fraction have one fraction, or kid i holds a px size, every kid that takes a
+fraction gives in proportion and keeps its ratio; otherwise kid i alone gives the
+span, and every other kid keeps its fraction. When every kid holds a px size,
+every kid gives a share.
 A card inserted at an edge of the plane is added beside the root, so every kid
 without a px size gives a share in proportion. An insert that would take a card
-below `minSize` is refused. A closing card leaves its cut, and the other kids of
-the cut that are no `fixed` card take its span by one factor; slots that stand
-between the same two lines before and after keep their drawn width. So a sidebar
-switched off and back on leaves every other card the width it had when the root
-is even; on an uneven root the kid that paid for it keeps less than it gave.
+below `minSize` is refused. A closing card leaves its cut, and the fractions of
+the other kids of the cut scale by one factor. A `fixed` card without a px size
+is a fixed cost of its cut: it keeps the size it is drawn at when a kid arrives
+or leaves beside it. So a sidebar switched off and back on leaves every other
+card the width it had when the root is even; on an uneven root the kid that paid
+for it keeps less than it gave.
 Where the plane does not hold what the axis declares, every declared size is
 drawn scaled by one factor; that factor changes when a card arrives or leaves.
 
@@ -447,30 +442,34 @@ cards draw their seams on the same lines.
 
 A box `{box, data?, inner}` is a rectangle of the host that the tree keeps as
 one kid of its cut, so no cut crosses it. `setHeads({id: px})` gives the px
-that the host draws inside the top of each box above its inner node; a box
-without an entry has no head. `setHeads` throws `soksak: heads name "<id>",
+that the host draws inside the top of each box above its inner node, the head
+with the space below it; a box without an entry has no head. The card or the box
+at the top of the inner node is drawn from the top of the box, so the head stands
+inside its top. `setHeads` throws `soksak: heads name "<id>",
 which is no box` for an id that is no box and `soksak: the head of "<id>" is
 <value>` for a head that is negative or not finite, and the heads are no part of
 the state.
 
-The size of a kid is its drawn size: the extent of the drawn rectangles of its
-cards, from the first edge to the last, gaps between them included, less on
-the `y` axis the heads of the boxes above it, so the head of a box is inside
-the share of the box and two kids of equal size are drawn at equal sizes. A
-slot is drawn at its span of the whole plane less its corridor (R5), so equal
-shares are not equal sizes: `even` lays every cut by equal shares, reads the
-drawn rectangles and moves each share by the difference between its drawn size
-and the equal size, until the largest difference is below a thousandth of a px;
-a corridor does not change with a share, so one correction lays a cut exactly
-and a nested cut takes one more. A card with a px size on the axis of its cut,
-and a `fixed` card, keeps its span and takes no share. A result below a minimum
-throws as below, and a throw changes nothing.
+Every rule of sizes works on the fractions of the tree. A cut first takes its
+fixed costs from its extent: the corridors between its kids, the px sizes of the
+kids that keep one, and the frames and heads of the boxes among its kids. Each
+kid that takes a fraction is drawn its frames and heads and its fraction of the
+rest, so kids of one fraction are drawn at one size inside their frames, at the
+border of the plane as between two corridors. A kid is even with its siblings
+when the kids of its cut that take a fraction have one fraction, and `even` gives
+every such kid of every cut one fraction. A gap change, a head change and a
+resize keep every fraction, so an ADD and a REMOVE on an even cut restore it
+exactly whatever changed between them. A card with a px size on the axis of its
+cut, and a `fixed` card, keep their size and take no fraction. A result below a
+minimum throws as below, and a throw changes nothing.
 
 The minimum of a node is recursive, with the heads and the corridors as fixed
 costs: a card needs `minSize` and on `y` the heads drawn inside its rectangle,
-a box needs what its inner node needs and its head, a cut needs on its own axis
-the needs of its kids and the corridors between them and across it the largest
-need of its kids, and a kid that keeps its span needs the size it is drawn at.
+a card with a px size the smaller of that size and `minSize`, a `fixed` card
+with a px size the smaller of that size and the size it had, another `fixed`
+card the size it is drawn at, a box what its inner node needs, a cut on its own
+axis the needs of its kids and the corridors between them and across it the
+largest need of its kids.
 After an operation, every card and box whose rectangle changed is judged from
 the outside in, and the first one drawn below its need throws `card <id> would
 be <w>x<h>, below its minimum <w>x<h>`, which names that card or box.
@@ -488,10 +487,11 @@ grid.visits;                      // the nodes that even visited
 
 ### Add and remove
 
-`withdraw(id)` takes the node `id`, a card or a box, out of its cut; the other
-kids of the cut take its space in proportion to their sizes, as a close does,
-and a cut left
-with one kid is replaced by that kid. It returns the node that left, a card
+`withdraw(id)` takes the node `id`, a card or a box, out of its cut; the
+fractions of the other kids of the cut scale by one factor, as a close does,
+and a cut left with one kid is replaced by that kid. A kid of that kid that is a
+cut along the axis of the cut that holds it joins that cut, and every kid keeps
+the size it is drawn at. It returns the node that left, a card
 node or a box node with its inner node, which `insert` takes, so a box lands
 with its members in their proportions. The last card and a `fixed` card are
 refused.
@@ -499,10 +499,11 @@ refused.
 `insert(target, side, node)` adds `node`, a new card `{card, data?}` or what
 `withdraw` returned, beside `target` toward `side` and returns its id;
 `target` is an id or the ids that neighbouring kids of one cut hold. Along the
-cut of the target, a cut whose kids have one size (within half a px) gives the
-node 1/(k+1) of the cut and keeps every ratio, and a cut whose kids differ
-gives the node half of the target less the new corridor and keeps every other
-size; when the target is the cut itself, the kid at the end toward `side` is
+cut of the target, an even cut of k kids that take a fraction gives the node
+1/(k+1) of their fractions and scales every other by k/(k+1), and a cut whose
+fractions differ gives the node half of the fraction of the target and keeps
+every other fraction; a node that keeps a px size takes its size from the kids
+that pay, with the new corridor; when the target is the cut itself, the kid at the end toward `side` is
 the target. Ids of neighbouring kids of one cut along the axis of the side are a
 run inside that cut: the node is added to that cut beside the run, as beside a
 kid, and the run is not wrapped in a cut of its own. Across the cut, the target
@@ -660,20 +661,19 @@ first.
 
 | | |
 | --- | --- |
-| `cards`, `card(id)`, `rect(id)`, `rects()`, `rectOf(card)` | read the arrangement |
+| `cards`, `card(id)`, `rect(id)`, `rects()`, `rectOf(card)` | read the arrangement; `rect(id)` of a box is the rectangle around its frame |
 | `resize(w, h)`, `width`, `height` | plane size |
 | `canSplit(id, axis)`, `split(id, axis, {id?, data?, newLine?})` | cut one card in two; `newLine` cuts at a new line at the centre even where a line that the card spans across lies inside it |
 | `splitToward(id, side, {id?, data?, newLine?})` | cut it and put the new one on a named side |
 | `canClose(id)`, `close(id)` | remove a card; the other kids of its cut take its share by one factor (R7) |
 | `canMove(id, targetId, side)`, `move(id, targetId, side)` | take a card to another card's side: a close and an insert |
 | `setFixed(id, on)`, `setSize(id, axis, px)`, `setData(id, data)` | change a card; the returned copies are frozen |
-| `setFrames(frames)` | the frames between each card and its lines (R5) |
 | `standings(axis)`, `canInsertAt(axis, line)`, `insertAt`, `moveTo` | a card that reaches across the plane: the edges of the plane and the seams of the root cut along the axis |
 | `zoneAt(x, y, options)` | where a drop lands |
 | `dividers()`, `rules()` | grab areas, and boundaries to draw |
 | `boundaryPos`, `boundaryRange`, `hasBoundary(axis, line)`, `moveBoundary(axis, line, px, allowSnap?)`, `centerBoundary` | drag a boundary |
-| `even()`, `setHeads(heads)`, `visits` | give every kid of every cut an equal share; the heads of the boxes; the nodes that the last operation visited ([cuts](#cuts)) |
-| `withdraw(id)` | take a card or a box out of its cut; the others take its space in proportion ([add and remove](#add-and-remove)) |
+| `even()`, `setHeads(heads)`, `visits` | give every kid of every cut that takes a fraction one fraction; the heads of the boxes; the nodes that the last operation visited ([cuts](#cuts)) |
+| `withdraw(id)` | take a card or a box out of its cut; the fractions of the others scale by one factor ([add and remove](#add-and-remove)) |
 | `insert(target, side, node)` | add a card beside a target: 1/(k+1) of an even cut, half of the target in an uneven cut, a wrap of two halves across ([add and remove](#add-and-remove)) |
 | `crossings(card)`, `cardsCrossing(axis, line)` | the lines a card crosses, and the cards that cross a line |
 | `lines(axis)`, `toJSON()`, `Soksak.from(state, options?)`, `checkState(state)`, `replace(state)` | inspection and state |

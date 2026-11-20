@@ -379,9 +379,10 @@ test("a card inserted on an even level and closed leaves the plane as it was", (
 });
 
 test("a card inserted on an uneven level takes its size from the kid before the boundary alone", () => {
-  const grid = new Soksak(undefined, { width: 1200, height: 600, gap: 24 });
-  grid.split("card", "x");
-  grid.split("card", "x");
+  const grid = new Soksak(
+    { root: { cut: "x", kids: [{ share: 0.5, node: { card: "card" } }, { share: 0.25, node: { card: "b" } }, { share: 0.25, node: { card: "c" } }] } },
+    { width: 1200, height: 600, gap: 24 },
+  );
   const before = new Map(grid.cards.map((c) => [c.id, grid.rect(c.id).w]));
   const first = grid.cards[0].id;
   const added = grid.insertAt("x", 1, { size: 100 });

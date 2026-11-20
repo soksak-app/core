@@ -4,6 +4,9 @@ import test from "node:test";
 import { Soksak } from "../dist/index.js";
 import { assertTiling, H, W, three } from "./helpers.mjs";
 
+/** Lines are drawn from the fractions that a drag stores, so a position or a size is the one asked for within their rounding. */
+const near = (actual, expected, note) => assert.ok(Math.abs(actual - expected) < 1e-9, `${note}: ${actual}, not ${expected}`);
+
 /**
  * A sidebar is a card. So is a rail. What makes them what they are is which slot
  * they hold and that they hold it at a fixed width — there is no second kind of
@@ -61,10 +64,10 @@ test("dragging the boundary beside a px slot resizes it", () => {
   const grid = edges();
   // A divider is a place to grab a line; it does not announce whose size it
   // changes. What the drag does is the thing to check.
-  const linesBefore = grid.lines("x");
+  const linesBefore = [...grid.lines("x")];
   grid.moveBoundary("x", 1, 260);
-  assert.equal(grid.boundaryPos("x", 1), 260, "the boundary landed where it was dropped");
-  assert.deepEqual(grid.lines("x"), linesBefore, "and the shared lines did not move");
+  near(grid.boundaryPos("x", 1), 260, "the boundary landed where it was dropped");
+  assert.deepEqual(grid.lines("x").slice(2), linesBefore.slice(2), "and the shared lines did not move");
   assert.equal(grid.rect("left").w, grid.card("left").width, "and the card draws the size it now holds");
   assertTiling(grid, "after resizing the sidebar");
 });
@@ -134,11 +137,11 @@ test("a boundary between two px slots changes both and nothing else", () => {
   // slot before takes the room; the slot after gives it up. Every card standing
   // in either slot follows — a slot has one width.
   const moved = to - from;
-  assert.equal(to, 230, "the boundary landed where it was sent");
+  near(to, 230, "the boundary landed where it was sent");
   assert.ok(moved > 0, "and it did move");
-  assert.equal(grid.rect("left").w, was.left + moved);
-  assert.equal(grid.rect("rail").w, was.rail - moved);
-  assert.equal(grid.rect("main").w, was.main, "the slot that does not touch the boundary is untouched");
+  near(grid.rect("left").w, was.left + moved, "left took the room");
+  near(grid.rect("rail").w, was.rail - moved, "the rail gave the room");
+  near(grid.rect("main").w, was.main, "the slot that does not touch the boundary is untouched");
   assertTiling(grid, "between two fixed cards");
 });
 
@@ -234,10 +237,13 @@ test("insertAt is refused when the card that arrives would take another below mi
   const shares = [...wide.rects()].map(([id, r]) => [id, r.w]).filter(([id]) => id !== "rail");
   assert.deepEqual(shares.map(([, w]) => w), [276, 276], "both gave the same share");
 
-  // On an uneven level the card before the boundary alone gives the span, so its floor decides: the sidebar is drawn 436.
-  const uneven = three();
+  // On an uneven level the card before the boundary alone gives the span, so its floor decides: the sidebar is drawn 441.28.
+  const uneven = new Soksak(
+    { root: { cut: "x", kids: [{ share: 0.28, node: { card: "sidebar" } }, { share: 0.72, node: { cut: "y", kids: [{ share: 0.52, node: { card: "upper" } }, { share: 0.48, node: { card: "lower" } }] } }] } },
+    { width: W, height: H },
+  );
   const state = uneven.toJSON();
-  assert.equal(uneven.insertAt("x", 1, { id: "rail", size: 400 }), null, "436 - 400 - 24 leaves the sidebar under 96");
+  assert.equal(uneven.insertAt("x", 1, { id: "rail", size: 400 }), null, "441.28 - 400 - 24 leaves the sidebar under 96");
   assert.deepEqual(uneven.toJSON(), state, "and nothing changed");
 });
 
@@ -282,12 +288,12 @@ test("a drag beside a px slot leaves the slot on the far side of it alone", () =
     const from = grid.boundaryPos("x", 3);
 
     const to = grid.moveBoundary("x", 3, from + push, false);
-    assert.equal(to, from + push, `landed at ${push}`);
-    assert.equal(grid.rect("rail").w, was.rail + push, "the rail took the room");
-    assert.equal(grid.rect("C").w, was.C - push, "the slot beside it gave the room");
-    assert.equal(grid.rect("D").w, was.D - push);
+    near(to, from + push, `landed at ${push}`);
+    near(grid.rect("rail").w, was.rail + push, "the rail took the room");
+    near(grid.rect("C").w, was.C - push, "the slot beside it gave the room");
+    near(grid.rect("D").w, was.D - push, "D gave the room");
     for (const id of ["left", "A", "B", "right"]) {
-      assert.equal(grid.rect(id).w, was[id], `${id} is not at this boundary`);
+      near(grid.rect(id).w, was[id], `${id} is not at this boundary`);
     }
     assertTiling(grid, `rail boundary ${push}`);
   }
@@ -298,11 +304,11 @@ test("a drag beside a px slot leaves the slot on the far side of it alone", () =
     const was = Object.fromEntries(grid.cards.map((c) => [c.id, grid.rect(c.id).w]));
     const from = grid.boundaryPos("x", 2);
 
-    assert.equal(grid.moveBoundary("x", 2, from + push, false), from + push);
-    assert.equal(grid.rect("A").w, was.A + push, "the pane before took the room");
-    assert.equal(grid.rect("rail").w, was.rail - push, "the rail gave the room");
+    near(grid.moveBoundary("x", 2, from + push, false), from + push, `landed at ${push}`);
+    near(grid.rect("A").w, was.A + push, "the pane before took the room");
+    near(grid.rect("rail").w, was.rail - push, "the rail gave the room");
     for (const id of ["left", "C", "D", "right"]) {
-      assert.equal(grid.rect(id).w, was[id], `${id} is not at this boundary`);
+      near(grid.rect(id).w, was[id], `${id} is not at this boundary`);
     }
     assertTiling(grid, `left of the rail ${push}`);
   }
@@ -318,32 +324,33 @@ test("a sidebar leaving and returning is settled with the cards that share", () 
   // Re-proportioning divides, so widths come back to within a rounding.
   const near = (id, w, note) =>
     assert.ok(Math.abs(grid.rect(id).w - w) < 1e-9, `${id} is ${grid.rect(id).w}, not ${w}: ${note}`);
-  // A slot is drawn width plus half a gap on each inner edge, and the sharing slots divide what the px slots leave in the
-  // proportion 0.25 : 0.3 of the two panes.
-  const half = grid.gap / 2;
+  // The px sizes and the corridors are costs; the shares of the two panes are 0.25 and 0.3 of what is left.
+  // The corridors and the px sizes are costs of the cut, and the two panes share what they leave in the proportion
+  // 0.25 : 0.3 of their fractions.
+  const gap = grid.gap;
 
   grid.setFixed("left", false);
   assert.equal(grid.close("left"), true);
   // Both panes take the sidebar's share by one factor, so the ratio of their shares holds; the cards that hold a fixed card keep their width.
-  const rest = W - (190 + 2 * half) - (210 + half);
-  near("A", (rest * 0.25) / 0.55 - half, "took its part of the share");
-  near("C", (rest * 0.3) / 0.55 - 2 * half, "took its part of the share");
+  const rest = W - 190 - 210 - 3 * gap;
+  near("A", (rest * 0.25) / 0.55, "took its part of the share");
+  near("C", (rest * 0.3) / 0.55, "took its part of the share");
   near("rail", 190, "a px size is declared, not divided");
   near("right", was.right, "a px size is declared, not divided");
 
   grid.setFixed("right", false);
   assert.equal(grid.close("right"), true);
-  const left = W - (190 + 2 * half);
-  near("A", (left * 0.25) / 0.55 - half, "took its part of the share");
-  near("C", (left * 0.3) / 0.55 - half, "took its part of the share");
+  const left = W - 190 - 2 * gap;
+  near("A", (left * 0.25) / 0.55, "took its part of the share");
+  near("C", (left * 0.3) / 0.55, "took its part of the share");
   near("rail", 190, "a px size is declared, not divided");
 
   // At the edge of the plane every card that holds no px size gives a share in proportion, so the ratio holds.
   assert.equal(grid.insertAt("x", 0, { id: "left", size: 190 }), "left");
-  const room = W - (190 + half) - (190 + 2 * half);
+  const room = W - 190 - 190 - 3 * gap;
   near("left", 190, "arrives at the size it asked for");
-  near("A", (room * 0.25) / 0.55 - 2 * half, "gave its share in proportion");
-  near("C", (room * 0.3) / 0.55 - half, "gave its share in proportion");
+  near("A", (room * 0.25) / 0.55, "gave its share in proportion");
+  near("C", (room * 0.3) / 0.55, "gave its share in proportion");
 
   assert.equal(grid.insertAt("x", last(), { id: "right", size: 210 }), "right");
   for (const [id, w] of Object.entries(was)) near(id, w, "ratio scaling at an edge restores it");
@@ -380,7 +387,7 @@ const crowded = () =>
     { width: 1600, height: 1000, gap: 24, minSize: 96 },
   );
 
-test("a plane too small for its cards draws the starved one with no width", () => {
+test("a plane too small for its cards draws each sharing card at its fraction of what the px size leaves", () => {
   const grid = crowded();
   grid.resize(453, 469);   // less than 230 + three minimums + three corridors
 
@@ -389,18 +396,11 @@ test("a plane too small for its cards draws the starved one with no width", () =
     assert.ok(r.w >= 0 && r.h >= 0, `${id} is ${r.w}x${r.h}`);
     assert.ok(r.x >= -1e-9 && r.x + r.w <= 453 + 1e-9, `${id} runs past the plane`);
   }
-  const starved = [...box].filter(([, r]) => r.w === 0);
-  assert.equal(starved.length, 1, "one card has no width");
-
-  // Where R5 places it: the middle of the slots it spans, so it stays inside
-  // them and the neighbours on both sides are the same distance away.
-  const [id] = starved[0];
-  const card = grid.card(id);
-  const xs = grid.lines("x");
-  const at = (line) => grid.boundaryPos("x", line);
-  const middle = (at(card.c0) + at(card.c1)) / 2;
-  assert.ok(Math.abs(box.get(id).x - middle) < 1e-9, `drawn at ${box.get(id).x}, not ${middle}`);
-  assert.ok(card.c0 >= 0 && card.c1 <= xs.length - 1);
+  // The corridors and the px size are costs, and the three sharing cards divide the 151 px that they leave by their
+  // fractions 0.3, 0.04 and 0.46; n2 is drawn below minSize, which a resize does not refuse.
+  near(box.get("n3").w, 230, "the px size is kept while the room holds one minSize besides it");
+  const rest = 453 - 230 - 3 * 24;
+  for (const [id, share] of [["n1", 0.3], ["n2", 0.04], ["card", 0.46]]) near(box.get(id).w, (rest * share) / 0.8, id);
 });
 
 test("height is the same rule as width, on the other axis", () => {
@@ -462,7 +462,6 @@ test("a plane too small keeps the corridor between neighbours", () => {
   }
   const drawn = across.reduce((n, [, r]) => n + r.w, 0);
   assert.ok(Math.abs(drawn + 3 * grid.gap - 453) < 1e-6, "and the plane is covered exactly");
-  assert.ok(across.some(([, r]) => r.w === 0), "one card ran out of room");
   for (const [id, r] of across) assert.ok(r.w >= 0, `${id} is ${r.w}`);
 });
 
@@ -588,22 +587,24 @@ test("a card inserted at a boundary of an uneven level is taken from the card be
     { root: { cut: "y", kids: [{ share: 0.8, node: { cut: "x", kids: [{ share: 0.5, node: { card: "a" } }, { share: 0.5, node: { card: "b" } }] } }, { share: 0.19999999999999996, node: { card: "low" } }] } },
     { width: 800, height: 600, gap: 24, minSize: 96 },
   );
-  assert.deepEqual(["a", "b", "low"].map((id) => grid.rect(id).h), [468, 468, 108], "the two kids are drawn 468 and 108");
-  const half = grid.gap / 2;
+  // The two fractions of the 576 px after the corridor.
+  const [upper, lower] = [0.8 * 576, 0.2 * 576];
+  for (const [id, h] of [["a", upper], ["b", upper], ["low", lower]]) near(grid.rect(id).h, h, `${id} is drawn at its fraction`);
 
   assert.equal(grid.insertAt("y", 1, { size: 120, id: "rail" }), "rail");
   assert.equal(grid.rect("rail").h, 120, "the rail stands at the size it asked for");
-  for (const [id, h] of [["a", 468 - 120 - grid.gap], ["b", 468 - 120 - grid.gap], ["low", 108]]) {
+  for (const [id, h] of [["a", upper - 120 - grid.gap], ["b", upper - 120 - grid.gap], ["low", lower]]) {
     assert.ok(Math.abs(grid.rect(id).h - h) < 1e-9, `${id} is ${grid.rect(id).h}, not ${h}: the card before the boundary alone gave the span`);
   }
 
   // The rail leaves its cut; the two kids that remain take its share by one factor, so the ratio of their slots holds.
   assert.equal(grid.close("rail"), true);
-  const top = (600 * (324 + half)) / (324 + half + 108 + half) - half;
-  assert.ok(Math.abs(grid.rect("a").h - top) < 1e-9, `a is ${grid.rect("a").h}, not ${top}`);
-  assert.ok(Math.abs(grid.rect("b").h - top) < 1e-9);
-  assert.ok(Math.abs(grid.rect("low").h - (600 - top - grid.gap)) < 1e-9, `low is ${grid.rect("low").h}`);
-  assert.ok(grid.rect("low").h > 108, "so the uneven level is not restored to the heights it had");
+  const paid = upper - 120 - grid.gap;
+  const top = (576 * paid) / (paid + lower);
+  near(grid.rect("a").h, top, "a");
+  near(grid.rect("b").h, top, "b");
+  near(grid.rect("low").h, 576 - top, "low");
+  assert.ok(grid.rect("low").h > lower, "so the uneven level is not restored to the heights it had");
   assertTiling(grid, "after the rail left an uneven level");
 });
 
@@ -712,7 +713,8 @@ test("centring reaches the middle on a plane that draws its sizes scaled", () =>
 test("a cut halves the card on a plane that draws its declared sizes scaled", () => {
   const grid = new Soksak({ root: { cut: "x", kids: [{ share: 0.55, node: { card: "left" } }, { share: 0.2699999999999999, node: { card: "rail", width: 123 } }, { share: 0.18000000000000005, node: { cut: "y", kids: [{ share: 0.64, node: { card: "top", height: 148 } }, { share: 0.36, node: { card: "bottom" } }] } }] } }, { width: 292, height: 218, gap: 32, minSize: 60 });
   assert.equal(grid.rect("left").h, 218);
-  assert.equal(grid.split("left", "y", { id: "new" }), "new");
+  // A plain split would take the line between `top` and `bottom`, which leaves `minSize` below it; a new line halves the card.
+  assert.equal(grid.split("left", "y", { id: "new", newLine: true }), "new");
   assert.equal(grid.rect("left").h, 93);
   assert.equal(grid.rect("new").h, 93);
 });
@@ -721,7 +723,7 @@ test("a gap change re-expresses the proportions and never rewrites them", () => 
   const grid = new Soksak({ root: { cut: "y", kids: [{ share: 0.2, node: { card: "top" } }, { share: 0.2, node: { card: "mid" } }, { share: 0.6, node: { card: "bot", height: 400 } }] } }, { width: 900, height: 634, gap: 0, minSize: 96 });
   grid.moveBoundary("y", 2, grid.boundaryRange("y", 2)[0], false);
   const parked = grid.rect("mid").h;
-  assert.equal(parked, 96);
+  near(parked, 96, "the range ends where mid is minSize");
   const ys = grid.lines("y");
 
   // the slot carries the corridor, so a wider gap draws a sharing card smaller
@@ -748,8 +750,9 @@ test("a drag past the limit stops at the limit, not one rounding short of it", (
   // A pane and a sidebar. The end of the range is where the pane is drawn at
   // `minSize`, which is also where the plane exactly holds what the sidebar
   // declares there: the two are the same number, so the last position the range
-  // names sits on the equality `declaredFor` tests. The size that position asks
-  // for is measured from a line position that carries one rounding per slot.
+  // names sits on the equality that the layout of the cut tests. The size that
+  // position asks for is measured from a line position that carries one rounding
+  // per slot.
   const grid = new Soksak(
     { root: { cut: "x", kids: [{ share: 0.28, node: { card: "pane" } }, { share: 0.72, node: { card: "side", width: 137 } }] } },
     { width: 800, height: 600, gap: 24, minSize: 96 },
@@ -772,20 +775,21 @@ test("a card narrower than minSize takes its width from the card before the boun
     { root: { cut: "x", kids: [{ share: 0.325, node: { card: "left" } }, { share: 0.675, node: { card: "right" } }] } },
     { width: 1200, height: 800, gap: 24, minSize: 96 },
   );
-  assert.equal(grid.rect("left").w, 378);
-  assert.equal(grid.rect("right").w, 798);
+  // The two fractions of the 1176 px after the corridor.
+  near(grid.rect("left").w, 382.2, "left");
+  near(grid.rect("right").w, 793.8, "right");
 
   assert.equal(grid.insertAt("x", 1, { id: "rail", size: 48 }), "rail");
   assert.equal(grid.rect("rail").w, 48, "the rail is drawn what it declares");
-  assert.ok(Math.abs(grid.rect("left").w - (378 - 48 - grid.gap)) < 1e-9, "the card before the boundary gave the span");
-  assert.equal(grid.rect("right").w, 798, "the card after it kept its width");
+  near(grid.rect("left").w, 382.2 - 48 - grid.gap, "the card before the boundary gave the span");
+  near(grid.rect("right").w, 793.8, "the card after it kept its width");
 
-  // The close shares the rail's share by one factor, so the ratio of the two slots holds and the level is no longer the one it was.
+  // The close shares the rail's share by one factor, so the ratio of the two cards holds and the level is no longer the one it was.
   assert.equal(grid.close("rail"), true);
-  const half = grid.gap / 2;
-  const left = (1200 * (378 - 48 - grid.gap + half)) / (378 - 48 - grid.gap + half + 798 + half) - half;
-  assert.ok(Math.abs(grid.rect("left").w - left) < 1e-9, `left is ${grid.rect("left").w}, not ${left}`);
-  assert.ok(Math.abs(grid.rect("right").w - (1200 - left - grid.gap)) < 1e-9, `right is ${grid.rect("right").w}`);
+  const paid = 382.2 - 48 - grid.gap;
+  const left = (1176 * paid) / (paid + 793.8);
+  near(grid.rect("left").w, left, "left");
+  near(grid.rect("right").w, 1176 - left, "right");
 });
 
 test("a boundary beside a card with a px size is shared by every card without one", () => {
@@ -795,25 +799,28 @@ test("a boundary beside a card with a px size is shared by every card without on
       { width: 1200, height: 800, gap: 24, minSize: 96 },
     );
 
-  // The kid before the boundary holds a px size, so both other kids give a share in proportion.
+  // a and b share the 952 px that the px size and the corridors leave, 0.3 : 0.5.
+  assert.deepEqual(["a", "b"].map((id) => build().rect(id).w), [357, 595]);
+
+  // The kid before the boundary holds a px size, so both other kids give a share in proportion: 828 px, 0.3 : 0.5.
   const beside = build();
   assert.equal(beside.insertAt("x", 1, { id: "rail", size: 100 }), "rail");
   assert.equal(beside.rect("side").w, 200, "the px size is kept");
-  assert.equal(beside.rect("a").w, 300);
-  assert.equal(beside.rect("b").w, 528);
+  near(beside.rect("a").w, 310.5, "a");
+  near(beside.rect("b").w, 517.5, "b");
 
   // The boundary between two cards without a px size, drawn at different sizes: the one before it alone gives the span.
   const between = build();
   assert.equal(between.insertAt("x", 2, { id: "rail", size: 100 }), "rail");
-  assert.equal(between.rect("a").w, 346.5 - 100 - between.gap);
-  assert.equal(between.rect("b").w, 605.5, "the card after the boundary keeps its size");
+  near(between.rect("a").w, 357 - 100 - between.gap, "a");
+  near(between.rect("b").w, 595, "the card after the boundary keeps its size");
 
   // An edge of the plane: every card without a px size gives a share in proportion.
   const edge = build();
   assert.equal(edge.insertAt("x", 0, { id: "rail", size: 100 }), "rail");
   assert.equal(edge.rect("side").w, 200);
-  assert.equal(edge.rect("a").w, 300);
-  assert.equal(edge.rect("b").w, 528);
+  near(edge.rect("a").w, 310.5, "a");
+  near(edge.rect("b").w, 517.5, "b");
 });
 
 test("the state holds only the root", () => {
@@ -851,23 +858,22 @@ test("a card that comes to span the whole axis loses the size it declared", () =
   );
 });
 
-test("a cut is refused on an axis where nothing flexes", () => {
-  // Both cards on the x axis declare a width of zero, so no slot there shares
-  // and no slot grows with its span. A cut has no px-per-span rate to be placed
-  // against, and `rail` — which spans both slots — cannot be divided at all.
+test("a cut across a card is its own cut whatever the cards of another cut declare", () => {
+  // Both cards of the cut below `rail` declare a width of zero, and with nothing
+  // that shares they divide the width in their proportion. `rail` stands in
+  // the cut along y, so a cut of it along x is a new cut of two halves, and the
+  // cards below keep their widths.
   const grid = new Soksak(
     { root: { cut: "y", kids: [{ share: 0.268, node: { card: "rail", height: 268 } }, { share: 0.732, node: { cut: "x", kids: [{ share: 0.5, node: { card: "p", width: 0 } }, { share: 0.5, node: { card: "q", width: 0 } }] } }] } },
     { width: 1600, height: 1000, gap: 0, minSize: 0 },
   );
   assert.equal(grid.rect("rail").w, 1600, "the rail reaches across");
 
-  assert.equal(grid.canSplit("rail", "x"), false, "no rate to measure the cut against");
-  assert.equal(grid.split("rail", "x"), null);
-  assert.equal(grid.cards.length, 3, "and the refusal left the plane alone");
-
-  // The same cut on the axis that does flex is allowed, so the refusal above is
-  // about the axis and not about the card.
-  assert.equal(grid.canSplit("rail", "y"), true);
+  assert.equal(grid.canSplit("rail", "x"), true);
+  const born = grid.split("rail", "x");
+  assert.ok(born, "the cut goes in");
+  assert.deepEqual([grid.rect("rail").w, grid.rect(born).w], [800, 800], "two halves");
+  assert.deepEqual([grid.rect("p").w, grid.rect("q").w], [800, 800], "and the cards below keep their widths");
 });
 
 test("a card inserted where every kid of the root holds a px size takes a share from every kid", () => {

@@ -113,7 +113,7 @@ test("varied layout checks reject ID and size implementation mutants", async (t)
   checkLayout(Soksak.from(value.state, value.options));
   assert.doesNotThrow(() => assertRoleIndependence({ ...value, check: checkLayout }));
   const mutants = [
-    { name: "identifier", file: "soksak.js", find: "return card && this.rectOf(card);", to: "const r = card && this.rectOf(card); return r && this.w < 400 && this.h >= 180 && id === 'card' ? { ...r, x: r.x + 1 } : r;", error: /role independence/ },
+    { name: "identifier", file: "soksak.js", find: "            return this.rectOf(card);", to: "            return ((r) => this.w < 400 && this.h >= 180 && id === 'card' ? { ...r, x: r.x + 1 } : r)(this.rectOf(card));", error: /role independence/ },
     { name: "size", file: "geometry.js", find: "    return { x, y, w, h };", to: "    return { x, y, w: frame.x.at.at(-1) < 400 && frame.y.at.at(-1) >= 180 ? -1 : w, h };", error: /public layout invariants/ },
   ];
   for (const mutant of mutants) await t.test(mutant.name, async (t) => {

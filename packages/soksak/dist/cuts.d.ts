@@ -3,63 +3,50 @@
  * (packages/soksak/docs/layout.md#cuts).
  *
  * A cut divides a rectangle along one axis into children: cards, boxes of the
- * host and cuts along the other axis. REMOVE (`withdraw`) takes a member out of
- * its cut, and the other children take its space in proportion to their sizes.
- * ADD (`insert`) puts a card beside a target: along the cut of the target, an
- * even cut gives the card 1/(k+1) and keeps every ratio, and a cut that is not
- * even takes half of the target for the card and keeps every other size; across
- * it, the target is wrapped in a new cut of two halves. `even` gives every child
- * of every cut an equal share.
- *
- * A size is a drawn size, the extent of the drawn rectangles of a child less on
- * the y axis the heads above it, and the library draws a slot at its span of the
- * whole plane less its corridor, so a size is not a span. An operation returns a
- * plan: `layout` lays the changed cuts by their weights, the grid draws the
- * result, and `correct` moves each laid span by the difference between the size
- * drawn and the size the weights ask for. Only the children of a cut that an
- * operation changes are laid again; every other card keeps its coordinates, and
- * coordinates within a billionth are one line (R1). `minimum` judges the result:
- * a node whose rectangle changed is refused below its minimum, computed
- * recursively with heads and corridors as fixed costs.
+ * host and cuts along the other axis. Every rule works on the fractions of the
+ * stored tree; the grid draws a kid at its fraction of what its cut has left once
+ * the corridors, the px sizes, the frames and the heads are laid, so equal
+ * fractions draw equal sizes. REMOVE (`withdraw`) takes a member out of its cut,
+ * and the other kids that keep no size of their own take its fraction by one
+ * factor. ADD (`insert`) puts a node beside a target: along the cut of the
+ * target, an even cut gives the node 1/(k+1) and keeps every ratio, and a cut
+ * that is not even gives the node half of the fraction of the target; across it,
+ * the target is wrapped in a new cut of two halves. `even` gives the kids of
+ * every cut equal fractions. An operation returns the stored tree it makes; the
+ * grid lays it and refuses a result that draws a changed node below its minimum.
  */
-import type { Axis, Card, Rect, Side } from './card.js';
-import type { TreeNode } from './tree.js';
-/** The drawn rectangle of each card by id. */
-export type Drawn = ReadonlyMap<string, Rect>;
-/** The px of the drawn size per unit of span on an axis. */
-export type Rate = (axis: Axis) => number;
-/** A rectangle in the coordinates of the lines, 0..1 over the sharing slots of each axis. */
-export interface Extent {
-    x0: number;
-    x1: number;
-    y0: number;
-    y1: number;
-}
-/** What an operation of the cuts reads of the grid: the stored tree, where each node stands, the cards, their drawing and the heads. */
+import type { Axis, Side } from './card.js';
+import type { CardNode, TreeNode } from './tree.js';
+/** What an operation of the cuts reads of the grid. */
 export interface Input {
+    /** A copy of the stored tree, which the operation changes. */
     root: TreeNode;
-    extent(node: TreeNode): Extent;
-    card(id: string): Card;
-    /** Whether an id names a card or a box of the tree. */
+    /** Whether an id names a card or a box of the grid. */
     taken(id: string): boolean;
-    drawn: Drawn;
-    heads: ReadonlyMap<string, number>;
+    /**
+     * Whether a node keeps its size on an axis whatever its fraction: a fixed card,
+     * or a node drawn at a px size there.
+     */
+    keeps(node: TreeNode, axis: Axis): boolean;
+    /** The px size of a node on an axis as the grid draws it now, its corridors and frames left out; a new node has none. */
+    content(node: TreeNode, axis: Axis): number;
+    /** The corridor of an axis in px. */
+    corridor(axis: Axis): number;
     /** Counts each node that an operation visits (packages/soksak/docs/layout.md#cuts). */
     visit(): void;
 }
-/** An operation laid out: `layout` gives the stored tree, and `correct` reads its drawing and returns the largest error in px. */
-export interface Plan {
-    layout(): TreeNode;
-    correct(drawn: Drawn, rate: Rate): number;
-    /** The text of the outermost changed node drawn below its minimum, or null. */
-    minimum(drawn: Drawn, min: number): string | null;
-}
-/** ADD: the plan of adding `node`, a new card or what `withdraw` returned, beside `target` toward `side`. */
-export declare function insertNode(input: Input, target: string | readonly string[], side: Side, node: TreeNode, gap: number): Plan;
-/** REMOVE: the plan of taking the card or the box `id` out of its cut, and the stored node that left. */
-export declare function withdrawNode(input: Input, id: string, cards: readonly Card[]): {
-    plan: Plan;
+/** ADD: the stored tree with `node`, a new card or what `withdraw` returned, beside `target` toward `side`. */
+export declare function insertNode(input: Input, target: string | readonly string[], side: Side, node: TreeNode): TreeNode;
+/** ADD beside a node of the stored tree of `input`: the stored tree with `node` beside `target` toward `side`. */
+export declare function insertBeside(input: Input, target: TreeNode, side: Side, node: TreeNode): TreeNode;
+/** REMOVE: the stored tree without the card or the box `id`, and the stored node that left. */
+export declare function withdrawNode(input: Input, id: string, cards: readonly {
+    id: string;
+    fixed: boolean;
+}[]): {
+    root: TreeNode;
     left: TreeNode;
 };
-/** Even: the plan of giving every kid of every cut an equal share. */
-export declare function evenCuts(input: Input): Plan;
+/** Even: the stored tree with equal fractions for the kids of every cut that take one. */
+export declare function evenCuts(input: Input): TreeNode;
+export type { CardNode };

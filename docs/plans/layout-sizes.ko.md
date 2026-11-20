@@ -58,10 +58,10 @@
 - I4 도달성: 현재 tree의 모든 (node, side), 모든 빈 slot, 모든 가운데, 모든 strip index는 같은 결과를 합친 뒤 그것을 고르는 anchor와 점을 가진다.
 - I5 move는 모든 tab과 surface를 유지한다.
 - I6 drop은 그 결과가 현재 layout과 같을 때 정확히 변경이 없다.
-- I7 비율: ADD와 REMOVE는 그것이 넣거나, 빼거나, 고르지 않은 level에서 절반으로 나누지 않는 모든 형제의 비율을 유지한다. 고른 level은 그 안의 ADD나 REMOVE 뒤에도 고르게 남는다.
+- I7 비율: ADD와 REMOVE는 그것이 넣거나, 빼거나, 고르지 않은 level에서 절반으로 나누지 않는 모든 형제의 fraction 비율을 유지한다. fraction을 받는 kid가 모두 같은 fraction을 가진 고른 level은 그 안의 ADD나 REMOVE 뒤에도 고르게 남는다.
 - I8 국소성: canonical 병합 뒤 원래 level과 target level의 subtree 밖의 사각형은 바뀌지 않는다.
 - I9 command는 그것이 돌려준 identifier로 idempotent하다.
-- I10 역: 방금 더한 node의 REMOVE는 고른 level을 되돌리고, 옮긴 node를 그 빈 slot에 놓는 drop은 변경이 없다.
+- I10 역: 방금 더한 node의 REMOVE는 고른 level의 fraction을 되돌리고, 옮긴 node를 그 빈 slot에 놓는 drop은 변경이 없다.
 
 ## 반론과 답
 
@@ -75,3 +75,4 @@
 - 반론: group header의 drop은 side가 필요하다. 답: 그것은 group의 plane의 root 오른쪽 끝에 더한다. group에 대한 `core.card.move` `centre`의 side다.
 - 반론: 가장자리 drop은 새 card에 preview가 보이는 zone의 크기를 줄 수 있다. 답: M은 언제나 그것이 들어간 level의 같은 몫을 받는다. 둘로 된 새 level은 1/2을 주므로 가장자리도 다른 모든 add와 같은 규칙을 따른다.
 - 반론: level이 줄어들 때 원래와 target level 밖의 변경을 배제할 수 없다. 답: I8은 canonical 병합 뒤의 국소성을 기술한다.
+- 반론: I7과 I10은 I1, I2처럼 그려진 크기로 판정할 수 있다. 답: 그려진 비율은 저장된 비율이 아니다. cut은 kid에게 fraction을 주기 전에 고정 비용(kid 사이의 corridor, px size, box의 frame과 head)을 먼저 빼고, 그 비용은 gap, head, node 주변의 kid에 따라 바뀐다. 그래서 그려진 비율의 기준은 fraction이 정확한 layout을 실패로 판정하고, 비용을 상쇄하도록 fraction을 고쳐 쓴 layout만 통과시켰다. 모든 규칙은 fraction으로 일하고, 각 kid는 비용이 남긴 크기의 자기 fraction으로 그려지므로 같은 fraction의 kid는 같은 크기로 그려지며, gap 변경은 모든 fraction을 유지한다. I7과 I10은 저장된 tree의 fraction으로 판정하고, I1과 I2는 그려진 사각형으로 판정한다.

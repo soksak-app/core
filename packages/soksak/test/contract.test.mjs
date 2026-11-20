@@ -358,7 +358,7 @@ test("replace updates the canonical arrangement without replacing the grid", () 
 
   assert.equal(grid.card("card"), undefined);
   assert.equal(grid.card("upper").data.program, "upper");
-  assert.deepEqual(grid.rect("lower"), { x: 312, y: 0, w: 888, h: 800 });
+  assert.deepEqual(grid.rect("lower"), { x: 318, y: 0, w: 882, h: 800 });
   // The board is the same and only the arrangement changed. The card before the change is not in this arrangement.
   assert.equal(first.id, "card");
   assert.equal(grid.card(first.id), undefined, "the card that was replaced is gone");

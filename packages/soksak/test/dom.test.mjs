@@ -468,7 +468,8 @@ test("a move with no button down ends the drag", () => {
   pointer(window, el, "pointerdown", 1, from, 300);
   pointer(window, el, "pointermove", 1, from - 100, 300);
   const held = grid.boundaryPos("x", 1);
-  assert.equal(held, from - 100, "a move with the button down drags");
+  // The line is drawn from the fractions that the drag stored, so it stands at the pointer within the rounding of those fractions.
+  assert.ok(Math.abs(held - (from - 100)) < 1e-9, `a move with the button down drags, to ${held}`);
 
   // The pointerup never arrives — the element lost the capture. The next move
   // has no button down, and must end the drag rather than keep dragging.
@@ -1653,14 +1654,17 @@ test("a gesture ends when a card the host puts in shifts the boundary it holds",
 
 test("a gesture survives a change that leaves its boundary where it stands", () => {
   const { window, host, grid, view } = mount();
-  grid.replace({ root: { cut: "x", kids: [{ share: 0.4, node: { card: "left" } }, { share: 0.6, node: { card: "right" } }] } });
+  grid.replace({ root: { cut: "x", kids: [
+    { share: 0.4, node: { card: "left" } },
+    { share: 0.6, node: { cut: "y", kids: [{ share: 0.5, node: { card: "right" } }, { share: 0.5, node: { card: "below" } }] } },
+  ] } });
   view.render();
   const el = host.querySelector('.sp-divider[data-axis="x"]');
   const held = grid.boundaryPos("x", 1);
   pointer(window, el, "pointerdown", 1, held, 300);
 
-  // The cut goes in above the line the finger holds, so a line is added and
-  // that line keeps both its number and its place.
+  // The cut goes in inside the kid after the line the finger holds, so a line is
+  // added above it and that line keeps both its number and its place.
   grid.split("right", "x");
   view.render();
   assert.equal(grid.boundaryPos("x", 1), held, "the boundary is where it was");
@@ -1689,7 +1693,7 @@ test("a host that renders between a drag and the draw it is holding keeps the dr
 
   hold = true;
   pointer(window, el, "pointermove", 1, held + 300, 300);
-  assert.equal(grid.boundaryPos("x", 1), held + 300, "the drag moved it, and nothing is drawn yet");
+  assert.ok(Math.abs(grid.boundaryPos("x", 1) - (held + 300)) < 1e-9, "the drag moved it, and nothing is drawn yet");
   view.render(); // the host renders for reasons of its own
   assert.equal(el.dataset.dragging, "true", "the change was the view's own, so the gesture stands");
 

@@ -52,19 +52,12 @@ card array 순서를 바꾸어도 geometry, query 판단과 대응하는 operati
 통로는 슬롯이 가지므로 px 크기는 그려지는 크기다. `width: 180` 은 판의 가장자리에서도,
 두 카드 사이에서도, 어떤 `gap` 에서도 180 으로 그려진다.
 
-호스트는 카드 묶음 둘레에 프레임을 그릴 수 있다. `setFrames({id: {left, right, top,
-bottom}})` 는 각 카드에 그 카드와 네 선 각각 사이에 있는 프레임의 수를 주며, 각 프레임은
-그쪽에 갭 하나를 차지한다: 카드의 가장자리는 선에서 통로와 그 프레임마다 갭 하나만큼
-떨어지고, 슬롯은 그 아래 선에서 시작하는 카드의 가장 많은 프레임과 그 위 선에서 끝나는
-카드의 가장 많은 프레임을 갖는다. 그래서 선의 통로는 갭 하나에 그 위 프레임마다 갭 하나를
-더한 것이며, 카드는 둘레의 프레임에서, 프레임은 다음 프레임에서, 카드나 프레임은 선 건너
-이웃에서 갭 하나만큼 떨어진다. 프레임은 통로의 갭을 차지하고, 판이 통로와 프레임을 담을 수
-없으면 그와 함께 줄어든다. 항목이 없는 카드는 프레임이 없고, 프레임은 상태의 일부가 아니며,
-`setFrames` 는 카드가 아닌 id에 대해 `soksak: frames name "<id>", which is no card`,
-0보다 작은 수에 대해 `soksak: the frames of "<id>" count below zero`, 정수가 아닌 수에
-대해 `soksak: the frames of "<id>" count no whole number` 를 throw한다. px 크기는 그
-슬롯에서 가장 많은 프레임을 가진 카드의 그려지는 크기이며, 더 적은 카드는 모자란 프레임마다
-갭 하나만큼 넓게 그려진다.
+box([모델](#모델))는 그 inner node 둘레에 프레임을 그린다: 프레임은 box의 왼쪽, 오른쪽,
+아래쪽에서 box 안쪽으로 통로 하나만큼, 위쪽에서는 box의 head(`setHeads`)만큼 들어와 선다.
+프레임과 head는 box를 담는 cut의 고정 비용이므로, 카드는 둘레의 프레임에서, 프레임은 다음
+프레임에서, box는 선 건너 이웃에서 통로 하나만큼 떨어진다. 프레임은 그 축의 통로를 차지하고,
+판이 통로와 프레임을 담을 수 없으면 그와 함께 줄어든다. px 크기는 둘레의 프레임 안에서
+카드가 그려지는 크기다. 프레임은 tree에서 따라 나오며 상태의 일부가 아니다.
 
 슬롯의 합은 언제나 판이고, 그것을 유지하기 위해 px 크기가 줄어든다. 축의 어떤 슬롯이
 지분을 갖고 판에 자리가 있는 동안 px 크기는 선언한 값으로 그려진다. 판에 자리가 없으면 모든 px
@@ -74,21 +67,21 @@ bottom}})` 는 각 카드에 그 카드와 네 선 각각 사이에 있는 프�
 선언한 카드 하나는 1600 으로, 200 과 300 을 선언한 둘은 630 과 946 으로 그려진다.
 카드가 실제로 그려진 값은 `rect(id)` 로 읽는다.
 
-담고 있는 것에 비해 너무 작은 판은 모든 카드에 최소 크기를 줄 수 없다. 그때 줄어드는
-것은 카드의 너비이고 그 옆의 갭은 줄지 않는다. 지분을 가진 슬롯은 자신이 가진 통로에서
-멈추고, 나머지가 남은 자리를 나누며, 자리가 없어진 카드는 가까운 가장자리에 너비 없이
-그려진다. 이웃한 두 카드 사이의 통로는 여전히 정확히 `gap` 이고 판은 여전히 정확히
-덮인다.
+담고 있는 것에 비해 너무 작은 판은 모든 카드에 최소 크기를 줄 수 없다. 축의 통로는
+갭을 그 범위를 통로를 가진 선과 프레임의 수로 나눈 값으로 제한한 것이고, 그래도 통로와
+프레임을 담지 못하는 cut은 그 축의 통로를 절반씩 없음까지 줄인다. 각 kid는 적어도 그 안의
+통로, px 크기, 프레임, head만큼 그려지고, fraction을 받는 kid는 나머지를 fraction대로
+나누므로, 작은 fraction은 `minSize` 아래로 그려지고 판은 여전히 정확히 덮인다.
 
 `minSize` 는 판이 아니라 연산을 구속한다. 자르기, 닫기, 삽입, 끌기는 각각 카드를 그
-아래로 내리는 것을 거절하고, `gap` 과 `minSize` 와 `resize` 는 같은 비율을 새 눈금으로
+아래로 내리는 것을 거절하고, `gap` 과 `minSize` 와 `resize` 는 같은 fraction을 새 눈금으로
 다시 표현한다. 그래서 바닥에 서 있는 지분 카드는 통로가 넓어지면 그 아래로 그려진다 —
-그 카드가 닿는 내부 선 하나마다 통로의 절반씩 — 판에 아직 자리가 있어도 그렇다. 다시
+갭이 더한 통로의 자기 fraction만큼 — 판에 아직 자리가 있어도 그렇다. 다시
 쓰이는 것은 없다. 통로를 되돌리면 카드는 마지막 자리까지 그대로 그려진다. 통로와 무관하게
 크기를 지켜야 하는 카드는 `setSize` 로 크기를 선언하고, 그 카드는 어떤 `gap` 에서도
 선언한 대로 그려진다.
 
-새로 들어온 카드는 끌기와 같은 방식으로 옆 슬롯에서 너비를 가져온다.
+새로 들어온 카드는 ADD의 규칙으로 크기를 받는다([add and remove](#add-and-remove)).
 
 px 크기는 슬롯 하나를 기술하므로, 자르기는 그것을 두 쪽으로 나눈다. 두 슬롯에 걸친
 카드는 px 크기를 갖지 않는다.
@@ -363,24 +356,22 @@ px 크기를 가진 카드 옆에서는, 경계가 닿을 수 있는 범위가 �
 경계에서 만나는 두 카드를 재므로, 그 바닥에 가까운 판에서는 경계가 갈 수 있는 것보다
 조금 더 넓게 보고할 수 있고, 그 너머를 목표로 하면 경계는 제자리에 남는다.
 
-축에 px 크기가 하나도 없어도 같은 일이 일어난다. 담고 있는 것에 비해 너무 작은 판은
-나누어 쓰는 슬롯 하나를 그 통로에서 멈추고, 멈춘 슬롯은 자기 구간을 따라 움직이지
-않으므로, 경계가 서는 px 은 좌표를 따라가기를 그친다. 범위 안에 그릴 수 없는 위치가
-생기고, 좌표 구간 전체가 몇 개의 위치만 만들어 내기도 한다. 그릴 수 없는 위치를
-목표로 한 끌기는 그릴 수 있는 위치에 내려앉고, 그 위치는 범위 밖일 수 있다.
+끌기는 한 cut의 두 kid 사이 선을 옮기고, commit은 fraction을 받는 각 kid의 fraction을
+그려진 크기에서 읽으므로, 양쪽 kid가 그 차이를 나누고 다른 모든 kid는 fraction을 유지한다.
+그 안의 비용만큼 그려진 kid는 내줄 자리가 없으므로, 그 옆의 선은 그쪽으로 움직이지 않는다.
 `boundaryRange` 는 끌기의 한계를 정할 뿐, 끌기가 어디서 멈출 수 있는지를 나열하지
 않는다.
 
 같은 규칙이 나타나거나 사라지는 카드를 정리한다. root의 kid i와 i+1 사이 경계에 삽입된
-카드는 kid i 옆 kid i+1 쪽에 더해진다([add and remove](#add-and-remove)). 그 축에 px
-크기를 갖지 않은 root의 kid들이 하나의 그려진 크기(반 px 안)를 가지거나 kid i가 px
-크기를 가지면, px 크기가 없는 모든 kid가 비례해 몫을 내고 비율을 유지한다. 그렇지
-않으면 kid i 혼자 span을 내고 다른 모든 kid는 크기를 유지한다. 모든 kid가 px 크기를
+카드는 kid i 옆 kid i+1 쪽에 더해진다([add and remove](#add-and-remove)). fraction을
+받는 root의 kid들이 하나의 fraction을 가지거나 kid i가 px 크기를 가지면, fraction을 받는
+모든 kid가 비례해 몫을 내고 비율을 유지한다. 그렇지 않으면 kid i 혼자 span을 내고 다른
+모든 kid는 fraction을 유지한다. 모든 kid가 px 크기를
 가지면 모든 kid가 몫을 낸다. 판의 가장자리에 삽입된 카드는 root 옆에 더해지므로 px
 크기가 없는 모든 kid가 비례해 몫을 낸다. 카드를 `minSize` 아래로 만드는 삽입은
-거부된다. 닫히는 카드는 자기 cut을 떠나고, `fixed` 카드가 아닌 그 cut의 다른 kid가 한
-인수로 그 span을 가진다. 전후에 같은 두 line 사이에 선 slot은 그려진 너비를 유지한다.
-그래서 사이드바를 껐다 켜면 root가 고를 때 다른 모든 카드는 갖고 있던 너비를 유지하고,
+거부된다. 닫히는 카드는 자기 cut을 떠나고, 그 cut의 다른 kid의 fraction은 한 인수로
+늘어난다. px 크기가 없는 `fixed` 카드는 그 cut의 고정 비용이므로, 옆에 kid가 들어오거나
+나가도 그려진 크기를 유지한다. 그래서 사이드바를 껐다 켜면 root가 고를 때 다른 모든 카드는 갖고 있던 너비를 유지하고,
 고르지 않은 root에서는 자리를 낸 kid가 낸 것보다 적게 돌려받는다. 판이 그 축의 선언을
 담지 못하면 선언된 크기는 모두 한 인수로 축소되어 그려지고, 카드가 들어오거나 나갈 때
 그 인수가 바뀐다.
@@ -399,32 +390,35 @@ grid.centerBoundary("x", 1);
 
 ## Cuts
 
-`even()`은 tree([모델](#모델))의 모든 cut의 모든 kid에 같은 share를 준다. 그래서
+`even()`은 tree([모델](#모델))의 모든 cut에서 fraction을 받는 모든 kid에 같은 share를 준다. 그래서
 결과는 배치를 만든 operation의 순서가 아니라 배치에 달려 있다. 다섯 카드의 row는
 절반씩 만들었든 셋으로 나눠 만들었든 같은 다섯 카드이고, 같은 수의 카드를 가진 두
 row는 seam을 같은 line에 그린다.
 
 box `{box, data?, inner}`는 tree가 그 cut의 kid 하나로 유지하는 host의 사각형이므로
 어떤 cut도 그것을 가로지르지 않는다. `setHeads({id: px})`는 host가 각 box 안쪽 위,
-inner node 위에 그리는 px를 준다. 항목이 없는 box는 head가 없다. `setHeads`는 box가
+inner node 위에 그리는 px, 곧 head와 그 아래 간격을 준다. 항목이 없는 box는 head가
+없다. inner node 맨 위의 카드나 box는 box의 위쪽부터 그려지므로 head는 그 위쪽 안에 선다. `setHeads`는 box가
 아닌 id에 `soksak: heads name "<id>", which is no box`를, 음수이거나 유한하지 않은
 head에 `soksak: the head of "<id>" is <value>`를 던지며, head는 state의 일부가 아니다.
 
-kid의 크기는 그려진 크기다. 곧 그 카드들의 그려진 사각형의 첫 가장자리부터 마지막
-가장자리까지의 범위이며 그 사이의 gap을 포함하고, `y` 축에서는 그 위 box의 head를
-뺀다. 그래서 box의 head는 box의 share 안에 있고, 크기가 같은 두 kid는 같은 크기로
-그려진다. slot은 plane 전체에 대한 span에서 corridor를 뺀 크기로 그려지므로(R5) 같은
-share가 같은 크기는 아니다. `even`은 모든 cut을 같은 share로 놓고, 그려진 사각형을
-읽고, 각 share를 그려진 크기와 같은 크기의 차이만큼 옮기며, 가장 큰 차이가 1000분의
-1 px 아래가 될 때까지 반복한다. corridor는 share에 따라 바뀌지 않으므로 한 번의
-보정으로 cut 하나가 정확히 놓이고, 중첩된 cut은 한 번 더 걸린다. cut의 축에 px
-크기를 가진 카드와 `fixed` 카드는 자기 span을 유지하고 share를 받지 않는다. minimum
-아래의 결과는 아래와 같이 던지며, 던지면 아무것도 바뀌지 않는다.
+크기의 모든 규칙은 tree의 fraction으로 일한다. cut은 먼저 자기 범위에서 고정 비용을
+뺀다: kid 사이의 corridor, px 크기를 유지하는 kid의 px 크기, kid 가운데 box의 frame과
+head다. fraction을 받는 각 kid는 자기 frame과 head에 나머지의 자기 fraction을 더한
+크기로 그려지므로, fraction이 같은 kid는 plane의 경계에서나 두 corridor 사이에서나 frame
+안에서 같은 크기로 그려진다. cut에서 fraction을 받는 kid들이 하나의 fraction을 가지면 그
+kid는 형제와 고르며, `even`은 모든 cut의 그런 kid에 하나의 fraction을 준다. gap 변경,
+head 변경, resize는 모든 fraction을 유지하므로, 고른 cut에서의 ADD와 REMOVE는 그 사이에
+무엇이 바뀌었든 그것을 정확히 되돌린다. cut의 축에 px 크기를 가진 카드와 `fixed` 카드는
+자기 크기를 유지하고 fraction을 받지 않는다. minimum 아래의 결과는 아래와 같이 던지며,
+던지면 아무것도 바뀌지 않는다.
 
 node의 minimum은 재귀적이며 head와 corridor를 고정 비용으로 센다. 카드는 `minSize`와
-`y`에서 그 사각형 안에 그려지는 head를 필요로 하고, box는 그 inner node가 필요로 하는
-것과 그 head를, cut은 자기 축에서 kid의 필요와 그 사이 corridor의 합을, 가로 축에서
-kid 필요의 최댓값을 필요로 하며, span을 유지하는 kid는 그려진 크기를 필요로 한다.
+`y`에서 그 사각형 안에 그려지는 head를 필요로 하고, px 크기를 가진 카드는 그 크기와
+`minSize` 가운데 작은 것을, px 크기를 가진 `fixed` 카드는 그 크기와 전에 가졌던 크기
+가운데 작은 것을, 다른 `fixed` 카드는 그려진 크기를, box는 그 inner node가 필요로 하는
+것을, cut은 자기 축에서 kid의 필요와 그 사이 corridor의 합을, 가로 축에서 kid 필요의
+최댓값을 필요로 한다.
 operation 뒤에 사각형이 바뀐 모든 카드와 box를 바깥부터 판정하고, 필요보다 작게
 그려지는 첫 카드나 box가 `card <id> would be <w>x<h>, below its minimum <w>x<h>`를
 던진다. 이 문구는 그 카드나 box를 가리킨다.
@@ -442,17 +436,20 @@ grid.visits;                      // even이 방문한 node 수
 
 ### Add and remove
 
-`withdraw(id)`는 카드나 box인 node `id`를 그 cut에서 꺼낸다. cut의 다른 kid는 close와
-같이 크기에 비례해 그 자리를 나눠 가지며, kid가 하나만 남은 cut은 그 kid로 바뀐다. 떠난 node, 곧
+`withdraw(id)`는 카드나 box인 node `id`를 그 cut에서 꺼낸다. cut의 다른 kid의 fraction은
+close와 같이 한 인수로 늘어나며, kid가 하나만 남은 cut은 그 kid로 바뀐다. 그 kid의 kid
+가운데 그것을 담는 cut의 축을 따르는 cut은 그 cut에 합쳐지고, 모든 kid는 그려진 크기를
+유지한다. 떠난 node, 곧
 카드 node이거나 inner node를 가진 box node를 돌려주고 `insert`가 그것을 받으므로,
 box는 member의 비율을 유지한 채 놓인다. 마지막 카드와 `fixed` 카드는 거부된다.
 
 `insert(target, side, node)`는 새 카드 `{card, data?}`나 `withdraw`가 돌려준 것인
 `node`를 `target` 옆 `side` 쪽에 더하고 그 id를 돌려준다. `target`은 id이거나 한
-cut의 이웃한 kid들이 가진 id들이다. target의 cut을 따라서는, kid의 크기가 하나인(반
-px 안) cut은 node에 cut의 1/(k+1)을 주고 모든 비율을 유지하며, kid의 크기가 다른
-cut은 node에 target의 절반에서 새 corridor를 뺀 크기를 주고 다른 모든 크기를
-유지한다. target이 cut 자체이면 `side` 쪽 끝의 kid가 target이다. side의 축을 따라 한
+cut의 이웃한 kid들이 가진 id들이다. target의 cut을 따라서는, fraction을 받는 kid k개의
+고른 cut은 node에 그 fraction의 1/(k+1)을 주고 다른 모든 fraction에 k/(k+1)을 곱하며,
+fraction이 다른 cut은 node에 target fraction의 절반을 주고 다른 모든 fraction을
+유지한다. px 크기를 유지하는 node는 자리를 내는 kid에서 새 corridor와 함께 크기를
+가져온다. target이 cut 자체이면 `side` 쪽 끝의 kid가 target이다. side의 축을 따라 한
 cut의 이웃한 kid들의 id는 그 cut 안의 run이다. node는 kid 옆에서와 같이 run 옆에서 그
 cut에 더해지고, run은 자기 cut으로 감싸지지 않는다. cut을 가로질러서는
 target을 두 절반의 새 cut으로 감싼다. operation이 바꾼 cut만 다시 놓으므로 다른 모든
@@ -598,20 +595,19 @@ share를 받지 않는다. fixed 카드를 담은 cut이나 box는 다른 kid처
 
 | | |
 | --- | --- |
-| `cards`, `card(id)`, `rect(id)`, `rects()`, `rectOf(card)` | 배치를 읽는다 |
+| `cards`, `card(id)`, `rect(id)`, `rects()`, `rectOf(card)` | 배치를 읽는다. box의 `rect(id)`는 그 frame을 두르는 사각형이다 |
 | `resize(w, h)`, `width`, `height` | 판의 크기 |
 | `canSplit(id, axis)`, `split(id, axis, {id?, data?, newLine?})` | 카드 하나를 둘로 자른다 |
 | `splitToward(id, side, {id?, data?, newLine?})` | 자르고 새 카드를 지정한 쪽에 놓는다. `newLine` 은 카드가 가로지르는 line이 안에 있어도 가운데의 새 line에서 자른다 |
 | `canClose(id)`, `close(id)` | 카드를 제거한다. 그 cut의 다른 kid가 한 인수로 그 share를 가진다(R7) |
 | `canMove(id, targetId, side)`, `move(id, targetId, side)` | 카드를 다른 카드의 옆으로 옮긴다. close와 insert다 |
 | `setFixed(id, on)`, `setSize(id, axis, px)`, `setData(id, data)` | 카드를 변경한다. 반환된 사본은 동결되어 있다 |
-| `setFrames(frames)` | 각 카드와 그 선 사이의 프레임 (R5) |
 | `standings(axis)`, `canInsertAt(axis, line)`, `insertAt`, `moveTo` | 판을 가로지르는 카드: 판의 가장자리와 그 축을 따르는 root cut의 seam |
 | `zoneAt(x, y, options)` | 드롭이 내려앉는 곳 |
 | `dividers()`, `rules()` | 잡는 영역과 그릴 경계 |
 | `boundaryPos`, `boundaryRange`, `hasBoundary(axis, line)`, `moveBoundary(axis, line, px, allowSnap?)`, `centerBoundary` | 경계를 끈다 |
-| `even()`, `setHeads(heads)`, `visits` | 모든 cut의 모든 kid에 같은 share를 준다. box의 head. 마지막 operation이 방문한 node 수 ([cuts](#cuts)) |
-| `withdraw(id)` | 카드나 box를 그 cut에서 꺼낸다. 나머지가 비율대로 그 자리를 나눈다 ([add and remove](#add-and-remove)) |
+| `even()`, `setHeads(heads)`, `visits` | 모든 cut에서 fraction을 받는 모든 kid에 하나의 fraction을 준다. box의 head. 마지막 operation이 방문한 node 수 ([cuts](#cuts)) |
+| `withdraw(id)` | 카드나 box를 그 cut에서 꺼낸다. 나머지의 fraction이 한 인수로 늘어난다 ([add and remove](#add-and-remove)) |
 | `insert(target, side, node)` | target 옆에 카드를 더한다. 고른 cut에서는 1/(k+1), 고르지 않은 cut에서는 target의 절반, 가로질러서는 두 절반으로 감싼다 ([add and remove](#add-and-remove)) |
 | `crossings(card)`, `cardsCrossing(axis, line)` | 카드가 가로지르는 선, 그리고 선을 가로지르는 카드 |
 | `lines(axis)`, `toJSON()`, `Soksak.from(state, options?)`, `checkState(state)`, `replace(state)` | 검사와 상태 |

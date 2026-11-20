@@ -125,15 +125,16 @@ test("a state restored from toJSON closes like the original", () => {
 
 test("a refused move leaves nothing behind", () => {
   const start = () => {
-    const grid = new Soksak(undefined, { width: 1600, height: 1000, gap: 24, minSize: 96 });
+    const grid = new Soksak(undefined, { width: 600, height: 200, gap: 24, minSize: 96 });
     grid.setSize("card", "x", 155);
-    grid.insertAt("y", 1, { size: 181, id: "n3" });
-    grid.insertAt("y", 1, { size: 141, id: "n4" });
+    grid.insertAt("x", 1, { size: 181, id: "n3" });
+    grid.insertAt("x", 1, { size: 141, id: "n4" });
     return grid;
   };
   const plain = start();
   const tried = start();
-  assert.equal(tried.move("n3", "card", "left"), false, "the move is refused");
+  // The halves of the 200 px column above and below `card` would be 88 px, below `minSize`.
+  assert.equal(tried.move("n3", "card", "top"), false, "the move is refused");
   assert.deepEqual(tried.toJSON(), plain.toJSON(), "and changes no state");
 
   plain.close("n3");
@@ -158,15 +159,16 @@ test("closing a card every slot paid for gives the span back to every slot", () 
 });
 
 test("a card that arrives takes its width from the kid before the line, and a close shares it among every kid", () => {
-  const grid = new Soksak(undefined, { width: 800, height: 600, gap: 24, minSize: 96 });
-  grid.split("card", "x", { id: "n1" });
-  grid.split("n1", "x", { id: "n2" });
+  const grid = new Soksak(
+    { root: { cut: "x", kids: [{ share: 0.5, node: { card: "card" } }, { share: 0.25, node: { card: "n1" } }, { share: 0.25, node: { card: "n2" } }] } },
+    { width: 800, height: 600, gap: 24, minSize: 96 },
+  );
   const widths = () => grid.cards.map((c) => `${c.id}:${grid.rect(c.id).w.toFixed(3)}`).sort().join(" ");
-  assert.equal(widths(), "card:388.000 n1:176.000 n2:188.000");
+  assert.equal(widths(), "card:376.000 n1:188.000 n2:188.000");
 
-  // The kids hold no px size and have three drawn sizes, so the kid before the line alone pays.
+  // The kids hold no px size and two fractions, so the kid before the line alone pays the width and the corridor.
   assert.equal(grid.insertAt("x", 1, { size: 200, id: "rail" }), "rail");
-  assert.equal(widths(), "card:164.000 n1:176.000 n2:188.000 rail:200.000", "only the kid before the line paid");
+  assert.equal(widths(), "card:152.000 n1:188.000 n2:188.000 rail:200.000", "only the kid before the line paid");
 
   // The close scales the other kids by one factor, so their shares keep their ratios.
   const shares = () => grid.toJSON().root.kids.map((kid) => kid.share);
@@ -175,7 +177,7 @@ test("a card that arrives takes its width from the kid before the line, and a cl
   const [a, b, c] = shares();
   const factor = a / card;
   assert.ok(Math.abs(b / n1 - factor) < 1e-9 && Math.abs(c / n2 - factor) < 1e-9, "every kid scaled by one factor");
-  assert.equal(widths(), "card:232.444 n1:253.778 n2:265.778");
+  assert.equal(widths(), "card:216.485 n1:267.758 n2:267.758");
 });
 
 test("a rail at the plane's border returns the span every slot gave it", () => {
@@ -215,23 +217,24 @@ test("a slot standing at zero width takes the corridor it will hold once it is g
   // slot of the rail standing at zero width while the settle runs. The width it
   // is named at is the width it had, so the corridor to add is the one it will
   // hold again, not the nothing a slot with no width holds.
-  const grid = new Soksak(undefined, { width: 800, height: 600, gap: 8, minSize: 60 });
-  grid.split("card", "x", { id: "n1" });
-  grid.split("n1", "x", { id: "n2" });
+  const grid = new Soksak(
+    { root: { cut: "x", kids: [{ share: 0.5, node: { card: "card" } }, { share: 0.25, node: { card: "n1" } }, { share: 0.25, node: { card: "n2" } }] } },
+    { width: 800, height: 600, gap: 8, minSize: 60 },
+  );
   const widths = () => grid.cards.map((c) => `${c.id}:${grid.rect(c.id).w.toFixed(6)}`).sort().join(" ");
   const was = widths();
-  assert.equal(was, "card:396.000000 n1:192.000000 n2:196.000000");
+  assert.equal(was, "card:392.000000 n1:196.000000 n2:196.000000");
 
-  // n1 alone would have to give 208 px at the boundary before n2 and holds 192, so the line is refused.
+  // n1 alone would have to give 208 px at the boundary before n2 and holds 196, so the line is refused.
   assert.equal(grid.insertAt("x", 2, { size: 200, id: "rail" }), null);
   assert.equal(widths(), was, "and nothing changed");
 
-  // At the edge every kid gives a share in proportion: 0.5, 0.25, 0.25 become 0.375, 0.1875, 0.1875.
+  // At the edge every kid gives in proportion to its fraction, so the three keep the ratio 2, 1, 1.
   assert.equal(grid.insertAt("x", 3, { size: 200, id: "rail" }), "rail");
   assert.equal(
     widths(),
-    "card:294.000000 n1:141.000000 n2:141.000000 rail:200.000000",
-    "the spans 300, 150 and 150 give the 4 px that the rail's width adds in the ratio 2, 1, 1",
+    "card:288.000000 n1:144.000000 n2:144.000000 rail:200.000000",
+    "the 208 px of the rail and its corridor come from the three in the ratio 2, 1, 1",
   );
   assert.equal(grid.close("rail"), true);
   assert.equal(widths(), was);
@@ -239,20 +242,20 @@ test("a slot standing at zero width takes the corridor it will hold once it is g
 
 test("a card that arrives at a border takes a share from every kid in proportion", () => {
   // The rail arrives at the far border beside `b`, and `a` is not beside it. At the
-  // edge of the plane every kid gives a share in proportion, so `a` pays too and the
-  // shares 0.25 and 0.75 become 0.175 and 0.525.
+  // edge of the plane every kid gives in proportion to its fraction, so `a` pays too and
+  // the two keep the ratio 1 to 3.
   const grid = Soksak.from(
     { root: { cut: "x", kids: [{ share: 0.25, node: { card: "a" } }, { share: 0.75, node: { card: "b" } }] } },
     { width: 600, height: 400, gap: 12, minSize: 60 },
   );
   const widths = () => grid.cards.map((c) => `${c.id}:${grid.rect(c.id).w.toFixed(6)}`).sort().join(" ");
   const was = widths();
-  assert.equal(was, "a:144.000000 b:444.000000");
+  assert.equal(was, "a:147.000000 b:441.000000");
 
   // The lines are 0, 1/4 and 1, so the far border is line 2.
   assert.equal(grid.insertAt("x", 2, { size: 180, id: "rail" }), "rail");
-  // The spans 105 and 315 give the 6 px that the rail's width adds in the ratio 1 to 3.
-  assert.equal(widths(), "a:97.500000 b:298.500000 rail:180.000000", "a pays in proportion to its share");
+  // The 192 px of the rail and its corridor come from the two in the ratio 1 to 3.
+  assert.equal(widths(), "a:99.000000 b:297.000000 rail:180.000000", "a pays in proportion to its share");
   assert.equal(grid.close("rail"), true);
   assert.equal(widths(), was, "the close scales the shares back by one factor");
 });
@@ -278,30 +281,30 @@ test("a card whose neighbours are all fixed gives its space to the other cards i
 });
 
 test("a close after a split gives the span to the other kids of the cut in proportion", () => {
-  // The split takes the new card's height from `top` alone. The close scales the
-  // other kids of the cut by one factor, so `top` and `bottom` keep the ratio they
-  // had when the close began and `bottom` takes its part of the span as well.
+  // The cut is uneven, so the split takes the fraction of the new card from `top` alone. The
+  // close scales the fractions of the other kids by one factor, so `top` and `bottom` keep the
+  // ratio they had when the close began and `bottom` takes its part of the span as well.
   const grid = new Soksak(
-    { root: { cut: "x", kids: [{ share: 0.5, node: { cut: "y", kids: [{ share: 0.5, node: { card: "top" } }, { share: 0.5, node: { card: "bottom" } }] } }, { share: 0.5, node: { card: "right" } }] } },
+    { root: { cut: "x", kids: [{ share: 0.5, node: { cut: "y", kids: [{ share: 0.6, node: { card: "top" } }, { share: 0.4, node: { card: "bottom" } }] } }, { share: 0.5, node: { card: "right" } }] } },
     { width: 1000, height: 400, gap: 20, minSize: 40 },
   );
   const tall = (id) => Number(grid.rect(id).h.toFixed(2));
-  assert.deepEqual([tall("top"), tall("bottom")], [190, 190]);
+  const shares = () => grid.toJSON().root.kids[0].node.kids.map((kid) => kid.share);
+  assert.deepEqual([tall("top"), tall("bottom")], [228, 152]);
 
-  // top is 123.33 tall after the first round, and a third cut would leave a part under minSize
   for (let round = 0; round < 2; round++) {
     const born = grid.split("top", "y", { id: `mid${round}` });
     assert.equal(born, `mid${round}`, `round ${round}: the cut was refused`);
     if (round === 0) {
-      assert.deepEqual([tall("top"), tall(born), tall("bottom")], [90, 80, 190], "the cut divides top and leaves bottom alone");
+      assert.deepEqual(shares(), [0.3, 0.3, 0.4], "the cut halves the fraction of top and leaves the fraction of bottom alone");
+      assert.deepEqual([tall("top"), tall(born), tall("bottom")], [108, 108, 144], "each fraction of the 360 px after the corridors");
     }
-    // top and bottom are the first and the last kid of the cut, so half a gap is drawn off each
-    const ratio = () => (grid.rect("top").h + grid.gap / 2) / (grid.rect("bottom").h + grid.gap / 2);
-    const held = ratio();
+    const [top, , bottom] = shares();
     assert.equal(grid.close(born), true);
-    assert.ok(Math.abs(ratio() - held) < 1e-9, `round ${round}: top and bottom kept their ratio`);
+    const [a, b] = shares();
+    assert.ok(Math.abs(a / top - b / bottom) < 1e-9, `round ${round}: top and bottom kept their ratio`);
     if (round === 0) {
-      assert.deepEqual([tall("top"), tall("bottom")], [123.33, 256.67], "the span went to both");
+      assert.deepEqual([tall("top"), tall("bottom")], [162.86, 217.14], "the span went to both");
     }
     assertTiling(grid, `after round ${round}`);
   }

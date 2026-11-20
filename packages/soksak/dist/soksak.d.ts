@@ -17,7 +17,7 @@
  * whose structure stays. `geometry.ts` computes the coordinates.
  */
 import type { Axis, Card, Rect, Side } from './card.js';
-import type { Divider, Frames, Rule, ZoneHit, ZoneOptions } from './geometry.js';
+import type { Divider, Rule, ZoneHit, ZoneOptions } from './geometry.js';
 export type { Divider, Rule, Zone, ZoneHit, ZoneOptions } from './geometry.js';
 import type { SoksakState, TreeNode } from './tree.js';
 export type { Axis, Card, CardInit, Rect, Side } from './card.js';
@@ -52,6 +52,16 @@ export declare class Soksak {
     private boxes;
     private at;
     private spots;
+    /** The px that each node stands inside its slot: the corridors and frames on each side, and on top the heads above it. */
+    private insets;
+    /** The corridor of each axis in px, which the last derive laid. */
+    private unit;
+    /** The px position of each line per axis from the last layout of the tree, or null on a plane with no size. */
+    private linesAt;
+    /** The px of the heads of the boxes that start on the top line of each card. */
+    private above;
+    /** Whether an operation moved the lines, so the commit reads the fractions from them. */
+    private moved;
     private up;
     /** The px that the host draws inside the top of each box by id, which `setHeads` set. */
     private heads;
@@ -90,12 +100,45 @@ export declare class Soksak {
     /** Takes the tree of a state as a copy and derives the lines and the cells. */
     private load;
     /**
-     * Lays the tree into the unit plane and derives the lines and the cells from
-     * it: coordinates within EPS are one line (R1), and the cards are listed in
-     * the order of the tree. Each node keeps the lines its rectangle starts and
-     * ends at and the node that holds it, so no operation searches the tree.
+     * Lays the tree into the plane and derives the lines and the cells from it
+     * (packages/soksak/docs/layout.md#the-model). A cut first takes its fixed costs
+     * from its extent, the corridors between its kids and the px sizes of the kids
+     * that keep one, and gives every other kid its fraction of the rest, so equal
+     * fractions draw equal sizes; a box takes its frames, one corridor on its left,
+     * right and bottom, and on its top the head of the host, from the extent of its
+     * inner node. A line stands at the middle of each corridor, at its px over the
+     * extent of the plane, and coordinates within EPS are one line (R1). Before the
+     * plane has a size the tree is laid by its fractions alone. The corridor narrows
+     * when the plane cannot hold the gaps, which the lines decide, so the tree is
+     * laid again with the corridor that the first lines give.
      */
     private derive;
+    /** The px size that a node keeps on an axis whatever its fraction, with its own costs, or null for a node that takes a fraction. */
+    private heldOf;
+    /**
+     * The px size that a node keeps on an axis in two parts: `px`, the sizes that its cards declare, which a plane that cannot draw
+     * them scales, and `cost`, its corridors, frames and heads, which it does not. Null for a node that takes a fraction.
+     */
+    private keptOf;
+    /**
+     * The px size of each kid of a cut along its axis, from the room inside the
+     * cut: the corridors between the kids first, then the px sizes of the kids
+     * that keep one, and the rest to the other kids by their fractions. A kid gets
+     * at least the costs inside it, its own corridors, px sizes, frames and heads,
+     * and the others share what is left. When the room does not hold the px sizes
+     * and one `minSize` for the kids that take a fraction, the px sizes are drawn
+     * scaled by one factor; when no kid takes a fraction, they divide the room in
+     * their proportion. Null when the room does not hold the costs of the kids.
+     */
+    private kidSizes;
+    /**
+     * The px of the frames and heads of the boxes that hold a node whole on an axis: a box takes one corridor on each side of x,
+     * and on y its head above and one corridor below. They are costs of the cut that holds the node (R5).
+     */
+    private frameOf;
+    /** The px that a node takes on an axis at no size of its cards: its corridors, px sizes, frames and heads. */
+    private costOf;
+    private lay;
     /**
      * Writes what the operations of the lines changed back into the tree: the
      * attributes of every card, and the share of every kid of a cut from the
@@ -146,15 +189,11 @@ export declare class Soksak {
      * `data` is opaque to this library.
      */
     setData(id: string, data: unknown): boolean;
-    /** The frames of each card by id that `setFrames` set (R5). */
-    private cardFrames;
     /**
-     * Sets the frames between each card and its four lines (R5): a card without an
-     * entry, and a side without a count, has none. The frames are no part of the
-     * state. Throws for an id that is no card and for a count that is no whole
-     * number from zero, and then changes nothing.
+     * The frames of each card by id (R5): on each side the boxes around it that
+     * end on the line of that side, which `derive` reads from the tree.
      */
-    setFrames(frames: Readonly<Record<string, Partial<Frames>>>): void;
+    private cardFrames;
     /**
      * Set whether the layout may split, close or move a card.
      */
@@ -189,6 +228,11 @@ export declare class Soksak {
     private noAxis;
     private size;
     rectOf(card: Card): Rect;
+    /**
+     * The drawn rectangle of the card or the box id: a box is drawn between its lines, each inset by its corridor and by the
+     * frames of the boxes around it, so its frame and its head stand inside it (R5); the heads of the boxes around it that start
+     * on its top line are drawn inside its top, as inside the top of a card.
+     */
     rect(id: string): Rect | undefined;
     rects(): Map<string, Rect>;
     /**
@@ -332,23 +376,40 @@ export declare class Soksak {
     insert(target: string | readonly string[], side: Side, node: TreeNode): string;
     /**
      * REMOVE (packages/soksak/docs/layout.md#add-and-remove): takes the node `id`,
-     * a card or a box, out of its cut; the other kids take its space in proportion
-     * to their sizes. Returns the node that left, which `insert` takes. Throws its
-     * refusal and changes nothing.
+     * a card or a box, out of its cut; the other kids that are no fixed card take
+     * its fraction by one factor. Returns the node that left, which `insert` takes.
+     * Throws its refusal and changes nothing.
      */
     withdraw(id: string): TreeNode;
-    /** Gives every kid of every cut an equal share (packages/soksak/docs/layout.md#cuts). */
+    /** Gives the kids of every cut that take a fraction equal fractions (packages/soksak/docs/layout.md#cuts). */
     even(): void;
+    /** Whether a node keeps its size on an axis whatever its fraction: a fixed card, or a node drawn at a px size there. */
+    private keeps;
     /**
-     * Installs the tree of the plan that `make` makes of the stored tree and its
-     * drawn rectangles. The plan lays its
-     * cuts, the grid draws them, and the plan corrects its spans by what was drawn
-     * until the largest error is below a thousandth of a px; a corridor does not
-     * change with a span, so this takes one correction, and one more for each
-     * nested cut that moved. A result that draws a changed node below its minimum
-     * throws its text. A throw puts the arrangement back.
+     * A fixed card without a px size on the axis of its cut is a fixed cost of that cut
+     * (packages/soksak/docs/layout.md#the-model): after an operation it is drawn at the size it had before, and the kids that take a
+     * fraction share the rest in the ratio of their fractions. Its fraction is the one that draws that size.
+     */
+    private keepFixed;
+    /** What an operation of the cuts reads of the grid, on the stored tree itself. */
+    private input;
+    /**
+     * Installs the stored tree that `make` makes of the stored tree and lays it. A
+     * result that draws a node that it changed below its minimum throws its text.
+     * A throw puts the arrangement back.
      */
     private byCuts;
+    /**
+     * The text of the outermost node that the last operation moved and that is
+     * drawn below its minimum, or null. The minimum of a node is recursive: a card
+     * needs `minSize` and on y the heads drawn inside its rectangle, a card that
+     * keeps a px size the smaller of that size and `minSize`, a fixed card with a
+     * px size the smaller of that size and the size it had, another fixed card the
+     * size it is drawn at, a box the minimum of its
+     * inner node, a cut along an axis the minimums of its kids and the corridors
+     * between them, and a cut across it the largest minimum of its kids.
+     */
+    private belowMinimum;
     /**
      * Where the two cards meeting at a boundary come out the same size.
      *
@@ -442,22 +503,14 @@ export declare class Soksak {
     private closing;
     /**
      * Remove a card (packages/soksak/docs/layout.md#boundaries): the node that
-     * leaves with it goes out of its cut, and the other kids of the cut that hold
-     * no fixed card take its share by one factor, so their ratios hold; a kid that
-     * holds a fixed card keeps its share. Returns false when the card is `fixed`,
+     * leaves with it goes out of its cut, and the fractions of the other kids of
+     * the cut that are no fixed card scale by one factor, so their ratios hold; a
+     * fixed card keeps the size it is drawn at. Returns false when the card is `fixed`,
      * when it is the last card, or when every other kid of its cut holds a fixed
      * card.
      */
     close(id: string): boolean;
     private closeAlong;
-    /**
-     * Draws again at the width it had every slot of `axis` that stood between the
-     * same two lines before a change, where the axis has a card with a px size,
-     * and lets the slots that the change made share what is left in the
-     * proportion of their spans. On an axis without a px size the coordinates are
-     * already the drawn sizes and nothing moves.
-     */
-    private settle;
     /**
      * Whether a card spanning the whole plane can be placed on this boundary:
      * the line is an edge of the plane or a seam of the root cut along `axis`.
@@ -495,11 +548,6 @@ export declare class Soksak {
         data?: unknown;
         size: number;
     }): string | null;
-    /**
-     * Whether the kids of a cut along `axis` that hold no px size on it have one
-     * drawn size, within half a px, as `insert` judges an even cut.
-     */
-    private evenKids;
     /**
      * Moves a card that spans the whole plane, a kid of the root cut along `axis`,
      * to another boundary of the root: its kid moves to that place with its share,

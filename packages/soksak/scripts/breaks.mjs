@@ -17,24 +17,24 @@
 export const BREAKS = [
   {
     id: "cut-gaps",
-    what: "the size of a cut is the sum of its kids, without the corridors between them",
-    file: "dist/cuts.js",
-    find: "            at = union(node.kids.map(visit));",
-    to: "            at = node.kids.map(visit).reduce((a, e) => ({ x0: a.x0, y0: a.y0, x1: a.x0 + (a.x1 - a.x0) + (e.x1 - e.x0), y1: a.y0 + (a.y1 - a.y0) + (e.y1 - e.y0) }));",
+    what: "a cut is drawn without the corridors between its kids",
+    file: "dist/soksak.js",
+    find: "        const free = room - (node.kids.length - 1) * unit[axis] - ",
+    to: "        const free = room - ",
   },
   {
     id: "remove-ratio",
-    what: "a close gives the share of the card to the other kids in equal parts, not by one factor",
-    file: "dist/soksak.js",
-    find: "                kid.share *= (free + gone) / free;",
-    to: "                kid.share += gone / (holder.kids.length - 1);",
+    what: "a remove gives the share of the card to the other kids in equal parts, not by one factor",
+    file: "dist/cuts.js",
+    find: "        kid.share *= (free + share) / free;",
+    to: "        kid.share += share / taking.length;",
   },
   {
     id: "remove-fixed",
-    what: "a close scales a kid that holds a fixed card",
-    file: "dist/soksak.js",
-    find: "            if (k !== i && !this.holdsFixed(kid.node))\n                kid.share *= (free + gone) / free;",
-    to: "            if (k !== i)\n                kid.share *= (free + gone) / free;",
+    what: "a remove scales the fraction of a fixed card",
+    file: "dist/cuts.js",
+    find: "const taking = holder.kids.filter((kid) => !(isCard(kid.node) && kid.node.fixed));",
+    to: "const taking = holder.kids;",
   },
   {
     id: "fixed-kid",
@@ -45,30 +45,30 @@ export const BREAKS = [
   },
   {
     id: "add-held",
-    what: "an insert where every kid of the root holds a px size is refused",
-    file: "dist/soksak.js",
-    find: "const paying = kids.some((kid) => !heldOn(kid.node, axis)) ? kids.filter((kid) => !heldOn(kid.node, axis)) : kids;",
-    to: "const paying = kids.filter((kid) => !heldOn(kid.node, axis));",
+    what: "an add where every kid beside it holds a px size gives the new card no fraction",
+    file: "dist/cuts.js",
+    find: "const even = isEven(into, input) || paying.length === 0;",
+    to: "const even = isEven(into, input);",
   },
   {
     id: "add-alone",
-    what: "an insert at a boundary of an uneven level takes the span from every kid",
-    file: "dist/soksak.js",
-    find: "const alone = payer !== null && !heldOn(payer, axis) && !this.evenKids(kids, axis);",
-    to: "const alone = false;",
+    what: "an add on an uneven level takes the span from every kid",
+    file: "dist/cuts.js",
+    find: "const even = isEven(into, input) || paying.length === 0;",
+    to: "const even = true;",
   },
   {
     id: "add-even",
-    what: "an insert at a boundary of an even level takes the span from the kid before it alone",
-    file: "dist/soksak.js",
-    find: "&& !heldOn(payer, axis) && !this.evenKids(kids, axis);",
-    to: "&& !heldOn(payer, axis);",
+    what: "an add on an even level takes the span from the kid beside it alone",
+    file: "dist/cuts.js",
+    find: "const even = isEven(into, input) || paying.length === 0;",
+    to: "const even = paying.length === 0;",
   },
   {
     id: "run-level",
-    what: "an insert beside a run of kids wraps the run in a cut of its own",
+    what: "an add beside a run of kids wraps the run in a cut of its own",
     file: "dist/cuts.js",
-    find: "    if (holder.axis === axis)\n        return { holder, first, last };\n",
+    find: "    if (level.cut === axis)\n        return { holder: level, first, last };\n",
     to: "",
   },
   {
@@ -122,17 +122,17 @@ export const BREAKS = [
   },
   {
     id: "corridor",
-    what: "a starved slot eats the corridor instead of stopping at it",
+    what: "a card is drawn over the corridor at its near line instead of stopping at it",
     file: "dist/geometry.js",
-    find: "                size[i] = corridor[i];\n                room -= corridor[i];",
-    to: "                size[i] = 0;\n                room -= corridor[i];",
+    find: "    const near = axle.at[lo] + axle.lo[lo] + framesLo * axle.unit;",
+    to: "    const near = axle.at[lo] + framesLo * axle.unit;",
   },
   {
-    id: "starve-run",
-    what: "a stop takes one slot of a run, so a line no card reads decides how much room it releases",
-    file: "dist/geometry.js",
-    find: "for (let i = runFrom[starved]; i < runTo[starved]; i++) {",
-    to: "for (let i = runFrom[starved]; i < starved + 1; i++) {",
+    id: "cost-clamp",
+    what: "a kid whose fraction is less than the costs inside it is drawn below them",
+    file: "dist/soksak.js",
+    find: "                    sizes[i] = costs[i];\n                    rest -= costs[i];",
+    to: "                    sizes[i] = 0;\n                    rest -= costs[i];",
   },
   {
     id: "place",
@@ -666,8 +666,8 @@ export const BREAKS = [
     id: "pair-total",
     what: "a drag changes what every other declared slot is drawn at",
     file: "dist/soksak.js",
-    find: "if (!holdsSizes(this.plane, axis) && asked > EPS) {",
-    to: "if (false) {",
+    find: "        if (own !== null && other !== null) {",
+    to: "        if (false) {",
   },
   {
     id: "line-order",
@@ -677,25 +677,11 @@ export const BREAKS = [
     to: "            ;",
   },
   {
-    id: "range-end",
-    what: "a drag to the end of the range is refused by one rounding",
-    file: "dist/geometry.js",
-    find: "if (sharedSpan > 1e-9 && room - (asked - now + drawn) - taken >= floor - 1e-9)",
-    to: "if (sharedSpan > 1e-9 && room - (asked - now + drawn) - taken >= floor)",
-  },
-  {
     id: "passed-it",
     what: "a drag keeps a step that landed further from the target than it stood",
     file: "dist/soksak.js",
     find: "                if (Math.abs(target - this.boundaryPos(axis, line)) > Math.abs(off)) {",
     to: "                if (false) {",
-  },
-  {
-    id: "no-span-left",
-    what: "a pool too small for the tolerance is read as none, so the room a stop released lands nowhere",
-    file: "dist/geometry.js",
-    find: "const each = room / pool;",
-    to: "const each = pool > 1e-9 ? room / pool : 0;",
   },
   {
     id: "resize-rewrite",
@@ -727,10 +713,10 @@ export const BREAKS = [
   },
   {
     id: "all-zero",
-    what: "an axis where every declared size is zero leaves the plane uncovered",
-    file: "dist/geometry.js",
-    find: "    if (asked <= 1e-9) {",
-    to: "    if (false) {",
+    what: "the last kid of a cut ends where the sizes end, so an axis where every declared size is zero leaves the plane uncovered",
+    file: "dist/soksak.js",
+    find: "const end = last ? slot[hi] : sizes ? at + size + u / 2 : at + size;",
+    to: "const end = sizes ? at + size + (last ? 0 : u / 2) : at + size;",
   },
   {
     id: "snap-off",
@@ -824,21 +810,17 @@ export const BREAKS = [
     id: "insert-fits",
     what: "an insert that takes a card below minSize is kept rather than undone",
     file: "dist/soksak.js",
-    // Anchored to the insert. The split undoes itself with the same three
-    // lines, and the shorter find patched both.
-    find:
-      "            this.changed();\n            if (!this.stillFits(axis, was, empty)) {\n                this.restore(undo);\n                return null;\n            }\n",
-    to:
-      "            this.changed();\n",
+    // Anchored to the insert by its indent: the split undoes itself with the same
+    // check one level less deep.
+    find: "            this.keepFixed(drawnBefore);\n            if (!this.stillFits(axis, was, empty)) {\n                this.restore(undo);\n                return null;\n            }\n",
+    to: "            this.keepFixed(drawnBefore);\n",
   },
   {
     id: "split-fits",
     what: "a split that takes another card below the size it has is kept rather than undone",
     file: "dist/soksak.js",
-    find:
-      "        this.derive();\n        this.changed();\n        if (!this.stillFits(axis, was, empty)) {\n            this.restore(undo);\n            return null;\n        }\n",
-    to:
-      "        this.derive();\n        this.changed();\n",
+    find: "if (!this.stillFits(axis, was, empty) || (whole === null && drawn < this.min - 0.01)) {",
+    to: "if (whole === null && drawn < this.min - 0.01) {",
   },
   {
     id: "fits-min",
@@ -846,13 +828,6 @@ export const BREAKS = [
     file: "dist/soksak.js",
     find: "            if (now < Math.min(this.min, was) - 0.01)\n                return false;",
     to: "            ;",
-  },
-  {
-    id: "starved",
-    what: "a slot a card spans past is charged the corridor it holds",
-    file: "dist/geometry.js",
-    find: "if (first >= 0 && fixed + span * each < need - 1e-9) {",
-    to: "if (first >= 0 && (a[first + 1] - a[first]) * each < corridor[first] - 1e-9) {",
   },
   {
     id: "seam",
@@ -867,13 +842,6 @@ export const BREAKS = [
     file: "dist/soksak.js",
     find: "if (!this.hasBoundary(axis, line))\n            return [0, 0];",
     to: "if (false)\n            return [0, 0];",
-  },
-  {
-    id: "scaled-size",
-    what: "a drag declares the size the plane drew, not the size that draws it",
-    file: "dist/geometry.js",
-    find: "export function declaredFor(plane, axis, slot, drawn) {",
-    to: "export function declaredFor(plane, axis, slot, drawn) {\n    return drawn;",
   },
   {
     id: "centre-scaled",
@@ -938,10 +906,10 @@ export const BREAKS = [
   },
   {
     id: "spanning-size",
-    what: "a card that came to span two slots is still measured at the px size it declared",
-    file: "dist/card.js",
-    find: "export function fixedSize(card, axis) {\n    if (spanOf(card, axis) !== 1)\n        return null;\n",
-    to: "export function fixedSize(card, axis) {\n",
+    what: "a card that came to span two slots keeps the px size it declared",
+    file: "dist/soksak.js",
+    find: "            if (card.width !== undefined && card.c1 - card.c0 !== 1)\n                delete card.width;\n",
+    to: "",
   },
   {
     id: "run-at-border",
