@@ -39,7 +39,8 @@ The current Linux and Windows platform implementations report that process exit 
 | `sok mcp [window]` | Serves the endpoint of the application to an agent as an MCP server on standard input and output ([MCP server](#mcp-server)) |
 | `sok mcp install` | Registers `sok mcp` with the `claude` command in its user scope ([MCP registration](#mcp-registration)) |
 | `sok setup check` | Prints each setup part with its state and its install step, and changes nothing ([setup parts](#setup-parts)) |
-| `sok setup install [path\|skill\|mcp]...` | Installs each missing setup part of the named kinds, of every kind without a name ([setup parts](#setup-parts)) |
+| `sok setup install [path\|skill\|hook\|mcp]...` | Installs each missing setup part of the named kinds, of every kind without a name ([setup parts](#setup-parts)) |
+| `sok setup remove hook` | Removes every soksak hook entry from the agent hook files and changes nothing else ([session restart hook](agent-roles.md#session-restart-hook)) |
 | `sok setup environment` | Prints `{HOME, PATH, CLAUDE_CONFIG_DIR, environment}` of its environment, where `environment` holds every variable, for the host that reads the environment of the login shell ([agents in the application](#agents-in-the-application)) |
 | `sok plugin install\|update\|remove\|enable\|disable <id>` | Changes the installed plugins ([installation](installation.md)) |
 | `sok conversation read --agent claude-code\|codex --cwd <path>` | Prints `{file, messages, skipped}`: the messages of the conversation of an agent in a working directory, read from the agent's session file on disk, and the file it read ([agent conversation](agent-conversation.md)); it does not need a running application |

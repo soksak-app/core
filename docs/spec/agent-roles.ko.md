@@ -292,6 +292,7 @@ Session 시작 hook은 CLI session의 시작, 재개, `clear`, compaction마다 
 
 - 명령: `sok role identity`이며 인자가 없다. 명령의 process는 `sok role confirm`처럼 자기 surface를 `agent.surface`에 묻는다([surface의 process](sidecars.md#processes-of-a-surface)). Hook process는 CLI process의 자식이므로 그 조상 사슬이 tab의 surface에 닿는다.
 - Role이 있을 때: 표준 출력에 JSON 한 줄 `{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"<identity 텍스트>"}}`을 쓰고 종료 상태는 0이다. identity 텍스트는 [stable identity](#stable-identity)의 텍스트이며 `<role file>`은 `<configuration directory>/agents/<surface>/role.md`다. Claude Code와 Codex는 SessionStart hook에서 이 형식을 읽으며, 둘 다 주입된 텍스트가 model context에 들어간다는 것을 측정했다([측정 사실](#measured-facts), 24행과 25행).
+- Hook 명령: soksak terminal 안에서만 `sok`을 실행하는 shell 줄이다. `[ -n "$SOKSAK_CONFIG_DIR" ] || exit 0`에 이어 `exec <sok> role identity --soksak-hook`를 쓰며, `<sok>`은 위와 같이 인용한 실행 중인 `sok`이다. Host는 surface를 위해 sidecar가 시작하는 모든 process에 `SOKSAK_CONFIG_DIR`을 설정하므로([sidecar](sidecars.ko.md#surface의-프로세스)), 이 변수는 soksak tab의 session에만 있다. Tab 밖에서는 줄이 `sok`을 실행하지 않고 바로 0으로 끝나므로, soksak을 쓰지 않는 project는 `sok`이 설치되지 않았거나 `PATH`에 없어도 `sok` 시작이나 hook 오류를 보지 않는다. Login shell에서 `SOKSAK_CONFIG_DIR`을 export한 사람에게는 줄이 `sok`을 실행하며, 그러면 `sok`이 자기 오류를 보고하거나 tab 밖에서는 아무것도 출력하지 않는다.
 - Role이 없거나 어느 surface에도 속하지 않을 때: 표준 출력은 비고 종료 상태는 0이다. Hook은 tab 밖을 포함해 agent의 모든 session에서 실행된다. tab 밖에는 tab 환경이 없으므로 명령은 surface를 찾지 못하고, 애플리케이션에 닿지 않은 채 아무것도 출력하지 않고 바로 종료 상태 0으로 끝난다.
 - 오류일 때(예: 거부된 surface 식별자, 응답하지 않는 애플리케이션): 표준 출력은 비고, 표준 오류에 `sok: <message>`를 쓰며 종료 상태는 1이다. Claude Code는 0도 2도 아닌 종료 상태의 hook을 막지 않는 오류로 다루므로, session은 identity 없이 시작하며 CLI는 막히지 않는다. Codex에서 종료 상태 1의 효과는 측정하지 않았다.
 - Hook은 role 정의를 절대 보내지 않는다. 지문 루프와 변경 message는 그대로다. Session 시작 hook이 없는 CLI는 루프에만 기댄다.
@@ -315,7 +316,7 @@ Hook은 `hooks` member의 `SessionStart` 배열에 있는 group 하나다: `{"ma
 - 다른 program의 항목과 다른 member는 값과 순서를 유지한다. 파일은 들여쓰기 두 칸과 끝 line feed로 쓴다.
 - 쓰기는 원자적이다. 임시 파일은 같은 폴더에 있고 파일 위로 이름을 바꾼다. 있던 파일은 모드를 유지한다.
 
-`sok setup check`는 설치가 쓸 파일마다 part `hook`을 나열한다. 상태는 파일이 정확히 현재 soksak 집합을 담을 때 `ok`다. 사유는 soksak 항목이 없으면 `absent`, soksak 항목이 현재 집합 밖에 있거나, 다른 event 아래에 있거나, 다른 `sok`을 가리키면 `differs`다. Setup에는 hook 제거가 없다. 사람은 파일을 고쳐 항목을 지운다.
+`sok setup check`는 설치가 쓸 파일마다 part `hook`을 나열한다. 상태는 파일이 정확히 현재 soksak 집합을 담을 때 `ok`다. 사유는 soksak 항목이 없으면 `absent`, soksak 항목이 현재 집합 밖에 있거나, 다른 event 아래에 있거나, 다른 `sok`을 가리키면 `differs`다. 제거는 setup 명령 `sok setup remove hook`이다. 설치와 같은 파일에 적용하며 soksak의 항목만 바꾼다. 모든 event와 matcher 아래의 soksak 항목을 모두 지우고, 제거로 비게 된 group이나 event 배열만 지운다. 다른 값과 순서는 모두 유지한다. 파일이 없으면 만들지 않는다. 그래서 soksak을 제거하면 hook이 남지 않으며, 사람의 항목은 바뀌지 않는다.
 
 ## Resume
 

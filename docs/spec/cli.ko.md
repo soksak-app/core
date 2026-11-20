@@ -39,7 +39,8 @@
 | `sok mcp [window]` | 애플리케이션의 엔드포인트를 표준 입출력의 MCP server로 agent에게 제공한다([MCP server](#mcp-server)) |
 | `sok mcp install` | `sok mcp`를 `claude` 명령의 user scope에 등록한다([MCP 등록](#mcp-등록)) |
 | `sok setup check` | Setup part마다 상태와 설치 단계를 출력하고 아무것도 바꾸지 않는다([setup part](#setup-part)) |
-| `sok setup install [path\|skill\|mcp]...` | 지정한 종류의, 이름이 없으면 모든 종류의 빠진 setup part를 설치한다([setup part](#setup-part)) |
+| `sok setup install [path\|skill\|hook\|mcp]...` | 지정한 종류의, 이름이 없으면 모든 종류의 빠진 setup part를 설치한다([setup part](#setup-part)) |
+| `sok setup remove hook` | Agent hook 파일에서 soksak의 hook 항목을 모두 지우고 다른 것은 바꾸지 않는다([session 재시작 hook](agent-roles.ko.md#세션-재시작-hook)) |
 | `sok setup environment` | 자기 환경의 `{HOME, PATH, CLAUDE_CONFIG_DIR, environment}`를 출력한다. `environment`는 모든 변수를 담는다. Login shell의 환경을 읽는 host가 쓴다([애플리케이션 안의 에이전트](#애플리케이션-안의-에이전트)) |
 | `sok plugin install\|update\|remove\|enable\|disable <id>` | 설치된 plugin을 바꾼다([설치](installation.ko.md)) |
 | `sok conversation read --agent claude-code\|codex --cwd <path>` | 작업 디렉터리에서 동작하는 agent의 대화 메시지를 agent의 session 파일에서 읽어 `{file, messages, skipped}`를 출력한다. 읽은 파일을 함께 밝힌다([agent 대화](agent-conversation.ko.md)). 실행 중인 애플리케이션이 필요하지 않다 |
