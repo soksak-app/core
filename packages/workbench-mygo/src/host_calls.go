@@ -101,6 +101,7 @@ func hostCalls(h *host.Host) map[string]HostCall {
 		"debugSaveText":            answerOf(h.DebugSaveText),
 		"filePlace":                answerOf(h.FilePlace),
 		"logQuery":                 request(h.LogQuery),
+		"debugFollow":              doneOf(h.DebugFollow),
 		"debugSaveAll":             readOf(h.DebugSaveAll),
 		"debugRead":                request(h.DebugRead),
 		"pluginsRun":               request(h.PluginsRun),

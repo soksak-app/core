@@ -12,6 +12,7 @@
 - F1016-10.3: layout library의 `headsAbove`가 grid의 card나 box가 아닌 id에 0을 답하지 않고 거부하며, box의 head와 card의 frame을 기본값 없이 읽고, library의 나머지 기본값이 이유를 적는다.
 - F1016-10.2: 작은 workbench module의 기본값 여덟 개가 이유를 적는다.
 - F1016-10.1: host와 sok package의 기본값 다섯 개가 이유를 적는다.
+- F1013-1 (host 호출 debugFollow): Go host, Rust host, Tauri와 GPUI binding은 창의 host 호출 `debugFollow({following})`에 답하고, 창의 화면이 event 파일을 따라가는지 보관하며, 창의 page가 준비를 알리면 그것을 지운다. Wails, Tauri, GPUI runtime과 page module `host.js`가 이 호출을 이름으로 갖는다. boolean `following`이 없는 요청은 `argument request.following is missing`이나 `argument request.following must be a boolean, not <kind>`로 거절된다. 검증: `TestDebugFollowRefusesARequestWithoutABoolean`과 `debug_follow_refuses_a_request_without_a_boolean`은 인자 검사 없이 요청을 decode했을 때 실패했고(Go는 `{}`와 `{"following":null}`을, Rust는 `{}`를 받아들였다) 지금 통과한다. `make check-hosts-same`은 Tauri command 전에 `tauriv2 host.call(debug_follow) has no registered handler`로 실패했고 지금 통과한다.
 - F1016-12: sok의 hook 파일 reader가 entry의 type과 command를 이유를 적고 한 번 읽으므로 kit 0.0.16의 event source 검사가 통과한다. 결과는 바뀌지 않는다.
 - F1016-1부터 F1016-9: main의 node test가 열 개 파일 중 아홉에서 다시 통과한다. roles format 기본값이 이유를 적고, doc comment가 더 이상 reason marker로 읽히지 않으며, comment 일곱 개가 영어이고, 공통 platform module과 실행 단계가 bundle을 이름 짓지 않으며, event class table과 window check의 배포 catalog가 catalog를 따르고, group header check가 window의 순서를 바꾸지 않으며, linked sidebar checker fixture가 저장된 tree를 주고, break inventory test가 `dist/tree.js`를 이름 짓는다. 이유 없는 기본값 93개인 F1016-10은 기다린다.
 - F1015: core가 kit 0.0.16을 pin하고, F916과 F686-6-1의 link는 version 없는 kit release 파일을 가리킨다.

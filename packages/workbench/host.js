@@ -579,6 +579,7 @@ export const debug = native ? {
   saveText: (request) => tell("debugSaveText", request),
   read: (request) => tell("debugRead", request),
   query: (request) => tell("logQuery", request),
+  follow: (following) => tell("debugFollow", { following }),
   onChanged: (listener) => bridge.on("debug-log-changed", listener),
   onSaveProgress: (listener) => bridge.on("debug-save-progress", listener),
   onSaveDone: (listener) => bridge.on("debug-save-done", listener),

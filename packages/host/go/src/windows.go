@@ -4,6 +4,7 @@ package host
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -203,11 +204,44 @@ func (h *Host) WindowNew() {
 	h.newWindow(fmt.Sprintf("project-window-%d", atomic.AddUint64(&h.nextWindow, 1)), "/")
 }
 
+// readyWindow records that the page of the calling window reported ready and returns the window: the page is ready, and the new
+// document has not asked to follow the event files (docs/spec/debug.md#files).
+func (h *Host) readyWindow(ctx context.Context) (*Surfaces, error) {
+	s, err := h.surface(ctx)
+	if err != nil {
+		return nil, err
+	}
+	h.mu.Lock()
+	s.ready = true
+	s.followsLog = false
+	h.mu.Unlock()
+	return s, nil
+}
+
 // announceLogNotice tells every window the host event `debug-log-changed` and the endpoint watchers of the host status `host.log` the
 // notice of a change of the event log.
 func (h *Host) announceLogNotice(notice LogNotice) {
 	h.announceToWindows("debug-log-changed", notice)
 	h.endpoint.NotifyWatchers("host.log", notice)
+}
+
+// DebugFollow records whether the view of the calling window follows the event files ({following}); only a window that follows
+// receives the host event `debug-log-changed` (docs/spec/debug.md#files).
+func (h *Host) DebugFollow(ctx context.Context, requestJSON json.RawMessage) error {
+	request, err := argument[struct {
+		Following bool `json:"following"`
+	}]("request", requestJSON)
+	if err != nil {
+		return err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	h.mu.Lock()
+	s.followsLog = request.Following
+	h.mu.Unlock()
+	return nil
 }
 
 // announceToWindows sends the host event to every window; every document of a window receives it.
@@ -275,13 +309,10 @@ func (h *Host) WindowState(ctx context.Context) (*WindowGeometry, error) {
 }
 
 func (h *Host) WindowReady(ctx context.Context) error {
-	s, err := h.surface(ctx)
+	s, err := h.readyWindow(ctx)
 	if err != nil {
 		return err
 	}
-	h.mu.Lock()
-	s.ready = true
-	h.mu.Unlock()
 	// The ready page receives the record of the project activities, so a new window starts with the projects of the other windows.
 	s.windowEvent("project-activity", h.activities.Record())
 	s.first.Do(func() { s.Emit("page-ready") })

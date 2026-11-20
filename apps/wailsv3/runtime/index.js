@@ -118,6 +118,7 @@ const METHOD = {
   debugSaveText: "DebugSaveText",
   filePlace: "FilePlace",
   logQuery: "LogQuery",
+  debugFollow: "DebugFollow",
   debugSaveAll: "DebugSaveAll",
   debugRead: "DebugRead",
   pluginsRun: "PluginsRun",

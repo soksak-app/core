@@ -46,6 +46,9 @@ pub struct WindowData {
     pub(crate) running: Running,
     pub root: Mutex<String>,
     pub ready: AtomicBool,
+    /// Whether the view of the window follows the event files, which the window tells with `debug_follow`; only a window that
+    /// follows receives `debug-log-changed` (docs/spec/debug.md#files).
+    pub follows_log: AtomicBool,
     /// Set when the host asked the ready page to reload, until the new page starts. The page no longer
     /// answers the calls of the surface documents in that time (docs/spec/native-host.md#page-reload).
     pub page_reloading: AtomicBool,
@@ -761,6 +764,20 @@ pub(crate) fn notify_log_notice(app: &AppHandle, notice: &crate::debug_follow::L
         }
     }
     crate::exposure::log_notice_changed(app, notice);
+}
+
+/// The argument of the debugFollow call: whether the view of the window follows the event files.
+#[derive(Debug, Deserialize)]
+pub struct FollowRequest {
+    pub following: bool,
+}
+
+/// The page's debugFollow call: records whether the view of the window follows the event files (docs/spec/debug.md#files).
+pub fn debug_follow(window: &Window, request: FollowRequest) -> Result<(), String> {
+    window_data(window)?
+        .follows_log
+        .store(request.following, Ordering::Relaxed);
+    Ok(())
 }
 
 /// Sends the host event to every window; every document of a window receives it.
@@ -1901,9 +1918,17 @@ fn send_responder(window: &Window, ready: bool) {
     }
 }
 
-pub fn window_ready(window: &Window) -> Result<(), String> {
+/// Records that the page of the window reported ready and returns the records of the window: the page is ready, and the new
+/// document has not asked to follow the event files (docs/spec/debug.md#files).
+pub(crate) fn ready_window(window: &Window) -> Result<Arc<WindowData>, String> {
     let data = window_data(window)?;
     data.ready.store(true, Ordering::Relaxed);
+    data.follows_log.store(false, Ordering::Relaxed);
+    Ok(data)
+}
+
+pub fn window_ready(window: &Window) -> Result<(), String> {
+    let data = ready_window(window)?;
     // The ready page receives the record of the project activities, so a new window starts with the projects of the other windows.
     let record = window.state::<Windows>().activities.record();
     if let Err(error) = emit_window(window, "project-activity", record) {
@@ -2369,6 +2394,10 @@ pub(crate) fn window_controls(window: &Window) -> Result<Rect, String> {
 #[cfg(test)]
 #[path = "windows_records_test.rs"]
 mod records_test;
+
+#[cfg(test)]
+#[path = "debug_follow_notices_test.rs"]
+mod debug_follow_notices_test;
 
 #[cfg(test)]
 #[path = "page_end_test.rs"]

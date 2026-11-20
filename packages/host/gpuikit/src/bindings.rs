@@ -619,6 +619,11 @@ fn dispatch(
             let request: serde_json::Map<String, Value> = argument(method, "request", body)?;
             json!(soksak_host::debug::log_query(app, request)?)
         }
+        "debug_follow" => {
+            let request: windows::FollowRequest = argument(method, "request", body)?;
+            windows::debug_follow(window, request)?;
+            Value::Null
+        }
         "debug_save_text" => {
             let request: soksak_host::debug::TextRequest = argument(method, "request", body)?;
             json!(soksak_host::debug::save_text(window, request)?)

@@ -162,6 +162,8 @@ pub struct FixtureFrontend {
     native: std::result::Result<usize, String>,
     /// Whether a page receives the events of the window; a window without one refuses each event.
     page: bool,
+    /// The window identifier, which is the label of the window.
+    name: String,
 }
 
 /// The error of a call that the window of the tests does not hold.
@@ -179,6 +181,17 @@ impl FixtureFrontend {
             presentation,
             native: Ok(WINDOW),
             page: false,
+            name: "fixture".to_string(),
+        }
+    }
+
+    /// The window name that has no native window, so no step reaches the platform.
+    // Only the tests of the notices of the event log name their windows.
+    #[allow(dead_code)]
+    pub fn named(name: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            ..Self::without_native_window("the test window has no native window")
         }
     }
 
@@ -210,7 +223,7 @@ impl FixtureFrontend {
 
 impl Frontend for FixtureFrontend {
     fn name(&self) -> &str {
-        "fixture"
+        &self.name
     }
 
     fn title(&self) -> Result<String> {

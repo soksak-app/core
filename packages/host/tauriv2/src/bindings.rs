@@ -1007,6 +1007,13 @@ async fn log_query(
     .await
 }
 
+/// Records whether the view of the window follows the event files (docs/spec/debug.md#files).
+#[tauri::command]
+fn debug_follow(window: Window, request: Argument<windows::FollowRequest>) -> Result<(), String> {
+    let Argument(request) = request;
+    windows::debug_follow(&window, request)
+}
+
 /// Saves text that the page built through the save panel.
 #[tauri::command]
 async fn debug_save_text(
