@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F982-11: 창의 key 상태가 일으키는 focus 변화가 first responder의 변화처럼 input transaction의 action으로 page에 이른다. page는 transaction 밖의 이전 보고를 `image view: no handlers for event type focus`로 보고했다.
 - F982-10: `exited` 뒤의 `idle` 상태가 다음 `running`까지 그 command의 exit code를 지니고(`docs/spec/terminal-state.md#change-event`), activity는 0이 아닌 `exit`를 가진 `exited`와 `idle`에서 `failed`이므로, 실패한 command 뒤에 attach하거나 다시 attach하는 page는 상태에서 실패를 읽는다. vt S230, alacritty S232, terminal P179, term P132가 구현하며, 바뀌지 않은 tracker와 page에서 Red, 그 뒤 그 test의 Green이다.
 - F982-9: image region이 보고하는 keyboard focus가 그 창의 key 상태를 따른다(`docs/spec/native-surfaces.md#image-regions`): `native/darwin/src/image_region.m`이 각 region의 창의 `NSWindowDidBecomeKeyNotification`과 `NSWindowDidResignKeyNotification`을 관찰하고, first responder는 창이 key 상태를 내려놓으면 `focused: false`를, 다시 key가 되면 `focused: true`를 보고하므로 sidecar가 DEC 1004 focus-out을 보내고 다른 application 뒤의 창에 있는 program이 notice를 준다. 검증: 바뀌지 않은 region에서 `image_region_test`의 TEST 7b의 Red, 그 뒤 `make -C native/darwin repeat TEST=image_region_test COUNT=3`과 `input_inject_test`, `input_pointers_test`, `input_reference_test`, `image_region_input_transaction_test`, `image_region_ime_test`, `press_release_test`의 Green.
 - F982-7(specification): query `OSC 7501 ; ?`의 답은 같은 output이 그 뒤에 보내는 primary device attributes 요청 `CSI c`의 답보다 앞선다. query를 `CSI c`와 한 번에 써 보내는 program은 그 답보다 먼저 온 답만 받기 때문이다. 검증: `make check-docs`.

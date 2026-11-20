@@ -661,12 +661,19 @@ static void spEnsurePressOriginMonitor(void) {
     [self reportFocusState];
 }
 
-// Reports the keyboard focus when it changes: the region has it while it is the first responder of a key window.
+// Reports the keyboard focus when it changes: the region has it while it is the first responder of a key window. The page
+// receives focus only as an action of an input transaction, so a change outside a callback of an input, such as the key
+// status of the window, opens one input for its report.
 - (void)reportFocusState {
     BOOL focused = self.hasFocus && !self.closed && self.window.isKeyWindow;
     if (focused == self.reportedFocus) return;
     self.reportedFocus = focused;
-    [self report:focused ? "{\"type\":\"focus\",\"focused\":true}" : "{\"type\":\"focus\",\"focused\":false}"];
+    BOOL opened = [self enterInput];
+    @try {
+        [self report:focused ? "{\"type\":\"focus\",\"focused\":true}" : "{\"type\":\"focus\",\"focused\":false}"];
+    } @finally {
+        [self leaveInput:opened];
+    }
 }
 
 - (void)viewDidMoveToSuperview {

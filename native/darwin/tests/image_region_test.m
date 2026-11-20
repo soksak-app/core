@@ -629,10 +629,16 @@ int main(int argc, char **argv) { @autoreleasepool {
         void *region7b = sp_region_create(surface, "test7b", testEvent, NULL);
         sp_region_place(region7b, 10, 10, 10, 10, true);
         sp_region_focus(region7b);
+        // A page receives focus only as an action of an input transaction, so a focus report outside one is listed as
+        // "outside" and is an error of the page (`packages/plugin-api/image-region.js` reports `image <name>: no handlers for event type focus`).
         NSArray<NSString *> *(^focusReports)(void) = ^NSArray<NSString *> *{
             NSMutableArray<NSString *> *reports = [NSMutableArray array];
             for (NSString *event in collectedEvents) {
                 if ([event rangeOfString:@"\"type\":\"focus\""].location == NSNotFound) continue;
+                if ([event rangeOfString:@"\"type\":\"input\""].location == NSNotFound) {
+                    [reports addObject:@"outside"];
+                    continue;
+                }
                 [reports addObject:[event rangeOfString:@"\"focused\":true"].location != NSNotFound ? @"true" : @"false"];
             }
             return reports;
