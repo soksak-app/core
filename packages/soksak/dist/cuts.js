@@ -366,6 +366,36 @@ export function vacatesNode(input, id, target, side) {
     return (side === far && names(at - 1)) || (side === near && names(at + 1));
 }
 /**
+ * The vacated slot of the node `id`, a card or a box, as a target and a side (docs/spec/groups.md#idempotency): the kid before it in its
+ * cut with the side toward it, `right` or `bottom`, or else the kid after it with the side toward it, `left` or `top`, each by its id or
+ * by the members of a cut, and the node itself with `right` when no such kid is there. A fixed card, a window sidebar, is no target of a
+ * move, so it is no such kid. A move answers it, so that a repeat with the reply is no change.
+ */
+export function vacatedSlotOf(input, id) {
+    const index = new Index(input.root, input);
+    const node = index.byId.get(id);
+    const holder = node && index.parent.get(node);
+    if (!holder)
+        return { target: id, side: 'right' };
+    const at = holder.kids.findIndex((kid) => kid.node === node);
+    const kid = (k) => {
+        if (k < 0 || k >= holder.kids.length)
+            return false;
+        const n = holder.kids[k].node;
+        return !(isCard(n) && n.fixed === true);
+    };
+    const named = (k) => {
+        const held = members(holder.kids[k].node);
+        return held.length === 1 ? held[0] : held;
+    };
+    const [near, far] = holder.cut === 'x' ? ['left', 'right'] : ['top', 'bottom'];
+    if (kid(at - 1))
+        return { target: named(at - 1), side: far };
+    if (kid(at + 1))
+        return { target: named(at + 1), side: near };
+    return { target: id, side: 'right' };
+}
+/**
  * EXCHANGE (packages/soksak/docs/layout.md#add-and-remove): the stored tree with the node `a`, a card or a box, where the node `b` stands
  * and `b` where `a` stood. Each place keeps the size it is drawn at: a node that enters a place takes that size less its own frames and
  * head, which are a cost of the place, and a card takes the px size that the card of that place declared. Two nodes of which one holds

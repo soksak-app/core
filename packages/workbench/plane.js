@@ -2719,6 +2719,20 @@ export function moveTab(tabId, cardId, zone, index) {
   }
   restoreFullscreen();
   dropTab(from.id, tabId, hit);
+  return movedTab(tabId);
+}
+
+/**
+ * The reply of core.tab.move, the target of the tab as resolved after the commit (docs/spec/groups.md#idempotency): a tab that shares its
+ * card with other tabs is answered by that card with the zone strip and its index, and the only tab of a card by the vacated slot of its
+ * card.
+ */
+function movedTab(tabId) {
+  const card = cardOfTab(tabId);
+  const held = tabsOf(card);
+  if (held.length > 1) return { tab: tabId, card: card.id, zone: "strip", index: held.findIndex((t) => t.id === tabId) };
+  const { target, side } = grid.vacatedSlot(card.id);
+  return { tab: tabId, card: target, zone: side };
 }
 
 /** Chooses one item of the open picker layer. */
@@ -2957,9 +2971,15 @@ export function moveCard(id, target, side, index) {
   layoutChangeable(card);
   if (index !== undefined && side !== "strip") throw new Error("index is given with side strip only");
   if (side === "strip") return joinStrip(card, to, index);
-  tree.move(card, to.length === 1 ? to[0] : to, side);
+  const place = to.length === 1 ? to[0] : to;
+  // A move to the centre of a content card is an exchange, a toggle that answers the card alone; every other move answers its target as
+  // resolved after the commit, the vacated slot of the card (docs/spec/groups.md#idempotency).
+  const exchange = side === "centre" && !tree.isGroup(to[0]) && !grid.vacates(card, place, side);
+  tree.move(card, place, side);
   settle();
-  return { card };
+  if (exchange) return { card };
+  const { target: slot, side: toward } = grid.vacatedSlot(card);
+  return { card, target: slot, side: toward };
 }
 
 /** Joins every tab of the content card card, in its order, to the content card of the list to at index, and closes card. */
@@ -2980,7 +3000,8 @@ function joinStrip(card, to, index) {
   tree.close(card);
   focusOn(into.id);
   settle();
-  return { card };
+  // The join closes card, so the reply names the card that holds its tabs (docs/spec/groups.md#idempotency).
+  return { card: into.id };
 }
 
 /**

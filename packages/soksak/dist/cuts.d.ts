@@ -66,6 +66,16 @@ export declare function withdrawNode(input: Input, id: string, cards: readonly {
  */
 export declare function vacatesNode(input: Input, id: string, target: string | readonly string[], side: string): boolean;
 /**
+ * The vacated slot of the node `id`, a card or a box, as a target and a side (docs/spec/groups.md#idempotency): the kid before it in its
+ * cut with the side toward it, `right` or `bottom`, or else the kid after it with the side toward it, `left` or `top`, each by its id or
+ * by the members of a cut, and the node itself with `right` when no such kid is there. A fixed card, a window sidebar, is no target of a
+ * move, so it is no such kid. A move answers it, so that a repeat with the reply is no change.
+ */
+export declare function vacatedSlotOf(input: Input, id: string): {
+    target: string | string[];
+    side: string;
+};
+/**
  * EXCHANGE (packages/soksak/docs/layout.md#add-and-remove): the stored tree with the node `a`, a card or a box, where the node `b` stands
  * and `b` where `a` stood. Each place keeps the size it is drawn at: a node that enters a place takes that size less its own frames and
  * head, which are a cost of the place, and a card takes the px size that the card of that place declared. Two nodes of which one holds
