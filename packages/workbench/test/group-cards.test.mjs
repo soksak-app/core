@@ -252,6 +252,26 @@ test("the group split buttons draw the split icons and one frame encloses the pa
   }
 });
 
+// The tool row and the frame of the group split buttons centre their items on one line, so the buttons inside the frame stand on the
+// centre line of the other buttons of the row (docs/spec/groups.md#headers). JSDOM computes no layout, so the declared rules of the
+// stylesheet stand in for the measured positions: a row without centring stretches its items, and the buttons of a fixed height then
+// stand at the top of the row while the taller frame puts its buttons lower.
+test("the tool row and the frame of the group split buttons centre their buttons on one line", { timeout: 5000 }, () => {
+  const sheet = document.createElement("style");
+  sheet.textContent = readFileSync(new URL("../app.css", import.meta.url), "utf8");
+  document.head.appendChild(sheet);
+  try {
+    const rule = (selector) => [...sheet.sheet.cssRules].find((r) => r.selectorText === selector);
+    for (const selector of [".chrome__acts", ".chrome__pair"]) {
+      const style = rule(selector)?.style;
+      assert.deepEqual([style?.getPropertyValue("display"), style?.getPropertyValue("align-items")], ["flex", "center"],
+        `${selector} does not centre its items as a flex row`);
+    }
+  } finally {
+    sheet.remove();
+  }
+});
+
 // Each group split menu groups the card toward its own side, whatever the shape of the card, and each press sends a new request, so a
 // second press groups the card again (docs/spec/groups.md#headers, docs/spec/groups.md#idempotency).
 test("core.card.menu group-x and group-y group the card with a new card toward right and toward bottom", { timeout: 5000 }, async () => {

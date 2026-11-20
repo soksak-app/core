@@ -340,11 +340,11 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .tab__x{border:0;background:transparent;color:inherit;padding:0 var(--tab-x-pad);line-height:var(--line-height-tight);
   font-size:var(--text-small);border-radius:var(--r-xs);opacity:var(--tab-x-opacity);cursor:pointer}
 .tab__x:hover{opacity:var(--opaque);background:color-mix(in srgb,var(--no) var(--tab-x-hover-mix),transparent)}
-.chrome__acts{margin-left:auto;display:flex;gap:var(--card-acts-gap);padding:var(--card-acts-pad);border-radius:var(--r-xs);
+.chrome__acts{margin-left:auto;display:flex;align-items:center;gap:var(--card-acts-gap);padding:var(--card-acts-pad);border-radius:var(--r-xs);
   flex:0 0 auto;border:var(--bw) solid var(--edge)}
 /* One rounded frame encloses the two group split buttons, with the padding card-group-frame-pad between the frame and the buttons
    (docs/spec/groups.md#headers). */
-.chrome__pair{display:flex;gap:var(--card-acts-gap);padding:var(--card-group-frame-pad);border-radius:var(--card-group-frame-radius);
+.chrome__pair{display:flex;align-items:center;gap:var(--card-acts-gap);padding:var(--card-group-frame-pad);border-radius:var(--card-group-frame-radius);
   border:var(--bw) solid var(--edge)}
 .chrome__act{display:grid;place-items:center;width:var(--card-button);height:var(--card-button);padding:0;border:0;
   background:transparent;color:var(--muted);border-radius:var(--r-xs);cursor:pointer}
