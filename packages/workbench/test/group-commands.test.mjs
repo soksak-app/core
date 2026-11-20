@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { arrange, box, content, PLAIN, plane, pointer, refuses, rootKids, row, run, SESSION, status, stored, tabIds, view } from "./support/group-page.mjs";
+import { arrange, box, content, PLAIN, plane, pointer, refuses, registry, reports, rootKids, row, run, SESSION, status, stored, tabIds, view } from "./support/group-page.mjs";
 
 test("core.group.create groups a content card with a new card and answers the same when applied again", { timeout: 5000 }, async () => {
   arrange();
@@ -367,19 +367,20 @@ test("core.layout.balance in a space with groups gives every child of every cut 
   same(["card-9", "card-11"], "w");
 });
 
+// The reply of a move, its card and its resolved target, is judged by the move reply cases (docs/spec/groups.md#idempotency).
 // contract: layout.move.focuses-the-moved-card
 test("core.card.move focuses the moved card, the first card inside a moved group card, and a move that changes nothing keeps the focus",
   { timeout: 5000 }, async () => {
     arrange();
     plane.focusCard("card-3");
-    assert.deepEqual(await run("core.card.move", { card: "card-2", target: "card-3", side: "right" }), { card: "card-2" });
+    assert.equal((await run("core.card.move", { card: "card-2", target: "card-3", side: "right" })).card, "card-2");
     assert.equal(plane.focused(), "card-2", "the move left the focus on another card than the moved card");
     plane.focusCard("card-1");
-    assert.deepEqual(await run("core.card.move", { card: "card-2", target: "card-3", side: "right" }), { card: "card-2" });
+    assert.equal((await run("core.card.move", { card: "card-2", target: "card-3", side: "right" })).card, "card-2");
     assert.equal(plane.focused(), "card-1", "a move that changes nothing moved the focus");
     arrange();
     plane.focusCard("card-3");
-    assert.deepEqual(await run("core.card.move", { card: "card-4", target: "card-3", side: "right" }), { card: "card-4" });
+    assert.equal((await run("core.card.move", { card: "card-4", target: "card-3", side: "right" })).card, "card-4");
     assert.equal(plane.focused(), "card-1", "the move of a group card did not focus the first card inside it");
   });
 

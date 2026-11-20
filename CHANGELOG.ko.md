@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F966-2-9와 F937-63 (main merge의 test): 새 space, 새 tab 이름, group command의 page test가 저장된 tree와 공유 support module을 읽고, page와 mygo의 focus test는 move 답의 card를 판단하고, leader mark의 좁은 header test는 plugin의 mark를 가진 tab이 자리를 지키는 820 point로 창을 좁히며, card의 유일한 tab의 그 card 쪽 이동은 변화 없음으로 판단되고, `docs/spec/hosts.md`의 row H103이 mygo framework adapter의 input notice test를 나열하며, F937-49의 feature link는 fork version `soksak.17`을 이름한다. 검증: 여섯 page test, 두 mygo test와 `make check-host-files`가 merge에서 실패했고 통과한다.
 - F1000-2.2: Go `sok`과 Rust `sok`은 agent의 window, `sok context`, `sok message send`, MCP tool을 위해 자기 process의 surface를 `agent.surface`에서 받고, `SOKSAK_SURFACE`를 어디서도 읽지 않는다. `sok message send`는 실행 중인 application이 없을 때와 거부 1014일 때 실패하며, `CODEX_THREAD_ID`가 있으면 거부 뒤에 `--no-daemon` 안내가 붙고, 그때 파일을 쓰지 않는다(`docs/spec/cli.md#the-window-of-an-agent`). Host는 `SOKSAK_SURFACE`를 더는 지우지 않고 sidecar를 `SOKSAK_CONFIG_DIR`만으로 시작한다.
 - F997 (agent skill의 웹 페이지): agent skill은 웹 페이지나 address를 그것을 여는 창의 plugin tab에 `core.layout.open`으로 열어 보이고, 애플리케이션 밖의 브라우저는 창의 어떤 plugin도 그것을 열지 못하거나 사람이 요청할 때만 쓴다고 말한다. 그래서 agent는 페이지를 작업 옆 창 안에 둔다. `docs/spec/cli.md#agent-skill`이 규칙을 적고 `scripts/test/skill-web-pages.test.mjs`가 그것을 지킨다.
 - F966-1-1-3 (seed drop 검사, page): page의 seed 검사가 I5와 I9도 판정하고, page의 `core.card.move`와 `core.tab.move`가 layout library의 `vacatedSlot`으로 commit 뒤에 정한 target을 답하므로 그 답으로 되풀이해도 변화가 없다. `exposure.json`의 두 사본이 `core.tab.move`의 결과를 object로 선언한다.

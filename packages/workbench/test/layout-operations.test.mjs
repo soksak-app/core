@@ -355,11 +355,13 @@ test("a refused core.layout.move fails with its error and leaves the layout", { 
     [{ tab: "tab-zzzzzz", card: "b" }, `tab tab-zzzzzz is not in the layout of window ${WINDOW}`],
     [{ tab: "tab-ooooo1", card: "b" }, "tab tab-ooooo1 is in space spc-bbbbbb, which is not active"],
     [{ tab: "tab-aaaaa1", card: "nothing" }, `card nothing is not in the layout of window ${WINDOW}`],
-    [{ tab: "tab-aaaaa1", card: "a", side: "right" }, "tab tab-aaaaa1 cannot move to the right of a"],
   ]) {
     await refuses(run("core.layout.move", params), text);
     assert.deepEqual(layout(), before, text);
   }
+  // The only tab of a card toward a side of its card names the vacated slot of the card and changes nothing (docs/spec/cli.md).
+  assert.deepEqual(await run("core.layout.move", { tab: "tab-aaaaa1", card: "a", side: "right" }), { card: "a", tab: "tab-aaaaa1" });
+  assert.deepEqual(layout(), before, "the move of the only tab of a toward its right side changed the layout");
 });
 
 // contract: layout.close.repeated-close-answers-closed
@@ -425,7 +427,7 @@ test("a refused split of a card leaves the number of the next tab name unchanged
 // The layout stores the name of a new tab without the mark of its plugin, which the strip draws before the name
 // (docs/spec/example-model.md#card-tabs), so core.grid reports the name alone as the title of the tab.
 test("a new tab stores its name without the mark of its plugin, and the strip draws the mark before the name", { timeout: 5000 }, async () => {
-  arrange([0, 1], [0, 1], [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [view("tab-aaaaa1", PLAIN)] }], "a");
+  arrange({ card: "a", tabs: [view("tab-aaaaa1", PLAIN)] }, "a");
   const { tab } = await run("core.layout.open", { card: "a", plugin: SESSION });
   const stored = cardNode(layout().root, "a").tabs.find((item) => item.tab === tab);
   assert.match(stored.title, /^탭 \d+$/, "the stored title is the name alone");

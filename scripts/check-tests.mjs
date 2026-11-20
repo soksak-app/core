@@ -393,7 +393,7 @@ const FEATURE_LINKS = [
     id: "F937-49",
     implementation: [
       { file: "packages/workbench-mygo/src/window_snapshot.go", symbol: "snapshotText(node.Text)" },
-      { file: "packages/workbench-mygo/go.mod", symbol: "replace github.com/egoist/mygo => github.com/min-0-max/mygo v0.7.4-244-g4abb83d-soksak.16" },
+      { file: "packages/workbench-mygo/go.mod", symbol: "replace github.com/egoist/mygo => github.com/min-0-max/mygo v0.7.4-244-g4abb83d-soksak.17" },
     ],
     tests: [
       { file: "packages/workbench-mygo/tests/window_snapshot_test.go", id: "TestAWindowSnapshotHoldsTheLayoutThePluginsTheMainGroupTheSurfaceGroupsAndTheUnregisteredEntries" },

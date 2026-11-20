@@ -55,6 +55,7 @@ const { registry } = await import("../exposure.js");
 registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
 const loaded = { plane: await import("../plane.js"), tabOrigins: await import("../tab-reports.js") };
 const { flushEvents } = await import("../page-log.js");
+const { stateCards } = await import("../layout-tree.js");
 
 // The error lines that the page wrote to the log of the host since the call at index `from`, as `<where>: <text>` (logRefusals writes the refusal text).
 async function errorLines(from) {
@@ -73,7 +74,7 @@ function setup() {
 // the stored layout, so the layout of a new space carries the origin member of each tab (docs/spec/projects.md#tab-origin).
 test("the layout of a new space carries the null origin member of each tab", { timeout: 5000 }, () => {
   const { state } = loaded.plane.fresh();
-  const tabs = state.cards.flatMap((card) => card.data?.tabs ?? []);
+  const tabs = stateCards(state).flatMap((card) => card.data?.tabs ?? []);
   assert.equal(tabs.length, 1, "the fixture grid declares one tab");
   assert.deepEqual(tabs.map((tab) => tab.origin), [{ directory: null }], "each tab of the new layout stores its origin member");
 });

@@ -48,7 +48,7 @@ assert.deepEqual(installEnvironment({
 export const { registry } = await import("../../exposure.js");
 registry.declare("core", JSON.parse(readFileSync(new URL("../../exposure.json", import.meta.url), "utf8")).exposes);
 const { begin } = await import("../../projects.js");
-const reports = await import("../../tab-reports.js");
+export const reports = await import("../../tab-reports.js");
 export const plane = await import("../../plane.js");
 const { installCoreExposure } = await import("../../core-exposure.js");
 await installCoreExposure({ library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},

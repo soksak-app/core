@@ -446,7 +446,8 @@ func TestARuleInsideAGroupStaysInsideItsFrame(t *testing.T) {
 // in the header beside the menu button; a member that does not lead moves its leader button into the menu (docs/spec/groups.md#headers).
 func TestTheLeaderMarkStaysInANarrowHeader(t *testing.T) {
 	f := groupedShell(t)
-	f.tester.SetSize(760, 500)
+	// At this width the tools of main fold into the menu and its tab, which the strip draws with the mark of its plugin, keeps its place.
+	f.tester.SetSize(820, 500)
 	f.settle()
 	acts := f.gridCards()["main"]["acts"].(map[string]any)
 	if acts["tools"] != "menu" {

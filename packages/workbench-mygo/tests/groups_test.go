@@ -649,9 +649,17 @@ func TestACardMoveFocusesTheMovedCardAndAMoveThatChangesNothingKeepsTheFocus(t *
 			t.Fatal(err)
 		}
 	}
+	// The reply of a move, its card and its resolved target, is judged by the move reply cases (docs/spec/groups.md#idempotency).
 	move := func(params, want string) {
 		t.Helper()
-		if answer, err := f.apply("core.card.move", params); err != nil || answer != `{"card":"`+want+`"}` {
+		answer, err := f.apply("core.card.move", params)
+		var reply struct {
+			Card string `json:"card"`
+		}
+		if err == nil {
+			err = json.Unmarshal([]byte(answer), &reply)
+		}
+		if err != nil || reply.Card != want {
 			t.Fatalf("core.card.move %s answered %s, %v", params, answer, err)
 		}
 	}
