@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F937-35: page workbench에서 content card의 split과 close 버튼이 header 아래의 그려진 최소 크기를 보는 group tree에 묻고, `core.grid`는 mygo workbench처럼 head가 그리는 tool만 `acts`에 나열한다. 검증: `group-cards.test.mjs`의 새 test 둘이 변경 전에 실패하고 변경 후에 통과한다.
 - F942: contract case `layout.close.keeps-other-cuts`가 page와 mygo workbench에서, close가 닫힌 카드의 몫을 그 split에 주고 다른 split의 카드는 frame을 지키는지 확인한다. F966-2의 저장 tree가 이미 이렇게 동작하므로 production 코드는 바뀌지 않는다. 검증: 두 test가 통과한다.
 - F969-1: contract case `layout.open.rule-of-sizes`가 page와 mygo workbench에서 `side`를 가진 `core.layout.open`이 크기 규칙으로 카드를 더하는지 확인한다. 고른 split에서는 같은 자식 하나가 더해지고, 고르지 않은 split에서는 카드의 절반을 받는다. F966-2의 저장 tree의 insert가 이미 이렇게 동작하므로 production 코드는 바뀌지 않는다. 검증: 두 test가 통과한다.
 - F911: `scripts/check-tests.mjs`가 완료된 F911을 Go와 Rust `sok` message writer의 rename과 그 test에 연결한다. 완료 항목 감사가 이 연결을 요구한다.

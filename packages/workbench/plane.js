@@ -456,9 +456,10 @@ function updateCard(el, card, rect) {
     chrome.appendChild(more);
   }
   updateCardTools(acts, {
-    canClose: grid.canClose(card.id),
-    canSplitX: grid.canSplit(card.id, "x"),
-    canSplitY: grid.canSplit(card.id, "y"),
+    // The group tree checks the drawn minimum below the headers and the group rectangles, which the layout library does not see.
+    canClose: tree.canClose(card.id),
+    canSplitX: tree.canSplit(card.id, "right"),
+    canSplitY: tree.canSplit(card.id, "bottom"),
     canGroupX: tree.canGroup(card.id, "right"),
     canGroupY: tree.canGroup(card.id, "bottom"),
     leads: tree.leadCount(tree.parentOf(card.id)) >= 2,
@@ -3006,12 +3007,13 @@ export function cardActs(id) {
   const acts = chrome?.querySelector(".chrome__acts");
   if (!acts) return null;
   const kept = shownKept(chrome, acts);
-  const buttons = Object.fromEntries([...acts.querySelectorAll(".chrome__act[data-do]")].map((b) => [
+  // A button that the head does not draw, such as the leader button of a level of one member, is no tool of the head.
+  const buttons = Object.fromEntries([...acts.querySelectorAll(".chrome__act[data-do]:not([hidden])")].map((b) => [
     ["close", "fullscreen", "leader"].includes(b.dataset.do) ? b.dataset.do : MENU_OF[b.dataset.do],
     // A head that folded the tools into a menu draws only the kept buttons of the tool row in the menu stage, the leader mark and the
     // fullscreen toggle, and none in the stage all.
     // default: a head that has not folded its tools draws them in the bar.
-    { enabled: !b.disabled, hidden: b.hidden || ((chrome.dataset.tools ?? "bar") !== "bar" && !kept.includes(b)),
+    { enabled: !b.disabled, hidden: (chrome.dataset.tools ?? "bar") !== "bar" && !kept.includes(b),
       title: b.title },
   ]));
   // default: the head of a card whose tab row is not yet fitted is an unfolded strip.

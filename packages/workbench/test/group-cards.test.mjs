@@ -459,3 +459,46 @@ test("a head at the minimum width of a card keeps a part of its tab and folds th
   assert.equal(plane.pickerState().items.some((item) => item.key === "fullscreen"), true, "the tool menu of card-3 does not hold the fullscreen toggle");
   plane.closePicker("test end");
 });
+
+// The head buttons of a content card ask the group tree, which checks the drawn minimum below the headers (docs/spec/groups.md#minimum-size).
+test("the split and close buttons of a content card are enabled exactly when the group tree accepts their operation", { timeout: 5000 }, () => {
+  let refused = 0;
+  for (const share of [0.5, 0.3, 0.2, 0.15, 0.12, 0.1]) {
+    plane.closePicker("fixture reset");
+    if (plane.currentGrid()) for (const card of plane.currentGrid().cards) for (const tab of plane.tabsOf(card)) reports.forgetTab(tab.id);
+    // card-3 is the first card of the two group cards card-5 and card-6, so both headers stand above its first line.
+    plane.adopt({ focusedId: "card-3", named: 0, windowSidebars: {}, sidebars: {}, lastCard: 6, leader: "card-6",
+      state: { root: row([
+        [share, box("card-6", "그룹 2", "card-5", [
+          [0.5, box("card-5", "그룹 1", "card-3", [[0.5, content("card-3", [view("tab-aaaaa3", PLAIN)])], [0.5, content("card-1", [view("tab-aaaaa1", PLAIN)])]])],
+          [0.5, content("card-2", [view("tab-aaaaa2", PLAIN)])],
+        ])],
+        [1 - share, content("card-4", [view("tab-aaaaa4", PLAIN)])],
+      ]) } }, "spc-aaaaaa");
+    plane.settle();
+    const tree = plane.currentTree();
+    for (const id of ["card-1", "card-2", "card-3", "card-4"]) {
+      const acts = plane.cardActs(id);
+      for (const [menu, side] of [["split-x", "right"], ["split-y", "bottom"]]) {
+        const accepted = tree.canSplit(id, side);
+        if (!accepted) refused++;
+        assert.equal(acts[menu].enabled, accepted, `${menu} of ${id} at the share ${share}`);
+      }
+      assert.equal(acts.close.enabled, tree.canClose(id), `close of ${id} at the share ${share}`);
+    }
+  }
+  assert.ok(refused > 0, "no arrangement reaches a split that the group tree refuses");
+});
+
+// core.grid lists a tool only where the head shows it, as the mygo workbench does: a level of one member shows no leader button.
+test("the acts of a card leave out the leader button of a level of one member", { timeout: 5000 }, () => {
+  plane.closePicker("fixture reset");
+  if (plane.currentGrid()) for (const card of plane.currentGrid().cards) for (const tab of plane.tabsOf(card)) reports.forgetTab(tab.id);
+  plane.adopt({ focusedId: "card-1", named: 0, windowSidebars: {}, sidebars: {}, lastCard: 1, leader: "card-1",
+    state: { root: content("card-1", [view("tab-aaaaa1", PLAIN)]) } }, "spc-aaaaaa");
+  plane.settle();
+  const acts = plane.cardActs("card-1");
+  assert.equal("leader" in acts, false, `the acts are ${JSON.stringify(acts)}`);
+  arrange();
+  assert.equal("leader" in plane.cardActs("card-3"), true, "a level of two members shows the leader button");
+});
