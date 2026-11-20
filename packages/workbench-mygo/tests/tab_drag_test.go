@@ -110,6 +110,43 @@ func TestDroppingATabOnTheEdgeOfACardMakesACard(t *testing.T) {
 	}
 }
 
+// A drag that enters the left line on the band of one card and stays on that band into the band of the card below it selects the run of
+// both, and the release adds the new card beside the run (docs/spec/groups.md#target-search).
+func TestADragAlongALineSelectsTheRunFromItsAnchor(t *testing.T) {
+	f, card, tab, other := cardWithTwoTabs(t)
+	first, second := f.box("core.card", card), f.box("core.card", other)
+	if first.X != second.X || second.Y <= first.Y {
+		t.Fatalf("the cards stand at %v and %v, not one above the other", first, second)
+	}
+	drag := dragTab(t, f, tab, first.X+8, first.Y+first.H/2)
+	if drag == nil || drag.Target == nil || strings.Join(drag.Target.Card, " ") != card || drag.Target.Zone != "left" {
+		t.Fatalf("the drag at the anchor is %+v", drag)
+	}
+	x, y := second.X+8, second.Y+second.H/2
+	f.tester.Move(x, y)
+	f.tester.Frame()
+	drag = status[*dragRead](t, f, "core.drag")
+	if drag == nil || drag.Target == nil || strings.Join(drag.Target.Card, " ") != card+" "+other || drag.Target.Zone != "left" {
+		t.Fatalf("the drag along the line is %+v with the target %+v", drag, drag.Target)
+	}
+	f.tester.Release(x, y)
+	f.settle()
+	cards := f.tabbedCards()
+	if len(cards) != 3 {
+		t.Fatalf("the plane holds %v", cards)
+	}
+	added := ""
+	for _, id := range cards {
+		if id != card && id != other {
+			added = id
+		}
+	}
+	box, top, bottom := f.box("core.card", added), f.box("core.card", card), f.box("core.card", other)
+	if box.X >= top.X || box.Y != top.Y || math.Abs(float64(box.Y+box.H-(bottom.Y+bottom.H))) > 0.01 {
+		t.Fatalf("the new card stands at %v beside %v and %v", box, top, bottom)
+	}
+}
+
 // A card with one tab moves as a whole, so no empty card remains.
 func TestDroppingTheOnlyTabMovesTheCard(t *testing.T) {
 	f, _, _, other := cardWithTwoTabs(t)
