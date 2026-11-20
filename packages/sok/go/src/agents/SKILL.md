@@ -40,6 +40,8 @@ A repeated operation with the returned identifiers gives the same identifiers an
 
 After a step, find the commands of the plugin of a tab with `exposure_search` or `window_describe {surface}` and run them with `command_run {surface}`. A request can name any window and any surface.
 
+A web page or an address is shown in a tab of a plugin of the window that opens it: find in `plugins` of the description a plugin whose description, `surface.params` or `opens` takes an address or the file, and open it with `core.layout.open`, so that the page stays in the window beside the work and its commands and statuses are declared. Use a browser outside the application only when no plugin of the window opens it or the person asks for one.
+
 ## Groups
 
 A group card is a card whose body holds a plane of its own with two or more cards, below a header with the name of the group. In `layout` it is a node with `group: {name, level, leader, root}`, where `root` is the tree of its plane; the cards of the plane are content cards and group cards, and every operation above takes a card of any plane. A split never creates a group: a split puts its new card into the plane of the card that it splits.
