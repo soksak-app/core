@@ -10,10 +10,10 @@ activity는 높은 것부터 낮은 것 순서로 다음과 같다:
 
 | Activity | 뜻 |
 | --- | --- |
-| `attention` | surface가 사람을 기다린다. 예를 들어 program이 질문한다 |
+| `attention` | surface가 사람을 기다린다. 예를 들어 program이 승인이나 답을 묻는다 |
 | `failed` | surface가 실행한 것이 실패로 끝났다 |
 | `running` | surface가 program이나 agent 같은 무언가를 실행한다 |
-| `idle` | surface가 아무것도 실행하지 않고 아무것도 기다리지 않는다 |
+| `idle` | surface가 일하지 않고 대기 중인 승인이나 답이 없다. 예를 들어 prompt의 shell이나 자기 prompt에서 쉬는 program이다 |
 
 ## 선언
 

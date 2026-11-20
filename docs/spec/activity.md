@@ -10,10 +10,10 @@ The activities, from the highest to the lowest:
 
 | Activity | Meaning |
 | --- | --- |
-| `attention` | The surface waits for the person, such as a program that asks a question |
+| `attention` | The surface waits for the person, such as a program that asks for an approval or an answer |
 | `failed` | What the surface ran ended with a failure |
 | `running` | The surface runs something, such as a program or an agent |
-| `idle` | The surface runs nothing and waits for nothing |
+| `idle` | The surface does no work and has no approval or answer pending, such as a shell at its prompt or a program that rests at its own prompt |
 
 ## Declaration
 
