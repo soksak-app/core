@@ -1,6 +1,6 @@
 // The view of the agent probe (docs/spec/cli.md#acting-on-a-layout): in the place of a process plugin, it asks its fixture sidecar
 // @sok-check/sidecar-agentprobe (e2e/fixtures/sidecars/agentprobe) to start for its surface a process that writes its
-// SOKSAK_CONFIG_DIR and SOKSAK_SURFACE and runs `sok context` (docs/spec/sidecars.md#processes-of-a-surface), and it reports what
+// SOKSAK_CONFIG_DIR and runs `sok context` (docs/spec/sidecars.md#processes-of-a-surface), and it reports what
 // the process wrote as the status agentprobe.process. An error of the sidecar is reported to the application log and kept in the
 // status.
 
@@ -34,8 +34,8 @@ export async function startAgentProbe({ bridge, expose, view }) {
   };
   await sidecar.on(surface, (body) => {
     if (body?.event === "process") {
-      const { configDirectory, surface: named, context } = body;
-      set({ configDirectory, surface: named, context });
+      const { configDirectory, context } = body;
+      set({ configDirectory, context });
     } else if (typeof body?.error === "string") {
       fail(body.error);
     } else {

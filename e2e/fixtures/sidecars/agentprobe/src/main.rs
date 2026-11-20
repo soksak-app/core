@@ -1,8 +1,9 @@
 // The agentprobe sidecar: the fixture sidecar of the agent layout window check (docs/spec/cli.md#acting-on-a-layout). It reads
 // the lines of the host on its standard input (docs/spec/sidecars.md#messages) and starts for a surface, on the request
-// `{"operation": "start", "sok": <path>}`, a process that carries SOKSAK_CONFIG_DIR and SOKSAK_SURFACE
-// (docs/spec/sidecars.md#processes-of-a-surface), writes them as its first line and runs `<sok> context` in its place. When the
-// process ends, the sidecar sends the surface `{"event": "process", configDirectory, surface, context}`.
+// `{"operation": "start", "sok": <path>}`, a process that carries SOKSAK_CONFIG_DIR (docs/spec/sidecars.md#processes-of-a-surface),
+// writes it as its first line and runs `<sok> context` in its place. When the process ends, the sidecar sends the surface
+// `{"event": "process", configDirectory, context}`. It records each process that it starts with its start time and answers the
+// process queries of the host (docs/spec/sidecars.md#process-identity).
 //
 //     sok-agentprobe                   the sidecar that the host starts
 //     sok-agentprobe --process <sok>   the process of a surface
@@ -37,14 +38,14 @@ fn set_display_name() -> Result<(), String> {
     Ok(())
 }
 
-/// The process of a surface: writes its two variables as one JSON line and replaces itself with `<sok> context`, so the
+/// The process of a surface: writes its SOKSAK_CONFIG_DIR as one JSON line and replaces itself with `<sok> context`, so the
 /// process that the sidecar started is the process of `sok`. It returns only when the replacement failed.
 fn process(sok: &str) -> ! {
     let variable = |name| std::env::var(name).ok();
-    let line = json!({"configDirectory": variable("SOKSAK_CONFIG_DIR"), "surface": variable("SOKSAK_SURFACE")});
+    let line = json!({"configDirectory": variable("SOKSAK_CONFIG_DIR")});
     let mut out = std::io::stdout();
     if let Err(error) = writeln!(out, "{line}").and_then(|()| out.flush()) {
-        eprintln!("write the variables: {error}");
+        eprintln!("write the configuration directory: {error}");
         std::process::exit(126);
     }
     let error = Command::new(sok).arg("context").exec();
@@ -68,12 +69,46 @@ fn write(output: &Output, message: Value) {
 /// Some kills the process before anything reaped it.
 type Running = Arc<Mutex<Option<Child>>>;
 
-/// The state of the sidecar: its output, its SOKSAK_CONFIG_DIR, the running processes by surface and the threads that wait for
-/// them, which the end of the sidecar joins so that it ends after the reports that they have begun.
+/// The processes that the sidecar started and has not reaped: the surface and the start time in milliseconds since the Unix epoch of
+/// each, by process id. A process is recorded before the next line of the host is read and removed under the lock of its Running
+/// when it is reaped, so a process query never names a reaped process.
+type Started = Arc<Mutex<HashMap<u32, (String, i64)>>>;
+
+/// The size of `struct kinfo_proc` of `sys/sysctl.h` and the offset of `kp_proc.p_starttime` in it, a `struct timeval` of an 8-byte
+/// second and a 4-byte microsecond. The crate libc declares no `kinfo_proc` for Apple platforms, so these values come from the
+/// header; a sysctl answer of another size is an error.
+const KINFO_PROC_SIZE: usize = 648;
+const KINFO_PROC_STARTED: usize = 0;
+
+/// The start time of the process `pid` in milliseconds since the Unix epoch, from the process table of the `kern.proc.pid` sysctl,
+/// which the host reads too (docs/spec/sidecars.md#process-identity).
+fn start_time(pid: u32) -> Result<i64, String> {
+    let mut name = [libc::CTL_KERN, libc::KERN_PROC, libc::KERN_PROC_PID, pid as libc::c_int];
+    let mut buffer = [0u8; KINFO_PROC_SIZE];
+    let mut size = KINFO_PROC_SIZE;
+    // SAFETY: name has the four integers of the request, and buffer has the size that size states.
+    let result = unsafe {
+        libc::sysctl(name.as_mut_ptr(), name.len() as libc::c_uint, buffer.as_mut_ptr().cast(), &raw mut size, std::ptr::null_mut(), 0)
+    };
+    if result != 0 {
+        return Err(format!("read process {pid}: {}", std::io::Error::last_os_error()));
+    }
+    if size != KINFO_PROC_SIZE {
+        return Err(format!("read process {pid}: the process table answered {size} of {KINFO_PROC_SIZE} bytes"));
+    }
+    // The process table holds the integers in the byte order of the machine, which is little-endian on every Mac.
+    let seconds = i64::from_le_bytes(buffer[KINFO_PROC_STARTED..KINFO_PROC_STARTED + 8].try_into().expect("eight bytes"));
+    let micros = i32::from_le_bytes(buffer[KINFO_PROC_STARTED + 8..KINFO_PROC_STARTED + 12].try_into().expect("four bytes"));
+    Ok(seconds * 1000 + i64::from(micros) / 1000)
+}
+
+/// The state of the sidecar: its output, its SOKSAK_CONFIG_DIR, the running processes by surface, the processes that it started and
+/// the threads that wait for them, which the end of the sidecar joins so that it ends after the reports that they have begun.
 struct Sidecar {
     output: Output,
     config: Option<String>,
     running: HashMap<String, Vec<Running>>,
+    started: Started,
     waits: Vec<JoinHandle<()>>,
 }
 
@@ -88,17 +123,27 @@ impl Sidecar {
             .arg("--process")
             .arg(sok)
             .env("SOKSAK_CONFIG_DIR", config)
-            .env("SOKSAK_SURFACE", surface)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
             .map_err(|error| format!("process of {surface}: start: {error}"))?;
+        let pid = child.id();
+        let started = match start_time(pid) {
+            Ok(started) => started,
+            Err(error) => {
+                // The process is not recorded, so it is ended and reaped before the error is answered.
+                let ended = child.kill().and_then(|()| child.wait().map(|_| ()));
+                return Err(format!("process of {surface}: {error}{}", ended.err().map(|error| format!("; end it: {error}")).unwrap_or_default()));
+            }
+        };
+        self.started.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).insert(pid, (surface.to_string(), started));
         let mut stdout = child.stdout.take().expect("the output of the process is piped");
         let mut stderr = child.stderr.take().expect("the error output of the process is piped");
         let cell: Running = Arc::new(Mutex::new(Some(child)));
         self.running.entry(surface.to_string()).or_default().push(cell.clone());
         let output = self.output.clone();
+        let records = self.started.clone();
         let surface = surface.to_string();
         let sok = sok.to_string();
         self.waits.push(std::thread::spawn(move || {
@@ -109,11 +154,15 @@ impl Sidecar {
             let mut text = Vec::new();
             let read = stdout.read_to_end(&mut text);
             let errors = errors.join().unwrap_or_else(|_| Err(std::io::Error::other("the read of the error output panicked")));
-            let Some(mut child) = cell.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).take() else {
+            let mut slot = cell.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            let Some(mut child) = slot.take() else {
                 // The close of the surface ended and reaped the process; it sends no report.
                 return;
             };
-            let body = match (read, errors, child.wait()) {
+            let waited = child.wait();
+            records.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).remove(&pid);
+            drop(slot);
+            let body = match (read, errors, waited) {
                 (Err(error), _, _) => json!({"error": format!("process of {surface}: read its output: {error}")}),
                 (_, Err(error), _) => json!({"error": format!("process of {surface}: read its error output: {error}")}),
                 (_, _, Err(error)) => json!({"error": format!("process of {surface}: wait: {error}")}),
@@ -136,6 +185,7 @@ impl Sidecar {
                 if let Err(error) = child.wait() {
                     failures.push(format!("wait for process {}: {error}", child.id()));
                 }
+                self.started.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).remove(&child.id());
             }
         }
         if failures.is_empty() { Ok(()) } else { Err(failures.join("; ")) }
@@ -150,6 +200,10 @@ impl Sidecar {
                 return;
             }
         };
+        if let Some(process) = message.get("process") {
+            self.answer_process(process, &message["request"], text);
+            return;
+        }
         let Some(surface) = message["surface"].as_str() else {
             eprintln!("the host sent a line without a surface: {text}");
             return;
@@ -173,6 +227,20 @@ impl Sidecar {
         }
     }
 
+    /// Answers the process query of the host for the process `process`: its surface and start time when the sidecar started it and has
+    /// not reaped it, else the surface null (docs/spec/sidecars.md#process-identity).
+    fn answer_process(&self, process: &Value, request: &Value, text: &str) {
+        let (Some(pid), Some(request)) = (process.as_u64().and_then(|pid| u32::try_from(pid).ok()), request.as_u64()) else {
+            eprintln!("the host sent a process query without a process id and a request number: {text}");
+            return;
+        };
+        let answer = match self.started.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).get(&pid) {
+            Some((surface, started)) => json!({"process": pid, "request": request, "surface": surface, "started": started}),
+            None => json!({"process": pid, "request": request, "surface": null}),
+        };
+        write(&self.output, answer);
+    }
+
     /// Ends the processes that still run and waits for the reports that have begun.
     fn end(mut self) {
         let surfaces: Vec<String> = self.running.keys().cloned().collect();
@@ -189,8 +257,8 @@ impl Sidecar {
     }
 }
 
-/// The report of a process that ended with `status`: its first line holds its variables and the rest of its output is the output
-/// of `sok context`. A process whose replacement failed, or that ended before its first line, is an error with its error output.
+/// The report of a process that ended with `status`: its first line holds its configuration directory and the rest of its output is
+/// the output of `sok context`. A process whose replacement failed, or that ended before its first line, is an error with its error output.
 fn report(surface: &str, sok: &str, output: &[u8], errors: &[u8], status: std::process::ExitStatus) -> Value {
     let errors = String::from_utf8_lossy(errors).into_owned();
     if status.code() == Some(127) && errors.starts_with(&format!("run {sok}: ")) {
@@ -198,7 +266,7 @@ fn report(surface: &str, sok: &str, output: &[u8], errors: &[u8], status: std::p
     }
     let text = String::from_utf8_lossy(output);
     let Some((first, rest)) = text.split_once('\n') else {
-        return json!({"error": format!("process of {surface}: ended with {status} before it wrote its variables: {errors}")});
+        return json!({"error": format!("process of {surface}: ended with {status} before it wrote its configuration directory: {errors}")});
     };
     let variables: Value = match serde_json::from_str(first) {
         Ok(value) => value,
@@ -207,7 +275,6 @@ fn report(surface: &str, sok: &str, output: &[u8], errors: &[u8], status: std::p
     json!({
         "event": "process",
         "configDirectory": variables["configDirectory"],
-        "surface": variables["surface"],
         "context": {"status": status.code(), "signal": status.signal(), "stdout": rest, "stderr": errors},
     })
 }
@@ -232,6 +299,7 @@ fn main() {
         // The host sets SOKSAK_CONFIG_DIR when it starts the sidecar; an empty value names no directory.
         config: std::env::var("SOKSAK_CONFIG_DIR").ok().filter(|value| !value.is_empty()),
         running: HashMap::new(),
+        started: Arc::new(Mutex::new(HashMap::new())),
         waits: Vec::new(),
     };
     for text in std::io::stdin().lock().lines() {

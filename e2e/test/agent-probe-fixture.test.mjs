@@ -1,5 +1,5 @@
 // The fixture plugins of the agent layout window check (docs/spec/cli.md#acting-on-a-layout): the agent probe, whose fixture
-// sidecar starts for its surface a process that writes its SOKSAK_CONFIG_DIR and SOKSAK_SURFACE and the output of `sok context`,
+// sidecar starts for its surface a process that writes its SOKSAK_CONFIG_DIR and the output of `sok context`,
 // and the agent open probe, whose surface.params takes path and address and whose surface.opens declares html. These tests hold
 // the declarations that the applications read and the view logic of the probes without a window; the processes of the sidecar run
 // in its own tests (e2e/fixtures/sidecars/agentprobe/tests/process.rs) and in the window check.
@@ -29,6 +29,7 @@ test("the agent probe depends on its sidecar, which runs on standard input and o
   const sidecar = validateSidecar(read(join(SERVICE, "sidecar.json")));
   assert.equal(sidecar.transport, undefined, "the sidecar of the agent probe is not a persistent service");
   assert.equal(sidecar.displayName, "soksak://sidecar/agentprobe");
+  assert.equal(sidecar.processes, true, "the sidecar starts processes for surfaces and answers process queries");
   assert.deepEqual(sidecar.message, { form: "json-object", operationField: "operation" });
   const pkg = read(join(SERVICE, "package.json"));
   assert.equal(pkg.name, SIDECAR);
@@ -59,7 +60,7 @@ test("the agent probe starts the process of its surface through its sidecar and 
   assert.equal(await view.status("agentprobe.process"), null);
   await view.exposed("status.watch", { name: "agentprobe.process" });
   assert.equal(await view.run("agentprobe.start", { sok: SOK }), null);
-  const process = { configDirectory: "/config", surface: "tab-4",
+  const process = { configDirectory: "/config",
     context: { status: 0, signal: null, stdout: '{"configDirectory":"/config","surface":"tab-4","window":"main"}\n', stderr: "" } };
   view.deliverNotice("sidecar.message", { id: "tab-4", body: { event: "process", ...process } });
   await turn();

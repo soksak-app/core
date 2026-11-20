@@ -10,12 +10,11 @@
     "status": [
       {
         "name": "agentprobe.process",
-        "description": "The last process of the surface: the SOKSAK_CONFIG_DIR and SOKSAK_SURFACE that it carried and the exit status, the signal, the standard output and the standard error of the `sok context` that it ran, or the error of the sidecar; null before the first process ended.",
+        "description": "The last process of the surface: the SOKSAK_CONFIG_DIR that it carried and the exit status, the signal, the standard output and the standard error of the `sok context` that it ran, or the error of the sidecar; null before the first process ended.",
         "schema": {
           "type": ["object", "null"],
           "properties": {
             "configDirectory": { "type": ["string", "null"] },
-            "surface": { "type": ["string", "null"] },
             "context": {
               "type": "object",
               "properties": {

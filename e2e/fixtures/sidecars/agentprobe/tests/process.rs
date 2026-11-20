@@ -1,6 +1,6 @@
 // The processes that the agentprobe sidecar starts for surfaces (docs/spec/sidecars.md#processes-of-a-surface), judged on the real
-// `sok-agentprobe` executable as the host runs it: the test starts it with SOKSAK_CONFIG_DIR set, as the host does, and with a
-// SOKSAK_SURFACE of another surface, which the sidecar replaces, writes the lines of the host and reads the lines of the sidecar.
+// `sok-agentprobe` executable as the host runs it: the test starts it with SOKSAK_CONFIG_DIR set, as the host does, writes the lines
+// of the host, among them process queries (docs/spec/sidecars.md#process-identity), and reads the lines of the sidecar.
 // The program that a process runs in the place of `sok` is a system program, so the test reads what the process gave it.
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
@@ -21,12 +21,11 @@ struct Sidecar {
 }
 
 impl Sidecar {
-    /// Starts the sidecar in the folder `dir` with SOKSAK_CONFIG_DIR `config` and the SOKSAK_SURFACE of another surface.
+    /// Starts the sidecar in the folder `dir` with SOKSAK_CONFIG_DIR `config`.
     fn start(dir: &PathBuf, config: &str) -> Sidecar {
         let mut child = Command::new(env!("CARGO_BIN_EXE_sok-agentprobe"))
             .current_dir(dir)
             .env("SOKSAK_CONFIG_DIR", config)
-            .env("SOKSAK_SURFACE", "tab-other")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
@@ -82,17 +81,17 @@ fn folder(name: &str) -> PathBuf {
 }
 
 #[test]
-fn a_process_of_a_surface_carries_the_configuration_directory_and_its_surface_and_runs_the_program_with_context() {
+fn a_process_of_a_surface_carries_the_configuration_directory_and_runs_the_program_with_context() {
     let dir = folder("carries");
     let mut sidecar = Sidecar::start(&dir, "/config/of/the/application");
     sidecar.send(json!({"surface": "tab-a", "root": "/project", "body": {"operation": "start", "sok": "/bin/echo"}}));
     assert_eq!(
         sidecar.next("the process of tab-a"),
-        json!({"surface": "tab-a", "body": {"event": "process", "configDirectory": "/config/of/the/application", "surface": "tab-a",
+        json!({"surface": "tab-a", "body": {"event": "process", "configDirectory": "/config/of/the/application",
             "context": {"status": 0, "signal": null, "stdout": "context\n", "stderr": ""}}})
     );
     sidecar.send(json!({"surface": "tab-b", "root": "/project", "body": {"operation": "start", "sok": "/bin/echo"}}));
-    assert_eq!(sidecar.next("the process of tab-b")["body"]["surface"], json!("tab-b"));
+    assert_eq!(sidecar.next("the process of tab-b")["body"]["event"], json!("process"));
     sidecar.send(json!({"surface": "tab-a", "root": "/project", "closed": true}));
     assert_eq!(sidecar.next("the close of tab-a"), json!({"surface": "tab-a", "closed": true}));
     let (status, rest) = sidecar.end();
@@ -108,7 +107,7 @@ fn a_program_that_fails_and_a_request_that_the_sidecar_refuses_are_answered_with
     sidecar.send(json!({"surface": "tab-a", "root": "/project", "body": {"operation": "start", "sok": "/bin/cat"}}));
     assert_eq!(
         sidecar.next("the process that runs cat"),
-        json!({"surface": "tab-a", "body": {"event": "process", "configDirectory": "/config", "surface": "tab-a",
+        json!({"surface": "tab-a", "body": {"event": "process", "configDirectory": "/config",
             "context": {"status": 1, "signal": null, "stdout": "", "stderr": "cat: context: No such file or directory\n"}}})
     );
     let missing = dir.join("missing-program");
@@ -143,5 +142,50 @@ fn the_close_of_a_surface_ends_its_running_process_before_the_answer() {
     let (status, rest) = sidecar.end();
     assert!(status.success(), "the sidecar ended with {status} after the end of its input");
     assert!(rest.is_empty(), "the sidecar reported {rest:?} for the process that the close ended");
+    std::fs::remove_dir_all(&dir).expect("the folder of the test is removed");
+}
+
+/// The milliseconds since the Unix epoch now.
+fn now() -> i64 {
+    let elapsed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).expect("the clock is after the epoch");
+    i64::try_from(elapsed.as_millis()).expect("the milliseconds fit")
+}
+
+/// The ids of the child processes of `parent`, which pgrep reads from the process table.
+fn children(parent: u32) -> Vec<u32> {
+    let output = Command::new("pgrep").arg("-P").arg(parent.to_string()).output().expect("pgrep runs");
+    String::from_utf8(output.stdout).expect("pgrep writes text").lines().map(|line| line.parse().expect("pgrep writes process ids")).collect()
+}
+
+#[test]
+fn a_process_query_names_the_surface_and_the_start_time_of_a_running_process_that_the_sidecar_started() {
+    let dir = folder("query");
+    // cat opens the named pipe `context` of the folder of the sidecar for reading, which waits for a writer that never comes.
+    let status = Command::new("mkfifo").arg(dir.join("context")).status().expect("mkfifo runs");
+    assert!(status.success(), "mkfifo ended with {status}");
+    let mut sidecar = Sidecar::start(&dir, "/config");
+    let pid = sidecar.child.id();
+    let before = now();
+    sidecar.send(json!({"surface": "tab-a", "root": "/project", "body": {"operation": "start", "sok": "/bin/cat"}}));
+    // The sidecar reads the lines of the host in order, so the answer to this query follows the start of the process.
+    sidecar.send(json!({"process": pid, "request": 1}));
+    assert_eq!(sidecar.next("a query for the sidecar itself"), json!({"process": pid, "request": 1, "surface": null}));
+    let after = now();
+    let started = children(pid);
+    assert_eq!(started.len(), 1, "the sidecar runs one process: {started:?}");
+    let child = started[0];
+    sidecar.send(json!({"process": child, "request": 2}));
+    let answer = sidecar.next("a query for the process of tab-a");
+    assert_eq!((&answer["process"], &answer["request"], &answer["surface"]), (&json!(child), &json!(2), &json!("tab-a")), "{answer}");
+    let time = answer["started"].as_i64().unwrap_or_else(|| panic!("the answer has no start time: {answer}"));
+    // The process table states the start in microseconds and the answer in milliseconds, so it may lie up to 1 ms before `before`.
+    assert!(before - 1 <= time && time <= after, "the start time {time} is not between {before} and {after}");
+    sidecar.send(json!({"surface": "tab-a", "root": "/project", "closed": true}));
+    assert_eq!(sidecar.next("the close of tab-a"), json!({"surface": "tab-a", "closed": true}));
+    sidecar.send(json!({"process": child, "request": 3}));
+    assert_eq!(sidecar.next("a query after the close"), json!({"process": child, "request": 3, "surface": null}), "the close reaped the process");
+    let (status, rest) = sidecar.end();
+    assert!(status.success(), "the sidecar ended with {status} after the end of its input");
+    assert!(rest.is_empty(), "the sidecar wrote {rest:?} at its end");
     std::fs::remove_dir_all(&dir).expect("the folder of the test is removed");
 }

@@ -2,7 +2,7 @@
   "name": "@sok-check/sidecar-agentprobe",
   "version": "0.0.40",
   "private": true,
-  "description": "Window check fixture: a sidecar on standard input and output that starts for a surface a process which writes its SOKSAK_CONFIG_DIR and SOKSAK_SURFACE and runs `sok context`.",
+  "description": "Window check fixture: a sidecar on standard input and output that starts for a surface a process which writes its SOKSAK_CONFIG_DIR and runs `sok context`, and that answers the process queries of the host.",
   "license": "MIT",
   "repository": "git+https://github.com/soksak-app/core.git",
   "os": ["darwin"],

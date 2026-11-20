@@ -15,6 +15,7 @@ name = "sok-agentprobe"
 path = "src/main.rs"
 
 [dependencies]
+libc = "0.2.189"
 serde_json = "1.0.151"
 
 [build-dependencies]
