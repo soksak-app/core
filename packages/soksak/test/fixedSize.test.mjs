@@ -413,7 +413,8 @@ test("height is the same rule as width, on the other axis", () => {
   assert.equal(grid.setSize("card", "y", 200), true);
   assert.equal(grid.card("card").height, 200);
   assert.equal(grid.rect("card").h, 200, "the px size is the drawn size on y too");
-  assert.equal(grid.card("beside").height, 200, "and every card in the slot takes it");
+  assert.equal(grid.rect("beside").h, 200, "and the row it stands in is drawn at it");
+  assert.equal(grid.card("beside").height, undefined, "which declares nothing of its own");
   assert.equal(grid.rect(below).h, 900 - 200 - grid.gap, "the rest is what is left");
 
   // Dragging the boundary beside it changes that size, as on x.
@@ -546,7 +547,7 @@ test("a boundary with a declared size on one side of it does not move a plane th
   );
 });
 
-test("a card that comes to span two slots loses the size it declared", () => {
+test("a card that comes to span two slots keeps the size it declared", () => {
   const grid = new Soksak(
     { root: { cut: "x", kids: [{ share: 0.4, node: { cut: "y", kids: [{ share: 0.5, node: { card: "side", width: 400 } }, { share: 0.5, node: { card: "low" } }] } }, { share: 0.6, node: { card: "main" } }] } },
     { width: 1200, height: 800, gap: 24 },
@@ -554,10 +555,12 @@ test("a card that comes to span two slots loses the size it declared", () => {
   assert.equal(grid.card("side").width, 400, "it declares a width");
 
   // The split puts a line inside the column both cards stand in, so `side` comes
-  // to span two slots without being split itself.
+  // to span two slots without being split itself. The size belongs to the card
+  // of the tree, so the line of the other cut does not change it.
   grid.split("low", "x");
   assert.equal(grid.card("side").c1 - grid.card("side").c0, 2, "side now spans two slots");
-  assert.equal(grid.card("side").width, undefined, "and carries no px size");
+  assert.equal(grid.card("side").width, 400, "and keeps its px size");
+  assert.equal(grid.rect("side").w, 400, "at which it is drawn");
 });
 
 test("a drag between two declared slots moves no third one", () => {
@@ -880,4 +883,39 @@ test("a card inserted where every kid of the root holds a px size takes a share 
   const grid = new Soksak({ root: { cut: "x", kids: [{ share: 0.4, node: { card: "p", width: 200 } }, { share: 0.6, node: { card: "q", width: 300 } }] } }, { width: 1600, height: 600, gap: 0, minSize: 20 });
   assert.equal(grid.insertAt("x", 2, { id: "n", size: 262 }), "n");
   assert.deepEqual(grid.cards.map((c) => c.id), ["p", "q", "n"]);
+});
+
+test("a px size is kept when a line of another cut falls inside its card", () => {
+  const state = { root: { cut: "y", kids: [
+    { share: 0.5, node: { cut: "x", kids: [{ share: 0.3, node: { card: "a", width: 200 } }, { share: 0.7, node: { card: "b" } }] } },
+    { share: 0.5, node: { cut: "x", kids: [{ share: 0.1, node: { card: "c" } }, { share: 0.9, node: { card: "d" } }] } },
+  ] } };
+  const grid = new Soksak(state, { width: 1000, height: 600, gap: 24, minSize: 50 });
+  assert.equal(grid.card("a").width, 200, "the card reads its px size");
+  assert.equal(grid.rect("a").w, 200, "the card is drawn at its px size");
+  assert.equal(grid.toJSON().root.kids[0].node.kids[0].node.width, 200, "the stored tree keeps the px size");
+  // An operation in the other cut keeps it.
+  assert.ok(grid.split("d", "x"));
+  assert.equal(grid.toJSON().root.kids[0].node.kids[0].node.width, 200, "a split in the other cut keeps the px size");
+  assert.equal(grid.rect("a").w, 200);
+  // A drag of its edge changes it to the drawn size.
+  const line = grid.card("a").c1;
+  assert.equal(grid.moveBoundary("x", line, 312), 312);
+  assert.equal(grid.card("a").width, 300, "a drag declares the size it draws");
+  assert.equal(grid.rect("a").w, 300);
+  // setSize declares it on a card that spans two cells of the lines.
+  assert.equal(grid.setSize("a", "x", 250), true);
+  assert.equal(grid.rect("a").w, 250);
+});
+
+test("two cards of two cuts that stand in one cell keep their own px sizes", () => {
+  const state = { root: { cut: "y", kids: [
+    { share: 0.5, node: { cut: "x", kids: [{ share: 0.3, node: { card: "a", width: 200 } }, { share: 0.7, node: { card: "b" } }] } },
+    { share: 0.5, node: { cut: "x", kids: [{ share: 0.3, node: { card: "c", width: 260 } }, { share: 0.7, node: { card: "d" } }] } },
+  ] } };
+  const grid = new Soksak(state, { width: 1000, height: 600, gap: 24, minSize: 50 });
+  assert.equal(grid.rect("a").w, 200);
+  assert.equal(grid.rect("c").w, 260);
+  const stored = grid.toJSON().root.kids.map((kid) => kid.node.kids[0].node.width);
+  assert.deepEqual(stored, [200, 260]);
 });

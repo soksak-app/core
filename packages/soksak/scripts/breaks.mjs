@@ -16,6 +16,13 @@
  */
 export const BREAKS = [
   {
+    id: "spanning-size",
+    what: "a card that a line of another cut crosses is read without the px size it declares",
+    file: "dist/card.js",
+    find: "export function fixedSize(card, axis) {\n",
+    to: "export function fixedSize(card, axis) {\n    if (spanOf(card, axis) !== 1)\n        return null;\n",
+  },
+  {
     id: "cut-gaps",
     what: "a cut is drawn without the corridors between its kids",
     file: "dist/soksak.js",
@@ -105,13 +112,6 @@ export const BREAKS = [
     file: "dist/soksak.js",
     find: "return Number.isInteger(line) && line >= 1 && line <= this.arr(axis).length - 2;",
     to: "return true;",
-  },
-  {
-    id: "one-slot",
-    what: "setSize writes onto a card spanning two slots",
-    file: "dist/soksak.js",
-    find: "if (px !== null && (!Number.isFinite(px) || px < 0 || spanOf(card, axis) !== 1))",
-    to: "if (px !== null && (!Number.isFinite(px) || px < 0))",
   },
   {
     id: "gap-guard",
@@ -227,25 +227,11 @@ export const BREAKS = [
     to: "                if (usable <= EPS) {\n                    a[line] = clamp(a[line - 1], a[line - 1], a[line + 1]);\n                    break;\n                }",
   },
   {
-    id: "named-paid",
-    what: "the slot a settle names is not the slot that pays",
-    file: "dist/soksak.js",
-    find: "            if (this.fits(axis) && this.namedKept(axis, want))",
-    to: "            if (this.fits(axis))",
-  },
-  {
     id: "insert-line",
     what: "canInsertAt answers for the line one past the end of the axis",
     file: "dist/soksak.js",
     find: "if (!Number.isInteger(line) || line < 0 || line > a.length - 1)",
     to: "if (!Number.isInteger(line) || line < 0 || line > a.length)",
-  },
-  {
-    id: "zero-width-corridor",
-    what: "a slot named at nothing is given a corridor, so a run of coincident lines comes apart",
-    file: "dist/soksak.js",
-    find: "asked > EPS ? corridorWhenWide : corridorOf",
-    to: "corridorWhenWide",
   },
   {
     id: "blank-corridor",
@@ -281,13 +267,6 @@ export const BREAKS = [
     file: "dist/soksak.js",
     find: "            if ((declared[line - 1] !== null) !== (declared[line] !== null)) {",
     to: "            if (false) {",
-  },
-  {
-    id: "span-share",
-    what: "a sharing span is rewritten counting the corridor the slot holds",
-    file: "dist/soksak.js",
-    find: "        const share = (i) => holds ? size[i] : Math.max(0, size[i] - corridorOf(plane, axis, i, read));",
-    to: "        const share = (i) => size[i];",
   },
   {
     id: "from-line",
@@ -664,17 +643,10 @@ export const BREAKS = [
   },
   {
     id: "pair-total",
-    what: "a drag changes what every other declared slot is drawn at",
+    what: "a drag between two declared cards takes the difference from no declaration on the far side",
     file: "dist/soksak.js",
-    find: "        if (own !== null && other !== null) {",
-    to: "        if (false) {",
-  },
-  {
-    id: "line-order",
-    what: "a rewrite of the slot widths leaves the line array out of order",
-    file: "dist/soksak.js",
-    find: "            if (a[i] > a[i + 1])\n                a[i] = a[i + 1];",
-    to: "            ;",
+    find: "        for (const card of far)\n            change(card, -delta);\n",
+    to: "",
   },
   {
     id: "passed-it",
@@ -689,13 +661,6 @@ export const BREAKS = [
     file: "dist/soksak.js",
     find: "this.w = width;\n        this.h = height;",
     to: "this.w = width;\n        this.h = height;\n        for (const c of this.list ?? []) {\n            if (c.width !== undefined && c.width > width)\n                c.width = width;\n            if (c.height !== undefined && c.height > height)\n                c.height = height;\n        }",
-  },
-  {
-    id: "settle-payer",
-    what: "the settle judges a card no choice of slot can widen, so no slot beside the boundary ever pays",
-    file: "dist/soksak.js",
-    find: "            if (!shares)\n                continue;",
-    to: "            ;",
   },
   {
     id: "centre-range",
@@ -724,13 +689,6 @@ export const BREAKS = [
     file: "dist/soksak.js",
     find: "if (allowSnap && this.snap !== 'off') {",
     to: "if (true) {",
-  },
-  {
-    id: "span-size",
-    what: "a card that comes to span two slots keeps the px size it declared",
-    file: "dist/soksak.js",
-    find: "if (card.width !== undefined && card.c1 - card.c0 !== 1)",
-    to: "if (false)",
   },
   {
     id: "crossings-axis",
@@ -905,13 +863,6 @@ export const BREAKS = [
     to: "\n",
   },
   {
-    id: "spanning-size",
-    what: "a card that came to span two slots keeps the px size it declared",
-    file: "dist/soksak.js",
-    find: "            if (card.width !== undefined && card.c1 - card.c0 !== 1)\n                delete card.width;\n",
-    to: "",
-  },
-  {
     id: "run-at-border",
     what: "a run of coincident lines reaching the plane's border is inset as if it met a card",
     file: "dist/geometry.js",
@@ -924,13 +875,6 @@ export const BREAKS = [
     file: "dist/soksak.js",
     find: "        // Every card must have a non-zero area, including one just created.\n        if (!this.hasArea(flat))\n            return false;\n",
     to: "        // Every card must have a non-zero area, including one just created.\n",
-  },
-  {
-    id: "settle-declared",
-    what: "the settle names a slot holding a px size as the one that paid",
-    file: "dist/soksak.js",
-    find: "            // that holds a px size is skipped here.\n            if (held[slot] !== null)\n                continue;\n",
-    to: "            // that holds a px size is skipped here.\n",
   },
   {
     id: "mouse-move-others",

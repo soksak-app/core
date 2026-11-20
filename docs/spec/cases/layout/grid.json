@@ -121,12 +121,12 @@
   {"call":"card","args":["a"],"returns":{"id":"a","c0":0,"c1":1,"r0":0,"r1":1,"data":{"tabs":["t1"]},"fixed":false,"width":300}},
   {"call":"rects","returns":{"a":{"x":0,"y":0,"w":300,"h":288},"b":{"x":324,"y":0,"w":676,"h":288},"c":{"x":0,"y":312,"w":1000,"h":288}}},
   {"call":"setSize","args":["a","x",-1],"returns":false},
-  {"call":"setSize","args":["c","x",200],"returns":false},
+  {"call":"setSize","args":["c","x",200],"returns":true},
   {"call":"setSize","args":["a","q",100],"returns":false},
   {"call":"setSize","args":["none","x",100],"returns":false},
   {"call":"setSize","args":["a","x",null],"returns":true},
   {"call":"card","args":["a"],"returns":{"id":"a","c0":0,"c1":1,"r0":0,"r1":1,"data":{"tabs":["t1"]},"fixed":false}},
-  {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false,"data":{"tabs":["t1"]}}},{"share":0.5,"node":{"card":"b","fixed":false,"data":{"note":"x","list":[1,2]}}}]}},{"share":0.5,"node":{"card":"c","fixed":true}}]}}}
+  {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false,"data":{"tabs":["t1"]}}},{"share":0.5,"node":{"card":"b","fixed":false,"data":{"note":"x","list":[1,2]}}}]}},{"share":0.5,"node":{"card":"c","fixed":true,"width":200}}]}}}
  ]},
  {"name":"splits cut a card into two and the new card takes the far half","options":{"width":1200,"height":800,"gap":16,"minSize":80},"steps":[
   {"call":"split","args":["card","x"],"returns":"card-1"},
@@ -436,7 +436,7 @@
  ]},
  {"name":"arrange even changes nothing and is false when no equal grid keeps every cell at minSize, and refuses another mode","options":{"width":120,"height":80,"gap":10,"minSize":40},"state":{"root":{"cut":"x","kids":[{"share":0.6,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a","width":250}},{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"c"}},{"share":0.5,"node":{"card":"d"}}]}}]}},{"share":0.4,"node":{"card":"b","fixed":true}}]}},"steps":[
   {"call":"arrange","args":["even"],"returns":false},
-  {"call":"lines","args":["x"],"returns":[0,0.275,0.5916666666666667,1]},
+  {"call":"lines","args":["x"],"returns":[0,0.2916666666666667,0.625,1]},
   {"call":"arrange","args":["odd"],"throws":"unknown arrangement \"odd\""}
  ]},
  {"name":"newLine cuts at a new line at the centre where a line that the card spans across lies inside it","options":{"width":1000,"height":600,"gap":10,"minSize":40},"state":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"cut":"x","kids":[{"share":0.4,"node":{"card":"b"}},{"share":0.6,"node":{"card":"c"}}]}}]}},"steps":[

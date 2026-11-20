@@ -67,9 +67,11 @@ export const spanOf = (card: Card, axis: Axis): number => {
   return card[hi] - card[lo];
 };
 
-/** The px size set on an axis, or null when the card takes a share. */
+/**
+ * The px size set on an axis, or null when the card takes a share. The size belongs to the card of the tree, so the cells that the
+ * lines of other cuts draw across the card do not change it.
+ */
 export function fixedSize(card: Card, axis: Axis): number | null {
-  if (spanOf(card, axis) !== 1) return null;
   const size = axis === 'x' ? card.width : card.height;
   return typeof size === 'number' && Number.isFinite(size) ? Math.max(0, size) : null;
 }

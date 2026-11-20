@@ -202,9 +202,9 @@ export declare class Soksak {
      * Sets a card's px width or height. `null` removes the size and the card takes
      * a share of the remainder.
      *
-     * The size applies to the slot, so it is written to every card in that slot.
-     * Returns false for an unknown axis, a negative or non-finite size, or a card
-     * spanning more than one slot on that axis.
+     * The size belongs to the card in the tree, so the cells that the lines of
+     * other cuts draw across it do not change it. Returns false for an unknown
+     * axis or a negative or non-finite size.
      */
     setSize(id: string, axis: Axis, px: number | null): boolean;
     /** The card itself, for the operations that change it. */
@@ -245,63 +245,18 @@ export declare class Soksak {
     cardsCrossing(axis: Axis, line: number): readonly Card[];
     /** How many lines a card spans across — how much finer its neighbours are. */
     crossings(card: Card): number;
-    /** Set the px size every card in a slot declares. */
-    private declare;
     /**
-     * Whether every card the settle can reach meets its minimum.
-     *
-     * `settleOn` names one sharing slot to absorb a difference, and only the
-     * sharing slots change width by that choice: a slot with a px size is drawn
-     * what it declares whichever slot pays. A card standing entirely in such
-     * slots is therefore not judged here. Judging it refused every candidate
-     * whenever the host declared a size below `minSize`, and the space went to
-     * the sharing slots together instead of to the slot beside the boundary.
+     * Draws the card `holder`, which declares a px size on `axis`, `delta` px larger by moving the boundary `line` at one of its
+     * edges. A px size belongs to its card of the tree, whatever cells the lines of other cuts draw across the card. The drag moves
+     * every seam that stands on the line, so every card that declares a px size and has its edge on that side of the line takes
+     * the same difference, as the kids of a column do. When cards on the other side declare px sizes as well, they give the
+     * difference and every declaration on the two sides changes by it at the scale it is drawn at: a plane that draws its declared
+     * sizes scaled keeps its scale, and no third card is redrawn. The line moves by the difference, so the commit reads the
+     * fractions of a kid that pays from it.
      */
-    private fits;
-    /**
-     * Writes the widths in `want` to the sharing slots by moving the lines between
-     * them. An entry of `null` leaves that slot to share the remainder in
-     * proportion to its span.
-     *
-     * Slots with a px size are skipped: that size is the host's and `want` does
-     * not override it. Only the lines around the named slots move.
-     */
-    private setSlotWidths;
-    /**
-     * Applies `want`, letting one sharing slot absorb the difference.
-     *
-     * `order` lists the candidate slots, nearest the boundary first. Each is set
-     * to `null` in turn, written, and measured; the first that keeps every card at
-     * `minSize` is kept and the rest are restored. If none does, every sharing
-     * slot is set to `null` and they share the difference.
-     *
-     * Measuring after writing means the sizes come from `slotSizes` and are not
-     * predicted separately.
-     *
-     * Returns the slot that absorbed the difference, or -1.
-     */
-    private settleOn;
-    /**
-     * Whether every sharing slot `want` named is drawn at the width it named.
-     *
-     * `setSlotWidths` divides the room the sharing slots hold between them, so a
-     * set of names that asks for more than that room is met by scaling all of
-     * them down. Every slot then gives a share, and the one set to `null` is not
-     * the one that paid.
-     */
-    private namedKept;
-    /**
-     * Draws one slot at `drawn` px and takes the difference from `pays`, the slot
-     * on the other side of the boundary.
-     *
-     * `drawn` is a size read off the plane, and what a slot declares is drawn
-     * scaled when the plane cannot hold every declared size, so each slot declares
-     * the size that draws at the width asked for.
-     *
-     * A drag moves one boundary, so only those two slots change. Both indices come
-     * from that boundary and are therefore in range and never equal.
-     */
-    private resizeSlot;
+    private resizeCard;
+    /** Declares the px size `size` of the card on `axis`. */
+    private declareOn;
     /**
      * The card whose px size a drag at this boundary changes, if either slot
      * meeting there has one. Every card in that slot takes the new size.
@@ -587,15 +542,6 @@ export declare class Soksak {
      * value is removed rather than kept for a later split to reapply.
      */
     private changed;
-    /**
-     * Writes the largest declared px size to every card in a slot, and removes the
-     * size from a card that no longer spans one slot.
-     *
-     * A slot has one width, so two cards in it cannot declare different sizes.
-     * `heldSizes` reads the largest and this writes it back, so `toJSON` reports
-     * what is drawn. Called wherever cards are added or moved.
-     */
-    private agreeSizes;
     /** Restores the arrangement to a state returned earlier by `toJSON`. */
     private restore;
 }
