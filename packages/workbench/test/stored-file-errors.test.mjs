@@ -8,8 +8,8 @@ import { storedFileErrors } from "../host-store.js";
 
 test("a snapshot lists the error of a refused projects.json and of a refused settings.json", { timeout: 1000 }, () => {
   assert.deepEqual(storedFileErrors({ projects: [], common: {} }), []);
-  assert.deepEqual(storedFileErrors({ projects: [], common: {}, projectsError: "p: projects.json: format must be 2" }),
-    ["p: projects.json: format must be 2"]);
+  assert.deepEqual(storedFileErrors({ projects: [], common: {}, projectsError: "p: projects.json: format must be 3" }),
+    ["p: projects.json: format must be 3"]);
   assert.deepEqual(storedFileErrors({ projects: [], common: {}, projectsError: "p: bad", settingsError: "s: settings.json: format must be 1" }),
     ["p: bad", "s: settings.json: format must be 1"]);
 });
