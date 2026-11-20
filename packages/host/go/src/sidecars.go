@@ -2838,93 +2838,108 @@ func (c *Sidecars) readPersistentLines(process *sidecar, reader *bufio.Reader) s
 	unfinished := 0
 	scanner.Split(MessageLines(&unfinished))
 	for scanner.Scan() {
-		recordReady(process)
-		line := scanner.Bytes()
-		var value map[string]json.RawMessage
-		if err := json.Unmarshal(line, &value); err != nil {
-			return fmt.Sprintf("invalid message: %v", err)
-		}
-		var operation string
-		if raw, present := value["operation"]; present {
-			if err := json.Unmarshal(raw, &operation); err != nil {
-				return fmt.Sprintf("invalid message: operation: %v", err)
-			}
-		}
-		if operation == "closed-owner" || operation == "shutdown" || operation == "retained" {
-			var request string
-			if err := json.Unmarshal(value["request"], &request); err != nil || request == "" {
-				return fmt.Sprintf("invalid message: %s request is not a non-empty string", operation)
-			}
-			var ok bool
-			if err := json.Unmarshal(value["ok"], &ok); err != nil {
-				return fmt.Sprintf("invalid message: %s ok: %v", operation, err)
-			}
-			var reason string
-			if raw, present := value["error"]; present {
-				if err := json.Unmarshal(raw, &reason); err != nil {
-					return fmt.Sprintf("invalid message: %s error: %v", operation, err)
-				}
-			}
-			var closed int
-			if operation == "retained" && ok {
-				if err := json.Unmarshal(value["closed"], &closed); err != nil {
-					return fmt.Sprintf("invalid message: retained closed: %v", err)
-				}
-			}
-			c.mu.Lock()
-			waiter := process.closeWaiters[request]
-			delete(process.closeWaiters, request)
-			if operation == "retained" && waiter != nil {
-				if process.retained == nil {
-					process.retained = map[string]int{}
-				}
-				process.retained[request] = closed
-			}
-			c.mu.Unlock()
-			if waiter != nil {
-				if ok {
-					waiter <- nil
-				} else if reason == "" {
-					waiter <- fmt.Errorf("%s failed", operation)
-				} else {
-					waiter <- errors.New(reason)
-				}
-			}
-			continue
-		}
-		var output sidecarOutput
-		if err := json.Unmarshal(line, &output); err != nil {
-			return fmt.Sprintf("invalid message: %v", err)
-		}
-		if output.Surface == nil {
-			return "invalid message: surface is missing"
-		}
-		if output.Closed != nil {
-			if violation := c.closeAnswered(process, *output.Surface, *output.Closed, output.Error); violation != "" {
-				return violation
-			}
-			continue
-		}
-		if output.Body == nil {
-			return "invalid message: body is missing"
-		}
-		event := sidecarEvent{Surface: *output.Surface, Body: output.Body}
-		c.recordReply(process.name, event.Surface, output.Cids, event.Body)
-		c.mu.Lock()
-		owner := c.owners[event.Surface]
-		c.mu.Unlock()
-		if owner != nil {
-			if ReceiveSidecarMessage(
-				func() { c.traceMessage("sidecar.receive", process.name, event.Surface, event.Body) },
-				func() bool { return c.tryHandleImageEnvelope(owner, process.name, event.Surface, event.Body) },
-			) {
-				continue
-			}
-			owner.DeliverSidecarMessage(SidecarMessage{Sidecar: process.name, Surface: event.Surface, Cids: output.Cids, Body: event.Body})
-		} else {
-			c.dropMessage(process, event)
+		if violation, handled := c.handlePersistentLine(process, scanner.Bytes()); handled {
+			return violation
 		}
 	}
+	return c.endPersistentLines(process, scanner, unfinished)
+}
+
+// handlePersistentLine handles one line of a persistent connection and counts its work as a wake of the routine
+// `service-messages` (docs/spec/performance-trace.md). It returns true with the reason of a violation that ends the connection.
+func (c *Sidecars) handlePersistentLine(process *sidecar, line []byte) (string, bool) {
+	started := time.Now()
+	defer routine.Work("service-messages", started, int64(len(line)))
+	recordReady(process)
+	var value map[string]json.RawMessage
+	if err := json.Unmarshal(line, &value); err != nil {
+		return fmt.Sprintf("invalid message: %v", err), true
+	}
+	var operation string
+	if raw, present := value["operation"]; present {
+		if err := json.Unmarshal(raw, &operation); err != nil {
+			return fmt.Sprintf("invalid message: operation: %v", err), true
+		}
+	}
+	if operation == "closed-owner" || operation == "shutdown" || operation == "retained" {
+		var request string
+		if err := json.Unmarshal(value["request"], &request); err != nil || request == "" {
+			return fmt.Sprintf("invalid message: %s request is not a non-empty string", operation), true
+		}
+		var ok bool
+		if err := json.Unmarshal(value["ok"], &ok); err != nil {
+			return fmt.Sprintf("invalid message: %s ok: %v", operation, err), true
+		}
+		var reason string
+		if raw, present := value["error"]; present {
+			if err := json.Unmarshal(raw, &reason); err != nil {
+				return fmt.Sprintf("invalid message: %s error: %v", operation, err), true
+			}
+		}
+		var closed int
+		if operation == "retained" && ok {
+			if err := json.Unmarshal(value["closed"], &closed); err != nil {
+				return fmt.Sprintf("invalid message: retained closed: %v", err), true
+			}
+		}
+		c.mu.Lock()
+		waiter := process.closeWaiters[request]
+		delete(process.closeWaiters, request)
+		if operation == "retained" && waiter != nil {
+			if process.retained == nil {
+				process.retained = map[string]int{}
+			}
+			process.retained[request] = closed
+		}
+		c.mu.Unlock()
+		if waiter != nil {
+			if ok {
+				waiter <- nil
+			} else if reason == "" {
+				waiter <- fmt.Errorf("%s failed", operation)
+			} else {
+				waiter <- errors.New(reason)
+			}
+		}
+		return "", false
+	}
+	var output sidecarOutput
+	if err := json.Unmarshal(line, &output); err != nil {
+		return fmt.Sprintf("invalid message: %v", err), true
+	}
+	if output.Surface == nil {
+		return "invalid message: surface is missing", true
+	}
+	if output.Closed != nil {
+		if violation := c.closeAnswered(process, *output.Surface, *output.Closed, output.Error); violation != "" {
+			return violation, true
+		}
+		return "", false
+	}
+	if output.Body == nil {
+		return "invalid message: body is missing", true
+	}
+	event := sidecarEvent{Surface: *output.Surface, Body: output.Body}
+	c.recordReply(process.name, event.Surface, output.Cids, event.Body)
+	c.mu.Lock()
+	owner := c.owners[event.Surface]
+	c.mu.Unlock()
+	if owner != nil {
+		if ReceiveSidecarMessage(
+			func() { c.traceMessage("sidecar.receive", process.name, event.Surface, event.Body) },
+			func() bool { return c.tryHandleImageEnvelope(owner, process.name, event.Surface, event.Body) },
+		) {
+			return "", false
+		}
+		owner.DeliverSidecarMessage(SidecarMessage{Sidecar: process.name, Surface: event.Surface, Cids: output.Cids, Body: event.Body})
+	} else {
+		c.dropMessage(process, event)
+	}
+	return "", false
+}
+
+// endPersistentLines reads the end of a persistent connection after its last line: the reason of a violation, or an empty string.
+func (c *Sidecars) endPersistentLines(process *sidecar, scanner *bufio.Scanner, unfinished int) string {
 	// net.ErrClosed means that this host closed the connection (cleanup after termination or failure). When the peer closes, it is EOF and there is no error.
 	if err := scanner.Err(); errors.Is(err, bufio.ErrTooLong) {
 		return fmt.Sprintf("message exceeds %d bytes", sidecarMessageLimit)

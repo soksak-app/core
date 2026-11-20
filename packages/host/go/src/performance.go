@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
@@ -69,6 +70,7 @@ func PerformanceCommand(request map[string]any) (any, error) {
 			return nil, nil
 		}
 		PerformanceObserve("host", func() map[string]any { return map[string]any{"event": "on"} })
+		routine.CountWork(true)
 		performanceSamplerStart()
 	case "off":
 		if !performanceOn.Load() {
@@ -77,6 +79,7 @@ func PerformanceCommand(request map[string]any) (any, error) {
 		PerformanceObserve("host", func() map[string]any { return map[string]any{"event": "off"} })
 		performanceOn.Store(false)
 		performanceSamplerEnd()
+		routine.CountWork(false)
 	}
 	return nil, nil
 }
@@ -161,6 +164,9 @@ func performanceSamplerStart() {
 	sampleWatch.Lock()
 	sampleCount = 0
 	sampleWatch.Unlock()
+	workSinceMu.Lock()
+	workSince = processTimes()
+	workSinceMu.Unlock()
 	routine.Go("performance-sampler", func() {
 		defer close(done)
 		for {
@@ -222,9 +228,55 @@ func PerformanceProcessRemove(pid int) {
 	processesMu.Unlock()
 }
 
-// PerformanceSample stores the memory of the host, of every registered process, and of the processes of every open window, each as
-// one event `host.sampler.memory`. A reading that fails is stored with its error instead of the sizes.
+// workSince is the moment and the processor time of the process at the last sample of the work of the routines.
+var (
+	workSinceMu sync.Mutex
+	workSince   workMoment
+)
+
+type workMoment struct {
+	at  time.Time
+	cpu time.Duration
+}
+
+// processTimes is the moment and the processor time (user and system) that the process used until it.
+func processTimes() workMoment {
+	var usage syscall.Rusage
+	moment := workMoment{at: time.Now()}
+	if err := syscall.Getrusage(syscall.RUSAGE_SELF, &usage); err != nil {
+		LogError("performance trace", fmt.Errorf("processor time: %w", err))
+		return moment
+	}
+	moment.cpu = time.Duration(usage.Utime.Nano() + usage.Stime.Nano())
+	return moment
+}
+
+// sampleWork stores the event `host.sampler.routines`: the wall time and the processor time of the process since the last sample
+// and the work of each named routine in it (docs/spec/performance-trace.md), so the processor time of the process is
+// attributed to its routines through the event log.
+func sampleWork() {
+	workSinceMu.Lock()
+	now := processTimes()
+	since := workSince
+	workSince = now
+	totals := routine.TakeWork()
+	workSinceMu.Unlock()
+	PerformanceObserve("sampler", func() map[string]any {
+		routines := make([]map[string]any, 0, len(totals))
+		for _, item := range totals {
+			routines = append(routines, map[string]any{"name": item.Name, "wakes": item.Wakes, "micros": item.Micros, "bytes": item.Bytes})
+		}
+		return map[string]any{
+			"event": "routines", "wall_us": now.at.Sub(since.at).Microseconds(), "cpu_us": (now.cpu - since.cpu).Microseconds(),
+			"routines": routines,
+		}
+	})
+}
+
+// PerformanceSample stores the work of the routines (`host.sampler.routines`) and the memory of the host, of every registered process,
+// and of the processes of every open window, each as one event `host.sampler.memory`. A reading that fails is stored with its error instead of the sizes.
 func PerformanceSample() {
+	sampleWork()
 	PerformanceObserve("sampler", func() map[string]any { return PerformanceMemory(os.Getpid()) })
 	processesMu.Lock()
 	named := make(map[int]registeredProcess, len(processes))

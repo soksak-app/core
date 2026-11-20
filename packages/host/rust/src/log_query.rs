@@ -98,6 +98,8 @@ fn start_log_indexer_on(
                 }
                 std::mem::take(&mut pending.paths)
             };
+            let started = std::time::Instant::now();
+            let mut read = 0i64;
             for path in paths {
                 let mut result = update_log_index(&path);
                 if result.is_err() {
@@ -108,8 +110,12 @@ fn start_log_indexer_on(
                     // The file may have come back between the update and the check, so the update is made once more and its result is reported.
                     result = update_log_index(&path);
                 }
+                if let Ok(update) = &result {
+                    read += update.bytes;
+                }
                 after(&path, result);
             }
+            crate::routine::work("log-index", started, read);
         }
     });
     let observer_shared = Arc::clone(&shared);

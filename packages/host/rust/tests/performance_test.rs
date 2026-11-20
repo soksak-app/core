@@ -532,3 +532,63 @@ fn the_sampler_divides_the_footprint_of_each_process() {
         );
     }
 }
+
+// contract: performance.sampler.attributes-the-work-of-the-routines
+#[test]
+fn the_sampler_attributes_the_work_of_the_routines() {
+    let lines = concat!(
+        r#"{"ts_us":1000,"mono_ns":1,"seq":1,"level":"info","layer":"host","event":"log.open","fields":{"schema":3,"pid":1,"role":"host","boot":"a"}}"#,
+        "\n",
+        r#"{"ts_us":1001,"mono_ns":2,"seq":2,"level":"debug","layer":"host","event":"host.x.y","fields":{"n":2}}"#,
+        "\n"
+    );
+    if let Some(config) = std::env::var_os(CHILD) {
+        let config = std::path::Path::new(&config);
+        let writer = records::start_writer(config);
+        performance::command(json!({"action": "on"})).unwrap();
+        records::wait_for_first_sample(config, &writer);
+        // The sample that the switch stored at once starts the interval; the work below falls into the next sample.
+        let file = config.join("indexed").join("host-a.jsonl");
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(&file, lines).unwrap();
+        let (updated, update) = std::sync::mpsc::channel();
+        let (observe, stop) = soksak_host::log_query::start_log_indexer(move |_path, result| {
+            let _ = updated.send(result);
+        });
+        observe(&file, lines.len() as u64);
+        update.recv().unwrap().unwrap();
+        stop();
+        performance::sample();
+        performance::command(json!({"action": "off"})).unwrap();
+        writer.flush().unwrap();
+        return;
+    }
+    let config = in_child("the_sampler_attributes_the_work_of_the_routines");
+    let samples = trace_fields(config.path(), "host.sampler.routines");
+    assert!(
+        samples.len() >= 2,
+        "the sampler stored {} records of the routines, want one at each sample",
+        samples.len()
+    );
+    let last = samples.last().unwrap();
+    let wall = last["wall_us"].as_i64().unwrap_or(0);
+    assert!(
+        wall > 0 && last["cpu_us"].as_i64().is_some_and(|cpu| cpu >= 0),
+        "the record holds no wall time or processor time: {last}"
+    );
+    let index = last["routines"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|entry| entry["name"] == "log-index");
+    assert!(
+        index.is_some_and(|entry| entry["wakes"] == 1 && entry["bytes"] == lines.len()),
+        "the record does not count one wake of log-index that read {} bytes: {last}",
+        lines.len()
+    );
+    let micros = index.unwrap()["micros"].as_i64().unwrap_or(-1);
+    assert!(
+        (0..=wall).contains(&micros),
+        "the work of log-index took {micros} microseconds of {wall}: {last}"
+    );
+}

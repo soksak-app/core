@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F996-5.1 (routine의 작업): performance trace가 켜진 동안 Go와 Rust host의 표본 추출은 표본마다 프로세스의 벽시계 시간과 processor 시간, 그리고 `log-index`와 `service-messages`의 wake 수, 작업 시간, 바이트를 담은 `host.sampler.routines`를 저장한다(`docs/spec/performance-trace.md`).
 - F899-7.5-9: layout은 새 탭의 이름을 plugin의 mark 없이 `탭 <n>`으로 저장하고, `core.grid`는 그 이름을 `title`로 알리며, 탭 줄, 탭 목록, 저장하지 않은 변경에 대한 질문은 그 앞에 mark를 그린다. Page와 mygo workbench 모두 그렇다(`docs/spec/example-model.md#card-tabs`).
 - F899-7.5-8: 주입 message는 보낸 쪽을 tab name, 즉 `core.grid`에서 tab의 `title`로 부르며, tab의 program이 정한 제목으로 결코 부르지 않는다(`docs/spec/messaging.md#injected-message`).
 - F996-3 (활성화의 index 읽기): Go와 Rust fetcher는 연결을 열어 두는 process의 HTTP client 하나를 쓰고, `If-None-Match`와 `If-Modified-Since`로 바뀌지 않은 registry index를 304와 둔 본문으로 받으며, index URL 읽기 중에 시작한 그 URL의 읽기에 그 결과를 준다. 그래서 창 활성화는 plugin 상태와 application update에 요청 하나를 보내고, index가 바뀌지 않았으면 본문을 받지 않는다(`docs/spec/installation.md#fetching`).
