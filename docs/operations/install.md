@@ -17,3 +17,7 @@ Memory saver is on by default: it unloads the hidden tabs of plugins that declar
 On its first start the application installs the starter plugins from the public registry `https://soksak-app.github.io/registry/index.json` ([first run](../spec/installation.md#first-run)).
 
 To use the command line of an application from a shell, run its `sok path install` with administrator rights: `sudo /Applications/soksak.app/Contents/MacOS/sok path install` ([command line](../spec/cli.md)).
+
+## Local development links
+
+For local development, each dependency location is assumed to be installed, and each is linked to its development directory with a symbolic link. Repositories are never cloned or copied for this. A build that follows such a link does not check out revisions, change sparse-checkout settings, or reject editable source because it differs from a release pin; source identity is recorded separately from release verification. Linked sources and real installations are consumed through the same declared installed paths, without Git metadata. Dependency installation and release-pin validation belong to a separate installation stage. Paths resolve from declarations or discovery (manifests, module resolution, build variables), never from assumed relative locations.

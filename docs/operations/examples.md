@@ -12,6 +12,8 @@ Read the [private native API inventory](private-native-apis.md) before updating 
 
 ## Build
 
+For native or example behavior, build both hosts, then run the affected checks against those binaries.
+
 ```sh
 make install
 pnpm build
@@ -64,6 +66,8 @@ The test runner `scripts/test-runner.mjs`, which runs the Node, Go, Rust and nat
 
 `make check-temp-files COMMAND="<command>"` (`scripts/check-temp-files.mjs`) runs the command with `TMPDIR` set to a new empty folder, names each entry with the prefix `soksak-` that the command left there (`TEMP LEFT <path>`), and fails when there is one or when the command fails; it removes its folder when it ends. The configuration folders of the window checks, `soksak-check-*`, are not counted, because they live across runs by design. A folder that a command writes outside `TMPDIR`, such as a fixed path under `/tmp`, is not seen by the audit, so the test sources name none (above).
 
+Only the lead runs and schedules builds and verification commands. Check free disk space before build batches and after cleanup. Reclaim abandoned temporary files and declared build output only after checking process and file ownership; preserve source, Git metadata, active build roots, and required evidence. Run no cleanup poller, and clear no shared cache while builds use it.
+
 ## View drag benchmark
 
 Use `make benchmark-plain-view` to measure the floor of a view drag: it opens the fixture of `e2e/fixtures/plain-view/probe`, which every check configuration has installed, a view whose document region shows one line of text of its own plugin document and whose page runs no code beyond the observer of its size, runs the same width drag and recording, and reports the in-gesture source intervals. It judges no target, because the floor is an input of the targets. It also runs a drag with traces disabled and reports its latency, convergence, load and transaction stages.
@@ -114,6 +118,10 @@ An object that records the output of the judged code is permitted only when it n
 A consumer of a wire (the client, the window-check session, `sok` with its MCP server `sok mcp`, the workbench page, a plugin) runs the shared contract cases of that wire: a tracked case file that the owning package runs against its real producer, and that the consumer reads as the replies of the producer. A case that the real producer does not pass is a defect of the producer or of the case. A document structure may be tested in jsdom; layout, paint, input and native composition are tested in the end-to-end tier.
 
 The reason for the rule: a stand-in answers as its test arranges, so its test passes while the real implementation behaves otherwise; a Go platform stand-in that ran queued work at once passed while the real platform queued it (F790). The adversarial review of the rule answered four objections: a recording object that blocks or drops input changes the judged code and is a replacement; a program written inline with fixed replies is a replacement and not a fixture program; AppKit and WebKit already answer in the unit tier, so platform-dependent tests do not leave CI; and a consumer cannot run the producer of another package, so it reads the replies from contract cases that the producer passes.
+
+Each test sits beside the module that owns its behavior; unrelated modules share no test directory. A test exercises a module through its exports or declared interfaces, never by extracting another file's source text. Repository audits find implementation and test languages from tracked files and fail on any executable language without runnable tests.
+
+Tests never verify another package's implementation. A consumer runs the shared contract cases that the owning package runs against its real implementation. Every test follows the real-input rule above and reads no other package's paths, SDK, build, or implementation names.
 
 ## Window checks
 
@@ -256,6 +264,8 @@ Core chooses its version independently of plugin and sidecar releases. A push to
 The publication job of the same run waits for every check and every build. It downloads the release files of that run, and `node scripts/candidate-acceptance.mjs files <folder>` requires them to be exactly the application zip file of each host and the five packed packages of the declared version, with the member paths of each zip inside `soksak.app/`. The commit must still be the head of `main` and its version tag must be absent; the job then creates that tag and the release with those files. `scripts/release-notes.mjs` resolves links from `docs/operations/install.md` against the tag, and the notes remain outside the release-file directory. No file is built again for publication, and the workflow serializes its runs, so two pushes never release one version twice. The CI jobs are the evidence of a release: the window checks need a display and run locally ([test kinds](#test-kinds)), and their results are not a condition of publication.
 
 The release holds what the plugin and sidecar repositories build with, so their workflows check out no source of core: the `sok` inside each application zip `soksak-<version>-darwin-arm64-<host>.zip` (`soksak.app/Contents/MacOS/sok`), which the release publishes nowhere else, and the packed releases `soksak-plugin-api-<version>.tgz`, `soksak-native-process-identity-darwin-<version>.tgz`, `soksak-client-<version>.tgz`, `soksak-log-contract-<version>.tgz` and `soksak-window-check-<version>.tgz`, which `node scripts/pack-release-packages.mjs dist` makes with `pnpm pack` from `packages/plugin-api`, `native/darwin/process-identity`, `packages/client`, `packages/log-contract` and `packages/window-check`. The tarball of the process identity package holds the static library that the release job builds. `pnpm pack` writes the version of a package for a `workspace:` dependency on it, which no registry serves, and pnpm 11 refuses a dependency of a dependency that a URL names (`blockExoticSubdeps`), so the script lists each such `dependencies` entry in `bundleDependencies` and holds the files of the release file of that package at `node_modules/<name>` of the release file, adds the registry dependencies of the held package to the `dependencies` of the packed one because pnpm installs no dependency of a bundled package, and fails when the release does not publish the package: the release file of `@soksak/window-check` holds `@soksak/client`, `@soksak/log-contract` and `@soksak/plugin-api`, so a plugin repository installs it from the release alone with the default settings of pnpm. The script writes the release file from the packed folder with `tar`, because `pnpm pack` refuses `bundleDependencies` with the isolated linker ([window checks of a plugin](../spec/plugins.md#window-checks-of-a-plugin)).
+
+A new repository starts at version 0.0.1. The declared workspace version and the latest published core release are recorded in the declarations and the changelog, not in this document.
 
 ## Page memory
 
@@ -417,3 +427,55 @@ Stall sampling and launchd process discovery use asynchronous child processes wi
 IME window checks end their owned terminal status observer after capture stop and before copying artifacts or running visual analysis. Every input stage and the terminal sequence boundary are already saved. Cleanup may call stop again safely and retries only subscriptions whose earlier release failed.
 
 The Terminal view benchmark keeps full performance tracing for process and one-shot layout evidence and disables only `diagnostics.performance` around the continuous drag. Source-frame events use the independent `diagnostics.log.frame` policy, and capture, clocks and error auditing remain enabled. Setting propagation completes before gesture timing; the host may wait for its sampler to stop. The prior setting is restored before reclaim sampling even when the drag fails. The phase mode is part of the recorded result. Full profiling is diagnostic context rather than cadence proof; keeping it throughout the timed gesture adds unrelated host observations. The alternative of disabling all debug settings is rejected because it also removes required frame records. The earlier layout retains tracing because its applied native-placement evidence requires it. The declared source-cadence and captured-paint convergence ceiling is 40 ms inclusive; the 2 pt and two-frame criteria remain unchanged.
+
+## Window check operation
+
+A window check fails on every application error logged while it runs unless the check causes that error on purpose and declares it with `expectError`; an error is never declared to make a check pass. A check starts from the state its preparation sets and leaves no state that changes another check; a difference between checks or hosts that leftover state causes is a defect of the check that left it.
+
+A window check connects through `<config-dir>/endpoint.json` to an application already running with `--config-dir PATH`. It uses only declared exposure entries and native input, waits on status notifications instead of timers (`make check-app-tests`), and uses a disposable configuration directory and project folders. When no declared entry produces the state that the check observes, the check may write a file in its own disposable configuration directory and restores that file in cleanup. A check never launches an application or activates a window independently. A project-window check may invoke the project-open command, which creates or focuses windows as specified. Automated check configurations stay separate from configurations used for interactive review; once a configuration is used for review, later automated checks use a new disposable configuration.
+
+Synthetic pointer measurements use non-activating native input. The frontmost application is not a criterion of a check result, so a check neither captures, restores, nor judges it. An application action may activate its window as specified. An application that a person brings forward is not caused by the check, and activating an earlier application would take the activation away from that person. A check that needs activation state asserts it through the declared status of the action it tests.
+
+Captures use `diagnostics.capture.still` and recordings use `diagnostics.capture.start/stop` whenever visual observation helps diagnosis or review. A capture never focuses or activates a window. A capture or recording is visual observation, never the pass/fail result alone. Inspect captures at original resolution (`view_image` with `detail: "original"`); a resized preview proves neither clipping nor a blank image. Compare the original image and measured pixels before diagnosing a composition failure.
+
+For visual or time-dependent behavior, record the full gesture at the requested rate. Derive tracked, machine-checkable Red/Green evidence from the recording: measure elapsed time or frame gaps for animation, and compare measured coordinates for DOM, native, or WebView composition. Missing frames or incomplete input are failures, not passing measurements. When a required state or measurement is not exposed, add the declared command and test interface that provides it; missing exposure is work to implement, not a reason to stop verification.
+
+Input-method (IME) behavior is verified only through the activation tier (`make test-app-activation`), with the user's approval. The OS input method serves only the key window of the active application. Each run sends the same keys to an AppKit text-view control in the same window, and a result is evidence only when that control produces the expected document.
+
+## Repeat an intermittent failure
+
+Reproduce and accept an intermittent failure with these tracked targets:
+
+- One native test: `make -C native/darwin repeat TEST=<name>_test COUNT=<n>`.
+- One test of the process identity package: `make -C native/darwin/process-identity repeat TEST=<name>_test COUNT=<n>`.
+- The default native suite: `make -C native/darwin repeat-suite COUNT=<n>`.
+- Rust tests of a package: `make repeat-rust PACKAGE=<package> COUNT=<n> [TEST=<name>] [FEATURES=<features>]`.
+- Go tests of a package: `make repeat-go PACKAGE=<path> COUNT=<n> [TEST=<regexp>] [TAGS=<tags>]`.
+- Node tests outside window checks: `make repeat-node FILE=<file> NAME=<pattern> COUNT=<n>`.
+- Test order dependence: `make test-rust-alone PACKAGE=<package> [FEATURES=<features>]` runs each test alone.
+
+For Rust, `TEST` selects one exact, fully qualified test name, not a regular expression or a pipe-separated list. List the compiled test binary with `--list` and choose one reported name. When the Cargo target of the test is known, pass `TEST_TARGET=lib` or `TEST_TARGET=test:<target>` to limit discovery; omit `TEST_TARGET` only for a deliberate package-wide check.
+
+## Commit hooks
+
+`make install-hooks` sets the hooks of a checkout, and every repository of the workspace has its own. The commit-msg hook checks the commit message form and its terms. The pre-commit hook runs the record and term check. The pre-push hook runs `make check-push`, which checks the commit messages and the checklist history (`make check-checklist-history`) of the commits that the push publishes, because a published commit is kept. CI checks the commits of each push and pull request with `make check-commits` and `make check-checklist-history`, and runs every other check on the pushed commits. The release gate releases only a green run. `make check-docs` reports each record line that states something other than facts about the repository.
+
+Commit messages use `type(scope): Subject (#<checklist id>)`. The type is `feat`, `fix`, `docs`, `style`, `refactor`, `test`, or `chore`. The subject is an imperative phrase of at most 50 characters that starts with a capital letter and has no final period. A non-empty body follows a blank line, wraps at 72 characters, and states what changed and why. A commit message has no footer of any kind: no checklist footer, generated-by text, co-author trailer, signature line, or session link. The author of every commit is `min-0-max <max@blue.tools>`. Published commit messages are kept; this form applies to new commits.
+
+## Closure forms
+
+`[-]` closes an item with `Closed:` and its reason, or with one of these forms:
+
+- `Not reproduced:` closes a failure observed once that did not recur after its tracked repeat target, in at least three full suite runs (one under the load of the original failure), with the records in place that show its cause if it recurs. It is not a fix; the attempts are recorded after `Not reproduced:`. A recurrence opens a linked follow-up ID.
+- `Platform excluded:` applies only to an explicitly authorized Windows/Linux scope exclusion. It names the platform, the unavailable or unimplemented runtime reason, and an explicit unverified result. It closes no shared or current-platform requirement.
+- `Evidence unavailable:` applies only to an explicitly authorized audit, confirmed by independent adversarial review, that shows the required historical evidence cannot be recovered from retained sources. It has nonempty `Scope:`, `Evidence:`, `Result:`, and `Follow-up when:` fields and states an unverified result.
+
+No closure form is a functional fix, a passing verification, or a closure of an executable check or release condition. Discovered evidence opens a linked follow-up comparison.
+
+## Command names
+
+Command names state their work in plain words. Executables are `sok` or `sok-<what>`. Make targets are `<verb>[-<what>][-<host>]`, with a verb of `install`, `fetch`, `copy`, `create`, `build`, `pack`, `release`, `run`, `test`, `check`, `repeat`, `measure`, `benchmark`, or `clean`. A check target takes the name of the script it runs. A check has one command, and no target has a second name or repeats another target's recipe. Names are decided for all commands together, and `make check-commands` (`sok-check commands`) enforces this in every repository.
+
+## Native bundle build
+
+Before a native bundle build, confirm that the working directory is the intended verification checkout and identify the exact output bundle. The build target refuses before its first bundle change when an application process runs from that bundle, and it names the PID and the bundle path. While user applications stay open, build in a separate verification checkout.

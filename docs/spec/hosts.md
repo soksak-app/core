@@ -183,6 +183,7 @@ packages/host/mygo/
 - Platform code exists only under `src/platform/<os>/`, where `os` is `darwin`, `windows`, or `linux`.
 - No stand-in files exist. An operation that a platform does not implement returns an error from `src/platform/<os>/unsupported.*`.
 - A C name that `native/darwin` exports starts with `sp_` when a framework exports the same name. Wails compiles its own `windowFullscreen`, and the linker picked one of the two: the call reached the framework's function and the host read its return value as a failure.
+- Go and Rust files that serve the same role have the same name.
 
 ## Platform selection
 

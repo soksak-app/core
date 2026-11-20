@@ -17,3 +17,7 @@
 첫 시작에서 애플리케이션은 공개 registry `https://soksak-app.github.io/registry/index.json`에서 시작 plugin을 설치한다([첫 실행](../spec/installation.ko.md#첫-실행)).
 
 shell에서 애플리케이션의 command line을 쓰려면 그 `sok path install`을 관리자 권한으로 실행한다: `sudo /Applications/soksak.app/Contents/MacOS/sok path install`([command line](../spec/cli.ko.md)).
+
+## 로컬 개발 연결
+
+로컬 개발에서는 각 dependency 위치가 설치되어 있다고 가정하고, 각 위치를 개발 디렉터리에 심볼릭 링크로 연결한다. 이를 위해 저장소를 clone하거나 복사하지 않는다. 이 링크를 따르는 빌드는 revision을 checkout하거나, sparse-checkout 설정을 바꾸거나, release pin과 다르다는 이유로 편집 가능한 소스를 거부하지 않는다. 소스 identity는 release 검증과 분리해 기록한다. 연결된 소스와 실제 설치는 같은 선언된 설치 경로로 소비하며 Git metadata를 요구하지 않는다. dependency 설치와 release pin 검증은 별도의 설치 단계가 담당한다. 경로는 가정한 상대 위치가 아니라 선언이나 발견(매니페스트, 모듈 해석, 빌드 변수)으로 해석한다.

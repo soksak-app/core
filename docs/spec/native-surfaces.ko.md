@@ -22,6 +22,8 @@ Tauri host의 native 이미지 표시 commit은 framework event callback 밖의 
 
 ## 배치 순서
 
+core의 ResizeObserver는 animation frame에서 관찰을 시작하며, 이 frame의 관찰 round보다 먼저 실행된다. Round 중에 시작한 관찰은 첫 알림을 미루고, WebKit은 loop 오류를 보고한다.
+
 연속 layout 변경을 포함한 모든 준비는 응답 전에 적용된 native geometry의 raster update를 시작한다. Page가 대응 DOM을 그리고 표시하는 동안 raster를 생성할 수 있다. Presentation 단계는 해당 DOM이 변경한 region geometry를 다시 refresh하고 commit 전에 정확한 필수 raster를 계속 기다린다. 조기 update는 presentation 확인이 아니다.
 
 1. 카드 DOM을 갱신하기 전에 페이지가 다음 표면 사각형을 제출한다.

@@ -82,6 +82,8 @@ Release host별 job은 자체 bundle을 build하고 audit하며 release file를 
 명시적으로 선택한 registry index에는 고정한 SHA-256을 지정할 수 있다. Digest를 지정하면 정확히 소문자 hexadecimal 64자리여야 하고 비어 있지 않은 명시적 index URL이 필요하며 JSON parsing 전에 받은 bytes와 비교한다. 불일치는 acceptance 실패다. 기본 public-index 검사와 digest 없는 명시적 index는 기존 동작을 유지한다.
 
 
+CI와 release job은 저장소의 다른 workspace 저장소를 checkout하지 않는다. 저장소는 하위 계층을 게시된 release로만 소비하며, manifest가 그 release를 고정한다. 다른 저장소의 source로는 소비하지 않는다. core는 plugin이나 sidecar를 소비하지 않는다. CI나 release job은 자기 저장소의 단위 테스트와 구조 검사만 실행한다. End-to-end 검사는 실행 중인 애플리케이션, 프레임을 표시하는 display, 또는 사람이 필요하며 make로 로컬에서만 실행한다.
+
 ## 제한된 실행
 
 E2E 실행기는 시험 child를 시작하기 전에 비어 있지 않은 `SOKSAK_RUN_ID`와 `SOKSAK_RUN_FOLDER`를 함께 요구한다. 누락되거나 일부만 있는 metadata는 실행기 경계에서 실패한다. 실행기는 전달받은 두 값을 child에 그대로 전달하며 id나 폴더를 만들어내지 않는다. 따라서 모든 window-check child를 해당 run과 감사 출력에 연결할 수 있다.
@@ -109,3 +111,13 @@ E2E 실행기는 시험 child를 시작하기 전에 비어 있지 않은 `SOKSA
 IME 기능 acceptance는 승인된 전체 입력 gesture, 동일 window의 일치하는 AppKit reference document, 일관된 terminal 상태 및 native input client가 보고하고 sidecar가 받는 각 입력 단계의 조합과 확정을 요구한다(`e2e/activation/ime.test.mjs`: `the preedit reports the selected end of Korean preedit`, `eight Korean vowels and one Backspace retain an exact input trace`, `a Korean syllable typed right after an input-source switch reaches the sidecar once`; `native/darwin/tests/image_region_hangul_test.m`, `native/darwin/tests/image_region_ime_test.m`). Capture cadence는 별도 성능 측정으로 기록한다. 녹화의 `late`와 `missed` 수가 보고하듯 still은 늦게 요청되거나 실패할 수 있으므로 고정 still-gap 목표는 기능 acceptance 기준이 아니다. 필요한 단계 증거 누락 및 잘못된 입력은 계속 실패한다. 녹화는 실패한 check의 증거로 남고, 녹화의 계약(쓴 still, 시각, gap, 잃은 still)은 capture check가 판정한다.
 
 기존 terminal-focus activation consumer는 click, 정확한 native input 및 AppKit document와 완전한 callback-to-frame 대응을 검증한다. Raw callback timing과 cadence 초과를 관측값으로 유지한다. 이 consumer는 glyph나 underline pixel을 측정하지 않으며 전체 IME visual-proof consumer를 대체하지 않는다.
+
+## 에이전트 검증 규칙
+
+- **완료 기준.** 항목은 소유 모듈의 단위 테스트가 결함이나 없는 동작에서 실패하고(Red), 변경으로 같은 테스트가 통과하며(Green), 명세, 체크리스트, 변경 기록, 에이전트 memory, 에이전트 지침이 그 결과를 적었을 때 완료된다. 어떤 단위 테스트도 닿지 못하는 동작에는 단위 테스트가 닿을 수 있는 선언된 interface를 만든다. 명령 응답과 추정한 동작은 결과가 아니다. Red 실행은 수정되지 않은 구현에서 테스트를 실행하고 실패한 assertion을 기록한다. 진단, 임시 script, 또는 수정 뒤에 작성한 테스트는 Red 증거가 아니다. 보통 입력으로 결함을 결정적으로 재현할 수 없으면 테스트는 같은 계약을 실행하는 명시적 테스트 제어 고장 주입을 사용한다.
+- **항목 중 검사.** 항목은 자기가 바꾼 것을 소유한 검사와 그 항목이 닿는 구조 검사만 실행한다: `make check-boundaries`, `make check-exposure`, `make check-tests`, `make check-events`. 회귀 검사는 구체적인 의존 관계나 관측된 실패가 있을 때만 넓힌다. 문서만 고친 변경이나 fast-forward 병합 뒤에는 검사 대상 소스, 테스트, 관련 설정이 바뀌지 않았음을 확인한 뒤 통과한 검사를 다시 실행하지 않고, 이전 실행을 이전 증거로만 인용한다. 각 실행은 고유 로그 경로를 쓰고, 보고는 실제 명령과 출력만 담는다.
+- **전체 모음.** `pnpm test`, `make test-native`, `make test-hosts`, `make test-all`, window 모음은 어떤 항목도 완료하지 않는다. 활성 체크리스트의 모든 항목이 완료되고 배포 전에 각각 한 번 실행한다.
+- **생성 출력.** 생성된 `dist/` 변경은 소스와 함께 커밋한다. 마지막 검사는 소스 출력과 커밋된 파일 사이에 차이가 없어야 한다.
+- **시간과 진행.** 모든 시험은 자기 시간 상한을 가지며, 모음 전체의 상한은 없고 어떤 시험도 수십 분 동안 실행하지 않는다. 각 runner는 시작한 시험마다 `running`, `finished`, `passed`, `failed`와 경과 시간을 출력한다. 상한을 넘은 시험은 실패하며, 원인은 소유 모듈에서 고치고 항목은 시험이 통과할 때까지 연다. 긴 작업은 상세한 단계 기록으로 관측하고 오류와 결과로 판정한다. 타이머는 성공을 판정하지 않는다. 성능은 개발이 끝난 뒤 전용 benchmark로 잰다.
+- **증거.** 각 결과는 검증한 구현과 플랫폼을 기록한다. 이전 결과로 이후 코드를 검증하지 않으며, 테스트 통과를 release라고 표현하지 않는다. 실패한 실행의 검사 출력과 host log는 모든 실패를 분류하고 기록할 때까지 보존한다.
+- **간헐 실패.** 간헐 실패는 추적되는 반복 대상으로만 재현하고 수용한다([간헐 실패 반복](../operations/examples.ko.md#간헐-실패-반복)). 실패한 검사는 원인을 찾는 측정 상태를 보고한다. 셸 명령, 임시 스크립트, 임시 폴더는 재현이나 수용 증거가 아니며, 필요한 검사는 추적되는 테스트나 대상이 된다.

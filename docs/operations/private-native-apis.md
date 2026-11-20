@@ -71,7 +71,11 @@ All private declarations of the shared library are in [`native/darwin/src/privat
 
 The two `drawsBackground` entries affect different objects. Wails changes the created view; Wry changes its configuration before creation. A framework's public Rust or Go entry point can therefore still introduce a private native dependency.
 
+Each private API is used only for its intended purpose.
+
 ## Necessity review
+
+Review each correction's necessity and the actual semantics of the API it calls.
 
 ### Device scale
 

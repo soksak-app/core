@@ -184,6 +184,7 @@ packages/host/mygo/
 - `native/darwin`이 내보내는 C 이름이 프레임워크의 이름과 겹치면 `sp_`로 시작한다. Wails는 자기 `windowFullscreen`을 컴파일하고, 링커가 둘 중 하나를 골라 호출이 프레임워크 함수로 갔으며 호스트는 그 반환값을 실패로 읽었다.
 
 두 호스트의 `platform/darwin/ui_queue.go`와 `ui_queue.rs`는 프레임워크 이벤트 잠금 밖의 네이티브 메인 큐 실행을 제공한다. 표면 커밋과 취소는 이 경계에서 실행한다.
+- Go와 Rust 파일 중 같은 역할을 하는 파일은 같은 이름을 쓴다.
 
 ## 플랫폼 선택
 

@@ -22,6 +22,8 @@ The host must not assume that DOM and native rendering differ by at most one fra
 
 ## Placement sequence
 
+A ResizeObserver of core starts observing at an animation frame, which runs before that frame's observation round; observation that starts during the round defers its first notifications and WebKit reports a loop error.
+
 Every preparation starts raster updates for the applied native geometry before its reply, including continuous layout changes. Raster generation can then proceed while the page draws and presents its matching DOM. The presentation step refreshes geometry again for regions changed by that DOM and still waits for the exact required raster before commit; an early update does not acknowledge presentation.
 
 1. Before updating card DOM, the page submits the next surface rectangles.

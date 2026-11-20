@@ -12,6 +12,8 @@
 
 ## 빌드
 
+네이티브나 예제 동작은 두 host를 모두 빌드한 뒤 그 binary로 해당 검사를 실행한다.
+
 ```sh
 make install
 pnpm build
@@ -64,6 +66,8 @@ Node·Go·Rust·native test와 window check를 실행하는 test runner `scripts
 
 `make check-temp-files COMMAND="<command>"`(`scripts/check-temp-files.mjs`)는 `TMPDIR`를 새 빈 폴더로 지정해 command를 실행하고, command가 그곳에 남긴 `soksak-` prefix의 entry를 하나씩 밝히며(`TEMP LEFT <path>`), 하나라도 있거나 command가 실패하면 실패한다. 끝날 때 자기 폴더를 지운다. window check의 configuration 폴더 `soksak-check-*`는 설계상 실행 사이에 남으므로 세지 않는다. `/tmp` 아래의 고정 경로처럼 command가 `TMPDIR` 밖에 쓰는 폴더는 audit이 보지 못하므로, test source는 그런 경로를 쓰지 않는다(위).
 
+빌드와 검증 명령은 lead만 실행하고 일정도 정한다. 빌드 묶음 전과 정리 후 디스크 여유를 확인한다. 임시 파일과 선언된 build 출력은 process와 파일 소유를 확인한 뒤에만 정리하며, source, Git metadata, 활성 build root, 필수 증거는 보존한다. 정리 poller를 두지 않고 빌드 중에는 공유 cache를 비우지 않는다.
+
 ## View drag benchmark
 
 `make benchmark-plain-view`는 view drag의 floor를 측정한다. 모든 검사 설정이 설치해 둔 `e2e/fixtures/plain-view/probe`의 fixture, 곧 document region이 자기 plugin document의 text 한 줄을 보이고 page가 크기 관찰 외의 코드를 실행하지 않는 view를 열고, 같은 너비 drag와 녹화를 실행해 gesture 중 source 간격을 보고한다. floor는 목표의 입력이므로 목표를 판정하지 않는다. trace를 끈 드래그도 실행해 지연, convergence, load와 transaction 단계를 보고한다.
@@ -114,6 +118,10 @@ test는 실제 입력으로만 code를 판정한다. 실제 입력은 다음 넷
 wire의 consumer(client, window-check session, MCP server `sok mcp`를 가진 `sok`, workbench page, plugin)는 그 wire의 공통 계약 사례를 실행한다. 계약 사례는 소유 패키지가 실제 producer에 대해 실행하고 consumer가 producer의 답으로 읽는 추적되는 case 파일이다. 실제 producer가 통과하지 않는 case는 producer나 case의 결함이다. 문서 구조는 jsdom에서 시험할 수 있고, layout, paint, 입력, native composition은 end-to-end tier에서 시험한다.
 
 규칙의 이유: 대역은 자기 test가 정한 대로 답하므로 실제 구현이 다르게 동작해도 그 test는 통과한다. queue에 넣은 일을 바로 실행한 Go platform 대역은 실제 platform이 그 일을 queue에 넣는 동안 통과했다(F790). 규칙의 적대 review는 네 반론에 답했다. 입력을 막거나 버리는 기록 object는 판정되는 code를 바꾸므로 대체물이다. 고정된 답을 inline으로 쓴 program은 fixture program이 아닌 대체물이다. AppKit과 WebKit은 이미 unit tier에서 답하므로 platform 의존 test는 CI를 떠나지 않는다. consumer는 다른 패키지의 producer를 실행할 수 없으므로 producer가 통과하는 계약 사례에서 답을 읽는다.
+
+각 테스트는 자기가 검증하는 동작을 소유한 모듈 가까이에 둔다. 서로 무관한 모듈이 테스트 디렉터리를 공유하지 않는다. 테스트는 모듈을 내보낸 이름이나 선언된 interface로 실행하며, 다른 파일의 소스 텍스트를 잘라 실행하지 않는다. 저장소 감사는 추적 파일에서 구현과 테스트 언어를 찾고, 실행 가능한 테스트가 없는 실행 가능한 구현 언어가 있으면 실패한다.
+
+어떤 테스트도 다른 패키지의 구현을 검증하지 않는다. 소비자는 소유 패키지가 실제 구현에 대해 실행하는 공통 계약 사례를 실행한다. 모든 테스트는 위의 실제 입력 규칙을 따르며, 다른 패키지의 경로, SDK, 빌드, 구현 이름을 읽지 않는다.
 
 ## 창 검사
 
@@ -254,6 +262,8 @@ Core는 plugin·sidecar release와 독립적으로 version을 정한다. `main` 
 같은 run의 게시 job은 모든 check와 모든 build를 기다린다. 그 run의 release file을 내려받고, `node scripts/candidate-acceptance.mjs files <folder>`가 그것이 정확히 각 host의 application zip file과 선언된 version의 packed package 다섯이며 각 zip의 member path가 `soksak.app/` 안에 있음을 요구한다. Commit이 여전히 `main`의 head이고 version tag가 없어야 하며, 그 뒤 job이 그 tag와 그 file로 release를 만든다. `scripts/release-notes.mjs`는 `docs/operations/install.md`의 link를 tag 기준으로 풀고, notes는 release file 디렉터리 밖에 둔다. 게시를 위해 다시 build하는 file은 없고, workflow는 run을 직렬화하므로 두 push가 한 version을 두 번 release하지 않는다. Release의 증거는 CI job이다. Window check는 display가 필요해 로컬에서 실행되며([test 종류](#test-종류)), 그 결과는 게시 조건이 아니다.
 
 Release는 plugin과 sidecar 저장소가 build에 쓰는 것을 담으므로, 그 workflow는 core의 source를 checkout하지 않는다. application zip `soksak-<version>-darwin-arm64-<host>.zip`마다 들어 있는 `sok`(`soksak.app/Contents/MacOS/sok`, release는 이를 따로 게시하지 않는다), 그리고 `node scripts/pack-release-packages.mjs dist`가 `pnpm pack`으로 `packages/plugin-api`, `native/darwin/process-identity`, `packages/client`, `packages/log-contract`, `packages/window-check`에서 만든 packed release `soksak-plugin-api-<version>.tgz`, `soksak-native-process-identity-darwin-<version>.tgz`, `soksak-client-<version>.tgz`, `soksak-log-contract-<version>.tgz`, `soksak-window-check-<version>.tgz`이다. process identity package의 tarball은 release job이 build한 static library를 담는다. `pnpm pack`은 `workspace:` dependency를 그 package의 version으로 쓰는데 어떤 registry도 그 version을 제공하지 않고, pnpm 11은 URL로 지정한 dependency의 dependency를 거부하므로(`blockExoticSubdeps`), script는 그런 `dependencies` 항목을 `bundleDependencies`에 올리고 그 package의 release file 내용을 release file의 `node_modules/<name>`에 담으며, pnpm이 bundle된 package의 dependency를 설치하지 않으므로 담은 package의 registry dependency를 packed package의 `dependencies`에 더하고, release가 게시하지 않는 package면 실패한다. `@soksak/window-check`의 release file은 `@soksak/client`, `@soksak/log-contract`, `@soksak/plugin-api`를 담으므로 plugin 저장소는 pnpm 기본 설정으로 release만으로 그것을 설치한다. `pnpm pack`은 isolated linker에서 `bundleDependencies`를 거부하므로 script는 packed folder를 `tar`로 묶는다([plugin의 창 검사](../spec/plugins.ko.md#plugin의-창-검사)).
+
+새 저장소는 version 0.0.1로 시작한다. 선언된 작업 공간 version과 최신 공개 core release는 선언 파일과 변경 기록에 있으며 이 문서에 적지 않는다.
 
 ## page 메모리
 
@@ -415,3 +425,55 @@ Stall sampling과 launchd process 조회는 각 process에 10초 제한을 둔 �
 IME window 검사는 capture stop 후 artifact 복사 또는 visual 분석 전에 소유 terminal status observer를 끝낸다. 모든 입력 단계와 terminal sequence boundary는 이미 저장돼 있다. Cleanup은 stop을 다시 안전하게 호출할 수 있으며 이전 해제에 실패한 구독만 재시도한다.
 
 Terminal view benchmark는 process 및 one-shot layout 증거에 전체 performance trace를 유지하고 continuous drag 구간에서 `diagnostics.performance`만 끈다. Source-frame event는 독립적인 `diagnostics.log.frame` 정책을 쓰며 capture, clock과 error 감사는 유지한다. Gesture 시각 측정 전에 설정 전파가 완료되어야 하며 host가 sampler 종료를 기다릴 수 있다. Drag가 실패해도 reclaim sampling 전에 이전 설정을 복원한다. Phase mode는 기록한 결과에 포함한다. 전체 profiling은 cadence 증거가 아닌 진단 맥락이며 측정 gesture 내내 유지하면 무관한 host 관측 작업을 더한다. 모든 debug 설정을 끄는 대안은 필요한 frame record도 없애므로 거부한다. 앞선 layout은 적용된 native placement 증거에 필요하므로 trace를 유지한다. Source cadence·captured-paint convergence의 명시된 시간 한도는 40 ms 이하이며, 2 pt·two-frame 기준은 그대로 유지한다.
+
+## 창 검사 운영
+
+창 검사는 `--config-dir PATH`로 실행 중인 애플리케이션에 `<config-dir>/endpoint.json`을 통해 연결한다. 선언된 노출 항목과 네이티브 입력만 쓰고, 타이머 대신 status 알림을 기다리며(`make check-app-tests`), 일회용 설정 디렉터리와 프로젝트 폴더를 쓴다. 준비가 정한 상태를 관측할 선언된 항목이 없으면 검사는 자기 일회용 설정 디렉터리에 파일을 쓸 수 있고, 정리 단계에서 그 파일을 되돌린다. 검사는 애플리케이션을 실행하거나 창을 독자적으로 활성화하지 않는다. 프로젝트 창 검사는 명세에 따라 창을 만들거나 포커스하는 프로젝트 열기 명령을 호출할 수 있다. 자동 검사 설정은 사람이 직접 확인하는 설정과 분리하며, 설정이 직접 확인에 쓰였다면 이후 자동 검사는 새 일회용 설정을 쓴다.
+
+합성 포인터 측정은 활성화하지 않는 네이티브 입력을 쓴다. 맨 앞 애플리케이션은 검사 결과의 기준이 아니므로 검사는 이를 캡처하거나 복원하거나 판정하지 않는다. 명세된 애플리케이션 동작은 자기 창을 활성화할 수 있다. 사람이 앞으로 가져온 다른 애플리케이션은 검사가 일으킨 것이 아니며, 이전 애플리케이션을 활성화하면 사람의 활성화를 빼앗게 된다. 활성화 상태가 필요한 검사는 시험하는 동작의 선언된 status로 이를 확인한다.
+
+창 검사는 실행 중 기록된 모든 애플리케이션 오류로 실패한다. 단, 검사가 그 오류를 일부러 일으키고 `expectError`로 선언한 경우는 예외다. 검사를 통과시키려고 오류를 선언하지 않는다. 검사는 준비가 정한 상태에서 시작하며, 다른 검사를 바꾸는 상태를 남기지 않는다. 남은 상태 때문에 생기는 검사나 host 사이의 차이는 그 상태를 남긴 검사의 결함이다.
+
+시각 관측이 진단이나 검토에 도움이 되면 `diagnostics.capture.still`로 비활성 캡처를, `diagnostics.capture.start/stop`으로 녹화를 한다. 캡처 때문에 창에 포커스하거나 활성화하지 않는다. 캡처와 녹화는 시각 관측일 뿐이며 이미지나 녹화만으로 pass/fail을 판정하지 않는다. 캡처는 원본 해상도(`view_image`의 `detail: "original"`)로 확인한다. 합성 실패를 진단하기 전에 원본 이미지와 측정 픽셀을 비교한다.
+
+시각 또는 시간 의존 동작은 요청한 속도로 제스처 전체를 녹화한다. 녹화에서 추적 가능하고 기계로 판정할 수 있는 Red/Green 증거를 도출한다. 애니메이션은 경과 시간이나 프레임 간격을, DOM, 네이티브, WebView 합성은 측정한 좌표를 비교한다. 프레임 누락이나 입력 미완료는 통과가 아니라 실패다. 필요한 상태나 측정값이 노출되지 않으면 이를 제공하는 선언 명령과 테스트 interface를 추가한다. 노출 부재는 검증을 멈출 이유가 아니라 구현할 작업이다.
+
+입력기(IME) 동작은 사용자 승인을 받은 활성화 등급(`make test-app-activation`)에서만 검증한다. OS 입력기는 활성 애플리케이션의 키 창만 처리한다. 각 실행은 같은 창의 AppKit 텍스트 뷰 대조군에 같은 키를 보내며, 대조군이 기대한 문서를 만들 때만 결과가 증거가 된다.
+
+## 간헐 실패 반복
+
+간헐 실패는 다음 추적 대상으로 재현하고 수용한다.
+
+- 네이티브 테스트 하나: `make -C native/darwin repeat TEST=<name>_test COUNT=<n>`.
+- process identity package의 테스트 하나: `make -C native/darwin/process-identity repeat TEST=<name>_test COUNT=<n>`.
+- 네이티브 기본 모음: `make -C native/darwin repeat-suite COUNT=<n>`.
+- Rust 패키지의 테스트: `make repeat-rust PACKAGE=<package> COUNT=<n> [TEST=<name>] [FEATURES=<features>]`.
+- Go 패키지의 테스트: `make repeat-go PACKAGE=<path> COUNT=<n> [TEST=<regexp>] [TAGS=<tags>]`.
+- 창 검사 밖의 Node 테스트: `make repeat-node FILE=<file> NAME=<pattern> COUNT=<n>`.
+- 테스트 순서 의존: `make test-rust-alone PACKAGE=<package> [FEATURES=<features>]`가 각 테스트를 혼자 실행한다.
+
+Rust에서 `TEST`는 정규식이나 `|`로 잇는 목록이 아니라 완전한 이름 하나를 정확히 고른다. 컴파일된 테스트 binary에 `--list`를 실행해 출력된 이름 하나를 고른다. 테스트의 Cargo target을 알면 `TEST_TARGET=lib` 또는 `TEST_TARGET=test:<target>`을 지정해 검색을 제한한다. 의도적으로 패키지 전체를 확인할 때만 `TEST_TARGET`을 생략한다.
+
+## 커밋 hook
+
+`make install-hooks`는 checkout의 hook을 설정하며, workspace의 모든 저장소가 자기 hook을 가진다. commit-msg hook은 커밋 메시지 형식과 용어를 검사한다. pre-commit hook은 기록과 용어 검사를 실행한다. pre-push hook은 `make check-push`를 실행해 push가 게시하는 커밋의 메시지와 체크리스트 이력(`make check-checklist-history`)을 검사한다. 게시된 커밋은 그대로 남기 때문이다. CI는 각 push와 pull request의 커밋을 `make check-commits`와 `make check-checklist-history`로 검사하고, 그 밖의 모든 검사는 push된 커밋에서 실행한다. release gate는 green 실행만 release한다. `make check-docs`는 저장소에 관한 사실이 아닌 내용을 적은 기록 줄을 각각 보고한다.
+
+커밋 메시지는 `type(scope): Subject (#<체크리스트 ID>)` 형식을 쓴다. type은 `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore` 중 하나다. 제목은 대문자로 시작하는 명령문이고 50자 이내이며 마침표로 끝내지 않는다. 빈 줄 뒤 본문은 비우지 않고 72자에서 줄을 바꾸며 무엇을 왜 바꿨는지 적는다. 커밋 메시지에는 어떤 꼬리말도 없다(체크리스트 꼬리말, 자동 생성 표시, 공동 작성자 트레일러, 서명 줄, 세션 링크 없음). 모든 커밋의 작성자는 `min-0-max <max@blue.tools>`다. 게시된 커밋 메시지는 보존하며, 이 형식은 새 커밋에 적용한다.
+
+## 종결 형식
+
+`[-]`는 `Closed:`와 그 사유, 또는 다음 형식 중 하나로 항목을 닫는다.
+
+- `Not reproduced:`는 한 번 관측된 실패가 추적되는 반복 대상에서 다시 나지 않았을 때 닫는다. 모음 전체를 최소 세 번 실행하고(한 번은 원래 실패의 부하 아래에서), 다시 날 때 원인을 보이는 기록을 갖춘다. 수정이 아니며, 시도 내용은 `Not reproduced:` 뒤에 기록한다. 재발하면 연결된 후속 ID를 연다.
+- `Platform excluded:`는 명시적으로 승인된 Windows/Linux 범위 제외에만 쓴다. 플랫폼 이름, 사용할 수 없거나 구현하지 않은 runtime 사유, 명시적인 미검증 결과를 적는다. 공통 또는 현재 플랫폼 요구사항은 닫지 않는다.
+- `Evidence unavailable:`는 명시적으로 승인되고 독립적인 적대 검토가 확인한 감사에서, 필요한 과거 증거를 보존된 자료로 복구할 수 없을 때만 쓴다. 비어 있지 않은 `Scope:`, `Evidence:`, `Result:`, `Follow-up when:` 필드를 갖고, 결과는 미검증으로 명시한다.
+
+어떤 종결 형식도 기능 수정, 검증 통과, 실행 가능한 검사나 release 조건의 종결이 아니다. 발견된 증거는 연결된 후속 비교 항목을 연다.
+
+## 명령 이름
+
+명령 이름은 하는 일을 쉬운 단어로 말한다. 실행 파일은 `sok` 또는 `sok-<what>`이다. make target은 `<verb>[-<what>][-<host>]`이며 verb는 `install`, `fetch`, `copy`, `create`, `build`, `pack`, `release`, `run`, `test`, `check`, `repeat`, `measure`, `benchmark`, `clean` 중 하나다. check target은 실행하는 script의 이름을 따른다. 검사는 명령이 하나이며, target은 두 번째 이름을 갖거나 다른 target의 recipe를 되풀이하지 않는다. 이름은 모든 명령을 함께 정한다. `make check-commands`(`sok-check commands`)가 모든 저장소에서 이를 강제한다.
+
+## 네이티브 bundle build
+
+네이티브 bundle을 build하기 전에 작업 디렉터리가 의도한 verification checkout인지 확인하고 출력 bundle을 명시한다. 그 bundle에서 애플리케이션 process가 실행 중이면 build target은 첫 bundle 변경 전에 PID와 bundle 경로를 밝히며 거부한다. 사용자 애플리케이션이 열려 있는 동안에는 별도의 verification checkout에서 build한다.
