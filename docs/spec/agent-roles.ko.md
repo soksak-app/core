@@ -134,15 +134,16 @@ role 파일이 담는 정의 텍스트는 soksak이 `<config-dir>/roles.json` �
 
 ## Tab role state
 
-agent CLI의 각 tab은 agent role을 하나 가지거나 없다. tab의 저장된 role 기록은 `projects.json` layout의 항목이며 다음을 담는다.
+agent CLI의 각 tab은 agent role을 하나 가지거나 없다. `projects.json` layout의 각 tab은 member `role`을 가진다. 값은 `null`(role 없음)이거나 role의 저장된 기록 전체다. 기록은 정확히 다음 다섯 member를 가진다.
 
-- `role`: role 식별자 또는 `null`;
-- `generation`: 1에서 시작하는 정수. role이나 정의가 바뀔 때마다 1씩 오른다;
-- `fingerprint`: 현재 role 파일의 fingerprint;
-- `confirmedFingerprint`: agent가 확인한 fingerprint, 없으면 `null`;
-- `requests`: 마지막 변경이나 confirmation 이후 보낸 reread request 수. 상한은 없다.
+- `id`: role 식별자이며 [role 정의](#role-definitions)의 식별자 규칙을 따른다;
+- `generation`: 1 이상의 정수. 1에서 시작하고, role이나 정의가 바뀔 때마다 1씩 오른다;
+- `fingerprint`: 현재 role 파일의 지문, 소문자 16진수 16자리;
+- `confirmedFingerprint`: agent가 확인한 지문, 소문자 16진수 16자리, 없으면 `null`.
 
-이 기록을 더하면 `projects.json`의 형식이 바뀌므로, [stored data formats](installation.md#stored-data-formats)에 따라 형식 번호를 2에서 3으로 올린다. migration은 쓰지 않는다. reader는 형식 2를 `<file>: projects: format must be 3, found 2`로 거부한다.
+부분 기록은 없다. member `role`이 없거나, 값이 `null`도 아니고 위 다섯 member의 형태를 갖춘 기록도 아닌 tab은 명시적 오류로 거부하며, 오류는 file, tab, member를 밝힌다. 오류 문장은 `projects.json: project <root> space <space>: tab <tab> member role is missing` 또는 `... member role is invalid`다. role 없이 만든 tab은 `role: null`을 저장한다.
+
+이 member가 `projects.json`에 처음 들어가는 형식이 4이므로, [저장 데이터 형식](installation.md#stored-data-formats)에 따라 형식 번호를 3에서 4로 올린다. migration은 쓰지 않는다. reader는 형식 3을 `<file>: projects.json: format must be 4`로 거부하며, 거부된 file의 모든 쓰기는 그 오류로 실패한다.
 
 role 변경은 registry를 거치는 명령 `core.tab.role {tab, role}`이다. tab이 이미 가진 role과 같은 정의를 설정하면 파일을 쓰지 않고, generation을 바꾸지 않고, message를 보내지 않으며, 답은 현재 `{role, generation, state, fingerprint}`다.
 
@@ -352,8 +353,8 @@ person이 tab의 shell에서 직접 시작한 두 번째 agent CLI는 soksak의 
 - 제거: 제거된 tab은 program을 멈추고, 이후 변경을 `tab <tab> was removed; its role cannot change`로 거부하며, 보류 message를 각각 `skipped` 기록으로 버린다.
 - resume: 프로그램은 자기 명령으로 시작하고, 첫 message를 다시 보내며, 바쁘지 않음 보고마다 reread request이 확인할 때까지 뒤따른다.
 - confirmation: 두 방식, `sok role confirm`과 답변 줄이 현재 fingerprint에 `ready`를 주고, 이전 fingerprint에는 `stale fingerprint: read the role file again at <path>` 오류를 준다. 명령 방식은 shell이 있는 agent에서만 테스트한다.
-- 요청: 바쁘지 않음 보고마다 요청이 하나씩 가고 `requests`가 오르며, 세 번째 이후 요청도 같은 경로와 현재 fingerprint을 적는다.
-- 형식: `projects.json` reader는 형식 2를 `<file>: projects: format must be 3, found 2`로 거부하고, writer는 형식 3을 쓴다.
+- 요청: 바쁘지 않음 보고마다 요청이 하나씩 가며 상한은 없다. 세 번째 이후 요청도 같은 경로와 현재 fingerprint을 적는다. 각 요청은 `plugin.<plugin>.messages.delivered`에 kind `role-reread`로 쓴다.
+- 형식: `projects.json` reader는 형식 3을 `<file>: projects: format must be 4, found 3`으로 거부하고, member `role`이 없거나 `null`도 유효한 기록도 아닌 tab은 [tab의 역할 상태](#tab-role-state)의 오류로 거부한다. writer는 형식 4를 쓰고, role 없이 만든 tab은 `null`을 저장한다.
 - 반복과 동시성: [Tests of the repetitions](#tests-of-the-repetitions)와 [Tests of the concurrency](#tests-of-the-concurrency).
 - sidecar open: 네 refusal을 각 문장 `open program must be a non-empty text`, `open args must be an array of texts`, `open args require program`, `open program and shell are both set`으로, `openFailed` 답을 `program not found: <program>`으로, program session에는 shell integration이 없다는 규칙을 확인한다.
 - `roles.json`: 형식 번호, 식별자 규칙, 알 수 없는 role 거부. 각 오류 문장을 확인한다: `<file>: roles: format must be 2, found <value>`, `<file>: roles: invalid role identifier <id>`, `unknown agent role <id>`.

@@ -134,15 +134,16 @@ The editor of the file is a separate checklist item.
 
 ## Tab role state
 
-Each tab of an agent CLI has one agent role, or none. The stored role record of the tab is an entry of the layout of `projects.json`, and it holds:
+Each tab has one agent role, or none. Each tab of the layout in `projects.json` holds the member `role`, which is either `null` (no role) or the whole stored record of the role. The record has exactly these members:
 
-- `role`: the role identifier, or `null`;
-- `generation`: an integer that starts at 1 and rises by one at each change of the role or of its definition;
-- `fingerprint`: the fingerprint of the current role file;
-- `confirmedFingerprint`: the fingerprint that the agent confirmed, or `null`;
-- `requests`: the number of reread requests sent since the last change or confirmation; no limit applies.
+- `id`: the role identifier, which matches the identifier rule of [role definitions](#role-definitions);
+- `generation`: an integer of at least 1 that starts at 1 and rises by one at each change of the role or of its definition;
+- `fingerprint`: the fingerprint of the current role file, 16 lowercase hexadecimal characters;
+- `confirmedFingerprint`: the fingerprint that the agent confirmed, 16 lowercase hexadecimal characters, or `null`.
 
-Adding this record changes the form of `projects.json`, so its format number rises from 2 to 3 as [stored data formats](installation.md#stored-data-formats) requires. No migration is written, and the reader refuses format 2 with `<file>: projects: format must be 3, found 2`.
+There is no partial record. A tab whose member `role` is absent, or whose value is neither `null` nor a record of these five members in these forms, is refused with an explicit error that names the file, the tab and the member; the error text is `projects.json: project <root> space <space>: tab <tab> member role is missing` or `... member role is invalid`. A tab created without a role stores `role: null`.
+
+Format 4 of `projects.json` is the first form with the member, so the format number rises from 3 to 4 as [stored data formats](installation.md#stored-data-formats) requires. No migration is written. The reader refuses format 3 with `<file>: projects.json: format must be 4`, and every write of the refused file fails with that error.
 
 A role change is the command `core.tab.role {tab, role}`, which runs through the registry. Setting the role the tab already has, with the same definition, writes no file, changes no generation and sends no message, and answers the current `{role, generation, state, fingerprint}`.
 
@@ -352,8 +353,8 @@ A CLI that the person starts by hand in a tab, as a second agent in the same she
 - Removal: a removed tab stops its program, refuses a later change with `tab <tab> was removed; its role cannot change`, and discards its held messages with one `skipped` record each.
 - Resume: the program starts with its own command, the first message is sent again, and reread requests follow each not-busy report until the agent confirms.
 - Confirmation: both ways, `sok role confirm` and the answer line, give `ready` for the current fingerprint and the stale error `stale fingerprint: read the role file again at <path>` for an older one; the command way is tested only for an agent with a shell.
-- Requests: one request at each not-busy report, the count in `requests`, and no limit: a third and later request name the same path and fingerprint.
-- Format: the `projects.json` reader refuses format 2 with `<file>: projects: format must be 3, found 2`, and the writer writes format 3.
+- Requests: one request at each not-busy report while `pending`, each written to the record `plugin.<plugin>.messages.delivered` with kind `role-reread`, and no limit: a third and later request name the same path and fingerprint.
+- Format: the `projects.json` reader refuses format 3 with `<file>: projects: format must be 4, found 3`; a tab without the member `role`, or with a member that is neither `null` nor a valid record, is refused with the error of [tab role state](#tab-role-state); the writer writes format 4, and a tab created without a role stores `null`.
 - Repetition and concurrency: the tests of [idempotency](#tests-of-the-repetitions) and [concurrency](#tests-of-the-concurrency).
 - Sidecar open: the four refusals with their texts `open program must be a non-empty text`, `open args must be an array of texts`, `open args require program` and `open program and shell are both set`; the `openFailed` reply with `program not found: <program>`; and the rule that a program session has no shell integration.
 - `roles.json`: format number, identifier rule and unknown role refusal, each with its error text: `<file>: roles: format must be 2, found <value>`, `<file>: roles: invalid role identifier <id>` and `unknown agent role <id>`.
