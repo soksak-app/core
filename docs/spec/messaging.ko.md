@@ -14,9 +14,19 @@
 
 Terminal은 `messages.register` 요청을 terminal sidecar에 보내 folder를 등록한다. Parameter는 `folder`이며 절대 경로다. 요청에는 모든 sidecar 요청과 같이 terminal의 `surface`가 담긴다([sidecars](sidecars.md#messages)). Sidecar는 자신에게 요청을 보낸 surface에만 event를 보낸다([sidecars](sidecars.md#failure), surface에 host가 보내지 않은 message의 실패 규칙).
 
-Reply는 `{registration, folder}`다. `registration`은 sidecar가 할당하는 식별자이며, folder를 등록할 때 난수로 만든 version 4 UUID다. 따라서 process를 넘어 유일하다([wire 결정](messaging.md#wire-decisions), 항목 3). 존재하지 않는 folder의 요청은 `folder-missing`으로 실패하고, directory가 아닌 경로는 `not-a-directory`로 실패한다. 다른 surface가 이미 등록한 folder, 또는 registration을 이미 가진 surface의 두 번째 folder의 요청은 `already-registered`로 실패한다. 같은 surface가 같은 folder를 다시 요청하면 같은 reply를 돌려준다. 이 operation은 idempotent하기 때문이다([AGENTS](../../AGENTS.md#implementation)). 이 규칙들은 [wire 결정](messaging.md#wire-decisions)에서 정한다. 각 error는 명시적인 error reply이며, 빈 결과로 대체되지 않는다.
+Reply는 `{registration, folder}`다. `registration`은 sidecar가 할당하는 식별자이며, folder를 등록할 때 난수로 만든 version 4 UUID다. 따라서 process를 넘어 유일하다([wire 결정](messaging.md#wire-decisions), 항목 3). Sidecar는 존재하지 않는 folder를, 없는 상위 folder와 함께, watch하기 전에 만든다. 만들기가 실패하면 folder와 system의 이유를 밝히는 `folder-create-failed`로 실패하고, directory가 아닌 경로는 `not-a-directory`로 실패한다([terminal의 folder](messaging.md#folder-of-a-terminal)). 만든 뒤 watch를 시작하기 전에 제거된 folder는 `folder-missing`으로 실패하고, system이 거부한 watch는 system의 이유와 함께 `folder-missing`으로 실패한다. 다른 surface가 이미 등록한 folder, 또는 registration을 이미 가진 surface의 두 번째 folder의 요청은 `already-registered`로 실패한다. 같은 surface가 같은 folder를 다시 요청하면 같은 reply를 돌려준다. 이 operation은 idempotent하기 때문이다([AGENTS](../../AGENTS.md#implementation)). 이 규칙들은 [wire 결정](messaging.md#wire-decisions)에서 정한다. 각 error는 명시적인 error reply이며, 빈 결과로 대체되지 않는다.
 
 Host가 surface에 `closed`를 보내면 sidecar는 그 surface의 자원(예: watch)을 해제한 뒤 `{"surface": id, "closed": true}`로 답한다. 자원을 해제하지 못하면 `error`로 답한다([sidecars](sidecars.md#messages)).
+
+## Terminal의 folder
+
+Terminal의 page는 folder `<root>/.soksak/messages/<surface>`를 등록한다. `<root>`는 start value의 `project`의 `root`, 곧 window가 보여 주는 project의 canonical root이고, `<surface>`는 그 surface의 식별자다([view surfaces](native-surfaces.md#view-surfaces), start value). Folder가 project에 속하는 것은 한 project의 terminal들이 message를 주고받기 때문이며, project root의 `.soksak/`은 이미 application의 project 파일을 담는다([projects](projects.md#persistence)). Folder는 등록하는 surface가 하나이므로 surface마다 자기 folder를 가진다([wire 결정](messaging.md#wire-decisions), 항목 9).
+
+- 만들기: terminal sidecar가 `messages.register`에서 folder와 없는 상위 folder를 만든다. Page에는 파일 operation이 없고, terminal의 sidecar가 그 domain의 native code이기 때문이다([AGENTS](../../AGENTS.md#structure)). Page는 아무것도 만들지 않는다.
+- 시점: page는 sidecar port가 연결되면 열린 session이 있든 없든 `messages.register`를 보내고([wire 결정](messaging.md#wire-decisions), 항목 8), sidecar가 다시 연결될 때마다 다시 보낸다. 반복된 등록은 같은 reply를 돌려주기 때문이다([wire 결정](messaging.md#wire-decisions), 항목 10). 같은 surface로 다시 load된 page는 같은 request를 보내고 같은 registration을 받는다.
+- Project 없음: project가 없는 window의 terminal은 folder를 등록하지 않으므로, 그 read와 wait는 sidecar의 `unknown-terminal`로 실패한다. 이 error는 registration이 없는 surface를 밝힌다.
+- Status: page는 registration을 status `<plugin>.messages`로 보고한다. Reply 뒤에는 `{folder, registration}`, 그 전과 project가 없을 때는 `null`이다. 그래서 sender는 terminal의 folder를 알고 `sok message send`로 그 folder에 쓴다([cli](cli.md#commands)). 거부된 등록은 `null`을 유지하고, plugin의 error 표시 경로로 `<plugin>.messages: <code>: <reason>` text와 함께 보이며, 그 경로가 application log에 쓴다([AGENTS](../../AGENTS.md#structure)).
+- 끝: surface가 닫힌 뒤에도 folder와 그 message는 남는다. Sidecar는 watch만 해제한다([등록된 folder](messaging.md#registered-folder)).
 
 ## File event
 
@@ -52,11 +62,23 @@ Message는 소비되지 않는다. `messages_read`는 `after`보다 큰 sequence
 
 ## Missing folder
 
-등록된 folder가 존재하지 않으면 실패다. 적용되는 규칙은 다음과 같다. 누락된 operation과 sidecar error는 실패이며 대체하거나 버리지 않는다([sidecars](sidecars.md#messages)). 경계는 잘못된 값을 명시적 error로 거부한다([AGENTS](../../AGENTS.md#implementation)). 등록 시점에 folder가 없으면 `folder-missing`이다. 등록 후 folder가 제거되면 [Folder 제거 또는 이름 변경](messaging.md#folder-removed-or-renamed)의 event가 registration을 끝낸다.
+Sidecar는 등록 시점에 없는 folder를 만든다([terminal의 folder](messaging.md#folder-of-a-terminal)). 따라서 없는 folder는 `messages.register`의 실패가 아니며, 만들기가 실패하면 `folder-create-failed`다. 만든 뒤 watch 전에 제거된 folder는 `folder-missing`이고, 등록 후 folder가 제거되면 [Folder 제거 또는 이름 변경](messaging.md#folder-removed-or-renamed)의 event가 registration을 끝낸다. 적용되는 규칙은 다음과 같다. Sidecar error는 실패이며 대체하거나 버리지 않는다([sidecars](sidecars.md#messages)). 경계는 잘못된 값을 명시적 error로 거부한다([AGENTS](../../AGENTS.md#implementation)).
 
 ## Hand-off는 message가 아니다
 
-Hand-off는 작업을 다른 terminal에 넘기고 결과를 받는 것이다. 이는 message가 아니라 record다. Message는 reader가 순서대로 받는 text이며, message로 보낸 결과는 어느 attempt의 답인지 보이지 않기 때문이다. record와 그 저장을 정의한 specification은 아직 없으며, 이 문서는 분리만 정의한다. Record의 상태는 `assigned`, `started`, `result`, `integrated`, `abandoned`다. `assigned`가 attempt를 시작하고, `started`, `result`, `integrated`가 그 순서로 따른다. `abandoned`는 `integrated`에 이르지 않은 attempt를 끝내며, 그 뒤의 새 할당은 다음 attempt를 시작한다. 각 record는 `attempt` 번호를 가지며, 1에서 시작해 할당마다 1씩 늘어난다. 상태 변경은 자기 attempt를 밝히며, 이전 attempt의 변경이나 결과는 `stale-attempt`로 거부된다. 이 error는 현재 attempt를 밝힌다. Record에는 heartbeat, 시간 제한, lock이 없다. 멈춘 attempt는 소유자나 사람이 `abandoned`로 끝낼 때까지 `started`로 남으며, 기다리는 호출자는 상태 event를 기다린다. [AGENTS](../../AGENTS.md#implementation)가 event 대기에 요구하는 방식이다.
+Hand-off는 작업을 다른 terminal에 넘기고 결과를 받는 것이다. 이는 message가 아니라 record다. Message는 reader가 순서대로 받는 text이며, message로 보낸 결과는 어느 attempt의 답인지 보이지 않기 때문이다. Record의 상태는 `assigned`, `started`, `result`, `integrated`, `abandoned`다. `assigned`가 attempt를 시작하고, `started`, `result`, `integrated`가 그 순서로 따른다. `abandoned`는 `integrated`에 이르지 않은 attempt를 끝내며, 그 뒤의 새 할당은 다음 attempt를 시작한다. 각 record는 `attempt` 번호를 가지며, 1에서 시작해 할당마다 1씩 늘어난다. 상태 변경은 자기 attempt를 밝히며, 이전 attempt의 변경이나 결과는 `stale-attempt`로 거부된다. 이 error는 현재 attempt를 밝힌다. Record에는 heartbeat, 시간 제한, lock이 없다. 멈춘 attempt는 소유자나 사람이 `abandoned`로 끝낼 때까지 `started`로 남으며, 기다리는 호출자는 상태 event를 기다린다. [AGENTS](../../AGENTS.md#implementation)가 event 대기에 요구하는 방식이다.
+
+### Hand-off record
+
+각 terminal sidecar는 messaging module 옆의 module `handoff`에 record를 둔다(`vt-core/src/handoff.rs`, `alacritty-core/src/handoff.rs`). Record는 등록된 folder의 message 옆에 있고, 그 folder는 messaging이 소유하기 때문이다.
+
+- 파일: task 하나의 record는 등록된 folder, 곧 task를 받는 terminal의 folder 바로 아래의 파일 `<task>.handoff.json`이다. 이름이 `.txt`로 끝나지 않으므로 file event와 message를 만들지 않는다([wire 결정](messaging.md#wire-decisions), 항목 12). `task`는 `/`, `.`, NUL이 없는 비어 있지 않은 이름이며, 다른 이름은 그 이름을 밝히는 `invalid-task`로 거부된다.
+- 내용: JSON object `{task, attempt, state, result}`다. `attempt`는 1 이상의 정수, `state`는 다섯 상태 중 하나, `result`는 결과 text로, `result`와 `integrated` 상태에서는 string이고 다른 상태에서는 `null`이다. 다른 형태의 파일은 경로와 발견한 것을 밝히는 `invalid-record`로 거부되며, 새 record로 대체되지 않는다.
+- 쓰기: module은 message를 쓰는 것과 같이([message](messaging.md#message)) 같은 folder의 임시 이름 `.tmp-<random>`으로 record를 쓰고 그 이름으로 rename한다. 그래서 reader는 이전 record나 새 record 중 하나를 읽는다.
+- 할당: `assign`은 task에 record가 없으면 `attempt` 1과 `assigned`를, 현재 attempt가 `abandoned`이면 다음 attempt와 `assigned`를 쓴다. 현재 attempt가 `assigned`, `started`, `result`인 동안, 또는 `integrated` 뒤에는 attempt와 그 상태를 밝히는 `invalid-transition`으로 거부된다.
+- 변경: `update`는 task, 그 attempt, 새 상태를 밝히며, `result`에는 text를 함께 준다. 현재가 아닌 attempt는 상태를 판단하기 전에, 주어진 attempt와 현재 attempt를 밝히는 `stale-attempt`로 거부된다. 변경은 `assigned`에서 `started`, `started`에서 `result`, `result`에서 `integrated`, 그리고 `assigned`, `started`, `result`에서 `abandoned`이며, 다른 변경은 attempt, 그 상태, 요청한 상태를 밝히는 `invalid-transition`으로 거부된다. Record가 없는 task는 `unknown-task`로 거부된다.
+- Attempt 하나: record는 현재 attempt만 담는다. 그래서 이전 attempt의 결과는 바꿀 record가 없고 거부된다.
+- 아직 wire operation이 record에 닿지 않는다. 다른 terminal의 folder의 record를 어느 process가 쓰는지 정하는 operation은 정의되지 않았다.
 
 ## Input injection
 
@@ -68,14 +90,28 @@ Message의 input 안 형식은 열려 있다([open decisions](messaging.md#open-
 
 ## MCP tools
 
-sok MCP server는 고정된 tool 집합을 노출하며, exposure로 tool을 만들지 않는다([cli](cli.md#mcp-server), tool table의 규칙). Messaging tool은 `messages_read`와 `messages_wait`다. 각 tool은 같은 점 표기 이름의 sidecar operation `messages.read`, `messages.wait`를 호출한다.
+sok MCP server는 고정된 tool 집합을 노출하며, exposure로 tool을 만들지 않는다([cli](cli.md#mcp-server), tool table의 규칙). Messaging tool은 `messages_read`와 `messages_wait`다. 각 tool은 terminal page의 command를 거쳐 같은 점 표기 이름의 sidecar operation `messages.read`, `messages.wait`에 닿는다([read 경로](messaging.md#path-of-the-reads)).
 
 | Tool | Arguments | Reply |
 | --- | --- | --- |
 | `messages_read` | `{terminal, after, registration}`; `after`는 선택이며 기본값은 0; `registration`은 선택이며 `after`가 0보다 크면 필수다([재시작 뒤 cursor](messaging.md#cursor-across-restart)) | `{registration, messages: [{seq, path, text, from}], last}`. `registration`은 surface의 현재 registration이며 cursor의 epoch다. `last`는 reply를 만들 때 registration의 가장 큰 `seq`이며, 호출자는 이를 그 `registration`과 함께 다음 `after`로 넘긴다. 알 수 없는 terminal은 `unknown-terminal`로, 현재가 아닌 `registration`은 `epoch-changed`로, sender가 없는 message는 `invalid-sender`로 실패한다. |
-| `messages_wait` | `{terminal, after, registration}`; `after`와 `registration`은 `messages_read`와 같다 | 도착하면 `messages_read`와 같은 형태이며 같은 error를 낸다. 이 call은 시간 제한과 timer가 없다. 도착, 호출자의 취소, 또는 그 folder의 registration이 닫힐 때 끝난다. Registration이 닫히면 닫힌 이유와 함께 `registration-closed`로 실패한다. 알 수 없는 terminal은 `unknown-terminal`로 실패한다. |
+| `messages_wait` | `{terminal, after, registration}`; `after`와 `registration`은 `messages_read`와 같다 | 도착하면 `messages_read`와 같은 형태이며 같은 error를 낸다. 이 call은 시간 제한과 timer가 없다. 도착, 호출자의 취소, 그 folder의 registration이 닫힐 때, 또는 page의 sidecar 연결이 끝날 때 끝난다. Registration이 닫히면 닫힌 이유와 함께 `registration-closed`로 실패한다. 알 수 없는 terminal은 `unknown-terminal`로 실패한다. |
 
-Wait는 도착하거나 registration을 닫는 event가 올 때 끝난다. Wait는 event를 기다리는 것이며, [AGENTS](../../AGENTS.md#implementation)는 event source가 없을 때만 timer를 허용하므로 timer로 끝내지 않는다. 취소된 call은 status watch와 같이 결과 없이 끝난다([cli](cli.md#mcp-server)).
+Wait는 도착하거나 registration을 닫는 event가 올 때 끝난다. Wait는 event를 기다리는 것이며, [AGENTS](../../AGENTS.md#implementation)는 event source가 없을 때만 timer를 허용하므로 timer로 끝내지 않는다. Relay도 wait에 한계를 두지 않는다. Command는 시간 제한이 없고 선언하지도 않으며, relay된 command는 reply나 peer의 끝으로 끝난다([exposure](exposure.md#relay), command `timeout`). 취소된 call은 status watch와 같이 결과 없이 끝난다([cli](cli.md#mcp-server)).
+
+### Read 경로
+
+Tool call은 endpoint, terminal의 page, 그 sidecar port를 거쳐 sidecar에 닿는다. Sidecar는 그 surface에 보낸 page의 window에 답하고([sidecars](sidecars.md#messages)) page가 그 surface의 sidecar port를 가지므로, sidecar에 보내는 endpoint method는 없다.
+
+1. Window: `sok`이 `surface.window {surface: terminal}`을 보낸다. 답이 1012이면 call은 `unknown-terminal: surface <terminal> is in no window`로 실패한다.
+2. Plugin: `sok`이 `exposure.snapshot {window, surface: terminal}`을 보내고 그 surface의 group의 `plugin`을 읽는다([window snapshot](exposure.md#window-snapshot)). Group이 command `<plugin>.messages.read` 또는 `<plugin>.messages.wait`를 등록하지 않은 surface는 `unknown-terminal: surface <terminal> of plugin <plugin> registers no command <name>`으로 실패한다.
+3. Command: `sok`이 `command.run {window, surface: terminal, name: "<plugin>.messages.read"}` 또는 `"<plugin>.messages.wait"`를 보낸다. `params`에는 call에 있는 `after`와 `registration`이 담긴다.
+4. Page: command는 같은 `after`와 `registration`, correlation 식별자 하나와 함께 `{operation: "messages.read"}` 또는 `{operation: "messages.wait"}`를 보내고, 그 식별자를 되돌려주는 reply의 body로 답한다. Reply `{error, reason}`은 command를 `<plugin>.messages.read: <error>: <reason>`(또는 `.wait`) text로 거부하고, sidecar 연결의 끝은 기다리는 각 command를 `<plugin>.messages.wait: the sidecar connection ended`로 거부한다. Sidecar는 연결의 wait를 reply 없이 끝내기 때문이다([wire 결정](messaging.md#wire-decisions), 항목 7). Page는 sidecar가 검사하는 parameter를 검사하지 않으므로, cursor의 각 거부(`invalidParams`)는 sidecar가 준다.
+5. 결과: tool은 command의 결과로 답하고, command error는 그 text를 가진 tool error다.
+
+각 terminal plugin은 parameter `{after, registration}`을 가진 command `<plugin>.messages.read`, `<plugin>.messages.wait`와 status `<plugin>.messages`를 선언한다. `terminal`과 `term`이 자기 repository에 이를 둔다.
+
+취소된 `messages_wait`는 결과 없이 call을 끝내고, server는 endpoint request를 열어 둔다. Endpoint에는 request 하나의 취소가 없으므로 command는 다음 message나 registration의 닫힘에서 끝나고, server는 그 답을 버린다. 그때까지 열린 command는 `core.plugin.open-calls`가 보고한다([plugin processes](plugin-processes.md)).
 
 [cli](cli.md#mcp-server)의 표에 있는 모든 tool은 밑줄 이름을 가진다. 예를 들어 `windows_list`, `status_get`이 그렇다. Messaging tool도 같은 형식을 따른다([settled](messaging.md#settled-decisions)).
 
@@ -94,7 +130,7 @@ Agent는 그 client가 MCP tool을 지원하는 곳에서만 MCP tool을 쓴다(
 1. **Event 이름.** Sidecar event는 `body`의 member `event`에 점 표기 이름으로 자신을 밝힌다. 따라서 file event는 `{surface, body: {event: "file.changed", registration, path, from, kind, seq}}`다. 이유: host는 `body`를 읽지 않고 전달하며([sidecars](sidecars.md#messages)), 기존 wire event는 모두 이렇게 이름을 밝힌다. 출처: `protocol.rs:3630`(`session`), `protocol.rs:3469`(`clipboard.store`), `protocol.rs:4923`(`screen.rows`) 카탈로그와 log 형식은 접두사를 유지하고(`events.json:162`, `sidecar.alacritty.shell.state`), wire는 짧은 이름을 쓴다(`protocol.rs:2225`, `selection.copy`).
 2. **Operation parameter.** Request는 `body`의 member `operation`에 점 표기 operation 이름 `messages.register`, `messages.read`, `messages.wait`를 밝히며, 각 parameter는 `operation` 옆의 `body` member다. Registration은 `folder`, read와 wait는 `after`와 `registration`을 쓴다. Terminal은 envelope member `surface`이므로 tool 인자 `terminal`은 `surface`로 보낸다. 절대 경로가 아닌 `folder`는 `invalidParams`로 실패한다. 이유: 기존 점 표기 operation `screen.read`와 `screen.watch`가 이 형식을 쓰고, envelope이 이미 surface를 담는다. 출처: `protocol.rs:5837`(`body.operation`으로 분기), `protocol.rs:6212`(`screen.watch`), `protocol.rs:6229`(`screen.read`), `protocol.rs:5867`(`open directory must be an absolute path`).
 3. **Registration 형식.** Member `registration`은 string이며, folder를 등록할 때 sidecar가 만드는 version 4 UUID다. 이유: registration은 sidecar가 만들고 reply로 돌려주며 event에 이름으로 쓰는 식별자이므로, `sessionId` string과 같은 역할이다. `protocol.rs:155`의 `generation` 정수는 image attachment를 가리키며 sidecar가 소유한 객체가 아니므로 형식이 아니다. 출처: `pty.rs:365`(`Uuid::new_v4().to_string()`), `protocol.rs:3630`(`sessionId`).
-4. **Error 필드.** 실패한 request는 `body: {error: <code>, reason: <text>}`로 답한다. `error`는 code(`folder-missing`, `not-a-directory`, `already-registered`, `unknown-terminal`, `message-too-large`, `invalid-text`, `invalid-sender`, `epoch-changed`)이고, `reason`은 실패한 folder 또는 path를 밝힌다. 이유: 기존 거부는 code를 `error`에, 원인을 `reason`에 담으며, reply error 문장은 둘을 모두 읽는다. 출처: `protocol.rs:6236`(`invalidParams`와 `reason`), `protocol.rs:4410`(`guardRefused`의 `rule`과 `reason`), `protocol.rs:84-96`(`reply_error`).
+4. **Error 필드.** 실패한 request는 `body: {error: <code>, reason: <text>}`로 답한다. `error`는 code(`folder-create-failed`, `folder-missing`, `not-a-directory`, `already-registered`, `unknown-terminal`, `message-too-large`, `invalid-text`, `invalid-sender`, `epoch-changed`)이고, `reason`은 실패한 folder 또는 path를 밝힌다. 이유: 기존 거부는 code를 `error`에, 원인을 `reason`에 담으며, reply error 문장은 둘을 모두 읽는다. 출처: `protocol.rs:6236`(`invalidParams`와 `reason`), `protocol.rs:4410`(`guardRefused`의 `rule`과 `reason`), `protocol.rs:84-96`(`reply_error`).
 5. **Event reason 필드.** 닫힘 event는 원인을 `body`의 member `reason`에 담는다. 즉 `{event: "registration.closed", registration, reason: "folder-removed"}`다. 이유: `reason`은 기존 sidecar event가 원인을 담는 member다. 출처: `protocol.rs:3550`(`sequence.rejected`), `protocol.rs:3292`(`error`).
 6. **상관 식별자.** Messages request는 envelope에 `cids` 식별자 하나를 담고, reply는 답이든 error든 그 `cids`를 되돌린다. File event는 request가 일으키지 않으므로 `cids`가 없다. 이유: 기존 request는 `cids`를 담고 각 reply가 이를 되돌리므로 `cids`가 기존 상관 형식이다. `messages.wait`의 reply는 같은 surface의 다른 line 뒤에 오므로 surface와 operation만으로는 식별되지 않는다. 출처: `protocol.rs:5497`(request envelope의 `cids`), `protocol.rs:111-117`(`Request::answer`가 각 reply에 `cids`를 쓴다), `protocol.rs:459-462`(`reply`가 `answer`를 호출한다).
 7. **호출자 취소.** 호출자가 input을 닫으면 sidecar는 대기 중인 `messages.wait`를 reply 없이 끝낸다. 이유: 클라이언트가 취소한 call은 결과 없이 끝나며([cli](cli.md#mcp-server)의 status watch와 같다), 닫힌 input은 프로토콜이 관찰하는 취소다. 출처: `protocol.rs:5457-5471`(input의 끝은 persistent connection을 분리하고 reply를 쓰지 않는다), `cli.md` 229행.
@@ -124,7 +160,7 @@ Agent는 그 client가 MCP tool을 지원하는 곳에서만 MCP tool을 쓴다(
 - Watcher library: Rust crate `notify`다. 이 crate는 maintained library이며 macOS에서 FSEvents를 사용한다. 이유: [AGENTS](../../AGENTS.md#implementation)는 file watching에 새 구현 대신 maintained library를 요구한다. 이 repository가 쓰는 folder watching library `@parcel/watcher`는 Node test tooling을 위한 것이며, 그 사용이 sidecar의 library를 정하지 않는다. Sidecar 언어의 출처: terminal sidecar는 자신의 repository에서 구현되며 이 repository는 그것을 선언하지 않는다. `notify`의 선택은 plan이 가리키는 Rust 구현을 따른다.
 - 파일 감시 sidecar의 transport: `transport: "persistent"`. 이유: registration은 persistent service의 재연결 후에도 살아남아야 하며, [persistent services](persistent-services.md#service-transport)는 재연결이 session을 복원한다고 정한다("Reconnection restores the same session, child process, and session state"). 그 규칙은 session을 말하며 watch는 말하지 않으므로, watch의 생존은 이 계약의 요구사항이다. [Sidecars](sidecars.md#failure)는 실패 후 새 process가 이전 process의 session을 전혀 갖지 않는다고 정하므로, standard input and output sidecar는 process가 끝나면 watch를 잃는다.
 - 요청: `messages.register`, parameter `folder`(절대 경로). 이유: 점 표기 operation 형식은 [persistent services](persistent-services.md#screen-message)의 `screen.read`와 같다.
-- 등록 reply와 error: `{registration, folder}`; `folder-missing`, `not-a-directory`, `already-registered`. 이유: reply와 명시적 error가 필요하며, sidecar는 이 조건들을 보고한다. Reply 형태는 [등록된 folder](messaging.md#registered-folder)에 주어진 그대로다.
+- 등록 reply와 error: `{registration, folder}`; `folder-create-failed`, `folder-missing`, `not-a-directory`, `already-registered`. 이유: reply와 명시적 error가 필요하며, sidecar는 이 조건들을 보고한다. Reply 형태는 [등록된 folder](messaging.md#registered-folder)에 주어진 그대로다.
 - Sequence 범위: registration마다, 한 sidecar process 안에서 1부터 시작. 이유: [logging](logging.md#event)은 `seq`를 writer마다 센 counter로 두며, registration마다 counter를 두면 reader가 folder 하나의 순서를 얻는다.
 - Message 형식: 등록된 folder의 `<from>.<token>.txt` 파일, UTF-8, 64 KiB 이하. 더 큰 파일은 `message-too-large`로 거부한다. 이유: text 파일은 terminal agent가 쓰기 가장 단순한 형식이며, 상한은 bounded buffer에 대한 [AGENTS](../../AGENTS.md#implementation)를 따른다.
 - 소비: message는 소비되지 않는다. `messages_read`는 `after`와 `registration`을 받아 더 큰 `seq`의 message를 돌려주며, 같은 `after`로 반복 읽으면 같은 결과를 준다. 이유: [AGENTS](../../AGENTS.md#implementation)는 idempotent operation을 요구한다.
