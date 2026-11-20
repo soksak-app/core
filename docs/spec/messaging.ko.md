@@ -82,7 +82,7 @@ Message는 받는 쪽에 보고를 요청하고, 보고는 아무것도 요청�
 받는 terminal의 working 기간이 끝났을 때 영수증이 없는 주입 message는 아직 보고가 없다. 그러면 page는 영수증이 도착할 때까지 program의 at-rest 보고마다 보고를 요청한다([program status](terminal-state.md#program-status)).
 
 - 기점: program 보고 중 `done` 또는 `idle`인 것마다, 영수증이 없는 주입 message마다 요청 하나.
-- 요청: page는 session에 영어 요청 `[soksak request] Message <token> has no report yet. Report its result with sok message send --reply <sender folder> --answers <token> "<report>". This request is from the application, not input from the person.`을 주입한다. `<sender folder>`는 [report request](#report-request)와 같다. 주입은 [injected message](#injected-message)를 따르며, 파괴적 명령 guard가 이를 판단한다.
+- 요청: page는 session에 영어 요청 `[soksak request] Message <token> has no report yet. Report its result with sok message send --reply <sender folder> --answers <token> "<report>". This request is from the application, not input from the person.`을 주입한다. `<sender folder>`는 [report request](#report-request)와 같다. 요청은 보내는 쪽의 framing 없이 본문만 주입한다([injected message](#injected-message)). 요청은 application에서 오며 본문이 이를 밝히기 때문이다. [injected message](#injected-message)의 보류가 이에 적용되며, 파괴적 명령 guard가 이를 판단한다.
 - 끝: 그 token의 영수증이 도착한다. Timer는 요청을 끝내지 않는다([AGENTS](../../AGENTS.md#implementation)).
 - 이유: 보고가 결과의 통로이며 notice는 내용을 싣지 않으므로, role reread와 같이 도착할 때까지 보고를 요청한다([agent roles](agent-roles.md)).
 
