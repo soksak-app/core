@@ -110,6 +110,37 @@ func (x *index) enter(n, parent *Node) {
 	}
 }
 
+// keepDrawn writes each card of n that keeps a px size on axis, through nodes that keep one, and is no fixed card at the px size it is
+// drawn at.
+func (x *index) keepDrawn(n *Node, axis Axis) {
+	if !x.g.keeps(n, axis) {
+		return
+	}
+	switch {
+	case n.isCard():
+		px := n.Width
+		if axis == "y" {
+			px = n.Height
+		}
+		if n.Fixed || px == nil {
+			return
+		}
+		if drawn := x.g.content(n, axis); drawn > 0 {
+			if axis == "x" {
+				n.Width = &drawn
+			} else {
+				n.Height = &drawn
+			}
+		}
+	case n.isBox():
+		x.keepDrawn(n.Inner, axis)
+	default:
+		for _, kid := range n.Kids {
+			x.keepDrawn(kid.Node, axis)
+		}
+	}
+}
+
 // replace puts next where n stands: in its cut, inside its box, or as the root. A cut along the axis of its cut gives that cut its kids,
 // so the tree stays canonical; the kids of the cut that joins are drawn at the sizes they had, and so is every other kid: the corridors
 // between them are costs of the one cut now, so each kid takes its drawn size over theirs.
@@ -118,6 +149,15 @@ func (x *index) replace(n, next *Node) {
 		at := slices.IndexFunc(holder.Kids, func(k Kid) bool { return k.Node == n })
 		if next.isCut() && next.Cut == holder.Cut {
 			axis := holder.Cut
+			// A node that keeps a px size is drawn at its px size whatever its fraction, and a cut whose kids all keep one divides its room
+			// in their proportion, so a px size can be drawn larger than it declares. Each card of the cut that is no fixed card and keeps a
+			// px size is written at the size it is drawn at, so the kids of the cut keep their drawn sizes when the join brings kids that
+			// take a fraction (packages/soksak/docs/layout.md#add-and-remove). A fixed card is a cost of the cut and keeps its px size.
+			for _, kid := range holder.Kids {
+				if kid.Node != n {
+					x.keepDrawn(kid.Node, axis)
+				}
+			}
 			share := holder.Kids[at].Share
 			kids := make([]Kid, len(next.Kids))
 			for k, kid := range next.Kids {

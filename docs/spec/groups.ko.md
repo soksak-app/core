@@ -2,7 +2,7 @@
 
 [English](groups.md)
 
-group card는 space grid의 사각형 하나를 가리키고 그 안의 card를 담는다. 이 명세는 space의 group tree, 각 level의 leader, group header, command `core.group.*`, `core.layout`, `core.grid`, `core.card.get`과 창 설명의 group member, `projects.json`에 저장되는 group tree의 형태, group 그리기를 소유한다. space의 grid는 layout library의 규칙([soksak](../../packages/soksak/docs/layout.md))을 따른다. card command와 layout operation은 [layout에 대한 동작](cli.ko.md#레이아웃에-동작하기)을, 선언은 [노출](exposure.ko.md)을 따른다.
+group card는 space grid의 사각형 하나를 가리키고 그 안의 card를 담는다. 이 명세는 space의 group tree, 각 level의 leader, group header, command `core.group.*`, `core.layout`, `core.grid`, `core.card.get`과 창 설명의 group member, `projects.json`에 저장되는 group tree의 형태, group 그리기, space의 모든 layout operation의 크기 규칙([크기 규칙](#크기-규칙))을 소유한다. space의 grid는 layout library의 규칙([soksak](../../packages/soksak/docs/layout.md))을 따른다. card command와 layout operation은 [layout에 대한 동작](cli.ko.md#레이아웃에-동작하기)을, 선언은 [노출](exposure.ko.md)을 따른다.
 
 ## 범위
 
@@ -25,6 +25,67 @@ layout library는 grid의 각 card의 사각형을 준다(R5). group card는 그
 ### 최소 크기
 
 content card는 두 축에서 적어도 `minSize`로 그려진다. layout library는 자기 사각형에 대해 이 한계를 지킨다. header는 card를 짧게 그리므로, workbench는 각 operation(split, close, insert, move, balance, arrange, 경계 drag, group 변경)을 오늘의 drop 미리보기처럼 먼저 grid와 group tree의 복사본에 적용하고, 그 operation이 바꾸는 content card가 어느 축에서 `minSize`보다 작게 그려지면 그 operation을 거부한다. window 크기 변경이 이미 작게 남긴 card는 그 card를 바꾸지 않는 operation을 거부하지 않는다. drop 미리보기와 drop 놓기는 같은 검사를 쓰므로, 검사가 거부하는 위치는 미리보기를 보이지 않고 놓아도 아무것도 바꾸지 않는다. 경계 drag는 library의 drag이며 모든 group을 가로질러 line 전체를 옮긴다. line 옆의 모든 content card가 적어도 `minSize`로 그려지는 마지막 위치에서 멈춘다. operation이 아닌 변경, 곧 window 크기 변경, `gap`, `size`, 글자 크기의 변경은 R5가 말하듯 grid의 비율을 다시 표현하고 아무것도 거부하지 않는다. 그때 card는 공간이 돌아올 때까지 최소보다 작게 그려진다.
+
+## 크기 규칙
+
+space의 layout을 바꾸는 모든 operation은 slicing tree에 대한 규칙 하나를 따른다. 그것은 두 primitive REMOVE와 ADD, 곧 layout library의 `withdraw`와 `insert`([add and remove](../../packages/soksak/docs/layout.ko.md#add-and-remove))의 조합이며, 모든 규칙은 저장된 tree의 fraction으로 일한다([cuts](../../packages/soksak/docs/layout.ko.md#cuts)). level은 tree의 cut이다. level의 kid는 level의 extent에서 그 level의 고정 비용을 뺀 것의 자기 fraction으로 그려진다. 고정 비용은 kid 사이의 corridor, 그 fixed card, 그 box의 head와 frame이며, workbench는 frame을 frames option `corridor`로, seam에서는 `none`으로 놓는다([그리는 사각형](#그리는-사각형)). fixed card, 곧 window sidebar는 point 단위의 크기를 유지하며 그 level의 비용이다. fixed card가 아닌 kid의 px 크기는 fraction을 받는 kid와 공간을 나누며 그 px 크기끼리 한 배율로 줄어들고, fraction을 받는 kid에게 `minSize` 하나를 남긴다. fraction을 받는 kid가 한 fraction을 가지면 level은 고르다. gap, head, 창의 변경은 모든 fraction을 유지하며, tree는 payer를 기록하지 않는다. 다른 나눔을 고르는 설정은 없다.
+
+### 두 primitive
+
+- REMOVE(X): X가 자기 level을 떠나고, 그 level의 fixed가 아닌 kid가 한 배율로 늘어 level을 채우므로 그 비율이 유지된다. kid 하나만 남은 level은 그 kid로 바뀌며, 그때 자기를 담은 level의 축을 따르는 cut인 kid는 그 level에 합쳐진다(canonical 병합). canonical 병합은 그려진 크기를 유지한다. 합쳐지는 모든 kid는 그려진 크기를 유지하고, px 크기를 유지하며 fixed card가 아닌 kid는 REMOVE의 배율이 그것을 줄이기 전에 그 그려진 크기로 쓰이며, fixed card는 비용으로 남는다. member 하나만 남은 group card는 operation이 commit될 때, 그 target이 정해진 뒤에 그 member로 바뀐다([닫기](#닫기)). root level의 마지막 content card는 제거되지 않는다.
+- ADD(M, N, side). N은 card, box, 한 level의 이웃한 kid의 run, level, 또는 plane의 root이고 `a`는 side의 축이다.
+  - 따라서: N을 담은 level이, 또는 N이 축 `a`의 level이고 side가 그 끝이면 N 자신이 축 `a`를 가지며, M은 N 옆 side 쪽에 들어간다. fraction을 받는 kid k개의 고른 level에서 M은 1/(k + 1)을 받고 모든 kid는 비율을 유지하므로 level은 고르게 남는다. 고르지 않은 level에서는 N만 지불한다. M은 N의 절반을 받고 다른 모든 kid는 fraction을 유지한다.
+  - 가로질러: N은 N과 M을 side 쪽으로 담는 축 `a`의 새 level로 감싸지며, 각각 1/2이다.
+- 거부: 사각형이 바뀌는 node가 head와 corridor를 고정 비용으로 한 재귀적 최소([최소 크기](#최소-크기)) 아래로 그려지면 operation은 거부되고 아무것도 바꾸지 않는다. 거부는 그런 node 가운데 가장 깊은 것을 그 content의 크기로 `card <id> would be <w>x<h>, below its minimum <w>x<h>`로 밝히고, 어떤 크기도 그 아래로 떨어지지 않는 `minSize` 0에서는 split이 넓이 없이 남길 card를 `card <id> would be <w>x<h> and have no area`로 밝힌다. group card의 생성은 box와 그 head를 포함하는 library의 operation 하나이며, 그 그려진 결과로 한 번 판정된다.
+
+### 모든 operation은 조합이다
+
+| Operation | 정의 |
+| --- | --- |
+| split 버튼, card X의 `core.layout.open {side}` | ADD(new, X, side) |
+| card X의 side 쪽 group split 버튼, `core.group.create` | group card가 X의 자리와 fraction을 받고, 그 plane은 ADD(new, X, side)다 |
+| card X의 side zone에 drop | ADD(moving, X, side) |
+| 한 level의 kid i와 i + 1 사이 line 조각에 drop | ADD(moving, kid i, i + 1 쪽 side) |
+| 한 level의 이웃한 kid 범위에 drop | ADD(moving, run, side) |
+| plane 또는 group card의 plane의 가장자리에 drop | ADD(moving, 그 plane의 root, side) |
+| group header 또는 group card의 tab에 drop | ADD(moving, group card의 plane의 root, right) |
+| card X의 가운데 또는 tab strip에 tab | tab이 그 index에서 X에 합류한다. tab 없이 남은 원래 card는 REMOVE된다 |
+| card X의 tab strip에 card | card의 모든 tab이 그 index에서 X에 합류한다. card는 REMOVE된다 |
+| card X의 가운데에 card | 두 card가 자리를 바꾸고, 각 자리는 크기를 유지한다 |
+| card, tab 하나인 card의 tab, group card의 close | REMOVE |
+| tab 하나인 card의 tab, card, group card의 move | REMOVE(moving) 다음 target의 ADD, 변경 하나로 commit된다 |
+| balance | 모든 level이 고르게 된다 |
+| boundary drag | boundary 옆의 두 fraction만 바꾼다 |
+| fullscreen | fullscreen인 card나 group card는 layout 변경을 거부한다. tab drag는 먼저 배치를 되돌린다 |
+
+### target 찾기
+
+- hit 영역은 현재 layout에 그려지고, 결과는 REMOVE(moving) 뒤의 tree에서 계산된다.
+- 점의 사슬은 그리는 사각형이 점을 담는 저장된 tree의 node이며, root에서 가장 안쪽 card까지 각 box의 inner node를 거친다. side의 side stack은 사슬의 가장 안쪽 node와, 그 위에서 그 side 쪽으로 같은 화면 line에서 끝나는 각 node다. 곧 node의 box, 그 side 쪽 kid가 아래 node인 cut, 그 side의 축을 가로지르는 cut이다. side stack의 line은 가장 바깥 node의 가장자리이므로, line의 각 조각은 그 위에서 끝나는 level에 속하고, level을 넘어 이어지는 line은 각각 target을 가진 별개의 조각이다.
+- side stack의 각 node는 window sidebar와 그것을 담은 cut을 빼고 그 side의 target이다. window sidebar를 담은 root cut은 plane의 content, 곧 window sidebar가 아닌 그 kid로서 target이다. 결과가 같은 target은 한 띠다.
+- side의 띠는 gap과 관계없이 그 line 안쪽에 가장 바깥 node부터 각각 `drop-band` point 폭으로 선다(`packages/workbench/workbench.json` chrome 값의 `drop-band`, 5). side가 가진 거리는 그 line에서 가장 안쪽 card의 그리는 사각형 가운데까지의 거리에서 `drop-band-margin`(3)을 뺀 것이며 적어도 1 point다. 그 거리가 side의 띠를 담지 못하면 그 side의 모든 띠가 한 비율로 그 거리를 띠 수로 나눈 폭으로 좁아지므로, 띠는 가운데 앞에서 끝나고 모든 띠와 가운데에 닿을 수 있다(I4). 위 line에서의 거리는 line과 점 사이의 tab strip과 group header를 빼며, 그것은 각각 자기 target이다.
+- 점의 side는 점의 거리를 그 side가 가진 거리로 나눈 값이 가장 작은 side다. 고정된 띠 폭으로는 최소 크기의 card에서 모든 side에 닿을 수 없기 때문이다. 점의 거리가 그 side의 띠 폭 합보다 작거나, 점이 어느 content card에도 없고 group header 위에도 없으면 점은 그 side의 띠에 있다. 띠는 거리를 띠 폭으로 나눈 index의 띠이며 가장 바깥이 처음이고, 그 target은 ADD(moving, node, side)다.
+- 띠에 없는 content card의 tab strip 위의 점은 그 card의 tab strip이다. group card의 header 위의 점은 그 왼쪽이나 오른쪽 side의 띠에 있고, 그렇지 않으면 ADD(moving, group card의 plane의 root, right)다. 띠에 없는 content card 본문의 점은 본문의 가장자리 몫 0.25로 정한다. 가운데에서는 card의 가운데이고, 바깥 4분의 1에서는 가장 가까운 side의 ADD(moving, card, side)다.
+- run은 drag가 line에 들어온 점과 현재 점으로 고른다. drag가 line에 들어온 띠의 node가 그 anchor이며, drag가 그 line의 그 띠에 머무는 동안, node가 side의 축을 가로지르는 anchor의 cut의 다른 kid인 띠는 둘 사이 kid의 run, 곧 ADD(moving, run, side)다.
+- 움직이는 node나 그 빈 자리를 가리키는 target은 빈 slot(level, index, fraction)에 대응하며, 그 ADD는 REMOVE의 역이므로 제자리 drop은 변경이 없다. pointer가 끌리는 card 위에 있다는 이유로 제외되는 target은 없다. drop은 그 결과가 현재 layout과 같을 때 정확히 변경이 없다.
+- window sidebar 위의 점이나 어느 card나 box에도 없는 점은 target이 없다.
+
+### 불변식
+
+규칙은 생성된 layout, 모든 anchor, 모든 점에서 다음 불변식을 지킨다.
+
+- I1 tiling: card가 빈틈이나 겹침 없이 plane을 덮는다.
+- I2 최소: 바뀐 node가 재귀적 최소 아래에 있지 않다. 그렇지 않으면 operation은 거부되고 그 node를 밝힌다.
+- I3 모든 anchor와 점에서 preview는 결과와 같다.
+- I4 도달성: 현재 tree의 모든 (node, side), 모든 빈 slot, 모든 가운데, 모든 strip index는 같은 결과를 합친 뒤 그것을 고르는 anchor와 점을 가진다.
+- I5 move는 모든 tab과 surface를 유지한다.
+- I6 drop은 그 결과가 현재 layout과 같을 때 정확히 변경이 없다.
+- I7 비율: ADD와 REMOVE는 그것이 넣거나, 빼거나, 고르지 않은 level에서 절반으로 나누지 않는 모든 kid의 fraction 비율을 유지한다. 고른 level은 그 안의 ADD나 REMOVE 뒤에도 고르게 남는다.
+- I8 국소성: canonical 병합 뒤 원래 level과 target level의 subtree 밖의 사각형은 바뀌지 않는다.
+- I9 command는 그것이 돌려준 identifier로 idempotent하다.
+- I10 역: 방금 더한 node의 REMOVE는 고른 level의 fraction을 되돌리고, 옮긴 node를 그 빈 slot에 놓는 drop은 변경이 없다.
+
+I1과 I2는 그려진 사각형으로, I7과 I10은 저장된 tree의 fraction으로 판정한다. layout library는 `docs/spec/cases/layout/invariants.json`의 생성된 layout에서 TypeScript와 Go로 I1, I2, I7, I8, I10을 검사한다. I3, I4, I5, I6, I9는 workbench에 관한 것이다.
 
 ## Leader
 
@@ -140,14 +201,13 @@ card나 group card의 box의 close는, 그 자체로든 move의 withdraw로든, 
 
 ## 이동과 drop
 
-tab drag와 `core.tab.move`는 어느 level의 target card든 받는다. drop은 점을 담는 가장 안쪽 box, 곧 사람이 겨누는 box에서 결정되며, 그 box의 zone만 쓰인다. content card의 그리는 사각형 안의 점은 그 card가 그것을 담은 group card의 바깥 4분의 1에 있어도 그 card에서 grid의 `zoneAt`으로 다섯 zone을 가지고 결정된다. content card에는 없지만 group card의 테두리 안, 곧 그 header 위나 테두리와 그 안 card 사이 gap에 있는 점은 그런 group card 중 가장 안쪽의 것에서 결정된다. 그 header 위나 테두리 가운데의 점은 group card의 `centre`이고, 테두리의 한 side 쪽 바깥 4분의 1(`zoneAt`이 card body를 재듯 테두리의 `edge` 0.25) 안의 점은 group card의 그 side다. 어떤 box에도 없는 점은 zone이 아니다. 그래서 drop은 group 없는 space의 card 사이처럼 group 안에서, 밖에서, 다른 group에서 모든 level의 모든 content card의 모든 side와 centre, 그리고 모든 group card의 모든 side와 centre에 닿는다.
+tab drag와 `core.tab.move`는 어느 level의 target이든 받고, drop은 크기 규칙의 [target 찾기](#target-찾기)로 정해진다. 그 target은 node를 side 쪽으로 하는 ADD, content card의 tab strip, 또는 그 가운데다. `core.tab.move {tab, card, zone}`과 `core.card.move {card, target, side}`는 ADD의 node를 `card`와 `target`으로 가리킨다. 곧 card나 box의 식별자, 또는 한 cut의 이웃한 kid가 담은 card와 box의 식별자 목록이며, layout library의 `insert`가 target을 받듯([add and remove](../../packages/soksak/docs/layout.ko.md#add-and-remove)) 그것이 cut의 모든 kid이면 그 cut을, 그렇지 않으면 그 run을 가리킨다. 그래서 drop은 group 없는 space의 card 사이처럼 group 안에서, 밖에서, 다른 group에서 모든 level의 모든 node의 모든 side에 닿는다.
 
-- content card의 `centre` 위 drop은 지금처럼 tab을 그 card로 옮긴다.
-- content card의 side 위 drop은 library의 split으로 tab을 그 옆 새 card에 넣고, 새 card는 target을 담은 group의 member가 된다. card의 유일한 tab은 `move`로 그 card를 그리로 옮기고, card는 그 group의 member가 된다.
-- group card의 `centre` 위 drop은 `core.card.add-tab`처럼 tab을 group 안, 그 사각형의 오른쪽 가장자리의 새 content card에 넣는다. card의 유일한 tab은 그 card를 그리로 옮긴다.
-- group card의 side 위 drop은 사각형의 split으로 tab을 group card 사각형 옆, 그 group card를 담은 level의 새 card에 넣는다. card의 유일한 tab은 `core.card.move`가 옮기듯 그 card를 그리로 옮긴다.
+- content card의 가운데나 tab strip 위 tab의 drop은 tab을 그 card로 옮긴다.
+- ADD(node, side) 위 tab의 drop은 tab을 node 옆 side 쪽에 더한 새 card에 넣는다. card의 유일한 tab은 `move`로 그 card를 그리로 옮기고, card는 그 node의 level의 member가 된다.
+- group card의 header 위 drop과, group `target`에 대한 `side` `centre`는 ADD(moving, group card의 plane의 root, right)다. 새 card나 옮긴 card는 `core.card.add-tab`이 두듯 group 안 그 사각형의 오른쪽 가장자리에 선다.
 
-card의 유일한 tab은 지금처럼 그 card를 옮기며, card는 식별자를 유지한다. group card header의 control 밖을 누르고 끌면 group card를 옮긴다. drop은 tab처럼 결정되고, 놓으면 `core.card.move {card, target, side}`를 실행한다. group card를 끄는 동안 결정은 오늘 tab drag가 자기 card의 centre를 빼듯(`centreOnly`) 끌리는 group card와 그 안의 card를 뺀다. zone 없이 놓으면 아무것도 바꾸지 않고 오류를 보이지 않는다.
+card의 유일한 tab은 지금처럼 그 card를 옮기며, card는 식별자를 유지한다. group card header의 control 밖을 누르고 끌면 group card를 옮긴다. drop은 tab처럼 결정되고, 놓으면 `core.card.move {card, target, side}`를 실행한다. 끌리는 node나 그 빈 자리를 가리키는 target은 빈 slot이며, pointer가 끌리는 card 위에 있다는 이유로 제외되는 target은 없다([target 찾기](#target-찾기)). zone 없이 놓으면 아무것도 바꾸지 않고 오류를 보이지 않는다.
 
 ## Focus
 
@@ -235,7 +295,7 @@ group card는 기존 card 디자인의 container 하나로 그린다. 그 테두
 - `projects.json`은 format 3을 받는다. group card를 box로 가진 grid의 tree는 format 2 파일에 없는 상태이며, 저장 형식 규칙은 새 format 번호를 요구하고 migration을 두지 않는다.
 - card 식별자는 기존 형태 `card-<n>`으로 남고, layout이 저장하는 `lastCard`에서 workbench가 낸다. 그래서 재시작을 지나도 식별자는 두 번 나오지 않는다. 무작위 식별자는 content card 식별자의 형태를 바꾸므로 거부되었다. 저장된 식별자에서 도출한 번호는 가장 큰 번호의 card가 끝난 뒤 끝난 식별자를 다시 내므로 거부되었다.
 - kid가 같은 fraction을 받는 cut의 split은 모든 kid에 1/(k + 1)을 준다. 이것이 layout library `insert`의 규칙이므로, split한 card만 나누는 것과 grid를 balance하는 것 사이를 고르는 설정은 없다: grid 전체의 balance는 split이 건드리지 않은 card를 바꾸었고, 고른 row는 규칙 자체로 고르게 남는다.
-- drop은 점을 담는 가장 안쪽 box에서 결정된다: content card는 grid의 `zoneAt`으로, 그 밖에는 가장 안쪽 group 테두리가 `zoneAt`의 edge 비율로 결정한다. 사람은 pointer 아래의 box를 겨누므로, group card의 바깥 4분의 1은 그 안의 card나 테두리 안에 있는 점을 가져가지 않는다. group card의 side는 그 테두리와 그 card 사이 gap에서 닿으며, 새 종류의 zone은 더해지지 않는다.
+- drop은 가장 안쪽 box 하나가 아니라 한 화면 line을 공유하는 side의 띠로, 가장 바깥 node부터 정해진다. 가장 안쪽 box는 pointer 아래의 box에만 side를 주었으므로, card와 같은 line에서 끝나는 level, 중첩된 group의 cut, plane의 root에 닿는 점이 없었고 kid의 run은 target이 없었다. 띠는 card가 그것을 담는 동안 표준 폭을 유지하고 그렇지 않으면 한 비율로 좁아지며, side는 거리를 그 side가 가진 거리로 나눈 값으로 고른다. 고정 폭으로는 한 line에 중첩된 side가 많은 최소 크기의 card에서 모든 side에 닿을 수 없기(I4) 때문이다.
 - group card는 group으로서 전체 화면이 된다. 사람은 card 하나를 보이듯 작업의 상자 하나를 보이므로, 그 사각형이 그 안의 모든 card와 header와 함께 작업 영역을 덮는다. 전체 화면인 동안 layout은 전체 화면 card의 규칙 하나대로 그 안에서도 밖에서도 바뀌지 않는다.
 - group card는 focus ring을 받지 않는다. ring은 surface의 keyboard를 쥐는데 group card에는 surface가 없기 때문이다. group card의 focus는 그 첫 content card로 간다.
 - focus를 받은 card를 담은 group card는 frame에 그것을 보이며, level마다 `group-focus-fade`만큼 옅어진다. 중첩된 group에서 card 하나의 ring만으로는 지금 일하는 곳을 어느 group이 담는지 보이지 않고, 모든 frame에 온전한 색의 ring을 그리면 어느 card가 keyboard를 쥐는지 보이지 않기 때문이다. 비율은 0.6이므로 card에서 두 level 위의 frame도 focus 색의 36 percent를 받는다. 이 표시는 frame의 선 색을 바꾸고 자기 선을 그리지 않는다. seam에서 frame 옆에 두 번째 선이 있으면 선이 seam보다 두꺼워지기 때문이다.
@@ -260,3 +320,25 @@ review는 다음 반론에 답했다.
 - layout library의 balance는 배치를 유지한다고 여겨졌지만 card를 다른 line에 놓을 수 있고, group이 있는 space의 balance가 group card를 다른 group의 cell 위에 두었다. 그것을 대신한 모든 slot의 같은 몫은 모든 line index를 유지했으므로, 절반씩 만든 row는 그 line의 절반들로 남았고 header를 가진 group card는 그 member를 형제보다 짧게 그렸다. balance는 child가 card와 group card인 tree에서 모든 cut의 모든 child에 같은 몫을 준다. 그래서 어떤 cut도 group card를 가로지르지 않고, group card의 header는 그 몫 안에 있으며, 결과는 배치를 만든 operation의 순서가 아니라 배치에 달려 있다. balance와 boundary 가운데 맞춤을 포함한 grid의 모든 결과는 같은 group 사각형 검사를 거치며, seed가 정해진 무작위 operation 순서가 매 단계 뒤에 불변식을 검사한다.
 - 반론: 모든 child의 같은 몫은 중첩된 group card 안의 card를 바깥 group 옆의 card보다 짧게 그린다. 각 header가 자기 group card의 몫 안에 있기 때문이다. 답: 몫은 cut의 child의 몫이고, 사람은 그것을 group card의 사각형으로 본다. content card를 최소 아래로 그릴 balance는 모든 operation처럼 거부되며 그 card를 밝힌다.
 - 거부된 split이나 group은 거부 문구가 content card를 가리키도록 최소 없이 다시 실행되었다. library가 group card가 box와 head를 더하기 전에 split을 판정했기 때문이다. 두 번째 실행은 library의 답을 우회한다. group은 box와 그 head를 포함하는 library의 operation 하나이고, library는 최소보다 작은 가장 깊은 node를 그려진 크기로 가리키므로 한 번의 실행이 거부를 준다.
+
+크기 규칙은 다음과 같이 정해졌다.
+
+- space의 모든 layout operation은 크기 규칙 하나, 곧 저장된 tree에 대한 REMOVE와 ADD의 조합([크기 규칙](#크기-규칙))을 따르며, 이 규칙은 layout operation의 manual(F961)에서 골랐다. 그것은 operation마다의 규칙을 대체한다. 뺀 card는 fill order에 따라 이웃 하나에 공간을 주었고, split은 split한 card만 반으로 나눴고, 놓인 card는 더 얇은 이웃의 절반을 가졌으므로, 같은 크기의 row가 operation마다 같지 않게 되었고 경우마다 자기 분기가 필요했다. 규칙 하나로 고른 row는 모든 add와 remove 뒤에도 고르게 남고, 방금 더한 node의 remove는 fraction을 되돌리며, 모든 operation은 case 한 벌이 TypeScript와 Go에서 검사하는 조합이다. 규칙은 저장된 tree를 유일한 형태로 함께 가진다. space layout, `environment.json`의 grid(`{root}`), `core.layout`의 보고는 tree만 담으며, split한 card를 나누는 것과 grid를 balance하는 것 사이를 고르던 설정 `cardSplit`은 제거되었다.
+- 모든 규칙은 fraction으로 일한다. kid는 자기 level의 extent에서 고정 비용, 곧 corridor, fixed card, box의 head와 frame을 뺀 것의 자기 fraction으로 그려지며, gap의 변경은 모든 fraction을 유지한다. fixed card는 그 level의 비용이고, fixed card가 아닌 kid의 px 크기는 fraction을 받는 kid와 나누며 그들에게 `minSize` 하나를 남긴다. 그러면 operation이 kid 안에 더하거나 빼는 비용을 fraction을 받는 kid가 내고, fixed card는 그 전과 뒤에 같은 크기로 그려지기 때문이다.
+- group card의 생성은 그 그려진 결과로 판정하는 library의 operation 하나이고, 거부는 operation이 최소 아래로 옮기는 가장 깊은 node를 그 content의 크기로 밝힌다. 최소 없이 다시 실행하는 두 번째 run은 library 대신 답했고 결코 그려지지 않는 크기를 밝혔기 때문이다.
+- canonical 병합은 그려진 크기를 유지한다. kid가 px 크기를 유지하는 cut에 fraction을 받는 kid를 들이는 합침은 fixed card가 아닌 각 px kid를 REMOVE가 그것을 줄이기 전에 그 그려진 크기로 쓴다. 더 크게 그려졌던 px kid가 저장된 크기로 돌아가면 그 안의 card가 넓이 없이 남았기 때문이다.
+
+크기 규칙의 review는 다음 반론에 답했다.
+
+- 반론: 사각형에서 tree를 읽는 규칙은 line이 우연히 맞춰질 때 결과가 바뀐다. 답, 받아들임: 저장된 layout은 canonical tree이고 사각형은 그것에서 나온다.
+- 반론: 모든 operation에서 고르게 남는 고른 level은 모든 layout에 대한 불변식 하나로 기술할 수 없다. 답, 받아들임: I7은 각 primitive가 유지하는 비율을 기술한다. 고름은 고른 level에서 그것으로부터 따라 나오며, I10은 역을 기술한다.
+- 반론: move가 지나가는 동안 member 하나인 group card는 drop target을 가질 수 없다. 답, 받아들임: group card는 target이 정해진 뒤 operation이 commit될 때 줄어든다.
+- 반론: card마다의 최소는 중첩된 group card의 header와 gap을 놓친다. 답, 받아들임: 최소는 header와 gap을 고정 비용으로 재귀적으로 계산되며, 거부는 그 node를 밝힌다.
+- 반론: 사람이 고르지 않게 크기를 정한 card에 drop할 때 같은 몫은 그 크기 조정을 없애므로, drop은 어디서나 target의 절반을 가져야 한다. 답, 일부 받아들임: 모든 add에 규칙 하나가 성립하지만, 고르지 않은 level에서는 target만 절반을 내고, 고른 level에서 split 버튼과 agent open은 같은 몫으로 넣는다. 반복된 split이 고르게 남기 때문이다(F957).
+- 반론: 제거 뒤 tree에서 계산한 target은 pointer 아래에서 움직인다. 답, 받아들임: hit 영역은 현재 layout에 그려진다. 결과만 제거 뒤에 계산되며 빈 slot이 target이다.
+- 반론: 한 화면 line 위의 중첩된 side는 구별할 수 없다. 답, 받아들임: 그것은 깊이 순서의 띠를 받고, 같은 결과는 한 띠를 공유하며, run은 drag가 line에 들어온 anchor로 고르고, 표준 폭에 너무 작은 card는 그 띠를 한 비율로 좁힌다.
+- 반론: group header의 drop은 side가 필요하고, drop의 side에 대한 비율 규칙은 모양에 따라 다르게 정한다. 답, 받아들임: 조합 표는 group card의 header와 tab을 나열하며, 그것은 group card에 대한 `core.card.move` `centre`의 side인 그 plane의 root 오른쪽 끝에 더하고, 비율 규칙은 남지 않는다.
+- 반론: 가장자리 drop은 새 card에 preview가 보이는 zone의 크기를 줄 수 있다. 답, 거부함: M은 언제나 그것이 들어간 level의 같은 몫을 받는다. 둘로 된 새 level은 1/2을 주므로 가장자리도 다른 모든 add와 같은 규칙을 따른다.
+- 반론: 사람이 크기를 정한 고르지 않은 level은 모든 kid가 add를 낼 때 그 크기 조정을 잃는다. 답, 받아들임: 고르지 않은 level에서는 N만 내고, 다른 모든 kid는 크기를 유지한다.
+- 반론: level이 줄어들 때 원래와 target level 밖의 변경을 배제할 수 없다. 답, 받아들임: I8은 canonical 병합 뒤의 국소성을 기술한다.
+- 반론: I7과 I10은 I1, I2처럼 그려진 크기로 판정할 수 있다. 답: 그려진 비율은 저장된 비율이 아니다. cut은 kid에게 fraction을 주기 전에 고정 비용을 먼저 빼고, 그 비용은 gap, head, node 주변의 kid에 따라 바뀐다. 그래서 그려진 비율의 기준은 fraction이 정확한 layout을 실패로 판정하고, 비용을 상쇄하도록 fraction을 고쳐 쓴 layout만 통과시켰다. I7과 I10은 저장된 tree의 fraction으로 판정하고, I1과 I2는 그려진 사각형으로 판정한다.
