@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F982-7: F982-9와 F982-11의 feature link는 `native/darwin/src/image_region.m`의 key status 관찰과 focus 알림의 input transaction, 그리고 `native/darwin/tests/image_region_test.m`의 두 TEST 7b 검사를 가리킨다. F982-7, F982-8, F982-10은 terminal sidecar와 plugin이 구현하고 core는 그 spec과 case만 가지므로 core capability가 없는 완료로 나열된다. 검증: `make check-tests`가 다섯 항목에 `completed capability has no feature link`로 실패했고 통과한다.
 - F966-1-1-1-1 (card를 닫는 drop의 preview, Go): card의 유일한 tab을 다른 card의 가운데나 tab strip에 놓는 drop의 preview는 놓기가 만들듯 tab이 떠나는 card가 닫힌 뒤의 target 사각형이다.
 - F966-3-1-4-6 (exchange, page layout library): `exchange`는 각 자리의 그려진 크기를 유지한다. exchange 전에 두 자리의 cut의 각 kid의 자리 크기를 읽고, 자리에 들어오는 node는 그 크기에서 자기 frame과 head를 뺀 크기를 받으므로, content card와 바꾼 group card가 더는 그 frame만큼 자리를 키우지 않는다. cuts의 `Input`은 새 member `frame`으로 node의 frame을 읽는다.
 - F966-2-8 (tree 위의 창 검사): 창 검사와 benchmark case는 `core.layout`의 `state.cards`와 `groups` 목록 대신 card의 grid line과 group card를 `core.grid`에서 읽고, card의 저장된 data를 cut의 kid와 box의 inner node를 따르는 `e2e/stored-layout.mjs`의 `storedCard`와 `storedCards`로 읽는다. 검증: `e2e/test/stored-layout.test.mjs`가 module이 생기기 전에 실패했고 통과한다. 창 검사는 실행하지 않았다.
