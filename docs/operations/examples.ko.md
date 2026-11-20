@@ -456,7 +456,7 @@ Rust에서 `TEST`는 정규식이나 `|`로 잇는 목록이 아니라 완전한
 
 ## 커밋 hook
 
-`make install-hooks`는 checkout의 hook을 설정하며, workspace의 모든 저장소가 자기 hook을 가진다. commit-msg hook은 커밋 메시지 형식과 용어를 검사한다. pre-commit hook은 기록과 용어 검사를 실행한다. pre-push hook은 `make check-push`를 실행해 push가 게시하는 커밋의 메시지와 체크리스트 이력(`make check-checklist-history`)을 검사한다. 게시된 커밋은 그대로 남기 때문이다. CI는 각 push와 pull request의 커밋을 `make check-commits`와 `make check-checklist-history`로 검사하고, 그 밖의 모든 검사는 push된 커밋에서 실행한다. release gate는 green 실행만 release한다. `make check-docs`는 저장소에 관한 사실이 아닌 내용을 적은 기록 줄을 각각 보고한다.
+`make install-hooks`는 checkout의 hook을 설정하며, workspace의 모든 저장소가 자기 hook을 가진다. commit-msg hook은 커밋 메시지 형식과 용어를 검사한다. pre-commit hook은 기록과 용어 검사를 실행한다. pre-push hook은 `make check-push`를 실행해 push가 게시하는 커밋의 메시지와 체크리스트 이력(`make check-checklist-history`)을 검사한다. 게시된 커밋은 그대로 남기 때문이다. 또 working tree의 Rust와 Go source format(`make check-rust-format`, `make check-go-format`)을 검사한다. format되지 않은 source가 main에 닿으면 CI의 format 단계가 실패하기 때문이다. CI는 각 push와 pull request의 커밋을 `make check-commits`와 `make check-checklist-history`로 검사하고, 그 밖의 모든 검사는 push된 커밋에서 실행한다. release gate는 green 실행만 release한다. `make check-docs`는 저장소에 관한 사실이 아닌 내용을 적은 기록 줄을 각각 보고한다.
 
 커밋 메시지는 `type(scope): Subject (#<체크리스트 ID>)` 형식을 쓴다. type은 `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore` 중 하나다. 제목은 대문자로 시작하는 명령문이고 50자 이내이며 마침표로 끝내지 않는다. 빈 줄 뒤 본문은 비우지 않고 72자에서 줄을 바꾸며 무엇을 왜 바꿨는지 적는다. 커밋 메시지에는 어떤 꼬리말도 없다(체크리스트 꼬리말, 자동 생성 표시, 공동 작성자 트레일러, 서명 줄, 세션 링크 없음). 모든 커밋의 작성자는 `min-0-max <max@blue.tools>`다. 게시된 커밋 메시지는 보존하며, 이 형식은 새 커밋에 적용한다.
 

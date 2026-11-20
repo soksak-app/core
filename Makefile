@@ -47,13 +47,17 @@ install-hooks:
 # Runs before a push (the pre-push hook of `make install-hooks`): the commit messages of RANGE, because a published commit message is kept,
 # and the checklist history of RANGE, because a published commit that reopens a closed item or removes an open one is kept too: the
 # kit compares each commit of RANGE with its first parent, which the check of the working tree against HEAD does not see after a rebase.
-# CI runs every other check on the pushed commits, a later commit corrects a failure, and the release gate releases only a green run.
+# It also runs the Rust and Go format checks of the working tree, because an unformatted source that reaches main fails the format
+# steps of CI (F1011). CI runs every other check on the pushed commits, a later commit corrects a failure, and the release gate
+# releases only a green run.
 # The pre-push hook sets RANGE to the commits of each pushed ref (scripts/push-range.mjs). Without RANGE, the commits are origin/main..HEAD:
 # the commits that the remote main branch does not have. This range exists on every branch, while @{upstream}..HEAD fails with git exit 128
 # on a branch without an upstream, which a new branch has until its first push.
 check-push:
 	@$(MAKE) --no-print-directory check-commits RANGE="$(or $(RANGE),origin/main..HEAD)"
 	@$(MAKE) --no-print-directory check-checklist-history RANGE="$(or $(RANGE),origin/main..HEAD)"
+	@$(MAKE) --no-print-directory check-rust-format
+	@$(MAKE) --no-print-directory check-go-format
 
 # Runs before a push every static check that the CI jobs of linux-node, equivalence and the host jobs run through make, in CI order, and stops at the first failure (scripts/check-preflight.mjs).
 check-preflight:

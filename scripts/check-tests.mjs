@@ -289,6 +289,13 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F1011",
+    implementation: [{ file: "Makefile", symbol: "@$(MAKE) --no-print-directory check-rust-format" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs the commit message, checklist history and format checks, and ci runs them on the range of its event with the structure, format and clippy checks" }],
+    expected: "A push runs the Rust and Go format checks besides the commit message and checklist history checks, so an unformatted source does not reach main.",
+    levels: ["unit"],
+  },
+  {
     id: "F1009",
     implementation: [
       { file: "native/darwin/src/image_region.m", symbol: "static IOSurfaceRef takeKeptSurface(" },
@@ -4048,7 +4055,7 @@ const FEATURE_LINKS = [
       { file: "Makefile", symbol: "check-checklist-history:" },
       { file: "scripts/check-docs.mjs", symbol: "import { checkCompletedItems, retiredChecklistItems } from \"@soksak/kit/checklist\";" },
     ],
-    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs only the commit message and checklist history checks, and ci runs them on the range of its event with the structure, format and clippy checks" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs the commit message, checklist history and format checks, and ci runs them on the range of its event with the structure, format and clippy checks" }],
     expected: "The checklist checks come from the pinned kit, and a push and CI check the checklist history of their range.",
     levels: ["unit"],
   },
@@ -9767,7 +9774,7 @@ const FEATURE_LINKS = [
   {
     id: "F222",
     implementation: [{ file: ".githooks/pre-push", symbol: "check-push" }],
-    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs only the commit message and checklist history checks, and ci runs them on the range of its event with the structure, format and clippy checks" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs the commit message, checklist history and format checks, and ci runs them on the range of its event with the structure, format and clippy checks" }],
     expected: "The pre-push hook runs make -C with the form the workflow test requires, with the range of the pushed refs.",
     levels: ["unit"],
   },
@@ -10301,7 +10308,7 @@ const FEATURE_LINKS = [
   {
     id: "F170",
     implementation: [{ file: "Makefile", symbol: "check-push:" }],
-    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs only the commit message and checklist history checks, and ci runs them on the range of its event with the structure, format and clippy checks" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs the commit message, checklist history and format checks, and ci runs them on the range of its event with the structure, format and clippy checks" }],
     expected: "A push checks its commit messages and its checklist history before it leaves the checkout, and CI runs both on the range of its event with the structure, format and clippy checks.",
     levels: ["unit"],
   },
@@ -14648,7 +14655,7 @@ const FEATURE_LINKS = [
   {
     id: "F274",
     implementation: [{ file: "Makefile", symbol: "because a published commit message is kept" }],
-    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs only the commit message and checklist history checks, and ci runs them on the range of its event with the structure, format and clippy checks" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs the commit message, checklist history and format checks, and ci runs them on the range of its event with the structure, format and clippy checks" }],
     expected: "A push checks its commit messages and its checklist history before it leaves the checkout, and CI runs every other check.",
     levels: ["unit"],
   },

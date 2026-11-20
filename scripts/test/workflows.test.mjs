@@ -81,7 +81,7 @@ test('the release workflow runs no stored data migration step and no release ste
   assert.equal(existsSync(join(ROOT, 'scripts', 'release-step.sh')), false, 'the release step script is removed');
 });
 
-test('the push check runs only the commit message and checklist history checks, and ci runs them on the range of its event with the structure, format and clippy checks', () => {
+test('the push check runs the commit message, checklist history and format checks, and ci runs them on the range of its event with the structure, format and clippy checks', () => {
   const ci = read('.github/workflows/ci.yml');
   const targets = (name) => {
     const step = steps(ci).find((item) => item.name === name);
@@ -96,10 +96,13 @@ test('the push check runs only the commit message and checklist history checks, 
   const makefile = read('Makefile');
   const recipe = /^check-push:[^\n]*\n((?:\t[^\n]*\n)+)/m.exec(makefile);
   assert.ok(recipe, 'the Makefile has no check-push target');
+  // An unformatted source that reaches main fails the format steps of CI, so the push also runs the Rust and Go format checks (F1011).
   assert.deepEqual(recipe[1].trim().split('\n').map((line) => line.trim()), [
     '@$(MAKE) --no-print-directory check-commits RANGE="$(or $(RANGE),origin/main..HEAD)"',
     '@$(MAKE) --no-print-directory check-checklist-history RANGE="$(or $(RANGE),origin/main..HEAD)"',
-  ], 'check-push runs a check other than the commit messages and the checklist history');
+    '@$(MAKE) --no-print-directory check-rust-format',
+    '@$(MAKE) --no-print-directory check-go-format',
+  ], 'check-push runs a check other than the commit messages, the checklist history and the Rust and Go format');
   // The range is one argument of the kit command, which splits it into its revision ranges.
   assert.match(makefile, /^check-checklist-history:\n\t@test -n "\$\(RANGE\)" \|\| [^\n]*\n\t@pnpm exec sok-check docs --range "\$\(RANGE\)"\n/m);
   const history = steps(ci).find((item) => item.name === 'Checklist history');

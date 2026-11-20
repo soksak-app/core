@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1011: `make check-push`, which the pre-push hook runs, runs `make check-rust-format` and `make check-go-format`, so a push of an unformatted Rust or Go source is refused before it reaches main. Verification: Red of the push check test of `scripts/test/workflows.test.mjs` and a passing `make check-push` on a commit with unformatted Rust and Go lines, then Green of the test, a failing `make check-push` on that commit for each language and a passing one after its revert.
 - F937-10-1 (head token, mygo): the group tree builds the layout token of its kept header answers again only after the grid or the tree changed, so a draw of the card heads without a layout change, as on a pointer move, formats no token.
 - F1010 (registered, held): the in-app check of the rule of sizes of F966 on the mygo, Wails and Tauri hosts waits for the final verification pass.
 - F966 (feature link): the test inventory links the completed rule of sizes to the layout operations and the insert and vacated-slot functions of both workbenches with their case, property and reach tests.
