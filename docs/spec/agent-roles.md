@@ -33,8 +33,14 @@ Measured with Claude Code 2.1.329 and Codex 0.171.0, both as interactive TUIs, i
 | 9 | Claude Code with no flag and the pointer in its first message; the file changed; a change message sent | The agent read the file, and after the change it read the file again and took the new role. |
 | 10 | `claude --model haiku --append-system-prompt-file <identity file>`, the identity file holding only the pointer and the rule to read it again after a change message | The agent read the role file; after the file changed and a change message was sent, it read the file again and took the new role. |
 | 11 | Claude Code 2.1.329 with `--permission-mode default`, with a Bash permission prompt open, and a change message sent during the prompt | `<plugin>.program` showed `{state: blocked, kind: permission}` and `<plugin>.messages` held the message with `{reason: blocked, kind: permission}` and `pending` 1, with nothing pasted. When the person closed the prompt with Esc, the message was injected and Claude Code acted on it. |
+| 12 | Claude Code 2.1.329, a new start in a folder whose `.claude/settings.json` has a `SessionStart` command hook; no login (probe-local configuration home) | The hook ran with `source` `startup` before the login check. |
+| 13 | Claude Code 2.1.329, `claude -p --resume ID` of the session of row 12 | The hook ran with `source` `resume`. |
+| 14 | Codex 0.171.0, a new `codex exec` in a folder trusted with `codex exec --trust` (probe-local configuration home); `.codex/hooks.json` with a `SessionStart` command hook | The hook ran with `source` `startup`; the run then stopped at the first model call with HTTP 401, because no login was present. |
+| 15 | Codex 0.171.0, `codex exec resume --last` of the session of row 14 | The hook ran with `source` `resume`. |
 
 Rows 3 and 7 show only that the agent follows a change message that names the new role; they do not show that the agent reads a file. Each row is one run. The rule against persistent memory is an instruction only; no measured launch option of either CLI disables memory.
+
+The `clear` and `compact` values of `SessionStart`, the `trigger` values of `PreCompact` and `PostCompact`, and the hooks of interactive sessions are not measured. The probe-local configuration homes hold no credentials, so the interactive Claude Code session stopped at its login screen and the Codex TUI exited before its first input. The credentials are in the default configuration folders, which the probe does not use. Codex 0.171.0 disables project-local configuration in an untrusted folder with a warning, and `codex exec --trust` enables it.
 
 Claude Code reports a permission prompt as `blocked` through the program status of [terminal state](terminal-state.md) (row 11), so the `blocked` hold of [messaging](messaging.md#hold-for-the-person) holds the change messages and reread requests while the prompt is open.
 

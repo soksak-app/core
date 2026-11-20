@@ -33,8 +33,14 @@ Claude Code 2.1.329와 Codex 0.171.0을 대화형 TUI로 측정했다. 측정은
 | 9 | flag 없이 첫 message에 경로를 넣은 Claude Code. 파일을 바꾸고 변경 message를 보냄 | agent는 파일을 읽었고, 변경 뒤에 다시 읽어 새 role을 따랐다. |
 | 10 | `claude --model haiku --append-system-prompt-file <identity file>`. identity 파일에는 경로와 변경 뒤 다시 읽으라는 규칙만 있음 | agent는 role 파일을 읽었고, 파일이 바뀌고 변경 message가 간 뒤 다시 읽어 새 role을 따랐다. |
 | 11 | 열린 Bash permission prompt가 있는 Claude Code 2.1.329(`--permission-mode default`)에, prompt 중에 변경 message를 보냄 | `<plugin>.program`이 `{state: blocked, kind: permission}`을 보였고, `<plugin>.messages`는 `{reason: blocked, kind: permission}`와 `pending` 1로 message를 보류했으며 아무것도 붙여 넣지 않았다. 사람이 Esc로 prompt를 닫자 message가 주입되었고 Claude Code가 그에 따라 행동했다. |
+| 12 | Claude Code 2.1.329, `.claude/settings.json`에 `SessionStart` command hook을 둔 folder에서 새로 시작. 로그인 없음(probe 전용 configuration home) | hook이 로그인 검사 전에 `source` `startup`으로 실행되었다. |
+| 13 | Claude Code 2.1.329, 12행 session에 `claude -p --resume ID` | hook이 `source` `resume`으로 실행되었다. |
+| 14 | Codex 0.171.0, `codex exec --trust`로 신뢰한 folder에서 새 `codex exec`(probe 전용 configuration home). `.codex/hooks.json`에 `SessionStart` command hook | hook이 `source` `startup`으로 실행되었다. 이후 실행은 로그인이 없어 첫 model 호출에서 HTTP 401로 멈추었다. |
+| 15 | Codex 0.171.0, 14행 session에 `codex exec resume --last` | hook이 `source` `resume`으로 실행되었다. |
 
 3행과 7행은 agent가 새 role을 지정하는 변경 message를 따른다는 것만 보여준다. 파일을 읽는다는 사실은 보여주지 않는다. 각 행은 한 번의 실행이다. persistent memory를 쓰지 말라는 규칙은 지시일 뿐이다. 측정된 launch 옵션 중 두 CLI의 memory를 끄는 옵션은 없다.
+
+`SessionStart`의 `clear`와 `compact` 값, `PreCompact`와 `PostCompact`의 `trigger` 값, 대화형 session의 hook은 측정하지 않았다. probe 전용 configuration home에는 자격 증명이 없어서 대화형 Claude Code session은 로그인 화면에서 멈추었고, Codex TUI는 첫 입력 전에 끝났다. 자격 증명은 기본 configuration folder에 있으며 probe는 그것을 쓰지 않는다. Codex 0.171.0은 신뢰하지 않은 folder의 project 설정을 경고와 함께 끄며, `codex exec --trust`가 이를 켠다.
 
 Claude Code는 permission prompt를 [terminal state](terminal-state.md)의 프로그램 상태로 `blocked`라고 보고한다(11행). 그래서 [messaging](messaging.md#hold-for-the-person)의 `blocked` 보류가 prompt가 열린 동안 변경 message와 reread request을 보류한다.
 
