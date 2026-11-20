@@ -27,7 +27,7 @@ function large() {
     for (let r = 0; r < 20; r++) kids.push({ share: 1 / 20, node: cards[r * 25 + c] });
     columns.push({ share: 1 / 25, node: { cut: "y", kids } });
   }
-  grid.replace({ root: { cut: "x", kids: columns }, paidBy: {} });
+  grid.replace({ root: { cut: "x", kids: columns } });
   return grid;
 }
 

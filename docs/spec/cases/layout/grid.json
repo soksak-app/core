@@ -1,5 +1,5 @@
 {
-"description":"The grid cases of the layout model. Each case builds a grid from state, the slicing tree {root, paidBy} of packages/soksak/docs/layout.md#the-model, and options and runs its steps in order: get and set read and write a property, any other call is the method of that name with args. A step with returns gives that value, numbers within a relative 1e-9; a step with throws fails with that message; a step with neither gives no value. A case with throws fails at the construction.",
+"description":"The grid cases of the layout model. Each case builds a grid from state, the slicing tree {root} of packages/soksak/docs/layout.md#the-model, and options and runs its steps in order: get and set read and write a property, any other call is the method of that name with args. A step with returns gives that value, numbers within a relative 1e-9; a step with throws fails with that message; a step with neither gives no value. A case with throws fails at the construction.",
 "cases":[
  {"name":"a grid without a state is one card filling the plane","steps":[
   {"call":"get","args":["gap"],"returns":24},
@@ -7,23 +7,21 @@
   {"call":"get","args":["grabSize"],"returns":11},
   {"call":"get","args":["snapDistance"],"returns":7},
   {"call":"get","args":["snap"],"returns":"merge"},
-  {"call":"get","args":["fillOrder"],"returns":"v"},
   {"call":"get","args":["width"],"returns":0},
   {"call":"get","args":["height"],"returns":0},
   {"call":"get","args":["cards"],"returns":[{"id":"card","c0":0,"c1":1,"r0":0,"r1":1,"fixed":false}]},
-  {"call":"toJSON","returns":{"root":{"card":"card","fixed":false},"paidBy":{}}},
+  {"call":"toJSON","returns":{"root":{"card":"card","fixed":false}}},
   {"call":"resize","args":[800,600]},
   {"call":"rects","returns":{"card":{"x":0,"y":0,"w":800,"h":600}}},
   {"call":"rules","returns":[]},
   {"call":"dividers","returns":[]}
  ]},
- {"name":"the options set the gap, the minimum, the grab size, the snap and the plane","options":{"gap":10,"minSize":50,"grabSize":9,"snapDistance":4,"snap":"off","fillOrder":"h","width":640,"height":480},"steps":[
+ {"name":"the options set the gap, the minimum, the grab size, the snap and the plane","options":{"gap":10,"minSize":50,"grabSize":9,"snapDistance":4,"snap":"off","width":640,"height":480},"steps":[
   {"call":"get","args":["gap"],"returns":10},
   {"call":"get","args":["minSize"],"returns":50},
   {"call":"get","args":["grabSize"],"returns":9},
   {"call":"get","args":["snapDistance"],"returns":4},
   {"call":"get","args":["snap"],"returns":"off"},
-  {"call":"get","args":["fillOrder"],"returns":"h"},
   {"call":"get","args":["width"],"returns":640},
   {"call":"get","args":["height"],"returns":480},
   {"call":"rects","returns":{"card":{"x":0,"y":0,"w":640,"h":480}}}
@@ -54,10 +52,6 @@
   {"call":"get","args":["snap"],"returns":"off"},
   {"call":"set","args":["snap","on"]},
   {"call":"get","args":["snap"],"returns":"off"},
-  {"call":"set","args":["fillOrder","h"]},
-  {"call":"get","args":["fillOrder"],"returns":"h"},
-  {"call":"set","args":["fillOrder","z"]},
-  {"call":"get","args":["fillOrder"],"returns":"h"},
   {"call":"resize","args":[-1,10]},
   {"call":"get","args":["width"],"returns":400},
   {"call":"resize","args":[300,200]},
@@ -65,7 +59,7 @@
   {"call":"get","args":["height"],"returns":200}
  ]},
  {"name":"the reads of a plane of three cards","options":{"width":1000,"height":600,"gap":12},"state":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","data":{"tabs":["t1"]}}},{"share":0.5,"node":{"card":"b"}}]}},{"share":0.5,"node":{"card":"c","fixed":true}}]}},"steps":[
-  {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false,"data":{"tabs":["t1"]}}},{"share":0.5,"node":{"card":"b","fixed":false}}]}},{"share":0.5,"node":{"card":"c","fixed":true}}]},"paidBy":{}}},
+  {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false,"data":{"tabs":["t1"]}}},{"share":0.5,"node":{"card":"b","fixed":false}}]}},{"share":0.5,"node":{"card":"c","fixed":true}}]}}},
   {"call":"rects","returns":{"a":{"x":0,"y":0,"w":494,"h":294},"b":{"x":506,"y":0,"w":494,"h":294},"c":{"x":0,"y":306,"w":1000,"h":294}}},
   {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":499.5,"y":0,"w":1,"h":600},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":499.5,"y":0,"w":1,"h":300},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":299.5,"w":1000,"h":1},{"key":"sy:1:0","axis":"y","line":1,"virtual":false,"x":0,"y":299.5,"w":1000,"h":1}]},
   {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":494,"y":0,"w":12,"h":294},{"key":"y:1:0","axis":"y","line":1,"x":0,"y":294,"w":1000,"h":12}]},
@@ -88,8 +82,6 @@
   {"call":"boundaryRange","args":["x",1],"returns":[102,898]},
   {"call":"boundaryRange","args":["y",1],"returns":[102,498]},
   {"call":"boundaryRange","args":["x",0],"returns":[0,0]},
-  {"call":"fill","args":["a"],"returns":{"side":"right","grow":"c0","cards":[{"id":"b","c0":1,"c1":2,"r0":0,"r1":1,"fixed":false}]}},
-  {"call":"fill","args":["c"],"returns":null},
   {"call":"canClose","args":["a"],"returns":true},
   {"call":"canClose","args":["c"],"returns":false},
   {"call":"canSplit","args":["a","x"],"returns":true},
@@ -134,16 +126,16 @@
   {"call":"setSize","args":["none","x",100],"returns":false},
   {"call":"setSize","args":["a","x",null],"returns":true},
   {"call":"card","args":["a"],"returns":{"id":"a","c0":0,"c1":1,"r0":0,"r1":1,"data":{"tabs":["t1"]},"fixed":false}},
-  {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false,"data":{"tabs":["t1"]}}},{"share":0.5,"node":{"card":"b","fixed":false,"data":{"note":"x","list":[1,2]}}}]}},{"share":0.5,"node":{"card":"c","fixed":true}}]},"paidBy":{}}}
+  {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false,"data":{"tabs":["t1"]}}},{"share":0.5,"node":{"card":"b","fixed":false,"data":{"note":"x","list":[1,2]}}}]}},{"share":0.5,"node":{"card":"c","fixed":true}}]}}}
  ]},
  {"name":"splits cut a card into two and the new card takes the far half","options":{"width":1200,"height":800,"gap":16,"minSize":80},"steps":[
   {"call":"split","args":["card","x"],"returns":"card-1"},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"card","fixed":false}},{"share":0.5,"node":{"card":"card-1","fixed":false}}]},"paidBy":{"card-1":"card"}}},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"card","fixed":false}},{"share":0.5,"node":{"card":"card-1","fixed":false}}]}}},
   {"call":"rects","returns":{"card":{"x":0,"y":0,"w":592,"h":800},"card-1":{"x":608,"y":0,"w":592,"h":800}}},
   {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":599.5,"y":0,"w":1,"h":800},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":599.5,"y":0,"w":1,"h":800}]},
   {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":592,"y":0,"w":16,"h":800}]},
   {"call":"split","args":["card","y",{"id":"lower","data":{"kind":"note"}}],"returns":"lower"},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"card","fixed":false}},{"share":0.5,"node":{"card":"lower","fixed":false,"data":{"kind":"note"}}}]}},{"share":0.5,"node":{"card":"card-1","fixed":false}}]},"paidBy":{"card-1":"card","lower":"card"}}},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"card","fixed":false}},{"share":0.5,"node":{"card":"lower","fixed":false,"data":{"kind":"note"}}}]}},{"share":0.5,"node":{"card":"card-1","fixed":false}}]}}},
   {"call":"rects","returns":{"card":{"x":0,"y":0,"w":592,"h":392},"card-1":{"x":608,"y":0,"w":592,"h":800},"lower":{"x":0,"y":408,"w":592,"h":392}}},
   {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":599.5,"y":0,"w":1,"h":800},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":599.5,"y":0,"w":1,"h":800},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":399.5,"w":1200,"h":1},{"key":"sy:1:0","axis":"y","line":1,"virtual":false,"x":0,"y":399.5,"w":600,"h":1}]},
   {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":592,"y":0,"w":16,"h":800},{"key":"y:1:0","axis":"y","line":1,"x":0,"y":392,"w":592,"h":16}]},
@@ -151,145 +143,131 @@
   {"call":"split","args":["card","x",{"id":"lower"}],"returns":null},
   {"call":"split","args":["none","x"],"returns":null},
   {"call":"split","args":["card","q"],"returns":null},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"card","fixed":false}},{"share":0.5,"node":{"card":"lower","fixed":false,"data":{"kind":"note"}}}]}},{"share":0.25,"node":{"card":"card-1","fixed":false}},{"share":0.25,"node":{"card":"card-2","fixed":false}}]},"paidBy":{"card-1":"card","lower":"card","card-2":"card-1"}}},
-  {"call":"rects","returns":{"card":{"x":0,"y":0,"w":592,"h":392},"card-1":{"x":608,"y":0,"w":284,"h":800},"lower":{"x":0,"y":408,"w":592,"h":392},"card-2":{"x":908,"y":0,"w":292,"h":800}}},
-  {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":599.5,"y":0,"w":1,"h":800},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":599.5,"y":0,"w":1,"h":800},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":899.5,"y":0,"w":1,"h":800},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":899.5,"y":0,"w":1,"h":800},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":399.5,"w":1200,"h":1},{"key":"sy:1:0","axis":"y","line":1,"virtual":false,"x":0,"y":399.5,"w":600,"h":1}]},
-  {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":592,"y":0,"w":16,"h":800},{"key":"x:2:0","axis":"x","line":2,"x":892,"y":0,"w":16,"h":800},{"key":"y:1:0","axis":"y","line":1,"x":0,"y":392,"w":592,"h":16}]},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.3333333333333333,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"card","fixed":false}},{"share":0.5,"node":{"card":"lower","fixed":false,"data":{"kind":"note"}}}]}},{"share":0.3333333333333333,"node":{"card":"card-1","fixed":false}},{"share":0.3333333333333333,"node":{"card":"card-2","fixed":false}}]}}},
+  {"call":"rects","returns":{"card":{"x":0,"y":0,"w":389.3333333333333,"h":392},"lower":{"x":0,"y":408,"w":389.3333333333333,"h":392},"card-1":{"x":405.3333333333333,"y":0,"w":389.3333333333333,"h":800},"card-2":{"x":810.6666666666666,"y":0,"w":389.33333333333337,"h":800}}},
+  {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":396.8333333333333,"y":0,"w":1,"h":800},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":396.8333333333333,"y":0,"w":1,"h":800},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":802.1666666666666,"y":0,"w":1,"h":800},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":802.1666666666666,"y":0,"w":1,"h":800},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":399.5,"w":1200,"h":1},{"key":"sy:1:0","axis":"y","line":1,"virtual":false,"x":0,"y":399.5,"w":397.3333333333333,"h":1}]},
+  {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":389.3333333333333,"y":0,"w":16,"h":800},{"key":"x:2:0","axis":"x","line":2,"x":794.6666666666666,"y":0,"w":16,"h":800},{"key":"y:1:0","axis":"y","line":1,"x":0,"y":392,"w":389.3333333333333,"h":16}]},
   {"call":"canSplit","args":["card","x"],"returns":true},
   {"call":"canSplit","args":["card","y"],"returns":true}
  ]},
  {"name":"a split toward a side puts the new card on that side","options":{"width":900,"height":700,"gap":10,"minSize":60},"steps":[
   {"call":"splitToward","args":["card","left"],"returns":"card-1"},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"card-1","fixed":false}},{"share":0.5,"node":{"card":"card","fixed":false}}]},"paidBy":{"card-1":"card"}}},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"card-1","fixed":false}},{"share":0.5,"node":{"card":"card","fixed":false}}]}}},
   {"call":"rects","returns":{"card":{"x":455,"y":0,"w":445,"h":700},"card-1":{"x":0,"y":0,"w":445,"h":700}}},
   {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":449.5,"y":0,"w":1,"h":700},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":449.5,"y":0,"w":1,"h":700}]},
   {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":444.5,"y":0,"w":11,"h":700}]},
   {"call":"splitToward","args":["card","top",{"id":"up"}],"returns":"up"},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"card-1","fixed":false}},{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"up","fixed":false}},{"share":0.5,"node":{"card":"card","fixed":false}}]}}]},"paidBy":{"card-1":"card","up":"card"}}},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"card-1","fixed":false}},{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"up","fixed":false}},{"share":0.5,"node":{"card":"card","fixed":false}}]}}]}}},
   {"call":"rects","returns":{"card":{"x":455,"y":355,"w":445,"h":345},"card-1":{"x":0,"y":0,"w":445,"h":700},"up":{"x":455,"y":0,"w":445,"h":345}}},
   {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":449.5,"y":0,"w":1,"h":700},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":449.5,"y":0,"w":1,"h":700},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":349.5,"w":900,"h":1},{"key":"sy:1:1","axis":"y","line":1,"virtual":false,"x":450,"y":349.5,"w":450,"h":1}]},
   {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":444.5,"y":0,"w":11,"h":700},{"key":"y:1:1","axis":"y","line":1,"x":455,"y":344.5,"w":445,"h":11}]},
   {"call":"splitToward","args":["card","right"],"returns":"card-2"},
   {"call":"splitToward","args":["up","bottom"],"returns":"card-3"},
   {"call":"splitToward","args":["card","middle"],"returns":null},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"card-1","fixed":false}},{"share":0.5,"node":{"cut":"y","kids":[{"share":0.25,"node":{"card":"up","fixed":false}},{"share":0.25,"node":{"card":"card-3","fixed":false}},{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"card","fixed":false}},{"share":0.5,"node":{"card":"card-2","fixed":false}}]}}]}}]},"paidBy":{"card-1":"card","up":"card","card-2":"card","card-3":"up"}}},
-  {"call":"rects","returns":{"card":{"x":455,"y":355,"w":215,"h":345},"card-1":{"x":0,"y":0,"w":445,"h":700},"up":{"x":455,"y":0,"w":445,"h":170},"card-2":{"x":680,"y":355,"w":220,"h":345},"card-3":{"x":455,"y":180,"w":445,"h":165}}},
-  {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":449.5,"y":0,"w":1,"h":700},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":449.5,"y":0,"w":1,"h":700},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":674.5,"y":0,"w":1,"h":700},{"key":"sx:2:2","axis":"x","line":2,"virtual":false,"x":674.5,"y":350,"w":1,"h":350},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":174.5,"w":900,"h":1},{"key":"sy:1:1","axis":"y","line":1,"virtual":false,"x":450,"y":174.5,"w":450,"h":1},{"key":"vy:2","axis":"y","line":2,"virtual":true,"x":0,"y":349.5,"w":900,"h":1},{"key":"sy:2:1","axis":"y","line":2,"virtual":false,"x":450,"y":349.5,"w":450,"h":1}]},
-  {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":444.5,"y":0,"w":11,"h":700},{"key":"x:2:2","axis":"x","line":2,"x":669.5,"y":355,"w":11,"h":345},{"key":"y:1:1","axis":"y","line":1,"x":455,"y":169.5,"w":445,"h":11},{"key":"y:2:1","axis":"y","line":2,"x":455,"y":344.5,"w":445,"h":11}]}
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"card-1","fixed":false}},{"share":0.5,"node":{"cut":"y","kids":[{"share":0.3333333333333333,"node":{"card":"up","fixed":false}},{"share":0.3333333333333333,"node":{"card":"card-3","fixed":false}},{"share":0.3333333333333333,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"card","fixed":false}},{"share":0.5,"node":{"card":"card-2","fixed":false}}]}}]}}]}}},
+  {"call":"rects","returns":{"card-1":{"x":0,"y":0,"w":445,"h":700},"up":{"x":455,"y":0,"w":445,"h":226.66666666666666},"card-3":{"x":455,"y":236.66666666666666,"w":445,"h":226.66666666666666},"card":{"x":455,"y":473.3333333333333,"w":217.5,"h":226.66666666666669},"card-2":{"x":682.5,"y":473.3333333333333,"w":217.5,"h":226.66666666666669}}},
+  {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":449.5,"y":0,"w":1,"h":700},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":449.5,"y":0,"w":1,"h":700},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":677,"y":0,"w":1,"h":700},{"key":"sx:2:2","axis":"x","line":2,"virtual":false,"x":677,"y":468.3333333333333,"w":1,"h":231.66666666666669},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":231.16666666666666,"w":900,"h":1},{"key":"sy:1:1","axis":"y","line":1,"virtual":false,"x":450,"y":231.16666666666666,"w":450,"h":1},{"key":"vy:2","axis":"y","line":2,"virtual":true,"x":0,"y":467.8333333333333,"w":900,"h":1},{"key":"sy:2:1","axis":"y","line":2,"virtual":false,"x":450,"y":467.8333333333333,"w":450,"h":1}]},
+  {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":444.5,"y":0,"w":11,"h":700},{"key":"x:2:2","axis":"x","line":2,"x":672,"y":473.3333333333333,"w":11,"h":226.66666666666669},{"key":"y:1:1","axis":"y","line":1,"x":455,"y":226.16666666666666,"w":445,"h":11},{"key":"y:2:1","axis":"y","line":2,"x":455,"y":462.8333333333333,"w":445,"h":11}]}
  ]},
  {"name":"a split refuses halves below the minimum","options":{"width":300,"height":200,"gap":8,"minSize":120},"steps":[
   {"call":"canSplit","args":["card","x"],"returns":true},
   {"call":"split","args":["card","x"],"returns":"card-1"},
   {"call":"canSplit","args":["card","y"],"returns":false},
   {"call":"split","args":["card","y"],"returns":null},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"card","fixed":false}},{"share":0.5,"node":{"card":"card-1","fixed":false}}]},"paidBy":{"card-1":"card"}}}
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"card","fixed":false}},{"share":0.5,"node":{"card":"card-1","fixed":false}}]}}}
  ]},
  {"name":"a split of a card with a px size divides the size","options":{"width":1000,"height":800,"gap":8,"minSize":40},"state":{"root":{"cut":"x","kids":[{"share":0.3,"node":{"card":"side","width":240}},{"share":0.7,"node":{"card":"main"}}]}},"steps":[
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.3,"node":{"card":"side","fixed":false,"width":240}},{"share":0.7,"node":{"card":"main","fixed":false}}]},"paidBy":{}}},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.3,"node":{"card":"side","fixed":false,"width":240}},{"share":0.7,"node":{"card":"main","fixed":false}}]}}},
   {"call":"rects","returns":{"side":{"x":0,"y":0,"w":240,"h":800},"main":{"x":248,"y":0,"w":752,"h":800}}},
   {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":243.5,"y":0,"w":1,"h":800},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":243.5,"y":0,"w":1,"h":800}]},
   {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":238.5,"y":0,"w":11,"h":800}]},
   {"call":"split","args":["side","x"],"returns":"card-1"},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.15,"node":{"card":"side","fixed":false,"width":120}},{"share":0.15,"node":{"card":"card-1","fixed":false,"width":120}},{"share":0.7,"node":{"card":"main","fixed":false}}]},"paidBy":{"card-1":"side"}}},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.15,"node":{"card":"side","fixed":false,"width":120}},{"share":0.15,"node":{"card":"card-1","fixed":false,"width":120}},{"share":0.7,"node":{"card":"main","fixed":false}}]}}},
   {"call":"rects","returns":{"side":{"x":0,"y":0,"w":120,"h":800},"main":{"x":256,"y":0,"w":744,"h":800},"card-1":{"x":128,"y":0,"w":120,"h":800}}},
   {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":123.5,"y":0,"w":1,"h":800},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":123.5,"y":0,"w":1,"h":800},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":251.5,"y":0,"w":1,"h":800},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":251.5,"y":0,"w":1,"h":800}]},
   {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":118.5,"y":0,"w":11,"h":800},{"key":"x:2:0","axis":"x","line":2,"x":246.5,"y":0,"w":11,"h":800}]},
   {"call":"split","args":["side","y"],"returns":"card-2"},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.15,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"side","fixed":false,"width":120}},{"share":0.5,"node":{"card":"card-2","fixed":false,"width":120}}]}},{"share":0.15,"node":{"card":"card-1","fixed":false,"width":120}},{"share":0.7,"node":{"card":"main","fixed":false}}]},"paidBy":{"card-1":"side","card-2":"side"}}},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.15,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"side","fixed":false,"width":120}},{"share":0.5,"node":{"card":"card-2","fixed":false,"width":120}}]}},{"share":0.15,"node":{"card":"card-1","fixed":false,"width":120}},{"share":0.7,"node":{"card":"main","fixed":false}}]}}},
   {"call":"rects","returns":{"side":{"x":0,"y":0,"w":120,"h":396},"main":{"x":256,"y":0,"w":744,"h":800},"card-1":{"x":128,"y":0,"w":120,"h":800},"card-2":{"x":0,"y":404,"w":120,"h":396}}},
   {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":123.5,"y":0,"w":1,"h":800},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":123.5,"y":0,"w":1,"h":800},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":251.5,"y":0,"w":1,"h":800},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":251.5,"y":0,"w":1,"h":800},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":399.5,"w":1000,"h":1},{"key":"sy:1:0","axis":"y","line":1,"virtual":false,"x":0,"y":399.5,"w":124,"h":1}]},
   {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":118.5,"y":0,"w":11,"h":800},{"key":"x:2:0","axis":"x","line":2,"x":246.5,"y":0,"w":11,"h":800},{"key":"y:1:0","axis":"y","line":1,"x":0,"y":394.5,"w":120,"h":11}]},
   {"call":"split","args":["main","y"],"returns":"card-3"},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.15,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"side","fixed":false,"width":120}},{"share":0.5,"node":{"card":"card-2","fixed":false,"width":120}}]}},{"share":0.15,"node":{"card":"card-1","fixed":false,"width":120}},{"share":0.7,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"main","fixed":false}},{"share":0.5,"node":{"card":"card-3","fixed":false}}]}}]},"paidBy":{"card-1":"side","card-2":"side","card-3":"main"}}},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.15,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"side","fixed":false,"width":120}},{"share":0.5,"node":{"card":"card-2","fixed":false,"width":120}}]}},{"share":0.15,"node":{"card":"card-1","fixed":false,"width":120}},{"share":0.7,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"main","fixed":false}},{"share":0.5,"node":{"card":"card-3","fixed":false}}]}}]}}},
   {"call":"rects","returns":{"side":{"x":0,"y":0,"w":120,"h":396},"main":{"x":256,"y":0,"w":744,"h":396},"card-1":{"x":128,"y":0,"w":120,"h":800},"card-2":{"x":0,"y":404,"w":120,"h":396},"card-3":{"x":256,"y":404,"w":744,"h":396}}},
   {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":123.5,"y":0,"w":1,"h":800},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":123.5,"y":0,"w":1,"h":800},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":251.5,"y":0,"w":1,"h":800},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":251.5,"y":0,"w":1,"h":800},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":399.5,"w":1000,"h":1},{"key":"sy:1:0","axis":"y","line":1,"virtual":false,"x":0,"y":399.5,"w":124,"h":1},{"key":"sy:1:2","axis":"y","line":1,"virtual":false,"x":252,"y":399.5,"w":748,"h":1}]},
   {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":118.5,"y":0,"w":11,"h":800},{"key":"x:2:0","axis":"x","line":2,"x":246.5,"y":0,"w":11,"h":800},{"key":"y:1:0","axis":"y","line":1,"x":0,"y":394.5,"w":120,"h":11},{"key":"y:1:2","axis":"y","line":1,"x":256,"y":394.5,"w":744,"h":11}]}
  ]},
- {"name":"a close returns the space to the card it came from","options":{"width":1200,"height":800,"gap":12,"minSize":60},"steps":[
+ {"name":"a close scales the other kids of its cut by one factor","options":{"width":1200,"height":800,"gap":12,"minSize":60},"steps":[
   {"call":"split","args":["card","x"],"returns":"card-1"},
   {"call":"split","args":["card-1","x"],"returns":"card-2"},
   {"call":"split","args":["card","y"],"returns":"card-3"},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"card","fixed":false}},{"share":0.5,"node":{"card":"card-3","fixed":false}}]}},{"share":0.25,"node":{"card":"card-1","fixed":false}},{"share":0.25,"node":{"card":"card-2","fixed":false}}]},"paidBy":{"card-1":"card","card-2":"card-1","card-3":"card"}}},
-  {"call":"rects","returns":{"card":{"x":0,"y":0,"w":594,"h":394},"card-1":{"x":606,"y":0,"w":288,"h":800},"card-2":{"x":906,"y":0,"w":294,"h":800},"card-3":{"x":0,"y":406,"w":594,"h":394}}},
-  {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":599.5,"y":0,"w":1,"h":800},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":599.5,"y":0,"w":1,"h":800},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":899.5,"y":0,"w":1,"h":800},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":899.5,"y":0,"w":1,"h":800},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":399.5,"w":1200,"h":1},{"key":"sy:1:0","axis":"y","line":1,"virtual":false,"x":0,"y":399.5,"w":600,"h":1}]},
-  {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":594,"y":0,"w":12,"h":800},{"key":"x:2:0","axis":"x","line":2,"x":894,"y":0,"w":12,"h":800},{"key":"y:1:0","axis":"y","line":1,"x":0,"y":394,"w":594,"h":12}]},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.3333333333333333,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"card","fixed":false}},{"share":0.5,"node":{"card":"card-3","fixed":false}}]}},{"share":0.3333333333333333,"node":{"card":"card-1","fixed":false}},{"share":0.3333333333333333,"node":{"card":"card-2","fixed":false}}]}}},
+  {"call":"rects","returns":{"card":{"x":0,"y":0,"w":392,"h":394},"card-3":{"x":0,"y":406,"w":392,"h":394},"card-1":{"x":404,"y":0,"w":392,"h":800},"card-2":{"x":808,"y":0,"w":392,"h":800}}},
+  {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":397.5,"y":0,"w":1,"h":800},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":397.5,"y":0,"w":1,"h":800},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":801.5,"y":0,"w":1,"h":800},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":801.5,"y":0,"w":1,"h":800},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":399.5,"w":1200,"h":1},{"key":"sy:1:0","axis":"y","line":1,"virtual":false,"x":0,"y":399.5,"w":398,"h":1}]},
+  {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":392,"y":0,"w":12,"h":800},{"key":"x:2:0","axis":"x","line":2,"x":796,"y":0,"w":12,"h":800},{"key":"y:1:0","axis":"y","line":1,"x":0,"y":394,"w":392,"h":12}]},
   {"call":"close","args":["card-2"],"returns":true},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"card","fixed":false}},{"share":0.5,"node":{"card":"card-3","fixed":false}}]}},{"share":0.5,"node":{"card":"card-1","fixed":false}}]},"paidBy":{"card-1":"card","card-3":"card"}}},
-  {"call":"rects","returns":{"card":{"x":0,"y":0,"w":594,"h":394},"card-1":{"x":606,"y":0,"w":594,"h":800},"card-3":{"x":0,"y":406,"w":594,"h":394}}},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"card","fixed":false}},{"share":0.5,"node":{"card":"card-3","fixed":false}}]}},{"share":0.5,"node":{"card":"card-1","fixed":false}}]}}},
+  {"call":"rects","returns":{"card":{"x":0,"y":0,"w":594,"h":394},"card-3":{"x":0,"y":406,"w":594,"h":394},"card-1":{"x":606,"y":0,"w":594,"h":800}}},
   {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":599.5,"y":0,"w":1,"h":800},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":599.5,"y":0,"w":1,"h":800},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":399.5,"w":1200,"h":1},{"key":"sy:1:0","axis":"y","line":1,"virtual":false,"x":0,"y":399.5,"w":600,"h":1}]},
   {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":594,"y":0,"w":12,"h":800},{"key":"y:1:0","axis":"y","line":1,"x":0,"y":394,"w":594,"h":12}]},
   {"call":"close","args":["card-1"],"returns":true},
-  {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"card":"card","fixed":false}},{"share":0.5,"node":{"card":"card-3","fixed":false}}]},"paidBy":{"card-3":"card"}}},
+  {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"card":"card","fixed":false}},{"share":0.5,"node":{"card":"card-3","fixed":false}}]}}},
   {"call":"rects","returns":{"card":{"x":0,"y":0,"w":1200,"h":394},"card-3":{"x":0,"y":406,"w":1200,"h":394}}},
   {"call":"rules","returns":[{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":399.5,"w":1200,"h":1},{"key":"sy:1:0","axis":"y","line":1,"virtual":false,"x":0,"y":399.5,"w":1200,"h":1}]},
   {"call":"dividers","returns":[{"key":"y:1:0","axis":"y","line":1,"x":0,"y":394,"w":1200,"h":12}]},
   {"call":"close","args":["card-3"],"returns":true},
-  {"call":"toJSON","returns":{"root":{"card":"card","fixed":false},"paidBy":{}}},
+  {"call":"toJSON","returns":{"root":{"card":"card","fixed":false}}},
   {"call":"rects","returns":{"card":{"x":0,"y":0,"w":1200,"h":800}}},
   {"call":"rules","returns":[]},
   {"call":"dividers","returns":[]},
   {"call":"close","args":["card"],"returns":false},
-  {"call":"toJSON","returns":{"root":{"card":"card","fixed":false},"paidBy":{}}}
+  {"call":"toJSON","returns":{"root":{"card":"card","fixed":false}}}
  ]},
  {"name":"a close lets a row of neighbours fill the space","options":{"width":1000,"height":800,"gap":10,"minSize":50},"state":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"card":"top"}},{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"l"}},{"share":0.5,"node":{"card":"r"}}]}}]}},"steps":[
-  {"call":"fill","args":["top"],"returns":{"side":"below","grow":"r0","cards":[{"id":"l","c0":0,"c1":1,"r0":1,"r1":2,"fixed":false},{"id":"r","c0":1,"c1":2,"r0":1,"r1":2,"fixed":false}]}},
-  {"call":"fill","args":["l"],"returns":{"side":"right","grow":"c0","cards":[{"id":"r","c0":1,"c1":2,"r0":1,"r1":2,"fixed":false}]}},
   {"call":"canClose","args":["top"],"returns":true},
   {"call":"close","args":["top"],"returns":true},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"l","fixed":false}},{"share":0.5,"node":{"card":"r","fixed":false}}]},"paidBy":{}}},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"l","fixed":false}},{"share":0.5,"node":{"card":"r","fixed":false}}]}}},
   {"call":"rects","returns":{"l":{"x":0,"y":0,"w":495,"h":800},"r":{"x":505,"y":0,"w":495,"h":800}}},
   {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":499.5,"y":0,"w":1,"h":800},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":499.5,"y":0,"w":1,"h":800}]},
   {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":494.5,"y":0,"w":11,"h":800}]},
   {"call":"close","args":["l"],"returns":true},
-  {"call":"toJSON","returns":{"root":{"card":"r","fixed":false},"paidBy":{}}},
+  {"call":"toJSON","returns":{"root":{"card":"r","fixed":false}}},
   {"call":"rects","returns":{"r":{"x":0,"y":0,"w":1000,"h":800}}},
   {"call":"rules","returns":[]},
   {"call":"dividers","returns":[]},
   {"call":"close","args":["r"],"returns":false}
  ]},
- {"name":"a close in the h order fills from the side first","options":{"width":1000,"height":800,"gap":10,"minSize":50,"fillOrder":"h"},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"c"}}]}},{"share":0.5,"node":{"card":"b"}}]}},"steps":[
-  {"call":"fill","args":["a"],"returns":{"side":"below","grow":"r0","cards":[{"id":"c","c0":0,"c1":1,"r0":1,"r1":2,"fixed":false}]}},
-  {"call":"set","args":["fillOrder","v"]},
-  {"call":"fill","args":["a"],"returns":{"side":"below","grow":"r0","cards":[{"id":"c","c0":0,"c1":1,"r0":1,"r1":2,"fixed":false}]}},
-  {"call":"set","args":["fillOrder","h"]},
-  {"call":"close","args":["a"],"returns":true},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"c","fixed":false}},{"share":0.5,"node":{"card":"b","fixed":false}}]},"paidBy":{}}},
-  {"call":"rects","returns":{"b":{"x":505,"y":0,"w":495,"h":800},"c":{"x":0,"y":0,"w":495,"h":800}}},
-  {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":499.5,"y":0,"w":1,"h":800},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":499.5,"y":0,"w":1,"h":800}]},
-  {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":494.5,"y":0,"w":11,"h":800}]}
- ]},
- {"name":"a close of a card that no row fills removes its slots","options":{"width":1200,"height":800,"gap":10,"minSize":50},"state":{"root":{"cut":"x","kids":[{"share":0.25,"node":{"card":"left"}},{"share":0.5,"node":{"card":"mid"}},{"share":0.25,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"rt"}},{"share":0.5,"node":{"card":"rb"}}]}}]}},"steps":[
-  {"call":"fill","args":["mid"],"returns":{"side":"right","grow":"c0","cards":[{"id":"rt","c0":2,"c1":3,"r0":0,"r1":1,"fixed":false},{"id":"rb","c0":2,"c1":3,"r0":1,"r1":2,"fixed":false}]}},
+ {"name":"a close of the middle card gives both neighbours a share in proportion","options":{"width":1200,"height":800,"gap":10,"minSize":50},"state":{"root":{"cut":"x","kids":[{"share":0.25,"node":{"card":"left"}},{"share":0.5,"node":{"card":"mid"}},{"share":0.25,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"rt"}},{"share":0.5,"node":{"card":"rb"}}]}}]}},"steps":[
   {"call":"canClose","args":["mid"],"returns":true},
   {"call":"close","args":["mid"],"returns":true},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.25,"node":{"card":"left","fixed":false}},{"share":0.75,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"rt","fixed":false}},{"share":0.5,"node":{"card":"rb","fixed":false}}]}}]},"paidBy":{}}},
-  {"call":"rects","returns":{"left":{"x":0,"y":0,"w":295,"h":800},"rt":{"x":305,"y":0,"w":895,"h":395},"rb":{"x":305,"y":405,"w":895,"h":395}}},
-  {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":299.5,"y":0,"w":1,"h":800},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":299.5,"y":0,"w":1,"h":800},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":399.5,"w":1200,"h":1},{"key":"sy:1:1","axis":"y","line":1,"virtual":false,"x":300,"y":399.5,"w":900,"h":1}]},
-  {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":294.5,"y":0,"w":11,"h":800},{"key":"y:1:1","axis":"y","line":1,"x":305,"y":394.5,"w":895,"h":11}]},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"left","fixed":false}},{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"rt","fixed":false}},{"share":0.5,"node":{"card":"rb","fixed":false}}]}}]}}},
+  {"call":"rects","returns":{"left":{"x":0,"y":0,"w":595,"h":800},"rt":{"x":605,"y":0,"w":595,"h":395},"rb":{"x":605,"y":405,"w":595,"h":395}}},
+  {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":599.5,"y":0,"w":1,"h":800},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":599.5,"y":0,"w":1,"h":800},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":399.5,"w":1200,"h":1},{"key":"sy:1:1","axis":"y","line":1,"virtual":false,"x":600,"y":399.5,"w":600,"h":1}]},
+  {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":594.5,"y":0,"w":11,"h":800},{"key":"y:1:1","axis":"y","line":1,"x":605,"y":394.5,"w":595,"h":11}]},
   {"call":"close","args":["none"],"returns":false}
  ]},
  {"name":"a dragged boundary moves its line within the range and snaps onto a neighbour","options":{"width":1200,"height":600,"gap":12,"minSize":60},"state":{"root":{"cut":"x","kids":[{"share":0.25,"node":{"card":"a"}},{"share":0.25,"node":{"card":"b"}},{"share":0.25,"node":{"card":"c"}},{"share":0.25,"node":{"card":"d"}}]}},"steps":[
   {"call":"boundaryRange","args":["x",1],"returns":[66,528]},
   {"call":"moveBoundary","args":["x",1,400],"returns":400},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.3333333333333333,"node":{"card":"a","fixed":false}},{"share":0.16666666666666669,"node":{"card":"b","fixed":false}},{"share":0.25,"node":{"card":"c","fixed":false}},{"share":0.25,"node":{"card":"d","fixed":false}}]},"paidBy":{}}},
-  {"call":"rects","returns":{"a":{"x":0,"y":0,"w":394,"h":600},"b":{"x":406,"y":0,"w":188,"h":600},"c":{"x":606,"y":0,"w":288,"h":600},"d":{"x":906,"y":0,"w":294,"h":600}}},
-  {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":399.5,"y":0,"w":1,"h":600},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":399.5,"y":0,"w":1,"h":600},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":599.5,"y":0,"w":1,"h":600},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":599.5,"y":0,"w":1,"h":600},{"key":"vx:3","axis":"x","line":3,"virtual":true,"x":899.5,"y":0,"w":1,"h":600},{"key":"sx:3:0","axis":"x","line":3,"virtual":false,"x":899.5,"y":0,"w":1,"h":600}]},
-  {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":394,"y":0,"w":12,"h":600},{"key":"x:2:0","axis":"x","line":2,"x":594,"y":0,"w":12,"h":600},{"key":"x:3:0","axis":"x","line":3,"x":894,"y":0,"w":12,"h":600}]},
-  {"call":"moveBoundary","args":["x",2,5000],"returns":828},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.3333333333333333,"node":{"card":"a","fixed":false}},{"share":0.35666666666666663,"node":{"card":"b","fixed":false}},{"share":0.06000000000000005,"node":{"card":"c","fixed":false}},{"share":0.25,"node":{"card":"d","fixed":false}}]},"paidBy":{}}},
-  {"call":"rects","returns":{"a":{"x":0,"y":0,"w":394,"h":600},"b":{"x":406,"y":0,"w":416,"h":600},"c":{"x":834,"y":0,"w":60,"h":600},"d":{"x":906,"y":0,"w":294,"h":600}}},
-  {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":399.5,"y":0,"w":1,"h":600},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":399.5,"y":0,"w":1,"h":600},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":827.5,"y":0,"w":1,"h":600},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":827.5,"y":0,"w":1,"h":600},{"key":"vx:3","axis":"x","line":3,"virtual":true,"x":899.5,"y":0,"w":1,"h":600},{"key":"sx:3:0","axis":"x","line":3,"virtual":false,"x":899.5,"y":0,"w":1,"h":600}]},
-  {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":394,"y":0,"w":12,"h":600},{"key":"x:2:0","axis":"x","line":2,"x":822,"y":0,"w":12,"h":600},{"key":"x:3:0","axis":"x","line":3,"x":894,"y":0,"w":12,"h":600}]},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.3384879725085911,"node":{"card":"a","fixed":false}},{"share":0.16151202749140897,"node":{"card":"b","fixed":false}},{"share":0.24999999999999994,"node":{"card":"c","fixed":false}},{"share":0.25000000000000006,"node":{"card":"d","fixed":false}}]}}},
+  {"call":"rects","returns":{"a":{"x":0,"y":0,"w":394,"h":600},"b":{"x":406,"y":0,"w":188,"h":600},"c":{"x":606,"y":0,"w":291,"h":600},"d":{"x":909,"y":0,"w":291,"h":600}}},
+  {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":399.5,"y":0,"w":1,"h":600},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":399.5,"y":0,"w":1,"h":600},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":599.5,"y":0,"w":1,"h":600},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":599.5,"y":0,"w":1,"h":600},{"key":"vx:3","axis":"x","line":3,"virtual":true,"x":902.5,"y":0,"w":1,"h":600},{"key":"sx:3:0","axis":"x","line":3,"virtual":false,"x":902.5,"y":0,"w":1,"h":600}]},
+  {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":394,"y":0,"w":12,"h":600},{"key":"x:2:0","axis":"x","line":2,"x":594,"y":0,"w":12,"h":600},{"key":"x:3:0","axis":"x","line":3,"x":897,"y":0,"w":12,"h":600}]},
+  {"call":"moveBoundary","args":["x",2,5000],"returns":831},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.3384879725085911,"node":{"card":"a","fixed":false}},{"share":0.3599656357388316,"node":{"card":"b","fixed":false}},{"share":0.05154639175257726,"node":{"card":"c","fixed":false}},{"share":0.25000000000000006,"node":{"card":"d","fixed":false}}]}}},
+  {"call":"rects","returns":{"a":{"x":0,"y":0,"w":394,"h":600},"b":{"x":406,"y":0,"w":419,"h":600},"c":{"x":837,"y":0,"w":59.999999999999886,"h":600},"d":{"x":908.9999999999999,"y":0,"w":291.0000000000001,"h":600}}},
+  {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":399.5,"y":0,"w":1,"h":600},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":399.5,"y":0,"w":1,"h":600},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":830.5,"y":0,"w":1,"h":600},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":830.5,"y":0,"w":1,"h":600},{"key":"vx:3","axis":"x","line":3,"virtual":true,"x":902.4999999999999,"y":0,"w":1,"h":600},{"key":"sx:3:0","axis":"x","line":3,"virtual":false,"x":902.4999999999999,"y":0,"w":1,"h":600}]},
+  {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":394,"y":0,"w":12,"h":600},{"key":"x:2:0","axis":"x","line":2,"x":825,"y":0,"w":12,"h":600},{"key":"x:3:0","axis":"x","line":3,"x":896.9999999999999,"y":0,"w":12,"h":600}]},
   {"call":"moveBoundary","args":["x",2,-100,false],"returns":471.99999999999994},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.3333333333333333,"node":{"card":"a","fixed":false}},{"share":0.05999999999999994,"node":{"card":"b","fixed":false}},{"share":0.35666666666666674,"node":{"card":"c","fixed":false}},{"share":0.25,"node":{"card":"d","fixed":false}}]},"paidBy":{}}},
-  {"call":"rects","returns":{"a":{"x":0,"y":0,"w":394,"h":600},"b":{"x":406,"y":0,"w":59.99999999999994,"h":600},"c":{"x":477.99999999999994,"y":0,"w":416.00000000000006,"h":600},"d":{"x":906,"y":0,"w":294,"h":600}}},
-  {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":399.5,"y":0,"w":1,"h":600},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":399.5,"y":0,"w":1,"h":600},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":471.49999999999994,"y":0,"w":1,"h":600},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":471.49999999999994,"y":0,"w":1,"h":600},{"key":"vx:3","axis":"x","line":3,"virtual":true,"x":899.5,"y":0,"w":1,"h":600},{"key":"sx:3:0","axis":"x","line":3,"virtual":false,"x":899.5,"y":0,"w":1,"h":600}]},
-  {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":394,"y":0,"w":12,"h":600},{"key":"x:2:0","axis":"x","line":2,"x":465.99999999999994,"y":0,"w":12,"h":600},{"key":"x:3:0","axis":"x","line":3,"x":894,"y":0,"w":12,"h":600}]},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.3384879725085911,"node":{"card":"a","fixed":false}},{"share":0.05154639175257732,"node":{"card":"b","fixed":false}},{"share":0.35996563573883156,"node":{"card":"c","fixed":false}},{"share":0.25000000000000006,"node":{"card":"d","fixed":false}}]}}},
+  {"call":"rects","returns":{"a":{"x":0,"y":0,"w":394,"h":600},"b":{"x":406,"y":0,"w":60,"h":600},"c":{"x":478,"y":0,"w":419,"h":600},"d":{"x":909,"y":0,"w":291,"h":600}}},
+  {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":399.5,"y":0,"w":1,"h":600},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":399.5,"y":0,"w":1,"h":600},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":471.5,"y":0,"w":1,"h":600},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":471.5,"y":0,"w":1,"h":600},{"key":"vx:3","axis":"x","line":3,"virtual":true,"x":902.5,"y":0,"w":1,"h":600},{"key":"sx:3:0","axis":"x","line":3,"virtual":false,"x":902.5,"y":0,"w":1,"h":600}]},
+  {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":394,"y":0,"w":12,"h":600},{"key":"x:2:0","axis":"x","line":2,"x":466,"y":0,"w":12,"h":600},{"key":"x:3:0","axis":"x","line":3,"x":897,"y":0,"w":12,"h":600}]},
   {"call":"moveBoundary","args":["x",9,10],"returns":0},
   {"call":"moveBoundary","args":["q",1,10],"returns":0},
   {"call":"moveBoundary","args":["x",3,600],"returns":600},
   {"call":"moveBoundary","args":["x",3,598],"returns":598},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.3333333333333333,"node":{"card":"a","fixed":false}},{"share":0.05999999999999994,"node":{"card":"b","fixed":false}},{"share":0.1050000000000001,"node":{"card":"c","fixed":false}},{"share":0.5016666666666667,"node":{"card":"d","fixed":false}}]},"paidBy":{}}},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.3384879725085911,"node":{"card":"a","fixed":false}},{"share":0.05154639175257732,"node":{"card":"b","fixed":false}},{"share":0.09793814432989695,"node":{"card":"c","fixed":false}},{"share":0.5120274914089347,"node":{"card":"d","fixed":false}}]}}},
   {"call":"rects","returns":{"a":{"x":0,"y":0,"w":394,"h":600},"b":{"x":406,"y":0,"w":59.99999999999994,"h":600},"c":{"x":477.99999999999994,"y":0,"w":114.00000000000006,"h":600},"d":{"x":604,"y":0,"w":596,"h":600}}},
   {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":399.5,"y":0,"w":1,"h":600},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":399.5,"y":0,"w":1,"h":600},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":471.49999999999994,"y":0,"w":1,"h":600},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":471.49999999999994,"y":0,"w":1,"h":600},{"key":"vx:3","axis":"x","line":3,"virtual":true,"x":597.5,"y":0,"w":1,"h":600},{"key":"sx:3:0","axis":"x","line":3,"virtual":false,"x":597.5,"y":0,"w":1,"h":600}]},
   {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":394,"y":0,"w":12,"h":600},{"key":"x:2:0","axis":"x","line":2,"x":465.99999999999994,"y":0,"w":12,"h":600},{"key":"x:3:0","axis":"x","line":3,"x":592,"y":0,"w":12,"h":600}]},
@@ -298,72 +276,72 @@
   {"call":"centerBoundary","args":["x",1],"returns":232.99999999999997},
   {"call":"centerBoundary","args":["x",2],"returns":415.5},
   {"call":"centerBoundary","args":["x",0],"returns":0},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.19416666666666665,"node":{"card":"a","fixed":false}},{"share":0.15208333333333335,"node":{"card":"b","fixed":false}},{"share":0.15208333333333335,"node":{"card":"c","fixed":false}},{"share":0.5016666666666667,"node":{"card":"d","fixed":false}}]},"paidBy":{}}},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.19501718213058414,"node":{"card":"a","fixed":false}},{"share":0.1464776632302406,"node":{"card":"b","fixed":false}},{"share":0.14647766323024058,"node":{"card":"c","fixed":false}},{"share":0.5120274914089347,"node":{"card":"d","fixed":false}}]}}},
   {"call":"rects","returns":{"a":{"x":0,"y":0,"w":226.99999999999997,"h":600},"b":{"x":238.99999999999997,"y":0,"w":170.50000000000003,"h":600},"c":{"x":421.5,"y":0,"w":170.5,"h":600},"d":{"x":604,"y":0,"w":596,"h":600}}},
   {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":232.49999999999997,"y":0,"w":1,"h":600},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":232.49999999999997,"y":0,"w":1,"h":600},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":415,"y":0,"w":1,"h":600},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":415,"y":0,"w":1,"h":600},{"key":"vx:3","axis":"x","line":3,"virtual":true,"x":597.5,"y":0,"w":1,"h":600},{"key":"sx:3:0","axis":"x","line":3,"virtual":false,"x":597.5,"y":0,"w":1,"h":600}]},
   {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":226.99999999999997,"y":0,"w":12,"h":600},{"key":"x:2:0","axis":"x","line":2,"x":409.5,"y":0,"w":12,"h":600},{"key":"x:3:0","axis":"x","line":3,"x":592,"y":0,"w":12,"h":600}]}
  ]},
  {"name":"a boundary beside a px size changes the size","options":{"width":1200,"height":600,"gap":10,"minSize":80},"state":{"root":{"cut":"x","kids":[{"share":0.2,"node":{"card":"l","width":200}},{"share":0.6000000000000001,"node":{"card":"m"}},{"share":0.19999999999999996,"node":{"card":"r","width":180}}]}},"steps":[
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.2,"node":{"card":"l","fixed":false,"width":200}},{"share":0.6000000000000001,"node":{"card":"m","fixed":false}},{"share":0.19999999999999996,"node":{"card":"r","fixed":false,"width":180}}]},"paidBy":{}}},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.2,"node":{"card":"l","fixed":false,"width":200}},{"share":0.6000000000000001,"node":{"card":"m","fixed":false}},{"share":0.19999999999999996,"node":{"card":"r","fixed":false,"width":180}}]}}},
   {"call":"rects","returns":{"l":{"x":0,"y":0,"w":200,"h":600},"m":{"x":210,"y":0,"w":800,"h":600},"r":{"x":1020,"y":0,"w":180,"h":600}}},
   {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":204.5,"y":0,"w":1,"h":600},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":204.5,"y":0,"w":1,"h":600},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":1014.5,"y":0,"w":1,"h":600},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":1014.5,"y":0,"w":1,"h":600}]},
   {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":199.5,"y":0,"w":11,"h":600},{"key":"x:2:0","axis":"x","line":2,"x":1009.5,"y":0,"w":11,"h":600}]},
   {"call":"boundaryRange","args":["x",1],"returns":[85,925]},
   {"call":"moveBoundary","args":["x",1,320],"returns":320},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.2,"node":{"card":"l","fixed":false,"width":315}},{"share":0.6000000000000001,"node":{"card":"m","fixed":false}},{"share":0.19999999999999996,"node":{"card":"r","fixed":false,"width":180}}]},"paidBy":{}}},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.2,"node":{"card":"l","fixed":false,"width":315}},{"share":0.6000000000000001,"node":{"card":"m","fixed":false}},{"share":0.19999999999999996,"node":{"card":"r","fixed":false,"width":180}}]}}},
   {"call":"rects","returns":{"l":{"x":0,"y":0,"w":315,"h":600},"m":{"x":325,"y":0,"w":685.0000000000001,"h":600},"r":{"x":1020.0000000000001,"y":0,"w":179.9999999999999,"h":600}}},
   {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":319.5,"y":0,"w":1,"h":600},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":319.5,"y":0,"w":1,"h":600},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":1014.5000000000001,"y":0,"w":1,"h":600},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":1014.5000000000001,"y":0,"w":1,"h":600}]},
   {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":314.5,"y":0,"w":11,"h":600},{"key":"x:2:0","axis":"x","line":2,"x":1009.5000000000001,"y":0,"w":11,"h":600}]},
   {"call":"moveBoundary","args":["x",2,900],"returns":900},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.2,"node":{"card":"l","fixed":false,"width":315}},{"share":0.6000000000000001,"node":{"card":"m","fixed":false}},{"share":0.19999999999999996,"node":{"card":"r","fixed":false,"width":295}}]},"paidBy":{}}},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.2,"node":{"card":"l","fixed":false,"width":315}},{"share":0.6000000000000001,"node":{"card":"m","fixed":false}},{"share":0.19999999999999996,"node":{"card":"r","fixed":false,"width":295}}]}}},
   {"call":"rects","returns":{"l":{"x":0,"y":0,"w":315,"h":600},"m":{"x":325,"y":0,"w":570,"h":600},"r":{"x":905,"y":0,"w":295,"h":600}}},
   {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":319.5,"y":0,"w":1,"h":600},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":319.5,"y":0,"w":1,"h":600},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":899.5,"y":0,"w":1,"h":600},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":899.5,"y":0,"w":1,"h":600}]},
   {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":314.5,"y":0,"w":11,"h":600},{"key":"x:2:0","axis":"x","line":2,"x":894.5,"y":0,"w":11,"h":600}]},
   {"call":"resize","args":[500,600]},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.2,"node":{"card":"l","fixed":false,"width":315}},{"share":0.6000000000000001,"node":{"card":"m","fixed":false}},{"share":0.19999999999999996,"node":{"card":"r","fixed":false,"width":295}}]},"paidBy":{}}},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.2,"node":{"card":"l","fixed":false,"width":315}},{"share":0.6000000000000001,"node":{"card":"m","fixed":false}},{"share":0.19999999999999996,"node":{"card":"r","fixed":false,"width":295}}]}}},
   {"call":"rects","returns":{"l":{"x":0,"y":0,"w":206.5573770491803,"h":600},"m":{"x":216.5573770491803,"y":0,"w":80.00000000000003,"h":600},"r":{"x":306.55737704918033,"y":0,"w":193.44262295081967,"h":600}}},
   {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":211.0573770491803,"y":0,"w":1,"h":600},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":211.0573770491803,"y":0,"w":1,"h":600},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":301.05737704918033,"y":0,"w":1,"h":600},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":301.05737704918033,"y":0,"w":1,"h":600}]},
   {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":206.0573770491803,"y":0,"w":11,"h":600},{"key":"x:2:0","axis":"x","line":2,"x":296.05737704918033,"y":0,"w":11,"h":600}]},
   {"call":"boundaryRange","args":["x",1],"returns":[211.5573770491803,211.5573770491803]},
   {"call":"moveBoundary","args":["x",1,100],"returns":211.5573770491803},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.2,"node":{"card":"l","fixed":false,"width":315}},{"share":0.6000000000000001,"node":{"card":"m","fixed":false}},{"share":0.19999999999999996,"node":{"card":"r","fixed":false,"width":295}}]},"paidBy":{}}},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.2,"node":{"card":"l","fixed":false,"width":315}},{"share":0.6000000000000001,"node":{"card":"m","fixed":false}},{"share":0.19999999999999996,"node":{"card":"r","fixed":false,"width":295}}]}}},
   {"call":"rects","returns":{"l":{"x":0,"y":0,"w":206.5573770491803,"h":600},"m":{"x":216.5573770491803,"y":0,"w":80.00000000000003,"h":600},"r":{"x":306.55737704918033,"y":0,"w":193.44262295081967,"h":600}}},
   {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":211.0573770491803,"y":0,"w":1,"h":600},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":211.0573770491803,"y":0,"w":1,"h":600},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":301.05737704918033,"y":0,"w":1,"h":600},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":301.05737704918033,"y":0,"w":1,"h":600}]},
   {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":206.0573770491803,"y":0,"w":11,"h":600},{"key":"x:2:0","axis":"x","line":2,"x":296.05737704918033,"y":0,"w":11,"h":600}]},
   {"call":"centerBoundary","args":["x",2],"returns":301.55737704918033},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.2,"node":{"card":"l","fixed":false,"width":315}},{"share":0.6000000000000001,"node":{"card":"m","fixed":false}},{"share":0.19999999999999996,"node":{"card":"r","fixed":false,"width":295}}]},"paidBy":{}}},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.2,"node":{"card":"l","fixed":false,"width":315}},{"share":0.6000000000000001,"node":{"card":"m","fixed":false}},{"share":0.19999999999999996,"node":{"card":"r","fixed":false,"width":295}}]}}},
   {"call":"rects","returns":{"l":{"x":0,"y":0,"w":206.5573770491803,"h":600},"m":{"x":216.5573770491803,"y":0,"w":80.00000000000003,"h":600},"r":{"x":306.55737704918033,"y":0,"w":193.44262295081967,"h":600}}},
   {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":211.0573770491803,"y":0,"w":1,"h":600},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":211.0573770491803,"y":0,"w":1,"h":600},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":301.05737704918033,"y":0,"w":1,"h":600},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":301.05737704918033,"y":0,"w":1,"h":600}]},
   {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":206.0573770491803,"y":0,"w":11,"h":600},{"key":"x:2:0","axis":"x","line":2,"x":296.05737704918033,"y":0,"w":11,"h":600}]}
  ]},
  {"name":"two px sizes on one boundary trade their sizes","options":{"width":1000,"height":600,"gap":10,"minSize":60},"state":{"root":{"cut":"x","kids":[{"share":0.2,"node":{"card":"l","width":200}},{"share":0.2,"node":{"card":"m","width":150}},{"share":0.6,"node":{"card":"r"}}]}},"steps":[
   {"call":"moveBoundary","args":["x",1,260],"returns":260},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.2,"node":{"card":"l","fixed":false,"width":255}},{"share":0.2,"node":{"card":"m","fixed":false,"width":95}},{"share":0.6,"node":{"card":"r","fixed":false}}]},"paidBy":{}}},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.2,"node":{"card":"l","fixed":false,"width":255}},{"share":0.2,"node":{"card":"m","fixed":false,"width":95}},{"share":0.6,"node":{"card":"r","fixed":false}}]}}},
   {"call":"rects","returns":{"l":{"x":0,"y":0,"w":255,"h":600},"m":{"x":265,"y":0,"w":95,"h":600},"r":{"x":370,"y":0,"w":630.0000000000001,"h":600}}},
   {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":259.5,"y":0,"w":1,"h":600},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":259.5,"y":0,"w":1,"h":600},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":364.5,"y":0,"w":1,"h":600},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":364.5,"y":0,"w":1,"h":600}]},
   {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":254.5,"y":0,"w":11,"h":600},{"key":"x:2:0","axis":"x","line":2,"x":359.5,"y":0,"w":11,"h":600}]},
   {"call":"resize","args":[300,600]},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.2,"node":{"card":"l","fixed":false,"width":255}},{"share":0.2,"node":{"card":"m","fixed":false,"width":95}},{"share":0.6,"node":{"card":"r","fixed":false}}]},"paidBy":{}}},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.2,"node":{"card":"l","fixed":false,"width":255}},{"share":0.2,"node":{"card":"m","fixed":false,"width":95}},{"share":0.6,"node":{"card":"r","fixed":false}}]}}},
   {"call":"rects","returns":{"l":{"x":0,"y":0,"w":160.28571428571428,"h":600},"m":{"x":170.28571428571428,"y":0,"w":59.71428571428572,"h":600},"r":{"x":240,"y":0,"w":60,"h":600}}},
   {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":164.78571428571428,"y":0,"w":1,"h":600},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":164.78571428571428,"y":0,"w":1,"h":600},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":234.5,"y":0,"w":1,"h":600},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":234.5,"y":0,"w":1,"h":600}]},
   {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":159.78571428571428,"y":0,"w":11,"h":600},{"key":"x:2:0","axis":"x","line":2,"x":229.5,"y":0,"w":11,"h":600}]},
   {"call":"moveBoundary","args":["x",1,90],"returns":90},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.2,"node":{"card":"l","fixed":false,"width":135.22727272727272}},{"share":0.2,"node":{"card":"m","fixed":false,"width":214.77272727272728}},{"share":0.6,"node":{"card":"r","fixed":false}}]},"paidBy":{}}},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.2,"node":{"card":"l","fixed":false,"width":135.22727272727272}},{"share":0.2,"node":{"card":"m","fixed":false,"width":214.77272727272728}},{"share":0.6,"node":{"card":"r","fixed":false}}]}}},
   {"call":"rects","returns":{"l":{"x":0,"y":0,"w":85,"h":600},"m":{"x":95,"y":0,"w":135,"h":600},"r":{"x":240,"y":0,"w":60,"h":600}}},
   {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":89.5,"y":0,"w":1,"h":600},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":89.5,"y":0,"w":1,"h":600},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":234.5,"y":0,"w":1,"h":600},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":234.5,"y":0,"w":1,"h":600}]},
   {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":84.5,"y":0,"w":11,"h":600},{"key":"x:2:0","axis":"x","line":2,"x":229.5,"y":0,"w":11,"h":600}]}
  ]},
  {"name":"an insert places a plane-spanning card at a boundary","options":{"width":1000,"height":600,"gap":10,"minSize":60},"state":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","data":{"tabs":["t1"]}}},{"share":0.5,"node":{"card":"b"}}]}},{"share":0.5,"node":{"card":"c","fixed":true}}]}},"steps":[
   {"call":"insertAt","args":["x",0,{"id":"rail","size":120}],"returns":"rail"},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.12,"node":{"card":"rail","fixed":false,"width":120}},{"share":0.88,"node":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.4285714285714286,"node":{"card":"a","fixed":false,"data":{"tabs":["t1"]}}},{"share":0.5714285714285715,"node":{"card":"b","fixed":false}}]}},{"share":0.5,"node":{"card":"c","fixed":true}}]}}]},"paidBy":{"rail":"a"}}},
-  {"call":"rects","returns":{"a":{"x":130,"y":0,"w":364.99999999999994,"h":295},"b":{"x":504.99999999999994,"y":0,"w":494.99999999999994,"h":295},"c":{"x":130,"y":305,"w":869.9999999999999,"h":295},"rail":{"x":0,"y":0,"w":120,"h":600}}},
-  {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":124.5,"y":0,"w":1,"h":600},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":124.5,"y":0,"w":1,"h":600},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":499.49999999999994,"y":0,"w":1,"h":600},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":499.49999999999994,"y":0,"w":1,"h":300},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":299.5,"w":1000,"h":1},{"key":"sy:1:1","axis":"y","line":1,"virtual":false,"x":125,"y":299.5,"w":875,"h":1}]},
-  {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":119.5,"y":0,"w":11,"h":600},{"key":"x:2:0","axis":"x","line":2,"x":494.49999999999994,"y":0,"w":11,"h":295},{"key":"y:1:1","axis":"y","line":1,"x":130,"y":294.5,"w":869.9999999999999,"h":11}]},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"rail","fixed":false,"width":120}},{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false,"data":{"tabs":["t1"]}}},{"share":0.5,"node":{"card":"b","fixed":false}}]}},{"share":0.5,"node":{"card":"c","fixed":true}}]}}]}}},
+  {"call":"rects","returns":{"rail":{"x":0,"y":0,"w":120,"h":600},"a":{"x":130,"y":0,"w":430,"h":295},"b":{"x":570,"y":0,"w":430,"h":295},"c":{"x":130,"y":305,"w":870,"h":295}}},
+  {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":124.5,"y":0,"w":1,"h":600},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":124.5,"y":0,"w":1,"h":600},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":564.5,"y":0,"w":1,"h":600},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":564.5,"y":0,"w":1,"h":300},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":299.5,"w":1000,"h":1},{"key":"sy:1:1","axis":"y","line":1,"virtual":false,"x":125,"y":299.5,"w":875,"h":1}]},
+  {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":119.5,"y":0,"w":11,"h":600},{"key":"x:2:0","axis":"x","line":2,"x":559.5,"y":0,"w":11,"h":295},{"key":"y:1:1","axis":"y","line":1,"x":130,"y":294.5,"w":870,"h":11}]},
   {"call":"insertAt","args":["x",3,{"size":90,"data":{"kind":"edge"}}],"returns":"card-1"},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.12,"node":{"card":"rail","fixed":false,"width":120}},{"share":0.7899999999999999,"node":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.4807692307692307,"node":{"card":"a","fixed":false,"data":{"tabs":["t1"]}}},{"share":0.5192307692307693,"node":{"card":"b","fixed":false}}]}},{"share":0.5,"node":{"card":"c","fixed":true}}]}},{"share":0.09000000000000008,"node":{"card":"card-1","fixed":false,"data":{"kind":"edge"},"width":90}}]},"paidBy":{"rail":"a","card-1":"b"}}},
-  {"call":"rects","returns":{"a":{"x":130,"y":0,"w":364.99999999999994,"h":295},"b":{"x":504.99999999999994,"y":0,"w":395.00000000000006,"h":295},"c":{"x":130,"y":305,"w":770,"h":295},"rail":{"x":0,"y":0,"w":120,"h":600},"card-1":{"x":910,"y":0,"w":90,"h":600}}},
-  {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":124.5,"y":0,"w":1,"h":600},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":124.5,"y":0,"w":1,"h":600},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":499.49999999999994,"y":0,"w":1,"h":600},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":499.49999999999994,"y":0,"w":1,"h":300},{"key":"vx:3","axis":"x","line":3,"virtual":true,"x":904.5,"y":0,"w":1,"h":600},{"key":"sx:3:0","axis":"x","line":3,"virtual":false,"x":904.5,"y":0,"w":1,"h":600},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":299.5,"w":1000,"h":1},{"key":"sy:1:1","axis":"y","line":1,"virtual":false,"x":125,"y":299.5,"w":780,"h":1}]},
-  {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":119.5,"y":0,"w":11,"h":600},{"key":"x:2:0","axis":"x","line":2,"x":494.49999999999994,"y":0,"w":11,"h":295},{"key":"x:3:0","axis":"x","line":3,"x":899.5,"y":0,"w":11,"h":600},{"key":"y:1:1","axis":"y","line":1,"x":130,"y":294.5,"w":770,"h":11}]},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.4,"node":{"card":"rail","fixed":false,"width":120}},{"share":0.4,"node":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false,"data":{"tabs":["t1"]}}},{"share":0.5,"node":{"card":"b","fixed":false}}]}},{"share":0.5,"node":{"card":"c","fixed":true}}]}},{"share":0.2,"node":{"card":"card-1","fixed":false,"data":{"kind":"edge"},"width":90}}]}}},
+  {"call":"rects","returns":{"rail":{"x":0,"y":0,"w":120,"h":600},"a":{"x":130,"y":0,"w":380.0000000000001,"h":295},"b":{"x":520.0000000000001,"y":0,"w":379.9999999999999,"h":295},"c":{"x":130,"y":305,"w":770,"h":295},"card-1":{"x":910,"y":0,"w":90,"h":600}}},
+  {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":124.5,"y":0,"w":1,"h":600},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":124.5,"y":0,"w":1,"h":600},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":514.5000000000001,"y":0,"w":1,"h":600},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":514.5000000000001,"y":0,"w":1,"h":300},{"key":"vx:3","axis":"x","line":3,"virtual":true,"x":904.5,"y":0,"w":1,"h":600},{"key":"sx:3:0","axis":"x","line":3,"virtual":false,"x":904.5,"y":0,"w":1,"h":600},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":299.5,"w":1000,"h":1},{"key":"sy:1:1","axis":"y","line":1,"virtual":false,"x":125,"y":299.5,"w":780,"h":1}]},
+  {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":119.5,"y":0,"w":11,"h":600},{"key":"x:2:0","axis":"x","line":2,"x":509.5000000000001,"y":0,"w":11,"h":295},{"key":"x:3:0","axis":"x","line":3,"x":899.5,"y":0,"w":11,"h":600},{"key":"y:1:1","axis":"y","line":1,"x":130,"y":294.5,"w":770,"h":11}]},
   {"call":"insertAt","args":["y",1,{"size":50}],"returns":null},
   {"call":"insertAt","args":["x",1,{"size":50}],"returns":"card-2"},
   {"call":"insertAt","args":["x",0,{"size":5000}],"returns":null},
@@ -373,32 +351,32 @@
   {"call":"insertAt","args":["q",0,{"size":1}],"returns":null},
   {"call":"standings","args":["x"],"returns":[0,1,2,4,5]},
   {"call":"moveTo","args":["rail","x",4],"returns":true},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.04999999999999999,"node":{"card":"card-2","fixed":false,"width":50}},{"share":0.74,"node":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.4375,"node":{"card":"a","fixed":false,"data":{"tabs":["t1"]}}},{"share":0.5624999999999999,"node":{"card":"b","fixed":false}}]}},{"share":0.5,"node":{"card":"c","fixed":true}}]}},{"share":0.12,"node":{"card":"rail","fixed":false,"width":120}},{"share":0.09000000000000008,"node":{"card":"card-1","fixed":false,"data":{"kind":"edge"},"width":90}}]},"paidBy":{"rail":"a","card-1":"b","card-2":"a"}}},
-  {"call":"rects","returns":{"a":{"x":60,"y":0,"w":305,"h":295},"b":{"x":375,"y":0,"w":395,"h":295},"c":{"x":60,"y":305,"w":710,"h":295},"card-1":{"x":910,"y":0,"w":90,"h":600},"card-2":{"x":0,"y":0,"w":50,"h":600},"rail":{"x":780,"y":0,"w":120,"h":600}}},
-  {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":54.5,"y":0,"w":1,"h":600},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":54.5,"y":0,"w":1,"h":600},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":369.5,"y":0,"w":1,"h":600},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":369.5,"y":0,"w":1,"h":300},{"key":"vx:3","axis":"x","line":3,"virtual":true,"x":774.5,"y":0,"w":1,"h":600},{"key":"sx:3:0","axis":"x","line":3,"virtual":false,"x":774.5,"y":0,"w":1,"h":600},{"key":"vx:4","axis":"x","line":4,"virtual":true,"x":904.5,"y":0,"w":1,"h":600},{"key":"sx:4:0","axis":"x","line":4,"virtual":false,"x":904.5,"y":0,"w":1,"h":600},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":299.5,"w":1000,"h":1},{"key":"sy:1:1","axis":"y","line":1,"virtual":false,"x":55,"y":299.5,"w":720,"h":1}]},
-  {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":49.5,"y":0,"w":11,"h":600},{"key":"x:2:0","axis":"x","line":2,"x":364.5,"y":0,"w":11,"h":295},{"key":"x:3:0","axis":"x","line":3,"x":769.5,"y":0,"w":11,"h":600},{"key":"x:4:0","axis":"x","line":4,"x":899.5,"y":0,"w":11,"h":600},{"key":"y:1:1","axis":"y","line":1,"x":60,"y":294.5,"w":710,"h":11}]},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.16666666666666669,"node":{"card":"card-2","fixed":false,"width":50}},{"share":0.33333333333333337,"node":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false,"data":{"tabs":["t1"]}}},{"share":0.5,"node":{"card":"b","fixed":false}}]}},{"share":0.5,"node":{"card":"c","fixed":true}}]}},{"share":0.33333333333333337,"node":{"card":"rail","fixed":false,"width":120}},{"share":0.16666666666666669,"node":{"card":"card-1","fixed":false,"data":{"kind":"edge"},"width":90}}]}}},
+  {"call":"rects","returns":{"card-2":{"x":0,"y":0,"w":50,"h":600},"a":{"x":60,"y":0,"w":350.00000000000006,"h":295},"b":{"x":420.00000000000006,"y":0,"w":349.99999999999994,"h":295},"c":{"x":60,"y":305,"w":710,"h":295},"rail":{"x":780,"y":0,"w":120,"h":600},"card-1":{"x":910,"y":0,"w":90,"h":600}}},
+  {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":54.5,"y":0,"w":1,"h":600},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":54.5,"y":0,"w":1,"h":600},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":414.50000000000006,"y":0,"w":1,"h":600},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":414.50000000000006,"y":0,"w":1,"h":300},{"key":"vx:3","axis":"x","line":3,"virtual":true,"x":774.5,"y":0,"w":1,"h":600},{"key":"sx:3:0","axis":"x","line":3,"virtual":false,"x":774.5,"y":0,"w":1,"h":600},{"key":"vx:4","axis":"x","line":4,"virtual":true,"x":904.5,"y":0,"w":1,"h":600},{"key":"sx:4:0","axis":"x","line":4,"virtual":false,"x":904.5,"y":0,"w":1,"h":600},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":299.5,"w":1000,"h":1},{"key":"sy:1:1","axis":"y","line":1,"virtual":false,"x":55,"y":299.5,"w":720,"h":1}]},
+  {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":49.5,"y":0,"w":11,"h":600},{"key":"x:2:0","axis":"x","line":2,"x":409.50000000000006,"y":0,"w":11,"h":295},{"key":"x:3:0","axis":"x","line":3,"x":769.5,"y":0,"w":11,"h":600},{"key":"x:4:0","axis":"x","line":4,"x":899.5,"y":0,"w":11,"h":600},{"key":"y:1:1","axis":"y","line":1,"x":60,"y":294.5,"w":710,"h":11}]},
   {"call":"moveTo","args":["rail","x",0],"returns":true},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.12,"node":{"card":"rail","fixed":false,"width":120}},{"share":0.04999999999999999,"node":{"card":"card-2","fixed":false,"width":50}},{"share":0.74,"node":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.4375,"node":{"card":"a","fixed":false,"data":{"tabs":["t1"]}}},{"share":0.5624999999999999,"node":{"card":"b","fixed":false}}]}},{"share":0.5,"node":{"card":"c","fixed":true}}]}},{"share":0.09000000000000008,"node":{"card":"card-1","fixed":false,"data":{"kind":"edge"},"width":90}}]},"paidBy":{"rail":"a","card-1":"b","card-2":"a"}}},
-  {"call":"rects","returns":{"a":{"x":190,"y":0,"w":305,"h":295},"b":{"x":505,"y":0,"w":395,"h":295},"c":{"x":190,"y":305,"w":710,"h":295},"card-1":{"x":910,"y":0,"w":90,"h":600},"card-2":{"x":130,"y":0,"w":50,"h":600},"rail":{"x":0,"y":0,"w":120,"h":600}}},
-  {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":124.5,"y":0,"w":1,"h":600},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":124.5,"y":0,"w":1,"h":600},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":184.5,"y":0,"w":1,"h":600},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":184.5,"y":0,"w":1,"h":600},{"key":"vx:3","axis":"x","line":3,"virtual":true,"x":499.5,"y":0,"w":1,"h":600},{"key":"sx:3:0","axis":"x","line":3,"virtual":false,"x":499.5,"y":0,"w":1,"h":300},{"key":"vx:4","axis":"x","line":4,"virtual":true,"x":904.5,"y":0,"w":1,"h":600},{"key":"sx:4:0","axis":"x","line":4,"virtual":false,"x":904.5,"y":0,"w":1,"h":600},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":299.5,"w":1000,"h":1},{"key":"sy:1:2","axis":"y","line":1,"virtual":false,"x":185,"y":299.5,"w":720,"h":1}]},
-  {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":119.5,"y":0,"w":11,"h":600},{"key":"x:2:0","axis":"x","line":2,"x":179.5,"y":0,"w":11,"h":600},{"key":"x:3:0","axis":"x","line":3,"x":494.5,"y":0,"w":11,"h":295},{"key":"x:4:0","axis":"x","line":4,"x":899.5,"y":0,"w":11,"h":600},{"key":"y:1:2","axis":"y","line":1,"x":190,"y":294.5,"w":710,"h":11}]},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.33333333333333337,"node":{"card":"rail","fixed":false,"width":120}},{"share":0.16666666666666669,"node":{"card":"card-2","fixed":false,"width":50}},{"share":0.33333333333333337,"node":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false,"data":{"tabs":["t1"]}}},{"share":0.5,"node":{"card":"b","fixed":false}}]}},{"share":0.5,"node":{"card":"c","fixed":true}}]}},{"share":0.16666666666666669,"node":{"card":"card-1","fixed":false,"data":{"kind":"edge"},"width":90}}]}}},
+  {"call":"rects","returns":{"rail":{"x":0,"y":0,"w":120,"h":600},"card-2":{"x":130,"y":0,"w":50,"h":600},"a":{"x":190,"y":0,"w":350,"h":295},"b":{"x":550,"y":0,"w":349.9999999999999,"h":295},"c":{"x":190,"y":305,"w":709.9999999999999,"h":295},"card-1":{"x":909.9999999999999,"y":0,"w":90,"h":600}}},
+  {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":124.5,"y":0,"w":1,"h":600},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":124.5,"y":0,"w":1,"h":600},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":184.5,"y":0,"w":1,"h":600},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":184.5,"y":0,"w":1,"h":600},{"key":"vx:3","axis":"x","line":3,"virtual":true,"x":544.5,"y":0,"w":1,"h":600},{"key":"sx:3:0","axis":"x","line":3,"virtual":false,"x":544.5,"y":0,"w":1,"h":300},{"key":"vx:4","axis":"x","line":4,"virtual":true,"x":904.4999999999999,"y":0,"w":1,"h":600},{"key":"sx:4:0","axis":"x","line":4,"virtual":false,"x":904.4999999999999,"y":0,"w":1,"h":600},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":299.5,"w":1000,"h":1},{"key":"sy:1:2","axis":"y","line":1,"virtual":false,"x":185,"y":299.5,"w":719.9999999999999,"h":1}]},
+  {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":119.5,"y":0,"w":11,"h":600},{"key":"x:2:0","axis":"x","line":2,"x":179.5,"y":0,"w":11,"h":600},{"key":"x:3:0","axis":"x","line":3,"x":539.5,"y":0,"w":11,"h":295},{"key":"x:4:0","axis":"x","line":4,"x":899.4999999999999,"y":0,"w":11,"h":600},{"key":"y:1:2","axis":"y","line":1,"x":190,"y":294.5,"w":709.9999999999999,"h":11}]},
   {"call":"moveTo","args":["a","x",0],"returns":false},
   {"call":"moveTo","args":["rail","y",0],"returns":false},
   {"call":"moveTo","args":["none","x",0],"returns":false},
   {"call":"close","args":["rail"],"returns":true},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.16999999999999998,"node":{"card":"card-2","fixed":false,"width":50}},{"share":0.74,"node":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5235294117647058,"node":{"card":"a","fixed":false,"data":{"tabs":["t1"]}}},{"share":0.47647058823529415,"node":{"card":"b","fixed":false}}]}},{"share":0.5,"node":{"card":"c","fixed":true}}]}},{"share":0.09000000000000008,"node":{"card":"card-1","fixed":false,"data":{"kind":"edge"},"width":90}}]},"paidBy":{"card-1":"b","card-2":"a"}}},
-  {"call":"rects","returns":{"a":{"x":60,"y":0,"w":434.99999999999994,"h":295},"b":{"x":504.99999999999994,"y":0,"w":395.00000000000006,"h":295},"c":{"x":60,"y":305,"w":840,"h":295},"card-1":{"x":910,"y":0,"w":90,"h":600},"card-2":{"x":0,"y":0,"w":50,"h":600}}},
-  {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":54.5,"y":0,"w":1,"h":600},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":54.5,"y":0,"w":1,"h":600},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":499.49999999999994,"y":0,"w":1,"h":600},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":499.49999999999994,"y":0,"w":1,"h":300},{"key":"vx:3","axis":"x","line":3,"virtual":true,"x":904.5,"y":0,"w":1,"h":600},{"key":"sx:3:0","axis":"x","line":3,"virtual":false,"x":904.5,"y":0,"w":1,"h":600},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":299.5,"w":1000,"h":1},{"key":"sy:1:1","axis":"y","line":1,"virtual":false,"x":55,"y":299.5,"w":850,"h":1}]},
-  {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":49.5,"y":0,"w":11,"h":600},{"key":"x:2:0","axis":"x","line":2,"x":494.49999999999994,"y":0,"w":11,"h":295},{"key":"x:3:0","axis":"x","line":3,"x":899.5,"y":0,"w":11,"h":600},{"key":"y:1:1","axis":"y","line":1,"x":60,"y":294.5,"w":840,"h":11}]}
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.25,"node":{"card":"card-2","fixed":false,"width":50}},{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false,"data":{"tabs":["t1"]}}},{"share":0.5,"node":{"card":"b","fixed":false}}]}},{"share":0.5,"node":{"card":"c","fixed":true}}]}},{"share":0.25,"node":{"card":"card-1","fixed":false,"data":{"kind":"edge"},"width":90}}]}}},
+  {"call":"rects","returns":{"card-2":{"x":0,"y":0,"w":50,"h":600},"a":{"x":60,"y":0,"w":415.00000000000006,"h":295},"b":{"x":485.00000000000006,"y":0,"w":415.00000000000006,"h":295},"c":{"x":60,"y":305,"w":840.0000000000001,"h":295},"card-1":{"x":910.0000000000001,"y":0,"w":90,"h":600}}},
+  {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":54.5,"y":0,"w":1,"h":600},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":54.5,"y":0,"w":1,"h":600},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":479.50000000000006,"y":0,"w":1,"h":600},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":479.50000000000006,"y":0,"w":1,"h":300},{"key":"vx:3","axis":"x","line":3,"virtual":true,"x":904.5000000000001,"y":0,"w":1,"h":600},{"key":"sx:3:0","axis":"x","line":3,"virtual":false,"x":904.5000000000001,"y":0,"w":1,"h":600},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":299.5,"w":1000,"h":1},{"key":"sy:1:1","axis":"y","line":1,"virtual":false,"x":55,"y":299.5,"w":850.0000000000001,"h":1}]},
+  {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":49.5,"y":0,"w":11,"h":600},{"key":"x:2:0","axis":"x","line":2,"x":474.50000000000006,"y":0,"w":11,"h":295},{"key":"x:3:0","axis":"x","line":3,"x":899.5000000000001,"y":0,"w":11,"h":600},{"key":"y:1:1","axis":"y","line":1,"x":60,"y":294.5,"w":840.0000000000001,"h":11}]}
  ]},
- {"name":"an insert that no neighbour can pay for takes the span from every slot","options":{"width":800,"height":600,"gap":8,"minSize":40},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"b"}}]}},"steps":[
+ {"name":"an insert at a boundary of an even row takes the span from every kid in proportion","options":{"width":800,"height":600,"gap":8,"minSize":40},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"b"}}]}},"steps":[
   {"call":"insertAt","args":["x",1,{"id":"mid","size":500}],"returns":"mid"},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.1875,"node":{"card":"a","fixed":false}},{"share":0.625,"node":{"card":"mid","fixed":false,"width":500}},{"share":0.1875,"node":{"card":"b","fixed":false}}]},"paidBy":{"mid":""}}},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.375,"node":{"card":"a","fixed":false}},{"share":0.25,"node":{"card":"mid","fixed":false,"width":500}},{"share":0.375,"node":{"card":"b","fixed":false}}]}}},
   {"call":"rects","returns":{"a":{"x":0,"y":0,"w":142,"h":600},"b":{"x":658,"y":0,"w":142,"h":600},"mid":{"x":150,"y":0,"w":500,"h":600}}},
   {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":145.5,"y":0,"w":1,"h":600},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":145.5,"y":0,"w":1,"h":600},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":653.5,"y":0,"w":1,"h":600},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":653.5,"y":0,"w":1,"h":600}]},
   {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":140.5,"y":0,"w":11,"h":600},{"key":"x:2:0","axis":"x","line":2,"x":648.5,"y":0,"w":11,"h":600}]},
   {"call":"close","args":["mid"],"returns":true},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"b","fixed":false}}]},"paidBy":{}}},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"b","fixed":false}}]}}},
   {"call":"rects","returns":{"a":{"x":0,"y":0,"w":396,"h":600},"b":{"x":404,"y":0,"w":396,"h":600}}},
   {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":399.5,"y":0,"w":1,"h":600},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":399.5,"y":0,"w":1,"h":600}]},
   {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":394.5,"y":0,"w":11,"h":600}]}
@@ -406,61 +384,50 @@
  {"name":"a move takes a card to a side of another and keeps its id and payload","options":{"width":1000,"height":800,"gap":10,"minSize":60},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a","data":{"tabs":["one"]}}},{"share":0.5,"node":{"card":"c","height":200}}]}},{"share":0.5,"node":{"card":"b"}}]}},"steps":[
   {"call":"canMove","args":["a","b","right"],"returns":true},
   {"call":"move","args":["a","b","right"],"returns":true},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"c","fixed":false}},{"share":0.25,"node":{"card":"b","fixed":false}},{"share":0.25,"node":{"card":"a","fixed":false,"data":{"tabs":["one"]}}}]},"paidBy":{"a":"b"}}},
-  {"call":"rects","returns":{"b":{"x":505,"y":0,"w":240,"h":800},"c":{"x":0,"y":0,"w":495,"h":800},"a":{"x":755,"y":0,"w":245,"h":800}}},
-  {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":499.5,"y":0,"w":1,"h":800},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":499.5,"y":0,"w":1,"h":800},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":749.5,"y":0,"w":1,"h":800},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":749.5,"y":0,"w":1,"h":800}]},
-  {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":494.5,"y":0,"w":11,"h":800},{"key":"x:2:0","axis":"x","line":2,"x":744.5,"y":0,"w":11,"h":800}]},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.3333333333333333,"node":{"card":"c","fixed":false}},{"share":0.3333333333333333,"node":{"card":"b","fixed":false}},{"share":0.3333333333333333,"node":{"card":"a","fixed":false,"data":{"tabs":["one"]}}}]}}},
+  {"call":"rects","returns":{"c":{"x":0,"y":0,"w":326.66666666666663,"h":800},"b":{"x":336.66666666666663,"y":0,"w":326.66666666666663,"h":800},"a":{"x":673.3333333333333,"y":0,"w":326.66666666666674,"h":800}}},
+  {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":331.16666666666663,"y":0,"w":1,"h":800},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":331.16666666666663,"y":0,"w":1,"h":800},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":667.8333333333333,"y":0,"w":1,"h":800},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":667.8333333333333,"y":0,"w":1,"h":800}]},
+  {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":326.16666666666663,"y":0,"w":11,"h":800},{"key":"x:2:0","axis":"x","line":2,"x":662.8333333333333,"y":0,"w":11,"h":800}]},
   {"call":"canMove","args":["c","a","top"],"returns":true},
   {"call":"move","args":["c","a","top"],"returns":true},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.75,"node":{"card":"b","fixed":false}},{"share":0.25,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"c","fixed":false}},{"share":0.5,"node":{"card":"a","fixed":false,"data":{"tabs":["one"]}}}]}}]},"paidBy":{"a":"b","c":"a"}}},
-  {"call":"rects","returns":{"b":{"x":0,"y":0,"w":745,"h":800},"a":{"x":755,"y":405,"w":245,"h":395},"c":{"x":755,"y":0,"w":245,"h":395}}},
-  {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":749.5,"y":0,"w":1,"h":800},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":749.5,"y":0,"w":1,"h":800},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":399.5,"w":1000,"h":1},{"key":"sy:1:1","axis":"y","line":1,"virtual":false,"x":750,"y":399.5,"w":250,"h":1}]},
-  {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":744.5,"y":0,"w":11,"h":800},{"key":"y:1:1","axis":"y","line":1,"x":755,"y":394.5,"w":245,"h":11}]},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"b","fixed":false}},{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"c","fixed":false}},{"share":0.5,"node":{"card":"a","fixed":false,"data":{"tabs":["one"]}}}]}}]}}},
+  {"call":"rects","returns":{"b":{"x":0,"y":0,"w":495,"h":800},"c":{"x":505,"y":0,"w":495,"h":395},"a":{"x":505,"y":405,"w":495,"h":395}}},
+  {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":499.5,"y":0,"w":1,"h":800},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":499.5,"y":0,"w":1,"h":800},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":399.5,"w":1000,"h":1},{"key":"sy:1:1","axis":"y","line":1,"virtual":false,"x":500,"y":399.5,"w":500,"h":1}]},
+  {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":494.5,"y":0,"w":11,"h":800},{"key":"y:1:1","axis":"y","line":1,"x":505,"y":394.5,"w":495,"h":11}]},
   {"call":"move","args":["a","a","left"],"returns":false},
   {"call":"move","args":["a","none","left"],"returns":false},
   {"call":"canMove","args":["a","b","middle"],"returns":false},
   {"call":"move","args":["a","b","middle"],"returns":false},
   {"call":"setFixed","args":["b",true],"returns":true},
   {"call":"move","args":["b","a","left"],"returns":false},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.75,"node":{"card":"b","fixed":true}},{"share":0.25,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"c","fixed":false}},{"share":0.5,"node":{"card":"a","fixed":false,"data":{"tabs":["one"]}}}]}}]},"paidBy":{"a":"b","c":"a"}}}
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"b","fixed":true}},{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"c","fixed":false}},{"share":0.5,"node":{"card":"a","fixed":false,"data":{"tabs":["one"]}}}]}}]}}}
  ]},
- {"name":"a frame takes one gap of the corridor on its side, so a card stands one gap from the frame around it and the frame one gap from the neighbour","state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"b"}}]}},"steps":[
+ {"name":"a box frames its inner node one corridor inside its left, right and bottom sides and stands one corridor from its neighbour, and its head is drawn inside the top of the card below it","state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"box":"g","inner":{"card":"a"}}},{"share":0.5,"node":{"card":"b"}}]}},"steps":[
   {"call":"resize","args":[1000,600]},
-  {"call":"setFrames","args":[{"a":{"right":1}}]},
-  {"call":"rects","returns":{"a":{"x":0,"y":0,"w":464,"h":600},"b":{"x":512,"y":0,"w":488,"h":600}}},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"b","fixed":false}}]},"paidBy":{}}},
-  {"call":"setFrames","args":[{}]},
-  {"call":"rects","returns":{"a":{"x":0,"y":0,"w":488,"h":600},"b":{"x":512,"y":0,"w":488,"h":600}}}
+  {"call":"rects","returns":{"a":{"x":24,"y":0,"w":464,"h":576},"b":{"x":536,"y":0,"w":464,"h":600}}},
+  {"call":"setHeads","args":[{"g":30}]},
+  {"call":"rects","returns":{"a":{"x":24,"y":0,"w":464,"h":576},"b":{"x":536,"y":0,"w":464,"h":600}}},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"box":"g","inner":{"card":"a","fixed":false}}},{"share":0.5,"node":{"card":"b","fixed":false}}]}}}
  ]},
- {"name":"frames on the two sides of a line add a gap each to its corridor","state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"b"}}]}},"steps":[
+ {"name":"the frames of boxes on the two sides of a line are costs of the cut, and the kids share the rest by their fractions","state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"box":"g1","inner":{"card":"a"}}},{"share":0.5,"node":{"box":"g2","inner":{"box":"g3","inner":{"card":"b"}}}}]}},"steps":[
   {"call":"resize","args":[1000,600]},
-  {"call":"setFrames","args":[{"a":{"right":1,"bottom":1},"b":{"left":2}}]},
-  {"call":"rects","returns":{"a":{"x":0,"y":0,"w":464,"h":576},"b":{"x":560,"y":0,"w":440,"h":600}}}
+  {"call":"rects","returns":{"a":{"x":24,"y":0,"w":416,"h":576},"b":{"x":536,"y":0,"w":416,"h":552}}}
  ]},
- {"name":"a slot carries the most frames of its cards on a side, and a card in fewer frames stands nearer the line","state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"c"}}]}},{"share":0.5,"node":{"card":"b"}}]}},"steps":[
+ {"name":"a box in one kid of a column frames only its own card, and the other kid is drawn to the line","state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"box":"g","inner":{"card":"a"}}},{"share":0.5,"node":{"card":"c"}}]}},{"share":0.5,"node":{"card":"b"}}]}},"steps":[
   {"call":"resize","args":[1000,600]},
-  {"call":"setFrames","args":[{"a":{"right":1}}]},
-  {"call":"rects","returns":{"a":{"x":0,"y":0,"w":464,"h":288},"c":{"x":0,"y":312,"w":488,"h":288},"b":{"x":512,"y":0,"w":488,"h":600}}}
+  {"call":"rects","returns":{"a":{"x":24,"y":0,"w":440,"h":276},"c":{"x":0,"y":324,"w":488,"h":276},"b":{"x":512,"y":0,"w":488,"h":600}}}
  ]},
- {"name":"a px size is the drawn size of a card in the most frames of its slot","state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","width":300}},{"share":0.5,"node":{"card":"b"}}]}},"steps":[
+ {"name":"a px size is the drawn size of a card inside the frame of its box","state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"box":"g","inner":{"card":"a","width":300}}},{"share":0.5,"node":{"card":"b"}}]}},"steps":[
   {"call":"resize","args":[1000,600]},
-  {"call":"setFrames","args":[{"a":{"right":1}}]},
-  {"call":"rects","returns":{"a":{"x":0,"y":0,"w":300,"h":600},"b":{"x":348,"y":0,"w":652,"h":600}}}
- ]},
- {"name":"frames that name no card, count below zero or count no whole number are refused and change nothing","state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"b"}}]}},"steps":[
-  {"call":"resize","args":[1000,600]},
-  {"call":"setFrames","args":[{"z":{"left":1}}],"throws":"soksak: frames name \"z\", which is no card"},
-  {"call":"setFrames","args":[{"a":{"right":-1}}],"throws":"soksak: the frames of \"a\" count below zero"},
-  {"call":"setFrames","args":[{"a":{"right":1.5}}],"throws":"soksak: the frames of \"a\" count no whole number"},
-  {"call":"rects","returns":{"a":{"x":0,"y":0,"w":488,"h":600},"b":{"x":512,"y":0,"w":488,"h":600}}}
+  {"call":"rects","returns":{"a":{"x":24,"y":0,"w":300,"h":576},"b":{"x":372,"y":0,"w":628,"h":600}}}
  ]},
  {"name":"arrange even puts the cards in reading order into an equal grid and removes every merge and size","options":{"width":1000,"height":600,"gap":10,"minSize":40},"state":{"root":{"cut":"x","kids":[{"share":0.6,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a","width":250}},{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"c"}},{"share":0.5,"node":{"card":"d"}}]}}]}},{"share":0.4,"node":{"card":"b","fixed":true}}]}},"steps":[
   {"call":"arrange","args":["even"],"returns":true},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"c","fixed":false}}]}},{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"b","fixed":true}},{"share":0.5,"node":{"card":"d","fixed":false}}]}}]},"paidBy":{}}}
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"c","fixed":false}}]}},{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"b","fixed":true}},{"share":0.5,"node":{"card":"d","fixed":false}}]}}]}}}
  ]},
  {"name":"arrange even adds one empty card when the grid closest to square has one cell more than the cards","options":{"width":1000,"height":600,"gap":10,"minSize":40},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"b"}},{"share":0.5,"node":{"card":"c"}}]}}]}},"steps":[
   {"call":"arrange","args":["even"],"returns":true},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"c","fixed":false}}]}},{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"b","fixed":false}},{"share":0.5,"node":{"card":"card-1","fixed":false}}]}}]},"paidBy":{}}}
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"c","fixed":false}}]}},{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"b","fixed":false}},{"share":0.5,"node":{"card":"card-1","fixed":false}}]}}]}}}
  ]},
  {"name":"arrange even gives every cell the same drawn size with the border insets in the line spacing","options":{"width":1500,"height":400,"gap":10,"minSize":40},"state":{"root":{"cut":"x","kids":[{"share":0.2,"node":{"card":"a"}},{"share":0.2,"node":{"card":"b"}},{"share":0.19999999999999996,"node":{"card":"c"}},{"share":0.20000000000000007,"node":{"card":"d"}},{"share":0.19999999999999996,"node":{"card":"e"}}]}},"steps":[
   {"call":"arrange","args":["even"],"returns":true},
@@ -469,41 +436,20 @@
  ]},
  {"name":"arrange even changes nothing and is false when no equal grid keeps every cell at minSize, and refuses another mode","options":{"width":120,"height":80,"gap":10,"minSize":40},"state":{"root":{"cut":"x","kids":[{"share":0.6,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a","width":250}},{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"c"}},{"share":0.5,"node":{"card":"d"}}]}}]}},{"share":0.4,"node":{"card":"b","fixed":true}}]}},"steps":[
   {"call":"arrange","args":["even"],"returns":false},
-  {"call":"lines","args":["x"],"returns":[0,0.3,0.6,1]},
+  {"call":"lines","args":["x"],"returns":[0,0.275,0.5916666666666667,1]},
   {"call":"arrange","args":["odd"],"throws":"unknown arrangement \"odd\""}
- ]},
- {"name":"fill and close take the sides to try in their order, fillSides by default, and refuse a side that is no fill side","options":{"width":1000,"height":600,"gap":10,"minSize":40},"state":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"b"}}]}},{"share":0.5,"node":{"card":"c"}}]}},"steps":[
-  {"call":"get","args":["fillSides"],"returns":["below","above","right","left"]},
-  {"call":"set","args":["fillOrder","h"]},
-  {"call":"get","args":["fillSides"],"returns":["right","left","below","above"]},
-  {"call":"set","args":["fillOrder","v"]},
-  {"call":"fill","args":["a"],"returns":{"side":"right","grow":"c0","cards":[{"id":"b","c0":1,"c1":2,"r0":0,"r1":1,"fixed":false}]}},
-  {"call":"fill","args":["a",["above"]],"returns":null},
-  {"call":"fill","args":["a",["up"]],"throws":"unknown fill side up"},
-  {"call":"close","args":["a",["up"]],"throws":"unknown fill side up"},
-  {"call":"move","args":["a","c","bottom",["up"]],"throws":"unknown fill side up"},
-  {"call":"close","args":["a",["right"]],"returns":true},
-  {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"card":"b","fixed":false}},{"share":0.5,"node":{"card":"c","fixed":false}}]},"paidBy":{}}}
- ]},
- {"name":"a close with no sides only removes the slots of the card","options":{"width":1000,"height":600,"gap":10,"minSize":40},"state":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"b"}}]}},{"share":0.5,"node":{"card":"c"}}]}},"steps":[
-  {"call":"close","args":["a",[]],"returns":true},
-  {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"card":"b","fixed":false}},{"share":0.5,"node":{"card":"c","fixed":false}}]},"paidBy":{}}}
- ]},
- {"name":"a move closes the card with its sides","options":{"width":1000,"height":600,"gap":10,"minSize":40},"state":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"b"}}]}},{"share":0.5,"node":{"card":"c"}}]}},"steps":[
-  {"call":"move","args":["a","c","bottom",["right"]],"returns":true},
-  {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"card":"b","fixed":false}},{"share":0.25,"node":{"card":"c","fixed":false}},{"share":0.25,"node":{"card":"a","fixed":false}}]},"paidBy":{"a":"c"}}}
  ]},
  {"name":"newLine cuts at a new line at the centre where a line that the card spans across lies inside it","options":{"width":1000,"height":600,"gap":10,"minSize":40},"state":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"cut":"x","kids":[{"share":0.4,"node":{"card":"b"}},{"share":0.6,"node":{"card":"c"}}]}}]}},"steps":[
   {"call":"split","args":["a","x",{"id":"n","newLine":true}],"returns":"n"},
-  {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"n","fixed":false}}]}},{"share":0.5,"node":{"cut":"x","kids":[{"share":0.4,"node":{"card":"b","fixed":false}},{"share":0.6,"node":{"card":"c","fixed":false}}]}}]},"paidBy":{"n":"a"}}}
+  {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"n","fixed":false}}]}},{"share":0.5,"node":{"cut":"x","kids":[{"share":0.4,"node":{"card":"b","fixed":false}},{"share":0.6,"node":{"card":"c","fixed":false}}]}}]}}}
  ]},
  {"name":"without newLine a split takes the line inside the card","options":{"width":1000,"height":600,"gap":10,"minSize":40},"state":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"cut":"x","kids":[{"share":0.4,"node":{"card":"b"}},{"share":0.6,"node":{"card":"c"}}]}}]}},"steps":[
   {"call":"split","args":["a","x",{"id":"n"}],"returns":"n"},
-  {"call":"lines","args":["x"],"returns":[0,0.4,1]}
+  {"call":"lines","args":["x"],"returns":[0,0.401,1]}
  ]},
  {"name":"even gives every child of every cut an equal share","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"y","kids":[{"share":0.4,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.25,"node":{"card":"b"}},{"share":0.125,"node":{"card":"c"}},{"share":0.0625,"node":{"card":"d"}},{"share":0.0625,"node":{"card":"e"}}]}},{"share":0.6,"node":{"cut":"x","kids":[{"share":0.3,"node":{"card":"f"}},{"share":0.7,"node":{"card":"g"}}]}}]}},"steps":[
   {"call":"even","args":[]},
-  {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.1941935483870968,"node":{"card":"a","fixed":false}},{"share":0.20387096774193547,"node":{"card":"b","fixed":false}},{"share":0.20387096774193536,"node":{"card":"c","fixed":false}},{"share":0.20387096774193558,"node":{"card":"d","fixed":false}},{"share":0.1941935483870968,"node":{"card":"e","fixed":false}}]}},{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"f","fixed":false}},{"share":0.5,"node":{"card":"g","fixed":false}}]}}]},"paidBy":{}}},
+  {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.2,"node":{"card":"a","fixed":false}},{"share":0.2,"node":{"card":"b","fixed":false}},{"share":0.2,"node":{"card":"c","fixed":false}},{"share":0.2,"node":{"card":"d","fixed":false}},{"share":0.2,"node":{"card":"e","fixed":false}}]}},{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"f","fixed":false}},{"share":0.5,"node":{"card":"g","fixed":false}}]}}]}}},
   {"call":"rect","args":["a"],"returns":{"x":0,"y":0,"w":228.8,"h":288}},
   {"call":"rect","args":["b"],"returns":{"x":252.8,"y":0,"w":228.8,"h":288}},
   {"call":"rect","args":["c"],"returns":{"x":505.6,"y":0,"w":228.8,"h":288}},
@@ -514,14 +460,14 @@
  ]},
  {"name":"even gives two rows of the same count the same lines","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.2,"node":{"card":"a"}},{"share":0.39999999999999997,"node":{"card":"b"}},{"share":0.4,"node":{"card":"c"}}]}},{"share":0.5,"node":{"cut":"x","kids":[{"share":0.3,"node":{"card":"d"}},{"share":0.39999999999999997,"node":{"card":"e"}},{"share":0.30000000000000004,"node":{"card":"f"}}]}}]}},"steps":[
   {"call":"even","args":[]},
-  {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.3301075268817204,"node":{"card":"a","fixed":false}},{"share":0.3397849462365592,"node":{"card":"b","fixed":false}},{"share":0.3301075268817204,"node":{"card":"c","fixed":false}}]}},{"share":0.5,"node":{"cut":"x","kids":[{"share":0.3301075268817204,"node":{"card":"d","fixed":false}},{"share":0.3397849462365592,"node":{"card":"e","fixed":false}},{"share":0.3301075268817204,"node":{"card":"f","fixed":false}}]}}]},"paidBy":{}}}
+  {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.3333333333333333,"node":{"card":"a","fixed":false}},{"share":0.3333333333333333,"node":{"card":"b","fixed":false}},{"share":0.3333333333333333,"node":{"card":"c","fixed":false}}]}},{"share":0.5,"node":{"cut":"x","kids":[{"share":0.3333333333333333,"node":{"card":"d","fixed":false}},{"share":0.3333333333333333,"node":{"card":"e","fixed":false}},{"share":0.3333333333333333,"node":{"card":"f","fixed":false}}]}}]}}}
  ]},
  {"name":"even counts the head of a box, so the member below the head and its sibling are drawn at one height below it","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"box":"g","inner":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"b"}}]}}},{"share":0.5,"node":{"card":"c"}}]}},"steps":[
   {"call":"setHeads","args":[{"g":56}]},
   {"call":"even","args":[]},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"box":"g","inner":{"cut":"y","kids":[{"share":0.5466666666666666,"node":{"card":"a","fixed":false}},{"share":0.45333333333333337,"node":{"card":"b","fixed":false}}]}}},{"share":0.5,"node":{"card":"c","fixed":false}}]},"paidBy":{}}},
-  {"call":"rect","args":["a"],"returns":{"x":0,"y":0,"w":608,"h":316}},
-  {"call":"rect","args":["b"],"returns":{"x":0,"y":340,"w":608,"h":260}}
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"box":"g","inner":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"b","fixed":false}}]}}},{"share":0.5,"node":{"card":"c","fixed":false}}]}}},
+  {"call":"rect","args":["a"],"returns":{"x":24,"y":0,"w":584,"h":304}},
+  {"call":"rect","args":["b"],"returns":{"x":24,"y":328,"w":584,"h":248}}
  ]},
  {"name":"four inserts toward right from the last card give five cards of one drawn width (P2)","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"card":"a"}},"steps":[
   {"call":"insert","args":["a","right",{"card":"b"}],"returns":"b"},
@@ -539,48 +485,48 @@
   {"call":"insert","args":["a","right",{"card":"b"}],"returns":"b"},
   {"call":"insert","args":["a","right",{"card":"c"}],"returns":"c"},
   {"call":"insert","args":["a","right",{"card":"d"}],"returns":"d"},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.24516129032258063,"node":{"card":"a","fixed":false}},{"share":0.2548387096774194,"node":{"card":"d","fixed":false}},{"share":0.2548387096774194,"node":{"card":"c","fixed":false}},{"share":0.2451612903225806,"node":{"card":"b","fixed":false}}]},"paidBy":{}}}
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.25,"node":{"card":"a","fixed":false}},{"share":0.25,"node":{"card":"d","fixed":false}},{"share":0.25,"node":{"card":"c","fixed":false}},{"share":0.25,"node":{"card":"b","fixed":false}}]}}}
  ]},
  {"name":"a withdraw from a row of four gives its space to the three others in proportion (P1)","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.24516129032258063,"node":{"card":"a"}},{"share":0.2548387096774194,"node":{"card":"b"}},{"share":0.2548387096774194,"node":{"card":"c"}},{"share":0.2451612903225806,"node":{"card":"d"}}]}},"steps":[
   {"call":"withdraw","args":["b"],"returns":{"card":"b","fixed":false}},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.3301075268817204,"node":{"card":"a","fixed":false}},{"share":0.3397849462365592,"node":{"card":"c","fixed":false}},{"share":0.3301075268817204,"node":{"card":"d","fixed":false}}]},"paidBy":{}}},
-  {"call":"rect","args":["a"],"returns":{"x":0,"y":0,"w":397.3333333333333,"h":600}},
-  {"call":"rect","args":["c"],"returns":{"x":421.3333333333333,"y":0,"w":397.3333333333334,"h":600}},
-  {"call":"rect","args":["d"],"returns":{"x":842.6666666666667,"y":0,"w":397.33333333333326,"h":600}}
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.329004329004329,"node":{"card":"a","fixed":false}},{"share":0.34199134199134207,"node":{"card":"c","fixed":false}},{"share":0.32900432900432897,"node":{"card":"d","fixed":false}}]}}},
+  {"call":"rect","args":["a"],"returns":{"x":0,"y":0,"w":392.17316017316017,"h":600}},
+  {"call":"rect","args":["c"],"returns":{"x":416.17316017316017,"y":0,"w":407.6536796536797,"h":600}},
+  {"call":"rect","args":["d"],"returns":{"x":847.8268398268399,"y":0,"w":392.1731601731601,"h":600}}
  ]},
  {"name":"a withdraw keeps the proportions of the cards that take the space (P1)","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.25,"node":{"card":"b"}},{"share":0.25,"node":{"card":"c"}}]}},"steps":[
   {"call":"withdraw","args":["b"],"returns":{"card":"b","fixed":false}},
-  {"call":"rect","args":["a"],"returns":{"x":0,"y":0,"w":816.0353200883002,"h":600}},
-  {"call":"rect","args":["c"],"returns":{"x":840.0353200883002,"y":0,"w":399.9646799116998,"h":600}}
+  {"call":"rect","args":["a"],"returns":{"x":0,"y":0,"w":810.6666666666666,"h":600}},
+  {"call":"rect","args":["c"],"returns":{"x":834.6666666666666,"y":0,"w":405.33333333333337,"h":600}}
  ]},
- {"name":"an insert across a row wraps the target in a new cut at half of its rectangle and makes no box (P3)","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.3301075268817204,"node":{"card":"a","fixed":false}},{"share":0.3397849462365592,"node":{"card":"b","fixed":false}},{"share":0.3301075268817204,"node":{"card":"c","fixed":false}}]},"paidBy":{}},"steps":[
+ {"name":"an insert across a row wraps the target in a new cut at half of its rectangle and makes no box (P3)","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.3301075268817204,"node":{"card":"a","fixed":false}},{"share":0.3397849462365592,"node":{"card":"b","fixed":false}},{"share":0.3301075268817204,"node":{"card":"c","fixed":false}}]}},"steps":[
   {"call":"insert","args":["b","bottom",{"card":"d"}],"returns":"d"},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.3301075268817204,"node":{"card":"a","fixed":false}},{"share":0.3397849462365592,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"b","fixed":false}},{"share":0.5,"node":{"card":"d","fixed":false}}]}},{"share":0.3301075268817204,"node":{"card":"c","fixed":false}}]},"paidBy":{}}},
-  {"call":"rect","args":["b"],"returns":{"x":421.3333333333333,"y":0,"w":397.3333333333334,"h":288}},
-  {"call":"rect","args":["d"],"returns":{"x":421.3333333333333,"y":312,"w":397.3333333333334,"h":288}}
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.3301075268817204,"node":{"card":"a","fixed":false}},{"share":0.3397849462365592,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"b","fixed":false}},{"share":0.5,"node":{"card":"d","fixed":false}}]}},{"share":0.3301075268817204,"node":{"card":"c","fixed":false}}]}}},
+  {"call":"rect","args":["b"],"returns":{"x":417.4881720430107,"y":0,"w":405.02365591397853,"h":288}},
+  {"call":"rect","args":["d"],"returns":{"x":417.4881720430107,"y":312,"w":405.02365591397853,"h":288}}
  ]},
  {"name":"an insert beside neighbouring children wraps them as one target","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.3301075268817204,"node":{"card":"a"}},{"share":0.3397849462365592,"node":{"card":"b"}},{"share":0.3301075268817204,"node":{"card":"c"}}]}},{"share":0.5,"node":{"card":"d"}}]}},"steps":[
   {"call":"insert","args":[["a","b"],"bottom",{"card":"e"}],"returns":"e"},
-  {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.6698924731182796,"node":{"cut":"y","kids":[{"share":0.48,"node":{"cut":"x","kids":[{"share":0.49277688603531294,"node":{"card":"a","fixed":false}},{"share":0.5072231139646871,"node":{"card":"b","fixed":false}}]}},{"share":0.52,"node":{"card":"e","fixed":false}}]}},{"share":0.3301075268817204,"node":{"card":"c","fixed":false}}]}},{"share":0.5,"node":{"card":"d","fixed":false}}]},"paidBy":{}}},
+  {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.6698924731182796,"node":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.49277688603531294,"node":{"card":"a","fixed":false}},{"share":0.5072231139646871,"node":{"card":"b","fixed":false}}]}},{"share":0.5,"node":{"card":"e","fixed":false}}]}},{"share":0.3301075268817204,"node":{"card":"c","fixed":false}}]}},{"share":0.5,"node":{"card":"d","fixed":false}}]}}},
   {"call":"insert","args":[["a","c"],"bottom",{"card":"f"}],"throws":"cards a, c are not neighbours of one cut"}
  ]},
  {"name":"an insert along a column of a box with a head gives the three members one height below the head (P2)","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"box":"g","inner":{"cut":"y","kids":[{"share":0.5466666666666666,"node":{"card":"a"}},{"share":0.45333333333333337,"node":{"card":"b"}}]}}},{"share":0.5,"node":{"card":"c"}}]}},"steps":[
   {"call":"setHeads","args":[{"g":56}]},
   {"call":"insert","args":["b","bottom",{"card":"d"}],"returns":"d"},
-  {"call":"rect","args":["a"],"returns":{"x":0,"y":0,"w":608,"h":221.33333333333334}},
-  {"call":"rect","args":["b"],"returns":{"x":0,"y":245.33333333333334,"w":608,"h":165.3333333333333}},
-  {"call":"rect","args":["d"],"returns":{"x":0,"y":434.66666666666663,"w":608,"h":165.33333333333337}}
+  {"call":"rect","args":["a"],"returns":{"x":24,"y":0,"w":584,"h":314.02666666666664}},
+  {"call":"rect","args":["b"],"returns":{"x":24,"y":338.02666666666664,"w":584,"h":106.98666666666668}},
+  {"call":"rect","args":["d"],"returns":{"x":24,"y":469.0133333333333,"w":584,"h":106.98666666666668}}
  ]},
- {"name":"a move is a withdraw and an insert","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.3301075268817204,"node":{"card":"a","fixed":false}},{"share":0.3397849462365592,"node":{"card":"b","fixed":false}},{"share":0.3301075268817204,"node":{"card":"c","fixed":false}}]},"paidBy":{}},"steps":[
+ {"name":"a move is a withdraw and an insert","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.3301075268817204,"node":{"card":"a","fixed":false}},{"share":0.3397849462365592,"node":{"card":"b","fixed":false}},{"share":0.3301075268817204,"node":{"card":"c","fixed":false}}]}},"steps":[
   {"call":"insert","args":["c","bottom",{"card":"a","fixed":false}],"throws":"card a is a member of the layout"},
   {"call":"withdraw","args":["a"],"returns":{"card":"a","fixed":false}},
   {"call":"insert","args":["c","bottom",{"card":"a","fixed":false}],"returns":"a"},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5000000000000001,"node":{"card":"b","fixed":false}},{"share":0.4999999999999999,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"c","fixed":false}},{"share":0.5,"node":{"card":"a","fixed":false}}]}}]},"paidBy":{}}}
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5072231139646871,"node":{"card":"b","fixed":false}},{"share":0.49277688603531294,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"c","fixed":false}},{"share":0.5,"node":{"card":"a","fixed":false}}]}}]}}}
  ]},
  {"name":"a withdrawn box lands with its members in their proportions","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"box":"g","inner":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"b"}}]}}},{"share":0.5,"node":{"card":"c"}}]}},"steps":[
   {"call":"withdraw","args":["g"],"returns":{"box":"g","inner":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"b","fixed":false}}]}}},
   {"call":"insert","args":["c","bottom",{"box":"g","inner":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"b","fixed":false}}]}}],"returns":"g"},
-  {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"card":"c","fixed":false}},{"share":0.5,"node":{"box":"g","inner":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"b","fixed":false}}]}}}]},"paidBy":{}}}
+  {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"card":"c","fixed":false}},{"share":0.5,"node":{"box":"g","inner":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"b","fixed":false}}]}}}]}}}
  ]},
  {"name":"the cut operations refuse an unknown side, a card that is no member, the last card and a fixed card","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"s","fixed":true}}]}},"steps":[
   {"call":"insert","args":["a","up",{"card":"x"}],"throws":"unknown side up; use left, right, top or bottom"},
@@ -592,62 +538,63 @@
  ]},
  {"name":"a drop on the right zone of the first card of an even row of three adds a card along the row, which gives four quarters","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.3301075268817204,"node":{"card":"a"}},{"share":0.3397849462365592,"node":{"card":"b"}},{"share":0.3301075268817204,"node":{"card":"c"}}]}},"steps":[
   {"call":"insert","args":["a","right",{"card":"n"}],"returns":"n"},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.24516129032258063,"node":{"card":"a","fixed":false}},{"share":0.2548387096774194,"node":{"card":"n","fixed":false}},{"share":0.2548387096774194,"node":{"card":"b","fixed":false}},{"share":0.2451612903225806,"node":{"card":"c","fixed":false}}]},"paidBy":{}}},
-  {"call":"rect","args":["a"],"returns":{"x":0,"y":0,"w":292,"h":600}},
-  {"call":"rect","args":["n"],"returns":{"x":316,"y":0,"w":292,"h":600}},
-  {"call":"rect","args":["b"],"returns":{"x":632,"y":0,"w":292,"h":600}},
-  {"call":"rect","args":["c"],"returns":{"x":948,"y":0,"w":292,"h":600}}
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.1650537634408602,"node":{"card":"a","fixed":false}},{"share":0.1650537634408602,"node":{"card":"n","fixed":false}},{"share":0.3397849462365592,"node":{"card":"b","fixed":false}},{"share":0.3301075268817204,"node":{"card":"c","fixed":false}}]}}},
+  {"call":"rect","args":["a"],"returns":{"x":0,"y":0,"w":192.7827956989247,"h":600}},
+  {"call":"rect","args":["n"],"returns":{"x":216.7827956989247,"y":0,"w":192.7827956989247,"h":600}},
+  {"call":"rect","args":["b"],"returns":{"x":433.5655913978494,"y":0,"w":396.8688172043012,"h":600}},
+  {"call":"rect","args":["c"],"returns":{"x":854.4344086021506,"y":0,"w":385.5655913978494,"h":600}}
  ]},
  {"name":"a drop on the line between the first and the second card of an even row of three gives four quarters","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.3301075268817204,"node":{"card":"a"}},{"share":0.3397849462365592,"node":{"card":"b"}},{"share":0.3301075268817204,"node":{"card":"c"}}]}},"steps":[
   {"call":"insert","args":["a","right",{"card":"n"}],"returns":"n"},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.24516129032258063,"node":{"card":"a","fixed":false}},{"share":0.2548387096774194,"node":{"card":"n","fixed":false}},{"share":0.2548387096774194,"node":{"card":"b","fixed":false}},{"share":0.2451612903225806,"node":{"card":"c","fixed":false}}]},"paidBy":{}}},
-  {"call":"rect","args":["a"],"returns":{"x":0,"y":0,"w":292,"h":600}},
-  {"call":"rect","args":["n"],"returns":{"x":316,"y":0,"w":292,"h":600}},
-  {"call":"rect","args":["b"],"returns":{"x":632,"y":0,"w":292,"h":600}},
-  {"call":"rect","args":["c"],"returns":{"x":948,"y":0,"w":292,"h":600}}
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.1650537634408602,"node":{"card":"a","fixed":false}},{"share":0.1650537634408602,"node":{"card":"n","fixed":false}},{"share":0.3397849462365592,"node":{"card":"b","fixed":false}},{"share":0.3301075268817204,"node":{"card":"c","fixed":false}}]}}},
+  {"call":"rect","args":["a"],"returns":{"x":0,"y":0,"w":192.7827956989247,"h":600}},
+  {"call":"rect","args":["n"],"returns":{"x":216.7827956989247,"y":0,"w":192.7827956989247,"h":600}},
+  {"call":"rect","args":["b"],"returns":{"x":433.5655913978494,"y":0,"w":396.8688172043012,"h":600}},
+  {"call":"rect","args":["c"],"returns":{"x":854.4344086021506,"y":0,"w":385.5655913978494,"h":600}}
  ]},
  {"name":"a drop on the top edge of the plane wraps the row in a column of two halves, and the row keeps its proportions","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.3301075268817204,"node":{"card":"a"}},{"share":0.3397849462365592,"node":{"card":"b"}},{"share":0.3301075268817204,"node":{"card":"c"}}]}},"steps":[
   {"call":"insert","args":[["a","b","c"],"top",{"card":"n"}],"returns":"n"},
-  {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"card":"n","fixed":false}},{"share":0.5,"node":{"cut":"x","kids":[{"share":0.3301075268817204,"node":{"card":"a","fixed":false}},{"share":0.3397849462365592,"node":{"card":"b","fixed":false}},{"share":0.3301075268817204,"node":{"card":"c","fixed":false}}]}}]},"paidBy":{}}},
+  {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"card":"n","fixed":false}},{"share":0.5,"node":{"cut":"x","kids":[{"share":0.3301075268817204,"node":{"card":"a","fixed":false}},{"share":0.3397849462365592,"node":{"card":"b","fixed":false}},{"share":0.3301075268817204,"node":{"card":"c","fixed":false}}]}}]}}},
   {"call":"rect","args":["n"],"returns":{"x":0,"y":0,"w":1240,"h":288}},
-  {"call":"rect","args":["a"],"returns":{"x":0,"y":312,"w":397.3333333333333,"h":288}},
-  {"call":"rect","args":["b"],"returns":{"x":421.3333333333333,"y":312,"w":397.3333333333334,"h":288}},
-  {"call":"rect","args":["c"],"returns":{"x":842.6666666666667,"y":312,"w":397.33333333333326,"h":288}}
+  {"call":"rect","args":["a"],"returns":{"x":0,"y":312,"w":393.4881720430107,"h":288}},
+  {"call":"rect","args":["b"],"returns":{"x":417.4881720430107,"y":312,"w":405.02365591397853,"h":288}},
+  {"call":"rect","args":["c"],"returns":{"x":846.5118279569892,"y":312,"w":393.48817204301076,"h":288}}
  ]},
  {"name":"a move of the third card of an even row of eight below the last card leaves seven cards of one width in the row","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.11774193548387096,"node":{"card":"a"}},{"share":0.12741935483870967,"node":{"card":"b"}},{"share":0.12741935483870967,"node":{"card":"c"}},{"share":0.1274193548387097,"node":{"card":"d"}},{"share":0.1274193548387097,"node":{"card":"e"}},{"share":0.1274193548387097,"node":{"card":"f"}},{"share":0.1274193548387097,"node":{"card":"g"}},{"share":0.11774193548387091,"node":{"card":"h"}}]}},"steps":[
   {"call":"withdraw","args":["c"],"returns":{"card":"c","fixed":false}},
   {"call":"insert","args":["h","bottom",{"card":"c","fixed":false}],"returns":"c"},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.1359447004608295,"node":{"card":"a","fixed":false}},{"share":0.14562211981566822,"node":{"card":"b","fixed":false}},{"share":0.1456221198156682,"node":{"card":"d","fixed":false}},{"share":0.1456221198156682,"node":{"card":"e","fixed":false}},{"share":0.1456221198156683,"node":{"card":"f","fixed":false}},{"share":0.1456221198156682,"node":{"card":"g","fixed":false}},{"share":0.1359447004608294,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"h","fixed":false}},{"share":0.5,"node":{"card":"c","fixed":false}}]}}]},"paidBy":{}}},
-  {"call":"rect","args":["a"],"returns":{"x":0,"y":0,"w":156.57142857142856,"h":600}},
-  {"call":"rect","args":["b"],"returns":{"x":180.57142857142856,"y":0,"w":156.57142857142856,"h":600}},
-  {"call":"rect","args":["d"],"returns":{"x":361.1428571428571,"y":0,"w":156.57142857142856,"h":600}},
-  {"call":"rect","args":["e"],"returns":{"x":541.7142857142857,"y":0,"w":156.57142857142856,"h":600}},
-  {"call":"rect","args":["f"],"returns":{"x":722.2857142857142,"y":0,"w":156.57142857142867,"h":600}},
-  {"call":"rect","args":["g"],"returns":{"x":902.8571428571429,"y":0,"w":156.57142857142867,"h":600}},
-  {"call":"rect","args":["h"],"returns":{"x":1083.4285714285716,"y":0,"w":156.57142857142844,"h":288}},
-  {"call":"rect","args":["c"],"returns":{"x":1083.4285714285716,"y":312,"w":156.57142857142844,"h":288}}
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.13493530499075787,"node":{"card":"a","fixed":false}},{"share":0.14602587800369685,"node":{"card":"b","fixed":false}},{"share":0.1460258780036969,"node":{"card":"d","fixed":false}},{"share":0.1460258780036969,"node":{"card":"e","fixed":false}},{"share":0.1460258780036969,"node":{"card":"f","fixed":false}},{"share":0.1460258780036969,"node":{"card":"g","fixed":false}},{"share":0.1349353049907578,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"h","fixed":false}},{"share":0.5,"node":{"card":"c","fixed":false}}]}}]}}},
+  {"call":"rect","args":["a"],"returns":{"x":0,"y":0,"w":147.88909426987058,"h":600}},
+  {"call":"rect","args":["b"],"returns":{"x":171.88909426987058,"y":0,"w":160.04436229205172,"h":600}},
+  {"call":"rect","args":["d"],"returns":{"x":355.9334565619223,"y":0,"w":160.0443622920518,"h":600}},
+  {"call":"rect","args":["e"],"returns":{"x":539.9778188539741,"y":0,"w":160.0443622920518,"h":600}},
+  {"call":"rect","args":["f"],"returns":{"x":724.0221811460259,"y":0,"w":160.0443622920518,"h":600}},
+  {"call":"rect","args":["g"],"returns":{"x":908.0665434380777,"y":0,"w":160.0443622920517,"h":600}},
+  {"call":"rect","args":["h"],"returns":{"x":1092.1109057301294,"y":0,"w":147.8890942698706,"h":288}},
+  {"call":"rect","args":["c"],"returns":{"x":1092.1109057301294,"y":312,"w":147.8890942698706,"h":288}}
  ]},
  {"name":"an add along a cut that is not even takes half of the target and keeps every other size","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.25,"node":{"card":"b"}},{"share":0.25,"node":{"card":"c"}}]}},"steps":[
   {"call":"insert","args":["b","right",{"card":"n"}],"returns":"n"},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.125,"node":{"card":"b","fixed":false}},{"share":0.125,"node":{"card":"n","fixed":false}},{"share":0.25,"node":{"card":"c","fixed":false}}]},"paidBy":{}}},
-  {"call":"rect","args":["a"],"returns":{"x":0,"y":0,"w":608,"h":600}},
-  {"call":"rect","args":["b"],"returns":{"x":632,"y":0,"w":131,"h":600}},
-  {"call":"rect","args":["n"],"returns":{"x":787,"y":0,"w":131,"h":600}},
-  {"call":"rect","args":["c"],"returns":{"x":942,"y":0,"w":298,"h":600}}
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.125,"node":{"card":"b","fixed":false}},{"share":0.125,"node":{"card":"n","fixed":false}},{"share":0.25,"node":{"card":"c","fixed":false}}]}}},
+  {"call":"rect","args":["a"],"returns":{"x":0,"y":0,"w":584,"h":600}},
+  {"call":"rect","args":["b"],"returns":{"x":608,"y":0,"w":146,"h":600}},
+  {"call":"rect","args":["n"],"returns":{"x":778,"y":0,"w":146,"h":600}},
+  {"call":"rect","args":["c"],"returns":{"x":948,"y":0,"w":292,"h":600}}
  ]},
  {"name":"an add at the end of a cut that is not even takes half of the child at that end","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.25,"node":{"card":"b"}},{"share":0.25,"node":{"card":"c"}}]}},"steps":[
   {"call":"insert","args":[["a","b","c"],"right",{"card":"n"}],"returns":"n"},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.25,"node":{"card":"b","fixed":false}},{"share":0.12983870967741928,"node":{"card":"c","fixed":false}},{"share":0.12016129032258072,"node":{"card":"n","fixed":false}}]},"paidBy":{}}}
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.25,"node":{"card":"a","fixed":false}},{"share":0.125,"node":{"card":"b","fixed":false}},{"share":0.125,"node":{"card":"c","fixed":false}},{"share":0.5,"node":{"card":"n","fixed":false}}]}}}
  ]},
  {"name":"an add that would draw a card below its minimum is refused, names the card, its size and its minimum, and changes nothing","options":{"width":500,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.238,"node":{"card":"a"}},{"share":0.262,"node":{"card":"b"}},{"share":0.262,"node":{"card":"c"}},{"share":0.238,"node":{"card":"d"}}]}},"steps":[
-  {"call":"insert","args":["b","right",{"card":"n"}],"throws":"card a would be 81x600, below its minimum 96x96"},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.238,"node":{"card":"a","fixed":false}},{"share":0.262,"node":{"card":"b","fixed":false}},{"share":0.262,"node":{"card":"c","fixed":false}},{"share":0.238,"node":{"card":"d","fixed":false}}]},"paidBy":{}}}
+  {"call":"insert","args":["b","right",{"card":"n"}],"throws":"card b would be 53x600, below its minimum 96x96"},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.238,"node":{"card":"a","fixed":false}},{"share":0.262,"node":{"card":"b","fixed":false}},{"share":0.262,"node":{"card":"c","fixed":false}},{"share":0.238,"node":{"card":"d","fixed":false}}]}}}
  ]},
  {"name":"an add that would draw a box below the minimum of its members and its head names the box","options":{"width":400,"height":300,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"box":"g","inner":{"cut":"y","kids":[{"share":0.5,"node":{"card":"b"}},{"share":0.5,"node":{"card":"c"}}]}}}]}},"steps":[
   {"call":"setHeads","args":[{"g":44}]},
-  {"call":"insert","args":["g","bottom",{"card":"n"}],"throws":"card g would be 188x138, below its minimum 96x260"}
+  {"call":"insert","args":["g","bottom",{"card":"n"}],"throws":"card g would be 140x148, below its minimum 96x260"}
  ]},
- {"name":"a state of the earlier form with lines and cells is refused","state":{"xs":[0,1],"ys":[0,1],"cards":[{"id":"a","c0":0,"c1":1,"r0":0,"r1":1}]},"throws":"soksak: the state holds xs, ys and cards, which is the earlier form; the state is {root, paidBy}","steps":[]},
+ {"name":"a state of the earlier form with lines and cells is refused","state":{"xs":[0,1],"ys":[0,1],"cards":[{"id":"a","c0":0,"c1":1,"r0":0,"r1":1}]},"throws":"soksak: the state holds xs, ys and cards, which is the earlier form; the state is {root}","steps":[]},
+ {"name":"a state that records a payer is refused","state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"b"}}]},"paidBy":{"b":"a"}},"throws":"soksak: the state holds paidBy, which the layout does not record; the state is {root}","steps":[]},
  {"name":"a node that is no card, box or cut is refused","state":{"root":{"id":"a"}},"throws":"soksak: the node {\"id\":\"a\"} is not a card, a box or a cut","steps":[]},
  {"name":"a cut with one kid is refused","state":{"root":{"cut":"x","kids":[{"share":1,"node":{"card":"a"}}]}},"throws":"soksak: the cut root is not canonical: it has fewer than two kids","steps":[]},
  {"name":"a kid cut along the axis of its cut is refused","state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"b"}},{"share":0.5,"node":{"card":"c"}}]}}]}},"throws":"soksak: the cut root.1 is not canonical: it is a cut along the axis of its cut","steps":[]},

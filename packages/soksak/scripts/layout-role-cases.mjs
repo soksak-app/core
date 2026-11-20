@@ -35,7 +35,7 @@ export function makeLayoutCase(seed) {
     gap: [0, 17, 64][Math.floor(seed / 2) % 3],
     minSize: [24, 96, 160][seed % 3],
     snap: seed % 2 ? "off" : "merge", snapDistance: seed % 2 ? 3 : 29,
-    grabSize: seed % 2 ? 7 : 23, fillOrder: Math.floor(seed / 2) % 2 ? "h" : "v",
+    grabSize: seed % 2 ? 7 : 23,
   };
   const initial = Soksak.from(grid.toJSON(), options);
   const state = initial.toJSON();

@@ -305,7 +305,7 @@ test("a card drawn with no area returns centre, not a side", () => {
   const grid = new Soksak(undefined, { width: 1000, height: 200, gap: 24, minSize: 0 });
   const b = grid.split("card", "x");
   grid.split(b, "x");
-  grid.gap = 400;                       // more corridor than a slot can hold
+  grid.gap = 600;                       // two corridors take the whole width
   const [id, r] = [...grid.rects()].find(([, box]) => box.w === 0) ?? [];
   assert.ok(id, "one card has no width");
   // Dividing by a zero width gives NaN, and every comparison then falls to the
@@ -315,11 +315,11 @@ test("a card drawn with no area returns centre, not a side", () => {
 
 test("no change leaves a card with no area, whatever minSize allows", () => {
   // minSize is zero, so nothing below is too small — except nothing itself. The
-  // gap here takes two thirds of the height, and a second cut would leave the
-  // new card drawn at no height at all.
-  const grid = new Soksak(undefined, { width: 1200, height: 800, gap: 200, minSize: 0 });
+  // gap here takes half of the height, and a second cut would leave the cards
+  // drawn at no height at all.
+  const grid = new Soksak(undefined, { width: 1200, height: 800, gap: 400, minSize: 0 });
   grid.split("card", "y");
-  assert.equal(grid.rect("card").h, 300, "two cards, each with room");
+  assert.equal(grid.rect("card").h, 200, "two cards, each with room");
 
   assert.equal(grid.canSplit("card", "y"), false, "a third would have no height");
   assert.equal(grid.split("card", "y"), null);

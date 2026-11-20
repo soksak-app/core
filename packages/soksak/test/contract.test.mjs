@@ -24,7 +24,6 @@ test("everything the API hands back is a copy the host may keep", () => {
     ["cards", grid.cards[0]],
     ["card()", grid.card("upper")],
     ["cardsCrossing", crossing[0]],
-    ["fill().cards", grid.fill("upper")?.cards[0]],
   ]) {
     assert.ok(got, `${what} answered`);
     assert.equal(Object.isFrozen(got), true, `${what} is frozen`);
@@ -62,7 +61,6 @@ test("an unknown id is answered, not thrown on, and changes nothing", () => {
 
   assert.equal(grid.card("nobody"), undefined);
   assert.equal(grid.rect("nobody"), undefined);
-  assert.equal(grid.fill("nobody"), null);
   assert.equal(grid.canClose("nobody"), false);
   assert.equal(grid.close("nobody"), false);
   assert.equal(grid.canSplit("nobody", "x"), false);
@@ -242,16 +240,16 @@ test("the options take every value that is one", () => {
 
   const plain = new Soksak(undefined, { width: W, height: H });
   assert.deepEqual(
-    [plain.gap, plain.minSize, plain.grabSize, plain.snapDistance, plain.snap, plain.fillOrder],
-    [24, 96, 11, 7, "merge", "v"],
+    [plain.gap, plain.minSize, plain.grabSize, plain.snapDistance, plain.snap],
+    [24, 96, 11, 7, "merge"],
     "the defaults the layout specification states",
   );
   const named = new Soksak(undefined, {
-    width: W, height: H, gap: 8, minSize: 20, grabSize: 3, snapDistance: 2, snap: "off", fillOrder: "h",
+    width: W, height: H, gap: 8, minSize: 20, grabSize: 3, snapDistance: 2, snap: "off",
   });
   assert.deepEqual(
-    [named.gap, named.minSize, named.grabSize, named.snapDistance, named.snap, named.fillOrder],
-    [8, 20, 3, 2, "off", "h"],
+    [named.gap, named.minSize, named.grabSize, named.snapDistance, named.snap],
+    [8, 20, 3, 2, "off"],
     "and a named value is kept",
   );
 });
@@ -360,7 +358,7 @@ test("replace updates the canonical arrangement without replacing the grid", () 
 
   assert.equal(grid.card("card"), undefined);
   assert.equal(grid.card("upper").data.program, "upper");
-  assert.deepEqual(grid.rect("lower"), { x: 312, y: 0, w: 888, h: 800 });
+  assert.deepEqual(grid.rect("lower"), { x: 318, y: 0, w: 882, h: 800 });
   // The board is the same and only the arrangement changed. The card before the change is not in this arrangement.
   assert.equal(first.id, "card");
   assert.equal(grid.card(first.id), undefined, "the card that was replaced is gone");

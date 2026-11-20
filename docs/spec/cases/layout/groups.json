@@ -1,5 +1,5 @@
 {
- "description": "The groups of a space (docs/spec/groups.md): the stored checks, the drawn rectangles, the group commands and their refusals, the rectangle operations and the drop resolution. A case reads its layout, the stored form {state, leader, lastCard} whose state is the tree of the grid with the group cards as boxes, with the options gap, minSize, head and the size of the plane, then runs its steps; a case with throws refuses its layout with that text, which the reader of projects.json prefixes with the project and the space. A step runs call with args and returns its result or throws its text. create, split, close, dissolve, rename, leader and move are the commands core.group.create, core.card.split, core.card.close, core.group.dissolve, core.group.rename, core.group.leader and core.card.move without tabs, add is the add of a card to a group card, a split or add step with even true divides as cardSplit even, balance is core.layout.balance, and boundary is core.boundary.move with axis, line and position; grid returns xs, ys and the cards of the grid in the order of the tree without paidBy; stored returns state, leader and lastCard; rect returns the drawn rectangle of a card; path returns the group path of core.card.get; level returns the level of a card; drop returns the card and the zone that a drop at a point resolves to. A value in a refusal text is its JSON text.",
+ "description": "The groups of a space (docs/spec/groups.md): the stored checks, the drawn rectangles, the group commands and their refusals, the rectangle operations and the drop resolution. A case reads its layout, the stored form {state, leader, lastCard} whose state is the tree of the grid with the group cards as boxes, with the options gap, minSize, head and the size of the plane, then runs its steps; a case with throws refuses its layout with that text, which the reader of projects.json prefixes with the project and the space. A step runs call with args and returns its result or throws its text. create, split, close, dissolve, rename, leader and move are the commands core.group.create, core.card.split, core.card.close, core.group.dissolve, core.group.rename, core.group.leader and core.card.move without tabs, add is the add of a card to a group card, a split or add step with even true divides as cardSplit even, balance is core.layout.balance, and boundary is core.boundary.move with axis, line and position; grid returns xs, ys and the cards of the grid in the order of the tree; stored returns state, leader and lastCard; rect returns the drawn rectangle of a card; path returns the group path of core.card.get; level returns the level of a card; drop returns the card and the zone that a drop at a point resolves to. A value in a refusal text is its JSON text.",
  "cases": [
   {
    "name": "a group of a card holds the card and a new card toward side, takes its slot and its leader mark, and issues the next ids",
@@ -15,8 +15,7 @@
      "root": {
       "card": "card-1",
       "fixed": false
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-1",
     "lastCard": 1
@@ -96,8 +95,7 @@
           }
          ]
         }
-       },
-       "paidBy": {}
+       }
       },
       "leader": "card-2",
       "lastCard": 3
@@ -192,8 +190,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-4",
     "lastCard": 4
@@ -328,8 +325,7 @@
           }
          }
         ]
-       },
-       "paidBy": {}
+       }
       },
       "leader": "card-5",
       "lastCard": 6
@@ -460,8 +456,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-4",
     "lastCard": 4
@@ -520,8 +515,7 @@
           }
          }
         ]
-       },
-       "paidBy": {}
+       }
       },
       "leader": "card-4",
       "lastCard": 4
@@ -573,8 +567,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-1",
     "lastCard": 3
@@ -626,8 +619,7 @@
         }
        ]
       }
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-3",
     "lastCard": 3
@@ -718,8 +710,7 @@
      "root": {
       "card": "card-1",
       "fixed": false
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-1",
     "lastCard": 1
@@ -764,8 +755,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-1",
     "lastCard": 1
@@ -839,8 +829,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-4",
     "lastCard": 4
@@ -881,14 +870,14 @@
                "cut": "y",
                "kids": [
                 {
-                 "share": 0.5277777777777778,
+                 "share": 0.5,
                  "node": {
                   "card": "card-1",
                   "fixed": false
                  }
                 },
                 {
-                 "share": 0.4722222222222222,
+                 "share": 0.5,
                  "node": {
                   "card": "card-5",
                   "fixed": false
@@ -916,8 +905,7 @@
           }
          }
         ]
-       },
-       "paidBy": {}
+       }
       },
       "leader": "card-4",
       "lastCard": 5
@@ -932,7 +920,7 @@
       "x": 24,
       "y": 56,
       "w": 464,
-      "h": 122
+      "h": 142
      }
     },
     {
@@ -942,9 +930,9 @@
      },
      "returns": {
       "x": 24,
-      "y": 202,
+      "y": 222,
       "w": 464,
-      "h": 122
+      "h": 142
      }
     },
     {
@@ -956,7 +944,7 @@
       "x": 512,
       "y": 56,
       "w": 464,
-      "h": 268
+      "h": 308
      }
     },
     {
@@ -968,7 +956,7 @@
       "x": 0,
       "y": 0,
       "w": 1000,
-      "h": 348
+      "h": 388
      }
     }
    ]
@@ -1024,8 +1012,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-4",
     "lastCard": 4
@@ -1152,8 +1139,7 @@
           }
          }
         ]
-       },
-       "paidBy": {}
+       }
       },
       "leader": "card-4",
       "lastCard": 5
@@ -1272,8 +1258,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-4",
     "lastCard": 4
@@ -1311,8 +1296,7 @@
           }
          }
         ]
-       },
-       "paidBy": {}
+       }
       },
       "leader": "card-1",
       "lastCard": 4
@@ -1398,8 +1382,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-5",
     "lastCard": 5
@@ -1501,8 +1484,7 @@
           }
          }
         ]
-       },
-       "paidBy": {}
+       }
       },
       "leader": "card-5",
       "lastCard": 5
@@ -1561,8 +1543,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-4",
     "lastCard": 4
@@ -1585,8 +1566,7 @@
        "root": {
         "card": "card-3",
         "fixed": false
-       },
-       "paidBy": {}
+       }
       },
       "leader": "card-3",
       "lastCard": 4
@@ -1716,8 +1696,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-7",
     "lastCard": 9
@@ -1850,8 +1829,7 @@
           }
          }
         ]
-       },
-       "paidBy": {}
+       }
       },
       "leader": "card-7",
       "lastCard": 9
@@ -1910,8 +1888,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-4",
     "lastCard": 4
@@ -2006,8 +1983,7 @@
           }
          }
         ]
-       },
-       "paidBy": {}
+       }
       },
       "leader": "card-1",
       "lastCard": 4
@@ -2085,8 +2061,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-4",
     "lastCard": 4
@@ -2205,8 +2180,7 @@
           }
          }
         ]
-       },
-       "paidBy": {}
+       }
       },
       "leader": "card-4",
       "lastCard": 6
@@ -2265,8 +2239,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-4",
     "lastCard": 4
@@ -2337,8 +2310,7 @@
           }
          }
         ]
-       },
-       "paidBy": {}
+       }
       },
       "leader": "card-3",
       "lastCard": 4
@@ -2397,8 +2369,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-4",
     "lastCard": 4
@@ -2424,30 +2395,27 @@
         "cut": "y",
         "kids": [
          {
-          "share": 0.25,
+          "share": 0.3333333333333333,
           "node": {
            "card": "card-1",
            "fixed": false
           }
          },
          {
-          "share": 0.25,
+          "share": 0.3333333333333333,
           "node": {
            "card": "card-2",
            "fixed": false
           }
          },
          {
-          "share": 0.5,
+          "share": 0.3333333333333333,
           "node": {
            "card": "card-3",
            "fixed": false
           }
          }
         ]
-       },
-       "paidBy": {
-        "card-2": "card-1"
        }
       },
       "leader": "card-1",
@@ -2463,7 +2431,7 @@
       "x": 0,
       "y": 0,
       "w": 1000,
-      "h": 138
+      "h": 184
      }
     },
     {
@@ -2473,9 +2441,9 @@
      },
      "returns": {
       "x": 0,
-      "y": 162,
+      "y": 208,
       "w": 1000,
-      "h": 126
+      "h": 184
      }
     },
     {
@@ -2485,9 +2453,9 @@
      },
      "returns": {
       "x": 0,
-      "y": 312,
+      "y": 416,
       "w": 1000,
-      "h": 288
+      "h": 184
      }
     }
    ]
@@ -2558,8 +2526,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-5",
     "lastCard": 5
@@ -2596,21 +2563,21 @@
             "cut": "y",
             "kids": [
              {
-              "share": 0.5,
+              "share": 0.3333333333333333,
               "node": {
                "card": "card-1",
                "fixed": false
               }
              },
              {
-              "share": 0.25,
+              "share": 0.3333333333333333,
               "node": {
                "card": "card-3",
                "fixed": false
               }
              },
              {
-              "share": 0.25,
+              "share": 0.3333333333333333,
               "node": {
                "card": "card-4",
                "fixed": false
@@ -2628,8 +2595,7 @@
           }
          }
         ]
-       },
-       "paidBy": {}
+       }
       },
       "leader": "card-5",
       "lastCard": 5
@@ -2643,8 +2609,8 @@
      "returns": {
       "x": 24,
       "y": 56,
-      "w": 440,
-      "h": 232
+      "w": 464,
+      "h": 157.33333333333331
      }
     },
     {
@@ -2654,9 +2620,9 @@
      },
      "returns": {
       "x": 24,
-      "y": 312,
-      "w": 440,
-      "h": 126
+      "y": 237.33333333333331,
+      "w": 464,
+      "h": 157.33333333333331
      }
     },
     {
@@ -2666,9 +2632,9 @@
      },
      "returns": {
       "x": 24,
-      "y": 462,
-      "w": 440,
-      "h": 114
+      "y": 418.66666666666663,
+      "w": 464,
+      "h": 157.33333333333337
      }
     },
     {
@@ -2677,9 +2643,9 @@
       "card": "card-2"
      },
      "returns": {
-      "x": 512,
+      "x": 536,
       "y": 0,
-      "w": 488,
+      "w": 464,
       "h": 600
      }
     }
@@ -2736,8 +2702,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-4",
     "lastCard": 4
@@ -2804,8 +2769,8 @@
       ],
       "xs": [
        0,
-       0.25,
-       0.5,
+       0.3373333333333333,
+       0.6626666666666666,
        1
       ],
       "ys": [
@@ -2829,21 +2794,21 @@
          "cut": "x",
          "kids": [
           {
-           "share": 0.25,
+           "share": 0.3333333333333333,
            "node": {
             "card": "card-1",
             "fixed": false
            }
           },
           {
-           "share": 0.25,
+           "share": 0.3333333333333333,
            "node": {
             "card": "card-2",
             "fixed": false
            }
           },
           {
-           "share": 0.5,
+           "share": 0.3333333333333333,
            "node": {
             "card": "card-3",
             "fixed": false
@@ -2851,8 +2816,7 @@
           }
          ]
         }
-       },
-       "paidBy": {}
+       }
       },
       "leader": "card-4",
       "lastCard": 4
@@ -2926,8 +2890,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-5",
     "lastCard": 5
@@ -2984,13 +2947,13 @@
       ],
       "xs": [
        0,
-       0.25,
-       0.5,
+       0.3373333333333333,
+       0.6626666666666666,
        1
       ],
       "ys": [
        0,
-       0.5,
+       0.5666666666666667,
        1
       ]
      }
@@ -3015,21 +2978,21 @@
             "cut": "x",
             "kids": [
              {
-              "share": 0.25,
+              "share": 0.3333333333333333,
               "node": {
                "card": "card-4",
                "fixed": false
               }
              },
              {
-              "share": 0.25,
+              "share": 0.3333333333333333,
               "node": {
                "card": "card-1",
                "fixed": false
               }
              },
              {
-              "share": 0.5,
+              "share": 0.3333333333333333,
               "node": {
                "card": "card-2",
                "fixed": false
@@ -3047,8 +3010,7 @@
           }
          }
         ]
-       },
-       "paidBy": {}
+       }
       },
       "leader": "card-5",
       "lastCard": 5
@@ -3057,7 +3019,7 @@
    ]
   },
   {
-   "name": "a card that leaves a group gives its space to its neighbour in the tree of the group, and no paidBy record returns its room to another card",
+   "name": "a card that leaves a group gives its space to its neighbour in the tree of the group",
    "options": {
     "gap": 24,
     "minSize": 96,
@@ -3137,8 +3099,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-1",
     "lastCard": 6
@@ -3210,14 +3171,14 @@
       ],
       "xs": [
        0,
-       0.25,
+       0.256,
        0.5,
        1
       ],
       "ys": [
        0,
-       0.3,
-       0.65,
+       0.27599999999999997,
+       0.6655000000000001,
        1
       ]
      }
@@ -3229,9 +3190,9 @@
      },
      "returns": {
       "x": 24,
-      "y": 308,
-      "w": 214,
-      "h": 200
+      "y": 288.79999999999995,
+      "w": 220,
+      "h": 231.60000000000014
      }
     },
     {
@@ -3306,8 +3267,8 @@
       ],
       "ys": [
        0,
-       0.3,
-       0.65,
+       0.27599999999999997,
+       0.6655000000000001,
        1
       ]
      }
@@ -3319,9 +3280,9 @@
      },
      "returns": {
       "x": 24,
-      "y": 308,
+      "y": 288.79999999999995,
       "w": 464,
-      "h": 200
+      "h": 231.60000000000014
      }
     },
     {
@@ -3414,8 +3375,7 @@
           }
          }
         ]
-       },
-       "paidBy": {}
+       }
       },
       "leader": "card-1",
       "lastCard": 7
@@ -3504,8 +3464,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-1",
     "lastCard": 6
@@ -3664,8 +3623,7 @@
         }
        ]
       }
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-6",
     "lastCard": 6
@@ -3680,7 +3638,7 @@
       "x": 48,
       "y": 112,
       "w": 440,
-      "h": 152
+      "h": 208
      }
     },
     {
@@ -3692,7 +3650,7 @@
       "x": 512,
       "y": 112,
       "w": 440,
-      "h": 152
+      "h": 208
      }
     },
     {
@@ -3702,9 +3660,9 @@
      },
      "returns": {
       "x": 24,
-      "y": 312,
+      "y": 368,
       "w": 464,
-      "h": 264
+      "h": 208
      }
     },
     {
@@ -3714,9 +3672,9 @@
      },
      "returns": {
       "x": 512,
-      "y": 312,
+      "y": 368,
       "w": 464,
-      "h": 264
+      "h": 208
      }
     },
     {
@@ -3728,7 +3686,7 @@
       "x": 24,
       "y": 56,
       "w": 952,
-      "h": 232
+      "h": 288
      }
     },
     {
@@ -3874,8 +3832,7 @@
         }
        ]
       }
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-6",
     "lastCard": 6
@@ -3974,8 +3931,7 @@
         }
        ]
       }
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-6",
     "lastCard": 6
@@ -4001,7 +3957,7 @@
      "returns": {
       "x": 24,
       "y": 56,
-      "w": 464,
+      "w": 488,
       "h": 520
      }
     },
@@ -4013,8 +3969,8 @@
      "returns": {
       "x": 48,
       "y": 112,
-      "w": 416,
-      "h": 176
+      "w": 440,
+      "h": 208
      }
     },
     {
@@ -4024,9 +3980,9 @@
      },
      "returns": {
       "x": 48,
-      "y": 312,
-      "w": 416,
-      "h": 240
+      "y": 344,
+      "w": 440,
+      "h": 208
      }
     },
     {
@@ -4035,9 +3991,9 @@
       "card": "card-2"
      },
      "returns": {
-      "x": 512,
+      "x": 536,
       "y": 56,
-      "w": 464,
+      "w": 440,
       "h": 520
      }
     }
@@ -4094,8 +4050,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-4",
     "lastCard": 4
@@ -4268,8 +4223,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "groups": [],
     "leader": "card-1",
@@ -4327,8 +4281,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-4",
     "lastCard": 4
@@ -4386,8 +4339,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-4",
     "lastCard": 4
@@ -4415,8 +4367,7 @@
        "card": "card-1",
        "fixed": false
       }
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-2",
     "lastCard": 2
@@ -4459,8 +4410,7 @@
         }
        ]
       }
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-2",
     "lastCard": 2
@@ -4513,13 +4463,12 @@
        "r1": 2,
        "fixed": false
       }
-     ],
-     "paidBy": {}
+     ]
     },
     "leader": "card-1",
     "lastCard": 3
    },
-   "throws": "soksak: the state holds xs, ys and cards, which is the earlier form; the state is {root, paidBy}"
+   "throws": "soksak: the state holds xs, ys and cards, which is the earlier form; the state is {root}"
   },
   {
    "name": "a stored layout with a card stored twice is refused",
@@ -4565,8 +4514,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-1",
     "lastCard": 3
@@ -4624,8 +4572,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-3",
     "lastCard": 3
@@ -4683,8 +4630,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-4",
     "lastCard": 4
@@ -4742,8 +4688,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-4",
     "lastCard": 4
@@ -4801,8 +4746,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-1",
     "lastCard": 4
@@ -4860,8 +4804,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": null,
     "lastCard": 4
@@ -4897,104 +4840,12 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "left",
     "lastCard": 1
    },
    "throws": "level root names the window sidebar left as its leader"
-  },
-  {
-   "name": "a stored layout with groups and a paidBy record is refused",
-   "options": {
-    "gap": 24,
-    "minSize": 96,
-    "head": 32,
-    "width": 1000,
-    "height": 800
-   },
-   "layout": {
-    "state": {
-     "root": {
-      "cut": "y",
-      "kids": [
-       {
-        "share": 0.3,
-        "node": {
-         "card": "card-1",
-         "fixed": false
-        }
-       },
-       {
-        "share": 0.7,
-        "node": {
-         "box": "card-4",
-         "data": {
-          "name": "그룹 1",
-          "leader": "card-2"
-         },
-         "inner": {
-          "cut": "x",
-          "kids": [
-           {
-            "share": 0.5,
-            "node": {
-             "cut": "y",
-             "kids": [
-              {
-               "share": 0.5000000000000001,
-               "node": {
-                "card": "card-2",
-                "fixed": false
-               }
-              },
-              {
-               "share": 0.5,
-               "node": {
-                "card": "card-5",
-                "fixed": false
-               }
-              }
-             ]
-            }
-           },
-           {
-            "share": 0.5,
-            "node": {
-             "cut": "y",
-             "kids": [
-              {
-               "share": 0.5000000000000001,
-               "node": {
-                "card": "card-3",
-                "fixed": false
-               }
-              },
-              {
-               "share": 0.5,
-               "node": {
-                "card": "card-6",
-                "fixed": false
-               }
-              }
-             ]
-            }
-           }
-          ]
-         }
-        }
-       }
-      ]
-     },
-     "paidBy": {
-      "card-3": "card-2"
-     }
-    },
-    "leader": "card-1",
-    "lastCard": 6
-   },
-   "throws": "layout with groups stores the paidBy record of card card-3; a layout with groups keeps none"
   },
   {
    "name": "a stored layout with a lastCard below an issued card number is refused",
@@ -5047,8 +4898,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-4",
     "lastCard": 3
@@ -5158,8 +5008,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-12",
     "lastCard": 13
@@ -5439,8 +5288,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-12",
     "lastCard": 13
@@ -5681,8 +5529,7 @@
         }
        ]
       }
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-2",
     "lastCard": 11
@@ -6007,8 +5854,7 @@
         }
        ]
       }
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-2",
     "lastCard": 11
@@ -6309,8 +6155,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-2",
     "lastCard": 27
@@ -6693,8 +6538,7 @@
         }
        ]
       }
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-6",
     "lastCard": 31
@@ -6889,8 +6733,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-1",
     "lastCard": 3
@@ -7005,8 +6848,7 @@
           }
          }
         ]
-       },
-       "paidBy": {}
+       }
       },
       "leader": "card-1",
       "lastCard": 4
@@ -7058,8 +6900,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-1",
     "lastCard": 3
@@ -7110,8 +6951,7 @@
           }
          }
         ]
-       },
-       "paidBy": {}
+       }
       },
       "leader": "card-1",
       "lastCard": 3
@@ -7148,8 +6988,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-1",
     "lastCard": 2
@@ -7265,8 +7104,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-1",
     "lastCard": 4
@@ -7406,8 +7244,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-1",
     "lastCard": 2
@@ -7467,8 +7304,7 @@
         }
        ]
       }
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-3",
     "lastCard": 3
@@ -7586,8 +7422,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-1",
     "lastCard": 5
@@ -7705,8 +7540,7 @@
         }
        }
       ]
-     },
-     "paidBy": {}
+     }
     },
     "leader": "card-3",
     "lastCard": 4

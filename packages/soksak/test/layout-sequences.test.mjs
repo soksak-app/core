@@ -157,7 +157,8 @@ test("replay preserves nondefault snapping and every recorded layout option", { 
     { share: 0.5, node: { cut: "x", kids: [{ share: 0.75, node: { card: "c" } }, { share: 0.25, node: { card: "d" } }] } },
   ] } }, { width: 1600, height: 1200, gap: 17, minSize: 51, snapDistance: 40, grabSize: 23, snap: "merge", fillOrder: "h" });
   const report = assertSequence(runSequence(grid, { operations: [{ method: "moveBoundary", args: ["x", 1, 1180] }] }));
-  assert.equal(report.trace[0].result, 1200, "20px distance snaps onto the line of the lower row only with the recorded 40px option");
+  // The line of the lower row stands half a corridor after the 0.75 of the 1583 px that c and d share: 1195.75.
+  assert.equal(report.trace[0].result, 1195.75, "a 15.75px distance snaps onto the line of the lower row only with the recorded 40px option");
   assert.deepEqual(sequences.replaySequence(JSON.parse(JSON.stringify(report))), report);
   const changed = structuredClone(report);
   changed.initial.options.snapDistance = 7;

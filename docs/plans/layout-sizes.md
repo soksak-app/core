@@ -58,10 +58,10 @@ These are checked over generated layouts, every anchor and every point:
 - I4 reachability: every (node, side) of the current tree, every vacated slot, every centre and every strip index has an anchor and a point that select it, after equal results are merged.
 - I5 moves keep every tab and surface.
 - I6 a drop is no change exactly when its result equals the current layout.
-- I7 ratios: ADD and REMOVE keep the ratios of every sibling that they do not insert, remove or, on a level that is not even, halve; an even level stays even under an ADD or a REMOVE inside it.
+- I7 ratios: ADD and REMOVE keep the ratios of the fractions of every sibling that they do not insert, remove or, on a level that is not even, halve; an even level, whose kids that take a fraction have one fraction, stays even under an ADD or a REMOVE inside it.
 - I8 locality: the rectangles outside the subtrees of the source and the target levels, after the canonical merge, do not change.
 - I9 commands are idempotent with the identifiers they return.
-- I10 inverse: the REMOVE of a node just added restores an even level, and a drop of a moved node on its vacated slot is no change.
+- I10 inverse: the REMOVE of a node just added restores the fractions of an even level, and a drop of a moved node on its vacated slot is no change.
 
 ## Objections and answers
 
@@ -75,3 +75,4 @@ These are checked over generated layouts, every anchor and every point:
 - Objection: a drop on a group header needs a side. Answer: it adds to the right end of the root of the plane of the group, the side of `core.card.move` `centre` of a group.
 - Objection: an edge drop could give the new card the size of the zone that the preview shows. Answer: M always gets an equal share of the level it lands in; a new level of two gives 1/2, so the edges follow the same rule as every other add.
 - Objection: changes outside the source and target levels cannot be ruled out when a level contracts. Answer: I8 states locality after the canonical merge.
+- Objection: I7 and I10 can be judged on the drawn sizes, as I1 and I2 are. Answer: a drawn ratio is not the stored ratio, because a cut takes its fixed costs (the corridors between its kids, the px sizes and the frames and heads of its boxes) before it gives its kids their fractions, and those costs change with the gap, the heads and the kids around a node; a criterion on drawn ratios therefore failed layouts whose fractions were exact and passed only layouts that rewrote fractions to undo the costs. Each rule works on fractions, each kid is drawn its fraction of what the costs leave, so kids of one fraction are drawn at one size, and a gap change keeps every fraction. I7 and I10 are judged on the fractions of the stored tree; I1 and I2 stay on the drawn rectangles.

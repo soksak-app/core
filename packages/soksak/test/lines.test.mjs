@@ -390,10 +390,10 @@ test("centring measures again from where the boundary landed", () => {
 });
 
 test("a drag never leaves the boundary further from the target than it stood", () => {
-  // A plane too narrow for what it holds. The px position of a line does not
-  // follow its coordinate there: a slot the starvation rule stopped does not
-  // move with its span, so a step can pass the target and the step after it
-  // come back past it.
+  // A plane too narrow for what it holds: the cut of four cards cannot hold its
+  // corridors, so its cards are drawn with no width, and the lines beside them
+  // have no room. A drag toward either end of the range of each line lands no
+  // further from where it was asked than where it stood.
   const grid = new Soksak(undefined, { width: 800, height: 300, gap: 21, minSize: 8 });
   for (const [id, axis, born] of [
     ["card", "x", "c0"],
@@ -408,17 +408,21 @@ test("a drag never leaves the boundary further from the target than it stood", (
   grid.setSize("c2", "y", 196);
   grid.resize(140, 300);
 
-  const from = grid.boundaryPos("x", 3);
-  const [, max] = grid.boundaryRange("x", 3);
-  assert.equal(from, 52.5);
-  assert.ok(max > from, "the range reports room above where it stands");
-
-  const to = grid.moveBoundary("x", 3, max, false);
-  assert.ok(
-    Math.abs(to - max) <= Math.abs(from - max) + 1e-9,
-    `asked ${max}, stood at ${from}, landed ${to}`,
-  );
-  assert.ok(to <= max + 0.01, `landed ${to}, past the range it reported`);
+  let moved = 0;
+  const start = grid.toJSON();
+  for (let line = 1; line < grid.lines("x").length - 1; line++) {
+    for (const end of [0, 1]) {
+      grid.replace(start);
+      const from = grid.boundaryPos("x", line);
+      const range = grid.boundaryRange("x", line);
+      const asked = range[end];
+      const to = grid.moveBoundary("x", line, asked, false);
+      assert.ok(Math.abs(to - asked) <= Math.abs(from - asked) + 1e-9, `line ${line}: asked ${asked}, stood at ${from}, landed ${to}`);
+      assert.ok(to >= range[0] - 0.01 && to <= range[1] + 0.01, `line ${line}: landed ${to}, outside the range ${range}`);
+      if (Math.abs(to - from) > 1) moved++;
+    }
+  }
+  assert.ok(moved > 0, "a line with room moved");
 });
 
 test("a split with newLine cuts the card as its own cut, drawing the line the other row holds", () => {
@@ -432,14 +436,3 @@ test("a split with newLine cuts the card as its own cut, drawing the line the ot
   assert.equal(fresh.card("n").c0, 0);
 });
 
-// A count below zero is refused as below zero before its fraction is judged, as the Go port judges it (R5 of docs/layout.md).
-test("setFrames refuses a count below zero as below zero, a fraction included, and keeps the frames it had", () => {
-  const grid = new Soksak({ root: { cut: "x", kids: [{ share: 0.5, node: { card: "a" } }, { share: 0.5, node: { card: "b" } }] } });
-  grid.resize(1000, 600);
-  grid.setFrames({ a: { right: 1 } });
-  const before = grid.rect("a");
-  assert.throws(() => grid.setFrames({ a: { right: -1.5 } }), { message: 'soksak: the frames of "a" count below zero' });
-  assert.throws(() => grid.setFrames({ a: { right: -Infinity } }), { message: 'soksak: the frames of "a" count below zero' });
-  assert.throws(() => grid.setFrames({ a: { right: Number.NaN } }), { message: 'soksak: the frames of "a" count no whole number' });
-  assert.deepEqual(grid.rect("a"), before);
-});

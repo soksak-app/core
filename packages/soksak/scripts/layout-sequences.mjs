@@ -31,7 +31,7 @@ export function createProfile(profile, seed = 0) {
   if (profile === "constrained") return new Soksak(undefined, {
     width: 200 + Math.floor(next() * 1600), height: 150 + Math.floor(next() * 1000),
     gap: Math.floor(next() * 40), minSize: Math.floor(next() * 120),
-    snap: next() < 0.8 ? "merge" : "off", fillOrder: next() < 0.5 ? "v" : "h",
+    snap: next() < 0.8 ? "merge" : "off",
   });
   throw new Error(`unknown layout profile: ${profile}`);
 }
@@ -158,7 +158,7 @@ export function generateOperation(grid, next, step, { profile = "ordinary", meth
 /** A refusal is a null/false return; a successful no-op is counted separately. */
 export function runSequence(grid, { seed = 0, steps = 0, profile = "ordinary", methods, operations, check = assertInvariants, afterOperation } = {}) {
   const next = random(seed);
-  const initial = structuredClone({ state: grid.toJSON(), options: { width: grid.width, height: grid.height, gap: grid.gap, minSize: grid.minSize, snap: grid.snap, snapDistance: grid.snapDistance, grabSize: grid.grabSize, fillOrder: grid.fillOrder } });
+  const initial = structuredClone({ state: grid.toJSON(), options: { width: grid.width, height: grid.height, gap: grid.gap, minSize: grid.minSize, snap: grid.snap, snapDistance: grid.snapDistance, grabSize: grid.grabSize } });
   const counts = () => ({ successful: 0, refused: 0, changed: 0, unchanged: 0 });
   const report = { seed, profile, initial, trace: [], counts: counts(), byMethod: {}, failure: null };
   const inspect = () => check(grid, profile);

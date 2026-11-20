@@ -73,32 +73,38 @@ test("travelling between interior boundaries changes no other card's width", () 
   }
 });
 
-test("standing on the plane's border moves the corridor, not the share", () => {
+test("standing on the plane's border keeps every share and every drawn size", () => {
   const grid = railed();
   grid.split("upper", "x");
   grid.split("lower", "x");
   const xs = () => grid.lines("x");
+  // The fraction of the card in the cut that holds it, from the stored tree.
   const share = (id) => {
-    const c = grid.card(id);
-    return xs()[c.c1] - xs()[c.c0];
+    const find = (node) => {
+      for (const kid of node.kids ?? []) {
+        if (kid.node.card === id) return kid.share;
+        const found = find(kid.node);
+        if (found !== undefined) return found;
+      }
+      return undefined;
+    };
+    return find(grid.toJSON().root);
   };
   const before = Object.fromEntries(
     grid.cards.filter((c) => c.id !== "rail").map((c) => [c.id, share(c.id)]),
   );
   const drawn = grid.rect("upper").w + grid.rect("card-1").w;
-  assert.notEqual(grid.rect("upper").w, grid.rect("card-1").w, "card-1 is flush with the border");
+  // The corridors are costs of the cut, so equal fractions draw equal sizes, at the border as well.
+  assert.ok(Math.abs(grid.rect("upper").w - grid.rect("card-1").w) < 1e-9, "equal shares draw equal");
 
   assert.equal(grid.moveTo("rail", "x", xs().length - 1), true);
 
-  // Every column keeps the share it had. What changes is the corridor: the rail
-  // pays half a gap at the border instead of a whole one, and the column that
-  // was flush against the border now has the rail beside it.
+  // Every column keeps the share it had, and the cut keeps its corridors, so every column keeps its drawn size.
   for (const [id, span] of Object.entries(before)) {
     assert.ok(Math.abs(share(id) - span) < 1e-9, `${id} kept its share`);
   }
   assert.equal(grid.rect("rail").w, 190);
-  assert.ok(Math.abs(grid.rect("upper").w - grid.rect("card-1").w) < 1e-9,
-            "equal shares now draw equal");
+  assert.ok(Math.abs(grid.rect("upper").w - grid.rect("card-1").w) < 1e-9, "equal shares still draw equal");
   assert.ok(Math.abs(grid.rect("upper").w + grid.rect("card-1").w - drawn) < 1e-9);
   assertTiling(grid, "rail on the border");
 });
@@ -159,18 +165,17 @@ test("standings includes the plane's borders", () => {
   );
 });
 
-test("a travel that would leave a card with no area is refused", () => {
-  // The slot leaves one boundary and arrives at another, so the pair that gives
-  // the room and the pair that takes it are not the same. Found by fuzzing:
-  // it happens about ten times in eighteen thousand states.
+test("a travel keeps every card its area and its drawn size", () => {
+  // The slot leaves one boundary and arrives at another of the same cut. The kids
+  // of the cut keep their fractions and the cut its corridors, so no card gives
+  // room to another, the state of a fuzzed case that once left a card no area.
   const state = { root: { cut: "x", kids: [{ share: 0.04997858047175793, node: { card: "rail", fixed: false } }, { share: 0.17328244274809163, node: { card: "left", fixed: true, width: 804.2623836009122 } }, { share: 0.29127711629255637, node: { card: "middle", fixed: false, width: 233 } }, { share: 0.4854618604875941, node: { card: "right", fixed: false } }] } };
   const grid = new Soksak(state, { width: 1117, height: 340, gap: 7, minSize: 47 });
-  const before = JSON.stringify(grid.toJSON());
-  const rects = JSON.stringify([...grid.rects()]);
+  const widths = () => Object.fromEntries([...grid.rects()].map(([id, r]) => [id, r.w]));
+  const before = widths();
 
-  assert.equal(grid.moveTo("rail", "x", 2), false, "the travel is refused");
-  assert.equal(JSON.stringify(grid.toJSON()), before, "and the arrangement is put back");
-  assert.equal(JSON.stringify([...grid.rects()]), rects, "down to the rects");
+  assert.equal(grid.moveTo("rail", "x", 2), true, "the travel goes");
+  for (const [id, w] of Object.entries(widths())) assert.ok(Math.abs(w - before[id]) < 1e-9, `${id} is drawn ${w}, was ${before[id]}`);
   for (const [id, r] of grid.rects()) assert.ok(r.w > 0 && r.h > 0, `${id} still has area`);
 });
 
@@ -188,4 +193,25 @@ test("canInsertAt refuses a line the axis does not have, and insertAt agrees", (
     assert.equal(grid.insertAt("x", line, { size: 100 }), null, `${line} takes no card`);
   }
   assert.deepEqual(grid.standings("x"), [0, 1, 2], "and standings names only the lines there are");
+});
+
+test("a card inserted at a boundary of an even level takes its size from every kid in proportion", () => {
+  // ADD(M, kid i, the side toward i + 1): an even level keeps every ratio.
+  const grid = new Soksak({ root: { cut: "x", kids: [{ share: 0.5, node: { card: "a" } }, { share: 0.5, node: { card: "b" } }] } }, { width: 1000, height: 600, gap: 0, minSize: 20 });
+  assert.equal(grid.insertAt("x", 1, { id: "rail", size: 200 }), "rail");
+  assert.deepEqual(["a", "rail", "b"].map((id) => Number(grid.rect(id).w.toFixed(6))), [400, 200, 400]);
+});
+
+test("a card inserted at a boundary of an uneven level takes its size from the kid before the boundary", () => {
+  // ADD(M, kid i, the side toward i + 1): an uneven level was sized by the person, so only kid i pays.
+  const grid = new Soksak({ root: { cut: "x", kids: [{ share: 0.3, node: { card: "a" } }, { share: 0.7, node: { card: "b" } }] } }, { width: 1000, height: 600, gap: 0, minSize: 20 });
+  assert.equal(grid.insertAt("x", 1, { id: "rail", size: 200 }), "rail");
+  assert.deepEqual(["a", "rail", "b"].map((id) => Number(grid.rect(id).w.toFixed(6))), [100, 200, 700]);
+});
+
+test("a card inserted at an edge of the plane takes its size from every kid in proportion", () => {
+  // ADD(M, root, side): the root level as a whole pays, so its kids keep their ratios.
+  const grid = new Soksak({ root: { cut: "x", kids: [{ share: 0.3, node: { card: "a" } }, { share: 0.7, node: { card: "b" } }] } }, { width: 1000, height: 600, gap: 0, minSize: 20 });
+  assert.equal(grid.insertAt("x", 0, { id: "rail", size: 200 }), "rail");
+  assert.deepEqual(["rail", "a", "b"].map((id) => Number(grid.rect(id).w.toFixed(6))), [200, 240, 560]);
 });

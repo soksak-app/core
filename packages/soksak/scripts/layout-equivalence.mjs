@@ -48,10 +48,6 @@ export function assertRoleIndependence({ state, options, operations, check, seed
     const born = operation.args[createdArgument[operation.method]]?.id;
     if (born !== undefined) identifiers.add(born);
   }
-  for (const [id, paid] of Object.entries(state.paidBy ?? {})) {
-    identifiers.add(id);
-    if (paid) identifiers.add(paid);
-  }
   const aliases = new Map([...identifiers].map((id, index) => [id, `renamed-${index}`]));
   const originals = new Map([...aliases].map(([id, alias]) => [alias, id]));
   const mapId = (map, id) => {
@@ -64,7 +60,6 @@ export function assertRoleIndependence({ state, options, operations, check, seed
     const normalize = (id) => renamed ? mapId(originals, id) : id;
     const input = structuredClone(state);
     input.root = renameTree(input.root, rename);
-    if (input.paidBy) input.paidBy = Object.fromEntries(Object.entries(input.paidBy).map(([id, paid]) => [rename(id), paid ? rename(paid) : ""]));
     const grid = create(input, structuredClone(options));
     check?.(grid);
     const observations = [{ state: snapshot(grid, normalize) }];

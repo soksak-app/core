@@ -12,8 +12,15 @@ import { Soksak } from "../dist/index.js";
  */
 const file = JSON.parse(readFileSync(new URL("../../../docs/spec/cases/layout/invariants.json", import.meta.url), "utf8"));
 
-/** The difference in px under which two drawn sizes are one size, as the layout library judges an even cut. */
+/** The difference in px under which two drawn sizes are one size. */
 const SAME = 0.5;
+/**
+ * The relative difference under which two fractions are one fraction. The rules of sizes work on the fractions of the stored tree
+ * (packages/soksak/docs/layout.md#add-and-remove): a drawn size is a fraction of what a level holds after its corridors, and a
+ * corridor of a deeper level is drawn inside one kid, so equal fractions are not equal drawn sizes on every level, and ratios of
+ * drawn sizes are not the ratios that the rules keep.
+ */
+const ULP = 1e-9;
 /** The difference in px under which a rectangle that an operation does not change is unchanged. */
 const KEPT = 1e-6;
 const SIDES = ["left", "right", "top", "bottom"];
@@ -30,13 +37,13 @@ function generator(seed) {
 }
 
 /**
- * The stored tree of a state with the drawn rectangles of its cards: a node is {id} for a card or a box, or {axis, kids}, and every node
- * has the ids of its cards and boxes and its drawn size per axis.
+ * The stored tree of a state: a node is {id} for a card or a box, or {axis, kids} with the fraction `share` of each kid, and every
+ * node has the ids of its cards and boxes.
  */
 function treeOf(state, rects) {
   const read = (node) => {
     if (node.cut) {
-      const kids = node.kids.map((kid) => read(kid.node));
+      const kids = node.kids.map((kid) => ({ ...read(kid.node), share: kid.share }));
       return { axis: node.cut, kids, ids: kids.flatMap((k) => k.ids), cards: kids.flatMap((k) => k.cards) };
     }
     if (node.box) {
@@ -45,11 +52,7 @@ function treeOf(state, rects) {
     }
     return { id: node.card, ids: [node.card], cards: [node.card] };
   };
-  const size = (node, axis) => {
-    const rs = node.cards.map((id) => rects.get(id));
-    return axis === "x" ? Math.max(...rs.map((r) => r.x + r.w)) - Math.min(...rs.map((r) => r.x)) : Math.max(...rs.map((r) => r.y + r.h)) - Math.min(...rs.map((r) => r.y));
-  };
-  return { root: read(state.root), size };
+  return { root: read(state.root) };
 }
 
 /** The cut that holds the node whose ids are ids, or null. */
@@ -65,7 +68,17 @@ function holderOf(node, ids) {
 
 const key = (ids) => [...ids].sort().join(",");
 
-const evenCut = (tree, cut) => cut.kids.every((kid) => Math.abs(tree.size(kid, cut.axis) - tree.size(cut.kids[0], cut.axis)) < SAME);
+const near = (a, b) => Math.abs(a - b) <= ULP * Math.max(1, Math.abs(a), Math.abs(b));
+
+/** A cut is even when its kids have one fraction; the generated cards have no px size, so every kid takes a fraction. */
+const evenCut = (cut) => cut.kids.every((kid) => near(kid.share, cut.kids[0].share));
+
+/** The two stored trees have the same nodes in the same order and the same fractions. */
+function sameTree(a, b) {
+  if (a.card !== undefined || b.card !== undefined) return a.card === b.card;
+  if (a.box !== undefined || b.box !== undefined) return a.box === b.box && sameTree(a.inner, b.inner);
+  return a.cut === b.cut && a.kids.length === b.kids.length && a.kids.every((kid, i) => near(kid.share, b.kids[i].share) && sameTree(kid.node, b.kids[i].node));
+}
 
 /** Every cell of the grid is covered by exactly one card. */
 function tiles(grid) {
@@ -122,32 +135,36 @@ function run(seed) {
     if (along) {
       const kept = now.kids.filter((kid) => !kid.ids.includes(id));
       const old = new Map(was.kids.map((kid) => [key(kid.ids), kid]));
-      const evenBefore = evenCut(before, was);
+      const evenBefore = evenCut(was);
       const factors = kept.map((kid) => {
         const prior = old.get(key(kid.ids));
-        return prior ? after.size(kid, axis) / before.size(prior, axis) : NaN;
+        return prior ? kid.share / prior.share : NaN;
       });
       if (evenBefore) {
-        if (factors.some((f) => Number.isNaN(f) || Math.abs(f - factors[0]) > 1e-6)) fail("I7", step, `the even cut of ${target} changed its ratios: ${factors}`);
-        if (!evenCut(after, now)) fail("I7", step, `the even cut of ${target} is not even after the add of ${id}`);
+        if (factors.some((f) => Number.isNaN(f) || !near(f, factors[0]))) fail("I7", step, `the even cut of ${target} changed its ratios: ${factors}`);
+        if (!evenCut(now)) fail("I7", step, `the even cut of ${target} is not even after the add of ${id}`);
       } else {
         const others = kept.filter((kid) => !kid.ids.includes(target));
-        const changed = others.filter((kid) => Math.abs(after.size(kid, axis) - before.size(old.get(key(kid.ids)), axis)) > SAME);
+        const changed = others.filter((kid) => !near(kid.share, old.get(key(kid.ids)).share));
         if (changed.length) fail("I7", step, `the add of ${id} beside ${target} in an uneven cut changed ${changed.map((k) => k.ids)}`);
+        const pair = now.kids.filter((kid) => kid.ids.includes(target) || kid.ids.includes(id)).map((kid) => kid.share);
+        const paid = old.get(key([target])).share;
+        if (pair.length !== 2 || !near(pair[0], pair[1]) || !near(pair[0] + pair[1], paid)) fail("I7", step, `the add of ${id} does not take half of ${target}: ${pair} of ${paid}`);
       }
       const outside = moved(rects, grid, now.ids);
       if (outside.length) fail("I8", step, `the add of ${id} moved ${outside} outside its cut`);
     } else {
-      const pair = now.kids.map((kid) => after.size(kid, axis));
-      if (now.kids.length !== 2 || Math.abs(pair[0] - pair[1]) > SAME) fail("I7", step, `the wrap of ${target} is not two halves: ${pair}`);
+      const pair = now.kids.map((kid) => kid.share);
+      if (now.kids.length !== 2 || !near(pair[0], pair[1])) fail("I7", step, `the wrap of ${target} is not two halves: ${pair}`);
       const outside = moved(rects, grid, now.ids);
       if (outside.length) fail("I8", step, `the wrap of ${target} moved ${outside}`);
     }
-    // I10: the withdraw of the card just added restores the layout of an even cut and of a wrap.
-    if (!along || evenCut(before, was)) {
+    // I10: the withdraw of the card just added restores the stored tree of an even cut and of a wrap, and with it the rectangles.
+    if (!along || evenCut(was)) {
       const copy = new Soksak(grid.toJSON(), file.options);
       try {
         copy.withdraw(id);
+        if (!sameTree(copy.toJSON().root, state.root)) fail("I10", step, `the withdraw of ${id} does not restore the tree`);
         const back = moved(rects, copy, []);
         if (back.length) fail("I10", step, `the withdraw of ${id} does not restore ${back}`);
       } catch (error) {
@@ -165,9 +182,9 @@ function run(seed) {
     if (rest.length > 1) {
       const factors = rest.map((kid) => {
         const now = holderOf(after.root, kid.ids)?.kids.find((k) => key(k.ids) === key(kid.ids));
-        return now ? after.size(now, was.axis) / before.size(kid, was.axis) : NaN;
+        return now ? now.share / kid.share : NaN;
       });
-      if (factors.some((f) => Number.isNaN(f) || Math.abs(f - factors[0]) > 1e-6)) fail("I7", step, `the withdraw of ${id} changed the ratios of its cut: ${factors}`);
+      if (factors.some((f) => Number.isNaN(f) || !near(f, factors[0]))) fail("I7", step, `the withdraw of ${id} changed the ratios of its cut: ${factors}`);
     }
     const outside = moved(rects, grid, was.ids);
     if (outside.length) fail("I8", step, `the withdraw of ${id} moved ${outside} outside its cut`);
@@ -201,7 +218,7 @@ function run(seed) {
         const uneven = [];
         const visit = (node) => {
           if (!node.kids) return;
-          if (!evenCut(after, node)) uneven.push(key(node.ids));
+          if (!evenCut(node)) uneven.push(key(node.ids));
           node.kids.forEach(visit);
         };
         visit(after.root);

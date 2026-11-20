@@ -79,7 +79,6 @@ test("varied layout cases cover the declared input classes and operation outcome
   assert.deepEqual(unique("snap"), ["merge", "off"]);
   assert.deepEqual(unique("snapDistance"), [3, 29]);
   assert.deepEqual(unique("grabSize"), [7, 23]);
-  assert.deepEqual(unique("fillOrder"), ["h", "v"]);
   for (const topology of unique("topology")) assert.equal(new Set(observed.filter((entry) => entry.topology === topology).map((entry) => entry.width)).size, 3);
   assert.ok(observed.some((entry) => entry.fixed > 0) && observed.some((entry) => entry.sized > 0));
   assert.ok(observed.some((entry) => entry.zeroSize > 0) && observed.some((entry) => entry.zeroSize === 0));
@@ -114,7 +113,7 @@ test("varied layout checks reject ID and size implementation mutants", async (t)
   checkLayout(Soksak.from(value.state, value.options));
   assert.doesNotThrow(() => assertRoleIndependence({ ...value, check: checkLayout }));
   const mutants = [
-    { name: "identifier", file: "soksak.js", find: "return card && this.rectOf(card);", to: "const r = card && this.rectOf(card); return r && this.w < 400 && this.h >= 180 && id === 'card' ? { ...r, x: r.x + 1 } : r;", error: /role independence/ },
+    { name: "identifier", file: "soksak.js", find: "            return this.rectOf(card);", to: "            return ((r) => this.w < 400 && this.h >= 180 && id === 'card' ? { ...r, x: r.x + 1 } : r)(this.rectOf(card));", error: /role independence/ },
     { name: "size", file: "geometry.js", find: "    return { x, y, w, h };", to: "    return { x, y, w: frame.x.at.at(-1) < 400 && frame.y.at.at(-1) >= 180 ? -1 : w, h };", error: /public layout invariants/ },
   ];
   for (const mutant of mutants) await t.test(mutant.name, async (t) => {

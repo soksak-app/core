@@ -43,11 +43,6 @@ export type TreeNode = CardNode | BoxNode | CutNode;
 
 export interface SoksakState {
   root: TreeNode;
-  /**
-   * The card that each card took its space from, by id. A close gives the space
-   * back to that card when it is a neighbouring kid of the same cut.
-   */
-  paidBy?: Record<string, string>;
 }
 
 /** The distance under which two coordinates are one line (R1), and the tolerance of the sum of the shares. */
@@ -97,16 +92,13 @@ function checkForm(value: unknown): asserts value is TreeNode {
  * the cells, is refused with that name.
  */
 export function checkState(state: SoksakState): void {
-  if (!state || typeof state !== 'object') refuse(`the state ${JSON.stringify(state)} is not {root, paidBy}`);
+  if (!state || typeof state !== 'object') refuse(`the state ${JSON.stringify(state)} is not {root}`);
   if (['xs', 'ys', 'cards'].some((key) => key in state)) {
-    refuse('the state holds xs, ys and cards, which is the earlier form; the state is {root, paidBy}');
+    refuse('the state holds xs, ys and cards, which is the earlier form; the state is {root}');
   }
-  if (state.paidBy !== undefined) {
-    if (!state.paidBy || typeof state.paidBy !== 'object' || Array.isArray(state.paidBy)) refuse('paidBy is not a map of card ids');
-    for (const [id, to] of Object.entries(state.paidBy)) {
-      if (typeof to !== 'string') refuse(`paidBy of ${id} is ${JSON.stringify(to)}, which is no card id`);
-    }
-  }
+  if ('paidBy' in state) refuse('the state holds paidBy, which the layout does not record; the state is {root}');
+  const extra = Object.keys(state).filter((key) => key !== 'root');
+  if (extra.length) refuse(`the state holds ${extra.join(', ')}; the state is {root}`);
   const seen = new Set<string>();
   const check = (value: unknown, path: string): void => {
     checkForm(value);

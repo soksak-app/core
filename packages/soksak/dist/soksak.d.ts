@@ -17,12 +17,10 @@
  * whose structure stays. `geometry.ts` computes the coordinates.
  */
 import type { Axis, Card, Rect, Side } from './card.js';
-import type { Divider, Frames, Rule, ZoneHit, ZoneOptions } from './geometry.js';
+import type { Divider, Rule, ZoneHit, ZoneOptions } from './geometry.js';
 export type { Divider, Rule, Zone, ZoneHit, ZoneOptions } from './geometry.js';
-import type { Fill, FillOrder } from './slicing.js';
 import type { SoksakState, TreeNode } from './tree.js';
 export type { Axis, Card, CardInit, Rect, Side } from './card.js';
-export type { Fill, FillOrder } from './slicing.js';
 export type { BoxNode, CardNode, CutNode, Kid, SoksakState, TreeNode } from './tree.js';
 export { checkState } from './tree.js';
 /** `merge`: a dragged boundary snaps onto a neighbouring line and the two combine. */
@@ -38,23 +36,14 @@ export interface SoksakOptions {
     snapDistance?: number;
     /** How a dragged boundary snaps. Default `merge`. */
     snap?: SnapMode;
-    /** Which axis a fill walks first. Default `v`. */
-    fillOrder?: FillOrder;
     /** Plane width in px. Default 0 until `resize`. */
     width?: number;
     /** Plane height in px. Default 0 until `resize`. */
     height?: number;
 }
 export declare class Soksak {
-    /** The state: the slicing tree of the plane, and the card that each card took its space from. */
+    /** The state: the slicing tree of the plane. */
     private root;
-    /**
-     * Which card each card took its space from, by id. `split` and `insertAt`
-     * record it, and a close gives the space back to that card when it stands
-     * beside it in the same cut, so the two operations are inverses; `''` names
-     * a card that took a share of every kid of the root.
-     */
-    private paidBy;
     private xs;
     private ys;
     private list;
@@ -63,6 +52,16 @@ export declare class Soksak {
     private boxes;
     private at;
     private spots;
+    /** The px that each node stands inside its slot: the corridors and frames on each side, and on top the heads above it. */
+    private insets;
+    /** The corridor of each axis in px, which the last derive laid. */
+    private unit;
+    /** The px position of each line per axis from the last layout of the tree, or null on a plane with no size. */
+    private linesAt;
+    /** The px of the heads of the boxes that start on the top line of each card. */
+    private above;
+    /** Whether an operation moved the lines, so the commit reads the fractions from them. */
+    private moved;
     private up;
     /** The px that the host draws inside the top of each box by id, which `setHeads` set. */
     private heads;
@@ -84,12 +83,6 @@ export declare class Soksak {
     get minSize(): number;
     /** Assigning it clears the values cached against the previous one. */
     set minSize(px: number);
-    private order;
-    /** The axis a close tries first. */
-    get fillOrder(): FillOrder;
-    /** The sides a close tries, in the order of `fillOrder`. */
-    get fillSides(): readonly Fill['side'][];
-    set fillOrder(value: FillOrder);
     private grab;
     /** Smallest grab area of a boundary, in px. */
     get grabSize(): number;
@@ -104,15 +97,48 @@ export declare class Soksak {
     set snap(mode: SnapMode);
     constructor(state?: SoksakState, options?: SoksakOptions);
     static from(state: SoksakState, options?: SoksakOptions): Soksak;
-    /** Takes the tree and the payers of a state as copies and derives the lines and the cells. */
+    /** Takes the tree of a state as a copy and derives the lines and the cells. */
     private load;
     /**
-     * Lays the tree into the unit plane and derives the lines and the cells from
-     * it: coordinates within EPS are one line (R1), and the cards are listed in
-     * the order of the tree. Each node keeps the lines its rectangle starts and
-     * ends at and the node that holds it, so no operation searches the tree.
+     * Lays the tree into the plane and derives the lines and the cells from it
+     * (packages/soksak/docs/layout.md#the-model). A cut first takes its fixed costs
+     * from its extent, the corridors between its kids and the px sizes of the kids
+     * that keep one, and gives every other kid its fraction of the rest, so equal
+     * fractions draw equal sizes; a box takes its frames, one corridor on its left,
+     * right and bottom, and on its top the head of the host, from the extent of its
+     * inner node. A line stands at the middle of each corridor, at its px over the
+     * extent of the plane, and coordinates within EPS are one line (R1). Before the
+     * plane has a size the tree is laid by its fractions alone. The corridor narrows
+     * when the plane cannot hold the gaps, which the lines decide, so the tree is
+     * laid again with the corridor that the first lines give.
      */
     private derive;
+    /** The px size that a node keeps on an axis whatever its fraction, with its own costs, or null for a node that takes a fraction. */
+    private heldOf;
+    /**
+     * The px size that a node keeps on an axis in two parts: `px`, the sizes that its cards declare, which a plane that cannot draw
+     * them scales, and `cost`, its corridors, frames and heads, which it does not. Null for a node that takes a fraction.
+     */
+    private keptOf;
+    /**
+     * The px size of each kid of a cut along its axis, from the room inside the
+     * cut: the corridors between the kids first, then the px sizes of the kids
+     * that keep one, and the rest to the other kids by their fractions. A kid gets
+     * at least the costs inside it, its own corridors, px sizes, frames and heads,
+     * and the others share what is left. When the room does not hold the px sizes
+     * and one `minSize` for the kids that take a fraction, the px sizes are drawn
+     * scaled by one factor; when no kid takes a fraction, they divide the room in
+     * their proportion. Null when the room does not hold the costs of the kids.
+     */
+    private kidSizes;
+    /**
+     * The px of the frames and heads of the boxes that hold a node whole on an axis: a box takes one corridor on each side of x,
+     * and on y its head above and one corridor below. They are costs of the cut that holds the node (R5).
+     */
+    private frameOf;
+    /** The px that a node takes on an axis at no size of its cards: its corridors, px sizes, frames and heads. */
+    private costOf;
+    private lay;
     /**
      * Writes what the operations of the lines changed back into the tree: the
      * attributes of every card, and the share of every kid of a cut from the
@@ -124,12 +150,6 @@ export declare class Soksak {
     private on;
     /** Puts `next` where `node` stands: in its cut, inside its box, or as the root. A cut along the axis of its cut gives that cut its kids. */
     private put;
-    /**
-     * Takes the kid `i` out of the cut `holder` and gives its share to the kid
-     * `to`, or to every other kid in proportion to its share when `to` is -1. A cut
-     * left with one kid is replaced by that kid.
-     */
-    private drop;
     /** The node that leaves with the card of `leaf`: the card, or the box around it that holds nothing else. */
     private departing;
     /** Whether an id names a card or a box of the tree. */
@@ -169,15 +189,11 @@ export declare class Soksak {
      * `data` is opaque to this library.
      */
     setData(id: string, data: unknown): boolean;
-    /** The frames of each card by id that `setFrames` set (R5). */
-    private cardFrames;
     /**
-     * Sets the frames between each card and its four lines (R5): a card without an
-     * entry, and a side without a count, has none. The frames are no part of the
-     * state. Throws for an id that is no card and for a count that is no whole
-     * number from zero, and then changes nothing.
+     * The frames of each card by id (R5): on each side the boxes around it that
+     * end on the line of that side, which `derive` reads from the tree.
      */
-    setFrames(frames: Readonly<Record<string, Partial<Frames>>>): void;
+    private cardFrames;
     /**
      * Set whether the layout may split, close or move a card.
      */
@@ -195,7 +211,7 @@ export declare class Soksak {
     private find;
     /** Grid line coordinates, normalised 0..1. A copy — the arrangement owns them. */
     lines(axis: Axis): number[];
-    /** The state: a copy of the slicing tree and of the payers. */
+    /** The state: a copy of the slicing tree. */
     toJSON(): SoksakState;
     /**
      * Replace the arrangement while keeping this grid's plane and options.
@@ -212,6 +228,11 @@ export declare class Soksak {
     private noAxis;
     private size;
     rectOf(card: Card): Rect;
+    /**
+     * The drawn rectangle of the card or the box id: a box is drawn between its lines, each inset by its corridor and by the
+     * frames of the boxes around it, so its frame and its head stand inside it (R5); the heads of the boxes around it that start
+     * on its top line are drawn inside its top, as inside the top of a card.
+     */
     rect(id: string): Rect | undefined;
     rects(): Map<string, Rect>;
     /**
@@ -355,23 +376,40 @@ export declare class Soksak {
     insert(target: string | readonly string[], side: Side, node: TreeNode): string;
     /**
      * REMOVE (packages/soksak/docs/layout.md#add-and-remove): takes the node `id`,
-     * a card or a box, out of its cut; the other kids take its space in proportion
-     * to their sizes. Returns the node that left, which `insert` takes. Throws its
-     * refusal and changes nothing.
+     * a card or a box, out of its cut; the other kids that are no fixed card take
+     * its fraction by one factor. Returns the node that left, which `insert` takes.
+     * Throws its refusal and changes nothing.
      */
     withdraw(id: string): TreeNode;
-    /** Gives every kid of every cut an equal share (packages/soksak/docs/layout.md#cuts). */
+    /** Gives the kids of every cut that take a fraction equal fractions (packages/soksak/docs/layout.md#cuts). */
     even(): void;
+    /** Whether a node keeps its size on an axis whatever its fraction: a fixed card, or a node drawn at a px size there. */
+    private keeps;
     /**
-     * Installs the tree of the plan that `make` makes of the stored tree and its
-     * drawn rectangles, with the paidBy records of the grid. The plan lays its
-     * cuts, the grid draws them, and the plan corrects its spans by what was drawn
-     * until the largest error is below a thousandth of a px; a corridor does not
-     * change with a span, so this takes one correction, and one more for each
-     * nested cut that moved. A result that draws a changed node below its minimum
-     * throws its text. A throw puts the arrangement back.
+     * A fixed card without a px size on the axis of its cut is a fixed cost of that cut
+     * (packages/soksak/docs/layout.md#the-model): after an operation it is drawn at the size it had before, and the kids that take a
+     * fraction share the rest in the ratio of their fractions. Its fraction is the one that draws that size.
+     */
+    private keepFixed;
+    /** What an operation of the cuts reads of the grid, on the stored tree itself. */
+    private input;
+    /**
+     * Installs the stored tree that `make` makes of the stored tree and lays it. A
+     * result that draws a node that it changed below its minimum throws its text.
+     * A throw puts the arrangement back.
      */
     private byCuts;
+    /**
+     * The text of the outermost node that the last operation moved and that is
+     * drawn below its minimum, or null. The minimum of a node is recursive: a card
+     * needs `minSize` and on y the heads drawn inside its rectangle, a card that
+     * keeps a px size the smaller of that size and `minSize`, a fixed card with a
+     * px size the smaller of that size and the size it had, another fixed card the
+     * size it is drawn at, a box the minimum of its
+     * inner node, a cut along an axis the minimums of its kids and the corridors
+     * between them, and a cut across it the largest minimum of its kids.
+     */
+    private belowMinimum;
     /**
      * Where the two cards meeting at a boundary come out the same size.
      *
@@ -449,76 +487,30 @@ export declare class Soksak {
     private splitAt;
     private nextId;
     /**
-     * The neighbours that would expand over a card if it closed, as frozen copies:
-     * the cards of the kid of its cut beside it toward the first of `sides` that
-     * names a kid without a fixed card, or null. `sides` names the sides to try
-     * in their order, the sides of `fillOrder` by default.
+     * Whether a kid is a fixed card, which keeps its size when a sibling leaves. A
+     * cut or a box that holds a fixed card is not fixed: its other cards take the
+     * share, and its fixed card keeps its size by the rule of its own cut.
      */
-    fill(id: string, sides?: readonly Fill['side'][]): Fill | null;
-    /**
-     * The neighbour that takes the space of the card `id` when it closes: the kid
-     * of the cut of the card beside it toward the first of `sides` that holds no
-     * fixed card, or null. A close gives the space to a kid of the card's own
-     * cut, so it never crosses the structure of another cut.
-     */
-    private fillAlong;
-    /**
-     * The index of the kid of `holder` that holds the card `id`, or -1 when no
-     * kid holds it. The walk goes up from the card, so it visits the depth of
-     * the card and no other node.
-     */
-    private kidHolding;
-    /** Whether a fixed card stands inside a node. */
     private holdsFixed;
     private removable;
     /** Whether `close` would remove the card. */
     canClose(id: string): boolean;
     /**
-     * The cut that holds the node leaving with the card `id`, the kid that takes
-     * its space, -1 for every other kid in proportion to its share, and whether
-     * that kid grows over the space as a neighbour. The kid of its cut that holds
-     * the card it took its space from takes it when that kid holds no fixed card;
-     * the kids between the two shift by the span. Otherwise a kid of the root
-     * cut that took its space gives it back to every kid in proportion when it
-     * took a share of every kid (paidBy `''`), else to the kid after it, or before
-     * it at the end of the plane. Otherwise the neighbour of the first of `sides`
-     * that fills it takes it, else every other kid in proportion. It
-     * is null when the card cannot close: it is fixed or the last card, or no kid
-     * of its cut without a fixed card can take the space.
+     * The cut that holds the node leaving with the card `id` and its index in
+     * that cut, or null when the card cannot close: it is fixed or the last card,
+     * or every other kid of its cut holds a fixed card.
      */
     private closing;
     /**
-     * Remove a card. Its space goes to a kid of its own cut: the card it took its
-     * space from when that card stands beside it, else the neighbour that the
-     * first of `sides` names, else every other kid in proportion to its share.
-     * Returns false when the card is `fixed`, when it is the last card, or when no
-     * kid of its cut without a fixed card can take the space. `sides` names the
-     * sides whose neighbour may expand, tried in their order, the sides of
-     * `fillOrder` by default; an empty list gives the space to every kid in
-     * proportion. A host that keeps its own regions of cards passes one side at a
-     * time.
+     * Remove a card (packages/soksak/docs/layout.md#boundaries): the node that
+     * leaves with it goes out of its cut, and the fractions of the other kids of
+     * the cut that are no fixed card scale by one factor, so their ratios hold; a
+     * fixed card keeps the size it is drawn at. Returns false when the card is `fixed`,
+     * when it is the last card, or when every other kid of its cut holds a fixed
+     * card.
      */
-    close(id: string, sides?: readonly Fill['side'][]): boolean;
+    close(id: string): boolean;
     private closeAlong;
-    /**
-     * The slots of the lines of kid `i` of `holder`, which leave with it, when
-     * `holder` spans the plane across its axis and kid `to` takes the span: every
-     * line of the range of such a cut is a line of its kids, so each other slot of
-     * the axis stands after the drop at its index less the slots that left.
-     * Null for a cut that does not span the plane, whose lines share their places
-     * with the lines of other cuts.
-     */
-    private leavingSlots;
-    /**
-     * Draws again every slot of `axis` that stood between the same two lines
-     * before a change at the width it had, where the axis had or has a card with
-     * a px size: the slots that the change made share what is left, the slots of
-     * the card `payer` first absorbing the difference. On an axis that had and has
-     * no px size the coordinates are already the drawn sizes and nothing moves.
-     * `leaving` names the slots that left with a kid of a cut that spans the plane
-     * (`leavingSlots`); every other slot then pairs with the slot of its index.
-     */
-    private settle;
     /**
      * Whether a card spanning the whole plane can be placed on this boundary:
      * the line is an edge of the plane or a seam of the root cut along `axis`.
@@ -538,14 +530,18 @@ export declare class Soksak {
      * Inserts a card at a boundary, spanning the whole plane on the other axis,
      * as a kid of the root cut along `axis`.
      *
-     * `size` is required, in px, and must be smaller than the plane. The new kid
-     * takes its span from the kid after it, else from the kid before it, else
-     * from every kid in proportion, and every other slot is drawn at the width it
-     * had.
+     * `size` is required, in px, and must be smaller than the plane. A boundary
+     * between kids i and i + 1 of the root is the add of the card beside kid i
+     * toward kid i + 1 (packages/soksak/docs/layout.md#boundaries): when the kids
+     * that hold no px size on the axis have one drawn size, or kid i holds one,
+     * every kid gives a share in proportion and keeps its ratio; otherwise kid i
+     * alone gives the span and every other kid keeps its size. An edge of the
+     * plane is the add beside the root as a whole, so every kid gives a share in
+     * proportion.
      *
      * Returns the new card's id, or null when a card spans the boundary, the line
      * is no seam of the root, the size is invalid, or the result would leave a
-     * card with no area.
+     * card with no area or below the size it had and `minSize`.
      */
     insertAt(axis: Axis, line: number, init: {
         id?: string;
@@ -578,10 +574,9 @@ export declare class Soksak {
      *
      * The card keeps its id and its payload, so the host's element is reused and a
      * live surface inside it is not destroyed. It keeps its px size only when it
-     * lands spanning one slot on that axis. `sides` is the sides of the close, as
-     * `close` takes them.
+     * lands spanning one slot on that axis.
      */
-    move(id: string, targetId: string, side: Side, sides?: readonly Fill['side'][]): boolean;
+    move(id: string, targetId: string, side: Side): boolean;
     /** Whether `move` would succeed, without performing it. */
     canMove(id: string, targetId: string, side: Side): boolean;
     /**
