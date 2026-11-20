@@ -6,6 +6,7 @@
 ## 2026-11-20
 
 - F937-10-1 (head token, mygo): the group tree builds the layout token of its kept header answers again only after the grid or the tree changed, so a draw of the card heads without a layout change, as on a pointer move, formats no token.
+- F1010 (registered, held): the in-app check of the rule of sizes of F966 on the mygo, Wails and Tauri hosts waits for the final verification pass.
 - F966 (feature link): the test inventory links the completed rule of sizes to the layout operations and the insert and vacated-slot functions of both workbenches with their case, property and reach tests.
 - F966-1-1-4-2 (seeded reach check, page): the seeded check of the page judges I4 over three generated layouts by the drag paths of the Go check, through pointer events on a tab or a group header, and every required target is reachable.
 - F937-10-1 (registered): a draw of a card head in mygo formats the layout token of the group tree for each kept answer on every pointer move.
