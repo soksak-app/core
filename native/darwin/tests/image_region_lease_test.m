@@ -67,6 +67,24 @@ static void checkPresentRecord(NSArray<NSDictionary *> *events, NSString *mode, 
         [NSString stringWithFormat:@"a %@ present stores one record of its steps (%@)", mode, records]);
 }
 
+// Whether the region used a kept surface for the frame (the field cached of its record native.image.present): 1 or 0,
+// or -1 when the frame was refused or stored no single record.
+static int presentCached(void *region, IOSurfaceRef surface, const unsigned char *nonce, const double *size,
+    uint64_t generation, uint64_t raster, int sequence) {
+    __block bool presented = false;
+    NSArray *events = capturedEvents(^{
+        presented = sp_region_present(region, IOSurfaceGetID(surface), nonce, size[0], size[1], size[2], generation, raster,
+            sequence);
+    });
+    NSArray *records = [events filteredArrayUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(NSDictionary *event, id bindings) {
+        (void)bindings;
+        return [event[@"name"] isEqual:@"native.image.present"];
+    }]];
+    id cached = records.count == 1 ? records[0][@"fields"][@"cached"] : nil;
+    if (!presented || ![cached isKindOfClass:NSNumber.class]) return -1;
+    return [cached boolValue] ? 1 : 0;
+}
+
 static IOSurfaceID presentedSurface(void *region) {
     CALayer *imageLayer = ((NSView *)region).layer.sublayers.firstObject;
     id contents = imageLayer.contents;
@@ -155,6 +173,69 @@ int main(int argc, char **argv) { @autoreleasepool {
         @"the copy region presents a host-owned copy");
     sp_region_close(copy);
     check(releases.count == 2, [NSString stringWithFormat:@"a copy region releases nothing: %@", releases]);
+
+    // A region keeps the surfaces that it looked up for its generation and raster revision, at most 16, and presents a
+    // kept surface again without a lookup (docs/spec/native-surfaces.md#darwin).
+    void *kept = sp_region_create(surface, "kept", ignoreEvent, NULL);
+    sp_region_place(kept, 10, 20, 120, 80, true);
+    // One surface more than the region keeps.
+    enum { pool = 17, last = pool - 1 };
+    unsigned char nonces[pool][16];
+    IOSurfaceRef surfaces[pool];
+    IOSurfaceID identifiers[pool];
+    for (int index = 0; index < pool; index++) {
+        surfaces[index] = createSurface(width, height, nonces[index]);
+        identifiers[index] = IOSurfaceGetID(surfaces[index]);
+    }
+    // Whether each surface of the pool still exists after the test released its own references: a surface that the
+    // region keeps is found by its identifier, a dropped one is not.
+    const IOSurfaceID *pooled = identifiers;
+    NSString *(^alive)(void) = ^NSString *{
+        NSMutableArray *found = [NSMutableArray array];
+        for (int index = 0; index < pool; index++) {
+            IOSurfaceRef looked = IOSurfaceLookup(pooled[index]);
+            [found addObject:looked ? @1 : @0];
+            if (looked) CFRelease(looked);
+        }
+        return [found componentsJoinedByString:@","];
+    };
+    int sequence = 1;
+    int lookedUp = presentCached(kept, surfaces[0], nonces[0], size, 7, 1, sequence++);
+    int again = presentCached(kept, surfaces[0], nonces[0], size, 7, 1, sequence++);
+    check(lookedUp == 0 && again == 1,
+        [NSString stringWithFormat:@"a frame of a kept surface is presented without a lookup (first %d, again %d)", lookedUp,
+            again]);
+    unsigned char otherNonce[16] = {1};
+    check(presentCached(kept, surfaces[0], otherNonce, size, 7, 1, sequence++) == -1,
+        @"a frame of a kept identifier with another nonce is looked up and refused");
+    NSMutableArray *filled = [NSMutableArray array];
+    for (int index = 1; index < pool; index++) {
+        [filled addObject:@(presentCached(kept, surfaces[index], nonces[index], size, 7, 1, sequence++))];
+    }
+    // The last surface replaced the first, the first then replaced the second, and the last is still kept.
+    int evicted = presentCached(kept, surfaces[0], nonces[0], size, 7, 1, sequence++);
+    int latest = presentCached(kept, surfaces[last], nonces[last], size, 7, 1, sequence++);
+    int replaced = presentCached(kept, surfaces[1], nonces[1], size, 7, 1, sequence++);
+    check(filled.count == last && ![filled containsObject:@1] && ![filled containsObject:@-1] && evicted == 0 && latest == 1 && replaced == 0,
+        [NSString stringWithFormat:@"a surface over the bound replaces the one presented least recently (filled %@, evicted %d, latest %d, "
+            "replaced %d)", filled, evicted, latest, replaced]);
+    int newRaster = presentCached(kept, surfaces[last], nonces[last], size, 7, 2, 1);
+    int newGeneration = presentCached(kept, surfaces[last], nonces[last], size, 8, 2, 1);
+    check(newGeneration == 0, [NSString stringWithFormat:@"a frame of another generation is looked up (cached %d)", newGeneration]);
+    for (int index = 0; index < pool; index++) CFRelease(surfaces[index]);
+    NSString *afterRaster = alive();
+    NSMutableArray *onlyLast = [NSMutableArray array], *noSurface = [NSMutableArray array];
+    for (int index = 0; index < pool; index++) {
+        [onlyLast addObject:index == last ? @"1" : @"0"];
+        [noSurface addObject:@"0"];
+    }
+    NSString *none = [noSurface componentsJoinedByString:@","];
+    check(newRaster == 0 && [afterRaster isEqual:[onlyLast componentsJoinedByString:@","]],
+        [NSString stringWithFormat:@"a frame of another raster revision drops the kept surfaces of the earlier pool (cached %d, "
+            "alive %@)", newRaster, afterRaster]);
+    sp_region_close(kept);
+    check([alive() isEqual:none],
+        [NSString stringWithFormat:@"closing the region drops its kept surfaces (alive %@)", alive()]);
 
     CFRelease(first);
     CFRelease(third);

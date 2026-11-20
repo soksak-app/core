@@ -469,6 +469,8 @@ Terminal의 `terminal.screen` status는 rows를 담고 JSON 값이 같으면 not
 
 macOS 그림 영역의 토큰은 전역 IOSurface 식별자와 그 표면에 붙인 16바이트 논스로 이루어진다. 호스트가 그림을 받으면 식별자로 표면을 조회하고, 논스가 일치하지 않으면 거절한다. 이는 재사용된 32비트 식별자를 방지한다.
 
+공급자는 한 raster의 frame을 식별자가 되풀이되는 surface pool에 그리므로, 그림 영역은 현재 generation과 raster revision에서 조회한 표면을 최대 16개, 조회 때 표면이 지닌 논스와 함께 지닌다. 식별자와 논스가 지닌 표면의 것과 같은 frame은 새 조회 없이 그 표면을 쓴다. 다른 frame은 위처럼 조회하고 검사하며, 받아들인 frame은 같은 식별자의 지닌 표면을, 16개를 지녔으면 가장 오래전에 표시한 표면을 대신한다. core 창에서 terminal sidecar의 pool은 표면 2개와 7개를 지녔고, 영역이 지니는 것보다 많은 표면에 차례로 그리는 공급자는 지닌 표면을 찾지 못한다. 영역은 지닌 각 표면의 참조를 쥐므로, 지니는 동안 그 식별자는 다른 표면을 가리키지 않는다. 공급자는 새 raster를 새 pool에 그리므로 다른 generation이나 raster revision의 frame은 먼저 지닌 표면을 모두 버리고, 영역을 닫아도 버린다.
+
 IOSurface 식별자는 프로세스 소유자의 전역 사용자 네임스페이스에 있다. 같은 사용자의 다른 프로세스도 표면을 조회해 열 수 있다. 이 신뢰 경계는 사이드카 통신에 쓰는 엔드포인트 소켓과 같다.
 
 Diagnostic viewport marker는 실제 attached document view layer의 bounds 안에 cyan 2 pt border를 그린다. Clipping, visibility 및 transform을 따르고 implicit animation을 끄며 frame geometry와 input을 유지하고 stop 또는 dispose 시 이전 border style을 복원한다. Diagnostic build에서만 존재하며 document-region paint를 root presentation 대기에 결합하지 않는다. Native border pixel은 native region bounds를 입증하고 HTML viewport paint와 자연 content 범위는 별도 관측으로 유지한다.

@@ -60,7 +60,24 @@ static NSTimeInterval spareDelay = 1;
 - (void)tick:(CADisplayLink *)link;
 @end
 
-@interface SPImageRegion : NSView <NSTextInputClient>
+// The surfaces that a region keeps for the frames of its current generation and raster revision
+// (docs/spec/native-surfaces.md#darwin): a supplier draws one raster into a small pool of surfaces.
+enum { SPKeptSurfaceCount = 16 };
+
+typedef struct {
+    IOSurfaceRef surface;      // Retained while kept, so that its identifier names no other surface; NULL when free.
+    IOSurfaceID identifier;
+    unsigned char nonce[16];  // The nonce that the surface carried at its lookup.
+    uint64_t presented;        // The present count of the region at the last present of the surface.
+} SPKeptSurface;
+
+@interface SPImageRegion : NSView <NSTextInputClient> {
+@public
+    SPKeptSurface kept[SPKeptSurfaceCount];
+    uint64_t keptGeneration;
+    uint64_t keptRaster;
+    uint64_t presents;
+}
 @property sp_region_event event;
 @property void *context;
 @property(retain) CALayer *imageLayer;
@@ -1595,6 +1612,60 @@ static IOSurfaceRef lookupSurface(unsigned int surface_id) {
     return IOSurfaceLookup(surface_id);
 }
 
+// Releases every kept surface of the region.
+static void dropKeptSurfaces(SPImageRegion *view) {
+    for (int index = 0; index < SPKeptSurfaceCount; index++) {
+        if (view->kept[index].surface) CFRelease(view->kept[index].surface);
+        view->kept[index] = (SPKeptSurface){0};
+    }
+}
+
+// The kept surface of the identifier and nonce, retained for the caller, or NULL when the region keeps none for this
+// generation and raster revision.
+static IOSurfaceRef takeKeptSurface(SPImageRegion *view, IOSurfaceID identifier, const unsigned char *nonce,
+    uint64_t generation, uint64_t raster) {
+    if (generation != view->keptGeneration || raster != view->keptRaster) return NULL;
+    for (int index = 0; index < SPKeptSurfaceCount; index++) {
+        SPKeptSurface *entry = &view->kept[index];
+        if (entry->surface && entry->identifier == identifier && memcmp(entry->nonce, nonce, 16) == 0) {
+            return (IOSurfaceRef)CFRetain(entry->surface);
+        }
+    }
+    return NULL;
+}
+
+// Keeps the surface of an accepted frame: a frame of another generation or raster revision drops the kept surfaces of
+// the earlier pool first, and the surface replaces the entry of its identifier, a free entry or the one presented
+// least recently.
+static void keepSurface(SPImageRegion *view, IOSurfaceRef surface, const unsigned char *nonce, uint64_t generation,
+    uint64_t raster) {
+    if (generation != view->keptGeneration || raster != view->keptRaster) {
+        dropKeptSurfaces(view);
+        view->keptGeneration = generation;
+        view->keptRaster = raster;
+    }
+    IOSurfaceID identifier = IOSurfaceGetID(surface);
+    SPKeptSurface *slot = NULL;
+    for (int index = 0; !slot && index < SPKeptSurfaceCount; index++) {
+        if (view->kept[index].surface && view->kept[index].identifier == identifier) slot = &view->kept[index];
+    }
+    for (int index = 0; !slot && index < SPKeptSurfaceCount; index++) {
+        if (!view->kept[index].surface) slot = &view->kept[index];
+    }
+    if (!slot) {
+        slot = &view->kept[0];
+        for (int index = 1; index < SPKeptSurfaceCount; index++) {
+            if (view->kept[index].presented < slot->presented) slot = &view->kept[index];
+        }
+    }
+    CFRetain(surface);
+    if (slot->surface) CFRelease(slot->surface);
+    slot->surface = surface;
+    slot->identifier = identifier;
+    memcpy(slot->nonce, nonce, 16);
+    slot->presented = view->presents;
+}
+
 // The color space that the kIOSurfaceColorSpace property of a frame declares, or NULL after the error that names the
 // property and the type of its value is recorded.
 static CGColorSpaceRef createDeclaredColorSpace(CFPropertyListRef properties) {
@@ -1762,23 +1833,26 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
     SPImageRegion *view = (SPImageRegion *)handle;
     if (!nonce) return false;
 
-    IOSurfaceRef surface = lookupSurface(token_id);
-    if (!surface) {
-        [view reject:@"notFound"];
-        return false;
-    }
-
-    // Copy transfers ownership even without an explicit retained annotation in the SDK header.
-    CFTypeRef nonceRef = IOSurfaceCopyValue(surface, CFSTR("soksak.frame"));
-    BOOL nonceMatches = NO;
-    if (nonceRef && CFGetTypeID(nonceRef) == CFDataGetTypeID()) {
-        CFDataRef nonceData = (CFDataRef)nonceRef;
-        if (CFDataGetLength(nonceData) == 16) {
-            nonceMatches = memcmp(nonce, CFDataGetBytePtr(nonceData), 16) == 0;
+    // A kept surface of the same identifier and nonce needs no lookup (docs/spec/native-surfaces.md#darwin).
+    IOSurfaceRef surface = takeKeptSurface(view, token_id, nonce, generation, raster);
+    BOOL cached = surface != NULL;
+    BOOL nonceMatches = cached;
+    if (!cached) {
+        surface = lookupSurface(token_id);
+        if (!surface) {
+            [view reject:@"notFound"];
+            return false;
         }
+        // Copy transfers ownership even without an explicit retained annotation in the SDK header.
+        CFTypeRef nonceRef = IOSurfaceCopyValue(surface, CFSTR("soksak.frame"));
+        if (nonceRef && CFGetTypeID(nonceRef) == CFDataGetTypeID()) {
+            CFDataRef nonceData = (CFDataRef)nonceRef;
+            if (CFDataGetLength(nonceData) == 16) {
+                nonceMatches = memcmp(nonce, CFDataGetBytePtr(nonceData), 16) == 0;
+            }
+        }
+        if (nonceRef) CFRelease(nonceRef);
     }
-
-    if (nonceRef) CFRelease(nonceRef);
     uint64_t looked = sp_mono_ns();
 
     if (!nonceMatches) {
@@ -1838,11 +1912,14 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
     // In the lease mode the layer presents the retained surface of the supplier; otherwise a host-owned copy.
     IOSurfaceRef presentation = view.released ? leasePresentation(surface, declaredColorSpaceName, sizeof(declaredColorSpaceName))
         : copyPresentation(view, surface, declaredColorSpaceName, sizeof(declaredColorSpaceName));
-    CFRelease(surface);
     if (!presentation) {
+        CFRelease(surface);
         [view reject:@"presentFailed"];
         return false;
     }
+    view->presents++;
+    keepSurface(view, surface, nonce, generation, raster);
+    CFRelease(surface);
 
     id displayContents = (__bridge id)presentation;
 
@@ -1886,10 +1963,11 @@ bool sp_region_present(void *handle, unsigned int token_id, const unsigned char 
     if (sp_event_gate(SP_CLASS_FRAME, SP_EVENT_DEBUG)) {
         char fields[320];
         snprintf(fields, sizeof fields,
-            "{\"mode\":\"%s\",\"width\":%zu,\"height\":%zu,\"bytes\":%zu,\"lookup_ns\":%llu,\"check_ns\":%llu,\"copy_ns\":%llu,"
+            "{\"mode\":\"%s\",\"surface\":%u,\"width\":%zu,\"height\":%zu,\"bytes\":%zu,\"lookup_ns\":%llu,\"cached\":%s,\"check_ns\":%llu,"
+            "\"copy_ns\":%llu,"
             "\"swap_ns\":%llu,\"commit_ns\":%llu,\"total_ns\":%llu}",
-            leased ? "lease" : "copy", surfaceWidth, surfaceHeight, leased ? (size_t)0 : surfaceWidth * surfaceHeight * 4,
-            (unsigned long long)(looked - started), (unsigned long long)(checked - looked), (unsigned long long)(copied - checked),
+            leased ? "lease" : "copy", token_id, surfaceWidth, surfaceHeight, leased ? (size_t)0 : surfaceWidth * surfaceHeight * 4,
+            (unsigned long long)(looked - started), cached ? "true" : "false", (unsigned long long)(checked - looked), (unsigned long long)(copied - checked),
             (unsigned long long)(swapped - copied), (unsigned long long)(committed - swapped),
             (unsigned long long)(sp_mono_ns() - started));
         sp_event(SP_CLASS_FRAME, SP_EVENT_DEBUG, "native.image.present", fields);
@@ -1977,6 +2055,7 @@ void sp_region_close(void *handle) {
     }
     view.closed = YES;
     view.event = NULL;
+    dropKeptSurfaces(view);
     [view.frameLink invalidate];
     view.frameLink = nil;
     view.runningSpareDelay.region = nil;
