@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde_json::Value;
 use soksak_host::role_file::{role_file_content, role_fingerprint, role_texts, write_role_file};
@@ -19,14 +19,9 @@ fn load_cases() -> Value {
     serde_json::from_slice(&fs::read(FINGERPRINT_CASES).unwrap()).unwrap()
 }
 
-fn temp_config(name: &str) -> PathBuf {
-    let directory = std::env::temp_dir().join(format!(
-        "soksak-role-file-test-{}-{name}",
-        std::process::id()
-    ));
-    let _ = fs::remove_dir_all(&directory);
-    fs::create_dir_all(&directory).unwrap();
-    directory
+/// A temporary configuration directory that the test removes when it ends, also on a panic.
+fn temp_config() -> tempfile::TempDir {
+    tempfile::TempDir::new().unwrap()
 }
 
 fn with_line_feed(text: &str) -> String {
@@ -87,7 +82,8 @@ fn role_file_has_first_line_definition_and_fingerprint() {
 // contract: roles.role-file-phrases
 #[test]
 fn role_texts_match_pinned_texts() {
-    let role_file = temp_config("phrases").join("agents/tab-1/role.md");
+    let temp = temp_config();
+    let role_file = temp.path().join("agents/tab-1/role.md");
     let role_file = role_file.display().to_string();
     let texts = role_texts(&role_file);
     let mut want = BTreeMap::new();
@@ -106,7 +102,8 @@ fn role_texts_match_pinned_texts() {
 // contract: roles.role-file-write
 #[test]
 fn write_role_file_writes_layout_atomically_with_modes() {
-    let config = temp_config("write");
+    let temp = temp_config();
+    let config = temp.path();
     let path = write_role_file(&config, "tab-1", "reviewer", "You review.\n").unwrap();
     assert_eq!(path, config.join("agents/tab-1/role.md"));
     let data = fs::read_to_string(&path).unwrap();
@@ -130,7 +127,8 @@ fn write_role_file_writes_layout_atomically_with_modes() {
 // contract: roles.role-file-removes-leftovers
 #[test]
 fn write_role_file_removes_leftover_temporary_files() {
-    let config = temp_config("leftovers");
+    let temp = temp_config();
+    let config = temp.path();
     let folder = config.join("agents/tab-1");
     fs::create_dir_all(&folder).unwrap();
     let leftover = folder.join(".role-crash.tmp");
@@ -142,7 +140,8 @@ fn write_role_file_removes_leftover_temporary_files() {
 // contract: roles.role-file-refuses-surface
 #[test]
 fn write_role_file_refuses_surface_with_path_parts() {
-    let config = temp_config("refuse");
+    let temp = temp_config();
+    let config = temp.path();
     for surface in ["", "..", "a/b", "../x", "a\u{1}b", "a\tb"] {
         assert!(
             write_role_file(&config, surface, "reviewer", "You review.\n").is_err(),
