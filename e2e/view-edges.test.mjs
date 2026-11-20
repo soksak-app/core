@@ -22,9 +22,8 @@ for (const app of Object.values(APPS)) {
     };
 
     await look("the first layout");
-    const first = (await s.get("core.grid")).cards.find((card) => card.tabs?.some((tab) => tab.id === rasters[0].surface));
-    assert.ok(first, `no card holds the raster probe ${rasters[0].surface}`);
-    const own = (await s.get("core.layout")).state.cards.find((card) => card.id === first.id);
+    const own = (await s.get("core.grid")).cards.find((card) => card.tabs?.some((tab) => tab.id === rasters[0].surface));
+    assert.ok(own, `no card holds the raster probe ${rasters[0].surface}`);
     const inner = (lines, first, last) => (last < lines.length - 1 ? last : first);
     for (const [axis, offset] of [["x", -17.4], ["x", -33.75], ["y", -21.3], ["y", -38.25]]) {
       const lines = (await s.get("core.grid")).lines[axis];

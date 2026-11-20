@@ -151,7 +151,7 @@ export async function runRedraw(s) {
     await presentedFrame(s, surface, (frame) => frame.color === CARD_COLOURS[index] && frame.rows === BANDS, `a frame in ${CARD_COLOURS[index]}`);
   }
   const leader = (await s.request("exposure.list")).commands.some((entry) => entry.name === "core.group.leader");
-  const line = (await s.get("core.layout")).state.cards.find((card) => card.id === grid[0][0].card).c1;
+  const line = (await s.get("core.grid")).cards.find((card) => card.id === grid[0][0].card).c1;
   const recording = await s.record();
   const windows = [];
   let displayed = await settled(s, cards.map(({ surface }) => surface));

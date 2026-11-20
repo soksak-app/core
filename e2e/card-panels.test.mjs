@@ -6,6 +6,7 @@ import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { checkLinkedPanels } from "./linked-panels.mjs";
 import { panelSurfaceRect, requireCleared, tabSwitchPair } from "./card-panel-checks.mjs";
+import { storedCard } from "./stored-layout.mjs";
 /** The card of the grid that holds the tab surface. */
 const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab) => tab.id === surface));
 const geometry=grid=>grid.cards.map(({id,x,y,w,h})=>({id,x,y,w,h})).sort((a,b)=>a.id.localeCompare(b.id));
@@ -210,7 +211,7 @@ for (const app of Object.values(APPS)) {
     const assigned=grid.cards.find(item=>item.id===card0.id);
     assert.ok(assigned.h-56-380<96,'the normal fixture must have insufficient height for two 190-point sides');
     assert.ok(assigned.w-2-380>=96,'the normal fixture must retain sufficient width for two 190-point sides');
-    const saved=(await s.get('core.layout')).state.cards.find(item=>item.id===card0.id).data.sidebars;
+    const saved=storedCard(await s.get('core.layout'),card0.id).data.sidebars;
     // In this height two 190 panels do not fit even at the minimum size, so the top, which has priority before any manual operation, opens at the size that fits and only the bottom collapses
     // (docs/spec/example-model.md). The height space is the card height minus 2 for the border, 54 for the head and foot, and 96 for the minimum content.
     const room=assigned.h-2-54-96;
@@ -234,7 +235,7 @@ for (const app of Object.values(APPS)) {
     const afterGrid=await s.get('core.grid');
     assert.deepEqual(geometry(afterGrid),geometry(grid),'tab selection changed internal or external card geometry');
     assert.deepEqual(afterGrid.cards.find(item=>item.id===card0.id).sidebars,panels,'tab selection changed assigned sets or presentation');
-    assert.deepEqual((await s.get('core.layout')).state.cards.find(item=>item.id===card0.id).data.sidebars,saved,'tab selection changed saved assignments');
+    assert.deepEqual(storedCard(await s.get('core.layout'),card0.id).data.sidebars,saved,'tab selection changed saved assignments');
     // The native surface of the switched tab sits at the same place too (V7a/V7b/V7c).
     await s.presented();
     assert.deepEqual((await s.get("core.verify")).rows.filter((row) => !row.ok), [], "tab selection left DOM and native geometry apart");
@@ -256,7 +257,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(folded.cards.find((item) => item.id === card0.id).sidebars.top.size, 190,
       "folding keeps the stored size");
     assert.equal(folded.cards.find(item=>item.id===card0.id).sidebars.top.autoCollapsed,false,'manual fold remained classified as automatic');
-    assert.equal((await s.get('core.layout')).state.cards.find(item=>item.id===card0.id).data.sidebars.top.collapsed,true,'manual fold was not saved');
+    assert.equal(storedCard(await s.get('core.layout'),card0.id).data.sidebars.top.collapsed,true,'manual fold was not saved');
     await s.run("core.card.sidebar.size", { card: card0.id, side: "right", size: 260 });
     const resized = await s.until("core.grid",
       (value) => value.cards.find((item) => item.id === card0.id)?.sidebars?.right?.size === 260,

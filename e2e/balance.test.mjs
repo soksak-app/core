@@ -28,9 +28,8 @@ for (const app of Object.values(APPS)) {
     const last = await split(far, "right");
     const below = [lower, near, far, last];
     await s.until("core.grid", (grid) => panes(grid).length === start + 6, "the six new cards did not appear");
-    const layout = await s.get("core.layout");
-    const line = layout.state.cards.find((item) => item.id === near).c1;
     const grid = await s.get("core.grid");
+    const line = card(grid, near).c1;
     await s.run("core.boundary.move", { axis: "x", line, position: grid.lines.x[line] + 60 });
     const before = await s.get("core.grid");
     assert.ok(spread(upper.map((id) => card(before, id).w)) > 10, `the upper row started even: ${JSON.stringify(before.cards)}`);

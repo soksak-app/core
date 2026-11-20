@@ -4,6 +4,7 @@ import test from "node:test";
 import { APPS, holdCovered, open, recordingSummary } from "@soksak/window-check/app.mjs";
 import { fresh, joinedFailure } from "./fixture.mjs";
 import { requireContentWidth } from "./card-panel-checks.mjs";
+import { storedCard } from "./stored-layout.mjs";
 const sides = ["top", "bottom", "left", "right"];
 const near = (a, b, label) => assert.ok(Math.abs(a - b) <= 1, `${label}: actual ${a}, expected ${b}`);
 /**
@@ -106,7 +107,7 @@ for (const app of Object.values(APPS))
           `${label}: window ${host.content.width}x${host.content.height}, card ${current.w}x${current.h}, saved requests ${JSON.stringify(choices)}, presentation ${JSON.stringify(current.sidebars)}`,
         );
         const layout = await s.get("core.layout");
-        const saved = layout.state.cards.find((item) => item.id === card.id).data.sidebars;
+        const saved = storedCard(layout, card.id).data.sidebars;
         const bars = await s.until(
           "core.sidebars",
           (all) =>

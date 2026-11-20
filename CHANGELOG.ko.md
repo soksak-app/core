@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F966-2-8 (tree 위의 창 검사): 창 검사와 benchmark case는 `core.layout`의 `state.cards`와 `groups` 목록 대신 card의 grid line과 group card를 `core.grid`에서 읽고, card의 저장된 data를 cut의 kid와 box의 inner node를 따르는 `e2e/stored-layout.mjs`의 `storedCard`와 `storedCards`로 읽는다. 검증: `e2e/test/stored-layout.test.mjs`가 module이 생기기 전에 실패했고 통과한다. 창 검사는 실행하지 않았다.
 - F966-3-1-4-2와 F966-3-1-4-5 (strip index, strip 합류, exchange, Go workbench): tab strip에 놓은 tab은 `core.drag`가 알리는 점 아래의 index에서 합류한다. `core.tab.move`와 `core.card.move`는 zone과 side `strip`과 함께 `index`를 받고, `strip`의 `core.card.move`는 content card의 모든 tab을 합류시키고 그것을 닫으며, header로 끌린 group card는 `TargetOptions.Group`으로 target 찾기를 실행하고 content card 가운데에서 자리를 바꾼다. exchange는 각 자리의 그려진 크기를 유지하므로 box는 자리의 크기로 들어간다.
 - F966-2-7 (tree 위의 card sidebar 선택): `e2e/card-sidebar-choices.mjs`의 `turnOffCardSidebars`는 `state.cards` 대신 cut의 kid와 box의 inner node를 따라 `core.layout`의 저장된 tree에서 card를 찾는다. 검증: tree layout을 가진 `e2e/test/window-sidebar-cleanup.test.mjs`가 바뀌지 않은 helper에서 실패했고 통과한다. 이 helper를 쓰는 창 검사는 실행하지 않았다.
 - F998 (Rust setup test의 login PATH에서 codex 제외): `packages/host/rust/tests/setup_test.rs`의 일회용 home의 login PATH는 Go setup test처럼 codex 명령을 가진 모든 directory를 빼므로, codex가 있는 기계에서도 install이 같게 실행된다. 검증: 바뀌지 않은 test에서 `setup_installs_the_skill_and_the_registration_one_at_a_time`이 `setup parts are not current: skill <home>/.agents/skills/soksak/SKILL.md`로 실패했고, `setup_test`의 여섯 test가 세 번 중 세 번 통과한다.

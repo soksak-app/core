@@ -55,7 +55,7 @@ for (const app of Object.values(APPS)) {
     const start = await s.get("core.layout");
     const created = await s.run("core.group.create", { card: start.leader, side: "right", plugin: START_PLUGIN });
     const { group } = created;
-    await s.until("core.layout", (layout) => layout.groups.some((item) => item.card === group), `the group ${group} was not created`);
+    await s.until("core.grid", (grid) => grid.groups.some((item) => item.id === group), `the group ${group} was not created`);
     await s.presented();
     await notActivated(s, "after the window was lowered");
 
@@ -65,9 +65,9 @@ for (const app of Object.values(APPS)) {
     // A press on the header, drags to the bottom zone of a card of the root level outside the group and the release.
     const before = await s.get("core.layout");
     assert.equal(before.leader, group, "the group card took the leader mark of the card that it grouped");
-    const members = before.groups.find((item) => item.card === group).members;
     const grid = await s.get("core.grid");
-    const target = grid.cards.find((card) => !card.fixed && card.parent === null && !members.includes(card.id));
+    // A content card of the root level has no parent, so it stands outside the group card.
+    const target = grid.cards.find((card) => !card.fixed && card.parent === null);
     if (!target) throw new Error(`the start layout holds no content card of the root level outside ${group}: ${JSON.stringify(grid)}`);
     const header = await s.rect("core.group.header");
     const press = { x: Math.round(header.x + 24), y: Math.round(header.y + header.height / 2) };
@@ -92,9 +92,9 @@ for (const app of Object.values(APPS)) {
 
     // A dissolve and a create in the same window, then at once a double-click on the name of the new group card (F937-59).
     await s.run("core.group.dissolve", { group });
-    await s.until("core.layout", (layout) => layout.groups.length === 0, `the dissolve of ${group} left a group`);
+    await s.until("core.grid", (grid) => grid.groups.length === 0, `the dissolve of ${group} left a group`);
     const again = (await s.run("core.group.create", { card: (await s.get("core.layout")).leader, side: "right", plugin: START_PLUGIN })).group;
-    await s.until("core.layout", (layout) => layout.groups.some((item) => item.card === again), `the group ${again} was not created`);
+    await s.until("core.grid", (grid) => grid.groups.some((item) => item.id === again), `the group ${again} was not created`);
     await s.presented();
     await doubleClickName(s, again, "after a dissolve and a create");
     await notActivated(s, "after the double-click on the new group card");
