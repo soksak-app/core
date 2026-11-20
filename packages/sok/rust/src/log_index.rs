@@ -1090,7 +1090,10 @@ pub fn read_buffer_bytes(start: u64, size: u64) -> usize {
 }
 
 /// Indexes the lines of the source after the indexed part (from the start when `rebuild` is set), writes the new full records and then the
-/// new state block. It returns the bytes it read, the lines it indexed and the lines that announce a change.
+/// new state block. It returns the bytes it read, the lines it indexed and the lines that announce a change. The lines after the indexed
+/// part are added to the record of the partial segment, so an update reads only the bytes that were appended: every member of a record is
+/// a count, a sum, a least or greatest value or a set of bits, which grows by each line in the same way whether the earlier lines were
+/// added by this update or by an earlier one.
 fn index_from(
     name: &str,
     state: &IndexState,
@@ -1101,25 +1104,19 @@ fn index_from(
     rebuild: bool,
 ) -> Result<(i64, i64, i64), OpenFailure> {
     let idx_display = format!("{name}.idx");
-    let (mut start, mut events, state) = if rebuild {
-        (0, 0, IndexState::default())
+    let state = if rebuild {
+        IndexState::default()
     } else {
-        (
-            state.indexed_bytes,
-            state.full_segments as u64 * SEGMENT_EVENTS,
-            state.clone(),
-        )
+        state.clone()
     };
-    if !rebuild && let Some(tail) = &state.tail {
-        start = tail.offset;
-    }
+    let start = state.indexed_bytes;
+    let mut events = state.events;
     let first_event = events;
-    // A line before this offset was indexed by an earlier update (the update reads the partial segment again), so it announced its change then.
-    let announced_before = state.indexed_bytes;
     let mut announcing = 0i64;
     let mut next = state.clone();
     next.tail = None;
-    let mut acc = Segment::new(start);
+    // default: an index without a partial segment starts a new segment at the end of the indexed part.
+    let mut acc = state.tail.clone().unwrap_or_else(|| Segment::new(start));
     let mut carry: Vec<u8> = vec![];
     let mut position = start;
     let mut buffer = vec![0u8; read_buffer_bytes(start, size)];
@@ -1166,7 +1163,7 @@ fn index_from(
                 next.first_seq = line.seq as u64;
             }
             acc.add(&line, line_size);
-            if !line.reads_log && line_start >= announced_before {
+            if !line.reads_log {
                 announcing += 1;
             }
             next.last_seq = line.seq as u64;

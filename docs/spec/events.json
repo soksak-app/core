@@ -2289,10 +2289,33 @@
                 }
               ]
             }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "wall_us": { "type": "number" },
+              "cpu_us": { "type": "number" },
+              "routines": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": { "type": "string" },
+                    "wakes": { "type": "number" },
+                    "micros": { "type": "number" },
+                    "bytes": { "type": "number" }
+                  },
+                  "required": ["name", "wakes", "micros", "bytes"],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["wall_us", "cpu_us", "routines"],
+            "additionalProperties": false
           }
         ]
       },
-      "description": "The sampler of the host, while the trace is on. The memory event `host.sampler.memory` is one reading every five seconds: role is host (rss_host_kb), a registered process role with name, page (the page web content process of the window `window`), document (the web content process of the document web view `surface` of the window `window`). The host reading and each process reading hold footprint_kb with its parts internal_kb, compressed_kb, purgeable_kb, graphics_kb, media_kb, network_kb and neural_kb (docs/spec/performance-trace.md), and each process reading holds pid and rss_kb; a reading that cannot obtain a size holds error instead of the sizes, and a window whose facts cannot be read holds role, window and error. Rows identify owners, not unique processes: repeated PIDs refer to the same physical process and consumers deduplicate by PID when totaling process memory."
+      "description": "The sampler of the host, while the trace is on. The work event `host.sampler.routines` is one reading at each sample: wall_us and cpu_us are the wall time and the processor time of the process since the previous sample, and routines holds for each named routine that worked in that time its name, its wakes, the microseconds of their work and the bytes they handled (docs/spec/performance-trace.md). The memory event `host.sampler.memory` is one reading every five seconds: role is host (rss_host_kb), a registered process role with name, page (the page web content process of the window `window`), document (the web content process of the document web view `surface` of the window `window`). The host reading and each process reading hold footprint_kb with its parts internal_kb, compressed_kb, purgeable_kb, graphics_kb, media_kb, network_kb and neural_kb (docs/spec/performance-trace.md), and each process reading holds pid and rss_kb; a reading that cannot obtain a size holds error instead of the sizes, and a window whose facts cannot be read holds role, window and error. Rows identify owners, not unique processes: repeated PIDs refer to the same physical process and consumers deduplicate by PID when totaling process memory."
     },
     "host.buffer.dropped": {
       "layer": "host",

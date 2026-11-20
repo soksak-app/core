@@ -11,6 +11,7 @@ import (
 	"os"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/soksak-app/core/packages/host/go/src/routine"
 	sok "github.com/soksak-app/core/packages/sok/go/src"
@@ -71,6 +72,8 @@ func StartLogIndexer(after func(path string, update sok.IndexUpdate, err error))
 			pending = map[string]bool{}
 			mu.Unlock()
 			sort.Strings(paths)
+			started := time.Now()
+			var read int64
 			for _, path := range paths {
 				update, err := sok.UpdateLogIndex(path)
 				if err != nil {
@@ -81,8 +84,10 @@ func StartLogIndexer(after func(path string, update sok.IndexUpdate, err error))
 					// The file may have come back between the update and the check, so the update is made once more and its result is reported.
 					update, err = sok.UpdateLogIndex(path)
 				}
+				read += update.Bytes
 				after(path, update, err)
 			}
+			routine.Work("log-index", started, read)
 		}
 	})
 	observe = func(path string, _ int64) {

@@ -475,6 +475,57 @@ fn index_update_allocates_for_the_appended_bytes_only() {
     );
 }
 
+// contract: log.index.update-reads-the-appended-bytes-only
+#[test]
+fn index_update_reads_the_appended_bytes_only() {
+    let (_config, path) = temp_file("index-appended-only");
+    std::fs::create_dir_all(path.parent().expect("parent")).expect("dir");
+    let partial = event_line_of(4002);
+    let first = format!("{}{}", lines_of(1, 4001), &partial[..30]);
+    std::fs::write(&path, &first).expect("write");
+    update_log_index(&path).expect("first update");
+    let indexed = lines_of(1, 4001).len() as i64;
+    // The partial segment holds 4,001 lines; the update reads the bytes after the last indexed line feed, not the segment again, and the
+    // record of the partial segment grows by the new lines across the end of the segment.
+    let appended = format!("{}\n{}", &partial[30..], lines_of(4003, 4200));
+    let mut file = std::fs::OpenOptions::new()
+        .append(true)
+        .open(&path)
+        .expect("open");
+    file.write_all(appended.as_bytes()).expect("append");
+    drop(file);
+    let update = update_log_index(&path).expect("append update");
+    let want = (first.len() + appended.len()) as i64 - indexed;
+    assert!(
+        !update.rebuilt && update.bytes == want && update.lines == 199 && update.announcing == 199,
+        "the update read {} bytes and indexed {} lines, {} announcing; want the {want} bytes after the indexed part and 199 lines",
+        update.bytes,
+        update.lines,
+        update.announcing
+    );
+    // The records that the updates grew are the records that one build of the whole file writes: the full records after the state
+    // blocks and the record of the partial segment in the valid block. The blocks differ in their generation.
+    let whole = path.with_file_name("host-b.jsonl");
+    std::fs::write(&whole, lines_of(1, 4200)).expect("write whole");
+    update_log_index(&whole).expect("build whole");
+    let records = |path: &Path, generation: usize| {
+        let data = std::fs::read(path.with_file_name(format!(
+            "{}.idx",
+            path.file_name().expect("name").to_string_lossy()
+        )))
+        .expect("index");
+        let block = generation % 2 * STATE_BLOCK_BYTES;
+        (
+            data[2 * STATE_BLOCK_BYTES..].to_vec(),
+            data[block + 88..block + 88 + RECORD_BYTES].to_vec(),
+        )
+    };
+    assert!(
+        records(&path, 2) == records(&whole, 1),
+        "the records grown by updates differ from the records built from the whole file"
+    );
+}
+
 // A head read that fails fails the index update with the read error. The update does not rebuild with a reason that the file
 // does not show, such as the first line changed.
 // contract: log.index.head-read-error-is-reported

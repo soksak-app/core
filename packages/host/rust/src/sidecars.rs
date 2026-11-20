@@ -4043,6 +4043,8 @@ impl<O: Owner> Core<O> {
                             return None;
                         }
                     }
+                    // The handling of the line is one wake of the routine `service-messages` (docs/spec/performance-trace.md).
+                    let _wake = crate::routine::Wake::start("service-messages", line.len());
                     let value: serde_json::Value = match serde_json::from_slice(&line) {
                         Ok(value) => value,
                         Err(error) => return Some(format!("invalid message: {error}")),

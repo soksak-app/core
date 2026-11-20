@@ -14,6 +14,7 @@ import (
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
+	sok "github.com/soksak-app/core/packages/sok/go/src"
 )
 
 func traceEvents(t *testing.T, config string, log *host.EventLog) []string {
@@ -428,5 +429,51 @@ func TestTheSamplerDividesTheFootprintOfEachProcess(t *testing.T) {
 		if _, ok := notStarted[part]; ok {
 			t.Fatalf("a web view whose process has not started was recorded with %s: %v", part, notStarted)
 		}
+	}
+}
+
+// contract: performance.sampler.attributes-the-work-of-the-routines
+func TestTheSamplerAttributesTheWorkOfTheRoutines(t *testing.T) {
+	config := t.TempDir()
+	log := support.StartWriter(t, config)
+	traceOn(t)
+	waitForFirstSample(t)
+	// The sample that the switch stored at once starts the interval; the work below falls into the next sample.
+	file := filepath.Join(t.TempDir(), "host-a.jsonl")
+	lines := `{"ts_us":1000,"mono_ns":1,"seq":1,"level":"info","layer":"host","event":"log.open","fields":{"schema":3,"pid":1,"role":"host","boot":"a"}}` + "\n" +
+		`{"ts_us":1001,"mono_ns":2,"seq":2,"level":"debug","layer":"host","event":"host.x.y","fields":{"n":2}}` + "\n"
+	if err := os.WriteFile(file, []byte(lines), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	updated := make(chan error, 1)
+	observe, stop := host.StartLogIndexer(func(_ string, _ sok.IndexUpdate, err error) { updated <- err })
+	t.Cleanup(stop)
+	observe(file, int64(len(lines)))
+	if err := <-updated; err != nil {
+		t.Fatal(err)
+	}
+	host.PerformanceSample()
+	samples := traceFields(t, config, log, "host.sampler.routines")
+	if len(samples) < 2 {
+		t.Fatalf("the sampler stored %d records of the routines, want one at each sample", len(samples))
+	}
+	last := samples[len(samples)-1]
+	wall, _ := last["wall_us"].(float64)
+	cpu, _ := last["cpu_us"].(float64)
+	if wall <= 0 || cpu < 0 {
+		t.Fatalf("the record holds no wall time or processor time: %v", last)
+	}
+	routines, _ := last["routines"].([]any)
+	var index map[string]any
+	for _, item := range routines {
+		if entry, _ := item.(map[string]any); entry["name"] == "log-index" {
+			index = entry
+		}
+	}
+	if index == nil || index["wakes"] != float64(1) || index["bytes"] != float64(len(lines)) {
+		t.Fatalf("the record does not count one wake of log-index that read %d bytes: %v", len(lines), last)
+	}
+	if micros, _ := index["micros"].(float64); micros < 0 || micros > wall {
+		t.Fatalf("the work of log-index took %v microseconds of %v: %v", micros, wall, last)
 	}
 }

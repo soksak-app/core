@@ -5,6 +5,9 @@
 
 ## 2026-11-20
 
+- F996-6 (follow-up of F996-3): the Rust fetcher recovers the guard of its shared state and of a running index read from a lock that a panicking thread poisoned instead of ending the process.
+- F996-5.2 (index update of a running log): the Go and the Rust update of an index add the lines after `indexed_bytes` to the record of the partial segment instead of reading the partial segment again, so an update after a write reads only the appended bytes; on the mygo debug host with three terminals of steady output and a wide event log policy the host takes 8.8% of a processor instead of 15 to 17% (`docs/spec/logging.md#index`).
+- F996-5.1 (work of the routines): while the performance trace is on, the sampler of the Go and the Rust host stores `host.sampler.routines` at each sample with the wall time and the processor time of the process and the wakes, work time and bytes of `log-index` and `service-messages` (`docs/spec/performance-trace.md`).
 - F1000-1: The agent skill and the MCP instructions state that an agent delegates a task with `sok message send`, waits at its prompt for the injected report, polls nothing for a result and does not delegate with a submit command.
 - F899-7.5-14: `docs/spec/endpoint.md` and the agent skill state that every 0.0.x release is a diagnostic build that answers the diagnostic methods, as the published `v0.0.41` bundle does. F1000 records the manual acceptance of orchestration without knowledge of the lead.
 - F899-7.5-13: The submit guidance of the agent skill, the usage texts and the command reference states that a submit command sends its text as a paste and Enter after the reply of the paste. F899-7.5-5: the window checks of the injection pass in mygo, Wails and Tauri for both terminal plugins.

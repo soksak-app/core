@@ -116,6 +116,7 @@ pub fn command(request: Value) -> Result<Value, String> {
         "on" => {
             if !ON.swap(true, Ordering::AcqRel) {
                 observe("host", || json!({"event": "on"}));
+                crate::routine::count_work(true);
                 start_sampler();
             }
         }
@@ -124,6 +125,7 @@ pub fn command(request: Value) -> Result<Value, String> {
                 observe("host", || json!({"event": "off"}));
                 ON.store(false, Ordering::Release);
                 end_sampler();
+                crate::routine::count_work(false);
             }
         }
         _ => unreachable!("validated performance action"),
@@ -268,6 +270,9 @@ fn start_sampler() {
         // hook records the panic.
         .unwrap_or_else(PoisonError::into_inner)
         .samples = 0;
+    // default: a lock that a panicking thread poisoned still holds the last moment, which the start replaces; the panic hook
+    // records the panic.
+    *WORK_SINCE.lock().unwrap_or_else(PoisonError::into_inner) = Some(process_times());
     let thread = std::thread::Builder::new()
         .name("performance-sampler".into())
         .spawn(move || {
@@ -380,9 +385,58 @@ pub fn window_remove(window: &str) {
         .remove(window);
 }
 
-/// Stores the resident size of the host and of every registered process, each as one event `host.sampler.memory`. A process
-/// whose size cannot be read is stored with its error.
+/// The moment and the processor time of the process at the last sample of the work of the routines.
+static WORK_SINCE: Mutex<Option<(std::time::Instant, std::time::Duration)>> = Mutex::new(None);
+
+/// The moment and the processor time (user and system) that the process used until it.
+fn process_times() -> (std::time::Instant, std::time::Duration) {
+    let at = std::time::Instant::now();
+    // SAFETY: getrusage writes the usage of the process into the zeroed structure that it is given.
+    let mut usage: libc::rusage = unsafe { std::mem::zeroed() };
+    if unsafe { libc::getrusage(libc::RUSAGE_SELF, &mut usage) } != 0 {
+        crate::application_log::log_error(
+            "performance trace",
+            format!("processor time: {}", std::io::Error::last_os_error()),
+        );
+        return (at, std::time::Duration::ZERO);
+    }
+    let time = |value: libc::timeval| {
+        std::time::Duration::from_secs(value.tv_sec as u64)
+            + std::time::Duration::from_micros(value.tv_usec as u64)
+    };
+    (at, time(usage.ru_utime) + time(usage.ru_stime))
+}
+
+/// Stores the event `host.sampler.routines`: the wall time and the processor time of the process since the last sample and the
+/// work of each named routine in it (docs/spec/performance-trace.md), so the processor time of the process is attributed to its
+/// routines through the event log.
+fn sample_work() {
+    // default: a lock that a panicking thread poisoned still holds the last moment, which the sample replaces; the panic hook
+    // records the panic.
+    let mut since = WORK_SINCE.lock().unwrap_or_else(PoisonError::into_inner);
+    let now = process_times();
+    // default: a sample before the first start of the sampler, which a check takes, measures from itself.
+    let (at, cpu) = since.replace(now).unwrap_or(now);
+    let totals = crate::routine::take_work();
+    drop(since);
+    observe("sampler", || {
+        let routines: Vec<Value> = totals
+            .iter()
+            .map(|item| json!({"name": item.name, "wakes": item.wakes, "micros": item.micros, "bytes": item.bytes}))
+            .collect();
+        json!({
+            "event": "routines",
+            "wall_us": now.0.duration_since(at).as_micros() as i64,
+            "cpu_us": now.1.saturating_sub(cpu).as_micros() as i64,
+            "routines": routines,
+        })
+    });
+}
+
+/// Stores the work of the routines (`host.sampler.routines`) and the resident size of the host and of every registered process, each
+/// as one event `host.sampler.memory`. A process whose size cannot be read is stored with its error.
 pub fn sample() {
+    sample_work();
     observe("sampler", || memory_record(std::process::id()));
     let named: Vec<(u32, (String, String))> = PROCESSES
         .lock()
