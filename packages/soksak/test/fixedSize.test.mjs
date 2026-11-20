@@ -919,3 +919,17 @@ test("two cards of two cuts that stand in one cell keep their own px sizes", () 
   const stored = grid.toJSON().root.kids.map((kid) => kid.node.kids[0].node.width);
   assert.deepEqual(stored, [200, 260]);
 });
+
+test("a resize below a declared size draws it at the new scale and keeps the declaration", () => {
+  const grid = new Soksak(
+    { root: { cut: "x", kids: [{ share: 0.6, node: { card: "side", width: 900 } }, { share: 0.4, node: { card: "main" } }] } },
+    { width: 1600, height: 800, gap: 24, minSize: 96 },
+  );
+  grid.resize(800, 800);
+  // A change after the resize writes the cards back into the tree.
+  assert.equal(grid.setData("main", { n: 1 }), true);
+  assert.equal(grid.card("side").width, 900, "the declaration is no part of the plane size");
+  grid.resize(1600, 800);
+  assert.equal(grid.card("side").width, 900);
+  assert.equal(grid.rect("side").w, 900, "the size comes back with the plane");
+});

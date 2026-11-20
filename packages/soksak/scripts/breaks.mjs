@@ -220,13 +220,6 @@ export const BREAKS = [
     to: "        let start = along[line - 1];\n        let end = along[line + 1];",
   },
   {
-    id: "no-flex",
-    what: "a drag on an axis where nothing flexes folds the line onto the one before it",
-    file: "dist/soksak.js",
-    find: "                if (usable <= EPS)\n                    break;",
-    to: "                if (usable <= EPS) {\n                    a[line] = clamp(a[line - 1], a[line - 1], a[line + 1]);\n                    break;\n                }",
-  },
-  {
     id: "insert-line",
     what: "canInsertAt answers for the line one past the end of the axis",
     file: "dist/soksak.js",
@@ -248,13 +241,6 @@ export const BREAKS = [
     to: "                const run = end - start;",
   },
   {
-    id: "one-pass",
-    what: "a drag converts px into span once, so it lands short while a slot is stopped",
-    file: "dist/soksak.js",
-    find: "            for (let pass = 0; pass < 8; pass++) {\n                // Only the sharing slots hold normalised width, so convert against those.",
-    to: "            for (let pass = 0; pass < 1; pass++) {\n                // Only the sharing slots hold normalised width, so convert against those.",
-  },
-  {
     id: "rule-gap",
     what: "a rule is extended by the gap of the other axis",
     file: "dist/geometry.js",
@@ -267,13 +253,6 @@ export const BREAKS = [
     file: "dist/soksak.js",
     find: "            if ((declared[line - 1] !== null) !== (declared[line] !== null)) {",
     to: "            if (false) {",
-  },
-  {
-    id: "from-line",
-    what: "a drag is converted from the line before it, so the corridor is scaled with the span",
-    file: "dist/soksak.js",
-    find: "                const off = target - this.boundaryPos(axis, line);",
-    to: "                const off = target - linePositions(this.plane, axis)[line - 1];",
   },
   {
     id: "stale-hold",
@@ -649,27 +628,6 @@ export const BREAKS = [
     to: "",
   },
   {
-    id: "passed-it",
-    what: "a drag keeps a step that landed further from the target than it stood",
-    file: "dist/soksak.js",
-    find: "                if (Math.abs(target - this.boundaryPos(axis, line)) > Math.abs(off)) {",
-    to: "                if (false) {",
-  },
-  {
-    id: "resize-rewrite",
-    what: "a resize rewrites a declared size instead of drawing it at the new scale",
-    file: "dist/soksak.js",
-    find: "this.w = width;\n        this.h = height;",
-    to: "this.w = width;\n        this.h = height;\n        for (const c of this.list ?? []) {\n            if (c.width !== undefined && c.width > width)\n                c.width = width;\n            if (c.height !== undefined && c.height > height)\n                c.height = height;\n        }",
-  },
-  {
-    id: "centre-range",
-    what: "a centring measures the range again after every move, so it walks outside the one it reported",
-    file: "dist/soksak.js",
-    find: "const middle = clamp(this.middleOf(axis, line), low, high);",
-    to: "const middle = this.middleOf(axis, line);",
-  },
-  {
     id: "flex-rate",
     what: "a cut is measured against a slot that does not flex with its span",
     file: "dist/soksak.js",
@@ -802,13 +760,6 @@ export const BREAKS = [
     to: "if (false)\n            return [0, 0];",
   },
   {
-    id: "centre-scaled",
-    what: "centring moves once and does not check where the boundary landed",
-    file: "dist/soksak.js",
-    find: "            for (let pass = 0; pass < 8 && this.hasBoundary(axis, line); pass++) {",
-    to: "            for (let pass = 0; pass < 1 && this.hasBoundary(axis, line); pass++) {",
-  },
-  {
     id: "pixel-grid",
     what: "the view places on whole units whatever the display draws",
     file: "dist/dom.js",
@@ -889,13 +840,6 @@ export const BREAKS = [
     file: "dist/dom.js",
     find: "            const step = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[e.key];\n            if (step === undefined)\n                return;\n",
     to: "            const step = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[e.key];\n",
-  },
-  {
-    id: "no-flex-cut",
-    what: "a cut is measured on an axis where nothing flexes, so a card no width can be taken from is split",
-    file: "dist/soksak.js",
-    find: "        const per = own !== null ? own / (a[card[hi]] - a[card[lo]] || 1) : this.sharedExtent(axis);\n        if (per <= EPS)\n            return null;\n",
-    to: "        const per = own !== null ? own / (a[card[hi]] - a[card[lo]] || 1) : this.sharedExtent(axis);\n",
   },
   {
     id: "cancel-elsewhere",

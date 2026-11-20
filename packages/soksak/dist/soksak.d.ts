@@ -305,10 +305,9 @@ export declare class Soksak {
     /**
      * Moves a boundary so the two cards beside it are drawn at the same size.
      *
-     * A plane too small for the sizes its cards declare draws them scaled, and the
-     * move changes that scale, so the position asked for is not the position
-     * reached. The middle is measured again after each move. A plane that holds
-     * its declared sizes reaches it in one.
+     * A move between two declared sizes keeps their sum, so a plane that draws
+     * them scaled keeps its scale, and a move between sharing cards lands where it
+     * is asked: one move reaches the middle.
      */
     centerBoundary(axis: Axis, line: number): number;
     /**

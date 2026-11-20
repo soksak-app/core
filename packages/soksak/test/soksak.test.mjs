@@ -328,3 +328,14 @@ test("no change leaves a card with no area, whatever minSize allows", () => {
     assert.ok(r.w > 0 && r.h > 0, `${id} is drawn at ${r.w}x${r.h}`);
   }
 });
+
+test("an insert that would leave a card with no area is refused where minSize is 0", () => {
+  // With minSize 0 the minimum does not refuse a card drawn at no size, so the area check alone refuses this insert.
+  const grid = new Soksak(undefined, { width: 386, height: 130, gap: 12, minSize: 0 });
+  const steps = [["split", "card", "x", { id: "n0" }], ["insertAt", "x", 2, { id: "i1", size: 6 }], ["close", "n0"], ["close", "i1"], ["split", "card", "y", { id: "n4" }], ["split", "card", "y", { id: "n5" }], ["split", "card", "x", { id: "n6" }], ["setSize", "n6", "x", 281], ["split", "card", "x", { id: "n8" }], ["split", "n4", "y", { id: "n9" }], ["split", "n4", "x", { id: "n10" }]];
+  for (const [method, ...args] of steps) grid[method](...args);
+  const before = JSON.stringify(grid.toJSON());
+  assert.equal(grid.insertAt("x", 3, { id: "i11", size: 118 }), null);
+  assert.equal(JSON.stringify(grid.toJSON()), before, "a refusal changes nothing");
+  for (const [id, r] of grid.rects()) assert.ok(r.w > 0 && r.h > 0, `${id} has an area`);
+});

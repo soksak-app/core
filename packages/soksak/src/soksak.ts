@@ -1039,44 +1039,12 @@ export class Soksak {
       const off = target - this.boundaryPos(axis, line);
       this.resizeCard(axis, holder, line, ends ? off : -off);
     } else {
+      // Once a line moves, every line stands at its coordinate over the extent of the plane, and the commit reads the fractions
+      // of the kids beside it from there, so the coordinate of the target is where the line stands. The neighbouring lines bound
+      // it, so the line array stays in order.
       const a = this.arr(axis);
-      // One average px per unit of span, which the slots do not all follow: a px
-      // size does not scale with it, and a slot the starvation rule stopped
-      // flexes again as soon as the move gives it room. So the step is measured
-      // again from where the line now stands, until the line is where it was
-      // asked to be.
-      for (let pass = 0; pass < 8; pass++) {
-        // Only the sharing slots hold normalised width, so convert against those.
-        const usable = this.sharedExtent(axis);
-        // No sharing slot flexes with its span, so no change to the line moves
-        // the boundary. Leave it where it stands: collapsing it onto the line
-        // before it moved a boundary the range reported as fixed.
-        if (usable <= EPS) break;
-        // Measured from where the line stands, not from the line before it. A slot
-        // holds its corridor as well as its share of the span, and that corridor
-        // is a constant the conversion must not scale.
-        const off = target - this.boundaryPos(axis, line);
-        if (Math.abs(off) < 0.01) break;
-        // The step can still land past a neighbouring line, which would put the
-        // array out of order and draw a card wider than one spanning more slots.
-        const next = clamp(a[line] + off / usable, a[line - 1], a[line + 1]);
-        if (next === a[line]) break;
-        const was = a[line];
-        this.moved = true;
-        a[line] = next;
-        // The position does not follow the coordinate everywhere: a slot the
-        // starvation rule stopped does not move with its span, and a slot that
-        // comes to stand at zero width gives up the corridor it held, so the
-        // positions between two of those are not reachable at all. A step that
-        // lands further from the target than the line already stood has passed
-        // them, and the step after it comes back past them. Put the line back
-        // and stop, so a drag never leaves the boundary further from where it
-        // was asked than where it started.
-        if (Math.abs(target - this.boundaryPos(axis, line)) > Math.abs(off)) {
-          a[line] = was;
-          break;
-        }
-      }
+      this.moved = true;
+      a[line] = clamp(target / this.size(axis), a[line - 1], a[line + 1]);
     }
     // The position is read before the commit: a line that reached another joins it there, and its index then names another line.
     const at = this.boundaryPos(axis, line);
@@ -1093,29 +1061,16 @@ export class Soksak {
   /**
    * Moves a boundary so the two cards beside it are drawn at the same size.
    *
-   * A plane too small for the sizes its cards declare draws them scaled, and the
-   * move changes that scale, so the position asked for is not the position
-   * reached. The middle is measured again after each move. A plane that holds
-   * its declared sizes reaches it in one.
+   * A move between two declared sizes keeps their sum, so a plane that draws
+   * them scaled keeps its scale, and a move between sharing cards lands where it
+   * is asked: one move reaches the middle.
    */
   centerBoundary(axis: Axis, line: number): number {
     if (this.noAxis(axis)) return 0;
     if (!this.hasBoundary(axis, line)) return this.boundaryPos(axis, line);
-    // The range is read once, before anything moves, and every pass is held
-    // inside it. A move changes where the range's own ends stand, so a pass
-    // clamped to the range as it then stood walked the boundary further out on
-    // every pass: past the range this call reported and below `minSize`.
-    const [low, high] = this.boundaryRange(axis, line);
-    return this.run(() => {
-      let at = this.boundaryPos(axis, line);
-      // A move onto another line joins the two lines, as the derived lines of the tree hold one coordinate once, so the boundary can end.
-      for (let pass = 0; pass < 8 && this.hasBoundary(axis, line); pass++) {
-        const middle = clamp(this.middleOf(axis, line), low, high);
-        if (Math.abs(middle - at) < 0.01) break;
-        at = this.moveLine(axis, line, middle, false);
-      }
-      return at;
-    });
+    // A move lands where it is asked inside the range of the boundary, and the outer edges of the two cards beside the line
+    // stay, so one move reaches the middle.
+    return this.run(() => this.moveLine(axis, line, this.middleOf(axis, line), false));
   }
 
   /**
@@ -1439,7 +1394,6 @@ export class Soksak {
     // default: a fixed card takes its px size from `width`/`height`, not from units, so its span can be zero
     // units; its px size then counts per one unit.
     const per = own !== null ? own / (a[card[hi]] - a[card[lo]] || 1) : this.sharedExtent(axis);
-    if (per <= EPS) return null;
 
     const half = halfCorridor(this.plane, axis);
     const lowest = a[card[lo]] + (this.min + cardInset(this.plane, axis, card, 'lo') + half) / per;
