@@ -302,6 +302,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F806",
+    implementation: [
+      { file: "packages/plugin-api/view.js", symbol: "if (batcher !== null) batcher.flush().catch(recordError(\"log batch flush\"));" },
+      { file: "packages/plugin-api/test/view-operations-contract.test.mjs", symbol: "dom.window.dispatchEvent(new dom.window.Event(\"pagehide\"));" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/view-operations-contract.test.mjs", id: "view operation ${testCase.id} matches each ordered step" },
+    ],
+    expected: "A case of the view operation contract ends the page with pagehide before it removes the window, so no writer step of the page runs after the case.",
+    levels: ["unit"],
+  },
+  {
     id: "F940",
     implementation: [
       { file: "packages/plugin-api/index.js", symbol: "const named = parameterRefusal(name, found.declaration.params, input);" },

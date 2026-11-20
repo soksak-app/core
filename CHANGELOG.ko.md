@@ -5,6 +5,7 @@
 
 ## 2026-11-21
 
+- F806: view operation contract의 case는 window를 지우기 전에 `pagehide`로 page를 끝내므로, case가 끝난 뒤 log writer의 단계가 돌지 않는다. 변경은 F795와 함께 들어왔고, 이 줄은 그 검증을 기록한다. 검증: 그 단계 없이 세 번 돌리면 `ReferenceError: window is not defined`로 실패하고, 그 단계가 있으면 세 번 모두 통과한다.
 - F940: 두 workbench registry의 test가 `core.settings.set {key, value}`, `core.settings.set {bogus}`, `core.layout.balance {bogus}`이 `command <name>: unknown parameter <member>`로 거부되는지 확인한다. F967의 검사가 이미 거부하므로 production 코드는 바뀌지 않는다. 검증: 그 명령에서 검사를 건너뛰면 두 test가 실패하고, 검사를 두면 통과한다.
 - F937-35: page workbench에서 content card의 split과 close 버튼이 header 아래의 그려진 최소 크기를 보는 group tree에 묻고, `core.grid`는 mygo workbench처럼 head가 그리는 tool만 `acts`에 나열한다. 검증: `group-cards.test.mjs`의 새 test 둘이 변경 전에 실패하고 변경 후에 통과한다.
 
