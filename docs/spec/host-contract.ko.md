@@ -1128,6 +1128,7 @@ fn invalid_json_closes_connection() {
 | `debug.follow.announces-only-changes-that-are-not-log-reads` | `announcing`이 0인 색인 갱신은 알림을 발행하지 않고, `announcing`이 0보다 큰 갱신은 그 갱신의 파일과 크기를 담은 알림을 발행한다. | all |
 | `debug.follow.query-announces-the-lines-it-indexes` | 색인을 최신으로 만든 질의는 그 줄의 알림을 발행하고, 이미 최신인 색인의 질의는 발행하지 않는다. | all |
 | `debug.follow.a-notice-does-not-cause-itself` | host의 writer, indexer, 발행자가 돌고 각 알림의 전달이 창이 그 전달에 저장하는 class `frame`의 기록(`host.frame.step`, `host.frame.record`, `host.frame.complete`)을 저장할 때, 첫 알림의 전달 기록은 알림을 발행하지 않고, 다음 변경이 아무것도 합쳐지지 않은 두 번째 알림이 된다. | all |
+| `debug.follow.notices-only-following-windows` | 창은 자기 `debugFollow({following: true})` 호출부터 `false` 호출이나 그 page의 다음 준비(`windowReady`)까지만 host event `debug-log-changed`를 받고, 한 번도 호출하지 않은 창은 받지 않는다. 한 창의 준비는 그 창의 따라가기만 끝낸다. | all |
 | `debug.follow.refuses-a-request-without-a-boolean` | `debugFollow`는 `following`이 없거나 null인 요청을 `argument request.following is missing`으로, boolean이 아닌 `following`을 `argument request.following must be a boolean, not <kind>`로 거절한다. | all |
 | `log.writer.announces-each-write-to-the-observer` | host의 기록기는 한 묶음을 쓴 뒤 파일의 경로와 크기로 observer를 부른다. | all |
 | `debug.read.returns-the-end-of-a-text-file` | `debugRead`는 `logs/` 아래 글 파일의 전체 내용을, 더 크면 문자 경계에서 시작하는 마지막 262144 byte를 `truncated` true와 함께 `kind` `text`인 `{path, size, truncated, kind, text}`로 답한다. | all |

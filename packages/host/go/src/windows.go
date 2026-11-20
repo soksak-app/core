@@ -218,10 +218,21 @@ func (h *Host) readyWindow(ctx context.Context) (*Surfaces, error) {
 	return s, nil
 }
 
-// announceLogNotice tells every window the host event `debug-log-changed` and the endpoint watchers of the host status `host.log` the
-// notice of a change of the event log.
+// announceLogNotice tells each window whose view follows the event files the host event `debug-log-changed` and the endpoint
+// watchers of the host status `host.log` the notice of a change of the event log. A window that does not follow receives no notice,
+// because its delivery is a step of the main thread of the window (docs/spec/debug.md#files).
 func (h *Host) announceLogNotice(notice LogNotice) {
-	h.announceToWindows("debug-log-changed", notice)
+	h.mu.Lock()
+	following := make([]*Surfaces, 0, len(h.windows))
+	for _, s := range h.windows {
+		if s.followsLog {
+			following = append(following, s)
+		}
+	}
+	h.mu.Unlock()
+	for _, s := range following {
+		s.Emit("debug-log-changed", notice)
+	}
 	h.endpoint.NotifyWatchers("host.log", notice)
 }
 

@@ -667,6 +667,31 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1013-1",
+    implementation: [
+      { file: "packages/host/go/src/windows.go", symbol: "func (h *Host) DebugFollow(ctx context.Context, requestJSON json.RawMessage) error {" },
+      { file: "packages/host/go/src/windows.go", symbol: "func (h *Host) readyWindow(ctx context.Context) (*Surfaces, error) {" },
+      { file: "packages/host/rust/src/windows.rs", symbol: "pub fn debug_follow(window: &Window, request: FollowRequest) -> Result<(), String> {" },
+      { file: "packages/host/rust/src/windows.rs", symbol: "pub(crate) fn following_windows(app: &AppHandle) -> Vec<Window> {" },
+      { file: "packages/workbench/debug-ui.js", symbol: "function tellFollowing() {" },
+      { file: "packages/workbench-mygo/src/shell_debug.go", symbol: "func (s *Shell) tellDebugFollowing() {" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/debug_follow_notices_test.go", id: "TestANoticeReachesOnlyTheWindowsThatFollow" },
+      { file: "packages/host/go/src/debug_follow_notices_test.go", id: "TestAReadyPageStartsNotFollowing" },
+      { file: "packages/host/go/src/debug_follow_notices_test.go", id: "TestDebugFollowRefusesARequestWithoutABoolean" },
+      { file: "packages/host/rust/src/debug_follow_notices_test.rs", id: "a_notice_reaches_only_the_windows_that_follow" },
+      { file: "packages/host/rust/src/debug_follow_notices_test.rs", id: "a_ready_page_starts_not_following" },
+      { file: "packages/host/rust/src/debug_follow_notices_test.rs", id: "debug_follow_refuses_a_request_without_a_boolean" },
+      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "stopping follows no more queries and resuming asks for what grew while stopped" },
+      { file: "packages/workbench/test/debug-timeline-ui.test.mjs", id: "a refused call that tells the host whether the view follows is shown through the error display" },
+      { file: "packages/workbench-mygo/tests/shell_debug_test.go", id: "TestTheViewTellsTheHostWhetherItFollows" },
+      { file: "packages/workbench-mygo/tests/shell_debug_test.go", id: "TestARefusedFollowCallIsShownInTheView" },
+    ],
+    expected: "Only a window whose view follows the event files receives debug-log-changed: the page and the mygo shell tell the host with debugFollow, and the ready of a page ends the following of its window, in the Go and Rust hosts.",
+    levels: ["unit"],
+  },
+  {
     id: "F1013",
     implementation: [
       { file: "packages/sok/go/src/log_index.go", symbol: "func readIndex(file *os.File, records bool) ([]byte, int64, error) {" },

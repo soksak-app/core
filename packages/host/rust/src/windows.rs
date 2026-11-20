@@ -755,15 +755,27 @@ pub(crate) fn notify_project_activity(app: &AppHandle) {
     }
 }
 
-/// Sends the host event `debug-log-changed` to every window and the value of the host status `host.log` to its watchers: the notice
-/// of a change of the event log (docs/spec/debug.md#following).
+/// Sends the host event `debug-log-changed` to each window whose view follows the event files and the value of the host status
+/// `host.log` to its watchers: the notice of a change of the event log. A window that does not follow receives no notice, because
+/// its delivery is a step of the main thread of the window (docs/spec/debug.md#files).
 pub(crate) fn notify_log_notice(app: &AppHandle, notice: &crate::debug_follow::LogNotice) {
-    for window in app.windows().values() {
-        if let Err(error) = emit_window(window, "debug-log-changed", notice.clone()) {
+    for window in following_windows(app) {
+        if let Err(error) = emit_window(&window, "debug-log-changed", notice.clone()) {
             log_error("debug-log-changed", error);
         }
     }
     crate::exposure::log_notice_changed(app, notice);
+}
+
+/// The windows whose view follows the event files.
+pub(crate) fn following_windows(app: &AppHandle) -> Vec<Window> {
+    app.windows()
+        .into_values()
+        .filter(|window| {
+            window_data_if_registered(window)
+                .is_some_and(|data| data.follows_log.load(Ordering::Relaxed))
+        })
+        .collect()
 }
 
 /// The argument of the debugFollow call: whether the view of the window follows the event files.
