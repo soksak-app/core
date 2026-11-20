@@ -16,26 +16,26 @@ foreground program 과 각 background job 은 한 가지 형식을 가진다.
 
 | Key | Value | macOS 의 출처 |
 | --- | --- | --- |
-| `group` | process group id. member 가 끝나는 동안에도 program 이나 job 을 식별한다 | `proc_pidinfo(PROC_PIDTBSDINFO)` 의 `pbi_pgid` |
+| `group` | process group id. member 가 끝나는 동안에도 program 이나 job 을 식별한다 | `proc_pidinfo(PROC_PIDT_SHORTBSDINFO)` 의 `pbsi_pgid` |
 | `pid` | entry 가 나타내는 process 의 id. 양의 정수 | [members](#members) |
 | `command` | 그 실행 파일의 경로 | `proc_pidpath` |
 | `arguments` | 문자열 배열: program 이름 뒤의 process arguments. argument 하나에 문자열 하나이고 process 의 순서를 따른다. 없으면 빈 배열 | `sysctl(KERN_PROCARGS2)` |
 | `cwd` | 그 작업 directory 의 경로 | `proc_pidinfo(PROC_PIDVNODEPATHINFO)` |
-| `started` | process 의 시작 시각. Unix epoch 이후의 millisecond 정수 | `pbi_start_tvsec` 과 `pbi_start_tvusec` |
+| `started` | process 의 시작 시각. Unix epoch 이후의 millisecond 정수 | `proc_pidinfo(PROC_PIDTBSDINFO)` 의 `pbi_start_tvsec` 과 `pbi_start_tvusec`. system 은 다른 effective user 의 process 에 이것을 거절한다 |
 
 background job 은 `state` 도 담는다([background jobs](#background-jobs)).
 
 - entry 의 process: group 의 leader(그 pid 는 group id 다)가 끝나지 않았으면 그 leader, 아니면 끝나지 않은 member 중 pid 가 가장 작은 group 의 member. 끝나지 않은 member 가 없는 group 은 entry 가 없다.
-- 거절된 읽기: 다른 사용자의 process 의 arguments 나 작업 directory 처럼 system 이 entry 의 process 의 읽기 하나를 거절하면 member `command`, `arguments`, `cwd`, `started` 는 `null` 이고 member `error` 가 그 읽기와 이유를 이름한다. 어떤 값도 추측하지 않는다.
+- 거절된 읽기: 다른 effective user 의 process 의 시작, arguments, 작업 directory 처럼 system 이 entry 의 process 의 읽기 하나를 거절하면 member `command`, `arguments`, `cwd`, `started` 는 `null` 이고 member `error` 가 그 읽기와 이유를 이름한다. 어떤 값도 추측하지 않는다.
 - agent 는 그 `arguments` 와 session file 로 식별된다([agent conversation](agent-conversation.ko.md)). process 이름만으로는 agent 를 식별하지 않으며, 이 계약은 agent 식별을 정의하지 않는다.
 
 ## Members
 
-list 의 member 는 제어 terminal 이 session 의 terminal 인 process 다. `PROC_TTY_ONLY` 와 terminal 의 device 로 부른 `proc_listpids`, 그리고 각 pid 의 group 과 상태를 `proc_pidinfo(PROC_PIDTBSDINFO)` 로 읽는다. list 와 그 읽기 사이에 끝난 process(`ESRCH`)는 member 가 아니다. member 의 상태는 `pbi_status` 와 `pbi_flags` 를 따른다.
+list 의 member 는 제어 terminal 이 session 의 terminal 인 process 다. `PROC_TTY_ONLY` 와 terminal 의 device(shell 이 시작할 때 읽은 session 의 shell 의 `e_tdev` 로, shell 이 끝난 뒤에도 알려져 있다)로 부른 `proc_listpids`, 그리고 각 pid 의 group, 부모, 상태를 사용자를 검사하지 않는 `proc_pidinfo(PROC_PIDT_SHORTBSDINFO)` 로 읽으므로, `PROC_PIDTBSDINFO` 가 session 의 사용자에게 전체 BSD 정보를 거절하는 `top` 같은 setuid program 도 member 다. list 와 그 읽기 사이에 끝난 process(`ESRCH`)는 member 가 아니다. member 의 상태는 `pbsi_status` 와 `pbsi_flags` 를 따른다.
 
-| `pbi_status` | 상태 |
+| `pbsi_status` | 상태 |
 | --- | --- |
-| `SZOMB`, 또는 `pbi_flags` 에 `P_INEXIT` 가 있는 모든 status | `ended` |
+| `SZOMB`, 또는 `pbsi_flags` 에 `P_INEXIT` 가 있는 모든 status | `ended` |
 | `SSTOP` | `stopped` |
 | `SIDL`, `SRUN`, `SSLEEP` | `running` |
 
@@ -59,7 +59,7 @@ shared case `docs/spec/cases/process-list/jobs.json` 이 규칙을 나타낸다.
 sidecar 는 session 의 각 출력 뒤에(shell 의 prompt 도 출력이다) process list 를 읽고, list 가 마지막으로 보낸 list 와 다르면 이벤트 `{event: "processes", foreground, background}` 를 보낸다. plugin 은 두 member 를 `<plugin>.session` 에 보관한다([terminal read](terminal-read.ko.md#session-상태)).
 
 - 실패한 읽기: sidecar 는 다음 읽기가 달라질 때까지 한 번 `{event: "processes", error}` 를 보내고, plugin 은 list 를 알 수 없음을 나타내도록 `foreground` 와 `background` 를 `null` 로 두며, 그 오류를 application log 에 쓰는 자기 오류 표시 경로로 보인다.
-- Job 의 이벤트: sidecar 는 session 마다 `kqueue` 하나를 가진다. 각 읽기 뒤에 아직 지켜보지 않는 background job 의 각 member 를 `EVFILT_PROC`, `NOTE_EXIT`, `NOTE_SIGNAL` 로 지켜보고, 더 이상 그런 member 가 아닌 process 의 지켜보기는 지운다(`EV_DELETE`). 지켜보는 process 가 끝나거나 job 의 정지와 재개처럼 signal 을 받으면 list 를 다시 읽는다. system 은 process 가 끝날 때 그 지켜보기를 지우므로 지켜보기가 같은 pid 의 이후 process 를 이름하는 일은 없다. system 이 이미 지운 지켜보기의 삭제(`ENOENT`)는 그 끝이며, 지켜보기가 시작되기 전에 끝난 process(`ESRCH`)는 sidecar 가 list 를 곧바로 다시 읽게 한다. 그 밖의 지켜보기 거절은 pid 와 이유와 함께 event log 에 기록된다. `kqueue` 는 session 과 함께 닫힌다.
+- Job 의 이벤트: sidecar 는 session 마다 `kqueue` 하나를 가진다. 각 읽기 뒤에 아직 지켜보지 않는 background job 의 각 member 와 그런 member 의 부모(`launchd`, pid 1 은 빼고)를 `EVFILT_PROC`, `NOTE_EXIT`, `NOTE_EXEC`, `NOTE_SIGNAL` 로 지켜보고, 각 지켜보기를 그 process 가 끝날 때까지 둔다. 지켜보는 process 가 끝나거나 program 을 실행하거나 signal 을 받으면 list 를 다시 읽는다. job 은 fork 와 `exec` 사이에 shell 의 command 로 읽히고, `exec` 중의 읽기는 그 process 를 찾지 못한다. `exec` 의 이벤트가 새 program 으로 list 를 다시 읽으며, process 를 놓친 읽기 뒤에 지운 지켜보기는 그 이벤트를 잃으므로 지켜보기는 그 process 와 함께만 끝난다. process 는 멈추기 전에 정지 signal 을 받으므로 member 만 지켜보면 정지 전에 list 를 읽을 수 있다. 그 부모는 member 가 멈추거나 재개하거나 끝난 뒤에 `SIGCHLD` 를 받으므로 부모의 지켜보기가 새 상태를 이름한다. system 은 process 가 끝날 때 그 지켜보기를 지우므로 지켜보기가 같은 pid 의 이후 process 를 이름하는 일은 없다. 지켜보기가 시작되기 전에 끝난 process(`ESRCH`)는 sidecar 가 list 를 곧바로 다시 읽게 한다. 그 밖의 지켜보기 거절은 pid 와 이유와 함께 event log 에 기록된다. `kqueue` 는 session 과 함께 닫힌다.
 - 새 job: shell 은 fork 로 job 을 시작하고 그 뒤에 자기 group 으로 옮기며, interactive shell 은 시작한 job 의 번호와 pid 를 쓰므로 시작 뒤의 출력이 그것을 이름한다.
 - 비용: 읽기는 PTY 의 한 번 읽기의 byte 를 담은 session 의 출력 이벤트마다 한 번 실행된다.
 
@@ -80,12 +80,12 @@ sidecar 는 body `{"event": "process.list", "foreground", "background"}` 로 답
 | surface 에 열린 session 이 없음 | `Session not open` |
 | session 의 master 가 닫힘 | `session master is closed` |
 | `tcgetpgrp` 가 실패함 | `read the foreground of the session: <reason>` |
-| PTY 의 terminal 을 이름하거나 읽을 수 없음 | `read the terminal of the session: <reason>` |
-| terminal 의 process 를 나열할 수 없음 | `list the processes of terminal <path>: <reason>` |
-| `ESRCH` 가 아닌 이유로 member 의 group 과 상태를 읽을 수 없음 | `read process <pid> of terminal <path>: <reason>` |
+| session 의 shell 의 제어 terminal 을 읽을 수 없음 | `read the terminal of the session: <reason>` |
+| terminal 의 process 를 나열할 수 없음 | `list the processes of terminal <device>: <reason>` |
+| `ESRCH` 가 아닌 이유로 member 의 group 과 상태를 읽을 수 없음 | `read process <pid> of terminal <device>: <reason>` |
 | platform 이 operation 을 구현하지 않음 | `process.list is not implemented on <os>` |
 
-group 과 상태를 읽을 수 없는 member 는 list 를 실패시킨다. 그것 없이는 그 job 과 job 의 상태를 말할 수 없기 때문이다. entry 의 process 의 거절된 읽기는 list 의 실패가 아니다. 그 entry 가 `error` 를 담는다([process](#process)). platform 형식은 repository 의 platform 규칙을 따른다. operation 을 구현하지 않는 platform 은 `not implemented on <os>` 를 돌려주며, `<os>` 는 `darwin`, `linux` 또는 `windows` 다.
+`<device>` 는 terminal 의 device 번호로, session leader 이며 terminal 을 제어 terminal 로 가진 session 의 shell 의 `e_tdev` 다. sidecar 는 shell 이 시작할 때 이를 읽으며, 그 읽기의 실패는 list 의 각 읽기를 실패시킨다. group 과 상태를 읽을 수 없는 member 는 list 를 실패시킨다. 그것 없이는 그 job 과 job 의 상태를 말할 수 없기 때문이다. entry 의 process 의 거절된 읽기는 list 의 실패가 아니다. 그 entry 가 `error` 를 담는다([process](#process)). platform 형식은 repository 의 platform 규칙을 따른다. operation 을 구현하지 않는 platform 은 `not implemented on <os>` 를 돌려주며, `<os>` 는 `darwin`, `linux` 또는 `windows` 다.
 
 ## Decisions
 
@@ -93,7 +93,7 @@ group 과 상태를 읽을 수 없는 member 는 list 를 실패시킨다. 그�
 
 1. Operation 이름과 operation field: operation 은 member `operation` 의 `process.list` 이며, 두 sidecar 는 모든 request 에서 이 member 를 읽는다. 이 sidecar 들의 읽기는 대상과 동사를 이름하고(`screen.read`, `shell.state.read`), 이 읽기의 reply 는 list 다.
 2. Foreground 방식: PTY master 의 `tcgetpgrp`. 두 sidecar 는 session 상태의 foreground 를 위해 이미 이를 부른다. POSIX terminal interface 는 terminal 의 foreground process group 을 이 호출로 정의한다. 이를 부르는 PTY library 의 method 는 실패를 group 없음으로 답하므로 sidecar 가 직접 부르고 그 실패를 알린다.
-3. Background job: `proc_listpids(PROC_TTY_ONLY)` 와 `proc_pidinfo(PROC_PIDTBSDINFO)` 로 읽는 session 의 제어 terminal 의 process group. shell 의 job table 은 shell 안에 있고 system 의 어떤 interface 도 그것을 읽지 않는 반면, job control 은 각 job 에 terminal 의 자기 process group 을 준다. 따라서 list 는 terminal 의 process group 을 이름하며, [background jobs](#background-jobs) 가 적듯이 shell 이 추적하지 않는 group 도 포함한다.
+3. Background job: `proc_listpids(PROC_TTY_ONLY)` 와 `proc_pidinfo(PROC_PIDT_SHORTBSDINFO)` 로 읽는 session 의 제어 terminal 의 process group. shell 의 job table 은 shell 안에 있고 system 의 어떤 interface 도 그것을 읽지 않는 반면, job control 은 각 job 에 terminal 의 자기 process group 을 준다. 따라서 list 는 terminal 의 process group 을 이름하며, [background jobs](#background-jobs) 가 적듯이 shell 이 추적하지 않는 group 도 포함한다.
 4. OSC 133: 어떤 entry 도 쓰지 않는다. mark `A`, `B`, `C`, `D` 는 prompt 의 상태와 exit code 를 담고 process id, 이름, job 은 담지 않으므로([terminal state](terminal-state.ko.md)) 모든 entry 는 process table 에서 온다.
 5. 오류 text: [failures](#failures) 표의 text. `Session not open` 과 `session master is closed` 는 두 sidecar 가 session 없는 surface 와 닫힌 master 에 이미 답하는 text 다.
 6. `started`: `pbi_start_tvsec` 과 `pbi_start_tvusec` 에서 얻은 Unix epoch 이후의 millisecond 정수. page 의 시각 형식(`Date.now()`)이며, `pid` 와 함께 새 process 를 같은 id 의 이전 process 와 구별한다.
@@ -113,5 +113,5 @@ sidecar 는 arguments 를 `sysctl(KERN_PROCARGS2)` 로 읽는다. library `sysin
 
 둘째 round, 여섯 반론:
 
-- 받아들임: foreground program 은 entry 의 process 규칙을 따르고 `group` 을 담으며, 끝난 leader 의 shared case 를 가진다. entry 의 process 는 끝나지 않은 member 중에서만 고르며, zombie leader 의 shared case 를 가진다. 지켜보기는 session 마다 `kqueue` 하나로, 새 member 에 더하고 떠난 process 에서 지우며 session 과 함께 닫힌다. `tcgetpgrp` 와 member 의 group 과 상태의 거절된 읽기는 각자의 실패를 가진다. 각 member 의 출처와 `pbi_status` 의 상태를 적는다. session 상태의 실패한 읽기는 plugin 이 보이고 두 member 를 `null` 로 두는 이벤트다.
+- 받아들임: foreground program 은 entry 의 process 규칙을 따르고 `group` 을 담으며, 끝난 leader 의 shared case 를 가진다. entry 의 process 는 끝나지 않은 member 중에서만 고르며, zombie leader 의 shared case 를 가진다. 지켜보기는 session 마다 `kqueue` 하나로, 새 member 에 더하고, `exec` 중의 읽기가 process 를 찾지 못하므로 각 process 가 끝날 때까지 두며, session 과 함께 닫힌다. `tcgetpgrp` 와 member 의 group 과 상태의 거절된 읽기는 각자의 실패를 가진다. 각 member 의 출처와 `pbsi_status` 의 상태를 적는다. session 상태의 실패한 읽기는 plugin 이 보이고 두 member 를 `null` 로 두는 이벤트다.
 - 거절함: 지켜보기의 key 로 `pid` 와 `started` 를 쓰는 것. system 은 지켜보기를 process 에 붙이고 process 가 끝날 때 지우므로 같은 pid 의 이후 process 에는 지켜보기가 없다.
