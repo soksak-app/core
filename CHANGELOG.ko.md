@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F899-7.5-5 (주입의 window check, 첫 부분): plugin term의 `e2e/messages.test.mjs`(term P135)가 mygo, Wails, Tauri에서 통과한다: 10초보다 긴 `messages_wait`는 `request_waiting` 없이 message로 끝나고(sidecar alacritty S229), `sok message send`는 `{path, receiver}`를 출력하며, reader의 page는 message를 주입한다.
 - F899-7.5-3 (plugin term의 주입): plugin term은 plugin terminal과 같이 자기 registration의 message를 주입하고 보류하며, `term.messages`에 `held`와 `last`를 보고한다(term P133).
 - F899-7.5-2 (plugin terminal의 주입): plugin terminal은 도착한 각 message를 `[메시지 from <title>] <text>`의 paste와 Enter로 주입하고, `docs/spec/messaging.md#hold-for-the-person`의 이유로 보류하며, `terminal.messages`에 `held`와 `last`를 보고한다(terminal P180). `docs/spec/messaging.md#injected-message`는 `skipped`의 이유 `message <seq> is not in the folder`와 page가 paste와 Enter의 reply를 기다림을 적는다.
 - F996-1 (활성화 frame): mygo workbench는 plugin 상태나 application update를 읽은 뒤 그 읽기가 상태나 failure를 바꿨을 때만 frame을 요청하므로, 같은 상태를 읽는 창 활성화는 아무것도 그리지 않는다(`docs/spec/installation.md`).
