@@ -115,14 +115,19 @@ Terminal의 program이 사람을 기다리는 동안이나 사람이 그 termina
 3. `composition`: `<plugin>.compose`의 `text`가 비어 있지 않다. 사람이 input method로 text를 조합하는 중이다.
 4. `typing`: 사람의 마지막 Enter나 Ctrl+C, 또는 `<plugin>.state`의 마지막 `idle`로의 변화 뒤에 사람이 terminal에 insert, paste 또는 drop을 보냈다. 사람의 한 줄이 input line에서 기다린다.
 5. `input-held`: `<plugin>.session`의 `inputHeld`가 `null`이 아니다. Session이 program이 읽지 않는 input을 잡고 있으며, 한도를 넘는 paste를 거부한다.
+6. `role-pending`: terminal tab의 role이 status `core.tab.role`에서 `pending` 또는 `unconfirmed`다([role 확인](agent-roles.ko.md#확인)). 따라서 agent는 받은 role을 아직 확인하지 않았다. 보류는 작업 message에만 적용되며, role의 변경 message와 재읽기 요청은 보류하지 않는다.
 
 Record도 notice도 없는 실행 중인 command는 기다림을 알 수 없는 program이다. 이것은 주입을 보류하지 않는다. Busy receiver는 message를 입력한 text로 받기 때문이다([settled decisions](messaging.md#settled-decisions)). 보류된 message는 folder에 남고 `messages_read`와 `messages_wait`로 읽을 수 있다. Page는 마지막 보류를 끝내는 status 변화에서 보류된 message를 순서대로 주입한다. Page는 변화를 따르며 polling하지 않는다.
 
 #### Delivery
 
-Status `<plugin>.messages`는 registration 옆에 message의 delivery를 담는다: `{folder, registration, held, last}`. `held`는 주입을 보류하는 것이 없으면 `null`이고, 보류 중이면 `{reason, kind, pending}`이다. `reason`은 위 목록의 첫 이유, `kind`는 `blocked` record의 `kind`이며 다른 이유에서는 `null`, `pending`은 기다리는 message의 수다. `last`는 첫 결정 전에는 `null`이고, 그 뒤에는 page가 결정한 마지막 message의 `{seq, path, from, state, reason}`이다. `state`는 `injected`, `refused` 또는 `skipped`이고, `injected`의 `reason`은 `null`이다. 각 결정은 `{seq, path, from, state, reason}`을 가진 record `plugin.<plugin>.messages.delivered`를 `info`로 쓰고, 보류의 각 시작과 끝은 `{reason, kind, pending}`을 가진 record `plugin.<plugin>.messages.held`를 `info`로 쓰며, 끝의 `reason`은 `null`이다. 따라서 각 delivery는 status와 event log에서 관찰된다.
+Status `<plugin>.messages`는 registration 옆에 message의 delivery를 담는다: `{folder, registration, held, last}`. `held`는 주입을 보류하는 것이 없으면 `null`이고, 보류 중이면 `{reason, kind, pending}`이다. `reason`은 위 목록의 첫 이유, `kind`는 `blocked` record의 `kind`이며 다른 이유에서는 `null`, `pending`은 기다리는 message의 수다. `last`는 첫 결정 전에는 `null`이고, 그 뒤에는 page가 결정한 마지막 message의 `{kind, seq, path, from, state, reason}`이다. `state`는 `injected`, `refused` 또는 `skipped`이고, `injected`의 `reason`은 `null`이다. 각 결정은 `{kind, seq, path, from, state, reason}`을 가진 record `plugin.<plugin>.messages.delivered`를 `info`로 쓴다. `kind`는 folder의 file이면 `message`, session의 첫 message이면 `first`, 변경 message이면 `role-change`, 재읽기 요청이면 `role-reread`다. File이 없는 kind에서는 `seq`와 `path`가 `null`이고, `from`은 application의 발신자인 `soksak`이다. 보류의 각 시작과 끝은 보류의 각 시작과 끝은 `{reason, kind, pending}`을 가진 record `plugin.<plugin>.messages.held`를 `info`로 쓰며, 끝의 `reason`은 `null`이다. 따라서 각 delivery는 status와 event log에서 관찰된다.
 
 `sok message send`는 message를 쓴 뒤 receiver의 보류를 읽고 `{path, receiver}`를 출력한다([cli](cli.md#commands)). `receiver`는 `{surface, plugin, held}`이며 `held`는 받는 surface의 status `<plugin>.messages`의 값이다. 따라서 `null`이 아닌 `held`는 message가 주입되지 않았음과 그 이유를, 이유와 record kind로 밝힌다. 애플리케이션이 실행되지 않거나, folder가 terminal의 folder(`<root>/.soksak/messages/<surface>`)가 아니거나, 그 surface가 어떤 window에도 없거나, surface의 status `<plugin>.messages`가 `null`이어서 surface가 registration을 갖지 않으면 `receiver`는 `null`이다. 어느 경우에도 message는 쓰이며, 보내는 쪽은 receiver의 `<plugin>.messages`의 `last`를 따라 자기 path의 결정을 안다.
+
+#### 역할 확인
+
+Terminal plugin은 session의 program이 쓰는 출력에서 줄 `soksak role <fingerprint>`를 찾는다. 여기서 `<fingerprint>`는 소문자 16진수 16자리다. 찾은 줄은 `core.tab.role.confirm`과 같은 surface별 직렬화를 거쳐 tab의 role을 확인한다([확인](agent-roles.ko.md#확인)). 줄은 양 끝의 공백을 뺀 뒤 비교한다. Page가 input에 쓰는 text는 찾지 않으므로, `<fingerprint>`를 placeholder로 가진 주입 message는 결코 맞지 않는다. Terminal이 폭에서 줄을 감싸는 줄은 맞지 않는다. 그러면 상태는 `pending`에 머물고 재읽기 요청이 다시 묻는다.
 
 #### Evidence of the hold
 

@@ -149,7 +149,7 @@ The states are:
 
 A change sets the state back to `pending`, because its generation and fingerprint are new.
 
-An agent confirms in one of two declared ways, and either one counts:
+An agent confirms in one of two declared ways, and either one counts. The command form runs the declared command `core.tab.role.confirm {fingerprint}`, which [cli](cli.md#commands) exposes as `sok role confirm`:
 
 - (a) the command `sok role confirm <fingerprint>`, for an agent with a shell. `sok` sends the request to the application with the surface that the process chain of the agent gives ([processes of a surface](sidecars.md#processes-of-a-surface)), so a process outside the tab cannot confirm for it.
 - (b) a line `soksak role <fingerprint>` in the answer of the agent. The terminal plugin matches that line in the output of the session and confirms through the same per-surface serialization. The fingerprint exists only as the last line of the file, and the file does not show a joined or echoed form that could be pasted, so the line shows that the agent read the fingerprint from the file.

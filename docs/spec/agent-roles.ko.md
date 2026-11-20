@@ -148,7 +148,7 @@ plane의 leader는 이 계약에서 role을 바꾸지 않는다. [groups](groups
 
 agent는 두 방식 중 하나로 확인하며, 어느 쪽이든 인정된다.
 
-- (a) 명령 `sok role confirm <fingerprint>`. shell이 있는 agent가 쓴다. `sok`은 요청을 agent의 프로세스 체인이 가리키는 surface로 application에 보낸다([surface의 프로세스](sidecars.md#processes-of-a-surface)). 그래서 tab 밖의 프로세스는 그 tab 대신 확인할 수 없다.
+- (a) 명령 `sok role confirm <fingerprint>`. shell이 있는 agent가 쓴다. 이 명령은 선언된 명령 `core.tab.role.confirm {fingerprint}`을 실행하며, [cli](cli.md#commands)가 이를 `sok role confirm`으로 노출한다. `sok`은 요청을 agent의 프로세스 체인이 가리키는 surface로 application에 보낸다([surface의 프로세스](sidecars.md#processes-of-a-surface)). 그래서 tab 밖의 프로세스는 그 tab 대신 확인할 수 없다.
 - (b) agent 답변 안의 줄 `soksak role <fingerprint>`. terminal plugin이 session 출력에서 이 줄을 찾아, 같은 surface 직렬화를 거쳐 확인한다. 지문은 파일 마지막 줄에만 있고, 파일에는 붙여 넣을 수 있는 합쳐진 형태나 에코된 형태가 없으므로, 줄이 있으면 agent가 파일에서 지문을 읽었다는 뜻이다.
 
 각 adapter와 각 CLI는 두 방식 중 무엇이 적용되는지 선언한다([실행 adapter](#실행-adapter)). 적용되지 않는 방식은 그 agent에게 제시하지 않는다.
