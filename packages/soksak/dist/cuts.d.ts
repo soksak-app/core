@@ -32,6 +32,8 @@ export interface Input {
     content(node: TreeNode, axis: Axis): number;
     /** The corridor of an axis in px. */
     corridor(axis: Axis): number;
+    /** The px that the frames and the heads of a box take on an axis, of the boxes inside it included; 0 for a card or a cut. */
+    frame(node: TreeNode, axis: Axis): number;
     /** Counts each node that an operation visits (packages/soksak/docs/layout.md#cuts). */
     visit(): void;
 }
@@ -59,8 +61,9 @@ export declare function withdrawNode(input: Input, id: string, cards: readonly {
 };
 /**
  * EXCHANGE (packages/soksak/docs/layout.md#add-and-remove): the stored tree with the node `a`, a card or a box, where the node `b` stands
- * and `b` where `a` stood. Each place keeps its fraction and the px size that a card there declares: a card takes the px size of the place
- * it enters, and a box, which declares none, its fraction. Two nodes of which one holds the other and a fixed card are refused.
+ * and `b` where `a` stood. Each place keeps the size it is drawn at: a node that enters a place takes that size less its own frames and
+ * head, which are a cost of the place, and a card takes the px size that the card of that place declared. Two nodes of which one holds
+ * the other and a fixed card are refused.
  */
 export declare function exchangeNodes(input: Input, a: string, b: string): TreeNode;
 /** Even: the stored tree with equal fractions for the kids of every cut that take one. */

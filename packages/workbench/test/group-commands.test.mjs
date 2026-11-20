@@ -266,7 +266,8 @@ test("core.card.move exchanges a card with a content card and joins its tabs at 
   // The two cards exchange places, and the leader mark of the group stays with its place (docs/spec/groups.md#commands).
   assert.deepEqual(await run("core.card.move", { card: "card-3", target: "card-1", side: "centre" }), { card: "card-3" });
   assert.deepEqual((await stored()).groups, [{ card: "card-4", name: "그룹 1", level: 1, leader: "card-3", members: ["card-3", "card-2"] }]);
-  assert.deepEqual((await status("core.layout")).state.root.kids.map((kid) => kid.share), [0.75, 0.25], "each place keeps its fraction");
+  // Each place keeps the size it is drawn at; the shares are computed again from those sizes, so they are compared to 9 digits.
+  assert.deepEqual((await status("core.layout")).state.root.kids.map((kid) => Number(kid.share.toFixed(9))), [0.75, 0.25], "each place keeps its size");
   // An exchange applied again exchanges them back.
   await run("core.card.move", { card: "card-3", target: "card-1", side: "centre" });
   assert.deepEqual((await stored()).groups[0], { card: "card-4", name: "그룹 1", level: 1, leader: "card-1", members: ["card-1", "card-2"] });
