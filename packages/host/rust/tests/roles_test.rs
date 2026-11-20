@@ -8,7 +8,10 @@ use std::path::{Path, PathBuf};
 use serde_json::{Value, json};
 use soksak_host::workspace::Workspace;
 
-const CASES: &str = "../../../../docs/spec/cases/agent-roles/roles.json";
+const CASES: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../../docs/spec/cases/agent-roles/roles.json"
+);
 
 fn load_cases() -> Value {
     let data = fs::read(CASES).unwrap();
