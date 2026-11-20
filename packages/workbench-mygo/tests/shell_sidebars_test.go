@@ -306,3 +306,38 @@ func TestCoreSidebarsReportsAWindowSidebarThatShowsNoSet(t *testing.T) {
 		t.Fatal("no focused card left the top sidebar without a set")
 	}
 }
+
+// A content card inside a group card keeps the rail of its overridden window sidebar: the rail joins the focused card and its sidebar,
+// which a group frame and a gap separate, so it draws one outline around the card and one around the sidebar beside the focus ring of
+// the card (docs/spec/external-sidebars.md#override-context-and-rail-border, docs/spec/groups.md#drawing).
+func TestTheRailOfACardInsideAGroupCardOutlinesTheCardAndItsSidebarApart(t *testing.T) {
+	f := sidebarShell(t)
+	type group struct {
+		Card     string   `json:"card"`
+		Sidebars []string `json:"sidebars"`
+	}
+	type rail struct {
+		Path   string  `json:"path"`
+		Groups []group `json:"groups"`
+	}
+	railed := ""
+	for _, card := range f.tabbedCards() {
+		f.run("core.card.focus", map[string]string{"card": card})
+		if groups := status[rail](t, f, "core.rail").Groups; len(groups) == 1 {
+			railed = card
+		}
+	}
+	if railed == "" {
+		t.Fatal("no card of the fixture overrides a window sidebar")
+	}
+	f.run("core.group.create", map[string]string{"card": railed, "side": "right", "plugin": "boxprobe"})
+	f.run("core.card.focus", map[string]string{"card": railed})
+	f.settle()
+	got := status[rail](t, f, "core.rail")
+	if len(got.Groups) != 1 || got.Groups[0].Card != railed || strings.Join(got.Groups[0].Sidebars, ",") != "right" {
+		t.Fatalf("with %s inside a group card the rail groups are %+v, want %s with the sidebar right", railed, got.Groups, railed)
+	}
+	if loops := strings.Count(got.Path, "M"); loops != 2 {
+		t.Fatalf("the rail path draws %d outlines, want one around the card and one around the sidebar: %s", loops, got.Path)
+	}
+}
