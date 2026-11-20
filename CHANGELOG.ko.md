@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F966-3-3-5 (바뀌지 않은 box, page): page layout library가 Go처럼 그 안 card의 범위가 바뀔 때만 box를 판정하므로, 창 크기가 최소 아래로 남긴 box 안에서 box의 사각형을 지키는 split은 더 이상 거부되지 않는다.
 - F966-3-3-4 (바뀌지 않은 box, Go): Go layout model이 그 안 card의 범위가 바뀔 때만 box를 판정하므로, 창 크기가 최소 아래로 남긴 box 안에서 box의 사각형을 지키는 split은 더 이상 거부되지 않는다.
 - F966-3-3-2 (최소 아래의 거부): specification이 거부가 밝히는 가장 깊은 node, 곧 그 안의 어떤 node도 최소 아래가 아닌데 재귀적 최소 아래인 깊이 우선 순서의 tree의 첫 node를 정하고, `groups.json`의 공유 case 다섯이 모든 operation의 거부, boundary move의 멈춤, 그리고 어떤 card도 더 작게 그리지 않는 dissolve와 close를 판정한다. Go가 이를 통과한다.
 - F966-3-3-1 (exchange의 frame, Go): Go grid의 보관된 frame이 이제 각 card의 id를 그 span과 함께 비교하므로, exchange로 서로의 cell에 들어간 두 card는 새 자리의 frame으로 그려진다. 전에는 group card의 member와 exchange한 root level의 card가 group card의 frame 안에 그려져 최소 크기 아래로 거부되었다.

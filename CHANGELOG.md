@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F966-3-3-5 (unchanged box, page): the page layout library judges a box only when the extent of the cards inside it changes, as Go does, so a split inside a box that the size of the window left below its minimum, which keeps the rectangle of the box, is no longer refused.
 - F966-3-3-4 (unchanged box, Go): the Go layout model judges a box only when the extent of the cards inside it changes, so a split inside a box that the size of the window left below its minimum, which keeps the rectangle of the box, is no longer refused.
 - F966-3-3-2 (refusal below the minimum): the specification defines the deepest node that a refusal names, the first node of the tree in depth-first order that is below its recursive minimum while no node inside it is, and five shared cases of `groups.json` judge the refusal of every operation, the stop of a boundary move and the dissolve and close that draw no card smaller; Go passes them.
 - F966-3-3-1 (exchange frames, Go): two cards that an exchange puts into each other's cells are drawn with the frames of their new places, because the kept frame of the Go grid now compares the id of each card with its span; a card of the root level exchanged with a member of a group card was drawn inside the frames of the group card and refused below its minimum.

@@ -1470,8 +1470,11 @@ export class Soksak {
   }
 
   /**
-   * The text of the deepest node that the last operation moved and that is
-   * drawn below its minimum, or null. The minimum of a node is recursive: a card
+   * The text of the deepest node whose drawn rectangle the last operation
+   * changed and that is drawn below its minimum, or null: the first such node in
+   * the depth-first order of the tree, a box after the nodes inside it. The
+   * rectangle of a card is its own, that of a box the extent of the cards inside
+   * it. The minimum of a node is recursive: a card
    * needs `minSize` and on y the heads drawn inside its rectangle, a card that
    * keeps a px size the smaller of that size and `minSize`, a fixed card with a
    * px size the smaller of that size and the size it had, another fixed card the
@@ -1483,13 +1486,28 @@ export class Soksak {
     const now = this.rects();
     const { extentOf, need } = this.measure(now, before);
     const text = (n: number) => String(Math.round(n));
-    const moved = (node: TreeNode): boolean =>
-      cardsOf(node).some((leaf) => {
-        const was = before.get(leaf.card);
-        const is = now.get(leaf.card) as Rect;
+    // Only a node whose rectangle changes is judged (docs/spec/groups.md#minimum-size): a card by its rectangle, and a box by the extent
+    // of the cards inside it, which a change of a card inside it that keeps that extent leaves as it was.
+    const moved = (node: TreeNode): boolean => {
+      if (isCard(node)) {
+        const was = before.get(node.card);
+        const is = now.get(node.card) as Rect;
         return !was || Math.abs(was.x - is.x) > 1e-6 || Math.abs(was.y - is.y) > 1e-6 || Math.abs(was.w - is.w) > 1e-6
           || Math.abs(was.h - is.h) > 1e-6;
-      });
+      }
+      const was: Extent = { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity };
+      for (const leaf of cardsOf(node)) {
+        const r = before.get(leaf.card);
+        if (!r) continue;
+        was.x0 = Math.min(was.x0, r.x);
+        was.x1 = Math.max(was.x1, r.x + r.w);
+        was.y0 = Math.min(was.y0, r.y);
+        was.y1 = Math.max(was.y1, r.y + r.h);
+      }
+      const is = extentOf(node);
+      return Math.abs(was.x0 - is.x0) > 1e-6 || Math.abs(was.x1 - is.x1) > 1e-6 || Math.abs(was.y0 - is.y0) > 1e-6
+        || Math.abs(was.y1 - is.y1) > 1e-6;
+    };
     // The deepest node below its minimum names the refusal, because the minimum of a box or a cut is the sum of the minimums
     // inside it: a box is below its minimum where a node inside it is, and the node inside it is the one that has no room.
     const visit = (node: TreeNode): string | null => {
