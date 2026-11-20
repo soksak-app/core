@@ -1041,6 +1041,7 @@ Items:
 | `roles.reads-shared-cases` | `roles` reads the role definitions of `roles.json` as the read cases of `docs/spec/cases/agent-roles/roles.json` state: a missing file reads `{}`, and each refusal names the file with the text of the case. | all |
 | `roles.writes-shared-cases` | `rolesPut` writes the write cases of `docs/spec/cases/agent-roles/roles.json` as `{format: 1, roles}`, and a refused definition writes no file. | all |
 | `roles.reads-absent-file-without-creating` | `roles` on a configuration directory without `roles.json` answers `{}` and does not create the file. | all |
+| `workspace.projects.writes-format-4` | `add` writes `projects.json` with the format member 4, and a file of format 3 is refused as a whole with `<path>: projects.json: format must be 4`. | all |
 | `roles.fingerprint-shared-cases` | The fingerprint of each case of `docs/spec/cases/agent-roles/fingerprint.json` is the first 16 lowercase hexadecimal characters of the SHA-256 digest of the identifier, one line feed and the text. | all |
 | `roles.role-file-layout` | The role file holds the first line, the definition with one line feed at its end, and the fingerprint on the last line, each line ending with one line feed; a definition of 5,000 characters is written whole. | all |
 | `roles.role-file-phrases` | The identity, the change message, the reread request and the first message suffix equal the texts of `fingerprint.json` with `<role file>` filled, and the first line equals its text. | all |

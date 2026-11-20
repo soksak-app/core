@@ -750,27 +750,26 @@ func TestEarlierStoredFormsAreReportedBySnapshotAndRefusedByWrites(t *testing.T)
 	if err := os.WriteFile(projects, []byte(bare), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	refusal := projects + ": projects.json: format must be 3"
+	refusal := projects + ": projects.json: format must be 4"
 	snapshot, err := store.Apply(host.WorkspaceRequest{Kind: "snapshot"})
 	if want := (host.Record{"projects": []host.Record{}, "common": host.Record{}, "projectsError": refusal}); err != nil || !reflect.DeepEqual(snapshot, want) {
 		t.Fatalf("a bare array of projects returned %#v, %v; want %#v", snapshot, err, want)
 	}
-	// A file of format 2 holds space layouts as lines and cells beside a group list, not as the slicing tree
-	// (docs/spec/groups.md#storage), so it is refused as a whole.
-	const earlier = `{"format":2,"projects":[{"id":"prj-a","root":"/x","identity":"1:1","spaces":[{"id":"s1","layout":` +
+	// A file of format 3 holds tabs without the member role (docs/spec/agent-roles.md#tab-role-state), so it is refused as a whole.
+	const earlier = `{"format":3,"projects":[{"id":"prj-a","root":"/x","identity":"1:1","spaces":[{"id":"s1","layout":` +
 		`{"state":{"xs":[0,1],"ys":[0,1],"cards":[{"id":"c1","c0":0,"c1":1,"r0":0,"r1":1}]},"groups":[],"lastCard":1,"leader":"c1"}}]}]}`
 	if err := os.WriteFile(projects, []byte(earlier), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	snapshot, err = store.Apply(host.WorkspaceRequest{Kind: "snapshot"})
 	if want := (host.Record{"projects": []host.Record{}, "common": host.Record{}, "projectsError": refusal}); err != nil || !reflect.DeepEqual(snapshot, want) {
-		t.Fatalf("a projects.json of format 2 returned %#v, %v; want %#v", snapshot, err, want)
+		t.Fatalf("a projects.json of format 3 returned %#v, %v; want %#v", snapshot, err, want)
 	}
 	if _, err := store.Apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-b", "root": "/y", "identity": "1:2"}}); err == nil || err.Error() != refusal {
-		t.Fatalf("an add to a projects.json of format 2 returned %v", err)
+		t.Fatalf("an add to a projects.json of format 3 returned %v", err)
 	}
 	if data, _ := os.ReadFile(projects); string(data) != earlier {
-		t.Fatalf("a refused projects.json of format 2 changed: %s", data)
+		t.Fatalf("a refused projects.json of format 3 changed: %s", data)
 	}
 	// A write into a missing projects.json stores the current form, format 3.
 	if err := os.Remove(projects); err != nil {
@@ -825,5 +824,26 @@ func assertProjectFileForm(t *testing.T, path string, want map[string]any) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("%s holds %v, want %v", path, got, want)
+	}
+}
+
+// contract: workspace.projects.writes-format-4
+func TestProjectsWriterWritesFormat4(t *testing.T) {
+	config := t.TempDir()
+	root := t.TempDir()
+	store := host.NewWorkspace(config)
+	if _, err := store.Apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-a", "root": root, "identity": "1:1"}}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(config, "projects.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var written map[string]any
+	if err := json.Unmarshal(data, &written); err != nil {
+		t.Fatal(err)
+	}
+	if written["format"] != float64(4) {
+		t.Fatalf("projects.json is written with format %v, want 4", written["format"])
 	}
 }

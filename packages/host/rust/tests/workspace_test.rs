@@ -810,15 +810,14 @@ fn earlier_stored_forms_are_reported_by_snapshot_and_refused_by_writes() {
     let projects = config.path().join("projects.json");
     let bare = r#"[{"id":"prj-a","root":"/x","identity":"1:1"}]"#;
     fs::write(&projects, bare).unwrap();
-    let refusal = format!("{}: projects.json: format must be 3", projects.display());
+    let refusal = format!("{}: projects.json: format must be 4", projects.display());
     assert_eq!(
         apply(json!({"kind":"snapshot"})).unwrap(),
         json!({"projects": [], "common": {}, "projectsError": refusal})
     );
-    // A file of format 2 holds space layouts as lines and cells beside a group list, not as the slicing tree
-    // (docs/spec/groups.md#storage), so it is refused as a whole.
+    // A file of format 3 holds tabs without the member role (docs/spec/agent-roles.md#tab-role-state), so it is refused as a whole.
     let earlier = concat!(
-        r#"{"format":2,"projects":[{"id":"prj-a","root":"/x","identity":"1:1","spaces":[{"id":"s1","layout":"#,
+        r#"{"format":3,"projects":[{"id":"prj-a","root":"/x","identity":"1:1","spaces":[{"id":"s1","layout":"#,
         r#"{"state":{"xs":[0,1],"ys":[0,1],"cards":[{"id":"c1","c0":0,"c1":1,"r0":0,"r1":1}]},"groups":[],"lastCard":1,"leader":"c1"}}]}]}"#
     );
     fs::write(&projects, earlier).unwrap();
@@ -857,4 +856,17 @@ fn earlier_stored_forms_are_reported_by_snapshot_and_refused_by_writes() {
         refusal
     );
     assert_eq!(fs::read_to_string(&settings).unwrap(), r#"{"gap":6}"#);
+}
+
+// contract: workspace.projects.writes-format-4
+#[test]
+fn projects_writer_writes_format_4() {
+    let config = folder::Folder::new();
+    let root = folder::Folder::new();
+    let store = Workspace::new(config.path().into());
+    apply(
+        &store,
+        json!({"kind":"add", "project":{"id":"prj-a", "root":root.path(), "identity":"1:1"}}),
+    );
+    assert_eq!(read(&config.path().join("projects.json"))["format"], json!(4));
 }

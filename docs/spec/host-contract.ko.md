@@ -1043,6 +1043,7 @@ fn invalid_json_closes_connection() {
 | `roles.reads-shared-cases` | `roles`는 `docs/spec/cases/agent-roles/roles.json`의 읽기 case가 정한 대로 `roles.json`의 역할 정의를 읽는다. 파일이 없으면 `{}`을 읽고, 각 거부는 case의 text로 file을 밝힌다. | all |
 | `roles.writes-shared-cases` | `rolesPut`은 `docs/spec/cases/agent-roles/roles.json`의 쓰기 case를 `{format: 1, roles}`로 쓰고, 거부된 정의는 file을 쓰지 않는다. | all |
 | `roles.reads-absent-file-without-creating` | `roles.json`이 없는 설정 디렉터리에서 `roles`는 `{}`을 답하고 file을 만들지 않는다. | all |
+| `workspace.projects.writes-format-4` | `add`는 format member 4인 `projects.json`을 쓰고, format 3 file은 전체가 `<path>: projects.json: format must be 4`로 거부된다. | all |
 | `roles.fingerprint-shared-cases` | `docs/spec/cases/agent-roles/fingerprint.json`의 각 case에서 fingerprint는 식별자, 줄 바꿈 하나, 본문의 SHA-256 digest의 첫 16개 소문자 16진 문자다. | all |
 | `roles.role-file-layout` | role 파일은 첫 줄, 끝에 줄 바꿈이 있는 정의, 마지막 줄의 fingerprint를 담고 각 줄은 줄 바꿈으로 끝난다. 5,000자 정의도 통째로 쓴다. | all |
 | `roles.role-file-phrases` | identity, 변경 message, 재읽기 요청, 첫 message 접미사는 `<role file>`을 채운 `fingerprint.json`의 문구와 같고, 첫 줄은 그 문구와 같다. | all |
