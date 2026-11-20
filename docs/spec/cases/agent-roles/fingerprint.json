@@ -1,0 +1,60 @@
+{
+  "algorithm": "Units: the definition split into paragraphs at blank lines; when fewer than 4 paragraphs, split into its non-empty lines instead. A definition with fewer than 4 units is refused. Unit i (1-based of n) has fragment frag_i = first 4 lowercase hex characters of SHA-256 over UTF-8 of: name, LF, decimal i, LF, the unit text. The confirmation value is frag_1-...-frag_n.",
+  "cases": [
+    {
+      "name": "reviewer",
+      "text": "A review role.\n\nReads the diffs.\n\nReports findings.\n\nDoes not edit files.",
+      "units": [
+        "A review role.",
+        "Reads the diffs.",
+        "Reports findings.",
+        "Does not edit files."
+      ],
+      "confirmation": "6665-ac82-3add-65d1",
+      "bits": 64
+    },
+    {
+      "name": "leader",
+      "text": "Line one\nLine two\nLine three\nLine four",
+      "units": [
+        "Line one",
+        "Line two",
+        "Line three",
+        "Line four"
+      ],
+      "confirmation": "cdfa-d40e-8d62-79bc",
+      "bits": 64
+    },
+    {
+      "name": "reviewer",
+      "text": "검수관입니다.\n\n다른 agent의 변경을 검토한다.\n\nCafé 🙂 review.\n\n마지막 문단.",
+      "units": [
+        "검수관입니다.",
+        "다른 agent의 변경을 검토한다.",
+        "Café 🙂 review.",
+        "마지막 문단."
+      ],
+      "confirmation": "70cc-0f54-76f3-2479",
+      "bits": 64
+    },
+    {
+      "name": "ops-1",
+      "text": "Para one\nline two\n\nPara two\n\nPara three\n\nPara four",
+      "units": [
+        "Para one\nline two",
+        "Para two",
+        "Para three",
+        "Para four"
+      ],
+      "confirmation": "acab-c2e2-b6c2-2ffa",
+      "bits": 64
+    }
+  ],
+  "refused": [
+    {
+      "name": "leader",
+      "text": "Only one line.",
+      "error": "definition needs at least 4 paragraphs or lines"
+    }
+  ]
+}
