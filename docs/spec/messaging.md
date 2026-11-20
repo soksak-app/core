@@ -60,6 +60,17 @@ A message asks its receiver for a report, and a report asks for none. `sok messa
 - Reason for the mark in the token: a report is marked in the part of the name that the readers do not interpret. The sidecars take `from` as the text before the last `.` and require a non-empty token without a `.` ([message](#message)); `report-<token>` is such a token, so every reader of the folder contract reads a report as a message without a change, and the name still states that the file is a report. A mark in the text, such as a first line, would be pasted into the terminal of the receiver.
 - An agent in a soksak terminal receives each message as injected input, so it answers a request once with `--reply` and answers no report; `messages_read` and `messages_wait` serve an agent outside a soksak terminal or read the history ([agent skill](cli.md#agent-skill)).
 
+## Completion notice
+
+A tab that received a message does not report its completion through a message of its own, and no answer text is sent with a notice. When the program of a terminal moves from `working` to `done` or `idle` ([terminal state](terminal-state.md#program-status), OSC 7501) after the terminal received a message from a sender, the terminal sidecar writes one notice into the folder of that sender.
+
+- Name: `<receiver>.notice-<token>.txt`, where `<receiver>` is the surface of the receiving terminal and `<token>` is a non-empty string without a `.`, as for a message ([message](#message)). The mark `notice-` is in the token, as `report-` is in the token of a report ([report request](#report-request)).
+- Text: the English notice `[soksak notice] Tab <title> (<surface>) moved from working to <state>. The notice carries no report of its work.`, where `<title>` is the title of the receiving tab, `<surface>` its surface and `<state>` the state `done` or `idle`.
+- Writer: the terminal sidecar writes the notice by the write rule of a message ([message](#message)), because the page has no file operation, as for the folder ([folder of a terminal](#folder-of-a-terminal)).
+- Trigger: one notice per sender for each working period of the receiving terminal, sent when the period ends and only when the terminal received a message from that sender during it. A repeated transition writes no second notice.
+- The notice is a message of the receiving surface for the sender: the page of the sender injects it under the rules of [injected message](#injected-message). An explicit report with `sok message send --reply` stays the only report of a result.
+- Reason: a sender that wrote a message has no signal of completion; the state of the receiver is a fact of its program, and the sender learns it without the text of the answer, which the receiver reports itself ([report request](#report-request)).
+
 ## Folder removed or renamed
 
 When the registered folder is removed or renamed, the sidecar sends the event `sidecar.<sidecar>.registration.closed` with `{registration, reason: "folder-removed"}` at the gate level `info`, and it ends the watch of that registration. The event is explicit, and the sidecar does not poll for the folder ([AGENTS](../../AGENTS.md#implementation)). A folder that is created again at the same path does not resume the watch: the agent registers the folder again, and the new registration starts its `seq` at 1.

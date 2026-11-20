@@ -60,6 +60,17 @@ Message는 받는 쪽에 보고를 요청하고, 보고는 아무것도 요청�
 - Token에 표시하는 이유: 보고는 reader가 해석하지 않는 이름 부분에 표시한다. Sidecar는 마지막 `.` 앞의 text를 `from`으로 받고, `.` 없는 비어 있지 않은 token을 요구한다([message](messaging.md#message)). `report-<token>`은 그런 token이므로 folder 계약의 모든 reader가 바뀌지 않고 보고를 message로 읽으며, 이름은 여전히 파일이 보고임을 밝힌다. 첫 줄처럼 text 안의 표시는 받는 쪽 terminal에 paste된다.
 - soksak terminal 안의 agent는 각 message를 주입된 입력으로 받으므로, 요청에 `--reply`로 한 번 답하고 보고에는 답하지 않는다. `messages_read`와 `messages_wait`는 soksak terminal 밖의 agent를 위한 것이거나 기록을 읽는다([agent skill](cli.md#agent-skill)).
 
+## 완료 notice
+
+message를 받은 tab은 자기 message로 완료를 보고하지 않으며, notice에는 답의 text를 싣지 않는다. Terminal의 program이 message를 받은 뒤 `working`에서 `done` 또는 `idle`로 옮겨 가면([terminal state](terminal-state.md#program-status), OSC 7501), terminal sidecar는 그 보낸 쪽의 folder에 notice를 하나 쓴다.
+
+- 이름: `<receiver>.notice-<token>.txt`. `<receiver>`는 받은 terminal의 surface이고, `<token>`은 message와 같이 `.`이 없는 비어 있지 않은 text다([message](messaging.md#message)). 표시 `notice-`는 token에 있으며, 보고의 token에 `report-`가 있는 것과 같다([report request](messaging.md#report-request)).
+- Text: 영어 notice `[soksak notice] Tab <title> (<surface>) moved from working to <state>. The notice carries no report of its work.`다. `<title>`은 받은 tab의 title, `<surface>`는 그 surface, `<state>`는 `done` 또는 `idle`이다.
+- 쓰는 쪽: terminal sidecar가 message의 쓰기 규칙으로 쓴다([message](messaging.md#message)). page는 파일 연산이 없기 때문이다([folder of a terminal](messaging.md#folder-of-a-terminal)).
+- 기점: working 기간마다 보낸 쪽 하나당 notice를 하나 쓰며, 기간이 끝날 때 그 기간에 그 보낸 쪽의 message를 받았을 때만 쓴다. 되풀이된 전이는 두 번째 notice를 쓰지 않는다.
+- Notice는 보낸 쪽에 대한 받는 surface의 message다. 보낸 쪽의 page는 [injected message](messaging.md#injected-message)의 규칙으로 주입한다. 명시적 보고 `sok message send --reply`는 결과의 유일한 보고로 남는다.
+- 이유: message를 쓴 보낸 쪽은 완료 신호가 없다. receiver의 상태는 program의 사실이며, 보낸 쪽은 답의 text 없이 이를 안다. 답은 receiver가 스스로 보고한다([report request](messaging.md#report-request)).
+
 ## Folder 제거 또는 이름 변경
 
 등록된 folder가 제거되거나 이름이 바뀌면 sidecar는 `{registration, reason: "folder-removed"}`를 담은 `sidecar.<sidecar>.registration.closed` event를 gate level `info`로 보내고, 그 registration의 watch를 끝낸다. Event는 명시적이며, sidecar는 folder를 polling하지 않는다([AGENTS](../../AGENTS.md#implementation)). 같은 path에 folder를 다시 만들어도 watch는 재개되지 않는다. Agent가 folder를 다시 등록하며, 새 registration의 `seq`는 1에서 시작한다.
