@@ -143,23 +143,30 @@ func (g *Grid) keptOf(n *Node, axis Axis, unit perAxis) kept {
 	return kept{px: *px, ok: true}
 }
 
-// kidSizes is the px size of each kid of a cut along its axis, from the room inside the cut: the corridors between the kids first, then
-// the px sizes of the kids that keep one, and the rest to the other kids by their fractions. A kid gets at least the costs inside it, and
-// the others share what is left. When the room does not hold the px sizes and one minSize for the kids that take a fraction, the px sizes
-// are drawn scaled by one factor, and further only where the room does not hold the costs inside the kids that take a fraction; when no kid takes a fraction, they divide the room in their proportion. Nil when the room does not hold
-// the costs of the kids.
+// kidSizes is the px size of each kid of a cut along its axis, from the room inside the cut (packages/soksak/docs/layout.md#the-model):
+// the corridors between the kids first, then the px sizes of the kids that keep one, and the rest to the other kids by their fractions.
+// A kid gets at least the costs inside it, and the others share what is left. A fixed card with a px size is a cost of its level and
+// keeps it while the room holds the costs and one minSize for the kids that share; the px sizes of the kids that share are scaled by one
+// factor to leave the kids that take a fraction one minSize; when no kid takes a fraction, they divide the room in their proportion.
+// Nil when the room does not hold the costs of the kids.
 func (g *Grid) kidSizes(n *Node, room float64, unit perAxis) []float64 {
 	axis := n.Cut
 	count := len(n.Kids)
 	held := make([]kept, count)
 	costs := make([]float64, count)
-	asked, heldCost, costSum := 0.0, 0.0, 0.0
+	asked, fixedAsked, heldCost, costSum := 0.0, 0.0, 0.0, 0.0
 	sharingAny := false
+	leaf := make([]bool, count)
 	for i, kid := range n.Kids {
 		held[i] = g.keptOf(kid.Node, axis, unit)
 		if held[i].ok {
-			asked += held[i].px
 			heldCost += held[i].cost
+			// A fixed card with a px size is a cost of its level, as a corridor is: it is no kid that shares.
+			if leaf[i] = kid.Node.isCard() && kid.Node.Fixed; leaf[i] {
+				fixedAsked += held[i].px
+			} else {
+				asked += held[i].px
+			}
 		} else {
 			costs[i] = g.costOf(kid.Node, axis, unit)
 			costSum += costs[i]
@@ -171,26 +178,43 @@ func (g *Grid) kidSizes(n *Node, room float64, unit perAxis) []float64 {
 	if free < -eps {
 		return nil
 	}
-	// A px size is scaled to leave the kids that take a fraction one minSize, which does not count the costs inside them: a cost that an
-	// operation adds or removes inside a kid is paid by the kids that take a fraction, so a px size is drawn the same before and after
-	// it. Only a room that does not hold those costs scales the px sizes further.
-	floor := 0.0
-	if sharingAny {
-		floor = g.min
+	// The fixed cards keep their px sizes while the room holds them, the corridors and the costs, and one minSize for the kids that share:
+	// a corridor or a cost that an operation adds or removes is paid by the kids that share. Only a room that does not hold them scales
+	// the fixed cards, by one factor; a cut of fixed cards alone divides the room in their proportion.
+	fixedScale := 1.0
+	if fixedAsked > 0 {
+		if !sharingAny && asked == 0 {
+			fixedScale = math.Max(0, free) / fixedAsked
+		} else if need := math.Max(g.min, costSum); free-fixedAsked < need {
+			fixedScale = math.Max(0, free-math.Min(need, math.Max(0, free))) / fixedAsked
+		}
 	}
+	free -= fixedAsked * fixedScale
+	// The px sizes of the kids that share are scaled by one factor, so their proportions survive, to leave the kids that take a fraction
+	// one minSize, which does not count the costs inside them; only a room that does not hold those costs scales them further. Without a
+	// kid that takes a fraction, they divide the room in their proportion.
 	scale := 1.0
-	if asked > 0 && (!sharingAny || free-asked < floor) {
-		scale = math.Max(0, free-math.Min(floor, math.Max(0, free))) / asked
+	if asked > 0 && !sharingAny {
+		scale = math.Max(0, free) / asked
 	}
-	if asked > 0 && sharingAny && free-asked*scale < costSum {
-		scale = math.Max(0, free-costSum) / asked
+	if asked > 0 && sharingAny {
+		if free-asked < g.min {
+			scale = math.Max(0, free-math.Min(g.min, math.Max(0, free))) / asked
+		}
+		if free-asked*scale < costSum {
+			scale = math.Max(0, free-costSum) / asked
+		}
 	}
 	rest := free - float64(asked*scale)
 	sizes := make([]float64, count)
 	open := make([]bool, count)
 	for i := range n.Kids {
 		if held[i].ok {
-			sizes[i] = float64(held[i].px*scale) + held[i].cost
+			if leaf[i] {
+				sizes[i] = float64(held[i].px*fixedScale) + held[i].cost
+			} else {
+				sizes[i] = float64(held[i].px*scale) + held[i].cost
+			}
 		} else {
 			open[i] = true
 		}

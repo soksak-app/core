@@ -74,12 +74,24 @@ throws `soksak: frames is <value>; use "corridor" or "none"`.
 The slots always sum to the plane, and a px size is reduced to keep that true.
 It is drawn as declared while some slot on the axis shares and the plane has the
 room.
-When the plane does not, every px size is scaled down by one factor, so their
-proportions survive and the sharing slots keep a floor of one `minSize`. The
-floor does not count the corridors, frames and heads inside the sharing kids, so
-an operation that adds or removes one there is paid by the sharing kids and a
-px size is drawn the same before and after it; only a room that does not hold
-those costs scales the px sizes further. When no slot on the axis
+The drawn size of a kid that shares is its fraction of the extent of its level
+less the fixed costs of the level: the corridors, the `fixed` cards with a px
+size, and the heads and frames of boxes. A `fixed` card with a px size is a
+cost of its level, as a corridor is, and no kid that shares; a card with a px
+size that is not `fixed` is a kid that shares. So the px sizes fall into two
+classes:
+
+- A `fixed` card keeps its px size while the plane holds the costs of its level
+  and one `minSize` for the kids that share; only a plane that does not hold
+  them scales the `fixed` cards, by one factor. A corridor, frame or head that an
+  operation adds or removes is paid by the kids that share.
+- When the plane does not hold the px sizes of the kids that share, those px
+  sizes are scaled down by one factor, so their proportions survive and the
+  kids that take a fraction keep a floor of one `minSize`. The floor does not
+  count the corridors, frames and heads inside the kids that take a fraction;
+  only a room that does not hold those costs scales the px sizes further.
+
+When no slot on the axis
 shares, the px sizes are the only thing that can cover the plane, so they are
 scaled to it in both directions and the declared numbers become proportions:
 one card declaring 200 in a 1600 plane is drawn 1600, and two declaring 200 and
@@ -432,10 +444,10 @@ is a fixed cost of its cut: it keeps the size it is drawn at when a kid arrives
 or leaves beside it. So a sidebar switched off and back on leaves every other
 card the width it had when the root is even; on an uneven root the kid that paid
 for it keeps less than it gave.
-Where the plane does not hold what the axis declares, every declared size is
-drawn scaled by one factor; that factor changes when a card arrives or leaves
-in the cut of the px sizes, and not for a change inside a kid that takes a
-fraction.
+Where the plane does not hold what the axis declares, the px sizes of the kids
+that share are drawn scaled by one factor, which changes when a card arrives or
+leaves in their cut; a `fixed` card keeps its px size while the plane holds the
+costs and one `minSize` for the kids that share.
 
 A px size is declared by the host. A drag changes one, and a cut divides one
 between the halves; a close gives the span to the other kids of its cut, and an
