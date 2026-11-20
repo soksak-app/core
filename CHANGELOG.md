@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F966 (feature link): the test inventory links the completed rule of sizes to the layout operations and the insert and vacated-slot functions of both workbenches with their case, property and reach tests.
 - F966-1-1-4-2 (seeded reach check, page): the seeded check of the page judges I4 over three generated layouts by the drag paths of the Go check, through pointer events on a tab or a group header, and every required target is reachable.
 - F937-10-1 (registered): a draw of a card head in mygo formats the layout token of the group tree for each kept answer on every pointer move.
 - F1009: An image region keeps up to 16 surfaces that it looked up for its current generation and raster revision and presents a frame of a kept surface with the same identifier and nonce without a new lookup; another generation or raster revision and the close of the region drop them, and `native.image.present` carries `surface` and `cached`. Verification: Red and Green of `image_region_lease_test` (5 of 5 runs) and the image region tests; in the lease mode of two term surfaces the mean lookup fell from 79–83 µs to 1 µs and the whole present from 184–194 µs to 106–113 µs.

@@ -628,6 +628,23 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F966",
+    implementation: [
+      { file: "packages/soksak/src/cuts.ts", symbol: "export function insertBeside(input: Input, target: TreeNode, side: Side, node: TreeNode): TreeNode {" },
+      { file: "packages/soksak/src/cuts.ts", symbol: "export function vacatesNode(input: Input, id: string, target: string | readonly string[], side: string): boolean {" },
+      { file: "packages/workbench-mygo/src/layout/cuts.go", symbol: "func (g *Grid) Insert(target Target, side Side, node *Node) (string, error) {" },
+      { file: "packages/workbench-mygo/src/layout/cuts.go", symbol: "func (g *Grid) Vacates(id string, target Target, side Side) bool {" },
+    ],
+    tests: [
+      { file: "packages/soksak/test/layout-invariants.test.mjs", id: "the invariants of the rule of sizes hold over the generated layouts of every seed" },
+      { file: "packages/workbench-mygo/tests/layout/groups_cases_test.go", id: "TestGroupCases" },
+      { file: "packages/workbench-mygo/tests/layout/groups_property_test.go", id: "TestRandomGroupOperationsKeepTheInvariants" },
+      { file: "packages/workbench-mygo/tests/group_drop_invariants_test.go", id: "TestDropTargetsOfAGroupCardOverTheGeneratedLayoutOfSeed1AreReachable" },
+    ],
+    expected: "The layout operations of both workbenches follow the rule of sizes of docs/spec/groups.md over the stored slicing tree, and the invariants of the rule hold over generated layouts.",
+    levels: ["unit"],
+  },
+  {
     id: "F974",
     implementation: [
       { file: "e2e/fixtures/raster-probe/probe/plugin.json", symbol: "\"id\": \"rasterprobe\"" },

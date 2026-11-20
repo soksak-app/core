@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F966 (feature link): test inventory가 완료된 크기 규칙을 두 workbench의 layout operation과 insert, 빈 slot 함수, 그리고 그 case, property, 도달 test에 잇는다.
 - F966-1-1-4-2 (seed 도달 검사, page): page의 seed 검사가 tab이나 group header에 대한 pointer event를 거쳐 Go 검사의 drag 경로로 생성한 layout 셋에서 I4를 판정하며, 필요한 target이 모두 도달 가능하다.
 - F937-10-1 (등록): mygo에서 card head를 그릴 때 pointer 이동마다 보관된 answer마다 group tree의 layout token을 서식화한다.
 - F1009: 그림 영역은 현재 generation과 raster revision에서 조회한 표면을 최대 16개 지니고, 식별자와 nonce가 같은 지닌 표면의 frame을 새 조회 없이 보인다. 다른 generation이나 raster revision, 영역 닫기는 그것들을 버리며, `native.image.present`는 `surface`와 `cached`를 지닌다. 검증: `image_region_lease_test`의 Red와 Green(5회 중 5회)과 그림 영역 test. term surface 둘의 lease mode에서 조회 평균이 79–83 µs에서 1 µs로, present 전체가 184–194 µs에서 106–113 µs로 줄었다.
