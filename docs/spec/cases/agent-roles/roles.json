@@ -1,0 +1,134 @@
+{
+  "description": "Shared cases of roles.json, the role definitions of docs/spec/agent-roles.md#role-definitions. The Go host and the Rust host run each read case against a roles.json holding `stored` (no file when `stored` is absent) and expect `result` or `error`; each write case passes `roles` to the write request on an absent file and expects `file` (the written document) or `error`, with the file still absent. `<file>` in an error stands for the path of roles.json. A `found` value is the compact JSON text of the format member, or null when the member is absent or the document is not an object.",
+  "reads": [
+    {
+      "name": "absent-file-reads-no-role",
+      "result": {}
+    },
+    {
+      "name": "valid-definitions",
+      "stored": {
+        "format": 1,
+        "roles": {
+          "reviewer": {"text": "You review the changes of the other agents in this project."},
+          "ops-1": {"text": "Line one.\nLine two."},
+          "reviewer-2": {"text": "검수관입니다.\n\n다른 agent의 변경을 검토한다. Café 🙂."},
+          "a": {"text": ""}
+        }
+      },
+      "result": {
+        "reviewer": {"text": "You review the changes of the other agents in this project."},
+        "ops-1": {"text": "Line one.\nLine two."},
+        "reviewer-2": {"text": "검수관입니다.\n\n다른 agent의 변경을 검토한다. Café 🙂."},
+        "a": {"text": ""}
+      }
+    },
+    {
+      "name": "identifier-of-64-characters-is-valid",
+      "stored": {"format": 1, "roles": {"a000000000000000000000000000000000000000000000000000000000000000": {"text": "x"}}},
+      "result": {"a000000000000000000000000000000000000000000000000000000000000000": {"text": "x"}}
+    },
+    {
+      "name": "format-2-is-refused",
+      "stored": {"format": 2, "roles": {}},
+      "error": "<file>: roles: format must be 1, found 2"
+    },
+    {
+      "name": "format-missing-is-refused",
+      "stored": {"roles": {}},
+      "error": "<file>: roles: format must be 1, found null"
+    },
+    {
+      "name": "format-string-is-refused",
+      "stored": {"format": "1", "roles": {}},
+      "error": "<file>: roles: format must be 1, found \"1\""
+    },
+    {
+      "name": "bare-array-is-refused",
+      "stored": [],
+      "error": "<file>: roles: format must be 1, found null"
+    },
+    {
+      "name": "unknown-top-level-member-is-refused",
+      "stored": {"format": 1, "roles": {}, "extra": true},
+      "error": "<file>: roles: unknown field extra"
+    },
+    {
+      "name": "roles-must-be-an-object",
+      "stored": {"format": 1, "roles": []},
+      "error": "<file>: roles: roles must be an object"
+    },
+    {
+      "name": "uppercase-identifier-is-refused",
+      "stored": {"format": 1, "roles": {"Reviewer": {"text": "x"}}},
+      "error": "<file>: roles: invalid role identifier Reviewer"
+    },
+    {
+      "name": "leading-digit-identifier-is-refused",
+      "stored": {"format": 1, "roles": {"1ops": {"text": "x"}}},
+      "error": "<file>: roles: invalid role identifier 1ops"
+    },
+    {
+      "name": "underscore-identifier-is-refused",
+      "stored": {"format": 1, "roles": {"ops_1": {"text": "x"}}},
+      "error": "<file>: roles: invalid role identifier ops_1"
+    },
+    {
+      "name": "identifier-of-65-characters-is-refused",
+      "stored": {"format": 1, "roles": {"a0000000000000000000000000000000000000000000000000000000000000000": {"text": "x"}}},
+      "error": "<file>: roles: invalid role identifier a0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "name": "definition-must-be-an-object",
+      "stored": {"format": 1, "roles": {"reviewer": "You review."}},
+      "error": "<file>: roles: role reviewer must be an object"
+    },
+    {
+      "name": "definition-unknown-field-is-refused",
+      "stored": {"format": 1, "roles": {"reviewer": {"text": "x", "extra": 1}}},
+      "error": "<file>: roles: role reviewer unknown field extra"
+    },
+    {
+      "name": "definition-without-text-is-refused",
+      "stored": {"format": 1, "roles": {"reviewer": {}}},
+      "error": "<file>: roles: role reviewer text must be a string"
+    },
+    {
+      "name": "definition-with-number-text-is-refused",
+      "stored": {"format": 1, "roles": {"reviewer": {"text": 1}}},
+      "error": "<file>: roles: role reviewer text must be a string"
+    },
+    {
+      "name": "first-invalid-identifier-in-sorted-order-is-named",
+      "stored": {"format": 1, "roles": {"Zeta": {"text": "x"}, "Alpha": {"text": "x"}}},
+      "error": "<file>: roles: invalid role identifier Alpha"
+    }
+  ],
+  "writes": [
+    {
+      "name": "write-valid-definitions",
+      "roles": {"reviewer": {"text": "You review the changes.\n"}, "ops-1": {"text": "Line one.\nLine two."}},
+      "file": {"format": 1, "roles": {"reviewer": {"text": "You review the changes.\n"}, "ops-1": {"text": "Line one.\nLine two."}}}
+    },
+    {
+      "name": "write-empty-roles",
+      "roles": {},
+      "file": {"format": 1, "roles": {}}
+    },
+    {
+      "name": "write-refuses-invalid-identifier",
+      "roles": {"Reviewer": {"text": "x"}},
+      "error": "<file>: roles: invalid role identifier Reviewer"
+    },
+    {
+      "name": "write-refuses-definition-without-text",
+      "roles": {"reviewer": {}},
+      "error": "<file>: roles: role reviewer text must be a string"
+    },
+    {
+      "name": "write-refuses-unknown-definition-field",
+      "roles": {"reviewer": {"text": "x", "extra": 1}},
+      "error": "<file>: roles: role reviewer unknown field extra"
+    }
+  ]
+}

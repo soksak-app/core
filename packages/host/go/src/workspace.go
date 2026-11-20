@@ -95,6 +95,7 @@ type WorkspaceRequest struct {
 	Tab     string   `json:"tab,omitempty"`
 	Entry   Record   `json:"entry,omitempty"`
 	Regions Record   `json:"regions,omitempty"`
+	Roles   Record   `json:"roles,omitempty"`
 }
 
 // readProjects reads the projects of projects.json, which holds them under the `projects` member beside the format
