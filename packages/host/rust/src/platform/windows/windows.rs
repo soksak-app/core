@@ -159,6 +159,9 @@ impl Platform for Windows {
     fn process_footprint(&self, pid: u32) -> Result<ProcessFootprint, String> {
         unsupported::process_footprint(pid)
     }
+    fn processor_time(&self) -> Result<std::time::Duration, String> {
+        unsupported::processor_time()
+    }
     fn login_shell(&self) -> Result<String, String> {
         unsupported::login_shell()
     }

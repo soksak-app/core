@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F996-8 (follow-up of F996-5.1): the processor time of the process for `host.sampler.routines` is an operation of the host platform interface, which macOS implements with `getrusage` and Windows answers as not implemented, so the Go host library and its framework adapters build for Windows again; the Rust work of the routines is `routine/work.rs`, the counterpart of the Go file.
 - F996-5.3 (one decode of a sidecar line): the Go and the Rust host decode a message line of a sidecar once into its members, the body of the message once and its member `image` once, and the readers, the reply record, the detach acknowledgement and the image decision read these members; a message without an image costs two decodes and a message with one three, which `MessageDecodes` and `message_decodes` count (`docs/spec/sidecars.md#messages`).
 - F1000-2: `docs/spec/sidecars.md#process-identity` states that the surface of a process comes from its chain of parent processes, which the host checks with the sidecar that started the nearest ancestor, and removes `SOKSAK_SURFACE`; the hosts, `sok` and the sidecars follow in F1000-2.1 to F1000-2.4.
 - F899-7.5-15: The Rust `sok` reports the parser error of a `surface.window` answer that does not parse in `sok message send` and the MCP tools, and states the reason of the dropped command answer on the line above its call.

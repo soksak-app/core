@@ -93,6 +93,7 @@ mod private_files;
 #[path = "process_exit.rs"]
 mod process_exit;
 mod process_footprint;
+mod processor_time;
 #[path = "shapes.rs"]
 mod shapes;
 #[path = "stall_sample.rs"]
@@ -262,6 +263,9 @@ impl Platform for Darwin {
     }
     fn process_footprint(&self, pid: u32) -> Result<ProcessFootprint, String> {
         process_footprint::process_footprint(pid)
+    }
+    fn processor_time(&self) -> Result<std::time::Duration, String> {
+        processor_time::processor_time()
     }
     fn login_shell(&self) -> Result<String, String> {
         login_shell::login_shell()

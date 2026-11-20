@@ -663,6 +663,10 @@ pub fn process_footprint(_pid: u32) -> Result<ProcessFootprint, String> {
     missing("process footprint")
 }
 
+pub fn processor_time() -> Result<std::time::Duration, String> {
+    missing("processor time")
+}
+
 pub fn login_shell() -> Result<String, String> {
     missing("login shell")
 }

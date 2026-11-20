@@ -424,6 +424,9 @@ type Platform interface {
 	// process, which counts the pages that no other process shares. The resident size counts the shared pages too. It returns an
 	// error when the process cannot be read, such as a process that has ended.
 	ProcessFootprint(pid int) (ProcessFootprint, error)
+	// ProcessorTime returns the processor time, user and system, that this process used since it started
+	// (docs/spec/performance-trace.md).
+	ProcessorTime() (time.Duration, error)
 	// LoginShell returns the login shell of the user of this process, as the user database (getpwuid_r) names it
 	// (docs/spec/cli.md#agents-in-the-application).
 	LoginShell() (string, error)
