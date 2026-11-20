@@ -226,7 +226,7 @@ const requestEntry = ({ tab, plugin, params }) => (tab !== null ? { tab } : { pl
  * reading order `{tab, card, plugin, params}`; `plane` and `minimum`, sizes `{width, height}` in points; `entry(plugin, params)`, which
  * answers the params of a new tab or throws the refusal of the plugin or its params; `unsaved(tab)`; and `measure(tree)`, the frames
  * `{x, y, width, height}` in window points of the cards of the tree in tree order, which the operations of the size rule build on a
- * copy of the plane without the minimum, or the refusal of the layout library for a tree whose cards have no extent in the plane. The
+ * copy of the plane without the minimum, or the error of the layout library, which the plan states as its reason. The
  * result holds the answer of the plan and `ids`, the kept card of each card of the tree in tree order or null, which an apply builds.
  */
 export function planArrangement(request, space) {
@@ -258,18 +258,28 @@ export function planArrangement(request, space) {
   return judged(tree, frames, request.close === true, space, tools);
 }
 
-/** The measure of a space that answers null for a tree whose cards have no extent, the test of the minimum, and the test of low cards. */
+/**
+ * The size refusal of the layout library (packages/soksak/docs/layout.md), the one error that a measure takes for a tree that does not
+ * fit.
+ */
+const SIZE_REFUSAL = /^card \S+ would be \S+x\S+, below its minimum \S+x\S+$/;
+
+/** The measure of a space that answers null for a tree that does not fit the plane and throws every other error of the layout
+ * library, the test of the minimum, and the test of low cards. */
 function sizing(space) {
   const { width, height } = space.minimum;
   return {
-    // A tree whose cards have no extent in the plane is refused by the layout library or drawn with an empty card; the plan states the
-    // plane instead of the text of the library.
+    // A tree that does not fit the plane is refused by the layout library with its size refusal, `card <id> would be <w>x<h>, below its
+    // minimum <w>x<h>` (packages/soksak/docs/layout.md), which a card of a window sidebar meets before the content cards have no extent,
+    // or is drawn with an empty card; the plan states the plane for both. Every other error of the measure is thrown, so a fault of the
+    // operations is not taken for a plane that is too small.
     measure: (tree) => {
       let frames;
       try {
         frames = space.measure(tree);
-      } catch {
-        return null;
+      } catch (error) {
+        if (SIZE_REFUSAL.test(error.message)) return null;
+        throw error;
       }
       return frames.every((frame) => frame.width > 0 && frame.height > 0) ? frames : null;
     },

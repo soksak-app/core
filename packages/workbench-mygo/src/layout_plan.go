@@ -7,6 +7,7 @@ import (
 	"maps"
 	"math"
 	"reflect"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -257,10 +258,14 @@ type planSize struct {
 	Height float64 `json:"height"`
 }
 
-// planSizing measures a tree, answering nil for a tree whose cards have no extent, and tells whether frames meet the minimum and
-// whether a card is lower than the minimum.
+// planSizeRefusal is the size refusal of the layout library (packages/soksak/docs/layout.md), the only error that a measure takes for a
+// tree that does not fit.
+var planSizeRefusal = regexp.MustCompile(`^card \S+ would be \S+x\S+, below its minimum \S+x\S+$`)
+
+// planSizing measures a tree, answering nil for a tree that does not fit the plane and every other error of the layout library, and
+// tells whether frames meet the minimum and whether a card is lower than the minimum.
 type planSizing struct {
-	measure func(tree *planNode) []planFrame
+	measure func(tree *planNode) ([]planFrame, error)
 	fits    func(frames []planFrame) bool
 	low     func(frames []planFrame) bool
 }
@@ -269,11 +274,14 @@ type planSizing struct {
 // whose cards are nearest to a square, the smallest mean |ln(width / height)|, and of equal ones the grid with fewer rows; when none
 // fits, the grid nearest to a square of those that measure builds, which is not feasible, and the grid of one row when it builds none.
 // A grid whose cards are lower than the minimum ends the search, because more rows only make them lower.
-func evenPlanGrid(count int, entry planEntry, sizing planSizing) plannedGrid {
+func evenPlanGrid(count int, entry planEntry, sizing planSizing) (plannedGrid, error) {
 	var best, nearest *plannedGrid
 	for rows := 1; rows <= count; rows++ {
 		tree := planGrid(count, rows, entry)
-		frames := sizing.measure(tree)
+		frames, err := sizing.measure(tree)
+		if err != nil {
+			return plannedGrid{}, err
+		}
 		if frames == nil {
 			continue
 		}
@@ -297,9 +305,9 @@ func evenPlanGrid(count int, entry planEntry, sizing planSizing) plannedGrid {
 		best = nearest
 	}
 	if best == nil {
-		return plannedGrid{tree: planGrid(count, 1, entry)}
+		return plannedGrid{tree: planGrid(count, 1, entry)}, nil
 	}
-	return *best
+	return *best, nil
 }
 
 // plannedGrid is a grid of evenPlanGrid: its tree, the frames of its cards or nil, whether they fit, and the mean skew of its cards.
@@ -678,14 +686,21 @@ func planArrangement(request planRequest, space planSpace) (planAnswer, error) {
 		if err != nil {
 			return refusedPlan(space, err.Error()), nil
 		}
-		tree, frames = read, sizing.measure(read)
+		measured, err := sizing.measure(read)
+		if err != nil {
+			return refusedPlan(space, err.Error()), nil
+		}
+		tree, frames = read, measured
 	} else {
 		params := request.Params
 		if string(bytes.TrimSpace(params)) == "null" {
 			params = nil
 		}
 		// A grid that does not fit is the plan of the grid nearest to a square, which the judgement of its frames refuses.
-		grid := evenPlanGrid(int(*request.Count), planEntry{Plugin: *request.Plugin, Params: params}, sizing)
+		grid, err := evenPlanGrid(int(*request.Count), planEntry{Plugin: *request.Plugin, Params: params}, sizing)
+		if err != nil {
+			return refusedPlan(space, err.Error()), nil
+		}
 		tree, frames = grid.tree, grid.frames
 	}
 	for _, leaf := range planLeaves(tree) {
@@ -707,19 +722,24 @@ func planArrangement(request planRequest, space planSpace) (planAnswer, error) {
 // low cards.
 func (space planSpace) sizing() planSizing {
 	return planSizing{
-		// A tree whose cards have no extent in the plane is refused by the layout library or drawn with an empty card; the plan states
-		// the plane instead of the text of the library.
-		measure: func(tree *planNode) []planFrame {
+		// A tree that does not fit the plane is refused by the layout library with its size refusal, `card <id> would be <w>x<h>, below
+		// its minimum <w>x<h>` (packages/soksak/docs/layout.md), which a card of a window sidebar meets before the content cards have
+		// no extent, or is drawn with an empty card; the plan states the plane for both. Every other error of the measure is returned, so
+		// a fault of the operations is not taken for a plane that is too small.
+		measure: func(tree *planNode) ([]planFrame, error) {
 			frames, err := space.measure(tree)
 			if err != nil {
-				return nil
+				if planSizeRefusal.MatchString(err.Error()) {
+					return nil, nil
+				}
+				return nil, err
 			}
 			for _, frame := range frames {
 				if frame.Width <= 0 || frame.Height <= 0 {
-					return nil
+					return nil, nil
 				}
 			}
-			return frames
+			return frames, nil
 		},
 		fits: func(frames []planFrame) bool {
 			for _, frame := range frames {
@@ -842,13 +862,20 @@ func judgedPlan(tree *planNode, frames []planFrame, close bool, space planSpace,
 // cards at least as large, so a bisection over the counts gives the largest count that fits.
 func proposePlan(sources []*planNode, close bool, space planSpace, sizing planSizing) (*planProposal, error) {
 	placeholder := planEntry{}
-	best := evenPlanGrid(len(sources), placeholder, sizing)
+	best, err := evenPlanGrid(len(sources), placeholder, sizing)
+	if err != nil {
+		return nil, err
+	}
 	if !best.feasible {
 		best = plannedGrid{}
 		lo, hi := 0, len(sources)
 		for hi-lo > 1 {
 			mid := (lo + hi) / 2
-			if found := evenPlanGrid(mid, placeholder, sizing); found.feasible {
+			found, err := evenPlanGrid(mid, placeholder, sizing)
+			if err != nil {
+				return nil, err
+			}
+			if found.feasible {
 				lo, best = mid, found
 			} else {
 				hi = mid
