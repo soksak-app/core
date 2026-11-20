@@ -3,9 +3,12 @@
 
 [한국어](CHANGELOG.ko.md)
 
-## 2026-11-20
+## 2026-11-21
 
 - F937-35: The split and close buttons of a content card in the page workbench ask the group tree, which checks the drawn minimum below the headers, and `core.grid` lists in `acts` only the tools that the head draws, as the mygo workbench does. Verification: the two new tests of `group-cards.test.mjs` fail before the change and pass after it.
+
+## 2026-11-20
+
 - F942: The contract case `layout.close.keeps-other-cuts` holds that a close gives the share of the closed card to its split and that the cards of other splits keep their frames, in the page and in the mygo workbench. The stored tree of F966-2 already behaves so, and no production code changes. Verification: both tests pass.
 - F969-1: The contract case `layout.open.rule-of-sizes` holds that `core.layout.open` with `side` adds a card by the rule of sizes in the page and in the mygo workbench: one more equal child of an even split, and half of the card of an uneven one. The insert of the stored tree of F966-2 already behaves so, and no production code changes. Verification: both tests pass.
 - F911: `scripts/check-tests.mjs` links the completed F911 to the rename of the message writers of `sok` in Go and Rust and to their tests, which the audit of completed items requires.
