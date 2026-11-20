@@ -115,7 +115,7 @@ The page injects no message while the terminal waits for the person or while the
 3. `composition`: the `text` of `<plugin>.compose` is not empty, so the person composes text with an input method.
 4. `typing`: the person has sent an insert, a paste or a drop to the terminal since the person's last Enter or Ctrl+C or the last change of `<plugin>.state` to `idle`, so a line of the person waits on the input line.
 5. `input-held`: `inputHeld` of `<plugin>.session` is not `null`, so the session holds input that the program does not read and refuses a paste above its bound.
-6. `role-pending`: the role of the tab of the terminal is `pending` or `unconfirmed` in the status `core.tab.role` ([role confirmation](agent-roles.md#confirmation)), so the agent has not confirmed the role it was given. The hold applies to the work messages only; the change messages and the reread requests of the role are not held.
+6. `role-pending`: the role of the tab of the terminal is `pending` in the status `core.tab.role` ([role confirmation](agent-roles.md#confirmation)), so the agent has not confirmed the role it was given. The hold applies to the work messages only; the change messages and the reread requests of the role are not held.
 
 A running command without records and without a notice is a program whose wait is unknown; it does not hold the injection, because a busy receiver takes a message as typed input ([settled decisions](#settled-decisions)). A held message stays in the folder and is readable with `messages_read` and `messages_wait`. The page injects the held messages in order at the status change that ends the last hold; it follows the changes and does not poll.
 
@@ -127,7 +127,7 @@ The status `<plugin>.messages` holds the delivery of the messages beside the reg
 
 #### Role confirmation
 
-The terminal plugin matches the line `soksak role <fingerprint>` against the visible rows of the screen that `<plugin>.screen.read` reads, after each change of the visible rows that the plugin receives, where `<fingerprint>` is 16 lowercase hexadecimal characters, and confirms the role of the tab through the same per-surface serialization as `core.tab.role.confirm` ([confirmation](agent-roles.md#confirmation)). A row matches when its text, without the spaces at both ends, is the line. An injected message never holds such a line with a fingerprint: its placeholder is `<fingerprint>`, and the paste form uses `Role fingerprint:`. A line that the terminal wraps over two rows, or that scrolls off the screen before its update is read, does not match; the state stays `pending` and a reread request asks again.
+The terminal plugin matches the line `soksak role <fingerprint>` against the visible rows of the screen that `<plugin>.screen.read` reads, after each change of the visible rows that the plugin receives, where `<fingerprint>` is 16 lowercase hexadecimal characters, and confirms the role of the tab through the same per-surface serialization as `core.tab.role.confirm` ([confirmation](agent-roles.md#confirmation)). A row matches when, after the spaces at both ends are removed, it ends with `soksak role <fingerprint>` and the text before it is empty or is a run of characters that are neither letters nor digits followed by at least one space. So `⏺ soksak role <fingerprint>` (the answer marker of Claude Code) and `• soksak role <fingerprint>` (the answer marker of Codex CLI) match, and a row with a letter or digit before the line does not. The rule is pinned by the shared case file `docs/spec/cases/agent-roles/confirmation-line.json`, which the page matcher tests run. An injected message never holds such a line with a fingerprint: its placeholder is `<fingerprint>`, and the paste form uses `Role fingerprint:`. A line that the terminal wraps over two rows, or that scrolls off the screen before its update is read, does not match; the state stays `pending` and a reread request asks again.
 
 #### Evidence of the hold
 
@@ -138,6 +138,16 @@ Measured in a pseudo terminal of 120 columns and 40 rows with Codex CLI 0.171.0 
 - A prompt that a program shows by itself takes the Enter of an injection in the same way: a Codex CLI update prompt that opened at start, with no OSC 7501 report, took the Enter after a pasted request and ran its selected answer, the update, and the folder trust prompt of Claude Code, whose status query received the same invalid answer, took an Enter and ran its selected answer, `No, exit`.
 
 So a paste followed by Enter answers a prompt for the person with its selected answer, and a paste during a prompt is lost. The `blocked` hold is required for both programs. A prompt of a program that writes no record and gives no notice is not observable, so the hold does not cover it.
+
+### Role messages
+
+The page of a terminal has one queue for each registration. It holds the agent messages of the folder in `seq` order and the role messages (change messages and reread requests of [agent roles](agent-roles.md)) in generation and `seq` order, and it injects the entries in their arrival order, one at a time. The first message of a session precedes every agent message of its registration.
+
+The sender of a role message is the application, so the rule that refuses a message whose sender has no tab in the window does not apply; the rule refuses such a message with `sender <surface> has no tab in this window` for an agent message.
+
+A role message is injected only while the tab's agent CLI is the foreground program, judged by the program state of the sidecar. While it is not, the message waits in the queue, and the page reports the wait once through the error display path with the text `change message waits: the agent CLI is not the foreground program`. A line submitted to a shell prompt, to an exited program or to a closed session would run in the shell. Until the behaviour of a change message while the agent is busy is measured for either CLI, messages are injected only after the program reports that it is not busy.
+
+A role message has the framing of the agent messages of [injected message](#injected-message): the text is not input of the person, it is handled after the current task, and it grants no approval or permission and answers no pending question.
 
 ## MCP tools
 

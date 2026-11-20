@@ -1,0 +1,68 @@
+{
+  "name": "confirmation-line",
+  "description": "Rows of the screen that the terminal plugin matches against the confirmation line `soksak role <fingerprint>`. The pattern is applied to a row after the spaces at both ends are removed; the flag is `u`.",
+  "pattern": "^(?:[^\\p{L}\\p{N}]+ +)?soksak role [0-9a-f]{16}$",
+  "flags": "u",
+  "cases": [
+    {
+      "row": "soksak role 0123456789abcdef",
+      "match": true
+    },
+    {
+      "row": "⏺ soksak role 0123456789abcdef",
+      "match": true
+    },
+    {
+      "row": "• soksak role 0123456789abcdef",
+      "match": true
+    },
+    {
+      "row": "  ⏺ soksak role 0123456789abcdef  ",
+      "match": true
+    },
+    {
+      "row": "> soksak role 0123456789abcdef",
+      "match": true
+    },
+    {
+      "row": "Done: soksak role 0123456789abcdef",
+      "match": false
+    },
+    {
+      "row": "A soksak role 0123456789abcdef",
+      "match": false
+    },
+    {
+      "row": "1 soksak role 0123456789abcdef",
+      "match": false
+    },
+    {
+      "row": "답 soksak role 0123456789abcdef",
+      "match": false
+    },
+    {
+      "row": "⏺soksak role 0123456789abcdef",
+      "match": false
+    },
+    {
+      "row": "soksak role 0123456789abcde",
+      "match": false
+    },
+    {
+      "row": "soksak role 0123456789abcdef0",
+      "match": false
+    },
+    {
+      "row": "soksak role 0123456789ABCDEF",
+      "match": false
+    },
+    {
+      "row": "0123456789abcdef",
+      "match": false
+    },
+    {
+      "row": "⏺ soksak role 0123456789abcdef and more",
+      "match": false
+    }
+  ]
+}

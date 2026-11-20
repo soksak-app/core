@@ -115,7 +115,7 @@ Terminal의 program이 사람을 기다리는 동안이나 사람이 그 termina
 3. `composition`: `<plugin>.compose`의 `text`가 비어 있지 않다. 사람이 input method로 text를 조합하는 중이다.
 4. `typing`: 사람의 마지막 Enter나 Ctrl+C, 또는 `<plugin>.state`의 마지막 `idle`로의 변화 뒤에 사람이 terminal에 insert, paste 또는 drop을 보냈다. 사람의 한 줄이 input line에서 기다린다.
 5. `input-held`: `<plugin>.session`의 `inputHeld`가 `null`이 아니다. Session이 program이 읽지 않는 input을 잡고 있으며, 한도를 넘는 paste를 거부한다.
-6. `role-pending`: terminal tab의 role이 status `core.tab.role`에서 `pending` 또는 `unconfirmed`다([role confirmation](agent-roles.ko.md#confirmation)). 따라서 agent는 받은 role을 아직 확인하지 않았다. 보류는 작업 message에만 적용되며, role의 변경 message와 reread request은 보류하지 않는다.
+6. `role-pending`: terminal tab의 role이 status `core.tab.role`에서 `pending`다([role confirmation](agent-roles.ko.md#confirmation)). 따라서 agent는 받은 role을 아직 확인하지 않았다. 보류는 작업 message에만 적용되며, role의 변경 message와 reread request은 보류하지 않는다.
 
 Record도 notice도 없는 실행 중인 command는 기다림을 알 수 없는 program이다. 이것은 주입을 보류하지 않는다. Busy receiver는 message를 입력한 text로 받기 때문이다([settled decisions](messaging.md#settled-decisions)). 보류된 message는 folder에 남고 `messages_read`와 `messages_wait`로 읽을 수 있다. Page는 마지막 보류를 끝내는 status 변화에서 보류된 message를 순서대로 주입한다. Page는 변화를 따르며 polling하지 않는다.
 
@@ -127,7 +127,7 @@ Status `<plugin>.messages`는 registration 옆에 message의 delivery를 담는�
 
 #### Role confirmation
 
-Terminal plugin은 `<plugin>.screen.read`가 읽는 화면의 보이는 행에서, 보이는 행이 바뀔 때마다 줄 `soksak role <fingerprint>`를 찾는다. 여기서 `<fingerprint>`는 소문자 16진수 16자리다. 찾은 줄은 `core.tab.role.confirm`과 같은 surface별 직렬화를 거쳐 tab의 role을 확인한다([확인](agent-roles.ko.md#confirmation)). 행은 양 끝의 공백을 뺀 텍스트가 줄과 같을 때 맞는다. 주입 message는 이런 줄을 fingerprint과 함께 담지 않는다. placeholder가 `<fingerprint>`이고 붙여 넣기 형식은 `Role fingerprint:`를 쓰기 때문이다. Terminal이 두 행에 걸쳐 감싼 줄이나, 갱신이 읽히기 전에 화면 밖으로 밀려난 줄은 맞지 않으며, 상태는 `pending`에 머물고 reread request이 다시 묻는다.
+Terminal plugin은 `<plugin>.screen.read`가 읽는 화면의 보이는 행에서, 보이는 행이 바뀔 때마다 줄 `soksak role <fingerprint>`를 찾는다. 여기서 `<fingerprint>`는 소문자 16진수 16자리다. 찾은 줄은 `core.tab.role.confirm`과 같은 surface별 직렬화를 거쳐 tab의 role을 확인한다([확인](agent-roles.ko.md#confirmation)). 행은 양 끝의 공백을 뺀 뒤 `soksak role <fingerprint>`로 끝나고, 그 앞이 비어 있거나 글자와 숫자가 아닌 문자들 뒤에 공백 하나 이상이 오면 맞는다. 그래서 `⏺ soksak role <fingerprint>`(Claude Code)와 `• soksak role <fingerprint>`(Codex CLI)는 맞고, 줄 앞에 글자나 숫자가 있으면 맞지 않는다. 이 규칙은 공유 case 파일 `docs/spec/cases/agent-roles/confirmation-line.json`으로 고정하며, page의 matcher test가 이를 실행한다. 주입 message는 이런 줄을 fingerprint과 함께 담지 않는다. placeholder가 `<fingerprint>`이고 붙여 넣기 형식은 `Role fingerprint:`를 쓰기 때문이다. Terminal이 두 행에 걸쳐 감싼 줄이나, 갱신이 읽히기 전에 화면 밖으로 밀려난 줄은 맞지 않으며, 상태는 `pending`에 머물고 reread request이 다시 묻는다.
 
 #### Evidence of the hold
 
