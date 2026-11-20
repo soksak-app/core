@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F997 (agent skill의 웹 페이지): agent skill은 웹 페이지나 address를 그것을 여는 창의 plugin tab에 `core.layout.open`으로 열어 보이고, 애플리케이션 밖의 브라우저는 창의 어떤 plugin도 그것을 열지 못하거나 사람이 요청할 때만 쓴다고 말한다. 그래서 agent는 페이지를 작업 옆 창 안에 둔다. `docs/spec/cli.md#agent-skill`이 규칙을 적고 `scripts/test/skill-web-pages.test.mjs`가 그것을 지킨다.
 - F966-1-1-3 (seed drop 검사, page): page의 seed 검사가 I5와 I9도 판정하고, page의 `core.card.move`와 `core.tab.move`가 layout library의 `vacatedSlot`으로 commit 뒤에 정한 target을 답하므로 그 답으로 되풀이해도 변화가 없다. `exposure.json`의 두 사본이 `core.tab.move`의 결과를 object로 선언한다.
 - F966-3-3-3 (최소 아래의 거부, page): group tree의 모든 operation이 가장 깊은 node를 밝히는 layout library의 판정에 이르므로, page는 바꾸지 않은 채 F966-3-3-2의 공유 case 다섯을 통과한다. library와 group tree의 판정, 그리고 boundary move의 범위를 빼는 fault injection은 그 case를 실패시킨다.
 - F966-3-3-5 (바뀌지 않은 box, page): page layout library가 Go처럼 그 안 card의 범위가 바뀔 때만 box를 판정하므로, 창 크기가 최소 아래로 남긴 box 안에서 box의 사각형을 지키는 split은 더 이상 거부되지 않는다.

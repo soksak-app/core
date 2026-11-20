@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F997 (web pages in the agent skill): the agent skill states that a web page or an address is shown in a tab of a plugin of the window that opens it, opened with `core.layout.open`, and that a browser outside the application is used only when no plugin of the window opens it or the person asks for one, so that an agent keeps the page in the window beside the work. `docs/spec/cli.md#agent-skill` lists the rule, and `scripts/test/skill-web-pages.test.mjs` holds it.
 - F966-1-1-3 (seeded drop check, page): the seeded check of the page also judges I5 and I9, and `core.card.move` and `core.tab.move` of the page answer their target as resolved after the commit, by `vacatedSlot` of the layout library, so that a repeat with the reply is no change; the result of `core.tab.move` is declared as an object in both copies of `exposure.json`.
 - F966-3-3-3 (refusal below the minimum, page): the page passes the five shared cases of F966-3-3-2 unchanged, because every operation of the group tree reaches the judgement of the layout library, which names the deepest node; a fault injection that removes the judgement of the library and of the group tree, and the range of a boundary move, fails them.
 - F966-3-3-5 (unchanged box, page): the page layout library judges a box only when the extent of the cards inside it changes, as Go does, so a split inside a box that the size of the window left below its minimum, which keeps the rectangle of the box, is no longer refused.
