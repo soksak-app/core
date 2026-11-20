@@ -341,6 +341,14 @@ export declare class Soksak {
      */
     insert(target: string | readonly string[], side: Side, node: TreeNode): string;
     /**
+     * EXCHANGE (packages/soksak/docs/layout.md#add-and-remove): puts the node `a`,
+     * a card or a box, where the node `b` stands and `b` where `a` stood. Each
+     * place keeps its fraction and the px size that a card there declares, and
+     * every other node keeps its rectangle. Throws its refusal, a result below a
+     * minimum included, and changes nothing.
+     */
+    exchange(a: string, b: string): void;
+    /**
      * REMOVE (packages/soksak/docs/layout.md#add-and-remove): takes the node `id`,
      * a card or a box, out of its cut; the other kids that are no fixed card take
      * its fraction by one factor. Returns the node that left, which `insert` takes.

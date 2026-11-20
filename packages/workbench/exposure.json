@@ -1770,7 +1770,7 @@
       },
       {
         "name": "core.drag",
-        "description": "The tab drag in progress: the dragged tab, its card, whether it moved, the drop target, and the drop preview in plane coordinates; null without a drag.",
+        "description": "The tab drag in progress: the dragged tab, its card, whether it moved, the drop target with the tab index of a tab strip, and the drop preview in plane coordinates; null without a drag.",
         "schema": {
           "type": [
             "object",
@@ -1802,8 +1802,12 @@
                     "left",
                     "right",
                     "top",
-                    "bottom"
+                    "bottom",
+                    "strip"
                   ]
+                },
+                "index": {
+                  "type": "integer"
                 }
               }
             },
@@ -3870,7 +3874,7 @@
       },
       {
         "name": "core.card.move",
-        "description": "Moves a content card or a group card beside a card, a box, a cut or a run of any level, named by one identifier or a list, or into a group, as a drop does.",
+        "description": "Moves a content card or a group card beside a card, a box, a cut or a run of any level, named by one identifier or a list, into a group, or into the place of a content card, which takes its place, or joins every tab of a content card to the tab strip of a content card at index, as a drop does.",
         "params": {
           "type": "object",
           "properties": {
@@ -3887,8 +3891,12 @@
                 "right",
                 "top",
                 "bottom",
-                "centre"
+                "centre",
+                "strip"
               ]
+            },
+            "index": {
+              "type": "integer"
             }
           },
           "required": ["card", "target", "side"]
@@ -4099,7 +4107,7 @@
       },
       {
         "name": "core.tab.move",
-        "description": "Moves a tab to the centre (as a tab) of a card, or to an edge (as a new card) of a card, a box, a cut or a run named by one identifier or a list, as a drop does.",
+        "description": "Moves a tab to the centre (as a tab at the end) or to the tab strip (as a tab at index) of a card, or to an edge (as a new card) of a card, a box, a cut or a run named by one identifier or a list, as a drop does.",
         "params": {
           "type": "object",
           "properties": {
@@ -4116,8 +4124,12 @@
                 "left",
                 "right",
                 "top",
-                "bottom"
+                "bottom",
+                "strip"
               ]
+            },
+            "index": {
+              "type": "integer"
             }
           },
           "required": ["tab", "card", "zone"]

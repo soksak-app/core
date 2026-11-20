@@ -39,7 +39,7 @@ import {
 import type { Divider, Frames, Plane, Rule, ZoneHit, ZoneOptions } from './geometry.js';
 
 export type { Divider, Rule, Zone, ZoneHit, ZoneOptions } from './geometry.js';
-import { evenCuts, groupNode, insertBeside, insertNode, unwrapNode, withdrawNode } from './cuts.js';
+import { evenCuts, exchangeNodes, groupNode, insertBeside, insertNode, unwrapNode, withdrawNode } from './cuts.js';
 import type { Input } from './cuts.js';
 import { EPS, cardsOf, checkState, cloneNode, isBox, isCard, isCut } from './tree.js';
 import type { BoxNode, CardNode, CutNode, SoksakState, TreeNode } from './tree.js';
@@ -1235,6 +1235,19 @@ export class Soksak {
     return this.run(() => {
       this.byCuts((input) => insertNode(input, target, side, node));
       return isBox(node) ? node.box : (node as CardNode).card;
+    });
+  }
+
+  /**
+   * EXCHANGE (packages/soksak/docs/layout.md#add-and-remove): puts the node `a`,
+   * a card or a box, where the node `b` stands and `b` where `a` stood. Each
+   * place keeps its fraction and the px size that a card there declares, and
+   * every other node keeps its rectangle. Throws its refusal, a result below a
+   * minimum included, and changes nothing.
+   */
+  exchange(a: string, b: string): void {
+    this.run(() => {
+      this.byCuts((input) => exchangeNodes(input, a, b));
     });
   }
 

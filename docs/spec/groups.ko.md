@@ -167,6 +167,12 @@ grid의 모든 operation은 각 group card를 tree의 box 하나로 유지하므
 | `core.card.move` | `side`가 `strip`이고 `index`가 0부터 `target`의 tab 수 밖 | `index <index> is outside the tabs of card <target>, 0 to <n>` |
 | `core.card.move` | `strip` 아닌 `side`에 `index` | `index is given with side strip only` |
 | `core.card.move` | `side`가 `centre`나 `strip`이고 `target`이 목록 | `card <id> moves to the <side> of one card, not of <targets>` |
+| `core.card.move` | `side`가 `strip`이고 `index`가 없음 | `index is required with side strip` |
+| `core.tab.move` | zone이 `centre`나 `strip`이고 `card`가 목록 | `tab <tab> moves to the <zone> of one card, not of <cards>` |
+| `core.tab.move` | zone이 `strip`이고 `card`가 group card | `card <card> is a group and has no tab strip` |
+| `core.tab.move` | zone이 `strip`이고 `index`가 없음 | `index is required with zone strip` |
+| `core.tab.move` | `strip` 아닌 zone에 `index` | `index is given with zone strip only` |
+| `core.tab.move` | zone이 `strip`이고 `index`가 0부터 `tab` 밖의 `card` tab 수 밖 | `index <index> is outside the tabs of card <card>, 0 to <n>` |
 | `core.card.move` | layout이 move를 거부 | `card <id> cannot move to <side> of <target>` |
 | 모든 operation | content card가 최소보다 작게 그려짐 | `card <id> cannot <operation>: card <c> would be <w>x<h>, below its minimum <m>x<m>` |
 

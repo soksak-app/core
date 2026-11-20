@@ -739,7 +739,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/plane.js", symbol: "tree = readGroupTree(kept, treeOptions(), grid);" },
       { file: "packages/workbench/plane.js", symbol: "const { leader, lastCard } = tree.stored();" },
       { file: "packages/workbench/plane.js", symbol: "export function createGroup(id, side, kind, params, request)" },
-      { file: "packages/workbench/plane.js", symbol: "export function moveCard(id, target, side)" },
+      { file: "packages/workbench/plane.js", symbol: "export function moveCard(id, target, side, index)" },
       { file: "packages/workbench/plane.js", symbol: "export function cardState(id, summary)" },
       { file: "packages/workbench/plane.js", symbol: "targets = tree.order().map((entry) => entry.id).filter((entry) => inside.has(entry));" },
       { file: "packages/workbench/plane.js", symbol: "export function dropHit(x, y, band)" },
