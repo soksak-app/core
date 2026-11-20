@@ -467,6 +467,44 @@ func TestLogIndexUpdateAllocatesForTheAppendedBytesOnly(t *testing.T) {
 	}
 }
 
+// contract: log.index.update-reads-the-state-blocks-only
+//
+// An update of a running log adds the appended lines to the record of the partial segment in the state block and appends full records,
+// so it reads the two state blocks of the index, once to find the indexed part and once after it wrote, and no record: its work does not
+// grow with the file. Two files of 10 and of 20,490 lines, whose indexes hold no and five full records, are each updated after two
+// appended lines.
+func TestLogIndexUpdateReadsTheStateBlocksOfTheIndexOnly(t *testing.T) {
+	read := map[int]int64{}
+	for _, lines := range []int{10, 5*4096 + 10} {
+		path := filepath.Join(t.TempDir(), "host-a.jsonl")
+		if err := os.WriteFile(path, []byte(linesOf(1, lines)), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := sok.UpdateLogIndex(path); err != nil {
+			t.Fatal(err)
+		}
+		file, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := file.WriteString(linesOf(lines+1, lines+2)); err != nil {
+			t.Fatal(err)
+		}
+		if err := file.Close(); err != nil {
+			t.Fatal(err)
+		}
+		update, err := sok.UpdateLogIndex(path)
+		if err != nil || update.Lines != 2 {
+			t.Fatalf("the update of %d lines: %+v err %v", lines, update, err)
+		}
+		read[lines] = update.IndexBytes
+	}
+	if read[10] != 4*stateBlockBytes || read[5*4096+10] != 4*stateBlockBytes {
+		t.Fatalf("the updates of files of 10 and 20,490 lines read %d and %d bytes of their indexes, want the %d bytes of two reads of the"+
+			" two state blocks for each", read[10], read[5*4096+10], 4*stateBlockBytes)
+	}
+}
+
 // contract: log.index.update-reads-the-appended-bytes-only
 func TestLogIndexUpdateReadsTheAppendedBytesOnly(t *testing.T) {
 	dir := t.TempDir()

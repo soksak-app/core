@@ -282,14 +282,15 @@ type indexFile struct {
 	data   []byte
 }
 
-// parseIndex reads the two state blocks of the content of an index file; name is the display name of the index.
-func parseIndex(name string, data []byte) (indexFile, error) {
+// parseIndex reads the two state blocks of the content of an index file of size bytes; data holds the state blocks and, for a query,
+// the records after them. name is the display name of the index.
+func parseIndex(name string, data []byte, size int64) (indexFile, error) {
 	file := indexFile{name: name, data: data}
-	if len(data) == 0 {
+	if size == 0 {
 		return file, nil
 	}
-	if len(data) < 2*indexBlockBytes {
-		return file, fmt.Errorf("%s: %d bytes are fewer than the two state blocks of %d", name, len(data), 2*indexBlockBytes)
+	if size < 2*indexBlockBytes {
+		return file, fmt.Errorf("%s: %d bytes are fewer than the two state blocks of %d", name, size, 2*indexBlockBytes)
 	}
 	anyUsed := false
 	for number := 0; number < 2; number++ {
@@ -308,7 +309,7 @@ func parseIndex(name string, data []byte) (indexFile, error) {
 	if !file.exists {
 		return file, fmt.Errorf("%s: neither state block has a valid checksum", name)
 	}
-	if follow := uint64(len(data)-2*indexBlockBytes) / indexRecordBytes; follow < uint64(file.state.fullSegments) {
+	if follow := uint64(size-2*indexBlockBytes) / indexRecordBytes; follow < uint64(file.state.fullSegments) {
 		return file, fmt.Errorf("%s: %d records follow the state blocks, and the state block counts %d", name, follow, file.state.fullSegments)
 	}
 	return file, nil
@@ -509,6 +510,8 @@ type IndexUpdate struct {
 	// Announcing is the number of the lines of this update that announce a change of the log: every line except the record of a call
 	// that only reads the log. Size is the size of the event file that the index covers or has read.
 	Announcing, Size int64
+	// IndexBytes is the number of bytes of the index file that the update read: the two state blocks, whatever the size of the file.
+	IndexBytes int64
 }
 
 // logDisplayName is the name that errors give an event file: `logs/<name>`.
@@ -610,7 +613,7 @@ func FailHeadReadForTest(path string, err error) {
 }
 
 func UpdateLogIndex(path string) (IndexUpdate, error) {
-	opened, err := openLog(path)
+	opened, err := openLog(path, false)
 	if err != nil {
 		return IndexUpdate{File: logDisplayName(path)}, err
 	}
@@ -621,13 +624,14 @@ func UpdateLogIndex(path string) (IndexUpdate, error) {
 	return update, nil
 }
 
-// openLog brings the index of the event file up to date and returns the file with the index content.
-func openLog(path string) (*openedLog, error) {
+// openLog brings the index of the event file up to date and returns the file with the index content: the state blocks, and the records
+// of the segments when records is set, which a query reads and an update of the index does not.
+func openLog(path string, records bool) (*openedLog, error) {
 	source, idx, err := lockedIndex(path)
 	if err != nil {
 		return nil, err
 	}
-	opened, err := refreshLocked(path, source, idx)
+	opened, err := refreshLocked(path, source, idx, records)
 	if closeErr := closeIndex(idx, path); err == nil {
 		err = closeErr
 	}
@@ -638,8 +642,10 @@ func openLog(path string) (*openedLog, error) {
 	return opened, nil
 }
 
-// refreshLocked brings the index up to date while the caller holds its lock.
-func refreshLocked(path string, source, idx *os.File) (*openedLog, error) {
+// refreshLocked brings the index up to date while the caller holds its lock. It reads the state blocks of the index and, when records is
+// set, the records of the segments after the update; an update reads no record, because it adds to the record of the partial segment
+// in the state block and appends full records, so its work follows the appended bytes and not the size of the file.
+func refreshLocked(path string, source, idx *os.File, records bool) (*openedLog, error) {
 	started := time.Now()
 	name := logDisplayName(path)
 	opened := &openedLog{name: name, source: source, update: IndexUpdate{File: name}}
@@ -648,11 +654,12 @@ func refreshLocked(path string, source, idx *os.File) (*openedLog, error) {
 		return nil, fileError(path, err)
 	}
 	opened.update.Size = info.Size()
-	data, err := readAll(idx)
+	data, length, err := readIndex(idx, records)
 	if err != nil {
 		return nil, fileError(path+".idx", err)
 	}
-	current, err := parseIndex(name+".idx", data)
+	opened.update.IndexBytes += int64(len(data))
+	current, err := parseIndex(name+".idx", data, length)
 	if err != nil {
 		return nil, err
 	}
@@ -696,28 +703,35 @@ func refreshLocked(path string, source, idx *os.File) (*openedLog, error) {
 	opened.update.Changed, opened.update.Rebuilt, opened.update.Reason = true, rebuild != "", rebuild
 	opened.update.Bytes, opened.update.Lines, opened.update.Announcing = read, lines, announcing
 	opened.update.Micros = time.Since(started).Microseconds()
-	if data, err = readAll(idx); err != nil {
+	if data, length, err = readIndex(idx, records); err != nil {
 		return nil, fileError(path+".idx", err)
 	}
-	if opened.index, err = parseIndex(name+".idx", data); err != nil {
+	opened.update.IndexBytes += int64(len(data))
+	if opened.index, err = parseIndex(name+".idx", data, length); err != nil {
 		return nil, err
 	}
 	return opened, nil
 }
 
-// readAll reads the whole file.
-func readAll(file *os.File) ([]byte, error) {
+// readIndex reads the state blocks of the index file, and every record after them when records is set, and returns them with the size
+// of the file.
+func readIndex(file *os.File, records bool) ([]byte, int64, error) {
 	info, err := file.Stat()
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	data := make([]byte, info.Size())
+	length := info.Size()
+	read := length
+	if !records {
+		read = min(length, 2*indexBlockBytes)
+	}
+	data := make([]byte, read)
 	if len(data) > 0 {
 		if _, err := file.ReadAt(data, 0); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 	}
-	return data, nil
+	return data, length, nil
 }
 
 // indexFrom indexes the lines of the source after the indexed part (from the start when rebuild is set), writes the new full
@@ -869,7 +883,7 @@ func ReadLogIndex(path string) (LogIndexInfo, error) {
 	if err != nil {
 		return LogIndexInfo{}, fileError(path+".idx", err)
 	}
-	index, err := parseIndex(logDisplayName(path)+".idx", data)
+	index, err := parseIndex(logDisplayName(path)+".idx", data, int64(len(data)))
 	if err != nil {
 		return LogIndexInfo{}, err
 	}
@@ -906,7 +920,7 @@ func RotateLogIndexes(path string, generation int, rotate func() error) (err err
 			err = closeErr
 		}
 	}()
-	opened, refreshErr := refreshLocked(path, source, idx)
+	opened, refreshErr := refreshLocked(path, source, idx, false)
 	if refreshErr != nil {
 		source.Close()
 	} else if err := opened.close(); err != nil {

@@ -475,6 +475,41 @@ fn index_update_allocates_for_the_appended_bytes_only() {
     );
 }
 
+// contract: log.index.update-reads-the-state-blocks-only
+//
+// An update of a running log adds the appended lines to the record of the partial segment in the state block and appends full records, so
+// it reads the two state blocks of the index, once to find the indexed part and once after it wrote, and no record: its work does not grow
+// with the file. Two files of 10 and of 20,490 lines, whose indexes hold no and five full records, are each updated after two appended
+// lines.
+#[test]
+fn index_update_reads_the_state_blocks_of_the_index_only() {
+    let mut read = Vec::new();
+    for lines in [10i64, 5 * 4096 + 10] {
+        let (_config, path) = temp_file(&format!("index-state-blocks-{lines}"));
+        std::fs::create_dir_all(path.parent().expect("parent")).expect("dir");
+        std::fs::write(&path, lines_of(1, lines)).expect("write");
+        update_log_index(&path).expect("first update");
+        let mut file = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .expect("open");
+        file.write_all(lines_of(lines + 1, lines + 2).as_bytes())
+            .expect("append");
+        drop(file);
+        let update = update_log_index(&path).expect("append update");
+        assert_eq!(update.lines, 2, "the update of {lines} lines: {update:?}");
+        read.push(update.index_bytes);
+    }
+    let want = 4 * STATE_BLOCK_BYTES as i64;
+    assert!(
+        read == [want, want],
+        "the updates of files of 10 and 20,490 lines read {} and {} bytes of their indexes, want the {want} bytes of two reads of the two \
+         state blocks for each",
+        read[0],
+        read[1]
+    );
+}
+
 // contract: log.index.update-reads-the-appended-bytes-only
 #[test]
 fn index_update_reads_the_appended_bytes_only() {

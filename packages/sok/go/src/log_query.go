@@ -537,7 +537,7 @@ func queryPage(configDir string, query LogQuery, indexed func(IndexUpdate)) (res
 		}
 	}()
 	for _, source := range sources {
-		opened, err := openLog(source.path)
+		opened, err := openLog(source.path, true)
 		var rejected rejectedLog
 		if errors.As(err, &rejected) {
 			page.Rejected = append(page.Rejected, rejected.text)

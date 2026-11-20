@@ -647,7 +647,7 @@ fn query_page(
     };
     let mut logs: Vec<(LogSource, OpenedLog)> = vec![];
     for source in sources {
-        let opened = match open_log(&source.path) {
+        let opened = match open_log(&source.path, true) {
             Ok(opened) => opened,
             Err(OpenFailure::Rejected(text)) => {
                 page.rejected.push(text);

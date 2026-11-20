@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1013 (index update 비용): event file에 line이 덧붙은 뒤의 index update는 index의 두 state block을 write 전과 후에 한 번씩 읽고 full segment의 record는 읽지 않는다. 전에는 index 전체를 두 번 읽어서 일이 file 크기에 따라 늘었고, host debug event file이 38 MB인 쉬는 application이 update마다 CPU를 썼다. `IndexUpdate.IndexBytes`(Rust는 `index_bytes`)는 update가 읽은 index byte 수를 알리고, query는 쓰는 record를 그대로 읽는다. 검증: `TestLogIndexUpdateReadsTheStateBlocksOfTheIndexOnly`와 `index_update_reads_the_state_blocks_of_the_index_only`는 update가 record를 읽게 했을 때 10줄과 20,490줄 file에서 81,920과 269,520 byte를 읽어 실패했고, 지금은 둘 다 81,920 byte로 통과한다. `packages/sok`의 Go test(253개)와 Rust `log_index_test`(9개)가 통과한다.
 - F1017 (license 표시): 개발 지침의 기록 규칙은 더 이상 코드 출처를 적는 것을 금지하지 않는다. 저장소가 복사하거나 fork한 외부 코드는 license가 요구하므로 license 표시와 출처를 유지한다.
 - F1014 (탭 글자 하나): mygo의 탭 목록은 탭 줄처럼 탭의 surface가 알린 제목을 보이고, mygo와 Wails, Tauri의 page의 탭 목록과 스페이스 앱 목록은 이름 옆에 plugin의 icon을 보이며 두 번째 mark는 보이지 않는다.
 - F937-10-2 (header answer 속성 test, mygo): seed test가 group tree에 무작위 layout operation을 실행하고, 매번 `CanSplit`, `CanGroup`, `CanClose`의 보관한 answer가 그 trial operation의 결과와 같기를 요구한다. 쓰이지 않던 group tree의 `SetHead`를 제거했다.

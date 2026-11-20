@@ -346,21 +346,21 @@ pub(crate) struct IndexFile {
     data: Vec<u8>,
 }
 
-/// Reads the two state blocks of the content of an index file; `name` is the display name of the index.
-fn parse_index(name: &str, data: Vec<u8>) -> Result<IndexFile, String> {
+/// Reads the two state blocks of the content of an index file of `size` bytes; `data` holds the state blocks and, for a query, the records
+/// after them. `name` is the display name of the index.
+fn parse_index(name: &str, data: Vec<u8>, size: usize) -> Result<IndexFile, String> {
     let mut file = IndexFile {
         name: name.to_string(),
         state: IndexState::default(),
         exists: false,
         data,
     };
-    if file.data.is_empty() {
+    if size == 0 {
         return Ok(file);
     }
-    if file.data.len() < 2 * BLOCK_BYTES {
+    if size < 2 * BLOCK_BYTES {
         return Err(format!(
-            "{name}: {} bytes are fewer than the two state blocks of {}",
-            file.data.len(),
+            "{name}: {size} bytes are fewer than the two state blocks of {}",
             2 * BLOCK_BYTES
         ));
     }
@@ -388,7 +388,7 @@ fn parse_index(name: &str, data: Vec<u8>) -> Result<IndexFile, String> {
     if !file.exists {
         return Err(format!("{name}: neither state block has a valid checksum"));
     }
-    let follow = (file.data.len() - 2 * BLOCK_BYTES) / RECORD_BYTES;
+    let follow = (size - 2 * BLOCK_BYTES) / RECORD_BYTES;
     if (follow as u64) < file.state.full_segments as u64 {
         return Err(format!(
             "{name}: {follow} records follow the state blocks, and the state block counts {}",
@@ -860,6 +860,8 @@ pub struct IndexUpdate {
     /// the log. `size` is the size of the event file that the index covers or has read.
     pub announcing: i64,
     pub size: i64,
+    /// The number of bytes of the index file that the update read: the two state blocks, whatever the size of the file.
+    pub index_bytes: i64,
 }
 
 /// The name that errors give an event file: `logs/<name>`.
@@ -905,9 +907,16 @@ pub(crate) fn read_range(file: &File, offset: u64, length: usize) -> std::io::Re
     Ok(data)
 }
 
-fn read_all(file: &File) -> std::io::Result<Vec<u8>> {
+/// Reads the state blocks of the index file, and every record after them when `records` is set, and returns them with the size of the
+/// file.
+fn read_index(file: &File, records: bool) -> std::io::Result<(Vec<u8>, usize)> {
     let size = file.metadata()?.len() as usize;
-    read_range(file, 0, size)
+    let read = if records {
+        size
+    } else {
+        size.min(2 * BLOCK_BYTES)
+    };
+    Ok((read_range(file, 0, read)?, size))
 }
 
 /// Opens the event file and its index, locks the index, and checks that both are still the files at their paths, so a rotation cannot mix
@@ -978,7 +987,7 @@ pub fn fail_head_read_for_test(path: &Path, error: &str) {
 }
 
 pub fn update_log_index(path: &Path) -> Result<IndexUpdate, String> {
-    open_log(path)
+    open_log(path, false)
         .map(|opened| opened.update)
         .map_err(|failure| match failure {
             OpenFailure::Rejected(text) | OpenFailure::Failed(text) => text,
@@ -998,26 +1007,36 @@ impl From<String> for OpenFailure {
     }
 }
 
-/// Brings the index of the event file up to date and returns the file with the index content.
-pub(crate) fn open_log(path: &Path) -> Result<OpenedLog, OpenFailure> {
+/// Brings the index of the event file up to date and returns the file with the index content: the state blocks, and the records of the
+/// segments when `records` is set, which a query reads and an update of the index does not.
+pub(crate) fn open_log(path: &Path, records: bool) -> Result<OpenedLog, OpenFailure> {
     let (source, idx, system) = locked_index(path)?;
-    let opened = refresh_locked(path, source, &idx);
+    let opened = refresh_locked(path, source, &idx, records);
     let closed = close_index(system.as_ref(), idx, path);
     let opened = opened?;
     closed?;
     Ok(opened)
 }
 
-/// Brings the index up to date while the caller holds its lock.
-fn refresh_locked(path: &Path, source: File, idx: &File) -> Result<OpenedLog, OpenFailure> {
+/// Brings the index up to date while the caller holds its lock. It reads the state blocks of the index and, when `records` is set, the
+/// records of the segments after the update; an update reads no record, because it adds to the record of the partial segment in the state
+/// block and appends full records, so its work follows the appended bytes and not the size of the file.
+fn refresh_locked(
+    path: &Path,
+    source: File,
+    idx: &File,
+    records: bool,
+) -> Result<OpenedLog, OpenFailure> {
     let started = Instant::now();
     let name = display_name(path);
     let idx_display = format!("{name}.idx");
     let info = source
         .metadata()
         .map_err(|error| file_error(path.display(), &error))?;
-    let data = read_all(idx).map_err(|error| file_error(&idx_display, &error))?;
-    let current = parse_index(&idx_display, data)?;
+    let (data, length) =
+        read_index(idx, records).map_err(|error| file_error(&idx_display, &error))?;
+    let mut index_bytes = data.len() as i64;
+    let current = parse_index(&idx_display, data, length)?;
     let size = info.len();
     let mtime = info
         .modified()
@@ -1033,6 +1052,7 @@ fn refresh_locked(path: &Path, source: File, idx: &File) -> Result<OpenedLog, Op
     let mut update = IndexUpdate {
         file: name.clone(),
         size: size as i64,
+        index_bytes,
         ..IndexUpdate::default()
     };
     let mut state = current.state.clone();
@@ -1074,8 +1094,11 @@ fn refresh_locked(path: &Path, source: File, idx: &File) -> Result<OpenedLog, Op
     update.lines = lines;
     update.announcing = announcing;
     update.micros = started.elapsed().as_micros() as i64;
-    let data = read_all(idx).map_err(|error| file_error(&idx_display, &error))?;
-    let index = parse_index(&idx_display, data)?;
+    let (data, length) =
+        read_index(idx, records).map_err(|error| file_error(&idx_display, &error))?;
+    index_bytes += data.len() as i64;
+    update.index_bytes = index_bytes;
+    let index = parse_index(&idx_display, data, length)?;
     Ok(OpenedLog {
         source,
         index,
@@ -1220,7 +1243,8 @@ pub fn read_log_index(path: &Path) -> Result<LogIndexInfo, String> {
     let idx_path = index_path(path);
     let data = std::fs::read(&idx_path).map_err(|error| file_error(idx_path.display(), &error))?;
     let name = format!("{}.idx", display_name(path));
-    let index = parse_index(&name, data)?;
+    let size = data.len();
+    let index = parse_index(&name, data, size)?;
     if !index.exists {
         return Err(format!("{name}: the index has no state block"));
     }
@@ -1259,7 +1283,7 @@ pub fn rotate_log_indexes(
         }
     };
     // The lock is held through the renames: the other updaters wait for it and then find the files at their new paths.
-    let refreshed = refresh_locked(path, source, &idx).map(drop);
+    let refreshed = refresh_locked(path, source, &idx, false).map(drop);
     let result = (|| {
         rotate()?;
         let mut closed = path.as_os_str().to_os_string();
