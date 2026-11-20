@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F996-8 (F996-5.1의 후속): `host.sampler.routines`를 위한 프로세스의 processor 시간은 host platform interface의 동작이며, macOS는 `getrusage`로 구현하고 Windows는 구현하지 않았다고 답한다. 그래서 Go host library와 framework adapter가 다시 Windows용으로 build된다. routine 작업의 Rust 코드는 Go 파일의 짝인 `routine/work.rs`다.
 - F996-5.3 (sidecar 줄의 decode 한 번): Go와 Rust host는 sidecar의 메시지 줄을 member들로 한 번, 메시지 body를 한 번, 그 member `image`를 한 번 decode하고, reader, reply 기록, detach 응답, image 결정은 이 member들을 읽는다. image가 없는 메시지는 decode 두 번, 있는 메시지는 세 번이 들며, `MessageDecodes`와 `message_decodes`가 이를 센다(`docs/spec/sidecars.md#messages`).
 - F1000-2: `docs/spec/sidecars.md#process-identity`는 process의 surface가 parent process의 사슬에서 오며, host가 가장 가까운 조상을 시작한 sidecar와 함께 그것을 확인한다고 밝히고, `SOKSAK_SURFACE`를 없앤다. host, `sok`, sidecar는 F1000-2.1부터 F1000-2.4에서 따른다.
 - F899-7.5-15: Rust `sok`은 `sok message send`와 MCP tool에서 parse되지 않는 `surface.window` 답의 parser error를 보고하고, 버려진 command 답의 이유를 그 호출 바로 윗줄에 적는다.

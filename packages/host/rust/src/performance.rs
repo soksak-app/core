@@ -391,20 +391,16 @@ static WORK_SINCE: Mutex<Option<(std::time::Instant, std::time::Duration)>> = Mu
 /// The moment and the processor time (user and system) that the process used until it.
 fn process_times() -> (std::time::Instant, std::time::Duration) {
     let at = std::time::Instant::now();
-    // SAFETY: getrusage writes the usage of the process into the zeroed structure that it is given.
-    let mut usage: libc::rusage = unsafe { std::mem::zeroed() };
-    if unsafe { libc::getrusage(libc::RUSAGE_SELF, &mut usage) } != 0 {
-        crate::application_log::log_error(
-            "performance trace",
-            format!("processor time: {}", std::io::Error::last_os_error()),
-        );
-        return (at, std::time::Duration::ZERO);
+    match platform::current().and_then(|current| current.processor_time()) {
+        Ok(time) => (at, time),
+        Err(error) => {
+            crate::application_log::log_error(
+                "performance trace",
+                format!("processor time: {error}"),
+            );
+            (at, std::time::Duration::ZERO)
+        }
     }
-    let time = |value: libc::timeval| {
-        std::time::Duration::from_secs(value.tv_sec as u64)
-            + std::time::Duration::from_micros(value.tv_usec as u64)
-    };
-    (at, time(usage.ru_utime) + time(usage.ru_stime))
 }
 
 /// Stores the event `host.sampler.routines`: the wall time and the processor time of the process since the last sample and the

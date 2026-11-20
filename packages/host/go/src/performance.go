@@ -11,7 +11,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
@@ -241,13 +240,14 @@ type workMoment struct {
 
 // processTimes is the moment and the processor time (user and system) that the process used until it.
 func processTimes() workMoment {
-	var usage syscall.Rusage
 	moment := workMoment{at: time.Now()}
-	if err := syscall.Getrusage(syscall.RUSAGE_SELF, &usage); err != nil {
-		LogError("performance trace", fmt.Errorf("processor time: %w", err))
-		return moment
+	current, err := platform.Current()
+	if err == nil {
+		moment.cpu, err = current.ProcessorTime()
 	}
-	moment.cpu = time.Duration(usage.Utime.Nano() + usage.Stime.Nano())
+	if err != nil {
+		LogError("performance trace", fmt.Errorf("processor time: %w", err))
+	}
 	return moment
 }
 
