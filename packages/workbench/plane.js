@@ -1006,7 +1006,14 @@ let dropShown = false;
  */
 function dropRect(fromId, hit) {
   const ids = targetIds(hit.card);
-  if (hit.zone === "strip" || (hit.zone === "centre" && !tree.isGroup(ids[0]))) return tree.rect(ids[0]);
+  // A join puts the tab into the target, and the card that it leaves without tabs closes, so the preview is the target after the same
+  // close of the release (docs/spec/groups.md#invariants, I3).
+  if (hit.zone === "strip" || (hit.zone === "centre" && !tree.isGroup(ids[0]))) {
+    return tree.probe(() => {
+      leaveJoined(fromId, ids[0], tabsOf(grid.card(fromId)).length - 1);
+      return tree.rect(ids[0]);
+    });
+  }
   const only = tabsOf(grid.card(fromId)).length === 1;
   return tree.probe(() => {
     try {
@@ -1107,6 +1114,17 @@ function hideDrop() {
 }
 
 /**
+ * The layout step of a join of a tab of the card fromId into the card targetId, which left tabs remain in fromId after: a card left
+ * without tabs closes when it can. The release and the preview of a join both run it, so the preview is the result. Returns whether the
+ * card closed.
+ */
+function leaveJoined(fromId, targetId, left) {
+  if (targetId === fromId || left > 0 || !tree.canClose(fromId)) return false;
+  tree.close(fromId);
+  return true;
+}
+
+/**
  * T4 and T5 decide the layout operation.
  * The origin card has 1 tab    → move the card. No empty card remains.            move()
  * It has 2 or more tabs        → keep the card and move only the tab.             splitToward()
@@ -1126,8 +1144,7 @@ function dropTab(fromId, tabId, hit) {
     target.data.tabs.splice(hit.index, 0, moving);
     target.data.activeId = moving.id;
     focusOn(target.id);
-    if (target.id !== fromId && tabsOf(from).length === 0 && tree.canClose(fromId)) tree.close(fromId);
-    else settleActiveTab(from);
+    if (!leaveJoined(fromId, target.id, tabsOf(from).length)) settleActiveTab(from);
     return settle();
   }
 
@@ -1136,8 +1153,7 @@ function dropTab(fromId, tabId, hit) {
     removeTab(from, tabId);
     appendTab(target, moving);
     focusOn(target.id);
-    if (tabsOf(from).length === 0 && tree.canClose(fromId)) tree.close(fromId);
-    else settleActiveTab(from);
+    if (!leaveJoined(fromId, target.id, tabsOf(from).length)) settleActiveTab(from);
     return settle();
   }
 
