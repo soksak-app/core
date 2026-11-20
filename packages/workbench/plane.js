@@ -135,8 +135,6 @@ let tree = null;
 // At the seam a frame and a header of a group card take no gap (docs/spec/groups.md#drawn-rectangles).
 const treeOptions = () => ({ gap: grid.gap, minSize: grid.minSize, head: HEADER, seam: seam() === "line" });
 
-/** Whether a split balances the grid in the same change (cardSplit even, docs/spec/groups.md#splitting). */
-const splitsEven = () => value("cardSplit") === "even";
 
 // The name of the window of this page, which its start document carries and the errors of the layout operations name
 // (docs/spec/native-host.md#page-start). It is null until the start names it.
@@ -454,8 +452,8 @@ function updateCard(el, card, rect) {
     canClose: grid.canClose(card.id),
     canSplitX: grid.canSplit(card.id, "x"),
     canSplitY: grid.canSplit(card.id, "y"),
-    canGroupX: tree.canGroup(card.id, "right", splitsEven()),
-    canGroupY: tree.canGroup(card.id, "bottom", splitsEven()),
+    canGroupX: tree.canGroup(card.id, "right"),
+    canGroupY: tree.canGroup(card.id, "bottom"),
     leads: tree.leadCount(tree.parentOf(card.id)) >= 2,
     leader: tree.leaderOf(tree.parentOf(card.id)) === card.id,
     fullscreen: el.dataset.fullscreen === "true",
@@ -897,14 +895,14 @@ function splitWith(cardId, side, plugin, params) {
   if (!card?.data) return;
   // A split without space is refused before the tab of the new card is made, so a refused split issues no tab id, records no
   // origin and leaves the tab-name counter.
-  const refusal = tree.splitRefusal(cardId, side, splitsEven());
+  const refusal = tree.splitRefusal(cardId, side);
   if (refusal !== null) {
     settle();
     throw new Error(refusal);
   }
   // default: a card without an active tab has no tab to inherit.
   const t = newTab(plugin, params, activeTab(card)?.id ?? null, "split");
-  const born = tree.split(cardId, side, { tabs: [t], activeId: t.id }, splitsEven());
+  const born = tree.split(cardId, side, { tabs: [t], activeId: t.id });
   focusOn(born);
   settle();
   return { card: born, tab: t.id };
@@ -932,7 +930,7 @@ function dropRect(fromId, hit) {
         tree.move(fromId, hit.id, hit.zone);
         return tree.rect(fromId);
       }
-      const born = hit.zone === "centre" ? tree.addCard(hit.id, undefined, splitsEven()) : tree.split(hit.id, hit.zone, undefined, splitsEven());
+      const born = hit.zone === "centre" ? tree.addCard(hit.id, undefined) : tree.split(hit.id, hit.zone, undefined);
       return tree.rect(born);
     } catch {
       // A refused operation is a drop with no slot, which the caller reads as undefined; the release then changes nothing.
@@ -1028,7 +1026,7 @@ function dropTab(fromId, tabId, hit) {
   removeTab(from, tabId);
   settleActiveTab(from);
   const data = { tabs: [moving], activeId: moving.id };
-  const born = !slot ? null : hit.zone === "centre" ? tree.addCard(hit.id, data, splitsEven()) : tree.split(hit.id, hit.zone, data, splitsEven());
+  const born = !slot ? null : hit.zone === "centre" ? tree.addCard(hit.id, data) : tree.split(hit.id, hit.zone, data);
   if (born === null) {                                           // If there is no slot, revert
     appendTab(from, moving);
   } else {
@@ -1687,7 +1685,7 @@ function build(kept) {
       }
       keepHiddenSidebars();
       const fullscreen = view.fullscreenCard;
-      drawGroupCards(plane, tree, drawnRects(fullscreen), { head: HEADER, fullscreen, even: splitsEven(), focused: focusedId });
+      drawGroupCards(plane, tree, drawnRects(fullscreen), { head: HEADER, fullscreen, focused: focusedId });
       markFocus();
       // A placeholder error that this draw does not show again is withdrawn: its surface left, or its plugin state was read again (F217).
       for (const where of shownPlaceholderErrors) if (!placeholderErrorPlaces.has(where)) hideError(null, where);
@@ -2119,10 +2117,10 @@ export function addTabTo(id, kind, params) {
  * the tab (docs/spec/groups.md#card-commands-on-a-group-card).
  */
 function addToGroup(id, kind, wanted) {
-  tree.probe(() => tree.addCard(id, undefined, splitsEven()));
+  tree.probe(() => tree.addCard(id, undefined));
   restoreFullscreen();
   const t = newTab(kind, wanted, sourceTabOf(id), "new tab");
-  focusOn(tree.addCard(id, { tabs: [t], activeId: t.id }, splitsEven()));
+  focusOn(tree.addCard(id, { tabs: [t], activeId: t.id }));
   settle();
   return t.id;
 }
@@ -2149,10 +2147,10 @@ export function splitCard(id, side, kind) {
 
 /** Puts a new content card with a tab of kind with params beside the rectangle of the group card id into the level that holds it. */
 function splitGroup(id, side, kind, params) {
-  tree.probe(() => tree.split(id, side, undefined, splitsEven()));
+  tree.probe(() => tree.split(id, side, undefined));
   restoreFullscreen();
   const t = newTab(kind, params, sourceTabOf(id), "split");
-  const born = tree.split(id, side, { tabs: [t], activeId: t.id }, splitsEven());
+  const born = tree.split(id, side, { tabs: [t], activeId: t.id });
   focusOn(born);
   settle();
   return { card: born, tab: t.id };
@@ -2717,11 +2715,11 @@ export function createGroup(id, side, kind, params, request) {
       ? tabsOf(grid.card(other)).find((t) => t.plugin === kind && sameJson(t.params ?? null, wanted)) : undefined;
     if (found) return { group: parent.card, card: other, tab: found.id };
   }
-  tree.probe(() => tree.create(card, side, undefined, splitsEven()));
+  tree.probe(() => tree.create(card, side, undefined));
   knownPlugin(kind);
   const wanted = checkTabParams(kind, plugin(kind).params, params);
   const t = newTab(kind, wanted, sourceTabOf(card), "split");
-  const made = tree.create(card, side, { tabs: [t], activeId: t.id }, splitsEven());
+  const made = tree.create(card, side, { tabs: [t], activeId: t.id });
   focusOn(made.card);
   settle();
   const answer = { group: made.group, card: made.card, tab: t.id };

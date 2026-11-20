@@ -98,8 +98,8 @@ function step(tree, grid, next) {
   const kind = pick(["create", "create", "split", "split", "close", "move", "dissolve", "leader", "boundary", "drop", "balance"]);
   const call = (() => {
     switch (kind) {
-      case "create": return { call: kind, args: { card: pick(any), side: pick(SIDES), even: next() < 0.3 } };
-      case "split": return { call: kind, args: { card: pick(any), side: pick(SIDES), even: next() < 0.3 } };
+      case "create": return { call: kind, args: { card: pick(any), side: pick(SIDES) } };
+      case "split": return { call: kind, args: { card: pick(any), side: pick(SIDES) } };
       case "close": return { call: kind, args: { card: pick(any) } };
       case "move": return { call: kind, args: { card: pick(any), target: pick(any), side: pick([...SIDES, "centre"]) } };
       case "dissolve": return groups.length ? { call: kind, args: { group: pick(groups) } } : { call: "balance", args: {} };
@@ -117,8 +117,8 @@ function step(tree, grid, next) {
   const { args } = call;
   try {
     switch (call.call) {
-      case "create": tree.create(args.card, args.side, undefined, args.even); break;
-      case "split": tree.split(args.card, args.side, undefined, args.even); break;
+      case "create": tree.create(args.card, args.side, undefined); break;
+      case "split": tree.split(args.card, args.side, undefined); break;
       case "close": tree.close(args.card); break;
       case "move": tree.move(args.card, args.target, args.side); break;
       case "dissolve": tree.dissolve(args.group); break;
