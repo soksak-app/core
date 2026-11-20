@@ -265,8 +265,13 @@ func TestACardMoveOutOfAGroupReplacesTheGroupOfOneCard(t *testing.T) {
 	if f.layout().focusedCard() != "card-3" {
 		t.Fatalf("the focus is on %s after the move", f.layout().focusedCard())
 	}
-	if _, err := f.apply("core.card.move", `{"card": "main", "target": "main", "side": "left"}`); err == nil || err.Error() != "card main cannot move into itself" {
-		t.Fatalf("a move into itself fails with %v", err)
+	// A target that is the card itself names its vacated slot, so the move is no change (docs/spec/groups.md#vacated-slot).
+	before := f.gridCards()
+	if answer, err := f.apply("core.card.move", `{"card": "main", "target": "main", "side": "left"}`); err != nil || answer != `{"card":"main"}` {
+		t.Fatalf("a move beside itself answers %s, %v", answer, err)
+	}
+	if after := f.gridCards(); !reflect.DeepEqual(after, before) {
+		t.Fatalf("a move beside itself changed core.grid from %v to %v", before, after)
 	}
 }
 

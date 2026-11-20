@@ -193,3 +193,38 @@ func TestThePreviewOfADropThatClosesItsCardIsItsResult(t *testing.T) {
 		})
 	}
 }
+
+// The only tab of a card dropped beside its own card names the vacated slot of the card: the drop has the card as its target and its
+// drawn rectangle as its preview, and the release changes nothing (docs/spec/groups.md#vacated-slot).
+func TestTheOnlyTabDroppedBesideItsOwnCardIsNoChange(t *testing.T) {
+	f := layoutShell(t, treeSpace("spc-aaaaaa", cutNode("x",
+		kidNode(0.3, cardNode("card-1", tab("t1", "notes"))),
+		kidNode(0.7, cardNode("card-2", tab("t4", "notes"), tab("t5", "notes"))))))
+	f.tester.SetSize(1400, 900)
+	f.settle()
+	before := f.gridCards()
+	box := f.box("core.card", "card-1")
+	x, y := box.X+box.W*0.85, box.Y+box.H/2
+	drag := dragTab(t, f.shellFixture, "t1", x, y)
+	if drag == nil || drag.Target == nil || strings.Join(drag.Target.Card, " ") != "card-1" || drag.Target.Zone != "right" || drag.Preview == nil {
+		t.Fatalf("the drag beside its own card is %+v with the target %+v", drag, drag.Target)
+	}
+	own := before["card-1"]
+	got := [4]float64{drag.Preview.X, drag.Preview.Y, drag.Preview.W, drag.Preview.H}
+	want := [4]float64{own["x"].(float64), own["y"].(float64), own["w"].(float64), own["h"].(float64)}
+	for i := range got {
+		if math.Abs(got[i]-want[i]) > 1e-6 {
+			t.Fatalf("the preview is %v, not the rectangle %v of the card", got, want)
+		}
+	}
+	f.tester.Release(x, y)
+	f.settle()
+	after := f.gridCards()
+	for _, id := range []string{"card-1", "card-2"} {
+		for _, key := range []string{"x", "y", "w", "h"} {
+			if math.Abs(after[id][key].(float64)-before[id][key].(float64)) > 1e-6 {
+				t.Fatalf("%s stands at %v after the drop, at %v before", id, after[id], before[id])
+			}
+		}
+	}
+}

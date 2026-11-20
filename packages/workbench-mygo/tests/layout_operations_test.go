@@ -682,7 +682,6 @@ func TestARefusedLayoutMoveChangesNothing(t *testing.T) {
 		{`{"tab":"tab-zzzzzz","card":"b"}`, "tab tab-zzzzzz is not in the layout of window main"},
 		{`{"tab":"tab-ffffff","card":"b"}`, "tab tab-ffffff is in space spc-bbbbbb, which is not active"},
 		{`{"tab":"tab-aaaaaa","card":"nothing"}`, "card nothing is not in the layout of window main"},
-		{`{"tab":"tab-aaaaaa","card":"a","side":"right"}`, "tab tab-aaaaaa cannot move to the right of a"},
 	} {
 		if _, err := f.apply("core.layout.move", c.params); err == nil || err.Error() != c.want {
 			t.Fatalf("%s failed with %v, want %s", c.params, err, c.want)
@@ -690,6 +689,13 @@ func TestARefusedLayoutMoveChangesNothing(t *testing.T) {
 		if f.described() != before {
 			t.Fatalf("the refused %s changed the layout", c.params)
 		}
+	}
+	// The only tab of a toward a side of a names the vacated slot of a, which changes nothing (docs/spec/groups.md#vacated-slot).
+	if answer, err := f.apply("core.layout.move", `{"tab":"tab-aaaaaa","card":"a","side":"right"}`); err != nil || answer != `{"card":"a","tab":"tab-aaaaaa"}` {
+		t.Fatalf("the move of the only tab of a beside a answered %s, %v", answer, err)
+	}
+	if f.described() != before {
+		t.Fatal("the move of the only tab of a beside a changed the layout")
 	}
 }
 

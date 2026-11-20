@@ -4725,7 +4725,9 @@
       "target": "card-3",
       "side": "centre"
      },
-     "throws": "card card-3 cannot move into itself"
+     "returns": {
+      "card": "card-3"
+     }
     },
     {
      "call": "move",
@@ -4858,6 +4860,260 @@
       "kind": "centre",
       "card": "card-1"
      }
+    }
+   ]
+  },
+  {
+   "name": "a move whose target names the vacated slot of the moving card or box, the node itself or the kid beside it toward it, is no change",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1200,
+    "height": 600
+   },
+   "layout": {
+    "state": {
+     "root": {
+      "cut": "x",
+      "kids": [
+       {
+        "share": 0.2,
+        "node": {
+         "card": "card-1",
+         "fixed": false
+        }
+       },
+       {
+        "share": 0.5,
+        "node": {
+         "box": "card-5",
+         "data": {
+          "name": "그룹 1",
+          "leader": "card-2"
+         },
+         "inner": {
+          "cut": "x",
+          "kids": [
+           {
+            "share": 0.5,
+            "node": {
+             "card": "card-2",
+             "fixed": false
+            }
+           },
+           {
+            "share": 0.5,
+            "node": {
+             "card": "card-6",
+             "fixed": false
+            }
+           }
+          ]
+         }
+        }
+       },
+       {
+        "share": 0.3,
+        "node": {
+         "cut": "y",
+         "kids": [
+          {
+           "share": 0.5,
+           "node": {
+            "card": "card-3",
+            "fixed": false
+           }
+          },
+          {
+           "share": 0.5,
+           "node": {
+            "card": "card-4",
+            "fixed": false
+           }
+          }
+         ]
+        }
+       }
+      ]
+     }
+    },
+    "leader": "card-1",
+    "lastCard": 6
+   },
+   "steps": [
+    {
+     "call": "move",
+     "args": {
+      "card": "card-1",
+      "target": "card-1",
+      "side": "bottom"
+     },
+     "returns": {
+      "card": "card-1"
+     }
+    },
+    {
+     "call": "move",
+     "args": {
+      "card": "card-1",
+      "target": "card-1",
+      "side": "centre"
+     },
+     "returns": {
+      "card": "card-1"
+     }
+    },
+    {
+     "call": "move",
+     "args": {
+      "card": "card-1",
+      "target": "card-5",
+      "side": "left"
+     },
+     "returns": {
+      "card": "card-1"
+     }
+    },
+    {
+     "call": "move",
+     "args": {
+      "card": "card-5",
+      "target": "card-1",
+      "side": "right"
+     },
+     "returns": {
+      "card": "card-5"
+     }
+    },
+    {
+     "call": "move",
+     "args": {
+      "card": "card-5",
+      "target": [
+       "card-3",
+       "card-4"
+      ],
+      "side": "left"
+     },
+     "returns": {
+      "card": "card-5"
+     }
+    },
+    {
+     "call": "move",
+     "args": {
+      "card": "card-5",
+      "target": "card-5",
+      "side": "top"
+     },
+     "returns": {
+      "card": "card-5"
+     }
+    },
+    {
+     "call": "move",
+     "args": {
+      "card": "card-2",
+      "target": "card-6",
+      "side": "left"
+     },
+     "returns": {
+      "card": "card-2"
+     }
+    },
+    {
+     "call": "move",
+     "args": {
+      "card": "card-6",
+      "target": "card-2",
+      "side": "right"
+     },
+     "returns": {
+      "card": "card-6"
+     }
+    },
+    {
+     "call": "stored",
+     "args": {},
+     "returns": {
+      "state": {
+       "root": {
+        "cut": "x",
+        "kids": [
+         {
+          "share": 0.2,
+          "node": {
+           "card": "card-1",
+           "fixed": false
+          }
+         },
+         {
+          "share": 0.5,
+          "node": {
+           "box": "card-5",
+           "data": {
+            "name": "그룹 1",
+            "leader": "card-2"
+           },
+           "inner": {
+            "cut": "x",
+            "kids": [
+             {
+              "share": 0.5,
+              "node": {
+               "card": "card-2",
+               "fixed": false
+              }
+             },
+             {
+              "share": 0.5,
+              "node": {
+               "card": "card-6",
+               "fixed": false
+              }
+             }
+            ]
+           }
+          }
+         },
+         {
+          "share": 0.3,
+          "node": {
+           "cut": "y",
+           "kids": [
+            {
+             "share": 0.5,
+             "node": {
+              "card": "card-3",
+              "fixed": false
+             }
+            },
+            {
+             "share": 0.5,
+             "node": {
+              "card": "card-4",
+              "fixed": false
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      },
+      "leader": "card-1",
+      "lastCard": 6
+     }
+    },
+    {
+     "call": "move",
+     "args": {
+      "card": "card-5",
+      "target": "card-2",
+      "side": "left"
+     },
+     "throws": "card card-5 cannot move into itself"
     }
    ]
   },

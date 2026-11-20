@@ -228,10 +228,9 @@ func (s *Shell) dropRect(from string, hit *layout.DropTarget) *layout.Rect {
 }
 
 // dropCard makes the change of the layout of a drop of a tab of the card from on hit and returns the card that holds the tab after it:
-// a tab that is the only tab of its card moves its card, which cannot move beside itself, the centre of a group card takes a new card with data at the right edge of
-// its rectangle, the centre or the tab strip of a content card closes a card that its only tab leaves, and a side takes a new card with
-// data beside the target
-// (docs/spec/groups.md#moving-and-dropping).
+// a tab that is the only tab of its card moves its card, and beside its own card names its vacated slot, which is no change; the centre
+// of a group card takes a new card with data at the right edge of its rectangle; the centre or the tab strip of a content card closes a
+// card that its only tab leaves; and a side takes a new card with data beside the target (docs/spec/groups.md#moving-and-dropping).
 func (s *Shell) dropCard(from string, hit *layout.DropTarget, data json.RawMessage) (string, error) {
 	source, err := s.cardData(from)
 	if err != nil {
@@ -249,8 +248,6 @@ func (s *Shell) dropCard(from string, hit *layout.DropTarget, data json.RawMessa
 			}
 		}
 		return target[0], nil
-	case single && slices.Contains(target, from) && len(target) == 1:
-		return "", fmt.Errorf("card %s cannot move beside itself", from)
 	case single:
 		if !s.planes.Moved(from, target, zone) {
 			if err := s.planes.Move(from, target, zone); err != nil {

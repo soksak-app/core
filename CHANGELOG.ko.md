@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F966-3-1-5-1 (빈 slot, Go): target이 움직이는 card나 box의 빈 slot, 곧 어느 side든 node 자신이나 그 가운데, 또는 그 쪽으로 그 앞이나 뒤의 kid를 가리키는 move는 변경이 없으므로, 자기 card 옆에 놓은 card의 유일한 tab은 그 card를 미리 보이고 아무것도 바꾸지 않는다. `core.card.move`는 card 안의 target만 거부한다.
 - F966-1-1-1-1 (card를 닫는 drop의 preview, Go): card의 유일한 tab을 다른 card의 가운데나 tab strip에 놓는 drop의 preview는 놓기가 만들듯 tab이 떠나는 card가 닫힌 뒤의 target 사각형이다.
 - F966-3-1-4-6 (exchange, page layout library): `exchange`는 각 자리의 그려진 크기를 유지한다. exchange 전에 두 자리의 cut의 각 kid의 자리 크기를 읽고, 자리에 들어오는 node는 그 크기에서 자기 frame과 head를 뺀 크기를 받으므로, content card와 바꾼 group card가 더는 그 frame만큼 자리를 키우지 않는다. cuts의 `Input`은 새 member `frame`으로 node의 frame을 읽는다.
 - F966-3-1-4-2와 F966-3-1-4-5 (strip index, strip 합류, exchange, Go workbench): tab strip에 놓은 tab은 `core.drag`가 알리는 점 아래의 index에서 합류한다. `core.tab.move`와 `core.card.move`는 zone과 side `strip`과 함께 `index`를 받고, `strip`의 `core.card.move`는 content card의 모든 tab을 합류시키고 그것을 닫으며, header로 끌린 group card는 `TargetOptions.Group`으로 target 찾기를 실행하고 content card 가운데에서 자리를 바꾼다. exchange는 각 자리의 그려진 크기를 유지하므로 box는 자리의 크기로 들어간다.

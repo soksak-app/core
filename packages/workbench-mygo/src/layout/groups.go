@@ -1021,7 +1021,9 @@ func (t *GroupTree) CheckMove(id string, target Target, side string) error {
 			return err
 		}
 	}
-	if !slices.ContainsFunc(target, func(card string) bool { return card != id && !slices.Contains(t.Groups(card), id) }) {
+	// The card itself names its vacated slot, which is no change; a target inside it is refused (docs/spec/groups.md#vacated-slot).
+	itself := len(target) == 1 && target[0] == id && side != "strip"
+	if !itself && !slices.ContainsFunc(target, func(card string) bool { return card != id && !slices.Contains(t.Groups(card), id) }) {
 		return fmt.Errorf("card %s cannot move into itself", id)
 	}
 	if (side == "centre" || side == "strip") && len(target) > 1 {
@@ -1096,6 +1098,9 @@ func (t *GroupTree) put(members *[]*node, at int, key string, n *node) {
 
 // Moved tells whether the card id already stands where a move to side of target puts it.
 func (t *GroupTree) Moved(id string, at Target, side string) bool {
+	if t.grid.Vacates(id, at, Side(side)) {
+		return true
+	}
 	if len(at) != 1 {
 		return false
 	}
@@ -1139,15 +1144,15 @@ func (t *GroupTree) Move(id string, target Target, side string) error {
 	if err := t.CheckMove(id, target, side); err != nil {
 		return err
 	}
+	if t.Moved(id, target, side) {
+		return nil
+	}
 	if side == "centre" && !t.IsGroup(target[0]) {
 		return t.exchange(id, target[0])
 	}
 	// The join of a tab strip moves tabs, which the workbench holds; the tree has no move to a strip.
 	if side == "strip" {
 		return fmt.Errorf("card %s cannot move to strip of %s", id, target[0])
-	}
-	if t.Moved(id, target, side) {
-		return nil
 	}
 	op := "move to " + side + " of " + strings.Join(target, ", ")
 	// The target is the node after the withdraw of the moving card (docs/spec/groups.md#target-search): a cut or a run that holds the

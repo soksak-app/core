@@ -801,6 +801,29 @@ func (x *index) sharePlaces(holder *Node, sizes []float64) {
 	}
 }
 
+// Vacates tells whether target and side name the vacated slot of the node id, a card or a box (docs/spec/groups.md#vacated-slot): the
+// node itself on any side or its centre, or the kid before it or after it in its cut toward it, named by its id or by the members of a
+// cut. A move there is the inverse of the withdraw of id, so it is no change.
+func (g *Grid) Vacates(id string, target Target, side Side) bool {
+	if len(target) == 1 && target[0] == id {
+		return true
+	}
+	x := newIndex(g)
+	n := x.byID[id]
+	if n == nil {
+		return false
+	}
+	holder := x.parent[n]
+	if holder == nil {
+		return false
+	}
+	at := slices.IndexFunc(holder.Kids, func(k Kid) bool { return k.Node == n })
+	names := func(k int) bool {
+		return k >= 0 && k < len(holder.Kids) && slices.Equal(members(holder.Kids[k].Node), target)
+	}
+	return side == far(holder.Cut) && names(at-1) || side == near(holder.Cut) && names(at+1)
+}
+
 // holdsBox is whether the box id stands inside the node n.
 func holdsBox(n *Node, id string) bool {
 	switch {
