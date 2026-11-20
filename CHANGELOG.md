@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1014 (one tab text): the tab list of mygo shows the title that the surface of a tab reports, as the tab strip does, and the tab list and the space apps list of mygo and of the page of Wails and Tauri show the icon of the plugin beside the name and no second mark.
 - F937-10-2 (header answer property test, mygo): a seeded test runs random layout operations on a group tree and requires, after each one, that the kept answers of `CanSplit`, `CanGroup` and `CanClose` equal the results of their trial operations; the unused `SetHead` of the group tree is removed.
 - F1012 (repeated target ids): an insert or a move of the layout library in Go and TypeScript refuses a target that names a card twice with `card <id> is named twice in the target`, where it wrapped the card in a cut of one kid that a reading of the stored layout refused.
 - F1011: `make check-push`, which the pre-push hook runs, runs `make check-rust-format` and `make check-go-format`, so a push of an unformatted Rust or Go source is refused before it reaches main. Verification: Red of the push check test of `scripts/test/workflows.test.mjs` and a passing `make check-push` on a commit with unformatted Rust and Go lines, then Green of the test, a failing `make check-push` on that commit for each language and a passing one after its revert.

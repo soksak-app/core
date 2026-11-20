@@ -916,8 +916,9 @@ function openTabList(anchor, cardId) {
   const card = grid.card(cardId);
   if (!card?.data) return;
   openLayer(anchor, `탭 ${tabsOf(card).length}개`, tabsOf(card).map((t) => ({
-    // The tab of a plugin that is not loaded shows only its name, without a mark.
-    key: t.id, name: tabName(t), mark: hasPlugin(t.plugin) ? plugin(t.plugin).mark : "?", svg: hasPlugin(t.plugin) ? plugin(t.plugin).svg : "",
+    // The name is the text of the tab strip, which holds the mark, so the item draws the icon of the plugin and no second mark
+    // (docs/spec/example-model.md#card-tabs); the tab of a plugin that is not loaded keeps an empty icon slot.
+    key: t.id, name: tabName(t), mark: "", svg: hasPlugin(t.plugin) ? plugin(t.plugin).svg : "",
     notice: tabNotice(t.id),
     active: t.id === card.data.activeId,
   })), (id) => {
@@ -2319,8 +2320,8 @@ export function openSpaceApps(id) {
       groups.push({
         heading: { id: card.id, name: `카드 ${groups.length + 1}`, depth: Math.max(0, cuts - 1), map: map(card.id) },
         items: tabsOf(card).map((t) => ({
-          key: `${card.id}/${t.id}`, name: tabName(t),
-          mark: hasPlugin(t.plugin) ? plugin(t.plugin).mark : "?", svg: hasPlugin(t.plugin) ? plugin(t.plugin).svg : "",
+          // The name holds the mark, as in the tab list.
+          key: `${card.id}/${t.id}`, name: tabName(t), mark: "", svg: hasPlugin(t.plugin) ? plugin(t.plugin).svg : "",
           notice: tabNotice(t.id),
           active: card.id === id && t.id === card.data.activeId,
         })),

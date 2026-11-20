@@ -652,6 +652,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1014",
+    implementation: [
+      { file: "packages/workbench-mygo/src/picker.go", symbol: "func (s *Shell) openTabList(card string) error {" },
+      { file: "packages/workbench-mygo/src/picker.go", symbol: "func (s *Shell) openSpaceApps(id string) error {" },
+      { file: "packages/workbench/plane.js", symbol: "function openTabList(anchor, cardId) {" },
+      { file: "packages/workbench/plane.js", symbol: "export function openSpaceApps(id) {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/app_tabs_test.go", id: "TestATabShowsOneTextInTheStripAndInTheLists" },
+      { file: "packages/workbench/test/tab-names.test.mjs", id: "a tab shows one text in the tab strip and in the lists" },
+    ],
+    expected: "A tab shows one text in the tab strip, the tab list and the space apps list of each workbench, and a list item shows the icon of its plugin and no second mark.",
+    levels: ["unit"],
+  },
+  {
     id: "F1012",
     implementation: [
       { file: "packages/soksak/src/cuts.ts", symbol: "function targetOf(index: Index, target: string | readonly string[], axis: Axis): TreeNode | Run {" },

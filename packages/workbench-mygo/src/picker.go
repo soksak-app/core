@@ -266,9 +266,11 @@ func (s *Shell) openTabList(card string) error {
 	active := data.ActiveTab()
 	items := make([]pickerItem, 0, len(tabs))
 	for _, tab := range tabs {
-		item := pickerItem{Key: tab.ID, Name: layout.TabName(s.markedTab(tab), nil, false), Mark: "?", Notice: tab.ID, Active: active != nil && tab.ID == active.ID}
+		// The name is the text of the tab strip, which holds the mark, so the item draws the icon of the plugin and no second mark
+		// (docs/spec/example-model.md#card-tabs).
+		item := pickerItem{Key: tab.ID, Name: s.tabName(tab), Notice: tab.ID, Active: active != nil && tab.ID == active.ID}
 		if plugin := s.loadedPlugin(tab.Plugin); plugin != nil {
-			item.Mark, item.Icon = plugin.Mark, plugin.Icon
+			item.Icon = plugin.Icon
 		}
 		items = append(items, item)
 	}
@@ -306,10 +308,10 @@ func (s *Shell) openSpaceApps(id string) error {
 		groups = append(groups, pickerGroup{ID: card.ID, Name: fmt.Sprintf("카드 %d", index+1), Depth: max(0, card.Cuts-1), Map: s.planeMap(order, card.ID, metrics)})
 		active := data.ActiveTab()
 		for _, tab := range data.TabList() {
-			item := pickerItem{Key: card.ID + "/" + tab.ID, Name: s.tabName(tab), Mark: "?", Group: card.ID, Notice: tab.ID,
+			item := pickerItem{Key: card.ID + "/" + tab.ID, Name: s.tabName(tab), Group: card.ID, Notice: tab.ID,
 				Active: card.ID == id && active != nil && tab.ID == active.ID}
 			if plugin := s.loadedPlugin(tab.Plugin); plugin != nil {
-				item.Mark, item.Icon = plugin.Mark, plugin.Icon
+				item.Icon = plugin.Icon
 			}
 			items = append(items, item)
 		}

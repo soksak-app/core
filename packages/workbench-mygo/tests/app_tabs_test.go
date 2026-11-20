@@ -144,6 +144,46 @@ func TestAnUnloadedTabKeepsItsLabel(t *testing.T) {
 	}
 }
 
+// A tab shows one text in the tab strip, in the tab list and in the space apps list: the title that its view reported, or the mark of
+// its plugin and its stored name, and an item of a list shows no second mark (docs/spec/example-model.md#card-tabs).
+func TestATabShowsOneTextInTheStripAndInTheLists(t *testing.T) {
+	stored := &surfaceHost{}
+	stored.installed = unloadDocument
+	stored.projects = []map[string]any{storedProject(tab("tab-aaaaaa", "notes"), tab("tab-bbbbbb", "notes"))}
+	f := newTabApp(t, stored, unloadDocument)
+	f.command("core.project.activate", map[string]string{"id": "prj-a"})
+	f.app.Emit(f.window, "view-call", map[string]any{"surface": "tab-aaaaaa", "plugin": "notes", "generation": 1, "id": 5, "command": "tab.title", "params": "notes.md"})
+	f.settle()
+	want := []string{"notes.md", "n tab-bbbbbb"}
+	for _, name := range want {
+		if !slices.Contains(f.tester.Texts(), name) {
+			t.Fatalf("the tab strip shows %q without %q", f.tester.Texts(), name)
+		}
+	}
+	f.command("core.card.tab-list", map[string]string{"card": "main"})
+	f.listShows("the tab list", want)
+	f.command("core.picker.close", map[string]any{})
+	f.command("core.card.fullscreen", map[string]string{"card": "main"})
+	f.command("core.space.apps", map[string]string{"card": "main"})
+	f.listShows("the space apps list", want)
+}
+
+// listShows fails unless the open list names its items want, in order, and draws no mark of a plugin beside them.
+func (f *tabApp) listShows(list string, want []string) {
+	f.t.Helper()
+	reply := f.ask("status.get", map[string]any{"name": "core.picker"})
+	names := []string{}
+	for _, item := range reply["result"].(map[string]any)["items"].([]any) {
+		names = append(names, item.(map[string]any)["name"].(string))
+	}
+	if !slices.Equal(names, want) {
+		f.t.Fatalf("%s names %q, while the tab strip shows %q", list, names, want)
+	}
+	if slices.Contains(f.tester.Texts(), "n") {
+		f.t.Fatalf("%s draws the mark n again beside a name: %q", list, f.tester.Texts())
+	}
+}
+
 func TestAnUnloadedTabLeavesThePlacementAndReturnsWhenItIsShown(t *testing.T) {
 	stored := &surfaceHost{}
 	stored.installed = unloadDocument
