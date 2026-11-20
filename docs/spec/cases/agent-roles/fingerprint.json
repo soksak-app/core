@@ -24,8 +24,8 @@
     },
     {
       "name": "reviewer",
-      "text": "검수관입니다.\n\n다른 agent의 변경을 검토한다. Café 🙂.",
-      "fingerprint": "82d76a800364f262"
+      "text": "reviewer입니다.\n\n다른 agent의 변경을 검토한다. Café 🙂.",
+      "fingerprint": "763dd78ea2ffc505"
     },
     {
       "name": "ops-1",
