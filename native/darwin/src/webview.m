@@ -169,11 +169,13 @@ static bool nativeWindowConfigureMainOnMain(void *handle, bool dark) {
     return true;
 }
 
+// The main web view takes the input registration when it is set, as the main web view of the Tauri host does, so a press or
+// release into the main page answers after the document received it (docs/spec/exposure.md#methods).
 static bool nativeWindowSetMainWebviewOnMain(void *handle) {
     NSWindow *window = (NSWindow *)handle;
     if (sp_window_main_webview(handle)) return true;
     WKWebView *root = mainWebview(window.contentView);
-    return root && sp_window_set_main_webview(window, root) != NULL;
+    return root && sp_window_set_main_webview(window, root) != NULL && webviewInputRegister(root);
 }
 
 static void nativeWebviewBoundsOnMain(void *handle, double x, double y, double width, double height) {

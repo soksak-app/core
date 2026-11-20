@@ -1,9 +1,10 @@
 // A group header takes native pointer input without any activation of the application or of its window: a press on the header,
 // drags over another card and the release move the group card (docs/spec/groups.md#moving-and-dropping), and a double-click on
-// the name of the group begins its rename (docs/spec/groups.md#headers). The window stands behind the windows of the person
-// (`host.window.lower`), and no input of the check is a move or an activation, so the window never becomes the key window or the
-// virtual key window: each press goes directly to the view under the point (docs/spec/exposure.md#methods). The group card leads the
-// root level and moves inside it, so it keeps the leader mark (docs/spec/groups.md#leader).
+// the name of the group begins its rename (docs/spec/groups.md#headers), in a new window and after a dissolve and a create in the
+// same window. The window stands behind the windows of the person (`host.window.lower`), and no input of the check is a move or an
+// activation, so the window never becomes the key window or the virtual key window: each press goes directly to the view under
+// the point (docs/spec/exposure.md#methods). The group card leads the root level and moves inside it, so it keeps the leader mark
+// (docs/spec/groups.md#leader).
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -15,6 +16,31 @@ function gridPoint(grid, id, fx, fy) {
   const box = [...grid.cards, ...grid.groups].find((item) => item.id === id);
   if (!box) throw new Error(`core.grid holds no card ${id}: ${JSON.stringify(grid)}`);
   return { x: Math.round(grid.plane.x + box.x + box.w * fx), y: Math.round(grid.plane.y + box.y + box.h * fy) };
+}
+
+/**
+ * Double-clicks the name of the group card group: two clicks, the second with the click count 2, through the connection of s.
+ * A release into a web view answers after its document received it, and WebKit dispatches the `dblclick` in the handling of that
+ * release (docs/spec/exposure.md#methods), so on a window with a main page the rename has begun when the release answers. The
+ * workbench of a window without a main page is no web view, so the check waits for the rename there.
+ */
+async function doubleClickName(s, group, what) {
+  const name = await s.rect("core.group.name");
+  const at = { x: Math.round(name.x + 12), y: Math.round(name.y + name.height / 2) };
+  await s.pointer(at.x, at.y, "down");
+  await s.pointer(at.x, at.y, "up");
+  await s.pointer(at.x, at.y, "down", { clicks: 2 });
+  await s.pointer(at.x, at.y, "up", { clicks: 2 });
+  const begun = (rename) => rename?.kind === "group" && rename.id === group;
+  if ((await s.get("host.window")).pageProcess !== null) {
+    const rename = await s.get("core.rename");
+    assert.ok(begun(rename), `${what}: the rename of ${group} had not begun when the release of the double-click answered: ` +
+      `core.rename ${JSON.stringify(rename)}, core.pointer ${JSON.stringify(await s.get("core.pointer"))}`);
+  } else {
+    await s.until("core.rename", begun, `${what}: the double-click on the name of ${group} did not begin its rename`);
+  }
+  await s.run("core.rename.cancel");
+  await s.until("core.rename", (rename) => rename === null, `${what}: the rename did not end`);
 }
 
 /** Asserts that the window is neither the key window nor the virtual key window of the application, which stays inactive. */
@@ -38,17 +64,7 @@ for (const app of Object.values(APPS)) {
     await s.presented();
     await notActivated(s, "after the window was lowered");
 
-    // A double-click on the name: two clicks, the second with the click count 2, through this connection.
-    const name = await s.rect("core.group.name");
-    const at = { x: Math.round(name.x + 12), y: Math.round(name.y + name.height / 2) };
-    await s.pointer(at.x, at.y, "down");
-    await s.pointer(at.x, at.y, "up");
-    await s.pointer(at.x, at.y, "down", { clicks: 2 });
-    await s.pointer(at.x, at.y, "up", { clicks: 2 });
-    await s.until("core.rename", (rename) => rename?.kind === "group" && rename.id === group,
-      `the double-click on the name of ${group} did not begin its rename`);
-    await s.run("core.rename.cancel");
-    await s.until("core.rename", (rename) => rename === null, "the rename did not end");
+    await doubleClickName(s, group, "a new window");
     await notActivated(s, "after the double-click");
 
     // A press on the header, drags to the bottom zone of a card of the root level outside the group and the release.
@@ -78,5 +94,14 @@ for (const app of Object.values(APPS)) {
     assert.equal(after.leader, group, `the move of ${group} inside the root level changed its leader to ${after.leader}`);
     assert.ok(moved.groups.some((item) => item.id === group && item.parent === null), `${group} left the root level`);
     await notActivated(s, "after the drag");
+
+    // A dissolve and a create in the same window, then at once a double-click on the name of the new group card (F937-59).
+    await s.run("core.group.dissolve", { group });
+    await s.until("core.layout", (layout) => layout.groups.length === 0, `the dissolve of ${group} left a group`);
+    const again = (await s.run("core.group.create", { card: (await s.get("core.layout")).leader, side: "right", plugin: START_PLUGIN })).group;
+    await s.until("core.layout", (layout) => layout.groups.some((item) => item.card === again), `the group ${again} was not created`);
+    await s.presented();
+    await doubleClickName(s, again, "after a dissolve and a create");
+    await notActivated(s, "after the double-click on the new group card");
   });
 }
