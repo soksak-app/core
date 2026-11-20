@@ -3285,3 +3285,49 @@ func TestPersistentProtocolViolationsStopTheRestarts(t *testing.T) {
 		t.Fatalf("the host connected %d times, want 4", got)
 	}
 }
+
+// The reader of a persistent connection decodes a line once, the body of a message once and the member image of the body once, and
+// dispatches the message by what it found: a message without an image costs two decodes and a message with an image three. The
+// service echoes each line that the host sends, so each body comes back as a message of the surface.
+// contract: sidecars-transport.persistent.decodes-a-line-once
+func TestAPersistentLineIsDecodedOnceBeforeItsDispatch(t *testing.T) {
+	// The replies are records: without a writer of this test the host holds them for the writer of the next test.
+	support.StartWriter(t, t.TempDir())
+	root := t.TempDir()
+	socket := filepath.Join(support.SocketParent(t), "s.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	writeHarnessEndpoint(t, root, socket)
+	serveHelloVersion(t, listener, nil)
+	sidecars, err := NewSidecars(support.HarnessDeclarations(t.TempDir()), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sidecars.Stop()
+	owner := support.NewSidecarRecorder(t, "/decodes")
+	// The first send connects; the decodes of its echo are not counted.
+	if err := owner.Send(sidecars, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	owner.Next(t)
+	for _, item := range []struct {
+		body    string
+		decodes uint64
+	}{
+		{`{"operation":"output","data":"x"}`, 2},
+		{`{"error":"failed"}`, 2},
+		{`{"image":{"want":{"name":"terminal","generation":1}}}`, 3},
+	} {
+		before := host.MessageDecodes()
+		if err := owner.Send(sidecars, "fixture-service", "surface", json.RawMessage(item.body)); err != nil {
+			t.Fatal(err)
+		}
+		owner.Next(t)
+		if got := host.MessageDecodes() - before; got != item.decodes {
+			t.Errorf("the reader decoded the message of the body %s %d times, want %d: the line, the body and the member image once each", item.body, got, item.decodes)
+		}
+	}
+}

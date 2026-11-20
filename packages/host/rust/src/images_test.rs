@@ -1081,7 +1081,7 @@ fn presenting_a_frame_notifies_after_its_identity_is_current() {
     let current_images = images.clone();
     let current_key = key.clone();
     assert!(super::handle_envelope_with_recovery(
-        &body,
+        &crate::message_body::MessageBody::read(&body),
         "sidecar-a",
         &key.0,
         &images,
@@ -1131,7 +1131,7 @@ fn failed_or_retired_frame_does_not_notify_the_window() {
     })
     .to_string();
     assert!(super::handle_envelope_with_recovery(
-        &body,
+        &crate::message_body::MessageBody::read(&body),
         "sidecar-a",
         &key.0,
         &images,
@@ -1148,7 +1148,7 @@ fn failed_or_retired_frame_does_not_notify_the_window() {
     let retired_images = images.clone();
     let retired_key = key.clone();
     assert!(super::handle_envelope_with_recovery(
-        &retired_body.to_string(),
+        &crate::message_body::MessageBody::read(&retired_body.to_string()),
         "sidecar-a",
         &key.0,
         &images,
@@ -1451,7 +1451,7 @@ fn handle_frame_request(
     let asked = Arc::new(Mutex::new(0));
     let steps = Arc::clone(&asked);
     let handled = super::handle_envelope(
-        &body.to_string(),
+        &crate::message_body::MessageBody::read(&body.to_string()),
         sender,
         "tab-1",
         images,
@@ -1779,7 +1779,7 @@ fn handle_screen_message(
     let answers = Arc::new(Mutex::new(Vec::new()));
     let sent = Arc::clone(&answers);
     let handled = super::handle_envelope(
-        &body.to_string(),
+        &crate::message_body::MessageBody::read(&body.to_string()),
         sender,
         surface,
         images,
@@ -2030,7 +2030,12 @@ fn malformed_screen_message_names_its_member() {
 fn a_null_screen_is_malformed_at_the_member_screen() {
     let (images, key, _, _, _) = screen_fixture();
     let body = serde_json::json!({ "image": { "screen": null } });
-    match super::decide(&body.to_string(), "sidecar-a", &key.0, &images) {
+    match super::decide(
+        &crate::message_body::MessageBody::read(&body.to_string()),
+        "sidecar-a",
+        &key.0,
+        &images,
+    ) {
         super::Decision::Malformed { member, text, .. } => assert_eq!(
             (member.as_str(), text.as_str()),
             ("screen", "image screen message has no screen object"),

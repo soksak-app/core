@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F996-5.3 (sidecar 줄의 decode 한 번): Go와 Rust host는 sidecar의 메시지 줄을 member들로 한 번, 메시지 body를 한 번, 그 member `image`를 한 번 decode하고, reader, reply 기록, detach 응답, image 결정은 이 member들을 읽는다. image가 없는 메시지는 decode 두 번, 있는 메시지는 세 번이 들며, `MessageDecodes`와 `message_decodes`가 이를 센다(`docs/spec/sidecars.md#messages`).
 - F1000-2: `docs/spec/sidecars.md#process-identity`는 process의 surface가 parent process의 사슬에서 오며, host가 가장 가까운 조상을 시작한 sidecar와 함께 그것을 확인한다고 밝히고, `SOKSAK_SURFACE`를 없앤다. host, `sok`, sidecar는 F1000-2.1부터 F1000-2.4에서 따른다.
 - F899-7.5-15: Rust `sok`은 `sok message send`와 MCP tool에서 parse되지 않는 `surface.window` 답의 parser error를 보고하고, 버려진 command 답의 이유를 그 호출 바로 윗줄에 적는다.
 - F996-4 (post된 closure의 sender): mygo host는 fork version `v0.7.4-244-g4abb83d-soksak.17`을 받고, main thread에 post된 각 closure를 post한 함수의 이름을 가진 `closure` 종류의 step으로 `host.frame.step`에 쓴다(`docs/spec/hosts.md`).

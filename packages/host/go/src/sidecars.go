@@ -2667,8 +2667,12 @@ func (c *Sidecars) relay(process *sidecar, stdout io.Reader) string {
 	scanner.Split(MessageLines(&unfinished))
 	for scanner.Scan() {
 		recordReady(process)
-		var output sidecarOutput
-		if err := json.Unmarshal(scanner.Bytes(), &output); err != nil {
+		line, err := decodeSidecarLine(scanner.Bytes())
+		if err != nil {
+			return fmt.Sprintf("invalid message: %v", err)
+		}
+		output, err := line.output()
+		if err != nil {
 			return fmt.Sprintf("invalid message: %v", err)
 		}
 		if output.Surface == nil {
@@ -2684,7 +2688,8 @@ func (c *Sidecars) relay(process *sidecar, stdout io.Reader) string {
 			return "invalid message: body is missing"
 		}
 		event := sidecarEvent{Surface: *output.Surface, Body: output.Body}
-		c.recordReply(process.name, event.Surface, output.Cids, event.Body)
+		body := ReadMessageBody(output.Body)
+		c.recordReply(process.name, event.Surface, output.Cids, body)
 		c.mu.Lock()
 		owner := c.owners[event.Surface]
 		addressed := process.surfaces[event.Surface]
@@ -2701,7 +2706,7 @@ func (c *Sidecars) relay(process *sidecar, stdout io.Reader) string {
 			// Checks whether it is an image envelope
 			if ReceiveSidecarMessage(
 				func() { c.traceMessage("sidecar.receive", process.name, event.Surface, event.Body) },
-				func() bool { return c.tryHandleImageEnvelope(owner, process.name, event.Surface, event.Body) },
+				func() bool { return c.tryHandleImageEnvelope(owner, process.name, event.Surface, body) },
 			) {
 				continue
 			}
@@ -2851,34 +2856,34 @@ func (c *Sidecars) handlePersistentLine(process *sidecar, line []byte) (string, 
 	started := time.Now()
 	defer routine.Work("service-messages", started, int64(len(line)))
 	recordReady(process)
-	var value map[string]json.RawMessage
-	if err := json.Unmarshal(line, &value); err != nil {
+	value, err := decodeSidecarLine(line)
+	if err != nil {
 		return fmt.Sprintf("invalid message: %v", err), true
 	}
 	var operation string
-	if raw, present := value["operation"]; present {
+	if raw := value.Operation; raw != nil {
 		if err := json.Unmarshal(raw, &operation); err != nil {
 			return fmt.Sprintf("invalid message: operation: %v", err), true
 		}
 	}
 	if operation == "closed-owner" || operation == "shutdown" || operation == "retained" {
 		var request string
-		if err := json.Unmarshal(value["request"], &request); err != nil || request == "" {
+		if err := json.Unmarshal(value.Request, &request); err != nil || request == "" {
 			return fmt.Sprintf("invalid message: %s request is not a non-empty string", operation), true
 		}
 		var ok bool
-		if err := json.Unmarshal(value["ok"], &ok); err != nil {
+		if err := json.Unmarshal(value.OK, &ok); err != nil {
 			return fmt.Sprintf("invalid message: %s ok: %v", operation, err), true
 		}
 		var reason string
-		if raw, present := value["error"]; present {
+		if raw := value.Error; raw != nil {
 			if err := json.Unmarshal(raw, &reason); err != nil {
 				return fmt.Sprintf("invalid message: %s error: %v", operation, err), true
 			}
 		}
 		var closed int
 		if operation == "retained" && ok {
-			if err := json.Unmarshal(value["closed"], &closed); err != nil {
+			if err := json.Unmarshal(value.Closed, &closed); err != nil {
 				return fmt.Sprintf("invalid message: retained closed: %v", err), true
 			}
 		}
@@ -2903,8 +2908,8 @@ func (c *Sidecars) handlePersistentLine(process *sidecar, line []byte) (string, 
 		}
 		return "", false
 	}
-	var output sidecarOutput
-	if err := json.Unmarshal(line, &output); err != nil {
+	output, err := value.output()
+	if err != nil {
 		return fmt.Sprintf("invalid message: %v", err), true
 	}
 	if output.Surface == nil {
@@ -2920,14 +2925,15 @@ func (c *Sidecars) handlePersistentLine(process *sidecar, line []byte) (string, 
 		return "invalid message: body is missing", true
 	}
 	event := sidecarEvent{Surface: *output.Surface, Body: output.Body}
-	c.recordReply(process.name, event.Surface, output.Cids, event.Body)
+	body := ReadMessageBody(output.Body)
+	c.recordReply(process.name, event.Surface, output.Cids, body)
 	c.mu.Lock()
 	owner := c.owners[event.Surface]
 	c.mu.Unlock()
 	if owner != nil {
 		if ReceiveSidecarMessage(
 			func() { c.traceMessage("sidecar.receive", process.name, event.Surface, event.Body) },
-			func() bool { return c.tryHandleImageEnvelope(owner, process.name, event.Surface, event.Body) },
+			func() bool { return c.tryHandleImageEnvelope(owner, process.name, event.Surface, body) },
 		) {
 			return "", false
 		}
@@ -3227,14 +3233,9 @@ func ClosedImageAnswer(body json.RawMessage) (string, json.RawMessage, bool) {
 
 // tryHandleImageEnvelope checks whether the event is an image envelope and handles it. It returns true for an envelope.
 
-func (c *Sidecars) tryHandleImageEnvelope(owner SidecarOwner, sidecarName, surface string, body json.RawMessage) bool {
-	var envelope struct {
-		Image *struct {
-			Detached json.RawMessage `json:"detached"`
-		} `json:"image"`
-	}
-	if err := json.Unmarshal(body, &envelope); err == nil && envelope.Image != nil && envelope.Image.Detached != nil {
-		ack, err := parseImageDetachAck(envelope.Image.Detached)
+func (c *Sidecars) tryHandleImageEnvelope(owner SidecarOwner, sidecarName, surface string, body MessageBody) bool {
+	if body.image != nil && body.image.Detached != nil {
+		ack, err := parseImageDetachAck(body.image.Detached)
 		if err != nil {
 			LogError("sidecar "+sidecarName, err.Error())
 			return true
@@ -3243,7 +3244,7 @@ func (c *Sidecars) tryHandleImageEnvelope(owner SidecarOwner, sidecarName, surfa
 	}
 	// Checks whether the owner has the image envelope decision handler
 	if decider, ok := owner.(interface {
-		DecideImageEnvelope(sidecarName, surface string, body json.RawMessage) bool
+		DecideImageEnvelope(sidecarName, surface string, body MessageBody) bool
 	}); ok {
 		return decider.DecideImageEnvelope(sidecarName, surface, body)
 	}

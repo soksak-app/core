@@ -53,6 +53,8 @@
 
 호스트는 표면에 처음 요청을 보낸 창을 기록하고, 사이드카 메시지를 그 창에만 `sidecar-message` 이벤트 `{sidecar, surface, cids, body}`로 전달한다. `sidecar`는 사이드카 `package.json`의 `name`이고, `cids`는 메시지 줄이 밝힐 때 있다. 다른 창이 같은 표면에 보낸 요청은 실패한다. 애플리케이션이 종료되면 호스트는 각 사이드카의 표준 입력을 닫고 프로세스 종료를 기다린다.
 
+호스트는 사이드카의 메시지 줄 하나를 member들로 한 번 decode하고, 메시지 body를 member들로 한 번, body의 member `image`를 member들로 한 번 decode하며, 이 member들로 줄을 dispatch한다: persistent 서비스의 응답, `closed`에 대한 답, detach된 image, image 요청, image frame, 또는 소유 창에 갈 메시지. 그 안의 member 값 하나를 읽는 일은 이 dispatch의 일부다. 두 호스트는 이 decode를 세므로, member `image`가 없는 메시지는 decode 두 번, 있는 메시지는 세 번이 든다.
+
 호스트는 사이드카 프로세스마다 요청을 보낸 모든 표면을 그 프로세스가 끝날 때까지 기억한다. 그런 표면 중 소유 창이 없어진 표면의 메시지는 버린다. 호스트가 표면을 제거하고 `closed`를 보낸 뒤, 사이드카가 `closed`에 답하기 전에 보낸 것이다. 같은 표면의 후속 요청은 그 답을 받기 전에 보낼 수 있다. Host는 close 답 전에 이미 buffer에 있던 줄을 포함해 표준 출력 메시지를 현재 surface owner에 전달한다. Wire에는 surface와 선택적 request `cids`가 있으며 별도의 session generation은 없다. sidecar 출력 끝의 line feed 없는 줄은 쓰다가 끝난 process가 남긴 것으로 메시지가 아니다. 출력은 연결처럼 거기서 끝나고 host는 그 줄의 크기를 기록한다. 실행 중인 사이드카가 보낸 폐기 전송 그림에는 `closed`로 답한다([그림 소비](native-surfaces.ko.md#그림-영역)). 호스트가 표준 입출력 사이드카를 중지하기 시작한 뒤 받은 전송 그림은 응답 없이 취소한다. 호스트는 취소를 기록하고 사이드카 process가 끝나기를 기다린다. process 종료가 사이드카 소유 전송 그림 자원을 해제한다. 애플리케이션 연결이 끊겨도 실행을 유지하는 지속 service는 `close-owner`가 끝날 때까지 연결을 유지하고, `shutdown`을 보내 transport를 닫기 전에 폐기 전송 그림에 `closed`로 답한다.
 
 Persistent layout reconciliation은 `retain`으로 누락된 session을 닫고 `retained`를 기다리며([persistent services](persistent-services.ko.md#종료와-복구)) surface별 `closed` envelope를 요구하지 않는다. `host.sidecars.closing`은 전송한 surface별 `closed` envelope 중 answer를 기다리는 것만 추적한다.

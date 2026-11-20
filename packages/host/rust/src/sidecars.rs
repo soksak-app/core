@@ -22,6 +22,7 @@ use crate::buffer_bounds::{HELD_LINES, PendingLines, record_buffer_drop};
 use crate::event_log::Level;
 use crate::event_record::emit_host;
 use crate::framework::Window;
+use crate::message_body::{Members, MessageBody, decode_members};
 use crate::platform::{OutputPipe, PersistentStream, current};
 use crate::sidecar_reply::{RequestLedger, error_of_body, record_stopped_requests};
 use crate::windows::{emit_window, window_data};
@@ -110,17 +111,18 @@ pub trait Owner: Clone + Send + 'static {
         &self,
         _sidecar_name: &str,
         _surface: &str,
-        _body: &RawValue,
+        _body: &MessageBody<'_>,
         _response_sender: &dyn ResponseSender,
     ) -> ImageEnvelopeDecision {
         ImageEnvelopeDecision::NotImage
     }
-    /// Consumes a supplier acknowledgement for a native image detach request.
+    /// Consumes a supplier acknowledgement, the member `image.detached` of a message body, for a native image detach
+    /// request.
     fn image_detach_ack(
         &self,
         _sidecar: &str,
         _surface: &str,
-        _body: &RawValue,
+        _detached: &RawValue,
     ) -> Result<(), String> {
         Err("no image detach acknowledgement handler is registered".to_string())
     }
@@ -145,28 +147,50 @@ struct Request<'a> {
     body: Option<&'a RawValue>,
 }
 
-#[derive(Deserialize)]
 struct Event {
     surface: String,
     body: Box<RawValue>,
     /// The correlation identifiers of the requests that this message answers (docs/spec/sidecars.md#messages).
-    #[serde(default)]
     cids: Vec<String>,
 }
 
-/// It first checks whether the line holds closed. When closed is present, the line is the answer to closed
-/// (docs/spec/sidecars.md#messages).
-#[derive(Deserialize)]
-struct CloseProbe {
-    closed: Option<bool>,
-}
-
-/// The answer of the sidecar to closed. error is the reason why it could not close.
-#[derive(Deserialize)]
+/// The answer of the sidecar to closed. error is the reason why it could not close (docs/spec/sidecars.md#messages).
 struct CloseAnswer {
     surface: String,
     closed: bool,
     error: Option<String>,
+}
+
+/// Decodes the member `name` of the members of a line as `T`, or `None` when the line has no such member. A member of another type
+/// is the reason of a violation.
+fn member<T: serde::de::DeserializeOwned>(
+    members: &Members<'_>,
+    name: &str,
+) -> Result<Option<T>, String> {
+    members
+        .get(name)
+        .map(|raw| {
+            serde_json::from_str(raw.get())
+                .map_err(|error| format!("invalid message: {name}: {error}"))
+        })
+        .transpose()
+}
+
+/// The message of a surface that the members of a line hold: the surface, the body and the correlation identifiers.
+fn event_of(members: &Members<'_>) -> Result<Event, String> {
+    let surface = member::<String>(members, "surface")?
+        .ok_or_else(|| "invalid message: surface is missing".to_string())?;
+    let body = members
+        .get("body")
+        .map(|body| (*body).to_owned())
+        .ok_or_else(|| "invalid message: body is missing".to_string())?;
+    // default: a message without cids answers no identified request (docs/spec/sidecars.md#messages).
+    let cids = member::<Vec<String>>(members, "cids")?.unwrap_or_default();
+    Ok(Event {
+        surface,
+        body,
+        cids,
+    })
 }
 
 /// The surfaces for which the host sent closed and the sidecar has not answered yet (host.sidecars).
@@ -259,15 +283,18 @@ fn close_answer<O: Owner>(
     state: &Arc<Mutex<State<O>>>,
     sidecar: &str,
     pid: u32,
-    line: &[u8],
+    members: &Members<'_>,
 ) -> Result<bool, String> {
-    let probe: CloseProbe =
-        serde_json::from_slice(line).map_err(|error| format!("invalid message: {error}"))?;
-    if probe.closed.is_none() {
+    // A closed member that is null is no answer, as a line without it.
+    let Some(closed) = member::<Option<bool>>(members, "closed")?.flatten() else {
         return Ok(false);
-    }
-    let answer: CloseAnswer =
-        serde_json::from_slice(line).map_err(|error| format!("invalid message: {error}"))?;
+    };
+    let answer = CloseAnswer {
+        surface: member::<String>(members, "surface")?
+            .ok_or_else(|| "invalid message: surface is missing".to_string())?,
+        closed,
+        error: member::<Option<String>>(members, "error")?.flatten(),
+    };
     if !answer.closed {
         return Err("invalid message: closed is not true".to_string());
     }
@@ -758,13 +785,10 @@ fn log_unfinished_line(sidecar: &str, bytes: usize) {
 /// Records a sidecar message that is dropped because no window owns it, together with its body. A dropped transfer
 /// image is answered `closed`, so the sidecar releases the frame and does not match a later answer of a reopened
 /// surface of the same id to it (docs/spec/native-surfaces.md#image-regions).
-fn drop_message(sender: &dyn ResponseSender, sidecar: &str, surface: &str, body: &RawValue) {
+fn drop_message(sender: &dyn ResponseSender, sidecar: &str, surface: &str, body: &str) {
     crate::application_log::log_warn(
         &format!("sidecar {sidecar}"),
-        format!(
-            "message for surface {surface} dropped: no window owns the surface: {}",
-            body.get()
-        ),
+        format!("message for surface {surface} dropped: no window owns the surface: {body}"),
     );
     let Some((name, answer)) = closed_image_answer(body) else {
         return;
@@ -785,7 +809,7 @@ fn drop_message(sender: &dyn ResponseSender, sidecar: &str, surface: &str, body:
 
 /// The answer `{image:{error:"closed",name,generation,raster,sequence}}` to a transfer image of a closed surface, with
 /// the image name, or `None` when the body is not a transfer image.
-pub fn closed_image_answer(body: &RawValue) -> Option<(String, Box<RawValue>)> {
+pub fn closed_image_answer(body: &str) -> Option<(String, Box<RawValue>)> {
     #[derive(Deserialize)]
     struct Image {
         name: String,
@@ -799,7 +823,7 @@ pub fn closed_image_answer(body: &RawValue) -> Option<(String, Box<RawValue>)> {
         image: Image,
     }
     // silent: a body that is not a transfer image is another message of the sidecar, which receives no closed answer.
-    let image = serde_json::from_str::<Envelope>(body.get()).ok()?.image;
+    let image = serde_json::from_str::<Envelope>(body).ok()?.image;
     if image.name.is_empty() || image.token.is_null() {
         return None;
     }
@@ -4045,23 +4069,24 @@ impl<O: Owner> Core<O> {
                     }
                     // The handling of the line is one wake of the routine `service-messages` (docs/spec/performance-trace.md).
                     let _wake = crate::routine::Wake::start("service-messages", line.len());
-                    let value: serde_json::Value = match serde_json::from_slice(&line) {
-                        Ok(value) => value,
+                    let members = match decode_members(&line) {
+                        Ok(members) => members,
                         Err(error) => return Some(format!("invalid message: {error}")),
                     };
-                    let Some(object) = value.as_object() else {
-                        return Some("invalid message: not a JSON object".to_string());
-                    };
-                    let operation = match object.get("operation") {
+                    let operation = match members
+                        .get("operation")
+                        .map(|raw| serde_json::from_str::<String>(raw.get()))
+                    {
                         None => None,
-                        Some(serde_json::Value::String(operation)) => Some(operation.as_str()),
-                        Some(_) => {
+                        Some(Ok(operation)) => Some(operation),
+                        Some(Err(_)) => {
                             return Some("invalid message: operation: not a string".to_string());
                         }
                     };
-                    if let Some(operation @ ("retained" | "closed-owner" | "shutdown")) = operation
+                    if let Some(operation @ ("retained" | "closed-owner" | "shutdown")) =
+                        operation.as_deref()
                     {
-                        let reply = match reply_of(operation, object) {
+                        let reply = match reply_of(operation, &members) {
                             Ok(reply) => reply,
                             Err(reason) => return Some(reason),
                         };
@@ -4116,16 +4141,17 @@ impl<O: Owner> Core<O> {
                         }
                         continue;
                     }
-                    match close_answer(&state, &sidecar, reader_service_pid, &line) {
+                    match close_answer(&state, &sidecar, reader_service_pid, &members) {
                         Ok(true) => continue,
                         Ok(false) => {}
                         Err(violation) => return Some(violation),
                     }
-                    let event: Event = match serde_json::from_slice(&line) {
+                    let event = match event_of(&members) {
                         Ok(event) => event,
-                        Err(error) => return Some(format!("invalid message: {error}")),
+                        Err(violation) => return Some(violation),
                     };
-                    record_reply(&state, &sidecar, &event);
+                    let body = MessageBody::read(event.body.get());
+                    record_reply(&state, &sidecar, &event, &body);
                     let owner = state
                         .lock()
                         // default: a lock that a panicking thread poisoned still holds the owner record, which is only
@@ -4154,7 +4180,7 @@ impl<O: Owner> Core<O> {
                                     &owner,
                                     &sidecar,
                                     &event.surface,
-                                    &event.body,
+                                    &body,
                                     &response_sender,
                                 )
                             },
@@ -4173,7 +4199,7 @@ impl<O: Owner> Core<O> {
                             tx: tx_clone.clone(),
                             state: Arc::clone(&state),
                         };
-                        drop_message(&response_sender, &sidecar, &event.surface, &event.body);
+                        drop_message(&response_sender, &sidecar, &event.surface, event.body.get());
                     }
                 }
             })();
@@ -4692,33 +4718,42 @@ struct Reply {
 
 /// Checks the field types of an answer. If a type is wrong, it returns the reason to end the connection.
 /// (docs/spec/persistent-services.md#service-transport).
-fn reply_of(
-    operation: &str,
-    object: &serde_json::Map<String, serde_json::Value>,
-) -> Result<Reply, String> {
-    let request = match object.get("request") {
-        Some(serde_json::Value::String(request)) if !request.is_empty() => request.clone(),
+fn reply_of(operation: &str, members: &Members<'_>) -> Result<Reply, String> {
+    let text = |name: &str| {
+        members
+            .get(name)
+            .map(|raw| serde_json::from_str::<String>(raw.get()))
+    };
+    let request = match text("request") {
+        Some(Ok(request)) if !request.is_empty() => request,
         _ => {
             return Err(format!(
                 "invalid message: {operation} request is not a non-empty string"
             ));
         }
     };
-    let ok = match object.get("ok") {
-        Some(serde_json::Value::Bool(ok)) => *ok,
+    let ok = match members
+        .get("ok")
+        .map(|raw| serde_json::from_str::<bool>(raw.get()))
+    {
+        Some(Ok(ok)) => ok,
         _ => return Err(format!("invalid message: {operation} ok is not a boolean")),
     };
-    let reason = match object.get("error") {
+    let reason = match text("error") {
         None => None,
-        Some(serde_json::Value::String(reason)) => Some(reason.clone()),
-        Some(_) => {
+        Some(Ok(reason)) => Some(reason),
+        Some(Err(_)) => {
             return Err(format!(
                 "invalid message: {operation} error is not a string"
             ));
         }
     };
     let closed = if operation == "retained" && ok {
-        match object.get("closed").and_then(serde_json::Value::as_u64) {
+        match members
+            .get("closed")
+            // default: a closed that is missing or not a count is the violation below.
+            .and_then(|raw| serde_json::from_str::<u64>(raw.get()).ok())
+        {
             Some(closed) => closed as usize,
             None => return Err("invalid message: retained closed is not a count".to_string()),
         }
@@ -4764,16 +4799,21 @@ fn relay<O: Owner>(
             Err(error) => return Some(format!("read: {error}")),
         }
         record_ready(ready, sidecar);
-        match close_answer(state, sidecar, pid, &line) {
+        let members = match decode_members(&line) {
+            Ok(members) => members,
+            Err(error) => return Some(format!("invalid message: {error}")),
+        };
+        match close_answer(state, sidecar, pid, &members) {
             Ok(true) => continue,
             Ok(false) => {}
             Err(violation) => return Some(violation),
         }
-        let event: Event = match serde_json::from_slice(&line) {
+        let event = match event_of(&members) {
             Ok(event) => event,
-            Err(error) => return Some(format!("invalid message: {error}")),
+            Err(violation) => return Some(violation),
         };
-        record_reply(state, sidecar, &event);
+        let body = MessageBody::read(event.body.get());
+        record_reply(state, sidecar, &event, &body);
         let (owner, addressed) = {
             // default: a lock that a panicking thread poisoned still holds the sidecar state, which is only read; the
             // panic hook records the panic.
@@ -4811,21 +4851,13 @@ fn relay<O: Owner>(
             state: Arc::clone(state),
         };
         let Some(owner) = owner else {
-            drop_message(&response_sender, sidecar, &event.surface, &event.body);
+            drop_message(&response_sender, sidecar, &event.surface, event.body.get());
             continue;
         };
         // Checks and handles whether it is an image envelope.
         if receive_sidecar_message(
             || trace_message("sidecar.receive", sidecar, &event.surface, &event.body),
-            || {
-                try_handle_image_envelope(
-                    &owner,
-                    sidecar,
-                    &event.surface,
-                    &event.body,
-                    &response_sender,
-                )
-            },
+            || try_handle_image_envelope(&owner, sidecar, &event.surface, &body, &response_sender),
         ) {
             continue;
         }
@@ -5118,8 +5150,13 @@ fn fail<O: Owner>(
 
 /// Stores `host.sidecar.reply` for a message of the sidecar when it names the correlation identifiers of requests or its body
 /// states an error (sidecar_reply.rs).
-fn record_reply<O>(state: &Arc<Mutex<State<O>>>, sidecar: &str, event: &Event) {
-    let failure = error_of_body(event.body.get());
+fn record_reply<O>(
+    state: &Arc<Mutex<State<O>>>,
+    sidecar: &str,
+    event: &Event,
+    body: &MessageBody<'_>,
+) {
+    let failure = error_of_body(body);
     if event.cids.is_empty() && failure.is_none() {
         return;
     }
@@ -5212,17 +5249,13 @@ fn try_handle_image_envelope<O: Owner>(
     owner: &O,
     sidecar_name: &str,
     surface: &str,
-    body: &RawValue,
+    body: &MessageBody<'_>,
     response_sender: &dyn ResponseSender,
 ) -> bool {
-    let is_detach_ack = match image_detach::detach_acknowledgement_body(body) {
-        Ok(Some(_)) => true,
-        // default: a value without the declared object path remains an ordinary sidecar message; its raw body continues
-        // through image classification and page delivery.
-        Ok(None) | Err(_) => false,
-    };
-    if is_detach_ack {
-        if let Err(error) = owner.image_detach_ack(sidecar_name, surface, body) {
+    // A body without the declared object path remains an ordinary sidecar message; its raw body continues through image
+    // classification and page delivery.
+    if let Some(detached) = body.image_member("detached") {
+        if let Err(error) = owner.image_detach_ack(sidecar_name, surface, detached) {
             log_error(&format!("sidecar {sidecar_name}"), error);
         }
         return true;
@@ -5232,7 +5265,7 @@ fn try_handle_image_envelope<O: Owner>(
         ImageEnvelopeDecision::NotImage => false,
         ImageEnvelopeDecision::Handled => true,
         ImageEnvelopeDecision::OwnerRetired => {
-            drop_message(response_sender, sidecar_name, surface, body);
+            drop_message(response_sender, sidecar_name, surface, body.raw);
             true
         }
     }
@@ -5305,19 +5338,19 @@ impl Owner for Window {
         &self,
         sidecar_name: &str,
         surface: &str,
-        body: &RawValue,
+        detached: &RawValue,
     ) -> Result<(), String> {
         crate::framework::Manager::state::<WindowSidecars>(self).acknowledge_image_detach(
             sidecar_name,
             surface,
-            body,
+            detached,
         )
     }
     fn decide_image_envelope(
         &self,
         sidecar_name: &str,
         surface: &str,
-        body: &RawValue,
+        body: &MessageBody<'_>,
         response_sender: &dyn ResponseSender,
     ) -> ImageEnvelopeDecision {
         let Some(data) = crate::windows::window_data_if_registered(self) else {
@@ -5325,7 +5358,7 @@ impl Owner for Window {
         };
         let window = self.clone();
         let handled = crate::images::handle_envelope_with_recovery(
-            body.get(),
+            body,
             sidecar_name,
             surface,
             &data.images,

@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::application_log::{log_error, log_failure};
 use crate::exposure::{self, on_main};
+use crate::message_body::{Members, MessageBody};
 use crate::platform::{self, Handle};
 use crate::sidecars::WindowSidecars;
 use crate::surfaces::{require_region, surface_handle};
@@ -2153,31 +2154,39 @@ fn screen_echo(
     echo
 }
 
-/// Parses and validates an image envelope and returns the decision.
-/// body must be a JSON object that holds an "image" field.
+/// Validates the image message of a body and returns the decision. It reads the members of the member image that
+/// `MessageBody::read` decoded and decodes no part of the body again.
 /// It returns NotImage when it is not an image envelope.
 /// It returns Reply when it is not valid.
 /// It returns Present when it is valid and registered.
-pub fn decide(body_str: &str, sender: &str, surface: &str, images: &Images) -> Decision {
-    // Parses the event body and checks the image field.
-    let obj: serde_json::Value = match serde_json::from_str(body_str) {
-        Ok(obj) => obj,
-        Err(_) => return Decision::NotImage,
-    };
-
-    let Some(image_val) = obj.get("image") else {
+pub fn decide(body: &MessageBody<'_>, sender: &str, surface: &str, images: &Images) -> Decision {
+    let Some((image_val, members)) = &body.image else {
         return Decision::NotImage;
     };
-
-    if let Some(want) = image_val.get("want") {
-        return decide_want(want);
-    }
-    if let Some(screen) = image_val.get("screen") {
-        return decide_screen(screen);
+    let malformed = || {
+        log_error(
+            "image frame",
+            format!("surface={surface} sender={sender} malformed image envelope: {image_val}"),
+        );
+        Decision::NotImage
+    };
+    let Some(members) = members else {
+        return malformed();
+    };
+    // The member want or screen is a request of its own; its value is decoded as the request reads it.
+    for (name, decide_request) in [
+        ("want", decide_want as fn(&serde_json::Value) -> Decision),
+        ("screen", decide_screen),
+    ] {
+        if let Some(request) = members.get(name) {
+            return match serde_json::from_str(request.get()) {
+                Ok(request) => decide_request(&request),
+                Err(_) => malformed(),
+            };
+        }
     }
 
     // Defines the structure of the image envelope.
-    #[derive(Deserialize)]
     struct ImageEnvelope {
         name: String,
         token: TokenInfo,
@@ -2197,15 +2206,27 @@ pub fn decide(body_str: &str, sender: &str, surface: &str, images: &Images) -> D
         nonce: String,
     }
 
-    let envelope: ImageEnvelope = match serde_json::from_value(image_val.clone()) {
-        Ok(e) => e,
-        Err(_) => {
-            log_error(
-                "image frame",
-                format!("surface={surface} sender={sender} malformed image envelope: {image_val}"),
-            );
-            return Decision::NotImage;
-        }
+    fn field<T: serde::de::DeserializeOwned>(members: &Members<'_>, name: &str) -> Option<T> {
+        members
+            .get(name)
+            // default: a member that is missing or of another type makes the envelope malformed, which the caller records.
+            .and_then(|raw| serde_json::from_str(raw.get()).ok())
+    }
+    let envelope = (|| {
+        Some(ImageEnvelope {
+            name: field(members, "name")?,
+            token: field(members, "token")?,
+            width: field(members, "width")?,
+            height: field(members, "height")?,
+            scale: field(members, "scale")?,
+            format: field(members, "format")?,
+            generation: field(members, "generation")?,
+            raster: field(members, "raster")?,
+            sequence: field(members, "sequence")?,
+        })
+    })();
+    let Some(envelope) = envelope else {
+        return malformed();
     };
 
     // Validates the format and the token kind.
@@ -2353,7 +2374,7 @@ pub fn after_present(
 /// Handles an image envelope. It takes the work to run on the main thread and the way to send the response as
 /// arguments. It returns true when the envelope was handled and false otherwise.
 pub fn handle_envelope<OnMain, SendResponse>(
-    body_str: &str,
+    body: &MessageBody<'_>,
     sender: &str,
     surface: &str,
     images: &Images,
@@ -2365,7 +2386,7 @@ where
     SendResponse: Fn(&str, serde_json::Value) -> Result<(), crate::sidecars::ResponseError>,
 {
     handle_envelope_with_recovery(
-        body_str,
+        body,
         sender,
         surface,
         images,
@@ -2386,7 +2407,7 @@ where
 /// of the region differs from the frame, so the host state holds an earlier raster than the native region.
 #[allow(clippy::too_many_arguments)]
 pub fn handle_envelope_with_recovery<OnMain, SendResponse, Recover, Declared, Presented>(
-    body_str: &str,
+    body: &MessageBody<'_>,
     sender: &str,
     surface: &str,
     images: &Images,
@@ -2403,7 +2424,7 @@ where
     Declared: Fn() -> bool,
     Presented: Fn(),
 {
-    let decision = decide(body_str, sender, surface, images);
+    let decision = decide(body, sender, surface, images);
 
     match decision {
         Decision::NotImage => false,

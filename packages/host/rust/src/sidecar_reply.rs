@@ -5,8 +5,7 @@
 
 use std::collections::{HashMap, VecDeque};
 
-use serde::Deserialize;
-use serde_json::value::RawValue;
+use crate::message_body::MessageBody;
 
 /// Bounds the requests that wait for a reply. The oldest request is forgotten when the bound is reached and the loss is counted
 /// as `host.buffer.dropped`; the request is still
@@ -131,21 +130,11 @@ impl RequestLedger {
     }
 }
 
-#[derive(Deserialize)]
-struct ErrorMember<'a> {
-    #[serde(borrow)]
-    error: Option<&'a RawValue>,
-}
-
 /// The text of the member `error` of a reply body, which a sidecar writes as a string or as another JSON value, or `None` when the
 /// body has none. A body without the member, or that is not an object, is not an error reply.
-pub fn error_of_body(body: &str) -> Option<String> {
-    if !body.contains("\"error\"") {
-        return None;
-    }
-    // silent: a body that is not an object, or whose error is null, states no error.
-    let member: ErrorMember = serde_json::from_str(body).ok()?;
-    let raw = member.error?;
+pub fn error_of_body(body: &MessageBody<'_>) -> Option<String> {
+    // silent: a body that is not an object, or whose error is missing or null, states no error.
+    let raw = body.error.filter(|raw| raw.get() != "null")?;
     match serde_json::from_str::<String>(raw.get()) {
         Ok(text) => Some(text),
         // default: an error that is not a string is stated by its JSON text.

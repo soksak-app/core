@@ -75,7 +75,7 @@ func TestReloadSurfaceImagesRetainsOldDetachTargetThroughGenerationAdvance(t *te
 		"request": body.Image.Detach.Request, "name": key.Name, "generation": oldGeneration,
 		"ok": true, "result": "detached",
 	}}})
-	if !c.tryHandleImageEnvelope(surfaces, "fixture-sidecar", key.Surface, ack) {
+	if !c.tryHandleImageEnvelope(surfaces, "fixture-sidecar", key.Surface, ReadMessageBody(ack)) {
 		t.Fatal("host did not consume the supplier acknowledgement")
 	}
 	<-ends
@@ -111,7 +111,7 @@ func acknowledgeImageDetach(t *testing.T, c *Sidecars, owner SidecarOwner, targe
 	if err != nil {
 		t.Fatalf("encode detach acknowledgement: %v", err)
 	}
-	if !c.tryHandleImageEnvelope(owner, target.Sidecar, target.Surface, ack) {
+	if !c.tryHandleImageEnvelope(owner, target.Sidecar, target.Surface, ReadMessageBody(ack)) {
 		t.Fatal("host did not consume the supplier acknowledgement")
 	}
 }
@@ -422,7 +422,7 @@ func TestImageDetachAcknowledgementIsConsumedByTheHost(t *testing.T) {
 	sidecars := &Sidecars{imageDetachRequests: map[string]*imageDetachWaiter{"request-1": waiter}}
 	body := json.RawMessage(`{"image":{"detached":{"request":"request-1","name":"view","generation":7,"ok":true,"result":"detached"}}}`)
 
-	if !sidecars.tryHandleImageEnvelope(owner, "fixture-sidecar", "surface-a", body) {
+	if !sidecars.tryHandleImageEnvelope(owner, "fixture-sidecar", "surface-a", ReadMessageBody(body)) {
 		t.Fatal("image.detached was not consumed by the host")
 	}
 	if len(owner.events) != 0 {
@@ -450,7 +450,7 @@ func TestImageDetachAcknowledgementIgnoresAnUnrelatedDeepMember(t *testing.T) {
 		sidecars := &Sidecars{imageDetachRequests: map[string]*imageDetachWaiter{request: waiter}}
 		body = strings.ReplaceAll(body, "request-1", request)
 
-		if !sidecars.tryHandleImageEnvelope(owner, "fixture-sidecar", "surface-a", json.RawMessage(body)) {
+		if !sidecars.tryHandleImageEnvelope(owner, "fixture-sidecar", "surface-a", ReadMessageBody(json.RawMessage(body))) {
 			t.Fatalf("image.detached was not consumed for deep member location %d", index)
 		}
 		if len(owner.events) != 0 {
@@ -706,7 +706,7 @@ func TestAMalformedImageDetachAcknowledgementNamesItsMember(t *testing.T) {
 			}
 			request := sentImageDetachRequest(t, services["fixture-sidecar"])
 			body := `{"image":{"detached":` + strings.ReplaceAll(tc.detached, "REQ", request) + `}}`
-			if !c.tryHandleImageEnvelope(surfaces, target.Sidecar, target.Surface, json.RawMessage(body)) {
+			if !c.tryHandleImageEnvelope(surfaces, target.Sidecar, target.Surface, ReadMessageBody(json.RawMessage(body))) {
 				t.Fatal("host did not consume the malformed acknowledgement")
 			}
 			want := strings.ReplaceAll(tc.want, "REQ", request)

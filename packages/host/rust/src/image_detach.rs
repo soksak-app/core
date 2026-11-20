@@ -45,18 +45,6 @@ pub(crate) fn detach_target_text(target: &DetachTarget) -> String {
 }
 
 #[derive(Deserialize)]
-struct DetachAcknowledgement<'a> {
-    #[serde(borrow)]
-    image: Option<DetachAcknowledgementImage<'a>>,
-}
-
-#[derive(Deserialize)]
-struct DetachAcknowledgementImage<'a> {
-    #[serde(borrow, default, deserialize_with = "raw_value_present")]
-    detached: Option<&'a RawValue>,
-}
-
-#[derive(Deserialize)]
 struct DetachAcknowledgementFields<'a> {
     #[serde(borrow, default, deserialize_with = "raw_value_present")]
     request: Option<&'a RawValue>,
@@ -84,14 +72,6 @@ where
     D: serde::Deserializer<'de>,
 {
     <&RawValue>::deserialize(deserializer).map(Some)
-}
-
-/// Reads only the declared acknowledgement path and skips unrelated JSON members without materializing them.
-pub(super) fn detach_acknowledgement_body(
-    body: &RawValue,
-) -> Result<Option<&RawValue>, serde_json::Error> {
-    let envelope: DetachAcknowledgement<'_> = serde_json::from_str(body.get())?;
-    Ok(envelope.image.and_then(|image| image.detached))
 }
 
 /// Ends the pending detaches whose waiter matches accepts because the supplier connection, the surface session or the
@@ -241,16 +221,14 @@ impl<O: Owner> Sidecars<O> {
         Ok((request, receiver))
     }
 
-    /// Validates and consumes one acknowledgement against its exact pending supplier request.
+    /// Validates and consumes one acknowledgement, the member `image.detached` of a message body, against its exact pending
+    /// supplier request.
     pub(super) fn acknowledge_image_detach(
         &self,
         sidecar: &str,
         surface: &str,
-        body: &RawValue,
+        detached: &RawValue,
     ) -> Result<(), String> {
-        let detached = detach_acknowledgement_body(body)
-            .map_err(|error| format!("invalid image detach acknowledgement: {error}"))?
-            .ok_or_else(|| "image detach acknowledgement has no object payload".to_string())?;
         // A payload that is not an object has no member to name, so its error names the payload.
         let ack: DetachAcknowledgementFields<'_> = serde_json::from_str(detached.get())
             .map_err(|_| "image detach acknowledgement has no object payload".to_string())?;

@@ -6,6 +6,7 @@ use std::path::Path;
 use std::sync::mpsc::{Receiver, TryRecvError, channel, sync_channel};
 use std::thread::JoinHandle;
 
+use crate::message_body::MessageBody;
 use crate::sidecars::{RetainedSurface, SidecarDeclaration};
 use crate::test_folder::Folder;
 use std::sync::{Arc, Mutex};
@@ -97,7 +98,7 @@ impl Owner for FixtureOwner {
         &self,
         _sidecar_name: &str,
         _surface: &str,
-        _body: &RawValue,
+        _body: &MessageBody<'_>,
         _response_sender: &dyn ResponseSender,
     ) -> ImageEnvelopeDecision {
         if self.registered_surfaces.lock().unwrap().contains(_surface) {
@@ -157,7 +158,7 @@ fn an_image_routed_to_an_owner_retired_after_lookup_receives_the_closed_answer()
         &routed_owner,
         "@fixture/sidecar-image",
         "surface-1",
-        &body,
+        &MessageBody::read(body.get()),
         &responses,
     );
 
@@ -188,7 +189,7 @@ fn current_and_retired_owner_paths_keep_their_existing_dispositions() {
         &live_owner,
         "@fixture/sidecar-image",
         "surface-1",
-        &non_image,
+        &MessageBody::read(non_image.get()),
         &responses,
     ));
     assert!(responses.0.lock().unwrap().is_empty());
@@ -216,7 +217,7 @@ fn current_and_retired_owner_paths_keep_their_existing_dispositions() {
         &live_handled_owner,
         "@fixture/sidecar-image",
         "surface-1",
-        &image,
+        &MessageBody::read(image.get()),
         &responses,
     ));
     assert!(responses.0.lock().unwrap().is_empty());
@@ -226,7 +227,7 @@ fn current_and_retired_owner_paths_keep_their_existing_dispositions() {
         &live_owner,
         "@fixture/sidecar-image",
         "surface-1",
-        &non_image,
+        &MessageBody::read(non_image.get()),
         &responses,
     ));
     let malformed_image = RawValue::from_string(r#"{"image":{"name":17}}"#.into()).unwrap();
@@ -234,7 +235,7 @@ fn current_and_retired_owner_paths_keep_their_existing_dispositions() {
         &live_owner,
         "@fixture/sidecar-image",
         "surface-1",
-        &malformed_image,
+        &MessageBody::read(malformed_image.get()),
         &responses,
     ));
     assert!(responses.0.lock().unwrap().is_empty());

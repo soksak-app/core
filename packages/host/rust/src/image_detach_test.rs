@@ -12,6 +12,7 @@ use super::super::{
 use super::{DetachOutcome, DetachWait, begin_image_detaches};
 use crate::event_record::buffered_fields;
 use crate::images::Images;
+use crate::message_body::MessageBody;
 
 #[derive(Clone)]
 struct TestOwner;
@@ -159,8 +160,9 @@ impl ResponseSender for NoopResponseSender {
     }
 }
 
+/// The member `image.detached` of the message body `value`, which the reader passes to the acknowledgement.
 fn ack(value: serde_json::Value) -> Box<RawValue> {
-    RawValue::from_string(value.to_string()).unwrap()
+    RawValue::from_string(value["image"]["detached"].to_string()).unwrap()
 }
 
 // contract: images.detach.ack-consumed
@@ -192,7 +194,7 @@ fn a_deep_unrelated_member_does_not_hide_a_detach_acknowledgement() {
                 &fixture.owner,
                 "fixture-sidecar",
                 "surface-a",
-                &body,
+                &MessageBody::read(body.get()),
                 &NoopResponseSender,
             ),
             "deep unrelated member location {index} must not hide the acknowledgement"

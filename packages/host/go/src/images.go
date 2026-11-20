@@ -1142,60 +1142,57 @@ func imageReply(reason, name string, generation, raster uint64, sequence int) *R
 	}, Reason: reason, Generation: generation, Raster: raster, Sequence: sequence}
 }
 
-// Decide parses and validates an image envelope and returns the decision.
-// body must be a JSON object that contains the "image" field.
+// Decide validates the image message of a body and returns the decision. It reads the members of the member image that
+// ReadMessageBody decoded and decodes no part of the body again.
 // It returns NotImage when it is not an image envelope.
 // It returns Reply when it is not valid.
 // It returns Present when it is valid and registered.
-func Decide(bodyBytes []byte, sender, surface string, images *Images) Decision {
-	var obj map[string]interface{}
-	if err := json.Unmarshal(bodyBytes, &obj); err != nil {
+func Decide(body MessageBody, sender, surface string, images *Images) Decision {
+	if body.imageMalformed {
+		LogError("image frame", fmt.Sprintf("surface=%s sender=%s malformed image envelope: %s", surface, sender, body.imageRaw))
 		return &NotImage{}
 	}
-
-	imageField, ok := obj["image"]
-	if !ok {
+	image := body.image
+	if image == nil {
 		return &NotImage{}
 	}
-
-	imageBytes, err := json.Marshal(imageField)
-	if err != nil {
-		return &NotImage{}
+	if image.Want != nil {
+		return decideWant(image.Want)
 	}
-
-	var wantHolder map[string]json.RawMessage
-	if err := json.Unmarshal(imageBytes, &wantHolder); err == nil {
-		if want, ok := wantHolder["want"]; ok {
-			return decideWant(want)
-		}
-	}
-
-	var screenHolder struct {
-		Screen json.RawMessage `json:"screen"`
-	}
-	if err := json.Unmarshal(imageBytes, &screenHolder); err == nil && screenHolder.Screen != nil {
-		return decideScreen(screenHolder.Screen)
+	if image.Screen != nil {
+		return decideScreen(image.Screen)
 	}
 
 	var envelope struct {
-		Name  string `json:"name"`
+		Name  string
 		Token struct {
 			Kind  string `json:"kind"`
 			ID    uint32 `json:"id"`
 			Nonce string `json:"nonce"`
-		} `json:"token"`
-		Width      int     `json:"width"`
-		Height     int     `json:"height"`
-		Scale      float64 `json:"scale"`
-		Format     string  `json:"format"`
-		Generation uint64  `json:"generation"`
-		Raster     uint64  `json:"raster"`
-		Sequence   int     `json:"sequence"`
+		}
+		Width      int
+		Height     int
+		Scale      float64
+		Format     string
+		Generation uint64
+		Raster     uint64
+		Sequence   int
 	}
-
-	if err := json.Unmarshal(imageBytes, &envelope); err != nil {
-		LogError("image frame", fmt.Sprintf("surface=%s sender=%s malformed image envelope: %s", surface, sender, imageBytes))
-		return &NotImage{}
+	for _, member := range []struct {
+		raw    json.RawMessage
+		target any
+	}{
+		{image.Name, &envelope.Name}, {image.Token, &envelope.Token}, {image.Width, &envelope.Width}, {image.Height, &envelope.Height},
+		{image.Scale, &envelope.Scale}, {image.Format, &envelope.Format}, {image.Generation, &envelope.Generation},
+		{image.Raster, &envelope.Raster}, {image.Sequence, &envelope.Sequence},
+	} {
+		if member.raw == nil {
+			continue
+		}
+		if err := json.Unmarshal(member.raw, member.target); err != nil {
+			LogError("image frame", fmt.Sprintf("surface=%s sender=%s malformed image envelope: %s", surface, sender, body.imageRaw))
+			return &NotImage{}
+		}
 	}
 
 	// Validates the format and the token kind
@@ -1477,9 +1474,9 @@ func logAnswerError(where string, err error) {
 // recoverFrame runs before the answer with notFound, when the native region has no IOSurface to display, and with staleRaster, when the
 // native raster of the region differs from the frame, so the host state holds an earlier raster than the native region; each requests
 // a configuration of the native raster (docs/spec/native-surfaces.md#image-regions). It returns true when it handled the envelope.
-func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, onMain func(func() error) error,
+func HandleEnvelope(body MessageBody, sender, surface string, images *Images, onMain func(func() error) error,
 	sendResponse func(string, map[string]interface{}) error, recoverFrame func(reason string) error, declared func() bool, presented func()) bool {
-	decision := Decide(bodyBytes, sender, surface, images)
+	decision := Decide(body, sender, surface, images)
 
 	switch d := decision.(type) {
 	case *NotImage:
