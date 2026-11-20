@@ -92,6 +92,9 @@ static NSTimeInterval spareDelay = 1;
 @property BOOL placed;
 @property BOOL closed;
 @property BOOL hasFocus;
+// The keyboard focus that the region reported last: the first responder of a key window (docs/spec/native-surfaces.md#image-regions).
+@property BOOL reportedFocus;
+@property(assign) NSWindow *observedWindow;
 @property(copy) NSString *reportedPreedit;  // The composition string reported last.
 @property(retain) NSMutableAttributedString *markedTextBuffer;
 @property NSRange inputSelection;
@@ -625,6 +628,47 @@ static void spEnsurePressOriginMonitor(void) {
         NSViewFrameDidChangeNotification, surface);
 }
 
+- (void)viewWillMoveToWindow:(NSWindow *)window {
+    [self observeWindow:nil];
+    [super viewWillMoveToWindow:window];
+}
+
+- (void)viewDidMoveToWindow {
+    [super viewDidMoveToWindow];
+    [self observeWindow:self.window];
+    [self reportFocusState];
+}
+
+// Follows the key status of the window, which decides the keyboard focus that the region reports, as a terminal reports focus
+// to its program when its window loses or gains the keyboard.
+- (void)observeWindow:(NSWindow *)window {
+    if (self.observedWindow == window) return;
+    if (self.observedWindow) {
+        [NSNotificationCenter.defaultCenter removeObserver:self name:NSWindowDidBecomeKeyNotification object:self.observedWindow];
+        [NSNotificationCenter.defaultCenter removeObserver:self name:NSWindowDidResignKeyNotification object:self.observedWindow];
+    }
+    self.observedWindow = window;
+    if (!window) return;
+    sp_observe_notification_selector("image_region.window_key", SP_OBSERVE_COUNT, self, @selector(windowKeyChanged:),
+        NSWindowDidBecomeKeyNotification, window);
+    sp_observe_notification_selector("image_region.window_key", SP_OBSERVE_COUNT, self, @selector(windowKeyChanged:),
+        NSWindowDidResignKeyNotification, window);
+}
+
+- (void)windowKeyChanged:(NSNotification *)notification {
+    (void)notification;
+    sp_observe_delivered("image_region.window_key");
+    [self reportFocusState];
+}
+
+// Reports the keyboard focus when it changes: the region has it while it is the first responder of a key window.
+- (void)reportFocusState {
+    BOOL focused = self.hasFocus && !self.closed && self.window.isKeyWindow;
+    if (focused == self.reportedFocus) return;
+    self.reportedFocus = focused;
+    [self report:focused ? "{\"type\":\"focus\",\"focused\":true}" : "{\"type\":\"focus\",\"focused\":false}"];
+}
+
 - (void)viewDidMoveToSuperview {
     [super viewDidMoveToSuperview];
     NSView *clipView = self.superview;
@@ -884,7 +928,7 @@ static void spEnsurePressOriginMonitor(void) {
     [self logInput:@"becomeFirstResponder" fields:[NSString stringWithFormat:@"\"result\":%@", result ? @"true" : @"false"] before:before];
     if (result && !self.hasFocus) {
         self.hasFocus = YES;
-        [self report:"{\"type\":\"focus\",\"focused\":true}"];
+        [self reportFocusState];
     }
     return result;
 }
@@ -929,7 +973,7 @@ static void spEnsurePressOriginMonitor(void) {
             // activeElement
             // (V5-114). It hands over right after the same event handling.
             self.hasFocus = NO;
-            [self report:"{\"type\":\"focus\",\"focused\":false}"];
+            [self reportFocusState];
             dispatch_async(dispatch_get_main_queue(), ^{
                 if (!pressed.closed && pressed.window && pressed.window.firstResponder != (NSResponder *)pressed) {
                     [pressed.window makeFirstResponder:(NSResponder *)pressed];
@@ -938,7 +982,7 @@ static void spEnsurePressOriginMonitor(void) {
             return result;
         }
         self.hasFocus = NO;
-        [self report:"{\"type\":\"focus\",\"focused\":false}"];
+        [self reportFocusState];
     }
     return result;
 }
