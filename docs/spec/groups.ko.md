@@ -36,7 +36,7 @@ space의 layout을 바꾸는 모든 operation은 slicing tree에 대한 규칙 �
 - ADD(M, N, side). N은 card, box, 한 level의 이웃한 kid의 run, level, 또는 plane의 root이고 `a`는 side의 축이다.
   - 따라서: N을 담은 level이, 또는 N이 축 `a`의 level이고 side가 그 끝이면 N 자신이 축 `a`를 가지며, M은 N 옆 side 쪽에 들어간다. fraction을 받는 kid k개의 고른 level에서 M은 1/(k + 1)을 받고 모든 kid는 비율을 유지하므로 level은 고르게 남는다. 고르지 않은 level에서는 N만 지불한다. M은 N의 절반을 받고 다른 모든 kid는 fraction을 유지한다.
   - 가로질러: N은 N과 M을 side 쪽으로 담는 축 `a`의 새 level로 감싸지며, 각각 1/2이다.
-- 거부: 사각형이 바뀌는 node가 head와 corridor를 고정 비용으로 한 재귀적 최소([최소 크기](#최소-크기)) 아래로 그려지면 operation은 거부되고 아무것도 바꾸지 않는다. 거부는 그런 node 가운데 가장 깊은 것을 그 content의 크기로 `card <id> would be <w>x<h>, below its minimum <w>x<h>`로 밝히고, 넓이가 없을 node는 `card <id> would be <w>x<h> and have no area`로 밝힌다. group card의 생성은 box와 그 head를 포함하는 library의 operation 하나이며, 그 그려진 결과로 한 번 판정된다.
+- 거부: 사각형이 바뀌는 node가 head와 corridor를 고정 비용으로 한 재귀적 최소([최소 크기](#최소-크기)) 아래로 그려지면 operation은 거부되고 아무것도 바꾸지 않는다. 거부는 그런 node 가운데 가장 깊은 것을 그 content의 크기로 `card <id> would be <w>x<h>, below its minimum <w>x<h>`로 밝히고, 어떤 크기도 그 아래로 떨어지지 않는 `minSize` 0에서는 split이 넓이 없이 남길 card를 `card <id> would be <w>x<h> and have no area`로 밝힌다. group card의 생성은 box와 그 head를 포함하는 library의 operation 하나이며, 그 그려진 결과로 한 번 판정된다.
 
 ### 모든 operation은 조합이다
 

@@ -1062,8 +1062,13 @@ func (g *Grid) splitAt(id string, axis Axis, init SplitInit, first bool) (string
 		} else {
 			h = 0
 		}
+		size := jsString(jsRound(w)) + "x" + jsString(jsRound(h))
+		// A minSize of zero is no minimum to fall below: the refusal is the area that the half would not have.
+		if g.min == 0 {
+			return "", fmt.Errorf("card %s would be %s and have no area", id, size)
+		}
 		m := jsString(jsRound(g.min))
-		return "", fmt.Errorf("card %s would be %sx%s, below its minimum %sx%s", id, jsString(jsRound(w)), jsString(jsRound(h)), m, m)
+		return "", fmt.Errorf("card %s would be %s, below its minimum %sx%s", id, size, m, m)
 	}
 	undo := g.ToJSON()
 	leaf := g.leaves[id]
