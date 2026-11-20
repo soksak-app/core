@@ -84,7 +84,7 @@ func declaredCommonOnly() []string {
 func CommonOnlyKeys() []string { return slices.Clone(commonOnly) }
 
 // WorkspaceRequest is one storage operation. Kind is one of snapshot, add, patch, remove, move, settings, tabState,
-// tabStatePut, tabSession, tabSessionPut, and tabSessions.
+// tabStatePut, tabSession, tabSessionPut, tabSessions, roles, and rolesPut.
 type WorkspaceRequest struct {
 	Kind    string   `json:"kind"`
 	ID      string   `json:"id,omitempty"`
@@ -506,6 +506,10 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 		return putTabSession(w.directory, req.Tab, req.Regions)
 	case "tabSessions":
 		return listTabSessions(w.directory)
+	case "roles":
+		return readRoles(filepath.Join(w.directory, "roles.json"))
+	case "rolesPut":
+		return writeRoles(filepath.Join(w.directory, "roles.json"), req.Roles)
 	}
 	registry := filepath.Join(w.directory, "projects.json")
 	// The file holds the projects under the `projects` member beside the format member (docs/spec/installation.md#stored-data-formats).
@@ -647,8 +651,8 @@ func (h *Host) runWorkspace(req WorkspaceRequest) (any, error) {
 	result, err := h.workspace.Apply(req)
 	if err == nil {
 		switch req.Kind {
-		case "tabState", "tabStatePut", "tabSession", "tabSessionPut", "tabSessions":
-			// The tab state store and the tab sessions change no project or setting, so no window is notified.
+		case "tabState", "tabStatePut", "tabSession", "tabSessionPut", "tabSessions", "roles", "rolesPut":
+			// The tab state store, the tab sessions and the role definitions change no project or setting, so no window is notified.
 		case "snapshot":
 			h.mu.Lock()
 			ids := make([]string, 0, len(h.owners))

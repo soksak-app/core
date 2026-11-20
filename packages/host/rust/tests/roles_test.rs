@@ -73,7 +73,10 @@ fn roles_write_cases_match_shared_file() {
         if case.get("error").is_some() {
             let want = refusal(case, &path);
             assert_eq!(result, Err(want.clone()), "case {name}: want error {want}");
-            assert!(!path.exists(), "case {name}: a refused write created the file");
+            assert!(
+                !path.exists(),
+                "case {name}: a refused write created the file"
+            );
         } else {
             result.unwrap_or_else(|e| panic!("case {name}: rolesPut returned error {e}"));
             let written: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
