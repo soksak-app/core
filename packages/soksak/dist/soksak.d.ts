@@ -140,7 +140,8 @@ export declare class Soksak {
      * at least the costs inside it, its own corridors, px sizes, frames and heads,
      * and the others share what is left. When the room does not hold the px sizes
      * and one `minSize` for the kids that take a fraction, the px sizes are drawn
-     * scaled by one factor; when no kid takes a fraction, they divide the room in
+     * scaled by one factor, and further only where the room does not hold the
+     * costs inside the kids that take a fraction; when no kid takes a fraction, they divide the room in
      * their proportion. Null when the room does not hold the costs of the kids.
      */
     private kidSizes;
