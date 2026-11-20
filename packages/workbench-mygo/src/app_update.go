@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"regexp"
 	"slices"
 
@@ -43,9 +44,11 @@ func NewAppUpdates(calls *Calls, begin BeginOperation, plugins func() *PluginsSt
 }
 
 // Refresh reads the candidate of the registry index again and runs done after the status took the read. A read that fails is the
-// error of the status.
+// error of the status. A read that finds the state and the failure that the window already has changes nothing on the screen, so it
+// asks for no frame.
 func (u *AppUpdates) Refresh(done func()) {
 	u.calls.Call("appUpdateState", nil, func(value any, err error) {
+		before, failed := u.state, u.failure
 		u.state, u.failure = nil, ""
 		if err == nil {
 			var state sok.AppUpdateState
@@ -56,7 +59,9 @@ func (u *AppUpdates) Refresh(done func()) {
 		if err != nil {
 			u.failure = err.Error()
 		}
-		u.changed()
+		if !reflect.DeepEqual(before, u.state) || failed != u.failure {
+			u.changed()
+		}
 		done()
 	})
 }

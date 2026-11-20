@@ -4,6 +4,7 @@ package workbench_test
 import (
 	"encoding/json"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -159,5 +160,32 @@ func BenchmarkAFrameOfAFullWindow(b *testing.B) {
 		for len(f.pending) > 0 {
 			(<-f.pending)()
 		}
+	}
+}
+
+// Each activation of a window reads the plugin state, the application update and the setup parts again (window-active); a read
+// that finds what the window already shows changes nothing on the screen and asks for no frame, and a read that finds a change
+// asks for one.
+func TestAnActivationThatReadsTheSameStateAsksForNoFrame(t *testing.T) {
+	f, stored := updateShell(t, "")
+	f.shell.Event("window-active", nil)
+	f.settle()
+	f.tester.Frame()
+	f.settle()
+	for activation := 1; activation <= 3; activation++ {
+		before := f.frames
+		f.shell.Event("window-active", nil)
+		f.settle()
+		if f.frames != before {
+			t.Fatalf("activation %d read the same state and asked for %d frames", activation, f.frames-before)
+		}
+	}
+	stored.appUpdate = map[string]any{"version": "1.0.0", "available": map[string]any{"version": "2.0.0",
+		"release": map[string]string{"url": appRelease, "sha256": strings.Repeat("0", 64)}}}
+	before := f.frames
+	f.shell.Event("window-active", nil)
+	f.settle()
+	if f.frames == before {
+		t.Fatal("an activation that read a new application update asked for no frame")
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -241,9 +242,11 @@ func (p *PluginOperations) State() *PluginsState { return p.state }
 // Failure returns why the state or the index could not be read, and nil when it could.
 func (p *PluginOperations) Failure() *PluginFailure { return p.failure }
 
-// Refresh reads the state of the host again and then runs done. A read that fails is the failure of the state.
+// Refresh reads the state of the host again and then runs done. A read that fails is the failure of the state. A read that finds
+// the state and the failure that the window already has changes nothing on the screen, so it asks for no frame.
 func (p *PluginOperations) Refresh(done func()) {
 	p.calls.Call("pluginsState", nil, func(value any, err error) {
+		before, failed := p.state, p.failure
 		p.state, p.failure = nil, nil
 		if err == nil {
 			var state PluginsState
@@ -257,7 +260,9 @@ func (p *PluginOperations) Refresh(done func()) {
 		if err != nil {
 			p.failure = &PluginFailure{Kind: "state", Message: err.Error()}
 		}
-		p.changed()
+		if !reflect.DeepEqual(before, p.state) || !reflect.DeepEqual(failed, p.failure) {
+			p.changed()
+		}
 		done()
 	})
 }
