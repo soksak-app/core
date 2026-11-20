@@ -69,7 +69,7 @@ func TestSendRefusesATextOneByteOverTheLimitWithNoFile(t *testing.T) {
 	home := t.TempDir()
 	folder := t.TempDir()
 	text := strings.Repeat("a", messageLimit+1)
-	code, stdout, stderr := messageSend(t, home, "app-1", folder, text)
+	code, stdout, stderr := messageSend(t, home, "app-1", "--reply", folder, text)
 	if code == 0 {
 		t.Fatalf("an oversized text must fail; stdout: %s", stdout)
 	}
@@ -85,7 +85,7 @@ func TestSendAcceptsATextOfExactlyTheLimit(t *testing.T) {
 	home := t.TempDir()
 	folder := t.TempDir()
 	text := strings.Repeat("b", messageLimit)
-	code, stdout, stderr := messageSend(t, home, "app-1", folder, text)
+	code, stdout, stderr := messageSend(t, home, "app-1", "--reply", folder, text)
 	if code != 0 {
 		t.Fatalf("stdout: %s stderr: %s", stdout, stderr)
 	}
@@ -100,7 +100,8 @@ func TestSendAcceptsATextOfExactlyTheLimit(t *testing.T) {
 
 func TestSendWritesTheWholeTextUnderTheSenderNameAndLeavesNoTemporaryFile(t *testing.T) {
 	home := t.TempDir()
-	folder := t.TempDir()
+	root := terminalFolders(t, "app-2")
+	folder := filepath.Join(root, ".soksak", "messages", "app-2")
 	text := "hello 안녕 terminal"
 	code, stdout, stderr := messageSend(t, home, "app-1", folder, text)
 	if code != 0 {
@@ -121,8 +122,47 @@ func TestSendWritesTheWholeTextUnderTheSenderNameAndLeavesNoTemporaryFile(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(written) != text {
-		t.Fatalf("the message is %q, want %q", written, text)
+	// The send adds the request for a report to the folder of the sender (docs/spec/messaging.md#report-request).
+	want := text + ` (끝나면 결과를 sok message send --reply ` + filepath.Join(root, ".soksak", "messages", "app-1") + ` "<보고>"로 보고하라)`
+	if string(written) != want {
+		t.Fatalf("the message is %q, want %q", written, want)
+	}
+}
+
+func TestSendReplyWritesTheTextAloneAsAReport(t *testing.T) {
+	home := t.TempDir()
+	root := terminalFolders(t, "app-2")
+	folder := filepath.Join(root, ".soksak", "messages", "app-2")
+	code, stdout, stderr := messageSend(t, home, "app-1", "--reply", folder, "done 안녕")
+	if code != 0 {
+		t.Fatalf("stdout: %s stderr: %s", stdout, stderr)
+	}
+	name := messageName(t, stdout)
+	token := strings.TrimSuffix(strings.TrimPrefix(name, "app-1."), ".txt")
+	if !strings.HasPrefix(token, "report-") || strings.Contains(token, ".") {
+		t.Fatalf("a report has the name <from>.report-<token>.txt; name: %s", name)
+	}
+	written, err := os.ReadFile(filepath.Join(folder, name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(written) != "done 안녕" {
+		t.Fatalf("a report holds the text alone; it is %q", written)
+	}
+}
+
+func TestSendRefusesAFolderOfNoTerminalWithoutReplyWithNoFile(t *testing.T) {
+	home := t.TempDir()
+	folder := t.TempDir()
+	code, stdout, stderr := messageSend(t, home, "app-1", folder, "text")
+	if code == 0 {
+		t.Fatalf("stdout: %s", stdout)
+	}
+	if !strings.Contains(stderr, "is not the folder of a terminal") {
+		t.Fatalf("the refusal must name the folder rule; stderr: %s", stderr)
+	}
+	if names := messageEntries(t, folder); len(names) != 0 {
+		t.Fatalf("a refused send must write no file; entries: %v", names)
 	}
 }
 
@@ -214,7 +254,7 @@ func TestSendWithoutAnApplicationOrToAnotherFolderHasNoReceiver(t *testing.T) {
 	config := t.TempDir()
 	root := terminalFolders(t, "t2")
 	for _, folder := range []string{filepath.Join(root, ".soksak", "messages", "t2"), t.TempDir()} {
-		code, stdout, stderr := messageSend(t, home, "t1", "--config-dir", config, folder, "hello")
+		code, stdout, stderr := messageSend(t, home, "t1", "--config-dir", config, "--reply", folder, "hello")
 		if code != 0 || messageReceiver(t, stdout) != "null" {
 			t.Fatalf("send to %s: code %d stdout %q stderr %q", folder, code, stdout, stderr)
 		}

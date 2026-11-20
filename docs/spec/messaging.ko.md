@@ -52,6 +52,14 @@ Writer는 message를 `.txt`로 끝나지 않는 임시 이름, 예를 들면 같
 
 Message는 소비되지 않는다. `messages_read`는 `after`보다 큰 sequence number를 가진 message를 `seq` 증가 순서로 돌려준다. 같은 `after`로 반복해서 읽으면 folder가 바뀌지 않는 한 같은 message를 돌려준다. 이 operation은 idempotent하기 때문이다([AGENTS](../../AGENTS.md#implementation)). 같은 파일을 다시 쓰면 새 `created` 또는 `modified` file event가 새 `seq`로 생기며, 이것은 새 message로 그 `seq`와 함께 돌려준다. 이전 event를 대체하지 않는다. Message의 text는 reply를 만들 때 읽는다. `removed` event는 message가 아니다: reply의 message는 reply를 만들 때 파일이 있는 `created`와 `modified` event이며, `last`는 registration의 모든 event 중 가장 큰 `seq`다.
 
+## Report request
+
+Message는 받는 쪽에 보고를 요청하고, 보고는 아무것도 요청하지 않는다. `sok message send <folder> <text>`는 `<text> (끝나면 결과를 sok message send --reply <sender folder> "<보고>"로 보고하라)`를 쓴다. `<sender folder>`는 `<root>/.soksak/messages/<SOKSAK_SURFACE>`, 즉 받는 쪽의 folder `<root>/.soksak/messages/<surface>` 옆에 있는 보내는 surface의 folder다([folder of a terminal](messaging.md#folder-of-a-terminal)). 명령은 요청을 정확히 하나 덧붙이고 text 안에서 요청을 찾지 않으므로, 보내는 쪽은 요청을 쓰지 않는다. 다른 형식의 folder는 root를 밝히지 않으므로 send는 명시적 error로 실패하며 파일을 쓰지 않는다. `sok message send --reply <folder> <text>`는 `<text>`만 쓰고 파일 이름을 `<from>.report-<token>.txt`로 한다.
+
+- 요청이 파일 안에 있는 이유: 요청은 message의 일부이므로, `messages_read`나 `messages_wait`로 읽는 agent는 주입된 paste와 같은 요청을 읽는다([injected message](messaging.md#injected-message)). 주입된 paste의 text는 파일의 text다. 각 message에 요청이 있으므로 받는 쪽은 별도의 지시가 필요 없고, 보내는 쪽은 결과를 알기 위한 두 번째 submit이 필요 없다.
+- Token에 표시하는 이유: 보고는 reader가 해석하지 않는 이름 부분에 표시한다. Sidecar는 마지막 `.` 앞의 text를 `from`으로 받고, `.` 없는 비어 있지 않은 token을 요구한다([message](messaging.md#message)). `report-<token>`은 그런 token이므로 folder 계약의 모든 reader가 바뀌지 않고 보고를 message로 읽으며, 이름은 여전히 파일이 보고임을 밝힌다. 첫 줄처럼 text 안의 표시는 받는 쪽 terminal에 paste된다.
+- soksak terminal 안의 agent는 각 message를 주입된 입력으로 받으므로, 요청에 `--reply`로 한 번 답하고 보고에는 답하지 않는다. `messages_read`와 `messages_wait`는 soksak terminal 밖의 agent를 위한 것이거나 기록을 읽는다([agent skill](cli.md#agent-skill)).
+
 ## Folder 제거 또는 이름 변경
 
 등록된 folder가 제거되거나 이름이 바뀌면 sidecar는 `{registration, reason: "folder-removed"}`를 담은 `sidecar.<sidecar>.registration.closed` event를 gate level `info`로 보내고, 그 registration의 watch를 끝낸다. Event는 명시적이며, sidecar는 folder를 polling하지 않는다([AGENTS](../../AGENTS.md#implementation)). 같은 path에 folder를 다시 만들어도 watch는 재개되지 않는다. Agent가 folder를 다시 등록하며, 새 registration의 `seq`는 1에서 시작한다.

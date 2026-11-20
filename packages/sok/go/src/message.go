@@ -1,8 +1,10 @@
 package sok
 
-// `sok message send <folder> <text>` (docs/spec/cli.md#commands, docs/spec/messaging.md#message): writes one text as a message of
-// the surface that SOKSAK_SURFACE names. The text is written under a temporary name that does not end in `.txt`, and the file is
-// renamed to `<from>.<token>.txt`; the rename is the point at which the message becomes visible. The Rust sok
+// `sok message send [--reply] <folder> <text>` (docs/spec/cli.md#commands, docs/spec/messaging.md#message): writes one text as a
+// message of the surface that SOKSAK_SURFACE names. A message carries the request for a report to the folder of the sender, and a
+// report (--reply) carries the text alone under the token prefix `report-` (docs/spec/messaging.md#report-request). The text is
+// written under a temporary name that does not end in `.txt`, and the file is renamed to `<from>.<token>.txt`; the rename is the
+// point at which the message becomes visible. The Rust sok
 // (packages/sok/rust/src/message.rs) implements the same command with the same rules.
 
 import (
@@ -36,7 +38,7 @@ func runMessage(args []string, stdout io.Writer, options Options) error {
 	if args[0] != "send" {
 		return usage("unknown command: message %s", strings.Join(args, " "))
 	}
-	parsed, err := parseAllowed(args[1:], map[string]bool{}, map[string]bool{"config-dir": true})
+	parsed, err := parseAllowed(args[1:], map[string]bool{"reply": true}, map[string]bool{"config-dir": true})
 	if err != nil {
 		return err
 	}
@@ -51,7 +53,15 @@ func runMessage(args []string, stdout io.Writer, options Options) error {
 	if strings.ContainsAny(surface, "/\\\x00") {
 		return fmt.Errorf("%s is not a valid surface identifier: %s", SurfaceVariable, surface)
 	}
-	name, err := sendMessage(folder, surface, text)
+	report := parsed.flags["reply"]
+	if !report {
+		request, err := reportRequest(folder, surface)
+		if err != nil {
+			return err
+		}
+		text += request
+	}
+	name, err := sendMessage(folder, surface, text, report)
 	if err != nil {
 		return err
 	}
@@ -141,9 +151,20 @@ func readReceiver(client *Client, terminal string) (any, error) {
 	return nil, fmt.Errorf("exposure.snapshot of window %s holds no group of surface %s", home.Window, terminal)
 }
 
-// sendMessage writes text as a message of surface into folder and returns the name of the message file. A text over the limit
-// fails before any file is created.
-func sendMessage(folder, surface, text string) (string, error) {
+// reportRequest returns the request for a report that a message carries after its text: the folder of the sender is
+// <root>/.soksak/messages/<surface>, beside the folder of the receiver, <root>/.soksak/messages/<receiver>
+// (docs/spec/messaging.md#report-request). A folder of another form names no root, and the send is refused.
+func reportRequest(folder, surface string) (string, error) {
+	messages := filepath.Dir(filepath.Clean(folder))
+	if filepath.Base(messages) != "messages" || filepath.Base(filepath.Dir(messages)) != ".soksak" {
+		return "", fmt.Errorf("message send: %s is not the folder of a terminal, <root>/.soksak/messages/<surface>, so it names no folder of the sender for the report; a report is sent with --reply", folder)
+	}
+	return ` (끝나면 결과를 sok message send --reply ` + filepath.Join(messages, surface) + ` "<보고>"로 보고하라)`, nil
+}
+
+// sendMessage writes text as a message of surface into folder and returns the name of the message file; the token of a report starts
+// with `report-`. A text over the limit fails before any file is created.
+func sendMessage(folder, surface, text string, report bool) (string, error) {
 	if !filepath.IsAbs(folder) {
 		return "", fmt.Errorf("folder is not an absolute path: %s", folder)
 	}
@@ -152,6 +173,9 @@ func sendMessage(folder, surface, text string) (string, error) {
 	}
 	token := messageToken()
 	temporary := filepath.Join(folder, ".tmp-"+token)
+	if report {
+		token = "report-" + token
+	}
 	name := surface + "." + token + ".txt"
 	file, err := os.OpenFile(temporary, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {

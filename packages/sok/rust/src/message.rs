@@ -1,5 +1,6 @@
-//! `sok message send <folder> <text>`: writes one message into a registered folder (docs/spec/cli.md#commands,
-//! docs/spec/messaging.md#message). The text is written under a temporary name that does not end in `.txt`, and the file is renamed
+//! `sok message send [--reply] <folder> <text>`: writes one message into a registered folder (docs/spec/cli.md#commands,
+//! docs/spec/messaging.md#message). A message carries the request for a report to the folder of the sender, and a report (`--reply`)
+//! carries the text alone under the token prefix `report-` (docs/spec/messaging.md#report-request). The text is written under a temporary name that does not end in `.txt`, and the file is renamed
 //! to `<from>.<token>.txt`, the rename being the point at which the message becomes visible.
 
 use std::collections::HashMap;
@@ -44,7 +45,7 @@ pub(crate) fn run(
             args.join(" ")
         )));
     }
-    let parsed = crate::parse_scoped_arguments(&args[1..], &[], &["config-dir"])?;
+    let parsed = crate::parse_scoped_arguments(&args[1..], &["reply"], &["config-dir"])?;
     let [folder, text] = parsed.positionals.as_slice() else {
         return Err(Error::Usage(
             "message send requires a folder and a text".into(),
@@ -63,7 +64,13 @@ pub(crate) fn run(
             "{SURFACE_VARIABLE} is not a valid surface identifier: {surface}"
         )));
     }
-    let name = send(folder, &surface, text)?;
+    let report = parsed.flags.contains_key("reply");
+    let text = if report {
+        text.clone()
+    } else {
+        format!("{text}{}", report_request(folder, &surface)?)
+    };
+    let name = send(folder, &surface, &text, report)?;
     let receiver = receiver(folder, &parsed.values, options)
         .map_err(|error| Error::Failed(format!("message {name} was written; {error}")))?;
     let output = json!({ "path": name, "receiver": receiver });
@@ -182,9 +189,31 @@ fn read_receiver(client: &mut Client, terminal: &str) -> Result<Value, String> {
     Ok(json!({ "surface": terminal, "plugin": group.plugin, "held": held }))
 }
 
-/// Writes `text` as a message of `surface` into `folder` and returns the name of the message file. A text over the limit fails before
-/// any file is created.
-fn send(folder: &str, surface: &str, text: &str) -> Result<String, Error> {
+/// The request for a report that a message carries after its text: the folder of the sender is `<root>/.soksak/messages/<surface>`,
+/// beside the folder of the receiver, `<root>/.soksak/messages/<receiver>` (docs/spec/messaging.md#report-request). A folder of another
+/// form names no root, and the send is refused.
+fn report_request(folder: &str, surface: &str) -> Result<String, Error> {
+    let messages = Path::new(folder).parent().filter(|messages| {
+        messages.file_name().is_some_and(|name| name == "messages")
+            && messages
+                .parent()
+                .and_then(Path::file_name)
+                .is_some_and(|name| name == ".soksak")
+    });
+    let Some(messages) = messages else {
+        return Err(Error::Failed(format!(
+            "message send: {folder} is not the folder of a terminal, <root>/.soksak/messages/<surface>, so it names no folder of the sender for the report; a report is sent with --reply"
+        )));
+    };
+    Ok(format!(
+        " (끝나면 결과를 sok message send --reply {} \"<보고>\"로 보고하라)",
+        messages.join(surface).display()
+    ))
+}
+
+/// Writes `text` as a message of `surface` into `folder` and returns the name of the message file; the token of a report starts
+/// with `report-`. A text over the limit fails before any file is created.
+fn send(folder: &str, surface: &str, text: &str, report: bool) -> Result<String, Error> {
     if !Path::new(folder).is_absolute() {
         return Err(Error::Failed(format!(
             "folder is not an absolute path: {folder}"
@@ -199,7 +228,11 @@ fn send(folder: &str, surface: &str, text: &str) -> Result<String, Error> {
     let folder = Path::new(folder);
     let token = unique_token()?;
     let temporary = folder.join(format!(".tmp-{token}"));
-    let name = format!("{surface}.{token}.txt");
+    let name = if report {
+        format!("{surface}.report-{token}.txt")
+    } else {
+        format!("{surface}.{token}.txt")
+    };
     let mut file = OpenOptions::new()
         .write(true)
         .create_new(true)

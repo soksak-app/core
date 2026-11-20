@@ -64,7 +64,8 @@ fn send_refuses_a_text_one_byte_over_the_limit_with_no_file() {
     let home = Folder::new("message-home");
     let folder = Folder::new("message-over-limit");
     let text = "a".repeat(LIMIT + 1);
-    let (status, stdout, stderr) = run_send(&home, Some("app-1"), &[folder.text(), &text]);
+    let (status, stdout, stderr) =
+        run_send(&home, Some("app-1"), &["--reply", folder.text(), &text]);
     assert_ne!(status, 0, "an oversized text must fail; stdout: {stdout}");
     assert!(
         stderr.contains("65536"),
@@ -82,7 +83,8 @@ fn send_accepts_a_text_of_exactly_the_limit() {
     let home = Folder::new("message-home");
     let folder = Folder::new("message-at-limit");
     let text = "b".repeat(LIMIT);
-    let (status, stdout, stderr) = run_send(&home, Some("app-1"), &[folder.text(), &text]);
+    let (status, stdout, stderr) =
+        run_send(&home, Some("app-1"), &["--reply", folder.text(), &text]);
     assert_eq!(status, 0, "stdout: {stdout} stderr: {stderr}");
     let name = message_name(&stdout);
     let written = std::fs::read_to_string(folder.path().join(&name)).expect("message file");
@@ -92,9 +94,15 @@ fn send_accepts_a_text_of_exactly_the_limit() {
 #[test]
 fn send_writes_the_whole_text_under_the_sender_name_and_leaves_no_temporary_file() {
     let home = Folder::new("message-home");
-    let folder = Folder::new("message-whole");
+    let root = Folder::new("message-whole");
+    terminal_folders(root.path(), &["app-2"]);
+    let folder = root.path().join(".soksak").join("messages").join("app-2");
     let text = "hello 안녕 terminal";
-    let (status, stdout, stderr) = run_send(&home, Some("app-1"), &[folder.text(), text]);
+    let (status, stdout, stderr) = run_send(
+        &home,
+        Some("app-1"),
+        &[folder.to_str().expect("folder"), text],
+    );
     assert_eq!(status, 0, "stdout: {stdout} stderr: {stderr}");
     let name = message_name(&stdout);
     assert!(
@@ -107,12 +115,55 @@ fn send_writes_the_whole_text_under_the_sender_name_and_leaves_no_temporary_file
         "the token must be non-empty and hold no dot; token: {token}"
     );
     assert_eq!(
-        entries(folder.path()),
+        entries(&folder),
         vec![name.clone()],
         "the folder must hold only the message file after the send"
     );
-    let written = std::fs::read_to_string(folder.path().join(&name)).expect("message file");
-    assert_eq!(written, text);
+    let written = std::fs::read_to_string(folder.join(&name)).expect("message file");
+    // The send adds the request for a report to the folder of the sender (docs/spec/messaging.md#report-request).
+    let sender = root.path().join(".soksak").join("messages").join("app-1");
+    assert_eq!(
+        written,
+        format!(
+            "{text} (끝나면 결과를 sok message send --reply {} \"<보고>\"로 보고하라)",
+            sender.display()
+        )
+    );
+}
+
+#[test]
+fn send_reply_writes_the_text_alone_as_a_report() {
+    let home = Folder::new("message-home");
+    let root = Folder::new("message-report");
+    terminal_folders(root.path(), &["app-2"]);
+    let folder = root.path().join(".soksak").join("messages").join("app-2");
+    let (status, stdout, stderr) = run_send(
+        &home,
+        Some("app-1"),
+        &["--reply", folder.to_str().expect("folder"), "done 안녕"],
+    );
+    assert_eq!(status, 0, "stdout: {stdout} stderr: {stderr}");
+    let name = message_name(&stdout);
+    let token = &name["app-1.".len()..name.len() - ".txt".len()];
+    assert!(
+        token.starts_with("report-") && !token.contains('.'),
+        "a report has the name <from>.report-<token>.txt; name: {name}"
+    );
+    let written = std::fs::read_to_string(folder.join(&name)).expect("message file");
+    assert_eq!(written, "done 안녕", "a report holds the text alone");
+}
+
+#[test]
+fn send_refuses_a_folder_of_no_terminal_without_reply_with_no_file() {
+    let home = Folder::new("message-home");
+    let folder = Folder::new("message-no-terminal");
+    let (status, stdout, stderr) = run_send(&home, Some("app-1"), &[folder.text(), "text"]);
+    assert_ne!(status, 0, "stdout: {stdout}");
+    assert!(
+        stderr.contains("is not the folder of a terminal"),
+        "the refusal must name the folder rule; stderr: {stderr}"
+    );
+    assert!(entries(folder.path()).is_empty());
 }
 
 #[test]
@@ -242,6 +293,7 @@ fn send_without_an_application_or_to_another_folder_has_no_receiver() {
             &[
                 "--config-dir",
                 config.text(),
+                "--reply",
                 path.to_str().expect("path"),
                 "hello",
             ],

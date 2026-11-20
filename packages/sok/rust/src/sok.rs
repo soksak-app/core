@@ -94,7 +94,8 @@ commands:
                             waits for the operating system to report that PID ended
   conversation read --agent claude-code|codex --cwd PATH
                             prints the messages of the agent conversation of the working directory, read from its session file
-  message send FOLDER TEXT  writes TEXT as a message of the surface SOKSAK_SURFACE into the folder FOLDER, and prints its file name and the hold of the receiver
+  message send [--reply] FOLDER TEXT
+                            writes TEXT as a message of the surface SOKSAK_SURFACE into the folder FOLDER, and prints its file name and the hold of the receiver; sok message send FOLDER TEXT adds to TEXT the request to report the result with sok message send --reply to the folder of the sender, so a sender writes no request; a report is sent with --reply, which adds none, and a report is never answered.
   registry build DIRECTORY  checks a registry and writes its index.json
   registry use INDEX        sets the registry index that installation reads
   plugin install|update|remove|enable|disable ID

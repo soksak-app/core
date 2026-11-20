@@ -2,6 +2,7 @@
   "contract": "docs/spec/messaging.md#message",
   "cases": [
     {"name": "s1.a1b2.txt", "result": {"from": "s1"}},
+    {"name": "s1.report-a1b2.txt", "result": {"from": "s1"}},
     {"name": "surface.with.dots.token.txt", "result": {"from": "surface.with.dots"}},
     {"name": "3f2c9a10-7e7b-4d1e-9a3c-2b6a1d0e9f11.0001.txt", "result": {"from": "3f2c9a10-7e7b-4d1e-9a3c-2b6a1d0e9f11"}},
     {"name": "note.txt", "result": "invalid-sender"},
