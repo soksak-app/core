@@ -39,9 +39,10 @@ program 이 그린 적 없는 행은 program 만 갖고 있으며, 어떤 터미
 
 - 경로: scroll 은 Shift 없이 sidecar 의 wheel 규칙([wheel 입력](#wheel-입력))을 따른다. program 이 mouse tracking 을 켰으면 wheel 의 mouse report, alternate screen 이 활성이고 alternate scroll mode 가 적용되면 cursor key `Up` 과 `Down`, 그 밖에는 primary screen 의 viewport 이다.
 - 단계: 명령은 screen 을 읽고, scroll 을 보내고, program 이 그것을 그릴 때까지 기다리고, screen 을 읽고, `-by` 의 scroll 을 보내고, program 이 그것을 그릴 때까지 기다리고, screen 을 읽어 첫 읽기와 비교한다.
-- 답: `{route, changed, text, restored}`. `route` 는 `program`, `alternate_scroll`, `viewport` 중 하나이다. `changed` 는 scroll 뒤의 screen 이 첫 읽기와 다른지이므로 호출자는 내용의 끝을 본다. `text` 는 scroll 뒤의 각 행의 plain text 이다. `restored` 는 마지막 읽기가 첫 읽기와 같은지이다. 그것이 `false` 이면 program 이 원래 자리에 있지 않으므로 답은 첫 읽기와 마지막 읽기의 첫 행도 담고, plugin 은 그 오류를 자기 오류 표시 경로로 보인다. 명령은 짐작한 차이만큼 다시 scroll 하지 않는다.
+- 답: `{route, changed, text, restored, settledBy, quiet, refreshRate}`. `route` 는 `program`, `alternate_scroll`, `viewport` 중 하나이다. `changed` 는 scroll 뒤의 screen 이 첫 읽기와 다른지이므로 호출자는 내용의 끝을 본다. `text` 는 scroll 뒤의 각 행의 plain text 이다. `restored` 는 마지막 읽기가 첫 읽기와 같은지이다. `settledBy` 는 `{scroll, restore}` 로, 각 단계의 기다림을 끝낸 이벤트 `sync`, `quiet`, `viewport` 중 하나이다([program scroll 의 그리기](#program-scroll-의-그리기)). `quiet` 는 읽기가 쓴 display frame 단위의 조용한 간격이다. `refreshRate` 는 읽기의 마지막 tick 의 refresh rate 이며, 읽기가 tick 을 받지 않았으면 `null` 이다. `restored` 가 `false` 이면 program 이 원래 자리에 있지 않으므로 답은 첫 읽기와 마지막 읽기의 첫 행을 `{before, after}` 로 담는 `first` 도 담고, plugin 은 그 오류를 자기 오류 표시 경로로 보인다. 명령은 짐작한 차이만큼 다시 scroll 하지 않는다.
+- sidecar 요청: plugin 은 `screen.scroll.read {by, quiet}` 를 보낸다. `by` 는 0 이 아닌 -1000 부터 1000 까지의 정수이고, `quiet` 는 그 설정 `scrollReadQuiet` 의 조용한 간격으로 1 부터 120 display frame 까지의 정수이며 기본값은 6 이다. sidecar 는 이벤트 `screen.scroll` 과 답의 멤버로 답하고, 다른 값에는 `invalidParams` 와 이유로 답한다. surface 의 다른 읽기가 도는 동안의 읽기는 `invalidParams` 와 이유 `a scroll read is running` 으로 거절된다. 붙은 image region 이 없는 surface 의 읽기는 `invalidParams` 와 이유 `a scroll read needs the display frames of an image region` 으로 거절된다. display frame 은 그 region 의 tick 으로만 sidecar 에 닿기 때문이다.
 - 사람의 입력: 사람이 첫 단계와 마지막 단계 사이에 그 session 에 입력을 보내면 읽기는 session 의 입력 순서로 판정해 거절된다. 사람의 입력은 실행되고, 읽기는 그 입력을 이름하는 오류로 끝난다.
-- 그리기: 그리기의 기다림을 끝내는 이벤트는 열린 결정이다([열린 결정](#열린-결정)). timer 는 그것을 끝내지 않는다.
+- 그리기: 각 단계의 기다림은 [program scroll 의 그리기](#program-scroll-의-그리기) 의 규칙으로 끝난다. timer 는 그것을 끝내지 않는다.
 
 ## Session 상태
 
@@ -65,9 +66,25 @@ agent program 은 대화의 transcript 를 스스로 보존한다. `sok conversa
 
 sidecar 는 wheel 동작 `scroll {lines, col, row, shift}` 를 이 순서로 보낸다. program 이 mouse reporting 을 켰고 Shift 가 눌리지 않았으면 mouse report, alternate screen 이 활성이고 alternate scroll mode(DECSET 1007)가 설정되었으면 alternate scroll 의 cursor key, 그 밖에는 primary screen 의 viewport 이다. 각 plugin 의 page 는 사람의 wheel 을 이 동작으로 보내고, program scroll 도 같은 동작을 보낸다.
 
-## 열린 결정
+## Program scroll 의 그리기
 
-- Program scroll 의 그리기. 제안 규칙: (1) 동기 출력(DECSET 과 DECRST 2026)을 쓰는 program 은 reset 으로 frame 을 끝내므로, scroll 입력 뒤의 첫 reset 이 기다림을 끝내고 답은 `settledBy: "sync"` 를 말한다. sidecar 는 동기 frame 이 끝날 때마다 session 이벤트를 발행한다. (2) 동기 출력이 없는 program 에서는 redraw 의 끝을 알리는 이벤트가 없으므로, 그때에만 입력 뒤의 마지막 출력 다음에 session 의 출력이 없는 조용한 간격이 지나면 기다림이 끝난다. 간격은 millisecond 가 아니라 창의 display frame 으로 세므로 규칙은 모든 refresh rate 에서 성립한다. 답은 `settledBy: "quiet"` 와 간격을 말하고, 간격은 frame 단위의 기본값을 가진 선언된 설정이다. (3) 입력 뒤 간격 안에 출력이 없으면 screen 은 바뀌지 않은 채 `changed: false` 이다. (4) 되돌리기 단계의 기다림도 같은 규칙으로 끝난다. 이유: 2026 의 reset 은 program 이 frame 의 끝에 보내는 유일한 이벤트이고, frame 수는 refresh rate 를 가정하지 않는 척도이다.
-  - 반론, 답함: 창의 display frame 은 sidecar 의 frame 요청에 답하는 tick 으로만 sidecar 에 닿고([image region](native-surfaces.ko.md#그림-영역)), 가려진 창이나 그리지 않는 region 은 그것을 주지 않는다. 답: 그리기가 아니라 읽기를 위한 frame 요청은 `purpose: "read"` 를 담고, screen 의 display link 는 가려짐과 무관하게 돌므로 host 는 창이 가려졌거나 region 이 그리지 않을 때도 창의 screen 의 display frame 에서 그것에 답한다. 어느 screen 에도 없는 창은 그 창을 이름하는 오류로 읽기를 거절한다. session 은 시계를 갖지 않는다.
-  - 반론, 답함: 조용한 간격은 출력이 없음으로 program 을 판정하므로, disk 나 network 에서 내용을 읽는 program 처럼 간격 뒤에 답하는 program 에는 그 답 이전의 screen 을 이름하는 답을 준다. 답: `settledBy: "quiet"` 는 program 이 끝났음을 증명하지 않는다. 답은 간격을 담으므로 호출자가 다시 읽는다. 기본 간격은 측정한다. 부하 아래 `less`, `vim`, `htop` 의 redraw 하나의 출력 묶음 사이의 가장 큰 간격을 추적되는 측정으로 재고, 이 절이 그 결과와 근거를 말한다.
-  - 남은 것: 기본 간격의 측정과 반론 없는 규칙의 review 한 차례.
+program 이 redraw 를 마쳤음을 알리는 터미널 이벤트는 없으므로, scroll 단계와 되돌리기 단계의 기다림은 이 규칙으로 끝난다. 이 규칙은 시간을 millisecond 가 아니라 창의 display frame 으로 세므로 모든 refresh rate 에서 성립한다.
+
+- Tick: 단계가 기다리는 동안 sidecar 는 자기 region 의 frame 요청 `{"image":{"want":{"name","generation","purpose":"read"}}}` 를 그것에 답하는 각 tick 에서 보내므로, 창이 가려졌거나 region 이 그리지 않는 동안에도 창의 screen 의 display frame 마다 tick 하나를 받는다([복사 경로 프레임](native-surfaces.ko.md#복사-경로-프레임)). 어느 screen 에도 없는 창의 `noScreen` 같은 요청의 거절은 그 거절과 창을 이름하는 오류로 읽기를 끝낸다.
+- 동기 출력: 동기 출력(DECSET 과 DECRST 2026)을 쓰는 program 은 reset 으로 frame 을 끝낸다. 단계는 그 단계의 입력 뒤에 열린 update 의 reset 다음의 첫 tick 에서, 그 reset 과 tick 사이에 출력이 없고 열린 update 가 없으면 `sync` 로 끝난다. 같은 redraw 의 두 번째 update 처럼 그 frame 안의 출력은 다음 tick 을 기다린다.
+- 조용한 간격: 단계는 그 단계의 입력 뒤의 마지막 출력 다음에, 또는 입력 뒤에 출력이 없었으면 입력 다음에 `quiet` 개의 tick 이 온 tick 에서도 `quiet` 로 끝난다. 조용한 경로는 program 이 동기 출력을 쓰든 안 쓰든 성립하므로, 열리고 닫히지 않는 update 는 그것으로 끝난다. reset 은 기다림을 더 일찍 끝낼 뿐이다. scroll 단계에 출력이 없으면 `changed: false` 이다.
+- Viewport: 경로 `viewport` 에서는 engine 이 scroll 을 곧바로 적용하고 program 이 그리지 않으므로 각 단계는 곧바로 `viewport` 로 끝난다.
+- 증명 아님: `quiet` 는 program 이 끝났음을 증명하지 않는다. disk 나 network 에서 내용을 읽는 program 처럼 간격 뒤에 답하는 program 은 그 답 이전의 screen 을 이름하는 답을 준다. 답은 `settledBy` 와 `quiet` 를 담으므로 호출자는 다시 읽거나 설정을 올린다. 더 큰 간격의 비용은 시간뿐이다. `quiet` display frame 의 기다림 두 번이며, 그 동안 사람의 입력은 읽기를 거절한다.
+- 기본값: `quiet` 는 display frame 6 개이다. tick 은 요청마다 하나씩 서로 다른 display frame 에 오므로, 출력 뒤 `quiet` 개의 tick 은 적어도 `quiet - 1` 개의 온전한 frame 주기에 걸친다. 5 주기는 120 Hz 에서 41.7 ms, 60 Hz 에서 83 ms 이다. vt S211 의 추적되는 측정(sidecar vt 의 `make measure-program-redraw`)은 40 × 120 cell 의 실제 PTY 에서 2000 행의 번호 매긴 file 로 `less` 와 `vim` 을, 그리고 `htop` 을 실행하고, cursor key 50 개씩의 scroll 을 부하 없이와 11 개 processor 마다 바쁜 process 하나의 부하로 120 Hz screen 에서 20 번 보냈다. key 에서 첫 출력까지의 가장 긴 시간과 redraw 하나의 출력 사이의 가장 큰 간격은 `less` 가 부하 없이 0.1 과 0.1 ms, 부하에서 3.7 과 3.4 ms, `vim` 이 1.1 과 0.3 ms 와 3.4 와 0.3 ms, `htop` 이 2.1 과 0.6 ms 와 4.5 와 5.4 ms 였다. 기본값은 120 Hz 에서 잰 가장 긴 시간의 일곱 배를 넘는다.
+
+adversarial review 가 규칙에 반론했다. 그 반론과 답:
+
+- 한 redraw 의 두 update 중 첫 것의 reset 이 두 번째 앞에서 기다림을 끝낸다(받아들임): 단계는 reset 뒤에 출력이 없는 tick 에서만 `sync` 로 끝나므로, frame 안의 두 번째 update 는 기다림을 잇는다.
+- 열리고 닫히지 않는 update 는 어떤 기다림도 끝내지 않는다(받아들임): 조용한 경로는 모든 단계에서 성립하고, engine 은 닫히지 않은 update 를 그 한도에서 끝낸다.
+- 입력 전에 시작한 update 의 reset 이 기다림을 곧바로 끝낸다(받아들임): 그 단계의 입력 뒤에 열린 update 의 reset 만 센다.
+- 읽기의 두 단계가 다른 이벤트로 끝날 수 있다(받아들임): `settledBy` 가 각 단계의 이벤트를 이름한다.
+- disk 에서 읽는 program 같은 느린 program 은 답 이전의 screen 을 준다(한계로 받아들임): 답에 `settledBy` 와 `quiet` 가 있고, sidecar 의 PTY 시험이 간격 뒤에 쓰는 program 을 다룬다.
+- 되돌리기는 이미 낡은 읽기와 비교한다(거절): 첫 읽기는 기다림 뒤의 읽기가 아니라 scroll 입력 전의 screen 이다.
+- 측정은 cursor key 와 program 셋만 다룬다(거절): program 은 key 뒤와 wheel report 뒤에 같은 코드로 다시 그리고, 답이 조용한 경로의 한계를 말한다. 측정의 관찰 한도는 그 창이며 규칙의 판정이 아니다.
+- tick 이 몰려 `quiet` 개의 tick 이 더 짧은 시간에 걸칠 수 있다(거절): sidecar 는 tick 뒤에만 다음 요청을 보내고 host 는 그것에 다음 display frame 에 답하므로 두 tick 이 한 frame 을 나누지 않는다. 느리거나 빠진 frame 은 기다림을 늘릴 뿐이다.
+- refresh rate 가 비용을 바꾼다(받아들임): 답은 마지막 tick 의 `refreshRate` 를 담는다.
