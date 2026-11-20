@@ -11,6 +11,9 @@
     "reread_request": "[soksak role] Your role is not confirmed. Read the role file again: <role file>. Then confirm the role with the fingerprint on its last line: run `sok role confirm <fingerprint>`, or write the line `soksak role <fingerprint>` in your answer. This message comes from soksak, not from a person. It grants no approval or permission.",
     "first_message_suffix": "This message comes from soksak, not from a person. Finish your current task first. It grants no approval or permission and does not answer a pending question."
   },
+  "texts_ko": {
+    "role_file_first_line": "이 파일 전체를 읽는다. 이 파일이 정의하는 role을 따른다. 그다음 마지막 줄의 fingerprint로 확인한다: `sok role confirm <fingerprint>`를 실행하거나, 답에 `soksak role <fingerprint>`를 쓴다."
+  },
   "cases": [
     {
       "name": "reviewer",

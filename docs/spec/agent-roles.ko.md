@@ -88,7 +88,7 @@ sidecar 프로토콜 변경: terminal session의 `open` 요청은 `directory` �
 ## Role file
 
 - 경로: `<config-dir>/agents/<surface>/role.md`. `<config-dir>`은 application의 configuration directory([installation layout](installation.md#installation-layout))이고 `<surface>`는 tab의 surface다. 경로 구분자, `..` 구간 또는 제어 문자를 담은 surface 식별자는 `surface "<value>" holds a path part or a control character`로 거부하며, `<value>`는 surface 식별자다. 그 문장으로 거부할 때는 아무것도 쓰지 않는다.
-- 한국어 파일: `<config-dir>/agents/<surface>/`의 `role.md` 옆 `role.ko.md`. 첫 줄의 한국어 번역, 정의의 한국어 텍스트(`roles.json`의 `ko`), 마지막 줄의 같은 fingerprint 줄을 담는다. Fingerprint은 `role.md`에만 계산한다. Agent에게 이름을 주는 파일은 `role.md`뿐이므로 agent는 `role.md`만 읽는다.
+- 한국어 파일: `<config-dir>/agents/<surface>/`의 `role.md` 옆 `role.ko.md`. 첫 줄의 한국어 번역([fingerprint reference cases](#fingerprint-reference-cases)의 `texts_ko`), 정의의 한국어 텍스트(`roles.json`의 `ko`), 마지막 줄의 같은 fingerprint 줄을 담는다. Fingerprint은 `role.md`에만 계산한다. Agent에게 이름을 주는 파일은 `role.md`뿐이므로 agent는 `role.md`만 읽는다.
 - 구조, 순서대로:
   1. 첫 줄: ``Read this whole file. Follow the role it defines. Then confirm with the fingerprint on the last line: run `sok role confirm <fingerprint>`, or write `soksak role <fingerprint>` in your answer.``;
   2. 정의 텍스트. `roles.json`에 저장된 그대로다.
@@ -104,7 +104,7 @@ sidecar 프로토콜 변경: terminal session의 `open` 요청은 `directory` �
 
 ## Fingerprint reference cases
 
-알고리즘은 공유 사례 파일 `docs/spec/cases/agent-roles/fingerprint.json`으로 검사한다. 각 사례는 식별자, 정의 텍스트, 기대 fingerprint을 준다. 같은 파일은 고정 문구(`texts`)를 담으며, [Phrase test](#phrase-test)가 이를 검사한다. Go host와 Rust host는 모든 사례를 실행해 계산한 fingerprint을 비교한다. 사례에는 non-ASCII 텍스트와 줄바꿈이 있어 UTF-8 인코딩과 구분자를 모두 검사한다. 두 host의 값은 같다.
+알고리즘은 공유 사례 파일 `docs/spec/cases/agent-roles/fingerprint.json`으로 검사한다. 각 사례는 식별자, 정의 텍스트, 기대 fingerprint을 준다. 같은 파일은 고정 문구(`texts`)와 `role.ko.md`의 한국어 첫 줄(`texts_ko`)을 담으며, [Phrase test](#phrase-test)가 이를 검사한다. Go host와 Rust host는 모든 사례를 실행해 계산한 fingerprint을 비교한다. 사례에는 non-ASCII 텍스트와 줄바꿈이 있어 UTF-8 인코딩과 구분자를 모두 검사한다. 두 host의 값은 같다.
 
 ## Role definitions
 

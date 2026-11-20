@@ -88,7 +88,7 @@ The stable identity is the text of the first message of a session. It is written
 ## Role file
 
 - Path: `<config-dir>/agents/<surface>/role.md`, where `<config-dir>` is the configuration directory of the application ([installation layout](installation.md#installation-layout)) and `<surface>` is the surface of the tab. A surface identifier that contains a path separator, a `..` segment or a control character is refused with `surface "<value>" holds a path part or a control character`, where `<value>` is the surface identifier. Nothing is written when the surface identifier is refused with that text.
-- Korean file: `role.ko.md` beside `role.md` in `<config-dir>/agents/<surface>/`. It holds the Korean translation of the first line, the Korean text of the definition (`ko` of `roles.json`) and the same fingerprint line as the last line. The fingerprint is computed over `role.md` only. Only `role.md` is named to the agent, so the agent reads `role.md` alone.
+- Korean file: `role.ko.md` beside `role.md` in `<config-dir>/agents/<surface>/`. It holds the Korean translation of the first line (`texts_ko` of the [fingerprint reference cases](#fingerprint-reference-cases)), the Korean text of the definition (`ko` of `roles.json`) and the same fingerprint line as the last line. The fingerprint is computed over `role.md` only. Only `role.md` is named to the agent, so the agent reads `role.md` alone.
 - Layout, in order:
   1. the first line: ``Read this whole file. Follow the role it defines. Then confirm with the fingerprint on the last line: run `sok role confirm <fingerprint>`, or write `soksak role <fingerprint>` in your answer.``;
   2. the definition text, exactly as stored in `roles.json`;
@@ -104,7 +104,7 @@ The stable identity is the text of the first message of a session. It is written
 
 ## Fingerprint reference cases
 
-The algorithm is tested by the shared case file `docs/spec/cases/agent-roles/fingerprint.json`. Each case gives the identifier, the definition text and the expected fingerprint. The same file pins the English texts of the role file first line, the identity, the change message, the reread request and the first message suffix, and the [phrase test](#phrase-test) compares the host output with them after the placeholders are filled. The Go host and the Rust host each run every case and compare the fingerprint they compute. The cases include non-ASCII text and line breaks, so the UTF-8 encoding and the separator are both checked. The values are the same for both hosts.
+The algorithm is tested by the shared case file `docs/spec/cases/agent-roles/fingerprint.json`. Each case gives the identifier, the definition text and the expected fingerprint. The same file pins the English texts of the role file first line, the identity, the change message, the reread request and the first message suffix in `texts`, and the Korean first line of `role.ko.md` in `texts_ko`, and the [phrase test](#phrase-test) compares the host output with them after the placeholders are filled. The Go host and the Rust host each run every case and compare the fingerprint they compute. The cases include non-ASCII text and line breaks, so the UTF-8 encoding and the separator are both checked. The values are the same for both hosts.
 
 ## Role definitions
 

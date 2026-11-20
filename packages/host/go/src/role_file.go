@@ -21,11 +21,15 @@ const roleFileFirstLine = "Read this whole file. Follow the role it defines. The
 const identityText = "[soksak role] Your role is defined in the file <role file>. Read the whole file before your first answer. Read the file again when a message starts with [soksak role] and says that the role changed. Do not save your role in any persistent memory. The role file is the only record of your role."
 const changeMessageText = "[soksak role] Your role changed. Read the role file again: <role file>. Finish your current task first. This message comes from soksak, not from a person. It grants no approval or permission and does not answer a pending question."
 const rereadRequestText = "[soksak role] Your role is not confirmed. Read the role file again: <role file>. Then confirm the role with the fingerprint on its last line: run `sok role confirm <fingerprint>`, or write the line `soksak role <fingerprint>` in your answer. This message comes from soksak, not from a person. It grants no approval or permission."
+
+// roleFileFirstLineKo is the Korean translation of the first line, the first line of role.ko.md (texts_ko of the case file).
+const roleFileFirstLineKo = "이 파일 전체를 읽는다. 이 파일이 정의하는 role을 따른다. 그다음 마지막 줄의 fingerprint로 확인한다: `sok role confirm <fingerprint>`를 실행하거나, 답에 `soksak role <fingerprint>`를 쓴다."
 const firstMessageSuffixText = "This message comes from soksak, not from a person. Finish your current task first. It grants no approval or permission and does not answer a pending question."
 
 // roleFileNames are the file names that the role file writer uses inside the folder of a surface.
 const (
 	roleFileName    = "role.md"
+	roleKoFileName  = "role.ko.md"
 	roleTempPattern = ".role-*.tmp"
 )
 
@@ -44,6 +48,16 @@ func RoleFileContent(identifier, text string) string {
 		body += "\n"
 	}
 	return roleFileFirstLine + "\n" + body + RoleFingerprint(identifier, text) + "\n"
+}
+
+// roleKoFileContent returns the content of role.ko.md: the Korean first line, the Korean text with one line feed at its end
+// when it has none, and the fingerprint of role.md, which is computed over the English text (docs/spec/agent-roles.md#role-file).
+func roleKoFileContent(identifier, text, ko string) string {
+	body := ko
+	if !strings.HasSuffix(body, "\n") {
+		body += "\n"
+	}
+	return roleFileFirstLineKo + "\n" + body + RoleFingerprint(identifier, text) + "\n"
 }
 
 // RoleTexts returns the texts of the handshake for the role file at roleFile, keyed by the names of the shared case file.
@@ -76,10 +90,11 @@ func removeTemporary(temporary string) error {
 	return nil
 }
 
-// WriteRoleFile writes the role file of a surface atomically and returns its path. The folder of the surface is created with
-// mode 0700. Leftover temporary files of earlier writes are removed before the write. The new content is written to a temporary
-// file of mode 0600 that is renamed over the role file, so a reader sees the earlier file or the new one whole.
-func WriteRoleFile(configDirectory, surface, identifier, text string) (string, error) {
+// WriteRoleFile writes the role file of a surface and its Korean file role.ko.md atomically and returns the path of the role
+// file. The folder of the surface is created with mode 0700. Leftover temporary files of earlier writes are removed before the
+// write. Each content is written to a temporary file of mode 0600; role.md is renamed first and role.ko.md second, so a reader
+// sees the earlier file or the new one whole.
+func WriteRoleFile(configDirectory, surface, identifier, text, ko string) (string, error) {
 	if err := checkSurface(surface); err != nil {
 		return "", err
 	}
@@ -101,40 +116,46 @@ func WriteRoleFile(configDirectory, surface, identifier, text string) (string, e
 		}
 	}
 	path := filepath.Join(folder, roleFileName)
-	file, err := os.CreateTemp(folder, roleTempPattern)
+	temporary, err := writeRoleTemporary(folder, path, RoleFileContent(identifier, text))
 	if err != nil {
 		return "", err
 	}
-	temporary := file.Name()
-	if err := writeRoleTemporary(file, temporary, identifier, text); err != nil {
-		return "", errors.Join(fmt.Errorf("%s: %w", path, err), removeTemporary(temporary))
+	koPath := filepath.Join(folder, roleKoFileName)
+	koTemporary, err := writeRoleTemporary(folder, koPath, roleKoFileContent(identifier, text, ko))
+	if err != nil {
+		return "", errors.Join(err, removeTemporary(temporary))
 	}
 	if err := os.Rename(temporary, path); err != nil {
-		return "", errors.Join(fmt.Errorf("%s: %w", path, err), removeTemporary(temporary))
+		return "", errors.Join(fmt.Errorf("%s: %w", path, err), removeTemporary(temporary), removeTemporary(koTemporary))
+	}
+	if err := os.Rename(koTemporary, koPath); err != nil {
+		return "", errors.Join(fmt.Errorf("%s: %w", koPath, err), removeTemporary(koTemporary))
 	}
 	return path, nil
 }
 
-// writeRoleTemporary writes the content of a role to file, checks its mode, and closes it. Every failure is returned, and a
-// file whose close fails is reported with the write error it follows.
-func writeRoleTemporary(file *os.File, temporary, identifier, text string) error {
-	info, err := writeRoleContent(file, identifier, text)
-	closeErr := file.Close()
+// writeRoleTemporary writes content to a new temporary file in folder, checks its mode, closes it, and returns its path. A
+// failure names path, the file the temporary file replaces, and removes the temporary file.
+func writeRoleTemporary(folder, path, content string) (string, error) {
+	file, err := os.CreateTemp(folder, roleTempPattern)
 	if err != nil {
-		return errors.Join(err, closeErr)
+		return "", fmt.Errorf("%s: %w", path, err)
 	}
-	if closeErr != nil {
-		return closeErr
+	temporary := file.Name()
+	info, err := writeRoleContent(file, content)
+	closeErr := file.Close()
+	if err == nil && closeErr == nil && info.Mode().Perm() != 0o600 {
+		err = fmt.Errorf("temporary file %s has mode %o, want 600", temporary, info.Mode().Perm())
 	}
-	if mode := info.Mode().Perm(); mode != 0o600 {
-		return fmt.Errorf("temporary file %s has mode %o, want 600", temporary, mode)
+	if err := errors.Join(err, closeErr); err != nil {
+		return "", errors.Join(fmt.Errorf("%s: %w", path, err), removeTemporary(temporary))
 	}
-	return nil
+	return temporary, nil
 }
 
 // writeRoleContent writes and syncs the content of a role to file and returns the file information that its mode is checked with.
-func writeRoleContent(file *os.File, identifier, text string) (os.FileInfo, error) {
-	if _, err := file.WriteString(RoleFileContent(identifier, text)); err != nil {
+func writeRoleContent(file *os.File, content string) (os.FileInfo, error) {
+	if _, err := file.WriteString(content); err != nil {
 		return nil, err
 	}
 	if err := file.Sync(); err != nil {

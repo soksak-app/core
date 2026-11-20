@@ -25,8 +25,9 @@ type fingerprintCase struct {
 }
 
 type fingerprintCases struct {
-	Texts map[string]string `json:"texts"`
-	Cases []fingerprintCase `json:"cases"`
+	Texts   map[string]string `json:"texts"`
+	TextsKo map[string]string `json:"texts_ko"`
+	Cases   []fingerprintCase `json:"cases"`
 }
 
 func loadFingerprintCases(t *testing.T) fingerprintCases {
@@ -102,7 +103,7 @@ func TestRoleTextsMatchPinnedTexts(t *testing.T) {
 // contract: roles.role-file-write
 func TestWriteRoleFileWritesLayoutAtomicallyWithModes(t *testing.T) {
 	config := t.TempDir()
-	path, err := host.WriteRoleFile(config, "tab-1", "reviewer", "You review.\n")
+	path, err := host.WriteRoleFile(config, "tab-1", "reviewer", "You review.\n", "검토한다.\n")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,12 +119,45 @@ func TestWriteRoleFileWritesLayoutAtomicallyWithModes(t *testing.T) {
 	}
 	assertMode(t, path, 0o600)
 	assertMode(t, filepath.Dir(path), 0o700)
-	if _, err := host.WriteRoleFile(config, "tab-1", "reviewer", "You review the tests.\n"); err != nil {
+	if _, err := host.WriteRoleFile(config, "tab-1", "reviewer", "You review the tests.\n", "검토한다.\n"); err != nil {
 		t.Fatal(err)
 	}
 	data, _ = os.ReadFile(path)
 	if want := host.RoleFileContent("reviewer", "You review the tests.\n"); string(data) != want {
 		t.Fatalf("the second write left %q, want %q", data, want)
+	}
+	if leftovers, _ := filepath.Glob(filepath.Join(filepath.Dir(path), ".role-*.tmp")); len(leftovers) != 0 {
+		t.Fatalf("a write left temporary files %v", leftovers)
+	}
+}
+
+// contract: roles.role-ko-file
+func TestWriteRoleFileWritesKoreanFileBesideRoleFile(t *testing.T) {
+	config := t.TempDir()
+	first := loadFingerprintCases(t).TextsKo["role_file_first_line"]
+	if first == "" {
+		t.Fatal("the case file pins no Korean first line in texts_ko")
+	}
+	path, err := host.WriteRoleFile(config, "tab-1", "reviewer", "You review.\n", "검토한다.")
+	if err != nil {
+		t.Fatal(err)
+	}
+	korean := filepath.Join(filepath.Dir(path), "role.ko.md")
+	data, err := os.ReadFile(korean)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The Korean file carries the fingerprint of role.md, computed over the English text.
+	if want := first + "\n검토한다.\n" + host.RoleFingerprint("reviewer", "You review.\n") + "\n"; string(data) != want {
+		t.Fatalf("Korean file is %q, want %q", data, want)
+	}
+	assertMode(t, korean, 0o600)
+	if _, err := host.WriteRoleFile(config, "tab-1", "reviewer", "You review the tests.\n", "test를 검토한다.\n"); err != nil {
+		t.Fatal(err)
+	}
+	data, _ = os.ReadFile(korean)
+	if want := first + "\ntest를 검토한다.\n" + host.RoleFingerprint("reviewer", "You review the tests.\n") + "\n"; string(data) != want {
+		t.Fatalf("the second write left the Korean file %q, want %q", data, want)
 	}
 	if leftovers, _ := filepath.Glob(filepath.Join(filepath.Dir(path), ".role-*.tmp")); len(leftovers) != 0 {
 		t.Fatalf("a write left temporary files %v", leftovers)
@@ -141,7 +175,7 @@ func TestWriteRoleFileRemovesLeftoverTemporaryFiles(t *testing.T) {
 	if err := os.WriteFile(leftover, []byte("partial"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := host.WriteRoleFile(config, "tab-1", "reviewer", "You review.\n"); err != nil {
+	if _, err := host.WriteRoleFile(config, "tab-1", "reviewer", "You review.\n", "검토한다.\n"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(leftover); !os.IsNotExist(err) {
@@ -153,7 +187,7 @@ func TestWriteRoleFileRemovesLeftoverTemporaryFiles(t *testing.T) {
 func TestWriteRoleFileRefusesSurfaceWithPathParts(t *testing.T) {
 	config := t.TempDir()
 	for _, surface := range []string{"", "..", "a/b", "../x", "a\x01b", "a\tb"} {
-		if _, err := host.WriteRoleFile(config, surface, "reviewer", "You review.\n"); err == nil {
+		if _, err := host.WriteRoleFile(config, surface, "reviewer", "You review.\n", "검토한다.\n"); err == nil {
 			t.Fatalf("surface %q was accepted", surface)
 		}
 	}
@@ -194,7 +228,7 @@ func TestRolePathMatchesSharedCases(t *testing.T) {
 	for _, kase := range file.Cases {
 		t.Run(kase.Name, func(t *testing.T) {
 			config := t.TempDir()
-			path, err := host.WriteRoleFile(config, kase.Surface, "reviewer", "Review the changes.")
+			path, err := host.WriteRoleFile(config, kase.Surface, "reviewer", "Review the changes.", "검토한다.\n")
 			if err != nil {
 				t.Fatal(err)
 			}

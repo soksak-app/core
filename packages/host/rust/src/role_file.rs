@@ -14,10 +14,14 @@ const ROLE_FILE_FIRST_LINE: &str = "Read this whole file. Follow the role it def
 const IDENTITY_TEXT: &str = "[soksak role] Your role is defined in the file <role file>. Read the whole file before your first answer. Read the file again when a message starts with [soksak role] and says that the role changed. Do not save your role in any persistent memory. The role file is the only record of your role.";
 const CHANGE_MESSAGE_TEXT: &str = "[soksak role] Your role changed. Read the role file again: <role file>. Finish your current task first. This message comes from soksak, not from a person. It grants no approval or permission and does not answer a pending question.";
 const REREAD_REQUEST_TEXT: &str = "[soksak role] Your role is not confirmed. Read the role file again: <role file>. Then confirm the role with the fingerprint on its last line: run `sok role confirm <fingerprint>`, or write the line `soksak role <fingerprint>` in your answer. This message comes from soksak, not from a person. It grants no approval or permission.";
+/// The Korean translation of the first line, the first line of role.ko.md (texts_ko of the case file).
+const ROLE_FILE_FIRST_LINE_KO: &str = "이 파일 전체를 읽는다. 이 파일이 정의하는 role을 따른다. 그다음 마지막 줄의 fingerprint로 확인한다: `sok role confirm <fingerprint>`를 실행하거나, 답에 `soksak role <fingerprint>`를 쓴다.";
 const FIRST_MESSAGE_SUFFIX_TEXT: &str = "This message comes from soksak, not from a person. Finish your current task first. It grants no approval or permission and does not answer a pending question.";
 
 /// The file name of the role file inside the folder of a surface.
 const ROLE_FILE_NAME: &str = "role.md";
+/// The file name of the Korean file of the role file.
+const ROLE_KO_FILE_NAME: &str = "role.ko.md";
 /// The prefix and suffix of the temporary files of the role file writer.
 const ROLE_TEMP_PREFIX: &str = ".role-";
 const ROLE_TEMP_SUFFIX: &str = ".tmp";
@@ -43,6 +47,20 @@ pub fn role_file_content(identifier: &str, text: &str) -> String {
     };
     format!(
         "{ROLE_FILE_FIRST_LINE}\n{body}{}\n",
+        role_fingerprint(identifier, text)
+    )
+}
+
+/// Returns the content of role.ko.md: the Korean first line, the Korean text with one line feed at its end when it has none,
+/// and the fingerprint of role.md, which is computed over the English text (docs/spec/agent-roles.md#role-file).
+fn role_ko_file_content(identifier: &str, text: &str, ko: &str) -> String {
+    let body = if ko.ends_with('\n') {
+        ko.to_string()
+    } else {
+        format!("{ko}\n")
+    };
+    format!(
+        "{ROLE_FILE_FIRST_LINE_KO}\n{body}{}\n",
         role_fingerprint(identifier, text)
     )
 }
@@ -80,14 +98,16 @@ fn check_surface(surface: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Writes the role file of a surface atomically and returns its path. The folder of the surface is created with mode 0700.
-/// Leftover temporary files of earlier writes are removed before the write. The new content goes to a temporary file of mode
-/// 0600 that is renamed over the role file, so a reader sees the earlier file or the new one whole.
+/// Writes the role file of a surface and its Korean file role.ko.md atomically and returns the path of the role file. The
+/// folder of the surface is created with mode 0700. Leftover temporary files of earlier writes are removed before the write.
+/// Each content goes to a temporary file of mode 0600; role.md is renamed first and role.ko.md second, so a reader sees the
+/// earlier file or the new one whole.
 pub fn write_role_file(
     config: &Path,
     surface: &str,
     identifier: &str,
     text: &str,
+    ko: &str,
 ) -> Result<PathBuf, String> {
     check_surface(surface)?;
     let folder = config.join("agents").join(surface);
@@ -103,14 +123,37 @@ pub fn write_role_file(
         }
     }
     let path = folder.join(ROLE_FILE_NAME);
+    let file = write_role_temporary(&folder, &path, &role_file_content(identifier, text))?;
+    let ko_path = folder.join(ROLE_KO_FILE_NAME);
+    // A failure drops file, whose drop removes its temporary file.
+    let ko_file = write_role_temporary(
+        &folder,
+        &ko_path,
+        &role_ko_file_content(identifier, text, ko),
+    )?;
+    file.persist(&path)
+        .map_err(|e| format!("{}: {}", path.display(), e.error))?;
+    ko_file
+        .persist(&ko_path)
+        .map_err(|e| format!("{}: {}", ko_path.display(), e.error))?;
+    Ok(path)
+}
+
+/// Writes content to a new temporary file in folder, syncs it and checks its mode 0600. A failure names path, the file that
+/// the temporary file replaces, and removes the temporary file.
+fn write_role_temporary(
+    folder: &Path,
+    path: &Path,
+    content: &str,
+) -> Result<tempfile::NamedTempFile, String> {
     let mut file = tempfile::Builder::new()
         .prefix(ROLE_TEMP_PREFIX)
         .suffix(ROLE_TEMP_SUFFIX)
-        .tempfile_in(&folder)
+        .tempfile_in(folder)
         .map_err(|e| format!("{}: {e}", path.display()))?;
     let temporary = file.path().to_path_buf();
     let written = (|| -> Result<(), String> {
-        file.write_all(role_file_content(identifier, text).as_bytes())
+        file.write_all(content.as_bytes())
             .map_err(|e| e.to_string())?;
         file.as_file().sync_all().map_err(|e| e.to_string())?;
         let mode = file.as_file().metadata().map_err(|e| e.to_string())?;
@@ -125,11 +168,8 @@ pub fn write_role_file(
         Ok(())
     })();
     if let Err(e) = written {
-        return Err(match std::fs::remove_file(&temporary) {
+        return Err(match file.close() {
             Ok(()) => format!("{}: {e}", path.display()),
-            Err(remove) if remove.kind() == std::io::ErrorKind::NotFound => {
-                format!("{}: {e}", path.display())
-            }
             Err(remove) => format!(
                 "{}: {e}; removing {}: {remove}",
                 path.display(),
@@ -137,7 +177,5 @@ pub fn write_role_file(
             ),
         });
     }
-    file.persist(&path)
-        .map_err(|e| format!("{}: {}", path.display(), e.error))?;
-    Ok(path)
+    Ok(file)
 }

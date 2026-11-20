@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1006-12: The Go and Rust role file writers write `role.ko.md` beside `role.md`, with the Korean first line pinned in `texts_ko` of the fingerprint cases, the `ko` text and the fingerprint of `role.md`. Verification: Red of the Go and Rust role file tests against the writer without `ko`; Green of the Go host package and the Rust role file, roles and workspace tests.
 - F1006-12: The non-ASCII fingerprint case `reviewer` of `docs/spec/cases/agent-roles/fingerprint.json` names the role with the English term `reviewer` instead of a coined Korean word, and its expected fingerprint is recomputed. Verification: the Go and Rust role file tests pass with the new value.
 - F1006-12: `roles.json` is format 2: each role definition requires the Korean translation `ko` beside `text`, and the Go and Rust stores refuse format 1 and a missing or non-string `ko`. Verification: Red of the Go and Rust roles tests on the format 1 stores against the format 2 cases; Green of the Go host package and the Rust roles, role file and workspace tests.
 - F1013-2: The window check `e2e/idle-window.test.mjs` and its module `packages/window-check/idle-window.mjs` judge an idle window over 120 refreshes that its display delivered, with the refreshes placed on the host event clock by measurement. Verification: the unit tests 8 of 8 and the window-check package 485 of 485; the window check itself has not run yet.

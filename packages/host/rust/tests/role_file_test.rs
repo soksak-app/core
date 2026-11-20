@@ -104,17 +104,68 @@ fn role_texts_match_pinned_texts() {
 fn write_role_file_writes_layout_atomically_with_modes() {
     let temp = temp_config();
     let config = temp.path();
-    let path = write_role_file(config, "tab-1", "reviewer", "You review.\n").unwrap();
+    let path =
+        write_role_file(config, "tab-1", "reviewer", "You review.\n", "검토한다.\n").unwrap();
     assert_eq!(path, config.join("agents/tab-1/role.md"));
     let data = fs::read_to_string(&path).unwrap();
     assert_eq!(data, role_file_content("reviewer", "You review.\n"));
     assert_mode(&path, 0o600);
     assert_mode(path.parent().unwrap(), 0o700);
-    write_role_file(config, "tab-1", "reviewer", "You review the tests.\n").unwrap();
+    write_role_file(
+        config,
+        "tab-1",
+        "reviewer",
+        "You review the tests.\n",
+        "검토한다.\n",
+    )
+    .unwrap();
     let data = fs::read_to_string(&path).unwrap();
     assert_eq!(
         data,
         role_file_content("reviewer", "You review the tests.\n")
+    );
+    let leftovers: Vec<_> = fs::read_dir(path.parent().unwrap())
+        .unwrap()
+        .map(|e| e.unwrap().file_name())
+        .filter(|n| n.to_string_lossy().starts_with(".role-"))
+        .collect();
+    assert!(leftovers.is_empty(), "temporary files left: {leftovers:?}");
+}
+
+// contract: roles.role-ko-file
+#[test]
+fn write_role_file_writes_korean_file_beside_role_file() {
+    let temp = temp_config();
+    let config = temp.path();
+    let first = load_cases()["texts_ko"]["role_file_first_line"]
+        .as_str()
+        .expect("the case file pins a Korean first line in texts_ko")
+        .to_string();
+    let path = write_role_file(config, "tab-1", "reviewer", "You review.\n", "검토한다.").unwrap();
+    let korean = path.parent().unwrap().join("role.ko.md");
+    // The Korean file carries the fingerprint of role.md, computed over the English text.
+    assert_eq!(
+        fs::read_to_string(&korean).unwrap(),
+        format!(
+            "{first}\n검토한다.\n{}\n",
+            role_fingerprint("reviewer", "You review.\n")
+        )
+    );
+    assert_mode(&korean, 0o600);
+    write_role_file(
+        config,
+        "tab-1",
+        "reviewer",
+        "You review the tests.\n",
+        "test를 검토한다.\n",
+    )
+    .unwrap();
+    assert_eq!(
+        fs::read_to_string(&korean).unwrap(),
+        format!(
+            "{first}\ntest를 검토한다.\n{}\n",
+            role_fingerprint("reviewer", "You review the tests.\n")
+        )
     );
     let leftovers: Vec<_> = fs::read_dir(path.parent().unwrap())
         .unwrap()
@@ -133,7 +184,7 @@ fn write_role_file_removes_leftover_temporary_files() {
     fs::create_dir_all(&folder).unwrap();
     let leftover = folder.join(".role-crash.tmp");
     fs::write(&leftover, b"partial").unwrap();
-    write_role_file(config, "tab-1", "reviewer", "You review.\n").unwrap();
+    write_role_file(config, "tab-1", "reviewer", "You review.\n", "검토한다.\n").unwrap();
     assert!(!leftover.exists(), "a leftover temporary file remains");
 }
 
@@ -144,7 +195,7 @@ fn write_role_file_refuses_surface_with_path_parts() {
     let config = temp.path();
     for surface in ["", "..", "a/b", "../x", "a\u{1}b", "a\tb"] {
         assert!(
-            write_role_file(config, surface, "reviewer", "You review.\n").is_err(),
+            write_role_file(config, surface, "reviewer", "You review.\n", "검토한다.\n").is_err(),
             "surface {surface:?} was accepted"
         );
     }
@@ -165,8 +216,14 @@ fn role_path_matches_shared_cases() {
     for case in cases["cases"].as_array().unwrap() {
         let config = tempfile::TempDir::new().unwrap();
         let surface = case["surface"].as_str().unwrap();
-        let path =
-            write_role_file(config.path(), surface, "reviewer", "Review the changes.").unwrap();
+        let path = write_role_file(
+            config.path(),
+            surface,
+            "reviewer",
+            "Review the changes.",
+            "검토한다.\n",
+        )
+        .unwrap();
         let want = config.path().join(case["path"].as_str().unwrap());
         assert_eq!(path, want, "case {}", case["name"]);
     }

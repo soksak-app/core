@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1006-12: Go와 Rust role file writer가 `role.md` 옆에 `role.ko.md`를 쓴다. 내용은 fingerprint 사례의 `texts_ko`에 고정한 한국어 첫 줄, `ko` 텍스트, `role.md`의 fingerprint다. 검증: `ko`가 없는 writer에 대한 Go와 Rust role file test의 Red, Go host package와 Rust role file, roles, workspace test의 Green.
 - F1006-12: `docs/spec/cases/agent-roles/fingerprint.json`의 non-ASCII 지문 사례 `reviewer`가 지어낸 한국어 단어 대신 영어 용어 `reviewer`로 역할을 부르고, 기대 지문을 다시 계산했다. 검증: Go와 Rust role file test가 새 값으로 통과한다.
 - F1006-12: `roles.json`은 형식 2다. 각 role 정의는 `text` 옆에 한국어 번역 `ko`를 요구하고, Go와 Rust store는 형식 1과 없거나 문자열이 아닌 `ko`를 거부한다. 검증: 형식 1 store에서 형식 2 사례에 대한 Go와 Rust roles test의 Red, Go host package와 Rust roles, role file, workspace test의 Green.
 - F1013-2: window check `e2e/idle-window.test.mjs`와 그 module `packages/window-check/idle-window.mjs`가 디스플레이가 낸 refresh 120개 동안 쉬는 창을 판정하며, refresh는 측정으로 host event 시계에 놓인다. 검증: unit test 8/8과 window-check package 485/485. window check 자체는 아직 실행하지 않았다.

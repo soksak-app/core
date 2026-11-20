@@ -1046,6 +1046,7 @@ Items:
 | `roles.role-file-layout` | The role file holds the first line, the definition with one line feed at its end, and the fingerprint on the last line, each line ending with one line feed; a definition of 5,000 characters is written whole. | all |
 | `roles.role-file-phrases` | The identity, the change message, the reread request and the first message suffix equal the texts of `fingerprint.json` with `<role file>` filled, and the first line equals its text. | all |
 | `roles.role-file-write` | A role file is written to `agents/<surface>/role.md` with mode 0600 for the file and 0700 for the folder, replaces an earlier file atomically, and reads as the layout. | all |
+| `roles.role-ko-file` | Each write writes `agents/<surface>/role.ko.md` with mode 0600 beside `role.md`: the Korean first line of `texts_ko`, the `ko` text with one line feed at its end, and the fingerprint of `role.md` on the last line; a later write replaces it, and no temporary file remains. | all |
 | `roles.role-path-shared-cases` | The role file path that the writer returns is `<config-dir>/agents/<surface>/role.md` for each case of `docs/spec/cases/agent-roles/role-path.json`; the status `core.tab.role` carries this path as `path`. | all |
 | `roles.role-file-removes-leftovers` | A write removes the `.role-*.tmp` files of the folder of its surface before it writes. | all |
 | `roles.role-file-refuses-surface` | A surface that is empty, names `.` or `..`, or holds a path separator or a control character is refused, and no folder is created. | all |
