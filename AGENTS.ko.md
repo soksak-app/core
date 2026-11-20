@@ -68,7 +68,7 @@
 - 현재 동작과 실제 이유를 적는다. 개인 선호와 대화 맥락은 Git 밖의 memory에 둔다.
 - 동작 이름을 직접 쓰고 주체와 대상을 밝힌다. 원인은 한 문장으로 쓴다. 주석, 문서, log, 커밋에 비유, 의인화, 구어체를 쓰지 않는다.
 - 개념마다 용어를 하나만 쓴다. 새 개념은 쓰기 전에 용어 목록(kit의 `terms.json`, [용어](docs/spec/terms.ko.md))에 더한다.
-- 기록(문서, 식별자, 주석, test 이름과 fixture, checklist, changelog, 커밋 메시지, 설정 파일의 설명)은 이 저장소의 사실만 적는다: 하는 일, 요구, 보장, 결함의 입력·동작·기대 동작, 변경과 이유. 요청·결정·발견한 사람, 코드 출처, 정리나 재작성 방법, 로컬 환경, 로컬이나 개인 경로, commit id, pull request·CI run 번호는 적지 않는다. 다른 작업은 checklist ID로 가리킨다.
+- 기록(문서, 식별자, 주석, test 이름과 fixture, checklist, changelog, 커밋 메시지, 설정 파일의 설명)은 이 저장소의 사실만 적는다: 하는 일, 요구, 보장, 결함의 입력·동작·기대 동작, 변경과 이유. 요청·결정·발견한 사람, 정리나 재작성 방법, 로컬 환경, 로컬이나 개인 경로, commit id, pull request·CI run 번호는 적지 않는다. 다른 작업은 checklist ID로 가리킨다. 저장소가 복사하거나 fork한 외부 코드는 license 표시와 출처를 유지한다.
 - 커밋 메시지는 [커밋 hook](docs/operations/examples.ko.md#커밋-hook)의 형식을 따른다. 꼬리말을 달지 않으며 작성자는 `min-0-max <max@blue.tools>`다.
 
 ## 검증

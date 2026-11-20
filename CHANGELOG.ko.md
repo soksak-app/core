@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1017 (license 표시): 개발 지침의 기록 규칙은 더 이상 코드 출처를 적는 것을 금지하지 않는다. 저장소가 복사하거나 fork한 외부 코드는 license가 요구하므로 license 표시와 출처를 유지한다.
 - F1014 (탭 글자 하나): mygo의 탭 목록은 탭 줄처럼 탭의 surface가 알린 제목을 보이고, mygo와 Wails, Tauri의 page의 탭 목록과 스페이스 앱 목록은 이름 옆에 plugin의 icon을 보이며 두 번째 mark는 보이지 않는다.
 - F937-10-2 (header answer 속성 test, mygo): seed test가 group tree에 무작위 layout operation을 실행하고, 매번 `CanSplit`, `CanGroup`, `CanClose`의 보관한 answer가 그 trial operation의 결과와 같기를 요구한다. 쓰이지 않던 group tree의 `SetHead`를 제거했다.
 - F1012 (반복된 target id): Go와 TypeScript layout library의 insert나 move가 한 card를 두 번 이름한 target을 `card <id> is named twice in the target`로 거부한다. 전에는 그 card를 kid 하나인 cut으로 감쌌고, 저장된 layout을 읽을 때 그것이 거부되었다.

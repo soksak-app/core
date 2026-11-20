@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1017 (license notices): the record rule of the development guidance no longer forbids naming where code came from; external code that the repository copies or forks keeps its license notice and names its source, because its license requires it.
 - F1014 (one tab text): the tab list of mygo shows the title that the surface of a tab reports, as the tab strip does, and the tab list and the space apps list of mygo and of the page of Wails and Tauri show the icon of the plugin beside the name and no second mark.
 - F937-10-2 (header answer property test, mygo): a seeded test runs random layout operations on a group tree and requires, after each one, that the kept answers of `CanSplit`, `CanGroup` and `CanClose` equal the results of their trial operations; the unused `SetHead` of the group tree is removed.
 - F1012 (repeated target ids): an insert or a move of the layout library in Go and TypeScript refuses a target that names a card twice with `card <id> is named twice in the target`, where it wrapped the card in a cut of one kid that a reading of the stored layout refused.
