@@ -144,8 +144,8 @@ for (let seed = 1; seed <= SEEDS; seed++) {
   test(`group form holds after random operations, seed ${seed}`, { timeout: 20000 }, () => {
     const next = random(seed);
     const grid = new Soksak(undefined, { gap: OPTIONS.gap, minSize: OPTIONS.minSize, width: WIDTH, height: HEIGHT });
-    const tree = readGroupTree({ state: { xs: [0, 1], ys: [0, 1], cards: [{ id: "card-1", c0: 0, c1: 1, r0: 0, r1: 1 }], paidBy: {} },
-      groups: [], leader: "card-1", lastCard: 1 }, OPTIONS, grid);
+    const tree = readGroupTree({ state: { root: { card: "card-1" } },
+      leader: "card-1", lastCard: 1 }, OPTIONS, grid);
     const done = [];
     for (let i = 0; i < STEPS; i++) {
       done.push(step(tree, grid, next));

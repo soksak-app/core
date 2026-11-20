@@ -12,7 +12,7 @@ import { drained } from "./support/drained.mjs";
 
 const PROJECT = {
   id: "prj-one", root: "/work/one", identity: "1:1", title: "one", color: "#fff", named: 1,
-  activeSpaceId: "spc-one", spaces: [{ id: "spc-one", title: "SPACE1", layout: { state: { cards: [], name: "one" } } }], settings: {},
+  activeSpaceId: "spc-one", spaces: [{ id: "spc-one", title: "SPACE1", layout: { state: { root: { card: "main" }, name: "one" } } }], settings: {},
 };
 // The stored settings store the operations of the page (the class call) and the start of the document (the class lifecycle).
 const COMMON = { "diagnostics.log": { lifecycle: "info", call: "info" } };

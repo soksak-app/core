@@ -4,7 +4,7 @@
 // over it. It does not know how a surface is measured and reported.
 //
 // It does not know that verification exists. It only announces that rendering finished, and the document decides what follows.
-import { Soksak, SoksakView, outline, sliceTree } from "soksak";
+import { Soksak, SoksakView, outline } from "soksak";
 import { appliedPatch, borderWidth, cardRadius, halfGap, linkedSet, pluginSettings, seam, set as setSetting, stagePad, value } from "./settings.js";
 import { effectiveTextScope, keepCardScope, nextTextSize, notifyTextSize, setSurfaceTextSize, setTextScope, textScope } from "./text-size.js";
 import { applyFrameText, chromeRow, measureAt } from "./frame-text.js";
@@ -26,7 +26,7 @@ import { cardNumber, memberId, readGroupTree } from "./group-tree.js";
 import { drawGroupCards } from "./group-cards.js";
 import { checkTabParams, storedParamsProblem } from "./tab-params.js";
 import { checkOpenPath, chooseOpener } from "./file-open.js";
-import { layoutTree, sameJson } from "./layout-tree.js";
+import { layoutTree, sameJson, stateCards } from "./layout-tree.js";
 import { recordClosedTabs, tabClosed } from "./closed-tabs.js";
 import { clearSlotSurface, setSlotSurface, standIn } from "./compositor.js";
 import { followRing, keyboardOwed } from "./keyboard.js";
@@ -249,20 +249,22 @@ function releaseKept(side) {
   holder.remove();
 }
 
-/** It builds the layout of a new space from workspace.grid of environment.json. Tab ids are issued anew. */
+/** It builds the layout of a new space from the tree of workspace.grid of environment.json. Tab ids are issued anew. */
 function initial(random) {
   const { grid: declared } = environment().workspace;
-  const cards = declared.cards.map(({ tabs, ...card }) => {
+  const made = (node) => {
+    if (node.cut) return { cut: node.cut, kids: node.kids.map((kid) => ({ share: kid.share, node: made(kid.node) })) };
+    const { tabs, ...card } = node;
     if (!tabs) return { ...card };
     // A tab of a new space has no source tab, so it records null (docs/spec/projects.md#tab-origin).
-    const made = tabs.map((t) => {
-      const opened = tab(t.plugin, t.title, null, random);
-      recordOrigin(opened.id, null, "new space");
-      return opened;
+    const opened = tabs.map((t) => {
+      const one = tab(t.plugin, t.title, null, random);
+      recordOrigin(one.id, null, "new space");
+      return one;
     });
-    return { ...card, data: { tabs: made, activeId: made[0].id } };
-  });
-  return { xs: [...declared.xs], ys: [...declared.ys], cards };
+    return { ...card, data: { tabs: opened, activeId: opened[0].id } };
+  };
+  return { root: made(declared.root) };
 }
 
 
@@ -1161,8 +1163,8 @@ function settle() {
   // The sides that have a choice hold a sidebar while their switch is on, arranged in the order (docs/spec/external-sidebars.md).
   arrangeWindowSidebars(grid, value("sidebarOrder"), windowSidebarCards(pluginUnits(), value("links"), focusedPlugin()).map(item => item.id),
     windowSidebars, value("sidebarWidth"), side => value(side));
-  // The window sidebars change the grid through the layout library, so a space with groups removes what they left (docs/spec/groups.md#model).
-  tree.keepForm();
+  // The window sidebars change the tree through the layout library, so the heads follow its boxes again.
+  tree.reframe();
   // default: when only place cards remain, there is no card to focus (null).
   if (!grid.card(focusedId)) focusOn(grid.cards.find((c) => !isPlace(c.id))?.id ?? null);
   keepCardScope((id) => grid.card(id));
@@ -1796,10 +1798,10 @@ export const capture = (path = null) => {
   const displayed = grid.toJSON();
   // A write names its writing path, and each view tab that it stores without an origin member is recorded (docs/spec/projects.md#tab-origin).
   for (const text of missingOriginRecords(displayed, path)) report(text);
-  const { groups, leader, lastCard } = tree.stored();
+  const { leader, lastCard } = tree.stored();
   return {
     // Each content-card tab stores its origin with the layout (docs/spec/projects.md#tab-origin).
-    state: storedLayoutState(displayed), groups, leader, lastCard, focusedId,
+    state: storedLayoutState(displayed), leader, lastCard, focusedId,
     windowSidebars: structuredClone(windowSidebars),
     named, sidebars: sidebarChoices(),
   };
@@ -1828,12 +1830,13 @@ export function fresh(random) {
   const state = initial(random);
   // A new space has no groups; its leader is the first card of the root level in reading order that is not a window sidebar, and
   // lastCard is the largest card number of its cards or 1 (docs/spec/groups.md#leader).
-  const first = [...state.cards].sort((a, b) => (a.r0 - b.r0) || (a.c0 - b.c0)).find((card) => !isPlace(card.id));
+  const cards = new Soksak(state).cards;
+  const first = [...cards].sort((a, b) => (a.r0 - b.r0) || (a.c0 - b.c0)).find((card) => !isPlace(card.id));
   return {
-    state, groups: [], leader: first ? first.id : null,
-    lastCard: Math.max(1, ...state.cards.map((card) => cardNumber(card.id) ?? 0)),
+    state, leader: first ? first.id : null,
+    lastCard: Math.max(1, ...cards.map((card) => cardNumber(card.id) ?? 0)),
     focusedId: environment().workspace.focus,
-    windowSidebars: Object.fromEntries(environment().workspace.grid.cards
+    windowSidebars: Object.fromEntries(cards
       .filter(card => windowSidebar(card.id))
       // default: a fixed sidebar whose size the environment declaration omits starts with the sidebarWidth setting on its axis:
       // the width of a left or right sidebar, the height of a top or bottom sidebar (docs/spec/external-sidebars.md).
@@ -2049,8 +2052,6 @@ export function openSpaceApps(id) {
   if (!anchor) throw new Error(`card ${id} has no space apps button`);
   if (picker?.anchor === anchor) { closePicker("toggle"); return; }
   const cards = grid.cards.filter((card) => card.data);
-  const tree = sliceTree(cards);
-  if (!tree) throw new Error("the cards of the space are not a slicing arrangement");
   const rects = grid.rects();
   const map = (own) => cards.map((card) => {
     const r = rects.get(card.id);
@@ -2060,10 +2061,16 @@ export function openSpaceApps(id) {
       `height="${(r.h * sy).toFixed(2)}" rx=".6" data-own="${card.id === own}"/>`;
   }).join("");
   const groups = [];
-  // A card stands at the depth of the number of cuts above it minus one. Cards under the same cut have the same depth.
-  const walk = (slice, cuts) => {
-    if ("card" in slice) {
-      const card = slice.card;
+  // A card stands at the depth of the number of cuts above it minus one, in the order of the stored tree. Cards under the same cut have
+  // the same depth, a box adds no cut, and a window sidebar has no data and is not listed.
+  const walk = (node, cuts) => {
+    if (node.box !== undefined) {
+      walk(node.inner, cuts);
+      return;
+    }
+    if (node.cut === undefined) {
+      const card = grid.card(node.card);
+      if (!card.data) return;
       groups.push({
         heading: { id: card.id, name: `카드 ${groups.length + 1}`, depth: Math.max(0, cuts - 1), map: map(card.id) },
         items: tabsOf(card).map((t) => ({
@@ -2075,9 +2082,9 @@ export function openSpaceApps(id) {
       });
       return;
     }
-    for (const side of slice.sides) walk(side, cuts + 1);
+    for (const kid of node.kids) walk(kid.node, cuts + 1);
   };
-  walk(tree, 0);
+  walk(grid.toJSON().root, 0);
   const total = groups.reduce((n, group) => n + group.items.length, 0);
   openLayer(anchor, `스페이스 앱 ${total}개`, [], (key) => {
     const [cardId, tabId] = key.split("/");
@@ -2331,7 +2338,7 @@ const contentCards = () => grid.cards.filter((card) => !isPlace(card.id));
 function inactiveSpaceOf(found) {
   const project = allProjects().find((entry) => entry.spaces.some((space) => space.id === heldSpace));
   // default: a window that shows no space has no other space, and a project without such a space has none.
-  return project?.spaces.find((entry) => entry.id !== heldSpace && found(entry.layout.state.cards, entry.layout))?.id ?? null;
+  return project?.spaces.find((entry) => entry.id !== heldSpace && found(stateCards(entry.layout.state), entry.layout))?.id ?? null;
 }
 
 /**
@@ -2346,7 +2353,7 @@ export function surfaceSpace(surface) {
   // default: a window that shows no space has no project of a shown space.
   const shown = allProjects().find((entry) => entry.spaces.some((space) => space.id === heldSpace));
   for (const project of new Set([...(shown ? [shown] : []), ...localProjects()])) {
-    const space = project.spaces.find((entry) => entry.id !== heldSpace && holds(entry.layout.state.cards));
+    const space = project.spaces.find((entry) => entry.id !== heldSpace && holds(stateCards(entry.layout.state)));
     if (space) return space.id;
   }
   return null;
@@ -2503,17 +2510,28 @@ export function layoutDescription() {
     const rect = rects.get(id);
     return { x: origin.left + rect.x, y: origin.top + rect.y, width: rect.w, height: rect.h };
   };
-  // The tree of the members of the level of the group node parent, null for the root level, over the lines of the grid.
+  // The tree of the members of the level of the group node parent, null for the root level, from the stored tree of the grid: the root
+  // for the root level and the inner node of the box of a group card, each box a leaf by its id.
+  const stored = grid.toJSON().root;
+  const innerOf = (node, id) => {
+    if (node.box === id) return node.inner;
+    if (node.box !== undefined) return innerOf(node.inner, id);
+    if (node.cut === undefined) return null;
+    for (const kid of node.kids) {
+      const found = innerOf(kid.node, id);
+      if (found) return found;
+    }
+    return null;
+  };
   const level = (parent) => {
-    const members = tree.levelMembers(parent).filter((member) => !isPlace(memberId(member)))
-      .map((member) => ({ id: memberId(member), node: typeof member === "string" ? null : member, ...tree.box(member) }));
-    return layoutTree(members, grid.lines("x"), grid.lines("y"), (member, size) => {
-      const leader = tree.leaderOf(parent) === member.id;
-      if (member.node) {
-        const { name, level: depth, leader: lead } = tree.groupRecord(member.id);
-        return { card: member.id, size, frame: frameOf(member.id), leader, group: { name, level: depth, leader: lead, root: level(member.node) } };
+    return layoutTree(parent ? innerOf(stored, parent.card) : stored, true, (id, size) => {
+      const leader = tree.leaderOf(parent) === id;
+      const node = tree.node(id);
+      if (node) {
+        const { name, level: depth, leader: lead } = tree.groupRecord(id);
+        return { card: id, size, frame: frameOf(id), leader, group: { name, level: depth, leader: lead, root: level(node) } };
       }
-      const card = grid.card(member.id);
+      const card = grid.card(id);
       return {
         card: card.id, size, frame: frameOf(card.id), parent: parent ? parent.card : null, leader,
         tabs: tabsOf(card).map((t) => ({
@@ -2634,11 +2652,10 @@ export const currentGrid = () => grid;
 /** The group tree of the shown space, or null while the plane holds no layout. */
 export const currentTree = () => tree;
 
-/** The JSON text of the stored layout of the active space, {state, groups, leader, lastCard}, or null while the window shows none. */
+/** The JSON text of the stored layout of the active space, {state, leader, lastCard}, or null while the window shows none. */
 export function storedLayoutText() {
   if (!grid) return null;
-  const { groups, leader, lastCard } = tree.stored();
-  return JSON.stringify({ state: grid.toJSON(), groups, leader, lastCard });
+  return JSON.stringify(tree.stored());
 }
 
 /**

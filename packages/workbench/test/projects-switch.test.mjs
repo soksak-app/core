@@ -12,7 +12,7 @@ import { drained } from "./support/drained.mjs";
 
 const PROJECT = {
   id: "prj-one", root: "/work/one", identity: "1:1", title: "one", color: "#fff", named: 1,
-  activeSpaceId: "spc-one", spaces: [{ id: "spc-one", title: "SPACE1", layout: { state: { cards: [], name: "one" } } }], settings: {},
+  activeSpaceId: "spc-one", spaces: [{ id: "spc-one", title: "SPACE1", layout: { state: { root: { card: "main" }, name: "one" } } }], settings: {},
 };
 
 let wire = selectPageWire("projects-switch-import");
@@ -43,7 +43,7 @@ const { connectSettings, settingProject } = await import("../settings.js");
 const { declareProjectData, viewDataOf } = await import("../plugin-data.js");
 
 // The installed plugin whose tabs are views: a stored tab of a view plugin keeps its origin.
-installEnvironment({ runtime: "runtime", workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: "retained-probe", title: "probe" }] }] } },
+installEnvironment({ runtime: "runtime", workspace: { focus: "main", grid: { root: { card: "main", tabs: [{ plugin: "retained-probe", title: "probe" }] } } },
   sidebars: { sets: [], links: [] } }, { plugins: [{ id: "retained-probe", package: "@fixture/retained-probe", version: "0.0.1",
   manifest: { id: "retained-probe", name: "Retained", description: "Retained view.", mark: "r", icon: "<path/>",
     surface: { composition: { kind: "view", page: "ui/page.html", regions: [], overlays: [] } } } }] });
@@ -192,16 +192,16 @@ test("a flush writes the window geometry only when it changed", async () => {
 });
 
 test("the surfaces of every layout are listed with their project root, and removing a project retains the rest", async () => {
-  const layout = { state: { cards: [
-    { id: "left" },
-    { id: "right", data: { tabs: [{ id: "tab-a", plugin: "fixture" }, { id: "tab-b", plugin: "fixture" }] } },
-  ] } };
+  const layout = { state: { root: { cut: "x", kids: [
+    { share: 0.2, node: { card: "left" } },
+    { share: 0.8, node: { card: "right", data: { tabs: [{ id: "tab-a", plugin: "fixture" }, { id: "tab-b", plugin: "fixture" }] } } },
+  ] } } };
   const two = {
     ...structuredClone(PROJECT), id: "prj-two", root: "/work/two",
     spaces: [{ id: "spc-two", title: "SPACE1", layout }],
   };
   const one = { ...structuredClone(PROJECT), id: "prj-three" };
-  one.spaces[0].layout = { state: { cards: [{ id: "one", data: { tabs: [{ id: "tab-one", plugin: "beta" }] } }] } };
+  one.spaces[0].layout = { state: { root: { card: "one", data: { tabs: [{ id: "tab-one", plugin: "beta" }] } } } };
   const store = await start("projects-switch-layout-surfaces", { initialise: false });
   await projects.initialise(store);
   assert.deepEqual(projects.layoutSurfaces(), [
@@ -217,10 +217,10 @@ test("the surfaces of every layout are listed with their project root, and remov
     "removing a project disposes the surface modules of its tabs before it ends their sidecar sessions");
   reported.length = 0;
   await projects.initialise(store);
-  assert.deepEqual(reported, ["project prj-three space spc-one has no layout cards"],
-    "the reconciliation of the tab state store reports a layout without cards and keeps the entries");
+  assert.deepEqual(reported, ["project prj-three space spc-one has no layout tree"],
+    "the reconciliation of the tab state store reports a layout without a tree and keeps the entries");
   reported.length = 0;
-  assert.throws(() => projects.layoutSurfaces(), /has no layout cards/, "a layout without cards is an explicit error");
+  assert.throws(() => projects.layoutSurfaces(), /has no layout tree/, "a layout without a tree is an explicit error");
   wire.finish();
 });
 
@@ -510,7 +510,7 @@ test("browsing shows the library in the draw that empties the plane, not where a
 });
 
 test("closing a tab removes its session file after the layout write, and the start removes the files of tabs in no layout", async () => {
-  const layout = (...tabs) => ({ state: { cards: [{ id: "card-one", data: { tabs: tabs.map((id) => ({ id, plugin: "fixture" })) } }] } });
+  const layout = (...tabs) => ({ state: { root: { card: "card-one", data: { tabs: tabs.map((id) => ({ id, plugin: "fixture" })) } } } });
   plane.layout = layout("tab-a", "tab-b");
   await start("projects-switch-session-files");
   const puts = () => workspaceCalls("tabSessionPut").map(({ payload }) => [payload.tab, payload.regions]);
@@ -570,10 +570,10 @@ test("a reopened project restores inactive-space origins before retained views c
   const project = structuredClone(PROJECT);
   project.id = "project-retained-origin";
   project.spaces.push({ id: "space-retained-origin", title: "Hidden", layout: {
-    state: { cards: [{ id: "hidden-card", data: {
+    state: { root: { card: "hidden-card", data: {
       activeId: "tab-retained-origin", tabs: [{ id: "tab-retained-origin", plugin: "retained-probe",
         origin: { directory: "/work/retained-source" } }],
-    } }] },
+    } } },
   } });
   const snapshot = { common: {}, projects: [project], open: [] };
   addressWith(`?project=${project.id}`);
@@ -625,7 +625,7 @@ test("a registry read after the write of this window draws nothing, and a read t
   let draws = 0;
   projects.onChange(() => { draws += 1; });
   try {
-    const space = projects.addSpace({ state: { cards: [], name: "two" } });
+    const space = projects.addSpace({ state: { root: { card: "main" }, name: "two" } });
     assert.equal(draws, 1, "the addition draws its space");
     await projects.flush();
     // The host answers a write of this window with workspace-changed, and the snapshot reads the file that the write changed.

@@ -56,15 +56,11 @@ function call(tree, grid, { call: name, args = {} }) {
     case "leader": return { card: args.card, group: tree.setLeader(args.card) };
     case "move": tree.move(args.card, args.target, args.side); return { card: args.card };
     case "add": return { card: tree.addCard(args.group, undefined) };
-    case "grid": {
-      // The cards of the grid with their place and whether they are fixed, as the cases write them.
-      const { xs, ys, cards } = grid.toJSON();
-      return { xs, ys, cards: cards.map(({ id, c0, c1, r0, r1, fixed }) => ({ id, c0, c1, r0, r1, fixed })) };
-    }
-    case "stored": {
-      const { groups, leader, lastCard } = tree.stored();
-      return { groups, leader, lastCard };
-    }
+    case "grid":
+      // The lines of the grid and its cards in the order of the tree with their place and whether they are fixed, as the cases write them.
+      return { xs: grid.lines("x"), ys: grid.lines("y"),
+        cards: grid.cards.map(({ id, c0, c1, r0, r1, fixed }) => ({ id, c0, c1, r0, r1, fixed })) };
+    case "stored": return tree.stored();
     case "rect": return tree.rect(args.card);
     case "path": return tree.path(args.card);
     case "level": return tree.level(args.card);

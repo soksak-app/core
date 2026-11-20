@@ -11,8 +11,8 @@ import { drained } from "./support/drained.mjs";
 const PROJECT = {
   id: "prj-one", root: "/work/one", identity: "1:1", title: "one", color: "#fff", named: 2, activeSpaceId: "spc-one",
   spaces: [
-    { id: "spc-one", title: "SPACE1", layout: { state: { cards: [], name: "one" } } },
-    { id: "spc-two", title: "SPACE2", layout: { state: { cards: [], name: "two" } } },
+    { id: "spc-one", title: "SPACE1", layout: { state: { root: { card: "main" }, name: "one" } } },
+    { id: "spc-two", title: "SPACE2", layout: { state: { root: { card: "main" }, name: "two" } } },
   ],
   settings: {},
 };

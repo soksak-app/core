@@ -47,8 +47,7 @@ test("core.sidebars reports a window sidebar that shows no set with its rectangl
   assert.deepEqual(installEnvironment({
     runtime: "runtime",
     workspace: { focus: "main", grid: {
-      xs: [0, 1], ys: [0, 1],
-      cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: pluginId, title: "main" }] }],
+      root: { card: "main", tabs: [{ plugin: pluginId, title: "main" }] },
     } },
     sidebars: {
       sets: [{ id: setId, title: "Fixture", layout: "list", sections: [`${otherId}.tree`] }],

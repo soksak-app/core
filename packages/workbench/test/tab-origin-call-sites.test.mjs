@@ -45,9 +45,7 @@ after(() => dom.window.close());
 const { installEnvironment } = await import("../environment.js");
 assert.deepEqual(installEnvironment({
   runtime: "runtime",
-  workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [
-    { id: "main", c0: 0, c1: 1, r0: 0, r1: 1, fixed: true, tabs: [{ plugin: plainId, title: "only" }] },
-  ] } },
+  workspace: { focus: "main", grid: { root: { card: "main", fixed: true, tabs: [{ plugin: plainId, title: "only" }] } } },
   sidebars: { sets: [], links: [] },
 }, { plugins: [{ id: viewId, package: "@fixture/origin-view", version, manifest: {
   id: viewId, name: "View", description: "검사용 view.", mark: "f", icon: "<path/>",
@@ -75,7 +73,7 @@ test("a restored view tab starts with its stored origin on the first build of th
   const env = setup();
   // The first call of adopt builds the plane (grid is absent), so this test is the one that reaches the build call site.
   const kept = env.plane.fresh();
-  const card = kept.state.cards.find((entry) => entry.id === "main");
+  const card = kept.state.root;
   card.data.tabs = [{ id: "built-view", plugin: viewId, title: "v", params: {}, origin: { directory: "/b" } }];
   card.data.activeId = "built-view";
   env.plane.adopt(kept, "spc-aaaaaa");
@@ -102,7 +100,7 @@ test("closing the last tab of a fixed card opens a tab that records a null origi
 test("a restored view tab starts with its stored origin and is not refused (F238-a-10)", { timeout: 5000 }, async () => {
   const env = setup();
   const kept = env.plane.fresh();
-  const card = kept.state.cards.find((entry) => entry.id === "main");
+  const card = kept.state.root;
   card.data.tabs = [
     { id: "restored-view", plugin: viewId, title: "v", params: {}, origin: { directory: "/a" } },
   ];
@@ -117,7 +115,7 @@ test("a restored view tab starts with its stored origin and is not refused (F238
 test("a refused view tab is written to the application log and shown on its tab (F238-a-16)", { timeout: 5000 }, async () => {
   const env = setup();
   const kept = env.plane.fresh();
-  const card = kept.state.cards.find((entry) => entry.id === "main");
+  const card = kept.state.root;
   card.data.tabs = [
     { id: "refused-view", plugin: viewId, title: "v", params: {} },
     { id: "plain-tab", plugin: plainId, title: "p", params: {} },

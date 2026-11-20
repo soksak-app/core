@@ -170,8 +170,6 @@ export function verify(controls = null) {
   add("V4 담았다 되돌리면 그대로", rebuilt === 0,
       `사본 ${rebuilt.toFixed(4)}px · 그려진 최소 변 ${smallest.toFixed(0)}px`);
 
-  add("V5 배치가 slicing", grid.isSlicing(), "한 영역을 통째로 자른 결과만 가능");
-
   const open = cards.filter((c) => !c.fixed);
   if (open.length <= 1) skip("V6 마지막 하나 빼고 전부 닫힌다", "열린 카드가 하나뿐이다");
   else add("V6 마지막 하나 빼고 전부 닫힌다", open.every((c) => grid.canClose(c.id)),

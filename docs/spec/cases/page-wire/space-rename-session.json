@@ -12,8 +12,8 @@
           {
             "id": "prj-one", "root": "/work/one", "identity": "1:1", "title": "one", "color": "#fff", "named": 2, "activeSpaceId": "spc-one",
             "spaces": [
-              { "id": "spc-one", "title": "SPACE1", "layout": { "state": { "cards": [], "name": "one" } } },
-              { "id": "spc-two", "title": "SPACE2", "layout": { "state": { "cards": [], "name": "two" } } }
+              { "id": "spc-one", "title": "SPACE1", "layout": { "state": { "root": {"card": "main"}, "name": "one" } } },
+              { "id": "spc-two", "title": "SPACE2", "layout": { "state": { "root": {"card": "main"}, "name": "two" } } }
             ],
             "settings": {}
           }
@@ -88,8 +88,8 @@
     { "reply": { "result": true } },
     { "call": { "name": "workspace", "payload": { "kind": "patch", "id": "prj-one", "patch": {
       "spaces": [
-        { "id": "spc-one", "title": "SPACE1", "layout": { "state": { "cards": [], "name": "one" } } },
-        { "id": "spc-two", "title": "Work", "layout": { "state": { "cards": [], "name": "two" } } }
+        { "id": "spc-one", "title": "SPACE1", "layout": { "state": { "root": {"card": "main"}, "name": "one" } } },
+        { "id": "spc-two", "title": "Work", "layout": { "state": { "root": {"card": "main"}, "name": "two" } } }
       ],
       "activeSpaceId": "spc-one",
       "named": 2

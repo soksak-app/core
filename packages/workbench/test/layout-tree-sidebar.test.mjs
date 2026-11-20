@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { Soksak } from "soksak";
 
 const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const dom = new JSDOM(markup, { url: "http://localhost/", pretendToBeVisual: true });
@@ -29,13 +30,15 @@ Object.defineProperty(document, "adoptedStyleSheets", { value: [] });
 const PLAIN = "fixture-plain";
 const SIDES = ["left", "right", "top", "bottom"];
 const { cases } = JSON.parse(readFileSync(new URL("../../../docs/spec/cases/layout/tree.json", import.meta.url), "utf8"));
-const withSidebar = cases.filter(({ layout: { cards } }) => cards.some(({ id }) => SIDES.includes(id)));
-const sides = [...new Set(withSidebar.flatMap(({ layout: { cards } }) => cards.map(({ id }) => id).filter((id) => SIDES.includes(id))))];
+// The card nodes of a stored tree in tree order.
+const leaves = (node) => (node.cut !== undefined ? node.kids.flatMap((kid) => leaves(kid.node)) : [node]);
+const withSidebar = cases.filter(({ layout }) => leaves(layout.root).some(({ card }) => SIDES.includes(card)));
+const sides = [...new Set(withSidebar.flatMap(({ layout }) => leaves(layout.root).map(({ card }) => card).filter((id) => SIDES.includes(id))))];
 
 const { installEnvironment } = await import("../environment.js");
 assert.deepEqual(installEnvironment({
   runtime: "runtime",
-  workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: PLAIN, title: "t" }] }] } },
+  workspace: { focus: "main", grid: { root: { card: "main", tabs: [{ plugin: PLAIN, title: "t" }] } } },
   // Each side of the cases holds a window sidebar with a set of one section.
   sidebars: { sets: [{ id: "set-list", title: "List", sections: ["fixture-sections.list"], layout: "list" }],
     links: sides.map((side) => ({ place: side, plugin: null, set: "set-list" })) },
@@ -70,19 +73,28 @@ test("the lines and cards of each arrangement of tree.json with a window sidebar
   };
   const strip = (node) => (node.card ? { card: node.card, size: node.size }
     : { direction: node.direction, size: node.size, children: node.children.map(strip) });
-  for (const { name, layout: { xs, ys, cards }, root } of withSidebar) {
-    const content = cards.filter(({ id }) => !SIDES.includes(id));
-    const first = [...content].sort((a, b) => (a.r0 - b.r0) || (a.c0 - b.c0))[0];
-    const numbers = cards.map(({ id }) => Number(/^card-(\d+)$/.exec(id)?.[1] ?? 0));
-    plane.adopt({ focusedId: content[0].id, named: 0, sidebars: {}, groups: [], leader: first.id, lastCard: Math.max(1, ...numbers),
-      // The plane keeps the size of a window sidebar as it is drawn, so the record holds the extent that the lines of the case give it.
-      windowSidebars: Object.fromEntries(cards.filter(({ id }) => SIDES.includes(id)).map(({ id, c0, c1, r0, r1 }) =>
-        [id, id === "left" || id === "right" ? { width: (xs[c1] - xs[c0]) * 1600 } : { height: (ys[r1] - ys[r0]) * 1200 }])),
-      state: { xs, ys, cards: cards.map((card, i) => (SIDES.includes(card.id) ? { ...card, fixed: true, data: null } : { ...card, data: {
-        tabs: [{ id: `tab-side${String(i).padStart(2, "0")}`, plugin: PLAIN, title: "t", origin: { directory: null } }],
-        activeId: `tab-side${String(i).padStart(2, "0")}` } })) } }, "spc-aaaaaa");
-    assert.deepEqual(plane.currentGrid().cards.map(({ id }) => id).sort(), cards.map(({ id }) => id).sort(), `${name}: the plane did not keep the cards of the case`);
-    assert.deepEqual(plane.currentGrid().lines("x"), xs, `${name}: the plane moved the lines of the case`);
+  for (const { name, layout, root } of withSidebar) {
+    const cards = leaves(layout.root).map(({ card }) => card);
+    const content = cards.filter((id) => !SIDES.includes(id));
+    const drawn = new Soksak(layout, { width: 1600, height: 1200 });
+    const first = [...drawn.cards].filter(({ id }) => !SIDES.includes(id)).sort((a, b) => (a.r0 - b.r0) || (a.c0 - b.c0))[0];
+    const numbers = cards.map((id) => Number(/^card-(\d+)$/.exec(id)?.[1] ?? 0));
+    let i = 0;
+    const withData = (node) => {
+      if (node.cut !== undefined) return { ...node, kids: node.kids.map((kid) => ({ ...kid, node: withData(kid.node) })) };
+      if (SIDES.includes(node.card)) return { ...node, fixed: true, data: null };
+      const tab = `tab-side${String(i++).padStart(2, "0")}`;
+      return { ...node, data: { tabs: [{ id: tab, plugin: PLAIN, title: "t", origin: { directory: null } }], activeId: tab } };
+    };
+    plane.adopt({ focusedId: content[0], named: 0, sidebars: {}, leader: first.id, lastCard: Math.max(1, ...numbers),
+      // The plane keeps the size of a window sidebar as it is drawn, so the record holds the extent that the share of the case gives it.
+      windowSidebars: Object.fromEntries(cards.filter((id) => SIDES.includes(id)).map((id) =>
+        [id, id === "left" || id === "right" ? { width: drawn.rect(id).w } : { height: drawn.rect(id).h }])),
+      state: { root: withData(layout.root) } }, "spc-aaaaaa");
+    assert.deepEqual(plane.currentGrid().cards.map(({ id }) => id).sort(), [...cards].sort(), `${name}: the plane did not keep the cards of the case`);
+    // The plane keeps the cuts of the case; the shares beside a window sidebar follow the gap of the plane.
+    const form = (node) => (node.cut !== undefined ? { cut: node.cut, kids: node.kids.map((kid) => form(kid.node)) } : node.card);
+    assert.deepEqual(form(plane.currentGrid().toJSON().root), form(layout.root), `${name}: the plane changed the cuts of the case`);
     close(strip(plane.layoutDescription().root), root, name);
   }
 });

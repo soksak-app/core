@@ -5,9 +5,7 @@ import test from "node:test";
 
 const environmentFile = {
   runtime: "runtime",
-  workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [
-    { id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: "absent", title: "m" }] },
-  ] } },
+  workspace: { focus: "main", grid: { root: { card: "main", tabs: [{ plugin: "absent", title: "m" }] } } },
   sidebars: { sets: [], links: [] },
 };
 const accepted = { id: "side", package: "@fixture/side", version: "0.0.1",

@@ -7,15 +7,19 @@ import { readGroupTree } from "../group-tree.js";
 
 const GAP = 12, HEAD = 30, MIN = 40, W = 1200, H = 800;
 
+/** A box of the group card id with its name and leader around the cut of the kids, each [share, node]. */
+const box = (id, name, leader, cut, kids) => ({ box: id, data: { name, leader }, inner: split(cut, kids) });
+/** A cut of the kids, each [share, node]; a string node is a card. */
+const split = (cut, kids) => ({ cut, kids: kids.map(([share, node]) => ({ share, node: typeof node === "string" ? { card: node } : node })) });
+
 /** card-6 holds the nested group card-5 of card-1 above card-3, and card-2 beside it; card-4 stands outside on the right. */
 function nested() {
   const grid = new Soksak(undefined, { gap: GAP, minSize: MIN, width: W, height: H });
   const layout = {
-    state: { xs: [0, 1 / 3, 2 / 3, 1], ys: [0, 0.5, 1], cards: [
-      { id: "card-1", c0: 0, c1: 1, r0: 0, r1: 1 }, { id: "card-3", c0: 0, c1: 1, r0: 1, r1: 2 },
-      { id: "card-2", c0: 1, c1: 2, r0: 0, r1: 2 }, { id: "card-4", c0: 2, c1: 3, r0: 0, r1: 2 }] },
-    groups: [{ card: "card-6", name: "그룹 1", leader: "card-5", members: [
-      { card: "card-5", name: "그룹 2", leader: "card-1", members: ["card-1", "card-3"] }, "card-2"] }],
+    state: { root: split("x", [
+      [2 / 3, box("card-6", "그룹 1", "card-5", "x", [[0.5, box("card-5", "그룹 2", "card-1", "y", [[0.5, "card-1"], [0.5, "card-3"]])], [0.5, "card-2"]])],
+      [1 / 3, "card-4"],
+    ]) },
     leader: "card-6", lastCard: 6,
   };
   return readGroupTree(layout, { gap: GAP, minSize: MIN, head: HEAD }, grid);
@@ -74,12 +78,13 @@ const LINE = 1;
 function seam() {
   const grid = new Soksak(undefined, { gap: LINE, minSize: MIN, width: W, height: H });
   const layout = {
-    state: { xs: [0, 0.25, 0.5, 0.75, 1], ys: [0, 0.5, 1], cards: [
-      { id: "card-1", c0: 0, c1: 1, r0: 0, r1: 1 }, { id: "card-3", c0: 1, c1: 2, r0: 0, r1: 1 }, { id: "card-4", c0: 0, c1: 2, r0: 1, r1: 2 },
-      { id: "card-2", c0: 2, c1: 3, r0: 0, r1: 2 }, { id: "card-8", c0: 3, c1: 4, r0: 0, r1: 2 }] },
-    groups: [{ card: "card-7", name: "그룹 3", leader: "card-6", members: [
-      { card: "card-6", name: "그룹 2", leader: "card-5", members: [
-        { card: "card-5", name: "그룹 1", leader: "card-1", members: ["card-1", "card-3"] }, "card-4"] }, "card-2"] }],
+    state: { root: split("x", [
+      [0.75, box("card-7", "그룹 3", "card-6", "x", [
+        [2 / 3, box("card-6", "그룹 2", "card-5", "y", [[0.5, box("card-5", "그룹 1", "card-1", "x", [[0.5, "card-1"], [0.5, "card-3"]])], [0.5, "card-4"]])],
+        [1 / 3, "card-2"],
+      ])],
+      [0.25, "card-8"],
+    ]) },
     leader: "card-7", lastCard: 8,
   };
   return readGroupTree(layout, { gap: LINE, minSize: MIN, head: HEAD, seam: true }, grid);
@@ -122,10 +127,7 @@ const GRIP = 24;
 test("a divider draws its grip only on a drawn stretch that holds the grip", () => {
   const grid = new Soksak(undefined, { gap: GAP, minSize: MIN, width: W, height: H });
   const tree = readGroupTree({
-    state: { xs: [0, 0.25, 0.5, 1], ys: [0, 1], cards: [
-      { id: "card-1", c0: 0, c1: 1, r0: 0, r1: 1 }, { id: "card-3", c0: 1, c1: 2, r0: 0, r1: 1 }, { id: "card-2", c0: 2, c1: 3, r0: 0, r1: 1 }] },
-    groups: [{ card: "card-6", name: "그룹 1", leader: "card-5", members: [
-      { card: "card-5", name: "그룹 2", leader: "card-1", members: ["card-1", "card-3"] }, "card-2"] }],
+    state: { root: box("card-6", "그룹 1", "card-5", "x", [[0.5, box("card-5", "그룹 2", "card-1", "x", [[0.5, "card-1"], [0.5, "card-3"]])], [0.5, "card-2"]]) },
     leader: "card-6", lastCard: 6,
   }, { gap: GAP, minSize: MIN, head: HEAD }, grid);
   const dividers = tree.drawnDividers(grid.dividers(), GRIP);

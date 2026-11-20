@@ -12,7 +12,7 @@ const spans = (grid) => JSON.stringify(grid.cards.map(({ id, c0, c1, r0, r1, fix
 for (const side of ORDER) test(`window ${side} sidebar retains its side and size across plugin overrides`, () => {
   const units = [{ id: "alpha" }, { id: "beta" }];
   const links = [{ place: side, plugin: null, set: "general" }, ...units.map((unit) => ({ place: `window-${side}`, plugin: unit.id, set: unit.id }))];
-  const grid = new Soksak({ xs: [0, 1], ys: [0, 1], cards: [{ id: "content", c0: 0, c1: 1, r0: 0, r1: 1 }] }, { width: 1000, height: 800 });
+  const grid = new Soksak({ root: { card: "content" } }, { width: 1000, height: 800 });
   const records = {};
   const arrange = (focus) => arrangeWindowSidebars(grid, ORDER, windowSidebarCards(units, links, focus).map((item) => item.id), records, 190,
     (shown) => shown === side);
@@ -34,17 +34,12 @@ for (const side of ORDER) test(`window ${side} sidebar retains its side and size
 // (docs/spec/external-sidebars.md#fixed-placement-and-persistence): the layout refuses an insertion that takes a card below its
 // minimum, and a missing sidebar or a refused arrangement is not that contract.
 test("a window sidebar whose saved size leaves no room docks at the largest size that fits", () => {
-  const grid = new Soksak({
-    xs: [0, 0.5, 1],
-    ys: [0, 0.25, 0.5, 0.75, 1],
-    cards: [
-      { id: "main", c0: 0, c1: 1, r0: 0, r1: 1 },
-      { id: "second", c0: 0, c1: 1, r0: 2, r1: 3 },
-      { id: "third", c0: 0, c1: 2, r0: 1, r1: 2 },
-      { id: "fourth", c0: 1, c1: 2, r0: 2, r1: 3 },
-      { id: "fifth", c0: 1, c1: 2, r0: 0, r1: 1 },
-    ],
-  }, { width: 1000, height: 800 });
+  const row = (a, b) => ({ cut: "x", kids: [{ share: 0.5, node: { card: a } }, { share: 0.5, node: { card: b } }] });
+  const grid = new Soksak({ root: { cut: "y", kids: [
+    { share: 0.25, node: row("main", "fifth") },
+    { share: 0.25, node: { card: "third" } },
+    { share: 0.5, node: row("second", "fourth") },
+  ] } }, { width: 1000, height: 800 });
   const records = {};
   assert.equal(arrangeWindowSidebars(grid, ORDER, ORDER, records, 190, () => true), true);
   const top = grid.card("top");
@@ -62,11 +57,8 @@ test("a window sidebar whose saved size leaves no room docks at the largest size
   // The plane that holds no size for a sidebar names the side it cannot place, and a quiet settle does not attempt the refused
   // arrangement again.
   const rows = ["main", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth"];
-  const tight = new Soksak({
-    xs: [0, 1],
-    ys: [0, 0.11, 0.22, 0.33, 0.44, 0.55, 0.66, 0.77, 0.88, 1],
-    cards: rows.map((id, index) => ({ id, c0: 0, c1: 1, r0: index, r1: index + 1 })),
-  }, { width: 1000, height: 800 });
+  const tight = new Soksak({ root: { cut: "y", kids: rows.map((id) => ({ share: 1 / rows.length, node: { card: id } })) } },
+    { width: 1000, height: 800 });
   assert.throws(() => arrangeWindowSidebars(tight, ORDER, ["top"], {}, 190, () => true), /^Error: cannot place window sidebars top$/);
   assert.equal(tight.card("top"), undefined, "the dock left a sidebar where no size holds");
   assert.equal(arrangeWindowSidebars(tight, ORDER, ["top"], {}, 190, () => true), false, "a quiet settle attempted the refused arrangement");
