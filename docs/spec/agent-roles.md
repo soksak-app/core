@@ -75,7 +75,7 @@ The stable identity is the text that a tab's launch delivers. It is written in E
 
 - The identity names the message prefix, so the agent recognizes a change message as the authority over its role.
 - The identity names the path of the role file, so the agent reads the role from the file.
-- The path is absolute and comes from the configuration directory of the application. A path with a quote or a control character makes the launch refuse with an explicit error.
+- The path is absolute and comes from the configuration directory of the application. A path with a quote or a control character is refused with `configuration directory <path> holds a quote or a control character`, and the launch starts no program.
 - The identity is the same text in a launch and in the first message of a CLI without an adapter.
 
 ## Role file
@@ -89,11 +89,11 @@ The stable identity is the text that a tab's launch delivers. It is written in E
 - Fingerprint: the first 16 lowercase hexadecimal characters of the SHA-256 digest of the UTF-8 bytes of the role identifier, one line feed (U+000A), and the definition text as stored. The identifier has no line break, so the separator is unambiguous. The fingerprint depends only on the identifier and the text: the same definition always gives the same fingerprint.
 - Length: soksak writes the definition as it is, whatever its length. The spec recommends a short definition, because the agent reads the whole file at each change.
 - The file belongs to the configuration directory and never to a repository of the person.
-- Mode: the directory `<config-dir>/agents/<surface>/` is created with mode 0700, and `role.md` and the identity file are written with mode 0600. The mode of the temporary file is checked before the rename, so a file with another mode is never visible under the final name; the write then fails with an explicit error and removes the temporary file.
+- Mode: the directory `<config-dir>/agents/<surface>/` is created with mode 0700, and `role.md` and the identity file are written with mode 0600. The mode of the temporary file is checked before the rename, so a file with another mode is never visible under the final name; the write then fails with `role file <path>: mode <mode> is not 0600` and removes the temporary file. A failed write step fails with `role file <path>: write failed: <os error>`, where `<path>` is the path that the step used.
 - Atomic write: the host writes the new content to a temporary file named `.role-<random>.tmp` in the same folder and renames it over `role.md`. A reader sees the whole earlier file or the whole new one. Before its first write, a launch deletes the files of its surface folder whose names match `.role-*.tmp`, which an earlier crash left.
 - Writer: the host writes the file; the terminal page creates no file. A failed write is an error that names the path and the reason. A failed role file or identity file write at a launch refuses the launch, and no program starts.
-- Lifecycle: the host creates the directory before the launch. When the tab is removed from the layout, the host stops the program of the tab, waits for a write in progress to end, refuses a later role change of that tab with an explicit error, and removes the directory. A failed rename after the removal removes the temporary file and is logged. The held messages of the removed tab are discarded, each with a delivery record of state `skipped` and reason `tab removed`. A removed tab cannot be resumed.
-- Launch record: each launch stores the identity path in the session record of the tab. A resume of a session launched with the identity by flag checks that the stored path equals the current path and that the file exists; an adapter-less session re-sends its first message with the current path, so no check applies; a mismatch, which happens when the configuration directory was moved, or a missing file fails the resume with an explicit error that names the path.
+- Lifecycle: the host creates the directory before the launch. When the tab is removed from the layout, the host stops the program of the tab, waits for a write in progress to end, refuses a later role change of that tab with `tab <tab> was removed; its role cannot change`, and removes the directory. A failed rename after the removal removes the temporary file and is logged. The held messages of the removed tab are discarded, each with a delivery record of state `skipped` and reason `tab removed`. A removed tab cannot be resumed.
+- Launch record: each launch stores the identity path in the session record of the tab. A resume of a session launched with the identity by flag checks that the stored path equals the current path and that the file exists; an adapter-less session re-sends its first message with the current path, so no check applies; a mismatch, which happens when the configuration directory was moved, or a missing file fails the resume with `identity path <stored> is not the current path <current>` when the path differs, or with `identity file <path> is missing` when the file is absent.
 
 The identity file of the Claude Code adapter is `<config-dir>/agents/<surface>/identity.txt`, written at the launch beside the role file by the same write rule. The Codex adapter passes the identity text inline, quoted as a TOML string.
 
@@ -178,7 +178,7 @@ soksak judges a confirmation inside the serialization of the surface, against th
 - a value that is not 16 lowercase hexadecimal characters is refused with an invalid-argument error before the serialization. The stale rule below applies only to valid values;
 - the fingerprint equals the current one, in state `pending` or `unconfirmed`: `confirmedFingerprint` is stored, the state becomes `ready`, `seq` rises, the requests counter is reset, and the held work messages are released;
 - the fingerprint equals the current one, in state `ready`: nothing changes, and the answer is a success;
-- the fingerprint differs from the current one, because it belongs to an earlier file: refused as stale, without a retry. The error names the path of the current role file and says to read it again. It names no fingerprint. The state stays as it was;
+- the fingerprint differs from the current one, because it belongs to an earlier file: refused as stale, without a retry. The error is `stale fingerprint: read the role file again at <path>`, which names the path of the current role file. It names no fingerprint. The state stays as it was;
 - a tab without a role, or a surface without a tab: refused with an explicit error that names the surface.
 
 ### Requests
@@ -323,18 +323,18 @@ A CLI that the person starts by hand in a tab, as a second agent in the same she
 
 - The launch adapters: the argument list and the identity file that each adapter produces, compared with the expected values. No agent CLI runs in a unit test.
 - The terminal launch path: a recording program that the launch starts as the agent command. It records the arguments and the first input and does nothing else; the launch starts it as a real process.
-- The role file write: real files. A fault point in the host writer fails the write at step 1, step 2 and step 3, and each case states the stored record and the file afterwards.
-- Mode: the temporary file is created with mode 0600 and the directory with 0700; a changed mode before the rename makes the write refuse without renaming.
+- The role file write: real files. A fault point in the host writer fails the write at step 1, step 2 and step 3, and each case asserts `role file <path>: write failed: <os error>` and states the stored record and the file afterwards.
+- Mode: the temporary file is created with mode 0600 and the directory with 0700; a changed mode before the rename makes the write fail with `role file <path>: mode <mode> is not 0600` without renaming.
 - Phrase test: the host output of each pinned text equals the text in `docs/spec/cases/agent-roles/fingerprint.json`, as described in the [phrase test](#phrase-test).
 - Paste form: a change to an agent that cannot read files, and its first message, contain the lead text, the definition text exactly and the fingerprint line, and the fingerprint is computed over the pasted definition.
 - Layout and fingerprint: the layout has the first line, the definition and the last line; a definition without a final line feed gets one in the layout and its fingerprint is computed over the stored text. The Go host and the Rust host compute the fingerprint of each case in `docs/spec/cases/agent-roles/fingerprint.json`, and the values are equal. The cases include non-ASCII text and line breaks.
 - Length: a long definition (5,000 characters) is written whole, and its fingerprint covers all of it.
-- Path: a configuration directory path with a quote or a control character makes the launch refuse; a surface identifier with a path separator, a `..` segment or a control character is refused with `surface "<value>" holds a path part or a control character`, and nothing is written.
+- Path: a configuration directory path with a quote or a control character is refused with `configuration directory <path> holds a quote or a control character`; a surface identifier with a path separator, a `..` segment or a control character is refused with `surface "<value>" holds a path part or a control character`, and nothing is written.
 - Launch failure: a failed identity or role file write at a launch starts no program.
 - Leftover files: a launch deletes the `.role-*.tmp` files of its surface folder before it writes.
-- Removal: a removed tab stops its program, refuses a later change, and discards its held messages with one `skipped` record each.
-- Resume: the stored path equal to the current one and the file present start the program; a different path or a missing file fails the resume with the error that names the path.
-- Confirmation: both ways, `sok role confirm` and the answer line, give `ready` for the current fingerprint and the stale error for an older one; each way is tested only where its adapter declares it.
+- Removal: a removed tab stops its program, refuses a later change with `tab <tab> was removed; its role cannot change`, and discards its held messages with one `skipped` record each.
+- Resume: the stored path equal to the current one and the file present start the program; a different path fails the resume with `identity path <stored> is not the current path <current>`, and a missing file with `identity file <path> is missing`.
+- Confirmation: both ways, `sok role confirm` and the answer line, give `ready` for the current fingerprint and the stale error `stale fingerprint: read the role file again at <path>` for an older one; each way is tested only where its adapter declares it.
 - Requests: the first and second request, the `unconfirmed` state, and the error-display record for each.
 - Format: the `projects.json` reader refuses format 2 with `<file>: projects: format must be 3, found 2`, and the writer writes format 3.
 - Repetition and concurrency: the tests of [idempotency](#tests-of-the-repetitions) and [concurrency](#tests-of-the-concurrency).

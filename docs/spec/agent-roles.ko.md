@@ -75,7 +75,7 @@ sidecar 프로토콜 변경: terminal session의 `open` 요청은 `directory` �
 
 - identity는 message 접두어를 적으므로 agent는 그 접두어가 붙은 변경 message를 role의 권한으로 알아본다.
 - identity는 role 파일 경로를 적으므로 agent는 role을 파일에서 읽는다.
-- 경로는 절대 경로이며 application의 configuration directory에서 온다. 따옴표나 제어 문자가 있는 경로는 launch를 명시적 오류로 거부한다.
+- 경로는 절대 경로이며 application의 configuration directory에서 온다. 따옴표나 제어 문자가 있는 경로는 `configuration directory <path> holds a quote or a control character`로 거부하며 launch는 어떤 program도 시작하지 않는다.
 - identity는 launch와 adapter가 없는 CLI의 첫 message에서 같은 텍스트다.
 
 ## Role file
@@ -89,11 +89,11 @@ sidecar 프로토콜 변경: terminal session의 `open` 요청은 `directory` �
 - fingerprint: role 식별자, line feed 하나(U+000A), 저장된 정의 텍스트를 이어 붙인 UTF-8 바이트의 SHA-256 digest에서 앞 16자리 소문자 16진수. 식별자에는 줄바꿈이 없으므로 구분자가 모호하지 않다. fingerprint은 식별자와 텍스트에만 의존한다. 같은 정의는 언제나 같은 fingerprint을 낸다.
 - 길이: soksak은 정의를 길이와 상관없이 그대로 쓴다. 짧은 정의를 권장하며 그 이유는 위에 적었다.
 - 파일은 configuration directory에 속하며 person의 repository에는 속하지 않는다.
-- 모드: 디렉터리 `<config-dir>/agents/<surface>/`는 모드 0700으로 만든다. `role.md`와 identity 파일은 모드 0600으로 쓴다. 임시 파일의 모드는 이름을 바꾸기 전에 확인한다. 모드가 다르면 최종 이름으로는 보이지 않으며, 쓰기는 명시적 오류로 실패하고 임시 파일을 지운다.
+- 모드: 디렉터리 `<config-dir>/agents/<surface>/`는 모드 0700으로 만든다. `role.md`와 identity 파일은 모드 0600으로 쓴다. 임시 파일의 모드는 이름을 바꾸기 전에 확인한다. 모드가 다르면 최종 이름으로는 보이지 않으며, 쓰기는 `role file <path>: mode <mode> is not 0600`으로 실패하고 임시 파일을 지운다. 각 쓰기 단계의 실패는 `role file <path>: write failed: <os error>`로 실패하며, `<path>`는 그 단계가 쓴 경로다.
 - 원자적 쓰기: host는 같은 폴더에 `.role-<random>.tmp` 이름의 임시 파일에 새 내용을 쓰고 `role.md` 위로 이름을 바꾼다. 읽는 쪽은 이전 파일 전체 또는 새 파일 전체만 본다. launch는 첫 쓰기 전에 surface 폴더에서 `.role-*.tmp`와 맞는 파일을 지운다. 이전 충돌이 남긴 파일이다.
 - 쓰는 주체: host가 파일을 쓴다. terminal page는 파일을 만들지 않는다. 실패한 쓰기는 경로와 이유를 적은 오류다. launch의 role 파일이나 identity 파일 쓰기가 실패하면 launch를 거부하며 어떤 program도 시작하지 않는다.
-- 수명: host는 launch 전에 디렉터리를 만든다. tab이 layout에서 제거되면 host는 tab의 프로그램을 멈추고, 진행 중인 쓰기가 끝나기를 기다리고, 그 tab의 이후 role 변경을 명시적 오류로 거부하며, 디렉터리를 지운다. 제거 뒤의 이름 바꾸기가 실패하면 임시 파일을 지우고 기록한다. 제거된 tab의 보류 message는 버린다. 각 message마다 state `skipped`와 reason `tab removed`의 delivery record를 쓴다. 제거된 tab은 resume할 수 없다.
-- launch 기록: 각 launch는 identity 경로를 tab의 session 기록에 저장한다. identity를 flag로 받은 session의 resume은 저장된 경로가 현재 경로와 같고 파일이 있는지 확인한다. adapter가 없는 session은 현재 경로로 첫 message를 다시 보내므로 이 확인이 없다. configuration directory가 옮겨졌거나 파일이 없으면 resume은 경로를 적은 명시적 오류로 실패한다.
+- 수명: host는 launch 전에 디렉터리를 만든다. tab이 layout에서 제거되면 host는 tab의 프로그램을 멈추고, 진행 중인 쓰기가 끝나기를 기다리고, 그 tab의 이후 role 변경을 `tab <tab> was removed; its role cannot change`로 거부하며, 디렉터리를 지운다. 제거 뒤의 이름 바꾸기가 실패하면 임시 파일을 지우고 기록한다. 제거된 tab의 보류 message는 버린다. 각 message마다 state `skipped`와 reason `tab removed`의 delivery record를 쓴다. 제거된 tab은 resume할 수 없다.
+- launch 기록: 각 launch는 identity 경로를 tab의 session 기록에 저장한다. identity를 flag로 받은 session의 resume은 저장된 경로가 현재 경로와 같고 파일이 있는지 확인한다. adapter가 없는 session은 현재 경로로 첫 message를 다시 보내므로 이 확인이 없다. configuration directory가 옮겨졌거나 파일이 없으면 resume은 경로가 다르면 `identity path <stored> is not the current path <current>`, 파일이 없으면 `identity file <path> is missing`으로 실패한다.
 
 Claude Code adapter의 identity 파일은 `<config-dir>/agents/<surface>/identity.txt`이며, launch 때 role 파일 옆에 같은 쓰기 규칙으로 쓴다. Codex adapter는 identity 텍스트를 TOML 문자열로 인용해 인라인으로 넘긴다.
 
@@ -178,7 +178,7 @@ soksak은 confirmation을 surface의 직렬화 안에서, 차례가 왔을 때�
 - 16자리 소문자 16진수가 아닌 값은 직렬화 전에 invalid-argument 오류로 거부한다. 아래 오래된 confirmation 규칙은 유효한 값에만 적용된다;
 - fingerprint이 현재 fingerprint과 같고 상태가 `pending` 또는 `unconfirmed`이면: `confirmedFingerprint`를 저장하고, 상태를 `ready`로 바꾸고, `seq`를 올리고, 요청 계수를 0으로 되돌리고, 보류된 작업 message를 풀어준다;
 - fingerprint이 현재 fingerprint과 같고 상태가 `ready`이면: 아무것도 바꾸지 않으며 답은 성공이다;
-- fingerprint이 현재 fingerprint과 다르면, 즉 이전 파일의 fingerprint이면: 재시도 없이 오래된 confirmation으로 거부한다. 오류는 현재 role 파일의 경로를 적고 다시 읽으라고 말한다. fingerprint은 적지 않는다. 상태는 그대로 둔다;
+- fingerprint이 현재 fingerprint과 다르면, 즉 이전 파일의 fingerprint이면: 재시도 없이 오래된 confirmation으로 거부한다. 오류는 `stale fingerprint: read the role file again at <path>`이며 현재 role 파일의 경로를 적는다. fingerprint은 적지 않는다. 상태는 그대로 둔다;
 - role이 없는 tab이거나 tab이 없는 surface이면: surface를 적은 명시적 오류로 거부한다.
 
 ### Requests
@@ -325,18 +325,18 @@ person이 tab의 shell에서 직접 시작한 두 번째 agent CLI는 soksak의 
 
 - 실행 adapter: 각 adapter가 만드는 인자 목록과 identity 파일을 기대값과 비교한다. 단위 테스트에서는 agent CLI를 실행하지 않는다.
 - terminal 실행 경로: launch가 agent 명령으로 시작하는 기록 program. 인자와 첫 입력을 기록하고 그 밖에는 아무것도 하지 않는다. launch는 이것을 실제 프로세스로 시작한다.
-- role 파일 쓰기: 실제 파일을 쓴다. host writer의 fault point가 1, 2, 3단계에서 쓰기를 실패시키고, 각 경우는 뒤의 저장 기록과 파일을 적는다.
-- 모드: 임시 파일은 모드 0600, 디렉터리는 0700으로 만든다. 이름을 바꾸기 전에 모드가 바뀌면 쓰기는 이름을 바꾸지 않고 거부한다.
+- role 파일 쓰기: 실제 파일을 쓴다. host writer의 fault point가 1, 2, 3단계에서 쓰기를 실패시키고, 각 경우는 `role file <path>: write failed: <os error>`를 확인하고 뒤의 저장 기록과 파일을 적는다.
+- 모드: 임시 파일은 모드 0600, 디렉터리는 0700으로 만든다. 이름을 바꾸기 전에 모드가 바뀌면 쓰기는 이름을 바꾸지 않고 `role file <path>: mode <mode> is not 0600`으로 실패한다.
 - phrase test: [Phrase test](#phrase-test)를 본다.
 - 붙여 넣기 형식: 파일을 읽을 수 없는 agent의 변경 message와 첫 message는 lead 문구, 정의 텍스트 그대로, fingerprint 줄을 담고, fingerprint은 붙여 넣은 정의로 계산한다.
 - 구조와 fingerprint: 구조는 첫 줄, 정의, 마지막 줄을 가진다. 마지막 line feed가 없는 정의는 구조에서 line feed를 얻고 fingerprint은 저장된 텍스트로 계산한다. Go host와 Rust host가 `docs/spec/cases/agent-roles/fingerprint.json`의 각 사례 fingerprint을 계산하고 값이 같다. 사례에는 non-ASCII 텍스트와 줄바꿈이 있다.
 - 길이: 긴 정의(5,000자)는 전체가 쓰이고 fingerprint은 전체를 덮는다.
-- 경로: 따옴표나 제어 문자가 있는 configuration directory 경로는 launch를 거부한다. 경로 구분자, `..` 구간 또는 제어 문자가 있는 surface 식별자도 `surface "<value>" holds a path part or a control character`로 거부하며 아무것도 쓰지 않는다.
+- 경로: 따옴표나 제어 문자가 있는 configuration directory 경로는 `configuration directory <path> holds a quote or a control character`로 거부한다. 경로 구분자, `..` 구간 또는 제어 문자가 있는 surface 식별자도 `surface "<value>" holds a path part or a control character`로 거부하며 아무것도 쓰지 않는다.
 - launch 실패: launch의 identity 또는 role 파일 쓰기가 실패하면 어떤 program도 시작하지 않는다.
 - 남은 파일: launch는 쓰기 전에 surface 폴더의 `.role-*.tmp` 파일을 지운다.
-- 제거: 제거된 tab은 program을 멈추고, 이후 변경을 거부하며, 보류 message를 각각 `skipped` 기록으로 버린다.
-- resume: 저장된 경로가 현재 경로와 같고 파일이 있으면 프로그램을 시작한다. 경로가 다르거나 파일이 없으면 경로를 적은 오류로 resume이 실패한다.
-- confirmation: 두 방식, `sok role confirm`과 답변 줄이 현재 fingerprint에 `ready`를 주고, 이전 fingerprint에는 오래된 confirmation 오류를 준다. 각 방식은 그것을 선언한 adapter에서만 테스트한다.
+- 제거: 제거된 tab은 program을 멈추고, 이후 변경을 `tab <tab> was removed; its role cannot change`로 거부하며, 보류 message를 각각 `skipped` 기록으로 버린다.
+- resume: 저장된 경로가 현재 경로와 같고 파일이 있으면 프로그램을 시작한다. 경로가 다르면 `identity path <stored> is not the current path <current>`, 파일이 없으면 `identity file <path> is missing`으로 resume이 실패한다.
+- confirmation: 두 방식, `sok role confirm`과 답변 줄이 현재 fingerprint에 `ready`를 주고, 이전 fingerprint에는 `stale fingerprint: read the role file again at <path>` 오류를 준다. 각 방식은 그것을 선언한 adapter에서만 테스트한다.
 - 요청: 첫 요청과 두 번째 요청, `unconfirmed` 상태, 각각의 error display 기록.
 - 형식: `projects.json` reader는 형식 2를 `<file>: projects: format must be 3, found 2`로 거부하고, writer는 형식 3을 쓴다.
 - 반복과 동시성: [Tests of the repetitions](#tests-of-the-repetitions)와 [Tests of the concurrency](#tests-of-the-concurrency).
