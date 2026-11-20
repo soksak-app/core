@@ -97,6 +97,8 @@ serde = { version = "1", features = ["derive"] }
 soksak-sok = { path = "../../sok/rust" }
 serde_json = { version = "1", features = ["raw_value"] }
 tempfile = "3"
+# The role fingerprint is the first 16 hexadecimal characters of the SHA-256 digest (role_file.rs role_fingerprint).
+sha2 = "0.10"
 flate2 = "1"
 tar = "0.4"
 base64 = "0.22"
@@ -142,7 +144,6 @@ windows = { version = "0.62", features = [
 [dev-dependencies]
 hex = "0.4"
 notify = "8.2"
-sha2 = "0.10"
 
 [target.'cfg(target_os = "macos")'.dev-dependencies]
 # The stall watch test runs the main run loop of its child process on the main thread (tests/stall_watch_test.rs).
