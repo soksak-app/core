@@ -641,7 +641,10 @@ export function onDrag(fn) {
 /* The drop preview drawn now, in plane coordinates. */
 let dropPreview = null;
 
-/** The tab drag in progress: the dragged tab, the origin card, the drop position, and the preview rectangle. */
+/**
+ * The drag in progress, of a tab or of a group card by its header, whose tab is "": the dragged tab, the origin card, the drop position,
+ * and the preview rectangle.
+ */
 export const dragState = () => (tabDrag ? {
   tab: tabDrag.tabId, card: tabDrag.cardId, moved: tabDrag.moved,
   target: tabDrag.hit ? { ...tabDrag.hit } : null,
@@ -714,6 +717,79 @@ function beginTabDrag(e, cardId, tabId) {
   el.addEventListener("pointermove", onMove);
   el.addEventListener("pointerup", onUp);
   el.addEventListener("pointercancel", onUp);
+}
+
+// A press on the header of a group card outside its buttons drags the group card (docs/spec/groups.md#moving-and-dropping).
+plane.addEventListener("pointerdown", (e) => {
+  const head = e.target.closest?.(".group > .group__head");
+  if (!head || e.target.closest("button") || e.button !== 0 || e.detail > 1) return;
+  beginGroupDrag(e, head.parentElement.dataset.groupCard, head);
+});
+
+/**
+ * The drop target of a point of the plane in the drag of the group card id, as {hit, anchor} of dragHit: the target search with the
+ * option group, which takes the tab strip as part of the body of its card, so the target is an add or the centre of a content card,
+ * whose card the group card exchanges with (docs/spec/groups.md#target-search). band is the measures that dropBands gave.
+ */
+export function groupDragHit(anchor, id, x, y, band) {
+  const found = tree.dragAt(anchor, x, y, { ...band, group: true });
+  const { hit } = found;
+  if (!hit) return { hit: null, anchor: found.anchor };
+  return { hit: hit.kind === "add" ? { card: hit.target, zone: hit.side } : { card: hit.card, zone: "centre" }, anchor: found.anchor };
+}
+
+/**
+ * The rectangle of the group card id after core.card.move toward hit, probed on the group tree, or undefined when the move is refused or
+ * hit names a window sidebar.
+ */
+function groupDropRect(id, hit) {
+  if (targetIds(hit.card).some(isPlace) || tree.checkMove(id, hit.card, hit.zone) !== null) return undefined;
+  return tree.probe(() => {
+    try {
+      tree.move(id, hit.card, hit.zone);
+      return tree.rect(id);
+    } catch {
+      // A refused move is a drop with no slot, which the caller reads as undefined; the release then changes nothing.
+      return undefined;
+    }
+  });
+}
+
+/** Starts the drag of the group card id from the press e on its header head; the release runs core.card.move toward the drop. */
+function beginGroupDrag(e, id, head) {
+  e.preventDefault();
+  const band = dropBands();
+  tabDrag = { cardId: id, tabId: "", from: { x: e.clientX, y: e.clientY }, moved: false, hit: null, anchor: null };
+  head.setPointerCapture(e.pointerId);
+  dragChanged();
+  const onMove = (ev) => {
+    if (!tabDrag) return;
+    if (Math.hypot(ev.clientX - tabDrag.from.x, ev.clientY - tabDrag.from.y) > 4) tabDrag.moved = true;
+    if (!tabDrag.moved) return;
+    if (!tabDrag.stood) { tabDrag.stood = true; restoreFullscreen(); standIn(true); }
+    const host = plane.getBoundingClientRect();
+    ({ hit: tabDrag.hit, anchor: tabDrag.anchor } = groupDragHit(tabDrag.anchor, id, ev.clientX - host.left, ev.clientY - host.top, band));
+    // A drop that the layout refuses has no slot, and that position is not taken.
+    if (!drawDrop(tabDrag.hit ? groupDropRect(id, tabDrag.hit) : undefined)) tabDrag.hit = null;
+    dragChanged();
+  };
+  const onUp = (ev) => {
+    if (!tabDrag) return;
+    if (head.hasPointerCapture(ev.pointerId)) head.releasePointerCapture(ev.pointerId);
+    const drag = tabDrag;
+    tabDrag = null;
+    hideDrop();
+    if (drag.stood) standIn(false);
+    head.removeEventListener("pointermove", onMove);
+    head.removeEventListener("pointerup", onUp);
+    head.removeEventListener("pointercancel", onUp);
+    dragChanged();
+    if (drag.moved && drag.hit) return run("core.card.move", { card: id, target: drag.hit.card, side: drag.hit.zone });
+    settle();
+  };
+  head.addEventListener("pointermove", onMove);
+  head.addEventListener("pointerup", onUp);
+  head.addEventListener("pointercancel", onUp);
 }
 
 /* ── Picker layer ──────────────────────────────────────────────────────────
@@ -993,7 +1069,11 @@ function stripIndex(cardId, x, tabId) {
  * position where releasing does nothing.
  */
 function showDrop(fromId, hit) {
-  const half = hit && !targetIds(hit.card).some(isPlace) ? dropRect(fromId, hit) : undefined;
+  return drawDrop(hit && !targetIds(hit.card).some(isPlace) ? dropRect(fromId, hit) : undefined);
+}
+
+/** Draws the drop preview at the rectangle half, or clears it without one, and returns the drawn rectangle or null. */
+function drawDrop(half) {
   if (!half) { hideDrop(); return null; }
   dropPreview = { x: half.x, y: half.y, w: half.w, h: half.h };
   // The preview must be drawn over the surface. When there is a host, it is drawn as a native shape — the fill is
