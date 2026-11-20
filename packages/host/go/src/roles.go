@@ -13,7 +13,7 @@ import (
 
 // rolesFormat is the format number of roles.json, the role definitions of the agent roles
 // (docs/spec/agent-roles.md#role-definitions).
-const rolesFormat = 1
+const rolesFormat = 2
 
 // roleIdentifier is the identifier rule of a role: a lowercase letter, then lowercase letters, digits and hyphens, at most 64
 // characters in all.
@@ -56,7 +56,8 @@ func writeRoles(path string, roles Record) (Record, error) {
 }
 
 // checkRoles checks a decoded roles.json document and returns its role definitions. Each refusal names the file. The members
-// are checked in a fixed order: the format, the unknown members, the roles object, then each role in identifier order.
+// are checked in a fixed order: the format, the unknown members, the roles object, then each role in identifier order, whose
+// members are checked as the unknown members, text, then ko.
 func checkRoles(path string, value any) (Record, error) {
 	// default: a document that is not an object has no format, which the refusal names as null (docs/spec/agent-roles.md#role-definitions).
 	document, _ := value.(map[string]any)
@@ -86,12 +87,15 @@ func checkRoles(path string, value any) (Record, error) {
 			return nil, fmt.Errorf("%s: roles: role %s must be an object", path, id)
 		}
 		for _, field := range slices.Sorted(maps.Keys(definition)) {
-			if field != "text" {
+			if field != "text" && field != "ko" {
 				return nil, fmt.Errorf("%s: roles: role %s unknown field %s", path, id, field)
 			}
 		}
 		if _, ok := definition["text"].(string); !ok {
 			return nil, fmt.Errorf("%s: roles: role %s text must be a string", path, id)
+		}
+		if _, ok := definition["ko"].(string); !ok {
+			return nil, fmt.Errorf("%s: roles: role %s ko must be a string", path, id)
 		}
 	}
 	return Record(roles), nil

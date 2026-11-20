@@ -127,7 +127,7 @@ A role definition is the text that a role file holds, and its Korean translation
 - `<file>: roles: invalid role identifier <id>`: the first identifier that does not match, in the sorted order of the identifiers.
 - `<file>: roles: role <id> must be an object`
 - `<file>: roles: role <id> ko must be a string`: the member `ko` is absent or is not a string.
-- `<file>: roles: role <id> unknown field <name>`: a member of a definition other than `text`.
+- `<file>: roles: role <id> unknown field <name>`: a member of a definition other than `text` and `ko`.
 - `<file>: roles: role <id> text must be a string`
 
 The editor of the file is a separate checklist item.

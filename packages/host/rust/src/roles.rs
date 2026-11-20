@@ -10,7 +10,7 @@ use serde_json::{Map, Value, json};
 use crate::workspace::write;
 
 /// The format of roles.json, the role definitions of the agent roles (docs/spec/agent-roles.md#role-definitions).
-pub(crate) const ROLES_FORMAT: u64 = 1;
+pub(crate) const ROLES_FORMAT: u64 = 2;
 
 /// Returns the role definitions of roles.json at path, or an empty object when the file does not exist. The file is not
 /// created by a read.
@@ -38,7 +38,8 @@ pub(crate) fn write_roles(path: &Path, roles: Option<Map<String, Value>>) -> Res
 }
 
 /// Checks a decoded roles.json document. Each refusal names the file. The members are checked in a fixed order: the format,
-/// the unknown members, the roles object, then each role in identifier order.
+/// the unknown members, the roles object, then each role in identifier order, whose members are checked as the unknown
+/// members, text, then ko.
 fn check_roles(path: &Path, value: &Value) -> Result<(), String> {
     // default: the refusal names an absent format member as null, as docs/spec/agent-roles.md#role-definitions defines.
     let format = value.get("format").unwrap_or(&Value::Null);
@@ -72,7 +73,7 @@ fn check_roles(path: &Path, value: &Value) -> Result<(), String> {
         let definition = definition
             .as_object()
             .ok_or_else(|| format!("{}: roles: role {id} must be an object", path.display()))?;
-        if let Some(field) = definition.keys().find(|key| *key != "text") {
+        if let Some(field) = definition.keys().find(|key| *key != "text" && *key != "ko") {
             return Err(format!(
                 "{}: roles: role {id} unknown field {field}",
                 path.display()
@@ -81,6 +82,12 @@ fn check_roles(path: &Path, value: &Value) -> Result<(), String> {
         if definition.get("text").and_then(Value::as_str).is_none() {
             return Err(format!(
                 "{}: roles: role {id} text must be a string",
+                path.display()
+            ));
+        }
+        if definition.get("ko").and_then(Value::as_str).is_none() {
+            return Err(format!(
+                "{}: roles: role {id} ko must be a string",
                 path.display()
             ));
         }

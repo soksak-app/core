@@ -8,127 +8,142 @@
     {
       "name": "valid-definitions",
       "stored": {
-        "format": 1,
+        "format": 2,
         "roles": {
-          "reviewer": {"text": "You review the changes of the other agents in this project."},
-          "ops-1": {"text": "Line one.\nLine two."},
-          "reviewer-2": {"text": "검수관입니다.\n\n다른 agent의 변경을 검토한다. Café 🙂."},
-          "a": {"text": ""}
+          "reviewer": {"text": "You review the changes of the other agents in this project.", "ko": "이 프로젝트의 다른 agent 변경을 검토한다."},
+          "ops-1": {"text": "Line one.\nLine two.", "ko": "첫째 줄.\n둘째 줄."},
+          "reviewer-2": {"text": "reviewer입니다.\n\n다른 agent의 변경을 검토한다. Café 🙂.", "ko": "reviewer입니다.\n\n다른 agent의 변경을 검토한다. Café 🙂."},
+          "a": {"text": "", "ko": ""}
         }
       },
       "result": {
-        "reviewer": {"text": "You review the changes of the other agents in this project."},
-        "ops-1": {"text": "Line one.\nLine two."},
-        "reviewer-2": {"text": "검수관입니다.\n\n다른 agent의 변경을 검토한다. Café 🙂."},
-        "a": {"text": ""}
+        "reviewer": {"text": "You review the changes of the other agents in this project.", "ko": "이 프로젝트의 다른 agent 변경을 검토한다."},
+        "ops-1": {"text": "Line one.\nLine two.", "ko": "첫째 줄.\n둘째 줄."},
+        "reviewer-2": {"text": "reviewer입니다.\n\n다른 agent의 변경을 검토한다. Café 🙂.", "ko": "reviewer입니다.\n\n다른 agent의 변경을 검토한다. Café 🙂."},
+        "a": {"text": "", "ko": ""}
       }
     },
     {
       "name": "identifier-of-64-characters-is-valid",
-      "stored": {"format": 1, "roles": {"a000000000000000000000000000000000000000000000000000000000000000": {"text": "x"}}},
-      "result": {"a000000000000000000000000000000000000000000000000000000000000000": {"text": "x"}}
+      "stored": {"format": 2, "roles": {"a000000000000000000000000000000000000000000000000000000000000000": {"text": "x", "ko": "x"}}},
+      "result": {"a000000000000000000000000000000000000000000000000000000000000000": {"text": "x", "ko": "x"}}
     },
     {
-      "name": "format-2-is-refused",
-      "stored": {"format": 2, "roles": {}},
-      "error": "<file>: roles: format must be 1, found 2"
+      "name": "format-1-is-refused",
+      "stored": {"format": 1, "roles": {}},
+      "error": "<file>: roles: format must be 2, found 1"
     },
     {
       "name": "format-missing-is-refused",
       "stored": {"roles": {}},
-      "error": "<file>: roles: format must be 1, found null"
+      "error": "<file>: roles: format must be 2, found null"
     },
     {
       "name": "format-string-is-refused",
-      "stored": {"format": "1", "roles": {}},
-      "error": "<file>: roles: format must be 1, found \"1\""
+      "stored": {"format": "2", "roles": {}},
+      "error": "<file>: roles: format must be 2, found \"2\""
     },
     {
       "name": "bare-array-is-refused",
       "stored": [],
-      "error": "<file>: roles: format must be 1, found null"
+      "error": "<file>: roles: format must be 2, found null"
     },
     {
       "name": "unknown-top-level-member-is-refused",
-      "stored": {"format": 1, "roles": {}, "extra": true},
+      "stored": {"format": 2, "roles": {}, "extra": true},
       "error": "<file>: roles: unknown field extra"
     },
     {
       "name": "roles-must-be-an-object",
-      "stored": {"format": 1, "roles": []},
+      "stored": {"format": 2, "roles": []},
       "error": "<file>: roles: roles must be an object"
     },
     {
       "name": "uppercase-identifier-is-refused",
-      "stored": {"format": 1, "roles": {"Reviewer": {"text": "x"}}},
+      "stored": {"format": 2, "roles": {"Reviewer": {"text": "x", "ko": "x"}}},
       "error": "<file>: roles: invalid role identifier Reviewer"
     },
     {
       "name": "leading-digit-identifier-is-refused",
-      "stored": {"format": 1, "roles": {"1ops": {"text": "x"}}},
+      "stored": {"format": 2, "roles": {"1ops": {"text": "x", "ko": "x"}}},
       "error": "<file>: roles: invalid role identifier 1ops"
     },
     {
       "name": "underscore-identifier-is-refused",
-      "stored": {"format": 1, "roles": {"ops_1": {"text": "x"}}},
+      "stored": {"format": 2, "roles": {"ops_1": {"text": "x", "ko": "x"}}},
       "error": "<file>: roles: invalid role identifier ops_1"
     },
     {
       "name": "identifier-of-65-characters-is-refused",
-      "stored": {"format": 1, "roles": {"a0000000000000000000000000000000000000000000000000000000000000000": {"text": "x"}}},
+      "stored": {"format": 2, "roles": {"a0000000000000000000000000000000000000000000000000000000000000000": {"text": "x", "ko": "x"}}},
       "error": "<file>: roles: invalid role identifier a0000000000000000000000000000000000000000000000000000000000000000"
     },
     {
       "name": "definition-must-be-an-object",
-      "stored": {"format": 1, "roles": {"reviewer": "You review."}},
+      "stored": {"format": 2, "roles": {"reviewer": "You review."}},
       "error": "<file>: roles: role reviewer must be an object"
     },
     {
       "name": "definition-unknown-field-is-refused",
-      "stored": {"format": 1, "roles": {"reviewer": {"text": "x", "extra": 1}}},
+      "stored": {"format": 2, "roles": {"reviewer": {"text": "x", "extra": 1, "ko": "x"}}},
       "error": "<file>: roles: role reviewer unknown field extra"
     },
     {
       "name": "definition-without-text-is-refused",
-      "stored": {"format": 1, "roles": {"reviewer": {}}},
+      "stored": {"format": 2, "roles": {"reviewer": {"ko": "x"}}},
       "error": "<file>: roles: role reviewer text must be a string"
     },
     {
       "name": "definition-with-number-text-is-refused",
-      "stored": {"format": 1, "roles": {"reviewer": {"text": 1}}},
+      "stored": {"format": 2, "roles": {"reviewer": {"text": 1, "ko": "x"}}},
       "error": "<file>: roles: role reviewer text must be a string"
     },
     {
+      "name": "definition-without-ko-is-refused",
+      "stored": {"format": 2, "roles": {"reviewer": {"text": "x"}}},
+      "error": "<file>: roles: role reviewer ko must be a string"
+    },
+    {
+      "name": "definition-with-number-ko-is-refused",
+      "stored": {"format": 2, "roles": {"reviewer": {"text": "x", "ko": 1}}},
+      "error": "<file>: roles: role reviewer ko must be a string"
+    },
+    {
       "name": "first-invalid-identifier-in-sorted-order-is-named",
-      "stored": {"format": 1, "roles": {"Zeta": {"text": "x"}, "Alpha": {"text": "x"}}},
+      "stored": {"format": 2, "roles": {"Zeta": {"text": "x", "ko": "x"}, "Alpha": {"text": "x", "ko": "x"}}},
       "error": "<file>: roles: invalid role identifier Alpha"
     }
   ],
   "writes": [
     {
       "name": "write-valid-definitions",
-      "roles": {"reviewer": {"text": "You review the changes.\n"}, "ops-1": {"text": "Line one.\nLine two."}},
-      "file": {"format": 1, "roles": {"reviewer": {"text": "You review the changes.\n"}, "ops-1": {"text": "Line one.\nLine two."}}}
+      "roles": {"reviewer": {"text": "You review the changes.\n", "ko": "변경을 검토한다.\n"}, "ops-1": {"text": "Line one.\nLine two.", "ko": "첫째 줄.\n둘째 줄."}},
+      "file": {"format": 2, "roles": {"reviewer": {"text": "You review the changes.\n", "ko": "변경을 검토한다.\n"}, "ops-1": {"text": "Line one.\nLine two.", "ko": "첫째 줄.\n둘째 줄."}}}
     },
     {
       "name": "write-empty-roles",
       "roles": {},
-      "file": {"format": 1, "roles": {}}
+      "file": {"format": 2, "roles": {}}
     },
     {
       "name": "write-refuses-invalid-identifier",
-      "roles": {"Reviewer": {"text": "x"}},
+      "roles": {"Reviewer": {"text": "x", "ko": "x"}},
       "error": "<file>: roles: invalid role identifier Reviewer"
     },
     {
       "name": "write-refuses-definition-without-text",
-      "roles": {"reviewer": {}},
+      "roles": {"reviewer": {"ko": "x"}},
       "error": "<file>: roles: role reviewer text must be a string"
     },
     {
       "name": "write-refuses-unknown-definition-field",
-      "roles": {"reviewer": {"text": "x", "extra": 1}},
+      "roles": {"reviewer": {"text": "x", "extra": 1, "ko": "x"}},
       "error": "<file>: roles: role reviewer unknown field extra"
+    },
+    {
+      "name": "write-refuses-definition-without-ko",
+      "roles": {"reviewer": {"text": "x"}},
+      "error": "<file>: roles: role reviewer ko must be a string"
     }
   ]
 }

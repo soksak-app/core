@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1006-12: `roles.json` is format 2: each role definition requires the Korean translation `ko` beside `text`, and the Go and Rust stores refuse format 1 and a missing or non-string `ko`. Verification: Red of the Go and Rust roles tests on the format 1 stores against the format 2 cases; Green of the Go host package and the Rust roles, role file and workspace tests.
 - F1013-2: The window check `e2e/idle-window.test.mjs` and its module `packages/window-check/idle-window.mjs` judge an idle window over 120 refreshes that its display delivered, with the refreshes placed on the host event clock by measurement. Verification: the unit tests 8 of 8 and the window-check package 485 of 485; the window check itself has not run yet.
 - F1016-14: The Go test runner runs the check of each package once after its tests pass, so a `TestMain` judgment over all tests of a package, such as the declared element names of the mygo tests, decides the run. Verification: Red of the runner unit test on the unchanged runner and of the mygo package on the code before F1016-13 (`core.plane`); Green of the runner unit tests, 28 of 28, and of the mygo package, 1147 of 1147 tests and its check.
 - F899-3.6: The row states that the sidecar releases vt v0.0.30 and alacritty v0.0.8 are published and that the releases of terminal P177 and term P58 remain.
