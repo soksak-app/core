@@ -99,14 +99,18 @@ export function assertInvariants(grid, profile = "constrained") {
       gaps.set(a[hi], gap);
     }
     if (profile === "fixed") {
-      // A cut scales the px sizes of its kids by one factor, so the cards that are kids of one cut along the axis are drawn at
-      // one ratio to what they declare; two cuts scale their own declarations, each by its own factor.
+      // A cut scales the px sizes of its fixed cards by one factor and the px sizes of its other kids by another
+      // (packages/soksak/docs/layout.md#the-model), so the fixed cards of one cut along the axis are drawn at one ratio to what they
+      // declare, and so are its other cards; two cuts scale their own declarations, each by its own factors.
       const asked = axis === "x" ? "width" : "height";
       const cuts = [];
       const visit = (node) => {
         if (node.box !== undefined) return visit(node.inner);
         if (node.cut === undefined) return;
-        if (node.cut === axis) cuts.push(node.kids.map((kid) => kid.node).filter((kid) => kid.card !== undefined && kid[asked] > 0.01));
+        if (node.cut === axis) {
+          const sized = node.kids.map((kid) => kid.node).filter((kid) => kid.card !== undefined && kid[asked] > 0.01);
+          cuts.push(sized.filter((kid) => kid.fixed === true), sized.filter((kid) => kid.fixed !== true));
+        }
         for (const kid of node.kids) visit(kid.node);
       };
       visit(grid.toJSON().root);

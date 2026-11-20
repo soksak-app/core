@@ -279,37 +279,59 @@ export class Soksak {
     }
     /**
      * The px size of each kid of a cut along its axis, from the room inside the
-     * cut: the corridors between the kids first, then the px sizes of the kids
-     * that keep one, and the rest to the other kids by their fractions. A kid gets
-     * at least the costs inside it, its own corridors, px sizes, frames and heads,
-     * and the others share what is left. When the room does not hold the px sizes
-     * and one `minSize` for the kids that take a fraction, the px sizes are drawn
-     * scaled by one factor, and further only where the room does not hold the
-     * costs inside the kids that take a fraction; when no kid takes a fraction, they divide the room in
+     * cut (packages/soksak/docs/layout.md#the-model): the corridors between the
+     * kids first, then the px sizes of the kids that keep one, and the rest to the
+     * other kids by their fractions. A kid gets at least the costs inside it, its
+     * own corridors, px sizes, frames and heads, and the others share what is left.
+     * A fixed card with a px size is a cost of its level and keeps it while the
+     * room holds the costs and one `minSize` for the kids that share; the px sizes
+     * of the kids that share are scaled by one factor to leave the kids that take a
+     * fraction one `minSize`; when no kid takes a fraction, they divide the room in
      * their proportion. Null when the room does not hold the costs of the kids.
      */
     kidSizes(node, room, unit) {
         const axis = node.cut;
         const held = node.kids.map((kid) => this.keptOf(kid.node, axis, unit));
         const costs = node.kids.map((kid, i) => (held[i] === null ? this.costOf(kid.node, axis, unit) : 0));
-        const asked = held.reduce((a, kept) => { var _a; return a + ((_a = kept === null || kept === void 0 ? void 0 : kept.px) !== null && _a !== void 0 ? _a : 0); }, 0);
+        // A fixed card with a px size is a cost of its level, as a corridor is: it is no kid that shares.
+        const leaf = node.kids.map((kid, i) => held[i] !== null && isCard(kid.node) && kid.node.fixed === true);
+        const fixedAsked = held.reduce((a, kept, i) => a + (kept && leaf[i] ? kept.px : 0), 0);
+        const asked = held.reduce((a, kept, i) => a + (kept && !leaf[i] ? kept.px : 0), 0);
         // The corridors between the kids and the costs inside the kids that keep a px size are drawn whatever the scale.
-        const free = room - (node.kids.length - 1) * unit[axis] - held.reduce((a, kept) => { var _a; return a + ((_a = kept === null || kept === void 0 ? void 0 : kept.cost) !== null && _a !== void 0 ? _a : 0); }, 0);
+        let free = room - (node.kids.length - 1) * unit[axis] - held.reduce((a, kept) => { var _a; return a + ((_a = kept === null || kept === void 0 ? void 0 : kept.cost) !== null && _a !== void 0 ? _a : 0); }, 0);
         if (free < -EPS)
             return null;
         const sharingAny = held.some((kept) => kept === null);
         const costSum = costs.reduce((a, c) => a + c, 0);
-        // A px size is scaled to leave the kids that take a fraction one minSize, which does not count the costs inside them: a cost that an
-        // operation adds or removes inside a kid is paid by the kids that take a fraction, so a px size is drawn the same before and after it.
-        // Only a room that does not hold those costs scales the px sizes further.
-        const floor = sharingAny ? this.min : 0;
+        // The fixed cards keep their px sizes while the room holds them, the corridors and the costs, and one minSize for the kids that share:
+        // a corridor or a cost that an operation adds or removes is paid by the kids that share. Only a room that does not hold them scales
+        // the fixed cards, by one factor; a cut of fixed cards alone divides the room in their proportion.
+        let fixedScale = 1;
+        if (fixedAsked > 0) {
+            const need = Math.max(this.min, costSum);
+            if (!sharingAny && asked === 0)
+                fixedScale = Math.max(0, free) / fixedAsked;
+            else if (free - fixedAsked < need)
+                fixedScale = Math.max(0, free - Math.min(need, Math.max(0, free))) / fixedAsked;
+        }
+        free -= fixedAsked * fixedScale;
+        // The px sizes of the kids that share are scaled by one factor, so their proportions survive, to leave the kids that take a fraction
+        // one minSize, which does not count the costs inside them; only a room that does not hold those costs scales them further. Without a
+        // kid that takes a fraction, they divide the room in their proportion.
         let scale = 1;
-        if (asked > 0 && (!sharingAny || free - asked < floor))
-            scale = Math.max(0, free - Math.min(floor, Math.max(0, free))) / asked;
-        if (asked > 0 && sharingAny && free - asked * scale < costSum)
-            scale = Math.max(0, free - costSum) / asked;
+        if (asked > 0 && !sharingAny)
+            scale = Math.max(0, free) / asked;
+        if (asked > 0 && sharingAny) {
+            if (free - asked < this.min)
+                scale = Math.max(0, free - Math.min(this.min, Math.max(0, free))) / asked;
+            if (free - asked * scale < costSum)
+                scale = Math.max(0, free - costSum) / asked;
+        }
         let rest = free - asked * scale;
-        const sizes = node.kids.map((_, i) => (held[i] ? held[i].px * scale + held[i].cost : 0));
+        const sizes = node.kids.map((_, i) => {
+            const kept = held[i];
+            return kept ? kept.px * (leaf[i] ? fixedScale : scale) + kept.cost : 0;
+        });
         const open = new Set(node.kids.map((_, i) => i).filter((i) => held[i] === null));
         if (rest < costs.reduce((a, c) => a + c, 0) - EPS)
             return null;

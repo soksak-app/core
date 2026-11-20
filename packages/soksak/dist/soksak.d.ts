@@ -135,13 +135,14 @@ export declare class Soksak {
     private keptOf;
     /**
      * The px size of each kid of a cut along its axis, from the room inside the
-     * cut: the corridors between the kids first, then the px sizes of the kids
-     * that keep one, and the rest to the other kids by their fractions. A kid gets
-     * at least the costs inside it, its own corridors, px sizes, frames and heads,
-     * and the others share what is left. When the room does not hold the px sizes
-     * and one `minSize` for the kids that take a fraction, the px sizes are drawn
-     * scaled by one factor, and further only where the room does not hold the
-     * costs inside the kids that take a fraction; when no kid takes a fraction, they divide the room in
+     * cut (packages/soksak/docs/layout.md#the-model): the corridors between the
+     * kids first, then the px sizes of the kids that keep one, and the rest to the
+     * other kids by their fractions. A kid gets at least the costs inside it, its
+     * own corridors, px sizes, frames and heads, and the others share what is left.
+     * A fixed card with a px size is a cost of its level and keeps it while the
+     * room holds the costs and one `minSize` for the kids that share; the px sizes
+     * of the kids that share are scaled by one factor to leave the kids that take a
+     * fraction one `minSize`; when no kid takes a fraction, they divide the room in
      * their proportion. Null when the room does not hold the costs of the kids.
      */
     private kidSizes;
