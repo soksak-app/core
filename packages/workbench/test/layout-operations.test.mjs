@@ -284,6 +284,10 @@ test("a refused core.layout.open fails with its error and leaves the layout", { 
   // The registry names an unknown member and a missing member of the declaration (docs/spec/exposure.md#command-parameters).
   await refuses(run("core.layout.open", { card: "a", plugin: SESSION, zone: "left" }), "command core.layout.open: unknown parameter zone");
   await refuses(run("core.layout.move", { card: "a" }), "command core.layout.move: parameter tab is required");
+  // A request with members that the declaration does not list is refused, also by a command whose members are all optional.
+  await refuses(run("core.settings.set", { key: "font", value: 12 }), "command core.settings.set: unknown parameter key");
+  await refuses(run("core.settings.set", { bogus: 1 }), "command core.settings.set: unknown parameter bogus");
+  await refuses(run("core.layout.balance", { bogus: 1 }), "command core.layout.balance: unknown parameter bogus");
   assert.deepEqual(layout(), before);
   // A card narrower than two cards of the minimum size cannot split across, and the refusal names the size that a half would get.
   arrange({ cut: "x", kids: [

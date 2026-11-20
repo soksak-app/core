@@ -302,6 +302,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F940",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "const named = parameterRefusal(name, found.declaration.params, input);" },
+      { file: "packages/workbench-mygo/src/registry.go", symbol: "if refusal := host.CommandParamsRefusal(name, r.declared.params[name], fields[\"params\"]); refusal != \"\" {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/layout-operations.test.mjs", id: "a refused core.layout.open fails with its error and leaves the layout" },
+      { file: "packages/workbench-mygo/tests/requests_test.go", id: "TestARequestIsRefusedAsThePageRefusesIt" },
+    ],
+    expected: "The registry of each workbench refuses a command request with a member that its declaration does not list, and names the command and the member.",
+    levels: ["unit"],
+  },
+  {
     id: "F942",
     implementation: [
       { file: "packages/soksak/src/soksak.ts", symbol: "withdraw(id: string): TreeNode {" },

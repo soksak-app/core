@@ -104,6 +104,8 @@ func TestACommandRequestRunsInAStepAndItsResultReachesTheHost(t *testing.T) {
 func TestARequestIsRefusedAsThePageRefusesIt(t *testing.T) {
 	declared := registry(t)
 	declared.Command("core.card.split", func(json.RawMessage) (any, error) { return nil, nil })
+	declared.Command("core.settings.set", func(json.RawMessage) (any, error) { return nil, nil })
+	declared.Command("core.layout.balance", func(json.RawMessage) (any, error) { return nil, nil })
 	r := newRelay(t, declared)
 	const cidsText = "command cids must be an array of non-empty strings without a quote, a backslash or a control character"
 	for _, row := range []struct {
@@ -122,6 +124,9 @@ func TestARequestIsRefusedAsThePageRefusesIt(t *testing.T) {
 		{"command.run", `{"name":"core.card.split","params":{"card":"a","side":"middle","plugin":"p"}}`, -32602, "invalid params for core.card.split"},
 		{"command.run", `{"name":"core.card.split","params":{"card":"a","side":"left","plugin":"p","zone":"x","Card":"y"}}`, -32602, "command core.card.split: unknown parameter Card"},
 		{"command.run", `{"name":"core.card.split","params":{"card":"a","plugin":"p"}}`, -32602, "command core.card.split: parameter side is required"},
+		{"command.run", `{"name":"core.settings.set","params":{"key":"font","value":12}}`, -32602, "command core.settings.set: unknown parameter key"},
+		{"command.run", `{"name":"core.settings.set","params":{"bogus":1}}`, -32602, "command core.settings.set: unknown parameter bogus"},
+		{"command.run", `{"name":"core.layout.balance","params":{"bogus":1}}`, -32602, "command core.layout.balance: unknown parameter bogus"},
 		{"command.run", `{"name":"core.card.split","params":{"card":"a","side":"left","plugin":"p"},"cids":[""]}`, -32602, "command.run for core.card.split: " + cidsText},
 		{"command.run", `{"name":"core.card.split","params":{"card":"a","side":"left","plugin":"p"},"cids":"a"}`, -32602, "command.run for core.card.split: " + cidsText},
 		{"status.get", `{"name":"core.screen"}`, 1002, "status core.screen is not registered"},
