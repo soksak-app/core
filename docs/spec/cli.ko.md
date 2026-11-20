@@ -132,7 +132,7 @@ Agent는 사람의 컴퓨터에서 사람을 위해 명령을 실행하고 도�
 | `SKILL.md` | Agent skill([에이전트 skill](#에이전트-skill)) |
 | `mcp.json` | `{instructions, tools}`: UTF-8로 4096 byte 이하인 MCP server의 instructions와, `tools/list` 순서의 각 도구의 `name`, `description`, `inputSchema`([MCP server](#mcp-server)) |
 
-Go `sok`은 파일을 `go:embed`로 embed한다. `go:embed`는 embed하는 package의 폴더 아래 파일만 읽으므로 이 폴더는 Go package `sok`의 폴더 안에 있다. Rust `sok`은 같은 파일을 `include_str!`로 포함하므로 두 구현은 한 벌에서 build된다. 이 파일은 `sok`이 agent에게 쓰고 제공하는 프로그램의 글이며 repository의 문서가 아니므로 한국어 번역 짝이 없고, `make check-docs`가 이 폴더에 대해 그렇게 밝힌다. 두 server는 library가 type에서 만드는 schema가 아니라 `mcp.json`의 input schema를 그대로 도구에 등록하므로 두 목록은 같은 JSON이다.
+Go `sok`은 파일을 `go:embed`로 embed한다. `go:embed`는 embed하는 package의 폴더 아래 파일만 읽으므로 이 폴더는 Go package `sok`의 폴더 안에 있다. Rust `sok`은 같은 파일을 `include_str!`로 포함하므로 두 구현은 한 벌에서 build된다. 각 파일은 repository에서 옆에 한국어 번역 짝을 둔다(예: `SKILL.md` 옆의 `SKILL.ko.md`). `make check-docs`가 이를 요구하며, person이 agent에게 전달되는 글을 이 짝으로 읽기 때문이다. Agent에게 설치되거나 제공되는 것은 영어 파일뿐이다. `sok skill install`은 `SKILL.md`만 쓰며, 한국어 파일은 agent 폴더에 쓰이지도 제공되지도 않는다. 두 server는 library가 type에서 만드는 schema가 아니라 `mcp.json`의 input schema를 그대로 도구에 등록하므로 두 목록은 같은 JSON이다.
 
 ### 탐색
 

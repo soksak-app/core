@@ -24,13 +24,9 @@ const anchorsOf = (path) => {
   return documentAnchors.get(path);
 };
 
-// The agent texts that sok embeds, writes into the skill folders of agents and serves (docs/spec/cli.md#agent-sources) are runtime
-// texts of the program, not documents of the repository, so they have no translation pair.
-const RUNTIME_TEXTS = "packages/sok/go/src/agents/";
-
 for (const file of files) {
   const partner = file.endsWith(".ko.md") ? file.replace(/\.ko\.md$/, ".md") : file.replace(/\.md$/, ".ko.md");
-  if (!file.startsWith(RUNTIME_TEXTS) && !existsSync(partner)) errors.push(`${file}: missing translation pair ${partner}`);
+  if (!existsSync(partner)) errors.push(`${file}: missing translation pair ${partner}`);
   const text = withoutCode(readFileSync(file, "utf8"));
   if (file.startsWith("docs/spec/")) errors.push(...checkSpecificationIds(text, file));
   // A table cut by a blank line: when a table row, a blank line and a table row follow, the later row does not belong to the table.

@@ -88,6 +88,7 @@ sidecar 프로토콜 변경: terminal session의 `open` 요청은 `directory` �
 ## Role file
 
 - 경로: `<config-dir>/agents/<surface>/role.md`. `<config-dir>`은 application의 configuration directory([installation layout](installation.md#installation-layout))이고 `<surface>`는 tab의 surface다. 경로 구분자, `..` 구간 또는 제어 문자를 담은 surface 식별자는 `surface "<value>" holds a path part or a control character`로 거부하며, `<value>`는 surface 식별자다. 그 문장으로 거부할 때는 아무것도 쓰지 않는다.
+- 한국어 파일: `<config-dir>/agents/<surface>/`의 `role.md` 옆 `role.ko.md`. 첫 줄의 한국어 번역, 정의의 한국어 텍스트(`roles.json`의 `ko`), 마지막 줄의 같은 fingerprint 줄을 담는다. Fingerprint은 `role.md`에만 계산한다. Agent에게 이름을 주는 파일은 `role.md`뿐이므로 agent는 `role.md`만 읽는다.
 - 구조, 순서대로:
   1. 첫 줄: ``Read this whole file. Follow the role it defines. Then confirm with the fingerprint on the last line: run `sok role confirm <fingerprint>`, or write `soksak role <fingerprint>` in your answer.``;
   2. 정의 텍스트. `roles.json`에 저장된 그대로다.
@@ -96,8 +97,8 @@ sidecar 프로토콜 변경: terminal session의 `open` 요청은 `directory` �
 - fingerprint: role 식별자, line feed 하나(U+000A), 저장된 정의 텍스트를 이어 붙인 UTF-8 바이트의 SHA-256 digest에서 앞 16자리 소문자 16진수. 식별자에는 줄바꿈이 없으므로 구분자가 모호하지 않다. fingerprint은 식별자와 텍스트에만 의존한다. 같은 정의는 언제나 같은 fingerprint을 낸다.
 - 길이: soksak은 정의를 길이와 상관없이 그대로 쓴다. 짧은 정의를 권장하며 그 이유는 위에 적었다.
 - 파일은 configuration directory에 속하며 person의 repository에는 속하지 않는다.
-- 모드: 디렉터리 `<config-dir>/agents/<surface>/`는 모드 0700으로 만든다. `role.md`는 모드 0600으로 쓴다. 임시 파일의 모드는 이름을 바꾸기 전에 확인한다. 모드가 다르면 최종 이름으로는 보이지 않으며, 쓰기는 `role file <path>: mode <mode> is not 0600`으로 실패하고 임시 파일을 지운다. 각 쓰기 단계의 실패는 `role file <path>: write failed: <os error>`로 실패하며, `<path>`는 그 단계가 쓴 경로다.
-- 원자적 쓰기: host는 같은 폴더에 `.role-<random>.tmp` 이름의 임시 파일에 새 내용을 쓰고 `role.md` 위로 이름을 바꾼다. 읽는 쪽은 이전 파일 전체 또는 새 파일 전체만 본다. launch는 첫 쓰기 전에 surface 폴더에서 `.role-*.tmp`와 맞는 파일을 지운다. 이전 충돌이 남긴 파일이다.
+- 모드: 디렉터리 `<config-dir>/agents/<surface>/`는 모드 0700으로 만든다. `role.md`는 모드 0600으로 쓴다. 임시 파일의 모드는 이름을 바꾸기 전에 확인한다. 모드가 다르면 최종 이름으로는 보이지 않으며, 쓰기는 `role file <path>: mode <mode> is not 0600`으로 실패하고 임시 파일을 지운다. 각 쓰기 단계의 실패는 `role file <path>: write failed: <os error>`로 실패하며, `<path>`는 그 단계가 쓴 경로다. `role.ko.md`도 모드 0600으로 쓴다.
+- 원자적 쓰기: host는 같은 폴더에 `.role-<random>.tmp` 이름의 임시 파일에 새 내용을 쓰고 `role.md` 위로 이름을 바꾼다. 읽는 쪽은 이전 파일 전체 또는 새 파일 전체만 본다. launch는 첫 쓰기 전에 surface 폴더에서 `.role-*.tmp`와 맞는 파일을 지운다. 이전 충돌이 남긴 파일이다. 두 파일은 같은 순서를 따른다. host는 각 임시 파일을 쓰고 모드를 확인한 뒤 `role.md`를 먼저, `role.ko.md`를 다음에 이름 바꾼다. `role.ko.md`의 이름 바꾸기 실패는 `role file <path>: rename failed: <os error>`로 보고하며, `<path>`는 그 파일의 경로다.
 - 쓰는 주체: host가 파일을 쓴다. terminal page는 파일을 만들지 않는다. 실패한 쓰기는 `role file <path>: write failed: <os error>`라는 문장으로 경로와 이유를 적는다. launch의 role 파일 쓰기가 실패하면 `role file <path>: write failed: <os error>` 문장으로 launch를 거부하며 어떤 program도 시작하지 않는다.
 - 수명: host는 launch 전에 디렉터리를 만든다. tab이 layout에서 제거되면 host는 tab의 프로그램을 멈추고, 진행 중인 쓰기가 끝나기를 기다리고, 그 tab의 이후 role 변경을 `tab <tab> was removed; its role cannot change`로 거부하며, 디렉터리를 지운다. 제거 뒤의 이름 바꾸기가 실패하면 임시 파일을 지우고 `role file <path>: rename failed: <os error>` 문장으로 기록한다. 제거된 tab의 보류 message는 버린다. 각 message마다 state `skipped`와 reason `tab removed`의 delivery record를 쓴다. 제거된 tab은 resume할 수 없다.
 
@@ -107,24 +108,26 @@ sidecar 프로토콜 변경: terminal session의 `open` 요청은 `directory` �
 
 ## Role definitions
 
-role 파일이 담는 정의 텍스트는 soksak이 `<config-dir>/roles.json` 하나에 저장한다. 이 파일은 `settings.json`, `projects.json`과 나란히 둔다([stored data formats](installation.md#stored-data-formats)). 파일은 번호가 있다. member `format`은 `1`이며, reader는 이 번호만 받고 다른 번호는 `<file>: roles: format must be 1, found <value>`로 거부한다.
+role 파일이 담는 정의 텍스트는 soksak이 `<config-dir>/roles.json` 하나에 저장한다. 이 파일은 `settings.json`, `projects.json`과 나란히 둔다([stored data formats](installation.md#stored-data-formats)). 파일은 번호가 있다. member `format`은 `2`이며, reader는 이 번호만 받고 다른 번호는 `<file>: roles: format must be 2, found <value>`로 거부한다. 정의의 한국어 번역은 member `ko`이며, `ko`가 추가되어 형식이 1에서 2로 올랐다. reader는 형식 1을 migration 없이 거부하고, 형식 1인 추적 파일은 같은 변경에서 형식 2로 고친다.
 
 ```json
-{"format": 1, "roles": {"reviewer": {"text": "You review the changes of the other agents in this project."}}}
+{"format": 2, "roles": {"reviewer": {"text": "You review the changes of the other agents in this project.", "ko": "이 프로젝트의 다른 agent 변경을 검토한다."}}}
 ```
 
 - role 식별자는 `[a-z][a-z0-9-]*`에 맞고 최대 64자다.
 - `text`는 UTF-8 텍스트이며 role 파일에 그대로 쓴다.
+- `ko`는 `text`의 한국어 번역인 UTF-8 텍스트이며 `role.ko.md`에 그대로 쓴다. 필수다. `ko`가 없는 정의는 거부하므로 짝이 빠질 수 없다. soksak은 번역하지 않는다.
 - tab이 이름을 댄 role이 `roles.json`에 없으면 `unknown agent role <id>`로 거부하고, tab은 이전 role을 유지한다.
 
-`<file>`은 `roles.json`의 경로다. 읽기나 쓰기는 아래 줄 중 맞는 문장으로 파일 전체를 거부하며, 예를 들면 `<file>: roles: format must be 1, found <value>`이다. 문장은 파일을 적고 아무것도 쓰지 않는다:
+`<file>`은 `roles.json`의 경로다. 읽기나 쓰기는 아래 줄 중 맞는 문장으로 파일 전체를 거부하며, 예를 들면 `<file>: roles: format must be 2, found <value>`이다. 문장은 파일을 적고 아무것도 쓰지 않는다:
 
-- `<file>: roles: format must be 1, found <value>`: `<value>`는 member `format`의 compact JSON 텍스트이며, member가 없거나 문서가 객체가 아니면 `null`이다.
+- `<file>: roles: format must be 2, found <value>`: `<value>`는 member `format`의 compact JSON 텍스트이며, member가 없거나 문서가 객체가 아니면 `null`이다.
 - `<file>: roles: unknown field <name>`: `format`과 `roles`가 아닌 최상위 member.
 - `<file>: roles: roles must be an object`
 - `<file>: roles: invalid role identifier <id>`: 정렬 순서의 식별자 중 맞지 않는 첫 식별자.
 - `<file>: roles: role <id> must be an object`
-- `<file>: roles: role <id> unknown field <name>`: `text`가 아닌 정의의 member.
+- `<file>: roles: role <id> unknown field <name>`: `text`와 `ko`가 아닌 정의의 member.
+- `<file>: roles: role <id> ko must be a string`: member `ko`가 없거나 문자열이 아니다.
 - `<file>: roles: role <id> text must be a string`
 
 정의를 편집하는 도구는 별도의 checklist 항목이다.
@@ -321,7 +324,7 @@ person이 tab의 shell에서 직접 시작한 두 번째 agent CLI는 soksak의 
 - 형식: `projects.json` reader는 형식 2를 `<file>: projects: format must be 3, found 2`로 거부하고, writer는 형식 3을 쓴다.
 - 반복과 동시성: [Tests of the repetitions](#tests-of-the-repetitions)와 [Tests of the concurrency](#tests-of-the-concurrency).
 - sidecar open: 네 refusal을 각 문장 `open program must be a non-empty text`, `open args must be an array of texts`, `open args require program`, `open program and shell are both set`으로, `openFailed` 답을 `program not found: <program>`으로, program session에는 shell integration이 없다는 규칙을 확인한다.
-- `roles.json`: 형식 번호, 식별자 규칙, 알 수 없는 role 거부. 각 오류 문장을 확인한다: `<file>: roles: format must be 1, found <value>`, `<file>: roles: invalid role identifier <id>`, `unknown agent role <id>`.
+- `roles.json`: 형식 번호, 식별자 규칙, 알 수 없는 role 거부. 각 오류 문장을 확인한다: `<file>: roles: format must be 2, found <value>`, `<file>: roles: invalid role identifier <id>`, `unknown agent role <id>`.
 
 ### Acceptance
 

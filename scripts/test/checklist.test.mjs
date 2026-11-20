@@ -45,10 +45,13 @@ test("checklist permits translated text and linked follow-up identifiers", { tim
   assert.equal(result.status, 0, result.stderr);
 });
 
-test("documentation audit requires no translation pair for the agent texts that sok serves", { timeout: 3000 }, (t) => {
+test("documentation audit requires a translation pair for the agent skill that sok serves", { timeout: 3000 }, (t) => {
   const done = ["- [o] G1 — done\n", "- [o] G1 — 완료\n"];
   const skill = check(t, ...done, "", undefined, { "packages/sok/go/src/agents/SKILL.md": "---\nname: soksak\n---\n" });
-  assert.equal(skill.status, 0, skill.stderr);
+  assert.notEqual(skill.status, 0, "documentation audit accepted the agent skill without a translation pair");
+  assert.match(skill.stderr, /packages\/sok\/go\/src\/agents\/SKILL\.md: missing translation pair packages\/sok\/go\/src\/agents\/SKILL\.ko\.md/);
+  const paired = check(t, ...done, "", undefined, { "packages/sok/go/src/agents/SKILL.md": "---\nname: soksak\n---\n", "packages/sok/go/src/agents/SKILL.ko.md": "---\nname: soksak\n---\n" });
+  assert.equal(paired.status, 0, paired.stderr);
   const other = check(t, ...done, "", undefined, { "packages/sok/go/src/notes.md": "# Notes\n" });
   assert.notEqual(other.status, 0, "documentation audit accepted a document without a translation pair");
   assert.match(other.stderr, /packages\/sok\/go\/src\/notes\.md: missing translation pair/);

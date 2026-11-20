@@ -88,6 +88,7 @@ The stable identity is the text of the first message of a session. It is written
 ## Role file
 
 - Path: `<config-dir>/agents/<surface>/role.md`, where `<config-dir>` is the configuration directory of the application ([installation layout](installation.md#installation-layout)) and `<surface>` is the surface of the tab. A surface identifier that contains a path separator, a `..` segment or a control character is refused with `surface "<value>" holds a path part or a control character`, where `<value>` is the surface identifier. Nothing is written when the surface identifier is refused with that text.
+- Korean file: `role.ko.md` beside `role.md` in `<config-dir>/agents/<surface>/`. It holds the Korean translation of the first line, the Korean text of the definition (`ko` of `roles.json`) and the same fingerprint line as the last line. The fingerprint is computed over `role.md` only. Only `role.md` is named to the agent, so the agent reads `role.md` alone.
 - Layout, in order:
   1. the first line: ``Read this whole file. Follow the role it defines. Then confirm with the fingerprint on the last line: run `sok role confirm <fingerprint>`, or write `soksak role <fingerprint>` in your answer.``;
   2. the definition text, exactly as stored in `roles.json`;
@@ -96,8 +97,8 @@ The stable identity is the text of the first message of a session. It is written
 - Fingerprint: the first 16 lowercase hexadecimal characters of the SHA-256 digest of the UTF-8 bytes of the role identifier, one line feed (U+000A), and the definition text as stored. The identifier has no line break, so the separator is unambiguous. The fingerprint depends only on the identifier and the text: the same definition always gives the same fingerprint.
 - Length: soksak writes the definition as it is, whatever its length. The spec recommends a short definition, because the agent reads the whole file at each change.
 - The file belongs to the configuration directory and never to a repository of the person.
-- Mode: the directory `<config-dir>/agents/<surface>/` is created with mode 0700, and `role.md` is written with mode 0600. The mode of the temporary file is checked before the rename, so a file with another mode is never visible under the final name; the write then fails with `role file <path>: mode <mode> is not 0600` and removes the temporary file. A failed write step fails with `role file <path>: write failed: <os error>`, where `<path>` is the path that the step used.
-- Atomic write: the host writes the new content to a temporary file named `.role-<random>.tmp` in the same folder and renames it over `role.md`. A reader sees the whole earlier file or the whole new one. Before its first write, a launch deletes the files of its surface folder whose names match `.role-*.tmp`, which an earlier crash left.
+- Mode: the directory `<config-dir>/agents/<surface>/` is created with mode 0700, and `role.md` is written with mode 0600. The mode of the temporary file is checked before the rename, so a file with another mode is never visible under the final name; the write then fails with `role file <path>: mode <mode> is not 0600` and removes the temporary file. A failed write step fails with `role file <path>: write failed: <os error>`, where `<path>` is the path that the step used. `role.ko.md` is written with mode 0600 as well.
+- Atomic write: the host writes the new content to a temporary file named `.role-<random>.tmp` in the same folder and renames it over `role.md`. A reader sees the whole earlier file or the whole new one. Before its first write, a launch deletes the files of its surface folder whose names match `.role-*.tmp`, which an earlier crash left. Both files follow the same order: the host writes each temporary file and checks its mode, renames `role.md` first and `role.ko.md` second. A failed rename of `role.ko.md` is reported with `role file <path>: rename failed: <os error>`, where `<path>` is its path.
 - Writer: the host writes the file; the terminal page creates no file. A failed write is an error with the text `role file <path>: write failed: <os error>`, which names the path and the reason. A failed role file write at a launch is refused with `role file <path>: write failed: <os error>`, and no program starts.
 - Lifecycle: the host creates the directory before the launch. When the tab is removed from the layout, the host stops the program of the tab, waits for a write in progress to end, refuses a later role change of that tab with `tab <tab> was removed; its role cannot change`, and removes the directory. A failed rename after the removal removes the temporary file and is logged with `role file <path>: rename failed: <os error>`. The held messages of the removed tab are discarded, each with a delivery record of state `skipped` and reason `tab removed`. A removed tab cannot be resumed.
 
@@ -107,23 +108,25 @@ The algorithm is tested by the shared case file `docs/spec/cases/agent-roles/fin
 
 ## Role definitions
 
-A role definition is the text that a role file holds. soksak holds the definitions in one stored file, `<config-dir>/roles.json`, beside `settings.json` and `projects.json` ([stored data formats](installation.md#stored-data-formats)). The file is numbered: its member `format` is `1`, and a reader accepts only that number and refuses another with `<file>: roles: format must be 1, found <value>`.
+A role definition is the text that a role file holds, and its Korean translation is the `ko` member. The format rose from 1 to 2 when `ko` was added: the reader refuses format 1 without any migration, and a tracked file in format 1 is edited into format 2 in the same change. soksak holds the definitions in one stored file, `<config-dir>/roles.json`, beside `settings.json` and `projects.json` ([stored data formats](installation.md#stored-data-formats)). The file is numbered: its member `format` is `2`, and a reader accepts only that number and refuses another with `<file>: roles: format must be 2, found <value>`.
 
 ```json
-{"format": 1, "roles": {"reviewer": {"text": "You review the changes of the other agents in this project."}}}
+{"format": 2, "roles": {"reviewer": {"text": "You review the changes of the other agents in this project.", "ko": "이 프로젝트의 다른 agent 변경을 검토한다."}}}
 ```
 
 - A role identifier matches `[a-z][a-z0-9-]*` with at most 64 characters.
 - `text` is UTF-8 text, written into the role file as it is.
+- `ko` is UTF-8 text, the Korean translation of `text`, written into `role.ko.md` as it is. It is required: a definition without `ko` is refused, so the pair cannot go missing. soksak does not translate it.
 - A role that a tab names and `roles.json` does not define is refused with `unknown agent role <id>`, and the tab keeps its earlier role.
 
-`<file>` is the path of `roles.json`. A read or a write refuses the whole file with the text of the matching line below, such as `<file>: roles: format must be 1, found <value>`, which names the file, and writes nothing:
+`<file>` is the path of `roles.json`. A read or a write refuses the whole file with the text of the matching line below, such as `<file>: roles: format must be 2, found <value>`, which names the file, and writes nothing:
 
-- `<file>: roles: format must be 1, found <value>`: `<value>` is the compact JSON text of the member `format`, or `null` when the member is absent or the document is not an object.
+- `<file>: roles: format must be 2, found <value>`: `<value>` is the compact JSON text of the member `format`, or `null` when the member is absent or the document is not an object.
 - `<file>: roles: unknown field <name>`: a top-level member other than `format` and `roles`.
 - `<file>: roles: roles must be an object`
 - `<file>: roles: invalid role identifier <id>`: the first identifier that does not match, in the sorted order of the identifiers.
 - `<file>: roles: role <id> must be an object`
+- `<file>: roles: role <id> ko must be a string`: the member `ko` is absent or is not a string.
 - `<file>: roles: role <id> unknown field <name>`: a member of a definition other than `text`.
 - `<file>: roles: role <id> text must be a string`
 
@@ -321,7 +324,7 @@ A CLI that the person starts by hand in a tab, as a second agent in the same she
 - Format: the `projects.json` reader refuses format 2 with `<file>: projects: format must be 3, found 2`, and the writer writes format 3.
 - Repetition and concurrency: the tests of [idempotency](#tests-of-the-repetitions) and [concurrency](#tests-of-the-concurrency).
 - Sidecar open: the four refusals with their texts `open program must be a non-empty text`, `open args must be an array of texts`, `open args require program` and `open program and shell are both set`; the `openFailed` reply with `program not found: <program>`; and the rule that a program session has no shell integration.
-- `roles.json`: format number, identifier rule and unknown role refusal, each with its error text: `<file>: roles: format must be 1, found <value>`, `<file>: roles: invalid role identifier <id>` and `unknown agent role <id>`.
+- `roles.json`: format number, identifier rule and unknown role refusal, each with its error text: `<file>: roles: format must be 2, found <value>`, `<file>: roles: invalid role identifier <id>` and `unknown agent role <id>`.
 
 ### Acceptance
 
