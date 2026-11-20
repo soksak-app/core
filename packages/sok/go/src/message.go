@@ -43,7 +43,7 @@ func runMessage(args []string, stdout io.Writer, options Options) error {
 	if args[0] != "send" {
 		return usage("unknown command: message %s", strings.Join(args, " "))
 	}
-	parsed, err := parseAllowed(args[1:], map[string]bool{"reply": true}, map[string]bool{"config-dir": true})
+	parsed, err := parseAllowed(args[1:], map[string]bool{"reply": true}, map[string]bool{"config-dir": true, "answers": true})
 	if err != nil {
 		return err
 	}
@@ -51,6 +51,10 @@ func runMessage(args []string, stdout io.Writer, options Options) error {
 		return usage("message send requires a folder and a text")
 	}
 	folder, text := parsed.positionals[0], parsed.positionals[1]
+	answers, answered := parsed.values["answers"]
+	if answered && !parsed.flags["reply"] {
+		return usage("message send --answers requires --reply")
+	}
 	client, err := connectTo(parsed.values, options)
 	if errors.Is(err, ErrNotRunning) {
 		return errors.New("message send requires a running application, which answers the surface of this process")
@@ -58,7 +62,7 @@ func runMessage(args []string, stdout io.Writer, options Options) error {
 	if err != nil {
 		return err
 	}
-	name, receiver, err := writeMessage(client, folder, text, parsed.flags["reply"])
+	name, receiver, err := writeMessage(client, folder, text, parsed.flags["reply"], answers)
 	if err = errors.Join(err, client.Close()); err != nil {
 		return err
 	}
@@ -72,7 +76,7 @@ func runMessage(args []string, stdout io.Writer, options Options) error {
 
 // writeMessage asks the application for the surface of this process, writes the message of that surface into folder and reads the hold
 // of its receiver. A refusal of agent.surface writes no file.
-func writeMessage(client *Client, folder, text string, report bool) (string, any, error) {
+func writeMessage(client *Client, folder, text string, report bool, answers string) (string, any, error) {
 	surface, refused, err := ownSurface(client.Request)
 	if err != nil {
 		return "", nil, err
@@ -88,13 +92,22 @@ func writeMessage(client *Client, folder, text string, report bool) (string, any
 		return "", nil, fmt.Errorf("agent.surface answered %s, which is not a valid surface identifier", surface)
 	}
 	if !report {
-		request, err := reportRequest(folder, surface)
+		token := messageToken()
+		request, err := reportRequest(folder, surface, token)
 		if err != nil {
 			return "", nil, err
 		}
-		text += request
+		name, err := writeNamedFile(folder, surface+"."+token+".txt", text+request)
+		if err != nil {
+			return "", nil, err
+		}
+		receiver, err := messageReceiver(client, folder)
+		if err != nil {
+			return "", nil, fmt.Errorf("message %s was written; %w", name, err)
+		}
+		return name, receiver, nil
 	}
-	name, err := sendMessage(folder, surface, text, report)
+	name, err := writeReport(folder, surface, text, answers)
 	if err != nil {
 		return "", nil, err
 	}
@@ -171,32 +184,56 @@ func readReceiver(client *Client, terminal string) (any, error) {
 }
 
 // reportRequest returns the request for a report that a message carries after its text: the folder of the sender is
-// <root>/.soksak/messages/<surface>, beside the folder of the receiver, <root>/.soksak/messages/<receiver>
-// (docs/spec/messaging.md#report-request). The request is English, because every text addressed to an agent is English. A folder
-// of another form names no root, and the send is refused.
-func reportRequest(folder, surface string) (string, error) {
+// <root>/.soksak/messages/<surface>, beside the folder of the receiver, <root>/.soksak/messages/<receiver>, and the request names the
+// message by its token (docs/spec/messaging.md#report-request). The request is English, because every text addressed to an agent is
+// English. A folder of another form names no root, and the send is refused.
+func reportRequest(folder, surface, token string) (string, error) {
 	messages := filepath.Dir(filepath.Clean(folder))
 	if filepath.Base(messages) != "messages" || filepath.Base(filepath.Dir(messages)) != ".soksak" {
 		return "", fmt.Errorf("message send: %s is not the folder of a terminal, <root>/.soksak/messages/<surface>, so it names no folder of the sender for the report; a report is sent with --reply", folder)
 	}
-	return ` (When done, report the result with sok message send --reply ` + filepath.Join(messages, surface) + ` "<report>")`, nil
+	return ` (When done, report the result with sok message send --reply ` + filepath.Join(messages, surface) + ` --answers ` + token + ` "<report>")`, nil
 }
 
-// sendMessage writes text as a message of surface into folder and returns the name of the message file; the token of a report starts
-// with `report-`. A text over the limit fails before any file is created.
-func sendMessage(folder, surface, text string, report bool) (string, error) {
+// writeReport writes a report of surface into the folder of the sender. Without answers the report is named by a new token. With
+// answers the report is named by the answered token, and the empty receipt of that token is written into the folder of surface
+// after the report. The token and the folder of the receipt are checked before any file is written (docs/spec/messaging.md#report-request).
+func writeReport(folder, surface, text, answers string) (string, error) {
+	if answers == "" {
+		return writeNamedFile(folder, surface+".report-"+messageToken()+".txt", text)
+	}
+	if strings.ContainsAny(answers, "./\\\x00") {
+		return "", fmt.Errorf("message send: --answers %q is not a token: it must be non-empty and hold no dot or path separator", answers)
+	}
+	messages := filepath.Dir(filepath.Clean(folder))
+	if filepath.Base(messages) != "messages" || filepath.Base(filepath.Dir(messages)) != ".soksak" {
+		return "", fmt.Errorf("message send: %s is not the folder of a terminal, so the receipt of --answers has no folder of the reporting surface; a report is sent with --reply", folder)
+	}
+	own := filepath.Join(messages, surface)
+	if info, err := os.Stat(own); err != nil || !info.IsDir() {
+		return "", fmt.Errorf("message send: the receipt folder %s of the reporting surface does not exist; the report is not written", own)
+	}
+	name, err := writeNamedFile(folder, surface+".report-"+answers+".txt", text)
+	if err != nil {
+		return "", err
+	}
+	if _, err := writeNamedFile(own, surface+".receipt-"+answers+".txt", ""); err != nil {
+		return "", fmt.Errorf("message %s was written; its receipt was not: %w", name, err)
+	}
+	return name, nil
+}
+
+// writeNamedFile writes text as the file name of folder and returns the name. The text is written under a temporary name that does
+// not end in .txt, and the file is renamed to name, which makes it visible (docs/spec/messaging.md#message). A text over the limit
+// fails before any file is created.
+func writeNamedFile(folder, name, text string) (string, error) {
 	if !filepath.IsAbs(folder) {
 		return "", fmt.Errorf("folder is not an absolute path: %s", folder)
 	}
 	if len(text) > messageLimit {
 		return "", fmt.Errorf("message text is %d bytes; the limit is %d bytes (64 KiB)", len(text), messageLimit)
 	}
-	token := messageToken()
-	temporary := filepath.Join(folder, ".tmp-"+token)
-	if report {
-		token = "report-" + token
-	}
-	name := surface + "." + token + ".txt"
+	temporary := filepath.Join(folder, ".tmp-"+messageToken())
 	file, err := os.OpenFile(temporary, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {
 		return "", fileError(temporary, err)

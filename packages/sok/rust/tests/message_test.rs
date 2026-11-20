@@ -144,7 +144,7 @@ fn send_writes_the_whole_text_under_the_sender_name_and_leaves_no_temporary_file
     assert_eq!(
         written,
         format!(
-            "{text} (When done, report the result with sok message send --reply {} \"<report>\")",
+            "{text} (When done, report the result with sok message send --reply {} --answers {token} \"<report>\")",
             sender.display()
         )
     );
@@ -338,4 +338,125 @@ fn send_to_another_folder_has_no_receiver() {
         "send to {}: status {status} stdout {stdout:?} stderr {stderr:?}",
         other.text()
     );
+}
+
+/// A report that answers a message names the message by its token and writes the receipt into the folder of the reporting surface.
+#[test]
+fn send_reply_with_answers_names_the_report_and_writes_the_receipt() {
+    let player = play_case("sok-message-send-terminal");
+    let home = Folder::new("message-answers-home");
+    let root = Folder::new("message-answers");
+    terminal_folders(root.path(), &["app-1", "app-2"]);
+    let folder = root.path().join(".soksak").join("messages").join("app-2");
+    let own = root.path().join(".soksak").join("messages").join("app-1");
+    let (status, stdout, stderr) = run_send(
+        &home,
+        &player.dir(),
+        None,
+        &[
+            "--reply",
+            "--answers",
+            "tok42",
+            folder.to_str().expect("folder"),
+            "done 안녕",
+        ],
+    );
+    assert_eq!(status, 0, "stdout: {stdout} stderr: {stderr}");
+    assert_eq!(message_name(&stdout), "app-1.report-tok42.txt");
+    assert_eq!(
+        std::fs::read_to_string(folder.join("app-1.report-tok42.txt")).expect("report"),
+        "done 안녕"
+    );
+    assert_eq!(entries(&own), vec!["app-1.receipt-tok42.txt".to_string()]);
+    assert_eq!(
+        std::fs::read(own.join("app-1.receipt-tok42.txt"))
+            .expect("receipt")
+            .len(),
+        0,
+        "a receipt is an empty file"
+    );
+}
+
+/// A token that holds a dot is refused before any file is written.
+#[test]
+fn send_reply_with_answers_refuses_a_token_with_a_dot_with_no_file() {
+    let player = play_case("sok-message-send-sender");
+    let home = Folder::new("message-dot-home");
+    let root = Folder::new("message-dot");
+    terminal_folders(root.path(), &["app-1", "app-2"]);
+    let folder = root.path().join(".soksak").join("messages").join("app-2");
+    let own = root.path().join(".soksak").join("messages").join("app-1");
+    let (status, stdout, stderr) = run_send(
+        &home,
+        &player.dir(),
+        None,
+        &[
+            "--reply",
+            "--answers",
+            "a.b",
+            folder.to_str().expect("folder"),
+            "done",
+        ],
+    );
+    assert_ne!(status, 0, "stdout: {stdout}");
+    assert!(stderr.contains("answers"), "stderr: {stderr}");
+    assert!(
+        entries(&folder).is_empty(),
+        "a refused report writes no file"
+    );
+    assert!(
+        entries(&own).is_empty(),
+        "a refused report writes no receipt"
+    );
+}
+
+/// The receipt needs the folder of the reporting surface, so a missing folder refuses the report before it is written.
+#[test]
+fn send_reply_with_answers_refuses_a_missing_receipt_folder_with_no_file() {
+    let player = play_case("sok-message-send-sender");
+    let home = Folder::new("message-missing-home");
+    let root = Folder::new("message-missing");
+    terminal_folders(root.path(), &["app-2"]);
+    let folder = root.path().join(".soksak").join("messages").join("app-2");
+    let (status, stdout, stderr) = run_send(
+        &home,
+        &player.dir(),
+        None,
+        &[
+            "--reply",
+            "--answers",
+            "tok42",
+            folder.to_str().expect("folder"),
+            "done",
+        ],
+    );
+    assert_ne!(status, 0, "stdout: {stdout}");
+    assert!(stderr.contains("receipt"), "stderr: {stderr}");
+    assert!(
+        entries(&folder).is_empty(),
+        "a refused report writes no file"
+    );
+}
+
+/// --answers belongs to a report, so it without --reply is refused with no file.
+#[test]
+fn send_answers_without_reply_is_refused_with_no_file() {
+    let home = Folder::new("message-noreply-home");
+    let config = Folder::new("message-noreply-config");
+    let root = Folder::new("message-noreply");
+    terminal_folders(root.path(), &["app-1", "app-2"]);
+    let folder = root.path().join(".soksak").join("messages").join("app-2");
+    let (status, stdout, _stderr) = run_send(
+        &home,
+        config.path().to_str().expect("config folder"),
+        None,
+        &[
+            "--answers",
+            "tok42",
+            folder.to_str().expect("folder"),
+            "text",
+        ],
+    );
+    assert_ne!(status, 0, "stdout: {stdout}");
+    assert!(entries(&folder).is_empty(), "a refused send writes no file");
 }

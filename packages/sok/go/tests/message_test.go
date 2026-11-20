@@ -121,7 +121,7 @@ func TestSendWritesTheWholeTextUnderTheSenderNameAndLeavesNoTemporaryFile(t *tes
 		t.Fatal(err)
 	}
 	// The send adds the request for a report to the folder of the sender (docs/spec/messaging.md#report-request).
-	want := text + ` (When done, report the result with sok message send --reply ` + filepath.Join(root, ".soksak", "messages", "app-1") + ` "<report>")`
+	want := text + ` (When done, report the result with sok message send --reply ` + filepath.Join(root, ".soksak", "messages", "app-1") + ` --answers ` + token + ` "<report>")`
 	if string(written) != want {
 		t.Fatalf("the message is %q, want %q", written, want)
 	}
@@ -264,5 +264,91 @@ func TestSendToAnotherFolderHasNoReceiver(t *testing.T) {
 	code, stdout, stderr := messageSend(t, home, playCase(t, "sok-message-send-sender", withText("sender", "t1")).configDir, "", "--reply", folder, "hello")
 	if code != 0 || messageReceiver(t, stdout) != "null" || !strings.HasPrefix(messageName(t, stdout), "t1.report-") {
 		t.Fatalf("send to %s: code %d stdout %q stderr %q", folder, code, stdout, stderr)
+	}
+}
+
+// The report that answers a message names the message by its token and writes the receipt into the folder of the reporting surface
+// (docs/spec/messaging.md#report-request).
+func TestSendReplyWithAnswersNamesTheReportAndWritesTheReceipt(t *testing.T) {
+	home := t.TempDir()
+	root := terminalFolders(t, "app-1", "app-2")
+	folder := filepath.Join(root, ".soksak", "messages", "app-2")
+	own := filepath.Join(root, ".soksak", "messages", "app-1")
+	code, stdout, stderr := messageSend(t, home, playCase(t, "sok-message-send-terminal").configDir, "", "--reply", "--answers", "tok42", folder, "done 안녕")
+	if code != 0 {
+		t.Fatalf("stdout: %s stderr: %s", stdout, stderr)
+	}
+	if name := messageName(t, stdout); name != "app-1.report-tok42.txt" {
+		t.Fatalf("a report that answers a message is named <from>.report-<token>.txt with the answered token; name: %s", name)
+	}
+	written, err := os.ReadFile(filepath.Join(folder, "app-1.report-tok42.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(written) != "done 안녕" {
+		t.Fatalf("a report holds the text alone; it is %q", written)
+	}
+	if names := messageEntries(t, own); len(names) != 1 || names[0] != "app-1.receipt-tok42.txt" {
+		t.Fatalf("the reporting folder must hold the receipt of the token; entries: %v", names)
+	}
+	receipt, err := os.ReadFile(filepath.Join(own, "app-1.receipt-tok42.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(receipt) != 0 {
+		t.Fatalf("a receipt is an empty file; it holds %q", receipt)
+	}
+}
+
+// A token that holds a dot is refused before any file is written (docs/spec/messaging.md#report-request).
+func TestSendReplyWithAnswersRefusesATokenWithADotWithNoFile(t *testing.T) {
+	home := t.TempDir()
+	root := terminalFolders(t, "app-1", "app-2")
+	folder := filepath.Join(root, ".soksak", "messages", "app-2")
+	own := filepath.Join(root, ".soksak", "messages", "app-1")
+	code, stdout, stderr := messageSend(t, home, playCase(t, "sok-message-send-sender").configDir, "", "--reply", "--answers", "a.b", folder, "done")
+	if code == 0 {
+		t.Fatalf("stdout: %s", stdout)
+	}
+	if !strings.Contains(stderr, "answers") {
+		t.Fatalf("the refusal must name the answers token; stderr: %s", stderr)
+	}
+	if names := messageEntries(t, folder); len(names) != 0 {
+		t.Fatalf("a refused report must write no file; entries: %v", names)
+	}
+	if names := messageEntries(t, own); len(names) != 0 {
+		t.Fatalf("a refused report must write no receipt; entries: %v", names)
+	}
+}
+
+// A report with an answered token needs the folder of the reporting surface for its receipt, so a missing folder refuses the
+// report before it is written (docs/spec/messaging.md#report-request).
+func TestSendReplyWithAnswersRefusesAMissingReceiptFolderWithNoFile(t *testing.T) {
+	home := t.TempDir()
+	root := terminalFolders(t, "app-2")
+	folder := filepath.Join(root, ".soksak", "messages", "app-2")
+	code, stdout, stderr := messageSend(t, home, playCase(t, "sok-message-send-sender").configDir, "", "--reply", "--answers", "tok42", folder, "done")
+	if code == 0 {
+		t.Fatalf("stdout: %s", stdout)
+	}
+	if !strings.Contains(stderr, "receipt") {
+		t.Fatalf("the refusal must name the receipt folder; stderr: %s", stderr)
+	}
+	if names := messageEntries(t, folder); len(names) != 0 {
+		t.Fatalf("a refused report must write no file; entries: %v", names)
+	}
+}
+
+// --answers belongs to a report, so it without --reply is refused with no file (docs/spec/messaging.md#report-request).
+func TestSendAnswersWithoutReplyIsRefusedWithNoFile(t *testing.T) {
+	home := t.TempDir()
+	root := terminalFolders(t, "app-1", "app-2")
+	folder := filepath.Join(root, ".soksak", "messages", "app-2")
+	code, stdout, _ := messageSend(t, home, t.TempDir(), "", "--answers", "tok42", folder, "text")
+	if code == 0 {
+		t.Fatalf("stdout: %s", stdout)
+	}
+	if names := messageEntries(t, folder); len(names) != 0 {
+		t.Fatalf("a refused send must write no file; entries: %v", names)
 	}
 }

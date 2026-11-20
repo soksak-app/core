@@ -45,12 +45,18 @@ pub(crate) fn run(
             args.join(" ")
         )));
     }
-    let parsed = crate::parse_scoped_arguments(&args[1..], &["reply"], &["config-dir"])?;
+    let parsed = crate::parse_scoped_arguments(&args[1..], &["reply"], &["config-dir", "answers"])?;
     let [folder, text] = parsed.positionals.as_slice() else {
         return Err(Error::Usage(
             "message send requires a folder and a text".into(),
         ));
     };
+    let answers = parsed.values.get("answers").map(String::as_str);
+    if answers.is_some() && !parsed.flags.contains_key("reply") {
+        return Err(Error::Usage(
+            "message send --answers requires --reply".into(),
+        ));
+    }
     let config_dir = crate::config_dir_of(&parsed.values, options)?;
     let endpoint = match read_running_endpoint(&config_dir)? {
         Ok(endpoint) => endpoint,
@@ -67,6 +73,7 @@ pub(crate) fn run(
         folder,
         text,
         parsed.flags.contains_key("reply"),
+        answers,
     );
     let closed = client.close();
     let (name, receiver) = written?;
@@ -105,6 +112,7 @@ fn write_message(
     folder: &str,
     text: &str,
     report: bool,
+    answers: Option<&str>,
 ) -> Result<(String, Value), Error> {
     let own = crate::agent_window::own_surface(&mut |method: &str, params: Option<Value>| {
         client.request(method, params, &mut |_: &str, _: &RawValue| Ok(()))
@@ -126,12 +134,17 @@ fn write_message(
             "agent.surface answered {surface}, which is not a valid surface identifier"
         )));
     }
-    let text = if report {
-        text.to_string()
+    let name = if report {
+        write_report(folder, &surface, text, answers)?
     } else {
-        format!("{text}{}", report_request(folder, &surface)?)
+        let token = unique_token()?;
+        let request = report_request(folder, &surface, &token)?;
+        write_named(
+            Path::new(folder),
+            &format!("{surface}.{token}.txt"),
+            &format!("{text}{request}"),
+        )?
     };
-    let name = send(folder, &surface, &text, report)?;
     let receiver = receiver(client, folder)
         .map_err(|error| Error::Failed(format!("message {name} was written; {error}")))?;
     Ok((name, receiver))
@@ -214,34 +227,97 @@ fn read_receiver(client: &mut Client, terminal: &str) -> Result<Value, String> {
     Ok(json!({ "surface": terminal, "plugin": group.plugin, "held": held }))
 }
 
+/// The folder `<root>/.soksak/messages` of a folder `<root>/.soksak/messages/<surface>`, or None for a folder of another form.
+fn terminal_messages(folder: &str) -> Option<PathBuf> {
+    Path::new(folder)
+        .parent()
+        .filter(|messages| {
+            messages.file_name().is_some_and(|name| name == "messages")
+                && messages
+                    .parent()
+                    .and_then(Path::file_name)
+                    .is_some_and(|name| name == ".soksak")
+        })
+        .map(Path::to_path_buf)
+}
+
 /// The request for a report that a message carries after its text: the folder of the sender is `<root>/.soksak/messages/<surface>`,
-/// beside the folder of the receiver, `<root>/.soksak/messages/<receiver>` (docs/spec/messaging.md#report-request). A folder of another
-/// form names no root, and the send is refused.
-fn report_request(folder: &str, surface: &str) -> Result<String, Error> {
-    let messages = Path::new(folder).parent().filter(|messages| {
-        messages.file_name().is_some_and(|name| name == "messages")
-            && messages
-                .parent()
-                .and_then(Path::file_name)
-                .is_some_and(|name| name == ".soksak")
-    });
-    let Some(messages) = messages else {
-        return Err(Error::Failed(format!(
+/// beside the folder of the receiver, `<root>/.soksak/messages/<receiver>`, and the request names the message by its token
+/// (docs/spec/messaging.md#report-request). A folder of another form names no root, and the send is refused.
+fn report_request(folder: &str, surface: &str, token: &str) -> Result<String, Error> {
+    let messages = terminal_messages(folder).ok_or_else(|| {
+        Error::Failed(format!(
             "message send: {folder} is not the folder of a terminal, <root>/.soksak/messages/<surface>, so it names no folder of the sender for the report; a report is sent with --reply"
-        )));
-    };
+        ))
+    })?;
     Ok(format!(
-        " (When done, report the result with sok message send --reply {} \"<report>\")",
+        " (When done, report the result with sok message send --reply {} --answers {token} \"<report>\")",
         messages.join(surface).display()
     ))
 }
 
-/// Writes `text` as a message of `surface` into `folder` and returns the name of the message file; the token of a report starts
-/// with `report-`. A text over the limit fails before any file is created.
-fn send(folder: &str, surface: &str, text: &str, report: bool) -> Result<String, Error> {
-    if !Path::new(folder).is_absolute() {
+/// Writes a report of `surface` into the folder of the sender. Without `answers` the report is named by a new token. With `answers`
+/// the report is named by the answered token, and the empty receipt of that token is written into the folder of `surface` after the
+/// report. The token and the receipt folder are checked before any file is written (docs/spec/messaging.md#report-request).
+fn write_report(
+    folder: &str,
+    surface: &str,
+    text: &str,
+    answers: Option<&str>,
+) -> Result<String, Error> {
+    let Some(answers) = answers else {
+        return write_named(
+            Path::new(folder),
+            &format!("{surface}.report-{}.txt", unique_token()?),
+            text,
+        );
+    };
+    if answers.is_empty() || answers.contains(['.', '/', '\\', '\0']) {
         return Err(Error::Failed(format!(
-            "folder is not an absolute path: {folder}"
+            "message send: --answers {answers:?} is not a token: it must be non-empty and hold no dot or path separator"
+        )));
+    }
+    let messages = terminal_messages(folder).ok_or_else(|| {
+        Error::Failed(format!(
+            "message send: {folder} is not the folder of a terminal, so the receipt of --answers has no folder of the reporting surface; a report is sent with --reply"
+        ))
+    })?;
+    let own = messages.join(surface);
+    if !own.is_dir() {
+        return Err(Error::Failed(format!(
+            "message send: the receipt folder {} of the reporting surface does not exist; the report is not written",
+            own.display()
+        )));
+    }
+    let name = write_named(
+        Path::new(folder),
+        &format!("{surface}.report-{answers}.txt"),
+        text,
+    )?;
+    write_named(&own, &format!("{surface}.receipt-{answers}.txt"), "").map_err(|error| {
+        Error::Failed(format!(
+            "message {name} was written; its receipt was not: {}",
+            error_text(error)
+        ))
+    })?;
+    Ok(name)
+}
+
+/// The text of an error, for a message that wraps it.
+fn error_text(error: Error) -> String {
+    match error {
+        Error::Failed(text) | Error::Usage(text) => text,
+    }
+}
+
+/// Writes `text` into `folder` under `name` and returns the name. The text is written under a temporary name that does not end in
+/// .txt, and the file is renamed to `name`, which makes it visible (docs/spec/messaging.md#message). A text over the limit fails before
+/// any file is created.
+fn write_named(folder: &Path, name: &str, text: &str) -> Result<String, Error> {
+    if !folder.is_absolute() {
+        return Err(Error::Failed(format!(
+            "folder is not an absolute path: {}",
+            folder.display()
         )));
     }
     if text.len() > MAX_TEXT_BYTES {
@@ -250,14 +326,8 @@ fn send(folder: &str, surface: &str, text: &str, report: bool) -> Result<String,
             text.len()
         )));
     }
-    let folder = Path::new(folder);
     let token = unique_token()?;
     let temporary = folder.join(format!(".tmp-{token}"));
-    let name = if report {
-        format!("{surface}.report-{token}.txt")
-    } else {
-        format!("{surface}.{token}.txt")
-    };
     let mut file = OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -268,19 +338,17 @@ fn send(folder: &str, surface: &str, text: &str, report: bool) -> Result<String,
         .map_err(|error| Error::Failed(file_error(temporary.display(), &error)))
         .and_then(|()| {
             drop(file);
-            std::fs::rename(&temporary, folder.join(&name))
-                .map_err(|error| Error::Failed(file_error(folder.join(&name).display(), &error)))
+            std::fs::rename(&temporary, folder.join(name))
+                .map_err(|error| Error::Failed(file_error(folder.join(name).display(), &error)))
         });
     match result {
-        Ok(()) => Ok(name),
+        Ok(()) => Ok(name.to_string()),
         // The file was created by this call and holds no message; a failed write or rename removes it.
         Err(error) => match std::fs::remove_file(&temporary) {
             Ok(()) => Err(error),
             Err(removal) => Err(Error::Failed(format!(
                 "{}; the temporary file was not removed: {removal}",
-                match error {
-                    Error::Failed(text) | Error::Usage(text) => text,
-                }
+                error_text(error)
             ))),
         },
     }
