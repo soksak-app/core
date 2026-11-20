@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { Soksak } from "../dist/index.js";
-import { assertTiling, fuzz, H, make, three, W } from "./helpers.mjs";
+import { assertTiling, fuzz, H, make, three, trySplit, W } from "./helpers.mjs";
 
 test("the other kid of a cut takes the whole cut when a card closes", () => {
   const grid = three();
@@ -38,7 +38,7 @@ test("cards can be closed down to the last one", () => {
     for (let i = 0; i < 40; i++) {
       const open = grid.cards.filter((p) => !p.fixed);
       const card = open[i % open.length];
-      grid.split(card.id, i % 2 ? "x" : "y");
+      trySplit(grid, card.id, i % 2 ? "x" : "y");
     }
     const built = grid.cards.length;
     let closed = 0;

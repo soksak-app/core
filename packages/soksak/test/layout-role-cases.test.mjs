@@ -93,7 +93,7 @@ test("layout option changes affect geometry and refusal decisions", { timeout: 3
   const plain = new Soksak(undefined, { width: 320, height: 180, gap: 0, minSize: 24 });
   const crowded = new Soksak(undefined, { width: 320, height: 180, gap: 64, minSize: 160 });
   assert.equal(plain.split("card", "x", { id: "other" }), "other");
-  assert.equal(crowded.split("card", "x", { id: "other" }), null);
+  assert.throws(() => crowded.split("card", "x", { id: "other" }), { message: "card card would be 128x180, below its minimum 160x160" });
   const before = plain.rect("card").w;
   plain.gap = 64;
   assert.ok(plain.rect("card").w < before);

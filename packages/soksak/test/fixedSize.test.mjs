@@ -436,7 +436,7 @@ test("the options are readable and writable after construction", () => {
   // Half of 1200 less the corridor is 588, so 700 refuses and 96 does not.
   grid.minSize = 700;
   assert.equal(grid.minSize, 700);
-  assert.equal(grid.split("card", "x"), null, "a split that would go under it is refused");
+  assert.throws(() => grid.split("card", "x"), { message: "card card would be 588x900, below its minimum 700x700" }, "a split that would go under it is refused");
 
   for (const bad of [-1, NaN, Infinity]) {
     grid.minSize = bad;

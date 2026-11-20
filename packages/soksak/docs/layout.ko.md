@@ -646,8 +646,10 @@ share를 받지 않는다. fixed 카드를 담은 cut이나 box는 다른 kid처
 | `gap`, `minSize`, `grabSize`, `snapDistance`, `snap`, `frames` | 옵션. 생성 후에도 읽고 쓸 수 있다 |
 
 축을 받는 모든 메서드는 `"x"` 나 `"y"` 가 아닌 값을 거절한다. 방향을 받는 모든
-메서드는 `left`, `right`, `top`, `bottom` 이 아닌 값을 거절한다. 거절은 `null`,
-`false` 또는 빈 답을 반환하고 아무것도 바꾸지 않는다.
+메서드는 `left`, `right`, `top`, `bottom` 이 아닌 값을 거절한다. 거절은 아무것도
+바꾸지 않는다. `split`, `splitToward`, `insert`, `withdraw`, `group`, `unwrap` 은
+거절을 그 text와 함께 throw하고, 다른 모든 메서드는 `null`, `false` 또는 빈 답을
+반환한다.
 
 `toJSON()` 은 `{root}` 를 돌려주며, close는 tree만 읽으므로 그것으로 다시 만든 grid 는
 카드를 같은 방식으로 닫는다. `checkState` 는 생성자가

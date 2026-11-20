@@ -722,7 +722,9 @@ first.
 
 Every method taking an axis refuses one that is not `"x"` or `"y"`; every method
 taking a side refuses one that is not `left`, `right`, `top` or `bottom`. A
-refusal returns `null`, `false` or an empty answer and changes nothing.
+refusal changes nothing: `split`, `splitToward`, `insert`, `withdraw`, `group`
+and `unwrap` throw it with its text, and every other method returns `null`,
+`false` or an empty answer.
 
 `toJSON()` returns `{root}`, and a grid rebuilt from it closes cards the same way,
 because a close reads only the tree. `checkState` is what the

@@ -4,6 +4,9 @@ import { Soksak, checkState } from "../dist/index.js";
 export const W = 1600;
 export const H = 1200;
 const sides = ["left", "right", "top", "bottom"];
+/** The methods of a sequence that throw their refusal. */
+const throwsRefusal = new Set(["split", "splitToward"]);
+
 export const ordinaryOperations = ["split", "close", "moveBoundary"];
 export const fixedOperations = ["splitToward", "close", "move", "insertAt", "moveTo", "moveBoundary"];
 export const allOperations = [...new Set([...ordinaryOperations, ...fixedOperations, "setSize", "setFixed", "resize"])];
@@ -189,9 +192,17 @@ export function runSequence(grid, { seed = 0, steps = 0, profile = "ordinary", m
       report.trace.push(entry);
       const methodCounts = report.byMethod[operation.method] ??= counts();
       try {
-        const result = grid[operation.method](...operation.args);
-        entry.result = result;
-        entry.outcome = result === false || result === null ? "refused" : "successful";
+        let result;
+        let refusal = null;
+        try {
+          result = grid[operation.method](...operation.args);
+        } catch (error) {
+          // A split throws its refusal; every other method of a sequence answers a refusal with false or null.
+          if (!throwsRefusal.has(operation.method)) throw error;
+          refusal = error.message;
+        }
+        entry.result = refusal === null ? result : { throws: refusal };
+        entry.outcome = refusal !== null || result === false || result === null ? "refused" : "successful";
         report.counts[entry.outcome]++;
         methodCounts[entry.outcome]++;
         const after = JSON.stringify({ state: grid.toJSON(), width: grid.width, height: grid.height });

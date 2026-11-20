@@ -39,6 +39,16 @@ export interface Input {
 export declare function insertNode(input: Input, target: string | readonly string[], side: Side, node: TreeNode): TreeNode;
 /** ADD beside a node of the stored tree of `input`: the stored tree with `node` beside `target` toward `side`. */
 export declare function insertBeside(input: Input, target: TreeNode, side: Side, node: TreeNode): TreeNode;
+/**
+ * The group split (packages/soksak/docs/layout.md#add-and-remove): the stored tree with the box `box` and its `data` in the place of
+ * `target`, with its fraction, around a cut of two halves along the axis of `side` that holds `target` and `node` toward `side`.
+ */
+export declare function groupNode(input: Input, target: string, side: Side, node: TreeNode, box: string, data: unknown): TreeNode;
+/**
+ * The inverse of the group split: the stored tree with the inner node of the box `id` in its place; a cut along the axis of the cut
+ * that holds the box joins that cut with every kid drawn at the size it had.
+ */
+export declare function unwrapNode(input: Input, id: string): TreeNode;
 /** REMOVE: the stored tree without the card or the box `id`, and the stored node that left. */
 export declare function withdrawNode(input: Input, id: string, cards: readonly {
     id: string;

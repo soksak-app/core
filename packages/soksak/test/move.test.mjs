@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { Soksak } from "../dist/index.js";
-import { assertTiling, H, three, W } from "./helpers.mjs";
+import { assertTiling, H, three, trySplit, W } from "./helpers.mjs";
 
 const ids = (grid) => grid.cards.map((p) => p.id).sort().join(",");
 
@@ -99,7 +99,7 @@ test("moving leaves a slicing arrangement", () => {
     for (let i = 0; i < 6; i++) {
       const open = grid.cards.filter((p) => !p.fixed);
       const p = open[Math.floor(next() * open.length)];
-      grid.split(p.id, next() < 0.5 ? "x" : "y");
+      trySplit(grid, p.id, next() < 0.5 ? "x" : "y");
     }
     for (let i = 0; i < 12; i++) {
       const open = grid.cards.filter((p) => !p.fixed);

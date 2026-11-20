@@ -253,6 +253,39 @@ export function insertBeside(input, target, side, node) {
     addBeside(index, target, side, cloneNode(node), input);
     return index.root;
 }
+/**
+ * The group split (packages/soksak/docs/layout.md#add-and-remove): the stored tree with the box `box` and its `data` in the place of
+ * `target`, with its fraction, around a cut of two halves along the axis of `side` that holds `target` and `node` toward `side`.
+ */
+export function groupNode(input, target, side, node, box, data) {
+    if (!SIDES.includes(side))
+        throw new Error(`unknown side ${String(side)}; use left, right, top or bottom`);
+    const ids = [box, ...(isCut(node) ? [] : [isBox(node) ? node.box : node.card]), ...cardsOf(node).map((c) => c.card)];
+    const member = ids.find((id) => input.taken(id));
+    if (member !== undefined)
+        throw new Error(`card ${member} is a member of the layout`);
+    const index = new Index(input.root, input);
+    const at = index.byId.get(target);
+    if (!at)
+        throw new Error(`card ${target} is not a member of the layout`);
+    const pair = side === 'right' || side === 'bottom' ? [at, cloneNode(node)] : [cloneNode(node), at];
+    const inner = { cut: axisOf(side), kids: pair.map((kid) => ({ share: 0.5, node: kid })) };
+    const wrapped = { box, inner };
+    if (data !== undefined)
+        wrapped.data = data;
+    index.replace(at, wrapped);
+    return index.root;
+}
+/**
+ * The inverse of the group split: the stored tree with the inner node of the box `id` in its place; a cut along the axis of the cut
+ * that holds the box joins that cut with every kid drawn at the size it had.
+ */
+export function unwrapNode(input, id) {
+    const index = new Index(input.root, input);
+    const box = index.byId.get(id);
+    index.replace(box, box.inner);
+    return index.root;
+}
 /** REMOVE: the stored tree without the card or the box `id`, and the stored node that left. */
 export function withdrawNode(input, id, cards) {
     const index = new Index(input.root, input);

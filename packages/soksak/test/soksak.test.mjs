@@ -89,7 +89,7 @@ test("splitting is refused when a half would fall under minSize", () => {
     splits++;
   }
   assert.ok(splits > 0 && splits < 100);
-  assert.equal(grid.split(grid.cards[0].id, "y"), null, "an extra split is a no-op");
+  assert.throws(() => grid.split(grid.cards[0].id, "y"), { message: "card card would be 1600x87, below its minimum 96x96" }, "an extra split is refused");
   assertTiling(grid, "at the smallest card size");
 });
 
@@ -107,7 +107,7 @@ test("splitting is refused when it would take another card below the size it has
   assert.equal(before, grid.minSize, "the plane draws it at exactly the floor");
 
   assert.equal(grid.canSplit("card-1", "x"), false, "so no cut may make it narrower");
-  assert.equal(grid.split("card-1", "x"), null, "and the cut is refused");
+  assert.throws(() => grid.split("card-1", "x"), { message: "card card-1 would be 32x158, below its minimum 58x58" }, "and the cut is refused");
   assert.equal(grid.rect("card").w, before, "and nothing moved");
   assert.equal(grid.cards.length, 2, "no card was added");
 });
@@ -129,7 +129,7 @@ test("a fixed card is never split and never closed", () => {
   assert.equal(grid.canSplit("sidebar", "x"), false);
   assert.equal(grid.canSplit("sidebar", "y"), false);
   assert.equal(grid.canClose("sidebar"), false);
-  assert.equal(grid.split("sidebar", "x"), null);
+  assert.throws(() => grid.split("sidebar", "x"), { message: "card sidebar is fixed and does not split" });
   assert.equal(grid.close("sidebar"), false);
 });
 
@@ -203,14 +203,14 @@ test("an id already in use is refused, so no two cards share a name", () => {
   assert.equal(grid.split("card", "x", { id: "dup" }), "dup");
   // rects() and the view key by id: a second card called `dup` would have no
   // rect and no element of its own.
-  assert.equal(grid.split("card", "y", { id: "dup" }), null);
-  assert.equal(grid.splitToward("card", "left", { id: "dup" }), null);
+  assert.throws(() => grid.split("card", "y", { id: "dup" }), { message: "card dup is a member of the layout" });
+  assert.throws(() => grid.splitToward("card", "left", { id: "dup" }), { message: "card dup is a member of the layout" });
   assert.equal(grid.insertAt("x", 0, { id: "dup", size: 100 }), null);
   assert.equal(grid.cards.length, grid.rects().size);
   assert.equal(new Set(grid.cards.map((c) => c.id)).size, grid.cards.length);
 });
 
-test("an axis the caller made up is refused, not thrown on", () => {
+test("an axis the caller made up is refused, and a split throws it", () => {
   const grid = new Soksak(undefined, { width: 1200, height: 800 });
   // A plane with one card has no boundary on either axis, so every reader below
   // refuses "x" as well and the axis decides nothing. Cut on both axes first.
@@ -228,7 +228,6 @@ test("an axis the caller made up is refused, not thrown on", () => {
     moveBoundary: () => grid.moveBoundary(z, 1, 10),
     centerBoundary: () => grid.centerBoundary(z, 1),
     canSplit: () => grid.canSplit("card", z),
-    split: () => grid.split("card", z),
     setSize: () => grid.setSize("card", z, 10),
     canInsertAt: () => grid.canInsertAt(z, 1),
     insertAt: () => grid.insertAt(z, 1, { size: 10 }),
@@ -248,6 +247,8 @@ test("an axis the caller made up is refused, not thrown on", () => {
     assert.doesNotThrow(() => { answer = ask(); }, `${name} threw`);
     assert.ok(refused(answer), `${name} answered ${JSON.stringify(answer)}`);
   }
+  // A split throws its refusal, and an axis it does not know is one.
+  assert.throws(() => grid.split("card", z), { message: "unknown axis z; use x or y" });
   assert.equal(JSON.stringify(grid.toJSON()), before, "and none of them changed anything");
 });
 
@@ -281,7 +282,7 @@ test("a side the caller made up is refused", () => {
   // would split downward without saying so.
   const other = grid.split("card", "x", { id: "other" });
   assert.ok(other, "two cards to move between");
-  assert.equal(grid.splitToward("card", "sideways", { id: "q" }), null);
+  assert.throws(() => grid.splitToward("card", "sideways", { id: "q" }), { message: "unknown side sideways; use left, right, top or bottom" });
   // Two different cards: moving a card onto itself is refused for its own
   // reason, so it does not name the side.
   assert.equal(grid.move("card", other, "sideways"), false, "a side that is not one");
@@ -322,7 +323,7 @@ test("no change leaves a card with no area, whatever minSize allows", () => {
   assert.equal(grid.rect("card").h, 200, "two cards, each with room");
 
   assert.equal(grid.canSplit("card", "y"), false, "a third would have no height");
-  assert.equal(grid.split("card", "y"), null);
+  assert.throws(() => grid.split("card", "y"), { message: "card card would be 1200x0, below its minimum 0x0" });
   assert.equal(grid.cards.length, 2, "and the refusal left the plane alone");
   for (const [id, r] of grid.rects()) {
     assert.ok(r.w > 0 && r.h > 0, `${id} is drawn at ${r.w}x${r.h}`);

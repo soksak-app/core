@@ -599,7 +599,7 @@
   {"call":"insert","args":["g","bottom",{"card":"n"}],"throws":"card b would be 140x40, below its minimum 96x96"}
  ]},
  {"name":"a group puts a box with its head in the place of the card and adds the new card inside it, and a refusal names the card at its drawn size under the head","options":{"width":400,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"c"}}]}},"steps":[
-  {"call":"group","args":["a","right",{"card":"b"},{"box":"g","data":{"name":"그룹 1"},"head":32}],"returns":null},
+  {"call":"group","args":["a","right",{"card":"b"},{"box":"g","data":{"name":"그룹 1"},"head":32}]},
   {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"box":"g","data":{"name":"그룹 1"},"inner":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"b","fixed":false}}]}}},{"share":0.5,"node":{"card":"c","fixed":false}}]}}},
   {"call":"rects","returns":{"a":{"x":24,"y":0,"w":164,"h":292},"b":{"x":212,"y":0,"w":164,"h":292},"c":{"x":0,"y":340,"w":400,"h":260}}},
   {"call":"group","args":["b","right",{"card":"d"},{"box":"h","data":{"name":"그룹 2"},"head":32}],"throws":"card b would be 58x204, below its minimum 96x96"},
@@ -614,7 +614,7 @@
   {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"box":"g","data":{"name":"그룹 2"},"inner":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"b","fixed":false}}]}}},{"share":0.5,"node":{"card":"c","fixed":false}}]}}},
   {"call":"unwrap","args":["a"],"throws":"card a is no box"},
   {"call":"unwrap","args":["z"],"throws":"card z is not a member of the layout"},
-  {"call":"unwrap","args":["g"],"returns":null},
+  {"call":"unwrap","args":["g"]},
   {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"b","fixed":false}}]}},{"share":0.5,"node":{"card":"c","fixed":false}}]}}},
   {"call":"rects","returns":{"a":{"x":0,"y":0,"w":288,"h":188},"b":{"x":0,"y":212,"w":288,"h":188},"c":{"x":312,"y":0,"w":288,"h":400}}},
   {"call":"headsAbove","args":["a"],"returns":0}

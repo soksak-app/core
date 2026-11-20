@@ -57,7 +57,12 @@ export function makeLayoutCase(seed) {
     { method: "resize", args: [options.width, options.height] },
   ];
   const prefix = assertSequence(runSequence(initial, { seed, profile: "constrained", operations }));
-  assert.deepEqual([1, 6, 7, 9, 11, 12].map((step) => prefix.trace[step].result), [null, "fixed-recovery", true, null, "size-recovery", true], `seed ${seed}: refusal/recovery preconditions changed`);
+  const refusal = (step) => prefix.trace[step].outcome === "refused" && typeof prefix.trace[step].result?.throws === "string";
+  assert.deepEqual(
+    [prefix.trace[1].result, refusal(9), ...[6, 7, 11, 12].map((step) => prefix.trace[step].result)],
+    [{ throws: `card ${target} is fixed and does not split` }, true, "fixed-recovery", true, "size-recovery", true],
+    `seed ${seed}: refusal/recovery preconditions changed`,
+  );
   const generated = assertSequence(runSequence(initial, { seed, steps: 20, profile: "constrained" }));
   operations.push(...generated.trace.map(({ method, args }) => ({ method, args })));
   return { seed, topology, state, options, operations };
