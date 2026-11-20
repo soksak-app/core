@@ -46,7 +46,7 @@ mark는 현재 상태와 다른 상태를 줄 때만 상태를 바꾼다. `A` �
 - `to`는 새 상태다.
 - `source`는 상태를 정한 signal이다. mark에서는 `osc133`이다.
 - `sequence`는 session에서 그 변화의 번호다: 첫 변화는 1이고, 이후 변화마다 하나씩 커진다. surface의 새 session은 다시 1에서 시작한다.
-- `exit`는 `exited`의 exit code로, 정수이거나 mark가 주지 않았으면 `null`이다. 다른 모든 상태에서는 `null`이다.
+- `exit`는 마지막으로 끝난 command의 exit code로, 정수이거나 그 mark가 주지 않았으면 `null`이다. `exited`와, 그 `exited` 뒤 다음 `running` 전의 `idle`의 code다. command의 실패는 다음 command가 시작할 때까지 가고([activity](#activity)) 나중에 attach하는 page는 그것을 상태에서 읽기 때문이다. `running`과 앞에 `exited`가 없는 `idle`에서는 `null`이다.
 
 sidecar는 각 변화를 자기 event log에도 `sidecar.<sidecar>.shell.state`(`sidecar.vt.shell.state`, `sidecar.alacritty.shell.state`)로 class `lifecycle`의 level `info`에 member `from`, `to`, `source`, `sequence`, `exit`와 함께 쓴다. sidecar는 surface의 image region이 그리지 않는 동안에도 모든 출력의 mark를 따르므로 상태는 최신으로 유지된다. surface event는 surface의 다른 vendor event와 같은 규칙으로 보낸다.
 
@@ -141,13 +141,12 @@ program이 답을 기다린다는 것과 얼마나 기다리는지는 `blocked` 
    | `<plugin>.state`의 `state` | `<plugin>.activity` |
    | --- | --- |
    | 첫 변화 전의 `null` | `null` |
-   | `idle` | `idle` |
+   | `exit` 0 또는 `null`을 가진 `idle` | `idle` |
    | `running` | `running` |
-   | 0이 아닌 `exit`를 가진 `exited` | `failed` |
-   | 0이 아닌 `exit`를 가진 `exited` 뒤의, 다음 `running` 전의 `idle` | `failed` |
+   | 0이 아닌 `exit`를 가진 `exited` 또는 `idle` | `failed` |
    | `exit` 0 또는 `exit` `null`을 가진 `exited` | `null` |
 
-mark가 exit code를 주지 않은 `exited` 상태는 실패를 보고하지 않는다. 실패를 보여 주는 code가 없기 때문이다. 마지막 command의 실패는 `error` record처럼 다음 command가 시작할 때까지 간다: zsh의 `precmd`가 보내는 `A`처럼 shell이 `D` 바로 뒤에 보내는 prompt 시작은 상태에 `idle`을 주고 activity에는 `failed`를 지니게 하며, 다음 `running`이 그것을 끝낸다. program의 record는 그 command의 exit code보다도 앞선다: `done`을 보고했고 command가 0이 아닌 code로 끝난 program은 다음 command가 시작할 때까지 `idle`을 주고, `error`를 보고한 program은 `failed`를 준다. `error` record는 가장 높은 level이 정하므로 `working` record 옆에서도 `failed`를 준다. status는 값이 바뀔 때만 바뀌며, surface의 새 session은 다시 `null`에서 시작한다.
+mark가 exit code를 주지 않은 `exited` 상태는 실패를 보고하지 않는다. 실패를 보여 주는 code가 없기 때문이다. 마지막 command의 실패는 `error` record처럼 다음 command가 시작할 때까지 간다: zsh의 `precmd`가 보내는 `A`처럼 shell이 `D` 바로 뒤에 보내는 prompt 시작은 상태에 command의 exit code와 함께 `idle`을 주고 activity에는 `failed`를 지니게 하며, 다음 `running`이 그것을 끝낸다. sidecar가 exit code를 상태에 지니므로, command 뒤에 attach하거나 다시 attach하는 page는 그 전의 page와 같은 activity를 읽는다. program의 record는 그 command의 exit code보다도 앞선다: `done`을 보고했고 command가 0이 아닌 code로 끝난 program은 다음 command가 시작할 때까지 `idle`을 주고, `error`를 보고한 program은 `failed`를 준다. `error` record는 가장 높은 level이 정하므로 `working` record 옆에서도 `failed`를 준다. status는 값이 바뀔 때만 바뀌며, surface의 새 session은 다시 `null`에서 시작한다.
 
 `attention`은 정확히 session에 `blocked` record가 있는 동안, 또는 record가 없고 notice가 `true`인 동안 유지된다. 그래서 `blocked` record의 report와 record가 없는 session의 notice에서 들어가고, program이 마지막 `blocked` record를 바꾸거나 지울 때, 그 record와 notice를 끝내는 command 종료 mark와 prompt 시작 mark에서, full reset에서, session이 끝날 때, 그리고 notice라면 사람이 terminal에 focus를 주거나 입력할 때 나온다. record의 report는 notice를 바꾸지 않는다: record가 있는 session은 notice에서 `attention`을 얻지 않으며, notice가 `true`인 동안 record가 지워지면 `attention`이 돌아온다. record의 `failed`는 program이 그 record를 바꾸거나 지울 때, command가 시작할 때, full reset에서, session이 끝날 때 나온다.
 
@@ -173,6 +172,7 @@ adversarial review는 여섯 round에 걸쳐 다음 반론을 냈고, 각 반론
 - *paste나 주입된 쓰기가 사람이 보지 않은 notice를 끝낸다.* 받아들인다: region의 input transaction만 그것을 끝낸다.
 - *아무 kind의 `P`나 prompt 시작이 살아 있는 record를 지우고, protocol이 말하는 process의 끝은 command 종료 mark다.* 받아들인다: `D`, `A`, kind `i`의 `P`가 실행 중인 program의 record를 끝낸다.
 - *0이 아닌 exit의 level은 `D`부터 zsh가 곧바로 보내는 다음 `A`까지만 간다.* 받아들인다: 마지막 command의 실패는 `error` record를 끝내는 때인 다음 command 시작까지 간다.
+- *page가 변화 event에서 끌어낸 실패는 page가 command 뒤에 attach하거나 다시 attach하면 잃는다. 읽기가 `idle`을 주기 때문이다.* 받아들인다: `exited` 뒤의 `idle`은 sidecar의 상태에 그 exit code를 지니므로, 읽기는 event와 같은 activity를 준다.
 - *창이 key 상태를 잃어도 region의 focus는 바뀌지 않으므로, 뒤에 있는 창의 bell은 notice를 주지 않고 DEC 1004는 focus-out을 보고하지 않는다.* 받아들인다: region의 focus는 그 창의 key 상태를 따른다([그림 영역](native-surfaces.ko.md#그림-영역)).
 - *`done`은 "끝났고 보지 않음"인데 `idle`이 된다.* 일부 받아들인다. 자기 prompt에서 쉬는 program은 대기 중인 승인이나 답이 없으며 그것이 `idle`의 의미다. 다섯 번째 level은 program이 스스로 끝내는 상태 때문에 core의 순서와 icon을 바꾼다(program은 사람이 확인하면 `idle`을 보고한다). [activity](activity.ko.md#activity의-종류)의 `idle` 의미가 이를 적는다.
 - *다음 command 시작에서 `done`과 `error`를 지우는 것은 protocol을 어긴다.* 거부한다: protocol은 그것들을 끝과 prompt 뒤에도 지니게 하고 언제 보여 주기를 멈출지는 terminal에 맡기며, 사람이 같은 terminal에서 시작한 command는 사람이 결과를 보았다는 것을 보여 준다.

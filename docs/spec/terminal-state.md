@@ -46,7 +46,7 @@ Each change of the state is one surface event of the sidecar, `{event: "shell.st
 - `to` is the new state.
 - `source` is the signal that decided the state; for the marks it is `osc133`.
 - `sequence` is the number of the change in the session: 1 for the first change, one more for each later change. A new session of the surface starts at 1 again.
-- `exit` is the exit code of `exited`, an integer or `null` when the mark gave none; it is `null` for every other state.
+- `exit` is the exit code of the last finished command, an integer or `null` when its mark gave none. It is the code of `exited` and of an `idle` that follows that `exited` before the next `running`, because the failure of a command lasts until the next command starts ([activity](#activity)) and a page that attaches later reads it from the state; it is `null` for `running` and for an `idle` that no `exited` precedes.
 
 The sidecar also writes each change to its event log as `sidecar.<sidecar>.shell.state` (`sidecar.vt.shell.state`, `sidecar.alacritty.shell.state`) at the level `info` in the class `lifecycle`, with the members `from`, `to`, `source`, `sequence` and `exit`. The sidecar follows the marks of every output, also while the image region of the surface is not drawing, so the state stays current; the surface event is sent under the same rule as the other vendor events of the surface.
 
@@ -141,13 +141,12 @@ Each terminal plugin also declares the status `<plugin>.activity` (`terminal.act
    | `state` of `<plugin>.state` | `<plugin>.activity` |
    | --- | --- |
    | `null`, before the first change | `null` |
-   | `idle` | `idle` |
+   | `idle` with `exit` 0 or `null` | `idle` |
    | `running` | `running` |
-   | `exited` with an `exit` other than 0 | `failed` |
-   | `idle` after an `exited` with an `exit` other than 0, before the next `running` | `failed` |
+   | `exited` or `idle` with an `exit` other than 0 | `failed` |
    | `exited` with `exit` 0, or with `exit` `null` | `null` |
 
-An `exited` state whose mark gives no exit code reports no failure, because no code shows one. A failure of the last command lasts until the next command starts, as a record of `error` does: the prompt start that a shell sends right after `D`, such as `A` from the `precmd` of zsh, gives `idle` to the state and keeps `failed` to the activity, and the next `running` ends it. The records of a program decide also over the exit code of its command: a program that reported `done` and whose command exits with a nonzero code gives `idle` until the next command starts, and one that reported `error` gives `failed`. An `error` record gives `failed` also beside a `working` record, because the highest level decides. The status changes only when its value changes, and a new session of the surface starts again at `null`.
+An `exited` state whose mark gives no exit code reports no failure, because no code shows one. A failure of the last command lasts until the next command starts, as a record of `error` does: the prompt start that a shell sends right after `D`, such as `A` from the `precmd` of zsh, gives `idle` to the state with the exit code of the command and keeps `failed` to the activity, and the next `running` ends it. The sidecar keeps the exit code in the state, so a page that attaches after the command, or attaches again, reads the same activity as the page before it. The records of a program decide also over the exit code of its command: a program that reported `done` and whose command exits with a nonzero code gives `idle` until the next command starts, and one that reported `error` gives `failed`. An `error` record gives `failed` also beside a `working` record, because the highest level decides. The status changes only when its value changes, and a new session of the surface starts again at `null`.
 
 `attention` holds exactly while the session has a `blocked` record, or has no record and the notice is `true`. So it is entered at the report of a `blocked` record and at a notice of a session without records, and it is left when the program replaces or clears its last `blocked` record, at a command finished mark and a prompt start mark, which end that record and the notice, at a full reset, when the session ends, and, for a notice, when the person focuses or types into the terminal. A report of a record does not change the notice: a session with records gives no `attention` from it, and its `attention` returns when the records are cleared while the notice is `true`. `failed` of a record is left when the program replaces or clears the record, when a command starts, at a full reset and when the session ends.
 
@@ -173,6 +172,7 @@ The adversarial review raised these objections in six rounds; each is judged wit
 - *A paste or an injected write ends a notice that the person has not seen.* Accepted: only an input transaction of the region ends it.
 - *A prompt start of any kind of `P` removes live records, and the command finished mark is the exit of the process that the protocol names.* Accepted: `D`, `A` and `P` of kind `i` end the records of a running program.
 - *The level of a nonzero exit lasts only from `D` to the next `A`, which zsh sends at once.* Accepted: the failure of the last command lasts until the next command starts, the moment that ends an `error` record.
+- *A failure that the page derives from the change events is lost when a page attaches after the command or attaches again, because the read gives `idle`.* Accepted: the `idle` after an `exited` carries its exit code in the state of the sidecar, so the read gives the same activity as the events.
 - *The focus of the region does not change when the window loses the key status, so a bell from a window in the background gives no notice, and DEC 1004 reports no focus-out.* Accepted: the focus of a region follows the key status of its window ([image regions](native-surfaces.md#image-regions)).
 - *`done` is "finished, not seen" and becomes `idle`.* Partly accepted. A program that rests at its prompt has no approval or answer pending, which is the meaning of `idle`, and a fifth level would change the order and the icons of core for a state that the program itself ends (a program reports `idle` once the person acknowledges). The meaning of `idle` in [activity](activity.md#activities) states it.
 - *Clearing `done` and `error` at the next command start breaks the protocol.* Rejected: the protocol keeps them past the exit and the prompt and leaves to the terminal when it stops showing them, and a command that the person starts in the same terminal shows that the person saw the result.
