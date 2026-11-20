@@ -8,7 +8,6 @@ import (
 	"image/color"
 	"math"
 	"os"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -767,11 +766,10 @@ func TestTheFrameOfAGroupCardRunsAroundItsHeader(t *testing.T) {
 	}
 }
 
-// A group split button draws the split icon of its side inside the rounded frame of a group card, with the padding card-group-frame-pad
-// between the inner edge of the frame and the box of the split icon and the radius card-group-frame-radius, in the stroke of the icon,
-// and keeps the size and the row of the split buttons (docs/spec/groups.md#headers). The icon box is the 16 point viewBox drawn at
-// card-icon.
-func TestAGroupSplitButtonFramesTheSplitIconOfItsSide(t *testing.T) {
+// The group split buttons draw the split icons of their sides at the size of the split buttons, and one rounded frame encloses the pair,
+// with the padding card-group-frame-pad between the frame and the buttons and the radius card-group-frame-radius, in the header band
+// (docs/spec/groups.md#headers).
+func TestOneFrameEnclosesTheGroupSplitButtons(t *testing.T) {
 	f := groupedShell(t)
 	f.settle()
 	raw, err := os.ReadFile("../src/workbench.json")
@@ -779,24 +777,47 @@ func TestAGroupSplitButtonFramesTheSplitIconOfItsSide(t *testing.T) {
 		t.Fatal(err)
 	}
 	var declared struct {
+		Themes []struct {
+			Shape map[string]string `json:"shape"`
+		} `json:"themes"`
 		Chrome map[string]string `json:"chrome"`
 	}
 	if err := json.Unmarshal(raw, &declared); err != nil {
 		t.Fatal(err)
 	}
-	number := func(name string) float64 {
+	// The fixture shows the first theme, whose shape gives the border width of a frame.
+	border, err := strconv.ParseFloat(strings.TrimSuffix(declared.Themes[0].Shape["bw"], "px"), 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	number := func(name string) float32 {
 		value, err := strconv.ParseFloat(strings.TrimSuffix(declared.Chrome[name], "px"), 64)
 		if err != nil {
 			t.Fatalf("chrome %s: %v", name, err)
 		}
-		return value
+		return float32(value)
 	}
-	unit := 16 / number("card-icon")
-	stroke := number("icon-stroke")
-	frameAt := regexp.MustCompile(`^<rect x="([-\d.]+)" y="([-\d.]+)" width="([-\d.]+)" height="([-\d.]+)" rx="([-\d.]+)"/><g transform="translate\(([-\d.]+) ([-\d.]+)\) scale\(([-\d.]+)\)" stroke-width="([-\d.]+)">(.*)</g>$`)
-	for _, head := range []struct{ id, prefix string }{{"main", "core.card"}, {"card-2", "core.group"}} {
+	tree := f.tester.ElementTree()
+	// holder is the element whose own children are the two nodes a and b.
+	var holder func(nodes []ui.ElementNode, a, b ui.ElementNode) (ui.ElementNode, bool)
+	holder = func(nodes []ui.ElementNode, a, b ui.ElementNode) (ui.ElementNode, bool) {
+		for _, node := range nodes {
+			var ids []uint64
+			for _, child := range node.Children {
+				ids = append(ids, child.ID)
+			}
+			if slices.Equal(ids, []uint64{a.ID, b.ID}) {
+				return node, true
+			}
+			if found, ok := holder(node.Children, a, b); ok {
+				return found, true
+			}
+		}
+		return ui.ElementNode{}, false
+	}
+	near := func(a, b float32) bool { return math.Abs(float64(a-b)) < 0.01 }
+	for _, head := range []struct{ id, prefix, header string }{{"main", "core.card", "core.card.header"}, {"card-2", "core.group", "core.group.header"}} {
 		for _, pair := range [][2]string{{"group-x", "split-x"}, {"group-y", "split-y"}} {
-			where := head.prefix + "." + pair[0] + " of " + head.id
 			icon, err := f.shell.HeadToolIcon(head.id, pair[0])
 			if err != nil {
 				t.Fatal(err)
@@ -805,34 +826,32 @@ func TestAGroupSplitButtonFramesTheSplitIconOfItsSide(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			// (a) the icon inside the frame is the split icon of the same side.
-			found := frameAt.FindStringSubmatch(icon)
-			if found == nil {
-				t.Fatalf("%s draws no split icon inside a frame: %s", where, icon)
+			// (a) the icon is the split icon of the same side.
+			if icon != split {
+				t.Errorf("%s.%s of %s draws %s, not the split icon %s", head.prefix, pair[0], head.id, icon, split)
 			}
-			if found[10] != split {
-				t.Errorf("%s draws %s inside its frame, not the split icon %s", where, found[10], split)
-			}
-			// (b) the frame runs along the edge of the icon box in the stroke of the icon, and the split icon fills the box inside it less the
-			// padding, in the same stroke.
-			values := make([]float64, 9)
-			for i := range values {
-				values[i], _ = strconv.ParseFloat(found[i+1], 64) // silent: the expression matched numbers.
-			}
-			inner := stroke + number("card-group-frame-pad")*unit
-			want := []float64{stroke / 2, stroke / 2, 16 - stroke, 16 - stroke, number("card-group-frame-radius") * unit, inner, inner,
-				(16 - 2*inner) / 16, stroke * 16 / (16 - 2*inner)}
-			for i := range want {
-				if math.Abs(values[i]-want[i]) > 1e-3 {
-					t.Errorf("%s frame and icon box %v, not %v", where, values, want)
-					break
-				}
-			}
-			// (c) the button keeps the size and the row of the split buttons.
+			// (c) the button keeps the size and the row of the split button.
 			button, beside := f.box(head.prefix+"."+pair[0], head.id), f.box(head.prefix+"."+pair[1], head.id)
-			if button.W != beside.W || button.H != beside.H || button.Y != beside.Y || float64(button.H) != number("card-button") {
-				t.Errorf("%s is drawn at %+v beside %s at %+v", where, button, pair[1], beside)
+			if button.W != beside.W || button.H != beside.H || button.H != number("card-button") {
+				t.Errorf("%s.%s of %s is drawn at %+v beside %s at %+v", head.prefix, pair[0], head.id, button, pair[1], beside)
 			}
+		}
+		// (b) one frame holds the two group split buttons, inset by its border and the padding, inside the header band.
+		gx, _ := exposedNode(tree, head.prefix+".group-x", head.id)
+		gy, _ := exposedNode(tree, head.prefix+".group-y", head.id)
+		frame, ok := holder(tree, gx, gy)
+		if !ok {
+			t.Fatalf("no element of the header of %s holds only %s.group-x and %s.group-y", head.id, head.prefix, head.prefix)
+		}
+		inset := number("card-group-frame-pad") + float32(border)
+		if !near(gx.Bounds.X-frame.Bounds.X, inset) || !near(frame.Bounds.X+frame.Bounds.W-gy.Bounds.X-gy.Bounds.W, inset) ||
+			!near(gx.Bounds.Y-frame.Bounds.Y, inset) || !near(frame.Bounds.Y+frame.Bounds.H-gx.Bounds.Y-gx.Bounds.H, inset) {
+			t.Errorf("the frame of %s at %+v holds %+v and %+v, not inset by %g", head.id, frame.Bounds, gx.Bounds, gy.Bounds, inset)
+		}
+		// (c) the header keeps the head height, and the frame stands inside it.
+		header := f.box(head.header, head.id)
+		if header.H != number("head-h") || frame.Bounds.Y < header.Y || frame.Bounds.Y+frame.Bounds.H > header.Y+header.H {
+			t.Errorf("the header of %s at %+v holds the frame at %+v", head.id, header, frame.Bounds)
 		}
 	}
 }

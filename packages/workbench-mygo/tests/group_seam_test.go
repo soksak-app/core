@@ -144,18 +144,18 @@ func (f *tabShell) seamLines() map[string][]colorRun {
 		"between card-4 and card-2, one group card ends": f.runs(cards["card-4"].X+cards["card-4"].W-in, y4, cards["card-2"].X+in, y4),
 		"between card-2 and card-8, one group card ends": f.runs(cards["card-2"].X+cards["card-2"].W-in, y2, cards["card-8"].X+in, y2),
 		"between card-1 and card-4, one group card ends": f.runs(x4-cards["card-4"].W/4, cards["card-1"].Y+cards["card-1"].H-in, x4-cards["card-4"].W/4, cards["card-4"].Y+in),
-		// The scan below card-3 crosses the header of card-4 beside its tab, whose strip starts 5.5 points below the top of the card, so it
-		// ends 3 points inside card-4, as the scans into a header do.
-		"between card-3 and card-4, one group card ends": f.runs(x3, cards["card-3"].Y+cards["card-3"].H-in, x3, cards["card-4"].Y+3),
+		// The scan below card-3 crosses the header of card-4, whose tool row with the frame of the group split buttons starts less than 3
+		// points below the top of the card, so it ends 1 point inside card-4, as the scans into a header do.
+		"between card-3 and card-4, one group card ends": f.runs(x3, cards["card-3"].Y+cards["card-3"].H-in, x3, cards["card-4"].Y+1),
 		"right of card-8, the edge of the plane":         f.runs(window.W-0.01, y8, cards["card-8"].X+cards["card-8"].W-in, y8),
 		"below card-4, where two group cards end":        f.runs(x4, window.H-0.01, x4, cards["card-4"].Y+cards["card-4"].H-in),
 		"below card-2, where one group card ends":        f.runs(x2, window.H-0.01, x2, cards["card-2"].Y+cards["card-2"].H-in),
-		"under the space bar above card-2":               f.runs(x2, top-in, x2, heads["card-7"].Y+3),
-		"under the space bar above card-8":               f.runs(x8, top-in, x8, cards["card-8"].Y+3),
-		"under the header of card-7 above card-2":        f.runs(x2, heads["card-7"].Y+heads["card-7"].H-in, x2, cards["card-2"].Y+3),
-		"under the header of card-7 above card-6":        f.runs(x3, heads["card-7"].Y+heads["card-7"].H-in, x3, heads["card-6"].Y+3),
-		"under the header of card-6 above card-5":        f.runs(x3, heads["card-6"].Y+heads["card-6"].H-in, x3, heads["card-5"].Y+3),
-		"under the header of card-5 above card-3":        f.runs(x3, heads["card-5"].Y+heads["card-5"].H-in, x3, cards["card-3"].Y+3),
+		"under the space bar above card-2":               f.runs(x2, top-in, x2, heads["card-7"].Y+1),
+		"under the space bar above card-8":               f.runs(x8, top-in, x8, cards["card-8"].Y+1),
+		"under the header of card-7 above card-2":        f.runs(x2, heads["card-7"].Y+heads["card-7"].H-in, x2, cards["card-2"].Y+1),
+		"under the header of card-7 above card-6":        f.runs(x3, heads["card-7"].Y+heads["card-7"].H-in, x3, heads["card-6"].Y+1),
+		"under the header of card-6 above card-5":        f.runs(x3, heads["card-6"].Y+heads["card-6"].H-in, x3, heads["card-5"].Y+1),
+		"under the header of card-5 above card-3":        f.runs(x3, heads["card-5"].Y+heads["card-5"].H-in, x3, cards["card-3"].Y+1),
 	}
 }
 

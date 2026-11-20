@@ -6,7 +6,6 @@ import (
 	"math"
 	"reflect"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -268,7 +267,7 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides 
 		left += widths[i] + float64(m.cardTabsGap)
 	}
 	buttons := float32(len(s.headTools(id)) + len(sides.shown))
-	group := buttons*m.cardButton + (buttons-1)*m.cardActsGap + 2*m.cardActsPad + 2*s.palette.BorderWidth
+	group := buttons*m.cardButton + (buttons-1)*m.cardActsGap + 2*m.cardActsPad + 2*s.palette.BorderWidth + s.pairWidth(s.headTools(id))
 	kept := keptTools(s.headTools(id))
 	fit := layout.FitHead(layout.Head{Width: float64(width), PaddingLeft: float64(m.cardHeadPad), PaddingRight: float64(m.cardHeadPad),
 		Lead: float64(m.cardButton), Gap: float64(m.cardHeadGap), ToolsWidth: float64(group), MoreWidth: float64(m.cardButton),
@@ -679,9 +678,9 @@ func (s *Shell) groupTools(id, header string, changes func(tool headTool, can bo
 	names := s.options.Declared.CardTools
 	tools := []headTool{
 		changes(headTool{Do: "gx", Status: "group-x", Name: header + ".group-x", Command: "core.card.menu", Params: menuParam{Card: id, Menu: "group-x"},
-			Title: names["group-x"], Icon: "card-group-x"}, s.planes.CanGroup(id, "right")),
+			Title: names["group-x"], Icon: "card-split-x"}, s.planes.CanGroup(id, "right")),
 		changes(headTool{Do: "gy", Status: "group-y", Name: header + ".group-y", Command: "core.card.menu", Params: menuParam{Card: id, Menu: "group-y"},
-			Title: names["group-y"], Icon: "card-group-y"}, s.planes.CanGroup(id, "bottom")),
+			Title: names["group-y"], Icon: "card-split-y"}, s.planes.CanGroup(id, "bottom")),
 	}
 	key := s.planes.Parent(id)
 	if s.planes.LeadCount(key) >= 2 {
@@ -694,12 +693,51 @@ func (s *Shell) groupTools(id, header string, changes func(tool headTool, can bo
 
 // drawTools draws the tools of a card.
 func (s *Shell) drawTools(c *ui.Context, id string) {
-	for _, tool := range s.headTools(id) {
+	s.drawToolRow(c, id, s.headTools(id))
+}
+
+// drawToolRow draws the head buttons tools of the card or group card id in their order, the two group split buttons inside one frame.
+func (s *Shell) drawToolRow(c *ui.Context, id string, tools []headTool) {
+	draw := func(tool headTool) {
 		button := s.headButton(c, tool.Name, tool.Command, id, tool.Params, tool.Title, s.headIcon(tool.Icon, false), tool.Enabled, tool.Pressed)
 		if tool.Do == "fullscreen" || tool.Do == "leader" {
 			button.Checked(tool.Pressed)
 		}
 	}
+	for k := 0; k < len(tools); k++ {
+		if tools[k].Do == "gx" && k+1 < len(tools) && tools[k+1].Do == "gy" {
+			pair := tools[k : k+2]
+			s.drawPair(c, func() {
+				for _, tool := range pair {
+					draw(tool)
+				}
+			})
+			k++
+			continue
+		}
+		draw(tools[k])
+	}
+}
+
+// drawPair draws the rounded frame that encloses the two group split buttons, with the padding card-group-frame-pad between the frame
+// and the buttons (docs/spec/groups.md#headers).
+// The frame is a group of the element tree named by the names of its two buttons.
+func (s *Shell) drawPair(c *ui.Context, buttons func()) {
+	m := s.metrics
+	names := s.options.Declared.CardTools
+	ui.Row(c).Role(ui.RoleGroup).Label(names["group-x"]+", "+names["group-y"]).Gap(m.cardActsGap).Padding(m.groupFramePad).
+		Radius(m.groupFrameRadius).Border(s.palette.BorderWidth, s.palette.Edge).Shrink(0).Children(buttons)
+}
+
+// pairWidth is what the frame of the group split buttons adds to the width of the tool row tools: its border and its padding on each
+// side, or nothing for a row without the pair.
+func (s *Shell) pairWidth(tools []headTool) float32 {
+	for k := 0; k+1 < len(tools); k++ {
+		if tools[k].Do == "gx" && tools[k+1].Do == "gy" {
+			return 2 * (s.metrics.groupFramePad + s.palette.BorderWidth)
+		}
+	}
+	return 0
 }
 
 // headButton draws a button of a card head with an icon. A pressed switch is drawn in the focus color, also under the pointer
@@ -763,25 +801,8 @@ func (s *Shell) HeadToolIcon(id, status string) (string, error) {
 	return "", fmt.Errorf("card %s has no head button %s", id, status)
 }
 
-// groupSplitIcons names the split icon of the side of each group split icon, which draws it in the frame of a group card.
-var groupSplitIcons = map[string]string{"card-group-x": "card-split-x", "card-group-y": "card-split-y"}
-
-// headIconElements returns the SVG elements of the declared icon name. The half of a split icon is a filled part of its strokes. A group
-// split icon is the split icon of its side drawn inside the rounded frame of a group card (docs/spec/groups.md#headers): in the 16 point
-// box of a head icon drawn at card-icon, the frame runs along the edge of the box in the stroke of the icon with the radius
-// card-group-frame-radius, and the split icon is scaled into the box inside the frame less the padding card-group-frame-pad, in the same
-// stroke width.
+// headIconElements returns the SVG elements of the declared icon name. The half of a split icon is a filled part of its strokes.
 func (s *Shell) headIconElements(name string) string {
-	if split, ok := groupSplitIcons[name]; ok {
-		m := s.metrics
-		unit := 16 / m.cardIcon
-		inner := m.iconStroke + m.groupFramePad*unit
-		scale := (16 - 2*inner) / 16
-		number := func(v float32) string { return strconv.FormatFloat(float64(v), 'g', -1, 32) }
-		return `<rect x="` + number(m.iconStroke/2) + `" y="` + number(m.iconStroke/2) + `" width="` + number(16-m.iconStroke) + `" height="` +
-			number(16-m.iconStroke) + `" rx="` + number(m.groupFrameRadius*unit) + `"/><g transform="translate(` + number(inner) + ` ` +
-			number(inner) + `) scale(` + number(scale) + `)" stroke-width="` + number(m.iconStroke/scale) + `">` + s.headIconElements(split) + `</g>`
-	}
 	half := fmt.Sprintf(`fill="currentColor" stroke="none" opacity="%g"`, s.metrics.cardActHalfOpacity)
 	return strings.ReplaceAll(s.options.Declared.Icons[name], `class="half"`, half)
 }

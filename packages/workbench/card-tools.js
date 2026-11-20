@@ -11,8 +11,8 @@ const definitions = [
   ["add", names.add, "core.card.add", icons["card-add"]],
   ["x", names["split-x"], "core.card.split-x", icons["card-split-x"]],
   ["y", names["split-y"], "core.card.split-y", icons["card-split-y"]],
-  ["gx", names["group-x"], "core.card.group-x", icons["card-group-x"]],
-  ["gy", names["group-y"], "core.card.group-y", icons["card-group-y"]],
+  ["gx", names["group-x"], "core.card.group-x", icons["card-split-x"]],
+  ["gy", names["group-y"], "core.card.group-y", icons["card-split-y"]],
   ["leader", names.leader, "core.card.leader", icons["card-leader"]],
   ["fullscreen", names.fullscreen, "core.card.fullscreen", icons["card-expand"]],
   ["close", names.close, "core.card.close", icons["card-close"]],
@@ -38,7 +38,22 @@ export function createCardTools(card) {
     else bind(button, expose, { card });
     toolbar.appendChild(button);
   }
+  framePair(toolbar);
   return toolbar;
+}
+
+/**
+ * Puts the group split buttons of the tool row toolbar into one frame, the rounded frame that encloses the pair with the padding
+ * card-group-frame-pad (docs/spec/groups.md#headers).
+ */
+export function framePair(toolbar) {
+  const gx = toolbar.querySelector(":scope > .chrome__act[data-do=gx]");
+  const gy = toolbar.querySelector(":scope > .chrome__act[data-do=gy]");
+  if (!gx || !gy) return;
+  const frame = document.createElement("span");
+  frame.className = "chrome__pair";
+  gx.before(frame);
+  frame.append(gx, gy);
 }
 
 /**
@@ -47,7 +62,7 @@ export function createCardTools(card) {
  * leads, a level of two or more members, holds the card; it is pressed on the leader (docs/spec/groups.md#headers).
  */
 export function updateCardTools(toolbar, { canClose, canSplitX, canSplitY, canGroupX, canGroupY, leads, leader, fullscreen }) {
-  for (const button of toolbar.children) {
+  for (const button of toolbar.querySelectorAll(".chrome__act")) {
     const action = button.dataset.do;
     const hidden = action === "leader" ? !leads : button.hidden;
     if (button.hidden !== hidden) button.hidden = hidden;

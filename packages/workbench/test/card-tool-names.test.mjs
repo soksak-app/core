@@ -23,12 +23,12 @@ test("the tooltip of a card tool is its name and a refusal states its reason", a
     registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
     const tools = await import("../card-tools.js");
     const toolbar = tools.createCardTools("fixture");
-    const titles = () => Object.fromEntries([...toolbar.children].map((button) => [button.dataset.do, button.title]));
+    const titles = () => Object.fromEntries([...toolbar.querySelectorAll(".chrome__act")].map((button) => [button.dataset.do, button.title]));
     tools.updateCardTools(toolbar, { canClose: true, canSplitX: true, canSplitY: true, canGroupX: true, canGroupY: true, leads: true, leader: false, fullscreen: false });
     assert.deepEqual(titles(), { add: names.add, x: names["split-x"], y: names["split-y"], gx: names["group-x"], gy: names["group-y"],
       leader: names.leader,
       fullscreen: names.fullscreen, close: names.close });
-    for (const button of toolbar.children) assert.equal(button.getAttribute("aria-label"), button.title);
+    for (const button of toolbar.querySelectorAll(".chrome__act")) assert.equal(button.getAttribute("aria-label"), button.title);
     tools.updateCardTools(toolbar, { canClose: false, canSplitX: true, canSplitY: true, canGroupX: true, canGroupY: true, leads: true, leader: false, fullscreen: false });
     assert.equal(titles().close, names["close-refused"]);
     // A group split that would be refused disables its button, as a split does, and hides none (docs/spec/groups.md#headers).

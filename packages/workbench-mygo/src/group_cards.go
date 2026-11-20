@@ -325,7 +325,7 @@ func (s *Shell) drawGroupHead(c *ui.Context, id, name string, width, height floa
 		nameWidth += m.activityIcon + m.cardHeadGap
 	}
 	buttons := float32(len(tools))
-	group := buttons*m.cardButton + (buttons-1)*m.cardActsGap + 2*m.cardActsPad + 2*s.palette.BorderWidth
+	group := buttons*m.cardButton + (buttons-1)*m.cardActsGap + 2*m.cardActsPad + 2*s.palette.BorderWidth + s.pairWidth(tools)
 	kept := keptTools(tools)
 	// The line of the frame runs over the ends of the header, so its content starts the head padding inside the line, as in a card head.
 	pad := m.cardHeadPad + s.palette.CardBorder()
@@ -379,12 +379,7 @@ func (s *Shell) drawGroupHead(c *ui.Context, id, name string, width, height floa
 			return
 		}
 		ui.Row(c).Gap(m.cardActsGap).Padding(m.cardActsPad).Radius(s.radiusSmall()).Border(s.palette.BorderWidth, s.palette.Edge).Shrink(0).Children(func() {
-			for _, tool := range tools {
-				button := s.headButton(c, tool.Name, tool.Command, id, tool.Params, tool.Title, s.headIcon(tool.Icon, false), tool.Enabled, tool.Pressed)
-				if tool.Do == "fullscreen" || tool.Do == "leader" {
-					button.Checked(tool.Pressed)
-				}
-			}
+			s.drawToolRow(c, id, tools)
 		})
 	})
 }
@@ -407,7 +402,7 @@ func (s *Shell) openGroupMenu(id, anchor string) error {
 	names := s.options.Declared.CardTools
 	items := []pickerItem{{Key: "close", Name: names["group-close"], Icon: s.headIconElements("card-close")}}
 	if s.fullscreen == "" && s.planes.IsGroup(id) {
-		items = append(items, pickerItem{Key: "dissolve", Name: names["group-dissolve"], Icon: s.headIconElements("card-group-x")})
+		items = append(items, pickerItem{Key: "dissolve", Name: names["group-dissolve"], Icon: s.headIconElements("card-split-x")})
 	}
 	s.openPicker(names["group-menu"], items, func(key string) error {
 		if key == "dissolve" {

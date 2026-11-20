@@ -187,7 +187,7 @@ test("a fullscreen group card is laid out as the whole area and a focus inside i
   assert.equal(plane.fullscreenCard(), null, "a second press restores the arrangement");
 });
 
-const headTools = (id) => [...cardElement(id).querySelectorAll(".chrome__acts > .chrome__act:not(.chrome__side)")];
+const headTools = (id) => [...cardElement(id).querySelectorAll(".chrome__acts .chrome__act:not(.chrome__side)")];
 const pick = async (plugin) => {
   const { items } = plane.pickerState();
   const index = items.findIndex((item) => item.key === plugin);
@@ -215,41 +215,40 @@ test("a content card head shows the split and group split buttons toward each di
     [[false, "true"], [false, "false"], [false, "false"]], "card-1 leads its level, card-2 does not, and card-4 leads the root level of card-3");
 });
 
-// A group split button draws the split icon of its side inside the rounded frame of a group card, with the padding card-group-frame-pad
-// between the inner edge of the frame and the box of the split icon and the radius card-group-frame-radius, in the stroke of the icon
-// (docs/spec/groups.md#headers). The icon box is the 16 point viewBox drawn at card-icon, and the button keeps the one icon of its size.
-test("a group split button draws the split icon of its side inside the frame of a group card with the declared padding", { timeout: 5000 }, () => {
+// The group split buttons draw the split icons of their sides at the size of the split buttons, and one rounded frame encloses the pair,
+// with the padding card-group-frame-pad between the frame and the buttons and the radius card-group-frame-radius, in the header band
+// (docs/spec/groups.md#headers). JSDOM has no layout, so the frame is judged by the rule of the stylesheet that draws it.
+test("the group split buttons draw the split icons and one frame encloses the pair with the declared padding", { timeout: 5000 }, () => {
   arrange();
-  const { chrome } = JSON.parse(readFileSync(new URL("../workbench.json", import.meta.url), "utf8"));
-  const unit = 16 / parseFloat(chrome["card-icon"]);
-  const stroke = Number(chrome["icon-stroke"]);
-  const pad = parseFloat(chrome["card-group-frame-pad"]) * unit;
-  const radius = parseFloat(chrome["card-group-frame-radius"]) * unit;
-  const heads = [["card-1", cardElement("card-1"), "core.card"], ["card-4", groupElement("card-4"), "core.group"]];
-  for (const [id, head, prefix] of heads) {
-    for (const [group, split] of [["group-x", "split-x"], ["group-y", "split-y"]]) {
-      const button = head.querySelector(`[data-expose="${prefix}.${group}"]`), beside = head.querySelector(`[data-expose="${prefix}.${split}"]`);
-      const where = `${id} ${prefix}.${group}`;
-      const svg = button.querySelector("svg");
-      const framed = svg.querySelector(":scope > g");
-      // (a) the icon inside the frame is the split icon of the same side.
-      assert.ok(framed, `${where} draws no split icon inside a frame: ${svg.innerHTML}`);
-      assert.equal(framed.innerHTML, beside.querySelector("svg").innerHTML, `${where} draws another icon than ${prefix}.${split}`);
-      // (b) the frame runs along the edge of the icon box in the stroke of the icon, and the split icon fills the box inside it less the
-      // padding.
-      const frame = svg.querySelector(":scope > rect");
-      const at = (name) => Number(frame.getAttribute(name));
-      assert.deepEqual([at("x"), at("y"), at("width"), at("height"), at("rx")].map((n) => n.toFixed(6)),
-        [stroke / 2, stroke / 2, 16 - stroke, 16 - stroke, radius].map((n) => n.toFixed(6)), `${where} frame`);
-      const [, x, y, scale] = framed.getAttribute("transform").match(/^translate\(([-\d.]+) ([-\d.]+)\) scale\(([-\d.]+)\)$/).map(Number);
-      const inner = stroke + pad;
-      assert.deepEqual([x, y, x + 16 * scale, y + 16 * scale].map((n) => n.toFixed(6)), [inner, inner, 16 - inner, 16 - inner].map((n) => n.toFixed(6)),
-        `${where} icon box inside the frame`);
-      assert.equal(Number(framed.getAttribute("stroke-width")).toFixed(6), (stroke / scale).toFixed(6), `${where} draws the split icon in another stroke`);
-      // (c) the button is a head button of the same kind and size as the split button: one icon of the 16 point viewBox.
-      assert.equal(button.className, beside.className, `${where} class`);
-      assert.deepEqual([button.children.length, svg.getAttribute("viewBox")], [1, beside.querySelector("svg").getAttribute("viewBox")], `${where} icon`);
+  const sheet = document.createElement("style");
+  sheet.textContent = readFileSync(new URL("../app.css", import.meta.url), "utf8");
+  document.head.appendChild(sheet);
+  try {
+    const rule = [...sheet.sheet.cssRules].find((r) => r.selectorText === ".chrome__pair");
+    const heads = [["card-1", cardElement("card-1"), "core.card"], ["card-4", groupElement("card-4"), "core.group"]];
+    for (const [id, head, prefix] of heads) {
+      const named = (name) => head.querySelector(`[data-expose="${prefix}.${name}"]`);
+      const [gx, gy] = [named("group-x"), named("group-y")];
+      for (const [button, split] of [[gx, named("split-x")], [gy, named("split-y")]]) {
+        const where = `${id} ${button.dataset.expose}`;
+        // (a) the icon is the split icon of the same side, in the svg of the same box.
+        assert.equal(button.querySelector("svg").outerHTML, split.querySelector("svg").outerHTML, `${where} draws another icon than ${split.dataset.expose}`);
+        // (c) the button is a head button of the size of the split button.
+        assert.equal(button.className, split.className, `${where} class`);
+      }
+      // (b) one frame holds the two group split buttons, and nothing else.
+      const frame = gx.parentElement;
+      assert.equal(frame.className, "chrome__pair", `${id}: the group split buttons stand in ${frame.className}, not in one frame`);
+      assert.deepEqual([...frame.children], [gx, gy], `${id}: the frame holds other elements than the two group split buttons`);
+      assert.equal(head.querySelector(".chrome__acts").contains(frame), true, `${id}: the frame stands outside the tool row`);
     }
+    assert.ok(rule, "the stylesheet draws no .chrome__pair");
+    assert.deepEqual(["padding", "border-radius", "border"].map((name) => rule.style.getPropertyValue(name)),
+      ["var(--card-group-frame-pad)", "var(--card-group-frame-radius)", "var(--bw) solid var(--edge)"], "the frame of the pair");
+    // (c) the header keeps the head height.
+    assert.equal(groupElement("card-4").querySelector(".group__head").style.height, `${plane.currentTree().options.head}px`);
+  } finally {
+    sheet.remove();
   }
 });
 

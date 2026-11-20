@@ -2,6 +2,7 @@
 // border and radius on its drawn rectangle filled with the color of its level, and its header, the band of head-h at the top of the frame, with
 // the name of the group and the head buttons of the group in the style of the head of a content card.
 import { bind } from "./commands.js";
+import { framePair } from "./card-tools.js";
 import { declaredIcons as icons } from "./icons.js";
 import { CHROME } from "./chrome-metrics.js";
 import { currentGroupLook } from "./settings.js";
@@ -25,9 +26,9 @@ export function groupHeadTools(tree, id, { fullscreen }) {
     changes({ do: "y", expose: "core.group.split-y", command: "core.card.menu", params: { card: id, menu: "split-y" }, title: names["split-y"],
       icon: "card-split-y" }, tree.canSplit(id, "bottom")),
     changes({ do: "gx", expose: "core.group.group-x", command: "core.card.menu", params: { card: id, menu: "group-x" }, title: names["group-x"],
-      icon: "card-group-x" }, tree.canGroup(id, "right")),
+      icon: "card-split-x" }, tree.canGroup(id, "right")),
     changes({ do: "gy", expose: "core.group.group-y", command: "core.card.menu", params: { card: id, menu: "group-y" }, title: names["group-y"],
-      icon: "card-group-y" }, tree.canGroup(id, "bottom")),
+      icon: "card-split-y" }, tree.canGroup(id, "bottom")),
   ];
   const parent = tree.parentOf(id);
   if (tree.leadCount(parent) >= 2) {
@@ -89,9 +90,11 @@ function drawTools(acts, tools) {
       bind(button, tool.command, tool.params);
       return button;
     }));
+    framePair(acts);
   }
+  const buttons = acts.querySelectorAll(".chrome__act");
   tools.forEach((tool, k) => {
-    const button = acts.children[k];
+    const button = buttons[k];
     if (button.disabled !== !tool.enabled) button.disabled = !tool.enabled;
     if (button.title !== tool.title) {
       button.title = tool.title;
