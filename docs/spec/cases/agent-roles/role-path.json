@@ -1,0 +1,7 @@
+{
+"description":"The role file path of a tab: <config-dir>/agents/<surface>/role.md. The status core.tab.role and the role command replies carry it as path (docs/spec/agent-roles.md#tab-role-state). Each case gives the surface, and path is the file path relative to the configuration directory.",
+"cases":[
+ {"name":"surface with a plain name","surface":"tab-a","path":"agents/tab-a/role.md"},
+ {"name":"surface with dots and digits","surface":"tab.2-b","path":"agents/tab.2-b/role.md"}
+]
+}

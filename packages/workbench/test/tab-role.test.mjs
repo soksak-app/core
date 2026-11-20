@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { recordOrigin, storedLayoutState } from "../tab-reports.js";
 
-const record = { id: "reviewer", generation: 2, fingerprint: "0123456789abcdef", confirmedFingerprint: null, requests: 1 };
+const record = { id: "reviewer", generation: 2, fingerprint: "0123456789abcdef", confirmedFingerprint: null };
 
 test("a tab without a role stores the member role as null", () => {
   recordOrigin("role-none", null, "test fixture");

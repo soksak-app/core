@@ -150,3 +150,23 @@ fn write_role_file_refuses_surface_with_path_parts() {
     }
     assert_eq!(fs::read_dir(config).unwrap().count(), 0);
 }
+
+const ROLE_PATH_CASES: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../../docs/spec/cases/agent-roles/role-path.json"
+);
+
+// Checks that the role file path that write_role_file returns is the path of each case of
+// docs/spec/cases/agent-roles/role-path.json, which the status core.tab.role carries as path.
+// contract: roles.role-path-shared-cases
+#[test]
+fn role_path_matches_shared_cases() {
+    let cases: Value = serde_json::from_slice(&fs::read(ROLE_PATH_CASES).unwrap()).unwrap();
+    for case in cases["cases"].as_array().unwrap() {
+        let config = tempfile::TempDir::new().unwrap();
+        let surface = case["surface"].as_str().unwrap();
+        let path = write_role_file(config.path(), surface, "reviewer", "Review the changes.").unwrap();
+        let want = config.path().join(case["path"].as_str().unwrap());
+        assert_eq!(path, want, "case {}", case["name"]);
+    }
+}

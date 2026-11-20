@@ -9,7 +9,7 @@ import (
 
 // TestTabWrittenWithRoleKeepsTheRecord checks that a stored role record is written as it was read.
 func TestTabWrittenWithRoleKeepsTheRecord(t *testing.T) {
-	const record = `{"id":"reviewer","generation":2,"fingerprint":"0123456789abcdef","confirmedFingerprint":null,"requests":1}`
+	const record = `{"id":"reviewer","generation":2,"fingerprint":"0123456789abcdef","confirmedFingerprint":null}`
 	var tab layout.Tab
 	if err := json.Unmarshal([]byte(`{"id":"t1","plugin":"alpha","title":"t1","role":`+record+`}`), &tab); err != nil {
 		t.Fatal(err)

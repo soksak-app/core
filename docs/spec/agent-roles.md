@@ -141,9 +141,9 @@ Each tab has one agent role, or none. Each tab of the layout in `projects.json` 
 - `fingerprint`: the fingerprint of the current role file, 16 lowercase hexadecimal characters;
 - `confirmedFingerprint`: the fingerprint that the agent confirmed, 16 lowercase hexadecimal characters, or `null`.
 
-There is no partial record. A tab whose member `role` is absent, or whose value is neither `null` nor a record of these five members in these forms, is refused with an explicit error that names the file, the tab and the member; the error text is `projects.json: project <root> space <space>: tab <tab> member role is missing` or `... member role is invalid`. A tab created without a role stores `role: null`.
+There is no partial record. A tab whose member `role` is absent, or whose value is neither `null` nor a record of these four members in these forms, is refused with an explicit error that names the file, the tab and the member; the error text is `projects.json: project <root> space <space>: tab <tab> member role is missing` or `... member role is invalid`. A tab created without a role stores `role: null`.
 
-Format 4 of `projects.json` is the first form with the member, so the format number rises from 3 to 4 as [stored data formats](installation.md#stored-data-formats) requires. No migration is written. The reader refuses format 3 with `<file>: projects.json: format must be 4`, and every write of the refused file fails with that error.
+Format 4 of `projects.json` is the first form with the member, so the format number rises from 3 to 4 as [stored data formats](installation.md#stored-data-formats) requires. No migration is written. The reader refuses format 3 as a whole with `<file>: projects: format must be 4, found 3`, where `3` is the compact JSON text of the member `format` as the file holds it, and every write of the refused file fails with that error.
 
 A role change is the command `core.tab.role {tab, role}`, which runs through the registry. Setting the role the tab already has, with the same definition, writes no file, changes no generation and sends no message, and answers the current `{role, generation, state, fingerprint}`.
 
@@ -152,9 +152,9 @@ Setting `role` to `null` with `core.tab.role` clears the role and removes the ro
 A change runs in this order, and each step starts only when the previous one succeeds:
 
 1. the host writes the new role file under its temporary name, with the new fingerprint, and checks its mode;
-2. the host stores the new `role`, `generation`, `fingerprint`, `confirmedFingerprint: null` and `requests: 0` in `projects.json`;
+2. the host stores the record `{id, generation, fingerprint, confirmedFingerprint: null}` as the member `role` of the tab in `projects.json`;
 3. the host renames the temporary file to `role.md`;
-4. the host publishes the status `core.tab.role` with `{role, generation, state: "pending", seq, fingerprint}`;
+4. the host publishes the status `core.tab.role` with `{role, generation, state: "pending", seq, fingerprint, path}`;
 5. the page of the terminal sends the change message ([change message](#change-message)).
 
 Failure rules: a failure in step 1, with the text `role file <path>: write failed: <os error>`, removes the temporary file and stores nothing. A failure in step 2 removes the temporary file, leaves the stored role unchanged and is reported with `role file <path>: write failed: <os error>`. A failure in step 3 removes the temporary file and then restores the earlier record in `projects.json`; when the restore also fails, both errors are reported: the write error and `projects.json <path>: restore failed: <os error>`. When the host ends between steps, the next launch writes the role file from the record in `projects.json` and the definition text in `roles.json` before the CLI starts; a fingerprint that differs from the record refuses the write with `role file <path>: fingerprint differs from the record`.
@@ -240,7 +240,7 @@ Role operations of one surface are serialized by one owner in the host, in arriv
 - Confirmations of B and C that interleave: the confirmation of B is refused as stale with `stale fingerprint: read the role file again at <path>` and that of C is accepted; the order does not change the end state.
 - Two callers set the role at the same time, the person and a lead agent: they are serialized, the last one wins, and each reply states the resulting `{role, generation, state, fingerprint}`.
 - Queued work messages wait for the `ready` of the current generation.
-- Restart: the generation, the confirmed fingerprint and the counter are stored in the record, so the state is rebuilt as the idempotency rules state.
+- Restart: the generation and the confirmed fingerprint are stored in the record, so the state is rebuilt as the idempotency rules state.
 
 ### Tests of the concurrency
 

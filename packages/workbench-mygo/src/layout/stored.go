@@ -340,14 +340,14 @@ func RestoreWindowSidebars(saved json.RawMessage) (map[string]WindowSidebar, err
 }
 
 // roleRecordMembers are the members of the stored record of a tab role (docs/spec/agent-roles.md#tab-role-state).
-var roleRecordMembers = []string{"id", "generation", "fingerprint", "confirmedFingerprint", "requests"}
+var roleRecordMembers = []string{"id", "generation", "fingerprint", "confirmedFingerprint"}
 
 var (
 	roleIdentifierPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
 	fingerprintPattern    = regexp.MustCompile(`^[0-9a-f]{16}$`)
 )
 
-// checkTabRole checks the member role of a stored tab: null, or the whole record of the tab role with exactly the five members of
+// checkTabRole checks the member role of a stored tab: null, or the whole record of the tab role with exactly the four members of
 // docs/spec/agent-roles.md#tab-role-state. An absent member or another value is refused with the id of the tab.
 func checkTabRole(tab map[string]json.RawMessage) error {
 	var id string
@@ -392,9 +392,6 @@ func validRoleRecord(raw json.RawMessage) bool {
 			return false
 		}
 	}
-	var generation, requests float64
-	if json.Unmarshal(members["generation"], &generation) != nil || generation < 1 || generation != math.Trunc(generation) {
-		return false
-	}
-	return json.Unmarshal(members["requests"], &requests) == nil && requests >= 0 && requests <= 2 && requests == math.Trunc(requests)
+	var generation float64
+	return json.Unmarshal(members["generation"], &generation) == nil && generation >= 1 && generation == math.Trunc(generation)
 }

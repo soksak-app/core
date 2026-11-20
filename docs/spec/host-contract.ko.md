@@ -1048,6 +1048,7 @@ fn invalid_json_closes_connection() {
 | `roles.role-file-layout` | role 파일은 첫 줄, 끝에 줄 바꿈이 있는 정의, 마지막 줄의 fingerprint를 담고 각 줄은 줄 바꿈으로 끝난다. 5,000자 정의도 통째로 쓴다. | all |
 | `roles.role-file-phrases` | identity, 변경 message, 재읽기 요청, 첫 message 접미사는 `<role file>`을 채운 `fingerprint.json`의 문구와 같고, 첫 줄은 그 문구와 같다. | all |
 | `roles.role-file-write` | role 파일은 `agents/<surface>/role.md`에 file mode 0600, folder mode 0700으로 쓰이고, 이전 file을 atomic하게 바꾸며, layout대로 읽힌다. | all |
+| `roles.role-path-shared-cases` | writer가 답하는 role 파일 경로는 `docs/spec/cases/agent-roles/role-path.json`의 각 case에 대해 `<config-dir>/agents/<surface>/role.md`이며, 상태 `core.tab.role`은 이 경로를 `path`로 싣는다. | all |
 | `roles.role-file-removes-leftovers` | 쓰기는 먼저 자기 surface folder의 `.role-*.tmp` file을 지운다. | all |
 | `roles.role-file-refuses-surface` | 비어 있거나, `.` 또는 `..`이거나, 경로 구분자나 제어 문자를 담은 surface는 거부되고 folder를 만들지 않는다. | all |
 | `workspace.settings.invalid-common-file-not-overwritten` | 잘못된 공통 설정 파일은 설정 변경을 실패시키고 바이트 단위로 그대로 남는다. | all |

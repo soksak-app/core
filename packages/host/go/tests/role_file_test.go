@@ -16,6 +16,8 @@ import (
 
 const fingerprintCasesPath = "../../../../docs/spec/cases/agent-roles/fingerprint.json"
 
+const rolePathCasesPath = "../../../../docs/spec/cases/agent-roles/role-path.json"
+
 type fingerprintCase struct {
 	Name        string `json:"name"`
 	Text        string `json:"text"`
@@ -168,5 +170,37 @@ func assertMode(t *testing.T, path string, want os.FileMode) {
 	}
 	if got := info.Mode().Perm(); got != want {
 		t.Fatalf("%s has mode %o, want %o", path, got, want)
+	}
+}
+
+// TestRolePathMatchesSharedCases checks that the role file path that WriteRoleFile returns is the path of each case of
+// docs/spec/cases/agent-roles/role-path.json, which the status core.tab.role carries as path.
+// contract: roles.role-path-shared-cases
+func TestRolePathMatchesSharedCases(t *testing.T) {
+	text, err := os.ReadFile(rolePathCasesPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var file struct {
+		Cases []struct {
+			Name    string `json:"name"`
+			Surface string `json:"surface"`
+			Path    string `json:"path"`
+		} `json:"cases"`
+	}
+	if err := json.Unmarshal(text, &file); err != nil {
+		t.Fatal(err)
+	}
+	for _, kase := range file.Cases {
+		t.Run(kase.Name, func(t *testing.T) {
+			config := t.TempDir()
+			path, err := host.WriteRoleFile(config, kase.Surface, "reviewer", "Review the changes.")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := filepath.Join(config, filepath.FromSlash(kase.Path)); path != want {
+				t.Fatalf("WriteRoleFile returned %q, want %q", path, want)
+			}
+		})
 	}
 }

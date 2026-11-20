@@ -14,10 +14,10 @@ const LAYOUT_MEMBERS = ["state", "leader", "lastCard", "focusedId", "named", "si
 const viewPlugin = (id) => pluginUnits().find(unit => unit.id === id)?.composition === "view";
 
 const FINGERPRINT = /^[0-9a-f]{16}$/;
-const ROLE_RECORD_MEMBERS = ["id", "generation", "fingerprint", "confirmedFingerprint", "requests"];
+const ROLE_RECORD_MEMBERS = ["id", "generation", "fingerprint", "confirmedFingerprint"];
 
 /**
- * Checks the member role of a stored tab: null, or the whole record of its agent role with exactly the five members of
+ * Checks the member role of a stored tab: null, or the whole record of its agent role with exactly the four members of
  * docs/spec/agent-roles.md#tab-role-state. A tab without the member, or with another value, is refused with its id.
  */
 function checkTabRole(tab) {
@@ -29,8 +29,7 @@ function checkTabRole(tab) {
     && typeof role.id === "string" && /^[a-z][a-z0-9-]{0,63}$/.test(role.id)
     && Number.isInteger(role.generation) && role.generation >= 1
     && typeof role.fingerprint === "string" && FINGERPRINT.test(role.fingerprint)
-    && (role.confirmedFingerprint === null || (typeof role.confirmedFingerprint === "string" && FINGERPRINT.test(role.confirmedFingerprint)))
-    && Number.isInteger(role.requests) && role.requests >= 0 && role.requests <= 2;
+    && (role.confirmedFingerprint === null || (typeof role.confirmedFingerprint === "string" && FINGERPRINT.test(role.confirmedFingerprint)));
   if (!valid) throw new Error(`tab ${tab.id} member role is invalid`);
 }
 

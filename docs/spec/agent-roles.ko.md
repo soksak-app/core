@@ -134,16 +134,16 @@ role 파일이 담는 정의 텍스트는 soksak이 `<config-dir>/roles.json` �
 
 ## Tab role state
 
-agent CLI의 각 tab은 agent role을 하나 가지거나 없다. `projects.json` layout의 각 tab은 member `role`을 가진다. 값은 `null`(role 없음)이거나 role의 저장된 기록 전체다. 기록은 정확히 다음 다섯 member를 가진다.
+agent CLI의 각 tab은 agent role을 하나 가지거나 없다. `projects.json` layout의 각 tab은 member `role`을 가진다. 값은 `null`(role 없음)이거나 role의 저장된 기록 전체다. 기록은 정확히 다음 네 member를 가진다.
 
 - `id`: role 식별자이며 [role 정의](#role-definitions)의 식별자 규칙을 따른다;
 - `generation`: 1 이상의 정수. 1에서 시작하고, role이나 정의가 바뀔 때마다 1씩 오른다;
 - `fingerprint`: 현재 role 파일의 지문, 소문자 16진수 16자리;
 - `confirmedFingerprint`: agent가 확인한 지문, 소문자 16진수 16자리, 없으면 `null`.
 
-부분 기록은 없다. member `role`이 없거나, 값이 `null`도 아니고 위 다섯 member의 형태를 갖춘 기록도 아닌 tab은 명시적 오류로 거부하며, 오류는 file, tab, member를 밝힌다. 오류 문장은 `projects.json: project <root> space <space>: tab <tab> member role is missing` 또는 `... member role is invalid`다. role 없이 만든 tab은 `role: null`을 저장한다.
+부분 기록은 없다. member `role`이 없거나, 값이 `null`도 아니고 위 네 member의 형태를 갖춘 기록도 아닌 tab은 명시적 오류로 거부하며, 오류는 file, tab, member를 밝힌다. 오류 문장은 `projects.json: project <root> space <space>: tab <tab> member role is missing` 또는 `... member role is invalid`다. role 없이 만든 tab은 `role: null`을 저장한다.
 
-이 member가 `projects.json`에 처음 들어가는 형식이 4이므로, [저장 데이터 형식](installation.md#stored-data-formats)에 따라 형식 번호를 3에서 4로 올린다. migration은 쓰지 않는다. reader는 형식 3을 `<file>: projects.json: format must be 4`로 거부하며, 거부된 file의 모든 쓰기는 그 오류로 실패한다.
+이 member가 `projects.json`에 처음 들어가는 형식이 4이므로, [저장 데이터 형식](installation.md#stored-data-formats)에 따라 형식 번호를 3에서 4로 올린다. migration은 쓰지 않는다. reader는 형식 3 file 전체를 `<file>: projects: format must be 4, found 3`으로 거부하며, `3`은 file이 담은 member `format`의 compact JSON 텍스트다. 거부된 file의 모든 쓰기는 그 오류로 실패한다.
 
 role 변경은 registry를 거치는 명령 `core.tab.role {tab, role}`이다. tab이 이미 가진 role과 같은 정의를 설정하면 파일을 쓰지 않고, generation을 바꾸지 않고, message를 보내지 않으며, 답은 현재 `{role, generation, state, fingerprint}`다.
 
@@ -152,9 +152,9 @@ role 변경은 registry를 거치는 명령 `core.tab.role {tab, role}`이다. t
 변경은 다음 순서로 실행하며, 각 단계는 앞 단계가 성공해야 시작한다.
 
 1. host가 새 role 파일을 임시 이름으로 새 fingerprint과 함께 쓰고 모드를 확인한다;
-2. host가 새 `role`, `generation`, `fingerprint`, `confirmedFingerprint: null`, `requests: 0`을 `projects.json`에 저장한다;
+2. host가 기록 `{id, generation, fingerprint, confirmedFingerprint: null}`을 `projects.json`의 tab member `role`로 저장한다;
 3. host가 임시 파일을 `role.md`로 이름 바꾼다;
-4. host가 상태 `core.tab.role`을 `{role, generation, state: "pending", seq, fingerprint}`로 게시한다;
+4. host가 상태 `core.tab.role`을 `{role, generation, state: "pending", seq, fingerprint, path}`로 게시한다;
 5. terminal page가 변경 message를 보낸다([Change message](#change-message)).
 
 실패 규칙: 1단계 실패는 `role file <path>: write failed: <os error>` 문장으로 임시 파일을 지우고 아무것도 저장하지 않는다. 2단계 실패는 임시 파일을 지우고, 저장된 role은 그대로 두며, `role file <path>: write failed: <os error>` 오류로 보고한다. 3단계 실패는 임시 파일을 지운 뒤 `projects.json`의 이전 기록을 복원한다. 복원도 실패하면 쓰기 오류와 `projects.json <path>: restore failed: <os error>`를 함께 보고한다. 단계 사이에 host가 끝나면, 다음 launch가 CLI를 시작하기 전에 `projects.json`의 기록과 `roles.json`의 정의 텍스트로 role 파일을 다시 쓴다. fingerprint이 기록과 다르면 `role file <path>: fingerprint differs from the record`로 쓰기를 거부한다.
@@ -240,7 +240,7 @@ role A를 B로 바꾸고 다시 A로 바꾸면 A의 fingerprint이 다시 나온
 - B와 C의 confirmation이 엇갈림: B의 confirmation은 `stale fingerprint: read the role file again at <path>`로 거부되고 C의 confirmation은 받아들여진다. 순서와 상관없이 끝 상태는 같다.
 - person과 leader agent가 같은 때에 role을 설정: 직렬화되며 마지막 것이 이긴다. 각 답은 결과 `{role, generation, state, fingerprint}`를 준다.
 - 대기 중인 작업 message는 현재 generation의 `ready`를 기다린다.
-- 재시작: generation, 확인된 fingerprint, 계수가 기록에 저장되어 있으므로 멱등성 규칙대로 상태를 다시 만든다.
+- 재시작: generation과 확인된 fingerprint가 기록에 저장되어 있으므로 멱등성 규칙대로 상태를 다시 만든다.
 
 ### Tests of the concurrency
 

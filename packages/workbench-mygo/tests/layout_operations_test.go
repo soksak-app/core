@@ -1168,8 +1168,11 @@ func TestTheTabsOfANewSpaceAreStoredWithANullRole(t *testing.T) {
 				for _, entry := range held {
 					item := entry.(map[string]any)
 					tabs++
-					if role, has := item["role"]; !has || role != nil {
-						t.Errorf("the tab %v of the new space %s is stored with the role %v", item["id"], space.ID, item["role"])
+					role, has := item["role"]
+					if !has {
+						t.Errorf("the tab %v of the new space %s has no member role", item["id"], space.ID)
+					} else if role != nil {
+						t.Errorf("the tab %v of the new space %s stores the member role %v, want null", item["id"], space.ID, role)
 					}
 				}
 			}
