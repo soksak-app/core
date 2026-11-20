@@ -104,13 +104,13 @@ fn role_texts_match_pinned_texts() {
 fn write_role_file_writes_layout_atomically_with_modes() {
     let temp = temp_config();
     let config = temp.path();
-    let path = write_role_file(&config, "tab-1", "reviewer", "You review.\n").unwrap();
+    let path = write_role_file(config, "tab-1", "reviewer", "You review.\n").unwrap();
     assert_eq!(path, config.join("agents/tab-1/role.md"));
     let data = fs::read_to_string(&path).unwrap();
     assert_eq!(data, role_file_content("reviewer", "You review.\n"));
     assert_mode(&path, 0o600);
     assert_mode(path.parent().unwrap(), 0o700);
-    write_role_file(&config, "tab-1", "reviewer", "You review the tests.\n").unwrap();
+    write_role_file(config, "tab-1", "reviewer", "You review the tests.\n").unwrap();
     let data = fs::read_to_string(&path).unwrap();
     assert_eq!(
         data,
@@ -133,7 +133,7 @@ fn write_role_file_removes_leftover_temporary_files() {
     fs::create_dir_all(&folder).unwrap();
     let leftover = folder.join(".role-crash.tmp");
     fs::write(&leftover, b"partial").unwrap();
-    write_role_file(&config, "tab-1", "reviewer", "You review.\n").unwrap();
+    write_role_file(config, "tab-1", "reviewer", "You review.\n").unwrap();
     assert!(!leftover.exists(), "a leftover temporary file remains");
 }
 
@@ -144,9 +144,9 @@ fn write_role_file_refuses_surface_with_path_parts() {
     let config = temp.path();
     for surface in ["", "..", "a/b", "../x", "a\u{1}b", "a\tb"] {
         assert!(
-            write_role_file(&config, surface, "reviewer", "You review.\n").is_err(),
+            write_role_file(config, surface, "reviewer", "You review.\n").is_err(),
             "surface {surface:?} was accepted"
         );
     }
-    assert_eq!(fs::read_dir(&config).unwrap().count(), 0);
+    assert_eq!(fs::read_dir(config).unwrap().count(), 0);
 }
