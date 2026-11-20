@@ -620,8 +620,8 @@ func idSet(ids []string) map[string]bool {
 
 // splitRect splits the rectangle of the group node toward side: the new card id with data stands beside its box toward side, added to the
 // cut that holds the box as insert of the layout library adds a card (docs/spec/groups.md#commands), so the tree inside the box stays.
-func (t *GroupTree) splitRect(n *node, side Side, id string, data json.RawMessage) error {
-	return t.insert(Target{n.card}, side, &Node{Card: id, Data: data})
+func (t *GroupTree) splitRect(n *node, side Side, id string, data json.RawMessage, op string) error {
+	return t.insert(n.card, op, Target{n.card}, side, &Node{Card: id, Data: data})
 }
 
 // addInto puts the new card id with data into the group node at the right edge of its rectangle: beside the members of its box toward
@@ -631,21 +631,16 @@ func (t *GroupTree) addInto(n *node, id string, data json.RawMessage) error {
 	for _, m := range n.members {
 		members = append(members, m.card)
 	}
-	return t.insert(members, "right", &Node{Card: id, Data: data})
+	return t.insert(n.card, "split toward right", members, "right", &Node{Card: id, Data: data})
 }
 
-// insert is Insert of the grid inside an operation of the tree. The library refuses an insert that draws a node below its minimum; the
-// insert is made again without the minimum, so the check of try names the content card that would be drawn below it and the size it
-// would get, as for the split of a content card (docs/spec/groups.md#commands).
-func (t *GroupTree) insert(target Target, side Side, node *Node) error {
-	if _, err := t.grid.Insert(target, side, node); err == nil {
-		return nil
+// insert is Insert of the grid inside the operation op of the card id: its refusal, which names the deepest node that the insert would
+// draw below its minimum, is the refusal of the operation (docs/spec/groups.md#commands).
+func (t *GroupTree) insert(id, op string, target Target, side Side, node *Node) error {
+	if _, err := t.grid.Insert(target, side, node); err != nil {
+		return fmt.Errorf("card %s cannot %s: %w", id, op, err)
 	}
-	min := t.grid.MinSize()
-	t.grid.SetMinSize(0)
-	defer t.grid.SetMinSize(min)
-	_, err := t.grid.Insert(target, side, node)
-	return err
+	return nil
 }
 
 // container is the members of the level that holds the card id, as a pointer that a change of the level writes through.
@@ -747,7 +742,11 @@ func (t *GroupTree) requireCard(id string) error {
 // is, cuts at a new line (docs/spec/groups.md#splitting). It is false when the layout refuses.
 func (t *GroupTree) splitCard(target string, side Side, id string, data json.RawMessage, grouping bool) (bool, error) {
 	if n := t.groupNode(target); n != nil {
-		return true, t.splitRect(n, side, id, data)
+		op := "split toward " + side
+		if grouping {
+			op = "hold a group toward " + side
+		}
+		return true, t.splitRect(n, side, id, data, op)
 	}
 	fresh := false
 	if axisOf(side) == "y" {

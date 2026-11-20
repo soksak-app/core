@@ -732,7 +732,7 @@ func (g *Grid) byCuts(change func() (*Node, error)) error {
 	return nil
 }
 
-// belowMinimum is the text of the outermost node that the last operation moved and that is drawn below its minimum, or "". The minimum
+// belowMinimum is the text of the deepest node that the last operation moved and that is drawn below its minimum, or "". The minimum
 // of a node is recursive: a card needs minSize and on y the heads drawn inside its rectangle, a card that keeps a px size the smaller of
 // that size and minSize, a fixed card with a px size the smaller of that size and the size it had, another fixed card the size it is
 // drawn at, a box the minimum of its inner node, a cut along an axis the minimums of its kids and the corridors between them, and a cut
@@ -816,27 +816,39 @@ func (g *Grid) belowMinimum(before map[string]Rect) string {
 		}
 		return false
 	}
+	// The deepest node below its minimum names the refusal, because the minimum of a box or a cut is the sum of the minimums inside it: a
+	// box is below its minimum where a node inside it is, and the node inside it is the one that has no room.
 	var visit func(n *Node) string
 	visit = func(n *Node) string {
-		if !n.isCut() && moved(n) {
-			has := extentOfNode(n)
-			w, h := has.x1-has.x0, has.y1-has.y0
-			nx, ny := need(n, "x"), need(n, "y")
-			if w < nx-0.5 || h < ny-0.5 {
-				return fmt.Sprintf("card %s would be %sx%s, below its minimum %sx%s", n.id(), text(w), text(h), text(nx), text(ny))
-			}
-		}
 		switch {
 		case n.isBox():
-			return visit(n.Inner)
+			if found := visit(n.Inner); found != "" {
+				return found
+			}
 		case n.isCut():
 			for _, kid := range n.Kids {
 				if found := visit(kid.Node); found != "" {
 					return found
 				}
 			}
+			return ""
 		}
-		return ""
+		if !moved(n) {
+			return ""
+		}
+		has := extentOfNode(n)
+		w, h := has.x1-has.x0, has.y1-has.y0
+		nx, ny := need(n, "x"), need(n, "y")
+		if w >= nx-0.5 && h >= ny-0.5 {
+			return ""
+		}
+		// A card is named at the size of its content, the heads drawn inside the top of its rectangle taken out of what it has and of what
+		// it needs.
+		if n.isCard() {
+			h -= g.above[n.Card]
+			ny -= g.above[n.Card]
+		}
+		return fmt.Sprintf("card %s would be %sx%s, below its minimum %sx%s", n.id(), text(w), text(h), text(nx), text(ny))
 	}
 	return visit(g.root)
 }

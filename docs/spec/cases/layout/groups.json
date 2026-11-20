@@ -5863,7 +5863,7 @@
     {
      "call": "balance",
      "args": {},
-     "throws": "the layout cannot balance: card card-2 would be 1352x476, below its minimum 324x556"
+     "throws": "the layout cannot balance: card card-7 would be 311x18, below its minimum 96x96"
     },
     {
      "call": "grid",

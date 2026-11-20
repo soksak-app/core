@@ -426,9 +426,13 @@ node의 minimum은 재귀적이며 head와 corridor를 고정 비용으로 센�
 가운데 작은 것을, 다른 `fixed` 카드는 그려진 크기를, box는 그 inner node가 필요로 하는
 것을, cut은 자기 축에서 kid의 필요와 그 사이 corridor의 합을, 가로 축에서 kid 필요의
 최댓값을 필요로 한다.
-operation 뒤에 사각형이 바뀐 모든 카드와 box를 바깥부터 판정하고, 필요보다 작게
-그려지는 첫 카드나 box가 `card <id> would be <w>x<h>, below its minimum <w>x<h>`를
-던진다. 이 문구는 그 카드나 box를 가리킨다.
+operation 뒤에 사각형이 바뀐 모든 카드와 box를 판정하고, 필요보다 작게 그려지는
+가장 깊은 것이 `card <id> would be <w>x<h>, below its minimum <w>x<h>`를 던진다.
+box는 그 안의 node가 필요보다 작을 때만 필요보다 작으므로, 이 문구는 자리가 없는
+node를 가리키고, box 안의 content card를 box보다 먼저 가리킨다. 카드는 content의
+크기로 가리킨다. 그 사각형 안에 그려지는 head를 가질 크기와 필요에서 빼므로, 그
+필요는 `minSize`나 px 크기다. box는 그 안의 어떤 node도 필요보다 작지 않을 때 그
+사각형과 필요로 가리킨다.
 
 모든 operation은 건드리는 node 수에 선형이다. tree는 각 id에서 그 node로, 각
 좌표에서 그 line으로 가는 map을 유지하므로, 어떤 operation도 카드 하나를 위해 tree
