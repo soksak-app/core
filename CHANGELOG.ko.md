@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F966-1-1-1-1 (card를 닫는 drop의 preview, Go): card의 유일한 tab을 다른 card의 가운데나 tab strip에 놓는 drop의 preview는 놓기가 만들듯 tab이 떠나는 card가 닫힌 뒤의 target 사각형이다.
 - F966-3-1-4-2와 F966-3-1-4-5 (strip index, strip 합류, exchange, Go workbench): tab strip에 놓은 tab은 `core.drag`가 알리는 점 아래의 index에서 합류한다. `core.tab.move`와 `core.card.move`는 zone과 side `strip`과 함께 `index`를 받고, `strip`의 `core.card.move`는 content card의 모든 tab을 합류시키고 그것을 닫으며, header로 끌린 group card는 `TargetOptions.Group`으로 target 찾기를 실행하고 content card 가운데에서 자리를 바꾼다. exchange는 각 자리의 그려진 크기를 유지하므로 box는 자리의 크기로 들어간다.
 - F966-3-1-6 (띠의 metric, Go): Go workbench가 page처럼 띠의 폭과 margin을 그 `workbench.json` 사본의 chrome metric `drop-band`와 `drop-band-margin`에서 읽고, layout model은 그것을 더 이상 상수로 갖지 않는다. chrome metric에 숫자가 없는 선언의 shell은 `workbench.json`을 가리키는 오류로 거부된다.
 - F966-3-1-4-4 (group card의 drag, page): group card의 header에서 그 button 밖을 누르고 끌면 group card가 끌린다. drop은 option `group`과 그 run의 anchor를 가진 target 찾기로 정해지고, preview는 시험한 이동 뒤 group card의 사각형이며, `core.drag`는 tab `""`으로 drag를 알리고, 놓으면 `core.card.move`가 실행된다. 그 이동은 node 옆에서는 group card를 옮기고 content card 가운데에서는 둘을 바꾼다.

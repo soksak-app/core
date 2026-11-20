@@ -152,3 +152,44 @@ func TestCardMoveToTheCentreOfACardExchangesThem(t *testing.T) {
 		}
 	}
 }
+
+// The preview of a drop is its result: a drop of the only tab of a card on the centre or the tab strip of another card closes the card
+// that it leaves, so the preview is the rectangle of the target after that close (docs/spec/groups.md#invariants, I3).
+func TestThePreviewOfADropThatClosesItsCardIsItsResult(t *testing.T) {
+	for _, zone := range []string{"centre", "strip"} {
+		t.Run(zone, func(t *testing.T) {
+			f := layoutShell(t, treeSpace("spc-aaaaaa", cutNode("x",
+				kidNode(0.5, cardNode("card-1", tab("t1", "notes"))),
+				kidNode(0.5, cardNode("card-2", tab("t4", "notes"), tab("t5", "notes"))))))
+			f.tester.SetSize(1400, 900)
+			f.settle()
+			x, y := float32(0), float32(0)
+			if zone == "centre" {
+				box := f.box("core.card", "card-2")
+				x, y = box.X+box.W/2, box.Y+box.H/2
+			} else {
+				five := f.box("core.card.tab", "t5")
+				x, y = five.X+five.W/2+2, five.Y+five.H/2
+			}
+			drag := dragTab(t, f.shellFixture, "t1", x, y)
+			if drag == nil || drag.Target == nil || drag.Target.Zone != zone || drag.Preview == nil {
+				t.Fatalf("the drag is %+v with the target %+v", drag, drag.Target)
+			}
+			preview := *drag.Preview
+			f.tester.Release(x, y)
+			f.settle()
+			cards := f.gridCards()
+			if _, held := cards["card-1"]; held {
+				t.Fatal("card-1 stays after its only tab left it")
+			}
+			result := cards["card-2"]
+			got := [4]float64{preview.X, preview.Y, preview.W, preview.H}
+			want := [4]float64{result["x"].(float64), result["y"].(float64), result["w"].(float64), result["h"].(float64)}
+			for i := range got {
+				if math.Abs(got[i]-want[i]) > 1e-6 {
+					t.Fatalf("the preview is %v and the result %v", got, want)
+				}
+			}
+		})
+	}
+}
