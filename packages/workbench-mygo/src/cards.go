@@ -574,7 +574,7 @@ func (s *Shell) drawTab(c *ui.Context, card string, tab layout.Tab, on bool, siz
 			pill.Background(faded(s.palette.Fg, m.chipSelMix))
 		}
 		s.tabContextMenu(pill, tab.ID)
-		pill.HandleInput(s.tabInput(card, tab.ID, pill.Bounds()))
+		pill.HandleInput(s.tabInput(card, tab.ID))
 		s.anchored("core.card.tab/"+tab.ID, pill)
 		noticed := s.tabNoticeText(tab.ID) != ""
 		start := m.tabPadX

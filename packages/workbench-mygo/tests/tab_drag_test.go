@@ -1,6 +1,7 @@
 package workbench_test
 
 import (
+	"encoding/json"
 	"errors"
 	"math"
 	"strings"
@@ -292,4 +293,52 @@ func TestATabDragUnderTheErrorLineDropsWhereItEnds(t *testing.T) {
 	if hasTab(f, card, tab) || !hasTab(f, other, tab) {
 		t.Fatalf("the cards hold %v and %v", f.tabsOf(card), f.tabsOf(other))
 	}
+}
+
+// A drag of a tab resolves its drop where the pointer is in the window when its move comes right after the frame that moved the tab:
+// the move arrives while that frame builds, so it applies after it, when the handler of the tab holds the Bounds of the frame before
+// and the move measures from the box of the frame that moved it.
+func TestATabDragResolvesItsDropAtThePointerAfterTheTabMoved(t *testing.T) {
+	f := layoutShell(t, oneCard(tab("t1", "notes"), tab("t2", "notes")))
+	f.tester.SetSize(1400, 900)
+	f.settle()
+	split, err := f.apply("core.card.split", `{"card": "main", "side": "left", "plugin": "plain"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var created struct{ Card string }
+	if err := json.Unmarshal([]byte(split), &created); err != nil || created.Card == "" {
+		t.Fatalf("the split answered %s: %v", split, err)
+	}
+	// The left zone of the new card in the narrower window, where the move goes.
+	f.tester.SetSize(1000, 900)
+	f.settle()
+	narrow, target := f.box("core.card.tab", "t2"), f.box("core.card", created.Card)
+	x, y := target.X+4, target.Y+target.H/2
+	f.tester.SetSize(1400, 900)
+	f.settle()
+	pill := f.box("core.card.tab", "t2")
+	if narrow.X == pill.X {
+		t.Fatalf("the tab t2 stands at x %v in both windows", pill.X)
+	}
+	from, at := pill.X+pill.W/2, pill.Y+pill.H/2
+	f.tester.Move(from, at)
+	f.tester.Press(from, at)
+	f.tester.Move(from+20, at+20)
+	// The resize builds the frame that moves the tab, and the move comes while it builds.
+	f.building = func() { f.tester.Move(x, y) }
+	f.tester.SetSize(1000, 900)
+	if moved := f.box("core.card", created.Card); moved != target {
+		t.Fatalf("card %s stands at %+v after the window narrowed, not at %+v as before", created.Card, moved, target)
+	}
+	drag := status[*dragRead](t, f.shellFixture, "core.drag")
+	if drag == nil {
+		t.Fatal("the press and the moves of the tab t2 began no drag")
+	}
+	if drag.Tab != "t2" || drag.Target == nil || drag.Target.Card != created.Card || drag.Target.Zone != "left" {
+		t.Fatalf("the drag of the tab t2, which moved from x %v to %v, to the left zone of %s at %v,%v is %+v with the target %+v",
+			pill.X, narrow.X, created.Card, x, y, drag, drag.Target)
+	}
+	f.tester.Release(x, y)
+	f.settle()
 }

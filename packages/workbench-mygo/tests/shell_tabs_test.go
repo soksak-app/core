@@ -57,6 +57,9 @@ type tabShell struct {
 	events   *stateEvents
 	failed   []string
 	keptPuts []string
+	// building runs once in the next build of the window, after the view of the shell, as input that the platform delivers while the
+	// window builds a frame (InBuild).
+	building func()
 	// sessionPuts holds the tab of each write of the stored sessions, and sessionReads the tab of each read of them.
 	sessionPuts  []string
 	sessionReads []string
@@ -184,7 +187,13 @@ func newTabShellWithState(t *testing.T, stored *storedHost, refused error) *tabS
 		t.Fatal(err)
 	}
 	f.shell = shell
-	f.tester = ui.NewTester(shell.View, 1200, 800)
+	f.tester = ui.NewTester(func(c *ui.Context) {
+		shell.View(c)
+		if step := f.building; step != nil {
+			f.building = nil
+			step()
+		}
+	}, 1200, 800)
 	shell.Start()
 	if refused != nil || stored.startFails {
 		f.pending.drain(t)

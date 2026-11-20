@@ -72,14 +72,15 @@ func (s *Shell) registerTabDrag() {
 	})
 }
 
-// tabInput handles the pointer on the name of a tab. The position of an event is relative to the element, which stands at bounds until the next
-// frame, so adding them gives the position in the window. It leaves a press that did not move to the button of the tab.
-func (s *Shell) tabInput(card, tab string, bounds ui.Rect) func(ui.InputEvent) bool {
+// tabInput handles the pointer on the name of a tab. It places an event in the window by the point in the window that the event
+// carries: the build gives the handler the box of the frame before, which the tab may have left by the time the event comes. It leaves a
+// press that did not move to the button of the tab.
+func (s *Shell) tabInput(card, tab string) func(ui.InputEvent) bool {
 	return func(event ui.InputEvent) bool {
 		if !s.drawnPlaneShown() {
 			return false
 		}
-		x, y := bounds.X+event.X, bounds.Y+event.Y
+		x, y := event.WindowX, event.WindowY
 		switch event.Kind {
 		case ui.InputPointerDown:
 			if event.Button != 0 {
@@ -332,13 +333,13 @@ func (s *Shell) dragGroupTo(drag *tabDrag, x, y float64, options layout.ZoneOpti
 }
 
 // groupHeadInput handles the pointer on the header of the group card id outside its buttons: a press that moves drags the group card,
-// and the release runs core.card.move toward the drop, or changes nothing without one. bounds is where the header stands.
-func (s *Shell) groupHeadInput(id string, bounds ui.Rect) func(ui.InputEvent) bool {
+// and the release runs core.card.move toward the drop, or changes nothing without one. It places an event in the window as tabInput does.
+func (s *Shell) groupHeadInput(id string) func(ui.InputEvent) bool {
 	return func(event ui.InputEvent) bool {
 		if !s.drawnPlaneShown() {
 			return false
 		}
-		x, y := bounds.X+event.X, bounds.Y+event.Y
+		x, y := event.WindowX, event.WindowY
 		switch event.Kind {
 		case ui.InputPointerDown:
 			if event.Button != 0 || event.Clicks > 1 {
