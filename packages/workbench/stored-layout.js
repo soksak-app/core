@@ -13,6 +13,27 @@ const LAYOUT_MEMBERS = ["state", "leader", "lastCard", "focusedId", "named", "si
 // A plugin whose declared surface is a view (docs/spec/native-surfaces.md#view-surfaces). A plugin that is not loaded is not a view.
 const viewPlugin = (id) => pluginUnits().find(unit => unit.id === id)?.composition === "view";
 
+const FINGERPRINT = /^[0-9a-f]{16}$/;
+const ROLE_RECORD_MEMBERS = ["id", "generation", "fingerprint", "confirmedFingerprint", "requests"];
+
+/**
+ * Checks the member role of a stored tab: null, or the whole record of its agent role with exactly the five members of
+ * docs/spec/agent-roles.md#tab-role-state. A tab without the member, or with another value, is refused with its id.
+ */
+function checkTabRole(tab) {
+  if (!Object.hasOwn(tab, "role")) throw new Error(`tab ${tab.id} member role is missing`);
+  if (tab.role === null) return;
+  const role = tab.role;
+  const valid = role !== null && typeof role === "object" && !Array.isArray(role)
+    && Object.keys(role).sort().join() === [...ROLE_RECORD_MEMBERS].sort().join()
+    && typeof role.id === "string" && /^[a-z][a-z0-9-]{0,63}$/.test(role.id)
+    && Number.isInteger(role.generation) && role.generation >= 1
+    && typeof role.fingerprint === "string" && FINGERPRINT.test(role.fingerprint)
+    && (role.confirmedFingerprint === null || (typeof role.confirmedFingerprint === "string" && FINGERPRINT.test(role.confirmedFingerprint)))
+    && Number.isInteger(role.requests) && role.requests >= 0 && role.requests <= 2;
+  if (!valid) throw new Error(`tab ${tab.id} member role is invalid`);
+}
+
 /**
  * Restores the origin of each tab of a stored layout, before any tab is created (docs/spec/projects.md#tab-origin). A refused view tab shows
  * its text on the tab. The refusals are returned as {tabId, text} so the caller logs them; a refusal never throws.
@@ -64,6 +85,7 @@ export function checkStoredLayout(kept) {
       for (const tab of tabs) {
         const unit = units.find(item => item.id === tab.plugin);
         if (unit && !unit.surface) throw new Error(`stored tab plugin ${tab.plugin} has no surface`);
+        checkTabRole(tab);
       }
       if (!tabs.some(tab => tab.id === card.data.activeId)) throw new Error(`invalid stored active tab ${card.id}`);
     }

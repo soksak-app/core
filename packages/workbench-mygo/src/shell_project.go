@@ -1037,7 +1037,8 @@ func (s *Shell) storeCard(id string, data *layout.CardData) error {
 }
 
 // newTabOf returns a new tab of the known plugin, named by its mark and the counter of the project as newTab of plane.js names it. from
-// is the source tab, whose reported directory the new tab keeps as its origin, or nil (docs/spec/projects.md#tab-origin).
+// is the source tab, whose reported directory the new tab keeps as its origin, or nil (docs/spec/projects.md#tab-origin). The new tab
+// has no agent role, so its member role is null (docs/spec/agent-roles.md#tab-role-state).
 func (s *Shell) newTabOf(plugin *LoadedPlugin, from *layout.Tab) (layout.Tab, error) {
 	var directory *string
 	if from != nil {
@@ -1051,7 +1052,7 @@ func (s *Shell) newTabOf(plugin *LoadedPlugin, from *layout.Tab) (layout.Tab, er
 	}
 	s.tabsNamed++
 	return layout.Tab{ID: s.newTabID(), Plugin: plugin.ID, Title: fmt.Sprintf("탭 %d", s.tabsNamed),
-		Rest: map[string]json.RawMessage{"origin": origin}}, nil
+		Rest: map[string]json.RawMessage{"origin": origin, "role": json.RawMessage("null")}}, nil
 }
 
 // knownPlugin returns the loaded plugin with a surface, or the refusal of the page.

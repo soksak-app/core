@@ -165,7 +165,7 @@ fn project_settings(path: &Path) -> Result<Map<String, Value>, String> {
 }
 
 /// The current format numbers of the stored files that the host writes (docs/spec/installation.md#stored-data-formats).
-pub(crate) const PROJECTS_FORMAT: u64 = 3;
+pub(crate) const PROJECTS_FORMAT: u64 = 4;
 pub(crate) const SETTINGS_FORMAT: u64 = 1;
 
 /// Writes the projects under the `projects` member with the format member of the current form.

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -277,6 +278,9 @@ func CheckStoredLayout(layout json.RawMessage, units []PluginUnit) error {
 					}
 				}
 			}
+			if err := checkTabRole(tab); err != nil {
+				return err
+			}
 			tabID, hasID := tab["id"]
 			if strictEqual(tabID, hasID, activeID, hasActive) {
 				active = true
@@ -333,4 +337,64 @@ func RestoreWindowSidebars(saved json.RawMessage) (map[string]WindowSidebar, err
 		out[id] = SidebarSize(id, value)
 	}
 	return out, nil
+}
+
+// roleRecordMembers are the members of the stored record of a tab role (docs/spec/agent-roles.md#tab-role-state).
+var roleRecordMembers = []string{"id", "generation", "fingerprint", "confirmedFingerprint", "requests"}
+
+var (
+	roleIdentifierPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
+	fingerprintPattern    = regexp.MustCompile(`^[0-9a-f]{16}$`)
+)
+
+// checkTabRole checks the member role of a stored tab: null, or the whole record of the tab role with exactly the five members of
+// docs/spec/agent-roles.md#tab-role-state. An absent member or another value is refused with the id of the tab.
+func checkTabRole(tab map[string]json.RawMessage) error {
+	var id string
+	if raw, has := tab["id"]; has && json.Unmarshal(raw, &id) != nil {
+		id = string(raw)
+	}
+	role, has := tab["role"]
+	if !has {
+		return fmt.Errorf("tab %s member role is missing", id)
+	}
+	if jsonKind(role) == 'n' {
+		return nil
+	}
+	if !validRoleRecord(role) {
+		return fmt.Errorf("tab %s member role is invalid", id)
+	}
+	return nil
+}
+
+// validRoleRecord reports whether raw is a record with exactly the members of roleRecordMembers and the form that the spec gives each.
+func validRoleRecord(raw json.RawMessage) bool {
+	members, _, ok := object(raw)
+	if !ok || len(members) != len(roleRecordMembers) {
+		return false
+	}
+	for _, key := range roleRecordMembers {
+		if _, has := members[key]; !has {
+			return false
+		}
+	}
+	var identifier string
+	if json.Unmarshal(members["id"], &identifier) != nil || !roleIdentifierPattern.MatchString(identifier) {
+		return false
+	}
+	var fingerprint string
+	if json.Unmarshal(members["fingerprint"], &fingerprint) != nil || !fingerprintPattern.MatchString(fingerprint) {
+		return false
+	}
+	if jsonKind(members["confirmedFingerprint"]) != 'n' {
+		var confirmed string
+		if json.Unmarshal(members["confirmedFingerprint"], &confirmed) != nil || !fingerprintPattern.MatchString(confirmed) {
+			return false
+		}
+	}
+	var generation, requests float64
+	if json.Unmarshal(members["generation"], &generation) != nil || generation < 1 || generation != math.Trunc(generation) {
+		return false
+	}
+	return json.Unmarshal(members["requests"], &requests) == nil && requests >= 0 && requests <= 2 && requests == math.Trunc(requests)
 }

@@ -275,7 +275,9 @@ export function storedLayoutState(state) {
       // The member of the layout is replaced by the origin that the tab holds, so a stored value is never read twice.
       const { origin: _stored, ...rest } = tab;
       const member = storedOriginMember(tab.id);
-      return member === null ? rest : { ...rest, origin: member.origin };
+      // A tab without a role stores null as its member role (docs/spec/agent-roles.md#tab-role-state); a stored record is kept.
+      const withRole = { ...rest, role: rest.role ?? null };
+      return member === null ? withRole : { ...withRole, origin: member.origin };
     });
     return { ...card, data: { ...card.data, tabs } };
   });
