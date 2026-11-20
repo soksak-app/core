@@ -100,8 +100,10 @@ impl Home {
             std::fs::create_dir_all(dir).unwrap();
         }
         let log = folder::Folder::new();
+        // The login PATH leaves out every directory that holds a codex command, so the registration with codex runs the same way on
+        // any machine; the codex registration has its own case (docs/spec/cli.md#mcp-registration).
         let zprofile = format!(
-            "export PATH={:?}:{:?}:$PATH\nexport CLAUDE_CONFIG_DIR={:?}\n",
+            "export PATH={:?}:{:?}:$PATH\nwithout=\"\"\nfor dir in ${{(s,:,)PATH}}; do [ -x \"$dir/codex\" ] || without=\"$without:$dir\"; done\nexport PATH=\"${{without#:}}\"\nexport CLAUDE_CONFIG_DIR={:?}\n",
             sok.parent().unwrap(),
             tools,
             config
