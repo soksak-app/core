@@ -23,7 +23,7 @@ type storedLayout struct {
 	Leader         json.RawMessage `json:"leader"`
 	LastCard       json.RawMessage `json:"lastCard"`
 	Named          int             `json:"named"`
-	FocusedID      string          `json:"focusedId"`
+	FocusedID      json.RawMessage `json:"focusedId"`
 	WindowSidebars json.RawMessage `json:"windowSidebars"`
 	Sidebars       json.RawMessage `json:"sidebars"`
 }
@@ -533,12 +533,19 @@ func (s *Shell) loadSpace(project *projectRecord) error {
 	}
 	s.showPlane(plane)
 	s.fullscreen = ""
-	// A new space stores no focus, and the stored focus of a card that left the layout names no card.
-	focused := stored.FocusedID
-	if _, known := plane.Card(focused); !known || plane.IsGroup(focused) {
-		focused = s.firstCard()
+	// A new space stores no focus and focuses its first card; a stored null keeps the focus clear (docs/spec/groups.md#focus); the stored
+	// focus of a card that left the layout names no card and passes the focus to the first card.
+	focused, err := storedFocus(stored.FocusedID)
+	if err != nil {
+		return fmt.Errorf("space %s: %w", space.ID, err)
 	}
-	s.focusCard(focused)
+	if focused == nil {
+		s.focusCard("")
+	} else if _, known := plane.Card(*focused); !known || plane.IsGroup(*focused) || *focused == "" {
+		s.focusCard(s.firstCard())
+	} else {
+		s.focusCard(*focused)
+	}
 	if _, err := s.arrangeWindowSidebars(); err != nil {
 		return fmt.Errorf("space %s: %w", space.ID, err)
 	}
@@ -562,7 +569,8 @@ func (s *Shell) arrangeWindowSidebars() (bool, error) {
 	width, _ := s.settings.Value("sidebarWidth").(float64) // silent: the settings store checks the type of the value.
 	// The sides that have a choice hold a sidebar while their switch is on, arranged in the order (docs/spec/external-sidebars.md).
 	changed, err := layout.ArrangeWindowSidebars(s.plane, s.sidebarOrder(), s.sidebars.Sides(), s.windowSidebars, width, shown)
-	if _, ok := s.findCard(s.focused); !ok {
+	// A focus that a press outside every content card cleared stays clear (docs/spec/groups.md#focus).
+	if _, ok := s.findCard(s.focused); !ok && s.focused != "" {
 		s.focusCard(s.firstCard())
 	}
 	return changed, err
@@ -625,7 +633,12 @@ func (s *Shell) keepPlane(project *projectRecord) error {
 	if kept["named"], err = json.Marshal(s.tabsNamed); err != nil {
 		return err
 	}
-	if kept["focusedId"], err = json.Marshal(s.focused); err != nil {
+	// No focused card is stored as null (docs/spec/projects.md#persistence).
+	var focused *string
+	if s.focused != "" {
+		focused = &s.focused
+	}
+	if kept["focusedId"], err = json.Marshal(focused); err != nil {
 		return err
 	}
 	if kept["sidebars"], err = json.Marshal(s.sidebars.Stored()); err != nil {
@@ -1314,4 +1327,21 @@ func (s *Shell) sidebarOrder() []string {
 		order = append(order, side)
 	}
 	return order
+}
+
+// storedFocus reads the stored focusedId of a space layout: absent, a new space, gives the empty card, which focuses the first card;
+// null gives nil, no focused card; a string gives that card. Another value is refused.
+func storedFocus(raw json.RawMessage) (*string, error) {
+	empty := ""
+	if len(raw) == 0 {
+		return &empty, nil
+	}
+	if string(raw) == "null" {
+		return nil, nil
+	}
+	var card string
+	if err := json.Unmarshal(raw, &card); err != nil {
+		return nil, fmt.Errorf("layout stores focusedId %s, which is neither a card nor null", raw)
+	}
+	return &card, nil
 }

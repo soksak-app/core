@@ -257,7 +257,9 @@ test("each decision of the keyboard is recorded with its cause", { timeout: 5000
 });
 
 // Each release of a left press on the workbench asks for one decided call, which the page sends in the dispatch of the release, from
-// what the press changed, on any element (docs/spec/exposure.md#the-keyboard-follows-the-focus-ring).
+// what the press changed, on any element (docs/spec/exposure.md#the-keyboard-follows-the-focus-ring). A press on a divider or on the
+// plane lands on no content card and clears the ring, so its decided call is for the workbench (docs/spec/groups.md#focus).
+const clearing = new Set(["a divider", "the plane"]);
 const pressTargets = {
   "a hidden tab": (b) => tabElement(b.plane.currentGrid().card(b.plane.focused()).data.tabs.map(({ id }) => id).find((id) => id !== b.ringSurface())),
   "the active tab": (b) => tabElement(b.ringSurface()),
@@ -279,7 +281,8 @@ for (const [name, element] of Object.entries(pressTargets)) {
     b.forgetEnds();
     press(target, "pointerdown");
     press(target, "pointerup");
-    assert.deepEqual(b.ends(), [b.ringSurface()], "the release did not send its decided call to the ring in its dispatch");
+    assert.equal(b.plane.focused() === null, clearing.has(name), `a press on ${name} left the focus ${b.plane.focused()}`);
+    assert.deepEqual(b.ends(), [clearing.has(name) ? null : b.ringSurface()], "the release did not send its decided call in its dispatch");
     await b.placed();
     assert.equal(b.ends().length, 1, `the decided calls of the press: ${JSON.stringify(b.ends())}`);
   });

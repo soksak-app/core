@@ -127,6 +127,7 @@ status `core.focus`는 창의 first responder를 가진 문서에서 키보드 �
 - 탭 pointer press는 element focus를 남기지 않는다. `Tab` 키는 여전히 탭에 멈추고, 키보드가 워크벤치에 있는 동안 그 멈춤을 유지한다.
 - 사용자가 press한 sidebar의 section view는 키보드를 유지한다. ring이 그 위에 있지 않기 때문이다.
 - ring은 어느 level의 content card에도 서며, group card는 ring을 받지 않는다([group card의 focus](groups.ko.md#focus)).
+- 어느 content card에도 닿지 않은 pointer 누르기는 [group card의 focus](groups.ko.md#focus)가 말하듯 ring을 지운다. ring이 없으면 card가 다시 focus될 때까지 keyboard는 workbench에 남는다(`surface: null`).
 
 첫 `window-responder` event 전과 호스트가 없는 runtime에서는 워크벤치가 포커스를 가진다. member가 문자열이나 `null`인 `{owner, surface, document}`가 아닌 `window-responder` event는 `error: window responder: invalid window-responder event <value>`로 알린다.
 

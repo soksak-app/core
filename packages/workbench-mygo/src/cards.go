@@ -69,7 +69,16 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 			s.pressPlace(FrameScope())
 		}
 	}).Children(func() {
-		ui.Box(c).Absolute().Left(shiftX-shareLeft).Top(shiftY-shareTop).Size(held, heldHeight).Draw(func(p *ui.Painter, r ui.Rect) { s.drawRules(p, r, inset, rules, false) }).DrawOver(func(p *ui.Painter, r ui.Rect) {
+		// A left press on the plane that lands on no card and on no header of a group card, such as on the frame or the body of a group
+		// card, a gap, a seam or a divider, clears the focus (docs/spec/groups.md#focus); the name of a group header clears it by its own
+		// binding, and a press on a card, a window sidebar included, keeps it.
+		blur := s.binder.Control(c, "core.plane", "core.card.focus", "")
+		ui.Box(c).Absolute().Left(shiftX-shareLeft).Top(shiftY-shareTop).Size(held, heldHeight).ObserveInput(func(ev ui.InputEvent) {
+			// A press that reaches the plane of a frame drawn before its project closed finds no plane and changes nothing.
+			if ev.Kind == ui.InputPointerDown && ev.Button == 0 && s.requirePlane() == nil && !s.onCardOrHeader(float64(ev.X-inset), float64(ev.Y-inset)) {
+				blur(focusParam{})
+			}
+		}).Draw(func(p *ui.Painter, r ui.Rect) { s.drawRules(p, r, inset, rules, false) }).DrawOver(func(p *ui.Painter, r ui.Rect) {
 			s.drawRail(p, r, inset)
 			paintGrips(p, r, inset, grips)
 			s.drawRules(p, r, inset, rules, true)
@@ -87,7 +96,7 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 				}
 				if s.isGroup(card.ID) {
 					if !s.shownFullscreen(card.ID) {
-						ui.Box(c).Absolute().Size(0, 0).Children(func() { s.binder.Absent(c, "core.group", "core.card.focus", card.ID, cardParam{Card: card.ID}) })
+						ui.Box(c).Absolute().Size(0, 0).Children(func() { s.binder.Absent(c, "core.group", "core.card.focus", card.ID, focusParam{}) })
 						continue
 					}
 					s.drawGroupCard(c, card.ID, rect, inset)
@@ -1435,4 +1444,22 @@ func (s *Shell) outOfLayout(kind, id string, holds func(cards []layout.Card) boo
 		}
 	}
 	return fmt.Errorf("%s %s is not in the layout of window %s", kind, id, s.options.Name)
+}
+
+// onCardOrHeader tells whether the point x, y of the plane stands on a card that is shown, a window sidebar included, or on the header of
+// a group card, whose name and buttons take their own presses.
+func (s *Shell) onCardOrHeader(x, y float64) bool {
+	inside := func(r layout.Rect) bool { return x >= r.X && x < r.X+r.W && y >= r.Y && y < r.Y+r.H }
+	for _, card := range s.allCards() {
+		if s.isGroup(card.ID) {
+			if head, ok := s.groupHeadRect(card.ID); ok && s.shownFullscreen(card.ID) && inside(head) {
+				return true
+			}
+			continue
+		}
+		if rect, ok := s.cardRect(card.ID); ok && s.shownFullscreen(card.ID) && rect.W > 0 && inside(rect) {
+			return true
+		}
+	}
+	return false
 }

@@ -63,7 +63,8 @@ func (s *Shell) groupHeadTools(id string) []headTool {
 func (s *Shell) drawGroupCard(c *ui.Context, id string, rect layout.Rect, inset float32) {
 	record, _ := s.planes.Group(id) // silent: drawWork draws a group card of the tree.
 	head, _ := s.groupHeadRect(id)  // silent: a group card has a header.
-	card := s.binder.Press(c, "core.group", "core.card.focus", id, cardParam{Card: id})
+	// The frame lets the pointer through to the plane, whose press clears the focus (docs/spec/groups.md#focus).
+	card := s.binder.Press(c, "core.group", "core.card.focus", id, focusParam{})
 	s.anchored("core.group/"+id, card)
 	card.FocusRing(false).Role(ui.RoleGroup).Label(record.Name).Absolute().Left(float32(rect.X)+inset).Top(float32(rect.Y)+inset).
 		Size(float32(rect.W), float32(rect.H)).Background(s.palette.GroupLook(s.planes.Level(id)+1, s.metrics.groupFillFade).Body).
@@ -361,7 +362,9 @@ func (s *Shell) drawGroupHead(c *ui.Context, id, name string, width, height floa
 			if activity != "" {
 				s.drawActivity(c, "core.activity.group", id, activity, m.activityIcon)
 			}
-			label := s.binder.Press(c, "core.group.name", "core.card.focus", id, cardParam{Card: id})
+			// A press on the name, which fills the header outside its buttons, lands on no content card and clears the focus
+			// (docs/spec/groups.md#focus).
+			label := s.binder.Press(c, "core.group.name", "core.card.focus", id, focusParam{})
 			// The name stands at the start of the place of the tab strip, where the first tab of a content card stands; a button centres its
 			// content otherwise (docs/spec/groups.md#headers).
 			label.KeepFocus().Grow(1).Shrink(1).Row().Justify(ui.Start).AlignItems(ui.Center).PaddingX(m.tabPadX).Label(name).Tooltip(name)

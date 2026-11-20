@@ -127,6 +127,7 @@ While the window is key and no modal is open, the active surface of the card wit
 - A pointer press on a tab leaves no element focus, and the `Tab` key still stops there and keeps that stop while the keyboard stays in the workbench.
 - A section view of a sidebar that the user presses keeps the keyboard, because no ring is on it.
 - The ring stands on a content card of any level, and a group card takes no ring ([focus of group cards](groups.md#focus)).
+- A pointer press that lands on no content card clears the ring, as [focus of group cards](groups.md#focus) states; with no ring the keyboard stays with the workbench (`surface: null`) until a card is focused again.
 
 Before the first `window-responder` event, and in a runtime without a host, the workbench holds the focus. A `window-responder` event that is not `{owner, surface, document}` with string or `null` members is reported as `error: window responder: invalid window-responder event <value>`.
 

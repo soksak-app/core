@@ -475,3 +475,62 @@ test("the verification of the plane fails no row when a member of a group card a
   assert.deepEqual(failed, [], "the verification fails rows of the layout with a group card");
   arrange();
 });
+
+// A pointer press that lands on no content card clears the focus, as a web page blurs its active element: a press on the header of a
+// group card outside its buttons, on its frame and on the plane between the cards runs core.card.focus {card: null}, so no card holds
+// the ring, core.grid, core.layout and the window description report no focused card, and an operation on current fails with the error
+// that names the window; a press on a head button changes the focus only as its command does, and core.card.focus on a group card focuses its first card
+// (docs/spec/groups.md#focus).
+test("a press outside every content card clears the focus and current names no card", { timeout: 5000 }, async () => {
+  arrange();
+  const planeElement = document.getElementById("plane");
+  const group = () => planeElement.querySelector('.group[data-group-card="card-4"]');
+  const press = (element) => {
+    pointer(element, "pointerdown", 0, 0);
+    pointer(element, "pointerup", 0, 0);
+  };
+  const cleared = async (where) => {
+    assert.equal(plane.focused(), null, `a press on ${where} left the focus on ${plane.focused()}`);
+    assert.deepEqual((await status("core.grid")).cards.filter((card) => card.focused).map((card) => card.id), [],
+      `core.grid reports a focused card after a press on ${where}`);
+    assert.equal((await status("core.layout")).focusedId, null, `core.layout stores a focused card after a press on ${where}`);
+    assert.equal(plane.layoutDescription().focused, null, `the window description names a focused card after a press on ${where}`);
+  };
+  for (const [where, element] of [["the header of the group card", () => group().querySelector(".group__head")],
+    ["the frame of the group card", group], ["the plane between the cards", () => planeElement]]) {
+    plane.focusCard("card-1");
+    press(element());
+    await cleared(where);
+  }
+  await refuses(run("core.layout.open", { card: "current", plugin: PLAIN }), "card current names no card: window main has no focused card");
+  // The fullscreen button of the group card runs core.card.fullscreen, which focuses the first card of the group card.
+  plane.focusCard("card-2");
+  const whole = group().querySelector('.group__head [data-expose="core.group.fullscreen"]');
+  press(whole);
+  whole.click();
+  await registry.commandsEnded();
+  assert.equal(plane.focused(), "card-1", "a press on the fullscreen button of the group card did not leave the focus of its command");
+  await run("core.card.fullscreen", { card: "card-4" });
+  await run("core.card.focus", { card: null });
+  await cleared("core.card.focus with null");
+  await run("core.card.focus", { card: "card-4" });
+  assert.equal(plane.focused(), "card-1", "core.card.focus on the group card did not focus its first card");
+});
+
+// A layout that stores the focus null shows no focused card, and a layout whose focused card left it focuses its first card
+// (docs/spec/groups.md#focus, docs/spec/projects.md#persistence).
+test("a layout that stores no focused card shows no ring", { timeout: 5000 }, async () => {
+  const layout = (focusedId) => ({ focusedId, named: 0, windowSidebars: {}, sidebars: {}, lastCard: 4, leader: "card-4",
+    state: { root: row([
+      [0.75, box("card-4", "그룹 1", "card-1", [[0.5, content("card-1", [view("tab-aaaaa1", PLAIN)])], [0.5, content("card-2", [view("tab-aaaaa2", PLAIN)])]])],
+      [0.25, content("card-3", [view("tab-aaaaa3", PLAIN)])],
+    ]) } });
+  plane.adopt(layout(null), "spc-aaaaaa");
+  plane.settle();
+  assert.equal(plane.focused(), null, "the layout that stores the focus null shows a focused card");
+  assert.equal((await status("core.layout")).focusedId, null, "core.layout stores a focused card");
+  plane.adopt(layout("card-9"), "spc-aaaaaa");
+  plane.settle();
+  assert.equal(plane.focused(), "card-1", "a layout whose focused card left it does not focus its first card");
+  arrange();
+});

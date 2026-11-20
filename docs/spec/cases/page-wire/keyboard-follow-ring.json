@@ -1862,7 +1862,7 @@
       "call": {
         "name": "surfaceFocus",
         "payload": {
-          "surface": "$tab-id-54",
+          "surface": null,
           "decided": true
         }
       }
@@ -1915,7 +1915,7 @@
       "call": {
         "name": "surfaceFocus",
         "payload": {
-          "surface": "$tab-id-57",
+          "surface": null,
           "decided": true
         }
       }
@@ -2169,7 +2169,7 @@
               "fields": {
                 "class": "input",
                 "level": "debug",
-                "count": 90
+                "count": 92
               }
             },
             {
@@ -2181,7 +2181,7 @@
               "fields": {
                 "class": "call",
                 "level": "debug",
-                "count": 4
+                "count": 6
               }
             },
             {

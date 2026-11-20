@@ -723,3 +723,108 @@ func TestAGroupCreateRefusesTheDrawnMinimumBeforeTheRequestAndThePlugin(t *testi
 		t.Errorf("an empty request on card-1 answered %v", err)
 	}
 }
+
+// A pointer press that lands on no content card clears the focus, as a web page blurs its active element: a press on the header of a
+// group card outside its buttons, on its frame and on the gap between its cards runs core.card.focus {"card": null}, so no card holds
+// the ring, core.grid, core.layout and the window description report no focused card, and an operation on current fails with the error
+// that names the window; a press on a head button changes the focus only as its command does, and core.card.focus on a group card focuses its first card
+// (docs/spec/groups.md#focus).
+func TestAPressOutsideEveryContentCardClearsTheFocus(t *testing.T) {
+	f := groupedShell(t)
+	f.settle()
+	tree := f.tester.ElementTree()
+	cards, frames := exposedAll(tree, "core.card"), exposedAll(tree, "core.group")
+	// The window sidebars left and right are cards of the plane; a press on them keeps the focus.
+	delete(cards, "left")
+	delete(cards, "right")
+	if len(cards) != 2 || len(frames) != 1 {
+		t.Fatalf("the fixture shows the cards %v and the group cards %v", cards, frames)
+	}
+	var group, first, second string
+	for id := range frames {
+		group = id
+	}
+	for id, rect := range cards {
+		if first == "" || rect.X < cards[first].X {
+			first, second = id, first
+		} else {
+			second = id
+		}
+	}
+	frame, header := frames[group], f.box("core.group.header", group)
+	focused := func() string {
+		value, _ := f.read("core.layout")["focusedId"].(string) // silent: null reads as no card.
+		return value
+	}
+	cleared := func(where string) {
+		t.Helper()
+		if got := f.read("core.layout")["focusedId"]; got != nil {
+			t.Errorf("after a press on %s core.layout stores the focused card %v", where, got)
+		}
+		for _, card := range f.read("core.grid")["cards"].([]any) {
+			if entry := card.(map[string]any); entry["focused"] == true {
+				t.Errorf("after a press on %s core.grid reports %v focused", where, entry["id"])
+			}
+		}
+		if described := f.layout(); described.Focused != nil {
+			t.Errorf("after a press on %s the window description names the focused card %s", where, *described.Focused)
+		}
+	}
+	gap := (cards[first].X + cards[first].W + cards[second].X) / 2
+	for _, press := range []struct {
+		where string
+		x, y  float32
+	}{
+		{"the header of the group card", header.X + header.W/2, header.Y + header.H/2},
+		{"the frame of the group card", frame.X + frame.W/2, frame.Y + frame.H - 2},
+		{"the gap between the cards of the group card", gap, cards[first].Y + cards[first].H/4},
+	} {
+		f.run(t, "core.card.focus", `{"card": "`+second+`"}`)
+		f.tester.ClickAt(press.x, press.y)
+		f.settle()
+		if got := focused(); got != "" {
+			t.Errorf("a press on %s left the focus on %s", press.where, got)
+			continue
+		}
+		cleared(press.where)
+	}
+	f.run(t, "core.card.focus", `{"card": null}`)
+	if _, err := f.apply("core.layout.open", `{"card": "current", "plugin": "plain"}`); err == nil ||
+		!strings.HasPrefix(err.Error(), "card current names no card: window ") || !strings.HasSuffix(err.Error(), " has no focused card") {
+		t.Errorf("core.layout.open on current without a focused card answered %v", err)
+	}
+	cleared("core.card.focus with null")
+	// The fullscreen button of the group card runs core.card.fullscreen, which focuses the first card of the group card.
+	f.run(t, "core.card.focus", `{"card": "`+second+`"}`)
+	button := f.box("core.group.fullscreen", group)
+	f.tester.ClickAt(button.X+button.W/2, button.Y+button.H/2)
+	f.settle()
+	if got := focused(); got != first {
+		t.Errorf("a press on the fullscreen button of the group card focused %q, not %s that its command focuses", got, first)
+	}
+	f.run(t, "core.card.fullscreen", `{"card": "`+group+`"}`)
+	f.run(t, "core.card.focus", `{"card": "`+group+`"}`)
+	if got := focused(); got != first {
+		t.Errorf("core.card.focus on the group card focused %q, not its first card %s", got, first)
+	}
+}
+
+// A space that stores the focus null opens with no focused card, and a space that stores no focus focuses its first card
+// (docs/spec/groups.md#focus, docs/spec/projects.md#persistence).
+func TestASpaceThatStoresNoFocusedCardOpensWithoutTheRing(t *testing.T) {
+	space := oneCard(tab("t1", "notes"))
+	space["layout"].(map[string]any)["focusedId"] = nil
+	f := layoutShell(t, space)
+	f.settle()
+	if got := f.read("core.layout")["focusedId"]; got != nil {
+		t.Errorf("the space that stores the focus null opens with the focus on %v", got)
+	}
+	if described := f.layout(); described.Focused != nil {
+		t.Errorf("the window description names the focused card %s", *described.Focused)
+	}
+	plain := layoutShell(t, oneCard(tab("t1", "notes")))
+	plain.settle()
+	if got := plain.read("core.layout")["focusedId"]; got != "main" {
+		t.Errorf("the space that stores no focus opens with the focus %v, not on its first card main", got)
+	}
+}

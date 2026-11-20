@@ -77,6 +77,11 @@ func act[T any](s *Shell, name string, run func(value T) error) {
 	command(s, name, func(value T) (any, error) { return nil, run(value) })
 }
 
+// focusParam is the parameter of core.card.focus: a card, or nil, which clears the focus (docs/spec/groups.md#focus).
+type focusParam struct {
+	Card *string `json:"card"`
+}
+
 type cardParam struct {
 	Card string `json:"card"`
 	// Side and Plugin are omitted when empty, so a run of the workbench gives a command only the members that it declares.
@@ -228,16 +233,21 @@ func (s *Shell) register() {
 		s.settle()
 		return nil
 	})
-	act(s, "core.card.focus", func(value cardParam) error {
+	act(s, "core.card.focus", func(value focusParam) error {
 		s.events.Trace("action", func() map[string]any { return map[string]any{"kind": "card.focus", "card": value.Card} })
 		if err := s.requirePlane(); err != nil {
 			return err
 		}
-		if _, ok := s.findCard(value.Card); !ok {
-			return fmt.Errorf("Unknown card: %s", value.Card)
+		// null clears the focus: no card holds the ring and the keyboard stays with the workbench (docs/spec/groups.md#focus).
+		if value.Card == nil {
+			s.focusCard("")
+			return nil
+		}
+		if _, ok := s.findCard(*value.Card); !ok {
+			return fmt.Errorf("Unknown card: %s", *value.Card)
 		}
 		// A group card takes no focus ring: its focus is the first content card inside it (docs/spec/groups.md#focus).
-		focused := s.planes.Focusable(value.Card)
+		focused := s.planes.Focusable(*value.Card)
 		s.focusCard(focused)
 		// A card inside a fullscreen group card keeps the fullscreen (docs/spec/groups.md#card-commands-on-a-group-card).
 		if !s.shownFullscreen(focused) {

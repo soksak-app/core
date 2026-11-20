@@ -1,7 +1,7 @@
 // The drawing of the group cards of a space (docs/spec/groups.md#drawing): each group card is one container, its frame of the card
 // border and radius on its drawn rectangle filled with the color of its level, and its header, the band of head-h at the top of the frame, with
 // the name of the group and the head buttons of the group in the style of the head of a content card.
-import { bind } from "./commands.js";
+import { bind, mark } from "./commands.js";
 import { framePair } from "./card-tools.js";
 import { declaredIcons as icons } from "./icons.js";
 import { CHROME } from "./chrome-metrics.js";
@@ -44,6 +44,9 @@ export function groupHeadTools(tree, id, { fullscreen }) {
   return tools;
 }
 
+/** Whether the event e is a left press on no button, tool menu or field of the group card. */
+const pressOutsideControls = (e) => e.button === 0 && !e.target.closest("button, input, .chrome__acts, .chrome__more");
+
 /**
  * Creates the element of the group card id: the frame with its header, the name, the button row and the tool menu button ⋯, which the
  * header shows in place of its folded buttons (docs/spec/groups.md#headers).
@@ -53,14 +56,16 @@ function createGroupCard(id) {
   el.className = "group";
   el.dataset.expose = "core.group";
   el.dataset.groupCard = id;
-  bind(el, "core.card.focus", { card: id });
+  // A left press on the frame, the header or the name of a group card outside its buttons, its tool menu and its rename field clears the
+  // focus: a group card takes no ring, and the press lands on no content card (docs/spec/groups.md#focus).
+  bind(el, "core.card.focus", { card: null }, { event: "pointerdown", when: pressOutsideControls });
   const head = document.createElement("header");
   head.className = "group__head";
   head.dataset.expose = "core.group.header";
   const name = document.createElement("span");
   name.className = "group__name";
   name.dataset.expose = "core.group.name";
-  bind(name, "core.card.focus", { card: id });
+  mark(name, "core.card.focus", { card: null });
   const acts = document.createElement("span");
   acts.className = "chrome__acts";
   const more = document.createElement("button");

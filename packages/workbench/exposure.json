@@ -3378,12 +3378,12 @@
       },
       {
         "name": "core.card.focus",
-        "description": "Focuses a card.",
+        "description": "Focuses a card: a content card, the first content card inside a group card, or no card with null, which clears the focus as a press outside every content card does.",
         "params": {
           "type": "object",
           "properties": {
             "card": {
-              "type": "string"
+              "type": ["string", "null"]
             }
           },
           "required": ["card"]
@@ -5375,6 +5375,10 @@
         "name": "core.divider",
         "description": "The grab areas of the layout boundaries.",
         "many": true
+      },
+      {
+        "name": "core.plane",
+        "description": "The plane of the shown space; a left press on it that lands on no card, no group card and no control clears the focus with core.card.focus {card: null}."
       },
       {
         "name": "core.rename.input",
