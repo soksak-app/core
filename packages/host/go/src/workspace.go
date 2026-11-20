@@ -175,7 +175,7 @@ func snapshot(directory string, projects []Record, projectsErr error) (Record, e
 }
 
 func readProjects(path string) ([]Record, error) {
-	document, err := readStored(path, "projects.json", projectsFormat)
+	document, err := readProjectsDocument(path)
 	if err != nil || document == nil {
 		return []Record{}, err
 	}
@@ -221,25 +221,58 @@ func readJSON(path string, into any) error {
 	return nil
 }
 
+// readStoredValue reads a stored file as JSON. A missing file reads as present false.
+func readStoredValue(path string) (value any, present bool, err error) {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil, false, nil
+	}
+	if err := readJSON(path, &value); err != nil {
+		return nil, false, err
+	}
+	return value, true, nil
+}
+
+// formatHolds reports whether the format member of a stored object is the number that the contract requires.
+func formatHolds(document map[string]any, format int) bool {
+	number, held := document["format"].(float64)
+	return held && number == float64(format)
+}
+
 // readStored reads a stored file that carries its format in the member format. A missing file reads as nil. A file that is
 // not an object, or whose format member is absent or another number, is refused with the file and the number it requires
 // (docs/spec/installation.md#stored-data-formats).
 func readStored(path, name string, format int) (Record, error) {
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return nil, nil
-	}
-	var value any
-	if err := readJSON(path, &value); err != nil {
+	value, present, err := readStoredValue(path)
+	if err != nil || !present {
 		return nil, err
 	}
 	document, ok := value.(map[string]any)
-	if !ok {
-		return nil, formatMustBe(path, name, format)
-	}
-	if number, held := document["format"].(float64); !held || number != float64(format) {
+	if !ok || !formatHolds(document, format) {
 		return nil, formatMustBe(path, name, format)
 	}
 	return Record(document), nil
+}
+
+// readProjectsDocument reads projects.json. A file of another format is refused with the format it holds: the compact JSON text of
+// its format member, or null when the member is absent or the file is not an object (docs/spec/agent-roles.md#tab-role-state).
+func readProjectsDocument(path string) (Record, error) {
+	value, present, err := readStoredValue(path)
+	if err != nil || !present {
+		return nil, err
+	}
+	document, ok := value.(map[string]any)
+	if ok && formatHolds(document, projectsFormat) {
+		return Record(document), nil
+	}
+	var found any
+	if ok {
+		found = document["format"]
+	}
+	text, err := jsonText(found)
+	if err != nil {
+		return nil, err
+	}
+	return nil, fmt.Errorf("%s: projects: format must be %d, found %s", path, projectsFormat, text)
 }
 
 // formatMustBe is the refusal of a stored file whose format is not the number that its contract requires.

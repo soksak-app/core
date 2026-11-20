@@ -81,7 +81,7 @@ pub struct Request {
 /// Reads the projects of projects.json, which holds them under the `projects` member beside the format member of the
 /// stored form (docs/spec/installation.md#stored-data-formats).
 fn read_projects(path: &Path) -> Result<Vec<Value>, String> {
-    let Some(document) = read_stored(path, "projects.json", PROJECTS_FORMAT)? else {
+    let Some(document) = read_projects_document(path)? else {
         return Ok(vec![]);
     };
     let projects = document
@@ -182,19 +182,52 @@ fn write_projects(path: &Path, projects: &[Value]) -> Result<(), String> {
 /// object, or whose format member is absent or another number, is refused with the file and the number it requires
 /// (docs/spec/installation.md#stored-data-formats).
 fn read_stored(path: &Path, name: &str, format: u64) -> Result<Option<Map<String, Value>>, String> {
+    let Some(value) = read_stored_value(path)? else {
+        return Ok(None);
+    };
+    let refusal = || format!("{}: {name}: format must be {format}", path.display());
+    let document = value.as_object().ok_or_else(refusal)?;
+    if !format_holds(document, format) {
+        return Err(refusal());
+    }
+    Ok(Some(document.clone()))
+}
+
+/// Reads a stored file as JSON. A missing file reads as None.
+fn read_stored_value(path: &Path) -> Result<Option<Value>, String> {
     let data = match fs::read(path) {
         Ok(data) => data,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(e) => return Err(format!("{}: {e}", path.display())),
     };
-    let value: Value =
-        serde_json::from_slice(&data).map_err(|e| format!("{}: {e}", path.display()))?;
-    let refusal = || format!("{}: {name}: format must be {format}", path.display());
-    let document = value.as_object().ok_or_else(refusal)?;
-    if document.get("format").and_then(Value::as_f64) != Some(format as f64) {
-        return Err(refusal());
+    serde_json::from_slice(&data)
+        .map(Some)
+        .map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// Reports whether the format member of a stored object is the number that the contract requires.
+fn format_holds(document: &Map<String, Value>, format: u64) -> bool {
+    document.get("format").and_then(Value::as_f64) == Some(format as f64)
+}
+
+/// Reads projects.json. A file of another format is refused with the format it holds: the compact JSON text of its format member,
+/// or null when the member is absent or the file is not an object (docs/spec/agent-roles.md#tab-role-state).
+fn read_projects_document(path: &Path) -> Result<Option<Map<String, Value>>, String> {
+    let Some(value) = read_stored_value(path)? else {
+        return Ok(None);
+    };
+    if let Some(document) = value.as_object() {
+        if format_holds(document, PROJECTS_FORMAT) {
+            return Ok(Some(document.clone()));
+        }
     }
-    Ok(Some(document.clone()))
+    let found = value.as_object().map_or(Value::Null, |document| {
+        document.get("format").cloned().unwrap_or(Value::Null)
+    });
+    Err(format!(
+        "{}: projects: format must be {PROJECTS_FORMAT}, found {found}",
+        path.display()
+    ))
 }
 
 fn write(path: &Path, value: &impl serde::Serialize) -> Result<(), String> {

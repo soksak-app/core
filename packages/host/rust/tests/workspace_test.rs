@@ -810,10 +810,11 @@ fn earlier_stored_forms_are_reported_by_snapshot_and_refused_by_writes() {
     let projects = config.path().join("projects.json");
     let bare = r#"[{"id":"prj-a","root":"/x","identity":"1:1"}]"#;
     fs::write(&projects, bare).unwrap();
-    let refusal = format!("{}: projects.json: format must be 4", projects.display());
+    let refusal_bare = format!("{}: projects: format must be 4, found null", projects.display());
+    let refusal = format!("{}: projects: format must be 4, found 3", projects.display());
     assert_eq!(
         apply(json!({"kind":"snapshot"})).unwrap(),
-        json!({"projects": [], "common": {}, "projectsError": refusal})
+        json!({"projects": [], "common": {}, "projectsError": refusal_bare})
     );
     // A file of format 3 holds tabs without the member role (docs/spec/agent-roles.md#tab-role-state), so it is refused as a whole.
     let earlier = concat!(
@@ -831,16 +832,16 @@ fn earlier_stored_forms_are_reported_by_snapshot_and_refused_by_writes() {
         refusal
     );
     assert_eq!(fs::read_to_string(&projects).unwrap(), earlier);
-    // A write into a missing projects.json stores the current form, format 3.
+    // A write into a missing projects.json stores the current form, format 4.
     fs::remove_file(&projects).unwrap();
     apply(json!({"kind":"add","project":{"id":"prj-b","root":"/y","identity":"1:2"}})).unwrap();
     let written: Value = serde_json::from_str(&fs::read_to_string(&projects).unwrap()).unwrap();
-    assert_eq!(written["format"], json!(3));
+    assert_eq!(written["format"], json!(4));
     fs::write(&projects, bare).unwrap();
     assert_eq!(
         apply(json!({"kind":"add","project":{"id":"prj-b","root":"/y","identity":"1:2"}}))
             .unwrap_err(),
-        refusal
+        refusal_bare
     );
     assert_eq!(fs::read_to_string(&projects).unwrap(), bare);
     fs::remove_file(&projects).unwrap();

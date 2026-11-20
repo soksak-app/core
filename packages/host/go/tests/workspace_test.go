@@ -750,7 +750,7 @@ func TestEarlierStoredFormsAreReportedBySnapshotAndRefusedByWrites(t *testing.T)
 	if err := os.WriteFile(projects, []byte(bare), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	refusal := projects + ": projects.json: format must be 4"
+	refusal := projects + ": projects: format must be 4, found null"
 	snapshot, err := store.Apply(host.WorkspaceRequest{Kind: "snapshot"})
 	if want := (host.Record{"projects": []host.Record{}, "common": host.Record{}, "projectsError": refusal}); err != nil || !reflect.DeepEqual(snapshot, want) {
 		t.Fatalf("a bare array of projects returned %#v, %v; want %#v", snapshot, err, want)
@@ -761,6 +761,7 @@ func TestEarlierStoredFormsAreReportedBySnapshotAndRefusedByWrites(t *testing.T)
 	if err := os.WriteFile(projects, []byte(earlier), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	refusal = projects + ": projects: format must be 4, found 3"
 	snapshot, err = store.Apply(host.WorkspaceRequest{Kind: "snapshot"})
 	if want := (host.Record{"projects": []host.Record{}, "common": host.Record{}, "projectsError": refusal}); err != nil || !reflect.DeepEqual(snapshot, want) {
 		t.Fatalf("a projects.json of format 3 returned %#v, %v; want %#v", snapshot, err, want)
@@ -771,7 +772,7 @@ func TestEarlierStoredFormsAreReportedBySnapshotAndRefusedByWrites(t *testing.T)
 	if data, _ := os.ReadFile(projects); string(data) != earlier {
 		t.Fatalf("a refused projects.json of format 3 changed: %s", data)
 	}
-	// A write into a missing projects.json stores the current form, format 3.
+	// A write into a missing projects.json stores the current form, format 4.
 	if err := os.Remove(projects); err != nil {
 		t.Fatal(err)
 	}
@@ -779,7 +780,7 @@ func TestEarlierStoredFormsAreReportedBySnapshotAndRefusedByWrites(t *testing.T)
 		t.Fatalf("an add to a missing projects.json returned %v", err)
 	}
 	var written map[string]any
-	if data, err := os.ReadFile(projects); err != nil || json.Unmarshal(data, &written) != nil || written["format"] != float64(3) {
+	if data, err := os.ReadFile(projects); err != nil || json.Unmarshal(data, &written) != nil || written["format"] != float64(4) {
 		t.Fatalf("an add to a missing projects.json wrote %#v, %v; want the format 3", written, err)
 	}
 	if err := os.WriteFile(projects, []byte(bare), 0o600); err != nil {
