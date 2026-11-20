@@ -1,0 +1,154 @@
+{
+  "name": "permission-prompts",
+  "description": "Observations of agent permission prompts in a pseudo terminal of 120 columns and 40 rows: the screen while the prompt is open, after a bracketed paste of an injected message without Enter, and after Enter, with the last OSC 7501 report of the program before each screen. The screens leave out the account, the plan, the usage and the logo rows, and name the scratch folder <scratch>.",
+  "cases": [
+    {
+      "program": "Codex CLI",
+      "version": "0.171.0",
+      "argv": [
+        "codex",
+        "-a",
+        "on-request",
+        "-s",
+        "read-only"
+      ],
+      "request": "Run the shell command `touch approved.txt` in the current folder, and nothing else.",
+      "statusQueryAnswered": false,
+      "steps": [
+        {
+          "screen": [
+            "  >_ OpenAI Codex (v0.171.0)",
+            "     <scratch>",
+            "› Run the shell command touch approved.txt in the current folder, and nothing else.",
+            "• I’ll run touch approved.txt in the current folder.",
+            "• Running touch approved.txt",
+            "  Would you like to run the following command?",
+            "  Environment: local",
+            "  Reason: Do you want to allow `touch approved.txt` in the current folder?",
+            "  $ touch approved.txt",
+            "› 1. Yes, proceed (y)",
+            "  2. Yes, and don't ask again for commands that start with `touch approved.txt` (p)",
+            "  3. No, and tell Codex what to do differently (esc)",
+            "  Press enter to confirm or esc to cancel"
+          ],
+          "programStatus": "state=blocked:app=codex:kind=permission"
+        },
+        {
+          "input": "\u001b[200~[메시지 from test] hello\u001b[201~",
+          "screen": [
+            "  >_ OpenAI Codex (v0.171.0)",
+            "     <scratch>",
+            "› Run the shell command touch approved.txt in the current folder, and nothing else.",
+            "• I’ll run touch approved.txt in the current folder.",
+            "• Running touch approved.txt",
+            "  Would you like to run the following command?",
+            "  Environment: local",
+            "  Reason: Do you want to allow `touch approved.txt` in the current folder?",
+            "  $ touch approved.txt",
+            "› 1. Yes, proceed (y)",
+            "  2. Yes, and don't ask again for commands that start with `touch approved.txt` (p)",
+            "  3. No, and tell Codex what to do differently (esc)",
+            "  Press enter to confirm or esc to cancel"
+          ],
+          "programStatus": "state=blocked:app=codex:kind=permission"
+        },
+        {
+          "input": "\r",
+          "screen": [
+            "  >_ OpenAI Codex (v0.171.0)",
+            "     <scratch>",
+            "› Run the shell command touch approved.txt in the current folder, and nothing else.",
+            "• I’ll run touch approved.txt in the current folder.",
+            "✔ You approved codex to run touch approved.txt this time",
+            "• Ran touch approved.txt",
+            "  └ (no output)",
+            "• touch approved.txt completed successfully.",
+            "› Ask Codex to do anything",
+            "  <scratch> · Create approved.txt"
+          ],
+          "programStatus": "state=done:app=codex"
+        }
+      ],
+      "result": {
+        "pasteWithoutEnter": "ignored: the prompt stays open, no command runs, and the text appears nowhere",
+        "enter": "answered: Enter selects the default answer Yes and the command runs"
+      }
+    },
+    {
+      "program": "Claude Code",
+      "version": "2.1.329",
+      "argv": [
+        "claude",
+        "--permission-mode",
+        "default"
+      ],
+      "request": "Run the shell command `touch approved.txt` in the current folder, and nothing else.",
+      "statusQueryAnswered": true,
+      "steps": [
+        {
+          "screen": [
+            "❯ Run the shell command touch approved.txt in the current folder, and nothing else.",
+            "⏺ Creating empty file approved.txt in current folder",
+            "  ⎿  $ touch approved.txt",
+            "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            " Bash command",
+            " Tip: auto mode handles these prompts for you — choose \"switch to auto mode\" below",
+            " Create empty file approved.txt in current folder",
+            "╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌",
+            " touch approved.txt",
+            "╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌",
+            " Do you want to proceed?",
+            " ❯ 1. Yes",
+            "   2. Yes, and always allow access to <scratch>",
+            "      <scratch> from this project",
+            "   3. Yes, and switch to auto mode · auto mode handles these prompts for you",
+            "   4. No",
+            " Esc to cancel · Tab to amend"
+          ],
+          "programStatus": null
+        },
+        {
+          "input": "\u001b[200~[메시지 from test] hello\u001b[201~",
+          "screen": [
+            "❯ Run the shell command touch approved.txt in the current folder, and nothing else.",
+            "⏺ Creating empty file approved.txt in current folder",
+            "  ⎿  $ touch approved.txt",
+            "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            " Bash command",
+            " Tip: auto mode handles these prompts for you — choose \"switch to auto mode\" below",
+            " Create empty file approved.txt in current folder",
+            "╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌",
+            " touch approved.txt",
+            "╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌",
+            " Do you want to proceed?",
+            " ❯ 1. Yes",
+            "   2. Yes, and always allow access to <scratch>",
+            "      <scratch> from this project",
+            "   3. Yes, and switch to auto mode · auto mode handles these prompts for you",
+            "   4. No",
+            " Esc to cancel · Tab to amend"
+          ],
+          "programStatus": null
+        },
+        {
+          "input": "\r",
+          "screen": [
+            "❯ Run the shell command touch approved.txt in the current folder, and nothing else.",
+            "  Ran 1 shell command",
+            "⏺ I ran touch approved.txt in the current folder, and it completed with no output. I didn't run anything else.",
+            "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "❯",
+            "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+            "  <scratch>",
+            "  ⏸ manual mode on"
+          ],
+          "programStatus": null
+        }
+      ],
+      "result": {
+        "pasteWithoutEnter": "ignored: the prompt stays open, no command runs, and the text appears nowhere",
+        "enter": "answered: Enter selects the default answer Yes and the command runs"
+      }
+    }
+  ]
+}

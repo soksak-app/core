@@ -86,7 +86,45 @@ Trigger는 terminal을 통해 동작한다. 등록된 terminal에 input을 주�
 
 Sidecar는 session의 `input`과 `paste` operation으로 input을 받는다([persistent services](persistent-services.md#destructive-command-guard)). 이 operation이 전달하는 제출된 각 줄은 destructive command guard가 판단한다. 선언된 규칙이 일치하거나 command를 판단할 수 없는 줄은 error `guardRefused`로 거부되며, session에 byte를 쓰지 않는다([persistent services](persistent-services.md#destructive-command-guard)). 주입된 message도 이 guard가 판단한다([settled](messaging.md#settled-decisions)).
 
-Message의 input 안 형식은 열려 있다([open decisions](messaging.md#open-decisions), 항목 1). Agent가 foreground TUI에서 작업 중인 terminal은 TUI adapter의 background 또는 send-now action을 통해서만 input을 받는다([terminal plan, 4.1](../plans/terminal-plan.md#41-tui-key-adapters-decision-d6)). Agent마다 둘 중 어느 것을 쓰는지는 보류 상태다([open decisions](messaging.md#open-decisions), 항목 2).
+Terminal의 page는 [injected message](messaging.md#injected-message)가 정한 형식과 순서와 보류에 따라 각 message를 주입한다.
+
+### Injected message
+
+Terminal의 page는 자기 registration의 각 message를 session의 input에 주입한다. 이는 decision D4의 기본 channel이며, 형식은 [settled decisions](messaging.md#settled-decisions)가 정한다.
+
+- 형식: 보이는 text는 `[메시지 from <title>] <text>`다. `<title>`은 보내는 tab의 보이는 제목이다. Window의 `core.grid`에서 `id`가 message의 `from`인 tab의 `label`이며, `label`이 `null`이면 그 tab의 `title`이다([tab reports](plugins.md#tab-reports)). Page는 `runtime.status.watch`로 `core.grid`를 따른다([view surfaces](native-surfaces.md#view-surfaces)). `<text>`는 `messages.read`가 돌려주는 message의 text다. 한 project의 terminal은 그 project의 folder를 함께 쓰고 project는 한 window가 보여 주므로, 보내는 쪽은 같은 window의 tab이다. `from`이 `core.grid`의 어떤 tab도 가리키지 않는 message는 주입하지 않는다. 그 delivery는 이유 `sender <from> has no tab in the window`를 가진 `refused`이며, message는 계속 읽을 수 있다.
+- 제출: page는 보이는 text를 session의 `paste` operation으로 보내고, 이어서 key Enter를 별도의 input으로 보낸다. 둘은 page의 input queue 순서를 따르며, `<plugin>.submit`이 text와 Enter를 보내는 방식과 같다. Sidecar는 program이 bracketed paste mode를 켰을 때 paste를 bracketed paste로 쓰고, 그렇지 않으면 text 그대로 쓴다. 따라서 text의 줄바꿈은 bracketed paste 안에서는 paste에 남고, 그렇지 않으면 붙여 넣은 text와 같이 한 줄을 제출한다. 거부된 paste 뒤에는 Enter를 보내지 않는다.
+- 순서: page는 message를 `seq`가 커지는 순서로 하나씩 주입하며, 앞 message의 input reply 뒤에 다음 message를 주입한다. 대상은 page가 registration에 붙어 있는 동안 받는 `created`와 `modified` file event의 message다. Page는 각 event마다 `messages.read {after: seq - 1, registration}`을 읽고 그 `seq`의 message를 주입한다. 파일이 지워져 reply에 message가 없는 event는 `skipped`다. Page가 붙기 전에 있던 message는 주입하지 않으며 MCP tool로 계속 읽을 수 있다. 따라서 다시 load된 page는 앞의 page가 주입한 message를 다시 주입하지 않는다.
+- Busy receiver: foreground program이 busy인 receiver, 곧 실행 중인 command나 작업 중인 agent는 paste와 Enter를 입력한 text처럼 input으로 받는다. Byte는 program이 읽을 때까지 session의 input에서 기다리고, 입력한 text를 queue에 넣는 agent는 message를 queue된 제출로 받는다. TUI adapter의 key는 보내지 않는다([settled decisions](messaging.md#settled-decisions)).
+- Guard: destructive command guard가 paste가 제출하는 각 줄을 판단한다([input injection](messaging.md#input-injection)). 거부된 message의 delivery는 이유 `guardRefused: <rule>: <reason>`를 가진 `refused`다.
+
+#### Hold for the person
+
+Terminal의 program이 사람을 기다리는 동안이나 사람이 그 terminal에 입력하는 동안 page는 message를 주입하지 않는다. Paste와 Enter가 사람에게 묻는 prompt에 답하기 때문이다. Enter는 permission prompt의 기본 답을 고르고, text는 선택지를 고를 수 있다([evidence](messaging.md#evidence-of-the-hold)). 아래 중 하나가 참인 동안 page는 주입을 보류하며, 보류는 이 순서에서 처음 참인 것을 밝힌다.
+
+1. `blocked`: `<plugin>.program`이 `state`가 `blocked`인 record를 가진다. Program은 prompt가 열려 있는 동안 정확히 사람의 승인이나 답을 기다린다. 보류는 그 record의 `kind`(`permission`, `question`, `auth` 또는 `null`)를 밝힌다. `<plugin>.program`은 terminal state 계약의 program status이며(`docs/spec/terminal-state.md`), program의 OSC 7501 보고에서 상태를 얻고 화면의 text에서는 얻지 않는다.
+2. `notice`: `<plugin>.program`에 record가 없고 `notice`가 `true`다. Record를 쓰지 않는 program이 사람을 불렀다. Notice는 program이 아직 기다리는지와 관계없이 사람이 terminal에 focus를 주거나 입력하면 끝나므로, record가 없는 program에 대해서만 주입을 보류한다.
+3. `composition`: `<plugin>.compose`의 `text`가 비어 있지 않다. 사람이 input method로 text를 조합하는 중이다.
+4. `typing`: 사람의 마지막 Enter나 Ctrl+C, 또는 `<plugin>.state`의 마지막 `idle`로의 변화 뒤에 사람이 terminal에 insert, paste 또는 drop을 보냈다. 사람의 한 줄이 input line에서 기다린다.
+5. `input-held`: `<plugin>.session`의 `inputHeld`가 `null`이 아니다. Session이 program이 읽지 않는 input을 잡고 있으며, 한도를 넘는 paste를 거부한다.
+
+Record도 notice도 없는 실행 중인 command는 기다림을 알 수 없는 program이다. 이것은 주입을 보류하지 않는다. Busy receiver는 message를 입력한 text로 받기 때문이다([settled decisions](messaging.md#settled-decisions)). 보류된 message는 folder에 남고 `messages_read`와 `messages_wait`로 읽을 수 있다. Page는 마지막 보류를 끝내는 status 변화에서 보류된 message를 순서대로 주입한다. Page는 변화를 따르며 polling하지 않는다.
+
+#### Delivery
+
+Status `<plugin>.messages`는 registration 옆에 message의 delivery를 담는다: `{folder, registration, held, last}`. `held`는 주입을 보류하는 것이 없으면 `null`이고, 보류 중이면 `{reason, kind, pending}`이다. `reason`은 위 목록의 첫 이유, `kind`는 `blocked` record의 `kind`이며 다른 이유에서는 `null`, `pending`은 기다리는 message의 수다. `last`는 첫 결정 전에는 `null`이고, 그 뒤에는 page가 결정한 마지막 message의 `{seq, path, from, state, reason}`이다. `state`는 `injected`, `refused` 또는 `skipped`이고, `injected`의 `reason`은 `null`이다. 각 결정은 `{seq, path, from, state, reason}`을 가진 record `plugin.<plugin>.messages.delivered`를 `info`로 쓰고, 보류의 각 시작과 끝은 `{reason, kind, pending}`을 가진 record `plugin.<plugin>.messages.held`를 `info`로 쓰며, 끝의 `reason`은 `null`이다. 따라서 각 delivery는 status와 event log에서 관찰된다.
+
+`sok message send`는 message를 쓴 뒤 receiver의 보류를 읽고 `{path, receiver}`를 출력한다([cli](cli.md#commands)). `receiver`는 `{surface, plugin, held}`이며 `held`는 받는 surface의 status `<plugin>.messages`의 값이다. 따라서 `null`이 아닌 `held`는 message가 주입되지 않았음과 그 이유를, 이유와 record kind로 밝힌다. 애플리케이션이 실행되지 않거나, folder가 terminal의 folder(`<root>/.soksak/messages/<surface>`)가 아니거나, 그 surface가 어떤 window에도 없으면 `receiver`는 `null`이다. 어느 경우에도 message는 쓰이며, 보내는 쪽은 receiver의 `<plugin>.messages`의 `last`를 따라 자기 path의 결정을 안다.
+
+#### Evidence of the hold
+
+120열 40행의 pseudo terminal에서 Codex CLI 0.171.0(`-a on-request -s read-only`)과 Claude Code 2.1.329(`--permission-mode default`)에 각각 scratch folder에서 `touch approved.txt`를 실행하도록 요청해 측정했다(`docs/spec/cases/messaging/permission-prompts.json`).
+
+- 둘 다 선택된 답이 Yes인 permission prompt를 보였다. Enter 없이 `[메시지 from test] hello`를 bracketed paste로 보내자 prompt는 열린 채였고, command는 실행되지 않았으며, text는 prompt에도 그 뒤의 input line에도 화면 어디에도 나타나지 않았다. 두 program 모두 이를 queue에 넣지 않았다. 이어진 Enter는 prompt에 Yes로 답했고 command가 실행되었다.
+- Codex CLI는 prompt가 열릴 때부터 답할 때까지 `state=blocked:kind=permission`(OSC 7501)을 보고했고, command 뒤에 `done`을 보고했다. Claude Code는 query `OSC 7501;?`을 보내고 답을 받았으나, 실행 동안 보고를 보내지 않았다.
+- Program이 스스로 여는 prompt도 주입의 Enter를 같은 방식으로 받는다. 시작 때 OSC 7501 보고 없이 열린 Codex CLI update prompt는 붙여 넣은 요청 뒤의 Enter를 받아 선택된 답인 update를 실행했고, 역시 보고 없는 Claude Code의 folder trust prompt는 Enter를 받아 선택된 답인 `No, exit`를 실행했다.
+
+따라서 paste 뒤의 Enter는 사람에게 묻는 prompt에 그 선택된 답으로 답하고, prompt 동안의 paste는 사라진다. `blocked` 보류는 두 program 모두에 필요하다. Record를 쓰지 않고 notice도 주지 않는 program의 prompt는 관찰할 수 없으므로 보류가 이를 다루지 못한다.
 
 ## MCP tools
 
@@ -150,10 +188,8 @@ Agent는 그 client가 MCP tool을 지원하는 곳에서만 MCP tool을 쓴다(
 
 각 항목은 열려 있는 이유를 적는다.
 
-1. Terminal input 안 주입 message의 형식: 보이는 text, message임을 표시하는 prefix, 제출 방식. 결정이 필요하다. Text는 사람이 agent의 input line에서 읽는 내용이며, 그 wording을 repository가 고를 수 없기 때문이다. 공백의 원인: plan은 "one declared form"만 말하고 정의하지 않는다([terminal plan, 3.3](../plans/terminal-plan.md#33-delivery-channel-to-the-agent-decision-d4)).
-2. Agent마다 busy foreground TUI에 message를 전달하는 TUI adapter의 action(background 또는 send-now)과 각 action의 key. 보류(held): TUI adapter의 key table이 비어 있어 관찰된 key가 없다. 해제 조건은 key가 관찰되는 것이다. TUI adapter의 message 전달이 이 같은 사실에 의존한다([terminal plan, 4.1](../plans/terminal-plan.md#41-tui-key-adapters-decision-d6)).
-3. 공유 machine에서 file event의 전달 지연 상한. 측정 대상으로 보류: plan의 열린 항목 V6이 측정되지 않았고, plan은 측정 전에는 상한을 적지 않는다고 말한다([terminal plan, 3.2](../plans/terminal-plan.md#32-event-path-decision-d3)).
-4. Claude Code가 session message를 위한 same-machine direct path를 갖는지. 측정 대상으로 보류: plan의 열린 항목 V8이 기록되지 않았고, 지금까지 관찰된 문자열에는 그런 path가 나타나지 않는다([terminal plan, 3.6](../plans/terminal-plan.md#36-open-items-in-part-3)).
+1. 공유 machine에서 file event의 전달 지연 상한. 측정 대상으로 보류: plan의 열린 항목 V6이 측정되지 않았고, plan은 측정 전에는 상한을 적지 않는다고 말한다([terminal plan, 3.2](../plans/terminal-plan.md#32-event-path-decision-d3)).
+2. Claude Code가 session message를 위한 same-machine direct path를 갖는지. 측정 대상으로 보류: plan의 열린 항목 V8이 기록되지 않았고, 지금까지 관찰된 문자열에는 그런 path가 나타나지 않는다([terminal plan, 3.6](../plans/terminal-plan.md#36-open-items-in-part-3)).
 
 ## Settled decisions
 
@@ -170,6 +206,8 @@ Agent는 그 client가 MCP tool을 지원하는 곳에서만 MCP tool을 쓴다(
 - Event 이름과 gate level: `sidecar.<sidecar>.file.changed`는 `debug`, class `io`; `sidecar.<sidecar>.messages.registered`와 `sidecar.<sidecar>.registration.closed`는 `info`, class `lifecycle`이며, `<sidecar>`는 `alacritty` 또는 `vt`다. 이유: sidecar event는 sidecar prefix를 가진다([logging](logging.md#sidecar-catalogs)). `info`는 object lifetime의 변경이고 `debug`는 boundary 통과다([logging](logging.md#event)). Class는 [logging](logging.md#classes-and-policy)의 표를 따른다.
 - Agent의 MCP 지원: agent 집합은 [wire 결정](messaging.md#wire-decisions) 항목 15에서 정한다. 근거는 `sok` command의 MCP 등록([cli](cli.md#mcp-registration))이다.
 - Tool 이름: 두 MCP tool은 [cli](cli.md#mcp-server)의 모든 tool과 같이 밑줄로 이름 붙인다(`messages_read`, `messages_wait`). 이 문서의 tool table은 이 이름을 쓴다.
-- Guard: 주입된 message는 입력된 줄과 같은 `input` operation으로 제출되므로, destructive command guard가 다른 제출 줄과 같이 판단한다([persistent services](persistent-services.md#destructive-command-guard)). 거부된 message는 `rule`과 `reason`을 담은 `guardRefused` reply를 받는다.
-- Carrier: 주입된 message는 session의 `input` operation으로 terminal에 도달한다. 이 operation은 입력된 줄을 나르는 operation이다([persistent services](persistent-services.md#destructive-command-guard)). 그 operation의 parameter는 이 repository가 아니라 자신의 repository에서 terminal sidecar가 선언한다([AGENTS](../../AGENTS.md#structure)).
-- Busy foreground TUI: busy foreground TUI로의 전달은 TUI adapter의 background 또는 send-now action을 요구한다. Plan은 둘 중 하나가 실행되기 전에는 그런 TUI가 message를 받지 않는다고 말한다([terminal plan, 4.1](../plans/terminal-plan.md#41-tui-key-adapters-decision-d6)).
+- 주입 message의 형식: 받는 terminal의 page는 `[메시지 from <title>] <text>`를 session의 `paste` operation으로 보내며, program이 bracketed paste mode를 켰으면 bracketed paste로 보내고, 이어서 Enter를 보낸다. `<title>`은 보내는 tab의 보이는 제목이다([injected message](messaging.md#injected-message)). 이유: 보이는 text는 사람이 agent의 input line에서 읽는 wording이며, 계약과 plan이 이를 정하지 않는다([terminal plan, 3.3](../plans/terminal-plan.md#33-delivery-channel-to-the-agent-decision-d4)). 이 형식은 그에 대해 기록된 결정이며, surface 식별자는 무작위 문자열이므로 tab의 제목이 사람이 window에서 보는 말로 보내는 쪽을 밝힌다.
+- Busy receiver: foreground program이 busy인 receiver로의 message는 입력한 text처럼 input에 들어가고, program이나 agent가 input을 읽을 때 받는다. 입력한 text를 queue에 넣는 agent는 이를 queue된 제출로 받으며, TUI adapter의 key는 보내지 않는다. 이유: paste와 Enter가 agent가 입력으로 queue에 넣는 제출이므로 busy agent에는 background나 send-now key가 필요 없다([terminal plan, 4.1](../plans/terminal-plan.md#41-tui-key-adapters-decision-d6)). 따라서 주입은 비어 있는 key table에 의존하지 않는다.
+- 사람을 위한 보류: terminal의 program이 사람을 기다리는 동안(`blocked` record, 또는 record가 없는 program의 notice)이나 사람이 그 terminal에 입력하는 동안 page는 아무것도 주입하지 않는다([hold for the person](messaging.md#hold-for-the-person)). 이유: 사람에게 묻는 prompt에서 paste와 Enter는 그 prompt에 답하며, agent의 permission prompt에 대해 [evidence](messaging.md#evidence-of-the-hold)가 이를 보인다. Message는 결코 사람 대신 답해서는 안 된다.
+- Guard: 주입된 message는 입력한 줄의 input인 `paste` operation과 Enter로 제출되므로, destructive command guard가 그것이 제출하는 각 줄을 다른 제출 줄과 같이 판단한다([persistent services](persistent-services.md#destructive-command-guard)). 거부된 message는 `rule`과 `reason`을 담은 `guardRefused` reply를 받는다.
+- Carrier: 주입된 message는 session의 `paste` operation과 `input` operation의 key Enter로 terminal에 도달한다([persistent services](persistent-services.md#destructive-command-guard)). 이 operation의 parameter는 이 repository가 아니라 자신의 repository에서 terminal sidecar가 선언한다([AGENTS](../../AGENTS.md#structure)).
