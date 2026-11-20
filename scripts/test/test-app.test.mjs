@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { startCasePlayer } from "@soksak/client/testing";
-import { e2ePlan, finishRoot, newConfigRoot, parseRunCount, remainingProcesses, runPlan, quitApplication } from "../test-app.mjs";
+import { e2ePlan, finishRoot, newConfigRoot, remainingProcesses, runPlan, quitApplication } from "../test-app.mjs";
 import { applicationArtifact, applicationExecutables } from "../platform/platform.js";
 import { fixturePluginIds } from "../fixture-registry.mjs";
 
@@ -600,12 +600,4 @@ test("the plan installs every fixture plugin of e2e/fixtures by default", { time
   const installs = plan.filter((item) => item.name.startsWith("install ") && item.name.endsWith(" mygo")).map((item) => item.argv[3]);
   assert.deepEqual(installs, fixturePluginIds());
   assert.ok(installs.includes("layoutprobe"), "the default tab of fresh is a fixture plugin");
-});
-
-test("--count takes a whole number of runs of at least 1, and one run without it", () => {
-  assert.equal(parseRunCount(undefined), 1);
-  assert.equal(parseRunCount("3"), 3);
-  for (const text of ["0", "-1", "1.5", "03", "x", ""]) {
-    assert.throws(() => parseRunCount(text), new RegExp(`^Error: --count ${text.replace(".", "\\.")}: the number of runs must be a whole number of at least 1$`), text);
-  }
 });

@@ -1,5 +1,5 @@
 // Runs the end-to-end checks of core on this computer (docs/operations/examples.md#end-to-end-run):
-//   node scripts/test-app.mjs --script <name> [--native <target>] [--only <file>]... [--defaults Name=Value]... [--count <n>]
+//   node scripts/test-app.mjs --script <name> [--native <target>] [--only <file>]... [--defaults Name=Value]...
 // The e2e targets of the Makefile build the three debug applications, and then run this script with the window-check script of their
 // tier (`verify`, `test-app:activation`) and the native end-to-end target of that tier. Each run
 // makes a new configuration root under target/e2e, prepares the registry certificates in it and installs every plugin of the fixture
@@ -11,12 +11,9 @@
 // (scripts/platform/platform.js); a platform that does not implement one fails the step with the name of that operation. A passed
 // run removes its root; a failed run keeps it with the logs of the applications, so a second run starts from the same state as the
 // first. Each step prints `running`, then `passed` or `failed` with its elapsed time, or `skipped` with the failed step that skipped it.
-// `--count <n>` repeats the full run n times, each with its own root, and stops at the first failed run; each run names its number and
-// the system load at its start, so a run under load is told from the record of the run.
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { existsSync, mkdirSync, mkdtempSync, openSync, rmSync } from 'node:fs';
-import { loadavg } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -379,19 +376,11 @@ export function finishRoot(configRoot, failures, write) {
   write(`kept ${configRoot}: ${failures.length} step${failures.length === 1 ? '' : 's'} failed`);
 }
 
-/** The number of full runs that `--count` asks for: 1 without it, else a whole number of at least 1. */
-export function parseRunCount(text) {
-  if (text === undefined) return 1;
-  if (!/^[1-9][0-9]*$/.test(text)) throw new Error(`--count ${text}: the number of runs must be a whole number of at least 1`);
-  return Number(text);
-}
-
 async function main(argv) {
   const { values } = parseArgs({
     args: argv, strict: true, options: { script: { type: 'string' }, native: { type: 'string' }, only: { type: 'string', multiple: true },
-      defaults: { type: 'string', multiple: true }, count: { type: 'string' } },
+      defaults: { type: 'string', multiple: true } },
   });
-  const count = parseRunCount(values.count);
   if (values.script === undefined) throw new Error('--script names the window-check script of the run');
   const write = (line) => process.stdout.write(`${line}\n`);
   // Reference installation and later check commands share cancellation and clean up their own children.
@@ -402,24 +391,13 @@ async function main(argv) {
       interrupt.abort(signal);
     });
   }
-  // Each run is a full run: a new root, the start of the applications, the checks and the quit. A repeat stops at the first failed
-  // run, which keeps its root, and names the run and the system load at its start, so a failure under load is told from one without.
-  for (let run = 1; run <= count; run++) {
-    const configRoot = newConfigRoot(ROOT);
-    const load = loadavg().map((value) => value.toFixed(2)).join(' ');
-    write(`run ${configRoot}${count > 1 ? ` (${run} of ${count}, load ${load})` : ''}`);
-    const failures = await runPlan(await e2ePlan({ root: ROOT, configRoot, script: values.script, native: values.native, only: values.only,
-      defaults: values.defaults ?? [] }), { write, interrupted: interrupt.signal });
-    finishRoot(configRoot, failures, write);
-    for (const failure of failures) write(`failure ${failure}`);
-    if (failures.length > 0) {
-      if (count > 1) write(`failed run ${run} of ${count}, load at its start ${load}`);
-      return 1;
-    }
-    if (interrupt.signal.aborted) return 1;
-  }
-  if (count > 1) write(`passed ${count} of ${count} runs`);
-  return 0;
+  const configRoot = newConfigRoot(ROOT);
+  write(`run ${configRoot}`);
+  const failures = await runPlan(await e2ePlan({ root: ROOT, configRoot, script: values.script, native: values.native, only: values.only,
+    defaults: values.defaults ?? [] }), { write, interrupted: interrupt.signal });
+  finishRoot(configRoot, failures, write);
+  for (const failure of failures) write(`failure ${failure}`);
+  return failures.length === 0 ? 0 : 1;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

@@ -646,13 +646,14 @@ const FEATURE_LINKS = [
   {
     id: "F983",
     implementation: [
-      { file: "scripts/test-app.mjs", symbol: "export function parseRunCount(text) {" },
-      { file: "native/darwin/src/surface_layout.m", symbol: "sp_event(SP_CLASS_INPUT, SP_EVENT_DEBUG, \"native.input.held\", fields.UTF8String);" },
+      { file: "native/darwin/src/surface_layout.m", symbol: "if (!layoutOf(owner) && ![returning containsObject:[NSValue valueWithPointer:owner]]) releaseInput(owner);" },
+      { file: "native/darwin/src/webview_geometry.m", symbol: "if (!holding || window.firstResponder == holding) return NO;" },
     ],
     tests: [
-      { file: "scripts/test/test-app.test.mjs", id: "--count takes a whole number of runs of at least 1, and one run without it" },
+      { file: "native/darwin/tests/surface_layout_observe_test.m", id: "checkCommitDuringAReturnKeepsTheKeyOrder" },
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "a surface that holds the keyboard for its region keeps it through a hide" },
     ],
-    expected: "A full window run repeats a given number of times and stops at the first failed run, and the held keys write their steps to the event log.",
+    expected: "Keys typed right after a press on a tab reach its image region whole and in order: a commit during a return keeps the key order (F983-1) and a surface that holds the keyboard keeps it through a hide (F983-2).",
     levels: ["unit"],
   },
   {
