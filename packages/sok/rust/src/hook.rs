@@ -133,8 +133,12 @@ fn hook_files(setup: &Setup) -> Result<Vec<PathBuf>, String> {
     Ok(files)
 }
 
-/// Parses an object whose members keep their text. The text of each key is the span of the key string in the object text, and
-/// the span is accepted only when the value text that serde_json read follows it.
+/// Parses an object whose members keep their text.
+///
+/// Library gap: serde_json yields only the decoded key of a map entry, so the text of a key with escapes or a key that the file
+/// wrote in another form is lost. A map type cannot hold this text either: `serde_json::Map` and `indexmap::IndexMap` keep one entry
+/// per decoded key and merge duplicate keys, which the file keeps as separate members. The key span is therefore located here,
+/// after serde_json has read the member list, and the span is accepted only when the value text that serde_json read follows it.
 fn members_of(text: &str) -> Result<Members, String> {
     let Pairs(pairs) = serde_json::from_str(text).map_err(|error| error.to_string())?;
     let bytes = text.as_bytes();
