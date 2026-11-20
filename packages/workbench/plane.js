@@ -733,12 +733,14 @@ function bindPlane() {
   if (plane.dataset.expose) return;
   plane.dataset.expose = "core.plane";
   bind(plane, "core.card.focus", { card: null },
+    // default: a press target that is no element, such as the document, has no closest and is in no card.
     { event: "pointerdown", when: (e) => e.button === 0 && !e.target.closest?.(".card, .group, button, input") });
 }
 
 // A press on the header of a group card outside its buttons, its tool menu and its rename field drags the group card
 // (docs/spec/groups.md#moving-and-dropping).
 plane.addEventListener("pointerdown", (e) => {
+  // default: a press target that is no element, such as the document, has no closest and is on no header.
   const head = e.target.closest?.(".group > .group__head");
   if (!head || !tree || e.target.closest("button, .chrome__acts, .chrome__more, input") || e.button !== 0 || e.detail > 1) return;
   beginGroupDrag(e, head.parentElement.dataset.groupCard, head);
@@ -813,6 +815,7 @@ function beginGroupDrag(e, id, head) {
 // The press takes the pointer capture of the header for a drag, so WebKit targets the double-click at the header, the common target of
 // the press and the release; the name under the point of the double-click decides the rename.
 plane.addEventListener("dblclick", (e) => {
+  // default: a press target that is no element, such as the document, has no closest and is on no header.
   const name = e.target.closest?.(".group__head")?.querySelector(":scope > .group__name");
   if (!name) return;
   const box = name.getBoundingClientRect();
@@ -1575,6 +1578,7 @@ function fitGroupHead(head) {
   delete head.dataset.measure;
   // The icon of an activity stands before the name, so the name takes its width and the gap of the header with it.
   const icon = head.querySelector(":scope > .activity");
+  // default: a column gap of normal parses as NaN, and normal is no gap in the flex row of a header.
   const lead = icon ? icon.getBoundingClientRect().width + (parseFloat(getComputedStyle(head).columnGap) || 0) : 0;
   foldHead(head, { lead: 0, tabWidths: [lead + name], tabGap: 0 });
 }
@@ -1802,6 +1806,7 @@ let previewed = null;
 
 /** A step of a divider drag: the line of the group tree moves toward px without the merge of the lines that meet. */
 function previewBoundary(axis, line, px) {
+  // default: the first step of a divider drag keeps the tree that the drag started from.
   previewed ??= { axis, line, kept: tree.snapshot() };
   return tree.placeBoundary(axis, line, px, true);
 }
@@ -2073,6 +2078,7 @@ export function fresh(random) {
   const first = [...cards].sort((a, b) => (a.r0 - b.r0) || (a.c0 - b.c0)).find((card) => !isPlace(card.id));
   return {
     state: storedLayoutState(state), leader: first ? first.id : null,
+    // default: an id that carries no card number, such as a window sidebar, issued no number.
     lastCard: Math.max(1, ...cards.map((card) => cardNumber(card.id) ?? 0)),
     focusedId: environment().workspace.focus,
     windowSidebars: Object.fromEntries(cards
@@ -2128,7 +2134,7 @@ export const fullscreenCard = () => view?.fullscreenCard ?? null;
 
 /** Whether the card id is drawn while a card is fullscreen: the fullscreen card and the cards inside it, or every card without one. */
 function shownFullscreen(id) {
-  const shown = view?.fullscreenCard ?? null;
+  const shown = fullscreenCard();
   return shown === null || id === shown || tree.path(id).some((group) => group.card === shown);
 }
 
@@ -2146,6 +2152,7 @@ export const presentedCardRect = (id) => view?.painted(id);
 /** The drawn rectangle of each card and group card of the space by id as the plane draws it now, an empty rectangle for a hidden one. */
 export function drawnCardRects() {
   const rects = drawnRects(view.fullscreenCard);
+  // default: a card that the fullscreen card hides is drawn as an empty rectangle.
   return new Map(tree.order().map(({ id }) => [id, rects.get(id) ?? { x: 0, y: 0, w: 0, h: 0 }]));
 }
 
@@ -2708,6 +2715,7 @@ export function moveInLayout({ tab: tabId, card: cardId, side }) {
     selectTab(named.tab.id);
     return { card: named.card.id, tab: named.tab.id };
   }
+  // default: a move without side joins the card, as a drop on its centre does.
   moveTab(named.tab.id, id, side ?? "centre");
   return { card: cardOfTab(named.tab.id).id, tab: named.tab.id };
 }
@@ -2902,6 +2910,7 @@ export function cardActs(id) {
     ["close", "fullscreen", "leader"].includes(b.dataset.do) ? b.dataset.do : MENU_OF[b.dataset.do],
     // A head that folded the tools into a menu draws only the kept buttons of the tool row in the menu stage, the leader mark and the
     // fullscreen toggle, and none in the stage all.
+    // default: a head that has not folded its tools draws them in the bar.
     { enabled: !b.disabled, hidden: b.hidden || ((chrome.dataset.tools ?? "bar") !== "bar" && !kept.includes(b)),
       title: b.title },
   ]));
@@ -2969,7 +2978,7 @@ function treeCard(id) {
   if (id === "current") return layoutCard("current").id;
   if (typeof id === "string" && tree?.find(id)) return id;
   // A group card of a stored layout is a box of its tree.
-  const holdsBox = (node) => node.box === id || (node.box !== undefined && holdsBox(node.inner)) || (node.kids ?? []).some((kid) => holdsBox(kid.node));
+  const holdsBox = (node) => node.box === id || (node.box !== undefined && holdsBox(node.inner)) || (node.cut !== undefined && node.kids.some((kid) => holdsBox(kid.node)));
   const space = inactiveSpaceOf((cards, layout) => cards.some((entry) => entry.id === id) || holdsBox(layout.state.root));
   if (space !== null) throw new Error(`card ${id} is in space ${space}, which is not active`);
   throw new Error(`card ${id} is not in the layout of window ${nameOfWindow()}`);
@@ -2982,6 +2991,7 @@ function treeCard(id) {
 const groupRequests = new Map();
 
 /** A request of core.group.create that the shown space has not answered, for one press of a group split button. */
+// default: a space without an open request holds no request.
 export const newGroupRequest = () => issueId("request", (id) => groupRequests.get(heldSpace)?.has(id) ?? false);
 
 /**
@@ -3005,8 +3015,8 @@ export function createGroup(id, side, kind, params, request) {
   if (request === undefined && parent && parent.members.length === 2 && hasPlugin(kind)) {
     const other = parent.members.map(memberId).find((member) => member !== card);
     const wanted = checkTabParams(kind, plugin(kind).params, params);
-    // default: a tab stored without params has the params null.
     const found = !tree.isGroup(other) && tree.neighbour(card, side) === other
+      // default: a tab stored without params has the params null.
       ? tabsOf(grid.card(other)).find((t) => t.plugin === kind && sameJson(t.params ?? null, wanted)) : undefined;
     if (found) return { group: parent.card, card: other, tab: found.id };
   }
@@ -3046,6 +3056,7 @@ export function openGroupMenu(id, menuAnchor) {
   const card = treeCard(id);
   tree.requireGroup(card);
   // The close item of the tool menu of a folded header opens the menu under ⋯, menuAnchor, and its close button otherwise.
+  // default: without menuAnchor, the menu opens under the close button of the group card.
   const anchor = menuAnchor ?? plane.querySelector(`[data-group-card="${CSS.escape(card)}"] [data-do="group-menu"]`);
   if (!anchor) throw new Error(`group ${card} has no close button`);
   if (picker?.anchor === anchor) { closePicker("toggle"); return null; }

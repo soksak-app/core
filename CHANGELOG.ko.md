@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1016-10.6: plane이 fullscreen card를 reader 하나로 읽고 cut node의 kids를 기본값 없이 읽으며, 나머지 기본값이 이유를 적는다.
 - F1016-10.7: mygo workbench가 level의 leader를 이유를 적은 reader 하나로 읽고, 나머지 무시한 결과가 어느 결과를 읽는지 적는다.
 - F1016-10.5: group tree가 card의 member를 이유를 적은 helper 하나로 읽고 나머지 기본값이 이유를 적는다. move는 알 수 없는 target을 거부한 뒤 target의 path를 기본값 없이 읽는다.
 - F1016-10.4: fallback 검사가 두 membership 검사 `.has(…)`나 `.includes(…)` 사이의 `||`를 값 fallback이 아니라 boolean으로 읽는다.
