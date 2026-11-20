@@ -394,8 +394,8 @@ export function frameOf(plane: Plane): Frame {
 /** Rect of one card from a precomputed frame. */
 export function rectIn(frame: Frame, card: Card): Rect {
   const frames = frame.frames?.get(card.id);
-  const [x, w] = span(frame.x, card.c0, card.c1, frames?.left ?? 0, frames?.right ?? 0);
-  const [y, h] = span(frame.y, card.r0, card.r1, frames?.top ?? 0, frames?.bottom ?? 0);
+  const [x, w] = span(frame.x, card.c0, card.c1, frameSide(frames, 'x', 'lo'), frameSide(frames, 'x', 'hi'));
+  const [y, h] = span(frame.y, card.r0, card.r1, frameSide(frames, 'y', 'lo'), frameSide(frames, 'y', 'hi'));
   return { x, y, w, h };
 }
 

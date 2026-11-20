@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1016-10.3: layout library의 `headsAbove`가 grid의 card나 box가 아닌 id에 0을 답하지 않고 거부하며, box의 head와 card의 frame을 기본값 없이 읽고, library의 나머지 기본값이 이유를 적는다.
 - F1016-10.2: 작은 workbench module의 기본값 여덟 개가 이유를 적는다.
 - F1016-10.1: host와 sok package의 기본값 다섯 개가 이유를 적는다.
 - F1016-12: sok의 hook 파일 reader가 entry의 type과 command를 이유를 적고 한 번 읽으므로 kit 0.0.16의 event source 검사가 통과한다. 결과는 바뀌지 않는다.

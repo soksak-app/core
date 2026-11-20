@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1016-10.3: `headsAbove` of the layout library refuses an id that is no card or box of the grid instead of answering 0, the head of a box and the frames of a card are read without a default, and the other defaults of the library state their reasons.
 - F1016-10.2: The eight defaults of the small workbench modules state their reasons.
 - F1016-10.1: The five defaults of the host and sok packages state their reasons.
 - F1016-12: The hook file reader of sok reads the type and the command of an entry once, with its stated reason, so the event source check of the kit 0.0.16 passes; no result changes.

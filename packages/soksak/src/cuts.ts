@@ -448,6 +448,7 @@ function sharePlaces(input: Input, holder: CutNode, sizes: readonly number[]): v
   const axis = holder.cut;
   const taking = holder.kids.map((kid, i) => (input.keeps(kid.node, axis) ? null : sizes[i] - input.frame(kid.node, axis)));
   if (taking.some((want) => want !== null && want <= 0)) return;
+  // default: a kept kid takes no room (null), so it adds nothing to the total.
   const total = taking.reduce<number>((a, want) => a + (want ?? 0), 0);
   const shared = holder.kids.reduce((a, kid, i) => (taking[i] !== null ? a + kid.share : a), 0);
   if (total <= 0) return;

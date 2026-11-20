@@ -251,6 +251,8 @@ export declare class Soksak {
      * on its top line are drawn inside its top, as inside the top of a card.
      */
     rect(id: string): Rect | undefined;
+    /** The px that the host draws inside the top of the box `box`. */
+    private headOf;
     /** The px of the heads of the boxes around the card or the box `id` that the grid draws inside the top of its rectangle. */
     headsAbove(id: string): number;
     rects(): Map<string, Rect>;

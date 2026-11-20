@@ -459,3 +459,15 @@ test("a boundary's range and its move come from its own cut, not from a line of 
   assert.ok(Math.abs(grid.rect("c2").h - 96) < 1e-9, "the lower card is drawn its minimum");
   assert.deepEqual({ c3: grid.rect("c3"), c4: grid.rect("c4") }, other, "the seam of the other column stays");
 });
+
+test("the heads above a card or a box come from its last layout, and an id that is no card or box is refused", () => {
+  const state = { root: { cut: "x", kids: [
+    { share: 0.5, node: { box: "g", inner: { card: "c1" } } },
+    { share: 0.5, node: { card: "c2" } },
+  ] } };
+  const grid = new Soksak(state, { width: 1000, height: 600, gap: 24, minSize: 96 });
+  grid.setHeads({ g: 44 });
+  assert.equal(grid.headsAbove("c1"), 44, "the head of the group is drawn inside the top of its card");
+  assert.equal(grid.headsAbove("c2"), 0, "a card that no box surrounds has no heads above it");
+  assert.throws(() => grid.headsAbove("none"), /soksak: "none" is no card or box of the grid/);
+});

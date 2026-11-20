@@ -414,8 +414,8 @@ export class SoksakView {
     if (fullscreen !== null && !this.drawn.has(fullscreen)) {
       throw new Error(`unknown fullscreen card ${fullscreen}`);
     }
-    // A card that a fullscreen box does not show is hidden with an empty rect.
     const shown = this.drawn.rects(fullscreen);
+    // default: a card that a fullscreen box does not show is hidden with an empty rect.
     const rects = new Map(this.grid.cards.map((card) => [card.id, shown.get(card.id) ?? { x: 0, y: 0, w: 0, h: 0 }]));
     const snapshot: PaintSnapshot = {
       fullscreen,
@@ -597,6 +597,7 @@ export class SoksakView {
     }
     const rank = new Map(order.map((id, index) => [id, index]));
     const standing = [...this.host.children].filter(
+      // default: a child of the host that is no card element has no card id, so it is not a standing card.
       (el): el is HTMLElement => this.cardEls.get((el as HTMLElement).dataset?.cardId ?? '')?.el === el,
     );
     const ranks = standing.map((el) => rank.get(el.dataset.cardId as string) as number);

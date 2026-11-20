@@ -252,7 +252,6 @@ export class Soksak {
      * them scales, and `cost`, its corridors, frames and heads, which it does not. Null for a node that takes a fraction.
      */
     keptOf(node, axis, unit) {
-        var _a;
         if (isCard(node)) {
             const px = axis === 'x' ? node.width : node.height;
             return px === undefined ? null : { px, cost: 0 };
@@ -261,7 +260,7 @@ export class Soksak {
             const inner = this.keptOf(node.inner, axis, unit);
             if (inner === null)
                 return null;
-            return { px: inner.px, cost: inner.cost + (axis === 'x' ? 2 * unit.x : unit.y + ((_a = this.heads.get(node.box)) !== null && _a !== void 0 ? _a : 0)) };
+            return { px: inner.px, cost: inner.cost + (axis === 'x' ? 2 * unit.x : unit.y + this.headOf(node.box)) };
         }
         const kids = node.kids.map((kid) => this.keptOf(kid.node, axis, unit));
         if (node.cut === axis) {
@@ -298,6 +297,7 @@ export class Soksak {
         const fixedAsked = held.reduce((a, kept, i) => a + (kept && leaf[i] ? kept.px : 0), 0);
         const asked = held.reduce((a, kept, i) => a + (kept && !leaf[i] ? kept.px : 0), 0);
         // The corridors between the kids and the costs inside the kids that keep a px size are drawn whatever the scale.
+        // default: a kid that keeps no px size (null) has its costs in costs, so it adds none here.
         let free = room - (node.kids.length - 1) * unit[axis] - held.reduce((a, kept) => { var _a; return a + ((_a = kept === null || kept === void 0 ? void 0 : kept.cost) !== null && _a !== void 0 ? _a : 0); }, 0);
         if (free < -EPS)
             return null;
@@ -367,11 +367,10 @@ export class Soksak {
      * and on y its head above and one corridor below. They are costs of the cut that holds the node (R5).
      */
     frameOf(node, axis, unit) {
-        var _a;
         if (!isBox(node))
             return 0;
         const frame = this.frameIn(unit);
-        return this.frameOf(node.inner, axis, unit) + (axis === 'x' ? 2 * frame.x : frame.y + ((_a = this.heads.get(node.box)) !== null && _a !== void 0 ? _a : 0));
+        return this.frameOf(node.inner, axis, unit) + (axis === 'x' ? 2 * frame.x : frame.y + this.headOf(node.box));
     }
     /** The px that the frame of a box takes on each axis at the corridor `unit`. */
     frameIn(unit) {
@@ -379,7 +378,6 @@ export class Soksak {
     }
     /** The px that a node takes on an axis at no size of its cards: its corridors, px sizes, frames and heads. */
     costOf(node, axis, unit) {
-        var _a;
         const held = this.heldOf(node, axis, unit);
         if (held !== null)
             return held;
@@ -387,7 +385,7 @@ export class Soksak {
             return 0;
         if (isBox(node)) {
             const frame = this.frameIn(unit);
-            return this.costOf(node.inner, axis, unit) + (axis === 'x' ? 2 * frame.x : frame.y + ((_a = this.heads.get(node.box)) !== null && _a !== void 0 ? _a : 0));
+            return this.costOf(node.inner, axis, unit) + (axis === 'x' ? 2 * frame.x : frame.y + this.headOf(node.box));
         }
         const kids = node.kids.map((kid) => this.costOf(kid.node, axis, unit));
         if (node.cut !== axis)
@@ -395,7 +393,6 @@ export class Soksak {
         return kids.reduce((a, c) => a + c, 0) + (node.kids.length - 1) * unit[axis];
     }
     lay(unit, sized) {
-        var _a, _b;
         const crowded = { x: false, y: false };
         const extentOf = { x: sized ? this.w : 1, y: sized ? this.h : 1 };
         const spots = new Map();
@@ -405,7 +402,6 @@ export class Soksak {
         const boxes = new Map();
         const paths = new Map();
         const place = (node, slot, inset, path) => {
-            var _a;
             this.visited++;
             spots.set(node, slot);
             insets.set(node, inset);
@@ -419,8 +415,8 @@ export class Soksak {
                 if (!sizes) {
                     crowded[axis] = true;
                 }
-                // A cut that cannot hold its corridors at no corridor lays its kids by their fractions alone, so every kid keeps a slot
-                // and is drawn at no size.
+                // default: a cut that cannot hold its corridors at no corridor lays its kids by their fractions alone, so every kid keeps
+                // a slot and is drawn at no size.
                 const each = sizes !== null && sizes !== void 0 ? sizes : node.kids.map((kid) => kid.share * Math.max(room, slot[hi] - slot[lo]));
                 let at = sizes ? from : slot[lo];
                 let start = slot[lo];
@@ -438,7 +434,7 @@ export class Soksak {
                 boxes.set(node.box, node);
                 paths.set(node, path);
                 up.set(node.inner, { node, at: -1 });
-                const head = sized ? (_a = this.heads.get(node.box)) !== null && _a !== void 0 ? _a : 0 : 0;
+                const head = sized ? this.headOf(node.box) : 0;
                 const frame = this.frameIn(unit);
                 place(node.inner, slot, { x0: inset.x0 + frame.x, x1: inset.x1 + frame.x, y0: inset.y0 + head, y1: inset.y1 + frame.y }, [...path, node]);
             }
@@ -516,7 +512,7 @@ export class Soksak {
                 if (s1 === r1)
                     counts.bottom++;
                 if (s0 === r0 && sized)
-                    heads += (_a = this.heads.get(box.box)) !== null && _a !== void 0 ? _a : 0;
+                    heads += this.headOf(box.box);
             }
             if (this.frameAt === 'corridor' && (counts.left || counts.right || counts.bottom))
                 frames.set(leaf.card, counts);
@@ -528,7 +524,7 @@ export class Soksak {
             let heads = 0;
             for (const outer of paths.get(box)) {
                 if (this.at.get(outer)[2] === r0 && sized)
-                    heads += (_b = this.heads.get(outer.box)) !== null && _b !== void 0 ? _b : 0;
+                    heads += this.headOf(outer.box);
             }
             above.set(box.box, heads);
         }
@@ -543,7 +539,6 @@ export class Soksak {
      * the tree stays; then the lines are derived again.
      */
     commit() {
-        var _a, _b;
         const moved = this.moved;
         this.moved = false;
         for (const card of this.list) {
@@ -553,8 +548,10 @@ export class Soksak {
                 leaf.data = card.data;
             else
                 delete leaf.data;
-            sizeOn(leaf, 'x', (_a = card.width) !== null && _a !== void 0 ? _a : null);
-            sizeOn(leaf, 'y', (_b = card.height) !== null && _b !== void 0 ? _b : null);
+            // default: a card without a px width or height stores none on that axis.
+            const { width = null, height = null } = card;
+            sizeOn(leaf, 'x', width);
+            sizeOn(leaf, 'y', height);
         }
         // The fraction of a kid that takes one is its drawn size, its slot less its corridors, frames and heads, over the drawn
         // size of the kids of its cut that take one; a kid that keeps a px size keeps its fraction.
@@ -572,6 +569,7 @@ export class Soksak {
                     const inset = this.insets.get(kid.node);
                     return (a[to] - a[from]) * extent - inset[lo] - inset[hi] - this.frameOf(kid.node, axis, this.unit);
                 });
+                // default: a kid that keeps a px size (null) shares no drawn size.
                 const drawn = sizes.reduce((sum, size) => sum + (size !== null && size !== void 0 ? size : 0), 0);
                 const shared = node.kids.reduce((sum, kid, i) => (sizes[i] !== null ? sum + kid.share : sum), 0);
                 // A fraction is positive: a kid drawn at no size keeps the fractions of its cut as they are.
@@ -817,7 +815,6 @@ export class Soksak {
      * on its top line are drawn inside its top, as inside the top of a card.
      */
     rect(id) {
-        var _a;
         const card = this.find(id);
         if (card)
             return this.rectOf(card);
@@ -828,13 +825,21 @@ export class Soksak {
         const [c0, c1, r0, r1] = this.at.get(box);
         const inset = this.insets.get(box);
         const x = at('x', c0) + inset.x0;
-        const y = at('y', r0) + inset.y0 - ((_a = this.above.get(id)) !== null && _a !== void 0 ? _a : 0);
+        const y = at('y', r0) + inset.y0 - this.headsAbove(id);
         return { x, y, w: Math.max(0, at('x', c1) - inset.x1 - x), h: Math.max(0, at('y', r1) - inset.y1 - y) };
+    }
+    /** The px that the host draws inside the top of the box `box`. */
+    headOf(box) {
+        var _a;
+        // default: a box that setHeads did not name has no head.
+        return (_a = this.heads.get(box)) !== null && _a !== void 0 ? _a : 0;
     }
     /** The px of the heads of the boxes around the card or the box `id` that the grid draws inside the top of its rectangle. */
     headsAbove(id) {
-        var _a;
-        return (_a = this.above.get(id)) !== null && _a !== void 0 ? _a : 0;
+        const heads = this.above.get(id);
+        if (heads === undefined)
+            throw new Error(`soksak: ${JSON.stringify(id)} is no card or box of the grid`);
+        return heads;
     }
     rects() {
         const frame = frameOf(this.plane); // measured once, not once per card
@@ -956,13 +961,12 @@ export class Soksak {
         // What a node can lose on the axis: a card or a node that keeps a px size down to its minimum; a cut across the axis loses
         // it in every kid; a cut along it shares the loss among its kids that take a fraction in proportion to their contents.
         const loses = (node) => {
-            var _a;
             if (isBox(node))
                 return loses(node.inner);
             // A drag sets the size of a card that the person moves, a fixed card or one that declares a px size included, so a card
             // can lose down to `minSize` and the heads inside it.
             if (isCard(node))
-                return Math.max(0, drawn(node) - this.min - (axis === 'y' ? (_a = this.above.get(node.card)) !== null && _a !== void 0 ? _a : 0 : 0));
+                return Math.max(0, drawn(node) - this.min - (axis === 'y' ? this.headsAbove(node.card) : 0));
             if (!isCut(node) || this.heldOf(node, axis, this.unit) !== null)
                 return Math.max(0, drawn(node) - need(node, axis));
             if (node.cut !== axis)
@@ -1139,6 +1143,7 @@ export class Soksak {
             // Every cell has one fraction, so every cell is drawn at one size.
             const cutOf = (axis, kids) => kids.length === 1 ? kids[0] : { cut: axis, kids: kids.map((node) => ({ share: 1 / kids.length, node })) };
             // The cards fill the grid in reading order: by the line their rectangle starts at, the top first, then the left.
+            // default: cards that start on one top line sort by their left line.
             const reading = [...this.list].sort((p, q) => p.r0 - q.r0 || p.c0 - q.c0);
             const cards = reading.map((card) => {
                 const leaf = cloneNode(this.leaves.get(card.id));
@@ -1341,6 +1346,7 @@ export class Soksak {
                 const [lo, hi] = ENDS[axis];
                 const slot = this.spots.get(node);
                 const inset = this.insets.get(node);
+                // default: a node that the last layout did not lay is new, and its content is its kept px size or none.
                 if (!slot || !inset)
                     return (_a = this.heldOf(node, axis, this.unit)) !== null && _a !== void 0 ? _a : 0;
                 // A node that takes a fraction is drawn its frames and its fraction of the rest; its content is that rest.
@@ -1392,12 +1398,11 @@ export class Soksak {
         };
         const along = (e, axis) => (axis === 'x' ? e.x1 - e.x0 : e.y1 - e.y0);
         const need = (node, axis) => {
-            var _a;
             this.visited++;
             if (isBox(node))
                 return need(node.inner, axis);
             if (isCard(node)) {
-                const heads = axis === 'y' ? (_a = this.above.get(node.card)) !== null && _a !== void 0 ? _a : 0 : 0;
+                const heads = axis === 'y' ? this.headsAbove(node.card) : 0;
                 const px = axis === 'x' ? node.width : node.height;
                 // A fixed card with a px size is drawn no smaller than its size, or than the size it had where the plane drew it smaller.
                 if (node.fixed && px !== undefined) {
@@ -1462,7 +1467,6 @@ export class Soksak {
         // The deepest node below its minimum names the refusal, because the minimum of a box or a cut is the sum of the minimums
         // inside it: a box is below its minimum where a node inside it is, and the node inside it is the one that has no room.
         const visit = (node) => {
-            var _a, _b;
             if (isCut(node)) {
                 for (const kid of node.kids) {
                     const found = visit(kid.node);
@@ -1488,8 +1492,8 @@ export class Soksak {
             // A card is named at the size of its content, the heads drawn inside the top of its rectangle taken out of what it has
             // and of what it needs.
             if (isCard(node)) {
-                h -= (_a = this.above.get(node.card)) !== null && _a !== void 0 ? _a : 0;
-                ny -= (_b = this.above.get(node.card)) !== null && _b !== void 0 ? _b : 0;
+                h -= this.headsAbove(node.card);
+                ny -= this.headsAbove(node.card);
             }
             return `card ${isBox(node) ? node.box : node.card} would be ${text(w)}x${text(h)}, below its minimum ${text(nx)}x${text(ny)}`;
         };
@@ -1711,7 +1715,7 @@ export class Soksak {
      * it, or with `first` the new card takes the part before it.
      */
     splitAt(id, axis, init, first) {
-        var _a, _b;
+        var _a;
         // An id already in use would give two nodes the same key. `rects` and the
         // view are both keyed by id, so one card would have no rect and no element.
         if (init.id !== undefined && this.taken(init.id))
@@ -1726,7 +1730,7 @@ export class Soksak {
             // The card is drawn no wider than the corridor of the cut, so a half would have no extent on the axis.
             const r = this.rect(id);
             const w = axis === 'x' ? 0 : r.w;
-            const h = axis === 'y' ? 0 : r.h - ((_a = this.above.get(id)) !== null && _a !== void 0 ? _a : 0);
+            const h = axis === 'y' ? 0 : r.h - this.headsAbove(id);
             const size = `${Math.round(w)}x${Math.round(h)}`;
             // A minSize of zero is no minimum to fall below: the refusal is the area that the half would not have.
             if (this.min === 0)
@@ -1753,7 +1757,7 @@ export class Soksak {
                 f = first / (first + second);
         }
         // default: `id` is optional; the plane issues one.
-        const fresh = { card: (_b = init.id) !== null && _b !== void 0 ? _b : this.nextId(), fixed: false };
+        const fresh = { card: (_a = init.id) !== null && _a !== void 0 ? _a : this.nextId(), fixed: false };
         if (init.data !== undefined)
             fresh.data = init.data;
         // A px size on the other axis is copied, because both halves stay in that slot.
@@ -1872,6 +1876,7 @@ export class Soksak {
         }
         else if (!this.closing(id))
             return false;
+        // default: an id that names no box names a card, which leaves with the boxes that hold it alone.
         const leaving = (_a = this.boxes.get(id)) !== null && _a !== void 0 ? _a : this.departing(this.leaves.get(id));
         const drawnBefore = this.rects();
         this.root = withdrawNode(this.input(), isBox(leaving) ? leaving.box : id, this.list).root;

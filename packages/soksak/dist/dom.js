@@ -262,8 +262,8 @@ export class SoksakView {
         if (fullscreen !== null && !this.drawn.has(fullscreen)) {
             throw new Error(`unknown fullscreen card ${fullscreen}`);
         }
-        // A card that a fullscreen box does not show is hidden with an empty rect.
         const shown = this.drawn.rects(fullscreen);
+        // default: a card that a fullscreen box does not show is hidden with an empty rect.
         const rects = new Map(this.grid.cards.map((card) => { var _a; return [card.id, (_a = shown.get(card.id)) !== null && _a !== void 0 ? _a : { x: 0, y: 0, w: 0, h: 0 }]; }));
         const snapshot = {
             fullscreen,
@@ -441,7 +441,9 @@ export class SoksakView {
                 (order.length !== listed.size ? `${missing.length || unknown.length ? ';' : ':'} a card given twice` : ''));
         }
         const rank = new Map(order.map((id, index) => [id, index]));
-        const standing = [...this.host.children].filter((el) => { var _a, _b; var _c; return ((_b = this.cardEls.get((_c = (_a = el.dataset) === null || _a === void 0 ? void 0 : _a.cardId) !== null && _c !== void 0 ? _c : '')) === null || _b === void 0 ? void 0 : _b.el) === el; });
+        const standing = [...this.host.children].filter(
+        // default: a child of the host that is no card element has no card id, so it is not a standing card.
+        (el) => { var _a, _b; var _c; return ((_b = this.cardEls.get((_c = (_a = el.dataset) === null || _a === void 0 ? void 0 : _a.cardId) !== null && _c !== void 0 ? _c : '')) === null || _b === void 0 ? void 0 : _b.el) === el; });
         const ranks = standing.map((el) => rank.get(el.dataset.cardId));
         const active = this.host.ownerDocument.activeElement;
         const pinned = standing.findIndex((el) => active !== null && el.contains(active));

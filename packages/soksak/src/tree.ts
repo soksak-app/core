@@ -61,6 +61,7 @@ const refuse = (why: string): never => {
   throw new TypeError(`soksak: ${why}`);
 };
 
+// default: JSON.stringify gives undefined for undefined and for a function, which String names.
 const notANode = (value: unknown): never => refuse(`the node ${JSON.stringify(value) ?? String(value)} is not a card, a box or a cut`);
 
 /** Whether a value is a node of one of the three forms, with exactly the members of that form. */
@@ -133,6 +134,7 @@ export function checkState(state: SoksakState): void {
 export function cloneNode(node: TreeNode): TreeNode {
   if (isCut(node)) return { cut: node.cut, kids: node.kids.map((kid) => ({ share: kid.share, node: cloneNode(kid.node) })) };
   if (isBox(node)) return { box: node.box, ...(node.data !== undefined ? { data: node.data } : {}), inner: cloneNode(node.inner) };
+  // default: a card node without fixed is not fixed; fixed is optional in the card node of the library.
   const out: CardNode = { card: node.card, fixed: node.fixed ?? false };
   if (node.data !== undefined) out.data = node.data;
   if (node.width !== undefined) out.width = node.width;

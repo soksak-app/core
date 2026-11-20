@@ -19,6 +19,7 @@ const only = (value, allowed) => Object.keys(value).every((key) => allowed.inclu
 const refuse = (why) => {
     throw new TypeError(`soksak: ${why}`);
 };
+// default: JSON.stringify gives undefined for undefined and for a function, which String names.
 const notANode = (value) => { var _a; return refuse(`the node ${(_a = JSON.stringify(value)) !== null && _a !== void 0 ? _a : String(value)} is not a card, a box or a cut`); };
 /** Whether a value is a node of one of the three forms, with exactly the members of that form. */
 function checkForm(value) {
@@ -105,6 +106,7 @@ export function cloneNode(node) {
         return { cut: node.cut, kids: node.kids.map((kid) => ({ share: kid.share, node: cloneNode(kid.node) })) };
     if (isBox(node))
         return { box: node.box, ...(node.data !== undefined ? { data: node.data } : {}), inner: cloneNode(node.inner) };
+    // default: a card node without fixed is not fixed; fixed is optional in the card node of the library.
     const out = { card: node.card, fixed: (_a = node.fixed) !== null && _a !== void 0 ? _a : false };
     if (node.data !== undefined)
         out.data = node.data;
