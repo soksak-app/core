@@ -131,7 +131,8 @@ func (s *Shell) joinStrip(card, into string, index *int) (any, error) {
 	delete(s.operated, card)
 	s.focusCard(into)
 	s.settle()
-	return map[string]string{"card": card}, nil
+	// The join closes card, so the reply names the card that holds its tabs (docs/spec/groups.md#idempotency).
+	return map[string]string{"card": into}, nil
 }
 
 // registerGroups registers the commands of group cards and the card query.
@@ -209,15 +210,21 @@ func (s *Shell) registerGroups() {
 		if value.Side == "strip" {
 			return s.joinStrip(value.Card, value.Target[0], value.Index)
 		}
-		if s.planes.Moved(value.Card, value.Target, value.Side) {
+		// A move to the centre of a content card is an exchange, a toggle that answers the card alone; every other move answers its
+		// target as resolved after the commit (docs/spec/groups.md#idempotency).
+		exchange := value.Side == "centre" && !s.isGroup(value.Target[0]) && !s.planes.Moved(value.Card, value.Target, value.Side)
+		if !s.planes.Moved(value.Card, value.Target, value.Side) {
+			if err := s.planes.Move(value.Card, value.Target, value.Side); err != nil {
+				return nil, err
+			}
+			s.focusCard(s.planes.Focusable(value.Card))
+			s.settle()
+		}
+		if exchange {
 			return map[string]string{"card": value.Card}, nil
 		}
-		if err := s.planes.Move(value.Card, value.Target, value.Side); err != nil {
-			return nil, err
-		}
-		s.focusCard(s.planes.Focusable(value.Card))
-		s.settle()
-		return map[string]string{"card": value.Card}, nil
+		target, side := s.planes.Grid().VacatedSlot(value.Card)
+		return map[string]any{"card": value.Card, "target": target, "side": side}, nil
 	})
 	later(s, "core.card.get", func(value cardParam, answer func(any, error)) { s.cardGet(value.Card, answer) })
 	act(s, "core.group.menu", func(value groupParam) error {
