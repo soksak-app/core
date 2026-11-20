@@ -4134,9 +4134,9 @@ const FEATURE_LINKS = [
   },
   {
     id: "F686-6-1",
-    implementation: [{ file: "package.json", symbol: "https://github.com/soksak-app/kit/releases/download/v0.0.15/soksak-kit-0.0.15.tgz" }],
+    implementation: [{ file: "package.json", symbol: "\"@soksak/kit\": \"https://github.com/soksak-app/kit/releases/download/" }],
     tests: [{ file: "scripts/test/kit-records.test.mjs", id: "the pinned record validator preserves runtime diagnostics and rejects discovery accounts" }],
-    expected: "The pinned normal record validator accepts the actual Go runtime diagnostic while preserving discovery-account rejection, a rule that the pinned kit 0.0.15 carries.",
+    expected: "The pinned normal record validator accepts the actual Go runtime diagnostic while preserving discovery-account rejection, a rule that each kit release since 0.0.15 carries.",
     levels: ["unit"],
   },
   {
@@ -15211,9 +15211,16 @@ const FEATURE_LINKS = [
   },
   {
     id: "F916",
-    implementation: [{ file: "package.json", symbol: "https://github.com/soksak-app/kit/releases/download/v0.0.15/soksak-kit-0.0.15.tgz" }],
+    implementation: [{ file: "package.json", symbol: "\"@soksak/kit\": \"https://github.com/soksak-app/kit/releases/download/" }],
     tests: [{ file: "scripts/test/checklist.test.mjs", id: "checklist translations with the same identifiers, ordering, nesting, and states pass when their labels differ" }],
-    expected: "Core pins the kit 0.0.15, and the checklist checks of core pass on the pinned kit.",
+    expected: "Core pins a release file of the kit without a local patch, and the checklist checks of core pass on the pinned kit.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1015",
+    implementation: [{ file: "package.json", symbol: "https://github.com/soksak-app/kit/releases/download/v0.0.16/soksak-kit-0.0.16.tgz" }],
+    tests: [{ file: "scripts/test/checklist.test.mjs", id: "checklist translations with the same identifiers, ordering, nesting, and states pass when their labels differ" }],
+    expected: "Core pins the kit 0.0.16, and the checklist checks of core pass on the pinned kit.",
     levels: ["unit"],
   },
   {
