@@ -4,6 +4,7 @@ package workbench_test
 
 import (
 	"encoding/json"
+	"math"
 	"reflect"
 	"slices"
 	"strconv"
@@ -402,9 +403,9 @@ func TestACardGetCarriesTheSummaryStatusesOfEachTab(t *testing.T) {
 	}
 }
 
-// With cardSplit even a split balances the grid, so the three columns of one row take equal widths; with exact the split divides only
-// the card that it splits (docs/spec/groups.md#split-setting).
-func TestTheSplitSettingBalancesTheGrid(t *testing.T) {
+// A split of a card of an even row adds the new card as one more equal kid, so each of the k + 1 kids takes 1/(k + 1) and the three
+// columns of one row take equal widths; no setting chooses another division (docs/spec/groups.md#commands).
+func TestASplitOfAnEvenRowGivesEveryCardAnEqualShare(t *testing.T) {
 	f := layoutShell(t, oneCard(tab("t1", "notes")))
 	f.tester.SetSize(1400, 900)
 	f.settle()
@@ -414,18 +415,10 @@ func TestTheSplitSettingBalancesTheGrid(t *testing.T) {
 		}
 	}
 	cards := f.gridCards()
-	if w := cards["card-2"]["w"].(float64); w < 1.5*cards["main"]["w"].(float64) {
-		t.Fatalf("with cardSplit exact card-2 is %v wide and main %v", w, cards["main"]["w"])
-	}
-	f.shellFixture.run("core.settings.set", map[string]any{"patch": map[string]any{"cardSplit": "even"}})
-	if _, err := f.apply("core.card.split", `{"card": "main", "side": "bottom", "plugin": "plain"}`); err != nil {
-		t.Fatal(err)
-	}
-	cards = f.gridCards()
 	width := cards["main"]["w"].(float64)
 	for _, id := range []string{"card-2", "card-3"} {
-		if w := cards[id]["w"].(float64); w < width-1 || w > width+1 {
-			t.Fatalf("with cardSplit even card %s is %v wide and main %v", id, w, width)
+		if w := cards[id]["w"].(float64); math.Abs(w-width) > 1e-6 {
+			t.Fatalf("card %s is %v wide and main %v", id, w, width)
 		}
 	}
 }
@@ -433,7 +426,8 @@ func TestTheSplitSettingBalancesTheGrid(t *testing.T) {
 // The close of a nested group card at the left of its group gives its cells to the card of the same group beside it, although the
 // fill order of the layout library tries the card of another group above it first (docs/spec/groups.md#closing).
 func TestTheCloseOfANestedGroupGivesItsCellsToItsGroup(t *testing.T) {
-	space := treeSpace("spc-aaaaaa", cutNode("y",
+	// The stored tree holds the two window sidebars beside the content, as the workbench stores it, so the shell docks none.
+	space := treeSpace("spc-aaaaaa", cutNode("x", kidNode(1./3, map[string]any{"card": "left", "width": 190, "fixed": true}), kidNode(1./3, cutNode("y",
 		kidNode(0.33127317676143386, cutNode("x",
 			kidNode(0.5, boxNode("card-9", "그룹 1", "terminal", cutNode("x", kidNode(0.4702083333333333, cardNode("terminal", tab("t1", "notes"))), kidNode(0.5297916666666667, cardNode("card-10", tab("t7", "notes")))))),
 			kidNode(0.5, cardNode("card-5", tab("t6", "notes"))))),
@@ -443,7 +437,8 @@ func TestTheCloseOfANestedGroupGivesItsCellsToItsGroup(t *testing.T) {
 					kidNode(0.4702083333333333, boxNode("card-11", "그룹 3", "browser", cutNode("x", kidNode(0.49203035002215334, cardNode("browser", tab("t2", "notes"))), kidNode(0.5079696499778467, cardNode("card-12", tab("t8", "notes")))))),
 					kidNode(0.5297916666666667, cardNode("card-13", tab("t9", "notes"))))),
 				kidNode(0.4953789279112754, cardNode("card-3", tab("t5", "notes"))))),
-			kidNode(0.5, cutNode("y", kidNode(0.5046210720887246, cardNode("card-7", tab("t4", "notes"))), kidNode(0.4953789279112754, cardNode("card-8", tab("t3", "notes"))))))))))
+			kidNode(0.5, cutNode("y", kidNode(0.5046210720887246, cardNode("card-7", tab("t4", "notes"))), kidNode(0.4953789279112754, cardNode("card-8", tab("t3", "notes")))))))))),
+		kidNode(1./3, map[string]any{"card": "right", "width": 210, "fixed": true})))
 	stored := space["layout"].(map[string]any)
 	stored["leader"], stored["lastCard"] = "card-9", 13
 	f := layoutShell(t, space)

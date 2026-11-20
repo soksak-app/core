@@ -881,7 +881,7 @@ export class GroupTree {
 
   /**
    * Balances the grid after the split of the card id toward side (cardSplit even), and refuses the split when the balance fails or draws
-   * a content card that it changed below its minimum (docs/spec/groups.md#split-setting).
+   * a content card that it changed below its minimum (docs/spec/groups.md#splitting).
    */
   balanceEven(id, side, before) {
     try {
@@ -1002,7 +1002,7 @@ export class GroupTree {
   /**
    * Splits the card target toward side into the card id with data, with the split of its rectangle for a group card. A split toward top or
    * bottom whose upper card is drawn below headers, which the split of the group button always is (grouping), cuts at a new line
-   * (docs/spec/groups.md#split-setting). Returns false when the layout refuses.
+   * (docs/spec/groups.md#splitting). Returns false when the layout refuses.
    */
   splitCard(target, side, id, data, grouping) {
     const node = this.node(target);
@@ -1025,7 +1025,7 @@ export class GroupTree {
 
   /**
    * Moves the line between the card target and the new card id of a split toward top or bottom, so that both are drawn at one height below
-   * the headers that the upper one stands under and inside the frames of their level (docs/spec/groups.md#split-setting). A split across, and a line that other cards stand on,
+   * the headers that the upper one stands under and inside the frames of their level (docs/spec/groups.md#splitting). A split across, and a line that other cards stand on,
    * do not change it, so a split moves no line of another card.
    */
   levelSplit(target, side, id) {

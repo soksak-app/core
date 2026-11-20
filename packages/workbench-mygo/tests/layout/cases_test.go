@@ -218,16 +218,14 @@ func gridCall(t *testing.T, g *layout.Grid, s step) (any, bool, error) {
 			return g.Gap(), true, nil
 		case "minSize":
 			return g.MinSize(), true, nil
-		case "fillOrder":
-			return g.FillOrder(), true, nil
-		case "fillSides":
-			return g.FillSides(), true, nil
 		case "grabSize":
 			return g.GrabSize(), true, nil
 		case "snapDistance":
 			return g.SnapDistance(), true, nil
 		case "snap":
 			return g.Snap(), true, nil
+		case "frames":
+			return g.Frames(), true, nil
 		case "width":
 			return g.Width(), true, nil
 		case "height":
@@ -242,11 +240,15 @@ func gridCall(t *testing.T, g *layout.Grid, s step) (any, bool, error) {
 			arg(t, s, 1, &px)
 			map[string]func(float64){"gap": g.SetGap, "minSize": g.SetMinSize, "grabSize": g.SetGrabSize, "snapDistance": g.SetSnapDistance}[name](px)
 			return nil, false, nil
-		case "fillOrder", "snap":
+		case "snap":
 			var value string
 			arg(t, s, 1, &value)
-			map[string]func(string){"fillOrder": g.SetFillOrder, "snap": g.SetSnap}[name](value)
+			g.SetSnap(value)
 			return nil, false, nil
+		case "frames":
+			var value string
+			arg(t, s, 1, &value)
+			return nil, false, g.SetFrames(value)
 		}
 	case "resize":
 		arg(t, s, 0, &x)
@@ -273,10 +275,6 @@ func gridCall(t *testing.T, g *layout.Grid, s step) (any, bool, error) {
 		arg(t, s, 0, &id)
 		arg(t, s, 1, &fixed)
 		return g.SetFixed(id, fixed), true, nil
-	case "setFrames":
-		var frames map[string]layout.Frames
-		arg(t, s, 0, &frames)
-		return nil, false, g.SetFrames(frames)
 	case "setSize":
 		var size *float64
 		arg(t, s, 0, &id)
@@ -376,24 +374,12 @@ func gridCall(t *testing.T, g *layout.Grid, s step) (any, bool, error) {
 			return born, true, nil
 		}
 		return nil, true, nil
-	case "fill":
-		arg(t, s, 0, &id)
-		sides := g.FillSides()
-		arg(t, s, 1, &sides)
-		fill, err := g.Fill(id, sides)
-		if fill == nil {
-			return nil, true, err
-		}
-		return fill, true, err
 	case "canClose":
 		arg(t, s, 0, &id)
 		return g.CanClose(id), true, nil
 	case "close":
 		arg(t, s, 0, &id)
-		sides := g.FillSides()
-		arg(t, s, 1, &sides)
-		closed, err := g.Close(id, sides)
-		return closed, true, err
+		return g.Close(id), true, nil
 	case "canInsertAt":
 		arg(t, s, 0, &axis)
 		arg(t, s, 1, &line)
@@ -422,10 +408,7 @@ func gridCall(t *testing.T, g *layout.Grid, s step) (any, bool, error) {
 		if s.Call == "canMove" {
 			return g.CanMove(id, target, side), true, nil
 		}
-		sides := g.FillSides()
-		arg(t, s, 3, &sides)
-		moved, err := g.Move(id, target, side, sides)
-		return moved, true, err
+		return g.Move(id, target, side), true, nil
 	}
 	t.Fatalf("the grid has no call %s %s", s.Call, name)
 	return nil, false, nil

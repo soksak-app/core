@@ -98,7 +98,7 @@ func (s *Shell) newLayout() (json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
-	return json.Marshal(map[string]any{"state": map[string]any{"root": root, "paidBy": map[string]any{}}, "leader": leader,
+	return json.Marshal(map[string]any{"state": map[string]any{"root": root}, "leader": leader,
 		"lastCard": last, "named": 0})
 }
 
@@ -1109,7 +1109,7 @@ func (s *Shell) splitTab(id, side string, known *LoadedPlugin, params json.RawMe
 	if err != nil {
 		return nil, err
 	}
-	born, err := s.planes.Split(id, side, encoded, s.cardSplitEven())
+	born, err := s.planes.Split(id, side, encoded)
 	if err != nil {
 		// A refused split changes nothing, so the number of the title of the new tab is not taken.
 		s.tabsNamed--

@@ -49,13 +49,13 @@ func TestTheHeaderAnswersOfAGroupTreeHoldUntilTheLayoutChanges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	state := layout.State{Root: &layout.Node{Card: "card-1"}, PaidBy: map[string]string{}}
+	state := layout.State{Root: &layout.Node{Card: "card-1"}}
 	tree, err := layout.ReadTree(state, nil, json.RawMessage(`"card-1"`), json.RawMessage(`1`),
 		layout.GroupOptions{Head: 32}, grid)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := tree.CreateGroup("card-1", "right", nil, false); err != nil {
+	if _, _, err := tree.CreateGroup("card-1", "right", nil); err != nil {
 		t.Fatal(err)
 	}
 	ask := func() {
@@ -76,7 +76,7 @@ func TestTheHeaderAnswersOfAGroupTreeHoldUntilTheLayoutChanges(t *testing.T) {
 	if got := tree.Probes(); got != first {
 		t.Fatalf("a second draw without a layout change ran %d trial operations, want none", got-first)
 	}
-	if _, err := tree.Split("card-1", "bottom", nil, false); err != nil {
+	if _, err := tree.Split("card-1", "bottom", nil); err != nil {
 		t.Fatal(err)
 	}
 	ask()

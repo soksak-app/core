@@ -56,7 +56,7 @@ func TestAnArrivingBoxKeepsTheSharesOfItsInnerNode(t *testing.T) {
 	var state layout.State
 	if err := json.Unmarshal([]byte(`{"root":{"cut":"x","kids":[
 		{"share":0.5,"node":{"box":"g","inner":{"cut":"y","kids":[{"share":0.3,"node":{"card":"a"}},{"share":0.7,"node":{"card":"b"}}]}}},
-		{"share":0.25,"node":{"card":"c"}},{"share":0.25,"node":{"card":"d"}}]},"paidBy":{}}`), &state); err != nil {
+		{"share":0.25,"node":{"card":"c"}},{"share":0.25,"node":{"card":"d"}}]}}`), &state); err != nil {
 		t.Fatal(err)
 	}
 	gap, minimum, width, height := 24.0, 96.0, 1200.0, 800.0
@@ -102,7 +102,7 @@ func TestSetHeadsNamesTheHeadItRefuses(t *testing.T) {
 	var state layout.State
 	if err := json.Unmarshal([]byte(`{"root":{"cut":"x","kids":[
 		{"share":0.5,"node":{"box":"g","inner":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"b"}}]}}},
-		{"share":0.5,"node":{"card":"c"}}]},"paidBy":{}}`), &state); err != nil {
+		{"share":0.5,"node":{"card":"c"}}]}}`), &state); err != nil {
 		t.Fatal(err)
 	}
 	grid, err := layout.New(&state, layout.Options{})
@@ -113,5 +113,32 @@ func TestSetHeadsNamesTheHeadItRefuses(t *testing.T) {
 		if err := grid.SetHeads(map[string]float64{"g": px}); err == nil || err.Error() != want {
 			t.Fatalf("setHeads of %v throws %v, not %q", px, err, want)
 		}
+	}
+}
+
+// An id that the grid issues names no node of the tree: a box takes an id of the same form as a card, so an issued id that only skips
+// the cards gave a new card the id of a box, and the tree held two nodes of one id.
+func TestAnIssuedIDNamesNoBox(t *testing.T) {
+	var state layout.State
+	if err := json.Unmarshal([]byte(`{"root":{"cut":"x","kids":[
+		{"share":0.5,"node":{"box":"card-1","inner":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"b"}}]}}},
+		{"share":0.5,"node":{"card":"c"}}]}}`), &state); err != nil {
+		t.Fatal(err)
+	}
+	width, height := 1000.0, 600.0
+	grid, err := layout.New(&state, layout.Options{Width: &width, Height: &height})
+	if err != nil {
+		t.Fatal(err)
+	}
+	size := 200.0
+	id, ok := grid.InsertAt("x", 0, layout.InsertInit{Size: &size})
+	if !ok {
+		t.Fatal("insertAt at the left edge is refused")
+	}
+	if id == "card-1" {
+		t.Fatalf("insertAt issued %s, the id of a box", id)
+	}
+	if err := layout.CheckState(grid.ToJSON()); err != nil {
+		t.Fatalf("the state after insertAt is refused: %s", err)
 	}
 }

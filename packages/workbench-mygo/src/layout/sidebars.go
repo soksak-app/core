@@ -560,17 +560,21 @@ func ArrangeWindowSidebars(g *Grid, order, sides []string, records map[string]Wi
 			break
 		}
 		closed := false
-		// A sidebar that cannot leave yet waits until another window sidebar has left.
+		why := []string{}
+		// A sidebar leaves as a withdraw, so the other kids of its cut take its space in proportion
+		// (packages/soksak/docs/layout.md#add-and-remove); a sidebar that cannot leave yet waits until another window sidebar has left.
 		for _, id := range left {
 			g.SetFixed(id, false)
-			if g.closeAlong(id, fillOrders[g.order]) {
+			if _, err := g.Withdraw(id); err == nil {
 				closed = true
 				break
+			} else {
+				why = append(why, err.Error())
 			}
 			g.SetFixed(id, true)
 		}
 		if !closed {
-			return true, fmt.Errorf("cannot remove window sidebars %s", strings.Join(left, ", "))
+			return true, fmt.Errorf("cannot remove window sidebars %s: %s", strings.Join(left, ", "), strings.Join(why, "; "))
 		}
 	}
 	var unplaceable []string

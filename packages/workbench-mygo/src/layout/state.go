@@ -9,6 +9,7 @@ import (
 	"slices"
 	"sort"
 	"strconv"
+	"strings"
 )
 
 // The stored form of the layout is its canonical slicing tree (packages/soksak/docs/layout.md#the-model): cards, boxes of the host and
@@ -35,8 +36,9 @@ type Kid struct {
 	Node  *Node   `json:"node"`
 }
 
-func (n *Node) isCut() bool { return n.Cut != "" }
-func (n *Node) isBox() bool { return n.Cut == "" && n.Inner != nil }
+func (n *Node) isCut() bool  { return n.Cut != "" }
+func (n *Node) isBox() bool  { return n.Cut == "" && n.Inner != nil }
+func (n *Node) isCard() bool { return n.Cut == "" && n.Inner == nil }
 
 // id is the id of a card or a box, and "" for a cut.
 func (n *Node) id() string {
@@ -190,13 +192,13 @@ func readNode(raw json.RawMessage) (*Node, error) {
 	return nil, notANode(raw)
 }
 
-// State is the stored arrangement: the slicing tree of the plane and, for each card, the card it took its space from.
+// State is the stored arrangement: the slicing tree of the plane.
 type State struct {
-	Root   *Node             `json:"root"`
-	PaidBy map[string]string `json:"paidBy"`
-	// earlier and broken are what UnmarshalJSON read that is no state, the members of the earlier form or a node of another form, which
-	// CheckState reports.
+	Root *Node `json:"root"`
+	// earlier, extra and broken are what UnmarshalJSON read that is no state, the members of the earlier form, the members other than
+	// root in their order, or a node of another form, which CheckState reports.
 	earlier bool
+	extra   []string
 	broken  error
 }
 
@@ -212,6 +214,15 @@ func (s *State) UnmarshalJSON(text []byte) error {
 			s.earlier = true
 		}
 	}
+	keys, err := memberKeys(text)
+	if err != nil {
+		return err
+	}
+	for _, key := range keys {
+		if key != "root" {
+			s.extra = append(s.extra, key)
+		}
+	}
 	if raw, ok := members["root"]; ok {
 		root, err := readNode(raw)
 		if err != nil {
@@ -219,18 +230,40 @@ func (s *State) UnmarshalJSON(text []byte) error {
 		}
 		s.Root = root
 	}
-	if raw, ok := members["paidBy"]; ok && string(raw) != "null" {
-		if err := json.Unmarshal(raw, &s.PaidBy); err != nil {
-			return err
+	return nil
+}
+
+// memberKeys is the keys of a JSON object in the order of the text.
+func memberKeys(text []byte) ([]string, error) {
+	decoder := json.NewDecoder(bytes.NewReader(text))
+	if _, err := decoder.Token(); err != nil {
+		return nil, err
+	}
+	keys := []string{}
+	for decoder.More() {
+		token, err := decoder.Token()
+		if err != nil {
+			return nil, err
+		}
+		keys = append(keys, token.(string))
+		var skip json.RawMessage
+		if err := decoder.Decode(&skip); err != nil {
+			return nil, err
 		}
 	}
-	return nil
+	return keys, nil
 }
 
 // CheckState rejects a state that is not a canonical slicing tree and names what is wrong. Nothing is converted.
 func CheckState(state State) error {
 	if state.earlier {
-		return errors.New("soksak: the state holds xs, ys and cards, which is the earlier form; the state is {root, paidBy}")
+		return errors.New("soksak: the state holds xs, ys and cards, which is the earlier form; the state is {root}")
+	}
+	if slices.Contains(state.extra, "paidBy") {
+		return errors.New("soksak: the state holds paidBy, which the layout does not record; the state is {root}")
+	}
+	if len(state.extra) > 0 {
+		return errors.New("soksak: the state holds " + strings.Join(state.extra, ", ") + "; the state is {root}")
 	}
 	if state.broken != nil {
 		return state.broken
@@ -340,129 +373,6 @@ func (l nodeLines) on(axis Axis) (int, int) {
 	return l[2], l[3]
 }
 
-// derive lays the tree into the unit plane and derives the lines and the cells from it: coordinates within eps are one line (R1), and
-// the cards are listed in the order of the tree.
-func (g *Grid) derive() {
-	extents := map[*Node]extent{}
-	up := map[*Node]holding{}
-	var place func(n *Node, e extent)
-	place = func(n *Node, e extent) {
-		g.visit()
-		extents[n] = e
-		switch {
-		case n.isCut():
-			lo, hi := ends(n.Cut)
-			at, total := e.get(lo), e.get(hi)-e.get(lo)
-			for i, kid := range n.Kids {
-				up[kid.Node] = holding{n, i}
-				end := at + kid.Share*total
-				if i == len(n.Kids)-1 {
-					end = e.get(hi)
-				}
-				part := e
-				part.set(lo, at)
-				part.set(hi, end)
-				place(kid.Node, part)
-				at = end
-			}
-		case n.isBox():
-			up[n.Inner] = holding{n, -1}
-			place(n.Inner, e)
-		}
-	}
-	place(g.root, extent{0, 1, 0, 1})
-	leaves := []*Node{}
-	var walk func(n *Node)
-	walk = func(n *Node) {
-		g.visit()
-		switch {
-		case n.isCut():
-			for _, kid := range n.Kids {
-				walk(kid.Node)
-			}
-		case n.isBox():
-			walk(n.Inner)
-		default:
-			leaves = append(leaves, n)
-		}
-	}
-	walk(g.root)
-	xv, yv := []float64{}, []float64{}
-	for _, leaf := range leaves {
-		e := extents[leaf]
-		xv, yv = append(xv, e.x0, e.x1), append(yv, e.y0, e.y1)
-	}
-	g.xs, g.ys = linesOf(xv), linesOf(yv)
-	g.at = make(map[*Node]nodeLines, len(extents))
-	g.up = up
-	for n, e := range extents {
-		g.at[n] = nodeLines{lineOf(g.xs, e.x0), lineOf(g.xs, e.x1), lineOf(g.ys, e.y0), lineOf(g.ys, e.y1)}
-	}
-	g.leaves = make(map[string]*Node, len(leaves))
-	g.byID = make(map[string]*Card, len(leaves))
-	g.list = make([]*Card, len(leaves))
-	for i, leaf := range leaves {
-		l := g.at[leaf]
-		c := &Card{ID: leaf.Card, C0: l[0], C1: l[1], R0: l[2], R1: l[3], Fixed: leaf.Fixed, Data: leaf.Data}
-		if leaf.Width != nil {
-			w := *leaf.Width
-			c.Width = &w
-		}
-		if leaf.Height != nil {
-			h := *leaf.Height
-			c.Height = &h
-		}
-		g.list[i] = c
-		g.byID[c.ID] = c
-		g.leaves[leaf.Card] = leaf
-	}
-}
-
-// commit writes what the operations of the lines changed back into the tree: the attributes of every card, and the share of every kid
-// of a cut from the coordinates of the lines its rectangle starts and ends at. The structure of the tree stays; then the lines are
-// derived again.
-func (g *Grid) commit() {
-	for _, c := range g.list {
-		leaf := g.leaves[c.ID]
-		if leaf == nil {
-			continue
-		}
-		leaf.Fixed, leaf.Data = c.Fixed, c.Data
-		leaf.Width, leaf.Height = nil, nil
-		if c.Width != nil {
-			w := *c.Width
-			leaf.Width = &w
-		}
-		if c.Height != nil {
-			h := *c.Height
-			leaf.Height = &h
-		}
-	}
-	var push func(n *Node)
-	push = func(n *Node) {
-		g.visit()
-		switch {
-		case n.isCut():
-			a := g.arr(n.Cut)
-			lo, hi := g.at[n].on(n.Cut)
-			total := a[hi] - a[lo]
-			if total > 0 {
-				for i, kid := range n.Kids {
-					from, to := g.at[kid.Node].on(n.Cut)
-					n.Kids[i].Share = (a[to] - a[from]) / total
-				}
-			}
-			for _, kid := range n.Kids {
-				push(kid.Node)
-			}
-		case n.isBox():
-			push(n.Inner)
-		}
-	}
-	push(g.root)
-	g.derive()
-}
-
 // holding is the node that holds a node: a cut with the index of the node among its kids, or a box with index -1.
 type holding struct {
 	node *Node
@@ -507,25 +417,6 @@ func (g *Grid) put(n, next *Node) {
 	}
 }
 
-// drop takes the kid i out of its cut h and gives its share to the kid to, or to every other kid in proportion to its share when to is
-// -1. A cut left with one kid is replaced by that kid.
-func (g *Grid) drop(h *Node, i, to int) {
-	gone := h.Kids[i].Share
-	if to >= 0 {
-		h.Kids[to].Share += gone
-	} else {
-		for k := range h.Kids {
-			if k != i {
-				h.Kids[k].Share /= 1 - gone
-			}
-		}
-	}
-	h.Kids = slices.Delete(slices.Clone(h.Kids), i, i+1)
-	if len(h.Kids) == 1 {
-		g.put(h, h.Kids[0].Node)
-	}
-}
-
 // cardsOf is the cards of a node in the order of the tree.
 func cardsOf(n *Node) []*Node {
 	switch {
@@ -556,10 +447,9 @@ func (s State) Cards() ([]Card, error) {
 // cells is the lines and the cells of the grid, which the rectangle operations of the group tree lay their cards on before the grid reads
 // them as its tree again (installCells).
 type cells struct {
-	Xs     []float64
-	Ys     []float64
-	Cards  []Card
-	PaidBy map[string]string
+	Xs    []float64
+	Ys    []float64
+	Cards []Card
 }
 
 // checkCells rejects lines and cells that cannot describe a plane and reports which field is wrong.
@@ -615,7 +505,7 @@ func treeOfCells(c cells, boxes []Member, data map[string]json.RawMessage) (Stat
 	if err := checkCells(c); err != nil {
 		return State{}, err
 	}
-	root, err := planeTree(c, boxes, map[string]Rect{}, []Axis{"x", "y"})
+	root, err := planeTree(c, boxes, []Axis{"x", "y"})
 	if err != nil {
 		return State{}, err
 	}
@@ -635,7 +525,7 @@ func treeOfCells(c cells, boxes []Member, data map[string]json.RawMessage) (Stat
 		}
 		return out
 	}
-	return State{Root: convert(root), PaidBy: maps.Clone(c.PaidBy)}, nil
+	return State{Root: convert(root)}, nil
 }
 
 // cells is the lines and the cells derived from the tree.
@@ -644,7 +534,7 @@ func (g *Grid) cells() cells {
 	for i, c := range g.list {
 		cards[i] = copyCard(c)
 	}
-	return cells{Xs: slices.Clone(g.xs), Ys: slices.Clone(g.ys), Cards: cards, PaidBy: maps.Clone(g.paidBy)}
+	return cells{Xs: slices.Clone(g.xs), Ys: slices.Clone(g.ys), Cards: cards}
 }
 
 // installCells reads lines and cells as the tree of the grid with the boxes and their data, and installs it with its checks.
@@ -809,6 +699,7 @@ func (g *Grid) SetHeads(heads map[string]float64) error {
 		}
 	}
 	g.heads = maps.Clone(heads)
+	g.derive()
 	return nil
 }
 

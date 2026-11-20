@@ -486,7 +486,6 @@ func (s *Shell) buildGeneral(b *settingsBuilder) error {
 	b.group("표시", "배치는 그대로 두고 보이는 모습만 바꾼다.",
 		choice("포커스 표시", "focusInd", map[string]string{"border": "테두리", "corner": "꺽쇠"}),
 		choice("카드 자동 정렬", "cardArrange", map[string]string{"resize": "크기맞춤", "even": "균등"}),
-		choice("카드 분할", "cardSplit", map[string]string{"exact": "정확히 분할", "even": "균등"}),
 		choice("경계선", "fullRule", map[string]string{"under": "가림", "over": "보임", "none": "숨김"}),
 		s.row(b, "포커스 밖 흐리게", s.toggle(b, "dim")))
 

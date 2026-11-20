@@ -94,7 +94,7 @@ func storedRoot(root map[string]any) map[string]any {
 		}
 	}
 	visit(root, false)
-	return map[string]any{"state": map[string]any{"root": root, "paidBy": map[string]any{}}, "leader": leader, "lastCard": last}
+	return map[string]any{"state": map[string]any{"root": root}, "leader": leader, "lastCard": last}
 }
 
 // gridProject is the stored project prj-a whose first space is active.
@@ -443,7 +443,8 @@ func TestALayoutOpenSplitsBesideAnotherNeighbour(t *testing.T) {
 	// A neighbour without the tab gets a new card between it and the card.
 	f = layoutShell(t, pair())
 	answer, layout = f.twice("core.layout.open", `{"card":"a","side":"right","plugin":"notes","params":{"path":"x.md"}}`)
-	if got, want := layout.Root.shape(), fmt.Sprintf("row[a 0.25, %s 0.25, b 0.5]", answer["card"]); got != want {
+	// The row of a and b is even, so the new card is one more equal kid (docs/spec/groups.md#commands).
+	if got, want := layout.Root.shape(), fmt.Sprintf("row[a 0.3333, %s 0.3333, b 0.3333]", answer["card"]); got != want {
 		t.Fatalf("the tree is %s, want %s", got, want)
 	}
 	if got := layout.tabs(t, "b"); !slices.Equal(got, []string{"tab-bbbbbb*"}) {
@@ -452,7 +453,7 @@ func TestALayoutOpenSplitsBesideAnotherNeighbour(t *testing.T) {
 	// A card on the side that does not span the two lines of the card is no neighbour.
 	f = layoutShell(t, treeSpace("spc-aaaaaa", cutNode("x", kidNode(0.5, cardNode("a", tab("tab-aaaaaa", "notes"))), kidNode(0.5, cutNode("y", kidNode(0.5, cardNode("b", paramTab("tab-bbbbbb", "notes", map[string]any{"path": "b.md"}))), kidNode(0.5, cardNode("c", tab("tab-cccccc", "notes"))))))))
 	answer, layout = f.twice("core.layout.open", `{"card":"a","side":"right","plugin":"notes","params":{"path":"b.md"}}`)
-	if got, want := layout.Root.shape(), fmt.Sprintf("row[a 0.25, %s 0.25, column[b 0.5, c 0.5] 0.5]", answer["card"]); got != want {
+	if got, want := layout.Root.shape(), fmt.Sprintf("row[a 0.3333, %s 0.3333, column[b 0.5, c 0.5] 0.3333]", answer["card"]); got != want {
 		t.Fatalf("the tree is %s, want %s", got, want)
 	}
 	if answer["tab"] == "tab-bbbbbb" || !slices.Equal(layout.tabs(t, "b"), []string{"tab-bbbbbb*"}) {
@@ -592,7 +593,8 @@ func TestCurrentResolvesAtEachApplication(t *testing.T) {
 		t.Fatalf("the two applications answered %s and %s", first, second)
 	}
 	layout := f.layout()
-	if got, want := layout.Root.shape(), fmt.Sprintf("row[main 0.5, %s 0.25, %s 0.25]", a["card"], b["card"]); got != want {
+	// Each open splits a card of an even row, so the row holds three equal kids (docs/spec/groups.md#commands).
+	if got, want := layout.Root.shape(), fmt.Sprintf("row[main 0.3333, %s 0.3333, %s 0.3333]", a["card"], b["card"]); got != want {
 		t.Fatalf("the tree is %s, want %s", got, want)
 	}
 	// The current tab is the active tab of the focused card.

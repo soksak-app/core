@@ -132,9 +132,6 @@ func spanOf(c *Card, axis Axis) int {
 
 // fixedSize is the px size set on an axis, or nil when the card takes a share.
 func fixedSize(c *Card, axis Axis) *float64 {
-	if spanOf(c, axis) != 1 {
-		return nil
-	}
 	size := c.Width
 	if axis != "x" {
 		size = c.Height
