@@ -268,3 +268,44 @@ func TestAGroupCardMovedInsideItsLevelKeepsItsLeaderMark(t *testing.T) {
 		t.Fatalf("the root level names the leader %v after the move of the group card card-5 inside it, want card-5", layout["leader"])
 	}
 }
+
+// A drag of a group card resolves its drop where the pointer is in the window when its move comes right after the frame that moved
+// the header: the move arrives while that frame builds, so it applies after it, when the handler of the header holds the Bounds of
+// the frame before and the move measures from the box of the frame that moved it.
+func TestADragResolvesItsDropAtThePointerAfterTheHeaderMoved(t *testing.T) {
+	f := groupedShell(t)
+	f.tester.SetSize(1400, 900)
+	f.settle()
+	if _, err := f.apply("core.card.split", `{"card": "card-2", "side": "left", "plugin": "plain"}`); err != nil {
+		t.Fatal(err)
+	}
+	f.settle()
+	// The left zone of card-4 in the narrower window, where the move goes.
+	f.tester.SetSize(1000, 900)
+	f.settle()
+	narrow, target := f.box("core.group.name", "card-2"), f.box("core.card", "card-4")
+	x, y := target.X+4, target.Y+target.H/2
+	f.tester.SetSize(1400, 900)
+	f.settle()
+	name := f.box("core.group.name", "card-2")
+	if narrow.X == name.X {
+		t.Fatalf("the header of card-2 stands at x %v in both windows", name.X)
+	}
+	from, at := name.X+12, name.Y+name.H/2
+	f.tester.Move(from, at)
+	f.tester.Press(from, at)
+	f.tester.Move(from+20, at+20)
+	// The resize builds the frame that moves the header, and the move comes while it builds.
+	f.building = func() { f.tester.Move(x, y) }
+	f.tester.SetSize(1000, 900)
+	if moved := f.box("core.card", "card-4"); moved != target {
+		t.Fatalf("card-4 stands at %+v after the window narrowed, not at %+v as before", moved, target)
+	}
+	drag := status[*dragRead](t, f.shellFixture, "core.drag")
+	if drag == nil || drag.Card != "card-2" || drag.Target == nil || drag.Target.Card != "card-4" || drag.Target.Zone != "left" {
+		t.Fatalf("the drag of the header of card-2, which moved from x %v to %v, to the left zone of card-4 at %v,%v is %+v", name.X,
+			narrow.X, x, y, drag)
+	}
+	f.tester.Release(x, y)
+	f.settle()
+}

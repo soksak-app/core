@@ -99,6 +99,13 @@ func (f Frontend) AfterPresentation(done func(err error)) error {
 	return system.AfterPresentation(f.NativeWindow(), func() { done(nil) })
 }
 
+// AfterInput is the input notice of the main page: the receipt of the platform answered the delivery after the page received the
+// input, so done runs at once.
+func (f Frontend) AfterInput(done func(err error)) error {
+	done(nil)
+	return nil
+}
+
 // SettledPresentation is the settled presentation of the main page: the block of its main web view.
 func (f Frontend) SettledPresentation() (unsafe.Pointer, error) {
 	system, err := platform.Current()

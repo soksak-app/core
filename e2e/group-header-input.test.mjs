@@ -20,9 +20,9 @@ function gridPoint(grid, id, fx, fy) {
 
 /**
  * Double-clicks the name of the group card group: two clicks, the second with the click count 2, through the connection of s.
- * A release into a web view answers after its document received it, and WebKit dispatches the `dblclick` in the handling of that
- * release (docs/spec/exposure.md#methods), so on a window with a main page the rename has begun when the release answers. The
- * workbench of a window without a main page is no web view, so the check waits for the rename there.
+ * A release answers after the workbench handled it, as the receipt of a main page or the frame of the native workbench of mygo
+ * tells (docs/spec/exposure.md#methods), and the release of a double-click begins the rename, so the rename has begun when the
+ * release answers.
  */
 async function doubleClickName(s, group, what) {
   const name = await s.rect("core.group.name");
@@ -31,16 +31,11 @@ async function doubleClickName(s, group, what) {
   await s.pointer(at.x, at.y, "up");
   await s.pointer(at.x, at.y, "down", { clicks: 2 });
   await s.pointer(at.x, at.y, "up", { clicks: 2 });
-  const begun = (rename) => rename?.kind === "group" && rename.id === group;
-  if ((await s.get("host.window")).pageProcess !== null) {
-    const rename = await s.get("core.rename");
-    assert.ok(begun(rename), `${what}: the rename of ${group} had not begun when the release of the double-click answered: ` +
-      `core.rename ${JSON.stringify(rename)}, core.pointer ${JSON.stringify(await s.get("core.pointer"))}`);
-  } else {
-    await s.until("core.rename", begun, `${what}: the double-click on the name of ${group} did not begin its rename`);
-  }
+  const rename = await s.get("core.rename");
+  assert.ok(rename?.kind === "group" && rename.id === group, `${what}: the rename of ${group} had not begun when the release of ` +
+    `the double-click answered: core.rename ${JSON.stringify(rename)}, core.pointer ${JSON.stringify(await s.get("core.pointer"))}`);
   await s.run("core.rename.cancel");
-  await s.until("core.rename", (rename) => rename === null, `${what}: the rename did not end`);
+  await s.until("core.rename", (value) => value === null, `${what}: the rename did not end`);
 }
 
 /** Asserts that the window is neither the key window nor the virtual key window of the application, which stays inactive. */

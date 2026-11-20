@@ -1092,6 +1092,18 @@ func (b hostBackend) Pointer(window string, input PointerInput) error {
 	if input.Phase == "down" {
 		s.press(got.view)
 	}
+	// A press or release answers after the workbench handled it (docs/spec/exposure.md#methods).
+	if input.Phase == "down" || input.Phase == "up" {
+		handled := make(chan error, 1)
+		var asked error
+		mainThreadStep(func() { asked = s.window.AfterInput(func(err error) { handled <- err }) })
+		if asked == nil {
+			asked = <-handled
+		}
+		if asked != nil {
+			return rpcError(codeTimeout, "the workbench did not handle the input: %v", asked)
+		}
+	}
 	return nil
 }
 

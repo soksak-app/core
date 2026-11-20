@@ -28,4 +28,4 @@ require (
 // to draw it after the commit, declares the cursor of its content as a
 // cursor rect so that a cursor that a page sets later yields to it, and
 // gives each element of its element tree its text content.
-replace github.com/egoist/mygo => github.com/min-0-max/mygo v0.7.4-244-g4abb83d-soksak.15
+replace github.com/egoist/mygo => github.com/min-0-max/mygo v0.7.4-244-g4abb83d-soksak.16

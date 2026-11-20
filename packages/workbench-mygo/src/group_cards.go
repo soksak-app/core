@@ -368,7 +368,7 @@ func (s *Shell) drawGroupHead(c *ui.Context, id, name string, width, height floa
 			s.renameOnDoubleClick(label, target)
 			// The name grows over the room that the buttons leave, so a press on the header outside its buttons drags the group card. The
 			// buttons take their own presses, so only the name starts the drag, and its release ends it.
-			label.HandleInput(s.groupHeadInput(id, label.Bounds()))
+			label.HandleInput(s.groupHeadInput(id))
 			label.Children(func() {
 				ui.Text(c, name).SingleLine().Ellipsis("…").LineHeight(m.lineHeight).FontSize(size).TextColor(s.palette.Fg)
 			})

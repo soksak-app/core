@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: check-push check-preflight check-events benchmark-rust benchmark-go check-tools install build test-all check-browser-example check-docs check-commits check-checklist-history install-hooks check-boundaries check-platform-files check-windows-build check-windows-rust check-host-files check-app-tests create-test-certificates test-app-card-sidebar-current test-app-view-focus-current test-app-shutdown benchmark-view-drag benchmark-resize-catch-up benchmark-empty-window benchmark-idle-tab benchmark-split-load benchmark-click-cpu benchmark-scroll-cpu benchmark-layout-redraw repeat-app-test benchmark-b3 check-b3 check-exposure check-tests check-hosts-same test-language check-release test-rust-alone repeat-rust repeat-go repeat-node check-temp-files measure-page-memory measure-object-counts measure-host-calls measure-app-usage measure-terminal-redraw measure-terminal-text measure-trace-share measure-host-allocations check-app-update check-host-debug check-commands test-headless-owners repeat-test-app
+.PHONY: check-push check-preflight check-events benchmark-rust benchmark-go check-tools install build test-all check-browser-example check-docs check-commits check-checklist-history install-hooks check-boundaries check-platform-files check-windows-build check-windows-rust check-host-files check-app-tests create-test-certificates test-app-card-sidebar-current test-app-view-focus-current test-app-shutdown benchmark-view-drag benchmark-resize-catch-up benchmark-empty-window benchmark-idle-tab benchmark-split-load benchmark-click-cpu benchmark-scroll-cpu benchmark-layout-redraw repeat-app-test benchmark-b3 check-b3 check-exposure check-tests check-hosts-same test-language check-release test-rust-alone repeat-rust repeat-go repeat-node check-temp-files measure-page-memory measure-object-counts measure-host-calls measure-app-usage measure-terminal-redraw measure-terminal-text measure-trace-share measure-host-allocations check-app-update check-host-debug check-commands test-headless-owners
 
 check-docs:
 	@node scripts/check-docs.mjs
@@ -785,13 +785,6 @@ benchmark-layout-redraw:
 # default mygo, and SOKSAK_CONFIG_DIR the configuration folder that the application runs with.
 benchmark-input-latency:
 	@$(B3_BENCHMARK_ENV) SOKSAK_APP=$(or $(APP),mygo) node scripts/node-tests.mjs --script benchmark:input-latency --concurrency 1 --timeout 600
-
-# Repeats the full window run of one check file COUNT times (docs/operations/examples.md#end-to-end-run): each run starts the three debug
-# applications in a new root, runs the check and quits them; the repeat stops at the first failed run and reports the run and the load.
-repeat-test-app: check-app-tests $(E2E_BUILD)
-	@case "$(FILE)" in '') echo "repeat-test-app requires FILE=<test file> COUNT=<n>" >&2; exit 2;; esac
-	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "repeat-test-app requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
-	@node scripts/test-app.mjs --script test-app --only '$(FILE)' --count $(COUNT)
 
 repeat-app-test:
 	@case "$(FILE)" in '') echo "repeat-app-test requires FILE=<test file> NAME=<test name pattern> COUNT=<n>" >&2; exit 2;; esac

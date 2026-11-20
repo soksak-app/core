@@ -9,6 +9,8 @@
 #import "host_api_webview.h"
 #import "main_thread.h"
 #import "support/event_wait.h"
+#import "support/records.h"
+#import "event_ring.h"
 
 static int failures;
 
@@ -593,6 +595,49 @@ static void checkInputEndedTicketCommitsAfterANewerLayout(void) {
     [window release];
 }
 
+// Each step of a held key is recorded as native.input.held at the debug level of the input class, with the number of the window
+// and of the piece, so the record of a run shows the order in which the key wait kept the keys and in which they ran
+// (docs/spec/native-surfaces.md#keyboard-of-a-surface).
+static void checkHeldKeysRecordTheirSteps(void) {
+    const int8_t everything[SP_CLASS_COUNT] = {SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE};
+    check(sp_event_set_policy(everything), @"the policy stores every level of every class");
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(100, 1300, 200, 100) styleMask:NSWindowStyleMaskBorderless
+        backing:NSBackingStoreBuffered defer:NO];
+    window.releasedWhenClosed = NO;
+    NSMutableString *ran = [NSMutableString string];
+    NSArray<NSDictionary *> *records = capturedEvents(^{
+        surfaceLayoutKeysWaitOpen(window, true);
+        check(surfaceLayoutHoldKey(window, ^{ [ran appendString:@"a"]; }, ^{}), @"a key waits for the decision");
+        check(surfaceLayoutHoldKey(window, ^{ [ran appendString:@"b"]; }, ^{}), @"a second key waits for the decision");
+        surfaceLayoutKeysDecided(window);
+        runQueue();
+    });
+    check([ran isEqualToString:@"ab"], [NSString stringWithFormat:@"the held keys ran in their order (ran %@)", ran]);
+    NSMutableArray<NSString *> *steps = [NSMutableArray array];
+    for (NSDictionary *record in records) {
+        if (![record[@"name"] isEqualToString:@"native.input.held"]) continue;
+        NSDictionary *fields = record[@"fields"];
+        if ([fields[@"window"] longValue] != window.windowNumber) continue;
+        check([record[@"level"] intValue] == SP_EVENT_DEBUG && [record[@"class"] intValue] == SP_CLASS_INPUT,
+            [NSString stringWithFormat:@"the step %@ is an input record of the debug level", fields[@"step"]]);
+        check([fields[@"kind"] isEqualToString:@"call"] && [fields[@"key"] boolValue],
+            [NSString stringWithFormat:@"the step %@ names a key call (%@)", fields[@"step"], fields]);
+        [steps addObject:[NSString stringWithFormat:@"%@ %@", fields[@"step"], fields[@"piece"]]];
+    }
+    NSUInteger waitedFirst = [steps indexOfObjectPassingTest:^BOOL(NSString *step, NSUInteger i, BOOL *stop) { return [step hasPrefix:@"waited "]; }];
+    NSMutableArray<NSString *> *waited = [NSMutableArray array], *ranSteps = [NSMutableArray array];
+    for (NSString *step in steps) {
+        NSString *piece = [step componentsSeparatedByString:@" "].lastObject;
+        if ([step hasPrefix:@"waited "]) [waited addObject:piece];
+        if ([step hasPrefix:@"ran "]) [ranSteps addObject:piece];
+    }
+    check(waitedFirst != NSNotFound && waited.count == 2 && ranSteps.count == 2 && [waited isEqualToArray:ranSteps]
+        && [waited[0] integerValue] < [waited[1] integerValue],
+        [NSString stringWithFormat:@"the two keys are recorded as waited and then ran, each piece once and in its order (%@)", steps]);
+    [window close];
+    [window release];
+}
+
 static void runInline(void (^call)(void)) { call(); }
 
 // Ends every transaction that a check left open, whatever its outcome, so each check starts with no open transaction.
@@ -659,6 +704,8 @@ int main(void) { @autoreleasepool {
     checkCommitDuringAReturnKeepsTheKeyOrder();
     resetOwners();
     checkInputEndedTicketCommitsAfterANewerLayout();
+    resetOwners();
+    checkHeldKeysRecordTheirSteps();
     [third release];
     [first release];
     [second release];
