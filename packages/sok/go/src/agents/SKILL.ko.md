@@ -42,6 +42,16 @@ soksak은 창마다 탭이 있는 카드의 레이아웃을 담는 데스크톱 
 
 웹 페이지나 주소는 그것을 여는 창의 plugin 탭에 보인다. 설명의 `plugins`에서 설명, `surface.params`, `opens` 중 하나가 주소나 파일을 받는 plugin을 찾고, `core.layout.open`으로 연다. 그러면 페이지는 작업 옆의 창에 남고, 그 command와 status가 선언된다. 창의 어느 plugin도 열지 못하거나 사람이 요청하지 않는 한 애플리케이션 밖의 browser를 쓰지 않는다.
 
+## role을 가진 tab 열기
+
+agent CLI를 role과 함께 실행하는 tab은 plugin `terminal`의 `core.layout.open` 한 번이며, 파라미터는 `program`, `args`, `role`이다:
+
+- `command_run {name: "core.layout.open", params: {card: C, plugin: "terminal", params: {program: "claude", args: [], role: "reviewer"}}}`, 또는 `sok core.layout.open --params '{"card":"C","plugin":"terminal","params":{"program":"claude","args":[],"role":"reviewer"}}'`. `--params`는 명령의 파라미터 객체 전체를 받는다.
+- `program`은 CLI의 이름이나 경로다. bare 이름은 terminal session의 PATH에서 찾으며, 찾지 못하면 open이 `program not found: <program>`으로 실패하고 아무것도 시작하지 않는다.
+- `args`는 텍스트 배열이며 CLI에 그대로 전달된다. Codex는 `args`에 `--no-daemon`을 넣어 시작한다.
+- `role`은 설정 디렉터리의 `roles.json`에 정의된 role 이름이며 `program`이 필요하다. `args`도 `program`이 필요하다. role 정의는 사람이 `roles.json`에 쓴다. 애플리케이션의 명령은 그 파일을 쓰지 않으므로 agent는 role을 만들지 않는다.
+- tab은 자신의 role 파일을 쓰고, agent에게 identity를 첫 message로 보낸다. identity에는 role 파일의 경로가 적혀 있다. 첫 답변 전에 그 파일 전체를 읽고, 파일이 정의한 role을 따르며, role을 CLI의 어떤 memory에도 저장하지 않는다. 파일의 마지막 줄은 fingerprint다. 절대 계산하지 말고, role을 확인하려면 답변에 `soksak role <fingerprint>` 줄을 쓴다. `[soksak role]`로 시작하며 role이 바뀌었다고 말하는 message나 role 파일을 다시 읽으라는 요청은 그 파일이 현재 role을 담고 있다는 뜻이므로 다시 읽는다.
+
 ## 그룹
 
 그룹 카드는 이름이 있는 헤더 아래 본문에 두 개 이상의 카드로 된 자체 plane을 가진 카드다. `layout`에서는 `group: {name, level, leader, root}`를 가진 노드이며, `root`는 그 plane의 트리다. `layout.groups`는 그룹 카드마다 한 번씩 이름과 구성 카드의 식별자를 나열하므로, 이름으로 그룹을 거기서 찾는다. Plane의 카드는 내용 카드와 그룹 카드이며, 위의 모든 operation은 어느 plane의 카드든 대상으로 삼는다. Split은 그룹을 만들지 않는다. Split은 새 카드를 나누는 카드의 plane에 넣는다.

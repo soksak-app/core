@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1006-6: The agent skill, the MCP instructions and `docs/spec/cli.md` state how an agent opens a tab with an agent CLI and a role through `core.layout.open` with `program`, `args` and `role`, and the line form of confirmation. The sentences name only the refusals that the code gives and omit the planned role commands that no code implements.
 - F1006-2: The terminal checklist row P192 starts an agent CLI through `program` and `args` of the sidecar `open`. The vt and alacritty sidecars already implement the members and the `program not found` error on their `origin/main` (S233, S241); their `open_program_test` passes 10 of 10 with the real PATH. The core rows F1006-2, F1006-2-1 and F1006-2-2 are `[o]`, and the spec `docs/spec/agent-roles.md#start-parameters` needed no change.
 - F1016-13: The plane of the mygo workbench is the element `core.plane` of the element tree and of the window snapshot, covers the plane without the margin of the stage, so a press on that margin keeps the focus as on the page, and a test presses the plane outside every card.
 - F1016-10.6: The plane reads the fullscreen card through one reader and the kids of a cut node without a default, and its other defaults state their reasons.

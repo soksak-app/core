@@ -42,6 +42,16 @@ After a step, find the commands of the plugin of a tab with `exposure_search` or
 
 A web page or an address is shown in a tab of a plugin of the window that opens it: find in `plugins` of the description a plugin whose description, `surface.params` or `opens` takes an address or the file, and open it with `core.layout.open`, so that the page stays in the window beside the work and its commands and statuses are declared. Use a browser outside the application only when no plugin of the window opens it or the person asks for one.
 
+## Opening a tab with an agent role
+
+A tab that runs an agent CLI with a role is one `core.layout.open` of the plugin `terminal` with the parameters `program`, `args` and `role`:
+
+- `command_run {name: "core.layout.open", params: {card: C, plugin: "terminal", params: {program: "claude", args: [], role: "reviewer"}}}`, or `sok core.layout.open --params '{"card":"C","plugin":"terminal","params":{"program":"claude","args":[],"role":"reviewer"}}'`; `--params` takes the whole parameter object of the command.
+- `program` is the name or the path of the CLI. A bare name is resolved through the PATH of the terminal session; a program that is not found fails the open with `program not found: <program>`, and then nothing starts.
+- `args` is an array of texts that the CLI receives as given. Codex is started with `--no-daemon` in `args`.
+- `role` names a role defined in `roles.json` of the configuration directory, and it needs `program`; `args` needs `program` too. A person writes role definitions into `roles.json`; no command of the application writes it, so an agent does not create a role.
+- The tab writes the role file of the tab and sends the agent its identity as the first message. The identity names the path of the role file. Read that whole file before the first answer, follow the role it defines, and do not save the role in any memory of the CLI. The last line of the file is the fingerprint: never compute it, and write the line `soksak role <fingerprint>` in an answer to confirm the role. A message that starts with `[soksak role]` and says that the role changed, or a request to read the role file again, means that the file holds the current role; read it again.
+
 ## Groups
 
 A group card is a card whose body holds a plane of its own with two or more cards, below a header with the name of the group. In `layout` it is a node with `group: {name, level, leader, root}`, where `root` is the tree of its plane, and `layout.groups` lists every group card once with its name and the identifiers of its members, so find a group by its name there; the cards of the plane are content cards and group cards, and every operation above takes a card of any plane. A split never creates a group: a split puts its new card into the plane of the card that it splits.
