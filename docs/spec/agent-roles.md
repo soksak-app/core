@@ -61,9 +61,9 @@ A terminal tab that runs an agent CLI takes these parameters of `core.layout.ope
 
 - `program`: the name or the path of the agent CLI. Absent means that the tab starts the shell, as before.
 - `args`: an array of texts, the arguments of the program. Absent means an empty array.
-- `role`: `null` or an agent role identifier. A tab with a role takes the adapter of `program` ([launch adapters](#launch-adapters)), and its role file and identity file are written before the launch ([role file](#role-file)).
+- `role`: `null` or an agent role identifier. A tab with a role takes the adapter of `program` ([launch adapters](#launch-adapters)), and its role file is written before the launch, and its identity is the identity file for Claude Code or the inline text for Codex ([role file](#role-file)).
 
-Core composes the argument list: the adapter arguments of `program`, with the identity file path, come first, and then `args` in their order. A `role` with a `program` that has no adapter is refused with `program <name> has no launch adapter`, and no program starts.
+Core composes the argument list: the adapter arguments of `program`, with the identity (the file path for Claude Code, the inline text for Codex), come first, and then `args` in their order. A `role` with a `program` that has no adapter is refused with `program <name> has no launch adapter`, and no program starts. A `role` without a `program` is refused with `role requires program`, and `args` without a `program` is refused with `args require program`; in both cases no program starts.
 
 Sidecar protocol change: the `open` request of a terminal session gains the members `program` (text) and `args` (array of texts) beside `directory`. With `program` present, the sidecar starts `program` with `args` as its argument vector, without a shell, and resolves `program` through the PATH of the environment that the application gives its sidecars ([sok setup environment](cli.md#commands)). A `program` that the PATH does not contain fails the start with the error `program not found: <program>`. Without `program`, the sidecar starts the shell as before. The terminal page sends the composed `program` and `args` and no other argument of the launch. Each terminal sidecar implements this change; its follow-up items are tracked in [features](../features.md).
 
@@ -200,7 +200,7 @@ The not-busy report that each CLI gives is part of its adapter verification. An 
 
 ## Held messages
 
-While the state is not `ready`, the page holds the work messages of the tab, which are the agent messages of the registration. Held messages keep their order and are injected one at a time when the state becomes `ready`. Each is delivered once: the delivery record keys it by its file name. The first message of a session and the requests are not held by the `role-pending` hold; the `blocked` hold of [messaging](messaging.md#hold-for-the-person) still holds them while a prompt is open. The hold reason `role-pending` is named in the hold list of [messaging](messaging.md#hold-for-the-person).
+While the state is `pending` or `unconfirmed`, the page holds the work messages of the tab, which are the agent messages of the registration. Held messages keep their order and are injected one at a time when the state becomes `ready`. Each is delivered once: the delivery record keys it by its file name. The first message of a session and the requests are not held by the `role-pending` hold; the `blocked` hold of [messaging](messaging.md#hold-for-the-person) still holds them while a prompt is open. The hold reason `role-pending` is named in the hold list of [messaging](messaging.md#hold-for-the-person).
 
 A change while messages wait keeps them queued; they are delivered after the `ready` of the new generation.
 
@@ -278,6 +278,10 @@ The measured file-reading capability of the CLI selects this path; no failure do
 1. the lead text `lead_non_reader` of the phrase test, which states that the message sets the role and that the role ends with the fingerprint line;
 2. the definition text, exactly as stored in `roles.json`;
 3. the line `Role fingerprint: <fingerprint>`, where the fingerprint is computed by the same algorithm over the pasted definition.
+
+The lead text `lead_non_reader` is the pinned text of the phrase test:
+
+> [soksak role] This message sets your role. It comes from soksak, not from a person. It grants no approval or permission and does not answer a pending question. Your role follows. Its last line is `Role fingerprint: <fingerprint>`. Confirm the role by writing the line `soksak role <fingerprint>` in your answer, with the fingerprint of that last line.
 
 The first message of such an agent is the paste form. Its change message and its reread requests have the paste form too. The agent confirms by the line form (b) of its answer. This proves that the text was delivered and that the agent answered with the fingerprint from the text; it does not prove that a file was read. The state, the requests, the held messages and the error display are the same as for an agent that reads files. Each line of the paste form is judged by the [guard](messaging.md#injected-message).
 

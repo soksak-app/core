@@ -127,7 +127,7 @@ Status `<plugin>.messages`는 registration 옆에 message의 delivery를 담는�
 
 #### 역할 확인
 
-Terminal plugin은 `<plugin>.screen.read`가 읽는 화면의 보이는 행에서, 보이는 행이 바뀔 때마다 줄 `soksak role <fingerprint>`를 찾는다. 여기서 `<fingerprint>`는 소문자 16진수 16자리다. 찾은 줄은 `core.tab.role.confirm`과 같은 surface별 직렬화를 거쳐 tab의 role을 확인한다([확인](agent-roles.ko.md#confirmation)). 행은 양 끝의 공백을 뺀 텍스트가 줄과 같을 때 맞는다. 주입 message는 이런 줄을 지문과 함께 담지 않는다. placeholder가 `<fingerprint>`이고 붙여 넣기 형식은 `Role fingerprint:`를 쓰기 때문이다. Terminal이 두 행에 걸쳐 감싼 줄이나, 갱신이 읽히기 전에 화면 밖으로 밀려난 줄은 맞지 않으며, 상태는 `pending`에 머물고 reread request이 다시 묻는다.
+Terminal plugin은 `<plugin>.screen.read`가 읽는 화면의 보이는 행에서, 보이는 행이 바뀔 때마다 줄 `soksak role <fingerprint>`를 찾는다. 여기서 `<fingerprint>`는 소문자 16진수 16자리다. 찾은 줄은 `core.tab.role.confirm`과 같은 surface별 직렬화를 거쳐 tab의 role을 확인한다([확인](agent-roles.ko.md#confirmation)). 행은 양 끝의 공백을 뺀 텍스트가 줄과 같을 때 맞는다. 주입 message는 이런 줄을 fingerprint과 함께 담지 않는다. placeholder가 `<fingerprint>`이고 붙여 넣기 형식은 `Role fingerprint:`를 쓰기 때문이다. Terminal이 두 행에 걸쳐 감싼 줄이나, 갱신이 읽히기 전에 화면 밖으로 밀려난 줄은 맞지 않으며, 상태는 `pending`에 머물고 reread request이 다시 묻는다.
 
 #### Evidence of the hold
 
