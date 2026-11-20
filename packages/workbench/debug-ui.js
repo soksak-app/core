@@ -75,6 +75,24 @@ export function onDebugDrawn(fn) {
   drawn = fn;
 }
 
+/** Whether the page last told the host that the view follows the event files; a new document starts not following. */
+let toldFollowing = false;
+
+/**
+ * Tells the host with `debugFollow` whether the view follows the event files when that changed since the last call: the view follows
+ * while it is open, its timeline is shown and following is on, and only a window that follows receives `debug-log-changed`
+ * (docs/spec/debug.md#files). A failed call is shown by the error display.
+ */
+function tellFollowing() {
+  const following = card !== null && timeline !== null && timeline.following;
+  if (debug === null || following === toldFollowing) return;
+  toldFollowing = following;
+  debug.follow(following).catch((reason) => {
+    fail("follow", reason);
+    draw();
+  });
+}
+
 /** The warning beside the save of the selected rows (docs/spec/logging.md#privacy). */
 const SELECTION_WARNING = "저장한 파일에는 입력한 글자가 들어 있을 수 있다.";
 
@@ -123,7 +141,10 @@ function button(key, name, label, command, params) {
 /** Draws the list and, while the view is open, updates the view of the host. */
 function draw() {
   if (!card) return;
-  queueMicrotask(() => drawn());
+  queueMicrotask(() => {
+    drawn();
+    tellFollowing();
+  });
   // The same content keeps its scroll position; another content starts at the top, and the text of a file at its end.
   const positions = scrollPositions(card);
   const pane = card.querySelector(".dbg-card__pane");
@@ -475,7 +496,10 @@ export async function openDebug() {
 /** Closes the view. */
 export function closeDebug() {
   if (!card) return;
-  queueMicrotask(() => drawn());
+  queueMicrotask(() => {
+    drawn();
+    tellFollowing();
+  });
   if (native) overlay.hide(card);
   else standIn(false);
   hideError(error, "debug");

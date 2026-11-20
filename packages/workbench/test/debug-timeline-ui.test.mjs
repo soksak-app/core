@@ -11,6 +11,8 @@ import { openDebugView } from "./support/debug-document.mjs";
 
 /** The requests of the host call `logQuery` that the page sent, in order. */
 const queriesOf = (wire) => wire.calls.filter((call) => call.name === "logQuery").map((call) => call.payload);
+/** The states of the host call `debugFollow` that the page sent, in order. */
+const followsOf = (wire) => wire.calls.filter((call) => call.name === "debugFollow").map((call) => call.payload.following);
 /** The requests of the host call `debugSaveText` that the page sent, in order. */
 const savesOf = (wire) => wire.calls.filter((call) => call.name === "debugSaveText").map((call) => call.payload);
 /** The text of the error display of the view, or null when none is shown. */
@@ -45,6 +47,7 @@ test("the timeline asks for the newest page and shows it oldest first with the s
     await close();
   }
   wire.finish();
+  assert.deepEqual(followsOf(wire), [true, false], "the shown and the left timeline did not tell the host whether the view follows");
 });
 
 test("a log of more rows than a page opens as one page and the older pages come in front of it", async () => {
@@ -409,6 +412,8 @@ test("stopping follows no more queries and resuming asks for what grew while sto
     await close();
   }
   wire.finish();
+  // Only a window that follows receives the notices (docs/spec/debug.md#files): the view tells the host each change of its following.
+  assert.deepEqual(followsOf(wire), [true, false, true, false], "the view did not tell the host each start and stop of following");
 });
 
 test("a query that fails while following stops following and is shown with its file and line", async () => {
@@ -503,6 +508,19 @@ test("the saved lines of selected rows are the lines of the events, also for a r
     assert.equal(saved.length, 1);
     assert.equal(saved[0].text.startsWith(" "), false, "the saved line has no indent");
     assert.equal(saved[0].text.split("\n").filter(Boolean).length, 1);
+  } finally {
+    await close();
+  }
+  wire.finish();
+});
+
+test("a refused call that tells the host whether the view follows is shown through the error display", async () => {
+  const { ui, wire, close } = await openDebugView("debug-timeline-ui-follow-refused");
+  try {
+    await ui.showDebugTimeline();
+    await settled();
+    assert.equal(ui.debugState().error, "follow: argument request.following is missing");
+    assert.equal(shownWhere(), "debug");
   } finally {
     await close();
   }

@@ -8294,6 +8294,19 @@
     },
     {
       "call": {
+        "name": "debugFollow",
+        "payload": {
+          "following": true
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
         "name": "overlayUpdate",
         "payload": "$update-3"
       }
@@ -32577,6 +32590,19 @@
           "ts_us": "$clock-ts-us-5",
           "mono_ns": "$clock-mono-ns-5"
         }
+      }
+    },
+    {
+      "call": {
+        "name": "debugFollow",
+        "payload": {
+          "following": false
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
       }
     },
     {

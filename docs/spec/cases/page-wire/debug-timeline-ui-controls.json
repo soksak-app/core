@@ -222,8 +222,34 @@
     },
     {
       "call": {
+        "name": "debugFollow",
+        "payload": {
+          "following": true
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
         "name": "overlayUpdate",
         "payload": "$update-3"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "debugFollow",
+        "payload": {
+          "following": false
+        }
       }
     },
     {

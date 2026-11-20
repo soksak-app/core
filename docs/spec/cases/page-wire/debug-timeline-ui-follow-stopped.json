@@ -262,8 +262,34 @@
     },
     {
       "call": {
+        "name": "debugFollow",
+        "payload": {
+          "following": true
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
         "name": "overlayUpdate",
         "payload": "$update-3"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "debugFollow",
+        "payload": {
+          "following": false
+        }
       }
     },
     {
@@ -321,6 +347,19 @@
           "w": 1024,
           "h": 768
         }
+      }
+    },
+    {
+      "call": {
+        "name": "debugFollow",
+        "payload": {
+          "following": true
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
       }
     },
     {
@@ -402,6 +441,19 @@
       "call": {
         "name": "overlayUpdate",
         "payload": "$update-6"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "debugFollow",
+        "payload": {
+          "following": false
+        }
       }
     },
     {
