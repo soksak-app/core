@@ -1,7 +1,9 @@
 // Checks the display frame of an image region (docs/spec/native-surfaces.md#copy-path-frames): a frame request of a region asks for
 // the next display frame of its window once, the region reports that frame through its event callback with the refresh rate of the
-// screen that shows the window, a second request before that frame asks nothing more, an idle region reports no frame, and a closed
-// region reports none. It opens a window behind the other windows and does not activate the application.
+// screen that shows the window, a second request before that frame asks nothing more, an idle region reports no frame, a hidden region
+// of an occluded window reports its frame, because the display link of the screen runs regardless of the occlusion of the window, and a
+// closed region reports none. It opens a window behind the other windows, occludes it with a second window behind the other windows, and
+// does not activate the application.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import <QuartzCore/QuartzCore.h>
@@ -93,10 +95,30 @@ int main(int argc, char **argv) { @autoreleasepool {
     check(late == nil, [NSString stringWithFormat:@"a request after the display frame reports a display frame: %@", late]);
     check(frames.count == 2, [NSString stringWithFormat:@"a request after the display frame reports one more frame: %@", frames]);
 
+    sp_region_place(region, 10, 20, 120, 80, false);
+    NSWindow *cover = [[NSWindow alloc] initWithContentRect:NSInsetRect(window.frame, -20, -20)
+        styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
+    [cover setReleasedWhenClosed:NO];
+    cover.opaque = YES;
+    cover.backgroundColor = NSColor.blackColor;
+    [cover orderWindow:NSWindowAbove relativeTo:window.windowNumber];
+    NSString *visible = eventWaitUntil(@"the occlusion of the window", 5,
+        ^BOOL { return !(window.occlusionState & NSWindowOcclusionStateVisible); },
+        ^NSString *{ return [NSString stringWithFormat:@"occlusion state %lu", (unsigned long)window.occlusionState]; });
+    check(visible == nil, [NSString stringWithFormat:@"the second window occludes the window: %@", visible]);
+    sp_region_want_frame(region);
+    late = eventWaitUntil(@"the display frame of a hidden region of an occluded window", 5, ^BOOL { return frames.count > 2; },
+        ^NSString *{ return [NSString stringWithFormat:@"%lu frames after %lu refreshes", (unsigned long)frames.count, (unsigned long)refreshes.ticks]; });
+    check(late == nil, [NSString stringWithFormat:@"a hidden region of an occluded window reports a display frame: %@", late]);
+    check(frames.count == 3 && [frames.lastObject isEqualToString:want],
+        [NSString stringWithFormat:@"the frame of the occluded window carries the refresh rate of the screen: %@, want %@", frames, want]);
+    [cover orderOut:nil];
+    [cover release];
+
     sp_region_want_frame(region);
     sp_region_close(region);
     waitRefreshes(refreshes, 3, @"three refreshes after the close");
-    check(frames.count == 2, [NSString stringWithFormat:@"a region closed before its display frame reports none: %@", frames]);
+    check(frames.count == 3, [NSString stringWithFormat:@"a region closed before its display frame reports none: %@", frames]);
 
     [link invalidate];
     sp_surface_unplace_view(view);

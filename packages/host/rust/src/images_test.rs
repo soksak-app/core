@@ -1487,17 +1487,17 @@ fn a_frame_request_asks_for_one_display_frame_and_its_tick_carries_the_refresh_r
         (true, Vec::new(), 0),
         "a request before the tick asks for nothing more"
     );
-    let tick = images
+    let frame = images
         .frame_tick(&key, Some(120))
         .expect("the display frame of the request gives a tick");
     assert_eq!(
-        serde_json::json!({ "image": { "tick": &tick } }),
+        frame.body("main"),
         serde_json::json!({ "image": { "tick": {
             "name": "copy", "generation": generation, "sequence": 1, "refreshRate": 120,
         } } })
     );
     assert_eq!(
-        images.want_frame(&key, "sidecar-a", generation),
+        images.want_frame(&key, "sidecar-a", generation, super::FramePurpose::Draw),
         Ok(true),
         "a request after the tick asks for one display frame"
     );
@@ -1506,13 +1506,13 @@ fn a_frame_request_asks_for_one_display_frame_and_its_tick_carries_the_refresh_r
         "a display frame without a refresh rate gives no tick"
     );
     assert_eq!(
-        images.want_frame(&key, "sidecar-a", generation),
+        images.want_frame(&key, "sidecar-a", generation, super::FramePurpose::Draw),
         Ok(true),
         "a display frame without a refresh rate ends the request"
     );
     let next = images
         .frame_tick(&key, Some(60))
-        .map(|tick| (tick.sequence, tick.refresh_rate));
+        .map(|frame| (frame.tick.sequence, frame.tick.refresh_rate));
     assert_eq!(next, Some((2, 60)), "the next tick");
 }
 
@@ -1591,6 +1591,109 @@ fn malformed_frame_request_names_its_member() {
             handle_frame_request(&images, want, "sidecar-a"),
             (true, Vec::new(), 0),
             "{case}"
+        );
+    }
+}
+
+// contract: images.copy-path.frame-request-read
+// A read frame request asks for one display frame also for a region that is not drawing and while the window is occluded, and its
+// display frame sends the tick; a read request and a draw request that wait together ask one display frame and receive one tick; the
+// display frame of a read request of a window on no screen is answered noScreen with the window; a purpose of another value is
+// malformed (docs/spec/native-surfaces.md#copy-path-frames).
+#[test]
+fn a_read_frame_request_is_answered_while_the_region_does_not_draw() {
+    let (images, key, idle, generation) = frame_fixture();
+    let idle_generation = images.lock().states[&idle].generation;
+    let read_idle =
+        serde_json::json!({ "name": "idle", "generation": idle_generation, "purpose": "read" });
+    assert_eq!(
+        handle_frame_request(&images, read_idle, "sidecar-a"),
+        (true, Vec::new(), 1),
+        "a read request for a region that is not drawing asks for one display frame"
+    );
+    let frame = images
+        .frame_tick(&idle, Some(120))
+        .expect("the display frame of the read request gives a tick");
+    assert_eq!(
+        (
+            frame.no_screen,
+            frame.tick.sequence,
+            frame.tick.refresh_rate
+        ),
+        (false, 1, 120),
+        "the tick of the read request"
+    );
+
+    images.set_on_screen(false);
+    assert_eq!(
+        handle_frame_request(
+            &images,
+            serde_json::json!({ "name": "copy", "generation": generation }),
+            "sidecar-a"
+        ),
+        (true, Vec::new(), 0),
+        "a draw request while the window is occluded asks for no display frame"
+    );
+    let read = serde_json::json!({ "name": "copy", "generation": generation, "purpose": "read" });
+    assert_eq!(
+        handle_frame_request(&images, read.clone(), "sidecar-a"),
+        (true, Vec::new(), 1),
+        "a read request while the window is occluded asks for one display frame"
+    );
+    let frame = images.frame_tick(&key, Some(120));
+    assert_eq!(
+        frame.map(|frame| (frame.no_screen, frame.tick.sequence)),
+        Some((false, 1)),
+        "the display frame of the read request of an occluded window"
+    );
+
+    images.set_on_screen(true);
+    let draw = serde_json::json!({ "name": "copy", "generation": generation, "purpose": "draw" });
+    let (_, _, draw_asked) = handle_frame_request(&images, draw, "sidecar-a");
+    let (_, _, read_asked) = handle_frame_request(&images, read.clone(), "sidecar-a");
+    assert_eq!(
+        (draw_asked, read_asked),
+        (1, 0),
+        "a draw request and a read request that wait together ask for one display frame"
+    );
+    let frame = images.frame_tick(&key, Some(120));
+    assert_eq!(
+        frame.map(|frame| frame.tick.sequence),
+        Some(2),
+        "the display frame of both requests gives one tick"
+    );
+
+    handle_frame_request(&images, read, "sidecar-a");
+    let frame = images
+        .frame_tick(&key, None)
+        .expect("the display frame of a read request of a window on no screen gives the refusal");
+    assert!(frame.no_screen, "the refusal noScreen");
+    assert_eq!(
+        frame.body("main"),
+        serde_json::json!({ "image": { "want": {
+            "error": "noScreen", "name": "copy", "generation": generation, "purpose": "read", "window": "main",
+        } } })
+    );
+
+    for purpose in [
+        serde_json::json!("paint"),
+        serde_json::json!(1),
+        serde_json::Value::Null,
+    ] {
+        assert_eq!(
+            handle_frame_request(
+                &images,
+                serde_json::json!({ "name": "copy", "generation": generation, "purpose": purpose }),
+                "sidecar-a"
+            ),
+            (
+                true,
+                vec![serde_json::json!({ "image": { "want": {
+                    "error": "malformed", "member": "purpose", "name": "copy",
+                } } })],
+                0
+            ),
+            "purpose {purpose}"
         );
     }
 }

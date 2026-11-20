@@ -517,6 +517,7 @@ fn invalid_json_closes_connection() {
 | `images.copy-path.frame-request-tick` | 그리는 region의 소유자가 보낸 프레임 요청은 native region에 display frame 하나를 요청하고, 틱 전의 두 번째 요청은 더 요청하지 않는다. display frame은 region의 1부터 세는 sequence와 native region이 읽은 재생률을 담은 틱 하나를 보내고, 재생률이 없는 display frame은 틱을 보내지 않고 요청을 끝낸다. | all |
 | `images.copy-path.frame-request-refused` | region을 소유하지 않는 보낸 쪽의 프레임 요청은 `notAttached`, 현재가 아닌 generation의 요청은 `stale`로 답하고, 그리지 않는 region의 요청은 display frame을 요청하지 않는다. | all |
 | `images.copy-path.frame-request-malformed` | `generation`이 없거나 형이 틀리거나 `null`인 프레임 요청은 `error`를 `malformed`로, `member`와 함께 답하고, 올바른 `name`이 없는 요청은 응답 없이 소비하며 응답을 보내지 않는다고 적는 오류 기록 하나를 남긴다. | all |
+| `images.copy-path.frame-request-read` | `purpose`가 `read`인 프레임 요청은 그리지 않는 region에 대해서도, 창이 가려진 동안에도 native region에 display frame 하나를 요청하고, 그 display frame은 틱을 보낸다. 함께 기다리는 read 요청과 draw 요청은 display frame 하나를 요청하고 틱 하나를 받는다. 재생률이 없는 read 요청의 display frame은 `error`를 `noScreen`으로, `purpose` `read`와 endpoint의 창 식별자 `window`와 함께 답한다. `draw`도 `read`도 아닌 `purpose`는 `malformed`로, `member` `purpose`와 함께 답한다. | all |
 | `images.copy-path.input-draw` | 응답되지 않은 요청이 없는 드로잉 region에 사용자 입력이 닿으면 입력의 correlation 식별자를 담은 screen 요청을 tick을 기다리지 않고 바로 보낸다. | all |
 | `images.copy-path.screen-answer-accepted` | 공급자의 screen 메시지가 region의 응답되지 않은 요청에 답하면 wire에서 `accepted`로 답하고 요청을 끝내며, 그 rows를 다음 요청의 기준으로 삼는다. | all |
 | `images.copy-path.screen-answer-refused` | generation, raster 또는 요청 식별자가 오래되었거나 region을 소유하지 않은 보낸 쪽의 screen 메시지는 `stale` 또는 `notAttached`로 답하며, 응답되지 않은 요청을 그대로 둔다. | all |

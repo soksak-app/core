@@ -151,9 +151,11 @@ type ImageRasterState struct {
 	ScreenRequest                  ImageScreenRequest
 	ScreenAccepted                 bool
 	ScreenGeneration, ScreenRaster uint64
-	// FrameWanted is true from an accepted frame request until the native region reports the display frame that answers it, and
-	// FrameSequence counts the ticks of the region (docs/spec/native-surfaces.md#copy-path-frames).
+	// FrameWanted is true from the frame request that asked the native region for a display frame until the native region reports that
+	// frame, FrameRead is true while a read request waits for it, and FrameSequence counts the ticks of the region
+	// (docs/spec/native-surfaces.md#copy-path-frames).
 	FrameWanted   bool
+	FrameRead     bool
 	FrameSequence uint64
 }
 
@@ -294,11 +296,20 @@ type ImageTick struct {
 	Owner       SidecarOwner `json:"-"`
 }
 
+// FramePurpose is the purpose of a frame request: a draw of the region, or a read that counts display frames
+// (docs/spec/native-surfaces.md#copy-path-frames).
+type FramePurpose string
+
+const (
+	FrameDraw FramePurpose = "draw"
+	FrameRead FramePurpose = "read"
+)
+
 // WantFrame answers the frame request of sender for a region (docs/spec/native-surfaces.md#copy-path-frames). It returns the refusal
 // reason, notAttached when sender does not own the attached region and stale when generation is not the current one, or "" for an
-// accepted request. ask is true when the caller asks the native region for one display frame: the region is drawing and waits for no
-// tick yet. A request while one waits and a request for a region that is not drawing ask nothing.
-func (i *Images) WantFrame(key ImageKey, sender string, generation uint64) (reason string, ask bool) {
+// accepted request. ask is true when the caller asks the native region for one display frame: the region waits for no display frame yet,
+// and it is drawing or the request is a read. A request while one waits and a draw request for a region that is not drawing ask nothing.
+func (i *Images) WantFrame(key ImageKey, sender string, generation uint64, purpose FramePurpose) (reason string, ask bool) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	state := i.states[key]
@@ -309,33 +320,62 @@ func (i *Images) WantFrame(key ImageKey, sender string, generation uint64) (reas
 	if generation != state.Generation {
 		return "stale", false
 	}
-	if state.FrameWanted || !i.drawingLocked(key, state) {
+	if purpose == FrameRead {
+		state.FrameRead = true
+	} else if !i.drawingLocked(key, state) {
+		return "", false
+	}
+	if state.FrameWanted {
 		return "", false
 	}
 	state.FrameWanted = true
 	return "", true
 }
 
-// FrameTick ends the frame request of a region at the display frame that the native region reported, and returns the tick of the
-// region when it is drawing. refreshRate is the refresh rate that the native region read, or nil for a window on no screen, which has
-// no display frame and sends no tick.
-func (i *Images) FrameTick(key ImageKey, refreshRate *int) (ImageTick, bool) {
+// ImageFrame is the answer of the display frame of a frame request: the tick, or NoScreen for a read request of a window on no screen,
+// which has no display frame (docs/spec/native-surfaces.md#copy-path-frames). Tick names the region and its supplier in both cases.
+type ImageFrame struct {
+	Tick     ImageTick
+	NoScreen bool
+}
+
+// Body returns the image message of the answer to the supplier; window is the window identifier of the endpoint, which the refusal
+// noScreen names.
+func (f ImageFrame) Body(window string) map[string]any {
+	if f.NoScreen {
+		return map[string]any{"image": map[string]any{"want": map[string]any{
+			"error": "noScreen", "name": f.Tick.Name, "generation": f.Tick.Generation, "purpose": string(FrameRead), "window": window,
+		}}}
+	}
+	return map[string]any{"image": map[string]any{"tick": f.Tick}}
+}
+
+// FrameTick ends the frame requests of a region at the display frame that the native region reported, and returns the answer: the tick
+// of the region when it is drawing or a read request waited, or the refusal noScreen of a waiting read request when refreshRate is nil.
+// refreshRate is the refresh rate that the native region read, or nil for a window on no screen, which has no display frame and sends
+// no tick.
+func (i *Images) FrameTick(key ImageKey, refreshRate *int) (ImageFrame, bool) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	state := i.states[key]
 	if state == nil {
-		return ImageTick{}, false
+		return ImageFrame{}, false
 	}
+	read := state.FrameRead
 	state.FrameWanted = false
+	state.FrameRead = false
 	owner := i.owners[key]
-	if refreshRate == nil || owner == nil || !i.drawingLocked(key, state) {
-		return ImageTick{}, false
+	if owner == nil || !read && (refreshRate == nil || !i.drawingLocked(key, state)) {
+		return ImageFrame{}, false
+	}
+	tick := ImageTick{Name: key.Name, Generation: state.Generation, Key: key, Sidecar: owner.SidecarName, Owner: owner.SidecarOwner}
+	if refreshRate == nil {
+		return ImageFrame{Tick: tick, NoScreen: true}, true
 	}
 	state.FrameSequence++
-	return ImageTick{
-		Name: key.Name, Generation: state.Generation, Sequence: state.FrameSequence, RefreshRate: *refreshRate,
-		Key: key, Sidecar: owner.SidecarName, Owner: owner.SidecarOwner,
-	}, true
+	tick.Sequence = state.FrameSequence
+	tick.RefreshRate = *refreshRate
+	return ImageFrame{Tick: tick}, true
 }
 
 // SetOnScreen records whether the window is neither occluded nor minimized.
@@ -1255,6 +1295,7 @@ func decideScreen(raw json.RawMessage) Decision {
 type FrameRequest struct {
 	Name       string
 	Generation uint64
+	Purpose    FramePurpose
 }
 
 // MalformedFrameRequest is a frame request with a missing or mistyped member. Member names it, Text states it, and Name is the name of
@@ -1270,7 +1311,8 @@ func (m *MalformedFrameRequest) Error() string {
 	return m.Text
 }
 
-// decideWant validates the members of a frame request in their order: name and generation. A null value is mistyped.
+// decideWant validates the members of a frame request in their order: name, generation and purpose, which is draw when it is absent. A
+// null value is mistyped.
 func decideWant(raw json.RawMessage) Decision {
 	var members map[string]json.RawMessage
 	if string(raw) == "null" || json.Unmarshal(raw, &members) != nil {
@@ -1284,7 +1326,15 @@ func decideWant(raw json.RawMessage) Decision {
 	if !screenMember(members, "generation", &generation) {
 		return &MalformedFrameRequest{Member: "generation", Text: "image frame request has no valid generation", Name: name}
 	}
-	return &FrameRequest{Name: name, Generation: generation}
+	purpose := FrameDraw
+	if _, present := members["purpose"]; present {
+		var value string
+		if !screenMember(members, "purpose", &value) || value != string(FrameDraw) && value != string(FrameRead) {
+			return &MalformedFrameRequest{Member: "purpose", Text: "image frame request has a purpose that is neither draw nor read", Name: name}
+		}
+		purpose = FramePurpose(value)
+	}
+	return &FrameRequest{Name: name, Generation: generation, Purpose: purpose}
 }
 
 // screenMember reads a member of a screen message into target and reports whether it is present, not null and of the type of target.
@@ -1456,7 +1506,7 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 
 	case *FrameRequest:
 		key := ImageKey{Surface: surface, Name: d.Name}
-		reason, ask := images.WantFrame(key, sender, d.Generation)
+		reason, ask := images.WantFrame(key, sender, d.Generation, d.Purpose)
 		if reason != "" {
 			want := map[string]interface{}{"error": reason, "name": d.Name, "generation": d.Generation}
 			logAnswerError("image want "+d.Name, sendResponse(d.Name, map[string]interface{}{"image": map[string]interface{}{"want": want}}))

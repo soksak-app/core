@@ -1062,29 +1062,29 @@ func TestAFrameRequestAsksForOneDisplayFrameAndItsTickCarriesTheRefreshRate(t *t
 		t.Fatalf("a request before the tick: handled %t, answers %v, display frames asked %d; want handled, no answer, none asked", handled, answers, asked)
 	}
 	rate := 120
-	tick, ok := images.FrameTick(key, &rate)
-	if !ok {
-		t.Fatal("the display frame of the request gave no tick")
+	frame, ok := images.FrameTick(key, &rate)
+	if !ok || frame.NoScreen {
+		t.Fatalf("the display frame of the request gave %+v, %t; want a tick", frame, ok)
 	}
-	body, err := json.Marshal(map[string]any{"image": map[string]any{"tick": tick}})
+	body, err := json.Marshal(frame.Body("main"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if want := fmt.Sprintf(`{"image":{"tick":{"name":"copy","generation":%d,"sequence":1,"refreshRate":120}}}`, raster.Generation); string(body) != want {
 		t.Fatalf("tick body = %s, want %s", body, want)
 	}
-	if reason, ask := images.WantFrame(key, "sidecar-a", raster.Generation); reason != "" || !ask {
+	if reason, ask := images.WantFrame(key, "sidecar-a", raster.Generation, FrameDraw); reason != "" || !ask {
 		t.Fatalf("a request after the tick: reason %q, ask %t; want no reason and one display frame", reason, ask)
 	}
 	if _, ok := images.FrameTick(key, nil); ok {
 		t.Fatal("a display frame without a refresh rate gave a tick")
 	}
-	if reason, ask := images.WantFrame(key, "sidecar-a", raster.Generation); reason != "" || !ask {
+	if reason, ask := images.WantFrame(key, "sidecar-a", raster.Generation, FrameDraw); reason != "" || !ask {
 		t.Fatalf("a request after a display frame without a refresh rate: reason %q, ask %t; want the request ended", reason, ask)
 	}
 	rate = 60
-	if tick, ok := images.FrameTick(key, &rate); !ok || tick.Sequence != 2 || tick.RefreshRate != 60 {
-		t.Fatalf("the next tick = %+v, %t; want sequence 2 and refresh rate 60", tick, ok)
+	if frame, ok := images.FrameTick(key, &rate); !ok || frame.Tick.Sequence != 2 || frame.Tick.RefreshRate != 60 {
+		t.Fatalf("the next tick = %+v, %t; want sequence 2 and refresh rate 60", frame, ok)
 	}
 }
 
@@ -1140,6 +1140,74 @@ func TestMalformedFrameRequestNamesItsMember(t *testing.T) {
 		handled, answers, asked := handleFrameRequest(t, images, tc.want, "sidecar-a")
 		if !handled || len(answers) != 0 || asked != 0 {
 			t.Fatalf("%s: handled %t, answers %v, display frames asked %d; want handled with no answer", tc.name, handled, answers, asked)
+		}
+	}
+}
+
+// contract: images.copy-path.frame-request-read
+// A read frame request asks for one display frame also for a region that is not drawing and while the window is occluded, and its display
+// frame sends the tick; a read request and a draw request that wait together ask one display frame and receive one tick; the display frame
+// of a read request of a window on no screen is answered noScreen with the window; a purpose of another value is malformed
+// (docs/spec/native-surfaces.md#copy-path-frames).
+func TestAReadFrameRequestIsAnsweredWhileTheRegionDoesNotDraw(t *testing.T) {
+	images, key, idle, raster := frameFixture(t)
+	images.mu.Lock()
+	idleGeneration := images.states[idle].Generation
+	images.mu.Unlock()
+	read := map[string]any{"name": "idle", "generation": idleGeneration, "purpose": "read"}
+	handled, answers, asked := handleFrameRequest(t, images, read, "sidecar-a")
+	if !handled || len(answers) != 0 || asked != 1 {
+		t.Fatalf("a read request for a region that is not drawing: handled %t, answers %v, display frames asked %d; want handled, no answer, one asked", handled, answers, asked)
+	}
+	rate := 120
+	frame, ok := images.FrameTick(idle, &rate)
+	if !ok || frame.NoScreen || frame.Tick.Sequence != 1 || frame.Tick.RefreshRate != 120 {
+		t.Fatalf("the display frame of the read request = %+v, %t; want the tick with sequence 1 and refresh rate 120", frame, ok)
+	}
+
+	images.SetOnScreen(false)
+	handled, answers, asked = handleFrameRequest(t, images, map[string]any{"name": "copy", "generation": raster.Generation}, "sidecar-a")
+	if !handled || len(answers) != 0 || asked != 0 {
+		t.Fatalf("a draw request while the window is occluded: handled %t, answers %v, display frames asked %d; want none asked", handled, answers, asked)
+	}
+	read = map[string]any{"name": "copy", "generation": raster.Generation, "purpose": "read"}
+	handled, answers, asked = handleFrameRequest(t, images, read, "sidecar-a")
+	if !handled || len(answers) != 0 || asked != 1 {
+		t.Fatalf("a read request while the window is occluded: handled %t, answers %v, display frames asked %d; want one asked", handled, answers, asked)
+	}
+	if frame, ok := images.FrameTick(key, &rate); !ok || frame.NoScreen || frame.Tick.Sequence != 1 {
+		t.Fatalf("the display frame of the read request of an occluded window = %+v, %t; want the tick with sequence 1", frame, ok)
+	}
+
+	images.SetOnScreen(true)
+	draw := map[string]any{"name": "copy", "generation": raster.Generation, "purpose": "draw"}
+	_, _, drawAsked := handleFrameRequest(t, images, draw, "sidecar-a")
+	_, _, readAsked := handleFrameRequest(t, images, read, "sidecar-a")
+	if drawAsked != 1 || readAsked != 0 {
+		t.Fatalf("a draw request and a read request that wait together asked %d and %d display frames; want 1 and 0", drawAsked, readAsked)
+	}
+	if frame, ok := images.FrameTick(key, &rate); !ok || frame.Tick.Sequence != 2 {
+		t.Fatalf("the display frame of both requests = %+v, %t; want one tick with sequence 2", frame, ok)
+	}
+
+	handleFrameRequest(t, images, read, "sidecar-a")
+	frame, ok = images.FrameTick(key, nil)
+	if !ok || !frame.NoScreen {
+		t.Fatalf("the display frame of a read request of a window on no screen = %+v, %t; want the refusal noScreen", frame, ok)
+	}
+	body, err := json.Marshal(frame.Body("main"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := fmt.Sprintf(`{"image":{"want":{"error":"noScreen","generation":%d,"name":"copy","purpose":"read","window":"main"}}}`, raster.Generation); string(body) != want {
+		t.Fatalf("refusal body = %s, want %s", body, want)
+	}
+
+	for _, purpose := range []any{"paint", 1, nil} {
+		handled, answers, asked = handleFrameRequest(t, images, map[string]any{"name": "copy", "generation": raster.Generation, "purpose": purpose}, "sidecar-a")
+		want := `{"image":{"want":{"error":"malformed","member":"purpose","name":"copy"}}}`
+		if !handled || !reflect.DeepEqual(answers, []string{want}) || asked != 0 {
+			t.Fatalf("purpose %v: handled %t, answers %v, display frames asked %d; want [%s]", purpose, handled, answers, asked, want)
 		}
 	}
 }

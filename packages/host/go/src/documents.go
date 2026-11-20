@@ -1119,14 +1119,16 @@ func frameEvent(event string) (refreshRate *int, frame bool, err error) {
 	return report.RefreshRate, report.Type == "frame", nil
 }
 
-// sendFrameTick ends the frame request of a region at its display frame and sends the tick to the supplier of a drawing region. The
-// region reports the frame on the main thread, which sends the tick as it sends a released surface.
+// sendFrameTick ends the frame requests of a region at its display frame and sends their answer to the supplier: the tick, or the
+// refusal noScreen of a read request of a window on no screen, which names the window. The region reports the frame on the main thread,
+// which sends the answer as it sends a released surface.
 func (s *Surfaces) sendFrameTick(key ImageKey, refreshRate *int) {
-	tick, ok := s.images.FrameTick(key, refreshRate)
+	frame, ok := s.images.FrameTick(key, refreshRate)
 	if !ok {
 		return
 	}
-	body, err := json.Marshal(map[string]any{"image": map[string]any{"tick": tick}})
+	tick := frame.Tick
+	body, err := json.Marshal(frame.Body(s.window.Name()))
 	if err == nil {
 		err = s.sidecars.Send(tick.Owner, tick.Sidecar, key.Surface, body)
 	}
