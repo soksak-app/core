@@ -18,6 +18,7 @@
 | `helpers` | 선택 필드. 헬퍼 프로그램 목록. 각 항목은 `name`(헬퍼 `package.json`의 `name`)과 `executable`(헬퍼 폴더 안의 경로)을 가진다 |
 | `events` | 선택 필드. sidecar의 event catalog 파일의 패키지 안 경로([logging](logging.ko.md#catalog)). 릴리스는 그 파일을 담는다 |
 | `replay` | 화면을 만드는 sidecar의 선택 필드 `{role, executable, inputs}`. `role`은 event 파일의 role(소문자 낱말), `executable`은 sidecar 안의 재생 실행 파일 경로([replay](replay.ko.md#재생-실행-파일)), `inputs`는 재생 입력의 종류(`output`, `write`, `resize`, `selection`, `viewport`, `theme`)마다 그것을 저장하는 event 이름이며, 이름은 `sidecar.`로 시작하는 계층 `sidecar`의 이름이다([replay](replay.ko.md#기록)) |
+| `processes` | surface를 위해 프로세스를 시작하는 sidecar의 선택 필드 `true`([프로세스 identity](#프로세스-identity)). 호스트는 그런 sidecar에만 process query를 보낸다. 없으면 그 sidecar는 surface를 위한 프로세스를 시작하지 않는다 |
 
 플러그인은 페이지가 사용하는 사이드카를 version 범위와 함께 `plugin.json`의 `dependencies`로 선언한다([플러그인](plugins.ko.md#pluginjson)). 설치는 각 사이드카의 release를 설정 디렉터리에 푼다.
 
@@ -47,6 +48,8 @@
 | 호스트 → 사이드카 | Persistent `retain` reconciliation 밖에서 논리 표면이 모든 프로젝트 레이아웃에서 제거되거나 그 창이 닫히면 표면의 root를 담은 `{"surface": id, "root": 경로, "closed": true}`를 그 표면에 요청을 보낸 사이드카 프로세스에만 보낸다. 받은 적이 없는 사이드카는 알림을 받지 않는다. 프로젝트 레이아웃이 표면을 보유한 채 native view만 제거하면 stdio 세션은 닫지만 영속 서비스 세션은 유지한다 |
 | 사이드카 → 호스트 | `{"surface": id, "cids": [id, …], "body": 값}`. `cids`는 선택이며 메시지가 답하는 요청들의 상관 식별자 목록이다. `error` member를 가진 객체인 body는 실패한 요청을 밝힌다. host는 이런 메시지를 event `host.sidecar.reply`로 저장한다([결과 형식](logging.ko.md#결과-형식)) |
 | 사이드카 → 호스트 | 닫힌 표면의 세션, 프로세스, 감시 같은 자원을 놓은 뒤 `{"surface": id, "closed": true}`, 놓지 못했으면 `{"surface": id, "closed": true, "error": 문장}` |
+| 호스트 → 사이드카 | `{"process": pid, "request": n}`, process query([프로세스 identity](#프로세스-identity)). `processes`를 선언한 sidecar에만 보낸다. `request`는 호스트가 그 sidecar의 그 프로세스에 대해 되풀이하지 않는 양의 정수다 |
+| 사이드카 → 호스트 | sidecar가 프로세스 `pid`를 surface `id`를 위해 시작했으면 `{"process": pid, "request": n, "surface": id, "started": ms}`, 아니면 `{"process": pid, "request": n, "surface": null}`. `started`는 sidecar가 그 프로세스를 시작할 때 process table에서 읽은 시작 시각이며 Unix epoch 이후 millisecond다 |
 
 호스트는 표면에 처음 요청을 보낸 창을 기록하고, 사이드카 메시지를 그 창에만 `sidecar-message` 이벤트 `{sidecar, surface, cids, body}`로 전달한다. `sidecar`는 사이드카 `package.json`의 `name`이고, `cids`는 메시지 줄이 밝힐 때 있다. 다른 창이 같은 표면에 보낸 요청은 실패한다. 애플리케이션이 종료되면 호스트는 각 사이드카의 표준 입력을 닫고 프로세스 종료를 기다린다.
 
@@ -64,23 +67,47 @@ Host는 state mutation을 직렬화하는 동안 각 immutable `host.sidecars` �
 
 ## Surface의 프로세스
 
-sidecar가 surface를 위해 시작하는 프로세스(탭의 session의 shell 등)는 환경에 변수 두 개를 담는다. 그래서 그 안에서 시작한 `sok`과 agent는 그 애플리케이션과 그 surface의 창에 닿는다([에이전트의 창](cli.ko.md#에이전트의-창)).
+sidecar가 surface를 위해 시작하는 프로세스(탭의 session의 shell 등)는 환경에 `SOKSAK_CONFIG_DIR`를 담는다. 그래서 그 안에서 시작한 `sok`과 agent는 그 애플리케이션에 닿는다([에이전트의 창](cli.ko.md#에이전트의-창)). 그 값은 surface의 요청을 보낸 애플리케이션의 설정 디렉터리이며, 표준 입출력 sidecar이면 자기 환경의 `SOKSAK_CONFIG_DIR` 값이고 호스트가 sidecar를 시작할 때 그 값을 설정하며, 지속 서비스이면 요청을 보낸 연결의 `client`다([서비스 전송](persistent-services.ko.md#서비스-전송)). surface를 위해 프로세스를 시작하는 모든 sidecar는 자기 환경이 가진 값을 대신해 그것을 설정한다. session이 재연결을 넘어 유지하는 프로세스는 시작 때의 값을 유지한다. 각 sidecar는 surface를 위해 시작한 프로세스로 이 의무를 자기 repository에서 테스트한다.
 
-| 변수 | 값 |
+프로세스의 surface는 그 환경의 변수가 아니다. 환경은 모든 자손에게 복사되고, surface의 process tree를 떠난 자손도 그것을 유지한다. 분리된 뒤 나중에 다른 surface의 프로세스를 위해 command를 실행하는 background server가 그런 자손이다. 그래서 환경 안의 값은 복사가 일어난 surface를 가리키지, 그것을 읽는 프로세스의 surface를 가리키지 않는다. 프로세스의 surface는 그 parent process의 사슬에서 온다([프로세스 identity](#프로세스-identity)).
+
+### 프로세스 identity
+
+프로세스의 surface는, 그 프로세스의 조상 가운데 parent가 sidecar인 가장 가까운 조상을 sidecar가 시작한 surface다. Endpoint method `agent.surface`([메서드](exposure.ko.md#메서드))가 연결의 프로세스에 대해 그것을 답한다:
+
+1. 호스트는 연결의 프로세스를 호출자가 보내는 값이 아니라 socket에서 읽는다(macOS에서 `SOL_LOCAL`과 `LOCAL_PEERPID`로 `getsockopt`).
+2. 호스트는 그 프로세스 자신부터 parent process들을 따라가며, 각각의 parent와 시작 시각을 process table에서 읽는다(`sysctl` `kern.proc.pid`. 이것은 `sudo` 조상처럼 다른 사용자의 프로세스도 설명하며, `proc_pidinfo`는 그것을 거부한다). 따라가기는 parent가 호스트의 실행 중인 sidecar의 프로세스인 첫 프로세스 A에서 멈춘다. 그 sidecar는 호스트가 시작한 표준 입출력 sidecar이거나 연결의 지속 서비스다.
+3. 그 sidecar가 `processes`를 선언하면 호스트는 A에 대한 process query를 보낸다. sidecar는 surface를 위해 시작한 각 프로세스를 시작 시각과 함께, 그 프로세스를 가리킬 수 있는 process query에 답하기 전에 기록하고, 그 프로세스를 reap할 때 지운다. sidecar는 page 요청을 기다리지 않고 process query에 답한다. A는 sidecar의 살아 있는 자식이므로, 답은 같은 id를 가졌던 이전 프로세스가 아니라 sidecar가 시작한 프로세스를 가리킨다.
+4. 호스트는 연결의 프로세스부터 A까지 모든 프로세스의 parent와 시작 시각을 다시 읽는다. 그것들이 바뀌지 않았고 답의 `started`가 A의 시작 시각과 같으면 답을 받아들이고 `{surface}`를 답한다.
+
+요청은 error 1014와 다음 text 가운데 하나로 실패하며, `sok`은 요청의 프로세스와 함께 그것을 보고한다:
+
+| 경우 | Text |
 | --- | --- |
-| `SOKSAK_CONFIG_DIR` | surface의 요청을 보낸 애플리케이션의 설정 디렉터리. 표준 입출력 sidecar이면 자기 환경의 `SOKSAK_CONFIG_DIR` 값이며, 호스트가 sidecar를 시작할 때 그 값을 설정한다. 지속 서비스이면 요청을 보낸 연결의 `client`다([서비스 전송](persistent-services.ko.md#서비스-전송)) |
-| `SOKSAK_SURFACE` | 요청의 `surface` |
+| 사슬의 어떤 프로세스도 호스트의 실행 중인 sidecar를 parent로 갖지 않는다. surface에서 분리된 background server의 프로세스, terminal multiplexer server나 `nohup`이 parent를 바꾼 프로세스, 다른 애플리케이션의 프로세스가 그렇다 | `process <pid> is not a process of a surface: no parent process of it is a running sidecar of the application that started it for a surface` |
+| parent인 sidecar가 `processes`를 선언하지 않았다 | `process <pid> is a process of sidecar <name>, which declares no processes of surfaces` |
+| sidecar의 helper처럼 답의 `surface`가 `null`이다 | `process <pid> is not a process of a surface: sidecar <name> did not start process <A> for a surface` |
+| 확인하는 동안 parent나 시작 시각이 바뀌었거나 `started`가 다르다 | `process <pid> changed while its surface was checked` |
 
-surface를 위해 프로세스를 시작하는 모든 sidecar는 자기 환경이 가진 값을 대신해 두 변수를 모두 설정하고, 어느 surface에도 속하지 않는 프로세스는 `SOKSAK_SURFACE` 없이 시작한다. 그래서 어떤 프로세스도 자기가 속하지 않은 surface를 가리키지 않는다. session이 재연결을 넘어 유지하는 프로세스는 시작 때의 값을 유지하며, surface는 식별자를 유지하므로 그 값은 맞는 값으로 남는다. 각 sidecar는 surface를 위해 시작한 프로세스로 이 의무를 자기 repository에서 테스트한다.
+답을 기다리는 일은 sidecar에 보내는 모든 요청처럼 답이나 sidecar의 실패([실패](#실패))로 끝난다. 프로세스 identity는 호스트의 darwin code(`platform/darwin`)이며, Windows 호스트는 `not implemented on windows`로 답한다.
 
-호스트는 표준 입출력 sidecar와 지속 서비스를 모두 `SOKSAK_CONFIG_DIR`를 자기 설정 디렉터리로 설정하고 `SOKSAK_SURFACE` 없이 시작한다. login shell의 환경이 무엇을 가졌든 그렇다. 설정 디렉터리 없이 만든 호스트는 `logs` 폴더도 없으며([로그](#로그)), 자기 sidecar를 `SOKSAK_CONFIG_DIR` 없이 시작한다. 호스트는 모든 sidecar의 환경을 자기 환경이 아니라 읽어 둔 login shell의 `environment`([애플리케이션 안의 에이전트](cli.md#agents-in-the-application))에서 shell이 process마다 정하는 `PWD`, `OLDPWD`, `SHLVL`, `_`를 빼고 만든다. 그래서 애플리케이션을 시작한 process의 변수, 예를 들어 agent의 session 변수는 sidecar와 surface의 process에 닿지 않고, sidecar는 무엇이 애플리케이션을 시작했든 같은 환경을 갖는다. 호스트는 또 모든 sidecar를 자기 실행 파일의 폴더, 곧 application bundle이 `sok`을 담는 폴더([명령줄](cli.md))를 `PATH`의 첫 항목으로 두고, 그 뒤에 그 폴더를 뺀 자기 `PATH`의 항목을 두어 시작한다. 그래서 sidecar가 시작하는 모든 프로세스와 그 안의 agent는 path entry 없이 그 애플리케이션의 `sok`을 실행한다. plugin과 sidecar는 이 값을 설정하지 않는다. 호스트는 시작할 때 설치된 sidecar의 channel을 만들면서 그 폴더를 event `host.sidecar.path` 하나로 기록한다. `folder`는 `PATH` 맨 앞에 두는 폴더이고, `sok`은 그 폴더에 있는 application bundle의 `sok`이다. 이 event는 class `lifecycle`의 level `info`이므로, policy가 그 level을 저장할 때 log에 남는다([정책](logging.ko.md#정책)). 애플리케이션 업데이트 전에 시작한 세션은 서비스가 교체될 때까지 시작할 때의 `PATH`를 유지한다. 호스트는 fixture sidecar(`docs/spec/cases/sidecars/fixture.sh`)의 환경을 테스트한다.
+#### Review
+
+네 번의 review가 이 결정에 대한 반론을 근거로 판단했다.
+
+- 결함: 자기 shell command를 공유 background server에서 실행하는 agent가 다른 탭에서 `sok message send`를 실행했다. 그 server는 자신을 처음 시작한 terminal에서 분리되며 그 terminal의 환경을 유지한다. `sok`은 그 환경에서 첫 terminal의 surface와 설정 디렉터리를 받아, 다른 애플리케이션의 `sok`으로 자신을 교체하고 첫 surface로 보냈다. 그 server는 client들이 server가 시작할 때 물려받은 환경을 쓰며 client별 환경을 제공하지 않는다고 문서에 밝힌다. server는 각 command의 환경에 thread identifier를 넣지만, 선언된 어떤 interface도 그 identifier를 client process에 대응시키지 않는다. server의 내부 log database는 thread identifier와 process identifier를 가진 행을 저장하지만 client의 warning 경로만 그것을 쓰며, 한 기계에서 측정한 37개 thread 가운데 client process의 행을 가진 것은 없었다. 그래서 그것은 interface가 아니다. 그런 agent의 표준 방법은 공유 server 없이 실행하는 것이며, 그러면 그 command들은 탭의 shell의 자손이 된다. `sok`의 거부 text가 그 방법을 밝힌다.
+- 받아들임: identity는 사슬에서만 오고 `SOKSAK_SURFACE`는 없앤다. 두 번째 값은 사슬과 같거나(중복) 다르기(낡음) 때문이다. 호스트가 다른 프로세스의 시작 환경을 읽는 대신 sidecar가 자기가 시작한 프로세스에 대해 답한다. 시작 환경은 프로세스의 memory이고, 일부 프로세스에서는 거부되며, 프로세스가 바꿀 수 있기 때문이다. 보고 대신 query를 쓴다. 보고는 `sok`의 요청과 다른 channel로 가서 그보다 늦게 도착할 수 있기 때문이다. 답은 자기 줄 형태를 갖는다. surface가 null인 줄은 sidecar를 실패시키기 때문이다. 답의 시작 시각과 사슬의 두 번째 읽기를 둔다. pid는 따라가기와 답 사이에, 또는 sidecar가 관찰하지 못한 reap 뒤에 다시 쓰일 수 있기 때문이다. 여러 thread를 가진 sidecar를 위해, 답 전에 기록하고 page 요청을 기다리지 않고 답한다. query를 모르는 sidecar는 그것으로 실패하므로 `sidecar.json`에 `processes`를 둔다. `agent.surface`는 surface만 답하고 창은 `surface.window`에 남는다. `sok`을 `SOKSAK_CONFIG_DIR`의 애플리케이션의 `sok`으로 교체하는 일은 자리를 유지하고, 교체한 `sok`이 먼저 `agent.surface`를 묻는다. 교체 전에 확인하면 교체가 피하려는 바로 그 `sok`으로 묻게 되기 때문이다. terminal multiplexer나 `nohup`이 parent를 바꾼 경우는 거부 text에 이름을 밝힌다.
+- 거부함: 답을 기다리는 일의 시간 제한. 그 기다림은 sidecar에 보내는 모든 요청처럼 답이나 sidecar의 실패로 끝나며, timer가 그것을 판단하게 되기 때문이다. 이전 답을 유지하는 오래 사는 `sok mcp`의 요청마다 사슬을 다시 확인하는 일. 각 요청이 다시 묻고, 사슬이 더는 자기 sidecar에 닿지 않는 프로세스는 더는 그 surface에 속하지 않기 때문이다. `sok`의 endpoint case를 window check로 옮기는 일. 그 case들은 호스트가 실제 구현에 대해 실행하는 공유 contract case이며, 따라가기 자체는 호스트에서 실제 프로세스로 테스트하기 때문이다.
+
+호스트는 표준 입출력 sidecar와 지속 서비스를 모두 `SOKSAK_CONFIG_DIR`를 자기 설정 디렉터리로 설정해 시작한다. login shell의 환경이 무엇을 가졌든 그렇다. 설정 디렉터리 없이 만든 호스트는 `logs` 폴더도 없으며([로그](#로그)), 자기 sidecar를 `SOKSAK_CONFIG_DIR` 없이 시작한다. 호스트는 모든 sidecar의 환경을 자기 환경이 아니라 읽어 둔 login shell의 `environment`([애플리케이션 안의 에이전트](cli.md#agents-in-the-application))에서 shell이 process마다 정하는 `PWD`, `OLDPWD`, `SHLVL`, `_`를 빼고 만든다. 그래서 애플리케이션을 시작한 process의 변수, 예를 들어 agent의 session 변수는 sidecar와 surface의 process에 닿지 않고, sidecar는 무엇이 애플리케이션을 시작했든 같은 환경을 갖는다. 호스트는 또 모든 sidecar를 자기 실행 파일의 폴더, 곧 application bundle이 `sok`을 담는 폴더([명령줄](cli.md))를 `PATH`의 첫 항목으로 두고, 그 뒤에 그 폴더를 뺀 자기 `PATH`의 항목을 두어 시작한다. 그래서 sidecar가 시작하는 모든 프로세스와 그 안의 agent는 path entry 없이 그 애플리케이션의 `sok`을 실행한다. plugin과 sidecar는 이 값을 설정하지 않는다. 호스트는 시작할 때 설치된 sidecar의 channel을 만들면서 그 폴더를 event `host.sidecar.path` 하나로 기록한다. `folder`는 `PATH` 맨 앞에 두는 폴더이고, `sok`은 그 폴더에 있는 application bundle의 `sok`이다. 이 event는 class `lifecycle`의 level `info`이므로, policy가 그 level을 저장할 때 log에 남는다([정책](logging.ko.md#정책)). 애플리케이션 업데이트 전에 시작한 세션은 서비스가 교체될 때까지 시작할 때의 `PATH`를 유지한다. 호스트는 fixture sidecar(`docs/spec/cases/sidecars/fixture.sh`)의 환경을 테스트한다.
 
 ## 실패
 
 표준 입출력을 쓰는 사이드카는 다음 경우에 실패한다.
 
 - 메시지 한도보다 긴 줄을 보낸다.
-- 문자열 `surface`와, `body`나 true인 `closed`를 가진 JSON 객체가 아닌 줄을 보낸다.
+- 문자열 `surface`와, `body`나 true인 `closed`를 가진 JSON 객체가 아니고 process query의 답(member `process`를 가진 줄)도 아닌 줄을 보낸다.
+- 호스트가 자기에게 보내지 않은 process query의 답이나, query와 다른 프로세스를 가리키는 답을 보낸다.
 - 호스트가 닫고 있지 않고, 중지가 목록에서 그 닫기를 빼지도 않은 표면의 `closed`에 답한다.
 - 호스트가 그 프로세스에 한 번도 보내지 않은 표면의 메시지를 보낸다.
 - 표준 출력 읽기가 실패한다.

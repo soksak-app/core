@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1000-2: `docs/spec/sidecars.md#process-identity`는 process의 surface가 parent process의 사슬에서 오며, host가 가장 가까운 조상을 시작한 sidecar와 함께 그것을 확인한다고 밝히고, `SOKSAK_SURFACE`를 없앤다. host, `sok`, sidecar는 F1000-2.1부터 F1000-2.4에서 따른다.
 - F899-7.5-15: Rust `sok`은 `sok message send`와 MCP tool에서 parse되지 않는 `surface.window` 답의 parser error를 보고하고, 버려진 command 답의 이유를 그 호출 바로 윗줄에 적는다.
 - F996-4 (post된 closure의 sender): mygo host는 fork version `v0.7.4-244-g4abb83d-soksak.17`을 받고, main thread에 post된 각 closure를 post한 함수의 이름을 가진 `closure` 종류의 step으로 `host.frame.step`에 쓴다(`docs/spec/hosts.md`).
 - F1000-3: agent skill과 MCP instructions는 submit command가 사람의 입력을 흉내 내고 agent가 message로 대화함을 밝힌다.

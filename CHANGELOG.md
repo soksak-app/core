@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1000-2: `docs/spec/sidecars.md#process-identity` states that the surface of a process comes from its chain of parent processes, which the host checks with the sidecar that started the nearest ancestor, and removes `SOKSAK_SURFACE`; the hosts, `sok` and the sidecars follow in F1000-2.1 to F1000-2.4.
 - F899-7.5-15: The Rust `sok` reports the parser error of a `surface.window` answer that does not parse in `sok message send` and the MCP tools, and states the reason of the dropped command answer on the line above its call.
 - F996-4 (sender of a posted closure): the mygo host takes the fork version `v0.7.4-244-g4abb83d-soksak.17` and writes each closure posted to the main thread as a step of the kind `closure` in `host.frame.step`, named after the function that posted it (`docs/spec/hosts.md`).
 - F1000-3: The agent skill and the MCP instructions state that a submit command imitates the input of a person and that agents talk through messages.
