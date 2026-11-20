@@ -143,7 +143,7 @@ Each tab has one agent role, or none. Each tab of the layout in `projects.json` 
 
 There is no partial record. A tab whose member `role` is absent, or whose value is neither `null` nor a record of these four members in these forms, is refused with an explicit error that names the file, the tab and the member; the error text is `projects.json: project <root> space <space>: tab <tab> member role is missing` or `... member role is invalid`. A tab created without a role stores `role: null`.
 
-Format 4 of `projects.json` is the first form with the member, so the format number rises from 3 to 4 as [stored data formats](installation.md#stored-data-formats) requires. No migration is written. The reader refuses format 3 as a whole with `<file>: projects: format must be 4, found 3`, where `3` is the compact JSON text of the member `format` as the file holds it, and every write of the refused file fails with that error.
+Format 4 of `projects.json` is the first form with the member, so the format number rises from 3 to 4 as [stored data formats](installation.md#stored-data-formats) requires. No migration is written. The reader refuses format 3 as a whole with `<file>: projects: format must be 4, found 3`, where `<value>` is the compact JSON text of the member `format` as the file holds it, or `null` when the member is absent or the document is not an object; `3` is the value of the file of this example. Every write of the refused file fails with that error.
 
 A role change is the command `core.tab.role {tab, role}`, which runs through the registry. Setting the role the tab already has, with the same definition, writes no file, changes no generation and sends no message, and answers the current `{role, generation, state, fingerprint}`.
 

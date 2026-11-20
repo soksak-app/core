@@ -143,7 +143,7 @@ agent CLI의 각 tab은 agent role을 하나 가지거나 없다. `projects.json
 
 부분 기록은 없다. member `role`이 없거나, 값이 `null`도 아니고 위 네 member의 형태를 갖춘 기록도 아닌 tab은 명시적 오류로 거부하며, 오류는 file, tab, member를 밝힌다. 오류 문장은 `projects.json: project <root> space <space>: tab <tab> member role is missing` 또는 `... member role is invalid`다. role 없이 만든 tab은 `role: null`을 저장한다.
 
-이 member가 `projects.json`에 처음 들어가는 형식이 4이므로, [저장 데이터 형식](installation.md#stored-data-formats)에 따라 형식 번호를 3에서 4로 올린다. migration은 쓰지 않는다. reader는 형식 3 file 전체를 `<file>: projects: format must be 4, found 3`으로 거부하며, `3`은 file이 담은 member `format`의 compact JSON 텍스트다. 거부된 file의 모든 쓰기는 그 오류로 실패한다.
+이 member가 `projects.json`에 처음 들어가는 형식이 4이므로, [저장 데이터 형식](installation.md#stored-data-formats)에 따라 형식 번호를 3에서 4로 올린다. migration은 쓰지 않는다. reader는 형식 3 file 전체를 `<file>: projects: format must be 4, found 3`으로 거부하며, `<value>`는 file이 담은 member `format`의 compact JSON 텍스트이며, member가 없거나 문서가 객체가 아니면 `null`이다. `3`은 이 예의 file 값이다. 거부된 file의 모든 쓰기는 그 오류로 실패한다.
 
 role 변경은 registry를 거치는 명령 `core.tab.role {tab, role}`이다. tab이 이미 가진 role과 같은 정의를 설정하면 파일을 쓰지 않고, generation을 바꾸지 않고, message를 보내지 않으며, 답은 현재 `{role, generation, state, fingerprint}`다.
 
