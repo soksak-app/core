@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -99,11 +100,31 @@ func noteElementNames(nodes []ui.ElementNode) {
 }
 
 // TestMain judges the element names after a whole run of the package. A run of chosen tests shows only what they show, and a listing
-// of the tests runs none, so neither is judged. The judgment needs every test, which no test of its own can have.
+// of the tests runs none, so neither is judged. The judgment needs every test, which no test of its own can have. The test runner runs
+// each test in a process of its own and then the check of the package (docs/operations/examples.md#test-parity): with
+// SOKSAK_TEST_RECORDS each test process writes the names that its test read into a file of that folder, and the check, with
+// SOKSAK_TEST_PACKAGE_CHECK, judges the names of every file there.
 func TestMain(m *testing.M) {
 	testplatform.InstallMainThread()
 	code := m.Run()
-	if flag.Lookup("test.run").Value.String() == "" && flag.Lookup("test.list").Value.String() == "" {
+	records := os.Getenv("SOKSAK_TEST_RECORDS")
+	judged := false
+	switch {
+	case os.Getenv("SOKSAK_TEST_PACKAGE_CHECK") != "":
+		if err := readElementNames(records); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		judged = true
+	case records != "":
+		if err := writeElementNames(records); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			code = 1
+		}
+	default:
+		judged = flag.Lookup("test.run").Value.String() == "" && flag.Lookup("test.list").Value.String() == ""
+	}
+	if judged {
 		declared, err := workbench.ReadDeclarations()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
@@ -116,4 +137,51 @@ func TestMain(m *testing.M) {
 		}
 	}
 	os.Exit(code)
+}
+
+// writeElementNames writes the element names that the tests of this process read into a new file of the folder records, one per line.
+func writeElementNames(records string) error {
+	file, err := os.CreateTemp(records, "element-names-*.txt")
+	if err != nil {
+		return fmt.Errorf("the element names of the tests: %w", err)
+	}
+	names := make([]string, 0, len(elementNamesInATree))
+	for name := range elementNamesInATree {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	if _, err := file.WriteString(strings.Join(names, "\n")); err != nil {
+		file.Close()
+		return fmt.Errorf("the element names of the tests: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("the element names of the tests: %w", err)
+	}
+	return nil
+}
+
+// readElementNames takes the element names of every file of the folder records that the tests of the package wrote.
+func readElementNames(records string) error {
+	if records == "" {
+		return fmt.Errorf("SOKSAK_TEST_PACKAGE_CHECK needs the folder SOKSAK_TEST_RECORDS")
+	}
+	files, err := filepath.Glob(filepath.Join(records, "element-names-*.txt"))
+	if err != nil {
+		return fmt.Errorf("the element names of %s: %w", records, err)
+	}
+	if len(files) == 0 {
+		return fmt.Errorf("%s holds no element names of a test", records)
+	}
+	for _, path := range files {
+		text, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("the element names of %s: %w", path, err)
+		}
+		for _, name := range strings.Split(string(text), "\n") {
+			if name != "" {
+				elementNamesInATree[name] = true
+			}
+		}
+	}
+	return nil
 }

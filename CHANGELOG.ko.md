@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1016-14: Go test runner가 test가 통과한 뒤 package마다 검사를 한 번 실행하므로, mygo test의 선언된 element 이름처럼 package의 모든 test에 걸친 `TestMain` 판정이 실행 결과를 정한다. 검증: 바뀌지 않은 runner에서 runner unit test의 Red와 F1016-13 이전 코드(`core.plane`)에서 mygo package의 Red, runner unit test 28/28과 mygo package test 1147/1147 및 그 검사의 Green.
 - F899-3.6: 행이 sidecar release vt v0.0.30 과 alacritty v0.0.8 이 공개되었고 terminal P177 과 term P58 의 release 가 남았다고 적는다.
 - F1016-16: Go와 Rust host가 role case 파일에 더는 없는 paste form 문구 `lead_non_reader`와 `role_fingerprint_line`을 돌려주지 않으므로 host role 문구 test가 통과한다. 검증: main에서 `TestRoleTextsMatchPinnedTexts`와 `role_texts_match_pinned_texts`가 두 key가 더 있어 실패한 Red, Go host package와 Rust `role_file_test`, `roles_test`, `workspace_test`, `setup_test`의 Green.
 - F1016-14, F1006-9, F1006-10, F1016-15, F1000-5.2, F1000-5.3, F1000-5.4, F1000-8: checklist 행이 실제 상태를 적는다. F1016-14는 커밋되지 않은 변경과 함께 등록됐고, F1006-9, F1006-10, F1016-15는 근거와 함께 완료이며, message 행은 sidecar와 terminal main branch에서 완료이고 미배포다.

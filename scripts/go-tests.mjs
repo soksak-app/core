@@ -3,18 +3,22 @@
 // as the test binary with `-test.run ^<name>$` and `-test.timeout` of its limit in the package folder, as go test runs it, so
 // `t.Deadline` reports the limit. A test that does not end panics at its limit with the stacks of its goroutines and is reported
 // with its name and elapsed time, and the next test still runs. A package of the pattern with no test files does
-// not decide the run; the run fails when no package has test files or no test matches. The build reads the environment of the
+// not decide the run; the run fails when no package has test files or no test matches. After the tests of a run without --test
+// passed, the check of each package runs once as a step of its own (runGoPackageChecks of test-discovery.mjs); a run of chosen tests
+// shows only what they show, so it writes that the checks did not run. The build reads the environment of the
 // caller (MACOSX_DEPLOYMENT_TARGET, CGO_CFLAGS), and a build whose link reports an object newer than the link fails the run
 // (macos-minimum.mjs).
 // Usage: node scripts/go-tests.mjs --package <pattern> [--tags <tags>] [--test <regexp>] [--count <n>] [--timeout <seconds>]
 //   [--ldflags <flags>] [--cgo-ldflags <flags>] [--native-packages <declaration.json>]
 import { execFileSync } from 'node:child_process';
+import { mkdirSync, rmSync } from 'node:fs';
 import { loadavg } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { runBuild } from './macos-minimum.mjs';
 import { runTests } from './test-runner.mjs';
+import { GO_TEST_RECORDS, goPackageCheck, runGoPackageChecks } from './test-discovery.mjs';
 import { temporaryFolder } from './temporary-folder.mjs';
 import { readNativePackages, resolveGoNativeInputs } from './go-repeat-inputs.mjs';
 
@@ -56,13 +60,17 @@ export async function runGoTests({ pattern, tags = '', test, count, timeoutMs, l
   const folder = run.path;
   try {
     const listed = [];
+    const checks = [];
     for (const [index, item] of testable.entries()) {
       const binary = join(folder, `test-${index}.binary`);
       await runBuild('go', ['test', '-c', '-o', binary, ...tagArgs, ...(linkerFlags ? ['-ldflags', linkerFlags] : []), item.importPath], { cwd, env: selectedEnv });
       const names = testNames(execFileSync(binary, ['-test.list', '.*'], { cwd: item.dir, env: selectedEnv, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] }));
+      const records = join(folder, `test-${index}.records`);
       for (const name of test === undefined ? names : names.filter((candidate) => new RegExp(test).test(candidate))) {
-        listed.push({ importPath: item.importPath, name, binary, cwd: item.dir });
+        listed.push({ importPath: item.importPath, name, binary, cwd: item.dir, records });
       }
+      checks.push({ importPath: item.importPath, records,
+        item: goPackageCheck({ name: `check ${item.importPath}`, binary, dir: item.dir, env: selectedEnv, records, timeoutMs }) });
     }
     if (listed.length === 0) throw new Error(test === undefined ? `${pattern} has no tests` : `${pattern} has no test matching ${test}`);
     // A name that two packages hold is shown with its package, so each test has a name of its own in the runner.
@@ -71,10 +79,15 @@ export async function runGoTests({ pattern, tags = '', test, count, timeoutMs, l
     const tests = listed.map((item) => ({
       name: occurrences.get(item.name) > 1 ? `${item.importPath} ${item.name}` : item.name,
       command: item.binary, args: ['-test.run', `^${item.name}$`, '-test.v', '-test.count=1', `-test.timeout=${timeoutMs}ms`], cwd: item.cwd,
-      passedAs: item.name, timeoutMs, stacksAtLimit: true, env: selectedEnv,
+      passedAs: item.name, timeoutMs, stacksAtLimit: true, env: { ...selectedEnv, [GO_TEST_RECORDS]: item.records },
     }));
     for (let run = 1; run <= count; run += 1) {
       write(`START ${pattern}: run ${run} of ${count}, ${tests.length} tests, each limited to ${timeoutMs / 1000}s`);
+      // Each run starts with empty records, so the check of a run judges the tests of that run.
+      for (const check of checks) {
+        rmSync(check.records, { recursive: true, force: true });
+        mkdirSync(check.records);
+      }
       const { results } = await runTests({ tests, concurrency: 1, write });
       const failed = tests.filter((item) => {
         const result = results.get(item.name);
@@ -85,6 +98,17 @@ export async function runGoTests({ pattern, tags = '', test, count, timeoutMs, l
       }
       if (failed.length > 0) {
         write(`FAIL: ${pattern} run ${run} of ${count}; load ${loadavg().map((value) => value.toFixed(2)).join(' ')}`);
+        return 1;
+      }
+      if (test !== undefined) {
+        write(`SKIP the checks of the packages after their tests: a run of the tests matching ${test} does not run every test`);
+        continue;
+      }
+      const owned = checks.map((check) => ({ item: check.item, tests: tests.filter((entry) => entry.command === check.item.command).map((entry) => entry.name) }));
+      const refused = await runGoPackageChecks({ checks: owned, results, concurrency: 1, write });
+      for (const text of refused) write(`FAIL ${text}`);
+      if (refused.length > 0) {
+        write(`FAIL: ${pattern} run ${run} of ${count}: ${refused.length} package checks failed`);
         return 1;
       }
     }

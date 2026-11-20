@@ -13,6 +13,44 @@ import { resolveGoNativeInputs } from './go-repeat-inputs.mjs';
 const execFileAsync = promisify(execFile);
 
 /**
+ * The check of a Go test package after its tests (docs/operations/examples.md#test-parity). A TestMain that judges what all tests of
+ * its package showed, such as the declared names that no test drew, sees one test in a process that runs one test. So every test
+ * process of a package gets the folder of the package as `SOKSAK_TEST_RECORDS`, where its TestMain writes what its test showed, and
+ * after the tests of the package passed, the runner runs the test binary once without a test, `-test.run=^$`, with the same folder
+ * and `SOKSAK_TEST_PACKAGE_CHECK=1`: its TestMain reads the records of every test and judges them. A package without such a TestMain
+ * runs no test in the check and passes it.
+ */
+export const GO_TEST_RECORDS = 'SOKSAK_TEST_RECORDS';
+export const GO_PACKAGE_CHECK = 'SOKSAK_TEST_PACKAGE_CHECK';
+
+/**
+ * Runs the check of each package of `checks` (`{tests, item}`) whose tests all passed in `results`, through the runner with
+ * `concurrency` checks at once; a package with a test that did not pass is written as `SKIP <check>` with that reason, because its
+ * records are not those of every test. Resolves with the failures, one text for each check that did not pass.
+ */
+export async function runGoPackageChecks({ checks, results, concurrency, write }) {
+  const ready = [];
+  for (const check of checks) {
+    const missed = check.tests.filter((name) => results.get(name)?.status !== 'pass');
+    if (missed.length === 0) ready.push(check.item);
+    else write(`SKIP ${check.item.name}: ${missed.length} of its ${check.tests.length} tests did not pass`);
+  }
+  if (ready.length === 0) return [];
+  const checked = (await runTests({ tests: ready, concurrency, write })).results;
+  return ready.filter((item) => checked.get(item.name).status !== 'pass')
+    .map((item) => `${item.name} ended ${checked.get(item.name).status}: ${checked.get(item.name).output.trim()}`);
+}
+
+/**
+ * The runner item named `name` of the check of the Go test package whose test binary is `binary` and whose folder is `dir`, with the
+ * records folder `records` of its tests, the environment `env` and the limit `timeoutMs` of one test.
+ */
+export function goPackageCheck({ name, binary, dir, env, records, timeoutMs }) {
+  return { name, command: binary, args: ['-test.run', '^$', '-test.count=1', `-test.timeout=${timeoutMs}ms`], cwd: dir,
+    env: { ...env, [GO_TEST_RECORDS]: records, [GO_PACKAGE_CHECK]: '1' }, timeoutMs, stacksAtLimit: true };
+}
+
+/**
  * The limit of a build, which compiles a package and its dependencies. It stops a build that hangs; a cold build of the Tauri
  * host with its tests takes more than 300 s on the macOS runner of CI, so the limit is the largest limit of a test command.
  */
@@ -25,7 +63,8 @@ const seconds = (ms) => (ms / 1000).toFixed(3);
  * flags; `buildDir` receives the test binaries. Each test runs with `-test.timeout` of `timeoutMs`, so `t.Deadline` reports
  * its limit, and a test that does not end panics at that limit with the stacks of every goroutine (`stacksAtLimit`). The package
  * list and the test list of each binary run through the runner without a runner limit (see the comment at the listing). Returns
- * `{tests, failures}`: `tests` are runner items with `testName` (the name `go test -json` gives) and `failures` name the patterns
+ * `{tests, checks, failures}`: `tests` are runner items with `testName` (the name `go test -json` gives), `checks` hold for each
+ * listed package the names of its tests and the runner item of its check after them (goPackageCheck), and `failures` name the patterns
  * whose package list failed, the packages whose build failed and the binaries whose test list failed.
  */
 export async function discoverGo({ patterns, cwd, tags, ldflags, buildDir, id, write, concurrency, timeoutMs, env = process.env }) {
@@ -66,18 +105,26 @@ export async function discoverGo({ patterns, cwd, tags, ldflags, buildDir, id, w
   }
   const listed = lists.length === 0 ? { results: new Map() } : await runTests({ tests: lists.map((list) => list.item), concurrency, write });
   const tests = [];
+  const checks = [];
   for (const { pkg, binary, item } of lists) {
     const names = listed.results.get(item.name);
     if (names.status !== 'pass') {
       failures.push(`${id}: the list of ${pkg.importPath} (${binary}) ended ${names.status} after ${seconds(names.elapsedMs)}s: ${names.detail}`);
       continue;
     }
+    const records = `${binary}.records`;
+    mkdirSync(records, { recursive: true });
+    const env = { ...selectedEnv, [GO_TEST_RECORDS]: records };
+    const own = [];
     for (const testName of names.output.split('\n').filter((line) => /^(Test|Example)/.test(line))) {
-      tests.push({ name: `${id} ${pkg.importPath}.${testName}`, run: id, testName, owner: relative(realpathSync(cwd), pkg.dir), command: binary,
-        args: ['-test.run', `^${testName}$`, '-test.count=1', '-test.v', `-test.timeout=${timeoutMs}ms`], cwd: pkg.dir, env: selectedEnv, timeoutMs, stacksAtLimit: true });
+      own.push({ name: `${id} ${pkg.importPath}.${testName}`, run: id, testName, owner: relative(realpathSync(cwd), pkg.dir), command: binary,
+        args: ['-test.run', `^${testName}$`, '-test.count=1', '-test.v', `-test.timeout=${timeoutMs}ms`], cwd: pkg.dir, env, timeoutMs, stacksAtLimit: true });
     }
+    tests.push(...own);
+    checks.push({ tests: own.map((entry) => entry.name),
+      item: goPackageCheck({ name: `check ${id} ${pkg.importPath}`, binary, dir: pkg.dir, env: selectedEnv, records, timeoutMs }) });
   }
-  return { tests, failures };
+  return { tests, checks, failures };
 }
 
 /**

@@ -102,6 +102,25 @@ test('make repeat-go passes a pattern whose tested package passed while a suppor
   assert.match(stdout, /1 of 1 runs pass/, stdout + stderr);
 });
 
+test('the Go test runner runs the check of each package once after its tests, and a check that fails fails the run', (t) => {
+  const run = (required, args = []) => runGoTests(t, ['--package', fixturePackage('packagecheck'), '--count', '1', '--timeout', '60', ...args],
+    { FIXTURE_REQUIRED: required });
+  const passed = run('TestAlpha,TestBeta');
+  assert.equal(passed.status, 0, passed.stdout + passed.stderr);
+  assert.match(passed.stdout, /^PASS TestAlpha \d+\.\d{3}s$/m, passed.stdout + passed.stderr);
+  assert.match(passed.stdout, /^PASS check fixture\.soksak\/repeatgo\/packagecheck \d+\.\d{3}s$/m, passed.stdout + passed.stderr);
+  // The check sees the records of both test processes; each process ran one test.
+  const missing = run('TestAlpha,TestBeta,TestGamma');
+  assert.notEqual(missing.status, 0, `a run whose package check fails passed: ${missing.stdout}${missing.stderr}`);
+  assert.match(missing.stdout, /^FAIL check fixture\.soksak\/repeatgo\/packagecheck ended fail: .*the required test TestGamma did not run/ms, missing.stdout + missing.stderr);
+  assert.doesNotMatch(missing.stdout, /the required test Test(Alpha|Beta) did not run/, missing.stdout);
+  // A run of chosen tests does not run every test, so it states that the checks did not run.
+  const chosen = run('TestAlpha,TestBeta', ['--test', 'TestAlpha']);
+  assert.equal(chosen.status, 0, chosen.stdout + chosen.stderr);
+  assert.match(chosen.stdout, /^SKIP the checks of the packages after their tests: a run of the tests matching TestAlpha does not run every test$/m, chosen.stdout);
+  assert.doesNotMatch(chosen.stdout, /^(PASS|FAIL) check /m, chosen.stdout);
+});
+
 test('make repeat-go fails a run in which no test matched', (t) => {
   const { stdout, stderr, status } = make(t, ['repeat-go', `PACKAGE=${fixturePackage('run')}`, 'COUNT=1', 'TEST=TestMissing']);
   assert.notEqual(status, 0, stdout + stderr);

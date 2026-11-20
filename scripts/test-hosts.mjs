@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { parse as parseToml } from 'smol-toml';
 import { cpus } from 'node:os';
 import { tableCells } from './markdown-table.mjs';
-import { auditStatus, discoverGo, discoverRust } from './test-discovery.mjs';
+import { auditStatus, discoverGo, discoverRust, runGoPackageChecks } from './test-discovery.mjs';
 import { runTests } from './test-runner.mjs';
 import { temporaryFolder } from './temporary-folder.mjs';
 
@@ -672,12 +672,21 @@ async function runContract(values, cases, buildDir, write, concurrency) {
     write(`RUN  ${goItems.length} Go tests with ${concurrency} at once, each limited to ${TEST_TIMEOUT_MS / 1000}s${scope}`);
     for (const [name, result] of (await runTests({ tests: goItems, concurrency, write })).results) results.set(name, result);
   }
-  if (only !== null) return [...results.values()].every((result) => result.status === 'pass') ? 0 : 1;
+  if (only !== null) {
+    write(`SKIP the checks of the Go packages after their tests: a run scoped by ${JSON.stringify(only)} does not run every test`);
+    return [...results.values()].every((result) => result.status === 'pass') ? 0 : 1;
+  }
+  // The check of each Go test package runs once after its tests (runGoPackageChecks of test-discovery.mjs).
+  const checked = {};
+  for (const name of ['wailsv3', 'mygo'].filter((host) => selectedHosts.includes(host))) {
+    checked[name] = await runGoPackageChecks({ checks: found[name].flatMap((entry) => entry.checks), results, concurrency, write });
+  }
   const hosts = [];
   for (const name of selectedHosts) {
     const own = found[name].flatMap((entry) => entry.tests);
     const { language, tests, errors: sourceErrors } = parseHostSources(name, name === 'tauriv2' ? own : []);
-    const errors = [...found[name].flatMap((entry) => entry.failures), ...sourceErrors];
+    // default: the Rust run of tauriv2 has no package checks.
+    const errors = [...found[name].flatMap((entry) => entry.failures), ...sourceErrors, ...(checked[name] ?? [])];
     for (const item of own) {
       if (results.get(item.name).status === 'timeout') errors.push(`${item.name} exceeded its limit of ${TEST_TIMEOUT_MS / 1000}s`);
     }

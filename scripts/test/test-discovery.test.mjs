@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import test from "node:test";
 
-import { auditStatus, discoverGo, discoverRust } from "../test-discovery.mjs";
+import { auditStatus, discoverGo, discoverRust, runGoPackageChecks } from "../test-discovery.mjs";
 import { runTests } from "../test-runner.mjs";
 
 const folder = () => mkdtempSync(join(tmpdir(), "discovery-"));
@@ -280,4 +280,32 @@ test("a cargo line that starts with a brace but is not JSON fails with the line"
   const missingTargetSource = JSON.stringify({ reason: "compiler-artifact", profile: { test: true }, executable: "/t/a", manifest_path: "/p/Cargo.toml", target: { name: "a" } });
   assert.throws(() => cargoTestExecutables(missingTargetSource), /missing or has invalid manifest path, target name or source path/);
   assert.throws(() => cargoTestExecutables(`${artifact}\n{not json\n`), (error) => error.message.includes("{not json"));
+});
+
+test("Go discovery gives each package a check after its tests, which fails when the records of its tests do not satisfy it", async (t) => {
+  const root = folder();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  // The tracked fixture package checks in its TestMain that every test that FIXTURE_REQUIRED names ran.
+  const fixture = resolve(import.meta.dirname, "fixtures/repeat-go");
+  const discover = (required) => discoverGo({ patterns: ["./packagecheck"], cwd: fixture, env: { ...process.env, GOWORK: "off", FIXTURE_REQUIRED: required },
+    buildDir: join(root, required.replaceAll(",", "-")), id: "go", write() {}, concurrency: 1, timeoutMs: 20000 });
+  for (const [required, failed] of [["TestAlpha,TestBeta", []], ["TestAlpha,TestGamma", ["TestGamma"]]]) {
+    const { tests, checks, failures } = await discover(required);
+    assert.deepEqual(failures, []);
+    assert.deepEqual(checks.map((check) => [check.item.name, check.tests.length]), [["check go fixture.soksak/repeatgo/packagecheck", 2]]);
+    const { results } = await runTests({ tests, concurrency: 2, write() {} });
+    assert.ok(tests.every((item) => results.get(item.name).status === "pass"), `the tests of ${required} did not pass`);
+    const lines = [];
+    const refused = await runGoPackageChecks({ checks, results, concurrency: 1, write: (line) => lines.push(line) });
+    const named = refused.map((text) => failed.every((name) => text.includes(`the required test ${name} did not run`)));
+    assert.deepEqual(named, failed.length === 0 ? [] : [true], `the checks of ${required} answered ${JSON.stringify(refused)}: ${lines.join("\n")}`);
+  }
+});
+
+test("Go package checks skip a package whose tests did not all pass", async () => {
+  const lines = [];
+  const check = { tests: ["go a.TestOne", "go a.TestTwo"], item: { name: "check go a", command: "false", args: [] } };
+  const results = new Map([["go a.TestOne", { status: "pass" }], ["go a.TestTwo", { status: "fail" }]]);
+  assert.deepEqual(await runGoPackageChecks({ checks: [check], results, concurrency: 1, write: (line) => lines.push(line) }), []);
+  assert.deepEqual(lines, ["SKIP check go a: 1 of its 2 tests did not pass"]);
 });
