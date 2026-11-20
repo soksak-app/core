@@ -246,7 +246,7 @@ func (f *tabShell) run(t *testing.T, name, params string) any {
 }
 
 func tab(id, plugin string) map[string]any {
-	return map[string]any{"id": id, "plugin": plugin, "title": id}
+	return map[string]any{"id": id, "plugin": plugin, "title": id, "role": nil}
 }
 
 func TestCoreFileOpenAddsATabOfTheOpenerAndActivatesItTheNextTime(t *testing.T) {

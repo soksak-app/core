@@ -86,9 +86,10 @@ func (s *Shell) newLayout() (json.RawMessage, error) {
 				made := make([]layout.Tab, 0, len(tabs))
 				for _, tab := range tabs {
 					// A first tab of a space has no source tab, so its origin is null, written with the layout that creates it
-					// (docs/spec/projects.md#tab-origin).
+					// (docs/spec/projects.md#tab-origin). It has no agent role, so its member role is null
+					// (docs/spec/agent-roles.md#tab-role-state).
 					made = append(made, layout.Tab{ID: s.issueTab(made), Plugin: tab.Plugin, Title: tab.Title,
-						Rest: map[string]json.RawMessage{"origin": json.RawMessage(`{"directory":null}`)}})
+						Rest: map[string]json.RawMessage{"origin": json.RawMessage(`{"directory":null}`), "role": json.RawMessage("null")}})
 				}
 				if len(made) > 0 {
 					out["data"] = tabData(made, made[0].ID)
