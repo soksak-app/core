@@ -305,6 +305,7 @@ func (g *Grid) costOf(n *Node, axis Axis, unit perAxis) float64 {
 // lay places the tree in px with the corridor unit and derives the lines, the cells, the frames and the heads above each card from it.
 // It returns the axes on which a cut could not hold its corridors.
 func (g *Grid) lay(unit perAxis, sized bool) crowding {
+	g.rev++
 	var crowded crowding
 	extentOf := perAxis{1, 1}
 	if sized {

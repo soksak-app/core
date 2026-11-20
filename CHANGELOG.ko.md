@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F937-10-1 (head token, mygo): group tree가 보관한 header answer의 layout token을 grid나 tree가 바뀐 뒤에만 다시 만들므로, pointer 이동처럼 layout 변경 없는 card head의 draw는 token을 서식화하지 않는다.
 - F966 (feature link): test inventory가 완료된 크기 규칙을 두 workbench의 layout operation과 insert, 빈 slot 함수, 그리고 그 case, property, 도달 test에 잇는다.
 - F966-1-1-4-2 (seed 도달 검사, page): page의 seed 검사가 tab이나 group header에 대한 pointer event를 거쳐 Go 검사의 drag 경로로 생성한 layout 셋에서 I4를 판정하며, 필요한 target이 모두 도달 가능하다.
 - F937-10-1 (등록): mygo에서 card head를 그릴 때 pointer 이동마다 보관된 answer마다 group tree의 layout token을 서식화한다.

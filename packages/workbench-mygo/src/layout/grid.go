@@ -77,15 +77,18 @@ type Grid struct {
 	w, h          float64
 	seq           int
 	splitMemo     map[string]bool
-	probes        int
-	probing       bool
-	gap           float64
-	min           float64
-	grab          float64
-	snapAt        float64
-	snapMode      string
-	frameAt       string
-	frames        frameRead
+	// rev counts the changes of the arrangement, the plane size, the gap and the minimum size, so a reader of the layout knows that it
+	// did not change since it read it.
+	rev      int
+	probes   int
+	probing  bool
+	gap      float64
+	min      float64
+	grab     float64
+	snapAt   float64
+	snapMode string
+	frameAt  string
+	frames   frameRead
 	// cardFrames is the frames of each card by id, which lay reads from the boxes of the tree.
 	cardFrames map[string]Frames
 	// heads is the px that the host draws inside the top of each box by id, which SetHeads set.
@@ -166,6 +169,7 @@ func (g *Grid) SetGap(px float64) {
 	}
 	g.gap = px
 	clear(g.splitMemo)
+	g.rev++
 	// The fractions stay, and the tree is laid with the new corridor.
 	if len(g.list) > 0 {
 		g.derive()
@@ -200,6 +204,7 @@ func (g *Grid) SetFrames(mode string) error {
 	}
 	g.frameAt = mode
 	clear(g.splitMemo)
+	g.rev++
 	if len(g.list) > 0 {
 		g.derive()
 	}
@@ -216,6 +221,7 @@ func (g *Grid) SetMinSize(px float64) {
 	}
 	g.min = px
 	clear(g.splitMemo)
+	g.rev++
 }
 
 // GrabSize is the smallest grab area of a boundary, in px.
@@ -264,6 +270,7 @@ func (g *Grid) Resize(width, height float64) {
 	g.w = width
 	g.h = height
 	clear(g.splitMemo)
+	g.rev++
 	// The fractions stay, and the tree is laid into the new extent.
 	if len(g.list) > 0 {
 		g.derive()
@@ -321,6 +328,7 @@ func (g *Grid) SetFixed(id string, fixed bool) bool {
 	card.Fixed = fixed
 	g.leaves[id].Fixed = fixed
 	clear(g.splitMemo)
+	g.rev++
 	return true
 }
 
@@ -395,6 +403,7 @@ func (g *Grid) Replace(state State) error {
 func (g *Grid) reload(state State) {
 	g.load(state)
 	clear(g.splitMemo)
+	g.rev++
 	g.commit()
 }
 
@@ -419,6 +428,7 @@ func (g *Grid) arr(axis Axis) []float64 {
 }
 
 func (g *Grid) setArr(axis Axis, a []float64) {
+	g.rev++
 	if axis == "x" {
 		g.xs = a
 	} else {
@@ -994,14 +1004,15 @@ func (g *Grid) CanSplit(id string, axis Axis) bool {
 	if card != nil {
 		if _, _, cuts := g.cutAt(card, axis, false); cuts {
 			before := g.ToJSON()
-			seq := g.seq
+			seq, rev := g.seq, g.rev
 			g.probing = true
 			g.probes++
 			_, err := g.Split(id, axis, SplitInit{})
 			ok = err == nil
 			g.restore(before)
 			g.probing = false
-			g.seq = seq
+			// The trial puts the arrangement back, so it puts back its revision as well.
+			g.seq, g.rev = seq, rev
 		}
 	}
 	g.splitMemo[key] = ok
@@ -1447,19 +1458,22 @@ func (g *Grid) CanMove(id, targetID string, side Side) bool {
 		return known
 	}
 	before := g.ToJSON()
-	seq := g.seq
+	seq, rev := g.seq, g.rev
 	probing := g.probing
 	g.probing = true
 	ok := g.Move(id, targetID, side)
 	g.restore(before)
 	g.probing = probing
-	g.seq = seq
+	// The trial puts the arrangement back, so it puts back its revision as well.
+	g.seq, g.rev = seq, rev
 	g.splitMemo[key] = ok
 	return ok
 }
 
 // changed runs after every operation that changes the arrangement: the sizes agree and the tree takes the lines and the attributes.
 func (g *Grid) changed() {
+	// A trial operation changes the arrangement as well, so a reader inside it reads the arrangement of the trial.
+	g.rev++
 	if !g.probing {
 		clear(g.splitMemo)
 	}
@@ -1469,6 +1483,7 @@ func (g *Grid) changed() {
 // restore restores the arrangement to a state returned earlier by ToJSON.
 func (g *Grid) restore(state State) {
 	g.load(state)
+	g.rev++
 	if !g.probing {
 		clear(g.splitMemo)
 	}

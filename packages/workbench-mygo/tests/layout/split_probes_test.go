@@ -42,7 +42,8 @@ func TestAResizeToTheSameSizeKeepsTheAnswersOfCanSplit(t *testing.T) {
 }
 
 // The answers of CanSplit, CanGroup and CanClose of a space with groups hold until the layout changes: the workbench asks them for
-// every card header in each draw, and a draw without a layout change, as on a pointer move, runs no trial operation.
+// every card header in each draw, and a draw without a layout change, as on a pointer move, runs no trial operation and builds no
+// layout token (F937-10-1).
 func TestTheHeaderAnswersOfAGroupTreeHoldUntilTheLayoutChanges(t *testing.T) {
 	gap, minimum, width, height := 12.0, 96.0, 1400.0, 900.0
 	grid, err := layout.New(nil, layout.Options{Gap: &gap, MinSize: &minimum, Width: &width, Height: &height})
@@ -72,9 +73,13 @@ func TestTheHeaderAnswersOfAGroupTreeHoldUntilTheLayoutChanges(t *testing.T) {
 	if first == 0 {
 		t.Fatal("the header answers ran no trial operation")
 	}
+	tokens := tree.Tokens()
 	ask()
 	if got := tree.Probes(); got != first {
 		t.Fatalf("a second draw without a layout change ran %d trial operations, want none", got-first)
+	}
+	if got := tree.Tokens(); got != tokens {
+		t.Fatalf("a second draw without a layout change built %d layout tokens, want none", got-tokens)
 	}
 	if _, err := tree.Split("card-1", "bottom", nil); err != nil {
 		t.Fatal(err)
@@ -82,6 +87,9 @@ func TestTheHeaderAnswersOfAGroupTreeHoldUntilTheLayoutChanges(t *testing.T) {
 	ask()
 	if got := tree.Probes(); got == first {
 		t.Fatal("after a split the header answers were kept")
+	}
+	if got := tree.Tokens(); got == tokens {
+		t.Fatal("after a split the header answers built no layout token")
 	}
 	grid.Resize(width-200, height)
 	moved := tree.Probes()

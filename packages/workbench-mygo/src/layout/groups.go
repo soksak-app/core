@@ -40,6 +40,12 @@ type GroupTree struct {
 	// draw without a layout change run no trial operation.
 	answers      map[string]bool
 	answersToken string
+	// tokens is the number of layout tokens that the answers built. rev counts the changes of the group cards, the head and the seam;
+	// token is the layout token at the revisions tokenAt of the grid and of the tree, so a draw without a layout change builds none.
+	tokens, rev int
+	token       string
+	tokenAt     [2]int
+	tokenRead   bool
 }
 
 // node is a member of a level: a group card with its name, its leader and its members, or a content card, which has no members.
@@ -71,11 +77,15 @@ func (t *GroupTree) Grid() *Grid { return t.grid }
 func (t *GroupTree) Head() float64 { return t.head }
 
 // SetHead changes the head height of a group card. It changes no arrangement.
-func (t *GroupTree) SetHead(head float64) { t.head = head }
+func (t *GroupTree) SetHead(head float64) {
+	t.head = head
+	t.rev++
+}
 
 // SetSeam changes whether the cards share one line, and gives the grid the frames of that drawing. It changes no arrangement.
 func (t *GroupTree) SetSeam(seam bool) {
 	t.seam = seam
+	t.rev++
 	t.reframe()
 }
 
@@ -434,6 +444,7 @@ func (t *GroupTree) snapshot() snapshot {
 }
 
 func (t *GroupTree) restore(s snapshot) {
+	t.rev++
 	if err := t.grid.Replace(s.state); err != nil {
 		panic("soksak: a snapshot of the grid was refused: " + err.Error())
 	}
@@ -474,12 +485,22 @@ func (t *GroupTree) reframe() {
 // Probes is the number of trial operations that Probe ran: an answer of CanSplit, CanGroup or CanClose that the tree kept runs none.
 func (t *GroupTree) Probes() int { return t.probes }
 
+// Tokens is the number of layout tokens that the answers of CanSplit, CanGroup and CanClose built: an answer for a layout that did not
+// change builds none.
+func (t *GroupTree) Tokens() int { return t.tokens }
+
 // Probe runs change on the tree and puts the tree back, and returns what change returned: the drop preview asks what a drop would
 // make without making it.
 func (t *GroupTree) Probe(change func() error) error {
 	t.probes++
 	kept := t.snapshot()
-	defer t.restore(kept)
+	revs, token, at, read := [2]int{t.grid.rev, t.rev}, t.token, t.tokenAt, t.tokenRead
+	defer func() {
+		t.restore(kept)
+		// The trial puts the layout back, so it puts back the revisions and the layout token that describe it.
+		t.grid.rev, t.rev = revs[0], revs[1]
+		t.token, t.tokenAt, t.tokenRead = token, at, read
+	}()
 	return change()
 }
 
@@ -487,6 +508,7 @@ func (t *GroupTree) Probe(change func() error) error {
 // no content card that it changed is drawn below minSize; otherwise the tree is put back and the refusal is returned
 // (docs/spec/groups.md#commands).
 func (t *GroupTree) try(id, op string, change func() error) error {
+	t.rev++
 	before := t.drawn()
 	kept := t.snapshot()
 	if err := change(); err != nil {
@@ -574,6 +596,7 @@ func (t *GroupTree) container(id string) (*[]*node, string) {
 // detach takes the card id out of the tree's record of its level, keeps the leader rule of the level it leaves and returns the key of
 // that level. A content card of the root level has no record.
 func (t *GroupTree) detach(id string) string {
+	t.rev++
 	members, key := t.container(id)
 	*members = slices.DeleteFunc(*members, func(n *node) bool { return n.card == id })
 	if lead, _ := t.Leader(key); lead == id {
@@ -590,6 +613,7 @@ func (t *GroupTree) detach(id string) string {
 
 // attach puts the node into the level key and gives a level without a leader that card.
 func (t *GroupTree) attach(key string, n *node) {
+	t.rev++
 	if key == "" {
 		if n.group {
 			t.roots = append(t.roots, n)
@@ -605,6 +629,7 @@ func (t *GroupTree) attach(key string, n *node) {
 // collapse replaces the group card key, when it holds one member, with that member, which takes its slot and its leader mark
 // (docs/spec/groups.md#closing), and its box gives its place to the member. It returns the member, or key.
 func (t *GroupTree) collapse(key string) (string, error) {
+	t.rev++
 	n := t.groupNode(key)
 	if n == nil || len(n.members) != 1 {
 		return key, nil
@@ -722,6 +747,7 @@ func (t *GroupTree) CheckGroup(id string, side Side) error {
 
 // CreateGroup groups the card id with a new content card with data toward side, and returns the group card and the new card.
 func (t *GroupTree) CreateGroup(id string, side Side, data json.RawMessage) (string, string, error) {
+	t.rev++
 	if err := t.CheckGroup(id, side); err != nil {
 		return "", "", err
 	}
@@ -763,6 +789,7 @@ func (t *GroupTree) requireGroup(id string) (*node, error) {
 
 // Dissolve replaces the group card id with its members in the level that holds it. The grid does not change.
 func (t *GroupTree) Dissolve(id string) error {
+	t.rev++
 	n, err := t.requireGroup(id)
 	if err != nil {
 		return err
@@ -883,7 +910,7 @@ func (t *GroupTree) CanSplit(id string, side Side) bool {
 
 // answer is the kept answer of key for the current layout, or whether the trial operation change succeeds, which it keeps.
 func (t *GroupTree) answer(key string, change func() error) bool {
-	token := t.layoutToken()
+	token := t.currentToken()
 	if token != t.answersToken || t.answers == nil {
 		t.answers, t.answersToken = map[string]bool{}, token
 	}
@@ -899,9 +926,19 @@ func (t *GroupTree) answer(key string, change func() error) bool {
 	return ok
 }
 
+// currentToken is the layout token of the current layout, built again only after the grid or the tree changed.
+func (t *GroupTree) currentToken() string {
+	at := [2]int{t.grid.rev, t.rev}
+	if !t.tokenRead || t.tokenAt != at {
+		t.token, t.tokenAt, t.tokenRead = t.layoutToken(), at, true
+	}
+	return t.token
+}
+
 // layoutToken describes everything that an answer of CanSplit, CanGroup or CanClose reads: the lines, the cards with their spans and
 // sizes, the size, gap, minimum size, head and seam of the plane, and the group cards with their members.
 func (t *GroupTree) layoutToken() string {
+	t.tokens++
 	g := t.grid
 	var b strings.Builder
 	fmt.Fprintf(&b, "%v|%v|%v|%v|%v|%v|%v|%v|", g.xs, g.ys, g.w, g.h, g.gap, g.min, t.head, t.seam)
@@ -1085,6 +1122,7 @@ func (t *GroupTree) exchange(id, other string) error {
 // put records the node n at the index at of the members of the level key, in place of the card that stood there, or with at -1 where
 // that card had no record: a content card of the root level has none, so there n is recorded only when it is a group card.
 func (t *GroupTree) put(members *[]*node, at int, key string, n *node) {
+	t.rev++
 	record := key != "" || n.group
 	switch {
 	case at >= 0 && record:
