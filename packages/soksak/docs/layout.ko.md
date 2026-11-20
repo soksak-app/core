@@ -465,7 +465,11 @@ grid.visits;                      // even이 방문한 node 수
 `withdraw(id)`는 카드나 box인 node `id`를 그 cut에서 꺼낸다. cut의 다른 kid의 fraction은
 close와 같이 한 인수로 늘어나며, kid가 하나만 남은 cut은 그 kid로 바뀐다. 그 kid의 kid
 가운데 그것을 담는 cut의 축을 따르는 cut은 그 cut에 합쳐지고, 모든 kid는 그려진 크기를
-유지한다. 떠난 node, 곧
+유지한다. px 크기를 유지하는 kid는 fraction과 상관없이 그 크기로 그려지고, 모든 kid가 px
+크기를 유지하는 cut은 그 공간을 그 비율로 나누므로, 합쳐지기 전에 선언보다 크게 그려질 수
+있다. 그래서 cut에서 `fixed`가 아니고 px 크기를 유지하는 각 카드는 px 크기를 유지하는
+node를 거쳐 그려진 크기로 기록되고, `fixed` 카드는 그 px 크기로 cut의 비용으로 남는다.
+합쳐지는 kid는 남은 것의 fraction을 받으므로 두 cut 밖의 어떤 kid도 바뀌지 않는다. 떠난 node, 곧
 카드 node이거나 inner node를 가진 box node를 돌려주고 `insert`가 그것을 받으므로,
 box는 member의 비율을 유지한 채 놓인다. 마지막 카드와 `fixed` 카드는 거부된다.
 

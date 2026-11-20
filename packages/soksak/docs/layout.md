@@ -525,7 +525,13 @@ grid.visits;                      // the nodes that even visited
 fractions of the other kids of the cut scale by one factor, as a close does,
 and a cut left with one kid is replaced by that kid. A kid of that kid that is a
 cut along the axis of the cut that holds it joins that cut, and every kid keeps
-the size it is drawn at. It returns the node that left, a card
+the size it is drawn at. A kid that keeps a px size is drawn at that size
+whatever its fraction, and a cut whose kids all keep one divides its room in
+their proportion, so before the join it can be drawn larger than it declares:
+each card of the cut that is not `fixed` and keeps a px size, through the nodes
+that keep one, is written at the size it is drawn at, and a `fixed` card stays a
+cost of the cut with its px size. The kids that join take a fraction of what is
+left, so no kid outside the two cuts changes. It returns the node that left, a card
 node or a box node with its inner node, which `insert` takes, so a box lands
 with its members in their proportions. The last card and a `fixed` card are
 refused.

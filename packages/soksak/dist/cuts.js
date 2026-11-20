@@ -45,6 +45,27 @@ class Index {
                 this.enter(kid.node, node);
         }
     }
+    /** Writes each card of `node` that keeps a px size on `axis`, through nodes that keep one, and is no fixed card at the px size it is drawn at. */
+    keepDrawn(node, axis) {
+        if (!this.input.keeps(node, axis))
+            return;
+        if (isCard(node)) {
+            if (node.fixed === true || (axis === 'x' ? node.width : node.height) === undefined)
+                return;
+            const drawn = this.input.content(node, axis);
+            if (drawn > 0) {
+                if (axis === 'x')
+                    node.width = drawn;
+                else
+                    node.height = drawn;
+            }
+            return;
+        }
+        if (isBox(node))
+            return this.keepDrawn(node.inner, axis);
+        for (const kid of node.kids)
+            this.keepDrawn(kid.node, axis);
+    }
     /** Puts `next` where `node` stands: in its cut, inside its box, or as the root. */
     replace(node, next) {
         const holder = this.parent.get(node);
@@ -53,6 +74,13 @@ class Index {
             // A cut along the axis of its cut gives that cut its kids, so the tree stays canonical.
             if (isCut(next) && next.cut === holder.cut) {
                 const axis = holder.cut;
+                // A node that keeps a px size is drawn at its px size whatever its fraction, and a cut whose kids all keep one divides its room
+                // in their proportion, so a px size can be drawn larger than it declares. Each card of the cut that is no fixed card and keeps a
+                // px size is written at the size it is drawn at, so the kids of the cut keep their drawn sizes when the join brings kids that
+                // take a fraction (packages/soksak/docs/layout.md#add-and-remove). A fixed card is a cost of the cut and keeps its px size.
+                for (const kid of holder.kids)
+                    if (kid.node !== node)
+                        this.keepDrawn(kid.node, axis);
                 const share = holder.kids[at].share;
                 holder.kids.splice(at, 1, ...next.kids.map((kid) => ({ share: share * kid.share, node: kid.node })));
                 for (const kid of next.kids)
