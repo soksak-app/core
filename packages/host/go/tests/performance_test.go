@@ -4,7 +4,9 @@
 package host_test
 
 import (
+	"encoding/json"
 	"errors"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -475,5 +477,64 @@ func TestTheSamplerAttributesTheWorkOfTheRoutines(t *testing.T) {
 	}
 	if micros, _ := index["micros"].(float64); micros < 0 || micros > wall {
 		t.Fatalf("the work of log-index took %v microseconds of %v: %v", micros, wall, last)
+	}
+}
+
+// A wake of service-messages also counts as the routine of the kind of its line: a message for the owning window as
+// service-messages.message and an image message as service-messages.image, so the sampler attributes the work of the lines to
+// the kinds of messages. The service echoes each line that the host sends.
+// contract: performance.sampler.attributes-the-kinds-of-service-messages
+func TestTheSamplerAttributesTheKindsOfServiceMessages(t *testing.T) {
+	config := t.TempDir()
+	log := support.StartWriter(t, config)
+	traceOn(t)
+	waitForFirstSample(t)
+	root := t.TempDir()
+	socket := filepath.Join(support.SocketParent(t), "s.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	writeHarnessEndpoint(t, root, socket)
+	serveHelloVersion(t, listener, nil)
+	sidecars, err := host.NewSidecars(support.HarnessDeclarations(t.TempDir()), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sidecars.Stop()
+	owner := support.NewSidecarRecorder(t, "/kinds")
+	for _, body := range []string{`{"operation":"open"}`, `{"operation":"output"}`} {
+		if err := owner.Send(sidecars, "fixture-service", "surface", json.RawMessage(body)); err != nil {
+			t.Fatal(err)
+		}
+		owner.Next(t)
+	}
+	// The detach acknowledgement is an image message that the window does not receive; the echo of the message after it shows
+	// that the reader handled it. The stop ends the reader after its last wake, so every wake has counted before the sample.
+	for _, body := range []string{`{"image":{"detached":5}}`, `{"operation":"output"}`} {
+		if err := owner.Send(sidecars, "fixture-service", "surface", json.RawMessage(body)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	owner.Next(t)
+	sidecars.Stop()
+	host.PerformanceSample()
+	wakes := map[string]float64{}
+	for _, sample := range traceFields(t, config, log, "host.sampler.routines") {
+		routines, _ := sample["routines"].([]any)
+		for _, item := range routines {
+			entry, _ := item.(map[string]any)
+			name, _ := entry["name"].(string)
+			count, _ := entry["wakes"].(float64)
+			wakes[name] += count
+		}
+	}
+	// The echo of the close-owner request of the stop holds no ok, so it violates the protocol: a wake without a kind.
+	want := map[string]float64{"service-messages": 5, "service-messages.message": 3, "service-messages.image": 1}
+	for name, count := range want {
+		if wakes[name] != count {
+			t.Errorf("the samples count %v wakes of %s, want %v: %v", wakes[name], name, count, wakes)
+		}
 	}
 }

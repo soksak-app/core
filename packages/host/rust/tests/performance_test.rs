@@ -14,6 +14,8 @@ use soksak_host::performance;
 
 #[path = "support/records.rs"]
 mod records;
+#[path = "support/sidecar_recorder.rs"]
+mod sidecar_recorder;
 
 const CHILD: &str = "SOKSAK_PERFORMANCE_CHILD";
 
@@ -591,4 +593,106 @@ fn the_sampler_attributes_the_work_of_the_routines() {
         (0..=wall).contains(&micros),
         "the work of log-index took {micros} microseconds of {wall}: {last}"
     );
+}
+
+// A wake of service-messages also counts as the routine of the kind of its line: a message for the owning window as
+// service-messages.message and an image message as service-messages.image, so the sampler attributes the work of the lines to
+// the kinds of messages. The service echoes each line that the host sends.
+// contract: performance.sampler.attributes-the-kinds-of-service-messages
+#[test]
+fn the_sampler_attributes_the_kinds_of_service_messages() {
+    use sidecar_recorder::SendAsRecorder;
+    use std::io::{BufRead, BufReader, Write};
+    if let Some(config) = std::env::var_os(CHILD) {
+        let config = std::path::Path::new(&config);
+        let writer = records::start_writer(config);
+        performance::command(json!({"action": "on"})).unwrap();
+        records::wait_for_first_sample(config, &writer);
+        let executable_directory = folder::Folder::new();
+        let config_directory = folder::Folder::new();
+        let service_directory = config_directory.path().join("services/echo");
+        std::fs::create_dir_all(&service_directory).unwrap();
+        let socket_path = service_directory.join("kinds.sock");
+        let listener = std::os::unix::net::UnixListener::bind(&socket_path).unwrap();
+        let endpoint = json!({"protocol": 1, "pid": std::process::id(), "socket": socket_path, "token": "kinds-token"});
+        std::fs::write(
+            service_directory.join("endpoint.json"),
+            serde_json::to_vec(&endpoint).unwrap(),
+        )
+        .unwrap();
+        // The service answers hello and echoes each other line.
+        std::thread::spawn(move || {
+            let Ok((mut stream, _)) = listener.accept() else {
+                return;
+            };
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut line = String::new();
+            while reader.read_line(&mut line).unwrap_or(0) > 0 {
+                let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+                let reply = if request["operation"] == "hello" {
+                    json!({"operation": "hello", "protocol": 1, "ok": true}).to_string()
+                } else {
+                    line.trim_end().to_string()
+                };
+                if writeln!(stream, "{reply}").is_err() {
+                    return;
+                }
+                line.clear();
+            }
+        });
+        let declarations = vec![soksak_host::sidecars::SidecarDeclaration {
+            name: "@fixture/sidecar-echo".to_string(),
+            folder: executable_directory.path().to_path_buf(),
+            data: br#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#.to_vec(),
+            error: None,
+            version: "0.0.1".to_string(),
+            dependents: Vec::new(),
+        }];
+        let sidecars = soksak_host::sidecars::Sidecars::new(
+            &declarations,
+            config_directory.path().to_path_buf(),
+        )
+        .unwrap();
+        let (owner, events) = sidecar_recorder::owner("kinds", "/projects/kinds");
+        let raw = |text: &str| serde_json::value::RawValue::from_string(text.to_string()).unwrap();
+        for body in [r#"{"operation":"open"}"#, r#"{"operation":"output"}"#] {
+            sidecars
+                .send_as(&owner, "@fixture/sidecar-echo", "surface", &raw(body))
+                .unwrap();
+            events.recv().unwrap();
+        }
+        // The detach acknowledgement is an image message that the window does not receive; the echo of the message after it
+        // shows that the reader handled it. The stop ends the reader after its last wake, so every wake has counted before
+        // the sample.
+        for body in [r#"{"image":{"detached":5}}"#, r#"{"operation":"output"}"#] {
+            sidecars
+                .send_as(&owner, "@fixture/sidecar-echo", "surface", &raw(body))
+                .unwrap();
+        }
+        events.recv().unwrap();
+        sidecars.stop();
+        performance::sample();
+        performance::command(json!({"action": "off"})).unwrap();
+        writer.flush().unwrap();
+        return;
+    }
+    let config = in_child("the_sampler_attributes_the_kinds_of_service_messages");
+    let mut wakes = std::collections::BTreeMap::<String, u64>::new();
+    for sample in trace_fields(config.path(), "host.sampler.routines") {
+        for entry in sample["routines"].as_array().into_iter().flatten() {
+            *wakes
+                .entry(entry["name"].as_str().unwrap_or_default().to_string())
+                .or_default() += entry["wakes"].as_u64().unwrap_or(0);
+        }
+    }
+    for (name, count) in [
+        ("service-messages.message", 3),
+        ("service-messages.image", 1),
+    ] {
+        assert_eq!(
+            wakes.get(name).copied().unwrap_or(0),
+            count,
+            "the samples count the wakes of {name}: {wakes:?}"
+        );
+    }
 }

@@ -2883,6 +2883,14 @@ func (c *Sidecars) readPersistentLines(process *sidecar, reader *bufio.Reader) s
 func (c *Sidecars) handlePersistentLine(process *sidecar, line []byte) (string, bool) {
 	started := time.Now()
 	defer routine.Work("service-messages", started, int64(len(line)))
+	// The wake also counts as the routine of its kind, so the work of the lines is attributed to the kinds of messages
+	// (docs/spec/performance-trace.md). A line that violates the protocol has no kind.
+	kind := ""
+	defer func() {
+		if kind != "" {
+			routine.Work("service-messages."+kind, started, int64(len(line)))
+		}
+	}()
 	recordReady(process)
 	value, err := decodeSidecarLine(line)
 	if err != nil {
@@ -2934,6 +2942,7 @@ func (c *Sidecars) handlePersistentLine(process *sidecar, line []byte) (string, 
 				waiter <- errors.New(reason)
 			}
 		}
+		kind = "reply"
 		return "", false
 	}
 	output, err := value.output()
@@ -2944,6 +2953,7 @@ func (c *Sidecars) handlePersistentLine(process *sidecar, line []byte) (string, 
 		if violation := c.processAnswered(process, output); violation != "" {
 			return violation, true
 		}
+		kind = "process"
 		return "", false
 	}
 	if output.Surface == nil {
@@ -2953,6 +2963,7 @@ func (c *Sidecars) handlePersistentLine(process *sidecar, line []byte) (string, 
 		if violation := c.closeAnswered(process, *output.Surface, *output.Closed, output.Error); violation != "" {
 			return violation, true
 		}
+		kind = "closed"
 		return "", false
 	}
 	if output.Body == nil {
@@ -2969,11 +2980,14 @@ func (c *Sidecars) handlePersistentLine(process *sidecar, line []byte) (string, 
 			func() { c.traceMessage("sidecar.receive", process.name, event.Surface, event.Body) },
 			func() bool { return c.tryHandleImageEnvelope(owner, process.name, event.Surface, body) },
 		) {
+			kind = "image"
 			return "", false
 		}
 		owner.DeliverSidecarMessage(SidecarMessage{Sidecar: process.name, Surface: event.Surface, Cids: output.Cids, Body: event.Body})
+		kind = "message"
 	} else {
 		c.dropMessage(process, event)
+		kind = "dropped"
 	}
 	return "", false
 }

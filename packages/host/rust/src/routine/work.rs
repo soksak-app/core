@@ -47,6 +47,8 @@ pub fn work(name: &'static str, started: std::time::Instant, bytes: i64) {
 /// The wake of a routine that counts its work when it ends, at the end of the scope that holds it.
 pub struct Wake {
     name: &'static str,
+    /// The routine of the kind of the wake, which the wake also counts as when it ends.
+    kind: Option<&'static str>,
     started: std::time::Instant,
     bytes: i64,
 }
@@ -56,15 +58,24 @@ impl Wake {
     pub fn start(name: &'static str, bytes: usize) -> Wake {
         Wake {
             name,
+            kind: None,
             started: std::time::Instant::now(),
             bytes: bytes as i64,
         }
+    }
+
+    /// Counts the wake also as the routine `kind` when it ends, the routine of the kind of its work.
+    pub fn count_as(&mut self, kind: &'static str) {
+        self.kind = Some(kind);
     }
 }
 
 impl Drop for Wake {
     fn drop(&mut self) {
         work(self.name, self.started, self.bytes);
+        if let Some(kind) = self.kind {
+            work(kind, self.started, self.bytes);
+        }
     }
 }
 
