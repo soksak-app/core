@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F966-2-4 (withdraw로 떠나는 window sidebar, mygo): mygo workbench에서 window sidebar의 숨김은 F966-3-6-2부터 tree의 withdraw이므로, 그 cut의 다른 kid가 비율대로 공간을 가지고 card가 더 이상 공간을 받은 이웃의 header button 아래에 서지 않는다. 그 scan에서 실패하던 `TestEverySeamLineIsOneLineHoweverManyGroupCardsEndOnIt`가 통과하고, item이 완료된다.
 - F966-3-6-14 (그 level의 비용인 fixed card): Go layout은 cut의 공간이 corridor, 비용, 지분을 가진 kid의 minSize 하나를 담는 동안 fixed card의 px 크기를 유지하고, 담지 못할 때만 fixed card를 줄인다. 지분을 가진 kid의 px 크기는 자기들끼리 한 배율과 minSize 하나의 하한을 지킨다. 검증: `grid.json`의 새 case는 바뀌지 않은 layout에서 300 px card 옆 fixed card가 198 대신 171.8로 그려져 실패했고, fixed card가 제거와 추가를 지나 유지되며 통과한다. fixed가 아닌 px 크기의 case는 값을 유지한다.
 - F966-3-6-13 (축소된 fixed card가 유지하는 사각형): Go layout이 px 크기를 줄일 때 지분을 가진 kid에 남기는 하한은 그 안의 corridor, frame, head를 세지 않는 minSize 하나이고, 그 비용을 담지 못하는 판만 더 줄인다. 그래서 fixed window sidebar 옆 kid 안의 split, close, group은 sidebar의 사각형을 유지하고, 거부된 split은 content card를 가리킨다. 검증: `grid.json`의 새 case는 바뀌지 않은 layout에서 sidebar가 198 대신 190.2로 그려져 실패했고, `TestCoreCardSplitRefuses`는 sidebar `left`를 가리켰다. 둘 다 content card를 가리키며 통과한다.
 - F966-3-4-1 (Go에서 거부되는 `cardSplit`): Go workbench의 settings store는 저장된 `cardSplit`을 `settings.json: unknown setting cardSplit`으로 거부하고, settings 명세는 그것을 이전 설정의 key 가운데 둔다. 검증: `packages/workbench-mygo/tests/settings_store_test.go`의 새 test는 F966-3-4 이전의 선언에서 error 없이 실패했고 통과한다.
