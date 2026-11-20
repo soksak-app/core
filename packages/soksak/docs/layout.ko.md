@@ -183,7 +183,7 @@ box or a cut`을, kid가 둘 미만인 cut, 그 cut의 축을 따라가는 kid c
 이전 state는 line과 cell이었고, 각 operation이 그것들에서 slicing tree를 다시
 만들었다. line이 우연히 한 좌표에 선 두 cut은 한 cut으로 읽혔으므로, 한 row의
 operation이 다른 row를 바꿨다. 생성한 operation 40개의 seed 32개에서
-`docs/plans/layout-sizes.ko.md#불변식`의 불변식 I7, I8, I10이 63번 실패했고, 모두
+`docs/spec/groups.ko.md#불변식`의 불변식 I7, I8, I10이 63번 실패했고, 모두
 line이 둘 이상의 tree로 읽히는 layout에서였으며 다른 layout에서는 없었다
 (`docs/spec/cases/layout/invariants.json`).
 
@@ -498,7 +498,7 @@ grid.insert("card-1", "right", left);             // card-3이 card-1 오른쪽�
 grid.insert(["card-1", "card-2"], "bottom", { card: "card-9" }); // 둘 아래에 새 row
 ```
 
-이 규칙의 제안은 [layout sizes](../../../docs/plans/layout-sizes.ko.md)이며,
+workbench는 모든 layout operation을 [크기 규칙](../../../docs/spec/groups.ko.md#크기-규칙)으로 이 둘에서 조합하며,
 `docs/spec/cases/layout/invariants.json`이 그 불변식을 두 언어에서 생성한 layout에
 대해 검사한다.
 

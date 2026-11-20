@@ -210,7 +210,7 @@ The earlier state was the lines and the cells, and each operation rebuilt the
 slicing tree from them. Two cuts whose lines stood at one coordinate by chance
 read as one cut, so an operation of one row changed the other: over 32 seeds of
 40 generated operations, the invariants I7, I8 and I10 of
-`docs/plans/layout-sizes.md#invariants` failed 63 times, each on a layout whose
+`docs/spec/groups.md#invariants` failed 63 times, each on a layout whose
 lines read as more than one tree, and none on another layout
 (`docs/spec/cases/layout/invariants.json`).
 
@@ -564,8 +564,8 @@ grid.insert("card-1", "right", left);             // card-3 lands to the right o
 grid.insert(["card-1", "card-2"], "bottom", { card: "card-9" }); // a new row below both
 ```
 
-The proposal of this rule is [layout sizes](../../../docs/plans/layout-sizes.md),
-whose invariants `docs/spec/cases/layout/invariants.json` checks over generated
+The workbenches compose every layout operation from these two by the [rule of
+sizes](../../../docs/spec/groups.md#rule-of-sizes), whose invariants `docs/spec/cases/layout/invariants.json` checks over generated
 layouts in both languages.
 
 ## Even arrangement

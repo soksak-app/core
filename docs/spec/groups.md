@@ -2,7 +2,7 @@
 
 [한국어](groups.ko.md)
 
-A group card names a rectangle of the grid of a space and holds the cards inside it. This specification owns the group tree of a space, the leader of each level, the group header, the commands `core.group.*`, the group members of `core.layout`, `core.grid`, `core.card.get` and the window description, the stored form of the group tree in `projects.json`, and the drawing of the groups. The grid of a space follows the rules of the layout library ([soksak](../../packages/soksak/docs/layout.md)); the card commands and the layout operations follow [acting on a layout](cli.md#acting-on-a-layout); the declarations follow [exposure](exposure.md).
+A group card names a rectangle of the grid of a space and holds the cards inside it. This specification owns the group tree of a space, the leader of each level, the group header, the commands `core.group.*`, the group members of `core.layout`, `core.grid`, `core.card.get` and the window description, the stored form of the group tree in `projects.json`, the drawing of the groups, and the rule of sizes of every layout operation of a space ([rule of sizes](#rule-of-sizes)). The grid of a space follows the rules of the layout library ([soksak](../../packages/soksak/docs/layout.md)); the card commands and the layout operations follow [acting on a layout](cli.md#acting-on-a-layout); the declarations follow [exposure](exposure.md).
 
 ## Scope
 
@@ -25,6 +25,63 @@ The layout library gives the rectangle of each card of the grid (R5). A group ca
 ### Minimum size
 
 A content card is drawn at least `minSize` on both axes. The layout library holds that bound for its rectangles; the headers make a card drawn shorter, so the workbench applies each operation (split, close, insert, move, balance, arrange, a boundary drag, a group change) to a copy of the grid and the group tree first, as the drop preview does today, and refuses the operation when a content card that it changes would then be drawn below `minSize` on an axis. A card that a window resize already left below its size does not refuse an operation that does not change it. The drop preview and the release of a drop use the same check, so a position that the check refuses shows no preview and its release changes nothing. A boundary drag is the drag of the library and moves the whole line across every group; it stops at the last position at which every content card beside the line is drawn at least `minSize`. A change that is not an operation, a window resize, a change of `gap`, of `size` or of the text size, re-expresses the proportions of the grid and refuses nothing, as R5 states: a card is then drawn below its minimum until the room returns.
+
+## Rule of sizes
+
+Every operation that changes the layout of a space follows one rule over the slicing tree: it is a composition of the two primitives REMOVE and ADD, the `withdraw` and the `insert` of the layout library ([add and remove](../../packages/soksak/docs/layout.md#add-and-remove)), and every rule works on the fractions of the stored tree ([cuts](../../packages/soksak/docs/layout.md#cuts)). A level is a cut of the tree. A kid of a level is drawn at its fraction of the extent of the level less the fixed costs of the level: the corridors between its kids, its fixed cards, and the heads and frames of its boxes, whose frames the workbench lays with the frames option `corridor`, or `none` at the seam ([drawn rectangles](#drawn-rectangles)). A fixed card, a window sidebar, keeps its size in points and is a cost of its level; the px size of a kid that is no fixed card shares the room with the kids that take a fraction and scales by one factor among those px sizes, which leaves the kids that take a fraction one `minSize`. A level is even when its kids that take a fraction have one fraction. A change of the gap, of a head or of the window keeps every fraction, and the tree records no payer. No setting chooses another division.
+
+### Two primitives
+
+- REMOVE(X): X leaves its level, and the kids of the level that are not fixed scale by one factor and fill the level, so their ratios hold. A level left with one kid is replaced by that kid, and a kid that is then a cut along the axis of the level that holds it joins that level (the canonical merge). The canonical merge keeps drawn sizes: every kid of the join keeps the size it is drawn at, and a kid that keeps a px size and is no fixed card is written at its drawn size before the factor of the REMOVE scales it, while a fixed card stays a cost. A group card left with one member is replaced by that member when the operation commits, after its target is resolved ([closing](#closing)). The last content card of the root level is not removed.
+- ADD(M, N, side), with N a card, a box, a run of neighbouring kids of one level, a level or the root of a plane, and `a` the axis of side:
+  - Along: the level that holds N, or N itself when N is a level of axis `a` and side is its end, has axis `a`, and M is inserted beside N toward side. On an even level of k kids that take a fraction, M gets 1/(k + 1) and every kid keeps its ratio, so the level stays even. On a level that is not even only N pays: M gets half of N and every other kid keeps its fraction.
+  - Across: N is wrapped in a new level of axis `a` that holds N and M toward side, each 1/2.
+- Refusal: an operation is refused and changes nothing when a node whose rectangle changes would be drawn below its recursive minimum, with the heads and the corridors as fixed costs ([minimum size](#minimum-size)). The refusal names the deepest such node at the size of its content, `card <id> would be <w>x<h>, below its minimum <w>x<h>`, and a node that would have no area as `card <id> would be <w>x<h> and have no area`. The creation of a group card is one operation of the library that includes the box and its head, judged once on its drawn result.
+
+### Every operation is a composition
+
+| Operation | Definition |
+| --- | --- |
+| split button, `core.layout.open {side}` on card X | ADD(new, X, side) |
+| group split button on card X toward side, `core.group.create` | a group card takes the place and the fraction of X, and its plane is ADD(new, X, side) |
+| drop on a side zone of card X | ADD(moving, X, side) |
+| drop on a line segment between the kids i and i + 1 of one level | ADD(moving, kid i, the side toward i + 1) |
+| drop on a span of neighbouring kids of one level | ADD(moving, run, side) |
+| drop on an edge of a plane or of the plane of a group card | ADD(moving, root of that plane, side) |
+| drop on a group header, or on the tabs of a group card | ADD(moving, root of the plane of the group card, right) |
+| tab onto the centre or the tab strip of card X | the tab joins X at the index; a source card left without tabs is REMOVEd |
+| card onto the tab strip of card X | every tab of the card joins X at the index; the card is REMOVEd |
+| card onto the centre of card X | the two cards exchange places, and each place keeps its size |
+| close of a card, of the tab of a card with one tab, of a group card | REMOVE |
+| move of the tab of a card with one tab, of a card or of a group card | REMOVE(moving), then the ADD of the target, committed as one change |
+| balance | every level becomes even |
+| boundary drag | changes the two fractions beside the boundary only |
+| fullscreen | a fullscreen card or group card refuses layout changes; a tab drag restores the arrangement first |
+
+### Target search
+
+- Hit areas are drawn on the current layout, and the result is computed on the tree after REMOVE(moving).
+- Each segment of a line belongs to one level of the tree; a line that runs on across levels is separate segments with separate previews. The face of a line segment is the side of the pointer.
+- A target that names the moving node or its vacated place maps to the vacated slot (level, index, fraction), whose ADD is the inverse of the REMOVE, so a drop back is no change. No target is excluded because the pointer is over the dragged card: a drop is no change exactly when its result equals the current layout.
+- Nested sides that share one screen line get bands ordered by depth from the outside in, whatever the gap; targets whose results are equal are one band. The bands of a card have their standard width in points while the card holds them all; otherwise every band of that card narrows by one factor, so that they end short of the centre of the card. A side is chosen by the distance of the point from it divided by the distance that side has, because a fixed band width cannot keep every side reachable (I4) in a card of the minimum size.
+- A run is chosen by the point where the drag entered the line and the current point.
+
+### Invariants
+
+The rule holds these invariants over generated layouts, every anchor and every point:
+
+- I1 tiling: the cards cover the plane without gap or overlap.
+- I2 minimum: no changed node is below its recursive minimum; otherwise the operation is refused and names it.
+- I3 the preview equals the result for every anchor and point.
+- I4 reachability: every (node, side) of the current tree, every vacated slot, every centre and every strip index has an anchor and a point that select it, after equal results are merged.
+- I5 moves keep every tab and surface.
+- I6 a drop is no change exactly when its result equals the current layout.
+- I7 ratios: ADD and REMOVE keep the ratios of the fractions of every kid that they do not insert, remove or, on a level that is not even, halve; an even level stays even under an ADD or a REMOVE inside it.
+- I8 locality: the rectangles outside the subtrees of the source and the target levels, after the canonical merge, do not change.
+- I9 commands are idempotent with the identifiers they return.
+- I10 inverse: the REMOVE of a node just added restores the fractions of an even level, and a drop of a moved node on its vacated slot is no change.
+
+I1 and I2 are judged on the drawn rectangles, I7 and I10 on the fractions of the stored tree. The layout library checks I1, I2, I7, I8 and I10 over the generated layouts of `docs/spec/cases/layout/invariants.json` in TypeScript and Go; I3, I4, I5, I6 and I9 concern a workbench.
 
 ## Leader
 
@@ -147,7 +204,7 @@ A tab drag and `core.tab.move` take a target card of any level. A drop resolves 
 - A drop on the `centre` of a group card puts the tab into a new content card inside the group at the right edge of its rectangle, as `core.card.add-tab` does; the only tab of a card moves its card there.
 - A drop on a side of a group card puts the tab into a new card beside the rectangle of the group card in the level that holds it, by the split of the rectangle; the only tab of a card moves its card there, as `core.card.move` moves it.
 
-A tab that is the only tab of its card moves its card, which keeps its identifier, as today. A press and drag on the header of a group card outside its controls moves the group card: the drop resolves as for a tab, and the release runs `core.card.move {card, target, side}`. While a group card is dragged, the resolution leaves out the dragged group card and the cards inside it, as a tab drag leaves out the centre of its own card today (`centreOnly`); a release with no zone changes nothing and shows no error.
+A tab that is the only tab of its card moves its card, which keeps its identifier, as today. A press and drag on the header of a group card outside its controls moves the group card: the drop resolves as for a tab, and the release runs `core.card.move {card, target, side}`. A target that names the dragged node or its vacated place is the vacated slot, and no target is excluded because the pointer is over the dragged card ([target search](#target-search)); a release with no zone changes nothing and shows no error.
 
 ## Focus
 
@@ -259,3 +316,25 @@ The review answered these objections:
 - The balance of the layout library was taken to keep the arrangement, but it can lay cards on other lines, and a balance in a space with groups left a group card over cells of another group; the equal share of every slot that replaced it kept every line index, so a row built by halves stayed in halves of its lines and a group card with a header drew its members shorter than its siblings. The balance gives every child of every cut an equal share on the tree whose children are the cards and the group cards, so no cut crosses a group card, the header of a group card is inside its share, and the result depends on the arrangement, not on the order of the operations that built it. Every result of the grid, a balance and the centring of a boundary included, passes the same check of the group rectangles, and a seeded sequence of random operations checks the invariants after every step.
 - Objection: an equal share of every child draws a card inside nested group cards shorter than a card beside the outer group, because each header is inside the share of its group card. Answer: the share is the share of the child of the cut, which the person sees as the rectangle of the group card; a balance that would draw a content card below its minimum is refused and names it, as every operation is.
 - A refused split or group was made again without the minimum so that the refusal named the content card, because the library judged the split before the group card added its box and its head: a second run works around the answer of the library. The group is one operation of the library that includes the box and its head, and the library names the deepest node below its minimum at its drawn size, so one run gives the refusal.
+
+The rule of sizes is decided:
+
+- Every layout operation of a space follows one rule of sizes, the composition of REMOVE and ADD over the stored tree ([rule of sizes](#rule-of-sizes)), chosen from the manual of the layout operations (F961). It replaces a rule for each operation: a removed card gave its space to one neighbour by the fill order, a split halved only the split card, and a dropped card took half of the thinner neighbour, so an equal row became unequal after each operation and each case needed a branch of its own. With one rule an even row stays even under every add and remove, the remove of a node just added restores the fractions, and every operation is a composition that one set of cases checks in TypeScript and Go. The rule comes with the stored tree as the one form: the space layout, the grid of `environment.json` (`{root}`) and the report of `core.layout` hold the tree and nothing else, and the setting `cardSplit`, which chose between dividing the split card and balancing the grid, is removed.
+- Every rule works on fractions: a kid is drawn at its fraction of the extent of its level less the fixed costs, which are the corridors, the fixed cards and the heads and frames of the boxes, and a change of the gap keeps every fraction. A fixed card is a cost of its level, and a px size of a kid that is no fixed card shares with the kids that take a fraction and leaves them one `minSize`, because a cost that an operation adds or removes inside a kid is then paid by the kids that take a fraction, and a fixed card is drawn at one size before and after it.
+- The creation of a group card is one operation of the library, judged on its drawn result, and a refusal names the deepest node that an operation moves below its minimum at the size of its content, because a second run without the minimum answered for the library and named sizes that are never drawn.
+- The canonical merge keeps drawn sizes: a join that brings kids that take a fraction into a cut whose kids keep px sizes writes each px kid that is no fixed card at its drawn size before the REMOVE scales it, because a px kid that fell back to its stored size after it had been drawn larger left the cards inside it without area.
+
+The review of the rule of sizes answered these objections:
+
+- Objection: a rule that reads the tree from the rectangles changes its result when lines align by chance. Answer, accepted: the stored layout is the canonical tree, and the rectangles are derived from it.
+- Objection: an even level that stays even under every operation cannot be stated as one invariant over all layouts. Answer, accepted: I7 states the ratios that each primitive keeps; evenness follows from it on an even level, and I10 states the inverse.
+- Objection: a group card with one member cannot hold a drop target while a move passes through it. Answer, accepted: a group card contracts when the operation commits, after the target is resolved.
+- Objection: a minimum per card misses the headers and gaps of nested group cards. Answer, accepted: the minimum is computed recursively, with headers and gaps as fixed costs, and the refusal names the node.
+- Objection: an equal share for a drop on a card that the person sized unequally undoes that sizing, so a drop should take half of its target everywhere. Answer, accepted in part: one rule holds for every add, but on a level that is not even only the target pays half, and split buttons and agent opens on an even level insert with an equal share, because repeated splits stay even (F957).
+- Objection: a target computed on the tree after the removal moves under the pointer. Answer, accepted: hit areas are drawn on the current layout; only the result is computed after the removal, and the vacated slot is a target.
+- Objection: nested sides on one screen line cannot be told apart. Answer, accepted: they get bands ordered by depth, equal results share one band, a run is chosen by the anchor where the drag entered the line, and a card too small for the standard widths narrows its bands by one factor.
+- Objection: a drop on a group header needs a side, and a rule of aspect for the side of a drop decides it differently by shape. Answer, accepted: the composition table lists the header and the tabs of a group card, which add to the right end of the root of its plane, the side of `core.card.move` `centre` of a group card, and no rule of aspect remains.
+- Objection: an edge drop could give the new card the size of the zone that the preview shows. Answer, rejected: M always gets an equal share of the level it lands in; a new level of two gives 1/2, so the edges follow the same rule as every other add.
+- Objection: an uneven level that the person sized loses that sizing when every kid pays for an add. Answer, accepted: on a level that is not even only N pays, and every other kid keeps its size.
+- Objection: changes outside the source and target levels cannot be ruled out when a level contracts. Answer, accepted: I8 states locality after the canonical merge.
+- Objection: I7 and I10 can be judged on the drawn sizes, as I1 and I2 are. Answer: a drawn ratio is not the stored ratio, because a cut takes its fixed costs before it gives its kids their fractions, and those costs change with the gap, the heads and the kids around a node; a criterion on drawn ratios failed layouts whose fractions were exact and passed only layouts that rewrote fractions to undo the costs. I7 and I10 are judged on the fractions of the stored tree, and I1 and I2 stay on the drawn rectangles.
