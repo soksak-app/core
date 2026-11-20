@@ -52,7 +52,7 @@ await installCoreExposure({ library: { state: () => null }, renames: { state: ()
   memorySaver: await pageMemorySaver() });
 plane.nameWindow(WINDOW);
 
-const view = (id, plugin) => ({ id, plugin, title: id, origin: { directory: null } });
+const view = (id, plugin) => ({ id, plugin, title: id, origin: { directory: null }, role: null });
 const content = (id, tabs) => ({ card: id, data: { tabs, activeId: tabs[0].id } });
 // The layout of the space: the browser card card-1 beside the plain card card-2, with card-1 focused.
 const layout = () => ({ focusedId: "card-1", named: 0, windowSidebars: {}, sidebars: {}, leader: "card-1", lastCard: 2,
