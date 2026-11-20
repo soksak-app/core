@@ -217,17 +217,18 @@ test("core.layout.open toward a side from the last card of a group finds its nei
   assert.deepEqual((await stored()).groups[0].members, ["card-1", "card-2", opened.card]);
 });
 
-test("a drop resolves on the rectangles of the group cards and core.tab.move puts a tab into and beside a group card", { timeout: 5000 }, async () => {
+test("a drop resolves by the bands of the target search and core.tab.move puts a tab into and beside a group card", { timeout: 5000 }, async () => {
   arrange();
   const tree = plane.currentTree();
   const band = plane.dropBands();
   const group = tree.rect("card-4");
   const first = tree.rect("card-1");
-  // The header of a group card is its centre, the outer quarter of its rectangle a side, and a point inside goes on to its members.
-  assert.deepEqual(plane.dropHit(group.x + group.w / 2, group.y + 1, "card-3", band), { id: "card-4", zone: "centre" });
-  assert.deepEqual(plane.dropHit(group.x + 2, group.y + group.h / 2, "card-3", band), { id: "card-4", zone: "left" });
-  // A point of card-1 outside the outer quarter of the group card resolves on card-1 by zoneAt.
-  assert.deepEqual(plane.dropHit(group.x + group.w * 0.4, first.y + first.h / 2, "card-3", band), { id: "card-1", zone: "right" });
+  // The header of a group card is the add to the right of the root of its plane, the members of the group; a point on the left line of
+  // the group card is in the band of the group card, the outermost node on that line, and a point in the outer quarter of the body of
+  // card-1 is the side of card-1 (docs/spec/groups.md#target-search).
+  assert.deepEqual(plane.dropHit(group.x + group.w / 2, group.y + 1, band), { card: ["card-1", "card-2"], zone: "right" });
+  assert.deepEqual(plane.dropHit(group.x + 2, group.y + group.h / 2, band), { card: "card-4", zone: "left" });
+  assert.deepEqual(plane.dropHit(group.x + group.w * 0.4, first.y + first.h / 2, band), { card: "card-1", zone: "right" });
   // A drop on the centre of a group card puts the tab into a new content card inside it; the only tab of a card moves its card.
   const { tab } = await run("core.card.add-tab", { card: "card-3", plugin: PLAIN });
   await run("core.tab.move", { tab, card: "card-4", zone: "centre" });
