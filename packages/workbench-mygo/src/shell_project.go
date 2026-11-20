@@ -494,6 +494,11 @@ func (s *Shell) loadSpace(project *projectRecord) error {
 	if err != nil {
 		return err
 	}
+	// The space opens after the check of its stored layout that the library preview runs, as build of packages/workbench/plane.js
+	// does, with the prefix of docs/spec/groups.md#storage.
+	if err := layout.CheckStoredLayout(space.Layout, s.pluginUnits()); err != nil {
+		return fmt.Errorf("projects.json: project %s space %s: %w", project.Root, space.ID, err)
+	}
 	var stored storedLayout
 	if err := json.Unmarshal(space.Layout, &stored); err != nil {
 		return fmt.Errorf("space %s: %w", space.ID, err)

@@ -224,7 +224,7 @@ The focus ring stands on one content card of any level, and the keyboard follows
 
 ## Storage
 
-A space layout in `projects.json` ([persistence](projects.md#persistence)) stores the tree of the grid, with its group cards as boxes, as `state`, the largest card number that the space issued as `lastCard`, a positive integer at least as large as the number of every card identifier of the tree, and the leader of the root level as `leader`, the identifier of a member of the root level, or `null` while the root level holds only window sidebars. The `data` of a box is exactly `{name, leader}`: `name` the name of the group and `leader` the identifier of one of its members. The level is not stored, because the depth of the box gives it.
+A space layout in `projects.json` ([persistence](projects.md#persistence)) stores the tree of the grid, with its group cards as boxes, as `state`, the largest card number that the space issued as `lastCard`, a positive integer at least as large as the number of every card identifier of the tree, and the leader of the root level as `leader`, the identifier of a member of the root level, or `null` while the root level holds only window sidebars. The `data` of a box is exactly `{name, leader}`: `name` the name of the group and `leader` the identifier of one of its members. The level is not stored, because the depth of the box gives it. Beside these members a space layout holds `focusedId`, `named`, `sidebars` and `windowSidebars` ([persistence](projects.md#persistence)), and no other member.
 
 The stored layout is read only in this form. Each refusal is a refusal of the space, as [persistence](projects.md#persistence) states for a stored layout: opening that space fails and the library preview shows the error, and the registry and the other spaces stay readable. The prefix of each refusal is `projects.json: project <root> space <space>: `, and `<level>` is `root` or `group <id>`:
 
@@ -232,6 +232,7 @@ The stored layout is read only in this form. Each refusal is a refusal of the sp
 | --- | --- |
 | a tree that the layout library refuses, the earlier form `{xs, ys, cards}` included | the error of `checkState` |
 | a layout that stores `groups`, the group list of the earlier form | `layout stores groups, the group list of the earlier form; the group cards are boxes of state` |
+| a layout that stores a member other than `state`, `leader`, `lastCard`, `focusedId`, `named`, `sidebars` and `windowSidebars`, apart from `groups` and the members `railWidth` and `edgeWidth` of the earlier form, which have texts of their own | `layout stores <members>, which a space layout does not hold`, the members in the order of their names, separated by `, ` |
 | a box whose `data` is of another form | `layout stores the group <id> with the data <value>, which is not {name, leader}` |
 | a name of another form | `group <id> stores the name <value>, which is not 1 to 40 characters` |
 | a box that holds a window sidebar | `group <id> holds the window sidebar <side>` |

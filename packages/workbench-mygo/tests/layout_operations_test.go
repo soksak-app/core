@@ -111,6 +111,24 @@ func layoutShell(t *testing.T, spaces ...map[string]any) *tabShell {
 	return f
 }
 
+// Opening a space runs the check of the stored layout that the library preview runs, so a layout that stores a member that
+// docs/spec/groups.md#storage does not define, such as the format member of the earlier layout of lines, is refused with the
+// prefix of the space instead of opening without it (docs/spec/cases/layout/stored.json).
+func TestOpeningASpaceRefusesALayoutMemberThatTheStorageDoesNotDefine(t *testing.T) {
+	space := oneCard(tab("t1", "notes"))
+	space["layout"].(map[string]any)["format"] = 2
+	stored := &storedHost{installed: layoutPlugins, projects: []map[string]any{gridProject(space)}}
+	f := newShell(t, stored)
+	f.shell.Registry().RunLater("core.project.activate", json.RawMessage(`{"id":"prj-a"}`), func(any, error) {})
+	f.pending.drain(t)
+	f.tester.Frame()
+	want := "projects.json: project /a space spc-aaaaaa: layout stores format, which a space layout does not hold"
+	// The command shows the refusal through the one error path, which writes it to the log.
+	if errors := stored.written("workbench.record.error"); len(errors) != 1 || !strings.Contains(fmt.Sprint(errors[0]), want) {
+		t.Fatalf("the window recorded %v; want %q", errors, want)
+	}
+}
+
 // oneCard is the space spc-aaaaaa with the card main and tabs.
 func oneCard(tabs ...map[string]any) map[string]any {
 	return treeSpace("spc-aaaaaa", cardNode("main", tabs...))

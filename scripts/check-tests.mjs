@@ -14857,14 +14857,14 @@ const FEATURE_LINKS = [
   {
     id: "F936",
     implementation: [
-      { file: "packages/host/go/src/workspace.go", symbol: "projectsFormat = 2" },
-      { file: "packages/host/rust/src/workspace.rs", symbol: "pub(crate) const PROJECTS_FORMAT: u64 = 2;" },
+      { file: "packages/host/go/src/workspace.go", symbol: "projectsFormat = 3" },
+      { file: "packages/host/rust/src/workspace.rs", symbol: "pub(crate) const PROJECTS_FORMAT: u64 = 3;" },
     ],
     tests: [
       { file: "packages/host/go/tests/workspace_test.go", id: "TestEarlierStoredFormsAreReportedBySnapshotAndRefusedByWrites" },
       { file: "packages/host/rust/tests/workspace_test.rs", id: "earlier_stored_forms_are_reported_by_snapshot_and_refused_by_writes" },
     ],
-    expected: "Both hosts refuse as a whole a projects.json of format 1, the only form whose spaces held the removed member parties.",
+    expected: "Both hosts refuse as a whole a projects.json of another format than the current 3, format 1 among them, the only form whose spaces held the removed member parties.",
     levels: ["unit"],
   },
   {
