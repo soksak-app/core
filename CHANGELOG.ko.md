@@ -8,6 +8,7 @@
 - F1006-5.3: 명령 `core.tab.role {tab, role}`와 `core.tab.role.confirm {fingerprint}`의 등록을 네 단위(page, mygo shell, Go host, Rust host)로 나누어 등록했다. 단위들은 F1006-5.2를 기다린다.
 - F1006-4: 파일을 읽을 수 없는 agent의 paste form을 `docs/spec/agent-roles.md`(en과 ko)와 case file `docs/spec/cases/agent-roles/fingerprint.json`에서 제거했다. 그 형식을 고르는 선언이 없고 실행되는 모든 CLI가 파일을 읽기 때문이다. 모든 agent CLI의 첫 message는 완료됐으며, 증거는 row에 있다.
 - F1006-6: agent skill, MCP instructions, `docs/spec/cli.md`가 agent CLI와 role을 가진 tab을 `core.layout.open`의 `program`, `args`, `role`로 여는 방법과 답변 줄 형식의 확인을 적는다. 적힌 문장은 코드가 주는 refusal만 이름을 쓰며, 코드가 구현하지 않은 계획된 role 명령은 빼었다.
+- F1016-15.2: darwin peer process test가 unix socket을 짧은 폴더에서 연다. test 임시 폴더 아래 경로가 `sun_path` 한도를 넘어 `bind`가 `invalid argument`로 실패했기 때문이다.
 - F1006-2: terminal checklist의 P192가 sidecar `open`의 `program`과 `args`로 agent CLI를 시작한다. vt와 alacritty sidecar는 멤버와 `program not found` 오류를 이미 `origin/main`(S233, S241)에 구현했고, 두 `open_program_test`가 실제 PATH로 10 of 10 통과한다. core의 F1006-2, F1006-2-1, F1006-2-2 행은 `[o]`이며, 명세 `docs/spec/agent-roles.md#start-parameters`는 바꿀 필요가 없었다.
 - F1016-13: mygo workbench의 plane이 element tree와 window snapshot의 element `core.plane`이고, stage의 margin 없이 plane만 덮어서 그 margin의 press가 page처럼 focus를 유지하며, test가 모든 card 밖에서 plane을 누른다.
 - F1016-10.6: plane이 fullscreen card를 reader 하나로 읽고 cut node의 kids를 기본값 없이 읽으며, 나머지 기본값이 이유를 적는다.

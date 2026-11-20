@@ -9,7 +9,17 @@ import (
 
 // contract: sidecars.process-identity.reads-the-peer-process-from-the-socket
 func TestPeerProcessIsTheProcessThatConnected(t *testing.T) {
-	address := filepath.Join(t.TempDir(), "s")
+	// The socket path must fit the sun_path limit of darwin, 104 bytes; t.TempDir holds the test name and exceeds it.
+	dir, err := os.MkdirTemp("", "peer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(dir); err != nil {
+			t.Error(err)
+		}
+	})
+	address := filepath.Join(dir, "s")
 	listener, err := net.Listen("unix", address)
 	if err != nil {
 		t.Fatal(err)
