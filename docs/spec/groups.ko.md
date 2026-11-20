@@ -67,7 +67,8 @@ space의 layout을 바꾸는 모든 operation은 slicing tree에 대한 규칙 �
 - 점의 side는 점의 거리를 그 side가 가진 거리로 나눈 값이 가장 작은 side다. 고정된 띠 폭으로는 최소 크기의 card에서 모든 side에 닿을 수 없기 때문이다. 점의 거리가 그 side의 띠 폭 합보다 작거나, 점이 어느 content card에도 없고 group header 위에도 없으면 점은 그 side의 띠에 있다. 띠는 거리를 띠 폭으로 나눈 index의 띠이며 가장 바깥이 처음이고, 그 target은 ADD(moving, node, side)다.
 - 띠에 없는 content card의 tab strip 위의 점은 점의 index에서의 그 card의 tab strip이다. index는 움직이는 tab을 뺀 그 card의 tab 가운데 그 가운데가 점 앞에 있는 tab의 수다. group card는 tab이 아닌 card를 담으므로 tab strip은 group card의 target이 아니다. 끌리는 group card에게 tab strip은 그 card 본문의 일부이므로, 그 위의 점은 그 card의 띠와 본문으로 정해지고 drop은 거부되지 않는다. group card의 header 위의 점은 side stack이 그 box에서 시작하는 그 group card의 왼쪽이나 오른쪽 side의 띠에 있고, 그렇지 않으면 ADD(moving, group card의 plane의 root, right)다. 띠에 없는 content card 본문의 점은 본문의 가장자리 몫 0.25로 정한다. 가운데에서는 card의 가운데이고, 바깥 4분의 1에서는 가장 가까운 side의 ADD(moving, card, side)다.
 - run은 drag가 line에 들어온 점과 현재 점으로 고른다. drag가 line에 들어온 띠의 node가 그 anchor이며, drag가 그 line의 그 띠에 머무는 동안, node가 side의 축을 가로지르는 anchor의 cut의 다른 kid인 띠는 둘 사이 kid의 run, 곧 ADD(moving, run, side)다.
-- 움직이는 node나 그 빈 자리를 가리키는 target은 빈 slot(level, index, fraction)에 대응하며, 그 ADD는 REMOVE의 역이므로 제자리 drop은 변경이 없다. pointer가 끌리는 card 위에 있다는 이유로 제외되는 target은 없다. drop은 그 결과가 현재 layout과 같을 때 정확히 변경이 없다.
+- <a id="빈-slot"></a>card나 group card의 box인 움직이는 node M의 빈 slot은 REMOVE(M)이 비우는 자리다. 곧 저장된 tree에서 M을 담은 cut C, C의 kid 가운데 M의 index i, M의 share다. target은 어느 side s든 ADD(M, s)이거나, M에 대한 `centre`이거나, K가 index i − 1의 C의 kid이고 s가 index i 쪽 C의 축의 side(x-cut의 `right`, y-cut의 `bottom`)인 ADD(K, s)이거나, K가 index i + 1의 kid이고 s가 index i − 1 쪽 side(`left`, `top`)일 때 빈 slot을 가리킨다. K는 그 식별자로, cut이면 그 member의 식별자로 가리킨다. 빈 slot에 대한 drop은 REMOVE(M)의 역이다. M은 그 share로 index i에 남고 모든 kid는 그 share를 유지하므로, 결과는 현재 layout과 같고 drop은 변경이 없으며 그 preview는 M의 그려진 사각형이다. cut이 없는 M, 곧 plane의 root에는 kid의 빈 slot이 없고 자기 target만 있다. cut이나 run의 kid 가운데 M을 나열하는 target은 REMOVE(M) 뒤에 남는 kid를 가리킨다.
+- pointer가 끌리는 card 위에 있다는 이유로 제외되는 target은 없다. drop은 그 결과가 현재 layout과 같을 때 정확히 변경이 없다(I6).
 - window sidebar 위의 점이나 어느 card나 box에도 없는 점은 target이 없다.
 
 ### 불변식
@@ -161,7 +162,7 @@ grid의 모든 operation은 각 group card를 tree의 box 하나로 유지하므
 | `core.group.leader` | `card`가 window sidebar | `card <id> is a window sidebar and cannot lead a level` |
 | `core.card.move` | `card`가 window sidebar | `card <id> is a window sidebar and does not move` |
 | `core.card.move` | `target`이 window sidebar | `card <target> is a window sidebar; a card does not move beside it` |
-| `core.card.move` | `target`이 `card`이거나 `card` 안의 card | `card <id> cannot move into itself` |
+| `core.card.move` | `target`이 `card` 안의 card | `card <id> cannot move into itself` |
 | `core.card.move` | `side`가 `strip`이고 `card`가 group card | `card <id> is a group and holds no tabs` |
 | `core.card.move` | `side`가 `strip`이고 `target`이 group card | `card <target> is a group and has no tab strip` |
 | `core.card.move` | `side`가 `strip`이고 `index`가 0부터 `target`의 tab 수 밖 | `index <index> is outside the tabs of card <target>, 0 to <n>` |
@@ -184,7 +185,7 @@ grid의 모든 operation은 각 group card를 tree의 box 하나로 유지하므
 
 - `core.group.create {card, side, plugin, params}`는 `card`가 member가 정확히 `card`와 `N`인 group card `G`의 member이고, `N`이 `core.layout.open`의 규칙으로 `side` 쪽 `card`의 이웃이며, `N`이 `plugin`의 tab `T`를 `params`로 담으면 `{group: G, card: N, tab: T}`를 돌려주고 아무것도 바꾸지 않는다. `request`, 곧 한 요청의 식별자가 있으면 command는 대신 그 식별자로 멱등이다: space가 전에 답한 `request`의 반복은 첫 실행의 답을 돌려주고 아무것도 바꾸지 않으며, space가 답하지 않은 `request`는 위 규칙이 group을 찾는 곳에서도 command를 실행한다. workbench는 각 space의 요청의 답을 그 window가 열린 동안 지니며 어느 것도 저장하지 않는다. `core.card.menu`의 menu `group-x`와 `group-y`의 항목은 누를 때마다 새 `request`를 보내므로, 각 누름은 card를 한 번 묶고 두 번째 누름은 다시 묶는다.
 - 이 창이 workbench 시작 뒤 푼 group card의 `core.group.dissolve {group}`은 `{dissolved: true}`로 답하고 아무것도 바꾸지 않는다. 창은 닫힌 tab을 기억하듯([layout에 대한 동작](cli.ko.md#레이아웃에-동작하기)) 자기가 푼 group card의 식별자를 기억한다. 이 실행에서 창이 풀지 않은 식별자는 tab의 반복 close처럼 재시작 뒤에도 layout에 없는 card의 문구로 실패한다. 식별자는 두 번 나오지 않으므로 그 식별자는 다른 card를 가리키지 않는다.
-- 현재 이름으로의 `core.group.rename`, 현재 leader의 `core.group.leader`, 그리고 card가 이미 move가 두는 자리(`target`의 level의 member이며 `side` 쪽 그 이웃, 또는 `centre`이면 `target`의 member로서 그 사각형의 오른쪽 가장자리에서 위부터 아래까지 닿는 자리)에 있는 `core.card.move`는 layout을 부르지 않고 같은 결과를 돌려주므로 아무것도 바뀌지 않는다.
+- 현재 이름으로의 `core.group.rename`, 현재 leader의 `core.group.leader`, 그리고 card가 이미 move가 두는 자리(`target`의 level의 member이며 `side` 쪽 그 이웃, 또는 `centre`이면 `target`의 member로서 그 사각형의 오른쪽 가장자리에서 위부터 아래까지 닿는 자리)에 있는 `core.card.move`, 그리고 `target`과 `side`가 `card`의 빈 slot([target 찾기](#target-찾기))을 가리키는 `core.card.move`는 layout을 부르지 않고 같은 결과를 돌려주므로 아무것도 바뀌지 않는다.
 - `core.group.menu`는 `core.card.menu`가 card menu를 토글하듯 menu를 토글한다. `core.layout`은 바뀌지 않는다.
 
 ### Group card에 대한 card command
