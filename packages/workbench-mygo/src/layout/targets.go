@@ -3,6 +3,7 @@ package layout
 import (
 	"math"
 	"slices"
+	"strings"
 )
 
 // DropTarget is where a drop lands by the target search of the rule of sizes (docs/spec/groups.md#target-search): Kind "add" is the
@@ -145,6 +146,27 @@ func stackTarget(l link, side Side) Target {
 	return members(n)
 }
 
+// Anchor is the band where a drag entered a line (docs/spec/groups.md#target-search): its side, its line, its index from the outermost,
+// and the cut across the axis of the side that holds its node, by the members of that cut, with the index of the kid there, or no cut.
+type Anchor struct {
+	side Side
+	line float64
+	band int
+	cut  string
+	kid  int
+}
+
+// kidOf is the kid of the cut across the axis of side that holds the node of the band at the link at of the stack, through the cuts along
+// the axis of side, which give no band: the members of that cut and the index of the kid, or "" when a box or the root comes first.
+func kidOf(stack []link, at int, side Side) (string, int) {
+	for j := at; j > 0 && stack[j].at >= 0; j-- {
+		if holder := stack[j-1].node; holder.Cut != axisOf(side) {
+			return strings.Join(members(holder), " "), stack[j].at
+		}
+	}
+	return "", 0
+}
+
 // near and far are the sides at the start and at the end of an axis.
 func near(axis Axis) Side {
 	if axis == "y" {
@@ -204,10 +226,18 @@ func (t *GroupTree) within(side Side, line, x, y, strip float64) float64 {
 }
 
 // TargetAt resolves a drop at x, y by the target search of the rule of sizes (docs/spec/groups.md#target-search), or nil for a point on
-// a window sidebar or in no card or box.
+// a window sidebar or in no card or box, as a drag that enters at that point.
 func (t *GroupTree) TargetAt(x, y float64, options TargetOptions) *DropTarget {
+	hit, _ := t.DragAt(nil, x, y, options)
+	return hit
+}
+
+// DragAt resolves the drop of a drag at x, y whose anchor is anchor, nil before the drag enters a line, and returns the anchor of the
+// next point: the anchor while the point stays on its band of its line, the band of the point when it enters another, and nil off the
+// bands. A band whose node is another kid of the cut of the anchor across the axis of the side is the run of the kids between the two.
+func (t *GroupTree) DragAt(anchor *Anchor, x, y float64, options TargetOptions) (*DropTarget, *Anchor) {
 	if math.IsNaN(x) || math.IsInf(x, 0) || math.IsNaN(y) || math.IsInf(y, 0) {
-		return nil
+		return nil, nil
 	}
 	holds := func(r Rect) bool { return x >= r.X && x <= r.X+r.W && y >= r.Y && y <= r.Y+r.H }
 	content, group := "", ""
@@ -226,7 +256,7 @@ func (t *GroupTree) TargetAt(x, y float64, options TargetOptions) *DropTarget {
 	root := t.grid.ToJSON().Root
 	whole := t.drawnRect(root)
 	if content == "" && group == "" && !holds(whole) {
-		return nil
+		return nil, nil
 	}
 	body, _ := t.Rect(content) // silent: content is a card of the tree, or "" whose rectangle no condition below reads.
 	inStrip := content != "" && !IsWindowSide(content) && y < body.Y+options.HeaderPx
@@ -240,10 +270,16 @@ func (t *GroupTree) TargetAt(x, y float64, options TargetOptions) *DropTarget {
 		if inHead {
 			head = group
 		}
-		if hit := t.bandAt(root, x, y, options, head, content == "" && !inHead); hit != nil {
-			return hit
+		if hit, next := t.bandAt(root, x, y, options, head, content == "" && !inHead, anchor); hit != nil {
+			return hit, next
 		}
 	}
+	return t.bodyAt(root, x, y, options, content, group, body, inStrip, inHead), nil
+}
+
+// bodyAt is the target of a point in no band: the tab strip, the centre or the outer quarter of a content card, or the header of a group
+// card.
+func (t *GroupTree) bodyAt(root *Node, x, y float64, options TargetOptions, content, group string, body Rect, inStrip, inHead bool) *DropTarget {
 	switch {
 	case inStrip:
 		return &DropTarget{Kind: "strip", Card: content}
@@ -280,7 +316,7 @@ func (t *GroupTree) TargetAt(x, y float64, options TargetOptions) *DropTarget {
 // bandAt is the band of the side of the point whose distance divided by the distance that side has is the smallest, when the point lies
 // in it, or always when anywhere is set. On the header of the group card head the chain ends at its box, so the bands are those of its
 // left and its right side (docs/spec/groups.md#target-search).
-func (t *GroupTree) bandAt(root *Node, x, y float64, options TargetOptions, head string, anywhere bool) *DropTarget {
+func (t *GroupTree) bandAt(root *Node, x, y float64, options TargetOptions, head string, anywhere bool, anchor *Anchor) (*DropTarget, *Anchor) {
 	chain := t.chain(root, x, y)
 	inHead := head != ""
 	if inHead {
@@ -302,16 +338,19 @@ func (t *GroupTree) bandAt(root *Node, x, y float64, options TargetOptions, head
 		side        Side
 		dist, width float64
 		score       float64
+		line        float64
 		bands       []Target
+		stack       []link
+		links       []int
 	}
 	var best *choice
 	for _, side := range sides {
 		stack := sideStack(chain, side)
 		line := edgeOf(stack[0].rect, side)
-		bands := []Target{}
-		for _, l := range stack {
+		bands, links := []Target{}, []int{}
+		for j, l := range stack {
 			if target := stackTarget(l, side); target != nil {
-				bands = append(bands, target)
+				bands, links = append(bands, target), append(links, j)
 			}
 		}
 		if len(bands) == 0 {
@@ -320,13 +359,32 @@ func (t *GroupTree) bandAt(root *Node, x, y float64, options TargetOptions, head
 		dist := t.within(side, line, x, y, options.HeaderPx)
 		have := math.Max(1, t.within(side, line, cx, cy, options.HeaderPx)-options.BandMargin)
 		width := math.Min(options.Band, have/float64(len(bands)))
-		if c := (choice{side: side, dist: dist, width: width, score: dist / have, bands: bands}); best == nil || c.score < best.score {
+		if c := (choice{side: side, dist: dist, width: width, score: dist / have, line: line, bands: bands, stack: stack, links: links}); best == nil || c.score < best.score {
 			best = &c
 		}
 	}
 	if best == nil || !(best.dist < float64(len(best.bands))*best.width || anywhere) {
-		return nil
+		return nil, nil
 	}
 	at := min(len(best.bands)-1, int(math.Floor(best.dist/best.width)))
-	return &DropTarget{Kind: "add", Target: best.bands[at], Side: best.side, Band: at, Of: len(best.bands)}
+	hit := &DropTarget{Kind: "add", Target: best.bands[at], Side: best.side, Band: at, Of: len(best.bands)}
+	cut, kid := kidOf(best.stack, best.links[at], best.side)
+	if anchor == nil || anchor.side != best.side || anchor.line != best.line || anchor.band != at {
+		return hit, &Anchor{side: best.side, line: best.line, band: at, cut: cut, kid: kid}
+	}
+	if cut != "" && cut == anchor.cut && kid != anchor.kid {
+		holder := best.stack[best.links[at]]
+		for j := best.links[at]; j > 0; j-- {
+			if strings.Join(members(best.stack[j-1].node), " ") == cut {
+				holder = best.stack[j-1]
+				break
+			}
+		}
+		run := Target{}
+		for _, k := range holder.node.Kids[min(kid, anchor.kid) : max(kid, anchor.kid)+1] {
+			run = append(run, members(k.Node)...)
+		}
+		hit.Target = run
+	}
+	return hit, anchor
 }

@@ -40,6 +40,7 @@ type groupArgs struct {
 	Position float64       `json:"position"`
 	X        float64       `json:"x"`
 	Y        float64       `json:"y"`
+	Points   [][2]float64  `json:"points"`
 	Arrange  bool          `json:"arrange"`
 }
 
@@ -152,8 +153,14 @@ func groupCall(t *testing.T, tree *layout.GroupTree, call string, a groupArgs, d
 		return path, true, nil
 	case "level":
 		return tree.Level(a.Card), true, nil
-	case "drop":
+	case "drop", "drag":
 		hit := tree.TargetAt(a.X, a.Y, drop)
+		if call == "drag" {
+			var anchor *layout.Anchor
+			for _, p := range a.Points {
+				hit, anchor = tree.DragAt(anchor, p[0], p[1], drop)
+			}
+		}
 		switch {
 		case hit == nil:
 			return nil, true, nil

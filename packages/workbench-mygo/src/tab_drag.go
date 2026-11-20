@@ -22,12 +22,13 @@ const tabDragThreshold = 4
 var tabZones = []string{"centre", "left", "right", "top", "bottom"}
 
 // tabDrag is the drag in progress: of a tab, or of the group card card by its header while tab is empty. hit and preview are the drop
-// that the release would run, in the coordinates of the plane.
+// that the release would run, in the coordinates of the plane, and anchor the band where the drag entered the line of its point.
 type tabDrag struct {
 	card, tab string
 	x, y      float32
 	moved     bool
 	hit       *layout.DropTarget
+	anchor    *layout.Anchor
 	preview   *layout.Rect
 }
 
@@ -144,7 +145,8 @@ func (s *Shell) dragTabTo(drag *tabDrag, x, y float32) {
 	}
 	// The drop resolves by the bands of the sides on the line of the point, from the outermost node in
 	// (docs/spec/groups.md#target-search).
-	drag.hit, drag.preview = s.planes.TargetAt(float64(x)-origin.X, float64(y)-origin.Y, options), nil
+	drag.hit, drag.anchor = s.planes.DragAt(drag.anchor, float64(x)-origin.X, float64(y)-origin.Y, options)
+	drag.preview = nil
 	if drag.hit != nil {
 		if card, _ := zoneOf(drag.hit); !slices.ContainsFunc(card, isPlace) {
 			drag.preview = s.dropRect(drag.card, drag.hit)
@@ -334,7 +336,8 @@ func (s *Shell) drawDropPreview(c *ui.Context, inset float32) {
 // core.card.move, which the tree refuses or places (docs/spec/groups.md#moving-and-dropping). A group card has no tabs, so a tab strip
 // and the centre of a content card are no target of it.
 func (s *Shell) dragGroupTo(drag *tabDrag, x, y float64, options layout.TargetOptions) {
-	drag.hit, drag.preview = s.planes.TargetAt(x, y, options), nil
+	drag.hit, drag.anchor = s.planes.DragAt(drag.anchor, x, y, options)
+	drag.preview = nil
 	if drag.hit != nil && drag.hit.Kind != "add" {
 		drag.hit = nil
 	}
