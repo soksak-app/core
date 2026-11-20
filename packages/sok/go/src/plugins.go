@@ -72,7 +72,7 @@ func ReadIndexAt(location string, fetcher Fetcher) (*Index, string, error) {
 		}
 		url = fileURL(path)
 	}
-	data, err := fetcher.Read(url, fetcher.Index)
+	data, err := fetcher.ReadIndex(url)
 	if err != nil {
 		return nil, "", err
 	}

@@ -34,7 +34,15 @@ struct Server {
     ca_pem: String,
 }
 
-fn serve(handler: fn(&str) -> Reply) -> Server {
+/// The certificate authority of the check and the TLS configuration of a server whose certificate it signed.
+struct Certificates {
+    config: Arc<rustls::ServerConfig>,
+    ca: Vec<u8>,
+    #[cfg(feature = "diagnostics")]
+    ca_pem: String,
+}
+
+fn certificates() -> Certificates {
     let ca_key = KeyPair::generate().expect("ca key");
     let mut ca_params = CertificateParams::new(Vec::<String>::new()).expect("ca params");
     ca_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
@@ -57,6 +65,17 @@ fn serve(handler: fn(&str) -> Reply) -> Server {
         )
         .expect("server config"),
     );
+    Certificates {
+        ca: ca.der().to_vec(),
+        #[cfg(feature = "diagnostics")]
+        ca_pem: ca.pem(),
+        config,
+    }
+}
+
+fn serve(handler: fn(&str) -> Reply) -> Server {
+    let certificates = certificates();
+    let config = certificates.config.clone();
     let listener = TcpListener::bind("127.0.0.1:0").expect("listener");
     let url = format!("https://{}", listener.local_addr().expect("address"));
     std::thread::spawn(move || {
@@ -111,9 +130,9 @@ fn serve(handler: fn(&str) -> Reply) -> Server {
     });
     Server {
         url,
-        ca: ca.der().to_vec(),
+        ca: certificates.ca,
         #[cfg(feature = "diagnostics")]
-        ca_pem: ca.pem(),
+        ca_pem: certificates.ca_pem,
     }
 }
 
@@ -281,5 +300,214 @@ fn a_diagnostic_build_trusts_the_registry_authorities_of_a_file() {
     assert_eq!(
         fetcher.read(&format!("{}/index.json", server.url), fetcher.index),
         Ok(b"index".to_vec())
+    );
+}
+
+/// The smallest registry index that the checks of reading an index serve.
+const EMPTY_INDEX: &[u8] =
+    br#"{"format":1,"plugins":[],"sidecars":[],"packs":[],"revoked":{"plugins":[],"sidecars":[]}}"#;
+
+/// The counts of an index server: the connections it accepted, the requests it read and the bodies it sent.
+#[derive(Default)]
+struct Counts {
+    connections: AtomicUsize,
+    requests: AtomicUsize,
+    bodies: AtomicUsize,
+}
+
+/// A TLS server of the check that keeps each connection open for the next request. It serves EMPTY_INDEX with an ETag
+/// and answers a request that sends that ETag with 304, and the path /unvalidated with 304. Each request is sent to
+/// arrived before it is answered, and while held is true the answer waits.
+struct IndexServer {
+    url: String,
+    ca: Vec<u8>,
+    counts: Arc<Counts>,
+    arrived: std::sync::mpsc::Receiver<()>,
+    held: Arc<(std::sync::Mutex<bool>, std::sync::Condvar)>,
+}
+
+impl IndexServer {
+    fn release(&self) {
+        let (held, changed) = &*self.held;
+        *held.lock().expect("held") = false;
+        changed.notify_all();
+    }
+}
+
+fn serve_index(held: bool) -> IndexServer {
+    let certificates = certificates();
+    let listener = TcpListener::bind("127.0.0.1:0").expect("listener");
+    let url = format!("https://{}", listener.local_addr().expect("address"));
+    let counts = Arc::new(Counts::default());
+    let (arrive, arrived) = std::sync::mpsc::channel();
+    let hold = Arc::new((std::sync::Mutex::new(held), std::sync::Condvar::new()));
+    let (config, server_counts, server_hold) =
+        (certificates.config.clone(), counts.clone(), hold.clone());
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(stream) = stream else { return };
+            server_counts.connections.fetch_add(1, Ordering::SeqCst);
+            let (config, counts, hold, arrive) = (
+                config.clone(),
+                server_counts.clone(),
+                server_hold.clone(),
+                arrive.clone(),
+            );
+            std::thread::spawn(move || {
+                let connection = rustls::ServerConnection::new(config).expect("connection");
+                let mut tls = BufReader::new(rustls::StreamOwned::new(connection, stream));
+                loop {
+                    let (mut path, mut validated) = (None, false);
+                    loop {
+                        let mut line = String::new();
+                        // A server of the check. A client that closed its connection ends the connection.
+                        if tls.read_line(&mut line).unwrap_or(0) == 0 {
+                            return;
+                        }
+                        if line == "\r\n" {
+                            break;
+                        }
+                        if path.is_none() {
+                            path = line.split(' ').nth(1).map(str::to_string);
+                        } else if line.to_ascii_lowercase().starts_with("if-none-match:") {
+                            validated = line.contains("\"v1\"");
+                        }
+                    }
+                    counts.requests.fetch_add(1, Ordering::SeqCst);
+                    // A server of the check. The check may have ended its receiver.
+                    let _ = arrive.send(());
+                    let (held, changed) = &*hold;
+                    let mut waiting = held.lock().expect("held");
+                    while *waiting {
+                        waiting = changed.wait(waiting).expect("held");
+                    }
+                    drop(waiting);
+                    let head = if path.as_deref() == Some("/unvalidated") {
+                        "HTTP/1.1 304 X\r\n\r\n".to_string()
+                    } else if validated {
+                        "HTTP/1.1 304 X\r\nETag: \"v1\"\r\n\r\n".to_string()
+                    } else {
+                        counts.bodies.fetch_add(1, Ordering::SeqCst);
+                        format!(
+                            "HTTP/1.1 200 X\r\nETag: \"v1\"\r\nContent-Length: {}\r\n\r\n",
+                            EMPTY_INDEX.len()
+                        )
+                    };
+                    let stream = tls.get_mut();
+                    // A server of the check. A client that closed its connection receives no answer.
+                    let _ = stream.write_all(head.as_bytes());
+                    if !validated && path.as_deref() != Some("/unvalidated") {
+                        let _ = stream.write_all(EMPTY_INDEX);
+                    }
+                    let _ = stream.flush();
+                }
+            });
+        }
+    });
+    IndexServer {
+        url,
+        ca: certificates.ca,
+        counts,
+        arrived,
+        held: hold,
+    }
+}
+
+/// A fetcher that trusts the index server and reads an index of up to 1 MiB.
+fn index_fetcher(server: &IndexServer) -> Fetcher {
+    let limit = Limit {
+        bytes: 1 << 20,
+        timeout: Duration::from_secs(5),
+    };
+    Fetcher {
+        roots: Some(vec![server.ca.clone()]),
+        index: limit,
+        release: limit,
+    }
+}
+
+// contract: fetch.https.reuses-the-connection
+#[test]
+fn reads_of_one_fetcher_reuse_the_connection() {
+    let server = serve_index(false);
+    let fetcher = index_fetcher(&server);
+    for _ in 0..3 {
+        soksak_sok::plugins::read_index_at(&format!("{}/index.json", server.url), &fetcher)
+            .expect("index");
+    }
+    assert_eq!(
+        (
+            server.counts.connections.load(Ordering::SeqCst),
+            server.counts.requests.load(Ordering::SeqCst)
+        ),
+        (1, 3),
+        "connections and requests"
+    );
+}
+
+// contract: fetch.https.answers-an-unchanged-index-without-a-body
+#[test]
+fn an_unchanged_index_is_answered_without_a_body() {
+    let server = serve_index(false);
+    let fetcher = index_fetcher(&server);
+    let url = format!("{}/index.json", server.url);
+    for _ in 0..3 {
+        soksak_sok::plugins::read_index_at(&url, &fetcher).expect("index");
+    }
+    assert_eq!(
+        (
+            server.counts.requests.load(Ordering::SeqCst),
+            server.counts.bodies.load(Ordering::SeqCst)
+        ),
+        (3, 1),
+        "requests and bodies"
+    );
+    // A 304 answer to a request that sent no validator is not an index.
+    let unvalidated = format!("{}/unvalidated", server.url);
+    assert_eq!(
+        soksak_sok::plugins::read_index_at(&unvalidated, &fetcher).map(|_| ()),
+        Err(format!("{unvalidated}: HTTP 304"))
+    );
+}
+
+// contract: fetch.https.shares-a-running-index-read
+#[test]
+fn a_read_that_starts_during_a_running_read_shares_it() {
+    let server = serve_index(true);
+    let fetcher = index_fetcher(&server);
+    let url = format!("{}/index.json", server.url);
+    let read = || {
+        let (url, fetcher) = (url.clone(), fetcher.clone());
+        std::thread::spawn(move || soksak_sok::plugins::read_index_at(&url, &fetcher).map(|_| ()))
+    };
+    let first = read();
+    server
+        .arrived
+        .recv_timeout(Duration::from_secs(5))
+        .expect("first request");
+    let second = read();
+    // The second read waits for the first: the fetcher reports it before the first answer is released.
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while soksak_sok::fetch::index_read_waiters(&url) != 1 {
+        if std::time::Instant::now() > deadline {
+            let requests = server.counts.requests.load(Ordering::SeqCst);
+            server.release();
+            panic!(
+                "waiters {} requests {requests}: the second read did not wait for the running read",
+                soksak_sok::fetch::index_read_waiters(&url)
+            );
+        }
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    server.release();
+    assert_eq!(first.join().expect("first"), Ok(()));
+    assert_eq!(second.join().expect("second"), Ok(()));
+    assert_eq!(
+        (
+            server.counts.requests.load(Ordering::SeqCst),
+            server.counts.bodies.load(Ordering::SeqCst)
+        ),
+        (1, 1),
+        "one shared request"
     );
 }

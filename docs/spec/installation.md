@@ -82,12 +82,16 @@ A registry index and an release are read from a location: an `https:` URL, an ab
 
 - The connection uses TLS with the certificate authorities that the operating system trusts.
 - A redirect is followed when its target is an `https:` URL, at most 5 times; a redirect to another scheme fails with `<url>: redirect to <target> is not https`, and a sixth redirect fails with `<url>: more than 5 redirects`.
-- A response other than 200 fails with `<url>: HTTP <status>`.
+- A response other than 200 fails with `<url>: HTTP <status>`, except the answer 304 to a conditional index request (below).
 - The whole request, from connecting to the last byte, takes at most 60 seconds for an index and 600 seconds for an release; a slower request fails with `<url>: timed out after <seconds> s`. The request otherwise ends at its own events: the last byte of the response, an error of the connection or its close. A server that keeps the connection open and sends nothing gives no event, and TCP reports no end for such a peer, so this limit is the end of a request that the server does not end.
 - An index holds at most 8 MiB and an release at most 256 MiB; a larger body fails with `<url>: larger than <bytes> bytes`.
 - A failure to connect or to read fails with `<url>: cannot connect: <reason>`, where the reason is the text of the network library.
 
-Nothing is cached: each command and each plugin operation reads the index and the releases it needs again, and an release is checked against its `sha256` before it is extracted.
+A process reads every `https:` location through one HTTP client, which keeps its connections open between requests, so a read after the first does not connect and negotiate TLS again. Nothing is written to disk: each command and each plugin operation reads the index and the releases it needs again, and an release is checked against its `sha256` before it is extracted. The application reads the index each time a window becomes active ([plugin operations](#plugin-operations-in-the-application)), so a read that finds the index unchanged transfers no body:
+
+- The process keeps in memory, for each index URL, the body of the last 200 answer together with its `ETag` and `Last-Modified` headers, when the answer has either. The next request of that URL sends them as `If-None-Match` and `If-Modified-Since`, and the answer 304 gives the kept body, which is checked again as an index. A 200 answer replaces the kept body, and an answer without either header keeps none. A 304 answer to a request that sent no validator fails with `<url>: HTTP 304`.
+- A read of an index URL that starts while a read of the same URL runs receives the result of that read and sends no request, so the plugin state and the application update state that a window reads when it becomes active share one request.
+- A release is never kept, because it is read once for an installation and checked against its `sha256`.
 
 ## Version selection
 

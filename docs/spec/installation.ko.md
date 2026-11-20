@@ -82,12 +82,16 @@ Registry index와 release는 위치에서 읽는다. 위치는 `https:` URL, 절
 
 - 연결은 운영체제가 신뢰하는 인증 기관으로 TLS를 쓴다.
 - redirect는 대상이 `https:` URL일 때 최대 5번 따라간다. 다른 scheme으로의 redirect는 `<url>: redirect to <target> is not https`로, 여섯 번째 redirect는 `<url>: more than 5 redirects`로 실패한다.
-- 200이 아닌 응답은 `<url>: HTTP <status>`로 실패한다.
+- 200이 아닌 응답은 `<url>: HTTP <status>`로 실패한다. 단, 조건부 index 요청(아래)에 대한 304 응답은 예외다.
 - 연결부터 마지막 byte까지 한 요청은 index는 60초, release는 600초 안에 끝나야 한다. 더 느린 요청은 `<url>: timed out after <seconds> s`로 실패한다. 그 밖에 요청은 자기 event에서 끝난다. 곧 응답의 마지막 byte, 연결의 오류나 닫힘이다. 연결을 열어 둔 채 아무것도 보내지 않는 server는 event를 주지 않고, TCP는 그런 peer의 끝을 알리지 않으므로, 이 한도가 server가 끝내지 않는 요청의 끝이다.
 - index는 최대 8 MiB, release는 최대 256 MiB다. 더 큰 본문은 `<url>: larger than <bytes> bytes`로 실패한다.
 - 연결하거나 읽지 못하면 `<url>: cannot connect: <reason>`으로 실패하며, reason은 network library의 문장이다.
 
-아무것도 저장해 두지 않는다. 각 명령과 각 plugin 작업은 필요한 index와 release를 다시 읽고, release는 풀기 전에 `sha256`과 비교한다.
+한 process는 모든 `https:` 위치를 HTTP client 하나로 읽고, 이 client는 요청 사이에 연결을 열어 두므로 첫 읽기 뒤의 읽기는 다시 연결하고 TLS를 협상하지 않는다. 디스크에는 아무것도 쓰지 않는다. 각 명령과 각 plugin 작업은 필요한 index와 release를 다시 읽고, release는 풀기 전에 `sha256`과 비교한다. 애플리케이션은 창이 활성화될 때마다 index를 읽으므로([plugin 작업](#애플리케이션-안의-plugin-작업)), 바뀌지 않은 index를 찾는 읽기는 본문을 전송하지 않는다.
+
+- process는 index URL마다 마지막 200 응답의 본문을 그 `ETag`, `Last-Modified` header와 함께 memory에 둔다. 응답에 둘 중 하나가 있을 때다. 그 URL의 다음 요청은 이것을 `If-None-Match`, `If-Modified-Since`로 보내고, 304 응답은 둔 본문을 주며 이 본문은 index로 다시 검사한다. 200 응답은 둔 본문을 바꾸고, 두 header가 모두 없는 응답은 아무것도 두지 않는다. validator를 보내지 않은 요청에 대한 304 응답은 `<url>: HTTP 304`로 실패한다.
+- 같은 URL의 읽기가 진행 중일 때 시작한 index URL 읽기는 그 읽기의 결과를 받고 요청을 보내지 않는다. 그래서 창이 활성화될 때 읽는 plugin 상태와 애플리케이션 업데이트 상태는 요청 하나를 나눈다.
+- release는 두지 않는다. release는 설치마다 한 번 읽고 `sha256`과 비교하기 때문이다.
 
 ## Version 선택
 

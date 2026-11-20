@@ -1,7 +1,11 @@
 //! Reads a registry index and a release from a location (docs/spec/installation.md#fetching). A location is an https: URL or an absolute
 //! file: URL. https: uses TLS with the certificate authorities that the operating system trusts, follows only redirects to https: up to 5 times,
-//! and rejects a response other than 200, a body over the limit and a request slower than the limit with the specified sentences. It stores nothing.
+//! and rejects a response other than 200, a body over the limit and a request slower than the limit with the specified sentences. The process reads
+//! through one agent for each trust configuration, which keeps its connections open, and keeps in memory the last body of each index URL with
+//! its validators, so an unchanged index is answered with 304 and no body. It writes nothing to disk.
 
+use std::collections::HashMap;
+use std::sync::{Arc, Condvar, LazyLock, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use ureq::tls::{Certificate, RootCerts, TlsConfig};
@@ -127,6 +131,46 @@ impl Fetcher {
             let path = file_path(location).map_err(|error| format!("{location}: {error}"))?;
             return std::fs::read(&path).map_err(|error| file_error(&path, &error));
         }
+        self.get(location, limit, false, None)
+    }
+
+    /// Reads the body of the registry index at location within the index limit. An https: read sends the validators of the last 200 answer of
+    /// location and takes the kept body for the answer 304, and a read that starts while a read of location runs waits for that read and returns
+    /// its result (docs/spec/installation.md#fetching).
+    pub fn read_index(&self, location: &str) -> Result<Vec<u8>, String> {
+        check_location(location)?;
+        if location.starts_with("file:") {
+            return self.read(location, self.index);
+        }
+        let mut state = shared();
+        if let Some(running) = state.flights.get(location).cloned() {
+            running
+                .waiters
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            drop(state);
+            let mut result = running.result.lock().expect("index read result");
+            while result.is_none() {
+                result = running.done.wait(result).expect("index read result");
+            }
+            return result.clone().expect("index read result");
+        }
+        let running = Arc::new(Flight::default());
+        state.flights.insert(location.to_string(), running.clone());
+        let kept = state.kept.get(location).cloned();
+        drop(state);
+        let result = self.get(location, self.index, true, kept.as_ref());
+        shared().flights.remove(location);
+        *running.result.lock().expect("index read result") = Some(result.clone());
+        running.done.notify_all();
+        result
+    }
+
+    /// The agent of the process for the trust configuration of this fetcher. It keeps the connections open between requests.
+    fn agent(&self) -> ureq::Agent {
+        let mut state = shared();
+        if let Some(agent) = state.agents.get(&self.roots) {
+            return agent.clone();
+        }
         let roots = match &self.roots {
             Some(certificates) => RootCerts::new_with_certs(
                 &certificates
@@ -143,6 +187,20 @@ impl Fetcher {
             .http_status_as_error(false)
             .build()
             .into();
+        state.agents.insert(self.roots.clone(), agent.clone());
+        agent
+    }
+
+    /// Reads the https: location within limit. With validators it sends them and takes their body for the answer 304. An index read keeps the body
+    /// and the validators of a 200 answer, and a 200 answer without validators removes the kept body.
+    fn get(
+        &self,
+        location: &str,
+        limit: Limit,
+        index: bool,
+        validators: Option<&Kept>,
+    ) -> Result<Vec<u8>, String> {
+        let agent = self.agent();
         let deadline = Instant::now() + limit.timeout;
         let timed_out = || format!("{location}: timed out after {} s", limit.timeout.as_secs());
         let mut current = location.to_string();
@@ -150,11 +208,16 @@ impl Fetcher {
             let remaining = deadline
                 .checked_duration_since(Instant::now())
                 .ok_or_else(timed_out)?;
-            let request = agent
-                .get(&current)
-                .config()
-                .timeout_global(Some(remaining))
-                .build();
+            let mut request = agent.get(&current);
+            if let Some(kept) = validators {
+                if let Some(etag) = &kept.etag {
+                    request = request.header("If-None-Match", etag);
+                }
+                if let Some(modified) = &kept.modified {
+                    request = request.header("If-Modified-Since", modified);
+                }
+            }
+            let request = request.config().timeout_global(Some(remaining)).build();
             let mut response = request
                 .call()
                 .map_err(|error| self.failure(location, &error, &timed_out))?;
@@ -178,6 +241,11 @@ impl Fetcher {
                 current = target;
                 continue;
             }
+            if status == 304
+                && let Some(kept) = validators
+            {
+                return Ok(kept.body.clone());
+            }
             if status != 200 {
                 return Err(format!("{location}: HTTP {status}"));
             }
@@ -194,6 +262,30 @@ impl Fetcher {
                 })?;
             if data.len() as u64 > limit.bytes {
                 return Err(larger());
+            }
+            if index {
+                let header = |name: &str| {
+                    response
+                        .headers()
+                        .get(name)
+                        // default: a validator that is not text is not sent back, as if the answer had none.
+                        .and_then(|value| value.to_str().ok())
+                        .map(str::to_string)
+                };
+                let (etag, modified) = (header("etag"), header("last-modified"));
+                let mut shared = shared();
+                if etag.is_some() || modified.is_some() {
+                    shared.kept.insert(
+                        location.to_string(),
+                        Kept {
+                            etag,
+                            modified,
+                            body: data.clone(),
+                        },
+                    );
+                } else {
+                    shared.kept.remove(location);
+                }
             }
             return Ok(data);
         }
@@ -212,4 +304,44 @@ impl Fetcher {
             error => format!("{location}: cannot connect: {error}"),
         }
     }
+}
+
+/// The body of the last 200 answer of an index URL with the validators of that answer.
+#[derive(Clone)]
+struct Kept {
+    etag: Option<String>,
+    modified: Option<String>,
+    body: Vec<u8>,
+}
+
+/// A running read of an index URL: the reads that start while it runs wait for its result. It is written here because the single-flight crates
+/// (`async_singleflight`, `singleflight-async`) need an async runtime, and the fetcher runs on the threads of its callers without one.
+#[derive(Default)]
+struct Flight {
+    waiters: std::sync::atomic::AtomicUsize,
+    result: Mutex<Option<Result<Vec<u8>, String>>>,
+    done: Condvar,
+}
+
+/// The state that the fetchers of the process share: one agent for each trust configuration, the kept index bodies and the running index
+/// reads, each by URL.
+#[derive(Default)]
+struct Shared {
+    agents: HashMap<Option<Vec<Vec<u8>>>, ureq::Agent>,
+    kept: HashMap<String, Kept>,
+    flights: HashMap<String, Arc<Flight>>,
+}
+
+static SHARED: LazyLock<Mutex<Shared>> = LazyLock::new(Mutex::default);
+
+fn shared() -> MutexGuard<'static, Shared> {
+    SHARED.lock().expect("fetch state")
+}
+
+/// Reports how many reads of the index at location wait for the running read of that location. A check uses it to start a read while another one
+/// runs.
+pub fn index_read_waiters(location: &str) -> usize {
+    shared().flights.get(location).map_or(0, |running| {
+        running.waiters.load(std::sync::atomic::Ordering::SeqCst)
+    })
 }

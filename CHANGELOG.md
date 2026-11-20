@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F996-3 (index reads of an activation): the Go and Rust fetchers keep one HTTP client of the process with open connections, answer an unchanged registry index with 304 and the kept body through `If-None-Match` and `If-Modified-Since`, and give a read of an index URL that starts during a read of it that result, so a window activation sends one request for the plugin state and the application update and receives no body when the index is unchanged (`docs/spec/installation.md#fetching`).
 - F899-7.5-5 (window check of the injection, first part): `e2e/messages.test.mjs` of the plugin term (term P135) passes in mygo, Wails and Tauri: a `messages_wait` longer than 10 seconds ends on the message without `request_waiting` (sidecar alacritty S229), `sok message send` prints `{path, receiver}`, and the page of the reader injects the message.
 - F899-7.5-3 (injection of the plugin term): the plugin term injects and holds the messages of its registration as the plugin terminal does and reports `held` and `last` in `term.messages` (term P133).
 - F899-7.5-2 (injection of the plugin terminal): the plugin terminal injects each arrived message as the paste of `[메시지 from <title>] <text>` and Enter, holds it by the reasons of `docs/spec/messaging.md#hold-for-the-person` and reports `held` and `last` in `terminal.messages` (terminal P180); `docs/spec/messaging.md#injected-message` states the reason `message <seq> is not in the folder` of `skipped` and that the page waits for the reply of the paste and of the Enter.

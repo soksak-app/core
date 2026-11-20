@@ -1328,6 +1328,9 @@ fn invalid_json_closes_connection() {
 | `fetch.https.reads-a-tls-response` | 설정한 인증 기관이 신뢰하는 TLS server에서 `https:` index나 release를 읽고, `sha256`이 항목과 다른 release는 실패한다. | all |
 | `fetch.https.redirects-only-to-https` | `https:` URL로의 redirect는 5번까지 따라간다. 여섯 번째 redirect와 `http:`로의 redirect는 그 문장으로 실패한다. | all |
 | `fetch.https.reports-status-size-and-timeout` | 200이 아닌 응답, 한도보다 큰 본문, 한도보다 느린 요청은 `HTTP <status>`, `larger than <bytes> bytes`, `timed out after <seconds> s`로 실패한다. | all |
+| `fetch.https.reuses-the-connection` | 한 fetcher로 하는 `https:` 위치 읽기는 server가 연결을 열어 두는 동안 TLS 연결 하나를 쓴다. | all |
+| `fetch.https.answers-an-unchanged-index-without-a-body` | index URL 읽기는 마지막 200 응답의 `ETag`와 `Last-Modified`를 보내고, 304 응답은 둔 본문을 준다. validator 없는 요청에 대한 304 응답은 `HTTP 304`로 실패한다. | all |
+| `fetch.https.shares-a-running-index-read` | 같은 URL의 읽기가 진행 중일 때 시작한 index URL 읽기는 요청을 보내지 않고 그 읽기의 결과를 받는다. | all |
 | `fetch.url.rejects-other-schemes` | `https:`도 절대 `file:` URL도 아닌 index나 release URL은 `the URL must be https: or an absolute file: URL`로 실패한다. | all |
 | `installed.modules.unreadable-installation-serves-frontend` | `plugins/installed.json`을 읽을 수 없으면 `/modules/` 아래 요청은 설치 plugin을 가리키지 않고 bundled frontend가 답하므로, core module이 불러와지고 page가 시작한다. `/installed-plugins.json`이 오류를 담는다. | all |
 | `installed.modules.serve-installed-files` | 켜진 설치 plugin의 `/modules/<package>/<path>`는 기록된 `path` 안의 파일을 제공한다. 없는 파일이나 빈 segment, `.`, `..`가 있는 경로는 찾을 수 없다. 꺼진 plugin이나 다른 package는 애플리케이션 frontend가 제공한다. | all |

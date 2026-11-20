@@ -53,7 +53,7 @@ pub fn read_index_at(location: &str, fetcher: &Fetcher) -> Result<(Index, String
         let path = std::path::absolute(location).map_err(|error| format!("{location}: {error}"))?;
         file_url(&path)?
     };
-    let data = fetcher.read(&url, fetcher.index)?;
+    let data = fetcher.read_index(&url)?;
     // For file: the error names the path, and for https: it names the URL.
     let shown = if url.starts_with("file:") {
         install::file_path(&url)?

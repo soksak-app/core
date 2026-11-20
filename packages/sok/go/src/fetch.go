@@ -3,7 +3,9 @@ package sok
 // Reads registry indexes and releases from a location (docs/spec/installation.md#fetching). A location is an https: URL
 // or an absolute file: URL. https: uses TLS with the certificate authorities that the operating system trusts, follows
 // redirects only to https: and at most 5 times, and rejects a response other than 200, a body larger than the limit and
-// a request slower than the limit with the specified sentence. Nothing is stored.
+// a request slower than the limit with the specified sentence. The process reads through one client for each trust
+// configuration, which keeps its connections open, and keeps in memory the last body of each index URL with its
+// validators, so an unchanged index is answered with 304 and no body. Nothing is written to disk.
 
 import (
 	"context"
@@ -15,6 +17,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -80,11 +83,90 @@ func (f Fetcher) Read(location string, limit Limit) ([]byte, error) {
 		}
 		return data, nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), limit.Timeout)
-	defer cancel()
+	return f.get(location, limit, false, nil)
+}
+
+// ReadIndex reads the body of the registry index at location within the index limit. An https: read sends the validators
+// of the last 200 answer of location and takes the kept body for the answer 304, and a read that starts while a read of
+// location runs waits for that read and returns its result (docs/spec/installation.md#fetching).
+func (f Fetcher) ReadIndex(location string) ([]byte, error) {
+	if err := CheckLocation(location); err != nil {
+		return nil, err
+	}
+	if strings.HasPrefix(location, "file:") {
+		return f.Read(location, f.Index)
+	}
+	fetching.mu.Lock()
+	if running := fetching.flights[location]; running != nil {
+		running.waiters++
+		fetching.mu.Unlock()
+		<-running.done
+		return running.data, running.err
+	}
+	running := &indexFlight{done: make(chan struct{})}
+	fetching.flights[location] = running
+	kept, known := fetching.kept[location]
+	fetching.mu.Unlock()
+	var validators *keptIndex
+	if known {
+		validators = &kept
+	}
+	running.data, running.err = f.get(location, f.Index, true, validators)
+	fetching.mu.Lock()
+	delete(fetching.flights, location)
+	fetching.mu.Unlock()
+	close(running.done)
+	return running.data, running.err
+}
+
+// keptIndex is the body of the last 200 answer of an index URL with the validators of that answer.
+type keptIndex struct {
+	etag, modified string
+	body           []byte
+}
+
+// indexFlight is a running read of an index URL: the reads that start while it runs wait for done and take its result.
+// It is written here because golang.org/x/sync/singleflight does not report the reads that wait, which the check of
+// sharing needs to start a read while another runs.
+type indexFlight struct {
+	done    chan struct{}
+	waiters int
+	data    []byte
+	err     error
+}
+
+// fetching is the state that the fetchers of the process share: one client for each trust configuration, the kept index
+// bodies and the running index reads, each by URL.
+var fetching = struct {
+	mu      sync.Mutex
+	clients map[*tls.Config]*http.Client
+	kept    map[string]keptIndex
+	flights map[string]*indexFlight
+}{clients: map[*tls.Config]*http.Client{}, kept: map[string]keptIndex{}, flights: map[string]*indexFlight{}}
+
+// IndexReadWaiters reports how many reads of the index at location wait for the running read of that location. A check
+// uses it to start a read while another one runs.
+func IndexReadWaiters(location string) int {
+	fetching.mu.Lock()
+	defer fetching.mu.Unlock()
+	if running := fetching.flights[location]; running != nil {
+		return running.waiters
+	}
+	return 0
+}
+
+// client returns the client of the process for the trust configuration of f. Its transport keeps the connections open
+// between requests.
+func (f Fetcher) client() *http.Client {
+	fetching.mu.Lock()
+	defer fetching.mu.Unlock()
+	if client := fetching.clients[f.TLS]; client != nil {
+		return client
+	}
 	client := &http.Client{
-		Transport: &http.Transport{TLSClientConfig: f.TLS, Proxy: http.ProxyFromEnvironment},
+		Transport: &http.Transport{TLSClientConfig: f.TLS, Proxy: http.ProxyFromEnvironment, ForceAttemptHTTP2: true},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			location := via[0].URL.String()
 			if req.URL.Scheme != "https" {
 				return errRedirect{fmt.Sprintf("%s: redirect to %s is not https", location, req.URL)}
 			}
@@ -94,16 +176,35 @@ func (f Fetcher) Read(location string, limit Limit) ([]byte, error) {
 			return nil
 		},
 	}
-	defer client.CloseIdleConnections()
+	fetching.clients[f.TLS] = client
+	return client
+}
+
+// get reads the https: location within limit. With validators it sends them and takes their body for the answer 304. An
+// index read keeps the body and the validators of a 200 answer, and a 200 answer without validators removes the kept body.
+func (f Fetcher) get(location string, limit Limit, index bool, validators *keptIndex) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), limit.Timeout)
+	defer cancel()
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, location, nil)
 	if err != nil {
 		return nil, fmt.Errorf("%s: the URL must be https: or an absolute file: URL", location)
 	}
-	response, err := client.Do(request)
+	if validators != nil {
+		if validators.etag != "" {
+			request.Header.Set("If-None-Match", validators.etag)
+		}
+		if validators.modified != "" {
+			request.Header.Set("If-Modified-Since", validators.modified)
+		}
+	}
+	response, err := f.client().Do(request)
 	if err != nil {
 		return nil, f.failure(location, limit, ctx, err)
 	}
 	defer response.Body.Close()
+	if response.StatusCode == http.StatusNotModified && validators != nil {
+		return validators.body, nil
+	}
 	if response.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("%s: HTTP %d", location, response.StatusCode)
 	}
@@ -113,6 +214,16 @@ func (f Fetcher) Read(location string, limit Limit) ([]byte, error) {
 	}
 	if int64(len(data)) > limit.Bytes {
 		return nil, fmt.Errorf("%s: larger than %d bytes", location, limit.Bytes)
+	}
+	if index {
+		etag, modified := response.Header.Get("ETag"), response.Header.Get("Last-Modified")
+		fetching.mu.Lock()
+		if etag != "" || modified != "" {
+			fetching.kept[location] = keptIndex{etag: etag, modified: modified, body: data}
+		} else {
+			delete(fetching.kept, location)
+		}
+		fetching.mu.Unlock()
 	}
 	return data, nil
 }
