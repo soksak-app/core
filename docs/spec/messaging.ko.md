@@ -125,7 +125,7 @@ Status `<plugin>.messages`는 registration 옆에 message의 delivery를 담는�
 
 `sok message send`는 message를 쓴 뒤 receiver의 보류를 읽고 `{path, receiver}`를 출력한다([cli](cli.md#commands)). `receiver`는 `{surface, plugin, held}`이며 `held`는 받는 surface의 status `<plugin>.messages`의 값이다. 따라서 `null`이 아닌 `held`는 message가 주입되지 않았음과 그 이유를, 이유와 record kind로 밝힌다. 애플리케이션이 실행되지 않거나, folder가 terminal의 folder(`<root>/.soksak/messages/<surface>`)가 아니거나, 그 surface가 어떤 window에도 없거나, surface의 status `<plugin>.messages`가 `null`이어서 surface가 registration을 갖지 않으면 `receiver`는 `null`이다. 어느 경우에도 message는 쓰이며, 보내는 쪽은 receiver의 `<plugin>.messages`의 `last`를 따라 자기 path의 결정을 안다.
 
-#### 역할 확인
+#### 역할 confirmation
 
 Terminal plugin은 `<plugin>.screen.read`가 읽는 화면의 보이는 행에서, 보이는 행이 바뀔 때마다 줄 `soksak role <fingerprint>`를 찾는다. 여기서 `<fingerprint>`는 소문자 16진수 16자리다. 찾은 줄은 `core.tab.role.confirm`과 같은 surface별 직렬화를 거쳐 tab의 role을 확인한다([확인](agent-roles.ko.md#confirmation)). 행은 양 끝의 공백을 뺀 텍스트가 줄과 같을 때 맞는다. 주입 message는 이런 줄을 fingerprint과 함께 담지 않는다. placeholder가 `<fingerprint>`이고 붙여 넣기 형식은 `Role fingerprint:`를 쓰기 때문이다. Terminal이 두 행에 걸쳐 감싼 줄이나, 갱신이 읽히기 전에 화면 밖으로 밀려난 줄은 맞지 않으며, 상태는 `pending`에 머물고 reread request이 다시 묻는다.
 

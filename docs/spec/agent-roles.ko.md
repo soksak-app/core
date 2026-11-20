@@ -51,7 +51,7 @@ CLI는 TUI에서 실행 동작을 측정한 뒤에 이 표에 추가한다. 지�
 
 Resume: `claude --resume <id>`와 `codex resume --no-daemon <id>`는 session 시작의 지시를 유지하며 resume 명령의 adapter flag는 무시한다(2행과 6행). launch adapter는 새 실행에서만 쓴다.
 
-각 adapter와 각 CLI는 두 확인 방식 중 어느 것이 적용되는지, 그리고 agent가 파일을 읽을 수 있는지를 선언한다([Confirmation](#confirmation)). 파일을 읽을 수 없다고 선언된 agent는 role 파일 경로를 적은 모든 message에서 붙여 넣기 형식을 받으며, 확인은 답변의 줄 형식 (b)로 한다([Agents that cannot read files](#agents-that-cannot-read-files)).
+각 adapter와 각 CLI는 두 confirmation 방식 중 어느 것이 적용되는지, 그리고 agent가 파일을 읽을 수 있는지를 선언한다([Confirmation](#confirmation)). 파일을 읽을 수 없다고 선언된 agent는 role 파일 경로를 적은 모든 message에서 붙여 넣기 형식을 받으며, confirmation은 답변의 줄 형식 (b)로 한다([Agents that cannot read files](#agents-that-cannot-read-files)).
 
 agent CLI는 CLI가 이미 신뢰하는 폴더에서만 시작한다. 폴더 신뢰나 업데이트를 묻는 CLI는, 주입이 자기 프롬프트에 Enter를 보낸다. 이는 [evidence of the hold](messaging.md#evidence-of-the-hold)에 측정되어 있다.
 
@@ -228,8 +228,8 @@ role A를 B로 바꾸고 다시 A로 바꾸면 A의 fingerprint이 다시 나온
 - A에서 B로, 다시 A로 바꿈: A의 fingerprint이 돌아오고, 그 fingerprint의 확인은 `ready`가 된다.
 - 현재 fingerprint의 확인을 반복: 두 번 모두 `ready`이며, 두 번째 뒤에 `seq`는 바뀌지 않는다.
 - 변경 뒤 이전 fingerprint의 확인: 오래된 confirmation으로 거부된다. 오류는 파일을 적고 fingerprint은 적지 않는다.
-- 16자리 소문자 16진수가 아닌 확인 값: invalid input으로 거부하며, 오래된 confirmation 오류를 보내지 않는다.
-- 확인 없이 reread request 두 번: `unconfirmed`, error display 기록 하나와 log 기록 하나, 세 번째 요청은 없다.
+- 16자리 소문자 16진수가 아닌 confirmation 값: invalid input으로 거부하며, 오래된 confirmation 오류를 보내지 않는다.
+- confirmation 없이 reread request 두 번: `unconfirmed`, error display 기록 하나와 log 기록 하나, 세 번째 요청은 없다.
 - 작업 message에서 `ready`가 두 번 도달: 파일 이름으로 구분해 한 번만 주입한다.
 - 확인이 저장된 상태에서 재시작: 입력 없이 `ready`. 계수 1이 저장되어 있으면 그 계수의 `pending`. 계수 2가 저장되어 있으면 입력 없이 `unconfirmed`.
 - resume: `pending`, 같은 fingerprint, 확인과 계수는 지워짐, 바쁘지 않음 보고 뒤 reread request 하나를 요청 1로 셈.
@@ -238,10 +238,10 @@ role A를 B로 바꾸고 다시 A로 바꾸면 A의 fingerprint이 다시 나온
 
 ## Concurrency
 
-한 surface의 role 작업은 host의 한 소유자가 도착 순서대로 직렬화한다. 작업은 role 할당이나 변경, confirmation(두 방식 모두), 요청, 재읽기, tab 제거다. 제거 뒤의 확인은 role이 없는 tab으로 거부한다. 변경마다 generation이 오르며, 확인은 같은 직렬화 안에서 판정하므로 차례가 왔을 때의 상태에 맞춰진다.
+한 surface의 role 작업은 host의 한 소유자가 도착 순서대로 직렬화한다. 작업은 role 할당이나 변경, confirmation(두 방식 모두), 요청, 재읽기, tab 제거다. 제거 뒤의 confirmation은 role이 없는 tab으로 거부한다. 변경마다 generation이 오르며, confirmation은 같은 직렬화 안에서 판정하므로 차례가 왔을 때의 상태에 맞춰진다.
 
 - role 파일은 원자적으로 쓰므로 읽는 쪽은 이전 파일 전체나 새 파일 전체만 본다.
-- A에서 B, B에서 C로 연속 변경: 각 변경은 변경 message를 보내며, 각 message는 같은 경로를 가리킨다. 그 파일은 언제나 최신 role을 담으므로 어느 message로 재읽기해도 C에 닿는다. C의 fingerprint 하나를 확인하면 `ready`가 된다.
+- A에서 B, B에서 C로 연속 변경: 각 변경은 변경 message를 보내며, 각 message는 같은 경로를 가리킨다. 그 파일은 언제나 최신 role을 담으므로 어느 message로 재읽기해도 C에 닿는다. C의 fingerprint로 confirmation하면 `ready`가 된다.
 - B와 C의 확인이 엇갈림: B의 확인은 오래된 confirmation으로 거부되고 C의 확인은 받아들여진다. 순서와 상관없이 끝 상태는 같다.
 - person과 leader agent가 같은 때에 role을 설정: 직렬화되며 마지막 것이 이긴다. 각 답은 결과 `{role, generation, state, fingerprint}`를 준다.
 - 대기 중인 작업 message는 현재 generation의 `ready`를 기다린다.
@@ -249,7 +249,7 @@ role A를 B로 바꾸고 다시 A로 바꾸면 A의 fingerprint이 다시 나온
 
 ### Tests of the concurrency
 
-- A에서 B, B에서 C로 연속 변경: 같은 경로를 적은 변경 message 세 개. 첫 번째 message로 재읽기하면 C를 얻는다. C의 확인 하나로 `ready`.
+- A에서 B, B에서 C로 연속 변경: 같은 경로를 적은 변경 message 세 개. 첫 번째 message로 재읽기하면 C를 얻는다. C의 confirmation 하나로 `ready`.
 - B와 C의 엇갈린 확인: B는 오래된 confirmation으로 거부되고 C는 받아들여진다. 어느 순서든 끝 상태는 C의 `ready`.
 - 오래된 confirmation: 거부되며, 오류는 파일을 적고 fingerprint은 적지 않는다.
 - 동시 설정자: 같은 때에 들어온 두 할당은 직렬화된다. 최종 generation은 나중 것이고, 각 답은 자기 결과 generation을 준다.
@@ -374,11 +374,12 @@ target은 role 상태만 판정한다. CLI마다 다음을 한다.
 - 상태 `unconfirmed`에서 같은 role을 할당하면 reread request 하나를 시작한다. 다른 상태에서는 아무것도 쓰지 않는다.
 - 답변 줄은 agent가 파일을 읽었음이 아니라 현재 파일의 fingerprint을 가졌음을 보인다.
 - fingerprint 참조 파일은 role 파일, identity, 변경 message, reread request, 첫 message의 접미 줄, 붙여 넣기 형식의 문구를 고정한다.
+- 첫 message의 접미 줄은 고정된 텍스트다.
 - 저장된 요청 계수가 2인 상태로 재시작하면 `unconfirmed`다.
 - 실행 중인 tab은 role을 잃을 수 없다.
 - 보류 근거 `role-pending`은 messaging의 보류 목록에 있다.
 - program의 도구 출력도 줄 형식에 인정되며, 명세가 이를 밝힌다.
-- 16자리 소문자 16진수가 아닌 확인 값은 invalid input이며 오래된 confirmation 규칙과 비교하지 않는다.
+- 16자리 소문자 16진수가 아닌 confirmation 값은 invalid input이며 오래된 confirmation 규칙과 비교하지 않는다.
 - 저장된 정의의 마지막 line feed가 없으면 파일에 하나를 붙이며, fingerprint은 저장된 텍스트를 쓴다.
 - 경로 구분자, `..` 구간 또는 제어 문자를 담은 surface 식별자는 launch를 거부한다.
 - surface는 tab 하나이므로, role 파일은 그 tab에만 속한다.
@@ -396,7 +397,7 @@ target은 role 상태만 판정한다. CLI마다 다음을 한다.
 문구를 바꾸지 않고 답한 것:
 
 - 파일을 읽지 못하는 agent의 붙여넣기 경로와 adapter가 없는 CLI의 첫 message는 실패가 아니라 측정된 능력이 고르는 전달 형식이다. 파일 경로를 쓸 수 있는 agent에는 추가 경로가 없다.
-- terminal이 줄을 감싼 확인 줄은 맞지 않으며, 상태는 `pending`에 머문다. reread request이 다시 묻는다. 명세가 이미 이를 말하므로 규칙을 더하지 않는다.
+- terminal이 줄을 감싼 confirmation 줄은 맞지 않으며, 상태는 `pending`에 머문다. reread request이 다시 묻는다. 명세가 이미 이를 말하므로 규칙을 더하지 않는다.
 - 어댑터 표에는 제품 이름을 쓴다. 표는 설정하는 각 CLI의 실행 형식을 말하기 때문이다.
 - 영어와 한국어 본문은 같은 규칙을 말한다.
 
