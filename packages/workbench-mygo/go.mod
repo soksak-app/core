@@ -25,4 +25,4 @@ require (
 // a frame that an open transaction of the application keeps from a drawable
 // to draw it after the commit, and declares the cursor of its content as a
 // cursor rect so that a cursor that a page sets later yields to it.
-replace github.com/egoist/mygo => github.com/min-0-max/mygo v0.7.4-244-g4abb83d-soksak.14
+replace github.com/egoist/mygo => github.com/min-0-max/mygo v0.7.4-244-g4abb83d-soksak.17

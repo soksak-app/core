@@ -13,7 +13,7 @@ import (
 
 // contract: window.frames.steps-reach-the-class-frame
 func TestAStepRecordCarriesTheNamesOfTheEventLog(t *testing.T) {
-	for kind, want := range map[mygo.StepKind]string{mygo.StepSelector: "selector", mygo.StepBlock: "block", mygo.StepCallback: "callback"} {
+	for kind, want := range map[mygo.StepKind]string{mygo.StepSelector: "selector", mygo.StepBlock: "block", mygo.StepCallback: "callback", mygo.StepClosure: "closure"} {
 		got := stepRecord(mygo.StepRecord{Kind: kind, Callback: "hitTest:", Entry: 1, Return: 2, Forwarded: 3, Wait: 4}, "main")
 		if want := (host.StepRecord{Window: "main", Kind: want, Callback: "hitTest:", Entry: 1, Return: 2, Forwarded: 3, Wait: 4}); got != want {
 			t.Fatalf("the record is %+v, want %+v", got, want)
