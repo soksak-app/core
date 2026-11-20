@@ -11,8 +11,9 @@ const CID = /^[^"\\\u0000-\u001f\u007f]+$/;
 const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 
 /**
- * Builds `{trace, log}` for the plugin `pluginId`. `surfaceId` is the surface that the events belong to, or null for the state
- * module, whose events have no surface. `hooks` is what the page offers:
+ * Builds `{trace, log}` for the plugin `pluginId`. `surfaceId` is the surface that the events belong to, or null when the events name
+ * no surface: the state module, whose events have no surface, and a view page, whose surface the host adds to each record
+ * (docs/spec/logging.md#view-record-delivery). `hooks` is what the page offers:
  *   log(level, event, fields, cids)  stores an event; the writer of the page decides whether the event is stored
  *   trace(event, fields)             writes a trace event; traceEnabled() tells whether the trace is on
  * A page without a host offers none of them, and the calls then store nothing. The function of a trace is not accepted without its

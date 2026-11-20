@@ -45,6 +45,8 @@ pub(crate) fn send_image_drawing_of(window: &Window, data: &WindowData) -> Resul
                     )
                 })
                 .map_err(|error| format!("image {:?} drawing: {error}", change.name))
+                // Only a sent state is recorded, so a state whose send failed is sent by the next pass.
+                .map(|()| data.images.mark_drawing_sent(change))
                 .and_then(|()| match &change.configure {
                     Some(configuration) => {
                         send_image_configuration(window, &change.key, configuration)

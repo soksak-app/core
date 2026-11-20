@@ -35,6 +35,7 @@ type pageWireCase struct {
 	Description string                          `json:"description"`
 	Replay      *bool                           `json:"replay"`
 	Reason      string                          `json:"reason"`
+	Filter      []string                        `json:"filter"`
 	Writer      *pageWireWriter                 `json:"writer"`
 	Variables   map[string]pageWireVariableSpec `json:"variables"`
 	Steps       []pageWireStep                  `json:"steps"`
@@ -145,6 +146,13 @@ func runPageWireCase(t *testing.T, name, file string) {
 	}
 	if kase.Replay == nil {
 		t.Fatalf("%s: replay is missing", file)
+	}
+	// A filtered call is answered by the reader and is not a step of the case, so the producer refuses a name that the reader does
+	// not answer (docs/spec/cases/page-wire/README.md#members).
+	for _, callName := range kase.Filter {
+		if callName != "notificationState" && callName != "setTheme" && callName != "setMenuLanguage" {
+			t.Fatalf("%s: filter names %s, which the reader does not answer", file, callName)
+		}
 	}
 	if !*kase.Replay {
 		if kase.Reason == "" {

@@ -34,7 +34,7 @@ test("a layout published before drawing waits for the host's placement answer", 
   });
 
   const pending = publishAhead(new Map([["card", { x: 20, y: 0, w: 180, h: 150 }]]),
-    new Map([["card", { id: "surface", dim: false, inset: { left: 2, top: 30, width: 4, height: 50 }, grid: 2 }]]));
+    new Map([["card", { id: "surface", dim: false, inset: { left: 2, top: 30, width: 4, height: 50 }, grid: 2 }]]), undefined, []);
   assert.equal(typeof pending?.then, "function", "the caller needs the host's promise before it draws");
   // Verify V7c judges the prediction on the grid that its layout was made on, which the display can leave before the check.
   assert.equal(prepared.surfaces[0].grid, 2, "the prediction does not carry the grid of its layout");
@@ -64,7 +64,7 @@ test("a layout published before drawing waits for the host's placement answer", 
   assert.equal(placementPending(), false, "the host answer seats the current commit");
 
   const replacement = publishAhead(new Map([["card", { x: 20, y: 0, w: 180, h: 150 }]]),
-    new Map([["card", { id: "replacement", dim: false, inset: null }]]));
+    new Map([["card", { id: "replacement", dim: false, inset: null }]]), undefined, []);
   assert.equal(typeof replacement?.then, "function", "replacing content must prepare the existing native view before drawing");
   assert.equal(prepared.surfaces[0].visible, false, "content with no matching future slot must be hidden before its card changes");
   await sent();
@@ -73,11 +73,11 @@ test("a layout published before drawing waits for the host's placement answer", 
 
   // A surface that has no card in the next layout is hidden too. The host requires visible to be a boolean. The layout is the same as
   // the replacement, so the page sends no request and the placement of the replacement stands.
-  const removed = publishAhead(new Map(), new Map());
+  const removed = publishAhead(new Map(), new Map(), undefined, []);
   assert.strictEqual(prepared.surfaces[0].visible, false, "content whose card leaves the layout must be hidden with a boolean");
   await removed;
   const resizedSidebar = publishAhead(new Map([["card", { x: 20, y: 0, w: 400, h: 150 }]]),
-    new Map([["card", { id: "surface", dim: false, inset: { left: 192, top: 30, width: 194, height: 50 } }]]));
+    new Map([["card", { id: "surface", dim: false, inset: { left: 192, top: 30, width: 194, height: 50 } }]]), undefined, []);
   assert.deepEqual(prepared.surfaces[0].declared, { x: 212, y: 30, w: 206, h: 100 },
     "native preparation reused the old sidebar width instead of the captured future inset");
   await sent();
@@ -159,7 +159,7 @@ test("a deferred preparation is not recorded as an applied or predicted view", a
     return Promise.resolve({ placements: [], deferred: ["deferred-view"] });
   });
   const prepared = await compositor.publishAhead(new Map([["card", { x: 20, y: 0, w: 180, h: 150 }]]),
-    new Map([["card", { id: "deferred-view", dim: false, inset: { left: 2, top: 30, width: 4, height: 50 } }]]));
+    new Map([["card", { id: "deferred-view", dim: false, inset: { left: 2, top: 30, width: 4, height: 50 } }]]), undefined, []);
   assert.deepEqual(prepared, [], "a deferred view was reported as a native placement");
   assert.deepEqual(record.surfaces, [], "a deferred view was stored as seated geometry");
   assert.deepEqual(record.deferred, ["deferred-view"], "the record does not hold the view that its placement deferred");
@@ -225,7 +225,7 @@ test("a retained dormant view is validated with the host superset and projected 
   const result = await compositor.publishAhead(
     new Map([["visible-card", { x: 0, y: 0, w: 200, h: 150 }]]),
     new Map([["visible-card", { id: "visible-view", dim: false, inset: { left: 2, top: 30, width: 4, height: 50 } }]]),
-  );
+    undefined, []);
   assert.deepEqual(hostRequestIds, ["visible-view", "tab-c2zkow"], "the host request did not include the retained dormant tab");
   assert.deepEqual(result, [{ id: "visible-view", visible: true, scale: 2, x: 2, y: 30, w: 196, h: 100 }]);
   assert.deepEqual(record.surfaces.map(({ id }) => id), ["visible-view"], "the dormant tab entered the compositor record");
@@ -267,7 +267,7 @@ test("a retained dormant view is validated with the host superset and projected 
   { placements: [currentPlacement], deferred: [] }, "a drawn placement refused to defer a view");
 
   slot.remove();
-  const emptyRecordResult = await compositor.publishAhead(new Map(), new Map());
+  const emptyRecordResult = await compositor.publishAhead(new Map(), new Map(), undefined, []);
   assert.deepEqual(hostRequestIds, ["tab-c2zkow"], "the dormant-only host request changed its surface set");
   assert.deepEqual(emptyRecordResult, [], "the dormant-only host response entered the empty compositor result");
   assert.deepEqual(record.surfaces, [], "the dormant tab entered an empty compositor record");
@@ -370,7 +370,7 @@ test("a preparation hides a section surface whose offsets do not fit the target 
     return { placements: record.surfaces.map((item) => ({ id: item.id, visible: item.visible, ...(item.visible ? { scale: 2 } : {}), ...item.applied })), deferred: [] };
   });
 
-  compositor.publishAhead(new Map([["place", { x: 0, y: 0, w: 4, h: 100 }]]), new Map());
+  compositor.publishAhead(new Map([["place", { x: 0, y: 0, w: 4, h: 100 }]]), new Map(), undefined, []);
 
   const [prepared] = records;
   assert.deepEqual({ visible: prepared.surfaces[0].visible, declared: prepared.surfaces[0].declared },
@@ -408,7 +408,7 @@ test("a preparation places a section surface without a box like its drawn commit
     return { placements: record.surfaces.map((item) => ({ id: item.id, visible: item.visible, ...(item.visible ? { scale: 2 } : {}), ...item.applied })), deferred: [] };
   });
 
-  compositor.publishAhead(new Map([["place", { x: 2, y: 83, w: 206, h: 600 }]]), new Map());
+  compositor.publishAhead(new Map([["place", { x: 2, y: 83, w: 206, h: 600 }]]), new Map(), undefined, []);
   width = 206;
   compositor.publish();
 
@@ -448,7 +448,7 @@ test("a preparation keeps a section surface at its offsets, so the drawn commit 
     return { placements: record.surfaces.map((item) => ({ id: item.id, visible: item.visible, ...(item.visible ? { scale: 2 } : {}), ...item.applied })), deferred: [] };
   });
 
-  compositor.publishAhead(new Map([["place", { x: 0, y: 0, w: 206, h: 600 }]]), new Map());
+  compositor.publishAhead(new Map([["place", { x: 0, y: 0, w: 206, h: 600 }]]), new Map(), undefined, []);
   width = 206;
   compositor.publish();
 

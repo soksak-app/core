@@ -185,8 +185,9 @@ static void checkTwoWindows(void) {
     NSWindow *two = makeWindow(NSWindow.class, 340, &second, &secondRight);
     check(input(one, "a", 20, 20, 1, 0) == SP_INPUT_DELIVERED, @"pointer a presses the left button in the first window");
     check(input(two, "b", 30, 30, 1, 1) == SP_INPUT_DELIVERED, @"pointer b presses the right button in the second window");
-    check(NSEvent.pressedMouseButtons == 3, [NSString stringWithFormat:@"outside a delivery the buttons of every pointer are pressed (%lu)",
-        (unsigned long)NSEvent.pressedMouseButtons]);
+    check(sp_input_pointer_buttons("a") == 1 && sp_input_pointer_buttons("b") == 2 && NSEvent.pressedMouseButtons == sp_input_physical_buttons(),
+        [NSString stringWithFormat:@"outside a delivery AppKit answers the buttons of a person, not of the pointers (%lu, person %lu)",
+            (unsigned long)NSEvent.pressedMouseButtons, sp_input_physical_buttons()]);
     check(input(one, "a", 60, 40, 2, 0) == SP_INPUT_DELIVERED, @"pointer a drags");
     check(input(two, "b", 70, 50, 2, 1) == SP_INPUT_DELIVERED, @"pointer b drags");
     check(input(one, "a", 60, 40, 3, 0) == SP_INPUT_DELIVERED, @"pointer a releases");
@@ -195,7 +196,7 @@ static void checkTwoWindows(void) {
         @"the view of pointer a receives its gesture with its button");
     checkSeen(second, @[@"rightDown 30,30 buttons 2", @"rightDragged 70,50 buttons 2", @"rightUp 70,50 buttons 0"],
         @"the view of pointer b receives its gesture with its button");
-    check(NSEvent.pressedMouseButtons == 0, @"no button stays pressed after both releases");
+    check(sp_input_pointer_buttons("a") == 0 && sp_input_pointer_buttons("b") == 0, @"no button stays pressed after both releases");
 
     // A pointer holds one press of a button, in any window.
     check(input(one, "a", 20, 20, 1, 0) == SP_INPUT_DELIVERED && input(two, "a", 20, 20, 1, 0) == SP_INPUT_PRESS_OPEN,
@@ -264,13 +265,14 @@ static void checkWindowEndsItsPress(void) {
         [gone close];
         [gone release];
     }
-    eventWait(@"the window that went away ends the press of its pointer", ^BOOL { return NSEvent.pressedMouseButtons == 2; });
-    check(NSEvent.pressedMouseButtons == 2, @"a window that goes away ends the press of its pointer");
+    eventWait(@"the window that went away ends the press of its pointer", ^BOOL { return sp_input_pointer_buttons("b") == 0; });
+    check(sp_input_pointer_buttons("b") == 0 && sp_input_pointer_buttons("a") == 2, @"a window that goes away ends the press of its pointer");
     check(input(kept, "b", 20, 20, 1, 0) == SP_INPUT_POINTER_HELD && heldBy("a"),
         @"the pointer of the window that went away presses again, and the view that pointer a holds rejects it");
     check(input(kept, "b", 170, 20, 1, 0) == SP_INPUT_DELIVERED && input(kept, "b", 170, 20, 3, 0) == SP_INPUT_DELIVERED,
         @"the pointer of the window that went away presses another view");
-    check(input(kept, "a", 20, 20, 3, 1) == SP_INPUT_DELIVERED && NSEvent.pressedMouseButtons == 0, @"the last release leaves no button");
+    check(input(kept, "a", 20, 20, 3, 1) == SP_INPUT_DELIVERED && sp_input_pointer_buttons("a") == 0 && sp_input_pointer_buttons("b") == 0,
+        @"the last release leaves no button");
     [kept close]; [kept release];
 }
 

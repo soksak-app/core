@@ -11,6 +11,7 @@ use std::net::Shutdown;
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use super::super::{Connection, Listener};
 
@@ -22,43 +23,52 @@ unsafe extern "C" {
 
 /// The error number that `kill` reports when no process has the number.
 const ESRCH: i32 = 3;
-/// The error number that `kill` reports when it refuses to signal a process of another user.
-const EPERM: i32 = 1;
 /// The length in bytes of a unix socket path. `sockaddr_un.sun_path` has 104 bytes on macOS (`sys/un.h`), and the last
 /// of them is the terminating NUL.
 const SOCKET_PATH_LIMIT: usize = 103;
 
-/// Checks whether the process of the persistent service endpoint still exists.
+/// Checks whether pid is the live process that published the persistent service endpoint whose modification time is
+/// `published` (docs/spec/persistent-services.md#endpoint-publisher).
 ///
-/// Only a process that can receive a signal exists. A spawn that was not awaited remains as a zombie and passes
-/// kill(pid, 0) (V5-106), so the state of a process that passed is read to tell zombies apart: a zombie has already
-/// ended and its endpoint is old. A refusal (EPERM) for a process of another user means that the process exists.
-pub fn service_process_exists(pid: u32) -> Result<bool, String> {
-    if pid == 0 {
+/// It reads the process from the process table of the kernel (`proc_pidinfo` with `PROC_PIDTBSDINFO`). A pid that the
+/// table does not have has ended; a zombie has ended too, as a spawn that was not awaited stays one (V5-106); a process of
+/// another user did not publish the endpoint, because the service runs as the user of the host, and the kernel refuses
+/// (EPERM) to describe a process of another user to a host that root does not run; and a process that started later than
+/// `published` received the pid after the publisher ended. It is an error when the table cannot be read.
+pub fn service_process_exists(pid: u32, published: SystemTime) -> Result<bool, String> {
+    if pid == 0 || pid > i32::MAX as u32 {
         return Ok(false);
     }
-    let result = unsafe { kill(pid as i32, 0) };
-    if result != 0 {
+    let mut info: libc::proc_bsdinfo = unsafe { std::mem::zeroed() };
+    let size = std::mem::size_of::<libc::proc_bsdinfo>() as libc::c_int;
+    let written = unsafe {
+        libc::proc_pidinfo(
+            pid as libc::c_int,
+            libc::PROC_PIDTBSDINFO,
+            0,
+            (&raw mut info).cast(),
+            size,
+        )
+    };
+    if written <= 0 {
         let error = std::io::Error::last_os_error();
-        match error.raw_os_error() {
-            Some(ESRCH) => return Ok(false),
-            Some(EPERM) => {}
-            _ => return Err(format!("cannot inspect service process {pid}: {error}")),
-        }
+        return match error.raw_os_error() {
+            Some(libc::ESRCH | libc::EPERM) => Ok(false),
+            Some(code) => Err(format!(
+                "cannot inspect service process {pid}: errno {code}"
+            )),
+            None => Err(format!("cannot inspect service process {pid}: {error}")),
+        };
     }
-    let output = std::process::Command::new("ps")
-        .args(["-o", "stat=", "-p", &pid.to_string()])
-        .output()
-        .map_err(|e| format!("cannot inspect service process {pid} state: {e}"))?;
-    let state = String::from_utf8_lossy(&output.stdout);
-    Ok(listed_as_alive(&state))
-}
-
-/// Whether the state that ps printed for a process names a process that runs. Empty output means that ps lists no such
-/// process: the process was reaped after kill(pid, 0) passed, so it has ended. A zombie (state Z) has ended too.
-fn listed_as_alive(state: &str) -> bool {
-    let state = state.trim_start();
-    !state.is_empty() && !state.starts_with('Z')
+    if written != size {
+        return Err(format!(
+            "cannot inspect service process {pid}: the table answered {written} of {size} bytes"
+        ));
+    }
+    let started =
+        UNIX_EPOCH + Duration::new(info.pbi_start_tvsec, info.pbi_start_tvusec as u32 * 1000);
+    let owned = info.pbi_uid == unsafe { geteuid() };
+    Ok(owned && info.pbi_status != libc::SZOMB && started <= published)
 }
 
 /// The identifier of the user event that wakes the wait for a service process when its stop stops.
@@ -368,7 +378,7 @@ pub fn listen(directory: &Path, name: &str) -> Result<Box<dyn Listener>, String>
 mod tests {
     use std::os::unix::net::UnixStream;
 
-    use super::{listed_as_alive, listen};
+    use super::listen;
 
     // contract: endpoint.transport.closing-a-disconnected-connection-succeeds
     #[test]
@@ -385,21 +395,5 @@ mod tests {
             "closing a disconnected connection reported an error"
         );
         listener.remove();
-    }
-
-    // contract: sidecars-transport.replace.waits-for-the-end-of-the-service-process
-    #[test]
-    fn a_process_that_ps_does_not_list_has_ended() {
-        // A process reaped between kill(pid, 0) and ps leaves no row, so the state is empty.
-        assert!(!listed_as_alive(""));
-        assert!(!listed_as_alive("  \n"));
-    }
-
-    // contract: sidecars-transport.replace.waits-for-the-end-of-the-service-process
-    #[test]
-    fn a_zombie_has_ended_and_a_running_process_has_not() {
-        assert!(!listed_as_alive("Z+\n"));
-        assert!(listed_as_alive("S   \n"));
-        assert!(listed_as_alive("  Ss\n"));
     }
 }

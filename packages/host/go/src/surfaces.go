@@ -922,7 +922,7 @@ func (s *Surfaces) DecideImageEnvelope(sidecarName, surface string, body json.Ra
 			return sidecars.SendResponse(sidecarName, surface, image, json.RawMessage(responseBytes))
 		},
 		func(reason string) error {
-			if reason != "notFound" {
+			if reason != "notFound" && reason != "staleRaster" {
 				return nil
 			}
 			return s.refreshImageRasters()

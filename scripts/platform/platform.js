@@ -56,6 +56,15 @@ export async function applicationArtifact(folder, app, { platform = process.plat
   return (await implementation('applicationArtifact', platform))(folder, app);
 }
 
+/**
+ * Verifies that the declared application artifact `artifact` is complete as its build signed it, and rejects with
+ * `the bundle <artifact> does not verify: <reason>` otherwise, so a run never starts an artifact that a build left half written
+ * (docs/operations/examples.md#end-to-end-run).
+ */
+export async function verifyApplicationArtifact(artifact, { platform = process.platform } = {}) {
+  return (await implementation('verifyApplicationArtifact', platform))(artifact);
+}
+
 /** The executables of the declared application artifact `artifact` of `app`: `{application, sok}`. */
 export async function applicationExecutables(artifact, app, { platform = process.platform } = {}) {
   return (await implementation('applicationExecutables', platform))(artifact, app);

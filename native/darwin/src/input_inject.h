@@ -15,6 +15,8 @@ typedef enum {
     SP_INPUT_BUTTON_HELD = 4, // AppKit reports a pressed mouse button, so the synthetic press or release was not delivered
     SP_INPUT_PRESS_OPEN = 5, // a press of that button of the pointer is still open, so the press was not delivered
     SP_INPUT_POINTER_HELD = 6, // an open press of another pointer would share the state that the input changes, so it was not delivered
+    SP_INPUT_RESIZE_EDGE = 7, // the press lies on a resize edge of the window, where AppKit tracks a press as a window resize, so it was not delivered
+    SP_INPUT_INTERRUPTED = 8, // a press of a person ended the gesture of that pointer and button, so the drag or release was not delivered
 } sp_input_result;
 
 // The pointer of sp_input_pointer and sp_input_pointer_clicks, and of a caller that names no pointer.
@@ -31,10 +33,14 @@ typedef enum {
 // Each named pointer holds one open press of each button: the window, the view that received the press (its target) and the
 // origin of the press. A drag and a release are delivered to the press target of the pointer and button, in the window of that
 // press. A drag or release without a press of the pointer in the window is rejected, and a press of a button whose press the
-// pointer holds is rejected with SP_INPUT_PRESS_OPEN, in any window. The real cursor never moves.
+// pointer holds is rejected with SP_INPUT_PRESS_OPEN, in any window. A press on a resize edge of the window, where a person's press
+// resizes the window and AppKit tracks the press in an event loop of its own before it returns, is rejected with
+// SP_INPUT_RESIZE_EDGE. The real cursor never moves.
 //
 // While the input of a pointer is delivered, +[NSEvent pressedMouseButtons] answers the buttons of that pointer, so a page sees the
-// buttons of its own gesture; outside a delivery it answers the buttons of every pointer. AppKit and WebKit keep some state once
+// buttons of its own gesture; outside a delivery, and on any other thread, it answers the buttons of the person. A press of a person
+// that reaches -[NSApplication sendEvent:] releases every open synthetic press on its view and ends it, and the next drag or
+// release of that pointer and button is rejected once with SP_INPUT_INTERRUPTED and the message of the interruption. AppKit and WebKit keep some state once
 // per window, page or application, and an input that would share such state with the open press of another pointer is rejected
 // with SP_INPUT_POINTER_HELD (docs/spec/exposure.md#named-pointers):
 // - a press on a page (the web view that contains the target, or the target view) that another pointer holds pressed;
@@ -43,7 +49,7 @@ typedef enum {
 // - a move in a window in which another pointer holds a press, because a window has one hover position;
 // - a move, press, drag or release while another pointer holds a press, when the input method of the system serves the page of
 //   either (the key window of the application that is really active, with an editable focus): the input method answers after
-//   the delivery has returned, and WebKit reads the buttons outside the delivery of the pointer.
+//   the delivery has returned, so the page events of two pointers could reach their pages in another order than their deliveries.
 sp_input_result sp_input_pointer(void *window, double x, double y, int phase, int button, double deltaX, double deltaY);
 
 // The largest click count of a press and a release: a person's triple click.
@@ -53,21 +59,28 @@ sp_input_result sp_input_pointer(void *window, double x, double y, int phase, in
 // second press of a person's double click a count of 2, and WebKit makes the dblclick event from that count. Another count is rejected.
 sp_input_result sp_input_pointer_clicks(void *window, double x, double y, int phase, int button, int clicks);
 
-// The mask of the buttons that a person holds. While a synthetic press is open, +[NSEvent pressedMouseButtons] also has
-// the button of that press, as sp_input_pointer states, because WebKit reads the buttons of a page event from there. Native code that decides by what
-// a person holds reads this function. Before the first delivered press the two values are the same value of AppKit.
+// The mask of the buttons that a person holds, which AppKit reports. During the delivery of a synthetic event
+// +[NSEvent pressedMouseButtons] answers the buttons of its pointer instead, as sp_input_pointer states, because WebKit reads the
+// buttons of a page event from there. Native code that decides by what a person holds reads this function.
 unsigned long sp_input_physical_buttons(void);
+
+// The buttons of the open presses of the pointer name, bit 0 left and bit 1 right, or 0 for a name that is not of the form of
+// SP_INPUT_POINTER_NAME_MAX. Call it on the main thread.
+unsigned long sp_input_pointer_buttons(const char *name);
 
 // The buttons that a person holds as input of this application may read them: none while a virtual key window is open
 // (input_virtual.h), whose pages never see a real button.
 unsigned long sp_input_person_buttons(void);
 
-// State of a rejection with SP_INPUT_BUTTON_HELD or SP_INPUT_POINTER_HELD.
+// State of a rejection with SP_INPUT_BUTTON_HELD, SP_INPUT_POINTER_HELD, SP_INPUT_RESIZE_EDGE or SP_INPUT_INTERRUPTED.
 //
 // For SP_INPUT_BUTTON_HELD it is measured in the same turn that rejected the input. This state alone does not identify the
 // cause, so the rejection is reported for the receiver to find the cause; pointer and reason are NULL.
 // For SP_INPUT_POINTER_HELD, pointer names the pointer whose open press rejected the input and reason states the shared state;
 // mask is 0, pid is -1 and bundleIdentifier is NULL.
+// For SP_INPUT_RESIZE_EDGE, reason is the message of the refusal, which names the point and the resize edge, and for
+// SP_INPUT_INTERRUPTED the message of the interruption, which names the press of the person and the point where the gesture was
+// released; pointer is NULL, mask is 0, pid is -1 and bundleIdentifier is NULL.
 typedef struct {
     unsigned long long mask; // NSEvent.pressedMouseButtons
     int pid; // pid of the frontmost application; -1 when AppKit does not report a frontmost application
@@ -76,7 +89,8 @@ typedef struct {
     const char *reason; // the state that the press of that pointer holds
 } sp_input_held;
 
-// held is non-NULL only when result is SP_INPUT_BUTTON_HELD or SP_INPUT_POINTER_HELD, and it is valid only until done returns.
+// held is non-NULL only when result is SP_INPUT_BUTTON_HELD, SP_INPUT_POINTER_HELD, SP_INPUT_RESIZE_EDGE or SP_INPUT_INTERRUPTED,
+// and it is valid only until done returns.
 typedef void (*sp_input_done)(void *context, sp_input_result result, const sp_input_held *held);
 
 // Same as sp_input_pointer, except that for a press and a release done is called after the document that owns the gesture

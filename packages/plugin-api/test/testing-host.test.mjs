@@ -413,12 +413,14 @@ test("the window of a view has the address of its page in the plugin, as the app
   }
 });
 
-test("a record that a view writes through runtime.log carries the surface of the view", { timeout: 5000 }, async () => {
+// The host adds the surface bound to the view channel, so the record that the view sends names none
+// (docs/spec/logging.md#view-record-delivery).
+test("a record that a view writes through runtime.log names no surface, which the host adds", { timeout: 5000 }, async () => {
   const view = await openView("probe", { start: START, host: fixtures() });
   try {
     view.bridge.runtime.log.info("saved", { n: 1 });
     const record = await view.logged("plugin.probe.saved");
-    assert.deepEqual(record.fields, { n: 1, surface: "probe-surface" });
+    assert.deepEqual(record.fields, { n: 1 });
   } finally {
     await view.close();
   }

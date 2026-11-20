@@ -9,6 +9,7 @@ package host
 // envelope (image envelope) that a sidecar sent, and the host verifies the authenticity of the sidecar.
 
 import (
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -18,8 +19,13 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 	"unsafe"
 )
+
+// inputDrawWindow is the age of a user input at which the screen request of the input is sent at once, without waiting for a tick
+// (docs/spec/native-surfaces.md#copy-path-frames).
+const inputDrawWindow = 200 * time.Millisecond
 
 // imageStore is the name of the persistent data store of an image region.
 const imageStore = "soksak-images"
@@ -136,10 +142,21 @@ type ImageRasterState struct {
 	// generation change does not reset it, because it counts the frames of the region (host.window presentedFrames).
 	PresentedFrames   uint64
 	PresentationError string
-	// Drawing and Hidden are the drawing state last returned by DrawingChanges, and DrawingSent whether one was returned.
+	// Drawing and Hidden are the drawing state last sent to the supplier, and DrawingSent whether one was sent (MarkDrawingSent).
 	Drawing     bool
 	Hidden      bool
 	DrawingSent bool
+	// ScreenRequest is the screen request that the region has not had answered; its Request is empty when none is unanswered.
+	// ScreenAccepted and ScreenGeneration, ScreenRaster are the screen that the host accepted last, the baseline of the rows.
+	ScreenRequest                  ImageScreenRequest
+	ScreenAccepted                 bool
+	ScreenGeneration, ScreenRaster uint64
+	// FrameWanted is true from the frame request that asked the native region for a display frame until the native region reports that
+	// frame, FrameRead is true while a read request waits for it, and FrameSequence counts the ticks of the region
+	// (docs/spec/native-surfaces.md#copy-path-frames).
+	FrameWanted   bool
+	FrameRead     bool
+	FrameSequence uint64
 }
 
 // ImageConfigure is the new raster configuration to send to the authorized sidecar.
@@ -168,6 +185,199 @@ type ImageDrawing struct {
 	Owner     SidecarOwner    `json:"-"`
 }
 
+// ImageScreenRequest is the request for the current screen of a drawing region (docs/spec/native-surfaces.md#copy-path-frames).
+// Full is true when the host holds no accepted screen of the same generation and raster, so the supplier sends every row.
+type ImageScreenRequest struct {
+	Request    string `json:"request"`
+	Name       string `json:"name"`
+	Generation uint64 `json:"generation"`
+	Raster     uint64 `json:"raster"`
+	Full       bool   `json:"full"`
+	// Cids are the correlation identifiers of the inputs that the request continues, present when the request was sent for an input.
+	Cids    []string     `json:"cids,omitempty"`
+	Key     ImageKey     `json:"-"`
+	Sidecar string       `json:"-"`
+	Owner   SidecarOwner `json:"-"`
+}
+
+// ScreenRequests returns a screen request for each drawing region that has no unanswered request, sorted by surface and name, and
+// records each returned request as unanswered. A request is not sent again while the region has an unanswered one.
+func (i *Images) ScreenRequests() []ImageScreenRequest {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	requests := []ImageScreenRequest{}
+	for key, state := range i.states {
+		if request, ok := i.newScreenRequestLocked(key, state, nil); ok {
+			requests = append(requests, request)
+		}
+	}
+	sort.Slice(requests, func(a, b int) bool {
+		if requests[a].Key.Surface != requests[b].Key.Surface {
+			return requests[a].Key.Surface < requests[b].Key.Surface
+		}
+		return requests[a].Key.Name < requests[b].Key.Name
+	})
+	return requests
+}
+
+// InputScreenRequest returns the screen request that a user input sends at once to a drawing region: the input is at most inputDrawWindow old
+// at now and the region has no unanswered request. cids are the correlation identifiers of the input. It returns false when the input sends
+// no request, and the next tick sends the request of the region. An input at a time after now is not within the window.
+func (i *Images) InputScreenRequest(key ImageKey, cids []string, inputAt, now time.Time) (ImageScreenRequest, bool) {
+	age := now.Sub(inputAt)
+	if age < 0 || age > inputDrawWindow {
+		return ImageScreenRequest{}, false
+	}
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	state := i.states[key]
+	if state == nil {
+		return ImageScreenRequest{}, false
+	}
+	return i.newScreenRequestLocked(key, state, cids)
+}
+
+// newScreenRequestLocked records and returns the screen request of a drawing region that has no unanswered request. It returns false
+// when the region gets no request. Call it while holding i.mu.
+func (i *Images) newScreenRequestLocked(key ImageKey, state *ImageRasterState, cids []string) (ImageScreenRequest, bool) {
+	owner := i.owners[key]
+	if owner == nil || i.handles[key] == nil || state.ScreenRequest.Request != "" || !i.drawingLocked(key, state) {
+		return ImageScreenRequest{}, false
+	}
+	request := ImageScreenRequest{
+		Request: "screen-" + rand.Text(), Name: key.Name, Generation: state.Generation, Raster: state.Raster,
+		Full: !(state.ScreenAccepted && state.ScreenGeneration == state.Generation && state.ScreenRaster == state.Raster),
+		Cids: cids, Key: key, Sidecar: owner.SidecarName, Owner: owner.SidecarOwner,
+	}
+	state.ScreenRequest = request
+	return request, true
+}
+
+// AnswerScreen ends the unanswered screen request of a region. An accepted answer makes the rows of the request the baseline of the next
+// screen request of the same generation and raster. It returns an error when the region has no unanswered request with that identifier.
+func (i *Images) AnswerScreen(key ImageKey, request ImageScreenRequest, accepted bool) error {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	return i.answerScreenLocked(key, request, accepted)
+}
+
+// answerScreenLocked ends the unanswered screen request of a region and returns an error when it has none with that identifier. Call it
+// while holding i.mu.
+func (i *Images) answerScreenLocked(key ImageKey, request ImageScreenRequest, accepted bool) error {
+	state := i.states[key]
+	if state == nil || request.Request == "" || state.ScreenRequest.Request != request.Request {
+		return fmt.Errorf("image %q of surface %q has no unanswered screen request %q", key.Name, key.Surface, request.Request)
+	}
+	state.ScreenRequest = ImageScreenRequest{}
+	if accepted {
+		state.ScreenAccepted, state.ScreenGeneration, state.ScreenRaster = true, request.Generation, request.Raster
+	}
+	return nil
+}
+
+// endScreenLocked ends the unanswered screen request of a region without an answer and drops its accepted screen, because no message
+// can answer the request any more: the generation or the raster of the region changed, or the connection of its supplier ended. The
+// next request of the region is then full (docs/spec/native-surfaces.md#copy-path-frames). Call it while holding i.mu.
+func endScreenLocked(state *ImageRasterState) {
+	state.ScreenRequest = ImageScreenRequest{}
+	state.ScreenAccepted = false
+}
+
+// ImageTick is the answer to the frame request of a drawing region at a display frame of its window
+// (docs/spec/native-surfaces.md#copy-path-frames). Sequence counts the ticks of the region from 1 for each attachment, and RefreshRate is
+// the refresh rate of the screen that showed the window at that display frame.
+type ImageTick struct {
+	Name        string       `json:"name"`
+	Generation  uint64       `json:"generation"`
+	Sequence    uint64       `json:"sequence"`
+	RefreshRate int          `json:"refreshRate"`
+	Key         ImageKey     `json:"-"`
+	Sidecar     string       `json:"-"`
+	Owner       SidecarOwner `json:"-"`
+}
+
+// FramePurpose is the purpose of a frame request: a draw of the region, or a read that counts display frames
+// (docs/spec/native-surfaces.md#copy-path-frames).
+type FramePurpose string
+
+const (
+	FrameDraw FramePurpose = "draw"
+	FrameRead FramePurpose = "read"
+)
+
+// WantFrame answers the frame request of sender for a region (docs/spec/native-surfaces.md#copy-path-frames). It returns the refusal
+// reason, notAttached when sender does not own the attached region and stale when generation is not the current one, or "" for an
+// accepted request. ask is true when the caller asks the native region for one display frame: the region waits for no display frame yet,
+// and it is drawing or the request is a read. A request while one waits and a draw request for a region that is not drawing ask nothing.
+func (i *Images) WantFrame(key ImageKey, sender string, generation uint64, purpose FramePurpose) (reason string, ask bool) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	state := i.states[key]
+	owner := i.owners[key]
+	if state == nil || owner == nil || owner.SidecarName != sender || i.handles[key] == nil {
+		return "notAttached", false
+	}
+	if generation != state.Generation {
+		return "stale", false
+	}
+	if purpose == FrameRead {
+		state.FrameRead = true
+	} else if !i.drawingLocked(key, state) {
+		return "", false
+	}
+	if state.FrameWanted {
+		return "", false
+	}
+	state.FrameWanted = true
+	return "", true
+}
+
+// ImageFrame is the answer of the display frame of a frame request: the tick, or NoScreen for a read request of a window on no screen,
+// which has no display frame (docs/spec/native-surfaces.md#copy-path-frames). Tick names the region and its supplier in both cases.
+type ImageFrame struct {
+	Tick     ImageTick
+	NoScreen bool
+}
+
+// Body returns the image message of the answer to the supplier; window is the window identifier of the endpoint, which the refusal
+// noScreen names.
+func (f ImageFrame) Body(window string) map[string]any {
+	if f.NoScreen {
+		return map[string]any{"image": map[string]any{"want": map[string]any{
+			"error": "noScreen", "name": f.Tick.Name, "generation": f.Tick.Generation, "purpose": string(FrameRead), "window": window,
+		}}}
+	}
+	return map[string]any{"image": map[string]any{"tick": f.Tick}}
+}
+
+// FrameTick ends the frame requests of a region at the display frame that the native region reported, and returns the answer: the tick
+// of the region when it is drawing or a read request waited, or the refusal noScreen of a waiting read request when refreshRate is nil.
+// refreshRate is the refresh rate that the native region read, or nil for a window on no screen, which has no display frame and sends
+// no tick.
+func (i *Images) FrameTick(key ImageKey, refreshRate *int) (ImageFrame, bool) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	state := i.states[key]
+	if state == nil {
+		return ImageFrame{}, false
+	}
+	read := state.FrameRead
+	state.FrameWanted = false
+	state.FrameRead = false
+	owner := i.owners[key]
+	if owner == nil || !read && (refreshRate == nil || !i.drawingLocked(key, state)) {
+		return ImageFrame{}, false
+	}
+	tick := ImageTick{Name: key.Name, Generation: state.Generation, Key: key, Sidecar: owner.SidecarName, Owner: owner.SidecarOwner}
+	if refreshRate == nil {
+		return ImageFrame{Tick: tick, NoScreen: true}, true
+	}
+	state.FrameSequence++
+	tick.Sequence = state.FrameSequence
+	tick.RefreshRate = *refreshRate
+	return ImageFrame{Tick: tick}, true
+}
+
 // SetOnScreen records whether the window is neither occluded nor minimized.
 func (i *Images) SetOnScreen(onScreen bool) {
 	i.mu.Lock()
@@ -192,7 +402,8 @@ func (i *Images) shownLocked(key ImageKey, state *ImageRasterState) bool {
 }
 
 // DrawingChanges returns the drawing state of each attached region whose state was not sent yet or changed since it was sent, sorted by
-// surface and name, and records it as sent.
+// surface and name. It does not record a state as sent: the caller records each state whose send succeeded with MarkDrawingSent, so a
+// state whose send failed is returned again by the next call.
 func (i *Images) DrawingChanges() []ImageDrawing {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -209,12 +420,13 @@ func (i *Images) DrawingChanges() []ImageDrawing {
 		if state.DrawingSent && state.Drawing == drawing && state.Hidden == hidden {
 			continue
 		}
-		state.Drawing, state.Hidden, state.DrawingSent = drawing, hidden, true
 		// A raster that changed while the region was hidden has no configuration yet, and no later step sends it when the
 		// region is shown without a new layout.
 		var configure *ImageConfigure
 		if drawing && !state.Configured && state.Width > 0 {
 			state.Configured = true
+			// A configuration ends the error of an ended supplier connection, because the supplier draws the raster again.
+			state.PresentationError = ""
 			configure = &ImageConfigure{Name: key.Name, Generation: state.Generation, Raster: state.Raster,
 				Width: state.Width, Height: state.Height, Scale: state.Scale, Sidecar: owner.SidecarName, Owner: owner.SidecarOwner}
 		}
@@ -228,6 +440,18 @@ func (i *Images) DrawingChanges() []ImageDrawing {
 		return changes[a].Key.Name < changes[b].Key.Name
 	})
 	return changes
+}
+
+// MarkDrawingSent records the drawing state of change as sent to the supplier of its region. A change of an earlier generation records
+// nothing, because the drawing state names the generation and the new generation is sent again.
+func (i *Images) MarkDrawingSent(change ImageDrawing) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	state := i.states[change.Key]
+	if state == nil || state.Generation != change.Generation {
+		return
+	}
+	state.Drawing, state.Hidden, state.DrawingSent = change.Drawing, change.Hidden, true
 }
 
 func NewImages() *Images {
@@ -267,6 +491,7 @@ func (i *Images) BeginGeneration(surface string) uint64 {
 			state.LastSequence = 0
 			state.PresentedRaster = 0
 			state.PresentedSequence = 0
+			endScreenLocked(state)
 		}
 	}
 	i.changedLocked()
@@ -314,17 +539,19 @@ func (i *Images) SetSurfaceVisible(surface string, visible bool) {
 			state.LastSequence = 0
 			state.PresentedSequence = 0
 			state.PresentationError = ""
+			endScreenLocked(state)
 		}
 	}
 	i.changedLocked()
 }
 
-// Reserve takes a name. It returns an error when owner is nil.
+// Reserve takes a name. It returns an error when owner names no supplier sidecar or no window that receives its messages, because
+// a region without a supplier would send its drawing state and configurations to no one.
 func (i *Images) Reserve(key ImageKey, owner *ImageOwner) error {
 	i.mu.Lock()
 	defer i.mu.Unlock()
-	if owner == nil {
-		return fmt.Errorf("image %q: owner is required", key.Name)
+	if owner == nil || owner.SidecarName == "" || owner.SidecarOwner == nil {
+		return fmt.Errorf("image %q: reserve requires a sidecar", key.Name)
 	}
 	if _, ok := i.handles[key]; ok {
 		return fmt.Errorf("image %q is already attached", key.Name)
@@ -506,8 +733,9 @@ func (i *Images) InvalidateSidecar(sidecar string) int {
 		if waited {
 			state.PresentationError = fmt.Sprintf("the supplier %s of the image region %s/%s ended", sidecar, key.Surface, key.Name)
 		}
-		// The service of the new connection has no drawing state either.
+		// The service of the new connection has no drawing state and no screen of the region either.
 		state.DrawingSent = false
+		endScreenLocked(state)
 		invalidated++
 	}
 	if invalidated > 0 {
@@ -542,6 +770,7 @@ func (i *Images) ConfigureRaster(key ImageKey, width, height int, scale float64,
 		state.Configured = false
 		state.PresentedSequence = 0
 		state.PresentationError = ""
+		endScreenLocked(state)
 		i.changedLocked()
 	}
 	// A supplier opens the session of a region at the size of its configuration, so a region of a window that is off
@@ -550,6 +779,8 @@ func (i *Images) ConfigureRaster(key ImageKey, width, height int, scale float64,
 		return nil, nil
 	}
 	state.Configured = true
+	// A configuration ends the error of an ended supplier connection, because the supplier draws the raster again.
+	state.PresentationError = ""
 	return &ImageConfigure{Name: key.Name, Generation: state.Generation, Raster: state.Raster,
 		Width: width, Height: height, Scale: scale, Sidecar: owner.SidecarName, Owner: owner.SidecarOwner}, nil
 }
@@ -881,6 +1112,28 @@ type Present struct {
 	Sequence   int
 }
 
+// ScreenMessage is the screen message of a supplier that answers a screen request (docs/spec/native-surfaces.md#copy-path-frames).
+// Its rows are not interpreted by the host.
+type ScreenMessage struct {
+	Request    string
+	Name       string
+	Generation uint64
+	Raster     uint64
+}
+
+// MalformedScreen is a screen message with a missing or mistyped member. Member is the dotted path of the first such member, Text
+// names it, and Echo holds each of request, name, generation and raster that the message holds with a valid type.
+type MalformedScreen struct {
+	Member string
+	Text   string
+	Echo   map[string]interface{}
+}
+
+// Error returns the text that names the malformed member.
+func (m *MalformedScreen) Error() string {
+	return m.Text
+}
+
 func imageReply(reason, name string, generation, raster uint64, sequence int) *Reply {
 	return &Reply{Name: name, JSON: map[string]interface{}{
 		"image": map[string]interface{}{
@@ -908,6 +1161,20 @@ func Decide(bodyBytes []byte, sender, surface string, images *Images) Decision {
 	imageBytes, err := json.Marshal(imageField)
 	if err != nil {
 		return &NotImage{}
+	}
+
+	var wantHolder map[string]json.RawMessage
+	if err := json.Unmarshal(imageBytes, &wantHolder); err == nil {
+		if want, ok := wantHolder["want"]; ok {
+			return decideWant(want)
+		}
+	}
+
+	var screenHolder struct {
+		Screen json.RawMessage `json:"screen"`
+	}
+	if err := json.Unmarshal(imageBytes, &screenHolder); err == nil && screenHolder.Screen != nil {
+		return decideScreen(screenHolder.Screen)
 	}
 
 	var envelope struct {
@@ -964,6 +1231,148 @@ func Decide(bodyBytes []byte, sender, surface string, images *Images) Decision {
 		Scale: envelope.Scale, Name: envelope.Name, Generation: envelope.Generation,
 		Raster: envelope.Raster, Sequence: envelope.Sequence,
 	}
+}
+
+// decideScreen validates the members of a screen message in their order: request, name, generation, raster and rows. It returns the
+// first missing or mistyped member as a MalformedScreen, and otherwise the ScreenMessage. A null value is mistyped
+// (docs/spec/native-surfaces.md#copy-path-frames); json.Unmarshal leaves its target unchanged for null, so each read refuses null first.
+func decideScreen(raw json.RawMessage) Decision {
+	var members map[string]json.RawMessage
+	if string(raw) == "null" || json.Unmarshal(raw, &members) != nil {
+		return &MalformedScreen{Member: "screen", Text: "image screen message has no screen object", Echo: map[string]interface{}{}}
+	}
+	echo := map[string]interface{}{}
+	var request, name string
+	var generation, raster uint64
+	var failure *MalformedScreen
+	fail := func(member, text string) {
+		if failure == nil {
+			failure = &MalformedScreen{Member: member, Text: text, Echo: echo}
+		}
+	}
+	if screenMember(members, "request", &request) && request != "" {
+		echo["request"] = request
+	} else {
+		fail("request", "image screen message has no request")
+	}
+	if screenMember(members, "name", &name) && name != "" {
+		echo["name"] = name
+	} else {
+		fail("name", "image screen message has no image name")
+	}
+	if screenMember(members, "generation", &generation) {
+		echo["generation"] = generation
+	} else {
+		fail("generation", "image screen message has no valid generation")
+	}
+	if screenMember(members, "raster", &raster) {
+		echo["raster"] = raster
+	} else {
+		fail("raster", "image screen message has no valid raster")
+	}
+	rows, ok := members["rows"]
+	var rowList []json.RawMessage
+	if !ok || string(rows) == "null" || json.Unmarshal(rows, &rowList) != nil {
+		fail("rows", "image screen message has no rows array")
+	}
+	for index, row := range rowList {
+		var fields map[string]json.RawMessage
+		var number uint64
+		if string(row) == "null" || json.Unmarshal(row, &fields) != nil || !screenRowNumber(fields, &number) {
+			fail(fmt.Sprintf("rows.%d.row", index), fmt.Sprintf("image screen message row %d has no valid row number", index))
+		}
+		if _, has := fields["cells"]; !has {
+			fail(fmt.Sprintf("rows.%d.cells", index), fmt.Sprintf("image screen message row %d has no cells", index))
+		}
+	}
+	if failure != nil {
+		return failure
+	}
+	return &ScreenMessage{Request: request, Name: name, Generation: generation, Raster: raster}
+}
+
+// FrameRequest is the frame request of a supplier for a region (docs/spec/native-surfaces.md#copy-path-frames).
+type FrameRequest struct {
+	Name       string
+	Generation uint64
+	Purpose    FramePurpose
+}
+
+// MalformedFrameRequest is a frame request with a missing or mistyped member. Member names it, Text states it, and Name is the name of
+// the region, or "" when the request has no valid name.
+type MalformedFrameRequest struct {
+	Member string
+	Text   string
+	Name   string
+}
+
+// Error returns the text that names the malformed member.
+func (m *MalformedFrameRequest) Error() string {
+	return m.Text
+}
+
+// decideWant validates the members of a frame request in their order: name, generation and purpose, which is draw when it is absent. A
+// null value is mistyped.
+func decideWant(raw json.RawMessage) Decision {
+	var members map[string]json.RawMessage
+	if string(raw) == "null" || json.Unmarshal(raw, &members) != nil {
+		return &MalformedFrameRequest{Member: "want", Text: "image frame request has no want object"}
+	}
+	var name string
+	if !screenMember(members, "name", &name) || name == "" {
+		return &MalformedFrameRequest{Member: "name", Text: "image frame request has no image name"}
+	}
+	var generation uint64
+	if !screenMember(members, "generation", &generation) {
+		return &MalformedFrameRequest{Member: "generation", Text: "image frame request has no valid generation", Name: name}
+	}
+	purpose := FrameDraw
+	if _, present := members["purpose"]; present {
+		var value string
+		if !screenMember(members, "purpose", &value) || value != string(FrameDraw) && value != string(FrameRead) {
+			return &MalformedFrameRequest{Member: "purpose", Text: "image frame request has a purpose that is neither draw nor read", Name: name}
+		}
+		purpose = FramePurpose(value)
+	}
+	return &FrameRequest{Name: name, Generation: generation, Purpose: purpose}
+}
+
+// screenMember reads a member of a screen message into target and reports whether it is present, not null and of the type of target.
+func screenMember(members map[string]json.RawMessage, member string, target interface{}) bool {
+	raw, ok := members[member]
+	return ok && string(raw) != "null" && json.Unmarshal(raw, target) == nil
+}
+
+// screenRowNumber reads the row number of a row of a screen message and reports whether it is a non-negative integer.
+func screenRowNumber(fields map[string]json.RawMessage, number *uint64) bool {
+	return screenMember(fields, "row", number)
+}
+
+// screenEcho returns the members that identify a screen request, as the host answers them.
+func screenEcho(request, name string, generation, raster uint64) map[string]interface{} {
+	return map[string]interface{}{"request": request, "name": name, "generation": generation, "raster": raster}
+}
+
+// ReceiveScreen answers the screen message of sender for a drawing region. It accepts the message when sender owns the region, its
+// generation and raster are current, and its request is the unanswered request of the region, and it returns "" then. Otherwise it returns
+// the refusal reason: notAttached when the region has no owner that sender is, and stale when the generation, the raster or the request is
+// out of date. A refused message leaves the unanswered request unanswered.
+func (i *Images) ReceiveScreen(key ImageKey, sender string, answer ImageScreenRequest) string {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	state := i.states[key]
+	owner := i.owners[key]
+	if state == nil || owner == nil || owner.SidecarName != sender || i.handles[key] == nil {
+		return "notAttached"
+	}
+	if answer.Generation != state.Generation || answer.Raster != state.Raster || state.ScreenRequest.Request == "" ||
+		answer.Request != state.ScreenRequest.Request {
+		return "stale"
+	}
+	if err := i.answerScreenLocked(key, answer, true); err != nil {
+		return "stale"
+	}
+	return ""
 }
 
 // LeasedReply is the answer to a frame that a region in the lease mode presents: the host holds its IOSurface.
@@ -1053,8 +1462,6 @@ func logRefusedFrame(surface, sender string, images *Images, name string, genera
 		surface, name, sender, generation, raster, sequence, reason, images.FrameState(ImageKey{Surface: surface, Name: name}))})
 }
 
-// recoverFrame is called, after the current frame failed for a native reason, with that reason
-// (notFound has no IOSurface to display, so it requests a new raster configuration). It returns true when it handled the envelope.
 // logAnswerError records the error of an answer to a frame: an answer that cannot reach a sidecar that ended needs no
 // receiver, because the frames of a sidecar end with its process, and any other failure is an error.
 func logAnswerError(where string, err error) {
@@ -1067,6 +1474,9 @@ func logAnswerError(where string, err error) {
 }
 
 // HandleEnvelope handles an image envelope. It takes as arguments the work to run on the main thread, the way to send the reply, the recovery after a presentation failure, whether a plugin still declares the sending sidecar, and the callback for a newly presented frame.
+// recoverFrame runs before the answer with notFound, when the native region has no IOSurface to display, and with staleRaster, when the
+// native raster of the region differs from the frame, so the host state holds an earlier raster than the native region; each requests
+// a configuration of the native raster (docs/spec/native-surfaces.md#image-regions). It returns true when it handled the envelope.
 func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, onMain func(func() error) error,
 	sendResponse func(string, map[string]interface{}) error, recoverFrame func(reason string) error, declared func() bool, presented func()) bool {
 	decision := Decide(bodyBytes, sender, surface, images)
@@ -1078,6 +1488,70 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 	case *Reply:
 		logRefusedFrame(surface, sender, images, d.Name, d.Generation, d.Raster, d.Sequence, d.Reason)
 		logAnswerError("image reply "+d.Name, sendResponse(d.Name, d.JSON))
+		return true
+
+	case *ScreenMessage:
+		key := ImageKey{Surface: surface, Name: d.Name}
+		reason := images.ReceiveScreen(key, sender,
+			ImageScreenRequest{Request: d.Request, Name: d.Name, Generation: d.Generation, Raster: d.Raster})
+		var screen map[string]interface{}
+		if reason == "" {
+			screen = map[string]interface{}{"accepted": screenEcho(d.Request, d.Name, d.Generation, d.Raster)}
+		} else {
+			screen = screenEcho(d.Request, d.Name, d.Generation, d.Raster)
+			screen["error"] = reason
+		}
+		logAnswerError("image screen "+d.Name, sendResponse(d.Name, map[string]interface{}{"image": map[string]interface{}{"screen": screen}}))
+		return true
+
+	case *FrameRequest:
+		key := ImageKey{Surface: surface, Name: d.Name}
+		reason, ask := images.WantFrame(key, sender, d.Generation, d.Purpose)
+		if reason != "" {
+			want := map[string]interface{}{"error": reason, "name": d.Name, "generation": d.Generation}
+			logAnswerError("image want "+d.Name, sendResponse(d.Name, map[string]interface{}{"image": map[string]interface{}{"want": want}}))
+			return true
+		}
+		if !ask {
+			return true
+		}
+		handle, err := images.Get(key)
+		if err == nil {
+			err = onMain(func() error { return system.WantImageFrame(handle) })
+		}
+		if err != nil {
+			// The native region asked for no display frame, so the request ends here and the next request asks again.
+			images.FrameTick(key, nil)
+			LogError("image want "+d.Name, fmt.Sprintf("surface=%s sender=%s the display frame was not requested: %v", surface, sender, err))
+		}
+		return true
+
+	case *MalformedFrameRequest:
+		if d.Name == "" {
+			LogError("image want", fmt.Sprintf("surface=%s sender=%s %s; the message names no image, so no answer is sent", surface, sender, d.Text))
+			return true
+		}
+		LogError("image want", fmt.Sprintf("surface=%s sender=%s %s", surface, sender, d.Text))
+		want := map[string]interface{}{"error": "malformed", "member": d.Member, "name": d.Name}
+		logAnswerError("image want "+d.Name, sendResponse(d.Name, map[string]interface{}{"image": map[string]interface{}{"want": want}}))
+		return true
+
+	case *MalformedScreen:
+		// The answer is routed by the image name. A message without a valid name names no image, so its one error record says that
+		// no answer is sent.
+		name, named := d.Echo["name"].(string)
+		if !named {
+			LogError("image screen", fmt.Sprintf("surface=%s sender=%s %s; the message names no image, so no answer is sent", surface, sender, d.Text))
+			return true
+		}
+		LogError("image screen", fmt.Sprintf("surface=%s sender=%s %s", surface, sender, d.Text))
+		screen := map[string]interface{}{}
+		for member, value := range d.Echo {
+			screen[member] = value
+		}
+		screen["error"] = "malformed"
+		screen["member"] = d.Member
+		logAnswerError("image screen "+name, sendResponse(name, map[string]interface{}{"image": map[string]interface{}{"screen": screen}}))
 		return true
 
 	case *Present:
@@ -1126,10 +1600,16 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 			reason, invalidated, line := PresentationOutcome(surface, d.Name, d.Generation, d.Raster, d.Sequence, d.ID,
 				err.Error(), images.FrameState(key))
 			Log(line)
+			recovery := ""
 			if !invalidated {
 				images.MarkPresentationFailed(key, d.Generation, d.Raster, d.Sequence, reason)
-				if err := recoverFrame(reason); err != nil {
-					LogError("image recovery", fmt.Sprintf("surface=%s name=%s reason=%s error=%v", surface, d.Name, reason, err))
+				recovery = reason
+			} else if strings.HasPrefix(err.Error(), "staleRaster") {
+				recovery = "staleRaster"
+			}
+			if recovery != "" {
+				if err := recoverFrame(recovery); err != nil {
+					LogError("image recovery", fmt.Sprintf("surface=%s name=%s reason=%s error=%v", surface, d.Name, recovery, err))
 				}
 			}
 			response := AfterPresent(false, reason, d.Name, d.Generation, d.Raster, d.Sequence)

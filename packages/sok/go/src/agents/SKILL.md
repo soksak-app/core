@@ -40,6 +40,18 @@ A repeated operation with the returned identifiers gives the same identifiers an
 
 After a step, find the commands of the plugin of a tab with `exposure_search` or `window_describe {surface}` and run them with `command_run {surface}`. A request can name any window and any surface.
 
+## Groups
+
+A group card is a card whose body holds a plane of its own with two or more cards, below a header with the name of the group. In `layout` it is a node with `group: {name, level, leader, root}`, where `root` is the tree of its plane; the cards of the plane are content cards and group cards, and every operation above takes a card of any plane. A split never creates a group: a split puts its new card into the plane of the card that it splits.
+
+- `core.group.create {card, side, plugin, params?}` returns `{group, card, tab}`: it turns `card` into a group card that holds `card` and a new card with a tab of `plugin` toward `side`. Run on a card that is already inside a group, it nests a new group inside that plane, so run it once per group. A repetition with the same parameters changes nothing only while the group holds exactly those two cards.
+- Add a card to the plane of a group with `core.layout.open {card: <a card of the group>, side, plugin}`, which splits that card inside its plane when it has no neighbour toward `side` there, or with `core.card.add-tab {card: <group>, plugin}`, which adds a content card at the right edge of the plane. `core.layout.open {card: <group>, plugin}` selects the first tab of `plugin` with equal `params` in the plane and adds a card only when none exists.
+- `core.group.dissolve {group}` replaces the group card with the cards of its plane. `core.card.move {card, target, side}` moves a content card or a group card beside `target` in the plane of `target`, or with `side: "centre"` and a group `target` to the right edge of its plane.
+
+A group of `N` cards of one plugin in a row: `core.group.create {card: C, side: "right", plugin: P}` gives `{group: G, card: M}`; then run `core.layout.open {card: M, side: "right", plugin: P}` `N` − 2 times, each time with the card `M` that the step before returned. That card stands at the right edge of the plane, so each step adds one card to the same plane. Read `layout` after each step: the `root` of `G` holds `N` cards in one row and no group node. Toward `bottom` the same steps make a column.
+
+Example, after a description: two cards `A` above `B` each hold a process session; make in each row a group of five process sessions side by side. `core.group.create {card: A, side: "right", plugin: <process plugin>}` gives `{group: G1, card: A2}`; `core.layout.open {card: A2, side: "right", plugin: <process plugin>}` gives `A3`, the same from `A3` gives `A4` and from `A4` gives `A5`. The same steps from `B` give `G2` with `B` to `B5`. `G1` holds `A` and `A2` to `A5`, `G2` holds `B` and `B2` to `B5`, and no group holds another.
+
 ## Running and observing
 
 - Run a declared command with the parameters of its schema: `sok <command> [--<parameter> <value>]... [--params <json>]`, or `command_run {name, params}`.

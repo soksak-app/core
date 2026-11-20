@@ -4,7 +4,7 @@
 #[path = "support/drawing.rs"]
 mod drawing;
 
-use drawing::{DrawingStep, attached_drawing_image, drawing_values};
+use drawing::{DrawingStep, attached_drawing_image, drawing_values, sent_drawing_changes};
 use soksak_host::images::Images;
 
 // A check that reads the pixels of a covered window asks its regions to draw; the window stays occluded, and a region whose
@@ -16,7 +16,7 @@ fn a_region_of_a_covered_window_draws_while_the_window_draws_covered() {
     let key = attached_drawing_image(&images, "tab-1");
     images.set_visible(&key, true).unwrap();
     assert_eq!(
-        drawing_values(images.drawing_changes()),
+        drawing_values(sent_drawing_changes(&images)),
         vec!["view=true"],
         "placed visible on screen"
     );
@@ -59,6 +59,10 @@ fn a_region_of_a_covered_window_draws_while_the_window_draws_covered() {
     ];
     for (name, change, want) in steps {
         change();
-        assert_eq!(drawing_values(images.drawing_changes()), want, "{name}");
+        assert_eq!(
+            drawing_values(sent_drawing_changes(&images)),
+            want,
+            "{name}"
+        );
     }
 }

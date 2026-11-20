@@ -239,18 +239,23 @@ export async function attributeWebKit(hosts) {
   return { attributed, errors };
 }
 
+/** The rows of `rows` with the first row of each pid. */
+export const onePerProcess = (rows) => rows.filter((row, index) => rows.findIndex((other) => other.pid === row.pid) === index);
+
 /** The summed figures of the rows. */
 const FIGURES = ["bytes", "peakBytes", "cpuSeconds", "cpuPercent"];
 
 /**
  * Sums the rows of one application: the application without its sidecars, the sidecars, which run the same sidecar builds on every
  * host (G1, G3), and both. A row whose value is null has an error in the errors list, and the sum leaves that value out. A
- * measurement that reads the footprints after its span too also sums bytesAfter.
+ * measurement that reads the footprints after its span too also sums bytesAfter. Each process counts once: host.window lists each
+ * document with the process that draws it, and one WebContent process draws the documents of several views, so several rows name
+ * one pid with the figures of the whole process.
  */
 export function totalsOf(rows) {
   const figures = rows.some((row) => "bytesAfter" in row) ? [...FIGURES, "bytesAfter"] : FIGURES;
   const sum = (selected) => Object.fromEntries(figures.map((figure) =>
-    [figure, selected.reduce((total, row) => total + (row[figure] ?? 0), 0)]));
+    [figure, onePerProcess(selected).reduce((total, row) => total + (row[figure] ?? 0), 0)]));
   const sidecar = (row) => row.role.startsWith("sidecar ");
   return { application: sum(rows.filter((row) => !sidecar(row))), sidecars: sum(rows.filter(sidecar)), total: sum(rows) };
 }

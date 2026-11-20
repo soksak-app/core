@@ -88,9 +88,11 @@ let heldDivider = null;
 /* One step of the left button. The host converts the coordinates into those of this document and sends them.
    phase is 0 for press, 1 for move, and 2 for release.
 
-   The grab area of a divider is wider than the gap. When the gap is one line wide, the whole area lies under a surface and
-   the press does not reach this document, so the host passes the coordinates and this code decides which divider they are
-   on. The view can also move a divider through mouse events, so the event is dispatched on that element and not on the plane. */
+   diagnostics.drag drives a divider through these steps (observe.js), and the host passes each press on a surface. The grab area of
+   a divider is a window overlay, in which this document takes the pointer before the native views
+   (docs/spec/native-surfaces.md#surface-host-container), so a press that the host passes from a surface lies outside every grab area
+   and grabs no divider. The view can also move a divider through mouse events, so the event is dispatched on that element and not on
+   the plane. */
 export const surfaceInput = ({ phase, x, y }) => {
   if (phase === 0) {
     // default: a point with no boundary line under it grabs no boundary line (null).
@@ -1437,8 +1439,10 @@ let transactionSeats = null;
  *
  * Above the plane there are OS views to which CSS does not apply, and they are placed through a separate path. That path is
  * slower, so it is handled first. If draw is called after the OS view is moved to the received rectangle, both are reflected
- * in the same frame. When nothing is registered, the plane renders immediately. fn receives (made, draw, seated, titlebar, held), where
- * held() tells whether the seats of this layout still name what the cards show (seatsHeld).
+ * in the same frame. When nothing is registered, the plane renders immediately. fn receives (made, draw, seated, titlebar, held, grabs),
+ * where held() tells whether the seats of this layout still name what the cards show (seatsHeld) and grabs are the dividers of the
+ * layout with the grab areas that the draw writes, which the host gives to this document over its native views
+ * (docs/spec/native-surfaces.md#surface-host-container).
  */
 export function onLayout(fn) {
   layouter = fn;
@@ -1527,7 +1531,7 @@ function build(kept) {
     bleed: stagePad(),
     // Drawing writes the frame scale of the current settings into the document. Preparation includes the first-row height at
     // that scale, so the host decides the window title bar in the same transaction (docs/spec/native-surfaces.md#title-bar-height).
-    commit: (made, draw) => {
+    commit: (made, draw, dividers) => {
       const factor = value("textSize");
       if (!layouter) {
         applyFrameText(factor);
@@ -1544,7 +1548,7 @@ function build(kept) {
         } finally {
           transactionSeats = null;
         }
-      }, seated, chromeRow(factor), () => seatsHeld(seated));
+      }, seated, chromeRow(factor), () => seatsHeld(seated), dividers);
     },
     // The render of the plane consists of what the view draws and what this document draws. onChange fires right after the
     // view draws, so the rest is drawn here and the receiver is called afterward.

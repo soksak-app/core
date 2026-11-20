@@ -385,7 +385,7 @@ func TestViewProcessEndClosesTheRegionsOfItsSurface(t *testing.T) {
 	}
 	imageKey := ImageKey{Surface: "probe-surface", Name: "picture"}
 	image := unsafe.Pointer(new(int))
-	if err := s.images.Reserve(imageKey, &ImageOwner{SidecarName: "@probe/sidecar"}); err != nil || !s.images.Set(imageKey, image) {
+	if err := s.images.Reserve(imageKey, &ImageOwner{SidecarName: "@probe/sidecar", SidecarOwner: s}); err != nil || !s.images.Set(imageKey, image) {
 		t.Fatalf("image region: %v", err)
 	}
 	ended := endView(t, s, views, viewTestEpoch)
@@ -398,7 +398,7 @@ func TestViewProcessEndClosesTheRegionsOfItsSurface(t *testing.T) {
 	if err := s.documents.Reserve(documentKey); err != nil {
 		t.Fatalf("the new view cannot attach the document region again: %v", err)
 	}
-	if err := s.images.Reserve(imageKey, &ImageOwner{SidecarName: "@probe/sidecar"}); err != nil {
+	if err := s.images.Reserve(imageKey, &ImageOwner{SidecarName: "@probe/sidecar", SidecarOwner: s}); err != nil {
 		t.Fatalf("the new view cannot attach the image region again: %v", err)
 	}
 	if len(views.created) != 2 {

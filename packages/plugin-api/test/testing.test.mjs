@@ -49,7 +49,7 @@ test("the events of the writer of the page are taken from its batches", { timeou
   const view = await openView("testing-writer-batches", { cases: CASES, start: START });
   view.bridge.runtime.log.info("started", { n: 1 });
   const event = await view.logged("plugin.probe.started");
-  assert.deepEqual(event.fields, { n: 1, surface: "tab-1" });
+  assert.deepEqual(event.fields, { n: 1 });
   await view.close();
 });
 

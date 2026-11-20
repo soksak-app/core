@@ -745,22 +745,29 @@ func TestSurfaceCloseRemovesOnlyItsImages(t *testing.T) {
 }
 
 // contract: images.attach.rejects-reservation-without-sidecar
-func TestReserveRejectsNilOwner(t *testing.T) {
-	images := host.NewImages()
-	key := host.ImageKey{Surface: "tab-1", Name: "view"}
-
-	// Tries reserve with a nil owner
-	err := images.Reserve(key, nil)
-	if err == nil {
-		t.Fatal("expected error for nil owner, got nil")
-	}
-	if !strings.Contains(err.Error(), "owner is required") {
-		t.Fatalf("expected 'owner is required' error, got %v", err)
-	}
-
-	// Checks that no image was registered
-	if _, err := images.Get(key); err == nil {
-		t.Fatal("image should not be registered after failed reserve")
+// A reservation whose owner names no supplier sidecar, or has no window that receives the messages of that supplier, is
+// rejected and registers nothing: a region without a supplier would send its drawing state and configurations to no one.
+func TestReserveRejectsAnOwnerWithoutASupplier(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		owner *host.ImageOwner
+	}{
+		{"nil owner", nil},
+		{"empty owner", &host.ImageOwner{}},
+		{"no window", &host.ImageOwner{SidecarName: "sidecar-a"}},
+		{"no sidecar", &host.ImageOwner{SidecarOwner: support.NewSidecarRecorder(t, "")}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			images := host.NewImages()
+			key := host.ImageKey{Surface: "tab-1", Name: "view"}
+			err := images.Reserve(key, tc.owner)
+			if want := `image "view": reserve requires a sidecar`; err == nil || err.Error() != want {
+				t.Fatalf("reserve with %s: %v, want %s", tc.name, err, want)
+			}
+			if _, err := images.Get(key); err == nil {
+				t.Fatal("image should not be registered after failed reserve")
+			}
+		})
 	}
 }
 
@@ -1414,6 +1421,16 @@ func attachedDrawingImage(t *testing.T, images *host.Images, surface string) hos
 }
 
 // drawingValues gives each drawing change as name=value, followed by the word hidden for a hidden surface.
+// sentDrawingChanges reads the drawing changes of a pass whose sends succeed and records each one as sent, as the host does after
+// each successful send.
+func sentDrawingChanges(images *host.Images) []host.ImageDrawing {
+	changes := images.DrawingChanges()
+	for _, change := range changes {
+		images.MarkDrawingSent(change)
+	}
+	return changes
+}
+
 func drawingValues(changes []host.ImageDrawing) []string {
 	values := []string{}
 	for _, change := range changes {
@@ -1461,7 +1478,7 @@ func TestDrawingStateIsSentAtAttachAndOnChange(t *testing.T) {
 	}
 	for _, step := range steps {
 		step.change()
-		if got := drawingValues(images.DrawingChanges()); !slices.Equal(got, step.want) {
+		if got := drawingValues(sentDrawingChanges(images)); !slices.Equal(got, step.want) {
 			t.Fatalf("%s: drawing changes %v, want %v", step.name, got, step.want)
 		}
 	}
@@ -1471,11 +1488,11 @@ func TestDrawingStateIsSentAtAttachAndOnChange(t *testing.T) {
 func TestDrawingReportsAHiddenSurface(t *testing.T) {
 	images := host.NewImages()
 	key := attachedDrawingImage(t, images, "tab-1")
-	if got := drawingValues(images.DrawingChanges()); !slices.Equal(got, []string{"view=false"}) {
+	if got := drawingValues(sentDrawingChanges(images)); !slices.Equal(got, []string{"view=false"}) {
 		t.Fatalf("a surface that reported no hiding is not hidden: %v", got)
 	}
 	images.SetSurfaceVisible(key.Surface, false)
-	changes := images.DrawingChanges()
+	changes := sentDrawingChanges(images)
 	if len(changes) != 1 || !changes[0].Hidden {
 		t.Fatalf("a region that does not draw reports the hiding of its surface: %+v", changes)
 	}
@@ -1487,12 +1504,12 @@ func TestDrawingReportsAHiddenSurface(t *testing.T) {
 	if string(wire) != want {
 		t.Fatalf("message %s, want %s", wire, want)
 	}
-	if got := drawingValues(images.DrawingChanges()); len(got) != 0 {
+	if got := drawingValues(sentDrawingChanges(images)); len(got) != 0 {
 		t.Fatalf("an unchanged state is sent again: %v", got)
 	}
 	// The service of a new connection holds no state, so it receives the hiding again.
 	images.InvalidateSidecar("sidecar-a")
-	if got := drawingValues(images.DrawingChanges()); !slices.Equal(got, []string{"view=false hidden"}) {
+	if got := drawingValues(sentDrawingChanges(images)); !slices.Equal(got, []string{"view=false hidden"}) {
 		t.Fatalf("the service of a new connection does not learn the hiding: %v", got)
 	}
 }
@@ -1528,9 +1545,9 @@ func TestAShownRegionIsConfiguredWhateverItsWindowAndOnlyADrawingRegionIsAwaited
 	if again, err := images.ConfigureRaster(key, 1000, 700, 2, true); err != nil || again != nil {
 		t.Fatalf("the raster was configured twice: %+v %v", again, err)
 	}
-	images.DrawingChanges()
+	sentDrawingChanges(images)
 	images.SetOnScreen(true)
-	for _, change := range images.DrawingChanges() {
+	for _, change := range sentDrawingChanges(images) {
 		if change.Configure != nil {
 			t.Fatalf("a configured raster was configured again when its region started drawing: %+v", change.Configure)
 		}
@@ -1545,11 +1562,11 @@ func TestARasterThatChangedWhileHiddenIsConfiguredWhenTheRegionIsShown(t *testin
 	images := host.NewImages()
 	key := attachedDrawingImage(t, images, "tab-1")
 	configureImage(t, images, key, 800, 600, 2)
-	images.DrawingChanges()
+	sentDrawingChanges(images)
 	if configuration, err := images.ConfigureRaster(key, 1000, 700, 2, false); err != nil || configuration != nil {
 		t.Fatalf("a hidden region was configured: %+v %v", configuration, err)
 	}
-	for _, change := range images.DrawingChanges() {
+	for _, change := range sentDrawingChanges(images) {
 		if change.Configure != nil {
 			t.Fatalf("a region that stopped drawing received a configuration: %+v", change.Configure)
 		}
@@ -1557,7 +1574,7 @@ func TestARasterThatChangedWhileHiddenIsConfiguredWhenTheRegionIsShown(t *testin
 	if err := images.SetVisible(key, true); err != nil {
 		t.Fatal(err)
 	}
-	configuration := images.DrawingChanges()[0].Configure
+	configuration := sentDrawingChanges(images)[0].Configure
 	if configuration == nil {
 		t.Fatal("the raster that changed while the region was hidden was not configured")
 	}
@@ -1570,11 +1587,11 @@ func TestARasterThatChangedWhileHiddenIsConfiguredWhenTheRegionIsShown(t *testin
 	if err := images.SetVisible(key, false); err != nil {
 		t.Fatal(err)
 	}
-	images.DrawingChanges()
+	sentDrawingChanges(images)
 	if err := images.SetVisible(key, true); err != nil {
 		t.Fatal(err)
 	}
-	if again := images.DrawingChanges()[0].Configure; again != nil {
+	if again := sentDrawingChanges(images)[0].Configure; again != nil {
 		t.Fatalf("a raster that did not change was configured again: %+v", again)
 	}
 }
@@ -1604,7 +1621,7 @@ func TestARegionAttachedInACoveredWindowIsNotDrawing(t *testing.T) {
 	if err := images.SetVisible(key, true); err != nil {
 		t.Fatal(err)
 	}
-	if got := drawingValues(images.DrawingChanges()); !slices.Equal(got, []string{"view=false"}) {
+	if got := drawingValues(sentDrawingChanges(images)); !slices.Equal(got, []string{"view=false"}) {
 		t.Fatalf("the first drawing state of a region in a covered window is %v", got)
 	}
 }
@@ -1619,12 +1636,64 @@ func TestSentDrawingIsTheStateLastSentToTheSupplier(t *testing.T) {
 	if images.SentDrawing(key) {
 		t.Fatal("a drawing state that was never sent is reported as drawing")
 	}
-	images.DrawingChanges()
+	sentDrawingChanges(images)
 	if !images.SentDrawing(key) {
 		t.Fatal("the sent drawing state is not reported")
 	}
 	images.SetSurfaceVisible(key.Surface, false)
 	if !images.SentDrawing(key) {
 		t.Fatal("a change that was not sent yet is reported as sent")
+	}
+}
+
+// contract: image.drawing.unsent-change-is-sent-again
+func TestADrawingChangeThatWasNotSentIsReturnedAgain(t *testing.T) {
+	images := host.NewImages()
+	key := attachedDrawingImage(t, images, "tab-1")
+	if err := images.SetVisible(key, true); err != nil {
+		t.Fatal(err)
+	}
+	// A pass reads the change and its send fails, so the pass records nothing.
+	if got := drawingValues(images.DrawingChanges()); !slices.Equal(got, []string{"view=true"}) {
+		t.Fatalf("the first pass read %v", got)
+	}
+	if images.SentDrawing(key) {
+		t.Fatal("a drawing change that was not sent is reported as sent")
+	}
+	if got := drawingValues(images.DrawingChanges()); !slices.Equal(got, []string{"view=true"}) {
+		t.Fatalf("the next pass read %v, want the unsent change again", got)
+	}
+}
+
+// contract: images.present.stale-native-raster-requests-reconfiguration
+func TestAFrameOfAnOlderNativeRasterRequestsTheCurrentRasterConfiguration(t *testing.T) {
+	images := host.NewImages()
+	key := host.ImageKey{Surface: "tab-1", Name: "view"}
+	attachImage(t, images, key)
+	first := configureImage(t, images, key, 800, 600, 2.0)
+	var response map[string]interface{}
+	var recovered *host.ImageConfigure
+	host.HandleEnvelope(configuredEnvelope(t, first, 1), "sidecar-a", key.Surface, images,
+		// The native raster of the region changed before its refresh reached the host state.
+		func(func() error) error { return errors.New("staleRaster native=900x600@2 frame=800x600@2") },
+		func(_ string, value map[string]interface{}) error {
+			response = value
+			return nil
+		},
+		func(reason string) error {
+			if reason != "staleRaster" {
+				t.Errorf("recovery reason %q, want staleRaster", reason)
+			}
+			next, err := images.ConfigureRaster(key, 900, 600, 2.0, true)
+			recovered = next
+			return err
+		},
+		func() bool { return true }, func() { t.Fatal("a refused frame notified the window") },
+	)
+	if got := response["image"].(map[string]interface{})["error"]; got != "stale" {
+		t.Fatalf("a frame of an older native raster returned %v, want stale", got)
+	}
+	if recovered == nil || recovered.Raster <= first.Raster || recovered.Width != 900 {
+		t.Fatalf("recovery configuration %+v, want the native raster after raster %d", recovered, first.Raster)
 	}
 }

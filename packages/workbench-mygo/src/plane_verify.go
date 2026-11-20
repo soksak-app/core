@@ -91,7 +91,7 @@ func (s *Shell) verifyPlane() ([]VerifyRow, error) {
 		}
 		drawn[id] = slot
 	}
-	edge := float64(s.palette.BorderWidth)
+	edge := float64(s.palette.CardBorder())
 	head, foot := float64(s.metrics.headH), float64(s.metrics.footH)
 	pending := s.surfaces.latest != nil && (s.surfaces.answered == nil || s.surfaces.latest.Seq > s.surfaces.answered.Seq)
 	var pendingFor time.Duration
@@ -121,7 +121,7 @@ func (s *Shell) verifyPlane() ([]VerifyRow, error) {
 		Drawn:      drawn,
 		Cards:      DrawnCards(tree, layout.Rect{X: origin.X, Y: origin.Y}),
 		Plane:      layout.Rect{W: s.plane.Width(), H: s.plane.Height()},
-		Pad:        float64(s.palette.Gap),
+		Pad:        float64(s.palette.StagePad()),
 		Rules:      s.drawnRules(),
 		Band:       DropBand{HeaderPx: head + edge, FooterPx: foot + edge},
 		Head:       head,
@@ -175,7 +175,7 @@ func (s *Shell) drawnRules() []layout.Rect {
 		if rule.Virtual && place == "none" {
 			continue
 		}
-		r := ruleRect(rule, s.plane.Width(), s.plane.Height(), ui.Rect{X: -inset, Y: -inset}, inset, s.palette.Gap)
+		r := ruleRect(rule, s.plane.Width(), s.plane.Height(), ui.Rect{X: -inset, Y: -inset}, inset, s.palette.StagePad())
 		rules = append(rules, layout.Rect{X: float64(r.X), Y: float64(r.Y), W: float64(r.W), H: float64(r.H)})
 	}
 	return rules

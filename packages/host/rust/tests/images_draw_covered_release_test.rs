@@ -5,7 +5,7 @@
 #[path = "support/drawing.rs"]
 mod drawing;
 
-use drawing::{DrawingStep, attached_drawing_image, drawing_values};
+use drawing::{DrawingStep, attached_drawing_image, drawing_values, sent_drawing_changes};
 use soksak_host::images::Images;
 
 // contract: image.drawing.covered-window-never-draws-without-diagnostics
@@ -15,7 +15,7 @@ fn a_build_without_diagnostics_cannot_draw_a_covered_window() {
     let key = attached_drawing_image(&images, "tab-1");
     images.set_visible(&key, true).unwrap();
     assert_eq!(
-        drawing_values(images.drawing_changes()),
+        drawing_values(sent_drawing_changes(&images)),
         vec!["view=true"],
         "placed visible on screen"
     );
@@ -43,6 +43,10 @@ fn a_build_without_diagnostics_cannot_draw_a_covered_window() {
     ];
     for (name, change, want) in steps {
         change();
-        assert_eq!(drawing_values(images.drawing_changes()), want, "{name}");
+        assert_eq!(
+            drawing_values(sent_drawing_changes(&images)),
+            want,
+            "{name}"
+        );
     }
 }

@@ -63,20 +63,22 @@ const SP_INPUT_UNRECEIVED: i32 = 3;
 const SP_INPUT_BUTTON_HELD: i32 = 4;
 const SP_INPUT_PRESS_OPEN: i32 = 5;
 const SP_INPUT_POINTER_HELD: i32 = 6;
+const SP_INPUT_RESIZE_EDGE: i32 = 7;
+const SP_INPUT_INTERRUPTED: i32 = 8;
 
-/// sp_input_held of native/darwin. The state of the attempt that was rejected with SP_INPUT_BUTTON_HELD or
-/// SP_INPUT_POINTER_HELD.
+/// sp_input_held of native/darwin. The state of the attempt that was rejected with SP_INPUT_BUTTON_HELD,
+/// SP_INPUT_POINTER_HELD or SP_INPUT_RESIZE_EDGE.
 #[repr(C)]
-struct SpInputHeld {
-    mask: u64,
+pub(super) struct SpInputHeld {
+    pub(super) mask: u64,
     /// The pid of the frontmost application. It is -1 when there is no frontmost application.
-    pid: i32,
+    pub(super) pid: i32,
     /// The bundle identifier. It is NULL when there is none.
-    bundle_identifier: *const c_char,
+    pub(super) bundle_identifier: *const c_char,
     /// The pointer that holds the press of an SP_INPUT_POINTER_HELD rejection.
-    pointer: *const c_char,
-    /// The state that the press of that pointer holds.
-    reason: *const c_char,
+    pub(super) pointer: *const c_char,
+    /// The state that the press of that pointer holds, or the message of an SP_INPUT_RESIZE_EDGE refusal.
+    pub(super) reason: *const c_char,
 }
 
 type Delivered = Box<dyn FnOnce(Delivery) + Send>;
@@ -84,23 +86,55 @@ type Delivered = Box<dyn FnOnce(Delivery) + Send>;
 extern "C" fn delivered(context: *mut c_void, result: i32, held: *const SpInputHeld) {
     // context is the value that pointer passed with Box::into_raw, and the library calls done once.
     let done = unsafe { Box::from_raw(context as *mut Delivered) };
-    done(match result {
+    // The library keeps held valid until done returns.
+    done(delivery(result, unsafe { held.as_ref() }));
+}
+
+/// The delivery of a result of sp_input_pointer_then and its state. The library passes held only for SP_INPUT_BUTTON_HELD,
+/// SP_INPUT_POINTER_HELD and SP_INPUT_RESIZE_EDGE; a notification of one of them without its state is a contract violation of
+/// the library, so it stops and names the violation.
+pub(super) fn delivery(result: i32, held: Option<&SpInputHeld>) -> Delivery {
+    match result {
         SP_INPUT_DELIVERED => Delivery::Delivered,
         SP_INPUT_INACTIVE => Delivery::Inactive,
         SP_INPUT_UNRECEIVED => Delivery::Unreceived,
-        // The library passes held only for SP_INPUT_BUTTON_HELD and keeps it valid until done returns.
         SP_INPUT_BUTTON_HELD => Delivery::ButtonHeld(button_held(
-            unsafe { held.as_ref() }
-                .expect("sp_input_pointer_then reported SP_INPUT_BUTTON_HELD without its state"),
+            held.expect("sp_input_pointer_then reported SP_INPUT_BUTTON_HELD without its state"),
         )),
         SP_INPUT_PRESS_OPEN => Delivery::PressOpen,
-        // The library passes held with its pointer and reason for SP_INPUT_POINTER_HELD.
         SP_INPUT_POINTER_HELD => Delivery::PointerHeld(pointer_held(
-            unsafe { held.as_ref() }
-                .expect("sp_input_pointer_then reported SP_INPUT_POINTER_HELD without its state"),
+            held.expect("sp_input_pointer_then reported SP_INPUT_POINTER_HELD without its state"),
+        )),
+        SP_INPUT_RESIZE_EDGE => Delivery::ResizeEdge(resize_edge(
+            held.expect("sp_input_pointer_then reported SP_INPUT_RESIZE_EDGE without its state"),
+        )),
+        SP_INPUT_INTERRUPTED => Delivery::Interrupted(interruption(
+            held.expect("sp_input_pointer_then reported SP_INPUT_INTERRUPTED without its state"),
         )),
         _ => Delivery::Rejected,
-    });
+    }
+}
+
+/// Reads the message of an SP_INPUT_RESIZE_EDGE refusal from sp_input_held. A notification without it is a contract violation
+/// of the library, so it stops and names the violation.
+fn resize_edge(held: &SpInputHeld) -> String {
+    if held.reason.is_null() {
+        panic!("sp_input_pointer_then reported SP_INPUT_RESIZE_EDGE without its message");
+    }
+    unsafe { std::ffi::CStr::from_ptr(held.reason) }
+        .to_string_lossy()
+        .into_owned()
+}
+
+/// Reads the message of an SP_INPUT_INTERRUPTED refusal from sp_input_held. A notification without it is a contract violation
+/// of the library, so it stops and names the violation.
+fn interruption(held: &SpInputHeld) -> String {
+    if held.reason.is_null() {
+        panic!("sp_input_pointer_then reported SP_INPUT_INTERRUPTED without its message");
+    }
+    unsafe { std::ffi::CStr::from_ptr(held.reason) }
+        .to_string_lossy()
+        .into_owned()
 }
 
 /// Reads the pointer and the reason of sp_input_held. A notification of SP_INPUT_POINTER_HELD without them is a contract

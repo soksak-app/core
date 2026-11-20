@@ -26,7 +26,7 @@ test("a failed presentation wait withdraws nothing, sets no timer, and the next 
     textSize: () => 1, rendered: () => Promise.resolve(), waitSurfaceCompositionDeclared: () => Promise.resolve(),
   });
   armLayoutFault();
-  page.onLayout({}, () => {}, [], 0, () => true);
+  page.onLayout({}, () => {}, [], 0, () => true, []);
   assert.equal(await page.presented(), false);
   assert.equal(answers.length, 0, "a failed layout asked the host for its presentation");
   const timers = activeTimeouts();

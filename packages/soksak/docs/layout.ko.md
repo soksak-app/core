@@ -511,11 +511,13 @@ shape.loops.length;                   // 카드가 붙어 있으면 1, 떨어져
 
 `SoksakView(host, grid, options)` — `render(reason?)`, `element(id)`,
 `painted(id)`, `fullscreen(id)`, `fullscreenCard`, `destroy()`. 옵션: `createCard`(필수), `updateCard`, `destroyCard`,
-`onChange(reason)`, `updateDivider`, `rules`(기본 켜짐), `commit(rects, draw)`,
+`onChange(reason)`, `updateDivider`, `rules`(기본 켜짐), `commit(rects, draw, dividers)`,
 `classPrefix`(기본 `sp`), `observeResize`(기본 켜짐), `bleed`(기본 0).
 
-`commit(rects, draw)`는 모든 레이아웃 변경 전에 실행되고 장치 픽셀 격자에 맞춘
-사각형을 받는다. 호스트는 자기 뷰를 준비한 뒤 `draw()`를 호출한다. 각 콜백은 자기가 받은
+`commit(rects, draw, dividers)`는 모든 레이아웃 변경 전에 실행되고 장치 픽셀 격자에 맞춘
+사각형과, 그리기가 그 격자에서 grab area에 주는 사각형을 가진 레이아웃의 divider를 받는다.
+전체화면에서는 divider가 없다. 자기 뷰가 카드를 덮는 호스트는 그 위에서 grab area에
+pointer를 준다. 호스트는 자기 뷰를 준비한 뒤 `draw()`를 호출한다. 각 콜백은 자기가 받은
 레이아웃을 한 번 그린다. 이후의 격자 변경은 그려지기 전의 그 레이아웃을 바꾸지 못하고,
 그리기 전에 바뀐 device pixel ratio도 그것이 쓰는 사각형을 바꾸지 않는다. 비율이 바뀌면
 뷰는 새 픽셀 격자로 다시 그린다.

@@ -4,13 +4,88 @@
   "replay": false,
   "reason": "A case file holds decoded JSON values, and a lone surrogate escape is no character of a decoded value, so the test gives the snapshot as raw text.",
   "variables": {
-    "snapshot": { "type": "object", "keys": ["window", "layout", "plugins", "groups", "unregistered"], "example": { "window": { "window": "main", "title": "soksak", "project": null }, "layout": { "space": "space-1", "focused": null, "root": null }, "plugins": [], "groups": [{ "owner": "core", "status": [{ "name": "core.screen", "description": "Current screen.", "schema": {}, "value": "home" }], "commands": [], "element": [] }], "unregistered": [] } }
+    "snapshot": {
+      "type": "object",
+      "keys": [
+        "window",
+        "layout",
+        "plugins",
+        "groups",
+        "unregistered"
+      ],
+      "example": {
+        "window": {
+          "window": "main",
+          "title": "soksak",
+          "project": null
+        },
+        "layout": {
+          "space": "space-1",
+          "focused": null,
+          "root": null
+        },
+        "plugins": [],
+        "groups": [
+          {
+            "owner": "core",
+            "status": [
+              {
+                "name": "core.screen",
+                "description": "Current screen.",
+                "schema": {},
+                "value": "home"
+              }
+            ],
+            "commands": [],
+            "element": []
+          }
+        ],
+        "unregistered": []
+      }
+    }
   },
   "steps": [
-    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
-    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "main", "title": "soksak", "project": null, "key": true, "ready": true }] } },
-    { "send": { "jsonrpc": "2.0", "id": 2, "method": "exposure.snapshot", "params": { "window": "main" } } },
-    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$snapshot" } },
-    { "close": "client" }
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "windows.list"
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": [
+          {
+            "window": "main",
+            "title": "soksak",
+            "project": null,
+            "key": true,
+            "ready": true
+          }
+        ]
+      }
+    },
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "exposure.snapshot",
+        "params": {
+          "window": "main"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": "$snapshot"
+      }
+    },
+    {
+      "close": "client"
+    }
   ]
 }

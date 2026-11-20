@@ -18,3 +18,4 @@ void main_sp_region_text(void *region, const char *utf8);
 void main_sp_region_background(void *region, bool enabled);
 const char *main_sp_region_facts(void *region);
 void main_sp_region_close(void *region);
+void main_sp_region_want_frame(void *region);

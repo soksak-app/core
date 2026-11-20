@@ -66,12 +66,13 @@ export function measureAt(factor, read) {
  * The switch to the library cancels the drawing of the plane prepared before it, so this layout is drawn with the current scale to avoid losing the scale of the canceled drawing,
  * and the library screen is shown in the same drawing.
  *
- *   publishAhead(rects, seated, titlebar), publish(), cancelPrepared(options), frame(work)  functions of compositor.js and layout-queue.js
+ *   publishAhead(rects, seated, titlebar, grabs), publish(), cancelPrepared(options), frame(work)  functions of compositor.js and layout-queue.js
  */
 export function frameLayout({ factor, publishAhead, publish, cancelPrepared, frame, clearPlane = () => {}, show = () => {} }) {
   const titlebar = chromeRow(factor);
   return {
-    prepare: () => publishAhead(new Map(), new Map(), titlebar),
+    // A window without a plane has no divider.
+    prepare: () => publishAhead(new Map(), new Map(), titlebar, []),
     draw: () => {
       clearPlane();
       applyFrameText(factor);

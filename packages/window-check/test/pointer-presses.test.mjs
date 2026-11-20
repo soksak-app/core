@@ -63,6 +63,19 @@ test("a check session releases the press of each named pointer", async (t) => {
   ]);
 });
 
+test("a gesture that an action of a person ended leaves no open press", async (t) => {
+  const { server, client } = await play(t, "window-check-presses-interrupted");
+  const s = new Session(app, client);
+  await s.pointer(10, 20, "down");
+  // The host released the press when the person acted, so the refused drag ends the press of the session
+  // (docs/spec/exposure.md#named-pointers).
+  await assert.rejects(s.pointer(12, 20, "drag"), (error) => error.code === 1013 &&
+    /^input\.pointer drag of the left button at 12,20 in main: .*a person's move at \(40, 40\)/.test(error.message));
+  assert.deepEqual(open(s), []);
+  assert.deepEqual(await s.releasePresses(), []);
+  assert.equal(sent(server).filter((request) => request.method === "input.pointer").length, 2);
+});
+
 test("a refused release keeps the press open until the held button is released", async (t) => {
   const { server, client } = await play(t, "window-check-presses-held-refused");
   const s = new Session(app, client);

@@ -31,7 +31,7 @@ func hostedPlugins() workbench.PluginPage {
 func drawPlugins(page *workbench.PluginPage, errors *workbench.ShownErrors, binder *workbench.Binder) *ui.Tester {
 	return ui.NewTester(func(c *ui.Context) {
 		workbench.DrawPluginSearch(c, binder, page.Query, func(field ui.Element) ui.Element { return field.FillWidth() })
-		workbench.DrawPluginPage(c, binder, *page, errors, workbench.PluginLook{LeastCard: 245, Gap: 10, Control: 12, Small: 11, Caption: 10, LineHeight: 1.45,
+		workbench.DrawPluginPage(c, binder, *page, errors, workbench.PluginLook{LeastCard: 245, HalfGap: 10, Control: 12, Small: 11, Caption: 10, LineHeight: 1.45,
 			Space1: 4, Space2: 8, Space3: 12, FieldPadY: 5, BorderWidth: 1})
 	}, 640, 900)
 }

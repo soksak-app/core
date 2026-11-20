@@ -7,7 +7,7 @@ const viewRecord = () => ({
   surfaces: [{ id: "view", plugin: "probe", dim: false, visible: true,
     surface: { pluginId: "probe", composition: { kind: "view", page: "ui/page.html" } },
     applied: { x: 0, y: 0, w: 3, h: 4 } }],
-  settled: true, drawn: false, titlebar: 40,
+  grabs: [], settled: true, drawn: false, titlebar: 40,
 });
 
 // The page-wire cases answer the host calls of each test (docs/spec/cases/page-wire/README.md). Each test selects its case before it imports
@@ -99,7 +99,7 @@ test("a failed theme reply refuses view placement and reports the host error", {
     assert.equal(placeResult.reason.message, "theme setter refused");
     assert.equal(names(wire).filter((name) => name === "syncSurfaces").length, 0, "a view was attached after theme setup failed");
     assert.deepEqual(errorLines(wire), ["host setTheme failed: Error: theme setter refused"]);
-    await surfaces.place({ surfaces: [], settled: true, drawn: false, titlebar: 40 });
+    await surfaces.place({ surfaces: [], grabs: [], settled: true, drawn: false, titlebar: 40 });
     assert.equal(names(wire).filter((name) => name === "syncSurfaces").length, 1,
       "a failed placement prevented the next independent layout from entering the host queue");
     wire.finish();
@@ -116,7 +116,7 @@ test("a failed theme reply with no view still uses the host error path", { timeo
     const { surfaces } = await import("../host.js?theme-error-without-view");
     await assert.rejects(surfaces.theme({ scheme: "broken", tokens: {} }), /theme setter refused/);
     await settled();
-    await surfaces.place({ surfaces: [], settled: true, drawn: false, titlebar: 40 });
+    await surfaces.place({ surfaces: [], grabs: [], settled: true, drawn: false, titlebar: 40 });
     assert.deepEqual(errorLines(wire), ["host setTheme failed: Error: theme setter refused"]);
     assert.equal(names(wire).filter((name) => name === "syncSurfaces").length, 1,
       "a failed theme without a view prevented the ordinary surface layout");

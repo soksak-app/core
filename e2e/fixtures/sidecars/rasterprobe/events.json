@@ -299,6 +299,9 @@
             "items": {
               "type": "number"
             }
+          },
+          "scrollback": {
+            "type": "object"
           }
         },
         "required": [
@@ -316,7 +319,8 @@
           "marker",
           "surface",
           "draw_us",
-          "inputs"
+          "inputs",
+          "scrollback"
         ]
       },
       "description": "The service sent a frame: its identity, its raster, its grid, the row bands it paints, its color, its identity marker, the id of its transfer image, the time in microseconds that painting the image took (draw_us) and the sequences of the inputs that it handled since the frame before (inputs)."

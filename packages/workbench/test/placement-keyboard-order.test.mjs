@@ -10,7 +10,7 @@ import { selectPageWire } from "@soksak/runtime";
 const record = (ids) => ({
   surfaces: ids.map((id) => ({ id, dim: false, visible: true,
     surface: { pluginId: "probe", composition: { kind: "dom" } }, applied: { x: 0, y: 0, w: 3, h: 4 } })),
-  settled: true, drawn: false, titlebar: 40,
+  grabs: [], settled: true, drawn: false, titlebar: 40,
 });
 
 // The host calls of the page as the assertions name them: a keyboard call names its surface.

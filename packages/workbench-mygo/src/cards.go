@@ -16,8 +16,8 @@ import (
 // The stage of a project: the cards of the plane with their head, tab strip, slot and status line, as packages/workbench/plane.js
 // draws them.
 
-// stageInset is the space around the plane: the half gap of the theme and the border of the stage.
-func (s *Shell) stageInset() float32 { return s.palette.Gap + s.palette.BorderWidth }
+// stageInset is the space around the plane: the margin of the stage, half the gap, and the border of the stage.
+func (s *Shell) stageInset() float32 { return s.palette.StagePad() + s.palette.BorderWidth }
 
 // drawWork draws the spaces and the stage of the shown project.
 func (s *Shell) drawWork(c *ui.Context, width, height float32) {
@@ -152,17 +152,24 @@ func (s *Shell) drawCard(c *ui.Context, id string, data *layout.CardData, rect l
 		return
 	}
 	border := s.palette.Edge
-	if id == s.focused && s.settings.Value("focusInd") != "corner" {
+	focusBorder := id == s.focused && s.settings.Value("focusInd") != "corner"
+	if focusBorder {
 		border = s.palette.Focus
 	}
 	card := s.binder.Press(c, "core.card", "core.card.focus", id, cardParam{Card: id})
 	card.ObserveInput(s.placeInput(CardScope(id)))
 	s.anchored("core.card/"+id, card)
-	// .card: its border says which card has the focus, without an outline.
+	// .card: its border says which card has the focus, without an outline. At the seam the card has no border of its own, and the
+	// focus paints the shared line around it (the seam rules of packages/workbench/app.css).
+	if focusBorder && s.palette.Seam() {
+		line := s.palette.BorderWidth
+		ui.Box(c).Absolute().Left(float32(rect.X)+inset-line).Top(float32(rect.Y)+inset-line).Size(float32(rect.W)+2*line, float32(rect.H)+2*line).
+			Border(line, s.palette.Focus).PassThrough()
+	}
 	card.FocusRing(false).Role(ui.RoleGroup).Label(id).Absolute().Left(float32(rect.X)+inset).Top(float32(rect.Y)+inset).Size(float32(rect.W), float32(rect.H)).
-		Background(s.palette.Card).Border(s.palette.BorderWidth, border).Radius(s.palette.Radius).Clip().Column().Children(func() {
+		Background(s.palette.Card).Border(s.palette.CardBorder(), border).Radius(s.palette.CardRadius()).Clip().Column().Children(func() {
 		// The border takes its width from every edge of the card, so the rows stand in what lies inside it.
-		edge := s.palette.BorderWidth
+		edge := s.palette.CardBorder()
 		inner := max(0, float32(rect.W)-2*edge)
 		head, foot := cardRows(float32(rect.H)-2*edge, s.metrics.headH, s.metrics.footH)
 		s.drawHead(c, id, data, sides, inner, head)
@@ -292,7 +299,7 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides 
 // cardLine is the color of the lines below the head of a card and above its foot: the rule of the plane when the cards share one line
 // (.chrome and .status of packages/workbench/app.css).
 func (s *Shell) cardLine() ui.Color {
-	if s.palette.Gap == 0 {
+	if s.palette.Seam() {
 		return s.palette.Rule
 	}
 	return s.palette.Edge

@@ -1,0 +1,187 @@
+{
+  "name": "sok-describe-summary-and-full",
+  "description": "sok describe holds the summary statuses of each tab, and sok describe --full holds every status value of each tab.",
+  "replay": true,
+  "variables": {
+    "snapshot": {
+      "type": "object",
+      "keys": [
+        "window",
+        "layout",
+        "plugins",
+        "groups",
+        "unregistered"
+      ],
+      "example": {
+        "window": {
+          "window": "main",
+          "title": "soksak",
+          "project": null
+        },
+        "layout": {
+          "space": "space-1",
+          "focused": "a",
+          "root": {
+            "direction": "row",
+            "size": 1,
+            "children": [
+              {
+                "card": "a",
+                "size": 0.5,
+                "frame": {
+                  "x": 0,
+                  "y": 40,
+                  "width": 600,
+                  "height": 760
+                },
+                "tabs": [
+                  {
+                    "id": "t-a",
+                    "plugin": "probe-plain"
+                  }
+                ]
+              },
+              {
+                "card": "b",
+                "size": 0.5,
+                "frame": {
+                  "x": 600,
+                  "y": 40,
+                  "width": 600,
+                  "height": 760
+                },
+                "tabs": [
+                  {
+                    "id": "t-b",
+                    "plugin": "probe-plain"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "plugins": [],
+        "groups": [
+          {
+            "owner": "core",
+            "status": [],
+            "commands": [],
+            "element": []
+          },
+          {
+            "owner": "surface",
+            "surface": "t-a",
+            "plugin": "probe-plain",
+            "kind": "tab",
+            "state": "open",
+            "visible": true,
+            "status": [
+              {
+                "name": "probe.busy",
+                "description": "Busy.",
+                "schema": {},
+                "summary": true,
+                "value": true
+              },
+              {
+                "name": "probe.detail",
+                "description": "Detail.",
+                "schema": {},
+                "value": "x"
+              }
+            ],
+            "commands": [],
+            "element": []
+          }
+        ],
+        "unregistered": []
+      }
+    }
+  },
+  "steps": [
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "windows.list"
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": [
+          {
+            "window": "main",
+            "title": "soksak",
+            "project": null,
+            "key": true,
+            "ready": true
+          }
+        ]
+      }
+    },
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "exposure.snapshot",
+        "params": {
+          "window": "main"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": "$snapshot"
+      }
+    },
+    {
+      "close": "client"
+    },
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "windows.list"
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": [
+          {
+            "window": "main",
+            "title": "soksak",
+            "project": null,
+            "key": true,
+            "ready": true
+          }
+        ]
+      }
+    },
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "exposure.snapshot",
+        "params": {
+          "window": "main"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": "$snapshot"
+      }
+    },
+    {
+      "close": "client"
+    }
+  ]
+}

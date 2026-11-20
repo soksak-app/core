@@ -15,7 +15,7 @@ const { compositor, verify } = page;
 /** Prepares the layout of the card with the seat of the surface "probe" and waits for the answer of the host. */
 const prepare = ({ card, inset, bands, grid }) => {
   const cardId = page.card.dataset.cardId;
-  return compositor.publishAhead(new Map([[cardId, card]]), new Map([[cardId, { id: "probe", dim: false, inset, bands, grid }]]), 40);
+  return compositor.publishAhead(new Map([[cardId, card]]), new Map([[cardId, { id: "probe", dim: false, inset, bands, grid }]]), 40, []);
 };
 
 /** The V7c row of a plane whose card slot "probe" is drawn at 0,34 400×240 after the preparation, with the element that the drawing added. */

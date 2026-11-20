@@ -142,6 +142,7 @@ func Functions() abi.NativeFunctions {
 		},
 		MainSpRegionSurfacePlaced:   func(a0 unsafe.Pointer) bool { return bool(C.main_sp_region_surface_placed(a0)) },
 		MainSpRegionText:            func(a0 unsafe.Pointer, a1 *byte) { C.main_sp_region_text(a0, (*C.char)(unsafe.Pointer(a1))) },
+		MainSpRegionWantFrame:       func(a0 unsafe.Pointer) { C.main_sp_region_want_frame(a0) },
 		MainSpScreens:               func() *byte { return (*byte)(unsafe.Pointer(C.main_sp_screens())) },
 		MainSpSurfaceClose:          func(a0 unsafe.Pointer) { C.main_sp_surface_close(a0) },
 		MainSpSurfaceCreate:         func(a0 uintptr) unsafe.Pointer { return C.main_sp_surface_create(C.uintptr_t(a0)) },

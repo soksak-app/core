@@ -1042,6 +1042,22 @@ fn agent_place(
     raw_text(encode(&place)?)
 }
 
+/// Whether a status entry is a summary status: its summary member, false when absent or null, and an error when not a boolean.
+fn summary_status(raw: &RawValue) -> Result<bool, Failure> {
+    let unexpected = || {
+        Failure::Other(format!(
+            "exposure.snapshot has a status whose summary is not a boolean: {}",
+            raw.get()
+        ))
+    };
+    let entry: serde_json::Value = serde_json::from_str(raw.get()).map_err(|_| unexpected())?;
+    match entry.get("summary") {
+        None | Some(serde_json::Value::Null) => Ok(false),
+        Some(serde_json::Value::Bool(summary)) => Ok(*summary),
+        Some(_) => Err(unexpected()),
+    }
+}
+
 /// One page of the description of a window from the result of exposure.snapshot. agent is `agent` of the description, None for
 /// null. full gives the rows as the snapshot gives them; after and limit select the page.
 fn describe_window(
@@ -1091,6 +1107,11 @@ fn describe_window(
         };
         for (kind, entries) in &group.lists {
             for entry in entries {
+                // Without full, a tab holds only its summary statuses (docs/spec/cli.md#window-description).
+                if !full && *kind == "status" && group.owner == "surface" && !summary_status(entry)?
+                {
+                    continue;
+                }
                 rows.push(entry_row(name, group, kind, entry, full)?);
             }
         }

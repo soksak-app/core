@@ -141,7 +141,48 @@ func (d *Declarations) HeightMetric(name string) (float64, bool) {
 // Palette is the colors and the shape of a theme in one mode.
 type Palette struct {
 	Bg, Card, Fg, Muted, Edge, Rule, Rail, Focus, No ui.Color
-	Radius, Gap, BorderWidth                         float32
+	// Gap is the gap setting: the full distance between two adjacent cards, 0 for the seam (docs/spec/settings.md#values).
+	Radius, Gap, BorderWidth float32
+}
+
+// Seam is whether the cards share one line: the gap is 0 (seam of packages/workbench/settings.js).
+func (p Palette) Seam() bool { return p.Gap == 0 }
+
+// HalfGap is half the distance between two adjacent cards, halfGap of packages/workbench/settings.js: at the seam it is half the border
+// width, so the cards stand one line apart and that line is the border that they share.
+func (p Palette) HalfGap() float32 {
+	if p.Seam() {
+		return p.BorderWidth / 2
+	}
+	return p.Gap / 2
+}
+
+// PlaneGap is the gap of the plane: the gap setting, or the border width at the seam.
+func (p Palette) PlaneGap() float64 { return float64(2 * p.HalfGap()) }
+
+// StagePad is the margin between the plane and the edge of the stage, stagePad of packages/workbench/settings.js: half the gap, and 0
+// at the seam.
+func (p Palette) StagePad() float32 {
+	if p.Seam() {
+		return 0
+	}
+	return p.HalfGap()
+}
+
+// CardBorder is the border width of a card: none at the seam, where the line between two cards is the line of the plane.
+func (p Palette) CardBorder() float32 {
+	if p.Seam() {
+		return 0
+	}
+	return p.BorderWidth
+}
+
+// CardRadius is the corner radius of a card: square at the seam (cardRadius of packages/workbench/settings.js).
+func (p Palette) CardRadius() float32 {
+	if p.Seam() {
+		return 0
+	}
+	return p.Radius
 }
 
 // DefaultPalette is the palette of the first theme of the declaration in its first mode.

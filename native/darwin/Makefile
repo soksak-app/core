@@ -5,7 +5,8 @@
 # directory. Every build regenerates the content and rewrites the file only when the content changes, so moving the
 # workspace points the file at the new location and leaving it in place keeps the file unchanged.
 #
-#   make          build/libsoksak-darwin.a, build/soksak-darwin.pc
+#   make          build/libsoksak-darwin.a, build/soksak-darwin.pc, build/sok-swap-bundle
+#   make build-swap-bundle  build/sok-swap-bundle, which installs an application bundle with one rename
 #   make test             runs the checks for input injection, the emulated activation, mouse button observation, window state, window button layout,
 #                         title bar height display inside a layout transaction, the start transaction of a re-read, display wait,
 #                         webview focus, the web inspector, overlapping webview input, view focus,
@@ -95,6 +96,8 @@ MYGO_LIBRARY := $(BUILD)/mygo/libsoksak-darwin.dylib
 HOST_CALLBACK_ABI_LIBRARY := $(BUILD)/libhost_callback_abi.dylib
 HOST_CALLBACK_WORKER_LIBRARY := $(BUILD)/libhost_callback_worker.dylib
 PKGCONFIG  := $(BUILD)/soksak-darwin.pc
+# The tool that installs an application bundle with one rename (src/tools/swap_bundle.m, docs/spec/hosts.md).
+SWAP_BUNDLE := $(BUILD)/sok-swap-bundle
 FRAMEWORKS := -framework Cocoa -framework WebKit -framework QuartzCore -framework CoreImage -framework IOSurface -framework Carbon -framework UserNotifications -lcompression -lz
 # The minimum macOS version is 14.4; the newest API that the sources call, the display link of a window or a view
 # (displayLinkWithTarget:selector: in capture.m and surface_layout.m), needs macOS 14.0. MACOS_MINIMUM of the Makefile of
@@ -115,9 +118,14 @@ ARCH       := arm64
 
 CFLAGS     := -arch $(ARCH) -fblocks -fmodules -Wall -Werror -O2 $(MINIMUM)
 
-.PHONY: build-host-callback-worker build-host-callback-abi build test test-app benchmark-site-cost test-capture-stop-intake test-app-activation test-app-virtual-ime test-app-input-reference-readiness test-app-activation-backspace test-app-activation-backspace-repeat build-ime-activation-target test-ime-cli test-app-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost benchmark-webview-resize-cadence build-test repeat repeat-suite clean pkgconfig-current
+.PHONY: build-host-callback-worker build-host-callback-abi build build-swap-bundle test test-app benchmark-site-cost test-capture-stop-intake test-app-activation test-app-virtual-ime test-app-input-reference-readiness test-app-activation-backspace test-app-activation-backspace-repeat build-ime-activation-target test-ime-cli test-app-activation-backspace-reference test-ime-source-restoration test-ime-wire-document benchmark benchmark-document benchmark-page-layers benchmark-occlusion benchmark-view-processes benchmark-region-cost benchmark-webview-resize-cadence build-test repeat repeat-suite clean pkgconfig-current
 
-build: $(LIBRARY) $(PKGCONFIG)
+build: $(LIBRARY) $(PKGCONFIG) $(SWAP_BUNDLE)
+
+build-swap-bundle: $(SWAP_BUNDLE)
+
+$(SWAP_BUNDLE): src/tools/swap_bundle.m Makefile | $(BUILD)
+	@clang $(CFLAGS) $< -o $@
 
 # Keep the dynamic artifact in its own directory so existing static consumers
 # never change link mode through the linker's -l search order.
@@ -284,6 +292,9 @@ NATIVE_TESTS = observe_test \
   host_api_process_footprint_test \
   window_motion_test \
   input_inject_test \
+  input_resize_edge_test \
+  input_person_press_test \
+  input_person_test \
   input_virtual_test \
   input_activate_test \
   input_virtual_key_equivalent_test \
@@ -363,6 +374,7 @@ NATIVE_TESTS = observe_test \
   image_region_decoration_test \
   iosurface_use_count_test \
   image_region_lease_test \
+  image_region_frame_test \
   host_test_regions_test \
   image_region_spare_test \
   image_region_scale_test \

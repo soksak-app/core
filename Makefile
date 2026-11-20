@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: check-push check-preflight check-events benchmark-rust benchmark-go check-tools install build test-all check-browser-example check-docs check-commits check-checklist-history install-hooks check-boundaries check-platform-files check-windows-build check-windows-rust check-host-files check-app-tests create-test-certificates test-app-card-sidebar-current test-app-view-focus-current test-app-shutdown benchmark-view-drag benchmark-resize-catch-up benchmark-empty-window benchmark-idle-tab benchmark-split-load repeat-app-test benchmark-b3 check-b3 check-exposure check-tests check-hosts-same test-language check-release test-rust-alone repeat-rust repeat-go repeat-node check-temp-files measure-page-memory measure-object-counts measure-host-calls measure-app-usage measure-terminal-redraw measure-trace-share measure-host-allocations check-app-update check-host-debug check-commands test-headless-owners
+.PHONY: check-push check-preflight check-events benchmark-rust benchmark-go check-tools install build test-all check-browser-example check-docs check-commits check-checklist-history install-hooks check-boundaries check-platform-files check-windows-build check-windows-rust check-host-files check-app-tests create-test-certificates test-app-card-sidebar-current test-app-view-focus-current test-app-shutdown benchmark-view-drag benchmark-resize-catch-up benchmark-empty-window benchmark-idle-tab benchmark-split-load benchmark-click-cpu benchmark-scroll-cpu benchmark-layout-redraw repeat-app-test benchmark-b3 check-b3 check-exposure check-tests check-hosts-same test-language check-release test-rust-alone repeat-rust repeat-go repeat-node check-temp-files measure-page-memory measure-object-counts measure-host-calls measure-app-usage measure-terminal-redraw measure-terminal-text measure-terminal-input measure-terminal-resize measure-trace-share measure-host-allocations check-app-update check-host-debug check-commands test-headless-owners
 
 check-docs:
 	@node scripts/check-docs.mjs
@@ -124,6 +124,34 @@ measure-terminal-redraw:
 	@case "$(CONFIG_DIR)" in '') echo "measure-terminal-redraw requires CONFIG_DIR=DIR PLUGIN=ID ROWS=N TRACE=0|1 [B3_OUT=FILE] [RATE=20] [INTERVAL=10] [SOK=PATH]" >&2; exit 2;; esac
 	@case "$(PLUGIN)" in '') echo "measure-terminal-redraw requires PLUGIN=ID, a plugin of the installed environment with PLUGIN.input and PLUGIN.screen" >&2; exit 2;; esac
 	@node scripts/measure-terminal-redraw.mjs --sok $(or $(SOK),target/debug/sok) --config-dir "$(CONFIG_DIR)" --plugin "$(PLUGIN)" --rows "$(ROWS)" --trace "$(TRACE)" --rate $(or $(RATE),20) --interval $(or $(INTERVAL),10) $(if $(B3_OUT),--b3-out "$(abspath $(B3_OUT))")
+
+# Reports the CPU time and the footprint of each process of the running application of CONFIG_DIR while one tab of PLUGIN holds each amount
+# of LINES text lines (scripts/measure-terminal-text.mjs, docs/operations/examples.md#terminal-text-measurement): idle over FRAMES display
+# periods of the window and over KEYS typed keys. SOK defaults to the sok binary of target/debug. PLUGIN has no default: the caller names a
+# plugin of the installed environment, and the target gates nothing.
+measure-terminal-text:
+	@case "$(CONFIG_DIR)" in '') echo "measure-terminal-text requires CONFIG_DIR=DIR PLUGIN=ID [LINES=1000,10000,100000] [FRAMES=600] [KEYS=40] [SOK=PATH]" >&2; exit 2;; esac
+	@case "$(PLUGIN)" in '') echo "measure-terminal-text requires PLUGIN=ID, a plugin of the installed environment with PLUGIN.input and PLUGIN.screen" >&2; exit 2;; esac
+	@node scripts/measure-terminal-text.mjs --sok $(or $(SOK),target/debug/sok) --config-dir "$(CONFIG_DIR)" --plugin "$(PLUGIN)" $(if $(LINES),--lines "$(LINES)") $(if $(FRAMES),--frames "$(FRAMES)") $(if $(KEYS),--keys "$(KEYS)")
+
+# Reports the CPU time and the footprint of each process of the running application of CONFIG_DIR while the input of a program in one
+# tab of PLUGIN grows (scripts/measure-terminal-input.mjs, docs/operations/examples.md#terminal-input-measurement): the line of the shell
+# and the input box of scripts/fixtures/input-box.mjs at each length of LENGTHS, idle over FRAMES display periods and over KEYS typed
+# keys, and a bracketed paste of each length of PASTES. SOK defaults to the sok binary of target/debug. PLUGIN has no default.
+measure-terminal-input:
+	@case "$(CONFIG_DIR)" in '') echo "measure-terminal-input requires CONFIG_DIR=DIR PLUGIN=ID [LENGTHS=0,1000,10000,50000] [PASTES=10000,50000] [FRAMES=600] [KEYS=40] [SOK=PATH]" >&2; exit 2;; esac
+	@case "$(PLUGIN)" in '') echo "measure-terminal-input requires PLUGIN=ID, a plugin of the installed environment with PLUGIN.input and PLUGIN.screen" >&2; exit 2;; esac
+	@node scripts/measure-terminal-input.mjs --sok $(or $(SOK),target/debug/sok) --config-dir "$(CONFIG_DIR)" --plugin "$(PLUGIN)" $(if $(LENGTHS),--lengths "$(LENGTHS)") $(if $(PASTES),--pastes "$(PASTES)") $(if $(FRAMES),--frames "$(FRAMES)") $(if $(KEYS),--keys "$(KEYS)")
+
+# Reports, for each frame of a recorded divider drag between two tabs of PLUGIN in a new project window of the running application of
+# CONFIG_DIR, whether each terminal still shows its prompt or its text (scripts/measure-terminal-resize.mjs,
+# docs/operations/examples.md#terminal-resize-measurement): CASES of prompt, output and alt, the divider DISTANCE points to the left and
+# back TIMES times over MS milliseconds each way. PLUGIN has no default: the caller names a plugin of the installed environment, and the
+# target gates nothing.
+measure-terminal-resize:
+	@case "$(CONFIG_DIR)" in '') echo "measure-terminal-resize requires CONFIG_DIR=DIR PLUGIN=ID [CASES=prompt,output,alt] [DISTANCE=200] [MS=900] [TIMES=2]" >&2; exit 2;; esac
+	@case "$(PLUGIN)" in '') echo "measure-terminal-resize requires PLUGIN=ID, a plugin of the installed environment with PLUGIN.input and PLUGIN.screen" >&2; exit 2;; esac
+	@node scripts/measure-terminal-resize.mjs --config-dir "$(CONFIG_DIR)" --plugin "$(PLUGIN)" $(if $(CASES),--cases "$(CASES)") $(if $(DISTANCE),--distance "$(DISTANCE)") $(if $(MS),--ms "$(MS)") $(if $(TIMES),--times "$(TIMES)")
 
 # Measures the share of the diagnostics in the memory of a running host: in the trace state TRACE=1 and then TRACE=0 it runs five repetitions of
 # measure-object-counts and prints the entry of the last repetition, which holds the footprint of the host process (docs/operations/examples.md).
@@ -382,7 +410,7 @@ TAURI_DEBUG_FEATURES = diagnostics,dev
 WAILS_DEBUG_TAGS     = diagnostics dev
 # The declared core release candidate is the RELEASE constant of scripts/check-versions.mjs.
 DIAGNOSTIC_RELEASE := $(filter 0.0.%,$(shell sed -n 's/^export const RELEASE = "\(.*\)";$$/\1/p' scripts/check-versions.mjs))
-.PHONY: build-native build-sok build-fixture-registry build-fixture-registry-from-sok copy-frontend-browser run-browser copy-frontend-wailsv3 copy-frontend-tauriv2 copy-frontend-mygo test-wailsv3 test-tauriv2 test-mygo test-hosts check-release-wailsv3 check-release-tauriv2 check-release-mygo check-rust-format check-rust-clippy check-go-format run-tauriv2 run-tauriv2-release build-tauriv2 build-tauriv2-release run-wailsv3 run-wailsv3-release build-wailsv3 build-wailsv3-release run-mygo run-mygo-release build-mygo build-mygo-release test-app test-app-capture-input-closetest-app-host-go test-app-host-go-library test-app-activation test-app-section-design benchmark-input-latency measure-examples-size run-tauriv2 run-tauriv2-release run-wailsv3 run-wailsv3-release test-app
+.PHONY: build-native build-sok build-fixture-registry build-fixture-registry-from-sok copy-frontend-browser run-browser copy-frontend-wailsv3 copy-frontend-tauriv2 copy-frontend-mygo copy-frontend-gpuikit build-gpuikit build-gpuikit-release test-wailsv3 test-tauriv2 test-mygo test-hosts check-release-wailsv3 check-release-tauriv2 check-release-mygo check-rust-format check-rust-clippy check-go-format run-tauriv2 run-tauriv2-release build-tauriv2 build-tauriv2-release run-wailsv3 run-wailsv3-release build-wailsv3 build-wailsv3-release run-mygo run-mygo-release build-mygo build-mygo-release test-app test-app-capture-input-closetest-app-host-go test-app-host-go-library test-app-activation test-app-section-design benchmark-input-latency measure-examples-size run-tauriv2 run-tauriv2-release run-wailsv3 run-wailsv3-release test-app
 
 # rustup installs cargo in $(CARGO_HOME)/bin, which is ~/.cargo/bin when CARGO_HOME is not set, and adds the path to
 # the shell profile. The shell of make does not read the profile, and a hosted runner sets CARGO_HOME outside HOME.
@@ -425,33 +453,45 @@ WAILS_DEBUG_BUNDLE   = target/debug/sok-wailsv3.app
 WAILS_RELEASE_BUNDLE = target/release/wailsv3/soksak.app
 MYGO_DEBUG_BUNDLE    = target/debug/sok-mygo.app
 MYGO_RELEASE_BUNDLE  = target/release/mygo/soksak.app
+GPUKIT_DEBUG_BUNDLE  = target/debug/sok-gpuikit.app
+GPUKIT_RELEASE_BUNDLE = target/release/gpuikit/soksak.app
 TAURI_DEBUG   = $(TAURI_DEBUG_BUNDLE)/Contents/MacOS/sok-tauriv2
 TAURI_RELEASE = $(TAURI_RELEASE_BUNDLE)/Contents/MacOS/sok-tauriv2
 WAILS_DEBUG   = $(WAILS_DEBUG_BUNDLE)/Contents/MacOS/sok-wailsv3
 WAILS_RELEASE = $(WAILS_RELEASE_BUNDLE)/Contents/MacOS/sok-wailsv3
 MYGO_DEBUG    = $(MYGO_DEBUG_BUNDLE)/Contents/MacOS/sok-mygo
 MYGO_RELEASE  = $(MYGO_RELEASE_BUNDLE)/Contents/MacOS/sok-mygo
+GPUKIT_DEBUG  = $(GPUKIT_DEBUG_BUNDLE)/Contents/MacOS/sok-gpuikit
+GPUKIT_RELEASE = $(GPUKIT_RELEASE_BUNDLE)/Contents/MacOS/sok-gpuikit
+# A build writes and signs the staging bundle <folder>/.staging/<name>.app of a bundle <folder>/<name>.app and installs it with one
+# rename, so a launch finds the complete earlier bundle or the complete new one (docs/spec/hosts.md). The argument is the bundle.
+staging = $(dir $(1)).staging/$(notdir $(1))
 
-# Writes the Info.plist and the Dock icon of the bundle. The first argument is the bundle and the second is the application. The app name
+# Writes the Info.plist and the Dock icon into the staging bundle of the bundle. The first argument is the bundle and the second is the application. The app name
 # is set by CFBundleDisplayName of Info.plist (the supported languages are declared in CFBundleLocalizations of the same plist).
 # When the name differs by language, the .lproj/InfoPlist.strings of that language is added again at that time.
-# The Contents of the bundle are created anew at each build so an earlier sidecar or other removed file cannot remain in the bundle. The Darwin
-# preparation helper checks the target before this mutation and refuses with the active process PID and bundle path when a process is executing
-# from its Contents/MacOS directory.
+# The staging bundle is created anew at each build so an earlier sidecar or other removed file cannot remain in the bundle. The Darwin
+# preparation helper checks the bundle first and refuses with the active process PID and bundle path when a process is executing from its
+# Contents/MacOS directory.
 bundle-info = node scripts/platform/darwin/prepare-app-bundle.mjs --bundle "$(1)" --app "$(2)"
 # So that the debug bundle runs beside the release application, appends .dev to the release identifier in Info.plist and uses the bundle name
 # as the executable name (docs/spec/hosts.md#frontend-and-executables). The first argument is the bundle and the second is the application.
-bundle-dev = plutil -replace CFBundleIdentifier -string "$$(plutil -extract CFBundleIdentifier raw $(1)/Contents/Info.plist).dev" $(1)/Contents/Info.plist \
-	&& plutil -replace CFBundleName -string sok-$(2) $(1)/Contents/Info.plist
-# Seals the executables and the Info.plist in the bundle with an ad hoc signature and registers the bundle with LaunchServices again. The Dock
-# shows the icon from the registered bundle information, and LaunchServices does not reread the registration when only files inside the bundle change.
+bundle-dev = plutil -replace CFBundleIdentifier -string "$$(plutil -extract CFBundleIdentifier raw $(call staging,$(1))/Contents/Info.plist).dev" $(call staging,$(1))/Contents/Info.plist \
+	&& plutil -replace CFBundleName -string sok-$(2) $(call staging,$(1))/Contents/Info.plist
+# Seals the executables and the Info.plist in the staging bundle of the bundle with an ad hoc signature. The argument is the bundle.
+bundle-sign = codesign --sign - --force --deep $(call staging,$(1))
+# Installs the signed staging bundle at the bundle with one rename through native/darwin/build/sok-swap-bundle, after the same check of
+# running processes and a verification of the signature, and registers the bundle with LaunchServices again. The Dock shows the icon from
+# the registered bundle information, and LaunchServices does not reread the registration when only files inside the bundle change.
 LSREGISTER = /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
-bundle-sign = codesign --sign - --force --deep $(1) && $(LSREGISTER) -f $(1)
+SWAP_BUNDLE = native/darwin/build/sok-swap-bundle
+bundle-install = node scripts/platform/darwin/prepare-app-bundle.mjs --install --bundle "$(1)" --swap $(SWAP_BUNDLE) && $(LSREGISTER) -f $(1)
 
 # Builds the command line sok (docs/spec/cli.md) and places it beside the executables of the bundle. The first argument is the bundle and the second is the profile.
 sok-wailsv3 = $(call go-env) go build -C packages/sok/go $(if $(filter release,$(2)),-trimpath) -ldflags "$(if $(filter release,$(2)),-s -w )$(GO_LINK)" $(if $(filter debug,$(2)),-tags "$(WAILS_DEBUG_TAGS)",$(if $(DIAGNOSTIC_RELEASE),-tags diagnostics)) -o ../../../$(1)/Contents/MacOS/sok ./src/cmd/sok
 sok-mygo = CGO_ENABLED=0 MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM) go build -C packages/sok/go $(if $(filter release,$(2)),-trimpath) -ldflags "$(if $(filter release,$(2)),-s -w )$(GO_INTERNAL_LINK)" $(if $(filter debug,$(2)),-tags "diagnostics dev mygo",-tags "$(if $(DIAGNOSTIC_RELEASE),diagnostics )mygo") -o ../../../$(1)/Contents/MacOS/sok ./src/cmd/sok
 sok-tauriv2 = $(CARGO_ENV) $(CARGO) build --locked -p soksak-sok $(if $(filter release,$(2)),--release) $(if $(filter debug,$(2)),--features $(TAURI_DEBUG_FEATURES),$(if $(DIAGNOSTIC_RELEASE),--features diagnostics)) && cp target/$(2)/sok $(1)/Contents/MacOS/sok
+sok-gpuikit = $(CARGO_ENV) $(CARGO) build --locked -p soksak-sok $(if $(filter release,$(2)),--release) $(if $(filter debug,$(2)),--features gpuikit,$(TAURI_DEBUG_FEATURES),$(if $(DIAGNOSTIC_RELEASE),--features gpuikit,diagnostics,--features gpuikit)) && cp target/$(2)/sok $(1)/Contents/MacOS/sok
 
 # The native library build reads only the native sources. The Go bindings that the checks of the callback and host API declarations
 # hold are compiled by the Go hosts, so those checks run with the builds and tests of the Go hosts, which install Go; the Rust host and
@@ -501,6 +541,8 @@ copy-wailsv3 = pnpm -F @soksak/wailsv3 exec sok-copy-frontend src/frontend $(1)
 copy-tauriv2 = pnpm -F @soksak/tauriv2 exec sok-copy-frontend src/frontend $(1)
 # No page runs the workbench on the mygo host, so its staging is the view root.
 copy-mygo = pnpm -F @soksak/mygo exec sok-copy-frontend src/frontend --no-main-page $(1)
+# The gpuikit application reads the staged page files beside its executable, so its staging folder is the bundle folder.
+copy-gpuikit = pnpm -F @soksak/gpuikit exec sok-copy-frontend frontend $(1)
 
 # Staging does not touch the bundle. The bundle is rebuilt only by the build targets. This keeps the executable of the debug app that checks use
 # from being removed by the staging of a check target such as test-native.
@@ -513,56 +555,86 @@ copy-frontend-tauriv2: build
 copy-frontend-mygo: build
 	@$(call copy-mygo,--diagnostics)
 
+copy-frontend-gpuikit: build
+	@$(call copy-gpuikit,--diagnostics)
+
 # generate_context! includes the frontend, so this rebuilds the crate.
 build-tauriv2: check-cargo build-native copy-frontend-tauriv2
 	@$(call bundle-info,$(TAURI_DEBUG_BUNDLE),tauriv2)
 	@$(call bundle-dev,$(TAURI_DEBUG_BUNDLE),tauriv2)
 	@touch apps/tauriv2/src/main.rs
 	@$(CARGO_ENV) $(CARGO) build --locked -p sok-tauriv2 --features $(TAURI_DEBUG_FEATURES)
-	@cp target/debug/sok-tauriv2 $(TAURI_DEBUG)
-	@$(call sok-tauriv2,$(TAURI_DEBUG_BUNDLE),debug)
+	@cp target/debug/sok-tauriv2 $(call staging,$(TAURI_DEBUG_BUNDLE))/Contents/MacOS/sok-tauriv2
+	@$(call sok-tauriv2,$(call staging,$(TAURI_DEBUG_BUNDLE)),debug)
 	@$(call bundle-sign,$(TAURI_DEBUG_BUNDLE))
+	@$(call bundle-install,$(TAURI_DEBUG_BUNDLE))
 
 build-tauriv2-release: check-cargo build-native build
 	@$(call bundle-info,$(TAURI_RELEASE_BUNDLE),tauriv2)
 	@$(call copy-tauriv2,$(if $(DIAGNOSTIC_RELEASE),--diagnostics))
 	@touch apps/tauriv2/src/main.rs
 	@$(CARGO_ENV) $(CARGO) build --locked --release -p sok-tauriv2 $(if $(DIAGNOSTIC_RELEASE),--features diagnostics)
-	@cp target/release/sok-tauriv2 $(TAURI_RELEASE)
-	@$(call sok-tauriv2,$(TAURI_RELEASE_BUNDLE),release)
+	@cp target/release/sok-tauriv2 $(call staging,$(TAURI_RELEASE_BUNDLE))/Contents/MacOS/sok-tauriv2
+	@$(call sok-tauriv2,$(call staging,$(TAURI_RELEASE_BUNDLE)),release)
 	@$(call bundle-sign,$(TAURI_RELEASE_BUNDLE))
+	@$(call bundle-install,$(TAURI_RELEASE_BUNDLE))
 
 build-wailsv3: check-host-callbacks check-host-api build-native copy-frontend-wailsv3
 	@$(call bundle-info,$(WAILS_DEBUG_BUNDLE),wailsv3)
 	@$(call bundle-dev,$(WAILS_DEBUG_BUNDLE),wailsv3)
-	@$(GO_ENV) go build -C apps/wailsv3 -tags "$(WAILS_DEBUG_TAGS)" -ldflags "$(GO_LINK)" -o ../../$(WAILS_DEBUG) ./src
-	@$(call sok-wailsv3,$(WAILS_DEBUG_BUNDLE),debug)
+	@$(GO_ENV) go build -C apps/wailsv3 -tags "$(WAILS_DEBUG_TAGS)" -ldflags "$(GO_LINK)" -o ../../$(call staging,$(WAILS_DEBUG_BUNDLE))/Contents/MacOS/sok-wailsv3 ./src
+	@$(call sok-wailsv3,$(call staging,$(WAILS_DEBUG_BUNDLE)),debug)
 	@$(call bundle-sign,$(WAILS_DEBUG_BUNDLE))
+	@$(call bundle-install,$(WAILS_DEBUG_BUNDLE))
 
 build-wailsv3-release: check-host-callbacks check-host-api build-native build
 	@$(call bundle-info,$(WAILS_RELEASE_BUNDLE),wailsv3)
 	@$(call copy-wailsv3,$(if $(DIAGNOSTIC_RELEASE),--diagnostics))
-	@$(GO_ENV) go build -C apps/wailsv3 -trimpath $(if $(DIAGNOSTIC_RELEASE),-tags diagnostics) -ldflags "-s -w $(GO_LINK)" -o ../../$(WAILS_RELEASE) ./src
-	@$(call sok-wailsv3,$(WAILS_RELEASE_BUNDLE),release)
+	@$(GO_ENV) go build -C apps/wailsv3 -trimpath $(if $(DIAGNOSTIC_RELEASE),-tags diagnostics) -ldflags "-s -w $(GO_LINK)" -o ../../$(call staging,$(WAILS_RELEASE_BUNDLE))/Contents/MacOS/sok-wailsv3 ./src
+	@$(call sok-wailsv3,$(call staging,$(WAILS_RELEASE_BUNDLE)),release)
 	@$(call bundle-sign,$(WAILS_RELEASE_BUNDLE))
+	@$(call bundle-install,$(WAILS_RELEASE_BUNDLE))
 
 build-mygo: build-native-mygo copy-frontend-mygo
 	@$(call bundle-info,$(MYGO_DEBUG_BUNDLE),mygo)
 	@$(call bundle-dev,$(MYGO_DEBUG_BUNDLE),mygo)
-	@CGO_ENABLED=0 MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM) go build -C apps/mygo -tags "diagnostics dev" -ldflags "$(GO_INTERNAL_LINK)" -o ../../$(MYGO_DEBUG) ./src
-	@mkdir -p $(MYGO_DEBUG_BUNDLE)/Contents/Frameworks
-	@cp native/darwin/build/mygo/libsoksak-darwin.dylib $(MYGO_DEBUG_BUNDLE)/Contents/Frameworks/
-	@$(call sok-mygo,$(MYGO_DEBUG_BUNDLE),debug)
+	@CGO_ENABLED=0 MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM) go build -C apps/mygo -tags "diagnostics dev" -ldflags "$(GO_INTERNAL_LINK)" -o ../../$(call staging,$(MYGO_DEBUG_BUNDLE))/Contents/MacOS/sok-mygo ./src
+	@mkdir -p $(call staging,$(MYGO_DEBUG_BUNDLE))/Contents/Frameworks
+	@cp native/darwin/build/mygo/libsoksak-darwin.dylib $(call staging,$(MYGO_DEBUG_BUNDLE))/Contents/Frameworks/
+	@$(call sok-mygo,$(call staging,$(MYGO_DEBUG_BUNDLE)),debug)
 	@$(call bundle-sign,$(MYGO_DEBUG_BUNDLE))
+	@$(call bundle-install,$(MYGO_DEBUG_BUNDLE))
+
+build-gpuikit: check-cargo build-native copy-frontend-gpuikit
+	@$(call bundle-info,$(GPUKIT_DEBUG_BUNDLE),gpuikit)
+	@$(call bundle-dev,$(GPUKIT_DEBUG_BUNDLE),gpuikit)
+	@$(CARGO_ENV) $(CARGO) build --locked -p sok-gpuikit --features gpuikit,$(TAURI_DEBUG_FEATURES)
+	@cp target/debug/sok-gpuikit $(call staging,$(GPUKIT_DEBUG_BUNDLE))/Contents/MacOS/sok-gpuikit
+	@mkdir -p $(call staging,$(GPUKIT_DEBUG_BUNDLE))/Contents/MacOS
+	@cp -R apps/gpuikit/frontend $(call staging,$(GPUKIT_DEBUG_BUNDLE))/Contents/MacOS/frontend
+	@$(call sok-gpuikit,$(call staging,$(GPUKIT_DEBUG_BUNDLE)),debug)
+	@$(call bundle-sign,$(GPUKIT_DEBUG_BUNDLE))
+	@$(call bundle-install,$(GPUKIT_DEBUG_BUNDLE))
+
+build-gpuikit-release: check-cargo build-native build
+	@$(call bundle-info,$(GPUKIT_RELEASE_BUNDLE),gpuikit)
+	@$(call copy-gpuikit,$(if $(DIAGNOSTIC_RELEASE),--diagnostics))
+	@$(CARGO_ENV) $(CARGO) build --locked --release -p sok-gpuikit $(if $(DIAGNOSTIC_RELEASE),--features gpuikit,diagnostics,--features gpuikit)
+	@cp target/release/sok-gpuikit $(call staging,$(GPUKIT_RELEASE_BUNDLE))/Contents/MacOS/sok-gpuikit
+	@cp -R apps/gpuikit/frontend $(call staging,$(GPUKIT_RELEASE_BUNDLE))/Contents/MacOS/frontend
+	@$(call sok-gpuikit,$(call staging,$(GPUKIT_RELEASE_BUNDLE)),release)
+	@$(call bundle-sign,$(GPUKIT_RELEASE_BUNDLE))
+	@$(call bundle-install,$(GPUKIT_RELEASE_BUNDLE))
 
 build-mygo-release: build-native-mygo build
 	@$(call bundle-info,$(MYGO_RELEASE_BUNDLE),mygo)
 	@$(call copy-mygo,$(if $(DIAGNOSTIC_RELEASE),--diagnostics))
-	@CGO_ENABLED=0 MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM) go build -C apps/mygo -trimpath $(if $(DIAGNOSTIC_RELEASE),-tags diagnostics) -ldflags "-s -w $(GO_INTERNAL_LINK)" -o ../../$(MYGO_RELEASE) ./src
-	@mkdir -p $(MYGO_RELEASE_BUNDLE)/Contents/Frameworks
-	@cp native/darwin/build/mygo/libsoksak-darwin.dylib $(MYGO_RELEASE_BUNDLE)/Contents/Frameworks/
-	@$(call sok-mygo,$(MYGO_RELEASE_BUNDLE),release)
+	@CGO_ENABLED=0 MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM) go build -C apps/mygo -trimpath $(if $(DIAGNOSTIC_RELEASE),-tags diagnostics) -ldflags "-s -w $(GO_INTERNAL_LINK)" -o ../../$(call staging,$(MYGO_RELEASE_BUNDLE))/Contents/MacOS/sok-mygo ./src
+	@mkdir -p $(call staging,$(MYGO_RELEASE_BUNDLE))/Contents/Frameworks
+	@cp native/darwin/build/mygo/libsoksak-darwin.dylib $(call staging,$(MYGO_RELEASE_BUNDLE))/Contents/Frameworks/
+	@$(call sok-mygo,$(call staging,$(MYGO_RELEASE_BUNDLE)),release)
 	@$(call bundle-sign,$(MYGO_RELEASE_BUNDLE))
+	@$(call bundle-install,$(MYGO_RELEASE_BUNDLE))
 
 run-tauriv2: build-tauriv2
 	@./$(TAURI_DEBUG)
@@ -708,6 +780,21 @@ benchmark-split-load:
 
 benchmark-plain-view:
 	@pnpm -F @soksak/e2e run benchmark:plain-view
+
+# Three benchmarks of cards whose view holds a native image region drawn by a sidecar, the raster probe fixture, against the running
+# applications of SOKSAK_APP (all three by default); each reports its figures and judges none. benchmark-click-cpu
+# (docs/operations/examples.md#click-cpu-benchmark) clicks ten cards 100 times; benchmark-scroll-cpu
+# (docs/operations/examples.md#scroll-cpu-benchmark) scrolls 10000 retained lines with native wheels; benchmark-layout-redraw
+# (docs/operations/examples.md#layout-redraw-benchmark) counts the recorded frames in which a card shows none of its raster during a
+# balance, a divider drag and a leader change.
+benchmark-click-cpu:
+	@pnpm -F @soksak/e2e run benchmark:click-cpu
+
+benchmark-scroll-cpu:
+	@pnpm -F @soksak/e2e run benchmark:scroll-cpu
+
+benchmark-layout-redraw:
+	@pnpm -F @soksak/e2e run benchmark:layout-redraw
 
 # The time from a key to its arrival in the input probe of an open application (docs/operations/examples.md#input-latency): APP names the application, by
 # default mygo, and SOKSAK_CONFIG_DIR the configuration folder that the application runs with.

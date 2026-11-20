@@ -740,7 +740,14 @@ pub fn close_image(_image: Handle) -> Result<(), String> {
     missing("image removal")
 }
 
-pub fn service_process_exists(_pid: u32) -> Result<bool, String> {
+pub fn want_image_frame(_image: Handle) -> Result<(), String> {
+    missing("image frame request")
+}
+
+pub fn service_process_exists(
+    _pid: u32,
+    _published: std::time::SystemTime,
+) -> Result<bool, String> {
     missing("service process inspection")
 }
 

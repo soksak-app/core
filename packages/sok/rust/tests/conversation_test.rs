@@ -737,3 +737,25 @@ fn claude_image_only_message_is_emitted_with_its_kind() {
         )
     );
 }
+
+// contract: conversation.refuses-a-home-that-is-not-utf-8
+// The event log of the built sok also reads HOME for the configuration folder and reports the same refusal before the command.
+#[test]
+fn home_that_is_not_utf8_is_refused_with_its_bytes_escaped() {
+    use std::os::unix::ffi::OsStrExt;
+    let home = std::ffi::OsStr::from_bytes(b"/nonexistent/h\xffme");
+
+    let (code, stdout, stderr) = run_conversation(
+        Path::new(home),
+        &["--agent", "claude-code", "--cwd", "/work/project"],
+    );
+
+    assert_eq!(
+        (code, stdout.as_str(), stderr.as_str()),
+        (
+            1,
+            "",
+            "sok: event log: the default configuration directory is unknown: HOME is not UTF-8: /nonexistent/h\\xffme\nsok: HOME is not UTF-8: /nonexistent/h\\xffme\n"
+        )
+    );
+}

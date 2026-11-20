@@ -116,7 +116,7 @@ func TestAValueOfAnotherFormIsRefusedWithItsReason(t *testing.T) {
 		{"sidebarOrder", []any{"left", "left", "top", "bottom"}, `Invalid setting sidebarOrder: ["left","left","top","bottom"] is not an order of "left", "right", "top", "bottom"`},
 		{"sidebarOrder", []any{"left", "right", "top"}, `Invalid setting sidebarOrder: ["left","right","top"] is not an order of "left", "right", "top", "bottom"`},
 		{"sidebarOrder", "left,right,top,bottom", `Invalid setting sidebarOrder: "left,right,top,bottom" is not an order of "left", "right", "top", "bottom"`},
-		{"gap", 99.0, `Invalid setting gap: 99 is not an integer from 0 to 24`},
+		{"gap", 99.0, `Invalid setting gap: 99 is not an integer from 0 to 48`},
 		{"memorySaverDelay", 1.0, `Invalid setting memorySaverDelay: 1`},
 		{"acme.level", 9.0, `Invalid setting acme.level: integer value is outside its declared range`},
 		{"nothing", 1.0, `Unknown setting: nothing`},

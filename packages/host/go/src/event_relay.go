@@ -496,15 +496,13 @@ func validateViewLogBatch(plugin, surface, page string, timeOrigin float64, requ
 				return fmt.Errorf("events[%d]: page.start url must be non-empty text", index)
 			}
 		case "page.log.clock", "page.log.dropped":
-		case "page.log.gated":
-			return fmt.Errorf("events[%d]: a view has no policy gate and cannot write page.log.gated", index)
 		default:
 			prefix := "plugin." + plugin + "."
 			if !strings.HasPrefix(name, prefix) || len(name) == len(prefix) {
 				return fmt.Errorf("events[%d]: event %q is not a record of plugin %q or an allowed page record", index, name, plugin)
 			}
 			if _, present := fields["surface"]; present {
-				return fmt.Errorf("events[%d]: plugin record must not supply its surface", index)
+				return fmt.Errorf("events[%d]: plugin event %q cannot set its owning surface", index, name)
 			}
 		}
 	}

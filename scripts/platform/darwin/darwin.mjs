@@ -5,7 +5,7 @@ import { realpathSync } from 'node:fs';
 import { promisify } from 'node:util';
 import { macosMinimum } from '../../macos-minimum.mjs';
 
-export { applicationArtifact, applicationExecutables } from './artifacts.mjs';
+export { applicationArtifact, applicationExecutables, verifyApplicationArtifact } from './artifacts.mjs';
 export { crashReports, listProcesses, openApplication, quitApplication, runNativeTests, waitForLockRelease } from './end-to-end.mjs';
 export { processExecutable } from './process-executable.mjs';
 export { launchdServices as processServices, sampleProcess as processStacks } from '@soksak/window-check/stall-sample.mjs';

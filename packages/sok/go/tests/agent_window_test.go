@@ -277,7 +277,7 @@ func TestDescribePrintsThePagesOfWindowDescribe(t *testing.T) {
 		_, hasLayout := printed["layout"]
 		_, hasPlugins := printed["plugins"]
 		_, hasAgent := printed["agent"]
-		if (page == 0) != (hasWindow && hasLayout && hasPlugins && hasAgent) || printed["total"] != float64(8) {
+		if (page == 0) != (hasWindow && hasLayout && hasPlugins && hasAgent) || printed["total"] != float64(7) {
 			t.Fatalf("page %d: %s", page, stdout)
 		}
 		rows, _ := printed["rows"].([]any)
@@ -290,7 +290,7 @@ func TestDescribePrintsThePagesOfWindowDescribe(t *testing.T) {
 		}
 		after = next
 	}
-	want := "[host status host.window host command host.window.reload core status core.screen core command core.layout.open core element core.tab terminal-1 status terminal.title terminal-1 command terminal.input unregistered command browser.reload]"
+	want := "[host status host.window host command host.window.reload core status core.screen core command core.layout.open core element core.tab terminal-1 command terminal.input unregistered command browser.reload]"
 	if fmt.Sprint(keys) != want {
 		t.Fatalf("rows %v\nwant %s", keys, want)
 	}
@@ -380,5 +380,21 @@ func TestContextTakesOnlyTheConfigurationDirectory(t *testing.T) {
 		if code != 2 || stdout != "" || !strings.HasPrefix(stderr, c.want) {
 			t.Fatalf("%v: code %d stdout %q stderr %q", c.args, code, stdout, stderr)
 		}
+	}
+}
+
+// contract: cli.describe.summary-and-full
+func TestDescribeSummaryHoldsSummaryStatusesAndFullHoldsEveryStatus(t *testing.T) {
+	player := playCase(t, "sok-describe-summary-and-full")
+	_, summary, stderr := run("describe", "--config-dir", player.configDir)
+	if !strings.Contains(summary, `"probe.busy"`) {
+		t.Fatalf("summary lacks the tab statuses: stderr %q stdout %s", stderr, summary)
+	}
+	if strings.Contains(summary, `"probe.detail"`) {
+		t.Fatalf("summary holds a status that is not a summary: %s", summary)
+	}
+	_, full, stderr := run("describe", "--full", "--config-dir", player.configDir)
+	if !strings.Contains(full, `"probe.detail"`) || !strings.Contains(full, `"probe.busy"`) {
+		t.Fatalf("full lacks the statuses of the tab: stderr %q stdout %s", stderr, full)
 	}
 }

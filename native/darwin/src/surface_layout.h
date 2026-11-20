@@ -90,6 +90,12 @@ void surfaceLayoutBegin(void *owner, uint64_t ticket, void (^ready)(int));
 // is not told again when it comes back. The end of the layout hold is one observer
 // (docs/spec/native-surfaces.md#layout-transaction). An observer stays for the life of the process.
 void surfaceInputActionObserve(void (^observer)(NSEvent *event));
+// Adds an observer of the moves and scrolls of the pointer: observer(event) runs on the main thread for every mouse move
+// (NSEventTypeMouseMoved) and every scroll that reaches -[NSApplication sendEvent:], before any monitor, gate or view sees the
+// event, and once for each event: an event that the hold kept is not told again when it comes back. These events are not told to
+// the observers of surfaceInputActionObserve, so they end no hold (docs/spec/native-surfaces.md#layout-transaction). An observer
+// stays for the life of the process.
+void surfaceInputPointerObserve(void (^observer)(NSEvent *event));
 #endif
 // Keeps an injected pointer call behind the input of owner that waits and returns true, or returns false when it runs now. A press
 // at the point, in window coordinates, waits as surfaceLayoutPressWaits says, and a press ends the wait of the keys for the

@@ -224,14 +224,17 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 
    Focus paints the seam itself in its own color. The outline is drawn outside the card rect, and that outside
    is the seam. Painting the line of the head or the status line would paint another line 22px or
-   32px away from the seam, which does not express the boundary of the card.          */
+   32px away from the seam, which does not express the boundary of the card.
+
+   The drop zone of a tab drag has the shape of the seam: no radius and a border of the border width, the width of
+   the focus line. A wider border would draw a line thicker than the seam around the place where the tab lands. */
 :root[data-seam=line] .stage{--stage-pad:0px;border-radius:0}
 :root[data-seam=line] .card{border-width:0;border-radius:0}
 :root[data-seam=line] .chrome{border-bottom-color:var(--rule)}
 :root[data-seam=line] .status{border-top-color:var(--rule)}
 :root[data-seam=line][data-focus-ind=border] .card[data-focused=true]{
   outline:var(--bw) solid var(--focus)}
-:root[data-seam=line] .drop{border-radius:0}
+:root[data-seam=line] .drop{border-radius:0;border:var(--bw) solid var(--focus)}
 
 /* Card head */
 .chrome{display:flex;align-items:center;gap:var(--card-head-gap);padding:0 var(--card-head-pad);overflow:hidden;

@@ -355,7 +355,7 @@ func TestAChangeOfTheBackingScaleRefreshesTheRastersOfTheWindow(t *testing.T) {
 		})
 	})
 	key := ImageKey{Surface: "tab", Name: "picture"}
-	if err := s.images.Reserve(key, &ImageOwner{}); err != nil {
+	if err := s.images.Reserve(key, &ImageOwner{SidecarName: "fixture-sidecar", SidecarOwner: s}); err != nil {
 		t.Fatal(err)
 	}
 	if !s.images.Set(key, handle) {
@@ -365,14 +365,17 @@ func TestAChangeOfTheBackingScaleRefreshesTheRastersOfTheWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.images.SetSurfaceVisible(key.Surface, true)
-	// The window state is read before the drawing state is taken as sent, so a listener of the window finds no change of the drawing state and
-	// sends no message to the supplier of the image, which this region (reserved without a supplier) has none.
+	// The window state is read before the drawing state is recorded as sent, so a listener of the window finds no change of the drawing
+	// state and sends no drawing message. The supplier is declared by no plugin, so the configuration of the refresh fails to send and
+	// the test judges only the read of the placement.
 	var read error
 	runOnMainThread(func() { read = s.readOnScreen() })
 	if read != nil {
 		t.Fatalf("read the window state: %v", read)
 	}
-	s.images.DrawingChanges()
+	for _, change := range s.images.DrawingChanges() {
+		s.images.MarkDrawingSent(change)
+	}
 	for _, listener := range window.listeners[WindowMove] {
 		listener()
 	}

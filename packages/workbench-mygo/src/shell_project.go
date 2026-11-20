@@ -439,6 +439,10 @@ func (s *Shell) loadSpace(project *projectRecord) error {
 	if err != nil {
 		return err
 	}
+	// The same refusal as readStoredSpace of packages/workbench/projects.js (docs/spec/projects.md#persistence).
+	if space.Parties != nil {
+		return fmt.Errorf("projects.json: project %s, space %s: obsolete member parties", project.Root, space.ID)
+	}
 	var stored storedLayout
 	if err := json.Unmarshal(space.Layout, &stored); err != nil {
 		return fmt.Errorf("space %s: %w", space.ID, err)
@@ -448,7 +452,7 @@ func (s *Shell) loadSpace(project *projectRecord) error {
 	}
 	s.planeSpace = space.ID
 	s.tabsNamed = stored.Named
-	gap := float64(2 * s.palette.Gap) // The gap of a theme is the half width of the passage between two cards.
+	gap := s.palette.PlaneGap()
 	width, height := 0.0, 0.0
 	if s.plane != nil {
 		width, height = s.plane.Width(), s.plane.Height()

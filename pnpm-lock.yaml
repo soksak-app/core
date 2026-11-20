@@ -20,7 +20,6 @@ overrides:
 
 patchedDependencies:
   '@parcel/watcher@2.6.0': 6ef848fc6cd89af1a4cb952b3d3829cd7e856f2344b017f38afd5917e6187b9a
-  '@soksak/kit@0.0.14': e8de6923f59e902ebc8c9de2741026cb32ace0b697ff9cd959bfa41629bb4e3b
 
 importers:
 
@@ -34,8 +33,8 @@ importers:
         version: link:packages/window-check
     devDependencies:
       '@soksak/kit':
-        specifier: https://github.com/soksak-app/kit/releases/download/v0.0.14/soksak-kit-0.0.14.tgz
-        version: https://github.com/soksak-app/kit/releases/download/v0.0.14/soksak-kit-0.0.14.tgz(patch_hash=e8de6923f59e902ebc8c9de2741026cb32ace0b697ff9cd959bfa41629bb4e3b)
+        specifier: https://github.com/soksak-app/kit/releases/download/v0.0.15/soksak-kit-0.0.15.tgz
+        version: https://github.com/soksak-app/kit/releases/download/v0.0.15/soksak-kit-0.0.15.tgz
       '@yarnpkg/parsers':
         specifier: 3.1.0
         version: 3.1.0
@@ -61,6 +60,16 @@ importers:
       fake-indexeddb:
         specifier: ^6.2.5
         version: 6.2.5
+
+  apps/gpuikit:
+    dependencies:
+      '@soksak/workbench':
+        specifier: workspace:*
+        version: link:../../packages/workbench
+    devDependencies:
+      '@soksak/plugin-api':
+        specifier: workspace:*
+        version: link:../../packages/plugin-api
 
   apps/mygo:
     dependencies:
@@ -116,6 +125,8 @@ importers:
   packages/client: {}
 
   packages/host/go: {}
+
+  packages/host/gpuikit: {}
 
   packages/host/mygo: {}
 
@@ -260,9 +271,9 @@ packages:
     resolution: {integrity: sha512-7FNeNl8NCE7aINx7WXiKQrPYZWC/hvrTsmk6zmxbI7LTXE7hVek/n8AfVgpe2y82zl3w0HvCHN0bVKMBoJcC0w==}
     engines: {node: '>= 10.0.0'}
 
-  '@soksak/kit@https://github.com/soksak-app/kit/releases/download/v0.0.14/soksak-kit-0.0.14.tgz':
-    resolution: {integrity: sha512-xeTLFb6TopYTwfs7U9iZjlbxYN4sa9lhfBVGaXgtNGyhhNNJ7y0wvLegOnhTXZeHTbpW8m02g4RZo0OLoqKSZA==, tarball: https://github.com/soksak-app/kit/releases/download/v0.0.14/soksak-kit-0.0.14.tgz}
-    version: 0.0.14
+  '@soksak/kit@https://github.com/soksak-app/kit/releases/download/v0.0.15/soksak-kit-0.0.15.tgz':
+    resolution: {integrity: sha512-3OX2YRK/3Sq3KxeGnByuqix80FerYq85wbM8No5dK4nf+tviCdtm1wZR1m6X1zZax87GFT8LWtRgfx4L/hXeVA==, tarball: https://github.com/soksak-app/kit/releases/download/v0.0.15/soksak-kit-0.0.15.tgz}
+    version: 0.0.15
     hasBin: true
 
   '@typescript/typescript-aix-ppc64@7.0.2':
@@ -619,7 +630,7 @@ snapshots:
       node-addon-api: 7.1.1
       picomatch: 4.0.7
 
-  '@soksak/kit@https://github.com/soksak-app/kit/releases/download/v0.0.14/soksak-kit-0.0.14.tgz(patch_hash=e8de6923f59e902ebc8c9de2741026cb32ace0b697ff9cd959bfa41629bb4e3b)':
+  '@soksak/kit@https://github.com/soksak-app/kit/releases/download/v0.0.15/soksak-kit-0.0.15.tgz':
     dependencies:
       ajv: 8.20.0
       smol-toml: 1.9.1

@@ -19,6 +19,7 @@ A case is one tracked JSON file in this directory. The consumer is the workbench
 | `description` | yes | One sentence on what the call does and what the reply is, in English. |
 | `replay` | yes | `true` when the producer runs the case against the real host. `false` needs `reason`. |
 | `reason` | when `replay` is `false` | Why the producer does not run the case. |
+| `filter` | no | A list of call names that the reader answers without matching them with a step and without counting them in `calls`. The names are `notificationState` (answered with `{"authorization": "notDetermined", "error": null}`), `setTheme` (answered with `null`) and `setMenuLanguage` (answered with `null`). The reader refuses any other name. |
 | `variables` | no | The values that the host or the page chooses. Each variable is `"<name>": {"type": ..., "example": ..., "source": ...}`. |
 | `writer` | no | The state of the event writer of the host that the case runs against. `policy` is `true` when the writer has a policy file (`log-policy.json` of the configuration directory). Without the member, the writer has no policy file. |
 | `steps` | yes | The ordered exchanges. An empty array means that the page sends no call. |

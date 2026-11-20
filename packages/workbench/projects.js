@@ -250,6 +250,7 @@ export function begin(snapshot) {
   begun = opened.id;
   // The work area screen gives the plane its size, so the screen changes first and then the plane is drawn. A plane drawn without a size is drawn again on the next frame.
   changed();
+  readStoredSpace(opened, opened.spaces.find((s) => s.id === opened.activeSpaceId));
   listener.load(layout, opened.activeSpaceId);
   const recreated = opened.spaces.find((s) => s.id === opened.activeSpaceId);
   const previousRecreated = recreated.layout;
@@ -425,6 +426,15 @@ async function readProjects(readSnapshot = () => store.snapshot()) {
   return ended;
 }
 
+/**
+ * Reads a stored space of projects.json (docs/spec/projects.md#persistence). No current form of a space object holds the member
+ * `parties`, so a space that holds it is refused with an error that names the file, the project root, the space and the member.
+ */
+export function readStoredSpace(project, space) {
+  if (Object.hasOwn(space, "parties")) throw new Error(`projects.json: project ${project.root}, space ${space.id}: obsolete member parties`);
+  return space;
+}
+
 export function keep(path) {
   const project = active();
   if (!project || !listener || browsing) return writing;
@@ -500,6 +510,7 @@ async function showProject(id, openedProject = null, stagedOwner = false) {
   history.replaceState(null, "", `${location.pathname}?project=${encodeURIComponent(id)}`);
   changed();
   savedLayout = "";
+  readStoredSpace(project, project.spaces.find((s) => s.id === project.activeSpaceId));
   listener.load(project.spaces.find((s) => s.id === project.activeSpaceId).layout, project.activeSpaceId);
   changed();
   // Replace the start-document preview synchronously before waking mounts that could declare native composition.
@@ -612,6 +623,7 @@ export const move = (id, delta) => store.move(id, delta);
 
 function restore(path) {
   const p = active();
+  readStoredSpace(p, p.spaces.find((s) => s.id === p.activeSpaceId));
   listener.load(p.spaces.find((s) => s.id === p.activeSpaceId).layout, p.activeSpaceId);
   changed();
   keep(path);

@@ -27,7 +27,7 @@ async function v7a(wire, slot, { composition } = {}) {
   page.mark({ composition });
   const cardId = page.card.dataset.cardId;
   try {
-    await compositor.publishAhead(new Map([[cardId, card]]), new Map([[cardId, { id: "probe", dim: false, inset, grid: 2 }]]), 40);
+    await compositor.publishAhead(new Map([[cardId, card]]), new Map([[cardId, { id: "probe", dim: false, inset, grid: 2 }]]), 40, []);
     return verify().find((row) => row.name.startsWith("V7a "));
   } finally {
     page.reset();
@@ -64,7 +64,7 @@ test("a drawn slot that its commit neither places nor defers fails V7a", { timeo
   page.measure(page.planeEl, rect(0, 0, 400, 300));
   page.measure(page.slot, rect(1, 1, 10, 10));
   try {
-    await compositor.publishAhead(new Map(), new Map(), 40);
+    await compositor.publishAhead(new Map(), new Map(), 40, []);
     page.mark();
     const row = verify().find((item) => item.name.startsWith("V7a "));
     assert.equal(row.ok, false);

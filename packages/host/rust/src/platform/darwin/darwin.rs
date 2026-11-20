@@ -49,6 +49,9 @@ mod image;
 #[path = "input.rs"]
 mod input;
 #[cfg(feature = "diagnostics")]
+#[path = "input_person.rs"]
+mod input_person;
+#[cfg(feature = "diagnostics")]
 #[path = "input_reference.rs"]
 mod input_reference;
 #[cfg(all(test, feature = "diagnostics"))]
@@ -57,6 +60,9 @@ mod input_reference_test;
 #[cfg(feature = "diagnostics")]
 #[path = "input_source.rs"]
 mod input_source;
+#[cfg(test)]
+#[path = "input_test.rs"]
+mod input_test;
 #[path = "layout.rs"]
 mod layout;
 #[path = "link.rs"]
@@ -582,6 +588,10 @@ impl Platform for Darwin {
         image::close(image);
         Ok(())
     }
+    fn want_image_frame(&self, image: Handle) -> Result<(), String> {
+        image::want_frame(image);
+        Ok(())
+    }
 
     fn begin_layout(
         &self,
@@ -834,6 +844,16 @@ impl Platform for Darwin {
         input_reference::end(window, reason);
     }
     #[cfg(feature = "diagnostics")]
+    fn dispatch_person_input(
+        &self,
+        window: Handle,
+        action: &str,
+        x: f64,
+        y: f64,
+    ) -> Result<(), String> {
+        input_person::dispatch(window, action, x, y)
+    }
+    #[cfg(feature = "diagnostics")]
     fn input_source(&self) -> Result<(Option<String>, String), String> {
         input_source::current()
     }
@@ -1012,8 +1032,12 @@ impl Platform for Darwin {
     fn secure_service_directory(&self, path: &Path) -> Result<(), String> {
         private_files::secure_service_directory(path)
     }
-    fn service_process_exists(&self, pid: u32) -> Result<bool, String> {
-        endpoint::service_process_exists(pid)
+    fn service_process_exists(
+        &self,
+        pid: u32,
+        published: std::time::SystemTime,
+    ) -> Result<bool, String> {
+        endpoint::service_process_exists(pid, published)
     }
     fn wait_service_process_end(&self, pid: u32, stop: &super::StopSignal) -> Result<bool, String> {
         endpoint::wait_service_process_end(pid, stop)

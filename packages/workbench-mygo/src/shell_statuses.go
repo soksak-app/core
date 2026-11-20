@@ -335,10 +335,31 @@ func (s *Shell) focusMark() *layout.Rect {
 		return nil
 	}
 	const out = 1 // The chrome metric focus-mark-t.
-	edge := float64(s.palette.BorderWidth)
+	edge := float64(s.palette.CardBorder())
 	shrunkHead, shrunkFoot := cardRows(float32(rect.H-2*edge), s.metrics.headH, s.metrics.footH)
 	head, foot := float64(shrunkHead), float64(shrunkFoot)
 	return &layout.Rect{X: rect.X + edge - out, Y: rect.Y + edge + head - out, W: rect.W - 2*edge + 2*out, H: rect.H - 2*edge - head - foot + 2*out}
+}
+
+// outlinePath returns the path of an outline, with each point of the plane placed in the stage by at.
+func outlinePath(outline layout.Outline, at func(x, y float64) (float32, float32)) ui.Path {
+	var path ui.Path
+	for _, step := range OutlineDrawSteps(outline) {
+		x, y := at(step.X, step.Y)
+		switch step.Op {
+		case DrawMove:
+			path.MoveTo(x, y)
+		case DrawLine:
+			path.LineTo(x, y)
+		case DrawCube:
+			c1x, c1y := at(step.C1X, step.C1Y)
+			c2x, c2y := at(step.C2X, step.C2Y)
+			path.CubeTo(c1x, c1y, c2x, c2y, x, y)
+		case DrawClose:
+			path.Close()
+		}
+	}
+	return path
 }
 
 // drawRail draws the rail outline and the focus corners over the cards of the stage. inset is the origin of the plane in the stage.
@@ -347,22 +368,7 @@ func (s *Shell) drawRail(p *ui.Painter, stage ui.Rect, inset float32) {
 		return stage.X + inset + float32(x), stage.Y + inset + float32(y)
 	}
 	for _, group := range s.railGroups() {
-		var path ui.Path
-		for _, step := range OutlineDrawSteps(group.Outline) {
-			x, y := at(step.X, step.Y)
-			switch step.Op {
-			case DrawMove:
-				path.MoveTo(x, y)
-			case DrawLine:
-				path.LineTo(x, y)
-			case DrawCube:
-				c1x, c1y := at(step.C1X, step.C1Y)
-				c2x, c2y := at(step.C2X, step.C2Y)
-				path.CubeTo(c1x, c1y, c2x, c2y, x, y)
-			case DrawClose:
-				path.Close()
-			}
-		}
+		path := outlinePath(group.Outline, at)
 		p.StrokePath(&path, s.palette.BorderWidth, s.palette.Rail)
 	}
 	mark := s.focusMark()

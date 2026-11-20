@@ -344,6 +344,12 @@ pub enum Delivery {
     PressOpen,
     /// An open press of another pointer would share the state that the input changes, so it was not delivered.
     PointerHeld(PointerHeld),
+    /// The press lies on a resize edge of the window, where AppKit tracks a press as a window resize, so it was not delivered.
+    /// The value is the message of the refusal, which names the point and the edge.
+    ResizeEdge(String),
+    /// The press of a person ended the gesture of that pointer and button, so the drag or release was not delivered. The value
+    /// is the message of the interruption, which names the press of the person and the point where the gesture was released.
+    Interrupted(String),
 }
 
 /// One step of a composition of `input.text`, as the input method of the system gives it to the text input client of the key
@@ -895,6 +901,10 @@ pub trait Platform: CoreRootHost + Send + Sync {
     fn text_image(&self, image: Handle, utf8: &str) -> Result<(), String>;
     /// Removes the image region. event is not called afterwards. Call it on the main thread.
     fn close_image(&self, image: Handle) -> Result<(), String>;
+    /// Asks for the next display frame of the window of the image region, which the region reports to its event as
+    /// {"type":"frame","refreshRate":N}, or with a null refreshRate at once for a window on no screen. A request while one
+    /// waits asks nothing more (docs/spec/native-surfaces.md#copy-path-frames). Call it on the main thread.
+    fn want_image_frame(&self, image: Handle) -> Result<(), String>;
 
     // Surface placement
 
@@ -1143,6 +1153,16 @@ pub trait Platform: CoreRootHost + Send + Sync {
         done: Box<dyn Fn(Result<Value, String>)>,
     );
     #[cfg(feature = "diagnostics")]
+    /// Dispatches in window the event that the window server gives the application for a press, a move or a scroll of a person
+    /// at x, y in the content (docs/spec/endpoint.md). Call it on the main thread.
+    fn dispatch_person_input(
+        &self,
+        window: Handle,
+        action: &str,
+        x: f64,
+        y: f64,
+    ) -> Result<(), String>;
+    #[cfg(feature = "diagnostics")]
     /// Ends the pending wait of the input reference of window, naming reason in its failure. Call it on the main thread.
     fn end_input_reference_wait(&self, window: Handle, reason: &str);
 
@@ -1326,8 +1346,14 @@ pub trait Platform: CoreRootHost + Send + Sync {
     fn connect_service(&self, address: &str) -> Result<Box<dyn PersistentStream>, String>;
     /// Makes the service directory for the current user only.
     fn secure_service_directory(&self, path: &Path) -> Result<(), String>;
-    /// Checks whether the process of the persistent service endpoint still exists.
-    fn service_process_exists(&self, pid: u32) -> Result<bool, String>;
+    /// Checks whether `pid` is the live process that published the persistent service endpoint whose modification time
+    /// is `published`: a process that started later received the pid after the publisher ended
+    /// (docs/spec/persistent-services.md#endpoint-publisher).
+    fn service_process_exists(
+        &self,
+        pid: u32,
+        published: std::time::SystemTime,
+    ) -> Result<bool, String>;
     /// Waits until the service process `pid` ends or `stop` stops, and answers whether it ended. A process that does not
     /// exist has ended. No time limit ends the wait. The wait uses the kernel notification of the end of a process, which
     /// also reports a process that stays as a zombie, so it does not poll (docs/spec/persistent-services.md#updates).

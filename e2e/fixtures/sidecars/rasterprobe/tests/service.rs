@@ -419,6 +419,66 @@ fn a_frame_waits_for_the_answer_of_the_frame_in_flight_and_reuses_released_image
 }
 
 #[test]
+fn a_scroll_moves_the_viewport_within_the_retained_history_and_the_frames_show_its_lines() {
+    let service = Service::start();
+    let mut client = service.client();
+    let opened = client.send(page("tab-1", json!({"operation": "open", "image": "raster", "rows": 3})));
+    assert_eq!(opened[0]["body"]["scrollback"], json!({"offset": 0, "history": 0}), "a new session retains no line");
+    client.send(host("tab-1", drawing(1, true)));
+    let lines = client.send(host("tab-1",
+        json!({"configure": {"name": "raster", "generation": 1, "raster": 1, "width": 160, "height": 96, "scale": 2.0}})));
+    assert_eq!(bodies(&lines)[1]["scrollback"], json!({"offset": 0, "history": 0}));
+    // The band of a row holds as many cells as the columns less the number of its line modulo the columns, so a frame shows
+    // the lines of its viewport: the line at the top is the history less the offset.
+    let (band, color) = ((255, 255, 255), (0, 80, 180));
+    let shows = |line: &Value, top: u32| {
+        let image = surface::Image::lookup(token_id(line));
+        for row in 0..2 {
+            let cells = 10 - (top + row) % 10;
+            let y = row * 32;
+            assert_eq!(image.pixel(cells * 16 - 1, y), band, "row {row} of line {} ends in its last cell", top + row);
+            if cells < 10 {
+                assert_eq!(image.pixel(cells * 16, y), color, "row {row} of line {} paints {cells} cells", top + row);
+            }
+        }
+    };
+    shows(&lines[0], 0);
+    client.send(host("tab-1", answer("leased", 1)));
+
+    let refused = client.send(page("tab-1", json!({"operation": "history"})));
+    assert_eq!(bodies(&refused), [json!({"error": "history requires a non-negative integer count"})]);
+    let history = client.send(page("tab-1", json!({"operation": "history", "count": 25})));
+    assert_eq!(bodies(&history)[0], json!({"event": "scrollback", "offset": 0, "history": 25}));
+    assert_eq!(bodies(&history)[2]["scrollback"], json!({"offset": 0, "history": 25}));
+    shows(&history[1], 25);
+    client.send(host("tab-1", answer("leased", 2)));
+
+    let refused = client.send(page("tab-1", json!({"operation": "scroll", "lines": 1})));
+    assert_eq!(bodies(&refused), [json!({"error": "scroll requires a non-negative integer sequence and an integer lines"})]);
+    let scrolled = client.send(page("tab-1", json!({"operation": "scroll", "sequence": 1, "lines": 7})));
+    assert_eq!(bodies(&scrolled)[0], json!({"event": "scrollback", "sequence": 1, "offset": 7, "history": 25}), "a positive scroll moves toward older lines");
+    assert_eq!(bodies(&scrolled)[2]["scrollback"], json!({"offset": 7, "history": 25}));
+    shows(&scrolled[1], 18);
+    client.send(host("tab-1", answer("leased", 3)));
+
+    let oldest = client.send(page("tab-1", json!({"operation": "scroll", "sequence": 2, "lines": 100})));
+    assert_eq!(bodies(&oldest)[0], json!({"event": "scrollback", "sequence": 2, "offset": 25, "history": 25}), "the offset stops at the oldest line");
+    shows(&oldest[1], 0);
+    client.send(host("tab-1", answer("leased", 4)));
+    let still = client.send(page("tab-1", json!({"operation": "scroll", "sequence": 3, "lines": 0})));
+    assert_eq!(bodies(&still), [json!({"event": "scrollback", "sequence": 3, "offset": 25, "history": 25})], "a scroll that moves nothing draws no frame");
+
+    let shorter = client.send(page("tab-1", json!({"operation": "history", "count": 10})));
+    assert_eq!(bodies(&shorter)[0], json!({"event": "scrollback", "offset": 10, "history": 10}), "a shorter history keeps the offset within it");
+    client.send(host("tab-1", answer("leased", 5)));
+    let newest = client.send(page("tab-1", json!({"operation": "scroll", "sequence": 4, "lines": -1000})));
+    assert_eq!(bodies(&newest)[0], json!({"event": "scrollback", "sequence": 4, "offset": 0, "history": 10}), "the offset stops at the newest line");
+    shows(&newest[1], 10);
+    let state = client.send(page("tab-1", json!({"operation": "state"})));
+    assert_eq!(bodies(&state)[0]["scrollback"], json!({"offset": 0, "history": 10}));
+}
+
+#[test]
 fn a_region_that_does_not_draw_gets_no_frame_until_it_draws() {
     let service = Service::start();
     let mut client = service.client();

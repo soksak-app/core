@@ -48,6 +48,8 @@
     {"reply":{"result":null}},
     {"call":{"command":"runtime.command.register","params":{"name":"rasterprobe.kill"}}},
     {"reply":{"result":null}},
+    {"call":{"command":"runtime.command.register","params":{"name":"rasterprobe.history"}}},
+    {"reply":{"result":null}},
     {"call":{"command":"runtime.native.call","params":{"name":"registered","payload":{"kind":"status","name":"rasterprobe.view"}}}},
     {"reply":{"result":null}},
     {"call":{"command":"runtime.native.call","params":{"name":"registered","payload":{"kind":"status","name":"rasterprobe.session"}}}},

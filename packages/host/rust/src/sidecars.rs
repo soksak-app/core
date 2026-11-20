@@ -1648,6 +1648,17 @@ pub struct OutdatedSidecar {
     pub sessions: usize,
 }
 
+/// The folder of the host executable, where the application bundle holds sok, which the environment of every sidecar puts
+/// first on PATH (docs/spec/sidecars.md#processes-of-a-surface).
+pub fn sok_folder() -> Result<PathBuf, String> {
+    let executable =
+        std::env::current_exe().map_err(|error| format!("host executable: {error}"))?;
+    executable
+        .parent()
+        .map(Path::to_path_buf)
+        .ok_or_else(|| format!("host executable {} has no folder", executable.display()))
+}
+
 /// Sets the environment of a sidecar: base, the environment of the login shell, without SOKSAK_SURFACE, with SOKSAK_CONFIG_DIR set
 /// to the configuration directory, whatever values of both base holds, and with the folder of the host executable, where the
 /// application bundle holds sok, first on PATH and in no other entry (docs/spec/sidecars.md#processes-of-a-surface). Without a base,
@@ -1657,11 +1668,8 @@ fn sidecar_environment(
     config_directory: &Path,
     base: Option<std::collections::BTreeMap<String, String>>,
 ) -> Result<(), String> {
-    let executable =
-        std::env::current_exe().map_err(|error| format!("host executable: {error}"))?;
-    let folder = executable
-        .parent()
-        .ok_or_else(|| format!("host executable {} has no folder", executable.display()))?;
+    let folder = sok_folder()?;
+    let folder = folder.as_path();
     let inherited = match base {
         Some(base) => {
             command.env_clear().envs(&base);
@@ -3402,6 +3410,15 @@ enum EndpointRead {
     Stop,
 }
 
+/// Reads the endpoint file at `path` and its modification time through one descriptor, so the time is the time of the
+/// content that it read (docs/spec/persistent-services.md#endpoint-publisher).
+fn read_endpoint_file(path: &Path) -> std::io::Result<(Vec<u8>, std::time::SystemTime)> {
+    let mut file = std::fs::File::open(path)?;
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)?;
+    Ok((bytes, file.metadata()?.modified()?))
+}
+
 /// The end of the wait for the endpoint line of a new service.
 enum EndpointLine {
     /// The first line that the service printed, empty when its output ended before a byte.
@@ -3746,11 +3763,13 @@ impl<O: Owner> Core<O> {
 
         let mut child = None;
         let mut spawn_clock = None;
-        let endpoint: Endpoint = match std::fs::read(&endpoint_path) {
-            Ok(bytes) => {
+        let endpoint: Endpoint = match read_endpoint_file(&endpoint_path) {
+            Ok((bytes, published)) => {
                 let endpoint: Endpoint = serde_json::from_slice(&bytes)
                     .map_err(|e| format!("sidecar {name}: invalid endpoint: {e}"))?;
-                if !current()?.service_process_exists(endpoint.pid)? {
+                // The endpoint names the service only while its pid is the process that published it
+                // (docs/spec/persistent-services.md#endpoint-publisher).
+                if !current()?.service_process_exists(endpoint.pid, published)? {
                     std::fs::remove_file(&endpoint_path)
                         .map_err(|e| format!("sidecar {name}: remove stale endpoint: {e}"))?;
                     // It re-enters the only creation path. A stale endpoint is an explicit crash recovery case and not
@@ -5329,7 +5348,7 @@ impl Owner for Window {
                 response_sender.send(surface, image, &body)
             },
             |reason| {
-                if reason != "notFound" {
+                if reason != "notFound" && reason != "staleRaster" {
                     return Ok(());
                 }
                 crate::composition::refresh_image_rasters(&window)

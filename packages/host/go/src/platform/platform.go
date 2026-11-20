@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/soksak-app/core/packages/host/go/src/routine"
@@ -632,6 +633,10 @@ type Platform interface {
 	FactsImage(image unsafe.Pointer) (string, error)
 	// CloseImage removes the image region. event is not called afterward.
 	CloseImage(image unsafe.Pointer)
+	// WantImageFrame asks for the next display frame of the window of the image region, which the region reports to its event as
+	// {"type":"frame","refreshRate":N}, or with a null refreshRate at once for a window on no screen. A request while one waits asks
+	// nothing more (docs/spec/native-surfaces.md#copy-path-frames).
+	WantImageFrame(image unsafe.Pointer) error
 
 	// BeginLayout starts a surface layout transaction. When the layout becomes possible, it calls ready on the UI thread.
 	BeginLayout(window Window, ticket uint64, ready func(allowed bool)) error
@@ -720,9 +725,11 @@ type Platform interface {
 	// application is part of the address name.
 	// When the listener is closed, the address is also removed.
 	Listen(directory, application string) (net.Listener, Endpoint, error)
-	// ServiceProcessExists checks, before an endpoint is reused after the application restarted,
-	// whether the preserved sidecar service process is still alive. It is an error when this cannot be determined.
-	ServiceProcessExists(pid int) (bool, error)
+	// ServiceProcessExists checks, before an endpoint is reused after the application restarted, whether pid is the live
+	// sidecar service process that published the endpoint whose modification time is published: a process that started later
+	// received the pid after the publisher ended (docs/spec/persistent-services.md#endpoint-publisher). It is an error when
+	// this cannot be determined.
+	ServiceProcessExists(pid int, published time.Time) (bool, error)
 	// WaitServiceProcessEnd waits until the service process pid ends or stop closes, and answers whether it ended. A process
 	// that does not exist has ended. The wait uses the kernel notification of the end of a process, which also reports a
 	// process that stays as a zombie, so it does not poll, and no time limit ends it (docs/spec/persistent-services.md#updates).
@@ -892,10 +899,18 @@ const (
 	PointerPressOpen
 	// PointerHeld means that an open press of another pointer would share the state that the input changes, so it was not delivered.
 	PointerHeld
+	// PointerResizeEdge means that the press lies on a resize edge of the window, where AppKit tracks a press as a window resize, so it
+	// was not delivered. Reason of ButtonHeld is the message of the refusal, which names the point and the edge.
+	PointerResizeEdge
+	// PointerInterrupted means that the press of a person ended the gesture of that pointer and button, so the drag or release was
+	// not delivered. Reason of ButtonHeld is the message of the interruption, which names the press of the person and the point
+	// where the gesture was released.
+	PointerInterrupted
 )
 
 // ButtonHeld is the state of a rejection: for PointerButtonHeld what AppKit reported at the time of the rejection, for PointerHeld
-// the pointer whose press rejected the input and the reason.
+// the pointer whose press rejected the input and the reason, and for PointerResizeEdge and PointerInterrupted the message of the
+// refusal.
 type ButtonHeld struct {
 	// Mask is the value of NSEvent.pressedMouseButtons.
 	Mask uint64
@@ -903,7 +918,7 @@ type ButtonHeld struct {
 	Frontmost *FrontmostApplication
 	// Pointer is the pointer that holds the press of a PointerHeld rejection.
 	Pointer string
-	// Reason is the state that the press of Pointer holds.
+	// Reason is the state that the press of Pointer holds, or the message of a PointerResizeEdge or PointerInterrupted refusal.
 	Reason string
 }
 

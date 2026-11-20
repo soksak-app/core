@@ -4,7 +4,7 @@
       "name": "midnight",
       "shape": {
         "r": "10px",
-        "gap": "6px",
+        "gap": "12px",
         "bw": "1px",
         "font": "mono-system",
         "size": "13px"
@@ -36,7 +36,7 @@
       "name": "nord",
       "shape": {
         "r": "8px",
-        "gap": "5px",
+        "gap": "10px",
         "bw": "1px",
         "font": "mono-sf",
         "size": "13px"
@@ -68,7 +68,7 @@
       "name": "solar",
       "shape": {
         "r": "6px",
-        "gap": "7px",
+        "gap": "14px",
         "bw": "2px",
         "font": "mono-system",
         "size": "13px"
@@ -100,7 +100,7 @@
       "name": "forest",
       "shape": {
         "r": "14px",
-        "gap": "6px",
+        "gap": "12px",
         "bw": "1px",
         "font": "sans-system",
         "size": "13px"
@@ -132,7 +132,7 @@
       "name": "ember",
       "shape": {
         "r": "4px",
-        "gap": "4px",
+        "gap": "8px",
         "bw": "2px",
         "font": "mono-jet",
         "size": "13px"
@@ -196,7 +196,7 @@
       "name": "mist",
       "shape": {
         "r": "12px",
-        "gap": "6px",
+        "gap": "12px",
         "bw": "1px",
         "font": "mono-system",
         "size": "13px"
@@ -228,7 +228,7 @@
       "name": "grape",
       "shape": {
         "r": "16px",
-        "gap": "5px",
+        "gap": "10px",
         "bw": "1px",
         "font": "sans-inter",
         "size": "13px"
@@ -260,7 +260,7 @@
       "name": "sand",
       "shape": {
         "r": "2px",
-        "gap": "4px",
+        "gap": "8px",
         "bw": "1px",
         "font": "mono-sf",
         "size": "13px"
@@ -413,7 +413,7 @@
     "shapeRanges": {
       "gap": [
         0,
-        24
+        48
       ],
       "radius": [
         0,

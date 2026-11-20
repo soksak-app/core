@@ -475,6 +475,16 @@ func describeWindow(snapshot json.RawMessage, agent any, full bool, after string
 			entries []json.RawMessage
 		}{{"status", group.Status}, {"command", group.Commands}, {"element", group.Element}} {
 			for _, raw := range list.entries {
+				// Without --full, a tab holds only its summary statuses (docs/spec/cli.md#window-description, docs/spec/exposure.md#entry-fields).
+				if !full && list.kind == "status" && group.Owner == "surface" {
+					summary, err := summaryStatus(raw)
+					if err != nil {
+						return nil, err
+					}
+					if !summary {
+						continue
+					}
+				}
 				row, err := entryRow(name, group, list.kind, raw, full)
 				if err != nil {
 					return nil, err
@@ -558,6 +568,17 @@ func describeWindow(snapshot json.RawMessage, agent any, full bool, after string
 		page["next"] = rows[last-1].key
 	}
 	return encodeJSON(page)
+}
+
+// summaryStatus reads the summary member of a status entry of exposure.snapshot. An absent member is false (docs/spec/exposure.md#entry-fields).
+func summaryStatus(raw json.RawMessage) (bool, error) {
+	var entry struct {
+		Summary bool `json:"summary"`
+	}
+	if err := json.Unmarshal(raw, &entry); err != nil {
+		return false, fmt.Errorf("exposure.snapshot has a status whose summary is not a boolean: %s", raw)
+	}
+	return entry.Summary, nil
 }
 
 // compacted is the compact text of a value of the snapshot, which encodeJSON writes as it is.

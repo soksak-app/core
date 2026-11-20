@@ -144,6 +144,8 @@ fn invalid_json_closes_connection() {
 | `notifications.request.rejects-invalid-fields` | 비었거나 너무 길거나 제어 문자가 있는 표면, 제목, 본문은 그 필드를 적은 오류로 거부한다. | all |
 | `notifications.event.records-each-event-and-failure` | host가 해석하는 알림 센터의 사건마다 `type`, 상태의 `authorization`, 알림의 `window`와 `surface`를 가진 event `host.notification.event`가 있고, 실패(읽을 수 없거나 알 수 없는 종류의 사건, 창과 표면이 없는 알림, 닫힌 창, 알림 센터가 알린 실패)마다 장소 `notification`의 `error` 기록이 있다. Go 시험은 전체 경로를, Rust 시험은 이벤트를 읽는 부분까지를 다룬다. 창 조회에는 application handle이 필요하기 때문이다. | all |
 | `diagnostics.input-reference.declared` | Diagnostic endpoint는 같은 window의 input reference method를 선언한다. | all |
+| `diagnostics.input-person.declared` | 진단 build는 `diagnostics.input.person`을 선언한다. | all |
+| `diagnostics.input-person.validates-parameters` | `diagnostics.input.person`은 native 호출 전에 `press`, `move`, `scroll`이 아닌 `action`을 -32602 `action must be press, move or scroll`로, 없거나 숫자가 아닌 `x`나 `y`를 -32602 `x and y must be numbers`로 거부한다. | all |
 | `diagnostics.input-reference.validates-document` | Input reference action은 wait-document와 wait에서만 빈 문자열을 포함한 document 문자열을 받으며 없거나 잘못된 값을 거부한다. | all |
 | `diagnostics.input-reference.rejects-nul` | Native input reference adapter는 action이나 document의 NUL을 거부하고 오류로 한 번 완료한다. | all |
 | `diagnostics.input-source.selects-a-role` | `diagnostics.input.source`는 role `latin`, `korean`, `japanese`가 아닌 `select`, `restore`와 함께 온 `select`, 빈 `restore`를 각각 invalid-params 오류로 거부한다. Role은 role 그대로 platform에 전달되며, 응답은 platform이 보고한 role을 `current`(role이 없는 input source는 null)로, 그 platform 식별자를 `source`로 담는다. | all |
@@ -414,6 +416,8 @@ fn invalid_json_closes_connection() {
 | `endpoint.input.pointer-button-held-message` | 1007 메시지는 `NSEvent.pressedMouseButtons` 마스크를 16진수로, frontmost 애플리케이션을 bundle identifier와 pid로 보고하며, bundle identifier가 없는 애플리케이션은 pid로, frontmost 애플리케이션이 없으면 그 사실을 두 host에서 같은 문장으로 보고한다. | all |
 | `endpoint.input.pointer-name` | `pointer`의 기본값은 `main`이고, `a-z`, `0-9`, `-`로 된 1~32자 이름은 그대로 전달하며, 빈 이름, 다른 문자가 있는 이름, 더 긴 이름, 문자열이 아닌 값은 -32602를 반환한다. | all |
 | `endpoint.input.pointer-held-message` | 1011 메시지는 누름을 쥔 pointer와 그 누름이 쥔 상태를 두 host에서 같은 문장으로 밝힌다. | all |
+| `endpoint.input.resize-edge-refusal` | 창의 resize edge 위 `down`은 -32602와 점과 edge를 밝히는 native library의 메시지를 두 host에서 바꾸지 않고 반환한다. | all |
+| `endpoint.input.interruption` | 사람의 누름, 이동, scroll이 끝낸 gesture의 `drag`나 `up`은 1013과 그 동작과 gesture를 놓은 점을 밝히는 native library의 메시지를 두 host에서 바꾸지 않고 반환한다. | all |
 | `endpoint.input.key-unknown-modifier-rejected` | 알 수 없는 키 수정자는 -32602를 반환한다. | all |
 | `endpoint.input.key-shift-command-mask` | shift와 command 수정자는 비트 마스크 9가 되고, 키와 phase는 그대로 전달된다. | all |
 | `endpoint.input.key-control-option-and-text` | control과 option 수정자는 6이 되고 text는 그대로 전달된다. | all |
@@ -508,6 +512,20 @@ fn invalid_json_closes_connection() {
 | `verification.trace-switch.requires-the-test-switch` | test switch를 쥐지 않고 performance trace를 전환하는 test는 첫 호출에서 실패한다. 이 test-only case는 전환 자체를 검증하지 않는다. | tauriv2 only: 이 guard는 Rust host의 lib test에 속한다 |
 | `verification.case-player.plays-the-frames-before-the-client-close` | `sok` test의 case player는 남은 step 중 하나가 client의 close이면, client가 write와 같은 turn에 닫아도 client가 connection을 닫기 전에 쓴 frame을 재생한다. 이 test-only case는 host를 검증하지 않는다. | all |
 | `images.invalidate.sidecar-connection-loss-resends-configure` | 사이드카의 그림을 무효화하면 같은 크기의 configure 를 다시 보내고 다른 사이드카의 그림은 그대로 둔다. | all |
+| `images.copy-path.screen-request` | 드로잉 region은 응답되지 않은 요청이 없을 때 screen 요청을 받고, 가진 요청에 host가 응답하거나 그 요청이 끝날 때까지 새 요청을 받지 않는다. | all |
+| `images.copy-path.screen-request-ends` | 응답되지 않은 screen 요청은 새 generation, 새 raster, 공급자 연결의 끝에서 답 없이 끝나며, 연결의 끝은 받아들인 화면도 버린다. 다음 요청은 `full: true`이고, 끝난 요청에 답하는 메시지는 `stale`이다. | all |
+| `images.copy-path.frame-request-tick` | 그리는 region의 소유자가 보낸 프레임 요청은 native region에 display frame 하나를 요청하고, 틱 전의 두 번째 요청은 더 요청하지 않는다. display frame은 region의 1부터 세는 sequence와 native region이 읽은 재생률을 담은 틱 하나를 보내고, 재생률이 없는 display frame은 틱을 보내지 않고 요청을 끝낸다. | all |
+| `images.copy-path.frame-request-refused` | region을 소유하지 않는 보낸 쪽의 프레임 요청은 `notAttached`, 현재가 아닌 generation의 요청은 `stale`로 답하고, 그리지 않는 region의 요청은 display frame을 요청하지 않는다. | all |
+| `images.copy-path.frame-request-malformed` | `generation`이 없거나 형이 틀리거나 `null`인 프레임 요청은 `error`를 `malformed`로, `member`와 함께 답하고, 올바른 `name`이 없는 요청은 응답 없이 소비하며 응답을 보내지 않는다고 적는 오류 기록 하나를 남긴다. | all |
+| `images.copy-path.frame-request-read` | `purpose`가 `read`인 프레임 요청은 그리지 않는 region에 대해서도, 창이 가려진 동안에도 native region에 display frame 하나를 요청하고, 그 display frame은 틱을 보낸다. 함께 기다리는 read 요청과 draw 요청은 display frame 하나를 요청하고 틱 하나를 받는다. 재생률이 없는 read 요청의 display frame은 `error`를 `noScreen`으로, `purpose` `read`와 endpoint의 창 식별자 `window`와 함께 답한다. `draw`도 `read`도 아닌 `purpose`는 `malformed`로, `member` `purpose`와 함께 답한다. | all |
+| `images.copy-path.input-draw` | 응답되지 않은 요청이 없는 드로잉 region에 사용자 입력이 닿으면 입력의 correlation 식별자를 담은 screen 요청을 tick을 기다리지 않고 바로 보낸다. | all |
+| `images.copy-path.screen-answer-accepted` | 공급자의 screen 메시지가 region의 응답되지 않은 요청에 답하면 wire에서 `accepted`로 답하고 요청을 끝내며, 그 rows를 다음 요청의 기준으로 삼는다. | all |
+| `images.copy-path.screen-answer-refused` | generation, raster 또는 요청 식별자가 오래되었거나 region을 소유하지 않은 보낸 쪽의 screen 메시지는 `stale` 또는 `notAttached`로 답하며, 응답되지 않은 요청을 그대로 둔다. | all |
+| `images.copy-path.screen-malformed-names-its-member` | 멤버가 없거나 타입이 틀린 screen 메시지, 또는 올바른 `row`나 `cells`가 없는 행은 `malformed` 오류와 첫 번째 그런 멤버의 점 경로로 답하며, 응답되지 않은 요청은 그대로 둔다. | all |
+| `images.copy-path.screen-without-name-is-not-answered` | 유효한 image `name`이 없는 screen 메시지는 답 없이 소비되며, 답은 image 이름으로 라우팅되므로 host는 이름이 없고 답을 보내지 않는다는 오류 기록 하나만 쓴다. | all |
+| `images.copy-path.screen-null-is-mistyped` | 값이 `null`인 screen 멤버는 타입이 틀린 멤버이며, `null` screen은 멤버 `screen`에서 malformed이다. | all |
+| `images.copy-path.answer-of-no-request-names-it` | region이 갖지 않은 screen 요청의 답은 region 이름, 그 surface, 요청을 따옴표로 묶어 이름 붙이는 오류이다. | all |
+| `images.request-identifiers-are-random-text` | screen 요청 식별자는 `screen-`, detach 요청 식별자는 `image-detach-`이며, 그 뒤에 시스템의 random source에서 뽑은 base32 알파벳 26자가 붙는다. | all |
 | `performance.trace.switch-accepts-on-and-off-only` | `performance` 호출은 동작 `on`과 `off`만 받으며, `line`을 포함한 다른 동작은 `action must be on or off`로 실패하고 아무것도 쓰지 않는다. | all |
 | `performance.trace.switch-is-held-by-the-process` | 프로세스가 스위치를 가진다. `on`은 trace를 켜고 `off`는 끄며, 켜진 동안의 관측만 event `host.trace.on`과 `host.trace.off` 사이에 저장되고, 그 뒤에 파일 `performance`, 파일 `logs/performance.ndjson`, service 폴더의 flag는 없다. | all |
 | `performance.sampler.ends-with-the-switch` | 표본 추출은 trace가 켜진 동안 돌고, 꺼지면 끝나며, 다시 켜면 새로 시작한다. | all |
@@ -647,6 +665,7 @@ fn invalid_json_closes_connection() {
 | `log.panic.records-an-event` | 진입점(`routine.Go`, `spawn_named`)으로 시작한 goroutine이나 스레드가 panic하면 프로세스가 0이 아닌 상태(Go는 2, Rust는 101)로 끝나기 전에 받은 `name`, panic 값 `text`, `stack`을 담은 `error` 수준 event `host.panic` 하나와, 그 뒤에 그 상태를 `code`로 담은 원인 `exit`의 `log.closed`를 저장한다. | all |
 | `log.panic.does-not-wait-for-the-writer` | panic hook은 writer가 멈춰 있어도 writer를 기다리지 않고 panic한 스레드에 돌아오며, writer가 풀리면 event가 저장되고 프로세스가 끝난다. | tauriv2 only: goroutine의 panic은 진입점이 recover하며 hook이 없다 |
 | `log.panic.before-writer-is-stored-when-the-writer-opens` | writer가 붙기 전의 host panic은 시작 buffer에 남고, writer가 붙으면 event가 저장되고 저장 뒤 프로세스가 상태로 끝난다. host의 시작이 writer를 붙이지 않고 끝나면 프로세스는 상태로 끝나고 record와 stack이 표준 오류에 남는다. 어떤 시간 한도도 writer 기다림을 끝내지 않는다. | all |
+| `log.panic.without-start-ends-the-process-at-the-panic` | writer가 붙지 않았고 host의 시작도 돌지 않는 동안의 goroutine panic은 writer가 붙지 않았고 host의 시작이 돌지 않는다는 줄 뒤에 `host.panic name=<name> text=<text>` 줄과 stack을 표준 오류에 쓰고, writer를 기다리지 않고 바로 상태 2로 프로세스를 끝낸다. | wailsv3, mygo only: Rust host는 panic hook을 프로세스의 시작에서 설치하므로, 시작을 돌리지 않는 Rust 프로세스에는 writer를 기다리는 hook이 없다 |
 | `log.panic.without-writer-is-written-to-the-standard-error` | writer가 저장하지 못한 panic은 표준 오류에 전부 쓰인다. host의 시작이 writer 없이 끝났다는 줄 뒤에 `host.panic name=<name> text=<text>` 줄과 stack이 온다. | all |
 | `host.stall.passes-every-gate` | stall 기록 `host.stall`, `host.stall.sampled`, `host.stall.dump`는 lifecycle 기록을 끄는 policy에서도 저장된다. 로깅 명세의 이름 붙은 gate 예외로 모든 gate를 `warn`에서 지나가기 때문이다. | all |
 | `host.crash.found.passes-every-gate` | crash 기록 `host.crash.found`는 lifecycle 기록을 끄는 policy에서도 저장된다. 명세의 이름 붙은 gate 예외로 `warn`에서 모든 gate를 지나기 때문이다. | all |
@@ -717,6 +736,7 @@ fn invalid_json_closes_connection() {
 | `images.wait.sidecar-end-ends-wait` | sidecar 연결의 끝은 그 sidecar 이름으로 그 region들의 raster wait를 끝낸다. 끝난 연결의 raster는 오지 않기 때문이다. window의 layout transaction의 끝은 그 안의 각 presentation 요청의 raster wait를 끝낸다. 어떤 raster wait도 시간으로 끝나지 않는다. | all |
 | `images.wait.ended-generation-does-not-block` | 표면 generation을 끝내면 표시 대기가 풀린다. | all |
 | `images.wait.ends-by-its-events` | 현재 raster의 presentation 대기에는 시간 제한이 없다. 필요한 각 raster의 presentation, 그 영역이나 표면의 제거, 그 supplier 연결의 끝, 기다리는 요청의 끝으로 끝난다. 요청의 끝은 presentation 요청에서는 ticket의 cancel이나 layout transaction의 끝이고, `host.window.presented`에서는 창의 close, main page process의 끝, endpoint 연결의 끝이다. layout transaction의 끝은 `host.window.presented`의 대기를 끝내지 않는다. 그 요청은 다음 layout이 보이는 raster를 기다린다. 실패는 호출자에게 돌아가고 application log에 줄을 쓰지 않는다. 기다린 요청이 실패를 알리기 때문이다. | all |
+| `images.wait.supplier-end-names-the-region` | raster를 가진 드로잉 region의 공급자 연결이 끝나면 이후의 presentation 대기는 `the supplier <sidecar> of the image region <surface>/<name> ended`로 실패하고, 다음 연결이 받는 configuration이 그 오류를 끝낸다. | all |
 | `images.visibility.survives-first-document-navigation` | 첫 문서 이동 전에 숨긴 표면은 이동 뒤에도 숨겨진 상태를 유지한다. | all |
 | `images.visibility.hidden-surface-defers-configuration` | 숨긴 표면의 이미지를 구성하면 표면이 보일 때까지 구성을 반환하지 않는다. | all |
 | `images.visibility.shown-surface-reconfigures-its-raster` | 숨겼다가 다시 보인 표면은 같은 크기라도 새 raster revision을 설정하므로, 표시 장벽은 숨긴 동안의 frame을 기다리지 않는다. | all |
@@ -727,9 +747,10 @@ fn invalid_json_closes_connection() {
 | `images.present.main-thread-failure-reports-present-failed` | 주 스레드 표시가 실패하면 presentFailed로 응답하고 표시 대기는 그 오류를 반환한다. | all |
 | `images.present.older-ack-preserves-newer-rejection` | 성공한 오래된 in-flight presentation은 실제 presented sequence를 전진시키지만 더 새 accepted sequence의 rejection을 지우지 않는다. 최신 accepted sequence의 성공 acknowledgment만 그 rejection을 지운다. | all |
 | `images.present.missing-native-surface-requests-reconfiguration` | notFound로 실패한 표시는 같은 raster의 새 구성을 요청한다. | all |
+| `images.present.stale-native-raster-requests-reconfiguration` | native raster가 그림과 달라 거부된 표시는 stale로 응답하고, 그 전에 native raster의 구성을 요청한다. | all |
 | `images.attach.surface-close-removes-only-its-images` | 표면을 제거하면 그 이미지 핸들을 반환하고 다른 표면의 이미지는 유지한다. | all |
 | `images.attach.one-main-step` | attach는 요청 확인, 이름 예약, 영역 생성과 등록을 main thread의 한 step에서 실행하므로, 표면 닫기나 page reload는 attach 전체의 앞이나 뒤에 실행된다. 실패한 attach는 오류 기록 없이 자기 이름만 되돌리고, 이름 없이 열린 영역은 남지 않는다. | all |
-| `images.attach.rejects-reservation-without-sidecar` | 소유 사이드카가 없는 이미지 예약을 거부하고 아무것도 등록하지 않는다. | all |
+| `images.attach.rejects-reservation-without-sidecar` | 소유 사이드카가 없거나, Go host에서 그 사이드카의 메시지를 받는 창이 없는 이미지 예약을 `image "<name>": reserve requires a sidecar`로 거부하고 아무것도 등록하지 않는다. | all |
 | `images.present.replaced-frame-is-logged-as-invalidated` | 더는 현재가 아닌 프레임(`stale`, `notAttached`, `staleRaster native=... frame=...`)은 `stale`로 답하고 표시 실패로 기록하지 않으며 `image frame invalidated before native presentation: ... reason=<detail>`을 남긴다. | all |
 | `images.present.frame-of-undeclared-sidecar-is-invalidated` | 어떤 plugin도 선언하지 않는 사이드카의 그림은 `stale`로 답하고 native 표시, 복구, 오류 없이 기록되며, 끝난 사이드카에 대한 답은 `not sent`로 기록된다. | all |
 | `images.present.failure-line-names-the-current-frame` | 다른 표시 실패는 그 사유(알 수 없는 상세는 `presentFailed`)로 답하고 오류 줄 `error host image present: ... reason=<detail> current <frame state>`를 남긴다. | all |
@@ -877,6 +898,7 @@ fn invalid_json_closes_connection() {
 | `sidecars-transport.startup.exits-before-endpoint` | endpoint 전에 끝난 시작한 service는 "service exited before endpoint"로 보내기를 실패시킨다. | all |
 | `sidecars-transport.endpoint.replaces-dead-service-endpoint` | 죽은 서비스가 남긴 엔드포인트는 새 서비스 엔드포인트로 바뀐다. | all |
 | `sidecars-transport.endpoint.live-unreachable-reported-without-replacement` | 살아 있지만 연결할 수 없는 서비스의 엔드포인트는 보내기를 실패시키고 바뀌지 않는다. | all |
+| `sidecars-transport.endpoint.replaces-the-endpoint-of-a-reused-pid` | pid가 `endpoint.json`의 수정 시각 뒤에 시작한 살아 있는 프로세스를 가리키는 엔드포인트는 낡은 것이다. 호스트는 그것을 지우고 새 서비스 엔드포인트가 그것을 대신한다([엔드포인트 게시자](persistent-services.ko.md#엔드포인트-게시자)). | all |
 | `sidecars-transport.stop.close-owner-then-shutdown` | 중지는 close-owner를 보내고 성공 응답 뒤에 shutdown을 보낸다. | all |
 | `sidecars-transport.stop.own-close-is-not-a-read-error` | 중지 중에 서비스 연결을 닫아도 `persistent read` 오류 줄을 쓰지 않는다. host 자신이 닫았기 때문이다. | all |
 | `sidecars-transport.stop.accepts-close-answers-sent-before-stop` | 지속 service가 중지 전에 보낸 closed 알림에 중지가 시작된 뒤 답해도 받아들인다. 중지는 shutdown을 보내고 닫는 중인 표면이 남지 않는다. | all |
@@ -890,6 +912,7 @@ fn invalid_json_closes_connection() {
 | `sidecars-transport.replace.ends-a-service-of-an-undeclared-sidecar` | 사이드카가 더 이상 선언되지 않은 실행 중인 상주 service는 `installed` `null`로 오래된 것으로 보고된다. 교체하면 `close-owner`와 `shutdown`을 보내고, 실행 파일을 시작하지 않고, 그 sidecar로 보낸 각 표면에 선언되지 않은 오류의 연결 알림을 보내고, `outdated`에서 빼고, info로 `sidecar <name>: service <running> ended; the sidecar is not declared`를 기록한다. | all |
 | `input.pointer.reads-the-press-target-before-delivery` | 주입된 press는 main thread의 한 단계 안에서 전달 전에 그 아래 view를 읽고, target을 읽을 수 없는 press는 전달하지 않는다. | all |
 | `image.drawing.sent-at-attach-and-on-change` | 호스트는 image region의 공급자에게 region의 부착 때와 상태가 바뀔 때마다 그 그리기 상태를 보내고, 바뀌지 않은 상태는 다시 보내지 않는다. | all |
+| `image.drawing.unsent-change-is-sent-again` | 한 번의 전송이 읽었으나 보낸 것으로 기록하지 않은 drawing 상태는 보낸 것으로 보고되지 않고 다음 전송이 다시 돌려준다. | all |
 | `image.drawing.reads-occlusion-at-attach` | 만들 때 완전히 가려진 창에 부착된 region의 그리기 상태는 false이며, 창 event가 아니라 AppKit occlusion 상태에서 읽는다. | all |
 | `image.drawing.reports-a-hidden-surface` | region의 그리기 메시지는 바깥 표면이 숨김을 알린 동안 `hidden`을 true로, 그 밖에는 false로 적는다. 아무것도 알리지 않은 표면은 숨겨진 것이 아니고, 값이 바뀌면 메시지를 보내며, 새 연결의 서비스는 그 값을 다시 받는다. | all |
 | `image.drawing.configures-shown-regions` | 보이는 region은 창의 상태와 상관없이 설정을 받고, 화면에 없는 창에서 raster가 바뀔 때도 받으며, 숨겨진 region은 받지 않는다. 표시 대기는 그리기 상태가 아닌 region을 기다리지 않고 그리기 상태가 된 region을 기다리며, 설정된 raster는 region이 그리기 상태가 될 때 다시 설정되지 않는다. | all |
@@ -903,7 +926,7 @@ fn invalid_json_closes_connection() {
 | `sidecars-transport.replace.waits-for-the-first-layout-list` | layout의 첫 목록 전에는 표면이 닫혀도 오래된 service를 교체하지 않는다. | all |
 | `sidecars-transport.persistent.starts-in-new-session` | 호스트가 시작한 영속 서비스는 새 session의 leader이므로 애플리케이션의 process group이나 terminal의 signal을 받지 않는다. | all |
 | `sidecars-transport.endpoint.zombie-service-does-not-exist` | 좀비 서비스 pid 는 존재하는 서비스로 치지 않아 낡은 endpoint 를 교체한다. | all |
-| `sidecars-transport.endpoint.foreign-service-process-exists` | 다른 사용자가 소유한 프로세스의 service pid 는 존재하는 service 다. 거부된 signal 확인이 그 프로세스가 있음을 보이기 때문이다. | all |
+| `sidecars-transport.endpoint.foreign-process-is-not-the-publisher` | pid가 다른 사용자가 소유한 살아 있는 프로세스를 가리키는 엔드포인트는 그 프로세스가 게시 전에 시작했더라도 낡은 것이다. 서비스는 호스트의 사용자로 실행되기 때문이다. 호스트는 그것을 지우고 새 서비스 엔드포인트가 그것을 대신한다([엔드포인트 게시자](persistent-services.ko.md#엔드포인트-게시자)). | all |
 | `sidecars-transport.endpoint.waits-for-the-end-of-a-service-process` | service process의 끝을 기다리면 process가 끝날 때, 그리고 process가 없을 때 true를 답하고, 실행 중에 그 중지가 오면 false를 답한다. 그 기다림을 끝내는 time limit은 없다. | all |
 | `sidecars-transport.replace.waits-for-the-end-of-the-service-process` | 교체한 상주 service는 endpoint의 process가 종료한 뒤에만 설치된 service를 시작하고, 호스트는 그 종료를 종료 event로 안다. 그 기다림 중의 중지는 교체를 "sidecars are stopped"로 실패시키고 sidecar를 오래된 채로 둔다. | all |
 | `sidecars-transport.persistent.revive-failure-is-reported` | 재시작 실패는 연결 끊김과 그 까닭을 소유 표면에 알린다. | all |
@@ -1159,6 +1182,7 @@ fn invalid_json_closes_connection() {
 | `cli.mcp.search-lists-the-whole-exposure` | Query 없는 `exposure_search`의 page들과 `--query` 없는 `sok exposures`는 창의 `exposure.list` 항목을 그 순서로 정확히 담고, `total`은 그 수다. | all |
 | `cli.describe.lists-every-entry` | `sok describe`와 `window_describe`의 모든 page의 row를 합치면 snapshot의 각 항목을 owner마다 한 번씩, 그리고 `unregistered`의 항목을 담고, `total`은 그 수이며, 첫 page는 `window`, `layout`, `plugins`, `agent`를 담는다. | all |
 | `cli.describe.compact-form-and-pages` | 간결한 형식은 설명을 첫 문장에서, status 값을 200자에서 `cut: true`와 함께 자르고, command 인자를 `<name>: <type>`으로 쓰며, 40000 byte나 `limit`을 넘길 row 앞에서 page를 `next`와 함께 끝낸다. `full`은 snapshot의 row를 자르지 않고 주고, `surface`는 그 surface만 준다. | all |
+| `cli.describe.summary-and-full` | `sok describe`는 각 tab의 summary status만 나열하고, `sok describe --full`은 tab의 모든 status를 나열한다. | all |
 | `endpoint.surface-window.resolves-the-owner` | `surface.window`는 ready인 창마다 `windows.list`의 순서로 page에 묻고 space를 답한 첫 page의 `{window, space}`로 답하고, page가 section surface에 `{space: null}`로 답하면 `space`는 `null`이다. 어느 page도 그 surface를 갖지 않고 모든 창이 ready이면 1012 `surface <id> is in no window`로, surface가 없거나 비어 있으면 page에 묻지 않고 -32602 `surface must be a non-empty string`으로, `space`가 없는 object처럼 `null`도 `{space}`도 아닌 page의 답에는 그 답의 글과 함께 -32603으로 답한다. | all |
 | `sidecars.environment.names-the-configuration-directory` | Host는 표준 입출력 sidecar와 지속 서비스를 `SOKSAK_CONFIG_DIR`를 자기 설정 폴더로 설정하고 `SOKSAK_SURFACE` 없이 시작하며, host의 환경이 두 변수의 다른 값을 가질 때도 그렇다. | all |
 | `sidecars.environment.puts-sok-first-on-the-path` | Host는 sidecar를 자기 실행 파일의 폴더, 곧 application bundle이 `sok`을 담는 폴더를 `PATH`의 첫 항목으로 두고 다른 항목에는 두지 않으며, 그 뒤에 자기 `PATH`의 항목을 두고 시작한다. | all |
@@ -1437,11 +1461,13 @@ fn invalid_json_closes_connection() {
 | `conversation.reads-an-unchosen-file-only-to-its-session-record` | 선택되지 않은 후보 파일은 세션 레코드까지만 읽으므로, 그 뒤의 잘못된 줄은 읽지 않는다. | all |
 | `conversation.refuses-a-relative-cwd` | `--cwd`가 절대 경로가 아니면 `cwd is not an absolute path: <cwd>`로 거부한다. | all |
 | `conversation.refuses-a-session-working-directory-that-is-not-a-string` | 세션 파일의 작업 디렉터리가 없거나 문자열이 아니면 작업 디렉터리 메시지로 거부한다. | all |
+| `conversation.refuses-a-home-that-is-not-utf-8` | byte가 UTF-8이 아닌 `HOME`은 그 byte를 escape하여 보여 주는 `HOME is not UTF-8: <escaped>`로 거부한다. | all |
 | `conversation.refuses-an-unknown-agent` | agent가 `claude-code`도 `codex`도 아니면 `unknown agent <agent>`로 거부한다. | all |
 | `conversation.refuses-an-unreadable-file-with-its-reason` | 읽을 수 없는 후보 또는 선택된 파일은 경로와 소문자 운영체제 사유와 함께 거부한다. | all |
 | `conversation.refuses-when-no-file-matches` | 작업 디렉터리와 일치하는 후보가 없으면 `no <agent> session file has the working directory <cwd>`로 거부한다. | all |
 | `conversation.selects-the-most-recently-modified-file` | 둘 이상의 후보가 일치하면 가장 최근에 수정된 파일을 고른다. | all |
 | `sidecars.environment.sok-folder-first-on-path` | sidecar 프로세스는 sok 애플리케이션의 folder를 PATH의 첫 항목으로 시작하며, 그 folder는 다른 PATH 항목에 나타나지 않는다. | all |
+| `sidecars.environment.start-records-the-sok-folder` | 설치된 sidecar의 sidecar channel의 시작은 level `info`의 event `host.sidecar.path` 하나를 기록하고, 그 `folder`는 host 실행 파일의 폴더이며 `sok`은 그 폴더의 `sok`이다. | all |
 
 ## Workbench cases
 
@@ -1481,3 +1507,4 @@ Wails와 Tauri 호스트의 메인 페이지와 mygo 호스트의 workbench는 �
 | `layout.surface-window.answers-the-space` | page에 보낸 `surface.window {surface}`는 현재 layout의 tab에는 보이는 space의 `{space}`로, 저장된 layout의 tab에는 project의 다른 space의 `{space}`로, 창의 sidebar가 그리는 section surface에는 `{space: null}`로, 그 set이 놓아준 뒤에는 `null`로, 어느 space도 갖지 않은 tab에는 `null`로, 없거나 비었거나 문자열이 아닌 surface에는 -32602 `surface must be a non-empty string`으로 답한다. |
 | `endpoint.exposure-snapshot.groups-the-window` | `exposure.snapshot`에서 메인 페이지의 부분은 각 status를 그 값과 함께, 또는 그 읽기가 실패하면 `error`와 함께, 각 command를, 각 element를 그 item과 그 command와 함께 담은 group `core`, `core.surfaces`의 surface마다 그 `plugin`, `kind`, `state`, `visible`을 가진 group 하나(unload된 surface와 아무것도 등록하지 않은 surface의 group은 항목을 담지 않는다), `unregistered`, 보이는 space의 frame과 탭을 가진 split과 카드의 tree인 `layout`, `surface.params`와 `opens`를 가진 `plugins`를 담는다. group들과 `unregistered`는 창의 `exposure.list` 항목을 정확히 담는다. `surface`가 있으면 group들은 그 surface의 group만 담고, 창에 없는 surface는 -32602 `surface <id> is not a surface of this window`로 실패한다. |
 | `endpoint.exposure-snapshot.surface-parts` | Surface document는 전달된 `exposure.snapshot`에 자기 group으로 답하고, 메인 페이지의 부분은 그 item의 사각형을 view의 원점을 더한 창 좌표로, 메인 document의 `inert`와 함께 준다. 답하기 전에 document가 끝난 surface는 `error` 1003과 항목 없이 나열된다. |
+| `workbench.space.parties-refused` | 저장된 space 객체가 현재의 어느 space 형태에도 없는 멤버 `parties`를 가지면, page와 mygo workbench 모두 그 읽기에서 `projects.json: project <root>, space <id>: obsolete member parties`로 실패하며, 그 space는 보이지 않는다([저장](projects.ko.md#저장)). |

@@ -14,6 +14,16 @@ pub fn attached_drawing_image(images: &Images, surface: &str) -> Key {
     key
 }
 
+/// Reads the drawing changes of a pass whose sends succeed and records each one as sent, as the host does after each
+/// successful send.
+pub fn sent_drawing_changes(images: &Images) -> Vec<Drawing> {
+    let changes = images.drawing_changes();
+    for change in &changes {
+        images.mark_drawing_sent(change);
+    }
+    changes
+}
+
 /// Gives each drawing change as name=value, followed by the word hidden for a hidden surface.
 pub fn drawing_values(changes: Vec<Drawing>) -> Vec<String> {
     changes

@@ -18,7 +18,7 @@ mod records;
 
 #[path = "support/drawing.rs"]
 mod drawing;
-use drawing::{DrawingStep, attached_drawing_image, drawing_values};
+use drawing::{DrawingStep, attached_drawing_image, drawing_values, sent_drawing_changes};
 
 fn configured_envelope(configuration: &Configure, sequence: i32) -> String {
     json!({
@@ -49,10 +49,10 @@ fn reserve_rejects_empty_sidecar() {
 
     // Try reserve with an empty sidecar.
     let result = images.reserve(&key, "owner", "");
-    assert!(result.is_err(), "expected error for empty sidecar");
-    assert!(
-        result.unwrap_err().contains("requires a sidecar"),
-        "expected 'requires a sidecar' error"
+    assert_eq!(
+        result,
+        Err(r#"image "view": reserve requires a sidecar"#.to_string()),
+        "the reservation without a sidecar"
     );
 
     // Check that the image was not registered.
@@ -1526,7 +1526,11 @@ fn drawing_state_is_sent_at_attach_and_on_change() {
     ];
     for (name, change, want) in steps {
         change();
-        assert_eq!(drawing_values(images.drawing_changes()), want, "{name}");
+        assert_eq!(
+            drawing_values(sent_drawing_changes(&images)),
+            want,
+            "{name}"
+        );
     }
 }
 
@@ -1536,12 +1540,12 @@ fn drawing_reports_a_hidden_surface() {
     let images = Images::default();
     let key = attached_drawing_image(&images, "tab-1");
     assert_eq!(
-        drawing_values(images.drawing_changes()),
+        drawing_values(sent_drawing_changes(&images)),
         vec!["view=false"],
         "a surface that reported no hiding is not hidden"
     );
     images.set_surface_visible(&key.0, false);
-    let changes = images.drawing_changes();
+    let changes = sent_drawing_changes(&images);
     assert_eq!(changes.len(), 1, "{changes:?}");
     assert!(
         changes[0].hidden,
@@ -1555,13 +1559,13 @@ fn drawing_reports_a_hidden_surface() {
         )
     );
     assert!(
-        images.drawing_changes().is_empty(),
+        sent_drawing_changes(&images).is_empty(),
         "an unchanged state is sent again"
     );
     // The service of a new connection holds no state, so it receives the hiding again.
     images.invalidate_sidecar("sidecar-a");
     assert_eq!(
-        drawing_values(images.drawing_changes()),
+        drawing_values(sent_drawing_changes(&images)),
         vec!["view=false hidden"],
         "the service of a new connection does not learn the hiding"
     );
@@ -1611,11 +1615,10 @@ fn a_shown_region_is_configured_whatever_its_window_and_only_a_drawing_region_is
             .is_none(),
         "the raster was configured twice"
     );
-    images.drawing_changes();
+    sent_drawing_changes(&images);
     images.set_on_screen(true);
     assert!(
-        images
-            .drawing_changes()
+        sent_drawing_changes(&images)
             .iter()
             .all(|change| change.configure.is_none()),
         "a configured raster was configured again when its region started drawing"
@@ -1635,7 +1638,7 @@ fn a_raster_that_changed_while_hidden_is_configured_when_the_region_is_shown() {
         .configure_raster(&key, 800, 600, 2.0, true)
         .unwrap()
         .expect("configure a drawing region");
-    images.drawing_changes();
+    sent_drawing_changes(&images);
     assert!(
         images
             .configure_raster(&key, 1000, 700, 2.0, false)
@@ -1644,14 +1647,13 @@ fn a_raster_that_changed_while_hidden_is_configured_when_the_region_is_shown() {
         "a hidden region was configured"
     );
     assert!(
-        images
-            .drawing_changes()
+        sent_drawing_changes(&images)
             .iter()
             .all(|change| change.configure.is_none()),
         "a region that stopped drawing received a configuration"
     );
     images.set_visible(&key, true).unwrap();
-    let shown = images.drawing_changes();
+    let shown = sent_drawing_changes(&images);
     let configuration = shown[0]
         .configure
         .as_ref()
@@ -1672,10 +1674,10 @@ fn a_raster_that_changed_while_hidden_is_configured_when_the_region_is_shown() {
         "the raster was configured twice"
     );
     images.set_visible(&key, false).unwrap();
-    images.drawing_changes();
+    sent_drawing_changes(&images);
     images.set_visible(&key, true).unwrap();
     assert!(
-        images.drawing_changes()[0].configure.is_none(),
+        sent_drawing_changes(&images)[0].configure.is_none(),
         "a raster that did not change was configured again"
     );
 }
@@ -1718,7 +1720,7 @@ fn a_region_attached_in_a_covered_window_is_not_drawing() {
     let key = attached_drawing_image(&images, "tab-1");
     images.set_visible(&key, true).unwrap();
     assert_eq!(
-        drawing_values(images.drawing_changes()),
+        drawing_values(sent_drawing_changes(&images)),
         vec!["view=false"],
         "the first drawing state of a region in a covered window"
     );
@@ -1734,7 +1736,7 @@ fn sent_drawing_is_the_state_last_sent_to_the_supplier() {
         !images.sent_drawing(&key),
         "a drawing state that was never sent is reported as drawing"
     );
-    images.drawing_changes();
+    sent_drawing_changes(&images);
     assert!(
         images.sent_drawing(&key),
         "the sent drawing state is not reported"
@@ -1744,4 +1746,91 @@ fn sent_drawing_is_the_state_last_sent_to_the_supplier() {
         images.sent_drawing(&key),
         "a change that was not sent yet is reported as sent"
     );
+}
+
+// contract: image.drawing.unsent-change-is-sent-again
+#[test]
+fn a_drawing_change_that_was_not_sent_is_returned_again() {
+    let images = Images::default();
+    let key = attached_drawing_image(&images, "tab-1");
+    images.set_visible(&key, true).unwrap();
+    // A pass reads the change and its send fails, so the pass records nothing.
+    assert_eq!(drawing_values(images.drawing_changes()), vec!["view=true"]);
+    assert!(
+        !images.sent_drawing(&key),
+        "a drawing change that was not sent is reported as sent"
+    );
+    assert_eq!(
+        drawing_values(images.drawing_changes()),
+        vec!["view=true"],
+        "the next pass does not read the unsent change again"
+    );
+}
+
+// contract: images.present.stale-native-raster-requests-reconfiguration
+#[test]
+fn a_frame_of_an_older_native_raster_requests_the_current_raster_configuration() {
+    let images = Images::default();
+    let key: Key = ("tab-1".to_string(), "view".to_string());
+    images.reserve(&key, "owner", "sidecar-a").expect("reserve");
+    images.set(&key, 100);
+    let configured = images
+        .configure_raster(&key, 800, 600, 2.0, true)
+        .unwrap()
+        .unwrap();
+    let body = json!({
+        "image": {
+            "name": "view",
+            "token": {
+                "kind": "iosurface-global",
+                "id": 12345u32,
+                "nonce": "AAAAAAAAAAAAAAAAAAAAAA=="
+            },
+            "width": 800,
+            "height": 600,
+            "scale": 2.0,
+            "format": "bgra8",
+            "generation": configured.generation,
+            "raster": configured.raster,
+            "sequence": 1
+        }
+    })
+    .to_string();
+    let recovered = Arc::new(Mutex::new(None));
+    let recovered_value = Arc::clone(&recovered);
+    let answer = Arc::new(Mutex::new(None));
+    let answer_value = Arc::clone(&answer);
+
+    assert!(handle_envelope_with_recovery(
+        &body,
+        "sidecar-a",
+        "tab-1",
+        &images,
+        // The native raster of the region changed before its refresh reached the host state.
+        |_work| Err("staleRaster native=900x600@2 frame=800x600@2".to_string()),
+        |_image, response| {
+            *answer_value.lock().unwrap() = Some(response);
+            Ok(())
+        },
+        |reason| {
+            assert_eq!(reason, "staleRaster");
+            let next = images.configure_raster(&key, 900, 600, 2.0, true).unwrap();
+            *recovered_value.lock().unwrap() = next;
+            Ok(())
+        },
+        || true,
+        || panic!("a refused frame notified the window"),
+    ));
+    let answer = answer
+        .lock()
+        .unwrap()
+        .take()
+        .expect("the frame was not answered");
+    assert_eq!(answer["image"]["error"], "stale");
+    let next = recovered
+        .lock()
+        .unwrap()
+        .take()
+        .expect("recovery was not requested");
+    assert!(next.raster > configured.raster && next.width == 900);
 }

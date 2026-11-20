@@ -182,7 +182,7 @@ test('stored and changed core setting values must have their declared form', asy
   const { beginSettings, connectSettings, set: change } = await import('../settings.js?test=core-values');
   const { orderedCallsAnswered } = await import('../host.js');
   const invalid = [
-    ['gap', 'wide'], ['gap', 25], ['radius', 1.5], ['size', 9], ['font', 'serif'], ['theme', 'neon'], ['mode', 'dim'],
+    ['gap', 'wide'], ['gap', 49], ['radius', 1.5], ['size', 9], ['font', 'serif'], ['theme', 'neon'], ['mode', 'dim'],
     ['projectOpening', 'tab'], ['projectTabs', 'right'], ['focusInd', 'glow'], ['fullRule', 'both'],
     ['left', 'yes'], ['right', 1], ['dim', null],
   ];

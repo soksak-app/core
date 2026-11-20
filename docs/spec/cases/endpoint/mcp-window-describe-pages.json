@@ -4,22 +4,1813 @@
   "replay": false,
   "reason": "The snapshots change between calls and hold a value whose length the test gives, which a running application does not show on demand.",
   "variables": {
-    "big": { "type": "string", "example": "x" }
+    "big": {
+      "type": "string",
+      "example": "x"
+    }
   },
   "steps": [
-    { "send": { "jsonrpc": "2.0", "id": 1, "method": "exposure.snapshot", "params": { "window": "main" } } },
-    { "reply": { "jsonrpc": "2.0", "id": 1, "result": { "window": { "window": "main", "title": "soksak", "project": null }, "layout": { "space": "space-1", "focused": "card-1", "root": { "card": "card-1", "size": 1, "frame": { "x": 0, "y": 0, "width": 100, "height": 100 }, "tabs": [] } }, "plugins": [], "groups": [{ "owner": "host", "status": [], "commands": [], "element": [] }, { "owner": "core", "status": [{ "name": "core.big", "description": "Status core.big.", "schema": {}, "value": "$big" }, { "name": "core.small", "description": "Status core.small.", "schema": {}, "value": 1 }, { "name": "core.gone", "description": "Status core.gone.", "schema": {}, "value": 2 }], "commands": [], "element": [{ "name": "core.many", "description": "Many items.", "many": true, "items": [{ "index": 0, "role": null, "text": "item 0", "rect": { "x": 0, "y": 0, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 1, "role": null, "text": "item 1", "rect": { "x": 0, "y": 1, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 2, "role": null, "text": "item 2", "rect": { "x": 0, "y": 2, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 3, "role": null, "text": "item 3", "rect": { "x": 0, "y": 3, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 4, "role": null, "text": "item 4", "rect": { "x": 0, "y": 4, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 5, "role": null, "text": "item 5", "rect": { "x": 0, "y": 5, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 6, "role": null, "text": "item 6", "rect": { "x": 0, "y": 6, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 7, "role": null, "text": "item 7", "rect": { "x": 0, "y": 7, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 8, "role": null, "text": "item 8", "rect": { "x": 0, "y": 8, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 9, "role": null, "text": "item 9", "rect": { "x": 0, "y": 9, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 10, "role": null, "text": "item 10", "rect": { "x": 0, "y": 10, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 11, "role": null, "text": "item 11", "rect": { "x": 0, "y": 11, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 12, "role": null, "text": "item 12", "rect": { "x": 0, "y": 12, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 13, "role": null, "text": "item 13", "rect": { "x": 0, "y": 13, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 14, "role": null, "text": "item 14", "rect": { "x": 0, "y": 14, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 15, "role": null, "text": "item 15", "rect": { "x": 0, "y": 15, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 16, "role": null, "text": "item 16", "rect": { "x": 0, "y": 16, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 17, "role": null, "text": "item 17", "rect": { "x": 0, "y": 17, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 18, "role": null, "text": "item 18", "rect": { "x": 0, "y": 18, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 19, "role": null, "text": "item 19", "rect": { "x": 0, "y": 19, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 20, "role": null, "text": "item 20", "rect": { "x": 0, "y": 20, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 21, "role": null, "text": "item 21", "rect": { "x": 0, "y": 21, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 22, "role": null, "text": "item 22", "rect": { "x": 0, "y": 22, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 23, "role": null, "text": "item 23", "rect": { "x": 0, "y": 23, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 24, "role": null, "text": "item 24", "rect": { "x": 0, "y": 24, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }] }] }], "unregistered": [] } } },
-    { "send": { "jsonrpc": "2.0", "id": 2, "method": "exposure.snapshot", "params": { "window": "main" } } },
-    { "reply": { "jsonrpc": "2.0", "id": 2, "result": { "window": { "window": "main", "title": "soksak", "project": null }, "layout": { "space": "space-1", "focused": "card-1", "root": { "card": "card-1", "size": 1, "frame": { "x": 0, "y": 0, "width": 100, "height": 100 }, "tabs": [] } }, "plugins": [], "groups": [{ "owner": "host", "status": [], "commands": [], "element": [] }, { "owner": "core", "status": [{ "name": "core.big", "description": "Status core.big.", "schema": {}, "value": "$big" }, { "name": "core.small", "description": "Status core.small.", "schema": {}, "value": 1 }, { "name": "core.added", "description": "Status core.added.", "schema": {}, "value": 3 }], "commands": [], "element": [{ "name": "core.many", "description": "Many items.", "many": true, "items": [{ "index": 0, "role": null, "text": "item 0", "rect": { "x": 0, "y": 0, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 1, "role": null, "text": "item 1", "rect": { "x": 0, "y": 1, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 2, "role": null, "text": "item 2", "rect": { "x": 0, "y": 2, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 3, "role": null, "text": "item 3", "rect": { "x": 0, "y": 3, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 4, "role": null, "text": "item 4", "rect": { "x": 0, "y": 4, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 5, "role": null, "text": "item 5", "rect": { "x": 0, "y": 5, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 6, "role": null, "text": "item 6", "rect": { "x": 0, "y": 6, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 7, "role": null, "text": "item 7", "rect": { "x": 0, "y": 7, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 8, "role": null, "text": "item 8", "rect": { "x": 0, "y": 8, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 9, "role": null, "text": "item 9", "rect": { "x": 0, "y": 9, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 10, "role": null, "text": "item 10", "rect": { "x": 0, "y": 10, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 11, "role": null, "text": "item 11", "rect": { "x": 0, "y": 11, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 12, "role": null, "text": "item 12", "rect": { "x": 0, "y": 12, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 13, "role": null, "text": "item 13", "rect": { "x": 0, "y": 13, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 14, "role": null, "text": "item 14", "rect": { "x": 0, "y": 14, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 15, "role": null, "text": "item 15", "rect": { "x": 0, "y": 15, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 16, "role": null, "text": "item 16", "rect": { "x": 0, "y": 16, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 17, "role": null, "text": "item 17", "rect": { "x": 0, "y": 17, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 18, "role": null, "text": "item 18", "rect": { "x": 0, "y": 18, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 19, "role": null, "text": "item 19", "rect": { "x": 0, "y": 19, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 20, "role": null, "text": "item 20", "rect": { "x": 0, "y": 20, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 21, "role": null, "text": "item 21", "rect": { "x": 0, "y": 21, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 22, "role": null, "text": "item 22", "rect": { "x": 0, "y": 22, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 23, "role": null, "text": "item 23", "rect": { "x": 0, "y": 23, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 24, "role": null, "text": "item 24", "rect": { "x": 0, "y": 24, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }] }] }], "unregistered": [] } } },
-    { "send": { "jsonrpc": "2.0", "id": 3, "method": "exposure.snapshot", "params": { "window": "main" } } },
-    { "reply": { "jsonrpc": "2.0", "id": 3, "result": { "window": { "window": "main", "title": "soksak", "project": null }, "layout": { "space": "space-1", "focused": "card-1", "root": { "card": "card-1", "size": 1, "frame": { "x": 0, "y": 0, "width": 100, "height": 100 }, "tabs": [] } }, "plugins": [], "groups": [{ "owner": "host", "status": [], "commands": [], "element": [] }, { "owner": "core", "status": [{ "name": "core.big", "description": "Status core.big.", "schema": {}, "value": "$big" }, { "name": "core.small", "description": "Status core.small.", "schema": {}, "value": 1 }, { "name": "core.added", "description": "Status core.added.", "schema": {}, "value": 3 }], "commands": [], "element": [{ "name": "core.many", "description": "Many items.", "many": true, "items": [{ "index": 0, "role": null, "text": "item 0", "rect": { "x": 0, "y": 0, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 1, "role": null, "text": "item 1", "rect": { "x": 0, "y": 1, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 2, "role": null, "text": "item 2", "rect": { "x": 0, "y": 2, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 3, "role": null, "text": "item 3", "rect": { "x": 0, "y": 3, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 4, "role": null, "text": "item 4", "rect": { "x": 0, "y": 4, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 5, "role": null, "text": "item 5", "rect": { "x": 0, "y": 5, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 6, "role": null, "text": "item 6", "rect": { "x": 0, "y": 6, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 7, "role": null, "text": "item 7", "rect": { "x": 0, "y": 7, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 8, "role": null, "text": "item 8", "rect": { "x": 0, "y": 8, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 9, "role": null, "text": "item 9", "rect": { "x": 0, "y": 9, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 10, "role": null, "text": "item 10", "rect": { "x": 0, "y": 10, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 11, "role": null, "text": "item 11", "rect": { "x": 0, "y": 11, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 12, "role": null, "text": "item 12", "rect": { "x": 0, "y": 12, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 13, "role": null, "text": "item 13", "rect": { "x": 0, "y": 13, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 14, "role": null, "text": "item 14", "rect": { "x": 0, "y": 14, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 15, "role": null, "text": "item 15", "rect": { "x": 0, "y": 15, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 16, "role": null, "text": "item 16", "rect": { "x": 0, "y": 16, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 17, "role": null, "text": "item 17", "rect": { "x": 0, "y": 17, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 18, "role": null, "text": "item 18", "rect": { "x": 0, "y": 18, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 19, "role": null, "text": "item 19", "rect": { "x": 0, "y": 19, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 20, "role": null, "text": "item 20", "rect": { "x": 0, "y": 20, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 21, "role": null, "text": "item 21", "rect": { "x": 0, "y": 21, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 22, "role": null, "text": "item 22", "rect": { "x": 0, "y": 22, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 23, "role": null, "text": "item 23", "rect": { "x": 0, "y": 23, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 24, "role": null, "text": "item 24", "rect": { "x": 0, "y": 24, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }] }] }], "unregistered": [] } } }
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "exposure.snapshot",
+        "params": {
+          "window": "main"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "window": {
+            "window": "main",
+            "title": "soksak",
+            "project": null
+          },
+          "layout": {
+            "space": "space-1",
+            "focused": "card-1",
+            "root": {
+              "card": "card-1",
+              "size": 1,
+              "frame": {
+                "x": 0,
+                "y": 0,
+                "width": 100,
+                "height": 100
+              },
+              "tabs": []
+            }
+          },
+          "plugins": [],
+          "groups": [
+            {
+              "owner": "host",
+              "status": [],
+              "commands": [],
+              "element": []
+            },
+            {
+              "owner": "core",
+              "status": [
+                {
+                  "name": "core.big",
+                  "description": "Status core.big.",
+                  "schema": {},
+                  "value": "$big"
+                },
+                {
+                  "name": "core.small",
+                  "description": "Status core.small.",
+                  "schema": {},
+                  "value": 1
+                },
+                {
+                  "name": "core.gone",
+                  "description": "Status core.gone.",
+                  "schema": {},
+                  "value": 2
+                }
+              ],
+              "commands": [],
+              "element": [
+                {
+                  "name": "core.many",
+                  "description": "Many items.",
+                  "many": true,
+                  "items": [
+                    {
+                      "index": 0,
+                      "role": null,
+                      "text": "item 0",
+                      "rect": {
+                        "x": 0,
+                        "y": 0,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 1,
+                      "role": null,
+                      "text": "item 1",
+                      "rect": {
+                        "x": 0,
+                        "y": 1,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 2,
+                      "role": null,
+                      "text": "item 2",
+                      "rect": {
+                        "x": 0,
+                        "y": 2,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 3,
+                      "role": null,
+                      "text": "item 3",
+                      "rect": {
+                        "x": 0,
+                        "y": 3,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 4,
+                      "role": null,
+                      "text": "item 4",
+                      "rect": {
+                        "x": 0,
+                        "y": 4,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 5,
+                      "role": null,
+                      "text": "item 5",
+                      "rect": {
+                        "x": 0,
+                        "y": 5,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 6,
+                      "role": null,
+                      "text": "item 6",
+                      "rect": {
+                        "x": 0,
+                        "y": 6,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 7,
+                      "role": null,
+                      "text": "item 7",
+                      "rect": {
+                        "x": 0,
+                        "y": 7,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 8,
+                      "role": null,
+                      "text": "item 8",
+                      "rect": {
+                        "x": 0,
+                        "y": 8,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 9,
+                      "role": null,
+                      "text": "item 9",
+                      "rect": {
+                        "x": 0,
+                        "y": 9,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 10,
+                      "role": null,
+                      "text": "item 10",
+                      "rect": {
+                        "x": 0,
+                        "y": 10,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 11,
+                      "role": null,
+                      "text": "item 11",
+                      "rect": {
+                        "x": 0,
+                        "y": 11,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 12,
+                      "role": null,
+                      "text": "item 12",
+                      "rect": {
+                        "x": 0,
+                        "y": 12,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 13,
+                      "role": null,
+                      "text": "item 13",
+                      "rect": {
+                        "x": 0,
+                        "y": 13,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 14,
+                      "role": null,
+                      "text": "item 14",
+                      "rect": {
+                        "x": 0,
+                        "y": 14,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 15,
+                      "role": null,
+                      "text": "item 15",
+                      "rect": {
+                        "x": 0,
+                        "y": 15,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 16,
+                      "role": null,
+                      "text": "item 16",
+                      "rect": {
+                        "x": 0,
+                        "y": 16,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 17,
+                      "role": null,
+                      "text": "item 17",
+                      "rect": {
+                        "x": 0,
+                        "y": 17,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 18,
+                      "role": null,
+                      "text": "item 18",
+                      "rect": {
+                        "x": 0,
+                        "y": 18,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 19,
+                      "role": null,
+                      "text": "item 19",
+                      "rect": {
+                        "x": 0,
+                        "y": 19,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 20,
+                      "role": null,
+                      "text": "item 20",
+                      "rect": {
+                        "x": 0,
+                        "y": 20,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 21,
+                      "role": null,
+                      "text": "item 21",
+                      "rect": {
+                        "x": 0,
+                        "y": 21,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 22,
+                      "role": null,
+                      "text": "item 22",
+                      "rect": {
+                        "x": 0,
+                        "y": 22,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 23,
+                      "role": null,
+                      "text": "item 23",
+                      "rect": {
+                        "x": 0,
+                        "y": 23,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 24,
+                      "role": null,
+                      "text": "item 24",
+                      "rect": {
+                        "x": 0,
+                        "y": 24,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "unregistered": []
+        }
+      }
+    },
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "exposure.snapshot",
+        "params": {
+          "window": "main"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": {
+          "window": {
+            "window": "main",
+            "title": "soksak",
+            "project": null
+          },
+          "layout": {
+            "space": "space-1",
+            "focused": "card-1",
+            "root": {
+              "card": "card-1",
+              "size": 1,
+              "frame": {
+                "x": 0,
+                "y": 0,
+                "width": 100,
+                "height": 100
+              },
+              "tabs": []
+            }
+          },
+          "plugins": [],
+          "groups": [
+            {
+              "owner": "host",
+              "status": [],
+              "commands": [],
+              "element": []
+            },
+            {
+              "owner": "core",
+              "status": [
+                {
+                  "name": "core.big",
+                  "description": "Status core.big.",
+                  "schema": {},
+                  "value": "$big"
+                },
+                {
+                  "name": "core.small",
+                  "description": "Status core.small.",
+                  "schema": {},
+                  "value": 1
+                },
+                {
+                  "name": "core.added",
+                  "description": "Status core.added.",
+                  "schema": {},
+                  "value": 3
+                }
+              ],
+              "commands": [],
+              "element": [
+                {
+                  "name": "core.many",
+                  "description": "Many items.",
+                  "many": true,
+                  "items": [
+                    {
+                      "index": 0,
+                      "role": null,
+                      "text": "item 0",
+                      "rect": {
+                        "x": 0,
+                        "y": 0,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 1,
+                      "role": null,
+                      "text": "item 1",
+                      "rect": {
+                        "x": 0,
+                        "y": 1,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 2,
+                      "role": null,
+                      "text": "item 2",
+                      "rect": {
+                        "x": 0,
+                        "y": 2,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 3,
+                      "role": null,
+                      "text": "item 3",
+                      "rect": {
+                        "x": 0,
+                        "y": 3,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 4,
+                      "role": null,
+                      "text": "item 4",
+                      "rect": {
+                        "x": 0,
+                        "y": 4,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 5,
+                      "role": null,
+                      "text": "item 5",
+                      "rect": {
+                        "x": 0,
+                        "y": 5,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 6,
+                      "role": null,
+                      "text": "item 6",
+                      "rect": {
+                        "x": 0,
+                        "y": 6,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 7,
+                      "role": null,
+                      "text": "item 7",
+                      "rect": {
+                        "x": 0,
+                        "y": 7,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 8,
+                      "role": null,
+                      "text": "item 8",
+                      "rect": {
+                        "x": 0,
+                        "y": 8,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 9,
+                      "role": null,
+                      "text": "item 9",
+                      "rect": {
+                        "x": 0,
+                        "y": 9,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 10,
+                      "role": null,
+                      "text": "item 10",
+                      "rect": {
+                        "x": 0,
+                        "y": 10,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 11,
+                      "role": null,
+                      "text": "item 11",
+                      "rect": {
+                        "x": 0,
+                        "y": 11,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 12,
+                      "role": null,
+                      "text": "item 12",
+                      "rect": {
+                        "x": 0,
+                        "y": 12,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 13,
+                      "role": null,
+                      "text": "item 13",
+                      "rect": {
+                        "x": 0,
+                        "y": 13,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 14,
+                      "role": null,
+                      "text": "item 14",
+                      "rect": {
+                        "x": 0,
+                        "y": 14,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 15,
+                      "role": null,
+                      "text": "item 15",
+                      "rect": {
+                        "x": 0,
+                        "y": 15,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 16,
+                      "role": null,
+                      "text": "item 16",
+                      "rect": {
+                        "x": 0,
+                        "y": 16,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 17,
+                      "role": null,
+                      "text": "item 17",
+                      "rect": {
+                        "x": 0,
+                        "y": 17,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 18,
+                      "role": null,
+                      "text": "item 18",
+                      "rect": {
+                        "x": 0,
+                        "y": 18,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 19,
+                      "role": null,
+                      "text": "item 19",
+                      "rect": {
+                        "x": 0,
+                        "y": 19,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 20,
+                      "role": null,
+                      "text": "item 20",
+                      "rect": {
+                        "x": 0,
+                        "y": 20,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 21,
+                      "role": null,
+                      "text": "item 21",
+                      "rect": {
+                        "x": 0,
+                        "y": 21,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 22,
+                      "role": null,
+                      "text": "item 22",
+                      "rect": {
+                        "x": 0,
+                        "y": 22,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 23,
+                      "role": null,
+                      "text": "item 23",
+                      "rect": {
+                        "x": 0,
+                        "y": 23,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 24,
+                      "role": null,
+                      "text": "item 24",
+                      "rect": {
+                        "x": 0,
+                        "y": 24,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "unregistered": []
+        }
+      }
+    },
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "exposure.snapshot",
+        "params": {
+          "window": "main"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "result": {
+          "window": {
+            "window": "main",
+            "title": "soksak",
+            "project": null
+          },
+          "layout": {
+            "space": "space-1",
+            "focused": "card-1",
+            "root": {
+              "card": "card-1",
+              "size": 1,
+              "frame": {
+                "x": 0,
+                "y": 0,
+                "width": 100,
+                "height": 100
+              },
+              "tabs": []
+            }
+          },
+          "plugins": [],
+          "groups": [
+            {
+              "owner": "host",
+              "status": [],
+              "commands": [],
+              "element": []
+            },
+            {
+              "owner": "core",
+              "status": [
+                {
+                  "name": "core.big",
+                  "description": "Status core.big.",
+                  "schema": {},
+                  "value": "$big"
+                },
+                {
+                  "name": "core.small",
+                  "description": "Status core.small.",
+                  "schema": {},
+                  "value": 1
+                },
+                {
+                  "name": "core.added",
+                  "description": "Status core.added.",
+                  "schema": {},
+                  "value": 3
+                }
+              ],
+              "commands": [],
+              "element": [
+                {
+                  "name": "core.many",
+                  "description": "Many items.",
+                  "many": true,
+                  "items": [
+                    {
+                      "index": 0,
+                      "role": null,
+                      "text": "item 0",
+                      "rect": {
+                        "x": 0,
+                        "y": 0,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 1,
+                      "role": null,
+                      "text": "item 1",
+                      "rect": {
+                        "x": 0,
+                        "y": 1,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 2,
+                      "role": null,
+                      "text": "item 2",
+                      "rect": {
+                        "x": 0,
+                        "y": 2,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 3,
+                      "role": null,
+                      "text": "item 3",
+                      "rect": {
+                        "x": 0,
+                        "y": 3,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 4,
+                      "role": null,
+                      "text": "item 4",
+                      "rect": {
+                        "x": 0,
+                        "y": 4,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 5,
+                      "role": null,
+                      "text": "item 5",
+                      "rect": {
+                        "x": 0,
+                        "y": 5,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 6,
+                      "role": null,
+                      "text": "item 6",
+                      "rect": {
+                        "x": 0,
+                        "y": 6,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 7,
+                      "role": null,
+                      "text": "item 7",
+                      "rect": {
+                        "x": 0,
+                        "y": 7,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 8,
+                      "role": null,
+                      "text": "item 8",
+                      "rect": {
+                        "x": 0,
+                        "y": 8,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 9,
+                      "role": null,
+                      "text": "item 9",
+                      "rect": {
+                        "x": 0,
+                        "y": 9,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 10,
+                      "role": null,
+                      "text": "item 10",
+                      "rect": {
+                        "x": 0,
+                        "y": 10,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 11,
+                      "role": null,
+                      "text": "item 11",
+                      "rect": {
+                        "x": 0,
+                        "y": 11,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 12,
+                      "role": null,
+                      "text": "item 12",
+                      "rect": {
+                        "x": 0,
+                        "y": 12,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 13,
+                      "role": null,
+                      "text": "item 13",
+                      "rect": {
+                        "x": 0,
+                        "y": 13,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 14,
+                      "role": null,
+                      "text": "item 14",
+                      "rect": {
+                        "x": 0,
+                        "y": 14,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 15,
+                      "role": null,
+                      "text": "item 15",
+                      "rect": {
+                        "x": 0,
+                        "y": 15,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 16,
+                      "role": null,
+                      "text": "item 16",
+                      "rect": {
+                        "x": 0,
+                        "y": 16,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 17,
+                      "role": null,
+                      "text": "item 17",
+                      "rect": {
+                        "x": 0,
+                        "y": 17,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 18,
+                      "role": null,
+                      "text": "item 18",
+                      "rect": {
+                        "x": 0,
+                        "y": 18,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 19,
+                      "role": null,
+                      "text": "item 19",
+                      "rect": {
+                        "x": 0,
+                        "y": 19,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 20,
+                      "role": null,
+                      "text": "item 20",
+                      "rect": {
+                        "x": 0,
+                        "y": 20,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 21,
+                      "role": null,
+                      "text": "item 21",
+                      "rect": {
+                        "x": 0,
+                        "y": 21,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 22,
+                      "role": null,
+                      "text": "item 22",
+                      "rect": {
+                        "x": 0,
+                        "y": 22,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 23,
+                      "role": null,
+                      "text": "item 23",
+                      "rect": {
+                        "x": 0,
+                        "y": 23,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    },
+                    {
+                      "index": 24,
+                      "role": null,
+                      "text": "item 24",
+                      "rect": {
+                        "x": 0,
+                        "y": 24,
+                        "width": 1,
+                        "height": 1
+                      },
+                      "visible": true,
+                      "inert": false,
+                      "command": null,
+                      "params": null
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "unregistered": []
+        }
+      }
+    }
   ],
   "mcp": {
-    "arguments": ["--window", "main"],
+    "arguments": [
+      "--window",
+      "main"
+    ],
     "steps": [
-      { "tool": "window_describe", "arguments": { "full": true } },
-      { "tool": "window_describe", "arguments": { "full": true, "after": "core status core.big" }, "result": { "next": null, "rows": [{ "description": "Status core.small.", "group": "core", "key": "core status core.small", "kind": "status", "name": "core.small", "schema": {}, "value": 1 }, { "description": "Status core.added.", "group": "core", "key": "core status core.added", "kind": "status", "name": "core.added", "schema": {}, "value": 3 }, { "description": "Many items.", "group": "core", "items": [{ "index": 0, "role": null, "text": "item 0", "rect": { "x": 0, "y": 0, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 1, "role": null, "text": "item 1", "rect": { "x": 0, "y": 1, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 2, "role": null, "text": "item 2", "rect": { "x": 0, "y": 2, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 3, "role": null, "text": "item 3", "rect": { "x": 0, "y": 3, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 4, "role": null, "text": "item 4", "rect": { "x": 0, "y": 4, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 5, "role": null, "text": "item 5", "rect": { "x": 0, "y": 5, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 6, "role": null, "text": "item 6", "rect": { "x": 0, "y": 6, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 7, "role": null, "text": "item 7", "rect": { "x": 0, "y": 7, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 8, "role": null, "text": "item 8", "rect": { "x": 0, "y": 8, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 9, "role": null, "text": "item 9", "rect": { "x": 0, "y": 9, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 10, "role": null, "text": "item 10", "rect": { "x": 0, "y": 10, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 11, "role": null, "text": "item 11", "rect": { "x": 0, "y": 11, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 12, "role": null, "text": "item 12", "rect": { "x": 0, "y": 12, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 13, "role": null, "text": "item 13", "rect": { "x": 0, "y": 13, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 14, "role": null, "text": "item 14", "rect": { "x": 0, "y": 14, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 15, "role": null, "text": "item 15", "rect": { "x": 0, "y": 15, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 16, "role": null, "text": "item 16", "rect": { "x": 0, "y": 16, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 17, "role": null, "text": "item 17", "rect": { "x": 0, "y": 17, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 18, "role": null, "text": "item 18", "rect": { "x": 0, "y": 18, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 19, "role": null, "text": "item 19", "rect": { "x": 0, "y": 19, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 20, "role": null, "text": "item 20", "rect": { "x": 0, "y": 20, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 21, "role": null, "text": "item 21", "rect": { "x": 0, "y": 21, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 22, "role": null, "text": "item 22", "rect": { "x": 0, "y": 22, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 23, "role": null, "text": "item 23", "rect": { "x": 0, "y": 23, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }, { "index": 24, "role": null, "text": "item 24", "rect": { "x": 0, "y": 24, "width": 1, "height": 1 }, "visible": true, "inert": false, "command": null, "params": null }], "key": "core element core.many", "kind": "element", "many": true, "name": "core.many" }], "total": 4 } },
-      { "tool": "window_describe", "arguments": {} }
+      {
+        "tool": "window_describe",
+        "arguments": {
+          "full": true
+        }
+      },
+      {
+        "tool": "window_describe",
+        "arguments": {
+          "full": true,
+          "after": "core status core.big"
+        },
+        "result": {
+          "next": null,
+          "rows": [
+            {
+              "description": "Status core.small.",
+              "group": "core",
+              "key": "core status core.small",
+              "kind": "status",
+              "name": "core.small",
+              "schema": {},
+              "value": 1
+            },
+            {
+              "description": "Status core.added.",
+              "group": "core",
+              "key": "core status core.added",
+              "kind": "status",
+              "name": "core.added",
+              "schema": {},
+              "value": 3
+            },
+            {
+              "description": "Many items.",
+              "group": "core",
+              "items": [
+                {
+                  "index": 0,
+                  "role": null,
+                  "text": "item 0",
+                  "rect": {
+                    "x": 0,
+                    "y": 0,
+                    "width": 1,
+                    "height": 1
+                  },
+                  "visible": true,
+                  "inert": false,
+                  "command": null,
+                  "params": null
+                },
+                {
+                  "index": 1,
+                  "role": null,
+                  "text": "item 1",
+                  "rect": {
+                    "x": 0,
+                    "y": 1,
+                    "width": 1,
+                    "height": 1
+                  },
+                  "visible": true,
+                  "inert": false,
+                  "command": null,
+                  "params": null
+                },
+                {
+                  "index": 2,
+                  "role": null,
+                  "text": "item 2",
+                  "rect": {
+                    "x": 0,
+                    "y": 2,
+                    "width": 1,
+                    "height": 1
+                  },
+                  "visible": true,
+                  "inert": false,
+                  "command": null,
+                  "params": null
+                },
+                {
+                  "index": 3,
+                  "role": null,
+                  "text": "item 3",
+                  "rect": {
+                    "x": 0,
+                    "y": 3,
+                    "width": 1,
+                    "height": 1
+                  },
+                  "visible": true,
+                  "inert": false,
+                  "command": null,
+                  "params": null
+                },
+                {
+                  "index": 4,
+                  "role": null,
+                  "text": "item 4",
+                  "rect": {
+                    "x": 0,
+                    "y": 4,
+                    "width": 1,
+                    "height": 1
+                  },
+                  "visible": true,
+                  "inert": false,
+                  "command": null,
+                  "params": null
+                },
+                {
+                  "index": 5,
+                  "role": null,
+                  "text": "item 5",
+                  "rect": {
+                    "x": 0,
+                    "y": 5,
+                    "width": 1,
+                    "height": 1
+                  },
+                  "visible": true,
+                  "inert": false,
+                  "command": null,
+                  "params": null
+                },
+                {
+                  "index": 6,
+                  "role": null,
+                  "text": "item 6",
+                  "rect": {
+                    "x": 0,
+                    "y": 6,
+                    "width": 1,
+                    "height": 1
+                  },
+                  "visible": true,
+                  "inert": false,
+                  "command": null,
+                  "params": null
+                },
+                {
+                  "index": 7,
+                  "role": null,
+                  "text": "item 7",
+                  "rect": {
+                    "x": 0,
+                    "y": 7,
+                    "width": 1,
+                    "height": 1
+                  },
+                  "visible": true,
+                  "inert": false,
+                  "command": null,
+                  "params": null
+                },
+                {
+                  "index": 8,
+                  "role": null,
+                  "text": "item 8",
+                  "rect": {
+                    "x": 0,
+                    "y": 8,
+                    "width": 1,
+                    "height": 1
+                  },
+                  "visible": true,
+                  "inert": false,
+                  "command": null,
+                  "params": null
+                },
+                {
+                  "index": 9,
+                  "role": null,
+                  "text": "item 9",
+                  "rect": {
+                    "x": 0,
+                    "y": 9,
+                    "width": 1,
+                    "height": 1
+                  },
+                  "visible": true,
+                  "inert": false,
+                  "command": null,
+                  "params": null
+                },
+                {
+                  "index": 10,
+                  "role": null,
+                  "text": "item 10",
+                  "rect": {
+                    "x": 0,
+                    "y": 10,
+                    "width": 1,
+                    "height": 1
+                  },
+                  "visible": true,
+                  "inert": false,
+                  "command": null,
+                  "params": null
+                },
+                {
+                  "index": 11,
+                  "role": null,
+                  "text": "item 11",
+                  "rect": {
+                    "x": 0,
+                    "y": 11,
+                    "width": 1,
+                    "height": 1
+                  },
+                  "visible": true,
+                  "inert": false,
+                  "command": null,
+                  "params": null
+                },
+                {
+                  "index": 12,
+                  "role": null,
+                  "text": "item 12",
+                  "rect": {
+                    "x": 0,
+                    "y": 12,
+                    "width": 1,
+                    "height": 1
+                  },
+                  "visible": true,
+                  "inert": false,
+                  "command": null,
+                  "params": null
+                },
+                {
+                  "index": 13,
+                  "role": null,
+                  "text": "item 13",
+                  "rect": {
+                    "x": 0,
+                    "y": 13,
+                    "width": 1,
+                    "height": 1
+                  },
+                  "visible": true,
+                  "inert": false,
+                  "command": null,
+                  "params": null
+                },
+                {
+                  "index": 14,
+                  "role": null,
+                  "text": "item 14",
+                  "rect": {
+                    "x": 0,
+                    "y": 14,
+                    "width": 1,
+                    "height": 1
+                  },
+                  "visible": true,
+                  "inert": false,
+                  "command": null,
+                  "params": null
+                },
+                {
+                  "index": 15,
+                  "role": null,
+                  "text": "item 15",
+                  "rect": {
+                    "x": 0,
+                    "y": 15,
+                    "width": 1,
+                    "height": 1
+                  },
+                  "visible": true,
+                  "inert": false,
+                  "command": null,
+                  "params": null
+                },
+                {
+                  "index": 16,
+                  "role": null,
+                  "text": "item 16",
+                  "rect": {
+                    "x": 0,
+                    "y": 16,
+                    "width": 1,
+                    "height": 1
+                  },
+                  "visible": true,
+                  "inert": false,
+                  "command": null,
+                  "params": null
+                },
+                {
+                  "index": 17,
+                  "role": null,
+                  "text": "item 17",
+                  "rect": {
+                    "x": 0,
+                    "y": 17,
+                    "width": 1,
+                    "height": 1
+                  },
+                  "visible": true,
+                  "inert": false,
+                  "command": null,
+                  "params": null
+                },
+                {
+                  "index": 18,
+                  "role": null,
+                  "text": "item 18",
+                  "rect": {
+                    "x": 0,
+                    "y": 18,
+                    "width": 1,
+                    "height": 1
+                  },
+                  "visible": true,
+                  "inert": false,
+                  "command": null,
+                  "params": null
+                },
+                {
+                  "index": 19,
+                  "role": null,
+                  "text": "item 19",
+                  "rect": {
+                    "x": 0,
+                    "y": 19,
+                    "width": 1,
+                    "height": 1
+                  },
+                  "visible": true,
+                  "inert": false,
+                  "command": null,
+                  "params": null
+                },
+                {
+                  "index": 20,
+                  "role": null,
+                  "text": "item 20",
+                  "rect": {
+                    "x": 0,
+                    "y": 20,
+                    "width": 1,
+                    "height": 1
+                  },
+                  "visible": true,
+                  "inert": false,
+                  "command": null,
+                  "params": null
+                },
+                {
+                  "index": 21,
+                  "role": null,
+                  "text": "item 21",
+                  "rect": {
+                    "x": 0,
+                    "y": 21,
+                    "width": 1,
+                    "height": 1
+                  },
+                  "visible": true,
+                  "inert": false,
+                  "command": null,
+                  "params": null
+                },
+                {
+                  "index": 22,
+                  "role": null,
+                  "text": "item 22",
+                  "rect": {
+                    "x": 0,
+                    "y": 22,
+                    "width": 1,
+                    "height": 1
+                  },
+                  "visible": true,
+                  "inert": false,
+                  "command": null,
+                  "params": null
+                },
+                {
+                  "index": 23,
+                  "role": null,
+                  "text": "item 23",
+                  "rect": {
+                    "x": 0,
+                    "y": 23,
+                    "width": 1,
+                    "height": 1
+                  },
+                  "visible": true,
+                  "inert": false,
+                  "command": null,
+                  "params": null
+                },
+                {
+                  "index": 24,
+                  "role": null,
+                  "text": "item 24",
+                  "rect": {
+                    "x": 0,
+                    "y": 24,
+                    "width": 1,
+                    "height": 1
+                  },
+                  "visible": true,
+                  "inert": false,
+                  "command": null,
+                  "params": null
+                }
+              ],
+              "key": "core element core.many",
+              "kind": "element",
+              "many": true,
+              "name": "core.many"
+            }
+          ],
+          "total": 4
+        }
+      },
+      {
+        "tool": "window_describe",
+        "arguments": {}
+      }
     ]
   }
 }

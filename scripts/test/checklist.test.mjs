@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { checklistCounts, checkChangelogTranslations, checkSpecificationIds } from "../checklist.mjs";
+import { checklistCounts, checkChangelogTranslations, checkChecklistTranslations, checkSpecificationIds } from "../checklist.mjs";
 
 const checker = fileURLToPath(new URL("../check-docs.mjs", import.meta.url));
 const englishTable = "\n| Feature | Implementation | Validation | Release |\n| --- | --- | --- | --- |\n| Test | Source | Unverified | Unreleased |\n";
@@ -236,6 +236,10 @@ for (const [name, english, korean, reason] of [
     assert.match(result.stderr, new RegExp(reason));
   });
 }
+
+test("checklist translations with the same identifiers, ordering, nesting, and states pass when their labels differ", () => {
+  assert.deepEqual(checkChecklistTranslations("- [o] G1 — done\n", "- [o] G1 — 완료\n"), []);
+});
 
 const englishLog = "# Changelog\n\n## Unreleased\n\n- F1-2: changed `a.js`.\n- Added `b`.\n\n## 2026-09-22\n\n- G3: done.\n";
 const koreanLog = "# 변경 기록\n\n## 미배포\n\n- F1-2: `a.js`를 바꿨다.\n- `b`를 추가했다.\n\n## 2026-09-22\n\n- G3: 완료했다.\n";

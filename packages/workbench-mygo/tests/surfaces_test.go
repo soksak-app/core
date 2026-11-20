@@ -813,10 +813,10 @@ func TestAViewTouchesTheHeadAndTheFootOfItsCard(t *testing.T) {
 	}
 }
 
-// A view takes the pointer wherever it shows, up to its edges, as the native view of a page host stands over the page: the grab area of
-// a boundary, which reaches over the edges of the cards beside it, stays out of the view. A press near the left edge of the first cell
-// of a terminal reaches the terminal, not the boundary.
-func TestAViewTakesThePointerUpToItsEdges(t *testing.T) {
+// The grab area of a boundary reaches over the edges of the cards beside it and takes the pointer over its whole area, also over the
+// edge of the view of a card there, as the window overlays give that area to the page of the Wails and Tauri hosts
+// (docs/spec/native-surfaces.md#surface-host-container); a view takes the pointer everywhere else that it shows, up to its edges.
+func TestTheGrabAreaOfABoundaryTakesThePointerOverTheEdgesOfAView(t *testing.T) {
 	// A theme without a gap leaves the passage between two cards narrower than the grab area of their boundary, which then reaches
 	// over the edge of the view of each card beside it. The plane takes the gap as it opens.
 	stored := &surfaceHost{window: workbench.WindowView{Visible: true, Scale: 2, Width: 1200, Height: 800}}
@@ -840,40 +840,42 @@ func TestAViewTakesThePointerUpToItsEdges(t *testing.T) {
 		}
 	}
 	walk(f.tester.ElementTree())
-	overlap := func(a, b ui.Rect) bool { return a.X < b.X+b.W && b.X < a.X+a.W && a.Y < b.Y+b.H && b.Y < a.Y+a.H }
-	reached := 0
+	inside := func(r ui.Rect, x, y float32) bool { return x >= r.X && x < r.X+r.W && y >= r.Y && y < r.Y+r.H }
+	reached, grabbed := 0, 0
 	for _, view := range views {
-		for _, divider := range dividers {
-			if overlap(view, divider) {
-				reached++
+		var lost, taken []ui.Point
+		for y := view.Y + 0.5; y < view.Y+view.H; y += 7 {
+			for x := view.X + 0.5; x < view.X+view.W; x += 0.5 {
+				over := false
+				for _, divider := range dividers {
+					over = over || inside(divider, x, y)
+				}
+				took := f.tester.WebViewAt(x, y) != nil
+				if over {
+					reached++
+					if took {
+						taken = append(taken, ui.Point{X: x, Y: y})
+					} else {
+						grabbed++
+					}
+				} else if !took && x > view.X+12 && x < view.X+view.W-12 {
+					lost = append(lost, ui.Point{X: x, Y: y})
+				}
 			}
+		}
+		if len(taken) > 0 {
+			t.Errorf("the view %+v takes the pointer at %d points of the grab area of a boundary, the first %+v; the dividers are %+v", view,
+				len(taken), taken[0], dividers)
+		}
+		if len(lost) > 0 {
+			t.Errorf("the view %+v does not take the pointer at %d points outside every grab area, the first %+v", view, len(lost), lost[0])
 		}
 	}
 	if reached == 0 {
 		t.Fatalf("no grab area of a boundary reaches over a view, so the test shows nothing: views %+v, dividers %+v", views, dividers)
 	}
-	for _, view := range views {
-		var covered []ui.Point
-		for _, in := range []float32{0.5, 1, 1.5} {
-			for along := float32(in); along < view.H-in; along++ {
-				for _, x := range []float32{view.X + in, view.X + view.W - in} {
-					if f.tester.WebViewAt(x, view.Y+along) == nil {
-						covered = append(covered, ui.Point{X: x, Y: view.Y + along})
-					}
-				}
-			}
-			for along := float32(in); along < view.W-in; along++ {
-				for _, y := range []float32{view.Y + in, view.Y + view.H - in} {
-					if f.tester.WebViewAt(view.X+along, y) == nil {
-						covered = append(covered, ui.Point{X: view.X + along, Y: y})
-					}
-				}
-			}
-		}
-		if len(covered) > 0 {
-			t.Errorf("the view %+v does not take the pointer at %d points inside its edges, the first %+v; the dividers are %+v", view,
-				len(covered), covered[0], dividers)
-		}
+	if grabbed == 0 {
+		t.Errorf("no point of a grab area over a view belongs to the boundary: views %+v, dividers %+v", views, dividers)
 	}
 }
 

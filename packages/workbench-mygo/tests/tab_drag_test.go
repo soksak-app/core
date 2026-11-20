@@ -180,6 +180,30 @@ func TestThePreviewOfADropIsDrawn(t *testing.T) {
 	f.settle()
 }
 
+// At gap 0 the preview draws no radius and a border of the border width, as the cards at the seam (row gap of
+// docs/spec/settings.md).
+func TestThePreviewOfADropAtTheSeamIsSquareWithTheBorderWidth(t *testing.T) {
+	f, _, tab, other := cardWithTwoTabs(t)
+	f.run("core.settings.change", map[string]any{"key": "gap", "value": 0, "scope": "common"})
+	f.settle()
+	box := f.box("core.card", other)
+	x, y := box.X+box.W/2, box.Y+box.H/2
+	dragTab(t, f, tab, x, y)
+	f.tester.Frame()
+	line := f.palette().BorderWidth
+	// The left column of the preview is its border. Two and a half pixels below the top, a radius of the theme leaves that column
+	// to the card; one pixel right of the border width the column is the fill.
+	edge, corner, fill := f.pixelOf(box.X+line/2, y), f.pixelOf(box.X+line/2, box.Y+2.5), f.pixelOf(box.X+line+0.5, y)
+	if corner != edge {
+		t.Errorf("at gap 0 the preview draws a radius: the border is %v and its corner %v", edge, corner)
+	}
+	if fill == edge {
+		t.Errorf("at gap 0 the preview draws a border wider than the border width %v: %v right of it", line, fill)
+	}
+	f.tester.Release(x, y)
+	f.settle()
+}
+
 func TestTheMoveCommandRefusesWhatADropCannotDo(t *testing.T) {
 	f, card, tab, other := cardWithTwoTabs(t)
 	only := f.tabsOf(other)[0].(map[string]any)["id"].(string)

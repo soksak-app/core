@@ -22,6 +22,11 @@ var writerAttached = make(chan struct{})
 
 var writerAttachedOnce sync.Once
 
+// startBegan is closed when the start of the host began (NotifyStartBegan).
+var startBegan = make(chan struct{})
+
+var startBeganOnce sync.Once
+
 // startEnded is closed when the start of the host ended (NotifyStartEnded), with or without the writer.
 var startEnded = make(chan struct{})
 
@@ -31,6 +36,13 @@ func init() {
 	routine.Record = recordPanic
 }
 
+// NotifyStartBegan records that the start of the host began. A panic before the writer is attached waits for the writer only
+// after the start began, because only a start attaches the writer or ends; a process that runs no start, such as a test
+// binary of the host packages, writes the record of a panic without a writer to the standard error and ends at once.
+func NotifyStartBegan() {
+	startBeganOnce.Do(func() { close(startBegan) })
+}
+
 // NotifyStartEnded records that the start of the host ended. A start that succeeded attached the writer before it; a start
 // that failed before the writer exists never attaches it, so a panic that waits for the writer writes its record to the
 // standard error.
@@ -38,14 +50,15 @@ func NotifyStartEnded() {
 	startEndedOnce.Do(func() { close(startEnded) })
 }
 
-// recordPanic stores the panic of a goroutine as the event `host.panic` and waits until it is in the event log. A panic before
-// the writer is attached waits for the writer, so the event enters the writer and not only the start buffer that the process
-// end would drop. A start that ended without the writer ends that wait, and the record goes to the standard error in full. A
-// flush that fails is reported on the standard error, which holds the stack as well.
+// recordPanic stores the panic of a goroutine as the event `host.panic` and waits until it is in the event log. A panic during
+// the start of the host, before the writer is attached, waits for the writer, so the event enters the writer and not only the
+// start buffer that the process end would drop. A start that ended without the writer ends that wait, and the record goes to
+// the standard error in full; so does the record of a panic without a writer while no start runs. A flush that fails is
+// reported on the standard error, which holds the stack as well.
 func recordPanic(name, text, stack string) {
-	if !waitForWriter() {
+	if absent := waitForWriter(); absent != "" {
 		// No writer exists to store the record, so the record is written to the standard error in full.
-		fmt.Fprintf(os.Stderr, "event writer: the record of the panic is not stored: the start of the host ended without a writer\nhost.panic name=%s text=%s\n%s", name, text, stack)
+		fmt.Fprintf(os.Stderr, "event writer: the record of the panic is not stored: %s\nhost.panic name=%s text=%s\n%s", absent, name, text, stack)
 		return
 	}
 	EmitHost(LevelError, "host.panic", map[string]any{"name": name, "text": text, "stack": stack})
@@ -56,15 +69,36 @@ func recordPanic(name, text, stack string) {
 	}
 }
 
-// waitForWriter waits until the writer is attached or the start of the host ended, and reports whether the writer is attached.
-// The start attaches the writer before it ends, so a writer attached before the end is found after either event.
-func waitForWriter() bool {
+// waitForWriter returns an empty text when a writer is attached, and otherwise the reason that no writer stores the record.
+// While the start of the host runs it waits until the writer is attached or the start ended; the start attaches the writer
+// before it ends, so a writer attached before the end is found after either event. Without a start no writer is awaited.
+func waitForWriter() string {
 	select {
-	case <-writerAttached:
-	case <-startEnded:
+	case <-startBegan:
+		select {
+		case <-writerAttached:
+		case <-startEnded:
+		}
+	default:
 	}
+	records.Lock()
+	attached := records.log != nil
+	records.Unlock()
+	switch {
+	case attached:
+		return ""
+	case isClosed(writerAttached):
+		return "the writer of the host is detached"
+	case isClosed(startBegan):
+		return "the start of the host ended without a writer"
+	default:
+		return "no writer is attached and no start of the host runs"
+	}
+}
+
+func isClosed(signal chan struct{}) bool {
 	select {
-	case <-writerAttached:
+	case <-signal:
 		return true
 	default:
 		return false

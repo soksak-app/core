@@ -48,6 +48,7 @@ const (
 	codePressOpen     = 1008
 	codePointerHeld   = 1011
 	codeNoSurface     = 1012
+	codeInterrupted   = 1013
 )
 
 // RPCError is the JSON-RPC error object.

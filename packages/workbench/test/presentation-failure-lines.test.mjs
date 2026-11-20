@@ -51,7 +51,7 @@ test("one presentation timeout writes one workbench error line", async () => {
         surface: { composition },
         applied: { x: 0, y: 0, w: 10, h: 10 },
       }],
-      settled: true, drawn: false, titlebar: 40,
+      grabs: [], settled: true, drawn: false, titlebar: 40,
     };
     // The presentation that the render of the plane committed (onRender of index.html). It requests the presentation of the drawn layout from the host.
     let rendered = Promise.resolve();
@@ -72,7 +72,7 @@ test("one presentation timeout writes one workbench error line", async () => {
       name: "core.fixture.split", description: "Splits.", params: { type: "object", properties: {} }, result: { type: "null" },
     }] });
     registry.command("core.fixture.split", () => {
-      page.onLayout(new Map(), () => { rendered = surfaces.place({ ...record, drawn: true }); }, new Map(), 40, () => true);
+      page.onLayout(new Map(), () => { rendered = surfaces.place({ ...record, drawn: true }); }, new Map(), 40, () => true, []);
       return null;
     });
 

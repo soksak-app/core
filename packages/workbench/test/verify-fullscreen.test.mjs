@@ -17,7 +17,7 @@ test("containment checks visible surfaces while hidden surfaces retain their nat
   page.mark();
   const cardId = page.card.dataset.cardId;
   const prepare = (size) => compositor.publishAhead(new Map([[cardId, { x: 0, y: 0, w: size, h: size }]]),
-    new Map([[cardId, { id: "probe", dim: false, inset: { left: 0, top: 0, width: 0, height: 0 }, grid: 1 }]]), 40);
+    new Map([[cardId, { id: "probe", dim: false, inset: { left: 0, top: 0, width: 0, height: 0 }, grid: 1 }]]), 40, []);
   try {
     // The host retains the native frame of a hidden surface at its last place, so the hidden surface lies outside the card.
     await prepare(100);

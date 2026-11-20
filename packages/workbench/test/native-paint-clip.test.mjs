@@ -55,7 +55,7 @@ test("native preparation does not change the presented background holes", async 
     f.answer(); await initial; f.frame();
     const before = f.clip();
     const prepared = f.compositor.publishAhead(new Map([["card", { x: 10, y: 20, w: 180, h: 100 }]]),
-      new Map([["card", { id: "surface", dim: false, inset: { left: 0, top: 0, width: 0, height: 0 } }]]));
+      new Map([["card", { id: "surface", dim: false, inset: { left: 0, top: 0, width: 0, height: 0 } }]]), undefined, []);
     assert.equal(f.requests[0].record.drawn, false);
     f.answer(); await prepared;
     f.resize(180);
@@ -144,7 +144,7 @@ test("a drawn commit equal to the prepared placement writes the holes of that pl
     const during = f.clip();
     // The prepared layout after the drag (width 200) is before drawing, so it does not use the clip.
     const prepared = f.compositor.publishAhead(new Map([["card", { x: 10, y: 20, w: 200, h: 100 }]]),
-      new Map([["card", { id: "surface", dim: false, inset: { left: 0, top: 0, width: 0, height: 0 } }]]));
+      new Map([["card", { id: "surface", dim: false, inset: { left: 0, top: 0, width: 0, height: 0 } }]]), undefined, []);
     f.answer(); await prepared; f.frame();
     // The commit after drawing is the same as the preparation request, so it is not sent. The prepared layout is what the screen shows, so the clip must follow that layout too.
     f.resize(200);

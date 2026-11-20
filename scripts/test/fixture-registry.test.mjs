@@ -94,6 +94,14 @@ test("the package.json of each fixture plugin has the description of 1 to 200 ch
   assert.deepEqual(outside, []);
 });
 
+test("the plugin.json of each fixture plugin has the description of 1 to 200 characters that an installation requires", { timeout: 5000 }, () => {
+  // docs/spec/plugins.md#pluginjson: sok install rejects a plugin whose manifest description is outside 1 to 200 Unicode code points, so
+  // a fixture plugin with a longer description stops the installation of the fixture plugins of every window check.
+  const outside = fixtureSources().plugins.map((dir) => [relative(FIXTURES, dir), JSON.parse(readFileSync(join(dir, "plugin.json"), "utf8")).description])
+    .filter(([, description]) => typeof description !== "string" || [...description].length < 1 || [...description].length > 200);
+  assert.deepEqual(outside, []);
+});
+
 test("the fixture registry packs every fixture plugin of its root into the pack fixtures and lists exactly those plugins", { timeout: 60000 }, async (t) => {
   const { fixtures, out } = copiedFixtures(t, ["layoutprobe", "probeplain"]);
   const { plugins, sidecars } = fixtureSources(fixtures);

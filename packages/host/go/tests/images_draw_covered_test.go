@@ -18,7 +18,7 @@ func TestARegionOfACoveredWindowDrawsWhileTheWindowDrawsCovered(t *testing.T) {
 	if err := images.SetVisible(key, true); err != nil {
 		t.Fatal(err)
 	}
-	if got := drawingValues(images.DrawingChanges()); !slices.Equal(got, []string{"view=true"}) {
+	if got := drawingValues(sentDrawingChanges(images)); !slices.Equal(got, []string{"view=true"}) {
 		t.Fatalf("placed visible on screen: drawing changes %v, want [view=true]", got)
 	}
 	steps := []struct {
@@ -36,7 +36,7 @@ func TestARegionOfACoveredWindowDrawsWhileTheWindowDrawsCovered(t *testing.T) {
 	}
 	for _, step := range steps {
 		step.change()
-		if got := drawingValues(images.DrawingChanges()); !slices.Equal(got, step.want) {
+		if got := drawingValues(sentDrawingChanges(images)); !slices.Equal(got, step.want) {
 			t.Fatalf("%s: drawing changes %v, want %v", step.name, got, step.want)
 		}
 	}

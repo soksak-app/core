@@ -39,7 +39,7 @@ test("a cancelled layout records only the phases that the event catalog declares
     textSize: () => value("textSize"),
   });
   armLayoutFault();
-  page.onLayout({}, () => {}, [], 0, () => true);
+  page.onLayout({}, () => {}, [], 0, () => true, []);
   assert.equal(await page.presented(), false, "the layout of the armed fault did not fail");
   await flushEvents();
   const phases = wire.calls.filter((call) => call.name === "log" && call.payload?.action === "batch")

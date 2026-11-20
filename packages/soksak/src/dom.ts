@@ -42,10 +42,13 @@ export interface ViewOptions {
   onChange?(reason: ChangeReason): void;
   /**
    * Prepare the supplied rectangles before calling `draw`.
-   * The callback receives one immutable draw request. Without this hook, changes draw
-   * immediately. Native presentation is the host's responsibility.
+   * The callback receives one immutable draw request: the card rectangles and the
+   * dividers with the grab areas that the draw writes, none in fullscreen. Without
+   * this hook, changes draw immediately. Native presentation is the host's
+   * responsibility, and a host whose views cover the cards gives the grab areas
+   * the pointer over them.
    */
-  commit?(rects: ReadonlyMap<string, Rect>, draw: () => void): void;
+  commit?(rects: ReadonlyMap<string, Rect>, draw: () => void, dividers: readonly Divider[]): void;
   /** Keep the plane size in sync with the host element. Default true. */
   observeResize?: boolean;
   /**
@@ -374,7 +377,7 @@ export class SoksakView {
     // view is not told which call followed a host change, as `settle` is not:
     // every `render()` is one that may have.
     this.drawing = !host;
-    this.options.commit(on, drawn);
+    this.options.commit(on, drawn, snapshot.dividers.map((divider) => ({ ...divider, ...onGrid(divider, step) })));
   }
 
   /**

@@ -15,7 +15,7 @@ import { drained } from "./support/drained.mjs";
 const descriptor = (id) => ({ surfaceId: id, pluginId: "probe", declarations: { status: [], commands: [], element: [] }, sidecars: [],
   composition: { kind: "view", page: "ui/page.html" }, params: null, diagnostics: null, unload: false });
 const view = (id, x = 0) => ({ id, plugin: "probe", dim: false, visible: true, surface: descriptor(id), applied: { x, y: 0, w: 3, h: 4 } });
-const record = (...views) => ({ surfaces: views, settled: true, drawn: true, titlebar: 40 });
+const record = (...views) => ({ surfaces: views, grabs: [], settled: true, drawn: true, titlebar: 40 });
 const names = (wire) => wire.calls.map(({ name }) => name);
 const syncedViews = (wire) => wire.calls.filter(({ name }) => name === "syncSurfaces").map(({ payload }) => payload.surfaces.map(({ id }) => id));
 

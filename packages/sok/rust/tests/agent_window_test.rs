@@ -411,7 +411,7 @@ fn describe_prints_the_pages_of_window_describe() {
             .iter()
             .all(|member| printed.get(member).is_some());
         assert!(
-            (page == 0) == whole && printed["total"] == 8,
+            (page == 0) == whole && printed["total"] == 7,
             "page {page}: {stdout}"
         );
         for row in printed["rows"].as_array().expect("rows") {
@@ -430,7 +430,6 @@ fn describe_prints_the_pages_of_window_describe() {
             "core status core.screen",
             "core command core.layout.open",
             "core element core.tab",
-            "terminal-1 status terminal.title",
             "terminal-1 command terminal.input",
             "unregistered command browser.reload",
         ]
@@ -580,4 +579,28 @@ fn context_takes_only_the_configuration_directory() {
             "{args:?}: code {code} stdout {stdout:?} stderr {stderr:?}"
         );
     }
+}
+
+// contract: cli.describe.summary-and-full
+#[test]
+fn describe_summary_holds_summary_statuses_and_full_holds_every_status() {
+    let player = play_case("sok-describe-summary-and-full");
+    let (_, summary, stderr) = run(&["describe", "--config-dir", &player.dir()], None, None);
+    assert!(
+        summary.contains("\"probe.busy\""),
+        "summary lacks the summary status: {stderr} {summary}"
+    );
+    assert!(
+        !summary.contains("\"probe.detail\""),
+        "summary holds a status that is not a summary: {summary}"
+    );
+    let (_, full, stderr) = run(
+        &["describe", "--full", "--config-dir", &player.dir()],
+        None,
+        None,
+    );
+    assert!(
+        full.contains("\"probe.detail\"") && full.contains("\"probe.busy\""),
+        "full lacks the tab statuses: {stderr} {full}"
+    );
 }

@@ -65,7 +65,8 @@ pub(crate) fn run(args: &[String], stdout: &mut dyn Write) -> Result<(), Error> 
         return Err(Error::Failed(format!("cwd is not an absolute path: {cwd}")));
     }
     let home = match std::env::var_os("HOME") {
-        Some(home) if !home.is_empty() => PathBuf::from(home),
+        Some(home) if !home.is_empty() => crate::files::utf8_path(PathBuf::from(home))
+            .map_err(|escaped| Error::Failed(format!("HOME is not UTF-8: {escaped}")))?,
         _ => return Err(Error::Failed("HOME is not set".into())),
     };
     let conversation = read_conversation(agent, &home, &cwd)?;
@@ -183,7 +184,9 @@ fn list_folder(folder: &Path) -> Result<Vec<PathBuf>, Error> {
     let mut paths = Vec::new();
     for entry in entries {
         let entry = entry.map_err(|error| Error::Failed(file_error(folder.display(), &error)))?;
-        paths.push(entry.path());
+        let path = crate::files::utf8_path(entry.path())
+            .map_err(|escaped| Error::Failed(format!("{escaped}: the path is not UTF-8")))?;
+        paths.push(path);
     }
     Ok(paths)
 }
@@ -298,6 +301,7 @@ fn claude_messages(path: &Path, records: &[(usize, Value)]) -> Result<(Vec<Value
     let mut messages = Vec::new();
     let mut skipped = 0;
     for (line_number, record) in records {
+        // silent: a record whose type is not a string is not a user or assistant message, and is counted in skipped.
         let role = match record.get("type").and_then(Value::as_str) {
             Some(role @ ("user" | "assistant")) => role,
             _ => {
@@ -305,6 +309,7 @@ fn claude_messages(path: &Path, records: &[(usize, Value)]) -> Result<(Vec<Value
                 continue;
             }
         };
+        // A message that is not an object has no content, so it is refused with the message content refusal below.
         let content = record
             .get("message")
             .and_then(|message| message.get("content"));
@@ -336,6 +341,8 @@ fn codex_messages(path: &Path, records: &[(usize, Value)]) -> Result<(Vec<Value>
     let mut messages = Vec::new();
     let mut skipped = 0;
     for (line_number, record) in records {
+        // silent: a record without a payload object, or whose payload type is not a string, is not a message, and is counted in
+        // skipped.
         let payload = record.get("payload");
         let is_message = record.get("type").and_then(Value::as_str) == Some("response_item")
             && payload
@@ -355,6 +362,7 @@ fn codex_messages(path: &Path, records: &[(usize, Value)]) -> Result<(Vec<Value>
         };
         let text = joined_text(path, *line_number, items, &["input_text", "output_text"])?;
         let images = count_items(path, *line_number, items, "input_image")?;
+        // silent: a message without a string role is neither user nor assistant, and is counted in skipped.
         let role = payload
             .and_then(|payload| payload.get("role"))
             .and_then(Value::as_str);

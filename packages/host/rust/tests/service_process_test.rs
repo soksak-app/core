@@ -13,22 +13,27 @@ fn a_zombie_service_process_does_not_exist() {
     // The exit makes it a zombie: the parent did not wait, so it remains in the table even after it died. The wait for
     // the exit does not reap it.
     platform.wait_process_exit(pid).expect("wait for the exit");
-    let exists = platform.service_process_exists(pid).expect("inspect");
+    let exists = platform
+        .service_process_exists(pid, std::time::SystemTime::now())
+        .expect("inspect");
     assert!(!exists, "a zombie service process must not exist");
     child.wait().expect("reap sleep");
 }
 
-// The signal check is refused for a process of another user. A refusal (EPERM) means that a process with that number
-// exists, so that service process exists.
-// contract: sidecars-transport.endpoint.foreign-service-process-exists
+// A process of another user did not publish the endpoint, although it started before the publication, because the
+// service runs as the user of the host.
+// contract: sidecars-transport.endpoint.foreign-process-is-not-the-publisher
 #[test]
-fn a_service_process_of_another_user_exists() {
+fn a_process_of_another_user_is_not_the_publisher() {
     // 1 is launchd, which root runs.
     let exists = soksak_host::platform::current()
         .expect("platform")
-        .service_process_exists(1)
+        .service_process_exists(1, std::time::SystemTime::now())
         .expect("inspect process 1");
-    assert!(exists, "process 1 of another user must exist");
+    assert!(
+        !exists,
+        "process 1 of another user is not the publisher of an endpoint"
+    );
 }
 
 // The wait for a service process ends by the exit of the process or by its stop, and by no time limit: the exit answers

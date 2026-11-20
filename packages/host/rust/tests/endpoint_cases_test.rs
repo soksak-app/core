@@ -539,6 +539,10 @@ const OUTSIDE: &[(&str, &str)] = &[
         "the sok client reads exposure.list of a window, which needs a page",
     ),
     (
+        "sok-describe-summary-and-full",
+        "the sok client reads the statuses of the tabs of a window, which the page reports",
+    ),
+    (
         "sok-status-value",
         "status.get of a page status, which the page answers",
     ),

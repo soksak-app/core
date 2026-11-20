@@ -35,7 +35,7 @@ async function verifyThirds(wire, { card = CARD, inset = INSET, grid = 3, slot =
   page.mark();
   const cardId = page.card.dataset.cardId;
   try {
-    await compositor.publishAhead(new Map([[cardId, card]]), new Map([[cardId, { id: "probe", dim: false, inset, grid }]]), 40);
+    await compositor.publishAhead(new Map([[cardId, card]]), new Map([[cardId, { id: "probe", dim: false, inset, grid }]]), 40, []);
     const rows = verify();
     return { v7c: rows.find((item) => item.name.startsWith("V7c ")), v7b: rows.find((item) => item.name.startsWith("V7b ")) };
   } finally {

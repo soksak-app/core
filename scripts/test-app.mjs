@@ -20,7 +20,7 @@ import { parseArgs } from 'node:util';
 import { connect } from '@soksak/client';
 import { untilFolderState } from '@soksak/window-check/folder-wait.mjs';
 import { applicationArtifact, applicationExecutables, crashReports, listProcesses, quitApplication as requestQuit, runNativeTests,
-  waitForLockRelease } from './platform/platform.js';
+  verifyApplicationArtifact, waitForLockRelease } from './platform/platform.js';
 import { fixturePluginIds } from './fixture-registry.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -58,7 +58,7 @@ export function parseDefaults(entries) {
 
 /**
  * The steps of a run. A step of the phase `prepare` that fails skips every later step except those of `cleanup`; a failed `check`
- * skips nothing. `run` runs a command to its end, `start` starts an application and ends when it writes endpoint.json, `native` runs
+ * skips nothing. `run` runs a command to its end, `verify` verifies that the application artifact is complete as its build signed it, `start` starts an application and ends when it writes endpoint.json, `native` runs
  * the native end-to-end tests `target` of the platform, `quit` quits a started application as a person does, through the quit item of
  * its menu (`by` `menu`) or through the quit key of the platform (`by` `key`), and `remaining` fails on a process whose executable or
  * arguments name the configuration root or an application artifact. `platform` selects the platform operations, the running
@@ -99,11 +99,16 @@ export async function e2ePlan({ root, configRoot, script, native, only, platform
         })),
       ];
     }),
-    ...APPS.map((app) => ({
-      name: `start ${app}`, phase: 'prepare', kind: 'start', app, configDir: configDir(configRoot, app), output: join(configRoot, `${app}.out`),
-      argv: [appBinary(app), '--config-dir', configDir(configRoot, app), '--registry-ca', ca,
-        ...Object.entries(defaultsPairs).flatMap(([name, value]) => [`-${name}`, value])],
-    })),
+    // Each application starts right after the verification of the signature of its artifact, so a run never starts an artifact that a
+    // build left half written (docs/operations/examples.md#end-to-end-run).
+    ...APPS.flatMap((app) => [
+      { name: `verify bundle ${app}`, phase: 'prepare', kind: 'verify', artifact: located.get(app), platform },
+      {
+        name: `start ${app}`, phase: 'prepare', kind: 'start', app, configDir: configDir(configRoot, app), output: join(configRoot, `${app}.out`),
+        argv: [appBinary(app), '--config-dir', configDir(configRoot, app), '--registry-ca', ca,
+          ...Object.entries(defaultsPairs).flatMap(([name, value]) => [`-${name}`, value])],
+      },
+    ]),
     {
       name: 'window checks', phase: 'check', kind: 'run',
       argv: ['node', 'scripts/node-tests.mjs', '--script', script, '--concurrency', '1', '--timeout', '600', ...onlies.flatMap((value) => ['--only', value])],
@@ -333,6 +338,7 @@ export async function runPlan(steps, { write, children = new Map(), interrupted,
     try {
       // A cleanup step runs to its end after an interrupt, because it ends what the earlier steps started.
       if (item.kind === 'run') await runCommand(item, item.phase === 'cleanup' ? undefined : interrupted);
+      else if (item.kind === 'verify') await verifyApplicationArtifact(item.artifact, { platform: item.platform });
       else if (item.kind === 'start') await startApplication(item, children);
       else if (item.kind === 'quit') await quitApplication(item, children, since, write, connectClient, lockRelease, quitLimitMs);
       else if (item.kind === 'native') await runNative(item, item.phase === 'cleanup' ? undefined : interrupted);

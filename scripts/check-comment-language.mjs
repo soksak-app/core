@@ -9,7 +9,9 @@ import { fileURLToPath } from "node:url";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** The files checked by extension; generated output is left out. */
-const SOURCE = /\.(js|mjs|cjs|ts|html|css|go|rs|m|h|sh)$|(^|\/)Makefile$/;
+const SOURCE = /\.(js|mjs|cjs|ts|html|css|go|rs|m|h|sh|bash|zsh)$|(^|\/)Makefile$/;
+/** The start files of zsh, which have no extension and no #! line. */
+const ZSH_START = /(^|\/)\.?z(shenv|shrc|profile|login)$/;
 /** Every tracked file of the hook folder is a script, whatever its name. */
 const HOOKS = /^\.githooks\//;
 const EXCLUDED = /(^|\/)(dist|node_modules|target)\//;
@@ -18,7 +20,7 @@ const HANGUL = /[가-힣]/;
 
 /** The language of a file, which sets the syntax of its comments and strings. */
 function language(file) {
-  if (/(^|\/)Makefile$/.test(file) || file.endsWith(".sh")) return "hash";
+  if (/(^|\/)Makefile$/.test(file) || /\.(sh|bash|zsh)$/.test(file) || ZSH_START.test(file)) return "hash";
   if (file.endsWith(".css")) return "css";
   if (file.endsWith(".html")) return "html";
   if (file.endsWith(".rs")) return "rust";
@@ -29,12 +31,12 @@ function language(file) {
 }
 
 /**
- * Whether a tracked file is checked: a file with a checked extension, a hook, or a script without an extension, which
- * starts with a #! line that names its interpreter. read(file) returns the text of the file.
+ * Whether a tracked file is checked: a file with a checked extension, a hook, a start file of zsh, or a script without an
+ * extension, which starts with a #! line that names its interpreter. read(file) returns the text of the file.
  */
 function checked(file, read) {
   if (EXCLUDED.test(file)) return false;
-  if (SOURCE.test(file) || HOOKS.test(file)) return true;
+  if (SOURCE.test(file) || HOOKS.test(file) || ZSH_START.test(file)) return true;
   return extname(file) === "" && read(file).startsWith("#!");
 }
 

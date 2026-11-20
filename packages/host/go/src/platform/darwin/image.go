@@ -106,6 +106,11 @@ func (implementation) CloseImage(image unsafe.Pointer) {
 	}
 }
 
+func (implementation) WantImageFrame(image unsafe.Pointer) error {
+	native.MainSpRegionWantFrame(image)
+	return nil
+}
+
 func (implementation) SetImageBackground(image unsafe.Pointer, enabled bool) {
 	native.MainSpRegionBackground(image, bool(enabled))
 }

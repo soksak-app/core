@@ -20,8 +20,9 @@ const ROOT = new URL("../", import.meta.url).pathname;
 // compares the packages of the frameworks. Each names the columns of the left and the right package of its pairs.
 export const LANGUAGE_TABLE = { title: "Language table", left: "Go", right: "Rust" };
 export const FRAMEWORK_TABLE = { title: "Framework table", left: "Wails", right: "Tauri" };
-// The mygo pairs read the same table with the column of mygo as their right column.
+// The mygo and gpuikit pairs read the same table with the column of mygo or gpuikit as their right column.
 export const MYGO_TABLE = { ...FRAMEWORK_TABLE, right: "mygo" };
+export const GPUIKIT_TABLE = { ...FRAMEWORK_TABLE, right: "gpuikit" };
 
 // A pair reads the rows of its table whose ID starts with its letter: H for the host packages, C for the command lines and A for the
 // applications.
@@ -32,6 +33,8 @@ const PAIRS = [
   { left: "apps/wailsv3", right: "apps/tauriv2", table: FRAMEWORK_TABLE, letter: "A" },
   { left: "packages/host/wailsv3", right: "packages/host/mygo", table: MYGO_TABLE, letter: "H" },
   { left: "apps/wailsv3", right: "apps/mygo", table: MYGO_TABLE, letter: "A" },
+  { left: "packages/host/wailsv3", right: "packages/host/gpuikit", table: GPUIKIT_TABLE, letter: "H" },
+  { left: "apps/wailsv3", right: "apps/gpuikit", table: GPUIKIT_TABLE, letter: "A" },
 ];
 
 const allowed = (path, files) => files.some((key) => key.endsWith("/") ? path.startsWith(key) : path === key);

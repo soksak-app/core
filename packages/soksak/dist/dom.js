@@ -289,7 +289,7 @@ export class SoksakView {
         // view is not told which call followed a host change, as `settle` is not:
         // every `render()` is one that may have.
         this.drawing = !host;
-        this.options.commit(on, drawn);
+        this.options.commit(on, drawn, snapshot.dividers.map((divider) => ({ ...divider, ...onGrid(divider, step) })));
     }
     /**
      * Draw the plane.

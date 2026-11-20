@@ -14,6 +14,8 @@ diagnostics = ["soksak-sok/diagnostics"]
 dev = ["soksak-sok/dev"]
 # host-test links the native host test library (native/darwin/tests/support) for the tests that run a handled crash child.
 host-test = []
+# test-seam exposes the buffered error records of the host to the tests of the framework adapters.
+test-seam = []
 
 # The fatal tests start a child whose crash exceptions the host test library answers; they need host-test.
 [[test]]
@@ -99,6 +101,8 @@ flate2 = "1"
 tar = "0.4"
 base64 = "0.22"
 crc32fast = "1"
+# The request identifiers of the image messages are drawn from the random source of the system (images.rs random_text).
+getrandom = "0.4"
 url = "2"
 # The start document answers the request of the scheme handler of the framework as an HTTP response.
 http = "1"

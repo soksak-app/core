@@ -1090,12 +1090,51 @@ func (s *Surfaces) imageChanged(key ImageKey, event string) {
 	PerformanceObserve("host", func() map[string]any {
 		return map[string]any{"event": "region", "surface": key.Surface, "name": key.Name, "body": json.RawMessage(event)}
 	})
+	if refreshRate, frame, err := frameEvent(event); frame || err != nil {
+		if err != nil {
+			LogError("image frame "+key.Name, err)
+			return
+		}
+		s.sendFrameTick(key, refreshRate)
+		return
+	}
 	if err := RecordInputRelay(key.Surface, key.Name, event); err != nil {
 		LogError("input relay", err)
 	}
 	payload := map[string]any{"surface": key.Surface, "name": key.Name, "event": json.RawMessage(event)}
 	s.emitToSurface(key.Surface, "image-event", payload)
 	s.windowChanged()
+}
+
+// frameEvent reads the display frame that a region reports for its frame request: frame is true for an event of type frame, and
+// refreshRate is its refresh rate, or nil for a window on no screen (docs/spec/native-surfaces.md#copy-path-frames).
+func frameEvent(event string) (refreshRate *int, frame bool, err error) {
+	var report struct {
+		Type        string `json:"type"`
+		RefreshRate *int   `json:"refreshRate"`
+	}
+	if err := json.Unmarshal([]byte(event), &report); err != nil {
+		return nil, false, fmt.Errorf("region event %s: %w", event, err)
+	}
+	return report.RefreshRate, report.Type == "frame", nil
+}
+
+// sendFrameTick ends the frame requests of a region at its display frame and sends their answer to the supplier: the tick, or the
+// refusal noScreen of a read request of a window on no screen, which names the window. The region reports the frame on the main thread,
+// which sends the answer as it sends a released surface.
+func (s *Surfaces) sendFrameTick(key ImageKey, refreshRate *int) {
+	frame, ok := s.images.FrameTick(key, refreshRate)
+	if !ok {
+		return
+	}
+	tick := frame.Tick
+	body, err := json.Marshal(frame.Body(s.window.Name()))
+	if err == nil {
+		err = s.sidecars.Send(tick.Owner, tick.Sidecar, key.Surface, body)
+	}
+	if err != nil {
+		LogError("image tick "+key.Name, err)
+	}
 }
 
 // attachImage creates a hidden image region inside a surface. It is an error when the same name already exists.

@@ -50,3 +50,7 @@ func (implementation) LayoutTraceRequested() func() { return func() {} }
 func (implementation) DeliveredNotifications(done func(json string)) {
 	done("delivered notifications are not implemented on windows")
 }
+
+func (implementation) DispatchPersonInput(platform.Window, string, float64, float64) error {
+	return unsupported("the action of a person")
+}

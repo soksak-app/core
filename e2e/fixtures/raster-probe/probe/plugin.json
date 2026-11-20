@@ -1,8 +1,9 @@
 {
   "id": "rasterprobe",
   "name": "Raster probe",
-  "description": "Window check fixture: a view whose image region shows the frames of the persistent fixture sidecar rasterprobe, which reports the view, its session, its frames and its input as statuses.",
+  "description": "Window check fixture: an image region that shows the frames of the fixture sidecar rasterprobe, with its view, session, frames and input as statuses; a benchmark number opens one tab per number.",
   "surface": {
+    "params": { "type": "object", "properties": { "benchmark": { "type": "number" } } },
     "composition": {
       "kind": "view",
       "page": "ui/page.html",
@@ -35,7 +36,7 @@
       },
       {
         "name": "rasterprobe.session",
-        "description": "The session of the surface as the sidecar reported it (session, created, child process, service pid, version and folder, mode image or headless, the name of its image region as region, color, rows, text size factor), whether the sidecar is connected, and the last failure or refused request.",
+        "description": "The session of the surface as the sidecar reported it (session, created, child process, service pid, version and folder, mode image or headless, the name of its image region as region, color, rows, text size factor, and scrollback {offset, history, sequence}: the lines that the viewport is above the newest line, the lines retained, and the number of the last wheel over the region whose scroll the sidecar answered, 0 before the first), whether the sidecar is connected, and the last failure or refused request.",
         "schema": {
           "type": "object",
           "properties": {
@@ -48,7 +49,7 @@
       },
       {
         "name": "rasterprobe.frame",
-        "description": "The last frame that the sidecar sent: its identity (generation, raster, sequence), its raster in device pixels and scale, its grid (rows, columns and cell size), the row bands it paints, its color, the color of its identity marker and the time in microseconds that painting it took (draw_us) and the sequences of the input transactions that the sidecar handled since its frame before (inputs); null before the first frame.",
+        "description": "The last frame that the sidecar sent: its identity (generation, raster, sequence), its raster in device pixels and scale, its grid (rows, columns and cell size), the row bands it paints, its scrollback {offset, history}, its color, the color of its identity marker and the time in microseconds that painting it took (draw_us) and the sequences of the input transactions that the sidecar handled since its frame before (inputs); null before the first frame.",
         "schema": { "type": ["object", "null"] }
       },
       {
@@ -130,6 +131,12 @@
         "name": "rasterprobe.kill",
         "description": "Asks the sidecar service to end at once with SIGKILL, as a crash of the service would.",
         "params": { "type": "object" },
+        "result": { "type": "null" }
+      },
+      {
+        "name": "rasterprobe.history",
+        "description": "Asks the sidecar to retain count lines above the screen of the session, as a terminal retains its scrollback; a wheel over the region then scrolls them, and the frames paint the lines of the viewport.",
+        "params": { "type": "object", "properties": { "count": { "type": "number" } } },
         "result": { "type": "null" }
       }
     ],

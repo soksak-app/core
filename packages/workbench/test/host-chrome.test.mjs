@@ -73,7 +73,7 @@ test("the preparation carries the title bar height and the presented chrome is t
       surface: { module: "surface-module", composition: { kind: "dom" } },
       applied: { x: 1, y: 2, w: 3, h: 4 },
     }],
-    settled: true, drawn, titlebar, viewport,
+    grabs: [], settled: true, drawn, titlebar, viewport,
   });
   try {
     assert.equal("titlebar" in chrome, false, "the page has no title bar request apart from the preparation");
@@ -128,7 +128,7 @@ test("a release during an open preparation presents that preparation as settled 
   globalThis.document = dom.window.document;
   const { surfaces } = await import("../host.js?release");
   const calls = wire.calls;
-  const record = (drawn, settled) => ({ surfaces: [], settled, drawn, titlebar: 40 });
+  const record = (drawn, settled) => ({ grabs: [], surfaces: [], settled, drawn, titlebar: 40 });
   try {
     await surfaces.place(record(false, false));
     await surfaces.place(record(true, true));
@@ -155,7 +155,7 @@ test("a cancelled preparation sends its ticket once and the next equal request i
   globalThis.document = dom.window.document;
   const { surfaces } = await import("../host.js?cancel");
   const calls = wire.calls;
-  const record = (drawn) => ({ surfaces: [], settled: true, drawn, titlebar: 40 });
+  const record = (drawn) => ({ surfaces: [], grabs: [], settled: true, drawn, titlebar: 40 });
   try {
     await surfaces.cancelPrepared({ handover: false });
     assert.deepEqual(calls, [], "no preparation is open");
@@ -184,7 +184,7 @@ test("a handed-over preparation sends no cancel and only a failed or cancelled n
   globalThis.document = dom.window.document;
   const { surfaces } = await import("../host.js?handover");
   const calls = wire.calls;
-  const record = (drawn, titlebar = 40) => ({ surfaces: [], settled: true, drawn, titlebar });
+  const record = (drawn, titlebar = 40) => ({ surfaces: [], grabs: [], settled: true, drawn, titlebar });
   const names = () => calls.map((c) => c.name);
   try {
     await surfaces.place(record(false));
@@ -239,7 +239,7 @@ test("a view surface carries its start values in the preparation and a surface w
         surface: { module: "surface-module", pluginId: "other", composition: { kind: "dom" } },
         applied: { x: 0, y: 4, w: 3, h: 4 } },
     ],
-    settled: true, drawn: false, titlebar: 40,
+    grabs: [], settled: true, drawn: false, titlebar: 40,
   };
   await surfaces.place(record);
   const request = wire.calls.find(({ name }) => name === "syncSurfaces").payload;
@@ -261,7 +261,7 @@ test("native view placement waits for the answer of a composition declaration in
   modules.authorizeSurface("view-ready-barrier");
   await drained();
   assert.deepEqual(names(wire), ["setTheme", "compositionDeclare"], "the view did not send its declaration");
-  const placement = surfaces.place({ surfaces: [view("view-ready-barrier")], settled: true, drawn: false, titlebar: 40 });
+  const placement = surfaces.place({ surfaces: [view("view-ready-barrier")], grabs: [], settled: true, drawn: false, titlebar: 40 });
   await drained();
   assert.equal(names(wire).includes("syncSurfaces"), false,
     "native view placement began before the host answered the declaration in flight");
@@ -280,7 +280,7 @@ test("native view placement defers a view whose surface was disposed before its 
   modules.authorizeSurface("view-disposed");
   await drained();
   assert.deepEqual(names(wire), ["setTheme", "compositionDeclare"], "the view did not send its declaration");
-  const placement = surfaces.place({ surfaces: [view("view-disposed")], settled: true, drawn: true, titlebar: 40 });
+  const placement = surfaces.place({ surfaces: [view("view-disposed")], grabs: [], settled: true, drawn: true, titlebar: 40 });
   await drained();
   const disposing = modules.disposeSurface("view-disposed");
   wire.release();
@@ -298,7 +298,7 @@ test("native view placement defers a view whose surface was disposed before its 
 test("an initial placement defers an unmounted view until its drawn commit", async (t) => {
   const wire = selectPageWire("host-chrome-unmounted-view");
   const { surfaces, modules, mount } = await openViews(t);
-  const record = (drawn) => ({ surfaces: [view("view-mount-order", { x: 1, y: 2, w: 30, h: 40 })], settled: true, drawn, titlebar: 40 });
+  const record = (drawn) => ({ surfaces: [view("view-mount-order", { x: 1, y: 2, w: 30, h: 40 })], grabs: [], settled: true, drawn, titlebar: 40 });
   const first = await surfaces.place(record(false));
   assert.deepEqual(first, { placements: [], deferred: ["view-mount-order"] },
     "the unmounted view must be explicitly deferred without a fabricated placement");
@@ -338,7 +338,7 @@ test("a view preparation notifies its prepared listeners, presents each ticket o
     modules.authorizeSurface(id);
     await modules.waitSurfaceCompositionDeclared(id);
   }
-  const record = { surfaces: [view("shown"), { ...view("hidden"), visible: false }], settled: false, drawn: false, titlebar: 40 };
+  const record = { surfaces: [view("shown"), { ...view("hidden"), visible: false }], grabs: [], settled: false, drawn: false, titlebar: 40 };
   const calls = wire.calls;
   const placing = () => calls.filter(({ name }) => name === "syncSurfaces" || name === "presentSurfaces");
   const prepared = [];

@@ -446,6 +446,9 @@ impl Platform for Windows {
     fn close_image(&self, image: Handle) -> Result<(), String> {
         unsupported::close_image(image)
     }
+    fn want_image_frame(&self, image: Handle) -> Result<(), String> {
+        unsupported::want_image_frame(image)
+    }
 
     fn begin_layout(
         &self,
@@ -666,6 +669,16 @@ impl Platform for Windows {
     #[cfg(feature = "diagnostics")]
     fn end_input_reference_wait(&self, _window: Handle, _reason: &str) {}
     #[cfg(feature = "diagnostics")]
+    fn dispatch_person_input(
+        &self,
+        _window: Handle,
+        _action: &str,
+        _x: f64,
+        _y: f64,
+    ) -> Result<(), String> {
+        Err("the action of a person is not implemented on windows".into())
+    }
+    #[cfg(feature = "diagnostics")]
     fn input_source(&self) -> Result<(Option<String>, String), String> {
         unsupported::input_source()
     }
@@ -844,8 +857,12 @@ impl Platform for Windows {
     fn secure_service_directory(&self, path: &Path) -> Result<(), String> {
         unsupported::secure_service_directory(path)
     }
-    fn service_process_exists(&self, pid: u32) -> Result<bool, String> {
-        unsupported::service_process_exists(pid)
+    fn service_process_exists(
+        &self,
+        pid: u32,
+        published: std::time::SystemTime,
+    ) -> Result<bool, String> {
+        unsupported::service_process_exists(pid, published)
     }
     fn wait_service_process_end(&self, pid: u32, stop: &super::StopSignal) -> Result<bool, String> {
         unsupported::wait_service_process_end(pid, stop)

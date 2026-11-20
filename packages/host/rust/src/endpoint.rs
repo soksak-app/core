@@ -56,6 +56,8 @@ pub const PRESS_OPEN: i64 = 1008;
 pub const POINTER_HELD: i64 = 1011;
 /// No layout of a ready window holds the surface of `surface.window`.
 pub const NO_SURFACE: i64 = 1012;
+/// The press of a person ended the synthetic gesture of the pointer and button, so a drag or a release was not delivered.
+pub const INTERRUPTED: i64 = 1013;
 /// A registered command or state handler failed.
 pub const HANDLER_FAILED: i64 = -32000;
 
@@ -98,6 +100,7 @@ const DIAGNOSTICS: &[&str] = &[
     "diagnostics.window.draw-covered",
     "diagnostics.input.source",
     "diagnostics.input.reference",
+    "diagnostics.input.person",
     "diagnostics.log.flush",
     "diagnostics.host.relaunch",
     "diagnostics.test.mark",
@@ -2482,6 +2485,15 @@ mod input_reference_declaration_test {
     #[test]
     fn input_reference_method_is_declared() {
         assert!(super::declared("diagnostics.input.reference"));
+    }
+}
+
+#[cfg(all(test, feature = "diagnostics"))]
+mod input_person_declaration_test {
+    // contract: diagnostics.input-person.declared
+    #[test]
+    fn input_person_method_is_declared() {
+        assert!(super::declared("diagnostics.input.person"));
     }
 }
 

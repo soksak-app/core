@@ -279,7 +279,7 @@ func (s *Shell) drawProjectGrid(c *ui.Context, width float32) {
 	if len(shown) == 0 && len(s.projects) > 0 {
 		ui.Text(s.binder.Name(c, "core.library.no-results", ""), "일치하는 프로젝트가 없습니다.").LineHeight(s.metrics.lineHeight).FontSize(s.textControl()).
 			// The margins of a paragraph of the page, with the gap of the grid below.
-			TextColor(s.palette.Muted).Margin(s.textControl(), 0, s.textControl()+2*s.palette.Gap, 0)
+			TextColor(s.palette.Muted).Margin(s.textControl(), 0, s.textControl()+2*s.palette.HalfGap(), 0)
 	}
 	least := m.libraryCardMinW
 	if width+2*m.space3 < m.libraryNarrowW {
@@ -287,7 +287,7 @@ func (s *Shell) drawProjectGrid(c *ui.Context, width float32) {
 	}
 	drawn := map[string]*layout.State{}
 	errors := map[string]string{}
-	ui.Grid(c).ColumnTracks(ui.Fr(1).Min(least).AutoFill()).FillWidth().Gap(2 * s.palette.Gap).Children(func() {
+	ui.Grid(c).ColumnTracks(ui.Fr(1).Min(least).AutoFill()).FillWidth().Gap(2 * s.palette.HalfGap()).Children(func() {
 		for _, project := range shown {
 			state, failure := s.drawProjectCard(c, &project)
 			drawn[project.ID] = state
@@ -396,7 +396,7 @@ func (s *Shell) libraryAct(c *ui.Context, button ui.Element, icon, label, title 
 // reason.
 func (s *Shell) drawPreview(c *ui.Context, project *projectRecord) (*layout.State, string) {
 	m := s.metrics
-	margin := s.palette.Gap
+	margin := s.palette.HalfGap()
 	// The frame takes the width of the control less its margins, as a block of the page does.
 	frame := ui.Box(c).AlignSelf(ui.Stretch).Height(m.libraryPreviewH).Margin(margin).Radius(s.radiusSmall()).Clip().Background(s.palette.Bg)
 	space, err := layout.SpaceIn(&project.Project, project.ActiveSpaceID)
@@ -453,7 +453,7 @@ func previewShares(state layout.State) []float32 {
 // rows sharing the height.
 func (s *Shell) previewPanes(state layout.State, width float32) []previewPane {
 	m := s.metrics
-	margin, gap := s.palette.Gap, m.space2
+	margin, gap := s.palette.HalfGap(), m.space2
 	padX, padY := 2*m.space4, m.space4
 	shares := previewShares(state)
 	total := float32(0)
@@ -587,7 +587,7 @@ func (s *Shell) pluginLook(width float32) PluginLook {
 		least = m.libraryCardMinWNarrow
 	}
 	return PluginLook{Bg: p.Bg, Card: p.Card, Fg: p.Fg, Muted: p.Muted, Edge: p.Edge, Rail: p.Rail, No: p.No, Control: s.textControl(), Small: s.textSmall(),
-		Caption: s.textCaption(), LineHeight: m.lineHeight, Radius: p.Radius, RadiusSmall: s.radiusSmall(), BorderWidth: p.BorderWidth, Gap: p.Gap, Space1: m.space1,
+		Caption: s.textCaption(), LineHeight: m.lineHeight, Radius: p.Radius, RadiusSmall: s.radiusSmall(), BorderWidth: p.BorderWidth, HalfGap: p.HalfGap(), Space1: m.space1,
 		Space2: m.space2, Space3: m.space3, FieldPadY: m.fieldPadY, LeastCard: least}
 }
 

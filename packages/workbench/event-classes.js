@@ -29,6 +29,7 @@ const EXACT = new Map([
   ["host.sidecar.disconnect", "lifecycle"],
   ["host.sidecar.exit", "lifecycle"],
   ["host.sidecar.first_output", "lifecycle"],
+  ["host.sidecar.path", "lifecycle"],
   ["host.sidecar.reply", "io"],
   ["host.sidecar.request", "io"],
   ["host.sidecar.restart-limit", "lifecycle"],

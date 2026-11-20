@@ -4,59 +4,1294 @@
   "replay": false,
   "reason": "The snapshot of the case holds plugins, surfaces and values that a running application does not show on demand, and sok needs SOKSAK_SURFACE, which a window check does not set.",
   "variables": {
-    "snapshot": { "type": "object", "keys": ["window", "layout", "plugins", "groups", "unregistered"], "example": { "window": { "window": "main", "title": "soksak", "project": "/p" }, "layout": { "space": "space-1", "focused": "card-2", "root": { "direction": "row", "size": 1, "children": [{ "card": "card-1", "size": 0.5, "frame": { "x": 0, "y": 40, "width": 600, "height": 760 }, "tabs": [{ "tab": "terminal-1", "plugin": "terminal", "title": "zsh", "active": true, "params": null }] }, { "direction": "column", "size": 0.5, "children": [{ "card": "card-2", "size": 0.5, "frame": { "x": 604, "y": 40, "width": 596, "height": 378 }, "tabs": [{ "tab": "browser-1", "plugin": "browser", "title": "Home", "active": true, "params": { "address": "http://localhost:3366" } }] }, { "card": "card-3", "size": 0.5, "frame": { "x": 604, "y": 422, "width": 596, "height": 378 }, "tabs": [{ "tab": "editor-1", "plugin": "editor", "title": "aaa.html", "active": true, "params": { "path": "aaa.html" } }, { "tab": "terminal-2", "plugin": "terminal", "title": "make", "active": false, "params": null }] }] }] } }, "plugins": [{ "plugin": "terminal", "name": "Terminal", "description": "Runs a process in a session.", "surface": { "params": null, "opens": [] } }, { "plugin": "browser", "name": "Browser", "description": "Shows an address.", "surface": { "params": { "type": "object", "properties": { "address": { "type": "string" } }, "required": ["address"] }, "opens": [] } }, { "plugin": "editor", "name": "Editor", "description": "Edits a file.", "surface": { "params": { "type": "object", "properties": { "path": { "type": "string" } }, "required": ["path"] }, "opens": ["html", "txt"] } }, { "plugin": "notes", "name": "Notes", "description": "Keeps notes in a section.", "surface": null }], "groups": [{ "owner": "host", "status": [{ "name": "host.window", "description": "Window state. It holds the frame.", "schema": { "type": "object" }, "value": { "key": true, "frame": { "x": 0, "y": 0, "width": 1200, "height": 800 } } }], "commands": [{ "name": "host.window.reload", "description": "Starts the workbench of the window again.", "params": { "type": "object" }, "result": { "type": "null" } }], "element": [] }, { "owner": "core", "status": [{ "name": "core.screen", "description": "Current screen, e.g. home. Long value.", "schema": {}, "value": "화면 <home> & abcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghij" }], "commands": [{ "name": "core.layout.open", "description": "Opens a tab in a card. Splits the card toward a side.", "params": { "type": "object", "properties": { "card": { "type": "string" }, "plugin": { "type": "string" }, "params": { "type": ["object", "null"] }, "path": { "type": "string" }, "side": { "enum": ["left", "right", "top", "bottom"] } }, "required": ["card"] }, "result": { "type": "object" } }], "element": [{ "name": "core.tab", "description": "A tab of a card.", "many": true, "items": [{ "index": 0, "role": "tab", "text": "tab 0", "rect": { "x": 0, "y": 0, "width": 10, "height": 30 }, "visible": true, "inert": false, "command": "core.tab.select", "params": { "tab": "t-0" } }, { "index": 1, "role": "tab", "text": "tab 1", "rect": { "x": 10, "y": 0, "width": 10, "height": 30 }, "visible": true, "inert": false, "command": "core.tab.select", "params": { "tab": "t-1" } }, { "index": 2, "role": "tab", "text": "tab 2", "rect": { "x": 20, "y": 0, "width": 10, "height": 30 }, "visible": true, "inert": false, "command": "core.tab.select", "params": { "tab": "t-2" } }, { "index": 3, "role": "tab", "text": "tab 3", "rect": { "x": 30, "y": 0, "width": 10, "height": 30 }, "visible": true, "inert": false, "command": "core.tab.select", "params": { "tab": "t-3" } }, { "index": 4, "role": "tab", "text": "tab 4", "rect": { "x": 40, "y": 0, "width": 10, "height": 30 }, "visible": true, "inert": false, "command": "core.tab.select", "params": { "tab": "t-4" } }, { "index": 5, "role": "tab", "text": "tab 5", "rect": { "x": 50, "y": 0, "width": 10, "height": 30 }, "visible": true, "inert": false, "command": "core.tab.select", "params": { "tab": "t-5" } }, { "index": 6, "role": "tab", "text": "tab 6", "rect": { "x": 60, "y": 0, "width": 10, "height": 30 }, "visible": true, "inert": false, "command": "core.tab.select", "params": { "tab": "t-6" } }, { "index": 7, "role": "tab", "text": "tab 7", "rect": { "x": 70, "y": 0, "width": 10, "height": 30 }, "visible": true, "inert": false, "command": "core.tab.select", "params": { "tab": "t-7" } }, { "index": 8, "role": "tab", "text": "tab 8", "rect": { "x": 80, "y": 0, "width": 10, "height": 30 }, "visible": true, "inert": false, "command": "core.tab.select", "params": { "tab": "t-8" } }, { "index": 9, "role": "tab", "text": "tab 9", "rect": { "x": 90, "y": 0, "width": 10, "height": 30 }, "visible": true, "inert": false, "command": "core.tab.select", "params": { "tab": "t-9" } }, { "index": 10, "role": "tab", "text": "tab 10", "rect": { "x": 100, "y": 0, "width": 10, "height": 30 }, "visible": true, "inert": false, "command": "core.tab.select", "params": { "tab": "t-10" } }, { "index": 11, "role": "tab", "text": "tab 11", "rect": { "x": 110, "y": 0, "width": 10, "height": 30 }, "visible": true, "inert": false, "command": "core.tab.select", "params": { "tab": "t-11" } }, { "index": 12, "role": "tab", "text": "tab 12", "rect": { "x": 120, "y": 0, "width": 10, "height": 30 }, "visible": true, "inert": false, "command": "core.tab.select", "params": { "tab": "t-12" } }, { "index": 13, "role": "tab", "text": "tab 13", "rect": { "x": 130, "y": 0, "width": 10, "height": 30 }, "visible": true, "inert": false, "command": "core.tab.select", "params": { "tab": "t-13" } }, { "index": 14, "role": "tab", "text": "tab 14", "rect": { "x": 140, "y": 0, "width": 10, "height": 30 }, "visible": true, "inert": false, "command": "core.tab.select", "params": { "tab": "t-14" } }, { "index": 15, "role": "tab", "text": "tab 15", "rect": { "x": 150, "y": 0, "width": 10, "height": 30 }, "visible": true, "inert": false, "command": "core.tab.select", "params": { "tab": "t-15" } }, { "index": 16, "role": "tab", "text": "tab 16", "rect": { "x": 160, "y": 0, "width": 10, "height": 30 }, "visible": true, "inert": false, "command": "core.tab.select", "params": { "tab": "t-16" } }, { "index": 17, "role": "tab", "text": "tab 17", "rect": { "x": 170, "y": 0, "width": 10, "height": 30 }, "visible": true, "inert": false, "command": "core.tab.select", "params": { "tab": "t-17" } }, { "index": 18, "role": "tab", "text": "tab 18", "rect": { "x": 180, "y": 0, "width": 10, "height": 30 }, "visible": true, "inert": false, "command": "core.tab.select", "params": { "tab": "t-18" } }, { "index": 19, "role": "tab", "text": "tab 19", "rect": { "x": 190, "y": 0, "width": 10, "height": 30 }, "visible": true, "inert": false, "command": "core.tab.select", "params": { "tab": "t-19" } }, { "index": 20, "role": "tab", "text": "tab 20", "rect": { "x": 200, "y": 0, "width": 10, "height": 30 }, "visible": false, "inert": false, "command": "core.tab.select", "params": { "tab": "t-20" } }, { "index": 21, "role": "tab", "text": "tab 21", "rect": { "x": 210, "y": 0, "width": 10, "height": 30 }, "visible": false, "inert": false, "command": "core.tab.select", "params": { "tab": "t-21" } }] }] }, { "owner": "surface", "surface": "terminal-1", "plugin": "terminal", "kind": "tab", "state": "loaded", "visible": true, "status": [{ "name": "terminal.title", "description": "The title of the session", "schema": { "type": "string" }, "error": "the session ended" }], "commands": [{ "name": "terminal.input", "description": "Writes text to the session. It types each character.", "params": { "type": "object", "properties": { "text": { "type": "string" } }, "required": ["text"] }, "result": { "type": "null" } }], "element": [] }, { "owner": "surface", "surface": "editor-1", "plugin": "editor", "kind": "tab", "state": "unloaded", "visible": true, "status": [], "commands": [], "element": [] }], "unregistered": [{ "kind": "command", "name": "browser.reload" }] } },
-    "surfaces": { "type": "object", "keys": ["window", "layout", "plugins", "groups", "unregistered"], "example": { "window": { "window": "main", "title": "soksak", "project": "/p" }, "layout": { "space": "space-1", "focused": "card-2", "root": { "direction": "row", "size": 1, "children": [{ "card": "card-1", "size": 0.5, "frame": { "x": 0, "y": 40, "width": 600, "height": 760 }, "tabs": [{ "tab": "terminal-1", "plugin": "terminal", "title": "zsh", "active": true, "params": null }] }, { "direction": "column", "size": 0.5, "children": [{ "card": "card-2", "size": 0.5, "frame": { "x": 604, "y": 40, "width": 596, "height": 378 }, "tabs": [{ "tab": "browser-1", "plugin": "browser", "title": "Home", "active": true, "params": { "address": "http://localhost:3366" } }] }, { "card": "card-3", "size": 0.5, "frame": { "x": 604, "y": 422, "width": 596, "height": 378 }, "tabs": [{ "tab": "editor-1", "plugin": "editor", "title": "aaa.html", "active": true, "params": { "path": "aaa.html" } }, { "tab": "terminal-2", "plugin": "terminal", "title": "make", "active": false, "params": null }] }] }] } }, "plugins": [{ "plugin": "terminal", "name": "Terminal", "description": "Runs a process in a session.", "surface": { "params": null, "opens": [] } }, { "plugin": "browser", "name": "Browser", "description": "Shows an address.", "surface": { "params": { "type": "object", "properties": { "address": { "type": "string" } }, "required": ["address"] }, "opens": [] } }, { "plugin": "editor", "name": "Editor", "description": "Edits a file.", "surface": { "params": { "type": "object", "properties": { "path": { "type": "string" } }, "required": ["path"] }, "opens": ["html", "txt"] } }, { "plugin": "notes", "name": "Notes", "description": "Keeps notes in a section.", "surface": null }], "groups": [{ "owner": "surface", "surface": "terminal-1", "plugin": "terminal", "kind": "tab", "state": "loaded", "visible": true, "status": [{ "name": "terminal.title", "description": "The title of the session", "schema": { "type": "string" }, "error": "the session ended" }], "commands": [{ "name": "terminal.input", "description": "Writes text to the session. It types each character.", "params": { "type": "object", "properties": { "text": { "type": "string" } }, "required": ["text"] }, "result": { "type": "null" } }], "element": [] }], "unregistered": [] } }
+    "snapshot": {
+      "type": "object",
+      "keys": [
+        "window",
+        "layout",
+        "plugins",
+        "groups",
+        "unregistered"
+      ],
+      "example": {
+        "window": {
+          "window": "main",
+          "title": "soksak",
+          "project": "/p"
+        },
+        "layout": {
+          "space": "space-1",
+          "focused": "card-2",
+          "root": {
+            "direction": "row",
+            "size": 1,
+            "children": [
+              {
+                "card": "card-1",
+                "size": 0.5,
+                "frame": {
+                  "x": 0,
+                  "y": 40,
+                  "width": 600,
+                  "height": 760
+                },
+                "tabs": [
+                  {
+                    "tab": "terminal-1",
+                    "plugin": "terminal",
+                    "title": "zsh",
+                    "active": true,
+                    "params": null
+                  }
+                ]
+              },
+              {
+                "direction": "column",
+                "size": 0.5,
+                "children": [
+                  {
+                    "card": "card-2",
+                    "size": 0.5,
+                    "frame": {
+                      "x": 604,
+                      "y": 40,
+                      "width": 596,
+                      "height": 378
+                    },
+                    "tabs": [
+                      {
+                        "tab": "browser-1",
+                        "plugin": "browser",
+                        "title": "Home",
+                        "active": true,
+                        "params": {
+                          "address": "http://localhost:3366"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "card": "card-3",
+                    "size": 0.5,
+                    "frame": {
+                      "x": 604,
+                      "y": 422,
+                      "width": 596,
+                      "height": 378
+                    },
+                    "tabs": [
+                      {
+                        "tab": "editor-1",
+                        "plugin": "editor",
+                        "title": "aaa.html",
+                        "active": true,
+                        "params": {
+                          "path": "aaa.html"
+                        }
+                      },
+                      {
+                        "tab": "terminal-2",
+                        "plugin": "terminal",
+                        "title": "make",
+                        "active": false,
+                        "params": null
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "plugins": [
+          {
+            "plugin": "terminal",
+            "name": "Terminal",
+            "description": "Runs a process in a session.",
+            "surface": {
+              "params": null,
+              "opens": []
+            }
+          },
+          {
+            "plugin": "browser",
+            "name": "Browser",
+            "description": "Shows an address.",
+            "surface": {
+              "params": {
+                "type": "object",
+                "properties": {
+                  "address": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "address"
+                ]
+              },
+              "opens": []
+            }
+          },
+          {
+            "plugin": "editor",
+            "name": "Editor",
+            "description": "Edits a file.",
+            "surface": {
+              "params": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path"
+                ]
+              },
+              "opens": [
+                "html",
+                "txt"
+              ]
+            }
+          },
+          {
+            "plugin": "notes",
+            "name": "Notes",
+            "description": "Keeps notes in a section.",
+            "surface": null
+          }
+        ],
+        "groups": [
+          {
+            "owner": "host",
+            "status": [
+              {
+                "name": "host.window",
+                "description": "Window state. It holds the frame.",
+                "schema": {
+                  "type": "object"
+                },
+                "value": {
+                  "key": true,
+                  "frame": {
+                    "x": 0,
+                    "y": 0,
+                    "width": 1200,
+                    "height": 800
+                  }
+                }
+              }
+            ],
+            "commands": [
+              {
+                "name": "host.window.reload",
+                "description": "Starts the workbench of the window again.",
+                "params": {
+                  "type": "object"
+                },
+                "result": {
+                  "type": "null"
+                }
+              }
+            ],
+            "element": []
+          },
+          {
+            "owner": "core",
+            "status": [
+              {
+                "name": "core.screen",
+                "description": "Current screen, e.g. home. Long value.",
+                "schema": {},
+                "value": "화면 <home> & abcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghij"
+              }
+            ],
+            "commands": [
+              {
+                "name": "core.layout.open",
+                "description": "Opens a tab in a card. Splits the card toward a side.",
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "card": {
+                      "type": "string"
+                    },
+                    "plugin": {
+                      "type": "string"
+                    },
+                    "params": {
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "side": {
+                      "enum": [
+                        "left",
+                        "right",
+                        "top",
+                        "bottom"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "card"
+                  ]
+                },
+                "result": {
+                  "type": "object"
+                }
+              }
+            ],
+            "element": [
+              {
+                "name": "core.tab",
+                "description": "A tab of a card.",
+                "many": true,
+                "items": [
+                  {
+                    "index": 0,
+                    "role": "tab",
+                    "text": "tab 0",
+                    "rect": {
+                      "x": 0,
+                      "y": 0,
+                      "width": 10,
+                      "height": 30
+                    },
+                    "visible": true,
+                    "inert": false,
+                    "command": "core.tab.select",
+                    "params": {
+                      "tab": "t-0"
+                    }
+                  },
+                  {
+                    "index": 1,
+                    "role": "tab",
+                    "text": "tab 1",
+                    "rect": {
+                      "x": 10,
+                      "y": 0,
+                      "width": 10,
+                      "height": 30
+                    },
+                    "visible": true,
+                    "inert": false,
+                    "command": "core.tab.select",
+                    "params": {
+                      "tab": "t-1"
+                    }
+                  },
+                  {
+                    "index": 2,
+                    "role": "tab",
+                    "text": "tab 2",
+                    "rect": {
+                      "x": 20,
+                      "y": 0,
+                      "width": 10,
+                      "height": 30
+                    },
+                    "visible": true,
+                    "inert": false,
+                    "command": "core.tab.select",
+                    "params": {
+                      "tab": "t-2"
+                    }
+                  },
+                  {
+                    "index": 3,
+                    "role": "tab",
+                    "text": "tab 3",
+                    "rect": {
+                      "x": 30,
+                      "y": 0,
+                      "width": 10,
+                      "height": 30
+                    },
+                    "visible": true,
+                    "inert": false,
+                    "command": "core.tab.select",
+                    "params": {
+                      "tab": "t-3"
+                    }
+                  },
+                  {
+                    "index": 4,
+                    "role": "tab",
+                    "text": "tab 4",
+                    "rect": {
+                      "x": 40,
+                      "y": 0,
+                      "width": 10,
+                      "height": 30
+                    },
+                    "visible": true,
+                    "inert": false,
+                    "command": "core.tab.select",
+                    "params": {
+                      "tab": "t-4"
+                    }
+                  },
+                  {
+                    "index": 5,
+                    "role": "tab",
+                    "text": "tab 5",
+                    "rect": {
+                      "x": 50,
+                      "y": 0,
+                      "width": 10,
+                      "height": 30
+                    },
+                    "visible": true,
+                    "inert": false,
+                    "command": "core.tab.select",
+                    "params": {
+                      "tab": "t-5"
+                    }
+                  },
+                  {
+                    "index": 6,
+                    "role": "tab",
+                    "text": "tab 6",
+                    "rect": {
+                      "x": 60,
+                      "y": 0,
+                      "width": 10,
+                      "height": 30
+                    },
+                    "visible": true,
+                    "inert": false,
+                    "command": "core.tab.select",
+                    "params": {
+                      "tab": "t-6"
+                    }
+                  },
+                  {
+                    "index": 7,
+                    "role": "tab",
+                    "text": "tab 7",
+                    "rect": {
+                      "x": 70,
+                      "y": 0,
+                      "width": 10,
+                      "height": 30
+                    },
+                    "visible": true,
+                    "inert": false,
+                    "command": "core.tab.select",
+                    "params": {
+                      "tab": "t-7"
+                    }
+                  },
+                  {
+                    "index": 8,
+                    "role": "tab",
+                    "text": "tab 8",
+                    "rect": {
+                      "x": 80,
+                      "y": 0,
+                      "width": 10,
+                      "height": 30
+                    },
+                    "visible": true,
+                    "inert": false,
+                    "command": "core.tab.select",
+                    "params": {
+                      "tab": "t-8"
+                    }
+                  },
+                  {
+                    "index": 9,
+                    "role": "tab",
+                    "text": "tab 9",
+                    "rect": {
+                      "x": 90,
+                      "y": 0,
+                      "width": 10,
+                      "height": 30
+                    },
+                    "visible": true,
+                    "inert": false,
+                    "command": "core.tab.select",
+                    "params": {
+                      "tab": "t-9"
+                    }
+                  },
+                  {
+                    "index": 10,
+                    "role": "tab",
+                    "text": "tab 10",
+                    "rect": {
+                      "x": 100,
+                      "y": 0,
+                      "width": 10,
+                      "height": 30
+                    },
+                    "visible": true,
+                    "inert": false,
+                    "command": "core.tab.select",
+                    "params": {
+                      "tab": "t-10"
+                    }
+                  },
+                  {
+                    "index": 11,
+                    "role": "tab",
+                    "text": "tab 11",
+                    "rect": {
+                      "x": 110,
+                      "y": 0,
+                      "width": 10,
+                      "height": 30
+                    },
+                    "visible": true,
+                    "inert": false,
+                    "command": "core.tab.select",
+                    "params": {
+                      "tab": "t-11"
+                    }
+                  },
+                  {
+                    "index": 12,
+                    "role": "tab",
+                    "text": "tab 12",
+                    "rect": {
+                      "x": 120,
+                      "y": 0,
+                      "width": 10,
+                      "height": 30
+                    },
+                    "visible": true,
+                    "inert": false,
+                    "command": "core.tab.select",
+                    "params": {
+                      "tab": "t-12"
+                    }
+                  },
+                  {
+                    "index": 13,
+                    "role": "tab",
+                    "text": "tab 13",
+                    "rect": {
+                      "x": 130,
+                      "y": 0,
+                      "width": 10,
+                      "height": 30
+                    },
+                    "visible": true,
+                    "inert": false,
+                    "command": "core.tab.select",
+                    "params": {
+                      "tab": "t-13"
+                    }
+                  },
+                  {
+                    "index": 14,
+                    "role": "tab",
+                    "text": "tab 14",
+                    "rect": {
+                      "x": 140,
+                      "y": 0,
+                      "width": 10,
+                      "height": 30
+                    },
+                    "visible": true,
+                    "inert": false,
+                    "command": "core.tab.select",
+                    "params": {
+                      "tab": "t-14"
+                    }
+                  },
+                  {
+                    "index": 15,
+                    "role": "tab",
+                    "text": "tab 15",
+                    "rect": {
+                      "x": 150,
+                      "y": 0,
+                      "width": 10,
+                      "height": 30
+                    },
+                    "visible": true,
+                    "inert": false,
+                    "command": "core.tab.select",
+                    "params": {
+                      "tab": "t-15"
+                    }
+                  },
+                  {
+                    "index": 16,
+                    "role": "tab",
+                    "text": "tab 16",
+                    "rect": {
+                      "x": 160,
+                      "y": 0,
+                      "width": 10,
+                      "height": 30
+                    },
+                    "visible": true,
+                    "inert": false,
+                    "command": "core.tab.select",
+                    "params": {
+                      "tab": "t-16"
+                    }
+                  },
+                  {
+                    "index": 17,
+                    "role": "tab",
+                    "text": "tab 17",
+                    "rect": {
+                      "x": 170,
+                      "y": 0,
+                      "width": 10,
+                      "height": 30
+                    },
+                    "visible": true,
+                    "inert": false,
+                    "command": "core.tab.select",
+                    "params": {
+                      "tab": "t-17"
+                    }
+                  },
+                  {
+                    "index": 18,
+                    "role": "tab",
+                    "text": "tab 18",
+                    "rect": {
+                      "x": 180,
+                      "y": 0,
+                      "width": 10,
+                      "height": 30
+                    },
+                    "visible": true,
+                    "inert": false,
+                    "command": "core.tab.select",
+                    "params": {
+                      "tab": "t-18"
+                    }
+                  },
+                  {
+                    "index": 19,
+                    "role": "tab",
+                    "text": "tab 19",
+                    "rect": {
+                      "x": 190,
+                      "y": 0,
+                      "width": 10,
+                      "height": 30
+                    },
+                    "visible": true,
+                    "inert": false,
+                    "command": "core.tab.select",
+                    "params": {
+                      "tab": "t-19"
+                    }
+                  },
+                  {
+                    "index": 20,
+                    "role": "tab",
+                    "text": "tab 20",
+                    "rect": {
+                      "x": 200,
+                      "y": 0,
+                      "width": 10,
+                      "height": 30
+                    },
+                    "visible": false,
+                    "inert": false,
+                    "command": "core.tab.select",
+                    "params": {
+                      "tab": "t-20"
+                    }
+                  },
+                  {
+                    "index": 21,
+                    "role": "tab",
+                    "text": "tab 21",
+                    "rect": {
+                      "x": 210,
+                      "y": 0,
+                      "width": 10,
+                      "height": 30
+                    },
+                    "visible": false,
+                    "inert": false,
+                    "command": "core.tab.select",
+                    "params": {
+                      "tab": "t-21"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "owner": "surface",
+            "surface": "terminal-1",
+            "plugin": "terminal",
+            "kind": "tab",
+            "state": "loaded",
+            "visible": true,
+            "status": [
+              {
+                "name": "terminal.title",
+                "description": "The title of the session",
+                "schema": {
+                  "type": "string"
+                },
+                "error": "the session ended"
+              }
+            ],
+            "commands": [
+              {
+                "name": "terminal.input",
+                "description": "Writes text to the session. It types each character.",
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "text"
+                  ]
+                },
+                "result": {
+                  "type": "null"
+                }
+              }
+            ],
+            "element": []
+          },
+          {
+            "owner": "surface",
+            "surface": "editor-1",
+            "plugin": "editor",
+            "kind": "tab",
+            "state": "unloaded",
+            "visible": true,
+            "status": [],
+            "commands": [],
+            "element": []
+          }
+        ],
+        "unregistered": [
+          {
+            "kind": "command",
+            "name": "browser.reload"
+          }
+        ]
+      }
+    },
+    "surfaces": {
+      "type": "object",
+      "keys": [
+        "window",
+        "layout",
+        "plugins",
+        "groups",
+        "unregistered"
+      ],
+      "example": {
+        "window": {
+          "window": "main",
+          "title": "soksak",
+          "project": "/p"
+        },
+        "layout": {
+          "space": "space-1",
+          "focused": "card-2",
+          "root": {
+            "direction": "row",
+            "size": 1,
+            "children": [
+              {
+                "card": "card-1",
+                "size": 0.5,
+                "frame": {
+                  "x": 0,
+                  "y": 40,
+                  "width": 600,
+                  "height": 760
+                },
+                "tabs": [
+                  {
+                    "tab": "terminal-1",
+                    "plugin": "terminal",
+                    "title": "zsh",
+                    "active": true,
+                    "params": null
+                  }
+                ]
+              },
+              {
+                "direction": "column",
+                "size": 0.5,
+                "children": [
+                  {
+                    "card": "card-2",
+                    "size": 0.5,
+                    "frame": {
+                      "x": 604,
+                      "y": 40,
+                      "width": 596,
+                      "height": 378
+                    },
+                    "tabs": [
+                      {
+                        "tab": "browser-1",
+                        "plugin": "browser",
+                        "title": "Home",
+                        "active": true,
+                        "params": {
+                          "address": "http://localhost:3366"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "card": "card-3",
+                    "size": 0.5,
+                    "frame": {
+                      "x": 604,
+                      "y": 422,
+                      "width": 596,
+                      "height": 378
+                    },
+                    "tabs": [
+                      {
+                        "tab": "editor-1",
+                        "plugin": "editor",
+                        "title": "aaa.html",
+                        "active": true,
+                        "params": {
+                          "path": "aaa.html"
+                        }
+                      },
+                      {
+                        "tab": "terminal-2",
+                        "plugin": "terminal",
+                        "title": "make",
+                        "active": false,
+                        "params": null
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "plugins": [
+          {
+            "plugin": "terminal",
+            "name": "Terminal",
+            "description": "Runs a process in a session.",
+            "surface": {
+              "params": null,
+              "opens": []
+            }
+          },
+          {
+            "plugin": "browser",
+            "name": "Browser",
+            "description": "Shows an address.",
+            "surface": {
+              "params": {
+                "type": "object",
+                "properties": {
+                  "address": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "address"
+                ]
+              },
+              "opens": []
+            }
+          },
+          {
+            "plugin": "editor",
+            "name": "Editor",
+            "description": "Edits a file.",
+            "surface": {
+              "params": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path"
+                ]
+              },
+              "opens": [
+                "html",
+                "txt"
+              ]
+            }
+          },
+          {
+            "plugin": "notes",
+            "name": "Notes",
+            "description": "Keeps notes in a section.",
+            "surface": null
+          }
+        ],
+        "groups": [
+          {
+            "owner": "surface",
+            "surface": "terminal-1",
+            "plugin": "terminal",
+            "kind": "tab",
+            "state": "loaded",
+            "visible": true,
+            "status": [
+              {
+                "name": "terminal.title",
+                "description": "The title of the session",
+                "schema": {
+                  "type": "string"
+                },
+                "error": "the session ended"
+              }
+            ],
+            "commands": [
+              {
+                "name": "terminal.input",
+                "description": "Writes text to the session. It types each character.",
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "text"
+                  ]
+                },
+                "result": {
+                  "type": "null"
+                }
+              }
+            ],
+            "element": []
+          }
+        ],
+        "unregistered": []
+      }
+    }
   },
   "steps": [
-    { "send": { "jsonrpc": "2.0", "id": 1, "method": "surface.window", "params": { "surface": "terminal-1" } } },
-    { "reply": { "jsonrpc": "2.0", "id": 1, "result": { "window": "main", "space": "space-1" } } },
-    { "send": { "jsonrpc": "2.0", "id": 2, "method": "exposure.snapshot", "params": { "window": "main" } } },
-    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$snapshot" } },
-    { "close": "client" },
-    { "send": { "jsonrpc": "2.0", "id": 1, "method": "surface.window", "params": { "surface": "terminal-1" } } },
-    { "reply": { "jsonrpc": "2.0", "id": 1, "result": { "window": "main", "space": null } } },
-    { "send": { "jsonrpc": "2.0", "id": 2, "method": "exposure.snapshot", "params": { "window": "main" } } },
-    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$snapshot" } },
-    { "close": "client" },
-    { "send": { "jsonrpc": "2.0", "id": 1, "method": "surface.window", "params": { "surface": "terminal-1" } } },
-    { "reply": { "jsonrpc": "2.0", "id": 1, "result": { "window": "main", "space": "space-1" } } },
-    { "send": { "jsonrpc": "2.0", "id": 2, "method": "exposure.snapshot", "params": { "window": "main" } } },
-    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$snapshot" } },
-    { "close": "client" },
-    { "send": { "jsonrpc": "2.0", "id": 1, "method": "surface.window", "params": { "surface": "terminal-1" } } },
-    { "reply": { "jsonrpc": "2.0", "id": 1, "result": { "window": "main", "space": "space-2" } } },
-    { "send": { "jsonrpc": "2.0", "id": 2, "method": "exposure.snapshot", "params": { "window": "main", "surface": "terminal-1" } } },
-    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$surfaces" } },
-    { "close": "client" },
-    { "send": { "jsonrpc": "2.0", "id": 1, "method": "surface.window", "params": { "surface": "terminal-1" } } },
-    { "reply": { "jsonrpc": "2.0", "id": 1, "result": { "window": "main", "space": "space-1" } } },
-    { "send": { "jsonrpc": "2.0", "id": 2, "method": "exposure.snapshot", "params": { "window": "other" } } },
-    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$snapshot" } },
-    { "close": "client" },
-    { "send": { "jsonrpc": "2.0", "id": 1, "method": "surface.window", "params": { "surface": "terminal-1" } } },
-    { "reply": { "jsonrpc": "2.0", "id": 1, "result": { "window": "main", "space": "space-1" } } },
-    { "send": { "jsonrpc": "2.0", "id": 2, "method": "exposure.snapshot", "params": { "window": "main" } } },
-    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$snapshot" } },
-    { "close": "client" },
-    { "send": { "jsonrpc": "2.0", "id": 1, "method": "surface.window", "params": { "surface": "terminal-1" } } },
-    { "reply": { "jsonrpc": "2.0", "id": 1, "result": { "window": "main", "space": "space-1" } } },
-    { "send": { "jsonrpc": "2.0", "id": 2, "method": "exposure.snapshot", "params": { "window": "main" } } },
-    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$snapshot" } },
-    { "close": "client" },
-    { "send": { "jsonrpc": "2.0", "id": 1, "method": "surface.window", "params": { "surface": "terminal-1" } } },
-    { "reply": { "jsonrpc": "2.0", "id": 1, "result": { "window": "main", "space": "space-1" } } },
-    { "send": { "jsonrpc": "2.0", "id": 2, "method": "exposure.snapshot", "params": { "window": "main" } } },
-    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$snapshot" } },
-    { "close": "client" },
-    { "send": { "jsonrpc": "2.0", "id": 1, "method": "surface.window", "params": { "surface": "terminal-1" } } },
-    { "reply": { "jsonrpc": "2.0", "id": 1, "result": { "window": "main", "space": "space-1" } } },
-    { "send": { "jsonrpc": "2.0", "id": 2, "method": "exposure.snapshot", "params": { "window": "main" } } },
-    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$snapshot" } },
-    { "close": "client" },
-    { "send": { "jsonrpc": "2.0", "id": 1, "method": "surface.window", "params": { "surface": "terminal-1" } } },
-    { "reply": { "jsonrpc": "2.0", "id": 1, "result": { "window": "main", "space": "space-1" } } },
-    { "send": { "jsonrpc": "2.0", "id": 2, "method": "exposure.snapshot", "params": { "window": "main" } } },
-    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$snapshot" } },
-    { "close": "client" }
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "surface.window",
+        "params": {
+          "surface": "terminal-1"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "window": "main",
+          "space": "space-1"
+        }
+      }
+    },
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "exposure.snapshot",
+        "params": {
+          "window": "main"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": "$snapshot"
+      }
+    },
+    {
+      "close": "client"
+    },
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "surface.window",
+        "params": {
+          "surface": "terminal-1"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "window": "main",
+          "space": null
+        }
+      }
+    },
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "exposure.snapshot",
+        "params": {
+          "window": "main"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": "$snapshot"
+      }
+    },
+    {
+      "close": "client"
+    },
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "surface.window",
+        "params": {
+          "surface": "terminal-1"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "window": "main",
+          "space": "space-1"
+        }
+      }
+    },
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "exposure.snapshot",
+        "params": {
+          "window": "main"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": "$snapshot"
+      }
+    },
+    {
+      "close": "client"
+    },
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "surface.window",
+        "params": {
+          "surface": "terminal-1"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "window": "main",
+          "space": "space-2"
+        }
+      }
+    },
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "exposure.snapshot",
+        "params": {
+          "window": "main",
+          "surface": "terminal-1"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": "$surfaces"
+      }
+    },
+    {
+      "close": "client"
+    },
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "surface.window",
+        "params": {
+          "surface": "terminal-1"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "window": "main",
+          "space": "space-1"
+        }
+      }
+    },
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "exposure.snapshot",
+        "params": {
+          "window": "other"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": "$snapshot"
+      }
+    },
+    {
+      "close": "client"
+    },
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "surface.window",
+        "params": {
+          "surface": "terminal-1"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "window": "main",
+          "space": "space-1"
+        }
+      }
+    },
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "exposure.snapshot",
+        "params": {
+          "window": "main"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": "$snapshot"
+      }
+    },
+    {
+      "close": "client"
+    },
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "surface.window",
+        "params": {
+          "surface": "terminal-1"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "window": "main",
+          "space": "space-1"
+        }
+      }
+    },
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "exposure.snapshot",
+        "params": {
+          "window": "main"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": "$snapshot"
+      }
+    },
+    {
+      "close": "client"
+    },
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "surface.window",
+        "params": {
+          "surface": "terminal-1"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "window": "main",
+          "space": "space-1"
+        }
+      }
+    },
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "exposure.snapshot",
+        "params": {
+          "window": "main"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": "$snapshot"
+      }
+    },
+    {
+      "close": "client"
+    },
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "surface.window",
+        "params": {
+          "surface": "terminal-1"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "window": "main",
+          "space": "space-1"
+        }
+      }
+    },
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "exposure.snapshot",
+        "params": {
+          "window": "main"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": "$snapshot"
+      }
+    },
+    {
+      "close": "client"
+    },
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "surface.window",
+        "params": {
+          "surface": "terminal-1"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "window": "main",
+          "space": "space-1"
+        }
+      }
+    },
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "exposure.snapshot",
+        "params": {
+          "window": "main"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": "$snapshot"
+      }
+    },
+    {
+      "close": "client"
+    }
   ]
 }

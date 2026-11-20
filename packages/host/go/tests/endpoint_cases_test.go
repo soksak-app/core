@@ -150,6 +150,7 @@ var endpointCasesOutsideTier = map[string]string{
 	"sok-capture-still":                "the sok client captures a registered window, which needs a page",
 	"sok-commands":                     "the sok client reads exposure.list of a window, which needs a page",
 	"sok-declared-rejects":             "the sok client reads exposure.list of a window, which needs a page",
+	"sok-describe-summary-and-full":    "the sok client reads the statuses of the tabs of a window, which the page reports",
 	"sok-status-value":                 "status.get of a page status, which the page answers",
 	"status-get-screen":                "status.get of a page status, which the page answers",
 	"status-unknown-name":              "status.get of a name that is not a host status is answered by the page",

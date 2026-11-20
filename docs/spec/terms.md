@@ -8,4 +8,6 @@ The term list is `terms.json` of the kit `soksak-app/kit`. Each entry has the te
 
 The request-local declaration table is defined in [native surfaces](native-surfaces.md).
 
+The plane, the level, the group card, the child plane and the leader of a plane are defined in [group cards](groups.md#model).
+
 The agent, the agent skill, the agent folder, the setup part and the MCP registration are defined in [command line](cli.md#agents).

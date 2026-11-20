@@ -45,7 +45,7 @@ test("a preparation holds the declaration of each view it leaves out until the h
     await modules.mountSurface(mountedView.slot, mountedView.surface);
     await modules.waitSurfaceCompositionDeclared(mountedView.surface.surfaceId);
     await settled();
-    const placing = surfaces.place({ surfaces: [record("mounted-view"), record("cold-view")], settled: true, drawn: false, titlebar: 40 });
+    const placing = surfaces.place({ surfaces: [record("mounted-view"), record("cold-view")], grabs: [], settled: true, drawn: false, titlebar: 40 });
     await settled();
     const request = wire.calls.find(({ name }) => name === "syncSurfaces").payload;
     assert.deepEqual(request.surfaces.map(({ id }) => id), ["mounted-view"], "the preparation sent an unmounted view");

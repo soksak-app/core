@@ -1,0 +1,90 @@
+// The host calls of a surface document are the events `workbench.call`, relayed in batches of the host command log
+// (docs/spec/logging.md#entrances).
+import assert from "node:assert/strict";
+import test from "node:test";
+// The event workbench.call is at the level debug, which only the debug state stores (docs/spec/logging.md#policy), so the host answers
+// the action policy-read with every class at trace.
+const TRACE = { lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" };
+
+async function surface(native) {
+  const calls = [];
+  globalThis.window = { __soksak: {
+    call: (command, args) => {
+      // The request for the clocks of the host is answered here; the batches are what the tests assert.
+      if (command === "log" && args.request.action === "clock") return Promise.resolve({ ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 });
+      if (command === "log" && args.request.action === "policy-read") return Promise.resolve({ classes: TRACE });
+      calls.push([command, args]);
+      return native(command, args);
+    },
+    on: async () => () => {},
+    event: () => {},
+    onStream: () => {},
+    stream: () => {},
+  } };
+  globalThis.location = { search: "?id=s1" };
+  const { page } = await import(`../runtime/index.js?test=surface-calls-${Math.random()}`);
+  // The statement of the clock anchor (workbench.log.clock) leads the first batch of a page and has its own test in the workbench.
+  const batches = () => calls.filter(([command]) => command === "log")
+    .map(([, { request }]) => request.events.filter((event) => event.event !== "workbench.log.clock"));
+  return { page, calls, batches };
+}
+
+const cleanup = () => {
+  delete globalThis.window;
+  delete globalThis.location;
+};
+
+test("the calls of one turn are the events workbench.call in one log batch, with the arguments of the host call", async () => {
+  const { page, calls, batches } = await surface(async () => undefined);
+  try {
+    await Promise.all([page.document.attach("doc"), page.document.load("doc", "https://example.test"), page.image.caret("v", 1, 2, 3, 4)]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(batches().length, 1, "one log call carries the events of the turn");
+    const events = batches()[0];
+    assert.deepEqual(events.map((event) => [event.event, event.level, event.fields.name, event.fields.args, event.fields.ok]), [
+      ["workbench.call", "debug", "documentAttach", '[{"surface":"s1","document":"doc"}]', true],
+      ["workbench.call", "debug", "documentLoad", '[{"surface":"s1","document":"doc","url":"https://example.test"}]', true],
+      ["workbench.call", "debug", "imageCaret", '[{"surface":"s1","name":"v"},1,2,3,4]', true],
+    ]);
+    for (const event of events) {
+      assert.equal(event.fields.truncated, false);
+      assert.ok(Number.isInteger(event.fields.micros) && event.fields.micros >= 0);
+      assert.ok(Number.isInteger(event.ts_us) && event.ts_us > 1.7e15);
+      assert.ok(Number.isInteger(event.mono_ns) && event.mono_ns > 0);
+    }
+    assert.equal(calls.filter(([command]) => command !== "log").length, 3, "the calls themselves are not delayed or repeated");
+  } finally {
+    cleanup();
+  }
+});
+
+test("a refused call is at the level warn with the error, and the caller still gets the rejection", async () => {
+  const { page, batches } = await surface(async (command) => { if (command === "image_focus") throw new Error("no such region"); });
+  try {
+    await assert.rejects(page.image.focus("v"), /no such region/);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const [event] = batches()[0];
+    assert.equal(event.level, "warn");
+    assert.equal(event.fields.name, "imageFocus");
+    assert.equal(event.fields.ok, false);
+    assert.equal(event.fields.error, "-32603: no such region");
+  } finally {
+    cleanup();
+  }
+});
+
+test("the log call is not recorded, and a long argument is cut with truncated", async () => {
+  const { page, batches } = await surface(async () => undefined);
+  try {
+    await page.report({ level: "info", where: "workbench", text: "ready" });
+    await page.sidecar("x").send("s1", "y".repeat(3000));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const events = batches().flat();
+    assert.deepEqual(events.map((event) => event.event), ["workbench.record.info", "workbench.call"]);
+    assert.equal(events[1].fields.name, "sidecarSend");
+    assert.equal(events[1].fields.args.length, 1024);
+    assert.equal(events[1].fields.truncated, true);
+  } finally {
+    cleanup();
+  }
+});

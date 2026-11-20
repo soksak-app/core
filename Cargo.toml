@@ -1,12 +1,13 @@
 # The Rust workspace. Its crates share one Cargo.lock and one target/ folder.
 [workspace]
 resolver = "2"
-members = ["apps/tauriv2", "packages/host/rust", "packages/host/tauriv2", "packages/host/tauriv2/tests/fixtures/window-race", "packages/sok/rust"]
+members = ["apps/gpuikit", "apps/tauriv2", "packages/host/rust", "packages/host/tauriv2", "packages/host/tauriv2/tests/fixtures/window-race", "packages/host/gpuikit", "packages/sok/rust"]
 
 # The crates of the workspace that a member outside their package folders uses, such as the fixture program of a test.
 [workspace.dependencies]
 soksak-host = { path = "packages/host/rust" }
 soksak-host-tauriv2 = { path = "packages/host/tauriv2" }
+soksak-host-gpuikit = { path = "packages/host/gpuikit" }
 
 # rustc reports an ld warning that an object was built for a newer macOS version than the link through the lint linker_info,
 # which is allowed by default, so a build would not print it; the runners fail a build that prints it

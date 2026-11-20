@@ -16,11 +16,47 @@ test("native surface synchronization includes the active app-DOM menu bounds", a
   // JSDOM has no layout, so the rectangle of the menu is given to the element as its layout.
   menu.getBoundingClientRect = () => ({ left: 12.5, top: 24.25, width: 160.5, height: 90.75 });
   overlay.show(menu, { x: 12.5, y: 24.25, w: 160.5, h: 90.75 }, () => {});
-  await surfaces.place({ surfaces: [], settled: true, drawn: false });
+  await surfaces.place({ surfaces: [], grabs: [], settled: true, drawn: false });
   const sync = wire.calls.find(({ name }) => name === "syncSurfaces");
   assert.deepEqual(sync.payload.overlays, [{ x: 12.5, y: 24.25, w: 160.5, h: 90.75 }]);
   overlay.hide();
   await orderedCallsAnswered();
+  wire.finish();
+  dom.window.close();
+});
+
+// The grab area of a boundary reaches over the edges of the cards beside it, and a native view at that edge would take a press, the
+// cursor and the hit test from the divider, so the page gives each grab area to its own document as a window overlay
+// (docs/spec/native-surfaces.md#surface-host-container). The preparation carries the grab areas of the layout that it prepares, and the
+// drawn commit measures the same areas, so a drawn layout sends no second request.
+test("native surface synchronization includes the grab areas of the dividers of the prepared layout", async () => {
+  const wire = selectPageWire("overlay-routing-divider-grab-sync");
+  const dom = new JSDOM('<div id="plane"><div class="sp-divider" role="separator"></div></div>', { pretendToBeVisual: true });
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
+  globalThis.requestAnimationFrame = dom.window.requestAnimationFrame.bind(dom.window);
+  // JSDOM has no layout, so the plane and the divider that the draw places are given their rectangles in the page.
+  document.getElementById("plane").getBoundingClientRect = () => ({ left: 10, top: 40, width: 1000, height: 600 });
+  const divider = document.querySelector(".sp-divider");
+  divider.getBoundingClientRect = () => ({ left: 0, top: 0, width: 0, height: 0 });
+  const compositor = await import("../compositor.js?divider-grab");
+  const { surfaces } = await import("../host.js");
+  const records = [];
+  compositor.onCommit((record) => {
+    records.push(record);
+    return surfaces.place(record);
+  });
+  const grabs = [{ x: 584, y: 0, w: 11, h: 600 }];
+  const prepared = compositor.publishAhead(new Map(), new Map(), 40, grabs);
+  assert.deepEqual(records[0].grabs, grabs, "the preparation carries the grab areas of the layout that it prepares");
+  await prepared;
+  // The draw places the divider at its grab area.
+  divider.getBoundingClientRect = () => ({ left: 594, top: 40, width: 11, height: 600 });
+  await compositor.publish();
+  assert.deepEqual(records[1].grabs, grabs, "the drawn commit measures the grab areas of the drawn dividers");
+  assert.deepEqual(wire.calls.map(({ name }) => name), ["syncSurfaces", "presentSurfaces"], "the drawn layout sent a second request");
+  assert.deepEqual(wire.calls[0].payload.overlays, [{ x: 594, y: 40, w: 11, h: 600 }]);
   wire.finish();
   dom.window.close();
 });

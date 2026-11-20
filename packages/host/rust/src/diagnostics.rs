@@ -257,6 +257,7 @@ pub(crate) fn call(
         "diagnostics.modal.held" => modal_held(window.label()),
         "diagnostics.input.source" => input_source(window, params, &connection),
         "diagnostics.input.reference" => input_reference(window, &params, &connection),
+        "diagnostics.input.person" => input_person(window, &params),
         "diagnostics.log.flush" => crate::event_record::flush_records()
             .map(|()| Value::Null)
             .map_err(|error| Failure::new(crate::endpoint::HANDLER_FAILED, error)),
@@ -961,6 +962,36 @@ pub(crate) fn capture_windows(app: &crate::framework::AppHandle) -> Result<Vec<S
 }
 
 /// Validates input reference actions and their expected document.
+/// Reads the action and the point of `diagnostics.input.person` (docs/spec/endpoint.md).
+fn parse_input_person(params: &Map<String, Value>) -> Result<(String, f64, f64), Failure> {
+    let action = params.get("action").and_then(Value::as_str);
+    let Some(action) = action.filter(|action| matches!(*action, "press" | "move" | "scroll"))
+    else {
+        return Err(Failure::params("action must be press, move or scroll"));
+    };
+    match (
+        params.get("x").and_then(Value::as_f64),
+        params.get("y").and_then(Value::as_f64),
+    ) {
+        (Some(x), Some(y)) => Ok((action.into(), x, y)),
+        _ => Err(Failure::params("x and y must be numbers")),
+    }
+}
+
+/// Dispatches in the window the event that the window server gives the application for a press, a move or a scroll of a person
+/// at the point, so a check makes an action of a person in its own application (docs/spec/endpoint.md,
+/// docs/spec/exposure.md#named-pointers).
+fn input_person(window: &Window, params: &Map<String, Value>) -> Result<Value, Failure> {
+    let (action, x, y) = parse_input_person(params)?;
+    let platform = platform::current().map_err(internal)?;
+    let native = platform.window_handle(window).map_err(internal)?;
+    on_main(window, move || {
+        platform.dispatch_person_input(native, &action, x, y)
+    })
+    .map(|()| Value::Null)
+    .map_err(|error| Failure::new(crate::endpoint::HANDLER_FAILED, error))
+}
+
 fn parse_input_reference(params: &Map<String, Value>) -> Result<(String, Option<String>), Failure> {
     let action = params
         .get("action")
@@ -2148,6 +2179,10 @@ mod lock_test;
 #[cfg(test)]
 #[path = "diagnostics_input_reference_test.rs"]
 mod input_reference_test;
+
+#[cfg(test)]
+#[path = "diagnostics_input_person_test.rs"]
+mod input_person_test;
 
 #[cfg(test)]
 #[path = "diagnostics_input_source_test.rs"]

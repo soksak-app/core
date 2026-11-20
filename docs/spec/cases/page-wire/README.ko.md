@@ -19,6 +19,7 @@ case는 이 디렉터리의 추적되는 JSON 파일 하나다. consumer는 work
 | `description` | 예 | 호출이 하는 일과 응답이 무엇인지 설명하는 한 문장(영어). |
 | `replay` | 예 | `true`이면 producer가 실제 host에서 case를 실행한다. `false`이면 `reason`이 필요하다. |
 | `reason` | `replay`가 `false`일 때 | producer가 case를 실행하지 않는 이유. |
+| `filter` | 아니오 | reader가 step과 맞추지 않고 `calls`에도 세지 않은 채 응답하는 call 이름의 목록. 이름은 `notificationState`(`{"authorization": "notDetermined", "error": null}`로 응답), `setTheme`(`null`로 응답), `setMenuLanguage`(`null`로 응답)이다. reader는 다른 이름을 거부한다. |
 | `variables` | 아니요 | host나 page가 고르는 값. 각 변수는 `"<name>": {"type": ..., "example": ..., "source": ...}`이다. |
 | `writer` | 아니요 | case가 실행되는 host의 event writer 상태. `policy`가 `true`이면 writer에 policy 파일(설정 디렉터리의 `log-policy.json`)이 있다. 멤버가 없으면 writer에 policy 파일이 없다. |
 | `steps` | 예 | 순서가 있는 교환. 빈 배열이면 page가 호출을 보내지 않는다. |

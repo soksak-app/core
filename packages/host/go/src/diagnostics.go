@@ -57,6 +57,7 @@ func init() {
 	diagnosticMethods["diagnostics.window.draw-covered"] = diagnosticWindowDrawCovered
 	diagnosticMethods["diagnostics.input.source"] = diagnosticInputSource
 	diagnosticMethods["diagnostics.input.reference"] = diagnosticInputReference
+	diagnosticMethods["diagnostics.input.person"] = diagnosticInputPerson
 	diagnosticMethods["diagnostics.log.flush"] = diagnosticLogFlush
 	diagnosticMethods["diagnostics.host.relaunch"] = diagnosticHostRelaunch
 	diagnosticMethods["diagnostics.test.mark"] = diagnosticTestMark
@@ -305,6 +306,46 @@ func diagnosticPresentationFailure(e *Endpoint, _ *endpointConn, params json.Raw
 	mainThreadStep(func() { injectErr = system.InjectSettledFailure(s.window.NativeWindow()) })
 	if injectErr != nil {
 		return nil, injectErr
+	}
+	return nil, nil
+}
+
+// personInputPlatform is implemented only by platforms that dispatch the event of an action of a person in a window.
+type personInputPlatform interface {
+	DispatchPersonInput(window platform.Window, action string, x, y float64) error
+}
+
+// diagnosticInputPerson dispatches in the window the event that the window server gives the application for a press, a move or a
+// scroll of a person at the point, so a check makes an action of a person in its own application (docs/spec/endpoint.md,
+// docs/spec/exposure.md#named-pointers).
+func diagnosticInputPerson(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
+	var p struct {
+		Action any `json:"action"`
+		X      any `json:"x"`
+		Y      any `json:"y"`
+	}
+	if err := decode(params, &p); err != nil {
+		return nil, err
+	}
+	action, isText := p.Action.(string)
+	if !isText || (action != "press" && action != "move" && action != "scroll") {
+		return nil, rpcError(codeInvalidParams, "action must be press, move or scroll")
+	}
+	x, xNumber := p.X.(float64)
+	y, yNumber := p.Y.(float64)
+	if !xNumber || !yNumber {
+		return nil, rpcError(codeInvalidParams, "x and y must be numbers")
+	}
+	_, s, err := diagnosticHost(e, params)
+	if err != nil {
+		return nil, err
+	}
+	person, ok := system.(personInputPlatform)
+	if !ok {
+		return nil, errors.New("the action of a person is not implemented on this platform")
+	}
+	if err := s.useWindow(func(window platform.Window) error { return person.DispatchPersonInput(window, action, x, y) }); err != nil {
+		return nil, nativeError(codeHandler, err)
 	}
 	return nil, nil
 }

@@ -299,7 +299,7 @@ func TestASelectBoxASliderAndADebugSwitchChangeTheirSettings(t *testing.T) {
 	}
 	f.tester.ClickAt(slider.Bounds.X+slider.Bounds.W/2, slider.Bounds.Y+slider.Bounds.H/2)
 	f.settle()
-	if got := f.settingValues()["gap"].(float64); got == 6 || got != float64(int(got)) {
+	if got := f.settingValues()["gap"].(float64); got == 12 || got != float64(int(got)) {
 		t.Fatalf("gap %v", got)
 	}
 	f.click("core.settings-modal.debug", "")
@@ -904,7 +904,7 @@ func TestTheValueOfASliderIsSixFiguresWide(t *testing.T) {
 	if !ok {
 		t.Fatalf("no plain element of %q", figures)
 	}
-	node, ok := nodeLabeled(f.tester.ElementTree(), "6px")
+	node, ok := nodeLabeled(f.tester.ElementTree(), "12px")
 	if !ok {
 		t.Fatalf("no value of the passage in %q", f.tester.Texts())
 	}
