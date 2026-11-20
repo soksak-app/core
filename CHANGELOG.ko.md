@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F996-4 (post된 closure의 sender): mygo host는 fork version `v0.7.4-244-g4abb83d-soksak.17`을 받고, main thread에 post된 각 closure를 post한 함수의 이름을 가진 `closure` 종류의 step으로 `host.frame.step`에 쓴다(`docs/spec/hosts.md`).
 - F1000-3: agent skill과 MCP instructions는 submit command가 사람의 입력을 흉내 내고 agent가 message로 대화함을 밝힌다.
 - F996-6 (F996-3의 후속): Rust fetcher는 panic한 thread가 poison한 lock에서 프로세스를 끝내지 않고, 공유 상태와 진행 중인 index 읽기의 guard를 되찾는다.
 - F996-5.2 (실행 중인 log의 index 갱신): Go와 Rust의 index 갱신은 부분 segment를 다시 읽지 않고 `indexed_bytes` 뒤의 줄을 부분 segment의 기록에 더한다. 그래서 쓰기 뒤의 갱신은 덧붙은 바이트만 읽는다. 꾸준히 출력하는 terminal 셋과 넓은 event log 정책의 mygo debug host는 processor 하나의 15~17% 대신 8.8%를 쓴다(`docs/spec/logging.md#index`).

@@ -19,7 +19,7 @@ var frameOutcomes = [...]string{
 var commitKinds = [...]string{ui.CommitStashed: "stashed", ui.CommitOffscreen: "offscreen", ui.CommitPixels: "pixels"}
 
 // stepKinds are the names of the kinds of a step in the event log.
-var stepKinds = [...]string{mygo.StepSelector: "selector", mygo.StepBlock: "block", mygo.StepCallback: "callback"}
+var stepKinds = [...]string{mygo.StepSelector: "selector", mygo.StepBlock: "block", mygo.StepCallback: "callback", mygo.StepClosure: "closure"}
 
 // stepRecord is the record of a step that entered while window, the name of the window with the focus, has the focus.
 func stepRecord(step mygo.StepRecord, window string) host.StepRecord {
