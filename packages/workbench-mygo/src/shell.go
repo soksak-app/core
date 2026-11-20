@@ -389,6 +389,8 @@ type Shell struct {
 	doublePressed renameTarget
 	// dragging is the drag of a tab in progress.
 	dragging *tabDrag
+	// tabBoxes is the rectangle in the window of each drawn tab in the last drawing, which the tab index of a tab strip reads.
+	tabBoxes map[string]ui.Rect
 	// workBanner is the height of the error line over the row of the spaces in the last drawing.
 	workBanner float32
 	// planeBox is the rectangle of the plane in the window in the last drawing, on the device pixel grid (alignPlane).

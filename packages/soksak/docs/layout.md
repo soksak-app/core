@@ -552,10 +552,12 @@ Only the cuts that the operation changes are laid again, so every other card
 keeps its rectangle. A move is a `withdraw` and an `insert`.
 
 `exchange(a, b)` puts the node `a`, a card or a box, where the node `b` stands
-and `b` where `a` stood, at any two places of the tree. Each place keeps its
-fraction and the px size that a card there declares, so a card takes the px
-size of the place it enters and a box takes the fraction of its place; every
-other node keeps its rectangle. Two nodes of which one holds the other, a
+and `b` where `a` stood, at any two places of the tree. Each place keeps the
+size it is drawn at: a node that enters a place takes that size less its own
+frames and head, which are a cost of the place, so a box enters at the size of
+the place and not at the fraction of the card that stood there, and a card
+takes the px size that the card of that place declared; every other node keeps
+its rectangle. Two nodes of which one holds the other, a
 `fixed` card and an id that the layout does not hold are refused, and the
 result is judged as an `insert` is.
 

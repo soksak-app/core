@@ -731,10 +731,26 @@ func (g *Grid) exchangeNodes(a, b string) (*Node, error) {
 	if slices.Contains(cardsOf(na), nb) || slices.Contains(cardsOf(nb), na) || holdsBox(na, b) || holdsBox(nb, a) {
 		return nil, fmt.Errorf("card %s and card %s hold one another and do not exchange", a, b)
 	}
+	// The size belongs to the place: each kid of the cuts of the two places keeps the size it is drawn at with its frames, and a node that
+	// enters a place takes the content of that size less its own frames, so a box, whose frame and head are a cost of its place, enters
+	// at the size of the place and not at the fraction of the card that stood there.
+	holders := []*Node{}
+	for _, n := range []*Node{na, nb} {
+		if holder := x.parent[n]; holder != nil && !slices.Contains(holders, holder) {
+			holders = append(holders, holder)
+		}
+	}
+	sizes := make([][]float64, len(holders))
+	for h, holder := range holders {
+		sizes[h] = x.placeSizes(holder)
+	}
 	putA, putB := x.place(na), x.place(nb)
 	putA(nb)
 	putB(na)
-	// The px size belongs to the place: a card takes the px size of the place it enters, and a box, which declares none, its fraction.
+	for h, holder := range holders {
+		x.sharePlaces(holder, sizes[h])
+	}
+	// A card takes the px size of the place it enters, and the place of a box, which declares none, its fraction.
 	wa, ha, wb, hb := na.Width, na.Height, nb.Width, nb.Height
 	if na.isCard() {
 		na.Width, na.Height = wb, hb
@@ -743,6 +759,46 @@ func (g *Grid) exchangeNodes(a, b string) (*Node, error) {
 		nb.Width, nb.Height = wa, ha
 	}
 	return x.root, nil
+}
+
+// placeSizes is the size of the place of each kid of the cut holder along its axis: the content that the kid is drawn at with its frames.
+func (x *index) placeSizes(holder *Node) []float64 {
+	out := make([]float64, len(holder.Kids))
+	for i, kid := range holder.Kids {
+		out[i] = x.g.content(kid.Node, holder.Cut)
+		if !x.g.keeps(kid.Node, holder.Cut) {
+			out[i] += x.g.frameOf(kid.Node, holder.Cut, x.g.unit)
+		}
+	}
+	return out
+}
+
+// sharePlaces gives each kid of the cut holder that takes a fraction the share that draws its place at the size of sizes, its content
+// that size less its own frames, out of the fractions that those kids hold together. A place too small for the frames of its node keeps
+// the fractions, and the judge of the result refuses it.
+func (x *index) sharePlaces(holder *Node, sizes []float64) {
+	axis := holder.Cut
+	want := make([]float64, len(holder.Kids))
+	total, shared := 0.0, 0.0
+	for i, kid := range holder.Kids {
+		if x.g.keeps(kid.Node, axis) {
+			continue
+		}
+		want[i] = sizes[i] - x.g.frameOf(kid.Node, axis, x.g.unit)
+		if want[i] <= 0 {
+			return
+		}
+		total += want[i]
+		shared += kid.Share
+	}
+	if total <= 0 {
+		return
+	}
+	for i, kid := range holder.Kids {
+		if !x.g.keeps(kid.Node, axis) {
+			holder.Kids[i].Share = want[i] / total * shared
+		}
+	}
 }
 
 // holdsBox is whether the box id stands inside the node n.

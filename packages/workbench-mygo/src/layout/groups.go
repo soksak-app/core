@@ -1024,11 +1024,18 @@ func (t *GroupTree) CheckMove(id string, target Target, side string) error {
 	if !slices.ContainsFunc(target, func(card string) bool { return card != id && !slices.Contains(t.Groups(card), id) }) {
 		return fmt.Errorf("card %s cannot move into itself", id)
 	}
-	if side == "centre" && len(target) > 1 {
-		return fmt.Errorf("card %s moves to the centre of one card, not of %s", id, strings.Join(target, ", "))
+	if (side == "centre" || side == "strip") && len(target) > 1 {
+		return fmt.Errorf("card %s moves to the %s of one card, not of %s", id, side, strings.Join(target, ", "))
 	}
-	if side != "centre" && !isSide(side) {
-		return fmt.Errorf("unknown side %s; use left, right, top, bottom or centre", side)
+	// A group card holds cards and no tabs, so it has no tabs to join a strip and no tab strip (docs/spec/groups.md#commands).
+	if side == "strip" && t.IsGroup(id) {
+		return fmt.Errorf("card %s is a group and holds no tabs", id)
+	}
+	if side == "strip" && t.IsGroup(target[0]) {
+		return fmt.Errorf("card %s is a group and has no tab strip", target[0])
+	}
+	if side != "centre" && side != "strip" && !isSide(side) {
+		return fmt.Errorf("unknown side %s; use left, right, top, bottom, centre or strip", side)
 	}
 	return nil
 }
@@ -1134,6 +1141,10 @@ func (t *GroupTree) Move(id string, target Target, side string) error {
 	}
 	if side == "centre" && !t.IsGroup(target[0]) {
 		return t.exchange(id, target[0])
+	}
+	// The join of a tab strip moves tabs, which the workbench holds; the tree has no move to a strip.
+	if side == "strip" {
+		return fmt.Errorf("card %s cannot move to strip of %s", id, target[0])
 	}
 	if t.Moved(id, target, side) {
 		return nil

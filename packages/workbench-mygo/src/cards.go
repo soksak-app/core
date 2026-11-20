@@ -556,6 +556,7 @@ func (s *Shell) drawTab(c *ui.Context, card string, tab layout.Tab, on bool, siz
 		}
 		s.tabContextMenu(pill, tab.ID)
 		pill.HandleInput(s.tabInput(card, tab.ID, pill.Bounds()))
+		s.tabBoxes[tab.ID] = pill.Bounds()
 		s.anchored("core.card.tab/"+tab.ID, pill)
 		noticed := s.tabNoticeText(tab.ID) != ""
 		start := m.tabPadX
@@ -1131,7 +1132,7 @@ func (s *Shell) moveLayoutTab(value layoutMoveParam) (map[string]string, error) 
 		}
 		return map[string]string{"card": from, "tab": tab}, nil
 	}
-	if err := s.moveTab(tab, layout.Target{card}, zone); err != nil {
+	if err := s.moveTab(tab, layout.Target{card}, zone, nil); err != nil {
 		return nil, err
 	}
 	return map[string]string{"card": s.cardOfTab(tab), "tab": tab}, nil

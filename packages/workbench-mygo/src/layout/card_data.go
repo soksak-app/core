@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 )
 
 // The values of a card that the layout reads, as packages/workbench/card-data.js gives them: the order of its tabs, its active tab, its
@@ -176,6 +177,11 @@ func (d *CardData) RemoveTab(id string) {
 func (d *CardData) AppendTab(tab Tab) {
 	d.Tabs = append(d.Tabs, tab)
 	d.setActive(&tab.ID)
+}
+
+// InsertTabs puts tabs at index of the card, in their order; index is from 0 to the number of the tabs of the card.
+func (d *CardData) InsertTabs(index int, tabs ...Tab) {
+	d.Tabs = slices.Insert(slices.Clone(d.TabList()), index, tabs...)
 }
 
 // SelectTab makes the tab id the active tab.
