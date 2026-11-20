@@ -24,13 +24,15 @@
                       "params": {},
                       "origin": {
                         "directory": "/work/origin"
-                      }
+                      },
+                      "role": null
                     },
                     {
                       "id": "tab-plain",
                       "plugin": "probe-plain",
                       "title": "plain",
-                      "params": {}
+                      "params": {},
+                      "role": null
                     }
                   ]
                 }
@@ -62,7 +64,8 @@
                       "id": "tab-legacy",
                       "plugin": "probe-view",
                       "title": "legacy",
-                      "params": {}
+                      "params": {},
+                      "role": null
                     }
                   ]
                 }

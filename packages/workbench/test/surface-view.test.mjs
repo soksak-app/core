@@ -546,9 +546,9 @@ test("a view whose origin is missing names the tab, its plugin, space, project, 
   const { viewStartValues } = await import("../surface-modules.js?view-origin-record");
   const { forgetTabsLeft, recordOrigin, storedLayoutState } = await import("../tab-reports.js");
   recordOrigin("tab-pruned", null, "new tab");
-  const previous = [{ id: "card-pruned", data: { tabs: [{ id: "tab-pruned", plugin: "fixture-view" }] } }];
+  const previous = [{ id: "card-pruned", data: { tabs: [{ id: "tab-pruned", plugin: "fixture-view", role: null }] } }];
   storedLayoutState({ root: { card: "card-pruned", data: previous[0].data } });
-  forgetTabsLeft(previous, [{ id: "card-kept", data: { tabs: [{ id: "tab-kept", plugin: "fixture-view" }] } }],
+  forgetTabsLeft(previous, [{ id: "card-kept", data: { tabs: [{ id: "tab-kept", plugin: "fixture-view", role: null }] } }],
     "saved layout of space spc-pruned, project prj-pruned");
   assert.throws(() => viewStartValues({ surfaceId: "tab-pruned", pluginId: "fixture-view", declarations: {} }, null), (error) => {
     assert.equal(error.message, "tab tab-pruned has no origin: plugin fixture-view, space none, project none, created by new tab, " +
@@ -564,7 +564,7 @@ test("a commit candidate without an origin is refused with the holder that made 
   const { surfacePlacementsForHost } = await import("../surface-modules.js?view-origin-holder");
   const { forgetTabsLeft } = await import("../tab-reports.js");
   recordOrigin("tab-held", null, "new tab");
-  forgetTabsLeft([{ id: "card-held", data: { tabs: [{ id: "tab-held", plugin: "fixture-view" }] } }], [], "close space spc-a, project prj-a");
+  forgetTabsLeft([{ id: "card-held", data: { tabs: [{ id: "tab-held", plugin: "fixture-view", role: null }] } }], [], "close space spc-a, project prj-a");
   const candidate = { id: "tab-held", surface: { surfaceId: "tab-held", pluginId: "fixture-view", declarations: {},
     composition: { kind: "view", page: "ui/page.html" } } };
   assert.throws(() => surfacePlacementsForHost([candidate], null, (entry) => `the stored layout of space spc-b, project prj-b (${entry.id})`),

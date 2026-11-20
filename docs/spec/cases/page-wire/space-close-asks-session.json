@@ -63,7 +63,8 @@
                           {
                             "id": "tab-bbbbbb",
                             "plugin": "fixture-space-close",
-                            "title": "document"
+                            "title": "document",
+                            "role": null
                           }
                         ],
                         "activeId": "tab-bbbbbb"
@@ -88,7 +89,8 @@
                           {
                             "id": "tab-cccccc",
                             "plugin": "fixture-space-close",
-                            "title": "document"
+                            "title": "document",
+                            "role": null
                           }
                         ],
                         "activeId": "tab-cccccc"
@@ -113,7 +115,8 @@
                           {
                             "id": "tab-dddddd",
                             "plugin": "fixture-space-close",
-                            "title": "document"
+                            "title": "document",
+                            "role": null
                           }
                         ],
                         "activeId": "tab-dddddd"
@@ -640,7 +643,8 @@
                             "title": "document",
                             "origin": {
                               "directory": null
-                            }
+                            },
+                            "role": null
                           }
                         ],
                         "activeId": "tab-bbbbbb"
@@ -666,7 +670,8 @@
                           {
                             "id": "tab-cccccc",
                             "plugin": "fixture-space-close",
-                            "title": "document"
+                            "title": "document",
+                            "role": null
                           }
                         ],
                         "activeId": "tab-cccccc"
@@ -691,7 +696,8 @@
                           {
                             "id": "tab-dddddd",
                             "plugin": "fixture-space-close",
-                            "title": "document"
+                            "title": "document",
+                            "role": null
                           }
                         ],
                         "activeId": "tab-dddddd"
@@ -739,7 +745,8 @@
                             "title": "document",
                             "origin": {
                               "directory": null
-                            }
+                            },
+                            "role": null
                           }
                         ],
                         "activeId": "tab-bbbbbb"
@@ -765,7 +772,8 @@
                           {
                             "id": "tab-dddddd",
                             "plugin": "fixture-space-close",
-                            "title": "document"
+                            "title": "document",
+                            "role": null
                           }
                         ],
                         "activeId": "tab-dddddd"
@@ -882,7 +890,8 @@
                             "title": "document",
                             "origin": {
                               "directory": null
-                            }
+                            },
+                            "role": null
                           }
                         ],
                         "activeId": "tab-dddddd"

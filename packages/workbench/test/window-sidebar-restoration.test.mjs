@@ -19,18 +19,18 @@ const { restoreWindowSidebars } = await import("../window-sidebars.js");
 
 test("saved window state rejects obsolete and unknown cards before replacing the displayed layout", () => {
   for (const card of [{ card: "rail-pane" }, { card: "window:missing:left" },
-    { card: "a", data: { tabs: [{ id: "t", plugin: "pane" }], activeId: "missing" } }]) {
+    { card: "a", data: { tabs: [{ id: "t", plugin: "pane", role: null }], activeId: "missing" } }]) {
     assert.throws(() => checkStoredLayout({ state: { root: card }, windowSidebars: {} }), /stored|obsolete|unknown/);
   }
-  checkStoredLayout({ state: { root: { card: "a", data: { tabs: [{ id: "t", plugin: "pane" }], activeId: "t" } } },
+  checkStoredLayout({ state: { root: { card: "a", data: { tabs: [{ id: "t", plugin: "pane", role: null }], activeId: "t" } } },
     leader: "a", lastCard: 1, windowSidebars: {} });
   // A tab of a plugin that is not loaded opens as a placeholder (docs/spec/plugins.md).
-  checkStoredLayout({ state: { root: { card: "a", data: { tabs: [{ id: "t", plugin: "missing" }], activeId: "t" } } },
+  checkStoredLayout({ state: { root: { card: "a", data: { tabs: [{ id: "t", plugin: "missing", role: null }], activeId: "t" } } },
     leader: "a", lastCard: 1, windowSidebars: {} });
 });
 
 test("a stored layout in an earlier form is refused with what it found", () => {
-  const card = (data) => ({ card: "a", data: { tabs: [{ id: "t", plugin: "pane" }], activeId: "t", ...data } });
+  const card = (data) => ({ card: "a", data: { tabs: [{ id: "t", plugin: "pane", role: null }], activeId: "t", ...data } });
   assert.throws(() => checkStoredLayout({ state: { root: card({ panels: {} }) }, windowSidebars: {} }),
     /^Error: card a stores panels, an earlier form of sidebars$/);
   assert.throws(() => checkStoredLayout({ state: { root: card({ sidebar: { width: 190 } }) }, windowSidebars: {} }),

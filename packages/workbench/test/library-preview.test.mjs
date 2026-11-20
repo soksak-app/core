@@ -20,7 +20,7 @@ const { preview } = await import("../library-preview.js");
 
 const project = (plugin) => ({
   activeSpaceId: "space",
-  spaces: [{ id: "space", layout: { focusedId: "main", named: 1, state: { root: { card: "main", data: { activeId: "tab-a", tabs: [{ id: "tab-a", plugin, title: "a" }] } } }, leader: "main", lastCard: 1 } }],
+  spaces: [{ id: "space", layout: { focusedId: "main", named: 1, state: { root: { card: "main", data: { activeId: "tab-a", tabs: [{ id: "tab-a", plugin, title: "a", role: null }] } } }, leader: "main", lastCard: 1 } }],
 });
 
 test("a library preview of a layout in an earlier form names projects.json and what it found", () => {

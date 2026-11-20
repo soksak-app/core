@@ -60,7 +60,7 @@ await installCoreExposure({ library: { state: () => null }, renames: { state: ()
 plane.nameWindow(WINDOW);
 
 // The project of the window has the shown space and a space that is not active, which holds the card other and the tab tab-ooooo1.
-const view = (id, plugin, params) => ({ id, plugin, title: id, origin: { directory: null }, ...(params === undefined ? {} : { params }) });
+const view = (id, plugin, params) => ({ id, plugin, title: id, origin: { directory: null }, role: null, ...(params === undefined ? {} : { params }) });
 const OTHER_SPACE = { id: "spc-bbbbbb", title: "SPACE2", layout: { focusedId: "other", named: 0, windowSidebars: {}, sidebars: {}, leader: "other", lastCard: 1, state: {
   root: { card: "other", data: { tabs: [view("tab-ooooo1", PLAIN)], activeId: "tab-ooooo1" } } } } };
 begin({ common: {}, open: [], projects: [{ id: "prj-aaaaaa", root: "/work/project", spaces: [

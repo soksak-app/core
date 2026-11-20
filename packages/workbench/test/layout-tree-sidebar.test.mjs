@@ -84,7 +84,7 @@ test("the lines and cards of each arrangement of tree.json with a window sidebar
       if (node.cut !== undefined) return { ...node, kids: node.kids.map((kid) => ({ ...kid, node: withData(kid.node) })) };
       if (SIDES.includes(node.card)) return { ...node, fixed: true, data: null };
       const tab = `tab-side${String(i++).padStart(2, "0")}`;
-      return { ...node, data: { tabs: [{ id: tab, plugin: PLAIN, title: "t", origin: { directory: null } }], activeId: tab } };
+      return { ...node, data: { tabs: [{ id: tab, plugin: PLAIN, title: "t", origin: { directory: null }, role: null }], activeId: tab } };
     };
     plane.adopt({ focusedId: content[0], named: 0, sidebars: {}, leader: first.id, lastCard: Math.max(1, ...numbers),
       // The plane keeps the size of a window sidebar as it is drawn, so the record holds the extent that the share of the case gives it.

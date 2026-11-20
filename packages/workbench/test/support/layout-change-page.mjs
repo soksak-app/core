@@ -51,7 +51,7 @@ export async function openLayoutChangePage(caseName) {
   logGate.set({ lifecycle: "error", input: "error", call: "debug", io: "error", frame: "error" });
 
   const content = (id) => {
-    const tabs = [{ id: `tab-${id.slice(5)}aaaa`, plugin: PLAIN, title: id, origin: { directory: null } }];
+    const tabs = [{ id: `tab-${id.slice(5)}aaaa`, plugin: PLAIN, title: id, origin: { directory: null }, role: null }];
     return { card: id, data: { tabs, activeId: tabs[0].id } };
   };
   plane.adopt({ focusedId: "card-1", named: 0, windowSidebars: {}, sidebars: {}, lastCard: 3, leader: "card-3",

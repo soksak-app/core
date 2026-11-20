@@ -56,7 +56,7 @@ await installCoreExposure({ library: { state: () => null }, renames: { state: ()
 // The window of the page has the name that its start document carries (docs/spec/native-host.md#page-start).
 plane.nameWindow(WINDOW);
 
-export const view = (id, plugin) => ({ id, plugin, title: id, origin: { directory: null } });
+export const view = (id, plugin) => ({ id, plugin, title: id, origin: { directory: null }, role: null });
 export const content = (id, tabs) => ({ card: id, data: { tabs, activeId: tabs[0].id } });
 /** A box of the group card id with its name and leader around the cut along x of the kids, each [share, node]. */
 export const box = (id, name, leader, kids) => ({ box: id, data: { name, leader }, inner: row(kids) });

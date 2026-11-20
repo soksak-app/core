@@ -194,14 +194,14 @@ test("a flush writes the window geometry only when it changed", async () => {
 test("the surfaces of every layout are listed with their project root, and removing a project retains the rest", async () => {
   const layout = { state: { root: { cut: "x", kids: [
     { share: 0.2, node: { card: "left" } },
-    { share: 0.8, node: { card: "right", data: { tabs: [{ id: "tab-a", plugin: "fixture" }, { id: "tab-b", plugin: "fixture" }] } } },
+    { share: 0.8, node: { card: "right", data: { tabs: [{ id: "tab-a", plugin: "fixture", role: null }, { id: "tab-b", plugin: "fixture", role: null }] } } },
   ] } } };
   const two = {
     ...structuredClone(PROJECT), id: "prj-two", root: "/work/two",
     spaces: [{ id: "spc-two", title: "SPACE1", layout }],
   };
   const one = { ...structuredClone(PROJECT), id: "prj-three" };
-  one.spaces[0].layout = { state: { root: { card: "one", data: { tabs: [{ id: "tab-one", plugin: "beta" }] } } } };
+  one.spaces[0].layout = { state: { root: { card: "one", data: { tabs: [{ id: "tab-one", plugin: "beta", role: null }] } } } };
   const store = await start("projects-switch-layout-surfaces", { initialise: false });
   await projects.initialise(store);
   assert.deepEqual(projects.layoutSurfaces(), [
@@ -510,7 +510,7 @@ test("browsing shows the library in the draw that empties the plane, not where a
 });
 
 test("closing a tab removes its session file after the layout write, and the start removes the files of tabs in no layout", async () => {
-  const layout = (...tabs) => ({ state: { root: { card: "card-one", data: { tabs: tabs.map((id) => ({ id, plugin: "fixture" })) } } } });
+  const layout = (...tabs) => ({ state: { root: { card: "card-one", data: { tabs: tabs.map((id) => ({ id, plugin: "fixture", role: null })) } } } });
   plane.layout = layout("tab-a", "tab-b");
   await start("projects-switch-session-files");
   const puts = () => workspaceCalls("tabSessionPut").map(({ payload }) => [payload.tab, payload.regions]);
@@ -572,7 +572,7 @@ test("a reopened project restores inactive-space origins before retained views c
   project.spaces.push({ id: "space-retained-origin", title: "Hidden", layout: {
     state: { root: { card: "hidden-card", data: {
       activeId: "tab-retained-origin", tabs: [{ id: "tab-retained-origin", plugin: "retained-probe",
-        origin: { directory: "/work/retained-source" } }],
+        origin: { directory: "/work/retained-source" }, role: null }],
     } } },
   } });
   const snapshot = { common: {}, projects: [project], open: [] };

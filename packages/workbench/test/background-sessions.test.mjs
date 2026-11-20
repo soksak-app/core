@@ -16,8 +16,8 @@ const COMMON = { "diagnostics.log": { lifecycle: "info" } };
 // The stored layout of the space of the project: one card with two tabs of the plugin that declares the background session; the first is shown.
 const STORED_LAYOUT = {
   state: { root: { card: "main", data: {
-    tabs: [{ id: "tab-aaaaaa", plugin: owner, title: "shown", origin: { directory: "/work/session" } },
-    { id: "tab-bbbbbb", plugin: owner, title: "hidden", origin: { directory: "/work/session" } }], activeId: "tab-aaaaaa" } } },
+    tabs: [{ id: "tab-aaaaaa", plugin: owner, title: "shown", origin: { directory: "/work/session" }, role: null },
+    { id: "tab-bbbbbb", plugin: owner, title: "hidden", origin: { directory: "/work/session" }, role: null }], activeId: "tab-aaaaaa" } } },
   leader: "main", lastCard: 1, focusedId: "main", windowSidebars: {}, named: 0, sidebars: {},
 };
 // The replies of the host settle in the turns that follow the call.

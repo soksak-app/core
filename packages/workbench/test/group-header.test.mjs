@@ -64,7 +64,7 @@ await installCoreExposure({ library: { state: () => null }, renames: barTabs.ren
 // The window of the page has the name that its start document carries (docs/spec/native-host.md#page-start).
 plane.nameWindow(WINDOW);
 
-const view = (id, plugin) => ({ id, plugin, title: id, origin: { directory: null } });
+const view = (id, plugin) => ({ id, plugin, title: id, origin: { directory: null }, role: null });
 const content = (id, tabs) => ({ card: id, data: { tabs, activeId: tabs[0].id } });
 /** A cut along x of the kids, each [share, node]. */
 const row = (kids) => ({ cut: "x", kids: kids.map(([share, node]) => ({ share, node })) });

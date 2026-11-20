@@ -17,7 +17,7 @@ await installCoreExposure({ library: { state: () => null }, renames: { state: ()
   memorySaver: await pageMemorySaver() });
 
 const content = (id) => {
-  const tabs = [{ id: `tab-${id}`, plugin: "fixture-verify", title: id }];
+  const tabs = [{ id: `tab-${id}`, plugin: "fixture-verify", title: id, role: null }];
   return { card: id, data: { tabs, activeId: tabs[0].id } };
 };
 

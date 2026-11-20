@@ -84,7 +84,7 @@ test("a restored view tab starts with its stored origin on the first build of th
   // The first call of adopt builds the plane (grid is absent), so this test is the one that reaches the build call site.
   const kept = env.plane.fresh();
   const card = kept.state.root;
-  card.data.tabs = [{ id: "built-view", plugin: viewId, title: "v", params: {}, origin: { directory: "/b" } }];
+  card.data.tabs = [{ id: "built-view", plugin: viewId, title: "v", params: {}, origin: { directory: "/b" }, role: null }];
   card.data.activeId = "built-view";
   env.plane.adopt(kept, "spc-aaaaaa");
   assert.deepEqual(env.tabOrigins.tabOrigin("built-view"), { directory: "/b" }, "the first build did not restore the stored origin");
@@ -112,7 +112,7 @@ test("a restored view tab starts with its stored origin and is not refused (F238
   const kept = env.plane.fresh();
   const card = kept.state.root;
   card.data.tabs = [
-    { id: "restored-view", plugin: viewId, title: "v", params: {}, origin: { directory: "/a" } },
+    { id: "restored-view", plugin: viewId, title: "v", params: {}, origin: { directory: "/a" }, role: null },
   ];
   card.data.activeId = "restored-view";
   env.plane.adopt(kept, "spc-aaaaaa");
@@ -127,8 +127,8 @@ test("a refused view tab is written to the application log and shown on its tab 
   const kept = env.plane.fresh();
   const card = kept.state.root;
   card.data.tabs = [
-    { id: "refused-view", plugin: viewId, title: "v", params: {} },
-    { id: "plain-tab", plugin: plainId, title: "p", params: {} },
+    { id: "refused-view", plugin: viewId, title: "v", params: {}, role: null },
+    { id: "plain-tab", plugin: plainId, title: "p", params: {}, role: null },
   ];
   card.data.activeId = "refused-view";
   env.plane.adopt(kept, "spc-aaaaaa");

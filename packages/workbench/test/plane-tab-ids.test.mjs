@@ -36,7 +36,7 @@ const environmentFile = {
 // A stored project whose layout holds the tab tab-bbbbbb; the window knows its tabs from the project list it starts with.
 const storedProject = {
   id: "prj-aaaaaa",
-  spaces: [{ id: "spc-aaaaaa", layout: { focusedId: "stored", named: 0, state: { root: { card: "stored", data: { tabs: [{ id: "tab-bbbbbb", plugin: owner, title: "stored" }], activeId: "tab-bbbbbb" } } } } }],
+  spaces: [{ id: "spc-aaaaaa", layout: { focusedId: "stored", named: 0, state: { root: { card: "stored", data: { tabs: [{ id: "tab-bbbbbb", plugin: owner, title: "stored", role: null }], activeId: "tab-bbbbbb" } } } } }],
   activeSpaceId: "spc-aaaaaa",
   named: 0,
 };

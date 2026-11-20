@@ -11,7 +11,7 @@ const { plane } = page;
 
 /** A content card node of a stored layout with the tabs, each of the plugin of the verification page, named by its id and the suffixes. */
 const content = (id, suffixes = [""]) => {
-  const tabs = suffixes.map((suffix) => ({ id: `tab-${id}${suffix}`, plugin: "fixture-verify", title: `${id}${suffix}` }));
+  const tabs = suffixes.map((suffix) => ({ id: `tab-${id}${suffix}`, plugin: "fixture-verify", title: `${id}${suffix}`, role: null }));
   return { card: id, data: { tabs, activeId: tabs[0].id } };
 };
 

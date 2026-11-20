@@ -53,8 +53,8 @@ test("a space holds the sections of the sets of its window sidebars and of the s
   ];
   const cards = [
     { id: "seat" },
-    { id: "one", data: { tabs: [{ id: "a", plugin: "beta" }, { id: "b", plugin: "gamma" }], activeId: "a" } },
-    { id: "two", data: { tabs: [{ id: "c", plugin: "gamma" }], activeId: "c", sidebars: { top: { set: "off" }, bottom: { set: "chosen" } } } },
+    { id: "one", data: { tabs: [{ id: "a", plugin: "beta", role: null }, { id: "b", plugin: "gamma", role: null }], activeId: "a" } },
+    { id: "two", data: { tabs: [{ id: "c", plugin: "gamma", role: null }], activeId: "c", sidebars: { top: { set: "off" }, bottom: { set: "chosen" } } } },
   ];
   assert.deepEqual(spaceSectionSurfaces("spc", cards, sets, links), [
     "spc/left/alpha.tree", "spc/left/alpha.bookmarks", "spc/left/beta.list",

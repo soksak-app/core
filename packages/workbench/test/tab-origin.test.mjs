@@ -57,7 +57,7 @@ test("a stored layout gets the origin of each tab, writes no member for an absen
     { share: 0.5, node: { card: "c", data: { activeId: "origin-store", tabs: [{ id: "origin-store", plugin: "p" }] } } },
     { share: 0.5, node: { card: "side", data: null } },
   ] } });
-  assert.deepEqual(state.root.kids[0].node.data.tabs[0], { id: "origin-store", plugin: "p", origin: { directory: null } });
+  assert.deepEqual(state.root.kids[0].node.data.tabs[0], { id: "origin-store", plugin: "p", role: null, origin: { directory: null } });
   assert.equal(state.root.kids[1].node.data, null);
   restoreOrigin({ id: "origin-absent", plugin: "view-plugin" }, true);
   const absent = storedLayoutState({ root: { card: "c", data: { tabs: [{ id: "origin-absent", plugin: "view-plugin" }] } } });
