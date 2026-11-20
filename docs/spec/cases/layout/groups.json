@@ -4455,7 +4455,7 @@
    ]
   },
   {
-   "name": "a card or a group card moved to the centre of a content card exchanges places with it, and each place keeps its fraction and the leader mark of its level",
+   "name": "a card or a group card moved to the centre of a content card exchanges places with it, each place keeps the size it is drawn at and the leader mark of its level",
    "options": {
     "gap": 24,
     "minSize": 96,
@@ -4667,7 +4667,7 @@
         "cut": "x",
         "kids": [
          {
-          "share": 0.4,
+          "share": 0.34827586206896555,
           "node": {
            "box": "card-4",
            "data": {
@@ -4696,7 +4696,7 @@
           }
          },
          {
-          "share": 0.6,
+          "share": 0.6517241379310345,
           "node": {
            "card": "card-3",
            "fixed": false

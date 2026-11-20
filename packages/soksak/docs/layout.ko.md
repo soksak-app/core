@@ -486,9 +486,10 @@ target을 두 절반의 새 cut으로 감싼다. operation이 바꾼 cut만 다�
 카드는 사각형을 유지한다. move는 `withdraw`와 `insert`다.
 
 `exchange(a, b)`는 카드나 box인 node `a`를 node `b`가 선 자리에, `b`를 `a`가 섰던
-자리에 tree의 어느 두 자리에서든 둔다. 각 자리는 그 fraction과 거기 카드가 선언한
-px 크기를 유지하므로, 카드는 들어가는 자리의 px 크기를, box는 그 자리의 fraction을
-받는다. 다른 모든 node는 사각형을 유지한다. 하나가 다른 하나를 담는 두 node,
+자리에 tree의 어느 두 자리에서든 둔다. 각 자리는 그려진 크기를 유지한다. 자리에
+들어가는 node는 그 크기에서 자리의 비용인 자기 frame과 head를 뺀 크기를 받으므로,
+box는 거기 섰던 카드의 fraction이 아닌 자리의 크기로 들어가고, 카드는 그 자리의
+카드가 선언한 px 크기를 받는다. 다른 모든 node는 사각형을 유지한다. 하나가 다른 하나를 담는 두 node,
 `fixed` 카드, layout이 담지 않은 id는 거부되고, 결과는 `insert`처럼 판정된다.
 
 `group(target, side, node, {box, data?, head})`는 카드나 box인 `target`의 group

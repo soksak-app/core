@@ -13764,7 +13764,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/mygo/src/frontend.go", symbol: "func (f *Frontend) AfterPresentation(done func(err error)) error {" },
       { file: "packages/host/go/src/surfaces.go", symbol: "func (s *Surfaces) apply(win Frontend, req SyncRequest) ([]string, []Placement, error) {" },
       { file: "packages/workbench-mygo/src/project_data.go", symbol: "func (s *Shell) refreshSettings(value any) error {" },
-      { file: "packages/workbench-mygo/src/tab_drag.go", symbol: "func (s *Shell) moveTab(tab string, card layout.Target, zone string) error {" },
+      { file: "packages/workbench-mygo/src/tab_drag.go", symbol: "func (s *Shell) moveTab(tab string, card layout.Target, zone string, index *int) error {" },
       { file: "packages/workbench-mygo/src/picker.go", symbol: "func (s *Shell) tabOf(id string) (layout.Tab, error) {" },
       { file: "packages/workbench-mygo/src/shell_plugins.go", symbol: "s.appUpdates.Refresh(func() { answer(err) })" },
       { file: "packages/workbench-mygo/src/view_calls.go", symbol: "func (s *Shell) statusesAfterFrame() {" },

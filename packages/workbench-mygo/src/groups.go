@@ -95,6 +95,43 @@ type cardMoveParam struct {
 	Card   string        `json:"card"`
 	Target layout.Target `json:"target"`
 	Side   string        `json:"side"`
+	Index  *int          `json:"index,omitempty"`
+}
+
+// joinStrip joins every tab of the content card card, in its order, to the content card into at index, and closes card
+// (docs/spec/groups.md#commands); the active tab of card is the active tab of into.
+func (s *Shell) joinStrip(card, into string, index *int) (any, error) {
+	if index == nil {
+		return nil, errors.New("index is required with side strip")
+	}
+	from, err := s.cardData(card)
+	if err != nil {
+		return nil, err
+	}
+	target, err := s.cardData(into)
+	if err != nil {
+		return nil, err
+	}
+	if count := len(target.TabList()); *index < 0 || *index > count {
+		return nil, fmt.Errorf("index %d is outside the tabs of card %s, 0 to %d", *index, into, count)
+	}
+	if !s.planes.CanClose(card) {
+		return nil, fmt.Errorf("card %s cannot move to strip of %s", card, into)
+	}
+	target.InsertTabs(*index, from.TabList()...)
+	if active := from.ActiveTab(); active != nil {
+		target.SelectTab(active.ID)
+	}
+	if err := s.storeCard(into, target); err != nil {
+		return nil, err
+	}
+	if _, err := s.planes.Close(card); err != nil {
+		return nil, err
+	}
+	delete(s.operated, card)
+	s.focusCard(into)
+	s.settle()
+	return map[string]string{"card": card}, nil
 }
 
 // registerGroups registers the commands of group cards and the card query.
@@ -163,8 +200,14 @@ func (s *Shell) registerGroups() {
 		if err := s.layoutChangeable(value.Card); err != nil {
 			return nil, err
 		}
+		if value.Index != nil && value.Side != "strip" {
+			return nil, errors.New("index is given with side strip only")
+		}
 		if err := s.planes.CheckMove(value.Card, value.Target, value.Side); err != nil {
 			return nil, err
+		}
+		if value.Side == "strip" {
+			return s.joinStrip(value.Card, value.Target[0], value.Index)
 		}
 		if s.planes.Moved(value.Card, value.Target, value.Side) {
 			return map[string]string{"card": value.Card}, nil

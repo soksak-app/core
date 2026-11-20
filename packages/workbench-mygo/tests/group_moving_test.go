@@ -183,6 +183,34 @@ func TestAGroupCardIsDraggedByItsHeader(t *testing.T) {
 	if cards["card-2"]["x"].(float64) <= cards["card-4"]["x"].(float64) {
 		t.Fatalf("the group card stands at %v, not right of card-4 at %v", cards["card-2"]["x"], cards["card-4"]["x"])
 	}
+	// Over a tab strip the drop resolves by the bands and the body of its card, since a group card holds no tabs, and on the centre of a
+	// content card the group card exchanges places with it (docs/spec/groups.md#target-search).
+	head, target = f.box("core.group.header", "card-2"), f.box("core.card", "card-4")
+	strip := f.box("core.card.tab", f.tabIDs("card-4")[0])
+	from, at = head.X+30, head.Y+head.H/2
+	f.tester.Move(from, at)
+	f.tester.Frame()
+	f.tester.Press(from, at)
+	f.tester.Frame()
+	f.tester.Move(strip.X+strip.W/2, strip.Y+strip.H/2)
+	f.tester.Frame()
+	drag = status[*dragRead](t, f.shellFixture, "core.drag")
+	if drag == nil || drag.Target == nil || drag.Target.Zone == "strip" || drag.Target.Zone == "centre" {
+		t.Fatalf("the drag of the group header over a tab strip is %+v with the target %+v", drag, drag.Target)
+	}
+	x, y = target.X+target.W/2, target.Y+target.H/2
+	f.tester.Move(x, y)
+	f.tester.Frame()
+	drag = status[*dragRead](t, f.shellFixture, "core.drag")
+	if drag == nil || drag.Target == nil || strings.Join(drag.Target.Card, " ") != "card-4" || drag.Target.Zone != "centre" || drag.Preview == nil {
+		t.Fatalf("the drag of the group header onto the centre of card-4 is %+v with the target %+v", drag, drag.Target)
+	}
+	f.tester.Release(x, y)
+	f.settle()
+	after := f.gridCards()
+	if math.Abs(after["card-4"]["x"].(float64)-cards["card-2"]["x"].(float64)) > 1e-6 || math.Abs(after["card-2"]["x"].(float64)-cards["card-4"]["x"].(float64)) > 1e-6 {
+		t.Fatalf("the group card stands at %v and card-4 at %v; before they stood at %v and %v", after["card-2"]["x"], after["card-4"]["x"], cards["card-2"]["x"], cards["card-4"]["x"])
+	}
 }
 
 // outsideShell is a layout shell whose card main, with the tabs t1 and t2, is in the group card card-2 beside card-3, and the root

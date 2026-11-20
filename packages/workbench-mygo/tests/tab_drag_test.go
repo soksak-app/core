@@ -18,8 +18,9 @@ type dragRead struct {
 	Card   string `json:"card"`
 	Moved  bool   `json:"moved"`
 	Target *struct {
-		Card layout.Target `json:"card"`
-		Zone string        `json:"zone"`
+		Card  layout.Target `json:"card"`
+		Zone  string        `json:"zone"`
+		Index *int          `json:"index"`
 	} `json:"target"`
 	Preview *struct {
 		X float64 `json:"x"`
