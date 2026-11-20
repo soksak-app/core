@@ -4,8 +4,28 @@
 
 import declaration from "./workbench.json" with { type: "json" };
 
-/** The icons of the card head, declared in workbench.json for both workbenches. */
-export const declaredIcons = declaration.icons;
+/**
+ * The split icon elements drawn inside the rounded frame of a group card, the icon of a group split button (docs/spec/groups.md#headers):
+ * in the 16 point box of a head icon drawn at card-icon, the frame runs along the edge of the box in the stroke of the icon with the
+ * radius card-group-frame-radius, and the split icon is scaled into the box inside the frame less the padding card-group-frame-pad, in the
+ * same stroke width.
+ */
+export function framedIcon(elements) {
+  const { chrome } = declaration;
+  const unit = 16 / parseFloat(chrome["card-icon"]);
+  const stroke = Number(chrome["icon-stroke"]);
+  const inner = stroke + parseFloat(chrome["card-group-frame-pad"]) * unit;
+  const scale = (16 - 2 * inner) / 16;
+  return `<rect x="${stroke / 2}" y="${stroke / 2}" width="${16 - stroke}" height="${16 - stroke}" rx="${parseFloat(chrome["card-group-frame-radius"]) * unit}"/>`
+    + `<g transform="translate(${inner} ${inner}) scale(${scale})" stroke-width="${stroke / scale}">${elements}</g>`;
+}
+
+/**
+ * The icons of the card head, declared in workbench.json for both workbenches, and the icons of the group split buttons, the split icon
+ * of each side in the frame of a group card.
+ */
+export const declaredIcons = { ...declaration.icons, "card-group-x": framedIcon(declaration.icons["card-split-x"]),
+  "card-group-y": framedIcon(declaration.icons["card-split-y"]) };
 
 const PATHS = {
   "panel-left": declaredIcons["panel-left"],

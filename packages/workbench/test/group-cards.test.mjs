@@ -215,6 +215,44 @@ test("a content card head shows the split and group split buttons toward each di
     [[false, "true"], [false, "false"], [false, "false"]], "card-1 leads its level, card-2 does not, and card-4 leads the root level of card-3");
 });
 
+// A group split button draws the split icon of its side inside the rounded frame of a group card, with the padding card-group-frame-pad
+// between the inner edge of the frame and the box of the split icon and the radius card-group-frame-radius, in the stroke of the icon
+// (docs/spec/groups.md#headers). The icon box is the 16 point viewBox drawn at card-icon, and the button keeps the one icon of its size.
+test("a group split button draws the split icon of its side inside the frame of a group card with the declared padding", { timeout: 5000 }, () => {
+  arrange();
+  const { chrome } = JSON.parse(readFileSync(new URL("../workbench.json", import.meta.url), "utf8"));
+  const unit = 16 / parseFloat(chrome["card-icon"]);
+  const stroke = Number(chrome["icon-stroke"]);
+  const pad = parseFloat(chrome["card-group-frame-pad"]) * unit;
+  const radius = parseFloat(chrome["card-group-frame-radius"]) * unit;
+  const heads = [["card-1", cardElement("card-1"), "core.card"], ["card-4", groupElement("card-4"), "core.group"]];
+  for (const [id, head, prefix] of heads) {
+    for (const [group, split] of [["group-x", "split-x"], ["group-y", "split-y"]]) {
+      const button = head.querySelector(`[data-expose="${prefix}.${group}"]`), beside = head.querySelector(`[data-expose="${prefix}.${split}"]`);
+      const where = `${id} ${prefix}.${group}`;
+      const svg = button.querySelector("svg");
+      const framed = svg.querySelector(":scope > g");
+      // (a) the icon inside the frame is the split icon of the same side.
+      assert.ok(framed, `${where} draws no split icon inside a frame: ${svg.innerHTML}`);
+      assert.equal(framed.innerHTML, beside.querySelector("svg").innerHTML, `${where} draws another icon than ${prefix}.${split}`);
+      // (b) the frame runs along the edge of the icon box in the stroke of the icon, and the split icon fills the box inside it less the
+      // padding.
+      const frame = svg.querySelector(":scope > rect");
+      const at = (name) => Number(frame.getAttribute(name));
+      assert.deepEqual([at("x"), at("y"), at("width"), at("height"), at("rx")].map((n) => n.toFixed(6)),
+        [stroke / 2, stroke / 2, 16 - stroke, 16 - stroke, radius].map((n) => n.toFixed(6)), `${where} frame`);
+      const [, x, y, scale] = framed.getAttribute("transform").match(/^translate\(([-\d.]+) ([-\d.]+)\) scale\(([-\d.]+)\)$/).map(Number);
+      const inner = stroke + pad;
+      assert.deepEqual([x, y, x + 16 * scale, y + 16 * scale].map((n) => n.toFixed(6)), [inner, inner, 16 - inner, 16 - inner].map((n) => n.toFixed(6)),
+        `${where} icon box inside the frame`);
+      assert.equal(Number(framed.getAttribute("stroke-width")).toFixed(6), (stroke / scale).toFixed(6), `${where} draws the split icon in another stroke`);
+      // (c) the button is a head button of the same kind and size as the split button: one icon of the 16 point viewBox.
+      assert.equal(button.className, beside.className, `${where} class`);
+      assert.deepEqual([button.children.length, svg.getAttribute("viewBox")], [1, beside.querySelector("svg").getAttribute("viewBox")], `${where} icon`);
+    }
+  }
+});
+
 // Each group split menu groups the card toward its own side, whatever the shape of the card, and each press sends a new request, so a
 // second press groups the card again (docs/spec/groups.md#headers, docs/spec/groups.md#idempotency).
 test("core.card.menu group-x and group-y group the card with a new card toward right and toward bottom", { timeout: 5000 }, async () => {

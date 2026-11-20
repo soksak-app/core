@@ -6,6 +6,7 @@ import (
 	"math"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -747,8 +748,40 @@ func (s *Shell) headIcon(name string, filled bool) *ui.SVG {
 	return s.declaredIcon("0 0 16 16", paint, s.headIconElements(name))
 }
 
-// headIconElements returns the SVG elements of the declared icon name. The half of a split icon is a filled part of its strokes.
+// HeadToolIcon returns the SVG elements that the head button status of the card or group card id draws, so that a test reads the icon of
+// a button that the element tree names but does not describe.
+func (s *Shell) HeadToolIcon(id, status string) (string, error) {
+	tools := s.headTools(id)
+	if s.isGroup(id) {
+		tools = s.groupHeadTools(id)
+	}
+	for _, tool := range tools {
+		if tool.Status == status {
+			return s.headIconElements(tool.Icon), nil
+		}
+	}
+	return "", fmt.Errorf("card %s has no head button %s", id, status)
+}
+
+// groupSplitIcons names the split icon of the side of each group split icon, which draws it in the frame of a group card.
+var groupSplitIcons = map[string]string{"card-group-x": "card-split-x", "card-group-y": "card-split-y"}
+
+// headIconElements returns the SVG elements of the declared icon name. The half of a split icon is a filled part of its strokes. A group
+// split icon is the split icon of its side drawn inside the rounded frame of a group card (docs/spec/groups.md#headers): in the 16 point
+// box of a head icon drawn at card-icon, the frame runs along the edge of the box in the stroke of the icon with the radius
+// card-group-frame-radius, and the split icon is scaled into the box inside the frame less the padding card-group-frame-pad, in the same
+// stroke width.
 func (s *Shell) headIconElements(name string) string {
+	if split, ok := groupSplitIcons[name]; ok {
+		m := s.metrics
+		unit := 16 / m.cardIcon
+		inner := m.iconStroke + m.groupFramePad*unit
+		scale := (16 - 2*inner) / 16
+		number := func(v float32) string { return strconv.FormatFloat(float64(v), 'g', -1, 32) }
+		return `<rect x="` + number(m.iconStroke/2) + `" y="` + number(m.iconStroke/2) + `" width="` + number(16-m.iconStroke) + `" height="` +
+			number(16-m.iconStroke) + `" rx="` + number(m.groupFrameRadius*unit) + `"/><g transform="translate(` + number(inner) + ` ` +
+			number(inner) + `) scale(` + number(scale) + `)" stroke-width="` + number(m.iconStroke/scale) + `">` + s.headIconElements(split) + `</g>`
+	}
 	half := fmt.Sprintf(`fill="currentColor" stroke="none" opacity="%g"`, s.metrics.cardActHalfOpacity)
 	return strings.ReplaceAll(s.options.Declared.Icons[name], `class="half"`, half)
 }

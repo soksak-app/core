@@ -103,7 +103,7 @@ type metrics struct {
 	barTabRootPad, barTabRootW, barTabRootH, dropMix, dropBorder, dropBand, dropBandMargin, groupFocusFade, tabDraggingOpacity, actStroke, chromeActsGap, brandGap, brandLogoAtBase, chromeH, chromeRowH, spaceGap, spacePad, chromeGap, barGap, barXPad, barXOpacity, barAddText, barAddPad, textControlAtBase, textCaptionAtBase, chipMix, chipHoverMix, chipOnMix, projectTabMix float32
 	headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, activityIcon, activityStroke, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW, tabGrabW float32
 	// The card head (.chrome of packages/workbench/app.css).
-	cardHeadGap, cardHeadPad, cardTabsGap, cardButton, cardIcon, cardActsGap, cardActsPad, cardActHalfOpacity, tabGap, tabPadY, tabPadX, tabXPad, tabXOpacity, iconStroke, disabledOpacity, noticeDotInset, radiusMiddleRatio, radiusSmallRatio, textSmallAtBase, textBase, chipSelMix, renameSelectionMix, insetMix, tabXHoverMix float32
+	cardHeadGap, cardHeadPad, cardTabsGap, cardButton, cardIcon, cardActsGap, cardActsPad, cardActHalfOpacity, tabGap, tabPadY, tabPadX, tabXPad, tabXOpacity, iconStroke, groupFramePad, groupFrameRadius, disabledOpacity, noticeDotInset, radiusMiddleRatio, radiusSmallRatio, textSmallAtBase, textBase, chipSelMix, renameSelectionMix, insetMix, tabXHoverMix float32
 	// The error line (#applicationError of packages/workbench/app.css).
 	errorPadY, errorPadX, errorBorder float32
 	// debugW is the width of the debug view, and debugH its largest share of the window height.
@@ -210,6 +210,8 @@ func readMetrics(declared *Declarations) (metrics, error) {
 	read("tab-x-pad", &m.tabXPad)
 	read("tab-x-opacity", &m.tabXOpacity)
 	read("icon-stroke", &m.iconStroke)
+	read("card-group-frame-pad", &m.groupFramePad)
+	read("card-group-frame-radius", &m.groupFrameRadius)
 	read("error-pad-y", &m.errorPadY)
 	read("error-pad-x", &m.errorPadX)
 	read("error-border", &m.errorBorder)

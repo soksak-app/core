@@ -8,6 +8,7 @@ import (
 	"image/color"
 	"math"
 	"os"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -763,5 +764,75 @@ func TestTheFrameOfAGroupCardRunsAroundItsHeader(t *testing.T) {
 	}
 	if corner, stage := at(frame.X+border/2, frame.Y+border/2), at(frame.X-2, frame.Y+frame.H/2); corner != stage {
 		t.Errorf("the top left corner of the frame is %v, want the stage %v around its radius", corner, stage)
+	}
+}
+
+// A group split button draws the split icon of its side inside the rounded frame of a group card, with the padding card-group-frame-pad
+// between the inner edge of the frame and the box of the split icon and the radius card-group-frame-radius, in the stroke of the icon,
+// and keeps the size and the row of the split buttons (docs/spec/groups.md#headers). The icon box is the 16 point viewBox drawn at
+// card-icon.
+func TestAGroupSplitButtonFramesTheSplitIconOfItsSide(t *testing.T) {
+	f := groupedShell(t)
+	f.settle()
+	raw, err := os.ReadFile("../src/workbench.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var declared struct {
+		Chrome map[string]string `json:"chrome"`
+	}
+	if err := json.Unmarshal(raw, &declared); err != nil {
+		t.Fatal(err)
+	}
+	number := func(name string) float64 {
+		value, err := strconv.ParseFloat(strings.TrimSuffix(declared.Chrome[name], "px"), 64)
+		if err != nil {
+			t.Fatalf("chrome %s: %v", name, err)
+		}
+		return value
+	}
+	unit := 16 / number("card-icon")
+	stroke := number("icon-stroke")
+	frameAt := regexp.MustCompile(`^<rect x="([-\d.]+)" y="([-\d.]+)" width="([-\d.]+)" height="([-\d.]+)" rx="([-\d.]+)"/><g transform="translate\(([-\d.]+) ([-\d.]+)\) scale\(([-\d.]+)\)" stroke-width="([-\d.]+)">(.*)</g>$`)
+	for _, head := range []struct{ id, prefix string }{{"main", "core.card"}, {"card-2", "core.group"}} {
+		for _, pair := range [][2]string{{"group-x", "split-x"}, {"group-y", "split-y"}} {
+			where := head.prefix + "." + pair[0] + " of " + head.id
+			icon, err := f.shell.HeadToolIcon(head.id, pair[0])
+			if err != nil {
+				t.Fatal(err)
+			}
+			split, err := f.shell.HeadToolIcon(head.id, pair[1])
+			if err != nil {
+				t.Fatal(err)
+			}
+			// (a) the icon inside the frame is the split icon of the same side.
+			found := frameAt.FindStringSubmatch(icon)
+			if found == nil {
+				t.Fatalf("%s draws no split icon inside a frame: %s", where, icon)
+			}
+			if found[10] != split {
+				t.Errorf("%s draws %s inside its frame, not the split icon %s", where, found[10], split)
+			}
+			// (b) the frame runs along the edge of the icon box in the stroke of the icon, and the split icon fills the box inside it less the
+			// padding, in the same stroke.
+			values := make([]float64, 9)
+			for i := range values {
+				values[i], _ = strconv.ParseFloat(found[i+1], 64) // silent: the expression matched numbers.
+			}
+			inner := stroke + number("card-group-frame-pad")*unit
+			want := []float64{stroke / 2, stroke / 2, 16 - stroke, 16 - stroke, number("card-group-frame-radius") * unit, inner, inner,
+				(16 - 2*inner) / 16, stroke * 16 / (16 - 2*inner)}
+			for i := range want {
+				if math.Abs(values[i]-want[i]) > 1e-3 {
+					t.Errorf("%s frame and icon box %v, not %v", where, values, want)
+					break
+				}
+			}
+			// (c) the button keeps the size and the row of the split buttons.
+			button, beside := f.box(head.prefix+"."+pair[0], head.id), f.box(head.prefix+"."+pair[1], head.id)
+			if button.W != beside.W || button.H != beside.H || button.Y != beside.Y || float64(button.H) != number("card-button") {
+				t.Errorf("%s is drawn at %+v beside %s at %+v", where, button, pair[1], beside)
+			}
+		}
 	}
 }
