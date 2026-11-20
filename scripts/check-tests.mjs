@@ -289,6 +289,17 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F1007",
+    implementation: [
+      { file: "native/darwin/src/image_region.m", symbol: "sp_event(SP_CLASS_FRAME, SP_EVENT_DEBUG, \"native.image.present\", fields);" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/image_region_lease_test.m", id: "a %@ present stores one record of its steps" },
+    ],
+    expected: "An accepted present of an image region stores native.image.present with its mode, size, copied bytes and the time of each of its steps.",
+    levels: ["unit"],
+  },
+  {
     id: "F974",
     implementation: [
       { file: "e2e/fixtures/raster-probe/probe/plugin.json", symbol: "\"id\": \"rasterprobe\"" },

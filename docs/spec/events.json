@@ -5231,6 +5231,60 @@
       },
       "description": "One delivery of a registration of the mode `record`; `count` is the exact number of deliveries of the source so far."
     },
+    "native.image.present": {
+      "layer": "native",
+      "class": "frame",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string"
+          },
+          "width": {
+            "type": "number"
+          },
+          "height": {
+            "type": "number"
+          },
+          "bytes": {
+            "type": "number"
+          },
+          "lookup_ns": {
+            "type": "number"
+          },
+          "check_ns": {
+            "type": "number"
+          },
+          "copy_ns": {
+            "type": "number"
+          },
+          "swap_ns": {
+            "type": "number"
+          },
+          "commit_ns": {
+            "type": "number"
+          },
+          "total_ns": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "mode",
+          "width",
+          "height",
+          "bytes",
+          "lookup_ns",
+          "check_ns",
+          "copy_ns",
+          "swap_ns",
+          "commit_ns",
+          "total_ns"
+        ]
+      },
+      "description": "An image region presented an accepted frame on the main thread (docs/spec/native-surfaces.md#image-regions). mode is copy or lease, width and height the size of the frame in pixels and bytes the bytes that the copy mode copied (0 in the lease mode). lookup_ns is the time of the lookup of the surface by its identifier and of the read of its nonce, check_ns of the other checks of the frame, copy_ns of the copy into host-owned storage or of the retain of the lease, swap_ns of the change of the layer contents, commit_ns of the commit of its transaction, and total_ns of the whole present."
+    },
     "native.observe.counted": {
       "layer": "native",
       "class": "frame",
