@@ -297,8 +297,12 @@ func (g *Grid) Card(id string) (Card, bool) {
 	return copyCard(found), true
 }
 
-// SetData replaces a card's payload, which the grid does not read.
+// SetData replaces the payload of a card or a box, which the grid does not read.
 func (g *Grid) SetData(id string, data json.RawMessage) bool {
+	if box := g.boxByID[id]; box != nil {
+		box.Data = slices.Clone(data)
+		return true
+	}
 	card := g.find(id)
 	if card == nil {
 		return false
@@ -448,6 +452,9 @@ func (g *Grid) Rect(id string) (Rect, bool) {
 	y := g.BoundaryPos("y", l[2]) + inset.y0 - g.above[id]
 	return Rect{X: x, Y: y, W: math.Max(0, g.BoundaryPos("x", l[1])-inset.x1-x), H: math.Max(0, g.BoundaryPos("y", l[3])-inset.y1-y)}, true
 }
+
+// HeadsAbove is the px of the heads of the boxes around the card or the box id that the grid draws inside the top of its rectangle.
+func (g *Grid) HeadsAbove(id string) float64 { return g.above[id] }
 
 // Rects is the rect of every card, by id.
 func (g *Grid) Rects() map[string]Rect {
@@ -1173,8 +1180,11 @@ func (g *Grid) removable(id string) *Card {
 	return card
 }
 
-// CanClose is whether Close would remove the card.
+// CanClose is whether Close would remove the card or the box id.
 func (g *Grid) CanClose(id string) bool {
+	if g.boxByID[id] != nil {
+		return g.boxClosing(id)
+	}
 	return g.closing(id)
 }
 
@@ -1196,16 +1206,19 @@ func (g *Grid) leaving(n *Node) bool {
 	return slices.ContainsFunc(h.Kids, func(k Kid) bool { return k.Node != h.Kids[i].Node && !(k.Node.isCard() && k.Node.Fixed) })
 }
 
-// Close removes a card (packages/soksak/docs/layout.md#boundaries): the node that leaves with it goes out of its cut, and the fractions
-// of the other kids of the cut that are no fixed card scale by one factor, so their ratios hold; a fixed card keeps the size it is drawn
-// at. It is false when the card is fixed, when it is the last card, or when every other kid of its cut is a fixed card.
+// Close removes a card or a box with every card inside it (packages/soksak/docs/layout.md#add-and-remove): the node that leaves with
+// it goes out of its cut, and the fractions of the other kids of the cut that are no fixed card scale by one factor, so their ratios
+// hold; a fixed card keeps the size it is drawn at. It is false, and changes nothing, when the card is fixed, when it is the last card
+// or the box holds every card that is not fixed, or when every other kid of its cut is a fixed card.
 func (g *Grid) Close(id string) bool {
 	defer g.begin()()
-	return g.closeAlong(id)
-}
-
-// closeAlong is Close inside another operation.
-func (g *Grid) closeAlong(id string) bool {
+	if box := g.boxByID[id]; box != nil {
+		if !g.boxClosing(id) {
+			return false
+		}
+		g.withdrawAlong(box)
+		return true
+	}
 	if !g.closing(id) {
 		return false
 	}
@@ -1226,23 +1239,15 @@ func (g *Grid) withdrawAlong(n *Node) {
 	g.keepFixed(drawnBefore)
 }
 
-// closeBox closes the box id with every card inside it as one node of the tree: the node leaves its cut and the other kids of the cut
-// that are no fixed card take its share by one factor (R7). It is false, and changes nothing, when the box is no box, when it holds
-// every card that is not fixed, or when no other kid of its cut takes the share.
-func (g *Grid) closeBox(id string) bool {
+// boxClosing is whether the box id can close: a card that is not fixed stands outside it, and its cut holds another kid that is no
+// fixed card, which takes its share.
+func (g *Grid) boxClosing(id string) bool {
 	box := g.boxByID[id]
-	if box == nil {
-		return false
-	}
 	inside := map[string]bool{}
 	for _, leaf := range cardsOf(box) {
 		inside[leaf.Card] = true
 	}
-	if !slices.ContainsFunc(g.list, func(c *Card) bool { return !c.Fixed && !inside[c.ID] }) || !g.leaving(box) {
-		return false
-	}
-	g.withdrawAlong(box)
-	return true
+	return slices.ContainsFunc(g.list, func(c *Card) bool { return !c.Fixed && !inside[c.ID] }) && g.leaving(box)
 }
 
 // CanInsertAt is whether a card spanning the whole plane can be placed on this boundary: the line is an edge of the plane or a seam
@@ -1420,7 +1425,7 @@ func (g *Grid) Move(id, targetID string, side Side) bool {
 	}
 	node := cloneNode(g.leaves[id])
 	before := g.ToJSON()
-	if !g.closeAlong(id) {
+	if !g.Close(id) {
 		return false
 	}
 	if err := g.byCuts(func() (*Node, error) { return g.insertNode(Target{targetID}, side, node) }); err != nil {

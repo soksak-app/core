@@ -475,6 +475,9 @@ split이다. id가 `box`이고 페이로드가 `data`이며 head가 `head` px인
 head에 더해지고, 결과는 새 box의 head와 frame과 함께 한 번 판정되므로, 거부는 group이
 최소보다 작게 그릴 가장 깊은 node를 head 아래 content 크기로 가리킨다. layout이 가진
 id는 거부된다.
+`unwrap(id)`는 그 반대다. box `id`의 inner node가 그 자리를 차지하고 head는 box와 함께
+떠나며, box를 담은 cut의 축을 따르는 cut은 모든 kid를 그려진 크기로 두고 그 cut에
+합쳐진다. box의 `close(id)`는 카드의 close와 같이 그 안의 모든 카드와 함께 box를 꺼낸다.
 
 ```js
 const left = grid.withdraw("card-3");             // row가 비율대로 빈자리를 메운다
@@ -624,9 +627,10 @@ share를 받지 않는다. fixed 카드를 담은 cut이나 box는 다른 kid처
 | `resize(w, h)`, `width`, `height` | 판의 크기 |
 | `canSplit(id, axis)`, `split(id, axis, {id?, data?, newLine?})` | 카드 하나를 둘로 자른다 |
 | `splitToward(id, side, {id?, data?, newLine?})` | 자르고 새 카드를 지정한 쪽에 놓는다. `newLine` 은 카드가 가로지르는 line이 안에 있어도 가운데의 새 line에서 자른다 |
-| `canClose(id)`, `close(id)` | 카드를 제거한다. 그 cut의 다른 kid가 한 인수로 그 share를 가진다(R7) |
+| `canClose(id)`, `close(id)` | 카드를, 또는 그 안의 모든 카드와 함께 box를 제거한다. 그 cut의 다른 kid가 한 인수로 그 share를 가지고 `fixed` 카드는 그려진 크기를 유지한다(R7). 카드가 `fixed`이거나 마지막 카드일 때, box가 `fixed`가 아닌 모든 카드를 담을 때, 또는 cut의 다른 모든 kid가 `fixed` 카드일 때 false다 |
 | `canMove(id, targetId, side)`, `move(id, targetId, side)` | 카드를 다른 카드의 옆으로 옮긴다. close와 insert다 |
-| `setFixed(id, on)`, `setSize(id, axis, px)`, `setData(id, data)` | 카드를 변경한다. 반환된 사본은 동결되어 있다 |
+| `setFixed(id, on)`, `setSize(id, axis, px)`, `setData(id, data)` | 카드를 변경하고, `setData`는 box의 페이로드도 바꾼다. 반환된 사본은 동결되어 있다 |
+| `unwrap(id)`, `headsAbove(id)` | box `id`의 inner node를 head 없이 그 자리에 놓고, 그 cut의 축을 따르는 cut은 모든 kid를 그려진 크기로 두고 그 cut에 합쳐진다. 카드나 box 안쪽 위에 그려지는 head의 px ([add and remove](#add-and-remove)) |
 | `standings(axis)`, `canInsertAt(axis, line)`, `insertAt`, `moveTo` | 판을 가로지르는 카드: 판의 가장자리와 그 축을 따르는 root cut의 seam |
 | `zoneAt(x, y, options)` | 드롭이 내려앉는 곳 |
 | `dividers()`, `rules()` | 잡는 영역과 그릴 경계 |

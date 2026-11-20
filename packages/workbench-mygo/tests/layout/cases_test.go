@@ -359,6 +359,12 @@ func gridCall(t *testing.T, g *layout.Grid, s step) (any, bool, error) {
 		arg(t, s, 2, &node)
 		arg(t, s, 3, &init)
 		return nil, true, g.Group(id, side, &node, init)
+	case "unwrap":
+		arg(t, s, 0, &id)
+		return nil, true, g.Unwrap(id)
+	case "headsAbove":
+		arg(t, s, 0, &id)
+		return g.HeadsAbove(id), true, nil
 	case "withdraw":
 		arg(t, s, 0, &id)
 		left, err := g.Withdraw(id)

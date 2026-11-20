@@ -605,6 +605,31 @@
   {"call":"group","args":["b","right",{"card":"d"},{"box":"h","data":{"name":"그룹 2"},"head":32}],"throws":"card b would be 58x204, below its minimum 96x96"},
   {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"box":"g","data":{"name":"그룹 1"},"inner":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"b","fixed":false}}]}}},{"share":0.5,"node":{"card":"c","fixed":false}}]}}}
  ]},
+ {"name":"the heads above a card are the heads of the boxes that start on its top, the data of a box is set by its id, and an unwrap puts the inner node of a box in its place without its head","options":{"width":600,"height":400,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"box":"g","data":{"name":"그룹 1"},"inner":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"b"}}]}}},{"share":0.5,"node":{"card":"c"}}]}},"steps":[
+  {"call":"setHeads","args":[{"g":32}]},
+  {"call":"headsAbove","args":["a"],"returns":32},
+  {"call":"headsAbove","args":["b"],"returns":0},
+  {"call":"headsAbove","args":["g"],"returns":0},
+  {"call":"setData","args":["g",{"name":"그룹 2"}],"returns":true},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"box":"g","data":{"name":"그룹 2"},"inner":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"b","fixed":false}}]}}},{"share":0.5,"node":{"card":"c","fixed":false}}]}}},
+  {"call":"unwrap","args":["a"],"throws":"card a is no box"},
+  {"call":"unwrap","args":["z"],"throws":"card z is not a member of the layout"},
+  {"call":"unwrap","args":["g"],"returns":null},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"b","fixed":false}}]}},{"share":0.5,"node":{"card":"c","fixed":false}}]}}},
+  {"call":"rects","returns":{"a":{"x":0,"y":0,"w":288,"h":188},"b":{"x":0,"y":212,"w":288,"h":188},"c":{"x":312,"y":0,"w":288,"h":400}}},
+  {"call":"headsAbove","args":["a"],"returns":0}
+ ]},
+ {"name":"a close of a box takes it out with every card inside it","options":{"width":600,"height":400,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"box":"g","data":{"name":"그룹 1"},"inner":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"b"}}]}}},{"share":0.5,"node":{"card":"c"}}]}},"steps":[
+  {"call":"setHeads","args":[{"g":32}]},
+  {"call":"canClose","args":["g"],"returns":true},
+  {"call":"close","args":["g"],"returns":true},
+  {"call":"toJSON","returns":{"root":{"card":"c","fixed":false}}}
+ ]},
+ {"name":"a box beside fixed cards only does not close","options":{"width":600,"height":400,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"box":"g","inner":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"b"}}]}}},{"share":0.5,"node":{"card":"s","fixed":true,"width":120}}]}},"steps":[
+  {"call":"canClose","args":["g"],"returns":false},
+  {"call":"close","args":["g"],"returns":false},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"box":"g","inner":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"b","fixed":false}}]}}},{"share":0.5,"node":{"card":"s","fixed":true,"width":120}}]}}}
+ ]},
  {"name":"a state of the earlier form with lines and cells is refused","state":{"xs":[0,1],"ys":[0,1],"cards":[{"id":"a","c0":0,"c1":1,"r0":0,"r1":1}]},"throws":"soksak: the state holds xs, ys and cards, which is the earlier form; the state is {root}","steps":[]},
  {"name":"a state that records a payer is refused","state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"b"}}]},"paidBy":{"b":"a"}},"throws":"soksak: the state holds paidBy, which the layout does not record; the state is {root}","steps":[]},
  {"name":"a node that is no card, box or cut is refused","state":{"root":{"id":"a"}},"throws":"soksak: the node {\"id\":\"a\"} is not a card, a box or a cut","steps":[]},

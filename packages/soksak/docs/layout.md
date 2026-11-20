@@ -535,6 +535,10 @@ inner node is a new cut of two halves along the axis of `side` that holds
 the result is judged once with the head and the frames of the new box, so a
 refusal names the deepest node that the group would draw below its minimum at
 the size of its content under the head. Ids that the layout holds are refused.
+`unwrap(id)` is the inverse: the inner node of the box `id` takes its place and
+its head leaves with it, and a cut along the axis of the cut that holds the box
+joins that cut with every kid drawn at the size it had. `close(id)` of a box
+withdraws it with every card inside it, as a close of a card does.
 
 ```js
 const left = grid.withdraw("card-3");             // the row closes the gap in proportion
@@ -694,9 +698,10 @@ first.
 | `resize(w, h)`, `width`, `height` | plane size |
 | `canSplit(id, axis)`, `split(id, axis, {id?, data?, newLine?})` | cut one card in two; `newLine` cuts at a new line at the centre even where a line that the card spans across lies inside it |
 | `splitToward(id, side, {id?, data?, newLine?})` | cut it and put the new one on a named side |
-| `canClose(id)`, `close(id)` | remove a card; the other kids of its cut take its share by one factor (R7) |
+| `canClose(id)`, `close(id)` | remove a card, or a box with every card inside it; the other kids of its cut take its share by one factor and a fixed card keeps its drawn size (R7); false when the card is fixed or the last card, when the box holds every card that is not fixed, or when every other kid of the cut is a fixed card |
 | `canMove(id, targetId, side)`, `move(id, targetId, side)` | take a card to another card's side: a close and an insert |
-| `setFixed(id, on)`, `setSize(id, axis, px)`, `setData(id, data)` | change a card; the returned copies are frozen |
+| `setFixed(id, on)`, `setSize(id, axis, px)`, `setData(id, data)` | change a card, and with `setData` the payload of a box; the returned copies are frozen |
+| `unwrap(id)`, `headsAbove(id)` | put the inner node of the box `id` in its place without its head, a cut along the axis of its cut joining that cut with every kid at its drawn size; the px of the heads drawn inside the top of a card or a box ([add and remove](#add-and-remove)) |
 | `standings(axis)`, `canInsertAt(axis, line)`, `insertAt`, `moveTo` | a card that reaches across the plane: the edges of the plane and the seams of the root cut along the axis |
 | `zoneAt(x, y, options)` | where a drop lands |
 | `dividers()`, `rules()` | grab areas, and boundaries to draw |

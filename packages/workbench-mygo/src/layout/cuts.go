@@ -23,38 +23,6 @@ import (
 // target; across it, the target is wrapped in a new cut of two halves. Even gives the kids of every cut equal fractions. An operation
 // changes the stored tree; the grid lays it and refuses a result that draws a changed node below its minimum.
 
-// Box is a rectangle of the host that the tree keeps as one child, with the px of its head above its members.
-type Box struct {
-	ID      string   `json:"id"`
-	Head    float64  `json:"head"`
-	Members []Member `json:"members"`
-}
-
-// Member is a member of the plane or of a box: a card id, or a box.
-type Member struct {
-	Card string
-	Box  *Box
-}
-
-// UnmarshalJSON reads a card id or a box.
-func (m *Member) UnmarshalJSON(raw []byte) error {
-	if bytes.HasPrefix(bytes.TrimSpace(raw), []byte(`"`)) {
-		return json.Unmarshal(raw, &m.Card)
-	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	m.Box = &Box{}
-	return decoder.Decode(m.Box)
-}
-
-// MarshalJSON writes a card id or a box.
-func (m Member) MarshalJSON() ([]byte, error) {
-	if m.Box != nil {
-		return json.Marshal(m.Box)
-	}
-	return json.Marshal(m.Card)
-}
-
 // Target is the target of an insert: one member id, or the ids that neighbouring children of one cut hold.
 type Target []string
 
@@ -106,19 +74,6 @@ func ends(axis Axis) (string, string) {
 }
 
 func notMember(id string) error { return fmt.Errorf("card %s is not a member of the layout", id) }
-
-// contentsOf is the card ids inside a box, through the boxes that it holds.
-func contentsOf(b *Box) []string {
-	out := []string{}
-	for _, m := range b.Members {
-		if m.Box != nil {
-			out = append(out, contentsOf(m.Box)...)
-		} else {
-			out = append(out, m.Card)
-		}
-	}
-	return out
-}
 
 // evenWithin is the difference of fractions under which two kids are of one size, so their cut is even.
 const evenWithin = 1e-9
@@ -659,6 +614,33 @@ func (g *Grid) groupNode(target string, side Side, node *Node, init GroupInit) (
 	inner := &Node{Cut: axisOf(side), Kids: []Kid{{Share: 0.5, Node: pair[0]}, {Share: 0.5, Node: pair[1]}}}
 	x.replace(at, &Node{Box: init.Box, Data: slices.Clone(init.Data), Inner: inner})
 	return x.root, nil
+}
+
+// Unwrap takes the box id out of the tree: its inner node takes its place in its cut, and a cut along the axis of that cut joins it with
+// every kid drawn at the size it had (packages/soksak/docs/layout.md#add-and-remove). The head of the box leaves with it. A refusal
+// changes nothing.
+func (g *Grid) Unwrap(id string) error {
+	defer g.begin()()
+	if g.boxByID[id] == nil {
+		if g.byID[id] != nil {
+			return fmt.Errorf("card %s is no box", id)
+		}
+		return notMember(id)
+	}
+	heads := g.heads
+	err := g.byCuts(func() (*Node, error) {
+		x := newIndex(g)
+		box := x.byID[id]
+		x.replace(box, box.Inner)
+		g.heads = maps.Clone(heads)
+		delete(g.heads, id)
+		return x.root, nil
+	})
+	if err != nil {
+		g.heads = heads
+		g.derive()
+	}
+	return err
 }
 
 // Withdraw is REMOVE (packages/soksak/docs/layout.md#add-and-remove): it takes the node id, a card or a box, out of its cut; the other
