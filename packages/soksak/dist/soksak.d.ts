@@ -261,22 +261,13 @@ export declare class Soksak {
     /** How many lines a card spans across — how much finer its neighbours are. */
     crossings(card: Card): number;
     /**
-     * Draws the card `holder`, which declares a px size on `axis`, `delta` px larger by moving the boundary `line` at one of its
-     * edges. A px size belongs to its card of the tree, whatever cells the lines of other cuts draw across the card. The drag moves
-     * every seam that stands on the line, so every card that declares a px size and has its edge on that side of the line takes
-     * the same difference, as the kids of a column do. When cards on the other side declare px sizes as well, they give the
-     * difference and every declaration on the two sides changes by it at the scale it is drawn at: a plane that draws its declared
-     * sizes scaled keeps its scale, and no third card is redrawn. The line moves by the difference, so the commit reads the
-     * fractions of a kid that pays from it.
+     * Draws `node`, which keeps a px size on `axis`, `delta` px larger at the edge `side` that a seam moves: a card takes the
+     * delta at the scale it is drawn at, a box gives it to its inner node, a cut along the axis to its kid at that edge, and a cut
+     * across it to each of its kids that keeps a size.
      */
-    private resizeCard;
+    private grow;
     /** Declares the px size `size` of the card on `axis`. */
     private declareOn;
-    /**
-     * The card whose px size a drag at this boundary changes, if either slot
-     * meeting there has one. Every card in that slot takes the new size.
-     */
-    private holderAt;
     /** Everything to draw for the boundaries. */
     rules(): Rule[];
     dividers(): Divider[];
@@ -304,6 +295,8 @@ export declare class Soksak {
      * the sharing slots always divide the same remainder between them.
      */
     boundaryRange(axis: Axis, line: number): [number, number];
+    /** The seams of the cuts along `axis` that stand on the derived line `line`: each cut and the index of the kid before the seam. */
+    private seams;
     /**
      * Move a boundary to a position in px.
      *
@@ -369,7 +362,12 @@ export declare class Soksak {
      */
     private byCuts;
     /**
-     * The text of the outermost node that the last operation moved and that is
+     * The drawn extent of a node, the extent of the drawn rectangles of its cards, and its recursive minimum on an axis
+     * (packages/soksak/docs/layout.md#cuts), read from the rectangles `now`; `before` holds the rectangles that a fixed card had.
+     */
+    private measure;
+    /**
+     * The text of the deepest node that the last operation moved and that is
      * drawn below its minimum, or null. The minimum of a node is recursive: a card
      * needs `minSize` and on y the heads drawn inside its rectangle, a card that
      * keeps a px size the smaller of that size and `minSize`, a fixed card with a

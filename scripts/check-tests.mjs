@@ -348,7 +348,7 @@ const FEATURE_LINKS = [
     id: "F963",
     implementation: [
       { file: "packages/workbench/card-tools.js", symbol: 'export const CARD_TOOL_MENUS = { add: "add", x: "split-x", y: "split-y", gx: "group-x", gy: "group-y" };' },
-      { file: "packages/workbench/group-tree.js", symbol: "canGroup(id, side, even) {" },
+      { file: "packages/workbench/group-tree.js", symbol: "canGroup(id, side) {" },
       { file: "packages/workbench-mygo/src/cards.go", symbol: "func (s *Shell) groupTools(id, header string, changes func(tool headTool, can bool) headTool) []headTool {" },
       { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) CanGroup(id string, side Side) bool {" },
     ],
@@ -734,7 +734,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/group-tree.js", symbol: "fullscreen(id, area)" },
       { file: "packages/workbench/group-tree.js", symbol: "drawnRules(rules)" },
       { file: "packages/workbench/settings.js", symbol: "export const currentGroupLook = (level) =>" },
-      { file: "packages/workbench/group-cards.js", symbol: "export function drawGroupCards(planeEl, tree, rects, { head, fullscreen, even, focused })" },
+      { file: "packages/workbench/group-cards.js", symbol: "export function drawGroupCards(planeEl, tree, rects, { head, fullscreen, focused })" },
       { file: "packages/workbench/plane.js", symbol: "export function drawnCardRects()" },
       { file: "packages/workbench/card-tools.js", symbol: "export function updateCardTools(toolbar, { canClose, canSplitX, canSplitY, canGroupX, canGroupY, leads, leader, fullscreen })" },
       { file: "packages/workbench/stored-layout.js", symbol: "readGroupTree(kept, { gap: 0, minSize: 0, head: 0 }, new Soksak());" },
@@ -853,7 +853,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F895",
-    implementation: [{ file: "packages/workbench/settings.js", symbol: "const { projectOpening, viewProcess, projectTabs, focusInd, fullRule, cardArrange, cardSplit } = declaration.settings.choices;" }],
+    implementation: [{ file: "packages/workbench/settings.js", symbol: "const { projectOpening, viewProcess, projectTabs, focusInd, fullRule, cardArrange } = declaration.settings.choices;" }],
     tests: [{ file: "packages/workbench/test/settings-controls.test.mjs", id: "every setting form is drawn with its one control" }],
     expected: "The setting cardArrange is a choice of resize and even, drawn as a select box whose options are the declared choices.",
     levels: ["unit"],

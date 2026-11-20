@@ -377,10 +377,10 @@ export class GroupTree {
   }
 
   /** Whether a group split button of the card id toward side is enabled: a group of the card and a new card toward side would succeed. */
-  canGroup(id, side, even) {
-    return this.answer(`group:${id}:${side}:${even}`, () => this.probe(() => {
+  canGroup(id, side) {
+    return this.answer(`group:${id}:${side}`, () => this.probe(() => {
       try {
-        this.create(id, side, undefined, even);
+        this.create(id, side, undefined);
         return true;
       } catch {
         // silent: the probe answers whether the group succeeds; the refusal is the answer false.
@@ -879,23 +879,6 @@ export class GroupTree {
     this.grid.replace(fromCoordinates(placed, state.paidBy, new Set([...inside, node.card])));
   }
 
-  /**
-   * Balances the grid after the split of the card id toward side (cardSplit even), and refuses the split when the balance fails or draws
-   * a content card that it changed below its minimum (docs/spec/groups.md#splitting).
-   */
-  balanceEven(id, side, before) {
-    try {
-      this.share(false);
-    } catch (error) {
-      throw new Error(`card ${id} cannot split toward ${side}: cardSplit even cannot balance the grid: ${error.message}`);
-    }
-    const below = this.belowMinimum(before);
-    if (below) {
-      throw new Error(`card ${id} cannot split toward ${side}: cardSplit even would draw card ${below.id} at ${sizeText(below.rect.w, below.rect.h)}, ` +
-        `below its minimum ${sizeText(this.options.minSize, this.options.minSize)}`);
-    }
-  }
-
   /** Finds the card id of the space, or refuses it. */
   require(id) {
     const found = this.find(id);
@@ -905,13 +888,12 @@ export class GroupTree {
 
   /**
    * Groups the card id, a content card or a group card, with a new content card with data toward side and returns {group, card}, the
-   * group card and the new card (docs/spec/groups.md#commands). even balances the grid after the split (cardSplit even).
+   * group card and the new card (docs/spec/groups.md#commands).
    */
-  create(id, side, data, even) {
+  create(id, side, data) {
     if (isPlace(id)) throw new Error(`card ${id} is a window sidebar; a group holds content cards and group cards`);
     if (!SIDES.includes(side)) throw new Error(`unknown side ${side}; use left, right, top or bottom`);
     const found = this.require(id);
-    const before = this.drawnCards();
     return this.attempt(id, `hold a group toward ${side}`, () => {
       const group = this.issue();
       const born = this.issue();
@@ -921,42 +903,38 @@ export class GroupTree {
       this.replaceMember(parent, id, node);
       if (this.leaderOf(parent) === id) this.setLeaderOf(parent, group);
       this.levelSplit(id, side, born);
-      if (even) this.balanceEven(id, side, before);
       return { group, card: born };
     });
   }
 
   /**
    * Puts a new content card with data beside the card id toward side and returns its id: a split of the library for a content card, which
-   * joins the group of the card, and the split of the rectangle for a group card, which joins the level that holds it. even balances the
-   * grid after the split (cardSplit even).
+   * joins the group of the card, and the split of the rectangle for a group card, which joins the level that holds it.
    */
-  split(id, side, data, even) {
+  split(id, side, data) {
     const refusal = () => new Error(`card ${id} cannot split toward ${side}`);
     const found = this.find(id);
     if (!found || isPlace(id) || !SIDES.includes(side)) throw refusal();
-    const before = this.drawnCards();
     return this.attempt(id, `split toward ${side}`, () => {
       const born = this.issue();
       if (!this.splitCard(id, side, born, data, false)) throw new Error(`card ${id} cannot split toward ${side}: ${this.noRoomText(id, side)}`);
       this.attach(found.parent, born);
       this.leaderEntered(found.parent, born);
       this.levelSplit(id, side, born);
-      if (even) this.balanceEven(id, side, before);
       return born;
     });
   }
 
   /** Whether split of the card id toward side would succeed. */
-  canSplit(id, side, even) {
-    return this.splitRefusal(id, side, even) === null;
+  canSplit(id, side) {
+    return this.splitRefusal(id, side) === null;
   }
 
   /** The text with which split of the card id toward side would be refused, or null when it would succeed. */
-  splitRefusal(id, side, even) {
-    return this.answer(`split:${id}:${side}:${even}`, () => this.probe(() => {
+  splitRefusal(id, side) {
+    return this.answer(`split:${id}:${side}`, () => this.probe(() => {
       try {
-        this.split(id, side, undefined, even);
+        this.split(id, side, undefined);
         return null;
       } catch (error) {
         return error.message;
@@ -966,16 +944,14 @@ export class GroupTree {
 
   /**
    * Adds a content card with data inside the group card id at the right edge of its rectangle, by the split of the rectangle toward right,
-   * and returns its id (docs/spec/groups.md#card-commands-on-a-group-card). even balances the grid after the add (cardSplit even).
+   * and returns its id (docs/spec/groups.md#card-commands-on-a-group-card).
    */
-  addCard(id, data, even) {
+  addCard(id, data) {
     const node = this.requireGroup(id);
-    const before = this.drawnCards();
     return this.attempt(id, "split toward right", () => {
       const born = this.issue();
       this.splitRectangle(node, "right", born, data);
       node.members.push(born);
-      if (even) this.balanceEven(id, "right", before);
       return born;
     });
   }

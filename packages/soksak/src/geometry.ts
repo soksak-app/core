@@ -270,6 +270,9 @@ function divide(plane: Plane, axis: Axis): { size: number[]; each: number } {
 
 /** Every line position in px, index for index with the line array. */
 export function linePositions(plane: Plane, axis: Axis): number[] {
+  // The positions that the layout drew are read as they are: summing their differences again adds a rounding per slot.
+  const at = plane.at?.[axis];
+  if (at) return at.slice();
   const sizes = slotSizes(plane, axis);
   const out = [0];
   for (const size of sizes) out.push(out[out.length - 1] + size);

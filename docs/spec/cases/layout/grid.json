@@ -612,6 +612,19 @@
  {"name":"a kid cut along the axis of its cut is refused","state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"b"}},{"share":0.5,"node":{"card":"c"}}]}}]}},"throws":"soksak: the cut root.1 is not canonical: it is a cut along the axis of its cut","steps":[]},
  {"name":"shares that do not sum to 1 are refused","state":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.4,"node":{"card":"b"}}]}},"throws":"soksak: the cut root is not canonical: its shares sum to 0.9","steps":[]},
  {"name":"a share that is not positive is refused","state":{"root":{"cut":"y","kids":[{"share":1,"node":{"card":"a"}},{"share":0,"node":{"card":"b"}}]}},"throws":"soksak: the cut root is not canonical: the share of kid 1 is 0","steps":[]},
+ {"name":"a boundary moves within its own cut, past a line of another cut","state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"box":"g","inner":{"cut":"y","kids":[{"share":0.5,"node":{"card":"c1"}},{"share":0.5,"node":{"card":"c2"}}]}}},{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"c3"}},{"share":0.5,"node":{"card":"c4"}}]}}]}},"options":{"width":1000,"height":600,"gap":24,"minSize":96},"steps":[
+  {"call":"setHeads","args":[{"g":44}]},
+  {"call":"lines","args":["y"],"returns":[0,0.5,0.5166666666666667,1]},
+  {"call":"boundaryRange","args":["y",2],"returns":[152,468]},
+  {"call":"moveBoundary","args":["y",2,0,false],"returns":152},
+  {"call":"rect","args":["c1"],"returns":{"x":24,"y":0,"w":464,"h":140}},
+  {"call":"rect","args":["c3"],"returns":{"x":536,"y":0,"w":464,"h":288}},
+  {"call":"lines","args":["y"],"returns":[0,0.2533333333333334,0.5,1]},
+  {"call":"boundaryRange","args":["y",1],"returns":[152,468]},
+  {"call":"moveBoundary","args":["y",1,600,false],"returns":468},
+  {"call":"rect","args":["c2"],"returns":{"x":24,"y":480,"w":464,"h":96}},
+  {"call":"rect","args":["c4"],"returns":{"x":536,"y":312,"w":464,"h":288}}
+ ]},
  {"name":"two nodes with one id are refused","state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"a"}}]}},"throws":"soksak: card a is stored twice","steps":[]}
 ]
 }

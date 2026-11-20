@@ -15,7 +15,7 @@ This proposal replaces parties (F908) with nested cards in release 0.0.45. It is
 - The buttons of a header act on the box of that header. In the header of a content card, `+` adds a tab and the two split buttons put a new card beside the card in the same plane. In the header of a group card, `+` adds a content card inside the group and the two split buttons split the group card in its parent plane. A split never creates a group. The group button turns the card into a group of two cards; it is shown only when the card can hold the group header and give its cards `minSize`. Dissolving a group is in the close menu of the group header.
 - A card keeps its identifier when it moves between planes. Every command that names a card (`core.layout.open`, `core.layout.select`, `core.layout.close`, `core.card.get`) works for a card in any plane.
 
-- The setting `cardSplit` decides the sizes after a split: `exact` (the default) divides only the rect of the card that is split; `even` rearranges the cards of that plane to fair sizes with `balance()`. It applies to the split buttons, the inner split of the group button and `core.layout.open` with `side`.
+- A split divides only the node that it splits, for the split buttons, the inner split of the group button and `core.layout.open` with `side`.
 
 ## Commands and statuses
 

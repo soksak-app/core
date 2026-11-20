@@ -209,8 +209,8 @@ export const BREAKS = [
     id: "range-here",
     what: "the range a boundary can move within leaves out where it stands",
     file: "dist/soksak.js",
-    find: "        const at = along[line];",
-    to: "        const at = min;",
+    find: "                return Math.max(0, drawn(node) - this.min - (axis === 'y' ? (_a = this.above.get(node.card)) !== null && _a !== void 0 ? _a : 0 : 0));",
+    to: "                return drawn(node) - this.min - (axis === 'y' ? (_a = this.above.get(node.card)) !== null && _a !== void 0 ? _a : 0 : 0);",
   },
   {
     id: "middle-lines",
@@ -624,7 +624,7 @@ export const BREAKS = [
     id: "pair-total",
     what: "a drag between two declared cards takes the difference from no declaration on the far side",
     file: "dist/soksak.js",
-    find: "        for (const card of far)\n            change(card, -delta);\n",
+    find: "                this.grow(cut.kids[i + 1].node, axis, -off, 'start');\n",
     to: "",
   },
   {

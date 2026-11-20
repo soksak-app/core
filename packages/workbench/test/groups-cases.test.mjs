@@ -49,14 +49,13 @@ function difference(actual, expected, where) {
 function call(tree, grid, { call: name, args = {} }) {
   switch (name) {
     case "create": return tree.create(args.card, args.side, undefined, false);
-    // default: a split step without even divides as cardSplit exact.
-    case "split": return { card: tree.split(args.card, args.side, undefined, args.even ?? false) };
+    case "split": return { card: tree.split(args.card, args.side, undefined) };
     case "close": tree.close(args.card); return { closed: true };
     case "dissolve": tree.dissolve(args.group); return { dissolved: true };
     case "rename": return { group: args.group, name: tree.rename(args.group, args.name) };
     case "leader": return { card: args.card, group: tree.setLeader(args.card) };
     case "move": tree.move(args.card, args.target, args.side); return { card: args.card };
-    case "add": return { card: tree.addCard(args.group, undefined, args.even ?? false) };
+    case "add": return { card: tree.addCard(args.group, undefined) };
     case "grid": {
       // The cards of the grid with their place and whether they are fixed, as the cases write them.
       const { xs, ys, cards } = grid.toJSON();
