@@ -839,6 +839,40 @@ func (t *GroupTree) Split(id string, side Side, data json.RawMessage) (string, e
 	return born, nil
 }
 
+// SplitBeside puts a new content card with data beside target toward side and returns its id: the split of one card, or the insert of
+// the layout library beside the cut or the run of neighbouring kids that the ids name, whose new card joins the level of those kids
+// (docs/spec/groups.md#moving-and-dropping).
+func (t *GroupTree) SplitBeside(target Target, side Side, data json.RawMessage) (string, error) {
+	if len(target) == 1 {
+		return t.Split(target[0], side, data)
+	}
+	if !isSide(side) {
+		return "", fmt.Errorf("unknown side %s; use left, right, top or bottom", side)
+	}
+	if len(target) == 0 {
+		return "", errors.New("a split names no card")
+	}
+	for _, id := range target {
+		if err := t.requireCard(id); err != nil {
+			return "", err
+		}
+	}
+	names := strings.Join(target, ", ")
+	var born string
+	err := t.try(target[0], "split toward "+side, func() error {
+		born = t.issue()
+		if _, err := t.grid.Insert(target, side, &Node{Card: born, Data: data}); err != nil {
+			return fmt.Errorf("cards %s cannot split toward %s: %w", names, side, err)
+		}
+		t.attach(t.Parent(target[0]), &node{card: born})
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+	return born, nil
+}
+
 // CanSplit tells whether Split of the card id toward side would succeed.
 func (t *GroupTree) CanSplit(id string, side Side) bool {
 	return t.answer("split:"+id+":"+string(side), func() error {
@@ -969,24 +1003,29 @@ func (t *GroupTree) CanClose(id string) bool {
 
 // CheckMove is the refusal of a move of the card id to side of target before the layout is asked, or nil
 // (docs/spec/groups.md#commands).
-func (t *GroupTree) CheckMove(id, target, side string) error {
+func (t *GroupTree) CheckMove(id string, target Target, side string) error {
 	if IsWindowSide(id) {
 		return fmt.Errorf("card %s is a window sidebar and does not move", id)
-	}
-	if IsWindowSide(target) {
-		return fmt.Errorf("card %s is a window sidebar; a card does not move beside it", target)
 	}
 	if err := t.requireCard(id); err != nil {
 		return err
 	}
-	if err := t.requireCard(target); err != nil {
-		return err
+	if len(target) == 0 {
+		return fmt.Errorf("card %s cannot move beside no card", id)
 	}
-	if target == id || slices.Contains(t.Groups(target), id) {
+	for _, card := range target {
+		if IsWindowSide(card) {
+			return fmt.Errorf("card %s is a window sidebar; a card does not move beside it", card)
+		}
+		if err := t.requireCard(card); err != nil {
+			return err
+		}
+	}
+	if !slices.ContainsFunc(target, func(card string) bool { return card != id && !slices.Contains(t.Groups(card), id) }) {
 		return fmt.Errorf("card %s cannot move into itself", id)
 	}
-	if side == "centre" && !t.IsGroup(target) {
-		return fmt.Errorf("card %s is not a group; a card moves beside it", target)
+	if side == "centre" && (len(target) > 1 || !t.IsGroup(target[0])) {
+		return fmt.Errorf("card %s is not a group; a card moves beside it", strings.Join(target, ", "))
 	}
 	if side != "centre" && !isSide(side) {
 		return fmt.Errorf("unknown side %s; use left, right, top, bottom or centre", side)
@@ -995,7 +1034,11 @@ func (t *GroupTree) CheckMove(id, target, side string) error {
 }
 
 // Moved tells whether the card id already stands where a move to side of target puts it.
-func (t *GroupTree) Moved(id, target, side string) bool {
+func (t *GroupTree) Moved(id string, at Target, side string) bool {
+	if len(at) != 1 {
+		return false
+	}
+	target := at[0]
 	if side == "centre" {
 		if t.Parent(id) != target {
 			return false
@@ -1031,14 +1074,17 @@ func (t *GroupTree) Neighbour(card, side string) string {
 
 // Move moves the card id beside target on side into the level of target, or with side centre into the group card target at the right
 // edge of its rectangle (docs/spec/groups.md#commands).
-func (t *GroupTree) Move(id, target, side string) error {
+func (t *GroupTree) Move(id string, target Target, side string) error {
 	if err := t.CheckMove(id, target, side); err != nil {
 		return err
 	}
 	if t.Moved(id, target, side) {
 		return nil
 	}
-	op := "move to " + side + " of " + target
+	op := "move to " + side + " of " + strings.Join(target, ", ")
+	// The target is the node after the withdraw of the moving card (docs/spec/groups.md#target-search): a cut or a run that holds the
+	// moving card names the kids that remain.
+	target = slices.DeleteFunc(slices.Clone(target), func(card string) bool { return card == id || slices.Contains(t.Groups(card), id) })
 	return t.try(id, op, func() error {
 		moving := t.nodeOf(id)
 		// A move is a withdraw and an insert: the card or the box of the group card leaves its cut, whose other kids take its space in
@@ -1049,12 +1095,12 @@ func (t *GroupTree) Move(id, target, side string) error {
 			return fmt.Errorf("card %s cannot %s: %w", id, op, err)
 		}
 		// The card leaves the group tree before the insert, so the insert measures every card with the heads that it is drawn with.
-		into, at, toward := t.Parent(target), Target{target}, Side(side)
+		into, at, toward := t.Parent(target[0]), target, Side(side)
 		from := t.detach(id)
 		t.reframe()
 		if side == "centre" {
-			into, at, toward = target, Target{}, "right"
-			for _, member := range t.Members(target) {
+			into, at, toward = target[0], Target{}, "right"
+			for _, member := range t.Members(target[0]) {
 				if member != id {
 					at = append(at, member)
 				}
@@ -1201,60 +1247,6 @@ func (t *GroupTree) CanGroup(id string, side Side) bool {
 		_, _, err := t.CreateGroup(id, side, nil)
 		return err
 	})
-}
-
-// DropAt resolves a drop at x, y on the innermost box that holds the point (docs/spec/groups.md#moving-and-dropping): a content card
-// whose drawn rectangle holds it gives the zone of the grid; else the innermost group card whose frame holds it gives its own zones, the
-// centre on its header and in its middle and a side in the outer edge fraction of its frame; a point of no box is no zone. A drop on
-// the card without, or inside it, is no zone.
-func (t *GroupTree) DropAt(x, y float64, options ZoneOptions, without string) *ZoneHit {
-	edge := 0.25
-	if options.Edge != nil && *options.Edge >= 0 && *options.Edge <= 0.5 {
-		edge = *options.Edge
-	}
-	excluded := func(id string) bool {
-		return without != "" && (id == without || slices.Contains(t.Groups(id), without))
-	}
-	holds := func(r Rect) bool { return x >= r.X && x <= r.X+r.W && y >= r.Y && y <= r.Y+r.H }
-	var hit string
-	var frame Rect
-	for _, id := range t.Cards() {
-		r, _ := t.Rect(id) // silent: id is a card of the tree.
-		if !holds(r) {
-			continue
-		}
-		if !t.IsGroup(id) {
-			if excluded(id) {
-				return nil
-			}
-			return t.grid.ZoneAt(x, y, options)
-		}
-		if hit == "" || r.W*r.H < frame.W*frame.H {
-			hit, frame = id, r
-		}
-	}
-	if hit == "" || excluded(hit) {
-		return nil
-	}
-	head, _ := t.HeadRect(hit) // silent: hit is a group card.
-	if y <= head.Y+head.H {
-		return &ZoneHit{ID: hit, Zone: "centre"}
-	}
-	px, py := (x-frame.X)/frame.W, (y-frame.Y)/frame.H
-	if px > edge && px < 1-edge && py > edge && py < 1-edge {
-		return &ZoneHit{ID: hit, Zone: "centre"}
-	}
-	nearest := math.Min(math.Min(px, 1-px), math.Min(py, 1-py))
-	zone := "bottom"
-	switch nearest {
-	case px:
-		zone = "left"
-	case 1 - px:
-		zone = "right"
-	case py:
-		zone = "top"
-	}
-	return &ZoneHit{ID: hit, Zone: zone}
 }
 
 // Fullscreen is the rectangle of each card inside the group card id while it is shown across rect, laid out as if the group card were

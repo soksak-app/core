@@ -124,7 +124,7 @@ func TestRandomGroupOperationsKeepTheInvariants(t *testing.T) {
 				step = fmt.Sprintf("close %s: %v", id, err)
 			case 6, 7:
 				id, target := pick(), pick()
-				err := tree.Move(id, target, side)
+				err := tree.Move(id, layout.Target{target}, side)
 				step = fmt.Sprintf("move %s %s %s: %v", id, target, side, err)
 			case 8:
 				id := pick()

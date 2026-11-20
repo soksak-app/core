@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"strings"
 
 	"github.com/egoist/mygo/ui"
 
@@ -26,20 +27,28 @@ type tabDrag struct {
 	card, tab string
 	x, y      float32
 	moved     bool
-	hit       *layout.ZoneHit
+	hit       *layout.DropTarget
 	preview   *layout.Rect
 }
 
 type tabMoveParam struct {
-	Tab  string `json:"tab"`
-	Card string `json:"card"`
-	Zone string `json:"zone"`
+	Tab  string        `json:"tab"`
+	Card layout.Target `json:"card"`
+	Zone string        `json:"zone"`
 }
 
-// dragTarget is the drop target of the status core.drag.
+// dragTarget is the drop target of the status core.drag: a card, a box or the ids of the kids of a cut, and the zone of the drop there.
 type dragTarget struct {
-	Card string `json:"card"`
-	Zone string `json:"zone"`
+	Card layout.Target `json:"card"`
+	Zone string        `json:"zone"`
+}
+
+// zoneOf is the target and the zone of a drop target: the side of an add, and the centre of a tab strip or of a content card.
+func zoneOf(hit *layout.DropTarget) (layout.Target, string) {
+	if hit.Kind == "add" {
+		return hit.Target, hit.Side
+	}
+	return layout.Target{hit.Card}, "centre"
 }
 
 // dragStatus is the status core.drag.
@@ -60,7 +69,8 @@ func (s *Shell) registerTabDrag() {
 		}
 		status := dragStatus{Tab: drag.tab, Card: drag.card, Moved: drag.moved, Preview: drag.preview}
 		if drag.hit != nil {
-			status.Target = &dragTarget{Card: drag.hit.ID, Zone: drag.hit.Zone}
+			card, zone := zoneOf(drag.hit)
+			status.Target = &dragTarget{Card: card, Zone: zone}
 		}
 		return status
 	})
@@ -107,7 +117,8 @@ func (s *Shell) tabInput(card, tab string, bounds ui.Rect) func(ui.InputEvent) b
 				return false
 			}
 			if drag.hit != nil {
-				s.binder.run("core.tab.move", tabMoveParam{Tab: drag.tab, Card: drag.hit.ID, Zone: drag.hit.Zone})
+				card, zone := zoneOf(drag.hit)
+				s.binder.run("core.tab.move", tabMoveParam{Tab: drag.tab, Card: card, Zone: zone})
 			} else {
 				s.settle()
 			}
@@ -126,35 +137,35 @@ func (s *Shell) dragTabTo(drag *tabDrag, x, y float32) {
 	drag.moved = true
 	s.fullscreen = ""
 	origin := s.planeOrigin()
-	edge := float64(s.palette.CardBorder())
-	header, footer := float64(s.metrics.headH)+edge, float64(s.metrics.footH)+edge
-	options := layout.ZoneOptions{HeaderPx: &header, FooterPx: &footer}
+	options := s.targetOptions()
 	if drag.tab == "" {
 		s.dragGroupTo(drag, float64(x)-origin.X, float64(y)-origin.Y, options)
 		return
 	}
-	data, err := s.cardData(drag.card)
-	if err != nil {
-		s.fail(err)
-		return
-	}
-	if len(data.TabList()) == 1 {
-		options.CentreOnly = &drag.card
-	}
-	// The drop resolves on the innermost box under the point, a content card before the group card that holds it.
-	drag.hit, drag.preview = s.planes.DropAt(float64(x)-origin.X, float64(y)-origin.Y, options, ""), nil
-	if drag.hit != nil && !isPlace(drag.hit.ID) {
-		drag.preview = s.dropRect(drag.card, drag.hit)
+	// The drop resolves by the bands of the sides on the line of the point, from the outermost node in
+	// (docs/spec/groups.md#target-search).
+	drag.hit, drag.preview = s.planes.TargetAt(float64(x)-origin.X, float64(y)-origin.Y, options), nil
+	if drag.hit != nil {
+		if card, _ := zoneOf(drag.hit); !slices.ContainsFunc(card, isPlace) {
+			drag.preview = s.dropRect(drag.card, drag.hit)
+		}
 	}
 	if drag.preview == nil {
 		drag.hit = nil
 	}
 }
 
+// targetOptions are the measures of the target search: the tab strip of a content card with its border, the edge share of a body and
+// the width and the margin of the bands (docs/spec/groups.md#target-search).
+func (s *Shell) targetOptions() layout.TargetOptions {
+	header := float64(s.metrics.headH) + float64(s.palette.CardBorder())
+	return layout.TargetOptions{HeaderPx: header, Edge: layout.DropEdge, Band: layout.DropBand, BandMargin: layout.DropBandMargin}
+}
+
 // dropRect is the rectangle of the card that a drop produces, in the coordinates of the plane, and nil when the layout refuses the
 // drop. The drop runs on the tree and the tree is put back, since a cut shares the gap between its two pieces and a move closes before
 // it cuts, so half of the target is not where the card lands.
-func (s *Shell) dropRect(from string, hit *layout.ZoneHit) *layout.Rect {
+func (s *Shell) dropRect(from string, hit *layout.DropTarget) *layout.Rect {
 	var rect *layout.Rect
 	err := s.planes.Probe(func() error {
 		id, err := s.dropCard(from, hit, json.RawMessage(`{}`))
@@ -176,45 +187,57 @@ func (s *Shell) dropRect(from string, hit *layout.ZoneHit) *layout.Rect {
 // a tab that is the only tab of its card moves its card, which cannot move beside itself, the centre of a group card takes a new card with data at the right edge of
 // its rectangle, the centre of a content card changes no card, and a side takes a new card with data beside the target
 // (docs/spec/groups.md#moving-and-dropping).
-func (s *Shell) dropCard(from string, hit *layout.ZoneHit, data json.RawMessage) (string, error) {
+func (s *Shell) dropCard(from string, hit *layout.DropTarget, data json.RawMessage) (string, error) {
 	source, err := s.cardData(from)
 	if err != nil {
 		return "", err
 	}
 	single := len(source.TabList()) == 1
+	target, zone := zoneOf(hit)
 	switch {
-	case hit.Zone == "centre" && !s.isGroup(hit.ID):
-		return hit.ID, nil
-	case single && from == hit.ID:
+	case zone == "centre" && !s.isGroup(target[0]):
+		return target[0], nil
+	case single && slices.Contains(target, from) && len(target) == 1:
 		return "", fmt.Errorf("card %s cannot move beside itself", from)
 	case single:
-		if !s.planes.Moved(from, hit.ID, hit.Zone) {
-			if err := s.planes.Move(from, hit.ID, hit.Zone); err != nil {
+		if !s.planes.Moved(from, target, zone) {
+			if err := s.planes.Move(from, target, zone); err != nil {
 				return "", err
 			}
 		}
 		return from, nil
-	case hit.Zone == "centre":
-		return s.planes.AddCard(hit.ID, data)
+	case zone == "centre":
+		return s.planes.AddCard(target[0], data)
 	}
-	return s.planes.Split(hit.ID, hit.Zone, data)
+	return s.planes.SplitBeside(target, zone, data)
 }
 
 // moveTab moves a tab to the centre or an edge of a card, as a drop does.
-func (s *Shell) moveTab(tab, card, zone string) error {
+func (s *Shell) moveTab(tab string, card layout.Target, zone string) error {
 	from := s.cardOfTab(tab)
 	if from == "" {
 		return fmt.Errorf("no tab %s", tab)
 	}
-	if err := s.paneCard(card); err != nil {
-		return err
+	if len(card) == 0 {
+		return fmt.Errorf("tab %s moves to no card", tab)
+	}
+	for _, id := range card {
+		if err := s.paneCard(id); err != nil {
+			return err
+		}
 	}
 	if !slices.Contains(tabZones, zone) {
 		return fmt.Errorf("unknown zone %s", zone)
 	}
-	hit := &layout.ZoneHit{ID: card, Zone: zone}
-	if (zone != "centre" || s.isGroup(card)) && s.dropRect(from, hit) == nil {
-		return fmt.Errorf("tab %s cannot move to the %s of %s", tab, zone, card)
+	if zone == "centre" && len(card) > 1 {
+		return fmt.Errorf("tab %s moves to the centre of one card, not of %s", tab, strings.Join(card, ", "))
+	}
+	hit := &layout.DropTarget{Kind: "add", Target: card, Side: zone}
+	if zone == "centre" {
+		hit = &layout.DropTarget{Kind: "centre", Card: card[0]}
+	}
+	if (zone != "centre" || s.isGroup(card[0])) && s.dropRect(from, hit) == nil {
+		return fmt.Errorf("tab %s cannot move to the %s of %s", tab, zone, strings.Join(card, ", "))
 	}
 	s.fullscreen = ""
 	return s.dropTab(from, tab, hit)
@@ -222,7 +245,7 @@ func (s *Shell) moveTab(tab, card, zone string) error {
 
 // dropTab runs a drop. A drop on the centre of a content card moves the tab into the card, a drop of the only tab of a card moves the
 // card, so no empty card remains, and a drop on a side or on the centre of a group card puts the tab into a new card (dropCard).
-func (s *Shell) dropTab(from, tab string, hit *layout.ZoneHit) error {
+func (s *Shell) dropTab(from, tab string, hit *layout.DropTarget) error {
 	source, err := s.cardData(from)
 	if err != nil {
 		return err
@@ -233,8 +256,8 @@ func (s *Shell) dropTab(from, tab string, hit *layout.ZoneHit) error {
 		return nil
 	}
 	moving := source.TabList()[index]
-	if hit.Zone == "centre" && !s.isGroup(hit.ID) {
-		return s.dropOnCentre(from, source, moving, hit.ID)
+	if target, zone := zoneOf(hit); zone == "centre" && !s.isGroup(target[0]) {
+		return s.dropOnCentre(from, source, moving, target[0])
 	}
 	encoded, err := json.Marshal(tabData([]layout.Tab{moving}, moving.ID))
 	if err != nil {
@@ -307,14 +330,18 @@ func (s *Shell) drawDropPreview(c *ui.Context, inset float32) {
 		Background(faded(s.palette.Focus, s.metrics.dropMix)).Border(border, s.palette.Focus)
 }
 
-// dragGroupTo takes the drop of the dragged group card at x and y of the plane: the resolution leaves out the group card and the cards
-// inside it, and the drop is the move of core.card.move, which the tree refuses or places (docs/spec/groups.md#moving-and-dropping).
-func (s *Shell) dragGroupTo(drag *tabDrag, x, y float64, options layout.ZoneOptions) {
-	drag.hit, drag.preview = s.planes.DropAt(x, y, options, drag.card), nil
-	if drag.hit != nil && !isPlace(drag.hit.ID) && s.planes.CheckMove(drag.card, drag.hit.ID, drag.hit.Zone) == nil {
+// dragGroupTo takes the drop of the dragged group card at x and y of the plane by the target search, and the drop is the move of
+// core.card.move, which the tree refuses or places (docs/spec/groups.md#moving-and-dropping). A group card has no tabs, so a tab strip
+// and the centre of a content card are no target of it.
+func (s *Shell) dragGroupTo(drag *tabDrag, x, y float64, options layout.TargetOptions) {
+	drag.hit, drag.preview = s.planes.TargetAt(x, y, options), nil
+	if drag.hit != nil && drag.hit.Kind != "add" {
+		drag.hit = nil
+	}
+	if drag.hit != nil && !slices.ContainsFunc(drag.hit.Target, isPlace) && s.planes.CheckMove(drag.card, drag.hit.Target, drag.hit.Side) == nil {
 		hit := drag.hit
 		err := s.planes.Probe(func() error {
-			if err := s.planes.Move(drag.card, hit.ID, hit.Zone); err != nil {
+			if err := s.planes.Move(drag.card, hit.Target, hit.Side); err != nil {
 				return err
 			}
 			if placed, ok := s.planes.Rect(drag.card); ok {
@@ -365,7 +392,7 @@ func (s *Shell) groupHeadInput(id string, bounds ui.Rect) func(ui.InputEvent) bo
 				return false
 			}
 			if drag.hit != nil {
-				s.binder.run("core.card.move", cardMoveParam{Card: id, Target: drag.hit.ID, Side: drag.hit.Zone})
+				s.binder.run("core.card.move", cardMoveParam{Card: id, Target: drag.hit.Target, Side: drag.hit.Side})
 			} else {
 				s.settle()
 			}
