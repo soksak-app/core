@@ -8,6 +8,8 @@ use std::time::Instant;
 
 use serde_json::value::RawValue;
 
+use crate::message_body::{MessageBody, decode_members};
+
 use super::{
     Event, Failure, LineWrite, Message, Outgoing, Owner, ReplyWaiters, Revival, Sidecars,
     await_replaced_service, close_answer, close_persistent_owner, fail, fail_requests,
@@ -120,7 +122,7 @@ fn a_poisoned_state_lock_still_answers_the_sidecar_queries() {
             &sidecars.core.state,
             "missing",
             0,
-            br#"{"surface":"surf","closed":true}"#
+            &decode_members(br#"{"surface":"surf","closed":true}"#).unwrap()
         ),
         Err("unexpected close answer for surf".to_string()),
         "the close answer was not judged while the state lock was poisoned"
@@ -138,6 +140,7 @@ fn a_poisoned_state_lock_still_answers_the_sidecar_queries() {
             body: RawValue::from_string("{}".to_string()).unwrap(),
             cids: vec!["cid-1".to_string()],
         },
+        &MessageBody::read("{}"),
     );
     // A reader of the standard error whose output already ended.
     fail(
@@ -300,7 +303,7 @@ fn fast_close_answer_preserves_both_closing_transitions() {
                     &sidecars.core.state,
                     "fixture-standard",
                     0,
-                    br#"{"surface":"tab-standard","closed":true}"#
+                    &decode_members(br#"{"surface":"tab-standard","closed":true}"#).unwrap()
                 ),
                 Ok(true)
             );

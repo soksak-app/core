@@ -14441,7 +14441,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-127",
-    implementation: [{ file: "packages/host/rust/src/image_detach.rs", symbol: "pub(super) fn detach_acknowledgement_body(" }],
+    implementation: [{ file: "packages/host/rust/src/message_body.rs", symbol: "pub fn read(" }],
     tests: [{ file: "packages/host/rust/src/image_detach_test.rs", id: "a_deep_unrelated_member_does_not_hide_a_detach_acknowledgement" }],
     expected: "Typed acknowledgement parsing ignores deep unrelated members without materializing them.",
     levels: ["unit"],

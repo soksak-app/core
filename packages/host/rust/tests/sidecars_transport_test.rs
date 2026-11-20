@@ -4246,3 +4246,110 @@ fn a_page_reload_returns_before_the_image_detach_acknowledgement() {
     sidecars.stop();
     service.join().unwrap();
 }
+
+/// The variable that runs `a_persistent_line_is_decoded_once_before_its_dispatch` in a child process: the count of the decodes belongs
+/// to the process, and the other tests of this binary run in parallel threads of it.
+const DECODES_CHILD: &str = "SOKSAK_DECODES_CHILD";
+
+// The reader of a persistent connection decodes a line once, the body of a message once and the member image of the body once, and
+// dispatches the message by what it found: a message without an image costs two decodes and a message with an image three. The
+// service echoes each line that the host sends, so each body comes back as a message of the surface.
+// contract: sidecars-transport.persistent.decodes-a-line-once
+#[test]
+fn a_persistent_line_is_decoded_once_before_its_dispatch() {
+    if std::env::var_os(DECODES_CHILD).is_none() {
+        let output = Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "a_persistent_line_is_decoded_once_before_its_dispatch",
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env(DECODES_CHILD, "1")
+            .stdin(std::process::Stdio::null())
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "the child ended with {:?}: {}{}",
+            output.status,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        return;
+    }
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
+    let service_directory = config_directory.path().join("services/echo");
+    std::fs::create_dir_all(&service_directory).unwrap();
+    let socket_path = service_directory.join("decodes.sock");
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    let endpoint = serde_json::json!({
+        "protocol": 1,
+        "pid": std::process::id(),
+        "socket": socket_path,
+        "token": "decodes-token"
+    });
+    std::fs::write(
+        service_directory.join("endpoint.json"),
+        serde_json::to_vec(&endpoint).unwrap(),
+    )
+    .unwrap();
+    // The service answers hello and echoes each surface request.
+    std::thread::spawn(move || {
+        let Ok((mut stream, _)) = listener.accept() else {
+            return;
+        };
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let mut line = String::new();
+        while reader.read_line(&mut line).unwrap_or(0) > 0 {
+            let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+            let reply = if request["operation"] == "hello" {
+                serde_json::json!({"operation": "hello", "protocol": 1, "ok": true}).to_string()
+            } else {
+                line.trim_end().to_string()
+            };
+            if writeln!(stream, "{reply}").is_err() {
+                return;
+            }
+            line.clear();
+        }
+    });
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
+    let declarations = declare(&fixture, executable_directory.path());
+    let sidecars = Sidecars::new(&declarations, config_directory.path().to_path_buf()).unwrap();
+    let (owner, events) = owner("decodes", "/projects/decodes");
+    // The first send connects; the decodes of its echo are not counted.
+    sidecars
+        .send_as(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    events.recv().unwrap();
+    let mut failures = Vec::new();
+    for (body, decodes) in [
+        (r#"{"operation":"output","data":"x"}"#, 2),
+        (r#"{"error":"failed"}"#, 2),
+        (
+            r#"{"image":{"want":{"name":"terminal","generation":1}}}"#,
+            3,
+        ),
+    ] {
+        let before = soksak_host::message_body::message_decodes();
+        sidecars
+            .send_as(&owner, ECHO, "surface", &raw(body))
+            .unwrap();
+        events.recv().unwrap();
+        let got = soksak_host::message_body::message_decodes() - before;
+        if got != decodes {
+            failures.push(format!(
+                "the reader decoded the message of the body {body} {got} times, want {decodes}"
+            ));
+        }
+    }
+    sidecars.stop();
+    assert!(
+        failures.is_empty(),
+        "the line, the body and the member image are decoded once each: {failures:?}"
+    );
+}

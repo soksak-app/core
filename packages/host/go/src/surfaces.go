@@ -903,7 +903,7 @@ func FrameAnswerEvent(surface, image string, response map[string]any) map[string
 }
 
 // DecideImageEnvelope decides and handles the image envelope that a sidecar sent.
-func (s *Surfaces) DecideImageEnvelope(sidecarName, surface string, body json.RawMessage) bool {
+func (s *Surfaces) DecideImageEnvelope(sidecarName, surface string, body MessageBody) bool {
 	sidecars := s.sidecars
 	return HandleEnvelope(body, sidecarName, surface, s.images,
 		func(work func() error) error {

@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F996-5.3 (sidecar 줄의 decode 한 번): Go와 Rust host는 sidecar의 메시지 줄을 member들로 한 번, 메시지 body를 한 번, 그 member `image`를 한 번 decode하고, reader, reply 기록, detach 응답, image 결정은 이 member들을 읽는다. image가 없는 메시지는 decode 두 번, 있는 메시지는 세 번이 들며, `MessageDecodes`와 `message_decodes`가 이를 센다(`docs/spec/sidecars.md#messages`).
 - F996-4 (post된 closure의 sender): mygo host는 fork version `v0.7.4-244-g4abb83d-soksak.17`을 받고, main thread에 post된 각 closure를 post한 함수의 이름을 가진 `closure` 종류의 step으로 `host.frame.step`에 쓴다(`docs/spec/hosts.md`).
 - F1000-3: agent skill과 MCP instructions는 submit command가 사람의 입력을 흉내 내고 agent가 message로 대화함을 밝힌다.
 - F996-6 (F996-3의 후속): Rust fetcher는 panic한 thread가 poison한 lock에서 프로세스를 끝내지 않고, 공유 상태와 진행 중인 index 읽기의 guard를 되찾는다.

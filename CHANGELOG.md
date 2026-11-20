@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F996-5.3 (one decode of a sidecar line): the Go and the Rust host decode a message line of a sidecar once into its members, the body of the message once and its member `image` once, and the readers, the reply record, the detach acknowledgement and the image decision read these members; a message without an image costs two decodes and a message with one three, which `MessageDecodes` and `message_decodes` count (`docs/spec/sidecars.md#messages`).
 - F996-4 (sender of a posted closure): the mygo host takes the fork version `v0.7.4-244-g4abb83d-soksak.17` and writes each closure posted to the main thread as a step of the kind `closure` in `host.frame.step`, named after the function that posted it (`docs/spec/hosts.md`).
 - F1000-3: The agent skill and the MCP instructions state that a submit command imitates the input of a person and that agents talk through messages.
 - F996-6 (follow-up of F996-3): the Rust fetcher recovers the guard of its shared state and of a running index read from a lock that a panicking thread poisoned instead of ending the process.

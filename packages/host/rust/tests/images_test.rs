@@ -11,6 +11,7 @@ use soksak_host::images::{
     Configure, Decision, Images, Key, after_present, decide, handle_envelope,
     handle_envelope_with_recovery, leased_reply, released_reply,
 };
+use soksak_host::message_body::MessageBody;
 use std::sync::{Arc, Mutex};
 
 #[path = "support/records.rs"]
@@ -87,7 +88,7 @@ fn unattached_image_is_refused() {
     .to_string();
 
     // Since the image is not registered, a notAttached error must be returned.
-    match decide(&body, "sidecar-a", "tab-1", &images) {
+    match decide(&MessageBody::read(&body), "sidecar-a", "tab-1", &images) {
         Decision::Reply { name, json, .. } => {
             assert_eq!(name, "view");
             assert!(
@@ -118,7 +119,7 @@ fn image_from_another_sidecar_is_refused() {
         .unwrap()
         .unwrap();
     let body = configured_envelope(&configured, 1);
-    match decide(&body, "sidecar-b", "tab-1", &images) {
+    match decide(&MessageBody::read(&body), "sidecar-b", "tab-1", &images) {
         Decision::Reply { name, json, .. } => {
             assert_eq!(name, "view");
             assert_eq!(json["image"]["error"], "notAttached");
@@ -128,7 +129,7 @@ fn image_from_another_sidecar_is_refused() {
     // Contrast: the same envelope that the connected sidecar sent is displayed.
     assert!(
         matches!(
-            decide(&body, "sidecar-a", "tab-1", &images),
+            decide(&MessageBody::read(&body), "sidecar-a", "tab-1", &images),
             Decision::Present { .. }
         ),
         "the attaching sidecar's envelope for the configured raster was not presented"
@@ -172,7 +173,7 @@ fn attached_image_is_presented() {
     .to_string();
 
     // When the same sidecar sends the same image, Present must be returned.
-    match decide(&body, "sidecar-a", "tab-1", &images) {
+    match decide(&MessageBody::read(&body), "sidecar-a", "tab-1", &images) {
         Decision::Present {
             id,
             nonce,
@@ -243,7 +244,7 @@ fn only_the_current_generation_raster_and_sequence_can_be_presented() {
     assert_eq!(first_raster.generation, first_generation);
     assert!(matches!(
         decide(
-            &configured_envelope(&first_raster, 1),
+            &MessageBody::read(&configured_envelope(&first_raster, 1)),
             "sidecar-a",
             &key.0,
             &images
@@ -251,7 +252,7 @@ fn only_the_current_generation_raster_and_sequence_can_be_presented() {
         Decision::Present { .. }
     ));
     match decide(
-        &configured_envelope(&first_raster, 1),
+        &MessageBody::read(&configured_envelope(&first_raster, 1)),
         "sidecar-a",
         &key.0,
         &images,
@@ -266,7 +267,7 @@ fn only_the_current_generation_raster_and_sequence_can_be_presented() {
         .unwrap();
     assert!(second_raster.raster > first_raster.raster);
     match decide(
-        &configured_envelope(&first_raster, 2),
+        &MessageBody::read(&configured_envelope(&first_raster, 2)),
         "sidecar-a",
         &key.0,
         &images,
@@ -276,7 +277,7 @@ fn only_the_current_generation_raster_and_sequence_can_be_presented() {
     }
     assert!(matches!(
         decide(
-            &configured_envelope(&second_raster, 1),
+            &MessageBody::read(&configured_envelope(&second_raster, 1)),
             "sidecar-a",
             &key.0,
             &images
@@ -295,7 +296,7 @@ fn only_the_current_generation_raster_and_sequence_can_be_presented() {
         .unwrap()
         .unwrap();
     match decide(
-        &configured_envelope(&first_raster, 3),
+        &MessageBody::read(&configured_envelope(&first_raster, 3)),
         "sidecar-a",
         &key.0,
         &images,
@@ -320,7 +321,7 @@ fn beginning_a_new_generation_invalidates_a_queued_old_frame_before_image_close(
     assert_eq!(first_raster.generation, first_generation);
     assert!(matches!(
         decide(
-            &configured_envelope(&first_raster, 1),
+            &MessageBody::read(&configured_envelope(&first_raster, 1)),
             "sidecar-a",
             &key.0,
             &images
@@ -331,7 +332,7 @@ fn beginning_a_new_generation_invalidates_a_queued_old_frame_before_image_close(
     let next_generation = images.begin_generation(&key.0);
     assert!(next_generation > first_generation);
     match decide(
-        &configured_envelope(&first_raster, 2),
+        &MessageBody::read(&configured_envelope(&first_raster, 2)),
         "sidecar-a",
         &key.0,
         &images,
@@ -357,7 +358,7 @@ fn presentation_wait_tracks_the_visible_current_raster() {
     let response = Arc::new(Mutex::new(None));
     let received = Arc::clone(&response);
     assert!(handle_envelope(
-        &configured_envelope(&first, 1),
+        &MessageBody::read(&configured_envelope(&first, 1)),
         "sidecar-a",
         &key.0,
         &images,
@@ -372,7 +373,7 @@ fn presentation_wait_tracks_the_visible_current_raster() {
 
     assert!(matches!(
         decide(
-            &configured_envelope(&first, 2),
+            &MessageBody::read(&configured_envelope(&first, 2)),
             "sidecar-a",
             &key.0,
             &images,
@@ -533,7 +534,7 @@ fn frame_that_becomes_stale_before_main_thread_presentation_is_rejected() {
     let changed_key = key.clone();
 
     assert!(handle_envelope(
-        &configured_envelope(&first, 1),
+        &MessageBody::read(&configured_envelope(&first, 1)),
         "sidecar-a",
         &key.0,
         &images,
@@ -570,7 +571,7 @@ fn frame_detached_before_main_thread_presentation_is_reported_as_stale() {
     let received = Arc::clone(&response);
 
     assert!(handle_envelope(
-        &configured_envelope(&configured, 1),
+        &MessageBody::read(&configured_envelope(&configured, 1)),
         "sidecar-a",
         "tab-1",
         &images,
@@ -626,7 +627,12 @@ fn unsupported_image_is_refused() {
     })
     .to_string();
 
-    match decide(&body_wrong_format, "sidecar-a", "tab-1", &images) {
+    match decide(
+        &MessageBody::read(&body_wrong_format),
+        "sidecar-a",
+        "tab-1",
+        &images,
+    ) {
         Decision::Reply { name, json, .. } => {
             assert_eq!(name, "view");
             assert!(
@@ -659,7 +665,12 @@ fn unsupported_image_is_refused() {
     })
     .to_string();
 
-    match decide(&body_wrong_nonce, "sidecar-a", "tab-1", &images) {
+    match decide(
+        &MessageBody::read(&body_wrong_nonce),
+        "sidecar-a",
+        "tab-1",
+        &images,
+    ) {
         Decision::Reply { name, json, .. } => {
             assert_eq!(name, "view");
             assert!(
@@ -692,7 +703,12 @@ fn unsupported_image_is_refused() {
     })
     .to_string();
 
-    match decide(&body_wrong_kind, "sidecar-a", "tab-1", &images) {
+    match decide(
+        &MessageBody::read(&body_wrong_kind),
+        "sidecar-a",
+        "tab-1",
+        &images,
+    ) {
         Decision::Reply { name, json, .. } => {
             assert_eq!(name, "view");
             assert!(
@@ -717,7 +733,12 @@ fn non_image_body_is_not_handled() {
     })
     .to_string();
 
-    match decide(&body_no_image, "sidecar-a", "tab-1", &images) {
+    match decide(
+        &MessageBody::read(&body_no_image),
+        "sidecar-a",
+        "tab-1",
+        &images,
+    ) {
         Decision::NotImage => {
             // Valid.
         }
@@ -726,7 +747,12 @@ fn non_image_body_is_not_handled() {
 
     // Invalid JSON.
     let body_invalid = "not json";
-    match decide(body_invalid, "sidecar-a", "tab-1", &images) {
+    match decide(
+        &MessageBody::read(body_invalid),
+        "sidecar-a",
+        "tab-1",
+        &images,
+    ) {
         Decision::NotImage => {
             // Valid.
         }
@@ -761,7 +787,7 @@ fn reply_escapes_names() {
     .to_string();
 
     // The image is not registered, so Reply must be returned.
-    match decide(&body, "sidecar-a", "tab-1", &images) {
+    match decide(&MessageBody::read(&body), "sidecar-a", "tab-1", &images) {
         Decision::Reply { name, json, .. } => {
             assert_eq!(name, "a\"b");
             // Convert the response to a string and check that the JSON is valid.
@@ -852,7 +878,7 @@ fn presentation_failure_is_reported() {
 
     // Call handle_envelope, and onMain returns false (presentation failure).
     let handled = handle_envelope(
-        &body,
+        &MessageBody::read(&body),
         "sidecar-a",
         "tab-1",
         &images,
@@ -916,7 +942,7 @@ fn missing_native_surface_requests_a_fresh_raster_configuration() {
     let recovered_value = Arc::clone(&recovered);
 
     assert!(handle_envelope_with_recovery(
-        &body,
+        &MessageBody::read(&body),
         "sidecar-a",
         "tab-1",
         &images,
@@ -1033,7 +1059,7 @@ fn shown_surface_presents_from_its_new_raster() {
     assert!(images.set(&key, 100));
     let present = |raster: &Configure, sequence: i32| {
         assert!(handle_envelope(
-            &configured_envelope(raster, sequence),
+            &MessageBody::read(&configured_envelope(raster, sequence)),
             "sidecar-a",
             &key.0,
             &images,
@@ -1205,7 +1231,7 @@ fn image_frame_refusals_are_recorded() {
         let on_main = |work: Box<dyn Fn() -> Result<(), String> + Send>| work();
         // A sidecar that does not own the region.
         handle_envelope(
-            &configured_envelope(&configured, 1),
+            &MessageBody::read(&configured_envelope(&configured, 1)),
             "sidecar-b",
             "tab-1",
             &images,
@@ -1217,7 +1243,7 @@ fn image_frame_refusals_are_recorded() {
             serde_json::from_str(&configured_envelope(&configured, 2)).unwrap();
         unsupported["image"]["format"] = json!("rgba8");
         handle_envelope(
-            &unsupported.to_string(),
+            &MessageBody::read(&unsupported.to_string()),
             "sidecar-a",
             "tab-1",
             &images,
@@ -1226,7 +1252,7 @@ fn image_frame_refusals_are_recorded() {
         );
         // An image field that is not an envelope is not handled as an image, and the record shows it.
         assert!(!handle_envelope(
-            r#"{"image":{"name":5}}"#,
+            &MessageBody::read(r#"{"image":{"name":5}}"#),
             "sidecar-a",
             "tab-1",
             &images,
@@ -1285,7 +1311,7 @@ fn presented_frame_identity_is_reported() {
     let response = Arc::new(Mutex::new(None));
     let received = Arc::clone(&response);
     assert!(handle_envelope(
-        &configured_envelope(&raster, 2),
+        &MessageBody::read(&configured_envelope(&raster, 2)),
         "sidecar-a",
         &key.0,
         &images,
@@ -1308,7 +1334,7 @@ fn presented_frame_identity_is_reported() {
     let during = images.clone();
     let during_key = key.clone();
     assert!(handle_envelope(
-        &configured_envelope(&raster, 3),
+        &MessageBody::read(&configured_envelope(&raster, 3)),
         "sidecar-a",
         &key.0,
         &images,
@@ -1380,7 +1406,7 @@ fn a_frame_of_a_sidecar_that_no_plugin_declares_is_invalidated() {
     let answers = Arc::new(Mutex::new(Vec::new()));
     let seen = Arc::clone(&answers);
     assert!(handle_envelope_with_recovery(
-        &configured_envelope(&configured, 1),
+        &MessageBody::read(&configured_envelope(&configured, 1)),
         "sidecar-a",
         "tab-1",
         &images,
@@ -1435,7 +1461,7 @@ fn image_frame_nonce_cause_is_recorded() {
                 serde_json::from_str(&configured_envelope(&configured, sequence)).unwrap();
             envelope["image"]["token"]["nonce"] = json!(nonce);
             handle_envelope(
-                &envelope.to_string(),
+                &MessageBody::read(&envelope.to_string()),
                 "sidecar-a",
                 "tab-1",
                 &images,
@@ -1692,7 +1718,7 @@ fn a_transfer_accepted_before_the_region_stopped_drawing_is_answered() {
         .unwrap()
         .expect("configure image");
     let accepted = decide(
-        &configured_envelope(&configuration, 1),
+        &MessageBody::read(&configured_envelope(&configuration, 1)),
         "sidecar-a",
         &key.0,
         &images,
@@ -1802,7 +1828,7 @@ fn a_frame_of_an_older_native_raster_requests_the_current_raster_configuration()
     let answer_value = Arc::clone(&answer);
 
     assert!(handle_envelope_with_recovery(
-        &body,
+        &MessageBody::read(&body),
         "sidecar-a",
         "tab-1",
         &images,

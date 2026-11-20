@@ -63,6 +63,7 @@ pub mod log_query;
 pub mod log_retention;
 pub mod memory_pressure;
 pub mod menu;
+pub mod message_body;
 pub mod modals;
 pub mod notifications;
 #[cfg(feature = "diagnostics")]

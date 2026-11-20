@@ -46,7 +46,7 @@ func TestPresentedFrameChangeNotifiesAfterItsIdentityIsCurrent(t *testing.T) {
 		t.Fatal(err)
 	}
 	var notified *PresentedFrame
-	HandleEnvelope(body, "sidecar-a", key.Surface, images,
+	HandleEnvelope(ReadMessageBody(body), "sidecar-a", key.Surface, images,
 		func(func() error) error { return nil },
 		func(string, map[string]interface{}) error { return nil },
 		func(string) error { return nil },
@@ -92,7 +92,7 @@ func TestFailedOrRetiredFrameDoesNotNotifyItsWindowWatcher(t *testing.T) {
 	}
 	send := func(string, map[string]interface{}) error { return nil }
 	recoverFrame := func(string) error { return nil }
-	if !HandleEnvelope(body(1), "sidecar-a", key.Surface, images,
+	if !HandleEnvelope(ReadMessageBody(body(1)), "sidecar-a", key.Surface, images,
 		func(func() error) error { return errors.New("presentFailed") }, send, recoverFrame,
 		func() bool { return true }, func() { t.Fatal("failed presentation notified the window") }) {
 		t.Fatal("failed frame was not handled")
@@ -100,7 +100,7 @@ func TestFailedOrRetiredFrameDoesNotNotifyItsWindowWatcher(t *testing.T) {
 	if _, ok := images.PresentedFrame(key); ok {
 		t.Fatal("failed frame became presented")
 	}
-	if !HandleEnvelope(body(2), "sidecar-a", key.Surface, images,
+	if !HandleEnvelope(ReadMessageBody(body(2)), "sidecar-a", key.Surface, images,
 		func(func() error) error {
 			images.BeginGeneration(key.Surface)
 			return nil
@@ -142,7 +142,7 @@ func TestARefusedFrameIsAnsweredToItsSupplier(t *testing.T) {
 		t.Fatal(err)
 	}
 	answers := []map[string]interface{}{}
-	handled := HandleEnvelope(body, "sidecar-a", key.Surface, images,
+	handled := HandleEnvelope(ReadMessageBody(body), "sidecar-a", key.Surface, images,
 		func(func() error) error { t.Fatal("a refused frame was presented"); return nil },
 		func(name string, answer map[string]interface{}) error {
 			answers = append(answers, answer)
@@ -1030,7 +1030,7 @@ func handleFrameRequest(t *testing.T, images *Images, want any, sender string) (
 	}
 	var answers []string
 	asked := 0
-	handled := HandleEnvelope(body, sender, "tab-1", images,
+	handled := HandleEnvelope(ReadMessageBody(body), sender, "tab-1", images,
 		func(func() error) error { asked++; return nil },
 		func(_ string, response map[string]interface{}) error {
 			answer, err := json.Marshal(response)
@@ -1281,7 +1281,7 @@ func screenFixture(t *testing.T) (*Images, ImageKey, *ImageConfigure, ImageScree
 func handleScreenMessage(images *Images, body []byte, sender, surface string) (bool, []string, error) {
 	var answers []string
 	var sendErr error
-	handled := HandleEnvelope(body, sender, surface, images,
+	handled := HandleEnvelope(ReadMessageBody(body), sender, surface, images,
 		func(work func() error) error { return work() },
 		func(_ string, response map[string]interface{}) error {
 			answer, err := json.Marshal(response)
@@ -1404,7 +1404,7 @@ func TestMalformedScreenMessageNamesItsMember(t *testing.T) {
 			member := valid()
 			tc.change(member)
 			body := screenMessageBody(t, member)
-			decision := Decide(body, "sidecar-a", key.Surface, images)
+			decision := Decide(ReadMessageBody(body), "sidecar-a", key.Surface, images)
 			malformed, ok := decision.(error)
 			if !ok || !strings.Contains(malformed.Error(), tc.want) {
 				t.Fatalf("decision of the malformed screen message = %T %v, want an error that names %q", decision, decision, tc.want)
@@ -1437,7 +1437,7 @@ func TestMalformedScreenMessageNamesItsMember(t *testing.T) {
 func TestANullScreenIsMalformedAtTheMemberScreen(t *testing.T) {
 	images, key, _, _ := screenFixture(t)
 	body := []byte(`{"image":{"screen":null}}`)
-	malformed, ok := Decide(body, "sidecar-a", key.Surface, images).(*MalformedScreen)
+	malformed, ok := Decide(ReadMessageBody(body), "sidecar-a", key.Surface, images).(*MalformedScreen)
 	if !ok || malformed.Member != "screen" || malformed.Text != "image screen message has no screen object" {
 		t.Fatalf("decision of a null screen = %+v, want the member screen with the text image screen message has no screen object", malformed)
 	}
@@ -1457,7 +1457,7 @@ func TestScreenMessageWithoutNameIsNotAnswered(t *testing.T) {
 		"rows": []any{map[string]any{"row": 0, "cells": "row-0"}},
 	}
 	body := screenMessageBody(t, member)
-	decision := Decide(body, "sidecar-a", key.Surface, images)
+	decision := Decide(ReadMessageBody(body), "sidecar-a", key.Surface, images)
 	malformed, ok := decision.(error)
 	if !ok || !strings.Contains(malformed.Error(), "image screen message has no image name") {
 		t.Fatalf("decision of the screen message without a name = %T %v, want an error that names the image name", decision, decision)

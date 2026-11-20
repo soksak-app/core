@@ -88,7 +88,7 @@ func TestUnattachedImageIsRefused(t *testing.T) {
 	bodyBytes, _ := json.Marshal(body)
 
 	// Since the image is not registered, it must return a notAttached error
-	decision := host.Decide(bodyBytes, "sidecar-a", "tab-1", images)
+	decision := host.Decide(host.ReadMessageBody(bodyBytes), "sidecar-a", "tab-1", images)
 	reply, ok := decision.(*host.Reply)
 	if !ok {
 		t.Fatalf("expected Reply(notAttached), got %T", decision)
@@ -137,7 +137,7 @@ func TestImageFromAnotherSidecarIsRefused(t *testing.T) {
 	bodyBytes, _ := json.Marshal(body)
 
 	// When another sidecar sends the same image, it must return a notAttached error
-	decision := host.Decide(bodyBytes, "sidecar-b", "tab-1", images)
+	decision := host.Decide(host.ReadMessageBody(bodyBytes), "sidecar-b", "tab-1", images)
 	reply, ok := decision.(*host.Reply)
 	if !ok {
 		t.Fatalf("expected Reply(notAttached) for different sidecar, got %T", decision)
@@ -183,7 +183,7 @@ func TestAttachedImageIsPresented(t *testing.T) {
 	bodyBytes, _ := json.Marshal(body)
 
 	// When the same sidecar sends the same image, it must return Present
-	decision := host.Decide(bodyBytes, "sidecar-a", "tab-1", images)
+	decision := host.Decide(host.ReadMessageBody(bodyBytes), "sidecar-a", "tab-1", images)
 	present, ok := decision.(*host.Present)
 	if !ok {
 		t.Fatalf("expected Present, got %T", decision)
@@ -263,10 +263,10 @@ func TestOnlyTheCurrentGenerationRasterAndSequenceCanBePresented(t *testing.T) {
 	if firstRaster.Generation != firstGeneration {
 		t.Fatalf("configuration generation %d, want %d", firstRaster.Generation, firstGeneration)
 	}
-	if _, ok := host.Decide(configuredEnvelope(t, firstRaster, 1), "sidecar-a", key.Surface, images).(*host.Present); !ok {
+	if _, ok := host.Decide(host.ReadMessageBody(configuredEnvelope(t, firstRaster, 1)), "sidecar-a", key.Surface, images).(*host.Present); !ok {
 		t.Fatal("current first frame was rejected")
 	}
-	if reply, ok := host.Decide(configuredEnvelope(t, firstRaster, 1), "sidecar-a", key.Surface, images).(*host.Reply); !ok || reply.JSON["image"].(map[string]interface{})["error"] != "stale" {
+	if reply, ok := host.Decide(host.ReadMessageBody(configuredEnvelope(t, firstRaster, 1)), "sidecar-a", key.Surface, images).(*host.Reply); !ok || reply.JSON["image"].(map[string]interface{})["error"] != "stale" {
 		t.Fatalf("duplicate sequence was not stale: %#v", reply)
 	}
 
@@ -274,10 +274,10 @@ func TestOnlyTheCurrentGenerationRasterAndSequenceCanBePresented(t *testing.T) {
 	if secondRaster.Raster <= firstRaster.Raster {
 		t.Fatalf("raster did not advance: %d -> %d", firstRaster.Raster, secondRaster.Raster)
 	}
-	if reply, ok := host.Decide(configuredEnvelope(t, firstRaster, 2), "sidecar-a", key.Surface, images).(*host.Reply); !ok || reply.JSON["image"].(map[string]interface{})["error"] != "stale" {
+	if reply, ok := host.Decide(host.ReadMessageBody(configuredEnvelope(t, firstRaster, 2)), "sidecar-a", key.Surface, images).(*host.Reply); !ok || reply.JSON["image"].(map[string]interface{})["error"] != "stale" {
 		t.Fatalf("old raster was not stale: %#v", reply)
 	}
-	if _, ok := host.Decide(configuredEnvelope(t, secondRaster, 1), "sidecar-a", key.Surface, images).(*host.Present); !ok {
+	if _, ok := host.Decide(host.ReadMessageBody(configuredEnvelope(t, secondRaster, 1)), "sidecar-a", key.Surface, images).(*host.Present); !ok {
 		t.Fatal("current resized raster was rejected")
 	}
 
@@ -293,7 +293,7 @@ func TestOnlyTheCurrentGenerationRasterAndSequenceCanBePresented(t *testing.T) {
 		t.Fatalf("attach second generation: %v", err)
 	}
 	configureImage(t, images, key, 800, 600, 2.0)
-	if reply, ok := host.Decide(configuredEnvelope(t, firstRaster, 3), "sidecar-a", key.Surface, images).(*host.Reply); !ok || reply.JSON["image"].(map[string]interface{})["error"] != "notAttached" {
+	if reply, ok := host.Decide(host.ReadMessageBody(configuredEnvelope(t, firstRaster, 3)), "sidecar-a", key.Surface, images).(*host.Reply); !ok || reply.JSON["image"].(map[string]interface{})["error"] != "notAttached" {
 		t.Fatalf("old generation was not rejected: %#v", reply)
 	}
 }
@@ -314,7 +314,7 @@ func TestPresentationWaitTracksTheVisibleCurrentRaster(t *testing.T) {
 	}
 	// Handles the envelope with onMain, which replies that the main thread display succeeded.
 	var response map[string]interface{}
-	if !host.HandleEnvelope(configuredEnvelope(t, first, 1), "sidecar-a", key.Surface, images,
+	if !host.HandleEnvelope(host.ReadMessageBody(configuredEnvelope(t, first, 1)), "sidecar-a", key.Surface, images,
 		func(func() error) error { return nil },
 		func(_ string, value map[string]interface{}) error {
 			response = value
@@ -331,7 +331,7 @@ func TestPresentationWaitTracksTheVisibleCurrentRaster(t *testing.T) {
 	if !images.CurrentPresented() {
 		t.Fatal("presented current raster did not release the wait")
 	}
-	if _, ok := host.Decide(configuredEnvelope(t, first, 2), "sidecar-a", key.Surface, images).(*host.Present); !ok {
+	if _, ok := host.Decide(host.ReadMessageBody(configuredEnvelope(t, first, 2)), "sidecar-a", key.Surface, images).(*host.Present); !ok {
 		t.Fatal("newer sequence on the current raster was rejected")
 	}
 	if images.CurrentPresented() {
@@ -480,7 +480,7 @@ func TestFrameThatBecomesStaleBeforeMainThreadPresentationIsRejected(t *testing.
 	first := configureImage(t, images, key, 800, 600, 2.0)
 	var response map[string]interface{}
 
-	host.HandleEnvelope(configuredEnvelope(t, first, 1), "sidecar-a", key.Surface, images,
+	host.HandleEnvelope(host.ReadMessageBody(configuredEnvelope(t, first, 1)), "sidecar-a", key.Surface, images,
 		func(work func() error) error {
 			if _, err := images.ConfigureRaster(key, 900, 600, 2.0, true); err != nil {
 				t.Fatal(err)
@@ -546,7 +546,7 @@ func TestUnsupportedImageIsRefused(t *testing.T) {
 	}
 	bodyBytes, _ := json.Marshal(bodyWrongFormat)
 
-	decision := host.Decide(bodyBytes, "sidecar-a", "tab-1", images)
+	decision := host.Decide(host.ReadMessageBody(bodyBytes), "sidecar-a", "tab-1", images)
 	reply, ok := decision.(*host.Reply)
 	if !ok {
 		t.Fatalf("expected Reply(unsupported) for wrong format, got %T", decision)
@@ -576,7 +576,7 @@ func TestUnsupportedImageIsRefused(t *testing.T) {
 	}
 	bodyBytes, _ = json.Marshal(bodyWrongNonce)
 
-	decision = host.Decide(bodyBytes, "sidecar-a", "tab-1", images)
+	decision = host.Decide(host.ReadMessageBody(bodyBytes), "sidecar-a", "tab-1", images)
 	reply, ok = decision.(*host.Reply)
 	if !ok {
 		t.Fatalf("expected Reply(unsupported) for wrong nonce length, got %T", decision)
@@ -606,7 +606,7 @@ func TestUnsupportedImageIsRefused(t *testing.T) {
 	}
 	bodyBytes, _ = json.Marshal(bodyWrongKind)
 
-	decision = host.Decide(bodyBytes, "sidecar-a", "tab-1", images)
+	decision = host.Decide(host.ReadMessageBody(bodyBytes), "sidecar-a", "tab-1", images)
 	reply, ok = decision.(*host.Reply)
 	if !ok {
 		t.Fatalf("expected Reply(unsupported) for wrong token kind, got %T", decision)
@@ -627,14 +627,14 @@ func TestNonImageBodyIsNotHandled(t *testing.T) {
 	}
 	bodyBytes, _ := json.Marshal(bodyNoImage)
 
-	decision := host.Decide(bodyBytes, "sidecar-a", "tab-1", images)
+	decision := host.Decide(host.ReadMessageBody(bodyBytes), "sidecar-a", "tab-1", images)
 	_, ok := decision.(*host.NotImage)
 	if !ok {
 		t.Fatalf("expected NotImage for body without image field, got %T", decision)
 	}
 
 	// Invalid JSON
-	decision = host.Decide([]byte("not json"), "sidecar-a", "tab-1", images)
+	decision = host.Decide(host.ReadMessageBody([]byte("not json")), "sidecar-a", "tab-1", images)
 	_, ok = decision.(*host.NotImage)
 	if !ok {
 		t.Fatalf("expected NotImage for invalid JSON, got %T", decision)
@@ -665,7 +665,7 @@ func TestReplyEscapesNames(t *testing.T) {
 	bodyBytes, _ := json.Marshal(body)
 
 	// The image is not registered, so Reply must be returned
-	decision := host.Decide(bodyBytes, "sidecar-a", "tab-1", images)
+	decision := host.Decide(host.ReadMessageBody(bodyBytes), "sidecar-a", "tab-1", images)
 	reply, ok := decision.(*host.Reply)
 	if !ok {
 		t.Fatalf("expected Reply, got %T", decision)
@@ -806,7 +806,7 @@ func TestEnvelopeFromTheAttachedSidecarIsPresented(t *testing.T) {
 	bodyBytes, _ := json.Marshal(body)
 
 	// When the same sidecar sends the same image, it must return Present
-	decision := host.Decide(bodyBytes, "sidecar-a", "tab-1", images)
+	decision := host.Decide(host.ReadMessageBody(bodyBytes), "sidecar-a", "tab-1", images)
 	present, ok := decision.(*host.Present)
 	if !ok {
 		t.Fatalf("expected Present, got %T", decision)
@@ -824,7 +824,7 @@ func TestEnvelopeFromAnotherSidecarIsRefused(t *testing.T) {
 	// This is the configured current raster, so the only reason for rejection is the sidecar that sent it.
 	configured := configureImage(t, images, key, 800, 600, 2.0)
 	envelope := configuredEnvelope(t, configured, 1)
-	reply, ok := host.Decide(envelope, "sidecar-b", key.Surface, images).(*host.Reply)
+	reply, ok := host.Decide(host.ReadMessageBody(envelope), "sidecar-b", key.Surface, images).(*host.Reply)
 	if !ok {
 		t.Fatal("an envelope from another sidecar was not refused")
 	}
@@ -832,7 +832,7 @@ func TestEnvelopeFromAnotherSidecarIsRefused(t *testing.T) {
 		t.Fatalf("another sidecar was answered %v, want notAttached", image)
 	}
 	// Contrast: the same envelope that the connected sidecar sent is displayed.
-	if _, ok := host.Decide(envelope, "sidecar-a", key.Surface, images).(*host.Present); !ok {
+	if _, ok := host.Decide(host.ReadMessageBody(envelope), "sidecar-a", key.Surface, images).(*host.Present); !ok {
 		t.Fatal("the attaching sidecar's envelope for the configured raster was not presented")
 	}
 }
@@ -873,7 +873,7 @@ func TestPresentationFailureIsReported(t *testing.T) {
 	// The main-thread function of the envelope reports that its task could not run.
 	var receivedImageName string
 	var receivedResponse map[string]interface{}
-	handled := host.HandleEnvelope(bodyBytes, "sidecar-a", "tab-1", images,
+	handled := host.HandleEnvelope(host.ReadMessageBody(bodyBytes), "sidecar-a", "tab-1", images,
 		func(func() error) error {
 			// This is a presentation failure in which the main thread task could not run.
 			return errors.New("main thread unavailable")
@@ -966,13 +966,13 @@ func TestBeginningANewGenerationInvalidatesAQueuedOldFrame(t *testing.T) {
 	if first.Generation != firstGeneration {
 		t.Fatalf("configured generation %d, want %d", first.Generation, firstGeneration)
 	}
-	if _, ok := host.Decide(configuredEnvelope(t, first, 1), "sidecar-a", key.Surface, images).(*host.Present); !ok {
+	if _, ok := host.Decide(host.ReadMessageBody(configuredEnvelope(t, first, 1)), "sidecar-a", key.Surface, images).(*host.Present); !ok {
 		t.Fatal("the current frame was rejected")
 	}
 	if next := images.BeginGeneration(key.Surface); next <= firstGeneration {
 		t.Fatalf("next generation %d is not after %d", next, firstGeneration)
 	}
-	reply, ok := host.Decide(configuredEnvelope(t, first, 2), "sidecar-a", key.Surface, images).(*host.Reply)
+	reply, ok := host.Decide(host.ReadMessageBody(configuredEnvelope(t, first, 2)), "sidecar-a", key.Surface, images).(*host.Reply)
 	if !ok {
 		t.Fatal("a queued frame of the old generation was not invalidated")
 	}
@@ -988,7 +988,7 @@ func TestFrameDetachedBeforeMainThreadPresentationIsReportedAsStale(t *testing.T
 	attachImage(t, images, key)
 	first := configureImage(t, images, key, 800, 600, 2.0)
 	var response map[string]interface{}
-	host.HandleEnvelope(configuredEnvelope(t, first, 1), "sidecar-a", key.Surface, images,
+	host.HandleEnvelope(host.ReadMessageBody(configuredEnvelope(t, first, 1)), "sidecar-a", key.Surface, images,
 		func(work func() error) error {
 			images.RemoveSurface(key.Surface)
 			return work()
@@ -1012,7 +1012,7 @@ func TestMissingNativeSurfaceRequestsAFreshRasterConfiguration(t *testing.T) {
 	attachImage(t, images, key)
 	first := configureImage(t, images, key, 800, 600, 2.0)
 	var recovered *host.ImageConfigure
-	host.HandleEnvelope(configuredEnvelope(t, first, 1), "sidecar-a", key.Surface, images,
+	host.HandleEnvelope(host.ReadMessageBody(configuredEnvelope(t, first, 1)), "sidecar-a", key.Surface, images,
 		func(func() error) error { return errors.New("notFound") },
 		func(string, map[string]interface{}) error { return nil },
 		func(reason string) error {
@@ -1111,7 +1111,7 @@ func TestShownSurfacePresentsFromItsNewRaster(t *testing.T) {
 	}
 	first := configureImage(t, images, key, 800, 600, 2)
 	for sequence := 1; sequence <= 3; sequence++ {
-		if _, ok := host.Decide(configuredEnvelope(t, first, sequence), "sidecar-a", key.Surface, images).(*host.Present); !ok {
+		if _, ok := host.Decide(host.ReadMessageBody(configuredEnvelope(t, first, sequence)), "sidecar-a", key.Surface, images).(*host.Present); !ok {
 			t.Fatalf("frame %d of the first raster was rejected", sequence)
 		}
 		if !images.MarkPresented(key, first.Generation, first.Raster, sequence) {
@@ -1122,7 +1122,7 @@ func TestShownSurfacePresentsFromItsNewRaster(t *testing.T) {
 	images.SetSurfaceVisible(key.Surface, false)
 	images.SetSurfaceVisible(key.Surface, true)
 	shown := configureImage(t, images, key, 800, 600, 2)
-	if _, ok := host.Decide(configuredEnvelope(t, shown, 1), "sidecar-a", key.Surface, images).(*host.Present); !ok {
+	if _, ok := host.Decide(host.ReadMessageBody(configuredEnvelope(t, shown, 1)), "sidecar-a", key.Surface, images).(*host.Present); !ok {
 		t.Fatal("the first frame of the new raster was rejected")
 	}
 	if !images.MarkPresented(key, shown.Generation, shown.Raster, 1) {
@@ -1259,7 +1259,7 @@ func TestImageFrameNonceCauseIsRecorded(t *testing.T) {
 		token := envelope["image"].(map[string]any)["token"].(map[string]any)
 		token["nonce"] = tc.nonce
 		body, _ := json.Marshal(envelope)
-		host.HandleEnvelope(body, "sidecar-a", key.Surface, images, onMain, send, recoverFrame, func() bool { return true }, func() {})
+		host.HandleEnvelope(host.ReadMessageBody(body), "sidecar-a", key.Surface, images, onMain, send, recoverFrame, func() bool { return true }, func() {})
 		want := " error host image frame: surface=tab-1 name=view sender=sidecar-a " + frame + " sequence=" + strconv.Itoa(tc.sequence) + " " + tc.want
 		if log := written(); !strings.Contains(log, want) {
 			t.Fatalf("the log has no %q:\n%s", want, log)
@@ -1281,7 +1281,7 @@ func TestImageFrameRefusalsAreRecorded(t *testing.T) {
 	recoverFrame := func(string) error { return nil }
 
 	// A sidecar that does not own the region.
-	host.HandleEnvelope(configuredEnvelope(t, configured, 1), "sidecar-b", key.Surface, images, onMain, send, recoverFrame, func() bool { return true }, func() {})
+	host.HandleEnvelope(host.ReadMessageBody(configuredEnvelope(t, configured, 1)), "sidecar-b", key.Surface, images, onMain, send, recoverFrame, func() bool { return true }, func() {})
 	// A format that the host does not present.
 	var unsupported map[string]any
 	if err := json.Unmarshal(configuredEnvelope(t, configured, 2), &unsupported); err != nil {
@@ -1289,9 +1289,9 @@ func TestImageFrameRefusalsAreRecorded(t *testing.T) {
 	}
 	unsupported["image"].(map[string]any)["format"] = "rgba8"
 	body, _ := json.Marshal(unsupported)
-	host.HandleEnvelope(body, "sidecar-a", key.Surface, images, onMain, send, recoverFrame, func() bool { return true }, func() {})
+	host.HandleEnvelope(host.ReadMessageBody(body), "sidecar-a", key.Surface, images, onMain, send, recoverFrame, func() bool { return true }, func() {})
 	// An image field that is not an envelope is not handled as an image, and the record shows it.
-	if host.HandleEnvelope([]byte(`{"image":{"name":5}}`), "sidecar-a", key.Surface, images, onMain, send, recoverFrame, func() bool { return true }, func() {}) {
+	if host.HandleEnvelope(host.ReadMessageBody([]byte(`{"image":{"name":5}}`)), "sidecar-a", key.Surface, images, onMain, send, recoverFrame, func() bool { return true }, func() {}) {
 		t.Fatal("a malformed envelope was handled as an image")
 	}
 
@@ -1323,7 +1323,7 @@ func TestPresentedFrameIdentityIsReported(t *testing.T) {
 		t.Fatalf("an image without a presented frame reports %+v", frame)
 	}
 	raster := configureImage(t, images, key, 800, 600, 2.0)
-	if _, ok := host.Decide(configuredEnvelope(t, raster, 2), "sidecar-a", key.Surface, images).(*host.Present); !ok {
+	if _, ok := host.Decide(host.ReadMessageBody(configuredEnvelope(t, raster, 2)), "sidecar-a", key.Surface, images).(*host.Present); !ok {
 		t.Fatal("current frame was rejected")
 	}
 	images.MarkPresented(key, raster.Generation, raster.Raster, 2)
@@ -1333,7 +1333,7 @@ func TestPresentedFrameIdentityIsReported(t *testing.T) {
 			frame, ok, raster.Generation, raster.Raster)
 	}
 	// A newer frame that the host accepted and has not presented leaves the presented frame as it was.
-	if _, ok := host.Decide(configuredEnvelope(t, raster, 3), "sidecar-a", key.Surface, images).(*host.Present); !ok {
+	if _, ok := host.Decide(host.ReadMessageBody(configuredEnvelope(t, raster, 3)), "sidecar-a", key.Surface, images).(*host.Present); !ok {
 		t.Fatal("newer frame was rejected")
 	}
 	if frame, ok := images.PresentedFrame(key); !ok || frame.Sequence != 2 {
@@ -1386,7 +1386,7 @@ func TestAFrameOfASidecarThatNoPluginDeclaresIsInvalidated(t *testing.T) {
 	first := configureImage(t, images, key, 800, 600, 2.0)
 	var answers []map[string]interface{}
 	presented := false
-	host.HandleEnvelope(configuredEnvelope(t, first, 1), "sidecar-a", key.Surface, images,
+	host.HandleEnvelope(host.ReadMessageBody(configuredEnvelope(t, first, 1)), "sidecar-a", key.Surface, images,
 		func(func() error) error { presented = true; return errors.New("notFound") },
 		func(_ string, response map[string]interface{}) error {
 			answers = append(answers, response)
@@ -1673,7 +1673,7 @@ func TestAFrameOfAnOlderNativeRasterRequestsTheCurrentRasterConfiguration(t *tes
 	first := configureImage(t, images, key, 800, 600, 2.0)
 	var response map[string]interface{}
 	var recovered *host.ImageConfigure
-	host.HandleEnvelope(configuredEnvelope(t, first, 1), "sidecar-a", key.Surface, images,
+	host.HandleEnvelope(host.ReadMessageBody(configuredEnvelope(t, first, 1)), "sidecar-a", key.Surface, images,
 		// The native raster of the region changed before its refresh reached the host state.
 		func(func() error) error { return errors.New("staleRaster native=900x600@2 frame=800x600@2") },
 		func(_ string, value map[string]interface{}) error {

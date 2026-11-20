@@ -6,7 +6,6 @@ package host
 // identifiers, so the reply states the microseconds since the request was queued.
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"sync"
@@ -139,27 +138,21 @@ func (l *requestLedger) failed(sidecar string) ([]string, map[string][]string) {
 
 // errorOfBody returns the text of the member `error` of a reply body, which a sidecar writes as a string or as another JSON value, and
 // whether the body has one. A body without the member, or that is not an object, is not an error reply.
-func errorOfBody(body json.RawMessage) (string, bool) {
-	if !bytes.Contains(body, []byte(`"error"`)) {
-		return "", false
-	}
-	var object struct {
-		Error json.RawMessage `json:"error"`
-	}
-	if err := json.Unmarshal(body, &object); err != nil || len(object.Error) == 0 || string(object.Error) == "null" {
-		// silent: a body that is not an object, or whose error is null, states no error.
+func errorOfBody(body MessageBody) (string, bool) {
+	if len(body.errorMember) == 0 || string(body.errorMember) == "null" {
+		// silent: a body that is not an object, or whose error is missing or null, states no error.
 		return "", false
 	}
 	var text string
-	if err := json.Unmarshal(object.Error, &text); err == nil {
+	if err := json.Unmarshal(body.errorMember, &text); err == nil {
 		return text, true
 	}
-	return string(object.Error), true
+	return string(body.errorMember), true
 }
 
 // recordReply stores `host.sidecar.reply` for a message of the sidecar to the surface, when it names the correlation identifiers cids of
 // requests or its body states an error.
-func (c *Sidecars) recordReply(sidecar, surface string, cids []string, body json.RawMessage) {
+func (c *Sidecars) recordReply(sidecar, surface string, cids []string, body MessageBody) {
 	failure, failed := errorOfBody(body)
 	if len(cids) == 0 && !failed {
 		return
@@ -168,7 +161,7 @@ func (c *Sidecars) recordReply(sidecar, surface string, cids []string, body json
 		LogError("sidecar "+sidecar, fmt.Sprintf("the cids of a reply of surface %s are refused: %v", surface, err))
 		cids = nil
 	}
-	fields := map[string]any{"name": sidecar, "surface": surface, "bytes": len(body), "ok": !failed}
+	fields := map[string]any{"name": sidecar, "surface": surface, "bytes": len(body.Raw), "ok": !failed}
 	if elapsed, known := c.requests.take(cids, monotonicNanos()); known {
 		fields["micros"] = elapsed / 1000
 	}
