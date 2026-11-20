@@ -33,3 +33,19 @@ test("a blocked tab fails the request", async () => {
   await assert.rejects(windows.openProject({ id: "p1", separate: true, current: "p0" }), /blocked the project window/);
   assert.throws(() => windows.newWindow(), /blocked the new window/);
 });
+
+test("the tab holds the record of the activities of its projects and sends it at ready, at each change and at a release", async () => {
+  const sent = [];
+  await windows.onProjectActivity((record) => sent.push(record));
+  await windows.ready();
+  assert.deepEqual(sent, [{ revision: 0, projects: {} }]);
+  const spaces = { s1: { activity: "failed", cards: { "card-1": "failed" }, groups: {} } };
+  await windows.projectActivity({ id: "p1", spaces });
+  assert.deepEqual(sent.at(-1), { revision: 1, projects: { p1: { activity: "failed", spaces } } });
+  await windows.projectActivity({ id: "p1", spaces });
+  assert.equal(sent.length, 2, "an unchanged publication sends nothing");
+  await assert.rejects(windows.projectActivity({ id: "p1", spaces: { s1: { activity: "busy", cards: {}, groups: {} } } }),
+    /project p1 space s1: activity "busy" is not one of attention, failed, running, idle/);
+  await windows.releaseProject("p1");
+  assert.deepEqual(sent.at(-1), { revision: 2, projects: {} });
+});

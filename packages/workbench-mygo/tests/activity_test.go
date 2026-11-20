@@ -1,5 +1,6 @@
 // The shared cases of the activities of a window (docs/spec/cases/activity.json, docs/spec/activity.md). tabActivity and windowActivity
-// of packages/workbench/activity.js run the same file, so a case is one statement that both workbenches meet.
+// of packages/workbench/activity.js run the same cases of tabs and windows, so a case is one statement that both workbenches meet; the
+// hosts run the cases of records.
 package workbench_test
 
 import (
@@ -56,6 +57,7 @@ func activityCases(t *testing.T) (tabs []struct {
 			Tabs     map[string]string           `json:"tabs"`
 			Returns  json.RawMessage             `json:"returns"`
 		} `json:"windows"`
+		Records json.RawMessage `json:"records"`
 	}
 	decoder := json.NewDecoder(bytes.NewReader(text))
 	decoder.DisallowUnknownFields()
@@ -107,7 +109,7 @@ func TestActivityCases(t *testing.T) {
 				t.Fatal(err)
 			}
 			if !reflect.DeepEqual(gotValue, wantValue) {
-				t.Fatalf("core.activity is %s, want %s", got, kase.Returns)
+				t.Fatalf("the activities of the window are %s, want %s", got, kase.Returns)
 			}
 		})
 	}
@@ -134,6 +136,14 @@ func TestTheActivityOfATabFollowsTheWatchOfItsSurface(t *testing.T) {
 	projects := activityWindow("tab-a", "tab-b")
 	changes := 0
 	var shown [][2]string
+	var published []string
+	publish := func(id string, spaces map[string]workbench.ActivitySpaceState) {
+		text, err := json.Marshal(spaces)
+		if err != nil {
+			t.Fatal(err)
+		}
+		published = append(published, id+" "+string(text))
+	}
 	follow := workbench.NewActivityFollow(func(name, surface string, fn func(value any)) func() {
 		return f.registry.Observe(name, &surface, true, fn)
 	},
@@ -144,7 +154,7 @@ func TestTheActivityOfATabFollowsTheWatchOfItsSurface(t *testing.T) {
 			return []string{"textprobe.screen"}
 		},
 		func() ([]workbench.ActivityProject, error) { return projects, nil }, func() { changes++ },
-		func(tab, text string) { shown = append(shown, [2]string{tab, text}) }, func(err error) { t.Error(err) })
+		func(tab, text string) { shown = append(shown, [2]string{tab, text}) }, func(err error) { t.Error(err) }, publish)
 	follow.Sync()
 	if len(f.forwards) != 1 || f.forwards[0]["method"] != "status.watch" || f.forwards[0]["surface"] != "tab-a" {
 		t.Fatalf("the sync forwarded %v", f.forwards)
@@ -157,12 +167,19 @@ func TestTheActivityOfATabFollowsTheWatchOfItsSurface(t *testing.T) {
 		}
 		return string(text)
 	}
-	if got := state(); got != `{"projects":{},"tabs":{}}` {
-		t.Fatalf("core.activity before a value is %s", got)
+	if got := state(); got != `{"spaces":{},"tabs":{}}` {
+		t.Fatalf("the activities before a value are %s", got)
+	}
+	if len(published) != 0 {
+		t.Fatalf("a project without an activity that was never published was published: %q", published)
 	}
 	f.deliver("tab-a", "textprobe.screen", `"running"`, 1)
-	if got := state(); got != `{"projects":{"p1":{"activity":"running","spaces":{"s1":{"activity":"running","cards":{"card-1":"running"},"groups":{}}}}},"tabs":{"tab-a":"running"}}` {
-		t.Fatalf("core.activity after running is %s", got)
+	running := `p1 {"s1":{"activity":"running","cards":{"card-1":"running"},"groups":{}}}`
+	if got := state(); got != `{"spaces":{"p1":{"s1":{"activity":"running","cards":{"card-1":"running"},"groups":{}}}},"tabs":{"tab-a":"running"}}` {
+		t.Fatalf("the activities after running are %s", got)
+	}
+	if !slices.Equal(published, []string{running}) {
+		t.Fatalf("the publications after running are %q", published)
 	}
 	// tab-b registers after the sync; its registration starts its watch, and its value raises the project to attention.
 	f.register("tab-b", "status", "textprobe.screen")
@@ -180,8 +197,12 @@ func TestTheActivityOfATabFollowsTheWatchOfItsSurface(t *testing.T) {
 	if !slices.Equal(shown, [][2]string{{"tab-a", want}, {"tab-a", ""}}) {
 		t.Fatalf("the shown errors after null are %q", shown)
 	}
-	if got := state(); got != `{"projects":{"p1":{"activity":"attention","spaces":{"s1":{"activity":"attention","cards":{"card-1":"attention"},"groups":{}}}}},"tabs":{"tab-b":"attention"}}` {
-		t.Fatalf("core.activity after attention and null is %s", got)
+	if got := state(); got != `{"spaces":{"p1":{"s1":{"activity":"attention","cards":{"card-1":"attention"},"groups":{}}}},"tabs":{"tab-b":"attention"}}` {
+		t.Fatalf("the activities after attention and null are %s", got)
+	}
+	attention := `p1 {"s1":{"activity":"attention","cards":{"card-1":"attention"},"groups":{}}}`
+	if !slices.Equal(published, []string{running, attention}) {
+		t.Fatalf("the window derives no activity of the project, only of its spaces, and publishes each change once: %q", published)
 	}
 	// tab-a leaves the layouts, so its watch ends and nothing that core.activity reports changes.
 	projects = activityWindow("tab-b")
@@ -191,6 +212,18 @@ func TestTheActivityOfATabFollowsTheWatchOfItsSurface(t *testing.T) {
 	}
 	if changes != 3 {
 		t.Fatalf("core.activity changed %d times, want 3", changes)
+	}
+	// tab-b ends with null, so the project has no activity and is withdrawn with empty spaces.
+	f.deliver("tab-b", "textprobe.screen", `null`, 2)
+	if !slices.Equal(published, []string{running, attention, "p1 {}"}) {
+		t.Fatalf("the publications after the end of the activity are %q", published)
+	}
+	// A project that leaves the window is not published: the host removes its entry with the release.
+	f.deliver("tab-b", "textprobe.screen", `"failed"`, 3)
+	projects = nil
+	follow.Sync()
+	if len(published) != 4 {
+		t.Fatalf("a project that left the window was published: %q", published)
 	}
 }
 
@@ -249,6 +282,9 @@ func TestTheIconsOfAnActivityStandOnItsHolders(t *testing.T) {
 	r.call(surface, "runtime.native.call", map[string]any{"name": "exposureReply", "payload": map[string]any{"id": watch["id"]}})
 	r.call(surface, "runtime.native.call", map[string]any{"name": "changed", "payload": map[string]any{"name": "textprobe.screen", "value": "attention", "version": 1}})
 	r.f.settle()
+	// The host sends the record of the project activities that the publication changed (docs/spec/activity.md#activity-of-a-project).
+	r.f.shell.Event("project-activity", []any{r.stored.activities.Record()})
+	r.f.settle()
 	state := status[workbench.ActivityState](t, r.f, "core.activity")
 	project := status[map[string]any](t, r.f, "core.project")
 	projectID, spaceID := project["id"].(string), project["activeSpaceId"].(string)
@@ -273,6 +309,8 @@ func TestTheIconsOfAnActivityStandOnItsHolders(t *testing.T) {
 	}
 	// A null value ends the activity, so every icon leaves.
 	r.call(surface, "runtime.native.call", map[string]any{"name": "changed", "payload": map[string]any{"name": "textprobe.screen", "value": nil, "version": 2}})
+	r.f.settle()
+	r.f.shell.Event("project-activity", []any{r.stored.activities.Record()})
 	r.f.settle()
 	tree = r.f.tester.ElementTree()
 	for _, name := range []string{"core.activity.tab", "core.activity.group", "core.activity.space", "core.activity.project"} {

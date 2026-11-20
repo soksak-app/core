@@ -11,8 +11,9 @@ import (
 )
 
 // The activities of a window (docs/spec/activity.md): the activity of each tab from the statuses of its plugin that declare activity,
-// and the highest activity of each card, group card, space and project. The shared cases of docs/spec/cases/activity.json state them,
-// and packages/workbench/activity.js meets the same cases.
+// and the highest activity of each card, group card and space, which the window publishes to the record of the project activities of
+// the host. The shared cases tabs and windows of docs/spec/cases/activity.json state them, and packages/workbench/activity.js meets
+// the same cases.
 
 // Activities are the activities from the highest to the lowest (docs/spec/activity.md#activities).
 var Activities = []string{"attention", "failed", "running", "idle"}
@@ -124,23 +125,38 @@ type ActivityProjectState struct {
 	Spaces   map[string]ActivitySpaceState `json:"spaces"`
 }
 
-// ActivityState is the value of core.activity (docs/spec/activity.md#status).
+// ActivityState is the value of core.activity (docs/spec/activity.md#status): the record of the project activities of the application
+// and the activities of the tabs of the window.
 type ActivityState struct {
 	Projects map[string]ActivityProjectState `json:"projects"`
 	Tabs     map[string]string               `json:"tabs"`
 }
 
-// WindowActivity is the value of core.activity for the projects of a window from the activity of each tab, by tab id. Each holder is
-// listed only with an activity.
-func WindowActivity(projects []ActivityProject, tabs map[string]string) (ActivityState, error) {
-	out := ActivityState{Projects: map[string]ActivityProjectState{}, Tabs: map[string]string{}}
+// ActivityRecord is the record of the project activities of the application that the host sends as project-activity
+// (docs/spec/activity.md#activity-of-a-project).
+type ActivityRecord struct {
+	Revision int64                           `json:"revision"`
+	Projects map[string]ActivityProjectState `json:"projects"`
+}
+
+// WindowActivities are the activities that a window derives: for each project that has a space with an activity the activities of its
+// spaces, which the window publishes with projectActivity, and the activities of the tabs.
+type WindowActivities struct {
+	Spaces map[string]map[string]ActivitySpaceState `json:"spaces"`
+	Tabs   map[string]string                        `json:"tabs"`
+}
+
+// WindowActivity is the activities of the projects of a window from the activity of each tab, by tab id
+// (docs/spec/activity.md#activity-of-a-card-a-group-card-and-a-space). Each holder is listed only with an activity, and no activity of a
+// project is derived here.
+func WindowActivity(projects []ActivityProject, tabs map[string]string) (WindowActivities, error) {
+	out := WindowActivities{Spaces: map[string]map[string]ActivitySpaceState{}, Tabs: map[string]string{}}
 	for _, project := range projects {
 		spaces := map[string]ActivitySpaceState{}
-		highest := ""
 		for _, space := range project.Spaces {
 			var stored activityLayout
 			if err := json.Unmarshal(space.Layout, &stored); err != nil {
-				return ActivityState{}, fmt.Errorf("project %s space %s: %w", project.ID, space.ID, err)
+				return WindowActivities{}, fmt.Errorf("project %s space %s: %w", project.ID, space.ID, err)
 			}
 			state := ActivitySpaceState{Cards: map[string]string{}, Groups: map[string]string{}}
 			for _, card := range stored.State.Cards {
@@ -181,11 +197,10 @@ func WindowActivity(projects []ActivityProject, tabs map[string]string) (Activit
 			}
 			if state.Activity != "" {
 				spaces[space.ID] = state
-				highest = HighestActivity(highest, state.Activity)
 			}
 		}
-		if highest != "" {
-			out.Projects[project.ID] = ActivityProjectState{Activity: highest, Spaces: spaces}
+		if len(spaces) > 0 {
+			out.Spaces[project.ID] = spaces
 		}
 	}
 	return out, nil
@@ -223,7 +238,9 @@ type activityTab struct {
 }
 
 // ActivityFollow follows the statuses that declare activity on the surface of each tab of the projects of a window by a watch of each
-// surface (docs/spec/activity.md#activity-of-a-tab).
+// surface (docs/spec/activity.md#activity-of-a-tab), and publishes the activities of the spaces of each project of the window after each
+// change of them (docs/spec/activity.md#activity-of-a-project). A project that leaves the window is not published again: the host
+// removes its entry with its release.
 type ActivityFollow struct {
 	// observe follows the status name of surface: fn receives each value, nil while the surface has not registered it, and the returned
 	// function ends it.
@@ -237,22 +254,28 @@ type ActivityFollow struct {
 	changed func()
 	shown   func(tab, text string)
 	failed  func(error)
+	// publish publishes the activities of the spaces of a project, empty when none has an activity.
+	publish func(id string, spaces map[string]ActivitySpaceState)
 
 	followed map[string]*activityTab
 	errors   map[string]string
-	state    ActivityState
-	syncing  bool
+	state    WindowActivities
+	// published are the published activities of the spaces of each project of the window, as JSON text, by project id.
+	published map[string]string
+	syncing   bool
 }
 
 // NewActivityFollow makes the follow of the activities of a window, which reports nothing until its first Sync.
 func NewActivityFollow(observe func(name, surface string, fn func(value any)) func(), statuses func(plugin string) []string,
-	projects func() ([]ActivityProject, error), changed func(), shown func(tab, text string), failed func(error)) *ActivityFollow {
+	projects func() ([]ActivityProject, error), changed func(), shown func(tab, text string), failed func(error),
+	publish func(id string, spaces map[string]ActivitySpaceState)) *ActivityFollow {
 	return &ActivityFollow{observe: observe, statuses: statuses, projects: projects, changed: changed, shown: shown, failed: failed,
-		followed: map[string]*activityTab{}, errors: map[string]string{}, state: ActivityState{Projects: map[string]ActivityProjectState{}, Tabs: map[string]string{}}}
+		publish: publish, followed: map[string]*activityTab{}, errors: map[string]string{}, published: map[string]string{},
+		state: WindowActivities{Spaces: map[string]map[string]ActivitySpaceState{}, Tabs: map[string]string{}}}
 }
 
-// State is the value of core.activity.
-func (a *ActivityFollow) State() ActivityState { return a.state }
+// State is the activities that the window derived.
+func (a *ActivityFollow) State() WindowActivities { return a.state }
 
 // derive derives the activities again, shows and withdraws the errors of the values and announces a change.
 func (a *ActivityFollow) derive() {
@@ -297,6 +320,36 @@ func (a *ActivityFollow) derive() {
 	if err != nil {
 		a.failed(err)
 		return
+	}
+	held := map[string]bool{}
+	for _, project := range projects {
+		held[project.ID] = true
+	}
+	for id := range a.published {
+		if !held[id] {
+			delete(a.published, id)
+		}
+	}
+	for _, project := range projects {
+		// A project without a space with an activity publishes empty spaces, which a project never published leaves unpublished.
+		spaces := next.Spaces[project.ID]
+		if spaces == nil {
+			spaces = map[string]ActivitySpaceState{}
+		}
+		text, err := json.Marshal(spaces)
+		if err != nil {
+			a.failed(fmt.Errorf("activity: project %s: %w", project.ID, err))
+			return
+		}
+		published, ok := a.published[project.ID]
+		if !ok {
+			published = "{}"
+		}
+		if string(text) == published {
+			continue
+		}
+		a.published[project.ID] = string(text)
+		a.publish(project.ID, spaces)
 	}
 	if reflect.DeepEqual(a.state, next) {
 		return
@@ -377,7 +430,7 @@ func (a *ActivityFollow) Sync() {
 // shownActivities are the activities that the window draws: those of the tabs and of the group cards of the shown space, and those of
 // the projects and the spaces of the shown project (docs/spec/activity.md#drawing).
 func (s *Shell) shownActivities() (tabs, groups, projects, spaces map[string]string) {
-	state := s.activity.State()
+	state := s.activityState()
 	tabs, groups, projects, spaces = state.Tabs, map[string]string{}, map[string]string{}, map[string]string{}
 	for id, project := range state.Projects {
 		projects[id] = project.Activity
@@ -391,6 +444,55 @@ func (s *Shell) shownActivities() (tabs, groups, projects, spaces map[string]str
 		}
 	}
 	return tabs, groups, projects, spaces
+}
+
+// activityState is the value of core.activity: the record of the project activities that the host sent and the activities of the tabs
+// of the window (docs/spec/activity.md#status).
+func (s *Shell) activityState() ActivityState {
+	return ActivityState{Projects: s.projectRecord.Projects, Tabs: s.activity.State().Tabs}
+}
+
+// projectActivityReceived keeps the record of the project activities of the highest revision that the host sent.
+func (s *Shell) projectActivityReceived(data []any) {
+	record, err := eventBody[ActivityRecord]("project-activity", data)
+	if err != nil {
+		s.fail(err)
+		return
+	}
+	if record.Revision <= s.projectRecord.Revision {
+		return
+	}
+	s.projectRecord = record
+	s.options.Invalidate()
+}
+
+// activityPublication is a publication of the activities of the spaces of a project that waits for the one before it.
+type activityPublication struct {
+	id     string
+	spaces map[string]ActivitySpaceState
+}
+
+// publishActivity publishes the activities of the spaces of the project id to the host, one publication after the other, so that the
+// host receives them in the order of their changes; Calls runs each call on a goroutine of its own.
+func (s *Shell) publishActivity(id string, spaces map[string]ActivitySpaceState) {
+	s.publications = append(s.publications, activityPublication{id, spaces})
+	if len(s.publications) == 1 {
+		s.nextPublication()
+	}
+}
+
+// nextPublication sends the first waiting publication and the next one after its answer.
+func (s *Shell) nextPublication() {
+	next := s.publications[0]
+	s.calls.Call("projectActivity", map[string]any{"id": next.id, "spaces": next.spaces}, func(_ any, err error) {
+		if err != nil {
+			s.fail(fmt.Errorf("projectActivity %s: %w", next.id, err))
+		}
+		s.publications = s.publications[1:]
+		if len(s.publications) > 0 {
+			s.nextPublication()
+		}
+	})
 }
 
 // activityColor is the color of the icon of activity; none is the error color, which belongs to the display of errors.

@@ -41,7 +41,10 @@ type storedHost struct {
 	keepsProjects  bool                      // The answer of projectRemoveAsk is that the project stays.
 	// removalAnswers holds the argument of each projectRemoveAnswer call.
 	removalAnswers []string
-	plugins        *pluginsHost
+	// activities is the record of the project activities of the Go host library, which projectActivity publishes to as the one window
+	// of the shell that holds each of its projects.
+	activities host.ProjectActivities
+	plugins    *pluginsHost
 	// reloads counts the starts of the workbench that the shell asked for.
 	reloads int
 	// located is the project that the shell last named as the one that its window shows.
@@ -316,6 +319,14 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 		"projectRemoveAnswer": answer("projectRemoveAnswer", func(argument json.RawMessage) (any, error) {
 			h.removalAnswers = append(h.removalAnswers, string(argument))
 			return nil, nil
+		}),
+		"projectActivity": answer("projectActivity", func(argument json.RawMessage) (any, error) {
+			var request host.ProjectActivityRequest
+			if err := json.Unmarshal(argument, &request); err != nil {
+				return nil, err
+			}
+			_, err := h.activities.Publish("main", "main", request.ID, request.Spaces)
+			return nil, err
 		}),
 		"folderChoose": answer("folderChoose", func(json.RawMessage) (any, error) { return "/chosen", nil }),
 		"windowReady":  answer("windowReady", none),

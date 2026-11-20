@@ -2723,7 +2723,10 @@ fn reload(
                         crate::windows::emit_window(window, "page-reload", serde_json::json!({}))
                             .map_err(|error| error.to_string())
                     },
-                    || crate::windows::removal_page_ended(window),
+                    || {
+                        crate::windows::removal_page_ended(window);
+                        crate::windows::activities_page_ended(window);
+                    },
                     || crate::surfaces::keys_page_ended(window),
                     || crate::windows::close_window(window),
                 )

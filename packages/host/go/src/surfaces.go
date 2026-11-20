@@ -1726,6 +1726,8 @@ func (h *Host) answerPage(s *Surfaces, end string) {
 	h.relay.Abandon(func(t relayTarget) bool { return t.owner == s })
 	// The page that a removal asked ended, so the removal is allowed (docs/spec/projects.md).
 	h.removals.Abandon(s.name)
+	// The surfaces of the page ended, so the project activities that the page published end with them.
+	h.endProjectActivities(s)
 	if asked {
 		s.window.Close()
 	}

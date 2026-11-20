@@ -161,6 +161,12 @@ fn dispatch(
             windows::project_release(window, id)?;
             Value::Null
         }
+        "project_activity" => {
+            let request: soksak_host::project_activity::ProjectActivityRequest =
+                argument(method, "request", body)?;
+            windows::project_activity(window, request)?;
+            Value::Null
+        }
         "project_remove_ask" => {
             let id: String = argument(method, "id", body)?;
             json!(windows::project_remove_ask(window, &id)?)

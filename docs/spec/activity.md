@@ -2,7 +2,7 @@
 
 [한국어](activity.ko.md)
 
-The activity of a tab tells a person, without opening the tab, whether its surface runs something, waits for the person or ended with a failure. A plugin reports the activity of its surfaces as a status; core derives the activity of every card, group card, space and project from the activity of their tabs, reports it as a status and draws it as an icon in both workbenches. Core names no plugin.
+The activity of a tab tells a person, without opening the tab, whether its surface runs something, waits for the person or ended with a failure. A plugin reports the activity of its surfaces as a status; each window derives the activity of every card, group card and space from the activity of their tabs, the application derives the activity of every project from those of its spaces, and core reports them as a status and draws it as an icon in both workbenches. Core names no plugin.
 
 ## Activities
 
@@ -33,20 +33,37 @@ A value that is neither an activity nor `null` is an error of the plugin: it giv
 
 The workbench follows each such status of each tab of the projects of its window by a watch of that surface ([relay](exposure.md#relay)), which sends each change of the value; it reads no value on a timer. It starts and ends the watches when a layout, a project or the registration of a surface changes, and derives the activities again at each value that a watch delivers.
 
-## Activity of a card, a group card, a space and a project
+## Activity of a card, a group card and a space
 
 Each holder has the highest activity among what it holds, and none when nothing that it holds has an activity:
 
 - a content card holds its tabs;
 - a group card holds its members, content cards and group cards, so an enclosing group card holds the activities of the group cards inside it ([group cards](groups.md#model));
-- a space holds the cards of its layout;
-- a project holds its spaces, the shown space and the spaces that are not shown.
+- a space holds the cards of its layout.
 
-The projects of a window are the projects that the window opened, whose tabs stay surfaces of the window ([memory saver](plugins.md#memory-saver)); a project that another window opened has no activity in this window, because its surfaces are not surfaces of this window. The shared cases of `docs/spec/cases/activity.json` state the activity of a tab from its statuses and the activities of the holders from the layouts of the stored form ([storage](groups.md#storage)), and `packages/workbench/activity.js` and `packages/workbench-mygo/src/activity.go` run them.
+A window derives these activities from the tabs of the projects that it holds: the projects that it opened, whose tabs stay surfaces of the window ([memory saver](plugins.md#memory-saver)), with the drawn layout in the place of the stored layout of the shown space. The surfaces of a project are surfaces of the window that holds it, so no other window can derive them. The shared cases `windows` of `docs/spec/cases/activity.json` state the activity of a tab from its statuses and the activities of the spaces of each project from the layouts of the stored form ([storage](groups.md#storage)), and `packages/workbench/activity.js` and `packages/workbench-mygo/src/activity.go` run them. A window derives no activity of a project.
+
+## Activity of a project
+
+The application holds one record of the activities of its projects, in the host, by project and not by window: a project has the highest activity among its spaces, the shown space and the spaces that are not shown, and the record lists only a project that has one, as `{activity, spaces}`. A project gives the same value in each window, whichever window holds it and whether it shares that window with other projects or has a window of its own, and the record is the only place where the activity of a project is derived.
+
+The window that holds a project publishes the activities of its spaces with the host call `projectActivity({id, spaces})` after each change of them: `spaces` maps each space of the project that has an activity to `{activity, cards, groups}` as the cases `windows` derive it, and an empty `spaces` withdraws the project from the record. The host refuses a publication with one of these texts and leaves the record unchanged:
+
+| Found | Text |
+| --- | --- |
+| an `id` that is not a project id | `invalid project id` |
+| a window that does not hold the project | `project <id> is not owned by this window` |
+| an `activity` of a space that is not an activity | `project <id> space <space>: activity <value> is not one of attention, failed, running, idle` |
+| a value of `cards` that is not an activity | `project <id> space <space> card <card>: activity <value> is not one of attention, failed, running, idle` |
+| a value of `groups` that is not an activity | `project <id> space <space> group <card>: activity <value> is not one of attention, failed, running, idle` |
+
+`<value>` is the JSON text of the value; the spaces are checked in code point order of their identifiers, each its `activity`, then its `cards` and its `groups` in code point order. The host removes the entry of a project when the window that published it releases the project ([projects](projects.md#project-identity)), closes, or its page ends or a new page starts, because the surfaces that gave the activities ended with it; the window that holds the project next publishes it again once its surfaces report. So a project that leaves one window for another keeps no entry of its earlier window, and a removed project has none.
+
+Each change of the record raises its `revision`, a whole number that starts at 0, and the host sends the record `{revision, projects}` as the event `project-activity` to every window; it sends the current record to a window when that window reports ready (`windowReady`), so a new window starts with the projects of the other windows. A window keeps the record of the highest revision that it received. The shared cases `records` of `docs/spec/cases/activity.json` state the record after each publication and removal, and the records of `packages/host/go`, of `packages/host/rust` and of `packages/workbench/activity.js`, which the browser runtime uses, run them.
 
 ## Status
 
-`core.activity` reports the activities of the window as `{projects, tabs}`. `projects` holds for each project of the window that has an activity `{activity, spaces}`, and `spaces` holds for each of its spaces that has an activity `{activity, cards, groups}`: `cards` maps each content card of the space that has an activity to it and `groups` each group card that has an activity to it, by card identifier. `tabs` maps each tab that has an activity to it, by tab identifier. A holder without an activity is not listed, so a window in which no tab has an activity reports `{projects: {}, tabs: {}}`.
+`core.activity` reports the activities as `{projects, tabs}`. `projects` is the record of the projects of the application ([activity of a project](#activity-of-a-project)): it holds for each project that has an activity, held by this window or by another, `{activity, spaces}`, and `spaces` holds for each of its spaces that has an activity `{activity, cards, groups}`: `cards` maps each content card of the space that has an activity to it and `groups` each group card that has an activity to it, by card identifier. `tabs` maps each tab of the projects of this window that has an activity to it, by tab identifier. A holder without an activity is not listed, so an application in which no tab has an activity reports `{projects: {}, tabs: {}}`. The project tabs, the space tabs and the group headers of a window draw the activities of `projects`, and the tabs of the cards draw those of `tabs`.
 
 ## Drawing
 

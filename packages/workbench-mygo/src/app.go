@@ -365,6 +365,8 @@ func (s *Shell) event(name string, data []any) {
 		s.followLogLevels(data)
 	case "workspace-changed":
 		s.workspaceChanged()
+	case "project-activity":
+		s.projectActivityReceived(data)
 	case "files-dropped":
 		s.filesDropped(data)
 	case "window-responder":

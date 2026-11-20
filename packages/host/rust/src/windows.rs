@@ -522,6 +522,9 @@ pub struct Windows {
     /// (docs/spec/installation.md#application-update, docs/spec/endpoint.md#diagnostic-builds).
     pub update: Mutex<Option<crate::app_update::PendingStart>>,
     removals: crate::project_removal::Removals,
+    /// The record of the activities of the projects of the application (docs/spec/activity.md#activity-of-a-project). A publication
+    /// is recorded while the owner record is held, so it does not cross the release of its project.
+    pub(crate) activities: crate::project_activity::ProjectActivities,
     next_window: AtomicU64,
     opening: Mutex<()>,
     windows: Mutex<HashMap<String, Arc<WindowData>>>,
@@ -538,6 +541,8 @@ fn remove_window_records(registry: &Windows, label: &str) -> bool {
         .unwrap_or_else(PoisonError::into_inner);
     owners.retain(|_, owner| owner != label);
     drop(owners);
+    // The surfaces of the window ended, so the project activities that it published end with them.
+    registry.activities.end(label);
     let mut windows = registry
         .windows
         .lock()
@@ -732,6 +737,17 @@ pub(crate) fn notify_workspace(app: &AppHandle) {
     for window in app.windows().values() {
         if let Err(error) = emit_window(window, "workspace-changed", ()) {
             log_error("workspace-changed", error);
+        }
+    }
+}
+
+/// Sends the record of the project activities to every window as `project-activity`. Two sends may arrive in either order, so a
+/// window keeps the record of the highest revision (docs/spec/activity.md#activity-of-a-project).
+pub(crate) fn notify_project_activity(app: &AppHandle) {
+    let record = app.state::<Windows>().activities.record();
+    for window in app.windows().values() {
+        if let Err(error) = emit_window(window, "project-activity", record.clone()) {
+            log_error("project-activity", error);
         }
     }
 }
@@ -1162,7 +1178,9 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             );
             let registry = host.state::<Windows>();
             crate::performance::window_remove(host.label());
-            if remove_window_records(&registry, host.label()) {
+            let quitting = remove_window_records(&registry, host.label());
+            notify_project_activity(host.app_handle());
+            if quitting {
                 crate::event_record::quit_with_cause(
                     "last-window-closed",
                     crate::event_record::host_quit_source("last-window-closed"),
@@ -1660,6 +1678,9 @@ pub fn project_shown(window: &Window, request: ProjectShown) -> Result<(), Strin
 pub fn project_release(window: &Window, id: String) -> Result<(), String> {
     let registry = window.state::<Windows>();
     let (released, empty) = release_owner(&registry.owners, &id);
+    if registry.activities.release(&id) {
+        notify_project_activity(window.app_handle());
+    }
     if let Some(label) = released {
         // When the window is already closed, there is no state to clear.
         if let Some(owner) = window.app_handle().get_window(&label) {
@@ -1779,6 +1800,43 @@ pub(crate) fn removal_page_ended(window: &Window) {
     window.state::<Windows>().removals.abandon(window.label());
 }
 
+/// Removes the project activities that the page of window published, because that page ended with the surfaces that gave them.
+pub(crate) fn activities_page_ended(window: &Window) {
+    if window.state::<Windows>().activities.end(window.label()) {
+        notify_project_activity(window.app_handle());
+    }
+}
+
+/// Records the activities of the spaces of the project `id` that `window` publishes, with the owner record held, and returns whether
+/// the record changed (docs/spec/activity.md#activity-of-a-project).
+pub(crate) fn publish_project_activity(
+    registry: &Windows,
+    window: &str,
+    request: crate::project_activity::ProjectActivityRequest,
+) -> Result<bool, String> {
+    let owners = registry
+        .owners
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the owner record, which is only read; the panic hook
+        // records the panic.
+        .unwrap_or_else(PoisonError::into_inner);
+    let owner = owners.get(&request.id).map(String::as_str);
+    registry
+        .activities
+        .publish(window, owner, &request.id, request.spaces)
+}
+
+/// Records the activities of the spaces of a project that the window holds, and sends the record to every window when it changed.
+pub fn project_activity(
+    window: &Window,
+    request: crate::project_activity::ProjectActivityRequest,
+) -> Result<(), String> {
+    if publish_project_activity(&window.state::<Windows>(), window.label(), request)? {
+        notify_project_activity(window.app_handle());
+    }
+    Ok(())
+}
+
 /// Records that the main page started. Call it before the start document request answers. It leaves the window not
 /// ready, ends the requests sent to the previous page, and cleans up the surface documents, the image regions and the
 /// modals of the previous page.
@@ -1792,6 +1850,7 @@ pub(crate) fn page_started(window: &Window) -> Result<(), String> {
     let cleanup = (|| {
         data.ready.store(false, Ordering::Relaxed);
         removal_page_ended(window);
+        activities_page_ended(window);
         // No page shows the failures of the cleared ends, so the host writes them.
         for failure in data.images.detach_page_starting() {
             log_error("image detach", failure);
@@ -1845,6 +1904,11 @@ fn send_responder(window: &Window, ready: bool) {
 pub fn window_ready(window: &Window) -> Result<(), String> {
     let data = window_data(window)?;
     data.ready.store(true, Ordering::Relaxed);
+    // The ready page receives the record of the project activities, so a new window starts with the projects of the other windows.
+    let record = window.state::<Windows>().activities.record();
+    if let Err(error) = emit_window(window, "project-activity", record) {
+        log_error("project-activity", error);
+    }
     for event in data.images.detach_page_ready() {
         if let Err(error) = emit_window(window, "image-detach-ended", event) {
             log_error("image-detach-ended", error);
@@ -1995,7 +2059,10 @@ pub(crate) fn end_page(window: &Window) -> Result<(), String> {
         &window.state::<crate::exposure::Exposure>().relay,
         &data,
         window.label(),
-        || removal_page_ended(window),
+        || {
+            removal_page_ended(window);
+            activities_page_ended(window);
+        },
         || crate::surfaces::keys_page_ended(window),
         || close_window(window),
     )

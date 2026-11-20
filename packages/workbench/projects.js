@@ -185,6 +185,9 @@ export const newWindow = () => windows.newWindow(beginOperation("workbench.windo
 export const pin = (id, pinned) => store.patch(id, { pinned });
 export function onSwitch(callbacks) { listener = callbacks; }
 export function onChange(fn) { changed = fn; }
+/* The receiver of the record of the project activities that the host sends (docs/spec/activity.md#activity-of-a-project). */
+let projectActivity = () => {};
+export function onProjectActivity(fn) { projectActivity = fn; }
 
 /** Stores the plugin data key of plugin for project id with value (docs/spec/plugins.md#project-data). */
 async function setPluginData(id, plugin, key, value) {
@@ -306,6 +309,8 @@ async function initialiseWindow(storage, unloadOf) {
   await windows.onActivate((id) => activateHere(id).catch(failed));
   await windows.onCloseRequest(() => closeWindow().catch(failed));
   await windows.onRemoveProjectRequest((id) => answerRemoval(id).catch(failed));
+  // The host sends the record at each change and when this window reports ready below.
+  await windows.onProjectActivity((record) => projectActivity(record));
   const requested = new URL(location.href).searchParams.get("project");
   const first = requested ? projects.find((p) => p.id === requested) : null;
   if (first) {

@@ -87,24 +87,50 @@ const activityListeners = new Set();
 /* The receiver of the error of the activity values of a tab, which the error display of the page shows (docs/spec/activity.md). */
 let activityFailed = null;
 
-/* The activities of this window, which follow the statuses of the plugins that declare activity on each surface. */
+const activityChanged = () => {
+  for (const listener of activityListeners) listener();
+  coreChanged();
+};
+
+/* The record of the activities of the projects of the application that the host sent last, by its revision
+   (docs/spec/activity.md#activity-of-a-project); -1 until the first record arrives. */
+let projectRecord = { revision: -1, projects: {} };
+/* The publications of this window, one after the other, so that the host receives the activities of a project in the order of their
+   changes. */
+let publishing = Promise.resolve();
+
+/* The activities of this window, which follow the statuses of the plugins that declare activity on each surface and publish the
+   activities of the spaces of each project of the window to the host. */
 const activity = createActivity({
   observe: (name, surface, fn) => registry.observe(name, surface, fn, { exact: true }),
   // default: a tab of a plugin that is not loaded, and a plugin record without activity, follow no status.
   statuses: (id) => (hasPlugin(id) ? plugin(id).activity ?? [] : []),
   projects: activityProjects,
   failed: (tab, text) => activityFailed(tab, text),
-  changed: () => {
-    for (const listener of activityListeners) listener();
-    coreChanged();
+  changed: activityChanged,
+  publish: (id, spaces) => {
+    publishing = publishing.then(() => windows.projectActivity({ id, spaces })).catch((error) => {
+      dispatchEvent(new ErrorEvent("error", { message: `projectActivity ${id}: ${error.message}` }));
+    });
   },
 });
 
 /** Starts and ends the watches of the activities after the layout, the projects or the plugins of the window changed. */
 export const syncActivity = () => activity.sync();
 
-/** The activities of this window, the value of core.activity. */
-export const activityState = () => activity.state();
+/**
+ * The value of core.activity: the record of the projects of the application and the activities of the tabs of this window
+ * (docs/spec/activity.md#status).
+ */
+export const activityState = () => ({ projects: projectRecord.projects, tabs: activity.state().tabs });
+
+/** Keeps the record of the project activities of the highest revision that the host sent. */
+function receivedProjectRecord(record) {
+  if (record.revision <= projectRecord.revision) return;
+  projectRecord = record;
+  activityChanged();
+}
+projects.onProjectActivity(receivedProjectRecord);
 
 /** Sets the receiver of the error text of the activity values of a tab, null when it is withdrawn. */
 export function onActivityError(receiver) {

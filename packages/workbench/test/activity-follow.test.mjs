@@ -1,5 +1,6 @@
-// The page follows each status that declares activity on the surface of each tab of its window by a watch of that surface, and derives
-// the activities at each delivered value (docs/spec/activity.md#activity-of-a-tab). The host calls are answered by a page-wire case
+// The page follows each status that declares activity on the surface of each tab of its window by a watch of that surface, derives
+// the activities at each delivered value (docs/spec/activity.md#activity-of-a-tab) and publishes the activities of the spaces of each
+// project of the window after each change of them (docs/spec/activity.md#activity-of-a-project). The host calls are answered by a page-wire case
 // (docs/spec/cases/page-wire/README.md).
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -29,25 +30,30 @@ test("the activity of a tab follows the watch of its surface, which starts when 
   let projects = windowOf([{ id: "tab-a", plugin: "probe" }, { id: "tab-b", plugin: "probe" }]);
   let changes = 0;
   const errors = [];
+  const published = [];
   const activity = createActivity({
     observe: (name, surface, fn) => made.observe(name, surface, fn, { exact: true }),
     statuses: (plugin) => (plugin === "probe" ? [STATE.name] : []),
     projects: () => projects,
     changed: () => { changes += 1; },
     failed: (tab, text) => errors.push([tab, text]),
+    publish: (id, spaces) => published.push([id, spaces]),
   });
   activity.sync();
   await made.idle();
-  assert.deepEqual(activity.state(), { projects: {}, tabs: {} }, "no surface sent a value");
+  assert.deepEqual(activity.state(), { spaces: {}, tabs: {} }, "no surface sent a value");
+  assert.deepEqual(published, [], "a project without an activity that was never published is not published");
   made.changed({ surface: "tab-a", name: "probe.state", value: "running", version: 1 });
   assert.deepEqual(activity.state().tabs, { "tab-a": "running" });
-  assert.equal(activity.state().projects.p1.activity, "running");
+  const running = { s1: { activity: "running", cards: { "card-1": "running" }, groups: {} } };
+  assert.deepEqual(published, [["p1", running]]);
   // tab-b registers its status after the sync; the registration starts its watch, and its value raises the project to attention.
   made.registered({ surface: "tab-b", kind: "status", name: "probe.state" });
   await made.idle();
   made.changed({ surface: "tab-b", name: "probe.state", value: "attention", version: 1 });
-  assert.deepEqual(activity.state(), { projects: { p1: { activity: "attention", spaces: { s1: { activity: "attention",
-    cards: { "card-1": "attention" }, groups: {} } } } }, tabs: { "tab-a": "running", "tab-b": "attention" } });
+  const attention = { s1: { activity: "attention", cards: { "card-1": "attention" }, groups: {} } };
+  assert.deepEqual(activity.state(), { spaces: { p1: attention }, tabs: { "tab-a": "running", "tab-b": "attention" } });
+  assert.deepEqual(published, [["p1", running], ["p1", attention]], "the window derives no activity of the project, only of its spaces");
   // A value that is no activity gives tab-a none and shows its error until a valid value withdraws it.
   made.changed({ surface: "tab-a", name: "probe.state", value: "busy", version: 2 });
   assert.deepEqual(activity.state().tabs, { "tab-b": "attention" });
@@ -61,5 +67,15 @@ test("the activity of a tab follows the watch of its surface, which starts when 
   await made.idle();
   assert.deepEqual(activity.state().tabs, { "tab-b": "attention" });
   assert.equal(changes, 3, "each change of core.activity is announced once, and the leave of a tab without an activity changes nothing");
+  assert.equal(published.length, 2, "an unchanged project is not published again");
+  // tab-b ends with a null value, so the project has no activity and is withdrawn with empty spaces.
+  made.changed({ surface: "tab-b", name: "probe.state", value: null, version: 2 });
+  assert.deepEqual(published.at(-1), ["p1", {}]);
+  // A project that leaves the window is not published: the host removes its entry with the release.
+  made.changed({ surface: "tab-b", name: "probe.state", value: "failed", version: 3 });
+  assert.equal(published.length, 4);
+  projects = [];
+  activity.sync();
+  assert.equal(published.length, 4, "a project that left the window is not published");
   wire.finish();
 });

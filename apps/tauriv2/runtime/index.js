@@ -13,7 +13,7 @@ import { createLifecycleListener } from "./listener-lifecycle.js";
 const COMMAND = {
   workspace: "workspace",
   windowNew: "window_new", folderChoose: "folder_choose", projectCreate: "project_create",
-  projectFolder: "project_folder", projectOpen: "project_open", projectShown: "project_shown", projectRelease: "project_release", projectRemoveAsk: "project_remove_ask", projectRemoveAnswer: "project_remove_answer",
+  projectFolder: "project_folder", projectOpen: "project_open", projectShown: "project_shown", projectRelease: "project_release", projectRemoveAsk: "project_remove_ask", projectRemoveAnswer: "project_remove_answer", projectActivity: "project_activity",
   windowState: "window_state", performance: "performance", log: "log", windowReady: "window_ready", windowClose: "window_close", windowCloseKept: "window_close_kept", appUpdateState: "app_update_state", appUpdateStage: "app_update_stage", appUpdateApply: "app_update_apply",
   syncSurfaces: "sync_surfaces",
   presentSurfaces: "present_surfaces",
@@ -93,7 +93,7 @@ const ARG = {
   workspace: (request) => ({ request }),
   windowNew: () => ({}), folderChoose: () => ({}), projectCreate: (request) => ({ request }),
   projectFolder: (root) => ({ root }), projectOpen: (request) => ({ request }), projectShown: (request) => ({ request }), projectRelease: (id) => ({ id }),
-  projectRemoveAsk: (id) => ({ id }), projectRemoveAnswer: (answer) => ({ answer }),
+  projectRemoveAsk: (id) => ({ id }), projectRemoveAnswer: (answer) => ({ answer }), projectActivity: (request) => ({ request }),
   windowState: () => ({}), windowReady: () => ({}), windowClose: () => ({}), windowCloseKept: () => ({}), appUpdateState: () => ({}), appUpdateStage: (request) => ({ request }), appUpdateApply: (request) => ({ request }),
   viewSourceOrigins: () => ({}),
   syncSurfaces: (v) => ({ request: v }),

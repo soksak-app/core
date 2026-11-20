@@ -1,6 +1,8 @@
-// The activities of a window (docs/spec/activity.md): the activity of each tab from the statuses of its plugin that declare activity,
-// and the highest activity of each card, group card, space and project. The shared cases of docs/spec/cases/activity.json state them,
-// and the Go workbench of packages/workbench-mygo meets the same cases.
+// The activities (docs/spec/activity.md): the activity of each tab of a window from the statuses of its plugin that declare activity,
+// the highest activity of each card, group card and space of the window, and the record of the activities of the projects of the
+// application, which the host holds and the browser runtime holds with createProjectActivities. The shared cases of
+// docs/spec/cases/activity.json state them; the Go workbench of packages/workbench-mygo meets the cases of tabs and windows, and the Go
+// and the Rust host meet the cases of records.
 import { ACTIVITIES } from "@soksak/plugin-api";
 import declaration from "./workbench.json" with { type: "json" };
 import { declaredIcons } from "./icons.js";
@@ -33,11 +35,13 @@ export function tabActivity(plugin, tab, statuses) {
 }
 
 /**
- * The value of core.activity for the projects of a window, each {id, spaces} with the stored layout of each space, from the activity of
- * each tab (tabs, by tab id). Each holder is listed only with an activity.
+ * The activities of the projects of a window, each {id, spaces} with the stored layout of each space, from the activity of each tab
+ * (tabs, by tab id): {spaces, tabs}, where spaces holds for each project the activities of its spaces that the window publishes with
+ * projectActivity (docs/spec/activity.md#activity-of-a-card-a-group-card-and-a-space). Each holder is listed only with an activity, and
+ * no activity of a project is derived here.
  */
 export function windowActivity(projects, tabs) {
-  const out = { projects: {}, tabs: {} };
+  const out = { spaces: {}, tabs: {} };
   for (const project of projects) {
     const spaces = {};
     for (const space of project.spaces) {
@@ -64,15 +68,72 @@ export function windowActivity(projects, tabs) {
       const activity = highestActivity(Object.values(cards));
       if (activity !== null) spaces[space.id] = { activity, cards, groups };
     }
-    const activity = highestActivity(Object.values(spaces).map((space) => space.activity));
-    if (activity !== null) out.projects[project.id] = { activity, spaces };
+    if (Object.keys(spaces).length) out.spaces[project.id] = spaces;
   }
   return out;
 }
 
+const PROJECT_ID = /^[a-z0-9-]+$/;
+const codePointOrder = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
+/**
+ * The record of the activities of the projects of the application (docs/spec/activity.md#activity-of-a-project), by project and not by
+ * window. publish(window, owner, id, spaces) sets the activities of the spaces of project id that window publishes, where owner is the
+ * window that holds the project or null, and throws the text of a refusal; release(id) removes the entry of a released project and
+ * end(window) the entries that an ended window published. record() is {revision, projects}; each change raises revision.
+ */
+export function createProjectActivities() {
+  // The entries by project id: the window that published it and the activities of its spaces.
+  const entries = new Map();
+  let revision = 0;
+  const projects = () => {
+    const out = {};
+    for (const [id, { spaces }] of entries) out[id] = { activity: highestActivity(Object.values(spaces).map((space) => space.activity)), spaces };
+    return out;
+  };
+  const refuse = (at, value) => {
+    if (!ACTIVITIES.includes(value)) throw new Error(`${at}: activity ${JSON.stringify(value)} is not one of ${ACTIVITIES.join(", ")}`);
+  };
+  return {
+    publish(window, owner, id, spaces) {
+      if (!PROJECT_ID.test(id)) throw new Error("invalid project id");
+      if (owner !== window) throw new Error(`project ${id} is not owned by this window`);
+      for (const space of Object.keys(spaces).sort(codePointOrder)) {
+        const { activity, cards, groups } = spaces[space];
+        refuse(`project ${id} space ${space}`, activity);
+        for (const card of Object.keys(cards).sort(codePointOrder)) refuse(`project ${id} space ${space} card ${card}`, cards[card]);
+        for (const card of Object.keys(groups).sort(codePointOrder)) refuse(`project ${id} space ${space} group ${card}`, groups[card]);
+      }
+      const held = entries.get(id);
+      if (!Object.keys(spaces).length) {
+        if (!held) return;
+        entries.delete(id);
+      } else {
+        if (held?.window === window && JSON.stringify(held.spaces) === JSON.stringify(spaces)) return;
+        entries.set(id, { window, spaces: structuredClone(spaces) });
+      }
+      revision += 1;
+    },
+    release(id) {
+      if (entries.delete(id)) revision += 1;
+    },
+    end(window) {
+      let ended = false;
+      for (const [id, entry] of entries) {
+        if (entry.window !== window) continue;
+        entries.delete(id);
+        ended = true;
+      }
+      if (ended) revision += 1;
+    },
+    record: () => ({ revision, projects: projects() }),
+  };
+}
+
 /**
  * Follows the statuses that declare activity on the surface of each tab of the projects of the window, by a watch of each surface
- * (docs/spec/activity.md#activity-of-a-tab).
+ * (docs/spec/activity.md#activity-of-a-tab), and publishes the activities of the spaces of each project of the window after each change
+ * of them (docs/spec/activity.md#activity-of-a-project).
  *
  *   observe(name, surface, fn)  follows the status name of surface; fn receives each value, null while the surface has not
  *                               registered it, and the function returns the function that ends it
@@ -80,15 +141,19 @@ export function windowActivity(projects, tabs) {
  *   projects()                  the projects of the window, each {id, spaces} with the stored layout of each space
  *   changed()                   called after the value of core.activity changed
  *   failed(tab, text)           shows the error text of the activity values of the tab, or withdraws it with null
+ *   publish(id, spaces)         publishes the activities of the spaces of the project id, {} when none has an activity
  *
- * sync() starts and ends the watches after a layout, a project or the plugins changed; state() is the value of core.activity.
+ * sync() starts and ends the watches after a layout, a project or the plugins changed; state() is {spaces, tabs} of windowActivity.
+ * A project that leaves the window is not published again: the host removes its entry with its release.
  */
-export function createActivity({ observe, statuses, projects, changed, failed }) {
+export function createActivity({ observe, statuses, projects, changed, failed, publish }) {
   // The followed tabs by id: the plugin, and each followed status by name with its value and the function that ends its watch.
   const followed = new Map();
   // The tabs whose error is shown, with its text.
   const errors = new Map();
-  let state = { projects: {}, tabs: {} };
+  let state = { spaces: {}, tabs: {} };
+  // The published activities of the spaces of each project of the window, as JSON text, by project id.
+  const published = new Map();
   let syncing = false;
 
   function derive() {
@@ -108,7 +173,18 @@ export function createActivity({ observe, statuses, projects, changed, failed })
       errors.delete(tab);
       failed(tab, null);
     }
-    const next = windowActivity(projects(), tabs);
+    const held = projects();
+    const next = windowActivity(held, tabs);
+    const ids = new Set(held.map(({ id }) => id));
+    for (const id of [...published.keys()]) if (!ids.has(id)) published.delete(id);
+    for (const id of ids) {
+      // default: a project without a space with an activity publishes {}, which a project never published leaves unpublished.
+      const spaces = next.spaces[id] ?? {};
+      const text = JSON.stringify(spaces);
+      if (text === (published.get(id) ?? "{}")) continue;
+      published.set(id, text);
+      publish(id, spaces);
+    }
     if (JSON.stringify(next) === JSON.stringify(state)) return;
     state = next;
     changed();
