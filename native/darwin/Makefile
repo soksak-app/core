@@ -315,6 +315,7 @@ NATIVE_TESTS = observe_test \
   window_order_test \
   window_release_test \
   modal_release_test \
+  main_webview_input_test \
   window_objects_test \
   page_objects_test \
   process_exit_test \
