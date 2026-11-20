@@ -91,7 +91,7 @@ sidecar 프로토콜 변경: terminal session의 `open` 요청은 `directory` �
 - 파일은 configuration directory에 속하며 person의 repository에는 속하지 않는다.
 - 모드: 디렉터리 `<config-dir>/agents/<surface>/`는 모드 0700으로 만든다. `role.md`와 identity 파일은 모드 0600으로 쓴다. 임시 파일의 모드는 이름을 바꾸기 전에 확인한다. 모드가 다르면 최종 이름으로는 보이지 않으며, 쓰기는 `role file <path>: mode <mode> is not 0600`으로 실패하고 임시 파일을 지운다. 각 쓰기 단계의 실패는 `role file <path>: write failed: <os error>`로 실패하며, `<path>`는 그 단계가 쓴 경로다.
 - 원자적 쓰기: host는 같은 폴더에 `.role-<random>.tmp` 이름의 임시 파일에 새 내용을 쓰고 `role.md` 위로 이름을 바꾼다. 읽는 쪽은 이전 파일 전체 또는 새 파일 전체만 본다. launch는 첫 쓰기 전에 surface 폴더에서 `.role-*.tmp`와 맞는 파일을 지운다. 이전 충돌이 남긴 파일이다.
-- 쓰는 주체: host가 파일을 쓴다. terminal page는 파일을 만들지 않는다. 실패한 쓰기는 경로와 이유를 적은 오류다. launch의 role 파일이나 identity 파일 쓰기가 실패하면 launch를 거부하며 어떤 program도 시작하지 않는다.
+- 쓰는 주체: host가 파일을 쓴다. terminal page는 파일을 만들지 않는다. 실패한 쓰기는 `role file <path>: write failed: <os error>`라는 문장으로 경로와 이유를 적는다. launch의 role 파일이나 identity 파일 쓰기가 실패하면 그 문장으로 launch를 거부하며 어떤 program도 시작하지 않는다.
 - 수명: host는 launch 전에 디렉터리를 만든다. tab이 layout에서 제거되면 host는 tab의 프로그램을 멈추고, 진행 중인 쓰기가 끝나기를 기다리고, 그 tab의 이후 role 변경을 `tab <tab> was removed; its role cannot change`로 거부하며, 디렉터리를 지운다. 제거 뒤의 이름 바꾸기가 실패하면 임시 파일을 지우고 기록한다. 제거된 tab의 보류 message는 버린다. 각 message마다 state `skipped`와 reason `tab removed`의 delivery record를 쓴다. 제거된 tab은 resume할 수 없다.
 - launch 기록: 각 launch는 identity 경로를 tab의 session 기록에 저장한다. identity를 flag로 받은 session의 resume은 저장된 경로가 현재 경로와 같고 파일이 있는지 확인한다. adapter가 없는 session은 현재 경로로 첫 message를 다시 보내므로 이 확인이 없다. configuration directory가 옮겨졌거나 파일이 없으면 resume은 경로가 다르면 `identity path <stored> is not the current path <current>`, 파일이 없으면 `identity file <path> is missing`으로 실패한다.
 
@@ -149,7 +149,7 @@ role 변경은 registry를 거치는 명령 `core.tab.role {tab, role}`이다. t
 4. host가 상태 `core.tab.role`을 `{role, generation, state: "pending", seq, fingerprint}`로 게시한다;
 5. terminal page가 변경 message를 보낸다([Change message](#change-message)).
 
-실패 규칙: 1단계 실패는 임시 파일을 지우고 아무것도 저장하지 않는다. 2단계 실패는 임시 파일을 지우고, 저장된 role은 그대로 두며, 오류로 보고한다. 3단계 실패는 임시 파일을 지운 뒤 `projects.json`의 이전 기록을 복원한다. 복원도 실패하면 두 오류를 각각 경로와 함께 보고한다. 단계 사이에 host가 끝나면, 다음 launch가 CLI를 시작하기 전에 `projects.json`의 기록과 `roles.json`의 정의 텍스트로 role 파일을 다시 쓴다. fingerprint이 기록과 다르면 쓰기를 경로를 적은 오류로 거부한다.
+실패 규칙: 1단계 실패는 임시 파일을 지우고 아무것도 저장하지 않는다. 2단계 실패는 임시 파일을 지우고, 저장된 role은 그대로 두며, 오류로 보고한다. 3단계 실패는 임시 파일을 지운 뒤 `projects.json`의 이전 기록을 복원한다. 복원도 실패하면 쓰기 오류와 `projects.json <path>: restore failed: <os error>`를 함께 보고한다. 단계 사이에 host가 끝나면, 다음 launch가 CLI를 시작하기 전에 `projects.json`의 기록과 `roles.json`의 정의 텍스트로 role 파일을 다시 쓴다. fingerprint이 기록과 다르면 `role file <path>: fingerprint differs from the record`로 쓰기를 거부한다.
 
 상태 `core.tab.role`의 값은 `{role, generation, state, seq, fingerprint}`다. `state`는 `pending`, `ready`, `unconfirmed`이며 role이 없으면 `null`이다. `fingerprint`는 현재 role 파일의 fingerprint이고 role이 없으면 `null`이다. `seq`는 변경마다 오른다. role 명령의 답도 `fingerprint`를 담는다. page는 상태의 `fingerprint`로 reread request을 만들며, 오류 문장은 fingerprint을 담지 않는다. page는 `runtime.status.watch`로 상태를 받으며 polling하지 않는다.
 
@@ -175,11 +175,11 @@ agent는 두 방식 중 하나로 확인하며, 어느 쪽이든 인정된다. �
 
 soksak은 confirmation을 surface의 직렬화 안에서, 차례가 왔을 때의 상태에 맞춰 판정한다.
 
-- 16자리 소문자 16진수가 아닌 값은 직렬화 전에 invalid-argument 오류로 거부한다. 아래 오래된 confirmation 규칙은 유효한 값에만 적용된다;
+- 16자리 소문자 16진수가 아닌 값은 직렬화 전에 `fingerprint <value> is not 16 lowercase hexadecimal characters`라는 invalid-argument 오류로 거부한다. 아래 오래된 confirmation 규칙은 유효한 값에만 적용된다;
 - fingerprint이 현재 fingerprint과 같고 상태가 `pending` 또는 `unconfirmed`이면: `confirmedFingerprint`를 저장하고, 상태를 `ready`로 바꾸고, `seq`를 올리고, 요청 계수를 0으로 되돌리고, 보류된 작업 message를 풀어준다;
 - fingerprint이 현재 fingerprint과 같고 상태가 `ready`이면: 아무것도 바꾸지 않으며 답은 성공이다;
-- fingerprint이 현재 fingerprint과 다르면, 즉 이전 파일의 fingerprint이면: 재시도 없이 오래된 confirmation으로 거부한다. 오류는 `stale fingerprint: read the role file again at <path>`이며 현재 role 파일의 경로를 적는다. fingerprint은 적지 않는다. 상태는 그대로 둔다;
-- role이 없는 tab이거나 tab이 없는 surface이면: surface를 적은 명시적 오류로 거부한다.
+- fingerprint이 현재 fingerprint과 다르면, 즉 이전 파일의 fingerprint이면: 재시도 없이 `stale fingerprint: read the role file again at <path>`로 거부한다. 오류는 `stale fingerprint: read the role file again at <path>`이며 현재 role 파일의 경로를 적는다. fingerprint은 적지 않는다. 상태는 그대로 둔다;
+- role이 없는 tab이거나 tab이 없는 surface이면: `surface "<value>" has no tab`, 또는 role이 없는 tab이면 `tab <tab> has no role`로 거부한다.
 
 ### Requests
 
@@ -191,7 +191,7 @@ page는 tab의 프로그램 상태([terminal state](terminal-state.md))를 지�
 
 상태 `unconfirmed`에서 같은 role을 다시 할당하면 상태는 계수 0의 `pending`이 되고, reread request은 다음 바쁘지 않음 보고에서 보내며 요청 1로 센다. 파일은 쓰지 않으며 generation도 바꾸지 않는다([Idempotency](#idempotency)).
 
-host는 `unconfirmed`를 error display 경로로 보고하고 application log에 쓴다. 상태는 person이 role을 다시 할당할 때까지 `unconfirmed`로 남는다.
+host는 `unconfirmed`를 `unconfirmed role: tab <tab> did not confirm the role file <path>` 문장과 함께 error display 경로로 보고하고 application log에 쓴다. 상태는 person이 role을 다시 할당할 때까지 `unconfirmed`로 남는다.
 
 각 요청은 같은 경로와 같은 fingerprint을 적으므로 결과를 바꾸지 않고 반복된다. 이 단계들은 timer로 정하지 않는다. 계수는 저장된 기록의 일부이므로 재시작해도 0으로 돌아가지 않는다.
 
@@ -214,7 +214,7 @@ host는 `unconfirmed`를 error display 경로로 보고하고 application log에
 - 현재 fingerprint으로 `sok role confirm` 또는 답변 줄을 반복하면 `ready`를 답하며 아무것도 바꾸지 않는다. `seq`도 바꾸지 않는다;
 - 다시 보내는 reread request은 같은 경로와 같은 fingerprint을 적으므로, 파일을 다시 읽고 다시 확인하면 같은 `ready`가 된다;
 - 작업 message는 `ready`가 두 번 도달해도 정확히 한 번 전달된다;
-- program이 계속 실행되는 동안 application을 재시작하면 상태는 저장된 기록과 파일에서 다시 만든다. `confirmedFingerprint`가 파일의 fingerprint과 같으면 `ready`다. 아니면 저장된 계수가 0 또는 1이면 그 계수를 가진 `pending`, 2이면 `unconfirmed`다. 파일의 fingerprint이 기록과 다르면 먼저 `roles.json`에서 파일을 다시 쓴다. 다시 쓴 파일의 fingerprint도 기록과 다르면 경로를 적은 오류로 재시작을 거부한다;
+- program이 계속 실행되는 동안 application을 재시작하면 상태는 저장된 기록과 파일에서 다시 만든다. `confirmedFingerprint`가 파일의 fingerprint과 같으면 `ready`다. 아니면 저장된 계수가 0 또는 1이면 그 계수를 가진 `pending`, 2이면 `unconfirmed`다. 파일의 fingerprint이 기록과 다르면 먼저 `roles.json`에서 파일을 다시 쓴다. 다시 쓴 파일의 fingerprint도 기록과 다르면 `role file <path>: fingerprint differs from the record`로 재시작을 거부한다;
 - resume은 같은 fingerprint을 가진 `pending`을 준다. resume은 launch 텍스트를 유지하지만 agent가 파일을 읽었다는 증거는 유지하지 않기 때문이다. host는 resume에서 `confirmedFingerprint`와 요청 계수를 지우고, resume된 tab은 다음 바쁘지 않음 보고에서 reread request을 한 번 보내며 그 요청은 요청 1로 센다. 새 launch도 `confirmedFingerprint`와 계수를 지우며, resume과 같다.
 
 role A를 B로 바꾸고 다시 A로 바꾸면 A의 fingerprint이 다시 나온다. 내용이 같으므로 그 fingerprint의 confirmation은 올바르다.
@@ -226,8 +226,8 @@ role A를 B로 바꾸고 다시 A로 바꾸면 A의 fingerprint이 다시 나온
 - 같은 role의 정의를 바꿈: 새 generation과 변경 message 하나.
 - A에서 B로, 다시 A로 바꿈: A의 fingerprint이 돌아오고, 그 fingerprint의 confirmation은 `ready`가 된다.
 - 현재 fingerprint의 confirmation을 반복: 두 번 모두 `ready`이며, 두 번째 뒤에 `seq`는 바뀌지 않는다.
-- 변경 뒤 이전 fingerprint의 confirmation: 오래된 confirmation으로 거부된다. 오류는 파일을 적고 fingerprint은 적지 않는다.
-- 16자리 소문자 16진수가 아닌 confirmation 값: invalid input으로 거부하며, 오래된 confirmation 오류를 보내지 않는다.
+- 변경 뒤 이전 fingerprint의 confirmation: `stale fingerprint: read the role file again at <path>`로 거부된다. fingerprint은 적지 않는다.
+- 16자리 소문자 16진수가 아닌 confirmation 값: `fingerprint <value> is not 16 lowercase hexadecimal characters`로 invalid input으로 거부하며, 오래된 confirmation 오류를 보내지 않는다.
 - confirmation 없이 reread request 두 번: `unconfirmed`, error display 기록 하나와 log 기록 하나, 세 번째 요청은 없다.
 - 작업 message에서 `ready`가 두 번 도달: 파일 이름으로 구분해 한 번만 주입한다.
 - confirmation이 저장된 상태에서 재시작: 입력 없이 `ready`. 계수 1이 저장되어 있으면 그 계수의 `pending`. 계수 2가 저장되어 있으면 입력 없이 `unconfirmed`.
@@ -237,11 +237,11 @@ role A를 B로 바꾸고 다시 A로 바꾸면 A의 fingerprint이 다시 나온
 
 ## Concurrency
 
-한 surface의 role 작업은 host의 한 소유자가 도착 순서대로 직렬화한다. 작업은 role 할당이나 변경, confirmation(두 방식 모두), 요청, reread request, tab 제거다. 제거 뒤의 confirmation은 role이 없는 tab으로 거부한다. 변경마다 generation이 오르며, confirmation은 같은 직렬화 안에서 판정하므로 차례가 왔을 때의 상태에 맞춰진다.
+한 surface의 role 작업은 host의 한 소유자가 도착 순서대로 직렬화한다. 작업은 role 할당이나 변경, confirmation(두 방식 모두), 요청, reread request, tab 제거다. 제거 뒤의 confirmation은 `tab <tab> has no role`로 거부한다. 변경마다 generation이 오르며, confirmation은 같은 직렬화 안에서 판정하므로 차례가 왔을 때의 상태에 맞춰진다.
 
 - role 파일은 원자적으로 쓰므로 읽는 쪽은 이전 파일 전체나 새 파일 전체만 본다.
 - A에서 B, B에서 C로 연속 변경: 각 변경은 변경 message를 보내며, 각 message는 같은 경로를 가리킨다. 그 파일은 언제나 최신 role을 담으므로 어느 message의 reread request로 다시 읽어도 C에 닿는다. C의 fingerprint로 confirmation하면 `ready`가 된다.
-- B와 C의 confirmation이 엇갈림: B의 confirmation은 오래된 confirmation으로 거부되고 C의 confirmation은 받아들여진다. 순서와 상관없이 끝 상태는 같다.
+- B와 C의 confirmation이 엇갈림: B의 confirmation은 `stale fingerprint: read the role file again at <path>`로 거부되고 C의 confirmation은 받아들여진다. 순서와 상관없이 끝 상태는 같다.
 - person과 leader agent가 같은 때에 role을 설정: 직렬화되며 마지막 것이 이긴다. 각 답은 결과 `{role, generation, state, fingerprint}`를 준다.
 - 대기 중인 작업 message는 현재 generation의 `ready`를 기다린다.
 - 재시작: generation, 확인된 fingerprint, 계수가 기록에 저장되어 있으므로 멱등성 규칙대로 상태를 다시 만든다.
@@ -249,8 +249,8 @@ role A를 B로 바꾸고 다시 A로 바꾸면 A의 fingerprint이 다시 나온
 ### Tests of the concurrency
 
 - A에서 B, B에서 C로 연속 변경: 같은 경로를 적은 변경 message 세 개. 첫 번째 message의 reread request로 C를 얻는다. C의 confirmation 하나로 `ready`.
-- B와 C의 엇갈린 confirmation: B는 오래된 confirmation으로 거부되고 C는 받아들여진다. 어느 순서든 끝 상태는 C의 `ready`.
-- 오래된 confirmation: 거부되며, 오류는 파일을 적고 fingerprint은 적지 않는다.
+- B와 C의 엇갈린 confirmation: B는 `stale fingerprint: read the role file again at <path>`로 거부되고 C는 받아들여진다. 어느 순서든 끝 상태는 C의 `ready`.
+- 오래된 confirmation: `stale fingerprint: read the role file again at <path>`로 거부되며, fingerprint은 적지 않는다.
 - 동시 설정자: 같은 때에 들어온 두 할당은 직렬화된다. 최종 generation은 나중 것이고, 각 답은 자기 결과 generation을 준다.
 - 쓰기 중 읽기: fault injection이 임시 쓰기와 이름 바꾸기 사이에서 writer를 멈춘다. 멈춘 동안의 reader는 이전 파일을 온전히 보고, 이름을 바꾼 뒤에는 새 파일을 온전히 본다.
 
@@ -332,7 +332,7 @@ person이 tab의 shell에서 직접 시작한 두 번째 agent CLI는 soksak의 
 - 구조와 fingerprint: 구조는 첫 줄, 정의, 마지막 줄을 가진다. 마지막 line feed가 없는 정의는 구조에서 line feed를 얻고 fingerprint은 저장된 텍스트로 계산한다. Go host와 Rust host가 `docs/spec/cases/agent-roles/fingerprint.json`의 각 사례 fingerprint을 계산하고 값이 같다. 사례에는 non-ASCII 텍스트와 줄바꿈이 있다.
 - 길이: 긴 정의(5,000자)는 전체가 쓰이고 fingerprint은 전체를 덮는다.
 - 경로: 따옴표나 제어 문자가 있는 configuration directory 경로는 `configuration directory <path> holds a quote or a control character`로 거부한다. 경로 구분자, `..` 구간 또는 제어 문자가 있는 surface 식별자도 `surface "<value>" holds a path part or a control character`로 거부하며 아무것도 쓰지 않는다.
-- launch 실패: launch의 identity 또는 role 파일 쓰기가 실패하면 어떤 program도 시작하지 않는다.
+- launch 실패: launch의 identity 또는 role 파일 쓰기가 실패하면 `role file <path>: write failed: <os error>`로 거부하며 어떤 program도 시작하지 않는다.
 - 남은 파일: launch는 쓰기 전에 surface 폴더의 `.role-*.tmp` 파일을 지운다.
 - 제거: 제거된 tab은 program을 멈추고, 이후 변경을 `tab <tab> was removed; its role cannot change`로 거부하며, 보류 message를 각각 `skipped` 기록으로 버린다.
 - resume: 저장된 경로가 현재 경로와 같고 파일이 있으면 프로그램을 시작한다. 경로가 다르면 `identity path <stored> is not the current path <current>`, 파일이 없으면 `identity file <path> is missing`으로 resume이 실패한다.
@@ -340,7 +340,7 @@ person이 tab의 shell에서 직접 시작한 두 번째 agent CLI는 soksak의 
 - 요청: 첫 요청과 두 번째 요청, `unconfirmed` 상태, 각각의 error display 기록.
 - 형식: `projects.json` reader는 형식 2를 `<file>: projects: format must be 3, found 2`로 거부하고, writer는 형식 3을 쓴다.
 - 반복과 동시성: [Tests of the repetitions](#tests-of-the-repetitions)와 [Tests of the concurrency](#tests-of-the-concurrency).
-- `roles.json`: 형식 번호, 식별자 규칙, 알 수 없는 role 거부. 각 오류 문장을 확인한다.
+- `roles.json`: 형식 번호, 식별자 규칙, 알 수 없는 role 거부. 각 오류 문장을 확인한다: `<file>: roles: format must be 1, found <value>`, `<file>: roles: invalid role identifier <id>`, `unknown agent role <id>`.
 
 ### Acceptance
 
@@ -355,9 +355,9 @@ target은 role 상태만 판정한다. CLI마다 다음을 한다.
 5. 답변 줄 방식(b)만 선언한 agent는 답변 줄로 2단계를 반복하고, shell이 있는 agent는 `sok role confirm`으로 반복한다;
 6. CLI의 persistent memory 파일과 project 폴더의 `AGENTS.md`, `CLAUDE.md`에 nonce가 나타나지 않음을 요구한다.
 
-확인하지 않는 agent는 `unconfirmed`로 끝나며 target은 오류와 그 문장을 보고한다. target은 `unconfirmed` 상태를 통과로 보고하지 않는다.
+확인하지 않는 agent는 `unconfirmed`로 끝나며 target은 `unconfirmed role: tab <tab> did not confirm the role file <path>`를 보고한다. target은 `unconfirmed` 상태를 통과로 보고하지 않는다.
 
-`claude`나 `codex` 명령이 없으면 target은 그 이름을 적은 오류로 실패하며, 어떤 테스트도 건너뛰지 않는다. 각 테스트는 자신의 시간 제한을 가지며, `running`, `finished`, `passed`, `failed`와 경과 시간을 출력한다([AGENTS](../../AGENTS.md#verification)).
+`claude`나 `codex` 명령이 없으면 target은 `command not found: <program>`으로 실패하며, 어떤 테스트도 건너뛰지 않는다. 각 테스트는 자신의 시간 제한을 가지며, `running`, `finished`, `passed`, `failed`와 경과 시간을 출력한다([AGENTS](../../AGENTS.md#verification)).
 
 ## Verification boundaries
 
