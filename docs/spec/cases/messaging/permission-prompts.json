@@ -83,7 +83,8 @@
         "default"
       ],
       "request": "Run the shell command `touch approved.txt` in the current folder, and nothing else.",
-      "statusQueryAnswered": true,
+      "statusQueryAnswered": false,
+      "statusQueryNote": "The program sent ESC ] 7501 ; ? BEL in one write with XTVERSION, CSI ? u and CSI c. The answer of the pseudo terminal of the observation was the bytes ] 7501 ; ? without ESC and without BEL or ST, written after the reply to CSI c, so it was no answer that the program accepts, and the programStatus null of the steps states nothing about the reports of the program.",
       "steps": [
         {
           "screen": [

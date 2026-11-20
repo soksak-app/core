@@ -121,8 +121,8 @@ Status `<plugin>.messages`는 registration 옆에 message의 delivery를 담는�
 120열 40행의 pseudo terminal에서 Codex CLI 0.171.0(`-a on-request -s read-only`)과 Claude Code 2.1.329(`--permission-mode default`)에 각각 scratch folder에서 `touch approved.txt`를 실행하도록 요청해 측정했다(`docs/spec/cases/messaging/permission-prompts.json`).
 
 - 둘 다 선택된 답이 Yes인 permission prompt를 보였다. Enter 없이 `[메시지 from test] hello`를 bracketed paste로 보내자 prompt는 열린 채였고, command는 실행되지 않았으며, text는 prompt에도 그 뒤의 input line에도 화면 어디에도 나타나지 않았다. 두 program 모두 이를 queue에 넣지 않았다. 이어진 Enter는 prompt에 Yes로 답했고 command가 실행되었다.
-- Codex CLI는 prompt가 열릴 때부터 답할 때까지 `state=blocked:kind=permission`(OSC 7501)을 보고했고, command 뒤에 `done`을 보고했다. Claude Code는 query `OSC 7501;?`을 보내고 답을 받았으나, 실행 동안 보고를 보내지 않았다.
-- Program이 스스로 여는 prompt도 주입의 Enter를 같은 방식으로 받는다. 시작 때 OSC 7501 보고 없이 열린 Codex CLI update prompt는 붙여 넣은 요청 뒤의 Enter를 받아 선택된 답인 update를 실행했고, 역시 보고 없는 Claude Code의 folder trust prompt는 Enter를 받아 선택된 답인 `No, exit`를 실행했다.
+- Codex CLI는 prompt가 열릴 때부터 답할 때까지 `state=blocked:kind=permission`(OSC 7501)을 보고했고, command 뒤에 `done`을 보고했다. Claude Code는 query `OSC 7501;?`을 XTVERSION, `CSI ? u`, `CSI c`와 한 write로 보냈다. 관찰의 pseudo terminal은 그것에 ESC와 종결자가 없는 byte로, `CSI c`의 답 뒤에 답했으므로, program은 유효한 답을 받지 않았고, 이 실행은 Claude Code의 보고에 대해 아무것도 말하지 않는다.
+- Program이 스스로 여는 prompt도 주입의 Enter를 같은 방식으로 받는다. 시작 때 OSC 7501 보고 없이 열린 Codex CLI update prompt는 붙여 넣은 요청 뒤의 Enter를 받아 선택된 답인 update를 실행했고, status query가 같은 무효한 답을 받은 Claude Code의 folder trust prompt는 Enter를 받아 선택된 답인 `No, exit`를 실행했다.
 
 따라서 paste 뒤의 Enter는 사람에게 묻는 prompt에 그 선택된 답으로 답하고, prompt 동안의 paste는 사라진다. `blocked` 보류는 두 program 모두에 필요하다. Record를 쓰지 않고 notice도 주지 않는 program의 prompt는 관찰할 수 없으므로 보류가 이를 다루지 못한다.
 
