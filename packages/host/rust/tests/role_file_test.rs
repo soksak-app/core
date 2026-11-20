@@ -165,7 +165,8 @@ fn role_path_matches_shared_cases() {
     for case in cases["cases"].as_array().unwrap() {
         let config = tempfile::TempDir::new().unwrap();
         let surface = case["surface"].as_str().unwrap();
-        let path = write_role_file(config.path(), surface, "reviewer", "Review the changes.").unwrap();
+        let path =
+            write_role_file(config.path(), surface, "reviewer", "Review the changes.").unwrap();
         let want = config.path().join(case["path"].as_str().unwrap());
         assert_eq!(path, want, "case {}", case["name"]);
     }

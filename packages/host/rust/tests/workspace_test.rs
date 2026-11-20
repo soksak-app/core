@@ -810,8 +810,14 @@ fn earlier_stored_forms_are_reported_by_snapshot_and_refused_by_writes() {
     let projects = config.path().join("projects.json");
     let bare = r#"[{"id":"prj-a","root":"/x","identity":"1:1"}]"#;
     fs::write(&projects, bare).unwrap();
-    let refusal_bare = format!("{}: projects: format must be 4, found null", projects.display());
-    let refusal = format!("{}: projects: format must be 4, found 3", projects.display());
+    let refusal_bare = format!(
+        "{}: projects: format must be 4, found null",
+        projects.display()
+    );
+    let refusal = format!(
+        "{}: projects: format must be 4, found 3",
+        projects.display()
+    );
     assert_eq!(
         apply(json!({"kind":"snapshot"})).unwrap(),
         json!({"projects": [], "common": {}, "projectsError": refusal_bare})
@@ -869,5 +875,8 @@ fn projects_writer_writes_format_4() {
         &store,
         json!({"kind":"add", "project":{"id":"prj-a", "root":root.path(), "identity":"1:1"}}),
     );
-    assert_eq!(read(&config.path().join("projects.json"))["format"], json!(4));
+    assert_eq!(
+        read(&config.path().join("projects.json"))["format"],
+        json!(4)
+    );
 }
