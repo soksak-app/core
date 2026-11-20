@@ -100,7 +100,9 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [ ] F1006-2 — terminal plugin이 agent CLI와 role로 tab을 시작한다(terminal 저장소 checklist, F1006에 연결).
   - [ ] F1006-3 — Claude Code와 Codex의 adapter: 각 adapter의 인자 목록과 identity file을 단위 test한다. 터미널 launch 경로는 launch가 agent 명령으로 시작하는 기록 program으로 test한다.
   - [ ] F1006-4 — adapter가 없는 agent CLI의 첫 message. `docs/spec/agent-roles.md`의 identity와 첫 message 규칙을 따른다.
-  - [ ] F1006-5 — 실행 중인 agent의 role 변경: role 파일 쓰기, 상태 `core.tab.role`, 변경 message, 그리고 `docs/spec/messaging.md`의 application message에 대한 결정 D3 개정.
+  - [~] F1006-5 — 실행 중인 agent의 role 변경: role 파일 쓰기, 상태 `core.tab.role`, 변경 message, 그리고 `docs/spec/messaging.md`의 application message에 대한 결정 D3 개정. 나뉨: F1006-5.1은 role 파일 writer, F1006-5.2는 F1006-9 이후의 `projects.json` record다.
+  - [~] F1006-5.1 — `docs/spec/agent-roles.ko.md#role-file`의 role 파일 writer: 공유 case `fingerprint.json`의 fingerprint, layout, identity와 handshake 문구(첫 줄은 `<fingerprint>`를 명령 문법의 문자 그대로 둔다), 디렉터리 mode 0700, 파일 mode 0600, atomic rename, 첫 쓰기 전 남은 `.role-*.tmp` 정리. 진행 중: Go와 Rust host의 Red 시험. 이 항목 밖, 저장된 record가 필요하므로 F1006-5.2로 넘긴다: generation, 반복 배정의 멱등성, 한 surface 작업의 직렬화, 오래된 fingerprint 거부.
+  - [ ] F1006-5.2 — role handshake 상태: generation, 상태 `core.tab.role`, 오래된 fingerprint 거부, surface별 직렬화를 `projects.json` record에 저장한다(F1006-9 이후).
   - [ ] F1006-6 — skill, MCP instructions와 `docs/spec/cli.md`(en+ko)가 role로 tab을 여는 방법을 적는다.
   - [o] F1006-7 — `roles.json`의 reader와 writer, 형식 번호와 `docs/spec/agent-roles.ko.md#역할-정의`의 오류, 정의를 편집하는 도구. 완료: Go와 Rust workspace store가 `roles.json`을 읽고 쓴다(형식 1, 식별자 규칙, `docs/spec/cases/agent-roles/roles.json`의 member와 거부 문구). Red: 구현 전 Go와 Rust의 roles 시험은 `unknown workspace operation: roles`로 실패한다. Green: 구현 후 Go 시험 3/3과 Rust 시험 3/3이 통과한다. mygo host는 Go store를 쓴다. 정의 편집 도구는 `docs/spec/agent-roles.ko.md#역할-정의`의 별도 항목이다.
   - [ ] F1006-8 — 인수 target `test-app-agent-role`을 terminal plugin 저장소에 둔다. 실제 Claude Code와 Codex를 로컬에서 실행한다. `ready`는 확인된 지문이 `roles.json`에서 계산한 지문과 같고, agent가 선언된 방식 중 하나로 확인했을 때만 판정한다. 확인하지 않은 agent는 `unconfirmed`로 끝나며 target은 오류 문장을 보고하고 통과를 보고하지 않는다.
