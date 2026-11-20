@@ -31,6 +31,8 @@ type debugHost struct {
 	texts    []string
 	failing  map[string]error
 	saveAll  string
+	// follows are the states of the calls debugFollow, in order.
+	follows []bool
 }
 
 // fixtureElements are the elements of the tester of a fixture, which is made after its shell.
@@ -105,6 +107,14 @@ func (h *debugHost) serve(table map[string]workbench.HostCall) {
 		page := h.pages[0]
 		h.pages = h.pages[1:]
 		return json.RawMessage(page), nil
+	}
+	table["debugFollow"] = func(_ context.Context, argument json.RawMessage) (any, error) {
+		var request struct{ Following bool }
+		if err := json.Unmarshal(argument, &request); err != nil {
+			return nil, err
+		}
+		h.follows = append(h.follows, request.Following)
+		return nil, failure("debugFollow")
 	}
 	table["debugSave"] = func(_ context.Context, argument json.RawMessage) (any, error) {
 		h.saved = append(h.saved, string(argument))
@@ -387,6 +397,37 @@ func TestANoticeOfAnEventFileAppendsWhatGrewOnce(t *testing.T) {
 	f.settle()
 	if len(stored.debug.queries) != 2 {
 		t.Fatalf("a file that is no event file asked %v", stored.debug.queries)
+	}
+}
+
+// Only a window that follows receives the notices of the event log (docs/spec/debug.md#files), so the view tells the host each
+// start and stop of following: the shown timeline, a stop and a resume, the list of files, and the close of the view.
+// contract: debug.follow.view-tells-whether-it-follows
+func TestTheViewTellsTheHostWhetherItFollows(t *testing.T) {
+	// The pages answer the shown timeline, the read of what grew when following resumes, and the timeline shown again.
+	f, stored := timelineShell(t, logPage("null", 1), logPage("null", 1), logPage("null", 1))
+	f.do("core.debug.timeline.follow", map[string]bool{"on": false})
+	f.do("core.debug.timeline.follow", map[string]bool{"on": true})
+	f.do("core.debug.list", nil)
+	f.do("core.debug.timeline", nil)
+	f.do("core.debug.close", nil)
+	if want := []bool{true, false, true, false, true, false}; !slices.Equal(stored.debug.follows, want) {
+		t.Fatalf("the view told the host %v, want %v", stored.debug.follows, want)
+	}
+}
+
+func TestARefusedFollowCallIsShownInTheView(t *testing.T) {
+	f, stored := debugShell(t)
+	stored.debug.pages = []string{logPage("null", 1)}
+	stored.debug.failing = map[string]error{"debugFollow": errors.New("refused")}
+	if err := f.later("core.debug.timeline", nil); err != nil {
+		t.Fatal(err)
+	}
+	if shown := f.shownRecords(); !slices.Equal(shown, []shownRecord{{"debug", "follow: refused"}}) {
+		t.Fatalf("the shell showed %v, want the refused follow call", shown)
+	}
+	if status := f.status("core.debug"); !strings.Contains(status, `"error":"follow: refused"`) {
+		t.Fatalf("the status is %s", status)
 	}
 }
 

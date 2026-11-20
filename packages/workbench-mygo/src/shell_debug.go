@@ -233,6 +233,26 @@ type debugViewState struct {
 	scroll    ui.ScrollState
 	tasks     []func(done func())
 	tokens    int
+	// toldFollowing is whether the shell last told the host that the view follows the event files; a window starts not following.
+	toldFollowing bool
+}
+
+// tellDebugFollowing tells the host with debugFollow whether the view follows the event files when that changed since the last
+// call: the view follows while it is open, its timeline is shown and following is on, and only a window that follows receives
+// debug-log-changed (docs/spec/debug.md#files). A failed call is shown in the view.
+func (s *Shell) tellDebugFollowing() {
+	d := &s.debugView
+	following := d.open && d.timeline != nil && d.timeline.following
+	if following == d.toldFollowing {
+		return
+	}
+	d.toldFollowing = following
+	s.calls.Call("debugFollow", map[string]bool{"following": following}, func(_ any, err error) {
+		if err != nil {
+			d.fail("follow", err)
+			s.options.Invalidate()
+		}
+	})
 }
 
 func (d *debugViewState) fail(step string, err error) {
@@ -471,6 +491,7 @@ func (s *Shell) closeDebug() {
 	s.errors.Hide(debugErrorPlace)
 	d.open, d.viewing, d.timeline, d.state = false, nil, nil, nil
 	d.tail = nil
+	s.tellDebugFollowing()
 	s.options.Invalidate()
 }
 
@@ -523,6 +544,7 @@ func (s *Shell) viewDebugFile(path string, answer func(any, error)) {
 		return
 	}
 	d.failure, d.timeline, d.state = nil, nil, nil
+	s.tellDebugFollowing()
 	s.debugRead(path, func(read debugRead, err error) {
 		var shown *DebugShown
 		if err == nil {
@@ -552,6 +574,7 @@ func (s *Shell) listDebugFiles() error {
 	}
 	d.viewing, d.timeline, d.state = nil, nil, nil
 	d.tail = nil
+	s.tellDebugFollowing()
 	s.options.Invalidate()
 	return nil
 }
@@ -569,6 +592,7 @@ func (s *Shell) showDebugTimeline(answer func(any, error)) {
 				d.timeline = nil
 				d.fail("timeline", err)
 			}
+			s.tellDebugFollowing()
 			s.options.Invalidate()
 			done()
 			answer(nil, err)
@@ -609,6 +633,7 @@ func (s *Shell) followDebugGrowth(answer func(err error)) {
 				d.timeline.following = false
 			}
 			d.fail("follow", err)
+			s.tellDebugFollowing()
 			s.options.Invalidate()
 			done()
 			answer(err)
@@ -670,6 +695,7 @@ func (s *Shell) followDebugTimeline(on *bool, answer func(any, error)) {
 	}
 	d.failure = nil
 	d.timeline.following = *on
+	s.tellDebugFollowing()
 	s.options.Invalidate()
 	if !*on {
 		answer(nil, nil)
@@ -879,6 +905,7 @@ func (s *Shell) showDebugState(path string, answer func(any, error)) {
 			d.viewing, d.timeline = nil, nil
 			d.tail = nil
 		}
+		s.tellDebugFollowing()
 		s.options.Invalidate()
 		answer(nil, err)
 	})
