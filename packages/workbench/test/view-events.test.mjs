@@ -15,6 +15,8 @@ import { drained } from "./support/drained.mjs";
 const dom = new JSDOM("<body></body>", { url: "http://localhost/" });
 globalThis.window = dom.window;
 globalThis.document = dom.window.document;
+// The page reads the language of its document, not the locale of the machine that runs the test.
+Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, configurable: true });
 dom.window.matchMedia = (query) => ({ media: query, matches: true, addEventListener: () => {}, removeEventListener: () => {} });
 globalThis.matchMedia = dom.window.matchMedia;
 

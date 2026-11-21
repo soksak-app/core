@@ -16,6 +16,8 @@ dom.window.matchMedia = (query) => ({ media: query, matches: true,
   addEventListener: () => {}, removeEventListener: () => {} });
 globalThis.window = dom.window;
 globalThis.document = dom.window.document;
+// The page reads the language of its document, not the locale of the machine that runs the test.
+Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, configurable: true });
 globalThis.location = dom.window.location;
 // The plane aligns itself to the device pixel grid of this scale on every draw (device-grid.js).
 globalThis.devicePixelRatio = dom.window.devicePixelRatio;

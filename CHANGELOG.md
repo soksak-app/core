@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1041: The page tests give the page the `navigator` of their jsdom document, so the menu language that the wire cases record no longer depends on the locale of the machine. Red: five files failed under a Korean locale. Green: all page tests pass under the Korean and the English locale.
 - F1038: Closing the focused card, or its last tab, clears the focus ring in both workbenches instead of moving it to the first card, and a stored focus of a card that left the layout opens with no ring. Closing another card or tab keeps the ring. Red: the page and mygo close tests found the ring on another card. Green: the page and mygo tests of the focus areas pass.
 - F1037: The agent group of the settings window names each hook part 훅 in both workbenches; the rows had no name. Red: the page and mygo setup tests found an empty name. Green: the page and mygo setup tests pass.
 - F1035: No operation of the application or of `sok` needs administrator rights. The system PATH entry (`/etc/paths.d/<identifier>`), the commands `sok path install` and `sok path remove`, the setup part of that entry, the `sudo` step of `sok setup install` and the event `sok.setup.path` are removed, because the user PATH registration, which each start reconciles with the rights of the person, puts `sok` on the PATH of the person's shells. `setupInstall` refuses `path` with `unknown setup part: path`. Red: `sok path install` wrote the entry or asked for `sudo`, and the sources named the `sudo` command. Green: the Go and Rust command line and host setup tests pass.

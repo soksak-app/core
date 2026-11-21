@@ -20,6 +20,8 @@ let wire = selectPageWire("projects-switch-import");
 // The window of the page: its address, its history and the error event that the page reports failures through.
 const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://soksak.test/index.html" });
 globalThis.document = dom.window.document;
+// The page reads the language of its document, not the locale of the machine that runs the test.
+Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, configurable: true });
 globalThis.location = dom.window.location;
 globalThis.history = dom.window.history;
 globalThis.dispatchEvent = dom.window.dispatchEvent.bind(dom.window);

@@ -116,6 +116,8 @@ async function mountView(name, { id = "probe-surface", plugin = "probe", unload 
   const store = unload || project !== undefined || opensStore ? await openTabStateStore() : null;
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
+  // The page reads the language of its document, not the locale of the machine that runs the test.
+  Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, configurable: true });
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};

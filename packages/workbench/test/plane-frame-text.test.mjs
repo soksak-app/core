@@ -21,6 +21,8 @@ test("a frame factor change prepares the row of the next draw and writes the fac
     addEventListener: () => {}, removeEventListener: () => {} });
   globalThis.window = dom.window;
   globalThis.document = dom.window.document;
+  // The page reads the language of its document, not the locale of the machine that runs the test.
+  Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, configurable: true });
   // The plane aligns itself to the device pixel grid of this scale on every draw (device-grid.js).
   globalThis.devicePixelRatio = dom.window.devicePixelRatio;
   globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
