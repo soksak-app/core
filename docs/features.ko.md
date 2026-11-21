@@ -162,7 +162,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [o] F1031-4 — Headless Linux job은 Apple 코드 서명을 실행하는 test 여섯 개를 제외한다. macOS job이 이 test를 선택하고 관련 test가 모두 통과한다.
   - [o] F1031-5 — Host와 CLI test가 실행하는 계약을 선언한다. Role identity와 진단 capture case가 현재 protocol로 실행된다. 관련 Rust와 Go test가 통과한다.
   - [o] F1031-6 — Sidecar buffer fixture가 정리까지 release pipe를 열어 두고 실패 시 기록한 오류를 보고한다. Mygo 20회와 Wails 10회의 각 실행에서 test 네 개가 통과한다.
-  - [~] F1031-7 — Candidate의 로컬 release 검사를 실행하고 검증한 candidate를 push하며 게시한 release 파일을 확인한다. 진행 중: 0.0.46을 위해 ci.yml과 release.yml job 명령을 로컬에서 실행한다. 그다음 push와 release run 결론이 남았다.
+  - [o] F1031-7 — Candidate의 로컬 release 검사를 실행하고 검증한 candidate를 push하며 게시한 release 파일을 확인한다. 완료: F1031-13, F1031-14, F1031-15 뒤 ci.yml job 명령의 로컬 실행이 통과했다. 0.0.46 release run이 success로 끝나 v0.0.46을 게시했다. Registry가 core 0.0.46을 vt-alacritty 0.0.32, alacritty 0.0.10, term 0.0.18, terminal 0.0.51과 함께 나열한다(registry G129).
   - [o] F1031-12 — Package와 crate manifest, application Info.plist와 Tauri 파일, Go와 pkg-config 선언, scripts/check-versions.mjs의 RELEASE 상수와 scripts/check-tests.mjs의 그 symbol, Cargo.lock의 workspace 항목 여섯 개에 version 0.0.46을 선언한다. 모든 workspace version이 0.0.46이어서 version 검사가 통과한다.
   - [o] F1031-13 — Layout library의 `cut-gaps` break가 cut room의 `let free` 선언을 찾는다. Red: check-breaks가 stale로 보고했다. Green: check-breaks가 필수 break 여덟 개를 모두 잡는다.
   - [o] F1031-14 — Native image region test의 direct pointer focus case는 test 창의 synthetic press나 release가 AppKit current event가 되었는지만 판정하고, 실패하면 두 event를 기록한다. Wait가 dispatch한 다른 source의 event가 current가 되는 것은 AppKit 설계다. Red: wait 중에 application-defined event를 넣으면 이전 같음 검사가 세 번 중 세 번 실패했고, 넣지 않아도 창의 KitDefined event로 실패했다. Green: event를 넣은 세 번의 실행이 모두 통과한다.
