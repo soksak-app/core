@@ -5,6 +5,7 @@
 
 ## 2026-11-21
 
+- F1031-13: The `cut-gaps` break of the layout library finds the `let free` declaration of the cut room. Red: check-breaks reported the break stale. Green: check-breaks catches all eight required breaks.
 - F1031-12: Every declared workspace version is 0.0.46, including the six workspace entries of Cargo.lock. Verification: the version check passes.
 - F1033-7: The mygo workbench applies the stored automatic dismissal of error toasts at the start and on a settings change of another window, through the settings application that every load and change runs; a value of another type is an error. The page component reads the validated settings without coercion, the settings modal takes the seconds range from the declaration, the mygo modal uses the page labels, and one validation of the seconds remains in mygo. Red: a mygo window that started with the switch on kept its toast past the stored seconds. Green: 48 page and 48 mygo toast and settings tests pass.
 - F1033-6: The common settings `autoDismissErrorToasts` (a switch, default off) and `errorToastDismissSeconds` (a whole number from 1 to 2147483, default 5) hold the automatic dismissal of error toasts; without the switch a toast closes only on its own control, the settings change reschedules the open toasts, and the settings modal draws the group in both workbenches. The fixed toast duration of the chrome declaration is removed. Verification: the toast, settings and declaration tests pass in both workbenches.

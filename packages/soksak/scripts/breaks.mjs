@@ -26,8 +26,8 @@ export const BREAKS = [
     id: "cut-gaps",
     what: "a cut is drawn without the corridors between its kids",
     file: "dist/soksak.js",
-    find: "        const free = room - (node.kids.length - 1) * unit[axis] - ",
-    to: "        const free = room - ",
+    find: "        let free = room - (node.kids.length - 1) * unit[axis] - ",
+    to: "        let free = room - ",
   },
   {
     id: "remove-ratio",
