@@ -303,6 +303,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1016",
+    implementation: [{ file: "Makefile", symbol: "check-preflight:" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "ci runs every check of the release on the range of its event" }],
+    expected: "The preflight of the push passes every target that the release run of ci.yml runs, and ci runs them on the push range.",
+    levels: ["unit"],
+  },
+  {
     id: "F1022",
     implementation: [{ file: "packages/plugin-api/contract/expose.json", symbol: "\"items\": []" }],
     tests: [{ file: "packages/plugin-api/test/expose-contract.test.mjs", id: "exposure contract publishes the required cases in order" }],

@@ -5,6 +5,7 @@
 
 ## 2026-11-21
 
+- F1028: push의 release run이 node test에서 실패한 원인 넷을 고쳤다. local gate가 돌리지 않았던 것들이다. surface core watch의 갱신이 `exposure.js`에서 호출만 있고 선언이 없었고, native virtual end 거부의 diagnostics 행이 release가 되돌린 toast 변경에 묶여 있었으며, stored-change source의 optional call에 이유가 없었고, 완료된 preflight 행에 feature link가 없었다. 네 page-wire file은 case가 고정한 언어와 menu language가 다른 machine에서 실패하며, CI runner에서는 생기지 않는다.
 - F1016: `make check-preflight`가 15개 대상을 다시 통과한다. role operation과 plan의 default가 계약 이유를 적거나 거부하고, Windows input platform이 거부의 errors import를 얻고, skill group 순서가 agent role 절을 담고, workflows test가 보호된 commit-msg hook을 맞추고, format mentions이 host reader의 projects format을 허용하고, native virtual end가 reason을 main thread에서 복사해 거부를 보고한다. 검증: preflight 실행과 host Go package 570/570.
 - F1016-11: 거부된 용어를 이름한 commit을 `docs(spec): Align the stable identity, held rule and terms (#F1006-1)`로 다시 썼다. main의 tree는 backup tag `backup/main-before-F1016-11`과 byte가 같고 `make check-commits`가 push 범위를 통과한다. role operation의 엄격한 walk가 다른 형태의 저장 layout을 파일과 그 내용으로 거부하고, role operation·plan·toast의 모든 default가 계약 이유를 적는다. 검증: fallback 검사 통과, host Go package 570/570, Rust role state test 7/7.
 - F1026: workbench의 각 오류가 창 아래 toast로 보인다. 서로 다른 문장마다 하나씩이고 닫기 조작은 새 `core.error.dismiss {text}`를 실행한다. 여러 오류가 함께 보이고 출처의 철회가 그 toast를 닫으며 `core.workbench.error`는 가장 최근 열린 toast를 이름한다. 검증: page test와 mygo toast test가 통과하고 mygo package 1157/1157.

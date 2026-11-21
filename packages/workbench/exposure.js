@@ -209,6 +209,26 @@ export function createRegistry({ call = null, report = null } = {}) {
     else if (!delivered) trace("surface.change.dropped", { surface, name, version, reason: `older than version ${newest}` });
   }
 
+  // The refresh of the core watches of a surface: the change of the stored workspace re-reads each open one, because a role
+  // change of any window notifies it. The subscription exists while a core watch is open.
+  let stopCoreRefresh = null;
+  const startCoreRefresh = () => {
+    if (stopCoreRefresh !== null) return;
+    // default: a document that passes no stored-change source holds no core watch to refresh.
+    const stop = options.onStoredChange?.(async () => {
+      for (const watch of [...following.values()]) {
+        if (!watch.core) continue;
+        try {
+          const value = await core.answer("status.get", { name: watch.name, surface: watch.surface });
+          deliver({ surface: watch.surface, name: watch.name, value, version: watch.version + 1 });
+        } catch (error) {
+          report(error);
+        }
+      }
+    });
+    if (stop) stopCoreRefresh = stop;
+  };
+
   /** Ends the watch of the surface when no other watch follows the same surface. origin is that of forward. */
   async function release(watch, name, origin) {
     const shared = [...following.values()].some((other) => other.surface === watch.surface && other.name === name);
