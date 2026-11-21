@@ -15,7 +15,9 @@ use std::sync::{Arc, Mutex};
 
 use serde_json::{Value, json};
 use soksak_host::platform::{self, Platform};
-use soksak_host::setup::{InstallRequest, LoginShellProcesses, Parts, Setups};
+use soksak_host::setup::{
+    InstallRequest, LoginShellProcesses, Parts, SetupStart, Setups, setup_start_of,
+};
 
 /// The login shell of the tests: zsh reads .zprofile and .zshrc of the disposable home as a login and interactive shell.
 const SHELL: &str = "/bin/zsh";
@@ -149,11 +151,17 @@ impl Home {
 
     /// The setup operations of the bundle sok of the home, and the receiver of each setup-changed.
     fn setups(&self) -> (Setups, Receiver<()>) {
+        self.setups_starting(SetupStart::default())
+    }
+
+    /// The setups with the start of the setup.
+    fn setups_starting(&self, start: SetupStart) -> (Setups, Receiver<()>) {
         let (changed, receive) = mpsc::channel();
         let changed = Mutex::new(changed);
         let setups = Setups::new(
             self.sok.clone(),
             "com.soksak.test".into(),
+            start,
             Box::new(ZshLogin(platform::current().unwrap())),
             Box::new(move || changed.lock().unwrap().send(()).unwrap()),
         )
@@ -607,4 +615,128 @@ fn setup_installs_the_skill_and_the_registration_one_at_a_time() {
         changed.try_recv().is_err(),
         "a refused install sent setup-changed"
     );
+}
+
+/// The start of a debug build, of a run with a given configuration directory and of a translocated executable changes no setup
+/// file of the person, and the setup operations still read the environment (docs/spec/cli.md#agents-in-the-application).
+// contract: setup.host.start-changes-no-file-of-another-run
+#[test]
+fn setup_start_of_a_run_beside_the_person_changes_no_file() {
+    let kept = |reason: &str| SetupStart {
+        kept: Some(reason.into()),
+        translocated: None,
+    };
+    let moved = "/private/var/folders/x/T/AppTranslocation/ID/d/soksak.app/Contents/MacOS";
+    for (identifier, config, executable, want) in [
+        (
+            "app.soksak.tauri",
+            None,
+            "/Applications/soksak.app/Contents/MacOS/sok-tauri",
+            SetupStart::default(),
+        ),
+        (
+            "app.soksak.tauri.dev",
+            None,
+            "/work/target/debug/sok-tauri",
+            kept("the debug build app.soksak.tauri.dev"),
+        ),
+        (
+            "app.soksak.tauri",
+            Some("/tmp/check"),
+            "/Applications/soksak.app/Contents/MacOS/sok-tauri",
+            kept("the configuration directory /tmp/check"),
+        ),
+        (
+            "app.soksak.tauri",
+            None,
+            &format!("{moved}/sok-tauri"),
+            SetupStart {
+                kept: None,
+                translocated: Some(moved.into()),
+            },
+        ),
+    ] {
+        assert_eq!(
+            setup_start_of(identifier, config, Path::new(executable)),
+            want,
+            "the start of {identifier} {config:?} {executable}"
+        );
+    }
+    let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    for (start, event, level, field) in [
+        (
+            kept("the debug build app.soksak.tauri.dev"),
+            "host.setup.kept",
+            "info",
+            "the debug build app.soksak.tauri.dev",
+        ),
+        (
+            SetupStart {
+                kept: None,
+                translocated: Some(moved.into()),
+            },
+            "host.setup.translocated",
+            "error",
+            moved,
+        ),
+    ] {
+        let logs = folder::Folder::new();
+        let log = records::start_writer(logs.path());
+        let h = Home::new("");
+        let (setups, changed) = h.setups_starting(start);
+        setups.start();
+        changed.recv().unwrap();
+        log.flush().unwrap();
+        soksak_host::event_record::use_host_event_log(None);
+        assert_eq!(
+            h.commands(),
+            Vec::<String>::new(),
+            "the start of {event} ran commands"
+        );
+        assert!(
+            !h.config.join("skills/soksak/SKILL.md").exists(),
+            "the start of {event} wrote the skill"
+        );
+        assert!(
+            !h.config.join("settings.json").exists(),
+            "the start of {event} wrote the hooks"
+        );
+        assert!(
+            std::fs::symlink_metadata(h.folder.path().join(".local/bin/sok")).is_err(),
+            "the start of {event} linked the user PATH sok"
+        );
+        let parts = setups
+            .state()
+            .unwrap_or_else(|error| panic!("the setup state after the start of {event}: {error}"));
+        let path = serde_json::to_value(&parts.parts[0]).unwrap();
+        assert_eq!(
+            (
+                path["part"].as_str(),
+                path["file"].as_str(),
+                path["state"].as_str()
+            ),
+            (Some("path"), h.sok.to_str(), Some("ok")),
+            "the user PATH part after the start of {event}"
+        );
+        let recorded: Vec<String> = records::read_events(&records::event_log_path(logs.path()))
+            .into_iter()
+            .filter(|record| record["event"] == event)
+            .map(|record| {
+                format!(
+                    "{} {}",
+                    record["level"].as_str().unwrap_or(""),
+                    record["fields"]
+                        .as_object()
+                        .and_then(|fields| fields.values().next())
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                )
+            })
+            .collect();
+        assert_eq!(
+            recorded,
+            vec![format!("{level} {field}")],
+            "the start recorded {recorded:?}"
+        );
+    }
 }

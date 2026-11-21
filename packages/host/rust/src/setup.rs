@@ -85,6 +85,7 @@ pub struct Setups {
 }
 
 struct Inner {
+    start: SetupStart,
     sok: PathBuf,
     identifier: String,
     user_path_support: Result<(), String>,
@@ -99,11 +100,58 @@ struct Inner {
     user_path: Mutex<Option<(Environment, Option<String>)>>,
 }
 
+/// What the start of the host does with the setup files of the person (docs/spec/cli.md#agents-in-the-application). The default
+/// brings them current.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SetupStart {
+    /// Why the start changes no setup file of the person: a debug build, or a configuration directory that the run was given,
+    /// which a check or a second application uses beside the application of the person.
+    pub kept: Option<String>,
+    /// The folder of an executable that runs from a folder that macOS made for App Translocation; the folder ends with the
+    /// process, so a registration of its sok would name a path that no longer exists.
+    pub translocated: Option<String>,
+}
+
+/// The path element of the folders that macOS makes for App Translocation.
+const TRANSLOCATION_FOLDER: &str = "/AppTranslocation/";
+
+/// The start of the setup of the application identifier, run with the configuration directory that the command line gave
+/// (`None` for none) from the executable.
+pub fn setup_start_of(
+    identifier: &str,
+    config_directory: Option<&str>,
+    executable: &Path,
+) -> SetupStart {
+    if identifier.ends_with(".dev") {
+        return SetupStart {
+            kept: Some(format!("the debug build {identifier}")),
+            translocated: None,
+        };
+    }
+    if let Some(directory) = config_directory {
+        return SetupStart {
+            kept: Some(format!("the configuration directory {directory}")),
+            translocated: None,
+        };
+    }
+    if executable.to_string_lossy().contains(TRANSLOCATION_FOLDER) {
+        // default: an executable path always has a folder.
+        let folder = executable.parent().unwrap_or(Path::new("/"));
+        return SetupStart {
+            kept: None,
+            translocated: Some(folder.to_string_lossy().into_owned()),
+        };
+    }
+    SetupStart::default()
+}
+
 impl Setups {
-    /// Returns the setup operations of the sok of the application identifier; changed sends setup-changed to every window.
+    /// Returns the setup operations of the sok of the application identifier; start tells what the start does with the setup
+    /// files of the person, and changed sends setup-changed to every window.
     pub fn new(
         sok: PathBuf,
         identifier: String,
+        start: SetupStart,
         processes: Box<dyn LoginShellProcesses>,
         changed: Box<dyn Fn() + Send + Sync>,
     ) -> Result<Setups, String> {
@@ -112,6 +160,7 @@ impl Setups {
             inner: Arc::new(Inner {
                 sok,
                 identifier,
+                start,
                 user_path_support: user_path,
                 processes,
                 changed,
@@ -132,6 +181,39 @@ impl Setups {
         self.inner.begin.call_once(move || {
             crate::routine::spawn_named("setup-environment", move || {
                 let environment = inner.read_environment();
+                // A start that keeps the files of the person or runs from a translocated folder only reads the environment.
+                let kept = match (&inner.start.translocated, &inner.start.kept) {
+                    (Some(folder), _) => {
+                        crate::event_record::emit_host(
+                            Level::Error,
+                            "host.setup.translocated",
+                            json!({ "folder": folder }),
+                        );
+                        true
+                    }
+                    (None, Some(reason)) => {
+                        crate::event_record::emit_host(
+                            Level::Info,
+                            "host.setup.kept",
+                            json!({ "reason": reason }),
+                        );
+                        true
+                    }
+                    (None, None) => false,
+                };
+                if kept {
+                    // The user PATH part reports the environment as the start read it, without a change.
+                    if let Ok(environment) = &environment
+                        && let Err(error) = inner.set_path_environment(environment.clone(), None)
+                    {
+                        crate::application_log::log_error("setup", error);
+                    }
+                    // default: the state is one value that a holder sets whole, so a holder that ended by a panic left no partial value.
+                    *inner.ready.lock().unwrap_or_else(PoisonError::into_inner) = Some(environment);
+                    inner.ended.notify_all();
+                    (inner.changed)();
+                    return;
+                }
                 if let Ok(environment) = &environment
                     && inner.user_path_support.is_ok()
                 {

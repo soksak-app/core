@@ -159,7 +159,8 @@ func Prepare(adapter Framework, assets fs.FS, options Options) (_ *Session, fail
 	if err != nil {
 		return nil, fmt.Errorf("setup: the location of the application is unknown: %s", osReason(err))
 	}
-	if host.setups, err = NewSetups(filepath.Join(filepath.Dir(executable), "sok"), identifier, system, host.notifySetup); err != nil {
+	start := SetupStartOf(identifier, options.ConfigDir, executable)
+	if host.setups, err = NewSetups(filepath.Join(filepath.Dir(executable), "sok"), identifier, start, system, host.notifySetup); err != nil {
 		return nil, err
 	}
 	// The environment of the login shell is the base of every sidecar, so its read starts with the host, off the start path.

@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1044: Only a release that runs from its own bundle with its default configuration directory brings the setup files of the person current at start. A debug build and a run with `--config-dir` record `host.setup.kept`, and a release in an App Translocation folder records the error `host.setup.translocated`; neither changes a file of the person. Red: the Go and Rust setup tests found the start running `claude mcp add`. Green: the Go and Rust setup tests pass.
 - F1041: The page tests give the page the `navigator` of their jsdom document, so the menu language that the wire cases record no longer depends on the locale of the machine. Red: five files failed under a Korean locale. Green: all page tests pass under the Korean and the English locale.
 - F1038: Closing the focused card, or its last tab, clears the focus ring in both workbenches instead of moving it to the first card, and a stored focus of a card that left the layout opens with no ring. Closing another card or tab keeps the ring. Red: the page and mygo close tests found the ring on another card. Green: the page and mygo tests of the focus areas pass.
 - F1037: The agent group of the settings window names each hook part 훅 in both workbenches; the rows had no name. Red: the page and mygo setup tests found an empty name. Green: the page and mygo setup tests pass.

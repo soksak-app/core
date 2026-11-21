@@ -58,6 +58,7 @@ type Setups struct {
 	sokPath    string
 	identifier string
 	pathsErr   error
+	start      SetupStart
 	processes  LoginShellProcesses
 	changed    func()
 
@@ -82,24 +83,65 @@ var sessionVariables = []string{"HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "S
 // does not take from the login shell (docs/spec/sidecars.md#processes-of-a-surface).
 var shellProcessVariables = []string{"PWD", "OLDPWD", "SHLVL", "_"}
 
-// NewSetups returns the setup operations of the sok sokPath of the application identifier; changed sends setup-changed to every
-// window.
-func NewSetups(sokPath, identifier string, processes LoginShellProcesses, changed func()) (*Setups, error) {
+// SetupStart is what the start of the host does with the setup files of the person (docs/spec/cli.md#agents-in-the-application).
+// The zero value brings them current.
+type SetupStart struct {
+	// Kept names why the start changes no setup file of the person: a debug build, or a configuration directory that the run was
+	// given, which a check or a second application uses beside the application of the person.
+	Kept string
+	// Translocated is the folder of an executable that runs from a folder that macOS made for App Translocation; the folder ends
+	// with the process, so a registration of its sok would name a path that no longer exists.
+	Translocated string
+}
+
+// translocationFolder is the path element of the folders that macOS makes for App Translocation.
+const translocationFolder = "/AppTranslocation/"
+
+// SetupStartOf returns the start of the setup of the application identifier, run with the configuration directory that the command
+// line gave ("" for none) from the executable.
+func SetupStartOf(identifier, configDirectory, executable string) SetupStart {
+	switch {
+	case strings.HasSuffix(identifier, ".dev"):
+		return SetupStart{Kept: "the debug build " + identifier}
+	case configDirectory != "":
+		return SetupStart{Kept: "the configuration directory " + configDirectory}
+	case strings.Contains(executable, translocationFolder):
+		return SetupStart{Translocated: filepath.Dir(executable)}
+	}
+	return SetupStart{}
+}
+
+// NewSetups returns the setup operations of the sok sokPath of the application identifier; start tells what the start does with
+// the setup files of the person, and changed sends setup-changed to every window.
+func NewSetups(sokPath, identifier string, start SetupStart, processes LoginShellProcesses, changed func()) (*Setups, error) {
 	system, err := sokplatform.Current()
 	if err != nil {
 		return nil, err
 	}
-	return &Setups{sokPath: sokPath, identifier: identifier, pathsErr: system.UserPath(), processes: processes, changed: changed,
+	return &Setups{sokPath: sokPath, identifier: identifier, start: start, pathsErr: system.UserPath(), processes: processes, changed: changed,
 		ready: make(chan struct{})}, nil
 }
 
 // Start reads the login shell environment, reconciles user PATH, brings the skill, the MCP registration and the hooks current, and
-// sends setup-changed.
+// sends setup-changed. A start that keeps the files of the person or runs from a translocated folder only reads the environment
+// and records why it changed no file.
 // The work runs off the start path. A later call does nothing.
 func (s *Setups) Start() {
 	s.begin.Do(func() {
 		routine.Go("setup-environment", func() {
 			s.env, s.envErr = s.readEnvironment()
+			if s.start != (SetupStart{}) {
+				if s.start.Translocated != "" {
+					EmitHost(LevelError, "host.setup.translocated", map[string]any{"folder": s.start.Translocated})
+				} else {
+					EmitHost(LevelInfo, "host.setup.kept", map[string]any{"reason": s.start.Kept})
+				}
+				// The user PATH part reports the environment as the start read it, without a change.
+				s.pathEnv = s.env
+				close(s.ready)
+				s.changed()
+				return
+			}
 			if s.envErr == nil && s.pathsErr == nil {
 				s.pathEnv, s.pathErr = s.reconcileUserPath(s.env, nil)
 			}

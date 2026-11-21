@@ -151,12 +151,18 @@ func (h setupHome) commands(t *testing.T) []string {
 // setup-changed.
 func (h setupHome) setups(t *testing.T) (*host.Setups, chan struct{}) {
 	t.Helper()
+	return h.setupsStarting(t, host.SetupStart{})
+}
+
+// setupsStarting is setups with the start of the setup.
+func (h setupHome) setupsStarting(t *testing.T, start host.SetupStart) (*host.Setups, chan struct{}) {
+	t.Helper()
 	changed := make(chan struct{}, 8)
 	system, err := platform.Current()
 	if err != nil {
 		t.Fatal(err)
 	}
-	setups, err := host.NewSetups(h.sok, "com.soksak.test", zshLogin{system}, func() { changed <- struct{}{} })
+	setups, err := host.NewSetups(h.sok, "com.soksak.test", start, zshLogin{system}, func() { changed <- struct{}{} })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -494,5 +500,74 @@ func TestTheSidecarEnvironmentIsTheLoginShellEnvironmentWithoutTheVariablesOfThe
 		if _, present := environment[name]; present {
 			t.Fatalf("%s of the shell process: %v", name, environment)
 		}
+	}
+}
+
+// The start of a debug build, of a run with a given configuration directory and of a translocated executable changes no setup file
+// of the person, and the setup operations still read the environment (docs/spec/cli.md#agents-in-the-application).
+// contract: setup.host.start-changes-no-file-of-another-run
+func TestSetupStartOfARunBesideThePersonChangesNoFile(t *testing.T) {
+	for _, c := range []struct {
+		identifier, config, executable string
+		want                           host.SetupStart
+	}{
+		{"app.soksak.mygo", "", "/Applications/soksak.app/Contents/MacOS/sok-mygo", host.SetupStart{}},
+		{"app.soksak.mygo.dev", "", "/work/target/debug/sok-mygo.app/Contents/MacOS/sok-mygo", host.SetupStart{Kept: "the debug build app.soksak.mygo.dev"}},
+		{"app.soksak.mygo", "/tmp/check", "/Applications/soksak.app/Contents/MacOS/sok-mygo", host.SetupStart{Kept: "the configuration directory /tmp/check"}},
+		{"app.soksak.mygo", "", "/private/var/folders/x/T/AppTranslocation/ID/d/soksak.app/Contents/MacOS/sok-mygo",
+			host.SetupStart{Translocated: "/private/var/folders/x/T/AppTranslocation/ID/d/soksak.app/Contents/MacOS"}},
+	} {
+		if got := host.SetupStartOf(c.identifier, c.config, c.executable); got != c.want {
+			t.Errorf("the start of %s %q %s is %+v, not %+v", c.identifier, c.config, c.executable, got, c.want)
+		}
+	}
+	for _, c := range []struct {
+		start        host.SetupStart
+		event, level string
+		field        string
+	}{
+		{host.SetupStart{Kept: "the debug build app.soksak.mygo.dev"}, "host.setup.kept", "info", "the debug build app.soksak.mygo.dev"},
+		{host.SetupStart{Translocated: "/private/var/folders/x/T/AppTranslocation/ID/d"}, "host.setup.translocated", "error", "/private/var/folders/x/T/AppTranslocation/ID/d"},
+	} {
+		t.Run(c.event, func(t *testing.T) {
+			log := support.UseEventLog(t)
+			h := newSetupHome(t, "")
+			setups, changed := h.setupsStarting(t, c.start)
+			setups.Start()
+			<-changed
+			if commands := h.commands(t); len(commands) != 0 {
+				t.Fatalf("the start ran %q", commands)
+			}
+			if _, err := os.Stat(filepath.Join(h.config, "skills", "soksak", "SKILL.md")); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("the start wrote the skill: %v", err)
+			}
+			if _, err := os.Stat(filepath.Join(h.config, "settings.json")); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("the start wrote the hooks: %v", err)
+			}
+			if _, err := os.Lstat(filepath.Join(h.home, ".local", "bin", "sok")); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("the start linked the user PATH sok: %v", err)
+			}
+			parts, err := setups.State()
+			if err != nil {
+				t.Fatalf("the setup state after the start: %v", err)
+			}
+			if path := parts.Parts[0]; path.Part != "path" || path.File != h.sok || path.State != "ok" {
+				t.Fatalf("the user PATH part after the start is %+v", path)
+			}
+			if err := log.Flush(); err != nil {
+				t.Fatal(err)
+			}
+			var recorded []string
+			for _, event := range readEventLog(t, log.Path()) {
+				if event["event"] == c.event {
+					for _, value := range event["fields"].(map[string]any) {
+						recorded = append(recorded, fmt.Sprintf("%s %v", event["level"], value))
+					}
+				}
+			}
+			if want := c.level + " " + c.field; len(recorded) != 1 || recorded[0] != want {
+				t.Fatalf("the start recorded %q, not %q", recorded, want)
+			}
+		})
 	}
 }

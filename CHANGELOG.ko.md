@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1044: 자기 bundle에서 기본 configuration directory로 실행된 release만 시작 시 사람의 setup 파일을 맞춘다. Debug build와 `--config-dir` 실행은 `host.setup.kept`를, App Translocation 폴더의 release는 오류 `host.setup.translocated`를 기록하며, 어느 쪽도 사람의 파일을 바꾸지 않는다. Red: Go와 Rust setup test가 `claude mcp add`를 실행하는 시작을 찾았다. Green: Go와 Rust setup test가 통과한다.
 - F1041: page test는 jsdom document의 `navigator`를 page에 주므로, wire case가 기록한 menu language가 더는 컴퓨터 locale에 따라 달라지지 않는다. Red: 한국어 locale에서 다섯 파일이 실패했다. Green: 한국어와 영어 locale에서 page test가 모두 통과한다.
 - F1038: 두 workbench에서 focus된 카드나 그 마지막 탭을 닫으면 focus ring을 첫 카드로 옮기지 않고 지운다. 레이아웃을 떠난 카드를 가리키는 저장된 focus는 ring 없이 열린다. 다른 카드나 탭을 닫으면 ring은 그대로 있다. Red: page와 mygo의 닫기 test가 다른 카드에서 ring을 찾았다. Green: focus 영역의 page와 mygo test가 통과한다.
 - F1037: 두 workbench에서 설정 창의 에이전트 group은 각 hook part의 이름을 훅으로 쓴다. 이전에는 행에 이름이 없었다. Red: page와 mygo setup test가 빈 이름을 찾았다. Green: page와 mygo setup test가 통과한다.

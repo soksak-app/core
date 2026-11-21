@@ -3833,6 +3833,42 @@
       },
       "description": "The host could not bring the MCP registration or the hooks current after it read the environment of the login shell: reason names each part that is not current, followed by the error of each install that failed (docs/spec/cli.md#agents-in-the-application)."
     },
+    "host.setup.kept": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "description": "The start of a debug build or of a run with a given configuration directory changed no setup file of the person: reason names the build or the directory (docs/spec/cli.md#agents-in-the-application)."
+    },
+    "host.setup.translocated": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "error",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "folder": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "folder"
+        ]
+      },
+      "description": "The application runs from a folder that macOS made for App Translocation, which ends with the process, so the start changed no setup file of the person: folder is the folder of the executable (docs/spec/cli.md#agents-in-the-application)."
+    },
     "host.setup.skill": {
       "layer": "host",
       "class": "lifecycle",

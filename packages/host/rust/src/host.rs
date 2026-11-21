@@ -461,9 +461,12 @@ pub fn setup(app: &AppHandle, setup: Setup) -> Result<(), Box<dyn std::error::Er
     // default: an executable path always has a folder.
     let bundle = executable.parent().unwrap_or(std::path::Path::new("/"));
     let notifying = app.clone();
+    let identifier = soksak_sok::identity::identity().to_string();
+    let start = setup::setup_start_of(&identifier, arguments().config_dir.as_deref(), &executable);
     let setups = setup::Setups::new(
         bundle.join("sok"),
-        soksak_sok::identity::identity().to_string(),
+        identifier,
+        start,
         Box::new(setup::SystemProcesses(platform::current()?)),
         Box::new(move || windows::notify_setup(&notifying)),
     )?;

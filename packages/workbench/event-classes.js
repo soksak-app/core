@@ -25,6 +25,8 @@ const EXACT = new Map([
   ["host.relaunch.start", "lifecycle"],
   ["host.run.unrecorded-end", "lifecycle"],
   ["host.setup.install", "lifecycle"],
+  ["host.setup.kept", "lifecycle"],
+  ["host.setup.translocated", "lifecycle"],
   ["host.setup.skill", "lifecycle"],
   ["host.sidecar.connect", "lifecycle"],
   ["host.sidecar.disconnect", "lifecycle"],

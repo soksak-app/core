@@ -466,6 +466,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1044",
+    implementation: [
+      { file: "packages/host/go/src/setup.go", symbol: "func SetupStartOf(identifier, configDirectory, executable string) SetupStart {" },
+      { file: "packages/host/rust/src/setup.rs", symbol: "pub fn setup_start_of(" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/setup_test.go", id: "TestSetupStartOfARunBesideThePersonChangesNoFile" },
+      { file: "packages/host/rust/tests/setup_test.rs", id: "setup_start_of_a_run_beside_the_person_changes_no_file" },
+    ],
+    expected: "Only a release that runs from its own bundle with its default configuration directory changes the setup files of the person at start.",
+    levels: ["unit"],
+  },
+  {
     id: "F1037",
     implementation: [
       { file: "packages/workbench/settings-ui.js", symbol: "const SETUP_NAMES = {" },
