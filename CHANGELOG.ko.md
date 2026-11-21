@@ -5,6 +5,7 @@
 
 ## 2026-11-21
 
+- F1033-1: 오류 표시 계약이 표시되는 오류를 소유하는 모든 애플리케이션 view를 명시한다. Library 오류 줄, 각 pane의 표시, 서로 다른 출처의 같은 글과 modal focus에 공용 component 규칙을 둔다.
 - F1031-11: Go와 Rust host library와 mygo workbench가 현재 workbench 선언을 내장한다. Red에서 exposure 검사가 이전 사본 세 개를 보고한다. Green에서 두 검사와 workbench 선언 test가 통과한다.
 - F1031-10: Toast는 글이 표시된 오류로 표시되면 테두리에 오류 색상을 쓴다. 닫기 control은 선언한 metric을 사용하며 layout fixture는 닫기 선언을 읽는다. Red에서 style 검사가 표시 없는 오류 색상과 직접 쓴 비율을 보고하고 layout test 두 개가 toast를 표시할 때 실패한다. Green에서 관련 test 13개가 통과한다.
 - F1031-9: Node reporter 색상 test는 하위 process의 색상을 강제할 때 NO_COLOR를 제거한다. Red에서 하위 process가 충돌하는 색상 환경을 보고한다. Green에서 상위 환경에 NO_COLOR가 설정된 상태로 test 39개가 통과한다.

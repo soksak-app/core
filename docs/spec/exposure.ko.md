@@ -148,6 +148,21 @@ mygo host에서는 워크벤치의 step이 native window가 닫힌 뒤에 실행
 
 `host.window.reload`는 창의 워크벤치를 다시 시작하고, `plugins-changed`를 받거나 `core.plugins.apply`를 실행한 창도 같은 방식으로 다시 시작한다([설치](installation.ko.md#변경-적용)). 워크벤치의 새 시작을 기다리는 window check와 측정 대상은 새 page process가 아니라 `core.window.workbench`의 새 `start`를 기다린다.
 
+### 오류 표시
+
+사용자에게 표시하는 애플리케이션 실패는 workbench, library, settings, card, sidebar, modal view에서 같은 오류 toast component를 사용한다. 활성 document 또는 native view의 아래쪽에 component를 그리며 닫기 control을 둔다. Plugin surface는 선언된 애플리케이션 인터페이스로 작업 실패를 보고하고 host가 같은 component로 표시한다. Terminal program 출력과 document 콘텐츠는 각각의 표시 방식을 유지한다.
+
+Component는 오류 style과 닫기 동작을 맡는다. 오류를 보고한 작업의 출처는 log, status, 철회에 유지한다. Toast를 닫으면 표시가 닫히고 애플리케이션 log 기록은 남는다. 실패한 작업의 control은 label과 복구 동작을 계속 제공한다.
+
+| 출처 | 표시 소유자 |
+| --- | --- |
+| 시작, workspace 또는 layout 실패 | Workbench view |
+| Library 동작, registry, 설치, 업데이트, project 폴더 또는 미리보기 실패 | Library view |
+| 설정 변경, setup 또는 debug 동작 실패 | 활성 modal document 또는 native modal |
+| Card, tab, sidebar 또는 plugin surface 실패와 읽을 수 없는 plugin 또는 session | Surface를 소유한 workbench view |
+
+활성 view는 전면 focus 범위 안에 toast component를 배치한다. Library와 workbench는 창 경계 안에 toast를 배치한다. Modal은 modal focus 순서 안에 닫기 control을 둔다. 진행 중이거나 복구된 애플리케이션 상태는 자신이 소유한 오류만 제거한다. 계속 유지되는 각 오류 발생에는 안정적인 출처가 있다. 같은 view의 두 출처에 같은 글이 있으면 출처 기록을 각각 유지하며 toast 하나를 공유한다. 글로 닫으면 그 toast가 닫히고 닫힌 오류를 다시 그려도 닫힌 채로 유지된다. 상태가 변하거나 복구된 출처에서 다음 오류가 발생하면 toast를 다시 열 수 있으며 그 오류의 애플리케이션 log 기록을 쓴다.
+
 ## 등록
 
 워크벤치는 코어 항목을 자기 등록소에 등록한다. 플러그인 표면 페이지는 `@soksak/plugin-api/page`로 항목을 등록한다. 코어 명령은 handler가 시작한 비동기 작업까지 handler가 끝나고, 판이 가장 새 배치를 그린 뒤 답한다. 배치를 바꾸는 명령 뒤에 배치를 읽는 쪽은 그려진 배치를 읽는다. 그려진 배치는 composition 을 아직 선언하지 않은 view 의 자리를 비워 두므로([view 표면](native-surfaces.ko.md#view-표면)), 답은 그런 선언을 기다리지 않는다. 진행 중인 선언에 대한 host 의 답만 기다리고, 그려진 배치가 가리키는 표면의 mount 실패는 그 답의 오류다. mygo 호스트는 워크벤치를 native 로 그린다. 실행 중에 frame 을 요청한 명령은, focus ring 의 이동을 포함해, 다음 frame 의 placement 가 끝나고, 그 뒤의 keyboard 호출에 호스트가 응답하고, watcher 가 그 frame 의 status 를 받은 뒤 답하므로, 답 뒤의 요청은 그 frame 의 요소를 찾는다. frame 을 요청하지 않은 실행은 바로 답한다. 명령은 한 번 답한다. 같은 실행의 두 번째 답은 그 명령의 결함이며, workbench 는 그것을 오류 `command <name> answered a second time` 로 보이고 넘기지 않는다. mygo 창의 닫기와 워크벤치의 새 시작은 그것이 정해질 때 실행 중인 명령과 요청의 답을 기다리고, 그 뒤에 시작한 것은 기다리지 않는다: 뒤에 시작한 것은 닫기나 새 시작을 늦추지 않으며, 워크벤치의 끝이 그것을 끝낸다([page 끝](hosts.ko.md#프로세스-생명주기)). mygo 워크벤치는 frame 의 status 를 frame 다음 step 에서 보낸다. 그 step 에서는 frame 의 element tree 를 읽을 수 있으므로, status 는 페이지가 render 뒤의 배치를 읽듯이 frame 이 보여 준 것을 말한다. main page 를 가진 호스트에서 명령은 그 뒤 페이지가 보낸 순서 있는 호출 모두에 호스트가 응답할 때까지 기다리므로, 명령이 연 modal 은 명령이 답할 때 창의 input 을 붙잡고 있다([native modals](native-modals.ko.md#키보드)). 기다림은 가장 새 배치를 기다리고, 기다리는 동안 더 새 배치가 예약되면 다시 기다린다. 더 새 배치가 대신한 배치는 그리지 않고 끝나기 때문이다. 그 뒤 그 그리기의 표면 slot을 읽고, slot이 가리키는 각 표면의 선언된 composition을 기다린다. 같은 표면의 이전 dispose를 기다리기 전에 mount 요청을 composition wait에 등록한다. replacement mount가 대기 중인 표면을 slot이 가리키면 그 mount를 기다리며 mount 실패를 그대로 보고한다. 이 명령이나 뒤의 명령이 제거한 표면은 기다림이 slot을 읽을 때 slot이 없다. 가장 새 그리기 뒤에 mount되지도 않고 mount 중도 아닌 표면을 가리키는 slot은 결함이며, 기다림은 `surface <id> is not mounted`로 실패한다. replacement가 없는 dispose는 mount된 상태나 대기 상태를 남기지 않는다. mounted surface entry에서 시작한 composition wait는 mount 등록이 pending이어도 해당 entry를 따른다. entry가 composition을 선언하기 전에 dispose가 시작되면 wait는 `surface <id> was disposed before declaring composition`으로 끝나며, mount 실패는 원래 오류를 반환한다. replacement mount를 기다리는 wait는 replacement entry를 따른다. 가장 새 배치가 실패하면 배치 대기열이 그 실패를 보이고, 그 배치는 표시되지 않았으므로 기다림은 slot을 읽지 않고 끝난다. 기다림 자체의 실패는 `exposure settled failed: <text>`로 쓴다. 두 경우 모두 명령은 handler의 결과로 답하며, 그 실패는 [애플리케이션 로그](hosts.ko.md#애플리케이션-로그)에 한 줄을 가진다.

@@ -155,18 +155,23 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [o] F1030-1.1 — F1030-1 후속: Rust PATH 적용이 이전 profile 블록을 제거하고 profile 목록을 저장할 때 변경을 보고한다. Sok package가 Clippy를 통과하고 Darwin setup test가 통과한다.
   - [o] F1030-1.2 — F1030-1 후속: 설치 안내가 애플리케이션 시작 시 사용자 PATH 등록과 설정 조작을 설명한다. 문서 검사가 통과한다.
   - [ ] F1030-2 — Agent group에서 MCP와 SessionStart hook 각각의 원하는 상태를 바꾼다. 켜면 소유한 등록만 갱신하고 끄면 재시작 뒤에도 소유한 등록을 두지 않는다.
-- [~] F1031 — P0: 현재 core candidate의 검사가 통과한 뒤 release한다. 통합 release 검증을 진행한다.
+- [ ] F1031 — P0, F1033 이후. 공용 오류 표시를 포함한 core candidate를 검증하고 release한다.
   - [o] F1031-1 — Page가 parameter 오류 처리기를 초기화한 뒤 `core.error.dismiss`를 설치한다. Page 시작과 오류 표시 test가 통과한다.
   - [o] F1031-2 — 오류 toast command가 비어 있거나 알 수 없는 글을 거부한다. Workbench status, layout 복구와 layout 오류 기록 test가 통과한다.
   - [o] F1031-3 — Rust role store가 값 없음과 오류를 직접 전달한다. 직렬화 test가 임시 폴더를 정리한다. Workspace Clippy와 전체 role test가 통과한다.
   - [o] F1031-4 — Headless Linux job은 Apple 코드 서명을 실행하는 test 여섯 개를 제외한다. macOS job이 이 test를 선택하고 관련 test가 모두 통과한다.
   - [o] F1031-5 — Host와 CLI test가 실행하는 계약을 선언한다. Role identity와 진단 capture case가 현재 protocol로 실행된다. 관련 Rust와 Go test가 통과한다.
   - [o] F1031-6 — Sidecar buffer fixture가 정리까지 release pipe를 열어 두고 실패 시 기록한 오류를 보고한다. Mygo 20회와 Wails 10회의 각 실행에서 test 네 개가 통과한다.
-  - [~] F1031-7 — Core candidate를 검증하고 게시한다. 남은 것: 로컬 release 검사를 실행하고 검증한 candidate를 push하며 CI가 게시한 release 파일을 확인한다.
+  - [ ] F1031-7 — Candidate의 로컬 release 검사를 실행하고 검증한 candidate를 push하며 게시한 release 파일을 확인한다.
   - [o] F1031-8 — Go와 Rust의 사용자 PATH 등록 파일 배치를 host 명세에 선언한다. 구조 검사가 통과한다.
   - [o] F1031-9 — Node reporter 색상 test가 명시적인 색상 환경을 사용한다. 상위 환경에 NO_COLOR를 지정한 상태에서 두 파일의 test 39개가 통과한다.
   - [o] F1031-10 — 표시된 오류에 맞춰 toast 테두리 색상을 적용하고 닫기 control metric을 선언하며 layout fixture에 닫기 선언을 연결한다. 관련 test 13개가 통과한다.
   - [o] F1031-11 — F1031-10 후속. Toast 닫기 metric을 포함하도록 host의 workbench 선언 사본을 갱신한다. Exposure 검사 두 개와 workbench 선언 test가 통과한다.
+- [~] F1033 — P0, F1026 후속. 애플리케이션 오류를 공용 오류 toast component로 표시한다. 오류 표시 전수 조사와 계약을 진행한다.
+  - [o] F1033-1 — 표시하는 오류 경로를 전수 조사하고 공용 표시 계약을 정의한다. Library, settings, workspace, card, sidebar, plugin surface와 debug 경로의 소유자를 정한다.
+  - [~] F1033-2 — 오류 저장과 toast 표시를 재사용 가능한 page와 native component에 통합한다. 남은 일은 공통 오류 발생, 닫기, 복구와 focus 동작을 검증하는 것이다.
+  - [ ] F1033-3 — 모든 애플리케이션 오류 표시에 component를 적용하고 대체된 표시 경로를 제거한다.
+  - [ ] F1033-4 — 각 host와 plugin surface의 전송 경로를 통해 오류 표시를 검증한다.
 - [!] F1032 — P0, F1031과 F1025 뒤: 개발 plugin과 vt 0.0.31을 쓰면 두 mygo terminal surface가 등록하고 요청과 답장을 전달하며 receipt를 기록한다. Registry에는 vt 0.0.31이 있다. 원인: Terminal release에 message status와 수신함 command가 없다. 재시도 조건: registry가 messaging을 포함하고 맞는 core와 sidecar를 선택하는 terminal release를 나열한다. Terminal 창 검사도 실제 terminal process에서 발신 command를 실행해야 한다.
 - [o] F1026 — P1, workbench 오류의 toast 표시. 오류 문장이 창 위에 뜬다는 사용자 보고에서 왔다. 끝냈고 push의 release가 되돌렸다: toast 표시가 page의 gated frame event를 두 배로 만들어 pin된 wire case를 깨뜨렸고 release를 막았다. 오류는 단일 banner로 돌아갔고 F1027이 원인을 고친 재상륙을 맡는다. 변경의 mygo 쪽(ShownErrors의 toast, `core.error.dismiss`, plane 아래 그리기)은 자기 suite를 통과했고 그 기록은 닫힌 변경의 changelog에 남는다.
 - [o] F1028 — P1: push의 release run이 `Core package tests` 단계에서 실패한 원인 넷을 고쳤다. local gate가 하나의 suite으로 돌리지 않았던 것들이다. surface core watch의 갱신이 `exposure.js`에서 호출만 있고 선언이 없었다(Red: `page-identifiers`가 `startCoreRefresh` 미해결로 지목. Green: 선언 복원). native virtual end 거부의 diagnostics 행이 release가 되돌린 toast 변경 안에 묶여 있었다(Red: `check-failure-table`가 `error native input virtual` 지목. Green: 행을 emitter 곁에 다시 추가). stored-change source의 optional call에 이유가 없었다(Red: `fallbacks`. Green: default 명시). 완료된 preflight 행에 feature link가 없었다(Red: `check-tests`. Green: preflight 대상과 workflow test로 link). menu language가 case가 고정한 언어와 다른 machine에서는 네 page-wire file도 실패하며 CI runner에서는 생기지 않는다. 그 행은 언어 case 변수를 위해 열어 둔다.
