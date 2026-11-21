@@ -196,6 +196,20 @@ function toggle(key, now) {
   return el;
 }
 
+/** Creates a number input of whole seconds; the range of the setting states its bounds and the step is one. */
+function seconds(key, min, max, now) {
+  const el = document.createElement("input");
+  el.type = "number";
+  el.dataset.set = key;
+  el.dataset.expose = "core.settings-modal.set";
+  valueCommand(el, key);
+  el.min = String(min);
+  el.max = String(max);
+  el.step = "1";
+  el.setAttribute("value", String(now));
+  return el;
+}
+
 /** Creates a range input and a value display. */
 function slide(key, min, max, now, unit) {
   const wrap = document.createElement("span");
@@ -326,6 +340,10 @@ function drawGeneral() {
     row("보기 프로세스", choose("viewProcess", named("viewProcess", { plugin: "플러그인마다 하나", view: "보기마다 하나" }), value("viewProcess"))),
     row("메모리 절약", toggle("memorySaver", value("memorySaver"))),
     row("숨긴 뒤 내리기까지", slide("memorySaverDelay", ...MEMORY_SAVER_DELAY, value("memorySaverDelay"), "분")),
+  ]));
+  if (scope === "common") body.append(group("알림", "오류 토스트의 자동 닫힘을 정한다. 끄면 각 토스트의 ×로만 닫는다.", [
+    row("자동 닫힘", toggle("autoDismissErrorToasts", value("autoDismissErrorToasts"))),
+    row("초 후 자동으로 닫힘", seconds("errorToastDismissSeconds", 1, 2147483, value("errorToastDismissSeconds"))),
   ]));
   if (scope === "common") body.append(group("진단", "디버그를 켜면 성능 트레이스와 모든 로그 종류의 상세 기록이 남는다. 끄면 오류만 기록된다.", [
     row("디버그", debugSwitch()),

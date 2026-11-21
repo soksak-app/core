@@ -59,13 +59,14 @@ type SettingsCatalog struct {
 	MenuLanguages []CatalogLanguage `json:"menuLanguages"`
 	Default       string            `json:"defaultLanguage"`
 	Settings      struct {
-		Defaults         map[string]any        `json:"defaults"`
-		LayoutRanges     map[string][2]float64 `json:"layoutRanges"`
-		ShapeRanges      map[string][2]float64 `json:"shapeRanges"`
-		MemorySaverDelay [2]float64            `json:"memorySaverDelay"`
-		Choices          map[string][]string   `json:"choices"`
-		TextSteps        []float64             `json:"textSteps"`
-		Switches         []string              `json:"switches"`
+		Defaults                 map[string]any        `json:"defaults"`
+		LayoutRanges             map[string][2]float64 `json:"layoutRanges"`
+		ShapeRanges              map[string][2]float64 `json:"shapeRanges"`
+		MemorySaverDelay         [2]float64            `json:"memorySaverDelay"`
+		ErrorToastDismissSeconds [2]float64            `json:"errorToastDismissSeconds"`
+		Choices                  map[string][]string   `json:"choices"`
+		TextSteps                []float64             `json:"textSteps"`
+		Switches                 []string              `json:"switches"`
 		// Orders are the settings whose value is an order of their listed values, each once (docs/spec/settings.md#values).
 		Orders     map[string][]string `json:"orders"`
 		CommonOnly []string            `json:"commonOnly"`
@@ -146,6 +147,9 @@ func (c *SettingsCatalog) choices(key string) []string {
 func (c *SettingsCatalog) bounds(key string) ([2]float64, bool) {
 	if value, ok := c.Settings.LayoutRanges[key]; ok {
 		return value, true
+	}
+	if key == "errorToastDismissSeconds" {
+		return c.Settings.ErrorToastDismissSeconds, true
 	}
 	value, ok := c.Settings.ShapeRanges[key]
 	return value, ok
@@ -459,6 +463,12 @@ func (s *SettingsStore) validate(key string, value any) error {
 		number, ok := integer(value)
 		if bounds := catalog.Settings.MemorySaverDelay; !ok || number < bounds[0] || number > bounds[1] {
 			return fmt.Errorf("Invalid setting memorySaverDelay: %s", jsonText(value))
+		}
+	}
+	if key == "errorToastDismissSeconds" {
+		number, ok := integer(value)
+		if bounds := catalog.Settings.ErrorToastDismissSeconds; !ok || number < bounds[0] || number > bounds[1] {
+			return fmt.Errorf("Invalid setting errorToastDismissSeconds: %s is not an integer from %v to %v", jsonText(value), bounds[0], bounds[1])
 		}
 	}
 	if bounds, ok := catalog.bounds(key); ok {

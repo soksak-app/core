@@ -1098,6 +1098,7 @@ export const overlay = native ? {
     hide(el) {
       if (el && shown !== el.id) return;
       const id = shown;
+// default: a host that keeps no error toasts restores none.
       restoreErrorToasts?.();
       restoreErrorToasts = null;
       shown = null;

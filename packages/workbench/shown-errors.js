@@ -2,6 +2,7 @@
 // log at the moment it is shown is the trace of that error (AGENTS.md, docs/spec/hosts.md#application-log). The error color is used only for the
 // `data-error` element that this path attaches. Drawing the same error again at the same place does not write it again.
 import { report } from "./host.js";
+import { onSettingsChange, value as settingsValue } from "./settings.js";
 import { delegate, mark } from "./commands.js";
 import { CHROME } from "./chrome-metrics.js";
 
@@ -31,8 +32,11 @@ function drawError(element, where, text) {
 }
 
 const documents = new WeakMap();
-const toastDuration = parseFloat(CHROME["error-toast-duration"]);
 const toastCloseKey = (id) => `error-toast:${id}`;
+
+/** Returns whether toasts close by their own deadline and the deadline in milliseconds, from the common settings
+ * (docs/spec/settings.md). Without automatic dismissal a toast closes only on its own control. */
+
 
 /** Returns the error toast component for a document. */
 export function errorToasts(document) {
@@ -44,6 +48,28 @@ function createErrorToasts(document) {
   const view = document.defaultView;
   const origins = new Map();
   const groups = new Map();
+  let autoDismiss = false;
+  let autoDismissDelay = 5000;
+  // The automatic dismissal follows the common settings; the subscription ends when the document closes, and the component
+  // takes the current settings when it opens a toast.
+  const followSettings = () => setAutoDismiss(settingsValue("autoDismissErrorToasts") === true,
+    // default: a setting of another form falls back to five seconds.
+    Number(settingsValue("errorToastDismissSeconds")) || 5);
+  onSettingsChange(followSettings);
+  /** Sets whether toasts close by their own deadline and the delay in seconds; the settings change of the workbench calls
+   * this, and the open toasts take the new deadline or drop their timer. */
+  const setAutoDismiss = (auto, seconds) => {
+    autoDismiss = auto === true;
+    // default: a seconds value of another form falls back to five seconds.
+    autoDismissDelay = (Number(seconds) || 5) * 1000;
+    for (const group of [...groups.values()]) {
+      view.clearTimeout(group.timer);
+      group.timer = null;
+      if (autoDismiss) group.timer = view.setTimeout(() => dismissGroup(group), autoDismissDelay);
+    }
+  };
+  // default: a setting of another form falls back to five seconds.
+  setAutoDismiss(settingsValue("autoDismissErrorToasts") === true, Number(settingsValue("errorToastDismissSeconds")) || 5);
   const watchers = new Set();
   let container = document.body;
   let holder;
@@ -71,8 +97,9 @@ function createErrorToasts(document) {
     holder.append(node);
     const group = { id, text, node, origins: new Set(), anonymous: false, timer: null };
     groups.set(text, group);
-    // Visibility has a fixed duration; no input or render event signals its end.
-    group.timer = view.setTimeout(() => dismissGroup(group), toastDuration);
+    // A toast closes by itself only while the setting asks for it; the settings change of the workbench reschedules the
+    // open toasts (settings.js).
+    if (autoDismiss) group.timer = view.setTimeout(() => dismissGroup(group), autoDismissDelay);
     return group;
   }
 
@@ -110,7 +137,8 @@ function createErrorToasts(document) {
       if (previous?.text === text) return;
       const existing = groups.get(text);
       if (!origin && existing?.anonymous) return;
-      const group = existing ?? open(text, where);
+      // default: a text that no open toast holds opens one.
+    const group = existing ?? open(text, where);
       let changedGroups = !existing;
       if (origin) {
         if (previous && detach(origin, previous)) changedGroups = true;
@@ -139,8 +167,10 @@ function createErrorToasts(document) {
     },
 
     /** Returns the current error of the origin, including a dismissed occurrence. */
+    // default: an origin without an error shows no text.
     text: (origin) => origins.get(origin)?.text ?? null,
 
+    // default: without an open toast the newest is none.
     newest: () => Array.from(groups.keys()).at(-1) ?? null,
 
     /** Identifies a previously assigned close control that the modal copy can still hold after its removal. */
@@ -161,6 +191,7 @@ function createErrorToasts(document) {
       watchers.add(fn);
       return () => watchers.delete(fn);
     },
+    setAutoDismiss,
   };
 }
 
@@ -183,3 +214,4 @@ function toast(document, text, where, id) {
   toast.append(shown, close);
   return toast;
 }
+

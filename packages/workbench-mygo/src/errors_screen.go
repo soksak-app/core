@@ -20,6 +20,10 @@ type ShownErrors struct {
 	toasts      []*errorToast
 	schedule    func(expire func()) (cancel func())
 	expired     func()
+	// autoDismiss states whether a toast closes by its own deadline, and deadline the delay in milliseconds; the settings of
+	// the workbench hold both and ConfigureToastDeadline applies their change.
+	autoDismiss bool
+	deadline    int64
 }
 
 type inlineError struct {
@@ -124,8 +128,20 @@ func (e *ShownErrors) startToastExpiry(schedule func(func()) func(), expired fun
 	}
 }
 
+// ConfigureToastDeadline applies the automatic-dismissal settings: without autoDismiss no toast closes by itself, and the
+// open toasts take the new deadline or drop their timer.
+func (e *ShownErrors) ConfigureToastDeadline(auto bool, milliseconds int64) {
+	e.autoDismiss, e.deadline = auto, milliseconds
+	for _, toast := range e.toasts {
+		toast.stopTimer()
+		if auto {
+			e.scheduleToast(toast)
+		}
+	}
+}
+
 func (e *ShownErrors) scheduleToast(toast *errorToast) {
-	if e.schedule == nil {
+	if e.schedule == nil || !e.autoDismiss {
 		return
 	}
 	toast.cancel = e.schedule(func() {

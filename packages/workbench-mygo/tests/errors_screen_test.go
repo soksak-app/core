@@ -210,6 +210,9 @@ func assertOnlyToastClose(t *testing.T, tree []ui.ElementNode, text string) ui.E
 
 func TestAnErrorToastExpiresWithoutRestartingForModalOrRepaint(t *testing.T) {
 	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
+	f.shellFixture.run("core.settings.set", map[string]any{"scope": "common", "patch": map[string]any{
+		"autoDismissErrorToasts": true, "errorToastDismissSeconds": 4,
+	}})
 	const failure = "the operation could not finish"
 	f.shellFixture.run("core.focus.set", map[string]string{"name": "core.chrome.settings"})
 	workbenchFocus := f.status("core.focus")
@@ -253,6 +256,9 @@ func TestAnErrorToastExpiresWithoutRestartingForModalOrRepaint(t *testing.T) {
 
 func TestAClosedToastDeadlineDoesNotExpireANewerEqualToast(t *testing.T) {
 	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
+	f.shellFixture.run("core.settings.set", map[string]any{"scope": "common", "patch": map[string]any{
+		"autoDismissErrorToasts": true, "errorToastDismissSeconds": 4,
+	}})
 	const failure = "the operation could not finish"
 	f.shell.StartFailed(errors.New(failure))
 	f.shownRecords()
@@ -273,4 +279,68 @@ func TestAClosedToastDeadlineDoesNotExpireANewerEqualToast(t *testing.T) {
 	if got := f.status("core.workbench.error"); got != "null" {
 		t.Fatalf("the newer toast did not expire at its own deadline: %s", got)
 	}
+}
+
+func TestErrorToastDismissalDefaultsToManualAndClosesOnlyTheSelectedToast(t *testing.T) {
+	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
+	const first, second = "the first operation did not finish", "the second operation did not finish"
+	f.shell.StartFailed(errors.New(first))
+	f.shell.StartFailed(errors.New(second))
+	f.shownRecords()
+	f.timers.tick(10000)
+	f.settle()
+	firstClose := assertOnlyToastClose(t, f.tester.ElementTree(), first)
+	secondClose := assertOnlyToastClose(t, f.tester.ElementTree(), second)
+	if firstClose.Bounds.Y >= secondClose.Bounds.Y {
+		t.Fatalf("the toasts did not stack in order: %v and %v", firstClose.Bounds, secondClose.Bounds)
+	}
+	press(t, f.tester, "core.error.dismiss", first)
+	f.settle()
+	if _, shown := keyed(f.tester.ElementTree(), "core.error.dismiss", first); shown {
+		t.Fatal("the chosen toast did not close")
+	}
+	assertOnlyToastClose(t, f.tester.ElementTree(), second)
+}
+
+func TestErrorToastSettingsApplyNewDeadlinesAndCancelOpenToasts(t *testing.T) {
+	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
+	change := func(key string, value any) {
+		t.Helper()
+		f.shellFixture.run("core.settings.change", map[string]any{"key": key, "scope": "common", "value": value})
+	}
+	const first, second, third = "the first operation did not finish", "the second operation did not finish", "the third operation did not finish"
+	f.shell.StartFailed(errors.New(first))
+	f.shownRecords()
+
+	f.timers.tick(400)
+	change("autoDismissErrorToasts", true)
+	f.timers.tick(4999)
+	f.settle()
+	assertOnlyToastClose(t, f.tester.ElementTree(), first)
+	f.timers.tick(1)
+	f.settle()
+	if got := f.status("core.workbench.error"); got != "null" {
+		t.Fatalf("the toast did not close five seconds after enabling: %s", got)
+	}
+
+	f.shell.StartFailed(errors.New(second))
+	f.shownRecords()
+	f.timers.tick(200)
+	change("errorToastDismissSeconds", 2)
+	f.timers.tick(1999)
+	f.settle()
+	assertOnlyToastClose(t, f.tester.ElementTree(), second)
+	f.timers.tick(1)
+	f.settle()
+	if got := f.status("core.workbench.error"); got != "null" {
+		t.Fatalf("the toast did not close two seconds after changing the delay: %s", got)
+	}
+
+	f.shell.StartFailed(errors.New(third))
+	f.shownRecords()
+	f.timers.tick(1000)
+	change("autoDismissErrorToasts", false)
+	f.timers.tick(10000)
+	f.settle()
+	assertOnlyToastClose(t, f.tester.ElementTree(), third)
 }

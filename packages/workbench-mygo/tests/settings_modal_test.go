@@ -1705,3 +1705,51 @@ func TestTheBalanceButtonDrawsTheIconOfItsArrangement(t *testing.T) {
 		t.Fatalf("resize draws %q", got)
 	}
 }
+
+func TestNotificationSettingsEditAndPersistToastDismissal(t *testing.T) {
+	f := opened(t)
+	f.tester.SetSize(1200, 3200)
+	f.settle()
+
+	const dismiss, seconds = "autoDismissErrorToasts", "errorToastDismissSeconds"
+	if !f.tester.HasText("초 후 자동으로 닫힘") {
+		t.Error("the notifications group has no automatic-dismissal label")
+	}
+	controls := map[string]string{}
+	for _, control := range f.modal().Controls {
+		if control.Key == nil || (*control.Key != dismiss && *control.Key != seconds) {
+			continue
+		}
+		if control.Command == nil || control.Command.Name != "core.settings.change" || control.Command.Params["scope"] != "common" {
+			t.Errorf("the control %s does not declare a common settings change: %+v", *control.Key, control.Command)
+		}
+		if *control.Key == dismiss && (control.On == nil || *control.On) {
+			t.Errorf("the default switch state is %v", control.On)
+		}
+		if control.Value != nil {
+			controls[*control.Key] = *control.Value
+		}
+	}
+	if controls[dismiss] != "false" || controls[seconds] != "5" {
+		t.Fatalf("the default toast controls are %+v", controls)
+	}
+
+	writes := len(f.host.settings)
+	f.click("core.settings-modal.set", seconds)
+	f.tester.Key(ui.Super, ui.KeyA)
+	f.tester.Type("7")
+	f.tester.Key(0, ui.KeyEnter)
+	f.settle()
+	if value := f.settingValues()[seconds]; value != 7.0 {
+		t.Fatalf("the seconds field changed its setting to %v", value)
+	}
+	f.click("core.settings-modal.set", dismiss)
+	if value := f.settingValues()[dismiss]; value != true {
+		t.Fatalf("the enable switch changed its setting to %v", value)
+	}
+	if patches := f.host.settings[writes:]; len(patches) != 2 ||
+		patches[0]["id"] != "" || patches[0]["patch"].(map[string]any)[seconds] != 7.0 ||
+		patches[1]["id"] != "" || patches[1]["patch"].(map[string]any)[dismiss] != true {
+		t.Fatalf("the native toast controls wrote %+v", patches)
+	}
+}

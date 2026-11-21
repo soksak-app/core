@@ -538,3 +538,29 @@ func TestCoreSettingsOverriddenIsAnArrayAcrossEmptyAndReset(t *testing.T) {
 		t.Fatalf("last reset retained overrides: %v", keys)
 	}
 }
+
+func TestErrorToastDismissalSecondsRequireAWholeCommonValue(t *testing.T) {
+	var writes []saved
+	store := settingsStore(t, &writes)
+	if err := store.Begin(nil, nil, "prj-a"); err != nil {
+		t.Fatal(err)
+	}
+	const key = "errorToastDismissSeconds"
+	for _, value := range []any{0.0, -1.0, 1.25, 2147484.0, "5"} {
+		if err := store.Set(map[string]any{key: value}, "common"); err == nil {
+			t.Errorf("the store accepted %v (%T)", value, value)
+		}
+	}
+	if err := store.Set(map[string]any{key: 5.0}, "project"); err == nil {
+		t.Error("the store accepted a project-specific dismissal delay")
+	}
+	if len(writes) != 0 {
+		t.Fatalf("refused values were written: %+v", writes)
+	}
+	if err := store.Change(key, "7", "common"); err != nil {
+		t.Fatalf("a numeric field value was refused: %v", err)
+	}
+	if len(writes) != 1 || writes[0].project != "" || writes[0].patch[key] != 7.0 {
+		t.Fatalf("the numeric field wrote %+v", writes)
+	}
+}

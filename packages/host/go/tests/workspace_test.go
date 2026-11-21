@@ -368,6 +368,8 @@ var commonOnlyCases = []struct {
 	{"textSize", 1.5, `1.5`},
 	{"memorySaver", false, `false`},
 	{"memorySaverDelay", 30, `30`},
+	{"autoDismissErrorToasts", true, `true`},
+	{"errorToastDismissSeconds", 5, `5`},
 }
 
 // contract: workspace.settings.rejects-project-common-only-keys

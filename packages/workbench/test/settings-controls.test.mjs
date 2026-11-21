@@ -61,6 +61,16 @@ test("every setting form is drawn with its one control", async (t) => {
     const delay = document.querySelector('[data-set="memorySaverDelay"]');
     assert.deepEqual([controlOf("memorySaverDelay").type, delay.min, delay.max, delay.nextSibling.textContent],
       ["range", "5", "720", "120분"]);
+    const autoDismiss = document.querySelector('[data-set="autoDismissErrorToasts"]');
+    const dismissSeconds = document.querySelector('[data-set="errorToastDismissSeconds"]');
+    assert.equal(controlOf("autoDismissErrorToasts").type, "checkbox");
+    assert.equal(autoDismiss.checked, false);
+    assert.equal(autoDismiss.closest(".set-group").querySelector("h4").textContent, "알림");
+    assert.equal(controlOf("errorToastDismissSeconds").type, "number");
+    assert.deepEqual([dismissSeconds.value, dismissSeconds.min, dismissSeconds.max, dismissSeconds.step, dismissSeconds.disabled],
+      ["5", "1", "2147483", "1", false]);
+    assert.equal(dismissSeconds.parentElement.textContent.trim(), "초 후 자동으로 닫힘");
+    assert.equal(controlOf("errorToastDismissSeconds").command, "core.settings.change");
     assert.equal(controlOf("link:left:").tag, "SELECT");
     for (const side of ["right", "top", "bottom"]) assert.equal(controlOf(`link:${side}:`).tag, "SELECT", `${side} has no set select`);
     // The order of the window sidebars: one row per side with ▲ (not on the first row) and ▼ (not on the last row), each running

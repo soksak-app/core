@@ -72,6 +72,7 @@ test("the native settings and debug copies share the foreground toast and forwar
   await orderedCallsAnswered();
   const previous = copied("overlayUpdate", "debug");
   const previousKey = previous.dataset.key;
+  errors.setAutoDismiss(true, 4);
   let dismissals = 0;
   registry.watch((name) => { if (name === "core.error.dismiss") dismissals++; });
   const answers = [];

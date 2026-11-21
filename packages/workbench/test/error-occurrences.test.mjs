@@ -12,10 +12,10 @@ function fixture(t) {
   const dom = new JSDOM("<body></body>");
   t.after(() => dom.window.close());
   const { document } = dom.window;
-  const { show, withdraw, dismiss, place, text } = errorToasts(document);
+  const { show, withdraw, dismiss, place, text, setAutoDismiss } = errorToasts(document);
   const log = t.mock.method(rawConsole, "error", () => {});
   return {
-    document, show, clear: withdraw, dismiss, place, text,
+    document, show, clear: withdraw, dismiss, place, text, setAutoDismiss,
     open: () => [...document.querySelectorAll("#errorToasts > .error-toast")].map((toast) => toast.dataset.text),
     records: () => log.mock.calls.map(({ arguments: [line] }) => line),
   };
@@ -67,6 +67,7 @@ test("a toast expires after four seconds across repaint and movement into a dial
   const dialog = document.createElement("div");
   dialog.setAttribute("role", "dialog");
   document.body.append(dialog);
+  display.setAutoDismiss(true, 4);
   display.show("failed", "", "layout");
   t.mock.timers.tick(2000);
   display.show("failed", "", "layout");
@@ -86,6 +87,7 @@ test("a toast expires after four seconds across repaint and movement into a dial
 test("a cancelled toast timer leaves a later occurrence of the same text open", (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const display = fixture(t);
+  display.setAutoDismiss(true, 4);
   display.show("failed", "", "layout");
   t.mock.timers.tick(1000);
   assert.equal(display.dismiss("failed"), true);
@@ -96,4 +98,35 @@ test("a cancelled toast timer leaves a later occurrence of the same text open", 
   t.mock.timers.tick(1000);
   assert.deepEqual(display.open(), []);
   assert.deepEqual(display.records(), ["workbench: failed", "workbench: failed"]);
+});
+
+test("toasts default to manual stacking and live settings replace or cancel their deadlines", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const display = fixture(t);
+  display.show("earlier", "", "layout");
+  display.show("later", "", "activity");
+  t.mock.timers.tick(5000);
+  assert.deepEqual(display.open(), ["earlier", "later"], "the default is manual dismissal");
+  assert.equal(display.dismiss("earlier"), true);
+  assert.deepEqual(display.open(), ["later"], "one manual close leaves other toasts open");
+
+  display.setAutoDismiss(true, 5);
+  t.mock.timers.tick(3000);
+  display.setAutoDismiss(true, 2);
+  t.mock.timers.tick(1999);
+  assert.deepEqual(display.open(), ["later"]);
+  t.mock.timers.tick(1);
+  assert.deepEqual(display.open(), []);
+
+  display.clear("activity");
+  display.show("later", "", "activity");
+  t.mock.timers.tick(1000);
+  display.setAutoDismiss(false, 2);
+  t.mock.timers.tick(10000);
+  assert.deepEqual(display.open(), ["later"], "turning the switch off cancels an open toast's deadline");
+  display.clear("layout");
+  display.show("earlier", "", "layout");
+  t.mock.timers.tick(5000);
+  assert.deepEqual(display.open(), ["later", "earlier"]);
+  assert.deepEqual(display.records(), ["workbench: earlier", "workbench: later", "workbench: later", "workbench: earlier"]);
 });

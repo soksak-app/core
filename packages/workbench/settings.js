@@ -105,6 +105,8 @@ export const defaults = {
 };
 
 /* The range of memorySaverDelay in minutes (docs/spec/settings.md#values). */
+// default: a declaration without the range holds the whole-number bounds.
+export const ERROR_TOAST_DISMISS_SECONDS = declaration.settings.errorToastDismissSeconds ?? [1, 2147483];
 export const MEMORY_SAVER_DELAY = declaration.settings.memorySaverDelay;
 
 
@@ -213,6 +215,10 @@ function validateValue(key, value) {
   if (key === "memorySaverDelay" && (!Number.isInteger(value) || value < MEMORY_SAVER_DELAY[0] || value > MEMORY_SAVER_DELAY[1])) {
     throw new Error(`Invalid setting memorySaverDelay: ${JSON.stringify(value)}`);
   }
+  if (key === "errorToastDismissSeconds"
+    && (!Number.isInteger(value) || value < ERROR_TOAST_DISMISS_SECONDS[0] || value > ERROR_TOAST_DISMISS_SECONDS[1])) {
+    throw new Error(`Invalid setting errorToastDismissSeconds: ${JSON.stringify(value)} is not an integer from ${ERROR_TOAST_DISMISS_SECONDS[0]} to ${ERROR_TOAST_DISMISS_SECONDS[1]}`);
+  }
   const range = RANGES[key];
   if (range && (!Number.isInteger(value) || value < range[0] || value > range[1])) {
     throw new Error(`Invalid setting ${key}: ${JSON.stringify(value)} is not an integer from ${range[0]} to ${range[1]}`);
@@ -239,7 +245,7 @@ function validateValue(key, value) {
 export function settingType(key) {
   if (SWITCHES.includes(key)) return "boolean";
   if (STRUCTURED.includes(key) || Object.hasOwn(ORDERS, key)) return "object";
-  if (Object.hasOwn(RANGES, key) || key === "memorySaverDelay") return "number";
+  if (Object.hasOwn(RANGES, key) || key === "memorySaverDelay" || key === "errorToastDismissSeconds") return "number";
   if (CHOICES[key]) return typeof CHOICES[key][0];
   const definition = pluginDefinitions.get(key);
   if (!definition) throw new Error(`Unknown setting: ${key}`);

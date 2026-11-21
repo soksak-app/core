@@ -394,7 +394,9 @@
       "sidebarMaxWidth": 480,
       "sidebarWidth": 190,
       "memorySaver": true,
-      "memorySaverDelay": 120
+      "memorySaverDelay": 120,
+      "autoDismissErrorToasts": false,
+      "errorToastDismissSeconds": 5
     },
     "layoutRanges": {
       "sidebarMinWidth": [
@@ -471,13 +473,14 @@
       3
     ],
     "switches": [
-      "left",
-      "right",
-      "top",
+      "autoDismissErrorToasts",
       "bottom",
-      "dim",
       "diagnostics.performance",
-      "memorySaver"
+      "dim",
+      "left",
+      "memorySaver",
+      "right",
+      "top"
     ],
     "orders": {
       "sidebarOrder": [
@@ -488,11 +491,17 @@
       ]
     },
     "commonOnly": [
-      "projectOpening",
-      "viewProcess",
-      "textSize",
+      "autoDismissErrorToasts",
+      "errorToastDismissSeconds",
       "memorySaver",
-      "memorySaverDelay"
+      "memorySaverDelay",
+      "projectOpening",
+      "textSize",
+      "viewProcess"
+    ],
+    "errorToastDismissSeconds": [
+      1,
+      2147483
     ]
   },
   "icons": {
@@ -788,7 +797,6 @@
     "error-close-pad-x": "6px",
     "error-border": "1px",
     "error-toast-bottom": "24px",
-    "error-toast-duration": "4000ms",
     "error-toast-max-width": "420px",
     "fold-button": "18px",
     "sidebar-status-gap": "6px",

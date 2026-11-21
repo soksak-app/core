@@ -523,6 +523,7 @@ export function createLibrary(root, rendered = () => {}) {
       formState:form.hidden?null:{mode:formMode,name:input('name'),parent:input('parent')},
       returnVisible:!back.hidden, pending, empty:!root.querySelector('.library-empty').hidden,
       noResults:Boolean(grid.querySelector('.library-no-results')),
+// default: a library without an error shows none.
       error:errors.text('library')??null, previews, previewErrors, folderErrors,
     };
   }

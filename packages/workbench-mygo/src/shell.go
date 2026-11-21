@@ -637,9 +637,8 @@ func NewShell(options ShellOptions) (*Shell, error) {
 		return nil, err
 	}
 	if s.tabs != nil {
-		duration := int64(options.Declared.ChromeNumber("error-toast-duration", "ms"))
 		s.errors.startToastExpiry(func(expire func()) func() {
-			return s.tabs.after(duration, expire)
+			return s.tabs.after(s.errors.deadline, expire)
 		}, s.options.Invalidate)
 	}
 	return s, nil

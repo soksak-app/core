@@ -153,4 +153,27 @@ test("core.settings.change gives each setting a value of its declared type", asy
       assert.equal(settings.settingType(key), typeof value, key);
     }
   });
+
+  await t.test("error toast preferences accept and reload saved whole seconds", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    await assert.rejects(change("errorToastDismissSeconds", "2.5"), /Invalid setting errorToastDismissSeconds/);
+    assert.equal(Object.hasOwn(memory.common, "errorToastDismissSeconds"), false);
+    await change("errorToastDismissSeconds", "7");
+    await change("autoDismissErrorToasts", "true");
+    assert.equal(memory.common.errorToastDismissSeconds, 7);
+    assert.equal(memory.common.autoDismissErrorToasts, true);
+    const saved = structuredClone(memory);
+    await change("errorToastDismissSeconds", 2);
+    await change("autoDismissErrorToasts", false);
+    settings.beginSettings(saved, null);
+    assert.equal(settings.value("errorToastDismissSeconds"), 7);
+    assert.equal(settings.value("autoDismissErrorToasts"), true);
+    const { errorToasts } = await import("../shown-errors.js");
+    const errors = errorToasts(document);
+    errors.show("restored preference", "", "settings fixture");
+    t.mock.timers.tick(6999);
+    assert.equal(errors.newest(), "restored preference");
+    t.mock.timers.tick(1);
+    assert.equal(errors.newest(), null);
+  });
 });

@@ -338,7 +338,7 @@ test("the common-only keys of the hosts and the workbench are read from their so
     wailsv3DeclarationSource: read("packages/host/go/src/workbench.json"),
     workbenchDeclarationSource: read("packages/workbench/workbench.json"),
   });
-  assert.deepEqual(keys.workbench, ["projectOpening", "viewProcess", "textSize", "memorySaver", "memorySaverDelay"]);
+  assert.deepEqual(keys.workbench, ["autoDismissErrorToasts", "errorToastDismissSeconds", "memorySaver", "memorySaverDelay", "projectOpening", "textSize", "viewProcess"]);
   assert.deepEqual(auditCommonOnlyKeys(keys), []);
 });
 
