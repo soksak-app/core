@@ -303,6 +303,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1024",
+    implementation: [{ file: "packages/workbench-mygo/src/chrome.go", symbol: "func (s *Shell) keepControls(at layout.Rect) {" }],
+    tests: [{ file: "packages/workbench-mygo/tests/split_test.go", id: "TestTheChromeBarKeepsTheWindowButtonAreaOfTheAnswer" }],
+    expected: "The first row of the mygo workbench leaves the area of the window buttons that the host answers to the buttons, and the logo never draws under them.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1025",
+    implementation: [{ file: "docs/features.md", symbol: "are the coupling of the pinned releases" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "requirement audit rejects a removed requirement and every omitted scenario dimension" }],
+    expected: "The error texts of the acceptance run are the coupling of the pinned releases, recorded as the answer to the question.",
+    levels: ["unit"],
+  },
+  {
     id: "F1028",
     implementation: [{ file: "packages/workbench/exposure.js", symbol: "const startCoreRefresh = () => {" }],
     tests: [{ file: "packages/workbench/test/page-identifiers.test.mjs", id: "every shipped module declares the names that it reads" }],
@@ -17043,7 +17057,7 @@ const MOVED_COMPLETIONS = new Set(["F6", "F596","F239-170", "F239-197", "F239-24
 // a recording and of a drag. F239-47-40-3, F239-123, F239-234, F239-75, F750, F698, F239-136, F239-143, F239-144, F239-146,
 // F239-148, F239-149, F239-178, F239-245, F239-259, F610 and F239-242 wrote those parts, so they have no implementation left.
 // F239-194 loads the diagnostic modules at startup, which stays; its only check was the drag identity check that F746 removes.
-const REMOVED_COMPLETIONS = new Set(["F239-189", "F239-47-40-3", "F239-123", "F239-234", "F239-75", "F750", "F698", "F239-136",
+const REMOVED_COMPLETIONS = new Set(["F1026", "F239-189", "F239-47-40-3", "F239-123", "F239-234", "F239-75", "F750", "F698", "F239-136",
   "F239-143", "F239-144", "F239-146", "F239-148", "F239-149", "F239-178", "F239-245", "F239-259", "F610", "F239-242", "F239-194", "F747", "F749", "F160.26", "F239-98", "F239-98-1", "F239-98-1-1", "F239-98-2", "F239-98-3", "F239-98-4", "F239-47-17",
   "F239-153", "F239-221-2", "F239-233", "F442", "F701", "F652", "F652-1", "F652-2", "F668", "F343", "F430", "F437", "F35", "F594", "F755",
   "F239-47-19", "F239-134", "F239-158", "F239-175", "F239-47-10", "F239-47-12", "F239-47-13", "F239-47-14", "F212.12-1-15-5", "F212.9-3-1", "F212.9a-1", "F239-107-1", "F239-220", "F239-40", "F239-43",
