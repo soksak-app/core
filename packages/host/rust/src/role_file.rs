@@ -156,15 +156,12 @@ pub fn prepare_role_file(
     let path = folder.join(ROLE_FILE_NAME);
     let file = write_role_temporary(&folder, &path, &role_file_content(identifier, text))?;
     let ko_path = folder.join(ROLE_KO_FILE_NAME);
-    let ko_file = match write_role_temporary(
+    // If the second write fails, dropping file removes the first temporary file.
+    let ko_file = write_role_temporary(
         &folder,
         &ko_path,
         &role_ko_file_content(identifier, text, ko),
-    ) {
-        Ok(ko_file) => ko_file,
-        // The drop of file removes its temporary file.
-        Err(e) => return Err(e),
-    };
+    )?;
     Ok(PreparedRole {
         path,
         ko_path,

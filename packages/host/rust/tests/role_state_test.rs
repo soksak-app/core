@@ -416,7 +416,7 @@ fn clear_read_only(directory: &Path) {
 // contract: roles.role-state-serialization
 #[test]
 fn the_role_operations_of_one_surface_run_in_arrival_order() {
-    let (_directory, store) = fixture("order");
+    let (directory, store) = fixture("order");
     let fingerprint_a = role_fingerprint("a", "Role A definition.");
     let fingerprint_b = role_fingerprint("b", "Role B definition.");
     // Consecutive changes a to b to a raise the generation at each change.
@@ -447,4 +447,5 @@ fn the_role_operations_of_one_surface_run_in_arrival_order() {
         json!({"kind": "roleConfirm", "tab": "tab-aaaaaa", "fingerprint": fingerprint_a}),
     );
     assert_eq!(ready["state"], json!("ready"));
+    fs::remove_dir_all(&directory).unwrap();
 }

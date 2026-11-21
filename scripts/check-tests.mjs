@@ -350,6 +350,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1031-3",
+    implementation: [
+      { file: "packages/host/rust/src/role_file.rs", symbol: "let ko_file = write_role_temporary(" },
+      { file: "packages/host/rust/src/role_state.rs", symbol: "let holder = node.as_object_mut()?;" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/role_file_test.rs", id: "write_role_file_writes_korean_file_beside_role_file" },
+      { file: "packages/host/rust/tests/role_state_test.rs", id: "the_role_operations_of_one_surface_run_in_arrival_order" },
+    ],
+    expected: "The Rust role store writes both role files and serializes changes to one surface.",
+    levels: ["unit"],
+  },
+  {
     id: "F1026",
     implementation: [
       { file: "packages/workbench/page-layout.js", symbol: "function errorToast(document, text, source) {" },

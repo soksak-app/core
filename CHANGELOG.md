@@ -5,6 +5,7 @@
 
 ## 2026-11-21
 
+- F1031-3: The Rust role store propagates missing values and write failures directly, and the serialization test removes its temporary directory. Red: Clippy refused five expressions in the role store and the test runner reported the temporary directory. Green: Clippy passes for the default and diagnostic workspace configurations, and all 15 role tests pass.
 - F1030-1.2: The installation guide describes automatic user PATH registration and its setting. The CLI specification identifies the system PATH entry as the operation that needs administrator rights.
 - F1030-1.1: Rust PATH reconciliation reports the saved profile list change after removing obsolete blocks. It propagates removal failures. Red: Clippy rejects an assignment discarded before the write. Green: the sok package passes Clippy and all four Darwin setup tests pass.
 - F1031-2: The page refuses an empty or unknown error toast text. The layout and status tests exercise the current error display and keep their logging and recovery assertions. Red: dismissing an empty text returned success. Green: the layout recovery, layout logging, and workbench status tests pass.

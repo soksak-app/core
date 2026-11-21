@@ -152,9 +152,7 @@ fn find_tab_role<'a>(projects: &'a [Value], tab: &str) -> Option<FoundTab<'a>> {
 
 /// Returns the tab record of the tab id in the tree of a layout state, or None when the tree holds no such tab.
 fn tab_entry<'a>(node: &'a Value, tab: &str) -> Option<&'a Map<String, Value>> {
-    let Some(holder) = node.as_object() else {
-        return None;
-    };
+    let holder = node.as_object()?;
     if holder.contains_key("card") {
         let tabs = holder["data"]["tabs"].as_array()?;
         return tabs
@@ -165,9 +163,7 @@ fn tab_entry<'a>(node: &'a Value, tab: &str) -> Option<&'a Map<String, Value>> {
     if holder.contains_key("box") {
         return tab_entry(&holder["inner"], tab);
     }
-    let Some(kids) = holder["kids"].as_array() else {
-        return None;
-    };
+    let kids = holder["kids"].as_array()?;
     for kid in kids {
         if let Some(found) = tab_entry(&kid["node"], tab) {
             return Some(found);
@@ -253,11 +249,12 @@ fn role_change(
         return Err(format!("surface {tab:?} has no tab"));
     };
     let earlier = checked_tab_role(&registry, found.root, found.space, tab, found.entry)?;
-    if let Some(record) = &earlier {
-        if record.id == id && record.fingerprint == fingerprint {
-            // The same role with the same definition: no file is written, no generation changes and no message is sent.
-            return Ok(answer_of(directory, state, tab, Some(record)));
-        }
+    if let Some(record) = &earlier
+        && record.id == id
+        && record.fingerprint == fingerprint
+    {
+        // The same role and definition keep the files and generation and send no message.
+        return Ok(answer_of(directory, state, tab, Some(record)));
     }
     // Step 1: both role files are written under their temporary names and their modes are checked.
     let prepared = prepare_role_file(directory, tab, id, text, ko)?;
@@ -404,9 +401,7 @@ fn store_tab_role(registry: &Path, tab: &str, role: Option<&Value>) -> Result<()
 
 /// Returns the tab record of the tab id in the tree of a layout state as a mutable reference.
 fn tab_entry_mut<'a>(node: &'a mut Value, tab: &str) -> Option<&'a mut Map<String, Value>> {
-    let Some(holder) = node.as_object_mut() else {
-        return None;
-    };
+    let holder = node.as_object_mut()?;
     if holder.contains_key("card") {
         let tabs = holder.get_mut("data")?.get_mut("tabs")?.as_array_mut()?;
         return tabs
