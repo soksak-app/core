@@ -59,9 +59,9 @@ func TestAWithdrawnErrorIsWrittenAgainWhenItIsShownAgain(t *testing.T) {
 	}
 }
 
-func TestTheErrorToastsShowTheErrorsOfTheWorkbench(t *testing.T) {
+func TestTheErrorBannerShowsTheErrorOfTheWorkbench(t *testing.T) {
 	errors := workbench.NewShownErrors(func(string) {})
-	tt := ui.NewTester(func(c *ui.Context) { workbench.DrawErrorToasts(c, errors) }, 480, 120)
+	tt := ui.NewTester(func(c *ui.Context) { workbench.DrawErrorBanner(c, errors) }, 480, 120)
 	if len(tt.Texts()) != 0 {
 		t.Fatalf("a workbench without an error shows %q", tt.Texts())
 	}

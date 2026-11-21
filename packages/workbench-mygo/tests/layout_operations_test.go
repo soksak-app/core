@@ -1233,41 +1233,6 @@ func TestTheRoleStatusIsReadWithTheSurfaceOfItsRequest(t *testing.T) {
 	})
 }
 
-// The errors of the workbench show as toasts at the bottom of the window, one per distinct text, and each closes on its
-// own (docs/spec/exposure.md, core.workbench.error).
-func TestTheWorkbenchErrorsShowAsToastsAndEachClosesOnItsOwn(t *testing.T) {
-	var lines []string
-	errors := workbench.NewShownErrors(func(line string) { lines = append(lines, line) })
-	errors.Show("workbench", "first failure", "")
-	errors.Show("workbench", "second failure", "")
-	if got := errors.Toasts(); !slices.Equal(got, []string{"first failure", "second failure"}) {
-		t.Fatalf("the toasts are %v", got)
-	}
-	errors.Show("workbench", "first failure", "")
-	if got := errors.Toasts(); len(got) != 2 {
-		t.Fatalf("a repeated text added a toast: %v", got)
-	}
-	if !errors.DismissToast("first failure") {
-		t.Fatal("the first toast did not close")
-	}
-	if got := errors.Toasts(); !slices.Equal(got, []string{"second failure"}) {
-		t.Fatalf("the open toasts are %v", got)
-	}
-	if errors.DismissToast("first failure") {
-		t.Fatal("a closed toast closed again")
-	}
-	// The record rule is the change of the place: the repeated first failure is a change from the second, so it records.
-	if len(lines) != 3 || lines[2] != "workbench: first failure" {
-		t.Fatalf("the records are %v", lines)
-	}
-	// A withdrawal of a source closes only the toast that the source showed.
-	errors.ShowFrom("workbench", "layout", "third failure", "")
-	errors.WithdrawFrom("layout")
-	if got := errors.Toasts(); !slices.Equal(got, []string{"second failure"}) {
-		t.Fatalf("the toasts after the withdrawal are %v", got)
-	}
-}
-
 // The role commands of a tab run through the workspace store of the host (docs/spec/agent-roles.md#tab-role-state). The
 // confirmation names no tab: it runs on the surface of its caller, and a request without a surface is refused.
 func TestTheRoleCommandsRunThroughTheWorkspaceStore(t *testing.T) {

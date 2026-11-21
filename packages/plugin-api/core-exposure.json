@@ -141,7 +141,6 @@
     "core.layout.plan",
     "core.layout.apply",
     "core.layout.close",
-    "core.error.dismiss",
     "core.tab.role",
     "core.tab.role.confirm",
     "core.tab.select",

@@ -51,7 +51,7 @@ import { foldSection, onSectionsChange, sectionDrawn, selectSection, sidebarsSta
 import { onTabReports, tabError, tabFooter, tabLabel, tabModified, tabNotice } from "./tab-reports.js";
 import { appUpdate, followActivation, followPluginChanges, followSidecarChanges, onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { pageIdentity } from "./page-identity.js";
-import { PLACEMENT_LAST, dismissErrorToast, placementLast } from "./page-layout.js";
+import { PLACEMENT_LAST, placementLast } from "./page-layout.js";
 import { stateCards } from "./layout-tree.js";
 
 /* Receivers of the watched core statuses. */
@@ -476,15 +476,8 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   // WebKit stops animation frames when it hides the document, so a change of the visibility state is announced.
   document.addEventListener("visibilitychange", coreChanged);
   onBinding(coreChanged);
-  // The errors of the workbench show as toasts at the bottom of the window; the status names the newest open one.
-  status("core.workbench.error", () => {
-    const toasts = document.getElementById("errorToasts")?.children;
-    return toasts?.length ? toasts[toasts.length - 1].dataset.text : null;
-  });
-  registry.command("core.error.dismiss", invalid(async ({ text }) => {
-    dismissErrorToast(document, String(text));
-    coreChanged();
-  }));
+  // default: core.workbench.error of a workbench that shows no error is null (exposure.json).
+  status("core.workbench.error", () => document.getElementById("applicationError")?.textContent ?? null);
   status("core.activity", activityState);
   status("core.projects", () => projects.all().map(withOpen));
   status("core.project", () => {

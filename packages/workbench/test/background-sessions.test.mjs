@@ -78,7 +78,6 @@ test("a background session opens only for a tab without a mounted surface and en
   const compositor = await import("../compositor.js");
   const modules = await import("../surface-modules.js");
   const { createPageLayout, createErrorDisplay, createErrorWithdrawal } = await import("../page-layout.js");
-
   const { checkStoredLayout } = await import("../stored-layout.js");
   const { value } = await import("../settings.js");
   const { log, surfaces } = await import("../host.js");

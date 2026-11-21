@@ -661,11 +661,6 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 }
 #applicationError[data-error], .library-error[data-error] { border-color: var(--no); }
 #applicationError { border-bottom: var(--error-border) solid var(--edge); }
-/* The error toasts of the workbench stand at the bottom of the window, one per error, each with its close control. */
-#errorToasts { position: fixed; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; gap: var(--error-border); pointer-events: none; }
-.error-toast { display: flex; align-items: start; gap: var(--error-pad-x); padding: var(--error-pad-y) var(--error-pad-x); background: var(--bg); border-top: var(--error-border) solid var(--no); pointer-events: auto; }
-.error-toast__text { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; user-select: text; }
-.error-toast__close { flex: none; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; padding: 0 calc(var(--error-pad-x) / 2); }
 .set-reset { font-size: var(--text-caption); }
 .set-row:has(.set-reset) { flex-wrap: wrap; }
 /* The mark of the common tab that the project value of a setting applies stands where the project tab has its reset (docs/spec/settings.md#scope-of-a-control). */

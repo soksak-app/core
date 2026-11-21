@@ -135,6 +135,7 @@ func (s *Shell) drawLibrary(c *ui.Context, width, height float32) {
 	ui.Column(c).Size(width, height).Background(s.palette.Bg).Children(func() {
 		ui.Scroll(c).FillWidth().Grow(1).Column().Padding(m.space3).Children(func() {
 			s.drawLibraryHead(c, width-2*m.space3)
+			DrawErrorBanner(c, s.errors)
 			DrawError(c, s.errors, libraryErrorPlace)
 			if s.library.page == pluginsPage {
 				s.drawPlugins(c, width-2*m.space3)
@@ -150,7 +151,6 @@ func (s *Shell) drawLibrary(c *ui.Context, width, height float32) {
 		})
 		s.drawLibraryFooter(c, width)
 	})
-	s.drawErrorToasts(c, width)
 }
 
 // drawLibraryHead draws the pages of the library, and the sort and the search of the shown page. A narrow window gives the search a row of its own.

@@ -16,15 +16,6 @@ type ShownErrors struct {
 	shown  map[string]string
 	// sources holds the source of the error of a place that has one.
 	sources map[string]string
-	// toasts holds the open error toasts of the workbench in the order in which they appeared; each closes on its own
-	// (core.error.dismiss) or when its source withdraws it.
-	toasts []errorToast
-}
-
-// errorToast is one error toast of the workbench: the text that it shows and the source that showed it.
-type errorToast struct {
-	text   string
-	source string
 }
 
 // NewShownErrors returns the display that writes each line with report.
@@ -33,70 +24,26 @@ func NewShownErrors(report func(line string)) *ShownErrors {
 }
 
 // Show shows the error text of the place where, and writes `<where>: <text><detail>` only when the error of that place
-// changes. detail is kept only in the record. An error of the workbench also opens a toast at the bottom of the window,
-// one per distinct text, so several errors show at once.
+// changes. detail is kept only in the record.
 func (e *ShownErrors) Show(where, text, detail string) {
 	delete(e.sources, where)
 	if shown, ok := e.shown[where]; ok && shown == text {
 		return
 	}
 	e.shown[where] = text
-	if where == workbenchErrorPlace && !e.hasToast(text) {
-		e.toasts = append(e.toasts, errorToast{text: text})
-	}
 	e.report(where + ": " + text + detail)
 }
 
-// hasToast tells whether a toast with the text is open.
-func (e *ShownErrors) hasToast(text string) bool {
-	for _, toast := range e.toasts {
-		if toast.text == text {
-			return true
-		}
-	}
-	return false
-}
-
-// DismissToast closes the open toast with the text and tells whether one closed (core.error.dismiss).
-func (e *ShownErrors) DismissToast(text string) bool {
-	for at, toast := range e.toasts {
-		if toast.text == text {
-			e.toasts = append(e.toasts[:at], e.toasts[at+1:]...)
-			return true
-		}
-	}
-	return false
-}
-
-// Toasts returns the texts of the open toasts in the order in which they appeared.
-func (e *ShownErrors) Toasts() []string {
-	texts := make([]string, 0, len(e.toasts))
-	for _, toast := range e.toasts {
-		texts = append(texts, toast.text)
-	}
-	return texts
-}
-
-// Hide withdraws the error of the place where, so the same error is written when it is shown again. The toasts of the
-// workbench close with it.
+// Hide withdraws the error of the place where, so the same error is written when it is shown again.
 func (e *ShownErrors) Hide(where string) {
 	delete(e.shown, where)
 	delete(e.sources, where)
-	if where == workbenchErrorPlace {
-		e.toasts = nil
-	}
 }
 
-// ShowFrom is Show for an error whose end its source can tell: HideFrom of the same source withdraws it. The toast of
-// the workbench carries the source, so a withdrawal closes only the toast that the source showed.
+// ShowFrom is Show for an error whose end its source can tell: HideFrom of the same source withdraws it.
 func (e *ShownErrors) ShowFrom(where, source, text, detail string) {
 	e.Show(where, text, detail)
 	e.sources[where] = source
-	for at, toast := range e.toasts {
-		if toast.text == text {
-			e.toasts[at].source = source
-		}
-	}
 }
 
 // ShownFrom tells whether the error of the place where is one that source showed.
@@ -115,28 +62,15 @@ func (e *ShownErrors) HideFrom(where, source string) bool {
 	return true
 }
 
-// WithdrawFrom closes the open toasts whose source is source, as the withdrawal of a layout error does
-// (createErrorWithdrawal of packages/workbench/page-layout.js).
-func (e *ShownErrors) WithdrawFrom(source string) {
-	held := e.toasts[:0]
-	for _, toast := range e.toasts {
-		if toast.source != source {
-			held = append(held, toast)
-		}
-	}
-	e.toasts = held
-}
-
 // Text returns the error shown at the place where.
 func (e *ShownErrors) Text(where string) (string, bool) {
 	text, ok := e.shown[where]
 	return text, ok
 }
 
-// DrawErrorToasts draws the open error toasts of the workbench as rows that the drawing of the window places at its
-// bottom; the shell adds the close control of each toast (cards.go). It draws nothing without an open toast.
-func DrawErrorToasts(c *ui.Context, errors *ShownErrors) {
-	for _, text := range errors.Toasts() {
+// DrawErrorBanner draws the error banner of the workbench, the value of `core.workbench.error`. It draws nothing without an error.
+func DrawErrorBanner(c *ui.Context, errors *ShownErrors) {
+	if text, ok := errors.Text(workbenchErrorPlace); ok {
 		drawErrorText(c, text)
 	}
 }
