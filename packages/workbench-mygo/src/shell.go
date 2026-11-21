@@ -596,8 +596,9 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.requests = NewRequests(s.registry, s.calls, options.Post, s.events.Error)
 	s.linkSurfaces()
 	s.registry.Status("core.workbench.error", func() any {
-		if text, ok := s.errors.Text(workbenchErrorPlace); ok {
-			return &text
+		// The errors of the workbench show as toasts at the bottom of the window; the status names the newest open one.
+		if toasts := s.errors.Toasts(); len(toasts) > 0 {
+			return &toasts[len(toasts)-1]
 		}
 		return (*string)(nil)
 	})

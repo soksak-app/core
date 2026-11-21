@@ -4253,6 +4253,22 @@
         }
       },
       {
+        "name": "core.error.dismiss",
+        "description": "Closes the error toast of the workbench with the text, so several errors are each closed on their own.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": ["text"]
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
         "name": "core.tab.role",
         "description": "Sets the agent role of a tab: null clears the role. The answer is the role status of the tab.",
         "params": {
@@ -4865,6 +4881,11 @@
       }
     ],
     "element": [
+    {
+      "name": "core.error.dismiss",
+      "description": "The close control of each error toast of the workbench, in toast order.",
+      "many": true
+    },
       {
         "name": "core.brand",
         "description": "The soksak logo at the start of the title bar; its letters are light in dark mode and dark in light mode."

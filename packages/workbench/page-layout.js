@@ -6,6 +6,7 @@ import { createLayoutQueue, drawPrepared, nextTask } from "./layout-queue.js";
 import { frameLayout } from "./frame-text.js";
 import { trace } from "./performance.js";
 import { hideError, showError as showShownError } from "./shown-errors.js";
+import { bind } from "./commands.js";
 
 /**
  * Returns the rows that core.verify holds for the current state. rows() runs the verification of the drawn plane and is
@@ -27,15 +28,20 @@ export function verificationRows({ drawn, rows, failure }) {
  */
 export function createErrorDisplay({ document, changed }) {
   return function showError(reason, detail = "", source = "") {
-    let el = document.getElementById("applicationError");
-    if (!el) {
-      el = document.createElement("div");
-      el.id = "applicationError";
-      el.setAttribute("role", "alert");
-      document.querySelector("header").after(el);
+    // Each error of the workbench shows as a toast at the bottom of the window, and several errors show at once: a text that
+    // no open toast holds adds one, and the close control of a toast dismisses it (core.error.dismiss).
+    const holder = errorToastHolder(document);
+    const text = String(reason);
+    // A text that no open toast holds opens one; a repeated text only refreshes its source. The text goes on the span of
+    // its toast: the shown-error writer sets the text content of the element that it takes, which would empty a toast.
+    let toast = [...holder.children].find((toast) => toast.dataset.text === text);
+    if (!toast) {
+      toast = errorToast(document, text, source);
+      holder.append(toast);
+    } else {
+      toast.dataset.errorSource = source;
     }
-    el.dataset.errorSource = source;
-    showShownError(el, "workbench", String(reason), detail);
+    showShownError(toast.querySelector(".error-toast__text"), "workbench", text, detail);
     changed();
   };
 }
@@ -49,12 +55,58 @@ const LAYOUT_SOURCE = "layout";
  */
 export function createErrorWithdrawal({ document, changed }) {
   return function withdrawError(source) {
-    const el = document.getElementById("applicationError");
-    if (!el || el.dataset.errorSource !== source) return;
-    hideError(el, "workbench");
-    el.remove();
+    const holder = document.getElementById("errorToasts");
+    if (!holder) return;
+    // A toast of another source stays: an error that a later show replaced is not withdrawn by an earlier source.
+    for (const toast of [...holder.children].filter((toast) => toast.dataset.errorSource === source)) {
+      hideError(toast, "workbench");
+      toast.remove();
+    }
     changed();
   };
+}
+
+/** The holder of the error toasts at the bottom of the window, created once. */
+function errorToastHolder(document) {
+  let holder = document.getElementById("errorToasts");
+  if (holder) return holder;
+  holder = document.createElement("div");
+  holder.id = "errorToasts";
+  holder.setAttribute("role", "alert");
+  document.body.append(holder);
+  return holder;
+}
+
+/** One error toast: the text and its close control, which dismisses the toast through the declared command. */
+function errorToast(document, text, source) {
+  const toast = document.createElement("div");
+  toast.className = "error-toast";
+  toast.dataset.text = text;
+  toast.dataset.errorSource = source;
+  const shown = document.createElement("span");
+  shown.className = "error-toast__text";
+  shown.textContent = text;
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "error-toast__close";
+  close.dataset.expose = "core.error.dismiss";
+  close.title = "오류 닫기";
+  close.setAttribute("aria-label", close.title);
+  close.textContent = "×";
+  bind(close, "core.error.dismiss", () => ({ text }));
+  toast.append(shown, close);
+  return toast;
+}
+
+/** Dismisses the error toast of the text; the command core.error.dismiss runs it (docs/spec/exposure.md). */
+export function dismissErrorToast(document, text) {
+  const holder = document.getElementById("errorToasts");
+  if (!holder) return false;
+  const toast = [...holder.children].find((toast) => toast.dataset.text === text);
+  if (!toast) return false;
+  hideError(toast, "workbench");
+  toast.remove();
+  return true;
 }
 
 /**

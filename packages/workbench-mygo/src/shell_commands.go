@@ -164,6 +164,19 @@ func (s *Shell) register() {
 	s.registerProjectClose()
 	// The role handshake of a tab (docs/spec/agent-roles.md#change-of-a-running-agent): the ordered change and the confirmation
 	// run in the workspace store of the host; the confirmation names no tab, because it runs on the surface of its caller.
+	s.registry.Command("core.error.dismiss", func(raw json.RawMessage) (any, error) {
+		var params struct {
+			Text string `json:"text"`
+		}
+		if err := json.Unmarshal(raw, &params); err != nil || params.Text == "" {
+			return nil, Refuse(InvalidParams, "core.error.dismiss requires a text")
+		}
+		if !s.errors.DismissToast(params.Text) {
+			return nil, Refuse(InvalidParams, "core.error.dismiss names no open toast")
+		}
+		return nil, nil
+	})
+
 	s.registry.StatusOnSurface("core.tab.role", s.roleStatus)
 	s.registry.CommandLater("core.tab.role", func(raw json.RawMessage, answer func(any, error)) {
 		var params struct {
