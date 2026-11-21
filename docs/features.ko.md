@@ -155,14 +155,15 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [o] F1030-1.1 — F1030-1 후속: Rust PATH 적용이 이전 profile 블록을 제거하고 profile 목록을 저장할 때 변경을 보고한다. Sok package가 Clippy를 통과하고 Darwin setup test가 통과한다.
   - [o] F1030-1.2 — F1030-1 후속: 설치 안내가 애플리케이션 시작 시 사용자 PATH 등록과 설정 조작을 설명한다. 문서 검사가 통과한다.
   - [ ] F1030-2 — Agent group에서 MCP와 SessionStart hook 각각의 원하는 상태를 바꾼다. 켜면 소유한 등록만 갱신하고 끄면 재시작 뒤에도 소유한 등록을 두지 않는다.
-- [ ] F1031 — P0, F1033 이후. 공용 오류 표시를 포함한 core candidate를 검증하고 release한다.
+- [~] F1031 — P0, F1033 이후. 공용 오류 표시를 포함한 core candidate를 검증하고 release한다.
   - [o] F1031-1 — Page가 parameter 오류 처리기를 초기화한 뒤 `core.error.dismiss`를 설치한다. Page 시작과 오류 표시 test가 통과한다.
   - [o] F1031-2 — 오류 toast command가 비어 있거나 알 수 없는 글을 거부한다. Workbench status, layout 복구와 layout 오류 기록 test가 통과한다.
   - [o] F1031-3 — Rust role store가 값 없음과 오류를 직접 전달한다. 직렬화 test가 임시 폴더를 정리한다. Workspace Clippy와 전체 role test가 통과한다.
   - [o] F1031-4 — Headless Linux job은 Apple 코드 서명을 실행하는 test 여섯 개를 제외한다. macOS job이 이 test를 선택하고 관련 test가 모두 통과한다.
   - [o] F1031-5 — Host와 CLI test가 실행하는 계약을 선언한다. Role identity와 진단 capture case가 현재 protocol로 실행된다. 관련 Rust와 Go test가 통과한다.
   - [o] F1031-6 — Sidecar buffer fixture가 정리까지 release pipe를 열어 두고 실패 시 기록한 오류를 보고한다. Mygo 20회와 Wails 10회의 각 실행에서 test 네 개가 통과한다.
-  - [ ] F1031-7 — Candidate의 로컬 release 검사를 실행하고 검증한 candidate를 push하며 게시한 release 파일을 확인한다.
+  - [~] F1031-7 — Candidate의 로컬 release 검사를 실행하고 검증한 candidate를 push하며 게시한 release 파일을 확인한다. 진행 중: 0.0.46을 위해 ci.yml과 release.yml job 명령을 로컬에서 실행한다. 그다음 push와 release run 결론이 남았다.
+  - [o] F1031-12 — Package와 crate manifest, application Info.plist와 Tauri 파일, Go와 pkg-config 선언, scripts/check-versions.mjs의 RELEASE 상수와 scripts/check-tests.mjs의 그 symbol, Cargo.lock의 workspace 항목 여섯 개에 version 0.0.46을 선언한다. 모든 workspace version이 0.0.46이어서 version 검사가 통과한다.
   - [o] F1031-8 — Go와 Rust의 사용자 PATH 등록 파일 배치를 host 명세에 선언한다. 구조 검사가 통과한다.
   - [o] F1031-9 — Node reporter 색상 test가 명시적인 색상 환경을 사용한다. 상위 환경에 NO_COLOR를 지정한 상태에서 두 파일의 test 39개가 통과한다.
   - [o] F1031-10 — 표시된 오류에 맞춰 toast 테두리 색상을 적용하고 닫기 control metric을 선언하며 layout fixture에 닫기 선언을 연결한다. 관련 test 13개가 통과한다.

@@ -155,14 +155,15 @@ The preceding macOS 26.6.2 arm64 optimized diagnostic measurement cohort retains
   - [o] F1030-1.1 — Follows F1030-1: Rust PATH reconciliation removes obsolete profile blocks and reports the change when it saves the profile list. The sok package passes Clippy and the Darwin setup tests pass.
   - [o] F1030-1.2 — Follows F1030-1: The installation guide describes user PATH registration at application start and its settings control. Documentation checks pass.
   - [ ] F1030-2 — The agent group controls the desired state of MCP and the session-start hook separately. An enabled integration updates only its owned registration and a disabled integration leaves its owned registration absent across restarts.
-- [ ] F1031 — P0, follows F1033. Verify and release the core candidate with the shared error presentation.
+- [~] F1031 — P0, follows F1033. Verify and release the core candidate with the shared error presentation.
   - [o] F1031-1 — The page installs `core.error.dismiss` after initializing its parameter error handler. The page startup and error display tests pass.
   - [o] F1031-2 — Error toast commands refuse an empty or unknown text. The workbench status, layout recovery and layout error logging tests pass.
   - [o] F1031-3 — The Rust role store propagates absent values and errors directly. Its serialization test cleans up its temporary folder. Workspace Clippy and all role tests pass.
   - [o] F1031-4 — The headless Linux job excludes the six tests that invoke Apple code signing. The macOS job selects them and all affected tests pass.
   - [o] F1031-5 — Host and CLI tests declare the contracts they exercise. The role identity and diagnostic capture cases run against the current protocol. The focused Rust and Go tests pass.
   - [o] F1031-6 — The sidecar buffer fixture keeps its release pipe open through cleanup and reports recorded errors on failure. Four tests pass in each of 20 mygo runs and 10 Wails runs.
-  - [ ] F1031-7 — Run the local release checks for the candidate, push the verified candidate, and confirm the published release files.
+  - [~] F1031-7 — Run the local release checks for the candidate, push the verified candidate, and confirm the published release files. Active: the local run of the ci.yml and release.yml job commands for 0.0.46; then the push and the release run conclusion.
+  - [o] F1031-12 — Declare version 0.0.46 in the package and crate manifests, the application Info.plist and Tauri files, the Go and pkg-config declarations, the RELEASE constant of scripts/check-versions.mjs and its symbol in scripts/check-tests.mjs, and the six workspace entries of Cargo.lock. The version check passes with every declared workspace version at 0.0.46.
   - [o] F1031-8 — Declare the file placement of Go and Rust user PATH registration in the host specification. The structure audit passes.
   - [o] F1031-9 — Give the Node reporter color tests an explicit color environment. All 39 tests of the two files pass with NO_COLOR set in the parent.
   - [o] F1031-10 — Attach the toast border color to the shown error, declare the close control metric, and give the layout fixtures the dismissal declaration. All 13 affected tests pass.

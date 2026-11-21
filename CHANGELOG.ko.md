@@ -5,6 +5,7 @@
 
 ## 2026-11-21
 
+- F1031-12: 선언된 모든 workspace version이 0.0.46이며 Cargo.lock의 workspace 항목 여섯 개도 포함한다. 검증: version 검사가 통과한다.
 - F1033-7: mygo workbench가 저장된 오류 toast 자동 닫기를 시작할 때와 다른 창의 설정 변경에서 적용한다. 모든 load와 변경이 거치는 설정 적용에서 처리하며, 다른 type의 값은 오류다. Page component는 검증된 설정을 변환 없이 읽고, 설정 modal은 초 범위를 선언에서 가져오며, mygo modal은 page와 같은 label을 쓰고, mygo의 초 검증은 하나만 남는다. Red: switch를 켠 채 시작한 mygo 창이 저장된 초가 지나도 toast를 유지했다. Green: page 48개와 mygo 48개의 toast·설정 test가 통과한다.
 - F1033-6: 전역 설정 `autoDismissErrorToasts`(switch, 기본 꺼짐)와 `errorToastDismissSeconds`(1부터 2147483까지의 정수, 기본 5)가 error toast의 자동 닫기를 저장한다. switch가 꺼져 있으면 toast는 자기 ×로만 닫고, 설정 변경이 열린 toast의 시한을 다시 맞춘다. 설정 modal이 두 workbench에서 그룹을 그리고, chrome 선언의 고정 toast 시간은 지웠다. 검증: 두 workbench의 toast, 설정, 선언 test가 통과한다.
 - F1033-5: 오류가 하단 중앙에 떠서 공간을 차지하지 않는다. Toast의 닫기나 만료는 이후의 같은 글을 닫을 수 없다. Red에서 library footer와 workbench card 경계가 이동했고 toast 만료가 없었다. Green에서 page test 28개와 native test 7개가 통과한다. 실행한 mygo library에서 작은 toast가 나타나고 만료되는 동안 form 경계가 같다.
