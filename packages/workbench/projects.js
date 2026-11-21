@@ -101,6 +101,7 @@ export const roleOf = (tab) => {
 };
 
 /** Runs fn at each change of the stored workspace, which a role change of any window notifies; null before initialise. */
+// default: before initialise no store exists, so no change can be followed.
 export const onStoredWorkspaceChange = (fn) => store?.onChange(fn) ?? null;
 
 /** Sets the agent role of a tab through the host store (docs/spec/agent-roles.md#tab-role-state). The store exists after initialise. */

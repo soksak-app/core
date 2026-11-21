@@ -103,6 +103,7 @@ export function evenGrid(count, entry, measure, fits, low) {
     if (!nearest || skew < nearest.skew) nearest = { tree, frames, feasible, skew };
     if (low(frames)) break;
   }
+  // default: a tree whose frames do not fit still plans; the first candidate serves a count that measured no tree.
   const { skew, ...grid } = best ?? nearest ?? { tree: gridTree(count, 1, entry), frames: null, feasible: false };
   return grid;
 }
@@ -132,8 +133,10 @@ export function resolveCards(cards, planeTabs, { close = false } = {}) {
         const { tab, plugin, params } = byId.get(entry.tab);
         return { tab, plugin, params };
       }
+      // default: an entry that names no tab of the plane opens a new tab.
       const found = planeTabs.find((tab) => !taken.has(tab.tab) && tab.plugin === entry.plugin && sameJson(tab.params ?? null, entry.params));
       if (found) taken.add(found.tab);
+      // default: no tab of the plane matches the entry, so the plan names no tab and the apply opens one.
       return { tab: found?.tab ?? null, plugin: entry.plugin, params: entry.params };
     }),
   }));
@@ -171,11 +174,13 @@ export function buildTree(ops, tree, ids) {
   const leaves = treeCards(tree);
   if (ids.length !== leaves.length) throw new Error(`the tree holds ${leaves.length} cards and ${ids.length} identifiers were given`);
   const plane = ops.cards();
+  // default: no identifier of the tree is a card of the plane, so the first card of the plane keeps its place.
   const stay = ids.find((id) => plane.includes(id)) ?? plane[0];
   const left = new Map();
   for (const id of plane) {
     if (id !== stay) left.set(id, ops.withdraw(id));
   }
+  // default: an identifier that no withdrawn card held is a card that arrives new.
   const arriving = (id) => left.get(id) ?? { card: id };
   if (ids[0] !== stay) {
     ops.insert(stay, "left", arriving(ids[0]));
@@ -246,6 +251,7 @@ export function planArrangement(request, space) {
     if (asked !== undefined) {
       tree = readTree(asked);
       frames = tools.measure(tree);
+    // default: a request without params opens its tabs with the params null.
     } else ({ tree, frames } = evenGrid(count, { plugin, params: request.params ?? null }, tools.measure, tools.fits, tools.low));
     for (const leaf of treeCards(tree)) {
       for (const entry of leaf.tabs) {

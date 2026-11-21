@@ -795,6 +795,7 @@ func (r *Registry) Changed() error {
 		entries = append(entries, entry{name: name, watched: watched, read: r.statuses[name]})
 	}
 	for key, watched := range r.surfaceWatches {
+		// default: a key of the table always holds the separator of surfaceWatchKey, so the absent case cannot occur.
 		name, surface, _ := strings.Cut(key, "\x00")
 		entries = append(entries, entry{name: name, watched: watched, onSource: r.statusSurface[name], surface: surface})
 	}

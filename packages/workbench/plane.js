@@ -2783,6 +2783,7 @@ function planSpace() {
   else if (group) {
     refusal = `core.layout.plan arranges a space without group cards; group ${group.id} holds ${tree.readingOrder(group.node.members).map(memberId).join(", ")}`;
   }
+  // default: two tabs on the same row sort by their column.
   const tabs = rects.sort((a, b) => a.rect.y - b.rect.y || a.rect.x - b.rect.x)
     // default: a tab stored without params has the params null.
     .flatMap(({ card }) => tabsOf(card).map((t) => ({ tab: t.id, card: card.id, plugin: t.plugin, params: t.params ?? null })));
@@ -2823,6 +2824,7 @@ export function applyInLayout(params) {
   if (!planned.feasible) throw new Error(planned.reason);
   const held = new Map(contentCards().flatMap((card) => tabsOf(card).map((t) => [t.id, t])));
   const kept = tree.snapshot();
+  // default: an entry that names no kept card takes a new identifier of the plane.
   const ids = planned.ids.map((id) => id ?? tree.issue());
   try {
     buildTree(planOperations, planned.tree, ids);
@@ -2837,6 +2839,7 @@ export function applyInLayout(params) {
     const tabs = node.tabs.map((entry) => (entry.tab !== undefined ? held.get(entry.tab) : newTab(entry.plugin, entry.params, null, "layout apply")));
     // A kept card keeps the rest of its data, its text size and its sidebars; default: a new card has no data.
     const id = ids[k++];
+    // default: a card that arrives new has no earlier data to keep.
     grid.setData(id, { ...(grid.card(id).data ?? {}), tabs, activeId: tabs[node.active].id });
     return { tabs: tabs.map((t) => ({ tab: t.id })), active: node.active };
   };

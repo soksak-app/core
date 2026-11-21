@@ -562,19 +562,27 @@ impl Workspace {
                 return write_roles(&self.directory.join("roles.json"), req.roles);
             }
             "role" => {
+                // default: a request without a tab reaches the operation, which refuses the empty tab with its own text.
                 let tab = req.tab.clone().unwrap_or_default();
+                // default: a panicking thread poisoned no state, the lock still holds the last consistent one.
                 let mut state = self.role.lock().unwrap_or_else(PoisonError::into_inner);
                 return crate::role_state::role_get(&self.directory, &mut state, &tab);
             }
             "rolePut" => {
+                // default: a request without a tab reaches the operation, which refuses the empty tab with its own text.
                 let tab = req.tab.clone().unwrap_or_default();
+                // default: a request without a role clears the role of the tab.
                 let role = req.role.clone().unwrap_or(Value::Null);
+                // default: a panicking thread poisoned no state, the lock still holds the last consistent one.
                 let mut state = self.role.lock().unwrap_or_else(PoisonError::into_inner);
                 return crate::role_state::role_put(&self.directory, &mut state, &tab, &role);
             }
             "roleConfirm" => {
+                // default: a request without a tab reaches the operation, which refuses the empty tab with its own text.
                 let tab = req.tab.clone().unwrap_or_default();
+                // default: a request without a fingerprint reaches the operation, which refuses a value of another form.
                 let fingerprint = req.fingerprint.clone().unwrap_or_default();
+                // default: a panicking thread poisoned no state, the lock still holds the last consistent one.
                 let mut state = self.role.lock().unwrap_or_else(PoisonError::into_inner);
                 return crate::role_state::role_confirm(
                     &self.directory,
@@ -584,7 +592,9 @@ impl Workspace {
                 );
             }
             "roleRemove" => {
+                // default: a request without a tab reaches the operation, which removes nothing and reports the removal.
                 let tab = req.tab.clone().unwrap_or_default();
+                // default: a panicking thread poisoned no state, the lock still holds the last consistent one.
                 let mut state = self.role.lock().unwrap_or_else(PoisonError::into_inner);
                 return crate::role_state::role_remove(&self.directory, &mut state, &tab)
                     .map(|()| Value::Bool(true));

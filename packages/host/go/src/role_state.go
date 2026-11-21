@@ -241,30 +241,46 @@ func (w *Workspace) locateTab(tab string) ([]Record, Record, tabAt, error) {
 	for index, project := range projects {
 		root, hasRoot := project["root"].(string)
 		if !hasRoot {
-			root = "?"
+			return nil, nil, tabAt{}, invalidStoredLayout(registry, "a project record without a root")
 		}
-		spaces, _ := project["spaces"].([]any)
+		spaces, hasSpaces := project["spaces"].([]any)
+		if !hasSpaces {
+			return nil, nil, tabAt{}, invalidStoredLayout(registry, "a project record without a spaces list")
+		}
 		for position, item := range spaces {
-			space, _ := item.(map[string]any)
-			if space == nil {
-				continue
+			space, isSpace := item.(map[string]any)
+			if !isSpace {
+				return nil, nil, tabAt{}, invalidStoredLayout(registry, "a space record that is not an object")
 			}
 			id, hasID := space["id"].(string)
 			if !hasID {
-				id = "?"
+				return nil, nil, tabAt{}, invalidStoredLayout(registry, "a space record without an id")
 			}
-			for _, found := range tabsOfLayout(space["layout"]) {
-				if found.id == tab {
-					record, err := checkedTabRole(registry, root, id, tab, found.record)
-					if err != nil {
-						return nil, nil, tabAt{}, err
-					}
-					return projects, found.record, tabAt{project: index, space: position, tab: found, record: record}, nil
+			var found *foundTab
+			visit := func(held foundTab) {
+				if held.id == tab && found == nil {
+					held := held
+					found = &held
 				}
+			}
+			if err := walkTabs(registry, space["layout"], visit); err != nil {
+				return nil, nil, tabAt{}, err
+			}
+			if found != nil {
+				record, err := checkedTabRole(registry, root, id, tab, found.record)
+				if err != nil {
+					return nil, nil, tabAt{}, err
+				}
+				return projects, found.record, tabAt{project: index, space: position, tab: *found, record: record}, nil
 			}
 		}
 	}
 	return nil, nil, tabAt{}, nil
+}
+
+// invalidStoredLayout refuses a projects.json whose form the role operations cannot read, naming the file and what they found.
+func invalidStoredLayout(registry, what string) error {
+	return fmt.Errorf("%s: %s", registry, what)
 }
 
 // checkedTabRole validates the member role of the record of a tab and answers the role record, or nil for the value null
@@ -332,12 +348,21 @@ func (w *Workspace) storeTabRole(at tabAt, role any) ([]Record, error) {
 	if len(projects) <= at.project {
 		return nil, writeFailed(registry, fmt.Errorf("project %d is gone", at.project))
 	}
-	spaces, _ := projects[at.project]["spaces"].([]any)
+	spaces, hasSpaces := projects[at.project]["spaces"].([]any)
+	if !hasSpaces {
+		return nil, writeFailed(registry, fmt.Errorf("project %d holds no spaces list", at.project))
+	}
 	if len(spaces) <= at.space {
 		return nil, writeFailed(registry, fmt.Errorf("space %d of the project is gone", at.space))
 	}
-	space, _ := spaces[at.space].(map[string]any)
-	found := findTabInLayout(space["layout"], at.tab.id)
+	space, isSpace := spaces[at.space].(map[string]any)
+	if !isSpace {
+		return nil, writeFailed(registry, fmt.Errorf("space %d of the project is gone", at.space))
+	}
+	found, err := findTabInLayout(registry, space["layout"], at.tab.id)
+	if err != nil {
+		return nil, err
+	}
 	if found == nil {
 		return nil, writeFailed(registry, fmt.Errorf("tab %s is gone", at.tab.id))
 	}
@@ -354,57 +379,79 @@ type foundTab struct {
 	record Record
 }
 
-// tabsOfLayout returns the tab records of the layout of a space with their identifiers.
-func tabsOfLayout(layout any) []foundTab {
-	var tabs []foundTab
-	held, _ := layout.(map[string]any)
-	if held == nil {
-		return tabs
+// walkTabs visits every tab record of the layout of a space, in the order of the stored tree, and refuses a stored layout
+// whose form is not the tree of docs/spec/groups.md#storage with the file and what it found: a layout object without a state,
+// a node that is not an object, a content card without a tab list, a tab without an identifier, a box without an inner cut and
+// a cut without a kid list.
+func walkTabs(registry string, layout any, visit func(found foundTab)) error {
+	held, isLayout := layout.(map[string]any)
+	if !isLayout {
+		return invalidStoredLayout(registry, "a space record whose layout is not an object")
 	}
-	// The state of a space layout holds its tree under the root member (docs/spec/groups.md#storage).
-	state, _ := held["state"].(map[string]any)
-	if state == nil {
-		return tabs
+	state, hasState := held["state"].(map[string]any)
+	if !hasState {
+		return invalidStoredLayout(registry, "a space layout without a state object")
 	}
-	var walk func(node any)
-	walk = func(node any) {
-		holder, _ := node.(map[string]any)
-		if holder == nil {
-			return
+	var walk func(node any) error
+	walk = func(node any) error {
+		holder, isObject := node.(map[string]any)
+		if !isObject {
+			return invalidStoredLayout(registry, "a layout node that is not an object")
 		}
 		if holder["card"] != nil {
-			data, _ := holder["data"].(map[string]any)
-			entries, _ := data["tabs"].([]any)
-			for _, entry := range entries {
-				tab, _ := entry.(map[string]any)
-				if tab == nil {
-					continue
-				}
-				id, _ := tab["id"].(string)
-				tabs = append(tabs, foundTab{id: id, record: tab})
+			data, hasData := holder["data"].(map[string]any)
+			if !hasData {
+				return invalidStoredLayout(registry, "a content card without a data object")
 			}
-			return
+			entries, hasTabs := data["tabs"].([]any)
+			if !hasTabs {
+				return invalidStoredLayout(registry, "a content card without a tab list")
+			}
+			for _, entry := range entries {
+				tab, isTab := entry.(map[string]any)
+				if !isTab {
+					return invalidStoredLayout(registry, "a tab record that is not an object")
+				}
+				id, hasID := tab["id"].(string)
+				if !hasID {
+					return invalidStoredLayout(registry, "a tab record without an identifier")
+				}
+				visit(foundTab{id: id, record: tab})
+			}
+			return nil
 		}
 		if holder["box"] != nil {
-			walk(holder["inner"])
-			return
+			return walk(holder["inner"])
 		}
-		kids, _ := holder["kids"].([]any)
+		kids, hasKids := holder["kids"].([]any)
+		if !hasKids {
+			return invalidStoredLayout(registry, "a cut without a kid list")
+		}
 		for _, kid := range kids {
-			pair, _ := kid.(map[string]any)
-			walk(pair["node"])
+			pair, isPair := kid.(map[string]any)
+			if !isPair {
+				return invalidStoredLayout(registry, "a kid of a cut that is not an object")
+			}
+			if _, hasNode := pair["node"]; !hasNode {
+				return invalidStoredLayout(registry, "a kid of a cut without a node")
+			}
+			if err := walk(pair["node"]); err != nil {
+				return err
+			}
 		}
+		return nil
 	}
-	walk(state["root"])
-	return tabs
+	return walk(state["root"])
 }
 
-// findTabInLayout returns the record of the tab id of the layout of a space, or nil when the layout holds no such tab.
-func findTabInLayout(layout any, id string) Record {
-	for _, found := range tabsOfLayout(layout) {
-		if found.id == id {
-			return found.record
+// findTabInLayout returns the record of the tab id of the layout of a space, or nil when the layout holds no such tab; a
+// stored layout of another form is refused.
+func findTabInLayout(registry string, layout any, id string) (Record, error) {
+	var found Record
+	err := walkTabs(registry, layout, func(held foundTab) {
+		if held.id == id && found == nil {
+			found = held.record
 		}
-	}
-	return nil
+	})
+	return found, err
 }
