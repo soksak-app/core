@@ -2166,14 +2166,23 @@ int main(int argc, char **argv) { @autoreleasepool {
             sp_region_focus(region17);
             check(sp_input_pointer(window, x17, y17, 3, 0, 0, 0) == SP_INPUT_DELIVERED,
                 @"direct pointer focus: the paired release reaches the pressed view after the focus command");
+            // An event of another source arrives during the wait, as the input of the person does, and AppKit makes it current.
+            [NSApp postEvent:[NSEvent otherEventWithType:NSEventTypeApplicationDefined location:NSZeroPoint modifierFlags:0
+                timestamp:0 windowNumber:0 context:nil subtype:0 data1:17 data2:0] atStart:NO];
             dispatch_async(dispatch_get_main_queue(), ^{ nextMainTurn17 = YES; });
             eventWait(@"the main queue runs the turn after the direct click", ^BOOL { return nextMainTurn17; });
         });
         check(nextMainTurn17, @"direct pointer focus: the responder restoration turn completed");
         check(!sp_input_press_context_point(window, NULL, NULL),
             @"direct pointer focus: the press context is removed after view dispatch");
-        check(NSApp.currentEvent == currentEvent17,
-            @"direct pointer focus: synthetic dispatch leaves the AppKit current event unchanged");
+        // The run loop of the wait dispatches the input events of the person, which AppKit makes current; only a mouse event of
+        // the test window can be the synthetic press or release.
+        NSEvent *after17 = NSApp.currentEvent;
+        BOOL synthetic17 = after17 != currentEvent17 && after17.window == window
+            && (after17.type == NSEventTypeLeftMouseDown || after17.type == NSEventTypeLeftMouseUp);
+        check(!synthetic17,
+            [NSString stringWithFormat:@"direct pointer focus: synthetic dispatch does not become the AppKit current event (before %@, after %@)",
+                currentEvent17, after17]);
         BOOL reportedLoss17 = NO;
         for (NSString *eventStr in collectedEvents) {
             if ([eventStr rangeOfString:@"\"focused\":false"].location != NSNotFound) reportedLoss17 = YES;

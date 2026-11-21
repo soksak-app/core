@@ -5,6 +5,7 @@
 
 ## 2026-11-21
 
+- F1031-14: Native image region test의 direct pointer focus case는 test 창의 synthetic mouse event가 AppKit current event가 되었는지 판정하고, 실패하면 두 event를 기록한다. Red: wait 중에 넣은 application-defined event가 이전 같음 검사를 세 번 중 세 번 실패시켰다. Green: 세 번 모두 통과한다.
 - F1031-13: Layout library의 `cut-gaps` break가 cut room의 `let free` 선언을 찾는다. Red: check-breaks가 break를 stale로 보고했다. Green: check-breaks가 필수 break 여덟 개를 모두 잡는다.
 - F1031-12: 선언된 모든 workspace version이 0.0.46이며 Cargo.lock의 workspace 항목 여섯 개도 포함한다. 검증: version 검사가 통과한다.
 - F1033-7: mygo workbench가 저장된 오류 toast 자동 닫기를 시작할 때와 다른 창의 설정 변경에서 적용한다. 모든 load와 변경이 거치는 설정 적용에서 처리하며, 다른 type의 값은 오류다. Page component는 검증된 설정을 변환 없이 읽고, 설정 modal은 초 범위를 선언에서 가져오며, mygo modal은 page와 같은 label을 쓰고, mygo의 초 검증은 하나만 남는다. Red: switch를 켠 채 시작한 mygo 창이 저장된 초가 지나도 toast를 유지했다. Green: page 48개와 mygo 48개의 toast·설정 test가 통과한다.

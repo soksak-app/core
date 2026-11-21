@@ -165,6 +165,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [~] F1031-7 — Candidate의 로컬 release 검사를 실행하고 검증한 candidate를 push하며 게시한 release 파일을 확인한다. 진행 중: 0.0.46을 위해 ci.yml과 release.yml job 명령을 로컬에서 실행한다. 그다음 push와 release run 결론이 남았다.
   - [o] F1031-12 — Package와 crate manifest, application Info.plist와 Tauri 파일, Go와 pkg-config 선언, scripts/check-versions.mjs의 RELEASE 상수와 scripts/check-tests.mjs의 그 symbol, Cargo.lock의 workspace 항목 여섯 개에 version 0.0.46을 선언한다. 모든 workspace version이 0.0.46이어서 version 검사가 통과한다.
   - [o] F1031-13 — Layout library의 `cut-gaps` break가 cut room의 `let free` 선언을 찾는다. Red: check-breaks가 stale로 보고했다. Green: check-breaks가 필수 break 여덟 개를 모두 잡는다.
+  - [o] F1031-14 — Native image region test의 direct pointer focus case는 test 창의 synthetic press나 release가 AppKit current event가 되었는지만 판정하고, 실패하면 두 event를 기록한다. Wait가 dispatch한 다른 source의 event가 current가 되는 것은 AppKit 설계다. Red: wait 중에 application-defined event를 넣으면 이전 같음 검사가 세 번 중 세 번 실패했고, 넣지 않아도 창의 KitDefined event로 실패했다. Green: event를 넣은 세 번의 실행이 모두 통과한다.
   - [o] F1031-8 — Go와 Rust의 사용자 PATH 등록 파일 배치를 host 명세에 선언한다. 구조 검사가 통과한다.
   - [o] F1031-9 — Node reporter 색상 test가 명시적인 색상 환경을 사용한다. 상위 환경에 NO_COLOR를 지정한 상태에서 두 파일의 test 39개가 통과한다.
   - [o] F1031-10 — 표시된 오류에 맞춰 toast 테두리 색상을 적용하고 닫기 control metric을 선언하며 layout fixture에 닫기 선언을 연결한다. 관련 test 13개가 통과한다.
