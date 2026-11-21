@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 	"slices"
+
+	sok "github.com/soksak-app/core/packages/sok/go/src"
 )
 
 // The keyboard of the window follows the focus ring (docs/spec/exposure.md#keyboard-focus): while no modal is open, the active
@@ -64,8 +66,20 @@ func (s *Shell) keyboardDecide() {
 	if target != nil && (s.surfaces.held[*target] == nil || !s.surfaces.held[*target].hosted) {
 		target = nil
 	}
+	s.recordKeyboard("press", target, "send", true)
 	s.sendKeyboard(target, true)
 }
+
+// recordKeyboard writes one decision of the keyboard as workbench.keyboard.follow, with the state before it, so a ring that the
+// keyboard does not follow is found in the event log (docs/spec/exposure.md#the-keyboard-follows-the-focus-ring).
+func (s *Shell) recordKeyboard(cause string, target *string, decision string, decided bool) {
+	sent, owed := s.keyboard.target, s.keyboard.owed
+	s.events.Emit(sok.LevelDebug, "workbench.keyboard.follow", func() map[string]any {
+		// A nil surface is written as null, the workbench.
+		return map[string]any{"cause": cause, "target": target, "sent": sent, "owed": owed, "decided": decided, "decision": decision}
+	}, nil)
+}
+
 
 // sendKeyboard sends the host call surfaceFocus to target in the order of the keyboard calls.
 func (s *Shell) sendKeyboard(target *string, decided bool) {
@@ -229,11 +243,21 @@ func (s *Shell) keyboardTarget() *string {
 func (s *Shell) followKeyboard(ahead bool) {
 	target := s.keyboardTarget()
 	hosted := target != nil && s.surfaces.held[*target] != nil && s.surfaces.held[*target].hosted
+	cause := "placed"
+	if ahead {
+		cause = "ring"
+	}
 	if ahead {
 		if !hosted {
+			if target != nil && (s.keyboard.owed || !sameSurface(target, s.keyboard.target)) {
+				s.recordKeyboard(cause, target, "wait", false)
+			}
 			return
 		}
 	} else if s.surfaces.running {
+		if s.keyboard.owed || !sameSurface(target, s.keyboard.target) {
+			s.recordKeyboard(cause, target, "wait", false)
+		}
 		return
 	} else if !hosted {
 		// A surface that a frame drew after the last placement started is not held by the host yet: the workbench holds the
@@ -244,18 +268,29 @@ func (s *Shell) followKeyboard(ahead bool) {
 		s.keyboard.answered = append(s.keyboard.answered, s.keyboard.decided...)
 		s.keyboard.decided = nil
 	}
-	same := (target == nil) == (s.keyboard.target == nil) && (target == nil || *target == *s.keyboard.target)
+	same := sameSurface(target, s.keyboard.target)
 	if same && !s.keyboard.owed {
 		s.answerKeyboard(nil)
 		return
 	}
+	decision := "send"
+	if same {
+		decision = "same"
+	}
+	s.recordKeyboard(cause, target, decision, false)
 	s.sendKeyboard(target, false)
+}
+
+// sameSurface tells whether two keyboard targets name the same surface, or both the workbench.
+func sameSurface(a, b *string) bool {
+	return (a == nil) == (b == nil) && (a == nil || *a == *b)
 }
 
 // keyboardLeft follows a first responder that reached the workbench while a surface should hold the keyboard: a press on the
 // workbench, or AppKit moving it from a view that it hides or closes.
 func (s *Shell) keyboardLeft(responder Responder) {
-	if responder.Owner == "workbench" && s.keyboardTarget() != nil {
+	if target := s.keyboardTarget(); responder.Owner == "workbench" && target != nil {
+		s.recordKeyboard("responder", target, "wait", false)
 		s.keyboard.owed = true
 		s.options.Invalidate()
 	}
