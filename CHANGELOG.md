@@ -5,6 +5,7 @@
 
 ## 2026-11-21
 
+- F1031-11: The Go and Rust host libraries and mygo workbench embed the current workbench declaration. Red: the exposure audits report three outdated copies. Green: both audits and the workbench declaration tests pass.
 - F1031-10: The toast border uses the error color when its text is marked as a shown error. The close control uses a declared metric, and the layout fixtures read the dismissal declaration. Red: the style audit reports an unmarked error color and a literal ratio, and the two layout tests fail when they display a toast. Green: all 13 affected tests pass.
 - F1031-9: The Node reporter color tests take control of NO_COLOR when they force color in a child. Red: the child reported a conflicting color environment. Green: 39 tests pass with NO_COLOR set in the parent.
 - F1031-8: The host specification declares the Go and Rust user PATH file placements. Red: the paired-host audit reports three unmatched files. Green: the same audit reports a clean graph.

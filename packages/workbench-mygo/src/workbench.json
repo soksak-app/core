@@ -785,6 +785,7 @@
     "theme-dot": "6px",
     "error-pad-y": "8px",
     "error-pad-x": "12px",
+    "error-close-pad-x": "6px",
     "error-border": "1px",
     "fold-button": "18px",
     "sidebar-status-gap": "6px",
