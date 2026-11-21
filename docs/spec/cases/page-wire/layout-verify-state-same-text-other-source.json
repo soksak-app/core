@@ -6,10 +6,30 @@
   "variables": {
     "ts-us-1": {
       "type": "integer",
-      "example": 1791000000020022,
+      "example": 1791000000019822,
       "source": "page"
     },
     "mono-ns-1": {
+      "type": "integer",
+      "example": 5019366748,
+      "source": "page"
+    },
+    "ts-us-2": {
+      "type": "integer",
+      "example": 1791000000019922,
+      "source": "page"
+    },
+    "mono-ns-2": {
+      "type": "integer",
+      "example": 5019466748,
+      "source": "page"
+    },
+    "ts-us-3": {
+      "type": "integer",
+      "example": 1791000000020022,
+      "source": "page"
+    },
+    "mono-ns-3": {
       "type": "integer",
       "example": 5019566748,
       "source": "page"
@@ -40,6 +60,58 @@
             {
               "ts_us": "$ts-us-1",
               "mono_ns": "$mono-ns-1",
+              "start": "$page-identity",
+              "level": "error",
+              "event": "workbench.record.error",
+              "fields": {
+                "where": "workbench",
+                "text": "surface presentation failed: the current image raster did not present within 10s; pending tab-1/view generation 2 raster 1 sequence 0 presented 0/0 surface visible"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-2",
+              "mono_ns": "$mono-ns-2",
+              "start": "$page-identity",
+              "level": "error",
+              "event": "workbench.record.error",
+              "fields": {
+                "where": "activity fixture",
+                "text": "surface presentation failed: the current image raster did not present within 10s; pending tab-1/view generation 2 raster 1 sequence 0 presented 0/0 surface visible"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-3",
+              "mono_ns": "$mono-ns-3",
               "start": "$page-identity",
               "level": "info",
               "event": "workbench.log.gated",

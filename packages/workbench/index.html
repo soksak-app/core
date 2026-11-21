@@ -76,7 +76,7 @@ import { observePlaneGrid } from "./device-grid.js";
 import { verify } from "./verify.js";
 import { chromeSwitches } from "./window-sidebars.js";
 /* Wiring of the error display and the layout queue. This document passes the document, the host, the plane and the compositor. */
-import { createErrorDisplay, createErrorWithdrawal, createPageLayout, reportUncaught, verificationRows } from "./page-layout.js";
+import { createPageLayout, reportUncaught, verificationRows } from "./page-layout.js";
 
 /* Application interface. When it is absent, an implementation that does nothing is used. */
 import { chrome, log, onDocumentState, onImageDetachEnded, onMemoryPressure, onMenuCommand, retainSidecarSessions, surfaces as host } from "./host.js";
@@ -85,7 +85,7 @@ import { pressesFrame, setTextScope } from "./text-size.js";
 import { applyFrameText, chromeRow, drawnFrameText } from "./frame-text.js";
 
 /* Public entries and diagnostic methods of the core. The registry answers requests of the host. */
-import { activityState, coreChanged, followPlugins, installCoreExposure, onActivity, onActivityError, redrawSettings, setVerify, syncActivity } from "./core-exposure.js";
+import { activityState, coreChanged, followPlugins, installCoreExposure, installErrorExposure, onActivity, onActivityError, redrawSettings, setVerify, syncActivity } from "./core-exposure.js";
 /* The setup parts of the agents of this machine, which the settings window shows (docs/spec/settings.md#agents). */
 import { installSetupExposure } from "./setup-exposure.js";
 /* Only a diagnostic build contains the diagnostic methods. In other builds this is an empty module. */
@@ -112,9 +112,9 @@ installChromeMetrics(document.documentElement);
 followLibraryWidth(document.documentElement, window);
 installTokens(document.documentElement);
 
-/* Error banner of the main document. An unhandled error is also shown in this banner and sent to the application log (page-layout.js). It is installed before anything else
-   so that an error that stops the start is shown too. */
-const showError = createErrorDisplay({ document, changed: coreChanged });
+/* Install the toast command before a failed startup can show a close control. */
+installExposure(exposureFile);
+const { show: showError, withdraw: withdrawError } = installErrorExposure();
 reportUncaught(globalThis, showError);
 /* Right end (px) of the window button area read last. The first row leaves that much empty. The window button area of the start
    document is applied first so that the first row does not cover the window buttons even when the start stops. */
@@ -132,7 +132,6 @@ for (const text of storedFileErrors(start.workspace)) showError(text);
 // The layout operations and the window snapshot name this window by the name that the start document carries.
 nameWindow(start.window);
 
-installExposure(exposureFile);
 // An installed plugin that the page refuses is left out and its error is shown, so the other plugins and the page start. An
 // environment.json that the page cannot use stops the start here with its error shown; the reload is done by host.window.reload
 // (docs/spec/installation.md#serving-installed-plugins).
@@ -402,8 +401,7 @@ onRender(() => {
 });
 
 /* Layout queue. It marks the layout of the plane, the first row of a window without a plane, and the empty plane of a project switch, one by one. */
-const withdrawError = createErrorWithdrawal({ document, changed: coreChanged });
-// A value of an activity status that is no activity is shown in the error banner with the tab as its source (docs/spec/activity.md).
+// A value of an activity status that is no activity is shown in a toast with the tab as its source (docs/spec/activity.md).
 onActivityError((tab, text) => (text === null ? withdrawError(`activity ${tab}`) : showError(text, "", `activity ${tab}`)));
 const pageLayout = createPageLayout({
   document, showError, withdrawError, setVerify, log, surfaces: host,

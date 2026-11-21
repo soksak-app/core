@@ -340,7 +340,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F1031-2",
-    implementation: [{ file: "packages/workbench/core-exposure.js", symbol: 'throw new Error("core.error.dismiss names no open toast")' }],
+    implementation: [{ file: "packages/workbench/core-exposure.js", symbol: 'throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "core.error.dismiss names no open toast")' }],
     tests: [
       { file: "packages/workbench/test/workbench-statuses.test.mjs", id: "core.window.workbench, core.workbench.error and core.workbench.audit describe the workbench and the page names are refused" },
       { file: "packages/workbench/test/layout-verify-state.test.mjs", id: "a presentation after a failed presentation withdraws the toast of that failure" },
@@ -408,9 +408,25 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1033-2",
+    implementation: [
+      { file: "packages/workbench/shown-errors.js", symbol: "export function errorToasts(document)" },
+      { file: "packages/workbench-mygo/src/errors_screen.go", symbol: "func (e *ShownErrors) ShowToast(" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/error-occurrences.test.mjs", id: "equal text from two origins shares a toast and records both occurrences" },
+      { file: "packages/workbench/test/stored-file-errors.test.mjs", id: "the actual start document shows and exposes a dismissible failed workspace toast before the library starts" },
+      { file: "packages/workbench/test/library-error-toast.test.mjs", id: "the project form uses the shared error toast when its folder is empty" },
+      { file: "packages/workbench-mygo/tests/errors_screen_test.go", id: "TestWorkbenchErrorsWithTheSameTextKeepTheirOrigins" },
+      { file: "packages/workbench-mygo/tests/library_test.go", id: "TestAFailedOpenOfTheLibraryShowsADismissibleToast" },
+    ],
+    expected: "The shared toast component owns occurrence, dismissal and recovery for the workbench and library.",
+    levels: ["unit"],
+  },
+  {
     id: "F1026",
     implementation: [
-      { file: "packages/workbench/page-layout.js", symbol: "function errorToast(document, text, source) {" },
+      { file: "packages/workbench/shown-errors.js", symbol: "function toast(document, text, where) {" },
       { file: "packages/workbench-mygo/src/errors_screen.go", symbol: "func (e *ShownErrors) DismissToast(text string) bool {" },
     ],
     tests: [
@@ -4223,7 +4239,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/src/debug_state.go", symbol: "func ParseDebugState(file, text string, truncated bool) (DebugState, error) {" },
     ],
     tests: [
-      { file: "packages/workbench-mygo/tests/errors_screen_test.go", id: "TestTheErrorToastsShowTheErrorsOfTheWorkbench" },
+      { file: "packages/workbench-mygo/tests/errors_screen_test.go", id: "TestTheErrorToastShowsAndDismissesThroughTheWorkbench" },
       { file: "packages/workbench-mygo/tests/sidebar_screen_test.go", id: "TestAListSidebarDrawsItsHeadersAndFoldsASection" },
       { file: "packages/workbench-mygo/tests/sidebar_screen_test.go", id: "TestTheSeatOfASectionIsItsBody" },
       { file: "packages/workbench-mygo/tests/plugin_screen_test.go", id: "TestTheActionsOfACardFollowThePlugin" },
@@ -5195,17 +5211,17 @@ const FEATURE_LINKS = [
     id: "F587",
     implementation: [
       { file: "packages/workbench-mygo/src/surfaces.go", symbol: "func (s *Shell) placed(err error) {" },
-      { file: "packages/workbench/page-layout.js", symbol: "export function createErrorWithdrawal({ document, changed }) {" },
+      { file: "packages/workbench/shown-errors.js", symbol: "withdraw(origin)" },
     ],
     tests: [
       { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestARecoveredPlacementWithdrawsItsError" },
       { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestARecoveredPlacementLeavesAnotherError" },
-      { file: "packages/workbench-mygo/tests/errors_screen_test.go", id: "TestAnErrorIsWithdrawnOnlyByItsSource" },
+      { file: "packages/workbench-mygo/tests/errors_screen_test.go", id: "TestWorkbenchRecoveryKeepsOtherOrigins" },
       { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestAFailureStaysUntilTheSurfacesPresent" },
       { file: "packages/workbench/test/layout-verify-state.test.mjs", id: "while a surface has not presented, the presentation of another render leaves the failure, and the presentation of that surface withdraws it" },
       { file: "packages/workbench/test/layout-verify-state.test.mjs", id: "a presentation after a failed presentation withdraws the toast of that failure" },
     ],
-    expected: "A placement that succeeds withdraws only the failure of the placement before it from the error banner.",
+    expected: "A placement that succeeds withdraws only the failure of the placement before it from the error display.",
     levels: ["unit"],
   },
   {
@@ -14266,7 +14282,7 @@ const FEATURE_LINKS = [
       { file: "e2e/test/library-preview.test.mjs", id: "the start panes stand by the geometry of the grid, whichever card holds the focus" },
       { file: "e2e/test/library-preview.test.mjs", id: "a start layout without two content cards in one column is refused" },
       { file: "packages/workbench-mygo/tests/library_test.go", id: "TestTheWindowOfAProjectAnswersItsRemoval" },
-      { file: "packages/workbench-mygo/tests/library_test.go", id: "TestAFailedOpenOfTheLibraryShowsInTheLibrary" },
+      { file: "packages/workbench-mygo/tests/library_test.go", id: "TestAFailedOpenOfTheLibraryShowsADismissibleToast" },
       { file: "scripts/test/fixture-registry.test.mjs", id: "a fixture registry is a new folder that the fixture registry build writes under the signal, and a failed build removes it" },
       { file: "scripts/test/fixture-registry.test.mjs", id: "a failed fixture registry build whose folder cannot be removed rejects with both failures" },
       { file: "packages/workbench-mygo/tests/view_call_records_test.go", id: "TestACallInFlightWhenItsSurfaceClosesGetsNoReply" },

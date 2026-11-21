@@ -174,6 +174,7 @@ func (s *Shell) register() {
 		if !s.errors.DismissToast(params.Text) {
 			return nil, Refuse(InvalidParams, "core.error.dismiss names no open toast")
 		}
+		s.options.Invalidate()
 		return nil, nil
 	})
 

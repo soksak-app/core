@@ -1,6 +1,7 @@
 package workbench_test
 
 import (
+	"errors"
 	"slices"
 	"testing"
 
@@ -9,26 +10,78 @@ import (
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
-// The source that showed an error withdraws it, and an error that another source showed since then stays, also with the same text.
-func TestAnErrorIsWithdrawnOnlyByItsSource(t *testing.T) {
-	errors := workbench.NewShownErrors(func(string) {})
-	errors.ShowFrom("workbench", "placement", "failed", "")
-	if errors.HideFrom("workbench", "other") {
-		t.Fatal("another source withdrew the error")
+func TestWorkbenchErrorsWithTheSameTextKeepTheirOrigins(t *testing.T) {
+	var lines []string
+	errors := workbench.NewShownErrors(func(line string) { lines = append(lines, line) })
+	errors.ShowFrom("workbench", "placement", "failed", " @ placement")
+	errors.ShowFrom("workbench", "activity tab-a", "failed", " @ activity")
+	errors.ShowFrom("workbench", "placement", "failed", " @ placement")
+	want := []string{"workbench: failed @ placement", "workbench: failed @ activity"}
+	if !slices.Equal(lines, want) {
+		t.Errorf("records are %q, want %q", lines, want)
+	}
+	if got := errors.Toasts(); !slices.Equal(got, []string{"failed"}) {
+		t.Fatalf("toasts for the two origins are %q", got)
+	}
+	if errors.HideFrom("workbench", "activity tab-b") {
+		t.Error("a source that never showed an error withdrew an occurrence")
 	}
 	if !errors.HideFrom("workbench", "placement") {
-		t.Fatal("the source did not withdraw its error")
+		t.Error("the placement source did not withdraw its occurrence")
 	}
-	if _, ok := errors.Text("workbench"); ok {
-		t.Fatal("the withdrawn error is still shown")
+	if got := errors.Toasts(); !slices.Equal(got, []string{"failed"}) {
+		t.Fatalf("withdrawing the placement removed the activity toast: %q", got)
 	}
-	errors.ShowFrom("workbench", "placement", "failed", "")
-	errors.Show("workbench", "failed", "")
-	if errors.HideFrom("workbench", "placement") {
-		t.Fatal("the source withdrew an error of no source with the same text")
+	if !errors.HideFrom("workbench", "activity tab-a") {
+		t.Error("the activity source did not withdraw its occurrence")
 	}
-	if text, ok := errors.Text("workbench"); !ok || text != "failed" {
-		t.Fatalf("the place shows %q, %v", text, ok)
+	if got := errors.Toasts(); len(got) != 0 {
+		t.Fatalf("withdrawing both sources left toasts %q", got)
+	}
+}
+
+func TestWorkbenchRecoveryKeepsOtherOrigins(t *testing.T) {
+	errors := workbench.NewShownErrors(func(string) {})
+	errors.ShowFrom("workbench", "placement", "layout failed", "")
+	errors.ShowFrom("workbench", "activity tab-a", "activity failed", "")
+	if !errors.ShownFrom("workbench", "placement") || !errors.HideFrom("workbench", "placement") {
+		t.Error("the activity error replaced the outstanding placement occurrence")
+	}
+	if got := errors.Toasts(); !slices.Equal(got, []string{"activity failed"}) {
+		t.Errorf("placement recovery left toasts %q", got)
+	}
+	errors.Show("workbench", "activity failed", "")
+	if !errors.HideFrom("workbench", "activity tab-a") {
+		t.Error("the generic error replaced the outstanding activity occurrence")
+	}
+	if got := errors.Toasts(); !slices.Equal(got, []string{"activity failed"}) {
+		t.Errorf("activity recovery left toasts %q", got)
+	}
+}
+
+func TestDismissedWorkbenchErrorReopensOnlyForANewOccurrence(t *testing.T) {
+	var lines []string
+	errors := workbench.NewShownErrors(func(line string) { lines = append(lines, line) })
+	errors.ShowFrom("workbench", "placement", "failed", " @ placement")
+	errors.ShowFrom("workbench", "activity tab-a", "failed", " @ activity")
+	if !errors.DismissToast("failed") {
+		t.Fatal("the grouped toast did not close")
+	}
+	errors.ShowFrom("workbench", "placement", "failed", " @ placement")
+	errors.ShowFrom("workbench", "activity tab-a", "failed", " @ activity")
+	if got := errors.Toasts(); len(got) != 0 {
+		t.Fatalf("repeating the dismissed occurrences opened toasts %q", got)
+	}
+	if !errors.HideFrom("workbench", "placement") {
+		t.Error("dismissing the toast lost the active placement occurrence")
+	}
+	errors.ShowFrom("workbench", "placement", "failed", " @ placement")
+	if got := errors.Toasts(); !slices.Equal(got, []string{"failed"}) {
+		t.Errorf("a new placement failure opened toasts %q", got)
+	}
+	want := []string{"workbench: failed @ placement", "workbench: failed @ activity", "workbench: failed @ placement"}
+	if !slices.Equal(lines, want) {
+		t.Errorf("records are %q, want %q", lines, want)
 	}
 }
 
@@ -59,30 +112,31 @@ func TestAWithdrawnErrorIsWrittenAgainWhenItIsShownAgain(t *testing.T) {
 	}
 }
 
-func TestTheErrorToastsShowTheErrorsOfTheWorkbench(t *testing.T) {
-	errors := workbench.NewShownErrors(func(string) {})
-	tt := ui.NewTester(func(c *ui.Context) { workbench.DrawErrorToasts(c, errors) }, 480, 120)
-	if len(tt.Texts()) != 0 {
-		t.Fatalf("a workbench without an error shows %q", tt.Texts())
+func TestTheErrorToastShowsAndDismissesThroughTheWorkbench(t *testing.T) {
+	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
+	const failure = "the first screen failed"
+	f.shell.StartFailed(errors.New(failure))
+	want := []shownRecord{{"workbench", failure}}
+	if got := f.shownRecords(); !slices.Equal(got, want) {
+		t.Fatalf("the workbench recorded %q, want %q", got, want)
 	}
-	errors.Show("workbench", "surface presentation failed: gone", "")
-	tt.Frame()
-	if !tt.HasText("surface presentation failed: gone") {
-		t.Fatalf("the banner shows %q", tt.Texts())
+	if !hasStatusLabel(f.tester.ElementTree(), failure) {
+		t.Fatalf("the toast has no status label for %q", failure)
 	}
-	if !hasRole(tt.ElementTree(), ui.RoleStatus) {
-		t.Fatalf("no element of the banner has the role status: %+v", tt.ElementTree())
+	close := element(t, f.tester, "core.error.dismiss", failure)
+	if close.Inert || close.Actions&ui.ActionPress == 0 {
+		t.Fatalf("the toast close control cannot be pressed: %+v", close)
 	}
-	errors.Hide("workbench")
-	tt.Frame()
-	if len(tt.Texts()) != 0 {
-		t.Fatalf("a withdrawn error still shows %q", tt.Texts())
+	press(t, f.tester, "core.error.dismiss", failure)
+	f.settle()
+	if f.tester.HasText(failure) || f.status("core.workbench.error") != "null" {
+		t.Fatalf("the closed toast is still visible or reported")
 	}
 }
 
-func hasRole(nodes []ui.ElementNode, role ui.Role) bool {
+func hasStatusLabel(nodes []ui.ElementNode, label string) bool {
 	for _, node := range nodes {
-		if node.Role == role || hasRole(node.Children, role) {
+		if node.Role == ui.RoleStatus && node.Label == label || hasStatusLabel(node.Children, label) {
 			return true
 		}
 	}

@@ -653,14 +653,6 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 
 /* The error color is used only on a data-error element that the error display path (shown-errors.js) attaches (AGENTS.md). */
 [data-error] { color: var(--no); }
-#applicationError {
-  padding: var(--error-pad-y) var(--error-pad-x);
-  background: var(--bg);
-  font: var(--text-control)/var(--line-height) var(--font);
-  user-select: text;
-}
-#applicationError[data-error], .library-error[data-error] { border-color: var(--no); }
-#applicationError { border-bottom: var(--error-border) solid var(--edge); }
 /* The error toasts of the workbench stand at the bottom of the window, one per error, each with its close control. */
 #errorToasts { position: fixed; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; gap: var(--error-border); pointer-events: none; }
 .error-toast { display: flex; align-items: start; gap: var(--error-pad-x); padding: var(--error-pad-y) var(--error-pad-x); background: var(--bg); border-top: var(--error-border) solid var(--edge); pointer-events: auto; }

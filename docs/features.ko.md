@@ -169,8 +169,11 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [o] F1031-11 — F1031-10 후속. Toast 닫기 metric을 포함하도록 host의 workbench 선언 사본을 갱신한다. Exposure 검사 두 개와 workbench 선언 test가 통과한다.
 - [~] F1033 — P0, F1026 후속. 애플리케이션 오류를 공용 오류 toast component로 표시한다. 오류 표시 전수 조사와 계약을 진행한다.
   - [o] F1033-1 — 표시하는 오류 경로를 전수 조사하고 공용 표시 계약을 정의한다. Library, settings, workspace, card, sidebar, plugin surface와 debug 경로의 소유자를 정한다.
-  - [~] F1033-2 — 오류 저장과 toast 표시를 재사용 가능한 page와 native component에 통합한다. 남은 일은 공통 오류 발생, 닫기, 복구와 focus 동작을 검증하는 것이다.
-  - [ ] F1033-3 — 모든 애플리케이션 오류 표시에 component를 적용하고 대체된 표시 경로를 제거한다.
+  - [o] F1033-2 — 오류 저장과 toast 표시를 재사용 가능한 page와 native component에 통합한다. Workbench와 library가 component를 사용한다. 초기 시작, 독립 출처, 닫기, 복구와 library 창 경계의 owner test가 통과한다.
+  - [~] F1033-3 — 각 애플리케이션 오류 표시에 component를 적용하고 대체된 표시 경로를 제거한다. Modal 표시를 진행한다.
+    - [~] F1033-3.1 — Toast component를 활성 settings와 debug modal의 focus 범위에 두고 modal을 닫으면 workbench로 돌려보낸다. 남은 일은 modal focus와 표시 case를 실행하는 것이다.
+    - [ ] F1033-3.2 — Library, card, sidebar와 plugin surface 실패를 component로 보내고 복구 동작을 유지한다.
+    - [ ] F1033-3.3 — Settings와 debug 동작 실패를 component로 보내고 남은 직접 표시 경로를 제거한다.
   - [ ] F1033-4 — 각 host와 plugin surface의 전송 경로를 통해 오류 표시를 검증한다.
 - [!] F1032 — P0, F1031과 F1025 뒤: 개발 plugin과 vt 0.0.31을 쓰면 두 mygo terminal surface가 등록하고 요청과 답장을 전달하며 receipt를 기록한다. Registry에는 vt 0.0.31이 있다. 원인: Terminal release에 message status와 수신함 command가 없다. 재시도 조건: registry가 messaging을 포함하고 맞는 core와 sidecar를 선택하는 terminal release를 나열한다. Terminal 창 검사도 실제 terminal process에서 발신 command를 실행해야 한다.
 - [o] F1026 — P1, workbench 오류의 toast 표시. 오류 문장이 창 위에 뜬다는 사용자 보고에서 왔다. 끝냈고 push의 release가 되돌렸다: toast 표시가 page의 gated frame event를 두 배로 만들어 pin된 wire case를 깨뜨렸고 release를 막았다. 오류는 단일 banner로 돌아갔고 F1027이 원인을 고친 재상륙을 맡는다. 변경의 mygo 쪽(ShownErrors의 toast, `core.error.dismiss`, plane 아래 그리기)은 자기 suite를 통과했고 그 기록은 닫힌 변경의 changelog에 남는다.

@@ -25,7 +25,8 @@ test("one presentation timeout writes one workbench error line", async () => {
   dom.window.cancelAnimationFrame = () => {};
   const { report, surfaces } = await import("../host.js");
   const { flushEvents } = await import("../page-log.js");
-  const { createErrorDisplay, createPageLayout } = await import("../page-layout.js");
+  const { createPageLayout } = await import("../page-layout.js");
+  const { errorToasts } = await import("../shown-errors.js");
   const { connectExposure, registry } = await import("../exposure.js");
   const { registerPlugin } = await import("../registry.js");
   const { recordOrigin } = await import("../tab-reports.js");
@@ -56,7 +57,7 @@ test("one presentation timeout writes one workbench error line", async () => {
     };
     // The presentation that the render of the plane committed (onRender of index.html). It requests the presentation of the drawn layout from the host.
     let rendered = Promise.resolve();
-    const showError = createErrorDisplay({ document, changed: () => {} });
+    const showError = errorToasts(document).show;
     // The layout queue shows the failure before it calls setVerify with the failed row, so the failure is queued when this resolves.
     const failed = Promise.withResolvers();
     const page = createPageLayout({

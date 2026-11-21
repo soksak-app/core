@@ -105,8 +105,8 @@ type metrics struct {
 	headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, activityIcon, activityStroke, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW, tabGrabW float32
 	// The card head (.chrome of packages/workbench/app.css).
 	cardHeadGap, cardHeadPad, cardTabsGap, cardButton, cardIcon, cardActsGap, cardActsPad, cardActHalfOpacity, tabGap, tabPadY, tabPadX, tabXPad, tabXOpacity, iconStroke, groupFramePad, groupFrameRadius, disabledOpacity, noticeDotInset, radiusMiddleRatio, radiusSmallRatio, textSmallAtBase, textBase, chipSelMix, renameSelectionMix, insetMix, tabXHoverMix float32
-	// The error line (#applicationError of packages/workbench/app.css).
-	errorPadY, errorPadX, errorBorder float32
+	// The error toasts of packages/workbench/app.css.
+	errorPadY, errorPadX, errorBorder, errorClosePadX float32
 	// debugW is the width of the debug view, and debugH its largest share of the window height.
 	debugW, debugH float32
 	// The grip of a divider, the dots of a folded side and the lines of the boundaries (.sp-divider, .card-sidebar__grip and .sp-rule of
@@ -216,6 +216,7 @@ func readMetrics(declared *Declarations) (metrics, error) {
 	read("error-pad-y", &m.errorPadY)
 	read("error-pad-x", &m.errorPadX)
 	read("error-border", &m.errorBorder)
+	read("error-close-pad-x", &m.errorClosePadX)
 	read("disabled-opacity", &m.disabledOpacity)
 	read("notice-dot-inset", &m.noticeDotInset)
 	read("r-xs-ratio", &m.radiusSmallRatio)
@@ -401,8 +402,6 @@ type Shell struct {
 	dragging *tabDrag
 	// tabBoxes is the rectangle in the window of each drawn tab in the last drawing, which the tab index of a tab strip reads.
 	tabBoxes map[string]ui.Rect
-	// workBanner is the height of the error line over the row of the spaces in the last drawing.
-	workBanner float32
 	// planeBox is the rectangle of the plane in the window in the last drawing, on the device pixel grid (alignPlane).
 	planeBox layout.Rect
 	// controlsWidth is the width that the first row leaves to the window buttons, kept by keepControls.
@@ -983,11 +982,13 @@ func (s *Shell) View(c *ui.Context) {
 	}
 	root.Children(func() {
 		s.drawChrome(c, width)
+		contentHeight := max(0, height-s.chromeHeight()-s.toastHeight(c, width))
 		if s.browsing || s.opened() == nil {
-			s.drawLibrary(c, width, height-s.chromeHeight())
+			s.drawLibrary(c, width, contentHeight)
 		} else {
-			s.drawWorkArea(c, width, height-s.chromeHeight())
+			s.drawWorkArea(c, width, contentHeight)
 		}
+		s.drawErrorToasts(c, width)
 	})
 	s.drawViewsBehindDialog(c)
 	s.drawPicker(c, width, height)

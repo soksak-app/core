@@ -24,7 +24,8 @@ const plane = await import("../plane.js");
 const { value } = await import("../settings.js");
 const { registry } = await import("../exposure.js");
 registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
-const { armLayoutFault, createErrorDisplay, createErrorWithdrawal, createPageLayout } = await import("../page-layout.js");
+const { armLayoutFault, createPageLayout } = await import("../page-layout.js");
+const { errorToasts } = await import("../shown-errors.js");
 const catalog = JSON.parse(readFileSync(new URL("../../../docs/spec/events.json", import.meta.url), "utf8"));
 
 test("a cancelled layout records only the phases that the event catalog declares", async () => {
@@ -32,8 +33,8 @@ test("a cancelled layout records only the phases that the event catalog declares
   await setLogPolicy({ frame: "debug" });
   await setTraceEnabled(true);
   const page = createPageLayout({
-    document, showError: createErrorDisplay({ document, changed: () => {} }),
-    withdrawError: createErrorWithdrawal({ document, changed: () => {} }),
+    document, showError: errorToasts(document).show,
+    withdrawError: errorToasts(document).withdraw,
     // setVerify receives the verification rows of core-exposure.js, which this test does not import; the rows are not asserted.
     setVerify: () => {}, log, surfaces,
     plane: { currentGrid: plane.currentGrid, settle: plane.settle, clear: plane.clear },

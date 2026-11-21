@@ -23,7 +23,8 @@ const { flushEvents } = await import("../page-log.js");
 const { onCommit, publishAhead, cancelPrepared } = await import("../compositor.js");
 const { registry } = await import("../exposure.js");
 registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
-const { createErrorDisplay, createErrorWithdrawal, createPageLayout, verificationRows } = await import("../page-layout.js");
+const { createPageLayout, verificationRows } = await import("../page-layout.js");
+const { errorToasts } = await import("../shown-errors.js");
 const latestToast = () => document.getElementById("errorToasts")?.lastElementChild;
 const toastText = () => latestToast()?.dataset.text ?? null;
 
@@ -35,8 +36,8 @@ function layoutWith(state) {
   onCommit(() => (state.fail ? Promise.reject(new Error(TIMEOUT)) : Promise.resolve({ placements: [], deferred: [] })));
   return createPageLayout({
     document,
-    showError: createErrorDisplay({ document, changed: () => {} }),
-    withdrawError: createErrorWithdrawal({ document, changed: () => {} }),
+    showError: errorToasts(document).show,
+    withdrawError: errorToasts(document).withdraw,
     setVerify: () => {},
     log: () => {},
     surfaces,
@@ -88,7 +89,7 @@ test("a presentation after a failed presentation leaves another error toast", as
   const page = layoutWith(state);
   page.onLayout(new Map(), () => {}, new Map(), 40, () => true, []);
   await page.presented();
-  const showError = createErrorDisplay({ document, changed: () => {} });
+  const showError = errorToasts(document).show;
   showError("another failure");
   state.fail = false;
   page.onLayout(new Map(), () => {}, new Map(), 40, () => true, []);
@@ -96,7 +97,7 @@ test("a presentation after a failed presentation leaves another error toast", as
   page.clearFailure();
   await drained();
   assert.equal(toastText(), "another failure");
-  latestToast().remove();
+  assert.equal(errorToasts(document).dismiss(toastText()), true);
   await flushEvents();
   wire.finish();
 });
@@ -155,7 +156,8 @@ test("a layout that fails during the wait keeps its failure", async () => {
   wire.release();
   await drained();
   assert.match(toastText() ?? "", /did not present/);
-  latestToast().remove();
+  assert.equal(errorToasts(document).dismiss(toastText()), true);
+  errorToasts(document).withdraw("layout");
   await flushEvents();
   wire.finish();
 });
@@ -169,7 +171,8 @@ test("a failure that repeats keeps its toast", async () => {
     await page.presented();
   }
   assert.match(toastText() ?? "", /surface presentation failed/);
-  latestToast().remove();
+  assert.equal(errorToasts(document).dismiss(toastText()), true);
+  errorToasts(document).withdraw("layout");
   await flushEvents();
   wire.finish();
 });
@@ -181,11 +184,12 @@ test("an error of another source with the text of the failure keeps its toast", 
   page.onLayout(new Map(), () => {}, new Map(), 40, () => true, []);
   await page.presented();
   const text = toastText();
-  createErrorDisplay({ document, changed: () => {} })(text);
+  errorToasts(document).show(text, "", "activity fixture", "activity fixture");
   page.clearFailure();
   await drained();
   assert.equal(toastText(), text);
-  latestToast().remove();
+  assert.equal(errorToasts(document).dismiss(toastText()), true);
+  errorToasts(document).withdraw("activity fixture");
   await flushEvents();
   wire.finish();
 });

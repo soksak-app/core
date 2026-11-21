@@ -564,9 +564,8 @@ func TestTheWindowOfAProjectAnswersItsRemoval(t *testing.T) {
 	equal(t, f.host.removalAnswers, []string{fmt.Sprintf(`{"allowed":true,"id":%q}`, id)})
 }
 
-// A library command that fails shows its failure in the error line of the library and records it at the place library, as
-// perform of packages/workbench/library.js does, and the workbench banner stays empty.
-func TestAFailedOpenOfTheLibraryShowsInTheLibrary(t *testing.T) {
+// A library command that fails opens a toast with a close control inside the window and keeps its library origin in the log.
+func TestAFailedOpenOfTheLibraryShowsADismissibleToast(t *testing.T) {
 	f := openedShell(t)
 	id := f.host.projects[0]["id"].(string)
 	f.run("core.projects.browse", nil)
@@ -588,8 +587,17 @@ func TestAFailedOpenOfTheLibraryShowsInTheLibrary(t *testing.T) {
 	if library.Error == nil || *library.Error != missing {
 		t.Fatalf("core.library reports the error %v", library.Error)
 	}
-	if banner := f.status("core.workbench.error"); banner != "null" {
-		t.Fatalf("the workbench banner shows %s", banner)
+	if toast := f.status("core.workbench.error"); toast != fmt.Sprintf("%q", missing) {
+		t.Fatalf("the library toast reports %s", toast)
+	}
+	close := f.box("core.error.dismiss", missing)
+	if close.Y < 700 || close.Y+close.H > 800 {
+		t.Fatalf("the library toast close control is outside the bottom of the window: %+v", close)
+	}
+	f.tester.ClickAt(close.X+close.W/2, close.Y+close.H/2)
+	f.settle()
+	if toast := f.status("core.workbench.error"); toast != "null" {
+		t.Fatalf("the closed library toast reports %s", toast)
 	}
 }
 

@@ -1,12 +1,10 @@
-// Error display and layout wiring of the main document (index.html). The layout queue shows the plane layout, the first row of
+// Layout and uncaught error wiring of the main document (index.html). The layout queue shows the plane layout, the first row of
 // a window without a plane, and the empty plane of a project switch one at a time, and receives their failures as error
 // displays. The project switch and the core command that wait for such a layout do not report the same failure again
 // (docs/spec/hosts.md#application-log). The caller passes the document, host, plane and compositor.
 import { createLayoutQueue, drawPrepared, nextTask } from "./layout-queue.js";
 import { frameLayout } from "./frame-text.js";
 import { trace } from "./performance.js";
-import { hideError, showError as showShownError } from "./shown-errors.js";
-import { bind } from "./commands.js";
 
 /**
  * Returns the rows that core.verify holds for the current state. rows() runs the verification of the drawn plane and is
@@ -19,101 +17,14 @@ export function verificationRows({ drawn, rows, failure }) {
   return out;
 }
 
-/**
- * Creates the function that shows an error in the error banner of the main document. It logs the error at the moment it
- * appears (shown-errors.js). If the banner does not exist, it creates the banner after the header.
- *
- *   document  main document
- *   changed   reports that the core state changed (coreChanged of core-exposure.js)
- */
-export function createErrorDisplay({ document, changed }) {
-  return function showError(reason, detail = "", source = "") {
-    // Each error of the workbench shows as a toast at the bottom of the window, and several errors show at once: a text that
-    // no open toast holds adds one, and the close control of a toast dismisses it (core.error.dismiss).
-    const holder = errorToastHolder(document);
-    const text = String(reason);
-    // A text that no open toast holds opens one; a repeated text only refreshes its source. The text goes on the span of
-    // its toast: the shown-error writer sets the text content of the element that it takes, which would empty a toast.
-    let toast = [...holder.children].find((toast) => toast.dataset.text === text);
-    if (!toast) {
-      toast = errorToast(document, text, source);
-      holder.append(toast);
-    } else {
-      toast.dataset.errorSource = source;
-    }
-    showShownError(toast.querySelector(".error-toast__text"), "workbench", text, detail);
-    changed();
-  };
-}
-
-/** The source of the error of a layout that failed, which the presentation of every surface after a later render withdraws. */
+/** The origin of a layout failure, cleared after every surface of a later render has presented. */
 const LAYOUT_SOURCE = "layout";
-
-/**
- * Creates the function that withdraws the error of the banner when source showed it. An error that another source showed since then
- * stays. The record of the error stays in the log.
- */
-export function createErrorWithdrawal({ document, changed }) {
-  return function withdrawError(source) {
-    const holder = document.getElementById("errorToasts");
-    if (!holder) return;
-    // A toast of another source stays: an error that a later show replaced is not withdrawn by an earlier source.
-    for (const toast of [...holder.children].filter((toast) => toast.dataset.errorSource === source)) {
-      hideError(toast, "workbench");
-      toast.remove();
-    }
-    changed();
-  };
-}
-
-/** The holder of the error toasts at the bottom of the window, created once. */
-function errorToastHolder(document) {
-  let holder = document.getElementById("errorToasts");
-  if (holder) return holder;
-  holder = document.createElement("div");
-  holder.id = "errorToasts";
-  holder.setAttribute("role", "alert");
-  document.body.append(holder);
-  return holder;
-}
-
-/** One error toast: the text and its close control, which dismisses the toast through the declared command. */
-function errorToast(document, text, source) {
-  const toast = document.createElement("div");
-  toast.className = "error-toast";
-  toast.dataset.text = text;
-  toast.dataset.errorSource = source;
-  const shown = document.createElement("span");
-  shown.className = "error-toast__text";
-  shown.textContent = text;
-  const close = document.createElement("button");
-  close.type = "button";
-  close.className = "error-toast__close";
-  close.dataset.expose = "core.error.dismiss";
-  close.title = "오류 닫기";
-  close.setAttribute("aria-label", close.title);
-  close.textContent = "×";
-  bind(close, "core.error.dismiss", () => ({ text }));
-  toast.append(shown, close);
-  return toast;
-}
-
-/** Dismisses the error toast of the text; the command core.error.dismiss runs it (docs/spec/exposure.md). */
-export function dismissErrorToast(document, text) {
-  const holder = document.getElementById("errorToasts");
-  if (!holder) return false;
-  const toast = [...holder.children].find((toast) => toast.dataset.text === text);
-  if (!toast) return false;
-  hideError(toast, "workbench");
-  toast.remove();
-  return true;
-}
 
 /**
  * Shows an unhandled error and sends it to the application log. The application has no console. The location and stack stay only in the log.
  *
  *   target     window that receives the error and unhandledrejection events
- *   showError  function of createErrorDisplay
+ *   showError  show method of the error toast component
  */
 export function reportUncaught(target, showError) {
   // default: an error event without a source file (a dispatched error or a cross-origin script) has no location, so the detail adds none.
@@ -154,8 +65,8 @@ export async function placementLast() {
  * Creates the layout queue of the main document and the functions that schedule and wait for its layouts.
  *
  *   document   main document that reads the slots
- *   showError  function of createErrorDisplay
- *   withdrawError  function of createErrorWithdrawal
+ *   showError  show method of the error toast component
+ *   withdrawError  withdraw method of the error toast component
  *   setVerify, log  receive the verification row and the observation line (core-exposure.js, host.js)
  *   surfaces   surface interface of the host (surfaces of host.js); uses waitPresented
  *   plane      { currentGrid, settle, clear }(plane.js)

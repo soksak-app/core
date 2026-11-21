@@ -199,9 +199,8 @@ func (s *Shell) registerLibrary() {
 	})
 }
 
-// performLibrary runs an action of the library as perform of packages/workbench/library.js does: it withdraws the error of the
-// library, shows the failure of the action in the error line of the library, and then runs ended. It asks for a frame only when the
-// error line changes, so an action that changes nothing that the window draws answers at once.
+// performLibrary runs an action, withdraws its previous error, presents a failure as a toast, and then runs ended.
+// It requests a frame when the error changes.
 func (s *Shell) performLibrary(action func(done func(error)), ended func()) {
 	if _, shown := s.errors.Text(libraryErrorPlace); shown {
 		s.errors.Hide(libraryErrorPlace)
@@ -209,7 +208,7 @@ func (s *Shell) performLibrary(action func(done func(error)), ended func()) {
 	}
 	action(func(err error) {
 		if err != nil {
-			s.errors.Show(libraryErrorPlace, err.Error(), "")
+			s.errors.ShowToast(libraryErrorPlace, err.Error(), "")
 			s.options.Invalidate()
 		}
 		ended()

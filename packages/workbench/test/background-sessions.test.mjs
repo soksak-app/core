@@ -77,7 +77,8 @@ test("a background session opens only for a tab without a mounted surface and en
   const { host } = await import("@soksak/runtime");
   const compositor = await import("../compositor.js");
   const modules = await import("../surface-modules.js");
-  const { createPageLayout, createErrorDisplay, createErrorWithdrawal } = await import("../page-layout.js");
+  const { createPageLayout } = await import("../page-layout.js");
+  const { errorToasts } = await import("../shown-errors.js");
 
   const { checkStoredLayout } = await import("../stored-layout.js");
   const { value } = await import("../settings.js");
@@ -87,7 +88,7 @@ test("a background session opens only for a tab without a mounted surface and en
   let presented = Promise.resolve();
   plane.onRender(() => { presented = Promise.resolve(compositor.publish()); });
   const pageLayout = createPageLayout({
-    document, showError: createErrorDisplay({ document, changed: () => {} }), withdrawError: createErrorWithdrawal({ document, changed: () => {} }),
+    document, showError: errorToasts(document).show, withdrawError: errorToasts(document).withdraw,
     setVerify: () => {}, log, surfaces,
     plane: { currentGrid: plane.currentGrid, settle: plane.settle, clear: plane.clear },
     compositor: { publishAhead: compositor.publishAhead, publish: compositor.publish, cancelPrepared: compositor.cancelPrepared },

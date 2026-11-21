@@ -9,7 +9,7 @@ import { contributionsState, onContributionsChange } from "./contributions.js";
 import { appUpdate, onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { matchPlugins } from "./plugin-search.js";
 import { hasUpdate } from "./plugin-operations.js";
-import { hideError, showError } from "./shown-errors.js";
+import { errorToasts, hideError, showError } from "./shown-errors.js";
 
 const TINTS = ["#ffb36b", "#7fe3b0", "#7db4ff", "#e08bd8", "#f2d16b"];
 const element = (tag, cls, text) => {
@@ -61,7 +61,6 @@ export function createLibrary(root, rendered = () => {}) {
         <label class="library-search"><span class="sr-only">프로젝트 검색</span><input class="text-field" type="search" data-expose="core.library.search" data-command="core.library.search" data-value="query" data-live placeholder="이름 또는 폴더 검색" autocomplete="off"></label>
         <label class="library-search library-plugin-search"><span class="sr-only">플러그인 검색</span><input class="text-field" type="search" data-expose="core.library.plugins.search" data-command="core.library.plugins.search" data-value="query" data-live placeholder="이름, id, 설명 검색" autocomplete="off"></label>
       </header>
-      <div class="library-error" role="alert" hidden></div>
       <div class="library-form" hidden></div>
       <div class="library-empty" data-expose="core.library.empty" hidden><h2>프로젝트를 시작하세요</h2><p>새 프로젝트를 만들거나 기존 폴더를 여세요.</p></div>
       <div class="library-grid" role="list"></div>
@@ -94,15 +93,15 @@ export function createLibrary(root, rendered = () => {}) {
     pages.append(tab);
   }
   const form = root.querySelector('.library-form');
-  const error = root.querySelector('.library-error');
+  const errors = errorToasts(root.ownerDocument);
   const back = root.querySelector('.library-return');
   let pending = false;
 
   // default: a rejection value may not be an Error, so the value itself is shown.
-  const fail = (reason) => showError(error, 'library', String(reason.message ?? reason));
+  const fail = (reason) => errors.show(String(reason.message ?? reason), '', 'library', 'library');
   async function perform(work) {
     if (pending) return;
-    pending = true; error.hidden = true; hideError(error, 'library');
+    pending = true; errors.withdraw('library');
     root.setAttribute('aria-busy', 'true');
     try { await work(); } catch (reason) { fail(reason); }
     finally { pending = false; root.removeAttribute('aria-busy'); render(); }
@@ -116,7 +115,7 @@ export function createLibrary(root, rendered = () => {}) {
     if (mode === 'create' && !windows.createsFolders) throw new Error('this application cannot create folders');
     if (mode !== 'create' && mode !== 'open') throw new Error(`unknown form mode ${mode}`);
     formMode = mode;
-    error.hidden = true;
+    errors.withdraw('library');
     form.hidden = false;
     form.innerHTML = '';
     const creates = mode === 'create';
@@ -220,7 +219,7 @@ export function createLibrary(root, rendered = () => {}) {
     }
     const plugins = page === 'plugins';
     for (const el of [sort.parentElement, search.parentElement, grid]) el.hidden = plugins;
-    if (plugins) { error.hidden = true; form.hidden = true; formMode = null; root.querySelector('.library-empty').hidden = true; }
+    if (plugins) { errors.withdraw('library'); form.hidden = true; formMode = null; root.querySelector('.library-empty').hidden = true; }
     pluginSearch.parentElement.hidden = !plugins;
     pluginList.hidden = !plugins;
   }
@@ -524,7 +523,7 @@ export function createLibrary(root, rendered = () => {}) {
       formState:form.hidden?null:{mode:formMode,name:input('name'),parent:input('parent')},
       returnVisible:!back.hidden, pending, empty:!root.querySelector('.library-empty').hidden,
       noResults:Boolean(grid.querySelector('.library-no-results')),
-      error:error.hidden?null:error.textContent, previews, previewErrors, folderErrors,
+      error:errors.text('library')??null, previews, previewErrors, folderErrors,
     };
   }
   const SORTS=['saved','name','recent','open'];

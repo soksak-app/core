@@ -36,9 +36,8 @@ func (s *Shell) stageShare() (left, top float32) {
 func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 	s.surfaces.drawnPlane = s.plane
 	project := s.opened()
-	s.workBanner = s.toastHeight(c, width)
 	s.drawSpaces(c, project, width)
-	stage := height - s.workBanner - s.spaceRowHeight()
+	stage := height - s.spaceRowHeight()
 	inset := s.stageInset()
 	// The plane stands on the device pixel grid, so the stage holds it moved by the part of a device pixel that the rows above and
 	// left of it leave.
@@ -134,7 +133,6 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 			s.drawDropPreview(c, inset)
 		})
 	})
-	s.drawErrorToasts(c, width)
 	s.forgetStrips()
 }
 
@@ -147,8 +145,7 @@ func (s *Shell) alignPlane(width, stage float32) (float32, float32) {
 	inset := s.stageInset()
 	left, top := s.stageShare()
 	area := layout.Rect{
-		// The toasts of the workbench stand at the bottom of the window, so the plane keeps its top and loses the height
-		// that they take (drawErrorToasts).
+		// The workbench receives its height after the window reserves the space of the error toasts.
 		X: float64(s.projectColumnWidth() + inset - left), Y: float64(s.chromeHeight() + s.spaceRowHeight() + inset - top),
 		W: float64(width - 2*inset + left), H: float64(stage - 2*inset + top),
 	}
@@ -165,42 +162,6 @@ func (s *Shell) alignPlane(width, stage float32) (float32, float32) {
 	}
 	s.planeBox = aligned
 	return float32(aligned.X - area.X), float32(aligned.Y - area.Y)
-}
-
-// toastHeight returns the height that the open error toasts of the workbench take at the bottom of the window, as
-// #errorToasts of packages/workbench/app.css. No open toast takes nothing.
-func (s *Shell) toastHeight(c *ui.Context, width float32) float32 {
-	toasts := s.errors.Toasts()
-	if len(toasts) == 0 {
-		return 0
-	}
-	m := s.metrics
-	total := float32(0)
-	for _, text := range toasts {
-		_, lines := c.MeasureText(width-2*m.errorPadX-m.cardButton, ui.Span{Text: text})
-		total += lines + 2*m.errorPadY + m.errorBorder
-	}
-	return total
-}
-
-// drawErrorToasts draws the error toasts of the workbench at the bottom of the window after the stage, one row per open
-// toast with its close control that runs core.error.dismiss. No open toast draws nothing.
-func (s *Shell) drawErrorToasts(c *ui.Context, width float32) {
-	toasts := s.errors.Toasts()
-	m := s.metrics
-	for _, text := range toasts {
-		_, lines := c.MeasureText(width-2*m.errorPadX-m.cardButton, ui.Span{Text: text})
-		height := lines + 2*m.errorPadY + m.errorBorder
-		ui.Row(c).Size(width, height).Padding(m.errorPadY, m.errorPadX).Background(s.palette.Bg).
-			BorderWidth(0, 0, 0, m.errorBorder).BorderColor(s.palette.No).Children(func() {
-			ui.Text(c, text).Wrap().TextColor(s.palette.No).Role(ui.RoleStatus).Label(text)
-			close := s.binder.Press(c, "core.error.dismiss", "core.error.dismiss", text, map[string]any{"text": text})
-			s.dressHeadButton(close, "오류 닫기", false)
-			close.Children(func() {
-				ui.Text(c, "×").TextColor(s.palette.No)
-			})
-		})
-	}
 }
 
 // cardRows sizes the head and the foot of a card of the given inner height, as the grid of the page does: each row takes its height

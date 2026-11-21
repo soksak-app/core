@@ -1,6 +1,6 @@
 // Checks the lines that the failure of one layout writes to the application log. The failed callback of the layout queue receives and shows that failure, so neither the project switch command
 // that waited for the layout nor the gesture that scheduled the layout writes the same failure again (docs/spec/hosts.md#application-log).
-// The connections are the error display of page-layout.js that index.html uses, the report of unhandled rejections, the layout receiver, and the
+// The connections are the error display of shown-errors.js that index.html uses, the report of unhandled rejections, the layout receiver, and the
 // presented callback of the project switch. The host calls are answered by the page-wire case of each test (docs/spec/cases/page-wire/README.md).
 // The compositor that prepares a layout is a stand-in in the tests that inject a failure or hold a preparation open: the
 // compositor of compositor.js reaches the host only through the listener of onCommit, which no module registers, so no
@@ -22,7 +22,8 @@ const dom = new JSDOM('<button id="projectTab"></button>');
 globalThis.document = dom.window.document;
 const { report, surfaces } = await import("../host.js");
 const { flushEvents } = await import("../page-log.js");
-const { createErrorDisplay, createPageLayout, dismissErrorToast, placementLast, reportUncaught } = await import("../page-layout.js");
+const { createPageLayout, placementLast, reportUncaught } = await import("../page-layout.js");
+const { errorToasts } = await import("../shown-errors.js");
 const { connectExposure, registry } = await import("../exposure.js");
 const { bind } = await import("../commands.js");
 
@@ -31,8 +32,7 @@ const linesOf = (wire) => wire.calls
   .filter(({ name, payload }) => name === "log" && payload?.action === "batch")
   .flatMap(({ name, payload }) => recordsOf(name, payload).map(shownRecord));
 
-const showError = createErrorDisplay({ document, changed: () => {} });
-const errorText = `surface presentation failed: ${TIMEOUT}`;
+const showError = errorToasts(document).show;
 
 // The window of the document. A browser reports an unhandled rejection as an unhandledrejection event of the window.
 const target = new EventTarget();
@@ -90,8 +90,8 @@ test("a layout failure of a project switch started from the interface writes one
 test("a layout failure that no command waits for writes one workbench error line", async () => {
   const wire = selectPageWire("layout-failure-lines-gesture");
   reportRejectionsAsPage();
-  // The same line is not written again, so the earlier presentation is withdrawn.
-  assert.equal(dismissErrorToast(document, errorText), true);
+  // The earlier test occurrence ended before this gesture runs.
+  errorToasts(document).withdraw("layout");
   schedule();
   assert.equal(await page.presented(), false, "a failed layout was reported as presented");
   await flushEvents();

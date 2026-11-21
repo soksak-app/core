@@ -58,18 +58,6 @@ test("core.window.workbench, core.workbench.error and core.workbench.audit descr
       } });
       assert.equal(refusal.error?.code, EXPOSURE_ERRORS.invalidParams, JSON.stringify(refusal));
     }
-    const toasts = document.createElement("div");
-    toasts.id = "errorToasts";
-    const toast = document.createElement("div");
-    toast.dataset.text = "the layout cannot be drawn";
-    toasts.append(toast);
-    document.body.append(toasts);
-    assert.deepEqual(await get("core.workbench.error"), { result: "the layout cannot be drawn" });
-    assert.deepEqual(await registry.handle({ method: "command.run", params: {
-      name: "core.error.dismiss", params: { text: "the layout cannot be drawn" },
-    } }), { result: null });
-    assert.deepEqual(await get("core.workbench.error"), { result: null });
-
     const loose = document.createElement("button");
     loose.textContent = "Loose";
     document.body.append(loose);

@@ -51,7 +51,8 @@ import { foldSection, onSectionsChange, sectionDrawn, selectSection, sidebarsSta
 import { onTabReports, tabError, tabFooter, tabLabel, tabModified, tabNotice } from "./tab-reports.js";
 import { appUpdate, followActivation, followPluginChanges, followSidecarChanges, onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { pageIdentity } from "./page-identity.js";
-import { PLACEMENT_LAST, dismissErrorToast, placementLast } from "./page-layout.js";
+import { PLACEMENT_LAST, placementLast } from "./page-layout.js";
+import { errorToasts } from "./shown-errors.js";
 import { stateCards } from "./layout-tree.js";
 
 /* Receivers of the watched core statuses. */
@@ -442,6 +443,20 @@ function watchLayout(name, params) {
   };
 }
 
+/** Registers the error display before the first screen or a failure that stops the start. */
+export function installErrorExposure() {
+  const errors = errorToasts(document);
+  if (registry.list().status.some(({ name, registered }) => name === "core.workbench.error" && registered)) return errors;
+  status("core.workbench.error", errors.newest);
+  registry.command("core.error.dismiss", ({ text }) => {
+    if (!text) throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "core.error.dismiss requires a text");
+    if (!errors.dismiss(text)) throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "core.error.dismiss names no open toast");
+  });
+  registry.element("core.error.dismiss");
+  errors.watch(coreChanged);
+  return errors;
+}
+
 export async function installCoreExposure({ library, renames, chrome, drawn, memorySaver }) {
   // The core entries read the memory saver (core.tab.memory, core.surfaces, the tab commands), so a page without it is refused
   // before any entry is registered.
@@ -449,6 +464,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
     throw new TypeError("installCoreExposure requires memorySaver, the memory saver of the page (memory-saver.js)");
   }
   memory = memorySaver;
+  installErrorExposure();
   registry.watch(watchLayout);
   // On this host the workbench is the main page: a start is its page identity, and it started at its time origin.
   // The role handshake of a tab (docs/spec/agent-roles.md#tab-role-state): the status is read from the host store with the
@@ -476,11 +492,6 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   // WebKit stops animation frames when it hides the document, so a change of the visibility state is announced.
   document.addEventListener("visibilitychange", coreChanged);
   onBinding(coreChanged);
-  // The errors of the workbench show as toasts at the bottom of the window; the status names the newest open one.
-  status("core.workbench.error", () => {
-    const toasts = document.getElementById("errorToasts")?.children;
-    return toasts?.length ? toasts[toasts.length - 1].dataset.text : null;
-  });
   status("core.activity", activityState);
   status("core.projects", () => projects.all().map(withOpen));
   status("core.project", () => {
@@ -553,7 +564,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   status("core.chrome", chrome);
   status("core.rail", () => (currentGrid() ? railState() : null));
 
-  // A refusal of a settings or error display command is an invalid request argument (docs/spec/settings.md).
+  // A refusal of a settings command is an invalid request argument (docs/spec/settings.md).
   const invalid = (run) => async (params) => {
     try {
       return await run(params);
@@ -561,11 +572,6 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
       throw new ExposureError(EXPOSURE_ERRORS.invalidParams, error.message);
     }
   };
-  registry.command("core.error.dismiss", invalid(async ({ text }) => {
-    if (!text) throw new Error("core.error.dismiss requires a text");
-    if (!dismissErrorToast(document, text)) throw new Error("core.error.dismiss names no open toast");
-    coreChanged();
-  }));
   // The host asks it before it waits for the presentation of the window (docs/spec/host-contract.md).
   registry.method(PLACEMENT_LAST, placementLast);
   // The host asks each ready window for the space that holds a surface and answers surface.window with the window and the space
@@ -866,7 +872,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   });
 
   for (const { name } of registry.list().element) {
-    if (name.startsWith("core.")) registry.element(name);
+    if (name.startsWith("core.") && name !== "core.error.dismiss") registry.element(name);
   }
 
   onPicker(coreChanged);
