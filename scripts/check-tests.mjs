@@ -391,6 +391,23 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1030-1.2",
+    implementation: [{ file: "docs/operations/install.md", symbol: "prepares the user PATH registration on startup" }],
+    tests: [{ file: "packages/host/go/tests/setup_test.go", id: "TestSetupRegistersUserPathOnStart" }],
+    expected: "The documented user PATH registration runs at startup.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1031-6",
+    implementation: [{ file: "packages/host/go/tests/platform/darwin/system/buffer_bounds_test.go", symbol: "func blockedSidecar(" }],
+    tests: [
+      { file: "packages/host/go/tests/platform/darwin/system/buffer_bounds_test.go", id: "TestThePendingRepliesOfASidecarHoldAtMostFourMebibytes" },
+      { file: "packages/host/go/tests/platform/darwin/system/buffer_bounds_test.go", id: "TestAPendingCloseBeyondTheBoundIsDroppedAndTheSurfaceIsNotWaitedFor" },
+    ],
+    expected: "The sidecar buffer checks end and verify the reply and close limits.",
+    levels: ["unit"],
+  },
+  {
     id: "F1026",
     implementation: [
       { file: "packages/workbench/page-layout.js", symbol: "function errorToast(document, text, source) {" },

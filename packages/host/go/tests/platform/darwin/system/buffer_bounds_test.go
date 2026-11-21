@@ -20,19 +20,52 @@ import (
 // blockedSidecar starts a sidecar that reads nothing until the returned function releases it, fills its write queue, and
 // returns the sidecars with the registered surfaces s1 to s<surfaces>. The owner has the project root `root`. now is the clock
 // of the sidecars, or nil for the clock of the host.
-func blockedSidecar(t *testing.T, root string, surfaces int, now func() time.Time) (*host.Sidecars, func()) {
+func blockedSidecar(t *testing.T, log *host.EventLog, root string, surfaces int, now func() time.Time) (*host.Sidecars, func()) {
 	t.Helper()
 	directory := t.TempDir()
 	fifo := filepath.Join(directory, "go")
 	if err := syscall.Mkfifo(fifo, 0o600); err != nil {
 		t.Fatal(err)
 	}
+	// Keep both ends open so cleanup can send the release even before the fixture opens the FIFO or after it exits.
+	gate, err := os.OpenFile(fifo, os.O_RDWR|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := gate.Close(); err != nil {
+			t.Errorf("close fixture release pipe: %v", err)
+		}
+	})
 	received := filepath.Join(directory, "received")
 	support.Fixture(t, directory, "echo", "ignore-term\nwait "+fifo+"\ndrain "+received+"\n")
 	sidecars, err := host.NewSidecars(support.Declare(directory, `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
 	if err != nil {
 		t.Fatal(err)
 	}
+	var once sync.Once
+	release := func() {
+		once.Do(func() {
+			if _, err := gate.WriteString("go\n"); err != nil {
+				t.Errorf("release the fixture: %v", err)
+			}
+			sidecars.Stop()
+		})
+	}
+	t.Cleanup(func() {
+		release()
+		if t.Failed() {
+			if err := log.Flush(); err != nil {
+				t.Errorf("flush fixture log: %v", err)
+				return
+			}
+			for _, event := range support.ReadEvents(t, log.Path()) {
+				if name, ok := event["event"].(string); ok && strings.HasPrefix(name, "sidecar.record.") {
+					t.Log(event["fields"])
+				}
+			}
+		}
+	})
 	sidecars.Now = now
 	owner := support.NewSidecarRecorder(t, root)
 	for i := 1; i <= surfaces; i++ {
@@ -62,21 +95,6 @@ func blockedSidecar(t *testing.T, root string, surfaces int, now func() time.Tim
 	if !full {
 		t.Fatal("the queue never filled")
 	}
-	var once sync.Once
-	release := func() {
-		once.Do(func() {
-			file, err := os.OpenFile(fifo, os.O_WRONLY, 0)
-			if err != nil {
-				t.Error(err)
-				return
-			}
-			file.Write([]byte("go\n"))
-			file.Close()
-			sidecars.Stop()
-		})
-	}
-	// A test that ends early releases the sidecar too, so Stop does not wait for a process that reads nothing.
-	t.Cleanup(release)
 	return sidecars, release
 }
 
@@ -87,7 +105,7 @@ func response(name string, padding int) json.RawMessage {
 // contract: buffers.sidecar-replies.bounded-by-messages
 func TestThePendingRepliesOfASidecarHoldAtMostOneThousandAndTwentyFourMessages(t *testing.T) {
 	log := support.UseRoomyEventLog(t)
-	sidecars, release := blockedSidecar(t, "/p", 1, nil)
+	sidecars, release := blockedSidecar(t, log, "/p", 1, nil)
 	var refused []string
 	for i := 0; i < 1024+10; i++ {
 		if err := sidecars.SendResponse(support.EchoSidecar, "s1", "a", response("a", 0)); err != nil {
@@ -113,7 +131,7 @@ func TestThePendingRepliesOfASidecarHoldAtMostOneThousandAndTwentyFourMessages(t
 // contract: buffers.sidecar-replies.bounded-by-bytes
 func TestThePendingRepliesOfASidecarHoldAtMostFourMebibytes(t *testing.T) {
 	log := support.UseRoomyEventLog(t)
-	sidecars, release := blockedSidecar(t, "/p", 1, nil)
+	sidecars, release := blockedSidecar(t, log, "/p", 1, nil)
 	var refused []string
 	for i := 0; i < 4; i++ {
 		if err := sidecars.SendResponse(support.EchoSidecar, "s1", "a", response("a", 3<<19)); err != nil {
@@ -135,7 +153,7 @@ func TestAPendingCloseBeyondTheBoundIsDroppedAndTheSurfaceIsNotWaitedFor(t *test
 	log := support.UseRoomyEventLog(t)
 	// A long project root makes each close message large, so the bound in bytes is reached with few surfaces.
 	root := "/" + strings.Repeat("r", 200<<10)
-	sidecars, release := blockedSidecar(t, root, 30, nil)
+	sidecars, release := blockedSidecar(t, log, root, 30, nil)
 	for i := 1; i <= 30; i++ {
 		sidecars.Close(fmt.Sprintf("s%d", i))
 	}
@@ -167,7 +185,7 @@ func TestALineThatWaitsInTheWriteQueueOfASidecarIsRecorded(t *testing.T) {
 		defer mu.Unlock()
 		return at
 	}
-	_, release := blockedSidecar(t, "/p", 1, now)
+	_, release := blockedSidecar(t, log, "/p", 1, now)
 	mu.Lock()
 	at = at.Add(time.Second)
 	mu.Unlock()

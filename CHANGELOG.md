@@ -5,6 +5,7 @@
 
 ## 2026-11-21
 
+- F1031-6: The sidecar buffer fixture opens its release pipe before starting the process and holds it through cleanup. It reports the fixture's recorded output on failure. Verification: four buffer tests pass in each of 20 mygo runs and 10 Wails runs.
 - F1031-5: Go and Rust host tests name the contract cases they actually exercise. The Rust endpoint plays the role identity case, the process identity fixture runs from its owning test, and the still capture case follows the current window selection. Verification: 70 Rust and 16 Go tests pass.
 - F1031-4: Tests that invoke macOS code signing run in the macOS system owner scope. The Linux headless job keeps the platform-independent preparation and window-run tests. Red: the workflow test reports two test files that invoke `codesign` in the Linux selection. Green: all 71 affected tests pass.
 - F1031-3: The Rust role store propagates missing values and write failures directly, and the serialization test removes its temporary directory. Red: Clippy refused five expressions in the role store and the test runner reported the temporary directory. Green: Clippy passes for the default and diagnostic workspace configurations, and all 15 role tests pass.

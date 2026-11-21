@@ -5,6 +5,7 @@
 
 ## 2026-11-21
 
+- F1031-6: Sidecar buffer fixture가 process를 시작하기 전에 release pipe를 열고 정리까지 유지한다. 실패 시 기록된 fixture 출력을 보고한다. Mygo 20회와 Wails 10회의 각 실행에서 buffer test 네 개가 통과한다.
 - F1031-5: Go와 Rust host test가 실제로 실행하는 contract case를 선언한다. Rust endpoint가 role identity case를 재생하고, process identity fixture가 해당 test에서 실행되며, still capture case가 현재 창 선택 순서를 따른다. Rust test 70개와 Go test 16개가 통과한다.
 - F1031-4: macOS 코드 서명을 실행하는 test가 macOS system owner 범위에서 실행된다. Linux headless job은 플랫폼에 독립적인 준비와 window run test를 실행한다. Red에서 workflow test가 Linux 선택에 있는 `codesign` 실행 파일 두 개를 보고한다. Green에서 관련 test 71개가 통과한다.
 - F1031-3: Rust role store가 값 없음과 쓰기 실패를 직접 전달하고 직렬화 test가 자신의 임시 폴더를 제거한다. Red에서 Clippy가 role store의 표현식 다섯 개를 거절했고 test runner가 임시 폴더를 보고했다. Green에서 기본 및 진단 workspace 구성의 Clippy 검사와 role test 15개가 통과한다.
