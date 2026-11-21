@@ -363,13 +363,13 @@ var commonOnlyCases = []struct {
 	value any
 	file  string
 }{
-	{"projectOpening", "tabs", `"tabs"`},
-	{"viewProcess", "view", `"view"`},
-	{"textSize", 1.5, `1.5`},
-	{"memorySaver", false, `false`},
-	{"memorySaverDelay", 30, `30`},
 	{"autoDismissErrorToasts", true, `true`},
 	{"errorToastDismissSeconds", 5, `5`},
+	{"memorySaver", false, `false`},
+	{"memorySaverDelay", 30, `30`},
+	{"projectOpening", "tabs", `"tabs"`},
+	{"textSize", 1.5, `1.5`},
+	{"viewProcess", "view", `"view"`},
 }
 
 // contract: workspace.settings.rejects-project-common-only-keys
