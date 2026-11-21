@@ -5,6 +5,7 @@
 
 ## 2026-11-21
 
+- F1030-1.1: Rust PATH reconciliation reports the saved profile list change after removing obsolete blocks. It propagates removal failures. Red: Clippy rejects an assignment discarded before the write. Green: the sok package passes Clippy and all four Darwin setup tests pass.
 - F1031-2: The page refuses an empty or unknown error toast text. The layout and status tests exercise the current error display and keep their logging and recovery assertions. Red: dismissing an empty text returned success. Green: the layout recovery, layout logging, and workbench status tests pass.
 - F1031-1: The page registers `core.error.dismiss` after initializing its parameter error handler. Red: the memory saver and lazy screen tests fail during startup with an uninitialized handler. Green: both startup tests and the error display tests pass.
 - F1030-1: The macOS hosts prepare a user PATH registration at startup. Settings can enable or disable it. Disabling removes the owned links and shell blocks and persists across restarts. A current registration is left in place and a conflicting command or file is reported. Verification: the Go and Rust host startup and restart tests and the page and mygo setup tests pass.

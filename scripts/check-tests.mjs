@@ -322,6 +322,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1030-1.1",
+    implementation: [{ file: "packages/sok/rust/src/platform/darwin/user_path.rs", symbol: "remove_block(file)?;" }],
+    tests: [{ file: "packages/sok/rust/tests/platform/darwin/setup_test.rs", id: "user_path_is_installed_once_and_stays_disabled_after_removal" }],
+    expected: "Rust PATH reconciliation reports a change after writing the list of managed shell files.",
+    levels: ["unit"],
+  },
+  {
     id: "F1031-1",
     implementation: [{ file: "packages/workbench/core-exposure.js", symbol: 'registry.command("core.error.dismiss"' }],
     tests: [

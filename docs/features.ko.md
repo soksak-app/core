@@ -150,8 +150,9 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
 - [o] F1024 — P1: 수용 run의 mygo 앱(cache 0.0.42)에서 chrome bar의 로고가 system 창 버튼(macOS traffic lights)과 겹쳤다는 사용자 스크린샷의 보고. 확인: main build와 cache 0.0.42 앱 모두 깨끗한 시작에서 로고를 버튼과 분리해 그린다. 보고는 수용 run의 driven 창에서 왔고 그 좁히기는 F1024-1에 있다.
     - [~] F1024-1 — P1, F1024의 후속, 좁히기: 겹침은 어느 build의 깨끗한 시작에서도 재현되지 않는다. 검사가 창을 옮기고 크기를 바꾸고 registry의 terminal plugin을 돌리고, 그 run은 F1025의 pin-release 오류를 안고 있었다. 남은 원인 후보: 창을 다른 display에 park할 때 backing scale 변화, 창이 움직이는 동안 도착하는 windowControls 답, run 부하 아래 첫 frame. 다음: release 결합이 사라진 run 안에서 title bar를 capture한다.
 - [o] F1025 — P1, 답변했고 기록으로 남긴다: 수용 run이 보여준 오류 문장이 pin된 release들의 결합인지 물었다. 그렇다. plugin release 0.0.16과 core release 0.0.42는 plugin main이 보내는 기록과 operation을 모르므로, core와 terminal이 release되면 모두 사라진다.
-- [ ] F1030 — P1, F831과 F1006-11-1의 후속: Agent setup의 PATH, MCP, SessionStart hook의 원하는 상태를 애플리케이션 재시작 뒤에도 유지한다.
+- [~] F1030 — P1, F831과 F1006-11-1의 후속: Agent setup의 PATH, MCP, SessionStart hook의 원하는 상태를 애플리케이션 재시작 뒤에도 유지한다. Rust PATH 검사를 진행한다.
   - [o] F1030-1 — macOS host가 시작 시 사용자 PATH를 맞추고 재시작 뒤에도 설정을 유지한다. Go와 Rust setup test가 반복 설치와 다른 등록의 보존을 검사한다. Host와 workbench test가 끄기와 그 결과 상태를 검사한다.
+  - [~] F1030-1.1 — F1030-1 후속: Rust PATH 적용이 Clippy 검사를 통과한다. 남은 것: 이전 profile 블록을 제거한 뒤의 중복 대입을 없애고 검사와 PATH test를 다시 실행한다.
   - [ ] F1030-2 — Agent group에서 MCP와 SessionStart hook 각각의 원하는 상태를 바꾼다. 켜면 소유한 등록만 갱신하고 끄면 재시작 뒤에도 소유한 등록을 두지 않는다.
 - [ ] F1031 — P0: 현재 core candidate의 검사가 통과한 뒤 release한다. Page 시작과 toast case가 통과한다. 남은 검사는 Linux owner test 선택, Rust host contract 선언, endpoint case, role test의 임시 폴더와 mygo sidecar buffer 한도다.
   - [o] F1031-1 — Page가 parameter 오류 처리기를 초기화한 뒤 `core.error.dismiss`를 설치한다. Page 시작과 오류 표시 test가 통과한다.

@@ -561,7 +561,7 @@ fn enable(
         if record.path.profiles != required {
             for file in &record.path.profiles {
                 if !required.contains(file) {
-                    changed |= remove_block(file)?;
+                    remove_block(file)?;
                 }
             }
             record.path.profiles = required;
