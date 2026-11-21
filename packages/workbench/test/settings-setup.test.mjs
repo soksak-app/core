@@ -69,6 +69,7 @@ test("the agent group reads the parts, shows the PATH preference, and runs the s
       ["명령 경로", "설치 안 됨", "/Users/person/.local/bin/sok", null],
       ["스킬", "다름", "/Users/person/.claude/skills/soksak/SKILL.md", null],
       ["MCP 등록", "설치 안 됨", "/Users/person/.claude.json", null],
+      ["훅", "설치 안 됨", "/Users/person/.claude/settings.json", null],
     ]);
     const pathToggle = control("core.settings-modal.setup-change");
     assert.deepEqual([pathToggle.textContent, pathToggle.dataset.command, JSON.parse(pathToggle.dataset.params)],
@@ -81,10 +82,10 @@ test("the agent group reads the parts, shows the PATH preference, and runs the s
 
     const installed = await registry.handle({ method: "command.run", params: { name: "core.setup.install", params: JSON.parse(install.dataset.params) } });
     assert.deepEqual(installed.result.parts.map(({ part, state, changed }) => [part, state, changed]),
-      [["path", "missing", false], ["skill", "ok", true], ["mcp", "ok", true]]);
+      [["path", "missing", false], ["skill", "ok", true], ["mcp", "ok", true], ["hook", "ok", false]]);
     await settled();
     assert.deepEqual((await status()).parts, installed.result.parts);
-    assert.deepEqual(rows().map(([name, state]) => [name, state]), [["명령 경로", "설치 안 됨"], ["스킬", "설치됨"], ["MCP 등록", "설치됨"]]);
+    assert.deepEqual(rows().map(([name, state]) => [name, state]), [["명령 경로", "설치 안 됨"], ["스킬", "설치됨"], ["MCP 등록", "설치됨"], ["훅", "설치됨"]]);
     assert.equal(control("core.settings-modal.setup-install"), null, "설치 is shown while every skill and mcp part is ok");
 
     const refused = await registry.handle({ method: "command.run", params: { name: "core.setup.install", params: { parts: ["path"] } } });

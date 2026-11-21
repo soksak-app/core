@@ -352,7 +352,7 @@ function drawGeneral() {
 }
 
 /** The names of the setup parts (docs/spec/settings.md#agents). */
-const SETUP_NAMES = { path: "명령 경로", skill: "스킬", mcp: "MCP 등록" };
+const SETUP_NAMES = { path: "명령 경로", skill: "스킬", mcp: "MCP 등록", hook: "훅" };
 const SETUP_STATES = { ok: "설치됨", absent: "설치 안 됨", differs: "다름" };
 
 /**

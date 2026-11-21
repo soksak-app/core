@@ -77,11 +77,13 @@ var (
 		setupPart("path", "/Users/person/.local/bin/sok", "missing", "absent"),
 		setupPart("skill", "/Users/person/.claude/skills/soksak/SKILL.md", "missing", "differs"),
 		setupPart("mcp", "/Users/person/.claude.json", "missing", "absent"),
+		setupPart("hook", "/Users/person/.claude/settings.json", "missing", "absent"),
 	}
 	setupInstalled = []map[string]any{
 		setupPart("path", "/Users/person/.local/bin/sok", "missing", "absent"),
 		setupPart("skill", "/Users/person/.claude/skills/soksak/SKILL.md", "ok", ""),
 		setupPart("mcp", "/Users/person/.claude.json", "ok", ""),
+		setupPart("hook", "/Users/person/.claude/settings.json", "ok", ""),
 	}
 )
 
@@ -180,6 +182,7 @@ func TestTheAgentGroupShowsAndInstallsTheSetupParts(t *testing.T) {
 		"명령 경로설치 안 됨/Users/person/.local/bin/sok끄기",
 		"스킬다름/Users/person/.claude/skills/soksak/SKILL.md",
 		"MCP 등록설치 안 됨/Users/person/.claude.json",
+		"훅설치 안 됨/Users/person/.claude/settings.json",
 	}; !slices.Equal(labels, want) {
 		t.Fatalf("the rows are %q, not %q", labels, want)
 	}
@@ -197,7 +200,7 @@ func TestTheAgentGroupShowsAndInstallsTheSetupParts(t *testing.T) {
 		t.Fatalf("설치 sent %v", host.args)
 	}
 	status := f.setupStatus()
-	if status.Running != nil || len(status.Parts) != 3 || status.Parts[1].State != "ok" || f.has("core.settings-modal.setup-install", "") {
+	if status.Running != nil || len(status.Parts) != 4 || status.Parts[1].State != "ok" || f.has("core.settings-modal.setup-install", "") {
 		t.Fatalf("after the install the status is %+v and 설치 is shown: %v", status, f.has("core.settings-modal.setup-install", ""))
 	}
 	// window-active and setup-changed read the parts again while the group is shown, and not after it is hidden.
@@ -247,14 +250,14 @@ func TestTheSetupFailuresAreShownAndKeepTheParts(t *testing.T) {
 	if errors := f.shownErrors(); failure == nil || !slices.Equal(errors, []string{"setup: login shell /bin/zsh: no environment within 10 s"}) {
 		t.Fatalf("the failed read answered %v and showed %q", failure, errors)
 	}
-	if status := f.setupStatus(); len(status.Parts) != 3 {
+	if status := f.setupStatus(); len(status.Parts) != 4 {
 		t.Fatalf("a failed read replaced the parts: %+v", status)
 	}
 	f.shell.Registry().RunLater("core.setup.install", json.RawMessage(`{"parts":["mcp"]}`), func(_ any, err error) { failure = err })
 	if errors := f.shownErrors(); failure == nil || !slices.Equal(errors, []string{"setup: the first sok on PATH, /usr/local/bin/sok, is not the sok of an application bundle"}) {
 		t.Fatalf("the failed install answered %v and showed %q", failure, errors)
 	}
-	if status := f.setupStatus(); len(status.Parts) != 3 || status.Running != nil {
+	if status := f.setupStatus(); len(status.Parts) != 4 || status.Running != nil {
 		t.Fatalf("a failed install changed the parts: %+v", status)
 	}
 	f.shell.Registry().RunLater("core.setup.check", json.RawMessage(`{}`), func(_ any, err error) { failure = err })

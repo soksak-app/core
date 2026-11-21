@@ -453,6 +453,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1037",
+    implementation: [
+      { file: "packages/workbench/settings-ui.js", symbol: "const SETUP_NAMES = {" },
+      { file: "packages/workbench-mygo/src/setup_parts.go", symbol: "setupNames  = map[string]string{" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/settings-setup.test.mjs", id: "the agent group reads the parts, shows the PATH preference, and runs the setup commands" },
+      { file: "packages/workbench-mygo/tests/setup_parts_test.go", id: "TestTheAgentGroupShowsAndInstallsTheSetupParts" },
+    ],
+    expected: "The agent group of the settings window names every setup part, the hook parts as 훅, in both workbenches.",
+    levels: ["unit"],
+  },
+  {
     id: "F1035",
     implementation: [
       { file: "packages/sok/go/src/setup.go", symbol: "func (s Setup) Install(kinds []string) (SetupParts, error) {" },
