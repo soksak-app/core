@@ -1021,7 +1021,7 @@ func (p *casePage) HostCommand(_, name string, _ json.RawMessage, _ *host.ReplyS
 // the functions that read it (pointerInput, keyInput, textInput and dialogAnswerInput of the host).
 func (p *casePage) Pointer(_ string, _ host.PointerInput) error { return nil }
 
-func (p *casePage) Key(_ string, _ host.KeyInput) error { return nil }
+func (p *casePage) Key(_ string, _ host.KeyInput) error    { return nil }
 func (p *casePage) VirtualKeyEnd(_ string, _ string) error { return nil }
 
 func (p *casePage) Text(_ string, _ host.TextInput) error { return nil }
