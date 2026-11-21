@@ -487,12 +487,15 @@ func (h *storedHost) workspace(argument json.RawMessage) (any, error) {
 		h.holdWorkspace.wait()
 	}
 	var request struct {
-		Kind    string
-		ID      string
-		Project map[string]any
-		Patch   map[string]any
-		Remove  []string
-		Delta   int
+		Kind        string
+		ID          string
+		Project     map[string]any
+		Patch       map[string]any
+		Remove      []string
+		Delta       int
+		Tab         string
+		Role        any
+		Fingerprint string
 	}
 	if err := json.Unmarshal(argument, &request); err != nil {
 		return nil, err
@@ -537,6 +540,12 @@ func (h *storedHost) workspace(argument json.RawMessage) (any, error) {
 		return nil, nil
 	case "tabState", "tabSession":
 		return nil, nil
+	case "rolePut":
+		return map[string]any{"role": request.Role, "generation": 1, "state": "pending", "seq": 1,
+			"fingerprint": "0123456789abcdef", "path": ""}, nil
+	case "roleConfirm":
+		return map[string]any{"role": nil, "generation": nil, "state": nil, "seq": 0,
+			"fingerprint": nil, "path": nil}, nil
 	case "tabSessions":
 		return []string{}, nil
 	case "tabStatePut", "tabSessionPut":

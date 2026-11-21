@@ -5,6 +5,7 @@
 
 ## 2026-11-21
 
+- F1006-5.3-1, 5.3-2: page와 mygo workbench가 result로 role 상태를 가진 `core.tab.role {tab, role}`과 `core.tab.role.confirm {fingerprint}`를 등록한다. page는 `projects.js`의 store 접근자로, mygo workbench는 host의 workspace kind로 실행하며 확인은 새 `CommandLaterOnSurface`로 caller surface에서 돌고 surface 없이는 거부된다. 검증: page test와 `TestTheRoleCommandsRunThroughTheWorkspaceStore`가 통과하고 exposure audit이 새 형식을 받는다.
 - F1006-5.3-1 (진행): exposure entries의 status read가 요청에 surface가 있으면 그 surface를 받는다. `status.get`과 `status.watch`의 첫 읽기 모두이다. Red: 두 형태 모두에서 read test가 실패했다. Green: `packages/plugin-api/test/exposure.test.mjs` 36/36.
 - F1022: 공개된 exposure snapshot case를 spec의 item 형식으로 고쳤다. item은 `index`, `role`, `text`, `rect`, `command`, `params`를 적고 surface document 부분은 `inert`를 빼며, 그려지지 않은 element는 item을 남기지 않는다. builder는 이미 spec을 따르고 있었다. 검증: `packages/plugin-api/test/expose-contract.test.mjs`가 이전 case로 실패하고 10/10 통과한다.
 - F1006-5.3-1 (진행): exposure entries에 등록된 명령의 context가 요청이 surface를 이름하면 caller의 surface를 `surface`로 받는다(`packages/plugin-api/index.js`). Red: `surface`를 가진 실행에서 context test가 실패했다. Green: test가 통과한다. case `expose.snapshot.answers-the-group-of-the-document`는 바뀌지 않은 tree에서도 실패한다. F1022가 이를 기록한다.

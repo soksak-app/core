@@ -94,6 +94,18 @@ const spaceTaken = (id) => projects.some((project) => project.spaces.some((space
 /** Whether a tab of a stored layout of a known project holds the tab id `id`; a persistent session belongs to such a tab. */
 export const storedTabTaken = (id) => projects.some((project) => projectTabs(project).has(id));
 
+/** Sets the agent role of a tab through the host store (docs/spec/agent-roles.md#tab-role-state). The store exists after initialise. */
+export const rolePut = (tab, role) => {
+  if (!store) throw new Error("projects.rolePut: the projects are not initialised");
+  return store.rolePut(tab, role);
+};
+
+/** Confirms the fingerprint of the role of a tab through the host store. The store exists after initialise. */
+export const roleConfirm = (tab, fingerprint) => {
+  if (!store) throw new Error("projects.roleConfirm: the projects are not initialised");
+  return store.roleConfirm(tab, fingerprint);
+};
+
 /** The tab ids of the layouts of all spaces of project. */
 const projectTabs = (project) => new Set(spaceTabIds(project));
 

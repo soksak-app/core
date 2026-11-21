@@ -17,6 +17,11 @@ import (
 // Command is the handler of a declared command. params is the JSON of its parameters, which is empty when it has none.
 type Command func(params json.RawMessage) (any, error)
 
+// LaterSurfaceCommand is the handler of a command that answers in a later step and runs on the surface of its caller: surface
+// is the surface member of the request, which a command that names no tab of its own takes as its tab
+// (docs/spec/agent-roles.md#change-of-a-running-agent).
+type LaterSurfaceCommand func(params json.RawMessage, surface string, answer func(any, error))
+
 // LaterCommand is the handler of a declared command whose answer depends on a host call, which answers in a later step of the
 // main thread, so a step cannot wait for it. params is as for Command, and the handler calls answer once.
 type LaterCommand func(params json.RawMessage, answer func(value any, err error))
@@ -73,14 +78,15 @@ type watch struct {
 // Registry holds the commands and the statuses of the workbench. Registering a name that is not declared is a programming error,
 // which make check-exposure also finds in the sources, so it panics.
 type Registry struct {
-	declared *Declarations
-	mu       sync.Mutex
-	commands map[string]Command
-	later    map[string]LaterCommand
-	methods  map[string]LaterCommand
-	statuses map[string]Status
-	watches  map[string]*watch
-	elements Elements
+	declared     *Declarations
+	mu           sync.Mutex
+	commands     map[string]Command
+	later        map[string]LaterCommand
+	laterSurface map[string]LaterSurfaceCommand
+	methods      map[string]LaterCommand
+	statuses     map[string]Status
+	watches      map[string]*watch
+	elements     Elements
 	// params holds the params of the command of each element that the binder keyed in the last frame, by its key.
 	params   map[Exposed]any
 	surfaces surfaceTable
@@ -97,7 +103,7 @@ type Registry struct {
 // NewRegistry returns an empty registry of the names of declared.
 func NewRegistry(declared *Declarations) *Registry {
 	return &Registry{declared: declared, commands: map[string]Command{}, later: map[string]LaterCommand{}, methods: map[string]LaterCommand{}, statuses: map[string]Status{},
-		watches: map[string]*watch{}, params: map[Exposed]any{}, surfaces: newSurfaceTable()}
+		laterSurface: map[string]LaterSurfaceCommand{}, watches: map[string]*watch{}, params: map[Exposed]any{}, surfaces: newSurfaceTable()}
 }
 
 // Command registers the handler of the declared command name.
@@ -114,6 +120,19 @@ func (r *Registry) Command(name string, run Command) {
 }
 
 // CommandLater registers the handler of the declared command name that answers in a later step.
+// CommandLaterOnSurface registers the later handler of the declared command name that runs on the surface of its caller.
+func (r *Registry) CommandLaterOnSurface(name string, run LaterSurfaceCommand) {
+	if !r.declared.Commands[name] {
+		panic(fmt.Sprintf("command %s is not declared", name))
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.commands[name] != nil || r.later[name] != nil || r.laterSurface[name] != nil {
+		panic(fmt.Sprintf("command %s is already registered", name))
+	}
+	r.laterSurface[name] = run
+}
+
 func (r *Registry) CommandLater(name string, run LaterCommand) {
 	if !r.declared.Commands[name] {
 		panic(fmt.Sprintf("command %s is not declared", name))
@@ -199,8 +218,13 @@ func (r *Registry) RunLater(name string, params json.RawMessage, answer func(val
 		return
 	}
 	r.mu.Lock()
-	later := r.later[name]
+	later, onSurface := r.later[name], r.laterSurface[name]
 	r.mu.Unlock()
+	if onSurface != nil {
+		// A command that runs on the surface of its caller has no tab of its own, so a run without a surface is refused.
+		answer(nil, Refuse(InvalidParams, "command %s requires a surface", name))
+		return
+	}
 	if later != nil {
 		ended := r.watched(name, params)
 		later(params, func(value any, err error) {
@@ -231,6 +255,9 @@ func (r *Registry) Names() (commands, statuses []string) {
 		commands = append(commands, name)
 	}
 	for name := range r.later {
+		commands = append(commands, name)
+	}
+	for name := range r.laterSurface {
 		commands = append(commands, name)
 	}
 	for name := range r.statuses {
@@ -287,8 +314,21 @@ func (r *Registry) ReplyFor(origin uint64, method string, params json.RawMessage
 	var name string
 	if method == "command.run" && json.Unmarshal(params, &fields) == nil && json.Unmarshal(fields["name"], &name) == nil {
 		r.mu.Lock()
-		later := r.later[name]
+		later, onSurface := r.later[name], r.laterSurface[name]
 		r.mu.Unlock()
+		if onSurface != nil {
+			if err := r.checkRequest(name, fields); err != nil {
+				answer(nil, err)
+				return
+			}
+			surface := ""
+			if held, has := fields["surface"]; !has || json.Unmarshal(held, &surface) != nil || surface == "" {
+				answer(nil, Refuse(InvalidParams, "command.run for %s requires a surface", name))
+				return
+			}
+			onSurface(fields["params"], surface, answer)
+			return
+		}
 		if later != nil {
 			if err := r.checkRequest(name, fields); err != nil {
 				answer(nil, err)

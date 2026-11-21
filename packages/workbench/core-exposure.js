@@ -755,6 +755,13 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   registry.command("core.layout.plan", (params) => planInLayout(params));
   registry.command("core.layout.apply", (params) => applyInLayout(params));
   registry.command("core.tab.select", ({ tab }) => { trace("action", { kind: "tab.select", tab }); selectTab(tab); });
+  // The role handshake of a tab (docs/spec/agent-roles.md#change-of-a-running-agent): the ordered change and the confirmation run
+  // in the host store; the confirmation names no tab, because it runs on the surface of its caller.
+  registry.command("core.tab.role", ({ tab, role }) => projects.rolePut(tab, role));
+  registry.command("core.tab.role.confirm", ({ fingerprint }, { surface }) => {
+    if (surface === undefined) throw new Error("core.tab.role.confirm requires the surface of its caller");
+    return projects.roleConfirm(surface, fingerprint);
+  });
   registry.command("core.tab.close", ({ tab }) => closeTabById(tab));
   registry.command("core.tab.unload", async ({ tab }) => {
     await memory.unload(memoryTab(tab));

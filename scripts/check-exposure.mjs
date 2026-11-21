@@ -77,7 +77,7 @@ export function auditWorkbenchNames(exposes, sources) {
 // name as not registered, so a new function of registration is added here.
 const WORKBENCH_REGISTRATIONS = {
   status: /\.Status\(\s*"([^"]+)"/g,
-  commands: /(?:\.Command|\.CommandLater|\b(?:command|later|act|laterAct|laterCommand|windowAct|sectionCommand|change)(?:\[[^\]]*\])?)\(\s*(?:\w+,\s*)?"([^"]+)"/g,
+  commands: /(?:\.Command(?:Later(?:OnSurface)?)?|\b(?:command|later|act|laterAct|laterCommand|windowAct|sectionCommand|change)(?:\[[^\]]*\])?)\(\s*(?:\w+,\s*)?"([^"]+)"/g,
 };
 // The entries that the view bridge registers in a surface document of the mygo workbench.
 const BRIDGE_REGISTRATIONS = { status: /expose\.status\(\s*"([^"]+)"/g, commands: /expose\.command\(\s*"([^"]+)"/g };

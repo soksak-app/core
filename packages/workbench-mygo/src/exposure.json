@@ -4226,6 +4226,81 @@
         }
       },
       {
+        "name": "core.tab.role",
+        "description": "Sets the agent role of a tab: null clears the role. The answer is the role status of the tab.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "tab": {
+              "type": "string"
+            },
+            "role": {
+              "type": ["string", "null"]
+            }
+          },
+          "required": ["tab", "role"]
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "role": {
+              "type": ["string", "null"]
+            },
+            "generation": {
+              "type": ["integer", "null"]
+            },
+            "state": {
+              "type": ["string", "null"]
+            },
+            "seq": {
+              "type": "integer"
+            },
+            "fingerprint": {
+              "type": ["string", "null"]
+            },
+            "path": {
+              "type": ["string", "null"]
+            }
+          }
+        }
+      },
+      {
+        "name": "core.tab.role.confirm",
+        "description": "Confirms the fingerprint of the role file of the tab of the caller, which gives the ready state.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "fingerprint": {
+              "type": "string"
+            }
+          },
+          "required": ["fingerprint"]
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "role": {
+              "type": ["string", "null"]
+            },
+            "generation": {
+              "type": ["integer", "null"]
+            },
+            "state": {
+              "type": ["string", "null"]
+            },
+            "seq": {
+              "type": "integer"
+            },
+            "fingerprint": {
+              "type": ["string", "null"]
+            },
+            "path": {
+              "type": ["string", "null"]
+            }
+          }
+        }
+      },
+      {
         "name": "core.tab.select",
         "description": "Activates a tab and focuses its card.",
         "params": {

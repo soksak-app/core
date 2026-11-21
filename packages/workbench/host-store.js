@@ -49,6 +49,9 @@ export class HostWorkspaceStore {
   tabSessions() { return this.host.call("workspace", { kind: "tabSessions" }); }
   remove(id) { return this.host.call("workspace", { kind: "remove", id }); }
   move(id, delta) { return this.host.call("workspace", { kind: "move", id, delta }); }
+  /** The role handshake of a tab through the workspace kinds of the host (docs/spec/agent-roles.md#tab-role-state). */
+  rolePut(tab, role) { return this.host.call("workspace", { kind: "rolePut", tab, role }); }
+  roleConfirm(tab, fingerprint) { return this.host.call("workspace", { kind: "roleConfirm", tab, fingerprint }); }
   settings(id, values, cids) {
     const patch = {}, remove = [];
     for (const [key, value] of Object.entries(values)) {

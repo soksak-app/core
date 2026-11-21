@@ -288,6 +288,10 @@ test("a refused core.layout.open fails with its error and leaves the layout", { 
   await refuses(run("core.settings.set", { key: "font", value: 12 }), "command core.settings.set: unknown parameter key");
   await refuses(run("core.settings.set", { bogus: 1 }), "command core.settings.set: unknown parameter bogus");
   await refuses(run("core.layout.balance", { bogus: 1 }), "command core.layout.balance: unknown parameter bogus");
+  // The role commands of a tab run through the host store (docs/spec/agent-roles.md#tab-role-state); this page runs without a
+  // host, so the store refusal names the missing initialisation.
+  await refuses(run("core.tab.role", { tab: "tab-aaaaaa", role: "a" }), "projects.rolePut: the projects are not initialised");
+  await refuses(run("core.tab.role.confirm", { fingerprint: "0123456789abcdef" }), "core.tab.role.confirm requires the surface of its caller");
   assert.deepEqual(layout(), before);
   // A card narrower than two cards of the minimum size cannot split across, and the refusal names the size that a half would get.
   arrange({ cut: "x", kids: [

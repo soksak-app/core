@@ -1186,6 +1186,23 @@ func TestADividerDoubleClickRunsTheCentreCommand(t *testing.T) {
 	}
 }
 
+// The role commands of a tab run through the workspace store of the host (docs/spec/agent-roles.md#tab-role-state). The
+// confirmation names no tab: it runs on the surface of its caller, and a request without a surface is refused.
+func TestTheRoleCommandsRunThroughTheWorkspaceStore(t *testing.T) {
+	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
+	f.shell.Registry().RunLater("core.tab.role", json.RawMessage(`{"tab":"tab-aaaaaa","role":"reviewer"}`), func(value any, err error) {
+		answer, held := value.(map[string]any)
+		if err != nil || !held || answer["role"] != "reviewer" {
+			t.Errorf("the role change answered %v, %v", value, err)
+		}
+	})
+	f.shell.Registry().RunLater("core.tab.role.confirm", json.RawMessage(`{"fingerprint":"0123456789abcdef"}`), func(_ any, err error) {
+		if err == nil || !strings.Contains(err.Error(), "requires a surface") {
+			t.Errorf("the confirm without a surface failed with %v", err)
+		}
+	})
+}
+
 // The tabs that a shell creates are stored with the member role null, so the stored layout holds the member of every tab
 // (docs/spec/agent-roles.md#tab-role-state).
 func TestTheTabsOfANewSpaceAreStoredWithANullRole(t *testing.T) {

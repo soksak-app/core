@@ -140,6 +140,8 @@
     "core.layout.plan",
     "core.layout.apply",
     "core.layout.close",
+    "core.tab.role",
+    "core.tab.role.confirm",
     "core.tab.select",
     "core.tab.close",
     "core.tab.move",
