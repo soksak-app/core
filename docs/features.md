@@ -155,7 +155,7 @@ The preceding macOS 26.6.2 arm64 optimized diagnostic measurement cohort retains
   - [o] F1030-1.1 — Follows F1030-1: Rust PATH reconciliation removes obsolete profile blocks and reports the change when it saves the profile list. The sok package passes Clippy and the Darwin setup tests pass.
   - [o] F1030-1.2 — Follows F1030-1: The installation guide describes user PATH registration at application start and its settings control. Documentation checks pass.
   - [ ] F1030-2 — The agent group controls the desired state of MCP and the session-start hook separately. An enabled integration updates only its owned registration and a disabled integration leaves its owned registration absent across restarts.
-- [~] F1031 — P0, follows F1033. Verify and release the core candidate with the shared error presentation.
+- [o] F1031 — P0, follows F1033. Verify and release the core candidate with the shared error presentation.
   - [o] F1031-1 — The page installs `core.error.dismiss` after initializing its parameter error handler. The page startup and error display tests pass.
   - [o] F1031-2 — Error toast commands refuse an empty or unknown text. The workbench status, layout recovery and layout error logging tests pass.
   - [o] F1031-3 — The Rust role store propagates absent values and errors directly. Its serialization test cleans up its temporary folder. Workspace Clippy and all role tests pass.

@@ -155,7 +155,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [o] F1030-1.1 — F1030-1 후속: Rust PATH 적용이 이전 profile 블록을 제거하고 profile 목록을 저장할 때 변경을 보고한다. Sok package가 Clippy를 통과하고 Darwin setup test가 통과한다.
   - [o] F1030-1.2 — F1030-1 후속: 설치 안내가 애플리케이션 시작 시 사용자 PATH 등록과 설정 조작을 설명한다. 문서 검사가 통과한다.
   - [ ] F1030-2 — Agent group에서 MCP와 SessionStart hook 각각의 원하는 상태를 바꾼다. 켜면 소유한 등록만 갱신하고 끄면 재시작 뒤에도 소유한 등록을 두지 않는다.
-- [~] F1031 — P0, F1033 이후. 공용 오류 표시를 포함한 core candidate를 검증하고 release한다.
+- [o] F1031 — P0, F1033 이후. 공용 오류 표시를 포함한 core candidate를 검증하고 release한다.
   - [o] F1031-1 — Page가 parameter 오류 처리기를 초기화한 뒤 `core.error.dismiss`를 설치한다. Page 시작과 오류 표시 test가 통과한다.
   - [o] F1031-2 — 오류 toast command가 비어 있거나 알 수 없는 글을 거부한다. Workbench status, layout 복구와 layout 오류 기록 test가 통과한다.
   - [o] F1031-3 — Rust role store가 값 없음과 오류를 직접 전달한다. 직렬화 test가 임시 폴더를 정리한다. Workspace Clippy와 전체 role test가 통과한다.
