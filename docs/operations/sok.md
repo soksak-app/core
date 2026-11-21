@@ -4,11 +4,11 @@
 
 `sok` drives a soksak application from a terminal: it lists windows, reads statuses, runs any command that core or a plugin declares, and sends native input. The contract is [command line `sok`](../spec/cli.md).
 
-## Reach `sok` from a shell
+## Run `sok` from a shell
 
 The `Contents/MacOS` folder of each application bundle has the executable of the application and the `sok` executable of that application. Each start of the application reconciles the user PATH registration, which makes the shells of the person find that `sok` on `PATH` without administrator rights; the settings window turns it on and off ([user PATH registration](../spec/cli.md#user-path-registration)). A new shell then finds `sok`, and that `sok` talks to that application and uses its configuration directory. To drive an application started with `--config-dir`, give `sok` the same `--config-dir`.
 
-## Drive a window
+## Control a window
 
 ```sh
 sok windows                                   # windows of the running application
