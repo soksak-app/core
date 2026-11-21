@@ -303,9 +303,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1028",
+    implementation: [{ file: "packages/workbench/exposure.js", symbol: "const startCoreRefresh = () => {" }],
+    tests: [{ file: "packages/workbench/test/page-identifiers.test.mjs", id: "every shipped module declares the names that it reads" }],
+    expected: "Every name that a shipped module of the page reads is declared, so the refresh of the core watches of a surface resolves.",
+    levels: ["unit"],
+  },
+  {
     id: "F1016",
     implementation: [{ file: "Makefile", symbol: "check-preflight:" }],
-    tests: [{ file: "scripts/test/workflows.test.mjs", id: "ci runs every check of the release on the range of its event" }],
+    tests: [{ file: "scripts/test/workflows.test.mjs", id: "the push check runs the commit message, checklist history and format checks, and ci runs them on the range of its event with the structure" }],
     expected: "The preflight of the push passes every target that the release run of ci.yml runs, and ci runs them on the push range.",
     levels: ["unit"],
   },
