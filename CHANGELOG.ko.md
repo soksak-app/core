@@ -5,6 +5,7 @@
 
 ## 2026-11-21
 
+- F918: 세 git hook 모두 pnpm을 실행하기 전에, 다른 checkout으로 향하는 symbolic link인 `node_modules`를 link를 지적하는 오류로 거부한다. pnpm은 그런 link를 링크된 checkout의 설치로 여기고 자기 설치를 위해 지우는데, worktree에서는 pnpm 자신의 unsafe-modules 거부에 걸려서만 멈췄다. pnpm이 lockfile로 그 안에 설치하므로 새로 만든 worktree는 hook을 통과한다. 검증: `scripts/test/githooks.test.mjs`가 변경 전에 실패하고 변경 후에 통과한다.
 - F1006-9.1: Rust host의 `projects.json` reader가 object와 그 format을 `if let` chain 하나로 확인하므로, `make check-rust-clippy`가 다시 통과한다. 그 검사가 `packages/host/gpuikit`에 경고를 보고하지 않으므로 F914-8이 완료된다. 검증: `make check-rust-clippy`가 통과하고, Rust host의 workspace test가 22/22 통과한다.
 - F915: 항목이 완료된다. discovery의 listing에는 시간 제한이 없고, `scripts/test/test-discovery.test.mjs`가 17/17 통과한다.
 - F806: view operation contract의 case는 window를 지우기 전에 `pagehide`로 page를 끝내므로, case가 끝난 뒤 log writer의 단계가 돌지 않는다. 변경은 F795와 함께 들어왔고, 이 줄은 그 검증을 기록한다. 검증: 그 단계 없이 세 번 돌리면 `ReferenceError: window is not defined`로 실패하고, 그 단계가 있으면 세 번 모두 통과한다.

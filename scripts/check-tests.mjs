@@ -43,6 +43,7 @@ const MATRIX = [
   lane("macOS application bundle exchange", "objective-c", ["native/darwin/src/tools/swap_bundle.m"], ["scripts/test/platform/darwin/bundle-preparation.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("sok agent guidance", "document", ["packages/sok/go/src/agents/SKILL.md", "packages/sok/go/src/agents/mcp.json", "docs/spec/cli.md"], ["scripts/test/submit-guidance.test.mjs", "scripts/test/skill-groups.test.mjs", "scripts/test/message-report-guidance.test.mjs", "scripts/test/skill-captures.test.mjs", "scripts/test/skill-web-pages.test.mjs", "scripts/test/skill-delegation.test.mjs"], { testLanguage: "js-ts" }),
   lane("preflight check", "js-ts", ["scripts/check-preflight.mjs"], ["scripts/test/check-preflight.test.mjs"]),
+  lane("git hooks", "shell", [".githooks/pre-commit", ".githooks/commit-msg", ".githooks/pre-push"], ["scripts/test/githooks.test.mjs"], { testLanguage: "js-ts" }),
   lane("CI workflows", "workflow", [".github/workflows/*.yml"], ["scripts/test/workflows.test.mjs", "scripts/test/test-kinds.test.mjs"], { testLanguage: "js-ts" }),
   lane("CI toolchain setup actions", "workflow", [".github/actions/setup-*/action.yml"], ["scripts/test/workflow-setup.test.mjs"], { testLanguage: "js-ts" }),
   lane("Rust workspace release profile", "build", ["Cargo.toml"], ["scripts/test/rust-release-profile.test.mjs"], { testLanguage: "js-ts" }),
@@ -299,6 +300,19 @@ const FEATURE_LINKS = [
       { file: "packages/sok/rust/tests/message_test.rs", id: "send_writes_the_whole_text_under_the_sender_name_and_leaves_no_temporary_file" },
     ],
     expected: "A message is written under a temporary name and renamed to its message name, so a reader sees the whole text or no file.",
+    levels: ["unit"],
+  },
+  {
+    id: "F918",
+    implementation: [
+      { file: ".githooks/pre-commit", symbol: "if [ -L \"$root/node_modules\" ]; then" },
+      { file: ".githooks/commit-msg", symbol: "if [ -L \"$root/node_modules\" ]; then" },
+      { file: ".githooks/pre-push", symbol: "if [ -L \"$root/node_modules\" ]; then" },
+    ],
+    tests: [
+      { file: "scripts/test/githooks.test.mjs", id: "every git hook refuses a node_modules that is a symbolic link into another checkout before it runs pnpm" },
+    ],
+    expected: "Every git hook refuses a node_modules that is a symbolic link into another checkout with an error that names the link before pnpm runs, because pnpm takes such a link for the install of the linked checkout and removes it for its own.",
     levels: ["unit"],
   },
   {

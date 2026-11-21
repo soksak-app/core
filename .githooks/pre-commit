@@ -2,4 +2,10 @@
 # Checks that the records of the working tree state facts about this repository and use one term per concept.
 # `make install-hooks` sets this folder as the git hook folder.
 root=$(git rev-parse --show-toplevel) || exit 1
+# pnpm takes a node_modules that is a symbolic link into another checkout for the install of that checkout and removes it for the
+# install of this one, so the hook refuses that form before it runs pnpm (#F918).
+if [ -L "$root/node_modules" ]; then
+  echo "$root/node_modules is a symbolic link to $(readlink "$root/node_modules"); this checkout needs its own install: run pnpm install" >&2
+  exit 1
+fi
 exec pnpm --dir "$root" exec sok-check docs "$root"

@@ -5,6 +5,7 @@
 
 ## 2026-11-21
 
+- F918: Every git hook refuses a `node_modules` that is a symbolic link into another checkout with an error that names the link, before pnpm runs: pnpm takes such a link for the install of the linked checkout and removes it for its own, and in a worktree it was stopped only by its own unsafe-modules refusal. A fresh worktree passes the hook, because pnpm installs into it from the lockfile. Verification: `scripts/test/githooks.test.mjs` fails before the change and passes after it.
 - F1006-9.1: The reader of `projects.json` in the Rust host tests the object and its format in one `if let` chain, so `make check-rust-clippy` passes again; F914-8 is complete, since that check reports no warning in `packages/host/gpuikit`. Verification: `make check-rust-clippy` passes, and the workspace tests of the Rust host pass 22 of 22.
 - F915: The item is complete: the listings of the discovery have no time bound, and `scripts/test/test-discovery.test.mjs` passes 17 of 17.
 - F806: The case of the view operation contract ends its page with `pagehide` before it removes the window, so no step of the log writer runs after the case; the change came with F795, and this entry records its verification. Verification: without the step three runs fail with `ReferenceError: window is not defined`, and with it three runs pass.
