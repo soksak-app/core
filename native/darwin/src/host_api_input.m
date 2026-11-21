@@ -107,7 +107,7 @@ int main_sp_input_text(uintptr_t window, int phase, const char *text, long selec
 
 void main_sp_input_virtual_end(const char *reason) {
     if (reason == NULL) {
-        sp_log_error("input_virtual", "main_sp_input_virtual_end requires a reason");
+        sp_log_error("input virtual", "main_sp_input_virtual_end requires a reason");
         return;
     }
     // The block runs after the call returned, so it holds its own copy of the text of the reason.

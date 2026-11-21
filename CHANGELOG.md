@@ -5,6 +5,7 @@
 
 ## 2026-11-21
 
+- F1026: Each error of the workbench shows as a toast at the bottom of the window, one per distinct text, with its close control running the new `core.error.dismiss {text}`; several errors show at once, a withdrawal closes the toast of its source, and `core.workbench.error` names the newest open toast. Verification: the page tests and the mygo toasts tests pass with the mygo package 1157 of 1157.
 - F982-12: `sok input virtual-end [window] --reason R` of both CLIs ends the virtual key window through the declared entry; the case `sok-parameters` plays the request. Verification: the CLI tests of both pass.
 - F982-12 (progress): The declared entry `input.virtual.end {window, reason}` of both hosts ends the virtual key window: the platform operation of each host calls the native main-thread wrapper, a request without a `reason` is refused with -32602 before its window, and Windows answers that it is not implemented there. Verification: the refusal test of each host, the host Go package 570 of 570, and the native build and binding checks.
 - F1006-5.2.1: The page and the mygo workbench publish the status `core.tab.role`: the page reads it with the surface of its request and refreshes each open watch when the stored workspace changes, and the mygo registry reads a status of a surface through `StatusOnSurface`, keeps watches by name and surface, and the shell re-reads the watched tabs on the same change. Verification: the page tests and the mygo package 1156 of 1156.

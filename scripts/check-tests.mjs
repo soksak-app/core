@@ -303,6 +303,26 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1026",
+    implementation: [
+      { file: "packages/workbench/page-layout.js", symbol: "function errorToast(document, text, source) {" },
+      { file: "packages/workbench-mygo/src/errors_screen.go", symbol: "func (e *ShownErrors) DismissToast(text string) bool {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/page-error-display.test.mjs", id: "the errors of the workbench show as toasts and each closes on its own" },
+      { file: "packages/workbench-mygo/tests/layout_operations_test.go", id: "TestTheWorkbenchErrorsShowAsToastsAndEachClosesOnItsOwn" },
+    ],
+    expected: "Each error of the workbench shows as a toast at the bottom of the window, one per distinct text, and the close control dismisses one alone.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1024",
+    implementation: [{ file: "packages/workbench-mygo/src/chrome.go", symbol: "func (s *Shell) keepControls(at layout.Rect) {" }],
+    tests: [{ file: "packages/workbench-mygo/tests/split_test.go", id: "TestTheChromeBarKeepsTheWindowButtonAreaOfTheAnswer" }],
+    expected: "The first row of the mygo workbench leaves the area of the window buttons that the host answers to the buttons, and the logo never draws under them.",
+    levels: ["unit"],
+  },
+  {
     id: "F1022",
     implementation: [{ file: "packages/plugin-api/contract/expose.json", symbol: "\"items\": []" }],
     tests: [{ file: "packages/plugin-api/test/expose-contract.test.mjs", id: "exposure contract publishes the required cases in order" }],
@@ -4077,7 +4097,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/src/debug_state.go", symbol: "func ParseDebugState(file, text string, truncated bool) (DebugState, error) {" },
     ],
     tests: [
-      { file: "packages/workbench-mygo/tests/errors_screen_test.go", id: "TestTheErrorBannerShowsTheErrorOfTheWorkbench" },
+      { file: "packages/workbench-mygo/tests/errors_screen_test.go", id: "TestTheErrorToastsShowTheErrorsOfTheWorkbench" },
       { file: "packages/workbench-mygo/tests/sidebar_screen_test.go", id: "TestAListSidebarDrawsItsHeadersAndFoldsASection" },
       { file: "packages/workbench-mygo/tests/sidebar_screen_test.go", id: "TestTheSeatOfASectionIsItsBody" },
       { file: "packages/workbench-mygo/tests/plugin_screen_test.go", id: "TestTheActionsOfACardFollowThePlugin" },

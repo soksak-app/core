@@ -33,6 +33,9 @@ const linesOf = (wire) => wire.calls
 
 const banner = document.getElementById("applicationError");
 const showError = createErrorDisplay({ document, changed: () => {} });
+
+
+
 // The window of the document. A browser reports an unhandled rejection as an unhandledrejection event of the window.
 const target = new EventTarget();
 reportUncaught(target, showError);
