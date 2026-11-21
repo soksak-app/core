@@ -1560,6 +1560,7 @@ Wails와 Tauri 호스트의 메인 페이지와 mygo 호스트의 workbench는 �
 | `project-data.replace.read-value-is-its-base` | 그 파일의 각 저장 값에 `runtime.data.get`이 답한 값을 `base`로 돌려보내면 `true`를 답한다. |
 | `project-data.replace.requires-base` | `base`가 없는 `runtime.data.replace`는 `view call runtime.data.replace requires base`로 실패한다. |
 | `project-data.replace.refusal-answers-the-view` | store가 거부한 replace는 view call을 실패시키고 key의 값을 그대로 둔다. |
+| `exposure.keyboard.closing-the-focused-card-clears-the-ring` | `core.card.close`나 마지막 탭의 닫기로 focus된 카드를 닫으면 focus된 카드가 없고, 그 뒤 `current`는 어느 카드도 가리키지 않는다. 다른 카드, 다른 카드의 마지막 탭, 카드가 남는 focus된 카드의 탭을 닫으면 ring은 focus된 카드에 남는다. |
 | `layout.open.adds-a-tab-once` | 그런 탭이 없는 카드에 두 번 적용한 `core.layout.open {card, plugin, params}`는 params를 가진 plugin의 탭 하나를 더하고, 그 탭은 focus된 카드에서 선택된다. 두 적용은 같은 `{card, tab}`으로 답하고, 각 적용 뒤 설명의 `layout`은 같다. |
 | `layout.open.selects-the-first-equal-tab` | `params`가 주어진 것과 JSON 값으로서 같은 plugin의 탭을 담은 카드에서, member의 순서와 수의 형태는 차이가 없으며, `core.layout.open`은 그중 탭 순서의 첫 탭을 고르고 탭을 더하지 않는다. 값 하나가 다른 `params`는 탭을 더한다. 생략한 `params`는 `null`과 같다. |
 | `layout.open.splits-once` | 두 번 적용한 `core.layout.open {card, side, plugin}`은 `card`를 `side` 쪽으로 한 번 나누고, 새 카드는 `card`의 절반을 차지한다. 첫 적용은 새 카드와 그 탭으로 답하고, 둘째는 같은 카드와 탭으로 답하며 같은 `layout`을 남긴다. 네 쪽 각각, 부모 split이 다른 방향인 카드, 그리고 선을 창 전체에 걸치게 만들어 tree의 방향을 바꾸는 split에서 그렇다. |

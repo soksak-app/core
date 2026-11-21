@@ -627,9 +627,9 @@ async function closeTab(cardId, tabId) {
     else card.data.tabs = [newTab(focusedPlugin() ?? plugins()[0].id, null, null, "card refill")];
   }
   settleActiveTab(card);
-  // A focus that a press outside every content card cleared stays clear (docs/spec/groups.md#focus); a focused card that left the plane
-  // passes the focus to the first content card. default: when only place cards remain, there is no card to focus (null).
-  if (focusedId !== null && !grid.card(focusedId)) focusOn(grid.cards.find((c) => !isPlace(c.id))?.id ?? null);
+  // A focused card that left the plane clears the ring: the workbench chooses no other card for it
+  // (docs/spec/exposure.md#the-keyboard-follows-the-focus-ring).
+  if (focusedId !== null && !grid.card(focusedId)) focusOn(null);
   settle();
 }
 
@@ -1358,9 +1358,9 @@ function settle() {
     windowSidebars, value("sidebarWidth"), side => value(side));
   // The window sidebars change the tree through the layout library, so the heads follow its boxes again.
   tree.reframe();
-  // A focus that a press outside every content card cleared stays clear (docs/spec/groups.md#focus); a focused card that left the plane
-  // passes the focus to the first content card. default: when only place cards remain, there is no card to focus (null).
-  if (focusedId !== null && !grid.card(focusedId)) focusOn(grid.cards.find((c) => !isPlace(c.id))?.id ?? null);
+  // A focused card that left the plane clears the ring: the workbench chooses no other card for it
+  // (docs/spec/exposure.md#the-keyboard-follows-the-focus-ring).
+  if (focusedId !== null && !grid.card(focusedId)) focusOn(null);
   keepCardScope((id) => grid.card(id));
   view.render();
   syncBackgroundSessions();
@@ -2432,9 +2432,9 @@ export function closeCard(id) {
   restoreFullscreen();
   recordClosedTabs(tabsOf(grid.card(id)).map((t) => t.id));
   tree.close(id);
-  // A focus that a press outside every content card cleared stays clear (docs/spec/groups.md#focus); a focused card that left the plane
-  // passes the focus to the first content card. default: when only place cards remain, there is no card to focus (null).
-  if (focusedId !== null && !grid.card(focusedId)) focusOn(grid.cards.find((c) => !isPlace(c.id))?.id ?? null);
+  // A focused card that left the plane clears the ring: the workbench chooses no other card for it
+  // (docs/spec/exposure.md#the-keyboard-follows-the-focus-ring).
+  if (focusedId !== null && !grid.card(focusedId)) focusOn(null);
   settle();
   return { closed: true };
 }
@@ -3065,9 +3065,9 @@ function closeGroup(id) {
   restoreFullscreen();
   recordClosedTabs(inside.flatMap((card) => tabsOf(grid.card(card)).map((t) => t.id)));
   tree.close(id);
-  // A focus that a press outside every content card cleared stays clear (docs/spec/groups.md#focus); a focused card that left the plane
-  // passes the focus to the first content card. default: when only place cards remain, there is no card to focus (null).
-  if (focusedId !== null && !grid.card(focusedId)) focusOn(grid.cards.find((c) => !isPlace(c.id))?.id ?? null);
+  // A focused card that left the plane clears the ring: the workbench chooses no other card for it
+  // (docs/spec/exposure.md#the-keyboard-follows-the-focus-ring).
+  if (focusedId !== null && !grid.card(focusedId)) focusOn(null);
   settle();
   return { closed: true };
 }

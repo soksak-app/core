@@ -534,18 +534,24 @@ func (s *Shell) loadSpace(project *projectRecord) error {
 	}
 	s.showPlane(plane)
 	s.fullscreen = ""
-	// A new space stores no focus and focuses its first card; a stored null keeps the focus clear (docs/spec/groups.md#focus); the stored
-	// focus of a card that left the layout names no card and passes the focus to the first card.
+	// A new space stores no focus and focuses its first card; a stored null keeps the focus clear (docs/spec/groups.md#focus), and so
+	// does the stored focus of a card that left the layout, because the workbench chooses no card for the ring
+	// (docs/spec/projects.md#persistence).
 	focused, err := storedFocus(stored.FocusedID)
 	if err != nil {
 		return fmt.Errorf("space %s: %w", space.ID, err)
 	}
-	if focused == nil {
+	switch {
+	case focused == nil:
 		s.focusCard("")
-	} else if _, known := plane.Card(*focused); !known || plane.IsGroup(*focused) || *focused == "" {
+	case *focused == "" || plane.IsGroup(*focused):
 		s.focusCard(s.firstCard())
-	} else {
-		s.focusCard(*focused)
+	default:
+		if _, known := plane.Card(*focused); known {
+			s.focusCard(*focused)
+		} else {
+			s.focusCard("")
+		}
 	}
 	if _, err := s.arrangeWindowSidebars(); err != nil {
 		return fmt.Errorf("space %s: %w", space.ID, err)
@@ -570,9 +576,10 @@ func (s *Shell) arrangeWindowSidebars() (bool, error) {
 	width, _ := s.settings.Value("sidebarWidth").(float64) // silent: the settings store checks the type of the value.
 	// The sides that have a choice hold a sidebar while their switch is on, arranged in the order (docs/spec/external-sidebars.md).
 	changed, err := layout.ArrangeWindowSidebars(s.plane, s.sidebarOrder(), s.sidebars.Sides(), s.windowSidebars, width, shown)
-	// A focus that a press outside every content card cleared stays clear (docs/spec/groups.md#focus).
+	// A focused card that left the plane clears the ring: the workbench chooses no other card for it
+	// (docs/spec/exposure.md#the-keyboard-follows-the-focus-ring).
 	if _, ok := s.findCard(s.focused); !ok && s.focused != "" {
-		s.focusCard(s.firstCard())
+		s.focusCard("")
 	}
 	return changed, err
 }
@@ -1165,8 +1172,10 @@ func (s *Shell) closeCard(id string) error {
 		return err
 	}
 	delete(s.operated, id)
+	// Closing the focused card clears the ring: the workbench chooses no other card for it
+	// (docs/spec/exposure.md#the-keyboard-follows-the-focus-ring).
 	if slices.Contains(ended, s.focused) {
-		s.focusCard(s.firstCard())
+		s.focusCard("")
 	}
 	s.settleThen(s.droppedTabs(dropped))
 	return nil

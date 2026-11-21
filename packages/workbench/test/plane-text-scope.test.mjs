@@ -63,6 +63,7 @@ test("the scope of a pressed card ends with the card and its space", { timeout: 
     await t.test("a closed card leaves the scope to the focused card", async () => {
       plane.adopt(plane.fresh(), "spc-aaaaaa");
       press("other");
+      plane.focusCard("main");
       plane.closeCard("other");
       assert.deepEqual(plane.currentTextScope(), { kind: "card", card: "main" });
       await plane.changeTextSize(1, "test");

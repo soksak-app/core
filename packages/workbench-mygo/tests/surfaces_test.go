@@ -1654,6 +1654,9 @@ func TestAClosedCardGivesTheTextScopeToTheFocusedCard(t *testing.T) {
 	f, _ := surfaceShell(t)
 	cards := f.tabbedCards()
 	pressCardHead(f, cards[1])
+	if _, err := f.answer("core.card.focus", map[string]string{"card": cards[0]}); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := f.answer("core.card.close", map[string]string{"card": cards[1]}); err != nil {
 		t.Fatal(err)
 	}

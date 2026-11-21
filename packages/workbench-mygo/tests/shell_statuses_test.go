@@ -219,14 +219,14 @@ func TestASpaceKeepsTheFocusOfItsCard(t *testing.T) {
 	}
 }
 
-// A stored focus that names no card of the layout gives the focus to the first card with a tab.
-func TestAStoredFocusOnNoCardTakesTheFirstCard(t *testing.T) {
+// A stored focus that names no card of the layout opens with no focused card (docs/spec/projects.md#persistence).
+func TestAStoredFocusOnNoCardOpensWithoutTheRing(t *testing.T) {
 	first := projectWithPlugins(t)
 	first.host.projects[0]["spaces"].([]any)[0].(map[string]any)["layout"].(map[string]any)["focusedId"] = "gone"
 	second := newShell(t, first.host)
 	second.click("core.library.open", first.host.projects[0]["id"].(string))
-	if got := status[map[string]any](t, second, "core.layout")["focusedId"]; got != second.tabbedCards()[0] {
-		t.Fatalf("the focus is on %v and not on %v", got, second.tabbedCards()[0])
+	if got := status[map[string]any](t, second, "core.layout")["focusedId"]; got != nil {
+		t.Fatalf("the focus is on %v and not on no card", got)
 	}
 }
 

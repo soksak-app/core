@@ -1095,7 +1095,7 @@
       "call": {
         "name": "surfaceFocus",
         "payload": {
-          "surface": "$tab-id-24"
+          "surface": null
         }
       }
     },

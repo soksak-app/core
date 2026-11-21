@@ -1143,3 +1143,77 @@ func TestThePressedFullscreenToolIsDrawnInTheFocusColor(t *testing.T) {
 		t.Fatalf("the pressed fullscreen tool is not drawn in the focus color: icon %d px, close %d px", icon, closing)
 	}
 }
+
+// Closing the focused card clears the ring, and closing another card or tab keeps it
+// (docs/spec/exposure.md#the-keyboard-follows-the-focus-ring).
+// contract: exposure.keyboard.closing-the-focused-card-clears-the-ring
+func TestClosingTheFocusedCardClearsTheRing(t *testing.T) {
+	focused := func(f *shellFixture) string {
+		read, err := f.shell.Registry().Read("core.layout")
+		if err != nil {
+			t.Fatal(err)
+		}
+		value, _ := jsonOf(t, read).(map[string]any)["focusedId"].(string) // silent: null reads as no card.
+		return value
+	}
+	run := func(f *shellFixture, name string, params map[string]any) {
+		t.Helper()
+		if _, err := f.answer(name, params); err != nil {
+			t.Fatalf("%s %v: %v", name, params, err)
+		}
+	}
+	// three makes the cards a, b and c in a row, gives b a second tab and focuses b.
+	three := func() (f *shellFixture, a, b, c, second string) {
+		f, a, b = splitShell(t)
+		made, err := f.answer("core.card.split", map[string]string{"card": b, "side": "right", "plugin": "textprobe"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		c = made["card"].(string)
+		run(f, "core.card.add-tab", map[string]any{"card": b, "plugin": "textprobe"})
+		run(f, "core.card.focus", map[string]any{"card": b})
+		return f, a, b, c, tabOf(f, b, 1)
+	}
+	f, a, b, c, second := three()
+	run(f, "core.card.close", map[string]any{"card": c})
+	if got := focused(f); got != b {
+		t.Fatalf("closing another card moved the ring to %q", got)
+	}
+	run(f, "core.tab.close", map[string]any{"tab": tabOf(f, a, 0)})
+	if got := focused(f); got != b {
+		t.Fatalf("closing the last tab of another card moved the ring to %q", got)
+	}
+	run(f, "core.tab.close", map[string]any{"tab": second})
+	if got := focused(f); got != b {
+		t.Fatalf("closing a tab of the focused card moved the ring to %q", got)
+	}
+	f, _, b, _, _ = three()
+	run(f, "core.card.close", map[string]any{"card": b})
+	if got := focused(f); got != "" {
+		t.Fatalf("closing the focused card moved the ring to %q", got)
+	}
+	f, _, b, _, second = three()
+	run(f, "core.tab.close", map[string]any{"tab": second})
+	run(f, "core.tab.close", map[string]any{"tab": tabOf(f, b, 0)})
+	if got := focused(f); got != "" {
+		t.Fatalf("closing the last tab of the focused card moved the ring to %q", got)
+	}
+}
+
+// tabOf returns the identifier of the tab at index of the card.
+func tabOf(f *shellFixture, card string, index int) string {
+	f.t.Helper()
+	for _, node := range f.cardsOf() {
+		if node["id"] != card {
+			continue
+		}
+		data, _ := node["data"].(map[string]any) // silent: a card without data has no tab, which the check below reports.
+		tabs, _ := data["tabs"].([]any)          // silent: the same.
+		if len(tabs) <= index {
+			break
+		}
+		return tabs[index].(map[string]any)["id"].(string)
+	}
+	f.t.Fatalf("card %s has no tab %d", card, index)
+	return ""
+}

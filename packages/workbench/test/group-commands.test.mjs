@@ -517,7 +517,7 @@ test("a press outside every content card clears the focus and current names no c
   assert.equal(plane.focused(), "card-1", "core.card.focus on the group card did not focus its first card");
 });
 
-// A layout that stores the focus null shows no focused card, and a layout whose focused card left it focuses its first card
+// A layout that stores the focus null shows no focused card, and so does a layout whose focused card left it
 // (docs/spec/groups.md#focus, docs/spec/projects.md#persistence).
 test("a layout that stores no focused card shows no ring", { timeout: 5000 }, async () => {
   const layout = (focusedId) => ({ focusedId, named: 0, windowSidebars: {}, sidebars: {}, lastCard: 4, leader: "card-4",
@@ -531,6 +531,6 @@ test("a layout that stores no focused card shows no ring", { timeout: 5000 }, as
   assert.equal((await status("core.layout")).focusedId, null, "core.layout stores a focused card");
   plane.adopt(layout("card-9"), "spc-aaaaaa");
   plane.settle();
-  assert.equal(plane.focused(), "card-1", "a layout whose focused card left it does not focus its first card");
+  assert.equal(plane.focused(), null, "a layout whose focused card left it focuses another card");
   arrange();
 });

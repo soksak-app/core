@@ -90,7 +90,8 @@ async function page() {
     await idle();
     await keyboard.keyboardPlaced(shownSurfaces(), heldSurfaces());
   };
-  const ringSurface = () => plane.currentGrid().card(plane.focused()).data.activeId;
+  // The surface of the ring, or null while no card holds the ring and the keyboard stays with the workbench.
+  const ringSurface = () => (plane.focused() === null ? null : plane.currentGrid().card(plane.focused()).data.activeId);
   const openProject = () => {
     plane.adopt(plane.fresh(), "spc-aaaaaa");
     return placed();

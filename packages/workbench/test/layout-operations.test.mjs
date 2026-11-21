@@ -793,3 +793,31 @@ test("a plan that cannot resolve its tree states the reason and changes nothing"
   const grouped = await run("core.layout.plan", { count: 2, plugin: SESSION });
   assert.match(grouped.reason, /^core\.layout\.plan arranges a space without group cards; group card-\d+ holds b, card-\d+$/);
 });
+
+// contract: exposure.keyboard.closing-the-focused-card-clears-the-ring
+test("closing the focused card clears the ring, and closing another card or tab keeps it", { timeout: 5000 }, async () => {
+  const three = () => arrange({ cut: "x", kids: [
+    { share: 1 / 3, node: { card: "a", tabs: [view("tab-aaaaaa", PLAIN)] } },
+    { share: 1 / 3, node: { card: "b", tabs: [view("tab-aaaaa2", PLAIN), view("tab-aaaaa3", PLAIN)] } },
+    { share: 1 / 3, node: { card: "c", tabs: [view("tab-aaaaa4", PLAIN)] } },
+  ] }, "b");
+  // Another card and its tab: the ring stays on b.
+  three();
+  await run("core.card.close", { card: "c" });
+  assert.equal(plane.focused(), "b", "closing another card moved the ring");
+  await run("core.layout.close", { tab: "tab-aaaaaa" });
+  assert.equal(plane.focused(), "b", "closing the last tab of another card moved the ring");
+  // A tab of the focused card while the card stays: the ring stays and the card shows its remaining tab.
+  await run("core.layout.close", { tab: "tab-aaaaa3" });
+  assert.equal(plane.focused(), "b", "closing a tab of the focused card moved the ring");
+  // The focused card by core.card.close: no card holds the ring.
+  three();
+  await run("core.card.close", { card: "b" });
+  assert.equal(plane.focused(), null, "closing the focused card moved the ring to another card");
+  await refuses(run("core.layout.close", { tab: "current" }), "card current names no card: window main has no focused card");
+  // The focused card by the close of its last tab.
+  three();
+  await run("core.layout.close", { tab: "tab-aaaaa3" });
+  await run("core.layout.close", { tab: "tab-aaaaa2" });
+  assert.equal(plane.focused(), null, "closing the last tab of the focused card moved the ring to another card");
+});

@@ -133,12 +133,20 @@ func TestTheKeyboardFollowsTheFocusRing(t *testing.T) {
 			path.run(t, f, stored, other)
 			f.settle()
 			ring, active := keyboardRing(t, f)
-			if active == nil {
-				t.Fatalf("the card %s of the ring has no active surface", ring)
-			}
 			got, ok := stored.keyboardTarget()
 			if !ok {
 				t.Fatalf("the ring is on the card %s and no keyboard call reached the host", ring)
+			}
+			// Closing the focused card clears the ring, and the keyboard stays with the workbench
+			// (docs/spec/exposure.md#the-keyboard-follows-the-focus-ring).
+			if ring == "" {
+				if got != nil {
+					t.Fatalf("no card holds the ring and the keyboard went to %s", *got)
+				}
+				return
+			}
+			if active == nil {
+				t.Fatalf("the card %s of the ring has no active surface", ring)
 			}
 			if got == nil || *got != *active {
 				t.Fatalf("the ring is on the surface %s and the keyboard went to %s", *active, describeTarget(got))

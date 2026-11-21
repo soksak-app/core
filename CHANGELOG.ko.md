@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1038: 두 workbench에서 focus된 카드나 그 마지막 탭을 닫으면 focus ring을 첫 카드로 옮기지 않고 지운다. 레이아웃을 떠난 카드를 가리키는 저장된 focus는 ring 없이 열린다. 다른 카드나 탭을 닫으면 ring은 그대로 있다. Red: page와 mygo의 닫기 test가 다른 카드에서 ring을 찾았다. Green: focus 영역의 page와 mygo test가 통과한다.
 - F1037: 두 workbench에서 설정 창의 에이전트 group은 각 hook part의 이름을 훅으로 쓴다. 이전에는 행에 이름이 없었다. Red: page와 mygo setup test가 빈 이름을 찾았다. Green: page와 mygo setup test가 통과한다.
 - F1035: 애플리케이션과 `sok`의 어떤 동작도 관리자 권한을 요구하지 않는다. 시스템 PATH 항목(`/etc/paths.d/<identifier>`), 명령 `sok path install`과 `sok path remove`, 그 항목의 setup part, `sok setup install`의 `sudo` 단계, event `sok.setup.path`를 제거한다. 시작할 때마다 사람의 권한으로 맞추는 사용자 PATH 등록이 사람의 shell PATH에 `sok`을 두기 때문이다. `setupInstall`은 `path`를 `unknown setup part: path`로 거부한다. Red: `sok path install`이 항목을 쓰거나 `sudo`를 요구했고, source가 `sudo` 명령을 이름으로 썼다. Green: Go와 Rust의 command line과 host setup test가 통과한다.
 - F1034: Host는 시작할 때마다 `sok setup install mcp hook`처럼 현재가 아닌 MCP registration과 hook을 install한다. 그래서 다른 폴더에서 시작한 application은 자기 bundle의 `sok`을 등록하고, read-only volume의 `sok`처럼 install할 수 없는 part는 오류 `host.setup.install` 하나로 기록한다. 시스템 PATH 항목은 명시적 단계를 유지한다. Red: Go와 Rust의 시작이 registration을 실행하지 않았고 두 hook을 missing으로 남겼으며 실패를 기록하지 않았다. Green: Go setup test 6개와 Rust setup test 8개가 통과한다.
