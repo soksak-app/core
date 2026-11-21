@@ -16,7 +16,7 @@
 
 첫 시작에서 애플리케이션은 공개 registry `https://soksak-app.github.io/registry/index.json`에서 시작 plugin을 설치한다([첫 실행](../spec/installation.ko.md#첫-실행)).
 
-shell에서 애플리케이션의 command line을 쓰려면 그 `sok path install`을 관리자 권한으로 실행한다: `sudo /Applications/soksak.app/Contents/MacOS/sok path install`([command line](../spec/cli.ko.md)).
+macOS 애플리케이션은 시작할 때 사용자 PATH 등록을 준비한다. 새 login shell에서 `sok`을 찾을 수 있다. 설정의 에이전트 그룹에서 등록을 제어한다. [사용자 PATH 등록](../spec/cli.ko.md#사용자-path-등록)
 
 ## 로컬 개발 연결
 

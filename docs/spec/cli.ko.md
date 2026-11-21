@@ -345,7 +345,7 @@ Host는 plugin 작업을 실행하듯([애플리케이션 안의 plugin 작업](
 - Skill은 정적이다. `exposure.list`에서의 탐색이 요청 시점에 설치된 모든 plugin을 덮으므로, 한 설치의 내용은 노출의 두 번째 낡은 사본이 되고 plugin이 바뀔 때마다 쓰는 쪽이 필요하다. Skill은 `sok`의 release로만 바뀐다.
 - MCP 도구는 선언된 command마다 도구 하나가 아니라, 이름과 schema가 안정된 고정 집합과 검색, 설명 도구다. Core 선언만으로 command 115개, status 36개, element 150개이고, host와 plugin 항목 전에 이전 server가 만든 방식의 도구 목록이 약 60 KB다. 그 크기의 도구 목록은 모든 session에서 agent의 context를 차지하고, 도구 선택을 떨어뜨리며, plugin이 바뀔 때마다 낡는다. 바뀐 도구 목록은 `notifications/tools/list_changed`를 따르는 client를 통해서만 실행 중인 session에 닿는데, 모든 client가 그렇지는 않고, 노출 변경의 엔드포인트 event도 없다. 고정 도구는 호출마다 노출을 읽으므로 plugin 변경에 알림이 필요 없고, 검색 결과는 작은 page로 남는다.
 - Agent 글은 원본 폴더 하나와 검사되는 Go 사본으로 둔다. `go:embed`는 그 package의 폴더 밖을 읽지 못하고, Rust package는 Go package의 파일을 읽지 않기 때문이다.
-- `sok setup install`은 terminal의 `sudo`로만 관리자 권한을 얻는다. 그래서 skill 파일과 등록은 관리자 계정이 아니라 사람이 쓴다. 애플리케이션은 경로 항목의 단계를 실행하지 않고 보여 준다.
+- `sok setup install`은 시스템 PATH 항목을 위한 관리자 권한을 terminal의 `sudo`로만 얻는다. 애플리케이션은 사용자 권한으로 사용자 PATH 등록을 맞춘다.
 - 등록은 그 설정 파일을 가진 `claude` 명령으로만 쓴다. `sok`은 등록이 최신인지 판단하려고만 그 파일을 읽고, `sok`이 읽지 못하는 그 파일의 형식은 파일을 밝히는 오류다.
 - 설정 창의 setup 상태는 그룹을 보여 줄 때, 창이 key window가 될 때(`window-active`), `setup-changed` 뒤, `core.setup.check`로 읽으며, 파일을 감시하지 않는다. `claude` 명령의 설정 파일은 agent session마다 다시 쓰이고, 상태는 사람이 볼 때 중요하기 때문이다.
 

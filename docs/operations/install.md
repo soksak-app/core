@@ -16,7 +16,7 @@ Memory saver is on by default: it unloads the hidden tabs of plugins that declar
 
 On its first start the application installs the starter plugins from the public registry `https://soksak-app.github.io/registry/index.json` ([first run](../spec/installation.md#first-run)).
 
-To use the command line of an application from a shell, run its `sok path install` with administrator rights: `sudo /Applications/soksak.app/Contents/MacOS/sok path install` ([command line](../spec/cli.md)).
+The macOS application prepares the user PATH registration on startup. A new login shell can then reach `sok`. Settings controls the registration in the agent group. [User PATH registration](../spec/cli.md#user-path-registration)
 
 ## Local development links
 
