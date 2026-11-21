@@ -5,6 +5,7 @@
 
 ## 2026-11-21
 
+- F1006-5.3-1 (progress): A status read of the exposure entries receives the surface of its request when it names one, in `status.get` and in the first read of a `status.watch`. Red: the read test failed for both forms. Green: `packages/plugin-api/test/exposure.test.mjs` passes 36 of 36.
 - F1022: The published exposure snapshot case is corrected to the item form of the specification: an item names `index`, `role`, `text`, `rect`, `command` and `params`, the part of a surface document omits `inert`, and an element that is not drawn leaves no item. The builder already followed the specification. Verification: `packages/plugin-api/test/expose-contract.test.mjs` failed with the earlier case and passes 10 of 10.
 - F1006-5.3-1 (progress): The context of a registered command of the exposure entries carries `surface`, the surface of the caller, when the request names one (`packages/plugin-api/index.js`). Red: the context test failed for a run with `surface`. Green: the test passes. The case `expose.snapshot.answers-the-group-of-the-document` fails on the unchanged tree too; F1022 records it.
 - F1006-12: The role operations of both hosts write `role.md` and `role.ko.md` through every change of a role, so the Korean pair is complete; the unit adds no code beyond the completion of F1006-5.2.

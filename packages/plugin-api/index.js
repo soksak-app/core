@@ -1837,7 +1837,9 @@ export function exposureEntries(declared, { place = () => null, inert = () => fa
       const { name } = params;
       const found = declared.get(declarationKey(kind, name));
       if (!found) throw new ExposureError(EXPOSURE_ERRORS.unknownName, `unknown ${kind} ${name}`);
-      if (method === "status.get") return jsonStatusValue(name, await status(name).read());
+      // The read receives the surface of the request when it names one, so a status of a tab reads the state of that tab
+      // (docs/spec/exposure.md, the surface member of a request).
+      if (method === "status.get") return jsonStatusValue(name, await status(name).read(params.surface));
       if (method === "status.watch") {
         const entry = status(name);
         entry.changed = changed;
@@ -1854,7 +1856,8 @@ export function exposureEntries(declared, { place = () => null, inert = () => fa
         entry.watching = true;
         const listen = (value) => update(entry, value);
         entry.stop = entry.subscribe(listen);
-        const first = Promise.resolve().then(() => entry.read()).then(listen);
+        const read = () => entry.read(params.surface);
+        const first = Promise.resolve().then(read).then(listen);
         entry.first = first;
         try {
           await first;

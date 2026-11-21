@@ -225,6 +225,16 @@ test("an element entry resolves one element, or one of many by index, and acts o
   assert.equal(entries.registered("element", "probe.input"), false, "a removed element is no longer registered");
 });
 
+test("a status read receives the surface of its request when it names one", async () => {
+  const entries = exposureEntries(declarationMap(exposes()));
+  const reads = [];
+  entries.status("probe.lines", (surface) => { reads.push(surface); return ["a"]; }, (fn) => () => {});
+  assert.deepEqual(await entries.answer("status.get", { name: "probe.lines", surface: "tab-aaaaaa" }), ["a"]);
+  assert.deepEqual(await entries.answer("status.get", { name: "probe.lines" }), ["a"]);
+  await entries.answer("status.watch", { name: "probe.lines", surface: "tab-bbbbbb" }, () => {});
+  assert.deepEqual(reads, ["tab-aaaaaa", undefined, "tab-bbbbbb"]);
+});
+
 test("a watched status sends its current value and each change with its version and ends with unwatch", async () => {
   const entries = exposureEntries(declarationMap(exposes()));
   let value = ["a"];
