@@ -508,7 +508,8 @@ export function createRegistry({ call = null, report = null } = {}) {
 
     /** Registers a core status. subscribe(fn) returns a function that unsubscribes. */
     status: (name, read, subscribe) => core.status(name, read, subscribe),
-    // The handler receives the context of the request, {cids} with the correlation identifiers of its cause when the request has them.
+    // The handler receives the context of the request, {cids} with the correlation identifiers of its cause when the request has them
+    // and {surface} with the surface of the caller when the request names one (a view that runs a core command, docs/spec/exposure.md).
     command: (name, run) => core.command(name, async (params, context) => {
       // A core command has no time limit: its handler's reply or error ends it, and its layout presentation follows by its own events.
       const result = await run(params, context);

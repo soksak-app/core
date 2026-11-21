@@ -1892,7 +1892,7 @@ export function exposureEntries(declared, { place = () => null, inert = () => fa
         } catch (error) {
           throw new ExposureError(EXPOSURE_ERRORS.invalidParams, `${method} for ${name}: ${error.message}`);
         }
-        const result = await run(input, { cids });
+        const result = await run(input, { cids, ...(params.surface === undefined ? {} : { surface: params.surface }) });
         // A command that declares no result (result type null) answers null when it returns nothing. Any other command
         // returns a JSON value, so undefined is refused.
         if (result === undefined && found.declaration.result?.type === "null") return null;

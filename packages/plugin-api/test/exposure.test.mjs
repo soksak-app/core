@@ -567,17 +567,18 @@ test("an element request gives an index or an address, never both, and an addres
   assert.equal(await code(() => entries.answer("element.rect", { name: "probe.row", address: { key: "none" } })), 1009);
 });
 
-test("a command run hands the cids of its cause to the handler as its context, and refuses a list a line cannot hold", async () => {
+test("a command run hands the cids of its cause and the surface of its caller to the handler as its context, and refuses a list a line cannot hold", async () => {
   const entries = exposureEntries(declarationMap(exposes()));
   const contexts = [];
   entries.command("probe.send", (params, context) => { contexts.push(context); return null; });
   await replyPayload(() => entries.answer("command.run", { name: "probe.send", params: { data: "x" }, cids: ["p1700000000000.7"] }));
   await replyPayload(() => entries.answer("command.run", { name: "probe.send", params: { data: "y" } }));
-  assert.deepEqual(contexts, [{ cids: ["p1700000000000.7"] }, { cids: undefined }]);
+  await replyPayload(() => entries.answer("command.run", { name: "probe.send", params: { data: "w" }, surface: "tab-aaaaaa" }));
+  assert.deepEqual(contexts, [{ cids: ["p1700000000000.7"] }, { cids: undefined }, { cids: undefined, surface: "tab-aaaaaa" }]);
   const code = async (work) => (await replyPayload(work)).error?.code;
   assert.equal(await code(() => entries.answer("command.run", { name: "probe.send", params: { data: "z" }, cids: ["p1.7\"x"] })),
     EXPOSURE_ERRORS.invalidParams);
-  assert.equal(contexts.length, 2, "a refused list reaches no handler");
+  assert.equal(contexts.length, 3, "a refused list reaches no handler");
 });
 
 test("an element request refuses an index that is not a non-negative integer instead of reading it as the first element", async () => {

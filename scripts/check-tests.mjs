@@ -12375,7 +12375,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/plugin-api/test/view-operations-contract.test.mjs", id: "view.operation.begin-logs-first-event-and-carries-cids" },
       { file: "packages/plugin-api/test/view-commands-contract.test.mjs", id: "view.commands.run-passes-cids-to-handler" },
-      { file: "packages/plugin-api/test/exposure.test.mjs", id: "a command run hands the cids of its cause to the handler as its context, and refuses a list a line cannot hold" },
+      { file: "packages/plugin-api/test/exposure.test.mjs", id: "a command run hands the cids of its cause and the surface of its caller to the handler as its context, and refuses a list a line cannot hold" },
       { file: "packages/workbench/test/view-calls.test.mjs", id: "a call that carries the cids of its cause hands them to the command of its plugin" },
       { file: "packages/workbench/test/view-calls.test.mjs", id: "a core command call that carries the cids of its cause hands them to runCore" },
       { file: "packages/workbench/test/app-update.test.mjs", id: "the release page of a command that carries the cids of its cause opens it with those cids" },
