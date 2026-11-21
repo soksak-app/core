@@ -5,6 +5,7 @@
 
 ## 2026-11-21
 
+- F1031-8: The host specification declares the Go and Rust user PATH file placements. Red: the paired-host audit reports three unmatched files. Green: the same audit reports a clean graph.
 - F1031-6: The sidecar buffer fixture opens its release pipe before starting the process and holds it through cleanup. It reports the fixture's recorded output on failure. Verification: four buffer tests pass in each of 20 mygo runs and 10 Wails runs.
 - F1031-5: Go and Rust host tests name the contract cases they actually exercise. The Rust endpoint plays the role identity case, the process identity fixture runs from its owning test, and the still capture case follows the current window selection. Verification: 70 Rust and 16 Go tests pass.
 - F1031-4: Tests that invoke macOS code signing run in the macOS system owner scope. The Linux headless job keeps the platform-independent preparation and window-run tests. Red: the workflow test reports two test files that invoke `codesign` in the Linux selection. Green: all 71 affected tests pass.
