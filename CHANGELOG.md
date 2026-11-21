@@ -5,6 +5,7 @@
 
 ## 2026-11-21
 
+- F1031-15: The Go check of persistent connection records starts after the first sample of the sampler and holds its interval at an hour, so a sample that read the processes before the stop is not stored after it. Red: one of three runs with an interval of 1 ms reported two samples after the stop. Green: five of five runs pass.
 - F1031-14: The direct pointer focus case of the native image region test judges whether a synthetic mouse event of the test window became the AppKit current event, and names both events on failure. Red: an application-defined event posted during the wait failed the earlier equality check in three of three runs. Green: three of three runs pass.
 - F1031-13: The `cut-gaps` break of the layout library finds the `let free` declaration of the cut room. Red: check-breaks reported the break stale. Green: check-breaks catches all eight required breaks.
 - F1031-12: Every declared workspace version is 0.0.46, including the six workspace entries of Cargo.lock. Verification: the version check passes.

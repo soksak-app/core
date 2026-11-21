@@ -5,6 +5,7 @@
 
 ## 2026-11-21
 
+- F1031-15: Persistent connection 기록의 Go 검사는 sampler의 첫 sample 뒤에 시작하고 간격을 한 시간으로 둔다. 그래서 stop 전에 process를 읽은 sample이 stop 뒤에 저장되지 않는다. Red: 간격 1 ms의 세 번 중 한 번이 stop 뒤 sample 둘을 보고했다. Green: 다섯 번 모두 통과한다.
 - F1031-14: Native image region test의 direct pointer focus case는 test 창의 synthetic mouse event가 AppKit current event가 되었는지 판정하고, 실패하면 두 event를 기록한다. Red: wait 중에 넣은 application-defined event가 이전 같음 검사를 세 번 중 세 번 실패시켰다. Green: 세 번 모두 통과한다.
 - F1031-13: Layout library의 `cut-gaps` break가 cut room의 `let free` 선언을 찾는다. Red: check-breaks가 break를 stale로 보고했다. Green: check-breaks가 필수 break 여덟 개를 모두 잡는다.
 - F1031-12: 선언된 모든 workspace version이 0.0.46이며 Cargo.lock의 workspace 항목 여섯 개도 포함한다. 검증: version 검사가 통과한다.

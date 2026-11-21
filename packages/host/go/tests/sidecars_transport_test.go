@@ -2897,6 +2897,9 @@ func TestPersistentConnectionsAreRecordedAsEvents(t *testing.T) {
 	if _, err := host.PerformanceCommand(map[string]any{"action": "on"}); err != nil {
 		t.Fatal(err)
 	}
+	// The sampler that the switch started stores its first sample at once; the check starts after it, so that a sample of the
+	// sampler that read the processes before the stop cannot be stored after it.
+	waitForFirstSample(t)
 	owner := support.NewSidecarRecorder(t, "/only")
 	if err := owner.Send(sidecars, eventsService, "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
