@@ -39,8 +39,8 @@ const lane = (capability, language, implementation, tests, options = {}) => ({
 // The connections of existing components are also kept as a file list. They are not interpreted as behavior evidence.
 const MATRIX = [
   lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/repeat-rust.test.mjs", "scripts/test/platform/darwin/system/repeat-rust.test.mjs", "scripts/test/check-windows-build.test.mjs", "scripts/test/host-debug-check.test.mjs", "scripts/test/create-test-certificates.test.mjs", "scripts/test/macos-minimum-commands.test.mjs", "scripts/test/makefile-recipes.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
-  lane("macOS application bundle preparation", "js-ts", ["scripts/platform/darwin/prepare-app-bundle.mjs"], ["scripts/test/platform/darwin/bundle-preparation.test.mjs"], { sharedTests: true }),
-  lane("macOS application bundle exchange", "objective-c", ["native/darwin/src/tools/swap_bundle.m"], ["scripts/test/platform/darwin/bundle-preparation.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("macOS application bundle preparation", "js-ts", ["scripts/platform/darwin/prepare-app-bundle.mjs"], ["scripts/test/platform/darwin/bundle-preparation.test.mjs", "scripts/test/platform/darwin/system/bundle-installation.test.mjs", "scripts/test/fixtures/bundle-preparation/process-table.mjs"], { sharedTests: true }),
+  lane("macOS application bundle exchange", "objective-c", ["native/darwin/src/tools/swap_bundle.m"], ["scripts/test/platform/darwin/system/bundle-installation.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("sok agent guidance", "document", ["packages/sok/go/src/agents/SKILL.md", "packages/sok/go/src/agents/mcp.json", "docs/spec/cli.md"], ["scripts/test/submit-guidance.test.mjs", "scripts/test/skill-groups.test.mjs", "scripts/test/message-report-guidance.test.mjs", "scripts/test/skill-captures.test.mjs", "scripts/test/skill-web-pages.test.mjs", "scripts/test/skill-delegation.test.mjs"], { testLanguage: "js-ts" }),
   lane("preflight check", "js-ts", ["scripts/check-preflight.mjs"], ["scripts/test/check-preflight.test.mjs"]),
   lane("git hooks", "shell", [".githooks/pre-commit", ".githooks/commit-msg", ".githooks/pre-push"], ["scripts/test/githooks.test.mjs"], { testLanguage: "js-ts" }),
@@ -68,7 +68,7 @@ lane("event log audit", "js-ts", ["scripts/check-events.mjs"], ["scripts/test/ch
 lane("event class tables", "js-ts", ["scripts/generate-event-classes.mjs"], ["scripts/test/event-classes.test.mjs"]),
 lane("run log audit", "js-ts", ["scripts/audit-run.mjs"], ["scripts/test/audit-run.test.mjs"]),
 lane("crash report fault", "js-ts", ["scripts/crash-fault.mjs"], ["scripts/test/crash-fault.test.mjs"]),
-lane("end-to-end run", "js-ts", ["scripts/test-app.mjs"], ["scripts/test/test-app.test.mjs"]),
+lane("end-to-end run", "js-ts", ["scripts/test-app.mjs"], ["scripts/test/test-app.test.mjs", "scripts/test/platform/darwin/system/test-app-signing.test.mjs"]),
 lane("log command audit", "js-ts", ["scripts/audit-log.mjs"], ["scripts/test/audit-log.test.mjs"]),
 lane("temporary folder audit", "js-ts", ["scripts/check-temp-files.mjs"], ["scripts/test/check-temp-files.test.mjs"]),
 lane("event source check", "declaration", ["scripts/event-sources.json"], ["scripts/test/event-sources.test.mjs"], { testLanguage: "js-ts" }),
@@ -360,6 +360,19 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/tests/role_state_test.rs", id: "the_role_operations_of_one_surface_run_in_arrival_order" },
     ],
     expected: "The Rust role store writes both role files and serializes changes to one surface.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1031-4",
+    implementation: [
+      { file: "Makefile", symbol: "test-headless-owners:" },
+      { file: "scripts/test/platform/darwin/system/bundle-installation.test.mjs", symbol: 'spawnSync("codesign",' },
+      { file: "scripts/test/platform/darwin/system/test-app-signing.test.mjs", symbol: 'spawnSync("codesign",' },
+    ],
+    tests: [
+      { file: "scripts/test/workflows.test.mjs", id: "every system owner under platform/darwin/system runs in a macOS job of CI and in no Linux job" },
+    ],
+    expected: "The Linux headless job excludes tests that invoke the macOS code signing tool.",
     levels: ["unit"],
   },
   {
@@ -963,10 +976,10 @@ const FEATURE_LINKS = [
       { file: "scripts/test-app.mjs", symbol: "else if (item.kind === 'verify') await verifyApplicationArtifact(item.artifact, { platform: item.platform });" },
     ],
     tests: [
-      { file: "scripts/test/platform/darwin/bundle-preparation.test.mjs", id: "a bundle build leaves the signed bundle unchanged until one rename installs the signed new bundle" },
-      { file: "scripts/test/platform/darwin/bundle-preparation.test.mjs", id: "the installation refuses a staging bundle that does not verify and leaves the bundle" },
-      { file: "scripts/test/platform/darwin/bundle-preparation.test.mjs", id: "the installation refuses a bundle that a process runs before it changes anything" },
-      { file: "scripts/test/test-app.test.mjs", id: "a bundle whose executable no longer matches its signature fails its verification with the bundle path, and the start is skipped" },
+      { file: "scripts/test/platform/darwin/system/bundle-installation.test.mjs", id: "a bundle build leaves the signed bundle unchanged until one rename installs the signed new bundle" },
+      { file: "scripts/test/platform/darwin/system/bundle-installation.test.mjs", id: "the installation refuses a staging bundle that does not verify and leaves the bundle" },
+      { file: "scripts/test/platform/darwin/system/bundle-installation.test.mjs", id: "the installation refuses a bundle that a process runs before it changes anything" },
+      { file: "scripts/test/platform/darwin/system/test-app-signing.test.mjs", id: "a bundle whose executable no longer matches its signature fails its verification with the bundle path, and the start is skipped" },
     ],
     expected: "A bundle build writes and signs a staging bundle and installs it with one rename, so a launch finds a complete signed bundle, and a check run verifies the signature of each bundle before it starts it.",
     levels: ["unit"],

@@ -243,6 +243,8 @@ test('every system owner under platform/darwin/system runs in a macOS job of CI 
   const linux = selectNodeTests(tests, { only: ['scripts/test/', 'e2e/test/', 'packages/window-check/test/'],
     excludeFolder: ['platform/darwin/system'] }).map(({ name }) => name);
   assert.deepEqual(system.filter((name) => linux.includes(name)), [], 'a system owner runs in the Linux job');
+  assert.deepEqual(linux.filter((name) => /\bspawnSync\(["']codesign["'],/.test(read(name))), [],
+    'a test that calls the macOS signing tool is selected by the Linux job');
 });
 
 test('make check-windows-rust checks the Rust host library for x86_64-pc-windows-msvc with and without diagnostics without installing the target', { timeout: 10_000 }, () => {

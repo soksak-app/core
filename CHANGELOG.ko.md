@@ -5,6 +5,7 @@
 
 ## 2026-11-21
 
+- F1031-4: macOS 코드 서명을 실행하는 test가 macOS system owner 범위에서 실행된다. Linux headless job은 플랫폼에 독립적인 준비와 window run test를 실행한다. Red에서 workflow test가 Linux 선택에 있는 `codesign` 실행 파일 두 개를 보고한다. Green에서 관련 test 71개가 통과한다.
 - F1031-3: Rust role store가 값 없음과 쓰기 실패를 직접 전달하고 직렬화 test가 자신의 임시 폴더를 제거한다. Red에서 Clippy가 role store의 표현식 다섯 개를 거절했고 test runner가 임시 폴더를 보고했다. Green에서 기본 및 진단 workspace 구성의 Clippy 검사와 role test 15개가 통과한다.
 - F1030-1.2: 설치 안내가 사용자 PATH 자동 등록과 그 설정을 설명한다. CLI 명세는 관리자 권한이 필요한 동작을 시스템 PATH 항목으로 밝힌다.
 - F1030-1.1: Rust PATH 적용은 이전 블록을 제거한 뒤 저장한 profile 목록 변경을 보고한다. 제거 오류를 전달한다. Red에서는 Clippy가 쓰기 전에 덮어쓰는 대입을 거부한다. Green에서는 sok package가 Clippy를 통과하고 Darwin setup test 네 개가 통과한다.
