@@ -107,7 +107,7 @@ func (s *Shell) drawSettings(c *ui.Context, width, height float32, model *settin
 					s.drawSettingsBody(c, model, float32(cardW)-border-pane.navW, float32(s.settingsCardMost())-border-pane.headH, pane)
 				})
 			})
-			s.drawModalErrorToasts(c, width)
+			s.drawErrorToasts(c, width)
 		})
 	})
 }

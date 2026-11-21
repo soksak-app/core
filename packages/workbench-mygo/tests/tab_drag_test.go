@@ -347,22 +347,17 @@ func TestTheStripWaitsForTheReleaseOfAPress(t *testing.T) {
 	}
 }
 
-// A drag in steps reaches its last place with the error line over the plane, which moves every element of the plane down.
+// A drag in steps reaches its last place while an error toast floats above the plane.
 func TestATabDragUnderTheErrorToastsDropsWhereItEnds(t *testing.T) {
 	f, card, tab, other := cardWithTwoTabs(t)
 	before := f.box("core.card", other)
-	f.host.failing = map[string]error{"presentSurfaces": errors.New("a fault")}
-	f.tester.SetSize(1160, 800)
+	f.shell.StartFailed(errors.New("a fault"))
 	if shown := f.shownErrors(); len(shown) == 0 {
 		t.Fatal("no error to show")
 	}
-	f.host.failing = nil
-	f.settle()
-	f.shownErrors()
 	target := f.box("core.card", other)
-	// The toasts of the workbench stand at the bottom, so the plane gives up their height: the card ends higher than before.
-	if bottom := target.Y + target.H; bottom >= before.Y+before.H {
-		t.Fatalf("the card ends at %v, want above the toasts at %v", bottom, before.Y+before.H)
+	if target != before {
+		t.Fatalf("the target card changed from %+v to %+v under the toast", before, target)
 	}
 	box := f.box("core.card.tab", tab)
 	from, at := box.X+box.W/2, box.Y+box.H/2

@@ -17,7 +17,9 @@ type ShownErrors struct {
 	report      func(line string)
 	inline      map[string]inlineError
 	occurrences map[errorOrigin]string
-	toasts      []errorToast
+	toasts      []*errorToast
+	schedule    func(expire func()) (cancel func())
+	expired     func()
 }
 
 type inlineError struct {
@@ -34,6 +36,7 @@ type errorOrigin struct {
 type errorToast struct {
 	text    string
 	origins map[errorOrigin]struct{}
+	cancel  func()
 }
 
 // NewShownErrors returns the display that writes each line with report.
@@ -77,7 +80,9 @@ func (e *ShownErrors) showToast(origin errorOrigin, text, detail string) {
 	e.occurrences[origin] = text
 	at := e.toastIndex(text)
 	if at == -1 {
-		e.toasts = append(e.toasts, errorToast{text: text, origins: map[errorOrigin]struct{}{origin: {}}})
+		toast := &errorToast{text: text, origins: map[errorOrigin]struct{}{origin: {}}}
+		e.toasts = append(e.toasts, toast)
+		e.scheduleToast(toast)
 	} else {
 		e.toasts[at].origins[origin] = struct{}{}
 	}
@@ -85,7 +90,7 @@ func (e *ShownErrors) showToast(origin errorOrigin, text, detail string) {
 }
 
 func (e *ShownErrors) toastIndex(text string) int {
-	return slices.IndexFunc(e.toasts, func(toast errorToast) bool { return toast.text == text })
+	return slices.IndexFunc(e.toasts, func(toast *errorToast) bool { return toast.text == text })
 }
 
 // DismissToast closes the open toast with the text. The occurrences stay active until the owning operation withdraws them.
@@ -94,8 +99,48 @@ func (e *ShownErrors) DismissToast(text string) bool {
 	if at == -1 {
 		return false
 	}
-	e.toasts = slices.Delete(e.toasts, at, at+1)
+	e.closeToast(at)
 	return true
+}
+
+func (e *ShownErrors) closeToast(at int) {
+	toast := e.toasts[at]
+	e.toasts = slices.Delete(e.toasts, at, at+1)
+	toast.stopTimer()
+}
+
+func (toast *errorToast) stopTimer() {
+	if toast.cancel != nil {
+		toast.cancel()
+		toast.cancel = nil
+	}
+}
+
+// startToastExpiry also starts the clocks of any errors found before the window connected its ports.
+func (e *ShownErrors) startToastExpiry(schedule func(func()) func(), expired func()) {
+	e.schedule, e.expired = schedule, expired
+	for _, toast := range e.toasts {
+		e.scheduleToast(toast)
+	}
+}
+
+func (e *ShownErrors) scheduleToast(toast *errorToast) {
+	if e.schedule == nil {
+		return
+	}
+	toast.cancel = e.schedule(func() {
+		if at := slices.Index(e.toasts, toast); at >= 0 {
+			e.closeToast(at)
+			e.expired()
+		}
+	})
+}
+
+func (e *ShownErrors) stopToastExpiry() {
+	e.schedule = nil
+	for _, toast := range e.toasts {
+		toast.stopTimer()
+	}
 }
 
 // Toasts returns the texts of the open toasts in the order in which they appeared.
@@ -158,9 +203,13 @@ func (e *ShownErrors) withdraw(origin errorOrigin) bool {
 }
 
 func (e *ShownErrors) removeToastOrigin(origin errorOrigin) {
-	e.toasts = slices.DeleteFunc(e.toasts, func(toast errorToast) bool {
+	e.toasts = slices.DeleteFunc(e.toasts, func(toast *errorToast) bool {
 		delete(toast.origins, origin)
-		return len(toast.origins) == 0
+		if len(toast.origins) != 0 {
+			return false
+		}
+		toast.stopTimer()
+		return true
 	})
 }
 
@@ -184,80 +233,62 @@ func (e *ShownErrors) Text(where string) (string, bool) {
 	return shown.text, ok
 }
 
-type toastLayout struct {
-	font                    ui.Font
-	direction               ui.Direction
-	textWidth               float32
-	closeWidth, closeHeight float32
+type toastRow struct {
+	text                     string
+	width, height, textWidth float32
 }
 
-func (s *Shell) toastLayout(c *ui.Context, width float32) toastLayout {
-	m := s.metrics
-	theme := c.Theme()
-	font := ui.Font{Family: theme.Font, Size: theme.FontSize, Lang: c.Locale(), LineHeight: m.lineHeight}
-	glyphWidth, closeHeight := ui.ShapeText("×", font, 0).Size()
-	closeWidth := glyphWidth + 2*m.errorClosePadX
-	return toastLayout{
-		font: font, direction: c.Direction(),
-		textWidth: max(1, width-3*m.errorPadX-closeWidth), closeWidth: closeWidth, closeHeight: closeHeight,
-	}
-}
-
-func (s *Shell) toastRowHeight(layout toastLayout, text string) float32 {
-	m := s.metrics
-	spans := []ui.Span{{Text: text}}
-	shape := ui.TextShape{Width: layout.textWidth, Direction: layout.direction, KeepAll: true}
-	_, textHeight := ui.ShapeRichTextWith(spans, layout.font, shape).Size()
-	return max(textHeight, layout.closeHeight) + 2*m.errorPadY + m.errorBorder
-}
-
-// toastHeight returns the space occupied by all open error toasts at width.
-func (s *Shell) toastHeight(c *ui.Context, width float32) float32 {
-	if len(s.errors.toasts) == 0 {
-		return 0
-	}
-	layout := s.toastLayout(c, width)
-	total := float32(len(s.errors.toasts)-1) * s.metrics.errorBorder
-	for _, toast := range s.errors.toasts {
-		total += s.toastRowHeight(layout, toast.text)
-	}
-	return total
-}
-
-// drawErrorToasts draws each visible error and its close button in the view that owns the active focus.
+// drawErrorToasts draws the floating component inside either the window overlay or the active modal.
 func (s *Shell) drawErrorToasts(c *ui.Context, width float32) {
 	if len(s.errors.toasts) == 0 {
 		return
 	}
 	m := s.metrics
-	layout := s.toastLayout(c, width)
-	color := c.Theme().Danger
-	ui.Column(c).Width(width).Shrink(0).Gap(m.errorBorder).Children(func() {
-		for _, toast := range s.errors.toasts {
-			text := toast.text
-			height := s.toastRowHeight(layout, text)
-			ui.Row(c).Size(width, height).Shrink(0).AlignItems(ui.Start).Gap(m.errorPadX).Padding(m.errorPadY, m.errorPadX).
-				Background(s.palette.Bg).BorderWidth(m.errorBorder, 0, 0, 0).BorderColor(color).Children(func() {
-				drawErrorText(c, text).Width(layout.textWidth).Shrink(0).LineHeight(layout.font.LineHeight).KeepAll()
-				close := s.binder.Press(c, "core.error.dismiss", "core.error.dismiss", text, map[string]any{"text": text})
-				close.Size(layout.closeWidth, layout.closeHeight).Shrink(0).PaddingX(m.errorClosePadX).Center().
+	theme := c.Theme()
+	font := ui.Font{Family: theme.Font, Size: theme.FontSize, Lang: c.Locale(), LineHeight: m.lineHeight}
+	glyphWidth, closeHeight := ui.ShapeText("×", font, 0).Size()
+	closeWidth := glyphWidth + 2*m.errorClosePadX
+	otherWidth := closeWidth + 3*m.errorPadX + 2*m.errorBorder
+	maxWidth := min(m.errorToastMaxWidth, width-2*m.space4)
+	stackWidth := float32(0)
+	stackHeight := float32(len(s.errors.toasts)-1) * m.errorPadY
+	rows := make([]toastRow, 0, len(s.errors.toasts))
+	for _, toast := range s.errors.toasts {
+		shape := ui.TextShape{Direction: c.Direction(), KeepAll: true}
+		spans := []ui.Span{{Text: toast.text}}
+		textWidth, textHeight := ui.ShapeRichTextWith(spans, font, shape).Size()
+		shape.Width = max(1, maxWidth-otherWidth)
+		if textWidth > shape.Width {
+			textWidth = shape.Width
+			_, textHeight = ui.ShapeRichTextWith(spans, font, shape).Size()
+		}
+		row := toastRow{toast.text, textWidth + otherWidth, max(textHeight, closeHeight) + 2*(m.errorPadY+m.errorBorder), textWidth}
+		rows = append(rows, row)
+		stackWidth, stackHeight = max(stackWidth, row.width), stackHeight+row.height
+	}
+	drawRows := func() {
+		for _, row := range rows {
+			ui.Row(c).Size(row.width, row.height).Shrink(0).AlignItems(ui.Start).Gap(m.errorPadX).Padding(m.errorPadY, m.errorPadX).
+				Background(s.palette.Card).Border(m.errorBorder, theme.Danger).Radius(s.radiusMiddle()).Children(func() {
+				drawErrorText(c, row.text).Width(row.textWidth).Shrink(0).LineHeight(font.LineHeight).KeepAll()
+				close := s.binder.Press(c, "core.error.dismiss", "core.error.dismiss", row.text, map[string]any{"text": row.text})
+				close.Size(closeWidth, closeHeight).Shrink(0).PaddingX(m.errorClosePadX).Center().
 					Label("오류 닫기").Tooltip("오류 닫기").Cursor(ui.CursorPointer).Children(func() {
-					ui.Text(c, "×").SingleLine().LineHeight(layout.font.LineHeight).TextColor(s.palette.Fg)
+					ui.Text(c, "×").SingleLine().LineHeight(font.LineHeight).TextColor(s.palette.Fg)
 				})
 			})
 		}
-	})
-}
-
-// drawModalErrorToasts anchors the component inside the active modal's focus scope.
-func (s *Shell) drawModalErrorToasts(c *ui.Context, width float32) {
-	height := s.toastHeight(c, width)
-	if height == 0 {
+	}
+	_, height := c.Size()
+	visibleHeight := min(stackHeight, height/2)
+	popup := ui.Box(c).Absolute().Left((width-stackWidth)/2).Bottom(m.errorToastBottom).Size(stackWidth, visibleHeight)
+	if stackHeight > visibleHeight {
+		popup.Children(func() {
+			ui.Scroll(c).Fill().Column().AlignItems(ui.Center).Gap(m.errorPadY).Children(drawRows)
+		})
 		return
 	}
-	ui.Box(c).Absolute().Left(0).Bottom(0).Size(width, height).Children(func() {
-		s.drawErrorToasts(c, width)
-	})
+	popup.PassThrough().Column().AlignItems(ui.Center).Gap(m.errorPadY).Children(drawRows)
 }
 
 // DrawError draws the error of the place where in its place on a screen. It draws nothing without an error.

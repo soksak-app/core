@@ -1237,7 +1237,7 @@ func (s *Shell) drawDebug(c *ui.Context, width float32) {
 	ui.Overlay(c, func() {
 		target := d.tail
 		DrawDebugView(c, s.binder, s.debugScreen(), s.errors).Children(func() {
-			s.drawModalErrorToasts(c, width)
+			s.drawErrorToasts(c, width)
 		})
 		if target != nil && d.viewing == target {
 			d.tail = nil

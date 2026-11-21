@@ -408,10 +408,25 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1033-5",
+    implementation: [
+      { file: "packages/workbench/app.css", symbol: "width: max-content" },
+      { file: "packages/workbench-mygo/src/errors_screen.go", symbol: "func (s *Shell) drawErrorToasts(" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/error-display.test.mjs", id: "the toast floats as a centered compact card in the window and dialog" },
+      { file: "packages/workbench/test/error-occurrences.test.mjs", id: "a toast expires after four seconds across repaint and movement into a dialog" },
+      { file: "packages/workbench-mygo/tests/split_test.go", id: "TestAnErrorToastKeepsTheCardBoundsOfTheWindow" },
+      { file: "packages/workbench-mygo/tests/errors_screen_test.go", id: "TestAnErrorToastExpiresWithoutRestartingForModalOrRepaint" },
+    ],
+    expected: "A compact toast floats over the content and expires without replacing an active occurrence.",
+    levels: ["unit"],
+  },
+  {
     id: "F1033-3.1",
     implementation: [
       { file: "packages/workbench/shown-errors.js", symbol: "place(root)" },
-      { file: "packages/workbench-mygo/src/errors_screen.go", symbol: "func (s *Shell) drawModalErrorToasts(" },
+      { file: "packages/workbench-mygo/src/errors_screen.go", symbol: "func (s *Shell) drawErrorToasts(" },
     ],
     tests: [
       { file: "packages/workbench/test/settings-error-toast.test.mjs", id: "the settings dialog owns the existing toast until it closes" },

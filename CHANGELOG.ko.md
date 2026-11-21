@@ -5,6 +5,7 @@
 
 ## 2026-11-21
 
+- F1033-5: 오류가 하단 중앙에 떠서 공간을 차지하지 않는다. Toast의 닫기나 만료는 이후의 같은 글을 닫을 수 없다. Red에서 library footer와 workbench card 경계가 이동했고 toast 만료가 없었다. Green에서 page test 28개와 native test 7개가 통과한다. 실행한 mygo library에서 작은 toast가 나타나고 만료되는 동안 form 경계가 같다.
 - F1033-3.1: 활성 settings 또는 debug modal이 같은 오류 toast를 표시하고 닫기 control을 소유한다. Red에서 native 닫기 control은 modal 뒤에서 비활성이고 page의 native 사본에 닫기 control이 없다. Green에서 두 native modal case와 page modal case가 통과한다.
 - F1033-2: Workbench와 library는 같은 글의 각 출처에 별도 오류 발생 기록을 두는 공용 toast component를 사용한다. Page는 시작 중 실패를 표시하기 전에 닫기를 설치한다. Red에서 library 실패가 toast를 열지 않았고 독립 출처가 log 기록이나 toast를 잃었으며 치명적인 page 시작 오류에 닫기를 연결하지 못했다. Green에서 page owner test 49개와 native owner test 11개가 통과한다.
 - F1033-1: 오류 표시 계약이 표시되는 오류를 소유하는 모든 애플리케이션 view를 명시한다. Library 오류 줄, 각 pane의 표시, 서로 다른 출처의 같은 글과 modal focus에 공용 component 규칙을 둔다.

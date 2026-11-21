@@ -468,6 +468,7 @@ func (s *Shell) flushTabs(answer func()) {
 // before its close, and a host call of a window that is gone fails.
 func (s *Shell) Closed() {
 	s.surfaces.closed = true
+	s.errors.stopToastExpiry()
 	// The page of a closed window ends with its pending timer, so a resize before the close saves no geometry after it.
 	if s.geometrySave != nil {
 		s.geometrySave()

@@ -150,7 +150,7 @@ mygo host에서는 워크벤치의 step이 native window가 닫힌 뒤에 실행
 
 ### 오류 표시
 
-사용자에게 표시하는 애플리케이션 실패는 workbench, library, settings, card, sidebar, modal view에서 같은 오류 toast component를 사용한다. 활성 document 또는 native view는 하단 중앙 근처에 작은 floating card로 toast를 표시한다. Layout 공간을 차지하지 않고 기존 focus를 유지하며 닫기 control을 둔다. 열린 toast는 4초 뒤 만료된다. 다시 그리거나 modal로 옮겨도 표시 시간은 다시 시작하지 않는다. Plugin surface는 선언된 애플리케이션 인터페이스로 작업 실패를 보고하고 host가 같은 component로 표시한다. Terminal program 출력과 document 콘텐츠는 각각의 표시 방식을 유지한다.
+사용자에게 표시하는 애플리케이션 실패는 workbench, library, settings, card, sidebar, modal view에서 같은 오류 toast component를 사용한다. 활성 document 또는 native view는 하단 중앙 근처에 작은 floating card로 toast를 표시한다. Layout 공간을 차지하지 않고 기존 focus를 유지하며 닫기 control을 둔다. 자동 닫기 설정을 켜면 열린 toast가 지정한 시간 뒤 만료된다([설정](settings.ko.md#오류-toast)). 다시 그리거나 modal로 옮겨도 표시 시간은 다시 시작하지 않는다. Plugin surface는 선언된 애플리케이션 인터페이스로 작업 실패를 보고하고 host가 같은 component로 표시한다. Terminal program 출력과 document 콘텐츠는 각각의 표시 방식을 유지한다.
 
 Component는 오류 style과 닫기 동작을 맡는다. 오류를 보고한 작업의 출처는 log, status, 철회에 유지한다. Toast를 닫으면 표시가 닫히고 애플리케이션 log 기록은 남는다. 실패한 작업의 control은 label과 복구 동작을 계속 제공한다.
 

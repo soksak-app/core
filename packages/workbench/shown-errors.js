@@ -3,6 +3,7 @@
 // `data-error` element that this path attaches. Drawing the same error again at the same place does not write it again.
 import { report } from "./host.js";
 import { delegate, mark } from "./commands.js";
+import { CHROME } from "./chrome-metrics.js";
 
 const shown = new Map();
 
@@ -30,6 +31,8 @@ function drawError(element, where, text) {
 }
 
 const documents = new WeakMap();
+const toastDuration = parseFloat(CHROME["error-toast-duration"]);
+const toastCloseKey = (id) => `error-toast:${id}`;
 
 /** Returns the error toast component for a document. */
 export function errorToasts(document) {
@@ -38,6 +41,7 @@ export function errorToasts(document) {
 }
 
 function createErrorToasts(document) {
+  const view = document.defaultView;
   const origins = new Map();
   const groups = new Map();
   const watchers = new Set();
@@ -50,7 +54,9 @@ function createErrorToasts(document) {
   }
 
   function open(text, where) {
-    const node = toast(document, text, where, ++nextToast);
+    const id = nextToast + 1;
+    const node = toast(document, text, where, id);
+    nextToast = id;
     if (!holder) {
       holder = document.createElement("div");
       holder.id = "errorToasts";
@@ -63,12 +69,15 @@ function createErrorToasts(document) {
     }
     if (holder.parentElement !== container) container.append(holder);
     holder.append(node);
-    const group = { text, node, origins: new Set(), anonymous: false };
+    const group = { id, text, node, origins: new Set(), anonymous: false, timer: null };
     groups.set(text, group);
+    // Visibility has a fixed duration; no input or render event signals its end.
+    group.timer = view.setTimeout(() => dismissGroup(group), toastDuration);
     return group;
   }
 
   function close(group) {
+    view.clearTimeout(group.timer);
     group.node.remove();
     groups.delete(group.text);
     if (groups.size === 0) holder.remove();
@@ -79,6 +88,14 @@ function createErrorToasts(document) {
     group.origins.delete(origin);
     if (group.origins.size !== 0 || group.anonymous) return false;
     close(group);
+    return true;
+  }
+
+  function dismissGroup(group) {
+    if (groups.get(group.text) !== group) return false;
+    for (const origin of group.origins) origins.get(origin).group = null;
+    close(group);
+    changed();
     return true;
   }
 
@@ -114,20 +131,24 @@ function createErrorToasts(document) {
       if (detach(origin, occurrence)) changed();
     },
 
-    /** Dismisses every occurrence in the visible toast. The named occurrences remain active until they recover. */
+    /** Removes the visible toast and retains its current named occurrences until they recover. */
     dismiss(text) {
       const group = groups.get(text);
       if (!group) return false;
-      for (const origin of group.origins) origins.get(origin).group = null;
-      close(group);
-      changed();
-      return true;
+      return dismissGroup(group);
     },
 
     /** Returns the current error of the origin, including a dismissed occurrence. */
     text: (origin) => origins.get(origin)?.text ?? null,
 
     newest: () => Array.from(groups.keys()).at(-1) ?? null,
+
+    /** Identifies a previously assigned close control that the modal copy can still hold after its removal. */
+    obsoleteClose(key, root) {
+      const id = Number(/^error-toast:([1-9]\d*)$/.exec(key)?.[1]);
+      if (!(id >= 1 && id <= nextToast)) return false;
+      return !Array.from(groups.values()).some((group) => group.id === id && root?.contains(group.node));
+    },
 
     /** Moves the existing stack to the foreground content without changing its occurrences. */
     place(root) {
@@ -153,7 +174,7 @@ function toast(document, text, where, id) {
   const close = document.createElement("button");
   close.type = "button";
   close.className = "error-toast__close";
-  close.dataset.key = `error-toast:${id}`;
+  close.dataset.key = toastCloseKey(id);
   close.dataset.expose = "core.error.dismiss";
   close.title = "오류 닫기";
   close.setAttribute("aria-label", close.title);

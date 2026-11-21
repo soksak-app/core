@@ -6,6 +6,7 @@ import { selectPageWire } from "@soksak/runtime";
 import { recordsOf } from "./support/records.mjs";
 
 test("the native settings and debug copies share the foreground toast and forward its close once", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   const wire = selectPageWire("error-toast-modal");
   const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   const dom = new JSDOM(markup, { url: "http://localhost/" });
@@ -69,13 +70,32 @@ test("the native settings and debug copies share the foreground toast and forwar
   // The state and file listing can finish while the native modal is opening. Its ordered updates wait for that reply.
   wire.release("overlayShow");
   await orderedCallsAnswered();
-  const button = copied("overlayUpdate", "debug");
+  const previous = copied("overlayUpdate", "debug");
+  const previousKey = previous.dataset.key;
   let dismissals = 0;
   registry.watch((name) => { if (name === "core.error.dismiss") dismissals++; });
   const answers = [];
   onAnswer(copy.window.document, (key, value) => answers.push({ key, value }));
+  t.mock.timers.tick(4000);
+  await orderedCallsAnswered();
+  assert.equal(errors.newest(), null);
+  errors.withdraw("activity");
+  source("activity");
+  await orderedCallsAnswered();
+  assert.equal(errors.newest(), message);
+
+  // The copied document can still have the old control until it processes the newer overlay updates.
+  previous.click();
+  assert.deepEqual(answers, [{ key: previousKey, value: "" }]);
+  wire.deliverNotice();
+  assert.equal(dismissals, 0, "the obsolete key did not issue a dismiss command for the newer occurrence");
+  assert.equal(errors.newest(), message);
+  assert.throws(() => wire.deliverNotice(), /debug control missing debug key is not in the card/);
+
+  const button = copied("overlayUpdate", "debug");
+  assert.notEqual(button.dataset.key, previousKey);
   button.click();
-  assert.deepEqual(answers, [{ key: button.dataset.key, value: "" }]);
+  assert.deepEqual(answers.at(-1), { key: button.dataset.key, value: "" });
   wire.deliverNotice();
   await registry.commandsEnded();
   await orderedCallsAnswered();
@@ -93,6 +113,7 @@ test("the native settings and debug copies share the foreground toast and forwar
   await flushEvents();
   assert.deepEqual(wire.calls.flatMap(({ name, payload }) => recordsOf(name, payload)), [
     { level: "error", where: "layout origin", text: message },
+    { level: "error", where: "activity origin", text: message },
     { level: "error", where: "activity origin", text: message },
   ]);
   wire.finish();

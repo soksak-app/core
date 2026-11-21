@@ -1,6 +1,6 @@
 {
   "name": "error-toast-modal",
-  "description": "The settings and debug modals present a shared error toast and the reported dismiss control removes it.",
+  "description": "The settings and debug modals present a shared toast. An expired copied close control leaves a new occurrence open, and the current close control dismisses it.",
   "replay": false,
   "reason": "The modal calls need a window, and the Go producer runs only the log and workspace calls without a window (docs/spec/cases/page-wire/README.md#producer-runs).",
   "variables": {
@@ -127,6 +127,40 @@
       "source": "page"
     },
     "mono-ns-4": {
+      "type": "integer",
+      "example": 5000000803,
+      "source": "page"
+    },
+    "update-after-expiry": {
+      "type": "object",
+      "example": {
+        "id": "debug"
+      },
+      "source": "page"
+    },
+    "update-after-reopened": {
+      "type": "object",
+      "example": {
+        "id": "debug"
+      },
+      "source": "page"
+    },
+    "ts-us-5": {
+      "type": "integer",
+      "example": 1791000000000463,
+      "source": "page"
+    },
+    "ts-us-6": {
+      "type": "integer",
+      "example": 1791000000000463,
+      "source": "page"
+    },
+    "mono-ns-5": {
+      "type": "integer",
+      "example": 5000000803,
+      "source": "page"
+    },
+    "mono-ns-6": {
       "type": "integer",
       "example": 5000000803,
       "source": "page"
@@ -410,11 +444,79 @@
       }
     },
     {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": "$update-after-expiry"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": "$update-after-reopened"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-5",
+              "mono_ns": "$mono-ns-5",
+              "start": "$page-identity",
+              "level": "error",
+              "event": "workbench.record.error",
+              "fields": {
+                "where": "activity origin",
+                "text": "The workspace could not be saved"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
       "notice": {
         "event": "overlay-pick",
         "payload": {
           "id": "debug",
           "key": "error-toast:1",
+          "value": ""
+        }
+      }
+    },
+    {
+      "notice": {
+        "event": "overlay-pick",
+        "payload": {
+          "id": "debug",
+          "key": "missing debug key",
+          "value": ""
+        }
+      }
+    },
+    {
+      "notice": {
+        "event": "overlay-pick",
+        "payload": {
+          "id": "debug",
+          "key": "error-toast:2",
           "value": ""
         }
       }
@@ -470,6 +572,18 @@
                 "class": "input",
                 "level": "debug",
                 "count": 4
+              }
+            },
+            {
+              "ts_us": "$ts-us-6",
+              "mono_ns": "$mono-ns-6",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "input",
+                "level": "info",
+                "count": 1
               }
             },
             {

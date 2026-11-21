@@ -34,6 +34,7 @@ A change redraws the window and keeps the scroll position of the shown content; 
 | 테마 | theme swatches `theme`, 모드 `mode` |
 | 형태 | 통로 `gap`, 모서리 `radius`, 폰트 `font`, 글자 크기 `size` |
 | 위치 | 프로젝트 탭 위치 `projectTabs` |
+| 알림 (common scope only) | 오류 toast 자동 닫기 `autoDismissErrorToasts` and delay `errorToastDismissSeconds` |
 | 사이드바 | 왼쪽 사이드바 보이기 `left`, 오른쪽 사이드바 보이기 `right`, 위 사이드바 보이기 `top`, 아래 사이드바 보이기 `bottom`; 왼쪽 사이드바 세트, 오른쪽 사이드바 세트, 위 사이드바 세트 and 아래 사이드바 세트 (each a select of all sets and 사용 안 함, `core.settings.link {place, plugin: null, set}`); 사이드바 순서 `sidebarOrder` |
 | 사이드바 크기 | the width settings of [layout values](#layout-values) |
 | 표시 | 포커스 표시 `focusInd`, 카드 자동 정렬 `cardArrange`, 경계선 `fullRule`, 포커스 밖 흐리게 `dim` |
@@ -43,6 +44,10 @@ A change redraws the window and keeps the scroll position of the shown content; 
 | 에이전트 (common scope only) | the setup parts of [agents](#에이전트), with 설치 and 다시 확인 |
 
 Window choices select content for one fixed sidebar on each side, left, right, top and bottom. The focused active plugin overrides the general side choice in the same place without adding a sidebar. A visibility switch affects the fixed sidebar of its side, and 사이드바 순서 sets which sidebar takes the room of the plane first ([external window sidebars](external-sidebars.md#fixed-placement-and-persistence)). The group states this under its name: 한 변에는 고정 사이드바가 하나 있고, 포커스된 플러그인의 창 세트는 같은 자리의 내용을 바꾼다. 순서가 앞선 변의 사이드바가 먼저 공간을 차지한다. Card sidebars remain inside their cards; the obsolete `cardSidebar` positioning setting is rejected. No plugin setting appears in 일반.
+
+### Error toasts
+
+The common group 알림 shows a switch and an editable seconds field as `[5]초 후 자동으로 닫힘`. The switch `autoDismissErrorToasts` defaults to off. Each visible toast can be closed with its own close control and several toasts can stack. The `errorToastDismissSeconds` setting defaults to five and accepts positive whole seconds within the timer range. The common settings file saves both values. Disabling the switch cancels all existing deadlines and retains the open toasts. Enabling it or changing the delay starts the configured delay for each open toast.
 
 ### 진단
 

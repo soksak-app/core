@@ -106,7 +106,7 @@ type metrics struct {
 	// The card head (.chrome of packages/workbench/app.css).
 	cardHeadGap, cardHeadPad, cardTabsGap, cardButton, cardIcon, cardActsGap, cardActsPad, cardActHalfOpacity, tabGap, tabPadY, tabPadX, tabXPad, tabXOpacity, iconStroke, groupFramePad, groupFrameRadius, disabledOpacity, noticeDotInset, radiusMiddleRatio, radiusSmallRatio, textSmallAtBase, textBase, chipSelMix, renameSelectionMix, insetMix, tabXHoverMix float32
 	// The error toasts of packages/workbench/app.css.
-	errorPadY, errorPadX, errorBorder, errorClosePadX float32
+	errorPadY, errorPadX, errorBorder, errorClosePadX, errorToastBottom, errorToastMaxWidth float32
 	// debugW is the width of the debug view, and debugH its largest share of the window height.
 	debugW, debugH float32
 	// The grip of a divider, the dots of a folded side and the lines of the boundaries (.sp-divider, .card-sidebar__grip and .sp-rule of
@@ -217,6 +217,8 @@ func readMetrics(declared *Declarations) (metrics, error) {
 	read("error-pad-x", &m.errorPadX)
 	read("error-border", &m.errorBorder)
 	read("error-close-pad-x", &m.errorClosePadX)
+	read("error-toast-bottom", &m.errorToastBottom)
+	read("error-toast-max-width", &m.errorToastMaxWidth)
 	read("disabled-opacity", &m.disabledOpacity)
 	read("notice-dot-inset", &m.noticeDotInset)
 	read("r-xs-ratio", &m.radiusSmallRatio)
@@ -634,6 +636,12 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	if err != nil {
 		return nil, err
 	}
+	if s.tabs != nil {
+		duration := int64(options.Declared.ChromeNumber("error-toast-duration", "ms"))
+		s.errors.startToastExpiry(func(expire func()) func() {
+			return s.tabs.after(duration, expire)
+		}, s.options.Invalidate)
+	}
 	return s, nil
 }
 
@@ -984,17 +992,17 @@ func (s *Shell) View(c *ui.Context) {
 	}
 	root.Children(func() {
 		s.drawChrome(c, width)
-		contentHeight := max(0, height-s.chromeHeight()-s.toastHeight(c, width))
+		contentHeight := max(0, height-s.chromeHeight())
 		if s.browsing || s.opened() == nil {
 			s.drawLibrary(c, width, contentHeight)
 		} else {
 			s.drawWorkArea(c, width, contentHeight)
 		}
-		if !dialogOpen {
-			s.drawErrorToasts(c, width)
-		}
 	})
 	s.drawViewsBehindDialog(c)
+	if !dialogOpen {
+		ui.Overlay(c, func() { s.drawErrorToasts(c, width) })
+	}
 	s.drawPicker(c, width, height)
 	s.drawSettings(c, width, height, settings)
 	s.drawDebug(c, width)

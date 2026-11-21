@@ -488,21 +488,17 @@ func TestAnUnknownPluginIsRefused(t *testing.T) {
 	}
 }
 
-// The error toasts of the workbench stand at the bottom of the window and take their height from the plane, so the
-// cards keep the top of the window (docs/spec/exposure.md, core.workbench.error).
-func TestAnErrorToastKeepsTheCardsAtTheTopOfTheWindow(t *testing.T) {
+// The floating error toast leaves the complete card rectangle unchanged.
+func TestAnErrorToastKeepsTheCardBoundsOfTheWindow(t *testing.T) {
 	f := narrowCard(t, 1, "a")
 	before := f.box("core.card", "main")
 	f.shell.Event("surface-pressed", []any{7.0})
-	f.pending.drain(t)
-	f.tester.Frame()
-	f.tester.Frame()
-	after := f.box("core.card", "main")
-	if after.Y != before.Y {
-		t.Fatalf("the card stands at %v under the toasts, before it at %v", after.Y, before.Y)
+	if shown := f.shownErrors(); len(shown) == 0 {
+		t.Fatal("the workbench did not show an error")
 	}
-	if bottom := after.Y + after.H; bottom >= before.Y+before.H {
-		t.Fatalf("the card ends at %v, want above the toasts at %v", bottom, before.Y+before.H)
+	f.tester.Frame()
+	if after := f.box("core.card", "main"); after != before {
+		t.Fatalf("the card changed from %+v to %+v under the toast", before, after)
 	}
 }
 

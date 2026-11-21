@@ -207,3 +207,70 @@ func assertOnlyToastClose(t *testing.T, tree []ui.ElementNode, text string) ui.E
 	}
 	return close
 }
+
+func TestAnErrorToastExpiresWithoutRestartingForModalOrRepaint(t *testing.T) {
+	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
+	const failure = "the operation could not finish"
+	f.shellFixture.run("core.focus.set", map[string]string{"name": "core.chrome.settings"})
+	workbenchFocus := f.status("core.focus")
+	if workbenchFocus == "null" {
+		t.Fatal("the workbench settings button has no focus")
+	}
+
+	f.shell.StartFailed(errors.New(failure))
+	want := []shownRecord{{"workbench", failure}}
+	if got := f.shownRecords(); !slices.Equal(got, want) {
+		t.Fatalf("the workbench recorded %q, want %q", got, want)
+	}
+	if got := f.status("core.focus"); got != workbenchFocus {
+		t.Fatalf("opening the toast moved focus from %s to %s", workbenchFocus, got)
+	}
+	assertOnlyToastClose(t, f.tester.ElementTree(), failure)
+
+	f.timers.tick(2000)
+	f.do("core.settings.open", nil)
+	f.shellFixture.run("core.focus.set", map[string]string{"name": "core.settings-modal.close"})
+	modalFocus := f.status("core.focus")
+	if modalFocus == "null" || modalFocus == workbenchFocus {
+		t.Fatalf("the settings close button did not take focus: %s", modalFocus)
+	}
+	f.timers.tick(1999)
+	f.tester.Frame()
+	f.tester.Frame()
+	assertOnlyToastClose(t, f.tester.ElementTree(), failure)
+	f.timers.tick(1)
+	f.settle()
+	if got := f.status("core.workbench.error"); got != "null" {
+		t.Fatalf("the toast is still open after its original 4000ms: %s", got)
+	}
+	if _, shown := keyed(f.tester.ElementTree(), "core.error.dismiss", failure); shown {
+		t.Fatal("the expired toast still has a close control")
+	}
+	if got := f.status("core.focus"); got != modalFocus {
+		t.Fatalf("expiring the toast moved focus from %s to %s", modalFocus, got)
+	}
+}
+
+func TestAClosedToastDeadlineDoesNotExpireANewerEqualToast(t *testing.T) {
+	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
+	const failure = "the operation could not finish"
+	f.shell.StartFailed(errors.New(failure))
+	f.shownRecords()
+	f.timers.tick(1000)
+	press(t, f.tester, "core.error.dismiss", failure)
+	f.settle()
+
+	// A different workbench occurrence allows the failed operation to open a new toast with the same text.
+	f.shell.StartFailed(errors.New("another operation failed"))
+	f.shell.StartFailed(errors.New(failure))
+	f.shownRecords()
+	f.timers.tick(3000)
+	f.settle()
+	assertOnlyToastClose(t, f.tester.ElementTree(), failure)
+
+	f.timers.tick(1000)
+	f.settle()
+	if got := f.status("core.workbench.error"); got != "null" {
+		t.Fatalf("the newer toast did not expire at its own deadline: %s", got)
+	}
+}

@@ -145,7 +145,6 @@ func (s *Shell) alignPlane(width, stage float32) (float32, float32) {
 	inset := s.stageInset()
 	left, top := s.stageShare()
 	area := layout.Rect{
-		// The workbench receives its height after the window reserves the space of the error toasts.
 		X: float64(s.projectColumnWidth() + inset - left), Y: float64(s.chromeHeight() + s.spaceRowHeight() + inset - top),
 		W: float64(width - 2*inset + left), H: float64(stage - 2*inset + top),
 	}

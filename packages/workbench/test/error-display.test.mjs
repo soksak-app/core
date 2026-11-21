@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
+import { JSDOM } from "jsdom";
 
 const here = new URL("../", import.meta.url);
 const files = (extension) => readdirSync(here).filter((name) => name.endsWith(extension));
@@ -33,4 +34,28 @@ test("only the error display path marks an element as an error", () => {
     }
   }
   assert.deepEqual(offending, [], "these lines mark an error without the error display path");
+});
+
+test("the toast floats as a centered compact card in the window and dialog", () => {
+  const dom = new JSDOM("<head></head>");
+  try {
+    const sheet = dom.window.document.createElement("style");
+    sheet.textContent = readFileSync(new URL("../app.css", import.meta.url), "utf8");
+    dom.window.document.head.append(sheet);
+    const style = (selector) => [...sheet.sheet.cssRules].find((rule) => rule.selectorText === selector)?.style;
+    const holder = style("#errorToasts");
+    assert.equal(holder.position, "fixed");
+    assert.equal(holder.width, "max-content");
+    assert.equal(holder.left, "var(--center)");
+    assert.match(holder.getPropertyValue("max-width"), /var\(--error-toast-max-width\)/);
+    assert.equal(holder.bottom, "var(--error-toast-bottom)");
+    assert.equal(holder.getPropertyValue("pointer-events"), "none");
+    assert.equal(style('[data-native-modal="dialog"] > #errorToasts').position, "absolute");
+    const card = style(".error-toast");
+    assert.equal(card.background, "var(--card)");
+    assert.equal(card.getPropertyValue("border-radius"), "var(--r-sm)");
+    assert.equal(card.getPropertyValue("pointer-events"), "auto");
+  } finally {
+    dom.window.close();
+  }
 });

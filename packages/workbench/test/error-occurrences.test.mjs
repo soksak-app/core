@@ -12,10 +12,10 @@ function fixture(t) {
   const dom = new JSDOM("<body></body>");
   t.after(() => dom.window.close());
   const { document } = dom.window;
-  const { show, withdraw, dismiss } = errorToasts(document);
+  const { show, withdraw, dismiss, place, text } = errorToasts(document);
   const log = t.mock.method(rawConsole, "error", () => {});
   return {
-    show, clear: withdraw, dismiss,
+    document, show, clear: withdraw, dismiss, place, text,
     open: () => [...document.querySelectorAll("#errorToasts > .error-toast")].map((toast) => toast.dataset.text),
     records: () => log.mock.calls.map(({ arguments: [line] }) => line),
   };
@@ -58,4 +58,42 @@ test("a dismissed occurrence stays closed on repaint and can reopen after recove
   assert.deepEqual(display.records(), [
     "workbench: failed from layout", "workbench: failed from activity", "workbench: failed after activity recovered",
   ]);
+});
+
+test("a toast expires after four seconds across repaint and movement into a dialog", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const display = fixture(t);
+  const { document } = display;
+  const dialog = document.createElement("div");
+  dialog.setAttribute("role", "dialog");
+  document.body.append(dialog);
+  display.show("failed", "", "layout");
+  t.mock.timers.tick(2000);
+  display.show("failed", "", "layout");
+  display.place(dialog);
+  assert.ok(dialog.querySelector(".error-toast"));
+  t.mock.timers.tick(1999);
+  assert.deepEqual(display.open(), ["failed"]);
+  t.mock.timers.tick(1);
+  assert.deepEqual(display.open(), []);
+  assert.equal(display.text("layout"), "failed", "the occurrence remains current after the toast expires");
+  display.show("failed", "", "layout");
+  display.place(document.body);
+  assert.deepEqual(display.open(), []);
+  assert.deepEqual(display.records(), ["workbench: failed"]);
+});
+
+test("a cancelled toast timer leaves a later occurrence of the same text open", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const display = fixture(t);
+  display.show("failed", "", "layout");
+  t.mock.timers.tick(1000);
+  assert.equal(display.dismiss("failed"), true);
+  display.clear("layout");
+  display.show("failed", "", "layout");
+  t.mock.timers.tick(3000);
+  assert.deepEqual(display.open(), ["failed"]);
+  t.mock.timers.tick(1000);
+  assert.deepEqual(display.open(), []);
+  assert.deepEqual(display.records(), ["workbench: failed", "workbench: failed"]);
 });

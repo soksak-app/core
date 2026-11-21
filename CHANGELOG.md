@@ -5,6 +5,7 @@
 
 ## 2026-11-21
 
+- F1033-5: An error floats at the bottom center and reserves no space. Closing or expiring a toast cannot close a later equal occurrence. Red: the library footer and workbench card bounds moved, and toast expiry was absent. Green: 28 page and seven native tests pass. The running mygo library keeps identical form bounds while a compact toast appears and expires.
 - F1033-3.1: The active settings or debug modal displays the same error toast and owns its close control. Red: the native close control is inert behind the modal and the page's native copy has no close control. Green: both native modal cases and the page modal cases pass.
 - F1033-2: The workbench and library use a shared toast component with separate occurrence records for the sources of one message. Page startup installs dismissal before displaying a failure. Red: library failures opened no toast, independent origins lost their record or toast, and fatal page startup failed to bind dismissal. Green: 49 page and 11 native owner tests pass.
 - F1033-1: The error presentation contract names every application view that owns shown errors. Library error lines, pane-specific rendering, duplicate text from different origins, and modal focus each have a shared component rule.

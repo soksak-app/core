@@ -34,6 +34,7 @@ chrome 버튼과 app 메뉴의 항목 설정…(Settings…), 단축키 `cmd+,`�
 | 테마 | 테마 견본 `theme`, 모드 `mode` |
 | 형태 | 통로 `gap`, 모서리 `radius`, 폰트 `font`, 글자 크기 `size` |
 | 위치 | 프로젝트 탭 위치 `projectTabs` |
+| 알림 (전역 scope 전용) | 오류 toast 자동 닫기 `autoDismissErrorToasts`와 delay `errorToastDismissSeconds` |
 | 사이드바 | 왼쪽 사이드바 보이기 `left`, 오른쪽 사이드바 보이기 `right`, 위 사이드바 보이기 `top`, 아래 사이드바 보이기 `bottom`; 왼쪽 사이드바 세트, 오른쪽 사이드바 세트, 위 사이드바 세트, 아래 사이드바 세트(각각 모든 세트와 사용 안 함의 선택 상자, `core.settings.link {place, plugin: null, set}`); 사이드바 순서 `sidebarOrder` |
 | 사이드바 크기 | [배치 값](#배치-값)의 폭 설정 |
 | 표시 | 포커스 표시 `focusInd`, 카드 자동 정렬 `cardArrange`, 경계선 `fullRule`, 포커스 밖 흐리게 `dim` |
@@ -43,6 +44,10 @@ chrome 버튼과 app 메뉴의 항목 설정…(Settings…), 단축키 `cmd+,`�
 | 에이전트 (전역 범위에서만) | [에이전트](#에이전트)의 setup part, 설치와 다시 확인 |
 
 창 선택은 왼쪽, 오른쪽, 위, 아래 각 변의 고정 사이드바 하나의 내용을 선택한다. 포커스 활성 플러그인은 사이드바를 추가하지 않고 같은 자리에서 일반 변 선택을 오버라이드한다. 표시 스위치는 자기 변의 고정 사이드바에 적용하고, 사이드바 순서는 어느 사이드바가 plane의 공간을 먼저 차지하는지 정한다([외부 창 사이드바](external-sidebars.ko.md#고정-배치와-저장)). 묶음은 이름 아래에 이를 밝힌다: 한 변에는 고정 사이드바가 하나 있고, 포커스된 플러그인의 창 세트는 같은 자리의 내용을 바꾼다. 순서가 앞선 변의 사이드바가 먼저 공간을 차지한다. 카드 사이드바는 카드 내부에 있으며 기존 `cardSidebar` 위치 설정은 거부한다. 일반에는 플러그인 설정이 없다.
+
+### 오류 toast
+
+전역 알림 group은 switch와 편집할 수 있는 초 입력을 `[5]초 후 자동으로 닫힘`으로 표시한다. Switch `autoDismissErrorToasts`의 기본값은 끄기다. 표시되는 toast는 각자 닫기 control로 닫을 수 있고 여러 toast가 쌓일 수 있다. `errorToastDismissSeconds` 설정의 기본값은 5이며 timer 범위의 양의 정수 초를 받는다. 전역 설정 파일이 두 값을 저장한다. Switch를 끄면 기존 deadline을 모두 취소하고 열린 toast를 유지한다. 켜거나 delay를 바꾸면 열린 각 toast에 설정한 delay를 적용한다.
 
 ### 진단
 

@@ -569,6 +569,8 @@ func TestAFailedOpenOfTheLibraryShowsADismissibleToast(t *testing.T) {
 	f := openedShell(t)
 	id := f.host.projects[0]["id"].(string)
 	f.run("core.projects.browse", nil)
+	beforeCard := f.box("core.library.open", id)
+	beforeFooter := f.box("core.library.window", "")
 	missing := "project directory does not exist: /work/alpha"
 	f.host.failing = map[string]error{"projectFolder": errors.New(missing)}
 	var failure error
@@ -591,8 +593,14 @@ func TestAFailedOpenOfTheLibraryShowsADismissibleToast(t *testing.T) {
 		t.Fatalf("the library toast reports %s", toast)
 	}
 	close := f.box("core.error.dismiss", missing)
-	if close.Y < 700 || close.Y+close.H > 800 {
-		t.Fatalf("the library toast close control is outside the bottom of the window: %+v", close)
+	if close.X <= 600 || close.X+close.W > 810 || close.Y < 700 || close.Y+close.H > 776 {
+		t.Errorf("the library toast close control is outside the compact floating popup: %+v", close)
+	}
+	if after := f.box("core.library.open", id); after != beforeCard {
+		t.Errorf("the project card changed from %+v to %+v", beforeCard, after)
+	}
+	if after := f.box("core.library.window", ""); after != beforeFooter {
+		t.Errorf("the library footer changed from %+v to %+v", beforeFooter, after)
 	}
 	f.tester.ClickAt(close.X+close.W/2, close.Y+close.H/2)
 	f.settle()

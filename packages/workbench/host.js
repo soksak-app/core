@@ -975,7 +975,7 @@ if (native) {
   // The reply carries the modal it belongs to. It is used to filter out the last reply of a closed modal so that it
   // does not reach the receiver of the next modal.
   bridge.on("overlay-pick", ({ id, key, value }) => {
-    if (id !== shown) {
+    if (id !== shown || errorToasts(document).obsoleteClose(key, document.getElementById(shown))) {
       // default: a page that shows no modal records the empty text as the shown one.
       emitEvent("info", "workbench.overlay.dropped", { id, shown: shown ?? "", key });
       return;
