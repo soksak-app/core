@@ -74,10 +74,6 @@ func (windows) OpenAgentSetupLockFile(path string) (*os.File, error) {
 	return nil, fmt.Errorf("user setup lock file %s is not implemented on windows", path)
 }
 
-func (windows) PathsDir() (string, error) {
-	return "", errors.New("path entries are not implemented on windows")
-}
-
 func (windows) ReadOnlyVolume(path string) (bool, error) {
 	return false, fmt.Errorf("the read-only flag of the volume of %s is not implemented on windows", path)
 }
@@ -88,4 +84,8 @@ func (windows) RegisteredSok(string) error {
 
 func (windows) ReplaceProcess(string, []string, []string) error {
 	return errors.New("process replacement is not implemented on windows")
+}
+
+func (windows) UserPath() error {
+	return errors.New("the user PATH registration is not implemented on windows")
 }

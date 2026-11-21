@@ -18,7 +18,6 @@ fn run_query_command(config_dir: &Path, args: &[&str]) -> (String, String, i32) 
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
     let options = soksak_sok::Options {
         identifier: "app.soksak.tauri",
-        paths_dir: Err("not used".to_string()),
         core_version: "0.0.2",
         config_dir_variable: None,
     };

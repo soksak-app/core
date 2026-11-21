@@ -15,9 +15,9 @@ type Platform interface {
 	ProcessRunning(pid int) error
 	// Key is the release key (`<os>-<arch>`) of this platform; an architecture without a key is an error.
 	Key() (string, error)
-	// PathsDir is the folder that holds path entries. It is an error when this operating system has no such folder
-	// (docs/spec/cli.md).
-	PathsDir() (string, error)
+	// UserPath is nil when this operating system has the user PATH registration, and otherwise the reason that it has none
+	// (docs/spec/cli.md#user-path-registration).
+	UserPath() error
 	// ExtractBundle extracts the zip of an application bundle into the folder.
 	ExtractBundle(zipped, folder string) error
 	// BundleVersion is the version that the application bundle at the path declares.

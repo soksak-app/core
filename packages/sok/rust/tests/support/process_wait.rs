@@ -1,11 +1,8 @@
-use std::path::Path;
-
 pub fn run(args: &[&str]) -> (i32, String, String) {
     let args: Vec<String> = args.iter().map(|arg| arg.to_string()).collect();
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
     let options = soksak_sok::Options {
         identifier: "com.soksak.test",
-        paths_dir: Ok(Path::new("/tmp")),
         core_version: "0.0.21",
         config_dir_variable: None,
     };

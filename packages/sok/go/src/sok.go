@@ -45,11 +45,10 @@ commands:
                             replays the session with the replay executable of its sidecar and compares every stored screen hash
   capture [window]          (diagnostic builds) writes a still image of the window without focusing it
   context                   prints the configuration directory, the surface of this process and its window
-  path install|remove       writes or deletes the PATH entry of this application (needs sudo)
   skill print|install       writes the agent skill to standard output or into the skill folder of each agent folder
   mcp install               registers sok mcp with the claude command in its user scope
   setup check               prints each setup part with its state and its install step
-  setup install [path|skill|mcp]...
+  setup install [skill|mcp|hook]...
                             installs each missing setup part of the named kinds
   setup environment         prints HOME, PATH, CLAUDE_CONFIG_DIR and every variable of the environment as one JSON line
   app update --wait PID --bundle PATH --target PATH [-- ARGUMENT...]
@@ -633,13 +632,8 @@ func watch(client *Client, params map[string]any, stdout io.Writer) error {
 // Options are the application and the operating system slots that the command line belongs to.
 type Options struct {
 	// Identifier is the identifier of the application. It is the name of the configuration directory when --config-dir is
-	// absent and the file name of the path entry.
+	// absent.
 	Identifier string
-	// PathsDir is the folder that holds path entries (/etc/paths.d on macOS).
-	PathsDir string
-	// PathsError is the reason this operating system has no path entry folder. When it is set, sok path fails with that
-	// error.
-	PathsError error
 	// CoreVersion is the core version used to choose plugins. The executable passes the CoreVersion of this Go package.
 	CoreVersion string
 }
@@ -721,13 +715,6 @@ func run(args []string, stdout, stderr io.Writer, options Options) (err error) {
 	}
 	if len(a.positionals) > 0 && a.positionals[0] == "debug" {
 		return runDebug(a, stdout, stderr, options)
-	}
-	if len(a.positionals) > 0 && a.positionals[0] == "path" {
-		action, err := a.positional(1, "path action")
-		if err != nil {
-			return err
-		}
-		return runPath(action, stdout, options)
 	}
 	if handled, err := runAgentSetup(a, stdout, options); handled {
 		return err

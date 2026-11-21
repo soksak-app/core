@@ -153,8 +153,7 @@ func registrationCommand(entry json.RawMessage) string {
 }
 
 // RequireWritableVolume fails for a sok on a volume that is mounted read-only, which disappears after the run
-// (docs/spec/cli.md#mcp-registration): the judgement of `sok path install` for the running sok and of `sok mcp install` for the
-// registered sok.
+// (docs/spec/cli.md#mcp-registration): the judgement of `sok mcp install` for the registered sok.
 func RequireWritableVolume(sok string) error {
 	system, err := platform.Current()
 	if err != nil {

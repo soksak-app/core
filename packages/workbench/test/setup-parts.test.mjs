@@ -23,7 +23,7 @@ test("showing the group reads the parts, window-active and setup-changed read th
   parts.follow();
   parts.show(true);
   await settled();
-  assert.deepEqual(parts.status().parts.map(({ part, state }) => [part, state]), [["path", "missing"], ["skill", "missing"], ["mcp", "missing"]]);
+  assert.deepEqual(parts.status().parts.map(({ part, state }) => [part, state]), [["path", "ok"], ["skill", "missing"], ["mcp", "missing"]]);
   assert.equal(parts.status().running, null);
   // Drawing the shown group again does not read the parts again.
   parts.show(true);
@@ -37,7 +37,7 @@ test("showing the group reads the parts, window-active and setup-changed read th
 
   wire.deliverNotice();
   await settled();
-  assert.deepEqual(parts.status().parts.map(({ part, state }) => [part, state]), [["path", "missing"], ["skill", "ok"], ["mcp", "ok"]]);
+  assert.deepEqual(parts.status().parts.map(({ part, state }) => [part, state]), [["path", "ok"], ["skill", "ok"], ["mcp", "ok"]]);
 
   parts.show(false);
   wire.deliverNotice();
@@ -55,7 +55,7 @@ test("an install runs setupInstall with the kinds, reports them as running, refu
   assert.equal(wire.calls.length, 1, "the second install was sent to the host");
   wire.release("setupInstall");
   const answer = await first;
-  assert.deepEqual(answer.parts.map(({ part, changed }) => [part, changed]), [["path", false], ["skill", true], ["mcp", true]]);
+  assert.deepEqual(answer.parts.map(({ part, changed }) => [part, changed]), [["path", undefined], ["skill", true], ["mcp", true]]);
   assert.deepEqual(parts.status().running, null);
   assert.equal(parts.status().parts, answer.parts);
 

@@ -316,7 +316,6 @@ fn tool_run_events(config: &Folder, args: &[&str]) -> Vec<Value> {
     all.push(config.path().to_str().unwrap().into());
     let options = soksak_sok::Options {
         identifier: "com.soksak.test",
-        paths_dir: Ok(std::path::Path::new("/nonexistent/paths.d")),
         core_version: "0.0.2",
         config_dir_variable: None,
     };

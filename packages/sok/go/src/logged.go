@@ -138,12 +138,8 @@ func interrupted(closeErr error) {
 
 // Logged runs command and records it: it starts the event file of the targeted configuration directory, runs the command,
 // stores a panic of the command with its stack as the exit status PanicStatus, stores the command with its result, and
-// flushes the file. An event file that cannot be started is reported on the standard error and the command runs without it. A
-// path entry command runs without an event file.
+// flushes the file. An event file that cannot be started is reported on the standard error and the command runs without it.
 func Logged(args []string, stdout, stderr io.Writer, options Options, command Command) int {
-	if commandWord(args) == "path" {
-		return unlogged(args, stdout, stderr, options, command)
-	}
 	started := time.Now()
 	config, err := targetConfigDir(args, options)
 	var log *EventLog
@@ -223,20 +219,6 @@ func Logged(args []string, stdout, stderr io.Writer, options Options, command Co
 	}
 	log.Close()
 	return status
-}
-
-// unlogged runs a path entry command without an event file (docs/spec/cli.md#event-log): it runs as root through sudo, and a folder
-// or file that it created in the configuration directory would belong to root and refuse the later runs of the person. A panic
-// of the command is written to the standard error and ends the run with the status PanicStatus.
-func unlogged(args []string, stdout, stderr io.Writer, options Options, command Command) int {
-	status, panicked := Guard(func() int { return command(args, stdout, stderr, options) })
-	if panicked == nil {
-		return status
-	}
-	if _, err := fmt.Fprintf(stderr, "sok: panic: %s\n%s", panicked.Text, panicked.Stack); err != nil {
-		return 3
-	}
-	return PanicStatus
 }
 
 // Main runs Run with the record of the tool.

@@ -132,7 +132,6 @@ var eventClasses = map[string]Class{
 	"sok.exec":                               ClassLifecycle,
 	"sok.panic":                              ClassLifecycle,
 	"sok.replay.divergence":                  ClassFrame,
-	"sok.setup.path":                         ClassLifecycle,
 	"sok.skill":                              ClassLifecycle,
 	"workbench.background.session":           ClassLifecycle,
 	"workbench.call":                         ClassCall,

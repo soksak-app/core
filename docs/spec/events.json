@@ -473,37 +473,6 @@
       },
       "description": "One skill file that `sok mcp` could not write when it brings the skill current at its start, one event for each such file: the skill file and the operating system reason in lower case; a failure that names no skill file, such as an unset HOME or an agent folder that cannot be read, has no `file` and its whole text as `reason`."
     },
-    "sok.setup.path": {
-      "layer": "sok",
-      "class": "lifecycle",
-      "level": [
-        "info",
-        "warn"
-      ],
-      "fields": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "type": "object",
-        "properties": {
-          "file": {
-            "type": "string"
-          },
-          "ok": {
-            "type": "boolean"
-          },
-          "error": {
-            "type": "string"
-          },
-          "truncated": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "file",
-          "ok"
-        ]
-      },
-      "description": "The result of `sudo <sok> path install` that `sok setup install` ran, stored by that run because the path entry command runs as root and opens no event file: the path entry file, whether the step succeeded, and for a step that failed its error cut to 1024 bytes (`truncated` is true when it was cut), at the level `warn`."
-    },
     "sok.replay.divergence": {
       "layer": "sok",
       "class": "frame",

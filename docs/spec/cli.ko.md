@@ -2,11 +2,11 @@
 
 [English](cli.md)
 
-`sok`은 soksak 애플리케이션의 command line이며, 모든 명령을 이것으로 공개한다. 두 package가 한 계약으로 이것을 구현한다. Tauri 애플리케이션용 Rust `packages/sok/rust`와 Wails·mygo 애플리케이션용 Go `packages/sok/go`이다([hosts](hosts.ko.md#command-line-트리)). 두 package는 애플리케이션 framework를 link하지 않는다. 각 애플리케이션 bundle은 실행 파일 옆에 자기 `sok`을 담고(macOS에서는 `Contents/MacOS/sok`), host는 설정 창의 plugin 작업과 setup 작업에 자기 언어 `sok`의 library를 link하므로([애플리케이션 안의 plugin 작업](installation.ko.md#애플리케이션-안의-plugin-작업)) 언어마다 설치 구현은 하나다. `sok`은 `--config-dir`가 다른 폴더를 지정하지 않으면, 그것이 없을 때는 환경의 `SOKSAK_CONFIG_DIR`가 설정되어 있고 비어 있지 않으면 그 폴더를([에이전트의 창](#에이전트의-창)), 그 밖에는 자신이 속한 애플리케이션의 설정 폴더(`app.soksak.tauri`, `app.soksak.wails` 또는 `app.soksak.mygo`, `dev` 플래그 빌드는 `.dev`를 붙인다. [projects](projects.ko.md#저장) 참조)를 쓴다. 그래서 `PATH`가 닿는 `sok`이 구현을 정하고, 애플리케이션 밖에서 설정 폴더는 그 `sok`의 것이다. `PATH`는 bundle의 실행 파일 폴더를 담은 경로 항목 `/etc/paths.d/<application identifier>`로 bundle에 닿는다. `sok path install`은 그것을 실행한 `sok`의 항목을 쓰고 `sok path remove`는 지운다. 둘 다 관리자 권한(`sudo`)이 필요하고, 되풀이해도 결과가 같으며, 쓰기에 실패하면 파일과 이유를 보고한다. 새 shell이 항목을 읽는다. Command line은 symbolic link를 쓰지 않는다.
+`sok`은 soksak 애플리케이션의 command line이며, 모든 명령을 이것으로 공개한다. 두 package가 한 계약으로 이것을 구현한다. Tauri 애플리케이션용 Rust `packages/sok/rust`와 Wails·mygo 애플리케이션용 Go `packages/sok/go`이다([hosts](hosts.ko.md#command-line-트리)). 두 package는 애플리케이션 framework를 link하지 않는다. 각 애플리케이션 bundle은 실행 파일 옆에 자기 `sok`을 담고(macOS에서는 `Contents/MacOS/sok`), host는 설정 창의 plugin 작업과 setup 작업에 자기 언어 `sok`의 library를 link하므로([애플리케이션 안의 plugin 작업](installation.ko.md#애플리케이션-안의-plugin-작업)) 언어마다 설치 구현은 하나다. `sok`은 `--config-dir`가 다른 폴더를 지정하지 않으면, 그것이 없을 때는 환경의 `SOKSAK_CONFIG_DIR`가 설정되어 있고 비어 있지 않으면 그 폴더를([에이전트의 창](#에이전트의-창)), 그 밖에는 자신이 속한 애플리케이션의 설정 폴더(`app.soksak.tauri`, `app.soksak.wails` 또는 `app.soksak.mygo`, `dev` 플래그 빌드는 `.dev`를 붙인다. [projects](projects.ko.md#저장) 참조)를 쓴다. 그래서 `PATH`가 닿는 `sok`이 구현을 정하고, 애플리케이션 밖에서 설정 폴더는 그 `sok`의 것이다. `PATH`는 애플리케이션이 시작할 때마다 사람의 권한으로 맞추는 사용자 PATH 등록으로 bundle에 닿는다([사용자 PATH 등록](#사용자-path-등록)). 어떤 동작도 관리자 권한을 요구하지 않는다.
 
 ## 운영체제
 
-`sok`은 macOS와 Linux에서 실행된다. platform key는 `arm64`나 `x64`를 쓴 `<os>-<arch>`다([설치](installation.ko.md)). Linux에서 설정 폴더는 `$XDG_CONFIG_HOME` 아래, 그것이 없으면 `~/.config` 아래의 애플리케이션 식별자이고, 엔드포인트는 macOS처럼 Unix socket이다([엔드포인트](endpoint.ko.md)). Linux에는 경로 항목 폴더가 없으므로 `sok path install`과 `sok path remove`는 거기서 `path entries are not implemented on linux`로 실패한다. Windows에서는 private event-log 디렉터리와 파일, process ownership lock file을 지원하지 않는다. 이 동작은 경로를 만들기 전에 `event log directory <path> is not implemented on windows`, `event log file <path> is not implemented on windows`, `process lock file <path> is not implemented on windows`를 보고한다. Event-log 준비 실패는 표준 오류에 보고한 뒤 기록 없이 명령을 실행하며, process-lock 실패는 쓰기 명령을 거부한다.
+`sok`은 macOS와 Linux에서 실행된다. platform key는 `arm64`나 `x64`를 쓴 `<os>-<arch>`다([설치](installation.ko.md)). Linux에서 설정 폴더는 `$XDG_CONFIG_HOME` 아래, 그것이 없으면 `~/.config` 아래의 애플리케이션 식별자이고, 엔드포인트는 macOS처럼 Unix socket이다([엔드포인트](endpoint.ko.md)). Windows에서는 private event-log 디렉터리와 파일, process ownership lock file을 지원하지 않는다. 이 동작은 경로를 만들기 전에 `event log directory <path> is not implemented on windows`, `event log file <path> is not implemented on windows`, `process lock file <path> is not implemented on windows`를 보고한다. Event-log 준비 실패는 표준 오류에 보고한 뒤 기록 없이 명령을 실행하며, process-lock 실패는 쓰기 명령을 거부한다.
 
 현재 Linux와 Windows platform 구현은 process 종료 대기를 지원하지 않는다고 보고한다. interrupt signal을 감시하지 않는 Rust CLI의 Windows platform은 기다림이 시작 전에 SIGINT와 SIGTERM을 감시하므로 interrupt signal이 지원되지 않는다고 먼저 보고한다. 따라서 해당 시스템에서 `sok process wait`는 명시적인 오류로 실패한다. macOS에서는 kernel process-exit notification을 사용한다.
 
@@ -35,7 +35,6 @@
 | `sok app update --wait <pid> --bundle <path> --target <path> [-- <argument>...]` | 프로세스 `<pid>`가 끝난 뒤 애플리케이션 번들 `<target>`을 `<bundle>`로 바꾸고 시작한다([애플리케이션 업데이트](installation.ko.md#애플리케이션-업데이트)) |
 | `sok app relaunch --wait <pid> --target <path> [-- <argument>...]` | 프로세스 `<pid>`가 끝난 뒤 애플리케이션 번들 `<target>`을 인자와 함께 활성화하지 않고 다시 시작한다([진단 빌드](endpoint.ko.md#진단-빌드)) |
 | `sok process wait <pid>` | 애플리케이션이나 service에 연결하지 않고 운영체제가 process ID의 종료를 보고할 때까지 기다린다 |
-| `sok path install\|remove` | 이 애플리케이션의 경로 항목을 쓰거나 지운다. `install`은 파일과 그 안의 폴더를 출력한다 |
 | `sok skill print\|install` | Agent skill을 표준 출력에 쓰거나, 있는 agent folder마다 그 skill 폴더에 쓴다([에이전트 skill](#에이전트-skill)) |
 | `sok mcp [window]` | 애플리케이션의 엔드포인트를 표준 입출력의 MCP server로 agent에게 제공한다([MCP server](#mcp-server)) |
 | `sok mcp install` | `sok mcp`를 `claude` 명령의 user scope에 등록한다([MCP 등록](#mcp-등록)) |
@@ -76,19 +75,17 @@ sok은 애플리케이션에 연결하기 전에 명령의 인자를 검사하�
 
 ## Event log
 
-`sok path install`과 `sok path remove`를 뺀 `sok`을 실행할 때마다 명령이 대상으로 삼는 설정 디렉터리에 자신의 event 파일 `logs/sok-<boot>.jsonl`을 쓴다. 대상은 명령을 해석하기 전에, 인자 `--` 앞에서만 읽는 `--config-dir`의 값, 그것이 없으면 설정되어 있고 비어 있지 않은 `SOKSAK_CONFIG_DIR`, 그 밖에는 애플리케이션의 기본 디렉터리다. `registry build`처럼 설정을 읽지 않는 명령도 기본 디렉터리에 기록한다. 파일은 층 `sok`으로 [event 계약](logging.ko.md)을 따르고, boot 식별자는 Unix epoch 이후 시작 시각(나노초)과 프로세스 식별자이므로, `exec`으로 프로세스를 대신하는 `sok`([에이전트의 창](#에이전트의-창))은 다른 파일을 쓴다. 도구는 `logs/`(mode 0700)와 파일(mode 0600, 새로 만듦)이 없으면 만든다. 파일은 level `error`, `warn`, `info`를 담고, level `debug`와 `trace`의 event(상태 0으로 끝나는 명령의 `sok.command`)는 `logs/sok-<boot>.debug.jsonl`에 있다. 도구는 이 파일을 첫 event와 함께 만들고 `log.open`으로 시작한다. 한 번의 실행이 저장하는 것은 다음과 같다.
+`sok`을 실행할 때마다 명령이 대상으로 삼는 설정 디렉터리에 자신의 event 파일 `logs/sok-<boot>.jsonl`을 쓴다. 대상은 명령을 해석하기 전에, 인자 `--` 앞에서만 읽는 `--config-dir`의 값, 그것이 없으면 설정되어 있고 비어 있지 않은 `SOKSAK_CONFIG_DIR`, 그 밖에는 애플리케이션의 기본 디렉터리다. `registry build`처럼 설정을 읽지 않는 명령도 기본 디렉터리에 기록한다. 파일은 층 `sok`으로 [event 계약](logging.ko.md)을 따르고, boot 식별자는 Unix epoch 이후 시작 시각(나노초)과 프로세스 식별자이므로, `exec`으로 프로세스를 대신하는 `sok`([에이전트의 창](#에이전트의-창))은 다른 파일을 쓴다. 도구는 `logs/`(mode 0700)와 파일(mode 0600, 새로 만듦)이 없으면 만든다. 파일은 level `error`, `warn`, `info`를 담고, level `debug`와 `trace`의 event(상태 0으로 끝나는 명령의 `sok.command`)는 `logs/sok-<boot>.debug.jsonl`에 있다. 도구는 이 파일을 첫 event와 함께 만들고 `log.open`으로 시작한다. 한 번의 실행이 저장하는 것은 다음과 같다.
 
 - 첫 줄 `log.open`.
 - 명령이 끝날 때 한 번 `sok.command`: 명령 단어(`name`), 공백으로 이은 인자(`args`), 실행의 마이크로초, `ok`, 종료 상태(`status`), 상태가 0이 아니면 표준 오류의 첫 줄(`error`). `args`와 `error`는 문자 경계에서 1024바이트로 자르고, 둘 중 하나라도 잘렸으면 event에 `truncated: true`가 붙는다. level은 `debug`이고, 상태가 0이 아니면 `warn`이다.
 - 실행이 명령을 `SOKSAK_CONFIG_DIR`의 애플리케이션의 `sok`에 넘길 때 level `info`의 `sok.exec`: `from`, `to`, `config`([에이전트의 창](#에이전트의-창)).
-- `sok setup install`이 `sudo <sok> path install`을 실행했으면 `sok.setup.path`: 경로 항목 파일(`file`), `ok`, 실패한 단계면 그 오류(`error`). `error`는 문자 경계에서 1024바이트로 자르고, 잘렸으면 `truncated: true`가 붙는다. level은 `info`이고, 실패한 단계면 `warn`이다.
 - `sok mcp`가 시작할 때 skill을 최신으로 만들며 쓰지 못한 skill 파일마다 level `error`의 `sok.skill`: 그 skill 파일(`file`)과 소문자로 쓴 운영체제 이유(`reason`). 설정되지 않은 `HOME`이나 읽을 수 없는 agent folder처럼 skill 파일을 밝히지 않는 실패에는 `file`이 없고 그 글 전체가 `reason`이다([MCP server](#mcp-server)).
 - `sok debug replay`가 저장된 hash와 재생한 hash가 다른 것을 찾으면 level `error`의 `sok.replay.divergence`: session, segment, 순번, 층, 기대한 hash와 찾은 hash([replay](replay.ko.md#명령)).
 - panic이면 level `error`의 `sok.panic`: panic한 goroutine이나 thread(명령이면 `main`), panic의 글, panic 시점의 stack. 도구는 `sok: panic: <text>`와 stack을 표준 오류에 쓰고, event와 상태 4의 `sok.command`를 저장하고, 파일을 flush한 뒤 상태 4로 끝난다. 명령이 아닌 goroutine이나 thread의 panic도 같은 방식으로 프로세스를 끝낸다.
 
 Go 도구의 모든 goroutine은 `Go`(`src/routine.go`)로, Rust 도구의 모든 thread는 `spawn_named`(`src/routine.rs`)로 시작한다. 이 둘이 도구에서 goroutine이나 thread를 시작하고 panic을 recover하는 유일한 곳이며, [event source check](logging.ko.md#event-sources)가 이를 요구한다. writer는 [상한](logging.ko.md#상한)의 한도를 가진 event 계약의 writer이고, 한 번의 실행이 저장하는 event는 위 몇 개뿐이므로 두 파일 모두 rotate하지 않는다. 만들 수 없는 폴더나 파일은 표준 오류에 `sok: event log: <path>: <reason>`로 보고하고, 명령은 기록 없이 실행되며 자기 종료 상태를 유지한다. 도구는 이 파일을 읽지 않으며, 읽는 쪽은 로그 감사와 사람뿐이다.
 
-`sok path install`과 `sok path remove`는 event 파일을 열지 않고 경로 항목 폴더에만 쓴다. 이 둘은 `sudo`를 거쳐 root로 실행되므로, 사람의 설정 디렉터리에 만든 폴더나 파일은 root의 것이 되어 사람이 나중에 실행할 때 거부된다. 둘 중 하나의 panic은 표준 오류에 쓰이고 상태 4로 끝난다. `sudo <sok> path install`을 실행하는 `sok setup install`은 그 단계의 결과를 사람으로서 자기 event 파일에 `sok.setup.path`로 저장한다.
 
 ## Release, registry
 
@@ -122,7 +119,7 @@ Plugin과 sidecar 명령은 설정 폴더의 파일을 직접 바꾸므로 실�
 
 ## 에이전트
 
-Agent는 사람의 컴퓨터에서 사람을 위해 명령을 실행하고 도구를 호출하는 프로그램이다. Agent는 agent skill로 애플리케이션을 배우고, `sok`이나 MCP server `sok mcp`로 실행 중인 애플리케이션에 닿는다. 둘 다 자기 `sok`의 설정 폴더에 있는 [엔드포인트](endpoint.ko.md)를 읽는다. 세 종류의 setup part가 누구도 agent에게 알려 주지 않아도 이것을 가능하게 한다. `sok`을 `PATH`에 두는 경로 항목, agent skill, MCP 등록이다. `sok setup check`는 setup part마다 상태와 설치 단계를 보고하고, `sok setup install`은 빠진 것을 설치하며, 설정 창은 같은 part를 보여 준다([설정 창](settings.ko.md#에이전트)).
+Agent는 사람의 컴퓨터에서 사람을 위해 명령을 실행하고 도구를 호출하는 프로그램이다. Agent는 agent skill로 애플리케이션을 배우고, `sok`이나 MCP server `sok mcp`로 실행 중인 애플리케이션에 닿는다. 둘 다 자기 `sok`의 설정 폴더에 있는 [엔드포인트](endpoint.ko.md)를 읽는다. `sok`을 `PATH`에 두는 사용자 PATH 등록과 세 종류의 setup part가 누구도 agent에게 알려 주지 않아도 이것을 가능하게 한다. Setup part는 agent skill, MCP 등록, hook이다. `sok setup check`는 setup part마다 상태와 설치 단계를 보고하고, `sok setup install`은 빠진 것을 설치하며, 설정 창은 같은 part를 보여 준다([설정 창](settings.ko.md#에이전트)).
 
 이 절의 명령은 환경에서 `HOME`, `PATH`, `CLAUDE_CONFIG_DIR`를 읽는다. `<home>`은 `HOME`의 값이고, 그것이 필요한 명령은 그 값이 없거나 비면 `HOME is not set`으로 실패한다. `<sok>`은 symbolic link를 푼 실행 중인 `sok`의 절대 경로다(Go `os.Executable`과 `filepath.EvalSymlinks`, Rust `std::env::current_exe`와 `std::fs::canonicalize`). 사람이 shell에 입력하는 단계에서 `<sok>`은 `A-Z`, `a-z`, `0-9`, `/`, `.`, `_`, `-`만 가지면 그대로 쓰고, 그렇지 않으면 작은따옴표 사이에 쓰며 경로의 작은따옴표 하나는 `'\''`로 쓴다.
 
@@ -300,20 +297,19 @@ MCP 등록은 `claude` 명령의 user scope에 있는 항목 `soksak`이고, `cl
 
 `PATH`에 `claude`와 `codex` 명령이 모두 없으면 설치는 `the claude command is not on PATH; register the MCP server "<registered sok> mcp" (standard input and output) with the agent`로 실패하고 아무것도 바꾸지 않는다. 등록 이름 `soksak` 하나가 설치된 모든 soksak 애플리케이션을 위한다. 각 애플리케이션은 설치할 때 자기 `sok`을 등록하고 이전 등록을 바꾸며, agent는 등록된 `sok`의 애플리케이션에 등록으로 닿는다. 두 애플리케이션에서 설치하면 등록은 하나만 남고, 마지막으로 설치를 실행한 애플리케이션의 것이다. 실행 중인 agent session은 session 중에 등록된 server를 다음 session에서야 시작한다.
 
-`<sok>`은 실행보다 오래 남아야 한다. 읽기 전용 disk image나, 사람이 옮기지 않은 내려받은 애플리케이션을 시스템이 실행하는 읽기 전용 mount(App Translocation)처럼 읽기 전용으로 mount된 volume의 `sok`은 `<sok>`에 대해 `sok path install`이, `<sok>`에 대해 `sok mcp install`도 `<sok> is on a read-only volume; move the application to a folder such as /Applications and start it again`로 거부한다. `<sok>`의 file system의 읽기 전용 flag가 정한다. Go는 두 platform에서 `golang.org/x/sys/unix.Statfs`를 읽고 `Flags`를 macOS에서는 `unix.MNT_RDONLY`로, Linux에서는 그 package가 정의하지 않는 kernel의 `ST_RDONLY`와 값이 같은 `unix.MS_RDONLY`로 검사한다. Rust는 `rustix::fs::statvfs`를 읽고 `StatVfsMountFlags::RDONLY`를 검사한다.
+`<sok>`은 실행보다 오래 남아야 한다. 읽기 전용 disk image나, 사람이 옮기지 않은 내려받은 애플리케이션을 시스템이 실행하는 읽기 전용 mount(App Translocation)처럼 읽기 전용으로 mount된 volume의 `sok`은 `<sok>`에 대해 `sok mcp install`이 `<sok> is on a read-only volume; move the application to a folder such as /Applications and start it again`로 거부한다. `<sok>`의 file system의 읽기 전용 flag가 정한다. Go는 두 platform에서 `golang.org/x/sys/unix.Statfs`를 읽고 `Flags`를 macOS에서는 `unix.MNT_RDONLY`로, Linux에서는 그 package가 정의하지 않는 kernel의 `ST_RDONLY`와 값이 같은 `unix.MS_RDONLY`로 검사한다. Rust는 `rustix::fs::statvfs`를 읽고 `StatVfsMountFlags::RDONLY`를 검사한다.
 
 ### Setup part
 
 | Part | 해당 | 파일 | 최신인 때 | 설치 단계 |
 | --- | --- | --- | --- | --- |
-| `path` | 경로 항목 폴더가 있는 platform | `/etc/paths.d/<application identifier>` | 내용이 `sok path install`이 `<sok>`에 대해 쓰는 내용이다 | `sudo <sok> path install` |
 | `skill` | 있는 agent folder마다 | `<agent folder>/skills/soksak/SKILL.md` | byte가 skill 글과 같다 | `<sok> skill install` |
 | `mcp` | `claude` 명령이 `PATH`에 있을 때 | `claude` 명령의 설정 파일 | 등록이 최신이다 | `<sok> mcp install` |
 | `hook` | 존재하는 user agent 폴더마다: Claude 폴더의 `settings.json`, Codex 폴더의 `hooks.json` | 현재 soksak의 `SessionStart` hook 집합과 다른 soksak hook이 없음 | `<sok> setup install hook` |
 
 `sok setup check`는 `{"parts": [{part, file, state, step, reason?, error?}]}`를 이 member 순서로, part는 표의 순서로, skill 파일은 agent folder의 순서로 출력한다. `state`는 `ok`, `missing`, `error`다. 빠진 part는 `reason`을 가진다. 없는 파일이나 등록은 `absent`, 등록되는 것이 아닌 `sok`을 가리키는 등록처럼 설치가 쓰는 것과 다른 것은 `differs`다. 상태를 읽을 수 없는 part는 실패의 글인 `error`를 가진다. 해당하지 않는 part는 나열하지 않는다. Linux에는 `path` part가 없다. 이 명령은 아무것도 바꾸지 않으며, 나열된 모든 part가 `ok`이면 0으로, 아니면 표준 출력의 JSON 뒤에 표준 오류에 `sok: setup parts are not current: <part> <file>, ...`를 쓰고 1로 끝난다.
 
-`sok setup install`은 지정한 종류의, 이름이 없으면 모든 종류의 `ok`가 아닌 나열된 part를 각자의 명령의 규칙으로 설치하고, `ok`인 part는 그대로 둔다. 빠진 경로 항목은 관리자 권한이 필요하지만 skill 파일과 등록은 사람의 것이다. 이 명령은 다른 사용자로 실행되지 않으며, 표준 입력이 terminal이면 `sudo <sok> path install`을 child로 실행해 거기서 password를 묻고, 그렇지 않으면 경로 항목을 빠진 채로 둔다. 설치 뒤의 part를 `sok setup check`처럼 출력하며, 각 part는 자기가 바꾸었으면 true인 `changed`를 가진다. 나열된 모든 part가 `ok`이면 0으로, 아니면 `sok: setup parts are not current: <part> <file>, ...`와 설치에 실패한 part마다 그 오류를 쓰고 1로 끝난다. 되풀이해도 아무것도 바꾸지 않는다.
+`sok setup install`은 지정한 종류의, 이름이 없으면 모든 종류의 `ok`가 아닌 나열된 part를 각자의 명령의 규칙으로 설치하고, `ok`인 part는 그대로 둔다. 모든 part는 사람의 것이므로 어떤 part도 관리자 권한을 요구하지 않고, 이 명령은 다른 사용자로 실행되지 않는다. 설치 뒤의 part를 `sok setup check`처럼 출력하며, 각 part는 자기가 바꾸었으면 true인 `changed`를 가진다. 나열된 모든 part가 `ok`이면 0으로, 아니면 `sok: setup parts are not current: <part> <file>, ...`와 설치에 실패한 part마다 그 오류를 쓰고 1로 끝난다. 되풀이해도 아무것도 바꾸지 않는다.
 
 ### 애플리케이션 안의 에이전트
 
@@ -331,13 +327,13 @@ Host는 plugin 작업을 실행하듯([애플리케이션 안의 plugin 작업](
 
 시스템이 애플리케이션을 위해 시작한 process는 사람의 shell이 아니라 session의 환경을 받으므로, 그 `PATH`에는 shell이 더하는 폴더가 없고 거기서 `claude` 명령을 찾지 못한다. 그래서 host는 host 시작마다 한 번 사람의 login shell, 곧 사용자 database(`getpwuid`)의 shell의 환경을 읽는다. `<shell> -l -i -c <sok> setup environment`를 실행하며(이 shell은 로그인 session이 사람의 모든 애플리케이션에 주는 변수 `HOME`, `USER`, `LOGNAME`, `SHELL`, `TMPDIR`, `SSH_AUTH_SOCK`, `__CF_USER_TEXT_ENCODING`만 host의 환경에서 가져와 시작하고 그 밖의 변수는 받지 않으므로, 시스템이 시작했든 terminal이나 다른 애플리케이션이 시작했든 출력하는 환경이 같다. 그 줄의 `environment`는 모든 sidecar 환경의 바탕이다([surface의 프로세스](sidecars.md#processes-of-a-surface)). host는 이 읽기를 시작할 때 start path 밖에서 시작하고, sidecar의 시작은 모두 그 끝을 기다린다), `<sok>`은 단계의 규칙으로 따옴표를 붙이고 명령은 인자 하나로 준다. 이 shell은 자기 process group(Go `Setpgid`, Rust `process_group(0)`)에서 표준 입력을 `/dev/null`로 하여 실행한다. `sok setup environment`가 출력한 JSON 줄의 `HOME`, `PATH`, `CLAUDE_CONFIG_DIR`를 setup library에 주므로 사람의 shell 문법은 관여하지 않는다. 읽기는 출력의 끝이나 shell의 끝이 아니라 그 줄이 표준 출력에 도착할 때 끝난다. Shell의 시작 파일이 시작한 process가 출력을 열어 둘 수 있기 때문이다. 그 뒤 host는 process group을 끝내며, 다른 모든 결과에서도 끝낸다. 표준 출력과 표준 오류는 따로 읽고, 줄 앞에 나온 시작 파일의 출력은 버린다. 줄 앞에 끝난 shell은 setup 작업을 `login shell <shell>: <reason>`로 실패시키며, reason은 종료 상태와 표준 오류의 첫 줄이다. 10 s 안에 줄을 주지 않은 shell은 `login shell <shell>: no environment within 10 s`로 실패시킨다. 입력을 기다리는 shell에는 그것을 끝내는 event가 없기 때문이다. 읽기에 실패하면 모든 sidecar 시작도 같은 문구로 실패한다. 다른 환경에서 시작한 sidecar는 애플리케이션을 시작한 process에 따라 달라지기 때문이다. Agent session 하나의 환경은 login shell과 다를 수 있다. 예를 들어 session이 `CLAUDE_CONFIG_DIR`를 정할 수 있다. 설정 창은 `PATH`가 shell이 닿는 `sok`을 정하는 login shell 환경의 part를 보여 주고, session 안의 `sok setup`은 그 session의 part를 보여 준다.
 
-환경을 읽은 뒤 host는 `sok mcp`처럼 skill을 최신으로 만들고, 쓰지 못한 skill 파일마다 파일과 이유와 함께 오류 `host.setup.skill` 하나로 기록한다. 이어서 `sok setup install mcp hook`처럼 현재가 아닌 MCP registration과 hook을 install한다. 그래서 application을 시작할 때마다 자기 bundle의 `sok`을 등록하고, 다른 폴더에서 시작한 application은 이전 것의 `sok`을 대체한다. `ok`인 part는 바뀌지 않으므로 반복된 시작은 아무것도 바꾸지 않는다. Read-only volume의 `sok`처럼 install할 수 없는 part는 현재가 아닌 part를 모두 밝히는 이유와 함께 오류 `host.setup.install` 하나로 기록한다. Host는 시작할 때 사용자 PATH 등록을 맞춘다. 시스템 PATH 항목은 administrator 권한이 필요하고 시작에는 `sudo`를 위한 terminal이 없으므로 명시적 단계를 유지한다.
+환경을 읽은 뒤 host는 `sok mcp`처럼 skill을 최신으로 만들고, 쓰지 못한 skill 파일마다 파일과 이유와 함께 오류 `host.setup.skill` 하나로 기록한다. 이어서 `sok setup install mcp hook`처럼 현재가 아닌 MCP registration과 hook을 install한다. 그래서 application을 시작할 때마다 자기 bundle의 `sok`을 등록하고, 다른 폴더에서 시작한 application은 이전 것의 `sok`을 대체한다. `ok`인 part는 바뀌지 않으므로 반복된 시작은 아무것도 바꾸지 않는다. Read-only volume의 `sok`처럼 install할 수 없는 part는 현재가 아닌 part를 모두 밝히는 이유와 함께 오류 `host.setup.install` 하나로 기록한다. Host는 시작할 때 사용자 PATH 등록을 맞춘다. 애플리케이션과 `sok`의 어떤 동작도 관리자 권한을 요구하지 않는다. 사용자 PATH 등록이 사람의 권한으로 사람의 shell PATH에 `sok`을 두므로 애플리케이션에는 시스템 PATH 항목이 없다.
 
 | Host call 또는 event | 뜻 |
 | --- | --- |
 | `setupState()` | 새 login shell에서 관측한 사용자 PATH 등록을 포함한 `{parts}`를 돌려준다 |
 | `setupChange({part, enabled})` | `part`가 `path`이면 사용자 PATH preference를 저장하고 적용하며 `{parts}`를 돌려주고 `setup-changed`를 보낸다 |
-| `setupInstall({parts})` | 지정한 종류의 `skill`과 `mcp`를 `sok setup install`처럼 설치하고 그 `{parts}`를 돌려준다. 애플리케이션에는 `sudo`를 위한 terminal이 없으므로 `path`는 `the path entry needs administrator rights: run <step> in a terminal`로 거부한다. Host는 setup 작업을 한 번에 하나 실행하고, 다른 것은 `another setup operation is running`으로 거부한다 |
+| `setupInstall({parts})` | 지정한 종류의 `skill`과 `mcp`를 `sok setup install`처럼 설치하고 그 `{parts}`를 돌려준다. `path`를 포함한 다른 종류는 `unknown setup part: <kind>`로 거부한다. 사용자 PATH 등록은 `setupChange`로 바꾸기 때문이다. Host는 setup 작업을 한 번에 하나 실행하고, 다른 것은 `another setup operation is running`으로 거부한다 |
 | `setup-changed` | `setupInstall` 뒤와 시작 시 skill, registration, hook 쓰기 뒤에 모든 창에 값 없이 보낸다. 그래서 모든 창이 part를 다시 읽는다 |
 
 ### 결정
@@ -345,7 +341,6 @@ Host는 plugin 작업을 실행하듯([애플리케이션 안의 plugin 작업](
 - Skill은 정적이다. `exposure.list`에서의 탐색이 요청 시점에 설치된 모든 plugin을 덮으므로, 한 설치의 내용은 노출의 두 번째 낡은 사본이 되고 plugin이 바뀔 때마다 쓰는 쪽이 필요하다. Skill은 `sok`의 release로만 바뀐다.
 - MCP 도구는 선언된 command마다 도구 하나가 아니라, 이름과 schema가 안정된 고정 집합과 검색, 설명 도구다. Core 선언만으로 command 115개, status 36개, element 150개이고, host와 plugin 항목 전에 이전 server가 만든 방식의 도구 목록이 약 60 KB다. 그 크기의 도구 목록은 모든 session에서 agent의 context를 차지하고, 도구 선택을 떨어뜨리며, plugin이 바뀔 때마다 낡는다. 바뀐 도구 목록은 `notifications/tools/list_changed`를 따르는 client를 통해서만 실행 중인 session에 닿는데, 모든 client가 그렇지는 않고, 노출 변경의 엔드포인트 event도 없다. 고정 도구는 호출마다 노출을 읽으므로 plugin 변경에 알림이 필요 없고, 검색 결과는 작은 page로 남는다.
 - Agent 글은 원본 폴더 하나와 검사되는 Go 사본으로 둔다. `go:embed`는 그 package의 폴더 밖을 읽지 못하고, Rust package는 Go package의 파일을 읽지 않기 때문이다.
-- `sok setup install`은 시스템 PATH 항목을 위한 관리자 권한을 terminal의 `sudo`로만 얻는다. 애플리케이션은 사용자 권한으로 사용자 PATH 등록을 맞춘다.
 - 등록은 그 설정 파일을 가진 `claude` 명령으로만 쓴다. `sok`은 등록이 최신인지 판단하려고만 그 파일을 읽고, `sok`이 읽지 못하는 그 파일의 형식은 파일을 밝히는 오류다.
 - 설정 창의 setup 상태는 그룹을 보여 줄 때, 창이 key window가 될 때(`window-active`), `setup-changed` 뒤, `core.setup.check`로 읽으며, 파일을 감시하지 않는다. `claude` 명령의 설정 파일은 agent session마다 다시 쓰이고, 상태는 사람이 볼 때 중요하기 때문이다.
 

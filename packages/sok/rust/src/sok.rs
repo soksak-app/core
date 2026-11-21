@@ -34,7 +34,6 @@ mod mcp_server;
 mod message;
 mod output;
 mod ownership;
-mod path;
 #[path = "platform/platform.rs"]
 pub mod platform;
 pub mod plugin_catalog;
@@ -83,11 +82,10 @@ commands:
                             replays the session with the replay executable of its sidecar and compares every stored screen hash
   capture [window]          (diagnostic builds) writes a still image of the window without focusing it
   context                   prints the configuration directory, the surface of this process and its window
-  path install|remove       writes or deletes the PATH entry of this application (needs sudo)
   skill print|install       writes the agent skill to standard output or into the skill folder of each agent folder
   mcp install               registers sok mcp with the claude command in its user scope
   setup check               prints each setup part with its state and its install step
-  setup install [path|skill|mcp]...
+  setup install [skill|mcp|hook]...
                             installs each missing setup part of the named kinds
   setup environment         prints HOME, PATH, CLAUDE_CONFIG_DIR and every variable of the environment as one JSON line
   app update --wait PID --bundle PATH --target PATH [-- ARGUMENT...]
@@ -842,11 +840,8 @@ fn watch(
 
 /// The application and the operating system that this command line belongs to.
 pub struct Options<'a> {
-    /// The identifier of the application. It is the configuration folder name when --config-dir is absent and the file name of the path entry.
+    /// The identifier of the application. It is the configuration folder name when --config-dir is absent.
     pub identifier: &'a str,
-    /// The folder that holds path entries (/etc/paths.d on macOS). When this operating system has no such folder, it holds the reason, and sok path
-    /// fails with that error.
-    pub paths_dir: Result<&'a Path, String>,
     /// The core version used to choose plugins. The executable supplies the version of this crate.
     pub core_version: &'a str,
     /// `SOKSAK_CONFIG_DIR` of the environment: the configuration directory when `--config-dir` is not given and it is not empty
@@ -979,10 +974,6 @@ fn execute(
     }
     if a.positionals.first().map(String::as_str) == Some("debug") {
         return debug::run_debug(&a, stdout, stderr, options);
-    }
-    if a.positionals.first().map(String::as_str) == Some("path") {
-        let action = a.positional(1, "path action")?;
-        return path::run_path(&action, stdout, options);
     }
     match first_two {
         (Some("skill" | "setup"), _) | (Some("mcp"), Some("install")) => {

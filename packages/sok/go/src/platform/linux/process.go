@@ -92,11 +92,6 @@ func (linux) LockFile(file *os.File) error {
 	return nil
 }
 
-// PathsDir is an error. The shell on Linux has no folder that adds a PATH entry for each file.
-func (linux) PathsDir() (string, error) {
-	return "", errors.New("path entries are not implemented on linux")
-}
-
 // PrepareLogDirectory creates the missing event-log directories with private access and restricts the final directory to mode 0700.
 func (linux) PrepareLogDirectory(path string) error {
 	if err := os.MkdirAll(path, 0o700); err != nil {
@@ -140,4 +135,9 @@ func (linux) RegisteredSok(string) error { return nil }
 // ReplaceProcess runs execve.
 func (linux) ReplaceProcess(path string, args, env []string) error {
 	return unix.Exec(path, args, env)
+}
+
+// UserPath is the reason that Linux has no user PATH registration.
+func (linux) UserPath() error {
+	return errors.New("the user PATH registration is not implemented on linux")
 }

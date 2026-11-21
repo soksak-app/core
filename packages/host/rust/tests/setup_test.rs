@@ -196,7 +196,7 @@ fn wait_exited(pid: i32) {
     }
 }
 
-/// The parts as `part | file | state | reason | step` lines without the path entry, and the step of the path entry.
+/// The parts as `part | file | state | reason | step` lines without the user PATH registration, and the step of that registration.
 fn lines(parts: &Parts) -> (Vec<String>, Option<String>) {
     let value = serde_json::to_value(parts).unwrap();
     let mut path = None;
@@ -575,15 +575,12 @@ fn setup_installs_the_skill_and_the_registration_one_at_a_time() {
         .clone();
     assert_eq!(mcp["state"], json!("ok"));
 
-    let want = format!(
-        "the path entry needs administrator rights: run sudo '{}' path install in a terminal",
-        h.sok.display()
-    );
+    // The application installs no part that needs administrator rights, so path is no part of an install.
     assert_eq!(
         setups.install(InstallRequest {
             parts: json!(["path", "skill"])
         }),
-        Err(want)
+        Err("unknown setup part: path".to_string())
     );
     for parts in [
         json!(null),

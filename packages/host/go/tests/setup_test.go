@@ -453,9 +453,9 @@ func TestSetupInstallsTheSkillAndTheRegistrationOneAtATime(t *testing.T) {
 		t.Fatalf("setupState after the install reports mcp as %q", mcpState)
 	}
 
-	want := "the path entry needs administrator rights: run sudo '" + h.sok + "' path install in a terminal"
-	if _, err := setups.Install(host.SetupInstallRequest{Parts: []any{"path", "skill"}}); err == nil || err.Error() != want {
-		t.Fatalf("an install of the path entry answered %v, not %s", err, want)
+	// The user PATH registration changes through setupChange, and no part needs administrator rights, so path is no install kind.
+	if _, err := setups.Install(host.SetupInstallRequest{Parts: []any{"path", "skill"}}); err == nil || err.Error() != "unknown setup part: path" {
+		t.Fatalf("an install of path answered %v", err)
 	}
 	for _, parts := range []any{nil, []any{}, []any{"skill", "skill"}, "skill", []any{1}} {
 		if _, err := setups.Install(host.SetupInstallRequest{Parts: parts}); err == nil || err.Error() != "parts must be a non-empty list of setup parts without repetition" {

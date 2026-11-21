@@ -174,7 +174,6 @@ pub fn class_of(name: &str) -> Option<Class> {
         "sok.exec" => Some(Class::Lifecycle),
         "sok.panic" => Some(Class::Lifecycle),
         "sok.replay.divergence" => Some(Class::Frame),
-        "sok.setup.path" => Some(Class::Lifecycle),
         "sok.skill" => Some(Class::Lifecycle),
         "workbench.background.session" => Some(Class::Lifecycle),
         "workbench.call" => Some(Class::Call),

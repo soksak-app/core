@@ -4,8 +4,7 @@
 
 use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;
-use std::path::PathBuf;
-use std::sync::Mutex;
+use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
@@ -18,16 +17,11 @@ mod case_player;
 use case_player::{play_case, play_case_with_held_frames, play_case_with_text};
 use folder::Folder;
 
-/// The paths.d location that the path entry check changes.
-static PATHS: Mutex<PathBuf> = Mutex::new(PathBuf::new());
-
 fn run(args: &[&str]) -> (i32, String, String) {
     let args: Vec<String> = args.iter().map(|arg| arg.to_string()).collect();
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
-    let paths = PATHS.lock().expect("paths").clone();
     let options = soksak_sok::Options {
         identifier: "com.soksak.test",
-        paths_dir: Ok(&paths),
         core_version: "0.0.2",
         config_dir_variable: None,
     };
@@ -84,10 +78,8 @@ fn an_error_that_cannot_be_written_exits_with_status_3() {
         .iter()
         .map(|arg| arg.to_string())
         .collect();
-    let paths = PATHS.lock().expect("paths").clone();
     let options = soksak_sok::Options {
         identifier: "com.soksak.test",
-        paths_dir: Ok(&paths),
         core_version: "0.0.2",
         config_dir_variable: None,
     };
@@ -535,80 +527,54 @@ fn commands_lists_the_declared_commands_in_order() {
     assert_eq!(names, ["fixture.do", "fixture.none"]);
 }
 
-// contract: cli.path.writes-and-removes-the-entry
+// contract: cli.no-administrator-rights
 #[test]
-fn path_install_writes_the_executable_directory_and_remove_deletes_it() {
-    let paths = Folder::new("sok");
-    *PATHS.lock().expect("paths") = paths.path().to_path_buf();
-    let directory = std::env::current_exe()
-        .expect("exe")
-        .canonicalize()
-        .expect("canonical")
-        .parent()
-        .expect("dir")
-        .display()
-        .to_string();
-    let entry = paths.path().join("com.soksak.test");
-    for _ in 0..2 {
-        let (code, stdout, stderr) = run(&["path", "install"]);
-        let want = format!(
-            "{{\n  \"directory\": {:?},\n  \"path\": {:?}\n}}\n",
-            directory,
-            entry.display().to_string()
-        );
-        assert_eq!((code, stdout.as_str()), (0, want.as_str()), "{stderr}");
-        assert_eq!(
-            std::fs::read_to_string(&entry).expect("entry"),
-            format!("{directory}\n")
-        );
-    }
-    for _ in 0..2 {
-        let (code, stdout, stderr) = run(&["path", "remove"]);
-        assert_eq!((code, stdout.as_str()), (0, "null\n"), "{stderr}");
-    }
-    assert!(!entry.exists(), "the entry remains");
-    let missing = paths.path().join("missing");
-    *PATHS.lock().expect("paths") = missing.clone();
-    let (code, _, stderr) = run(&["path", "install"]);
-    assert_eq!(code, 1);
+fn sok_has_no_path_entry_command() {
+    let dir = Folder::new("sok");
+    let (code, stdout, stderr) = run(&[
+        "path",
+        "install",
+        "--config-dir",
+        &dir.path().display().to_string(),
+    ]);
+    assert_eq!((code, stdout.as_str()), (2, ""));
     assert!(
-        stderr.starts_with(&format!(
-            "sok: cannot write {}: ",
-            missing.join("com.soksak.test").display()
-        )),
+        stderr.starts_with("sok: unknown command: path\nusage: sok <command>"),
         "{stderr}"
     );
-    assert!(
-        stderr.ends_with("; run sudo sok path install\n"),
-        "{stderr}"
-    );
-    *PATHS.lock().expect("paths") = PathBuf::new();
 }
 
-// contract: cli.path.fails-without-a-path-entry-folder
+/// The files under `folder` whose name ends with `.rs`.
+fn rust_sources(folder: &Path, files: &mut Vec<PathBuf>) {
+    for entry in std::fs::read_dir(folder).expect("read the source folder") {
+        let path = entry.expect("read a source entry").path();
+        if path.is_dir() {
+            rust_sources(&path, files);
+        } else if path.extension().is_some_and(|extension| extension == "rs") {
+            files.push(path);
+        }
+    }
+}
+
+// contract: cli.no-administrator-rights
 #[test]
-fn path_entries_fail_where_the_operating_system_has_no_folder() {
-    let args = vec!["path".to_string(), "install".to_string()];
-    let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
-    let options = soksak_sok::Options {
-        identifier: "com.soksak.test",
-        paths_dir: Err("path entries are not implemented on linux".to_string()),
-        core_version: "0.0.2",
-        config_dir_variable: None,
-    };
-    let code = soksak_sok::run(&args, &mut stdout, &mut stderr, &options);
-    assert_eq!(
-        (
-            code,
-            String::from_utf8(stdout).expect("stdout"),
-            String::from_utf8(stderr).expect("stderr")
-        ),
-        (
-            1,
-            String::new(),
-            "sok: path entries are not implemented on linux\n".to_string()
-        )
-    );
+fn no_source_runs_sudo() {
+    let packages = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut files = Vec::new();
+    for folder in ["sok/rust/src", "host/rust/src"] {
+        rust_sources(&packages.join(folder), &mut files);
+    }
+    let named: Vec<String> = files
+        .iter()
+        .filter(|file| {
+            std::fs::read_to_string(file)
+                .expect("read a source")
+                .contains("\"sudo\"")
+        })
+        .map(|file| file.display().to_string())
+        .collect();
+    assert!(!files.is_empty(), "no Rust source was found");
+    assert_eq!(named, Vec::<String>::new(), "sources that name sudo");
 }
 
 // contract: cli.identity.build-identifier

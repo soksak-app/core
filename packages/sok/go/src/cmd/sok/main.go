@@ -13,13 +13,11 @@ import (
 )
 
 func main() {
-	system, err := platform.Current()
-	if err != nil {
+	if _, err := platform.Current(); err != nil {
 		fmt.Fprintf(os.Stderr, "sok: %v\n", err)
 		os.Exit(1)
 	}
-	paths, pathsErr := system.PathsDir()
-	// The identifier names the default configuration directory and the path entry (docs/spec/projects.md#persistence).
+	// The identifier names the default configuration directory (docs/spec/projects.md#persistence).
 	identifier := sok.Identity()
-	os.Exit(sok.Main(os.Args[1:], os.Stdout, os.Stderr, sok.Options{Identifier: identifier, PathsDir: paths, PathsError: pathsErr, CoreVersion: sok.CoreVersion}))
+	os.Exit(sok.Main(os.Args[1:], os.Stdout, os.Stderr, sok.Options{Identifier: identifier, CoreVersion: sok.CoreVersion}))
 }

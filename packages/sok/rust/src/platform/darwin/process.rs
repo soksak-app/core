@@ -155,9 +155,9 @@ impl Platform for Darwin {
         }
     }
 
-    /// For each file in this folder, the shell adds its line to PATH.
-    fn paths_dir(&self) -> Result<PathBuf, String> {
-        Ok(PathBuf::from("/etc/paths.d"))
+    /// The login shells of macOS read the startup files that the user PATH registration edits.
+    fn user_path(&self) -> Result<(), String> {
+        Ok(())
     }
 
     fn user_path_state(

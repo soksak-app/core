@@ -1,10 +1,8 @@
 use super::{Options, process, run_with_process_wait};
-use std::path::Path;
 
 fn options() -> Options<'static> {
     Options {
         identifier: "com.soksak.test",
-        paths_dir: Ok(Path::new("/tmp")),
         core_version: super::version::CORE_VERSION,
         config_dir_variable: None,
     }

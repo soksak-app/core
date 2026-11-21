@@ -2,7 +2,7 @@
 
 // Package darwin checks the setup operations of sok that macOS decides (docs/spec/cli.md#mcp-registration,
 // docs/spec/cli.md#setup-parts): the registered sok must be the sok of an application bundle, a sok on a read-only volume is
-// refused, and the path entry of /etc/paths.d is left missing without a terminal.
+// refused, and an install needs no administrator rights.
 package darwin
 
 import (
@@ -155,7 +155,7 @@ func TestMcpInstallRequiresABundleSok(t *testing.T) {
 	}
 }
 
-// The judgement with which sok path install refuses the running sok and sok mcp install refuses the registered sok: the sealed
+// The judgement with which sok mcp install refuses the registered sok: the sealed
 // system volume of macOS, which statfs reports read-only, is refused, and the volume of the temporary folder of the test is
 // accepted.
 // contract: cli.setup.refuses-a-read-only-volume
@@ -173,8 +173,8 @@ func TestSetupRefusesASokOnAReadOnlyVolume(t *testing.T) {
 	}
 }
 
-// contract: cli.setup.install-leaves-the-path-entry-without-a-terminal
-func TestSetupInstallLeavesThePathEntryWithoutATerminal(t *testing.T) {
+// contract: cli.no-administrator-rights
+func TestSetupInstallRunsNoSudo(t *testing.T) {
 	program := builtSok(t)
 	h := newHome(t, "claude", "sudo")
 	if err := os.MkdirAll(filepath.Join(h.dir, ".claude"), 0o755); err != nil {
@@ -183,16 +183,13 @@ func TestSetupInstallLeavesThePathEntryWithoutATerminal(t *testing.T) {
 	running := copyExecutable(t, program, filepath.Join(t.TempDir(), "Mine.app", "Contents", "MacOS", "sok"))
 	code, stdout, stderr := h.run(t, running, []string{h.fixtures, filepath.Dir(running)}, "setup", "install")
 	list := parts(t, stdout)
-	if code != 1 || len(list) != 4 || list[0].Part != "path" || list[0].State != "missing" || list[1].State != "ok" || list[2].State != "ok" || list[3].Part != "hook" || list[3].State != "ok" {
+	if code != 0 || stderr != "" || len(list) != 3 || list[0].Part != "skill" || list[1].Part != "mcp" || list[2].Part != "hook" {
 		t.Fatalf("code %d stdout %s stderr %q", code, stdout, stderr)
 	}
-	// The entry is named by the identifier of the build, so the sok of the test is the build of the tested package.
-	entry := "/etc/paths.d/" + sok.Identity()
-	if list[0].File != entry {
-		t.Fatalf("path entry %q, want %q", list[0].File, entry)
-	}
-	if stderr != "sok: setup parts are not current: path "+entry+"\n" {
-		t.Fatalf("stderr %q", stderr)
+	for _, part := range list {
+		if part.State != "ok" {
+			t.Fatalf("part %+v", part)
+		}
 	}
 	if commands := h.commands(t); strings.Contains(commands, "sudo") || !strings.Contains(commands, "claude mcp add --scope user soksak -- "+running+" mcp") {
 		t.Fatalf("commands %q", commands)

@@ -20,7 +20,7 @@ import (
 
 func runMain(args ...string) (int, string, string) {
 	var stdout, stderr strings.Builder
-	code := sok.Main(args, &stdout, &stderr, sok.Options{Identifier: "com.soksak.test", PathsDir: pathsDir, CoreVersion: "0.0.2"})
+	code := sok.Main(args, &stdout, &stderr, sok.Options{Identifier: "com.soksak.test", CoreVersion: "0.0.2"})
 	return code, stdout.String(), stderr.String()
 }
 

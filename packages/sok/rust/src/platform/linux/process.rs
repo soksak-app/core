@@ -153,9 +153,9 @@ impl Platform for Linux {
         Ok(now.tv_sec as u64 * 1_000_000_000 + now.tv_nsec as u64)
     }
 
-    /// The shell on Linux has no folder that adds a PATH entry for each file.
-    fn paths_dir(&self) -> Result<PathBuf, String> {
-        Err("path entries are not implemented on linux".into())
+    /// Linux has no user PATH registration.
+    fn user_path(&self) -> Result<(), String> {
+        Err("the user PATH registration is not implemented on linux".into())
     }
 
     fn user_path_state(

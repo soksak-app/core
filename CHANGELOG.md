@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1035: No operation of the application or of `sok` needs administrator rights. The system PATH entry (`/etc/paths.d/<identifier>`), the commands `sok path install` and `sok path remove`, the setup part of that entry, the `sudo` step of `sok setup install` and the event `sok.setup.path` are removed, because the user PATH registration, which each start reconciles with the rights of the person, puts `sok` on the PATH of the person's shells. `setupInstall` refuses `path` with `unknown setup part: path`. Red: `sok path install` wrote the entry or asked for `sudo`, and the sources named the `sudo` command. Green: the Go and Rust command line and host setup tests pass.
 - F1034: Each start of a host installs the MCP registration and the hooks that are not current, as `sok setup install mcp hook` does, so a start of the application from another folder registers the `sok` of its own bundle, and a part that it could not install, such as a `sok` on a read-only volume, is recorded as one error `host.setup.install`; the system PATH entry keeps its explicit step. Red: the Go and Rust starts ran no registration, left both hooks missing and recorded no failure. Green: six Go and eight Rust setup tests pass.
 
 ## 2026-11-21

@@ -29,8 +29,9 @@ pub trait Platform {
     fn executable(&self, metadata: &std::fs::Metadata) -> bool;
     /// The release key (`<os>-<arch>`) of this platform; an architecture without a key is an error.
     fn key(&self) -> Result<String, String>;
-    /// The folder that holds path entries. It is an error when this operating system has no such folder (docs/spec/cli.md).
-    fn paths_dir(&self) -> Result<PathBuf, String>;
+    /// Ok when this operating system has the user PATH registration, and otherwise the reason that it has none
+    /// (docs/spec/cli.md#user-path-registration).
+    fn user_path(&self) -> Result<(), String>;
     /// Reads the desired state of PATH registration and the first command that the login shell can resolve.
     fn user_path_state(
         &self,

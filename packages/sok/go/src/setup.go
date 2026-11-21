@@ -5,19 +5,14 @@ package sok
 // (docs/spec/cli.md#agents-in-the-application), and the commands `sok skill`, `sok mcp install` and `sok setup` call them.
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
-
-	"golang.org/x/term"
 )
 
 // AgentEnvironment is HOME, PATH and CLAUDE_CONFIG_DIR of the environment of a run, where nil is a variable that is not set, and
@@ -91,13 +86,11 @@ func (e AgentEnvironment) applied(env []string) []string {
 }
 
 // Setup is the input of the setup operations: the agent environment, <sok>, the canonical path of the sok of the application, and
-// the path entry of the application, which does not apply when PathsError is set.
+// the identifier of the application.
 type Setup struct {
 	Environment AgentEnvironment
 	Sok         string
 	Identifier  string
-	PathsDir    string
-	PathsError  error
 }
 
 // SetupPart is one setup part with its state (`ok`, `missing` or `error`), the reason of a missing part (`absent` or `differs`),
@@ -113,13 +106,13 @@ type SetupPart struct {
 	Enabled *bool  `json:"enabled,omitempty"`
 }
 
-// SetupParts are the parts that apply, in the order path, skill files, registration.
+// SetupParts are the parts that apply, in the order skill files, registration, hooks.
 type SetupParts struct {
 	Parts []SetupPart `json:"parts"`
 }
 
 // setupKinds are the kinds of setup parts in their order.
-var setupKinds = []string{"path", "skill", "mcp", "hook"}
+var setupKinds = []string{"skill", "mcp", "hook"}
 
 // plainStep matches a <sok> that a step writes as it is.
 var plainStep = regexp.MustCompile(`^[A-Za-z0-9/._-]+$`)
@@ -133,30 +126,9 @@ func StepOf(sok string) string {
 	return "'" + strings.ReplaceAll(sok, "'", `'\''`) + "'"
 }
 
-// pathEntry is the file of the path entry and the content that `sok path install` writes for <sok>.
-func (s Setup) pathEntry() (string, string) {
-	return filepath.Join(s.PathsDir, s.Identifier), filepath.Dir(s.Sok) + "\n"
-}
-
 // Check reads the state of each part that applies and changes nothing.
 func (s Setup) Check() (SetupParts, error) {
 	parts := []SetupPart{}
-	if s.PathsError == nil {
-		file, want := s.pathEntry()
-		part := SetupPart{Part: "path", File: file, Step: "sudo " + StepOf(s.Sok) + " path install"}
-		data, err := os.ReadFile(file)
-		switch {
-		case errors.Is(err, fs.ErrNotExist):
-			part.State, part.Reason = "missing", "absent"
-		case err != nil:
-			part.State, part.Error = "error", fileError(file, err).Error()
-		case string(data) == want:
-			part.State = "ok"
-		default:
-			part.State, part.Reason = "missing", "differs"
-		}
-		parts = append(parts, part)
-	}
 	folders, _, err := s.skillFolders()
 	if err != nil {
 		return SetupParts{}, err
@@ -210,10 +182,9 @@ func checkKinds(kinds []string) error {
 }
 
 // Install installs each part of the kinds (every kind for none) that is not ok, by the rules of its own command, and returns the
-// parts as Check reads them afterwards with `changed`. A missing path entry is installed only when terminal is set, by
-// `sudo <sok> path install` as a child that asks for the password on that terminal. The error names the parts of the kinds that are
-// not ok, followed by the error of each install that failed.
-func (s Setup) Install(kinds []string, terminal bool) (SetupParts, error) {
+// parts as Check reads them afterwards with `changed`. The error names the parts of the kinds that are not ok, followed by the error
+// of each install that failed.
+func (s Setup) Install(kinds []string) (SetupParts, error) {
 	if err := checkKinds(kinds); err != nil {
 		return SetupParts{}, err
 	}
@@ -230,16 +201,6 @@ func (s Setup) Install(kinds []string, terminal bool) (SetupParts, error) {
 	}
 	changed := map[string]bool{}
 	var failures []string
-	if pending["path"] && terminal {
-		file, _ := s.pathEntry() // silent: the second result is the content of the entry, which the root sok of the step writes.
-		err := s.installPathEntry()
-		recordPathStep(file, err)
-		if err != nil {
-			failures = append(failures, err.Error())
-		} else {
-			changed[file] = true
-		}
-	}
 	if pending["mcp"] {
 		result, err := s.InstallMCP()
 		if err != nil {
@@ -310,52 +271,6 @@ func (s Setup) Install(kinds []string, terminal bool) (SetupParts, error) {
 	return after, errors.New(strings.Join(append([]string{notCurrent.Error()}, failures...), "; "))
 }
 
-// installPathEntry runs `sudo <sok> path install` with the terminal of this process for the password.
-func (s Setup) installPathEntry() error {
-	sudo, err := findOnPath(s.Environment.path(), "sudo")
-	if err != nil {
-		return err
-	}
-	if sudo == "" {
-		return errors.New("the sudo command is not on PATH")
-	}
-	command := exec.Command(sudo, s.Sok, "path", "install")
-	command.Env = s.Environment.applied(os.Environ())
-	command.Stdin = os.Stdin
-	var stderr bytes.Buffer
-	command.Stdout, command.Stderr = io.Discard, io.MultiWriter(os.Stderr, &stderr)
-	err = command.Run()
-	var exit *exec.ExitError
-	if errors.As(err, &exit) {
-		line, _, _ := strings.Cut(stderr.String(), "\n") // silent: a standard error without a line feed is its own first line.
-		return fmt.Errorf("sudo %s path install failed with status %d: %s", StepOf(s.Sok), exit.ExitCode(), line)
-	}
-	if err != nil {
-		return fmt.Errorf("sudo %s path install: %w", StepOf(s.Sok), err)
-	}
-	return nil
-}
-
-// recordPathStep stores the result of `sudo <sok> path install` as sok.setup.path in the event file of the run
-// (docs/spec/cli.md#event-log): the path entry command runs as root and opens no event file, so the run of the person records
-// it. A run without an event file, such as a host, stores nothing.
-func recordPathStep(file string, err error) {
-	log := runLog.Load()
-	if log == nil {
-		return
-	}
-	if err == nil {
-		log.Emit(LevelInfo, "sok.setup.path", map[string]any{"file": file, "ok": true})
-		return
-	}
-	text, cut := CutText(err.Error(), callTextBytes)
-	fields := map[string]any{"file": file, "ok": false, "error": text}
-	if cut {
-		fields["truncated"] = true
-	}
-	log.Emit(LevelWarn, "sok.setup.path", fields)
-}
-
 // runningSok is <sok>: the absolute path of the running sok with its symbolic links resolved.
 func runningSok() (string, error) {
 	executable, err := os.Executable()
@@ -374,7 +289,7 @@ func commandSetup(options Options) (Setup, error) {
 	if err != nil {
 		return Setup{}, err
 	}
-	return Setup{Environment: ProcessAgentEnvironment(), Sok: sok, Identifier: options.Identifier, PathsDir: options.PathsDir, PathsError: options.PathsError}, nil
+	return Setup{Environment: ProcessAgentEnvironment(), Sok: sok, Identifier: options.Identifier}, nil
 }
 
 // runAgentSetup runs `sok skill`, `sok mcp install` and `sok setup`, and reports false for another command.
@@ -445,7 +360,7 @@ func runAgentSetup(a arguments, stdout io.Writer, options Options) (bool, error)
 		}
 		return true, parts.NotCurrent(nil)
 	}
-	parts, installErr := setup.Install(extra, term.IsTerminal(int(os.Stdin.Fd())))
+	parts, installErr := setup.Install(extra)
 	if parts.Parts == nil {
 		return true, installErr
 	}

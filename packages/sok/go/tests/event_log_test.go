@@ -171,7 +171,7 @@ func named(events []loggedEvent, name string) []loggedEvent {
 
 func loggedRun(config string, command sok.Command, args ...string) (int, string, string) {
 	var stdout, stderr bytes.Buffer
-	code := sok.Logged(append(args, "--config-dir", config), &stdout, &stderr, sok.Options{Identifier: "com.soksak.test", PathsDir: pathsDir, CoreVersion: "0.0.2"}, command)
+	code := sok.Logged(append(args, "--config-dir", config), &stdout, &stderr, sok.Options{Identifier: "com.soksak.test", CoreVersion: "0.0.2"}, command)
 	return code, stdout.String(), stderr.String()
 }
 
@@ -213,27 +213,6 @@ func TestEachCommandIsRecordedWithItsResult(t *testing.T) {
 	ok := named(eventsOf(t, passing), "sok.command")
 	if len(ok) != 1 || ok[0].Level != "debug" || ok[0].Fields["ok"] != true || ok[0].Fields["status"] != float64(0) || ok[0].Fields["error"] != nil {
 		t.Fatalf("sok.command of a command that succeeded = %+v", ok)
-	}
-}
-
-// A path entry command runs as root through sudo, so it opens no event file: a folder or file that it created in the
-// configuration directory would belong to root (docs/spec/cli.md#event-log).
-// contract: cli.log.path-entry-commands-open-no-event-file
-func TestPathEntryCommandsOpenNoEventFile(t *testing.T) {
-	pathsDir = t.TempDir()
-	t.Cleanup(func() { pathsDir = "/nonexistent/paths.d" })
-	config := t.TempDir()
-	for _, action := range []string{"install", "remove"} {
-		if code, stdout, stderr := loggedRun(config, sok.Run, "path", action); code != 0 {
-			t.Fatalf("path %s: code %d stdout %q stderr %q", action, code, stdout, stderr)
-		}
-		entries, err := os.ReadDir(config)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(entries) != 0 {
-			t.Fatalf("path %s left %d entries in the configuration directory, first %q", action, len(entries), entries[0].Name())
-		}
 	}
 }
 

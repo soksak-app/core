@@ -87,7 +87,7 @@ pub struct Setups {
 struct Inner {
     sok: PathBuf,
     identifier: String,
-    paths_dir: Result<PathBuf, String>,
+    user_path_support: Result<(), String>,
     processes: Box<dyn LoginShellProcesses>,
     changed: Box<dyn Fn() + Send + Sync>,
     begin: Once,
@@ -107,12 +107,12 @@ impl Setups {
         processes: Box<dyn LoginShellProcesses>,
         changed: Box<dyn Fn() + Send + Sync>,
     ) -> Result<Setups, String> {
-        let paths_dir = soksak_sok::platform::current()?.paths_dir();
+        let user_path = soksak_sok::platform::current()?.user_path();
         Ok(Setups {
             inner: Arc::new(Inner {
                 sok,
                 identifier,
-                paths_dir,
+                user_path_support: user_path,
                 processes,
                 changed,
                 begin: Once::new(),
@@ -133,7 +133,7 @@ impl Setups {
             crate::routine::spawn_named("setup-environment", move || {
                 let environment = inner.read_environment();
                 if let Ok(environment) = &environment
-                    && inner.paths_dir.is_ok()
+                    && inner.user_path_support.is_ok()
                 {
                     let (effective, error) = inner.reconcile_user_path(environment.clone(), None);
                     if let Err(error) = inner.set_path_environment(effective, error) {
@@ -180,7 +180,7 @@ impl Setups {
         }
         let _running = self.inner.begin_operation()?;
         self.inner.environment()?;
-        self.inner.paths_dir.as_ref().map_err(Clone::clone)?;
+        self.inner.user_path_support.clone()?;
         let environment = if request.enabled {
             self.inner.read_environment()?
         } else {
@@ -198,19 +198,12 @@ impl Setups {
         }
     }
 
-    /// Installs the named kinds of skill and mcp as `sok setup install` does and returns its parts, then sends setup-changed. The
-    /// path entry needs administrator rights, which the application has no terminal to ask for.
+    /// Installs the named kinds of skill and mcp as `sok setup install` does and returns its parts, then sends setup-changed.
     pub fn install(&self, request: InstallRequest) -> Result<Parts, String> {
         let kinds = kinds_of(&request.parts)?;
         let _running = self.inner.begin_operation()?;
         let environment = self.inner.environment()?;
-        if kinds.contains(&Kind::Path) {
-            return Err(format!(
-                "the path entry needs administrator rights: run sudo {} path install in a terminal",
-                setup::step_of(&self.inner.sok.display().to_string())
-            ));
-        }
-        let installed = setup::install(&self.inner.setup(&environment), &kinds, false);
+        let installed = setup::install(&self.inner.setup(&environment), &kinds);
         // The install can have changed a part also when it failed, so every window reads the parts again.
         (self.inner.changed)();
         match installed? {
@@ -272,7 +265,7 @@ impl Inner {
     }
 
     fn with_user_path(&self, mut parts: Vec<Part>, refresh: bool) -> Result<Parts, String> {
-        if self.paths_dir.is_ok() {
+        if self.user_path_support.is_ok() {
             let (mut environment, error) = self.path_environment()?;
             if refresh {
                 environment = self.read_environment()?;
@@ -285,7 +278,7 @@ impl Inner {
                 part.reason = None;
                 part.error = Some(error);
             }
-            parts[0] = part;
+            parts.insert(0, part);
         }
         Ok(Parts { parts })
     }
@@ -333,7 +326,6 @@ impl Inner {
             environment,
             sok: &self.sok,
             identifier: &self.identifier,
-            paths_dir: self.paths_dir.as_deref().map_err(Clone::clone),
         }
     }
 
@@ -369,8 +361,7 @@ impl Inner {
         let Ok(environment) = environment else {
             return;
         };
-        let error = match setup::install(&self.setup(environment), &[Kind::Mcp, Kind::Hook], false)
-        {
+        let error = match setup::install(&self.setup(environment), &[Kind::Mcp, Kind::Hook]) {
             Ok(installed) => installed.error,
             Err(error) => Some(error),
         };
@@ -507,6 +498,9 @@ impl Inner {
 }
 
 /// Reads the parts of a setupInstall request: a non-empty list of setup part names without repetition.
+/// The kinds of setup parts that `setupInstall` installs.
+const SETUP_PART_KINDS: [Kind; 2] = [Kind::Skill, Kind::Mcp];
+
 fn kinds_of(value: &Value) -> Result<Vec<Kind>, String> {
     let invalid = || "parts must be a non-empty list of setup parts without repetition".to_string();
     let list = value
@@ -523,7 +517,11 @@ fn kinds_of(value: &Value) -> Result<Vec<Kind>, String> {
     }
     names
         .into_iter()
-        .map(|name| Kind::parse(name).ok_or_else(|| format!("unknown setup part: {name}")))
+        .map(|name| {
+            Kind::parse(name)
+                .filter(|kind| SETUP_PART_KINDS.contains(kind))
+                .ok_or_else(|| format!("unknown setup part: {name}"))
+        })
         .collect()
 }
 

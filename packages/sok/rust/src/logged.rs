@@ -223,8 +223,7 @@ impl Record {
 
 /// Runs `command` and records it: it starts the event file of the targeted configuration folder, runs the command, stores a
 /// panic of the command with its stack as the exit status `PANIC_STATUS`, stores the command with its result, and flushes the
-/// file. An event file that cannot be started is reported on the standard error and the command runs without it. A path entry
-/// command runs without an event file.
+/// file. An event file that cannot be started is reported on the standard error and the command runs without it.
 pub fn logged(
     args: &[String],
     stdout: &mut dyn Write,
@@ -232,9 +231,6 @@ pub fn logged(
     options: &Options,
     command: Command,
 ) -> i32 {
-    if command::command_word(args) == Some("path") {
-        return unlogged(args, stdout, stderr, options, command);
-    }
     let started = Instant::now();
     let log = target_config_dir(args, options).and_then(|config| start_tool_event_log(&config));
     let log = match log {
@@ -348,28 +344,6 @@ pub fn logged(
     set_run_log(None);
     record.log.close();
     status
-}
-
-/// Runs a path entry command without an event file (docs/spec/cli.md#event-log): it runs as root through sudo, and a folder or file
-/// that it created in the configuration folder would belong to root and refuse the later runs of the person. A panic of the command
-/// is written to the standard error and ends the run with the status `PANIC_STATUS`.
-fn unlogged(
-    args: &[String],
-    stdout: &mut dyn Write,
-    stderr: &mut dyn Write,
-    options: &Options,
-    command: Command,
-) -> i32 {
-    match guard(|| command(args, stdout, stderr, options)) {
-        Ok(status) => status,
-        Err(panic) => {
-            if write!(stderr, "sok: panic: {}\n{}", panic.text, panic.stack).is_err() {
-                3
-            } else {
-                PANIC_STATUS
-            }
-        }
-    }
 }
 
 /// Runs `run` with the record of the tool.

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net"
 	"os"
 	"os/exec"
@@ -25,12 +26,9 @@ import (
 	_ "github.com/soksak-app/core/packages/sok/go/src/platform/linux"
 )
 
-// pathsDir is the paths.d slot that the path entry checks change.
-var pathsDir = "/nonexistent/paths.d"
-
 func run(args ...string) (int, string, string) {
 	var stdout, stderr bytes.Buffer
-	code := sok.Run(args, &stdout, &stderr, sok.Options{Identifier: "com.soksak.test", PathsDir: pathsDir, CoreVersion: "0.0.2"})
+	code := sok.Run(args, &stdout, &stderr, sok.Options{Identifier: "com.soksak.test", CoreVersion: "0.0.2"})
 	return code, stdout.String(), stderr.String()
 }
 
@@ -58,7 +56,7 @@ func (unwritable) Write([]byte) (int, error) { return 0, errors.New("standard er
 // contract: cli.error.unwritable-stderr-exits-3
 func TestAnErrorThatCannotBeWrittenExitsWithStatus3(t *testing.T) {
 	var stdout bytes.Buffer
-	code := sok.Run([]string{"nothing", "--config-dir", t.TempDir()}, &stdout, unwritable{}, sok.Options{Identifier: "com.soksak.test", PathsDir: pathsDir, CoreVersion: "0.0.2"})
+	code := sok.Run([]string{"nothing", "--config-dir", t.TempDir()}, &stdout, unwritable{}, sok.Options{Identifier: "com.soksak.test", CoreVersion: "0.0.2"})
 	if code != 3 {
 		t.Fatalf("code %d", code)
 	}
@@ -303,50 +301,30 @@ func TestCommandsListsTheDeclaredCommandsInOrder(t *testing.T) {
 	}
 }
 
-// contract: cli.path.writes-and-removes-the-entry
-func TestPathInstallWritesTheExecutableDirectoryAndRemoveDeletesIt(t *testing.T) {
-	pathsDir = t.TempDir()
-	t.Cleanup(func() { pathsDir = "/nonexistent/paths.d" })
-	executable, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
+// No command of sok needs administrator rights: the path entry command is gone, and no source of the command line, the host or the
+// mygo workbench starts sudo (docs/spec/cli.md#agents-in-the-application).
+// contract: cli.no-administrator-rights
+func TestNoCommandNeedsAdministratorRights(t *testing.T) {
+	if code, stdout, stderr := run("path", "install"); code != 2 || stdout != "" || !strings.HasPrefix(stderr, "sok: unknown command: path\n") {
+		t.Fatalf("code %d stdout %q stderr %q", code, stdout, stderr)
 	}
-	executable, err = filepath.EvalSymlinks(executable)
-	if err != nil {
-		t.Fatal(err)
-	}
-	entry := filepath.Join(pathsDir, "com.soksak.test")
-	for range 2 {
-		code, stdout, stderr := run("path", "install")
-		want := fmt.Sprintf("{\n  \"directory\": %q,\n  \"path\": %q\n}\n", filepath.Dir(executable), entry)
-		if code != 0 || stdout != want {
-			t.Fatalf("code %d stdout %q stderr %q", code, stdout, stderr)
+	for _, folder := range []string{"../src", "../../../host/go/src", "../../../workbench-mygo/src"} {
+		err := filepath.WalkDir(folder, func(path string, entry fs.DirEntry, err error) error {
+			if err != nil || entry.IsDir() || !strings.HasSuffix(path, ".go") {
+				return err
+			}
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			if strings.Contains(string(data), `"sudo"`) {
+				t.Errorf("%s names the sudo command", path)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
 		}
-		if data, err := os.ReadFile(entry); err != nil || string(data) != filepath.Dir(executable)+"\n" {
-			t.Fatalf("entry %q %v", data, err)
-		}
-	}
-	for range 2 {
-		if code, stdout, stderr := run("path", "remove"); code != 0 || stdout != "null\n" {
-			t.Fatalf("code %d stdout %q stderr %q", code, stdout, stderr)
-		}
-	}
-	if _, err := os.Stat(entry); !os.IsNotExist(err) {
-		t.Fatalf("the entry remains: %v", err)
-	}
-	pathsDir = filepath.Join(t.TempDir(), "missing")
-	code, _, stderr := run("path", "install")
-	if code != 1 || !strings.HasPrefix(stderr, "sok: cannot write "+filepath.Join(pathsDir, "com.soksak.test")+": ") || !strings.HasSuffix(stderr, "; run sudo sok path install\n") {
-		t.Fatalf("code %d stderr %q", code, stderr)
-	}
-}
-
-// contract: cli.path.fails-without-a-path-entry-folder
-func TestPathEntriesFailWhereTheOperatingSystemHasNoFolder(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-	code := sok.Run([]string{"path", "install"}, &stdout, &stderr, sok.Options{Identifier: "com.soksak.test", PathsError: errors.New("path entries are not implemented on linux"), CoreVersion: "0.0.2"})
-	if code != 1 || stdout.String() != "" || stderr.String() != "sok: path entries are not implemented on linux\n" {
-		t.Fatalf("code %d stdout %q stderr %q", code, stdout.String(), stderr.String())
 	}
 }
 
@@ -360,7 +338,7 @@ const watchChild = "SOK_TEST_WATCH_CHILD"
 func TestAnInterruptEndsAWatchThatWaitsInAWrite(t *testing.T) {
 	if config := os.Getenv(watchChild); config != "" {
 		os.Exit(sok.Main([]string{"status", "fixture.value", "--window", "main", "--watch", "--config-dir", config}, os.Stdout, os.Stderr,
-			sok.Options{Identifier: "com.soksak.test", PathsDir: pathsDir, CoreVersion: "0.0.2"}))
+			sok.Options{Identifier: "com.soksak.test", CoreVersion: "0.0.2"}))
 	}
 	// The value is larger than the buffer of a pipe, so its write waits while nothing reads the pipe.
 	player := playCase(t, "sok-interrupt-watch", withText("value", strings.Repeat("x", 1<<20)))

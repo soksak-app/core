@@ -1,6 +1,6 @@
 //! Checks the setup operations of sok that macOS decides (docs/spec/cli.md#mcp-registration, docs/spec/cli.md#setup-parts): the
-//! running sok must be the sok of an application bundle, and the judgement with which `sok path install` refuses the running sok
-//! and `sok mcp install` refuses the running sok on a read-only volume. The read-only volume is the sealed system volume of
+//! running sok must be the sok of an application bundle, and the judgement with which `sok mcp install` refuses the running sok
+//! on a read-only volume. The read-only volume is the sealed system volume of
 //! macOS, which statvfs reports read-only; the writable volume is the one of the temporary folder of the test.
 
 #![cfg(target_os = "macos")]

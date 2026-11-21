@@ -64,17 +64,16 @@ func containsCommand(commands []string, want string) bool {
 // current.
 // contract: cli.setup.install-writes-the-skill-of-the-folder-that-the-registration-creates
 func TestSetupInstallWritesTheSkillOfTheCodexFolderThatTheRegistrationCreates(t *testing.T) {
-	f, entry, _ := partsFixture(t)
-	writeText(t, entry, filepath.Dir(f.running)+"\n")
+	f, _ := partsFixture(t)
 	codexDir := setupFixture(t, "codex")
 	t.Setenv("PATH", filepath.Dir(f.sok)+string(os.PathListSeparator)+f.claudeDir+string(os.PathListSeparator)+codexDir)
 	code, stdout, stderr := f.run(t, "setup", "install")
-	want := "path ok changed=false\nskill ok changed=true\nskill ok changed=true\nmcp ok changed=true\nhook ok changed=true\nhook ok changed=true"
+	want := "skill ok changed=true\nskill ok changed=true\nmcp ok changed=true\nhook ok changed=true\nhook ok changed=true"
 	if code != 0 || describeParts(decodeParts(t, stdout)) != want {
 		t.Fatalf("code %d stdout %s stderr %q, want the parts\n%s", code, stdout, stderr, want)
 	}
 	codexSkill := filepath.Join(f.home, ".agents", "skills", "soksak", "SKILL.md")
-	if parts := decodeParts(t, stdout); parts[2].File != codexSkill {
+	if parts := decodeParts(t, stdout); parts[1].File != codexSkill {
 		t.Fatalf("parts %s, want the skill %s", stdout, codexSkill)
 	}
 }

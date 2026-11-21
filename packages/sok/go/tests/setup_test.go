@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,7 +14,6 @@ import (
 	"testing"
 
 	sok "github.com/soksak-app/core/packages/sok/go/src"
-	"github.com/soksak-app/core/packages/sok/go/tests/support"
 )
 
 type mcpInstall struct {
@@ -103,15 +101,12 @@ func (f registrationFixture) run(t *testing.T, args ...string) (int, string, str
 	return runInBundle(t, f.running, args...)
 }
 
-// sokArgsVariable and sokPathsDirVariable pass the arguments and the paths folder of a sok run by runInBundle.
-const (
-	sokArgsVariable     = "SOKSAK_TEST_SOK_ARGS"
-	sokPathsDirVariable = "SOKSAK_TEST_PATHS_DIR"
-)
+// sokArgsVariable passes the arguments of a sok run by runInBundle.
+const sokArgsVariable = "SOKSAK_TEST_SOK_ARGS"
 
 // runInBundle runs the sok of the test from bundle, a copy of the test binary in an application bundle folder, so that the
 // running sok is a sok of an application bundle as on macOS (docs/spec/cli.md#mcp-registration). The copy runs
-// TestSokHelperProcess, which calls sok.Run with the arguments and the paths folder of the test.
+// TestSokHelperProcess, which calls sok.Run with the arguments of the test.
 func runInBundle(t *testing.T, bundle string, args ...string) (int, string, string) {
 	t.Helper()
 	encoded, err := json.Marshal(args)
@@ -119,7 +114,7 @@ func runInBundle(t *testing.T, bundle string, args ...string) (int, string, stri
 		t.Fatal(err)
 	}
 	cmd := exec.Command(bundle, "-test.run=^TestSokHelperProcess$")
-	cmd.Env = append(os.Environ(), sokArgsVariable+"="+string(encoded), sokPathsDirVariable+"="+pathsDir)
+	cmd.Env = append(os.Environ(), sokArgsVariable+"="+string(encoded))
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	code := 0
@@ -145,7 +140,7 @@ func TestSokHelperProcess(t *testing.T) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
 	}
-	os.Exit(sok.Run(args, os.Stdout, os.Stderr, sok.Options{Identifier: "com.soksak.test", PathsDir: os.Getenv(sokPathsDirVariable), CoreVersion: "0.0.2"}))
+	os.Exit(sok.Run(args, os.Stdout, os.Stderr, sok.Options{Identifier: "com.soksak.test", CoreVersion: "0.0.2"}))
 }
 
 // writeRegistration writes the configuration file of the claude command with the entry soksak.
@@ -299,52 +294,47 @@ func TestMcpInstallReportsClaudeFailures(t *testing.T) {
 	}
 }
 
-// partsFixture is a registration fixture with a path entry folder and an agent folder.
-func partsFixture(t *testing.T) (registrationFixture, string, string) {
+// partsFixture is a registration fixture with an agent folder.
+func partsFixture(t *testing.T) (registrationFixture, string) {
 	t.Helper()
 	f := newRegistrationFixture(t)
-	pathsDir = t.TempDir()
-	t.Cleanup(func() { pathsDir = "/nonexistent/paths.d" })
 	mkdirs(t, filepath.Join(f.home, ".claude"))
-	return f, filepath.Join(pathsDir, "com.soksak.test"), filepath.Join(f.home, ".claude", "skills", "soksak", "SKILL.md")
+	return f, filepath.Join(f.home, ".claude", "skills", "soksak", "SKILL.md")
 }
 
 // contract: cli.setup.check-reports-each-part
 func TestSetupCheckReportsEachPart(t *testing.T) {
-	f, entry, skill := partsFixture(t)
+	f, skill := partsFixture(t)
 	running := f.running
 	code, stdout, stderr := f.run(t, "setup", "check")
 	parts := decodeParts(t, stdout)
-	if code != 1 || describeParts(parts) != "path missing absent\nskill missing absent\nmcp missing absent\nhook missing absent" {
+	if code != 1 || describeParts(parts) != "skill missing absent\nmcp missing absent\nhook missing absent" {
 		t.Fatalf("code %d parts %s", code, stdout)
 	}
-	if parts[0].File != entry || parts[1].File != skill || parts[2].File != f.config ||
-		parts[0].Step != "sudo "+running+" path install" || parts[1].Step != running+" skill install" || parts[2].Step != running+" mcp install" {
+	if parts[0].File != skill || parts[1].File != f.config || parts[0].Step != running+" skill install" || parts[1].Step != running+" mcp install" {
 		t.Fatalf("parts %s", stdout)
 	}
 	settings := filepath.Join(f.home, ".claude", "settings.json")
-	if want := fmt.Sprintf("sok: setup parts are not current: path %s, skill %s, mcp %s, hook %s\n", entry, skill, f.config, settings); stderr != want {
+	if want := fmt.Sprintf("sok: setup parts are not current: skill %s, mcp %s, hook %s\n", skill, f.config, settings); stderr != want {
 		t.Fatalf("stderr %q, want %q", stderr, want)
 	}
-	if !strings.HasPrefix(stdout, "{\n  \"parts\": [\n    {\n      \"part\": \"path\",\n      \"file\": ") {
+	if !strings.HasPrefix(stdout, "{\n  \"parts\": [\n    {\n      \"part\": \"skill\",\n      \"file\": ") {
 		t.Fatalf("members out of order: %s", stdout)
 	}
 	// Each part current.
-	writeText(t, entry, filepath.Dir(running)+"\n")
 	writeText(t, skill, skillSource(t))
 	writeRegistration(t, f.config, fmt.Sprintf(`{"type": "stdio", "command": %q, "args": ["mcp"], "env": {}}`, f.running))
 	if code, stdout, stderr := f.run(t, "setup", "install", "hook"); code != 0 {
 		t.Fatalf("install hook: code %d stdout %s stderr %q", code, stdout, stderr)
 	}
-	if code, stdout, stderr := f.run(t, "setup", "check"); code != 0 || stderr != "" || describeParts(decodeParts(t, stdout)) != "path ok\nskill ok\nmcp ok\nhook ok" {
+	if code, stdout, stderr := f.run(t, "setup", "check"); code != 0 || stderr != "" || describeParts(decodeParts(t, stdout)) != "skill ok\nmcp ok\nhook ok" {
 		t.Fatalf("code %d stdout %s stderr %q", code, stdout, stderr)
 	}
 	// Each part differs.
-	writeText(t, entry, "/elsewhere\n")
 	writeText(t, skill, "edited\n")
 	writeRegistration(t, f.config, `{"type": "stdio", "command": "/elsewhere/sok", "args": ["mcp"]}`)
 	writeText(t, filepath.Join(f.home, ".claude", "settings.json"), `{"hooks": {"SessionStart": [{"matcher": "", "hooks": [{"type": "command", "command": "[ -n \"$SOKSAK_CONFIG_DIR\" ] || exit 0; exec /elsewhere/sok role identity --soksak-hook"}]}]}}`+"\n")
-	if code, stdout, _ := f.run(t, "setup", "check"); code != 1 || describeParts(decodeParts(t, stdout)) != "path missing differs\nskill missing differs\nmcp missing differs\nhook missing differs" {
+	if code, stdout, _ := f.run(t, "setup", "check"); code != 1 || describeParts(decodeParts(t, stdout)) != "skill missing differs\nmcp missing differs\nhook missing differs" {
 		t.Fatalf("code %d stdout %s", code, stdout)
 	}
 	// A part that cannot be read is an error with its text.
@@ -355,17 +345,17 @@ func TestSetupCheckReportsEachPart(t *testing.T) {
 	writeText(t, f.config, "{not json")
 	_, stdout, _ = f.run(t, "setup", "check")
 	parts = decodeParts(t, stdout)
-	if parts[1].State != "error" || parts[1].Error != skill+": permission denied" || parts[2].State != "error" || parts[2].Error != f.config+" is not valid JSON at line 1 column 2" {
+	if parts[0].State != "error" || parts[0].Error != skill+": permission denied" || parts[1].State != "error" || parts[1].Error != f.config+" is not valid JSON at line 1 column 2" {
 		t.Fatalf("parts %s", stdout)
 	}
 	// The check changed no file.
-	if fileText(t, entry) != "/elsewhere\n" || fileText(t, f.config) != "{not json" || f.commands(t) != nil {
-		t.Fatalf("the check changed a file: %q %q %v", fileText(t, entry), fileText(t, f.config), f.commands(t))
+	if fileText(t, f.config) != "{not json" || f.commands(t) != nil {
+		t.Fatalf("the check changed a file: %q %v", fileText(t, f.config), f.commands(t))
 	}
 	// Without an agent folder and without the claude command, the parts that do not apply are not listed.
 	os.RemoveAll(filepath.Join(f.home, ".claude"))
 	t.Setenv("PATH", filepath.Dir(f.running))
-	if _, stdout, _ := f.run(t, "setup", "check"); describeParts(decodeParts(t, stdout)) != "path missing differs" {
+	if _, stdout, _ := f.run(t, "setup", "check"); describeParts(decodeParts(t, stdout)) != "" {
 		t.Fatalf("parts %s", stdout)
 	}
 }
@@ -385,72 +375,23 @@ func TestSetupStepsQuoteTheSok(t *testing.T) {
 
 // contract: cli.setup.install-installs-missing-parts
 func TestSetupInstallInstallsMissingParts(t *testing.T) {
-	f, entry, skill := partsFixture(t)
-	running := f.running
-	writeText(t, entry, filepath.Dir(running)+"\n")
+	f, skill := partsFixture(t)
 	// Named kinds limit the install to those kinds.
 	code, stdout, stderr := f.run(t, "setup", "install", "skill")
-	if code != 0 || describeParts(decodeParts(t, stdout)) != "path ok changed=false\nskill ok changed=true\nmcp missing absent changed=false\nhook missing absent changed=false" || f.commands(t) != nil {
+	if code != 0 || describeParts(decodeParts(t, stdout)) != "skill ok changed=true\nmcp missing absent changed=false\nhook missing absent changed=false" || f.commands(t) != nil {
 		t.Fatalf("code %d stdout %s stderr %q", code, stdout, stderr)
 	}
 	writeText(t, skill, "edited\n")
 	code, stdout, stderr = f.run(t, "setup", "install")
-	if code != 0 || describeParts(decodeParts(t, stdout)) != "path ok changed=false\nskill ok changed=true\nmcp ok changed=true\nhook ok changed=true" {
+	if code != 0 || describeParts(decodeParts(t, stdout)) != "skill ok changed=true\nmcp ok changed=true\nhook ok changed=true" {
 		t.Fatalf("code %d stdout %s stderr %q", code, stdout, stderr)
 	}
 	code, stdout, stderr = f.run(t, "setup", "install")
-	if code != 0 || describeParts(decodeParts(t, stdout)) != "path ok changed=false\nskill ok changed=false\nmcp ok changed=false\nhook ok changed=false" || len(f.commands(t)) != 1 {
+	if code != 0 || describeParts(decodeParts(t, stdout)) != "skill ok changed=false\nmcp ok changed=false\nhook ok changed=false" || len(f.commands(t)) != 1 {
 		t.Fatalf("code %d stdout %s stderr %q commands %v", code, stdout, stderr, f.commands(t))
 	}
 	if code, _, stderr := f.run(t, "setup", "install", "nothing"); code != 2 || !strings.HasPrefix(stderr, "sok: unknown setup part: nothing\n") {
 		t.Fatalf("code %d stderr %q", code, stderr)
-	}
-}
-
-// The path entry command that setup install runs through sudo opens no event file, so the run of the person stores its result as
-// sok.setup.path (docs/spec/cli.md#event-log): ok when sudo succeeded, and the error when it failed.
-// contract: cli.setup.install-records-the-path-step
-func TestSetupInstallRecordsThePathStep(t *testing.T) {
-	h := newAgentHome(t)
-	pathsDir = t.TempDir()
-	t.Cleanup(func() { pathsDir = "/nonexistent/paths.d" })
-	entry := filepath.Join(pathsDir, "com.soksak.test")
-	running := testExecutable(t)
-	install := func(path string) sok.Command {
-		return func([]string, io.Writer, io.Writer, sok.Options) int {
-			setup := sok.Setup{Environment: sok.AgentEnvironment{Home: &h.home, Path: &path}, Sok: running, Identifier: "com.soksak.test", PathsDir: pathsDir}
-			if _, err := setup.Install([]string{"path"}, true); err == nil {
-				return 0
-			}
-			return 1
-		}
-	}
-	// Each run has a configuration directory of its own: a sok process runs one command, and its event file is named by the boot
-	// identifier of the process, which the runs of this test process share.
-	config := t.TempDir()
-	support.StoreEveryLevel(t, config)
-	// The fixture sudo records its arguments and exits with 0 without writing the entry, so the part stays missing.
-	if code, _, stderr := loggedRun(config, install(setupFixture(t, "sudo")), "setup", "install", "path"); code != 1 {
-		t.Fatalf("code %d stderr %q", code, stderr)
-	}
-	if commands := h.commands(t); len(commands) != 1 || commands[0] != "sudo "+running+" path install" {
-		t.Fatalf("commands %q", commands)
-	}
-	// Without sudo on PATH the step fails.
-	without := t.TempDir()
-	support.StoreEveryLevel(t, without)
-	if code, _, stderr := loggedRun(without, install(t.TempDir()), "setup", "install", "path"); code != 1 {
-		t.Fatalf("code %d stderr %q", code, stderr)
-	}
-	steps := append(named(eventsOf(t, config), "sok.setup.path"), named(eventsOf(t, without), "sok.setup.path")...)
-	if len(steps) != 2 {
-		t.Fatalf("sok.setup.path events %+v", steps)
-	}
-	if steps[0].Level != "info" || steps[0].Fields["file"] != entry || steps[0].Fields["ok"] != true || steps[0].Fields["error"] != nil {
-		t.Fatalf("the step that succeeded is %+v", steps[0])
-	}
-	if steps[1].Level != "warn" || steps[1].Fields["file"] != entry || steps[1].Fields["ok"] != false || steps[1].Fields["error"] != "the sudo command is not on PATH" {
-		t.Fatalf("the step that failed is %+v", steps[1])
 	}
 }
 

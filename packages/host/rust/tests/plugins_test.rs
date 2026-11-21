@@ -15,10 +15,8 @@ use soksak_host::plugins::{Changed, Plugins, RegistryRequest, RunRequest, Starte
 fn sok_json(args: &[&str]) -> Value {
     let args: Vec<String> = args.iter().map(|arg| arg.to_string()).collect();
     let (mut stdout, mut stderr) = (vec![], vec![]);
-    let paths = folder::Folder::new();
     let options = soksak_sok::Options {
         identifier: "com.soksak.test",
-        paths_dir: Ok(paths.path()),
         core_version: soksak_sok::version::CORE_VERSION,
         config_dir_variable: None,
     };

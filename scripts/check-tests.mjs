@@ -453,6 +453,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1035",
+    implementation: [
+      { file: "packages/sok/go/src/setup.go", symbol: "func (s Setup) Install(kinds []string) (SetupParts, error) {" },
+      { file: "packages/sok/rust/src/setup.rs", symbol: "pub fn install(setup: &Setup, kinds: &[Kind]) -> Result<Installed, String> {" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/sok_test.go", id: "TestNoCommandNeedsAdministratorRights" },
+      { file: "packages/sok/go/tests/platform/darwin/setup_test.go", id: "TestSetupInstallRunsNoSudo" },
+      { file: "packages/sok/rust/tests/sok_test.rs", id: "sok_has_no_path_entry_command" },
+      { file: "packages/sok/rust/tests/sok_test.rs", id: "no_source_runs_sudo" },
+    ],
+    expected: "sok has no path entry command, sok setup install installs every part without sudo, and no source of the command line or of a host names the sudo command.",
+    levels: ["unit"],
+  },
+  {
     id: "F1034",
     implementation: [
       { file: "packages/host/go/src/setup.go", symbol: "func (s *Setups) bringAgentPartsCurrent() {" },
@@ -15553,8 +15568,8 @@ const FEATURE_LINKS = [
       { file: "packages/sok/rust/src/mcp_server.rs", symbol: "pub(crate) fn run(a: &Arguments, stderr: &mut dyn Write, options: &Options) -> Result<(), Error> {" },
       { file: "packages/sok/go/src/skill.go", symbol: "func (s Setup) InstallSkills() ([]SkillFile, error) {" },
       { file: "packages/sok/go/src/registration.go", symbol: "func (s Setup) InstallMCP() (MCPInstall, error) {" },
-      { file: "packages/sok/go/src/setup.go", symbol: "func (s Setup) Install(kinds []string, terminal bool) (SetupParts, error) {" },
-      { file: "packages/sok/rust/src/setup.rs", symbol: "pub fn install(setup: &Setup, kinds: &[Kind], terminal: bool) -> Result<Installed, String> {" },
+      { file: "packages/sok/go/src/setup.go", symbol: "func (s Setup) Install(kinds []string) (SetupParts, error) {" },
+      { file: "packages/sok/rust/src/setup.rs", symbol: "pub fn install(setup: &Setup, kinds: &[Kind]) -> Result<Installed, String> {" },
       { file: "packages/workbench/core-exposure.js", symbol: "registry.command(\"core.layout.open\", (params) => openInLayout(params));" },
     ],
     tests: [
@@ -15564,10 +15579,8 @@ const FEATURE_LINKS = [
       { file: "packages/sok/rust/tests/mcp_server_test.rs", id: "a_line_over_the_limit_ends_the_mcp_server" },
       { file: "packages/sok/go/tests/skill_test.go", id: "TestSkillInstallWritesOnlyExistingAgentFolders" },
       { file: "packages/sok/rust/tests/skill_test.rs", id: "skill_install_writes_only_existing_agent_folders" },
-      { file: "packages/sok/go/tests/setup_test.go", id: "TestSetupInstallRecordsThePathStep" },
-      { file: "packages/sok/rust/tests/setup_test.rs", id: "setup_install_records_the_path_step" },
-      { file: "packages/sok/go/tests/event_log_test.go", id: "TestPathEntryCommandsOpenNoEventFile" },
-      { file: "packages/sok/rust/tests/event_log_test.rs", id: "path_entry_commands_open_no_event_file" },
+      { file: "packages/sok/go/tests/setup_test.go", id: "TestSetupInstallInstallsMissingParts" },
+      { file: "packages/sok/rust/tests/setup_test.rs", id: "setup_install_installs_missing_parts" },
       { file: "packages/workbench/test/layout-operations.test.mjs", id: "core.layout.open applied twice adds one tab with its params, selected in its focused card" },
       { file: "packages/workbench-mygo/tests/layout_operations_test.go", id: "TestSurfaceWindowAnswersTheSpaceNullForASeatedSection" },
     ],

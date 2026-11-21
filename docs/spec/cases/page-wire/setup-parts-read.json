@@ -5,13 +5,13 @@
   "reason": "The parts depend on the agent folders and the claude command of the login shell of the person, which the Go producer without a window does not hold.",
   "steps": [
     {"call":{"name":"setupState"}},
-    {"reply":{"result":{"parts":[{"part":"path","file":"/etc/paths.d/app.soksak.wails","state":"missing","step":"sudo /Applications/soksak.app/Contents/MacOS/sok path install","reason":"absent"},{"part":"skill","file":"/Users/person/.claude/skills/soksak/SKILL.md","state":"missing","step":"/Applications/soksak.app/Contents/MacOS/sok skill install","reason":"differs"},{"part":"mcp","file":"/Users/person/.claude.json","state":"missing","step":"/Applications/soksak.app/Contents/MacOS/sok mcp install","reason":"absent"}]}}},
+    {"reply":{"result":{"parts":[{"part":"path","file":"/Users/person/.local/bin/sok","state":"ok","step":"","enabled":true},{"part":"skill","file":"/Users/person/.claude/skills/soksak/SKILL.md","state":"missing","step":"/Applications/soksak.app/Contents/MacOS/sok skill install","reason":"differs"},{"part":"mcp","file":"/Users/person/.claude.json","state":"missing","step":"/Applications/soksak.app/Contents/MacOS/sok mcp install","reason":"absent"}]}}},
     {"notice":{"event":"window-active"}},
     {"call":{"name":"setupState"}},
     {"reply":{"error":"login shell /bin/zsh: no environment within 10 s"}},
     {"notice":{"event":"setup-changed"}},
     {"call":{"name":"setupState"}},
-    {"reply":{"result":{"parts":[{"part":"path","file":"/etc/paths.d/app.soksak.wails","state":"missing","step":"sudo /Applications/soksak.app/Contents/MacOS/sok path install","reason":"absent","changed":false},{"part":"skill","file":"/Users/person/.claude/skills/soksak/SKILL.md","state":"ok","step":"/Applications/soksak.app/Contents/MacOS/sok skill install","changed":true},{"part":"mcp","file":"/Users/person/.claude.json","state":"ok","step":"/Applications/soksak.app/Contents/MacOS/sok mcp install","changed":true}]}}},
+    {"reply":{"result":{"parts":[{"part":"path","file":"/Users/person/.local/bin/sok","state":"ok","step":"","enabled":true},{"part":"skill","file":"/Users/person/.claude/skills/soksak/SKILL.md","state":"ok","step":"/Applications/soksak.app/Contents/MacOS/sok skill install","changed":true},{"part":"mcp","file":"/Users/person/.claude.json","state":"ok","step":"/Applications/soksak.app/Contents/MacOS/sok mcp install","changed":true}]}}},
     {"notice":{"event":"window-active"}},
     {"notice":{"event":"setup-changed"}}
   ]

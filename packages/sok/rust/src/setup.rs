@@ -1,15 +1,12 @@
-//! The setup parts of an agent (docs/spec/cli.md#setup-parts): the path entry, the skill files and the MCP registration. The
+//! The setup parts of an agent (docs/spec/cli.md#setup-parts): the skill files, the MCP registration and the hooks. The
 //! commands `sok setup` and the host (docs/spec/cli.md#agents-in-the-application) run the same functions.
 
-use std::io::{IsTerminal, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 use serde_json::json;
 
-use crate::event_bounds::cut_text;
-use crate::event_log::Level;
-use crate::logged::CALL_TEXT_BYTES;
 use crate::{Error, Options, indent, platform, registration, skill};
 
 /// `HOME`, `PATH` and `CLAUDE_CONFIG_DIR` of the environment that the setup operations read, where `None` is a variable that is not
@@ -161,18 +158,16 @@ pub fn require_writable_volume(sok: &Path) -> Result<(), String> {
 /// A kind of setup part.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
-    Path,
     Skill,
     Mcp,
     Hook,
 }
 
 impl Kind {
-    pub const ALL: [Kind; 4] = [Kind::Path, Kind::Skill, Kind::Mcp, Kind::Hook];
+    pub const ALL: [Kind; 3] = [Kind::Skill, Kind::Mcp, Kind::Hook];
 
     pub fn as_str(self) -> &'static str {
         match self {
-            Kind::Path => "path",
             Kind::Skill => "skill",
             Kind::Mcp => "mcp",
             Kind::Hook => "hook",
@@ -259,43 +254,20 @@ pub fn configure_user_path(
     platform::current()?.configure_user_path(environment, shell, executable, enabled)
 }
 
-/// What the setup operations read and change: the environment, the sok whose setup they describe, and the path entry of its
+/// What the setup operations read and change: the environment, the sok whose setup they describe, and the identifier of its
 /// application.
 pub struct Setup<'a> {
     pub environment: &'a Environment,
     /// The sok of the application: the running sok for `sok setup`, the sok of the bundle for the host.
     pub sok: &'a Path,
-    /// The identifier of the application, the file name of its path entry.
+    /// The identifier of the application.
     pub identifier: &'a str,
-    /// The folder of path entries; an error when the platform has none, and then the path part does not apply.
-    pub paths_dir: Result<&'a Path, String>,
-}
-
-impl Setup<'_> {
-    fn path_entry(&self) -> Option<PathBuf> {
-        self.paths_dir
-            .as_ref()
-            // default: a platform without a path entry folder has no path part (docs/spec/cli.md#setup-parts).
-            .ok()
-            .map(|dir| dir.join(self.identifier))
-    }
 }
 
 /// The parts of the setup in the order of the table, the skill files in the order of the agent folders. It fails only when
 /// `HOME` is not set.
 pub fn check(setup: &Setup) -> Result<Vec<Part>, String> {
     let mut parts = Vec::new();
-    if let Some(file) = setup.path_entry() {
-        parts.push(Part::new(
-            Kind::Path,
-            &file,
-            format!(
-                "sudo {} path install",
-                step_of(&setup.sok.display().to_string())
-            ),
-            crate::path::entry_state(&file, setup.sok),
-        ));
-    }
     for file in skill::skill_files(setup.environment)? {
         let state = skill::skill_state(&file);
         parts.push(Part::new(
@@ -328,9 +300,8 @@ pub struct Installed {
 }
 
 /// Installs each part of the kinds (every kind for none) that is not `ok` by the rules of its own command and leaves an `ok` part
-/// unchanged. The path entry is installed only when `terminal` is set, through `sudo <sok> path install` as a child that asks for
-/// the password on that terminal.
-pub fn install(setup: &Setup, kinds: &[Kind], terminal: bool) -> Result<Installed, String> {
+/// unchanged.
+pub fn install(setup: &Setup, kinds: &[Kind]) -> Result<Installed, String> {
     let before = check(setup)?;
     let named = |kind: Kind| kinds.is_empty() || kinds.contains(&kind);
     let pending = |kind: Kind| {
@@ -341,18 +312,6 @@ pub fn install(setup: &Setup, kinds: &[Kind], terminal: bool) -> Result<Installe
     };
     let mut changed: Vec<String> = Vec::new();
     let mut failures = Vec::new();
-    if pending(Kind::Path)
-        && terminal
-        && let Some(file) = setup.path_entry()
-    {
-        let file = file.display().to_string();
-        let installed = sudo_path_install(setup);
-        record_path_step(&file, installed.as_ref().err());
-        match installed {
-            Ok(()) => changed.push(file),
-            Err(error) => failures.push(error),
-        }
-    }
     if pending(Kind::Mcp) {
         match registration::install(setup.environment, setup.sok) {
             Ok(done) => {
@@ -413,79 +372,6 @@ pub fn install(setup: &Setup, kinds: &[Kind], terminal: bool) -> Result<Installe
     Ok(Installed { parts, error })
 }
 
-/// Stores the result of `sudo <sok> path install` as `sok.setup.path` in the event file of the run (docs/spec/cli.md#event-log): the
-/// path entry command runs as root and opens no event file, so the run of the person records it. A run without an event file, such
-/// as a host, stores nothing.
-fn record_path_step(file: &str, error: Option<&String>) {
-    let Some(error) = error else {
-        crate::replay::emit_run_event(
-            Level::Info,
-            "sok.setup.path",
-            &json!({"file": file, "ok": true}),
-        );
-        return;
-    };
-    let (text, cut) = cut_text(error, CALL_TEXT_BYTES);
-    let mut fields = json!({"file": file, "ok": false, "error": text});
-    if cut {
-        fields["truncated"] = json!(true);
-    }
-    crate::replay::emit_run_event(Level::Warn, "sok.setup.path", &fields);
-}
-
-/// Runs `sudo <sok> path install` with the terminal of this process for the password; its standard output is discarded, because
-/// the standard output of this process holds the parts, and its standard error goes to this process.
-fn sudo_path_install(setup: &Setup) -> Result<(), String> {
-    let step = step_of(&setup.sok.display().to_string());
-    let Some(sudo) = registration::find_on_path(setup.environment, "sudo")? else {
-        return Err("the sudo command is not on PATH".into());
-    };
-    let mut command = std::process::Command::new(sudo);
-    command
-        .arg(setup.sok)
-        .args(["path", "install"])
-        .stdin(std::process::Stdio::inherit())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::piped());
-    setup.environment.apply(&mut command);
-    let mut child = command.spawn().map_err(|error| {
-        format!(
-            "sudo {step} path install: {}",
-            crate::files::os_reason(&error)
-        )
-    })?;
-    // The standard error of sudo is shown on the standard error of this process and its first line kept for the error.
-    let mut first = String::new();
-    if let Some(stderr) = child.stderr.take() {
-        use std::io::BufRead;
-        for line in std::io::BufReader::new(stderr).lines() {
-            let line = line.map_err(|error| {
-                format!(
-                    "sudo {step} path install: {}",
-                    crate::files::os_reason(&error)
-                )
-            })?;
-            eprintln!("{line}");
-            if first.is_empty() {
-                first = line;
-            }
-        }
-    }
-    let status = child.wait().map_err(|error| {
-        format!(
-            "sudo {step} path install: {}",
-            crate::files::os_reason(&error)
-        )
-    })?;
-    if status.success() {
-        return Ok(());
-    }
-    Err(format!(
-        "sudo {step} path install failed with {}: {first}",
-        status_text(&status)
-    ))
-}
-
 /// The end of a child process: `status <n>`, or the text of the standard library for a process that a signal ended.
 pub(crate) fn status_text(status: &std::process::ExitStatus) -> String {
     match status.code() {
@@ -533,7 +419,6 @@ pub(crate) fn run_agent_setup(
             environment: &environment,
             sok: &sok,
             identifier: options.identifier,
-            paths_dir: options.paths_dir.clone(),
         };
         crate::hook::remove_hooks(&setup)?;
         let parts = crate::hook::hook_parts(&setup)?;
@@ -571,7 +456,6 @@ pub(crate) fn run_agent_setup(
         environment: &environment,
         sok: &sok,
         identifier: options.identifier,
-        paths_dir: options.paths_dir.clone(),
     };
     match (word, action.as_str()) {
         ("skill", "install") => {
@@ -596,7 +480,7 @@ pub(crate) fn run_agent_setup(
             }
         }
         _ => {
-            let installed = install(&setup, &kinds, std::io::stdin().is_terminal())?;
+            let installed = install(&setup, &kinds)?;
             print(stdout, &json!({ "parts": installed.parts }))?;
             match installed.error {
                 None => Ok(()),

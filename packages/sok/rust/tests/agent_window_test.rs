@@ -24,10 +24,8 @@ use folder::Folder;
 fn run_with(logged: bool, args: &[&str], config_dir: Option<&str>) -> (i32, String, String) {
     let args: Vec<String> = args.iter().map(|arg| arg.to_string()).collect();
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
-    let paths = PathBuf::from("/nonexistent-paths.d");
     let options = soksak_sok::Options {
         identifier: "com.soksak.test",
-        paths_dir: Ok(&paths),
         core_version: "0.0.2",
         config_dir_variable: config_dir,
     };

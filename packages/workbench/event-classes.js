@@ -119,7 +119,6 @@ const EXACT = new Map([
   ["sok.exec", "lifecycle"],
   ["sok.panic", "lifecycle"],
   ["sok.replay.divergence", "frame"],
-  ["sok.setup.path", "lifecycle"],
   ["sok.skill", "lifecycle"],
   ["workbench.background.session", "lifecycle"],
   ["workbench.call", "call"],

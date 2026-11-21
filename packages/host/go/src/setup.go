@@ -57,7 +57,6 @@ type LoginShellProcesses interface {
 type Setups struct {
 	sokPath    string
 	identifier string
-	pathsDir   string
 	pathsErr   error
 	processes  LoginShellProcesses
 	changed    func()
@@ -90,8 +89,7 @@ func NewSetups(sokPath, identifier string, processes LoginShellProcesses, change
 	if err != nil {
 		return nil, err
 	}
-	pathsDir, pathsErr := system.PathsDir()
-	return &Setups{sokPath: sokPath, identifier: identifier, pathsDir: pathsDir, pathsErr: pathsErr, processes: processes, changed: changed,
+	return &Setups{sokPath: sokPath, identifier: identifier, pathsErr: system.UserPath(), processes: processes, changed: changed,
 		ready: make(chan struct{})}, nil
 }
 
@@ -124,7 +122,7 @@ func (s *Setups) environmentSetup() (sok.Setup, error) {
 	if s.envErr != nil {
 		return sok.Setup{}, s.envErr
 	}
-	return sok.Setup{Environment: s.env, Sok: s.sokPath, Identifier: s.identifier, PathsDir: s.pathsDir, PathsError: s.pathsErr}, nil
+	return sok.Setup{Environment: s.env, Sok: s.sokPath, Identifier: s.identifier}, nil
 }
 
 // bringSkillCurrent writes a differing skill file of each agent folder that exists, as `sok mcp` does, and records each skill file
@@ -156,7 +154,7 @@ func (s *Setups) bringAgentPartsCurrent() {
 	if err != nil {
 		return
 	}
-	if _, err := setup.Install([]string{"mcp", "hook"}, false); err != nil {
+	if _, err := setup.Install([]string{"mcp", "hook"}); err != nil {
 		EmitHost(LevelError, "host.setup.install", map[string]any{"reason": err.Error()})
 	}
 }
@@ -216,7 +214,7 @@ func (s *Setups) withUserPath(parts sok.SetupParts, refresh bool) (sok.SetupPart
 	if pathErr != nil && part.State != "ok" {
 		part.State, part.Reason, part.Error = "error", "", pathErr.Error()
 	}
-	parts.Parts[0] = part
+	parts.Parts = append([]sok.SetupPart{part}, parts.Parts...)
 	return parts, nil
 }
 
@@ -295,10 +293,7 @@ func (s *Setups) Install(request SetupInstallRequest) (sok.SetupParts, error) {
 	if err != nil {
 		return sok.SetupParts{}, err
 	}
-	if slices.Contains(kinds, "path") {
-		return sok.SetupParts{}, fmt.Errorf("the path entry needs administrator rights: run sudo %s path install in a terminal", sok.StepOf(s.sokPath))
-	}
-	parts, err := setup.Install(kinds, false)
+	parts, err := setup.Install(kinds)
 	// The install can have changed a part also when it failed, so every window reads the parts again.
 	s.changed()
 	if err != nil {
@@ -308,7 +303,7 @@ func (s *Setups) Install(request SetupInstallRequest) (sok.SetupParts, error) {
 }
 
 // setupPartKinds are the kinds of setup parts, as `sok setup` names them.
-var setupPartKinds = []string{"path", "skill", "mcp"}
+var setupPartKinds = []string{"skill", "mcp"}
 
 // setupKindsOf reads the parts of a setupInstall request: a non-empty list of setup part names without repetition.
 func setupKindsOf(value any) ([]string, error) {

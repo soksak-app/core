@@ -199,7 +199,6 @@ fn a_run_stores_only_the_events_that_the_specification_names() {
         .collect();
     let options = soksak_sok::Options {
         identifier: "com.soksak.test",
-        paths_dir: Ok(std::path::Path::new("/nonexistent/paths.d")),
         core_version: "0.0.2",
         config_dir_variable: None,
     };

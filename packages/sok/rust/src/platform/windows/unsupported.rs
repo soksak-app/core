@@ -75,8 +75,8 @@ impl Platform for Windows {
         ))
     }
 
-    fn paths_dir(&self) -> Result<PathBuf, String> {
-        Err("path entries are not implemented on windows".into())
+    fn user_path(&self) -> Result<(), String> {
+        Err("the user PATH registration is not implemented on windows".into())
     }
 
     fn user_path_state(

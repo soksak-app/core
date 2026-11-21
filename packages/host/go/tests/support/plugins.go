@@ -35,7 +35,7 @@ func WriteInstalled(t *testing.T, config string, files map[string]string) {
 func sokJSON(t *testing.T, args ...string) map[string]any {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
-	if code := sok.Run(args, &stdout, &stderr, sok.Options{Identifier: "com.soksak.test", PathsDir: t.TempDir(), CoreVersion: sok.CoreVersion}); code != 0 {
+	if code := sok.Run(args, &stdout, &stderr, sok.Options{Identifier: "com.soksak.test", CoreVersion: sok.CoreVersion}); code != 0 {
 		t.Fatalf("sok %v: code %d stderr %s", args, code, stderr.String())
 	}
 	var value map[string]any

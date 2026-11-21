@@ -29,9 +29,6 @@ func (darwin) ProcessRunning(pid int) error {
 	return nil
 }
 
-// PathsDir is the path entry folder on macOS. The shell adds the line of each file in this folder to PATH.
-func (darwin) PathsDir() (string, error) { return "/etc/paths.d", nil }
-
 // Key is the release key of macOS.
 func (darwin) Key() (string, error) {
 	switch runtime.GOARCH {
@@ -198,3 +195,6 @@ func (darwin) RegisteredSok(path string) error {
 func (darwin) ReplaceProcess(path string, args, env []string) error {
 	return unix.Exec(path, args, env)
 }
+
+// UserPath is nil: the login shells of macOS read the startup files that the user PATH registration edits.
+func (darwin) UserPath() error { return nil }
