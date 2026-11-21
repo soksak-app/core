@@ -34,10 +34,6 @@ function drawError(element, where, text) {
 const documents = new WeakMap();
 const toastCloseKey = (id) => `error-toast:${id}`;
 
-/** Returns whether toasts close by their own deadline and the deadline in milliseconds, from the common settings
- * (docs/spec/settings.md). Without automatic dismissal a toast closes only on its own control. */
-
-
 /** Returns the error toast component for a document. */
 export function errorToasts(document) {
   if (!documents.has(document)) documents.set(document, createErrorToasts(document));
@@ -47,29 +43,22 @@ export function errorToasts(document) {
 function createErrorToasts(document) {
   const view = document.defaultView;
   const origins = new Map();
-  const groups = new Map();
+  // Toasts close by their own deadline only while autoDismissErrorToasts is on (docs/spec/settings.md); the settings store
+  // validates both values, and each settings change reschedules the open toasts.
   let autoDismiss = false;
-  let autoDismissDelay = 5000;
-  // The automatic dismissal follows the common settings; the subscription ends when the document closes, and the component
-  // takes the current settings when it opens a toast.
-  const followSettings = () => setAutoDismiss(settingsValue("autoDismissErrorToasts") === true,
-    // default: a setting of another form falls back to five seconds.
-    Number(settingsValue("errorToastDismissSeconds")) || 5);
-  onSettingsChange(followSettings);
-  /** Sets whether toasts close by their own deadline and the delay in seconds; the settings change of the workbench calls
-   * this, and the open toasts take the new deadline or drop their timer. */
-  const setAutoDismiss = (auto, seconds) => {
-    autoDismiss = auto === true;
-    // default: a seconds value of another form falls back to five seconds.
-    autoDismissDelay = (Number(seconds) || 5) * 1000;
-    for (const group of [...groups.values()]) {
+  let autoDismissDelay = 0;
+  const followSettings = () => {
+    autoDismiss = settingsValue("autoDismissErrorToasts");
+    autoDismissDelay = settingsValue("errorToastDismissSeconds") * 1000;
+    for (const group of groups.values()) {
       view.clearTimeout(group.timer);
-      group.timer = null;
-      if (autoDismiss) group.timer = view.setTimeout(() => dismissGroup(group), autoDismissDelay);
+      group.timer = autoDismiss ? view.setTimeout(() => dismissGroup(group), autoDismissDelay) : null;
     }
   };
-  // default: a setting of another form falls back to five seconds.
-  setAutoDismiss(settingsValue("autoDismissErrorToasts") === true, Number(settingsValue("errorToastDismissSeconds")) || 5);
+  const groups = new Map();
+  followSettings();
+  // The component lives as long as its document, so the subscription ends with the page.
+  onSettingsChange(followSettings);
   const watchers = new Set();
   let container = document.body;
   let holder;
@@ -138,7 +127,7 @@ function createErrorToasts(document) {
       const existing = groups.get(text);
       if (!origin && existing?.anonymous) return;
       // default: a text that no open toast holds opens one.
-    const group = existing ?? open(text, where);
+      const group = existing ?? open(text, where);
       let changedGroups = !existing;
       if (origin) {
         if (previous && detach(origin, previous)) changedGroups = true;
@@ -191,7 +180,6 @@ function createErrorToasts(document) {
       watchers.add(fn);
       return () => watchers.delete(fn);
     },
-    setAutoDismiss,
   };
 }
 
@@ -214,4 +202,3 @@ function toast(document, text, where, id) {
   toast.append(shown, close);
   return toast;
 }
-

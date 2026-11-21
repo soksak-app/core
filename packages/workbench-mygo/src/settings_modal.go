@@ -500,8 +500,8 @@ func (s *Shell) buildGeneral(b *settingsBuilder) error {
 			s.row(b, "메모리 절약", s.toggle(b, "memorySaver")),
 			s.row(b, "숨긴 뒤 내리기까지", s.slide(b, "memorySaverDelay", catalog.Settings.MemorySaverDelay, "분")))
 		b.group("알림", "오류 토스트의 자동 닫힘을 정한다. 끄면 각 토스트의 ×로만 닫는다.",
-			s.row(b, "초 후 자동으로 닫힘", s.toggle(b, "autoDismissErrorToasts")),
-			s.row(b, "초", s.textField(b, "errorToastDismissSeconds", 3)))
+			s.row(b, "자동 닫힘", s.toggle(b, "autoDismissErrorToasts")),
+			s.row(b, "초 후 자동으로 닫힘", s.textField(b, "errorToastDismissSeconds", 3)))
 		on := s.settings.DebugOn()
 		debug := b.add(SettingsControl{Name: "core.settings-modal.debug", Label: "디버그", On: &on, Command: settingCommand("core.settings.debug", nil), kind: controlSwitch, param: "on"})
 		b.group("진단", "디버그를 켜면 성능 트레이스와 모든 로그 종류의 상세 기록이 남는다. 끄면 오류만 기록된다.", settingsRow{name: "디버그", controls: []*SettingsControl{debug}})
@@ -934,12 +934,6 @@ func (s *Shell) settingsChanged() error {
 	}
 	s.followScale()
 	s.followSettings()
-	// The toast deadline follows the automatic-dismissal settings of the workbench.
-	// default: the settings store checks the type of each value, so a value of the wrong type cannot reach this point.
-	auto, _ := s.settings.Value("autoDismissErrorToasts").(bool)
-	// default: the store holds a whole number or its default, so a value of another form cannot reach this point.
-	seconds, _ := s.settings.Value("errorToastDismissSeconds").(float64)
-	s.errors.ConfigureToastDeadline(auto, int64(seconds)*1000)
 	if err := s.followDiagnostics(); err != nil {
 		return err
 	}
@@ -964,6 +958,16 @@ func (s *Shell) applySettings() error {
 		return err
 	}
 	s.sidebars.Adopt(sets, links)
+	// The toast deadline follows the automatic-dismissal settings on every load and change of the settings.
+	auto, ok := s.settings.Value("autoDismissErrorToasts").(bool)
+	if !ok {
+		return fmt.Errorf("settings: autoDismissErrorToasts is %s, not a switch", jsonText(s.settings.Value("autoDismissErrorToasts")))
+	}
+	seconds, ok := s.settings.Value("errorToastDismissSeconds").(float64)
+	if !ok {
+		return fmt.Errorf("settings: errorToastDismissSeconds is %s, not a number", jsonText(s.settings.Value("errorToastDismissSeconds")))
+	}
+	s.errors.ConfigureToastDeadline(auto, int64(seconds)*1000)
 	return nil
 }
 

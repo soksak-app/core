@@ -344,3 +344,22 @@ func TestErrorToastSettingsApplyNewDeadlinesAndCancelOpenToasts(t *testing.T) {
 	f.settle()
 	assertOnlyToastClose(t, f.tester.ElementTree(), third)
 }
+
+// The automatic dismissal that the common settings file holds applies from the start of the window, before any settings
+// change (docs/spec/settings.md).
+func TestStoredErrorToastDismissalAppliesFromTheStart(t *testing.T) {
+	f := newTabShell(t, &storedHost{installed: layoutPlugins, projects: []map[string]any{gridProject(oneCard(tab("tab-aaaaaa", "plain")))},
+		common: map[string]any{"autoDismissErrorToasts": true, "errorToastDismissSeconds": 3}})
+	f.open(t)
+	const failure = "the operation could not finish"
+	f.shell.StartFailed(errors.New(failure))
+	f.shownRecords()
+	f.timers.tick(2999)
+	f.settle()
+	assertOnlyToastClose(t, f.tester.ElementTree(), failure)
+	f.timers.tick(1)
+	f.settle()
+	if got := f.status("core.workbench.error"); got != "null" {
+		t.Fatalf("the stored setting did not close the toast after three seconds: %s", got)
+	}
+}

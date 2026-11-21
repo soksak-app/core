@@ -4,18 +4,27 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { installExposure } from "../exposure.js";
 import { rawConsole } from "../page-log.js";
+import { beginSettings } from "../settings.js";
 import { errorToasts } from "../shown-errors.js";
 
 installExposure(JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")));
+
+/** Applies the automatic dismissal through the common settings, as a settings snapshot of the host does. */
+function dismissal(auto, seconds) {
+  beginSettings({ common: { autoDismissErrorToasts: auto, errorToastDismissSeconds: seconds }, projects: [] }, null);
+}
 
 function fixture(t) {
   const dom = new JSDOM("<body></body>");
   t.after(() => dom.window.close());
   const { document } = dom.window;
-  const { show, withdraw, dismiss, place, text, setAutoDismiss } = errorToasts(document);
+  // The settings install their values on the global document of the page.
+  Object.assign(globalThis, { window: dom.window, document });
+  beginSettings({ common: {}, projects: [] }, null);
+  const { show, withdraw, dismiss, place, text } = errorToasts(document);
   const log = t.mock.method(rawConsole, "error", () => {});
   return {
-    document, show, clear: withdraw, dismiss, place, text, setAutoDismiss,
+    document, show, clear: withdraw, dismiss, place, text,
     open: () => [...document.querySelectorAll("#errorToasts > .error-toast")].map((toast) => toast.dataset.text),
     records: () => log.mock.calls.map(({ arguments: [line] }) => line),
   };
@@ -67,7 +76,7 @@ test("a toast expires after four seconds across repaint and movement into a dial
   const dialog = document.createElement("div");
   dialog.setAttribute("role", "dialog");
   document.body.append(dialog);
-  display.setAutoDismiss(true, 4);
+  dismissal(true, 4);
   display.show("failed", "", "layout");
   t.mock.timers.tick(2000);
   display.show("failed", "", "layout");
@@ -87,7 +96,7 @@ test("a toast expires after four seconds across repaint and movement into a dial
 test("a cancelled toast timer leaves a later occurrence of the same text open", (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const display = fixture(t);
-  display.setAutoDismiss(true, 4);
+  dismissal(true, 4);
   display.show("failed", "", "layout");
   t.mock.timers.tick(1000);
   assert.equal(display.dismiss("failed"), true);
@@ -110,9 +119,9 @@ test("toasts default to manual stacking and live settings replace or cancel thei
   assert.equal(display.dismiss("earlier"), true);
   assert.deepEqual(display.open(), ["later"], "one manual close leaves other toasts open");
 
-  display.setAutoDismiss(true, 5);
+  dismissal(true, 5);
   t.mock.timers.tick(3000);
-  display.setAutoDismiss(true, 2);
+  dismissal(true, 2);
   t.mock.timers.tick(1999);
   assert.deepEqual(display.open(), ["later"]);
   t.mock.timers.tick(1);
@@ -121,7 +130,7 @@ test("toasts default to manual stacking and live settings replace or cancel thei
   display.clear("activity");
   display.show("later", "", "activity");
   t.mock.timers.tick(1000);
-  display.setAutoDismiss(false, 2);
+  dismissal(false, 2);
   t.mock.timers.tick(10000);
   assert.deepEqual(display.open(), ["later"], "turning the switch off cancels an open toast's deadline");
   display.clear("layout");

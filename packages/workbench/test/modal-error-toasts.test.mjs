@@ -72,7 +72,8 @@ test("the native settings and debug copies share the foreground toast and forwar
   await orderedCallsAnswered();
   const previous = copied("overlayUpdate", "debug");
   const previousKey = previous.dataset.key;
-  errors.setAutoDismiss(true, 4);
+  // The common settings turn on the automatic dismissal, as a settings snapshot of the host does.
+  (await import("../settings.js")).beginSettings({ common: { autoDismissErrorToasts: true, errorToastDismissSeconds: 4 }, projects: [] }, null);
   let dismissals = 0;
   registry.watch((name) => { if (name === "core.error.dismiss") dismissals++; });
   const answers = [];

@@ -104,9 +104,8 @@ export const defaults = {
   size: parseFloat(defaultTheme.shape.size),
 };
 
-/* The range of memorySaverDelay in minutes (docs/spec/settings.md#values). */
-// default: a declaration without the range holds the whole-number bounds.
-export const ERROR_TOAST_DISMISS_SECONDS = declaration.settings.errorToastDismissSeconds ?? [1, 2147483];
+/* The range of memorySaverDelay in minutes and of errorToastDismissSeconds in seconds (docs/spec/settings.md#values). */
+export const ERROR_TOAST_DISMISS_SECONDS = declaration.settings.errorToastDismissSeconds;
 export const MEMORY_SAVER_DELAY = declaration.settings.memorySaverDelay;
 
 

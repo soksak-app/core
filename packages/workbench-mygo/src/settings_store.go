@@ -465,12 +465,6 @@ func (s *SettingsStore) validate(key string, value any) error {
 			return fmt.Errorf("Invalid setting memorySaverDelay: %s", jsonText(value))
 		}
 	}
-	if key == "errorToastDismissSeconds" {
-		number, ok := integer(value)
-		if bounds := catalog.Settings.ErrorToastDismissSeconds; !ok || number < bounds[0] || number > bounds[1] {
-			return fmt.Errorf("Invalid setting errorToastDismissSeconds: %s is not an integer from %v to %v", jsonText(value), bounds[0], bounds[1])
-		}
-	}
 	if bounds, ok := catalog.bounds(key); ok {
 		number, whole := integer(value)
 		if !whole || number < bounds[0] || number > bounds[1] {

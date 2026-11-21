@@ -27,7 +27,7 @@ import { missingKinds } from "./setup-parts.js";
 import { errorToasts, showError } from "./shown-errors.js";
 import { hasSection, section, sectionNames } from "./registry.js";
 import {
-  CHOICES, FONTS, LAYOUT_RANGES, MEMORY_SAVER_DELAY, MENU_LANGUAGES, SHAPE_RANGES, THEMES, debugOn, scopedValue, settingProject, settingProjectRoot, overridden, sourceScope,
+  CHOICES, ERROR_TOAST_DISMISS_SECONDS, FONTS, LAYOUT_RANGES, MEMORY_SAVER_DELAY, MENU_LANGUAGES, SHAPE_RANGES, THEMES, debugOn, scopedValue, settingProject, settingProjectRoot, overridden, sourceScope,
   settingDefinitions,
 } from "./settings.js";
 
@@ -343,7 +343,7 @@ function drawGeneral() {
   ]));
   if (scope === "common") body.append(group("알림", "오류 토스트의 자동 닫힘을 정한다. 끄면 각 토스트의 ×로만 닫는다.", [
     row("자동 닫힘", toggle("autoDismissErrorToasts", value("autoDismissErrorToasts"))),
-    row("초 후 자동으로 닫힘", seconds("errorToastDismissSeconds", 1, 2147483, value("errorToastDismissSeconds"))),
+    row("초 후 자동으로 닫힘", seconds("errorToastDismissSeconds", ...ERROR_TOAST_DISMISS_SECONDS, value("errorToastDismissSeconds"))),
   ]));
   if (scope === "common") body.append(group("진단", "디버그를 켜면 성능 트레이스와 모든 로그 종류의 상세 기록이 남는다. 끄면 오류만 기록된다.", [
     row("디버그", debugSwitch()),
