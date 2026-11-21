@@ -60,6 +60,8 @@ pub fn common_only_keys() -> &'static [String] {
 pub struct Workspace {
     directory: PathBuf,
     writing: Mutex<()>,
+    /// The state of the role operations of this session beside the stored record (role_state.rs).
+    role: Mutex<crate::role_state::RoleState>,
 }
 
 /// A store request. kind is one of snapshot, add, patch, remove, move, settings, tabState, tabStatePut, tabSession,
@@ -77,11 +79,13 @@ pub struct Request {
     entry: Option<Map<String, Value>>,
     regions: Option<Map<String, Value>>,
     roles: Option<Map<String, Value>>,
+    role: Option<Value>,
+    fingerprint: Option<String>,
 }
 
 /// Reads the projects of projects.json, which holds them under the `projects` member beside the format member of the
 /// stored form (docs/spec/installation.md#stored-data-formats).
-fn read_projects(path: &Path) -> Result<Vec<Value>, String> {
+pub(crate) fn read_projects(path: &Path) -> Result<Vec<Value>, String> {
     let Some(document) = read_projects_document(path)? else {
         return Ok(vec![]);
     };
@@ -93,7 +97,7 @@ fn read_projects(path: &Path) -> Result<Vec<Value>, String> {
 }
 
 /// Returns the projects when every record has an id, a root and an identity, or the error that names projects.json.
-fn check_projects(registry: &Path, projects: Vec<Value>) -> Result<Vec<Value>, String> {
+pub(crate) fn check_projects(registry: &Path, projects: Vec<Value>) -> Result<Vec<Value>, String> {
     for project in &projects {
         let valid = project["id"].as_str().is_some_and(|id| {
             !id.is_empty()
@@ -170,7 +174,7 @@ pub(crate) const PROJECTS_FORMAT: u64 = 4;
 pub(crate) const SETTINGS_FORMAT: u64 = 1;
 
 /// Writes the projects under the `projects` member with the format member of the current form.
-fn write_projects(path: &Path, projects: &[Value]) -> Result<(), String> {
+pub(crate) fn write_projects(path: &Path, projects: &[Value]) -> Result<(), String> {
     let format = PROJECTS_FORMAT;
     let document = serde_json::json!({
         "format": format,
@@ -511,6 +515,7 @@ impl Workspace {
         Self {
             directory,
             writing: Mutex::new(()),
+            role: Mutex::new(Default::default()),
         }
     }
 
@@ -555,6 +560,34 @@ impl Workspace {
             "roles" => return read_roles(&self.directory.join("roles.json")),
             "rolesPut" => {
                 return write_roles(&self.directory.join("roles.json"), req.roles);
+            }
+            "role" => {
+                let tab = req.tab.clone().unwrap_or_default();
+                let mut state = self.role.lock().unwrap_or_else(PoisonError::into_inner);
+                return crate::role_state::role_get(&self.directory, &mut state, &tab);
+            }
+            "rolePut" => {
+                let tab = req.tab.clone().unwrap_or_default();
+                let role = req.role.clone().unwrap_or(Value::Null);
+                let mut state = self.role.lock().unwrap_or_else(PoisonError::into_inner);
+                return crate::role_state::role_put(&self.directory, &mut state, &tab, &role);
+            }
+            "roleConfirm" => {
+                let tab = req.tab.clone().unwrap_or_default();
+                let fingerprint = req.fingerprint.clone().unwrap_or_default();
+                let mut state = self.role.lock().unwrap_or_else(PoisonError::into_inner);
+                return crate::role_state::role_confirm(
+                    &self.directory,
+                    &mut state,
+                    &tab,
+                    &fingerprint,
+                );
+            }
+            "roleRemove" => {
+                let tab = req.tab.clone().unwrap_or_default();
+                let mut state = self.role.lock().unwrap_or_else(PoisonError::into_inner);
+                return crate::role_state::role_remove(&self.directory, &mut state, &tab)
+                    .map(|()| Value::Bool(true));
             }
             _ => {}
         }
@@ -704,6 +737,7 @@ pub fn handle(app: &AppHandle, mut request: Request) -> Result<Value, String> {
             | "tabSessions"
             | "roles"
             | "rolesPut"
+            | "role"
     );
     let changed = request.kind != "snapshot" && !tab_state;
     let snapshot = request.kind == "snapshot";

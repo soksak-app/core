@@ -25,6 +25,10 @@ import (
 type Workspace struct {
 	mu        sync.Mutex
 	directory string
+	// roleSeq counts the changes of the role of a tab in this session of the host, and roleRemoved names the tabs whose role
+	// ended with their removal from the layout; the durable state of a role is its stored record (role_state.go).
+	roleSeq     map[string]int
+	roleRemoved map[string]bool
 }
 
 // PrepareConfigDirectory creates and normalizes the configuration directory that the storage and the service use together.
@@ -48,7 +52,7 @@ func PrepareConfigDirectory(path string) (string, error) {
 
 // NewWorkspace returns the storage of the configuration directory directory.
 func NewWorkspace(directory string) *Workspace {
-	return &Workspace{directory: directory}
+	return &Workspace{directory: directory, roleSeq: map[string]int{}, roleRemoved: map[string]bool{}}
 }
 
 // Record is one JSON object.
@@ -84,18 +88,20 @@ func declaredCommonOnly() []string {
 func CommonOnlyKeys() []string { return slices.Clone(commonOnly) }
 
 // WorkspaceRequest is one storage operation. Kind is one of snapshot, add, patch, remove, move, settings, tabState,
-// tabStatePut, tabSession, tabSessionPut, tabSessions, roles, and rolesPut.
+// tabStatePut, tabSession, tabSessionPut, tabSessions, roles, rolesPut, role, rolePut, roleConfirm and roleRemove.
 type WorkspaceRequest struct {
-	Kind    string   `json:"kind"`
-	ID      string   `json:"id,omitempty"`
-	Project Record   `json:"project,omitempty"`
-	Patch   Record   `json:"patch,omitempty"`
-	Remove  []string `json:"remove,omitempty"`
-	Delta   *int     `json:"delta"`
-	Tab     string   `json:"tab,omitempty"`
-	Entry   Record   `json:"entry,omitempty"`
-	Regions Record   `json:"regions,omitempty"`
-	Roles   Record   `json:"roles,omitempty"`
+	Kind        string   `json:"kind"`
+	ID          string   `json:"id,omitempty"`
+	Project     Record   `json:"project,omitempty"`
+	Patch       Record   `json:"patch,omitempty"`
+	Remove      []string `json:"remove,omitempty"`
+	Delta       *int     `json:"delta"`
+	Tab         string   `json:"tab,omitempty"`
+	Entry       Record   `json:"entry,omitempty"`
+	Regions     Record   `json:"regions,omitempty"`
+	Roles       Record   `json:"roles,omitempty"`
+	Role        any      `json:"role,omitempty"`
+	Fingerprint string   `json:"fingerprint,omitempty"`
 }
 
 // readProjects reads the projects of projects.json, which holds them under the `projects` member beside the format
@@ -529,6 +535,14 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	switch req.Kind {
+	case "role":
+		return w.roleGet(req.Tab)
+	case "rolePut":
+		return w.rolePut(req.Tab, req.Role)
+	case "roleConfirm":
+		return w.roleConfirm(req.Tab, req.Fingerprint)
+	case "roleRemove":
+		return true, w.roleRemove(req.Tab)
 	case "tabState":
 		return readTabState(filepath.Join(w.directory, "tab-state.json"))
 	case "tabStatePut":
@@ -684,8 +698,9 @@ func (h *Host) runWorkspace(req WorkspaceRequest) (any, error) {
 	result, err := h.workspace.Apply(req)
 	if err == nil {
 		switch req.Kind {
-		case "tabState", "tabStatePut", "tabSession", "tabSessionPut", "tabSessions", "roles", "rolesPut":
-			// The tab state store, the tab sessions and the role definitions change no project or setting, so no window is notified.
+		case "tabState", "tabStatePut", "tabSession", "tabSessionPut", "tabSessions", "roles", "rolesPut", "role":
+			// The tab state store, the tab sessions, the role definitions and the role read change no project or setting, so
+			// no window is notified. The role writes change projects.json, so every window reads its spaces again.
 		case "snapshot":
 			h.mu.Lock()
 			ids := make([]string, 0, len(h.owners))

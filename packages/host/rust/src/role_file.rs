@@ -109,34 +109,97 @@ pub fn write_role_file(
     text: &str,
     ko: &str,
 ) -> Result<PathBuf, String> {
+    let path = {
+        let prepared = prepare_role_file(config, surface, identifier, text, ko)?;
+        let path = prepared.path.clone();
+        prepared.commit()?;
+        path
+    };
+    Ok(path)
+}
+
+/// A write of the role files that holds both temporary files and persists them in its commit: step 1 of the ordered change of
+/// a role, whose step 3 the commit is (docs/spec/agent-roles.md#tab-role-state). A failure of the commit renames no later
+/// file, and the drop of a temporary file that was not persisted removes it.
+pub struct PreparedRole {
+    path: PathBuf,
+    ko_path: PathBuf,
+    file: tempfile::NamedTempFile,
+    ko_file: tempfile::NamedTempFile,
+}
+
+/// Performs step 1 of the ordered change: it creates the folder of the surface, removes the leftover temporary files of
+/// earlier writes, and writes both contents to temporary files of mode 0600. A failure is refused with `role file <path>:
+/// write failed: <os error>` or the mode text of the spec, removes what it wrote, and stores nothing.
+pub fn prepare_role_file(
+    config: &Path,
+    surface: &str,
+    identifier: &str,
+    text: &str,
+    ko: &str,
+) -> Result<PreparedRole, String> {
     check_surface(surface)?;
     let folder = config.join("agents").join(surface);
-    platform::current()?.create_private_directories(&folder)?;
-    let entries = std::fs::read_dir(&folder).map_err(|e| format!("{}: {e}", folder.display()))?;
+    platform::current()?
+        .create_private_directories(&folder)
+        .map_err(|e| write_failed(&folder, &e.to_string()))?;
+    let entries = std::fs::read_dir(&folder).map_err(|e| write_failed(&folder, &e.to_string()))?;
     for entry in entries {
-        let entry = entry.map_err(|e| format!("{}: {e}", folder.display()))?;
+        let entry = entry.map_err(|e| write_failed(&folder, &e.to_string()))?;
         let name = entry.file_name();
         let name = name.to_string_lossy();
         if name.starts_with(ROLE_TEMP_PREFIX) && name.ends_with(ROLE_TEMP_SUFFIX) {
             std::fs::remove_file(entry.path())
-                .map_err(|e| format!("{}: {e}", entry.path().display()))?;
+                .map_err(|e| write_failed(&entry.path(), &e.to_string()))?;
         }
     }
     let path = folder.join(ROLE_FILE_NAME);
     let file = write_role_temporary(&folder, &path, &role_file_content(identifier, text))?;
     let ko_path = folder.join(ROLE_KO_FILE_NAME);
-    // A failure drops file, whose drop removes its temporary file.
-    let ko_file = write_role_temporary(
+    let ko_file = match write_role_temporary(
         &folder,
         &ko_path,
         &role_ko_file_content(identifier, text, ko),
-    )?;
-    file.persist(&path)
-        .map_err(|e| format!("{}: {}", path.display(), e.error))?;
-    ko_file
-        .persist(&ko_path)
-        .map_err(|e| format!("{}: {}", ko_path.display(), e.error))?;
-    Ok(path)
+    ) {
+        Ok(ko_file) => ko_file,
+        // The drop of file removes its temporary file.
+        Err(e) => return Err(e),
+    };
+    Ok(PreparedRole {
+        path,
+        ko_path,
+        file,
+        ko_file,
+    })
+}
+
+impl PreparedRole {
+    /// Performs step 3 of the ordered change: role.md is renamed first and role.ko.md second. A failed rename is refused
+    /// with `role file <path>: rename failed: <os error>`, and the temporary files that were not persisted are removed.
+    pub fn commit(self) -> Result<(), String> {
+        let PreparedRole {
+            path,
+            ko_path,
+            file,
+            ko_file,
+        } = self;
+        file.persist(&path)
+            .map_err(|e| rename_failed(&path, &e.error.to_string()))?;
+        ko_file
+            .persist(&ko_path)
+            .map_err(|e| rename_failed(&ko_path, &e.error.to_string()))?;
+        Ok(())
+    }
+}
+
+/// States the refusal of a failed write step: `role file <path>: write failed: <os error>`.
+fn write_failed(path: &Path, error: &str) -> String {
+    format!("role file {}: write failed: {error}", path.display())
+}
+
+/// States the refusal of a failed rename of a role file: `role file <path>: rename failed: <os error>`.
+fn rename_failed(path: &Path, error: &str) -> String {
+    format!("role file {}: rename failed: {error}", path.display())
 }
 
 /// Writes content to a new temporary file in folder, syncs it and checks its mode 0600. A failure names path, the file that
@@ -150,7 +213,7 @@ fn write_role_temporary(
         .prefix(ROLE_TEMP_PREFIX)
         .suffix(ROLE_TEMP_SUFFIX)
         .tempfile_in(folder)
-        .map_err(|e| format!("{}: {e}", path.display()))?;
+        .map_err(|e| write_failed(path, &e.to_string()))?;
     let temporary = file.path().to_path_buf();
     let written = (|| -> Result<(), String> {
         file.write_all(content.as_bytes())
@@ -161,18 +224,18 @@ fn write_role_temporary(
         let mode = mode.permissions().mode() & 0o777;
         if mode != 0o600 {
             return Err(format!(
-                "temporary file {} has mode {mode:o}, want 600",
-                temporary.display()
+                "role file {}: mode {mode:o} is not 0600",
+                path.display()
             ));
         }
         Ok(())
     })();
     if let Err(e) = written {
         return Err(match file.close() {
-            Ok(()) => format!("{}: {e}", path.display()),
+            Ok(()) => write_failed(path, &e),
             Err(remove) => format!(
-                "{}: {e}; removing {}: {remove}",
-                path.display(),
+                "{}; removing {}: {remove}",
+                write_failed(path, &e),
                 temporary.display()
             ),
         });

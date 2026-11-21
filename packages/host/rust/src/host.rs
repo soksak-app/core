@@ -104,6 +104,7 @@ pub mod view_lifecycle;
 pub mod window_events;
 pub use surfaces::surface_owner_id;
 pub mod role_file;
+pub mod role_state;
 pub mod roles;
 pub mod startup;
 pub mod termination;

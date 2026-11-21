@@ -93,62 +93,104 @@ func removeTemporary(temporary string) error {
 // WriteRoleFile writes the role file of a surface and its Korean file role.ko.md atomically and returns the path of the role
 // file. The folder of the surface is created with mode 0700. Leftover temporary files of earlier writes are removed before the
 // write. Each content is written to a temporary file of mode 0600; role.md is renamed first and role.ko.md second, so a reader
-// sees the earlier file or the new one whole.
+// sees the earlier file or the new one whole. A write that the ordered change of a role drives stores the record between the
+// two steps, so the change calls prepareRoleFile and commit itself (docs/spec/agent-roles.md#tab-role-state).
 func WriteRoleFile(configDirectory, surface, identifier, text, ko string) (string, error) {
-	if err := checkSurface(surface); err != nil {
+	prepared, err := prepareRoleFile(configDirectory, surface, identifier, text, ko)
+	if err != nil {
 		return "", err
+	}
+	if err := prepared.commit(); err != nil {
+		return "", err
+	}
+	return prepared.rolePath, nil
+}
+
+// preparedRole is a write of the role files that holds both temporary files and renames them in its commit: step 1 of the
+// ordered change of a role, whose step 3 the commit is (docs/spec/agent-roles.md#tab-role-state).
+type preparedRole struct {
+	folder, rolePath, koPath, roleTemporary, koTemporary string
+}
+
+// prepareRoleFile performs step 1 of the ordered change: it creates the folder of the surface, removes the leftover
+// temporary files of earlier writes, and writes both contents to temporary files of mode 0600. A failure is refused with
+// `role file <path>: write failed: <os error>` or the mode text, removes what it wrote, and stores nothing.
+func prepareRoleFile(configDirectory, surface, identifier, text, ko string) (*preparedRole, error) {
+	if err := checkSurface(surface); err != nil {
+		return nil, err
 	}
 	system, err := platform.Current()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	folder := filepath.Join(configDirectory, "agents", surface)
 	if err := system.CreatePrivateDirectories(folder); err != nil {
-		return "", err
+		return nil, writeFailed(folder, err)
 	}
 	leftovers, err := filepath.Glob(filepath.Join(folder, roleTempPattern))
 	if err != nil {
-		return "", err
+		return nil, writeFailed(folder, err)
 	}
 	for _, leftover := range leftovers {
 		if err := os.Remove(leftover); err != nil {
-			return "", err
+			return nil, writeFailed(leftover, err)
 		}
 	}
-	path := filepath.Join(folder, roleFileName)
-	temporary, err := writeRoleTemporary(folder, path, RoleFileContent(identifier, text))
-	if err != nil {
-		return "", err
+	prepared := &preparedRole{folder: folder, rolePath: filepath.Join(folder, roleFileName), koPath: filepath.Join(folder, roleKoFileName)}
+	if prepared.roleTemporary, err = writeRoleTemporary(folder, prepared.rolePath, RoleFileContent(identifier, text)); err != nil {
+		return nil, err
 	}
-	koPath := filepath.Join(folder, roleKoFileName)
-	koTemporary, err := writeRoleTemporary(folder, koPath, roleKoFileContent(identifier, text, ko))
-	if err != nil {
-		return "", errors.Join(err, removeTemporary(temporary))
+	if prepared.koTemporary, err = writeRoleTemporary(folder, prepared.koPath, roleKoFileContent(identifier, text, ko)); err != nil {
+		prepared.discard()
+		return nil, err
 	}
-	if err := os.Rename(temporary, path); err != nil {
-		return "", errors.Join(fmt.Errorf("%s: %w", path, err), removeTemporary(temporary), removeTemporary(koTemporary))
+	return prepared, nil
+}
+
+// commit performs step 3 of the ordered change: role.md is renamed first and role.ko.md second. A failed rename removes the
+// temporary files and is refused with `role file <path>: rename failed: <os error>`.
+func (p *preparedRole) commit() error {
+	if err := os.Rename(p.roleTemporary, p.rolePath); err != nil {
+		return errors.Join(renameFailed(p.rolePath, err), p.discard())
 	}
-	if err := os.Rename(koTemporary, koPath); err != nil {
-		return "", errors.Join(fmt.Errorf("%s: %w", koPath, err), removeTemporary(koTemporary))
+	if err := os.Rename(p.koTemporary, p.koPath); err != nil {
+		return errors.Join(renameFailed(p.koPath, err), p.discard())
 	}
-	return path, nil
+	return nil
+}
+
+// discard removes the temporary files of a write that will not be committed. A file that is already gone is not an error.
+func (p *preparedRole) discard() error {
+	return errors.Join(removeTemporary(p.roleTemporary), removeTemporary(p.koTemporary))
+}
+
+// writeFailed states the refusal of a failed write step: `role file <path>: write failed: <os error>`
+// (docs/spec/agent-roles.md#role-file).
+func writeFailed(path string, err error) error {
+	return fmt.Errorf("role file %s: write failed: %w", path, err)
+}
+
+// renameFailed states the refusal of a failed rename of a role file: `role file <path>: rename failed: <os error>`.
+func renameFailed(path string, err error) error {
+	return fmt.Errorf("role file %s: rename failed: %w", path, err)
 }
 
 // writeRoleTemporary writes content to a new temporary file in folder, checks its mode, closes it, and returns its path. A
-// failure names path, the file the temporary file replaces, and removes the temporary file.
+// failure is refused with the write-failed text of the file that the temporary file replaces, or the mode text of the spec,
+// and removes the temporary file.
 func writeRoleTemporary(folder, path, content string) (string, error) {
 	file, err := os.CreateTemp(folder, roleTempPattern)
 	if err != nil {
-		return "", fmt.Errorf("%s: %w", path, err)
+		return "", writeFailed(path, err)
 	}
 	temporary := file.Name()
 	info, err := writeRoleContent(file, content)
 	closeErr := file.Close()
 	if err == nil && closeErr == nil && info.Mode().Perm() != 0o600 {
-		err = fmt.Errorf("temporary file %s has mode %o, want 600", temporary, info.Mode().Perm())
+		err = fmt.Errorf("role file %s: mode %o is not 0600", path, info.Mode().Perm())
 	}
 	if err := errors.Join(err, closeErr); err != nil {
-		return "", errors.Join(fmt.Errorf("%s: %w", path, err), removeTemporary(temporary))
+		return "", errors.Join(err, removeTemporary(temporary))
 	}
 	return temporary, nil
 }

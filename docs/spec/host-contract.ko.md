@@ -1052,6 +1052,13 @@ fn invalid_json_closes_connection() {
 | `roles.role-path-shared-cases` | writer가 답하는 role 파일 경로는 `docs/spec/cases/agent-roles/role-path.json`의 각 case에 대해 `<config-dir>/agents/<surface>/role.md`이며, 상태 `core.tab.role`은 이 경로를 `path`로 싣는다. | all |
 | `roles.role-file-removes-leftovers` | 쓰기는 먼저 자기 surface folder의 `.role-*.tmp` file을 지운다. | all |
 | `roles.role-file-refuses-surface` | 비어 있거나, `.` 또는 `..`이거나, 경로 구분자나 제어 문자를 담은 surface는 거부되고 folder를 만들지 않는다. | all |
+| `roles.role-state-handshake` | workspace kind `role`, `rolePut`, `roleConfirm`이 상태 `{role, generation, state, seq, fingerprint, path}`로 답하고 role이 없으면 member는 null이다. 배정은 role 파일을 임시 이름으로 쓰고, `projects.json`에 기록을 저장하고, rename하며, `pending`으로 답한다. 현재 fingerprint의 확인은 그것을 저장하고 `ready`로 답한다. 저장된 layout 어디에도 없는 tab은 그 kind의 거부 문구로 답한다. | all |
+| `roles.role-state-idempotency` | 같은 정의의 같은 role 재배정은 파일을 쓰지 않고 generation을 바꾸지 않고 현재 상태로 답한다. earlier role로 돌아간 변경은 그 fingerprint를 되돌리고 그 확인은 올바르다. 현재 fingerprint의 반복 확인은 `seq`를 포함해 아무것도 바꾸지 않는다. earlier fingerprint는 `stale fingerprint: read the role file again at <path>`로 거부되고 문구에 fingerprint가 없다. | all |
+| `roles.role-state-invalid-input` | `roles.json`에 없는 role은 `unknown agent role <id>`로 거부되고 tab은 earlier role을 지킨다. 다른 형태의 확인 값은 stale 규칙보다 먼저 `fingerprint <value> is not 16 lowercase hexadecimal characters`로 거부된다. role 없는 tab은 `tab <tab> has no role`, 저장된 layout에 없는 tab은 `surface "<value>" has no tab`이다. | all |
+| `roles.role-state-clear-and-removal` | role을 `null`로 정하면 `role: null`을 저장하고 그 surface의 role 파일 폴더를 지운다. layout을 떠난 tab의 `roleRemove`는 폴더를 지우고 이후 변경은 `tab <tab> was removed; its role cannot change`, 확인은 `tab <tab> has no role`로 거부한다. | all |
+| `roles.role-state-restart` | 재시작 뒤 상태는 저장된 기록만으로 다시 세워진다. 저장된 확인이 없으면 `pending`, 있으면 입력 없이 `ready`이고 새 session의 `seq`는 0에서 시작한다. | all |
+| `roles.role-state-write-failures` | 순서 변경의 1단계 임시 쓰기 실패는 `role file <path>: write failed: <os error>`로 거부되고 아무것도 저장하지 않는다. 2단계 `projects.json` 저장 실패는 임시 파일을 지우고 `projects.json`을 지칭하는 같은 문구로 earlier 기록을 지킨다. 3단계 rename 실패는 `role file <path>: rename failed: <os error>`로 거부되고 earlier 기록을 되돌리며, 되돌리기까지 실패하면 두 오류를 모두 보고한다. | all |
+| `roles.role-state-serialization` | 한 surface의 role operation은 workspace store의 lock 아래 도착 순서로 돈다. 그래서 a에서 b로, a로의 연속 변경은 매번 generation을 올리고, earlier fingerprint의 확인은 순서와 무관하게 stale로 거부되며, 확인은 자기 차례의 상태로 판정된다. | all |
 | `workspace.settings.invalid-common-file-not-overwritten` | 잘못된 공통 설정 파일은 설정 변경을 실패시키고 바이트 단위로 그대로 남는다. | all |
 | `workspace.settings.concurrent-patches-preserved` | 서로 다른 키에 대한 동시 공통 설정 변경이 모두 유지된다. | all |
 | `workspace.settings.records-each-change` | 설정 변경마다 `scope`(`common` 또는 project id), 바꾼 키 `set`, 있었던 키 중 지운 `removed`를 각각 쉼표로 이은 정렬된 목록으로 가진 event `host.workspace.settings`가 있다. | all |
