@@ -1180,7 +1180,7 @@
       },
       {
         "name": "core.setup",
-        "description": "The setup parts that let an agent on the machine learn and reach the application, as the host call setupState returns them in the environment of the login shell of the person: parts of the last read or install in the order of sok setup check, each with its part (path, skill or mcp), file, state (ok, missing or error), install step, reason (absent or differs) of a missing part, error text of a part that cannot be read and, after an install, whether the install changed it; [] before the first read; and running, the kinds of the install that runs, or null.",
+        "description": "The setup parts that let an agent on the machine learn and reach the application, as the host call setupState returns them in the environment of the login shell of the person: parts of the last read or operation in the order of sok setup check, each with its kind, file, state, step, reason or error when present, changed after an install, and enabled for the desired state of the user PATH registration; [] before the first read; and running, the kinds of the setup operation that runs, or null.",
         "schema": {
           "type": "object",
           "properties": {
@@ -1194,7 +1194,8 @@
                     "enum": [
                       "path",
                       "skill",
-                      "mcp"
+                      "mcp",
+                      "hook"
                     ]
                   },
                   "file": {
@@ -1215,13 +1216,18 @@
                     "type": "string",
                     "enum": [
                       "absent",
-                      "differs"
+                      "differs",
+                      "codex absent",
+                      "codex differs"
                     ]
                   },
                   "error": {
                     "type": "string"
                   },
                   "changed": {
+                    "type": "boolean"
+                  },
+                  "enabled": {
                     "type": "boolean"
                   }
                 }
@@ -1235,6 +1241,7 @@
               "items": {
                 "type": "string",
                 "enum": [
+                  "path",
                   "skill",
                   "mcp"
                 ]
@@ -2169,7 +2176,8 @@
                     "enum": [
                       "path",
                       "skill",
-                      "mcp"
+                      "mcp",
+                      "hook"
                     ]
                   },
                   "file": {
@@ -2190,13 +2198,18 @@
                     "type": "string",
                     "enum": [
                       "absent",
-                      "differs"
+                      "differs",
+                      "codex absent",
+                      "codex differs"
                     ]
                   },
                   "error": {
                     "type": "string"
                   },
                   "changed": {
+                    "type": "boolean"
+                  },
+                  "enabled": {
                     "type": "boolean"
                   }
                 }
@@ -2237,7 +2250,8 @@
                     "enum": [
                       "path",
                       "skill",
-                      "mcp"
+                      "mcp",
+                      "hook"
                     ]
                   },
                   "file": {
@@ -2258,13 +2272,91 @@
                     "type": "string",
                     "enum": [
                       "absent",
-                      "differs"
+                      "differs",
+                      "codex absent",
+                      "codex differs"
                     ]
                   },
                   "error": {
                     "type": "string"
                   },
                   "changed": {
+                    "type": "boolean"
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "core.setup.change",
+        "description": "Saves and applies the desired state of the user PATH registration through setupChange and answers the resulting parts.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "part": {
+              "type": "string",
+              "enum": [
+                "path"
+              ]
+            },
+            "enabled": {
+              "type": "boolean"
+            }
+          },
+          "required": ["part", "enabled"]
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "parts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "part": {
+                    "type": "string",
+                    "enum": [
+                      "path",
+                      "skill",
+                      "mcp",
+                      "hook"
+                    ]
+                  },
+                  "file": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "ok",
+                      "missing",
+                      "error"
+                    ]
+                  },
+                  "step": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "enum": [
+                      "absent",
+                      "differs",
+                      "codex absent",
+                      "codex differs"
+                    ]
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "changed": {
+                    "type": "boolean"
+                  },
+                  "enabled": {
                     "type": "boolean"
                   }
                 }
@@ -5512,12 +5604,16 @@
       },
       {
         "name": "core.settings-modal.setup",
-        "description": "The rows of the 에이전트 group in the order of the setup parts: the name of the part, its file, its state and, for a missing path entry, its install step; the key of a row is setup:<part>:<file>.",
+        "description": "The rows of the 에이전트 group in the order of the setup parts: the name of the part, its file, its state and the optional action for the user PATH registration; the key of a row is setup:<part>:<file>.",
         "many": true
       },
       {
         "name": "core.settings-modal.setup-install",
         "description": "The 설치 button of the 에이전트 group, shown while a skill or mcp part is not ok: runs core.setup.install with those kinds."
+      },
+      {
+        "name": "core.settings-modal.setup-change",
+        "description": "The user PATH registration action of the 에이전트 group: runs core.setup.change with the opposite of the saved preference."
       },
       {
         "name": "core.settings-modal.setup-check",

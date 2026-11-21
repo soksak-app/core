@@ -1,8 +1,8 @@
 package host
 
 // The setup parts of the agents of the machine in the application (docs/spec/cli.md#agents-in-the-application): the host reads
-// the environment of the login shell of the person once per start, brings the agent skill current, and runs the setup operations
-// of the setup library of its command line in that environment for the setupState and setupInstall calls.
+// the environment of the login shell of the person at startup, reconciles user PATH, and brings the agent skill current.
+// Setup calls use the setup library of the command line.
 
 import (
 	"bufio"
@@ -13,6 +13,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -35,6 +36,12 @@ var errSetupOperationRunning = errors.New("another setup operation is running")
 // not a list of strings is refused.
 type SetupInstallRequest struct {
 	Parts any `json:"parts"`
+}
+
+// SetupChangeRequest names the user PATH preference and its desired value.
+type SetupChangeRequest struct {
+	Part    string `json:"part"`
+	Enabled *bool  `json:"enabled"`
 }
 
 // LoginShellProcesses are the operations of the platform that the read of the login shell environment uses
@@ -62,6 +69,9 @@ type Setups struct {
 	env     sok.AgentEnvironment
 	envErr  error
 	running sync.Mutex
+	pathMu  sync.RWMutex
+	pathEnv sok.AgentEnvironment
+	pathErr error
 }
 
 // sessionVariables are the variables that the login session gives every application of the person, and the only variables of the
@@ -85,12 +95,15 @@ func NewSetups(sokPath, identifier string, processes LoginShellProcesses, change
 		ready: make(chan struct{})}, nil
 }
 
-// Start reads the environment of the login shell once, then brings the skill current and sends setup-changed. The host calls it at
-// its start, and the read runs on a goroutine of its own, off the start path; a later call does nothing.
+// Start reads the login shell environment, reconciles user PATH, brings the skill current, and sends setup-changed.
+// The work runs off the start path. A later call does nothing.
 func (s *Setups) Start() {
 	s.begin.Do(func() {
 		routine.Go("setup-environment", func() {
 			s.env, s.envErr = s.readEnvironment()
+			if s.envErr == nil && s.pathsErr == nil {
+				s.pathEnv, s.pathErr = s.reconcileUserPath(s.env, nil)
+			}
 			s.bringSkillCurrent()
 			close(s.ready)
 			s.changed()
@@ -150,17 +163,110 @@ func (s *Setups) SidecarEnvironment() (map[string]string, error) {
 	return variables, nil
 }
 
-// State returns the parts as `sok setup check` prints them, after the start ended.
+// State returns the setup parts with the current state of the user PATH registration.
 func (s *Setups) State() (sok.SetupParts, error) {
+	return s.state(true)
+}
+
+func (s *Setups) state(refresh bool) (sok.SetupParts, error) {
 	setup, err := s.setup()
 	if err != nil {
 		return sok.SetupParts{}, err
 	}
-	return setup.Check()
+	parts, err := setup.Check()
+	if err != nil {
+		return parts, err
+	}
+	return s.withUserPath(parts, refresh)
+}
+
+func (s *Setups) withUserPath(parts sok.SetupParts, refresh bool) (sok.SetupParts, error) {
+	if s.pathsErr != nil {
+		return parts, nil
+	}
+	s.pathMu.RLock()
+	environment, pathErr := s.pathEnv, s.pathErr
+	s.pathMu.RUnlock()
+	if refresh {
+		var err error
+		environment, err = s.readEnvironment()
+		if err != nil {
+			return sok.SetupParts{}, err
+		}
+	}
+	part, err := sok.UserPathState(environment)
+	if err != nil {
+		return sok.SetupParts{}, err
+	}
+	if pathErr != nil && part.State != "ok" {
+		part.State, part.Reason, part.Error = "error", "", pathErr.Error()
+	}
+	parts.Parts[0] = part
+	return parts, nil
+}
+
+// reconcileUserPath applies the saved preference and verifies a change in a fresh login shell.
+func (s *Setups) reconcileUserPath(environment sok.AgentEnvironment, enabled *bool) (sok.AgentEnvironment, error) {
+	shell, err := s.processes.LoginShell()
+	if err != nil {
+		return environment, err
+	}
+	changed, err := sok.ConfigureUserPath(environment, shell, s.sokPath, enabled)
+	if err != nil || !changed {
+		return environment, err
+	}
+	fresh, err := s.readEnvironment()
+	if err != nil {
+		return environment, err
+	}
+	part, err := sok.UserPathState(fresh)
+	if err != nil {
+		return fresh, err
+	}
+	if part.State != "ok" {
+		return fresh, fmt.Errorf("login shell %s: the user PATH registration is %s", shell, part.State)
+	}
+	return fresh, nil
+}
+
+// Change saves and applies the user PATH preference and notifies every window of the result.
+func (s *Setups) Change(request SetupChangeRequest) (sok.SetupParts, error) {
+	if request.Part != "path" || request.Enabled == nil {
+		return sok.SetupParts{}, errors.New("setup change requires path and a boolean enabled")
+	}
+	if !s.running.TryLock() {
+		return sok.SetupParts{}, errSetupOperationRunning
+	}
+	defer s.running.Unlock()
+	<-s.ready
+	if s.envErr != nil {
+		return sok.SetupParts{}, s.envErr
+	}
+	if s.pathsErr != nil {
+		return sok.SetupParts{}, s.pathsErr
+	}
+	s.pathMu.RLock()
+	environment := s.pathEnv
+	s.pathMu.RUnlock()
+	if *request.Enabled {
+		fresh, err := s.readEnvironment()
+		if err != nil {
+			return sok.SetupParts{}, err
+		}
+		environment = fresh
+	}
+	environment, err := s.reconcileUserPath(environment, request.Enabled)
+	s.pathMu.Lock()
+	s.pathEnv, s.pathErr = environment, err
+	s.pathMu.Unlock()
+	s.changed()
+	if err != nil {
+		return sok.SetupParts{}, err
+	}
+	return s.state(false)
 }
 
 // Install installs the named kinds of skill and mcp as `sok setup install` does and returns its parts, then sends setup-changed.
-// The path entry needs administrator rights, which the application has no terminal to ask for.
 func (s *Setups) Install(request SetupInstallRequest) (sok.SetupParts, error) {
 	kinds, err := setupKindsOf(request.Parts)
 	if err != nil {
@@ -183,7 +289,7 @@ func (s *Setups) Install(request SetupInstallRequest) (sok.SetupParts, error) {
 	if err != nil {
 		return sok.SetupParts{}, err
 	}
-	return parts, nil
+	return s.withUserPath(parts, false)
 }
 
 // setupPartKinds are the kinds of setup parts, as `sok setup` names them.
@@ -235,7 +341,12 @@ func (s *Setups) readEnvironment() (_ sok.AgentEnvironment, failure error) {
 		return fail("%v", err)
 	}
 	defer stderrRead.Close()
-	command := exec.Command(shell, "-l", "-i", "-c", sok.StepOf(s.sokPath)+" setup environment")
+	line := sok.StepOf(s.sokPath) + " setup environment"
+	if filepath.Base(shell) == "zsh" {
+		// zsh permits ZDOTDIR to be local to the shell. The setup part needs its effective value.
+		line = "export ZDOTDIR; " + line
+	}
+	command := exec.Command(shell, "-l", "-i", "-c", line)
 	command.Stdout, command.Stderr = stdoutWrite, stderrWrite
 	command.Env = []string{}
 	for _, name := range sessionVariables {
@@ -380,6 +491,15 @@ func (h *Host) SetupInstall(requestJSON json.RawMessage) (sok.SetupParts, error)
 		return sok.SetupParts{}, err
 	}
 	return h.setups.Install(request)
+}
+
+// SetupChange is the setupChange call of the page.
+func (h *Host) SetupChange(requestJSON json.RawMessage) (sok.SetupParts, error) {
+	request, err := argument[SetupChangeRequest]("request", requestJSON)
+	if err != nil {
+		return sok.SetupParts{}, err
+	}
+	return h.setups.Change(request)
 }
 
 // notifySetup sends setup-changed to every window.

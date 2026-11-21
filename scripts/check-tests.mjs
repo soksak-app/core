@@ -303,6 +303,25 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1030-1",
+    implementation: [
+      { file: "packages/sok/go/src/user_path.go", symbol: "func ConfigureUserPath(" },
+      { file: "packages/sok/rust/src/platform/darwin/user_path.rs", symbol: "fn configure(" },
+      { file: "packages/workbench/setup-exposure.js", symbol: 'registry.command("core.setup.change"' },
+      { file: "packages/workbench-mygo/src/setup_parts.go", symbol: 'later(s, "core.setup.change"' },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/user_path_test.go", id: "TestUserPathRegistrationInstallsOnceAndStaysDisabled" },
+      { file: "packages/sok/rust/tests/platform/darwin/setup_test.rs", id: "user_path_is_installed_once_and_stays_disabled_after_removal" },
+      { file: "packages/host/go/tests/setup_test.go", id: "TestSetupRegistersUserPathOnStart" },
+      { file: "packages/host/rust/tests/setup_test.rs", id: "setup_registers_user_path_on_start" },
+      { file: "packages/workbench/test/settings-setup.test.mjs", id: "changing the desired PATH setup" },
+      { file: "packages/workbench-mygo/tests/setup_parts_test.go", id: "TestTheAgentGroupChangesTheDesiredPathState" },
+    ],
+    expected: "The settings action persists the desired PATH state. A fresh shell resolves an owned registration automatically. Repeating setup leaves it unchanged and a disabled registration stays absent across restart.",
+    levels: ["unit"],
+  },
+  {
     id: "F1026",
     implementation: [
       { file: "packages/workbench/page-layout.js", symbol: "function errorToast(document, text, source) {" },

@@ -113,7 +113,7 @@ test("a call of the main page that carries out an operation sends its identifier
 });
 
 // The setup calls of the settings window (docs/spec/cli.md#agents-in-the-application) reach the setup methods of the host.
-test("the setup calls reach the setup methods with the request of an install", async () => {
+test("the setup calls reach the setup methods with their requests", async () => {
   const calls = [];
   register("./support/wails-runtime-loader.mjs", import.meta.url);
   globalThis.__wailsRuntime = {
@@ -127,10 +127,12 @@ test("the setup calls reach the setup methods with the request of an install", a
     const { host } = await import("../runtime/index.js?test=setup-calls");
     await host.call("setupState");
     await host.call("setupInstall", { parts: ["skill", "mcp"] });
+    await host.call("setupChange", { part: "path", enabled: false });
     const service = "github.com/soksak-app/core/packages/host/wailsv3/src.Bindings.Call";
     assert.deepEqual(calls, [
       [service, "SetupState", [], []],
       [service, "SetupInstall", [{ parts: ["skill", "mcp"] }], []],
+      [service, "SetupChange", [{ part: "path", enabled: false }], []],
     ]);
   } finally {
     delete globalThis.__wailsRuntime;

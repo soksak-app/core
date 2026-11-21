@@ -10,7 +10,24 @@ import { selectPageWire } from "@soksak/runtime";
 /** Settles the reads and the draws that a command or the showing started. */
 const settled = () => new Promise((resolve) => setImmediate(resolve));
 
-test("the agent group reads the parts when it is shown, draws one row per part, and the install and check buttons run the setup commands", { timeout: 10000 }, async () => {
+test("changing the desired PATH setup sends the selected value and publishes the resulting state", async () => {
+  const { createSetupParts } = await import("../setup-parts.js");
+  const parts = [{ part: "path", enabled: false, state: "ok", file: "/Users/person/.local/bin/sok", step: "" }];
+  const calls = [];
+  const setup = createSetupParts({
+    host: { call: async (name, params) => {
+      calls.push({ name, params });
+      return { parts };
+    } },
+    changed() {},
+    failed: assert.fail,
+  });
+  assert.deepEqual(await setup.change({ part: "path", enabled: false }), { parts });
+  assert.deepEqual(calls, [{ name: "setupChange", params: { part: "path", enabled: false } }]);
+  assert.deepEqual(setup.status(), { parts, running: null });
+});
+
+test("the agent group reads the parts, shows the PATH preference, and runs the setup commands", { timeout: 10000 }, async () => {
   const dom = new JSDOM("<body><div id=plane></div></body>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
   globalThis.window = dom.window;
@@ -48,12 +65,14 @@ test("the agent group reads the parts when it is shown, draws one row per part, 
     ui.showSection("general");
     await settled();
     assert.equal(wire.calls.filter(({ name }) => name === "setupState").length, 1, "showing the group did not read the parts once");
-    const sok = "/Applications/soksak.app/Contents/MacOS/sok";
     assert.deepEqual(rows(), [
-      ["명령 경로", "설치 안 됨", "/etc/paths.d/app.soksak.wails", `sudo ${sok} path install`],
+      ["명령 경로", "설치 안 됨", "/Users/person/.local/bin/sok", null],
       ["스킬", "다름", "/Users/person/.claude/skills/soksak/SKILL.md", null],
       ["MCP 등록", "설치 안 됨", "/Users/person/.claude.json", null],
     ]);
+    const pathToggle = control("core.settings-modal.setup-change");
+    assert.deepEqual([pathToggle.textContent, pathToggle.dataset.command, JSON.parse(pathToggle.dataset.params)],
+      ["끄기", "core.setup.change", { part: "path", enabled: false }]);
     const install = control("core.settings-modal.setup-install");
     assert.equal(install?.textContent, "설치", "a missing skill or mcp part shows no 설치");
     assert.deepEqual([install.dataset.command, JSON.parse(install.dataset.params)], ["core.setup.install", { parts: ["skill", "mcp"] }]);
@@ -70,6 +89,17 @@ test("the agent group reads the parts when it is shown, draws one row per part, 
 
     const refused = await registry.handle({ method: "command.run", params: { name: "core.setup.install", params: { parts: ["path"] } } });
     assert.equal(refused.error?.code, EXPOSURE_ERRORS.invalidParams, "an install of the path entry is not refused as invalid params");
+
+    for (const params of [{ part: "skill", enabled: false }, { part: "path" }, { part: "path", enabled: "off" }]) {
+      const invalid = await registry.handle({ method: "command.run", params: { name: "core.setup.change", params } });
+      assert.equal(invalid.error?.code, EXPOSURE_ERRORS.invalidParams, JSON.stringify(params));
+    }
+    const disabled = await registry.handle({ method: "command.run", params: { name: "core.setup.change", params: JSON.parse(pathToggle.dataset.params) } });
+    assert.equal(disabled.result.parts[0].enabled, false);
+    await settled();
+    assert.equal(rows()[0][1], "사용 안 함");
+    const enablePath = control("core.settings-modal.setup-change");
+    assert.deepEqual([enablePath.textContent, JSON.parse(enablePath.dataset.params)], ["켜기", { part: "path", enabled: true }]);
 
     await registry.handle({ method: "command.run", params: { name: "core.setup.check", params: {} } });
     await settled();

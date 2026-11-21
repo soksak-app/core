@@ -116,6 +116,7 @@ The stored files of the contract, with their owner, the member that carries thei
 | `plugins/registry.json` | core | `format` | numbered |
 | `log-policy.json` | core | `schema` | numbered |
 | `settings.json`, `<project root>/.soksak/settings.json` | core | `format` | numbered |
+| [User `agent-setup.json`](cli.md#user-path-registration) | core | `format` | numbered |
 | `projects.json` | core | `format` | numbered |
 | `tab-state.json` | core | `format` | numbered |
 | `tab-sessions/<tab>.json` | core | `format` | numbered |

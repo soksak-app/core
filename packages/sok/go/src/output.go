@@ -46,11 +46,19 @@ func printJSON(stdout io.Writer, value any) error {
 
 // replaceFile writes data to a temporary file in the same folder and then renames it, which replaces path in one step.
 func replaceFile(path string, data []byte) error {
+	return replaceFileMode(path, data, 0o600)
+}
+
+// replaceFileMode sets the destination permissions on the temporary file before making the replacement visible.
+func replaceFileMode(path string, data []byte, mode os.FileMode) error {
 	temp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
 	if err != nil {
 		return fileError(path, err)
 	}
 	_, err = temp.Write(data)
+	if err == nil && mode != 0o600 {
+		err = temp.Chmod(mode)
+	}
 	// The data is on disk before the rename replaces the destination, so a crash cannot leave a cut file; the twin of
 	// this package in the other language syncs the same way.
 	if err == nil {

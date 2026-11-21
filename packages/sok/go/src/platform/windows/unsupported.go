@@ -70,6 +70,10 @@ func (windows) OpenProcessLockFile(path string) (*os.File, error) {
 	return nil, fmt.Errorf("process lock file %s is not implemented on windows", path)
 }
 
+func (windows) OpenAgentSetupLockFile(path string) (*os.File, error) {
+	return nil, fmt.Errorf("user setup lock file %s is not implemented on windows", path)
+}
+
 func (windows) PathsDir() (string, error) {
 	return "", errors.New("path entries are not implemented on windows")
 }

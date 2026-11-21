@@ -55,11 +55,11 @@ chrome 버튼과 app 메뉴의 항목 설정…(Settings…), 단축키 `cmd+,`�
 
 ### 에이전트
 
-<a id="agents"></a>그룹 에이전트(agent group)는 컴퓨터의 agent가 애플리케이션을 배우고 그것에 닿게 하는 setup part를 보여 준다([에이전트](cli.ko.md#에이전트)). 이 part는 프로젝트가 아니라 컴퓨터와 사람의 것이므로 그룹은 전역 범위에서만 보인다. 그룹은 host call `setupState()`로 part를 읽는다. 이 call은 사람의 login shell 환경에서 애플리케이션의 `sok`이 `sok setup check`로 보고하는 것을 보고한다. 그룹을 보여 줄 때, 창이 key window가 될 때(`window-active`), 각 `setup-changed` event 뒤, `core.setup.check`를 실행할 때 읽으며, timer는 다시 읽지 않는다.
+<a id="agents"></a>그룹 에이전트(agent group)는 컴퓨터의 agent가 애플리케이션을 배우고 그것에 닿게 하는 setup part를 보여 준다([에이전트](cli.ko.md#에이전트)). 이 part는 프로젝트가 아니라 컴퓨터와 사람의 것이므로 그룹은 전역 범위에서만 보인다. 그룹은 host call `setupState()`로 part를 읽는다. 이 call은 사람의 login shell 환경에서 사용자 PATH 등록과 다른 setup part를 보고한다. 그룹을 보여 줄 때, 창이 key window가 될 때(`window-active`), 각 `setup-changed` event 뒤, `core.setup.check`를 실행할 때 읽으며, timer는 다시 읽지 않는다.
 
-각 part는 행 하나다(element name `core.settings-modal.setup`, part 순서). 행은 이름(`path`는 명령 경로, `skill`은 스킬, `mcp`는 MCP 등록), 파일, 상태를 보여 준다. 상태는 `ok`이면 설치됨, `absent`인 `missing`이면 설치 안 됨, `differs`이면 다름, `error`이면 오류 글이다. 빠진 `path` 행은 사람이 terminal에서 실행하는 `sudo` 명령인 설치 단계도 보여 준다. 애플리케이션은 관리자 권한을 묻지 않기 때문이다. 설치(`core.settings-modal.setup-install`)는 `skill`과 `mcp` 가운데 `ok`가 아닌 행이 있는 종류로 `core.setup.install`을 실행한다. 그런 행이 있는 동안에만 보인다. 등록은 `PATH`의 첫 `sok`을 가리키므로([MCP 등록](cli.ko.md#mcp-등록)) 어느 애플리케이션의 설치든 같은 등록을 쓴다. 다시 확인(`core.settings-modal.setup-check`)은 `core.setup.check`를 실행한다. 해당하지 않는 part는 행이 없고, 행이 하나도 없으면 그룹은 "이 컴퓨터에서 설정할 에이전트 항목이 없습니다."를 보여 준다.
+각 part는 행 하나다(element name `core.settings-modal.setup`, part 순서). 행은 이름(`path`는 명령 경로, `skill`은 스킬, `mcp`는 MCP 등록), 파일, 상태를 보여 준다. 상태는 `ok`이면 설치됨, `absent`인 `missing`이면 설치 안 됨, `differs`이면 다름, `error`이면 오류 글이다. PATH 행은 관측한 상태와 함께 저장한 preference인 `enabled`를 담는다. 동작(element `core.settings-modal.setup-change`)은 사용자 PATH 등록을 켜거나 끈다. 끈 등록은 사용 안 함을 표시한다. 적용 실패는 오류 글을 표시한다. 설치(`core.settings-modal.setup-install`)는 `skill`과 `mcp` 가운데 `ok`가 아닌 행이 있는 종류로 `core.setup.install`을 실행한다. 그런 행이 있는 동안에만 보인다. 등록은 `PATH`의 첫 `sok`을 가리키므로([MCP 등록](cli.ko.md#mcp-등록)) 어느 애플리케이션의 설치든 같은 등록을 쓴다. 다시 확인(`core.settings-modal.setup-check`)은 `core.setup.check`를 실행한다. 해당하지 않는 part는 행이 없고, 행이 하나도 없으면 그룹은 "이 컴퓨터에서 설정할 에이전트 항목이 없습니다."를 보여 준다.
 
-`core.setup.check`는 매개변수 없이 part를 다시 읽고 `{parts}`로 답한다. `core.setup.install`은 반복 없는 `skill`과 `mcp`의 비지 않은 목록 `{parts}`를 받아 host call `setupInstall`을 실행하고 그 `{parts}`로 답한다. 다른 목록이면 -32602(invalid params)로, 설치가 실패하거나 다른 설치가 실행 중이면 host 오류로, host가 없으면 "setup operations need a native host"로 실패한다. 실패한 읽기나 설치는 오류 표시로 보이고, 오류 표시는 그것을 애플리케이션 log에 쓴다. 행은 마지막으로 읽은 part를 유지한다.
+`core.setup.check`는 매개변수 없이 part를 다시 읽고 `{parts}`로 답한다. `core.setup.install`은 반복 없는 `skill`과 `mcp`의 비지 않은 목록 `{parts}`를 받아 host call `setupInstall`을 실행하고 그 `{parts}`로 답한다. 다른 목록이면 -32602(invalid params)로, 설치가 실패하거나 다른 설치가 실행 중이면 host 오류로, host가 없으면 "setup operations need a native host"로 실패한다. `core.setup.change {part, enabled}`는 `part: "path"`와 boolean `enabled`를 받는다. 같은 매개변수로 `setupChange`를 실행하고 preference를 저장해 적용한 뒤 `{parts}`로 답한다. 실패한 읽기나 작업은 오류 표시로 보이고, 오류 표시는 그것을 애플리케이션 log에 쓴다.
 
 ### 플러그인
 
@@ -239,7 +239,7 @@ theme catalog와 mode, font, menu 언어와 기본 언어, 그리고 이 설정�
 
 `core.plugins`는 [plugin 화면](installation.ko.md#plugin-화면)이 정한다.
 
-`core.setup`은 `{parts, running}`을 보고한다. 마지막 읽기나 설치의 part를 `setupState()`가 돌려주는 대로 담고 첫 읽기 전에는 `[]`이며, `running`은 실행 중인 설치의 종류 목록이거나 `null`이다.
+`core.setup`은 `{parts, running}`을 보고한다. 마지막 읽기나 작업의 part를 `setupState()`가 돌려주는 대로 담고 첫 읽기 전에는 `[]`이며, `running`은 현재 작업의 종류 목록이거나 `null`이다.
 
 `core.settings`는 `sets`, `links`, 배치 값을 포함한 모든 유효 값을 `values`로, 모든 key의 common 값을 `common`으로 보고한다. common 값은 저장된 common 값이고, common 설정에 저장된 값이 없으면 기본값이다. 선택된 project가 덮어쓴 key는 `values`에 project 값을, `common`에 common 값을 가진다. `core.themes`는 theme catalog를 순서대로 보고한다. 각 theme의 `name`, `shape` 값, `dark`와 `light` mode의 color token이다.
 
@@ -250,7 +250,7 @@ theme catalog와 mode, font, menu 언어와 기본 언어, 그리고 이 설정�
 - 사이드바는 세트 목록, 새 세트, 편집만 담는다. 편집에는 등록된 섹션마다의 컨트롤이 없다. 섹션 컨트롤은 행마다 선택 상자 하나와 ▲ ▼ −, 그리고 + 하나다.
 - 섹션 행은 `core.settings.sets.row`로 섹션을 고르고, 옮기고, 빼고, 더한다. 같은 섹션의 반복은 거부된다.
 - 플러그인은 불러온 플러그인을 이름으로 걸러진 목록에 보여 주고, 행은 설정, 섹션, 사이드바 선택이 있는 플러그인 페이지를 열며, 목록이 목록으로 돌아간다. 이 절은 플러그인 설명, 버전, 사이드카, 플러그인 작업을 보여 주지 않는다. 플러그인 관리는 창을 닫고 plugin 화면을 보여 준다.
-- 에이전트는 해당하는 각 setup part를 `sok setup check`가 보고하는 상태로 보여 주고, 설치는 빠진 skill 파일과 등록을 설치하며 제자리에 있는 것은 바꾸지 않고, 경로 항목은 단계를 실행하지 않고 보여 준다.
+- 에이전트는 해당하는 각 setup part를 `sok setup check`가 보고하는 상태로 보여 주고, 설치는 빠진 skill 파일과 등록을 설치하며 제자리에 있는 것은 바꾸지 않고, PATH 동작은 사용자 등록의 원하는 상태를 권한 상승 없이 적용하고 저장한다.
 - 일반·플러그인 창·카드 내부 선택은 포커스와 탭 변경에도 독립적이다. 사용 안 함인 창 열이 다른 플러그인 열을 대체하지 않는다.
 - 배치 값이 카드 내부 사이드바의 한계·초기 크기와 창 사이드바의 자기 축 처음 크기를 바꾼다.
 - 순서 줄이 순서 전체를 담은 `core.settings.change`로 변을 위아래로 옮기고, 창 사이드바가 새 순서로 배치한다.

@@ -46,6 +46,8 @@ type Platform interface {
 	AppendLogFile(path string) (*os.File, error)
 	// OpenProcessLockFile opens or creates the configuration ownership lock with private access (mode 0600 on Unix).
 	OpenProcessLockFile(path string) (*os.File, error)
+	// OpenAgentSetupLockFile opens or creates the user setup lock with mode 0600 and refuses symbolic links.
+	OpenAgentSetupLockFile(path string) (*os.File, error)
 	// ReadOnlyVolume reports whether the file system of the path is mounted read-only (docs/spec/cli.md#mcp-registration).
 	ReadOnlyVolume(path string) (bool, error)
 	// RegisteredSok checks that the sok that the MCP registration names belongs to an application of this platform: on macOS it is

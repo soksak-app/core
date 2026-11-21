@@ -1,9 +1,9 @@
 //! The setup parts of the agents of the machine in the application (docs/spec/cli.md#agents-in-the-application): the host reads
-//! the environment of the login shell of the person once per start, brings the agent skill current, and runs the setup operations
-//! of the setup library of its command line in that environment for the setupState and setupInstall calls.
+//! the environment of the login shell of the person at startup, reconciles user PATH, and brings the agent skill current.
+//! Setup calls use the setup library of the command line.
 
 use std::io::{BufRead, BufReader, Read};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, Condvar, Mutex, Once, PoisonError, TryLockError};
@@ -64,6 +64,13 @@ pub struct InstallRequest {
     pub parts: Value,
 }
 
+/// The desired state of the user PATH registration.
+#[derive(Debug, serde::Deserialize)]
+pub struct ChangeRequest {
+    pub part: String,
+    pub enabled: bool,
+}
+
 /// The answer of setupState and setupInstall.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Parts {
@@ -89,6 +96,7 @@ struct Inner {
     ready: Mutex<Option<Result<Environment, String>>>,
     ended: Condvar,
     running: Mutex<()>,
+    user_path: Mutex<Option<(Environment, Option<String>)>>,
 }
 
 impl Setups {
@@ -111,6 +119,7 @@ impl Setups {
                 ready: Mutex::new(None),
                 ended: Condvar::new(),
                 running: Mutex::new(()),
+                user_path: Mutex::new(None),
             }),
         })
     }
@@ -122,6 +131,14 @@ impl Setups {
         self.inner.begin.call_once(move || {
             crate::routine::spawn_named("setup-environment", move || {
                 let environment = inner.read_environment();
+                if let Ok(environment) = &environment
+                    && inner.paths_dir.is_ok()
+                {
+                    let (effective, error) = inner.reconcile_user_path(environment.clone(), None);
+                    if let Err(error) = inner.set_path_environment(effective, error) {
+                        crate::application_log::log_error("setup", error);
+                    }
+                }
                 inner.bring_skill_current(&environment);
                 // default: the state is one value that a holder sets whole, so a holder that ended by a panic left no partial value.
                 *inner.ready.lock().unwrap_or_else(PoisonError::into_inner) = Some(environment);
@@ -145,25 +162,45 @@ impl Setups {
 
     /// Returns the parts as `sok setup check` prints them, after the start ended.
     pub fn state(&self) -> Result<Parts, String> {
+        self.read_state(true)
+    }
+
+    fn read_state(&self, refresh: bool) -> Result<Parts, String> {
         let environment = self.inner.environment()?;
-        Ok(Parts {
-            parts: setup::check(&self.inner.setup(&environment))?,
-        })
+        self.inner
+            .with_user_path(setup::check(&self.inner.setup(&environment))?, refresh)
+    }
+
+    /// Persists and applies the user PATH preference and notifies every window of the result.
+    pub fn change(&self, request: ChangeRequest) -> Result<Parts, String> {
+        if request.part != "path" {
+            return Err("setup change requires path and a boolean enabled".into());
+        }
+        let _running = self.inner.begin_operation()?;
+        self.inner.environment()?;
+        self.inner.paths_dir.as_ref().map_err(Clone::clone)?;
+        let environment = if request.enabled {
+            self.inner.read_environment()?
+        } else {
+            self.inner.path_environment()?.0
+        };
+        let (environment, error) = self
+            .inner
+            .reconcile_user_path(environment, Some(request.enabled));
+        self.inner
+            .set_path_environment(environment, error.clone())?;
+        (self.inner.changed)();
+        match error {
+            Some(error) => Err(error),
+            None => self.read_state(false),
+        }
     }
 
     /// Installs the named kinds of skill and mcp as `sok setup install` does and returns its parts, then sends setup-changed. The
     /// path entry needs administrator rights, which the application has no terminal to ask for.
     pub fn install(&self, request: InstallRequest) -> Result<Parts, String> {
         let kinds = kinds_of(&request.parts)?;
-        let _running = match self.inner.running.try_lock() {
-            Ok(guard) => guard,
-            Err(TryLockError::WouldBlock) => {
-                return Err("another setup operation is running".to_string());
-            }
-            Err(TryLockError::Poisoned(error)) => {
-                return Err(format!("setup operation state: {error}"));
-            }
-        };
+        let _running = self.inner.begin_operation()?;
         let environment = self.inner.environment()?;
         if kinds.contains(&Kind::Path) {
             return Err(format!(
@@ -178,7 +215,7 @@ impl Setups {
             setup::Installed {
                 error: Some(error), ..
             } => Err(error),
-            setup::Installed { parts, error: None } => Ok(Parts { parts }),
+            setup::Installed { parts, error: None } => self.inner.with_user_path(parts, false),
         }
     }
 }
@@ -204,6 +241,75 @@ fn deliver(sender: &mpsc::Sender<Message>, message: Message) {
 }
 
 impl Inner {
+    fn begin_operation(&self) -> Result<std::sync::MutexGuard<'_, ()>, String> {
+        match self.running.try_lock() {
+            Ok(guard) => Ok(guard),
+            Err(TryLockError::WouldBlock) => Err("another setup operation is running".into()),
+            Err(TryLockError::Poisoned(error)) => Err(format!("setup operation state: {error}")),
+        }
+    }
+
+    fn path_environment(&self) -> Result<(Environment, Option<String>), String> {
+        self.user_path
+            .lock()
+            .map_err(|error| format!("user PATH state: {error}"))?
+            .clone()
+            .ok_or_else(|| "the user PATH environment was not read".into())
+    }
+
+    fn set_path_environment(
+        &self,
+        environment: Environment,
+        error: Option<String>,
+    ) -> Result<(), String> {
+        *self
+            .user_path
+            .lock()
+            .map_err(|error| format!("user PATH state: {error}"))? = Some((environment, error));
+        Ok(())
+    }
+
+    fn with_user_path(&self, mut parts: Vec<Part>, refresh: bool) -> Result<Parts, String> {
+        if self.paths_dir.is_ok() {
+            let (mut environment, error) = self.path_environment()?;
+            if refresh {
+                environment = self.read_environment()?;
+            }
+            let mut part = setup::user_path_state(&environment)?;
+            if let Some(error) = error
+                && part.state != setup::State::Ok
+            {
+                part.state = setup::State::Error;
+                part.reason = None;
+                part.error = Some(error);
+            }
+            parts[0] = part;
+        }
+        Ok(Parts { parts })
+    }
+
+    /// Applies the saved preference and verifies a change in a fresh login shell.
+    fn reconcile_user_path(
+        &self,
+        mut environment: Environment,
+        enabled: Option<bool>,
+    ) -> (Environment, Option<String>) {
+        let result = (|| {
+            let shell = self.processes.login_shell()?;
+            if !setup::configure_user_path(&environment, &shell, &self.sok, enabled)? {
+                return Ok(());
+            }
+            environment = self.read_environment()?;
+            if setup::user_path_state(&environment)?.state != setup::State::Ok {
+                return Err(format!(
+                    "login shell {shell}: the user PATH registration is missing"
+                ));
+            }
+            Ok(())
+        })();
+        (environment, result.err())
+    }
+
     /// The environment that the start read, after the start ended.
     fn environment(&self) -> Result<Environment, String> {
         // default: the state is one value that a holder sets whole, so a holder that ended by a panic left no partial value.
@@ -268,12 +374,19 @@ impl Inner {
                 command.env(name, value);
             }
         }
+        let sok = setup::step_of(&self.sok.display().to_string());
+        let line = if Path::new(&shell)
+            .file_name()
+            .is_some_and(|name| name == "zsh")
+        {
+            // zsh permits ZDOTDIR to be local to the shell. The setup part needs its effective value.
+            format!("export ZDOTDIR; {sok} setup environment")
+        } else {
+            format!("{sok} setup environment")
+        };
         command
             .args(["-l", "-i", "-c"])
-            .arg(format!(
-                "{} setup environment",
-                setup::step_of(&self.sok.display().to_string())
-            ))
+            .arg(line)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());

@@ -398,7 +398,7 @@ test("a call of the main page that carries out an operation sends its identifier
 });
 
 // The setup calls of the settings window (docs/spec/cli.md#agents-in-the-application) reach the setup commands of the host.
-test("the setup calls reach the setup commands with the request of an install", async () => {
+test("the setup calls reach the setup commands with their requests", async () => {
   const calls = [];
   globalThis.window = { __TAURI__: {
     core: { invoke: async (command, args) => { calls.push([command, args]); return null; } },
@@ -410,9 +410,11 @@ test("the setup calls reach the setup commands with the request of an install", 
     const { host } = await import("../runtime/index.js?test=setup-calls");
     await host.call("setupState");
     await host.call("setupInstall", { parts: ["skill", "mcp"] });
+    await host.call("setupChange", { part: "path", enabled: false });
     assert.deepEqual(calls, [
       ["setup_state", {}],
       ["setup_install", { request: { parts: ["skill", "mcp"] } }],
+      ["setup_change", { request: { part: "path", enabled: false } }],
     ]);
   } finally {
     delete globalThis.window;

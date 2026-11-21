@@ -61,8 +61,11 @@ func (h *setupHost) calls() map[string]workbench.HostCall {
 const setupSok = "/Applications/soksak.app/Contents/MacOS/sok"
 
 func setupPart(part, file, state, reason string) map[string]any {
-	steps := map[string]string{"path": "sudo " + setupSok + " path install", "skill": setupSok + " skill install", "mcp": setupSok + " mcp install"}
+	steps := map[string]string{"skill": setupSok + " skill install", "mcp": setupSok + " mcp install"}
 	value := map[string]any{"part": part, "file": file, "state": state, "step": steps[part]}
+	if part == "path" {
+		value["enabled"] = true
+	}
 	if reason != "" {
 		value["reason"] = reason
 	}
@@ -71,12 +74,12 @@ func setupPart(part, file, state, reason string) map[string]any {
 
 var (
 	setupMissing = []map[string]any{
-		setupPart("path", "/etc/paths.d/app.soksak.mygo", "missing", "absent"),
+		setupPart("path", "/Users/person/.local/bin/sok", "missing", "absent"),
 		setupPart("skill", "/Users/person/.claude/skills/soksak/SKILL.md", "missing", "differs"),
 		setupPart("mcp", "/Users/person/.claude.json", "missing", "absent"),
 	}
 	setupInstalled = []map[string]any{
-		setupPart("path", "/etc/paths.d/app.soksak.mygo", "missing", "absent"),
+		setupPart("path", "/Users/person/.local/bin/sok", "missing", "absent"),
 		setupPart("skill", "/Users/person/.claude/skills/soksak/SKILL.md", "ok", ""),
 		setupPart("mcp", "/Users/person/.claude.json", "ok", ""),
 	}
@@ -87,6 +90,43 @@ func setupShell(t *testing.T, host *setupHost) *shellFixture {
 	stored := acme()
 	stored.extra = host.calls()
 	return newShell(t, stored)
+}
+
+func TestTheAgentGroupChangesTheDesiredPathState(t *testing.T) {
+	const path = "/Users/person/.local/bin/sok"
+	on := map[string]any{"part": "path", "enabled": true, "state": "missing", "reason": "absent", "file": path, "step": ""}
+	off := map[string]any{"part": "path", "enabled": false, "state": "ok", "file": path, "step": ""}
+	host := &setupHost{states: []setupAnswer{{parts: []map[string]any{on}}}}
+	stored := acme()
+	stored.extra = host.calls()
+	var changed string
+	stored.extra["setupChange"] = func(_ context.Context, argument json.RawMessage) (any, error) {
+		changed = string(argument)
+		return map[string]any{"parts": []map[string]any{off}}, nil
+	}
+	f := newShell(t, stored)
+	f.click("core.chrome.settings", "")
+	for _, control := range f.modal().Controls {
+		if control.Name == "core.settings-modal.setup-change" {
+			if control.Command == nil || control.Command.Name != "core.setup.change" ||
+				!reflect.DeepEqual(control.Command.Params, map[string]any{"part": "path", "enabled": false}) {
+				t.Fatalf("the path control runs %+v", control.Command)
+			}
+			f.run("core.setup.change", map[string]any{"part": "path", "enabled": false})
+			if changed != `{"part":"path","enabled":false}` && changed != `{"enabled":false,"part":"path"}` {
+				t.Fatalf("changing the PATH state sent %q", changed)
+			}
+			for _, after := range f.modal().Controls {
+				if after.Name == "core.settings-modal.setup-change" && after.Command != nil &&
+					reflect.DeepEqual(after.Command.Params, map[string]any{"part": "path", "enabled": true}) {
+					f.audit()
+					return
+				}
+			}
+			t.Fatal("the disabled path has no enable action")
+		}
+	}
+	t.Fatal("the managed path has no disable action")
 }
 
 // setupStatus is the value of core.setup.
@@ -137,7 +177,7 @@ func TestTheAgentGroupShowsAndInstallsTheSetupParts(t *testing.T) {
 	}
 	modal := f.modal()
 	if labels, want := modal.labels("core.settings-modal.setup"), []string{
-		"명령 경로설치 안 됨/etc/paths.d/app.soksak.mygosudo " + setupSok + " path install",
+		"명령 경로설치 안 됨/Users/person/.local/bin/sok끄기",
 		"스킬다름/Users/person/.claude/skills/soksak/SKILL.md",
 		"MCP 등록설치 안 됨/Users/person/.claude.json",
 	}; !slices.Equal(labels, want) {

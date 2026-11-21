@@ -220,6 +220,8 @@ pub struct Part {
     pub error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub changed: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
 }
 
 impl Part {
@@ -237,8 +239,24 @@ impl Part {
             reason,
             error,
             changed: None,
+            enabled: None,
         }
     }
+}
+
+/// Reads the user's PATH preference and the command that the login shell can resolve.
+pub fn user_path_state(environment: &Environment) -> Result<Part, String> {
+    platform::current()?.user_path_state(environment)
+}
+
+/// Reconciles user PATH registration and reports whether it changed.
+pub fn configure_user_path(
+    environment: &Environment,
+    shell: &str,
+    executable: &Path,
+    enabled: Option<bool>,
+) -> Result<bool, String> {
+    platform::current()?.configure_user_path(environment, shell, executable, enabled)
 }
 
 /// What the setup operations read and change: the environment, the sok whose setup they describe, and the path entry of its

@@ -116,6 +116,7 @@ Core version과 플랫폼에 맞춰 plugin을 설치하면, `engines.soksak`이 
 | `plugins/registry.json` | 코어 | `format` | numbered |
 | `log-policy.json` | 코어 | `schema` | numbered |
 | `settings.json`, `<project root>/.soksak/settings.json` | 코어 | `format` | numbered |
+| [사용자 `agent-setup.json`](cli.ko.md#사용자-path-등록) | 코어 | `format` | numbered |
 | `projects.json` | 코어 | `format` | numbered |
 | `tab-state.json` | 코어 | `format` | numbered |
 | `tab-sessions/<tab>.json` | 코어 | `format` | numbered |

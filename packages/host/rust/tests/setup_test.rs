@@ -247,9 +247,9 @@ fn setup_reads_the_login_shell_environment_and_brings_the_skill_current() {
     assert_eq!(h.commands(), Vec::<String>::new(), "the start ran commands");
     let step = format!("'{}'", h.sok.display());
     let (got, path) = lines(&setups.state().unwrap());
-    // The path entry applies on macOS; it names the bundle.
+    // The user PATH registration applies on macOS and preserves the existing command.
     if let Some(path) = path {
-        assert_eq!(path, format!("sudo {step} path install"));
+        assert!(path.is_empty(), "{path}");
     }
     assert_eq!(
         got,
@@ -314,6 +314,41 @@ fn the_sidecar_environment_is_the_login_shell_environment_without_the_variables_
             "{name} of the shell process: {environment:?}"
         );
     }
+}
+
+// contract: setup.host.reconciles-user-path
+#[test]
+fn setup_registers_user_path_on_start() {
+    let _serial = SERIAL.lock().unwrap_or_else(|error| error.into_inner());
+    let home = Home::new("export PATH=/usr/bin:/bin\n");
+    let (setups, changed) = home.setups();
+    setups.start();
+    changed.recv().unwrap();
+    let entry = home.home().join(".local/bin/sok");
+    assert_eq!(
+        entry
+            .canonicalize()
+            .unwrap_or_else(|error| panic!("{}: {error}", entry.display())),
+        home.sok
+    );
+    assert!(home.commands().is_empty());
+    let before = setups.state().unwrap();
+    assert_eq!(before.parts[0].state, soksak_sok::setup::State::Ok);
+    let disabled = setups
+        .change(soksak_host::setup::ChangeRequest {
+            part: "path".into(),
+            enabled: false,
+        })
+        .unwrap();
+    assert_eq!(disabled.parts[0].enabled, Some(false));
+    let (restarted, changed) = home.setups();
+    restarted.start();
+    changed.recv().unwrap();
+    assert_eq!(restarted.state().unwrap().parts[0].enabled, Some(false));
+    assert_eq!(
+        entry.symlink_metadata().unwrap_err().kind(),
+        std::io::ErrorKind::NotFound
+    );
 }
 
 // contract: setup.host.start-brings-the-skill-current
@@ -410,7 +445,9 @@ fn setup_installs_the_skill_and_the_registration_one_at_a_time() {
         std::io::Error::last_os_error()
     );
     // The shell waits at the gate, so the first install holds the setup operation while it waits for the environment.
-    let h = Home::new(&format!("read line < {fifo:?}\n"));
+    let h = Home::new(&format!(
+        "if [ ! -e \"$HOME/setup-read\" ]; then\n  read line < {fifo:?}\n  : > \"$HOME/setup-read\"\nfi\n"
+    ));
     let (setups, changed) = h.setups();
     setups.start();
     let (answer, answers) = mpsc::channel();

@@ -589,8 +589,7 @@ func (s *Shell) drawSearchControl(c *ui.Context, control *SettingsControl) {
 	})
 }
 
-// drawSetupRow draws a row of the agent group, as setupGroup of packages/workbench/settings-ui.js draws it: the name column, then
-// the state, the file and the install step of a missing path entry. The error of a part is drawn by the error display path.
+// drawSetupRow draws the name, state, file and optional action of a setup part. The error of a part uses the error display path.
 func (s *Shell) drawSetupRow(c *ui.Context, control *SettingsControl, pane settingsPane) {
 	row := control.setup
 	s.exposedBox(c, control.Name, "", control.item()).FillWidth().Row().MinHeight(pane.rowH).Gap(pane.rowGap).AlignItems(ui.Center).Role(ui.RoleGroup).Label(control.Label).Children(func() {
@@ -602,9 +601,9 @@ func (s *Shell) drawSetupRow(c *ui.Context, control *SettingsControl, pane setti
 				ui.Text(c, row.state).Wrap().FontSize(s.textControl()).TextColor(s.palette.Fg)
 			}
 			ui.Text(c, row.file).Wrap().FontSize(s.textSmall()).TextColor(s.palette.Muted)
-			if row.step != "" {
-				ui.Text(c, row.step).Wrap().FontSize(s.textSmall()).TextColor(s.palette.Fg)
-			}
 		})
+		if row.action != nil {
+			s.drawButton(c, row.action, pane)
+		}
 	})
 }

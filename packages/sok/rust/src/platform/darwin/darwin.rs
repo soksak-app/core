@@ -9,6 +9,9 @@ use super::Connection;
 #[path = "process.rs"]
 mod process;
 
+#[path = "user_path.rs"]
+mod user_path;
+
 #[cfg(test)]
 #[path = "process_wait_signal_test.rs"]
 mod process_wait_signal_test;

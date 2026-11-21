@@ -338,8 +338,8 @@ const SETUP_NAMES = { path: "명령 경로", skill: "스킬", mcp: "MCP 등록" 
 const SETUP_STATES = { ok: "설치됨", absent: "설치 안 됨", differs: "다름" };
 
 /**
- * The agent group: one row per setup part with its name, file and state, the install step of a missing path entry, the install
- * button while a skill or mcp part is not ok, and the check button. The error text of a part that cannot be read goes through the
+ * The agent group shows each setup part and its file and state. The PATH action changes the saved preference. The install
+ * button appears while a skill or mcp part is not ok, and the check button reads all the parts again. Part errors use the
  * error display path.
  */
 function setupGroup() {
@@ -357,18 +357,17 @@ function setupGroup() {
     const state = document.createElement("span");
     state.className = "set-setup__state";
     if (part.state === "error") showError(state, `setup:${part.part}:${part.file}`, part.error);
-    else state.textContent = SETUP_STATES[part.state === "ok" ? "ok" : part.reason];
+    else state.textContent = part.enabled === false ? "사용 안 함" : SETUP_STATES[part.state === "ok" ? "ok" : part.reason];
     const file = document.createElement("span");
     file.className = "set-caption";
     file.textContent = part.file;
     about.append(state, file);
-    if (part.part === "path" && part.state === "missing") {
-      const step = document.createElement("code");
-      step.className = "set-setup__step";
-      step.textContent = part.step;
-      about.append(step);
-    }
     el.append(name, about);
+    if (part.part === "path" && typeof part.enabled === "boolean") {
+      el.classList.add("set-row--setup-change");
+      el.append(button("setup-change:path", "core.settings-modal.setup-change", part.enabled ? "끄기" : "켜기",
+        "core.setup.change", { part: "path", enabled: !part.enabled }));
+    }
     return el;
   });
   if (!rows.length) {
@@ -382,7 +381,7 @@ function setupGroup() {
   actions.className = "set-actions";
   if (kinds.length) actions.append(button("setup-install", "core.settings-modal.setup-install", "설치", "core.setup.install", { parts: kinds }));
   actions.append(button("setup-check", "core.settings-modal.setup-check", "다시 확인", "core.setup.check", {}));
-  return group("에이전트", "에이전트가 이 애플리케이션을 배우고 다루게 하는 항목. 명령 경로는 관리자 권한이 필요하므로 터미널에서 보이는 명령으로 설치한다.",
+  return group("에이전트", "에이전트가 이 애플리케이션을 배우고 다루게 하는 항목.",
     [...rows, actions]);
 }
 

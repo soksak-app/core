@@ -413,6 +413,7 @@ fn hook_part(file: &Path, sok: &str) -> Part {
         reason: Some(Reason::Absent),
         error: None,
         changed: None,
+        enabled: None,
     };
     let data = match std::fs::read(file) {
         Ok(data) => data,

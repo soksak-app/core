@@ -110,6 +110,7 @@ type SetupPart struct {
 	Reason  string `json:"reason,omitempty"`
 	Error   string `json:"error,omitempty"`
 	Changed *bool  `json:"changed,omitempty"`
+	Enabled *bool  `json:"enabled,omitempty"`
 }
 
 // SetupParts are the parts that apply, in the order path, skill files, registration.

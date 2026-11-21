@@ -46,6 +46,7 @@
     "core.settings.debug",
     "core.setup.check",
     "core.setup.install",
+    "core.setup.change",
     "core.settings.open",
     "core.settings.close",
     "core.debug.open",

@@ -158,6 +158,23 @@ impl Platform for Linux {
         Err("path entries are not implemented on linux".into())
     }
 
+    fn user_path_state(
+        &self,
+        _environment: &crate::setup::Environment,
+    ) -> Result<crate::setup::Part, String> {
+        Err("user PATH registration is not implemented on linux".into())
+    }
+
+    fn configure_user_path(
+        &self,
+        _environment: &crate::setup::Environment,
+        _shell: &str,
+        _executable: &std::path::Path,
+        _enabled: Option<bool>,
+    ) -> Result<bool, String> {
+        Err("user PATH registration is not implemented on linux".into())
+    }
+
     fn extract_bundle(
         &self,
         _zip: &std::path::Path,

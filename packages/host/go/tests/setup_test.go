@@ -234,15 +234,50 @@ func TestSetupReadsTheLoginShellEnvironmentAndBringsTheSkillCurrent(t *testing.T
 		"hook | " + filepath.Join(h.home, ".claude", "settings.json") + " | missing | absent | " + step + " setup install hook",
 		"hook | " + filepath.Join(h.config, "settings.json") + " | missing | absent | " + step + " setup install hook",
 	}
-	// The path entry applies on macOS; it stands first and names the bundle.
+	// The user PATH registration applies on macOS and preserves the existing command.
 	if len(parts.Parts) > 0 && parts.Parts[0].Part == "path" {
-		if parts.Parts[0].Step != "sudo "+step+" path install" {
-			t.Fatalf("the path entry has the step %q", parts.Parts[0].Step)
+		if path := parts.Parts[0]; path.State != "ok" || path.Enabled == nil || !*path.Enabled || path.Step != "" {
+			t.Fatalf("the user PATH registration is %+v", path)
 		}
 		got = got[1:]
 	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("the parts are\n%s\nnot\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// contract: setup.host.reconciles-user-path
+func TestSetupRegistersUserPathOnStart(t *testing.T) {
+	h := newSetupHome(t, "export PATH=/usr/bin:/bin\n")
+	setups, changed := h.setups(t)
+	setups.Start()
+	<-changed
+	entry := filepath.Join(h.home, ".local", "bin", "sok")
+	resolved, err := filepath.EvalSymlinks(entry)
+	if err != nil || resolved != h.sok {
+		t.Fatalf("the user PATH link resolved to %q, want %q: %v", resolved, h.sok, err)
+	}
+	if commands := h.commands(t); len(commands) != 0 {
+		t.Fatalf("the start ran %q", commands)
+	}
+	parts, err := setups.State()
+	if err != nil || parts.Parts[0].State != "ok" {
+		t.Fatalf("the fresh shell did not resolve the user registration: %+v, %v", parts, err)
+	}
+	disabled := false
+	parts, err = setups.Change(host.SetupChangeRequest{Part: "path", Enabled: &disabled})
+	if err != nil || parts.Parts[0].Enabled == nil || *parts.Parts[0].Enabled {
+		t.Fatalf("the registration was not disabled: %+v, %v", parts, err)
+	}
+	restarted, restartedChanged := h.setups(t)
+	restarted.Start()
+	<-restartedChanged
+	parts, err = restarted.State()
+	if err != nil || parts.Parts[0].Enabled == nil || *parts.Parts[0].Enabled {
+		t.Fatalf("restart changed the disabled preference: %+v, %v", parts, err)
+	}
+	if _, err := os.Lstat(entry); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("restart did not leave the owned link absent: %v", err)
 	}
 }
 
@@ -327,7 +362,7 @@ func TestSetupInstallsTheSkillAndTheRegistrationOneAtATime(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The shell waits at the gate, so the first install holds the setup operation while it waits for the environment.
-	h := newSetupHome(t, fmt.Sprintf("read line < %q\n", gate))
+	h := newSetupHome(t, fmt.Sprintf("if [ ! -e \"$HOME/setup-read\" ]; then\n  read line < %q\n  : > \"$HOME/setup-read\"\nfi\n", gate))
 	setups, changed := h.setups(t)
 	setups.Start()
 	type answer struct {

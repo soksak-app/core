@@ -160,6 +160,23 @@ impl Platform for Darwin {
         Ok(PathBuf::from("/etc/paths.d"))
     }
 
+    fn user_path_state(
+        &self,
+        environment: &crate::setup::Environment,
+    ) -> Result<crate::setup::Part, String> {
+        super::user_path::state(environment)
+    }
+
+    fn configure_user_path(
+        &self,
+        environment: &crate::setup::Environment,
+        shell: &str,
+        executable: &std::path::Path,
+        enabled: Option<bool>,
+    ) -> Result<bool, String> {
+        super::user_path::configure(environment, shell, executable, enabled)
+    }
+
     /// Extracts the zip with ditto, which keeps the modes and the signature of the bundle.
     fn extract_bundle(
         &self,

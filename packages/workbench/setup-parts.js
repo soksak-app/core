@@ -1,12 +1,12 @@
 // The setup parts of the agents of this machine: the agent group of the settings window, the core.setup status and the
-// core.setup.check and core.setup.install commands (docs/spec/settings.md#agents). The host reads and installs the parts with the
+// core.setup commands (docs/spec/settings.md#agents). The host reads and installs the parts with the
 // setup library of its command line in the environment of the login shell of the person (docs/spec/cli.md#agents-in-the-application).
 // The parts are read when the group is shown, and while it is shown when the window becomes the key window and after setup-changed,
 // and by core.setup.check; no timer reads them, because the configuration file of the agent is rewritten by every agent session.
 import { EXPOSURE_ERRORS, ExposureError } from "@soksak/plugin-api";
 import { errorText } from "./error-text.js";
 
-/** The kinds of parts that the application installs; the path entry needs administrator rights and is installed in a terminal. */
+/** The kinds of parts that the application installs on request. */
 export const SETUP_KINDS = ["skill", "mcp"];
 
 /** The error of a setup operation of a window without a host. */
@@ -61,12 +61,10 @@ export function createSetupParts({ host, changed, failed }) {
     return value;
   }
 
-  /** Installs the kinds through setupInstall and keeps the parts that it answers; a failure is shown and rejects. */
-  async function install(kinds) {
-    setupKinds(kinds);
+  /** Applies a setup operation and keeps the parts it answers. */
+  async function apply(method, params, kinds) {
     if (!host) throw new Error(NO_HOST);
-    // The host runs one setup operation at a time; a second install of this window is refused with the text of the host, so
-    // running names the install that runs.
+    // The host runs one setup operation at a time, so running names the parts of the current operation.
     if (running) {
       const error = new Error("another setup operation is running");
       failed(`setup: ${error.message}`);
@@ -76,7 +74,7 @@ export function createSetupParts({ host, changed, failed }) {
     changed();
     const order = ++lastRead;
     try {
-      const value = await host.call("setupInstall", { parts: kinds });
+      const value = await host.call(method, params);
       if (order === lastRead) parts = value.parts;
       return value;
     } catch (error) {
@@ -86,6 +84,15 @@ export function createSetupParts({ host, changed, failed }) {
       running = null;
       changed();
     }
+  }
+
+  async function install(kinds) {
+    setupKinds(kinds);
+    return apply("setupInstall", { parts: kinds }, kinds);
+  }
+
+  function change({ part, enabled }) {
+    return apply("setupChange", { part, enabled }, [part]);
   }
 
   /** A read that an event of the host or the showing of the group starts; load shows its failure and does not reject. */
@@ -110,7 +117,7 @@ export function createSetupParts({ host, changed, failed }) {
   }
 
   return {
-    read, install, show, follow,
+    read, install, change, show, follow,
     parts: () => parts,
     status: () => ({ parts, running }),
   };

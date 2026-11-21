@@ -1,5 +1,5 @@
 // The setup parts of this window (setup-parts.js) and their exposed entries: the core.setup status and the core.setup.check and
-// core.setup.install commands (docs/spec/settings.md#agents). The settings window draws the agent group from the same parts.
+// core.setup.install and core.setup.change commands (docs/spec/settings.md#agents). The settings window draws the agent group from the same parts.
 import { host } from "@soksak/runtime";
 import { registry } from "./exposure.js";
 import { createSetupParts } from "./setup-parts.js";
@@ -31,5 +31,6 @@ export function installSetupExposure({ showError, changed }) {
   });
   registry.command("core.setup.check", () => setupParts.read());
   registry.command("core.setup.install", ({ parts }) => setupParts.install(parts));
+  registry.command("core.setup.change", (params) => setupParts.change(params));
   setupParts.follow();
 }

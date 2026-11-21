@@ -649,6 +649,10 @@ fn dispatch(
             let request: soksak_host::setup::InstallRequest = argument(method, "request", body)?;
             json!(app.state::<soksak_host::setup::Setups>().install(request)?)
         }
+        "setup_change" => {
+            let request: soksak_host::setup::ChangeRequest = argument(method, "request", body)?;
+            json!(app.state::<soksak_host::setup::Setups>().change(request)?)
+        }
         "plugins_starter" => {
             let request: soksak_host::plugins::StarterRequest = argument(method, "request", body)?;
             json!(

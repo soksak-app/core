@@ -317,15 +317,26 @@ MCP 등록은 `claude` 명령의 user scope에 있는 항목 `soksak`이고, `cl
 
 ### 애플리케이션 안의 에이전트
 
+#### 사용자 PATH 등록
+
+macOS host는 login shell을 읽은 뒤 `setup-changed`를 보내기 전에 사용자의 PATH 등록을 맞춘다. 등록에는 사용자 권한을 쓴다. Shell의 PATH에 작동하는 soksak 실행 파일이 있으면 사용하며, 다른 설치된 host의 실행 파일도 같은 규칙을 따른다. 충돌하는 명령이나 파일을 보고하고 그 항목은 바꾸지 않는다.
+
+사용자 수준 setup record는 그 shell의 home에 있는 `~/Library/Application Support/app.soksak/agent-setup.json`이다. 현재 형식은 `{"format":1,"path":{"enabled":true,"profiles":[]}}`이다. `profiles` 배열은 soksak이 쓴 블록을 가진 shell 시작 파일의 절대 경로를 나열한다. 파일이 없으면 활성 상태이고 소유한 파일이 없다. 설정을 적용하기 전에 preference 변경을 저장하고 같은 사용자의 애플리케이션 사이에서 작업을 직렬화한다. Record는 mode 0600으로 원자적으로 쓴다.
+
+켜져 있고 작동하는 `sok`이 없으면 `~/.local/bin/sok`을 `~/.local/share/soksak/sok`으로 연결하고 그 링크를 지속되는 bundle의 실행 파일로 연결한다. 실제 shell에 필요할 때만 PATH 끝에 사용자 bin 폴더를 더한다. zsh와 Bash에서는 시작 파일에서 표시한 블록, fish에서는 soksak 설정 조각을 편집한다. 파일의 나머지와 권한을 보존한다. 등록이 바뀌면 새 shell에서 의도한 실행 파일을 찾아야 준비 상태로 보고한다. 끄면 소유한 링크와 블록을 제거하며 다른 등록을 보존하고 재시작 뒤에도 꺼진 상태를 유지한다. 등록 위치의 일반 파일이나 다른 링크는 충돌이다.
+
+#### Login shell과 setup call
+
 Host는 plugin 작업을 실행하듯([애플리케이션 안의 plugin 작업](installation.ko.md#애플리케이션-안의-plugin-작업)) setup 작업을 command line(`packages/sok`)의 setup library로 실행한다. 그래서 애플리케이션과 `sok setup`은 같은 code로 같은 파일을 읽고 바꾼다. `<sok>`은 애플리케이션 bundle의 `sok`이다.
 
 시스템이 애플리케이션을 위해 시작한 process는 사람의 shell이 아니라 session의 환경을 받으므로, 그 `PATH`에는 shell이 더하는 폴더가 없고 거기서 `claude` 명령을 찾지 못한다. 그래서 host는 host 시작마다 한 번 사람의 login shell, 곧 사용자 database(`getpwuid`)의 shell의 환경을 읽는다. `<shell> -l -i -c <sok> setup environment`를 실행하며(이 shell은 로그인 session이 사람의 모든 애플리케이션에 주는 변수 `HOME`, `USER`, `LOGNAME`, `SHELL`, `TMPDIR`, `SSH_AUTH_SOCK`, `__CF_USER_TEXT_ENCODING`만 host의 환경에서 가져와 시작하고 그 밖의 변수는 받지 않으므로, 시스템이 시작했든 terminal이나 다른 애플리케이션이 시작했든 출력하는 환경이 같다. 그 줄의 `environment`는 모든 sidecar 환경의 바탕이다([surface의 프로세스](sidecars.md#processes-of-a-surface)). host는 이 읽기를 시작할 때 start path 밖에서 시작하고, sidecar의 시작은 모두 그 끝을 기다린다), `<sok>`은 단계의 규칙으로 따옴표를 붙이고 명령은 인자 하나로 준다. 이 shell은 자기 process group(Go `Setpgid`, Rust `process_group(0)`)에서 표준 입력을 `/dev/null`로 하여 실행한다. `sok setup environment`가 출력한 JSON 줄의 `HOME`, `PATH`, `CLAUDE_CONFIG_DIR`를 setup library에 주므로 사람의 shell 문법은 관여하지 않는다. 읽기는 출력의 끝이나 shell의 끝이 아니라 그 줄이 표준 출력에 도착할 때 끝난다. Shell의 시작 파일이 시작한 process가 출력을 열어 둘 수 있기 때문이다. 그 뒤 host는 process group을 끝내며, 다른 모든 결과에서도 끝낸다. 표준 출력과 표준 오류는 따로 읽고, 줄 앞에 나온 시작 파일의 출력은 버린다. 줄 앞에 끝난 shell은 setup 작업을 `login shell <shell>: <reason>`로 실패시키며, reason은 종료 상태와 표준 오류의 첫 줄이다. 10 s 안에 줄을 주지 않은 shell은 `login shell <shell>: no environment within 10 s`로 실패시킨다. 입력을 기다리는 shell에는 그것을 끝내는 event가 없기 때문이다. 읽기에 실패하면 모든 sidecar 시작도 같은 문구로 실패한다. 다른 환경에서 시작한 sidecar는 애플리케이션을 시작한 process에 따라 달라지기 때문이다. Agent session 하나의 환경은 login shell과 다를 수 있다. 예를 들어 session이 `CLAUDE_CONFIG_DIR`를 정할 수 있다. 설정 창은 `PATH`가 shell이 닿는 `sok`을 정하는 login shell 환경의 part를 보여 주고, session 안의 `sok setup`은 그 session의 part를 보여 준다.
 
-환경을 읽은 뒤 host는 `sok mcp`처럼 skill을 최신으로 만들고, 쓰지 못한 skill 파일마다 파일과 이유와 함께 오류 `host.setup.skill` 하나로 기록한다. 경로 항목과 등록은 설치하지 않는다. 그것은 사람의 시스템과 agent의 설정을 바꾸므로 사람이 요청할 때만 한다.
+환경을 읽은 뒤 host는 `sok mcp`처럼 skill을 최신으로 만들고, 쓰지 못한 skill 파일마다 파일과 이유와 함께 오류 `host.setup.skill` 하나로 기록한다. Host는 시작할 때 사용자 PATH 등록을 맞춘다. 시스템 PATH 항목과 MCP 등록은 각각 명시적 명령을 쓴다.
 
 | Host call 또는 event | 뜻 |
 | --- | --- |
-| `setupState()` | 환경을 읽은 뒤, `sok setup check`가 출력하는 `{parts}`를 돌려준다 |
+| `setupState()` | 새 login shell에서 관측한 사용자 PATH 등록을 포함한 `{parts}`를 돌려준다 |
+| `setupChange({part, enabled})` | `part`가 `path`이면 사용자 PATH preference를 저장하고 적용하며 `{parts}`를 돌려주고 `setup-changed`를 보낸다 |
 | `setupInstall({parts})` | 지정한 종류의 `skill`과 `mcp`를 `sok setup install`처럼 설치하고 그 `{parts}`를 돌려준다. 애플리케이션에는 `sudo`를 위한 terminal이 없으므로 `path`는 `the path entry needs administrator rights: run <step> in a terminal`로 거부한다. Host는 setup 작업을 한 번에 하나 실행하고, 다른 것은 `another setup operation is running`으로 거부한다 |
 | `setup-changed` | `setupInstall` 뒤와 시작 시 skill 쓰기 뒤에 모든 창에 값 없이 보낸다. 그래서 모든 창이 part를 다시 읽는다 |
 

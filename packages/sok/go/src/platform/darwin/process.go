@@ -170,6 +170,10 @@ func (darwin) OpenProcessLockFile(path string) (*os.File, error) {
 	return os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o600)
 }
 
+func (darwin) OpenAgentSetupLockFile(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_RDWR|os.O_CREATE|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0o600)
+}
+
 // ReadOnlyVolume reads the flags of the file system of the path; MNT_RDONLY is the read-only mount of a disk image or of the
 // translocated copy of a downloaded application.
 func (darwin) ReadOnlyVolume(path string) (bool, error) {

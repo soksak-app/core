@@ -120,6 +120,10 @@ func (linux) OpenProcessLockFile(path string) (*os.File, error) {
 	return os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o600)
 }
 
+func (linux) OpenAgentSetupLockFile(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_RDWR|os.O_CREATE|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0o600)
+}
+
 // ReadOnlyVolume reads the flags of the file system of the path; MS_RDONLY has the value of the kernel's ST_RDONLY, which the
 // package unix does not define.
 func (linux) ReadOnlyVolume(path string) (bool, error) {

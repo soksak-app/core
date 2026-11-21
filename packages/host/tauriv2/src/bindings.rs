@@ -1105,6 +1105,16 @@ async fn setup_install(
     blocking(move || app.state::<soksak_host::setup::Setups>().install(request)).await
 }
 
+/// Applies the desired user PATH registration.
+#[tauri::command]
+async fn setup_change(
+    app: AppHandle,
+    request: Argument<soksak_host::setup::ChangeRequest>,
+) -> Result<soksak_host::setup::Parts, String> {
+    let Argument(request) = request;
+    blocking(move || app.state::<soksak_host::setup::Setups>().change(request)).await
+}
+
 /// Records or completes the durable starter installation job.
 #[tauri::command]
 async fn plugins_starter(

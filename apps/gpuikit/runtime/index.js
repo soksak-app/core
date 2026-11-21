@@ -88,6 +88,7 @@ const COMMAND = {
   pluginsStarter: "plugins_starter",
   setupState: "setup_state",
   setupInstall: "setup_install",
+  setupChange: "setup_change",
 };
 
 // The argument names differ per command. The Rust signature determines the names.
@@ -175,6 +176,7 @@ const ARG = {
   pluginsStarter: (request) => ({ request }),
   setupState: () => ({}),
   setupInstall: (request) => ({ request }),
+  setupChange: (request) => ({ request }),
 };
 
 /**

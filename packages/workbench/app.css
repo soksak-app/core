@@ -550,9 +550,9 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .set-setup{display:flex;flex-direction:column;gap:var(--set-caption-gap);min-width:0}
 .set-setup > .set-caption{margin:0;overflow-wrap:anywhere}
 .set-setup__state{font-size:var(--text-control)}
-.set-setup__step{font-size:var(--text-small);overflow-wrap:anywhere;user-select:text}
 .set-row{display:grid;grid-template-columns:var(--set-row-name-w) 1fr;align-items:center;gap:var(--set-row-gap);
   min-height:var(--set-row-h)}
+.set-row--setup-change{grid-template-columns:var(--set-row-name-w) minmax(0,1fr) auto}
 .set-row__name{font-size:var(--text-control);color:var(--muted)}
 /* In a set row, the set line uses the remaining width instead of a name cell, and the buttons attach to the right of the line. */
 .set-row:has(> .set-caption){grid-template-columns:1fr auto}

@@ -79,6 +79,23 @@ impl Platform for Windows {
         Err("path entries are not implemented on windows".into())
     }
 
+    fn user_path_state(
+        &self,
+        _environment: &crate::setup::Environment,
+    ) -> Result<crate::setup::Part, String> {
+        Err("user PATH registration is not implemented on windows".into())
+    }
+
+    fn configure_user_path(
+        &self,
+        _environment: &crate::setup::Environment,
+        _shell: &str,
+        _executable: &std::path::Path,
+        _enabled: Option<bool>,
+    ) -> Result<bool, String> {
+        Err("user PATH registration is not implemented on windows".into())
+    }
+
     fn extract_bundle(
         &self,
         _zip: &std::path::Path,

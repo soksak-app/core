@@ -68,7 +68,7 @@ const (
 	controlCaption
 	// controlMark is the mark of the common tab that the project value of its setting applies.
 	controlMark
-	// controlSetup is a row of the agent group: the name, the state, the file and the install step of a setup part.
+	// controlSetup is a row of the agent group, with the name, state, file and optional action of a setup part.
 	controlSetup
 )
 
