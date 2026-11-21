@@ -58,9 +58,11 @@ test('make repeat-node stops at the first failed run and reports its output', (t
 
 test('make repeat-node rejects a name pattern that runs no passed test, with the color of the reporter on or off', (t) => {
   const file = fixture(t, 'probe-passes');
+  const env = { ...process.env };
+  delete env.NO_COLOR;
   for (const color of ['3', '0']) {
     const result = spawnSync('make', ['repeat-node', `FILE=${file}`, 'NAME=missing probe', 'COUNT=2'], {
-      cwd: root, encoding: 'utf8', timeout: 60000, env: { ...process.env, FORCE_COLOR: color },
+      cwd: root, encoding: 'utf8', timeout: 60000, env: { ...env, FORCE_COLOR: color },
     });
     assert.notEqual(result.status, 0, result.stdout + result.stderr);
     assert.match(result.stdout, /missing or incomplete test evidence/, `FORCE_COLOR=${color}: ${result.stdout}${result.stderr}`);
@@ -69,8 +71,10 @@ test('make repeat-node rejects a name pattern that runs no passed test, with the
 
 test('make repeat-node counts passing runs when the reporter writes colors', (t) => {
   const file = fixture(t, 'probe-passes');
+  const env = { ...process.env };
+  delete env.NO_COLOR;
   const result = spawnSync('make', ['repeat-node', `FILE=${file}`, 'NAME=probe passes', 'COUNT=2'], {
-    cwd: root, encoding: 'utf8', timeout: 60000, env: { ...process.env, FORCE_COLOR: '3' },
+    cwd: root, encoding: 'utf8', timeout: 60000, env: { ...env, FORCE_COLOR: '3' },
   });
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stdout, /2 of 2 runs pass/);

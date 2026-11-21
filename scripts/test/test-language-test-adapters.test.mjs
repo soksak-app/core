@@ -289,8 +289,10 @@ test('reports expected and actual test counts without hiding mismatch', async ()
 
 test('the node case counts its tests when the reporter writes colors', { timeout: 30_000 }, async () => {
   // The node:test execution context (NODE_TEST_CONTEXT) of this check is not passed to the child check.
-  const saved = { color: process.env.FORCE_COLOR, context: process.env.NODE_TEST_CONTEXT };
+  const variables = ['FORCE_COLOR', 'NO_COLOR', 'NODE_TEST_CONTEXT'];
+  const saved = variables.map((name) => [name, process.env[name]]);
   process.env.FORCE_COLOR = '3';
+  delete process.env.NO_COLOR;
   delete process.env.NODE_TEST_CONTEXT;
   try {
     // A fixture of three tests: the count is the subject, so the check does not run the repository's own suites again.
@@ -305,7 +307,9 @@ test('the node case counts its tests when the reporter writes colors', { timeout
       assert.equal(item.actual.tests, item.expected.tests, JSON.stringify(item.actual));
     }
   } finally {
-    if (saved.color === undefined) delete process.env.FORCE_COLOR; else process.env.FORCE_COLOR = saved.color;
-    if (saved.context !== undefined) process.env.NODE_TEST_CONTEXT = saved.context;
+    for (const [name, value] of saved) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
   }
 });

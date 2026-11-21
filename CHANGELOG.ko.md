@@ -5,6 +5,7 @@
 
 ## 2026-11-21
 
+- F1031-9: Node reporter 색상 test는 하위 process의 색상을 강제할 때 NO_COLOR를 제거한다. Red에서 하위 process가 충돌하는 색상 환경을 보고한다. Green에서 상위 환경에 NO_COLOR가 설정된 상태로 test 39개가 통과한다.
 - F1031-8: Host 명세가 Go와 Rust의 사용자 PATH 파일 배치를 선언한다. Red에서 paired-host 검사가 짝이 없는 파일 세 개를 보고한다. Green에서 같은 구조 검사가 통과한다.
 - F1031-6: Sidecar buffer fixture가 process를 시작하기 전에 release pipe를 열고 정리까지 유지한다. 실패 시 기록된 fixture 출력을 보고한다. Mygo 20회와 Wails 10회의 각 실행에서 buffer test 네 개가 통과한다.
 - F1031-5: Go와 Rust host test가 실제로 실행하는 contract case를 선언한다. Rust endpoint가 role identity case를 재생하고, process identity fixture가 해당 test에서 실행되며, still capture case가 현재 창 선택 순서를 따른다. Rust test 70개와 Go test 16개가 통과한다.
