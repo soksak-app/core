@@ -429,7 +429,10 @@ test('the kit release that core pins defines the presentation mode terms', () =>
 });
 
 test('the hooks, the record targets and the release gate run the commands of the kit release', () => {
-  assert.match(read('.githooks/commit-msg'), /exec pnpm --dir "\$\(git rev-parse --show-toplevel\)" exec sok-check commits "\$1"/);
+  // The commit-msg hook refuses a node_modules that points into another checkout before it runs the kit
+// (the hook test states each part).
+assert.match(read('.githooks/commit-msg'), /root=\$\(git rev-parse --show-toplevel\) \|\| exit 1/);
+assert.match(read('.githooks/commit-msg'), /exec pnpm --dir "\$root" exec sok-check commits "\$1"/);
   assert.match(read('.githooks/pre-commit'), /exec pnpm --dir "\$root" exec sok-check docs "\$root"/);
   const makefile = read('Makefile');
   assert.doesNotMatch(makefile, /packages\/plugin-api\/(?:records|commits)-check\.js/, 'the Makefile runs a record check of the plugin API');

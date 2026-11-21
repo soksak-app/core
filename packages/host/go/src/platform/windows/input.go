@@ -3,6 +3,7 @@
 package windows
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"time"

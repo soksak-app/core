@@ -40,7 +40,10 @@ test("the agent skill describes group cards after acting on a layout", () => {
   const headings = list.map((section) => section.heading);
   const groups = headings.indexOf("Groups");
   assert.ok(groups !== -1, `the agent skill has no section Groups; its sections are ${headings.join(", ")}`);
-  assert.equal(headings[groups - 1], "Acting on a layout", "the section Groups follows the section Acting on a layout");
+  // The section of the agent role stands between them (docs/spec/agent-roles.md), so the section Groups follows the section of
+  // the agent role, which follows the section Acting on a layout.
+  assert.equal(headings[groups - 1], "Opening a tab with an agent role", "the section Groups follows the section Opening a tab with an agent role");
+  assert.equal(headings[groups - 2], "Acting on a layout", "the agent role section follows the section Acting on a layout");
   const missing = PHRASES.filter((phrase) => !list[groups].body.includes(phrase));
   assert.deepEqual(missing, [], "the section Groups does not state these phrases");
 });

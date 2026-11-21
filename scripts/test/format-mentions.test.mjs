@@ -8,6 +8,7 @@ import test from "node:test";
 const ROOT = new URL("../..", import.meta.url).pathname;
 
 const installedFormat = Number(/const InstalledFormat = (\d+)/.exec(readFileSync(join(ROOT, "packages/sok/go/src/install.go"), "utf8"))[1]);
+const projectsFormat = Number(/\tprojectsFormat = (\d+)/.exec(readFileSync(join(ROOT, "packages/host/go/src/workspace.go"), "utf8"))[1]);
 const installedFormatRust = Number(/pub const INSTALLED_FORMAT: u64 = (\d+)/.exec(readFileSync(join(ROOT, "packages/sok/rust/src/install.rs"), "utf8"))[1]);
 
 test("both command lines require the same installed format number", () => {
@@ -22,8 +23,9 @@ test("every spec mention of the installed format number matches the reader", () 
       const text = readFileSync(join(ROOT, dir, name), "utf8");
       for (const match of text.matchAll(/format must be (\d)|`format` (?:is not|이 아닌) (\d)|has `format` (\d)|`format` (\d+)과|format` (\d+)은/g)) {
         const found = Number(match.slice(1).find((group) => group !== undefined));
-        // The legitimate mentions are the refused format 1 and format 2 forms, and the current form.
-        const allowed = new Set([1, 2, installedFormat - 1, installedFormat]);
+        // The legitimate mentions are the refused format 1 and format 2 forms, the current form of the installation state and
+        // of projects.json, and the form one below each (docs/spec/installation.md#stored-data-formats).
+        const allowed = new Set([1, 2, installedFormat - 1, installedFormat, projectsFormat - 1, projectsFormat]);
         if (!allowed.has(found)) findings.push(`${dir}/${name}: format ${found}`);
       }
     }

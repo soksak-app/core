@@ -107,10 +107,14 @@ int main_sp_input_text(uintptr_t window, int phase, const char *text, long selec
 
 void main_sp_input_virtual_end(const char *reason) {
     if (reason == NULL) {
-        sp_log_error("input virtual", "main_sp_input_virtual_end requires a reason");
+        hostRunOnMain(^{
+            sp_log_error("input virtual", "main_sp_input_virtual_end requires a reason");
+        });
         return;
     }
-    // The block runs after the call returned, so it holds its own copy of the text of the reason.
-    NSString *held = [NSString stringWithUTF8String:reason];
-    hostRunOnMain(^{ sp_input_virtual_end(held.UTF8String); });
+    // The block runs after the call returned, so it copies the text of the reason for itself and ends on the main thread.
+    hostRunOnMain(^{
+        NSString *held = [NSString stringWithUTF8String:reason];
+        sp_input_virtual_end(held.UTF8String);
+    });
 }
