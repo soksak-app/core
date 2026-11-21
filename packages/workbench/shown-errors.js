@@ -41,21 +41,27 @@ function createErrorToasts(document) {
   const origins = new Map();
   const groups = new Map();
   const watchers = new Set();
+  let container = document.body;
   let holder;
+  let nextToast = 0;
 
   function changed() {
     for (const watcher of watchers) watcher();
   }
 
   function open(text, where) {
-    const node = toast(document, text, where);
+    const node = toast(document, text, where, ++nextToast);
     if (!holder) {
       holder = document.createElement("div");
       holder.id = "errorToasts";
       holder.setAttribute("role", "alert");
       delegate(holder);
-      document.body.append(holder);
+      // The surrounding dialog may also delegate its controls. A toast close belongs to this holder.
+      holder.addEventListener("click", (event) => {
+        if (event.target.closest(".error-toast__close")) event.stopPropagation();
+      });
     }
+    if (holder.parentElement !== container) container.append(holder);
     holder.append(node);
     const group = { text, node, origins: new Set(), anonymous: false };
     groups.set(text, group);
@@ -65,6 +71,7 @@ function createErrorToasts(document) {
   function close(group) {
     group.node.remove();
     groups.delete(group.text);
+    if (groups.size === 0) holder.remove();
   }
 
   function detach(origin, { group }) {
@@ -87,15 +94,16 @@ function createErrorToasts(document) {
       const existing = groups.get(text);
       if (!origin && existing?.anonymous) return;
       const group = existing ?? open(text, where);
+      let changedGroups = !existing;
       if (origin) {
-        if (previous) detach(origin, previous);
+        if (previous && detach(origin, previous)) changedGroups = true;
         origins.set(origin, { text, group });
         group.origins.add(origin);
       } else {
         group.anonymous = true;
       }
       if (origin || !existing) report(`${where}: ${text}${detail}`);
-      changed();
+      if (changedGroups) changed();
     },
 
     /** Withdraws the occurrence when its origin recovers. */
@@ -121,6 +129,13 @@ function createErrorToasts(document) {
 
     newest: () => Array.from(groups.keys()).at(-1) ?? null,
 
+    /** Moves the existing stack to the foreground content without changing its occurrences. */
+    place(root) {
+      if (root === container) return;
+      container = root;
+      if (groups.size > 0) container.append(holder);
+    },
+
     watch(fn) {
       watchers.add(fn);
       return () => watchers.delete(fn);
@@ -128,7 +143,7 @@ function createErrorToasts(document) {
   };
 }
 
-function toast(document, text, where) {
+function toast(document, text, where, id) {
   const toast = document.createElement("div");
   toast.className = "error-toast";
   toast.dataset.text = text;
@@ -138,6 +153,7 @@ function toast(document, text, where) {
   const close = document.createElement("button");
   close.type = "button";
   close.className = "error-toast__close";
+  close.dataset.key = `error-toast:${id}`;
   close.dataset.expose = "core.error.dismiss";
   close.title = "오류 닫기";
   close.setAttribute("aria-label", close.title);

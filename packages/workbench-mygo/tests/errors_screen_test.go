@@ -142,3 +142,68 @@ func hasStatusLabel(nodes []ui.ElementNode, label string) bool {
 	}
 	return false
 }
+
+func TestApplicationToastMovesIntoTheActiveNativeModal(t *testing.T) {
+	for _, modal := range []struct {
+		name, open, close, scrim string
+	}{
+		{"settings", "core.settings.open", "core.settings.close", "core.settings-modal.scrim"},
+		{"debug", "core.debug.open", "core.debug.close", "core.debug.scrim"},
+	} {
+		t.Run(modal.name, func(t *testing.T) {
+			f, _ := surfaceShell(t)
+			const failure = "the application could not finish the operation"
+			f.shell.StartFailed(errors.New(failure))
+			want := []shownRecord{{"workbench", failure}}
+			if got := f.shownRecords(); !slices.Equal(got, want) {
+				t.Fatalf("the application recorded %q, want %q", got, want)
+			}
+			assertOnlyToastClose(t, f.tester.ElementTree(), failure)
+
+			f.do(modal.open, nil)
+			scrim := element(t, f.tester, modal.scrim, "")
+			close := assertOnlyToastClose(t, f.tester.ElementTree(), failure)
+			if child, ok := keyed(scrim.Children, "core.error.dismiss", failure); !ok || child.ID != close.ID {
+				t.Fatalf("the toast close control is outside the %s focus scope", modal.name)
+			}
+
+			f.do(modal.close, nil)
+			assertOnlyToastClose(t, f.tester.ElementTree(), failure)
+
+			f.do(modal.open, nil)
+			press(t, f.tester, "core.error.dismiss", failure)
+			f.settle()
+			if got := f.status("core.workbench.error"); got != "null" {
+				t.Fatalf("clicking the modal toast close left the error %s", got)
+			}
+			element(t, f.tester, modal.scrim, "")
+			f.do(modal.close, nil)
+			if _, shown := keyed(f.tester.ElementTree(), "core.error.dismiss", failure); shown {
+				t.Fatal("the dismissed error returned outside the modal")
+			}
+		})
+	}
+}
+
+func assertOnlyToastClose(t *testing.T, tree []ui.ElementNode, text string) ui.ElementNode {
+	t.Helper()
+	var controls []ui.ElementNode
+	var collect func([]ui.ElementNode)
+	collect = func(nodes []ui.ElementNode) {
+		for _, node := range nodes {
+			if key, ok := node.Key.(workbench.Exposed); ok && key.Name == "core.error.dismiss" && key.Item == text {
+				controls = append(controls, node)
+			}
+			collect(node.Children)
+		}
+	}
+	collect(tree)
+	if len(controls) != 1 {
+		t.Fatalf("the frame has %d toast close controls for %q", len(controls), text)
+	}
+	close := controls[0]
+	if close.Inert || close.Actions&ui.ActionPress == 0 || close.Bounds.W <= 0 || close.Bounds.H <= 0 {
+		t.Fatalf("the toast close control is outside the active focus scope: %+v", close)
+	}
+	return close
+}

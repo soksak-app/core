@@ -972,10 +972,12 @@ func (s *Shell) View(c *ui.Context) {
 	outline := s.options.Declared.ChromeNumber("focus-outline", "px")
 	theme.Focus, theme.FocusRingWidth, theme.FocusRingOffset = s.palette.Focus, float32(outline), -float32(outline)
 	c.SetTheme(&theme)
+	settings := s.settingsForFrame(c, width, height)
+	dialogOpen := s.dialogOpen()
 	s.keys.Declare(c)
 	// Korean breaks at the spaces, as body of packages/workbench/app.css says. It is inherited, except by an overlay, whose root takes it.
 	root := s.binder.Watched(ui.Column(c).Size(width, height).Background(s.palette.Bg).TextColor(s.palette.Fg).KeepAll().Clip())
-	if s.dialogOpen() {
+	if dialogOpen {
 		// Kept: the workbench behind the dialog changes nothing while the dialog scrolls or types, so its blurred layer is drawn
 		// again only when it changes, and a frame of the dialog redraws the dialog alone.
 		root.Blur(s.dialogBlur()).Cache()
@@ -988,12 +990,14 @@ func (s *Shell) View(c *ui.Context) {
 		} else {
 			s.drawWorkArea(c, width, contentHeight)
 		}
-		s.drawErrorToasts(c, width)
+		if !dialogOpen {
+			s.drawErrorToasts(c, width)
+		}
 	})
 	s.drawViewsBehindDialog(c)
 	s.drawPicker(c, width, height)
-	s.drawSettings(c, width, height)
-	s.drawDebug(c)
+	s.drawSettings(c, width, height, settings)
+	s.drawDebug(c, width)
 	s.tellBackground()
 	s.forgetUnseated()
 	s.observeSections()

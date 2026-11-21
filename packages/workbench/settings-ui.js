@@ -24,7 +24,7 @@ import { matchPlugins } from "./plugin-search.js";
 import { restoreScroll, scrollPositions } from "./scroll-keep.js";
 import { setupParts } from "./setup-exposure.js";
 import { missingKinds } from "./setup-parts.js";
-import { showError } from "./shown-errors.js";
+import { errorToasts, showError } from "./shown-errors.js";
 import { hasSection, section, sectionNames } from "./registry.js";
 import {
   CHOICES, FONTS, LAYOUT_RANGES, MEMORY_SAVER_DELAY, MENU_LANGUAGES, SHAPE_RANGES, THEMES, debugOn, scopedValue, settingProject, settingProjectRoot, overridden, sourceScope,
@@ -923,6 +923,7 @@ export function openSettings() {
     card.style.visibility = "hidden";
     overlay.show(card, rect, answer, () => closeSettings());
   } else {
+    errorToasts(document).place(card);
     standIn(true, rect);
   }
 }
@@ -933,7 +934,10 @@ export function closeSettings() {
   queueMicrotask(() => drawn());
   setupParts.show(false);
   if (native) overlay.hide(card);
-  else standIn(false);
+  else {
+    errorToasts(document).place(document.body);
+    standIn(false);
+  }
   scrim.remove();
   scrim = null;
   card = null;

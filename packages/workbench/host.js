@@ -14,6 +14,7 @@ import { surfacePlugins } from "./registry.js";
 import { createClipboardBridge, createExpose, createLinkBridge, orderedSidecar } from "@soksak/plugin-api";
 import { gatedExposureReply, registerSurfacePort, registry } from "./exposure.js";
 import { logGate } from "./log-gate.js";
+import { errorToasts } from "./shown-errors.js";
 import { pageIdentity } from "./page-identity.js";
 import { surfaceSyncRequestDifference, surfaceSyncRequestWithDeclarationTable } from "./surface-sync-request.js";
 
@@ -873,6 +874,7 @@ let pick = null;
 let shown = null;
 // The show of the modal on display: a later show, also of the same element, is another one.
 let showing = null;
+let restoreErrorToasts = null;
 
 /* The state that the open modal document reported last. It is core.modal of docs/spec/exposure.md. */
 let modalDocument = null;
@@ -1046,6 +1048,15 @@ export const overlay = native ? {
       const show = {};
       showing = show;
       modalDocument = null;
+      if (el.dataset.nativeModal === "dialog") {
+        const errors = errorToasts(el.ownerDocument);
+        errors.place(el);
+        const stop = errors.watch(() => this.update(el));
+        restoreErrorToasts = () => {
+          stop();
+          errors.place(el.ownerDocument.body);
+        };
+      }
       modalChanged();
       const style = getComputedStyle(el);
       modalFrame = overlayFrame(el, rect);
@@ -1087,6 +1098,8 @@ export const overlay = native ? {
     hide(el) {
       if (el && shown !== el.id) return;
       const id = shown;
+      restoreErrorToasts?.();
+      restoreErrorToasts = null;
       shown = null;
       showing = null;
       pick = null;

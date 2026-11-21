@@ -150,7 +150,7 @@ On the mygo host a step of the workbench can run after its native window closed.
 
 ### Error presentation
 
-Application failures that are shown to the user use the same error toast component in the workbench, library, settings, card, sidebar and modal views. The active document or native view presents the component at its bottom edge and includes a close control. Plugin surfaces report operation failures through their declared application interface and the host presents the same component. Terminal program output and document content keep their own rendering.
+Application failures that are shown to the user use the same error toast component in the workbench, library, settings, card, sidebar and modal views. The active document or native view presents the toast as a compact floating card centered near the bottom. It reserves no layout space, keeps existing focus and has a close control. An open toast expires after four seconds. A redraw or a transfer to a modal does not restart its visibility period. Plugin surfaces report operation failures through their declared application interface and the host presents the same component. Terminal program output and document content keep their own rendering.
 
 The component owns the error styling and dismissal. The operation that reports an error retains its origin for logging, status and withdrawal. Closing the toast acts on the visible error and keeps its application log record. A control whose operation failed keeps its label and recovery actions available.
 

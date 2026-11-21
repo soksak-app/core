@@ -53,8 +53,8 @@ func (s *Shell) readSettingsPane() settingsPane {
 	}
 }
 
-// drawSettings draws the scrim and the card over a window of width and height.
-func (s *Shell) drawSettings(c *ui.Context, width, height float32) {
+// settingsForFrame builds the settings model before the window chooses its foreground focus scope.
+func (s *Shell) settingsForFrame(c *ui.Context, width, height float32) *settingsModel {
 	w := &s.settingsWindow
 	w.width, w.height = float64(width), float64(height)
 	s.tellLanguage(c.Locale())
@@ -62,13 +62,24 @@ func (s *Shell) drawSettings(c *ui.Context, width, height float32) {
 	// the general section, and the scope is common while no project is selected.
 	s.setupOperations.Show(w.open && w.section == "general" && (w.scope == "common" || s.settings.Project() == ""))
 	if !w.open {
-		return
+		return nil
 	}
 	model, err := s.settingsBuild()
 	if err != nil {
+		s.closeSettings()
+		s.setupOperations.Show(false)
 		s.fail(err)
+		return nil
+	}
+	return model
+}
+
+// drawSettings draws the scrim and the card over a window of width and height.
+func (s *Shell) drawSettings(c *ui.Context, width, height float32, model *settingsModel) {
+	if model == nil {
 		return
 	}
+	w := &s.settingsWindow
 	if w.moved {
 		s.clampCard()
 	}
@@ -96,6 +107,7 @@ func (s *Shell) drawSettings(c *ui.Context, width, height float32) {
 					s.drawSettingsBody(c, model, float32(cardW)-border-pane.navW, float32(s.settingsCardMost())-border-pane.headH, pane)
 				})
 			})
+			s.drawModalErrorToasts(c, width)
 		})
 	})
 }

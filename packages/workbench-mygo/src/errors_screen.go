@@ -249,6 +249,17 @@ func (s *Shell) drawErrorToasts(c *ui.Context, width float32) {
 	})
 }
 
+// drawModalErrorToasts anchors the component inside the active modal's focus scope.
+func (s *Shell) drawModalErrorToasts(c *ui.Context, width float32) {
+	height := s.toastHeight(c, width)
+	if height == 0 {
+		return
+	}
+	ui.Box(c).Absolute().Left(0).Bottom(0).Size(width, height).Children(func() {
+		s.drawErrorToasts(c, width)
+	})
+}
+
 // DrawError draws the error of the place where in its place on a screen. It draws nothing without an error.
 func DrawError(c *ui.Context, errors *ShownErrors, where string) {
 	if text, ok := errors.Text(where); ok {

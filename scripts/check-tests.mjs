@@ -408,6 +408,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1033-3.1",
+    implementation: [
+      { file: "packages/workbench/shown-errors.js", symbol: "place(root)" },
+      { file: "packages/workbench-mygo/src/errors_screen.go", symbol: "func (s *Shell) drawModalErrorToasts(" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/settings-error-toast.test.mjs", id: "the settings dialog owns the existing toast until it closes" },
+      { file: "packages/workbench/test/modal-error-toasts.test.mjs", id: "the native settings and debug copies share the foreground toast and forward its close once" },
+      { file: "packages/workbench-mygo/tests/errors_screen_test.go", id: "TestApplicationToastMovesIntoTheActiveNativeModal" },
+    ],
+    expected: "The active modal owns the dismissible shared toast without opening another occurrence.",
+    levels: ["unit"],
+  },
+  {
     id: "F1033-2",
     implementation: [
       { file: "packages/workbench/shown-errors.js", symbol: "export function errorToasts(document)" },
@@ -426,7 +440,7 @@ const FEATURE_LINKS = [
   {
     id: "F1026",
     implementation: [
-      { file: "packages/workbench/shown-errors.js", symbol: "function toast(document, text, where) {" },
+      { file: "packages/workbench/shown-errors.js", symbol: "function toast(document, text, where, id) {" },
       { file: "packages/workbench-mygo/src/errors_screen.go", symbol: "func (e *ShownErrors) DismissToast(text string) bool {" },
     ],
     tests: [
@@ -4235,7 +4249,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/src/sidebar_screen.go", symbol: "func SectionHeights(sections []SidebarSection, metrics SidebarMetrics, room float32) []float32 {" },
       { file: "packages/workbench-mygo/src/sidebar_screen.go", symbol: "func SidebarSeats(frame SidebarFrame) []SidebarSeat {" },
       { file: "packages/workbench-mygo/src/plugin_screen.go", symbol: "func DrawPluginPage(c *ui.Context, binder *Binder, page PluginPage, shown *ShownErrors, look PluginLook) {" },
-      { file: "packages/workbench-mygo/src/debug_screen.go", symbol: "func DrawDebugView(c *ui.Context, binder *Binder, view DebugView, shown *ShownErrors) {" },
+      { file: "packages/workbench-mygo/src/debug_screen.go", symbol: "func DrawDebugView(c *ui.Context, binder *Binder, view DebugView, shown *ShownErrors) ui.Element {" },
       { file: "packages/workbench-mygo/src/debug_state.go", symbol: "func ParseDebugState(file, text string, truncated bool) (DebugState, error) {" },
     ],
     tests: [

@@ -1229,14 +1229,16 @@ func (s *Shell) debugScreen() DebugView {
 }
 
 // drawDebug draws the view over the window.
-func (s *Shell) drawDebug(c *ui.Context) {
+func (s *Shell) drawDebug(c *ui.Context, width float32) {
 	d := &s.debugView
 	if !d.open {
 		return
 	}
 	ui.Overlay(c, func() {
 		target := d.tail
-		DrawDebugView(c, s.binder, s.debugScreen(), s.errors)
+		DrawDebugView(c, s.binder, s.debugScreen(), s.errors).Children(func() {
+			s.drawModalErrorToasts(c, width)
+		})
 		if target != nil && d.viewing == target {
 			d.tail = nil
 			// Post is a later UI step, after this frame resolves ScrollIntoView

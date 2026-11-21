@@ -5,8 +5,9 @@ import { test } from "node:test";
 import { JSDOM } from "jsdom";
 import { selectPageWire } from "@soksak/runtime";
 
-// The page reads the host when it imports the page modules, so the case is selected before the import. The display sends no call.
+// The page reads the host when it imports the page modules, so the case is selected before the import.
 const wire = selectPageWire("error-toasts");
+const { flushEvents } = await import("../page-log.js");
 const { reportUncaught } = await import("../page-layout.js");
 const { errorToasts } = await import("../shown-errors.js");
 const { registry } = await import("../exposure.js");
@@ -24,9 +25,8 @@ function displayed() {
 }
 
 // Each error of the workbench shows a toast at the bottom of the window, several at once, and the close control dismisses
-// one alone (docs/spec/exposure.md, core.workbench.error). The shown records go through the error display, which the case
-// of this file pins as no call, so the toasts of this test withdraw before the wire ends.
-test("the errors of the workbench show as toasts and each closes on its own", () => {
+// one alone (docs/spec/exposure.md, core.workbench.error). The records of toasts that have closed still reach the host.
+test("the errors of the workbench show as toasts and each closes on its own", async () => {
   const { show, dismiss } = errorToasts(dom.window.document);
   show("first failure");
   show("second failure");
@@ -43,6 +43,7 @@ test("the errors of the workbench show as toasts and each closes on its own", ()
   assert.equal(open[0].dataset.text, "second failure");
   assert.equal(dismiss("first failure"), false, "a closed toast is not open");
   assert.equal(dismiss("second failure"), true);
+  await flushEvents();
   wire.finish();
 });
 
