@@ -303,6 +303,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1022",
+    implementation: [{ file: "packages/plugin-api/contract/expose.json", symbol: "\"items\": []" }],
+    tests: [{ file: "packages/plugin-api/test/expose-contract.test.mjs", id: "exposure contract publishes the required cases in order" }],
+    expected: "The published snapshot case holds the item form of the specification: an item names index, role, text, rect, command and params, and an element that is not drawn leaves no item.",
+    levels: ["unit"],
+  },
+  {
     id: "F918",
     implementation: [
       { file: ".githooks/pre-commit", symbol: "if [ -L \"$root/node_modules\" ]; then" },

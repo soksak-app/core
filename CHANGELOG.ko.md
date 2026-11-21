@@ -5,6 +5,7 @@
 
 ## 2026-11-21
 
+- F1022: 공개된 exposure snapshot case를 spec의 item 형식으로 고쳤다. item은 `index`, `role`, `text`, `rect`, `command`, `params`를 적고 surface document 부분은 `inert`를 빼며, 그려지지 않은 element는 item을 남기지 않는다. builder는 이미 spec을 따르고 있었다. 검증: `packages/plugin-api/test/expose-contract.test.mjs`가 이전 case로 실패하고 10/10 통과한다.
 - F1006-5.3-1 (진행): exposure entries에 등록된 명령의 context가 요청이 surface를 이름하면 caller의 surface를 `surface`로 받는다(`packages/plugin-api/index.js`). Red: `surface`를 가진 실행에서 context test가 실패했다. Green: test가 통과한다. case `expose.snapshot.answers-the-group-of-the-document`는 바뀌지 않은 tree에서도 실패한다. F1022가 이를 기록한다.
 - F1006-12: 두 host의 role operation이 role의 매 변경마다 `role.md`와 `role.ko.md`를 쓰므로 한국어 쌍이 완성된다. 이 단위는 F1006-5.2 완료 외에 코드를 더하지 않는다.
 - F1006-5.2, 5.3-3, 5.3-4: 두 host의 workspace store가 tab의 role operation을 가진다. `role`은 저장된 기록에서 다시 세운 상태 `{role, generation, state, seq, fingerprint, path}`로 답하고, `rolePut`은 spec의 순서 단계로 role을 배정·변경·해제하며, `roleConfirm`은 자기 차례의 상태로 fingerprint를 판정하고 stale로 거부하고, `roleRemove`는 layout을 떠난 tab의 role을 끝낸다. role 파일 writer는 임시 쓰기와 rename을 순서 변경의 1·3단계로 수행한다. 검증: 각 host의 일곱 test. Go host package 570/570, Rust host는 role state, role file, roles, workspace test를 통과한다.
