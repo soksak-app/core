@@ -5,6 +5,7 @@
 
 ## 2026-11-21
 
+- F1016: `make check-preflight`가 15개 대상을 다시 통과한다. role operation과 plan의 default가 계약 이유를 적거나 거부하고, Windows input platform이 거부의 errors import를 얻고, skill group 순서가 agent role 절을 담고, workflows test가 보호된 commit-msg hook을 맞추고, format mentions이 host reader의 projects format을 허용하고, native virtual end가 reason을 main thread에서 복사해 거부를 보고한다. 검증: preflight 실행과 host Go package 570/570.
 - F1016-11: 거부된 용어를 이름한 commit을 `docs(spec): Align the stable identity, held rule and terms (#F1006-1)`로 다시 썼다. main의 tree는 backup tag `backup/main-before-F1016-11`과 byte가 같고 `make check-commits`가 push 범위를 통과한다. role operation의 엄격한 walk가 다른 형태의 저장 layout을 파일과 그 내용으로 거부하고, role operation·plan·toast의 모든 default가 계약 이유를 적는다. 검증: fallback 검사 통과, host Go package 570/570, Rust role state test 7/7.
 - F1026: workbench의 각 오류가 창 아래 toast로 보인다. 서로 다른 문장마다 하나씩이고 닫기 조작은 새 `core.error.dismiss {text}`를 실행한다. 여러 오류가 함께 보이고 출처의 철회가 그 toast를 닫으며 `core.workbench.error`는 가장 최근 열린 toast를 이름한다. 검증: page test와 mygo toast test가 통과하고 mygo package 1157/1157.
 - F982-12: 두 CLI의 `sok input virtual-end [window] --reason R`가 선언된 entry로 가상 key window를 끝낸다. case `sok-parameters`가 이 요청을 재생한다. 검증: 양쪽 CLI test 통과.
