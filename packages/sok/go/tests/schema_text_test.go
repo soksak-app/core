@@ -12,6 +12,7 @@ import (
 
 // TestTheSchemaTextMatchesEachCaseOfTheSubset replays docs/spec/cases/schema-subset.json, which the reader and the Rust matcher also
 // replay: MatchesSchemaText matches each value against its schema exactly when the case says so.
+// contract: cli.command.schema-subset-matcher
 func TestTheSchemaTextMatchesEachCaseOfTheSubset(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	data, err := os.ReadFile(filepath.Join(filepath.Dir(here), "..", "..", "..", "..", "docs", "spec", "cases", "schema-subset.json"))

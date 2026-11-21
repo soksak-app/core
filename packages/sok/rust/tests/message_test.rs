@@ -66,6 +66,7 @@ fn entries(folder: &Path) -> Vec<String> {
     names
 }
 
+// contract: cli.message.report-text-byte-limit
 #[test]
 fn send_refuses_a_text_one_byte_over_the_limit_with_no_file() {
     let player = play_case("sok-message-send-sender");
@@ -90,6 +91,7 @@ fn send_refuses_a_text_one_byte_over_the_limit_with_no_file() {
     );
 }
 
+// contract: cli.message.report-text-byte-limit
 #[test]
 fn send_accepts_a_text_of_exactly_the_limit() {
     let player = play_case("sok-message-send-sender");
@@ -108,6 +110,7 @@ fn send_accepts_a_text_of_exactly_the_limit() {
     assert_eq!(written.len(), LIMIT);
 }
 
+// contract: cli.message.send-writes-complete-request
 #[test]
 fn send_writes_the_whole_text_under_the_sender_name_and_leaves_no_temporary_file() {
     let player = play_case("sok-message-send-terminal");
@@ -150,6 +153,7 @@ fn send_writes_the_whole_text_under_the_sender_name_and_leaves_no_temporary_file
     );
 }
 
+// contract: cli.message.report-writes-only-text
 #[test]
 fn send_reply_writes_the_text_alone_as_a_report() {
     let player = play_case("sok-message-send-terminal");
@@ -174,6 +178,7 @@ fn send_reply_writes_the_text_alone_as_a_report() {
     assert_eq!(written, "done 안녕", "a report holds the text alone");
 }
 
+// contract: cli.message.send-requires-a-terminal-folder
 #[test]
 fn send_refuses_a_folder_of_no_terminal_without_reply_with_no_file() {
     let player = play_case("sok-message-send-sender");
@@ -341,6 +346,7 @@ fn send_to_another_folder_has_no_receiver() {
 }
 
 /// A report that answers a message names the message by its token and writes the receipt into the folder of the reporting surface.
+// contract: cli.message.report-writes-the-receipt
 #[test]
 fn send_reply_with_answers_names_the_report_and_writes_the_receipt() {
     let player = play_case("sok-message-send-terminal");
@@ -378,6 +384,7 @@ fn send_reply_with_answers_names_the_report_and_writes_the_receipt() {
 }
 
 /// A token that holds a dot is refused before any file is written.
+// contract: cli.message.report-refuses-invalid-answers
 #[test]
 fn send_reply_with_answers_refuses_a_token_with_a_dot_with_no_file() {
     let config = Folder::new("message-dot-config");
@@ -411,6 +418,7 @@ fn send_reply_with_answers_refuses_a_token_with_a_dot_with_no_file() {
 }
 
 /// The receipt needs the folder of the reporting surface, so a missing folder refuses the report before it is written.
+// contract: cli.message.report-refuses-invalid-answers
 #[test]
 fn send_reply_with_answers_refuses_a_missing_receipt_folder_with_no_file() {
     let player = play_case("sok-message-send-sender");
@@ -439,6 +447,7 @@ fn send_reply_with_answers_refuses_a_missing_receipt_folder_with_no_file() {
 }
 
 /// --answers belongs to a report, so it without --reply is refused with no file.
+// contract: cli.message.report-refuses-invalid-answers
 #[test]
 fn send_answers_without_reply_is_refused_with_no_file() {
     let home = Folder::new("message-noreply-home");

@@ -1,6 +1,6 @@
 //! The surface of a process (docs/spec/sidecars.md#process-identity), checked with real processes. The process sidecar is this
-//! test binary: a script in the folder of the declaration runs the test `process_sidecar_role` of this binary with
-//! PROCESS_SIDECAR set, and that test starts real shells for surfaces and answers the process queries. The test harness writes its
+//! test binary: a script in the folder of the declaration runs the test with PROCESS_SIDECAR set. The fixture branch starts
+//! real shells for surfaces and answers the process queries. The test harness writes its
 //! own lines to standard output, so the script moves standard output to descriptor 3, where the role writes its lines, and sends
 //! the output of the harness to standard error.
 
@@ -42,11 +42,7 @@ fn end(mut child: Child) {
 /// The process sidecar: a body {"start": "surface"} starts a shell for the surface whose child sleeps and answers {"root",
 /// "child"}; {"start": "helper"} starts a sleep for no surface and answers {"helper"}; a process query is answered from the
 /// processes that it started, which it records before it answers the line that started them.
-#[test]
-fn process_sidecar_role() {
-    if std::env::var_os(PROCESS_SIDECAR).is_none() {
-        return;
-    }
+fn process_sidecar_role() -> ! {
     // SAFETY: the script of the role opens descriptor 3 on the standard output of the sidecar, and nothing else owns it.
     let mut output = unsafe { std::fs::File::from_raw_fd(3) };
     let mut write = |value: Value| {
@@ -109,7 +105,7 @@ fn process_sidecar_role() {
 /// Declares the process sidecar in `folder` with the declaration `manifest`, whose executable is `role`.
 fn process_sidecars(folder: &Path, manifest: &str) -> Sidecars<SidecarRecorder> {
     let script = format!(
-        "#!/bin/sh\nexec 3>&1 1>&2\n{PROCESS_SIDECAR}=1 exec '{}' --exact process_sidecar_role --nocapture --test-threads=1\n",
+        "#!/bin/sh\nexec 3>&1 1>&2\n{PROCESS_SIDECAR}=1 exec '{}' --exact the_surface_of_a_process_is_the_surface_of_the_nearest_sidecar_child --nocapture --test-threads=1\n",
         std::env::current_exe().unwrap().display()
     );
     let role = folder.join("role");
@@ -159,6 +155,9 @@ fn refusal(result: Result<String, ProcessSurfaceError>) -> String {
 // contract: sidecars.process-identity.answers-the-surface-of-the-process-chain
 #[test]
 fn the_surface_of_a_process_is_the_surface_of_the_nearest_sidecar_child() {
+    if std::env::var_os(PROCESS_SIDECAR).is_some() {
+        process_sidecar_role();
+    }
     let folder = folder::Folder::new();
     let sidecars = process_sidecars(folder.path(), WITH_PROCESSES);
     let first = started_pids(&sidecars, "tab-a", "surface");

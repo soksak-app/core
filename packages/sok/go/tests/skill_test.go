@@ -216,6 +216,7 @@ func TestSkillInstallReportsAFailedWrite(t *testing.T) {
 // TestTheSkillAndTheInstructionsNameTheArrangementCommands checks that the skill and the instructions of the MCP server name the plan
 // and the apply of an arrangement and the move of a tab beside the other layout operations, and state that the layout is read again and
 // compared with the request after a change (docs/spec/cli.md#agent-skill).
+// contract: cli.skill.arrangement-guidance
 func TestTheSkillAndTheInstructionsNameTheArrangementCommands(t *testing.T) {
 	skill := skillSource(t)
 	var server struct {

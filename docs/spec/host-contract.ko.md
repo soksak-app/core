@@ -1181,6 +1181,7 @@ fn invalid_json_closes_connection() {
 | `cli.identity.build-identifier` | `dev` 플래그 build는 `app.soksak.<wails, mygo 또는 tauri>.dev`를 쓰고, 진단 build를 포함한 다른 build는 `app.soksak.<wails, mygo 또는 tauri>`를 쓴다. | all |
 | `cli.command.host-command-without-page` | `host.` command는 `owner`가 `host`인 `exposure.list`로 검사되므로, workbench가 노출 목록에 답하지 않는 동안에도 `command.run`으로 실행된다. | all |
 | `cli.command.flags-from-schema` | 선언된 command는 창, surface, 그리고 선언된 schema로 flag에서 바꾼 매개변수와 함께 `command.run`으로 실행된다. 텍스트, 숫자, 정수, boolean, enum 값, nullable type의 `null`, JSON 객체와 배열, `--`로 시작하며 `=` 뒤에 준 값이며, `--params`는 객체 전체를 준다. | all |
+| `cli.command.schema-subset-matcher` | CLI schema matcher가 공유 schema subset case와 같은 값을 수락하거나 거절한다. | all |
 | `cli.command.rejects-undeclared-or-invalid-values` | 선언되지 않은 flag, schema와 맞지 않는 값, 값이 없는 flag, 값이 따라오는 boolean, 매개변수 flag와 함께 쓴 `--params`, 선언되지 않은 command는 `command.run`을 보내기 전에 종료 상태 2로 끝난다. | all |
 | `cli.commands.lists-declared-commands` | `sok commands`는 `exposure.list`의 `commands` 목록을 애플리케이션이 선언한 순서대로 출력한다. | all |
 | `cli.path.writes-and-removes-the-entry` | `sok path install`은 실행 중인 `sok`의 폴더를 담은 `<paths directory>/<identifier>`를 쓰고 파일과 폴더를 출력한다. 되풀이해도 같은 파일이다. `sok path remove`는 그것을 지우며 없어도 성공한다. 쓰기 실패는 파일과 `run sudo sok path install`을 보고한다. | all |
@@ -1188,6 +1189,7 @@ fn invalid_json_closes_connection() {
 | `cli.exposures.query-filters-entries` | `sok exposures --kind <kind> --query <text>`와 `sok commands --query <text>`는 이름이나 설명이 query의 각 단어를 일부로 가진 그 종류의 항목을 `exposure.list` 순서로 전체 선언과 함께 출력한다. `A`-`Z`는 `a`-`z`와 맞고 다른 모든 문자는 자기 자신에만 맞으며, 빈 query나 space만인 query는 모든 항목을 출력한다. | all |
 | `cli.agents.embeds-the-sources` | `sok`의 skill 글과 MCP 도구 목록은 `packages/sok/go/src/agents/SKILL.md`의 byte, `packages/sok/go/src/agents/mcp.json`의 JSON과 같다. Front matter는 skill 이름을 `soksak`으로, 설명을 1024 Unicode scalar value 이하로 두고, instructions는 UTF-8로 4096 byte 이하이며, 비 ASCII fixture 글에서도 같이 센다. | all |
 | `cli.skill.prints-the-text` | `sok skill print`는 skill 글만 쓴다. | all |
+| `cli.skill.arrangement-guidance` | Skill과 MCP 안내가 배치 및 tab 이동 command를 이름으로 안내하고 변경 뒤 layout을 읽도록 한다. | all |
 | `cli.skill.writes-only-existing-agent-folders` | Test home에서 `sok skill install`은 `<home>/.claude`, `$CLAUDE_CONFIG_DIR`, `<home>/.agents` 가운데 symbolic link를 거쳐서라도 폴더인 것 아래에만 `skills/soksak/SKILL.md`를 쓰고, skill 폴더가 한 폴더로 풀리는 agent folder에는 파일 하나를 쓰며, 빠진 `skills/soksak` 폴더를 만들고, 파일을 mode 0644로 쓰고, 각 파일과 함께 `written`을 출력한다. | all |
 | `cli.skill.rewrites-only-a-differing-file` | Byte가 skill 글과 같은 skill 파일은 같은 파일, 같은 수정 시각으로 그대로 두고 `current`로 출력한다. 다른 파일은 같은 폴더의 임시 파일을 rename해 바꾸며, skill 글을 담고, 임시 파일을 남기지 않고, `written`으로 출력한다. 동시에 실행한 두 설치는 둘 다 skill 글로 끝나고 임시 파일을 남기지 않는다. 되풀이하면 아무것도 쓰지 않는다. | all |
 | `cli.skill.fails-without-an-agent-folder` | Agent folder가 없으면 `sok skill install`은 `no agent folder: neither <home>/.claude nor <home>/.agents is a directory; sok skill print writes the skill to standard output`로 1로 끝나고 아무것도 만들지 않는다. `HOME`이 없으면 `HOME is not set`으로 1로 끝난다. | all |
@@ -1236,6 +1238,12 @@ fn invalid_json_closes_connection() {
 | `cli.message.send-reports-the-hold-of-the-receiver` | Folder `<root>/.soksak/messages/<surface>`로의 `sok message send`는 `surface.window`, `exposure.snapshot`, surface의 status `<plugin>.messages`로 얻은 `receiver` `{surface, plugin, held}`와 함께 `{path, receiver}`를 출력하며, 어떤 window에도 없는 surface와 `null` status에는 `null`을 주고, `held`가 없는 status에는 쓰기 뒤에 쓴 파일을 밝히는 error로 실패한다([delivery](messaging.md#delivery)). | all |
 | `cli.message.send-into-another-folder-has-no-receiver` | terminal의 folder가 아닌 folder로의 `sok message send --reply`는 보고를 쓰고 `receiver` `null`을 출력한다. | all |
 | `cli.message.send-requires-the-surface-of-its-process` | 실행 중인 애플리케이션이 없으면 `sok message send`는 `message send requires a running application, which answers the surface of this process`로, `agent.surface`가 거부하면 `message send: <거부의 글>`로 실패하며, 환경에 `CODEX_THREAD_ID`가 있으면 그 뒤에 `; start codex with --no-daemon, so that the commands of its agent run in processes of the surface`가 붙는다. 어느 쪽도 파일을 쓰지 않는다. | all |
+| `cli.message.report-text-byte-limit` | 64 KiB인 report 글을 전부 쓴다. 한 byte를 넘기면 거절하고 파일을 만들지 않는다. | all |
+| `cli.message.send-writes-complete-request` | 요청은 글 전체와 report 요청을 발신자와 token 이름의 파일에 쓰고 임시 파일을 남기지 않는다. | all |
+| `cli.message.send-requires-a-terminal-folder` | 터미널 폴더 형식에 맞지 않는 경로로 보낸 요청은 파일을 쓰지 않고 거부한다. | all |
+| `cli.message.report-writes-only-text` | 응답 token이 없는 report는 발신자의 report 이름으로 글만 쓴다. | all |
+| `cli.message.report-writes-the-receipt` | 응답 token이 있는 report는 그 token을 이름에 쓰고 발신 terminal 폴더에 receipt를 쓴다. | all |
+| `cli.message.report-refuses-invalid-answers` | Report는 점이 있는 응답 token이나 receipt 폴더가 없으면 거부한다. 요청은 응답 token을 거부한다. 거부 결과는 파일을 쓰지 않는다. | all |
 | `cli.context.prints-the-agent-context` | `sok context`와 도구 `agent_context`는 `agent.surface`의 surface와 `surface.window`의 창을 담은 `{configDirectory, surface, window}`를 주고, `agent.surface`가 1014로 거부하면 surface와 window는 `null`이다. | all |
 | `cli.mcp.search-lists-the-whole-exposure` | Query 없는 `exposure_search`의 page들과 `--query` 없는 `sok exposures`는 창의 `exposure.list` 항목을 그 순서로 정확히 담고, `total`은 그 수다. | all |
 | `cli.describe.lists-every-entry` | `sok describe`와 `window_describe`의 모든 page의 row를 합치면 snapshot의 각 항목을 owner마다 한 번씩, 그리고 `unregistered`의 항목을 담고, `total`은 그 수이며, 첫 page는 `window`, `layout`, `plugins`, `agent`를 담는다. | all |

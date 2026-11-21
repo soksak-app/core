@@ -1,6 +1,6 @@
 {
   "name": "sok-capture-still",
-  "description": "The capture command lists the windows, then sends diagnostics.capture.still for the only window and prints the path that the host answers.",
+  "description": "The capture command asks for the surface of its process. A refusal selects the only window, and the command prints the path returned by diagnostics.capture.still.",
   "replay": true,
   "variables": {
     "title": { "type": "string", "example": "soksak" },
@@ -10,10 +10,12 @@
     "path": { "type": "string", "example": "/config/captures/still-main-1.png" }
   },
   "steps": [
-    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
-    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } },
-    { "send": { "jsonrpc": "2.0", "id": 2, "method": "diagnostics.capture.still", "params": { "window": "main" } } },
-    { "reply": { "jsonrpc": "2.0", "id": 2, "result": { "path": "$path" } } },
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "agent.surface" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "error": { "code": 1014, "message": "the process has no surface" } } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } },
+    { "send": { "jsonrpc": "2.0", "id": 3, "method": "diagnostics.capture.still", "params": { "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 3, "result": { "path": "$path" } } },
     { "close": "client" }
   ]
 }

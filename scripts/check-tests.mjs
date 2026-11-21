@@ -376,6 +376,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1031-5",
+    implementation: [
+      { file: "docs/spec/host-contract.md", symbol: "cli.command.schema-subset-matcher" },
+      { file: "docs/spec/cases/endpoint/sok-capture-still.json", symbol: '"method": "agent.surface"' },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/endpoint_test.rs", id: "scripted_role_identity" },
+      { file: "packages/sok/rust/tests/sok_test.rs", id: "capture_requests_a_still_image_in_a_diagnostic_build" },
+      { file: "packages/sok/go/tests/message_test.go", id: "TestSendReplyWithAnswersNamesTheReportAndWritesTheReceipt" },
+      { file: "packages/sok/rust/tests/message_test.rs", id: "send_reply_with_answers_names_the_report_and_writes_the_receipt" },
+    ],
+    expected: "The CLI and host tests exercise the current surface resolution and message contracts.",
+    levels: ["unit"],
+  },
+  {
     id: "F1026",
     implementation: [
       { file: "packages/workbench/page-layout.js", symbol: "function errorToast(document, text, source) {" },

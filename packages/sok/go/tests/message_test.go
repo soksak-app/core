@@ -63,6 +63,7 @@ func messageName(t *testing.T, stdout string) string {
 	return reply.Path
 }
 
+// contract: cli.message.report-text-byte-limit
 func TestSendRefusesATextOneByteOverTheLimitWithNoFile(t *testing.T) {
 	home := t.TempDir()
 	folder := t.TempDir()
@@ -79,6 +80,7 @@ func TestSendRefusesATextOneByteOverTheLimitWithNoFile(t *testing.T) {
 	}
 }
 
+// contract: cli.message.report-text-byte-limit
 func TestSendAcceptsATextOfExactlyTheLimit(t *testing.T) {
 	home := t.TempDir()
 	folder := t.TempDir()
@@ -96,6 +98,7 @@ func TestSendAcceptsATextOfExactlyTheLimit(t *testing.T) {
 	}
 }
 
+// contract: cli.message.send-writes-complete-request
 func TestSendWritesTheWholeTextUnderTheSenderNameAndLeavesNoTemporaryFile(t *testing.T) {
 	home := t.TempDir()
 	root := terminalFolders(t, "app-2")
@@ -127,6 +130,7 @@ func TestSendWritesTheWholeTextUnderTheSenderNameAndLeavesNoTemporaryFile(t *tes
 	}
 }
 
+// contract: cli.message.report-writes-only-text
 func TestSendReplyWritesTheTextAloneAsAReport(t *testing.T) {
 	home := t.TempDir()
 	root := terminalFolders(t, "app-2")
@@ -149,6 +153,7 @@ func TestSendReplyWritesTheTextAloneAsAReport(t *testing.T) {
 	}
 }
 
+// contract: cli.message.send-requires-a-terminal-folder
 func TestSendRefusesAFolderOfNoTerminalWithoutReplyWithNoFile(t *testing.T) {
 	home := t.TempDir()
 	folder := t.TempDir()
@@ -269,6 +274,7 @@ func TestSendToAnotherFolderHasNoReceiver(t *testing.T) {
 
 // The report that answers a message names the message by its token and writes the receipt into the folder of the reporting surface
 // (docs/spec/messaging.md#report-request).
+// contract: cli.message.report-writes-the-receipt
 func TestSendReplyWithAnswersNamesTheReportAndWritesTheReceipt(t *testing.T) {
 	home := t.TempDir()
 	root := terminalFolders(t, "app-1", "app-2")
@@ -301,6 +307,7 @@ func TestSendReplyWithAnswersNamesTheReportAndWritesTheReceipt(t *testing.T) {
 }
 
 // A token that holds a dot is refused before any file is written (docs/spec/messaging.md#report-request).
+// contract: cli.message.report-refuses-invalid-answers
 func TestSendReplyWithAnswersRefusesATokenWithADotWithNoFile(t *testing.T) {
 	home := t.TempDir()
 	root := terminalFolders(t, "app-1", "app-2")
@@ -323,6 +330,7 @@ func TestSendReplyWithAnswersRefusesATokenWithADotWithNoFile(t *testing.T) {
 
 // A report with an answered token needs the folder of the reporting surface for its receipt, so a missing folder refuses the
 // report before it is written (docs/spec/messaging.md#report-request).
+// contract: cli.message.report-refuses-invalid-answers
 func TestSendReplyWithAnswersRefusesAMissingReceiptFolderWithNoFile(t *testing.T) {
 	home := t.TempDir()
 	root := terminalFolders(t, "app-2")
@@ -340,6 +348,7 @@ func TestSendReplyWithAnswersRefusesAMissingReceiptFolderWithNoFile(t *testing.T
 }
 
 // --answers belongs to a report, so it without --reply is refused with no file (docs/spec/messaging.md#report-request).
+// contract: cli.message.report-refuses-invalid-answers
 func TestSendAnswersWithoutReplyIsRefusedWithNoFile(t *testing.T) {
 	home := t.TempDir()
 	root := terminalFolders(t, "app-1", "app-2")

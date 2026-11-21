@@ -115,6 +115,7 @@ func TestFailedOrRetiredFrameDoesNotNotifyItsWindowWatcher(t *testing.T) {
 
 // A frame of a raster that a later configuration replaced is refused, and the supplier gets the refusal as its answer, because the
 // supplier draws no next frame until the frame in flight is answered.
+// contract: images.transfer.rejects-stale-raster
 func TestARefusedFrameIsAnsweredToItsSupplier(t *testing.T) {
 	images := NewImages()
 	key := ImageKey{Surface: "tab-refused", Name: "view"}

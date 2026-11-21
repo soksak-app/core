@@ -247,6 +247,7 @@ fn skill_install_reports_a_failed_write() {
 /// The skill and the instructions of the MCP server name the plan and the apply of an arrangement and the move of a
 /// tab beside the other layout operations, and state that the layout is read again and compared with the request
 /// after a change (docs/spec/cli.md#agent-skill).
+// contract: cli.skill.arrangement-guidance
 #[test]
 fn the_skill_and_the_instructions_name_the_arrangement_commands() {
     let skill = soksak_sok::agents::SKILL;

@@ -27,7 +27,6 @@ func invalidParams(t *testing.T, params map[string]any, err error) {
 	}
 }
 
-// contract: endpoint.input.pointer-missing-coordinate, endpoint.input.pointer-numeric-button-rejected, endpoint.input.pointer-middle-button-rejected, endpoint.input.pointer-clicks-range, endpoint.input.pointer-clicks-only-on-press-and-release, endpoint.input.pointer-unknown-field-rejected, endpoint.input.pointer-activate-only-on-move, endpoint.input.pointer-activate-must-be-bool, endpoint.input.pointer-phase-and-scroll-decoding, endpoint.input.pointer-name
 // contract: endpoint.input.virtual-end-requires-reason
 func TestVirtualEndRejectsAMissingReason(t *testing.T) {
 	for _, params := range []map[string]any{{"window": "main"}, {"window": "main", "reason": ""}} {
@@ -39,6 +38,7 @@ func TestVirtualEndRejectsAMissingReason(t *testing.T) {
 	}
 }
 
+// contract: endpoint.input.pointer-missing-coordinate, endpoint.input.pointer-numeric-button-rejected, endpoint.input.pointer-middle-button-rejected, endpoint.input.pointer-clicks-range, endpoint.input.pointer-clicks-only-on-press-and-release, endpoint.input.pointer-unknown-field-rejected, endpoint.input.pointer-activate-only-on-move, endpoint.input.pointer-activate-must-be-bool, endpoint.input.pointer-phase-and-scroll-decoding, endpoint.input.pointer-name
 func TestPointerInputRejectsInvalidParams(t *testing.T) {
 	rejected := []map[string]any{
 		{"window": "main", "x": 1, "y": 2, "phase": "down", "button": 0},

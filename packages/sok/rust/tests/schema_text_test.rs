@@ -3,6 +3,7 @@
 
 use serde_json::Value;
 
+// contract: cli.command.schema-subset-matcher
 #[test]
 fn the_schema_matcher_matches_each_case_of_the_subset() {
     let path = concat!(

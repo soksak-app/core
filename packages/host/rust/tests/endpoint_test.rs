@@ -294,6 +294,12 @@ fn scripted_agent_surface() {
     endpoint_case::play("scripted_agent_surface", "agent-surface");
 }
 
+// contract: endpoint.agent-surface.answers-the-surface-of-the-connection
+#[test]
+fn scripted_role_identity() {
+    endpoint_case::play("scripted_role_identity", "role-identity");
+}
+
 // contract: endpoint.agent-surface.refusal-is-1014
 #[test]
 fn scripted_agent_surface_refused() {
@@ -476,6 +482,7 @@ const SCRIPTED: &[&str] = &[
     "name-errors",
     "no-result-recorded",
     "reply-after-peer-close",
+    "role-identity",
     "round-trip-page-params",
     "surface-window",
     "surface-window-in-no-window",
