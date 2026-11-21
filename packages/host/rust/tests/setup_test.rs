@@ -218,7 +218,7 @@ fn lines(parts: &Parts) -> (Vec<String>, Option<String>) {
     (lines, path)
 }
 
-// contract: setup.host.reads-the-login-shell-environment, setup.host.start-brings-the-skill-current
+// contract: setup.host.reads-the-login-shell-environment, setup.host.start-brings-the-skill-current, setup.host.start-brings-the-agent-parts-current
 #[test]
 fn setup_reads_the_login_shell_environment_and_brings_the_skill_current() {
     let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
@@ -244,7 +244,15 @@ fn setup_reads_the_login_shell_environment_and_brings_the_skill_current() {
             file.display()
         );
     }
-    assert_eq!(h.commands(), Vec::<String>::new(), "the start ran commands");
+    // The start registers the sok of the bundle with the claude command once and runs no sudo.
+    assert_eq!(
+        h.commands(),
+        [format!(
+            "claude mcp add --scope user soksak -- {} mcp",
+            h.sok.display()
+        )],
+        "the start ran other commands"
+    );
     let step = format!("'{}'", h.sok.display());
     let (got, path) = lines(&setups.state().unwrap());
     // The user PATH registration applies on macOS and preserves the existing command.
@@ -263,15 +271,15 @@ fn setup_reads_the_login_shell_environment_and_brings_the_skill_current() {
                 differing.display()
             ),
             format!(
-                "mcp | {} | missing | absent | {step} mcp install",
+                "mcp | {} | ok |  | {step} mcp install",
                 h.config.join(".claude.json").display()
             ),
             format!(
-                "hook | {} | missing | absent | {step} setup install hook",
+                "hook | {} | ok |  | {step} setup install hook",
                 h.home().join(".claude/settings.json").display()
             ),
             format!(
-                "hook | {} | missing | absent | {step} setup install hook",
+                "hook | {} | ok |  | {step} setup install hook",
                 h.config.join("settings.json").display()
             ),
         ]
@@ -384,7 +392,58 @@ fn setup_records_a_skill_file_that_cannot_be_written() {
         recorded,
         [json!(["error", { "file": file.display().to_string(), "reason": "permission denied" }])]
     );
-    assert_eq!(h.commands(), Vec::<String>::new(), "the start ran commands");
+    assert!(
+        h.commands()
+            .iter()
+            .all(|command| !command.starts_with("sudo ")),
+        "the start ran {:?}",
+        h.commands()
+    );
+}
+
+// contract: setup.host.start-brings-the-agent-parts-current
+#[test]
+fn setup_records_an_agent_part_that_the_start_cannot_install() {
+    let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let logs = folder::Folder::new();
+    let log = records::start_writer(logs.path());
+    log.flush().unwrap();
+    let earlier = records::read_events(&records::event_log_path(logs.path())).len();
+    let h = Home::new("");
+    // SAFETY: SERIAL holds every test of this binary that reads or changes the environment.
+    unsafe { std::env::set_var("SETUP_FIXTURE_FAIL", "add") };
+    let (setups, changed) = h.setups();
+    setups.start();
+    changed.recv().unwrap();
+    // SAFETY: as above.
+    unsafe { std::env::remove_var("SETUP_FIXTURE_FAIL") };
+    log.flush().unwrap();
+    soksak_host::event_record::use_host_event_log(None);
+    let recorded: Vec<Value> = records::read_events(&records::event_log_path(logs.path()))
+        .into_iter()
+        .skip(earlier)
+        .filter(|event| event["event"] == "host.setup.install")
+        .collect();
+    let prefix = format!(
+        "setup parts are not current: mcp {}",
+        h.config.join(".claude.json").display()
+    );
+    assert!(
+        recorded.len() == 1
+            && recorded[0]["level"] == "error"
+            && recorded[0]["fields"]["reason"]
+                .as_str()
+                .is_some_and(|reason| reason.starts_with(&prefix)),
+        "the start recorded {recorded:?}, not one error that names the mcp part"
+    );
+    // The hooks do not depend on the registration, so the start installs them although the registration failed.
+    let state = serde_json::to_value(setups.state().unwrap()).unwrap();
+    for part in state["parts"].as_array().unwrap() {
+        assert!(
+            part["part"] != "hook" || part["state"] == "ok",
+            "the start left the hook part {part}"
+        );
+    }
 }
 
 // contract: setup.host.reads-the-login-shell-environment
@@ -483,26 +542,25 @@ fn setup_installs_the_skill_and_the_registration_one_at_a_time() {
             )
         })
         .collect();
-    // The skill files were written by the start, which ends before the install takes the environment.
-    // The install lists every part as the check reads it afterwards; hook is not named, so it stays missing.
+    // The install lists every part as the check reads it afterwards. The start, which ends before the install takes the environment,
+    // wrote the skill files, the registration and the hooks, so the install changes nothing.
     assert_eq!(
         states,
         [
             "skill ok false",
             "skill ok false",
-            "mcp ok true",
-            "hook missing false",
-            "hook missing false"
+            "mcp ok false",
+            "hook ok false",
+            "hook ok false"
         ]
     );
-    let registration = format!(
-        "claude mcp add --scope user soksak -- {} mcp",
-        h.sok.display()
-    );
-    assert!(
-        h.commands().contains(&registration),
-        "the install ran {:?}",
-        h.commands()
+    assert_eq!(
+        h.commands(),
+        [format!(
+            "claude mcp add --scope user soksak -- {} mcp",
+            h.sok.display()
+        )],
+        "the start and the install ran other commands"
     );
     // One setup-changed after the skill write at start and one after the install.
     changed.recv().unwrap();

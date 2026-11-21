@@ -95,7 +95,8 @@ func NewSetups(sokPath, identifier string, processes LoginShellProcesses, change
 		ready: make(chan struct{})}, nil
 }
 
-// Start reads the login shell environment, reconciles user PATH, brings the skill current, and sends setup-changed.
+// Start reads the login shell environment, reconciles user PATH, brings the skill, the MCP registration and the hooks current, and
+// sends setup-changed.
 // The work runs off the start path. A later call does nothing.
 func (s *Setups) Start() {
 	s.begin.Do(func() {
@@ -105,6 +106,7 @@ func (s *Setups) Start() {
 				s.pathEnv, s.pathErr = s.reconcileUserPath(s.env, nil)
 			}
 			s.bringSkillCurrent()
+			s.bringAgentPartsCurrent()
 			close(s.ready)
 			s.changed()
 		})
@@ -144,6 +146,19 @@ func (s *Setups) bringSkillCurrent() {
 		return
 	}
 	EmitHost(LevelError, "host.setup.skill", map[string]any{"file": nil, "reason": err.Error()})
+}
+
+// bringAgentPartsCurrent installs the MCP registration and the hooks that are not current, as `sok setup install mcp hook` does, so
+// each start registers the sok of this bundle, and records a part that it could not install as one error host.setup.install.
+func (s *Setups) bringAgentPartsCurrent() {
+	// silent: a failed read of the environment is recorded once, as host.setup.skill by bringSkillCurrent.
+	setup, err := s.environmentSetup()
+	if err != nil {
+		return
+	}
+	if _, err := setup.Install([]string{"mcp", "hook"}, false); err != nil {
+		EmitHost(LevelError, "host.setup.install", map[string]any{"reason": err.Error()})
+	}
 }
 
 // SidecarEnvironment returns the environment of a sidecar: the variables of the login shell without the ones that a shell sets for

@@ -124,7 +124,8 @@ impl Setups {
         })
     }
 
-    /// Reads the environment of the login shell once, then brings the skill current and sends setup-changed. The host calls it
+    /// Reads the environment of the login shell once, then brings the skill, the MCP registration and the hooks current and sends
+    /// setup-changed. The host calls it
     /// at its start, and the read runs on a thread of its own, off the start path; a later call does nothing.
     pub fn start(&self) {
         let inner = self.inner.clone();
@@ -140,6 +141,7 @@ impl Setups {
                     }
                 }
                 inner.bring_skill_current(&environment);
+                inner.bring_agent_parts_current(&environment);
                 // default: the state is one value that a holder sets whole, so a holder that ended by a panic left no partial value.
                 *inner.ready.lock().unwrap_or_else(PoisonError::into_inner) = Some(environment);
                 inner.ended.notify_all();
@@ -357,6 +359,27 @@ impl Inner {
                 "host.setup.skill",
                 json!({ "file": null, "reason": error }),
             ),
+        }
+    }
+
+    /// Installs the MCP registration and the hooks that are not current, as `sok setup install mcp hook` does, so each start registers
+    /// the sok of this bundle, and records a part that it could not install as one error host.setup.install. A failed read of the
+    /// environment is recorded once, as host.setup.skill by bring_skill_current.
+    fn bring_agent_parts_current(&self, environment: &Result<Environment, String>) {
+        let Ok(environment) = environment else {
+            return;
+        };
+        let error = match setup::install(&self.setup(environment), &[Kind::Mcp, Kind::Hook], false)
+        {
+            Ok(installed) => installed.error,
+            Err(error) => Some(error),
+        };
+        if let Some(reason) = error {
+            crate::event_record::emit_host(
+                Level::Error,
+                "host.setup.install",
+                json!({ "reason": reason }),
+            );
         }
     }
 

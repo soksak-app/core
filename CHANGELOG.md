@@ -3,6 +3,10 @@
 
 [한국어](CHANGELOG.ko.md)
 
+## 2026-11-22
+
+- F1034: Each start of a host installs the MCP registration and the hooks that are not current, as `sok setup install mcp hook` does, so a start of the application from another folder registers the `sok` of its own bundle, and a part that it could not install, such as a `sok` on a read-only volume, is recorded as one error `host.setup.install`; the system PATH entry keeps its explicit step. Red: the Go and Rust starts ran no registration, left both hooks missing and recorded no failure. Green: six Go and eight Rust setup tests pass.
+
 ## 2026-11-21
 
 - F1031-15: The Go check of persistent connection records starts after the first sample of the sampler and holds its interval at an hour, so a sample that read the processes before the stop is not stored after it. Red: one of three runs with an interval of 1 ms reported two samples after the stop. Green: five of five runs pass.

@@ -3,6 +3,10 @@
 
 [English](CHANGELOG.md)
 
+## 2026-11-22
+
+- F1034: Host는 시작할 때마다 `sok setup install mcp hook`처럼 현재가 아닌 MCP registration과 hook을 install한다. 그래서 다른 폴더에서 시작한 application은 자기 bundle의 `sok`을 등록하고, read-only volume의 `sok`처럼 install할 수 없는 part는 오류 `host.setup.install` 하나로 기록한다. 시스템 PATH 항목은 명시적 단계를 유지한다. Red: Go와 Rust의 시작이 registration을 실행하지 않았고 두 hook을 missing으로 남겼으며 실패를 기록하지 않았다. Green: Go setup test 6개와 Rust setup test 8개가 통과한다.
+
 ## 2026-11-21
 
 - F1031-15: Persistent connection 기록의 Go 검사는 sampler의 첫 sample 뒤에 시작하고 간격을 한 시간으로 둔다. 그래서 stop 전에 process를 읽은 sample이 stop 뒤에 저장되지 않는다. Red: 간격 1 ms의 세 번 중 한 번이 stop 뒤 sample 둘을 보고했다. Green: 다섯 번 모두 통과한다.

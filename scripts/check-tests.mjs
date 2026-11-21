@@ -453,6 +453,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1034",
+    implementation: [
+      { file: "packages/host/go/src/setup.go", symbol: "func (s *Setups) bringAgentPartsCurrent() {" },
+      { file: "packages/host/rust/src/setup.rs", symbol: "fn bring_agent_parts_current(&self, environment: &Result<Environment, String>) {" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/setup_test.go", id: "TestSetupReadsTheLoginShellEnvironmentAndBringsTheSkillCurrent" },
+      { file: "packages/host/go/tests/setup_test.go", id: "TestSetupRecordsAnAgentPartThatTheStartCannotInstall" },
+      { file: "packages/host/rust/tests/setup_test.rs", id: "setup_reads_the_login_shell_environment_and_brings_the_skill_current" },
+      { file: "packages/host/rust/tests/setup_test.rs", id: "setup_records_an_agent_part_that_the_start_cannot_install" },
+    ],
+    expected: "Each start of a host installs the MCP registration and the hooks that are not current for the sok of its bundle, and records a part that it could not install as one error host.setup.install.",
+    levels: ["unit"],
+  },
+  {
     id: "F1026",
     implementation: [
       { file: "packages/workbench/shown-errors.js", symbol: "function toast(document, text, where, id) {" },

@@ -37,6 +37,7 @@ var eventClasses = map[string]Class{
 	"host.project.removal_allowed":           ClassLifecycle,
 	"host.relaunch.start":                    ClassLifecycle,
 	"host.run.unrecorded-end":                ClassLifecycle,
+	"host.setup.install":                     ClassLifecycle,
 	"host.setup.skill":                       ClassLifecycle,
 	"host.sidecar.connect":                   ClassLifecycle,
 	"host.sidecar.disconnect":                ClassLifecycle,

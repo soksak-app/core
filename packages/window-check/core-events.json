@@ -3846,6 +3846,24 @@
       },
       "description": "The connection to a persistent service ended. end is how it ended without a protocol violation: eof when the service closed its output, unfinished line when the output ended in a line without a line break, read error with the reader's text, or violation when the service violated the protocol. waiting is the number of requests that waited for the connection when it ended. The exit status of the service is not recorded: the host does not own the process of a persistent service."
     },
+    "host.setup.install": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "error",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "description": "The host could not bring the MCP registration or the hooks current after it read the environment of the login shell: reason names each part that is not current, followed by the error of each install that failed (docs/spec/cli.md#agents-in-the-application)."
+    },
     "host.setup.skill": {
       "layer": "host",
       "class": "lifecycle",

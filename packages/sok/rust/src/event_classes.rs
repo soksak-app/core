@@ -79,6 +79,7 @@ pub fn class_of(name: &str) -> Option<Class> {
         "host.project.removal_allowed" => Some(Class::Lifecycle),
         "host.relaunch.start" => Some(Class::Lifecycle),
         "host.run.unrecorded-end" => Some(Class::Lifecycle),
+        "host.setup.install" => Some(Class::Lifecycle),
         "host.setup.skill" => Some(Class::Lifecycle),
         "host.sidecar.connect" => Some(Class::Lifecycle),
         "host.sidecar.disconnect" => Some(Class::Lifecycle),

@@ -193,7 +193,7 @@ func waitExited(t *testing.T, pid int) {
 	}
 }
 
-// contract: setup.host.reads-the-login-shell-environment, setup.host.start-brings-the-skill-current
+// contract: setup.host.reads-the-login-shell-environment, setup.host.start-brings-the-skill-current, setup.host.start-brings-the-agent-parts-current
 func TestSetupReadsTheLoginShellEnvironmentAndBringsTheSkillCurrent(t *testing.T) {
 	// The start files print before the line, and a process that they start holds the output open after it.
 	h := newSetupHome(t, "echo start-file output\necho start-file error >&2\nsleep 600 &\necho $! > \"$HOME/background.pid\"\n")
@@ -215,8 +215,9 @@ func TestSetupReadsTheLoginShellEnvironmentAndBringsTheSkillCurrent(t *testing.T
 			t.Fatalf("the start did not bring %s current: %v", file, err)
 		}
 	}
-	if commands := h.commands(t); len(commands) != 0 {
-		t.Fatalf("the start ran %q", commands)
+	// The start registers the sok of the bundle with the claude command once and runs no sudo.
+	if commands, want := h.commands(t), []string{"claude mcp add --scope user soksak -- " + h.sok + " mcp"}; !slices.Equal(commands, want) {
+		t.Fatalf("the start ran %q, not %q", commands, want)
 	}
 	parts, err := setups.State()
 	if err != nil {
@@ -230,9 +231,9 @@ func TestSetupReadsTheLoginShellEnvironmentAndBringsTheSkillCurrent(t *testing.T
 	want := []string{
 		"skill | " + filepath.Join(h.home, ".claude", "skills", "soksak", "SKILL.md") + " | ok |  | " + step + " skill install",
 		"skill | " + differing + " | ok |  | " + step + " skill install",
-		"mcp | " + filepath.Join(h.config, ".claude.json") + " | missing | absent | " + step + " mcp install",
-		"hook | " + filepath.Join(h.home, ".claude", "settings.json") + " | missing | absent | " + step + " setup install hook",
-		"hook | " + filepath.Join(h.config, "settings.json") + " | missing | absent | " + step + " setup install hook",
+		"mcp | " + filepath.Join(h.config, ".claude.json") + " | ok |  | " + step + " mcp install",
+		"hook | " + filepath.Join(h.home, ".claude", "settings.json") + " | ok |  | " + step + " setup install hook",
+		"hook | " + filepath.Join(h.config, "settings.json") + " | ok |  | " + step + " setup install hook",
 	}
 	// The user PATH registration applies on macOS and preserves the existing command.
 	if len(parts.Parts) > 0 && parts.Parts[0].Part == "path" {
@@ -318,8 +319,42 @@ func TestSetupRecordsASkillFileThatCannotBeWritten(t *testing.T) {
 	if !slices.Equal(recorded, want) {
 		t.Fatalf("the start recorded %q, not %q", recorded, want)
 	}
-	if commands := h.commands(t); len(commands) != 0 {
-		t.Fatalf("the start ran %q", commands)
+	for _, command := range h.commands(t) {
+		if strings.HasPrefix(command, "sudo ") {
+			t.Fatalf("the start ran %q", command)
+		}
+	}
+}
+
+// contract: setup.host.start-brings-the-agent-parts-current
+func TestSetupRecordsAnAgentPartThatTheStartCannotInstall(t *testing.T) {
+	log := support.UseEventLog(t)
+	h := newSetupHome(t, "")
+	t.Setenv("SETUP_FIXTURE_FAIL", "add")
+	setups, changed := h.setups(t)
+	setups.Start()
+	<-changed
+	if err := log.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	var recorded []string
+	for _, event := range readEventLog(t, log.Path()) {
+		if event["event"] == "host.setup.install" {
+			recorded = append(recorded, fmt.Sprintf("%s %v", event["level"], event["fields"].(map[string]any)["reason"]))
+		}
+	}
+	if len(recorded) != 1 || !strings.HasPrefix(recorded[0], "error setup parts are not current: mcp "+filepath.Join(h.config, ".claude.json")) {
+		t.Fatalf("the start recorded %q, not one error that names the mcp part", recorded)
+	}
+	// The hooks do not depend on the registration, so the start installs them although the registration failed.
+	parts, err := setups.State()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, part := range parts.Parts {
+		if part.Part == "hook" && part.State != "ok" {
+			t.Fatalf("the start left the hook part %+v", part)
+		}
 	}
 }
 
@@ -393,13 +428,13 @@ func TestSetupInstallsTheSkillAndTheRegistrationOneAtATime(t *testing.T) {
 			states = append(states, fmt.Sprintf("%s %s %v", part.Part, part.State, *part.Changed))
 		}
 	}
-	// The install lists every part as the check reads it afterwards; hook is not named, so it stays missing.
-	if want := []string{"skill ok false", "skill ok false", "mcp ok true", "hook missing false", "hook missing false"}; !slices.Equal(states, want) {
-		// The skill files were written by the start, which ends before the install takes the environment.
+	// The install lists every part as the check reads it afterwards. The start, which ends before the install takes the environment,
+	// wrote the skill files, the registration and the hooks, so the install changes nothing.
+	if want := []string{"skill ok false", "skill ok false", "mcp ok false", "hook ok false", "hook ok false"}; !slices.Equal(states, want) {
 		t.Fatalf("the install answered %q, not %q", states, want)
 	}
-	if want := "claude mcp add --scope user soksak -- " + h.sok + " mcp"; !slices.Contains(h.commands(t), want) {
-		t.Fatalf("the install ran %q, not %s", h.commands(t), want)
+	if commands, want := h.commands(t), []string{"claude mcp add --scope user soksak -- " + h.sok + " mcp"}; !slices.Equal(commands, want) {
+		t.Fatalf("the start and the install ran %q, not %q", commands, want)
 	}
 	// One setup-changed after the skill write at start and one after the install.
 	<-changed
