@@ -164,6 +164,7 @@ func (s *Shell) register() {
 	s.registerProjectClose()
 	// The role handshake of a tab (docs/spec/agent-roles.md#change-of-a-running-agent): the ordered change and the confirmation
 	// run in the workspace store of the host; the confirmation names no tab, because it runs on the surface of its caller.
+	s.registry.StatusOnSurface("core.tab.role", s.roleStatus)
 	s.registry.CommandLater("core.tab.role", func(raw json.RawMessage, answer func(any, error)) {
 		var params struct {
 			Tab  string  `json:"tab"`
@@ -178,7 +179,10 @@ func (s *Shell) register() {
 			role = *params.Role
 		}
 		s.calls.CallInOrder("role", "workspace", map[string]any{"kind": "rolePut", "tab": params.Tab, "role": role},
-			func(value any, err error) { answer(value, err) })
+			func(value any, err error) {
+				s.setRoleStatus(params.Tab, value)
+				answer(value, err)
+			})
 	})
 	s.registry.CommandLaterOnSurface("core.tab.role.confirm", func(raw json.RawMessage, surface string, answer func(any, error)) {
 		var params struct {
@@ -189,7 +193,10 @@ func (s *Shell) register() {
 			return
 		}
 		s.calls.CallInOrder("role confirm", "workspace", map[string]any{"kind": "roleConfirm", "tab": surface, "fingerprint": params.Fingerprint},
-			func(value any, err error) { answer(value, err) })
+			func(value any, err error) {
+				s.setRoleStatus(surface, value)
+				answer(value, err)
+			})
 	})
 
 	s.registry.CommandLater("core.window.new", func(_ json.RawMessage, answer func(any, error)) {

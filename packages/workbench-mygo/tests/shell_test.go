@@ -540,6 +540,8 @@ func (h *storedHost) workspace(argument json.RawMessage) (any, error) {
 		return nil, nil
 	case "tabState", "tabSession":
 		return nil, nil
+	case "role":
+		return map[string]any{"role": nil, "generation": nil, "state": nil, "seq": 0, "fingerprint": nil, "path": nil}, nil
 	case "rolePut":
 		return map[string]any{"role": request.Role, "generation": 1, "state": "pending", "seq": 1,
 			"fingerprint": "0123456789abcdef", "path": ""}, nil

@@ -292,6 +292,13 @@ test("a refused core.layout.open fails with its error and leaves the layout", { 
   // host, so the store refusal names the missing initialisation.
   await refuses(run("core.tab.role", { tab: "tab-aaaaaa", role: "a" }), "projects.rolePut: the projects are not initialised");
   await refuses(run("core.tab.role.confirm", { fingerprint: "0123456789abcdef" }), "core.tab.role.confirm requires the surface of its caller");
+  // The role status of a tab is read with the surface of its request (docs/spec/agent-roles.md#tab-role-state).
+  const statusOf = (params) => registry.handle({ id: 1, method: "status.get", params }).then((reply) => {
+    if (reply.error) throw new Error(reply.error.message);
+    return reply.result;
+  });
+  await refuses(statusOf({ name: "core.tab.role" }), "status.get for core.tab.role requires a surface");
+  await refuses(statusOf({ name: "core.tab.role", surface: "tab-aaaaaa" }), "projects.roleOf: the projects are not initialised");
   assert.deepEqual(layout(), before);
   // A card narrower than two cards of the minimum size cannot split across, and the refusal names the size that a half would get.
   arrange({ cut: "x", kids: [

@@ -98,7 +98,7 @@ export function createRegistry({ call = null, report = null } = {}) {
     // Work to wait for after a core command ran. The document passes the drawing of the plane, so a command that changed the layout replies after it is drawn.
     settled: () => undefined,
     // default: without a composition source no applied frame is known, and a view rectangle is refused by forward.
-    surfaceFrame: () => null,
+    surfaceFrame: () => null, onStoredChange: null,
     // default: without a modal source every core element has the rectangle of its own document.
     elementPlace: () => null,
     // default: without a modal source no element is inert. It takes null for the document of a surface.
@@ -263,6 +263,28 @@ export function createRegistry({ call = null, report = null } = {}) {
     const name = params?.name;
     const kind = METHOD_KINDS[method];
     const found = kind && typeof name === "string" ? declared.get(declarationKey(kind, name)) : undefined;
+    // A core status that a request names a surface for is a watch of that surface: the value is read from the core entry with
+    // the surface, and the change of the stored workspace refreshes each open watch (docs/spec/exposure.md, the surface member
+    // of a request), so a status of a tab holds the state of that tab alone.
+    if (found && !surfaceName(name) && kind === "status" && params.surface !== undefined && (method === "status.watch" || method === "status.unwatch")) {
+      const key = watchKey(name, params.surface);
+      if (method === "status.unwatch") {
+        const watch = following.get(key);
+        if (watch?.core) {
+          if (watch.local.size) watch.external = false;
+          else following.delete(key);
+        }
+        return null;
+      }
+      if (!following.has(key)) {
+        following.set(key, { surface: params.surface, requested: params.surface, name, version: 0, external: true, local: new Set(), core: true });
+        startCoreRefresh();
+      }
+      following.get(key).external = true;
+      const first = await core.answer("status.get", { name, surface: params.surface });
+      deliver({ surface: params.surface, name, value: first, version: following.get(key).version + 1 });
+      return null;
+    }
     // For a name that a state module registered, this document answers a request that names no surface (docs/spec/exposure.md#choosing-a-surface).
     const page = found && params.surface === undefined ? pageOf(kind, name) : null;
     // The entries of this document send a watched value as (name, value, version); the host takes the value of a watch that names

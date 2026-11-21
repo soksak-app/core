@@ -451,6 +451,12 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   memory = memorySaver;
   registry.watch(watchLayout);
   // On this host the workbench is the main page: a start is its page identity, and it started at its time origin.
+  // The role handshake of a tab (docs/spec/agent-roles.md#tab-role-state): the status is read from the host store with the
+  // surface of its request, and a change of the stored workspace refreshes every open watch (exposure.js).
+  status("core.tab.role", (surface) => {
+    if (surface === undefined) throw new Error("status.get for core.tab.role requires a surface");
+    return projects.roleOf(surface);
+  }, () => () => {});
   status("core.window.workbench", () => ({
     start: pageIdentity,
     startedAt: performance.timeOrigin,
@@ -870,6 +876,8 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
       return record ? shift(record.applied, planeOrigin()) : null;
     },
     elementPlace: overlayElementRect, elementInert: behindDialog, unloaded: (surface) => memory.unloaded(surface), leftOut: surfaceLeftOut,
+    // The store of the workspace refreshes the core watches of a surface, because a role change of any window notifies it.
+    onStoredChange: projects.onStoredWorkspaceChange,
     snapshotParts: () => ({
       layout: layoutDescription(),
       plugins: pluginDescriptions(),

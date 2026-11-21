@@ -94,6 +94,15 @@ const spaceTaken = (id) => projects.some((project) => project.spaces.some((space
 /** Whether a tab of a stored layout of a known project holds the tab id `id`; a persistent session belongs to such a tab. */
 export const storedTabTaken = (id) => projects.some((project) => projectTabs(project).has(id));
 
+/** Reads the role status of a tab through the host store. The store exists after initialise. */
+export const roleOf = (tab) => {
+  if (!store) throw new Error("projects.roleOf: the projects are not initialised");
+  return store.role(tab);
+};
+
+/** Runs fn at each change of the stored workspace, which a role change of any window notifies; null before initialise. */
+export const onStoredWorkspaceChange = (fn) => store?.onChange(fn) ?? null;
+
 /** Sets the agent role of a tab through the host store (docs/spec/agent-roles.md#tab-role-state). The store exists after initialise. */
 export const rolePut = (tab, role) => {
   if (!store) throw new Error("projects.rolePut: the projects are not initialised");

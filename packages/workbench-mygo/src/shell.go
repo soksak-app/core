@@ -8,6 +8,7 @@ import (
 	"math"
 	"path"
 	"slices"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -328,6 +329,9 @@ func (record *projectRecord) take(members map[string]any) error {
 
 // Shell is the workbench of one window.
 type Shell struct {
+	// roles holds the last role status of each tab, and rolesMu guards it (roles_status.go).
+	rolesMu sync.Mutex
+	roles   map[string]map[string]any
 	// transcript records the host calls of the workbench while diagnostics.transcript is on, and replyHold holds the exposure
 	// replies of the surfaces that diagnostics.surface.hold names.
 	transcript *Transcript

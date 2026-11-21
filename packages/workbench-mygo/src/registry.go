@@ -7,6 +7,7 @@ import (
 	"math"
 	"regexp"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,6 +29,10 @@ type LaterCommand func(params json.RawMessage, answer func(value any, err error)
 
 // Status reads the current value of a declared status.
 type Status func() any
+
+// SurfaceStatus reads a status of the surface of its request, which a status of a tab takes as its tab
+// (docs/spec/agent-roles.md#tab-role-state).
+type SurfaceStatus func(surface string) any
 
 // The codes of the failures of a request (docs/spec/exposure.md#errors).
 const (
@@ -78,15 +83,17 @@ type watch struct {
 // Registry holds the commands and the statuses of the workbench. Registering a name that is not declared is a programming error,
 // which make check-exposure also finds in the sources, so it panics.
 type Registry struct {
-	declared     *Declarations
-	mu           sync.Mutex
-	commands     map[string]Command
-	later        map[string]LaterCommand
-	laterSurface map[string]LaterSurfaceCommand
-	methods      map[string]LaterCommand
-	statuses     map[string]Status
-	watches      map[string]*watch
-	elements     Elements
+	declared       *Declarations
+	mu             sync.Mutex
+	commands       map[string]Command
+	later          map[string]LaterCommand
+	laterSurface   map[string]LaterSurfaceCommand
+	methods        map[string]LaterCommand
+	statuses       map[string]Status
+	statusSurface  map[string]SurfaceStatus
+	surfaceWatches map[string]*watch
+	watches        map[string]*watch
+	elements       Elements
 	// params holds the params of the command of each element that the binder keyed in the last frame, by its key.
 	params   map[Exposed]any
 	surfaces surfaceTable
@@ -103,7 +110,7 @@ type Registry struct {
 // NewRegistry returns an empty registry of the names of declared.
 func NewRegistry(declared *Declarations) *Registry {
 	return &Registry{declared: declared, commands: map[string]Command{}, later: map[string]LaterCommand{}, methods: map[string]LaterCommand{}, statuses: map[string]Status{},
-		laterSurface: map[string]LaterSurfaceCommand{}, watches: map[string]*watch{}, params: map[Exposed]any{}, surfaces: newSurfaceTable()}
+		laterSurface: map[string]LaterSurfaceCommand{}, statusSurface: map[string]SurfaceStatus{}, surfaceWatches: map[string]*watch{}, watches: map[string]*watch{}, params: map[Exposed]any{}, surfaces: newSurfaceTable()}
 }
 
 // Command registers the handler of the declared command name.
@@ -156,6 +163,19 @@ func (r *Registry) Method(method string, run LaterCommand) {
 }
 
 // Status registers the reader of the declared status name.
+// StatusOnSurface registers the read of the declared status name that answers the surface of its request.
+func (r *Registry) StatusOnSurface(name string, read SurfaceStatus) {
+	if !r.declared.Statuses[name] {
+		panic(fmt.Sprintf("status %s is not declared", name))
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.statuses[name] != nil || r.statusSurface[name] != nil {
+		panic(fmt.Sprintf("status %s is already registered", name))
+	}
+	r.statusSurface[name] = read
+}
+
 func (r *Registry) Status(name string, read Status) {
 	if !r.declared.Statuses[name] {
 		panic(fmt.Sprintf("status %s is not declared", name))
@@ -261,6 +281,9 @@ func (r *Registry) Names() (commands, statuses []string) {
 		commands = append(commands, name)
 	}
 	for name := range r.statuses {
+		statuses = append(statuses, name)
+	}
+	for name := range r.statusSurface {
 		statuses = append(statuses, name)
 	}
 	sort.Strings(commands)
@@ -419,14 +442,36 @@ func (r *Registry) dispatch(method string, params json.RawMessage, changed Chang
 	if !r.isDeclared(kind, *name) {
 		return nil, Refuse(UnknownName, "unknown %s %s", kind, *name)
 	}
+	surface := ""
+	if held, has := fields["surface"]; has {
+		if json.Unmarshal(held, &surface) != nil {
+			surface = ""
+		}
+	}
+	r.mu.Lock()
+	onSurface := r.statusSurface[*name]
+	r.mu.Unlock()
+	if onSurface != nil && surface == "" && (method == "status.get" || method == "status.watch") {
+		return nil, Refuse(InvalidParams, "%s for %s requires a surface", method, *name)
+	}
 	switch method {
 	case "status.get":
+		if onSurface != nil {
+			return onSurface(surface), nil
+		}
 		return r.Read(*name)
 	case "status.watch":
+		if onSurface != nil {
+			return nil, r.watchSurface(*name, surface, onSurface, changed)
+		}
 		return nil, r.watch(*name, changed)
 	case "status.unwatch":
 		r.mu.Lock()
-		delete(r.watches, *name)
+		if onSurface != nil {
+			delete(r.surfaceWatches, surfaceWatchKey(*name, surface))
+		} else {
+			delete(r.watches, *name)
+		}
 		r.mu.Unlock()
 		return nil, nil
 	case "command.run":
@@ -675,6 +720,45 @@ func (r *Registry) watch(name string, changed Changed) error {
 	return r.send(name, current, read())
 }
 
+// surfaceWatchKey is the key of a watch of a status of one surface: the name and the surface.
+func surfaceWatchKey(name, surface string) string {
+	return name + "\x00" + surface
+}
+
+// watchSurface watches a status of one surface: the first read answers at once, and Changed re-reads it.
+func (r *Registry) watchSurface(name, surface string, read SurfaceStatus, changed Changed) error {
+	key := surfaceWatchKey(name, surface)
+	r.mu.Lock()
+	current := r.surfaceWatches[key]
+	if current != nil {
+		current.changed = changed
+	}
+	r.mu.Unlock()
+	if current != nil {
+		changed(name, current.value)
+		return nil
+	}
+	current = &watch{changed: changed}
+	r.mu.Lock()
+	r.surfaceWatches[key] = current
+	r.mu.Unlock()
+	return r.send(name, current, read(surface))
+}
+
+// WatchedSurfaces names the surfaces whose watch of the status name is open.
+func (r *Registry) WatchedSurfaces(name string) []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var surfaces []string
+	for key := range r.surfaceWatches {
+		if held, surface, found := strings.Cut(key, "\x00"); found && held == name {
+			surfaces = append(surfaces, surface)
+		}
+	}
+	sort.Strings(surfaces)
+	return surfaces
+}
+
 // Watched tells whether a receiver watches the status name.
 func (r *Registry) Watched(name string) bool {
 	r.mu.Lock()
@@ -699,18 +783,28 @@ func (r *Registry) send(name string, watched *watch, value any) error {
 // Changed sends the watched statuses whose value changed. The workbench calls it in a step, after a change of its state.
 func (r *Registry) Changed() error {
 	type entry struct {
-		name    string
-		watched *watch
-		read    Status
+		name     string
+		watched  *watch
+		read     Status
+		onSource SurfaceStatus
+		surface  string
 	}
 	r.mu.Lock()
-	entries := make([]entry, 0, len(r.watches))
+	entries := make([]entry, 0, len(r.watches)+len(r.surfaceWatches))
 	for name, watched := range r.watches {
-		entries = append(entries, entry{name, watched, r.statuses[name]})
+		entries = append(entries, entry{name: name, watched: watched, read: r.statuses[name]})
+	}
+	for key, watched := range r.surfaceWatches {
+		name, surface, _ := strings.Cut(key, "\x00")
+		entries = append(entries, entry{name: name, watched: watched, onSource: r.statusSurface[name], surface: surface})
 	}
 	r.mu.Unlock()
 	var failures []error
 	for _, each := range entries {
+		if each.onSource != nil {
+			failures = append(failures, r.send(each.name, each.watched, each.onSource(each.surface)))
+			continue
+		}
 		failures = append(failures, r.send(each.name, each.watched, each.read()))
 	}
 	return errors.Join(failures...)

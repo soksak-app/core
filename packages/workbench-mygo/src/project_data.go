@@ -245,6 +245,7 @@ func (s *Shell) workspaceChanged() {
 		if err := s.refreshSettings(value); err != nil {
 			s.fail(err)
 		}
+		s.refreshRoles()
 	})
 }
 

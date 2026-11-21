@@ -1,6 +1,33 @@
 {
   "exposes": {
     "status": [
+    {
+      "name": "core.tab.role",
+      "description": "The role handshake of a tab: the role, the generation, the state pending or ready or null without a role, the change count of this session of the host, the fingerprint of the role file and its path, null without a role.",
+      "schema": {
+        "type": ["object", "null"],
+        "properties": {
+          "role": {
+            "type": ["string", "null"]
+          },
+          "generation": {
+            "type": ["integer", "null"]
+          },
+          "state": {
+            "type": ["string", "null"]
+          },
+          "seq": {
+            "type": "integer"
+          },
+          "fingerprint": {
+            "type": ["string", "null"]
+          },
+          "path": {
+            "type": ["string", "null"]
+          }
+        }
+      }
+    },
       {
         "name": "core.window.workbench",
         "description": "The workbench of the window: start identifies one start of the workbench and startedAt is its start time in milliseconds since the epoch (the page identity and the time origin of the main page on a host with a main page); readyState; visibility, hidden while the window is minimized or not shown; scheme, the color scheme of the workbench (dark or light); background, whether the workbench is drawn with the background blur of an open modal; scale, the backing scale of the window; width and height, the content size of the window in points.",

@@ -1186,6 +1186,53 @@ func TestADividerDoubleClickRunsTheCentreCommand(t *testing.T) {
 	}
 }
 
+// The role status of a tab is read with the surface of its request and a watch of it answers the state of that tab alone
+// (docs/spec/agent-roles.md#tab-role-state).
+func TestTheRoleStatusIsReadWithTheSurfaceOfItsRequest(t *testing.T) {
+	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
+	r := f.shell.Registry()
+	read := func(params string) (any, error) {
+		var held any
+		done := make(chan error, 1)
+		r.Reply("status.get", json.RawMessage(params), nil, func(value any, err error) {
+			held = value
+			done <- err
+		})
+		if err := <-done; err != nil {
+			return nil, err
+		}
+		return held, nil
+	}
+	if _, err := read(`{"name":"core.tab.role"}`); err == nil || !strings.Contains(err.Error(), "requires a surface") {
+		t.Fatalf("a read without a surface failed with %v", err)
+	}
+	answer, err := read(`{"name":"core.tab.role","surface":"tab-aaaaaa"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	held, _ := answer.(map[string]any)
+	if held["role"] != nil || held["state"] != nil || held["seq"] != 0 {
+		t.Fatalf("the status of a tab without a role is %v", answer)
+	}
+	// A change of this window updates the status: the answer of the role operation is the status of its tab.
+	// The answer of the role operation is the status of its tab, and the read inside its callback observes it.
+	f.shell.Registry().RunLater("core.tab.role", json.RawMessage(`{"tab":"tab-aaaaaa","role":"reviewer"}`), func(_ any, err error) {
+		if err != nil {
+			t.Errorf("the role change answered %v", err)
+			return
+		}
+		answer, err := read(`{"name":"core.tab.role","surface":"tab-aaaaaa"}`)
+		if err != nil {
+			t.Errorf("the read after the change answered %v", err)
+			return
+		}
+		held, _ := answer.(map[string]any)
+		if held["role"] != "reviewer" || held["state"] != "pending" {
+			t.Errorf("the status after the change is %v", answer)
+		}
+	})
+}
+
 // The role commands of a tab run through the workspace store of the host (docs/spec/agent-roles.md#tab-role-state). The
 // confirmation names no tab: it runs on the surface of its caller, and a request without a surface is refused.
 func TestTheRoleCommandsRunThroughTheWorkspaceStore(t *testing.T) {

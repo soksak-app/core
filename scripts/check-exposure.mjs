@@ -76,7 +76,7 @@ export function auditWorkbenchNames(exposes, sources) {
 // The calls of a Go source of the mygo workbench that register a status or a command. A registration through another call reports its
 // name as not registered, so a new function of registration is added here.
 const WORKBENCH_REGISTRATIONS = {
-  status: /\.Status\(\s*"([^"]+)"/g,
+  status: /\.Status(?:OnSurface)?\(\s*"([^"]+)"/g,
   commands: /(?:\.Command(?:Later(?:OnSurface)?)?|\b(?:command|later|act|laterAct|laterCommand|windowAct|sectionCommand|change)(?:\[[^\]]*\])?)\(\s*(?:\w+,\s*)?"([^"]+)"/g,
 };
 // The entries that the view bridge registers in a surface document of the mygo workbench.

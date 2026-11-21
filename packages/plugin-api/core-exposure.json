@@ -1,5 +1,6 @@
 {
   "status": [
+    "core.tab.role",
     "core.window.workbench",
     "core.screen",
     "core.workbench.error",
