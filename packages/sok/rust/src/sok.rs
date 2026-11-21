@@ -73,6 +73,8 @@ commands:
   input gesture [window] [--pointer NAME] [--button left|right] [--clicks N] --points X,Y[;X,Y]...
                             sends down at the first point, a drag to each later point and up at the last on one connection
   input key [window] --key K --phase down|up [--text T] [--modifiers shift,control,option,command]
+  input virtual-end [window] --reason R
+                            ends the virtual key window of the window with the reason R, so a check ends the input state that it made
   input text [window] --phase mark|insert|unmark [--text T] [--selection START,LENGTH] [--replacement START,LENGTH]
                             gives one step of a composition to the text input client of the key responder, as an input method does
   debug query [--channel C] [--level L] [--class C] [--layer L] [--event E] [--event-prefix P] [--surface S] [--session S] [--cid C] [--run R] [--text T] [--from T] [--to T] [--order asc|desc] [--limit N] [--after CURSOR]
@@ -156,6 +158,7 @@ const OPTIONS: &[&str] = &[
     "delta-y",
     "key",
     "text",
+    "reason",
     "modifiers",
     "selection",
     "replacement",
@@ -496,6 +499,19 @@ fn plan(
                             ("phase", text(phase)),
                             ("text", a.optional("text")),
                             ("modifiers", modifiers),
+                        ])),
+                        mode: Mode::Once,
+                        field: None,
+                    })
+                }
+                "virtual-end" => {
+                    let reason = a.required("reason")?;
+                    let window = window()?;
+                    Ok(Request {
+                        method: "input.virtual.end",
+                        params: Some(compact(vec![
+                            ("window", text(window)),
+                            ("reason", text(reason)),
                         ])),
                         mode: Mode::Once,
                         field: None,

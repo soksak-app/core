@@ -133,7 +133,7 @@ fn result_is_indented_in_the_endpoint_key_order() {
 #[test]
 fn the_only_window_is_used_and_parameters_are_sent() {
     let player = play_case("sok-parameters");
-    let cases: [(&[&str], &str, &str); 11] = [
+    let cases: [(&[&str], &str, &str); 12] = [
         (
             &["status", "core.screen", "--surface", "tab-1"],
             "status.get",
@@ -233,6 +233,11 @@ fn the_only_window_is_used_and_parameters_are_sent() {
             &["input", "text", "--phase", "unmark"],
             "input.text",
             r#"{"phase":"unmark","window":"main"}"#,
+        ),
+        (
+            &["input", "virtual-end", "--reason", "check ended"],
+            "input.virtual.end",
+            r#"{"reason":"check ended","window":"main"}"#,
         ),
     ];
     for (args, method, params) in cases {

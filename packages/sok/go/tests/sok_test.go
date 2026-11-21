@@ -103,6 +103,7 @@ func TestTheOnlyWindowIsUsedAndParametersAreSent(t *testing.T) {
 		{[]string{"input", "key", "--key", "a", "--phase", "down", "--modifiers", "shift,,command"}, "input.key", `{"key":"a","modifiers":["shift","command"],"phase":"down","window":"main"}`},
 		{[]string{"input", "text", "--phase", "mark", "--text", "한글", "--selection", "0,1", "--replacement", "2,3"}, "input.text", `{"phase":"mark","replacement":{"length":3,"start":2},"selection":{"length":1,"start":0},"text":"한글","window":"main"}`},
 		{[]string{"input", "text", "--phase", "unmark"}, "input.text", `{"phase":"unmark","window":"main"}`},
+		{[]string{"input", "virtual-end", "--reason", "check ended"}, "input.virtual.end", `{"reason":"check ended","window":"main"}`},
 	}
 	for _, c := range cases {
 		code, stdout, stderr := run(append(c.args, "--config-dir", player.configDir)...)

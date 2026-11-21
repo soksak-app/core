@@ -5,6 +5,7 @@
 
 ## 2026-11-21
 
+- F982-12: 두 CLI의 `sok input virtual-end [window] --reason R`가 선언된 entry로 가상 key window를 끝낸다. case `sok-parameters`가 이 요청을 재생한다. 검증: 양쪽 CLI test 통과.
 - F982-12 (진행): 두 host의 선언된 entry `input.virtual.end {window, reason}`가 가상 key window를 끝낸다. 각 host의 platform operation이 native main-thread wrapper를 부르고, `reason` 없는 요청은 창보다 먼저 -32602로 거부되며 Windows는 그곳에 없다고 답한다. 검증: 각 host의 거부 test, host Go package 570/570, native build와 binding 검사.
 - F1006-5.2.1: page와 mygo workbench가 status `core.tab.role`을 공개한다. page는 요청의 surface로 읽고 저장 workspace가 바뀌면 열린 watch를 다시 읽는다. mygo registry는 `StatusOnSurface`로 surface의 status를 읽고 watch를 이름과 surface로 유지하며 shell이 같은 변경에서 watch 중인 tab을 다시 읽는다. 검증: page test와 mygo package 1156/1156.
 - F1006-5.3-1, 5.3-2: page와 mygo workbench가 result로 role 상태를 가진 `core.tab.role {tab, role}`과 `core.tab.role.confirm {fingerprint}`를 등록한다. page는 `projects.js`의 store 접근자로, mygo workbench는 host의 workspace kind로 실행하며 확인은 새 `CommandLaterOnSurface`로 caller surface에서 돌고 surface 없이는 거부된다. 검증: page test와 `TestTheRoleCommandsRunThroughTheWorkspaceStore`가 통과하고 exposure audit이 새 형식을 받는다.

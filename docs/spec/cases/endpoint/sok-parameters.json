@@ -101,6 +101,14 @@
     { "reply": { "jsonrpc": "2.0", "id": 2, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } },
     { "send": { "jsonrpc": "2.0", "id": 3, "method": "input.text", "params": { "phase": "unmark", "window": "main" } } },
     { "reply": { "jsonrpc": "2.0", "id": 3, "result": null } },
+    { "close": "client" },
+
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "agent.surface" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "error": { "code": 1014, "message": "$refusal" } } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } },
+    { "send": { "jsonrpc": "2.0", "id": 3, "method": "input.virtual.end", "params": { "reason": "check ended", "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 3, "result": null } },
     { "close": "client" }
   ]
 }

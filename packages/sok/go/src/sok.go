@@ -35,6 +35,8 @@ commands:
   input gesture [window] [--pointer NAME] [--button left|right] [--clicks N] --points X,Y[;X,Y]...
                             sends down at the first point, a drag to each later point and up at the last on one connection
   input key [window] --key K --phase down|up [--text T] [--modifiers shift,control,option,command]
+  input virtual-end [window] --reason R
+                            ends the virtual key window of the window with the reason R, so a check ends the input state that it made
   input text [window] --phase mark|insert|unmark [--text T] [--selection START,LENGTH] [--replacement START,LENGTH]
                             gives one step of a composition to the text input client of the key responder, as an input method does
   debug query [--channel C] [--level L] [--class C] [--layer L] [--event E] [--event-prefix P] [--surface S] [--session S] [--cid C] [--run R] [--text T] [--from T] [--to T] [--order asc|desc] [--limit N] [--after CURSOR]
@@ -85,7 +87,7 @@ var booleans = map[string]bool{"watch": true, "activate": true, "help": true, "f
 // options are the flags that take a value.
 var options = map[string]bool{
 	"config-dir": true, "window": true, "project": true, "surface": true, "index": true, "value": true, "event": true,
-	"wait": true, "bundle": true, "target": true, "x": true, "y": true, "phase": true, "platform": true, "button": true, "pointer": true, "delta-x": true, "clicks": true, "delta-y": true, "points": true, "key": true, "text": true, "modifiers": true, "selection": true, "replacement": true,
+	"wait": true, "bundle": true, "target": true, "x": true, "y": true, "phase": true, "platform": true, "button": true, "pointer": true, "delta-x": true, "clicks": true, "delta-y": true, "points": true, "key": true, "text": true, "reason": true, "modifiers": true, "selection": true, "replacement": true,
 	"level": true, "layer": true, "session": true, "cid": true, "from": true, "to": true,
 	"channel": true, "class": true, "event-prefix": true, "kind": true, "query": true, "run": true, "order": true, "limit": true, "after": true, "around": true, "earlier": true, "later": true, "until": true,
 }
@@ -372,6 +374,14 @@ func plan(a arguments, window func() (string, error)) (request, error) {
 			return withWindow(func(w string) (request, error) {
 				return request{method: "input.key", params: compact("window", w, "key", key, "phase", phase,
 					"text", optional(a, "text"), "modifiers", modifiers)}, nil
+			})
+		case "virtual-end":
+			reason, err := a.required("reason")
+			if err != nil {
+				return request{}, err
+			}
+			return withWindow(func(w string) (request, error) {
+				return request{method: "input.virtual.end", params: compact("window", w, "reason", reason)}, nil
 			})
 		case "text":
 			phase, err := a.required("phase")
