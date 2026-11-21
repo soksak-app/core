@@ -150,18 +150,19 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
 - [o] F1024 — P1: 수용 run의 mygo 앱(cache 0.0.42)에서 chrome bar의 로고가 system 창 버튼(macOS traffic lights)과 겹쳤다는 사용자 스크린샷의 보고. 확인: main build와 cache 0.0.42 앱 모두 깨끗한 시작에서 로고를 버튼과 분리해 그린다. 보고는 수용 run의 driven 창에서 왔고 그 좁히기는 F1024-1에 있다.
     - [~] F1024-1 — P1, F1024의 후속, 좁히기: 겹침은 어느 build의 깨끗한 시작에서도 재현되지 않는다. 검사가 창을 옮기고 크기를 바꾸고 registry의 terminal plugin을 돌리고, 그 run은 F1025의 pin-release 오류를 안고 있었다. 남은 원인 후보: 창을 다른 display에 park할 때 backing scale 변화, 창이 움직이는 동안 도착하는 windowControls 답, run 부하 아래 첫 frame. 다음: release 결합이 사라진 run 안에서 title bar를 capture한다.
 - [o] F1025 — P1, 답변했고 기록으로 남긴다: 수용 run이 보여준 오류 문장이 pin된 release들의 결합인지 물었다. 그렇다. plugin release 0.0.16과 core release 0.0.42는 plugin main이 보내는 기록과 operation을 모르므로, core와 terminal이 release되면 모두 사라진다.
-- [~] F1030 — P1, F831과 F1006-11-1의 후속: Agent setup의 PATH, MCP, SessionStart hook의 원하는 상태를 애플리케이션 재시작 뒤에도 유지한다. 설치 안내를 고친다.
+- [ ] F1030 — P1, F831과 F1006-11-1의 후속: Agent setup의 PATH, MCP, SessionStart hook의 원하는 상태를 애플리케이션 재시작 뒤에도 유지한다.
   - [o] F1030-1 — macOS host가 시작 시 사용자 PATH를 맞추고 재시작 뒤에도 설정을 유지한다. Go와 Rust setup test가 반복 설치와 다른 등록의 보존을 검사한다. Host와 workbench test가 끄기와 그 결과 상태를 검사한다.
   - [o] F1030-1.1 — F1030-1 후속: Rust PATH 적용이 이전 profile 블록을 제거하고 profile 목록을 저장할 때 변경을 보고한다. Sok package가 Clippy를 통과하고 Darwin setup test가 통과한다.
-  - [~] F1030-1.2 — F1030-1 후속: 설치 안내가 애플리케이션 시작 시 사용자 PATH 등록을 설명한다. 남은 것: 안내에서 이전 권한 상승 단계를 제거하고 문서를 검증한다.
+  - [o] F1030-1.2 — F1030-1 후속: 설치 안내가 애플리케이션 시작 시 사용자 PATH 등록과 설정 조작을 설명한다. 문서 검사가 통과한다.
   - [ ] F1030-2 — Agent group에서 MCP와 SessionStart hook 각각의 원하는 상태를 바꾼다. 켜면 소유한 등록만 갱신하고 끄면 재시작 뒤에도 소유한 등록을 두지 않는다.
-- [~] F1031 — P0: 현재 core candidate의 검사가 통과한 뒤 release한다. Mygo sidecar buffer fixture를 수정한다.
+- [~] F1031 — P0: 현재 core candidate의 검사가 통과한 뒤 release한다. 통합 release 검증을 진행한다.
   - [o] F1031-1 — Page가 parameter 오류 처리기를 초기화한 뒤 `core.error.dismiss`를 설치한다. Page 시작과 오류 표시 test가 통과한다.
   - [o] F1031-2 — 오류 toast command가 비어 있거나 알 수 없는 글을 거부한다. Workbench status, layout 복구와 layout 오류 기록 test가 통과한다.
   - [o] F1031-3 — Rust role store가 값 없음과 오류를 직접 전달한다. 직렬화 test가 임시 폴더를 정리한다. Workspace Clippy와 전체 role test가 통과한다.
   - [o] F1031-4 — Headless Linux job은 Apple 코드 서명을 실행하는 test 여섯 개를 제외한다. macOS job이 이 test를 선택하고 관련 test가 모두 통과한다.
   - [o] F1031-5 — Host와 CLI test가 실행하는 계약을 선언한다. Role identity와 진단 capture case가 현재 protocol로 실행된다. 관련 Rust와 Go test가 통과한다.
-  - [~] F1031-6 — Sidecar buffer fixture는 종료한 process를 기다리지 않고 해제한다. 남은 것: fixture가 끝날 때까지 FIFO를 열어 두고 실패하면 기록한 오류를 보고하며 buffer test를 반복한다.
+  - [o] F1031-6 — Sidecar buffer fixture가 정리까지 release pipe를 열어 두고 실패 시 기록한 오류를 보고한다. Mygo 20회와 Wails 10회의 각 실행에서 test 네 개가 통과한다.
+  - [~] F1031-7 — Core candidate를 검증하고 게시한다. 남은 것: 로컬 release 검사를 실행하고 검증한 candidate를 push하며 CI가 게시한 release 파일을 확인한다.
 - [!] F1032 — P0, F1031과 F1025 뒤: 개발 plugin과 vt 0.0.31을 쓰면 두 mygo terminal surface가 등록하고 요청과 답장을 전달하며 receipt를 기록한다. Registry에는 vt 0.0.31이 있다. 원인: Terminal release에 message status와 수신함 command가 없다. 재시도 조건: registry가 messaging을 포함하고 맞는 core와 sidecar를 선택하는 terminal release를 나열한다. Terminal 창 검사도 실제 terminal process에서 발신 command를 실행해야 한다.
 - [o] F1026 — P1, workbench 오류의 toast 표시. 오류 문장이 창 위에 뜬다는 사용자 보고에서 왔다. 끝냈고 push의 release가 되돌렸다: toast 표시가 page의 gated frame event를 두 배로 만들어 pin된 wire case를 깨뜨렸고 release를 막았다. 오류는 단일 banner로 돌아갔고 F1027이 원인을 고친 재상륙을 맡는다. 변경의 mygo 쪽(ShownErrors의 toast, `core.error.dismiss`, plane 아래 그리기)은 자기 suite를 통과했고 그 기록은 닫힌 변경의 changelog에 남는다.
 - [o] F1028 — P1: push의 release run이 `Core package tests` 단계에서 실패한 원인 넷을 고쳤다. local gate가 하나의 suite으로 돌리지 않았던 것들이다. surface core watch의 갱신이 `exposure.js`에서 호출만 있고 선언이 없었다(Red: `page-identifiers`가 `startCoreRefresh` 미해결로 지목. Green: 선언 복원). native virtual end 거부의 diagnostics 행이 release가 되돌린 toast 변경 안에 묶여 있었다(Red: `check-failure-table`가 `error native input virtual` 지목. Green: 행을 emitter 곁에 다시 추가). stored-change source의 optional call에 이유가 없었다(Red: `fallbacks`. Green: default 명시). 완료된 preflight 행에 feature link가 없었다(Red: `check-tests`. Green: preflight 대상과 workflow test로 link). menu language가 case가 고정한 언어와 다른 machine에서는 네 page-wire file도 실패하며 CI runner에서는 생기지 않는다. 그 행은 언어 case 변수를 위해 열어 둔다.
