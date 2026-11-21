@@ -5,6 +5,7 @@
 
 ## 2026-11-21
 
+- F1006-12: 두 host의 role operation이 role의 매 변경마다 `role.md`와 `role.ko.md`를 쓰므로 한국어 쌍이 완성된다. 이 단위는 F1006-5.2 완료 외에 코드를 더하지 않는다.
 - F1006-5.2, 5.3-3, 5.3-4: 두 host의 workspace store가 tab의 role operation을 가진다. `role`은 저장된 기록에서 다시 세운 상태 `{role, generation, state, seq, fingerprint, path}`로 답하고, `rolePut`은 spec의 순서 단계로 role을 배정·변경·해제하며, `roleConfirm`은 자기 차례의 상태로 fingerprint를 판정하고 stale로 거부하고, `roleRemove`는 layout을 떠난 tab의 role을 끝낸다. role 파일 writer는 임시 쓰기와 rename을 순서 변경의 1·3단계로 수행한다. 검증: 각 host의 일곱 test. Go host package 570/570, Rust host는 role state, role file, roles, workspace test를 통과한다.
 - F918: 세 git hook 모두 pnpm을 실행하기 전에, 다른 checkout으로 향하는 symbolic link인 `node_modules`를 link를 지적하는 오류로 거부한다. pnpm은 그런 link를 링크된 checkout의 설치로 여기고 자기 설치를 위해 지우는데, worktree에서는 pnpm 자신의 unsafe-modules 거부에 걸려서만 멈췄다. pnpm이 lockfile로 그 안에 설치하므로 새로 만든 worktree는 hook을 통과한다. 검증: `scripts/test/githooks.test.mjs`가 변경 전에 실패하고 변경 후에 통과한다.
 - F1006-9.1: Rust host의 `projects.json` reader가 object와 그 format을 `if let` chain 하나로 확인하므로, `make check-rust-clippy`가 다시 통과한다. 그 검사가 `packages/host/gpuikit`에 경고를 보고하지 않으므로 F914-8이 완료된다. 검증: `make check-rust-clippy`가 통과하고, Rust host의 workspace test가 22/22 통과한다.
