@@ -5,6 +5,7 @@
 
 ## 2026-11-21
 
+- F1031-1: Page가 parameter 오류 처리기를 초기화한 뒤 `core.error.dismiss`를 등록한다. Red에서는 memory saver와 lazy screen test가 초기화되지 않은 처리기로 시작 중 실패한다. Green에서는 두 시작 test와 오류 표시 test가 통과한다.
 - F1030-1: macOS host가 시작 시 사용자 PATH 등록을 준비한다. 설정에서 등록을 켜거나 끌 수 있다. 끄면 소유한 링크와 shell 블록을 제거하며 재시작 뒤에도 상태를 유지한다. 최신 등록은 그대로 두고 충돌하는 명령이나 파일은 보고한다. 검증 결과 Go와 Rust host의 시작 및 재시작 test, page와 mygo의 setup test가 통과한다.
 - F1029: toast 변경의 되돌림이 수용 보고의 완료 행(F1024와 그 좁히기 F1024-1, F1025)을 지켰고 F1026을 되돌려짐으로 닫았으며(F1027이 재상륙을 맡는다) tree에 남는 capability의 행에 feature link를 붙였다. F1026의 capability는 되돌림과 함께 tree를 떠났으므로 그 완료 행은 audit의 removed 집합에 있다. 검증: `make check-push`, `make check-docs`, `make check-tests` 통과.
 - F1028: push의 release run이 node test에서 실패한 원인 넷을 고쳤다. local gate가 돌리지 않았던 것들이다. surface core watch의 갱신이 `exposure.js`에서 호출만 있고 선언이 없었고, native virtual end 거부의 diagnostics 행이 release가 되돌린 toast 변경에 묶여 있었으며, stored-change source의 optional call에 이유가 없었고, 완료된 preflight 행에 feature link가 없었다. 네 page-wire file은 case가 고정한 언어와 menu language가 다른 machine에서 실패하며, CI runner에서는 생기지 않는다.

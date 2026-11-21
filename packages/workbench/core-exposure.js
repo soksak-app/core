@@ -481,10 +481,6 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
     const toasts = document.getElementById("errorToasts")?.children;
     return toasts?.length ? toasts[toasts.length - 1].dataset.text : null;
   });
-  registry.command("core.error.dismiss", invalid(async ({ text }) => {
-    dismissErrorToast(document, String(text));
-    coreChanged();
-  }));
   status("core.activity", activityState);
   status("core.projects", () => projects.all().map(withOpen));
   status("core.project", () => {
@@ -557,7 +553,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   status("core.chrome", chrome);
   status("core.rail", () => (currentGrid() ? railState() : null));
 
-  // A refusal of a settings change is an invalid request argument (docs/spec/settings.md).
+  // A refusal of a settings or error display command is an invalid request argument (docs/spec/settings.md).
   const invalid = (run) => async (params) => {
     try {
       return await run(params);
@@ -565,6 +561,10 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
       throw new ExposureError(EXPOSURE_ERRORS.invalidParams, error.message);
     }
   };
+  registry.command("core.error.dismiss", invalid(async ({ text }) => {
+    dismissErrorToast(document, String(text));
+    coreChanged();
+  }));
   // The host asks it before it waits for the presentation of the window (docs/spec/host-contract.md).
   registry.method(PLACEMENT_LAST, placementLast);
   // The host asks each ready window for the space that holds a surface and answers surface.window with the window and the space

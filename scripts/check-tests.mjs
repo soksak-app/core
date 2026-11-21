@@ -322,6 +322,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1031-1",
+    implementation: [{ file: "packages/workbench/core-exposure.js", symbol: 'registry.command("core.error.dismiss"' }],
+    tests: [
+      { file: "packages/workbench/test/core-exposure-memory-saver.test.mjs", id: "installCoreExposure refuses a page without its memory saver and installs the entries of a page that gives it" },
+      { file: "packages/workbench/test/page-start-imports.test.mjs", id: "a screen that never loaded answers its status as closed, and its first command loads it" },
+    ],
+    expected: "The page starts and registers its commands before the lazy screen opens.",
+    levels: ["unit"],
+  },
+  {
     id: "F1026",
     implementation: [
       { file: "packages/workbench/page-layout.js", symbol: "function errorToast(document, text, source) {" },
