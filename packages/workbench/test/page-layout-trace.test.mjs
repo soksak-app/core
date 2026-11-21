@@ -22,6 +22,8 @@ const { log, surfaces } = await import("../host.js");
 const compositor = await import("../compositor.js");
 const plane = await import("../plane.js");
 const { value } = await import("../settings.js");
+const { registry } = await import("../exposure.js");
+registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
 const { armLayoutFault, createErrorDisplay, createErrorWithdrawal, createPageLayout } = await import("../page-layout.js");
 const catalog = JSON.parse(readFileSync(new URL("../../../docs/spec/events.json", import.meta.url), "utf8"));
 

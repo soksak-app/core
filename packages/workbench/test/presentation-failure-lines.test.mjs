@@ -4,6 +4,7 @@
 // layout is mounted by surface-modules.js. The test gives the layout the publication of the placement, the render of the plane, and the animation frame; the host calls
 // are answered by the page-wire case of the test (docs/spec/cases/page-wire/README.md).
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { JSDOM } from "jsdom";
 import { selectPageWire } from "@soksak/runtime";
@@ -68,7 +69,9 @@ test("one presentation timeout writes one workbench error line", async () => {
     });
     await connectExposure({ settled: page.drawn, report });
     await surfaces.theme({ scheme: "light", tokens: {} });
-    registry.declare("core", { status: [], element: [], commands: [{
+    const declared = JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes;
+    const dismiss = declared.commands.find(({ name }) => name === "core.error.dismiss");
+    registry.declare("core", { status: [], element: [], commands: [dismiss, {
       name: "core.fixture.split", description: "Splits.", params: { type: "object", properties: {} }, result: { type: "null" },
     }] });
     registry.command("core.fixture.split", () => {
