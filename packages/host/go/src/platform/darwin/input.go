@@ -177,6 +177,15 @@ func (implementation) InjectKey(window platform.Window, key, text string, modifi
 	}
 }
 
+// VirtualKeyEnd ends the virtual key window with the reason through the main-thread entry of native/darwin; the native
+// side is idempotent and writes one native.input.virtual record of the reason.
+func (implementation) VirtualKeyEnd(reason string) error {
+	held := native.CString(reason)
+	defer native.Free(unsafe.Pointer(held))
+	native.MainSpInputVirtualEnd(held)
+	return nil
+}
+
 // InjectText gives a step of a composition with sp_input_text of native/darwin.
 func (implementation) InjectText(window platform.Window, phase int, text string, selectionStart, selectionLength, replacementStart,
 	replacementLength int) (platform.PointerResult, error) {

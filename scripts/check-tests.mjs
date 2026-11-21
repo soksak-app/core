@@ -4463,7 +4463,7 @@ const FEATURE_LINKS = [
       { file: "packages/plugin-api/index.js", symbol: "export const EXPOSE_KINDS = Object.freeze({ status: \"status\", commands: \"command\", element: \"element\" });" },
       { file: "packages/plugin-api/binder.js", symbol: "export function roleOf(element) {" },
       { file: "packages/workbench/core-exposure.js", symbol: "status(\"core.window.workbench\", () => ({" },
-      { file: "packages/host/go/src/endpoint.go", symbol: "\"element.rect\":  elementRequest(\"element.rect\")," },
+      { file: "packages/host/go/src/endpoint.go", symbol: "\"element.rect\":      elementRequest(\"element.rect\")," },
       { file: "packages/host/rust/src/exposure.rs", symbol: "pub fn check_registration_kind(kind: &str) -> Result<(), String> {" },
       { file: "packages/sok/go/src/manifest.go", symbol: "exposes.dom is removed; an exposed element is declared in exposes.element" },
       { file: "packages/sok/rust/src/manifest.rs", symbol: "exposes.dom is removed; an exposed element is declared in exposes.element" },

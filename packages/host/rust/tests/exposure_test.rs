@@ -1101,6 +1101,23 @@ fn a_registration_kind_is_status_command_or_element() {
     }
 }
 
+// contract: endpoint.input.virtual-end-requires-reason
+#[test]
+fn a_virtual_end_without_a_reason_is_refused() {
+    for params in [
+        serde_json::json!({"window": "main"}),
+        serde_json::json!({"window": "main", "reason": ""}),
+    ] {
+        let failure = exposure::virtual_end(params.as_object().unwrap())
+            .expect_err("the request returned no error");
+        assert_eq!(failure.code, -32602, "code of {params}");
+        assert_eq!(
+            failure.message, "input.virtual.end requires a reason",
+            "message of {params}"
+        );
+    }
+}
+
 // contract: endpoint.input.text-phases, endpoint.input.text-ranges, endpoint.input.text-invalid
 #[test]
 fn a_text_input_reaches_the_platform_as_one_step_of_a_composition() {

@@ -14,6 +14,8 @@ import (
 
 type diagnosticsClockBackend struct{}
 
+func (diagnosticsClockBackend) VirtualKeyEnd(string, string) error { return nil }
+
 func (diagnosticsClockBackend) Windows() []WindowEntry {
 	return []WindowEntry{{Window: "main"}}
 }

@@ -577,6 +577,9 @@ impl Platform for Windows {
     fn input_text(&self, _window: Handle, _text: &TextInput) -> Result<Delivery, String> {
         Err("input.text is not implemented on this platform".into())
     }
+    fn virtual_key_end(&self, _reason: &str) -> Result<(), String> {
+        Err("the virtual key window is not implemented on windows".into())
+    }
 
     #[cfg(feature = "diagnostics")]
     fn capture_open(&self, window_number: isize, display: bool) -> Result<(), String> {

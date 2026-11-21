@@ -45,6 +45,7 @@ unsafe extern "C" {
         modifiers: u32,
         down: bool,
     ) -> i32;
+    fn sp_input_virtual_end(reason: *const c_char);
     fn sp_input_text(
         window: *mut c_void,
         phase: i32,
@@ -261,6 +262,15 @@ fn activation_result(result: i32, frontmost: &str) -> Result<(), String> {
 pub fn activate(window: Handle, x: f64, y: f64, done: Activated) {
     let context = Box::into_raw(Box::new(done)) as *mut c_void;
     unsafe { sp_input_activate_at(window as *mut c_void, x, y, activated, context) }
+}
+
+/// Ends the virtual key window with the reason of its ender; the native side is idempotent and writes one
+/// native.input.virtual record of the reason. Call it on the main thread. A reason that contains a NUL character returns
+/// an error.
+pub fn virtual_end(reason: &str) -> Result<(), String> {
+    let held = CString::new(reason).map_err(|e| e.to_string())?;
+    unsafe { sp_input_virtual_end(held.as_ptr()) };
+    Ok(())
 }
 
 /// Delivers key input to the window and returns whether it was delivered. Call it on the main thread. A key name or a

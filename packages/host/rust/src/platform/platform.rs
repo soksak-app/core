@@ -1049,6 +1049,8 @@ pub trait Platform: CoreRootHost + Send + Sync {
     ) -> Result<(), String>;
     /// Delivers key input to the window and returns whether it was delivered. Call it on the main thread.
     fn input_key(&self, window: Handle, key: &Key) -> Result<Delivery, String>;
+    /// Ends the virtual key window with the reason of its ender; it is idempotent (docs/spec/exposure.md#virtual-key-window).
+    fn virtual_key_end(&self, reason: &str) -> Result<(), String>;
     /// Gives one step of a composition to the text input client of the key responder of the window and returns whether it was
     /// delivered. Call it on the main thread.
     fn input_text(&self, window: Handle, text: &TextInput) -> Result<Delivery, String>;

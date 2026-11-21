@@ -192,6 +192,9 @@ type Backend interface {
 	Key(window string, input KeyInput) error
 	// Text gives one step of a composition to the text input client of the key responder of a window.
 	Text(window string, input TextInput) error
+	// VirtualKeyEnd ends the virtual key window of the window with the reason of its ender; it is idempotent
+	// (docs/spec/exposure.md#virtual-key-window).
+	VirtualKeyEnd(window, reason string) error
 	// HostWatched tells the host that the first watch of its status name in window started (on) or that the last one ended.
 	HostWatched(window, name string, on bool)
 	// DialogAnswer answers a dialog request of window (docs/spec/exposure.md#dialogs).
@@ -1380,15 +1383,16 @@ var endpointMethods = map[string]endpointMethod{
 	"windows.list": func(e *Endpoint, _ *endpointConn, _ json.RawMessage, _ *ReplyScope) (any, error) {
 		return e.backend.Windows(), nil
 	},
-	"log.query":     logQuery,
-	"exposure.list": exposureList,
-	"status.get":    statusGet,
-	"command.run":   commandRun,
-	"element.rect":  elementRequest("element.rect"),
-	"element.act":   elementRequest("element.act"),
-	"input.pointer": inputPointer,
-	"input.key":     inputKey,
-	"input.text":    inputText,
+	"log.query":         logQuery,
+	"exposure.list":     exposureList,
+	"status.get":        statusGet,
+	"command.run":       commandRun,
+	"element.rect":      elementRequest("element.rect"),
+	"element.act":       elementRequest("element.act"),
+	"input.pointer":     inputPointer,
+	"input.key":         inputKey,
+	"input.text":        inputText,
+	"input.virtual.end": inputVirtualEnd,
 
 	// exposure.snapshot answers the window snapshot (docs/spec/exposure.md#window-snapshot).
 	"exposure.snapshot": exposureSnapshot,
@@ -1957,6 +1961,23 @@ func dialogAnswerInput(params json.RawMessage) (DialogAnswer, error) {
 		answer.Paths = *fields.Paths
 	}
 	return answer, nil
+}
+
+// inputVirtualEnd is the handler of input.virtual.end: a declared ender of the virtual key window of a window, idempotent,
+// with one native.input.virtual record of its reason (docs/spec/exposure.md#virtual-key-window).
+func inputVirtualEnd(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
+	// The reason is judged before the window, so a request without it is refused without a lookup.
+	var held struct {
+		Reason string
+	}
+	if err := json.Unmarshal(params, &held); err != nil || held.Reason == "" {
+		return nil, rpcError(codeInvalidParams, "input.virtual.end requires a reason")
+	}
+	window, err := e.window(params)
+	if err != nil {
+		return nil, err
+	}
+	return nil, e.backend.VirtualKeyEnd(window, held.Reason)
 }
 
 func inputText(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {

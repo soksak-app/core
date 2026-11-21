@@ -79,6 +79,7 @@ const METHODS: &[&str] = &[
     "element.act",
     "input.pointer",
     "input.key",
+    "input.virtual.end",
     "input.text",
     "input.dialog.answer",
 ];
@@ -2044,6 +2045,9 @@ fn run(
         }
         "input.key" => {
             crate::exposure::key(&params)?;
+        }
+        "input.virtual.end" => {
+            crate::exposure::virtual_end(&params)?;
         }
         "input.text" => {
             crate::exposure::text_input(&params)?;

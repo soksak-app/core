@@ -556,6 +556,19 @@ pub fn pointer(params: &Map<String, Value>) -> Result<Pointer, Failure> {
 }
 
 /// Reads the parameters of `input.key`.
+/// Reads the reason of input.virtual.end and ends the virtual key window of the window of the request with it.
+pub fn virtual_end(params: &Map<String, Value>) -> Result<(), Failure> {
+    let reason = params
+        .get("reason")
+        .and_then(Value::as_str)
+        .filter(|reason| !reason.is_empty())
+        .ok_or_else(|| Failure::new(INVALID_PARAMS, "input.virtual.end requires a reason"))?;
+    let platform = platform::current().map_err(|e| Failure::new(NO_INPUT, e))?;
+    platform
+        .virtual_key_end(reason)
+        .map_err(|e| Failure::new(NO_INPUT, e))
+}
+
 pub fn key(params: &Map<String, Value>) -> Result<Key, Failure> {
     let key = match params.get("key") {
         Some(Value::String(key)) if !key.is_empty() => key.clone(),
@@ -3474,6 +3487,25 @@ impl Host {
     }
 
     /// Delivers key input on the main thread.
+    /// input.virtual.end ends the virtual key window of the window with the reason of its ender; it is idempotent and
+    /// leaves one native.input.virtual record of the reason (docs/spec/exposure.md#virtual-key-window).
+    fn input_virtual_end(
+        &self,
+        window: &Window,
+        params: &Map<String, Value>,
+    ) -> Result<Value, Failure> {
+        let reason = params
+            .get("reason")
+            .and_then(Value::as_str)
+            .filter(|reason| !reason.is_empty())
+            .ok_or_else(|| Failure::new(INVALID_PARAMS, "input.virtual.end requires a reason"))?;
+        let platform = platform::current().map_err(|e| Failure::new(NO_INPUT, e))?;
+        let held = reason.to_string();
+        with_native_owner(window, move |_handle| platform.virtual_key_end(&held))
+            .map_err(native_failure(window.label(), NO_INPUT))?;
+        Ok(Value::Null)
+    }
+
     fn input_key(&self, window: &Window, key: Key) -> Result<Value, Failure> {
         let platform = platform::current().map_err(|e| Failure::new(NO_INPUT, e))?;
         match with_native_owner(window, move |handle| platform.input_key(handle, &key)) {
@@ -3553,6 +3585,7 @@ impl Host {
         match method {
             "input.pointer" => raw(&self.input_pointer(window, pointer(&params)?)?),
             "input.key" => raw(&self.input_key(window, key(&params)?)?),
+            "input.virtual.end" => raw(&self.input_virtual_end(window, &params)?),
             "input.text" => raw(&self.input_text(window, text_input(&params)?)?),
             "input.dialog.answer" => {
                 let answer = dialog_answer(&params)?;

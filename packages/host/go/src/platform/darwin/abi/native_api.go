@@ -167,6 +167,8 @@ type NativeFunctions struct {
 	MainSpHostPresentationComplete         func(unsafe.Pointer, *byte)
 	MainSpInputKey                         func(uintptr, *byte, *byte, uint32, bool) int32
 	MainSpInputText                        func(uintptr, int32, *byte, int64, int64, int64, int64) int32
+	MainSpInputVirtualEnd                  func(*byte)
+	MainSpInputVirtualEndCursorObservation func(unsafe.Pointer)
 	MainSpLinkOpen                         func(*byte) *byte
 	MainSpMemoryPressureInject             func(*byte) bool
 	MainSpMenuItems                        func() *byte
@@ -201,9 +203,7 @@ type NativeFunctions struct {
 	MainSpWindowColorSpaceFacts            func(uintptr) *byte
 	MainSpWindowContentSize                func(uintptr, *float64) bool
 	MainSpWindowEndResponderObservation    func(unsafe.Pointer)
-	MainSpInputVirtualEndCursorObservation func(unsafe.Pointer)
 	MainSpWindowEndSheetObservation        func(unsafe.Pointer)
-	MainSpWindowReleaseDialogs             func(unsafe.Pointer)
 	MainSpWindowFacts                      func(uintptr) *byte
 	MainSpWindowFocusWorkbench             func(uintptr)
 	MainSpWindowHit                        func(uintptr, float64, float64) *byte
@@ -218,6 +218,7 @@ type NativeFunctions struct {
 	MainSpWindowOnScreen                   func(uintptr) bool
 	MainSpWindowPlaceNew                   func(uintptr, **byte) bool
 	MainSpWindowRaise                      func(uintptr) bool
+	MainSpWindowReleaseDialogs             func(unsafe.Pointer)
 	MainSpWindowRevealAfterLoad            func(uintptr, **byte) bool
 	MainSpWindowShow                       func(uintptr)
 	MainSurfaceLayoutAbandonView           func(uintptr, unsafe.Pointer) bool
@@ -240,6 +241,7 @@ type NativeFunctions struct {
 	ModalAligned                           func(uintptr, float64, float64, float64, float64, *float64)
 	ModalViewConfigure                     func(unsafe.Pointer, *byte, float64)
 	ModalViewFocus                         func(unsafe.Pointer, int32)
+	NativeDialogAnswer                     func(uint64, **byte, uint64, bool, uintptr)
 	NativeFunctionPresentation             func(uintptr) unsafe.Pointer
 	NativeLayoutObserve                    func()
 	NativeWebviewAfterPresentation         func(unsafe.Pointer, uintptr) bool
@@ -254,14 +256,13 @@ type NativeFunctions struct {
 	NativeWindowAfterSettled               func(uintptr, unsafe.Pointer, uintptr)
 	NativeWindowConfigureMain              func(uintptr, bool) bool
 	NativeWindowFullscreen                 func(uintptr, bool, uintptr) bool
+	NativeWindowHoldDialogs                func(uintptr, uintptr) unsafe.Pointer
 	NativeWindowJoinView                   func(uintptr, uint64, unsafe.Pointer, uintptr) bool
 	NativeWindowLayoutBegin                func(uintptr, uint64, uintptr)
 	NativeWindowMainPresentation           func(uintptr) unsafe.Pointer
-	NativeWindowObserveResponder           func(uintptr, uintptr) unsafe.Pointer
 	NativeWindowObserveCursor              func(uintptr, uintptr) unsafe.Pointer
+	NativeWindowObserveResponder           func(uintptr, uintptr) unsafe.Pointer
 	NativeWindowObserveSheet               func(uintptr, uintptr) unsafe.Pointer
-	NativeDialogAnswer                     func(uint64, **byte, uint64, bool, uintptr)
-	NativeWindowHoldDialogs                func(uintptr, uintptr) unsafe.Pointer
 	NativeWindowPrepare                    func(uintptr)
 	NativeWindowSetMainWebview             func(uintptr) bool
 	NativeWindowStartPage                  func(uintptr, uint64, float64, uintptr)
@@ -450,6 +451,12 @@ func (functions NativeFunctions) Validate() error {
 	if functions.MainSpInputText == nil {
 		return fmt.Errorf("native API function is missing: main_sp_input_text")
 	}
+	if functions.MainSpInputVirtualEnd == nil {
+		return fmt.Errorf("native API function is missing: main_sp_input_virtual_end")
+	}
+	if functions.MainSpInputVirtualEndCursorObservation == nil {
+		return fmt.Errorf("native API function is missing: main_sp_input_virtual_end_cursor_observation")
+	}
 	if functions.MainSpLinkOpen == nil {
 		return fmt.Errorf("native API function is missing: main_sp_link_open")
 	}
@@ -552,14 +559,8 @@ func (functions NativeFunctions) Validate() error {
 	if functions.MainSpWindowEndResponderObservation == nil {
 		return fmt.Errorf("native API function is missing: main_sp_window_end_responder_observation")
 	}
-	if functions.MainSpInputVirtualEndCursorObservation == nil {
-		return fmt.Errorf("native API function is missing: main_sp_input_virtual_end_cursor_observation")
-	}
 	if functions.MainSpWindowEndSheetObservation == nil {
 		return fmt.Errorf("native API function is missing: main_sp_window_end_sheet_observation")
-	}
-	if functions.MainSpWindowReleaseDialogs == nil {
-		return fmt.Errorf("native API function is missing: main_sp_window_release_dialogs")
 	}
 	if functions.MainSpWindowFacts == nil {
 		return fmt.Errorf("native API function is missing: main_sp_window_facts")
@@ -602,6 +603,9 @@ func (functions NativeFunctions) Validate() error {
 	}
 	if functions.MainSpWindowRaise == nil {
 		return fmt.Errorf("native API function is missing: main_sp_window_raise")
+	}
+	if functions.MainSpWindowReleaseDialogs == nil {
+		return fmt.Errorf("native API function is missing: main_sp_window_release_dialogs")
 	}
 	if functions.MainSpWindowRevealAfterLoad == nil {
 		return fmt.Errorf("native API function is missing: main_sp_window_reveal_after_load")
@@ -669,6 +673,9 @@ func (functions NativeFunctions) Validate() error {
 	if functions.ModalViewFocus == nil {
 		return fmt.Errorf("native API function is missing: modalViewFocus")
 	}
+	if functions.NativeDialogAnswer == nil {
+		return fmt.Errorf("native API function is missing: nativeDialogAnswer")
+	}
 	if functions.NativeFunctionPresentation == nil {
 		return fmt.Errorf("native API function is missing: nativeFunctionPresentation")
 	}
@@ -711,6 +718,9 @@ func (functions NativeFunctions) Validate() error {
 	if functions.NativeWindowFullscreen == nil {
 		return fmt.Errorf("native API function is missing: nativeWindowFullscreen")
 	}
+	if functions.NativeWindowHoldDialogs == nil {
+		return fmt.Errorf("native API function is missing: nativeWindowHoldDialogs")
+	}
 	if functions.NativeWindowJoinView == nil {
 		return fmt.Errorf("native API function is missing: nativeWindowJoinView")
 	}
@@ -720,20 +730,14 @@ func (functions NativeFunctions) Validate() error {
 	if functions.NativeWindowMainPresentation == nil {
 		return fmt.Errorf("native API function is missing: nativeWindowMainPresentation")
 	}
-	if functions.NativeWindowObserveResponder == nil {
-		return fmt.Errorf("native API function is missing: nativeWindowObserveResponder")
-	}
 	if functions.NativeWindowObserveCursor == nil {
 		return fmt.Errorf("native API function is missing: nativeWindowObserveCursor")
 	}
+	if functions.NativeWindowObserveResponder == nil {
+		return fmt.Errorf("native API function is missing: nativeWindowObserveResponder")
+	}
 	if functions.NativeWindowObserveSheet == nil {
 		return fmt.Errorf("native API function is missing: nativeWindowObserveSheet")
-	}
-	if functions.NativeDialogAnswer == nil {
-		return fmt.Errorf("native API function is missing: nativeDialogAnswer")
-	}
-	if functions.NativeWindowHoldDialogs == nil {
-		return fmt.Errorf("native API function is missing: nativeWindowHoldDialogs")
 	}
 	if functions.NativeWindowPrepare == nil {
 		return fmt.Errorf("native API function is missing: nativeWindowPrepare")

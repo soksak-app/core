@@ -101,3 +101,8 @@ func (implementation) ActivateWindow(window platform.Window, _, _ float64, done 
 	check()
 	return nil
 }
+
+// VirtualKeyEnd is not implemented on Windows: the virtual key window is a concept of macOS.
+func (implementation) VirtualKeyEnd(string) error {
+	return errors.New("the virtual key window is not implemented on windows")
+}

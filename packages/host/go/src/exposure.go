@@ -1208,6 +1208,18 @@ func (b hostBackend) DialogAnswer(window string, answer DialogAnswer) error {
 	return nil
 }
 
+func (b hostBackend) VirtualKeyEnd(window, reason string) error {
+	s, err := b.window(window)
+	if err != nil {
+		return err
+	}
+	err = s.useWindow(func(platform.Window) error { return system.VirtualKeyEnd(reason) })
+	if err != nil {
+		return nativeError(codeNoInput, err)
+	}
+	return nil
+}
+
 func (b hostBackend) Text(window string, input TextInput) error {
 	s, err := b.window(window)
 	if err != nil {

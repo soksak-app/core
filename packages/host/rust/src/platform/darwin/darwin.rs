@@ -733,6 +733,9 @@ impl Platform for Darwin {
     fn input_key(&self, window: Handle, key: &Key) -> Result<Delivery, String> {
         input::key(window, key)
     }
+    fn virtual_key_end(&self, reason: &str) -> Result<(), String> {
+        input::virtual_end(reason)
+    }
     fn input_text(&self, window: Handle, text: &TextInput) -> Result<Delivery, String> {
         input::text(window, text)
     }
