@@ -106,6 +106,8 @@ func Functions() abi.NativeFunctions {
 		MainSpInputText: func(a0 uintptr, a1 int32, a2 *byte, a3 int64, a4 int64, a5 int64, a6 int64) int32 {
 			return int32(C.main_sp_input_text(C.uintptr_t(a0), C.int(a1), (*C.char)(unsafe.Pointer(a2)), C.long(a3), C.long(a4), C.long(a5), C.long(a6)))
 		},
+		MainSpInputVirtualEnd:                  func(a0 *byte) { C.main_sp_input_virtual_end((*C.char)(unsafe.Pointer(a0))) },
+		MainSpInputVirtualEndCursorObservation: func(a0 unsafe.Pointer) { C.main_sp_input_virtual_end_cursor_observation(a0) },
 		MainSpLinkOpen: func(a0 *byte) *byte {
 			return (*byte)(unsafe.Pointer(C.main_sp_link_open((*C.char)(unsafe.Pointer(a0)))))
 		},
@@ -159,12 +161,10 @@ func Functions() abi.NativeFunctions {
 		MainSpWindowContentSize: func(a0 uintptr, a1 *float64) bool {
 			return bool(C.main_sp_window_content_size(C.uintptr_t(a0), (*C.double)(unsafe.Pointer(a1))))
 		},
-		MainSpWindowEndResponderObservation:    func(a0 unsafe.Pointer) { C.main_sp_window_end_responder_observation(a0) },
-		MainSpInputVirtualEndCursorObservation: func(a0 unsafe.Pointer) { C.main_sp_input_virtual_end_cursor_observation(a0) },
-		MainSpWindowEndSheetObservation:        func(a0 unsafe.Pointer) { C.main_sp_window_end_sheet_observation(a0) },
-		MainSpWindowReleaseDialogs:             func(a0 unsafe.Pointer) { C.main_sp_window_release_dialogs(a0) },
-		MainSpWindowFacts:                      func(a0 uintptr) *byte { return (*byte)(unsafe.Pointer(C.main_sp_window_facts(C.uintptr_t(a0)))) },
-		MainSpWindowFocusWorkbench:             func(a0 uintptr) { C.main_sp_window_focus_workbench(C.uintptr_t(a0)) },
+		MainSpWindowEndResponderObservation: func(a0 unsafe.Pointer) { C.main_sp_window_end_responder_observation(a0) },
+		MainSpWindowEndSheetObservation:     func(a0 unsafe.Pointer) { C.main_sp_window_end_sheet_observation(a0) },
+		MainSpWindowFacts:                   func(a0 uintptr) *byte { return (*byte)(unsafe.Pointer(C.main_sp_window_facts(C.uintptr_t(a0)))) },
+		MainSpWindowFocusWorkbench:          func(a0 uintptr) { C.main_sp_window_focus_workbench(C.uintptr_t(a0)) },
 		MainSpWindowHit: func(a0 uintptr, a1 float64, a2 float64) *byte {
 			return (*byte)(unsafe.Pointer(C.main_sp_window_hit(C.uintptr_t(a0), C.double(a1), C.double(a2))))
 		},
@@ -182,7 +182,8 @@ func Functions() abi.NativeFunctions {
 		MainSpWindowPlaceNew: func(a0 uintptr, a1 **byte) bool {
 			return bool(C.main_sp_window_place_new(C.uintptr_t(a0), (**C.char)(unsafe.Pointer(a1))))
 		},
-		MainSpWindowRaise: func(a0 uintptr) bool { return bool(C.main_sp_window_raise(C.uintptr_t(a0))) },
+		MainSpWindowRaise:          func(a0 uintptr) bool { return bool(C.main_sp_window_raise(C.uintptr_t(a0))) },
+		MainSpWindowReleaseDialogs: func(a0 unsafe.Pointer) { C.main_sp_window_release_dialogs(a0) },
 		MainSpWindowRevealAfterLoad: func(a0 uintptr, a1 **byte) bool {
 			return bool(C.main_sp_window_reveal_after_load(C.uintptr_t(a0), (**C.char)(unsafe.Pointer(a1))))
 		},
@@ -220,7 +221,10 @@ func Functions() abi.NativeFunctions {
 		ModalViewConfigure: func(a0 unsafe.Pointer, a1 *byte, a2 float64) {
 			C.modalViewConfigure(a0, (*C.char)(unsafe.Pointer(a1)), C.double(a2))
 		},
-		ModalViewFocus:             func(a0 unsafe.Pointer, a1 int32) { C.modalViewFocus(a0, C.int(a1)) },
+		ModalViewFocus: func(a0 unsafe.Pointer, a1 int32) { C.modalViewFocus(a0, C.int(a1)) },
+		NativeDialogAnswer: func(a0 uint64, a1 **byte, a2 uint64, a3 bool, a4 uintptr) {
+			C.nativeDialogAnswer(C.ulonglong(a0), (**C.char)(unsafe.Pointer(a1)), C.size_t(a2), C.bool(a3), C.uintptr_t(a4))
+		},
 		NativeFunctionPresentation: func(a0 uintptr) unsafe.Pointer { return C.nativeFunctionPresentation(C.uintptr_t(a0)) },
 		NativeLayoutObserve:        func() { C.nativeLayoutObserve() },
 		NativeWebviewAfterPresentation: func(a0 unsafe.Pointer, a1 uintptr) bool {
@@ -249,6 +253,9 @@ func Functions() abi.NativeFunctions {
 		NativeWindowFullscreen: func(a0 uintptr, a1 bool, a2 uintptr) bool {
 			return bool(C.nativeWindowFullscreen(C.uintptr_t(a0), C.bool(a1), C.uintptr_t(a2)))
 		},
+		NativeWindowHoldDialogs: func(a0 uintptr, a1 uintptr) unsafe.Pointer {
+			return C.nativeWindowHoldDialogs(C.uintptr_t(a0), C.uintptr_t(a1))
+		},
 		NativeWindowJoinView: func(a0 uintptr, a1 uint64, a2 unsafe.Pointer, a3 uintptr) bool {
 			return bool(C.nativeWindowJoinView(C.uintptr_t(a0), C.uint64_t(a1), a2, C.uintptr_t(a3)))
 		},
@@ -256,20 +263,14 @@ func Functions() abi.NativeFunctions {
 			C.nativeWindowLayoutBegin(C.uintptr_t(a0), C.uint64_t(a1), C.uintptr_t(a2))
 		},
 		NativeWindowMainPresentation: func(a0 uintptr) unsafe.Pointer { return C.nativeWindowMainPresentation(C.uintptr_t(a0)) },
-		NativeWindowObserveResponder: func(a0 uintptr, a1 uintptr) unsafe.Pointer {
-			return C.nativeWindowObserveResponder(C.uintptr_t(a0), C.uintptr_t(a1))
-		},
 		NativeWindowObserveCursor: func(a0 uintptr, a1 uintptr) unsafe.Pointer {
 			return C.nativeWindowObserveCursor(C.uintptr_t(a0), C.uintptr_t(a1))
 		},
+		NativeWindowObserveResponder: func(a0 uintptr, a1 uintptr) unsafe.Pointer {
+			return C.nativeWindowObserveResponder(C.uintptr_t(a0), C.uintptr_t(a1))
+		},
 		NativeWindowObserveSheet: func(a0 uintptr, a1 uintptr) unsafe.Pointer {
 			return C.nativeWindowObserveSheet(C.uintptr_t(a0), C.uintptr_t(a1))
-		},
-		NativeDialogAnswer: func(a0 uint64, a1 **byte, a2 uint64, a3 bool, a4 uintptr) {
-			C.nativeDialogAnswer(C.ulonglong(a0), (**C.char)(unsafe.Pointer(a1)), C.size_t(a2), C.bool(a3), C.uintptr_t(a4))
-		},
-		NativeWindowHoldDialogs: func(a0 uintptr, a1 uintptr) unsafe.Pointer {
-			return C.nativeWindowHoldDialogs(C.uintptr_t(a0), C.uintptr_t(a1))
 		},
 		NativeWindowPrepare:        func(a0 uintptr) { C.nativeWindowPrepare(C.uintptr_t(a0)) },
 		NativeWindowSetMainWebview: func(a0 uintptr) bool { return bool(C.nativeWindowSetMainWebview(C.uintptr_t(a0))) },
