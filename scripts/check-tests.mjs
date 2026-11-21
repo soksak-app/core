@@ -332,6 +332,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1031-2",
+    implementation: [{ file: "packages/workbench/core-exposure.js", symbol: 'throw new Error("core.error.dismiss names no open toast")' }],
+    tests: [
+      { file: "packages/workbench/test/workbench-statuses.test.mjs", id: "core.window.workbench, core.workbench.error and core.workbench.audit describe the workbench and the page names are refused" },
+      { file: "packages/workbench/test/layout-verify-state.test.mjs", id: "a presentation after a failed presentation withdraws the toast of that failure" },
+      { file: "packages/workbench/test/layout-failure-lines.test.mjs", id: "a layout failure that no command waits for writes one workbench error line" },
+    ],
+    expected: "Only an open toast can be dismissed. A layout error is logged once and withdrawn when its surfaces present.",
+    levels: ["unit"],
+  },
+  {
     id: "F1026",
     implementation: [
       { file: "packages/workbench/page-layout.js", symbol: "function errorToast(document, text, source) {" },
@@ -5127,7 +5138,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/errors_screen_test.go", id: "TestAnErrorIsWithdrawnOnlyByItsSource" },
       { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestAFailureStaysUntilTheSurfacesPresent" },
       { file: "packages/workbench/test/layout-verify-state.test.mjs", id: "while a surface has not presented, the presentation of another render leaves the failure, and the presentation of that surface withdraws it" },
-      { file: "packages/workbench/test/layout-verify-state.test.mjs", id: "a presentation after a failed presentation withdraws the error of that failure from the banner" },
+      { file: "packages/workbench/test/layout-verify-state.test.mjs", id: "a presentation after a failed presentation withdraws the toast of that failure" },
     ],
     expected: "A placement that succeeds withdraws only the failure of the placement before it from the error banner.",
     levels: ["unit"],

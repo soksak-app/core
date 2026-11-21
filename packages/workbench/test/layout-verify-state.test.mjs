@@ -4,6 +4,7 @@
 // The compositor is the real one: its commit listener (onCommit) answers with the failed presentation, and the waits for the presentation of
 // the window are calls that the page-wire cases of this test answer (docs/spec/cases/page-wire/README.md).
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { JSDOM } from "jsdom";
 import { selectPageWire } from "@soksak/runtime";
@@ -14,13 +15,17 @@ const TIMEOUT = "the current image raster did not present within 10s; pending ta
 // The page-wire case of the first test is selected before host.js is imported, because host.js reads the host when it is imported.
 let wire = selectPageWire("layout-verify-state-recovered-ends-failure");
 
-const dom = new JSDOM('<header></header><div id="plane"></div><div id="applicationError"></div>');
+const dom = new JSDOM('<header></header><div id="plane"></div>');
 globalThis.window = dom.window;
 globalThis.document = dom.window.document;
 const { surfaces } = await import("../host.js");
 const { flushEvents } = await import("../page-log.js");
 const { onCommit, publishAhead, cancelPrepared } = await import("../compositor.js");
+const { registry } = await import("../exposure.js");
+registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
 const { createErrorDisplay, createErrorWithdrawal, createPageLayout, verificationRows } = await import("../page-layout.js");
+const latestToast = () => document.getElementById("errorToasts")?.lastElementChild;
+const toastText = () => latestToast()?.dataset.text ?? null;
 
 /**
  * Creates the page layout whose preparation fails while state.fail is true: the commit listener of the compositor answers with the failure
@@ -60,24 +65,24 @@ test("a presentation after a failed presentation ends the failure of the page la
   wire.finish();
 });
 
-test("a presentation after a failed presentation withdraws the error of that failure from the banner", async () => {
+test("a presentation after a failed presentation withdraws the toast of that failure", async () => {
   wire = selectPageWire("layout-verify-state-banner-withdrawn");
   const state = { fail: true };
   const page = layoutWith(state);
   page.onLayout(new Map(), () => {}, new Map(), 40, () => true, []);
   await page.presented();
-  assert.match(document.getElementById("applicationError")?.textContent ?? "", /surface presentation failed/);
+  assert.match(toastText() ?? "", /surface presentation failed/);
   state.fail = false;
   page.onLayout(new Map(), () => {}, new Map(), 40, () => true, []);
   await page.presented();
   page.clearFailure();
   await drained();
-  assert.equal(document.getElementById("applicationError"), null, "the banner keeps the failure of a layout that recovered");
+  assert.equal(toastText(), null, "the toast keeps the failure of a layout that recovered");
   await flushEvents();
   wire.finish();
 });
 
-test("a presentation after a failed presentation leaves another error in the banner", async () => {
+test("a presentation after a failed presentation leaves another error toast", async () => {
   wire = selectPageWire("layout-verify-state-other-error-kept");
   const state = { fail: true };
   const page = layoutWith(state);
@@ -90,8 +95,8 @@ test("a presentation after a failed presentation leaves another error in the ban
   await page.presented();
   page.clearFailure();
   await drained();
-  assert.equal(document.getElementById("applicationError")?.textContent, "another failure");
-  document.getElementById("applicationError").remove();
+  assert.equal(toastText(), "another failure");
+  latestToast().remove();
   await flushEvents();
   wire.finish();
 });
@@ -106,12 +111,12 @@ test("while a surface has not presented, the presentation of another render leav
   page.onLayout(new Map(), () => {}, new Map(), 40, () => true, []);
   await page.drawn();
   page.clearFailure();
-  // The wait for the surface is held until the release, so the banner keeps the failure after clearFailure.
+  // The wait for the surface is held until the release, so the toast keeps the failure after clearFailure.
   assert.equal(page.failure(), null, "a later presentation must end the failure of the page layout");
-  assert.match(document.getElementById("applicationError")?.textContent ?? "", /did not present/, "the error is still true");
+  assert.match(toastText() ?? "", /did not present/, "the error is still true");
   wire.release();
   await drained();
-  assert.equal(document.getElementById("applicationError"), null, "the surface presented and the banner kept the failure");
+  assert.equal(toastText(), null, "the surface presented and the toast kept the failure");
   await flushEvents();
   wire.finish();
 });
@@ -128,12 +133,12 @@ test("a wait for the surfaces that fails leaves the failure, and the next presen
   page.clearFailure();
   // The wait rejects with the failure; the page handles that rejection, so the test only observes that it ended.
   await drained();
-  assert.match(document.getElementById("applicationError")?.textContent ?? "", /did not present/);
+  assert.match(toastText() ?? "", /did not present/);
   assert.equal(waits(), 1, "a failed wait asked the surfaces again before the next presented render");
   page.clearFailure();
   await drained();
   assert.equal(waits(), 2);
-  assert.equal(document.getElementById("applicationError"), null);
+  assert.equal(toastText(), null);
   await flushEvents();
   wire.finish();
 });
@@ -149,13 +154,13 @@ test("a layout that fails during the wait keeps its failure", async () => {
   await page.drawn();
   wire.release();
   await drained();
-  assert.match(document.getElementById("applicationError")?.textContent ?? "", /did not present/);
-  document.getElementById("applicationError").remove();
+  assert.match(toastText() ?? "", /did not present/);
+  latestToast().remove();
   await flushEvents();
   wire.finish();
 });
 
-test("a failure that repeats stays in the banner", async () => {
+test("a failure that repeats keeps its toast", async () => {
   wire = selectPageWire("layout-verify-state-failure-repeats");
   const state = { fail: true };
   const page = layoutWith(state);
@@ -163,24 +168,24 @@ test("a failure that repeats stays in the banner", async () => {
     page.onLayout(new Map(), () => {}, new Map(), 40, () => true, []);
     await page.presented();
   }
-  assert.match(document.getElementById("applicationError")?.textContent ?? "", /surface presentation failed/);
-  document.getElementById("applicationError").remove();
+  assert.match(toastText() ?? "", /surface presentation failed/);
+  latestToast().remove();
   await flushEvents();
   wire.finish();
 });
 
-test("an error of another source with the text of the failure stays in the banner", async () => {
+test("an error of another source with the text of the failure keeps its toast", async () => {
   wire = selectPageWire("layout-verify-state-same-text-other-source");
   const state = { fail: true };
   const page = layoutWith(state);
   page.onLayout(new Map(), () => {}, new Map(), 40, () => true, []);
   await page.presented();
-  const text = document.getElementById("applicationError").textContent;
+  const text = toastText();
   createErrorDisplay({ document, changed: () => {} })(text);
   page.clearFailure();
   await drained();
-  assert.equal(document.getElementById("applicationError")?.textContent, text);
-  document.getElementById("applicationError").remove();
+  assert.equal(toastText(), text);
+  latestToast().remove();
   await flushEvents();
   wire.finish();
 });

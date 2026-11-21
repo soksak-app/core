@@ -5,6 +5,7 @@
 
 ## 2026-11-21
 
+- F1031-2: The page refuses an empty or unknown error toast text. The layout and status tests exercise the current error display and keep their logging and recovery assertions. Red: dismissing an empty text returned success. Green: the layout recovery, layout logging, and workbench status tests pass.
 - F1031-1: The page registers `core.error.dismiss` after initializing its parameter error handler. Red: the memory saver and lazy screen tests fail during startup with an uninitialized handler. Green: both startup tests and the error display tests pass.
 - F1030-1: The macOS hosts prepare a user PATH registration at startup. Settings can enable or disable it. Disabling removes the owned links and shell blocks and persists across restarts. A current registration is left in place and a conflicting command or file is reported. Verification: the Go and Rust host startup and restart tests and the page and mygo setup tests pass.
 - F1029: The revert of the toast change kept the completed rows of the acceptance reports (F1024 with its narrowing F1024-1 and F1025), closed F1026 as reverted with F1027 holding the re-landing, and the feature links cover the rows whose capability remains in the tree; the capability of F1026 left the tree with the revert, so its completed row is in the removed set of the audit. Verification: `make check-push`, `make check-docs` and `make check-tests` pass.

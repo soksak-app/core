@@ -562,7 +562,8 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
     }
   };
   registry.command("core.error.dismiss", invalid(async ({ text }) => {
-    dismissErrorToast(document, String(text));
+    if (!text) throw new Error("core.error.dismiss requires a text");
+    if (!dismissErrorToast(document, text)) throw new Error("core.error.dismiss names no open toast");
     coreChanged();
   }));
   // The host asks it before it waits for the presentation of the window (docs/spec/host-contract.md).

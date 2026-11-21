@@ -6,6 +6,7 @@
 // compositor of compositor.js reaches the host only through the listener of onCommit, which no module registers, so no
 // production preparation fails with a host answer here (see the notes of each test).
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { JSDOM } from "jsdom";
 import { selectPageWire } from "@soksak/runtime";
@@ -17,12 +18,11 @@ const TIMEOUT = "the current image raster did not present within 10s; pending ta
 // The page-wire case of the first test is selected before host.js is imported, because host.js reads the host when it is imported.
 const firstWire = selectPageWire("layout-failure-lines-project-switch");
 
-const dom = new JSDOM('<div id="applicationError"></div><button id="projectTab"></button>');
+const dom = new JSDOM('<button id="projectTab"></button>');
 globalThis.document = dom.window.document;
 const { report, surfaces } = await import("../host.js");
 const { flushEvents } = await import("../page-log.js");
-const { createErrorDisplay, createPageLayout, placementLast, reportUncaught } = await import("../page-layout.js");
-const { hideError } = await import("../shown-errors.js");
+const { createErrorDisplay, createPageLayout, dismissErrorToast, placementLast, reportUncaught } = await import("../page-layout.js");
 const { connectExposure, registry } = await import("../exposure.js");
 const { bind } = await import("../commands.js");
 
@@ -31,10 +31,8 @@ const linesOf = (wire) => wire.calls
   .filter(({ name, payload }) => name === "log" && payload?.action === "batch")
   .flatMap(({ name, payload }) => recordsOf(name, payload).map(shownRecord));
 
-const banner = document.getElementById("applicationError");
 const showError = createErrorDisplay({ document, changed: () => {} });
-
-
+const errorText = `surface presentation failed: ${TIMEOUT}`;
 
 // The window of the document. A browser reports an unhandled rejection as an unhandledrejection event of the window.
 const target = new EventTarget();
@@ -66,7 +64,9 @@ const schedule = () => { page.onLayout(new Map(), () => {}, new Map(), 40, () =>
 
 test("a layout failure of a project switch started from the interface writes one workbench error line", async () => {
   reportRejectionsAsPage();
-  registry.declare("core", { status: [], element: [], commands: [{
+  const declared = JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes;
+  const dismiss = declared.commands.find(({ name }) => name === "core.error.dismiss");
+  registry.declare("core", { status: [], element: [], commands: [dismiss, {
     name: "core.fixture.activate", description: "Activates.", params: { type: "object", properties: {} }, result: { type: "null" },
   }] });
   // A project switch schedules the loaded layout on the plane, waits for its presentation, and then replies (showProject of projects.js).
@@ -91,7 +91,7 @@ test("a layout failure that no command waits for writes one workbench error line
   const wire = selectPageWire("layout-failure-lines-gesture");
   reportRejectionsAsPage();
   // The same line is not written again, so the earlier presentation is withdrawn.
-  hideError(banner, "workbench");
+  assert.equal(dismissErrorToast(document, errorText), true);
   schedule();
   assert.equal(await page.presented(), false, "a failed layout was reported as presented");
   await flushEvents();
