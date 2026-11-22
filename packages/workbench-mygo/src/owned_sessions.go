@@ -43,6 +43,10 @@ type OwnedPorts struct {
 	Random  func() string
 	Emit    func(level, name string, fields map[string]any)
 	Changed func()
+	// Listen registers listener for each message of surface of the sidecar name, and answers with the function that stops it.
+	Listen func(name, surface string, listener func(body json.RawMessage), answer func(stop func(), err error))
+	// Fail shows an error of place with its text through the error display of the window.
+	Fail func(place, text string)
 }
 
 // Size is the size of a session: the width and height of its card in points and the backing scale of the window. The sidecar converts
@@ -77,11 +81,20 @@ type OwnedSessions struct {
 	order []string
 	// pending holds the size of each session whose resize request has no reply yet.
 	pending map[string]Size
+	// listens holds the listener of each owner surface that has an open session, while the window listens to the surface.
+	listens map[string]*ownedListen
+}
+
+// ownedListen is the listener of an owner surface: its stop function, which is nil until the host answers the registration, and
+// whether the owner has no session left, so that the stop runs when the registration is answered.
+type ownedListen struct {
+	stop    func()
+	dropped bool
 }
 
 // NewOwnedSessions returns the owned sessions over ports.
 func NewOwnedSessions(ports OwnedPorts) *OwnedSessions {
-	return &OwnedSessions{ports: ports, sessions: map[string]*OwnedSession{}, pending: map[string]Size{}}
+	return &OwnedSessions{ports: ports, sessions: map[string]*OwnedSession{}, pending: map[string]Size{}, listens: map[string]*ownedListen{}}
 }
 
 // Open opens a session of plugin that owner owns, with the size and the parameters params. It answers with the session
@@ -271,6 +284,12 @@ func (o *OwnedSessions) Retire(live func(surface string) bool) {
 			current.ShownBy = ""
 		}
 	}
+	// A listener stays while its owner surface is live, so that a repeated session.ended of it is refused and logged; a dead owner has none.
+	for owner := range o.listens {
+		if !live(owner) {
+			o.unlisten(owner)
+		}
+	}
 	o.ports.Changed()
 }
 
@@ -393,6 +412,82 @@ func (o *OwnedSessions) sidecarOf(plugin string) string {
 func (o *OwnedSessions) add(session *OwnedSession) {
 	o.sessions[session.Session] = session
 	o.order = append(o.order, session.Session)
+	o.listen(session.Owner, session.Plugin)
+}
+
+// listen registers the window for the messages of owner, when no session of owner was listened to yet, so that the session.ended event
+// of the owner reaches SurfaceMessage (docs/spec/persistent-services.md#owned-sessions).
+func (o *OwnedSessions) listen(owner, plugin string) {
+	if o.listens[owner] != nil {
+		return
+	}
+	name, _ := o.ports.Sidecar(plugin)
+	listen := &ownedListen{}
+	o.listens[owner] = listen
+	o.ports.Listen(name, owner, func(body json.RawMessage) {
+		// A listener of a surface that no session holds any more receives no message.
+		if o.listens[owner] == listen {
+			o.SurfaceMessage(owner, body)
+		}
+	}, func(stop func(), err error) {
+		if err != nil {
+			if o.listens[owner] == listen {
+				delete(o.listens, owner)
+			}
+			o.ports.Fail("core.session.ended", fmt.Sprintf("listen %s: %s", owner, err))
+			return
+		}
+		listen.stop = stop
+		if listen.dropped {
+			stop()
+		}
+	})
+}
+
+// unlisten removes the listener of owner, which has no open session left. A registration that the host has not answered stops when it is answered.
+func (o *OwnedSessions) unlisten(owner string) {
+	listen := o.listens[owner]
+	if listen == nil {
+		return
+	}
+	delete(o.listens, owner)
+	listen.dropped = true
+	if listen.stop != nil {
+		listen.stop()
+	}
+}
+
+// SurfaceMessage handles a message of the owner surface. A body whose event is session.ended ends the session it names with reason
+// ended; any other body is a reply or an event of the plugin and is not a session end (docs/spec/persistent-services.md#owned-sessions).
+func (o *OwnedSessions) SurfaceMessage(owner string, body json.RawMessage) {
+	var members map[string]json.RawMessage
+	if err := json.Unmarshal(body, &members); err != nil {
+		return // A body that is not an object is not a session.ended event.
+	}
+	var event string
+	if err := json.Unmarshal(members["event"], &event); err != nil || event != "session.ended" {
+		return
+	}
+	var session string
+	if err := json.Unmarshal(members["session"], &session); err != nil || session == "" {
+		o.ports.Fail("core.session.ended", "invalid session.ended body: session")
+		return
+	}
+	var reason string
+	if err := json.Unmarshal(members["reason"], &reason); err != nil || reason != "ended" {
+		o.ports.Fail("core.session.ended", "invalid session.ended body: reason")
+		return
+	}
+	entry := o.sessions[session]
+	if entry == nil {
+		o.ports.Fail("core.session.ended "+session, fmt.Sprintf("session %s is not open", session))
+		return
+	}
+	if entry.Owner != owner {
+		o.ports.Fail("core.session.ended "+session, fmt.Sprintf("surface %s does not own session %s", owner, session))
+		return
+	}
+	o.finish(session, "ended")
 }
 
 // finish removes session from the open sessions and records its end with reason.

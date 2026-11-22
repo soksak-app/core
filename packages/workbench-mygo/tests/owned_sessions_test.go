@@ -50,6 +50,7 @@ type ownedViewSend struct {
 
 func (h *ownedHost) table() map[string]workbench.HostCall {
 	return map[string]workbench.HostCall{
+		"sidecarListen": func(_ context.Context, _ json.RawMessage) (any, error) { return nil, nil },
 		"sidecarSend": func(_ context.Context, argument json.RawMessage) (any, error) {
 			var request struct {
 				Sidecar string
@@ -130,6 +131,8 @@ type ownedFixture struct {
 	views map[string]workbench.MountedView
 	shown map[string]string
 	ids   int
+	// failures holds each error shown as "place: text".
+	failures []string
 }
 
 // newSessions returns the owned sessions of a window over the ports of the fixture. A reopened window is a new value over the same
@@ -156,6 +159,10 @@ func (f *ownedFixture) newSessions() *workbench.OwnedSessions {
 		},
 		Emit:    f.events.emit,
 		Changed: func() {},
+		Listen: func(name, surface string, listener func(json.RawMessage), answer func(func(), error)) {
+			f.ports.Port(name).On(surface, listener, answer)
+		},
+		Fail: func(place, text string) { f.failures = append(f.failures, place+": "+text) },
 	})
 }
 
@@ -587,4 +594,78 @@ func TestAnUnchangedCardFrameSendsNothingAcrossManyFrames(t *testing.T) {
 		f.pending.drain(t)
 	}
 	equal(t, len(f.host.sent()), 1)
+}
+
+// surfaceMessage delivers body as a message of surface of the session sidecar, as the host does for a surface that the window listens to.
+func (f *ownedFixture) surfaceMessage(surface, body string) {
+	f.ports.Message(sessionSidecar, surface, json.RawMessage(body))
+}
+
+func TestSessionEndedFromTheOwnerEndsTheSessionWithoutARequest(t *testing.T) {
+	f := newOwnedFixture(t)
+	openFixtureSession(t, f)
+	f.surfaceMessage("owner-tab", `{"event":"session.ended","session":"s-1","reason":"ended"}`)
+	equal(t, len(f.sessions.Status()), 0)
+	equal(t, len(f.host.sent()), 0)
+	equal(t, f.failures, []string(nil))
+	ends := f.eventsNamed("workbench.session.end")
+	equal(t, len(ends), 1)
+	equal(t, ends[0]["session"], "s-1")
+	equal(t, ends[0]["reason"], "ended")
+}
+
+func TestSessionEndedForAnUnknownSessionIsLoggedAndChangesNothing(t *testing.T) {
+	f := newOwnedFixture(t)
+	openFixtureSession(t, f)
+	f.surfaceMessage("owner-tab", `{"event":"session.ended","session":"s-9","reason":"ended"}`)
+	equal(t, f.failures, []string{"core.session.ended s-9: session s-9 is not open"})
+	equal(t, len(f.sessions.Status()), 1)
+	equal(t, len(f.eventsNamed("workbench.session.end")), 0)
+}
+
+func TestRepeatedSessionEndedChangesNothingAfterTheFirst(t *testing.T) {
+	f := newOwnedFixture(t)
+	openFixtureSession(t, f)
+	f.surfaceMessage("owner-tab", `{"event":"session.ended","session":"s-1","reason":"ended"}`)
+	f.surfaceMessage("owner-tab", `{"event":"session.ended","session":"s-1","reason":"ended"}`)
+	equal(t, f.failures, []string{"core.session.ended s-1: session s-1 is not open"})
+	equal(t, len(f.sessions.Status()), 0)
+	equal(t, len(f.eventsNamed("workbench.session.end")), 1)
+}
+
+func TestSessionEndedNamingAnotherOwnersSessionIsRefused(t *testing.T) {
+	f := newOwnedFixture(t)
+	openFixtureSession(t, f)
+	f.host.reply = func(op string, body map[string]any) map[string]any {
+		return map[string]any{"session": "s-2", "creation": body["session"].(map[string]any)["creation"]}
+	}
+	if _, err := f.open("other-tab", "terminal", `{}`, cardSize); err != nil {
+		t.Fatalf("open of the other owner: %v", err)
+	}
+	f.surfaceMessage("owner-tab", `{"event":"session.ended","session":"s-2","reason":"ended"}`)
+	equal(t, f.failures, []string{"core.session.ended s-2: surface owner-tab does not own session s-2"})
+	equal(t, len(f.sessions.Status()), 2)
+	equal(t, len(f.eventsNamed("workbench.session.end")), 0)
+}
+
+func TestSessionEndedWithAnotherReasonOrWithoutSessionIsRefused(t *testing.T) {
+	f := newOwnedFixture(t)
+	openFixtureSession(t, f)
+	f.surfaceMessage("owner-tab", `{"event":"session.ended","session":"s-1","reason":"owner-closed"}`)
+	f.surfaceMessage("owner-tab", `{"event":"session.ended","reason":"ended"}`)
+	equal(t, f.failures, []string{
+		"core.session.ended: invalid session.ended body: reason",
+		"core.session.ended: invalid session.ended body: session",
+	})
+	equal(t, len(f.sessions.Status()), 1)
+}
+
+func TestOtherBodiesOfTheOwnerAreNotSessionEnds(t *testing.T) {
+	f := newOwnedFixture(t)
+	openFixtureSession(t, f)
+	f.surfaceMessage("owner-tab", `{"event":"output","text":"x"}`)
+	f.surfaceMessage("owner-tab", `"plain text"`)
+	f.surfaceMessage("owner-tab", `{"operation":"end","session":"s-1","ended":true}`)
+	equal(t, f.failures, []string(nil))
+	equal(t, len(f.sessions.Status()), 1)
 }

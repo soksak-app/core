@@ -44,6 +44,13 @@ func (s *Shell) ownedPorts() OwnedPorts {
 		Shown:  s.layoutShownSessions,
 		Random: func() string { return issueID(s.options.Random, "os-", func(string) bool { return false }) },
 		Emit:   s.emitTabEvent,
+		Listen: func(name, surface string, listener func(json.RawMessage), answer func(func(), error)) {
+			s.tabs.sidecars.Port(name).On(surface, listener, answer)
+		},
+		Fail: func(place, text string) {
+			s.errors.Show(place, text, "")
+			s.options.Invalidate()
+		},
 		Changed: func() {
 			if err := s.registry.Changed(); err != nil {
 				s.fail(err)
