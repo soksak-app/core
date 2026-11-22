@@ -743,14 +743,14 @@ func (s *Surfaces) planViewSync(surfaceID string, surface unsafe.Pointer, plugin
 	if err == nil {
 		return viewSyncPlace, handle, nil
 	}
-	if spec.folder == "" {
-		folder, folderErr := PluginFolder(s.host.configDir, plugin)
-		if folderErr != nil {
-			return viewSyncSkip, nil, folderErr
-		}
-		spec.folder = folder
-		spec.directory = filepath.Join(s.host.configDir, documentData)
+	// The folder is resolved at each creation, because a plugin update keeps the surface and its record while the installed version
+	// changes; the record of the earlier creation holds the folder of the earlier version.
+	folder, folderErr := PluginFolder(s.host.configDir, plugin)
+	if folderErr != nil {
+		return viewSyncSkip, nil, folderErr
 	}
+	spec.folder = folder
+	spec.directory = filepath.Join(s.host.configDir, documentData)
 	return viewSyncCreate, nil, nil
 }
 

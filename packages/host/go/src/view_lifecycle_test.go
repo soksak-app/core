@@ -2,6 +2,8 @@ package host
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
@@ -82,10 +84,10 @@ func newLifecycleSurfacesWithStart(t *testing.T, start ViewStart) (*Surfaces, *l
 // of a web view of the platform when a test hands it to the native layer; a nil view is a handle that only the host state holds.
 func newLifecycleSurfacesOn(t *testing.T, start ViewStart, view unsafe.Pointer) (*Surfaces, *lifecycleViews, unsafe.Pointer) {
 	t.Helper()
-	s := &Surfaces{documents: NewDocuments(), streams: NewDocumentStreams(), images: NewImages(), lifecycle: newViewLifecycle(), host: &Host{configDir: "/config"}, invoke: func(task func()) { task() }, events: func(string, any) {}}
+	config := t.TempDir()
+	writeViewPluginVersion(t, config, "1.0.0")
+	s := &Surfaces{documents: NewDocuments(), streams: NewDocumentStreams(), images: NewImages(), lifecycle: newViewLifecycle(), host: &Host{configDir: config}, invoke: func(task func()) { task() }, events: func(string, any) {}}
 	native := unsafe.Pointer(new(int))
-	spec := s.viewRecords().track("probe-surface", native, "probe", "ui/page.html", true)
-	spec.directory, spec.folder = "/config/document-data", "/plugins/probe"
 	views := &lifecycleViews{first: view}
 	views.sync(t, s, native, true, start)
 	return s, views, native
@@ -475,5 +477,61 @@ func TestViewProcessEndSendsTheProcessEndedEvent(t *testing.T) {
 	}
 	if ended != 1 {
 		t.Fatalf("view-process-ended events after the process end: %d, want one", ended)
+	}
+}
+
+// writeViewPluginVersion installs version of plugin probe in the configuration folder config and records it as the enabled
+// installed version in installed.json, as an update does.
+func writeViewPluginVersion(t *testing.T, config, version string) {
+	t.Helper()
+	folder := filepath.Join(config, "plugins", "probe", version)
+	if err := os.MkdirAll(folder, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(folder, "plugin.json"), []byte(`{"id": "probe"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(folder, "package.json"), []byte(`{"name": "plugin-probe"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	record := `{"format": 3, "plugins": {"probe": {"version": "` + version + `", "path": "plugins/probe/` + version + `", "enabled": true, "sidecars": {}}}, "sidecars": {}}`
+	if err := os.WriteFile(filepath.Join(config, "plugins", "installed.json"), []byte(record), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestAViewCreatedAfterAnUpdateServesTheInstalledVersionFolder checks that a view whose surface is kept across a workbench restart
+// takes the folder of the version that installed.json records when the view is created again. The surface id and the start values
+// of the view, which carry its restore state, are the same before and after the update.
+func TestAViewCreatedAfterAnUpdateServesTheInstalledVersionFolder(t *testing.T) {
+	config := t.TempDir()
+	writeViewPluginVersion(t, config, "1.0.0")
+	s := &Surfaces{documents: NewDocuments(), streams: NewDocumentStreams(), images: NewImages(), lifecycle: newViewLifecycle(), host: &Host{configDir: config}, invoke: func(task func()) { task() }, events: func(string, any) {}}
+	views := &lifecycleViews{}
+	native := unsafe.Pointer(new(int))
+	start := nullOriginStart()
+	start.Params = json.RawMessage(`{"restore":"state-A"}`)
+	if step := views.syncSurface(t, s, "probe-surface", native, true, start); step != viewSyncCreate {
+		t.Fatalf("first synchronization planned %v, want the creation of the view", step)
+	}
+	if got, want := s.viewRecords().specs["probe-surface"].folder, filepath.Join(config, "plugins", "probe", "1.0.0"); got != want {
+		t.Fatalf("first view folder %q, want %q", got, want)
+	}
+	// The update installs 2.0.0, and the workbench restart closes the documents of the kept surface. The page of the kept surface
+	// starts the view again with the start values that it had.
+	writeViewPluginVersion(t, config, "2.0.0")
+	s.closeSurfaceDocumentsWith("probe-surface", func(unsafe.Pointer) {})
+	if step := views.syncSurface(t, s, "probe-surface", native, true, start); step != viewSyncCreate {
+		t.Fatalf("synchronization after the update planned %v, want the creation of the view", step)
+	}
+	spec := s.viewRecords().specs["probe-surface"]
+	if got, want := spec.folder, filepath.Join(config, "plugins", "probe", "2.0.0"); got != want {
+		t.Fatalf("view folder after the update %q, want %q", got, want)
+	}
+	if string(spec.start.Params) != `{"restore":"state-A"}` {
+		t.Fatalf("view start params after the update %s, want the restore state of the surface", spec.start.Params)
+	}
+	if len(views.createdFor) != 2 || views.createdFor[1] != native {
+		t.Fatalf("views created for %d surfaces, want the second view of the same surface", len(views.createdFor))
 	}
 }

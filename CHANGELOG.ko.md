@@ -6,6 +6,7 @@
 ## 2026-11-22
 
 - F1070: Go와 Rust sok의 manifest 검사는 F1064 이후의 plugin API처럼 `surface`나 `sections`가 있는 `extends`를 받아들이고, 공유 manifest case `extends.requires-surface-or-sections`와 `extends.accepts-with-sections`가 이 규칙을 정한다. Red: Go case replay가 sections manifest를 `extends requires a surface`로 거부했다. Green: Go와 Rust case replay, plugin API case 229개가 통과한다.
+- F1065: mygo host는 view를 만들 때마다 `installed.json`에서 plugin 폴더를 읽는다. 그래서 plugin 업데이트 뒤 만든 view는 설치된 version을 내주고, surface 식별자와 시작 parameter는 유지된다. Rust host는 이미 만들 때마다 폴더를 읽었다. Red: `TestAViewCreatedAfterAnUpdateServesTheInstalledVersionFolder`가 이전 version의 폴더로 실패했다. Green: Go host test 390개와 584개가 통과한다.
 - F1063-2: Go와 Rust host는 각 role의 `files`를 담은 format 3으로 `roles.json`을 읽고 쓰며, `files`를 fingerprint와 role 파일에 포함하고, 요청 `roleDefine`, `roleDefinitionRemove`, `rolesStatus`를 처리한다. tab에서 실패한 define은 `roles.json`을 쓴 뒤 tab 오류를 이어 붙여 답한다. Red: 공유 role case가 format 3에서 실패했다. Green: Go host test 584개와 Rust host test 1149개가 통과한다.
 - F1055-4: 두 workbench는 유지하는 group card 하나의 카드를 다른 group card로 옮기는 두 번째 apply를 시험한다. 두 group card는 식별자와 이름을 유지하고, 옮긴 카드는 자기 tab을 유지하며, 되풀이는 아무것도 바꾸지 않는다. test가 첫 실행에서 통과했으므로 F1055-2의 구현이 이미 계약을 만족했다. F1055가 완료되었다.
 - F1064: plugin specification과 plugin API의 `validateManifest`에서 `extends`는 `data`처럼 `surface`나 `sections`를 요구한다. 그래서 section만 page로 가진 plugin도 extension point를 제공한다. Red: `extends is accepted with a surface or with sections and refused without either`가 `extends requires a surface`로 실패했다. Green: validation test 42개가 통과한다. plugin은 다음 core release로 이 변경을 받는다.

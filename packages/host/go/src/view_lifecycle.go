@@ -14,7 +14,7 @@ const viewRestartLimit = 4
 const viewRestartWindow = 300 * time.Second
 
 // viewSpec is the record of one view surface that the host needs to create its view again. directory and folder are resolved
-// when the view is first created.
+// from installed.json each time the view is created.
 type viewSpec struct {
 	native    unsafe.Pointer
 	plugin    string
