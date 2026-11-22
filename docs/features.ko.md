@@ -171,6 +171,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [o] F1031-9 — Node reporter 색상 test가 명시적인 색상 환경을 사용한다. 상위 환경에 NO_COLOR를 지정한 상태에서 두 파일의 test 39개가 통과한다.
   - [o] F1031-10 — 표시된 오류에 맞춰 toast 테두리 색상을 적용하고 닫기 control metric을 선언하며 layout fixture에 닫기 선언을 연결한다. 관련 test 13개가 통과한다.
   - [o] F1031-11 — F1031-10 후속. Toast 닫기 metric을 포함하도록 host의 workbench 선언 사본을 갱신한다. Exposure 검사 두 개와 workbench 선언 test가 통과한다.
+- [o] F1057 — P1, F1052의 후속: F1052가 `surface-listing.js`로 옮긴 저장 layout tab 나열에 data 없는 card의 nullish 기본값이 이유 없이 남아 있어서 fallback 검사가 거부했다. 그 기본값에 data 없는 저장 card는 tab이 없다는 이유를 적었다.
 - [o] F1056 — P1, F1053의 후속: window check projects reader의 test가 아직 projects format 3으로 써서, reader가 format 4로 바뀐 뒤 실패했다. test는 format 4로 쓰고 format 3을 거부로 판정한다.
 - [~] F1054 — P0, F1033-4의 후속: mygo workbench는 library에서 project를 다시 열었을 때 project override 대신 common mode를 보였다. `project windows persist files, inherit settings, and isolate native state` 5회 중 3회. mygo workbench는 캐시한 project 기록의 override를 적용하고, 그 기록은 window의 쓰기를 store의 change event 때에만 받는다. page workbench는 project를 선택할 때 store를 읽는다. 남은 일: change event가 갱신하지 않은 캐시 기록으로 Red test, project를 보일 때 store 읽기, window check 반복.
 - [ ] F1055 — P1: 여러 card의 group card 요청을 plan 한 번과 apply 한 번으로 만든다. group은 `core.group.create`와 추가 card마다 layout을 읽은 뒤의 `core.layout.open`이 필요해서, agent가 한 배치에 여러 단계를 쓴다.

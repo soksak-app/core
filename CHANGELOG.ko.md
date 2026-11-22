@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1057: 저장 tab 나열의 nullish 기본값에 이유를 적었다. Red: `scripts/test/fallbacks.test.mjs`가 `surface-listing.js:40: nullish default without a stated reason`으로 실패했다. Green: fallback test가 통과한다.
 - F1056: window check projects reader의 test는 format 4로 쓰고 format 3을 거부로 판정한다. Red: `project records reject a malformed current envelope`가 `expected projects format 4, found format 3`로 실패했다. Green: reader test 네 개가 통과한다.
 - F1053: window check의 projects reader(`e2e/projects-file.mjs`)는 projects format 4를 받는다. Red: project window check가 `projects.json: expected projects format 3, found format 4`로 실패했다. Green: Wails와 Tauri의 project window check가 통과한다.
 - F1052: page workbench는 다른 space의 저장된 layout tab을 layout tree에서 나열한다(`surface-listing.js`의 `storedSpaceTabs`). Red: 새 listing test가 `space.layout.state.cards is not iterable`로 실패했고, Wails와 Tauri의 project window check가 presentation 오류로 실패했다. Green: listing test와 page workbench suite가 통과하고, 오류 window check가 Wails와 Tauri에서 통과한다.

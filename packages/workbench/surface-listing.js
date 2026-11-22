@@ -37,6 +37,7 @@ export function storedSpaceTabs(projects, skip) {
     for (const space of project.spaces) {
       if (skip(project, space)) continue;
       for (const card of stateCards(space.layout.state)) {
+        // default: a stored card without data holds no tabs (stateCards of layout-tree.js names data optional).
         for (const tab of card.data?.tabs ?? []) out.push({ tab, card, holder: `the stored layout of space ${space.id}, project ${project.id}` });
       }
     }

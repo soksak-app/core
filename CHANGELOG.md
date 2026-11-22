@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1057: The nullish default of the stored tab listing states its reason. Red: `scripts/test/fallbacks.test.mjs` failed with `surface-listing.js:40: nullish default without a stated reason`. Green: the fallback test passes.
 - F1056: The test of the projects reader of the window checks writes format 4 and judges format 3 as refused. Red: `project records reject a malformed current envelope` failed with `expected projects format 4, found format 3`. Green: the four reader tests pass.
 - F1053: The projects reader of the window checks (`e2e/projects-file.mjs`) accepts projects format 4. Red: the project window checks failed with `projects.json: expected projects format 3, found format 4`. Green: the Wails and Tauri project window checks pass.
 - F1052: The page workbench lists the tabs of the stored layouts of the other spaces from the layout tree (`storedSpaceTabs` of `surface-listing.js`). Red: the new listing test failed with `space.layout.state.cards is not iterable`, and the Wails and Tauri project window checks failed with the presentation error. Green: the listing test and the page workbench suite pass, and the error window checks pass on Wails and Tauri.
