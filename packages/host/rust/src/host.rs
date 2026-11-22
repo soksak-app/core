@@ -255,20 +255,20 @@ pub fn manage_start_state(app: &AppHandle) {
 /// exists, without it; a panic that waits for the writer ends its wait there (docs/spec/hosts.md#process-lifecycle).
 pub fn start_endpoint(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let started = open_endpoint(app);
-    // The update at start follows the open event log (docs/spec/installation.md#update-at-start).
-    if started.is_ok() {
-        start_plugin_updates(app);
-    }
     crate::routine::notify_start_ended();
     started
 }
 
 /// Runs the update of the installed plugins on its own thread, so the start does not wait for the registry, and stores each
-/// outcome in the event log: a failure is an error record and an update is the event host.plugins.update.
-fn start_plugin_updates(app: &AppHandle) {
-    let app = app.clone();
-    crate::routine::spawn_named("plugin-updates", move || {
-        for update in app.state::<plugins::Plugins>().update_at_start() {
+/// outcome in the event log: a failure is an error record and an update is the event host.plugins.update. The setup adds the
+/// plugins state, so the state is read here, on the calling thread, and an application without it is refused before any thread
+/// starts (docs/spec/installation.md#update-at-start).
+pub fn start_plugin_updates(app: &AppHandle) -> Result<std::thread::JoinHandle<()>, String> {
+    let plugins = app
+        .try_state::<plugins::Plugins>()
+        .ok_or("the update at start requires the plugins state, which the setup adds")?;
+    Ok(crate::routine::spawn_named("plugin-updates", move || {
+        for update in plugins.update_at_start() {
             if update.plugin.is_empty() {
                 match update.error {
                     None => application_log::log_info("plugins", "no registry is configured"),
@@ -284,7 +284,7 @@ fn start_plugin_updates(app: &AppHandle) {
                 );
             }
         }
-    });
+    }))
 }
 
 /// The steps of [`start_endpoint`].
@@ -527,6 +527,9 @@ pub fn setup(app: &AppHandle, setup: Setup) -> Result<(), Box<dyn std::error::Er
     // A client sends a request to the first window as soon as it reads endpoint.json, so the file is written
     // after the window is registered.
     exposure::publish(app, "main")?;
+    // The update at start follows the open event log and the plugins and sidecars states of this setup, which its apply step reads
+    // (docs/spec/installation.md#update-at-start).
+    start_plugin_updates(app)?;
     Ok(())
 }
 

@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1093: 설치된 plugin의 시작 때 update는 plugins와 sidecars state가 생긴 뒤 host setup의 끝에서 시작하고, plugins state 없는 시작은 호출한 thread에서 거부되므로, Tauri application은 endpoint.json을 쓰기 전에 thread `plugin-updates`의 panic으로 status 101로 끝나지 않는다. 검증: panic을 읽은 `a_start_of_the_update_without_the_plugins_state_is_refused_without_a_thread`의 Red, 그 뒤 Rust host의 start update test 8개와 함께 Green.
 - F1082-1: stop이 연결을 즉시 끝내서 service fixture가 echo를 쓰기 전에 끝낼 수 있으므로, `TestPersistentServiceStartsInANewSession`은 sidecar stop 전에 open의 echo를 받는다. 검증: 20회 반복 실행이 변경 전에는 `write: broken pipe`로 실패하고 변경 후에는 통과한다.
 - F1082-1: normal shutdown audit 시험의 실행 중 service fixture는 window-source audit가 거부하는 반복 timer 대신 열린 standard input으로 계속 실행된다. 검증: window-source audit 시험은 `e2e/test/normal-shutdown-audit.test.mjs:153: uses a repeating timer`로 실패한 뒤 통과하고, normal shutdown audit 시험 16개가 통과한다.
 - F1092: presentation 대기는 공급자 연결이 끝난 image region의 raster를 host가 그 region의 프레임을 다시 표시할 때까지 요구하지 않으므로, region의 session을 갖지 않은 재시작한 sidecar가 더 이상 workbench의 모든 명령을 붙잡지 않는다. 검증: Go와 Rust image 대기 사례의 Red, 이후 두 host의 image 테스트로 Green.

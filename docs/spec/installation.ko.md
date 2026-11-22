@@ -191,7 +191,7 @@ Host가 시작할 때마다 registry index를 읽은 뒤 한 번, 실행 중인 
 
 시작 업데이트의 실패는 시작 업데이트가 끝날 때까지 host가 보관하며, `pluginsState`는 이를 `startUpdate`로 알린다. `{where, text}` 목록이며 `where`는 각 기록의 자리(`plugins update` 또는 `plugin update <id>`), `text`는 그 내용이다. 각 창은 상태를 읽을 때 `startUpdate`의 항목마다 오류 표시로 보이므로, 사람은 애플리케이션 log 없이도 실패를 본다. 시작 업데이트가 도는 동안 host가 종료하면, 시작 업데이트는 다음 plugin을 시작하지 않고, 아직 `plugins/installed.json`을 쓰지 않은 설치는 아무것도 쓰지 않는다. 종료가 시작된 뒤에는 release를 풀지 않고, `installed.json`을 쓰지 않으며, 적용 단계를 실행하지 않는다. 종료 전에 쓴 `installed.json`은 쓴 그대로 남고, 시작 업데이트는 그 중단을 error record `plugin update <id>: the host is shutting down`으로 남긴다.
 
-시작은 다른 plugin 작업이 실행 중이어도 후보를 거부하지 않고 그 작업이 끝날 때까지 기다린다. 시작은 자기 thread에서 실행하므로 창은 registry를 기다리지 않고 열린다. 설치된 plugin이 모두 받아들여지고 받아들여지는 가장 새 version을 가지면 다시 시작해도 아무것도 바뀌지 않는다. Index를 읽는 실패를 포함한 각 실패는 애플리케이션 log의 error record이며, registry 오류는 [Plugin 화면](#plugin-화면)이 보이는 대로 보인다.
+시작은 다른 plugin 작업이 실행 중이어도 후보를 거부하지 않고 그 작업이 끝날 때까지 기다린다. 시작은 자기 thread에서 실행하므로 창은 registry를 기다리지 않고 열린다. 시작은 host의 setup이 plugins와 sidecars state를 추가한 뒤, setup의 끝에서 시작하며, plugins state 없이 update를 시작하면 오류로 거부되고 thread를 시작하지 않는다. 설치된 plugin이 모두 받아들여지고 받아들여지는 가장 새 version을 가지면 다시 시작해도 아무것도 바뀌지 않는다. Index를 읽는 실패를 포함한 각 실패는 애플리케이션 log의 error record이며, registry 오류는 [Plugin 화면](#plugin-화면)이 보이는 대로 보인다.
 
 ## Plugin 화면
 

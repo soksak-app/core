@@ -1422,6 +1422,7 @@ fn invalid_json_closes_connection() {
 | `plugins.start-update.replaces-refused-with-newest-accepted` | start 때 reader가 `plugin.json`을 거부하는 설치된 plugin은 index의 가장 새로운 수용 version으로 갱신되고, `pluginsState`는 새 설치 version을 보고한다. | all |
 | `plugins.start-update.advances-older-accepted` | start 때 index의 가장 새로운 수용 version보다 오래된 설치된 plugin은 그 version으로 갱신된다. | all |
 | `plugins.start-update.repeated-start-changes-nothing` | 후보를 모두 갱신한 start 다음의 start는 파일을 바꾸지 않고 변경 메시지를 보내지 않는다. | all |
+| `plugins.start-update.refused-without-plugins-state` | plugins state가 없는 application에서 시작 때 update를 시작하면 호출한 thread에서 `the update at start requires the plugins state, which the setup adds`로 거부되고 thread는 시작하지 않는다. | tauriv2 only: Go host는 plugins를 update가 시작하기 전에 있는 host 값의 member로 갖는다 |
 | `plugins.start-update.refused-without-newer-is-reported-and-kept` | 거부되고 더 새로운 수용 version이 없는 설치된 plugin은 설치된 채 남고, start는 오류 record `plugin update <id>: <reason>`을 저장하며 `pluginsState.startUpdate`에 나열한다. | all |
 | `plugins.start-update.unreadable-registry-is-reported` | registry index를 읽을 수 없는 start는 아무것도 바꾸지 않고 오류 record `plugins update: <error>`를 저장한다. | all |
 | `plugins.start-update.failure-is-kept-in-plugins-state` | start 때의 실패한 갱신은 host가 끝날 때까지 `pluginsState.startUpdate`에 `{where, text}`로 남는다. | all |
