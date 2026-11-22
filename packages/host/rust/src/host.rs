@@ -79,6 +79,7 @@ pub mod presentation_wait;
 pub mod process_lock_hook;
 pub mod project_activity;
 pub mod project_removal;
+pub mod program_run;
 pub mod projects;
 pub mod quit;
 #[cfg(feature = "diagnostics")]

@@ -457,6 +457,34 @@ async fn sidecar_sessions(window: Window, sidecar: Argument<String>) -> Result<s
     .await
 }
 
+/// Runs the program that a plugin page declared for a view call (docs/spec/native-surfaces.md#program-runs). The answer is the
+/// reply of an exit, and null for a run that ended before its exit.
+#[tauri::command]
+async fn program_run(
+    window: Window,
+    request: Argument<soksak_host::program_run::RunCall>,
+) -> Result<Option<serde_json::Value>, String> {
+    let Argument(request) = request;
+    blocking(move || {
+        let data = soksak_host::windows::window_data(&window)?;
+        let environment = window.state::<WindowSidecars>().program_environment()?;
+        documents::program_run(&data, environment, request)
+    })
+    .await
+}
+
+/// Ends the open run of a view call (docs/spec/native-surfaces.md#program-runs).
+#[tauri::command]
+fn program_cancel(
+    window: Window,
+    request: Argument<soksak_host::program_run::CancelCall>,
+) -> Result<(), String> {
+    let Argument(request) = request;
+    let data = soksak_host::windows::window_data(&window)?;
+    documents::program_cancel(&data, request);
+    Ok(())
+}
+
 /// The surface list that every project layout holds.
 #[derive(serde::Deserialize)]
 struct RetainRequest {

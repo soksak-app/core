@@ -19,6 +19,8 @@ const COMMAND = {
   presentSurfaces: "present_surfaces",
   cancelSurfaces: "cancel_surfaces",
   surfaceFocus: "surface_focus",
+  programRun: "program_run",
+  programCancel: "program_cancel",
   waitPresented: "wait_presented",
   setTheme: "set_theme",
   setMenuLanguage: "set_menu_language",
@@ -103,6 +105,8 @@ const ARG = {
   presentSurfaces: (v) => ({ request: v }),
   cancelSurfaces: (v) => ({ request: v }),
   surfaceFocus: (v) => ({ request: v }),
+  programRun: (request) => ({ request }),
+  programCancel: (request) => ({ request }),
   waitPresented: () => ({}),
   setTheme: (v) => ({ theme: v }),
   setMenuLanguage: (v) => {

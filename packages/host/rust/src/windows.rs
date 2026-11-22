@@ -76,6 +76,8 @@ pub struct WindowData {
     pub registrations: Mutex<Vec<(String, String, String)>>,
     /// The document regions of surface pages.
     pub documents: crate::documents::Documents,
+    /// The open runs of the declared programs of the surfaces of the window (docs/spec/native-surfaces.md#program-runs).
+    pub program_runs: crate::program_run::ProgramRuns,
     /// The stream subscriptions of the document regions.
     pub streams: crate::documents::Streams,
     /// The image regions of surface pages.
@@ -1173,6 +1175,8 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
         WindowEvent::Destroyed => {
             context.end_waits("the window closed");
             context.documents.views().forget_all();
+            // The open program runs of the window end with it (docs/spec/native-surfaces.md#program-runs).
+            context.program_runs.end_window();
             // The close of the window ends its run with its transactions (docs/spec/native-surfaces.md#layout-transaction).
             crate::surfaces::end_run(&context.running);
             // A window that ends keeps no tab, so a removal that asked it is allowed.

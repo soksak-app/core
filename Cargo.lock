@@ -7563,6 +7563,7 @@ dependencies = [
  "objc2 0.6.4",
  "percent-encoding",
  "pkg-config",
+ "regex",
  "serde",
  "serde_json",
  "sha2 0.10.9",

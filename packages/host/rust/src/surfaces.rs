@@ -44,6 +44,15 @@ struct SurfaceRequest {
     /// (docs/spec/native-surfaces.md#view-surfaces). A surface of another composition carries none.
     #[serde(default)]
     start: Option<ViewStartRequest>,
+    /// The programs that the plugin declares, by name (docs/spec/plugins.md#pluginjson). The member is absent for a plugin that
+    /// declares none, which is the empty object.
+    #[serde(default = "no_programs")]
+    programs: serde_json::Value,
+}
+
+/// The programs of a surface request that carries no `programs` member.
+fn no_programs() -> serde_json::Value {
+    serde_json::json!({})
 }
 
 #[derive(Clone, Debug)]
@@ -58,6 +67,7 @@ pub(crate) struct Surface {
     plugin: String,
     composition: SurfaceComposition,
     start: Option<ViewStart>,
+    programs: crate::program_run::Declarations,
 }
 
 /// Returns the start values that the view of surface uses: those of the request or, when the request
@@ -688,6 +698,8 @@ impl SyncRequest {
                 }
                 None => None,
             };
+            let programs = crate::program_run::parse_declarations(&surface.programs)
+                .map_err(|error| format!("surface {:?}: {error}", surface.id))?;
             surfaces.push(Surface {
                 id: surface.id,
                 x: surface.x,
@@ -699,6 +711,7 @@ impl SyncRequest {
                 plugin: surface.plugin,
                 composition: surface.composition,
                 start,
+                programs,
             });
         }
         if let Some(index) = referenced.iter().position(|used| !used) {
@@ -1807,6 +1820,15 @@ pub fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurfaces, S
     )?;
     for surface in &request.surfaces {
         view_start_of(context.documents.lifecycle(), surface)?;
+    }
+    // The placement declares the programs of its surfaces, and it ends the runs of the surfaces that it leaves out
+    // (docs/spec/native-surfaces.md#program-runs).
+    let listed: Vec<&str> = request.surfaces.iter().map(|surface| surface.id.as_str()).collect();
+    context.program_runs.retain(&listed);
+    for surface in &request.surfaces {
+        context
+            .program_runs
+            .declare(&surface.id, &surface.plugin, surface.programs.clone());
     }
 
     if !request.settled {

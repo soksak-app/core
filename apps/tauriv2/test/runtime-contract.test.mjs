@@ -105,6 +105,11 @@ test("Tauri page regions expose operations but only composition places geometry"
   assert.deepEqual(recorded.at(-1), ["surface_focus", { request: { surface: "s1" } }]);
   await host.call("surfaceFocus", { surface: "s1", decided: true });
   assert.deepEqual(recorded.at(-1), ["surface_focus", { request: { surface: "s1", decided: true } }]);
+  // A view call runs a declared program of the project and cancels it (docs/spec/native-surfaces.md#program-runs).
+  await host.call("programRun", { surface: "s1", id: 1, name: "lint", args: ["src"] });
+  assert.deepEqual(recorded.at(-1), ["program_run", { request: { surface: "s1", id: 1, name: "lint", args: ["src"] } }]);
+  await host.call("programCancel", { surface: "s1", id: 1 });
+  assert.deepEqual(recorded.at(-1), ["program_cancel", { request: { surface: "s1", id: 1 } }]);
   // The keyboard of the window follows only surfaceFocus: no call holds the keys or ends a hold
   // (docs/spec/native-surfaces.md#keyboard-of-a-surface).
   await assert.rejects(host.call("keyboardHold"), /unknown host call: keyboardHold/);

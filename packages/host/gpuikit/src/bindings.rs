@@ -111,10 +111,38 @@ fn answer(app: &AppHandle, label: &str, body: &str) -> Result<(), String> {
             }
         }
     }
+    // A program run lasts until its program ends, so it runs on the blocking pool and the dispatcher stays free for its cancel.
+    if wire.method == "program_run" {
+        let result = argument::<soksak_host::program_run::RunCall>(&wire.method, "request", &body)
+            .map(|request| (request, window.clone()));
+        match result {
+            Ok((request, window)) => {
+                let page = label.to_string();
+                crate::runtime().spawn_blocking(move || {
+                    let result = run_program(&window, request);
+                    call.finish(&["request"], &result);
+                    deliver_reply(&reply, &page, &result);
+                });
+                return Ok(());
+            }
+            Err(error) => {
+                call.finish(&["request"], &Err::<Value, String>(error.clone()));
+                deliver_reply(&reply, label, &Err(error));
+                return Ok(());
+            }
+        }
+    }
     let result = dispatch(app, &window, &webview, &wire.method, &body);
     call.finish(&[], &result);
     deliver_reply(&reply, label, &result);
     Ok(())
+}
+
+/// Runs the declared program of a view call with the environment of the sidecars of the window, and answers its reply.
+fn run_program(window: &port::Window, request: soksak_host::program_run::RunCall) -> Result<Value, String> {
+    let data = soksak_host::windows::window_data(window)?;
+    let environment = window.state::<WindowSidecars>().program_environment()?;
+    documents::program_run(&data, environment, request).map(|reply| json!(reply))
 }
 
 /// Delivers the reply of a call to its page.
@@ -317,6 +345,12 @@ fn dispatch(
             json!(window
                 .state::<WindowSidecars>()
                 .sessions_of(soksak_host::sidecars::SidecarSessionsRequest { sidecar })?)
+        }
+        "program_cancel" => {
+            let request: soksak_host::program_run::CancelCall = argument(method, "request", body)?;
+            let data = soksak_host::windows::window_data(window)?;
+            documents::program_cancel(&data, request);
+            Value::Null
         }
         "sidecars_outdated" => json!(window.state::<WindowSidecars>().outdated()),
         "sidecars_replace" => {

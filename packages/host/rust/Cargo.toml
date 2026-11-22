@@ -106,6 +106,9 @@ crc32fast = "1"
 # The request identifiers of the image messages are drawn from the random source of the system (images.rs random_text).
 getrandom = "0.4"
 url = "2"
+# The argument patterns of a declared program are regular expressions of the RE2 syntax, which this crate compiles and matches
+# (program_run.rs pattern_matches).
+regex = "1.13"
 # The start document answers the request of the scheme handler of the framework as an HTTP response.
 http = "1"
 # The surface presentation waits for its main-thread step on a channel of the asynchronous runtime, and the host builds that

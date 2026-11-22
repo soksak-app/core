@@ -2001,6 +2001,8 @@ fn view_failed(
     data.documents.lifecycle().record_end(surface);
     // The open calls are taken before the view is removed, because the removal drops the channel of the view.
     let open_calls = data.documents.views().end_calls(surface);
+    // The runs of the view end with its process (docs/spec/native-surfaces.md#program-runs).
+    data.program_runs.end_view(surface);
     retire_view_before_replacement(
         &data,
         surface,
@@ -4002,6 +4004,42 @@ pub fn window_sidecar_send_answered<O: crate::sidecars::Owner>(
     sidecars.send_answered(sidecar, surface, cids, || {
         sidecars.send_from_window(owner, sidecar, surface, body, cids, &authority)
     })
+}
+
+/// Runs the declared program of a view call of its surface, in the project folder of the view
+/// (docs/spec/native-surfaces.md#program-runs). It answers the reply of an exit, and None for a run that ended before its exit.
+pub fn program_run(
+    data: &crate::windows::WindowData,
+    environment: Vec<(std::ffi::OsString, std::ffi::OsString)>,
+    call: crate::program_run::RunCall,
+) -> Result<Option<serde_json::Value>, String> {
+    let (plugin, project) = {
+        let views = data.documents.views().lock();
+        let view = views.get(&call.surface).ok_or_else(|| {
+            format!("program run: the surface {} shows no view", call.surface)
+        })?;
+        let project = match &view.project {
+            ViewProject::Bound(Some(root)) if !root.is_empty() => Some(std::path::PathBuf::from(root)),
+            _ => None,
+        };
+        (view.plugin.clone(), project)
+    };
+    let request = crate::program_run::Request {
+        surface: call.surface,
+        plugin,
+        id: call.id,
+        name: call.name,
+        args: call.args,
+        project,
+        environment,
+    };
+    let finished = data.program_runs.run(request)?;
+    Ok(crate::program_run::reply(&finished))
+}
+
+/// Ends the open run of a view call of its surface (docs/spec/native-surfaces.md#program-runs).
+pub fn program_cancel(data: &crate::windows::WindowData, call: crate::program_run::CancelCall) {
+    data.program_runs.cancel(&call.surface, call.id);
 }
 
 /// Generic window/background boundary. Native-view sends use view_sidecar_send.
