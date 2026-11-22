@@ -16,6 +16,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	sok "github.com/soksak-app/core/packages/sok/go/src"
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
@@ -2282,5 +2283,32 @@ func TestAViewThatFailedAfterItsFirstCallKeepsItsSurface(t *testing.T) {
 	f.tester.Frame()
 	if got := strings.Join(f.tester.Texts(), " "); strings.Contains(got, "표면 오류") {
 		t.Fatalf("a view with a call shows the error state after view-stopped: %q", got)
+	}
+}
+
+// A loading surface records each request of a frame with the surface that asks for it, in the frame class of the policy in force.
+// contract: workbench.frame.request.names-the-surface
+func TestALoadingSurfaceRecordsEachFrameRequestWithItsSurface(t *testing.T) {
+	stored := &surfaceHost{window: workbench.WindowView{Visible: true, Scale: 2, Width: 1200, Height: 800}}
+	stored.classes = map[string]any{}
+	for class := range sok.DefaultLogPolicy().Classes() {
+		stored.classes[class] = "off"
+	}
+	stored.classes["frame"] = "debug"
+	f := surfaceShellOn(t, installedDocument, stored)
+	var surface string
+	for id := range stored.lastSurfaces(t) {
+		surface = id
+		break
+	}
+	f.settle()
+	f.tester.Frame()
+	f.pending.drain(t)
+	requests := stored.written("workbench.frame.request")
+	if len(requests) == 0 {
+		t.Fatal("the loading surface wrote no workbench.frame.request record")
+	}
+	if text := fmt.Sprint(requests[0]); !strings.Contains(text, surface) || !strings.Contains(text, "loading") {
+		t.Fatalf("frame request record %s, want the surface %s and the reason loading", text, surface)
 	}
 }

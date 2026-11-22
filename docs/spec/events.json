@@ -1246,6 +1246,34 @@
       },
       "description": "The performance trace of an existing surface-layout UI admission or native callback. queued_ns is sampled immediately before the existing dispatch or callback registration, entered_ns at the UI closure or callback entry, and returned_ns at that closure or callback's end. All three are canonical decimal nanoseconds from the host event clock (CLOCK_UPTIME_RAW on macOS). ticket is omitted until the sync request has assigned one. The operation composition records the placement of the regions and overlays of one surface, which surface names; the records of the window layout have no surface. The record does not include the caller's resume time after a synchronous dispatch."
     },
+    "workbench.frame.request": {
+      "layer": "workbench",
+      "class": "frame",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "surface": {
+            "type": "string"
+          },
+          "card": {
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "loading"
+            ]
+          }
+        },
+        "required": [
+          "surface",
+          "card",
+          "reason"
+        ]
+      },
+      "description": "The workbench requested the next animation frame of a surface in the loading phase, which is the reason of the request; the surface and the card are the ones that asked for it, so a frame record can be traced to its requester."
+    },
     "host.frame.commit": {
       "layer": "host",
       "class": "frame",

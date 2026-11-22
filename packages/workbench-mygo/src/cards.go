@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/ui"
+	sok "github.com/soksak-app/core/packages/sok/go/src"
 
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
@@ -881,6 +882,9 @@ func (s *Shell) drawSurfaceStatus(c *ui.Context, card, tab string) {
 			at := float64(p.Now().UnixNano()%int64(turn)) / float64(turn) * 2 * math.Pi
 			// The ring turns at each refresh of the display that shows the window, whatever its rate, as the CSS animation of the
 			// JavaScript workbench does.
+			s.events.Emit(sok.LevelDebug, "workbench.frame.request", func() map[string]any {
+				return map[string]any{"surface": tab, "card": card, "reason": "loading"}
+			}, nil)
 			p.AnimationFrame()
 			var ring ui.Path
 			const steps = 24
