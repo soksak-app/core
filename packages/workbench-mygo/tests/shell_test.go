@@ -1262,9 +1262,11 @@ func TestAProjectWithARefusedSettingsFileDoesNotOpen(t *testing.T) {
 	project := storedProject(tab("tab-aaaaaa", "notes"))
 	project["settingsError"] = "the settings file is refused"
 	f := newShell(t, &storedHost{projects: []map[string]any{project}})
-	if _, err := f.shell.Registry().Run("core.project.activate", json.RawMessage(`{"id":"`+project["id"].(string)+`"}`)); err != nil {
-		t.Fatal(err)
-	}
+	f.shell.Registry().RunLater("core.project.activate", json.RawMessage(`{"id":"`+project["id"].(string)+`"}`), func(_ any, err error) {
+		if err != nil {
+			t.Error(err)
+		}
+	})
 	f.pending.drain(t)
 	f.tester.Frame()
 	if errors := f.host.written("workbench.record.error"); len(errors) != 1 || !strings.Contains(fmt.Sprint(errors[0]), "the settings file is refused") {

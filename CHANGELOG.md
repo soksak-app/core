@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1058: `core.project.activate` of the mygo workbench answers when the project is shown. The tests that ran it through the immediate runner run it through the later runner, and the layout record tests count the records after the activation, whose layout change is recorded with its command. Red: `TestTheActivationAnswersWhenTheProjectIsShown` read the library settings at the answer, and the mygo project window check failed in 5 of 5 runs after F1054. Green: the 1173 mygo workbench tests pass.
 - F1054: The mygo workbench reads the store snapshot when it shows a project, so a project opened again from the library shows the overrides that the store holds before the change event of the write arrived. Red: `TestAProjectOpenedFromTheLibraryShowsItsOverrides` showed `mode: dark` with the stale record, the symptom of the window check. Green: the test and the 1172 mygo workbench tests pass.
 - F1057: The nullish default of the stored tab listing states its reason. Red: `scripts/test/fallbacks.test.mjs` failed with `surface-listing.js:40: nullish default without a stated reason`. Green: the fallback test passes.
 - F1056: The test of the projects reader of the window checks writes format 4 and judges format 3 as refused. Red: `project records reject a malformed current envelope` failed with `expected projects format 4, found format 3`. Green: the four reader tests pass.

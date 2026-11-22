@@ -515,9 +515,7 @@ func narrowCard(t *testing.T, tabs int, title string) *shellFixture {
 		kidNode(0.5, cardNode("other", map[string]any{"id": "tab-bbbbbb", "plugin": "notes", "title": "b", "role": nil})))
 	// The window shows no sidebars, so the width of the card is half of the plane and its head holds its tabs.
 	f := newShell(t, &storedHost{common: map[string]any{"left": false, "right": false}, projects: []map[string]any{project}})
-	if _, err := f.answer("core.project.activate", map[string]string{"id": "prj-a"}); err != nil {
-		t.Fatal(err)
-	}
+	f.run("core.project.activate", map[string]string{"id": "prj-a"})
 	f.settle()
 	return f
 }
@@ -633,9 +631,7 @@ func TestTheStripGlidesOnlyToAChosenTab(t *testing.T) {
 func TestALongTabNameKeepsTheHeadOfItsCard(t *testing.T) {
 	title := strings.Repeat("max@host:/private/tmp/a-long-directory/", 4)
 	f := newShell(t, &storedHost{projects: []map[string]any{storedProject(map[string]any{"id": "tab-aaaaaa", "plugin": "notes", "title": title, "role": nil})}})
-	if _, err := f.answer("core.project.activate", map[string]string{"id": "prj-a"}); err != nil {
-		t.Fatal(err)
-	}
+	f.run("core.project.activate", map[string]string{"id": "prj-a"})
 	f.settle()
 	tab, closing := f.box("core.card.tab", "tab-aaaaaa"), f.box("core.card.tab-close", "tab-aaaaaa")
 	if width := closing.X + closing.W - tab.X; width > 200 {

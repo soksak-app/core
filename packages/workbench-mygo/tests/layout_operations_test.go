@@ -1006,6 +1006,8 @@ func TestALayoutCommandRecordsTheLayoutItLeaves(t *testing.T) {
 		projects: []map[string]any{gridProject(oneCard(tab("t1", "notes")))}})
 	f := newTabShell(t, host)
 	f.open(t)
+	// The activation that shows the project changes the layout too; the records of the commands below follow its record.
+	opened := len(host.written("workbench.layout.change"))
 	if _, err := f.apply("core.card.split", `{"card":"main","side":"right","plugin":"plain"}`); err != nil {
 		t.Fatal(err)
 	}
@@ -1013,7 +1015,7 @@ func TestALayoutCommandRecordsTheLayoutItLeaves(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.settle()
-	records := host.written("workbench.layout.change")
+	records := host.written("workbench.layout.change")[opened:]
 	if len(records) != 1 {
 		t.Fatalf("the commands wrote %d records workbench.layout.change: %v", len(records), records)
 	}
@@ -1044,6 +1046,8 @@ func TestEveryLayoutCommandRecordsTheLayout(t *testing.T) {
 		projects: []map[string]any{gridProject(oneCard(tab("t1", "notes")))}})
 	f := newTabShell(t, host)
 	f.open(t)
+	// The activation that shows the project changes the layout too; the records of the commands below follow its record.
+	opened := len(host.written("workbench.layout.change"))
 	if _, err := f.apply("core.layout.open", `{"card":"main","plugin":"plain","side":"right"}`); err != nil {
 		t.Fatal(err)
 	}
@@ -1068,7 +1072,7 @@ func TestEveryLayoutCommandRecordsTheLayout(t *testing.T) {
 		t.Fatal("the close of the added space did not answer")
 	}
 	counts := map[string]int{}
-	for _, record := range host.written("workbench.layout.change") {
+	for _, record := range host.written("workbench.layout.change")[opened:] {
 		counts[record["fields"].(map[string]any)["command"].(string)]++
 	}
 	if want := map[string]int{"core.layout.open": 1, "core.space.add": 1, "core.space.close": 1}; !reflect.DeepEqual(counts, want) {

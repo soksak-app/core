@@ -223,9 +223,11 @@ func (f *tabShell) attach(t *testing.T, tab string) {
 
 func (f *tabShell) open(t *testing.T) {
 	t.Helper()
-	if _, err := f.shell.Registry().Run("core.project.activate", json.RawMessage(`{"id":"prj-a"}`)); err != nil {
-		t.Fatal(err)
-	}
+	f.shell.Registry().RunLater("core.project.activate", json.RawMessage(`{"id":"prj-a"}`), func(_ any, err error) {
+		if err != nil {
+			t.Error(err)
+		}
+	})
 	f.settle()
 }
 

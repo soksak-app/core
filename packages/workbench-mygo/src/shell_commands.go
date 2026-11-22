@@ -160,7 +160,14 @@ func (s *Shell) register() {
 	s.registerFixture()
 	s.registerPlacementLast()
 	s.registry.Method("surface.window", s.surfaceSpace)
-	act(s, "core.project.activate", func(value idParam) error { s.activate(value.ID); return nil })
+	// The activation answers when the project is shown, as activate of packages/workbench/projects.js resolves after showProject; an
+	// activation that is refused shows its error, as core.library.open does.
+	later(s, "core.project.activate", func(value idParam, answer func(any, error)) {
+		s.activateThen(value.ID, func(err error) {
+			s.failed(err)
+			answer(nil, nil)
+		})
+	})
 	s.registerProjectClose()
 	// The role handshake of a tab (docs/spec/agent-roles.md#change-of-a-running-agent): the ordered change and the confirmation
 	// run in the workspace store of the host; the confirmation names no tab, because it runs on the surface of its caller.

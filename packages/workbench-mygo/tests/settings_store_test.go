@@ -535,6 +535,36 @@ func TestAProjectOpenedFromTheLibraryShowsItsOverrides(t *testing.T) {
 	}
 }
 
+// core.project.activate answers when the project is shown, so a reader of the settings after the answer reads the settings of the
+// project, as activate of packages/workbench/projects.js resolves after showProject.
+func TestTheActivationAnswersWhenTheProjectIsShown(t *testing.T) {
+	f := viewShell(t)
+	type settings struct {
+		Values  map[string]any `json:"values"`
+		Project *string        `json:"project"`
+	}
+	f.run("core.settings.set", map[string]any{"patch": map[string]any{"mode": "dark"}, "scope": "common"})
+	f.run("core.settings.set", map[string]any{"patch": map[string]any{"mode": "light"}, "scope": "project"})
+	f.settle()
+	project := *status[settings](t, f, "core.settings").Project
+	f.run("core.projects.browse", nil)
+	f.settle()
+	answered := false
+	f.shell.Registry().RunLater("core.project.activate", json.RawMessage(`{"id":"`+project+`"}`), func(_ any, err error) {
+		if err != nil {
+			t.Errorf("the activation failed: %v", err)
+		}
+		answered = true
+		if shown := status[settings](t, f, "core.settings"); shown.Values["mode"] != "light" || shown.Project == nil {
+			t.Errorf("the settings at the answer of the activation are %+v, not those of the project", shown)
+		}
+	})
+	f.settle()
+	if !answered {
+		t.Fatal("the activation did not answer")
+	}
+}
+
 // core.settings declares overridden as an array in exposure.json, including
 // an empty array before overrides exist and after the last reset.
 func TestCoreSettingsOverriddenIsAnArrayAcrossEmptyAndReset(t *testing.T) {
