@@ -56,9 +56,9 @@ func (c *Sidecars) IsPersistent(name string) bool {
 	return c.persistent[name]
 }
 
-// Sessions returns the owned sessions that the persistent service of the sidecar holds for the client, as the JSON array of the answer
+// OwnedSessions returns the owned sessions that the persistent service of the sidecar holds for the client, as the JSON array of the answer
 // to the request `sessions` (docs/spec/persistent-services.md#owned-sessions). A sidecar whose service has no endpoint holds none.
-func (c *Sidecars) Sessions(name string) (json.RawMessage, error) {
+func (c *Sidecars) OwnedSessions(name string) (json.RawMessage, error) {
 	if name == "" {
 		return nil, errors.New("sidecarSessions requires a non-empty sidecar")
 	}

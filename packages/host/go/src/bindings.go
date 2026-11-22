@@ -590,7 +590,7 @@ func (h *Host) SidecarSessions(ctx context.Context, reqJSON json.RawMessage) (Si
 	if _, err := h.surface(ctx); err != nil {
 		return SidecarSessionsResult{}, err
 	}
-	sessions, err := h.sidecars.Sessions(req.Sidecar)
+	sessions, err := h.sidecars.OwnedSessions(req.Sidecar)
 	if err != nil {
 		return SidecarSessionsResult{}, err
 	}

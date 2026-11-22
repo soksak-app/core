@@ -62,7 +62,7 @@ func answerSessions(t *testing.T, c *Sidecars, process *sidecar, answer func(req
 	}
 	done := make(chan result, 1)
 	go func() {
-		sessions, err := c.Sessions("fixture-service")
+		sessions, err := c.OwnedSessions("fixture-service")
 		done <- result{sessions, err}
 	}()
 	var request struct {
@@ -112,7 +112,7 @@ func TestSessionsEndsWithItsConnection(t *testing.T) {
 	c, process := sessionsFixture(t)
 	done := make(chan error, 1)
 	go func() {
-		_, err := c.Sessions("fixture-service")
+		_, err := c.OwnedSessions("fixture-service")
 		done <- err
 	}()
 	var request struct {
@@ -161,7 +161,7 @@ func TestSessionsOfAServiceWithoutEndpointIsEmptyAndStartsNothing(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	sessions, err := c.Sessions("fixture-service")
+	sessions, err := c.OwnedSessions("fixture-service")
 	if err != nil || string(sessions) != "[]" {
 		t.Fatalf("Sessions = %s, %v; want []", sessions, err)
 	}
@@ -173,7 +173,7 @@ func TestSessionsOfAServiceWithoutEndpointIsEmptyAndStartsNothing(t *testing.T) 
 // contract: sidecars-transport.sessions.refuses-empty-sidecar
 func TestSessionsRefusesAnEmptySidecarName(t *testing.T) {
 	c, _ := sessionsFixture(t)
-	if _, err := c.Sessions(""); err == nil || err.Error() != "sidecarSessions requires a non-empty sidecar" {
+	if _, err := c.OwnedSessions(""); err == nil || err.Error() != "sidecarSessions requires a non-empty sidecar" {
 		t.Fatalf("Sessions error = %v", err)
 	}
 }
@@ -182,7 +182,7 @@ func TestSessionsRefusesAnEmptySidecarName(t *testing.T) {
 func TestSessionsRefusesASidecarThatIsNotAPersistentService(t *testing.T) {
 	c, process := sessionsFixture(t)
 	process.persistent = false
-	if _, err := c.Sessions("fixture-service"); err == nil || err.Error() != "sidecar fixture-service is not a persistent service" {
+	if _, err := c.OwnedSessions("fixture-service"); err == nil || err.Error() != "sidecar fixture-service is not a persistent service" {
 		t.Fatalf("Sessions error = %v", err)
 	}
 	if len(process.outbox) != 0 {
