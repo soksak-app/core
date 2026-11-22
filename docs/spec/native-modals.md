@@ -96,6 +96,8 @@ same rule; background blur must never become a dialog style. It does not
 hide or remove the original DOM. Keep that DOM measurable with
 `visibility: hidden` if it owns layout, then call `overlay.place(el, rect)` when
 it moves or changes size and `overlay.update(el)` when its content changes.
+An update whose copy equals the copy that the host last received for the
+shown modal sends nothing, so two callers of one change send one update.
 JavaScript listeners and form properties are not serialized; use attributes
 such as `checked`, `selected` and `value` for the copied initial state.
 

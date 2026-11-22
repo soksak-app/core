@@ -164,16 +164,6 @@
       "example": {},
       "source": "page"
     },
-    "place-6": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
-    "update-toast-1": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
     "place-toast-1": {
       "type": "object",
       "example": {},
@@ -646,17 +636,6 @@
       "call": {
         "name": "overlayUpdate",
         "payload": "$update-6"
-      }
-    },
-    {
-      "reply": {
-        "result": null
-      }
-    },
-    {
-      "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-toast-1"
       }
     },
     {

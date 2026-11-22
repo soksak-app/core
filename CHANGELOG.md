@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1033-8: An overlay update whose copy equals the copy that the host last received for the shown modal sends nothing, so a toast change in an open dialog that the view also draws sends one update. Red: 33 debug and modal wire cases without the equal updates failed on the earlier page, which sent them. Green: the page workbench suite passes; the cases lost only equal update steps and their replies.
 - F1049: The buffer checks of the Go and Rust host libraries wait for a ready line that the fixture writes after it ignores TERM, so a stop no longer ends the fixture before the writer wrote the queued lines. Red: the Go check failed in run 7 of 60 with no write wait, and the failed run recorded the exit of the fixture by signal 15. Green: 60 of 60 Go runs and 30 of 30 Rust runs pass; the Rust failure was not reproduced before the change.
 - F1048: The test inventory links F42, F45 and F954 to the toast tests and symbols of F1033-3, and the lane `administrator rights of the hosts` claims `scripts/check-administrator-rights.mjs` and its test. Red: `check-tests` reported seven stale links and the unclaimed test, and the script test failed when a mygo source named `sudo`. Green: both pass.
 - F1047: The setup start tests of the Go and Rust host libraries use the identifier `app.soksak.example` and the executable `sok-example`. Red: `check-host-files` reported the framework names. Green: it passes, and both tests pass.

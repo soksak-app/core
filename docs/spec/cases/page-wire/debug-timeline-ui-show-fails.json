@@ -24,11 +24,6 @@
       "example": {},
       "source": "page"
     },
-    "update-2": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
     "place-2": {
       "type": "object",
       "example": {},
@@ -52,16 +47,6 @@
     "page-identity": {
       "type": "string",
       "example": "6571a40e-6d32-4c55-9632-3f4f321f53e5",
-      "source": "page"
-    },
-    "place-3": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
-    "update-toast-1": {
-      "type": "object",
-      "example": {},
       "source": "page"
     },
     "place-toast-1": {
@@ -141,17 +126,6 @@
     },
     {
       "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-2"
-      }
-    },
-    {
-      "reply": {
-        "result": null
-      }
-    },
-    {
-      "call": {
         "name": "overlayPlace",
         "payload": "$place-2"
       }
@@ -212,17 +186,6 @@
             }
           ]
         }
-      }
-    },
-    {
-      "reply": {
-        "result": null
-      }
-    },
-    {
-      "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-toast-1"
       }
     },
     {

@@ -24,11 +24,6 @@
       "example": {},
       "source": "page"
     },
-    "update-2": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
     "place-2": {
       "type": "object",
       "example": {},
@@ -49,11 +44,6 @@
       "example": {},
       "source": "page"
     },
-    "place-4": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
     "ts-us": {
       "type": "integer",
       "example": 1791000000000456,
@@ -67,11 +57,6 @@
     "page-identity": {
       "type": "string",
       "example": "6571a40e-6d32-4c55-9632-3f4f321f53e5",
-      "source": "page"
-    },
-    "update-toast-1": {
-      "type": "object",
-      "example": {},
       "source": "page"
     },
     "place-toast-1": {
@@ -147,17 +132,6 @@
           "w": 1024,
           "h": 768
         }
-      }
-    },
-    {
-      "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-2"
-      }
-    },
-    {
-      "reply": {
-        "result": null
       }
     },
     {
@@ -325,17 +299,6 @@
       "call": {
         "name": "overlayUpdate",
         "payload": "$update-4"
-      }
-    },
-    {
-      "reply": {
-        "result": null
-      }
-    },
-    {
-      "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-toast-1"
       }
     },
     {

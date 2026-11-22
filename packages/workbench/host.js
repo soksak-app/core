@@ -874,6 +874,8 @@ let pick = null;
 let shown = null;
 // The show of the modal on display: a later show, also of the same element, is another one.
 let showing = null;
+// The drawing that the host last received for the shown modal. An update that equals it changes nothing on the host, so it is not sent.
+let sentDrawing = null;
 let restoreErrorToasts = null;
 
 /* The state that the open modal document reported last. It is core.modal of docs/spec/exposure.md. */
@@ -1065,7 +1067,7 @@ export const overlay = native ? {
         id: shown,
         title: name,
         rect: modalFrame,
-        ...drawing(el),
+        ...(() => { const drawn = drawing(el); sentDrawing = JSON.stringify(drawn); return drawn; })(),
         radius: el.dataset.nativeModal === "dialog" ? 0 : parseFloat(style.borderTopLeftRadius),
       }).then(undefined, (reason) => {
         if (showing !== show) return;
@@ -1091,7 +1093,11 @@ export const overlay = native ? {
     /** Replaces the content of the modal view of this element. Recreating the view flickers. */
     update(el) {
       if (shown !== el.id) return;
-      tellInTurn("overlayUpdate", { id: shown, ...drawing(el) });
+      const drawn = drawing(el);
+      const text = JSON.stringify(drawn);
+      if (text === sentDrawing) return;
+      sentDrawing = text;
+      tellInTurn("overlayUpdate", { id: shown, ...drawn });
     },
 
     /** Closes the modal view of this element. */
@@ -1103,6 +1109,7 @@ export const overlay = native ? {
       restoreErrorToasts = null;
       shown = null;
       showing = null;
+      sentDrawing = null;
       pick = null;
       modalDocument = null;
       modalChanged();

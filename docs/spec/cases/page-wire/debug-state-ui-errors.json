@@ -54,11 +54,6 @@
       "example": "6571a40e-6d32-4c55-9632-3f4f321f53e5",
       "source": "page"
     },
-    "place-3": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
     "ts-us-2": {
       "type": "integer",
       "example": 1791000000000456,
@@ -74,11 +69,6 @@
       "example": {},
       "source": "page"
     },
-    "place-4": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
     "ts-us-3": {
       "type": "integer",
       "example": 1791000000000456,
@@ -87,11 +77,6 @@
     "mono-ns-3": {
       "type": "integer",
       "example": 5000000789,
-      "source": "page"
-    },
-    "update-5": {
-      "type": "object",
-      "example": {},
       "source": "page"
     },
     "place-5": {
@@ -104,22 +89,7 @@
       "example": {},
       "source": "page"
     },
-    "place-6": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
-    "update-toast-1": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
     "place-toast-1": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
-    "update-toast-2": {
       "type": "object",
       "example": {},
       "source": "page"
@@ -130,11 +100,6 @@
       "source": "page"
     },
     "update-toast-3": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
-    "update-toast-4": {
       "type": "object",
       "example": {},
       "source": "page"
@@ -351,13 +316,18 @@
     },
     {
       "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-toast-1"
+        "name": "overlayPlace",
+        "payload": "$place-toast-1"
       }
     },
     {
       "reply": {
-        "result": null
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
       }
     },
     {
@@ -376,22 +346,6 @@
           "truncated": false,
           "kind": "text",
           "text": "{\"time\":\"t\",\"host\":\"tauriv2\",\"versions\":{\"core\":\"0.0.10\"},\"windows\":[],\"workbench\":{\"modal\":null}}"
-        }
-      }
-    },
-    {
-      "call": {
-        "name": "overlayPlace",
-        "payload": "$place-toast-1"
-      }
-    },
-    {
-      "reply": {
-        "result": {
-          "x": 0,
-          "y": 0,
-          "w": 1024,
-          "h": 768
         }
       }
     },
@@ -434,17 +388,6 @@
     },
     {
       "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-5"
-      }
-    },
-    {
-      "reply": {
-        "result": null
-      }
-    },
-    {
-      "call": {
         "name": "overlayPlace",
         "payload": "$place-5"
       }
@@ -472,17 +415,6 @@
     },
     {
       "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-toast-2"
-      }
-    },
-    {
-      "reply": {
-        "result": null
-      }
-    },
-    {
-      "call": {
         "name": "overlayPlace",
         "payload": "$place-toast-2"
       }
@@ -501,17 +433,6 @@
       "call": {
         "name": "overlayUpdate",
         "payload": "$update-toast-3"
-      }
-    },
-    {
-      "reply": {
-        "result": null
-      }
-    },
-    {
-      "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-toast-4"
       }
     },
     {

@@ -24,11 +24,6 @@
       "example": {},
       "source": "page"
     },
-    "update-2": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
     "place-2": {
       "type": "object",
       "example": {},
@@ -64,27 +59,12 @@
       "example": "soksak-timeline-20261001T000000Z.txt",
       "source": "page"
     },
-    "update-4": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
     "place-4": {
       "type": "object",
       "example": {},
       "source": "page"
     },
     "update-5": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
-    "place-5": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
-    "update-6": {
       "type": "object",
       "example": {},
       "source": "page"
@@ -109,22 +89,7 @@
       "example": {},
       "source": "page"
     },
-    "place-8": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
-    "update-9": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
     "place-9": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
-    "update-toast-1": {
       "type": "object",
       "example": {},
       "source": "page"
@@ -212,17 +177,6 @@
           "w": 1024,
           "h": 768
         }
-      }
-    },
-    {
-      "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-2"
-      }
-    },
-    {
-      "reply": {
-        "result": null
       }
     },
     {
@@ -404,13 +358,18 @@
     },
     {
       "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-4"
+        "name": "overlayPlace",
+        "payload": "$place-4"
       }
     },
     {
       "reply": {
-        "result": null
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
       }
     },
     {
@@ -428,35 +387,8 @@
     },
     {
       "call": {
-        "name": "overlayPlace",
-        "payload": "$place-4"
-      }
-    },
-    {
-      "reply": {
-        "result": {
-          "x": 0,
-          "y": 0,
-          "w": 1024,
-          "h": 768
-        }
-      }
-    },
-    {
-      "call": {
         "name": "overlayUpdate",
         "payload": "$update-5"
-      }
-    },
-    {
-      "reply": {
-        "result": null
-      }
-    },
-    {
-      "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-6"
       }
     },
     {
@@ -520,17 +452,6 @@
     },
     {
       "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-9"
-      }
-    },
-    {
-      "reply": {
-        "result": null
-      }
-    },
-    {
-      "call": {
         "name": "overlayPlace",
         "payload": "$place-9"
       }
@@ -543,17 +464,6 @@
           "w": 1024,
           "h": 768
         }
-      }
-    },
-    {
-      "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-toast-1"
-      }
-    },
-    {
-      "reply": {
-        "result": null
       }
     },
     {

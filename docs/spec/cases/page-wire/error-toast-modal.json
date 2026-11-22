@@ -90,13 +90,6 @@
       },
       "source": "page"
     },
-    "update-2": {
-      "type": "object",
-      "example": {
-        "id": "debug"
-      },
-      "source": "page"
-    },
     "place-2": {
       "type": "object",
       "example": {
@@ -178,7 +171,8 @@
           "--rule": "#22242f",
           "--rail": "#7279ff",
           "--focus": "#ffb36b",
-          "--no": "#ff7c7c", "--fail": "#ff7cd3",
+          "--no": "#ff7c7c",
+          "--fail": "#ff7cd3",
           "--r": "10px",
           "--half-gap": "6px",
           "--bw": "1px",
@@ -442,17 +436,6 @@
           "w": 800,
           "h": 600
         }
-      }
-    },
-    {
-      "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-2"
-      }
-    },
-    {
-      "reply": {
-        "result": null
       }
     },
     {

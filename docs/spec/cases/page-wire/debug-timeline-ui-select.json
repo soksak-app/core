@@ -24,11 +24,6 @@
       "example": {},
       "source": "page"
     },
-    "update-2": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
     "place-2": {
       "type": "object",
       "example": {},
@@ -50,11 +45,6 @@
       "source": "page"
     },
     "place-4": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
-    "update-5": {
       "type": "object",
       "example": {},
       "source": "page"
@@ -152,17 +142,6 @@
           "w": 1024,
           "h": 768
         }
-      }
-    },
-    {
-      "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-2"
-      }
-    },
-    {
-      "reply": {
-        "result": null
       }
     },
     {
@@ -338,17 +317,6 @@
           "w": 1024,
           "h": 768
         }
-      }
-    },
-    {
-      "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-5"
-      }
-    },
-    {
-      "reply": {
-        "result": null
       }
     },
     {
