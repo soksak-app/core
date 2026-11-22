@@ -86,6 +86,7 @@ plugin 동작의 창 검사는 그 plugin의 repository에서 실행된다([검�
 | `extends` | 아니오 | `{ "<point>": { "version": "x.y.z", "schema": <스키마>, "modules"?: { "<bare specifier>": "<경로>" } } }`: 다른 plugin이 기여하는 [확장 지점](#확장-지점). `surface`가 필요하다 |
 | `contributes` | 아니오 | `{ "<plugin id>.<point>": [ { "range": "<version range>", "module": "<경로>", ... } ] }`: plugin이 다른 plugin의 확장 지점에 기여하는 항목 |
 | `data` | 아니오 | `{ "<키>": { "schema": <스키마>, "default": <값>, "format"?: <양의 정수> } }`: plugin의 view가 프로젝트마다 읽고 쓰는 [프로젝트 데이터](#프로젝트-데이터). `surface` 또는 `sections`가 필요하다 |
+| `sessions` | 아니오 | `true`: 플러그인의 표면이 소유 세션을 열 수 있음을 선언한다([소유 세션](#소유-세션)). `dependencies`에 선언한 `transport: "persistent"` 사이드카가 필요하다. `background`는 이 선언으로 바뀌지 않는다 |
 | `background` | 아니오 | `{ "sidecar": "<선언한 사이드카>", "operation": "<동작 이름>", "settings"?: { "<요청 필드>": "<선언한 설정>" } }`: 표면이 마운트되지 않은 비활성 탭마다 네이티브 표면을 만들지 않고 선언한 사이드카 세션 하나를 유지한다. 워크벤치는 대응한 플러그인 설정의 현재 값을 요청 필드에 넣으며, `settings`는 `operation`이나 선언하지 않은 설정을 가리킬 수 없다. `surface`와 `dependencies`가 필요하다 |
 
 이 표에 없는 manifest member는 알 수 없는 member이며 그 manifest는 거부된다. 제거된 member `host`와 `hostOperations`는 `plugin <id>: <member> is removed; a section is a view of the plugin`으로 거부된다. 0.0.x release version인 동안은 저장 데이터 마이그레이션을 싣지 않으므로 어떤 manifest도 migration member를 선언하지 않는다.
@@ -184,6 +185,14 @@ plugin 저장소는 자기 `package.json`이 development dependency로 pin한 `@
 Wails와 Tauri host의 OS 창마다 앱 DOM WebView가 하나 있고, mygo host의 창에는 없다. 워크벤치는 표면의 카드 요소를 소유하며, `view` 합성의 표면은 자기 view에서 페이지를 실행하고 호스트가 그 view를 카드 요소 위에 배치한다([view 표면](#view-표면)). 플러그인은 내부 WebView나 iframe을 만들지 않는다. 표면 context에서 보낸 사이드카 메시지는 보낸 순서대로 사이드카에 도착한다. 워크벤치는 같은 사이드카에 대한 이전 전송이 끝난 뒤에야 다음 전송을 시작하며, 그 사이드카의 모든 표면과 background 세션이 한 순서를 공유한다. 표면이 아닌 표면에서 보낸 전송은 거부한다.
 
 `background` 선언은 두 번째 페이지나 숨은 WebView가 아니라 세션 수명을 명시하는 계약이다. 워크벤치는 선언된 `operation`을 선언된 사이드카에 사이드카 메시지 프로토콜로 보낸다. manifest에서는 읽기 쉬운 전체 필드명 `operation`을 사용한다. 워크벤치는 요청을 임의로 만들거나 누락된 동작을 대체하거나 오류를 숨기지 않는다. 표면이 마운트된 탭은 그 표면을 통해 세션을 소유한다. 같은 카드의 다른 탭이 보이는 동안에도 탭의 표면은 마운트된 채 남으므로 그런 탭에는 background 세션이 없고, 탭이 보이거나 그 표면이 마운트되면 탭의 background 세션은 끝난다. 연결 listener도 함께 멈추므로, 사이드카가 다시 연결되어도 세션을 소유한 표면에 그 동작을 보내지 않는다. 탭이 보이게 되면 그 표면이 같은 동작과 이미지 영역을 보내 기존 세션에 다시 연결한다. Page reload가 sidecar session을 유지하면서 마운트된 image region을 닫을 때는 새 page가 비마운트 표면을 background session으로 열기 전에 호스트가 supplier와 정확한 image generation의 `image.detach`/`image.detached` 교환을 완료한다. Supplier는 새 image가 붙을 때까지 표면 session을 headless로 유지한다. 탭을 제거하면 listener의 구독이 끝나지 않았어도 background 세션을 제거한다. 각 결정은 event `workbench.background.session` `{tab, plugin, sidecar, action, surface}`다. `open`과 `reopen`은 동작을 보내고, `skip`은 표면이 마운트된 비활성 탭에 아무것도 보내지 않으며, `stop`은 세션을 끝낸다. `surface`는 `mounted` 또는 `absent`다.
+
+## 소유 세션
+
+`sessions`를 선언한 플러그인의 표면은 `core.session.open {plugin, params, cols, rows}`로 소유 세션을 열며, 이 명령은 `{session}`을 반환한다. 호출한 표면이 세션의 소유자이고, 세션은 창이 가려졌는지와 관계없이 그 크기로 열린다. `core.session.resize {session, cols, rows}`와 `core.session.end {session}`는 세션에 작용한다. 어떤 탭도 세션을 보이지 않을 때 크기를 바꿀 수 있는 것은 소유자뿐이며, 세션을 끝낼 수 있는 것도 소유자뿐이다.
+
+탭은 `core.layout.open {card, plugin, params: {session}}`로 세션을 보인다. 탭은 카드의 크기를 따르며, 보이던 탭을 닫아도 세션은 마지막 크기를 유지한다. status `core.sessions`는 열린 세션마다 `{session, plugin, owner, shownBy}`를 나열하며, `shownBy`는 보이는 탭이거나 `null`이다.
+
+세션은 소유자가 끝내거나 소유자 표면이 닫힐 때 끝난다. 이벤트 `workbench.session.end {session, reason}`가 사유를 담으며, 닫힌 소유자 표면의 사유는 `owner-closed`다. 세션이 열리면 이벤트 `workbench.session.open`이 발생한다. 거부 사유는 `session <id> is not open`, `surface <id> does not own session <id>`, `plugin <id> declares no sessions`다. 소유 세션의 재시작과 retain 규칙은 [영속 서비스](persistent-services.ko.md#소유-세션)에 있다. `background` 선언은 바뀌지 않으며 소유 세션을 열지 않는다.
 
 ## view 표면
 

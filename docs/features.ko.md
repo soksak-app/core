@@ -173,6 +173,11 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [o] F1031-11 — F1031-10 후속. Toast 닫기 metric을 포함하도록 host의 workbench 선언 사본을 갱신한다. Exposure 검사 두 개와 workbench 선언 test가 통과한다.
 - [o] F1057 — P1, F1052의 후속: F1052가 `surface-listing.js`로 옮긴 저장 layout tab 나열에 data 없는 card의 nullish 기본값이 이유 없이 남아 있어서 fallback 검사가 거부했다. 그 기본값에 data 없는 저장 card는 tab이 없다는 이유를 적었다.
 - [o] F1056 — P1, F1053의 후속: window check projects reader의 test가 아직 projects format 3으로 써서, reader가 format 4로 바뀐 뒤 실패했다. test는 format 4로 쓰고 format 3을 거부로 판정한다.
+- [~] F1062 — P1, F1045 다음: surface는 어떤 tab도 갖지 않고 그 surface가 소유하는 session을 열고, 요청이 있을 때 tab이 그것을 보인다. 그래서 agent group은 화면의 자리 없이 member를 시작한다. 남은 일: F1062-2부터 F1062-4. 기다리는 것: 없음.
+  - [o] F1062-1 — specification은 owned session을 정한다: manifest member `sessions`, `core.session.open`, `resize`, `end`, `core.layout.open`의 open argument `session`, status `core.sessions`, event, owner와 restart 규칙, occlusion 예외.
+  - [ ] F1062-2 — kit의 term list에 owned session과 owner를 넣는다.
+  - [ ] F1062-3 — page와 mygo workbench와 host가 command, status, event를 Red/Green test와 함께 구현한다.
+  - [ ] F1062-4 — terminal plugin과 그 sidecar가 `sessions`를 선언하고 owned session을 연다. 각 저장소의 체크리스트에 기록한다.
 - [o] F1060 — P1: mygo와 page workbench는 이전 형식 `<device>:<inode>`의 저장된 project identity를 알아보고 자기 오류로 거부했고, 이는 이전 저장 형식을 읽는 코드다. Go와 Rust host의 `projects.json` reader는 identity를 만드는 코드 옆에서, identity가 platform 형식이 아닌 기록을 `projects.json: project <root> has the identity <identity>, not <volume UUID>:<inode>`로 거부하고, workbench의 분기는 지운다.
 - [o] F1061 — P2, F1036의 후속: 한국어 문서가 계획, 파일 이름, identifier를 만드는 일에 동사 `짓다`를 썼고, 이는 실제 동작을 말하지 않는다. 문서는 동작(`만든다`, `정한다`)을 말하고, figurative verb check는 `거짓`, `몸짓`, `꼭짓점`, `남짓`, `관련짓다`, `짝을 짓다`, `이름 짓다` 밖의 `짓다`를 보고한다.
 - [o] F1059 — P1, F1033-4의 후속: 완료된 error toast capability F1033이 test inventory에 feature link가 없어서 inventory test가 거부했다. F1033은 page와 mygo workbench의 공유 toast를 그 test에 연결한다.

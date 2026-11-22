@@ -16,6 +16,14 @@ A surface attachment is not a session. The first open for a surface key creates 
 
 The service endpoint is scoped to the configuration directory, authenticated, versioned, and protected by a single-instance lock. A test configuration cannot discover a service belonging to another configuration. Session state and input queues are isolated. A busy session must not hold a global lock while reading, writing, or processing its output.
 
+## Owned sessions
+
+A session that a surface opens with `core.session.open` belongs to that surface, its owner. Its commands, status and events are defined in [plugins](plugins.md#owned-sessions). While no tab shows the session, only the owner may resize it. Only the owner may end it, and the session also ends when the owner surface closes, with reason `owner-closed`.
+
+The retain snapshot of the page lists the owner surface of each owned session with its project root. A retain therefore closes an owned session only when its owner surface leaves every layout.
+
+After a restart, the service keeps owned sessions as this section and [closing and recovery](#closing-and-recovery) state. An owner that starts again reattaches by reading `core.sessions`. A session whose owner does not return ends with reason `owner-absent`.
+
 ## Closing and recovery
 
 ### Service transport
