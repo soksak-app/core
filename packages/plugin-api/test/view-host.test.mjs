@@ -54,11 +54,14 @@ const base = () => ({
   project: START_PROJECT,
 });
 
-/** The fixtures of the probe-reader view of the dependency cases: its plugin lists other, whose note is stored as "from other". */
+/**
+ * The fixtures of the probe-reader view of the dependency cases: its plugin lists the package @fixture/plugin-other of the plugin other,
+ * whose note is stored as "from other". The package differs from the id, and the view calls name the id.
+ */
 const dependencyBase = () => ({
   ...base(),
   plugin: "probe-reader",
-  dependencies: { other: { data: { note: { schema: { type: "string" }, default: "default" } }, values: { note: "from other" } } },
+  dependencies: { "@fixture/plugin-other": { plugin: "other", data: { note: { schema: { type: "string" }, default: "default" } }, values: { note: "from other" } } },
 });
 
 /** A fixture that answers its values in order, and fails when the values are used up. */
@@ -70,9 +73,9 @@ const queue = (...values) => () => {
 // The fixtures of each case that needs more than the base: one fixtures object for the view of the case, or a list of them for a case with
 // two views. A held fixture is released by the replay after the last step of the case.
 const FIXTURES = {
-  // The probe plugin lists other in its dependencies, so other's declared status is followed; other2 is not a dependency.
-  "view-calls-status-watch-dependency": () => ({ ...base(), dependencies: { other: { status: [{ name: "other.count" }] } }, statuses: { "other.count": null } }),
-  // The probe-reader plugin lists other in its dependencies, so other's project data is read and followed; other2 is not a dependency.
+  // The probe plugin lists the package of other in its dependencies, so other's declared status is followed; other2 is not a dependency.
+  "view-calls-status-watch-dependency": () => ({ ...base(), dependencies: { "@fixture/plugin-other": { plugin: "other", status: [{ name: "other.count" }] } }, statuses: { "other.count": null } }),
+  // The probe-reader plugin lists the package of other in its dependencies, so other's project data is read and followed; other2 is not a dependency.
   "view-calls-data-dependency": dependencyBase,
   "view-calls-data-dependency-refused": dependencyBase,
   "view-calls-cancel-pending": (releases) => ({ ...base(), sidecar: { "fixture-sidecar": () => new Promise((resolve) => releases.push(() => resolve(null))) } }),

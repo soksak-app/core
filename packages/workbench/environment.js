@@ -74,6 +74,8 @@ export function installEnvironment(environmentDocument, installedDocument) {
   const manifests = installed.map(({ package: name, version, manifest }) => ({ name, manifest, version }));
   // A dependency that names the package of an installed plugin is a plugin dependency, not a sidecar (docs/spec/plugins.md#pluginjson).
   const pluginNames = new Set(installed.map((plugin) => plugin.package));
+  // The id of the installed plugin of each package, which the view calls name (docs/spec/plugins.md#pluginjson).
+  const pluginIds = new Map(installed.map((plugin) => [plugin.package, plugin.id]));
   installContributions(installed);
   checkReferences(environment, manifests.map((m) => m.manifest));
   const diagnosticPlugins = Object.fromEntries(installed.filter((plugin) => plugin.diagnostics)
@@ -113,6 +115,10 @@ export function installEnvironment(environmentDocument, installedDocument) {
         // The statuses that declare activity, which the activity of each tab of the plugin follows (docs/spec/activity.md).
         // default: exposes and its status are optional; a plugin without them declares no activity.
         activity: (exposes?.status ?? []).filter((entry) => entry.activity === true).map(({ name }) => name),
+        // The ids of the installed plugins whose packages the plugin lists in dependencies, whose statuses and project data its views
+        // read and follow (docs/spec/plugins.md#project-data).
+        // default: dependencies is an optional field of plugin.json; without it the plugin depends on no plugin.
+        plugins: Object.keys(manifest.dependencies ?? {}).filter((name) => pluginIds.has(name)).map((name) => pluginIds.get(name)),
         surface: surfaceOf(name, manifest.id, {
           ...manifest.surface,
           // default: exposes is an optional field of plugin.json; without it there is no declaration.

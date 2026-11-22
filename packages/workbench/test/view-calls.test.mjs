@@ -26,11 +26,11 @@ const projects = await import("../projects.js");
 
 setSurfaceTextSize(() => 1);
 // The plugin probe declares surface.menu, and the plugin probe-bare declares none (null, as the declaration of a plugin without it).
-registerPlugin({ id: "probe", surface: () => null, menu: [{ label: "Run", command: "probe.run" }], dependencies: {} });
-registerPlugin({ id: "probe-bare", surface: () => null, menu: null, dependencies: {} });
-// The plugin probe-reader lists other in its dependencies, so its views read and follow the project data of other.
-registerPlugin({ id: "probe-reader", surface: () => null, menu: null, dependencies: { other: "^1.0.0" } });
-registerPlugin({ id: "fixture-unload", surface: () => null, dependencies: {} });
+registerPlugin({ id: "probe", surface: () => null, menu: [{ label: "Run", command: "probe.run" }], plugins: [] });
+registerPlugin({ id: "probe-bare", surface: () => null, menu: null, plugins: [] });
+// The plugin probe-reader lists the package of the plugin other in its dependencies, so its views read and follow the project data of other.
+registerPlugin({ id: "probe-reader", surface: () => null, menu: null, plugins: ["other"] });
+registerPlugin({ id: "fixture-unload", surface: () => null, plugins: [] });
 setPluginSettings([{ id: "probe", settings: { home: { label: "홈 주소", type: "address", default: "https://example.test" } } }]);
 globalThis.location = new URL("http://soksak.test/index.html");
 // The first flush of the events of the page reads the clock of the host, which belongs to the start of the page and not to a test.

@@ -26,6 +26,13 @@ const addListener = (set, fn) => {
 // The key of a status value as the fixtures name it: the name, or the surface and the name of a watch on a surface.
 const statusKeyOf = (name, surface) => (surface === undefined ? name : `${surface} ${name}`);
 
+// The dependency fixtures by plugin id: a dependency of plugin.json names the package of a plugin, and the view calls name its plugin id
+// (docs/spec/plugins.md#pluginjson). A fixture without a plugin id is refused.
+const dependencyFixtures = (byPackage) => Object.fromEntries(Object.entries(byPackage).map(([name, entry]) => {
+  if (typeof entry?.plugin !== "string" || entry.plugin === "") throw new TypeError(`dependency fixture ${name} requires the plugin id of the package`);
+  return [entry.plugin, entry];
+}));
+
 const KINDS = Object.values(EXPOSE_KINDS);
 
 /**
@@ -33,8 +40,9 @@ const KINDS = Object.values(EXPOSE_KINDS);
  *
  *     plugin, surface   the plugin id and the surface id of the view (required)
  *     declarations      the exposure of the plugin, {status, commands, element} as lists of {name}
- *     dependencies      the plugins that the plugin lists in dependencies: {plugin: {status: [{name}], data: {key: {schema, default}}, values: {key: value}}},
- *                       with the statuses and the project data each declares, and the values of its data for the start project
+ *     dependencies      the plugins that the plugin lists in dependencies, by package as plugin.json names them:
+ *                       {package: {plugin, status: [{name}], data: {key: {schema, default}}, values: {key: value}}}, with the plugin id that the
+ *                       view calls name, the statuses and the project data each declares, and the values of its data for the start project
  *     contributions     the installed plugins {id, package, version, manifest}, from which the contributions of the view resolve
  *     surfaces          [{surface, plugin}]: the surfaces that the window holds
  *     sidecars          the sidecar names that the plugin declares
@@ -103,7 +111,7 @@ export function createTestHost(fixtures) {
   const core = coreExposure();
   const coreDeclared = declarationMap({ status: core.status.map((name) => ({ name })), commands: core.commands.map((name) => ({ name })) });
   // default: a fixture without dependencies lists no plugin in dependencies, so the view follows no status of another plugin.
-  const dependencies = fixtures.dependencies ?? {};
+  const dependencies = dependencyFixtures(fixtures.dependencies ?? {});
   // default: a dependency fixture without a status list declares no status.
   const dependencyDeclared = declarationMap({ status: Object.values(dependencies).flatMap((entry) => entry.status ?? []) });
   // default: a name is declared when the plugin, core or a dependency of the plugin declares it.

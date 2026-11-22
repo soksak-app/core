@@ -24,7 +24,7 @@ const files = {
     id: "card", name: "Card", description: "검사용 카드.", mark: "c", icon: "<path/>",
     surface: { composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } }, exposes: { status: [{ name: "card.info", description: "검사용 상태.", schema: { type: "object" } }] },
     sections: [{ id: "card.info", name: "Info", composition: { kind: "view", page: "ui/info.html" }, height: 120 }],
-    preview: { ink: "--fixture-ink" }, dependencies: { "@fixture/sidecar-card": "^0.1.0" },
+    preview: { ink: "--fixture-ink" }, dependencies: { "@fixture/sidecar-card": "^0.1.0", "@fixture/side": "^0.0.1" },
     sidebars: { sets: [{ id: "info", title: "Info", sections: ["card.info"], layout: "tabs" }], card: { top: "info" } },
     settings: { "cursor.shape": { label: "커서 모양", type: "enum", default: "block", values: ["block", "beam"] } },
   },
@@ -58,6 +58,8 @@ test("the environment registers card plugins, sections, and sidebar defaults fro
   // card declares no extension point, so every point is undeclared.
   assert.throws(() => contributions("language"), /extension point language is not declared by card/);
   assert.equal(registry.plugin("card").ink, "--fixture-ink");
+  // card lists the package @fixture/side, so its views read and follow the plugin side, whose id differs from the package.
+  assert.deepEqual(registry.plugin("card").plugins, ["side"], "a dependency on the package of an installed plugin names the plugin id");
   assert.equal(await pluginDiagnostics("card"), null, "a release build has no plugin diagnostic module");
   assert.equal(registry.section("side.list").name, "List");
   assert.equal(registry.section("card.info").name, "Info");

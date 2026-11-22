@@ -555,9 +555,10 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
       native: gate,
       // Whether a surface is a surface of the plugin in the window, which a status watch with surface checks (view-answer.js of @soksak/plugin-api).
       holdsSurface: (plugin, watched) => registry.holdsSurface(plugin, watched),
-      // Whether the plugin of the view lists the other plugin in its dependencies, which lets the view follow the statuses that the other plugin
-      // declares (view-answer.js of @soksak/plugin-api, docs/spec/plugins.md#pluginjson).
-      dependsOn: (viewPlugin, dependency) => viewPlugin === surface.pluginId && Object.hasOwn(plugin(viewPlugin).dependencies, dependency),
+      // Whether the plugin of the view lists the package of the other plugin in its dependencies, which lets the view follow the statuses that
+      // the other plugin declares; the environment resolves each package to the id of its plugin (view-answer.js of @soksak/plugin-api,
+      // docs/spec/plugins.md#pluginjson).
+      dependsOn: (viewPlugin, dependency) => viewPlugin === surface.pluginId && plugin(viewPlugin).plugins.includes(dependency),
       // The surface menu of a right click in the view (view-answer.js of @soksak/plugin-api): a section declares no menu, and the frame moves the point into the window.
       menu: {
         declared: () => !isSectionSurface(surface.surfaceId) && plugin(surface.pluginId).menu !== null,

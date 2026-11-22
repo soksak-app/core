@@ -47,7 +47,7 @@ type installedUnit struct {
 	Exposes     Exposes
 	Diagnostics json.RawMessage
 	Sidecars    []string
-	// Plugins are the loaded plugins that plugin.json lists in dependencies; a view of the plugin follows their declared statuses
+	// Plugins are the ids of the loaded plugins whose packages plugin.json lists in dependencies; a view of the plugin follows their declared statuses
 	// (docs/spec/plugins.md#pluginjson).
 	Plugins []string
 	// Settings holds the local name of each setting.
@@ -85,6 +85,7 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 		Error   *string `json:"error"`
 		Plugins []struct {
 			ID          string          `json:"id"`
+			Package     string          `json:"package"`
 			Diagnostics json.RawMessage `json:"diagnostics"`
 			Manifest    struct {
 				Surface *struct {
@@ -114,8 +115,12 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 		return nil, fmt.Errorf("installed plugins: %s", *read.Error)
 	}
 	units := make(map[string]*installedUnit, len(read.Plugins))
+	// ids holds the plugin id of each package: a dependency names the package of a plugin, and the view calls name its plugin id
+	// (docs/spec/plugins.md#pluginjson).
+	ids := make(map[string]string, len(read.Plugins))
 	for _, plugin := range read.Plugins {
 		units[plugin.ID] = &installedUnit{ID: plugin.ID, Diagnostics: plugin.Diagnostics}
+		ids[plugin.Package] = plugin.ID
 	}
 	for _, plugin := range read.Plugins {
 		unit := units[plugin.ID]
@@ -130,10 +135,10 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 			unit.Settings = append(unit.Settings, local)
 		}
 		for name := range plugin.Manifest.Dependencies {
-			if units[name] == nil {
-				unit.Sidecars = append(unit.Sidecars, name)
+			if id, found := ids[name]; found {
+				unit.Plugins = append(unit.Plugins, id)
 			} else {
-				unit.Plugins = append(unit.Plugins, name)
+				unit.Sidecars = append(unit.Sidecars, name)
 			}
 		}
 		if len(plugin.Manifest.Exposes) > 0 {

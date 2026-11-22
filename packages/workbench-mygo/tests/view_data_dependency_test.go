@@ -8,9 +8,9 @@ import (
 	"testing"
 )
 
-// dependencyDocument lists boxprobe in the dependencies of textprobe, and declares the key note of boxprobe.
+// dependencyDocument lists the package @scope/plugin-boxprobe of the plugin boxprobe in the dependencies of textprobe, and declares the key note of boxprobe.
 func dependencyDocument() string {
-	document := strings.Replace(installedDocument, `"dependencies": {"@scope/sidecar-probe": "^1.0.0"}`, `"dependencies": {"@scope/sidecar-probe": "^1.0.0", "boxprobe": "^1.0.0"}`, 1)
+	document := strings.Replace(installedDocument, `"dependencies": {"@scope/sidecar-probe": "^1.0.0"}`, `"dependencies": {"@scope/sidecar-probe": "^1.0.0", "@scope/plugin-boxprobe": "^1.0.0"}`, 1)
 	return strings.Replace(document, `"manifest": {"id": "boxprobe", `, `"manifest": {"id": "boxprobe", "data": {"note": {"schema": {"type": "string"}, "default": "none"}}, `, 1)
 }
 
