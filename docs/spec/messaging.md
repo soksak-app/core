@@ -100,7 +100,7 @@ The sidecar creates a missing folder at registration ([folder of a terminal](#fo
 
 ## Hand-off is not a message
 
-A hand-off gives a task to another terminal and receives its result. It is a record, not a message: a message is text that the reader receives in order, and a result sent as a message cannot show which attempt of the task it answers. The record has the states `assigned`, `started`, `result`, `integrated` and `abandoned`. `assigned` starts an attempt, and `started`, `result` and `integrated` follow in that order. `abandoned` ends an attempt that has not reached `integrated`, and a new assignment after it starts the next attempt. Each record holds an `attempt` number that starts at 1 and rises by one with each assignment. A state change names its attempt, and a change or a result of an earlier attempt is refused with `stale-attempt`, which names the current attempt. The record has no heartbeat, time limit or lock: a stalled attempt stays `started` until its owner or a person abandons it, and a waiting caller waits for the state event, as [AGENTS](../../AGENTS.md#implementation) requires for event waits.
+A hand-off gives a task to another terminal and receives its result. It is a record, not a message: a message is text that the reader receives in order, and a result sent as a message cannot show which attempt of the task it answers. The record has the states `assigned`, `started`, `result`, `integrated` and `abandoned`. `assigned` starts an attempt, and `started`, `result` and `integrated` follow in that order. `abandoned` ends an attempt that has not arrived at `integrated`, and a new assignment after it starts the next attempt. Each record holds an `attempt` number that starts at 1 and rises by one with each assignment. A state change names its attempt, and a change or a result of an earlier attempt is refused with `stale-attempt`, which names the current attempt. The record has no heartbeat, time limit or lock: a stalled attempt stays `started` until its owner or a person abandons it, and a waiting caller waits for the state event, as [AGENTS](../../AGENTS.md#implementation) requires for event waits.
 
 ### Hand-off record
 
@@ -112,7 +112,7 @@ Each terminal sidecar owns the record in its module `handoff` beside its messagi
 - Assignment: `assign` writes `attempt` 1 and `assigned` when the task has no record, and the next attempt and `assigned` when the current attempt is `abandoned`; while the current attempt is `assigned`, `started` or `result`, or after `integrated`, it is refused with `invalid-transition`, which names the attempt and its state.
 - Change: `update` names the task, its attempt and the new state, with the text for `result`. An attempt other than the current one is refused with `stale-attempt`, which names the given and the current attempt, before the state is judged. The changes are `assigned` to `started`, `started` to `result`, `result` to `integrated`, and `assigned`, `started` or `result` to `abandoned`; any other change is refused with `invalid-transition`, which names the attempt, its state and the requested state. A task without a record is refused with `unknown-task`.
 - One attempt: the record holds the current attempt only, so a result of an earlier attempt has no record to change and is refused.
-- No wire operation reaches the record yet; the operations, which decide which process writes a record of another terminal's folder, are not defined.
+- No wire operation is written to the record yet; the operations, which decide which process writes a record of another terminal's folder, are not defined.
 
 ## Input injection
 
@@ -181,7 +181,7 @@ A role message has the framing of the agent messages of [injected message](#inje
 
 ## MCP tools
 
-The sok MCP server exposes a fixed set of tools, and no tool is made from the exposure ([cli](cli.md#mcp-server), the rule of the tool table). The messaging tools are `messages_read` and `messages_wait`. Each reaches the sidecar operation of the same dotted name, `messages.read` and `messages.wait`, through the command of the terminal page ([path of the reads](#path-of-the-reads)).
+The sok MCP server exposes a fixed set of tools, and no tool is made from the exposure ([cli](cli.md#mcp-server), the rule of the tool table). The messaging tools are `messages_read` and `messages_wait`. Each maps to the sidecar operation of the same dotted name, `messages.read` and `messages.wait`, through the command of the terminal page ([path of the reads](#path-of-the-reads)).
 
 | Tool | Arguments | Reply |
 | --- | --- | --- |
@@ -192,7 +192,7 @@ The wait ends on arrival or on an event that closes the registration; no timer e
 
 ### Path of the reads
 
-A tool call reaches the sidecar through the endpoint, the page of the terminal and its sidecar port; no endpoint method sends to a sidecar, because the sidecar answers the window of the page that sent for the surface ([sidecars](sidecars.md#messages)) and the page holds the sidecar port of its surface.
+A tool call is delivered to the sidecar through the endpoint, the page of the terminal and its sidecar port; no endpoint method sends to a sidecar, because the sidecar answers the window of the page that sent for the surface ([sidecars](sidecars.md#messages)) and the page holds the sidecar port of its surface.
 
 1. Window: `sok` sends `surface.window {surface: terminal}`. The answer 1012 fails the call with `unknown-terminal: surface <terminal> is in no window`.
 2. Plugin: `sok` sends `exposure.snapshot {window, surface: terminal}` and takes `plugin` of the group of the surface ([window snapshot](exposure.md#window-snapshot)). A surface whose group registers no command `<plugin>.messages.read` or `<plugin>.messages.wait` fails the call with `unknown-terminal: surface <terminal> of plugin <plugin> registers no command <name>`.
@@ -263,4 +263,4 @@ Each item states the reason it is open.
 - Busy receiver: a message to a receiver whose foreground program is busy goes into its input as typed text does, and the program or the agent takes it when it reads its input; an agent that queues typed input takes it as a queued submission, and no key of the TUI adapter is sent. Reason: the paste and Enter are the submission that the agent queues as typed input, so a busy agent needs no background or send-now key ([terminal plan, 4.1](../plans/terminal-plan.md#41-tui-key-adapters-decision-d6)); the injection then depends on no key table, which is empty.
 - Hold for the person: the page injects nothing while the program of the terminal waits for the person (a `blocked` record, or a notice of a program without records) or while the person types in it ([hold for the person](#hold-for-the-person)). Reason: a paste and an Enter in a prompt for the person answer it, as the [evidence](#evidence-of-the-hold) shows for a permission prompt of an agent, and a message must never answer for the person.
 - Guard: an injected message is submitted through the `paste` operation and Enter, the input of a typed line, so the destructive command guard judges each line that it submits like any submitted line ([persistent services](persistent-services.md#destructive-command-guard)). A refused message gets the reply `guardRefused` with its `rule` and `reason`.
-- Carrier: an injected message reaches the terminal through the `paste` operation of its session and the key Enter of its `input` operation ([persistent services](persistent-services.md#destructive-command-guard)). The parameters of these operations are declared by the terminal sidecar in its own repository, not by this repository ([AGENTS](../../AGENTS.md#structure)).
+- Carrier: an injected message is delivered to the terminal through the `paste` operation of its session and the key Enter of its `input` operation ([persistent services](persistent-services.md#destructive-command-guard)). The parameters of these operations are declared by the terminal sidecar in its own repository, not by this repository ([AGENTS](../../AGENTS.md#structure)).

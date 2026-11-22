@@ -13,11 +13,11 @@
 감사는 core, sidecar와 plugin, 검증의 소스를 읽었고 아무것도 실행하지 않았다. 명제는 지금 거짓이다.
 
 - **검사는 범위가 아니라 이름을 증명한다.** `make check-events`는 선언한 이름이 소스에 글자로 있는지만 보므로 주석도 통과시킨다. 선언하지 않고 방출한 이름, 필수 field, event 없는 원천은 찾지 못한다. `scripts/check-fallbacks.mjs`는 사유 주석을 요구하지만 일부 형식만 본다(Objective-C observer, monitor, KVO, timer, delegate, `return NO`, `recover` 없는 Go `go` 문, 버려지는 channel은 보지 않는다).
-- **시험 결과가 로그에 매핑되지 않는다.** 실행 id, 시험 이름, offset이 로그에 닿지 않는다. 실행기는 출력을 메모리에 두고 실패만 출력한다. 감사 `check-events.mjs --logs`는 손으로만 실행되고 CI에 없으며, `auditLog`는 `error` event와 sidecar의 파일을 보고하지 않고, offset 파일은 검사가 끝날 때마다 덮어쓴다. stall 파일, 충돌 리포트, 표준 오류에는 event가 없다.
+- **시험 결과가 로그에 매핑되지 않는다.** 실행 id, 시험 이름, offset이 로그에 기록되지 않는다. 실행기는 출력을 메모리에 두고 실패만 출력한다. 감사 `check-events.mjs --logs`는 손으로만 실행되고 CI에 없으며, `auditLog`는 `error` event와 sidecar의 파일을 보고하지 않고, offset 파일은 검사가 끝날 때마다 덮어쓴다. stall 파일, 충돌 리포트, 표준 오류에는 event가 없다.
 - **사슬을 잇는 id가 없다.** `native.input.key_down`은 catalog에 없고 입력의 id를 발급하는 층이 없다. `cids`의 두 집계가 다르므로(25개 파일 969,368건에는 없고 로그 폴더 네 곳에는 33,693건) F160.8의 감사 script가 항목을 닫기 전에 다시 센다. page command, host 호출, sidecar 요청, 창, 프로젝트, 설정 변경, plugin 작업은 표면과 시각으로만 맞춘다.
 - **침묵하는 원천이 있다.** native library의 observer, monitor, KVO, timer 등록 약 36개 중 13개만 기록한다. Go 호스트에는 `go` 문 약 21개와 `recover()` 0개가 있다. endpoint 메서드는 성능 trace가 켜져 있을 때만 기록한다. 보류 응답과 close의 buffer는 한도 없이 자란다. event를 쓰는 sidecar는 터미널 sidecar뿐이며, Go sidecar 둘과 plugin 일곱에는 catalog, event 파일, `cids`가 없다.
 - **기록의 성능은 설계이며 측정이 아니다.** benchmark 결과가 기록돼 있지 않고, 입력 지연을 기록을 켜고 끈 상태와 비교한 적이 없으며, 첫 응답자는 프레임마다 메인 스레드에서 dictionary로 기록하고, `pty_read`의 hex는 바이트마다 할당하며, `page.call`은 자르기 전에 모든 인자를 직렬화한다.
-- **부피가 신호를 가린다.** 호스트와 terminal sidecar의 파일 31개가 970,468건(345.2 MB)을 담는다. 바이트로는 `page.call` 45.4%, `sidecar.vt.request` 19.1%, `native.input.query` 18.1%, `native.record.info` 6.5%이고, 139,068건(47.8 MB)의 로그는 `error` 0.0%, `warn` 0.4%, `info` 4.8%, `debug` 94.8%를 담는다. 피크 처리율은 9,715 events/s로 큐 한도 안이다. 100 MB 5세대 회전은 평균 19~23시간치, 가장 높은 부하에서 약 7시간치이며, 회전에 닿은 파일은 아직 없다(가장 큰 파일 48 MB). 디스크 여유가 18 GiB(96% 사용)이므로 모든 파일을 지우지 않으려면 명시한 예산이 필요하다.
+- **부피가 신호를 가린다.** 호스트와 terminal sidecar의 파일 31개가 970,468건(345.2 MB)을 담는다. 바이트로는 `page.call` 45.4%, `sidecar.vt.request` 19.1%, `native.input.query` 18.1%, `native.record.info` 6.5%이고, 139,068건(47.8 MB)의 로그는 `error` 0.0%, `warn` 0.4%, `info` 4.8%, `debug` 94.8%를 담는다. 피크 처리율은 9,715 events/s로 큐 한도 안이다. 100 MB 5세대 회전은 평균 19~23시간치, 가장 높은 부하에서 약 7시간치이며, 회전에 도달한 파일은 아직 없다(가장 큰 파일 48 MB). 디스크 여유가 18 GiB(96% 사용)이므로 모든 파일을 지우지 않으려면 명시한 예산이 필요하다.
 
 ## 결정
 

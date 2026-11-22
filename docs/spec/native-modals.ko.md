@@ -19,7 +19,7 @@ mygo host는 modal web view를 만들지 않는다: 그 workbench의 modal은 na
 
 열기, 닫기, 표면 생성, 표면 탐색에 현재 배경 상태를 적용해야 한다. 닫을 때 페이지의 기존 스타일을 변경하지 않고 적용한 스타일시트를 제거한다. 메인 문서를 다시 로드하면 해당 모달과 배경 효과를 제거한다. 모달 웹뷰와 해당 초기 문서는 투명하고 카드는 자체 배경을 그린다. 별도의 OS 창이나 플랫폼 시각 효과 뷰는 필요하지 않다.
 
-인수 기준은 블러와 반투명 색상, 선명한 대화상자 내용, 배경 클릭과 스크롤 차단, 설정의 × 버튼 전용 닫기, 닫은 후 표시와 입력 복원이다. `e2e/modal.test.mjs`는 이를 host와 문서가 보고하는 값으로 판정한다: `host.window`에서 view surface의 각 문서와 image region의 `blurred`, module surface 문서의 CSS filter, 대화상자 문서의 scrim 배경과 filter 없음, 대화상자 뒤 지점의 네이티브 hit와 뒤 요소의 거부, 닫은 뒤 블러 해제와 문서의 네이티브 hit 복원이다(`settings blocks background input and closes only through its close button`, `an open modal's document receives the content the page updates`). 카드 이동, 내용 갱신, 표면 교체와 탐색, 부모 창 크기 변경, 메인 문서 다시 로드에서도 이를 유지해야 한다. 추가 및 분할 메뉴는 두 배경 효과를 적용하지 않는다. 같은 window check는 배경 클릭과 스크롤 차단을 입력 event로도 판정한다. 열린 설정 뒤의 view 위 클릭과 wheel은 그 view가 아니라 설정 webview에 닿아 그 view는 wheel을 기록하지 않고(`core.surface.input`), 설정을 닫은 뒤 그 view에 보낸 wheel은 그 view에 닿는다.
+인수 기준은 블러와 반투명 색상, 선명한 대화상자 내용, 배경 클릭과 스크롤 차단, 설정의 × 버튼 전용 닫기, 닫은 후 표시와 입력 복원이다. `e2e/modal.test.mjs`는 이를 host와 문서가 보고하는 값으로 판정한다: `host.window`에서 view surface의 각 문서와 image region의 `blurred`, module surface 문서의 CSS filter, 대화상자 문서의 scrim 배경과 filter 없음, 대화상자 뒤 지점의 네이티브 hit와 뒤 요소의 거부, 닫은 뒤 블러 해제와 문서의 네이티브 hit 복원이다(`settings blocks background input and closes only through its close button`, `an open modal's document receives the content the page updates`). 카드 이동, 내용 갱신, 표면 교체와 탐색, 부모 창 크기 변경, 메인 문서 다시 로드에서도 이를 유지해야 한다. 추가 및 분할 메뉴는 두 배경 효과를 적용하지 않는다. 같은 window check는 배경 클릭과 스크롤 차단을 입력 event로도 판정한다. 열린 설정 뒤의 view 위 클릭과 wheel은 그 view가 아니라 설정 webview에 전달되어 그 view는 wheel을 기록하지 않고(`core.surface.input`), 설정을 닫은 뒤 그 view에 보낸 wheel은 그 view에 전달된다.
 
 시각 효과 정의는 공통 웹 코드다. 각 플랫폼에는 작동하는 네이티브 웹뷰 호스트와 동작 검증이 필요하다. 현재 Wails의 추가 웹뷰 생성은 macOS에만 구현되어 있다. Windows와 Linux 실행은 미검증이다.
 
@@ -27,7 +27,7 @@ mygo host는 modal web view를 만들지 않는다: 그 workbench의 modal은 na
 
 ## 키보드
 
-modal web view 는 그 문서가 렌더를 마쳤다고 알릴 때(`modalReady`) 창의 키보드를 받고, 그 전에는 받지 않는다. 숨은 web view 가 키보드를 가지면 사람이 볼 수 없는 곳이 키를 받기 때문이다. 그래서 modal 이 열리는 순간 사람이 누른 키는 뒤의 view 에 닿지 않고 modal 을 기다린다. modal 의 show 는 이전 modal 을 제거하고 web view 를 만들기 전에 창의 키 대기를 시작하고, ready 요청이 modal 에 키보드를 주면 기다린 키는 순서대로 modal 에 닿는다. 기다리는 것은 키뿐이고 pointer event 는 붙잡지 않으므로, scrim 이나 modal 위의 press 는 곧바로 닿는다. modal 이 닫히거나, show 가 실패하거나, 그 문서의 process 가 끝나거나, main page 가 시작하거나, 창이 닫혀도 대기는 끝나고, 창 닫힘은 키를 버린다. 시간은 대기를 끝내지 않는다. modal 을 교체하는 show 는 교체한 modal 을 위해 대기를 유지한다. modal 대기는 워크벤치의 결정을 기다리는 창의 키 대기와 같은 대기다([surface 의 키보드](native-surfaces.ko.md#surface의-키보드)). 둘 중 하나라도 기다리는 동안 키는 기다린다. modal 을 여는 core command 는 호스트가 그 show 에 응답한 뒤에 응답하므로, command 가 응답할 때 대기는 열려 있다([exposure](exposure.ko.md#등록)).
+modal web view 는 그 문서가 렌더를 마쳤다고 알릴 때(`modalReady`) 창의 키보드를 받고, 그 전에는 받지 않는다. 숨은 web view 가 키보드를 가지면 사람이 볼 수 없는 곳이 키를 받기 때문이다. 그래서 modal 이 열리는 순간 사람이 누른 키는 뒤의 view 에 전달되지 않고 modal 을 기다린다. modal 의 show 는 이전 modal 을 제거하고 web view 를 만들기 전에 창의 키 대기를 시작하고, ready 요청이 modal 에 키보드를 주면 기다린 키는 순서대로 modal 에 전달된다. 기다리는 것은 키뿐이고 pointer event 는 붙잡지 않으므로, scrim 이나 modal 위의 press 는 곧바로 전달된다. modal 이 닫히거나, show 가 실패하거나, 그 문서의 process 가 끝나거나, main page 가 시작하거나, 창이 닫혀도 대기는 끝나고, 창 닫힘은 키를 버린다. 시간은 대기를 끝내지 않는다. modal 을 교체하는 show 는 교체한 modal 을 위해 대기를 유지한다. modal 대기는 워크벤치의 결정을 기다리는 창의 키 대기와 같은 대기다([surface 의 키보드](native-surfaces.ko.md#surface의-키보드)). 둘 중 하나라도 기다리는 동안 키는 기다린다. modal 을 여는 core command 는 호스트가 그 show 에 응답한 뒤에 응답하므로, command 가 응답할 때 대기는 열려 있다([exposure](exposure.ko.md#등록)).
 
 ## 사용
 

@@ -366,12 +366,12 @@ or leaves moves both the number a line has and where it stands. So a gesture is
 settled against such a change instead: a boundary still within the width its
 divider is grabbed at is the same handle and the gesture keeps it, and a boundary
 further away than that is one the gesture never took hold of, so the gesture ends
-there — the divider stops carrying `data-dragging` and the next move drives
+there — the divider stops carrying `data-dragging` and the next move controls
 nothing.
 
 The settle runs at the `render()` the host makes, whatever reason it names there,
 and nowhere else. **A host changes the grid and calls `render()` in the same
-turn.** Nothing reaches a gesture in between, so a press, a key, a move or a
+turn.** Nothing affects a gesture in between, so a press, a key, a move or a
 release always follows the render of the change before it, and each of those
 paths reads a grid the elements agree with. A host that changes the grid and
 renders later hands its gestures a boundary that has moved and does not say so;
@@ -404,7 +404,7 @@ at the scale it is drawn at; the kids that take a fraction take the fractions of
 their new contents. A line of another cut is no limit, because the kids of
 another cut do not change: a seam dragged past it passes it, and a seam dragged
 onto it joins it, so the two seams stand on one line and a later drag moves them
-together. `moveBoundary` returns the position the seam reached, read after the
+together. `moveBoundary` returns the position the seam arrived at, read after the
 lines are derived again, on the line it then stands on.
 
 Where the plane holds less than the px sizes an axis declares, every declared
@@ -624,9 +624,9 @@ plane gets more rows.
 grid.arrange("even");
 ```
 
-## A card that reaches across the plane
+## A card that spans the plane
 
-A rail stands between panes and reaches from one side of the plane to the other.
+A rail stands between panes and extends from one side of the plane to the other.
 It cannot be made by splitting a card — that would give it the extent of the card
 it came from, and it would be a pane like any other. It goes in at a boundary no
 card spans over, and every card past it is shifted by its span.
@@ -713,7 +713,7 @@ shape.loops.length;                   // 1 when the cards are adjacent, 2 when a
 
 The state is a slicing tree (R4), so a pinwheel — four cards each overhanging
 the one in the middle, so no side can take its place — cannot be stored, and no
-operation reaches it.
+operation applies to it.
 
 A close takes the card out of its cut and gives its share to the other kids of
 the same cut by one factor, and every cut has at least two kids, so another kid
@@ -752,7 +752,7 @@ first.
 | `canMove(id, targetId, side)`, `move(id, targetId, side)` | take a card to another card's side: a close and an insert |
 | `setFixed(id, on)`, `setSize(id, axis, px)`, `setData(id, data)` | change a card, and with `setData` the payload of a box; the returned copies are frozen |
 | `unwrap(id)`, `headsAbove(id)` | put the inner node of the box `id` in its place without its head, a cut along the axis of its cut joining that cut with every kid at its drawn size; the px of the heads drawn inside the top of a card or a box ([add and remove](#add-and-remove)) |
-| `standings(axis)`, `canInsertAt(axis, line)`, `insertAt`, `moveTo` | a card that reaches across the plane: the edges of the plane and the seams of the root cut along the axis |
+| `standings(axis)`, `canInsertAt(axis, line)`, `insertAt`, `moveTo` | a card that spans the plane: the edges of the plane and the seams of the root cut along the axis |
 | `zoneAt(x, y, options)` | where a drop lands |
 | `dividers()`, `rules()` | grab areas, and boundaries to draw |
 | `boundaryPos`, `boundaryRange`, `hasBoundary(axis, line)`, `moveBoundary(axis, line, px, allowSnap?)`, `centerBoundary` | drag a boundary |
@@ -828,13 +828,13 @@ size: it resizes the grid and returns whether the grid took the size; a
 destroyed view and a host of zero width or height leave the grid as it is and
 return `false`.
 
-`bleed` is how far past the plane a rule may run to reach the frame around it.
+`bleed` is how far past the plane a rule may run to extend to the frame around it.
 A host that holds the plane inside a frame — a padding on the element outside
 it — draws its border that far from where a rule ends, so the rule stops short of
 that border. Only the host has that distance: the view receives an
 element, and an element's own padding does not move what is placed absolutely
-inside it. Only the ends that reach the plane bleed; a rule that stops against
-a card is left where it stops, because the card is the edge it reaches.
+inside it. Only the ends that touch the plane bleed; a rule that stops against
+a card is left where it stops, because the card is the edge it touches.
 
 It is writable on the view — `view.bleed = px` — because a host that lets a
 person change its gap changes this with it.
@@ -845,7 +845,7 @@ for an arrow key,
 `center(axis, line)` for the second press of a pair and Enter, and
 `end(axis, line)` at the end of a drag, which returns whether a line merged.
 Without it the view runs `moveBoundary` and `centerBoundary` of the grid, and
-`end` returns false, because a drag that reaches another line has joined it
+`end` returns false, because a drag that touches another line has joined it
 already ([boundaries](#boundaries)). A host whose cards are drawn at other
 rectangles than the grid's, and which holds rules of its own for a line,
 supplies its own; a host that stores the result of a drag through an

@@ -28,7 +28,7 @@ SDK 동작은 소유 패키지에서만 검사한다. 플러그인 테스트가 
 
 명령 분리: `make test`는 플러그인 테스트 스크립트만 실행한다. `make check`는 SDK를 읽는 도구(`soksak-exposure`, `soksak-engines`, `sok-check events --config`, `sok-check docs`), check 스크립트에 기록된 상수와 SDK `view-start.js`의 SHA-256을 비교하는 검사, 픽스처가 담은 값의 리터럴 일치 검사(`VIEW_IMPORTS` 항목, 화면 메시지 벡터), `build-vendor --check`를 실행한다. 모든 플러그인 저장소는 Makefile에 `check` 대상을 가지며 `pack`은 `check`에 의존한다. 빌드와 검사 스크립트(테스트가 아님)는 SDK 검증기를 호출할 수 있다.
 
-SDK 픽스처가 SDK에 충실하도록 core가 소유한 계약 사례를 둔다. 계약 사례 하나는 플러그인의 리터럴 SDK 픽스처가 덮는 SDK 표면 하나를 덮는다. 뷰 wire(`view-start.js`의 시작 값과 `VIEW_IMPORTS` 항목, 뷰 브리지 메시지, 페이지가 호출하는 `sokView` 멤버), `createBinder`, `screenHash`, `drawList`, 매니페스트와 진단 검증기가 그것이다. 사례는 하나의 순서 있는 단계 목록이다. 단계는 입력과 기대 출력을 가진 호출, 또는 표면이 플러그인에 전달하는 수신 이벤트다. 순수한 호출 하나는 단계 하나짜리 목록이다. core는 이런 표면 전부의 사례를 `packages/plugin-api/contract/`에 리터럴 예제로 공개하고, core `make test`는 모든 사례를 core 자신의 구현에 대해 실행한다. 플러그인의 리터럴 SDK 픽스처는 표로 구동된다. 복사한 사례의 단계를 들고, 호출은 목록에서 그 위치에서만 답하고, 이벤트는 테스트가 그 위치에 닿았을 때만 전달하며, 그 밖의 것에는 던진다. 그러므로 플러그인 테스트가 관찰하는 동작은 공개된 동작뿐이다. 플러그인 테스트에 필요하지만 core가 공개하지 않은 순서는 core가 먼저 추가한다. 테스트 트리 빌드는 플러그인이 커밋한 표가 나열한 (지정자, export 이름) 짝에 대해서만 SDK import를 그런 SDK 픽스처로 바꾸고, SDK 픽스처는 나열된 이름만 export하며, core 경로는 읽지 않는다. 그 밖의 SDK import가 `ui/`에서 닿으면 빌드가 실패하므로, 플러그인은 그 코드 경로를 빼거나 core가 사례를 먼저 공개한다. 플러그인 테스트는 SDK 코드를 import하거나, 감싸거나, 기록하거나, 호출하지 않는다. 플러그인 `check` 대상은 복사한 각 표를 공개 파일과 비교하고 차이가 있으면 실패한다. 공개된 사례가 없는 표면을 덮는 SDK 픽스처는 `check`에서 실패한다. 검사는 SDK 파일을 읽을 수 있고, 테스트는 읽을 수 없다.
+SDK 픽스처가 SDK에 충실하도록 core가 소유한 계약 사례를 둔다. 계약 사례 하나는 플러그인의 리터럴 SDK 픽스처가 덮는 SDK 표면 하나를 덮는다. 뷰 wire(`view-start.js`의 시작 값과 `VIEW_IMPORTS` 항목, 뷰 브리지 메시지, 페이지가 호출하는 `sokView` 멤버), `createBinder`, `screenHash`, `drawList`, 매니페스트와 진단 검증기가 그것이다. 사례는 하나의 순서 있는 단계 목록이다. 단계는 입력과 기대 출력을 가진 호출, 또는 표면이 플러그인에 전달하는 수신 이벤트다. 순수한 호출 하나는 단계 하나짜리 목록이다. core는 이런 표면 전부의 사례를 `packages/plugin-api/contract/`에 리터럴 예제로 공개하고, core `make test`는 모든 사례를 core 자신의 구현에 대해 실행한다. 플러그인의 리터럴 SDK 픽스처는 표로 구동된다. 복사한 사례의 단계를 들고, 호출은 목록에서 그 위치에서만 답하고, 이벤트는 테스트가 그 위치에 도달했을 때만 전달하며, 그 밖의 것에는 던진다. 그러므로 플러그인 테스트가 관찰하는 동작은 공개된 동작뿐이다. 플러그인 테스트에 필요하지만 core가 공개하지 않은 순서는 core가 먼저 추가한다. 테스트 트리 빌드는 플러그인이 커밋한 표가 나열한 (지정자, export 이름) 짝에 대해서만 SDK import를 그런 SDK 픽스처로 바꾸고, SDK 픽스처는 나열된 이름만 export하며, core 경로는 읽지 않는다. 그 밖의 SDK import가 `ui/`에서 참조하면 빌드가 실패하므로, 플러그인은 그 코드 경로를 빼거나 core가 사례를 먼저 공개한다. 플러그인 테스트는 SDK 코드를 import하거나, 감싸거나, 기록하거나, 호출하지 않는다. 플러그인 `check` 대상은 복사한 각 표를 공개 파일과 비교하고 차이가 있으면 실패한다. 공개된 사례가 없는 표면을 덮는 SDK 픽스처는 `check`에서 실패한다. 검사는 SDK 파일을 읽을 수 있고, 테스트는 읽을 수 없다.
 
 결정은 각 플러그인 저장소에서 그 저장소의 sub-item이 들어갈 때 효력을 가진다. 그 전까지 현재 형태는 준수가 아니라 소유자가 있는 열린 결함이다.
 
@@ -66,7 +66,7 @@ CI: `ci.yml:23`이 `appview`, `browser`, `editor`, `files`, `hwp`, `shell`, `ter
 
 ### 필요한 변경
 
-1. 테스트 트리: 각 플러그인에 `scripts/build-test.mjs`를 두어 `build/test/`를 쓴다. `ui/`를 복사하고, 플러그인 표가 나열한 SDK import(지정자와 export 이름의 짝 단위, `@soksak/plugin-api`, `@soksak/plugin-api/*`, `@soksak/runtime`, `@soksak/workbench`)만 SDK 코드가 없는 표 구동 SDK 픽스처 모듈로 바꾸고, SDK 픽스처는 나열된 이름만 export하며, core 경로를 읽지 않고, 그 밖의 SDK import가 `ui/`에서 닿으면 빌드가 실패한다. 제3자 지정자와 `ui/vendor/` 번들은 그대로 둔다. 플러그인의 `test` 스크립트가 이를 먼저 실행한다. 소유자: 각 플러그인 저장소, 저장소마다 sub-item 하나. `build` 스크립트가 없는 `shell`과 `flowmark`를 포함해 `browser`, `appview`, `terminal`도 이 스크립트를 가진다.
+1. 테스트 트리: 각 플러그인에 `scripts/build-test.mjs`를 두어 `build/test/`를 쓴다. `ui/`를 복사하고, 플러그인 표가 나열한 SDK import(지정자와 export 이름의 짝 단위, `@soksak/plugin-api`, `@soksak/plugin-api/*`, `@soksak/runtime`, `@soksak/workbench`)만 SDK 코드가 없는 표 구동 SDK 픽스처 모듈로 바꾸고, SDK 픽스처는 나열된 이름만 export하며, core 경로를 읽지 않고, 그 밖의 SDK import가 `ui/`에서 참조하면 빌드가 실패한다. 제3자 지정자와 `ui/vendor/` 번들은 그대로 둔다. 플러그인의 `test` 스크립트가 이를 먼저 실행한다. 소유자: 각 플러그인 저장소, 저장소마다 sub-item 하나. `build` 스크립트가 없는 `shell`과 `flowmark`를 포함해 `browser`, `appview`, `terminal`도 이 스크립트를 가진다.
 2. 테스트 규칙, 플러그인의 `test/` 디렉터리마다: `test/**`의 어떤 줄과 `ui/**/*.test.mjs`의 어떤 줄도 SDK 찾을 문자열을 포함하지 않는다. 테스트는 찾을 문자열을 조각으로 만들어(예: `"@" + "soksak/"`) 자기 소스와 일치하지 않게 한다. 규칙은 SDK와 공용 키트의 `@soksak/` 지정자를 다루며, 5번 변경으로 상대 경로가 되는 `@soksak/shared/editor.extension/` 번들 지정자는 제외한다. 테스트는 SDK 파일을 읽지 않는다. `view-start.js` 비교는 `make check`에서만 실행한다.
 3. resolver hook: `editor/test/shared-modules.mjs`는 변경 1이 들어가면 삭제하며, `editor/package.json:23`의 `--import`도 뺀다. 그 전까지 hook은 소유자(editor 저장소)가 있는 열린 결함이다.
 4. `editor/test/editor.test.mjs:184`와 `:198`, `editor/test/fixtures/upper-gutter.mjs:2`는 vendor 번들을 상대 경로(`ui/vendor/...`)로 import한다. 각 단언은 의미를 유지한다.
@@ -269,14 +269,14 @@ CI: `ci.yml:23`이 `appview`, `browser`, `editor`, `files`, `hwp`, `shell`, `ter
 새 Haiku 감사자 2명(D1만, 결정 수준)이 이의를 보고했다:
 
 - 플러그인에 전달되는 이벤트가 호출과 따로 나열되어, 표가 호출의 순서와 이벤트의 순서를 각각 고정할 뿐 둘의 교차를 고정하지 못한다. 테스트가 core가 그 이벤트로 답했을 호출보다 먼저 이벤트를 전달할 수 있다. 수용: 각 사례는 호출 또는 수신 이벤트인 하나의 순서 있는 단계 목록이고, SDK 픽스처는 단계의 위치에서만 답하거나 전달한다.
-- runtime, workbench, sidecar 지정자는 공개된 사례가 없는 SDK 픽스처로 바뀌므로, 규칙이 그것들을 검사하는지 말하지 않는다. 수용: 테스트 트리 빌드는 공개된 사례가 덮는 표면의 SDK 지정자만 바꾸고, 그 밖의 SDK 지정자가 `ui/`에서 닿으면 빌드가 실패하므로 플러그인은 그 코드 경로를 빼거나 core가 사례를 먼저 공개한다.
+- runtime, workbench, sidecar 지정자는 공개된 사례가 없는 SDK 픽스처로 바뀌므로, 규칙이 그것들을 검사하는지 말하지 않는다. 수용: 테스트 트리 빌드는 공개된 사례가 덮는 표면의 SDK 지정자만 바꾸고, 그 밖의 SDK 지정자가 `ui/`에서 참조하면 빌드가 실패하므로 플러그인은 그 코드 경로를 빼거나 core가 사례를 먼저 공개한다.
 
 ### 라운드 15
 
 새 Haiku 감사자 2명(D1만, 결정 수준)이 보고했다:
 
 - 한 감사자는 결정 수준의 이의가 없다고 답했고, 빌드 coverage는 지정자 단위가 아니라 export 단위로 검사해야 한다는 sub-item 주의를 남겼다.
-- 다른 감사자는 `@soksak/plugin-api` 같이 덮인 지정자가 덮이지 않은 export를 가질 수 있고, 빌드가 그것을 SDK 픽스처에 실어 낸다고 이의를 냈다. 수용: coverage는 (지정자, export 이름) 짝 단위로 본다. 빌드는 짝이 공개된 사례에 덮인 import만 바꾸고, SDK 픽스처는 덮인 이름만 export하며, `ui/`에서 닿는 그 밖의 SDK import에는 빌드가 실패한다.
+- 다른 감사자는 `@soksak/plugin-api` 같이 덮인 지정자가 덮이지 않은 export를 가질 수 있고, 빌드가 그것을 SDK 픽스처에 실어 낸다고 이의를 냈다. 수용: coverage는 (지정자, export 이름) 짝 단위로 본다. 빌드는 짝이 공개된 사례에 덮인 import만 바꾸고, SDK 픽스처는 덮인 이름만 export하며, `ui/`에서 참조하는 그 밖의 SDK import에는 빌드가 실패한다.
 
 ### 라운드 16
 

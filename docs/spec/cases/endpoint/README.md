@@ -33,7 +33,7 @@ A step has exactly one of the members below. A step may also have `connection`, 
 - `page`: a step of the page, described below.
 - `log`: a record of the application log. `{"line": "<text>"}` waits until the log holds a record whose text after the time is `<text>` (`info host endpoint: connection closed: peer closed`); `{"absent": "<text>"}` requires that no record holds `<text>`.
 - `watching`: `{"window": ..., "name": ..., "value": true|false}` requires that the registry of watches of the endpoint holds a watch of the status without a surface, or not.
-- `watched`: the list of the starts and ends of watches of host statuses that reached the host, `"<window> <name> on|off"`, in their order, which the host holds now.
+- `watched`: the list of the starts and ends of watches of host statuses that arrived at the host, `"<window> <name> on|off"`, in their order, which the host holds now.
 
 ## The page of a case
 

@@ -87,7 +87,7 @@
 - D9.A files 사이드바: 카드 view가 없다. files 섹션은 선언형 UI이며 왼쪽 또는 오른쪽 사이드바에 세로로 놓인다(방향은 사이드바 면을 따른다, `docs/spec/plugins.md:97`). 원천은 files 플러그인 호스트다. 호스트가 원천인 이유는 `docs/spec/plugin-processes.md:26`이다. view가 없는 동안 값을 보여야 하는 섹션은 그 플러그인의 호스트가 필요하다. 사이드카는 현재 명세에서 원천이 아니다. status는 page가 `page.exposure.register`로 등록하며(`docs/spec/declared-ui.md:145`), 사이드카에는 page가 없다. 이 배제는 현재 명세의 규칙이며 개정으로 바뀔 수 있다. 사이드카의 사실이 아니다.
   - `docs/spec/plugin-host.md:5`와 `plugin-processes.md:28`의 호스트 생성 검사(view도 사이드카도 가질 수 없는 DOM 없는 로직)는 로직으로는 충족되지 않는다. 목록, git 상태, 선택은 사이드카에 둘 수 있고 호스트는 아무 로직도 갖지 않는다. 그래서 호스트는 `:26`에 따라서만 생성되며, 이를 위해 `:5`와 `:28`의 면제가 필요하다(D9.F.1, 이제 F229의 입력). 대안 D9.A′은 아래 라운드 5 결정에서 기각된다. D9.A의 변형이 아니다.
   - 사이드카는 호스트에 보낼 수 없다. `docs/spec/plugin-host.md:59`가 "no sidecar send"를 금한다(D9.F.2, F238-d-23).
-  - 북마크는 프로젝트 데이터에 있다(`docs/spec/plugins.md:126`). 호스트가 프로젝트 데이터에 닿으려면 `plugin-host.md:59`의 개정이 필요하다(D9.F.2). 상태 모듈은 선언형 status를 제공하지 못한다(`declared-ui.md:145`).
+  - 북마크는 프로젝트 데이터에 있다(`docs/spec/plugins.md:126`). 호스트가 프로젝트 데이터에 접근하려면 `plugin-host.md:59`의 개정이 필요하다(D9.F.2). 상태 모듈은 선언형 status를 제공하지 못한다(`declared-ui.md:145`).
   - 펼친 상태는 워크벤치에 남는다(`declared-ui.md:3-11`). 사이드카는 목록, git 상태, 플러그인 자신의 값을 준다.
   - 조건(F238-d-24): files 섹션 view(`ui/sections/tree.js`, `bookmarks.js`)에 이름 바꾸기, 끌어 놓기, 포인터 컨텍스트 메뉴, 텍스트 입력이 없어야 한다. 있으면 카드 표면이 필요하다(`plugin-processes.md:25`).
   - `plugins/files/ui/state.js`(`./events.js`만 가져옴)는 사이드카로 옮긴다. F229의 결정(F238-d-20)은 호스트 표현에만 해당한다.
@@ -152,7 +152,7 @@
 - A-D8-2와 cfg 사례(D8.3이 `#[cfg(feature)]` 선언을 깬다): 수락. `endpoint_test.rs:176-178`로 확인. D8.3은 `cfg(feature)`를 허용하고 결과를 바꾸는 속성을 거부한다.
 - A-D8-3과 B-D8-7(`groupResults`가 `statusOf` 전에 소유자를 합친다): 수락. `test-hosts.mjs:91-100`로 확인. D8.1은 실행, 소유자, 이름으로 묶고 D8.5에 사례를 추가한다.
 - B-D9-1(플러그인 호스트가 목록에 필요한 사이드카 이벤트를 받을 수 없다): 필요한 스펙 변경으로 수락. 인용된 "no sidecar send" 문구는 main의 `plugin-host.md`에 없다. 실질 지적은 확인되었다: 스펙은 플러그인 사이드카 이벤트로 가는 호스트 채널을 정의하지 않는다. D9.2가 중계를 추가한다. view 경로 확인은 라운드 2 항목으로 처리했다. view 채널 대안은 D9.2에서 거부했다.
-- B-D9-2(펼침이 플러그인에 닿지 않는다): 수락. `declared-ui.md:117`("does not reach the plugin")로 확인. D9.3이 `declared-ui.expanded` 메시지를 추가한다.
+- B-D9-2(펼침이 플러그인에 전달되지 않는다): 수락. `declared-ui.md:117`("does not reach the plugin")로 확인. D9.3이 `declared-ui.expanded` 메시지를 추가한다.
 - A-D9-4와 B-D9-3(어휘 빈틈: git 표시, 행 북마크 동작, 열기 알림, 헤더 별, Enter로 열기): 수락. `tree-horizontal.js:15-17,29,62,65`와 `tree.js:82-85,119,124`로 확인. D9.1(d)부터 (g)가 추가한다. Enter로 열기는 D9.1b다.
 - A-D9-4(컨텍스트 검색 문구를 재현할 수 없다): 수락. 이제 `contextmenu`, `rename`, `drag`를 적는다.
 - A-D9-5와 B-D9-5(D9.1a와 D9.4가 충돌): 수락. D9.5가 하나의 문구다: 새 ID, F212.8은 `[o]`.
@@ -226,7 +226,7 @@
 
 - D8.1(소유자 대응, 수정): 선언의 소유자는 파일에서 계산하고 `parseDeclarations`가 반환한다. Go는 파일의 디렉터리(절대 패키지 디렉터리로 정규화), Rust는 파일에서 가장 가까운 `Cargo.toml`을 포함하는 조상 디렉터리. `statusOf`는 정규화된 소유자를 비교한다.
 - D8.2(잠 이름 중복, 수정): 검사는 크레이트의 모든 실행 파일의 `--list` 출력을 각 구성 실행마다 합친다(`tauriv2-tests`, `tauriv2-diagnostics-tests`, sok 실행). 잠 이름이 그 합에서 두 번 나오면 둘이 어느 실행 파일에 있든 실패한다. D8.5 3번 사례는 같은 크레이트의 다른 타겟에 두 잠을 둔다.
-- D9.1b(키, 수정): `declared-ui.md:130`은 "A tree node with `open` has a key handler: Enter keydown on the focused node runs `open` and prevents the native `click`; no other element has a key handler."로 바꾼다. `open`을 가진 트리 노드는 `command`도 가져야 하며, 그래야 네이티브 버튼이 있고 Enter가 누를 수 있는 노드에 닿는다. 두 번 누르기는 `event.detail === 2`인 `click`이며, 그 click은 `command` 대신 `open`을 실행한다.
+- D9.1b(키, 수정): `declared-ui.md:130`은 "A tree node with `open` has a key handler: Enter keydown on the focused node runs `open` and prevents the native `click`; no other element has a key handler."로 바꾼다. `open`을 가진 트리 노드는 `command`도 가져야 하며, 그래야 네이티브 버튼이 있고 Enter가 누를 수 있는 노드를 가리킨다. 두 번 누르기는 `event.detail === 2`인 `click`이며, 그 click은 `command` 대신 `open`을 실행한다.
 - D9.1e(동작, 수정): 동작은 역할 `action`과 그 노드의 동작 사이에서 유일한 `key`로 주소를 갖는다. `declared-ui.md:126`과 `:128`에 `action` 역할과 `key` 필드를 더한다. `open` 컨트롤은 노드의 `label` 주소를 공유한다(노드에 누르는 컨트롤이 하나를 넘지 않음).
 - D9.1f(오류, 수정): 열기 실패는 사용자가 보는 오류다. 코어 `core.file.open` 명령이 자체 실패를 코어 표시 경로로 이미 보여준다. 목록 오류는 호스트 채널을 통해 `pluginHostEvent {kind: "error", text}`로 메인 페이지에 가고, 메인 페이지는 `error: plugin <id>: <text>`를 한 표시 경로로 쓴다. `plugin-host.md` Channel에 `kind: "error"` 이벤트를 더한다. 프로젝트 없음 문구는 값 안의 `status-line`이다.
 - D9.1h(잘라내기와 분기, 수정): 트리 노드는 값에 보내지 않은 하위 노드가 있을 때 `branch: true`를 선언할 수 있다. `declared-ui.md:62`는 바뀌어, `branch: true` 노드는 `children`이 없더라도 분기이며 펼침 컨트롤을 그린다. 사이드카는 펼친 분기의 자식만 보낸다. 값은 최대 5000 노드(`declared-ui.md:91`)이고, 한도를 넘는 값은 거부되므로 사이드카가 보내기 전에 행을 자르고 잘린 행 수를 밝히는 `status-line`을 다는다.

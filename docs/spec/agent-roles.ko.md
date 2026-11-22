@@ -2,7 +2,7 @@
 
 [English](agent-roles.md)
 
-이 문서는 terminal agent의 tab이 role을 받는 방법과, soksak이 agent가 role을 가졌다고 확인하는 방법을 정의한다. 구현과 검증은 [features](../features.ko.md)에서 추적한다. 메시지는 [messaging](messaging.md#injected-message)의 주입 경로로 agent에게 닿는다.
+이 문서는 terminal agent의 tab이 role을 받는 방법과, soksak이 agent가 role을 가졌다고 확인하는 방법을 정의한다. 구현과 검증은 [features](../features.ko.md)에서 추적한다. 메시지는 [messaging](messaging.md#injected-message)의 주입 경로로 agent에게 전달된다.
 
 ## Decision
 
@@ -56,7 +56,7 @@ Claude Code는 permission prompt를 [terminal state](terminal-state.md)의 프�
 
 ## Launch
 
-모든 agent CLI는 같은 방식으로 시작한다. `program`이 가리키는 프로그램을 `args`의 인자와 함께 실행하며, core는 인자를 더하지 않는다. identity는 session의 첫 message로 CLI에 닿는다([첫 message](#first-message)). Codex는 `args`에 `--no-daemon`을 받아 시작하며, 이는 [cli](cli.md)가 적는다.
+모든 agent CLI는 같은 방식으로 시작한다. `program`이 가리키는 프로그램을 `args`의 인자와 함께 실행하며, core는 인자를 더하지 않는다. identity는 session의 첫 message로 CLI에 전달된다([첫 message](#first-message)). Codex는 `args`에 `--no-daemon`을 받아 시작하며, 이는 [cli](cli.md)가 적는다.
 
 줄 방식 확인은 모든 CLI에 적용되며, 명령 방식은 shell이 있는 agent에 적용된다([확인](#confirmation)).
 
@@ -236,7 +236,7 @@ role A를 B로 바꾸고 다시 A로 바꾸면 A의 fingerprint이 다시 나온
 한 surface의 role 작업은 host의 한 소유자가 도착 순서대로 직렬화한다. 작업은 role 할당이나 변경, confirmation(두 방식 모두), 요청, reread request, tab 제거다. 제거 뒤의 confirmation은 `tab <tab> has no role`로 거부한다. 변경마다 generation이 오르며, confirmation은 같은 직렬화 안에서 판정하므로 차례가 왔을 때의 상태에 맞춰진다.
 
 - role 파일은 원자적으로 쓰므로 읽는 쪽은 이전 파일 전체나 새 파일 전체만 본다.
-- A에서 B, B에서 C로 연속 변경: 각 변경은 변경 message를 보내며, 각 message는 같은 경로를 가리킨다. 그 파일은 언제나 최신 role을 담으므로 어느 message의 reread request로 다시 읽어도 C에 닿는다. C의 fingerprint로 confirmation하면 `ready`가 된다.
+- A에서 B, B에서 C로 연속 변경: 각 변경은 변경 message를 보내며, 각 message는 같은 경로를 가리킨다. 그 파일은 언제나 최신 role을 담으므로 어느 message의 reread request로 다시 읽어도 C를 다시 읽게 된다. C의 fingerprint로 confirmation하면 `ready`가 된다.
 - B와 C의 confirmation이 엇갈림: B의 confirmation은 `stale fingerprint: read the role file again at <path>`로 거부되고 C의 confirmation은 받아들여진다. 순서와 상관없이 끝 상태는 같다.
 - person과 leader agent가 같은 때에 role을 설정: 직렬화되며 마지막 것이 이긴다. 각 답은 결과 `{role, generation, state, fingerprint}`를 준다.
 - 대기 중인 작업 message는 현재 generation의 `ready`를 기다린다.
@@ -277,10 +277,10 @@ session의 첫 message는 등록의 모든 agent message보다 앞선다. page�
 
 Session 시작 hook은 CLI session의 시작, 재개, `clear`, compaction마다 tab의 stable identity를 CLI에 준다. 그래서 context가 초기화된 직후에 identity가 context 안에 있다. Hook은 [stable identity](#stable-identity)의 identity 텍스트를 주며, role 정의는 절대 주지 않는다. 정의는 agent가 읽는 role 파일에 남는다.
 
-- 명령: `sok role identity`이며 인자가 없다. 명령의 process는 `sok role confirm`처럼 자기 surface를 `agent.surface`에 묻는다([surface의 process](sidecars.md#processes-of-a-surface)). Hook process는 CLI process의 자식이므로 그 조상 사슬이 tab의 surface에 닿는다.
+- 명령: `sok role identity`이며 인자가 없다. 명령의 process는 `sok role confirm`처럼 자기 surface를 `agent.surface`에 묻는다([surface의 process](sidecars.md#processes-of-a-surface)). Hook process는 CLI process의 자식이므로 그 조상 사슬이 tab의 surface에 이어진다.
 - Role이 있을 때: 표준 출력에 JSON 한 줄 `{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"<identity 텍스트>"}}`을 쓰고 종료 상태는 0이다. identity 텍스트는 [stable identity](#stable-identity)의 텍스트이며 `<role file>`은 `<configuration directory>/agents/<surface>/role.md`다. Claude Code와 Codex는 SessionStart hook에서 이 형식을 읽으며, 둘 다 주입된 텍스트가 model context에 들어간다는 것을 측정했다([측정 사실](#measured-facts), 24행과 25행).
 - Hook 명령: soksak terminal 안에서만 `sok`을 실행하는 shell 줄이다. `[ -n "$SOKSAK_CONFIG_DIR" ] || exit 0`에 이어 `exec <sok> role identity --soksak-hook`를 쓰며, `<sok>`은 위와 같이 인용한 실행 중인 `sok`이다. Host는 surface를 위해 sidecar가 시작하는 모든 process에 `SOKSAK_CONFIG_DIR`을 설정하므로([sidecar](sidecars.ko.md#surface의-프로세스)), 이 변수는 soksak tab의 session에만 있다. Tab 밖에서는 줄이 `sok`을 실행하지 않고 바로 0으로 끝나므로, soksak을 쓰지 않는 project는 `sok`이 설치되지 않았거나 `PATH`에 없어도 `sok` 시작이나 hook 오류를 보지 않는다. Login shell에서 `SOKSAK_CONFIG_DIR`을 export한 사람에게는 줄이 `sok`을 실행하며, 그러면 `sok`이 자기 오류를 보고하거나 tab 밖에서는 아무것도 출력하지 않는다.
-- Role이 없거나 어느 surface에도 속하지 않을 때: 표준 출력은 비고 종료 상태는 0이다. Hook은 tab 밖을 포함해 agent의 모든 session에서 실행된다. tab 밖에는 tab 환경이 없으므로 명령은 surface를 찾지 못하고, 애플리케이션에 닿지 않은 채 아무것도 출력하지 않고 바로 종료 상태 0으로 끝난다.
+- Role이 없거나 어느 surface에도 속하지 않을 때: 표준 출력은 비고 종료 상태는 0이다. Hook은 tab 밖을 포함해 agent의 모든 session에서 실행된다. tab 밖에는 tab 환경이 없으므로 명령은 surface를 찾지 못하고, 애플리케이션에 연결되지 않은 채 아무것도 출력하지 않고 바로 종료 상태 0으로 끝난다.
 - 오류일 때(예: 거부된 surface 식별자, 응답하지 않는 애플리케이션): 표준 출력은 비고, 표준 오류에 `sok: <message>`를 쓰며 종료 상태는 1이다. Codex는 이 실행의 종료 상태만 기록하고 표준 오류의 텍스트는 기록하지 않는다([위](#세션-재시작-hook)). Claude Code는 이 상태로 session을 막지 않으므로, session은 identity 없이 시작한다. Claude Code 참조 문서에 따르면 `SessionStart` hook의 종료 상태 2는 stderr를 사람에게만 보이고 session을 막지 않으며, 그 밖의 0이 아닌 종료 상태는 막지 않는 오류다([Claude Code hooks](https://code.claude.com/docs/en/hooks)). Codex 0.171.0은 command hook을 shell로 실행한다. Unix에서는 `$SHELL -lc '<명령>'`을 시작하며, `SHELL`이 없으면 `/bin/sh`를 쓴다(`codex-rs/hooks/src/engine/command_runner.rs`의 448행부터 474행과 508행, tag `rust-v0.171.0`). `SessionStart` hook에서 종료 상태 0과 JSON 표준 출력은 그 `additionalContext`를 더하고, 종료 상태 0과 JSON이 아닌 표준 출력은 그 출력을 context로 더하며, 그 밖의 종료 상태는 실행을 실패로 기록하고 항목 `hook exited with code <n>`을 남긴다. 실행은 계속된다. 이 handler는 hook의 stderr를 쓰지 않는다(`codex-rs/hooks/src/events/session_start.rs`의 245행부터 321행). 임시 폴더에서 `codex --no-daemon --dangerously-bypass-hook-trust exec --trust`로 한 probe는 두 가지를 확인했다. 변수가 없으면 0으로 끝나는 guard 줄로 shell 형식을 확인했고, 종료 상태 3으로 끝난 hook은 실패로 기록되었으며 그 stderr 텍스트는 보이지 않았다. Bypass flag는 project hook 파일을 그 형식으로 읽게 하며, 사람이 시작한 session에는 필요하지 않다.
 - Hook은 role 정의를 절대 보내지 않는다. 지문 루프와 변경 message는 그대로다. Session 시작 hook이 없는 CLI는 루프에만 기댄다.
 
@@ -399,7 +399,7 @@ target은 role 상태만 판정한다. CLI마다 다음을 한다.
 - launch는 쓰기 전에 남은 `.role-*.tmp` 파일을 지운다.
 - program이 실행 중인 재시작은 저장된 기록을 유지하고, resume은 기록을 지운다.
 - 테스트는 소유 패키지를 밝힌다.
-- 시작 parameter `program`, `args`, `role`은 sidecar `open` 요청에 닿으며, 모든 program은 identity를 첫 message로 받는다.
+- 시작 parameter `program`, `args`, `role`은 sidecar `open` 요청으로 전달되며, 모든 program은 identity를 첫 message로 받는다.
 - status `core.tab.role`과 role 명령의 답은 `fingerprint`와 `generation`을 담으므로, page는 그것으로 reread request을 만든다.
 - 줄 형식은 `<plugin>.screen.read`가 읽는 보이는 행에서 보이는 행이 바뀔 때마다 맞춘다. 감싼 줄과 화면 밖으로 밀려난 줄은 맞지 않는다.
 - 기억 진술은 측정된 launch 옵션으로 한정한다.

@@ -2,7 +2,7 @@
 
 [한국어](agent-roles.ko.md)
 
-This document defines how a tab of a terminal agent receives its role, and how soksak confirms that the agent has the role. Implementation and verification are tracked in [features](../features.md). Messages reach the agent through the injection path of [messaging](messaging.md#injected-message).
+This document defines how a tab of a terminal agent receives its role, and how soksak confirms that the agent has the role. Implementation and verification are tracked in [features](../features.md). Messages are delivered to the agent through the injection path of [messaging](messaging.md#injected-message).
 
 ## Decision
 
@@ -56,7 +56,7 @@ Claude Code reports a permission prompt as `blocked` through the program status 
 
 ## Launch
 
-Every agent CLI starts the same way: the program named by `program` with the arguments of `args`, and no argument from core. Its identity reaches it as the first message of the session ([first message](#first-message)). Codex is started with `--no-daemon` in `args`, as [cli](cli.md) states.
+Every agent CLI starts the same way: the program named by `program` with the arguments of `args`, and no argument from core. Its identity is delivered to it as the first message of the session ([first message](#first-message)). Codex is started with `--no-daemon` in `args`, as [cli](cli.md) states.
 
 The line form of confirmation applies to every CLI, and the command form applies to an agent with a shell ([confirmation](#confirmation)).
 
@@ -210,7 +210,7 @@ Every step of the role handshake repeats without a change of the result:
 - a new generation is made only when the role or its definition changes;
 - `sok role confirm` or the answer line with the current fingerprint, repeated, answers `ready` and changes nothing, including `seq`;
 - a reread request that is sent again names the same path and the same fingerprint, so reading the file again and confirming again gives the same `ready`;
-- a work message is delivered exactly once, even when `ready` is reached twice;
+- a work message is delivered exactly once, even when `ready` occurs twice;
 - after a restart of the application while the program keeps running, the state is rebuilt from the stored record and the file: `ready` when `confirmedFingerprint` equals the fingerprint of the file; otherwise `pending`. A file whose fingerprint differs from the record is rewritten from `roles.json` first, and a rewrite whose fingerprint still differs from the record is refused with `role file <path>: fingerprint differs from the record`;
 - a resume gives `pending` with the same fingerprint, because a resume keeps the session but not the proof that the agent read the file. The host clears `confirmedFingerprint` at the resume, and the resumed tab sends a reread request at each not-busy report until it confirms; a new launch clears `confirmedFingerprint` as a resume does.
 
@@ -225,7 +225,7 @@ A role A changed to B and back to A has the fingerprint of A again, so a confirm
 - Confirmation of an earlier fingerprint after a change: refused as stale with `stale fingerprint: read the role file again at <path>`; the error names no fingerprint.
 - A confirmation value that is not 16 lowercase hexadecimal characters: refused as invalid input with `fingerprint <value> is not 16 lowercase hexadecimal characters`, and the text `stale fingerprint: read the role file again at <path>` is not sent.
 - Reread requests without confirmation: one request at each not-busy report, each written to `plugin.<plugin>.messages.delivered` with kind `role-reread`, with no limit; each names the same path and the current fingerprint.
-- Work message with `ready` reached twice: injected once, keyed by its file name.
+- Work message with `ready` occurring twice: injected once, keyed by its file name.
 - Restart with a stored confirmation: `ready` without input; without one: `pending` without input.
 - Resume: `pending`, the same fingerprint, the confirmation cleared, one reread request.
 
@@ -236,7 +236,7 @@ These are unit tests with real files and the real `sok` command; no agent CLI ru
 Role operations of one surface are serialized by one owner in the host, in arrival order. The operations are the assignment or change of the role, the confirmation (both ways), the request, the reread and the removal of the tab; a confirmation after a removal is refused with `tab <tab> has no role`. Each change raises the generation, and a confirmation is judged under the same serialization, so it is judged against the state at its turn.
 
 - The role file is written atomically, so a reader sees the whole earlier file or the whole new one.
-- Consecutive changes A to B to C: each sends its change message; each message points to the same file, which always holds the latest role, so a reread on any of them reaches C. One confirmation of the fingerprint of C gives `ready`.
+- Consecutive changes A to B to C: each sends its change message; each message points to the same file, which always holds the latest role, so a reread on any of them loads C. One confirmation of the fingerprint of C gives `ready`.
 - Confirmations of B and C that interleave: the confirmation of B is refused as stale with `stale fingerprint: read the role file again at <path>` and that of C is accepted; the order does not change the end state.
 - Two callers set the role at the same time, the person and a lead agent: they are serialized, the last one wins, and each reply states the resulting `{role, generation, state, fingerprint}`.
 - Queued work messages wait for the `ready` of the current generation.
@@ -277,7 +277,7 @@ The first message of a session precedes every agent message of its registration.
 
 A session-start hook gives the stable identity of the tab to the CLI at each start, resume, clear and compaction of its session. The identity is then in the context directly after the context is reset. The hook delivers the identity text of [stable identity](#stable-identity) and never the role definition: the definition stays in the role file, which the agent reads.
 
-- Command: `sok role identity`, with no argument. The process of the command asks `agent.surface` for its surface, as `sok role confirm` does ([processes of a surface](sidecars.md#processes-of-a-surface)). The hook process is a child of the CLI process, so its ancestor chain reaches the surface of the tab.
+- Command: `sok role identity`, with no argument. The process of the command asks `agent.surface` for its surface, as `sok role confirm` does ([processes of a surface](sidecars.md#processes-of-a-surface)). The hook process is a child of the CLI process, so its ancestor chain leads to the surface of the tab.
 - With a role: standard output holds one line of JSON, `{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"<identity text>"}}`. The identity text is the text of [stable identity](#stable-identity) with `<role file>` set to `<configuration directory>/agents/<surface>/role.md`. The exit status is 0. Claude Code and Codex read this form from a SessionStart hook; both were measured to put the injected text in the model context ([measured facts](#measured-facts), rows 24 and 25).
 - Hook command: the command is a shell line that runs `sok` only inside a soksak terminal: `[ -n "$SOKSAK_CONFIG_DIR" ] || exit 0` followed by `exec <sok> role identity --soksak-hook`, where `<sok>` is the running `sok` quoted as above. The host sets `SOKSAK_CONFIG_DIR` in every process that a sidecar starts for a surface ([sidecars](sidecars.md#processes-of-a-surface)), so the variable is present exactly in the sessions of a soksak tab. Outside a tab the line exits 0 at once without running `sok`, so a project that does not use soksak sees no start of `sok` and no hook error, even when `sok` is not installed or not on `PATH`. A person who exports `SOKSAK_CONFIG_DIR` in the login shell makes the line run `sok`; `sok` then reports its own error or prints nothing outside a tab.
 - Without a role, or outside every surface: nothing on standard output, exit status 0. A hook runs in every session of the agent, including sessions outside a soksak tab. Outside a tab no tab environment exists, so the command finds no surface, prints nothing and exits 0 at once, without contacting the application.
@@ -372,7 +372,7 @@ Objections were raised against each revision of this decision and are answered b
 Answered and applied:
 
 - Launch adapters are removed: every CLI starts with its `program` and `args`, and receives its identity as its first message. One path needs no code for each CLI. The measured trade-off is that a first message can be lost to context compaction; the reread requests and the change messages restore the role.
-- The reread requests repeat at each not-busy report until the agent confirms, with no limit. The reason is convergence by repetition: the file holds the current role, and each request names that path and the current fingerprint, so a repeated request reaches the same confirmation. A cap would end the loop before the agent confirms.
+- The reread requests repeat at each not-busy report until the agent confirms, with no limit. The reason is convergence by repetition: the file holds the current role, and each request names that path and the current fingerprint, so a repeated request leads to the same confirmation. A cap would end the loop before the agent confirms.
 - Held work messages wait for `ready`, because the role play proceeds only after the fingerprint is confirmed.
 - `roles.json` holds the role text, because a role named by its identifier needs one place for its text.
 - Both confirmation ways stay. The line form serves every CLI; `sok role confirm` serves a CLI that puts a letter or digit before the line, since the line matcher refuses such a row.
@@ -401,7 +401,7 @@ Answered and applied:
 - A restart with the program running keeps the stored record; a resume clears it.
 - Tests name their owning packages.
 - The English and Korean texts state the same rules.
-- The start parameters `program`, `args` and `role` reach the sidecar `open` request, and every program takes its identity in its first message.
+- The start parameters `program`, `args` and `role` are delivered to the sidecar `open` request, and every program takes its identity in its first message.
 - The status `core.tab.role` and the role command replies carry `fingerprint` and `generation`, so the page composes the reread request from them.
 - The line form is matched against the visible rows that `<plugin>.screen.read` reads after each change of the visible rows; a wrapped line or a line that scrolls off does not match.
 - The memory statement is limited to the measured launch options.

@@ -30,7 +30,7 @@
 - 지시받은 작업은 구현 전에 우선순위를 정하고 계약과 checklist를 갱신한다. 완료 항목은 다시 열지 않고 후속 ID를 추가한다. 새 지시는 checklist에 기록하고 활성 작업이 멈출 지점에서 우선순위대로 진행한다. 우선순위가 요구하거나 명시적 지시가 있을 때만 활성 작업을 멈춘다.
 - 항목은 따로 개발·검증·커밋할 수 있는 기능 한 단위로 정하고 더 크면 쪼갠다. 미커밋 변경은 항목 하나로 제한하고 기능 단위로 커밋한다. 독립 항목은 병렬로 진행할 수 있으나, 활성 항목의 작업·검증·문서·커밋을 마친 뒤에 다음을 시작한다.
 - 항목은 검증하고 커밋한 뒤 `[o]`로 표시하며, changelog 항목은 같은 커밋에 쓴다. 과정 규칙은 이 지침에만 두고 checklist나 changelog에 복사하지 않는다.
-- 다른 저장소의 release를 거쳐야 사용자에게 닿는 수정은 기록할 때 그 release를 checklist 항목으로 등록하고, 게시 전까지 미배포로 보고한다. release, publication, deployment, registry 작업은 작업 범위에 명시된 경우에만 완료 기준에 넣는다.
+- 다른 저장소의 release를 거쳐야 사용자에게 전달되는 수정은 기록할 때 그 release를 checklist 항목으로 등록하고, 게시 전까지 미배포로 보고한다. release, publication, deployment, registry 작업은 작업 범위에 명시된 경우에만 완료 기준에 넣는다.
 - 요청을 기록하기 전에 분류한다. 과정 규칙은 이 지침에, 프로젝트 작업은 checklist에, 지속되는 사용자별 맥락은 memory에 둔다. 단순 질문은 답만 한다.
 - 기본은 `main`에서 직접 작업한다. 격리가 필요하면 `{type}/{shortname}-{checklist ID}` branch나 `{프로젝트}-{shortname}-{checklist ID}` worktree를 쓴다. `main`에 병합한 직후 그 worktree와 branch를 제거하며, 병합되지 않은 것은 제거하지 않는다.
 - `main`에 병합될 수 없는 test 코드는 의미가 남으면 cherry-pick하고 아니면 폐기하며, 커밋 전에 제거한다. 즉시 제거할 수 없으면 제거 조건을 적은 checklist 하위 항목을 만든다.

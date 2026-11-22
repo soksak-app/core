@@ -54,7 +54,7 @@ view branch `feat/view-kind-F212.7`은 2026-10-21에 main에 합쳐지고 지워
 2. 요청을 분류하고 항목을 등록한다(EN과 KO). 계약이 바뀌면 명세를 먼저 고친다.
 3. 소유 module에 시험을 쓴다. 바꾸지 않은 코드에서 돌려 실패한 assertion을 기록한다(Red). module이 없거나 compile 오류, link 오류는 Red가 아니다. 코드가 이미 그 동작을 하면, 사본에서 그 동작을 끄고 assertion 실패를 본 뒤 파일을 되돌린다.
 4. 구현하고 같은 시험을 돌린다(Green).
-5. 커밋된 tree에서 변경이 닿는 소유 시험과 구조 검사를 돌린다. 전체 모음은 여기서 돌리지 않는다. 전체 모음은 체크리스트 완료 때 한 번 돌린다.
+5. 커밋된 tree에서 변경과 관련된 소유 시험과 구조 검사를 돌린다. 전체 모음은 여기서 돌리지 않는다. 전체 모음은 체크리스트 완료 때 한 번 돌린다.
 6. 항목을 Red와 Green과 함께 `[o]`로 표시하고 CHANGELOG에 EN과 KO 항목을 더한다.
 7. author `min-0-max <max@blue.tools>`, `type(scope): Subject (#ID)` 형식으로 커밋한다. 제목은 50자 이하다. 본문은 무엇을 왜 바꿨는지 72열로 감싸 적는다. footer와 trailer는 없다. commit-msg hook이 다른 형식을 거부한다. 경로를 명시해 stage하고 `git add -A`는 쓰지 않는다.
 

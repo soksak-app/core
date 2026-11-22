@@ -7,12 +7,12 @@ description: Reads and operates a running soksak application through the sok com
 
 soksak is a desktop application whose windows hold a layout of cards with tabs; each tab is a surface of a plugin. The application declares every action as a command, every visible state as a status and every interactive control as an element, and its endpoint answers requests for them.
 
-`sok` and the MCP tools of the server `sok mcp` reach the running application whose configuration directory that `sok` uses. The MCP tools exist only when the MCP server is registered with the agent; `sok` reaches the application from any shell. Every command of `sok` prints JSON on standard output and an error as `sok: <message>` on standard error.
+`sok` and the MCP tools of the server `sok mcp` connect to the running application whose configuration directory that `sok` uses. The MCP tools exist only when the MCP server is registered with the agent; `sok` connects to the application from any shell. Every command of `sok` prints JSON on standard output and an error as `sok: <message>` on standard error.
 
 ## Finding the application and its windows
 
 - `sok windows` or `windows_list` lists the windows. A request while no application runs fails with the text that the endpoint file does not exist; tell the person that the application is not running.
-- A request names its window with `--window <name>` or `--project <directory>` (`window` for the tools). Without one, an agent in a soksak window reaches its own window, and otherwise the only window.
+- A request names its window with `--window <name>` or `--project <directory>` (`window` for the tools). Without one, an agent in a soksak window connects to its own window, and otherwise the only window.
 - `sok context` or `agent_context` gives `{configDirectory, surface, window}`: the configuration directory, the surface whose process started the agent and the window of that surface, or `null` outside a soksak window.
 
 ## Learning the window

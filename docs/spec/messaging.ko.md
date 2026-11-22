@@ -112,7 +112,7 @@ Hand-off는 작업을 다른 terminal에 넘기고 결과를 받는 것이다. �
 - 할당: `assign`은 task에 record가 없으면 `attempt` 1과 `assigned`를, 현재 attempt가 `abandoned`이면 다음 attempt와 `assigned`를 쓴다. 현재 attempt가 `assigned`, `started`, `result`인 동안, 또는 `integrated` 뒤에는 attempt와 그 상태를 밝히는 `invalid-transition`으로 거부된다.
 - 변경: `update`는 task, 그 attempt, 새 상태를 밝히며, `result`에는 text를 함께 준다. 현재가 아닌 attempt는 상태를 판단하기 전에, 주어진 attempt와 현재 attempt를 밝히는 `stale-attempt`로 거부된다. 변경은 `assigned`에서 `started`, `started`에서 `result`, `result`에서 `integrated`, 그리고 `assigned`, `started`, `result`에서 `abandoned`이며, 다른 변경은 attempt, 그 상태, 요청한 상태를 밝히는 `invalid-transition`으로 거부된다. Record가 없는 task는 `unknown-task`로 거부된다.
 - Attempt 하나: record는 현재 attempt만 담는다. 그래서 이전 attempt의 결과는 바꿀 record가 없고 거부된다.
-- 아직 wire operation이 record에 닿지 않는다. 다른 terminal의 folder의 record를 어느 process가 쓰는지 정하는 operation은 정의되지 않았다.
+- 아직 wire operation이 record에 반영되지 않는다. 다른 terminal의 folder의 record를 어느 process가 쓰는지 정하는 operation은 정의되지 않았다.
 
 ## Input injection
 
@@ -171,7 +171,7 @@ Terminal plugin은 `<plugin>.screen.read`가 읽는 화면의 보이는 행에�
 
 ## MCP tools
 
-sok MCP server는 고정된 tool 집합을 노출하며, exposure로 tool을 만들지 않는다([cli](cli.md#mcp-server), tool table의 규칙). Messaging tool은 `messages_read`와 `messages_wait`다. 각 tool은 terminal page의 command를 거쳐 같은 점 표기 이름의 sidecar operation `messages.read`, `messages.wait`에 닿는다([read 경로](messaging.md#path-of-the-reads)).
+sok MCP server는 고정된 tool 집합을 노출하며, exposure로 tool을 만들지 않는다([cli](cli.md#mcp-server), tool table의 규칙). Messaging tool은 `messages_read`와 `messages_wait`다. 각 tool은 terminal page의 command를 거쳐 같은 점 표기 이름의 sidecar operation `messages.read`, `messages.wait`에 대응한다([read 경로](messaging.md#path-of-the-reads)).
 
 | Tool | Arguments | Reply |
 | --- | --- | --- |
@@ -182,7 +182,7 @@ Wait는 도착하거나 registration을 닫는 event가 올 때 끝난다. Wait�
 
 ### Read 경로
 
-Tool call은 endpoint, terminal의 page, 그 sidecar port를 거쳐 sidecar에 닿는다. Sidecar는 그 surface에 보낸 page의 window에 답하고([sidecars](sidecars.md#messages)) page가 그 surface의 sidecar port를 가지므로, sidecar에 보내는 endpoint method는 없다.
+Tool call은 endpoint, terminal의 page, 그 sidecar port를 거쳐 sidecar에 전달된다. Sidecar는 그 surface에 보낸 page의 window에 답하고([sidecars](sidecars.md#messages)) page가 그 surface의 sidecar port를 가지므로, sidecar에 보내는 endpoint method는 없다.
 
 1. Window: `sok`이 `surface.window {surface: terminal}`을 보낸다. 답이 1012이면 call은 `unknown-terminal: surface <terminal> is in no window`로 실패한다.
 2. Plugin: `sok`이 `exposure.snapshot {window, surface: terminal}`을 보내고 그 surface의 group의 `plugin`을 읽는다([window snapshot](exposure.md#window-snapshot)). Group이 command `<plugin>.messages.read` 또는 `<plugin>.messages.wait`를 등록하지 않은 surface는 `unknown-terminal: surface <terminal> of plugin <plugin> registers no command <name>`으로 실패한다.

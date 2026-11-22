@@ -24,7 +24,7 @@ chrome 버튼과 app 메뉴의 항목 설정…(Settings…), 단축키 `cmd+,`�
 
 `core.settings-modal.nav {section}`이 절을 보여 준다. 창은 닫았다 다시 열어도 절, 플러그인 검색어, 선택한 플러그인, 편집 중인 세트를 유지한다.
 
-값을 바꾸면 창을 다시 그리고 보이던 내용의 스크롤 위치를 유지한다. 다른 절, 범위, 플러그인 페이지, 편집하는 세트를 보이면 맨 위에서 시작한다. 창은 보이는 내용의 스크롤 위치를 `core.settings-modal`의 `scroll`(위에서부터의 포인트)로 보고한다. 내용을 처음보다 더 당기는 동안 위치는 음수이고, 숫자가 아닌 보고 값은 거부한다. 상태는 창의 사각형 `card`와 굴러가는 상자의 사각형 `pane`도 보고한다. pane은 카드의 고정 head 아래, 절 nav 옆에 놓이고, 스크롤이 잘라 낸 내용을 head가 덮으므로 보이는 내용의 컨트롤은 pane 안에서만 눌러 닿을 수 있다.
+값을 바꾸면 창을 다시 그리고 보이던 내용의 스크롤 위치를 유지한다. 다른 절, 범위, 플러그인 페이지, 편집하는 세트를 보이면 맨 위에서 시작한다. 창은 보이는 내용의 스크롤 위치를 `core.settings-modal`의 `scroll`(위에서부터의 포인트)로 보고한다. 내용을 처음보다 더 당기는 동안 위치는 음수이고, 숫자가 아닌 보고 값은 거부한다. 상태는 창의 사각형 `card`와 굴러가는 상자의 사각형 `pane`도 보고한다. pane은 카드의 고정 head 아래, 절 nav 옆에 놓이고, 스크롤이 잘라 낸 내용을 head가 덮으므로 보이는 내용의 컨트롤은 pane 안에서만 눌러 조작할 수 있다.
 
 ### 일반
 
@@ -60,7 +60,7 @@ chrome 버튼과 app 메뉴의 항목 설정…(Settings…), 단축키 `cmd+,`�
 
 ### 에이전트
 
-<a id="agents"></a>그룹 에이전트(agent group)는 컴퓨터의 agent가 애플리케이션을 배우고 그것에 닿게 하는 setup part를 보여 준다([에이전트](cli.ko.md#에이전트)). 이 part는 프로젝트가 아니라 컴퓨터와 사람의 것이므로 그룹은 전역 범위에서만 보인다. 그룹은 host call `setupState()`로 part를 읽는다. 이 call은 사람의 login shell 환경에서 사용자 PATH 등록과 다른 setup part를 보고한다. 그룹을 보여 줄 때, 창이 key window가 될 때(`window-active`), 각 `setup-changed` event 뒤, `core.setup.check`를 실행할 때 읽으며, timer는 다시 읽지 않는다.
+<a id="agents"></a>그룹 에이전트(agent group)는 컴퓨터의 agent가 애플리케이션을 배우고 그것에 연결하게 하는 setup part를 보여 준다([에이전트](cli.ko.md#에이전트)). 이 part는 프로젝트가 아니라 컴퓨터와 사람의 것이므로 그룹은 전역 범위에서만 보인다. 그룹은 host call `setupState()`로 part를 읽는다. 이 call은 사람의 login shell 환경에서 사용자 PATH 등록과 다른 setup part를 보고한다. 그룹을 보여 줄 때, 창이 key window가 될 때(`window-active`), 각 `setup-changed` event 뒤, `core.setup.check`를 실행할 때 읽으며, timer는 다시 읽지 않는다.
 
 각 part는 행 하나다(element name `core.settings-modal.setup`, part 순서). 행은 이름(`path`는 명령 경로, `skill`은 스킬, `mcp`는 MCP 등록, `hook`은 훅), 파일, 상태를 보여 준다. 상태는 `ok`이면 설치됨, `absent`인 `missing`이면 설치 안 됨, `differs`이면 다름, `error`이면 오류 글이다. PATH 행은 관측한 상태와 함께 저장한 preference인 `enabled`를 담는다. 동작(element `core.settings-modal.setup-change`)은 사용자 PATH 등록을 켜거나 끈다. 끈 등록은 사용 안 함을 표시한다. 적용 실패는 오류 글을 표시한다. 설치(`core.settings-modal.setup-install`)는 `skill`과 `mcp` 가운데 `ok`가 아닌 행이 있는 종류로 `core.setup.install`을 실행한다. 그런 행이 있는 동안에만 보인다. 등록은 `PATH`의 첫 `sok`을 가리키므로([MCP 등록](cli.ko.md#mcp-등록)) 어느 애플리케이션의 설치든 같은 등록을 쓴다. 다시 확인(`core.settings-modal.setup-check`)은 `core.setup.check`를 실행한다. 해당하지 않는 part는 행이 없고, 행이 하나도 없으면 그룹은 "이 컴퓨터에서 설정할 에이전트 항목이 없습니다."를 보여 준다.
 

@@ -7,12 +7,12 @@ description: sok 명령줄 또는 soksak MCP 도구로 실행 중인 soksak 애�
 
 soksak은 창마다 탭이 있는 카드의 레이아웃을 담는 데스크톱 애플리케이션이다. 각 탭은 plugin의 surface다. 애플리케이션은 모든 동작을 command로, 보이는 모든 상태를 status로, 상호작용하는 모든 조작 요소를 element로 선언하며, 그 endpoint는 이들에 대한 요청에 답한다.
 
-`sok`과 서버 `sok mcp`의 MCP 도구는 `sok`이 쓰는 configuration directory의 실행 중인 애플리케이션에 닿는다. MCP 도구는 MCP server가 agent에 등록되어 있을 때만 있으며, `sok`은 어느 shell에서나 애플리케이션에 닿는다. `sok`의 모든 명령은 JSON을 표준 출력에 쓰고, 오류는 `sok: <message>` 형태로 표준 오류에 쓴다.
+`sok`과 서버 `sok mcp`의 MCP 도구는 `sok`이 쓰는 configuration directory의 실행 중인 애플리케이션에 연결한다. MCP 도구는 MCP server가 agent에 등록되어 있을 때만 있으며, `sok`은 어느 shell에서나 애플리케이션에 연결한다. `sok`의 모든 명령은 JSON을 표준 출력에 쓰고, 오류는 `sok: <message>` 형태로 표준 오류에 쓴다.
 
 ## 애플리케이션과 창 찾기
 
 - `sok windows` 또는 `windows_list`는 창을 나열한다. 애플리케이션이 실행 중이 아닐 때의 요청은 endpoint 파일이 없다는 글로 실패하며, 이때는 사람에게 애플리케이션이 실행 중이 아니라고 알린다.
-- 요청은 `--window <name>` 또는 `--project <directory>`(도구에서는 `window`)로 창을 지정한다. 지정하지 않으면 soksak 창 안의 agent는 자기 창에 닿고, 그렇지 않으면 유일한 창에 닿는다.
+- 요청은 `--window <name>` 또는 `--project <directory>`(도구에서는 `window`)로 창을 지정한다. 지정하지 않으면 soksak 창 안의 agent는 자기 창에 연결하고, 그렇지 않으면 유일한 창에 연결한다.
 - `sok context` 또는 `agent_context`는 `{configDirectory, surface, window}`를 준다. 이는 configuration directory, agent를 시작한 process의 surface, 그 surface의 창이며, soksak 창 밖이면 `null`이다.
 
 ## 창 알아보기
