@@ -16544,6 +16544,30 @@ const FEATURE_LINKS = [
     expected: "A declared program runs for a view call in the Go and Rust hosts with the refusals, bounds and end causes of the program run rules, and a run of a surface without a view is refused.",
     levels: ["unit"],
   },
+  {
+    id: "F1071-2",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "function validPluginPath(" },
+      { file: "packages/sok/go/src/plugins.go", symbol: "func checkProgramFiles(" },
+      { file: "packages/sok/rust/src/plugins.rs", symbol: "fn check_program_files(" },
+      { file: "packages/host/go/src/program_run.go", symbol: "func resolvePluginProgram(" },
+      { file: "packages/host/rust/src/program_run.rs", symbol: "fn resolve_plugin(" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/program_run_plugin_test.go", id: "TestProgramRunPluginPathRunsTheInstalledFile" },
+      { file: "packages/host/go/src/program_run_plugin_test.go", id: "TestProgramRunPluginPathNotFoundFailsTheRun" },
+      { file: "packages/host/go/src/program_run_plugin_test.go", id: "TestProgramRunPluginPathNotExecutableFailsTheRun" },
+      { file: "packages/host/go/src/program_run_plugin_test.go", id: "TestProgramDeclarationRefusesAnInvalidPluginPath" },
+      { file: "packages/host/rust/tests/program_run_test.rs", id: "a_plugin_path_runs_the_file_of_the_installed_plugin_folder" },
+      { file: "packages/host/rust/tests/program_run_test.rs", id: "a_plugin_path_is_not_found_in_the_project_folder" },
+      { file: "packages/host/rust/tests/program_run_test.rs", id: "a_plugin_path_without_an_execute_bit_fails_the_run" },
+      { file: "packages/host/rust/tests/program_run_test.rs", id: "a_declared_plugin_path_that_leaves_the_folder_is_refused_at_the_boundary" },
+      { file: "packages/sok/go/tests/plugin_program_file_test.go", id: "TestPluginInstallChecksTheProgramFileOfThePlugin" },
+      { file: "packages/sok/rust/tests/plugin_program_file_test.rs", id: "plugin_install_checks_the_program_file_of_the_plugin" },
+    ],
+    expected: "A declared program of the form plugin:<path> runs the file in the installed version folder of its plugin, is refused when its path leaves the folder, and fails the run when the file is missing or not executable; sok install refuses a release whose program file is missing or not executable.",
+    levels: ["unit"],
+  },
 ];
 
 // Generated output is checked for agreement with its source and is not counted as an independent implementation.
