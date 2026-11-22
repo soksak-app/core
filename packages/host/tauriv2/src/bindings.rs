@@ -467,8 +467,9 @@ async fn program_run(
     let Argument(request) = request;
     blocking(move || {
         let data = soksak_host::windows::window_data(&window)?;
-        let environment = window.state::<WindowSidecars>().program_environment()?;
-        documents::program_run(&data, environment, request)
+        let sidecars = window.state::<WindowSidecars>();
+        let environment = sidecars.program_environment()?;
+        documents::program_run(&data, environment, &sidecars.config_directory(), request)
     })
     .await
 }

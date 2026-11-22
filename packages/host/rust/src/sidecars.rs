@@ -1986,6 +1986,11 @@ struct Payload<'a> {
 }
 
 impl<O: Owner> Sidecars<O> {
+    /// Returns the canonical configuration directory of the sidecar channel, which the installed plugins of the window are read from.
+    pub fn config_directory(&self) -> PathBuf {
+        self.core.config_directory.clone()
+    }
+
     /// Returns the complete environment of a program run: the environment that a sidecar process gets, as name and value pairs
     /// (docs/spec/native-surfaces.md#program-runs). The overlay comes from sidecar_environment, the same function that sets the
     /// environment of a sidecar, so the two never differ.

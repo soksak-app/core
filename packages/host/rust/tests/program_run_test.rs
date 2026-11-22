@@ -53,6 +53,7 @@ fn request(id: u64, name: &str, args: &[&str], project: &Path) -> Request {
         name: name.to_string(),
         args: args.iter().map(|arg| arg.to_string()).collect(),
         project: Some(project.to_path_buf()),
+        plugin_folder: Ok(project.join("plugin")),
         environment: environment(project),
     }
 }
@@ -290,6 +291,68 @@ fn a_program_file_that_the_system_refuses_to_start_fails_the_run() {
         error.starts_with("program bin/tool: start failed: "),
         "unexpected refusal: {error}"
     );
+}
+
+// contract: program.run.plugin-path-runs-installed-file
+#[test]
+fn a_plugin_path_runs_the_file_of_the_installed_plugin_folder() {
+    let project = folder::Folder::new();
+    script(&project.path().join("plugin"), "bin/tool", "echo ok");
+    let runs = runs_with(declared("plugin:bin/tool", vec![]));
+    let finished = runs
+        .run(request(1, "run", &[], project.path()))
+        .expect("the run of the plugin file");
+    assert_eq!(finished.code, Some(0));
+    assert_eq!(finished.stdout.text, "ok\n");
+}
+
+// contract: program.run.plugin-path-not-found
+#[test]
+fn a_plugin_path_is_not_found_in_the_project_folder() {
+    let project = folder::Folder::new();
+    script(project.path(), "bin/tool", "echo ran");
+    let runs = runs_with(declared("plugin:bin/tool", vec![]));
+    let error = runs
+        .run(request(1, "run", &[], project.path()))
+        .unwrap_err();
+    assert_eq!(error, "program not found: plugin:bin/tool");
+}
+
+// contract: program.run.plugin-path-not-executable
+#[test]
+fn a_plugin_path_without_an_execute_bit_fails_the_run() {
+    let project = folder::Folder::new();
+    let path = project.path().join("plugin/bin/tool");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, "#!/bin/sh\necho ran\n").unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+    let runs = runs_with(declared("plugin:bin/tool", vec![]));
+    let error = runs
+        .run(request(1, "run", &[], project.path()))
+        .unwrap_err();
+    assert_eq!(
+        error,
+        "program plugin:bin/tool is not a regular executable file"
+    );
+}
+
+// contract: program.run.plugin-path-refuses-invalid-path
+#[test]
+fn a_declared_plugin_path_that_leaves_the_folder_is_refused_at_the_boundary() {
+    for program in [
+        "plugin:../tool",
+        "plugin:/tool",
+        "plugin:",
+        "plugin:bin//tool",
+    ] {
+        let value = serde_json::json!({"lint": {"program": program}});
+        let error = soksak_host::program_run::parse_declarations(&value).unwrap_err();
+        assert_eq!(
+            error,
+            "programs.lint program plugin path must be a relative path of / separated segments that are not empty, . or .., without a backslash",
+            "{program}"
+        );
+    }
 }
 
 // contract: program.run.refuses-undeclared-name

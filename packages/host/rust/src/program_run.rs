@@ -93,6 +93,9 @@ pub struct Request {
     pub args: Vec<String>,
     /// The project folder of the surface, or None for a window that shows no project.
     pub project: Option<PathBuf>,
+    /// The installed version folder of the plugin, which a program of the form `plugin:<path>` resolves in. The error is the
+    /// reason that the folder is unknown, and a run reports it only when its program has that form.
+    pub plugin_folder: Result<PathBuf, String>,
     /// The complete environment of the program as name and value pairs.
     pub environment: Vec<(OsString, OsString)>,
 }
@@ -338,6 +341,32 @@ fn pattern_matches(pattern: &str, argument: &str) -> Result<bool, String> {
     Ok(anchored.is_match(argument))
 }
 
+/// The prefix of a program that names a file of its plugin, resolved in the installed version folder of the plugin.
+const PLUGIN_PROGRAM_PREFIX: &str = "plugin:";
+
+/// Finds the file of a program of the form `plugin:<path>` in the installed version folder of its plugin, which the view folder
+/// uses (docs/spec/native-surfaces.md#program-runs). The declaration reader accepts only a path without empty, `.` or `..`
+/// segments, so the file stays inside the folder. A file that does not exist is not found; any other error of the lookup is
+/// returned, and so is a folder that is unknown.
+fn resolve_plugin(
+    program: &str,
+    path: &str,
+    folder: &Result<PathBuf, String>,
+) -> Result<PathBuf, String> {
+    let folder = folder.as_ref().map_err(Clone::clone)?;
+    let file = folder.join(path);
+    match std::fs::metadata(&file) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            Err(format!("program not found: {program}"))
+        }
+        Err(error) => Err(format!("program {program}: {error}")),
+        Ok(metadata) if !metadata.is_file() || metadata.permissions().mode() & 0o111 == 0 => Err(
+            format!("program {program} is not a regular executable file"),
+        ),
+        Ok(_) => Ok(file),
+    }
+}
+
 /// Finds the program of a run as a terminal session finds its program (docs/spec/agent-roles.md#start-parameters): a path with a
 /// separator resolves from the project folder, and an absolute path as it is; a bare name is searched through the PATH of the
 /// run environment, in the order of the entries, for a regular file with an execute bit, as the process execution of the system does.
@@ -498,10 +527,17 @@ fn execute(
         failed(&reason);
         return Err(reason);
     };
-    let Some(path) = resolve(&declaration.program, directory, &request.environment) else {
-        let reason = format!("program not found: {}", declaration.program);
-        failed(&reason);
-        return Err(reason);
+    let resolved = match declaration.program.strip_prefix(PLUGIN_PROGRAM_PREFIX) {
+        Some(path) => resolve_plugin(&declaration.program, path, &request.plugin_folder),
+        None => resolve(&declaration.program, directory, &request.environment)
+            .ok_or_else(|| format!("program not found: {}", declaration.program)),
+    };
+    let path = match resolved {
+        Ok(path) => path,
+        Err(reason) => {
+            failed(&reason);
+            return Err(reason);
+        }
     };
     let mut child = match spawn(request, declaration, directory, &path) {
         Ok(child) => child,
@@ -721,6 +757,13 @@ pub fn parse_declarations(value: &serde_json::Value) -> Result<Declarations, Str
             .ok_or_else(|| {
                 format!("programs.{name} program is not a text of 1 to 255 bytes without a control character")
             })?;
+        if let Some(path) = program.strip_prefix(PLUGIN_PROGRAM_PREFIX)
+            && !plugin_path_valid(path)
+        {
+            return Err(format!(
+                "programs.{name} program plugin path must be a relative path of / separated segments that are not empty, . or .., without a backslash"
+            ));
+        }
         let slots = match fields.get("args") {
             None => Vec::new(),
             Some(args) => {
@@ -746,6 +789,16 @@ pub fn parse_declarations(value: &serde_json::Value) -> Result<Declarations, Str
         );
     }
     Ok(declarations)
+}
+
+/// Reports whether path, the text after the plugin prefix, is a relative path of `/` separated segments that are none empty, `.`
+/// or `..`, and has no backslash, so that a run names only a file inside the plugin folder (docs/spec/native-surfaces.md#program-runs).
+fn plugin_path_valid(path: &str) -> bool {
+    !path.is_empty()
+        && !path.contains('\\')
+        && path
+            .split('/')
+            .all(|segment| !segment.is_empty() && segment != "." && segment != "..")
 }
 
 /// Reports whether the name has the form `[a-z][a-z0-9-]*`.

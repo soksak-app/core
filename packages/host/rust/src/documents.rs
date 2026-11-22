@@ -4192,6 +4192,7 @@ pub fn window_sidecar_send_answered<O: crate::sidecars::Owner>(
 pub fn program_run(
     data: &crate::windows::WindowData,
     environment: Vec<(std::ffi::OsString, std::ffi::OsString)>,
+    config: &std::path::Path,
     call: crate::program_run::RunCall,
 ) -> Result<Option<serde_json::Value>, String> {
     let (plugin, project) = {
@@ -4207,6 +4208,7 @@ pub fn program_run(
         };
         (view.plugin.clone(), project)
     };
+    let plugin_folder = crate::installed::plugin_folder(config, &plugin);
     let request = crate::program_run::Request {
         surface: call.surface,
         plugin,
@@ -4214,6 +4216,7 @@ pub fn program_run(
         name: call.name,
         args: call.args,
         project,
+        plugin_folder,
         environment,
     };
     let finished = data.program_runs.run(request)?;

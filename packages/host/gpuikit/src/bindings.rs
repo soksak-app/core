@@ -144,8 +144,9 @@ fn run_program(
     request: soksak_host::program_run::RunCall,
 ) -> Result<Value, String> {
     let data = soksak_host::windows::window_data(window)?;
-    let environment = window.state::<WindowSidecars>().program_environment()?;
-    documents::program_run(&data, environment, request).map(|reply| json!(reply))
+    let sidecars = window.state::<WindowSidecars>();
+    let environment = sidecars.program_environment()?;
+    documents::program_run(&data, environment, &sidecars.config_directory(), request).map(|reply| json!(reply))
 }
 
 /// Delivers the reply of a call to its page.
