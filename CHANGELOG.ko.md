@@ -5,6 +5,10 @@
 
 ## 2026-11-22
 
+- F1063-2: Rust workspace 검사는 문자열 `identity`나 `root`가 없는 project record를 빈 기본값 대신 `invalid project record`로 보고한다. 유효하지 않은 identity의 검사는 그대로다. `make check-events`(rs.unwrap-or finding 2 → 0)와 `cargo test -p soksak-host --lib workspace`로 확인했다.
+- F1069: Go와 Rust host는 view의 첫 call 전에 도착한 `view.error` message에 `view-stopped`를 보내므로, script 불러오기가 실패한 view는 매 화면 갱신마다 animation frame을 요청하던 loading 상태 대신 실패 상태를 보인다. 첫 call 뒤의 실패는 surface를 유지한다. Red: `TestAViewThatFailsBeforeItsFirstCallEndsItsLoadingState`, `TestViewErrorMessageSendsViewStoppedWithItsReason`, `a_view_error_message_yields_view_stopped_with_its_reason`. Green: 변경 뒤 같은 test들이 통과한다. JSON이 아닌 `view.error`는 view channel 경로로 보고된다.
+- F1069: `host.view.killed`는 종료의 원인을 밝히는 `caller` 필드를 담는다: `process-ended`, `queue-overflow`, `surface-removed`, `documents-reloaded`, `document-committed`, `window-closed`. Red: `TestAViewEndStoresHostViewKilledWithItsPluginAndSurface`, `a_view_end_stores_host_view_killed_with_its_plugin_and_surface`. Green: 같은 test들이 통과한다.
+- F1069: loading 중인 surface는 animation frame을 요청하기 전에 frame class로 `workbench.frame.request`를 기록하며, 기록은 surface, card와 이유 `loading`을 담는다. Red: `TestALoadingSurfaceRecordsEachFrameRequestWithItsSurface`. Green: 같은 test가 통과한다.
 - F1062-2: kit의 term list가 owned session과 owner를 정한다. kit 변경은 kit main에 있다. F1062-5는 F1062-3의 spec commit이 담은 owned session 메시지 명세를 기록한다.
 - F1070: Go와 Rust sok의 manifest 검사는 F1064 이후의 plugin API처럼 `surface`나 `sections`가 있는 `extends`를 받아들이고, 공유 manifest case `extends.requires-surface-or-sections`와 `extends.accepts-with-sections`가 이 규칙을 정한다. Red: Go case replay가 sections manifest를 `extends requires a surface`로 거부했다. Green: Go와 Rust case replay, plugin API case 229개가 통과한다.
 - F1065: mygo host는 view를 만들 때마다 `installed.json`에서 plugin 폴더를 읽는다. 그래서 plugin 업데이트 뒤 만든 view는 설치된 version을 내주고, surface 식별자와 시작 parameter는 유지된다. Rust host는 이미 만들 때마다 폴더를 읽었다. Red: `TestAViewCreatedAfterAnUpdateServesTheInstalledVersionFolder`가 이전 version의 폴더로 실패했다. Green: Go host test 390개와 584개가 통과한다.
