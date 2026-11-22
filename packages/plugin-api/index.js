@@ -366,6 +366,7 @@ export const PROGRAM_STATES = Object.freeze(["idle", "working", "blocked"]);
  */
 function checkProgram(where, program, manifest) {
   if (!isText(program)) throw new Error(`${where}: surface program must be a status name`);
+  // default: exposes or its status list that is absent declares no status, so the program check refuses the name.
   const status = (manifest.exposes?.status ?? []).find((entry) => isObject(entry) && entry.name === program);
   if (status === undefined) throw new Error(`${where}: surface program ${program} must name a status declared in exposes`);
   const { schema } = status;

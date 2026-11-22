@@ -978,12 +978,11 @@ var programStates = []string{"idle", "working", "blocked"}
 // statusSchema returns the schema of the status name of exposes and whether exposes declares that status. A schema that
 // is not an object gives nil, which the program check then refuses.
 func statusSchema(manifest map[string]any, name string) (map[string]any, bool) {
-	// default: exposes or its status list that is absent or not a list declares no status.
-	exposes, _ := manifest["exposes"].(map[string]any)
-	statuses, _ := exposes["status"].([]any)
+	exposes, _ := manifest["exposes"].(map[string]any) // default: exposes that is absent or not an object declares no status.
+	statuses, _ := exposes["status"].([]any)           // default: a status list that is absent or not a list declares no status.
 	for _, item := range statuses {
 		if entry, ok := item.(map[string]any); ok && entry["name"] == name {
-			schema, _ := entry["schema"].(map[string]any)
+			schema, _ := entry["schema"].(map[string]any) // default: a schema that is not an object is nil, which checkProgram refuses.
 			return schema, true
 		}
 	}
@@ -1001,11 +1000,12 @@ func checkProgram(where string, raw any, manifest map[string]any) error {
 	if !declared {
 		return fmt.Errorf("%s: surface program %s must name a status declared in exposes", where, name)
 	}
+	// default: each member that is absent or of another type is empty, so the shape check below refuses the schema.
 	types, _ := schema["type"].([]any)
-	required, _ := schema["required"].([]any)
-	properties, _ := schema["properties"].(map[string]any)
-	state, _ := properties["state"].(map[string]any)
-	states, _ := state["enum"].([]any)
+	required, _ := schema["required"].([]any)              // default: absent or of another type is empty, which the shape check refuses.
+	properties, _ := schema["properties"].(map[string]any) // default: absent or of another type is empty, which the shape check refuses.
+	state, _ := properties["state"].(map[string]any)       // default: absent or of another type is empty, which the shape check refuses.
+	states, _ := state["enum"].([]any)                     // default: absent or of another type is empty, which the shape check refuses.
 	valid := len(types) == 2 && slices.Contains(types, any("object")) && slices.Contains(types, any("null")) &&
 		slices.Contains(required, any("state")) && len(states) == len(programStates)
 	for _, want := range programStates {

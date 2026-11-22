@@ -153,6 +153,7 @@ export function onProgramError(receiver) {
 }
 
 /** The program state of a tab for core.grid, or null when the tab has none (docs/spec/program-state.md#status). */
+// default: a tab without a reported program state has program null in core.grid (docs/spec/program-state.md#status).
 const programOf = (tab) => activity.programs()[tab] ?? null;
 
 /** Calls listener after the activities of this window changed. */
