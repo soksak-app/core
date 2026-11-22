@@ -4736,6 +4736,32 @@
         }
       },
       {
+        "name": "core.tab.reload",
+        "description": "Restarts the view of a tab: the host ends its view and creates it again, clears its restart stop, and counts no failure. It answers the tab; a tab without a view fails with an error that names the tab.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "tab": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "tab"
+          ]
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "tab": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "tab"
+          ]
+        }
+      },
+      {
         "name": "core.tab.keep",
         "description": "Sets (true) or clears (false) the mark kept of a tab and stores it in tab-state.json; it fails for a tab that can never be unloaded.",
         "params": {
@@ -5168,6 +5194,11 @@
     ],
     "element": [
     {
+        "name": "core.tab.reload",
+        "description": "The 다시 불러오기 control of a failed view surface, which runs core.tab.reload of the tab of the surface, in card order.",
+        "many": true
+      },
+      {
       "name": "core.error.dismiss",
       "description": "The close control of each error toast of the workbench, in toast order.",
       "many": true

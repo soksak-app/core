@@ -10,7 +10,7 @@ import { contributionsState, onContributionsChange } from "./contributions.js";
 import { checkOpenPath } from "./file-open.js";
 import { registry, connectExposure, revisitRegistrations, whenRepliesSent } from "./exposure.js";
 import { tabDescription } from "./card-data.js";
-import { log, reloadPage, report } from "./host.js";
+import { log, reloadPage, reloadView, report } from "./host.js";
 import { createPluginApply } from "./plugin-apply.js";
 import { trace } from "./performance.js";
 import { focusName, focusState } from "./focus-state.js";
@@ -816,6 +816,13 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
     await memory.unload(memoryTab(tab));
     return null;
   });
+  // The host restarts the view of the tab and refuses a tab without a view with an error that names it.
+  registry.command("core.tab.reload", async ({ tab }) => {
+    if (typeof tab !== "string") throw new ExposureError(EXPOSURE_ERRORS.invalidParams, `unknown tab ${JSON.stringify(tab)}`);
+    await reloadView(tab);
+    return { tab };
+  });
+  registry.element("core.tab.reload");
   registry.command("core.tab.keep", ({ tab, keep }) => {
     memoryTab(tab);
     if (typeof keep !== "boolean") throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "keep must be a boolean");

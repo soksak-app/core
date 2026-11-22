@@ -1,0 +1,35 @@
+{
+  "name": "tab-reload-command",
+  "description": "The core.tab.reload command sends viewReload with its tab to the host and answers the tab.",
+  "replay": false,
+  "reason": "The producer runs only the replay cases against the real host. The host side of viewReload is covered by the Go host tests of the view reload.",
+  "variables": {},
+  "steps": [
+    {
+      "call": {
+        "name": "notificationState"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "authorization": "denied",
+          "error": null
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "viewReload",
+        "payload": {
+          "surface": "tab-reload-probe"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ]
+}

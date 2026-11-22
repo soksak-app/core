@@ -1,4 +1,5 @@
 // Keeps the native surface lifecycle visible in the card status row.
+import { mark } from "./commands.js";
 import { hideError, showError } from "./shown-errors.js";
 /** The description of the error state. An error state must have an error. */
 export function surfaceErrorText(state) {
@@ -31,11 +32,21 @@ export function setSurfaceStatus(status, surface, state) {
   // Several projects use the same card id, so the surface id is written too.
   // default: a status row that does not belong to a card is written without a card name.
   const where = `surface status ${card?.dataset.cardId ?? "outside a card"} ${surface}`;
+  // The control runs core.tab.reload of the tab, and it exists only while the surface shows its error.
+  status.querySelector("[data-surface-reload]")?.remove();
   if (phase === "error") {
     // The status row keeps a state label; the error text shows in the error toast.
     indicator.textContent = "표면 오류";
     indicator.removeAttribute("title");
     showError(document, where, `표면 오류 · ${surfaceErrorText(state)}`);
+    const reload = document.createElement("button");
+    reload.type = "button";
+    reload.className = "surface-status__reload";
+    reload.dataset.surfaceReload = surface;
+    reload.dataset.expose = "core.tab.reload";
+    reload.textContent = "다시 불러오기";
+    mark(reload, "core.tab.reload", { tab: surface });
+    status.append(reload);
     return;
   }
   hideError(document, where);

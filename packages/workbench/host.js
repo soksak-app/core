@@ -416,6 +416,12 @@ export function watchCalls(fn) {
 /** Reloads this page after every sent call has its answer (docs/spec/native-host.md#page-reload). */
 export const reloadPage = () => bridge.reload();
 
+/** Restarts the view of the tab surface through the host (core.tab.reload, docs/spec/native-surfaces.md#view-surfaces). */
+export const reloadView = (surface) => {
+  if (!native) throw new Error("the view of a tab restarts only in the application");
+  return bridge.call("viewReload", { surface });
+};
+
 export const report = (line) => reportRecord("error", line);
 
 /**
