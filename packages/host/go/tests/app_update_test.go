@@ -53,7 +53,7 @@ func updateRegistry(t *testing.T, key string) string {
 		t.Fatal(err)
 	}
 	sum := sha256.Sum256(buffer.Bytes())
-	index := `{"format": 1, "plugins": [], "sidecars": [], "core": {"versions": [{"version": "0.0.9", "releases": {"` + key +
+	index := `{"format": 2, "plugins": [], "sidecars": [], "core": {"versions": [{"version": "0.0.9", "releases": {"` + key +
 		`": {"url": "file://` + zipPath + `", "sha256": "` + hex.EncodeToString(sum[:]) + `"}}}]}, "packs": [], "revoked": {"plugins": [], "sidecars": []}}`
 	indexPath := filepath.Join(releases, "index.json")
 	if err := os.WriteFile(indexPath, []byte(index), 0o644); err != nil {

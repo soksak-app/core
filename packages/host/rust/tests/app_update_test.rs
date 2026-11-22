@@ -54,7 +54,7 @@ fn update_registry(work: &Path, key: &str) -> PathBuf {
         .unwrap()
         .to_string();
     let index = format!(
-        r#"{{"format": 1, "plugins": [], "sidecars": [], "core": {{"versions": [{{"version": "0.0.9", "releases": {{"{key}": {{"url": "file://{}", "sha256": "{sum}"}}}}}}]}}, "packs": [], "revoked": {{"plugins": [], "sidecars": []}}}}"#,
+        r#"{{"format": 2, "plugins": [], "sidecars": [], "core": {{"versions": [{{"version": "0.0.9", "releases": {{"{key}": {{"url": "file://{}", "sha256": "{sum}"}}}}}}]}}, "packs": [], "revoked": {{"plugins": [], "sidecars": []}}}}"#,
         zip.display()
     );
     let index_path = work.join("index.json");
