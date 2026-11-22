@@ -108,6 +108,41 @@
       "type": "object",
       "example": {},
       "source": "page"
+    },
+    "update-toast-1": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "place-toast-1": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "update-toast-2": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "place-toast-2": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "update-toast-3": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "update-toast-4": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "place-toast-3": {
+      "type": "object",
+      "example": {},
+      "source": "page"
     }
   },
   "steps": [
@@ -290,22 +325,6 @@
     },
     {
       "call": {
-        "name": "overlayPlace",
-        "payload": "$place-3"
-      }
-    },
-    {
-      "reply": {
-        "result": {
-          "x": 0,
-          "y": 0,
-          "w": 1024,
-          "h": 768
-        }
-      }
-    },
-    {
-      "call": {
         "name": "log",
         "payload": {
           "action": "batch",
@@ -323,6 +342,17 @@
             }
           ]
         }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": "$update-toast-1"
       }
     },
     {
@@ -351,19 +381,8 @@
     },
     {
       "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-4"
-      }
-    },
-    {
-      "reply": {
-        "result": null
-      }
-    },
-    {
-      "call": {
         "name": "overlayPlace",
-        "payload": "$place-4"
+        "payload": "$place-toast-1"
       }
     },
     {
@@ -374,6 +393,17 @@
           "w": 1024,
           "h": 768
         }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": "$update-4"
+      }
+    },
+    {
+      "reply": {
+        "result": null
       }
     },
     {
@@ -442,8 +472,57 @@
     },
     {
       "call": {
+        "name": "overlayUpdate",
+        "payload": "$update-toast-2"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
         "name": "overlayPlace",
-        "payload": "$place-6"
+        "payload": "$place-toast-2"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": "$update-toast-3"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": "$update-toast-4"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayPlace",
+        "payload": "$place-toast-3"
       }
     },
     {

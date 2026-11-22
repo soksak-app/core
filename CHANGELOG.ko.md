@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1033-3.2, F1033-3.3: workbench가 보이는 모든 오류는 오류 toast에만 나타난다. library card, application update 줄, plugin card와 그 기여 줄, card 상태 행, 멈춘 surface의 placeholder, sidebar section, 설정의 setup 행, debug view는 `실패`, `표면 오류`, `열 수 없음`, `오류` 같은 짧은 상태 label을 muted 색으로 보이고 복구 동작을 유지한다. toast 밖의 어떤 element도 오류 색을 쓰지 않는다. mygo workbench는 inline 오류 drawer와 `dbg-error-gap` metric을 없애고, activity icon 길이를 em으로 선언한다. Red: 이전 구현에서 상태 행, surface 상태, library 폴더, application update, 설정 setup, 멈춘 view의 page 테스트와 plugin card, 상태 행, debug view, sidebar section의 mygo 테스트가 오류 글이 toast 밖에 있어서 실패했다. Green: page workbench suite와 mygo workbench suite가 통과한다.
 - F1036-2, F1036-3, F1036-4: 체크리스트, changelog, 영어 문서는 실제 동사로 동작을 적고, `make check-docs`는 code 밖의 `닿다`, `reach`, `drive`, `talk to`를 파일과 줄로 보고한다. `맞닿다`와 Windows `drive` 형식은 실제 뜻이라 보고하지 않는다. Red: `auditFigurativeVerbs`가 export되지 않았다. Green: `scripts/test/checklist.test.mjs`와 `make check-docs`가 통과한다.
 - F1036-1: specification과 운영 문서는 `닿다`, `reach`, `drive`, `talk to` 대신 실제 동사로 전달, 연결, 실행, 접근, 찾기를 적는다.
 - F1040-1: 모든 holder의 activity 순서에서 `running`이 `failed`보다 높다. 그래서 card, group card, space, project는 일을 실행하면 끝난 실패보다 그 일을 먼저 보인다. terminal activity 계약은 실패한 command 뒤 shell이 prompt를 보이면 `idle`을 준다. Red: running tab과 failed tab을 가진 card의 공유 case가 page와 mygo workbench에서 실패했고, Go host record case가 기대값을 바꾼 뒤 실패했다. Green: page, mygo, Go host, Rust host activity test가 통과한다.

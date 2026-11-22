@@ -348,7 +348,10 @@ func (s *Shell) drawProjectCard(c *ui.Context, project *projectRecord) (*preview
 						ui.Text(c, fmt.Sprintf("%d월 %d일", when.Month(), when.Day())).LineHeight(s.metrics.lineHeight).FontSize(size).TextColor(s.palette.Muted).Tooltip(when.Format(time.DateTime))
 					}
 				})
-				DrawError(c, s.errors, "library project "+project.Root)
+				// The card keeps a state label; the reason shows in the error toast.
+				if _, failed := s.errors.Text("library project " + project.Root); failed {
+					ui.Text(c, "폴더를 열 수 없음").LineHeight(s.metrics.lineHeight).FontSize(s.textCaption()).TextColor(s.palette.Muted)
+				}
 			})
 		})
 		ui.Row(c).Absolute().Right(m.space2).Top(m.space2).Gap(m.space1).Children(func() {
@@ -404,9 +407,6 @@ func (s *Shell) drawPreview(c *ui.Context, project *projectRecord) (*previewLayo
 	padX, padY := 2*m.space4, m.space4
 	if err := layout.CheckStoredLayout(space.Layout, s.pluginUnits()); err != nil {
 		failure := fmt.Sprintf("projects.json: project %s space %s: %s", project.Root, project.ActiveSpaceID, err)
-		frame.Children(func() {
-			ui.Text(c, failure).Wrap().LineHeight(s.metrics.lineHeight).FontSize(s.textCaption()).TextColor(s.palette.No).Margin(padY, padX, padY, padX)
-		})
 		return nil, failure
 	}
 	var stored storedLayout
@@ -417,9 +417,6 @@ func (s *Shell) drawPreview(c *ui.Context, project *projectRecord) (*previewLayo
 	tree, err := s.readStoredTree(stored)
 	if err != nil {
 		failure := fmt.Sprintf("projects.json: project %s space %s: %s", project.Root, project.ActiveSpaceID, err)
-		frame.Children(func() {
-			ui.Text(c, failure).Wrap().LineHeight(s.metrics.lineHeight).FontSize(s.textCaption()).TextColor(s.palette.No).Margin(padY, padX, padY, padX)
-		})
 		return nil, failure
 	}
 	grid := tree.Grid()

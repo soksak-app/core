@@ -15,7 +15,6 @@ const libraryErrorPlace = "library"
 // ShownErrors records the error of an origin when it appears and holds the errors that the window displays.
 type ShownErrors struct {
 	report      func(line string)
-	inline      map[string]inlineError
 	occurrences map[errorOrigin]string
 	toasts      []*errorToast
 	schedule    func(expire func()) (cancel func())
@@ -24,11 +23,6 @@ type ShownErrors struct {
 	// the workbench hold both and ConfigureToastDeadline applies their change.
 	autoDismiss bool
 	deadline    int64
-}
-
-type inlineError struct {
-	text   string
-	source string
 }
 
 type errorOrigin struct {
@@ -46,25 +40,14 @@ type errorToast struct {
 // NewShownErrors returns the display that writes each line with report.
 func NewShownErrors(report func(line string)) *ShownErrors {
 	return &ShownErrors{
-		report: report, inline: map[string]inlineError{}, occurrences: map[errorOrigin]string{},
+		report: report, occurrences: map[errorOrigin]string{},
 	}
 }
 
-// Show shows the inline error of where or adds an error of the workbench to its open toasts.
+// Show shows the error of where in the window's toast component; the control whose operation failed keeps its label
+// (docs/spec/exposure.md), as showError of packages/workbench/shown-errors.js does.
 func (e *ShownErrors) Show(where, text, detail string) {
-	if where == workbenchErrorPlace {
-		e.ShowToast(where, text, detail)
-		return
-	}
-	e.showInline(where, "", text, detail)
-}
-
-func (e *ShownErrors) showInline(where, source, text, detail string) {
-	shown, ok := e.inline[where]
-	e.inline[where] = inlineError{text: text, source: source}
-	if !ok || shown.text != text {
-		e.report(where + ": " + text + detail)
-	}
+	e.ShowToast(where, text, detail)
 }
 
 // ShowToast shows the error of where in the window's toast component. A new error of the workbench can stack with its earlier errors.
@@ -77,7 +60,7 @@ func (e *ShownErrors) showToast(origin errorOrigin, text, detail string) {
 		if previous == text {
 			return
 		}
-		if origin != (errorOrigin{where: workbenchErrorPlace}) {
+		if origin.where != workbenchErrorPlace || origin.source != "" {
 			e.removeToastOrigin(origin)
 		}
 	}
@@ -170,7 +153,6 @@ func (e *ShownErrors) Toasts() []string {
 
 // Hide withdraws every error of where so its next occurrence is recorded.
 func (e *ShownErrors) Hide(where string) {
-	delete(e.inline, where)
 	for origin := range e.occurrences {
 		if origin.where == where {
 			e.withdraw(origin)
@@ -180,33 +162,18 @@ func (e *ShownErrors) Hide(where string) {
 
 // ShowFrom shows an error whose source can withdraw it with HideFrom.
 func (e *ShownErrors) ShowFrom(where, source, text, detail string) {
-	if where == workbenchErrorPlace {
-		e.showToast(errorOrigin{where: where, source: source}, text, detail)
-		return
-	}
-	e.showInline(where, source, text, detail)
+	e.showToast(errorOrigin{where: where, source: source}, text, detail)
 }
 
 // ShownFrom reports whether source has an active occurrence of where, including a dismissed toast.
 func (e *ShownErrors) ShownFrom(where, source string) bool {
-	if where == workbenchErrorPlace {
-		_, ok := e.occurrences[errorOrigin{where: where, source: source}]
-		return ok
-	}
-	shown, ok := e.inline[where]
-	return ok && shown.source == source
+	_, ok := e.occurrences[errorOrigin{where: where, source: source}]
+	return ok
 }
 
 // HideFrom withdraws the occurrence that source owns and reports whether it existed.
 func (e *ShownErrors) HideFrom(where, source string) bool {
-	if where == workbenchErrorPlace {
-		return e.withdraw(errorOrigin{where: where, source: source})
-	}
-	if !e.ShownFrom(where, source) {
-		return false
-	}
-	delete(e.inline, where)
-	return true
+	return e.withdraw(errorOrigin{where: where, source: source})
 }
 
 func (e *ShownErrors) withdraw(origin errorOrigin) bool {
@@ -242,11 +209,12 @@ func (e *ShownErrors) Text(where string) (string, bool) {
 		}
 		return e.toasts[len(e.toasts)-1].text, true
 	}
-	if text, ok := e.occurrences[errorOrigin{where: where}]; ok {
-		return text, true
+	for origin, text := range e.occurrences {
+		if origin.where == where {
+			return text, true
+		}
 	}
-	shown, ok := e.inline[where]
-	return shown.text, ok
+	return "", false
 }
 
 type toastRow struct {
@@ -307,13 +275,7 @@ func (s *Shell) drawErrorToasts(c *ui.Context, width float32) {
 	popup.PassThrough().Column().AlignItems(ui.Center).Gap(m.errorPadY).Children(drawRows)
 }
 
-// DrawError draws the error of the place where in its place on a screen. It draws nothing without an error.
-func DrawError(c *ui.Context, errors *ShownErrors, where string) {
-	if text, ok := errors.Text(where); ok {
-		drawErrorText(c, text)
-	}
-}
-
+// drawErrorText draws the text of a toast, the one element that takes the error color.
 func drawErrorText(c *ui.Context, text string) ui.Element {
 	return ui.Text(c, text).Wrap().TextColor(c.Theme().Danger).Role(ui.RoleStatus).Label(text)
 }

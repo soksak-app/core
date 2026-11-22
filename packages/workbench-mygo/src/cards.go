@@ -111,7 +111,6 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 				data, err := s.readCard(card)
 				if err != nil {
 					s.errors.Show(card.ID, err.Error(), "")
-					DrawError(c, s.errors, card.ID)
 					continue
 				}
 				if !s.shownFullscreen(card.ID) {
@@ -180,7 +179,6 @@ func (s *Shell) drawCard(c *ui.Context, id string, data *layout.CardData, rect l
 	sides, err := s.cardSides(id, data, rect)
 	if err != nil {
 		s.errors.Show(id, err.Error(), "")
-		DrawError(c, s.errors, id)
 		return
 	}
 	border := s.palette.Edge
@@ -429,7 +427,6 @@ func (s *Shell) drawAbsentCard(c *ui.Context, id string, data *layout.CardData, 
 		sides, err := s.cardSides(id, data, rect)
 		if err != nil {
 			s.errors.Show(id, err.Error(), "")
-			DrawError(c, s.errors, id)
 			return
 		}
 		for _, name := range []string{"core.card.header", "core.card.status"} {
@@ -864,8 +861,9 @@ func (s *Shell) drawSurfaceStatus(c *ui.Context, card, tab string) {
 	m := s.metrics
 	color, text := s.palette.Muted, "불러오는 중"
 	if phase == "error" {
-		color, text = s.palette.No, "표면 오류 · "+reason
-		s.errors.Show(where, text, "")
+		// The status row keeps a state label; the error text shows in the error toast, the one place of the error color.
+		text = "표면 오류"
+		s.errors.Show(where, "표면 오류 · "+reason, "")
 	}
 	// The state shrinks with the status row and cuts its text with an ellipsis, so an error stays on the one line of the row; its whole
 	// text is the label and the tooltip of the text.
@@ -919,10 +917,8 @@ func (s *Shell) drawStatus(c *ui.Context, id string, data *layout.CardData, fold
 		if active := data.ActiveTab(); active != nil {
 			where := "tab error " + active.ID
 			if report := s.surfaces.reports[active.ID]; report != nil && report.Error != "" {
+				// The error text of the tab shows in the error toast; the status row holds no copy of it.
 				s.errors.Show(where, report.Error, "")
-				// The error stays on the one line of the row, cut with an ellipsis; its whole text is the label and the tooltip.
-				ui.Text(c, report.Error).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).FontSize(s.textCaption()).TextColor(s.palette.No).
-					Label(report.Error).Tooltip(report.Error)
 			} else {
 				s.errors.Hide(where)
 			}

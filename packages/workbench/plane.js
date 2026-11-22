@@ -528,8 +528,8 @@ function updateCard(el, card, rect) {
   });
   cardFolds.set(card.id, folded);
   setText(statusText, cardStatusText(card, tabs, folded));
-  // The operation error of the active tab, shown in its card's status row (docs/spec/plugins.md#tab-reports).
-  setTabError(status, shown.id, tabError(shown.id));
+  // The operation error of the active tab shows in the error toast (docs/spec/plugins.md#tab-reports).
+  setTabError(shown.id, tabError(shown.id));
 }
 
 // The last drawn out-of-space fold text of each card. When a tab changes the bottom text, only the foot is fixed and nothing is redrawn.
@@ -580,10 +580,12 @@ function pluginPlaceholder(tab, paramsProblem) {
   const line = document.createElement("p");
   const text = reason === "params" ? paramsProblem : PLACEHOLDER_LINES[reason](tab.plugin);
   // The reasons unread and params state a failure (the install state could not be read, or the stored params do not match the declaration),
-  // so their lines are errors shown through the error display path (F217). The other reasons are the designed states of a saved layout and stay plain text.
+  // so their text shows in the error toast (F217, F1033-3.2) and the card keeps a state label. The other reasons are the designed states of a
+  // saved layout and stay plain text.
   if (reason === "unread" || reason === "params") {
     const where = `surface ${tab.id} placeholder`;
-    showError(line, where, text);
+    line.textContent = "열 수 없음";
+    showError(document, where, text);
     placeholderErrorPlaces.add(where);
   } else {
     line.textContent = text;
@@ -1925,7 +1927,7 @@ function build(kept) {
       drawActivities();
       markFocus();
       // A placeholder error that this draw does not show again is withdrawn: its surface left, or its plugin state was read again (F217).
-      for (const where of shownPlaceholderErrors) if (!placeholderErrorPlaces.has(where)) hideError(null, where);
+      for (const where of shownPlaceholderErrors) if (!placeholderErrorPlaces.has(where)) hideError(document, where);
       shownPlaceholderErrors = placeholderErrorPlaces;
       placeholderErrorPlaces = new Set();
       // Clears the notification of a tab that became visible.
@@ -1987,7 +1989,7 @@ const redrawTabReports = () => {
     const statusText = el.querySelector(":scope > .status .status__text");
     // default: a card not drawn yet has no folded-side text.
     if (statusText && !isPlace(card.id)) setText(statusText, cardStatusText(card, tabsOf(card), cardFolds.get(card.id) ?? null));
-    if (statusText && !isPlace(card.id) && tabsOf(card).length) setTabError(statusText.parentElement, activeTab(card).id, tabError(activeTab(card).id));
+    if (statusText && !isPlace(card.id) && tabsOf(card).length) setTabError(activeTab(card).id, tabError(activeTab(card).id));
   }
 };
 onTabReports(redrawTabReports);

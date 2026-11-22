@@ -105,7 +105,8 @@ test("a project whose folder cannot be read shows the reason in the library and 
   assert.deepEqual(state.folderErrors, { "prj-a": "project directory does not exist: /work/missing" });
   const card = document.querySelector('[data-project-id="prj-a"]');
   // The path appears only once, in the path line of the card.
-  assert.equal(card.querySelector(".library-project__missing")?.textContent, "폴더가 없습니다.");
+  assert.equal(card.querySelector(".library-project__missing")?.textContent, "폴더를 열 수 없음", "the card keeps a state label");
+  assert.equal(document.querySelector(".error-toast__text")?.textContent, "폴더가 없습니다.", "the reason shows in the toast");
   assert.equal(document.querySelector('[data-project-id="prj-b"] .library-project__missing'), null);
   assert.equal(card.querySelector('[data-expose="core.library.open"]').disabled, true, "the card of a missing folder can still be pressed");
   assert.equal(document.querySelector('[data-project-id="prj-b"] [data-expose="core.library.open"]').disabled, false);

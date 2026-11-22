@@ -9,7 +9,7 @@
     {"call":{"name":"viewReply","payload":{"id":1,"result":null,"page":"$page-identity","generation":1,"surface":"probe-surface"}}},
     {"reply":{"result":null}},
     {"change":{"state":"settings","value":{"home":""}}},
-    {"call":{"name":"setTheme","payload":{"scheme":"dark","tokens":{"--bg":"#101117","--card":"#191b24","--fg":"#ececf5","--muted":"#8f92a4","--edge":"#2b2e3d","--rule":"#22242f","--rail":"#7279ff","--focus":"#ffb36b","--no":"#ff7c7c","--r":"10px","--half-gap":"6px","--bw":"1px","--font":"ui-monospace,SFMono-Regular,Menlo,monospace","--size":"13px"}}}},
+    {"call":{"name":"setTheme","payload":{"scheme":"dark","tokens":{"--bg":"#101117","--card":"#191b24","--fg":"#ececf5","--muted":"#8f92a4","--edge":"#2b2e3d","--rule":"#22242f","--rail":"#7279ff","--focus":"#ffb36b","--no":"#ff7c7c", "--fail": "#ff7cd3","--r":"10px","--half-gap":"6px","--bw":"1px","--font":"ui-monospace,SFMono-Regular,Menlo,monospace","--size":"13px"}}}},
     {"reply":{"result":null}},
     {"call":{"name":"viewEvent","payload":{"generation":1,"event":"settings","data":{"home":""},"surface":"probe-surface"}}},
     {"reply":{"result":true}},

@@ -5,6 +5,7 @@ import (
 	"math"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -123,7 +124,8 @@ func TestAFailedOperationShowsItsErrorOnItsCard(t *testing.T) {
 	page := hostedPlugins()
 	page.Operation = &workbench.PluginOperation{Action: "update", Plugin: "alpha", State: "failed", Error: "no network"}
 	tt := drawPlugins(&page, errors, recorder(t, new([]call), screenCommands...))
-	if !tt.HasText("no network") {
+	// The card keeps a state label; the error text shows in the error toast, which writes the line below.
+	if !tt.HasText("alpha update 실패") || tt.HasText("no network") {
 		t.Fatalf("the card shows %q", tt.Texts())
 	}
 	if !slices.Equal(lines, []string{"library plugin alpha: no network"}) {
@@ -197,7 +199,7 @@ func TestAFailedApplicationUpdateIsShownInItsRow(t *testing.T) {
 	if !absent(tt, "core.library.app.release") {
 		t.Fatal("a version without a release page shows the release button")
 	}
-	if !tt.HasText("0.6.0 업데이트하지 못했습니다: no space") {
+	if !tt.HasText("0.6.0 업데이트 실패") || tt.HasText("0.6.0 업데이트하지 못했습니다: no space") {
 		t.Fatalf("the row shows %q", tt.Texts())
 	}
 	if !slices.Equal(lines, []string{"library app update: 0.6.0 업데이트하지 못했습니다: no space"}) {
@@ -227,19 +229,28 @@ func TestAnOutdatedServiceHasItsReplaceAction(t *testing.T) {
 }
 
 func TestAPluginStateThatCannotBeReadShowsItsReasonAndNoCards(t *testing.T) {
+	var lines []string
 	page := workbench.PluginPage{Hosted: true, Failure: &workbench.PluginFailure{Kind: "state", Message: "bad file"}}
-	tt := drawPlugins(&page, noErrors(), recorder(t, new([]call), screenCommands...))
-	if !tt.HasText("플러그인 상태를 읽지 못했습니다: bad file") || tt.HasText("찾는 플러그인이 없습니다.") {
+	tt := drawPlugins(&page, workbench.NewShownErrors(func(line string) { lines = append(lines, line) }), recorder(t, new([]call), screenCommands...))
+	// The reason shows in the error toast, which writes it; the page shows no cards and no empty search result.
+	if tt.HasText("찾는 플러그인이 없습니다.") || tt.HasText("Alpha") {
 		t.Fatalf("the page shows %q", tt.Texts())
+	}
+	if len(lines) != 1 || !strings.HasSuffix(lines[0], "플러그인 상태를 읽지 못했습니다: bad file") {
+		t.Fatalf("written lines %q", lines)
 	}
 }
 
 func TestARegistryThatCannotBeReadKeepsTheCards(t *testing.T) {
 	page := hostedPlugins()
 	page.Failure = &workbench.PluginFailure{Kind: "index", Message: "offline"}
-	tt := drawPlugins(&page, noErrors(), recorder(t, new([]call), screenCommands...))
-	if !tt.HasText("레지스트리를 읽지 못했습니다: offline") || !tt.HasText("Alpha") {
+	var lines []string
+	tt := drawPlugins(&page, workbench.NewShownErrors(func(line string) { lines = append(lines, line) }), recorder(t, new([]call), screenCommands...))
+	if !tt.HasText("Alpha") {
 		t.Fatalf("the page shows %q", tt.Texts())
+	}
+	if len(lines) != 1 || !strings.HasSuffix(lines[0], "레지스트리를 읽지 못했습니다: offline") {
+		t.Fatalf("written lines %q", lines)
 	}
 }
 
@@ -264,7 +275,7 @@ func TestAContributionShowsItsStateAndAnInvalidOneItsError(t *testing.T) {
 		{Plugin: "alpha", Point: "git.panel", Index: 1, State: "invalid", Reason: "no id"},
 	}
 	tt := drawPlugins(&page, errors, recorder(t, new([]call), screenCommands...))
-	if !tt.HasText("git.panel 기여 1: 연결됨") || !tt.HasText("git.panel 기여 2: no id") {
+	if !tt.HasText("git.panel 기여 1: 연결됨") || !tt.HasText("git.panel 기여 2: 오류") {
 		t.Fatalf("the card shows %q", tt.Texts())
 	}
 	if !slices.Equal(lines, []string{"library plugin alpha contribution git.panel 2: git.panel 기여 2: no id"}) {
@@ -289,12 +300,13 @@ func TestVersionsCompareByNumber(t *testing.T) {
 }
 
 func TestAVersionOfAnotherFormIsShownAndOffersNoUpdate(t *testing.T) {
-	errors := noErrors()
+	var lines []string
+	errors := workbench.NewShownErrors(func(line string) { lines = append(lines, line) })
 	page := hostedPlugins()
 	page.Plugins[0].Latest = stringOf("next")
-	tt := drawPlugins(&page, errors, recorder(t, new([]call), screenCommands...))
-	if !tt.HasText("version next must be x.y.z with numeric parts and no leading zeros") {
-		t.Fatalf("the card shows %q", tt.Texts())
+	drawPlugins(&page, errors, recorder(t, new([]call), screenCommands...))
+	if len(lines) != 1 || !strings.HasSuffix(lines[0], "version next must be x.y.z with numeric parts and no leading zeros") {
+		t.Fatalf("written lines %q", lines)
 	}
 	if got := workbench.PluginPageActions(page)[0]; got.Action != "disable" {
 		t.Fatalf("the first action is %+v", got)
@@ -315,7 +327,7 @@ func TestTheDescriptionAndContributionLinesOfACardAreNamedElements(t *testing.T)
 	}
 	// Caption 10 at the line height 1.45 of drawPlugins, a line box of the whole points of 14.5.
 	const line = 14
-	for index, want := range []string{"db.items 기여 1: 연결됨", "db.items 기여 2: no label"} {
+	for index, want := range []string{"db.items 기여 1: 연결됨", "db.items 기여 2: 오류"} {
 		node := positional(t, tt, "core.library.plugins.contribution", index)
 		if node.Label != want || math.Abs(float64(node.Bounds.H)-line) > 0.01 {
 			t.Errorf("contribution line %d is %q, %v high; want %q, %v high", index, node.Label, node.Bounds.H, want, line)

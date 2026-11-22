@@ -1,53 +1,35 @@
-// The errors of the card status row (docs/spec/plugins.md#tab-reports, docs/spec/example-model.md): the error of a stopped surface and the
-// operation error of the active tab stay on the one line of the row, cut with an ellipsis, and the whole text is the tooltip of the element.
-// jsdom does not compute var(), so the test reads the rules of app.css with the values of workbench.json written in.
+// The errors of the card status row (docs/spec/plugins.md#tab-reports, docs/spec/exposure.md): the error of a stopped surface and the
+// operation error of the active tab show their text in the error toast; the status row keeps only the state label of the surface.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+// The error toast runs the declared command core.error.dismiss, so the page exposure is installed before a toast shows.
+const { installExposure } = await import("../exposure.js");
+const { default: exposureFile } = await import("../exposure.json", { with: { type: "json" } });
+installExposure(exposureFile);
 
-const css = readFileSync(new URL("../app.css", import.meta.url), "utf8");
-const declared = JSON.parse(readFileSync(new URL("../workbench.json", import.meta.url), "utf8"));
 const LONG = "the save of the document failed because the folder is not writable ".repeat(8).trim();
 
-test("an error of the status row stays on one line and is cut with an ellipsis", { timeout: 5000 }, () => {
-  const vars = new Map(Object.entries(declared.chrome).map(([name, value]) => [`--${name}`, value]));
-  const resolved = css.replace(/var\(\s*(--[\w-]+)\s*\)/g, (whole, name) => vars.get(name) ?? whole);
-  const dom = new JSDOM(`<style>${resolved}</style><section class="card"><footer class="status"><span class="surface-status" id="surface"
-    data-surface-status="error" data-error="surface status card-1 tab-a">표면 오류 · ${LONG}</span><span class="status__text">~/project</span>
-    <span class="status__error" id="tab" data-error="tab error tab-a">${LONG}</span></footer></section>`);
-  try {
-    for (const id of ["surface", "tab"]) {
-      const style = dom.window.getComputedStyle(dom.window.document.getElementById(id));
-      const drawn = {
-        display: style.display, whiteSpace: style.whiteSpace, overflow: style.overflow, textOverflow: style.textOverflow,
-        minWidth: style.minWidth, flexShrink: style.flexShrink,
-      };
-      assert.deepEqual(drawn, { display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: "0px", flexShrink: "1" },
-        `the ${id} error of the status row`);
-    }
-  } finally { dom.window.close(); }
-});
-
-test("an error of the status row carries its whole text as its tooltip until it is withdrawn", { timeout: 5000 }, async () => {
+test("an error of the status row shows its text in the toast and the row keeps a state label", { timeout: 5000 }, async () => {
   const dom = new JSDOM(`<section data-card-id="card-1"><footer class="status"></footer></section>`);
   globalThis.document = dom.window.document;
-  const { setSurfaceStatus, setTabError } = await import("../surface-status.js?tooltip");
+  const { setSurfaceStatus, setTabError } = await import("../surface-status.js?toast");
   const status = document.querySelector(".status");
+  const toasts = () => [...document.querySelectorAll(".error-toast__text")].map((shown) => [shown.dataset.error, shown.textContent]);
   try {
     setSurfaceStatus(status, "tab-a", { phase: "error", error: LONG });
     const indicator = status.querySelector("[data-surface-status]");
-    assert.equal(indicator.title, `표면 오류 · ${LONG}`, "the surface error carries its whole text as its tooltip");
+    assert.deepEqual({ text: indicator.textContent, title: indicator.hasAttribute("title"), where: indicator.dataset.error },
+      { text: "표면 오류", title: false, where: undefined }, "the status row holds the state label and no error text");
+    assert.deepEqual(toasts(), [["surface status card-1 tab-a", `표면 오류 · ${LONG}`]], "the surface error shows in the toast");
     setSurfaceStatus(status, "tab-a", { phase: "loading" });
-    assert.equal(indicator.hasAttribute("title"), false, "the loading state carries no tooltip of the error");
+    assert.deepEqual(toasts(), [], "the next state withdraws the surface error");
 
-    setTabError(status, "tab-a", LONG);
-    const line = status.querySelector(".status__error");
-    assert.deepEqual({ text: line.textContent, title: line.title, hidden: line.hidden, where: line.dataset.error },
-      { text: LONG, title: LONG, hidden: false, where: "tab error tab-a" }, "the tab error carries its whole text as its tooltip");
-    setTabError(status, "tab-a", null);
-    assert.deepEqual({ hidden: line.hidden, title: line.hasAttribute("title"), where: line.dataset.error },
-      { hidden: true, title: false, where: undefined }, "a removed tab error carries no tooltip");
+    setTabError("tab-a", LONG);
+    assert.equal(status.textContent.includes(LONG), false, "the status row holds no copy of the tab error");
+    assert.deepEqual(toasts(), [["tab error tab-a", LONG]], "the tab error shows in the toast");
+    setTabError("tab-a", null);
+    assert.deepEqual(toasts(), [], "a removed tab error closes its toast");
   } finally {
     dom.window.close();
     delete globalThis.document;

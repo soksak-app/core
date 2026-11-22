@@ -1184,7 +1184,7 @@ func (s *Shell) debugStyle() DebugStyle {
 		Border: s.palette.BorderWidth, Radius: s.radiusMiddle(), ButtonRadius: s.radiusSmall(), Top: metric("set-card-top"),
 		HeadH: pane.headH, HeadGap: pane.headGap, HeadPadStart: pane.headPadStart, HeadPadEnd: pane.headPadEnd,
 		ShadowY: pane.shadowY, ShadowBlur: pane.shadowBlur, ShadowAlpha: pane.shadowAlpha,
-		PanePadX: metric("dbg-pane-pad-x"), PaneTop: metric("dbg-pane-pad-top"), PaneBottom: metric("dbg-pane-pad-bottom"), ErrorGap: metric("dbg-error-gap"),
+		PanePadX: metric("dbg-pane-pad-x"), PaneTop: metric("dbg-pane-pad-top"), PaneBottom: metric("dbg-pane-pad-bottom"),
 		RowGap: metric("dbg-row-gap"), RowH: metric("dbg-row-h"), ActW: metric("dbg-act-w"), BarGap: metric("dbg-bar-gap"), CaptionGap: pane.captionGap,
 		ActionsGap: metric("set-actions-gap"), ActionsMargin: metric("set-actions-margin"), FieldPadY: metric("field-pad-y"),
 		Space1: metric("space-1"), Space2: metric("space-2"), Space3: metric("space-3"),

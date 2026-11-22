@@ -433,7 +433,10 @@ func TestASectionShowsThatItsViewStopped(t *testing.T) {
 	id := f.sectionOf("left", "fieldprobe.tree").SurfaceID
 	viewCall(t, f, stored, id, "runtime.settings.read", nil)
 	f.shell.Event("view-stopped", []any{map[string]any{"surface": id, "reason": "the view stopped"}})
-	f.settle()
+	// The section keeps a state label and shows the reason in the error toast, which records it once.
+	if got, want := f.shownRecords(), []shownRecord{{"surface " + id, "the view stopped"}}; !slices.Equal(got, want) {
+		t.Fatalf("the records of the stopped section are %q, want %q", got, want)
+	}
 	stopped := f.sectionOf("left", "fieldprobe.tree")
 	if stopped.Mounted || stopped.Phase == nil || *stopped.Phase != "error" || stopped.Error == nil || *stopped.Error != "the view stopped" {
 		t.Fatalf("a section whose view stopped is %+v", stopped)
@@ -460,7 +463,7 @@ func TestTheSurfaceStatusNamesTheErrorOfAStoppedView(t *testing.T) {
 		t.Fatalf("the status of a live view is %v", got)
 	}
 	f.shell.Event("view-stopped", []any{map[string]any{"surface": id, "reason": "the view stopped"}})
-	f.settle()
+	f.shownRecords()
 	if got := statusOf(); !reflect.DeepEqual(got, map[string]any{"phase": "error", "error": "the view stopped"}) {
 		t.Fatalf("the status of a stopped view is %v", got)
 	}

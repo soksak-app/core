@@ -8,6 +8,8 @@ import (
 	"math"
 	"path"
 	"slices"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -185,8 +187,17 @@ func readMetrics(declared *Declarations) (metrics, error) {
 	read("space-tab-h", &m.spaceTabH)
 	read("act-w", &m.actW)
 	read("notice-dot", &m.noticeDot)
-	read("activity-icon-em", &m.activityIconEm)
-	read("activity-gap-em", &m.activityGapEm)
+	// The activity icon and its gap are lengths in em of the text size of their holder, as the page declares them.
+	readEm := func(name string, into *float32) {
+		value := declared.ChromeValue(name)
+		number, err := strconv.ParseFloat(strings.TrimSuffix(value, "em"), 64)
+		if err != nil || !strings.HasSuffix(value, "em") {
+			failed = fmt.Errorf("the chrome metric %s is not a length in em: %s", name, value)
+		}
+		*into = float32(number)
+	}
+	readEm("activity-icon-em", &m.activityIconEm)
+	readEm("activity-gap-em", &m.activityGapEm)
 	read("activity-stroke", &m.activityStroke)
 	read("act-h", &m.actH)
 	read("act-icon", &m.actIcon)

@@ -106,8 +106,10 @@ test("the agent group reads the parts, shows the PATH preference, and runs the s
     await settled();
     const error = "read /Users/person/.claude/skills/soksak/SKILL.md: permission denied";
     const state = document.querySelector('[data-expose="core.settings-modal.setup"] .set-setup__state');
-    assert.deepEqual([state.textContent, state.dataset.error], [error, "setup:skill:/Users/person/.claude/skills/soksak/SKILL.md"],
-      "the error of a part is not drawn through the error display path");
+    assert.equal(state.textContent, "오류", "the row keeps a state label");
+    const toast = document.querySelector(".error-toast__text");
+    assert.deepEqual([toast?.textContent, toast?.dataset.error], [error, "setup:skill:/Users/person/.claude/skills/soksak/SKILL.md"],
+      "the error of a part shows in the error toast");
     assert.ok(control("core.settings-modal.setup-install"), "설치 is not shown for a skill part in error");
 
     // Closing hides the group, and showing it again reads the parts again.

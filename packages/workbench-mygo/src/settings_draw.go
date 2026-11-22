@@ -601,14 +601,15 @@ func (s *Shell) drawSearchControl(c *ui.Context, control *SettingsControl) {
 	})
 }
 
-// drawSetupRow draws the name, state, file and optional action of a setup part. The error of a part uses the error display path.
+// drawSetupRow draws the name, state, file and optional action of a setup part. The error of a part shows in the error toast.
 func (s *Shell) drawSetupRow(c *ui.Context, control *SettingsControl, pane settingsPane) {
 	row := control.setup
 	s.exposedBox(c, control.Name, "", control.item()).FillWidth().Row().MinHeight(pane.rowH).Gap(pane.rowGap).AlignItems(ui.Center).Role(ui.RoleGroup).Label(control.Label).Children(func() {
 		s.drawRowName(c, row.name, pane)
 		ui.Column(c).Grow(1).Basis(0).Gap(pane.captionGap).Children(func() {
+			// A failed part keeps a state label; the error text shows in the error toast.
 			if row.failed {
-				DrawError(c, s.errors, control.item())
+				ui.Text(c, "오류").Wrap().FontSize(s.textControl()).TextColor(s.palette.Muted)
 			} else {
 				ui.Text(c, row.state).Wrap().FontSize(s.textControl()).TextColor(s.palette.Fg)
 			}

@@ -10,6 +10,10 @@ const REASON = "the view failed 4 times within 300 seconds and is created again 
 test("the stop of a view shows its reason on the card and the reopened card clears it", async () => {
   // The case selects the host of the page before the modules that read it are imported, because the page reads the host when it is imported.
   const wire = selectPageWire("view-stopped-display-error");
+  // The error toast runs the declared command core.error.dismiss, so the page exposure is installed before a toast shows.
+  const { installExposure } = await import("../exposure.js");
+  const { default: exposureFile } = await import("../exposure.json", { with: { type: "json" } });
+  installExposure(exposureFile);
   const { viewStopState } = await import("@soksak/plugin-api/view-answer");
   const dom = new JSDOM(`<section data-card-id="card-1"><div data-native-surface-id="probe-surface"></div><footer class="status"></footer></section>`);
   globalThis.document = dom.window.document;
@@ -22,8 +26,10 @@ test("the stop of a view shows its reason on the card and the reopened card clea
     const indicator = status.querySelector("[data-surface-status]");
     assert.equal(status.dataset.surfaceStatus, "error");
     assert.equal(indicator.hidden, false, "the error is visible on the card");
-    assert.match(indicator.textContent, /the view failed 4 times within 300 seconds/);
-    assert.equal(indicator.dataset.error, "surface status card-1 probe-surface", "the error uses the display path of its card");
+    assert.equal(indicator.textContent, "표면 오류", "the indicator keeps a state label");
+    const toast = document.querySelector(".error-toast__text");
+    assert.match(toast.textContent, /the view failed 4 times within 300 seconds/);
+    assert.equal(toast.dataset.error, "surface status card-1 probe-surface", "the error uses the display path of its card");
     // The record leaves in the batch of the page log, which the flush waits for.
     await flushEvents();
     const reports = wire.calls

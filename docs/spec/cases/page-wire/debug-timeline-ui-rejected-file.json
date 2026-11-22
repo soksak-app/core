@@ -78,6 +78,26 @@
       "type": "object",
       "example": {},
       "source": "page"
+    },
+    "place-toast-1": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "update-toast-1": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "update-toast-2": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "place-toast-2": {
+      "type": "object",
+      "example": {},
+      "source": "page"
     }
   },
   "steps": [
@@ -325,22 +345,6 @@
     },
     {
       "call": {
-        "name": "overlayPlace",
-        "payload": "$place-3"
-      }
-    },
-    {
-      "reply": {
-        "result": {
-          "x": 0,
-          "y": 0,
-          "w": 1024,
-          "h": 768
-        }
-      }
-    },
-    {
-      "call": {
         "name": "log",
         "payload": {
           "action": "batch",
@@ -378,6 +382,22 @@
     },
     {
       "call": {
+        "name": "overlayPlace",
+        "payload": "$place-toast-1"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
+      }
+    },
+    {
+      "call": {
         "name": "debugFollow",
         "payload": {
           "following": false
@@ -391,8 +411,30 @@
     },
     {
       "call": {
+        "name": "overlayUpdate",
+        "payload": "$update-toast-1"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": "$update-toast-2"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
         "name": "overlayPlace",
-        "payload": "$place-4"
+        "payload": "$place-toast-2"
       }
     },
     {

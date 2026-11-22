@@ -87,7 +87,8 @@ func TestAFailedStepShowsItsErrorInTheView(t *testing.T) {
 	failure := "list: no folder"
 	view := workbench.DebugView{Failure: &failure}
 	tt := drawDebug(&view, errors, recorder(t, new([]call), screenCommands...))
-	if !tt.HasText(failure) || !slices.Equal(lines, []string{"debug: list: no folder"}) {
+	// The view holds no copy of the failure; the error toast shows it and writes the line.
+	if tt.HasText(failure) || !slices.Equal(lines, []string{"debug: list: no folder"}) {
 		t.Fatalf("texts %q, written %q", tt.Texts(), lines)
 	}
 	view.Failure = nil

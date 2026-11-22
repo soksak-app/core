@@ -110,7 +110,7 @@ type DebugStyle struct {
 	Border, Radius, ButtonRadius, Top                            float32
 	HeadH, HeadGap, HeadPadStart, HeadPadEnd                     float32
 	ShadowY, ShadowBlur, ShadowAlpha                             float32
-	PanePadX, PaneTop, PaneBottom, ErrorGap                      float32
+	PanePadX, PaneTop, PaneBottom                                float32
 	RowGap, RowH, ActW, BarGap, CaptionGap                       float32
 	ActionsGap, ActionsMargin, FieldPadY, Space1, Space2, Space3 float32
 	LineHeight, TextControl, TextSmall                           float32
@@ -201,7 +201,6 @@ func drawDebugPane(c *ui.Context, binder *Binder, view DebugView, shown *ShownEr
 	drawDebugActions(c, binder, view)
 	if view.Failure != nil {
 		shown.Show(debugErrorPlace, *view.Failure, "")
-		ui.Box(c).FillWidth().Margin(0, 0, st.ErrorGap, 0).FontSize(st.TextSmall).Children(func() { DrawError(c, shown, debugErrorPlace) })
 	} else {
 		shown.Hide(debugErrorPlace)
 	}

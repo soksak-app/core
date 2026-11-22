@@ -17,7 +17,7 @@
           "--rule": "#22242f",
           "--rail": "#7279ff",
           "--focus": "#ffb36b",
-          "--no": "#ff7c7c",
+          "--no": "#ff7c7c", "--fail": "#ff7cd3",
           "--r": "10px",
           "--half-gap": "6px",
           "--bw": "1px",

@@ -30,7 +30,6 @@ const debugListing = async () => fixtureEntries === null ? debug.files() : struc
 let scrim = null;
 let card = null;
 let list = null;
-let error = null;
 let view = null;
 let text = null;
 let image = null;
@@ -182,8 +181,8 @@ function draw() {
     view.querySelector(".dbg-card__cut").hidden = !viewing.truncated;
   }
   const problems = [...(failure === null ? [] : [failure]), ...(timeline === null ? [] : rejected.map((text) => `rejected: ${text}`))];
-  if (problems.length === 0) hideError(error, "debug");
-  else showError(error, "debug", problems.join("\n"));
+  if (problems.length === 0) hideError(document, "debug");
+  else showError(document, "debug", problems.join("\n"));
   // A save of the logs folder shows its progress and keeps its button disabled while the host writes.
   const writing = operation?.action === "save-all" && operation.state === "running" && operation.total !== undefined;
   const progress = card.querySelector(".dbg-card__progress");
@@ -348,7 +347,6 @@ function makeCard() {
       '<p class="set-caption">애플리케이션의 모든 진단 파일이다. 결함을 알릴 때 모두 저장한 파일을 함께 보낸다.</p>' +
       '<div class="set-actions"></div>' +
       '<div class="dbg-card__progress" hidden><progress data-expose="core.debug.progress" value="0" max="1"></progress><span class="dbg-card__progress-text"></span></div>' +
-      '<p class="dbg-card__error" hidden></p>' +
       '<div class="dbg-card__list"></div>' +
       '<div class="dbg-card__view" hidden>' +
         '<div class="dbg-card__bar"><span class="dbg-card__path"></span><span class="dbg-card__cut" hidden>앞부분 생략</span></div>' +
@@ -442,7 +440,6 @@ export async function openDebug() {
   scrim.appendChild(card);
   document.body.appendChild(scrim);
   list = card.querySelector(".dbg-card__list");
-  error = card.querySelector(".dbg-card__error");
   view = card.querySelector(".dbg-card__view");
   text = view.querySelector(".dbg-card__text");
   image = view.querySelector(".dbg-card__image");
@@ -502,12 +499,11 @@ export function closeDebug() {
   });
   if (native) overlay.hide(card);
   else standIn(false);
-  hideError(error, "debug");
+  hideError(document, "debug");
   scrim.remove();
   scrim = null;
   card = null;
   list = null;
-  error = null;
   view = null;
   text = null;
   image = null;

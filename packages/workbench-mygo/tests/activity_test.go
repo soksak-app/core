@@ -351,7 +351,8 @@ func declaredChrome(t *testing.T) map[string]float32 {
 	}
 	out := map[string]float32{}
 	for name, text := range declared.Chrome {
-		if value, err := strconv.ParseFloat(strings.TrimSuffix(text, "px"), 32); err == nil {
+		// A length in em is read as its number of the text size, as the activity icon and its gap are declared.
+		if value, err := strconv.ParseFloat(strings.TrimSuffix(strings.TrimSuffix(text, "px"), "em"), 32); err == nil {
 			out[name] = float32(value)
 		}
 	}

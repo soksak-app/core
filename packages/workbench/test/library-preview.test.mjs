@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+// The error toast runs the declared command core.error.dismiss, so the page exposure is installed before a toast shows.
+const { installExposure } = await import("../exposure.js");
+const { default: exposureFile } = await import("../exposure.json", { with: { type: "json" } });
+installExposure(exposureFile);
 
 // The library preview accepts or rejects with the same check that opens a stored layout.
 globalThis.document = new JSDOM("<body></body>").window.document;

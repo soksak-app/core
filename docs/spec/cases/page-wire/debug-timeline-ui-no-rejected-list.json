@@ -58,6 +58,16 @@
       "type": "object",
       "example": {},
       "source": "page"
+    },
+    "update-toast-1": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "place-toast-1": {
+      "type": "object",
+      "example": {},
+      "source": "page"
     }
   },
   "steps": [
@@ -215,8 +225,19 @@
     },
     {
       "call": {
+        "name": "overlayUpdate",
+        "payload": "$update-toast-1"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
         "name": "overlayPlace",
-        "payload": "$place-3"
+        "payload": "$place-toast-1"
       }
     },
     {

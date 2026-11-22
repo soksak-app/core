@@ -2175,68 +2175,40 @@ func TestAFrameThatOpensTheLayoutWithoutAPreparationDoesNotHoldTheNext(t *testin
 	}
 }
 
-// The error of a tab and the error of a stopped view stay on one line inside the status row of their card, cut with an ellipsis, and the
-// whole text is the label of the element and the tooltip that a pointer resting on it shows (docs/spec/plugins.md#tab-reports,
-// docs/spec/example-model.md).
-func TestALongErrorStaysOnOneLineInsideTheStatusRow(t *testing.T) {
+// The error of a tab and the error of a stopped view show their text in the error toast; the status row of their card holds no copy of
+// it (docs/spec/plugins.md#tab-reports, docs/spec/exposure.md).
+func TestTheStatusRowHoldsNoErrorText(t *testing.T) {
 	long := strings.TrimSpace(strings.Repeat("the save of the document failed because the folder is not writable ", 8))
 	t.Run("tab error", func(t *testing.T) {
 		f, stored := surfaceShell(t)
 		surface := terminalSurface(t, stored)
 		viewCallShowing(t, f, stored, surface, "tab.error", long)
-		errorOnOneLine(t, f, long)
+		errorOnlyInToast(t, f, long)
 	})
 	t.Run("surface error", func(t *testing.T) {
 		f, stored := surfaceShell(t)
 		surface := terminalSurface(t, stored)
 		f.shell.Event("view-stopped", []any{map[string]any{"surface": surface, "reason": long}})
 		f.shownRecords()
-		errorOnOneLine(t, f, "표면 오류 · "+long)
+		errorOnlyInToast(t, f, "표면 오류 · "+long)
 	})
 }
 
-// errorOnOneLine requires that the status row of a card holds an element labelled text inside its rectangle and that a pointer resting on
-// that element shows a tooltip with text.
-func errorOnOneLine(t *testing.T, f *shellFixture, text string) {
+// errorOnlyInToast requires that the window shows text and that no status row of a card holds it.
+func errorOnlyInToast(t *testing.T, f *shellFixture, text string) {
 	t.Helper()
-	var row, line *ui.ElementNode
-	var walk func(nodes []ui.ElementNode, inRow bool)
-	walk = func(nodes []ui.ElementNode, inRow bool) {
+	tree := f.tester.ElementTree()
+	if !labelled(tree, text) {
+		t.Fatalf("the window shows no element labelled %q", text)
+	}
+	var walk func(nodes []ui.ElementNode)
+	walk = func(nodes []ui.ElementNode) {
 		for i := range nodes {
-			node := &nodes[i]
-			if node.Label == "core.card.status" && row == nil && labelled(node.Children, text) {
-				row = node
-				walk(node.Children, true)
-				continue
+			if nodes[i].Label == "core.card.status" && labelled(nodes[i].Children, text) {
+				t.Fatalf("the status row %+v holds the error text", nodes[i].Bounds)
 			}
-			if inRow && node.Label == text {
-				line = node
-			}
-			walk(node.Children, inRow)
+			walk(nodes[i].Children)
 		}
 	}
-	walk(f.tester.ElementTree(), false)
-	if row == nil || line == nil {
-		t.Fatalf("no status row holds an element labelled %q", text)
-	}
-	if line.Bounds.Y < row.Bounds.Y || line.Bounds.Y+line.Bounds.H > row.Bounds.Y+row.Bounds.H || line.Bounds.X+line.Bounds.W > row.Bounds.X+row.Bounds.W {
-		t.Fatalf("the error %+v leaves the status row %+v", line.Bounds, row.Bounds)
-	}
-	f.tester.Move(line.Bounds.X+line.Bounds.W/2, line.Bounds.Y+line.Bounds.H/2)
-	f.tester.Advance(2 * time.Second)
-	f.settle()
-	tip := false
-	var find func(nodes []ui.ElementNode)
-	find = func(nodes []ui.ElementNode) {
-		for _, node := range nodes {
-			if node.Role == ui.RoleTooltip && (node.Label == text || labelled(node.Children, text)) {
-				tip = true
-			}
-			find(node.Children)
-		}
-	}
-	find(f.tester.ElementTree())
-	if !tip {
-		t.Fatalf("a pointer resting on the error shows no tooltip with %q", text)
-	}
+	walk(tree)
 }

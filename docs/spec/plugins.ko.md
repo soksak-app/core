@@ -204,7 +204,7 @@ Wails와 Tauri host의 OS 창마다 앱 DOM WebView가 하나 있고, mygo host�
 
 실패한 save는 같은 modified tab의 다음 close 요청에서 save를 선택하는 것을 막지 않는다. Retry는 그 tab에 새 save command를 실행하고 clean 보고 뒤에도 응답이 대기 중이면 tab을 열린 상태로 유지한다. 성공 응답과 clean 상태가 모두 충족되어야 닫으며, 앞서 실패한 시도가 나중에 해당 tab이나 다른 tab을 닫을 수 없다. Retry 시작은 이전 error를 지우지 않는다. 새 error 보고는 이를 교체할 수 있고 표면은 이를 지울 수 있다.
 
-`tab.error(text)`는 표면이 준비된 뒤 실패한 표면 작업(예: 저장)의 오류를 제어 문자 없는 1자부터 1024자까지의 글로 보이고, `tab.error(null)`은 그것을 지운다. 다른 값은 예외를 던진다. 탭이 활성인 동안 카드 상태 행이 오류 표시로 그 글을 보이고, 오류 표시는 글이 나타날 때 애플리케이션 로그에 `error workbench tab error <tab id>: <text>`를 쓴다. `core.grid`는 탭마다 `error`를 글이나 `null`로 보고하고, 이 오류는 layout에 저장하지 않는다. 표면 자체의 실패는 표면 상태가 `error`로 두며, 이는 탭이 닫힐 때까지 남는다.
+`tab.error(text)`는 표면이 준비된 뒤 실패한 표면 작업(예: 저장)의 오류를 제어 문자 없는 1자부터 1024자까지의 글로 보이고, `tab.error(null)`은 그것을 지운다. 다른 값은 예외를 던진다. 그 글은 창의 오류 toast로 보이며([exposure](exposure.md)), 글이 나타날 때 애플리케이션 로그에 `error workbench tab error <tab id>: <text>`를 쓴다. 카드 상태 행은 그 글을 따로 보이지 않는다. `core.grid`는 탭마다 `error`를 글이나 `null`로 보고하고, 이 오류는 layout에 저장하지 않는다. 표면 자체의 실패는 표면 상태가 `error`로 두며, 이는 탭이 닫힐 때까지 남는다.
 
 `tab.title(text)`는 표면의 탭이 이름 대신 보일 제목을 정하고, `tab.title(null)`은 그 제목을 지워 탭이 다시 이름을 보이게 한다. 텍스트는 제어 문자(U+0000–U+001F, U+007F–U+009F)가 없는 1–256자의 문자열이며, 다른 값은 예외를 던진다. 제목은 레이아웃과 함께 저장하지 않는다. `core.grid`는 각 탭이 보이는 제목을 `label`로, 없으면 `null`로 알리고, plugin의 mark 없는 저장된 이름을 `title`로 알린다([card tabs](example-model.md#card-tabs)). plugin이 `surface.unload`를 `{format, maxBytes}`로 선언한 탭이면 워크벤치는 `memorySaver` 설정과 상관없이 마지막 제목을 탭의 `label`로 `tab-state.json`에 둔다. 그래서 마운트되지 않은 탭은 restore 뒤 첫 제목 알림이 그것을 바꿀 때까지 그것을 보인다. `tab.title(null)`은 그것을 지운다([메모리 절약](#메모리-절약)).
 

@@ -182,7 +182,7 @@ export function createLibrary(root, rendered = () => {}) {
     if(foldersFor===roots) return;
     foldersFor=roots;
     // A removed project withdraws its folder error, so the same folder error is written again when the project is added again.
-    for(const root of [...folders.keys()]) if(!all.some(p=>p.root===root)) { folders.delete(root); checks.delete(root); hideError(null, `library project ${root}`); }
+    for(const root of [...folders.keys()]) if(!all.some(p=>p.root===root)) { folders.delete(root); checks.delete(root); hideError(document, `library project ${root}`); }
     for(const project of all) {
       const check=++checkCount;
       checks.set(project.root, check);
@@ -247,8 +247,8 @@ export function createLibrary(root, rendered = () => {}) {
       const line = element('p', 'library-plugin__contribution', `${entry.point} 기여 ${entry.index + 1}: ${CONTRIBUTION_STATES[entry.state]}`);
       line.dataset.state = entry.state; line.dataset.expose = 'core.library.plugins.contribution';
       card.append(line);
-      if (entry.state === 'invalid') showError(line, where, `${entry.point} 기여 ${entry.index + 1}: ${entry.reason}`);
-      else hideError(line, where);
+      if (entry.state === 'invalid') showError(document, where, `${entry.point} 기여 ${entry.index + 1}: ${entry.reason}`);
+      else hideError(document, where);
     }
     if (pluginOperations.hosted) {
       const actions = element('div', 'library-plugin__actions');
@@ -270,11 +270,12 @@ export function createLibrary(root, rendered = () => {}) {
     const operation = status.operation;
     // A plugin operation that succeeds reloads the window, so a done operation shows no line.
     if (operation && operation.plugin === row.id && operation.state !== 'done') {
-      const line = element('p', 'library-plugin__operation', operation.state === 'running' ? `${row.id} ${operation.action} 진행 중` : '');
+      // A failed operation keeps a state label on its card; the error text shows in the error toast.
+      const line = element('p', 'library-plugin__operation', `${row.id} ${operation.action} ${operation.state === 'running' ? '진행 중' : '실패'}`);
       line.dataset.state = operation.state;
       card.append(line);
-      if (operation.state === 'failed') showError(line, `library plugin ${row.id}`, operation.error);
-      else hideError(line, `library plugin ${row.id}`);
+      if (operation.state === 'failed') showError(document, `library plugin ${row.id}`, operation.error);
+      else hideError(document, `library plugin ${row.id}`);
     }
     return card;
   }
@@ -305,8 +306,9 @@ export function createLibrary(root, rendered = () => {}) {
       const line = element('p', 'library-app-update__operation');
       line.dataset.expose = 'core.library.app.operation';
       if (operation.state === 'failed') {
-        line.setAttribute('role', 'alert');
-        showError(line, 'library app update', `${operation.version} 업데이트하지 못했습니다: ${operation.error}`);
+        // The line keeps a state label; the error text shows in the error toast.
+        line.textContent = `${operation.version} 업데이트 실패`;
+        showError(document, 'library app update', `${operation.version} 업데이트하지 못했습니다: ${operation.error}`);
       } else {
         line.textContent = `${operation.version} ${operation.state === 'staging' ? '받는 중' : '적용하는 중'}`;
       }
@@ -326,19 +328,16 @@ export function createLibrary(root, rendered = () => {}) {
       const key = JSON.stringify(failure);
       if (failureLine.key !== key) {
         failureLine.key = key;
-        failureLine.node = element('p', 'library-plugins-error');
-        failureLine.node.dataset.kind = failure.kind; failureLine.node.setAttribute('role', 'alert');
-        showError(failureLine.node, 'library plugins', failure.kind === 'index'
+        showError(document, 'library plugins', failure.kind === 'index'
           ? `레지스트리를 읽지 못했습니다: ${failure.message}` : `플러그인 상태를 읽지 못했습니다: ${failure.message}`);
       }
-      wanted.push(failureLine.node);
     } else {
       failureLine.key = null;
-      hideError(null, 'library plugins');
+      hideError(document, 'library plugins');
     }
     // The plugins that the registry lists in a newer version, with the action that updates all of them.
     const app = appUpdate.status();
-    if (app.operation?.state !== 'failed') hideError(null, 'library app update');
+    if (app.operation?.state !== 'failed') hideError(document, 'library app update');
     if (pluginOperations.hosted && (status.updates.length || app.available)) {
       const key = JSON.stringify([app, status.updates]);
       if (updateList.key !== key) {
@@ -423,12 +422,12 @@ export function createLibrary(root, rendered = () => {}) {
         // The card of a folder that cannot be opened cannot be pressed. The reason is shown on the card, and the remove button deletes the record.
         choose.disabled=true;
         card.dataset.folderError=folder.error;
-        const missing=element('p','library-project__missing');
-        text.append(missing);
-        showError(missing, `library project ${project.root}`, folderReason(folder.error));
+        // The card keeps a state label; the reason shows in the error toast.
+        text.append(element('p','library-project__missing','폴더를 열 수 없음'));
+        showError(document, `library project ${project.root}`, folderReason(folder.error));
       } else if(folder) {
         // A folder whose last known result has no error hides the error. A folder that has no result yet keeps the display as it is.
-        hideError(null, `library project ${project.root}`);
+        hideError(document, `library project ${project.root}`);
       }
       choose.append(text);
       const pin=element('button','act library-project__pin');pin.type='button';pin.dataset.expose='core.library.pin';pin.innerHTML=icon('star');
@@ -481,7 +480,7 @@ export function createLibrary(root, rendered = () => {}) {
       const key=JSON.stringify([project, projects.isOpen(project.id), folder?.error ?? null]);
       const kept=cards.get(project.id);
       if(kept?.key===key) {
-        if(folder&&!folder.error) hideError(null, `library project ${project.root}`);
+        if(folder&&!folder.error) hideError(document, `library project ${project.root}`);
         wanted.push(kept.card);
         continue;
       }

@@ -77,8 +77,11 @@ test("the update list shows the core update first with its release link, its act
     await settled();
     library.render();
     const failed = root.querySelector('[data-expose="core.library.app.operation"]');
-    assert.equal(failed.textContent, "0.0.9 업데이트하지 못했습니다: application update: sha256 differs");
-    assert.equal(failed.getAttribute("role"), "alert");
+    assert.equal(failed.textContent, "0.0.9 업데이트 실패", "the operation line keeps a state label");
+    assert.equal(document.querySelector(".error-toast__text")?.textContent, "0.0.9 업데이트하지 못했습니다: application update: sha256 differs",
+      "the error text shows in the toast");
+    assert.equal(failed.getAttribute("role"), null, "the alert is the toast, not the operation line");
+    assert.equal(document.querySelector(".error-toast__text").closest('[role="alert"]') !== null, true, "the toast announces the error");
     await flushEvents();
     wire.finish();
   } finally {

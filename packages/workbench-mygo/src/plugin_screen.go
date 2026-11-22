@@ -308,13 +308,6 @@ func (l PluginLook) button(c *ui.Context, button ui.Element, label string) ui.El
 	return button
 }
 
-// error draws the shown error of the place where at the size of the page.
-func (l PluginLook) error(c *ui.Context, shown *ShownErrors, where string) {
-	if text, ok := shown.Text(where); ok {
-		l.text(c, text, l.Control, l.No).Wrap().Role(ui.RoleStatus).Label(text)
-	}
-}
-
 // DrawPluginPage draws the plugin page: the reason of a failure, the update list, the outdated services and the cards of the shown plugins in as
 // many columns of the least card width as the page holds, the grid of .library-plugins of packages/workbench/library.css, in the room its
 // scroll container gives it beside a classic bar.
@@ -361,7 +354,6 @@ func drawPluginFailure(c *ui.Context, page PluginPage, shown *ShownErrors, look 
 		text = "레지스트리를 읽지 못했습니다: " + page.Failure.Message
 	}
 	shown.Show(where, text, "")
-	look.error(c, shown, where)
 }
 
 func drawUpdateList(c *ui.Context, binder *Binder, page PluginPage, shown *ShownErrors, look PluginLook) {
@@ -419,7 +411,10 @@ func drawAppOperation(c *ui.Context, binder *Binder, app AppUpdate, shown *Shown
 	if operation.State == "failed" {
 		const where = "library app update"
 		shown.Show(where, operation.Version+" 업데이트하지 못했습니다: "+operation.Error, "")
-		ui.Box(binder.Name(c, name, "")).Role(ui.RoleGroup).Children(func() { look.error(c, shown, where) })
+		// The line keeps a state label; the error text shows in the error toast.
+		ui.Box(binder.Name(c, name, "")).Role(ui.RoleGroup).Children(func() {
+			look.text(c, operation.Version+" 업데이트 실패", look.Caption, look.Muted)
+		})
 		return
 	}
 	step := "적용하는 중"
@@ -470,7 +465,6 @@ func drawPluginCard(c *ui.Context, binder *Binder, page PluginPage, row PluginRo
 		}
 		if _, err := hasUpdate(row); err != nil {
 			shown.Show(where+" version", err.Error(), "")
-			look.error(c, shown, where+" version")
 		} else {
 			shown.Hide(where + " version")
 		}
@@ -495,12 +489,9 @@ func drawPluginContributions(c *ui.Context, binder *Binder, page PluginPage, row
 		line := binder.Name(c, "core.library.plugins.contribution", fmt.Sprintf("%s/%s/%d", row.ID, entry.Point, number))
 		if entry.State == "invalid" {
 			shown.Show(where, fmt.Sprintf("%s 기여 %d: %s", entry.Point, number, entry.Reason), "")
-			if text, ok := shown.Text(where); ok {
-				look.text(line, text, look.Caption, look.No).Wrap().Role(ui.RoleStatus).Label(text)
-			}
-			continue
+		} else {
+			shown.Hide(where)
 		}
-		shown.Hide(where)
 		look.text(line, fmt.Sprintf("%s 기여 %d: %s", entry.Point, number, contributionStates[entry.State]), look.Caption, look.Fg).Wrap()
 	}
 }
@@ -542,7 +533,8 @@ func drawCardOperation(c *ui.Context, page PluginPage, row PluginRow, shown *Sho
 	case "running":
 		look.text(c, row.ID+" "+operation.Action+" 진행 중", look.Caption, look.Muted)
 	case "failed":
+		// The card keeps a state label; the error text shows in the error toast.
 		shown.Show(where, operation.Error, "")
-		look.error(c, shown, where)
+		look.text(c, row.ID+" "+operation.Action+" 실패", look.Caption, look.Muted)
 	}
 }

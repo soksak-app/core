@@ -196,9 +196,10 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [o] F1033-2 — 오류 저장과 toast 표시를 재사용 가능한 page와 native component에 통합한다. Workbench와 library가 component를 사용한다. 초기 시작, 독립 출처, 닫기, 복구와 library 창 경계의 owner test가 통과한다.
   - [ ] F1033-3 — Floating toast 검증 뒤 애플리케이션 오류 연결을 이어 간다.
     - [o] F1033-3.1 — Toast component를 활성 settings와 debug modal의 focus 범위에 둔다. Native와 page test가 닫기 control 하나, modal 안의 닫기, workbench 복귀를 판정한다.
-    - [ ] F1033-3.2 — Library, card, sidebar와 plugin surface 실패를 component로 보내고 복구 동작을 유지한다.
-    - [ ] F1033-3.3 — Settings와 debug 동작 실패를 component로 보내고 남은 직접 표시 경로를 제거한다.
+    - [o] F1033-3.2 — Library, card, sidebar와 plugin surface 실패를 component로 보내고 복구 동작을 유지한다.
+    - [o] F1033-3.3 — Settings와 debug 동작 실패를 component로 보내고 남은 직접 표시 경로를 제거한다.
   - [ ] F1033-4 — 각 host와 plugin surface의 전송 경로를 통해 오류 표시를 검증한다.
+  - [ ] F1033-8 — 같은 overlay의 직전 update와 payload가 같은 overlay update는 보내지 않는다. 그래서 열린 dialog의 toast가 바뀌고 view가 다시 그릴 때 update는 두 번이 아니라 한 번 나간다.
   - [o] F1033-5 — P0, F1033-2 후속. 작은 floating toast가 workbench와 library의 경계를 유지한다. Page와 native 만료 test가 통과하고 실행한 mygo 창에서 toast가 나타났다가 만료된다.
   - [o] F1033-6 — P0, F1033-5 후속. 전역 설정에 자동 닫기 switch와 편집 가능한 초를 저장한다. 기본값은 직접 닫기와 5초다. 완료: 전역 설정 `autoDismissErrorToasts`(switch, 기본 꺼짐)와 `errorToastDismissSeconds`(1부터 2147483까지의 정수, 기본 5)가 자동 닫기를 저장한다. switch가 꺼져 있으면 toast는 자기 ×로만 닫고, 설정 변경이 열린 toast의 시한을 다시 맞춘다(page와 mygo 모두). 설정 modal이 두 workbench에서 switch와 숫자 칸을 그리고, chrome 선언의 고정 toast 시간은 지웠다. Red: 설정을 선언하기 전에 두 workbench의 settings store, settings modal, toast test가 실패했다. Green: 두 workbench의 toast, 설정, 선언 test가 통과한다.
   - [o] F1033-7 — P0, F1033-6 후속. mygo workbench가 저장된 자동 닫기를 시작할 때와 다른 창의 설정 변경에서 적용하고, 두 workbench가 설정 값을 강제 변환하지 않고 읽는다. Red: `autoDismissErrorToasts`를 켠 채 시작한 mygo 창이 저장된 초가 지나도 toast를 유지했다. Green: mygo의 toast와 설정 test, page의 toast와 설정 test가 통과한다. Page test는 전역 설정으로 자동 닫기를 바꾸고, modal wire case는 그 변경의 theme와 menu language 호출을 기록한다.

@@ -24,7 +24,7 @@ import { matchPlugins } from "./plugin-search.js";
 import { restoreScroll, scrollPositions } from "./scroll-keep.js";
 import { setupParts } from "./setup-exposure.js";
 import { missingKinds } from "./setup-parts.js";
-import { errorToasts, showError } from "./shown-errors.js";
+import { errorToasts, hideError, showError } from "./shown-errors.js";
 import { hasSection, section, sectionNames } from "./registry.js";
 import {
   CHOICES, ERROR_TOAST_DISMISS_SECONDS, FONTS, LAYOUT_RANGES, MEMORY_SAVER_DELAY, MENU_LANGUAGES, SHAPE_RANGES, THEMES, debugOn, scopedValue, settingProject, settingProjectRoot, overridden, sourceScope,
@@ -374,8 +374,12 @@ function setupGroup() {
     about.className = "set-setup";
     const state = document.createElement("span");
     state.className = "set-setup__state";
-    if (part.state === "error") showError(state, `setup:${part.part}:${part.file}`, part.error);
-    else state.textContent = part.enabled === false ? "사용 안 함" : SETUP_STATES[part.state === "ok" ? "ok" : part.reason];
+    // A failed setup part keeps a state label; the error text shows in the error toast.
+    if (part.state === "error") {
+      state.textContent = "오류";
+      showError(document, `setup:${part.part}:${part.file}`, part.error);
+    } else hideError(document, `setup:${part.part}:${part.file}`);
+    if (part.state !== "error") state.textContent = part.enabled === false ? "사용 안 함" : SETUP_STATES[part.state === "ok" ? "ok" : part.reason];
     const file = document.createElement("span");
     file.className = "set-caption";
     file.textContent = part.file;

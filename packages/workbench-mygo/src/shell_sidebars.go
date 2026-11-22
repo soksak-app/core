@@ -30,7 +30,6 @@ func (s *Shell) drawSidebarCard(c *ui.Context, id string, rect layout.Rect, inse
 	frame, err := s.sidebars.Frame(id, s.opened().ActiveSpaceID, s.focusedSurface())
 	if err != nil {
 		s.errors.Show(id, err.Error(), "")
-		DrawError(c, s.errors, id)
 		return
 	}
 	frame.Scope = s.settings.Source(id)

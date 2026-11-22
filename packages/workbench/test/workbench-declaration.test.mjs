@@ -131,7 +131,7 @@ test("every chrome metric is a CSS value that a stylesheet or a module of the wo
     assert.ok(!declaredHere.has(`--${name}`), `a stylesheet declares the chrome metric ${name} again`);
   }
   // The other custom properties that the stylesheets read: the theme tokens of the settings, the values of the page and the ones the stylesheets declare.
-  const themeTokens = ["--bg", "--card", "--fg", "--muted", "--edge", "--rule", "--rail", "--focus", "--no", "--r", "--half-gap", "--bw", "--font", "--size"];
+  const themeTokens = ["--bg", "--card", "--fg", "--muted", "--edge", "--rule", "--rail", "--focus", "--no", "--fail", "--r", "--half-gap", "--bw", "--font", "--size"];
   const page = ["--controls-w", "--pl", "--pr", "--pt", "--pb", "--depth", "--text-zoom", "--section-height",
     "--preview-ink", "--font-mono", "--project-color", "--group-focus"];
   const unknown = [...new Set([...sheets.matchAll(/var\(\s*(--[\w-]+)/g)].map((match) => match[1]))]

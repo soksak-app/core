@@ -24,9 +24,7 @@ export function preview(project) {
   } catch (error) {
     const text=`projects.json: project ${project.root} space ${project.activeSpaceId}: ${error.message}`;
     el.dataset.previewError=text;
-    const reason=part('p','library-preview__error');
-    el.append(reason);
-    showError(reason, `library preview ${project.id}`, text);
+    showError(document, `library preview ${project.id}`, text);
     return el;
   }
   // The layout library places the cards of the stored tree between its lines; the preview keeps the order of the lines and decides the

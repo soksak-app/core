@@ -340,8 +340,9 @@ func (s *Shell) drawSeat(c *ui.Context, tab layout.Tab, box layout.Rect) {
 	if s.surfaces.detaching[tab.ID] {
 		return
 	}
-	if reason, stopped := s.surfaces.stopped(tab.ID); stopped {
-		ui.Text(c, reason).FontSize(s.textBody()).TextColor(s.palette.No)
+	// A stopped surface keeps a state label; the status row of its card shows the reason in the error toast.
+	if _, stopped := s.surfaces.stopped(tab.ID); stopped {
+		ui.Text(c, "열 수 없음").FontSize(s.textBody()).TextColor(s.palette.Muted)
 		return
 	}
 	s.standSurface(c, &heldSurface{tab: tab, composition: unit.Composition, box: box}, box)
@@ -353,7 +354,8 @@ func (s *Shell) drawSectionSeat(c *ui.Context, seat SidebarSeat) {
 	s.surfaces.seated[seat.SurfaceID] = seat
 	if reason, stopped := s.surfaces.failed[seat.SurfaceID]; stopped {
 		if seat.Visible {
-			ui.Text(c, reason).FontSize(s.textBody()).TextColor(s.palette.No)
+			s.errors.Show("surface "+seat.SurfaceID, reason, "")
+			ui.Text(c, "열 수 없음").FontSize(s.textBody()).TextColor(s.palette.Muted)
 		}
 		return
 	}

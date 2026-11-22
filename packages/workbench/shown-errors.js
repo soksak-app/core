@@ -1,34 +1,24 @@
 // The only path that shows an error to the user. The next drawing or reload erases the error display on the screen, so the record written to the application
 // log at the moment it is shown is the trace of that error (AGENTS.md, docs/spec/hosts.md#application-log). The error color is used only for the
-// `data-error` element that this path attaches. Drawing the same error again at the same place does not write it again.
+// text of the toasts of this component. Drawing the same error again at the same place does not write it again.
 import { report } from "./host.js";
 import { onSettingsChange, value as settingsValue } from "./settings.js";
 import { delegate, mark } from "./commands.js";
 import { CHROME } from "./chrome-metrics.js";
 
-const shown = new Map();
-
 /**
- * Shows the error text of the place where on the element element, and writes `error: <where>: <text><detail>` only when the error of that place changed.
- * detail is a detail (the location or stack of the error) that is not shown on the screen and is kept only in the log.
+ * Shows the error text of the place where as a toast of the error toast component of document, and writes
+ * `error: <where>: <text><detail>` only when the error of that place changed. The control whose operation failed keeps its
+ * label and its recovery actions (docs/spec/exposure.md). detail is a detail (the location or stack of the error) that is not
+ * shown on the screen and is kept only in the log.
  */
-export function showError(element, where, text, detail = "") {
-  drawError(element, where, text);
-  if (shown.get(where) === text) return;
-  shown.set(where, text);
-  report(`${where}: ${text}${detail}`);
+export function showError(document, where, text, detail = "") {
+  errorToasts(document).show(text, detail, where, where);
 }
 
-/** Withdraws the error display of the place where. A place that is not drawn, with no element, can be withdrawn too. If the same error is shown next time, it is written again. */
-export function hideError(element, where) {
-  if (element) delete element.dataset.error;
-  shown.delete(where);
-}
-
-function drawError(element, where, text) {
-  element.textContent = text;
-  element.dataset.error = where;
-  element.hidden = false;
+/** Withdraws the error of the place where; its toast closes when no other place holds the same text. If the same error is shown next time, it is written again. A document without the component shows no toast, so the withdrawal creates none. */
+export function hideError(document, where) {
+  documents.get(document)?.withdraw(where);
 }
 
 const documents = new WeakMap();
@@ -189,7 +179,8 @@ function toast(document, text, where, id) {
   toast.dataset.text = text;
   const shown = document.createElement("span");
   shown.className = "error-toast__text";
-  drawError(shown, where, text);
+  shown.textContent = text;
+  shown.dataset.error = where;
   const close = document.createElement("button");
   close.type = "button";
   close.className = "error-toast__close";

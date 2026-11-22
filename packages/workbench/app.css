@@ -331,7 +331,7 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 /* The icon of an activity before the name of a tab, a group header, a space tab or a project tab (docs/spec/activity.md#drawing).
    The icon and its gap to the name are shares of the text size of the name, the same in every holder: the icon takes the text
    size of its holder, and its margin adds to the gap of the holder what the share needs. No activity uses the error color. */
-.activity{display:inline-grid;flex:0 0 auto;font-size:var(--activity-text);width:calc(var(--activity-icon-em) * 1em);height:calc(var(--activity-icon-em) * 1em);margin-right:calc(var(--activity-gap-em) * 1em - var(--activity-holder-gap))}
+.activity{display:inline-grid;flex:0 0 auto;font-size:var(--activity-text);width:var(--activity-icon-em);height:var(--activity-icon-em);margin-right:calc(var(--activity-gap-em) - var(--activity-holder-gap))}
 .tab .activity{--activity-text:var(--text-small);--activity-holder-gap:var(--tab-gap)}
 .group__head .activity{--activity-text:var(--text-small);--activity-holder-gap:var(--card-head-gap)}
 .group__head .activity + .group__name{padding-left:0}
@@ -432,7 +432,7 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .status__text{min-width:0;overflow:hidden;text-overflow:ellipsis}
 /* The state of the surface and the error of the tab shrink with the row and cut their text with an ellipsis, so an error stays on the
    one line of the row; the whole text is the tooltip of the element. An ellipsis needs a block container, so the spinner is an inline block. */
-.surface-status,.status__error{display:block;flex:0 1 auto;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.surface-status{display:block;flex:0 1 auto;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .surface-status{margin-right:var(--surface-status-margin);color:var(--muted)}
 .surface-status::before{content:"";display:inline-block;vertical-align:middle;margin-right:var(--surface-status-gap);
   width:var(--spinner);height:var(--spinner);border:var(--spinner-border) solid currentColor;border-top-color:transparent;
@@ -572,7 +572,6 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 /* The pane has no padding above, so the sticky bar of a shown file stays at its top edge. */
 .dbg-card__pane{flex:1 1 auto;min-height:0;padding:0 var(--dbg-pane-pad-x) var(--dbg-pane-pad-bottom);overflow:auto}
 .dbg-card__pane > :first-child{margin-top:var(--dbg-pane-pad-top)}
-.dbg-card__error{margin:0 0 var(--dbg-error-gap);font-size:var(--text-small);white-space:pre-line}
 .dbg-row{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:var(--dbg-row-gap);min-height:var(--dbg-row-h)}
 .dbg-row__path{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--text-control);color:var(--fg)}
 .dbg-row__acts{display:grid;grid-template-columns:repeat(3,var(--dbg-act-w));gap:var(--space-2)}
