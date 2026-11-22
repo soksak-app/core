@@ -421,6 +421,7 @@ func (s *Shell) register() {
 		}
 		return s.selectTab(value.Tab)
 	})
+	s.registerTabReload()
 	command(s, "core.tab.close", func(value tabParam) (any, error) {
 		if err := s.requirePlane(); err != nil {
 			return nil, err

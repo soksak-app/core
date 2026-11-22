@@ -148,6 +148,20 @@ func (h *Host) SurfaceFocus(ctx context.Context, reqJSON json.RawMessage) error 
 	return s.FocusSurface(req)
 }
 
+// ViewReload restarts the view of the tab named by the request, which the core.tab.reload command sends
+// (docs/spec/native-surfaces.md#view-surfaces).
+func (h *Host) ViewReload(ctx context.Context, reqJSON json.RawMessage) error {
+	req, err := argument[ViewReloadRequest]("request", reqJSON)
+	if err != nil {
+		return err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	return s.ReloadView(req.Surface)
+}
+
 // CancelSurfaces ends a preparation that the page does not present, so the windows that wait for its transaction continue.
 func (h *Host) CancelSurfaces(ctx context.Context, reqJSON json.RawMessage) error {
 	req, err := argument[CancelRequest]("request", reqJSON)

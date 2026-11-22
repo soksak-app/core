@@ -149,6 +149,9 @@ func (h *surfaceHost) keyboardTarget() (*string, bool) {
 
 func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 	table := h.table()
+	for name, call := range h.extra {
+		table[name] = call
+	}
 	table["syncSurfaces"] = func(_ context.Context, argument json.RawMessage) (any, error) {
 		if h.syncFailure != nil {
 			return nil, h.syncFailure

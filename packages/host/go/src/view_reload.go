@@ -5,6 +5,11 @@ import (
 	"time"
 )
 
+// ViewReloadRequest names the tab whose view restarts.
+type ViewReloadRequest struct {
+	Surface string `json:"surface"`
+}
+
 // ReloadView restarts the view of the tab surface: the host ends the current view, clears its restart stop, and creates the view again
 // from its record (core.tab.reload, docs/spec/native-surfaces.md#view-surfaces). A reload counts no failure. It runs on the UI thread.
 func (s *Surfaces) ReloadView(surface string) error {

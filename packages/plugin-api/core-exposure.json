@@ -156,6 +156,7 @@
     "core.tab.close",
     "core.tab.move",
     "core.tab.unload",
+    "core.tab.reload",
     "core.tab.keep",
     "core.tab.menu",
     "core.picker.pick",
