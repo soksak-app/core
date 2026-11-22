@@ -89,6 +89,9 @@ func TestTheFailedSurfaceShowsAReloadControlThatRunsTheCommand(t *testing.T) {
 	f.shell.Event("view-stopped", []any{map[string]any{"surface": id, "plugin": "textprobe", "reason": "the view failed"}})
 	f.pending.drain(t)
 	f.tester.Frame()
+	if _, ok := exposedNode(f.tester.ElementTree(), "core.tab.reload", ""); !ok {
+		t.Fatal("the failed surface exposes no core.tab.reload element")
+	}
 	if err := f.tester.Click("다시 불러오기"); err != nil {
 		t.Fatalf("the failed surface has no reload control: %v", err)
 	}
