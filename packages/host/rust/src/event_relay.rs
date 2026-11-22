@@ -393,6 +393,30 @@ pub fn view_log_command(
                             "events[{index}]: plugin event {event:?} cannot set its owning surface"
                         ));
                     }
+                } else if event == "page.theme.applied" {
+                    // The record names the scheme that the view applied and its source; the host adds the surface of the view.
+                    if fields
+                        .get("scheme")
+                        .and_then(Value::as_str)
+                        .filter(|scheme| !scheme.is_empty())
+                        .is_none()
+                    {
+                        return Err(format!(
+                            "events[{index}]: page.theme.applied scheme must be non-empty text"
+                        ));
+                    }
+                    let source = fields.get("source").and_then(Value::as_str);
+                    if !matches!(source, Some("start" | "host")) {
+                        return Err(format!(
+                            "events[{index}]: page.theme.applied source must be start or host, not {}",
+                            fields.get("source").cloned().unwrap_or(Value::Null) // default: an absent source is named null in the refusal.
+                        ));
+                    }
+                    if fields.contains_key("surface") {
+                        return Err(format!(
+                            "events[{index}]: page.theme.applied cannot set its owning surface"
+                        ));
+                    }
                 } else if matches!(event, "page.start" | "page.log.clock" | "page.log.dropped") {
                     if event == "page.start" {
                         let started = fields
@@ -428,7 +452,9 @@ pub fn view_log_command(
                 .expect("validated events array")
             {
                 let event = item["event"].as_str().expect("validated event name");
-                if event.len() > plugin_prefix.len() && event.starts_with(&plugin_prefix) {
+                if event == "page.theme.applied" {
+                    item["fields"]["surface"] = Value::String(surface.to_string());
+                } else if event.len() > plugin_prefix.len() && event.starts_with(&plugin_prefix) {
                     item["fields"]["surface"] = Value::String(surface.to_string());
                     let (fields, produced) =
                         bounded_serialize(&item["fields"], 65_536).map_err(|error| {

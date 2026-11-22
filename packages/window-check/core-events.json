@@ -2700,6 +2700,32 @@
       },
       "description": "The number of events of the class and the level that the gate of the workbench refused since the earlier report."
     },
+    "page.theme.applied": {
+      "layer": "page",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "scheme": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "start",
+              "host"
+            ]
+          }
+        },
+        "required": [
+          "scheme",
+          "source"
+        ]
+      },
+      "description": "A view applied a theme to the root of its document: the theme of its start script (start) or a theme message of the host (host); scheme is the scheme of that theme, and the host adds the surface of the view, so a query names each view whose scheme differs from the scheme of its window."
+    },
     "page.start": {
       "layer": "page",
       "class": "lifecycle",
@@ -4495,6 +4521,28 @@
         ]
       },
       "description": "A page of the window started, before the host ends the views of the earlier page with the caller documents-reloaded. cause is host.window.reload when the host started the workbench of a page that was not ready, and page when the page started by itself: its own reload, whose workbench.page.reload names the cause, the first start, or a start of WebKit; views is the number of surfaces of the window that the start ends."
+    },
+    "host.view.theme.deferred": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "surface": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "surface",
+          "reason"
+        ]
+      },
+      "description": "The host did not post a changed theme to the view of surface, because the view has no ready document; its ready message receives the current theme, so the view loses no theme."
     },
     "host.view.killed": {
       "layer": "host",

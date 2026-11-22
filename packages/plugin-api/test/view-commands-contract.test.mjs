@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { JSDOM } from "jsdom";
 import { createViewBridge } from "../view.js";
+import { createLogHost } from "./support/log-host.mjs";
 
 const CONTRACT = JSON.parse(readFileSync(new URL("../contract/view-commands.json", import.meta.url), "utf8"));
 const EXPECTED_IDS = [
@@ -38,12 +39,17 @@ async function runCase(testCase) {
     // The host gives every view the start theme script (docs/spec/native-surfaces.md#view-surfaces).
     dom.window.sokTheme = { scheme: "dark", tokens: {} };
     dom.window.eval(readFileSync(new URL("../view-start.js", import.meta.url), "utf8"));
-    const bridge = createViewBridge({
-      handler: { postMessage: (message) => posted.push(structuredClone(message)) },
-      report: () => {},
-    });
     // A host message is a window message event whose source is the window.
     const host = (data) => dom.window.dispatchEvent(new dom.window.MessageEvent("message", { data, source: dom.window }));
+    // The host answers the runtime.log calls of the view as the real host does, and the posted calls of a step leave them out.
+    const log = createLogHost();
+    const bridge = createViewBridge({
+      handler: { postMessage: (message) => {
+        if (log.answer(message, host)) return;
+        posted.push(structuredClone(message));
+      } },
+      report: () => {},
+    });
     posted.splice(0);
     const outputs = [];
     for (const step of testCase.steps) {
@@ -76,9 +82,21 @@ test("view command contract publishes the required cases in order", () => {
   assert.deepEqual(CONTRACT.cases.map(({ id }) => id), EXPECTED_IDS);
 });
 
+// The view numbers its calls with one counter that its runtime.log calls share, so the id of a posted call is read from the call: each
+// expected call takes the id of the actual call at its place when that id is a positive integer, and every other field is compared.
+function withPostedIds(expected, actual) {
+  return expected.map((output, step) => ({
+    ...output,
+    posted: output.posted.map((message, index) => {
+      const id = actual[step]?.posted[index]?.id;
+      return "command" in message && "id" in message && Number.isInteger(id) && id > 0 ? { ...message, id } : message;
+    }),
+  }));
+}
+
 for (const testCase of CONTRACT.cases) {
   test(`view command ${testCase.id} matches each ordered step`, async () => {
     const actual = await runCase(testCase);
-    assert.deepEqual(actual, testCase.steps.map(({ output }) => output));
+    assert.deepEqual(actual, withPostedIds(testCase.steps.map(({ output }) => output), actual));
   });
 }

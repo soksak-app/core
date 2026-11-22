@@ -15,3 +15,20 @@ fn the_theme_script_freezes_the_theme_value_for_the_first_page_script() {
         "the script sets the frozen theme value"
     );
 }
+
+// contract: view.theme.deferred-is-recorded
+// A theme change that finds a view without a ready document is not posted to it, because its ready message receives the current
+// theme, and the host records the skip with the surface and that reason.
+#[test]
+fn a_theme_change_before_the_view_is_ready_is_recorded_with_its_reason() {
+    super::record_theme_deferred("theme-deferred-probe");
+    let stored: Vec<serde_json::Value> =
+        crate::event_record::buffered_fields("host.view.theme.deferred")
+            .into_iter()
+            .filter(|fields| fields["surface"] == "theme-deferred-probe")
+            .collect();
+    assert_eq!(
+        stored,
+        vec![json!({"surface": "theme-deferred-probe", "reason": super::THEME_DEFERRED_REASON})]
+    );
+}

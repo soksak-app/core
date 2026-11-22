@@ -305,6 +305,7 @@ fn invalid_json_closes_connection() {
 | `surface-layout.presentation-failure-stops-before-commit` | application DOM presentation 실패 시 raster 작업을 건너뛰며 DOM 또는 raster 오류를 성공한 native commit 없이 반환한다. | all |
 | `view.call.peer-lost` | view가 `sok-view`로 보내고 workbench가 답하지 않은 call 요청은 view process가 끝날 때까지 열려 있다. process 종료는 그것을 process-ended 이유로 끝내고 `host.call.peer-lost {plugin, command, reason}`을 쓴다. 종료 전에 workbench가 답한 call은 아무것도 쓰지 않는다. | all |
 | `view.theme.first-script` | host가 만든 view는 page를 불러오기 전에 생성 시점의 테마 `{scheme, tokens}`를 동결해 `window.sokTheme`에 넣는 document-start script를 가진다. 그래서 page의 첫 script가 토큰을 읽으며, 나중의 테마 변경은 post 경로로 보낸다. | all |
+| `view.theme.deferred-is-recorded` | ready 문서가 없는 view에 보내지 않은 테마 변경은 surface와 이유(ready message가 현재 테마를 받는다)와 함께 `host.view.theme.deferred`로 기록되고, 이어진 ready message가 현재 테마를 받는다. | all |
 | `view.start-values.first-script` | host가 만든 view는 page를 불러오기 전에 페이지가 준비로 그 surface에 선언한 동결된 시작 값 `{surface, params, origin, project, declarations, diagnostics, section, levels}`를 `window.sokSurface`에 넣는 document-start script를 가진다. 그래서 page의 첫 script가 이를 읽는다. surface가 가지지 않은 값은 `null`이되, `origin`은 연 탭이 directory를 기록하지 않았을 때 `{directory: null}`이고, 형식이 맞지 않는 값은 준비와 함께 거부되며, 다른 구성의 surface는 이 값을 담지 않고, host는 view를 다시 만들 때 surface의 기록에서 이 값을 다시 주입한다. | all |
 | `view.start-values.levels` | 시작 값 `levels`는 host가 view를 만들 때 host writer의 gate에서 각 event class의 저장 level인 `{<class>: <level>}`이다. 아무 level도 저장하지 않는 class는 `off`이고, writer가 host를 gate하지 않는 동안 모든 class는 `trace`다. 페이지는 `levels`를 보내지 않는다. | all |
 | `view.start-values.declaration-table` | Surface synchronization request는 request-local declaration table을 요구하고 기존 검사나 surface 변경 전에 각 view start index를 완전한 declaration object로 해석한다. 누락된 table, 잘못된 entry, 누락되거나 잘못된 index, 사용하지 않는 entry와 이전 중첩 wire 형식은 거부한다. View별 context 차이와 request별 변경을 보존한다. | all |
@@ -1528,6 +1529,7 @@ fn invalid_json_closes_connection() {
 | `log.batch.stores-clock-and-cids-of-workbench-events` | `log` 중계는 workbench가 준 `ts_us`, `mono_ns`와, event에 있으면 `cids`를 저장하고, `cids`가 없는 event에는 `cids`가 없다. | all |
 | `log.batch.answers-the-clock-request` | `log` 중계는 `{action: "clock"}`에 host가 호출 시점에 읽은 `ts_us`와 `mono_ns`로 답하고 event를 저장하지 않는다. 두 번째 답은 어느 clock에서도 첫 번째 답보다 작지 않다. | all |
 | `log.view-batch.binds-ready-page-and-native-surface` | view batch는 해당 view의 ready page에 대해서만 허용된다. host는 native plugin과 surface를 묶고 결과 기록에 page와 주입한 surface를 저장한다. | all |
+| `log.view-batch.theme-record-carries-the-view-surface` | view batch의 `page.theme.applied`는 host가 더한 view의 surface와 함께 저장되고, surface를 적거나 `start`, `host` 아닌 source를 적은 기록은 거부된다. | all |
 | `log.view-batch.rejects-foreign-source-without-partial-write` | 다른 page의 event가 포함된 batch는 전체를 거부하며 그보다 앞선 유효 event도 쓰지 않는다. | all |
 | `log.view-batch-requires-page-start-to-match-ready-origin` | view batch의 `page.start`는 ready page identity와 같은 `time_origin`을 가져야 한다. 다르면 전체 batch를 쓰지 않고 거부한다. | all |
 | `log.view-batch-requires-a-nonempty-page-start-url` | view batch의 `page.start`에는 비어 있지 않은 URL이 필요하며, 빈 URL이면 전체 batch를 쓰지 않고 거부한다. | all |

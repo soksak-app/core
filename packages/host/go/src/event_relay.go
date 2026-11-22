@@ -496,6 +496,17 @@ func validateViewLogBatch(plugin, surface, page string, timeOrigin float64, requ
 				return fmt.Errorf("events[%d]: page.start url must be non-empty text", index)
 			}
 		case "page.log.clock", "page.log.dropped":
+		case "page.theme.applied":
+			// The record names the scheme that the view applied and its source; the host adds the surface of the view.
+			if scheme, ok := fields["scheme"].(string); !ok || scheme == "" {
+				return fmt.Errorf("events[%d]: page.theme.applied scheme must be non-empty text", index)
+			}
+			if source := fields["source"]; source != "start" && source != "host" {
+				return fmt.Errorf("events[%d]: page.theme.applied source must be start or host, not %s", index, jsonTextOf(source))
+			}
+			if _, present := fields["surface"]; present {
+				return fmt.Errorf("events[%d]: page.theme.applied cannot set its owning surface", index)
+			}
 		default:
 			prefix := "plugin." + plugin + "."
 			if !strings.HasPrefix(name, prefix) || len(name) == len(prefix) {
@@ -524,7 +535,13 @@ func withViewSurface(request map[string]any, plugin, surface string) (map[string
 		}
 		name := event["event"].(string)
 		prefix := "plugin." + plugin + "."
-		if strings.HasPrefix(name, prefix) && len(name) > len(prefix) {
+		if name == "page.theme.applied" {
+			copyFields := map[string]any{"surface": surface}
+			for key, value := range event["fields"].(map[string]any) {
+				copyFields[key] = value
+			}
+			copyEvent["fields"] = copyFields
+		} else if strings.HasPrefix(name, prefix) && len(name) > len(prefix) {
 			fields := event["fields"].(map[string]any)
 			copyFields := make(map[string]any, len(fields)+1)
 			for key, value := range fields {

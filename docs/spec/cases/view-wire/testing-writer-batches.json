@@ -19,6 +19,11 @@
       "type": "array",
       "example": [],
       "source": "page"
+    },
+    "later-events": {
+      "type": "array",
+      "example": [],
+      "source": "page"
     }
   },
   "steps": [
@@ -43,6 +48,8 @@
     {"call":{"command":"runtime.log","params":{"action":"clock"}}},
     {"reply":{"result":{"ts_us":"$ts-us","mono_ns":"$mono-ns"}}},
     {"call":{"command":"runtime.log","params":{"action":"batch","events":"$events"}}},
+    {"reply":{"result":null}},
+    {"call":{"command":"runtime.log","params":{"action":"batch","events":"$later-events"}}},
     {"reply":{"result":null}}
   ]
 }

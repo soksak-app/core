@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { createViewBridge, createViewChannel } from "../view.js";
+import { createLogHost } from "./support/log-host.mjs";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const QUEUE_LIMIT = 256;
@@ -13,6 +14,22 @@ const QUEUE_LIMIT = 256;
 // The injected script runs in the realm of the window, so its objects carry other prototypes; the comparisons read plain copies.
 const plain = (value) => JSON.parse(JSON.stringify(value));
 const observeRejection = (promise) => { promise.catch(() => {}); return promise; };
+// The handler of a view bridge: runtime.log goes to the log host, which answers it as the host does (support/log-host.mjs), and every
+// other call goes to post.
+const viewHandler = (post, log = createLogHost()) => ({
+  log,
+  postMessage: (message) => {
+    if (!log.answer(message, (data) => globalThis.window.dispatchEvent(new globalThis.window.MessageEvent("message", { data, source: globalThis.window })))) post(message);
+  },
+});
+
+// The id of the last call that the view posted to post. The log calls of the view share its call id counter and go to the log host,
+// so a test reads the id of a call from the call instead of counting calls.
+const lastId = (posted) => {
+  const id = posted.at(-1)?.id;
+  assert.ok(Number.isInteger(id) && id > 0, `the last posted message has no call id: ${JSON.stringify(posted.at(-1))}`);
+  return id;
+};
 
 /**
  * Creates a page on url with the sok-view handler, loads the injected script when script is true, and makes the page window the
@@ -190,7 +207,7 @@ test("createViewChannel throws when the injected script is not loaded", (t) => {
 test("createViewBridge refuses a page that is not on soksak://<plugin id>", (t) => {
   setup(t, { url: "https://example.test/" });
   assert.throws(
-    () => createViewBridge({ handler: { postMessage() {} }, report: () => {} }),
+    () => createViewBridge({ handler: viewHandler(() => {}), report: () => {} }),
     /requires a view page on soksak:\/\/<plugin id>/,
   );
 });
@@ -204,7 +221,7 @@ test("send posts each message through the handler", (t) => {
 
 test("createViewBridge sends a call with the sok marker and passes its reply to the caller", async (t) => {
   const { posted, host } = setup(t);
-  const { calls } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const { calls } = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
   const reply = calls.request("probe.run", { a: 1 });
   assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "probe.run", params: { a: 1 } });
   host({ sok: 1, id: 1, result: "done" });
@@ -213,7 +230,7 @@ test("createViewBridge sends a call with the sok marker and passes its reply to 
 
 test("createViewBridge rejects a call with the error that the host forwards", async (t) => {
   const { host } = setup(t);
-  const { calls } = createViewBridge({ handler: { postMessage: () => {} }, report: () => {} });
+  const { calls } = createViewBridge({ handler: viewHandler(() => {}), report: () => {} });
   const reply = calls.request("tab.state.read");
   host({ sok: 1, id: 1, error: { code: -32000, message: "tab.state is not declared" } });
   await assert.rejects(reply, { code: -32000, message: "tab.state is not declared" });
@@ -221,7 +238,7 @@ test("createViewBridge rejects a call with the error that the host forwards", as
 
 test("exposure.register sends the status or element registration through the channel and resolves on the reply", async (t) => {
   const { posted, host } = setup(t);
-  const { exposure } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const { exposure } = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
   const registered = exposure.register("status", "probe.state");
   assert.deepEqual(posted.at(-1), {
     sok: 1, id: 1, command: "runtime.native.call", params: { name: "registered", payload: { kind: "status", name: "probe.state" } },
@@ -232,7 +249,7 @@ test("exposure.register sends the status or element registration through the cha
 
 test("exposure.reply sends the reply of a forwarded exposure request with its id", async (t) => {
   const { posted, host } = setup(t);
-  const { exposure } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const { exposure } = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
   const sent = exposure.reply(7, { result: { value: 1 } });
   assert.deepEqual(posted.at(-1), {
     sok: 1, id: 1, command: "runtime.native.call", params: { name: "exposureReply", payload: { id: 7, result: { value: 1 } } },
@@ -244,7 +261,7 @@ test("exposure.reply sends the reply of a forwarded exposure request with its id
 test("runtime.native.on sends one subscription call per name and passes each host event of that name to its listener", async (t) => {
   const { posted, host } = setup(t);
   const seen = [];
-  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const { runtime } = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
   const off = runtime.native.on("probe.changed", (event) => seen.push(event));
   assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.native.on", params: { name: "probe.changed" } });
   host({ sok: 1, id: 1, result: null });
@@ -260,7 +277,7 @@ test("runtime.native.on sends one subscription call per name and passes each hos
 
 test("runtime.sidecar() delivers the messages and failures of its id only, with their body and reason", async (t) => {
   const { posted, host } = setup(t);
-  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const { runtime } = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
   const bodies = [];
   const reasons = [];
   const onMessage = runtime.sidecar("fixture-sidecar").on("probe-surface", (body) => bodies.push(body));
@@ -280,7 +297,7 @@ test("runtime.sidecar() delivers the messages and failures of its id only, with 
 
 test("runtime.sidecar(name).on passes the identifiers of the requests that a message answers", async (t) => {
   const { posted, host } = setup(t);
-  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const { runtime } = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
   const received = [];
   const on = runtime.sidecar("fixture-sidecar").on("probe-surface", (body, cids) => received.push([body, cids]));
   host({ sok: 1, id: 1, result: null });
@@ -292,18 +309,18 @@ test("runtime.sidecar(name).on passes the identifiers of the requests that a mes
 
 test("runtime.sidecar(name) sends to the named sidecar and its requests carry the name and the id", async (t) => {
   const { posted, host } = setup(t);
-  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const { runtime } = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
   assert.throws(() => runtime.sidecar(), TypeError);
   assert.throws(() => runtime.sidecar(""), TypeError);
   const port = runtime.sidecar("fixture-sidecar");
   const sent = port.send("probe-surface", '{"operation":"list"}', ["c1"]);
-  assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.sidecar.send", params: { id: "probe-surface", sidecar: "fixture-sidecar", body: '{"operation":"list"}', cids: ["c1"] } });
-  host({ sok: 1, id: 1, result: null });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: lastId(posted), command: "runtime.sidecar.send", params: { id: "probe-surface", sidecar: "fixture-sidecar", body: '{"operation":"list"}', cids: ["c1"] } });
+  host({ sok: 1, id: lastId(posted), result: null });
   assert.equal(await sent, null);
   const bodies = [];
   const onMessage = port.on("probe-surface", (body) => bodies.push(body));
-  assert.deepEqual(posted.at(-1), { sok: 1, id: 2, command: "runtime.sidecar.on", params: { id: "probe-surface", sidecar: "fixture-sidecar" } });
-  host({ sok: 1, id: 2, result: null });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: lastId(posted), command: "runtime.sidecar.on", params: { id: "probe-surface", sidecar: "fixture-sidecar" } });
+  host({ sok: 1, id: lastId(posted), result: null });
   await onMessage;
   host({ sok: 1, event: "sidecar.message", data: { id: "probe-surface", body: { n: 1 } } });
   assert.deepEqual(bodies, [{ n: 1 }]);
@@ -311,7 +328,7 @@ test("runtime.sidecar(name) sends to the named sidecar and its requests carry th
 
 test("runtime.theme gives the listener the last theme that the host sent, then each later theme", (t) => {
   const { host } = setup(t);
-  const { runtime } = createViewBridge({ handler: { postMessage: () => {} }, report: () => {} });
+  const { runtime } = createViewBridge({ handler: viewHandler(() => {}), report: () => {} });
   host({ sok: 1, event: "theme", data: { scheme: "dark", tokens: { bg: "#000" } } });
   const seen = [];
   runtime.theme((theme) => seen.push(theme));
@@ -322,14 +339,14 @@ test("runtime.theme gives the listener the last theme that the host sent, then e
 test("runtime.textSize.read reads the scale of the surface and runtime.textSize.on subscribes once", async (t) => {
   const { posted, host } = setup(t);
   const seen = [];
-  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const { runtime } = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
   const read = runtime.textSize.read();
-  assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.textSize.read", params: null });
-  host({ sok: 1, id: 1, result: 1.5 });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: lastId(posted), command: "runtime.textSize.read", params: null });
+  host({ sok: 1, id: lastId(posted), result: 1.5 });
   assert.equal(await read, 1.5);
   const off = runtime.textSize.on((factor) => seen.push(factor));
-  assert.deepEqual(posted.at(-1), { sok: 1, id: 2, command: "runtime.textSize.on", params: null });
-  host({ sok: 1, id: 2, result: null });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: lastId(posted), command: "runtime.textSize.on", params: null });
+  host({ sok: 1, id: lastId(posted), result: null });
   await off;
   await runtime.textSize.on(() => {});
   assert.equal(posted.filter((message) => message.command === "runtime.textSize.on").length, 1);
@@ -343,7 +360,7 @@ test("runtime.textSize.read reads the scale of the surface and runtime.textSize.
 test("runtime.status.watch with a surface follows the status on that surface, and each listener gets the values of its surface", async (t) => {
   const { posted, host } = setup(t);
   const seen = [];
-  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const { runtime } = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
   const stopSection = runtime.status.watch("probe.lines", (value) => seen.push(["section", value]), { surface: "spc-aaaaaa/left/files.tree" });
   assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.status.watch", params: { name: "probe.lines", surface: "spc-aaaaaa/left/files.tree" } });
   host({ sok: 1, id: 1, result: null });
@@ -360,14 +377,14 @@ test("runtime.status.watch with a surface follows the status on that surface, an
 
 test("runtime.data.get and runtime.data.set send the key, and the value for a set, as view calls", async (t) => {
   const { posted, host } = setup(t);
-  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const { runtime } = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
   const read = runtime.data.get("note");
-  assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.data.get", params: { key: "note" } });
-  host({ sok: 1, id: 1, result: "text" });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: lastId(posted), command: "runtime.data.get", params: { key: "note" } });
+  host({ sok: 1, id: lastId(posted), result: "text" });
   assert.equal(await read, "text");
   const write = runtime.data.set("note", ["a"]);
-  assert.deepEqual(posted.at(-1), { sok: 1, id: 2, command: "runtime.data.set", params: { key: "note", value: ["a"] } });
-  host({ sok: 1, id: 2, result: null });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: lastId(posted), command: "runtime.data.set", params: { key: "note", value: ["a"] } });
+  host({ sok: 1, id: lastId(posted), result: null });
   assert.equal(await write, null);
   assert.throws(() => runtime.data.get(""), /runtime.data.get requires a non-empty key/);
   assert.throws(() => runtime.data.set(1, "x"), /runtime.data.set requires a non-empty key/);
@@ -375,34 +392,34 @@ test("runtime.data.get and runtime.data.set send the key, and the value for a se
 
 test("runtime.data.change reads, replaces, and starts over from a new read when another write came first", async (t) => {
   const { posted, host } = setup(t);
-  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const { runtime } = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
   const settle = () => new Promise((resolve) => setImmediate(resolve));
   const change = runtime.data.change("note", (list) => {
     list.push("mine");
     return list;
   });
-  assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.data.get", params: { key: "note" } });
-  host({ sok: 1, id: 1, result: ["a"] });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: lastId(posted), command: "runtime.data.get", params: { key: "note" } });
+  host({ sok: 1, id: lastId(posted), result: ["a"] });
   await settle();
-  assert.deepEqual(posted.at(-1), { sok: 1, id: 2, command: "runtime.data.replace", params: { key: "note", base: ["a"], value: ["a", "mine"] } });
-  host({ sok: 1, id: 2, result: false });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: lastId(posted), command: "runtime.data.replace", params: { key: "note", base: ["a"], value: ["a", "mine"] } });
+  host({ sok: 1, id: lastId(posted), result: false });
   await settle();
-  assert.deepEqual(posted.at(-1), { sok: 1, id: 3, command: "runtime.data.get", params: { key: "note" } });
-  host({ sok: 1, id: 3, result: ["a", "b"] });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: lastId(posted), command: "runtime.data.get", params: { key: "note" } });
+  host({ sok: 1, id: lastId(posted), result: ["a", "b"] });
   await settle();
-  assert.deepEqual(posted.at(-1), { sok: 1, id: 4, command: "runtime.data.replace", params: { key: "note", base: ["a", "b"], value: ["a", "b", "mine"] } });
-  host({ sok: 1, id: 4, result: true });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: lastId(posted), command: "runtime.data.replace", params: { key: "note", base: ["a", "b"], value: ["a", "b", "mine"] } });
+  host({ sok: 1, id: lastId(posted), result: true });
   assert.deepEqual(await change, ["a", "b", "mine"]);
 });
 
 test("runtime.data.change writes nothing when next returns undefined, and fails when next throws", async (t) => {
   const { posted, host } = setup(t);
-  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const { runtime } = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
   const same = runtime.data.change("note", () => undefined);
-  host({ sok: 1, id: 1, result: ["a"] });
+  host({ sok: 1, id: lastId(posted), result: ["a"] });
   assert.deepEqual(await same, ["a"]);
   const refused = runtime.data.change("note", () => { throw new Error("not bookmarked"); });
-  host({ sok: 1, id: 2, result: ["a"] });
+  host({ sok: 1, id: lastId(posted), result: ["a"] });
   await assert.rejects(refused, /^Error: not bookmarked$/);
   assert.deepEqual(posted.filter((message) => message.command).map((message) => message.command), ["runtime.data.get", "runtime.data.get"]);
   await assert.rejects(runtime.data.change("", () => undefined), /runtime.data.change requires a non-empty key/);
@@ -410,28 +427,28 @@ test("runtime.data.change writes nothing when next returns undefined, and fails 
 
 test("runtime.data.change fails when a new read equals the read before it, because no writer changed the value", async (t) => {
   const { posted, host } = setup(t);
-  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const { runtime } = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
   const settle = () => new Promise((resolve) => setImmediate(resolve));
   const change = runtime.data.change("note", () => ["next"]);
-  host({ sok: 1, id: 1, result: { a: 1, b: 2 } });
+  host({ sok: 1, id: lastId(posted), result: { a: 1, b: 2 } });
   await settle();
-  host({ sok: 1, id: 2, result: false });
+  host({ sok: 1, id: lastId(posted), result: false });
   await settle();
-  host({ sok: 1, id: 3, result: { a: 1, b: 2 } });
+  host({ sok: 1, id: lastId(posted), result: { a: 1, b: 2 } });
   await assert.rejects(change, /^Error: runtime\.data\.change note: the store refused the value that it answered$/);
   assert.equal(posted.filter((message) => message.command === "runtime.data.replace").length, 1);
 });
 
 test("runtime.data.change fails after 64 reads when other writers keep changing the value", async (t) => {
   const { posted, host } = setup(t);
-  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const { runtime } = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
   const settle = () => new Promise((resolve) => setImmediate(resolve));
   const change = runtime.data.change("note", () => ["next"]);
   const failed = assert.rejects(change, /^Error: runtime\.data\.change note: other writers changed the value 64 times$/);
   for (let id = 1; id <= 128; id += 2) {
-    host({ sok: 1, id, result: [`value ${id}`] });
+    host({ sok: 1, id: lastId(posted), result: [`value ${id}`] });
     await settle();
-    host({ sok: 1, id: id + 1, result: false });
+    host({ sok: 1, id: lastId(posted), result: false });
     await settle();
   }
   await failed;
@@ -440,21 +457,21 @@ test("runtime.data.change fails after 64 reads when other writers keep changing 
 
 test("runtime.log.levels of a document without start levels is refused", (t) => {
   const { posted } = setup(t);
-  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const { runtime } = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
   assert.throws(() => runtime.log.levels(), /^Error: view probe has no start levels$/);
 });
 
 test("runtime.settings.read reads the settings of the plugin and runtime.settings.on subscribes once", async (t) => {
   const { posted, host } = setup(t);
   const seen = [];
-  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const { runtime } = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
   const read = runtime.settings.read();
-  assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.settings.read", params: null });
-  host({ sok: 1, id: 1, result: { home: "soksak://core/start" } });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: lastId(posted), command: "runtime.settings.read", params: null });
+  host({ sok: 1, id: lastId(posted), result: { home: "soksak://core/start" } });
   assert.deepEqual(await read, { home: "soksak://core/start" });
   const off = runtime.settings.on((values) => seen.push(values));
-  assert.deepEqual(posted.at(-1), { sok: 1, id: 2, command: "runtime.settings.on", params: null });
-  host({ sok: 1, id: 2, result: null });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: lastId(posted), command: "runtime.settings.on", params: null });
+  host({ sok: 1, id: lastId(posted), result: null });
   await off;
   await runtime.settings.on(() => {});
   assert.equal(posted.filter((message) => message.command === "runtime.settings.on").length, 1);
@@ -467,7 +484,7 @@ test("runtime.settings.read reads the settings of the plugin and runtime.setting
 
 test("runtime.error sends the error line of the view as the call runtime.error and resolves on the reply", async (t) => {
   const { posted, host } = setup(t);
-  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const { runtime } = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
   assert.equal(typeof runtime.error, "function", "the view bridge has no runtime.error");
   const sent = runtime.error("save", "disk full");
   assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.error", params: { where: "save", text: "disk full" } });
@@ -477,68 +494,57 @@ test("runtime.error sends the error line of the view as the call runtime.error a
 
 test("contributions(point) returns the connected items of the point, and fail(reason) makes one invalid through the page", async (t) => {
   const { posted, host } = setup(t);
-  const bridge = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const bridge = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
   assert.equal(typeof bridge.contributions, "function", "the view bridge has no contributions");
   const read = bridge.contributions("language");
-  assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.contributions", params: { point: "language" } });
-  host({ sok: 1, id: 1, result: [{ plugin: "one", index: 0, item: { name: "one" }, module: "soksak://core/modules/one.js" }] });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: lastId(posted), command: "runtime.contributions", params: { point: "language" } });
+  host({ sok: 1, id: lastId(posted), result: [{ plugin: "one", index: 0, item: { name: "one" }, module: "soksak://core/modules/one.js" }] });
   const items = await read;
   assert.deepEqual(items.map(({ plugin, index, item, module }) => ({ plugin, index, item, module })),
     [{ plugin: "one", index: 0, item: { name: "one" }, module: "soksak://core/modules/one.js" }]);
   const failing = items[0].fail(new Error("extend is not a function"));
-  assert.deepEqual(posted.at(-1), { sok: 1, id: 2, command: "runtime.contributions.fail",
+  assert.deepEqual(posted.at(-1), { sok: 1, id: lastId(posted), command: "runtime.contributions.fail",
     params: { point: "language", plugin: "one", index: 0, reason: "extend is not a function" } });
-  host({ sok: 1, id: 2, result: null });
+  host({ sok: 1, id: lastId(posted), result: null });
   assert.equal(await failing, undefined);
 });
 
 test("the view writer reuses the document-start page identity when later clock reads differ", { timeout: 5000 }, async (t) => {
-  const { posted, host } = setup(t, { timeOrigins: [1_700_000_000_000.5, 1_700_000_000_111.25] });
+  const { posted } = setup(t, { timeOrigins: [1_700_000_000_000.5, 1_700_000_000_111.25] });
   const reports = [];
-  const { runtime, calls } = createViewBridge({ handler: { postMessage: (message) => posted.push(plain(message)) }, report: (error) => reports.push(error) });
+  const handler = viewHandler((message) => posted.push(plain(message)));
+  const { runtime, calls } = createViewBridge({ handler, report: (error) => reports.push(error) });
   runtime.log.info("saved", { n: 1 });
-  for (let index = 0; index < 5; index += 1) {
-    await new Promise((resolve) => setImmediate(resolve));
-    const request = posted.filter(({ command, params }) => command === "runtime.log" && params?.action === "clock")[index];
-    assert.ok(request, `clock anchor ${index + 1} was not requested`);
-    host({ sok: 1, id: request.id, result: { ts_us: 1_791_000_000_000_000 + index, mono_ns: 5_000_000_000 + index } });
-  }
+  // The log host answers the five clock reads and the batch as the host does (support/log-host.mjs).
+  const events = plain(await handler.log.until((events) => events.some(({ event }) => event === "plugin.probe.saved")));
   await new Promise((resolve) => setImmediate(resolve));
-  const batch = posted.find(({ command, params }) => command === "runtime.log" && params?.action === "batch");
-  assert.ok(batch, "the view did not send a batch request");
-  host({ sok: 1, id: batch.id, result: null });
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.ok(batch.params.events.every(({ page }) => page === posted[0].document), "batch identity differs from document-start ready identity");
-  assert.deepEqual(batch.params.events.find(({ event }) => event === "page.start").fields,
+  assert.equal(handler.log.calls.filter(({ params }) => params.action === "clock").length, 5, "the view did not read five clock anchors");
+  assert.ok(events.every(({ page }) => page === posted[0].document), "batch identity differs from document-start ready identity");
+  assert.deepEqual(events.find(({ event }) => event === "page.start").fields,
     { time_origin: 1_700_000_000_000.5, url: "soksak://probe/" });
   assert.equal(calls.openCalls().count, 0, "the batch call remained open after its reply");
   assert.deepEqual(reports.filter(({ kind }) => kind !== "open-calls"), [], "the successful batch reported an error");
 });
 
 test("the view bridge keeps the public log API and batches source-clocked records through the direct writer", { timeout: 5000 }, async (t) => {
-  const { posted, host } = setup(t);
+  const { posted } = setup(t);
   const reports = [];
-  const { runtime, calls } = createViewBridge({ handler: { postMessage: (message) => posted.push(plain(message)) }, report: (error) => reports.push(error) });
+  const handler = viewHandler((message) => posted.push(plain(message)));
+  const { runtime, calls } = createViewBridge({ handler, report: (error) => reports.push(error) });
   assert.equal(runtime.log.enabled, undefined, "the view bridge still exports runtime.log.enabled");
   let built = 0;
   runtime.log.info("saved", () => { built += 1; return { n: built }; }, { cids: ["b.1"] });
-  for (let index = 0; index < 5; index += 1) {
-    await new Promise((resolve) => setImmediate(resolve));
-    const clocks = posted.filter(({ command, params }) => command === "runtime.log" && params?.action === "clock");
-    const request = clocks[index];
-    assert.ok(request, `clock anchor ${index + 1} was not requested`);
-    host({ sok: 1, id: request.id, result: { ts_us: 1_791_000_000_000_000 + index, mono_ns: 5_000_000_000 + index } });
-  }
+  // The log host answers the five clock reads and the batch as the host does (support/log-host.mjs).
+  const events = plain(await handler.log.until((events) => events.some(({ event }) => event === "plugin.probe.saved")));
   await new Promise((resolve) => setImmediate(resolve));
-  const batch = posted.find(({ command, params }) => command === "runtime.log" && params?.action === "batch");
-  assert.ok(batch, "the view did not send a batch request");
-  assert.deepEqual(batch.params.events.map(({ event }) => event), ["page.log.clock", "page.start", "plugin.probe.saved"]);
-  assert.ok(batch.params.events.every(({ page }) => page === posted[0].document), "the batch does not use the ready page identity");
-  assert.deepEqual(batch.params.events[1].fields, { time_origin: posted[0].time_origin, url: "soksak://probe/" });
-  assert.deepEqual(batch.params.events[2].fields, { n: 1 });
-  assert.deepEqual(batch.params.events[2].cids, ["b.1"]);
-  host({ sok: 1, id: batch.id, result: null });
-  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(handler.log.calls.filter(({ params }) => params.action === "clock").length, 5, "the view did not read five clock anchors");
+  assert.equal(handler.log.calls.filter(({ params }) => params.action === "batch").length, 1, "the records were not sent in one batch");
+  assert.deepEqual(events.map(({ event }) => event), ["page.log.clock", "page.start", "page.theme.applied", "plugin.probe.saved"]);
+  assert.ok(events.every(({ page }) => page === posted[0].document), "the batch does not use the ready page identity");
+  assert.deepEqual(events[1].fields, { time_origin: posted[0].time_origin, url: "soksak://probe/" });
+  assert.deepEqual(events[2].fields, { scheme: "dark", source: "start" });
+  assert.deepEqual(events[3].fields, { n: 1 });
+  assert.deepEqual(events[3].cids, ["b.1"]);
   assert.equal(built, 1, "the builder of a record was not run once");
   assert.equal(calls.openCalls().count, 0, "the batch call remained open after its reply");
   assert.deepEqual(reports.filter(({ kind }) => kind !== "open-calls"), [], "a successful writer reply reported an error");
@@ -590,7 +596,7 @@ const keydown = (init) => {
 
 test("the bridge sends no call for a key and has no shortcut table", (t) => {
   const { posted } = setup(t);
-  const bridge = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const bridge = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
   const before = posted.length;
   // A workbench key, a view key and an ordinary key keep their default action: the view decides, and the bridge forwards nothing.
   for (const init of [{ key: "j", ctrlKey: true }, { key: "Escape" }, { key: "a" }, { key: "k", metaKey: true }]) {
@@ -603,14 +609,14 @@ test("the bridge sends no call for a key and has no shortcut table", (t) => {
 test("an event that no listener has is passed to no call layer and reports nothing", (t) => {
   const { host } = setup(t);
   const reports = [];
-  createViewBridge({ handler: { postMessage: () => {} }, report: (event) => reports.push(event) });
+  createViewBridge({ handler: viewHandler(() => {}), report: (event) => reports.push(event) });
   host({ sok: 1, event: "probe.unlistened", data: 1 });
   assert.deepEqual(reports, []);
 });
 
 test("commands.register sends the registration call, and the page reply resolves it", async (t) => {
   const { posted, host } = setup(t);
-  const { commands } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const { commands } = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
   const registered = commands.register("probe.run", () => null);
   assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.command.register", params: { name: "probe.run" } });
   host({ sok: 1, id: 1, result: null });
@@ -619,7 +625,7 @@ test("commands.register sends the registration call, and the page reply resolves
 
 test("a request of the page runs the registered command and replies with its result on the reply field", async (t) => {
   const { posted, host } = setup(t);
-  const { commands } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const { commands } = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
   const calls = [];
   commands.register("probe.run", (params) => { calls.push(params); return { n: params.a + 1 }; });
   host({ sok: 1, id: 1, result: null });
@@ -632,7 +638,7 @@ test("a request of the page runs the registered command and replies with its res
 
 test("a request for a command the view did not register replies with the unregistered error", async (t) => {
   const { posted, host } = setup(t);
-  createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
   host({ sok: 1, id: 10, command: "probe.other", params: null });
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(posted.at(-1), { sok: 1, reply: 10, error: { code: 1002, message: "view command probe.other is not registered" } });
@@ -642,7 +648,7 @@ test("a request for a command the view did not register replies with the unregis
 // its answer (docs/spec/plugin-processes.md, rule 4). A document without window.sokSurface has no such handler.
 test("a core document exposure request without a handler is answered with the refusal", async (t) => {
   const { posted, host } = setup(t);
-  createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
   host({ sok: 1, event: "exposure-request",
     data: { id: 9, surface: "probe-tab", method: "status.get", params: { name: "core.surface.document" } } });
   await new Promise((resolve) => setImmediate(resolve));
@@ -654,7 +660,7 @@ test("a core document exposure request without a handler is answered with the re
 
 test("a handler that throws replies with its message as the error of the reply", async (t) => {
   const { posted, host } = setup(t);
-  const { commands } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const { commands } = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
   commands.register("probe.fail", () => { throw new Error("boom"); });
   host({ sok: 1, id: 1, result: null });
   host({ sok: 1, id: 11, command: "probe.fail", params: null });
@@ -664,7 +670,7 @@ test("a handler that throws replies with its message as the error of the reply",
 
 test("a registration that the page refuses leaves no handler, so a request for it is unregistered", async (t) => {
   const { posted, host } = setup(t);
-  const { commands } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const { commands } = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
   const refused = commands.register("other.run", () => null);
   host({ sok: 1, id: 1, error: { code: 1002, message: "owner probe has not registered command other.run" } });
   await assert.rejects(refused, { message: "owner probe has not registered command other.run" });
@@ -704,7 +710,7 @@ test("a view record that the host refuses is reported, and so is its refused err
 
 test("runtime.command sends a command name through the view call route and resolves on the reply", async (t) => {
   const { posted, host } = setup(t);
-  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const { runtime } = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
   assert.equal(typeof runtime.command, "function", "the view bridge has no runtime.command");
   const sent = runtime.command("core.picker.close", {});
   assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "core.picker.close", params: {} });
@@ -716,7 +722,7 @@ test("runtime.command sends a command name through the view call route and resol
 
 test("runtime.command with surface runs the command of the plugin on that surface through runtime.command.run", async (t) => {
   const { posted, host } = setup(t);
-  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const { runtime } = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
   const sent = runtime.command("probe.go", { index: 2 }, { surface: "tab-a" });
   assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.command.run",
     params: { name: "probe.go", params: { index: 2 }, surface: "tab-a" } });
@@ -745,14 +751,13 @@ function compositionSetup(t, replies) {
   const rect = (left, top, width, height) => ({ left, top, right: left + width, bottom: top + height, width, height });
   view.document.getElementById("doc").getBoundingClientRect = () => rect(10, 20, 300, 200);
   view.document.getElementById("picture").getBoundingClientRect = () => rect(320, 20, 400, 400);
-  const handler = {
-    postMessage: (message) => {
-      posted.push(message);
-      if (typeof message.command !== "string") return;
-      const reply = replies[message.command];
-      queueMicrotask(() => host({ sok: 1, id: message.id, result: typeof reply === "function" ? reply(message.params) : reply ?? null }));
-    },
-  };
+  // runtime.log goes to the log host, which answers it as the host does (support/log-host.mjs).
+  const handler = viewHandler((message) => {
+    posted.push(message);
+    if (typeof message.command !== "string") return;
+    const reply = replies[message.command];
+    queueMicrotask(() => host({ sok: 1, id: message.id, result: typeof reply === "function" ? reply(message.params) : reply ?? null }));
+  });
   return { posted, host, view, handler };
 }
 
@@ -921,7 +926,7 @@ test("published view bridge cases match calls, replies, events, and refusals", a
       if (item.id === "view.bridge.refuses-unsupported-page") {
         setup(subtest, { url: item.steps[0].input.url });
         let actual;
-        try { createViewBridge({ handler: { postMessage() {} }, report() {} }); } catch (error) { actual = error; }
+        try { createViewBridge({ handler: viewHandler(() => {}), report() {} }); } catch (error) { actual = error; }
         assert.ok(actual, "unsupported page must be refused");
         assert.equal(actual.message, item.steps[0].output.throws);
         return;
@@ -929,7 +934,14 @@ test("published view bridge cases match calls, replies, events, and refusals", a
       const create = item.steps.find(({ action }) => action === "create");
       const { posted, host } = setup(subtest, { url: create?.input?.url ?? "soksak://probe/" });
       const reports = [];
-      const bridge = createViewBridge({ handler: { postMessage: (message) => posted.push(plain(message)) }, report: (event) => reports.push(event) });
+      const handler = viewHandler((message) => posted.push(plain(message)));
+      const bridge = createViewBridge({ handler, report: (event) => reports.push(event) });
+      // The view writes its start records first (support/log-host.mjs); the case starts once their batch is answered, so the open
+      // calls that a case counts are its own calls.
+      await handler.log.until((events) => events.some(({ event }) => event === "page.theme.applied"));
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(bridge.calls.openCalls().count, 0, "the start records left a call open");
+      reports.length = 0;
       subtest.after(async () => {
         bridge.calls.peerLost("surface-closed");
         await new Promise((resolve) => setImmediate(resolve));
@@ -944,8 +956,10 @@ test("published view bridge cases match calls, replies, events, and refusals", a
       if (item.id === "view.bridge.ready-and-request-reply") {
         assert.equal(posted[0]?.event === "view.ready", item.steps[0].output.ready);
         const reply = observeRejection(bridge.calls.request(item.steps[1].input.command, item.steps[1].input.params));
-        assert.deepEqual(posted.at(-1), item.steps[1].output);
-        host(item.steps[2].input);
+        // The published cases count from id 1; the log calls of the view share its counter, so the id comes from the call.
+        const id = lastId(posted);
+        assert.deepEqual(posted.at(-1), { ...item.steps[1].output, id });
+        host({ ...item.steps[2].input, id });
         assert.equal(await reply, item.steps[2].output);
         assert.equal(bridge.calls.openCalls().count, 0);
       } else if (item.id === "view.bridge.refuses-malformed-host-message") {
@@ -955,12 +969,14 @@ test("published view bridge cases match calls, replies, events, and refusals", a
         assert.deepEqual(plain(posted.slice(before)), [item.steps[1].output]);
       } else if (item.id === "view.bridge.tab-state-read-write") {
         const pending = [];
+        let id;
         for (const step of item.steps.slice(1)) {
           if (step.action === "request") {
             pending.push(observeRejection(bridge.calls.request(step.input.command, step.input.params)));
-            assert.deepEqual(plain(posted.at(-1)), step.output);
+            id = lastId(posted);
+            assert.deepEqual(plain(posted.at(-1)), { ...step.output, id });
           } else if (step.action === "host-reply") {
-            host(step.input);
+            host({ ...step.input, id });
             assert.deepEqual(await pending.shift(), step.output);
             assert.equal(bridge.calls.openCalls().count, pending.length);
           }
@@ -975,8 +991,9 @@ test("published view bridge cases match calls, replies, events, and refusals", a
           assert.equal(replyStep.action, "host-reply");
           const pending = observeRejection(bridge.runtime.sidecar(step.input.sidecar).send(step.input.id, step.input.body, step.input.cids));
           let mismatch;
-          try { assert.deepEqual(plain(posted.at(-1)), step.output); } catch (error) { mismatch = error; }
-          host(replyStep.input);
+          const id = lastId(posted);
+          try { assert.deepEqual(plain(posted.at(-1)), { ...step.output, id }); } catch (error) { mismatch = error; }
+          host({ ...replyStep.input, id });
           try { assert.deepEqual(await pending, replyStep.output); } catch (error) { mismatch ??= error; }
           assert.equal(bridge.calls.openCalls().count, 0);
           index += 1;
@@ -997,8 +1014,9 @@ test("published view bridge cases match calls, replies, events, and refusals", a
             else throw new Error("unsupported sidecar subscription kind " + step.input.kind);
             const subscription = observeRejection(subscribe());
             let mismatch;
-            try { assert.deepEqual(plain(posted.at(-1)), step.output); } catch (error) { mismatch = error; }
-            host(replyStep.input);
+            const id = lastId(posted);
+            try { assert.deepEqual(plain(posted.at(-1)), { ...step.output, id }); } catch (error) { mismatch = error; }
+            host({ ...replyStep.input, id });
             try { assert.equal(typeof await subscription, "function"); } catch (error) { mismatch ??= error; }
             assert.equal(bridge.calls.openCalls().count, 0);
             index += 1;
@@ -1028,15 +1046,15 @@ test("published view bridge cases match calls, replies, events, and refusals", a
 
 test("runtime.data.get and runtime.data.on name a dependency's plugin, and its changes arrive under data:<plugin>", async (t) => {
   const { posted, host } = setup(t);
-  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const { runtime } = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
   const read = runtime.data.get("note", { plugin: "other" });
-  assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.data.get", params: { key: "note", plugin: "other" } });
-  host({ sok: 1, id: 1, result: "from other" });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: lastId(posted), command: "runtime.data.get", params: { key: "note", plugin: "other" } });
+  host({ sok: 1, id: lastId(posted), result: "from other" });
   assert.equal(await read, "from other");
   const seen = [];
   const subscribed = runtime.data.on((change) => seen.push(change.key), { plugin: "other" });
-  assert.deepEqual(posted.at(-1), { sok: 1, id: 2, command: "runtime.data.on", params: { plugin: "other" } });
-  host({ sok: 1, id: 2, result: null });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: lastId(posted), command: "runtime.data.on", params: { plugin: "other" } });
+  host({ sok: 1, id: lastId(posted), result: null });
   await subscribed;
   host({ sok: 1, event: "data:other", data: { key: "note" } });
   host({ sok: 1, event: "data", data: { key: "marks" } });
@@ -1045,7 +1063,7 @@ test("runtime.data.get and runtime.data.on name a dependency's plugin, and its c
 
 test("runtime.data.on subscribes once and passes the key of each change of the project data to every listener", async (t) => {
   const { posted, host } = setup(t);
-  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const { runtime } = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
   const seen = [];
   const first = runtime.data.on((change) => seen.push(["a", change.key]));
   const second = runtime.data.on((change) => seen.push(["b", change.key]));
@@ -1063,15 +1081,15 @@ test("runtime.data.on subscribes once and passes the key of each change of the p
 
 test("runtime.program.run sends the name and the arguments as a view call, and an absent args is an empty array", async (t) => {
   const { posted, host } = setup(t);
-  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const { runtime } = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
   const reply = { code: 0, stdout: "ok", stderr: "", truncated: { stdout: false, stderr: false } };
   const run = runtime.program.run("probe-tool", ["a", "b"]);
-  assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.program.run", params: { name: "probe-tool", args: ["a", "b"] } });
-  host({ sok: 1, id: 1, result: reply });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: lastId(posted), command: "runtime.program.run", params: { name: "probe-tool", args: ["a", "b"] } });
+  host({ sok: 1, id: lastId(posted), result: reply });
   assert.deepEqual(await run, reply);
   const bare = runtime.program.run("probe-tool");
-  assert.deepEqual(posted.at(-1), { sok: 1, id: 2, command: "runtime.program.run", params: { name: "probe-tool", args: [] } });
-  host({ sok: 1, id: 2, result: reply });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: lastId(posted), command: "runtime.program.run", params: { name: "probe-tool", args: [] } });
+  host({ sok: 1, id: lastId(posted), result: reply });
   await bare;
   assert.throws(() => runtime.program.run(""), /runtime.program.run requires a non-empty name/);
   assert.throws(() => runtime.program.run("probe-tool", "a"), /runtime.program.run args must be an array of texts/);
@@ -1080,7 +1098,7 @@ test("runtime.program.run sends the name and the arguments as a view call, and a
 
 test("runtime.program.run with a signal sends the cancel of its view call when the signal aborts, and rejects with cancelled", async (t) => {
   const { posted } = setup(t);
-  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const { runtime } = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
   const controller = new AbortController();
   const run = runtime.program.run("probe-tool", [], { signal: controller.signal });
   controller.abort();

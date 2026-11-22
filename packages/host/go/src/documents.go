@@ -2268,13 +2268,25 @@ func (s *Surfaces) planViewPost(surface string, generation *uint64, message map[
 	return viewPost{handle: handle, text: string(data)}, true, false, nil
 }
 
-// postThemeToViews posts the current theme to each view that has a ready document. It runs after the theme changed.
+// postThemeToViews posts the current theme to each view that has a ready document. It runs after the theme changed. A view without a
+// ready document receives the current theme with its ready message, and the skip is recorded (recordThemeDeferred).
 func (s *Surfaces) postThemeToViews() {
 	for _, surface := range s.documents.viewSurfaces() {
-		if _, err := s.sendToView(surface, map[string]any{"event": "theme", "data": s.Theme()}); err != nil {
+		ready, err := s.sendToView(surface, map[string]any{"event": "theme", "data": s.Theme()})
+		if err != nil {
 			LogError("view channel", err)
+		} else if !ready {
+			recordThemeDeferred(surface)
 		}
 	}
+}
+
+// themeDeferredReason is the reason of host.view.theme.deferred.
+const themeDeferredReason = "the view has no ready document; its ready message receives the current theme"
+
+// recordThemeDeferred writes host.view.theme.deferred for a theme change that the view of surface receives with its ready message.
+func recordThemeDeferred(surface string) {
+	EmitHost(LevelDebug, "host.view.theme.deferred", map[string]any{"surface": surface, "reason": themeDeferredReason})
 }
 
 // viewStoppedEvent returns the payload of the view-stopped event of the view of surface, which has the plugin id and the reason. The

@@ -23,11 +23,24 @@ function setup(t, { surface = true, params = { path: "sample.txt" }, levels } = 
     { url: "soksak://probe/ui/view.html", runScripts: "outside-only" });
   const view = dom.window;
   const posted = [];
+  // The events of the log batches that the view sent, and the waits for them.
+  const logged = [];
+  const logWaits = [];
+  const loggedUntil = (done) => (done(logged) ? Promise.resolve(logged) : new Promise((resolve) => logWaits.push({ done, resolve })));
   const host = (data) => view.dispatchEvent(new view.MessageEvent("message", { data, source: view }));
   const handler = { postMessage(message) {
     posted.push(message);
     if (message.sok === 1 && message.id !== undefined && message.command) {
-      queueMicrotask(() => host({ sok: 1, id: message.id, result: null }));
+      // The host answers a clock request of the log of the view with its clock, as a host does, and every other request with null.
+      const result = message.command === "runtime.log" && message.params?.action === "clock" ? { ts_us: 1_000_000, mono_ns: 1_000_000_000 } : null;
+      queueMicrotask(() => host({ sok: 1, id: message.id, result }));
+      if (message.command === "runtime.log" && message.params?.action === "batch") {
+        logged.push(...message.params.events);
+        for (const wait of logWaits.splice(0)) {
+          if (wait.done(logged)) wait.resolve(logged);
+          else logWaits.push(wait);
+        }
+      }
     }
   } };
   view.webkit = { messageHandlers: { "sok-view": handler } };
@@ -66,7 +79,7 @@ function setup(t, { surface = true, params = { path: "sample.txt" }, levels } = 
   const changes = (name) => posted.filter((message) => message.command === "runtime.native.call"
     && message.params.name === "changed" && message.params.payload.name === name)
     .map((message) => ({ value: message.params.payload.value, version: message.params.payload.version }));
-  return { view, bridge, request, registrations, posted, changes, host };
+  return { view, bridge, request, registrations, posted, changes, host, loggedUntil };
 }
 
 // A view is a separate document and does not inherit the stylesheet of the main page, so the bridge sets the theme of the start
@@ -300,4 +313,14 @@ test("the start of a run requests one frame of the view and no later frame", asy
   assert.equal(frames.length, 1, "the start of a run requests a frame");
   frames.shift()();
   assert.equal(frames.length, 0, "a frame of the start of a run requests no next frame");
+});
+
+// Each theme that a view applies is recorded with its scheme and its source, so a query compares the scheme of each view with the
+// scheme of its window (docs/spec/native-surfaces.md#view-surfaces).
+test("the view records each theme that it applies with its scheme and its source", { timeout: 5000 }, async (t) => {
+  const { host, loggedUntil } = setup(t);
+  host({ sok: 1, event: "theme", data: { scheme: "light", tokens: { "--bg": "rgb(4, 5, 6)" } } });
+  const themes = (events) => events.filter((event) => event.event === "page.theme.applied");
+  const applied = themes(await loggedUntil((events) => themes(events).length >= 2)).map(({ level, fields }) => ({ level, ...fields }));
+  assert.deepEqual(applied, [{ level: "info", scheme: "dark", source: "start" }, { level: "info", scheme: "light", source: "host" }]);
 });

@@ -609,3 +609,71 @@ fn a_view_clock_answers_without_accepting_policy_or_writing_records() {
     log.flush().unwrap();
     assert_eq!(read(&path).len(), 2, "a view clock request wrote a record");
 }
+
+// contract: log.view-batch.theme-record-carries-the-view-surface
+// The record of the theme that a view applied passes the relay with the surface of the view, which the host adds, and a record that
+// names its own surface or an unknown source is refused.
+#[test]
+fn a_view_batch_stores_the_applied_theme_with_the_surface_of_the_view() {
+    let directory = folder::Folder::new();
+    let log = start(directory.path());
+    let accepted = json!({"action": "batch", "events": [
+        {"ts_us": 1, "mono_ns": 1, "level": "info", "event": "page.theme.applied", "page": "doc-1", "fields": {"scheme": "dark", "source": "host"}}
+    ]});
+    assert_eq!(
+        view_log_command(
+            &log,
+            accepted,
+            "probe",
+            "surface-1",
+            "doc-1",
+            1791948729050.5
+        )
+        .unwrap(),
+        Value::Null
+    );
+    // The refusal names what it found as JSON text, the same text as the Go host.
+    for (fields, text) in [
+        (
+            json!({"scheme": "dark", "source": "host", "surface": "other"}),
+            "events[0]: page.theme.applied cannot set its owning surface",
+        ),
+        (
+            json!({"scheme": "dark", "source": "page"}),
+            "events[0]: page.theme.applied source must be start or host, not \"page\"",
+        ),
+        (
+            json!({"scheme": "dark"}),
+            "events[0]: page.theme.applied source must be start or host, not null",
+        ),
+    ] {
+        let refused = json!({"action": "batch", "events": [
+            {"ts_us": 2, "mono_ns": 2, "level": "info", "event": "page.theme.applied", "page": "doc-1", "fields": fields}
+        ]});
+        assert_eq!(
+            view_log_command(
+                &log,
+                refused,
+                "probe",
+                "surface-1",
+                "doc-1",
+                1791948729050.5
+            )
+            .err()
+            .as_deref(),
+            Some(text),
+            "the theme record {fields}"
+        );
+    }
+    let path = log.path().to_path_buf();
+    log.flush().unwrap();
+    let stored: Vec<Value> = read(&path)
+        .into_iter()
+        .filter(|event| event["event"] == "page.theme.applied")
+        .map(|event| event["fields"].clone())
+        .collect();
+    assert_eq!(
+        stored,
+        vec![json!({"scheme": "dark", "source": "host", "surface": "surface-1"})]
+    );
+}

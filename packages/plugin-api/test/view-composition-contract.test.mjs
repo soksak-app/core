@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { JSDOM } from "jsdom";
 import { createViewBridge } from "../view.js";
+import { createLogHost } from "./support/log-host.mjs";
 
 const CONTRACT = JSON.parse(readFileSync(new URL("../contract/view-composition.json", import.meta.url), "utf8"));
 const EXPECTED_IDS = [
@@ -58,9 +59,21 @@ async function runCase(testCase) {
 
     const posted = [];
     const delivered = [];
-    const host = (data) => view.dispatchEvent(new view.MessageEvent("message", { data, source: view }));
+    const deliver = (data) => view.dispatchEvent(new view.MessageEvent("message", { data, source: view }));
+    // The host answers the log calls of the view as the real host does and keeps them out of the compared calls. The published
+    // cases number the other calls from 1, so the host records each of them under its number and answers it under the view's id.
+    const log = createLogHost();
+    const viewIds = new Map();
+    const host = (data) => deliver("id" in data ? { ...data, id: viewIds.get(data.id) ?? data.id } : data);
     const bridge = createViewBridge({
-      handler: { postMessage: (message) => posted.push(structuredClone(message)) },
+      handler: {
+        postMessage: (message) => {
+          if (log.answer(message, deliver)) return;
+          const id = viewIds.size + 1;
+          viewIds.set(id, message.id);
+          posted.push({ ...structuredClone(message), id });
+        },
+      },
       report: () => {},
     });
     let controller = null;

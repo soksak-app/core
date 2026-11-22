@@ -210,7 +210,9 @@ test("a log batch without a fault is stored in the events of the view in arrival
     await view.bridge.calls.request("runtime.log", { action: "batch", events: [{ event: "probe.first" }] });
     await view.bridge.calls.request("runtime.log", { action: "batch", events: [{ event: "probe.second" }] });
     await view.settled();
-    assert.deepEqual(view.events.map((event) => event.event), ["probe.first", "probe.second"]);
+    // The view also stores the page records that it writes from its start (page.start, page.theme.applied), which the order of the
+    // two batches of the test leaves out.
+    assert.deepEqual(view.events.map((event) => event.event).filter((event) => event.startsWith("probe.")), ["probe.first", "probe.second"]);
   } finally {
     await view.close();
   }

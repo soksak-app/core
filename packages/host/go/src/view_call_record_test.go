@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -528,5 +529,55 @@ func TestRetiredViewRuntimeLogDoesNotWriteThroughReplacement(t *testing.T) {
 	command.Env = append(os.Environ(), viewLogDeliveryChild+"="+config)
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("child retired generation: %v: %s", err, output)
+	}
+}
+
+// contract: log.view-batch.theme-record-carries-the-view-surface
+// The record of the theme that a view applied passes the relay with the surface of the view, which the host adds, and a record that
+// names its own surface or an unknown source is refused.
+func TestViewRuntimeLogStoresTheAppliedThemeWithTheSurfaceOfTheView(t *testing.T) {
+	if config := os.Getenv(viewLogDeliveryChild); config != "" {
+		log := startViewRecordWriter(t, config)
+		s := readyViewLogSurfaces(t, log)
+		viewLogReplyForTest(t, s, 41, map[string]any{"action": "batch", "events": []any{
+			map[string]any{"ts_us": 1234570, "mono_ns": 1234570890, "page": "doc-1", "level": "info", "event": "page.theme.applied", "fields": map[string]any{"scheme": "dark", "source": "host"}},
+		}})
+		// The refusal names what it found as JSON text, the same text as the Rust host.
+		for _, refusal := range []struct {
+			fields map[string]any
+			text   string
+		}{
+			{map[string]any{"scheme": "dark", "source": "host", "surface": "other"}, "events[0]: page.theme.applied cannot set its owning surface"},
+			{map[string]any{"scheme": "dark", "source": "page"}, `events[0]: page.theme.applied source must be start or host, not "page"`},
+			{map[string]any{"scheme": "dark"}, "events[0]: page.theme.applied source must be start or host, not null"},
+		} {
+			request := map[string]any{"action": "batch", "events": []any{
+				map[string]any{"ts_us": 1234571, "mono_ns": 1234571890, "page": "doc-1", "level": "info", "event": "page.theme.applied", "fields": refusal.fields},
+			}}
+			err := validateViewLogBatch("probe", "probe-surface", "doc-1", 1234.5, request)
+			if err == nil || err.Error() != refusal.text {
+				t.Fatalf("the theme record %v: got %v, want %q", refusal.fields, err, refusal.text)
+			}
+		}
+		if err := log.Flush(); err != nil {
+			t.Fatal(err)
+		}
+		var stored []any
+		for _, event := range viewRecordEvents(t, config) {
+			if event["event"] == "page.theme.applied" {
+				stored = append(stored, event["fields"])
+			}
+		}
+		want := []any{map[string]any{"scheme": "dark", "source": "host", "surface": "probe-surface"}}
+		if !reflect.DeepEqual(stored, want) {
+			t.Fatalf("page.theme.applied records %v, want %v", stored, want)
+		}
+		return
+	}
+	config := t.TempDir()
+	command := exec.Command(os.Args[0], "-test.run", "^TestViewRuntimeLogStoresTheAppliedThemeWithTheSurfaceOfTheView$", "-test.count=1")
+	command.Env = append(os.Environ(), viewLogDeliveryChild+"="+config)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("child theme record: %v: %s", err, output)
 	}
 }

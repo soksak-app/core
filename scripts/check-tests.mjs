@@ -305,6 +305,25 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1108-2",
+    implementation: [
+      { file: "packages/plugin-api/view.js", symbol: "const recordTheme = (source, theme) => writeLog(\"info\", \"page.theme.applied\", { scheme: theme.scheme, source });" },
+      { file: "packages/host/go/src/documents.go", symbol: "func recordThemeDeferred(surface string) {" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "pub(crate) fn record_theme_deferred(surface: &str) {" },
+      { file: "packages/host/go/src/event_relay.go", symbol: "case \"page.theme.applied\":" },
+      { file: "packages/host/rust/src/event_relay.rs", symbol: "} else if event == \"page.theme.applied\" {" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/view-document.test.mjs", id: "the view records each theme that it applies with its scheme and its source" },
+      { file: "packages/host/go/src/document_post_test.go", id: "TestAThemeChangeBeforeTheViewIsReadyIsRecordedAndTheReadyMessageReceivesIt" },
+      { file: "packages/host/rust/src/view_theme_test.rs", id: "a_theme_change_before_the_view_is_ready_is_recorded_with_its_reason" },
+      { file: "packages/host/go/src/view_call_record_test.go", id: "TestViewRuntimeLogStoresTheAppliedThemeWithTheSurfaceOfTheView" },
+      { file: "packages/host/rust/tests/event_relay_test.rs", id: "a_view_batch_stores_the_applied_theme_with_the_surface_of_the_view" },
+    ],
+    expected: "Each view records the theme that it applies with the surface that the host adds, and the host records a theme change that a view without a ready document receives with its ready message.",
+    levels: ["unit"],
+  },
+  {
     id: "F1110",
     implementation: [
       { file: "packages/host/go/src/windows.go", symbol: "func (h *Host) removeWindowRecords(s *Surfaces, id uint) bool {" },

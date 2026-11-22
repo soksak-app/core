@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { JSDOM } from "jsdom";
 import { createViewBridge } from "../view.js";
+import { createLogHost } from "./support/log-host.mjs";
 
 const CONTRACT = JSON.parse(readFileSync(new URL("../contract/view-tab-calls.json", import.meta.url), "utf8"));
 const EXPECTED_IDS = [
@@ -33,12 +34,24 @@ async function runCase(testCase) {
     // The host gives every view the start theme script (docs/spec/native-surfaces.md#view-surfaces).
     dom.window.sokTheme = { scheme: "dark", tokens: {} };
     dom.window.eval(readFileSync(new URL("../view-start.js", import.meta.url), "utf8"));
+    const deliver = (data) => dom.window.dispatchEvent(new dom.window.MessageEvent("message", { data, source: dom.window }));
+    // The host answers the log calls of the view as the real host does and keeps them out of the compared calls. The published
+    // cases number the other calls from 1, so the host records each of them under its number and answers it under the view's id.
+    const log = createLogHost();
+    const viewIds = new Map();
+    const host = (data) => deliver("id" in data ? { ...data, id: viewIds.get(data.id) ?? data.id } : data);
     const bridge = createViewBridge({
-      handler: { postMessage: (message) => posted.push(structuredClone(message)) },
+      handler: {
+        postMessage: (message) => {
+          if (log.answer(message, deliver)) return;
+          const id = viewIds.size + 1;
+          viewIds.set(id, message.id);
+          posted.push({ ...structuredClone(message), id });
+        },
+      },
       report: () => {},
     });
     // A host message is a window message event whose source is the window.
-    const host = (data) => dom.window.dispatchEvent(new dom.window.MessageEvent("message", { data, source: dom.window }));
     posted.splice(0);
     const outputs = [];
     for (const step of testCase.steps) {

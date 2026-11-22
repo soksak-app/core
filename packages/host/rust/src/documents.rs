@@ -2420,12 +2420,26 @@ pub(crate) fn post_sidecar_message(
     );
 }
 
-/// Posts the current theme to each view of the window that has a ready document. A view without one is skipped, because the theme
-/// reaches it with its ready message.
+/// The reason of `host.view.theme.deferred`.
+const THEME_DEFERRED_REASON: &str =
+    "the view has no ready document; its ready message receives the current theme";
+
+/// Writes `host.view.theme.deferred` for a theme change that the view of surface receives with its ready message.
+pub(crate) fn record_theme_deferred(surface: &str) {
+    crate::event_record::emit_host(
+        crate::event_log::Level::Debug,
+        "host.view.theme.deferred",
+        serde_json::json!({"surface": surface, "reason": THEME_DEFERRED_REASON}),
+    );
+}
+
+/// Posts the current theme to each view of the window that has a ready document. A view without one receives the current theme with
+/// its ready message, and the skip is recorded ([`record_theme_deferred`]).
 pub(crate) fn post_theme_to_views(window: &Window) -> Result<(), String> {
     let data = window_data(window)?;
     for surface in data.documents.views().surfaces() {
         if data.documents.views().ready_document(&surface).is_none() {
+            record_theme_deferred(&surface);
             continue;
         }
         if let Err(error) = post_theme(window, &surface) {

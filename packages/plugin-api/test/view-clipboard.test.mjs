@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { JSDOM } from "jsdom";
 import { createViewBridge } from "../view.js";
+import { createLogHost } from "./support/log-host.mjs";
 
 const BINARY_ID = "0123456789abcdef0123456789abcdef";
 
@@ -17,7 +18,7 @@ const settle = async () => {
 /**
  * Runs body(view) with a bridge on a jsdom window. view.posted holds the call messages, view.fetched each fetch {url, method, type,
  * body}, view.respond(response) sets the answer of the next fetch {status, json} or {status, bytes}, and view.answer(answer) answers the
- * last posted call.
+ * last posted call. The host answers the runtime.log calls of the view as the real host does, and view.posted leaves them out.
  */
 async function withView(body) {
   const dom = new JSDOM("", { url: "soksak://probe/", runScripts: "outside-only" });
@@ -45,12 +46,16 @@ async function withView(body) {
         arrayBuffer: async () => new Uint8Array(response.bytes).buffer,
       };
     };
+    const host = (data) => dom.window.dispatchEvent(new dom.window.MessageEvent("message", { data, source: dom.window }));
+    const log = createLogHost();
     const bridge = createViewBridge({
-      handler: { postMessage: (message) => posted.push(structuredClone(message)) },
+      handler: { postMessage: (message) => {
+        if (log.answer(message, host)) return;
+        posted.push(structuredClone(message));
+      } },
       report: () => {},
     });
     posted.splice(0);
-    const host = (data) => dom.window.dispatchEvent(new dom.window.MessageEvent("message", { data, source: dom.window }));
     await body({
       clipboard: bridge.runtime.clipboard,
       posted,

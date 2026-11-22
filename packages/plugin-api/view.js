@@ -232,6 +232,10 @@ export function createViewBridge({ handler, report }) {
     // events: forwarded
     batcher.emit(level, event, fields, cids);
   };
+  // Each theme that the view applies is recorded with its scheme and its source, the start script or a theme message of the host, so
+  // a query compares the scheme of each view with the scheme of its window (docs/spec/native-surfaces.md#view-surfaces).
+  const recordTheme = (source, theme) => writeLog("info", "page.theme.applied", { scheme: theme.scheme, source });
+  recordTheme("start", window.sokTheme);
   // The records of a view name no surface: the host adds the surface that it binds to the view channel and refuses a record that
   // names one (docs/spec/logging.md#view-record-delivery).
   const { log } = createPluginRuntime({ pluginId: plugin, hooks: {
@@ -463,6 +467,7 @@ export function createViewBridge({ handler, report }) {
     if (message.event === "theme") {
       lastTheme = message.data;
       applyTheme(window.document.documentElement, lastTheme);
+      recordTheme("host", lastTheme);
     }
     // A status value reaches its listeners as the value, without the name that keys the event.
     const data = message.event === "status" ? message.data.value : message.data;
