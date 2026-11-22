@@ -118,6 +118,8 @@ const METHOD = {
   debugSave: "DebugSave",
   debugSaveText: "DebugSaveText",
   filePlace: "FilePlace",
+  programRun: "ProgramRun",
+  programCancel: "ProgramCancel",
   logQuery: "LogQuery",
   debugFollow: "DebugFollow",
   debugSaveAll: "DebugSaveAll",

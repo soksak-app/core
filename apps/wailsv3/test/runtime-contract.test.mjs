@@ -75,6 +75,11 @@ test("Wails page regions expose operations but only composition places geometry"
   assert.deepEqual(recorded.at(-1), ["SurfaceFocus", [{ surface: "s1" }]]);
   await host.call("surfaceFocus", { surface: "s1", decided: true });
   assert.deepEqual(recorded.at(-1), ["SurfaceFocus", [{ surface: "s1", decided: true }]]);
+  // A view call runs a declared program of the project and cancels it; the Go host receives the request as its only argument.
+  await host.call("programRun", { surface: "s1", id: "call-1", name: "lint", args: ["src"] });
+  assert.deepEqual(recorded.at(-1), ["ProgramRun", [{ surface: "s1", id: "call-1", name: "lint", args: ["src"] }]]);
+  await host.call("programCancel", { surface: "s1", id: "call-1" });
+  assert.deepEqual(recorded.at(-1), ["ProgramCancel", [{ surface: "s1", id: "call-1" }]]);
   // The keyboard of the window follows only surfaceFocus: no call holds the keys or ends a hold
   // (docs/spec/native-surfaces.md#keyboard-of-a-surface).
   await assert.rejects(host.call("keyboardHold"), /unknown host call: keyboardHold/);
