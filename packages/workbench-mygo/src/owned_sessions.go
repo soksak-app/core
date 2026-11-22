@@ -607,7 +607,12 @@ func (o *OwnedSessions) program(owner string, members map[string]json.RawMessage
 		o.ports.Fail("core.session.program "+session, fmt.Sprintf("surface %s does not own session %s", owner, session))
 		return
 	}
+	// A report of the state that the session already has changes nothing and publishes nothing.
+	if entry.Program == state {
+		return
+	}
 	entry.Program = state
+	o.ports.Emit("info", "workbench.session.program", map[string]any{"session": session, "state": state})
 	o.ports.Changed()
 }
 

@@ -134,3 +134,29 @@ func TestSessionProgressOfAnotherOwnerIsRefused(t *testing.T) {
 	equal(t, f.failures, []string{"core.session.program s-2: surface owner-tab does not own session s-2"})
 	equal(t, f.sessions.Status()[1]["program"], nil)
 }
+
+func TestAcceptedProgressChangePublishesTheEvent(t *testing.T) {
+	f := newOwnedFixture(t)
+	openFixtureSession(t, f)
+	f.surfaceMessage("owner-tab", `{"event":"session.program","session":"s-1","state":"working"}`)
+	f.surfaceMessage("owner-tab", `{"event":"session.program","session":"s-1","state":"idle"}`)
+	equal(t, f.eventsNamed("workbench.session.program"), []map[string]any{{"session": "s-1", "state": "working"}, {"session": "s-1", "state": "idle"}})
+}
+
+func TestRepeatedProgressStateChangesNothingAndPublishesNothing(t *testing.T) {
+	f := newOwnedFixture(t)
+	openFixtureSession(t, f)
+	f.surfaceMessage("owner-tab", `{"event":"session.program","session":"s-1","state":"working"}`)
+	f.surfaceMessage("owner-tab", `{"event":"session.program","session":"s-1","state":"working"}`)
+	equal(t, f.failures, []string(nil))
+	equal(t, len(f.eventsNamed("workbench.session.program")), 1)
+}
+
+func TestRefusedProgressReportPublishesNothing(t *testing.T) {
+	f := newOwnedFixture(t)
+	openFixtureSession(t, f)
+	f.surfaceMessage("owner-tab", `{"event":"session.program","session":"s-1","state":"busy"}`)
+	f.surfaceMessage("owner-tab", `{"event":"session.program","session":"s-9","state":"idle"}`)
+	equal(t, len(f.failures), 2)
+	equal(t, len(f.eventsNamed("workbench.session.program")), 0)
+}
