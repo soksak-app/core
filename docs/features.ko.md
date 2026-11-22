@@ -204,7 +204,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [o] F1073-3 — page workbench가 선언된 status를 각 탭 표면에서 따라가고 `core.grid`에 `program`을 보고하며, 잘못된 값의 오류를 보인다. Red를 먼저 둔다.
   - [o] F1073-4 — mygo workbench가 Go에서 같은 따라가기와 `core.grid` 보고를 한다. Red를 먼저 둔다.
   - [o] F1073-5 — program 상태가 tab의 foreground program process id를 담는다: `surface.program`이 이름 붙인 status의 값은 `{state, pid}` 또는 `null`이고, manifest reader는 `pid`를 integer 또는 null로 요구하며, `core.grid` tab이 이를 담는다.
-- [o] F1074 — P1, F1073의 후속: plugin page가 `dependencies`에 적은 plugin의 선언된 status를 읽는다. view는 core status와 자기 plugin의 status만 따라갔으므로, 에이전트 탭 목록이 다른 plugin이 선언한 program 상태를 읽을 수 없었다. 계약: `docs/spec/native-surfaces.ko.md#view-표면`과 `docs/spec/plugins.ko.md#pluginjson`. 남은 일: F1074-1부터 F1074-3은 작업 트리에 있으며 검증과 commit을 기다린다.
+- [o] F1074 — P1, F1073의 후속: plugin page가 `dependencies`에 적은 plugin의 선언된 status를 읽는다. view는 core status와 자기 plugin의 status만 따라갔으므로, 에이전트 탭 목록이 다른 plugin이 선언한 program 상태를 읽을 수 없었다. 계약: `docs/spec/native-surfaces.ko.md#view-표면`과 `docs/spec/plugins.ko.md#pluginjson`.
   - [o] F1074-1 — 명세(영어와 한국어)가 의존 읽기 규칙과 거부 문구를 정하며, page-wire case `view-calls-status-watch-dependency`가 그것을 재생한다. Red: page 변경 전에는 `other.count`가 owner 거부로 실패했다.
   - [o] F1074-2 — page가 의존 plugin의 status watch에 답한다: `plugin-api`의 view-answer와 view-host, 그리고 page workbench의 `surface-modules.js`. Green: plugin-api view-host 테스트가 통과한다(99/99). workbench view-call 테스트는 `jsdom`이 필요하며 이 worktree에는 설치되어 있지 않아 실행되지 않았다.
   - [o] F1074-3 — mygo workbench: `installedUnit.Plugins`와 `Shell.dependsOn`이 owner를 검사하며, 테스트 `TestAViewFollowsAStatusOfADependency`가 이를 다룬다. Go 테스트는 `make`의 native library가 필요해 이 worktree에서 실행되지 않았다. 패키지는 `CGO_ENABLED=0 go vet`으로 타입 검사를 통과한다.
