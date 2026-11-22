@@ -5194,7 +5194,7 @@
     ],
     "element": [
     {
-        "name": "core.surface.reload",
+        "name": "core.tab.reload",
         "description": "The 다시 불러오기 control of a failed view surface, which runs core.tab.reload of the tab of the surface, in card order.",
         "many": true
       },
