@@ -87,6 +87,8 @@ func hostCalls(h *host.Host) map[string]HostCall {
 		"sidecarsOutdated":         readOf(h.SidecarsOutdated),
 		"clipboardRead":            answerOf(h.ClipboardRead),
 		"linkOpen":                 doneOf(h.LinkOpen),
+		"programRun":               answerOf(h.ProgramRun),
+		"programCancel":            doneOf(h.ProgramCancel),
 		"notify":                   doneOf(h.Notify),
 		"notificationRemove":       doneOf(h.NotificationRemove),
 		"notificationState":        readOf(h.NotificationState),

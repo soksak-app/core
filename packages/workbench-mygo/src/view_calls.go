@@ -37,7 +37,11 @@ type viewCallEvent struct {
 }
 
 // viewPending is a call of a view that has not replied.
-type viewPending struct{ done bool }
+type viewPending struct {
+	done bool
+	// program tells that the call runs a declared program, whose cancel the workbench passes to programCancel.
+	program bool
+}
 
 // viewState is what the workbench holds for the document of a view.
 type viewState struct {
@@ -180,6 +184,10 @@ func (s *Shell) viewCall(data []any) {
 		if pending := view.pending[call.ID]; pending != nil {
 			pending.done = true
 			delete(view.pending, call.ID)
+			// The cancel of an open program run ends the run in the host (docs/spec/native-surfaces.md#program-runs).
+			if pending.program {
+				s.calls.Call("programCancel", map[string]any{"surface": call.Surface, "id": call.ID}, func(_ any, err error) { s.failed(err) })
+			}
 			s.viewReply(call, nil, errors.New("cancelled"))
 		}
 		return
@@ -532,6 +540,28 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 			return fmt.Errorf("view call %s requires a non-empty URL", call.Command)
 		}
 		s.calls.Call("linkOpen", map[string]string{"url": url}, func(_ any, err error) { answer(nil, err) })
+	case "runtime.program.run":
+		// A declared program runs with the argument texts; an absent args is an empty list (docs/spec/native-surfaces.md#program-runs).
+		fields, err := viewFields[struct {
+			Name string          `json:"name"`
+			Args json.RawMessage `json:"args"`
+		}](call)
+		if err != nil {
+			return err
+		}
+		if fields.Name == "" {
+			return fmt.Errorf("view call %s requires a non-empty name", call.Command)
+		}
+		args := []string{}
+		if fields.Args != nil {
+			if err := json.Unmarshal(fields.Args, &args); err != nil || args == nil {
+				return fmt.Errorf("view call %s args must be an array of texts", call.Command)
+			}
+		}
+		if pending := view.pending[call.ID]; pending != nil {
+			pending.program = true
+		}
+		s.calls.Call("programRun", map[string]any{"surface": call.Surface, "id": call.ID, "name": fields.Name, "args": args}, func(value any, err error) { answer(value, err) })
 	case "runtime.clipboard.read":
 		return s.readClipboard(call, text, answer)
 	case "runtime.clipboard.writeText":

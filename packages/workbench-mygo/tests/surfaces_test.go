@@ -80,8 +80,12 @@ type surfaceHost struct {
 	placed           int
 	declared         []string
 	replies          []map[string]any
-	hostName         []string
-	hostNameMu       sync.Mutex
+	// programRuns and programCancels hold the arguments of each programRun and programCancel, and programGate, when set, holds each programRun.
+	programRuns    []map[string]any
+	programCancels []map[string]any
+	programGate    *gate
+	hostName       []string
+	hostNameMu     sync.Mutex
 	// clipboard is the text of the clipboard.
 	clipboard string
 	debug     debugHost
@@ -155,6 +159,25 @@ func (h *surfaceHost) surfaceTable() map[string]workbench.HostCall {
 		h.requests = append(h.requests, request)
 		h.called("syncSurfaces")
 		return map[string]any{"ticket": len(h.requests), "placements": []any{}, "chrome": map[string]any{}}, nil
+	}
+	table["programRun"] = func(_ context.Context, argument json.RawMessage) (any, error) {
+		var request map[string]any
+		if err := json.Unmarshal(argument, &request); err != nil {
+			return nil, err
+		}
+		h.programRuns = append(h.programRuns, request)
+		if h.programGate != nil {
+			h.programGate.wait()
+		}
+		return map[string]any{"code": 0, "stdout": "ok", "stderr": "", "truncated": map[string]any{"stdout": false, "stderr": false}}, nil
+	}
+	table["programCancel"] = func(_ context.Context, argument json.RawMessage) (any, error) {
+		var request map[string]any
+		if err := json.Unmarshal(argument, &request); err != nil {
+			return nil, err
+		}
+		h.programCancels = append(h.programCancels, request)
+		return nil, nil
 	}
 	table["cancelSurfaces"] = func(_ context.Context, argument json.RawMessage) (any, error) {
 		var request struct{ Ticket uint64 }

@@ -56,6 +56,8 @@ type installedUnit struct {
 	Data map[string]dataDeclaration
 	// Drop is the command that surface.drop names, and empty for a plugin that takes no files.
 	Drop string
+	// Programs holds the programs member of plugin.json as it stands there, which the view sync request declares (docs/spec/native-surfaces.md#program-runs).
+	Programs json.RawMessage
 	// Opens holds the extensions of surface.opens, and Background the background declaration, or nil.
 	Opens      []string
 	Background *BackgroundDeclaration
@@ -91,6 +93,7 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 				} `json:"surface"`
 				Background   *BackgroundDeclaration     `json:"background"`
 				Sessions     bool                       `json:"sessions"`
+				Programs     json.RawMessage            `json:"programs"`
 				Exposes      json.RawMessage            `json:"exposes"`
 				Dependencies map[string]any             `json:"dependencies"`
 				Settings     map[string]json.RawMessage `json:"settings"`
@@ -113,6 +116,7 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 		unit.Data = plugin.Manifest.Data
 		unit.Background = plugin.Manifest.Background
 		unit.Sessions = plugin.Manifest.Sessions
+		unit.Programs = plugin.Manifest.Programs
 		if plugin.Manifest.Surface != nil {
 			unit.Opens = plugin.Manifest.Surface.Opens.Extensions
 		}
@@ -593,13 +597,18 @@ func (s *Shell) surfaceRequest() (map[string]any, error) {
 			tables[unit.ID] = index
 			table = append(table, marks)
 		}
-		surfaces = append(surfaces, map[string]any{"id": id, "visible": visible, "dim": visible && s.surfaceDimmed(id), "plugin": unit.ID,
+		entry := map[string]any{"id": id, "visible": visible, "dim": visible && s.surfaceDimmed(id), "plugin": unit.ID,
 			"composition": held.composition, "x": held.box.X, "y": held.box.Y, "w": held.box.W, "h": held.box.H,
 			"start": map[string]any{"params": tabMember(held.tab, "params", "null"), "origin": tabMember(held.tab, "origin", `{"directory":null}`),
 				"project": held.project, "declarations": index, "diagnostics": rawOrNull(unit.Diagnostics), "section": held.section,
 				// The setting viewProcess at the creation of the view decides whether it shares the process of its plugin
 				// (docs/spec/plugin-processes.md#view-processes).
-				"process": s.settings.Value("viewProcess")}})
+				"process": s.settings.Value("viewProcess")}}
+		// The programs that the plugin of a view declares, which the host checks each run against (docs/spec/native-surfaces.md#program-runs).
+		if unit.Declaration.Kind == "view" && len(unit.Programs) > 0 {
+			entry["programs"] = unit.Programs
+		}
+		surfaces = append(surfaces, entry)
 	}
 	// viewport is the size of the window that the frame laid out, which the host keeps with the layout transaction of the preparation
 	// (docs/spec/native-surfaces.md#layout-transaction), as the page gives it.
