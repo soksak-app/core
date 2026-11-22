@@ -4,9 +4,7 @@
 use std::process::{Command, Stdio};
 use std::thread;
 
-use super::{
-    Failure, Message, Owner, ProcessExit, Replacement, Sidecars, await_replaced_service,
-};
+use super::{Failure, Message, Owner, ProcessExit, Replacement, Sidecars, await_replaced_service};
 
 #[derive(Clone)]
 struct StopOwner;

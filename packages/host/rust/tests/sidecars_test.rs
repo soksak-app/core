@@ -1390,9 +1390,7 @@ fn the_quit_stop_exits_after_its_sidecars() {
             );
             let (empty, _empty_directory) = fixture_sidecars("on any echo\n");
             assert!(
-                empty.quit_stop(|| panic!(
-                    "the quit stop without a sidecar ran its end"
-                )),
+                empty.quit_stop(|| panic!("the quit stop without a sidecar ran its end")),
                 "the quit stop without a sidecar refused the exit"
             );
         });

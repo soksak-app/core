@@ -445,9 +445,10 @@ fn kill_quit_stop(quit: &QuitStop) {
             &place,
             format!("the second quit kills process {}", target.pid),
         );
-        if let Err(error) = target.exit.signal_group(|| {
-            current().and_then(|platform| platform.end_process_group(target.pid))
-        }) {
+        if let Err(error) = target
+            .exit
+            .signal_group(|| current().and_then(|platform| platform.end_process_group(target.pid)))
+        {
             log_error(&place, format!("second quit: {error}"));
         }
     }
