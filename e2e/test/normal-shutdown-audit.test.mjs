@@ -146,12 +146,13 @@ test("service shutdown fails when the service process ended at the quit", { time
 
 /**
  * A running service process of the check: it ends on SIGTERM, and it removes the endpoint file first when `removes` holds. It
- * answers once its SIGTERM handler is installed, so a signal of the check never finds the process without it.
+ * answers once its SIGTERM handler is installed, so a signal of the check never finds the process without it. The open standard input
+ * of the check keeps the process running without a timer.
  */
 async function runningService(t, file, removes) {
   const end = removes ? `require("node:fs").rmSync(${JSON.stringify(file)}); process.exit(0);` : "process.exit(0);";
-  const script = `process.on("SIGTERM", () => { ${end} }); process.stdout.write("ready\\n"); setInterval(() => {}, 1 << 30);`;
-  const child = spawn(process.execPath, ["-e", script], { stdio: ["ignore", "pipe", "inherit"] });
+  const script = `process.on("SIGTERM", () => { ${end} }); process.stdout.write("ready\\n"); process.stdin.resume();`;
+  const child = spawn(process.execPath, ["-e", script], { stdio: ["pipe", "pipe", "inherit"] });
   const exited = new Promise((resolve) => child.once("exit", resolve));
   t.after(async () => {
     if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
