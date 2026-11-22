@@ -43,7 +43,7 @@ registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", imp
 const { begin } = await import("../projects.js");
 const plane = await import("../plane.js");
 const { installCoreExposure } = await import("../core-exposure.js");
-const { endOwnedSession, inputOwnedSession, openOwnedSession, ownedSessionsState, readOwnedSession, resizeOwnedSession, startOwnedSessions, submitOwnedSession } = await import("../owned-sessions.js");
+const { endOwnedSession, inputOwnedSession, ownedReplyFailure, openOwnedSession, ownedSessionsState, readOwnedSession, resizeOwnedSession, startOwnedSessions, submitOwnedSession } = await import("../owned-sessions.js");
 const { flushEvents } = await import("../page-log.js");
 // The stored policy of the settings, which the page applies at its start, stores the lifecycle events at info (the case records them).
 const { logGate, logPolicyOf } = await import("../log-gate.js");
@@ -62,6 +62,13 @@ begin({ common: { "diagnostics.log": { lifecycle: "info" } }, open: [], projects
 test("core.session.open refuses a size whose width, height or scale is not positive before any sidecar request", async () => {
   await assert.rejects(openOwnedSession({ plugin: SESSION, params: {}, size: { width: 0, height: 384, scale: 2 } }, OWNER),
     /size width, height and scale must be positive numbers/);
+});
+
+test("a refusal of the sidecar that states its rule and reason keeps them in the failure text", () => {
+  assert.equal(ownedReplyFailure("core.session.input", { error: "guardRefused", rule: "untracked", reason: "the line is not followed" }).message,
+    "core.session.input: guardRefused: untracked: the line is not followed");
+  assert.equal(ownedReplyFailure("core.session.read", { error: "unknownSession" }).message, "core.session.read: unknownSession");
+  assert.equal(ownedReplyFailure("core.session.read", { rows: [] }), null);
 });
 
 test("the owned session messages open, resize and end a session through the owner surface", async () => {

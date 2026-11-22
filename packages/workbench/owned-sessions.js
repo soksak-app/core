@@ -31,9 +31,18 @@ function requireSession(session) {
   return entry;
 }
 
+/** The failure that a sidecar reply states, or null: a refusal that states its rule and reason, as the input guard of the sidecar does,
+ * keeps them in the text, so the person reads why the request was refused. */
+export function ownedReplyFailure(where, reply) {
+  if (reply?.error === undefined) return null;
+  const parts = [reply.error, reply.rule, reply.reason].filter((part) => part !== undefined && part !== "");
+  return new Error(`${where}: ${parts.join(": ")}`);
+}
+
 /** The reply of a sidecar request that names the session: a failed reply states its error, and any other reply must name the session. */
 function sessionReply(where, reply, session) {
-  if (reply?.error !== undefined) throw new Error(`${where}: ${reply.error}`);
+  const failure = ownedReplyFailure(where, reply);
+  if (failure) throw failure;
   if (reply?.session !== session) throw new Error(`${where}: the sidecar reply names no session ${session}`);
   return reply;
 }
@@ -59,7 +68,8 @@ export async function openOwnedSession({ plugin: id, params, size }, surface) {
   if (!port) throw new Error(`owned session sidecar unavailable: ${sidecar}`);
   // default: an open without params sends null, the value of an absent parameter set.
   const reply = await port.send(surface, { operation: "open", session: { creation }, size: sizeBody(size), params: params ?? null });
-  if (reply?.error !== undefined) throw new Error(`core.session.open: ${reply.error}`);
+  const failure = ownedReplyFailure("core.session.open", reply);
+  if (failure) throw failure;
   if (typeof reply?.session !== "string" || reply.session === "" || reply.creation !== creation) {
     throw new Error(`core.session.open: the sidecar reply names no session of creation ${creation}`);
   }
@@ -182,7 +192,8 @@ export async function submitOwnedSession({ session, text }, surface) {
 export async function readOwnedSession({ session }, surface) {
   const entry = requireOwner("core.session.read", session, surface);
   const reply = await windowSidecar(entry.sidecar).send(entry.owner, { operation: "read", session });
-  if (reply?.error !== undefined) throw new Error(`core.session.read: ${reply.error}`);
+  const failure = ownedReplyFailure("core.session.read", reply);
+  if (failure) throw failure;
   return reply;
 }
 

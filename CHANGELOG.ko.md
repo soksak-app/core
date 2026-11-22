@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1080-1: Wails와 Tauri에서 거부된 owned session 요청의 실패 text가 sidecar의 rule과 reason을 담는다.
 - F1080: mygo에서 거부된 owned session 요청의 실패 text가 sidecar의 rule과 reason을 담는다. 예: guardRefused: untracked: <reason>.
 - F1079: mygo에서 호출자의 surface에서 실행되는 core command(core.session.open 등)의 view call이 그 view의 surface에서 실행되어, view가 owned session을 열고 쓴다.
 - F1078: Go role state가 저장된 space의 고정 window sidebar card를 건너뛴다. 이 card는 data가 없다. 그래서 core.role.define이 Wails와 mygo의 모든 project에서 더 이상 실패하지 않는다.
