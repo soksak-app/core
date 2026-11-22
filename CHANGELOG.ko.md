@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1048: test inventory가 F42, F45, F954를 F1033-3의 toast 테스트와 symbol로 link하고, lane `administrator rights of the hosts`가 `scripts/check-administrator-rights.mjs`와 그 테스트를 claim한다. Red: `check-tests`가 오래된 link 일곱 개와 claim되지 않은 테스트를 보고했고, mygo source가 `sudo`를 적자 script 테스트가 실패했다. Green: 둘 다 통과한다.
 - F1047: Go와 Rust host library의 setup start 테스트는 identifier `app.soksak.example`과 실행 파일 `sok-example`을 쓴다. Red: `check-host-files`가 framework 이름을 보고했다. Green: 통과하고, 두 테스트도 통과한다.
 - F1046-5: host contract case `setup.host.start-changes-no-file-of-another-run`는 영어와 한국어에서 scope `all`을 가진다. Red: host test check가 scope 없는 case를 거부했다. Green: 통과한다.
 - F1046-4: `packages/sok/go`의 테스트는 command line의 source만 판단하고, `scripts/test/administrator-rights.test.mjs`가 Go host, Rust host, mygo workbench의 어떤 source도 `sudo`를 적지 않음을 판단한다. Red: mygo source가 `sudo`를 적자 script 테스트가 실패했고, 경계 테스트가 sok 테스트가 다른 package를 읽는다고 보고했다. Green: 둘 다 통과한다.

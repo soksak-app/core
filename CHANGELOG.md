@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1048: The test inventory links F42, F45 and F954 to the toast tests and symbols of F1033-3, and the lane `administrator rights of the hosts` claims `scripts/check-administrator-rights.mjs` and its test. Red: `check-tests` reported seven stale links and the unclaimed test, and the script test failed when a mygo source named `sudo`. Green: both pass.
 - F1047: The setup start tests of the Go and Rust host libraries use the identifier `app.soksak.example` and the executable `sok-example`. Red: `check-host-files` reported the framework names. Green: it passes, and both tests pass.
 - F1046-5: The host contract case `setup.host.start-changes-no-file-of-another-run` holds the scope `all` in English and Korean. Red: the host test check rejected the case without a scope. Green: it passes.
 - F1046-4: The test of `packages/sok/go` judges only the sources of the command line, and `scripts/test/administrator-rights.test.mjs` judges that no source of the Go host, the Rust host or the mygo workbench names `sudo`. Red: the script test failed when a mygo source named `sudo`, and the boundary test reported the sok test reading other packages. Green: both pass.

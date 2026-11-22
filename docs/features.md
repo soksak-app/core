@@ -171,6 +171,7 @@ The preceding macOS 26.6.2 arm64 optimized diagnostic measurement cohort retains
   - [o] F1031-9 — Give the Node reporter color tests an explicit color environment. All 39 tests of the two files pass with NO_COLOR set in the parent.
   - [o] F1031-10 — Attach the toast border color to the shown error, declare the close control metric, and give the layout fixtures the dismissal declaration. All 13 affected tests pass.
   - [o] F1031-11 — Follow-up to F1031-10. Refresh the host copies of the workbench declaration with the toast close metric. The two exposure audits and the workbench declaration tests pass.
+- [o] F1048 — P0, follow-up of F1033-3 and F1046-4: The test inventory named the tests and symbols that F1033-3 replaced for F42, F45 and F954, and did not claim the repository test of F1046-4. F954 links the toast tests, and `scripts/check-administrator-rights.mjs` holds the scan that its test judges.
 - [o] F1047 — P0, follow-up of F1044 and F1046: The setup start tests of the Go and Rust host libraries named the frameworks mygo and Tauri in their identifiers and executables; a language host library names no framework, so the tests use the identifier `app.soksak.example`.
 - [o] F1046 — P0, follow-up of F1034 to F1044: The push gate (`make check-preflight`) failed on five checks of the unpushed items.
   - [o] F1046-1 — A comment of the figurative verb check and its test name a Korean verb; comments are English.

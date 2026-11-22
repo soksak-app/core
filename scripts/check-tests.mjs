@@ -95,6 +95,8 @@ lane("release packages", "js-ts", ["scripts/pack-release-packages.mjs"], ["scrip
   lane("native test target audit", "js-ts", ["scripts/check-native-test-targets.mjs"], ["scripts/test/native-test-targets.test.mjs"]),
   lane("comment language audit", "js-ts", ["scripts/check-comment-language.mjs"], ["scripts/test/comment-language.test.mjs"]),
 lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-range.test.mjs"]),
+  // The repository test judges the sources of the hosts and of the mygo workbench, which no package test of another package reads.
+  lane("administrator rights of the hosts", "js-ts", ["scripts/check-administrator-rights.mjs"], ["scripts/test/administrator-rights.test.mjs"]),
   lane("documentation and checklist checks", "js-ts", ["scripts/check-docs.mjs", "scripts/checklist.mjs"], ["scripts/test/checklist.test.mjs", "scripts/test/kit-records.test.mjs"]),
   lane("release notes", "js-ts", ["scripts/release-notes.mjs", "scripts/markdown-links.mjs"], ["scripts/test/release-notes.test.mjs"]),
   lane("markdown table cells", "js-ts", ["scripts/markdown-table.mjs"], ["scripts/test/markdown-table.test.mjs"]),
@@ -550,6 +552,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/sok/go/tests/sok_test.go", id: "TestNoCommandNeedsAdministratorRights" },
+      { file: "scripts/test/administrator-rights.test.mjs", id: "no source of the hosts or of the mygo workbench starts sudo" },
       { file: "packages/sok/go/tests/platform/darwin/setup_test.go", id: "TestSetupInstallRunsNoSudo" },
       { file: "packages/sok/rust/tests/sok_test.rs", id: "sok_has_no_path_entry_command" },
       { file: "packages/sok/rust/tests/sok_test.rs", id: "no_source_runs_sudo" },
@@ -1287,15 +1290,14 @@ const FEATURE_LINKS = [
     id: "F954",
     implementation: [
       { file: "packages/workbench-mygo/src/cards.go", symbol: "ui.Row(c).Shrink(1).MinWidth(0).AlignItems(ui.Center).Gap(m.surfaceStatusGap)" },
-      { file: "packages/workbench/surface-status.js", symbol: "export function setTabError(status, tab, text)" },
-      { file: "packages/workbench/app.css", symbol: ".surface-status,.status__error{display:block;flex:0 1 auto;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}" },
+      { file: "packages/workbench/surface-status.js", symbol: "export function setTabError(tab, text) {" },
+      { file: "packages/workbench/surface-status.js", symbol: 'indicator.textContent = "표면 오류";' },
     ],
     tests: [
-      { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestALongErrorStaysOnOneLineInsideTheStatusRow" },
-      { file: "packages/workbench/test/status-errors.test.mjs", id: "an error of the status row stays on one line and is cut with an ellipsis" },
-      { file: "packages/workbench/test/status-errors.test.mjs", id: "an error of the status row carries its whole text as its tooltip until it is withdrawn" },
+      { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestTheStatusRowHoldsNoErrorText" },
+      { file: "packages/workbench/test/status-errors.test.mjs", id: "an error of the status row shows its text in the toast and the row keeps a state label" },
     ],
-    expected: "The error of a surface and the operation error of a tab stay on the one line of the card footer in both workbenches, cut with an ellipsis, with the whole text as the tooltip.",
+    expected: "The footer of a narrow card does not overflow with an error: the status row holds a short state label, and the error text of a surface or a tab shows in the error toast (F1033-3).",
     levels: ["unit"],
   },
   {
@@ -11499,7 +11501,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/shown-errors.js", symbol: "export function showError" },
     ],
     tests: [
-      { file: "packages/workbench/test/shown-errors.test.mjs", id: "an error shown on the screen is logged once until it changes or clears" },
+      { file: "packages/workbench/test/shown-errors.test.mjs", id: "an error shown on the screen opens a toast, is logged once until it changes or clears, and leaves its control unchanged" },
       { file: "packages/workbench/test/error-display.test.mjs", id: "the error color is used only by the elements of the error display path" },
     ],
     expected: "Every error that the page shows is written to the application log when it appears.",
@@ -12213,7 +12215,7 @@ const FEATURE_LINKS = [
   {
     id: "F45",
     implementation: [
-      { file: "packages/workbench/shown-errors.js", symbol: "element.dataset.error = where" },
+      { file: "packages/workbench/shown-errors.js", symbol: "shown.dataset.error = where;" },
     ],
     tests: [
       { file: "packages/workbench/test/error-display.test.mjs", id: "only the error display path marks an element as an error" },
@@ -17274,9 +17276,10 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // F1031 verifies and releases the core candidate; its capabilities are the linked items F1031-1 to F1031-6, and it changes no behaviour itself.
 // F1036 states actions with literal verbs in the records and adds the document check of them; it changes no behaviour.
 // F1040 and F1043 group their items; the capabilities are the linked items F1040-1 and F1043-2, and F1043-1 and F1043-3 record and find.
+// F1048 brings the test inventory current with F1033-3 and F1046-4; it changes no behaviour.
 // F1047 removes the framework names from the setup start tests of the host libraries; it changes no behaviour.
 // F1046 brings the checks of the repository current with F1034 to F1044; it changes no behaviour.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F1047", "F1046", "F1043", "F1040", "F1036", "F1041", "F1031", "F1017", "F1005", "F982-7", "F982-8", "F982-10", "F993", "F989", "F904", "F907", "F897", "F887", "F886", "F883-1", "F873", "F872", "F871", "F870", "F869", "F867-11", "F867-10", "F867-9", "F867-8", "F867-7", "F867", "F523", "F866", "F865", "F864", "F863","F862", "F861", "F860", "F859", "F858", "F857", "F856", "F855", "F854", "F853", "F852", "F851", "F850", "F849", "F848", "F847", "F846", "F845", "F835", "F843", "F842", "F841", "F840", "F839", "F838", "F837", "F836", "F834", "F833", "F832", "F830-3", "F830-2", "F830-1", "F830", "F825-1", "F829", "F827-1", "F827", "F828", "F826", "F825", "F820-1", "F823-1", "F824", "F822", "F823", "F821", "F819", "F818", "F817", "F816", "F814", "F813", "F812", "F811", "F810", "F809", "F808", "F805", "F804", "F803", "F802", "F801", "F800", "F799", "F795-5", "F798", "F795-1-1", "F795-7", "F796", "F795-2", "F795-1", "F788", "F676", "F673", "F510", "F664-1", "F648", "F646", "F582", "F497", "F496", "F494", "F492", "F495", "F493", "F491", "F490", "F489", "F488", "F639", "F637", "F629", "F486", "F487", "F485", "F484", "F435-8-2", "F483-1", "F435-8-1", "F435-7", "F483", "F482", "F435-6", "F631", "F481", "F479", "F435-5", "F478", "F477", "F476", "F474", "F475", "F473", "F472", "F471", "F239-276", "F97", "F16", "F470", "F469", "F468", "F466", "F467", "F465", "F463", "F464", "F561", "F581", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
+const NON_CAPABILITY_COMPLETIONS = new Set(["F1048", "F1047", "F1046", "F1043", "F1040", "F1036", "F1041", "F1031", "F1017", "F1005", "F982-7", "F982-8", "F982-10", "F993", "F989", "F904", "F907", "F897", "F887", "F886", "F883-1", "F873", "F872", "F871", "F870", "F869", "F867-11", "F867-10", "F867-9", "F867-8", "F867-7", "F867", "F523", "F866", "F865", "F864", "F863","F862", "F861", "F860", "F859", "F858", "F857", "F856", "F855", "F854", "F853", "F852", "F851", "F850", "F849", "F848", "F847", "F846", "F845", "F835", "F843", "F842", "F841", "F840", "F839", "F838", "F837", "F836", "F834", "F833", "F832", "F830-3", "F830-2", "F830-1", "F830", "F825-1", "F829", "F827-1", "F827", "F828", "F826", "F825", "F820-1", "F823-1", "F824", "F822", "F823", "F821", "F819", "F818", "F817", "F816", "F814", "F813", "F812", "F811", "F810", "F809", "F808", "F805", "F804", "F803", "F802", "F801", "F800", "F799", "F795-5", "F798", "F795-1-1", "F795-7", "F796", "F795-2", "F795-1", "F788", "F676", "F673", "F510", "F664-1", "F648", "F646", "F582", "F497", "F496", "F494", "F492", "F495", "F493", "F491", "F490", "F489", "F488", "F639", "F637", "F629", "F486", "F487", "F485", "F484", "F435-8-2", "F483-1", "F435-8-1", "F435-7", "F483", "F482", "F435-6", "F631", "F481", "F479", "F435-5", "F478", "F477", "F476", "F474", "F475", "F473", "F472", "F471", "F239-276", "F97", "F16", "F470", "F469", "F468", "F466", "F467", "F465", "F463", "F464", "F561", "F581", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66), the window checks of plugins (F110) and the registry listing of the hwp plugin (F141, registry items G37 and G38). Core cannot read
