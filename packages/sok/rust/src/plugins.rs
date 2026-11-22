@@ -458,6 +458,50 @@ pub fn read_installed_manifests(
     Ok((state, manifests))
 }
 
+/// Checks the program files of the plugins whose version changed: each program whose text has the form `plugin:<path>` names a
+/// regular file with an execute bit in the installed version folder (docs/spec/plugins.md#pluginjson). The manifests were checked
+/// by the reader, so each path has the form that the reader accepts.
+fn check_program_files(
+    config_dir: &Path,
+    state: &InstalledState,
+    ids: &[String],
+) -> Result<(), String> {
+    let platform = platform::current()?;
+    for id in ids {
+        let plugin = &state.plugins[id];
+        let installed = read_installed_manifest(config_dir, id, plugin)?;
+        let Some(programs) = installed.value.get("programs").and_then(Value::as_object) else {
+            continue;
+        };
+        let mut names: Vec<&String> = programs.keys().collect();
+        names.sort();
+        for name in names {
+            let Some(program) = programs[name].get("program").and_then(Value::as_str) else {
+                continue;
+            };
+            let Some(path) = program.strip_prefix(crate::manifest::PROGRAM_PLUGIN_PREFIX) else {
+                continue;
+            };
+            let file = config_dir.join(&plugin.path).join(path);
+            match std::fs::metadata(&file) {
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    return Err(format!(
+                        "plugin {id}: programs.{name} program {program} is not found"
+                    ));
+                }
+                Err(error) => return Err(crate::files::file_error(file.display(), &error)),
+                Ok(metadata) if !metadata.is_file() || !platform.executable(&metadata) => {
+                    return Err(format!(
+                        "plugin {id}: programs.{name} program {program} is not a regular executable file"
+                    ));
+                }
+                Ok(_) => {}
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Reads and checks the plugin.json of the installed plugin id.
 pub fn read_installed_manifest(
     config_dir: &Path,
@@ -716,6 +760,7 @@ fn install_plugin_unless(
         extract(data, &config_dir.join(&plugin.path))
             .map_err(|error| format!("plugin {changed} {} package: {error}", plugin.version))?;
     }
+    check_program_files(config_dir, &state, &order)?;
     drop_unnamed_sidecars(&mut state);
     if stop() {
         return Err(STOPPED.to_string());

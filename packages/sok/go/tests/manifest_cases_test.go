@@ -68,7 +68,7 @@ func TestPluginInstallReplaysTheManifestCases(t *testing.T) {
 			})
 			for _, file := range c.PackageFiles {
 				if file != "plugin.json" {
-					writeTree(t, dir, map[string]string{file: ""})
+					writeTree(t, dir, map[string]string{file + "*": ""}) // executable, so a plugin program file of an accepted case runs
 				}
 			}
 			release := support.PackRelease(t, dir, t.TempDir())

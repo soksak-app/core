@@ -615,6 +615,9 @@ func installPlugin(configDir, id, core, platform string, update bool, stop func(
 			return nil, fmt.Errorf("plugin %s %s package: %w", changed, plugin.Version, err)
 		}
 	}
+	if err := checkProgramFiles(configDir, state, plan.order); err != nil {
+		return nil, err
+	}
 	dropUnnamedSidecars(state)
 	if stopped() {
 		return nil, errStopped
@@ -646,6 +649,46 @@ func installPlugin(configDir, id, core, platform string, update bool, stop func(
 		return nil, err
 	}
 	return pluginResult(state, id), nil
+}
+
+// checkProgramFiles checks the program files of the plugins whose version changed: each programs member whose program has the
+// form plugin:<path> names a regular file with an execute bit in the installed version folder (docs/spec/plugins.md#pluginjson).
+// The manifests were checked by ValidateManifest, so the paths have the form that the check of the reader accepts.
+func checkProgramFiles(configDir string, state *InstalledState, ids []string) error {
+	for _, id := range ids {
+		plugin := state.Plugins[id]
+		installed, err := ReadInstalledManifest(configDir, id, plugin)
+		if err != nil {
+			return err
+		}
+		programs, ok := installed.Value["programs"].(map[string]any)
+		if !ok {
+			continue
+		}
+		names := make([]string, 0, len(programs))
+		for name := range programs {
+			names = append(names, name)
+		}
+		slices.Sort(names)
+		for _, name := range names {
+			entry, _ := programs[name].(map[string]any)
+			program, _ := entry["program"].(string)
+			if !strings.HasPrefix(program, ProgramPluginPrefix) {
+				continue
+			}
+			file := filepath.Join(configDir, plugin.Path, filepath.FromSlash(strings.TrimPrefix(program, ProgramPluginPrefix)))
+			info, err := os.Stat(file)
+			switch {
+			case errors.Is(err, fs.ErrNotExist):
+				return fmt.Errorf("plugin %s: programs.%s program %s is not found", id, name, program)
+			case err != nil:
+				return fileError(file, err)
+			case !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0:
+				return fmt.Errorf("plugin %s: programs.%s program %s is not a regular executable file", id, name, program)
+			}
+		}
+	}
+	return nil
 }
 
 // dependencyPlan is the plan that installs a plugin and its plugin dependencies. state is the planned installation

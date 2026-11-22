@@ -99,6 +99,11 @@ fn plugin_install_replays_the_manifest_cases() {
             .filter(|file| file.as_str() != "plugin.json")
         {
             write_tree(dir.path(), &[(file.as_str(), "")]);
+            // Each package file is executable, so that a plugin program file of an accepted case is a program that runs.
+            soksak_sok::platform::current()
+                .unwrap()
+                .set_executable(&dir.path().join(file), true)
+                .unwrap();
         }
         let out = Folder::new("manifest-release");
         let release = package_release::pack(dir.path(), out.path());
