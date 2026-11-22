@@ -1842,6 +1842,53 @@ fn the_end_of_a_supplier_fails_the_wait_until_the_region_is_configured_again() {
     );
 }
 
+// contract: images.wait.restarted-supplier-not-awaited
+// A region whose supplier connection ended is not awaited by a later presentation wait after the next connection receives its
+// configuration, because that connection may hold no session for the region and then sends no raster; the first frame of the region
+// that the host presents makes the waits require its rasters again (docs/spec/native-surfaces.md#image-regions).
+#[test]
+fn a_restarted_supplier_that_sends_no_raster_ends_no_later_wait() {
+    let (images, key, _, _, _) = screen_fixture();
+    images.invalidate_sidecar("sidecar-a");
+    let configure = images
+        .configure_raster(&key, 800, 600, 2.0, true)
+        .unwrap()
+        .expect("the region is configured for the next connection");
+    for settled in [false, true] {
+        assert_eq!(
+            images.wait_layout_rasters(settled),
+            Ok(()),
+            "the layout wait (settled {settled}) after the restart of the supplier"
+        );
+    }
+    assert_eq!(
+        images.wait_current(&|| None),
+        Ok(()),
+        "the presentation wait after the restart of the supplier"
+    );
+    assert_eq!(images.pending_rasters(), "none");
+    images
+        .authorize_frame(
+            &key,
+            "sidecar-a",
+            super::FrameIdentity {
+                generation: configure.generation,
+                raster: configure.raster,
+                width: configure.width,
+                height: configure.height,
+                scale: configure.scale,
+                sequence: 1,
+            },
+        )
+        .expect("authorize the first frame of the next connection");
+    assert!(images.mark_presented(&key, configure.generation, configure.raster, 1));
+    images.configure_raster(&key, 810, 600, 2.0, true).unwrap();
+    assert!(
+        !images.current_presented(),
+        "after a presented frame of the next connection a new raster blocks the wait"
+    );
+}
+
 /// A step that ends the unanswered screen request of the region of screen_fixture: (case, the change).
 type ScreenRequestEnd = (&'static str, fn(&super::Images, &super::Key));
 

@@ -203,6 +203,12 @@ impl Inner {
         self.shown(key, state) && (!self.off_screen || self.draws_covered())
     }
 
+    /// Reports whether a wait requires a raster of the region: it is drawing, has a raster, and its supplier did not end since
+    /// the region last presented a frame.
+    fn awaited(&self, key: &Key, state: &RasterState) -> bool {
+        self.drawing(key, state) && state.raster != 0 && !state.supplier_ended
+    }
+
     /// Reports whether a region and its outer surface are shown, whatever the state of the window.
     fn shown(&self, key: &Key, state: &RasterState) -> bool {
         // default: the address of a region that is not registered is 0, the same as a region that is not attached.
@@ -245,6 +251,8 @@ impl Inner {
                 // The drawing state names the generation, so the new generation is sent again.
                 state.drawing_sent = None;
                 state.presentation_error = None;
+                // A new document of the surface opens its supplier sessions again, so its rasters are required again.
+                state.supplier_ended = false;
                 state.last_sequence = 0;
                 state.presented_raster = 0;
                 state.presented_sequence = 0;
@@ -271,6 +279,10 @@ struct RasterState {
     /// change does not reset it, because it counts the frames of the region (host.window presentedFrames).
     presented_frames: u64,
     presentation_error: Option<String>,
+    /// True from the end of the supplier connection of the region until the host presents a frame of the region again. The next
+    /// connection may hold no session for the region and then sends no raster, so no wait requires a raster of the region
+    /// meanwhile (docs/spec/native-surfaces.md#image-regions).
+    supplier_ended: bool,
     /// The drawing state and the hiding last sent to the supplier (mark_drawing_sent), or None before one was sent.
     drawing_sent: Option<(bool, bool)>,
     /// The screen request that the region has not had answered, or None when none is unanswered.
@@ -1073,6 +1085,7 @@ impl Images {
             });
             // The service of the new connection has no drawing state and no screen of the region either.
             state.drawing_sent = None;
+            state.supplier_ended = true;
             state.end_screen();
             invalidated += 1;
         }
@@ -1286,6 +1299,8 @@ impl Images {
         state.presented_raster = raster;
         state.presented_sequence = sequence;
         state.presented_frames += 1;
+        // A presented frame shows that the supplier draws the region, so the waits require its rasters again.
+        state.supplier_ended = false;
         if sequence == state.last_sequence {
             state.presentation_error = None;
         }
@@ -1318,8 +1333,7 @@ impl Images {
 
     fn current_presented_locked(inner: &Inner) -> bool {
         inner.states.iter().all(|(key, state)| {
-            !inner.drawing(key, state)
-                || state.raster == 0
+            !inner.awaited(key, state)
                 || (state.last_sequence > 0
                     && state.presented_raster == state.raster
                     && state.presented_sequence == state.last_sequence)
@@ -1328,8 +1342,7 @@ impl Images {
 
     fn current_raster_snapshot_installed_locked(inner: &Inner) -> bool {
         inner.states.iter().all(|(key, state)| {
-            !inner.drawing(key, state)
-                || state.raster == 0
+            !inner.awaited(key, state)
                 || (state.presented_raster == state.raster && state.presented_sequence > 0)
         })
     }
@@ -1347,7 +1360,7 @@ impl Images {
                 let presented = state.last_sequence > 0
                     && state.presented_raster == state.raster
                     && state.presented_sequence == state.last_sequence;
-                if !inner.drawing(key, state) || state.raster == 0 || presented {
+                if !inner.awaited(key, state) || presented {
                     return None;
                 }
                 let surface = if known.is_some() {

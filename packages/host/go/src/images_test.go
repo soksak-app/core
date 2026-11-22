@@ -993,6 +993,43 @@ func TestTheEndOfASupplierFailsTheWaitUntilTheRegionIsConfiguredAgain(t *testing
 	}
 }
 
+// contract: images.wait.restarted-supplier-not-awaited
+// A region whose supplier connection ended is not awaited by a later presentation wait after the next connection receives its
+// configuration, because that connection may hold no session for the region and then sends no raster; the first frame of the region
+// that the host presents makes the waits require its rasters again (docs/spec/native-surfaces.md#image-regions).
+func TestARestartedSupplierThatSendsNoRasterEndsNoLaterWait(t *testing.T) {
+	images, key, raster, _ := screenFixture(t)
+	images.InvalidateSidecar("sidecar-a")
+	configuration, err := images.ConfigureRaster(key, raster.Width, raster.Height, raster.Scale, true)
+	if err != nil || configuration == nil {
+		t.Fatalf("configure the region for the next connection: %+v, %v", configuration, err)
+	}
+	for _, settled := range []bool{false, true} {
+		if err := images.WaitLayoutRasters(settled); err != nil {
+			t.Fatalf("the layout wait (settled %t) after the restart of the supplier ended with %v, want nil", settled, err)
+		}
+	}
+	if err := images.WaitCurrentError(nil); err != nil {
+		t.Fatalf("the presentation wait after the restart of the supplier ended with %v, want nil", err)
+	}
+	if pending := images.PendingRasters(); pending != "none" {
+		t.Fatalf("the pending rasters after the restart of the supplier are %s, want none", pending)
+	}
+	if status := images.AuthorizeFrame(key, "sidecar-a", configuration.Generation, configuration.Raster,
+		configuration.Width, configuration.Height, configuration.Scale, 1); status != "" {
+		t.Fatalf("authorize the first frame of the next connection: %q", status)
+	}
+	if !images.MarkPresented(key, configuration.Generation, configuration.Raster, 1) {
+		t.Fatal("the first frame of the next connection was not marked presented")
+	}
+	if _, err := images.ConfigureRaster(key, raster.Width+10, raster.Height, raster.Scale, true); err != nil {
+		t.Fatal(err)
+	}
+	if images.CurrentPresented() {
+		t.Fatal("after a presented frame of the next connection a new raster does not block the wait")
+	}
+}
+
 // frameFixture returns a window with the drawing region copy and the region idle, which is not drawing, both of sidecar-a.
 func frameFixture(t *testing.T) (*Images, ImageKey, ImageKey, *ImageConfigure) {
 	t.Helper()

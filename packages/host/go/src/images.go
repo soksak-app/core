@@ -142,6 +142,10 @@ type ImageRasterState struct {
 	// generation change does not reset it, because it counts the frames of the region (host.window presentedFrames).
 	PresentedFrames   uint64
 	PresentationError string
+	// SupplierEnded is true from the end of the supplier connection of the region until the host presents a frame of the region
+	// again. The next connection may hold no session for the region and then sends no raster, so no wait requires a raster of the
+	// region meanwhile (docs/spec/native-surfaces.md#image-regions).
+	SupplierEnded bool
 	// Drawing and Hidden are the drawing state last sent to the supplier, and DrawingSent whether one was sent (MarkDrawingSent).
 	Drawing     bool
 	Hidden      bool
@@ -488,6 +492,8 @@ func (i *Images) BeginGeneration(surface string) uint64 {
 			// The drawing state names the generation, so the new generation is sent again.
 			state.DrawingSent = false
 			state.PresentationError = ""
+			// A new document of the surface opens its supplier sessions again, so its rasters are required again.
+			state.SupplierEnded = false
 			state.LastSequence = 0
 			state.PresentedRaster = 0
 			state.PresentedSequence = 0
@@ -735,6 +741,7 @@ func (i *Images) InvalidateSidecar(sidecar string) int {
 		}
 		// The service of the new connection has no drawing state and no screen of the region either.
 		state.DrawingSent = false
+		state.SupplierEnded = true
 		endScreenLocked(state)
 		invalidated++
 	}
@@ -827,6 +834,8 @@ func (i *Images) MarkPresented(key ImageKey, generation, raster uint64, sequence
 	state.PresentedRaster = raster
 	state.PresentedSequence = sequence
 	state.PresentedFrames++
+	// A presented frame shows that the supplier draws the region, so the waits require its rasters again.
+	state.SupplierEnded = false
 	if sequence == state.LastSequence {
 		state.PresentationError = ""
 	}
@@ -885,10 +894,16 @@ func (i *Images) MarkPresentationFailed(key ImageKey, generation, raster uint64,
 	i.changedLocked()
 }
 
-// currentPresentedLocked returns whether every drawing image region displayed the current raster.
+// awaitedLocked reports whether a wait requires a raster of the region: it is drawing, has a raster, and its supplier did not end
+// since the region last presented a frame. Call it while holding i.mu.
+func (i *Images) awaitedLocked(key ImageKey, state *ImageRasterState) bool {
+	return i.drawingLocked(key, state) && state.Raster > 0 && !state.SupplierEnded
+}
+
+// currentPresentedLocked returns whether every awaited image region displayed the current raster.
 func (i *Images) currentPresentedLocked() bool {
 	for key, state := range i.states {
-		if i.drawingLocked(key, state) && state.Raster > 0 &&
+		if i.awaitedLocked(key, state) &&
 			(state.LastSequence <= 0 || state.PresentedRaster != state.Raster || state.PresentedSequence != state.LastSequence) {
 			return false
 		}
@@ -896,10 +911,10 @@ func (i *Images) currentPresentedLocked() bool {
 	return true
 }
 
-// currentRasterSnapshotInstalledLocked reports whether every drawing image region has a presented frame of its current raster.
+// currentRasterSnapshotInstalledLocked reports whether every awaited image region has a presented frame of its current raster.
 func (i *Images) currentRasterSnapshotInstalledLocked() bool {
 	for key, state := range i.states {
-		if i.drawingLocked(key, state) && state.Raster > 0 &&
+		if i.awaitedLocked(key, state) &&
 			(state.PresentedRaster != state.Raster || state.PresentedSequence <= 0) {
 			return false
 		}
@@ -915,7 +930,7 @@ func (i *Images) PendingRasters() string {
 	var pending []string
 	for key, state := range i.states {
 		_, known := i.surfaceVisible[key.Surface]
-		if !i.drawingLocked(key, state) || state.Raster == 0 {
+		if !i.awaitedLocked(key, state) {
 			continue
 		}
 		if state.LastSequence > 0 && state.PresentedRaster == state.Raster && state.PresentedSequence == state.LastSequence {

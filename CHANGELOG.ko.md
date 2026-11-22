@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1092: presentation 대기는 공급자 연결이 끝난 image region의 raster를 host가 그 region의 프레임을 다시 표시할 때까지 요구하지 않으므로, region의 session을 갖지 않은 재시작한 sidecar가 더 이상 workbench의 모든 명령을 붙잡지 않는다. 검증: Go와 Rust image 대기 사례의 Red, 이후 두 host의 image 테스트로 Green.
 - F1091: `sessions` 응답의 각 owned session 항목은 그 프로그램이 마지막으로 보고한 프로그램 상태 또는 `null`인 `program`을 담는다. Go와 Rust host는 다른 값을 `invalid message: sessions program is not idle, working, blocked or null`로 거부하고, page와 mygo는 재시작 뒤 그 상태와 함께 세션을 adopt한다. 이전에는 adopt한 세션이 프로그램이 변화를 보고할 때까지 프로그램 상태를 갖지 않았으므로, 방의 idle member가 거부되었다. 검증: Go, Rust, mygo, page 사례의 Red, 그 뒤 Go와 Rust host session test, mygo workbench test, page owned session test의 Green.
 - F1090: host가 view를 마운트한 소유자에 대한 owned session 메시지는 mygo와 페이지에서 view-source-registered의 소스 generation으로 viewSidecarSend를 거치고, mygo에서 placement가 끝나지 않은 소유자에 대한 메시지는 마운트나 placement의 끝을 기다린다.
 
