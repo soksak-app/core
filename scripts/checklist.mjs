@@ -14,6 +14,29 @@ export function checklistCounts(text, file = "docs/features.md") {
 
 // These are guards on retained historical records, not product behavior tests.
 // A checklist without the corresponding record has no obligation to add it.
+// The figurative verbs that documents do not use (F1036): 닿다 in Korean (맞닿다, which states that two edges touch, is literal), and reach, drive and talk to in English. Code spans and code
+// blocks hold identifiers and quoted texts, and the Windows path prefix is named the drive form, rule or prefix, so neither is reported.
+const FIGURATIVE_VERBS = /(?<!맞)닿[가-힣]*|\b(?:reach(?:es|ed|ing)?|drive[s]?|driving|talks? to|talked to|talking to)\b/gi;
+
+export function auditFigurativeVerbs(source, file) {
+  const errors = [];
+  let fence = null;
+  source.split("\n").forEach((line, index) => {
+    const opening = line.match(/^\s*(`{3,}|~{3,})/);
+    if (opening) {
+      if (fence === null) fence = opening[1];
+      else if (opening[1].startsWith(fence)) fence = null;
+      return;
+    }
+    if (fence !== null) return;
+    const prose = line.replace(/`[^`]*`/g, "").replace(/drive (?:form|letter|rule|prefix)|\(drive\) prefix/gi, "");
+    for (const match of prose.matchAll(FIGURATIVE_VERBS)) {
+      errors.push(`${file}:${index + 1}: figurative verb ${match[0]}; state the literal action`);
+    }
+  });
+  return errors;
+}
+
 export function auditHistoricalScopeWording(source, file = "docs/features.md") {
   const forbidden = file.endsWith(".ko.md") ? [
     "통제 사이트 pixel과 복원/신규 문서 검증은 F3에서 미완료로 남아 있다.",

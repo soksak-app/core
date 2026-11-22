@@ -152,7 +152,7 @@ Auditors: two fresh subagents, each reviewing all three decisions. Thirteen obje
 - A-D8-2 and the cfg case (D8.3 breaks `#[cfg(feature)]` declarations): accepted. Verified `endpoint_test.rs:176-178`. D8.3 allows `cfg(feature)` and rejects outcome-changing attributes.
 - A-D8-3 and B-D8-7 (`groupResults` merges owners before `statusOf`): accepted. Verified `test-hosts.mjs:91-100`. D8.1 keys by run, owner and name; D8.5 adds the case.
 - B-D9-1 (plugin host cannot receive the sidecar events the listing needs): accepted as a required spec change. The quoted phrase "no sidecar send" is not in `plugin-host.md` on main; the substantive point is confirmed: the spec defines no host channel to its plugin's sidecar events. D9.2 adds the relay, with a check of the view's relay path as a round-2 item. The view-channel alternative is rejected (D9.2).
-- B-D9-2 (expansion is never delivered to the plugin): accepted. Verified `declared-ui.md:117` ("does not reach the plugin"). D9.3 adds the `declared-ui.expanded` message.
+- B-D9-2 (expansion is never delivered to the plugin): accepted. Verified at `declared-ui.md:117`, which stated that the expansion is not delivered to the plugin. D9.3 adds the `declared-ui.expanded` message.
 - A-D9-4 and B-D9-3 (vocabulary gaps: git marker, row bookmark action, open notice, header star, Enter-to-open): accepted. Verified `tree-horizontal.js:15-17,29,62,65` and `tree.js:82-85,119,124`. D9.1 (d) to (g) add them. Enter-to-open is D9.1b.
 - A-D9-4 (context grep claim not reproducible): accepted. The wording now names `contextmenu`, `rename` and `drag`.
 - A-D9-5 and B-D9-5 (D9.1a and D9.4 contradict): accepted. D9.5 is the single wording: new IDs, F212.8 stays `[o]`.

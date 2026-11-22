@@ -5,7 +5,7 @@ import { absolute, markdownLinks } from "./markdown-links.mjs";
 import { tableCells } from "./markdown-table.mjs";
 import { checkCompletedItems, retiredChecklistItems } from "@soksak/kit/checklist";
 import { headingAnchors } from "@soksak/kit/docs";
-import { auditCommittedEvidenceWording, auditHistoricalScopeWording, auditModalParitySnapshotWording, checkChangelogTranslations, checkChecklistTranslations, checkSpecificationIds, conflictMarkerErrors } from "./checklist.mjs";
+import { auditCommittedEvidenceWording, auditFigurativeVerbs, auditHistoricalScopeWording, auditModalParitySnapshotWording, checkChangelogTranslations, checkChecklistTranslations, checkSpecificationIds, conflictMarkerErrors } from "./checklist.mjs";
 
 const files = [...new Set(execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
   { encoding: "utf8" }).split("\0"))].filter((file) => file.endsWith(".md") && existsSync(file));
@@ -29,6 +29,7 @@ for (const file of files) {
   if (!existsSync(partner)) errors.push(`${file}: missing translation pair ${partner}`);
   const text = withoutCode(readFileSync(file, "utf8"));
   if (file.startsWith("docs/spec/")) errors.push(...checkSpecificationIds(text, file));
+  errors.push(...auditFigurativeVerbs(readFileSync(file, "utf8"), file));
   // A table cut by a blank line: when a table row, a blank line and a table row follow, the later row does not belong to the table.
   const lines = text.split("\n");
   lines.forEach((line, index) => {

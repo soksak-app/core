@@ -200,7 +200,7 @@ Observed in the local Claude Code 2.1.327 binary and in the open-source Codex re
 ### 3.5 Red and Green for F899-7
 
 - Red: a file created in a registered folder produces no event for the observing terminal (fails on the current code).
-- Green: one event per change, with its source and sequence number, reaches the registered terminal. The message then reaches the agent
+- Green: one event per change, with its source and sequence number, is delivered to the registered terminal. The message is then delivered to the agent
   through the channel chosen in 3.3.
 
 ### 3.6 Open items in Part 3
@@ -309,7 +309,7 @@ No item is implemented.
 | F899-4 terminal state | 2 | sidecars, adapters | a fixture prompt, running command and finished command produce no state events | each transition emits one event with its source and sequence number | not started |
 | F899-5 key adapters and dialogs | 4 | adapters; supervisor | a fixture TUI with a dialog does not respond to the declared key | the TUI key or the fallback is sent, and the path is logged | not started |
 | F899-6 destructive command guard | 5 | sidecar layer | a destructive command fixture is not refused | the refusal is in the event log with its rule, and unparseable input is refused | not started |
-| F899-7 messaging | 3 | sidecar, adapters, sok MCP server | a file created in a registered folder produces no event | one event per change reaches the registered terminal through the chosen channel | not started |
+| F899-7 messaging | 3 | sidecar, adapters, sok MCP server | a file created in a registered folder produces no event | one event per change is delivered to the registered terminal through the chosen channel | not started |
 
 ## Part 7: Decisions
 

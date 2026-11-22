@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { checklistCounts, checkChangelogTranslations, checkChecklistTranslations, checkSpecificationIds } from "../checklist.mjs";
+import { auditFigurativeVerbs, checklistCounts, checkChangelogTranslations, checkChecklistTranslations, checkSpecificationIds } from "../checklist.mjs";
 
 const checker = fileURLToPath(new URL("../check-docs.mjs", import.meta.url));
 const englishTable = "\n| Feature | Implementation | Validation | Release |\n| --- | --- | --- | --- |\n| Test | Source | Unverified | Unreleased |\n";
@@ -333,4 +333,27 @@ test("check-docs reads a link after a backtick that no run of its block closes",
 test("check-docs passes a text that holds no conflict marker at the start of a line", { timeout: 5000 }, (t) => {
   const result = check(t, "- [~] G1 — task\n", "- [~] G1 — 작업\n", "", undefined, { "heading.md": "Title\n=======\n", "heading.ko.md": "제목\n=======\n" });
   assert.equal(result.status, 0, result.stderr);
+});
+
+// Documents state actions with literal verbs (F1036): 닿다 and the figurative reach, drive and talk to are reported with their line,
+// and code spans, code blocks and the Windows drive form are not.
+test("auditFigurativeVerbs reports the figurative verbs outside code", () => {
+  const source = [
+    "The message reaches the agent.",
+    "이 경로는 application에 닿는다.",
+    "The test drives the window.",
+    "The page talks to the host.",
+    "The test `records-reach-the-class-frame` passes.",
+    "```",
+    "reach",
+    "```",
+    "The `/<letter>:` (drive form) prefix is refused.",
+    "The message is delivered to the agent.",
+  ].join("\n");
+  assert.deepEqual(auditFigurativeVerbs(source, "docs/a.md"), [
+    "docs/a.md:1: figurative verb reaches; state the literal action",
+    "docs/a.md:2: figurative verb 닿는다; state the literal action",
+    "docs/a.md:3: figurative verb drives; state the literal action",
+    "docs/a.md:4: figurative verb talks to; state the literal action",
+  ]);
 });

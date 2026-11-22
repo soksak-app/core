@@ -152,7 +152,7 @@
 - A-D8-2와 cfg 사례(D8.3이 `#[cfg(feature)]` 선언을 깬다): 수락. `endpoint_test.rs:176-178`로 확인. D8.3은 `cfg(feature)`를 허용하고 결과를 바꾸는 속성을 거부한다.
 - A-D8-3과 B-D8-7(`groupResults`가 `statusOf` 전에 소유자를 합친다): 수락. `test-hosts.mjs:91-100`로 확인. D8.1은 실행, 소유자, 이름으로 묶고 D8.5에 사례를 추가한다.
 - B-D9-1(플러그인 호스트가 목록에 필요한 사이드카 이벤트를 받을 수 없다): 필요한 스펙 변경으로 수락. 인용된 "no sidecar send" 문구는 main의 `plugin-host.md`에 없다. 실질 지적은 확인되었다: 스펙은 플러그인 사이드카 이벤트로 가는 호스트 채널을 정의하지 않는다. D9.2가 중계를 추가한다. view 경로 확인은 라운드 2 항목으로 처리했다. view 채널 대안은 D9.2에서 거부했다.
-- B-D9-2(펼침이 플러그인에 전달되지 않는다): 수락. `declared-ui.md:117`("does not reach the plugin")로 확인. D9.3이 `declared-ui.expanded` 메시지를 추가한다.
+- B-D9-2(펼침이 플러그인에 전달되지 않는다): 수락. 펼침이 plugin에 전달되지 않는다고 적은 `declared-ui.md:117`로 확인. D9.3이 `declared-ui.expanded` 메시지를 추가한다.
 - A-D9-4와 B-D9-3(어휘 빈틈: git 표시, 행 북마크 동작, 열기 알림, 헤더 별, Enter로 열기): 수락. `tree-horizontal.js:15-17,29,62,65`와 `tree.js:82-85,119,124`로 확인. D9.1(d)부터 (g)가 추가한다. Enter로 열기는 D9.1b다.
 - A-D9-4(컨텍스트 검색 문구를 재현할 수 없다): 수락. 이제 `contextmenu`, `rename`, `drag`를 적는다.
 - A-D9-5와 B-D9-5(D9.1a와 D9.4가 충돌): 수락. D9.5가 하나의 문구다: 새 ID, F212.8은 `[o]`.
