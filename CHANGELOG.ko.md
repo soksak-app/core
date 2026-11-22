@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1081: input guard 계약은 세션이 시작한 셸이 명령을 실행하지 않는 동안만 판정한다.
 - F1080-1: Wails와 Tauri에서 거부된 owned session 요청의 실패 text가 sidecar의 rule과 reason을 담는다.
 - F1080: mygo에서 거부된 owned session 요청의 실패 text가 sidecar의 rule과 reason을 담는다. 예: guardRefused: untracked: <reason>.
 - F1079: mygo에서 호출자의 surface에서 실행되는 core command(core.session.open 등)의 view call이 그 view의 surface에서 실행되어, view가 owned session을 열고 쓴다.

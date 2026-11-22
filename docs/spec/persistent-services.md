@@ -97,7 +97,7 @@ When the `version` of the `hello` reply differs from the version that `installed
 
 ## Destructive command guard
 
-The input path of a sidecar judges each command line that an `input` or a `paste` operation submits to a session. The judgement applies to the line editing of the shell: an alternate screen or an application keypad mode is not judged, and the line is then untracked.
+The input path of a sidecar judges each command line that an `input` or a `paste` operation submits to a session. The judgement applies to the line editing of a shell that the session started, while that shell runs no command: a session that started a program directly, a command that the shell runs, an alternate screen and an application keypad mode are not judged, because their keys belong to the program that reads them, and the line is then untracked. A shell that reports no command state through its integration marks is judged.
 
 A submitted line that a declared rule matches, or whose command cannot be decided, is refused. The reply is the error `guardRefused` with the fields `rule` (the id of the matching rule, or `unparseable`, `undecidable` or `untracked`) and `reason`. The refused transaction writes no byte to the session. Each decision is written to the event log of the sidecar with its rule id; the command text is not recorded.
 
