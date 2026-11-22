@@ -47,6 +47,9 @@ type installedUnit struct {
 	Exposes     Exposes
 	Diagnostics json.RawMessage
 	Sidecars    []string
+	// Plugins are the loaded plugins that plugin.json lists in dependencies; a view of the plugin follows their declared statuses
+	// (docs/spec/plugins.md#pluginjson).
+	Plugins []string
 	// Settings holds the local name of each setting.
 	Settings []string
 	// Menu tells whether the plugin declares surface.menu, and Unload holds its surface.unload.
@@ -129,6 +132,8 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 		for name := range plugin.Manifest.Dependencies {
 			if units[name] == nil {
 				unit.Sidecars = append(unit.Sidecars, name)
+			} else {
+				unit.Plugins = append(unit.Plugins, name)
 			}
 		}
 		if len(plugin.Manifest.Exposes) > 0 {

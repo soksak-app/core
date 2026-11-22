@@ -47,6 +47,8 @@ const BINARY_ID = /^[0-9a-f]{32}$/;
  *                   subscribe.settings(), subscribe.logLevels(): register the page subscriptions of the view (view-events.js of this package); each resolves when it is
  *                   registered
  *                 holdsSurface(plugin, surface): whether the surface is a surface of the plugin in the window
+ *                 dependsOn(plugin, owner): whether the plugin lists the owner, a plugin, in its dependencies, which lets a view of the
+ *                   plugin follow the statuses that the owner declares (docs/spec/plugins.md#pluginjson)
  *                 menu: {declared(), frame()} of the surface: whether its plugin declares surface.menu for it, and its applied frame
  *                   {x, y} in the window or null
  *                 data.of(project, plugin): the project data of the plugin for the project, which the data calls read and write
@@ -279,7 +281,7 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
     }
     case "runtime.status.watch":
     case "runtime.status.unwatch": {
-      const watch = statusWatchOf(command, params, plugin, runtime.holdsSurface);
+      const watch = statusWatchOf(command, params, plugin, runtime.holdsSurface, runtime.dependsOn);
       if (command === "runtime.status.watch") await runtime.subscribe.statusWatch(watch.name, watch.surface);
       else await runtime.subscribe.statusUnwatch(watch.name, watch.surface);
       return null;
@@ -497,9 +499,9 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
  * and runs nothing. An unwatch ends only a watch of this view, whose surface was checked when it started, so its surface is not checked:
  * the surface can close before the view unwatches it.
  */
-function statusWatchOf(command, params, plugin, holdsSurface) {
+function statusWatchOf(command, params, plugin, holdsSurface, dependsOn) {
   const fields = objectOf(command, params);
-  const name = statusNameOf(command, fields.name, plugin);
+  const name = statusNameOf(command, fields.name, plugin, dependsOn);
   if (fields.surface === undefined) return { name, surface: undefined };
   if (typeof fields.surface !== "string" || fields.surface === "") throw new TypeError(`view call ${command} requires a non-empty surface`);
   if (command === "runtime.status.watch" && !holdsSurface(plugin, fields.surface)) {
@@ -509,15 +511,16 @@ function statusWatchOf(command, params, plugin, holdsSurface) {
 }
 
 /**
- * The status name of a status watch (docs/spec/native-surfaces.md#view-surfaces, view calls): a core status, whose owner is core, or a
- * status of the plugin of the view. A name without an owner or with another owner is refused, and runs nothing.
+ * The status name of a status watch (docs/spec/native-surfaces.md#view-surfaces, view calls): a core status, whose owner is core, a
+ * status of the plugin of the view, or a status of a plugin that the plugin of the view lists in its dependencies (dependsOn(plugin, owner)).
+ * A name without an owner or with any other owner is refused, and runs nothing.
  */
-function statusNameOf(command, name, plugin) {
+function statusNameOf(command, name, plugin, dependsOn) {
   if (typeof name !== "string" || name === "") throw new TypeError(`view call ${command} requires a non-empty name`);
   const dot = name.indexOf(".");
   const owner = dot < 0 ? null : name.slice(0, dot);
-  if (owner !== "core" && owner !== plugin) {
-    throw new Error(`view call ${command} ${name} is neither a core status nor a status of ${plugin}`);
+  if (owner !== "core" && owner !== plugin && !dependsOn(plugin, owner)) {
+    throw new Error(`view call ${command} ${name} is neither a core status nor a status of ${plugin} or of its dependencies`);
   }
   return name;
 }

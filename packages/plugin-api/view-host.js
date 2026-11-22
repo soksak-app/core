@@ -33,6 +33,7 @@ const KINDS = Object.values(EXPOSE_KINDS);
  *
  *     plugin, surface   the plugin id and the surface id of the view (required)
  *     declarations      the exposure of the plugin, {status, commands, element} as lists of {name}
+ *     dependencies      the plugins that the plugin lists in dependencies: {plugin: {status: [{name}]}}, with the statuses each declares
  *     contributions     the installed plugins {id, package, version, manifest}, from which the contributions of the view resolve
  *     surfaces          [{surface, plugin}]: the surfaces that the window holds
  *     sidecars          the sidecar names that the plugin declares
@@ -100,8 +101,11 @@ export function createTestHost(fixtures) {
   const pluginDeclared = declarationMap(fixtures.declarations ?? {});
   const core = coreExposure();
   const coreDeclared = declarationMap({ status: core.status.map((name) => ({ name })), commands: core.commands.map((name) => ({ name })) });
-  // default: a name is declared when the plugin or core declares it.
-  const declares = (kind, name) => pluginDeclared.has(declarationKey(kind, name)) || coreDeclared.has(declarationKey(kind, name));
+  // default: a fixture without dependencies lists no plugin in dependencies, so the view follows no status of another plugin.
+  const dependencies = fixtures.dependencies ?? {};
+  const dependencyDeclared = declarationMap({ status: Object.values(dependencies).flatMap((entry) => entry.status ?? []) });
+  // default: a name is declared when the plugin, core or a dependency of the plugin declares it.
+  const declares = (kind, name) => pluginDeclared.has(declarationKey(kind, name)) || coreDeclared.has(declarationKey(kind, name)) || dependencyDeclared.has(declarationKey(kind, name));
   const observed = {
     tab: { title: null, footer: null, directory: null, modified: null, error: null, focus: null, notify: [], keep: [] },
     data: [], sidecar: [], commands: [], document: [], errors: [], links: [], programs: [], failures: [], events: [], contributions: [], timers: [],
@@ -337,6 +341,8 @@ export function createTestHost(fixtures) {
       native: gate,
       // default: a fixture without surfaces holds no surface of another plugin.
       holdsSurface: (owner, name) => (fixtures.surfaces ?? []).some((entry) => entry.plugin === owner && entry.surface === name),
+      // default: a fixture without dependencies lists no plugin of the view in dependencies.
+      dependsOn: (viewPlugin, dependency) => viewPlugin === plugin && Object.hasOwn(dependencies, dependency),
       menu: { declared: () => fixtures.menu?.declared === true, frame: () => appliedFrame },
       data: { of: dataOf },
       clipboard: {

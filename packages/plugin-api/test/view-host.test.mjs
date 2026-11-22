@@ -63,6 +63,8 @@ const queue = (...values) => () => {
 // The fixtures of each case that needs more than the base: one fixtures object for the view of the case, or a list of them for a case with
 // two views. A held fixture is released by the replay after the last step of the case.
 const FIXTURES = {
+  // The probe plugin lists other in its dependencies, so other's declared status is followed; other2 is not a dependency.
+  "view-calls-status-watch-dependency": () => ({ ...base(), dependencies: { other: { status: [{ name: "other.count" }] } }, statuses: { "other.count": null } }),
   "view-calls-cancel-pending": (releases) => ({ ...base(), sidecar: { "fixture-sidecar": () => new Promise((resolve) => releases.push(() => resolve(null))) } }),
   "view-calls-pending-id-refused": (releases) => ({ ...base(), sidecar: { "fixture-sidecar": () => new Promise((resolve) => releases.push(() => resolve(null))) } }),
   // The first run of probe-tool is held until the replay ends, and its cancel ends the call; the second run answers its result.

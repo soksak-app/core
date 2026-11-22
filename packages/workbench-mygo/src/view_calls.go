@@ -648,8 +648,8 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 		if fields.Name == "" {
 			return fmt.Errorf("view call %s requires a non-empty name", call.Command)
 		}
-		if owner := ownerOf(fields.Name); owner != "core" && owner != call.Plugin {
-			return fmt.Errorf("view call %s %s is neither a core status nor a status of %s", call.Command, fields.Name, call.Plugin)
+		if owner := ownerOf(fields.Name); owner != "core" && owner != call.Plugin && !s.dependsOn(call.Plugin, owner) {
+			return fmt.Errorf("view call %s %s is neither a core status nor a status of %s or of its dependencies", call.Command, fields.Name, call.Plugin)
 		}
 		if fields.Surface != nil || registeredBySurface(fields.Name) {
 			return s.observeForView(call, view, fields.Name, fields.Surface, answer)

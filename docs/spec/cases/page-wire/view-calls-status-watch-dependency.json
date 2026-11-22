@@ -1,0 +1,25 @@
+{
+  "name": "view-calls-status-watch-dependency",
+  "description": "A view of probe, which lists other in its dependencies, watches and unwatches a status that other declares, watches a status of other2, which probe does not list, and watches an undeclared status of other; the page follows the declared status and refuses the other two.",
+  "replay": false,
+  "reason": "The view calls reach the page as the notice view-call of a view that the host runs in a window, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {"page-identity":{"type":"string","example":"0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e","source":"page"}},
+  "steps": [
+    {"call":{"name":"compositionDeclare","payload":{"plugin":"probe","composition":{"kind":"view","page":"ui/page.html","regions":[],"overlays":[]},"surface":"probe-surface"}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"view-call","payload":{"surface":"probe-surface","plugin":"probe","generation":1,"id":1,"command":"runtime.status.watch","params":{"name":"other.count"}}}},
+    {"call":{"name":"viewEvent","payload":{"generation":1,"event":"status","data":{"name":"other.count","value":null},"surface":"probe-surface"}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"viewReply","payload":{"id":1,"result":null,"page":"$page-identity","generation":1,"surface":"probe-surface"}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"view-call","payload":{"surface":"probe-surface","plugin":"probe","generation":1,"id":2,"command":"runtime.status.unwatch","params":{"name":"other.count"}}}},
+    {"call":{"name":"viewReply","payload":{"id":2,"result":null,"page":"$page-identity","generation":1,"surface":"probe-surface"}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"view-call","payload":{"surface":"probe-surface","plugin":"probe","generation":1,"id":3,"command":"runtime.status.watch","params":{"name":"other2.count"}}}},
+    {"call":{"name":"viewReply","payload":{"id":3,"error":{"code":-32000,"message":"view call runtime.status.watch other2.count is neither a core status nor a status of probe or of its dependencies"},"page":"$page-identity","generation":1,"surface":"probe-surface"}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"view-call","payload":{"surface":"probe-surface","plugin":"probe","generation":1,"id":4,"command":"runtime.status.watch","params":{"name":"other.missing"}}}},
+    {"call":{"name":"viewReply","payload":{"id":4,"error":{"code":-32000,"message":"view call runtime.status.watch other.missing is not a declared status"},"page":"$page-identity","generation":1,"surface":"probe-surface"}}},
+    {"reply":{"result":null}}
+  ]
+}

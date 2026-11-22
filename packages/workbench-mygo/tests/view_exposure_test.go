@@ -365,7 +365,7 @@ func TestAViewFollowsAStatusOfItsPlugin(t *testing.T) {
 	r.call(surface, "runtime.native.on", map[string]any{"name": "exposure-request"})
 	r.call(surface, "runtime.native.call", map[string]any{"name": "registered", "payload": map[string]any{"kind": "status", "name": "textprobe.screen"}})
 	reply := viewCall(t, r.f, r.stored, surface, "runtime.status.watch", map[string]any{"name": "boxprobe.page"})
-	if failure, _ := reply["error"].(map[string]any); failure == nil || failure["message"] != "view call runtime.status.watch boxprobe.page is neither a core status nor a status of textprobe" {
+	if failure, _ := reply["error"].(map[string]any); failure == nil || failure["message"] != "view call runtime.status.watch boxprobe.page is neither a core status nor a status of textprobe or of its dependencies" {
 		t.Fatalf("the reply is %v", reply)
 	}
 	reply = viewCall(t, r.f, r.stored, surface, "runtime.status.watch", map[string]any{"name": "textprobe.screen", "surface": "tab-none"})

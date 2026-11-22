@@ -96,6 +96,13 @@ func (s *Shell) snapshotParts() (SnapshotParts, error) {
 }
 
 // surfacePlugin returns the plugin of a surface that the window holds.
+// dependsOn tells whether the plugin lists the loaded plugin owner in its dependencies, which lets a view of the plugin follow the
+// statuses that owner declares (docs/spec/plugins.md#pluginjson).
+func (s *Shell) dependsOn(plugin, owner string) bool {
+	unit := s.units[plugin]
+	return unit != nil && slices.Contains(unit.Plugins, owner)
+}
+
 func (s *Shell) surfacePlugin(surface string) string {
 	if held := s.surfaces.held[surface]; held != nil {
 		return held.tab.Plugin
