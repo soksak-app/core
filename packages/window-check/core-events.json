@@ -2982,7 +2982,7 @@
         },
         "required": ["session", "reason"]
       },
-      "description": "An owned session ended with its reason: ended by its owner, owner-closed when its owner surface closed, or owner-absent when its owner did not return after a restart (docs/spec/plugins.md#owned-sessions)."
+      "description": "An owned session ended with its reason: ended by its owner, owner-closed when its owner surface closed, owner-absent when its owner did not return after a restart, or plugin-absent when its opening plugin was not installed or declared no sessions of its sidecar after a restart (docs/spec/plugins.md#owned-sessions)."
     },
     "workbench.session.open": {
       "layer": "workbench",

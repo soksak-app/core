@@ -182,7 +182,8 @@
                 "width": 640,
                 "height": 384,
                 "scale": 2
-              }
+              },
+              "plugin": "fixture-session"
             },
             {
               "session": "ses-other",
@@ -193,7 +194,8 @@
                 "width": 640,
                 "height": 384,
                 "scale": 2
-              }
+              },
+              "plugin": "fixture-session"
             }
           ]
         }

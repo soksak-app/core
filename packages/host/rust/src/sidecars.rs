@@ -1770,6 +1770,8 @@ pub struct OwnedSession {
     pub root: String,
     pub creation: String,
     pub size: OwnedSize,
+    /// The plugin that opened the session.
+    pub plugin: String,
 }
 
 /// The size of an owned session: the width and height of its card in points, and the backing scale of the window.
@@ -1812,6 +1814,7 @@ impl OwnedSession {
                 height: number("height")?,
                 scale: number("scale")?,
             },
+            plugin: text("plugin")?,
         })
     }
 }

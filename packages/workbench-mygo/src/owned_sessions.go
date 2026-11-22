@@ -122,7 +122,7 @@ func (o *OwnedSessions) Open(owner, plugin string, params json.RawMessage, size 
 		params = json.RawMessage("{}")
 	}
 	creation := o.ports.Random()
-	body := map[string]any{"operation": "open", "session": map[string]any{"creation": creation}, "size": size.body(), "params": params}
+	body := map[string]any{"operation": "open", "session": map[string]any{"creation": creation}, "plugin": plugin, "size": size.body(), "params": params}
 	o.request(o.ports.Port(name), owner, body, func(reply json.RawMessage, err error) {
 		if err != nil {
 			answer("", err)
@@ -432,16 +432,12 @@ func (o *OwnedSessions) Adopt(live func(surface string) bool, answer func(error)
 				answer(err)
 				return
 			}
-			var listed []struct {
-				Session string `json:"session"`
-				Surface string `json:"surface"`
-				Size    Size   `json:"size"`
-			}
+			var listed []ownedEntry
 			if err := json.Unmarshal(list, &listed); err != nil {
 				answer(fmt.Errorf("sessions of %s: %w", names[index], err))
 				return
 			}
-			o.endAbsent(port, listed, 0, func(err error) {
+			o.endAbsent(names[index], port, listed, 0, func(err error) {
 				if err != nil {
 					answer(err)
 					return
@@ -495,21 +491,31 @@ func (o *OwnedSessions) showRestored(live func(surface string) bool) {
 	}
 }
 
-// endAbsent adopts or ends listed[index:] in order and answers when all of them are done.
-func (o *OwnedSessions) endAbsent(port OwnedSidecar, listed []struct {
+// ownedEntry is an entry of the sessions answer of a sidecar; the host checked its members (docs/spec/persistent-services.md#owned-sessions).
+type ownedEntry struct {
 	Session string `json:"session"`
 	Surface string `json:"surface"`
 	Size    Size   `json:"size"`
-}, index int, answer func(error), live func(surface string) bool) {
+	Plugin  string `json:"plugin"`
+}
+
+// endAbsent adopts or ends listed[index:] of the sidecar name in order and answers when all of them are done. An entry whose opening plugin
+// is not loaded or declares no sessions of the sidecar ends with reason plugin-absent, an entry whose owner surface is not live ends with
+// reason owner-absent, and every other entry is adopted as a session of its opening plugin.
+func (o *OwnedSessions) endAbsent(name string, port OwnedSidecar, listed []ownedEntry, index int, answer func(error), live func(surface string) bool) {
 	if index == len(listed) {
 		o.ports.Changed()
 		answer(nil)
 		return
 	}
 	item := listed[index]
-	if live(item.Surface) {
-		o.add(&OwnedSession{Session: item.Session, Plugin: o.ports.Plugin(item.Surface), Owner: item.Surface, Size: item.Size})
-		o.endAbsent(port, listed, index+1, answer, live)
+	sidecar, declared := o.ports.Sidecar(item.Plugin)
+	reason := "owner-absent"
+	if !declared || sidecar != name {
+		reason = "plugin-absent"
+	} else if live(item.Surface) {
+		o.add(&OwnedSession{Session: item.Session, Plugin: item.Plugin, Owner: item.Surface, Size: item.Size})
+		o.endAbsent(name, port, listed, index+1, answer, live)
 		return
 	}
 	body := map[string]any{"operation": "end", "session": item.Session}
@@ -521,8 +527,8 @@ func (o *OwnedSessions) endAbsent(port OwnedSidecar, listed []struct {
 			answer(err)
 			return
 		}
-		o.ports.Emit("info", "workbench.session.end", map[string]any{"session": item.Session, "reason": "owner-absent"})
-		o.endAbsent(port, listed, index+1, answer, live)
+		o.ports.Emit("info", "workbench.session.end", map[string]any{"session": item.Session, "reason": reason})
+		o.endAbsent(name, port, listed, index+1, answer, live)
 	})
 }
 

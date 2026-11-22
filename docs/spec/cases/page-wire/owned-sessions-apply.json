@@ -208,6 +208,7 @@
             "session": {
               "creation": "$creation-1"
             },
+            "plugin": "fixture-session",
             "size": {
               "width": 640,
               "height": 384,

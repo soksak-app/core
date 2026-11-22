@@ -86,12 +86,12 @@ func answerSessions(t *testing.T, c *Sidecars, process *sidecar, answer func(req
 func TestSessionsReturnsTheSessionsOfTheService(t *testing.T) {
 	c, process := sessionsFixture(t)
 	sessions, err := answerSessions(t, c, process, func(request string) string {
-		return `{"operation":"sessions","request":"` + request + `","ok":true,"sessions":[{"session":"s1","surface":"tab-a","root":"/work","creation":"c1","size":{"width":640,"height":384,"scale":2}}]}`
+		return `{"operation":"sessions","request":"` + request + `","ok":true,"sessions":[{"session":"s1","surface":"tab-a","root":"/work","creation":"c1","size":{"width":640,"height":384,"scale":2},"plugin":"terminal"}]}`
 	})
 	if err != nil {
 		t.Fatalf("Sessions: %v", err)
 	}
-	if want := `[{"session":"s1","surface":"tab-a","root":"/work","creation":"c1","size":{"width":640,"height":384,"scale":2}}]`; string(sessions) != want {
+	if want := `[{"session":"s1","surface":"tab-a","root":"/work","creation":"c1","size":{"width":640,"height":384,"scale":2},"plugin":"terminal"}]`; string(sessions) != want {
 		t.Fatalf("Sessions = %s, want %s", sessions, want)
 	}
 }
@@ -131,11 +131,22 @@ func TestSessionsEndsWithItsConnection(t *testing.T) {
 	}
 }
 
+// contract: sidecars-transport.sessions.refuses-an-entry-without-plugin
+func TestSessionsRefusesAnEntryWithoutPlugin(t *testing.T) {
+	c, process := sessionsFixture(t)
+	_, err := answerSessions(t, c, process, func(request string) string {
+		return `{"operation":"sessions","request":"` + request + `","ok":true,"sessions":[{"session":"s1","surface":"tab-a","root":"/work","creation":"c1","size":{"width":640,"height":384,"scale":2}}]}`
+	})
+	if err == nil || err.Error() != "invalid message: sessions plugin is not a non-empty string" {
+		t.Fatalf("Sessions error = %v", err)
+	}
+}
+
 // contract: sidecars-transport.sessions.refuses-a-size-that-is-not-an-object
 func TestSessionsRefusesASizeThatIsNotAnObject(t *testing.T) {
 	c, process := sessionsFixture(t)
 	_, err := answerSessions(t, c, process, func(request string) string {
-		return `{"operation":"sessions","request":"` + request + `","ok":true,"sessions":[{"session":"s1","surface":"tab-a","root":"/work","creation":"c1","size":80}]}`
+		return `{"operation":"sessions","request":"` + request + `","ok":true,"sessions":[{"session":"s1","surface":"tab-a","root":"/work","creation":"c1","size":80,"plugin":"terminal"}]}`
 	})
 	if err == nil || err.Error() != "invalid message: sessions size is not an object" {
 		t.Fatalf("Sessions error = %v", err)
@@ -146,7 +157,7 @@ func TestSessionsRefusesASizeThatIsNotAnObject(t *testing.T) {
 func TestSessionsRefusesAnEntryWhoseSizeIsNotPositive(t *testing.T) {
 	c, process := sessionsFixture(t)
 	_, err := answerSessions(t, c, process, func(request string) string {
-		return `{"operation":"sessions","request":"` + request + `","ok":true,"sessions":[{"session":"s1","surface":"tab-a","root":"/work","creation":"c1","size":{"width":0,"height":384,"scale":2}}]}`
+		return `{"operation":"sessions","request":"` + request + `","ok":true,"sessions":[{"session":"s1","surface":"tab-a","root":"/work","creation":"c1","size":{"width":0,"height":384,"scale":2},"plugin":"terminal"}]}`
 	})
 	if err == nil || err.Error() != "invalid message: sessions size.width is not a positive number" {
 		t.Fatalf("Sessions error = %v", err)

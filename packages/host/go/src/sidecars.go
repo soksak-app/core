@@ -3608,7 +3608,7 @@ func validateSessions(sessions json.RawMessage, answered bool) (json.RawMessage,
 		return nil, errors.New("invalid message: sessions is not an array")
 	}
 	for _, entry := range list {
-		for _, member := range []string{"session", "surface", "root", "creation"} {
+		for _, member := range []string{"session", "surface", "root", "creation", "plugin"} {
 			var text string
 			if err := json.Unmarshal(entry[member], &text); err != nil || text == "" {
 				return nil, fmt.Errorf("invalid message: sessions %s is not a non-empty string", member)

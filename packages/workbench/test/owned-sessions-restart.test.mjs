@@ -12,6 +12,9 @@ const SIDECAR = "@scope/fixture-sidecar";
 const OWNER = "tab-aaaaa1";
 // A restored tab whose params name a session that the service no longer holds.
 const STALE = "tab-aaaaa2";
+// A restored tab of a plugin that declares no sessions and no sidecar, which owns a session that the plugin SESSION opened.
+const ROOM = "tab-aaaaa3";
+const ROOM_PLUGIN = "fixture-room";
 // The page-wire case answers every call of the page in order; it is selected before the modules that read the host are imported.
 const wire = selectPageWire("owned-sessions-restart");
 
@@ -40,7 +43,9 @@ assert.deepEqual(installEnvironment({
   runtime: "runtime",
   workspace: { focus: "main", grid: { root: { card: "main", tabs: [{ plugin: SESSION, title: "t" }] } } },
   sidebars: { sets: [], links: [] },
-}, { plugins: [{ id: SESSION, package: "@fixture/session", version: "0.0.1", manifest }] }), [], "the fixture environment refused a plugin");
+}, { plugins: [{ id: SESSION, package: "@fixture/session", version: "0.0.1", manifest },
+  { id: ROOM_PLUGIN, package: "@fixture/room", version: "0.0.1", manifest: { id: ROOM_PLUGIN, name: ROOM_PLUGIN, description: "검사용 방.", mark: "r",
+    icon: "<path/>", surface: manifest.surface } }] }), [], "the fixture environment refused a plugin");
 const { registry } = await import("../exposure.js");
 registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
 const { begin } = await import("../projects.js");
@@ -51,6 +56,7 @@ begin({ common: { "diagnostics.log": { lifecycle: "info" } }, open: [], projects
     root: { card: "main", data: { tabs: [
       { id: OWNER, plugin: SESSION, title: SESSION, params: { session: "ses-keep" }, origin: { directory: null }, role: null },
       { id: STALE, plugin: SESSION, title: SESSION, params: { session: "ses-missing" }, origin: { directory: null }, role: null },
+      { id: ROOM, plugin: ROOM_PLUGIN, title: ROOM_PLUGIN, params: {}, origin: { directory: null }, role: null },
     ], activeId: OWNER } } } } },
 ], activeSpaceId: "spc-aaaaaa", named: 2 }] });
 const { installCoreExposure } = await import("../core-exposure.js");
@@ -68,7 +74,9 @@ test("the restart adopts the session whose owner is in the restored layout, ends
   await startOwnedSessions();
   // The restored tab that names the adopted session shows it, and the tab whose session did not return shows the error
   // restored tab <tab>: session <id> is not open (docs/spec/plugins.md#owned-sessions).
-  assert.deepEqual(ownedSessionsState(), [{ session: "ses-keep", plugin: SESSION, owner: OWNER, shownBy: OWNER, program: null }]);
+  // The session that the room owns belongs to the plugin that opened it, which its entry names (docs/spec/persistent-services.md#owned-sessions).
+  assert.deepEqual(ownedSessionsState(), [{ session: "ses-keep", plugin: SESSION, owner: OWNER, shownBy: OWNER, program: null },
+    { session: "ses-room", plugin: SESSION, owner: ROOM, shownBy: null, program: null }]);
   // The batch of the owner-absent end is sent after its microtasks, so the test waits for it before the case is judged.
   await flushEvents();
   wire.finish();

@@ -67,7 +67,7 @@ export async function openOwnedSession({ plugin: id, params, size }, surface) {
   const port = windowSidecar(sidecar);
   if (!port) throw new Error(`owned session sidecar unavailable: ${sidecar}`);
   // default: an open without params sends null, the value of an absent parameter set.
-  const reply = await port.send(surface, { operation: "open", session: { creation }, size: sizeBody(size), params: params ?? null });
+  const reply = await port.send(surface, { operation: "open", session: { creation }, plugin: id, size: sizeBody(size), params: params ?? null });
   const failure = ownedReplyFailure("core.session.open", reply);
   if (failure) throw failure;
   if (typeof reply?.session !== "string" || reply.session === "" || reply.creation !== creation) {
@@ -383,8 +383,9 @@ export function startOwnedSessions() {
 }
 
 /**
- * The restart of the page: each owned session that the sidecar still holds is adopted when its owner surface is in the restored layout,
- * and every other one is ended with reason owner-absent (docs/spec/persistent-services.md#owned-sessions). A sidecar that is not
+ * The restart of the page: each owned session that the sidecar still holds is adopted as a session of the plugin that its entry names
+ * when that plugin declares the sessions of the sidecar and its owner surface is in the restored layout; an entry of any other plugin is
+ * ended with reason plugin-absent, and every other one with reason owner-absent (docs/spec/persistent-services.md#owned-sessions). A sidecar that is not
  * reachable is reported, and the other sidecars are still read.
  */
 export async function reconcileOwnedSessions() {
@@ -398,15 +399,17 @@ export async function reconcileOwnedSessions() {
       // A page without a host has no sidecar sessions.
       if (listed === null) continue;
       for (const item of listed.sessions) {
-        const owner = tabs.get(item.surface);
-        if (owner !== undefined && hasPlugin(owner) && plugin(owner).sessions === name) {
-          sessions.set(item.session, { session: item.session, plugin: owner, owner: item.surface, shownBy: null, program: null, sidecar: name, size: sizeBody(item.size), pending: null });
+        // The session belongs to the plugin that opened it, which the entry names; the owner surface may be of a plugin without sessions.
+        const declared = hasPlugin(item.plugin) && plugin(item.plugin).sessions === name;
+        if (declared && tabs.has(item.surface)) {
+          sessions.set(item.session, { session: item.session, plugin: item.plugin, owner: item.surface, shownBy: null, program: null, sidecar: name, size: sizeBody(item.size), pending: null });
           listenOwner(item.surface, windowSidecar(name));
           continue;
         }
+        const reason = declared ? "owner-absent" : "plugin-absent";
         const reply = await windowSidecar(name).send(item.surface, { operation: "end", session: item.session });
-        sessionReply("core.session.end (owner-absent)", reply, item.session);
-        emitEvent("info", "workbench.session.end", { session: item.session, reason: "owner-absent" });
+        sessionReply(`core.session.end (${reason})`, reply, item.session);
+        emitEvent("info", "workbench.session.end", { session: item.session, reason });
       }
       read.add(name);
     } catch (error) {

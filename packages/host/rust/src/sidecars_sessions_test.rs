@@ -98,7 +98,8 @@ fn session_entry(session: &str, surface: &str, width: f64, height: f64) -> serde
         "surface": surface,
         "root": "/project",
         "creation": format!("creation-{session}"),
-        "size": {"width": width, "height": height, "scale": 2.0}
+        "size": {"width": width, "height": height, "scale": 2.0},
+        "plugin": "terminal"
     })
 }
 
@@ -602,6 +603,36 @@ fn the_sidecar_sessions_call_resolves_with_the_service_sessions() {
     );
 }
 
+// contract: sidecars-transport.sessions.refuses-an-entry-without-plugin
+#[test]
+fn service_sessions_refuses_an_entry_without_plugin() {
+    let executable = folder::Folder::new();
+    let config = folder::Folder::new();
+    let listener = service_endpoint(config.path());
+    let (_received, thread) = sessions_service(listener, |request| {
+        Some(serde_json::json!({
+            "operation": "sessions",
+            "request": request["request"],
+            "ok": true,
+            "sessions": [{
+                "session": "session-1",
+                "surface": "tab-a",
+                "root": "/project",
+                "creation": "creation-session-1",
+                "size": {"width": 640.0, "height": 384.0, "scale": 2.0}
+            }]
+        }))
+    });
+    let sidecars =
+        Sidecars::<SidecarRecorder>::new(&declare(executable.path()), config.path().to_path_buf())
+            .unwrap();
+
+    let error = sidecars.service_sessions(ECHO).unwrap_err();
+    sidecars.stop();
+    thread.join().unwrap();
+    assert_eq!(error, "invalid message: sessions plugin is not a non-empty string");
+}
+
 // contract: sidecars-transport.sessions.refuses-a-size-that-is-not-an-object
 #[test]
 fn service_sessions_refuses_a_size_that_is_not_an_object() {
@@ -618,7 +649,8 @@ fn service_sessions_refuses_a_size_that_is_not_an_object() {
                 "surface": "tab-a",
                 "root": "/project",
                 "creation": "creation-session-1",
-                "size": 80
+                "size": 80,
+                "plugin": "terminal"
             }]
         }))
     });
