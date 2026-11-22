@@ -10,7 +10,7 @@ use std::path::Path;
 mod records;
 
 use serde_json::{Value, json};
-use soksak_host::platform;
+use soksak_host::platform::{self, Platform};
 use soksak_host::projects::folder;
 use soksak_host::workspace::{Workspace, common_only_keys, prepare_config_directory};
 
@@ -32,7 +32,7 @@ fn settings_use_common_and_project_files_and_reset_removes_override() {
     let store = Workspace::new(config.path().into());
     apply(
         &store,
-        json!({"kind":"add", "project":{"id":"prj-test", "root":root.path(), "identity":"1:2"}}),
+        json!({"kind":"add", "project":{"id":"prj-test", "root":root.path(), "identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:2"}}),
     );
     apply(
         &store,
@@ -90,7 +90,7 @@ fn concurrent_updates_preserve_fields_and_saved_project_order() {
     for (i, root) in roots.iter().enumerate() {
         apply(
             &store,
-            json!({"kind":"add", "project":{"id":format!("p{i}"), "root":root.path(), "identity":i.to_string()}}),
+            json!({"kind":"add", "project":{"id":format!("p{i}"), "root":root.path(), "identity":format!("6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:{}", i + 1)}}),
         );
     }
     let jobs: Vec<_> = ["mode", "theme", "rail"]
@@ -212,7 +212,7 @@ fn a_project_patch_stores_plugin_data_and_rejects_unknown_fields() {
     let store = Workspace::new(config.path().into());
     apply(
         &store,
-        json!({"kind":"add", "project":{"id":"prj-test", "root":root.path(), "identity":"1:2"}}),
+        json!({"kind":"add", "project":{"id":"prj-test", "root":root.path(), "identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:2"}}),
     );
     apply(
         &store,
@@ -277,7 +277,7 @@ fn move_without_delta_is_refused() {
     let store = Workspace::new(config.path().into());
     apply(
         &store,
-        json!({"kind":"add", "project":{"id":"first", "root":root.path(), "identity":"first"}}),
+        json!({"kind":"add", "project":{"id":"first", "root":root.path(), "identity":"6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:8"}}),
     );
     for request in [
         json!({"kind":"move", "id":"first"}),
@@ -333,7 +333,7 @@ fn project_common_only_keys_are_rejected() {
         let store = Workspace::new(config.path().into());
         apply(
             &store,
-            json!({"kind":"add", "project":{"id":"prj-test", "root":root.path(), "identity":"1:2"}}),
+            json!({"kind":"add", "project":{"id":"prj-test", "root":root.path(), "identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:2"}}),
         );
         let refused = store.apply(
             serde_json::from_value(
@@ -368,11 +368,11 @@ fn a_refused_project_settings_file_is_reported_at_its_project() {
     let store = Workspace::new(config.path().into());
     apply(
         &store,
-        json!({"kind":"add", "project":{"id":"prj-refused", "root":refused_root.path(), "identity":"1:2"}}),
+        json!({"kind":"add", "project":{"id":"prj-refused", "root":refused_root.path(), "identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:2"}}),
     );
     apply(
         &store,
-        json!({"kind":"add", "project":{"id":"prj-kept", "root":kept_root.path(), "identity":"1:3"}}),
+        json!({"kind":"add", "project":{"id":"prj-kept", "root":kept_root.path(), "identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:3"}}),
     );
     let refused = refused_root.path().join(".soksak/settings.json");
     fs::create_dir_all(refused.parent().unwrap()).unwrap();
@@ -393,7 +393,7 @@ fn a_refused_project_settings_file_is_reported_at_its_project() {
     // The refused file is reported at its project without settings, and the other project keeps its settings.
     assert_eq!(
         project("prj-refused"),
-        json!({"id":"prj-refused", "root":refused_root.path(), "identity":"1:2",
+        json!({"id":"prj-refused", "root":refused_root.path(), "identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:2",
             "settingsError": format!("{}: settings.json: format must be 1", refused.display())})
     );
     assert_eq!(project("prj-kept")["settings"], json!({"gap":7}));
@@ -410,7 +410,7 @@ fn each_settings_change_is_recorded_with_its_keys() {
         let writer = records::start_writer(&config);
         let store = Workspace::new(config.clone());
         for request in [
-            json!({"kind":"add", "project":{"id":"prj-test", "root":root.path(), "identity":"1:2"}}),
+            json!({"kind":"add", "project":{"id":"prj-test", "root":root.path(), "identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:2"}}),
             json!({"kind":"settings", "patch":{"mode":"light", "gap":6}}),
             json!({"kind":"settings", "remove":["gap", "missing"]}),
             json!({"kind":"settings", "id":"prj-test", "patch":{"gap":12}}),
@@ -769,7 +769,7 @@ fn a_project_settings_write_refuses_another_form_and_stores_the_current_form() {
     let earlier = folder::Folder::new();
     apply(
         &store,
-        json!({"kind":"add", "project":{"id":"prj-earlier", "root":earlier.path(), "identity":"1:4"}}),
+        json!({"kind":"add", "project":{"id":"prj-earlier", "root":earlier.path(), "identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:4"}}),
     );
     fs::create_dir_all(earlier.path().join(".soksak")).unwrap();
     let file = earlier.path().join(".soksak/settings.json");
@@ -791,7 +791,7 @@ fn a_project_settings_write_refuses_another_form_and_stores_the_current_form() {
     let fresh = folder::Folder::new();
     apply(
         &store,
-        json!({"kind":"add", "project":{"id":"prj-fresh", "root":fresh.path(), "identity":"1:5"}}),
+        json!({"kind":"add", "project":{"id":"prj-fresh", "root":fresh.path(), "identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:5"}}),
     );
     apply(
         &store,
@@ -803,6 +803,25 @@ fn a_project_settings_write_refuses_another_form_and_stores_the_current_form() {
     );
 }
 
+// contract: workspace.projects.refuses-identity-of-another-form
+#[test]
+fn a_project_with_an_identity_of_another_form_is_refused_by_name() {
+    let config = folder::Folder::new();
+    let store = Workspace::new(config.path().into());
+    let projects = config.path().join("projects.json");
+    let other = r#"{"format":4,"projects":[{"id":"prj-a","root":"/x","identity":"1:1"}]}"#;
+    fs::write(&projects, other).unwrap();
+    let form = platform::current().unwrap().directory_identity_form();
+    let refusal = format!("projects.json: project /x has the identity 1:1, not {form}");
+    assert_eq!(
+        apply(&store, json!({"kind":"snapshot"})),
+        json!({"projects": [], "common": {}, "projectsError": refusal})
+    );
+    let add = serde_json::from_value(json!({"kind":"add", "project":{"id":"prj-b", "root":"/y", "identity":"6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:9"}})).unwrap();
+    assert_eq!(store.apply(add).unwrap_err(), refusal);
+    assert_eq!(fs::read_to_string(&projects).unwrap(), other);
+}
+
 // contract: install.stored.rejects-an-earlier-form, workspace.snapshot.reports-refused-stored-files
 #[test]
 fn earlier_stored_forms_are_reported_by_snapshot_and_refused_by_writes() {
@@ -810,7 +829,8 @@ fn earlier_stored_forms_are_reported_by_snapshot_and_refused_by_writes() {
     let store = Workspace::new(config.path().into());
     let apply = |request: Value| store.apply(serde_json::from_value(request).unwrap());
     let projects = config.path().join("projects.json");
-    let bare = r#"[{"id":"prj-a","root":"/x","identity":"1:1"}]"#;
+    let bare =
+        r#"[{"id":"prj-a","root":"/x","identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:1"}]"#;
     fs::write(&projects, bare).unwrap();
     let refusal_bare = format!(
         "{}: projects: format must be 4, found null",
@@ -826,7 +846,7 @@ fn earlier_stored_forms_are_reported_by_snapshot_and_refused_by_writes() {
     );
     // A file of format 3 holds tabs without the member role (docs/spec/agent-roles.md#tab-role-state), so it is refused as a whole.
     let earlier = concat!(
-        r#"{"format":3,"projects":[{"id":"prj-a","root":"/x","identity":"1:1","spaces":[{"id":"s1","layout":"#,
+        r#"{"format":3,"projects":[{"id":"prj-a","root":"/x","identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:1","spaces":[{"id":"s1","layout":"#,
         r#"{"state":{"xs":[0,1],"ys":[0,1],"cards":[{"id":"c1","c0":0,"c1":1,"r0":0,"r1":1}]},"groups":[],"lastCard":1,"leader":"c1"}}]}]}"#
     );
     fs::write(&projects, earlier).unwrap();
@@ -835,19 +855,19 @@ fn earlier_stored_forms_are_reported_by_snapshot_and_refused_by_writes() {
         json!({"projects": [], "common": {}, "projectsError": refusal})
     );
     assert_eq!(
-        apply(json!({"kind":"add","project":{"id":"prj-b","root":"/y","identity":"1:2"}}))
+        apply(json!({"kind":"add","project":{"id":"prj-b","root":"/y","identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:2"}}))
             .unwrap_err(),
         refusal
     );
     assert_eq!(fs::read_to_string(&projects).unwrap(), earlier);
     // A write into a missing projects.json stores the current form, format 4.
     fs::remove_file(&projects).unwrap();
-    apply(json!({"kind":"add","project":{"id":"prj-b","root":"/y","identity":"1:2"}})).unwrap();
+    apply(json!({"kind":"add","project":{"id":"prj-b","root":"/y","identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:2"}})).unwrap();
     let written: Value = serde_json::from_str(&fs::read_to_string(&projects).unwrap()).unwrap();
     assert_eq!(written["format"], json!(4));
     fs::write(&projects, bare).unwrap();
     assert_eq!(
-        apply(json!({"kind":"add","project":{"id":"prj-b","root":"/y","identity":"1:2"}}))
+        apply(json!({"kind":"add","project":{"id":"prj-b","root":"/y","identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:2"}}))
             .unwrap_err(),
         refusal_bare
     );
@@ -875,7 +895,7 @@ fn projects_writer_writes_format_4() {
     let store = Workspace::new(config.path().into());
     apply(
         &store,
-        json!({"kind":"add", "project":{"id":"prj-a", "root":root.path(), "identity":"1:1"}}),
+        json!({"kind":"add", "project":{"id":"prj-a", "root":root.path(), "identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:1"}}),
     );
     assert_eq!(
         read(&config.path().join("projects.json"))["format"],

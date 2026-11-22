@@ -5,11 +5,25 @@ package darwin
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"syscall"
 	"unsafe"
 
 	"golang.org/x/sys/unix"
 )
+
+// directoryIdentityPattern is the form that DirectoryIdentity returns: the uppercase hyphenated UUID, a colon and the decimal inode.
+var directoryIdentityPattern = regexp.MustCompile(`^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}:[0-9]+$`)
+
+// DirectoryIdentityForm names the form that DirectoryIdentity returns.
+func (implementation) DirectoryIdentityForm() string {
+	return "<volume UUID>:<inode>"
+}
+
+// ValidDirectoryIdentity reports whether identity has the form that DirectoryIdentity returns.
+func (implementation) ValidDirectoryIdentity(identity string) bool {
+	return directoryIdentityPattern.MatchString(identity)
+}
 
 // DirectoryIdentity identifies a directory by the UUID of its volume and its inode number: `<volume UUID>:<inode>`. The device
 // number st_dev does not identify a volume across boots, because the system renumbers it at each boot, and statfs f_fsid is the

@@ -876,6 +876,10 @@ type Platform interface {
 
 	// DirectoryIdentity returns the string that identifies a directory.
 	DirectoryIdentity(path string, info os.FileInfo) (string, error)
+	// DirectoryIdentityForm names the form that DirectoryIdentity returns, for the error of a stored identity of another form.
+	DirectoryIdentityForm() string
+	// ValidDirectoryIdentity reports whether identity has the form that DirectoryIdentity returns.
+	ValidDirectoryIdentity(identity string) bool
 	// CreatePrivateDirectories creates the missing directories of path with permissions exclusive to the current user. It does not change the permissions of a directory
 	// that already exists.
 	CreatePrivateDirectories(path string) error

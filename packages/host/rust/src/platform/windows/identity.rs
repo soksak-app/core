@@ -10,6 +10,18 @@ use ::windows::Win32::Storage::FileSystem::{
     BY_HANDLE_FILE_INFORMATION, FILE_FLAG_BACKUP_SEMANTICS, GetFileInformationByHandle,
 };
 
+/// The form that identity returns: the decimal volume serial number, a colon and the decimal file index.
+pub const FORM: &str = "<volume serial number>:<file index>";
+
+/// Returns whether identity has the form FORM.
+pub fn is_valid(identity: &str) -> bool {
+    let Some((serial, index)) = identity.split_once(':') else {
+        return false;
+    };
+    let decimal = |part: &str| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit());
+    decimal(serial) && decimal(index)
+}
+
 /// Identifies a directory by the volume serial number and the file index.
 pub fn identity(path: &Path) -> Result<String, String> {
     let file = OpenOptions::new()

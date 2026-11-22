@@ -23,7 +23,7 @@ fn fixture(name: &str) -> (PathBuf, Workspace) {
         serde_json::to_vec_pretty(&json!({
             "format": 4,
             "projects": [{
-                "id": "prj-aaaaaa", "root": directory.join("work"), "identity": "aaaaaaaa",
+                "id": "prj-aaaaaa", "root": directory.join("work"), "identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:7",
                 "spaces": [{
                     "id": "spc-aaaaaa", "title": "SPACE1",
                     "layout": {

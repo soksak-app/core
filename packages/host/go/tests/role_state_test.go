@@ -28,7 +28,7 @@ func roleFixture(t *testing.T) (string, *host.Workspace, string) {
 		"focusedId": "card-1", "leader": "card-1", "lastCard": 1, "named": 0,
 	}}
 	registry := map[string]any{"format": 4, "projects": []any{map[string]any{
-		"id": "prj-aaaaaa", "root": filepath.Join(config, "work"), "identity": "aaaaaaaa", "spaces": []any{space}, "activeSpaceId": "spc-aaaaaa",
+		"id": "prj-aaaaaa", "root": filepath.Join(config, "work"), "identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:7", "spaces": []any{space}, "activeSpaceId": "spc-aaaaaa",
 	}}}
 	if err := os.Mkdir(filepath.Join(config, "work"), 0o700); err != nil {
 		t.Fatal(err)

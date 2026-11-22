@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1060: Go와 Rust host의 `projects.json` reader는 platform 형식이 아닌 identity를 거부하고, workbench는 이전 형식을 더 이상 알아보지 않는다. Red: 이전 reader에서 `TestAProjectWithAnIdentityOfAnotherFormIsRefusedByName`과 `a_project_with_an_identity_of_another_form_is_refused_by_name`이 실패했다. Green: 두 test가 통과하고, Go host test 574개, Rust workspace와 role state test, mygo project test, `projects-switch.test.mjs`도 통과한다.
 - F1061: 한국어 문서는 `짓다` 대신 동작을 말하고, figurative verb check가 이를 보고한다. Red: 규칙이 없을 때 `auditFigurativeVerbs reports the figurative verbs outside code`가 실패했다. Green: test가 통과하고, check는 추적되는 문서를 하나도 보고하지 않는다.
 - F1055-1: `core.layout.plan`과 `core.layout.apply`의 tree는 group `{group: {name?}, tree}`를 받는다. group은 첫 카드가 유지하는 카드를 담은 group card를 유지하고, 새 group card는 `그룹 <n>`을 받으며, 어떤 group도 유지하지 않는 group card는 카드가 옮겨진 뒤 끝난다. 그래서 group card가 있는 space를 거부하지 않고 계획한다. plan은 group header를 넣어 그린 크기로 판정하고, `cards`는 각 카드의 group을 밝힌다.
 - F1059: test inventory는 F1033을 page와 mygo workbench의 toast에 연결한다. Red: `completed capability entries all have feature evidence links`가 `F1033: completed capability has no feature link`로 실패했다. Green: inventory test가 통과한다.

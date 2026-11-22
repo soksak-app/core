@@ -96,8 +96,10 @@ pub(crate) fn read_projects(path: &Path) -> Result<Vec<Value>, String> {
     serde_json::from_value(projects).map_err(|e| format!("{}: {e}", path.display()))
 }
 
-/// Returns the projects when every record has an id, a root and an identity, or the error that names projects.json.
+/// Returns the projects when every record has an id, a root and an identity of the platform's form, or the error that names
+/// projects.json (docs/spec/projects.md#project-identity).
 pub(crate) fn check_projects(registry: &Path, projects: Vec<Value>) -> Result<Vec<Value>, String> {
+    let current = crate::platform::current()?;
     for project in &projects {
         let valid = project["id"].as_str().is_some_and(|id| {
             !id.is_empty()
@@ -112,6 +114,14 @@ pub(crate) fn check_projects(registry: &Path, projects: Vec<Value>) -> Result<Ve
                 .is_some_and(|identity| !identity.is_empty());
         if !valid {
             return Err(format!("{}: invalid project record", registry.display()));
+        }
+        let identity = project["identity"].as_str().unwrap_or_default();
+        if !current.is_valid_directory_identity(identity) {
+            return Err(format!(
+                "projects.json: project {} has the identity {identity}, not {}",
+                project["root"].as_str().unwrap_or_default(),
+                current.directory_identity_form()
+            ));
         }
     }
     Ok(projects)

@@ -2,6 +2,7 @@ package host_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -10,6 +11,7 @@ import (
 	"testing"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
+	"github.com/soksak-app/core/packages/host/go/src/platform"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
 )
 
@@ -20,7 +22,7 @@ func TestEachSettingsChangeIsRecordedWithItsKeys(t *testing.T) {
 	log := support.StartWriter(t, config)
 	store := host.NewWorkspace(config)
 	for _, req := range []host.WorkspaceRequest{
-		{Kind: "add", Project: host.Record{"id": "prj-test", "root": root, "identity": "1:2"}},
+		{Kind: "add", Project: host.Record{"id": "prj-test", "root": root, "identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:2"}},
 		{Kind: "settings", Patch: host.Record{"mode": "light", "gap": 6}},
 		{Kind: "settings", Remove: []string{"gap", "missing"}},
 		{Kind: "settings", ID: "prj-test", Patch: host.Record{"gap": 12}},
@@ -113,7 +115,7 @@ func TestSettingsFilesAndInheritance(t *testing.T) {
 		}
 		return result
 	}
-	apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-test", "root": root, "identity": "1:2"}})
+	apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-test", "root": root, "identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:2"}})
 	apply(host.WorkspaceRequest{Kind: "settings", Patch: host.Record{"mode": "light", "gap": 6, "projectOpening": "windows"}})
 	apply(host.WorkspaceRequest{Kind: "settings", ID: "prj-test", Patch: host.Record{"gap": 12}})
 	var project host.Record
@@ -160,8 +162,8 @@ func TestSettingsFilesAndInheritance(t *testing.T) {
 // contract: workspace.settings.concurrent-patches-preserved, workspace.projects.move-reorders, workspace.projects.remove-keeps-remaining-order
 func TestConcurrentSettingsAndProjectOrder(t *testing.T) {
 	store := host.NewWorkspace(t.TempDir())
-	for _, id := range []string{"first", "second", "third"} {
-		if _, err := store.Apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": id, "identity": id, "root": t.TempDir()}}); err != nil {
+	for i, id := range []string{"first", "second", "third"} {
+		if _, err := store.Apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": id, "identity": fmt.Sprintf("6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:%d", i+1), "root": t.TempDir()}}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -276,7 +278,7 @@ func TestAProjectPatchStoresPluginDataAndRejectsUnknownFields(t *testing.T) {
 	config := t.TempDir()
 	root := t.TempDir()
 	store := host.NewWorkspace(config)
-	if _, err := store.Apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-test", "root": root, "identity": "1:2"}}); err != nil {
+	if _, err := store.Apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-test", "root": root, "identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:2"}}); err != nil {
 		t.Fatal(err)
 	}
 	plugins := map[string]any{"probe": map[string]any{"marks": []any{"a.txt"}}}
@@ -341,7 +343,7 @@ func TestFolderMessages(t *testing.T) {
 // contract: workspace.projects.move-requires-delta
 func TestMoveWithoutDeltaIsRefused(t *testing.T) {
 	store := host.NewWorkspace(t.TempDir())
-	if _, err := store.Apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "first", "identity": "first", "root": t.TempDir()}}); err != nil {
+	if _, err := store.Apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "first", "identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:8", "root": t.TempDir()}}); err != nil {
 		t.Fatal(err)
 	}
 	for _, raw := range []string{`{"kind":"move","id":"first"}`, `{"kind":"move","id":"first","delta":null}`} {
@@ -377,7 +379,7 @@ func TestProjectCommonOnlyKeysAreRejected(t *testing.T) {
 	for _, c := range commonOnlyCases {
 		root := t.TempDir()
 		store := host.NewWorkspace(t.TempDir())
-		if _, err := store.Apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-test", "root": root, "identity": "1:2"}}); err != nil {
+		if _, err := store.Apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-test", "root": root, "identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:2"}}); err != nil {
 			t.Fatal(err)
 		}
 		_, err := store.Apply(host.WorkspaceRequest{Kind: "settings", ID: "prj-test", Patch: host.Record{c.key: c.value}})
@@ -435,7 +437,7 @@ func TestCommonOnlyKeysAreTheDeclaredList(t *testing.T) {
 func TestARefusedProjectSettingsFileIsReportedAtItsProject(t *testing.T) {
 	refusedRoot, keptRoot := t.TempDir(), t.TempDir()
 	store := host.NewWorkspace(t.TempDir())
-	for _, project := range []host.Record{{"id": "prj-refused", "root": refusedRoot, "identity": "1:2"}, {"id": "prj-kept", "root": keptRoot, "identity": "1:3"}} {
+	for _, project := range []host.Record{{"id": "prj-refused", "root": refusedRoot, "identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:2"}, {"id": "prj-kept", "root": keptRoot, "identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:3"}} {
 		if _, err := store.Apply(host.WorkspaceRequest{Kind: "add", Project: project}); err != nil {
 			t.Fatal(err)
 		}
@@ -459,7 +461,7 @@ func TestARefusedProjectSettingsFileIsReportedAtItsProject(t *testing.T) {
 		projects[project["id"].(string)] = project
 	}
 	// The refused file is reported at its project without settings, and the other project keeps its settings.
-	want := host.Record{"id": "prj-refused", "root": refusedRoot, "identity": "1:2", "settingsError": refused + ": settings.json: format must be 1"}
+	want := host.Record{"id": "prj-refused", "root": refusedRoot, "identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:2", "settingsError": refused + ": settings.json: format must be 1"}
 	if got, _ := json.Marshal(projects["prj-refused"]); string(got) != string(must(json.Marshal(want))) {
 		t.Fatalf("refused project = %s", got)
 	}
@@ -721,7 +723,7 @@ func TestProjectSettingsWriteRefusesAnotherFormAndStoresTheCurrentForm(t *testin
 			t.Fatal(err)
 		}
 	}
-	apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-earlier", "root": earlier, "identity": "1:4"}})
+	apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-earlier", "root": earlier, "identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:4"}})
 	if err := os.MkdirAll(filepath.Join(earlier, ".soksak"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -738,7 +740,7 @@ func TestProjectSettingsWriteRefusesAnotherFormAndStoresTheCurrentForm(t *testin
 		t.Fatalf("a refused write changed the file: %s", data)
 	}
 	fresh := t.TempDir()
-	apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-fresh", "root": fresh, "identity": "1:5"}})
+	apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-fresh", "root": fresh, "identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:5"}})
 	apply(host.WorkspaceRequest{Kind: "settings", ID: "prj-fresh", Patch: map[string]any{"gap": 3}})
 	assertProjectFileForm(t, filepath.Join(fresh, ".soksak", "settings.json"), map[string]any{"format": float64(1), "gap": float64(3)})
 }
@@ -748,7 +750,7 @@ func TestEarlierStoredFormsAreReportedBySnapshotAndRefusedByWrites(t *testing.T)
 	config := t.TempDir()
 	store := host.NewWorkspace(config)
 	projects := filepath.Join(config, "projects.json")
-	const bare = `[{"id":"prj-a","root":"/x","identity":"1:1"}]`
+	const bare = `[{"id":"prj-a","root":"/x","identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:1"}]`
 	if err := os.WriteFile(projects, []byte(bare), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -758,7 +760,7 @@ func TestEarlierStoredFormsAreReportedBySnapshotAndRefusedByWrites(t *testing.T)
 		t.Fatalf("a bare array of projects returned %#v, %v; want %#v", snapshot, err, want)
 	}
 	// A file of format 3 holds tabs without the member role (docs/spec/agent-roles.md#tab-role-state), so it is refused as a whole.
-	const earlier = `{"format":3,"projects":[{"id":"prj-a","root":"/x","identity":"1:1","spaces":[{"id":"s1","layout":` +
+	const earlier = `{"format":3,"projects":[{"id":"prj-a","root":"/x","identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:1","spaces":[{"id":"s1","layout":` +
 		`{"state":{"xs":[0,1],"ys":[0,1],"cards":[{"id":"c1","c0":0,"c1":1,"r0":0,"r1":1}]},"groups":[],"lastCard":1,"leader":"c1"}}]}]}`
 	if err := os.WriteFile(projects, []byte(earlier), 0o600); err != nil {
 		t.Fatal(err)
@@ -768,7 +770,7 @@ func TestEarlierStoredFormsAreReportedBySnapshotAndRefusedByWrites(t *testing.T)
 	if want := (host.Record{"projects": []host.Record{}, "common": host.Record{}, "projectsError": refusal}); err != nil || !reflect.DeepEqual(snapshot, want) {
 		t.Fatalf("a projects.json of format 3 returned %#v, %v; want %#v", snapshot, err, want)
 	}
-	if _, err := store.Apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-b", "root": "/y", "identity": "1:2"}}); err == nil || err.Error() != refusal {
+	if _, err := store.Apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-b", "root": "/y", "identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:2"}}); err == nil || err.Error() != refusal {
 		t.Fatalf("an add to a projects.json of format 3 returned %v", err)
 	}
 	if data, _ := os.ReadFile(projects); string(data) != earlier {
@@ -778,7 +780,7 @@ func TestEarlierStoredFormsAreReportedBySnapshotAndRefusedByWrites(t *testing.T)
 	if err := os.Remove(projects); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-b", "root": "/y", "identity": "1:2"}}); err != nil {
+	if _, err := store.Apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-b", "root": "/y", "identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:2"}}); err != nil {
 		t.Fatalf("an add to a missing projects.json returned %v", err)
 	}
 	var written map[string]any
@@ -789,7 +791,7 @@ func TestEarlierStoredFormsAreReportedBySnapshotAndRefusedByWrites(t *testing.T)
 		t.Fatal(err)
 	}
 	bareRefusal := projects + ": projects: format must be 4, found null"
-	if _, err := store.Apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-b", "root": "/y", "identity": "1:2"}}); err == nil || err.Error() != bareRefusal {
+	if _, err := store.Apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-b", "root": "/y", "identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:2"}}); err == nil || err.Error() != bareRefusal {
 		t.Fatalf("an add to a refused projects.json returned %v", err)
 	}
 	if data, _ := os.ReadFile(projects); string(data) != bare {
@@ -831,12 +833,39 @@ func assertProjectFileForm(t *testing.T, path string, want map[string]any) {
 	}
 }
 
+// contract: workspace.projects.refuses-identity-of-another-form
+func TestAProjectWithAnIdentityOfAnotherFormIsRefusedByName(t *testing.T) {
+	config := t.TempDir()
+	store := host.NewWorkspace(config)
+	projects := filepath.Join(config, "projects.json")
+	const other = `{"format":4,"projects":[{"id":"prj-a","root":"/x","identity":"1:1"}]}`
+	if err := os.WriteFile(projects, []byte(other), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	current, err := platform.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	refusal := "projects.json: project /x has the identity 1:1, not " + current.DirectoryIdentityForm()
+	snapshot, err := store.Apply(host.WorkspaceRequest{Kind: "snapshot"})
+	if want := (host.Record{"projects": []host.Record{}, "common": host.Record{}, "projectsError": refusal}); err != nil || !reflect.DeepEqual(snapshot, want) {
+		t.Fatalf("a projects.json with an identity of another form returned %#v, %v; want %#v", snapshot, err, want)
+	}
+	add := host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-b", "root": "/y", "identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:9"}}
+	if _, err := store.Apply(add); err == nil || err.Error() != refusal {
+		t.Fatalf("an add to a projects.json with an identity of another form returned %v", err)
+	}
+	if data, _ := os.ReadFile(projects); string(data) != other {
+		t.Fatalf("a refused projects.json changed: %s", data)
+	}
+}
+
 // contract: workspace.projects.writes-format-4
 func TestProjectsWriterWritesFormat4(t *testing.T) {
 	config := t.TempDir()
 	root := t.TempDir()
 	store := host.NewWorkspace(config)
-	if _, err := store.Apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-a", "root": root, "identity": "1:1"}}); err != nil {
+	if _, err := store.Apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-a", "root": root, "identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:1"}}); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(filepath.Join(config, "projects.json"))

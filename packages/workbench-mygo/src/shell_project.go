@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -362,9 +361,6 @@ func (s *Shell) activateThen(id string, done func(err error)) {
 	})
 }
 
-// earlierIdentity matches the identity of the earlier form <device>:<inode>.
-var earlierIdentity = regexp.MustCompile(`^\d+:\d+$`)
-
 // openStored asks the host for the window of the stored project, as the rest of projects.activate does, and shows the project when
 // the window is this one.
 func (s *Shell) openStored(id string, project *projectRecord, done func(err error)) {
@@ -380,12 +376,6 @@ func (s *Shell) openStored(id string, project *projectRecord, done func(err erro
 			return
 		}
 		if folder.Identity != identity {
-			// A stored identity of the earlier form <device>:<inode> never equals the current form, so it is refused by its form and not as a
-			// changed directory (docs/spec/projects.md#project-identity; the same check as activateInTurn of packages/workbench/projects.js).
-			if earlierIdentity.MatchString(identity) {
-				done(fmt.Errorf("projects.json: project %s stores the identity %s of the earlier form <device>:<inode>; the identity is <volume UUID>:<inode>, so add the project again", root, identity))
-				return
-			}
 			done(fmt.Errorf("Project directory has changed: %s", root))
 			return
 		}

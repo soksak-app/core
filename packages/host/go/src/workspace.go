@@ -126,14 +126,22 @@ func projectSettings(path string) (Record, error) {
 	return settings, nil
 }
 
-// checkProjects returns the error that names projects.json when a record has no valid id, root or identity.
+// checkProjects returns the error that names projects.json when a record has no valid id, root or identity, or an identity of
+// another form than the platform's (docs/spec/projects.md#project-identity).
 func checkProjects(registry string, projects []Record) error {
+	current, err := platform.Current()
+	if err != nil {
+		return err
+	}
 	for _, p := range projects {
 		id, idOK := p["id"].(string)
 		root, rootOK := p["root"].(string)
 		identity, identityOK := p["identity"].(string)
 		if !idOK || !validProjectID(id) || !rootOK || root == "" || !identityOK || identity == "" {
 			return fmt.Errorf("%s: invalid project record", registry)
+		}
+		if !current.ValidDirectoryIdentity(identity) {
+			return fmt.Errorf("projects.json: project %s has the identity %s, not %s", root, identity, current.DirectoryIdentityForm())
 		}
 	}
 	return nil

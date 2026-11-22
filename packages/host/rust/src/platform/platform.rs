@@ -1335,6 +1335,10 @@ pub trait Platform: CoreRootHost + Send + Sync {
 
     /// Returns the same value for paths that point to the same directory.
     fn directory_identity(&self, path: &Path, metadata: &Metadata) -> Result<String, String>;
+    /// Names the form that directory_identity returns, for the error of a stored identity of another form.
+    fn directory_identity_form(&self) -> &'static str;
+    /// Returns whether identity has the form that directory_identity returns.
+    fn is_valid_directory_identity(&self, identity: &str) -> bool;
     /// Creates a missing directory at path with permissions for the current user only. The permissions of an existing
     /// directory are not changed.
     fn create_private_directories(&self, path: &Path) -> Result<(), String>;

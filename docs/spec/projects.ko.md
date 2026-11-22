@@ -8,7 +8,7 @@
 
 ## 프로젝트 식별
 
-프로젝트 하나는 존재하는 디렉터리 하나에 대응한다. 네이티브 호스트는 현재 사용자의 `~`를 확장하고 절대 경로와 심볼릭 링크를 해석하며 디렉터리인지 확인한 뒤 파일시스템 식별자를 반환한다. macOS 에서는 `<volume UUID>:<inode>` 로, volume 이 저장한 UUID(`getattrlist` 와 `ATTR_VOL_UUID`)와 inode 번호이며, volume 의 device number 는 부팅마다 다시 매겨지므로 이 UUID 와 inode 는 부팅과 remount 를 거쳐도 같다. Windows 에서는 volume serial number 와 file index 다. 이전 형식 `<device>:<inode>` 의 저장된 identity 는 변환하지 않는다. 그 프로젝트를 열면 `projects.json`, 프로젝트 root, 찾은 identity 를 밝히는 오류로 실패하고, person 이 프로젝트를 다시 추가한다. 프로젝트 등록 목록은 같은 식별자와 같은 정규 경로의 중복을 거절한다. 같은 디렉터리를 다시 열면 기존 프로젝트와 창을 선택하며 프로젝트를 추가하지 않는다. 프로젝트 이름은 변경할 수 있으며 식별 기준으로 사용하지 않는다.
+프로젝트 하나는 존재하는 디렉터리 하나에 대응한다. 네이티브 호스트는 현재 사용자의 `~`를 확장하고 절대 경로와 심볼릭 링크를 해석하며 디렉터리인지 확인한 뒤 파일시스템 식별자를 반환한다. macOS 에서는 `<volume UUID>:<inode>` 로, volume 이 저장한 UUID(`getattrlist` 와 `ATTR_VOL_UUID`)와 inode 번호이며, volume 의 device number 는 부팅마다 다시 매겨지므로 이 UUID 와 inode 는 부팅과 remount 를 거쳐도 같다. Windows 에서는 volume serial number 와 file index 다. `projects.json` 의 reader 는 플랫폼의 형식이 아닌 identity 를 가진 record 를 거부한다(macOS 에서는 `<volume UUID>:<inode>`: 대문자 8-4-4-4-12 16진수 형식의 36자 UUID, 콜론, 10진수 inode). 거부 오류는 `projects.json: project <root> has the identity <identity>, not <volume UUID>:<inode>` 이며, 이전 형식 `<device>:<inode>` 의 저장된 identity 는 변환하지 않는다. 프로젝트 등록 목록은 같은 식별자와 같은 정규 경로의 중복을 거절한다. 같은 디렉터리를 다시 열면 기존 프로젝트와 창을 선택하며 프로젝트를 추가하지 않는다. 프로젝트 이름은 변경할 수 있으며 식별 기준으로 사용하지 않는다.
 
 앱 시작과 새 창 동작은 프로젝트를 선택하지 않은 일반 앱 창에서 프로젝트 라이브러리를 표시한다. 첫 프로젝트를 생성하거나 열면 같은 OS 창의 라이브러리를 작업 화면으로 교체한다. 라이브러리는 화면이며 별도 창 유형이나 임시 프로젝트가 아니다. 기존 작업 화면을 다시 로드하면 해당 창의 선택한 프로젝트를 유지한다. 디렉터리가 없으면 오류를 표시하고 저장된 프로젝트 데이터를 삭제하지 않으며 프로젝트 선택은 계속 사용할 수 있다.
 

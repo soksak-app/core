@@ -5,9 +5,23 @@ package windows
 import (
 	"fmt"
 	"os"
+	"regexp"
 
 	sys "golang.org/x/sys/windows"
 )
+
+// directoryIdentityPattern is the form that DirectoryIdentity returns: the decimal volume serial number, a colon and the decimal file index.
+var directoryIdentityPattern = regexp.MustCompile(`^[0-9]+:[0-9]+$`)
+
+// DirectoryIdentityForm names the form that DirectoryIdentity returns.
+func (implementation) DirectoryIdentityForm() string {
+	return "<volume serial number>:<file index>"
+}
+
+// ValidDirectoryIdentity reports whether identity has the form that DirectoryIdentity returns.
+func (implementation) ValidDirectoryIdentity(identity string) bool {
+	return directoryIdentityPattern.MatchString(identity)
+}
 
 // DirectoryIdentity identifies a directory by the volume serial number and the file index.
 func (implementation) DirectoryIdentity(path string, _ os.FileInfo) (string, error) {

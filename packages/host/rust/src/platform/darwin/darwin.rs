@@ -1025,6 +1025,12 @@ impl Platform for Darwin {
     fn directory_identity(&self, path: &Path, metadata: &Metadata) -> Result<String, String> {
         identity::identity(path, metadata)
     }
+    fn directory_identity_form(&self) -> &'static str {
+        identity::FORM
+    }
+    fn is_valid_directory_identity(&self, identity: &str) -> bool {
+        identity::is_valid(identity)
+    }
     #[cfg(feature = "diagnostics")]
     fn private_directory(&self, path: &Path) -> Result<(), String> {
         endpoint::private_directory(path)

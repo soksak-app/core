@@ -849,6 +849,12 @@ impl Platform for Windows {
     fn directory_identity(&self, path: &Path, _metadata: &Metadata) -> Result<String, String> {
         identity::identity(path)
     }
+    fn directory_identity_form(&self) -> &'static str {
+        identity::FORM
+    }
+    fn is_valid_directory_identity(&self, identity: &str) -> bool {
+        identity::is_valid(identity)
+    }
     #[cfg(feature = "diagnostics")]
     fn private_directory(&self, path: &Path) -> Result<(), String> {
         unsupported::private_directory(path)

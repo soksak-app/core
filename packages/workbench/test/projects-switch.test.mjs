@@ -280,18 +280,6 @@ test("opening a project whose folder cannot be read rejects with the host's mess
   wire.finish();
 });
 
-test("opening a project whose stored identity has the earlier form is refused with an error that names projects.json", async () => {
-  await start("projects-switch-folder-earlier-identity");
-  const from = wire.calls.length;
-  reported.length = 0;
-  await assert.rejects(projects.activate("prj-one"),
-    { message: "projects.json: project /work/one stores the identity 1:1 of the earlier form <device>:<inode>; the identity is <volume UUID>:<inode>, so add the project again" });
-  assert.deepEqual(openedFrom(from), [], "the refused open asked the host for a window");
-  await projects.flush();
-  assert.deepEqual(reported, [], "the refused switch was reported again as a window error");
-  wire.finish();
-});
-
 test("switching to or closing into a space that fails the plane check changes neither the active space nor the plane", async () => {
   // The project that this window owns keeps its space in memory, so the test uses a different project from the earlier tests.
   await start("projects-switch-space-check");

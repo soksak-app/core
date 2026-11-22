@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1060: The Go and Rust host readers of `projects.json` refuse an identity that is not of the form of the platform, and the workbenches no longer recognize the earlier form. Red: `TestAProjectWithAnIdentityOfAnotherFormIsRefusedByName` and `a_project_with_an_identity_of_another_form_is_refused_by_name` failed with the earlier readers. Green: they pass, with the 574 Go host tests, the Rust workspace and role state tests, the mygo project tests and `projects-switch.test.mjs`.
 - F1061: Korean documents state the action instead of `짓다`, and the figurative verb check reports it. Red: `auditFigurativeVerbs reports the figurative verbs outside code` failed without the rule. Green: it passes, and the check reports no tracked document.
 - F1055-1: The tree of `core.layout.plan` and `core.layout.apply` takes a group `{group: {name?}, tree}`. A group keeps the group card that holds the card its first card keeps, a new group card takes `그룹 <n>`, and a group card that no group keeps ends once its cards moved, so a space that holds group cards is planned instead of refused. The plan judges the drawn size with the group headers, and `cards` names the group of each card.
 - F1059: The test inventory links F1033 to the toast of the page and of the mygo workbench. Red: `completed capability entries all have feature evidence links` failed with `F1033: completed capability has no feature link`. Green: the inventory test passes.

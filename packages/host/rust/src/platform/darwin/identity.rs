@@ -6,6 +6,26 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 
+/// The form that identity returns: the uppercase hyphenated UUID, a colon and the decimal inode.
+pub const FORM: &str = "<volume UUID>:<inode>";
+
+/// Returns whether identity has the form FORM: a UUID of the 8-4-4-4-12 uppercase hexadecimal groups, a colon and a decimal inode.
+pub fn is_valid(identity: &str) -> bool {
+    let Some((uuid, inode)) = identity.split_once(':') else {
+        return false;
+    };
+    let lengths = [8, 4, 4, 4, 12];
+    let groups: Vec<&str> = uuid.split('-').collect();
+    let uuid_ok = groups.len() == lengths.len()
+        && groups.iter().zip(lengths).all(|(group, length)| {
+            group.len() == length
+                && group
+                    .bytes()
+                    .all(|b| b.is_ascii_digit() || (b'A'..=b'F').contains(&b))
+        });
+    uuid_ok && !inode.is_empty() && inode.bytes().all(|b| b.is_ascii_digit())
+}
+
 /// Identifies a directory by the UUID of its volume and its inode number: `<volume UUID>:<inode>`. The device number st_dev does
 /// not identify a volume across boots, because the system renumbers it at each boot, and statfs f_fsid is the same device number.
 /// getattrlist with ATTR_VOL_UUID returns the UUID that the volume stores, which stays the same across boots and remounts.
