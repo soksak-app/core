@@ -2236,7 +2236,7 @@ func errorOnlyInToast(t *testing.T, f *shellFixture, text string) {
 	walk(tree)
 }
 
-// contract: view.error-before-ready-shows-failure
+// contract: view.error.display
 // A view-stopped event of a surface whose view has made no call yet ends its loading state: the status row shows the error state, the
 // reason is written once on the error display path, and no turning ring keeps asking for frames for it (docs/spec/native-surfaces.md#view-surfaces).
 // A view-stopped event of a surface whose view has made a call keeps its state: its later failure is shown by the error display path only.
@@ -2264,7 +2264,7 @@ func TestAViewThatFailsBeforeItsFirstCallEndsItsLoadingState(t *testing.T) {
 	}
 }
 
-// contract: view.error-after-call-keeps-surface
+// contract: view.error.display
 // A view that made a call has a state, so a view-stopped event that reaches it leaves its surface ready.
 func TestAViewThatFailedAfterItsFirstCallKeepsItsSurface(t *testing.T) {
 	f, stored := surfaceShell(t)

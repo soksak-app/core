@@ -35,11 +35,10 @@ func TestViewErrorMessageIsWrittenOnTheErrorDisplayPathWithItsView(t *testing.T)
 	}
 }
 
-// contract: view.error.before-ready-stops-surface
-// A view.error message that arrives before the view's ready message means the page failed before its first call, so the view has no
-// channel to its workbench. The surface receives one view-stopped event with the plugin and the reason, so its status shows the failure
-// and no loading state waits for a view that never comes (docs/spec/native-surfaces.md#view-surfaces).
-func TestViewErrorBeforeReadyStopsTheSurface(t *testing.T) {
+// contract: view.error.display
+// A view.error message with a reason other than a queue overflow sends one view-stopped event to its surface, which names the surface,
+// the plugin and the reason, so the workbench shows the failure of a page that failed before its first call (docs/spec/host-contract.md).
+func TestViewErrorMessageSendsViewStoppedWithItsReason(t *testing.T) {
 	s := registeredViewRecordSurfaces(t)
 	events := recordWindowEvents(s)
 	if err := s.ViewMessage("probe-surface", `{"message":{"event":"view.error","plugin":"probe","reason":"script soksak://probe/ui/view.js failed to load"}}`); err != nil {
