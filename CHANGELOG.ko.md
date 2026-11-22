@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1080: mygo에서 거부된 owned session 요청의 실패 text가 sidecar의 rule과 reason을 담는다. 예: guardRefused: untracked: <reason>.
 - F1079: mygo에서 호출자의 surface에서 실행되는 core command(core.session.open 등)의 view call이 그 view의 surface에서 실행되어, view가 owned session을 열고 쓴다.
 - F1078: Go role state가 저장된 space의 고정 window sidebar card를 건너뛴다. 이 card는 data가 없다. 그래서 core.role.define이 Wails와 mygo의 모든 project에서 더 이상 실패하지 않는다.
 - F1071-3: mygo program run test 네 개가 map의 첫 surface 대신 `pluginSurface`로 `textprobe`의 surface를 골라, sync request test가 일부 실행에서 `boxprobe`의 surface를 읽지 않는다. F1071-4: Rust host는 `reload_record`를 test build에서만 re-export하고, program run과 sidecar session test는 `tests/support/folder.rs`의 두 번째 module 대신 `crate::test_folder`를 쓰며, reload test는 `expect_err`를 호출하며, workspace test는 쓰지 않는 trait `Platform`을 import하지 않으므로 `make check-rust-clippy`가 통과한다.

@@ -48,6 +48,20 @@ func TestInputByTheOwnerSendsTheTextAsGiven(t *testing.T) {
 	equal(t, sends[0].body, map[string]any{"operation": "input", "session": "s-1", "text": "ls\r"})
 }
 
+// A refusal of the sidecar that states its rule and reason reaches the caller with them, so the person reads why the input was
+// refused (docs/spec/plugins.md#owned-sessions).
+func TestARefusedInputNamesTheRuleAndReasonOfTheSidecar(t *testing.T) {
+	f := newOwnedFixture(t)
+	openFixtureSession(t, f)
+	f.host.reply = func(op string, body map[string]any) map[string]any {
+		return map[string]any{"error": "guardRefused", "rule": "untracked", "reason": "the line is not followed"}
+	}
+	err := f.run(func(answer func(error)) { f.sessions.Input("owner-tab", "s-1", "\r", answer) })
+	if err == nil || err.Error() != "guardRefused: untracked: the line is not followed" {
+		t.Fatalf("the refusal is %v, want guardRefused: untracked: the line is not followed", err)
+	}
+}
+
 func TestSubmitRefusesTextWithALineEndBeforeAnyRequest(t *testing.T) {
 	f := newOwnedFixture(t)
 	openFixtureSession(t, f)

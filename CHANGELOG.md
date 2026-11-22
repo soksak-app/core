@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1080: On mygo a refused owned session request keeps the rule and reason of the sidecar in its failure text, such as guardRefused: untracked: <reason>.
 - F1079: On mygo a view call of a core command that runs on the surface of its caller, such as core.session.open, runs on the surface of the view, so views open and use owned sessions.
 - F1078: The Go role state skips the fixed window sidebar cards of a stored space, which hold no data, so core.role.define no longer fails in every project on Wails and mygo.
 - F1071-3: The four mygo program run tests choose the surface of `textprobe` with `pluginSurface` instead of the first surface of a map, so the sync request test no longer reads the surface of `boxprobe` in some runs. F1071-4: The Rust host re-exports `reload_record` only in test builds, its program run and sidecar session tests use `crate::test_folder` instead of a second module of `tests/support/folder.rs`, the reload test calls `expect_err`, and the workspace test no longer imports the unused trait `Platform`, so `make check-rust-clippy` passes.

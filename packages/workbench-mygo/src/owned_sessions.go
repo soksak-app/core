@@ -635,7 +635,9 @@ func (o *OwnedSessions) finish(session, reason string) {
 // ownedReplyError returns the failure that a reply body states in its member error, or nil.
 func ownedReplyError(reply json.RawMessage) error {
 	var failed struct {
-		Error json.RawMessage `json:"error"`
+		Error  json.RawMessage `json:"error"`
+		Rule   string          `json:"rule"`
+		Reason string          `json:"reason"`
 	}
 	if err := json.Unmarshal(reply, &failed); err != nil {
 		return fmt.Errorf("the reply of a sidecar: %w", err)
@@ -646,6 +648,12 @@ func ownedReplyError(reply json.RawMessage) error {
 	var text string
 	if err := json.Unmarshal(failed.Error, &text); err != nil {
 		return errors.New(string(failed.Error))
+	}
+	// A refusal that states its rule and reason, as the input guard of the sidecar does, keeps them in the text of the failure.
+	for _, part := range []string{failed.Rule, failed.Reason} {
+		if part != "" {
+			text += ": " + part
+		}
 	}
 	return errors.New(text)
 }
