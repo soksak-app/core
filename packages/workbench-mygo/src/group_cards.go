@@ -324,8 +324,10 @@ func (s *Shell) drawGroupHead(c *ui.Context, id, name string, width, height floa
 	// silent: shownActivities gives the activities of the tabs, the group cards, the projects and the spaces; a group header reads only those of the group cards.
 	_, groupActivities, _, _ := s.shownActivities()
 	activity := groupActivities[id]
+	icon, iconGap := s.activityMark(size)
 	if activity != "" {
-		nameWidth += m.activityIcon + m.cardHeadGap
+		// The name drops its start padding beside the icon, so the gap of the icon is the declared share of the text size.
+		nameWidth += icon + iconGap - m.tabPadX
 	}
 	buttons := float32(len(tools))
 	group := buttons*m.cardButton + (buttons-1)*m.cardActsGap + 2*m.cardActsPad + 2*s.palette.BorderWidth + s.pairWidth(tools)
@@ -361,15 +363,17 @@ func (s *Shell) drawGroupHead(c *ui.Context, id, name string, width, height floa
 			// (docs/spec/groups.md#headers).
 			s.drawRenameField(c, 0, size).Grow(1).Shrink(1).MarginStart(m.tabPadX - s.palette.BorderWidth - s.frameLength(m.barTabRootPad))
 		} else {
+			nameStart := m.tabPadX
 			if activity != "" {
-				s.drawActivity(c, "core.activity.group", id, activity, m.activityIcon)
+				s.drawActivity(c, "core.activity.group", id, activity, icon).MarginEnd(iconGap - m.cardHeadGap)
+				nameStart = 0
 			}
 			// A press on the name, which fills the header outside its buttons, lands on no content card and clears the focus
 			// (docs/spec/groups.md#focus).
 			label := s.binder.Press(c, "core.group.name", "core.card.focus", id, focusParam{})
 			// The name stands at the start of the place of the tab strip, where the first tab of a content card stands; a button centres its
 			// content otherwise (docs/spec/groups.md#headers).
-			label.KeepFocus().Grow(1).Shrink(1).Row().Justify(ui.Start).AlignItems(ui.Center).PaddingX(m.tabPadX).Label(name).Tooltip(name)
+			label.KeepFocus().Grow(1).Shrink(1).Row().Justify(ui.Start).AlignItems(ui.Center).Padding(0, m.tabPadX, 0, nameStart).Label(name).Tooltip(name)
 			s.renameOnDoubleClick(label, target)
 			// The name grows over the room that the buttons leave, so a press on the header outside its buttons drags the group card. The
 			// buttons take their own presses, so only the name starts the drag, and its release ends it.

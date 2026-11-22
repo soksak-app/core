@@ -6,10 +6,12 @@ package workbench_test
 import (
 	"bytes"
 	"encoding/json"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -301,6 +303,21 @@ func TestTheIconsOfAnActivityStandOnItsHolders(t *testing.T) {
 			t.Errorf("the icons of %s are %v, want the image of %s named 응답 대기", name, got, item)
 		}
 	}
+	// Each icon is the declared share of the text size of its name, so the four holders draw it at one ratio
+	// (docs/spec/activity.md#drawing).
+	chrome := declaredChrome(t)
+	iconEm, base := chrome["activity-icon-em"], chrome["text-base"]
+	small, control := 13*chrome["text-small-at-base"]/base, 13*chrome["text-control-at-base"]/base
+	for name, item := range map[string]string{"core.activity.tab": surface, "core.activity.group": group, "core.activity.space": spaceID, "core.activity.project": projectID} {
+		text := small
+		if name == "core.activity.space" || name == "core.activity.project" {
+			text = control
+		}
+		box, ok := exposedAll(tree, name)[item]
+		if !ok || math.Abs(float64(box.W-iconEm*text)) > 0.01 || math.Abs(float64(box.H-iconEm*text)) > 0.01 {
+			t.Errorf("the icon of %s is %v×%v, want %v of the text size %v", name, box.W, box.H, iconEm, text)
+		}
+	}
 	// The project tabs in the column keep the icon of the project.
 	r.f.run("core.settings.set", map[string]any{"patch": map[string]any{"projectTabs": "left"}})
 	if got := activityIcons(r.f.tester.ElementTree(), "core.activity.project"); !slices.Equal(got, []activityIcon{{projectID, ui.RoleImage, "응답 대기"}}) {
@@ -315,6 +332,61 @@ func TestTheIconsOfAnActivityStandOnItsHolders(t *testing.T) {
 	for _, name := range []string{"core.activity.tab", "core.activity.group", "core.activity.space", "core.activity.project"} {
 		if got := activityIcons(tree, name); len(got) != 0 {
 			t.Errorf("the icons of %s after the activity ended are %v", name, got)
+		}
+	}
+}
+
+// declaredChrome reads the unitless and the point values of the chrome declaration of packages/workbench/workbench.json.
+func declaredChrome(t *testing.T) map[string]float32 {
+	t.Helper()
+	raw, err := os.ReadFile("../src/workbench.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var declared struct {
+		Chrome map[string]string `json:"chrome"`
+	}
+	if err := json.Unmarshal(raw, &declared); err != nil {
+		t.Fatal(err)
+	}
+	out := map[string]float32{}
+	for name, text := range declared.Chrome {
+		if value, err := strconv.ParseFloat(strings.TrimSuffix(text, "px"), 32); err == nil {
+			out[name] = float32(value)
+		}
+	}
+	return out
+}
+
+// Each activity has its own color in every theme and mode: the icons of attention, failed, running and idle take focus, fail, rail
+// and muted, four different colors, and none takes the error color no, which belongs to the display of errors
+// (docs/spec/activity.md#drawing).
+func TestEveryThemeGivesEachActivityItsOwnColor(t *testing.T) {
+	raw, err := os.ReadFile("../src/workbench.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var declared struct {
+		Themes []map[string]any `json:"themes"`
+	}
+	if err := json.Unmarshal(raw, &declared); err != nil {
+		t.Fatal(err)
+	}
+	for _, theme := range declared.Themes {
+		for _, mode := range []string{"dark", "light"} {
+			colors, _ := theme[mode].(map[string]any)
+			seen := map[string]string{}
+			for _, key := range []string{"focus", "fail", "rail", "muted", "no"} {
+				value, _ := colors[key].(string)
+				if value == "" {
+					t.Errorf("theme %v %s has no color %s", theme["name"], mode, key)
+					continue
+				}
+				if other, ok := seen[strings.ToLower(value)]; ok {
+					t.Errorf("theme %v %s gives %s and %s the same color %s", theme["name"], mode, other, key, value)
+				}
+				seen[strings.ToLower(value)] = key
+			}
 		}
 	}
 }

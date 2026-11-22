@@ -257,7 +257,8 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides 
 			spare += m.noticeDot + m.tabGap
 		}
 		if tabActivities[tab.ID] != "" {
-			spare += m.activityIcon + m.tabGap
+			icon, gap := s.activityMark(size)
+			spare += icon + gap
 		}
 		widths[i] = float64(min(measured+spare, m.tabMaxW))
 		if active != nil && tab.ID == active.ID {
@@ -597,8 +598,9 @@ func (s *Shell) drawTab(c *ui.Context, card string, tab layout.Tab, on bool, siz
 		// silent: shownActivities gives the activities of the tabs, the group cards, the projects and the spaces; a tab reads only those of the tabs.
 		tabs, _, _, _ := s.shownActivities()
 		activity, iconAt := tabs[tab.ID], start
+		icon, iconGap := s.activityMark(size)
 		if activity != "" {
-			start += m.activityIcon + m.tabGap
+			start += icon + iconGap
 		}
 		pill.Children(func() {
 			// .tab[data-active=true] of the focused card: the border of the active tab takes the focus color of the ring of the card. It
@@ -614,8 +616,8 @@ func (s *Shell) drawTab(c *ui.Context, card string, tab layout.Tab, on bool, siz
 			ui.Box(c).Absolute().Left(m.tabPadX).Top(m.tabPadY + (line-m.noticeDot)/2).Children(func() { s.noticeMark(c, tab.ID) })
 		}
 		if activity != "" {
-			ui.Box(c).Absolute().Left(iconAt).Top(m.tabPadY + (line-m.activityIcon)/2).Children(func() {
-				s.drawActivity(c, "core.activity.tab", tab.ID, activity, m.activityIcon)
+			ui.Box(c).Absolute().Left(iconAt).Top(m.tabPadY + (line-icon)/2).Children(func() {
+				s.drawActivity(c, "core.activity.tab", tab.ID, activity, icon)
 			})
 		}
 		closing := s.binder.Press(c, "core.card.tab-close", "core.tab.close", tab.ID, tabParam{tab.ID})

@@ -223,9 +223,10 @@ func (s *Shell) drawBarTab(c *ui.Context, tab barTab) {
 		}
 		// The icon of the activity of the project or the space stands before the name, over the room that the chip keeps for it
 		// (docs/spec/activity.md#drawing).
-		icon, start := s.frameLength(m.activityIcon), pad
+		icon, gap := s.activityMark(size)
+		start := pad
 		if tab.activity != "" {
-			start += icon + s.frameLength(m.barGap)
+			start += icon + gap
 		}
 		chip.Children(func() {
 			ui.Row(c).Padding(0, room, 0, start).Children(func() {
@@ -361,7 +362,8 @@ func (s *Shell) drawColumnTab(c *ui.Context, tab barTab, width float32) {
 		s.renameOnDoubleClick(name, tab.rename)
 		// The icon of the activity and the name stand centred together: the name is centred in the room after the icon and its gap, and
 		// the icon stands before the name over that room (docs/spec/activity.md#drawing).
-		pad, icon, gap := s.frameLength(m.projectTabPad), s.frameLength(m.activityIcon), s.frameLength(m.barGap)
+		pad := s.frameLength(m.projectTabPad)
+		icon, gap := s.activityMark(size)
 		lead := float32(0)
 		if tab.activity != "" {
 			lead = icon + gap

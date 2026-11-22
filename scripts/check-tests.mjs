@@ -477,6 +477,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1042",
+    implementation: [
+      { file: "packages/workbench-mygo/src/activity.go", symbol: "func (s *Shell) activityMark(text float32) (icon, gap float32) {" },
+      { file: "packages/workbench/app.css", symbol: ".activity[data-activity=failed]{color:var(--fail)}" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/activity_test.go", id: "TestTheIconsOfAnActivityStandOnItsHolders" },
+      { file: "packages/workbench-mygo/tests/activity_test.go", id: "TestEveryThemeGivesEachActivityItsOwnColor" },
+      { file: "packages/workbench/test/activity-marks.test.mjs", id: "the icon and its gap are shares of the text size of the name in every holder" },
+      { file: "packages/workbench/test/activity-marks.test.mjs", id: "each activity has its own color and none is the error color" },
+    ],
+    expected: "Activity icons and their gaps are shares of the text size of the name in every holder, and each activity has its own theme color.",
+    levels: ["unit"],
+  },
+  {
     id: "F1039",
     implementation: [
       { file: "packages/workbench/app.css", symbol: ".card[data-focused=true] .tab[data-active=true]{box-shadow:inset 0 0 0 var(--bw) var(--focus)}" },

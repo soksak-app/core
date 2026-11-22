@@ -455,7 +455,7 @@ function themeTokens() {
   return {
     "--bg": c.bg, "--card": c.card, "--fg": c.fg, "--muted": c.muted,
     "--edge": c.edge, "--rule": c.rule, "--rail": c.rail, "--focus": c.focus,
-    "--no": c.no,
+    "--no": c.no, "--fail": c.fail,
     // The four shape values are kept by the settings, not by the theme. A theme sets the values once when it is
     // selected (applyTheme). Writing the theme values here would erase the values the user changed.
     "--r": `${settings.radius}px`, "--half-gap": `${halfGap()}px`,

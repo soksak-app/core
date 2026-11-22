@@ -69,13 +69,13 @@ project를 가진 창은 그 space들의 activity가 바뀔 때마다 host call 
 
 각 workbench는 activity가 있는 card의 각 tab(`core.activity.tab`), 각 group header(`core.activity.group`), 각 space tab(`core.activity.space`), 각 project tab(`core.activity.project`)의 이름 바로 앞에 그 activity의 icon을 그리고, activity가 없는 곳에는 아무것도 그리지 않는다. content card는 자기 tab들의 activity를 보이며 자기 icon을 그리지 않는다. 각 icon은 위 element 이름의 image로, 그린 icon마다 element 하나가 workbench 순서로 있고, 그 activity의 한국어 이름을 accessible name과 tooltip으로 가지며, command를 실행하지 않고, `core.activity`가 그 activity를 담는다.
 
-icon은 `packages/workbench/workbench.json`의 선언된 icon `activity-attention`, `activity-failed`, `activity-running`, `activity-idle`로, 16 point view box 위에 있으며, chrome 값 `activity-stroke`의 선으로 `activity-icon` 크기에 그리고, 이름과의 간격은 그것을 담은 요소의 간격으로, tab에서는 `tab-gap`, group header에서는 `card-head-gap`, space tab과 project tab에서는 `bar-tab-gap`이다. activity의 이름은 같은 파일의 `activities`다. space tab과 project tab은 이름처럼 frame text 배율을 따르고, column의 project tab은 icon과 이름을 함께 가운데에 둔다:
+icon은 `packages/workbench/workbench.json`의 선언된 icon `activity-attention`, `activity-failed`, `activity-running`, `activity-idle`로, 16 point view box 위에 있으며, chrome 값 `activity-stroke`의 선으로 그린다. icon과 이름 사이 간격은 모든 holder에서 이름 글자 크기의 같은 비율이다: icon의 너비와 높이는 그 크기의 `activity-icon-em`, 간격은 `activity-gap-em`이고, tab과 group header는 small 글자 크기, space tab과 project tab은 control 글자 크기를 쓴다. group header는 icon 옆에서 이름의 시작 padding을 빼서 그 간격만 남긴다. activity의 이름은 같은 파일의 `activities`다. space tab과 project tab은 이름처럼 frame text 배율을 따르고, column의 project tab은 icon과 이름을 함께 가운데에 둔다:
 
 | Activity | Icon | 색 | 이름 |
 | --- | --- | --- | --- |
 | `attention` | 느낌표가 든 고리 | `focus` | 응답 대기 |
-| `failed` | 가위표가 든 고리 | `fg` | 실패 |
+| `failed` | 가위표가 든 고리 | `fail` | 실패 |
 | `running` | 삼각형이 든 고리 | `rail` | 실행 중 |
 | `idle` | 고리 | `muted` | 유휴 |
 
-icon은 정적이다. activity가 바뀌면 다음 icon을 한 번 그리고, 어떤 icon도 움직이지 않으므로, activity가 바뀌지 않는 동안 activity는 frame에 일을 더하지 않는다. 어떤 icon도 오류 색 `no`를 쓰지 않는다. 그 색은 오류 표시의 것이다.
+icon은 정적이다. activity가 바뀌면 다음 icon을 한 번 그리고, 어떤 icon도 움직이지 않으므로, activity가 바뀌지 않는 동안 activity는 frame에 일을 더하지 않는다. 각 activity는 모든 theme과 mode에서 자기 색을 가진다: theme은 `focus`, `rail`, `muted` 옆에 `fail`을 선언하고, 네 색은 서로 다르다. 어떤 icon도 오류 색 `no`를 쓰지 않는다. 그 색은 오류 표시의 것이다.

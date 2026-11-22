@@ -153,7 +153,7 @@ func (d *Declarations) HeightMetric(name string) (float64, bool) {
 
 // Palette is the colors and the shape of a theme in one mode.
 type Palette struct {
-	Bg, Card, Fg, Muted, Edge, Rule, Rail, Focus, No ui.Color
+	Bg, Card, Fg, Muted, Edge, Rule, Rail, Focus, No, Fail ui.Color
 	// Gap is the gap setting: the full distance between two adjacent cards, 0 for the seam (docs/spec/settings.md#values).
 	Radius, Gap, BorderWidth float32
 }
@@ -242,7 +242,7 @@ func (d *Declarations) DefaultPalette() (Palette, error) {
 		return float32(number)
 	}
 	return Palette{Bg: color("bg"), Card: color("card"), Fg: color("fg"), Muted: color("muted"), Edge: color("edge"), Rule: color("rule"),
-		Rail: color("rail"), Focus: color("focus"), No: color("no"), Radius: length("r"), Gap: length("gap"), BorderWidth: length("bw")}, failed
+		Rail: color("rail"), Focus: color("focus"), No: color("no"), Fail: color("fail"), Radius: length("r"), Gap: length("gap"), BorderWidth: length("bw")}, failed
 }
 
 // Declared returns the declarations of the embedded copies.

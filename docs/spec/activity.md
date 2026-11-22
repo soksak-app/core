@@ -69,13 +69,13 @@ Each change of the record raises its `revision`, a whole number that starts at 0
 
 Each workbench draws the icon of the activity immediately before the name of each tab of a card (`core.activity.tab`), of each group header (`core.activity.group`), of each space tab (`core.activity.space`) and of each project tab (`core.activity.project`) that has an activity, and draws nothing where there is none; a content card shows the activities of its tabs and draws no icon of its own. Each icon is an image of the element name above, one element per drawn icon in workbench order, with the Korean name of its activity as its accessible name and tooltip; it runs no command, and `core.activity` holds its activity.
 
-The icons are the declared icons `activity-attention`, `activity-failed`, `activity-running` and `activity-idle` of `packages/workbench/workbench.json` on a 16 point view box, drawn in strokes of the chrome value `activity-stroke` at the size `activity-icon`, with the gap of its holder to the name: `tab-gap` in a tab, `card-head-gap` in a group header and `bar-tab-gap` in a space or project tab. The names of the activities are `activities` of the same file. A space tab and a project tab follow the frame text scale as their names do; a project tab in the column shows its icon and its name centred together:
+The icons are the declared icons `activity-attention`, `activity-failed`, `activity-running` and `activity-idle` of `packages/workbench/workbench.json` on a 16 point view box, drawn in strokes of the chrome value `activity-stroke`. The icon and its gap to the name are shares of the text size of the name, the same in every holder: the icon is `activity-icon-em` of that size wide and high, and the gap is `activity-gap-em` of it, in a tab and a group header at the small text size and in a space tab and a project tab at the control text size; a group header drops the start padding of its name beside an icon, so that gap stands alone. The names of the activities are `activities` of the same file. A space tab and a project tab follow the frame text scale as their names do; a project tab in the column shows its icon and its name centred together:
 
 | Activity | Icon | Color | Name |
 | --- | --- | --- | --- |
 | `attention` | a ring with an exclamation mark | `focus` | 응답 대기 |
-| `failed` | a ring with a cross | `fg` | 실패 |
+| `failed` | a ring with a cross | `fail` | 실패 |
 | `running` | a ring with a triangle | `rail` | 실행 중 |
 | `idle` | a ring | `muted` | 유휴 |
 
-The icons are static: a change of activity draws the next icon once, and no icon animates, so the activity adds no work to a frame while no activity changes. No icon uses the error color `no`, which belongs to the display of errors.
+The icons are static: a change of activity draws the next icon once, and no icon animates, so the activity adds no work to a frame while no activity changes. Each activity has its own color in every theme and mode: the theme declares `fail` beside `focus`, `rail` and `muted`, and the four differ. No icon uses the error color `no`, which belongs to the display of errors.

@@ -497,11 +497,17 @@ func (s *Shell) activityColor(activity string) ui.Color {
 	case "attention":
 		return s.palette.Focus
 	case "failed":
-		return s.palette.Fg
+		return s.palette.Fail
 	case "running":
 		return s.palette.Rail
 	}
 	return s.palette.Muted
+}
+
+// activityMark is the size of the icon of an activity beside a name of text points and the gap between the icon and the name: both
+// are declared shares of the text size, so every holder keeps one ratio (docs/spec/activity.md#drawing).
+func (s *Shell) activityMark(text float32) (icon, gap float32) {
+	return text * s.metrics.activityIconEm, text * s.metrics.activityGapEm
 }
 
 // drawActivity draws the icon of activity, size wide, as the element name of item: an image with the declared name of the activity as

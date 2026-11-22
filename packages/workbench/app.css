@@ -329,11 +329,16 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
   content:"";width:var(--notice-dot);height:var(--notice-dot);border-radius:var(--circle);background:var(--focus);flex:0 0 auto}
 .chrome__ham{position:relative}
 /* The icon of an activity before the name of a tab, a group header, a space tab or a project tab (docs/spec/activity.md#drawing).
-   No activity uses the error color. */
-.activity{display:inline-grid;flex:0 0 auto;width:var(--activity-icon);height:var(--activity-icon)}
+   The icon and its gap to the name are shares of the text size of the name, the same in every holder: the icon takes the text
+   size of its holder, and its margin adds to the gap of the holder what the share needs. No activity uses the error color. */
+.activity{display:inline-grid;flex:0 0 auto;font-size:var(--activity-text);width:calc(var(--activity-icon-em) * 1em);height:calc(var(--activity-icon-em) * 1em);margin-right:calc(var(--activity-gap-em) * 1em - var(--activity-holder-gap))}
+.tab .activity{--activity-text:var(--text-small);--activity-holder-gap:var(--tab-gap)}
+.group__head .activity{--activity-text:var(--text-small);--activity-holder-gap:var(--card-head-gap)}
+.group__head .activity + .group__name{padding-left:0}
+.bar-tab .activity{--activity-text:var(--text-control);--activity-holder-gap:var(--bar-tab-gap)}
 .activity svg{width:var(--fill);height:var(--fill);fill:none;stroke:currentColor;stroke-width:var(--activity-stroke);stroke-linecap:round;stroke-linejoin:round}
 .activity[data-activity=attention]{color:var(--focus)}
-.activity[data-activity=failed]{color:var(--fg)}
+.activity[data-activity=failed]{color:var(--fail)}
 .activity[data-activity=running]{color:var(--rail)}
 .activity[data-activity=idle]{color:var(--muted)}
 .chrome__ham[data-notice=true]::after{position:absolute;top:var(--notice-dot-inset);right:var(--notice-dot-inset)}
