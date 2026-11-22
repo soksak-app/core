@@ -702,6 +702,8 @@ struct ViewChannel {
     navigations: u64,
     /// The calls that the view has open, by id, with the plugin and the command of each.
     calls: BTreeMap<u64, String>,
+    /// Set by the first call of the view. A view.error after it is shown on the error display path only.
+    called: bool,
 }
 
 /// The local identity of one native view document. It does not depend on a native handle, which can be reused after release.
@@ -896,6 +898,18 @@ struct ViewLogCall {
 }
 
 impl ViewChannels {
+    /// Records that the view of surface made a call.
+    pub fn mark_called(&self, surface: &str) {
+        if let Some(channel) = self.lock().get_mut(surface) {
+            channel.called = true;
+        }
+    }
+
+    /// Reports whether the view of surface has made a call. A surface without a view has made none.
+    pub fn has_called(&self, surface: &str) -> bool {
+        self.lock().get(surface).is_some_and(|channel| channel.called)
+    }
+
     fn dispatch(&self, surface: &str, value: &str) -> Result<ViewDispatch, String> {
         self.dispatch_with_decoder(surface, value, |value| {
             serde_json::from_str(value)
@@ -1039,6 +1053,7 @@ impl ViewChannels {
                 process_ready: false,
                 navigations: 0,
                 calls: BTreeMap::new(),
+                called: false,
             },
         );
         origin
@@ -1848,6 +1863,9 @@ fn view_message(
             return;
         }
         Ok(ViewDispatch::Call(payload)) => {
+            if let Ok(data) = window_data(window) {
+                data.documents.views().mark_called(surface);
+            }
             let payload = tag_view_generation(payload, origin.generation);
             if let Err(error) = crate::windows::emit_view_source_event(window, "view-call", payload)
             {
@@ -1877,7 +1895,8 @@ fn view_message(
         Ok(false) => {
             // A page failure sends view-stopped to the surface, so the workbench shows it instead of the loading state
             // (docs/spec/native-surfaces.md#view-surfaces).
-            if let Some(payload) = view_error_stop(surface, plugin, value) {
+            let called = window_data(window).is_ok_and(|data| data.documents.views().has_called(surface));
+            if let Some(payload) = view_error_stop(surface, plugin, value, called) {
                 if let Err(error) = crate::windows::emit_view_source_event(window, "view-stopped", payload) {
                     log_error("view channel", error);
                 }
@@ -1979,8 +1998,12 @@ fn view_log_reply_message(id: u64, result: &Result<Value, String>) -> Value {
 /// Handles the failure of the view document of surface: its process ended, or its message queue overflowed. The view is closed, and it
 /// is created again unless the failure stops the restarts (docs/spec/plugin-processes.md, rule 5). A document that is not the current
 /// view of the surface was already replaced, so its failure is not counted again.
-/// Returns the view-stopped payload of a view.error message whose reason is not a queue overflow, or None for any other message.
-pub fn view_error_stop(surface: &str, plugin: &str, value: &str) -> Option<serde_json::Value> {
+/// Returns the view-stopped payload of a view.error message whose reason is not a queue overflow, for a view that has made no call yet
+/// (called is false), or None for any other message.
+pub fn view_error_stop(surface: &str, plugin: &str, value: &str, called: bool) -> Option<serde_json::Value> {
+    if called {
+        return None;
+    }
     let parsed: serde_json::Value = serde_json::from_str(value).ok()?;
     let message = parsed.get("message")?;
     if message.get("event")?.as_str()? != "view.error" {

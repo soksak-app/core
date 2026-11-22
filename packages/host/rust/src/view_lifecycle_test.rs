@@ -121,13 +121,28 @@ fn a_view_error_message_yields_view_stopped_with_its_reason() {
     use serde_json::json;
     let failure = r#"{"message":{"event":"view.error","plugin":"probe","reason":"script soksak://probe/ui/view.js failed to load"}}"#;
     assert_eq!(
-        view_error_stop("probe-surface", "probe", failure),
+        view_error_stop("probe-surface", "probe", failure, false),
         Some(json!({"surface": "probe-surface", "plugin": "probe", "reason": "script soksak://probe/ui/view.js failed to load"}))
     );
     let overflow = r#"{"message":{"event":"view.error","plugin":"probe","reason":"queue full for probe"}}"#;
     let empty = r#"{"message":{"event":"view.error","plugin":"probe","reason":""}}"#;
     let ready = r#"{"message":{"event":"view.ready","plugin":"probe","document":"d","time_origin":1.0}}"#;
     for value in [overflow, empty, ready] {
-        assert_eq!(view_error_stop("probe-surface", "probe", value), None, "{value}");
+        assert_eq!(view_error_stop("probe-surface", "probe", value, false), None, "{value}");
     }
+    // A page that made a call and then fails keeps its surface: its failure is shown on the error display path only.
+    assert_eq!(view_error_stop("probe-surface", "probe", failure, true), None);
+}
+
+// contract: view.error.display
+// The host records the first call of a view, so a view.error after it does not send view-stopped.
+#[test]
+fn a_view_records_its_first_call() {
+    use crate::documents::ViewChannels;
+    let channels = ViewChannels::default();
+    channels.register("probe-surface", "probe", 1);
+    assert!(!channels.has_called("probe-surface"));
+    channels.mark_called("probe-surface");
+    assert!(channels.has_called("probe-surface"));
+    assert!(!channels.has_called("other-surface"));
 }
