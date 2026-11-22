@@ -283,7 +283,7 @@ pub fn build_registry(dir: &Path) -> Result<Value, String> {
             .ok_or_else(|| "name is required".into())
     })?;
     let revoked = read_json_file(dir, "revoked.json")?;
-    let mut root = json!({"format": 1, "plugins": plugins, "sidecars": sidecars, "packs": packs, "revoked": revoked});
+    let mut root = json!({"format": install::REGISTRY_INDEX_FORMAT, "plugins": plugins, "sidecars": sidecars, "packs": packs, "revoked": revoked});
     // A registry without core.json lists no core release.
     if dir.join("core.json").exists() {
         root["core"] = read_json_file(dir, "core.json")?;

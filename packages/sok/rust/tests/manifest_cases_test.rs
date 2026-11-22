@@ -72,7 +72,7 @@ fn index_for_release(path: &Path, sum: &str) -> Folder {
         "versions": [{"version": "0.2.0",
             "release": {"url": format!("file://{}", path.display()), "sha256": sum},
             "engines": {"soksak": "^0.0.2"}, "sidecars": {}}]});
-    let index = json!({"format": 1, "plugins": [plugin], "sidecars": [], "packs": [],
+    let index = json!({"format": 2, "plugins": [plugin], "sidecars": [], "packs": [],
         "revoked": {"plugins": [], "sidecars": []}});
     write_tree(dir.path(), &[("index.json", &index.to_string())]);
     dir

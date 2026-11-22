@@ -1025,7 +1025,7 @@ fn dependency_registry(versions: &[Dependent]) -> Registry {
     for (id, entry) in &plugins {
         files.push((format!("plugins/{id}.json"), entry.to_string()));
     }
-    let index = json!({"format": 1, "plugins": plugins.values().collect::<Vec<_>>(), "sidecars": [worker],
+    let index = json!({"format": 2, "plugins": plugins.values().collect::<Vec<_>>(), "sidecars": [worker],
         "packs": [], "revoked": revoked});
     files.push(("index.json".to_string(), index.to_string()));
     let files: Vec<(&str, &str)> = files
@@ -1397,7 +1397,7 @@ fn mismatched_index() -> Registry {
         "versions": [{"version": "0.2.0",
             "release": {"url": format!("file://{}", result["release"].as_str().unwrap()), "sha256": result["sha256"]},
             "engines": {"soksak": "^0.0.2"}, "sidecars": {}}]});
-    let index_json = json!({"format": 1, "plugins": [plugin], "sidecars": [], "packs": [],
+    let index_json = json!({"format": 2, "plugins": [plugin], "sidecars": [], "packs": [],
         "revoked": {"plugins": [], "sidecars": []}});
     write_tree(index.path(), &[("index.json", &index_json.to_string())]);
     Registry {
@@ -1459,7 +1459,7 @@ fn schema_outside_subset_index() -> Registry {
         "versions": [{"version": "0.2.0",
             "release": {"url": "file:///nonexistent/probe-0.2.0.tgz", "sha256": "0".repeat(64)},
             "engines": {"soksak": "^0.0.2"}, "sidecars": {}}]});
-    let index_json = json!({"format": 1, "plugins": [plugin], "sidecars": [], "packs": [],
+    let index_json = json!({"format": 2, "plugins": [plugin], "sidecars": [], "packs": [],
         "revoked": {"plugins": [], "sidecars": []}});
     write_tree(dir.path(), &[("index.json", &index_json.to_string())]);
     Registry { dir, _work: vec![] }

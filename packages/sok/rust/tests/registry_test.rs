@@ -147,7 +147,7 @@ fn registry_build_writes_the_index_after_checking_every_release() {
     );
     let want = format!(
         r#"{{
-  "format": 1,
+  "format": 2,
   "plugins": [
     {{
       "id": "probe",

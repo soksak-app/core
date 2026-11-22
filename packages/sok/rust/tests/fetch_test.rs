@@ -269,7 +269,7 @@ fn other_schemes_are_rejected() {
 fn registry_use_records_an_https_index() {
     let server = serve(|_| {
         Reply::Body(
-            br#"{"format":1,"plugins":[],"sidecars":[],"packs":[],"revoked":{"plugins":[],"sidecars":[]}}"#
+            br#"{"format":2,"plugins":[],"sidecars":[],"packs":[],"revoked":{"plugins":[],"sidecars":[]}}"#
                 .to_vec(),
         )
     });
@@ -305,7 +305,7 @@ fn a_diagnostic_build_trusts_the_registry_authorities_of_a_file() {
 
 /// The smallest registry index that the checks of reading an index serve.
 const EMPTY_INDEX: &[u8] =
-    br#"{"format":1,"plugins":[],"sidecars":[],"packs":[],"revoked":{"plugins":[],"sidecars":[]}}"#;
+    br#"{"format":2,"plugins":[],"sidecars":[],"packs":[],"revoked":{"plugins":[],"sidecars":[]}}"#;
 
 /// The counts of an index server: the connections it accepted, the requests it read and the bodies it sent.
 #[derive(Default)]

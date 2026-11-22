@@ -28,7 +28,7 @@ fn sidecar() -> Value {
 }
 
 fn index() -> Value {
-    json!({"format": 1, "plugins": [plugin()], "sidecars": [sidecar()],
+    json!({"format": 2, "plugins": [plugin()], "sidecars": [sidecar()],
         "packs": [{"name": "starter", "description": "처음 설치하는 plugin.", "plugins": ["probe"]}],
         "revoked": {"plugins": [{"id": "probe", "version": "0.3.0", "reason": "breaks saved spaces"}], "sidecars": []}})
 }
@@ -393,10 +393,10 @@ fn registry_index_checks_names_packs_sidecar_ranges_and_revoked_versions() {
         "registry index: package @scope/plugin-probe appears twice",
     );
     let mut format = index();
-    format["format"] = json!(2);
+    format["format"] = json!(1);
     rejects(
         install::validate_registry_index(&format),
-        "registry index: format must be 1",
+        "registry index: format must be 2",
     );
 }
 

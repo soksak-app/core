@@ -9,8 +9,11 @@ use semver::Version;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-/// The format number of the registry index.
+/// The format number of the registry record that `registry use` writes.
 pub const INSTALL_FORMAT: u64 = 1;
+
+/// The format number of the registry index. Format 2 records the plugin dependencies of each version in `plugins`.
+pub const REGISTRY_INDEX_FORMAT: u64 = 2;
 
 /// The format number of the installation state file. Format 2 records the installation folder as a path relative to the configuration folder.
 pub const INSTALLED_FORMAT: u64 = 3;
@@ -800,8 +803,8 @@ pub fn validate_registry_index(value: &Value) -> Result<Index, String> {
     if let Some(core) = root.get("core") {
         validate_registry_core(core)?;
     }
-    if !is_one(root.get("format")) {
-        return Err(format!("registry index: format must be {INSTALL_FORMAT}"));
+    if root.get("format").and_then(Value::as_u64) != Some(REGISTRY_INDEX_FORMAT) {
+        return Err(format!("registry index: format must be {REGISTRY_INDEX_FORMAT}"));
     }
     type Validate = fn(&Value) -> Result<(), String>;
     let lists: [(&str, Validate); 3] = [
