@@ -2,6 +2,7 @@ package workbench
 
 import (
 	"slices"
+	"strings"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -194,6 +195,20 @@ func (e *ShownErrors) removeToastOrigin(origin errorOrigin) {
 		toast.stopTimer()
 		return true
 	})
+}
+
+// WithdrawTab withdraws the errors that name the closed tab: its operation error, the error of its restored session, the error of
+// its stopped view, and the program and activity errors of the tab (docs/spec/exposure.md#error-presentation). The state that each error
+// describes ended with the tab, and a display shows only the current state.
+func (e *ShownErrors) WithdrawTab(tab string) {
+	for origin := range e.occurrences {
+		named := origin.where == "tab error "+tab || origin.where == "restored tab "+tab ||
+			(strings.HasPrefix(origin.where, "surface status ") && strings.HasSuffix(origin.where, " "+tab)) ||
+			(origin.where == workbenchErrorPlace && (origin.source == "program "+tab || origin.source == "activity "+tab))
+		if named {
+			e.withdraw(origin)
+		}
+	}
 }
 
 // WithdrawFrom ends the workbench occurrences of source.

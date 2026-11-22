@@ -1804,6 +1804,20 @@ func TestTheErrorOfTheActiveTabIsRecordedWhenItAppears(t *testing.T) {
 	}
 }
 
+// Closing a tab withdraws the errors that name it, so no toast shows the state of a tab that is gone (docs/spec/exposure.md#error-presentation).
+func TestClosingATabWithdrawsItsErrors(t *testing.T) {
+	f, stored := surfaceShell(t)
+	surface := terminalSurface(t, stored)
+	viewCallShowing(t, f, stored, surface, "tab.error", "late")
+	if got := f.status("core.workbench.error"); got != `"late"` {
+		t.Fatalf("the shown error is %s", got)
+	}
+	f.run("core.tab.close", map[string]string{"tab": surface})
+	if got := f.status("core.workbench.error"); got != "null" {
+		t.Fatalf("the error of the closed tab %s stays shown: %s", surface, got)
+	}
+}
+
 // A stopped view of the active tab shows its error in the status row of its card through the error display, which records
 // `surface status <card> <tab>: ` with the error text and the reason once when it appears, as setSurfaceStatus of
 // packages/workbench/surface-status.js records it.

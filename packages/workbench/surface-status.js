@@ -1,6 +1,10 @@
 // Keeps the native surface lifecycle visible in the card status row.
 import { mark } from "./commands.js";
 import { hideError, showError } from "./shown-errors.js";
+import { onTabsClosed } from "./closed-tabs.js";
+
+// The place of the shown error of each stopped surface by its tab id, which the close of the tab withdraws.
+const surfaceErrorPlaces = new Map();
 /** The description of the error state. An error state must have an error. */
 export function surfaceErrorText(state) {
   if (state.error === null || state.error === undefined) throw new Error("a surface error state carries no error");
@@ -39,6 +43,7 @@ export function setSurfaceStatus(status, surface, state) {
     indicator.textContent = "표면 오류";
     indicator.removeAttribute("title");
     showError(document, where, `표면 오류 · ${surfaceErrorText(state)}`);
+    surfaceErrorPlaces.set(surface, where);
     const reload = document.createElement("button");
     reload.type = "button";
     reload.className = "surface-status__reload";
@@ -50,6 +55,7 @@ export function setSurfaceStatus(status, surface, state) {
     return;
   }
   hideError(document, where);
+  surfaceErrorPlaces.delete(surface);
   indicator.removeAttribute("title");
   indicator.textContent = phase === "loading" ? "불러오는 중" : "";
 }
@@ -63,3 +69,15 @@ export function setTabError(tab, text) {
   if (text !== null) showError(document, where, text);
   else hideError(document, where);
 }
+
+// The close of a tab withdraws its operation error and the error of its stopped surface: the state that each describes ended with the
+// tab, and a display shows only the current state (docs/spec/exposure.md#error-presentation).
+onTabsClosed((ids) => {
+  for (const id of ids) {
+    hideError(document, `tab error ${id}`);
+    const where = surfaceErrorPlaces.get(id);
+    if (where === undefined) continue;
+    surfaceErrorPlaces.delete(id);
+    hideError(document, where);
+  }
+});

@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1088: Closing a tab withdraws the errors that name it: its operation error, the error of its restored session, the error of its stopped surface, and on mygo its program and activity errors; the restored-session error now shows through the error display.
 - F1087: On mygo a card without a measured frame, such as a card that a fullscreen card hides, sends no size to the session that its tab shows and raises no error; the session takes the size when the card is measured again.
 - F1086: The open body of an owned session names its opening plugin, the hosts require it in each sessions entry, and after a restart the page and mygo adopt each session as a session of that plugin, so an owner surface of a plugin without a sidecar keeps using the session; an entry whose plugin is not installed or declares no sessions ends with reason plugin-absent.
 - F1085: core.session.read takes the optional from and count of the sidecar screen read on the page and on mygo and answers the retained rows {from, count, rows} of the sidecar unchanged; invalid from and count are refused before any sidecar request with the same text.

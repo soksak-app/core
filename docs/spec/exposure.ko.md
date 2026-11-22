@@ -162,7 +162,7 @@ Component는 오류 style과 닫기 동작을 맡는다. 오류를 보고한 작
 | 설정 변경, setup 또는 debug 동작 실패 | 활성 modal document 또는 native modal |
 | Card, tab, sidebar 또는 plugin surface 실패와 읽을 수 없는 plugin 또는 session | Surface를 소유한 workbench view |
 
-활성 view는 전면 focus 범위 안에 toast component를 배치한다. Library와 workbench는 창 경계 안에 toast를 배치한다. Modal은 modal focus 순서 안에 닫기 control을 둔다. 진행 중이거나 복구된 애플리케이션 상태는 자신이 소유한 오류만 제거한다. 계속 유지되는 각 오류 발생에는 안정적인 출처가 있다. 같은 view의 두 출처에 같은 글이 있으면 출처 기록을 각각 유지하며 toast 하나를 공유한다. 글로 닫으면 그 toast가 닫히고 닫힌 오류를 다시 그려도 닫힌 채로 유지된다. 상태가 변하거나 복구된 출처에서 다음 오류가 발생하면 toast를 다시 열 수 있으며 그 오류의 애플리케이션 log 기록을 쓴다.
+활성 view는 전면 focus 범위 안에 toast component를 배치한다. Library와 workbench는 창 경계 안에 toast를 배치한다. Modal은 modal focus 순서 안에 닫기 control을 둔다. 진행 중이거나 복구된 애플리케이션 상태는 자신이 소유한 오류만 제거한다. Tab을 닫으면 그 tab을 가리키는 오류, 곧 tab의 작업 오류, 복원된 session의 오류, 멈춘 surface의 오류, program과 activity 오류를 철회한다. 각 오류가 설명하는 상태가 tab과 함께 끝났기 때문이다. 다른 tab과 workbench의 오류는 유지한다. 계속 유지되는 각 오류 발생에는 안정적인 출처가 있다. 같은 view의 두 출처에 같은 글이 있으면 출처 기록을 각각 유지하며 toast 하나를 공유한다. 글로 닫으면 그 toast가 닫히고 닫힌 오류를 다시 그려도 닫힌 채로 유지된다. 상태가 변하거나 복구된 출처에서 다음 오류가 발생하면 toast를 다시 열 수 있으며 그 오류의 애플리케이션 log 기록을 쓴다.
 
 ## 등록
 

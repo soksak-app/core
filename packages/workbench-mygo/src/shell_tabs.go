@@ -438,6 +438,7 @@ func (s *Shell) droppedTabs(tabs []string) func() {
 	s.forgetSurfaces(tabs)
 	for _, tab := range tabs {
 		s.closedTabs[tab] = true
+		s.errors.WithdrawTab(tab)
 	}
 	if len(tabs) == 0 {
 		return func() {}

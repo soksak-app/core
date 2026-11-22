@@ -44,3 +44,21 @@ test("a surface status without a phase or an error state without an error is rej
   assert.match(document.querySelector(".error-toast__text").textContent, /broken/, "the error text shows in the toast");
   dom.window.close();
 });
+
+// The close of a tab withdraws its operation error and the error of its stopped surface, because the state that each describes ended
+// with the tab (docs/spec/exposure.md#error-presentation).
+test("closing a tab withdraws its tab error and its surface error", async () => {
+  const dom = new JSDOM("<div data-card-id=card-1><footer class=status></footer></div>");
+  globalThis.document = dom.window.document;
+  const { setSurfaceStatus, setTabError } = await import("../surface-status.js");
+  const { errorToasts } = await import("../shown-errors.js");
+  const { recordClosedTabs } = await import("../closed-tabs.js");
+  setSurfaceStatus(document.querySelector(".status"), "tab-c", { phase: "error", error: "stopped" });
+  setTabError("tab-c", "save failed");
+  setTabError("tab-d", "other failed");
+  recordClosedTabs(["tab-c"]);
+  assert.equal(errorToasts(document).text("tab error tab-c"), null);
+  assert.equal(errorToasts(document).text("surface status card-1 tab-c"), null);
+  assert.equal(errorToasts(document).text("tab error tab-d"), "other failed");
+  dom.window.close();
+});

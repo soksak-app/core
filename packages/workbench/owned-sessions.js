@@ -6,6 +6,7 @@ import { plugin, hasPlugin, plugins } from "./registry.js";
 import { sidecarSessions, windowSidecar, report } from "./host.js";
 import { emitEvent } from "./page-log.js";
 import { onTabsClosed } from "./closed-tabs.js";
+import { hideError, showError } from "./shown-errors.js";
 import { all as allProjects, waitForInitialProjectContext } from "./projects.js";
 
 /** The open sessions of this page, keyed by session identifier, in the order that they opened. */
@@ -327,11 +328,16 @@ function programMessage(owner, body) {
 }
 
 /**
- * A closed tab ends the sessions it owns with reason owner-closed, and a session that it shows is no longer shown. A failed end is
+ * A closed tab ends the sessions it owns with reason owner-closed, a session that it shows is no longer shown, and the error of its
+ * restored session is withdrawn. A failed end is
  * reported through the error display, and the session stays in the status until the sidecar ends it.
  */
 function tabsClosed(ids) {
-  for (const id of ids) unlistenOwner(id);
+  for (const id of ids) {
+    unlistenOwner(id);
+    // The error of a restored tab describes that tab, so its close withdraws it (docs/spec/exposure.md#error-presentation).
+    hideError(document, `restored tab ${id}`);
+  }
   for (const entry of sessions.values()) if (ids.includes(entry.shownBy)) entry.shownBy = null;
   for (const entry of [...sessions.values()]) {
     if (!ids.includes(entry.owner)) continue;
@@ -430,6 +436,6 @@ function showRestored(read) {
     if (!hasPlugin(id) || !read.has(plugin(id).sessions)) continue;
     const entry = sessions.get(session);
     if (entry && entry.plugin === id) bindShown(session, tab);
-    else report(`restored tab ${tab}: session ${session} is not open`);
+    else showError(document, `restored tab ${tab}`, `session ${session} is not open`);
   }
 }

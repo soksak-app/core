@@ -77,6 +77,14 @@ test("the restart adopts the session whose owner is in the restored layout, ends
   // The session that the room owns belongs to the plugin that opened it, which its entry names (docs/spec/persistent-services.md#owned-sessions).
   assert.deepEqual(ownedSessionsState(), [{ session: "ses-keep", plugin: SESSION, owner: OWNER, shownBy: OWNER, program: null },
     { session: "ses-room", plugin: SESSION, owner: ROOM, shownBy: null, program: null }]);
+  // The error of the restored tab shows as a toast of the error display, and the close of that tab withdraws it, because the state
+  // that it describes ended with the tab (docs/spec/exposure.md#error-presentation).
+  const { errorToasts } = await import("../shown-errors.js");
+  const { recordClosedTabs } = await import("../closed-tabs.js");
+  assert.equal(errorToasts(document).text(`restored tab ${STALE}`), "session ses-missing is not open");
+  recordClosedTabs([STALE]);
+  assert.equal(errorToasts(document).text(`restored tab ${STALE}`), null);
+  assert.equal(errorToasts(document).newest(), null);
   // The batch of the owner-absent end is sent after its microtasks, so the test waits for it before the case is judged.
   await flushEvents();
   wire.finish();

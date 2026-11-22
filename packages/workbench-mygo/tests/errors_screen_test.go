@@ -40,6 +40,23 @@ func TestWorkbenchErrorsWithTheSameTextKeepTheirOrigins(t *testing.T) {
 	}
 }
 
+// The errors that name a closed tab are withdrawn with it; the errors of another tab and of the workbench stay
+// (docs/spec/exposure.md#error-presentation).
+func TestWithdrawingATabRemovesOnlyTheErrorsThatNameIt(t *testing.T) {
+	errors := workbench.NewShownErrors(func(string) {})
+	errors.Show("restored tab tab-a", "session s-1 is not open", "")
+	errors.Show("tab error tab-a", "save failed", "")
+	errors.Show("surface status card-1 tab-a", "표면 오류 · stopped", "")
+	errors.ShowFrom("workbench", "program tab-a", "program failed", "")
+	errors.ShowFrom("workbench", "activity tab-a", "activity failed", "")
+	errors.Show("restored tab tab-ab", "session s-2 is not open", "")
+	errors.Show("workbench", "layout failed", "")
+	errors.WithdrawTab("tab-a")
+	if got, want := errors.Toasts(), []string{"session s-2 is not open", "layout failed"}; !slices.Equal(got, want) {
+		t.Fatalf("toasts after the tab closed are %q, want %q", got, want)
+	}
+}
+
 func TestWorkbenchRecoveryKeepsOtherOrigins(t *testing.T) {
 	errors := workbench.NewShownErrors(func(string) {})
 	errors.ShowFrom("workbench", "placement", "layout failed", "")
