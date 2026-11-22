@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1053: The projects reader of the window checks (`e2e/projects-file.mjs`) accepts projects format 4. Red: the project window checks failed with `projects.json: expected projects format 3, found format 4`. Green: the Wails and Tauri project window checks pass.
 - F1052: The page workbench lists the tabs of the stored layouts of the other spaces from the layout tree (`storedSpaceTabs` of `surface-listing.js`). Red: the new listing test failed with `space.layout.state.cards is not iterable`, and the Wails and Tauri project window checks failed with the presentation error. Green: the listing test and the page workbench suite pass, and the error window checks pass on Wails and Tauri.
 - F1033-3: The application error adoption is complete; its children F1033-3.1, F1033-3.2 and F1033-3.3 are complete.
 - F1051: The Go check of the commit of a prepared geometry accepts the present and the view-join commit paths. Red: the CI run recorded the path present with the commit after the presentation notice. Green: 5 runs pass.

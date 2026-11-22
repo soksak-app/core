@@ -171,6 +171,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [o] F1031-9 — Node reporter 색상 test가 명시적인 색상 환경을 사용한다. 상위 환경에 NO_COLOR를 지정한 상태에서 두 파일의 test 39개가 통과한다.
   - [o] F1031-10 — 표시된 오류에 맞춰 toast 테두리 색상을 적용하고 닫기 control metric을 선언하며 layout fixture에 닫기 선언을 연결한다. 관련 test 13개가 통과한다.
   - [o] F1031-11 — F1031-10 후속. Toast 닫기 metric을 포함하도록 host의 workbench 선언 사본을 갱신한다. Exposure 검사 두 개와 workbench 선언 test가 통과한다.
+- [o] F1053 — P1, F1052의 후속: window check의 projects reader는 projects format 3만 받았는데, host는 F1006-9부터 format 4로 쓰므로 projects.json을 읽는 project window check가 모두 실패했다. reader는 format 4를 받는다.
 - [o] F1052 — P0, F1033-4의 후속: page workbench는 다른 space나 project의 저장된 layout card를 `state.cards`로 읽었는데, 저장된 tree layout에는 그 형식이 없어서 그런 space를 가진 window의 commit마다 Wails와 Tauri에서 `surface presentation failed: undefined is not an object (evaluating 'space.layout.state.cards')`로 실패했다. surface listing은 그 tab을 layout tree에서 읽는다.
 - [o] F1051 — P1, F1050의 후속: 준비된 geometry의 commit 검사가 CI에서 transaction이 present path로 commit해서 실패했다. present path와 view-join path는 모두 page가 present한 뒤에만 commit하므로(docs/spec/endpoint.md), 검사는 두 path를 모두 받는다.
 - [o] F1050 — P0, F1049의 후속: stop이 start를 기다리지 않는다는 검사가 CI에서 제한 시간까지 실행됐다. 원인: Go host는 stop과 hello 답 중 하나를 goroutine에서 골랐는데, 그 goroutine은 둘이 모두 일어난 뒤에야 실행될 수 있었고, 답을 고르면 start가 close-owner에 답하지 않는 service로 owner를 닫았다. 이제 Go host에서는 hello 답 읽기가 끝나기 전에 닫힌 stop이 start를 결정한다. Rust host는 stop 안에서 stop flag를 세우므로 바꾸지 않는다.
