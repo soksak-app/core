@@ -1,5 +1,5 @@
-// The owned session messages of the main page against the page-wire case owned-sessions-open: the restart listing, and open, resize
-// and end through the owner surface (docs/spec/plugins.md#owned-sessions, docs/spec/persistent-services.md#owned-session-messages).
+// The owned session messages of the main page against the page-wire case owned-sessions-open: the restart listing, and open, resize,
+// input, submit, read, program and end through the owner surface (docs/spec/plugins.md#owned-sessions, docs/spec/persistent-services.md#owned-session-messages).
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -43,7 +43,7 @@ registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", imp
 const { begin } = await import("../projects.js");
 const plane = await import("../plane.js");
 const { installCoreExposure } = await import("../core-exposure.js");
-const { endOwnedSession, openOwnedSession, ownedSessionsState, resizeOwnedSession, startOwnedSessions } = await import("../owned-sessions.js");
+const { endOwnedSession, inputOwnedSession, openOwnedSession, ownedSessionsState, readOwnedSession, resizeOwnedSession, startOwnedSessions, submitOwnedSession } = await import("../owned-sessions.js");
 const { flushEvents } = await import("../page-log.js");
 // The stored policy of the settings, which the page applies at its start, stores the lifecycle events at info (the case records them).
 const { logGate, logPolicyOf } = await import("../log-gate.js");
@@ -69,9 +69,22 @@ test("the owned session messages open, resize and end a session through the owne
   await startOwnedSessions();
   const opened = await openOwnedSession({ plugin: SESSION, params: { name: "agent" }, size: { width: 640, height: 384, scale: 2 } }, OWNER);
   assert.deepEqual(opened, { session: "ses-1" });
-  assert.deepEqual(ownedSessionsState(), [{ session: "ses-1", plugin: SESSION, owner: OWNER, shownBy: null }]);
+  assert.deepEqual(ownedSessionsState(), [{ session: "ses-1", plugin: SESSION, owner: OWNER, shownBy: null, program: null }]);
   assert.deepEqual(await resizeOwnedSession({ session: "ses-1", size: { width: 1000, height: 600, scale: 2 } }, OWNER),
     { session: "ses-1", size: { width: 1000, height: 600, scale: 2 } });
+  // Another surface is refused before any sidecar request, and a text that contains CR or LF is refused before the paste.
+  await assert.rejects(inputOwnedSession({ session: "ses-1", text: "ls\r" }, "tab-other"), /^Error: session ses-1 is owned by tab-aaaaa1$/);
+  await assert.rejects(readOwnedSession({ session: "ses-1" }, "tab-other"), /^Error: session ses-1 is owned by tab-aaaaa1$/);
+  await assert.rejects(submitOwnedSession({ session: "ses-1", text: "ls\r" }, OWNER), /^Error: core.session.submit text must not contain CR or LF$/);
+  // The owner types the text as given, submits a text as one paste and Enter, and reads the screen of the sidecar.
+  assert.deepEqual(await inputOwnedSession({ session: "ses-1", text: "ls\r" }, OWNER), {});
+  assert.deepEqual(await submitOwnedSession({ session: "ses-1", text: "ls" }, OWNER), {});
+  assert.deepEqual(await readOwnedSession({ session: "ses-1" }, OWNER), { rows: ["$ ls", "README.md"], cursor: { row: 1, column: 0 } });
+  // The sidecar reports the program state of the session to its owner; the status shows each state in turn.
+  wire.deliverNotice();
+  assert.deepEqual(ownedSessionsState()[0].program, { state: "working" });
+  wire.deliverNotice();
+  assert.deepEqual(ownedSessionsState()[0].program, { state: "idle" });
   await endOwnedSession({ session: "ses-1" }, OWNER);
   assert.deepEqual(ownedSessionsState(), []);
   await flushEvents();

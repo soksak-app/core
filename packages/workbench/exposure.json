@@ -554,7 +554,7 @@
       },
       {
         "name": "core.sessions",
-        "description": "The owned sessions of this page: each open session with its session identifier, plugin, owner surface, and shownBy, the tab that shows it or null (docs/spec/plugins.md#owned-sessions).",
+        "description": "The owned sessions of this page: each open session with its session identifier, plugin, owner surface, shownBy, the tab that shows it or null, and program, the program state {state} (idle, working or blocked) or null (docs/spec/plugins.md#owned-sessions).",
         "schema": {
           "type": "array",
           "items": {
@@ -563,9 +563,14 @@
               "session": { "type": "string" },
               "plugin": { "type": "string" },
               "owner": { "type": "string" },
-              "shownBy": { "type": ["string", "null"] }
+              "shownBy": { "type": ["string", "null"] },
+              "program": {
+                "type": ["object", "null"],
+                "properties": { "state": { "enum": ["idle", "working", "blocked"] } },
+                "required": ["state"]
+              }
             },
-            "required": ["session", "plugin", "owner", "shownBy"]
+            "required": ["session", "plugin", "owner", "shownBy", "program"]
           }
         }
       },
@@ -4226,6 +4231,56 @@
           "required": ["session"]
         },
         "result": { "type": "null" }
+      },
+      {
+        "name": "core.session.input",
+        "description": "Types text into an open owned session as given, without any change to its characters. Only its owner surface may call it; the result is {} (docs/spec/plugins.md#owned-sessions).",
+        "params": {
+          "type": "object",
+          "properties": {
+            "session": { "type": "string" },
+            "text": { "type": "string" }
+          },
+          "required": ["session", "text"]
+        },
+        "result": { "type": "object" }
+      },
+      {
+        "name": "core.session.submit",
+        "description": "Pastes text into an open owned session and then sends Enter. The text must not contain CR or LF. Only its owner surface may call it; the result is {} (docs/spec/plugins.md#owned-sessions).",
+        "params": {
+          "type": "object",
+          "properties": {
+            "session": { "type": "string" },
+            "text": { "type": "string" }
+          },
+          "required": ["session", "text"]
+        },
+        "result": { "type": "object" }
+      },
+      {
+        "name": "core.session.read",
+        "description": "Reads the screen of an open owned session: {rows, cursor}, where rows are the visible rows as text, top row first, and cursor is the zero-based {row, column} of the cursor in rows. Only its owner surface may call it (docs/spec/plugins.md#owned-sessions).",
+        "params": {
+          "type": "object",
+          "properties": { "session": { "type": "string" } },
+          "required": ["session"]
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "rows": { "type": "array", "items": { "type": "string" } },
+            "cursor": {
+              "type": "object",
+              "properties": {
+                "row": { "type": "integer" },
+                "column": { "type": "integer" }
+              },
+              "required": ["row", "column"]
+            }
+          },
+          "required": ["rows", "cursor"]
+        }
       },
       {
         "name": "core.layout.open",

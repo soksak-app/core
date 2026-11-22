@@ -61,7 +61,7 @@ plane.nameWindow("main");
 
 test("the restart adopts the session whose owner is in the restored layout and ends the session whose owner is absent", async () => {
   await startOwnedSessions();
-  assert.deepEqual(ownedSessionsState(), [{ session: "ses-keep", plugin: SESSION, owner: OWNER, shownBy: null }]);
+  assert.deepEqual(ownedSessionsState(), [{ session: "ses-keep", plugin: SESSION, owner: OWNER, shownBy: null, program: null }]);
   // The batch of the owner-absent end is sent after its microtasks, so the test waits for it before the case is judged.
   await flushEvents();
   wire.finish();

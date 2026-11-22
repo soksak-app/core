@@ -52,6 +52,12 @@ test("core.session.open refuses a plugin that declares no sessions", async () =>
     /plugin fixture-plain declares no sessions/);
 });
 
+test("core.session.input, submit and read refuse a session that is not open", async () => {
+  await assert.rejects(registry.run("core.session.input", { session: "fixture-missing", text: "ls" }), /session fixture-missing is not open/);
+  await assert.rejects(registry.run("core.session.submit", { session: "fixture-missing", text: "ls" }), /session fixture-missing is not open/);
+  await assert.rejects(registry.run("core.session.read", { session: "fixture-missing" }), /session fixture-missing is not open/);
+});
+
 test("core.session.resize and core.session.end refuse a session that is not open", async () => {
   await assert.rejects(registry.run("core.session.resize", { session: "fixture-missing", size: { width: 80, height: 24, scale: 2 } }),
     /session fixture-missing is not open/);

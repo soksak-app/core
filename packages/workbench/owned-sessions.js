@@ -38,9 +38,11 @@ function sessionReply(where, reply, session) {
   return reply;
 }
 
-/** The status core.sessions: each open session with its plugin, owner surface and showing tab (or null). */
-export const ownedSessionsState = () => [...sessions.values()].map(({ session, plugin: id, owner, shownBy }) =>
-  ({ session, plugin: id, owner, shownBy }));
+const PROGRAM_STATES = ["idle", "working", "blocked"];
+
+/** The status core.sessions: each open session with its plugin, owner surface, showing tab (or null) and program state (or null). */
+export const ownedSessionsState = () => [...sessions.values()].map(({ session, plugin: id, owner, shownBy, program }) =>
+  ({ session, plugin: id, owner, shownBy, program }));
 
 /**
  * core.session.open: the caller surface opens a session of its plugin with the size and the params. The page names the session with a
@@ -61,7 +63,7 @@ export async function openOwnedSession({ plugin: id, params, size }, surface) {
   if (typeof reply?.session !== "string" || reply.session === "" || reply.creation !== creation) {
     throw new Error(`core.session.open: the sidecar reply names no session of creation ${creation}`);
   }
-  sessions.set(reply.session, { session: reply.session, plugin: id, owner: surface, shownBy: null, sidecar, size: sizeBody(size), pending: null });
+  sessions.set(reply.session, { session: reply.session, plugin: id, owner: surface, shownBy: null, program: null, sidecar, size: sizeBody(size), pending: null });
   listenOwner(surface, port);
   emitEvent("info", "workbench.session.open", { session: reply.session, plugin: id, owner: surface, size: sizeBody(size) });
   return { session: reply.session };
@@ -147,6 +149,43 @@ export async function endOwnedSession({ session }, surface) {
   return null;
 }
 
+/** The entry of a session whose owner is the caller; any other caller, and a missing caller, is refused before any sidecar request. */
+function requireOwner(command, session, surface) {
+  const entry = requireSession(session);
+  if (surface === undefined) throw new Error(`${command} requires the surface of its caller`);
+  if (surface !== entry.owner) throw new Error(`session ${session} is owned by ${entry.owner}`);
+  return entry;
+}
+
+/** A request of an owner command: the sidecar reply must name the session, and a failed reply states its error. */
+const ownerRequest = (entry, body, where) => windowSidecar(entry.sidecar).send(entry.owner, body).then((reply) => sessionReply(where, reply, entry.session));
+
+/** core.session.input: the owner types text into its session as given. */
+export async function inputOwnedSession({ session, text }, surface) {
+  const entry = requireOwner("core.session.input", session, surface);
+  if (typeof text !== "string") throw new Error("core.session.input text must be a string");
+  await ownerRequest(entry, { operation: "input", session, text }, "core.session.input");
+  return {};
+}
+
+/** core.session.submit: the owner pastes text into its session and then sends Enter, so the text holds no line end. */
+export async function submitOwnedSession({ session, text }, surface) {
+  const entry = requireOwner("core.session.submit", session, surface);
+  if (typeof text !== "string") throw new Error("core.session.submit text must be a string");
+  if (/[\r\n]/.test(text)) throw new Error("core.session.submit text must not contain CR or LF");
+  await ownerRequest(entry, { operation: "paste", session, text }, "core.session.submit");
+  await ownerRequest(entry, { operation: "input", session, text: "\r" }, "core.session.submit");
+  return {};
+}
+
+/** core.session.read: the owner reads the screen of its session; the sidecar reply is returned unchanged when it states no error. */
+export async function readOwnedSession({ session }, surface) {
+  const entry = requireOwner("core.session.read", session, surface);
+  const reply = await windowSidecar(entry.sidecar).send(entry.owner, { operation: "read", session });
+  if (reply?.error !== undefined) throw new Error(`core.session.read: ${reply.error}`);
+  return reply;
+}
+
 /**
  * Checks a core.layout.open that names a session: the session is open, belongs to the plugin of the tab, and is not shown by another
  * open tab. The layout operation then opens or selects the tab, and bindShown records the tab that shows the session.
@@ -208,6 +247,10 @@ function unlistenOwner(owner) {
  * refused as an unknown session (docs/spec/persistent-services.md#owned-sessions).
  */
 function surfaceMessage(owner, body) {
+  if (body !== null && typeof body === "object" && body.event === "session.program") {
+    programMessage(owner, body);
+    return;
+  }
   if (body === null || typeof body !== "object" || body.event !== "session.ended") return;
   const { session } = body;
   if (typeof session !== "string" || session === "") {
@@ -229,6 +272,32 @@ function surfaceMessage(owner, body) {
   }
   sessions.delete(session);
   emitEvent("info", "workbench.session.end", { session, reason: "ended" });
+}
+
+/**
+ * Handles the event session.program of an owner: it sets the program state of its session, and an invalid, unknown or foreign event is
+ * reported and changes nothing (docs/spec/plugins.md#owned-sessions).
+ */
+function programMessage(owner, body) {
+  const { session, state } = body;
+  if (typeof session !== "string" || session === "") {
+    report("core.session.program: invalid session.program body: session");
+    return;
+  }
+  if (!PROGRAM_STATES.includes(state)) {
+    report("core.session.program: invalid session.program body: state");
+    return;
+  }
+  const entry = sessions.get(session);
+  if (!entry) {
+    report(`core.session.program ${session}: session ${session} is not open`);
+    return;
+  }
+  if (entry.owner !== owner) {
+    report(`core.session.program ${session}: surface ${owner} does not own session ${session}`);
+    return;
+  }
+  entry.program = { state };
 }
 
 /**
@@ -287,7 +356,7 @@ export async function reconcileOwnedSessions() {
       for (const item of listed.sessions) {
         const owner = tabs.get(item.surface);
         if (owner !== undefined && hasPlugin(owner) && plugin(owner).sessions === name) {
-          sessions.set(item.session, { session: item.session, plugin: owner, owner: item.surface, shownBy: null, sidecar: name, size: sizeBody(item.size), pending: null });
+          sessions.set(item.session, { session: item.session, plugin: owner, owner: item.surface, shownBy: null, program: null, sidecar: name, size: sizeBody(item.size), pending: null });
           listenOwner(item.surface, windowSidecar(name));
           continue;
         }

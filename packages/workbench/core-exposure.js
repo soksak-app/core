@@ -56,7 +56,7 @@ import { pageIdentity } from "./page-identity.js";
 import { PLACEMENT_LAST, placementLast } from "./page-layout.js";
 import { errorToasts } from "./shown-errors.js";
 import { stateCards } from "./layout-tree.js";
-import { bindShown, cardFramesRedrawn, checkShowOwnedSession, endOwnedSession, openOwnedSession, ownedSessionsState, resizeOwnedSession, startOwnedSessions } from "./owned-sessions.js";
+import { bindShown, cardFramesRedrawn, checkShowOwnedSession, endOwnedSession, inputOwnedSession, openOwnedSession, ownedSessionsState, readOwnedSession, resizeOwnedSession, startOwnedSessions, submitOwnedSession } from "./owned-sessions.js";
 
 /* Receivers of the watched core statuses. */
 const watchers = new Set();
@@ -808,6 +808,9 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   registry.command("core.session.open", (params, { surface }) => openOwnedSession(params, surface));
   registry.command("core.session.resize", (params, { surface }) => resizeOwnedSession(params, surface));
   registry.command("core.session.end", (params, { surface }) => endOwnedSession(params, surface));
+  registry.command("core.session.input", (params, { surface }) => inputOwnedSession(params, surface));
+  registry.command("core.session.submit", (params, { surface }) => submitOwnedSession(params, surface));
+  registry.command("core.session.read", (params, { surface }) => readOwnedSession(params, surface));
   registry.command("core.layout.select", (params) => selectInLayout(params));
   registry.command("core.layout.move", (params) => moveInLayout(params));
   registry.command("core.layout.close", (params) => closeInLayout(params));

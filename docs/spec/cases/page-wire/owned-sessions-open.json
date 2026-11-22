@@ -1,6 +1,6 @@
 {
   "name": "owned-sessions-open",
-  "description": "The page lists the owned sessions of its sidecar at its restart, opens a session for its tab, resizes it and ends it through the owner surface.",
+  "description": "The page lists the owned sessions of its sidecar at its restart, opens a session for its tab, resizes it, types, submits and reads its screen, receives the program state of its session, and ends it through the owner surface.",
   "replay": false,
   "reason": "The host side of the owned session messages lands with the host work of F1062-3; the producer runs this case once the host answers sidecarSessions and the owned session messages.",
   "variables": {
@@ -279,6 +279,102 @@
         "result": {
           "session": "ses-1",
           "size": {"width": 1000, "height": 600, "scale": 2}
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "sidecarSend",
+        "payload": {
+          "sidecar": "@scope/fixture-sidecar",
+          "surface": "tab-aaaaa1",
+          "cids": [],
+          "body": {
+            "operation": "input",
+            "session": "ses-1",
+            "text": "ls\r"
+          }
+        }
+      }
+    },
+    {
+      "reply": {"result": {"session": "ses-1"}}
+    },
+    {
+      "call": {
+        "name": "sidecarSend",
+        "payload": {
+          "sidecar": "@scope/fixture-sidecar",
+          "surface": "tab-aaaaa1",
+          "cids": [],
+          "body": {
+            "operation": "paste",
+            "session": "ses-1",
+            "text": "ls"
+          }
+        }
+      }
+    },
+    {
+      "reply": {"result": {"session": "ses-1"}}
+    },
+    {
+      "call": {
+        "name": "sidecarSend",
+        "payload": {
+          "sidecar": "@scope/fixture-sidecar",
+          "surface": "tab-aaaaa1",
+          "cids": [],
+          "body": {
+            "operation": "input",
+            "session": "ses-1",
+            "text": "\r"
+          }
+        }
+      }
+    },
+    {
+      "reply": {"result": {"session": "ses-1"}}
+    },
+    {
+      "call": {
+        "name": "sidecarSend",
+        "payload": {
+          "sidecar": "@scope/fixture-sidecar",
+          "surface": "tab-aaaaa1",
+          "cids": [],
+          "body": {
+            "operation": "read",
+            "session": "ses-1"
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "rows": ["$ ls", "README.md"],
+          "cursor": {"row": 1, "column": 0}
+        }
+      }
+    },
+    {
+      "notice": {
+        "event": "sidecar-message",
+        "payload": {
+          "sidecar": "@scope/fixture-sidecar",
+          "surface": "tab-aaaaa1",
+          "body": {"event": "session.program", "session": "ses-1", "state": "working"}
+        }
+      }
+    },
+    {
+      "notice": {
+        "event": "sidecar-message",
+        "payload": {
+          "sidecar": "@scope/fixture-sidecar",
+          "surface": "tab-aaaaa1",
+          "body": {"event": "session.program", "session": "ses-1", "state": "idle"}
         }
       }
     },
