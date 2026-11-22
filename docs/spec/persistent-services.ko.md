@@ -32,6 +32,8 @@
 - `{operation: "resize", session, size}`는 같은 소유자의 세션 크기를 `size`의 형식으로 정한다. 응답 body는 `{session, size}`다.
 - `{operation: "end", session}`은 같은 소유자의 세션을 끝낸다. 응답 body는 `{session, ended: true}`다. 끝낸 사유는 page가 `workbench.session.end`에 기록하며, 서비스는 사유를 받지 않는다.
 
+owned session의 프로그램이 끝나면 사이드카는 소유자의 일반 surface 이벤트 `{"surface": owner, "body": {"event": "session.ended", "session": id, "reason": "ended"}}`를 보낸다. 여기서 `session`은 open 응답이 밝힌 식별자이고 `reason`은 `ended`다. host는 다른 surface 이벤트와 같이 그 surface를 소유한 창(`c.owners[surface]`)으로 보내며, body의 멤버를 읽지 않는다. 창의 page 또는 mygo workbench는 사이드카에 요청하지 않고 이를 처리한다. 세션을 `core.sessions`에서 제거하고, 그 세션을 보이던 tab의 `shownBy`를 비우며, 사유 `ended`로 `workbench.session.end`를 발행한다. `session`이 빈 값이 아닌 문자열이 아니거나 `reason`이 `ended`가 아닌 `session.ended` body는 `error: core.session.ended: invalid session.ended body: <member>`로 기록하고 아무것도 바꾸지 않는다. 창이 가지지 않은 세션의 이벤트는 `error: core.session.ended <id>: session <id> is not open`으로 기록하고 아무것도 바꾸지 않는다. 처리는 멱등이다. 이미 끝난 세션에 대한 반복 이벤트는 이런 알 수 없는 세션이므로, 그 뒤의 상태는 첫 이벤트 뒤의 상태와 같다.
+
 열려 있지 않은 세션이나 다른 소유자의 세션에 대한 메시지는 오류 텍스트 `session <id> is not open` 또는 `surface <id> does not own session <id>`로 답한다.
 
 표면 메시지 envelope에는 요청 식별자가 없으므로, 소유 세션 요청의 상관(correlation)은 `cids`다([사이드카 메시지](sidecars.ko.md#메시지)). 응답을 기다리는 요청은 빈 목록이 아닌 `cids`를 보내고, 서비스는 같은 목록을 `cids`로 답한다. 같은 표면과 사이드카에서 기다리는 다른 요청과 `cids` 목록이 같은 요청은 거부한다.
