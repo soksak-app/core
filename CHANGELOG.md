@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1103: The check that the records of the delivery of a notice cause no notice measures each change at the end of its own record instead of the file size after the flush, so the delivery of the first notice, which can append its records before the read, no longer fails it on the CI runner. Verification: Red with a pause of 50 ms between the flush and the read (`size: 334 ... want the change of 970 bytes`), then Green (5 of 5 with the pause, 100 of 100 runs of `make repeat-rust`).
 - F1102: The defaults of the Rust walk of the stored tabs, of the Wails `sidecarSend` answer argument and of the core status read failure report state their reason, so the default and event source checks of `pnpm test` pass; before, they failed with 5 findings. Verification: Red of `scripts/test/fallbacks.test.mjs` and `scripts/test/event-sources.test.mjs`, then Green (16 of 16).
 - F1101-1: The core version is 0.0.49 in every package and crate manifest, Info.plist, Tauri file, Go and pkg-config declaration, the six workspace entries of Cargo.lock and scripts/check-versions.mjs.
 - F1100: The vt sidecar 0.0.43 keeps the connection when a request names a surface whose actor has ended, such as a tab of an owned session after `core.session.end`, and answers that surface with `surface <id> has no live session: its surface actor has ended`; before, the connection ended and every other surface on it restarted its sidecar. Core changes nothing for it.

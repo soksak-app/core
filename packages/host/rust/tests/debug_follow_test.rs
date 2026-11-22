@@ -249,18 +249,30 @@ fn the_records_of_the_delivery_of_a_notice_cause_no_notice() {
             .to_string_lossy()
             .replace(".jsonl", ".debug.jsonl"),
     );
-    let change = || {
-        assert!(log.emit(Level::Debug, "host.x.y", &json!({"n": 1})));
+    // A change writes the record `host.x.y` with its number and returns the size of the file at the end of that record. The file
+    // size read after the flush is no such measure: the delivery of a notice that the change caused can append its records first.
+    let change = |number: u64| {
+        assert!(log.emit(Level::Debug, "host.x.y", &json!({"n": number})));
         log.flush().unwrap();
-        std::fs::metadata(&path).unwrap().len() as i64
+        let text = std::fs::read_to_string(&path).unwrap();
+        let record = format!("\"event\":\"host.x.y\",\"fields\":{{\"n\":{number}}}");
+        let start = text
+            .find(&record)
+            .expect("the change is a record of the file");
+        let end = start
+            + text[start..]
+                .find('\n')
+                .expect("the record of the change ends its line")
+            + 1;
+        end as i64
     };
     let lines = |path: &std::path::Path| {
         std::fs::read_to_string(path).unwrap().matches('\n').count() as i64
     };
-    let first = change();
+    let first = change(1);
     let notice = next_notice(&published);
     assert!(
-        notice.notices == 1 && notice.size >= first,
+        notice.notices == 1 && notice.size == first,
         "the first notice is {notice:?}, want the change of {first} bytes"
     );
     enter_spacing(&spaced);
@@ -272,7 +284,7 @@ fn the_records_of_the_delivery_of_a_notice_cause_no_notice() {
         assert!(result.is_ok(), "an update of the index failed: {result:?}");
     }
     ends.send(()).unwrap();
-    let second = change();
+    let second = change(2);
     let notice = next_notice(&published);
     let want = LogNotice {
         path: format!("logs/{}", path.file_name().unwrap().to_string_lossy()),

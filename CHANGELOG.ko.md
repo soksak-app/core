@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1103: notice delivery의 record가 notice를 만들지 않는다는 check는 각 change를 flush 뒤의 file 크기 대신 그 record의 끝에서 잰다. 그래서 읽기 전에 record를 덧붙일 수 있는 첫 notice의 delivery가 CI runner에서 더 이상 check를 실패시키지 않는다. 검증: flush와 읽기 사이 50 ms pause의 Red(`size: 334 ... want the change of 970 bytes`), 이어 Green(pause로 5번 중 5번, `make repeat-rust` 100번 중 100번).
 - F1102: 저장된 tab의 Rust walk, Wails `sidecarSend`의 answer 인수, core status read 실패 보고의 default가 이유를 밝히므로 `pnpm test`의 default check와 event source check가 통과한다. 이전에는 5개 finding으로 실패했다. 검증: `scripts/test/fallbacks.test.mjs`와 `scripts/test/event-sources.test.mjs`의 Red, 이어 Green(16개 중 16개).
 - F1101-1: core version은 모든 package와 crate manifest, Info.plist, Tauri 파일, Go와 pkg-config 선언, Cargo.lock의 workspace 항목 여섯 개, scripts/check-versions.mjs에서 0.0.49다.
 - F1100: vt sidecar 0.0.43은 actor가 끝난 surface, 예를 들어 `core.session.end` 뒤 owned session의 tab을 가리키는 요청에도 연결을 유지하고, 그 surface에 `surface <id> has no live session: its surface actor has ended`로 답한다. 이전에는 연결이 끝나서 그 연결의 다른 모든 surface가 sidecar를 다시 시작했다. core는 이를 위해 바꾸는 것이 없다.
