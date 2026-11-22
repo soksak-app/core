@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1046-5: host contract case `setup.host.start-changes-no-file-of-another-run`는 영어와 한국어에서 scope `all`을 가진다. Red: host test check가 scope 없는 case를 거부했다. Green: 통과한다.
 - F1046-4: `packages/sok/go`의 테스트는 command line의 source만 판단하고, `scripts/test/administrator-rights.test.mjs`가 Go host, Rust host, mygo workbench의 어떤 source도 `sudo`를 적지 않음을 판단한다. Red: mygo source가 `sudo`를 적자 script 테스트가 실패했고, 경계 테스트가 sok 테스트가 다른 package를 읽는다고 보고했다. Green: 둘 다 통과한다.
 - F1046-3: F1036은 동작을 바꾸지 않는 완료로, F1040과 F1043은 기능이 link된 하위 항목에 있는 완료로 적는다. Red: test inventory check가 세 항목에 feature link가 없다고 보고했다. Green: 통과한다.
 - F1046-2: page, Go command line, Rust command line의 생성된 event class 파일이 다시 `docs/spec/events.json`과 같다. Red: event class 테스트가 Go 파일이 catalog와 다르다고 보고했다. Green: 통과한다.

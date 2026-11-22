@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1046-5: The host contract case `setup.host.start-changes-no-file-of-another-run` holds the scope `all` in English and Korean. Red: the host test check rejected the case without a scope. Green: it passes.
 - F1046-4: The test of `packages/sok/go` judges only the sources of the command line, and `scripts/test/administrator-rights.test.mjs` judges that no source of the Go host, the Rust host or the mygo workbench names `sudo`. Red: the script test failed when a mygo source named `sudo`, and the boundary test reported the sok test reading other packages. Green: both pass.
 - F1046-3: F1036 is listed as a completion that changes no behaviour, and F1040 and F1043 as completions whose capabilities are their linked items. Red: the test inventory check reported the three items without a feature link. Green: it passes.
 - F1046-2: The generated event class files of the page, of the Go command line and of the Rust command line match `docs/spec/events.json` again. Red: the event class test found the Go file different from the catalog. Green: it passes.
