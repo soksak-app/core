@@ -37,6 +37,11 @@ fn a_destroyed_window_is_removed_from_the_records_when_their_locks_are_poisoned(
         .lock()
         .unwrap()
         .insert("main".into(), Arc::new(WindowData::default()));
+    registry
+        .windows
+        .lock()
+        .unwrap()
+        .insert("second".into(), Arc::new(WindowData::default()));
     poison(&registry.owners);
     poison(&registry.windows);
     let exits = remove_window_records(&registry, "main");
@@ -125,5 +130,28 @@ fn a_notification_of_an_open_window_runs_and_reports_its_failure() {
     assert_eq!(
         with_open_window(&open, |_| Err("the read failed".to_string())),
         Err("the read failed".to_string())
+    );
+}
+
+// The close of the last window quits the application, also when no quit is in progress, so the application never stays without a
+// window (docs/spec/hosts.md#process-lifecycle).
+// contract: log.closed.cause-before-quit
+#[test]
+fn the_close_of_the_last_window_quits_without_a_quit_in_progress() {
+    let registry = Windows::default();
+    for label in ["main", "second"] {
+        registry
+            .windows
+            .lock()
+            .unwrap()
+            .insert(label.into(), Arc::new(WindowData::default()));
+    }
+    assert!(
+        !remove_window_records(&registry, "main"),
+        "the close of a window quit the application while another window stayed"
+    );
+    assert!(
+        remove_window_records(&registry, "second"),
+        "the close of the last window did not quit the application, which then runs without a window"
     );
 }

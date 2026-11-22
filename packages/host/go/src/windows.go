@@ -643,17 +643,12 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 	win.OnClosing(func() bool {
 		h.mu.Lock()
 		ready := s.ready
-		if !ready {
-			delete(h.windows, win.ID())
-			PerformanceWindowRemove(s.name)
-			for id := range s.projects {
-				delete(h.owners, id)
-			}
-		}
+		quit := false
 		if ready {
 			s.closeAsked = true
+		} else {
+			quit = h.removeWindowRecords(s, win.ID())
 		}
-		quit := h.quit.Active() && len(h.windows) == 0
 		h.mu.Unlock()
 		if ready {
 			RecordWindowEvent(s.name, "close_requested")
@@ -673,6 +668,18 @@ func (h *Host) newWindow(name, url string) *Surfaces {
 		return false
 	})
 	return s
+}
+
+// removeWindowRecords removes the records of the window id of s that closes and reports whether the application quits: it quits when
+// the closed window was the last one, so the application never stays without a window (docs/spec/hosts.md#process-lifecycle). A window
+// that its page kept (windowCloseKept) does not close and is not removed. The caller holds h.mu.
+func (h *Host) removeWindowRecords(s *Surfaces, id uint) bool {
+	delete(h.windows, id)
+	PerformanceWindowRemove(s.name)
+	for project := range s.projects {
+		delete(h.owners, project)
+	}
+	return len(h.windows) == 0
 }
 
 // quitEventType is the type of the event that the application handles now, which names a quit of the menu or a key

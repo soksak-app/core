@@ -305,6 +305,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1110",
+    implementation: [
+      { file: "packages/host/go/src/windows.go", symbol: "func (h *Host) removeWindowRecords(s *Surfaces, id uint) bool {" },
+      { file: "packages/host/rust/src/windows.rs", symbol: "fn remove_window_records(registry: &Windows, label: &str) -> bool {" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/windows_removal_end_test.go", id: "TestTheCloseOfTheLastWindowQuitsWithoutAQuitInProgress" },
+      { file: "packages/host/rust/src/windows_records_test.rs", id: "the_close_of_the_last_window_quits_without_a_quit_in_progress" },
+    ],
+    expected: "The close of the last window quits the application with the cause last-window-closed whether or not a quit is in progress.",
+    levels: ["unit"],
+  },
+  {
     id: "F1108-1",
     implementation: [
       { file: "packages/workbench/host.js", symbol: "export function recordPageReload(cause) {" },

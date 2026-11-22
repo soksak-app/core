@@ -53,3 +53,22 @@ func TestARemovalRequestEndsWithTheEndOfTheOwnerPage(t *testing.T) {
 		t.Fatal("the end of the asked page refused the removal")
 	}
 }
+
+// The close of the last window quits the application, also when no quit is in progress, and the close of a window while another one
+// stays does not (docs/spec/hosts.md#process-lifecycle).
+// contract: log.closed.cause-before-quit
+func TestTheCloseOfTheLastWindowQuitsWithoutAQuitInProgress(t *testing.T) {
+	host, s, window := askedHost(t)
+	second := &Surfaces{name: "second", projects: map[string]string{}}
+	host.mu.Lock()
+	host.windows[99] = second
+	quitWithSecond := host.removeWindowRecords(s, window.ID())
+	quitLast := host.removeWindowRecords(second, 99)
+	host.mu.Unlock()
+	if quitWithSecond {
+		t.Fatal("the close of a window quit the application while another window stayed")
+	}
+	if !quitLast {
+		t.Fatal("the close of the last window did not quit the application, which then runs without a window")
+	}
+}

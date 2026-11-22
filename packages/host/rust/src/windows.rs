@@ -539,7 +539,7 @@ pub struct Windows {
     owners: Mutex<HashMap<String, String>>,
 }
 
-/// Removes the window from the owner and window records, and returns whether no window is left while the application quits.
+/// Removes the window from the owner and window records, and returns whether no window is left, so the application quits.
 fn remove_window_records(registry: &Windows, label: &str) -> bool {
     let mut owners = registry
         .owners
@@ -558,7 +558,9 @@ fn remove_window_records(registry: &Windows, label: &str) -> bool {
         // removed from it; the panic hook records the panic.
         .unwrap_or_else(PoisonError::into_inner);
     windows.remove(label);
-    windows.is_empty() && registry.quit.active()
+    // The application quits when the closed window was the last one, so it never stays without a window
+    // (docs/spec/hosts.md#process-lifecycle); a window that its page kept does not close and is not removed.
+    windows.is_empty()
 }
 
 /// Registers records as the records of the window of label, without the native steps of register. The tests of the library

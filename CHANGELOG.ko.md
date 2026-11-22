@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1110: 두 host에서 마지막 창을 닫으면 종료 중이든 아니든 원인 `last-window-closed`로 애플리케이션이 종료한다. 이전에는 마지막 창을 닫으면 process가 창 없이 남았다. 검증: Go와 Rust 마지막 창 테스트의 Red, 이어 Green.
 - F1108-1: main page의 reload마다 원인을 기록한다. page는 자신을 다시 읽는 operation과 함께 `workbench.page.reload`를 쓰고 원인 없는 reload를 거부하며, 두 host는 page 시작마다 원인과 그 시작이 끝내는 view 수와 함께 `host.page.started`를 쓴다. 검증: page-wire case `page-reload-cause`와 Go, Rust 기록 테스트의 Red, 이어 Green.
 - F1105: agent skill, MCP instructions, 두 sok 구현의 usage가 web page 규칙 하나를 밝힌다. agent가 여는 것, 테스트하는 것, 실행하는 것, 확인하는 것 모두, local server도 포함한 web page는 먼저 web address를 여는 창의 plugin 탭으로 가고, 바깥 browser나 headless browser, browser automation library는 그런 plugin이 없거나 사람이 요청할 때만, 그 경우를 밝히고 쓴다. 이전에는 skill만 web page가 plugin 탭에 보인다고 했다. 검증: `scripts/test/skill-web-pages.test.mjs`의 Red, 이어 Green, 다른 안내 테스트, sok의 Go 테스트, Rust skill, MCP, usage 테스트.
 - F1104: `sok-test-app`의 quit key 종료는 key down만 보낸다. key down이 application을 끝내고 window를 닫아서 key up이 `sok: the application has 0 windows`와 status 2로 실패했기 때문이다. 검증: `the quit by key sends the key down alone, because the application has no window for the key up after it quits`의 Red, 이어 Green.
