@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1063-1: The agent role specification states the commands `core.role.define` and `core.role.remove`, the status `core.roles`, and `roles.json` format 3, whose roles name absolute `files` that the fingerprint covers and the role file lists; the host contract and the shared cases follow it.
 - F1062-1: The plugin and persistent service specifications state owned sessions: a surface opens a session with its size regardless of occlusion, owns it, and a tab shows it with `core.layout.open {params: {session}}`; the session ends with its owner, and an owner reattaches after a restart through `core.sessions`.
 - F1060: The Go and Rust host readers of `projects.json` refuse an identity that is not of the form of the platform, and the workbenches no longer recognize the earlier form. Red: `TestAProjectWithAnIdentityOfAnotherFormIsRefusedByName` and `a_project_with_an_identity_of_another_form_is_refused_by_name` failed with the earlier readers. Green: they pass, with the 574 Go host tests, the Rust workspace and role state tests, the mygo project tests and `projects-switch.test.mjs`.
 - F1061: Korean documents state the action instead of `짓다`, and the figurative verb check reports it. Red: `auditFigurativeVerbs reports the figurative verbs outside code` failed without the rule. Green: it passes, and the check reports no tracked document.

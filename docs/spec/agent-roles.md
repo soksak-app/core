@@ -88,13 +88,14 @@ The stable identity is the text of the first message of a session. It is written
 ## Role file
 
 - Path: `<config-dir>/agents/<surface>/role.md`, where `<config-dir>` is the configuration directory of the application ([installation layout](installation.md#installation-layout)) and `<surface>` is the surface of the tab. A surface identifier that contains a path separator, a `..` segment or a control character is refused with `surface "<value>" holds a path part or a control character`, where `<value>` is the surface identifier. Nothing is written when the surface identifier is refused with that text.
-- Korean file: `role.ko.md` beside `role.md` in `<config-dir>/agents/<surface>/`. It holds the Korean translation of the first line (`texts_ko` of the [fingerprint reference cases](#fingerprint-reference-cases)), the Korean text of the definition (`ko` of `roles.json`) and the same fingerprint line as the last line. The fingerprint is computed over `role.md` only. Only `role.md` is named to the agent, so the agent reads `role.md` alone.
+- Korean file: `role.ko.md` beside `role.md` in `<config-dir>/agents/<surface>/`. It holds the Korean translation of the first line (`texts_ko` of the [fingerprint reference cases](#fingerprint-reference-cases)), the Korean text of the definition (`ko` of `roles.json`) and the files block (the Korean heading of `files_heading` in `texts_ko`, then the paths of `files`), and the same fingerprint line as the last line. The fingerprint is computed over `role.md` only. Only `role.md` is named to the agent, so the agent reads `role.md` alone.
 - Layout, in order:
   1. the first line: ``Read this whole file. Follow the role it defines. Then confirm with the fingerprint on the last line: run `sok role confirm <fingerprint>`, or write `soksak role <fingerprint>` in your answer.``;
   2. the definition text, exactly as stored in `roles.json`;
-  3. the last line: the fingerprint.
+  3. when `files` is not empty, the heading line `Files this role reads:`, then one line `- <path>` for each path of `files` in list order;
+  4. the last line: the fingerprint.
   Each line ends with one line feed. A definition whose stored text lacks a final line feed gets one in the file; the fingerprint is computed over the stored text unchanged. A tab without a role has no role file and no identity ([tab role state](#tab-role-state)).
-- Fingerprint: the first 16 lowercase hexadecimal characters of the SHA-256 digest of the UTF-8 bytes of the role identifier, one line feed (U+000A), and the definition text as stored. The identifier has no line break, so the separator is unambiguous. The fingerprint depends only on the identifier and the text: the same definition always gives the same fingerprint.
+- fingerprint: the first 16 lowercase hexadecimal characters of the SHA-256 digest of the UTF-8 bytes of the role identifier, one line feed (U+000A), the definition text as stored, one line feed, and the file list as a compact JSON array of its paths in list order. The array escapes only the double quote, the backslash and the control characters below U+0020, with the short forms `\b`, `\f`, `\n`, `\r` and `\t` and `\u00XX` for the others; other characters stay as UTF-8. The array holds no raw line feed, so the last line feed separates the text from the list. The same identifier, text and file list always give the same fingerprint, and a change of the file list changes it.
 - Length: soksak writes the definition as it is, whatever its length. The spec recommends a short definition, because the agent reads the whole file at each change.
 - The file belongs to the configuration directory and never to a repository of the person.
 - Mode: the directory `<config-dir>/agents/<surface>/` is created with mode 0700, and `role.md` is written with mode 0600. The mode of the temporary file is checked before the rename, so a file with another mode is never visible under the final name; the write then fails with `role file <path>: mode <mode> is not 0600` and removes the temporary file. A failed write step fails with `role file <path>: write failed: <os error>`, where `<path>` is the path that the step used. `role.ko.md` is written with mode 0600 as well.
@@ -104,33 +105,60 @@ The stable identity is the text of the first message of a session. It is written
 
 ## Fingerprint reference cases
 
-The algorithm is tested by the shared case file `docs/spec/cases/agent-roles/fingerprint.json`. Each case gives the identifier, the definition text and the expected fingerprint. The same file pins the English texts of the role file first line, the identity, the change message, the reread request and the first message suffix in `texts`, and the Korean first line of `role.ko.md` in `texts_ko`, and the [phrase test](#phrase-test) compares the host output with them after the placeholders are filled. The Go host and the Rust host each run every case and compare the fingerprint they compute. The cases include non-ASCII text and line breaks, so the UTF-8 encoding and the separator are both checked. The values are the same for both hosts.
+The algorithm is tested by the shared case file `docs/spec/cases/agent-roles/fingerprint.json`. Each case gives the identifier, the definition text and the expected fingerprint. The same file pins the English texts of the role file first line, the identity, the change message, the reread request, the first message suffix and the files heading in `texts`, and the Korean first line and the Korean files heading of `role.ko.md` in `texts_ko`, and the [phrase test](#phrase-test) compares the host output with them after the placeholders are filled. The Go host and the Rust host each run every case and compare the fingerprint they compute. The cases include non-ASCII text and line breaks, so the UTF-8 encoding and the separator are both checked. The values are the same for both hosts.
 
 ## Role definitions
 
-A role definition is the text that a role file holds, and its Korean translation is the `ko` member. The format rose from 1 to 2 when `ko` was added: the reader refuses format 1 without any migration, and a tracked file in format 1 is edited into format 2 in the same change. soksak holds the definitions in one stored file, `<config-dir>/roles.json`, beside `settings.json` and `projects.json` ([stored data formats](installation.md#stored-data-formats)). The file is numbered: its member `format` is `2`, and a reader accepts only that number and refuses another with `<file>: roles: format must be 2, found <value>`.
+A role definition is the text that a role file holds, its Korean translation, and the files that the agent reads with the role. soksak holds the definitions in one stored file, `<config-dir>/roles.json`, beside `settings.json` and `projects.json` ([stored data formats](installation.md#stored-data-formats)). The file is numbered: its member `format` is `3`. The reader accepts only that number and refuses another with `<file>: roles: format must be 3, found <value>`, which names the file and the found value. The format rose from 2 to 3 when `files` was added: the reader refuses format 2 without any migration, and a tracked file in format 2 is edited into format 3 in the same change.
 
 ```json
-{"format": 2, "roles": {"reviewer": {"text": "You review the changes of the other agents in this project.", "ko": "이 프로젝트의 다른 agent 변경을 검토한다."}}}
+{"format": 3, "roles": {"reviewer": {"text": "You review the changes of the other agents in this project.", "ko": "이 프로젝트의 다른 agent 변경을 검토한다.", "files": ["/path/to/checklist.md"]}}}
 ```
 
 - A role identifier matches `[a-z][a-z0-9-]*` with at most 64 characters.
 - `text` is UTF-8 text, written into the role file as it is.
 - `ko` is UTF-8 text, the Korean translation of `text`, written into `role.ko.md` as it is. It is required: a definition without `ko` is refused, so the pair cannot go missing. soksak does not translate it.
+- `files` is a required list of absolute paths, each a text, that the agent reads with the role. The list may be empty and keeps its order. The role file lists the paths after the text ([role file](#role-file)). A path holds no control character.
 - A role that a tab names and `roles.json` does not define is refused with `unknown agent role <id>`, and the tab keeps its earlier role.
 
-`<file>` is the path of `roles.json`. A read or a write refuses the whole file with the text of the matching line below, such as `<file>: roles: format must be 2, found <value>`, which names the file, and writes nothing:
+The members of a definition are checked in the order `text`, `ko`, `files` and then the unknown members. A read or a write refuses the whole file with the first failing check, named by the line below that matches, and writes nothing. `<file>` is the path of `roles.json`:
 
-- `<file>: roles: format must be 2, found <value>`: `<value>` is the compact JSON text of the member `format`, or `null` when the member is absent or the document is not an object.
+- `<file>: roles: format must be 3, found <value>`: `<value>` is the compact JSON text of the member `format`, or `null` when the member is absent or the document is not an object.
 - `<file>: roles: unknown field <name>`: a top-level member other than `format` and `roles`.
 - `<file>: roles: roles must be an object`
 - `<file>: roles: invalid role identifier <id>`: the first identifier that does not match, in the sorted order of the identifiers.
 - `<file>: roles: role <id> must be an object`
-- `<file>: roles: role <id> ko must be a string`: the member `ko` is absent or is not a string.
-- `<file>: roles: role <id> unknown field <name>`: a member of a definition other than `text` and `ko`.
 - `<file>: roles: role <id> text must be a string`
+- `<file>: roles: role <id> ko must be a string`: the member `ko` is absent or is not a string.
+- `<file>: roles: role <id> files must be an array of strings`: the member `files` is absent or is not an array of strings.
+- `<file>: roles: role <id> file <path> is not absolute`
+- `<file>: roles: role <id> file <path> holds a control character`
+- `<file>: roles: role <id> unknown field <name>`: a member of a definition other than `text`, `ko` and `files`.
 
-The editor of the file is a separate checklist item.
+Only `core.role.define` and `core.role.remove` write `roles.json`. The reader does not check that a listed path exists. A failed write of `roles.json` is refused with `<file>: roles: write failed: <os error>`.
+
+### Commands
+
+`core.role.define {id, text, ko, files}` defines a role, or changes the definition of the role with that identifier. The command checks its input with the rules above, with `<file>` as the path of `roles.json`, and then checks each path of `files` in list order: a path that is not absolute is refused with `role <id>: file <path> is not absolute`, a path with a control character with `role <id>: file <path> holds a control character`, and a path that does not exist with `role <id>: file <path> does not exist`. The first failure refuses the command, and nothing is written.
+
+The command then runs in this order:
+
+1. When the stored definition of the role already equals the new one, `roles.json` is not written. Otherwise the host writes the whole `roles.json` in format 3, atomically. A failed write stops the command with its write error, and no tab changes.
+2. For each tab of the layout, in layout order, whose role is this identifier and whose record fingerprint differs from the fingerprint of the new definition, the host runs steps 1 to 5 of [tab role state](#tab-role-state) with this definition and sends one change message. A tab whose record already has the fingerprint of the new definition is not changed. This rule repairs a tab whose change failed earlier.
+3. A failure of one tab is reported as that tab's error through the error display path, and the next tabs continue. `roles.json` keeps the new definition, and the failed tab keeps its earlier record and role file. A launch of that tab is refused with `role file <path>: fingerprint differs from the record` until a `core.role.define` of the role repairs it.
+4. When `roles.json` changed, the host publishes the status `core.roles` ([role status](#role-status)).
+
+The answer is the stored definition `{id, text, ko, files}`.
+
+`core.role.remove {id}` removes a role definition:
+
+- an identifier that `roles.json` does not define is refused with `role <id> is not defined`;
+- a role that a tab uses is refused with `role <id> is used by tab <tab>`, which names the first such tab in layout order, and nothing is written;
+- otherwise the host writes `roles.json` without the role, with the write rule above, and publishes `core.roles`.
+
+### Role status
+
+The status `core.roles` has the value `{seq, roles: [{id, text, ko, files}]}`. `roles` lists every definition in the order of its identifiers, and names no tab. `seq` rises by one at each published change, and the `seq` of a new session starts at zero. The host publishes it after each change of `roles.json`.
 
 ## Tab role state
 
@@ -342,7 +370,8 @@ A CLI that the person starts by hand in a tab, as a second agent in the same she
 - Format: the `projects.json` reader refuses format 3 with `<file>: projects: format must be 4, found 3`; a tab without the member `role`, or with a member that is neither `null` nor a valid record, is refused with the error of [tab role state](#tab-role-state); the writer writes format 4, and a tab created without a role stores `null`.
 - Repetition and concurrency: the tests of [idempotency](#tests-of-the-repetitions) and [concurrency](#tests-of-the-concurrency).
 - Sidecar open: the four refusals with their texts `open program must be a non-empty text`, `open args must be an array of texts`, `open args require program` and `open program and shell are both set`; the `openFailed` reply with `program not found: <program>`; and the rule that a program session has no shell integration.
-- `roles.json`: format number, identifier rule and unknown role refusal, each with its error text: `<file>: roles: format must be 2, found <value>`, `<file>: roles: invalid role identifier <id>` and `unknown agent role <id>`.
+- `roles.json`: format number, identifier rule and unknown role refusal, each with its error text: `<file>: roles: format must be 3, found <value>`, `<file>: roles: invalid role identifier <id>` and `unknown agent role <id>`.
+- `core.role.define` and `core.role.remove`: a define of a new role writes `roles.json` in format 3 and publishes `core.roles`; a define of the same definition writes no file and changes no tab; a define that changes the text or the files of a role used by a tab sends one change message to each such tab; the refusals `role <id>: file <path> does not exist`, `role <id>: file <path> is not absolute`, `role <id> is used by tab <tab>` and `role <id> is not defined` write nothing; a tab whose write fails reports its error and the other tabs continue.
 
 ### Acceptance
 

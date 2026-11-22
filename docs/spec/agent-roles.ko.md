@@ -88,13 +88,14 @@ sidecar 프로토콜 변경: terminal session의 `open` 요청은 `directory` �
 ## Role file
 
 - 경로: `<config-dir>/agents/<surface>/role.md`. `<config-dir>`은 application의 configuration directory([installation layout](installation.md#installation-layout))이고 `<surface>`는 tab의 surface다. 경로 구분자, `..` 구간 또는 제어 문자를 담은 surface 식별자는 `surface "<value>" holds a path part or a control character`로 거부하며, `<value>`는 surface 식별자다. 그 문장으로 거부할 때는 아무것도 쓰지 않는다.
-- 한국어 파일: `<config-dir>/agents/<surface>/`의 `role.md` 옆 `role.ko.md`. 첫 줄의 한국어 번역([fingerprint reference cases](#fingerprint-reference-cases)의 `texts_ko`), 정의의 한국어 텍스트(`roles.json`의 `ko`), 마지막 줄의 같은 fingerprint 줄을 담는다. Fingerprint은 `role.md`에만 계산한다. Agent에게 이름을 주는 파일은 `role.md`뿐이므로 agent는 `role.md`만 읽는다.
+- 한국어 파일: `<config-dir>/agents/<surface>/`의 `role.md` 옆 `role.ko.md`. 첫 줄의 한국어 번역([fingerprint reference cases](#fingerprint-reference-cases)의 `texts_ko`), 정의의 한국어 텍스트(`roles.json`의 `ko`), 파일 목록 블록(`texts_ko`의 한국어 제목 `files_heading`, 그다음 `files`의 경로)과 마지막 줄의 같은 fingerprint 줄을 담는다. Fingerprint은 `role.md`에만 계산한다. Agent에게 이름을 주는 파일은 `role.md`뿐이므로 agent는 `role.md`만 읽는다.
 - 구조, 순서대로:
   1. 첫 줄: ``Read this whole file. Follow the role it defines. Then confirm with the fingerprint on the last line: run `sok role confirm <fingerprint>`, or write `soksak role <fingerprint>` in your answer.``;
   2. 정의 텍스트. `roles.json`에 저장된 그대로다.
-  3. 마지막 줄: fingerprint.
+  3. `files`가 비어 있지 않으면 제목 줄 `Files this role reads:`, 그다음 `files`의 경로마다 한 줄 `- <path>`를 목록 순서대로 쓴다.
+  4. 마지막 줄: fingerprint.
   각 줄은 line feed 하나로 끝난다. 저장된 텍스트에 마지막 line feed가 없는 정의는 파일에 line feed 하나가 붙는다. fingerprint은 저장된 텍스트 그대로 계산한다. role이 없는 tab은 role 파일도 identity도 없다([Tab role state](#tab-role-state)).
-- fingerprint: role 식별자, line feed 하나(U+000A), 저장된 정의 텍스트를 이어 붙인 UTF-8 바이트의 SHA-256 digest에서 앞 16자리 소문자 16진수. 식별자에는 줄바꿈이 없으므로 구분자가 모호하지 않다. fingerprint은 식별자와 텍스트에만 의존한다. 같은 정의는 언제나 같은 fingerprint을 낸다.
+- fingerprint: role 식별자, line feed 하나(U+000A), 저장된 정의 텍스트, line feed 하나, `files` 경로 목록을 목록 순서대로 쓴 compact JSON 배열을 이어 붙인 UTF-8 바이트의 SHA-256 digest에서 앞 16자리 소문자 16진수. 배열은 큰따옴표, 역슬래시, U+0020 아래의 제어 문자만 이스케이프한다. 짧은 형식 `\b`, `\f`, `\n`, `\r`, `\t`를 쓰고, 나머지는 `\u00XX`로 쓴다. 그 밖의 문자(non-ASCII 포함)는 UTF-8 그대로 둔다. 배열에는 날 line feed가 없으므로 마지막 line feed가 텍스트와 목록을 구분한다. 같은 식별자, 텍스트, 파일 목록은 언제나 같은 fingerprint을 내며, 파일 목록이 바뀌면 fingerprint도 바뀐다.
 - 길이: soksak은 정의를 길이와 상관없이 그대로 쓴다. 짧은 정의를 권장하며 그 이유는 위에 적었다.
 - 파일은 configuration directory에 속하며 person의 repository에는 속하지 않는다.
 - 모드: 디렉터리 `<config-dir>/agents/<surface>/`는 모드 0700으로 만든다. `role.md`는 모드 0600으로 쓴다. 임시 파일의 모드는 이름을 바꾸기 전에 확인한다. 모드가 다르면 최종 이름으로는 보이지 않으며, 쓰기는 `role file <path>: mode <mode> is not 0600`으로 실패하고 임시 파일을 지운다. 각 쓰기 단계의 실패는 `role file <path>: write failed: <os error>`로 실패하며, `<path>`는 그 단계가 쓴 경로다. `role.ko.md`도 모드 0600으로 쓴다.
@@ -104,33 +105,60 @@ sidecar 프로토콜 변경: terminal session의 `open` 요청은 `directory` �
 
 ## Fingerprint reference cases
 
-알고리즘은 공유 사례 파일 `docs/spec/cases/agent-roles/fingerprint.json`으로 검사한다. 각 사례는 식별자, 정의 텍스트, 기대 fingerprint을 준다. 같은 파일은 고정 문구(`texts`)와 `role.ko.md`의 한국어 첫 줄(`texts_ko`)을 담으며, [Phrase test](#phrase-test)가 이를 검사한다. Go host와 Rust host는 모든 사례를 실행해 계산한 fingerprint을 비교한다. 사례에는 non-ASCII 텍스트와 줄바꿈이 있어 UTF-8 인코딩과 구분자를 모두 검사한다. 두 host의 값은 같다.
+알고리즘은 공유 사례 파일 `docs/spec/cases/agent-roles/fingerprint.json`으로 검사한다. 각 사례는 식별자, 정의 텍스트, 기대 fingerprint을 준다. 같은 파일은 고정 문구(`texts`, 파일 목록 제목 `files_heading` 포함)와 `role.ko.md`의 한국어 첫 줄과 한국어 파일 목록 제목(`texts_ko`)을 담으며, [Phrase test](#phrase-test)가 이를 검사한다. Go host와 Rust host는 모든 사례를 실행해 계산한 fingerprint을 비교한다. 사례에는 non-ASCII 텍스트와 줄바꿈이 있어 UTF-8 인코딩과 구분자를 모두 검사한다. 두 host의 값은 같다.
 
 ## Role definitions
 
-role 파일이 담는 정의 텍스트는 soksak이 `<config-dir>/roles.json` 하나에 저장한다. 이 파일은 `settings.json`, `projects.json`과 나란히 둔다([stored data formats](installation.md#stored-data-formats)). 파일은 번호가 있다. member `format`은 `2`이며, reader는 이 번호만 받고 다른 번호는 `<file>: roles: format must be 2, found <value>`로 거부한다. 정의의 한국어 번역은 member `ko`이며, `ko`가 추가되어 형식이 1에서 2로 올랐다. reader는 형식 1을 migration 없이 거부하고, 형식 1인 추적 파일은 같은 변경에서 형식 2로 고친다.
+role 파일이 담는 정의 텍스트, 그 한국어 번역, agent가 role과 함께 읽는 파일 목록을 soksak이 `<config-dir>/roles.json` 하나에 저장한다. 이 파일은 `settings.json`, `projects.json`과 나란히 둔다([stored data formats](installation.md#stored-data-formats)). 파일은 번호가 있다. member `format`은 `3`이며, reader는 이 번호만 받고 다른 번호는 `<file>: roles: format must be 3, found <value>`로 거부한다. 이 문장은 파일과 찾은 값을 밝힌다. 형식은 `files`가 더해지면서 2에서 3으로 올랐다. reader는 형식 2를 migration 없이 거부하고, 형식 2인 추적 파일은 같은 변경에서 형식 3으로 고친다.
 
 ```json
-{"format": 2, "roles": {"reviewer": {"text": "You review the changes of the other agents in this project.", "ko": "이 프로젝트의 다른 agent 변경을 검토한다."}}}
+{"format": 3, "roles": {"reviewer": {"text": "You review the changes of the other agents in this project.", "ko": "이 프로젝트의 다른 agent 변경을 검토한다.", "files": ["/path/to/checklist.md"]}}}
 ```
 
 - role 식별자는 `[a-z][a-z0-9-]*`에 맞고 최대 64자다.
 - `text`는 UTF-8 텍스트이며 role 파일에 그대로 쓴다.
 - `ko`는 `text`의 한국어 번역인 UTF-8 텍스트이며 `role.ko.md`에 그대로 쓴다. 필수다. `ko`가 없는 정의는 거부하므로 짝이 빠질 수 없다. soksak은 번역하지 않는다.
+- `files`는 agent가 role과 함께 읽는 절대 경로의 필수 목록이며, 각 항목은 텍스트다. 빈 목록일 수 있고, 목록은 순서를 지킨다. role 파일은 경로를 텍스트 뒤에 적는다([role 파일](#role-file)). 경로에는 제어 문자가 없다.
 - tab이 이름을 댄 role이 `roles.json`에 없으면 `unknown agent role <id>`로 거부하고, tab은 이전 role을 유지한다.
 
-`<file>`은 `roles.json`의 경로다. 읽기나 쓰기는 아래 줄 중 맞는 문장으로 파일 전체를 거부하며, 예를 들면 `<file>: roles: format must be 2, found <value>`이다. 문장은 파일을 적고 아무것도 쓰지 않는다:
+정의의 member는 `text`, `ko`, `files`, 그다음 알 수 없는 member의 순서로 검사한다. 읽기나 쓰기는 처음 실패한 검사를 아래 줄 중 맞는 문장으로 밝히며, 파일 전체를 거부하고 아무것도 쓰지 않는다. `<file>`은 `roles.json`의 경로다:
 
-- `<file>: roles: format must be 2, found <value>`: `<value>`는 member `format`의 compact JSON 텍스트이며, member가 없거나 문서가 객체가 아니면 `null`이다.
+- `<file>: roles: format must be 3, found <value>`: `<value>`는 member `format`의 compact JSON 텍스트이며, member가 없거나 문서가 객체가 아니면 `null`이다.
 - `<file>: roles: unknown field <name>`: `format`과 `roles`가 아닌 최상위 member.
 - `<file>: roles: roles must be an object`
 - `<file>: roles: invalid role identifier <id>`: 정렬 순서의 식별자 중 맞지 않는 첫 식별자.
 - `<file>: roles: role <id> must be an object`
-- `<file>: roles: role <id> unknown field <name>`: `text`와 `ko`가 아닌 정의의 member.
-- `<file>: roles: role <id> ko must be a string`: member `ko`가 없거나 문자열이 아니다.
 - `<file>: roles: role <id> text must be a string`
+- `<file>: roles: role <id> ko must be a string`: member `ko`가 없거나 문자열이 아니다.
+- `<file>: roles: role <id> files must be an array of strings`: member `files`가 없거나 문자열 배열이 아니다.
+- `<file>: roles: role <id> file <path> is not absolute`
+- `<file>: roles: role <id> file <path> holds a control character`
+- `<file>: roles: role <id> unknown field <name>`: `text`, `ko`, `files`가 아닌 정의의 member.
 
-정의를 편집하는 도구는 별도의 checklist 항목이다.
+`roles.json`은 `core.role.define`과 `core.role.remove`만 쓴다. reader는 나열된 경로가 있는지 검사하지 않는다. `roles.json` 쓰기가 실패하면 `<file>: roles: write failed: <os error>`로 거부한다.
+
+### Commands
+
+`core.role.define {id, text, ko, files}`은 role을 정의하거나, 그 식별자의 role 정의를 바꾼다. 명령은 입력을 위 규칙으로 검사한다(`<file>`은 `roles.json`의 경로). 그다음 `files`의 각 경로를 목록 순서대로 검사한다. 절대 경로가 아니면 `role <id>: file <path> is not absolute`, 제어 문자가 있으면 `role <id>: file <path> holds a control character`, 존재하지 않으면 `role <id>: file <path> does not exist`로 거부한다. 첫 실패가 명령을 거부하며 아무것도 쓰지 않는다.
+
+명령은 다음 순서로 실행한다:
+
+1. 저장된 정의가 새 정의와 같으면 `roles.json`을 쓰지 않는다. 아니면 host가 format 3의 `roles.json` 전체를 원자적으로 쓴다. 쓰기가 실패하면 그 쓰기 오류로 명령을 멈추며 어떤 tab도 바꾸지 않는다.
+2. layout 순서로 각 tab을 보며, role이 이 식별자이고 기록의 fingerprint이 새 정의의 fingerprint과 다른 tab은 [Tab role state](#tab-role-state)의 1단계부터 5단계까지를 이 정의로 실행하고 변경 message를 한 번 보낸다. 기록이 이미 새 정의의 fingerprint을 가진 tab은 바꾸지 않는다. 이 규칙은 앞서 실패한 tab을 고친다.
+3. tab 하나의 실패는 그 tab의 오류로 error display 경로에 보고하며, 다음 tab은 계속한다. `roles.json`은 새 정의를 유지하고, 실패한 tab은 이전 기록과 이전 role 파일을 유지한다. 그 tab의 launch는 `core.role.define`으로 고쳐질 때까지 `role file <path>: fingerprint differs from the record`로 거부된다.
+4. `roles.json`이 바뀌었으면 host는 상태 `core.roles`를 게시한다([role status](#role-status)).
+
+답은 저장된 정의 `{id, text, ko, files}`다.
+
+`core.role.remove {id}`는 role 정의를 지운다:
+
+- `roles.json`에 없는 식별자는 `role <id> is not defined`로 거부한다;
+- tab이 쓰는 role은 `role <id> is used by tab <tab>`로 거부하며, layout 순서의 첫 tab을 밝힌다. 아무것도 쓰지 않는다;
+- 그 밖에는 host가 위 쓰기 규칙으로 그 role을 뺀 `roles.json`을 쓰고 `core.roles`를 게시한다.
+
+### Role status
+
+상태 `core.roles`의 값은 `{seq, roles: [{id, text, ko, files}]}`다. `roles`는 식별자 순서로 모든 정의를 나열하며 tab을 적지 않는다. `seq`는 게시된 변경마다 1씩 오르고, 새 session의 `seq`는 0에서 시작한다. host는 `roles.json`이 바뀔 때마다 게시한다.
 
 ## Tab role state
 
@@ -342,7 +370,8 @@ person이 tab의 shell에서 직접 시작한 두 번째 agent CLI는 soksak의 
 - 형식: `projects.json` reader는 형식 3을 `<file>: projects: format must be 4, found 3`으로 거부하고, member `role`이 없거나 `null`도 유효한 기록도 아닌 tab은 [tab의 역할 상태](#tab-role-state)의 오류로 거부한다. writer는 형식 4를 쓰고, role 없이 만든 tab은 `null`을 저장한다.
 - 반복과 동시성: [Tests of the repetitions](#tests-of-the-repetitions)와 [Tests of the concurrency](#tests-of-the-concurrency).
 - sidecar open: 네 refusal을 각 문장 `open program must be a non-empty text`, `open args must be an array of texts`, `open args require program`, `open program and shell are both set`으로, `openFailed` 답을 `program not found: <program>`으로, program session에는 shell integration이 없다는 규칙을 확인한다.
-- `roles.json`: 형식 번호, 식별자 규칙, 알 수 없는 role 거부. 각 오류 문장을 확인한다: `<file>: roles: format must be 2, found <value>`, `<file>: roles: invalid role identifier <id>`, `unknown agent role <id>`.
+- `roles.json`: 형식 번호, 식별자 규칙, 알 수 없는 role 거부. 각 오류 문장을 확인한다: `<file>: roles: format must be 3, found <value>`, `<file>: roles: invalid role identifier <id>`, `unknown agent role <id>`.
+- `core.role.define`과 `core.role.remove`: 새 role의 define은 format 3의 `roles.json`을 쓰고 `core.roles`를 게시한다. 같은 정의의 define은 file을 쓰지 않고 tab을 바꾸지 않는다. tab이 쓰는 role의 text나 files를 바꾸는 define은 그런 tab마다 변경 message 하나를 보낸다. 거부 문장 `role <id>: file <path> does not exist`, `role <id>: file <path> is not absolute`, `role <id> is used by tab <tab>`, `role <id> is not defined`는 아무것도 쓰지 않는다. tab의 쓰기가 실패하면 그 오류를 보고하고 다른 tab은 계속한다.
 
 ### Acceptance
 
