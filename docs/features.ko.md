@@ -212,14 +212,14 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [o] F1036-4 — 저장소 검사가 이 동사들을 보고한다. test 식별자, 인용한 오류 문구, Windows `drive` 경로는 예외로 둔다.
 - [o] F1035 — P0, F1034 후속. Application과 `sok`의 어떤 동작도 administrator 권한을 요구하지 않는다. 시스템 PATH 항목(`/etc/paths.d/<identifier>`, `sok path install|remove`, setup part `path`와 그 `sudo` 단계)을 제거한다. 시작할 때마다 사람의 권한으로 맞추는 사용자 PATH 등록이 사람의 shell PATH에 `sok`을 두기 때문이다. Red: 바꾸기 전 Go와 Rust command line의 `sok path install`은 알 수 없는 명령으로 실패하지 않고 항목을 썼으며, source가 `sudo` 명령을 이름으로 썼다. Green: Go command line setup test(16)와 darwin setup test(2), Go host setup test(6), Rust `soksak-sok` 전체 test(284), Rust `setup_darwin`(4), host `setup_test`(8)와 `plugins_test`(6) target, page setup test(4), Clippy, event·host parity·test inventory 검사가 통과한다.
 - [o] F1034 — P0. Host는 skill처럼 MCP registration과 hook을 시작할 때마다 현재로 맞춘다. 그래서 다른 폴더의 application을 시작하면 명시적 install 없이 이전 `sok`을 대체한다. Read-only volume의 `sok`처럼 install할 수 없는 part는 error `host.setup.install` 하나로 기록한다. System PATH entry는 administrator 권한이 필요하므로 명시적 단계를 유지한다. Red: Go와 Rust의 시작이 `claude mcp add`를 실행하지 않았고, registration과 두 hook을 missing으로 남겼으며, registration이 실패해도 오류를 기록하지 않았다. Green: Go setup test 6개와 Rust setup test 8개가 통과하고, event, host parity, test inventory, Clippy 검사가 통과한다.
-- [~] F1033 — P0, F1026 후속. 애플리케이션 오류를 공용 오류 toast component로 표시한다. 오류 표시 전수 조사와 계약을 진행한다.
+- [o] F1033 — P0, F1026 후속. 애플리케이션 오류를 공용 오류 toast component로 표시한다. 오류 표시 전수 조사와 계약을 진행한다.
   - [o] F1033-1 — 표시하는 오류 경로를 전수 조사하고 공용 표시 계약을 정의한다. Library, settings, workspace, card, sidebar, plugin surface와 debug 경로의 소유자를 정한다.
   - [o] F1033-2 — 오류 저장과 toast 표시를 재사용 가능한 page와 native component에 통합한다. Workbench와 library가 component를 사용한다. 초기 시작, 독립 출처, 닫기, 복구와 library 창 경계의 owner test가 통과한다.
   - [o] F1033-3 — Floating toast 검증 뒤 애플리케이션 오류 연결을 이어 간다.
     - [o] F1033-3.1 — Toast component를 활성 settings와 debug modal의 focus 범위에 둔다. Native와 page test가 닫기 control 하나, modal 안의 닫기, workbench 복귀를 판정한다.
     - [o] F1033-3.2 — Library, card, sidebar와 plugin surface 실패를 component로 보내고 복구 동작을 유지한다.
     - [o] F1033-3.3 — Settings와 debug 동작 실패를 component로 보내고 남은 직접 표시 경로를 제거한다.
-  - [ ] F1033-4 — 각 host와 plugin surface의 전송 경로를 통해 오류 표시를 검증한다.
+  - [o] F1033-4 — 각 host와 plugin surface의 전송 경로를 통해 오류 표시를 검증한다.
   - [o] F1033-8 — 같은 overlay의 직전 update와 payload가 같은 overlay update는 보내지 않는다. 그래서 열린 dialog의 toast가 바뀌고 view가 다시 그릴 때 update는 두 번이 아니라 한 번 나간다. 이 비교는 view가 열릴 때 보내는 같은 update도 없애므로, 그 update를 변수 payload로 기록한 debug wire case는 page가 보내는 drawing과 하나씩 대조해 판단한다.
   - [o] F1033-5 — P0, F1033-2 후속. 작은 floating toast가 workbench와 library의 경계를 유지한다. Page와 native 만료 test가 통과하고 실행한 mygo 창에서 toast가 나타났다가 만료된다.
   - [o] F1033-6 — P0, F1033-5 후속. 전역 설정에 자동 닫기 switch와 편집 가능한 초를 저장한다. 기본값은 직접 닫기와 5초다. 완료: 전역 설정 `autoDismissErrorToasts`(switch, 기본 꺼짐)와 `errorToastDismissSeconds`(1부터 2147483까지의 정수, 기본 5)가 자동 닫기를 저장한다. switch가 꺼져 있으면 toast는 자기 ×로만 닫고, 설정 변경이 열린 toast의 시한을 다시 맞춘다(page와 mygo 모두). 설정 modal이 두 workbench에서 switch와 숫자 칸을 그리고, chrome 선언의 고정 toast 시간은 지웠다. Red: 설정을 선언하기 전에 두 workbench의 settings store, settings modal, toast test가 실패했다. Green: 두 workbench의 toast, 설정, 선언 test가 통과한다.
