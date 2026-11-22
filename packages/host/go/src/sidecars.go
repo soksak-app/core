@@ -2377,7 +2377,18 @@ func (c *Sidecars) processPersistent(name, program string, lost *revival) (*side
 	})
 	responseLine, err := reader.ReadBytes('\n')
 	close(answered)
-	if <-stoppedHello {
+	stopped := <-stoppedHello
+	// The goroutine may choose the answer when the stop came first but the goroutine ran only after the answer, so a stop that
+	// closed before the read ended decides the start too.
+	if !stopped {
+		select {
+		case <-c.stopSignal:
+			conn.Close()
+			stopped = true
+		default:
+		}
+	}
+	if stopped {
 		return nil, errors.New("sidecars are stopped")
 	}
 	if err != nil {
