@@ -603,8 +603,8 @@ func ValidateManifest(value any) error {
 	}
 	sidecars := sortedKeys(dependencies)
 	if raw, ok := manifest["extends"]; ok {
-		if !hasSurface {
-			return fmt.Errorf("%s: extends requires a surface", where)
+		if _, hasSections := manifest["sections"]; !hasSurface && !hasSections {
+			return fmt.Errorf("%s: extends requires a surface or sections", where)
 		}
 		if err := checkExtends(where, raw); err != nil {
 			return err

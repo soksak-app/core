@@ -1330,7 +1330,7 @@
       ]
     },
     {
-      "id": "extends.requires-surface",
+      "id": "extends.requires-surface-or-sections",
       "manifest": {
         "id": "probe",
         "name": "Probe",
@@ -1350,7 +1350,44 @@
         }
       },
       "accepted": false,
-      "error": "plugin probe: extends requires a surface",
+      "error": "plugin probe: extends requires a surface or sections",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "extends.accepts-with-sections",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "sections": [
+          {
+            "id": "probe.a",
+            "name": "A",
+            "composition": {
+              "kind": "view",
+              "page": "ui/page.html"
+            },
+            "height": "fill"
+          }
+        ],
+        "extends": {
+          "p": {
+            "version": "1.0.0",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "n": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "accepted": true,
       "packageFiles": [
         "plugin.json",
         "ui/page.html"

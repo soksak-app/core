@@ -1496,8 +1496,8 @@ pub fn validate_manifest(value: &Value) -> Result<(), String> {
         .map(String::as_str)
         .collect();
     if let Some(raw) = manifest.get("extends") {
-        if !has("surface") {
-            return Err(format!("{where_}: extends requires a surface"));
+        if !has("surface") && !has("sections") {
+            return Err(format!("{where_}: extends requires a surface or sections"));
         }
         check_extends(&where_, raw)?;
     }
