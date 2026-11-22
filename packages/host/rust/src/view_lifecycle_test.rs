@@ -187,3 +187,41 @@ fn reloading_a_tab_without_a_view_record_is_refused_with_its_id() {
         .expect("a tab without a view record was reloaded");
     assert_eq!(error, "tab missing-tab: no view to reload");
 }
+
+// contract: host.view.killed.is-written-on-every-end
+#[test]
+fn a_view_end_stores_the_committed_url_of_its_document() {
+    use serde_json::json;
+    let lifecycle = ViewLifecycle::default();
+    lifecycle.track(
+        "end-url",
+        9,
+        "probe",
+        "ui/page.html",
+        true,
+        Default::default(),
+    );
+    lifecycle.note_committed("end-url", "soksak://probe/ui/page.html");
+    lifecycle.record_end("end-url", "view-reloaded");
+    // A view whose document committed no URL stores no url field.
+    lifecycle.track(
+        "end-no-url",
+        10,
+        "probe",
+        "ui/page.html",
+        true,
+        Default::default(),
+    );
+    lifecycle.record_end("end-no-url", "surface-removed");
+    let stored: Vec<serde_json::Value> = crate::event_record::buffered_fields("host.view.killed")
+        .into_iter()
+        .filter(|fields| fields["surface"] == "end-url" || fields["surface"] == "end-no-url")
+        .collect();
+    assert_eq!(
+        stored,
+        vec![
+            json!({"plugin": "probe", "surface": "end-url", "caller": "view-reloaded", "unsent": true, "url": "soksak://probe/ui/page.html"}),
+            json!({"plugin": "probe", "surface": "end-no-url", "caller": "surface-removed", "unsent": true}),
+        ]
+    );
+}

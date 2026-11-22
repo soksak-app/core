@@ -40,6 +40,8 @@ struct LifecycleState {
     live: HashSet<String>,
     failures: HashMap<String, Vec<Instant>>,
     stopped: HashSet<String>,
+    /// The committed URL of the document of each live view, which `host.view.killed` names when the view ends.
+    committed: HashMap<String, String>,
 }
 
 /// The failures and the records of the view surfaces of a window. Each failure is passed with the instant at which it occurred, so the
@@ -110,6 +112,15 @@ impl ViewLifecycle {
         self.lock().stopped.contains(surface)
     }
 
+    /// Records the committed URL of the document of the live view of surface. A surface without a live view records nothing, so a
+    /// URL of a view that already ended is not written with a later end.
+    pub fn note_committed(&self, surface: &str, url: &str) {
+        let mut state = self.lock();
+        if state.live.contains(surface) {
+            state.committed.insert(surface.to_string(), url.to_string());
+        }
+    }
+
     /// Clears the restart failures and the restart stop of surface, so its view is created again as a new view. The record of the view
     /// stays, because the view is created from it (core.tab.reload).
     pub fn reset(&self, surface: &str) {
@@ -123,6 +134,7 @@ impl ViewLifecycle {
     pub fn forget(&self, surface: &str) {
         let mut state = self.lock();
         state.live.remove(surface);
+        state.committed.remove(surface);
         state.specs.remove(surface);
         state.failures.remove(surface);
         state.stopped.remove(surface);
@@ -137,13 +149,14 @@ impl ViewLifecycle {
             if !state.live.remove(surface) {
                 return;
             }
-            state.specs.get(surface).cloned()
+            let url = state.committed.remove(surface);
+            state.specs.get(surface).cloned().map(|spec| (spec, url))
         };
-        if let Some(spec) = spec {
+        if let Some((spec, url)) = spec {
             emit_host(
                 Level::Warn,
                 "host.view.killed",
-                view_killed_event(surface, &spec.plugin, caller),
+                view_killed_event(surface, &spec.plugin, caller, url.as_deref()),
             );
         }
     }
@@ -151,8 +164,18 @@ impl ViewLifecycle {
 
 /// The fields of `host.view.killed`: the plugin and the surface of the view, the caller that ended it, and `unsent` true, because the
 /// records of the view that the writer did not receive may be lost and the event states that loss (docs/spec/logging.md#principles).
-pub fn view_killed_event(surface: &str, plugin: &str, caller: &str) -> serde_json::Value {
-    json!({"plugin": plugin, "surface": surface, "caller": caller, "unsent": true})
+/// The field `url` carries the committed URL of the document of the view when the view committed one.
+pub fn view_killed_event(
+    surface: &str,
+    plugin: &str,
+    caller: &str,
+    url: Option<&str>,
+) -> serde_json::Value {
+    let mut fields = json!({"plugin": plugin, "surface": surface, "caller": caller, "unsent": true});
+    if let Some(url) = url {
+        fields["url"] = json!(url);
+    }
+    fields
 }
 
 /// The reason of a view that stopped its restarts. The log line and the view-stopped event carry it.

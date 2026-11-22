@@ -875,6 +875,9 @@ struct ViewEvent {
 struct ViewState {
     #[allow(dead_code)]
     loading: bool,
+    /// The URL of the document of the view, which WebKit reports as the committed URL.
+    #[serde(default)]
+    url: String,
     navigations: Option<u64>,
 }
 
@@ -1828,6 +1831,13 @@ fn view_state(window: &Window, surface: &str, origin: &ViewOrigin, state: &str) 
     }
     if let Err(error) = data.documents.views().state(surface, state) {
         log_error("view channel", error);
+        return;
+    }
+    // The state carries the URL of the document, which WebKit reports at its commit, so it is the committed URL of the view.
+    if let Ok(loaded) = serde_json::from_str::<ViewState>(state)
+        && !loaded.url.is_empty()
+    {
+        data.documents.lifecycle().note_committed(surface, &loaded.url);
     }
 }
 
