@@ -22,7 +22,10 @@ const PLUGIN: &str = "plugin-a";
 fn environment(project: &Path) -> Vec<(OsString, OsString)> {
     vec![
         ("PATH".into(), "/usr/bin:/bin".into()),
-        ("SOKSAK_CONFIG_DIR".into(), project.join("config").into_os_string()),
+        (
+            "SOKSAK_CONFIG_DIR".into(),
+            project.join("config").into_os_string(),
+        ),
     ]
 }
 
@@ -83,7 +86,11 @@ fn wait_for_child(marker: &Path) -> u32 {
         {
             return pid.parse().unwrap();
         }
-        assert!(Instant::now() < deadline, "the program did not start {}", marker.display());
+        assert!(
+            Instant::now() < deadline,
+            "the program did not start {}",
+            marker.display()
+        );
         std::thread::sleep(Duration::from_millis(10));
     }
 }
@@ -101,7 +108,10 @@ fn process_alive(pid: u32) -> bool {
 fn assert_ends_with_group_kill(pid: u32) {
     let deadline = Instant::now() + Duration::from_secs(10);
     while process_alive(pid) {
-        assert!(Instant::now() < deadline, "the child {pid} of the program still runs");
+        assert!(
+            Instant::now() < deadline,
+            "the child {pid} of the program still runs"
+        );
         std::thread::sleep(Duration::from_millis(20));
     }
 }
@@ -133,7 +143,12 @@ fn arguments_reach_the_program_unchanged_without_a_shell() {
     ];
     let runs = runs_with(declared("/usr/bin/printf", slots));
     let finished = runs
-        .run(request(1, "run", &["%s\n", "$HOME", ";", "a b"], project.path()))
+        .run(request(
+            1,
+            "run",
+            &["%s\n", "$HOME", ";", "a b"],
+            project.path(),
+        ))
         .unwrap();
     assert_eq!(finished.stdout.text, "$HOME\n;\na b\n");
 }
@@ -144,7 +159,9 @@ fn the_working_directory_of_a_run_is_the_project_folder() {
     let project = folder::Folder::new();
     let runs = runs_with(declared("/bin/pwd", vec![]));
     let finished = runs.run(request(1, "run", &[], project.path())).unwrap();
-    let printed = Path::new(finished.stdout.text.trim_end()).canonicalize().unwrap();
+    let printed = Path::new(finished.stdout.text.trim_end())
+        .canonicalize()
+        .unwrap();
     assert_eq!(printed, project.path().canonicalize().unwrap());
 }
 
@@ -160,7 +177,9 @@ fn a_bare_name_is_found_through_the_path_of_the_run_environment() {
     assert_eq!(runs.run(found).unwrap().stdout.text, "found\n");
 
     let runs = runs_with(declared("soksak-no-such-tool", vec![]));
-    let error = runs.run(request(2, "run", &[], project.path())).unwrap_err();
+    let error = runs
+        .run(request(2, "run", &[], project.path()))
+        .unwrap_err();
     assert_eq!(error, "program not found: soksak-no-such-tool");
 }
 
@@ -171,10 +190,16 @@ fn a_path_with_a_separator_resolves_from_the_project_folder() {
     script(project.path(), "bin/tool", "echo relative");
     let runs = runs_with(declared("bin/tool", vec![]));
     assert_eq!(
-        runs.run(request(1, "run", &[], project.path())).unwrap().stdout.text,
+        runs.run(request(1, "run", &[], project.path()))
+            .unwrap()
+            .stdout
+            .text,
         "relative\n"
     );
-    let runs = runs_with(declared("/usr/bin/printf", vec![Slot::Text("absolute\n".to_string())]));
+    let runs = runs_with(declared(
+        "/usr/bin/printf",
+        vec![Slot::Text("absolute\n".to_string())],
+    ));
     assert_eq!(
         runs.run(request(2, "run", &["absolute\n"], project.path()))
             .unwrap()
@@ -223,7 +248,12 @@ fn output_beyond_the_bound_is_discarded_and_marked() {
     ];
     let runs = runs_with(declared("/usr/bin/head", slots));
     let finished = runs
-        .run(request(1, "run", &["-c", "1048577", "/dev/zero"], project.path()))
+        .run(request(
+            1,
+            "run",
+            &["-c", "1048577", "/dev/zero"],
+            project.path(),
+        ))
         .unwrap();
     assert_eq!(finished.end, None);
     assert_eq!(finished.stdout.text.len(), 1 << 20);
@@ -238,7 +268,9 @@ fn a_kept_stderr_that_is_not_utf8_fails_the_run() {
     let project = folder::Folder::new();
     script(project.path(), "bin/tool", "printf '\\377' >&2");
     let runs = runs_with(declared("bin/tool", vec![]));
-    let error = runs.run(request(1, "run", &[], project.path())).unwrap_err();
+    let error = runs
+        .run(request(1, "run", &[], project.path()))
+        .unwrap_err();
     assert_eq!(error, "program run: stderr is not UTF-8");
 }
 
@@ -251,7 +283,9 @@ fn a_program_file_that_the_system_refuses_to_start_fails_the_run() {
     std::fs::write(&path, "not a program\n").unwrap();
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
     let runs = runs_with(declared("bin/tool", vec![]));
-    let error = runs.run(request(1, "run", &[], project.path())).unwrap_err();
+    let error = runs
+        .run(request(1, "run", &[], project.path()))
+        .unwrap_err();
     assert!(
         error.starts_with("program bin/tool: start failed: "),
         "unexpected refusal: {error}"
@@ -267,6 +301,16 @@ fn a_name_that_the_declaration_lacks_is_refused_before_a_start() {
         .run(request(1, "missing", &[], project.path()))
         .unwrap_err();
     assert_eq!(error, "program missing is not declared by plugin-a");
+}
+
+#[test]
+fn a_run_of_a_surface_without_a_view_is_refused_with_the_no_view_text() {
+    let project = folder::Folder::new();
+    let runs = Arc::new(ProgramRuns::new());
+    let error = runs
+        .run(request(1, "run", &[], project.path()))
+        .unwrap_err();
+    assert_eq!(error, "program run: surface surface-a has no view");
 }
 
 // contract: program.run.refuses-argument-count
@@ -292,7 +336,10 @@ fn an_argument_that_does_not_match_its_pattern_in_full_is_refused() {
     let error = runs
         .run(request(1, "run", &["a", "12x"], project.path()))
         .unwrap_err();
-    assert_eq!(error, "program run argument 2 12x does not match its pattern");
+    assert_eq!(
+        error,
+        "program run argument 2 12x does not match its pattern"
+    );
 }
 
 // contract: program.run.refuses-pattern-that-does-not-compile
@@ -340,7 +387,12 @@ fn the_fifth_open_run_of_a_surface_is_refused_and_the_first_four_continue() {
         wait_for_child(marker);
     }
     let fifth = runs
-        .run(request(5, "run", &[markers[0].to_str().unwrap()], project.path()))
+        .run(request(
+            5,
+            "run",
+            &[markers[0].to_str().unwrap()],
+            project.path(),
+        ))
         .unwrap_err();
     assert_eq!(fifth, "program run: 4 runs are open on surface surface-a");
     assert!(handles.iter().all(|handle| !handle.is_finished()));
@@ -372,9 +424,17 @@ fn a_view_call_identifier_that_names_an_open_run_is_refused() {
     let handle = start_holding(&runs, project.path(), 1, &marker);
     wait_for_child(&marker);
     let again = runs
-        .run(request(1, "run", &[marker.to_str().unwrap()], project.path()))
+        .run(request(
+            1,
+            "run",
+            &[marker.to_str().unwrap()],
+            project.path(),
+        ))
         .unwrap_err();
-    assert_eq!(again, "program run: call 1 is already open on surface surface-a");
+    assert_eq!(
+        again,
+        "program run: call 1 is already open on surface surface-a"
+    );
     runs.end_surface(SURFACE);
     let finished = handle.join().unwrap().unwrap();
     assert_eq!(finished.end, Some(End::SurfaceClosed));
@@ -426,9 +486,14 @@ fn the_close_of_a_surface_ends_its_open_runs_with_surface_closed() {
     let finished = handle.join().unwrap().unwrap();
     assert_eq!(finished.end, Some(End::SurfaceClosed));
     let refused = runs
-        .run(request(2, "run", &[marker.to_str().unwrap()], project.path()))
+        .run(request(
+            2,
+            "run",
+            &[marker.to_str().unwrap()],
+            project.path(),
+        ))
         .unwrap_err();
-    assert_eq!(refused, "program run is not declared by plugin-a");
+    assert_eq!(refused, "program run: surface surface-a has no view");
 }
 
 // contract: program.run.window-close-ends-the-run
@@ -456,11 +521,16 @@ fn a_declaration_is_read_with_its_slots_and_refuses_an_invalid_member() {
     assert_eq!(declarations["lint"].program, "bin/lint");
     assert_eq!(
         declarations["lint"].slots,
-        vec![Slot::Text("src".to_string()), Slot::Pattern("[a-z]+".to_string())]
+        vec![
+            Slot::Text("src".to_string()),
+            Slot::Pattern("[a-z]+".to_string())
+        ]
     );
     assert!(declarations["version"].slots.is_empty());
 
-    let refused = |value: serde_json::Value| soksak_host::program_run::parse_declarations(&value).unwrap_err();
+    let refused = |value: serde_json::Value| {
+        soksak_host::program_run::parse_declarations(&value).unwrap_err()
+    };
     assert_eq!(
         refused(serde_json::json!({"Lint": {"program": "x"}})),
         "programs.Lint name is not of the form [a-z][a-z0-9-]*"
@@ -473,7 +543,8 @@ fn a_declaration_is_read_with_its_slots_and_refuses_an_invalid_member() {
         refused(serde_json::json!({"lint": {"program": "x", "args": [{"pattern": "a", "x": 1}]}})),
         "programs.lint args.0 is neither a text nor an object with the single member pattern"
     );
-    let uncompiled = refused(serde_json::json!({"lint": {"program": "x", "args": [{"pattern": "("}]}}));
+    let uncompiled =
+        refused(serde_json::json!({"lint": {"program": "x", "args": [{"pattern": "("}]}}));
     assert!(
         uncompiled.starts_with("programs.lint pattern does not compile: "),
         "unexpected refusal: {uncompiled}"
@@ -493,7 +564,12 @@ fn a_placement_that_leaves_out_a_surface_ends_its_open_runs() {
     let finished = handle.join().unwrap().unwrap();
     assert_eq!(finished.end, Some(End::SurfaceClosed));
     let refused = runs
-        .run(request(2, "run", &[marker.to_str().unwrap()], project.path()))
+        .run(request(
+            2,
+            "run",
+            &[marker.to_str().unwrap()],
+            project.path(),
+        ))
         .unwrap_err();
-    assert_eq!(refused, "program run is not declared by plugin-a");
+    assert_eq!(refused, "program run: surface surface-a has no view");
 }

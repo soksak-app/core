@@ -172,7 +172,12 @@ impl ProgramRuns {
     }
 
     /// Checks the request against the declaration and the limit of open runs, and opens the run under its id when it is admitted.
-    fn admit(&self, request: &Request, token: u64, sender: &Sender<Event>) -> Result<Declaration, String> {
+    fn admit(
+        &self,
+        request: &Request,
+        token: u64,
+        sender: &Sender<Event>,
+    ) -> Result<Declaration, String> {
         if request.project.is_none() {
             return Err("program run: the window shows no project".to_string());
         }
@@ -183,7 +188,9 @@ impl ProgramRuns {
                 request.name, request.plugin
             )
         };
-        let state = surfaces.get(&request.surface).ok_or_else(not_declared)?;
+        let state = surfaces
+            .get(&request.surface)
+            .ok_or_else(|| format!("program run: surface {} has no view", request.surface))?;
         if state.plugin != request.plugin {
             return Err(not_declared());
         }
@@ -211,9 +218,12 @@ impl ProgramRuns {
                 }
                 Slot::Text(_) => {}
                 Slot::Pattern(pattern) => {
-                    if !pattern_matches(pattern, argument)
-                        .map_err(|reason| format!("program {} pattern does not compile: {reason}", request.name))?
-                    {
+                    if !pattern_matches(pattern, argument).map_err(|reason| {
+                        format!(
+                            "program {} pattern does not compile: {reason}",
+                            request.name
+                        )
+                    })? {
                         return Err(format!(
                             "program {} argument {position} {argument} does not match its pattern",
                             request.name
@@ -321,14 +331,19 @@ fn prune(surfaces: &mut BTreeMap<String, SurfaceRuns>, surface: &str) {
 /// error of the pattern itself, and the anchored form matches the whole argument.
 fn pattern_matches(pattern: &str, argument: &str) -> Result<bool, String> {
     regex::Regex::new(pattern).map_err(|error| error.to_string())?;
-    let anchored = regex::Regex::new(&format!(r"\A(?:{pattern})\z")).map_err(|error| error.to_string())?;
+    let anchored =
+        regex::Regex::new(&format!(r"\A(?:{pattern})\z")).map_err(|error| error.to_string())?;
     Ok(anchored.is_match(argument))
 }
 
 /// Finds the program of a run as a terminal session finds its program (docs/spec/agent-roles.md#start-parameters): a path with a
 /// separator resolves from the project folder, and an absolute path as it is; a bare name is searched through the PATH of the
 /// run environment, in the order of the entries, for a regular file with an execute bit, as the process execution of the system does.
-fn resolve(program: &str, directory: &Path, environment: &[(OsString, OsString)]) -> Option<PathBuf> {
+fn resolve(
+    program: &str,
+    directory: &Path,
+    environment: &[(OsString, OsString)],
+) -> Option<PathBuf> {
     if program.contains('/') {
         let path = Path::new(program);
         let resolved = if path.is_absolute() {
@@ -364,7 +379,12 @@ fn resolve(program: &str, directory: &Path, environment: &[(OsString, OsString)]
 
 /// Starts the program at path with its arguments, the complete environment, the project folder as working directory, an
 /// empty standard input and its own process group.
-fn spawn(request: &Request, declaration: &Declaration, directory: &Path, path: &Path) -> Result<Child, String> {
+fn spawn(
+    request: &Request,
+    declaration: &Declaration,
+    directory: &Path,
+    path: &Path,
+) -> Result<Child, String> {
     let start_failed = |error: &dyn std::fmt::Display| {
         format!("program {}: start failed: {error}", declaration.program)
     };
@@ -422,7 +442,10 @@ fn decode(mut kept: Vec<u8>, truncated: bool) -> (String, bool) {
     }
     match String::from_utf8(kept) {
         Ok(text) => (text, true),
-        Err(error) => (String::from_utf8_lossy(&error.into_bytes()).into_owned(), false),
+        Err(error) => (
+            String::from_utf8_lossy(&error.into_bytes()).into_owned(),
+            false,
+        ),
     }
 }
 
@@ -518,7 +541,15 @@ fn execute(
         // silent: the run keeps its receiver until this exit arrives, so the send cannot fail while the run waits.
         let _ = exit_sender.send(Event::Exited(child.wait()));
     });
-    let outcome = wait_and_collect(request, declaration, pid, &receiver, stdout_reader, stderr_reader, started);
+    let outcome = wait_and_collect(
+        request,
+        declaration,
+        pid,
+        &receiver,
+        stdout_reader,
+        stderr_reader,
+        started,
+    );
     let ran = match outcome {
         Ok(ran) => ran,
         Err(reason) => {
@@ -574,7 +605,9 @@ fn wait_and_collect(
     let status = loop {
         match receiver.recv() {
             Ok(Event::Exited(status)) => {
-                break status.map_err(|error| format!("program {}: wait failed: {error}", declaration.program))?;
+                break status.map_err(|error| {
+                    format!("program {}: wait failed: {error}", declaration.program)
+                })?;
             }
             Ok(Event::End(end)) => {
                 if cause.is_none() {
@@ -584,7 +617,12 @@ fn wait_and_collect(
                         .err();
                 }
             }
-            Err(error) => return Err(format!("program {}: no end channel: {error}", declaration.program)),
+            Err(error) => {
+                return Err(format!(
+                    "program {}: no end channel: {error}",
+                    declaration.program
+                ));
+            }
         }
     };
     let duration = started.elapsed();
@@ -597,7 +635,10 @@ fn wait_and_collect(
         .map_err(|_| format!("program {name}: stderr reader panicked"))?
         .map_err(|error| format!("program {name}: read stderr failed: {error}"))?;
     if let Some(error) = kill_error {
-        return Err(format!("program {}: end failed: {error}", declaration.program));
+        return Err(format!(
+            "program {}: end failed: {error}",
+            declaration.program
+        ));
     }
     let (code, signal) = match cause {
         Some(_) => (None, Some("SIGKILL".to_string())),
@@ -650,12 +691,17 @@ pub fn parse_declarations(value: &serde_json::Value) -> Result<Declarations, Str
     let mut declarations = Declarations::new();
     for (name, entry) in object {
         if !valid_name(name) {
-            return Err(format!("programs.{name} name is not of the form [a-z][a-z0-9-]*"));
+            return Err(format!(
+                "programs.{name} name is not of the form [a-z][a-z0-9-]*"
+            ));
         }
         let fields = entry
             .as_object()
             .ok_or_else(|| format!("programs.{name} is not an object"))?;
-        if let Some(member) = fields.keys().find(|key| *key != "program" && *key != "args") {
+        if let Some(member) = fields
+            .keys()
+            .find(|key| *key != "program" && *key != "args")
+        {
             return Err(format!("programs.{name} has an unknown member {member}"));
         }
         let program = fields
@@ -697,8 +743,12 @@ pub fn parse_declarations(value: &serde_json::Value) -> Result<Declarations, Str
 /// Reports whether the name has the form `[a-z][a-z0-9-]*`.
 fn valid_name(name: &str) -> bool {
     let mut characters = name.chars();
-    characters.next().is_some_and(|first| first.is_ascii_lowercase())
-        && characters.all(|character| character.is_ascii_lowercase() || character.is_ascii_digit() || character == '-')
+    characters
+        .next()
+        .is_some_and(|first| first.is_ascii_lowercase())
+        && characters.all(|character| {
+            character.is_ascii_lowercase() || character.is_ascii_digit() || character == '-'
+        })
 }
 
 /// Reads one argument slot: a text, or an object whose single member `pattern` is a regular expression of at most 512 bytes.
