@@ -90,7 +90,7 @@ const METHOD = {
   documentQuery: "DocumentQuery",
   documentInteractionState: "DocumentInteractionState",
   documentPost: "DocumentPost",
-  viewEvent: "ViewEvent", viewReply: "ViewReply", viewRequest: "ViewRequest",
+  viewEvent: "ViewEvent", viewReload: "ViewReload", viewReply: "ViewReply", viewRequest: "ViewRequest",
   viewSidecarRoute: "ViewSidecarRoute",
   viewSidecarSend: "ViewSidecarSend",
   sidecarListen: "SidecarListen",

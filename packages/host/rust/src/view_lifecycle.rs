@@ -110,6 +110,14 @@ impl ViewLifecycle {
         self.lock().stopped.contains(surface)
     }
 
+    /// Clears the restart failures and the restart stop of surface, so its view is created again as a new view. The record of the view
+    /// stays, because the view is created from it (core.tab.reload).
+    pub fn reset(&self, surface: &str) {
+        let mut state = self.lock();
+        state.failures.remove(surface);
+        state.stopped.remove(surface);
+    }
+
     /// Removes the record of surface, which clears its failures and its stop. It runs when the surface is removed, so the next surface
     /// of the same name is a new view.
     pub fn forget(&self, surface: &str) {

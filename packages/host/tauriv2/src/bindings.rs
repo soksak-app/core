@@ -684,6 +684,13 @@ async fn sidecar_listen(
     .await
 }
 
+/// Restarts the view of a tab surface (core.tab.reload).
+#[tauri::command]
+fn view_reload(window: Window, surface: Argument<String>) -> Result<(), String> {
+    let Argument(surface) = surface;
+    documents::reload_view(&window, &surface)
+}
+
 /// Adds or removes a view as a receiver of the messages of a pair of a sidecar and a session id
 /// (docs/spec/native-surfaces.md#view-surfaces).
 #[tauri::command]
