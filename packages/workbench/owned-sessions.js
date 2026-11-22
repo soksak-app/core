@@ -344,6 +344,23 @@ function restoredTabs() {
   return tabs;
 }
 
+/** The tabs of the stored layouts whose params name a session, each with its plugin and the session, in the order of the layouts. */
+function restoredShownSessions() {
+  const shown = [];
+  const walk = (node) => {
+    if (node === null || node === undefined) return;
+    // default: a node with cut is a split of cards, and the other nodes are cards with their tabs.
+    if (node.cut !== undefined) for (const kid of node.kids) walk(kid.node);
+    // default: a card without a tab list holds no tabs to restore.
+    else for (const tab of node.data?.tabs ?? []) {
+      if (typeof tab.params?.session === "string") shown.push({ tab: tab.id, plugin: tab.plugin, session: tab.params.session });
+    }
+  };
+  // default: a project without spaces, or a space without a layout state, holds no tabs to restore.
+  for (const project of allProjects()) for (const space of project.spaces ?? []) walk(space.layout?.state?.root);
+  return shown;
+}
+
 let restoring = null;
 
 /** Starts the restart reconciliation once. The returned promise settles when it ends, and a failure is reported before it settles. */
@@ -362,6 +379,7 @@ export async function reconcileOwnedSessions() {
   await waitForInitialProjectContext();
   const tabs = restoredTabs();
   const names = [...new Set(plugins().filter((p) => p.sessions).map((p) => p.sessions))];
+  const read = new Set();
   for (const name of names) {
     try {
       const listed = await sidecarSessions(name);
@@ -378,9 +396,25 @@ export async function reconcileOwnedSessions() {
         sessionReply("core.session.end (owner-absent)", reply, item.session);
         emitEvent("info", "workbench.session.end", { session: item.session, reason: "owner-absent" });
       }
+      read.add(name);
     } catch (error) {
       // default: an error that is not an Error object is reported by its value.
       report(`owned sessions of sidecar ${name}: ${error?.message ?? error}`);
     }
+  }
+  showRestored(read);
+}
+
+/**
+ * Makes each restored tab whose params name a session show that session when the session is open, and states the error of each
+ * such tab whose session did not return, such as a session of a service that ended (docs/spec/plugins.md#owned-sessions). A tab
+ * of a sidecar whose sessions could not be read is judged by nothing, because its failure is already reported.
+ */
+function showRestored(read) {
+  for (const { tab, plugin: id, session } of restoredShownSessions()) {
+    if (!hasPlugin(id) || !read.has(plugin(id).sessions)) continue;
+    const entry = sessions.get(session);
+    if (entry && entry.plugin === id) bindShown(session, tab);
+    else report(`restored tab ${tab}: session ${session} is not open`);
   }
 }

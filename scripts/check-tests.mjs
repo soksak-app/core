@@ -292,6 +292,34 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F1082",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) QuitStop(ended func()) bool {" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "pub fn quit_stop(&self, ended: impl FnOnce() + Send + 'static) -> bool {" },
+      { file: "packages/workbench/owned-sessions.js", symbol: "function showRestored(read) {" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestTheQuitStopKeepsTheSessionsOfAPersistentService" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "the_quit_stop_keeps_the_sessions_of_a_persistent_service" },
+      { file: "packages/workbench-mygo/tests/owned_sessions_test.go", id: "TestRestoredTabShowsItsOpenSessionAfterAdoption" },
+    ],
+    expected: "A quit keeps the owned sessions of the restored layout, and a restored tab whose session did not return states it.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1082-2",
+    implementation: [
+      { file: "packages/workbench/owned-sessions.js", symbol: "function showRestored(read) {" },
+      { file: "packages/workbench-mygo/src/owned_sessions.go", symbol: "func (o *OwnedSessions) showRestored(live func(surface string) bool) {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/owned-sessions-restart.test.mjs", id: "the restart adopts the session whose owner is in the restored layout, ends the session whose owner is absent and states the session that did not return" },
+      { file: "packages/workbench-mygo/tests/owned_sessions_test.go", id: "TestRestoredTabShowsItsOpenSessionAfterAdoption" },
+    ],
+    expected: "A restored tab whose session did not return shows restored tab <tab>: session <id> is not open on the page and on mygo.",
+    levels: ["unit"],
+  },
+  {
     id: "F1082-1",
     implementation: [
       { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) QuitStop(ended func()) bool {" },

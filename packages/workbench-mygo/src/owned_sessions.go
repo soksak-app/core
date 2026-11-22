@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sort"
 	"strings"
 )
 
@@ -428,13 +429,27 @@ func (o *OwnedSessions) request(port OwnedSidecar, owner string, body any, answe
 	port.Request(owner, body, cid, answer)
 }
 
-// showRestored makes each restored tab that is live show the open session that its params name (docs/spec/plugins.md#owned-sessions).
-// A session that did not survive the restart is not shown.
+// showRestored makes each restored tab that is live show the open session that its params name, and states the error of each such
+// tab of a plugin that declares sessions whose session did not return, such as a session of a service that ended
+// (docs/spec/plugins.md#owned-sessions). The tabs are judged in the order of their identifiers.
 func (o *OwnedSessions) showRestored(live func(surface string) bool) {
+	shown := o.ports.Shown()
+	tabs := make([]string, 0, len(shown))
+	for tab := range shown {
+		tabs = append(tabs, tab)
+	}
+	sort.Strings(tabs)
 	changed := false
-	for tab, session := range o.ports.Shown() {
+	for _, tab := range tabs {
+		session := shown[tab]
+		if !live(tab) {
+			continue
+		}
 		current := o.sessions[session]
-		if current == nil || !live(tab) {
+		if current == nil {
+			if _, declares := o.ports.Sidecar(o.ports.Plugin(tab)); declares {
+				o.ports.Fail("restored tab "+tab, "session "+session+" is not open")
+			}
 			continue
 		}
 		current.ShownBy = tab

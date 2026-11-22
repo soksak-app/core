@@ -10,6 +10,8 @@ import { selectPageWire } from "@soksak/runtime";
 const SESSION = "fixture-session";
 const SIDECAR = "@scope/fixture-sidecar";
 const OWNER = "tab-aaaaa1";
+// A restored tab whose params name a session that the service no longer holds.
+const STALE = "tab-aaaaa2";
 // The page-wire case answers every call of the page in order; it is selected before the modules that read the host are imported.
 const wire = selectPageWire("owned-sessions-restart");
 
@@ -46,7 +48,10 @@ const plane = await import("../plane.js");
 // The stored layout is read before the page start: the restart reconciliation reads the restored tabs when the start is done.
 begin({ common: { "diagnostics.log": { lifecycle: "info" } }, open: [], projects: [{ id: "prj-aaaaaa", root: "/work/project", spaces: [
   { id: "spc-aaaaaa", title: "SPACE1", layout: { focusedId: "main", named: 0, windowSidebars: {}, sidebars: {}, leader: "main", lastCard: 1, state: {
-    root: { card: "main", data: { tabs: [{ id: OWNER, plugin: SESSION, title: SESSION, origin: { directory: null }, role: null }], activeId: OWNER } } } } },
+    root: { card: "main", data: { tabs: [
+      { id: OWNER, plugin: SESSION, title: SESSION, params: { session: "ses-keep" }, origin: { directory: null }, role: null },
+      { id: STALE, plugin: SESSION, title: SESSION, params: { session: "ses-missing" }, origin: { directory: null }, role: null },
+    ], activeId: OWNER } } } } },
 ], activeSpaceId: "spc-aaaaaa", named: 2 }] });
 const { installCoreExposure } = await import("../core-exposure.js");
 const { ownedSessionsState, startOwnedSessions } = await import("../owned-sessions.js");
@@ -59,9 +64,11 @@ await installCoreExposure({ library: { state: () => null }, renames: { state: ()
   memorySaver: await pageMemorySaver() });
 plane.nameWindow("main");
 
-test("the restart adopts the session whose owner is in the restored layout and ends the session whose owner is absent", async () => {
+test("the restart adopts the session whose owner is in the restored layout, ends the session whose owner is absent and states the session that did not return", async () => {
   await startOwnedSessions();
-  assert.deepEqual(ownedSessionsState(), [{ session: "ses-keep", plugin: SESSION, owner: OWNER, shownBy: null, program: null }]);
+  // The restored tab that names the adopted session shows it, and the tab whose session did not return shows the error
+  // restored tab <tab>: session <id> is not open (docs/spec/plugins.md#owned-sessions).
+  assert.deepEqual(ownedSessionsState(), [{ session: "ses-keep", plugin: SESSION, owner: OWNER, shownBy: OWNER, program: null }]);
   // The batch of the owner-absent end is sent after its microtasks, so the test waits for it before the case is judged.
   await flushEvents();
   wire.finish();

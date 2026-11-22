@@ -169,7 +169,7 @@ func (f *ownedFixture) newSessions() *workbench.OwnedSessions {
 func newOwnedFixture(t *testing.T) *ownedFixture {
 	t.Helper()
 	f := &ownedFixture{t: t, host: &ownedHost{}, pending: make(steps, 256), events: &stateEvents{}, layout: map[string]string{
-		"owner-tab": "terminal", "other-tab": "terminal", "kept-tab": "terminal", "plain-tab": "plain",
+		"owner-tab": "terminal", "other-tab": "terminal", "kept-tab": "terminal", "gone-tab": "terminal", "plain-tab": "plain",
 	}, views: map[string]workbench.MountedView{}, shown: map[string]string{}}
 	f.ports = workbench.NewHostSidecars(workbench.NewCalls(f.host.table(), f.pending.post), func(string) {})
 	f.sessions = f.newSessions()
@@ -449,12 +449,16 @@ func TestRestoredTabShowsItsOpenSessionAfterAdoption(t *testing.T) {
 	f.shown = map[string]string{"kept-tab": "s-3", "gone-tab": "s-missing"}
 	var adopted error
 	answered := false
-	f.sessions.Adopt(func(surface string) bool { return surface == "owner-tab" || surface == "kept-tab" }, func(err error) { adopted, answered = err, true })
+	f.sessions.Adopt(func(surface string) bool {
+		return surface == "owner-tab" || surface == "kept-tab" || surface == "gone-tab"
+	}, func(err error) { adopted, answered = err, true })
 	f.pending.drain(t)
 	if !answered || adopted != nil {
 		t.Fatalf("adopt = %v, answered %v", adopted, answered)
 	}
 	equal(t, f.sessions.Status(), []map[string]any{{"session": "s-3", "plugin": "terminal", "owner": "owner-tab", "shownBy": "kept-tab", "program": nil}})
+	// The restored tab whose session did not return states it through the error display (docs/spec/plugins.md#owned-sessions).
+	equal(t, f.failures, []string{"restored tab gone-tab: session s-missing is not open"})
 }
 
 // A window close keeps its owned sessions: the close sends no end, and the reopened window reattaches the session that its restored
