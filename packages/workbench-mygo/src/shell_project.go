@@ -479,12 +479,32 @@ func (s *Shell) showThen(id string, done func(err error)) {
 	s.windowProjects[id] = true
 	s.options.Located(id)
 	s.errors.Hide(workbenchErrorPlace)
-	settingsErr := s.beginSettings(s.settings.Common())
-	s.calls.Call("projectShown", map[string]any{"project": map[string]string{"id": id, "root": project.Root, "title": project.Title}},
-		func(_ any, err error) {
-			s.shownProject(err)
-			done(errors.Join(settingsErr, err))
-		})
+	// The settings of the shown project are those that the store holds, which a write of this window reaches in the record only at
+	// the change event of the store, so the window reads the store first, as selectProject of packages/workbench/settings.js does.
+	s.calls.CallInOrder("workspace", "workspace", map[string]string{"kind": "snapshot"}, func(value any, err error) {
+		if err != nil {
+			done(fmt.Errorf("show project: %w", err))
+			return
+		}
+		if err := s.compareData(value); err != nil {
+			done(fmt.Errorf("show project: %w", err))
+			return
+		}
+		snapshot, err := decode[struct {
+			Common map[string]any `json:"common"`
+		}](value)
+		if err != nil {
+			done(fmt.Errorf("show project: %w", err))
+			return
+		}
+		settingsErr := s.beginSettings(orEmpty(snapshot.Common))
+		s.calls.Call("projectShown", map[string]any{"project": map[string]string{"id": id, "root": project.Root, "title": project.Title}},
+			func(_ any, err error) {
+				s.shownProject(err)
+				done(errors.Join(settingsErr, err))
+			})
+		s.options.Invalidate()
+	})
 	s.tabsSettled()
 	s.options.Invalidate()
 }

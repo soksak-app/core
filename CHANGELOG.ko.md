@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1054: mygo workbench는 project를 보일 때 store snapshot을 읽으므로, library에서 다시 연 project는 쓰기의 change event가 오기 전에도 store의 override를 보인다. Red: `TestAProjectOpenedFromTheLibraryShowsItsOverrides`가 낡은 기록으로 window check와 같은 `mode: dark`를 보였다. Green: 그 test와 mygo workbench test 1172개가 통과한다.
 - F1057: 저장 tab 나열의 nullish 기본값에 이유를 적었다. Red: `scripts/test/fallbacks.test.mjs`가 `surface-listing.js:40: nullish default without a stated reason`으로 실패했다. Green: fallback test가 통과한다.
 - F1056: window check projects reader의 test는 format 4로 쓰고 format 3을 거부로 판정한다. Red: `project records reject a malformed current envelope`가 `expected projects format 4, found format 3`로 실패했다. Green: reader test 네 개가 통과한다.
 - F1053: window check의 projects reader(`e2e/projects-file.mjs`)는 projects format 4를 받는다. Red: project window check가 `projects.json: expected projects format 3, found format 4`로 실패했다. Green: Wails와 Tauri의 project window check가 통과한다.

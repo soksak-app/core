@@ -507,6 +507,34 @@ func TestTheLibraryShowsTheCommonSettings(t *testing.T) {
 	}
 }
 
+// A project that the window opens again from the library shows the overrides that the store holds, also before the change event of
+// the write of its overrides arrived, as selectProject of packages/workbench/settings.js reads the store.
+func TestAProjectOpenedFromTheLibraryShowsItsOverrides(t *testing.T) {
+	f := viewShell(t)
+	type settings struct {
+		Values  map[string]any `json:"values"`
+		Project *string        `json:"project"`
+	}
+	f.run("core.settings.set", map[string]any{"patch": map[string]any{"mode": "dark"}, "scope": "common"})
+	// The change event of the store write has not arrived yet, so the record of the project still holds no override; the store holds it.
+	f.run("core.settings.set", map[string]any{"patch": map[string]any{"mode": "light"}, "scope": "project"})
+	f.settle()
+	shown := status[settings](t, f, "core.settings")
+	if shown.Project == nil || shown.Values["mode"] != "light" {
+		t.Fatalf("the project shows %+v", shown)
+	}
+	project := *shown.Project
+	f.run("core.projects.browse", nil)
+	f.run("core.settings.set", map[string]any{"patch": map[string]any{"mode": "light"}})
+	f.run("core.settings.set", map[string]any{"patch": map[string]any{"mode": "dark"}})
+	f.settle()
+	f.run("core.project.activate", map[string]string{"id": project})
+	f.settle()
+	if shown := status[settings](t, f, "core.settings"); shown.Values["mode"] != "light" || shown.Project == nil {
+		t.Fatalf("the project opened from the library shows %+v, not its override", shown)
+	}
+}
+
 // core.settings declares overridden as an array in exposure.json, including
 // an empty array before overrides exist and after the last reset.
 func TestCoreSettingsOverriddenIsAnArrayAcrossEmptyAndReset(t *testing.T) {
