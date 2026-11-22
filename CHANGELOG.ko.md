@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1062-7 (events, page, mygo): 세션 프로그램 상태가 받아들여져 바뀔 때마다 owned session은 `workbench.session.program {session, state}`를 발행한다. catalog가 이 이벤트를 선언하고 생성된 class 표는 그 뒤를 따른다. 같은 상태의 보고는 아무것도 발행하지 않는다. page-wire case `owned-sessions-program`은 잘못된 상태, 알 수 없는 session, 다른 소유자의 session에 대한 거부를 확인하며, 이들은 기록되고 아무것도 바꾸지 않는다. Red/Green: `owned-sessions-program.test.mjs`와 Go `Progress` test.
 - F1062-7 (spec): owned session 명세는 소유자 명령 `core.session.input`(text를 준 그대로 입력), `core.session.submit`(text를 paste한 뒤 Enter, CR이나 LF가 든 text는 거부), `core.session.read`(`{rows, cursor}`를 답함)를 정하며, 각 명령은 다른 표면에 `session <id> is owned by <owner>`로 거부된다. 사이드카 메시지 `paste`, `input`, `read`와, `core.sessions`의 세션별 프로그램 상태 `{state}`를 정하며, 상태는 소유자의 이벤트 `session.program`이 정한다.
 - F1062-7 (page): page workbench는 소유자 명령 세 개를 사이드카 메시지로 구현하고, 세션의 프로그램 상태를 소유자의 `session.program`으로 정한다. 잘못되거나 알 수 없거나 다른 소유자의 이벤트는 식별자와 함께 거부한다. Red/Green: `owned-sessions-open` case와 open, end, frame, restart test(`owned-sessions*.test.mjs`의 test 8개)가 통과한다.
 - F1062-7 (mygo): mygo workbench는 같은 세 명령과 세션별 프로그램 상태를 같은 거부와 오류 문장으로 구현한다. Red/Green: `owned_sessions_io_test.go`와 `owned_sessions_test.go`의 Go owned session test가 통과한다.
