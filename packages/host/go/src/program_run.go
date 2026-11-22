@@ -17,6 +17,7 @@ import (
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 	"github.com/soksak-app/core/packages/host/go/src/routine"
+	sok "github.com/soksak-app/core/packages/sok/go/src"
 )
 
 // programOutputMaxBytes is the number of bytes that a run keeps of each output stream; the bytes beyond it are read and discarded.
@@ -46,6 +47,8 @@ type ProgramRun struct {
 	Args    []string
 	// Directory is the working directory, the project folder of the surface.
 	Directory string
+	// PluginFolder is the installed version folder of the plugin, which a Program of the form plugin:<path> resolves in.
+	PluginFolder string
 	// Environment is the complete environment of the program as KEY=VALUE entries.
 	Environment []string
 	// OnStart, when set, receives the process identifier after the program started.
@@ -105,7 +108,10 @@ func trimIncompleteTail(kept []byte) []byte {
 // a path with a separator resolves from the directory and an absolute path as it is, and a bare name resolves through the PATH of
 // the environment. os/exec finds a bare name through the PATH of the host process, which may differ from the environment of the
 // run, so this searches the PATH of the environment with the rule of os/exec: a regular file with an execute bit.
-func resolveProgram(program, directory string, environment []string) (string, error) {
+func resolveProgram(program, directory, pluginFolder string, environment []string) (string, error) {
+	if path, ok := strings.CutPrefix(program, sok.ProgramPluginPrefix); ok {
+		return resolvePluginProgram(program, path, pluginFolder)
+	}
 	if strings.ContainsRune(program, filepath.Separator) {
 		path := program
 		if !filepath.IsAbs(path) {
@@ -135,12 +141,33 @@ func resolveProgram(program, directory string, environment []string) (string, er
 	return "", fmt.Errorf("program not found: %s", program)
 }
 
+// resolvePluginProgram finds the file of a program of the form plugin:<path> in the installed version folder of its plugin, which
+// the same folder resolution as the view folder gives (docs/spec/native-surfaces.md#program-runs). The declaration reader accepts
+// only a path without empty, `.` or `..` segments, so the file stays inside the folder. The file must be a regular file with an
+// execute bit; a file that does not exist is not found, and any other error of the lookup is returned.
+func resolvePluginProgram(program, path, folder string) (string, error) {
+	if folder == "" {
+		return "", fmt.Errorf("program %s: the plugin folder is not known", program)
+	}
+	file := filepath.Join(folder, filepath.FromSlash(path))
+	info, err := os.Stat(file)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		return "", fmt.Errorf("program not found: %s", program)
+	case err != nil:
+		return "", fmt.Errorf("program %s: %w", program, err)
+	case !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0:
+		return "", fmt.Errorf("program %s is not a regular executable file", program)
+	}
+	return file, nil
+}
+
 // RunProgram starts the program of run and waits for it to exit or for its context to end. A context that ends first ends the
 // program group with the force-kill signal and answers the cause of the context as the result, without waiting for the program
 // (docs/spec/native-surfaces.md#program-runs). It refuses a program that does not resolve or does not start, and a stream that the
 // run kept and that is not UTF-8, with an error that names the program or the stream.
 func RunProgram(ctx context.Context, run ProgramRun) (ProgramOutcome, error) {
-	path, err := resolveProgram(run.Program, run.Directory, run.Environment)
+	path, err := resolveProgram(run.Program, run.Directory, run.PluginFolder, run.Environment)
 	if err != nil {
 		return ProgramOutcome{}, err
 	}

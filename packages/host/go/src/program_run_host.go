@@ -113,6 +113,9 @@ func parseProgramDeclarations(raw json.RawMessage) (map[string]programDeclaratio
 			program == "" || len(program) > sok.ProgramTextMaxBytes || strings.ContainsFunc(program, unicode.IsControl) {
 			return nil, fmt.Errorf("programs.%s program is not a text of 1 to 255 bytes without a control character", name)
 		}
+		if strings.HasPrefix(program, sok.ProgramPluginPrefix) && !sok.ProgramPluginPathValid(strings.TrimPrefix(program, sok.ProgramPluginPrefix)) {
+			return nil, fmt.Errorf("programs.%s program plugin path must be a relative path of / separated segments that are not empty, . or .., without a backslash", name)
+		}
 		var slots []programSlot
 		if raw, present := fields["args"]; present {
 			var items []json.RawMessage
@@ -358,8 +361,17 @@ func (h *Host) ProgramRun(ctx context.Context, reqJSON json.RawMessage) (Program
 	if err != nil {
 		return ProgramRunReply{}, fmt.Errorf("program %s: environment: %w", req.Name, err)
 	}
+	// A program of the form plugin:<path> resolves in the installed version folder of the plugin, which the view folder uses.
+	folder := ""
+	if strings.HasPrefix(spec.Program, sok.ProgramPluginPrefix) {
+		folder, err = PluginFolder(s.sidecars.configDir, view.plugin)
+		if err != nil {
+			EmitHost(LevelError, "host.program.failed", map[string]any{"plugin": view.plugin, "surface": req.Surface, "name": req.Name, "reason": err.Error()})
+			return ProgramRunReply{}, err
+		}
+	}
 	outcome, err := RunProgram(runContext, ProgramRun{
-		Name: req.Name, Program: spec.Program, Args: spec.Args, Directory: spec.Directory, Environment: environment,
+		Name: req.Name, Program: spec.Program, Args: spec.Args, Directory: spec.Directory, Environment: environment, PluginFolder: folder,
 		OnStart: func(int) {
 			EmitHost(LevelInfo, "host.program.start", map[string]any{
 				"plugin": view.plugin, "surface": req.Surface, "name": req.Name, "program": spec.Program, "args": spec.Args, "cwd": spec.Directory,
