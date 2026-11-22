@@ -90,6 +90,12 @@ func (l *viewLifecycle) isStopped(surface string) bool {
 
 // forget removes the record of surface, which clears its failures and its stop. It runs when the surface is removed, so the next
 // surface of the same name is a new view.
+// reset clears the failures and the stop of the view of surface, so its next failure starts a new count. The view record stays.
+func (l *viewLifecycle) reset(surface string) {
+	delete(l.failures, surface)
+	delete(l.stopped, surface)
+}
+
 func (l *viewLifecycle) forget(surface string) {
 	delete(l.live, surface)
 	delete(l.specs, surface)

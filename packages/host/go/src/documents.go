@@ -1911,6 +1911,12 @@ type viewClosers struct {
 // presentation wait of the view before its documents close, so the wait ends with the reason process-ended and not with the close of the
 // documents. It runs on the UI thread.
 func (s *Surfaces) endView(surface string, handle unsafe.Pointer, generation uint64, now time.Time, closers viewClosers, caller string) (*viewSpec, bool) {
+	return s.endViewWith(surface, handle, generation, now, closers, caller, true)
+}
+
+// endViewWith is endView, and counted states whether the end is a failure of the view: a reload ends the view without a failure, so
+// it counts none and returns the record of the view whatever the restart state is.
+func (s *Surfaces) endViewWith(surface string, handle unsafe.Pointer, generation uint64, now time.Time, closers viewClosers, caller string, counted bool) (*viewSpec, bool) {
 	key := DocumentKey{Surface: surface, Name: viewRegionName}
 	current, err := s.documents.Get(key)
 	channel, ok := s.documents.view(surface)
@@ -1949,6 +1955,13 @@ func (s *Surfaces) endView(surface string, handle unsafe.Pointer, generation uin
 	s.emitToSurface(surface, "view-process-ended", map[string]any{"surface": surface, "plugin": channel.plugin, "generation": generation})
 	lifecycle := s.viewRecords()
 	spec := lifecycle.specs[surface]
+	if !counted {
+		if spec == nil {
+			LogError("view channel", fmt.Errorf("%s: the view record is missing, so the view is not created again", surface))
+			return nil, true
+		}
+		return spec, true
+	}
 	if !lifecycle.fail(surface, now) {
 		reason := viewStopReason()
 		LogError("view channel", fmt.Errorf("%s: %s", surface, reason))
