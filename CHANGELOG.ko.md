@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1062-2: kit의 term list가 owned session과 owner를 정한다. kit 변경은 kit main에 있다. F1062-5는 F1062-3의 spec commit이 담은 owned session 메시지 명세를 기록한다.
 - F1070: Go와 Rust sok의 manifest 검사는 F1064 이후의 plugin API처럼 `surface`나 `sections`가 있는 `extends`를 받아들이고, 공유 manifest case `extends.requires-surface-or-sections`와 `extends.accepts-with-sections`가 이 규칙을 정한다. Red: Go case replay가 sections manifest를 `extends requires a surface`로 거부했다. Green: Go와 Rust case replay, plugin API case 229개가 통과한다.
 - F1065: mygo host는 view를 만들 때마다 `installed.json`에서 plugin 폴더를 읽는다. 그래서 plugin 업데이트 뒤 만든 view는 설치된 version을 내주고, surface 식별자와 시작 parameter는 유지된다. Rust host는 이미 만들 때마다 폴더를 읽었다. Red: `TestAViewCreatedAfterAnUpdateServesTheInstalledVersionFolder`가 이전 version의 폴더로 실패했다. Green: Go host test 390개와 584개가 통과한다.
 - F1068: `core.grid`의 각 `tabs` 항목은 layout tab의 member `{tab, plugin, title, active, params, label, notice, footer, modified, error}`를 담는다. `tab`, `plugin`, `title`, `active`, `params`는 window snapshot의 `layout` member와 같은 코드가 만들며, mygo와 page workbench가 모두 publish한다. 공유 case `a tab description gives the members of a layout tab`(docs/spec/cases/layout/tabs.json)과 Go test `TestTheTabsOfTheGridHoldTheMembersOfTheLayoutTabs`가 이 규칙을 정한다. Red: Go test가 HEAD에서 `the tab 0 of core.grid has params = <nil>, want map[path:a.md]`로 실패했다. Green: 준비된 상태에서 mygo test 패키지 `tests`와 `tests/layout`이 통과한다.
