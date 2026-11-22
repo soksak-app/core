@@ -1375,14 +1375,13 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/workbench-mygo/src/cards.go", symbol: "func (s *Shell) describeLevel(key string) (*LayoutNode, error)" },
       { file: "packages/workbench/plane.js", symbol: "export function layoutDescription()" },
-      { file: "packages/sok/go/src/agents/SKILL.md", symbol: "read `layout` again right before each step" },
     ],
     tests: [
       { file: "packages/workbench-mygo/tests/groups_test.go", id: "TestTheDescriptionHoldsTheGroupCardsInItsTree" },
       { file: "packages/workbench/test/group-commands.test.mjs", id: "the layout of the window description holds each group card as a node of its tree and lists every group once" },
       { file: "scripts/test/skill-groups.test.mjs", id: "the agent skill describes group cards after acting on a layout" },
     ],
-    expected: "The layout of the window description in both workbenches is the tree of the root level with each group card as a node of its group and the tree of its members, and groups lists every group card once with the identifiers of its members; the skill says to read the layout again before each step.",
+    expected: "The layout of the window description in both workbenches is the tree of the root level with each group card as a node of its group and the tree of its members, and groups lists every group card once with the identifiers of its members.",
     levels: ["unit"],
   },
   {
@@ -16440,6 +16439,90 @@ const FEATURE_LINKS = [
       { file: "native/darwin/tests/input_virtual_test.m", id: "the change of the cursor is recorded with its setter (%@)" },
     ],
     expected: "An injected move of the virtual key window sets the cursor of the cursor rect under the point through AppKit, which keeps it as the cursor of the cursor rect, so a page cursor that answers an earlier move later leaves it, and over a page the page sets its cursor again.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1055",
+    implementation: [
+      { file: "packages/workbench-mygo/src/layout_apply_groups.go", symbol: "func collectGroups(tree *planNode) []*planNode {" },
+      { file: "packages/workbench/layout-plan.js", symbol: "export function treeGroups(tree)" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/layout_plan_test.go", id: "TestAGroupOfFiveCardsPlansAndAppliesAsOneGroupCard" },
+      { file: "packages/workbench/test/layout-operations.test.mjs", id: "a group of five cards in a row plans and applies one group card, and a repeated apply changes nothing" },
+    ],
+    expected: "A group of several cards in a row is planned and applied as one group card in one apply, a repeated apply changes nothing, and a tree of one card or a name outside 1 to 40 characters is refused.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1064",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "extends requires a surface or sections" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/validate.test.mjs", id: "extends is accepted with a surface or with sections and refused without either" },
+    ],
+    expected: "The manifest validation of the plugin API accepts extends with a surface or with sections and refuses it without either.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1065",
+    implementation: [
+      { file: "packages/host/go/src/documents.go", symbol: "spec.folder = folder" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/view_lifecycle_test.go", id: "TestAViewCreatedAfterAnUpdateServesTheInstalledVersionFolder" },
+    ],
+    expected: "A view resolves the folder of the installed plugin version at each creation, so a view created after an update serves the files of the installed version.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1066",
+    implementation: [
+      { file: "packages/host/go/src/plugins.go", symbol: "func (p *Plugins) UpdateAtStart() []StartUpdate {" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/plugins_start_update_test.go", id: "TestStartUpdateReplacesARefusedInstalledPluginWithTheNewestAcceptedVersion" },
+      { file: "packages/host/go/tests/plugins_start_update_test.go", id: "TestRepeatedStartUpdateChangesNothing" },
+    ],
+    expected: "At start a refused or older installed plugin is replaced by the newest release the running core accepts, and a repeated start changes nothing.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1068",
+    implementation: [
+      { file: "packages/workbench-mygo/src/cards.go", symbol: "func (s *Shell) describeTab(data *layout.CardData, tab layout.Tab) layout.TabDescription {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/groups_test.go", id: "TestTheTabsOfTheGridHoldTheMembersOfTheLayoutTabs" },
+    ],
+    expected: "The members of each tab in core.grid are the tab, its plugin, its params and its title, the same members as the tabs of the layout member of exposure.snapshot.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1070",
+    implementation: [
+      { file: "packages/sok/go/src/manifest.go", symbol: "extends requires a surface or sections" },
+      { file: "packages/sok/rust/src/manifest.rs", symbol: "extends requires a surface or sections" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/manifest_cases_test.go", id: "TestPluginInstallReplaysTheManifestCases" },
+      { file: "packages/sok/rust/tests/manifest_cases_test.rs", id: "plugin_install_replays_the_manifest_cases" },
+    ],
+    expected: "The sok manifest checks in Go and Rust accept extends with sections and refuse it without a surface or sections, as the shared manifest case states.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1071",
+    implementation: [
+      { file: "packages/host/go/src/program_run.go", symbol: "func (b *boundedCapture) truncated() bool {" },
+      { file: "packages/host/rust/src/program_run.rs", symbol: "fn admit(" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/program_run_host_test.go", id: "TestProgramRunOfASurfaceWithoutAViewIsRefused" },
+      { file: "packages/host/rust/tests/program_run_test.rs", id: "a_run_of_a_surface_without_a_view_is_refused_with_the_no_view_text" },
+    ],
+    expected: "A declared program runs for a view call in the Go and Rust hosts with the refusals, bounds and end causes of the program run rules, and a run of a surface without a view is refused.",
     levels: ["unit"],
   },
 ];

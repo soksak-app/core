@@ -280,8 +280,10 @@ impl ProgramRuns {
             .iter()
             .filter(|(open_id, _)| id.is_none_or(|wanted| **open_id == wanted))
         {
-            // silent: a send fails only when the run has ended and dropped its receiver, so the cause has no run to end.
-            let _ = open.sender.send(Event::End(cause));
+            if open.sender.send(Event::End(cause)).is_err() {
+                // default: a send fails only after the run dropped its receiver, so the run has already ended and has no run left to end.
+                continue;
+            }
         }
     }
 
@@ -479,7 +481,6 @@ fn execute(
     sender: Sender<Event>,
     receiver: Receiver<Event>,
 ) -> Result<Finished, String> {
-    let directory = request.project.as_deref().unwrap_or(Path::new(""));
     let failed = |reason: &str| {
         emit_host(
             Level::Error,
@@ -491,6 +492,11 @@ fn execute(
                 "reason": reason,
             }),
         );
+    };
+    let Some(directory) = request.project.as_deref() else {
+        let reason = "program run: the window shows no project".to_string();
+        failed(&reason);
+        return Err(reason);
     };
     let Some(path) = resolve(&declaration.program, directory, &request.environment) else {
         let reason = format!("program not found: {}", declaration.program);
@@ -538,8 +544,9 @@ fn execute(
     let stderr_reader = crate::routine::spawn_named("program-stderr", move || capture(stderr));
     let exit_sender = sender;
     crate::routine::spawn_named("program-wait", move || {
-        // silent: the run keeps its receiver until this exit arrives, so the send cannot fail while the run waits.
-        let _ = exit_sender.send(Event::Exited(child.wait()));
+        if exit_sender.send(Event::Exited(child.wait())).is_err() {
+            // default: a send fails only after the run dropped its receiver, so the exit arrived after the run ended without it.
+        }
     });
     let outcome = wait_and_collect(
         request,
@@ -571,6 +578,7 @@ fn execute(
             "stderrBytes": ran.finished.stderr.bytes,
             "stdoutTruncated": ran.finished.stdout.truncated,
             "stderrTruncated": ran.finished.stderr.truncated,
+            // default: a duration beyond u64::MAX microseconds, about 584,000 years, is reported as u64::MAX.
             "durationUs": u64::try_from(ran.finished.duration.as_micros()).unwrap_or(u64::MAX),
         }),
     );

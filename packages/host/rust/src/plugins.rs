@@ -259,10 +259,10 @@ impl Plugins {
                 })
             })
             .collect();
-        // default: the failure list stays writable after poison; the panic hook records the panic.
         let mut kept = self
             .start_failures
             .lock()
+            // default: the failure list stays writable after poison; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner);
         *kept = failures;
     }

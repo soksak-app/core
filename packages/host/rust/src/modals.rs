@@ -968,7 +968,7 @@ mod tests {
         assert_eq!(
             unrelated,
             vec![serde_json::json!({
-                "plugin": "probe", "surface": surface, "unsent": true,
+                "caller": "test-end", "plugin": "probe", "surface": surface, "unsent": true,
             })],
             "modal recovery must preserve unrelated lifecycle records"
         );

@@ -4804,6 +4804,7 @@ impl<O: Owner> Core<O> {
                     .cloned()
                     .collect();
                 for key in keys {
+                    // default: each key was read from this map under the same lock, so its removal finds its answers.
                     for entry in answers.remove(&key).unwrap_or_default() {
                         if entry
                             .sender
