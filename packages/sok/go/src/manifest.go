@@ -845,6 +845,23 @@ const (
 	ProgramPatternMaxBytes = 512
 )
 
+// ProgramPluginPrefix starts the program of a file of the plugin itself, resolved in its installed version folder.
+const ProgramPluginPrefix = "plugin:"
+
+// ProgramPluginPathValid reports whether path, the text after ProgramPluginPrefix, is a relative path of `/` separated segments
+// that are none empty, `.` or `..`, and has no backslash (docs/spec/native-surfaces.md#program-runs). The hosts check the same rule.
+func ProgramPluginPathValid(path string) bool {
+	if path == "" || strings.Contains(path, `\`) {
+		return false
+	}
+	for _, segment := range strings.Split(path, "/") {
+		if segment == "" || segment == "." || segment == ".." {
+			return false
+		}
+	}
+	return true
+}
+
 // ProgramPatternSource is the expression that a program pattern compiles to: it must match the whole argument
 // (docs/spec/native-surfaces.md#program-runs). The host matcher compiles this same source.
 func ProgramPatternSource(pattern string) string {
@@ -885,6 +902,9 @@ func checkPrograms(where string, raw any) error {
 		program, _ := entry["program"].(string)
 		if program == "" || len(program) > ProgramTextMaxBytes || hasControlCharacter(program) {
 			return fmt.Errorf("%s program must be a non-empty text of at most %d bytes without a control character", at, ProgramTextMaxBytes)
+		}
+		if strings.HasPrefix(program, ProgramPluginPrefix) && !ProgramPluginPathValid(strings.TrimPrefix(program, ProgramPluginPrefix)) {
+			return fmt.Errorf("%s program plugin path must be a relative path of / separated segments that are not empty, . or .., without a backslash", at)
 		}
 		raw, present := entry["args"]
 		if !present {

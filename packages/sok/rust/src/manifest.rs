@@ -733,6 +733,19 @@ fn is_program_name(name: &str) -> bool {
         && chars.all(|c| matches!(c, 'a'..='z' | '0'..='9' | '-'))
 }
 
+/// The prefix of a program that names a file of the plugin itself, resolved in its installed version folder.
+pub const PROGRAM_PLUGIN_PREFIX: &str = "plugin:";
+
+/// Reports whether path, the text after PROGRAM_PLUGIN_PREFIX, is a relative path of `/` separated segments that are none empty,
+/// `.` or `..`, and has no backslash (docs/spec/native-surfaces.md#program-runs). The hosts check the same rule.
+pub fn plugin_path_valid(path: &str) -> bool {
+    !path.is_empty()
+        && !path.contains('\\')
+        && path
+            .split('/')
+            .all(|segment| !segment.is_empty() && segment != "." && segment != "..")
+}
+
 /// The expression that a program pattern compiles to: it must match the whole argument (docs/spec/native-surfaces.md#program-runs).
 /// The host matcher compiles this same source.
 pub(crate) fn program_pattern_source(pattern: &str) -> String {
@@ -763,7 +776,7 @@ fn check_programs(where_: &str, raw: &Value) -> Result<(), String> {
                 return Err(format!("{at} member {member} is unknown"));
             }
         }
-        entry
+        let program = entry
             .get("program")
             .and_then(Value::as_str)
             .filter(|program| {
@@ -774,6 +787,13 @@ fn check_programs(where_: &str, raw: &Value) -> Result<(), String> {
                     "{at} program must be a non-empty text of at most {PROGRAM_TEXT_MAX_BYTES} bytes without a control character"
                 )
             })?;
+        if let Some(path) = program.strip_prefix(PROGRAM_PLUGIN_PREFIX)
+            && !plugin_path_valid(path)
+        {
+            return Err(format!(
+                "{at} program plugin path must be a relative path of / separated segments that are not empty, . or .., without a backslash"
+            ));
+        }
         let Some(raw_args) = entry.get("args") else {
             continue;
         };

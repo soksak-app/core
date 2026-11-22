@@ -570,6 +570,12 @@ function checkRegions(where, regions, overlays, sidecars) {
 
 const PROGRAM_NAME = /^[a-z][a-z0-9-]*$/;
 const PROGRAM_TEXT_MAX_BYTES = 255;
+const PROGRAM_PLUGIN_PREFIX = "plugin:";
+
+/** Reports whether path is a relative path of `/` separated segments, none empty, `.` or `..`, and without a backslash. */
+function validPluginPath(path) {
+  return path.length > 0 && !path.includes("\\") && path.split("/").every((segment) => segment !== "" && segment !== "." && segment !== "..");
+}
 const PROGRAM_SLOTS_MAX = 16;
 const PROGRAM_PATTERN_MAX_BYTES = 512;
 // Control characters are U+0000 to U+001F and U+007F; the byte limits count UTF-8 bytes, as the hosts do.
@@ -589,6 +595,11 @@ function checkPrograms(where, programs) {
     const { program } = entry;
     if (typeof program !== "string" || program.length === 0 || utf8Length(program) > PROGRAM_TEXT_MAX_BYTES || hasControlCharacter(program)) {
       throw new Error(`${at} program must be a non-empty text of at most ${PROGRAM_TEXT_MAX_BYTES} bytes without a control character`);
+    }
+    // A plugin path is a relative path of segments that are not empty, `.` or `..`, with no backslash, so no file outside the
+    // installed version folder of the plugin is named (docs/spec/native-surfaces.md#program-runs).
+    if (program.startsWith(PROGRAM_PLUGIN_PREFIX) && !validPluginPath(program.slice(PROGRAM_PLUGIN_PREFIX.length))) {
+      throw new Error(`${at} program plugin path must be a relative path of / separated segments that are not empty, . or .., without a backslash`);
     }
     if (entry.args === undefined) continue;
     if (!Array.isArray(entry.args) || entry.args.length > PROGRAM_SLOTS_MAX) {

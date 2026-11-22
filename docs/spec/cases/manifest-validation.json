@@ -6843,6 +6843,198 @@
       ]
     },
     {
+      "id": "programs.plugin-path-accepts-file-of-the-plugin",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "run": {
+            "program": "plugin:bin/tool",
+            "args": [
+              "--json"
+            ]
+          }
+        }
+      },
+      "accepted": true,
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html",
+        "bin/tool"
+      ]
+    },
+    {
+      "id": "programs.plugin-path-refuses-parent-segment",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "run": {
+            "program": "plugin:../tool"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: programs.run program plugin path must be a relative path of / separated segments that are not empty, . or .., without a backslash",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "programs.plugin-path-refuses-absolute-path",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "run": {
+            "program": "plugin:/usr/bin/tool"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: programs.run program plugin path must be a relative path of / separated segments that are not empty, . or .., without a backslash",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "programs.plugin-path-refuses-empty-path",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "run": {
+            "program": "plugin:"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: programs.run program plugin path must be a relative path of / separated segments that are not empty, . or .., without a backslash",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "programs.plugin-path-refuses-empty-segment",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "run": {
+            "program": "plugin:bin//tool"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: programs.run program plugin path must be a relative path of / separated segments that are not empty, . or .., without a backslash",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "programs.plugin-path-refuses-dot-segment",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "run": {
+            "program": "plugin:./tool"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: programs.run program plugin path must be a relative path of / separated segments that are not empty, . or .., without a backslash",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "programs.plugin-path-refuses-backslash",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "run": {
+            "program": "plugin:..\\tool"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: programs.run program plugin path must be a relative path of / separated segments that are not empty, . or .., without a backslash",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
       "id": "programs.accepts-without-args",
       "manifest": {
         "id": "probe",
