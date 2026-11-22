@@ -283,6 +283,14 @@ func (s *Shell) activityStatuses(id string) []string {
 	return nil
 }
 
+// programStatus is the program status of the plugin id, and "" for a plugin that is not loaded or declares none (docs/spec/program-state.md).
+func (s *Shell) programStatus(id string) string {
+	if unit := s.units[id]; unit != nil {
+		return unit.Program
+	}
+	return ""
+}
+
 // activityProjects are the projects that the window opened for their activities, each with the stored layout of each space and the
 // drawn layout in the place of the shown space once the plane is made (docs/spec/activity.md).
 func (s *Shell) activityProjects() ([]ActivityProject, error) {

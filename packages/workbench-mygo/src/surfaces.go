@@ -58,6 +58,8 @@ type installedUnit struct {
 	Drop string
 	// Programs holds the programs member of plugin.json as it stands there, which the view sync request declares (docs/spec/native-surfaces.md#program-runs).
 	Programs json.RawMessage
+	// Program is the status that carries the program state of the tabs of the plugin, "" when it declares none (docs/spec/program-state.md).
+	Program string
 	// Opens holds the extensions of surface.opens, and Background the background declaration, or nil.
 	Opens      []string
 	Background *BackgroundDeclaration
@@ -87,6 +89,7 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 					Menu        json.RawMessage `json:"menu"`
 					Unload      *surfaceUnload  `json:"unload"`
 					Drop        string          `json:"drop"`
+					Program     string          `json:"program"`
 					Opens       struct {
 						Extensions []string `json:"extensions"`
 					} `json:"opens"`
@@ -161,6 +164,7 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 		unit.Menu = len(plugin.Manifest.Surface.Menu) > 0
 		unit.Unload = plugin.Manifest.Surface.Unload
 		unit.Drop = plugin.Manifest.Surface.Drop
+		unit.Program = plugin.Manifest.Surface.Program
 	}
 	return units, nil
 }

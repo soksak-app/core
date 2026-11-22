@@ -601,7 +601,8 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.activity = NewActivityFollow(func(name, surface string, fn func(value any)) func() {
 		return s.registry.Observe(name, &surface, true, fn)
 	},
-		s.activityStatuses, s.activityProjects, s.options.Invalidate, s.activityError, s.fail, s.publishActivity)
+		s.activityStatuses, s.programStatus, s.activityProjects, s.options.Invalidate, s.activityError, s.programError, s.fail,
+		s.publishActivity)
 	s.projectRecord = ActivityRecord{Revision: -1, Projects: map[string]ActivityProjectState{}}
 	s.contributions = NewContributions()
 	if err := s.contributions.Install(s.installed); err != nil {

@@ -80,6 +80,8 @@ type gridTabStatus struct {
 	Footer   *string `json:"footer"`
 	Modified bool    `json:"modified"`
 	Error    *string `json:"error"`
+	// Program is the program state of the tab, null when it has none (docs/spec/program-state.md#status).
+	Program *ProgramState `json:"program"`
 }
 
 // cardTool is a tool of a card head of core.grid.
@@ -296,7 +298,7 @@ func (s *Shell) gridState() (any, error) {
 
 // gridTab returns the entry of a tab of the card data with what its view reported.
 func (s *Shell) gridTab(data *layout.CardData, tab layout.Tab) gridTabStatus {
-	entry := gridTabStatus{TabDescription: s.describeTab(data, tab)}
+	entry := gridTabStatus{TabDescription: s.describeTab(data, tab), Program: s.activity.Programs()[tab.ID]}
 	if report := s.surfaces.reports[tab.ID]; report != nil {
 		entry.Label, entry.Footer, entry.Error = optionalText(report.Title), optionalText(report.Footer), optionalText(report.Error)
 		entry.Notice, entry.Modified = optionalText(s.tabNoticeText(tab.ID)), report.Modified

@@ -235,6 +235,37 @@ type activityTab struct {
 	plugin  string
 	names   []string
 	watches map[string]*activityWatch
+	// program is the program status of the plugin, "" when it declares none, and programWatch its watch (docs/spec/program-state.md).
+	program      string
+	programWatch *activityWatch
+}
+
+// ProgramState is the program state of a tab (docs/spec/program-state.md#value) as core.grid reports it.
+type ProgramState struct {
+	State string `json:"state"`
+}
+
+// programStates are the program states from the first to the last (docs/spec/program-state.md#value).
+var programStates = []string{"idle", "working", "blocked"}
+
+// TabProgram is the program state of the tab tab from the value that its surface reports for the program status status of plugin: an
+// object whose only member is state, one of the program states, gives that state, and null gives none. Another value gives an error
+// with the text of docs/spec/program-state.md#value, where the JSON text of the value has its members in code point order.
+func TabProgram(plugin, status, tab string, value any) (*ProgramState, error) {
+	if value == nil {
+		return nil, nil
+	}
+	if object, ok := value.(map[string]any); ok && len(object) == 1 {
+		if state, isText := object["state"].(string); isText && slices.Contains(programStates, state) {
+			return &ProgramState{State: state}, nil
+		}
+	}
+	text, err := json.Marshal(value)
+	if err != nil {
+		return nil, fmt.Errorf("%s exposes %s on tab %s: program value: %w", plugin, status, tab, err)
+	}
+	return nil, fmt.Errorf("%s exposes %s on tab %s: program value %s is not null or an object with only the member state, one of %s",
+		plugin, status, tab, text, strings.Join(programStates, ", "))
 }
 
 // ActivityFollow follows the statuses that declare activity on the surface of each tab of the projects of a window by a watch of each
@@ -256,10 +287,17 @@ type ActivityFollow struct {
 	failed  func(error)
 	// publish publishes the activities of the spaces of a project, empty when none has an activity.
 	publish func(id string, spaces map[string]ActivitySpaceState)
+	// programStatus is the program status of a plugin, "" when it declares none, and programShown shows the error text of the program
+	// value of a tab, "" when it is withdrawn (docs/spec/program-state.md#value).
+	programStatus func(plugin string) string
+	programShown  func(tab, text string)
 
 	followed map[string]*activityTab
 	errors   map[string]string
 	state    WindowActivities
+	// programs are the program states of the tabs that have one, by tab id; programErrors are the shown program errors by tab id.
+	programs      map[string]*ProgramState
+	programErrors map[string]string
 	// published are the published activities of the spaces of each project of the window, as JSON text, by project id.
 	published map[string]string
 	syncing   bool
@@ -267,15 +305,20 @@ type ActivityFollow struct {
 
 // NewActivityFollow makes the follow of the activities of a window, which reports nothing until its first Sync.
 func NewActivityFollow(observe func(name, surface string, fn func(value any)) func(), statuses func(plugin string) []string,
-	projects func() ([]ActivityProject, error), changed func(), shown func(tab, text string), failed func(error),
-	publish func(id string, spaces map[string]ActivitySpaceState)) *ActivityFollow {
-	return &ActivityFollow{observe: observe, statuses: statuses, projects: projects, changed: changed, shown: shown, failed: failed,
-		publish: publish, followed: map[string]*activityTab{}, errors: map[string]string{}, published: map[string]string{},
-		state: WindowActivities{Spaces: map[string]map[string]ActivitySpaceState{}, Tabs: map[string]string{}}}
+	programStatus func(plugin string) string, projects func() ([]ActivityProject, error), changed func(), shown func(tab, text string),
+	programShown func(tab, text string), failed func(error), publish func(id string, spaces map[string]ActivitySpaceState)) *ActivityFollow {
+	return &ActivityFollow{observe: observe, statuses: statuses, programStatus: programStatus, projects: projects, changed: changed,
+		shown: shown, programShown: programShown, failed: failed, publish: publish, followed: map[string]*activityTab{},
+		errors: map[string]string{}, published: map[string]string{}, programs: map[string]*ProgramState{},
+		programErrors: map[string]string{},
+		state:         WindowActivities{Spaces: map[string]map[string]ActivitySpaceState{}, Tabs: map[string]string{}}}
 }
 
 // State is the activities that the window derived.
 func (a *ActivityFollow) State() WindowActivities { return a.state }
+
+// Programs are the program states of the tabs of the window that have one, by tab id (docs/spec/program-state.md#status).
+func (a *ActivityFollow) Programs() map[string]*ProgramState { return a.programs }
 
 // derive derives the activities again, shows and withdraws the errors of the values and announces a change.
 func (a *ActivityFollow) derive() {
@@ -283,6 +326,7 @@ func (a *ActivityFollow) derive() {
 		return
 	}
 	tabs := map[string]string{}
+	programs := map[string]*ProgramState{}
 	for tab, follow := range a.followed {
 		statuses := make([]ActivityStatus, 0, len(follow.names))
 		for _, name := range follow.names {
@@ -304,11 +348,36 @@ func (a *ActivityFollow) derive() {
 			}
 			a.shown(tab, text)
 		}
+		if follow.programWatch == nil {
+			continue
+		}
+		program, programErr := TabProgram(follow.plugin, follow.program, tab, follow.programWatch.value)
+		if program != nil {
+			programs[tab] = program
+		}
+		programText := ""
+		if programErr != nil {
+			programText = programErr.Error()
+		}
+		if programText != a.programErrors[tab] {
+			if programText == "" {
+				delete(a.programErrors, tab)
+			} else {
+				a.programErrors[tab] = programText
+			}
+			a.programShown(tab, programText)
+		}
 	}
 	for tab := range a.errors {
 		if a.followed[tab] == nil {
 			delete(a.errors, tab)
 			a.shown(tab, "")
+		}
+	}
+	for tab := range a.programErrors {
+		if follow := a.followed[tab]; follow == nil || follow.programWatch == nil {
+			delete(a.programErrors, tab)
+			a.programShown(tab, "")
 		}
 	}
 	projects, err := a.projects()
@@ -351,10 +420,12 @@ func (a *ActivityFollow) derive() {
 		a.published[project.ID] = string(text)
 		a.publish(project.ID, spaces)
 	}
-	if reflect.DeepEqual(a.state, next) {
+	programsChanged := !reflect.DeepEqual(programs, a.programs)
+	if reflect.DeepEqual(a.state, next) && !programsChanged {
 		return
 	}
 	a.state = next
+	a.programs = programs
 	a.changed()
 }
 
@@ -375,8 +446,10 @@ func (a *ActivityFollow) Sync() {
 			}
 			stored.State.Root.eachCard(func(card activityNode) {
 				for _, tab := range card.Data.Tabs {
-					if names := a.statuses(tab.Plugin); len(names) > 0 {
-						wanted[tab.ID] = &activityTab{plugin: tab.Plugin, names: names}
+					names := a.statuses(tab.Plugin)
+					program := a.programStatus(tab.Plugin)
+					if len(names) > 0 || program != "" {
+						wanted[tab.ID] = &activityTab{plugin: tab.Plugin, names: names, program: program}
 					}
 				}
 			})
@@ -384,43 +457,57 @@ func (a *ActivityFollow) Sync() {
 	}
 	a.syncing = true
 	for tab, follow := range a.followed {
-		if want := wanted[tab]; want != nil && want.plugin == follow.plugin && slices.Equal(want.names, follow.names) {
+		if want := wanted[tab]; want != nil && want.plugin == follow.plugin && slices.Equal(want.names, follow.names) && want.program == follow.program {
 			continue
 		}
 		delete(a.followed, tab)
 		for _, watch := range follow.watches {
 			watch.stop()
 		}
+		if follow.programWatch != nil {
+			follow.programWatch.stop()
+		}
 	}
 	for tab, want := range wanted {
 		if a.followed[tab] != nil {
 			continue
 		}
-		follow := &activityTab{plugin: want.plugin, names: want.names, watches: map[string]*activityWatch{}}
+		follow := &activityTab{plugin: want.plugin, names: want.names, watches: map[string]*activityWatch{}, program: want.program}
 		a.followed[tab] = follow
 		for _, name := range want.names {
 			watch := &activityWatch{}
 			follow.watches[name] = watch
-			watch.stop = a.observe(name, tab, func(value any) {
-				if a.followed[tab] != follow {
-					return
-				}
-				// A surface delivers the JSON text of its value; a read of the status gives the decoded value.
-				if raw, isText := value.(json.RawMessage); isText {
-					var decoded any
-					if err := json.Unmarshal(raw, &decoded); err != nil {
-						a.failed(fmt.Errorf("activity: status %s of surface %s: %w", name, tab, err))
-						return
-					}
-					value = decoded
-				}
-				watch.value = value
-				a.derive()
-			})
+			watch.stop = a.observe(name, tab, a.receive(tab, follow, name, watch))
+		}
+		if want.program != "" {
+			// A surface that has not registered the program status delivers nil, which gives no program state.
+			watch := &activityWatch{}
+			follow.programWatch = watch
+			watch.stop = a.observe(want.program, tab, a.receive(tab, follow, want.program, watch))
 		}
 	}
 	a.syncing = false
 	a.derive()
+}
+
+// receive is the function that receives each value of the status name of the tab, while the follow of the tab is current. A surface
+// delivers the JSON text of its value; a read of the status gives the decoded value.
+func (a *ActivityFollow) receive(tab string, follow *activityTab, name string, watch *activityWatch) func(value any) {
+	return func(value any) {
+		if a.followed[tab] != follow {
+			return
+		}
+		if raw, isText := value.(json.RawMessage); isText {
+			var decoded any
+			if err := json.Unmarshal(raw, &decoded); err != nil {
+				a.failed(fmt.Errorf("activity: status %s of surface %s: %w", name, tab, err))
+				return
+			}
+			value = decoded
+		}
+		watch.value = value
+		a.derive()
+	}
 }
 
 // shownActivities are the activities that the window draws: those of the tabs and of the group cards of the shown space, and those of
@@ -517,6 +604,18 @@ func (s *Shell) drawActivity(c *ui.Context, name, item, activity string, size fl
 	label := s.options.Declared.ActivityNames[activity]
 	return ui.Icon(s.binder.Name(c, name, item), s.declaredIcon("0 0 16 16", paint, s.options.Declared.Icons["activity-"+activity])).
 		Size(size, size).Shrink(0).TextColor(s.activityColor(activity)).Role(ui.RoleImage).Label(label).Tooltip(label)
+}
+
+// programError shows the error text of the program value of the tab in the error banner of the window with the source `program <tab>`,
+// and withdraws it for "" (docs/spec/program-state.md#value).
+func (s *Shell) programError(tab, text string) {
+	if text == "" {
+		// silent: an error that another source showed since then stays in the banner.
+		s.errors.HideFrom(workbenchErrorPlace, "program "+tab)
+	} else {
+		s.errors.ShowFrom(workbenchErrorPlace, "program "+tab, text, "")
+	}
+	s.options.Invalidate()
 }
 
 // activityError shows the error text of the activity values of the tab in the error banner of the window with the source

@@ -154,8 +154,10 @@ func TestTheActivityOfATabFollowsTheWatchOfItsSurface(t *testing.T) {
 			}
 			return []string{"textprobe.screen"}
 		},
+		func(plugin string) string { return "" },
 		func() ([]workbench.ActivityProject, error) { return projects, nil }, func() { changes++ },
-		func(tab, text string) { shown = append(shown, [2]string{tab, text}) }, func(err error) { t.Error(err) }, publish)
+		func(tab, text string) { shown = append(shown, [2]string{tab, text}) }, func(tab, text string) {},
+		func(err error) { t.Error(err) }, publish)
 	follow.Sync()
 	if len(f.forwards) != 1 || f.forwards[0]["method"] != "status.watch" || f.forwards[0]["surface"] != "tab-a" {
 		t.Fatalf("the sync forwarded %v", f.forwards)
