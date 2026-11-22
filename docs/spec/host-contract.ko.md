@@ -1600,6 +1600,11 @@ fn invalid_json_closes_connection() {
 | `program.run.refuses-argument-not-equal-text` | text와 다른 고정 인자는 `program status argument 1 stat does not equal its text`로 실행을 거부한다. | all |
 | `program.run.refuses-open-call-id` | surface에서 아직 열린 실행이 이름하는 view call 식별자는 `program run: call 1 is already open on surface s1`로 거부되며, 다른 surface의 같은 식별자는 허용된다. | all |
 | `program.run.declaration-is-checked-at-the-boundary` | host가 거부하는 선언 member는 `programs.Lint name is not of the form [a-z][a-z0-9-]*`, `programs.lint has an unknown member extra`, `programs.lint args.0 is neither a text nor an object with the single member pattern`, `programs.lint pattern does not compile: <reason>`으로 거부되며, 올바른 선언은 program과 text slot, pattern slot을 읽는다. | all |
+| `program.run.plugin-path-runs-installed-file` | 선언한 `plugin:bin/tool`은 plugin의 설치된 version 폴더의 `bin/tool` 파일을 인자를 그대로 두고 실행하며, 작업 디렉터리는 surface의 프로젝트 폴더다. | all |
+| `program.run.plugin-path-refuses-invalid-path` | `program`이 `plugin:../tool`, `plugin:/tool`, `plugin:` 또는 `plugin:bin//tool`인 선언은 읽을 때 `programs.lint program plugin path must be a relative path of / separated segments that are not empty, . or .., without a backslash`로 거부되며, 그 선언으로 실행이 시작되지 않는다. | all |
+| `program.run.plugin-path-not-found` | 파일이 없는 `plugin:bin/missing` program의 실행은 `program not found: plugin:bin/missing`으로 실패하고, `host.program.failed`를 기록하며, 프로세스를 시작하지 않는다. | all |
+| `program.run.plugin-path-not-executable` | 실행 권한 bit가 있는 일반 파일이 아닌 `plugin:bin/tool` program의 실행은 `program plugin:bin/tool is not a regular executable file`으로 실패하고 `host.program.failed`를 기록한다. | all |
+| `install.plugin-program-file` | 설치된 version 폴더에 실행 가능한 일반 파일이 없는 `programs.run`의 `plugin:bin/tool` release는 `sok plugin install`이 `plugin probe: programs.run program plugin:bin/tool is not a regular executable file`로 거부하고, 그 파일이 실행 가능하면 설치한다. | all |
 | `sidecars.environment.start-records-the-sok-folder` | 설치된 sidecar의 sidecar channel의 시작은 level `info`의 event `host.sidecar.path` 하나를 기록하고, 그 `folder`는 host 실행 파일의 폴더이며 `sok`은 그 폴더의 `sok`이다. | all |
 
 ## Workbench cases
