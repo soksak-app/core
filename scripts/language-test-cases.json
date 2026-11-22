@@ -34,7 +34,7 @@
       "command": "go",
       "args": ["tool", "test2json", "../../../../build/language-tests/go-sok-registry.test", "-test.v=test2json", "-test.run", "^TestRegistryBuild"],
       "build": { "command": "go", "args": ["test", "-c", "-o", "../../../../build/language-tests/go-sok-registry.test", "."], "timeoutMs": 300000 },
-      "expectedTests": 7,
+      "expectedTests": 10,
       "implementationFiles": ["packages/sok/go/src/registry.go"],
       "testFiles": ["packages/sok/go/tests/registry_test.go"],
       "dependencyFiles": ["packages/sok/go/go.mod", "go.work"],

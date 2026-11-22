@@ -112,7 +112,7 @@ func (w *Workspace) roleChange(tab, id string) (*roleAnswer, error) {
 	if !textOK || !koOK {
 		return nil, fmt.Errorf("role %s holds no text or ko", id)
 	}
-	// checkRoles of roles.json guarantees the files list, so stringList reads it.
+	// silent: checkRoles of roles.json rejects a definition whose files is not a string list, so the ok result is true here.
 	files, _ := stringList(definition["files"])
 	fingerprint := RoleFingerprint(id, text, files)
 	projects, _, at, err := w.locateTab(tab)

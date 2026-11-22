@@ -171,8 +171,11 @@ func (w *Workspace) roleDefine(id string, entry Record) (Record, error) {
 	if _, err := checkRoles(path, map[string]any{"format": float64(rolesFormat), "roles": map[string]any(candidate)}, false); err != nil {
 		return nil, err
 	}
+	// silent: checkRoles above rejects an entry whose text is not a string, so the read holds the validated text.
 	text, _ := entry["text"].(string)
+	// silent: checkRoles above rejects an entry whose ko is not a string, so the read holds the validated ko.
 	ko, _ := entry["ko"].(string)
+	// silent: checkRoles above rejects an entry whose files is not a string list, so the ok result is true here.
 	files, _ := stringList(entry["files"])
 	for _, file := range files {
 		if err := checkDefinedPath(id, file); err != nil {

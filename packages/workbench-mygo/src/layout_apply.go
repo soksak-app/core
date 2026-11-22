@@ -214,6 +214,7 @@ func (s *Shell) applyLayout(value layoutApplyParam) (map[string]any, error) {
 			}
 		}
 	}
+	// silent: a root level without a leader yields the empty string, which groupLeaders reads as no leader.
 	rootLeader, _ := s.planes.Leader("")
 	before := s.planContent()
 	var named *planNode

@@ -881,6 +881,7 @@ func checkPrograms(where string, raw any) error {
 				return fmt.Errorf("%s member %s is unknown", at, member)
 			}
 		}
+		// silent: an absent or non-string program reads as empty, and the check below refuses an empty program.
 		program, _ := entry["program"].(string)
 		if program == "" || len(program) > ProgramTextMaxBytes || hasControlCharacter(program) {
 			return fmt.Errorf("%s program must be a non-empty text of at most %d bytes without a control character", at, ProgramTextMaxBytes)

@@ -60,7 +60,7 @@ func leafGroups(tree *planNode) [][]*planNode {
 	return out
 }
 
-// defaultGroupName is `그룹 <n>` for the smallest positive n that taken does not hold.
+// defaultGroupName is the Korean word for group, a space and n, for the smallest positive n that taken does not hold.
 func defaultGroupName(taken []string) string {
 	for n := 1; ; n++ {
 		if name := "그룹 " + strconv.Itoa(n); !slices.Contains(taken, name) {
@@ -71,7 +71,7 @@ func defaultGroupName(taken []string) string {
 
 // resolveGroups names and keeps the group nodes of tree (docs/spec/cli.md#planning-an-arrangement). A group keeps the group card of the plane
 // that holds the card its first card in reading order keeps, when no earlier group of the tree keeps that group card, and then it keeps
-// the name of that card; otherwise it is a new group card, named by its name or else the smallest `그룹 <n>` that no group card of the space
+// the name of that card; otherwise it is a new group card, named by its name or else the smallest default name of defaultGroupName that no group card of the space
 // has, numbered in reading order of its first card. cards holds the resolved card of each card in tree order, and order the cards of tree
 // in reading order. It sets Card and Name of each group node and returns the kept group card of each card in tree order, nil outside a kept
 // group card and for a card of a new group card.

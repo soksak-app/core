@@ -2842,6 +2842,7 @@ function planSpace() {
     unsaved: (tabId) => tabModified(tabId),
     groupNames: tree.nodes().map((node) => node.name),
     groupName: (id) => tree.node(id).name,
+    // default: a card with no parent group has no group, which the description reports as null.
     groupOf: (card) => tree.parentOf(card)?.card ?? null,
     // The plan builds on a copy of the plane without the minimum, so it reads the size of every card and judges it by the minimum.
     measure: (shape) => tree.probe(() => {
@@ -2876,6 +2877,7 @@ export function applyInLayout(params) {
   const kept = tree.snapshot();
   // default: an entry that names no kept card takes a new identifier of the plane.
   const ids = planned.ids.map((id) => id ?? tree.issue());
+  // default: an entry that names no kept group takes a new identifier of the plane.
   const groupIds = planned.groupIds.map((id) => id ?? tree.issue());
   let leader;
   try {

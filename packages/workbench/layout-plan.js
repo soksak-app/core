@@ -220,6 +220,7 @@ export function buildTree(ops, tree, ids, groupIds) {
   for (const box of boxes) if (!kept.has(box)) ops.unwrap(box);
   // The units that the withdrawn nodes leave behind; an identifier that no withdrawn node holds is a card that arrives new.
   const left = new Map();
+  // default: an identifier that no withdrawn node holds is a card that arrives new, as the comment above states.
   const arriving = (id) => left.get(id) ?? { card: id };
   // The unit at the top left of a node: a kept group card, or the card that a new group card starts with.
   const unitOf = (node) => {
@@ -266,6 +267,7 @@ export function buildTree(ops, tree, ids, groupIds) {
       // The kept group card keeps its box: its members are withdrawn but one, which takes the first unit of the tree.
       const unit = unitOf(inner);
       const members = ops.members(box);
+      // default: a unit that is not a member of the box takes the first planned member, or the first member when none is planned.
       const alone = members.includes(unit) ? unit : (members.find((id) => planned.has(id)) ?? members[0]);
       for (const id of members) if (id !== alone) left.set(id, ops.withdraw(id));
       if (unit !== alone) {
@@ -393,7 +395,7 @@ function sizing(space) {
 /**
  * The group cards of a tree (docs/spec/cli.md#planning-an-arrangement). A group keeps the group card of the plane that holds the card its
  * first card in reading order keeps, when no earlier group keeps that group card; otherwise it is a new group card. A kept group card keeps
- * its name; a new one takes its name, or the smallest `그룹 <n>` that no group of the space has, numbered in reading order of its first card.
+ * its name; a new one takes its name, or the smallest default name, the Korean word for group and a number, that no group of the space has, numbered in reading order of its first card.
  * It answers, for each group in pre-order, its kept group card or null and its name, and for each card the innermost group that holds it.
  */
 function resolveGroups(tree, order, resolved, space) {

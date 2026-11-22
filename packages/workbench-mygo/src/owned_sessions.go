@@ -405,6 +405,7 @@ func (o *OwnedSessions) authorized(caller, session string, ownerOnly bool) (*Own
 
 // sidecarOf returns the sidecar name of plugin for a request of an open session.
 func (o *OwnedSessions) sidecarOf(plugin string) string {
+	// silent: the port returns the empty name for a plugin without exactly one sidecar, and an open session always names its sidecar.
 	name, _ := o.ports.Sidecar(plugin)
 	return name
 }
@@ -421,6 +422,7 @@ func (o *OwnedSessions) listen(owner, plugin string) {
 	if o.listens[owner] != nil {
 		return
 	}
+	// silent: only a plugin that declares sessions gets an owned session, and the port names the sidecar of such a plugin.
 	name, _ := o.ports.Sidecar(plugin)
 	listen := &ownedListen{}
 	o.listens[owner] = listen

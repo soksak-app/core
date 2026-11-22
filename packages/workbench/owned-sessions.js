@@ -55,6 +55,7 @@ export async function openOwnedSession({ plugin: id, params, size }, surface) {
   const creation = crypto.randomUUID();
   const port = windowSidecar(sidecar);
   if (!port) throw new Error(`owned session sidecar unavailable: ${sidecar}`);
+  // default: an open without params sends null, the value of an absent parameter set.
   const reply = await port.send(surface, { operation: "open", session: { creation }, size: sizeBody(size), params: params ?? null });
   if (reply?.error !== undefined) throw new Error(`core.session.open: ${reply.error}`);
   if (typeof reply?.session !== "string" || reply.session === "" || reply.creation !== creation) {
@@ -99,6 +100,7 @@ function sizeToCard(entry, card) {
   if (sameSize(entry.size, size) || sameSize(entry.pending, size)) return;
   entry.pending = size;
   sendSize(entry, size)
+    // default: an error that is not an Error object is reported by its value.
     .catch((error) => report(`core.session.resize ${entry.session}: ${error?.message ?? error}`))
     .finally(() => {
       if (entry.pending === size) entry.pending = null;
@@ -185,6 +187,7 @@ function listenOwner(owner, port) {
     if (entry.dropped) stop();
   }, (error) => {
     if (listens.get(owner) === entry) listens.delete(owner);
+    // default: an error that is not an Error object is reported by its value.
     report(`core.session.ended: listen ${owner}: ${error?.message ?? error}`);
   });
 }
@@ -195,6 +198,7 @@ function unlistenOwner(owner) {
   if (!entry) return;
   listens.delete(owner);
   entry.dropped = true;
+  // silent: a registration that the host has not answered has no stop function yet, and it stops when it is answered (entry.dropped).
   entry.stop?.();
 }
 
@@ -236,6 +240,7 @@ function tabsClosed(ids) {
   for (const entry of sessions.values()) if (ids.includes(entry.shownBy)) entry.shownBy = null;
   for (const entry of [...sessions.values()]) {
     if (!ids.includes(entry.owner)) continue;
+    // default: an error that is not an Error object is reported by its value.
     endEntry(entry, "owner-closed").catch((error) => report(`core.session.end ${entry.session}: owner-closed: ${error?.message ?? error}`));
   }
 }
@@ -248,8 +253,10 @@ function restoredTabs() {
     if (node === null || node === undefined) return;
     // default: a node with cut is a split of cards, and the other nodes are cards with their tabs.
     if (node.cut !== undefined) for (const kid of node.kids) walk(kid.node);
+    // default: a card without a tab list holds no tabs to restore.
     else for (const tab of node.data?.tabs ?? []) tabs.set(tab.id, tab.plugin);
   };
+  // default: a project without spaces, or a space without a layout state, holds no tabs to restore.
   for (const project of allProjects()) for (const space of project.spaces ?? []) walk(space.layout?.state?.root);
   return tabs;
 }
@@ -258,6 +265,7 @@ let restoring = null;
 
 /** Starts the restart reconciliation once. The returned promise settles when it ends, and a failure is reported before it settles. */
 export function startOwnedSessions() {
+  // default: the reconciliation starts once, so its promise is created only while none is held, and an error without a message is reported by its value.
   restoring ??= reconcileOwnedSessions().catch((error) => report(`owned sessions: ${error?.message ?? error}`));
   return restoring;
 }
@@ -288,6 +296,7 @@ export async function reconcileOwnedSessions() {
         emitEvent("info", "workbench.session.end", { session: item.session, reason: "owner-absent" });
       }
     } catch (error) {
+      // default: an error that is not an Error object is reported by its value.
       report(`owned sessions of sidecar ${name}: ${error?.message ?? error}`);
     }
   }
