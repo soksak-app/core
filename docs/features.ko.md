@@ -171,6 +171,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [o] F1031-9 — Node reporter 색상 test가 명시적인 색상 환경을 사용한다. 상위 환경에 NO_COLOR를 지정한 상태에서 두 파일의 test 39개가 통과한다.
   - [o] F1031-10 — 표시된 오류에 맞춰 toast 테두리 색상을 적용하고 닫기 control metric을 선언하며 layout fixture에 닫기 선언을 연결한다. 관련 test 13개가 통과한다.
   - [o] F1031-11 — F1031-10 후속. Toast 닫기 metric을 포함하도록 host의 workbench 선언 사본을 갱신한다. Exposure 검사 두 개와 workbench 선언 test가 통과한다.
+- [o] F1049 — P0, F1031-6의 후속: sidecar write wait 검사가 CI의 두 macOS job에서, local에서는 약 일곱 번에 한 번 write wait 기록 없이 실패했다. 원인: buffer 검사의 fixture는 shell이 시작한 뒤에야 TERM을 무시하는데, trap 전에 온 stop이 writer가 queue의 줄을 쓰기 전에 fixture를 TERM으로 끝냈다. fixture는 trap 뒤에 ready FIFO에 한 줄을 쓰고, Go와 Rust 검사는 그 줄을 읽은 뒤에 보낸다.
 - [o] F1048 — P0, F1033-3과 F1046-4의 후속: test inventory가 F42, F45, F954에 F1033-3이 바꾼 테스트와 symbol을 적었고, F1046-4의 저장소 테스트를 claim하지 않았다. F954는 toast 테스트를 link하고, `scripts/check-administrator-rights.mjs`가 그 테스트가 판단하는 검사를 가진다.
 - [o] F1047 — P0, F1044와 F1046의 후속: Go와 Rust host library의 setup start 테스트가 identifier와 실행 파일에 mygo와 Tauri framework를 적었다. 언어 host library는 framework를 적지 않으므로 테스트는 identifier `app.soksak.example`을 쓴다.
 - [o] F1046 — P0, F1034부터 F1044까지의 후속: push gate(`make check-preflight`)가 push하지 않은 항목의 check 다섯 개에서 실패했다.

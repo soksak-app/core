@@ -88,8 +88,22 @@ impl Blocked {
             .expect("mkfifo failed");
         assert!(made.status.success());
         let received = directory.path().join("received");
-        // The sidecar ignores the terminate signal when input_end_stops is set, so the end of its input is its stop.
-        let stop = if input_end_stops { "ignore-term\n" } else { "" };
+        // The sidecar ignores the terminate signal when input_end_stops is set, so the end of its input is its stop. It then
+        // appends a line to the ready FIFO, and the check reads that line before it sends: a stop that came before the trap would
+        // end the fixture by the terminate signal before the writer wrote the queued lines.
+        let ready = directory.path().join("ready");
+        if input_end_stops {
+            let made = std::process::Command::new("mkfifo")
+                .arg(&ready)
+                .output()
+                .expect("mkfifo failed");
+            assert!(made.status.success());
+        }
+        let stop = if input_end_stops {
+            format!("ignore-term\nappend {} ready\n", ready.display())
+        } else {
+            String::new()
+        };
         directory.fixture(
             "echo",
             &format!(
@@ -115,6 +129,12 @@ impl Blocked {
             sidecars
                 .send(&owner, ECHO, &format!("s{index}"), &raw("{}"))
                 .unwrap();
+        }
+        // The first send started the fixture; the open of the ready FIFO waits for the fixture to open it, and the read for
+        // its line.
+        if input_end_stops {
+            let line = std::fs::read_to_string(&ready).expect("read the ready FIFO");
+            assert_eq!(line, "ready\n", "the fixture is not ready");
         }
         // A line larger than the pipe of the sidecar (64 KiB at most on macOS) keeps the writer inside its write, so it takes
         // no more lines from the queue; a surface line of a long root does the same. The fixture waits until the writer starts

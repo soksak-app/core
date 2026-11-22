@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1049: Go와 Rust host library의 buffer 검사는 fixture가 TERM을 무시한 뒤 쓰는 ready 줄을 기다리므로, stop이 writer가 queue의 줄을 쓰기 전에 fixture를 끝내지 않는다. Red: Go 검사가 60회 중 7회째에 write wait 없이 실패했고, 그 run은 fixture가 signal 15로 끝난 것을 기록했다. Green: Go 60회와 Rust 30회가 모두 통과한다. Rust 실패는 변경 전에 재현하지 않았다.
 - F1048: test inventory가 F42, F45, F954를 F1033-3의 toast 테스트와 symbol로 link하고, lane `administrator rights of the hosts`가 `scripts/check-administrator-rights.mjs`와 그 테스트를 claim한다. Red: `check-tests`가 오래된 link 일곱 개와 claim되지 않은 테스트를 보고했고, mygo source가 `sudo`를 적자 script 테스트가 실패했다. Green: 둘 다 통과한다.
 - F1047: Go와 Rust host library의 setup start 테스트는 identifier `app.soksak.example`과 실행 파일 `sok-example`을 쓴다. Red: `check-host-files`가 framework 이름을 보고했다. Green: 통과하고, 두 테스트도 통과한다.
 - F1046-5: host contract case `setup.host.start-changes-no-file-of-another-run`는 영어와 한국어에서 scope `all`을 가진다. Red: host test check가 scope 없는 case를 거부했다. Green: 통과한다.

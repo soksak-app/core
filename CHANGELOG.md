@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1049: The buffer checks of the Go and Rust host libraries wait for a ready line that the fixture writes after it ignores TERM, so a stop no longer ends the fixture before the writer wrote the queued lines. Red: the Go check failed in run 7 of 60 with no write wait, and the failed run recorded the exit of the fixture by signal 15. Green: 60 of 60 Go runs and 30 of 30 Rust runs pass; the Rust failure was not reproduced before the change.
 - F1048: The test inventory links F42, F45 and F954 to the toast tests and symbols of F1033-3, and the lane `administrator rights of the hosts` claims `scripts/check-administrator-rights.mjs` and its test. Red: `check-tests` reported seven stale links and the unclaimed test, and the script test failed when a mygo source named `sudo`. Green: both pass.
 - F1047: The setup start tests of the Go and Rust host libraries use the identifier `app.soksak.example` and the executable `sok-example`. Red: `check-host-files` reported the framework names. Green: it passes, and both tests pass.
 - F1046-5: The host contract case `setup.host.start-changes-no-file-of-another-run` holds the scope `all` in English and Korean. Red: the host test check rejected the case without a scope. Green: it passes.

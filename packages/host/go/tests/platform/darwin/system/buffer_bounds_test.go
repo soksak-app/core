@@ -38,7 +38,13 @@ func blockedSidecar(t *testing.T, log *host.EventLog, root string, surfaces int,
 		}
 	})
 	received := filepath.Join(directory, "received")
-	support.Fixture(t, directory, "echo", "ignore-term\nwait "+fifo+"\ndrain "+received+"\n")
+	// The fixture appends a line to the ready FIFO after it ignores TERM, and the check reads that line before it sends: a stop
+	// that came before the trap would end the fixture by TERM before the writer wrote the queued lines.
+	ready := filepath.Join(directory, "ready")
+	if err := syscall.Mkfifo(ready, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	support.Fixture(t, directory, "echo", "ignore-term\nappend "+ready+" ready\nwait "+fifo+"\ndrain "+received+"\n")
 	sidecars, err := host.NewSidecars(support.Declare(directory, `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`), directory)
 	if err != nil {
 		t.Fatal(err)
@@ -72,6 +78,11 @@ func blockedSidecar(t *testing.T, log *host.EventLog, root string, surfaces int,
 		if err := owner.Send(sidecars, support.EchoSidecar, fmt.Sprintf("s%d", i), json.RawMessage(`{}`)); err != nil {
 			t.Fatal(err)
 		}
+	}
+	// The first send started the fixture; the open of the ready FIFO waits for the fixture to open it, and the read for its line.
+	line, err := os.ReadFile(ready)
+	if err != nil || string(line) != "ready\n" {
+		t.Fatalf("the fixture is not ready: %q, %v", line, err)
 	}
 	// A line larger than the pipe of the sidecar (64 KiB at most on macOS) keeps the writer inside its write, so it takes no more
 	// lines from the queue; a surface line of a long root does the same. The fixture waits until the writer starts that line.
