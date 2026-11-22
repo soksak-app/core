@@ -520,7 +520,7 @@ func TestAViewCreatedAfterAnUpdateServesTheInstalledVersionFolder(t *testing.T) 
 	// The update installs 2.0.0, and the workbench restart closes the documents of the kept surface. The page of the kept surface
 	// starts the view again with the start values that it had.
 	writeViewPluginVersion(t, config, "2.0.0")
-	s.closeSurfaceDocumentsWith("probe-surface", func(unsafe.Pointer) {})
+	s.closeSurfaceDocumentsWith("probe-surface", "workbench-restart", func(unsafe.Pointer) {})
 	if step := views.syncSurface(t, s, "probe-surface", native, true, start); step != viewSyncCreate {
 		t.Fatalf("synchronization after the update planned %v, want the creation of the view", step)
 	}
@@ -533,6 +533,8 @@ func TestAViewCreatedAfterAnUpdateServesTheInstalledVersionFolder(t *testing.T) 
 	}
 	if len(views.createdFor) != 2 || views.createdFor[1] != native {
 		t.Fatalf("views created for %d surfaces, want the second view of the same surface", len(views.createdFor))
+	}
+}
 
 // contract: host.view.killed.is-written-on-every-end
 // A view whose document committed names the committed URL in its end record, and a view without a commit has no url field.
