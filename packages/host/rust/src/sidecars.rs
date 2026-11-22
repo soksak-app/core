@@ -6036,3 +6036,7 @@ pub fn receive_sidecar_message(trace: impl FnOnce(), handle_image: impl FnOnce()
     trace();
     handle_image()
 }
+
+#[cfg(test)]
+#[path = "sidecars_sessions_test.rs"]
+mod sidecars_sessions_test;

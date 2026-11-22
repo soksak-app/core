@@ -12,6 +12,10 @@
 // macro.
 #![recursion_limit = "256"]
 
+// The support module tests/support/sidecar_recorder.rs names the library as soksak_host, which the unit tests of src include.
+#[cfg(test)]
+extern crate self as soksak_host;
+
 use std::sync::{Arc, PoisonError};
 
 use framework::{AppHandle, Manager, Webview};

@@ -1,11 +1,9 @@
 //! Owned session queries of a persistent service: the `sessions` operation and the `sidecarSessions` bridge request
 //! (docs/spec/persistent-services.md#owned-sessions). The service harness answers hello and sessions as the protocol states.
 
-#[path = "support/folder.rs"]
+#[path = "../tests/support/folder.rs"]
 mod folder;
-#[path = "support/records.rs"]
-mod records;
-#[path = "support/sidecar_recorder.rs"]
+#[path = "../tests/support/sidecar_recorder.rs"]
 mod sidecar_recorder;
 use sidecar_recorder::SidecarRecorder;
 
@@ -14,11 +12,9 @@ use std::os::unix::net::UnixListener;
 use std::path::Path;
 use std::sync::mpsc::{Receiver, channel};
 
+use crate::sidecars::{SidecarDeclaration, SidecarSendRequest, SidecarSessionsRequest, Sidecars};
 use serde_json::value::RawValue;
 use sidecar_recorder::SendAsRecorder;
-use soksak_host::sidecars::{
-    SidecarDeclaration, SidecarSendRequest, SidecarSessionsRequest, Sidecars,
-};
 
 const ECHO: &str = "@fixture/sidecar-echo";
 

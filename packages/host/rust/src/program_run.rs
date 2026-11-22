@@ -882,3 +882,7 @@ pub fn reply(finished: &Finished) -> Option<Value> {
         })
     })
 }
+
+#[cfg(test)]
+#[path = "program_run_test.rs"]
+mod program_run_test;

@@ -599,7 +599,6 @@ func TestSurfacesListATabOfAPluginThatIsNotLoadedWithItsPlaceholderReason(t *tes
 	}
 }
 
-// contract: workbench.plugins.start-update-failure-is-shown
 func TestAFailureOfTheUpdateAtStartIsShownThroughTheErrorDisplay(t *testing.T) {
 	record := func() map[string]any {
 		return map[string]any{"version": "1.0.0", "enabled": true, "sidecars": map[string]string{}}

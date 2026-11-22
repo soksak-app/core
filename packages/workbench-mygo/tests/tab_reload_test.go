@@ -12,7 +12,6 @@ import (
 )
 
 // The core.tab.reload command restarts the view of its tab through the host, and it answers the tab.
-// contract: view.reload.restarts-once
 func TestTheReloadCommandRestartsTheViewOfItsTab(t *testing.T) {
 	stored := &surfaceHost{window: workbench.WindowView{Visible: true, Scale: 2, Width: 1200, Height: 800}}
 	var reloaded []string
@@ -39,7 +38,6 @@ func TestTheReloadCommandRestartsTheViewOfItsTab(t *testing.T) {
 }
 
 // A reload of a tab without a view is refused, and the refusal names the tab.
-// contract: view.reload.refuses-unknown-tab
 func TestTheReloadCommandRefusesAnUnknownTabWithItsId(t *testing.T) {
 	stored := &surfaceHost{window: workbench.WindowView{Visible: true, Scale: 2, Width: 1200, Height: 800}}
 	stored.extra = map[string]workbench.HostCall{"viewReload": func(_ context.Context, argument json.RawMessage) (any, error) {
@@ -72,7 +70,6 @@ func firstSurfaceOf(stored *surfaceHost, t *testing.T) string {
 }
 
 // A failed surface shows the control that runs core.tab.reload of its tab.
-// contract: view.reload.restarts-once
 func TestTheFailedSurfaceShowsAReloadControlThatRunsTheCommand(t *testing.T) {
 	stored := &surfaceHost{window: workbench.WindowView{Visible: true, Scale: 2, Width: 1200, Height: 800}}
 	var reloaded []string

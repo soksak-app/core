@@ -9,11 +9,11 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use soksak_host::program_run::{
+use crate::program_run::{
     Declaration, Declarations, End, Finished, ProgramRuns, RUNS_PER_SURFACE, Request, Slot,
 };
 
-#[path = "support/folder.rs"]
+#[path = "../tests/support/folder.rs"]
 mod folder;
 
 const SURFACE: &str = "surface-a";
@@ -408,7 +408,7 @@ fn an_argument_that_does_not_match_its_pattern_in_full_is_refused() {
 // contract: program.run.refuses-pattern-that-does-not-compile
 #[test]
 fn a_pattern_that_does_not_compile_is_refused() {
-    let error = soksak_host::program_run::parse_declarations(&serde_json::json!({
+    let error = crate::program_run::parse_declarations(&serde_json::json!({
         "run": {"program": "/bin/cat", "args": [{"pattern": "("}]}
     }))
     .unwrap_err();
@@ -576,7 +576,7 @@ fn the_end_of_a_window_ends_its_open_runs_with_window_closed() {
 // contract: program.run.declaration-is-checked-at-the-boundary
 #[test]
 fn a_declaration_is_read_with_its_slots_and_refuses_an_invalid_member() {
-    let declarations = soksak_host::program_run::parse_declarations(&serde_json::json!({
+    let declarations = crate::program_run::parse_declarations(&serde_json::json!({
         "lint": {"program": "bin/lint", "args": ["src", {"pattern": "[a-z]+"}]},
         "version": {"program": "/usr/bin/true"},
     }))
@@ -591,9 +591,8 @@ fn a_declaration_is_read_with_its_slots_and_refuses_an_invalid_member() {
     );
     assert!(declarations["version"].slots.is_empty());
 
-    let refused = |value: serde_json::Value| {
-        soksak_host::program_run::parse_declarations(&value).unwrap_err()
-    };
+    let refused =
+        |value: serde_json::Value| crate::program_run::parse_declarations(&value).unwrap_err();
     assert_eq!(
         refused(serde_json::json!({"Lint": {"program": "x"}})),
         "programs.Lint name is not of the form [a-z][a-z0-9-]*"

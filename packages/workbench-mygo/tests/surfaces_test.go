@@ -2240,7 +2240,6 @@ func errorOnlyInToast(t *testing.T, f *shellFixture, text string) {
 	walk(tree)
 }
 
-// contract: view.error.display
 // A view-stopped event of a surface whose view has made no call yet ends its loading state: the status row shows the error state, the
 // reason is written once on the error display path, and no turning ring keeps asking for frames for it (docs/spec/native-surfaces.md#view-surfaces).
 // A view-stopped event of a surface whose view has made a call keeps its state: its later failure is shown by the error display path only.
@@ -2269,7 +2268,6 @@ func TestAViewThatFailsBeforeItsFirstCallEndsItsLoadingState(t *testing.T) {
 }
 
 // A loading surface records each request of a frame with the surface that asks for it, in the frame class of the policy in force.
-// contract: workbench.frame.request.names-the-surface
 func TestALoadingSurfaceRecordsEachFrameRequestWithItsSurface(t *testing.T) {
 	stored := &surfaceHost{window: workbench.WindowView{Visible: true, Scale: 2, Width: 1200, Height: 800}}
 	stored.classes = map[string]any{}
