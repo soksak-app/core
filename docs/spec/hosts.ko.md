@@ -379,6 +379,7 @@ host는 `application.Run` 바로 앞에서 framework가 init에서 main thread�
 | H94 | 없음 | `tests/fixtures/update/Info.plist` | Rust update test는 staged bundle의 `Info.plist`를 이 fixture에서 복사한다. Go update test는 같은 document를 test 안에서 쓴다 |
 | H95 | 없음 | `tests/support/endpoint_case.rs`, `tests/support/main_thread.rs`, `tests/support/sidecar_recorder.rs`, `tests/support/tier_service.rs`, `tests/support/wire_replay.rs` | Rust integration test는 각각 별도 crate이므로 endpoint case player, main thread target의 runner, sidecar send recorder, page 없는 endpoint test의 service, wire-case producer의 공통 부분은 `tests/support/`의 module이다. Go test는 같은 부분을 한 package에 둔다: endpoint case player는 `tests/endpoint_cases_test.go`, sidecar recorder는 `tests/support/sidecars.go`, wire-case 부분은 `tests/page_wire_test.go`에 있다. Go test는 `TestMain`으로 main thread에서 실행되므로 runner가 필요 없다 |
 | H97 | 없음 | `tests/fixtures/setup/sok` | Rust host의 setup test는 이 fixture program을 application bundle의 `sok`으로 실행하고, 이 program은 `sok setup environment`의 environment를 출력한다. Go setup test는 Go host library가 module로 요구하는 Go module의 `sok`을 build한다 |
+| H104 | 없음 | `tests/plugins_start_order_test.rs` | Rust host는 plugins를 setup이 추가하는 managed state로 가지므로, 그 state 없이 시작 때 update를 시작하면 어떤 thread도 시작하기 전에 거부된다(`plugins.start-update.refused-without-plugins-state`). Go host는 plugins를 update가 시작하기 전에 있는 host 값의 member로 가지므로 그런 시작도, 이 test의 counterpart도 없다 |
 
 ### Framework 표
 

@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1093: host specification은 plugin update 시작의 Rust test를 Go counterpart 없는 row H104로 선언한다.
 - F1093, F1094: scripts/check-tests.mjs는 각 수정을 그 구현과 test에 연결한다.
 - F1095-1: core version은 모든 package와 crate manifest, Info.plist, Tauri 파일, Go와 pkg-config 선언, Cargo.lock의 workspace 항목 여섯 개, scripts/check-versions.mjs에서 0.0.48이다.
 - F1094: surface 없는 `core.tab.role`의 view watch는 page와 mygo에서 subscribe하기 전에 `status.watch for core.tab.role requires a surface`로 거부되고, view가 자기 surface로 follow하는 core status는 그 surface를 읽으며, read가 실패한 core watcher는 `core status: <error>`를 보고하고 나머지 core watcher는 계속 실행된다. 이전에는 거부된 watch가 watcher를 남겼고, 그 실패하는 read가 Wails와 Tauri에서 core watcher loop를 끝내서, 그 뒤에 watch된 core status, 곧 terminal tab이 기다리는 status가 더 값을 받지 못했다. 검증: plugin-api, page, mygo case의 Red, 그 뒤 plugin-api test, workbench test 346개, mygo workbench test와 함께 Green.
