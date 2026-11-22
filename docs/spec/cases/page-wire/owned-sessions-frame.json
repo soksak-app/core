@@ -216,6 +216,17 @@
     },
     {
       "call": {
+        "name": "sidecarListen",
+        "payload": {"sidecar": "@scope/fixture-sidecar", "id": "tab-aaaaa1", "on": true}
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
         "name": "log",
         "payload": {
           "action": "batch",

@@ -11,6 +11,9 @@ import { all as allProjects, waitForInitialProjectContext } from "./projects.js"
 /** The open sessions of this page, keyed by session identifier, in the order that they opened. */
 const sessions = new Map();
 
+/** The listener of each owner surface that has an open session: its stop function, once the host answered, and whether it was dropped. */
+const listens = new Map();
+
 const SIZE_REFUSAL = "size width, height and scale must be positive numbers";
 const isPositive = (value) => typeof value === "number" && Number.isFinite(value) && value > 0;
 
@@ -58,6 +61,7 @@ export async function openOwnedSession({ plugin: id, params, size }, surface) {
     throw new Error(`core.session.open: the sidecar reply names no session of creation ${creation}`);
   }
   sessions.set(reply.session, { session: reply.session, plugin: id, owner: surface, shownBy: null, sidecar, size: sizeBody(size), pending: null });
+  listenOwner(surface, port);
   emitEvent("info", "workbench.session.open", { session: reply.session, plugin: id, owner: surface, size: sizeBody(size) });
   return { session: reply.session };
 }
@@ -167,10 +171,68 @@ export function bindShown(session, tab, card = null) {
 }
 
 /**
+ * Listens to the messages of an owner surface while it has an open session, so that its session.ended reaches surfaceMessage
+ * (docs/spec/persistent-services.md#owned-sessions). The listener is registered once for each owner.
+ */
+function listenOwner(owner, port) {
+  if (listens.has(owner)) return;
+  const entry = { stop: null, dropped: false };
+  listens.set(owner, entry);
+  port.on(owner, (body) => {
+    if (listens.get(owner) === entry) surfaceMessage(owner, body);
+  }).then((stop) => {
+    entry.stop = stop;
+    if (entry.dropped) stop();
+  }, (error) => {
+    if (listens.get(owner) === entry) listens.delete(owner);
+    report(`core.session.ended: listen ${owner}: ${error?.message ?? error}`);
+  });
+}
+
+/** Removes the listener of an owner surface whose tab closed. A registration that the host has not answered stops when it is answered. */
+function unlistenOwner(owner) {
+  const entry = listens.get(owner);
+  if (!entry) return;
+  listens.delete(owner);
+  entry.dropped = true;
+  entry.stop?.();
+}
+
+/**
+ * Handles a message of an owner surface. A body whose event is session.ended ends the session it names with reason ended, and any other
+ * body is a reply or an event of the plugin. An invalid, unknown or foreign end is reported and changes nothing, so a repeated event is
+ * refused as an unknown session (docs/spec/persistent-services.md#owned-sessions).
+ */
+function surfaceMessage(owner, body) {
+  if (body === null || typeof body !== "object" || body.event !== "session.ended") return;
+  const { session } = body;
+  if (typeof session !== "string" || session === "") {
+    report("core.session.ended: invalid session.ended body: session");
+    return;
+  }
+  if (body.reason !== "ended") {
+    report("core.session.ended: invalid session.ended body: reason");
+    return;
+  }
+  const entry = sessions.get(session);
+  if (!entry) {
+    report(`core.session.ended ${session}: session ${session} is not open`);
+    return;
+  }
+  if (entry.owner !== owner) {
+    report(`core.session.ended ${session}: surface ${owner} does not own session ${session}`);
+    return;
+  }
+  sessions.delete(session);
+  emitEvent("info", "workbench.session.end", { session, reason: "ended" });
+}
+
+/**
  * A closed tab ends the sessions it owns with reason owner-closed, and a session that it shows is no longer shown. A failed end is
  * reported through the error display, and the session stays in the status until the sidecar ends it.
  */
 function tabsClosed(ids) {
+  for (const id of ids) unlistenOwner(id);
   for (const entry of sessions.values()) if (ids.includes(entry.shownBy)) entry.shownBy = null;
   for (const entry of [...sessions.values()]) {
     if (!ids.includes(entry.owner)) continue;
@@ -218,6 +280,7 @@ export async function reconcileOwnedSessions() {
         const owner = tabs.get(item.surface);
         if (owner !== undefined && hasPlugin(owner) && plugin(owner).sessions === name) {
           sessions.set(item.session, { session: item.session, plugin: owner, owner: item.surface, shownBy: null, sidecar: name, size: sizeBody(item.size), pending: null });
+          listenOwner(item.surface, windowSidecar(name));
           continue;
         }
         const reply = await windowSidecar(name).send(item.surface, { operation: "end", session: item.session });

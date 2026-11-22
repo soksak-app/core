@@ -188,13 +188,13 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [o] F1063-2 — Go와 Rust host store가 format 3을 읽고 쓰며 command를 실행하고 status를 publish한다. 공용 case에 대한 Red/Green test가 있고, 사람이 가진 `roles.json`은 같은 변경에서 format 3으로 고친다.
   - [ ] F1063-3 — agent skill과 MCP instructions는 role command가 `roles.json`을 쓴다고 말한다.
   - [o] F1063-4 — page와 mygo workbench는 host 요청 `roleDefine`, `roleDefinitionRemove`, `rolesStatus`로 `core.role.define`, `core.role.remove`, status `core.roles`를 등록하고, exposure에 선언한다.
-- [~] F1062 — P1, F1045 다음: surface는 어떤 tab도 갖지 않고 그 surface가 소유하는 session을 열고, 요청이 있을 때 tab이 그것을 보인다. 그래서 agent group은 화면의 자리 없이 member를 시작한다. 남은 일: F1062-2부터 F1062-6. 기다리는 것: 없음.
+- [~] F1062 — P1, F1045 다음: surface는 어떤 tab도 갖지 않고 그 surface가 소유하는 session을 열고, 요청이 있을 때 tab이 그것을 보인다. 그래서 agent group은 화면의 자리 없이 member를 시작한다. 남은 일: F1062-4. 기다리는 것: 없음.
   - [o] F1062-1 — specification은 owned session을 정한다: manifest member `sessions`, `core.session.open`, `resize`, `end`, `core.layout.open`의 open argument `session`, status `core.sessions`, event, owner와 restart 규칙, occlusion 예외.
   - [o] F1062-2 — kit의 term list에 owned session과 owner를 넣는다.
   - [o] F1062-5 — persistent services 명세가 owned session 메시지를 정한다: surface 메시지 `open`과 그 응답 `{session, creation}`, `resize`와 `end`와 각 응답, host bridge 연산 `sidecarSend`와 `sidecarSessions`.
   - [o] F1062-3 — page와 mygo workbench와 host가 command, status, event를 Red/Green test와 함께 구현한다.
   - [ ] F1062-4 — terminal plugin과 그 sidecar가 `sessions`를 선언하고 owned session을 연다. 각 저장소의 체크리스트에 기록한다.
-  - [ ] F1062-6 — page와 mygo workbench는 소유 surface가 사유 `ended`의 `session.ended`를 받으면 owned session을 끝낸다. 세션은 `core.sessions`에서 빠지고 `shownBy`는 비워지며, `workbench.session.end` 사유 `ended`가 발행되고, 알 수 없는 세션은 식별자와 함께 기록된다. 각 workbench의 Red/Green test를 둔다.
+  - [o] F1062-6 — page와 mygo workbench는 소유 surface가 사유 `ended`의 `session.ended`를 받으면 owned session을 끝낸다. 세션은 `core.sessions`에서 빠지고 `shownBy`는 비워지며, `workbench.session.end` 사유 `ended`가 발행되고, 알 수 없는 세션은 식별자와 함께 기록된다. 각 workbench의 Red/Green test를 둔다.
 - [o] F1060 — P1: mygo와 page workbench는 이전 형식 `<device>:<inode>`의 저장된 project identity를 알아보고 자기 오류로 거부했고, 이는 이전 저장 형식을 읽는 코드다. Go와 Rust host의 `projects.json` reader는 identity를 만드는 코드 옆에서, identity가 platform 형식이 아닌 기록을 `projects.json: project <root> has the identity <identity>, not <volume UUID>:<inode>`로 거부하고, workbench의 분기는 지운다.
 - [o] F1061 — P2, F1036의 후속: 한국어 문서가 계획, 파일 이름, identifier를 만드는 일에 동사 `짓다`를 썼고, 이는 실제 동작을 말하지 않는다. 문서는 동작(`만든다`, `정한다`)을 말하고, figurative verb check는 `거짓`, `몸짓`, `꼭짓점`, `남짓`, `관련짓다`, `짝을 짓다`, `이름 짓다` 밖의 `짓다`를 보고한다.
 - [o] F1059 — P1, F1033-4의 후속: 완료된 error toast capability F1033이 test inventory에 feature link가 없어서 inventory test가 거부했다. F1033은 page와 mygo workbench의 공유 toast를 그 test에 연결한다.
