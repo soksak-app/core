@@ -26,9 +26,11 @@ const projects = await import("../projects.js");
 
 setSurfaceTextSize(() => 1);
 // The plugin probe declares surface.menu, and the plugin probe-bare declares none (null, as the declaration of a plugin without it).
-registerPlugin({ id: "probe", surface: () => null, menu: [{ label: "Run", command: "probe.run" }] });
-registerPlugin({ id: "probe-bare", surface: () => null, menu: null });
-registerPlugin({ id: "fixture-unload", surface: () => null });
+registerPlugin({ id: "probe", surface: () => null, menu: [{ label: "Run", command: "probe.run" }], dependencies: {} });
+registerPlugin({ id: "probe-bare", surface: () => null, menu: null, dependencies: {} });
+// The plugin probe-reader lists other in its dependencies, so its views read and follow the project data of other.
+registerPlugin({ id: "probe-reader", surface: () => null, menu: null, dependencies: { other: "^1.0.0" } });
+registerPlugin({ id: "fixture-unload", surface: () => null, dependencies: {} });
 setPluginSettings([{ id: "probe", settings: { home: { label: "홈 주소", type: "address", default: "https://example.test" } } }]);
 globalThis.location = new URL("http://soksak.test/index.html");
 // The first flush of the events of the page reads the clock of the host, which belongs to the start of the page and not to a test.
@@ -43,7 +45,7 @@ const UNLOAD = { format: 2, maxBytes: 64 };
 // test registers belong to the plugin probe through the table of data that the registry reads (owners), and the applied frame of a
 // surface through the table frames, as the layout of the window gives them.
 const { registry } = await import("../exposure.js");
-const { declareProjectData } = await import("../plugin-data.js");
+const { declareProjectData, compareProjectData } = await import("../plugin-data.js");
 registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
 const probeExposes = {
   status: [
@@ -56,6 +58,7 @@ const probeExposes = {
 };
 registry.declare("probe", probeExposes);
 declareProjectData("probe", { note: { schema: { type: "string" }, default: "default" } });
+declareProjectData("other", { note: { schema: { type: "string" }, default: "default" } });
 const owners = new Map();
 const frames = new Map();
 const preferredSurfaces = [];
@@ -319,6 +322,35 @@ test("runtime.data.replace answers for the start project of the view and require
   assert.deepEqual(patches(h, from), [{ kind: "patch", id: "p1", patch: { plugins: { probe: { note: { format: 1, value: "kept" } } } } }]);
   assert.match((await h.call()).error.message, /^view call runtime.data.replace requires base$/);
   assert.equal(patches(h, from).length, 1);
+  await h.close();
+});
+
+// contract: project-data.dependency.reads-and-follows
+test("runtime.data.get and runtime.data.on read and follow the project data of a dependency for the start project", async () => {
+  const h = await mountView("data-dependency", { project: START_PROJECT, plugin: "probe-reader" });
+  const from = wire.calls.length;
+  // runtime.data.get {key: "note", plugin: "other"}, runtime.data.on {plugin: "other"}, and the change of the note of other that the window reads
+  assert.equal((await h.call()).result, "from other");
+  assert.equal((await h.call()).result, null);
+  assert.equal(h.sent(from, ["viewEvent"]).length, 0);
+  const change = playChange("data");
+  assert.equal(change.plugin, "other", "the change names the dependency");
+  compareProjectData([{ id: "p1", plugins: { other: { note: { format: 1, value: "from other" } } } }],
+    [{ id: "p1", plugins: { other: { note: { format: 1, value: change.value } } } }]);
+  await drained();
+  assert.deepEqual(h.sent(from, ["viewEvent"]), [["viewEvent", { generation: 1, event: "data:other", data: { key: "note" }, surface: "probe-surface" }]]);
+  await h.close();
+});
+
+// contract: project-data.dependency.refusals
+test("runtime.data.set names another plugin, runtime.data.get names a plugin that is not a dependency, and runtime.data.on names the plugin itself, and each runs nothing", async () => {
+  const h = await mountView("data-dependency-refused", { project: START_PROJECT, plugin: "probe-reader" });
+  const from = wire.calls.length;
+  // runtime.data.set {key: "note", value: "x", plugin: "other"}, runtime.data.get {key: "note", plugin: "other2"}, runtime.data.on {plugin: "probe-reader"}
+  assert.equal((await h.call()).error.message, "view call runtime.data.set other is read-only for probe-reader: a view changes only the project data of its own plugin");
+  assert.equal((await h.call()).error.message, "view call runtime.data.get other2 is not a dependency of probe-reader");
+  assert.equal((await h.call()).error.message, "view call runtime.data.on probe-reader is not a dependency of probe-reader");
+  assert.deepEqual(patches(h, from), []);
   await h.close();
 });
 
