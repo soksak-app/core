@@ -171,6 +171,12 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [o] F1031-9 — Node reporter 색상 test가 명시적인 색상 환경을 사용한다. 상위 환경에 NO_COLOR를 지정한 상태에서 두 파일의 test 39개가 통과한다.
   - [o] F1031-10 — 표시된 오류에 맞춰 toast 테두리 색상을 적용하고 닫기 control metric을 선언하며 layout fixture에 닫기 선언을 연결한다. 관련 test 13개가 통과한다.
   - [o] F1031-11 — F1031-10 후속. Toast 닫기 metric을 포함하도록 host의 workbench 선언 사본을 갱신한다. Exposure 검사 두 개와 workbench 선언 test가 통과한다.
+- [o] F1056 — P1, F1053의 후속: window check projects reader의 test가 아직 projects format 3으로 써서, reader가 format 4로 바뀐 뒤 실패했다. test는 format 4로 쓰고 format 3을 거부로 판정한다.
+- [~] F1054 — P0, F1033-4의 후속: mygo workbench는 library에서 project를 다시 열었을 때 project override 대신 common mode를 보였다. `project windows persist files, inherit settings, and isolate native state` 5회 중 3회. mygo workbench는 캐시한 project 기록의 override를 적용하고, 그 기록은 window의 쓰기를 store의 change event 때에만 받는다. page workbench는 project를 선택할 때 store를 읽는다. 남은 일: change event가 갱신하지 않은 캐시 기록으로 Red test, project를 보일 때 store 읽기, window check 반복.
+- [ ] F1055 — P1: 여러 card의 group card 요청을 plan 한 번과 apply 한 번으로 만든다. group은 `core.group.create`와 추가 card마다 layout을 읽은 뒤의 `core.layout.open`이 필요해서, agent가 한 배치에 여러 단계를 쓴다.
+  - [ ] F1055-1 — `core.layout.plan`과 `core.layout.apply`의 tree가 이름과 children을 가진 group node를 받고, plan은 group card를 보고한다. specification과 exposure 선언을 먼저 바꾼다.
+  - [ ] F1055-2 — page workbench와 mygo workbench가 계획된 group card를 만들고, 반복은 아무것도 바꾸지 않는다.
+  - [ ] F1055-3 — soksak skill 본문은 group card를 plan 한 번과 apply 한 번으로 만들고, 요청마다 command 선언을 한 번 읽는다.
 - [o] F1053 — P1, F1052의 후속: window check의 projects reader는 projects format 3만 받았는데, host는 F1006-9부터 format 4로 쓰므로 projects.json을 읽는 project window check가 모두 실패했다. reader는 format 4를 받는다.
 - [o] F1052 — P0, F1033-4의 후속: page workbench는 다른 space나 project의 저장된 layout card를 `state.cards`로 읽었는데, 저장된 tree layout에는 그 형식이 없어서 그런 space를 가진 window의 commit마다 Wails와 Tauri에서 `surface presentation failed: undefined is not an object (evaluating 'space.layout.state.cards')`로 실패했다. surface listing은 그 tab을 layout tree에서 읽는다.
 - [o] F1051 — P1, F1050의 후속: 준비된 geometry의 commit 검사가 CI에서 transaction이 present path로 commit해서 실패했다. present path와 view-join path는 모두 page가 present한 뒤에만 commit하므로(docs/spec/endpoint.md), 검사는 두 path를 모두 받는다.
