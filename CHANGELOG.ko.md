@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1055-1: `core.layout.plan`과 `core.layout.apply`의 tree는 group `{group: {name?}, tree}`를 받는다. group은 첫 카드가 유지하는 카드를 담은 group card를 유지하고, 새 group card는 `그룹 <n>`을 받으며, 어떤 group도 유지하지 않는 group card는 카드가 옮겨진 뒤 끝난다. 그래서 group card가 있는 space를 거부하지 않고 계획한다. plan은 group header를 넣어 그린 크기로 판정하고, `cards`는 각 카드의 group을 밝힌다.
 - F1059: test inventory는 F1033을 page와 mygo workbench의 toast에 연결한다. Red: `completed capability entries all have feature evidence links`가 `F1033: completed capability has no feature link`로 실패했다. Green: inventory test가 통과한다.
 - F1033-4: F1052, F1053, F1056, F1057, F1058 뒤에 오류 window check가 Wails, Tauri, mygo host에서 5회 모두 통과한다: 예외를 던지는 layout draw, 숨긴 view와 유지한 view, sidebar section, project window, plugin surface transport로 view에서 어떤 plugin도 열지 않는 파일. check는 오류 status와 application log를 판정한다. F1033이 완료되었다.
 - F1058: mygo workbench의 `core.project.activate`는 project가 보일 때 답한다. 즉시 runner로 실행하던 test는 later runner로 실행하고, layout 기록 test는 activation 뒤의 기록을 센다. activation의 layout 변경은 그 command 이름으로 기록된다. Red: `TestTheActivationAnswersWhenTheProjectIsShown`이 답 시점에 library 설정을 읽었고, F1054 뒤 mygo project window check가 5회 모두 실패했다. Green: mygo workbench test 1173개가 통과한다.
