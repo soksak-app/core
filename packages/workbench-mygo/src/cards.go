@@ -159,6 +159,7 @@ func (s *Shell) alignPlane(width, stage float32) (float32, float32) {
 		return 0, 0
 	}
 	s.planeBox = aligned
+	s.sizeChangedCards(window.Scale)
 	return float32(aligned.X - area.X), float32(aligned.Y - area.Y)
 }
 
@@ -1117,7 +1118,6 @@ func (s *Shell) describeNode(node layout.TreeNode) (LayoutNode, error) {
 	return described, nil
 }
 
-// The layout operations core.layout.open, core.layout.select, core.layout.move and core.layout.close (docs/spec/cli.md#acting-on-a-layout). Each runs in
 // describeTab describes a tab of a card as the window description and core.grid report it, with the name that its view reported.
 func (s *Shell) describeTab(data *layout.CardData, tab layout.Tab) layout.TabDescription {
 	var reported *string
@@ -1127,6 +1127,7 @@ func (s *Shell) describeTab(data *layout.CardData, tab layout.Tab) layout.TabDes
 	return data.DescribeTab(tab, reported)
 }
 
+// The layout operations core.layout.open, core.layout.select, core.layout.move and core.layout.close (docs/spec/cli.md#acting-on-a-layout). Each runs in
 // one step of the main thread, which decides and changes the layout, so the window applies them one at a time.
 
 // currentTarget is the name of the focused card, or of the active tab of the focused card, in a layout operation.
@@ -1147,7 +1148,7 @@ func (s *Shell) registerLayout() {
 		if err := s.requirePlane(); err != nil {
 			return nil, err
 		}
-		return s.openLayoutTab(value)
+		return s.layoutOpenWithSession(value)
 	})
 	command(s, "core.layout.select", func(value tabParam) (any, error) {
 		if err := s.requirePlane(); err != nil {

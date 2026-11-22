@@ -27,6 +27,7 @@ import {
   cardSidebars, resizeSidebar, settle, settleModifiedTabs, settleModifiedTabsToClose, splitCard, surfaceState, tabsOf,
   openInLayout, selectInLayout, moveInLayout, closeInLayout, planInLayout, applyInLayout, layoutDescription, surfaceSpace, activityLayout,
   cardState, createGroup, currentTree, dissolveGroup, leadLevel, moveCard, openGroupMenu, renameGroup, storedLayoutText,
+  cardSizeOf, onCardFrames,
 } from "./plane.js";
 import { emitEvent, eventAdmits } from "./page-log.js";
 import { boundedJson, cutBytes } from "@soksak/plugin-api/bounded-json.js";
@@ -55,6 +56,7 @@ import { pageIdentity } from "./page-identity.js";
 import { PLACEMENT_LAST, placementLast } from "./page-layout.js";
 import { errorToasts } from "./shown-errors.js";
 import { stateCards } from "./layout-tree.js";
+import { bindShown, cardFramesRedrawn, checkShowOwnedSession, endOwnedSession, openOwnedSession, ownedSessionsState, resizeOwnedSession, startOwnedSessions } from "./owned-sessions.js";
 
 /* Receivers of the watched core statuses. */
 const watchers = new Set();
@@ -514,6 +516,11 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   followActivation();
   onTabReports(coreChanged);
   status("core.surfaces", surfacesState);
+  // The owned sessions of this page (docs/spec/plugins.md#owned-sessions). The restart reconciliation waits for the initial project context.
+  status("core.sessions", ownedSessionsState);
+  startOwnedSessions();
+  // The frames of the cards change with each redraw of the plane; a shown session takes the frame of its card (docs/spec/plugins.md#owned-sessions).
+  onCardFrames(() => cardFramesRedrawn(cardSizeOf));
   status("core.tab.memory", () => ({ enabled: value("memorySaver"), delay: value("memorySaverDelay"), ...memory.status() }));
   status("core.drop", () => lastDrop);
   status("core.notifications", () => systemNotifications.state());
@@ -773,7 +780,20 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
     return cardState(card, summary);
   });
   // The layout operations of an agent (docs/spec/cli.md#acting-on-a-layout). Each decides and changes the layout in the turn that runs it.
-  registry.command("core.layout.open", (params) => openInLayout(params));
+  registry.command("core.layout.open", (params) => {
+    // A tab that shows a session names it in its params, and the session must belong to the plugin of the tab (docs/spec/plugins.md#owned-sessions).
+    const session = params.params?.session;
+    if (session === undefined) return openInLayout(params);
+    if (typeof session !== "string" || session === "") throw new Error("core.layout.open: session must be a session identifier");
+    if (params.plugin === undefined) throw new Error("core.layout.open: session requires plugin");
+    checkShowOwnedSession(session, params.plugin);
+    const placed = openInLayout(params);
+    bindShown(session, placed.tab, cardSizeOf(placed.tab));
+    return placed;
+  });
+  registry.command("core.session.open", (params, { surface }) => openOwnedSession(params, surface));
+  registry.command("core.session.resize", (params, { surface }) => resizeOwnedSession(params, surface));
+  registry.command("core.session.end", (params, { surface }) => endOwnedSession(params, surface));
   registry.command("core.layout.select", (params) => selectInLayout(params));
   registry.command("core.layout.move", (params) => moveInLayout(params));
   registry.command("core.layout.close", (params) => closeInLayout(params));

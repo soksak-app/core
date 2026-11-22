@@ -115,6 +115,7 @@
     "exposure.js",
     "contributions.js",
     "core-exposure.js",
+    "owned-sessions.js",
     "file-open.js",
     "focus-state.js",
     "keep-children.js",

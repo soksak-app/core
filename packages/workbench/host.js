@@ -267,6 +267,16 @@ export function retainSidecarSessions(surfaces) {
   return bridge.call("sidecarsRetain", { surfaces });
 }
 
+/**
+ * Reads the owned sessions that the persistent sidecar holds for this application, and resolves with {sessions: [{session, surface,
+ * root, creation, cols, rows}]} (docs/spec/persistent-services.md#owned-session-messages). A page without a host has no sidecar sessions,
+ * so the function returns null.
+ */
+export function sidecarSessions(sidecar) {
+  if (!bridge) return Promise.resolve(null);
+  return bridge.call("sidecarSessions", { sidecar });
+}
+
 /* Surface modules mount into this document, so every native operation is limited to an explicit surface scope
    before it crosses the host boundary. */
 export function surfaceContextRuntime(surface, declarations = {}) {

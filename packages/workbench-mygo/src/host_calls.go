@@ -117,6 +117,7 @@ func hostCalls(h *host.Host) map[string]HostCall {
 			}
 			return h.SidecarSend(ctx, call.Sidecar, call.Surface, call.Body, call.Cids, call.Answer)
 		},
+		"sidecarSessions": answerOf(h.SidecarSessions),
 		"imageCaret": func(ctx context.Context, argument json.RawMessage) (any, error) {
 			var call struct {
 				Surface, Name       string

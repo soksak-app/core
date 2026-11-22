@@ -93,6 +93,9 @@ export function installEnvironment(environmentDocument, installedDocument) {
         ink: manifest.preview?.ink ?? null,
         // default: background is an optional field of plugin.json; without it there is no background session (null).
         background: manifest.background ?? null,
+        // default: sessions is an optional field of plugin.json; without it the surfaces open no owned session (null). With it, the
+        // value is the one sidecar that the plugin declares in dependencies, which holds its owned sessions (docs/spec/plugins.md#owned-sessions).
+        sessions: manifest.sessions === true ? manifestSidecars(manifest, pluginNames)[0] : null,
         // default: surface.drop is an optional field; without it that surface does not accept drops (null).
         drop: manifest.surface?.drop ?? null,
         // default: surface.params is optional; a plugin without it opens tabs without parameters (null).

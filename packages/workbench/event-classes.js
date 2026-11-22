@@ -123,6 +123,8 @@ const EXACT = new Map([
   ["sok.replay.divergence", "frame"],
   ["sok.skill", "lifecycle"],
   ["workbench.background.session", "lifecycle"],
+  ["workbench.session.open", "lifecycle"],
+  ["workbench.session.end", "lifecycle"],
   ["workbench.call", "call"],
   ["workbench.command", "call"],
   ["workbench.fixture.step", "lifecycle"],

@@ -151,6 +151,9 @@ func (s *Shell) retainSessions() {
 	s.calls.CallInOrder("sidecar retain", "sidecarsRetain", map[string]any{"surfaces": surfaces}, func(_ any, err error) {
 		if err != nil {
 			s.fail(err)
+		} else {
+			// The retain closed the owned sessions whose owner no layout holds; they end with owner-closed (docs/spec/plugins.md#owned-sessions).
+			s.owned.Retire(liveSurfaces(surfaces))
 		}
 		s.retaining--
 		if s.retaining > 0 {

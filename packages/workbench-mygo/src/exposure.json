@@ -553,6 +553,23 @@
         }
       },
       {
+        "name": "core.sessions",
+        "description": "The owned sessions of this page: each open session with its session identifier, plugin, owner surface, and shownBy, the tab that shows it or null (docs/spec/plugins.md#owned-sessions).",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "session": { "type": "string" },
+              "plugin": { "type": "string" },
+              "owner": { "type": "string" },
+              "shownBy": { "type": ["string", "null"] }
+            },
+            "required": ["session", "plugin", "owner", "shownBy"]
+          }
+        }
+      },
+      {
         "name": "core.surfaces",
         "description": "The native surfaces of the current plane with their plugin, visibility, dimming, declared and applied frames in window coordinates, registered entries as \"<kind> <name>\", and the page status shown in the card status row: phase loading, ready, or error, and the error message. A tab of a plugin that is not loaded is reported with its plugin, visible true and placeholder set to the reason (missing, disabled, reload, refused, host, unread or params); a mounted surface reports placeholder null. state is the memory saver state of the tab: loaded, unloaded or restoring. kind is tab for the surface of a tab and section for a section surface, and sidebar is the sidebar id of a section surface or null.",
         "schema": {
@@ -4137,6 +4154,78 @@
             }
           }
         }
+      },
+      {
+        "name": "core.session.open",
+        "description": "Opens an owned session of plugin with params in a size of the width and height of a card in points and the backing scale of the window, owned by the calling surface, which the sidecar of the plugin opens; the result is {session}. The session opens with its size whatever the occlusion of the window (docs/spec/plugins.md#owned-sessions).",
+        "params": {
+          "type": "object",
+          "properties": {
+            "plugin": { "type": "string" },
+            "params": { "type": "object" },
+            "size": {
+              "type": "object",
+              "properties": {
+                "width": { "type": "number" },
+                "height": { "type": "number" },
+                "scale": { "type": "number" }
+              },
+              "required": ["width", "height", "scale"]
+            }
+          },
+          "required": ["plugin", "size"]
+        },
+        "result": {
+          "type": "object",
+          "properties": { "session": { "type": "string" } },
+          "required": ["session"]
+        }
+      },
+      {
+        "name": "core.session.resize",
+        "description": "Sets the size of an open session to the width, height and backing scale of a card. While no tab shows the session, only its owner may resize it (docs/spec/plugins.md#owned-sessions).",
+        "params": {
+          "type": "object",
+          "properties": {
+            "session": { "type": "string" },
+            "size": {
+              "type": "object",
+              "properties": {
+                "width": { "type": "number" },
+                "height": { "type": "number" },
+                "scale": { "type": "number" }
+              },
+              "required": ["width", "height", "scale"]
+            }
+          },
+          "required": ["session", "size"]
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "session": { "type": "string" },
+            "size": {
+              "type": "object",
+              "properties": {
+                "width": { "type": "number" },
+                "height": { "type": "number" },
+                "scale": { "type": "number" }
+              },
+              "required": ["width", "height", "scale"]
+            }
+          },
+          "required": ["session", "size"]
+        }
+      },
+      {
+        "name": "core.session.end",
+        "description": "Ends an open owned session. Only its owner surface may end it (docs/spec/plugins.md#owned-sessions).",
+        "params": {
+          "type": "object",
+          "properties": { "session": { "type": "string" } },
+          "required": ["session"]
+        },
+        "result": { "type": "null" }
       },
       {
         "name": "core.layout.open",

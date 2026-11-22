@@ -1723,6 +1723,25 @@ export function onRender(fn) {
   listener = fn;
 }
 
+// The receivers of each redraw of the plane that read the card frames, such as the owned sessions (docs/spec/plugins.md#owned-sessions).
+const frameListeners = new Set();
+
+/** Registers fn to run after each redraw of the plane, which is where the frames of the cards change. Returns the function that removes it. */
+export function onCardFrames(fn) {
+  frameListeners.add(fn);
+  return () => frameListeners.delete(fn);
+}
+
+/** The size of the card that shows tab in points and at the scale of the window, or null when the card is hidden or the tab is not in the layout. */
+export function cardSizeOf(tab) {
+  if (!grid || !view) return null;
+  const card = grid.cards.find((c) => tabsOf(c).some((t) => t.id === tab));
+  if (!card) return null;
+  const rect = drawnCardRects().get(card.id);
+  if (!rect || rect.w <= 0 || rect.h <= 0) return null;
+  return { width: rect.w, height: rect.h, scale: gridScale() };
+}
+
 /* The receiver for when the layout is decided to change. It is called before drawing. */
 let layouter = null;
 /* The per-card slots and the sidebar display state that the layout transaction being drawn predicted. It is null outside drawing. */
@@ -1938,6 +1957,7 @@ function build(kept) {
       notifyTextSize();
       // default: a drawing before onRender registers the receiver has nowhere to report to.
       listener?.(reason);
+      for (const fn of [...frameListeners]) fn();
     },
   });
   settle();

@@ -1,0 +1,259 @@
+{
+  "name": "owned-sessions-restart",
+  "description": "The page reads the owned sessions of its sidecar at its restart, adopts the session whose owner surface is in the restored layout, and ends the session whose owner is absent.",
+  "replay": false,
+  "reason": "The host side of the owned session messages lands with the host work of F1062-3; the producer runs this case once the host answers the owned session messages.",
+  "variables": {
+    "clock-ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-1": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-2": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-2": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-3": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-3": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-4": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-4": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-5": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-5": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-1": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "ts-us-2": {
+      "type": "integer",
+      "example": 1791000000000999,
+      "source": "page"
+    },
+    "mono-ns-2": {
+      "type": "integer",
+      "example": 5000000999,
+      "source": "page"
+    },
+    "page-identity": {
+      "type": "string",
+      "example": "25c5dd90-4c68-4c05-9a13-093a42d6c132",
+      "source": "page"
+    },
+    "trip-us-1": {
+      "type": "integer",
+      "example": 0,
+      "source": "page"
+    },
+    "resolution-us-1": {
+      "type": "integer",
+      "example": 1,
+      "source": "page"
+    }
+  },
+  "filter": [
+    "notificationState",
+    "setTheme",
+    "setMenuLanguage"
+  ],
+  "steps": [
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-1",
+          "mono_ns": "$clock-mono-ns-1"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-2",
+          "mono_ns": "$clock-mono-ns-2"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-3",
+          "mono_ns": "$clock-mono-ns-3"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-4",
+          "mono_ns": "$clock-mono-ns-4"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-5",
+          "mono_ns": "$clock-mono-ns-5"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "sidecarSessions",
+        "payload": {
+          "sidecar": "@scope/fixture-sidecar"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "sessions": [
+            {
+              "session": "ses-keep",
+              "surface": "tab-aaaaa1",
+              "root": "/work/project",
+              "creation": "c-keep",
+              "size": {"width": 640, "height": 384, "scale": 2}
+            },
+            {
+              "session": "ses-gone",
+              "surface": "tab-zzzzzz",
+              "root": "/work/project",
+              "creation": "c-gone",
+              "size": {"width": 640, "height": 384, "scale": 2}
+            }
+          ]
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "sidecarSend",
+        "payload": {
+          "sidecar": "@scope/fixture-sidecar",
+          "surface": "tab-zzzzzz",
+          "cids": [],
+          "body": {
+            "operation": "end",
+            "session": "ses-gone"
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "session": "ses-gone",
+          "ended": true
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-1",
+              "mono_ns": "$mono-ns-1",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.clock",
+              "fields": {
+                "trip_us": "$trip-us-1",
+                "resolution_us": "$resolution-us-1"
+              }
+            },
+            {
+              "ts_us": "$ts-us-1",
+              "mono_ns": "$mono-ns-1",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.session.end",
+              "fields": {
+                "session": "ses-gone",
+                "reason": "owner-absent"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ]
+}

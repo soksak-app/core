@@ -161,6 +161,7 @@ func (s *Shell) connectTabs(ports TabPorts) {
 	})
 	RegisterFileCommands(s.registry, shellFiles{s}, s.calls)
 	s.registerLayout()
+	s.registerOwnedSessions()
 	RegisterMemorySaver(s.registry, tabs.saver, ports.Enabled, ports.Delay)
 }
 

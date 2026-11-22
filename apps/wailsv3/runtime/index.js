@@ -99,6 +99,7 @@ const METHOD = {
   documentSubscribe: "DocumentSubscribe",
   documentUnsubscribe: "DocumentUnsubscribe",
   sidecarSend: "SidecarSend",
+  sidecarSessions: "SidecarSessions",
   sidecarsRetain: "SidecarsRetain",
   sidecarsReplace: "SidecarsReplace",
   sidecarsOutdated: "SidecarsOutdated",

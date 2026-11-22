@@ -59,6 +59,8 @@ type installedUnit struct {
 	// Opens holds the extensions of surface.opens, and Background the background declaration, or nil.
 	Opens      []string
 	Background *BackgroundDeclaration
+	// Sessions tells whether the plugin declares sessions, which its surfaces open as owned sessions (docs/spec/plugins.md#owned-sessions).
+	Sessions bool
 	// Activity holds the names of the statuses that declare activity, which the activity of each tab of the plugin follows
 	// (docs/spec/activity.md).
 	Activity []string
@@ -88,6 +90,7 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 					} `json:"opens"`
 				} `json:"surface"`
 				Background   *BackgroundDeclaration     `json:"background"`
+				Sessions     bool                       `json:"sessions"`
 				Exposes      json.RawMessage            `json:"exposes"`
 				Dependencies map[string]any             `json:"dependencies"`
 				Settings     map[string]json.RawMessage `json:"settings"`
@@ -109,6 +112,7 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 		unit := units[plugin.ID]
 		unit.Data = plugin.Manifest.Data
 		unit.Background = plugin.Manifest.Background
+		unit.Sessions = plugin.Manifest.Sessions
 		if plugin.Manifest.Surface != nil {
 			unit.Opens = plugin.Manifest.Surface.Opens.Extensions
 		}

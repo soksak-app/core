@@ -366,12 +366,16 @@ type Shell struct {
 	metrics  metrics
 	palette  Palette
 	registry *Registry
-	binder   *Binder
-	keys     *Shortcuts
-	calls    *Calls
-	requests *Requests
-	errors   *ShownErrors
-	sidebars *Sidebars
+	// owned holds the owned sessions of the window (owned_sessions.go).
+	owned *OwnedSessions
+	// cardFrames are the frames of the cards that the last layout change reported to the owned sessions.
+	cardFrames map[string]layout.Rect
+	binder     *Binder
+	keys       *Shortcuts
+	calls      *Calls
+	requests   *Requests
+	errors     *ShownErrors
+	sidebars   *Sidebars
 	// operated holds the side of each axis of each card that was operated last, for the time the plane stands.
 	operated map[string]map[string]layout.Side
 	grip     *heldGrip
@@ -562,6 +566,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	}
 	s.text = NewTextSize(shellText{s}, steps)
 	s.exposedFocus = NewFocus(options.Declared, func() { s.options.Invalidate() })
+	s.owned = NewOwnedSessions(s.ownedPorts())
 	s.verification = NewVerification()
 	s.events = NewEvents(EventsOptions{Calls: s.calls, Post: options.Post, Report: options.Report, Now: time.Now,
 		After: func(delay time.Duration, task func()) { time.AfterFunc(delay, task) }})
@@ -720,7 +725,7 @@ func (s *Shell) Start() {
 							s.startPlugins(func(installed bool) {
 								s.started = true
 								// After the application restarts or the window fails, the sessions of surfaces in no layout end.
-								s.retainSessions()
+								s.adoptSessions(s.retainSessions)
 								if s.changed || installed {
 									s.applyPlugins(func(bool, error) {})
 								}
