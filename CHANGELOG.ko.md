@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1064: plugin specification과 plugin API의 `validateManifest`에서 `extends`는 `data`처럼 `surface`나 `sections`를 요구한다. 그래서 section만 page로 가진 plugin도 extension point를 제공한다. Red: `extends is accepted with a surface or with sections and refused without either`가 `extends requires a surface`로 실패했다. Green: validation test 42개가 통과한다. plugin은 다음 core release로 이 변경을 받는다.
 - F1055-3: agent skill과 MCP instructions는 카드 여럿의 group card를, `core.group.create`와 카드마다 `core.layout.open`을 쓰는 대신 group을 담은 tree의 `core.layout.plan` 하나와 `core.layout.apply` 하나로 만들고, agent가 command 선언을 요청마다 한 번 읽는다고 말한다. skill test가 통과한다.
 - F1055-2: page와 mygo workbench는 group을 담은 tree를 계획하고 적용한다. group은 식별자와 이름을 가진 자기 group card를 유지하고, 새 group card는 그 이름이나 `그룹 <n>`을 받으며, 어떤 group도 유지하지 않는 group card는 끝나고, 계획은 group header를 넣어 그린 크기로 판정한다. workbench case `layout.apply.groups`와 `layout.plan.group-refusals`가 양쪽을 시험한다. Red: group test가 page에서 `tree has the unknown member group`으로, mygo에서 group card가 있는 space의 거부로 실패했다. Green: page workbench test 1736개와 mygo workbench test 1176개가 통과한다.
 - F1063-1: agent role specification은 command `core.role.define`과 `core.role.remove`, status `core.roles`, `roles.json` format 3을 정한다. format 3의 role은 fingerprint가 포함하고 role file이 나열하는 절대 경로 `files`를 밝힌다. host contract와 공용 case가 이를 따른다.

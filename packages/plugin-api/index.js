@@ -694,7 +694,7 @@ export function validateManifest(manifest) {
     checkDependencies(where, manifest.dependencies);
   }
   if (manifest.extends !== undefined) {
-    if (manifest.surface === undefined) throw new Error(`${where}: extends requires a surface`);
+    if (manifest.surface === undefined && manifest.sections === undefined) throw new Error(`${where}: extends requires a surface or sections`);
     checkExtends(where, manifest.extends);
   }
   if (manifest.contributes !== undefined) checkContributes(where, id, manifest.contributes);

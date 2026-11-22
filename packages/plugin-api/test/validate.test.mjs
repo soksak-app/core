@@ -453,10 +453,17 @@ test("a provider declares extension points and a contributor may consist of cont
   assert.equal(validateManifest({ ...side, contributes: contributor.contributes }).contributes["probe.language"].length, 1);
 });
 
+test("extends is accepted with a surface or with sections and refused without either", () => {
+  assert.equal(validateManifest({ ...side, extends: { language: point } }).extends.language.version, "1.0.0");
+  assert.throws(
+    () => validateManifest({ id: "bare", name: "Bare", description: "검사용 확장.", extends: { language: point } }),
+    /extends requires a surface or sections$/,
+  );
+});
+
 test("extension points and contributions are rejected for each invalid field", () => {
   const item = contributor.contributes["probe.language"][0];
   for (const [manifest, error] of [
-    [{ ...side, extends: { language: point } }, /extends requires a surface/],
     [{ ...card, extends: [] }, /extends must be an object/],
     [{ ...card, extends: { Language: point } }, /invalid extension point Language/],
     [{ ...card, extends: { language: { ...point, version: "1.0" } } }, /extension point language version must be x.y.z/],

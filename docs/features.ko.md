@@ -173,6 +173,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [o] F1031-11 — F1031-10 후속. Toast 닫기 metric을 포함하도록 host의 workbench 선언 사본을 갱신한다. Exposure 검사 두 개와 workbench 선언 test가 통과한다.
 - [o] F1057 — P1, F1052의 후속: F1052가 `surface-listing.js`로 옮긴 저장 layout tab 나열에 data 없는 card의 nullish 기본값이 이유 없이 남아 있어서 fallback 검사가 거부했다. 그 기본값에 data 없는 저장 card는 tab이 없다는 이유를 적었다.
 - [o] F1056 — P1, F1053의 후속: window check projects reader의 test가 아직 projects format 3으로 써서, reader가 format 4로 바뀐 뒤 실패했다. test는 format 4로 쓰고 format 3을 거부로 판정한다.
+- [o] F1064 — P1: manifest 표는 `extends`에 `surface`를 요구한다. 그러나 section도 view이고 그 page는 `runtime.contributions`로 extension point에 연결된 항목을 읽으며, `data`는 이미 `surface`나 `sections`를 요구한다. 그래서 section만 page로 가진 plugin은 extension point를 제공할 수 없다. `extends`는 specification과 manifest validation에서 `surface`나 `sections`를 요구한다. 이 변경은 plugin API의 다음 core release로 plugin에 전달된다.
 - [~] F1063 — P1, F1045 다음: plugin은 선언된 command로 role을 정의, 변경, 삭제하고 role을 status로 읽으며, role은 그 agent가 읽는 파일을 밝힌다. 남은 일: F1063-2부터 F1063-3. 기다리는 것: 없음.
   - [o] F1063-1 — specification은 `core.role.define`, `core.role.remove`, status `core.roles`, `files`가 있는 `roles.json` format 3, `files`를 포함한 fingerprint, role file의 파일 목록 block을 host contract case, 공용 case와 함께 정한다.
   - [ ] F1063-2 — Go와 Rust host store가 format 3을 읽고 쓰며 command를 실행하고 status를 publish한다. 공용 case에 대한 Red/Green test가 있고, 사람이 가진 `roles.json`은 같은 변경에서 format 3으로 고친다.
