@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1059: test inventory는 F1033을 page와 mygo workbench의 toast에 연결한다. Red: `completed capability entries all have feature evidence links`가 `F1033: completed capability has no feature link`로 실패했다. Green: inventory test가 통과한다.
 - F1033-4: F1052, F1053, F1056, F1057, F1058 뒤에 오류 window check가 Wails, Tauri, mygo host에서 5회 모두 통과한다: 예외를 던지는 layout draw, 숨긴 view와 유지한 view, sidebar section, project window, plugin surface transport로 view에서 어떤 plugin도 열지 않는 파일. check는 오류 status와 application log를 판정한다. F1033이 완료되었다.
 - F1058: mygo workbench의 `core.project.activate`는 project가 보일 때 답한다. 즉시 runner로 실행하던 test는 later runner로 실행하고, layout 기록 test는 activation 뒤의 기록을 센다. activation의 layout 변경은 그 command 이름으로 기록된다. Red: `TestTheActivationAnswersWhenTheProjectIsShown`이 답 시점에 library 설정을 읽었고, F1054 뒤 mygo project window check가 5회 모두 실패했다. Green: mygo workbench test 1173개가 통과한다.
 - F1054: mygo workbench는 project를 보일 때 store snapshot을 읽으므로, library에서 다시 연 project는 쓰기의 change event가 오기 전에도 store의 override를 보인다. Red: `TestAProjectOpenedFromTheLibraryShowsItsOverrides`가 낡은 기록으로 window check와 같은 `mode: dark`를 보였다. Green: 그 test와 mygo workbench test 1172개가 통과한다.
