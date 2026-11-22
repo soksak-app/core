@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1084: page와 mygo에서 params가 owned session을 적은 core.layout.apply의 새 탭은 세션을 보이고 카드 크기를 보내며, apply는 열려 있지 않은 세션을 거절한다.
 - F1083: end-to-end check는 `core.grid`의 tab을 member `tab`으로 찾고, groups specification의 `core.grid` tab 목록은 `program`을 적는다.
 - F1082-2: 재시작 뒤 session이 돌아오지 않은 복원된 tab은 page와 mygo에서 `restored tab <tab>: session <id> is not open`을 보이고, page는 adopt된 session을 그 복원된 tab에 보인다.
 - F1082-1: Wails, mygo, Tauri에서 quit은 close-owner와 shutdown 없이 각 persistent service의 연결을 끝내므로, service와 그 owned session이 quit 뒤에도 남고 다음 시작이 다시 붙는다.

@@ -132,8 +132,12 @@ func newTabShellWithState(t *testing.T, stored *storedHost, refused error) *tabS
 		}
 		return "QUFBQQ==", nil
 	}
-	table["sidecarListen"] = record("listen")
-	table["sidecarSend"] = record("send")
+	// A fixture that answers the sidecar calls itself, as the owned sessions need, keeps its own calls.
+	for name, kind := range map[string]string{"sidecarListen": "listen", "sidecarSend": "send"} {
+		if _, own := stored.extra[name]; !own {
+			table[name] = record(kind)
+		}
+	}
 	// A fixture without its own document has the plugin notes, which holds the tabs.
 	installed := `{"plugins": [{"id": "notes", "package": "@scope/plugin-notes", "version": "1.0.0", "manifest": {"id": "notes", "name": "노트", "description": "notes", "mark": "n", "icon": "<path d=\"M1 1h14\"/>",
 			"surface": {"composition": {"kind": "view", "page": "ui/index.html"}, "params": {"type": "object", "properties": {"path": {"type": "string"}}}}}}]}`

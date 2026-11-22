@@ -475,6 +475,23 @@ export function installErrorExposure() {
   return errors;
 }
 
+/**
+ * Checks a new tab entry of core.layout.apply: a tab whose params name a session shows it, as a tab of core.layout.open does, so the
+ * session must be open and belong to the plugin of the tab (docs/spec/plugins.md#owned-sessions).
+ */
+export function applySessionCheck(entry) {
+  const session = entry.params?.session;
+  if (session === undefined) return;
+  if (typeof session !== "string" || session === "") throw new Error("core.layout.apply: session must be a session identifier");
+  checkShowOwnedSession(session, entry.plugin);
+}
+
+/** Records that the new tab of core.layout.apply shows the session that its params name, and sizes the session to its card. */
+export function applySessionShow(tab, entry) {
+  const session = entry.params?.session;
+  if (session !== undefined) bindShown(session, tab, cardSizeOf(tab));
+}
+
 export async function installCoreExposure({ library, renames, chrome, drawn, memorySaver }) {
   // The core entries read the memory saver (core.tab.memory, core.surfaces, the tab commands), so a page without it is refused
   // before any entry is registered.
@@ -816,7 +833,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   registry.command("core.layout.close", (params) => closeInLayout(params));
   // The plan and the apply of a whole arrangement (docs/spec/cli.md#planning-an-arrangement).
   registry.command("core.layout.plan", (params) => planInLayout(params));
-  registry.command("core.layout.apply", (params) => applyInLayout(params));
+  registry.command("core.layout.apply", (params) => applyInLayout(params, applySessionCheck, applySessionShow));
   registry.command("core.tab.select", ({ tab }) => { trace("action", { kind: "tab.select", tab }); selectTab(tab); });
   // The role handshake of a tab (docs/spec/agent-roles.md#change-of-a-running-agent): the ordered change and the confirmation run
   // in the host store; the confirmation names no tab, because it runs on the surface of its caller.

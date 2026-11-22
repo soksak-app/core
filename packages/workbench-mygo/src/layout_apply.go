@@ -195,6 +195,12 @@ func (s *Shell) applyLayout(value layoutApplyParam) (map[string]any, error) {
 	if !planned.Feasible {
 		return nil, fmt.Errorf("%s", *planned.Reason)
 	}
+	// A new tab whose params name a session shows it, as a tab of core.layout.open does, so the session must be open before the layout
+	// changes (docs/spec/plugins.md#owned-sessions).
+	if err := s.checkPlannedSessions(planned.Tree); err != nil {
+		return nil, err
+	}
+	var showing [][2]string
 	held := map[string]layout.Tab{}
 	for _, id := range s.planContent() {
 		data, err := s.cardData(id)
@@ -268,6 +274,13 @@ func (s *Shell) applyLayout(value layoutApplyParam) (map[string]any, error) {
 				if entry.Params != nil {
 					tab.Rest["params"] = entry.Params
 				}
+				session, err := sessionOfParams(entry.Params)
+				if err != nil {
+					return nil, err
+				}
+				if session != "" {
+					showing = append(showing, [2]string{tab.ID, session})
+				}
 				tabs = append(tabs, tab)
 			}
 			id := ids[k]
@@ -328,6 +341,13 @@ func (s *Shell) applyLayout(value layoutApplyParam) (map[string]any, error) {
 		return nil, err
 	}
 	s.showPlane(tree)
+	for _, pair := range showing {
+		s.owned.Show(pair[0], pair[1], s.cardSizeOf(pair[0]), func(err error) {
+			if err != nil {
+				s.fail(err)
+			}
+		})
+	}
 	// The focus takes the first content card in workbench order, which is no window sidebar.
 	for _, card := range s.contentCards() {
 		if !isPlace(card.ID) {
@@ -354,4 +374,29 @@ func (s *Shell) applyLayout(value layoutApplyParam) (map[string]any, error) {
 		return nil, err
 	}
 	return map[string]any{"tree": applied.Tree, "cards": applied.Cards, "kept": planned.Kept, "closed": planned.Closed}, nil
+}
+
+// checkPlannedSessions refuses a tree whose new tab names a session in its params that is not open.
+func (s *Shell) checkPlannedSessions(node *planNode) error {
+	if node.Group != nil {
+		return s.checkPlannedSessions(node.Group.Tree)
+	}
+	for _, child := range node.Children {
+		if err := s.checkPlannedSessions(child); err != nil {
+			return err
+		}
+	}
+	for _, entry := range node.Tabs {
+		if entry.Tab != "" {
+			continue
+		}
+		session, err := sessionOfParams(entry.Params)
+		if err != nil {
+			return err
+		}
+		if session != "" && !s.owned.IsOpen(session) {
+			return fmt.Errorf("session %s is not open", session)
+		}
+	}
+	return nil
 }

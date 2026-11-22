@@ -2868,11 +2868,14 @@ export function planInLayout(params) {
 /**
  * core.layout.apply: builds the plan of its tree with the operations of the size rule on the plane, moves the existing tabs into their
  * cards, opens the new tabs, closes the tabs of closed and focuses the first card of the tree. A plan that is not feasible changes
- * nothing and fails with its reason.
+ * nothing and fails with its reason. check runs on each new tab entry before the layout changes and refuses by throwing, and opened runs
+ * on the identifier and the entry of each new tab after the layout settled.
  */
-export function applyInLayout(params) {
+export function applyInLayout(params, check = () => {}, opened = () => {}) {
   const planned = planArrangement(params, planSpace());
   if (!planned.feasible) throw new Error(planned.reason);
+  const entries = (node) => (node.group ? entries(node.tree) : node.direction ? node.children.flatMap(entries) : node.tabs);
+  for (const entry of entries(planned.tree)) if (entry.tab === undefined) check(entry);
   const held = new Map(contentCards().flatMap((card) => tabsOf(card).map((t) => [t.id, t])));
   const kept = tree.snapshot();
   // default: an entry that names no kept card takes a new identifier of the plane.
@@ -2887,15 +2890,18 @@ export function applyInLayout(params) {
     throw error;
   }
   let k = 0;
+  const created = [];
   // The tree of the result names each tab by its identifier, the new tabs included, and each group card by its name.
   const place = (node) => {
     if (node.group) return { group: { name: node.group.name }, tree: place(node.tree) };
     if (node.direction) return { direction: node.direction, children: node.children.map(place) };
     const tabs = node.tabs.map((entry) => (entry.tab !== undefined ? held.get(entry.tab) : newTab(entry.plugin, entry.params, null, "layout apply")));
+    const fresh = node.tabs.flatMap((entry, index) => (entry.tab === undefined ? [[tabs[index].id, entry]] : []));
     // A kept card keeps the rest of its data, its text size and its sidebars; default: a new card has no data.
     const id = ids[k++];
     // default: a card that arrives new has no earlier data to keep.
     grid.setData(id, { ...(grid.card(id).data ?? {}), tabs, activeId: tabs[node.active].id });
+    created.push(...fresh);
     return { tabs: tabs.map((t) => ({ tab: t.id })), active: node.active };
   };
   const named = place(planned.tree);
@@ -2904,6 +2910,7 @@ export function applyInLayout(params) {
   tree = readGroupTree({ state: grid.toJSON(), leader, lastCard: tree.last }, treeOptions(), grid);
   focusOn(ids[readingOrder(planned.tree)[0]]);
   settle();
+  for (const [tab, entry] of created) opened(tab, entry);
   const applied = planArrangement({ tree: named }, planSpace());
   return { tree: applied.tree, cards: applied.cards, kept: planned.kept, closed: planned.closed };
 }
