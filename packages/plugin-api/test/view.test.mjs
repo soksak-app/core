@@ -853,6 +853,9 @@ const BRIDGE_ACTIONS = {
   "view.bridge.sidecar-send": ["create", "sidecar-send", "host-reply"],
   "view.bridge.sidecar-subscriptions": ["create", "sidecar-subscribe", "host-reply", "sidecar-subscribe", "host-reply", "host-event", "host-event", "host-event"],
 };
+// The open-call reports of the start records of a view: each of the five clock requests and the batch opens one call that its reply
+// closes (support/log-host.mjs).
+const START_OPEN_CALLS = Array.from({ length: 6 }, () => [1, 0]).flat();
 const OPEN_CALL_COUNTS = {
   "view.bridge.ready-and-request-reply": [1, 0],
   "view.bridge.events-delivered-in-order": [],
@@ -941,7 +944,9 @@ test("published view bridge cases match calls, replies, events, and refusals", a
       await handler.log.until((events) => events.some(({ event }) => event === "page.theme.applied"));
       await new Promise((resolve) => setImmediate(resolve));
       assert.equal(bridge.calls.openCalls().count, 0, "the start records left a call open");
-      reports.length = 0;
+      // Each start log call (five clock requests and one batch) opens one call and its reply closes it, and nothing else is reported.
+      assert.deepEqual(reports.map(({ kind }) => kind), START_OPEN_CALLS.map(() => "open-calls"), "the start records reported more than their calls");
+      assertOpenCallSequence(reports, globalThis.window.location.host, START_OPEN_CALLS);
       subtest.after(async () => {
         bridge.calls.peerLost("surface-closed");
         await new Promise((resolve) => setImmediate(resolve));
@@ -1039,7 +1044,7 @@ test("published view bridge cases match calls, replies, events, and refusals", a
         assert.deepEqual(plain(received), item.steps.slice(1).map((step) => step.output));
         await subscription.dispose;
       }
-      assertOpenCallSequence(reports, globalThis.window.location.host, OPEN_CALL_COUNTS[item.id]);
+      assertOpenCallSequence(reports, globalThis.window.location.host, [...START_OPEN_CALLS, ...OPEN_CALL_COUNTS[item.id]]);
     });
   }
 });
