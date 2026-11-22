@@ -22,7 +22,7 @@ for (const app of Object.values(APPS)) {
     await s.run(`${START_PLUGIN}.notify`, { text: "PRESS-NOTICE", policy: "tab" }, hidden);
     await s.until("core.grid", (grid) => cardOf(grid, hidden).tabs.find((item) => item.tab === hidden).notice === "PRESS-NOTICE",
       "the tab out of view did not show a tab notice");
-    const index = (await s.get("core.grid")).cards.flatMap((card) => card.tabs).findIndex((item) => item.id === hidden);
+    const index = (await s.get("core.grid")).cards.flatMap((card) => card.tabs).findIndex((item) => item.tab === hidden);
     if (index < 0) throw new Error("the tab out of view is not rendered");
     const tab = await s.rect("core.card.tab", index);
     await s.click(tab.document.x + tab.x + tab.width / 2, tab.document.y + tab.y + tab.height / 2);

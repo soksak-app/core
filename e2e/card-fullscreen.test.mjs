@@ -170,7 +170,7 @@ for (const app of Object.values(APPS)) {
     let displayed = 0;
     let stopped;
     try {
-      for (const selected of [other.id, card.active]) {
+      for (const selected of [other.tab, card.active]) {
         // The tab elements are numbered across every card in the order of core.grid, the hidden cards of fullscreen too.
         const rect = await s.rect("core.card.tab", tabElementIndex(added, selected));
         await s.click((rect.document?.x ?? 0) + rect.x + rect.width / 2,

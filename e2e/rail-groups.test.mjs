@@ -8,7 +8,7 @@ import { fresh } from "./fixture.mjs";
 for (const app of Object.values(APPS)) test(`${app.name}: rail groups follow adjacent, detached, fullscreen and restored cards`, { timeout: 90000 }, async (t) => {
   const s = await open(t, app);
   const { surface, plugin } = await fresh(s);
-  const own = (await s.get("core.grid")).cards.find((card) => card.tabs?.some((item) => item.id === surface)).id;
+  const own = (await s.get("core.grid")).cards.find((card) => card.tabs?.some((item) => item.tab === surface)).id;
   await keepCommonSettings(s);
   await s.run("core.settings.theme", { name: "midnight", mode: "dark" });
   // The right override of the layout probe, a stored set of its sections, ties the right fixed sidebar to the card of the start tab.
@@ -35,7 +35,7 @@ for (const app of Object.values(APPS)) test(`${app.name}: rail groups follow adj
   // In the default layout, the card of the start tab adjoins the right fixed sidebar.
   await record("adjacent", () => s.run("core.card.focus", { card: own }), 1);
   const { tab } = await s.run("core.card.split", { card: own, side: "right", plugin });
-  const split = (await s.get("core.grid")).cards.find((card) => card.tabs.some((item) => item.id === tab));
+  const split = (await s.get("core.grid")).cards.find((card) => card.tabs.some((item) => item.tab === tab));
   assert.ok(split, "the split card is missing");
   s.cleanupSteps(
     async () => {

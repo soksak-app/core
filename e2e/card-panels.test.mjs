@@ -229,8 +229,8 @@ for (const app of Object.values(APPS)) {
     }
 
     // Link blocking: even when the active tab is changed to another plugin, the assigned set stays the same.
-    await s.run("core.tab.select", { tab: other.id });
-    await s.until("core.grid", (value) => value.cards.find((item) => item.id === card0.id)?.active === other.id,
+    await s.run("core.tab.select", { tab: other.tab });
+    await s.until("core.grid", (value) => value.cards.find((item) => item.id === card0.id)?.active === other.tab,
       "the tab did not switch");
     const afterGrid=await s.get('core.grid');
     assert.deepEqual(geometry(afterGrid),geometry(grid),'tab selection changed internal or external card geometry');

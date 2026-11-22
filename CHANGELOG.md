@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1083: The end-to-end checks find a tab of `core.grid` by its member `tab`, and the tab list of `core.grid` in the groups specification names `program`.
 - F1082-2: A restored tab whose session did not return after a restart shows `restored tab <tab>: session <id> is not open` on the page and on mygo, and the page shows the adopted session in its restored tab.
 - F1082-1: A quit ends the connection of each persistent service without close-owner and shutdown on Wails, mygo and Tauri, so the service and its owned sessions outlive the quit and the next start reattaches them.
 - F1081: The input guard contract judges only a shell that the session started while it runs no command.
