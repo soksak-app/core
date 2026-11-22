@@ -107,6 +107,75 @@ func (s *Shell) registerOwnedSessions() {
 		}
 		s.owned.End(surface, value.Session, func(err error) { answer(nil, err) })
 	})
+	type textParam struct {
+		Session string  `json:"session"`
+		Text    *string `json:"text"`
+	}
+	s.registry.CommandLaterOnSurface("core.session.input", func(raw json.RawMessage, surface string, answer func(any, error)) {
+		value, err := params[textParam](raw)
+		if err != nil {
+			answer(nil, fmt.Errorf("core.session.input: %w", err))
+			return
+		}
+		if surface == "" {
+			answer(nil, fmt.Errorf("core.session.input requires the surface of its caller"))
+			return
+		}
+		if value.Text == nil {
+			answer(nil, fmt.Errorf("core.session.input text must be a string"))
+			return
+		}
+		s.owned.Input(surface, value.Session, *value.Text, func(err error) {
+			if err != nil {
+				answer(nil, err)
+				return
+			}
+			answer(map[string]any{}, nil)
+		})
+	})
+	s.registry.CommandLaterOnSurface("core.session.submit", func(raw json.RawMessage, surface string, answer func(any, error)) {
+		value, err := params[textParam](raw)
+		if err != nil {
+			answer(nil, fmt.Errorf("core.session.submit: %w", err))
+			return
+		}
+		if surface == "" {
+			answer(nil, fmt.Errorf("core.session.submit requires the surface of its caller"))
+			return
+		}
+		if value.Text == nil {
+			answer(nil, fmt.Errorf("core.session.submit text must be a string"))
+			return
+		}
+		s.owned.Submit(surface, value.Session, *value.Text, func(err error) {
+			if err != nil {
+				answer(nil, err)
+				return
+			}
+			answer(map[string]any{}, nil)
+		})
+	})
+	type readParam struct {
+		Session string `json:"session"`
+	}
+	s.registry.CommandLaterOnSurface("core.session.read", func(raw json.RawMessage, surface string, answer func(any, error)) {
+		value, err := params[readParam](raw)
+		if err != nil {
+			answer(nil, fmt.Errorf("core.session.read: %w", err))
+			return
+		}
+		if surface == "" {
+			answer(nil, fmt.Errorf("core.session.read requires the surface of its caller"))
+			return
+		}
+		s.owned.Read(surface, value.Session, func(screen json.RawMessage, err error) {
+			if err != nil {
+				answer(nil, err)
+				return
+			}
+			answer(screen, nil)
+		})
+	})
 	s.registry.Status("core.sessions", func() any { return s.owned.Status() })
 }
 

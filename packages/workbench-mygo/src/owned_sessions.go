@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 )
 
 // OwnedSidecar is the port of the persistent sidecar of owned sessions.
@@ -70,6 +71,8 @@ type OwnedSession struct {
 	Session, Plugin, Owner string
 	Size                   Size
 	ShownBy                string
+	// Program is the program state reported by the sidecar (idle, working or blocked), or "" while none is reported.
+	Program string
 }
 
 // OwnedSessions holds the owned sessions of a window (docs/spec/plugins.md#owned-sessions). A session is open from its open reply until
@@ -202,6 +205,85 @@ func (o *OwnedSessions) Resize(caller, session string, size Size, answer func(er
 	})
 }
 
+// Input types text into session as given. Only its owner may call it (docs/spec/plugins.md#owned-sessions).
+func (o *OwnedSessions) Input(caller, session, text string, answer func(error)) {
+	current, err := o.ownedBy(caller, session)
+	if err != nil {
+		answer(err)
+		return
+	}
+	o.named(current, map[string]any{"operation": "input", "session": session, "text": text}, answer)
+}
+
+// Submit pastes text into session and then sends Enter as a separate input. A text with CR or LF is refused before any request, so
+// that Enter is the only line end. Only its owner may call it.
+func (o *OwnedSessions) Submit(caller, session, text string, answer func(error)) {
+	current, err := o.ownedBy(caller, session)
+	if err != nil {
+		answer(err)
+		return
+	}
+	if strings.ContainsAny(text, "\r\n") {
+		answer(errors.New("core.session.submit text must not contain CR or LF"))
+		return
+	}
+	o.named(current, map[string]any{"operation": "paste", "session": session, "text": text}, func(err error) {
+		if err != nil {
+			answer(err)
+			return
+		}
+		o.named(current, map[string]any{"operation": "input", "session": session, "text": "\r"}, answer)
+	})
+}
+
+// Read answers the screen of session as the sidecar replies it, unchanged when the reply states no error. Only its owner may call it.
+func (o *OwnedSessions) Read(caller, session string, answer func(json.RawMessage, error)) {
+	current, err := o.ownedBy(caller, session)
+	if err != nil {
+		answer(nil, err)
+		return
+	}
+	o.request(o.ports.Port(o.sidecarOf(current.Plugin)), current.Owner, map[string]any{"operation": "read", "session": session}, func(reply json.RawMessage, err error) {
+		if err == nil {
+			err = ownedReplyError(reply)
+		}
+		if err != nil {
+			answer(nil, err)
+			return
+		}
+		answer(reply, nil)
+	})
+}
+
+// ownedBy returns the open session of session when caller is its owner; any other caller is refused before a sidecar request.
+func (o *OwnedSessions) ownedBy(caller, session string) (*OwnedSession, error) {
+	current := o.sessions[session]
+	if current == nil {
+		return nil, fmt.Errorf("session %s is not open", session)
+	}
+	if caller != current.Owner {
+		return nil, fmt.Errorf("session %s is owned by %s", session, current.Owner)
+	}
+	return current, nil
+}
+
+// named sends body to the owner of current and answers with its failure. The reply must name the session of current, and a reply that
+// states an error fails with that error.
+func (o *OwnedSessions) named(current *OwnedSession, body map[string]any, answer func(error)) {
+	o.request(o.ports.Port(o.sidecarOf(current.Plugin)), current.Owner, body, func(reply json.RawMessage, err error) {
+		var named struct {
+			Session string `json:"session"`
+		}
+		if err == nil {
+			err = ownedReplyOf(reply, &named)
+		}
+		if err == nil && named.Session != current.Session {
+			err = fmt.Errorf("the sidecar reply names no session %s", current.Session)
+		}
+		answer(err)
+	})
+}
+
 // End ends session. Only its owner may end it.
 func (o *OwnedSessions) End(caller, session string, answer func(error)) {
 	current, err := o.authorized(caller, session, true)
@@ -266,7 +348,11 @@ func (o *OwnedSessions) Status() []map[string]any {
 		if current.ShownBy != "" {
 			shown = current.ShownBy
 		}
-		list = append(list, map[string]any{"session": current.Session, "plugin": current.Plugin, "owner": current.Owner, "shownBy": shown})
+		var program any
+		if current.Program != "" {
+			program = map[string]any{"state": current.Program}
+		}
+		list = append(list, map[string]any{"session": current.Session, "plugin": current.Plugin, "owner": current.Owner, "shownBy": shown, "program": program})
 	}
 	return list
 }
@@ -467,7 +553,14 @@ func (o *OwnedSessions) SurfaceMessage(owner string, body json.RawMessage) {
 		return // A body that is not an object is not a session.ended event.
 	}
 	var event string
-	if err := json.Unmarshal(members["event"], &event); err != nil || event != "session.ended" {
+	if err := json.Unmarshal(members["event"], &event); err != nil {
+		return
+	}
+	if event == "session.program" {
+		o.program(owner, members)
+		return
+	}
+	if event != "session.ended" {
 		return
 	}
 	var session string
@@ -490,6 +583,32 @@ func (o *OwnedSessions) SurfaceMessage(owner string, body json.RawMessage) {
 		return
 	}
 	o.finish(session, "ended")
+}
+
+// program sets the program state of the session that the event session.program of owner names. An invalid, unknown or foreign event is
+// failed and changes nothing (docs/spec/plugins.md#owned-sessions).
+func (o *OwnedSessions) program(owner string, members map[string]json.RawMessage) {
+	var session string
+	if err := json.Unmarshal(members["session"], &session); err != nil || session == "" {
+		o.ports.Fail("core.session.program", "invalid session.program body: session")
+		return
+	}
+	var state string
+	if err := json.Unmarshal(members["state"], &state); err != nil || !slices.Contains([]string{"idle", "working", "blocked"}, state) {
+		o.ports.Fail("core.session.program", "invalid session.program body: state")
+		return
+	}
+	entry := o.sessions[session]
+	if entry == nil {
+		o.ports.Fail("core.session.program "+session, fmt.Sprintf("session %s is not open", session))
+		return
+	}
+	if entry.Owner != owner {
+		o.ports.Fail("core.session.program "+session, fmt.Sprintf("surface %s does not own session %s", owner, session))
+		return
+	}
+	entry.Program = state
+	o.ports.Changed()
 }
 
 // finish removes session from the open sessions and records its end with reason.

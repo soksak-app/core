@@ -270,7 +270,7 @@ func TestOpenSendsTheOpenRequestToTheOwnerAndRecordsTheSession(t *testing.T) {
 	opened := f.eventsNamed("workbench.session.open")
 	equal(t, len(opened), 1)
 	equal(t, opened[0]["session"], "s-1")
-	equal(t, f.sessions.Status(), []map[string]any{{"session": "s-1", "plugin": "terminal", "owner": "owner-tab", "shownBy": nil}})
+	equal(t, f.sessions.Status(), []map[string]any{{"session": "s-1", "plugin": "terminal", "owner": "owner-tab", "shownBy": nil, "program": nil}})
 }
 
 func TestOpenAnsweredWithAnErrorRecordsNoSession(t *testing.T) {
@@ -378,7 +378,7 @@ func TestRetireEndsTheSessionsOfOwnersThatLeftEveryLayout(t *testing.T) {
 	equal(t, len(ends), 1)
 	equal(t, ends[0]["session"], "s-1")
 	equal(t, ends[0]["reason"], "owner-closed")
-	equal(t, f.sessions.Status(), []map[string]any{{"session": "s-2", "plugin": "terminal", "owner": "other-tab", "shownBy": nil}})
+	equal(t, f.sessions.Status(), []map[string]any{{"session": "s-2", "plugin": "terminal", "owner": "other-tab", "shownBy": nil, "program": nil}})
 }
 
 func TestAdoptionKeepsTheSessionsOfRestoredOwnersAndEndsTheOthers(t *testing.T) {
@@ -394,7 +394,7 @@ func TestAdoptionKeepsTheSessionsOfRestoredOwnersAndEndsTheOthers(t *testing.T) 
 	if !answered || adopted != nil {
 		t.Fatalf("adopt = %v, answered %v", adopted, answered)
 	}
-	equal(t, f.sessions.Status(), []map[string]any{{"session": "s-3", "plugin": "terminal", "owner": "kept-tab", "shownBy": nil}})
+	equal(t, f.sessions.Status(), []map[string]any{{"session": "s-3", "plugin": "terminal", "owner": "kept-tab", "shownBy": nil, "program": nil}})
 	sends := f.host.sent()
 	equal(t, len(sends), 1)
 	equal(t, sends[0].surface, "gone-tab")
@@ -454,7 +454,7 @@ func TestRestoredTabShowsItsOpenSessionAfterAdoption(t *testing.T) {
 	if !answered || adopted != nil {
 		t.Fatalf("adopt = %v, answered %v", adopted, answered)
 	}
-	equal(t, f.sessions.Status(), []map[string]any{{"session": "s-3", "plugin": "terminal", "owner": "owner-tab", "shownBy": "kept-tab"}})
+	equal(t, f.sessions.Status(), []map[string]any{{"session": "s-3", "plugin": "terminal", "owner": "owner-tab", "shownBy": "kept-tab", "program": nil}})
 }
 
 // A window close keeps its owned sessions: the close sends no end, and the reopened window reattaches the session that its restored
@@ -485,7 +485,7 @@ func TestWindowCloseKeepsTheSessionAndTheReopenedWindowReattachesIt(t *testing.T
 	if !adoptAnswered || adopted != nil {
 		t.Fatalf("adopt = %v, answered %v", adopted, adoptAnswered)
 	}
-	equal(t, f.sessions.Status(), []map[string]any{{"session": "s-7", "plugin": "terminal", "owner": "owner-tab", "shownBy": "kept-tab"}})
+	equal(t, f.sessions.Status(), []map[string]any{{"session": "s-7", "plugin": "terminal", "owner": "owner-tab", "shownBy": "kept-tab", "program": nil}})
 	if sent := f.host.sent(); len(sent) != before {
 		t.Fatalf("closing and reopening the window sent %d requests, want none: %+v", len(sent)-before, sent[before:])
 	}
@@ -514,7 +514,7 @@ func TestCardFrameResizesTheSessionItsTabShows(t *testing.T) {
 	equal(t, len(sends), 1)
 	equal(t, sends[0].surface, "owner-tab")
 	equal(t, sends[0].body, map[string]any{"operation": "resize", "session": "s-1", "size": map[string]any{"width": float64(800), "height": float64(500), "scale": float64(2)}})
-	equal(t, f.sessions.Status(), []map[string]any{{"session": "s-1", "plugin": "terminal", "owner": "owner-tab", "shownBy": "other-tab"}})
+	equal(t, f.sessions.Status(), []map[string]any{{"session": "s-1", "plugin": "terminal", "owner": "owner-tab", "shownBy": "other-tab", "program": nil}})
 }
 
 // The frame of a card that shows no session sends nothing.
@@ -577,7 +577,7 @@ func TestShowSendsTheCardSizeAtOnce(t *testing.T) {
 	equal(t, len(sends), 1)
 	equal(t, sends[0].surface, "owner-tab")
 	equal(t, sends[0].body, map[string]any{"operation": "resize", "session": "s-1", "size": map[string]any{"width": float64(800), "height": float64(500), "scale": float64(2)}})
-	equal(t, f.sessions.Status(), []map[string]any{{"session": "s-1", "plugin": "terminal", "owner": "owner-tab", "shownBy": "other-tab"}})
+	equal(t, f.sessions.Status(), []map[string]any{{"session": "s-1", "plugin": "terminal", "owner": "owner-tab", "shownBy": "other-tab", "program": nil}})
 }
 
 // A frame that does not change sends nothing, however many frames the window draws (docs/spec/plugins.md#owned-sessions).
