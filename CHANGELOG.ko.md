@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1089: core.session.read {session}은 {from, rows, cursor}를 답한다. from은 사이드카 화면 응답의 첫 행 absolute line number이며, 페이지와 mygo는 0 이상의 from이 없는 화면 응답을 거부한다. Workbench 선언의 mygo 사본을 갱신했다.
 - F1088: Tab을 닫으면 그 tab을 가리키는 오류, 곧 작업 오류, 복원된 session의 오류, 멈춘 surface의 오류, mygo의 program과 activity 오류를 철회한다. 복원된 session의 오류는 이제 오류 표시로 나타난다.
 - F1087: mygo에서 fullscreen 카드가 가린 카드처럼 측정된 frame이 없는 카드는 그 탭이 보이는 세션에 크기를 보내지 않고 오류를 내지 않으며, 세션은 카드가 다시 측정될 때 크기를 받는다.
 - F1086: owned session의 open body는 세션을 연 plugin을 적고, host는 각 sessions 항목에 이를 요구하며, 재시작 뒤 page와 mygo는 각 세션을 그 plugin의 세션으로 채택하므로 사이드카가 없는 plugin의 소유자 표면도 세션을 계속 쓴다. plugin이 설치되어 있지 않거나 sessions를 선언하지 않은 항목은 사유 plugin-absent로 끝난다.

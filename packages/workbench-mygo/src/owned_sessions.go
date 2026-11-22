@@ -238,7 +238,8 @@ func (o *OwnedSessions) Submit(caller, session, text string, answer func(error))
 	})
 }
 
-// Read answers the screen of session as the sidecar replies it, unchanged when the reply states no error. With from and count, the
+// Read answers the screen of session as the sidecar replies it, unchanged when the reply states no error and states the absolute
+// line number from of its first row. With from and count, the
 // raw members of core.session.read, it asks for those retained rows of the session; nil stands for an absent member. Only its owner
 // may call it (docs/spec/plugins.md#owned-sessions).
 func (o *OwnedSessions) Read(caller, session string, from, count json.RawMessage, answer func(json.RawMessage, error)) {
@@ -269,12 +270,30 @@ func (o *OwnedSessions) Read(caller, session string, from, count json.RawMessage
 		if err == nil {
 			err = ownedReplyError(reply)
 		}
+		if err == nil && from == nil {
+			err = screenReplyError(reply)
+		}
 		if err != nil {
 			answer(nil, err)
 			return
 		}
 		answer(reply, nil)
 	})
+}
+
+// screenReplyError refuses a screen reply of the sidecar whose from, the absolute line number of its first row, is absent or not an
+// integer of 0 or more, with the text of the page.
+func screenReplyError(reply json.RawMessage) error {
+	var screen struct {
+		From json.RawMessage `json:"from"`
+	}
+	if err := json.Unmarshal(reply, &screen); err != nil {
+		return fmt.Errorf("the reply of a sidecar: %w", err)
+	}
+	if first, ok := integerOf(screen.From); screen.From == nil || !ok || first < 0 {
+		return errors.New("core.session.read: the sidecar reply from must be an integer of 0 or more")
+	}
+	return nil
 }
 
 // integerOf reads raw as a JSON number that is a safe integer, as Number.isSafeInteger of the page judges it; any other value is

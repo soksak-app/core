@@ -86,7 +86,12 @@ test("the owned session messages open, resize and end a session through the owne
   // The owner types the text as given, submits a text as one paste and Enter, and reads the screen of the sidecar.
   assert.deepEqual(await inputOwnedSession({ session: "ses-1", text: "ls\r" }, OWNER), {});
   assert.deepEqual(await submitOwnedSession({ session: "ses-1", text: "ls" }, OWNER), {});
-  assert.deepEqual(await readOwnedSession({ session: "ses-1" }, OWNER), { rows: ["$ ls", "README.md"], cursor: { row: 1, column: 0 } });
+  assert.deepEqual(await readOwnedSession({ session: "ses-1" }, OWNER), { from: 40, rows: ["$ ls", "README.md"], cursor: { row: 1, column: 0 } });
+  // A screen reply of the sidecar without a from of 0 or more is refused.
+  for (let reply = 0; reply < 2; reply++) {
+    await assert.rejects(readOwnedSession({ session: "ses-1" }, OWNER),
+      { message: "core.session.read: the sidecar reply from must be an integer of 0 or more" });
+  }
   // A read with from and count asks for those retained rows and returns the reply of the sidecar unchanged; invalid members are refused
   // before any sidecar request.
   for (const [params, refusal] of [

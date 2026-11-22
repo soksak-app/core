@@ -419,7 +419,7 @@ func TestAnAdoptedSessionOfAnOwnerWithoutSidecarIsReadThroughItsOpeningPlugin(t 
 	}
 	equal(t, f.sessions.Status(), []map[string]any{{"session": "s-5", "plugin": "terminal", "owner": "plain-tab", "shownBy": nil, "program": nil}})
 	f.host.reply = func(op string, body map[string]any) map[string]any {
-		return map[string]any{"session": "s-5", "rows": []any{"$ "}, "cursor": map[string]any{"row": 0, "column": 2}}
+		return map[string]any{"session": "s-5", "from": 0, "rows": []any{"$ "}, "cursor": map[string]any{"row": 0, "column": 2}}
 	}
 	var rows json.RawMessage
 	var got error

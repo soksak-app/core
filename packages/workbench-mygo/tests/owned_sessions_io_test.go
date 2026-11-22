@@ -107,7 +107,7 @@ func TestReadByTheOwnerReturnsTheScreenOfTheSidecar(t *testing.T) {
 	f := newOwnedFixture(t)
 	openFixtureSession(t, f)
 	f.host.reply = func(op string, body map[string]any) map[string]any {
-		return map[string]any{"rows": []any{"$ ls", "README.md"}, "cursor": map[string]any{"row": 1, "column": 0}}
+		return map[string]any{"from": 40, "rows": []any{"$ ls", "README.md"}, "cursor": map[string]any{"row": 1, "column": 0}}
 	}
 	screen, err := f.runRead("owner-tab", "s-1")
 	if err != nil {
@@ -117,10 +117,31 @@ func TestReadByTheOwnerReturnsTheScreenOfTheSidecar(t *testing.T) {
 	if err := json.Unmarshal(screen, &got); err != nil {
 		t.Fatalf("screen: %v", err)
 	}
-	equal(t, got, map[string]any{"rows": []any{"$ ls", "README.md"}, "cursor": map[string]any{"row": float64(1), "column": float64(0)}})
+	equal(t, got, map[string]any{"from": float64(40), "rows": []any{"$ ls", "README.md"},
+		"cursor": map[string]any{"row": float64(1), "column": float64(0)}})
 	sends := f.host.sent()
 	equal(t, len(sends), 1)
 	equal(t, sends[0].body, map[string]any{"operation": "read", "session": "s-1"})
+}
+
+// A screen reply of the sidecar whose from is absent or not an integer of 0 or more is refused with the text of the page
+// (docs/spec/plugins.md#owned-sessions).
+func TestReadRefusesAScreenReplyWithoutAValidFrom(t *testing.T) {
+	for _, from := range []any{nil, -1, 1.5, "0", 9007199254740992.0} {
+		f := newOwnedFixture(t)
+		openFixtureSession(t, f)
+		f.host.reply = func(op string, body map[string]any) map[string]any {
+			reply := map[string]any{"rows": []any{"$ ls"}, "cursor": map[string]any{"row": 0, "column": 4}}
+			if from != nil {
+				reply["from"] = from
+			}
+			return reply
+		}
+		_, err := f.runRead("owner-tab", "s-1")
+		if err == nil || err.Error() != "core.session.read: the sidecar reply from must be an integer of 0 or more" {
+			t.Fatalf("read of a reply with from %v: error = %v", from, err)
+		}
+	}
 }
 
 // A read with from and count asks the sidecar for those retained rows and answers its reply {from, count, rows} unchanged

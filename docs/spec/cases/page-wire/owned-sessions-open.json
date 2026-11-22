@@ -354,8 +354,54 @@
     {
       "reply": {
         "result": {
+          "from": 40,
           "rows": ["$ ls", "README.md"],
           "cursor": {"row": 1, "column": 0}
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "sidecarSend",
+        "payload": {
+          "sidecar": "@scope/fixture-sidecar",
+          "surface": "tab-aaaaa1",
+          "cids": [],
+          "body": {
+            "operation": "read",
+            "session": "ses-1"
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "rows": ["$ ls"],
+          "cursor": {"row": 0, "column": 4}
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "sidecarSend",
+        "payload": {
+          "sidecar": "@scope/fixture-sidecar",
+          "surface": "tab-aaaaa1",
+          "cids": [],
+          "body": {
+            "operation": "read",
+            "session": "ses-1"
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "from": -1,
+          "rows": ["$ ls"],
+          "cursor": {"row": 0, "column": 4}
         }
       }
     },

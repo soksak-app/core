@@ -191,7 +191,7 @@ export async function submitOwnedSession({ session, text }, surface) {
 
 /**
  * core.session.read: the owner reads the screen of its session, or with from and count those retained rows of it; the sidecar reply
- * is returned unchanged when it states no error.
+ * is returned unchanged when it states no error. A screen reply must state the absolute line number from of its first row.
  */
 export async function readOwnedSession(params, surface) {
   const { session } = params;
@@ -207,6 +207,9 @@ export async function readOwnedSession(params, surface) {
   const reply = await windowSidecar(entry.sidecar).send(entry.owner, body);
   const failure = ownedReplyFailure("core.session.read", reply);
   if (failure) throw failure;
+  if (!("from" in body) && !(Number.isSafeInteger(reply?.from) && reply.from >= 0)) {
+    throw new Error("core.session.read: the sidecar reply from must be an integer of 0 or more");
+  }
   return reply;
 }
 
