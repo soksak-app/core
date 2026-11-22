@@ -122,16 +122,18 @@ fn a_view_error_message_yields_view_stopped_with_its_reason() {
     let failure = r#"{"message":{"event":"view.error","plugin":"probe","reason":"script soksak://probe/ui/view.js failed to load"}}"#;
     assert_eq!(
         view_error_stop("probe-surface", "probe", failure, false),
-        Some(json!({"surface": "probe-surface", "plugin": "probe", "reason": "script soksak://probe/ui/view.js failed to load"}))
+        Ok(Some(json!({"surface": "probe-surface", "plugin": "probe", "reason": "script soksak://probe/ui/view.js failed to load"})))
     );
     let overflow = r#"{"message":{"event":"view.error","plugin":"probe","reason":"queue full for probe"}}"#;
     let empty = r#"{"message":{"event":"view.error","plugin":"probe","reason":""}}"#;
     let ready = r#"{"message":{"event":"view.ready","plugin":"probe","document":"d","time_origin":1.0}}"#;
     for value in [overflow, empty, ready] {
-        assert_eq!(view_error_stop("probe-surface", "probe", value, false), None, "{value}");
+        assert_eq!(view_error_stop("probe-surface", "probe", value, false), Ok(None), "{value}");
     }
     // A page that made a call and then fails keeps its surface: its failure is shown on the error display path only.
-    assert_eq!(view_error_stop("probe-surface", "probe", failure, true), None);
+    assert_eq!(view_error_stop("probe-surface", "probe", failure, true), Ok(None));
+    // A value that is not JSON is reported, not dropped.
+    assert!(view_error_stop("probe-surface", "probe", "{not json", false).is_err());
 }
 
 // contract: view.error.display

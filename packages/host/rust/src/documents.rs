@@ -1897,10 +1897,14 @@ fn view_message(
             // A page failure sends view-stopped to the surface, so the workbench shows it instead of the loading state
             // (docs/spec/native-surfaces.md#view-surfaces).
             let called = window_data(window).is_ok_and(|data| data.documents.views().has_called(surface));
-            if let Some(payload) = view_error_stop(surface, plugin, value, called) {
-                if let Err(error) = crate::windows::emit_view_source_event(window, "view-stopped", payload) {
-                    log_error("view channel", error);
+            match view_error_stop(surface, plugin, value, called) {
+                Ok(Some(payload)) => {
+                    if let Err(error) = crate::windows::emit_view_source_event(window, "view-stopped", payload) {
+                        log_error("view channel", error);
+                    }
                 }
+                Ok(None) => {}
+                Err(error) => log_error("view channel", error),
             }
         }
         Err(error) => {
@@ -2000,21 +2004,31 @@ fn view_log_reply_message(id: u64, result: &Result<Value, String>) -> Value {
 /// is created again unless the failure stops the restarts (docs/spec/plugin-processes.md, rule 5). A document that is not the current
 /// view of the surface was already replaced, so its failure is not counted again.
 /// Returns the view-stopped payload of a view.error message whose reason is not a queue overflow, for a view that has made no call yet
-/// (called is false), or None for any other message.
-pub fn view_error_stop(surface: &str, plugin: &str, value: &str, called: bool) -> Option<serde_json::Value> {
+/// (called is false), or None for any other message. A value that is not JSON is an error of the view channel.
+pub fn view_error_stop(
+    surface: &str,
+    plugin: &str,
+    value: &str,
+    called: bool,
+) -> Result<Option<serde_json::Value>, String> {
     if called {
-        return None;
+        return Ok(None);
     }
-    let parsed: serde_json::Value = serde_json::from_str(value).ok()?;
-    let message = parsed.get("message")?;
-    if message.get("event")?.as_str()? != "view.error" {
-        return None;
+    let parsed: serde_json::Value = serde_json::from_str(value)
+        .map_err(|error| format!("{surface}: view message is not JSON: {error}"))?;
+    let Some(message) = parsed.get("message") else {
+        return Ok(None);
+    };
+    if message.get("event").and_then(serde_json::Value::as_str) != Some("view.error") {
+        return Ok(None);
     }
-    let reason = message.get("reason")?.as_str()?;
+    let Some(reason) = message.get("reason").and_then(serde_json::Value::as_str) else {
+        return Ok(None);
+    };
     if reason.is_empty() || is_queue_full(reason) {
-        return None;
+        return Ok(None);
     }
-    Some(crate::view_lifecycle::view_failed_event(surface, plugin, reason))
+    Ok(Some(crate::view_lifecycle::view_failed_event(surface, plugin, reason)))
 }
 
 fn view_failed(
