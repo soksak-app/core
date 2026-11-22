@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { retainedSurfaceEntries, surfaceKindOf } from "../surface-listing.js";
+import { retainedSurfaceEntries, storedSpaceTabs, surfaceKindOf } from "../surface-listing.js";
 
 test("a mounted view outside the seated record is listed with its exposes and no placement", () => {
   const mounts = [
@@ -44,4 +44,24 @@ test("a retained section view keeps its kind and sidebar", () => {
   const [entry] = retainedSurfaceEntries(mounts, new Set());
   assert.equal(entry.kind, "section");
   assert.equal(entry.sidebar, "left");
+});
+
+// The stored layout of a space holds its cards as a tree (docs/spec/workspace.md), so the tabs of a group card nested in a cut are listed.
+test("the tabs of the stored layouts of other spaces are read from the layout tree", () => {
+  const tab = (id) => ({ id, plugin: "probeview", title: id });
+  const content = (card, tabs) => ({ card, data: { tabs, activeId: tabs[0].id } });
+  const layout = (root) => ({ focusedId: "c1", named: 0, windowSidebars: {}, sidebars: {}, leader: "c1", lastCard: 2, state: { root } });
+  const projects = [
+    { id: "prj-a", spaces: [
+      { id: "spc-a", layout: layout(content("c1", [tab("tab-current")])) },
+      { id: "spc-b", layout: layout({ cut: "x", kids: [{ share: 1, node: content("c1", [tab("tab-1"), tab("tab-2")]) },
+        { share: 1, node: content("c2", [tab("tab-3")]) }] }) },
+    ] },
+  ];
+  const listed = storedSpaceTabs(projects, (project, space) => space.id === "spc-a");
+  assert.deepEqual(listed.map(({ tab, card, holder }) => [tab.id, card.id, holder]), [
+    ["tab-1", "c1", "the stored layout of space spc-b, project prj-a"],
+    ["tab-2", "c1", "the stored layout of space spc-b, project prj-a"],
+    ["tab-3", "c2", "the stored layout of space spc-b, project prj-a"],
+  ]);
 });

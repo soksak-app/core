@@ -33,7 +33,7 @@ import { pageStart } from "./page-start-errors-install.js";
 import { defaultRegistry, installEnvironment, pluginUnits, starterPack } from "./environment.js";
 import { appUpdate, onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { installExposure } from "./exposure.js";
-import { surfaceKindOf } from "./surface-listing.js";
+import { storedSpaceTabs, surfaceKindOf } from "./surface-listing.js";
 /* The declaration files and the installed list are imported as a module graph so that the first screen is drawn before the first await (docs/spec/native-host.md#page-start). */
 import exposureFile from "./exposure.json" with { type: "json" };
 import environmentFile from "./environment.json" with { type: "json" };
@@ -233,14 +233,8 @@ function dormant(shown, holders = null) {
   for (const card of currentGrid()?.cards ?? []) for (const t of tabsOf(card)) add(t, card, "the current plane");
   // Tabs of the other spaces. For the active space, the plane above is correct, not the stored layout.
   const here = projects.active();
-  for (const p of projects.local()) {
-    for (const space of p.spaces) {
-      if (!projects.inLibrary() && p === here && space.id === here.activeSpaceId) continue;
-      for (const card of space.layout.state.cards) {
-        for (const t of card.data?.tabs ?? []) add(t, card, `the stored layout of space ${space.id}, project ${p.id}`);
-      }
-    }
-  }
+  const current = (p, space) => !projects.inLibrary() && p === here && space.id === here.activeSpaceId;
+  for (const { tab, card, holder } of storedSpaceTabs(projects.local(), current)) add(tab, card, holder);
   return out;
 }
 

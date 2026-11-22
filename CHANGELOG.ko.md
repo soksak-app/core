@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1052: page workbench는 다른 space의 저장된 layout tab을 layout tree에서 나열한다(`surface-listing.js`의 `storedSpaceTabs`). Red: 새 listing test가 `space.layout.state.cards is not iterable`로 실패했고, Wails와 Tauri의 project window check가 presentation 오류로 실패했다. Green: listing test와 page workbench suite가 통과하고, 오류 window check가 Wails와 Tauri에서 통과한다.
 - F1033-3: application error 적용이 끝났다. 하위 항목 F1033-3.1, F1033-3.2, F1033-3.3이 완료되었다.
 - F1051: 준비된 geometry commit의 Go 검사는 present와 view-join commit path를 모두 받는다. Red: CI run이 presentation notice 뒤에 commit하는 path present를 기록했다. Green: 5회 통과한다.
 - F1050: Go host에서 hello 답 읽기가 끝나기 전에 닫힌 stop은 start를 "sidecars are stopped"로 실패시킨다. Red: CI 검사 TestTheStopDoesNotWaitForAStart가 owner를 닫는 start에 멈춘 채 120초 제한까지 실행됐고, local 500회는 재현하지 않았다. Green: hello stop 검사 세 개가 각각 50회 통과한다.

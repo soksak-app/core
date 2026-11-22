@@ -1,4 +1,5 @@
 // The core.surfaces entries of the mounted views that the compositor record does not hold (docs/spec/exposure.md#plugin-processes).
+import { stateCards } from "./layout-tree.js";
 
 /**
  * The kind of a surface and the sidebar of a section surface, as core.surfaces reports them (docs/spec/plugins.md#sections): a
@@ -24,4 +25,21 @@ export function retainedSurfaceEntries(mounts, seatedIds) {
     exposes: mount.exposes, status: mount.status, placeholder: null, composition: mount.composition, state: mount.state,
     kind: mount.kind, sidebar: mount.sidebar,
   }));
+}
+
+/**
+ * Returns each tab of the stored layouts of the spaces of projects with its card and the holder that names its space and project,
+ * as { tab, card, holder }. skip(project, space) leaves out a space whose layout the current plane holds.
+ */
+export function storedSpaceTabs(projects, skip) {
+  const out = [];
+  for (const project of projects) {
+    for (const space of project.spaces) {
+      if (skip(project, space)) continue;
+      for (const card of stateCards(space.layout.state)) {
+        for (const tab of card.data?.tabs ?? []) out.push({ tab, card, holder: `the stored layout of space ${space.id}, project ${project.id}` });
+      }
+    }
+  }
+  return out;
 }
