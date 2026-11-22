@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1033-3: The application error adoption is complete; its children F1033-3.1, F1033-3.2 and F1033-3.3 are complete.
 - F1051: The Go check of the commit of a prepared geometry accepts the present and the view-join commit paths. Red: the CI run recorded the path present with the commit after the presentation notice. Green: 5 runs pass.
 - F1050: In the Go host a stop that closed before the read of the hello answer ended fails the start with "sidecars are stopped". Red: the CI check TestTheStopDoesNotWaitForAStart ran to its 120 s limit with the start in the close of its owner; 500 local runs did not reproduce it. Green: 50 runs each of the three hello stop checks pass.
 - F1033-8: An overlay update whose copy equals the copy that the host last received for the shown modal sends nothing, so a toast change in an open dialog that the view also draws sends one update. Red: 33 debug and modal wire cases without the equal updates failed on the earlier page, which sent them. Green: the page workbench suite passes; the cases lost only equal update steps and their replies.

@@ -205,7 +205,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
 - [~] F1033 — P0, F1026 후속. 애플리케이션 오류를 공용 오류 toast component로 표시한다. 오류 표시 전수 조사와 계약을 진행한다.
   - [o] F1033-1 — 표시하는 오류 경로를 전수 조사하고 공용 표시 계약을 정의한다. Library, settings, workspace, card, sidebar, plugin surface와 debug 경로의 소유자를 정한다.
   - [o] F1033-2 — 오류 저장과 toast 표시를 재사용 가능한 page와 native component에 통합한다. Workbench와 library가 component를 사용한다. 초기 시작, 독립 출처, 닫기, 복구와 library 창 경계의 owner test가 통과한다.
-  - [ ] F1033-3 — Floating toast 검증 뒤 애플리케이션 오류 연결을 이어 간다.
+  - [o] F1033-3 — Floating toast 검증 뒤 애플리케이션 오류 연결을 이어 간다.
     - [o] F1033-3.1 — Toast component를 활성 settings와 debug modal의 focus 범위에 둔다. Native와 page test가 닫기 control 하나, modal 안의 닫기, workbench 복귀를 판정한다.
     - [o] F1033-3.2 — Library, card, sidebar와 plugin surface 실패를 component로 보내고 복구 동작을 유지한다.
     - [o] F1033-3.3 — Settings와 debug 동작 실패를 component로 보내고 남은 직접 표시 경로를 제거한다.

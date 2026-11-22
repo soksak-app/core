@@ -205,7 +205,7 @@ The preceding macOS 26.6.2 arm64 optimized diagnostic measurement cohort retains
 - [~] F1033 — P0, follows F1026. Present application errors through a shared error toast component. The display inventory and contract are in progress.
   - [o] F1033-1 — Inventory the visible error paths and define the shared presentation contract. The library, settings, workspace, card, sidebar, plugin surface and debug paths have named owners.
   - [o] F1033-2 — Consolidate the error store and toast rendering into reusable page and native components. The workbench and library use the component. Early startup, separate origins, dismissal, recovery and library window bounds pass the owner tests.
-  - [ ] F1033-3 — Continue application error adoption after the floating toast verification.
+  - [o] F1033-3 — Continue application error adoption after the floating toast verification.
     - [o] F1033-3.1 — Transfer the toast component into the active settings and debug modal focus scope. Native and page tests judge one close control, dismissal inside the modal, and return to the workbench.
     - [o] F1033-3.2 — Route the library, card, sidebar and plugin surface failures through the component and preserve their recovery actions.
     - [o] F1033-3.3 — Route the settings and debug operation failures through the component and remove the remaining direct display paths.

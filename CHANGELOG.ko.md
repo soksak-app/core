@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1033-3: application error 적용이 끝났다. 하위 항목 F1033-3.1, F1033-3.2, F1033-3.3이 완료되었다.
 - F1051: 준비된 geometry commit의 Go 검사는 present와 view-join commit path를 모두 받는다. Red: CI run이 presentation notice 뒤에 commit하는 path present를 기록했다. Green: 5회 통과한다.
 - F1050: Go host에서 hello 답 읽기가 끝나기 전에 닫힌 stop은 start를 "sidecars are stopped"로 실패시킨다. Red: CI 검사 TestTheStopDoesNotWaitForAStart가 owner를 닫는 start에 멈춘 채 120초 제한까지 실행됐고, local 500회는 재현하지 않았다. Green: hello stop 검사 세 개가 각각 50회 통과한다.
 - F1033-8: 보이는 modal에 대해 host가 마지막으로 받은 복사본과 같은 overlay update는 보내지 않으므로, 열린 dialog의 toast 변경을 view도 그릴 때 update는 하나만 나간다. Red: 같은 update를 뺀 debug와 modal wire case 33개가 그것을 보내던 이전 page에서 실패했다. Green: page workbench suite가 통과하고, case에서는 같은 update 단계와 그 reply만 빠졌다.
