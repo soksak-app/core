@@ -538,7 +538,8 @@ fn check_program(where_: &str, raw: &Value, manifest: &Map<String, Value>) -> Re
             .map_or(&[][..], Vec::as_slice)
     };
     let types = members("type");
-    let has_text = |items: &[Value], want: &str| items.iter().any(|item| item.as_str() == Some(want));
+    let has_text =
+        |items: &[Value], want: &str| items.iter().any(|item| item.as_str() == Some(want));
     let states = schema
         .and_then(|schema| schema.get("properties"))
         .and_then(|properties| properties.get("state"))
