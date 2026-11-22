@@ -86,7 +86,6 @@ fn a_reset_clears_the_restart_stop_and_keeps_the_view_record() {
 fn reloading_a_tab_without_a_view_record_is_refused_with_its_id() {
     let lifecycle = ViewLifecycle::default();
     let error = crate::documents::reload_record(&lifecycle, "missing-tab")
-        .err()
-        .expect("a tab without a view record was reloaded");
+        .expect_err("a tab without a view record was reloaded");
     assert_eq!(error, "tab missing-tab: no view to reload");
 }

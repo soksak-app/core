@@ -1,8 +1,7 @@
 //! Owned session queries of a persistent service: the `sessions` operation and the `sidecarSessions` bridge request
 //! (docs/spec/persistent-services.md#owned-sessions). The service harness answers hello and sessions as the protocol states.
 
-#[path = "../tests/support/folder.rs"]
-mod folder;
+use crate::test_folder as folder;
 #[path = "../tests/support/sidecar_recorder.rs"]
 mod sidecar_recorder;
 use sidecar_recorder::SidecarRecorder;

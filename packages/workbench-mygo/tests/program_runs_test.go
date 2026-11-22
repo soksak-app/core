@@ -18,7 +18,7 @@ func TestAViewRunsADeclaredProgramThroughProgramRun(t *testing.T) {
 	f, stored := surfaceShellOf(t, programsDocument())
 	f.followCalls()
 	f.settle()
-	surface := anySurface(t, stored)
+	surface := pluginSurface(t, stored, "textprobe")
 	reply := viewCall(t, f, stored, surface, "runtime.program.run", map[string]any{"name": "probe-tool", "args": []string{"a"}})
 	if reply["error"] != nil {
 		t.Fatalf("the program run was refused: %v", reply["error"])
@@ -38,7 +38,7 @@ func TestAProgramRunRefusesAnInvalidCallAndRunsNothing(t *testing.T) {
 	f, stored := surfaceShellOf(t, programsDocument())
 	f.followCalls()
 	f.settle()
-	surface := anySurface(t, stored)
+	surface := pluginSurface(t, stored, "textprobe")
 	for _, tc := range []struct {
 		params  any
 		message string
@@ -63,7 +63,7 @@ func TestTheSyncRequestDeclaresTheProgramsOfAView(t *testing.T) {
 	f, stored := surfaceShellOf(t, programsDocument())
 	f.followCalls()
 	f.settle()
-	surface := anySurface(t, stored)
+	surface := pluginSurface(t, stored, "textprobe")
 	got := stored.lastSurfaces(t)[surface]["programs"]
 	want := map[string]any{"probe-tool": map[string]any{"program": "probe-tool", "args": []any{"a"}}}
 	if !reflect.DeepEqual(got, want) {
@@ -76,7 +76,7 @@ func TestTheCancelOfAnOpenProgramRunSendsProgramCancel(t *testing.T) {
 	f, stored := surfaceShellOf(t, programsDocument())
 	f.followCalls()
 	f.settle()
-	surface := anySurface(t, stored)
+	surface := pluginSurface(t, stored, "textprobe")
 	stored.programGate = newGate()
 	defer stored.programGate.open()
 	f.shell.Event("view-call", []any{map[string]any{"surface": surface, "plugin": "textprobe", "generation": 1, "id": 5,

@@ -609,6 +609,19 @@ func anySurface(t *testing.T, stored *surfaceHost) string {
 	return ""
 }
 
+// pluginSurface returns the surface of the view of plugin, so a test that depends on the declarations of one plugin reads its surface
+// and not the surface that the iteration of a map returns first.
+func pluginSurface(t *testing.T, stored *surfaceHost, plugin string) string {
+	t.Helper()
+	for id, surface := range stored.lastSurfaces(t) {
+		if surface["plugin"] == plugin {
+			return id
+		}
+	}
+	t.Fatalf("no surface of the plugin %s", plugin)
+	return ""
+}
+
 // A diagnostic build lists diagnostics.json in the installed plugins document: its declarations add to those of the surface, and the
 // view page reads the diagnostic module from its start values.
 func TestADiagnosticPluginAddsItsDeclarationsToTheSurface(t *testing.T) {

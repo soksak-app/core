@@ -2181,6 +2181,7 @@ fn view_failed(
 
 #[path = "view_reload.rs"]
 mod view_reload;
+#[cfg(test)]
 pub(crate) use view_reload::reload_record;
 pub use view_reload::reload_view;
 

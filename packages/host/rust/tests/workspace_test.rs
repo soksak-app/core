@@ -10,7 +10,7 @@ use std::path::Path;
 mod records;
 
 use serde_json::{Value, json};
-use soksak_host::platform::{self, Platform};
+use soksak_host::platform;
 use soksak_host::projects::folder;
 use soksak_host::workspace::{Workspace, common_only_keys, prepare_config_directory};
 

@@ -13,8 +13,7 @@ use crate::program_run::{
     Declaration, Declarations, End, Finished, ProgramRuns, RUNS_PER_SURFACE, Request, Slot,
 };
 
-#[path = "../tests/support/folder.rs"]
-mod folder;
+use crate::test_folder as folder;
 
 const SURFACE: &str = "surface-a";
 const PLUGIN: &str = "plugin-a";
