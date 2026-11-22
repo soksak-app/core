@@ -791,7 +791,56 @@ test("a plan that cannot resolve its tree states the reason and changes nothing"
   plane.toggleCardFullscreen("a");
   await run("core.group.create", { card: "b", side: "right", plugin: SESSION });
   const grouped = await run("core.layout.plan", { count: 2, plugin: SESSION });
-  assert.match(grouped.reason, /^core\.layout\.plan arranges a space without group cards; group card-\d+ holds b, card-\d+$/);
+  assert.equal(grouped.feasible, true, grouped.reason);
+  // A flat plan keeps no group card of the space, so its apply ends the group card.
+  await twice("core.layout.apply", { tree: grouped.tree });
+  assert.deepEqual(layout().groups, []);
+});
+
+// contract: layout.apply.groups
+test("a group of five cards in a row plans and applies one group card, and a repeated apply changes nothing", { timeout: 5000 }, async () => {
+  single([view("tab-aaaaa1", PLAIN)]);
+  const tree = { group: { name: "Row" }, tree: { direction: "row", children: terminals(5) } };
+  const plan = await run("core.layout.plan", { tree });
+  assert.deepEqual([plan.feasible, plan.reason], [true, null]);
+  assert.equal(plan.tree.group.name, "Row");
+  // A new group card has no identifier in the plan.
+  assert.deepEqual(plan.cards.map(({ group }) => group), [null, null, null, null, null]);
+  const applied = await twice("core.layout.apply", { tree: plan.tree });
+  const { groups, focused } = layout();
+  assert.deepEqual(groups.map(({ name, members }) => [name, members.length]), [["Row", 5]]);
+  assert.ok(applied.cards.every(({ group }) => group === groups[0].card));
+  // The focus goes to the first content card in workbench order.
+  assert.equal(focused, applied.cards[0].card);
+  // The second apply keeps the group card by its identifier.
+  assert.deepEqual(layout().groups.map(({ card }) => card), [groups[0].card]);
+  // A plan of the applied tree keeps the group card and its name, and a request name is not applied to a kept group card.
+  const renamed = { group: { name: "Other" }, tree: applied.tree.tree };
+  const again = await run("core.layout.plan", { tree: renamed });
+  assert.equal(again.tree.group.name, "Row");
+  assert.ok(again.cards.every(({ group }) => group === groups[0].card));
+  await twice("core.layout.apply", { tree: renamed });
+  assert.deepEqual(layout().groups.map(({ card, name }) => [card, name]), [[groups[0].card, "Row"]]);
+});
+
+// contract: layout.plan.group-refusals
+test("a group whose tree is one card or whose name is not 1 to 40 characters is refused and changes nothing", { timeout: 5000 }, async () => {
+  arrange({ cut: "x", kids: [
+    { share: 0.5, node: { card: "a", tabs: [view("tab-aaaaa1", PLAIN)] } },
+    { share: 0.5, node: { card: "b", tabs: [view("tab-aaaaa2", PLAIN)] } },
+  ] }, "a");
+  const before = layout();
+  const two = { direction: "row", children: terminals(2) };
+  for (const [tree, reason] of [
+    [{ group: {}, tree: { tabs: [{ plugin: SESSION }] } }, "a group of the tree holds at least two cards"],
+    [{ group: { name: "   " }, tree: two }, "group name must be 1 to 40 characters: "],
+    [{ group: { name: "x".repeat(41) }, tree: two }, `group name must be 1 to 40 characters: ${"x".repeat(41)}`],
+  ]) {
+    const plan = await run("core.layout.plan", { tree });
+    assert.deepEqual([plan.feasible, plan.reason], [false, reason]);
+    await refuses(run("core.layout.apply", { tree }), reason);
+    assert.deepEqual(layout(), before, reason);
+  }
 });
 
 // contract: exposure.keyboard.closing-the-focused-card-clears-the-ring

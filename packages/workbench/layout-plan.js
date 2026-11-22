@@ -1,15 +1,31 @@
 // The plan of an arrangement (docs/spec/cli.md#planning-an-arrangement): the request tree, its reading order, the resolution of its
-// entries against the tabs of the plane, and the most even grid of a count. The sizes of an arrangement come from the size rule of the
-// layout library through `measure`, which the workbench builds on the operations insert and withdraw of that rule; this module holds
+// entries against the tabs of the plane, the group cards of the tree, and the most even grid of a count. The sizes of an arrangement come
+// from the size rule of the layout library through `measure`, which the workbench builds on the operations of that rule; this module holds
 // no size rule of its own.
 
 import { sameJson } from "./layout-tree.js";
 
 const DIRECTIONS = ["row", "column"];
 
-/** Reads a request tree, or throws the reason in the form `tree<path>: <reason>`. */
+/**
+ * Reads a request tree, or throws the reason in the form `tree<path>: <reason>`. A group is {group: {name?}, tree}, whose tree is a split;
+ * its name is trimmed and holds 1 to 40 characters.
+ */
 export function readTree(value, path = "") {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`tree${path} must be an object`);
+  if ("group" in value) {
+    const { group, tree, ...rest } = value;
+    const extra = Object.keys(rest).sort()[0];
+    if (extra !== undefined) throw new Error(`tree${path} has the unknown member ${extra}`);
+    if (!group || typeof group !== "object" || Array.isArray(group)) throw new Error(`tree${path}.group must be an object`);
+    const { name, ...groupRest } = group;
+    const unknown = Object.keys(groupRest).sort()[0];
+    if (unknown !== undefined) throw new Error(`tree${path}.group has the unknown member ${unknown}`);
+    const named = name === undefined ? undefined : readGroupName(name);
+    // A group holds two or more cards, so its tree is a split.
+    if (!tree || typeof tree !== "object" || !("direction" in tree)) throw new Error("a group of the tree holds at least two cards");
+    return { group: { name: named }, tree: readTree(tree, `${path}.tree`) };
+  }
   if ("direction" in value) {
     const { direction, children, ...rest } = value;
     const extra = Object.keys(rest).sort()[0];
@@ -33,6 +49,15 @@ export function readTree(value, path = "") {
   return { tabs: tabs.map((entry, index) => readEntry(entry, `${path}.tabs[${index}]`)), active };
 }
 
+/** Reads the name of a group card: its white space at both ends is removed, and it holds 1 to 40 Unicode scalar values. */
+function readGroupName(name) {
+  if (typeof name !== "string") throw new Error(`group name must be 1 to 40 characters: ${String(name)}`);
+  const trimmed = name.trim();
+  const count = [...trimmed].length;
+  if (count < 1 || count > 40) throw new Error(`group name must be 1 to 40 characters: ${trimmed}`);
+  return trimmed;
+}
+
 /** Reads an entry {tab} or {plugin, params?}; an omitted params is null. */
 function readEntry(entry, path) {
   if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw new Error(`tree${path} must be an object`);
@@ -50,9 +75,16 @@ function readEntry(entry, path) {
   return { plugin, params };
 }
 
-/** The cards of a tree in tree order. */
+/** The cards of a tree in tree order; a group holds the cards of its tree. */
 export function treeCards(tree) {
+  if (tree.group) return treeCards(tree.tree);
   return tree.direction ? tree.children.flatMap(treeCards) : [tree];
+}
+
+/** The group nodes of a tree in pre-order: each group before the groups inside its tree. */
+export function treeGroups(tree) {
+  if (tree.group) return [tree, ...treeGroups(tree.tree)];
+  return tree.direction ? tree.children.flatMap(treeGroups) : [];
 }
 
 /**
@@ -63,6 +95,7 @@ export function treeCards(tree) {
 export function readingOrder(tree) {
   const frames = [];
   const walk = (node, x, y, width, height) => {
+    if (node.group) return walk(node.tree, x, y, width, height);
     if (!node.direction) return void frames.push({ x, y });
     const n = node.children.length;
     node.children.forEach((child, k) => (node.direction === "row"
@@ -160,65 +193,125 @@ export function resolveCards(cards, planeTabs, { close = false } = {}) {
   return { cards: resolved, kept: close ? [] : rest.map(({ tab }) => tab), closed: close ? rest.map(({ tab }) => tab) : [] };
 }
 
-
 /**
- * Builds `tree` through `ops`, the operations of the size rule of the layout library on the content cards of the space: `cards()`, the
- * content card ids, `withdraw(id)`, which returns what left, `insert(target, side, node)` with a node `{card}` or what withdraw
- * returned, `even()` and `frame(id)`. `ids[k]` is the card of the k-th card of the tree in tree order: an id of the plane that the card
- * keeps, or a new id. One card of the plane stays and every other card is withdrawn; the first card of the tree takes its place, the
- * first card of each split stands where the split stands and the other children are inserted beside it toward right or bottom from the
- * root inward, and every cut is made even. A withdrawn card that the tree keeps arrives with its data. It returns the frames of the
- * cards of the tree in tree order.
+ * Builds `tree` through `ops`, the operations of the size rule of the layout library on the content cards and group cards of the space
+ * (docs/spec/groups.md#rule-of-sizes). `ids[k]` is the card of the k-th card of the tree in tree order, and `groupIds[g]` the group card
+ * of the g-th group in pre-order: an identifier of the plane that the node keeps, or a new identifier. `ops` has `boxes()`, the group card
+ * ids of the plane; `members(box)`, the content cards and group cards directly inside the group card `box`, or of the root for null;
+ * `cards()`, the content card ids of the plane; `unwrap(id)`; `withdraw(id)`; `insert(target, side, node)`; `group(target, side, node,
+ * {box, data, head})`; `setData(id, data)`; `head()`; `even()`; and `frame(id)`.
+ *
+ * A group card that no group of the tree keeps is unwrapped first. A kept group card is never unwrapped: it stays in place, its cards
+ * other than the first card of its tree are withdrawn, and the tree is built inside it. A new group card is created by `group` around the
+ * first card of its tree. The first card of the tree stays where the plane has it, and each split inserts its other children beside the
+ * first unit of the child before, toward right or bottom, from the root inward; every cut is made even. It returns {frames, leader}: the
+ * frames of the cards in tree order and the leader of the root level, which is the first unit of the tree.
  */
-export function buildTree(ops, tree, ids) {
+export function buildTree(ops, tree, ids, groupIds) {
   const leaves = treeCards(tree);
+  const groups = treeGroups(tree);
   if (ids.length !== leaves.length) throw new Error(`the tree holds ${leaves.length} cards and ${ids.length} identifiers were given`);
-  const plane = ops.cards();
-  // default: no identifier of the tree is a card of the plane, so the first card of the plane keeps its place.
-  const stay = ids.find((id) => plane.includes(id)) ?? plane[0];
+  if (groupIds.length !== groups.length) throw new Error(`the tree holds ${groups.length} groups and ${groupIds.length} identifiers were given`);
+  const leafId = new Map(leaves.map((leaf, index) => [leaf, ids[index]]));
+  const boxOf = new Map(groups.map((group, index) => [group, groupIds[index]]));
+  const boxes = ops.boxes();
+  const kept = new Set(groupIds.filter((id) => boxes.includes(id)));
+  const planned = new Set([...ids, ...groupIds]);
+  for (const box of boxes) if (!kept.has(box)) ops.unwrap(box);
+  // The units that the withdrawn nodes leave behind; an identifier that no withdrawn node holds is a card that arrives new.
   const left = new Map();
-  for (const id of plane) {
-    if (id !== stay) left.set(id, ops.withdraw(id));
-  }
-  // default: an identifier that no withdrawn card held is a card that arrives new.
   const arriving = (id) => left.get(id) ?? { card: id };
-  if (ids[0] !== stay) {
-    ops.insert(stay, "left", arriving(ids[0]));
+  // The unit at the top left of a node: a kept group card, or the card that a new group card starts with.
+  const unitOf = (node) => {
+    if (node.group) return kept.has(boxOf.get(node)) ? boxOf.get(node) : unitOf(node.tree);
+    if (node.direction) return unitOf(node.children[0]);
+    return leafId.get(node);
+  };
+  // The member of the level that holds the top left of a node: a group card for a group, else the card.
+  const leaderOf = (node) => {
+    if (node.group) return boxOf.get(node);
+    if (node.direction) return leaderOf(node.children[0]);
+    return leafId.get(node);
+  };
+  const side = (split) => (split.direction === "row" ? "right" : "bottom");
+  const first = unitOf(tree);
+  const rootMembers = ops.members(null);
+  // default: the first unit of the tree stays in its place when the plane holds it, else another member of the plane stays.
+  const stay = rootMembers.includes(first) ? first : (rootMembers.find((id) => planned.has(id)) ?? rootMembers[0]);
+  for (const id of rootMembers) if (id !== stay) left.set(id, ops.withdraw(id));
+  if (first !== stay) {
+    ops.insert(stay, "left", arriving(first));
     left.set(stay, ops.withdraw(stay));
   }
-  const idOf = new Map(leaves.map((leaf, index) => [leaf, ids[index]]));
-  const first = (node) => (node.direction ? first(node.children[0]) : node);
-  const place = (node) => {
-    if (!node.direction) return;
-    const side = node.direction === "row" ? "right" : "bottom";
-    let target = idOf.get(first(node.children[0]));
-    for (const child of node.children.slice(1)) {
-      const id = idOf.get(first(child));
-      ops.insert(target, side, arriving(id));
-      target = id;
+  // The other children of a split go beside the unit of the child before them, from index `from` on.
+  const chain = (split, from, prev) => {
+    let target = prev;
+    for (const child of split.children.slice(from)) {
+      const unit = unitOf(child);
+      ops.insert(target, side(split), arriving(unit));
+      target = unit;
     }
-    node.children.forEach(place);
   };
-  place(tree);
+  const realize = (node) => {
+    if (node.group) return realizeGroup(node);
+    if (!node.direction) return undefined;
+    chain(node, 1, unitOf(node.children[0]));
+    return node.children.forEach(realize);
+  };
+  const realizeGroup = (node) => {
+    const box = boxOf.get(node);
+    const inner = node.tree;
+    const data = { name: node.group.name, leader: leaderOf(inner) };
+    if (kept.has(box)) {
+      // The kept group card keeps its box: its members are withdrawn but one, which takes the first unit of the tree.
+      const unit = unitOf(inner);
+      const members = ops.members(box);
+      const alone = members.includes(unit) ? unit : (members.find((id) => planned.has(id)) ?? members[0]);
+      for (const id of members) if (id !== alone) left.set(id, ops.withdraw(id));
+      if (unit !== alone) {
+        ops.insert(alone, "left", arriving(unit));
+        left.set(alone, ops.withdraw(alone));
+      }
+      ops.setData(box, data);
+      chain(inner, 1, unit);
+    } else {
+      // A new group card is made around the first card of its tree and the first unit of its second child.
+      const unit = unitOf(inner);
+      const second = unitOf(inner.children[1]);
+      ops.group(unit, side(inner), arriving(second), { box, data, head: ops.head() });
+      chain(inner, 2, second);
+    }
+    return inner.children.forEach(realize);
+  };
+  realize(tree);
   ops.even();
-  return ids.map((id) => ops.frame(id));
+  return { frames: ids.map((id) => ops.frame(id)), leader: leaderOf(tree) };
 }
 
 /**
  * The number of cards of an equal share along each axis for every card of a tree in tree order: a split multiplies the count of its
- * children along its own axis by the number of its children.
+ * children along its own axis by the number of its children; a group takes the share of its tree.
  */
 function shares(tree, along = { width: 1, height: 1 }) {
+  if (tree.group) return shares(tree.tree, along);
   if (!tree.direction) return [along];
   const axis = tree.direction === "row" ? "width" : "height";
   const inner = { ...along, [axis]: along[axis] * tree.children.length };
   return tree.children.flatMap((child) => shares(child, inner));
 }
 
-/** The tree with the card at each place of tree order replaced by `cards[k]`. */
-function withCards(tree, cards) {
+/** The tree with the card at each place of tree order replaced by `cards[k]`, and each group named by `names[g]` in pre-order. */
+function withCards(tree, cards, names = []) {
   let k = 0;
-  const walk = (node) => (node.direction ? { direction: node.direction, children: node.children.map(walk) } : cards[k++]);
+  let g = 0;
+  const walk = (node) => {
+    if (node.group) {
+      const name = names[g];
+      g += 1;
+      return { group: { name }, tree: walk(node.tree) };
+    }
+    return node.direction ? { direction: node.direction, children: node.children.map(walk) } : cards[k++];
+  };
   return walk(tree);
 }
 
@@ -229,14 +322,17 @@ const requestEntry = ({ tab, plugin, params }) => (tab !== null ? { tab } : { pl
  * The plan of an arrangement (docs/spec/cli.md#planning-an-arrangement). `request` is the parameters of core.layout.plan. `space`
  * describes the active space: `refusal`, the text of a cause that refuses every arrangement, or null; `tabs`, the tabs of the plane in
  * reading order `{tab, card, plugin, params}`; `plane` and `minimum`, sizes `{width, height}` in points; `entry(plugin, params)`, which
- * answers the params of a new tab or throws the refusal of the plugin or its params; `unsaved(tab)`; and `measure(tree)`, the frames
+ * answers the params of a new tab or throws the refusal of the plugin or its params; `unsaved(tab)`; `groupNames`, the names of the group
+ * cards of the space; `groupOf(card)`, the group card that holds a content card or null; `groupName(id)`; and `measure(tree)`, the frames
  * `{x, y, width, height}` in window points of the cards of the tree in tree order, which the operations of the size rule build on a
- * copy of the plane without the minimum, or the error of the layout library, which the plan states as its reason. The
- * result holds the answer of the plan and `ids`, the kept card of each card of the tree in tree order or null, which an apply builds.
+ * copy of the plane without the minimum, or the error of the layout library, which the plan states as its reason. The result holds the
+ * answer of the plan, `ids`, the kept card of each card of the tree in tree order or null, and `groupIds`, the kept group card of each
+ * group in pre-order or null, which an apply builds.
  */
 export function planArrangement(request, space) {
   const refused = (reason) => ({
-    feasible: false, tree: null, cards: [], plane: space.plane, minimum: space.minimum, kept: [], closed: [], reason, needed: null, proposal: null, ids: [],
+    feasible: false, tree: null, cards: [], plane: space.plane, minimum: space.minimum, kept: [], closed: [], reason, needed: null, proposal: null,
+    ids: [], groupIds: [],
   });
   const { tree: asked, count, plugin } = request;
   if (asked !== undefined && (count !== undefined || plugin !== undefined || request.params !== undefined)) {
@@ -294,6 +390,56 @@ function sizing(space) {
   };
 }
 
+/**
+ * The group cards of a tree (docs/spec/cli.md#planning-an-arrangement). A group keeps the group card of the plane that holds the card its
+ * first card in reading order keeps, when no earlier group keeps that group card; otherwise it is a new group card. A kept group card keeps
+ * its name; a new one takes its name, or the smallest `그룹 <n>` that no group of the space has, numbered in reading order of its first card.
+ * It answers, for each group in pre-order, its kept group card or null and its name, and for each card the innermost group that holds it.
+ */
+function resolveGroups(tree, order, resolved, space) {
+  const leaves = treeCards(tree);
+  const groups = treeGroups(tree);
+  const indexOf = new Map(leaves.map((leaf, index) => [leaf, index]));
+  const place = [];
+  order.forEach((index, n) => { place[index] = n; });
+  const firstOf = (group) => Math.min(...treeCards(group).map((leaf) => place[indexOf.get(leaf)]));
+  const taken = new Set(space.groupNames);
+  const keptBy = new Set();
+  const keep = new Map();
+  const name = new Map();
+  for (const group of [...groups].sort((a, b) => firstOf(a) - firstOf(b))) {
+    const card = resolved.cards[firstOf(group)].card;
+    const holder = card === null ? null : space.groupOf(card);
+    const kept = holder !== null && !keptBy.has(holder) ? holder : null;
+    keep.set(group, kept);
+    if (kept !== null) {
+      keptBy.add(kept);
+      name.set(group, space.groupName(kept));
+    } else if (group.group.name !== undefined) {
+      name.set(group, group.group.name);
+    } else {
+      let n = 1;
+      while (taken.has(`그룹 ${n}`)) n += 1;
+      taken.add(`그룹 ${n}`);
+      name.set(group, `그룹 ${n}`);
+    }
+  }
+  const innermost = new Map();
+  const walk = (node, holder) => {
+    if (node.group) return walk(node.tree, node);
+    if (node.direction) return node.children.forEach((child) => walk(child, holder));
+    innermost.set(node, holder);
+    return undefined;
+  };
+  walk(tree, null);
+  return {
+    groups,
+    keep: (group) => keep.get(group),
+    name: (group) => name.get(group),
+    groupOf: (leaf) => (innermost.get(leaf) ? keep.get(innermost.get(leaf)) : null),
+  };
+}
+
 /** The plan of a tree that reads and checks: its resolution against the plane and the judgement of its frames by the minimum. */
 function judged(tree, frames, close, space, tools) {
   const order = readingOrder(tree);
@@ -303,16 +449,22 @@ function judged(tree, frames, close, space, tools) {
     resolved = resolveCards(order.map((index) => leaves[index]), space.tabs, { close });
   } catch (error) {
     return { feasible: false, tree: null, cards: [], plane: space.plane, minimum: space.minimum, kept: [], closed: [], reason: error.message,
-      needed: null, proposal: null, ids: [] };
+      needed: null, proposal: null, ids: [], groupIds: [] };
   }
   // resolved.cards[n] is the card of the tree at the place order[n] of tree order.
   const inTreeOrder = [];
   order.forEach((index, n) => { inTreeOrder[index] = resolved.cards[n]; });
-  const requestTree = withCards(tree, inTreeOrder.map(({ tabs, active }) => ({ tabs: tabs.map(requestEntry), active })));
-  const cards = frames === null ? [] : order.map((index, n) => ({ card: resolved.cards[n].card, frame: frames[index], tabs: resolved.cards[n].tabs, active: resolved.cards[n].active }));
+  const groups = resolveGroups(tree, order, resolved, space);
+  const requestTree = withCards(tree, inTreeOrder.map(({ tabs, active }) => ({ tabs: tabs.map(requestEntry), active })),
+    groups.groups.map((group) => groups.name(group)));
+  const cards = frames === null ? [] : order.map((index, n) => ({
+    card: resolved.cards[n].card, frame: frames[index], tabs: resolved.cards[n].tabs, active: resolved.cards[n].active,
+    group: groups.groupOf(leaves[index]),
+  }));
   const result = {
     feasible: true, tree: requestTree, cards, plane: space.plane, minimum: space.minimum, kept: resolved.kept, closed: resolved.closed,
     reason: null, needed: null, proposal: null, ids: inTreeOrder.map(({ card }) => card),
+    groupIds: groups.groups.map((group) => groups.keep(group)),
   };
   const unsaved = resolved.closed.find((tab) => space.unsaved(tab));
   if (unsaved !== undefined) return { ...result, feasible: false, reason: `tab ${unsaved} has unsaved changes; core.layout.close asks the person` };
@@ -325,7 +477,7 @@ function judged(tree, frames, close, space, tools) {
   const small = cards.findIndex(({ frame }) => !tools.fits([frame]));
   if (small < 0) return result;
   // A card of an equal share is drawn at (plane - corridors) / count on each axis, so the plane at which it meets the minimum is the
-  // plane less count times what it lacks.
+  // plane less count times what it lacks. The drawn sizes include the headers of the group cards, so no header is added here.
   const counts = shares(tree);
   // The need is rounded up to a whole point after a rounding to a millionth, so a sum of equal shares stays its whole number.
   const need = (axis) => Math.ceil(Math.round(Math.max(...frames.map((frame, k) => space.plane[axis] - counts[k][axis] * (frame[axis] - space.minimum[axis]))) * 1e6) / 1e6);

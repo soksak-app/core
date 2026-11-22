@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1055-2: page와 mygo workbench는 group을 담은 tree를 계획하고 적용한다. group은 식별자와 이름을 가진 자기 group card를 유지하고, 새 group card는 그 이름이나 `그룹 <n>`을 받으며, 어떤 group도 유지하지 않는 group card는 끝나고, 계획은 group header를 넣어 그린 크기로 판정한다. workbench case `layout.apply.groups`와 `layout.plan.group-refusals`가 양쪽을 시험한다. Red: group test가 page에서 `tree has the unknown member group`으로, mygo에서 group card가 있는 space의 거부로 실패했다. Green: page workbench test 1736개와 mygo workbench test 1176개가 통과한다.
 - F1063-1: agent role specification은 command `core.role.define`과 `core.role.remove`, status `core.roles`, `roles.json` format 3을 정한다. format 3의 role은 fingerprint가 포함하고 role file이 나열하는 절대 경로 `files`를 밝힌다. host contract와 공용 case가 이를 따른다.
 - F1062-1: plugin과 persistent service specification은 owned session을 정한다: surface는 occlusion과 관계없이 그 크기로 session을 열어 소유하고, tab은 `core.layout.open {params: {session}}`으로 그것을 보인다. session은 owner와 함께 끝나고, owner는 restart 뒤 `core.sessions`로 다시 연결한다.
 - F1060: Go와 Rust host의 `projects.json` reader는 platform 형식이 아닌 identity를 거부하고, workbench는 이전 형식을 더 이상 알아보지 않는다. Red: 이전 reader에서 `TestAProjectWithAnIdentityOfAnotherFormIsRefusedByName`과 `a_project_with_an_identity_of_another_form_is_refused_by_name`이 실패했다. Green: 두 test가 통과하고, Go host test 574개, Rust workspace와 role state test, mygo project test, `projects-switch.test.mjs`도 통과한다.

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"slices"
-	"strings"
 
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
@@ -42,6 +41,12 @@ func (s *Shell) planContent() []string {
 // planOperations are the operations of the size rule of the layout library on the content cards of the plane.
 func (s *Shell) planOperations() planOperations {
 	origin := s.planeOrigin()
+	// The head of a group card is drawn as reframe of the group tree draws it: the head, and the corridor below it unless the seam takes none.
+	options := s.groupOptions()
+	head := options.Head
+	if !options.Seam {
+		head += s.plane.Gap()
+	}
 	return planOperations{
 		cards:    s.planContent,
 		withdraw: s.plane.Withdraw,
@@ -53,6 +58,19 @@ func (s *Shell) planOperations() planOperations {
 		frame: func(id string) planFrame {
 			rect, _ := s.plane.Rect(id) // silent: buildPlanTree asks only for the cards that it built.
 			return planFrame{X: origin.X + rect.X, Y: origin.Y + rect.Y, Width: rect.W, Height: rect.H}
+		},
+		boxes: func() []string {
+			var out []string
+			for _, id := range s.planes.Cards() {
+				if s.planes.IsGroup(id) {
+					out = append(out, id)
+				}
+			}
+			return out
+		},
+		unwrap: s.plane.Unwrap,
+		group: func(target, side string, node *layout.Node, box string) error {
+			return s.plane.Group(target, side, node, layout.GroupInit{Box: box, Head: head})
 		},
 	}
 }
@@ -78,12 +96,15 @@ func (s *Shell) planSpace() (planSpace, error) {
 		left, top = min(left, rect.X), min(top, rect.Y)
 		right, bottom = max(right, rect.X+rect.W), max(bottom, rect.Y+rect.H)
 	}
-	space := planSpace{plane: &planSize{Width: right - left, Height: bottom - top}, minimum: minimum, tabs: []planTab{}}
+	space := planSpace{plane: &planSize{Width: right - left, Height: bottom - top}, minimum: minimum, tabs: []planTab{},
+		parent: s.planes.Parent, groupName: s.planes.GroupName}
+	for _, id := range s.planes.Cards() {
+		if s.planes.IsGroup(id) {
+			space.taken = append(space.taken, s.planes.GroupName(id))
+		}
+	}
 	if s.fullscreen != "" {
 		space.refusal = fmt.Sprintf("the layout does not change while card %s is fullscreen; restore the arrangement first", s.fullscreen)
-	} else if groups := s.describeGroups("", []LayoutGroup{}); len(groups) > 0 {
-		space.refusal = fmt.Sprintf("core.layout.plan arranges a space without group cards; group %s holds %s", groups[0].Card,
-			strings.Join(groups[0].Members, ", "))
 	}
 	slices.SortStableFunc(content, func(a, b placed) int {
 		if a.rect.Y != b.rect.Y {
@@ -128,6 +149,7 @@ func (s *Shell) planSpace() (planSpace, error) {
 						ids[k] = issue()
 					}
 				}
+				assignBoxes(tree, issue)
 				built, err := buildPlanTree(s.planOperations(), tree, ids)
 				frames = built
 				return err
@@ -159,8 +181,8 @@ func (s *Shell) planLayout(request planRequest) (planAnswer, error) {
 }
 
 // applyLayout is core.layout.apply: it builds the plan of its tree with the operations of the size rule on the plane, moves the
-// existing tabs into their cards, opens the new tabs, closes the tabs of closed and focuses the first card of the tree. A plan that is
-// not feasible changes nothing and fails with its reason.
+// existing tabs into their cards, opens the new tabs, closes the tabs of closed, builds the group cards of the tree and focuses the first
+// content card in workbench order. A plan that is not feasible changes nothing and fails with its reason.
 func (s *Shell) applyLayout(value layoutApplyParam) (map[string]any, error) {
 	space, err := s.planSpace()
 	if err != nil {
@@ -183,6 +205,16 @@ func (s *Shell) applyLayout(value layoutApplyParam) (map[string]any, error) {
 			held[tab.ID] = tab
 		}
 	}
+	// The leaders of the kept group cards and of the root level, before the apply changes them.
+	oldLeaders := map[string]string{}
+	for _, group := range collectGroups(planned.Tree) {
+		if group.Group.Card != "" {
+			if leader, ok := s.planes.Leader(group.Group.Card); ok {
+				oldLeaders[group.Group.Card] = leader
+			}
+		}
+	}
+	rootLeader, _ := s.planes.Leader("")
 	before := s.planContent()
 	var named *planNode
 	ids := slices.Clone(planned.ids)
@@ -192,13 +224,21 @@ func (s *Shell) applyLayout(value layoutApplyParam) (map[string]any, error) {
 				ids[k] = issue()
 			}
 		}
+		assignBoxes(planned.Tree, issue)
 		if _, err := buildPlanTree(s.planOperations(), planned.Tree, ids); err != nil {
 			return err
 		}
 		k := 0
-		// The tree of the result names each tab by its identifier, the new tabs included.
+		// The tree of the result names each tab by its identifier, the new tabs included, and each group by its name.
 		var place func(node *planNode) (*planNode, error)
 		place = func(node *planNode) (*planNode, error) {
+			if node.Group != nil {
+				inner, err := place(node.Group.Tree)
+				if err != nil {
+					return nil, err
+				}
+				return &planNode{Group: &planGroup{Name: node.Group.Name, Tree: inner}}, nil
+			}
 			if node.Direction != "" {
 				out := &planNode{Direction: node.Direction}
 				for _, child := range node.Children {
@@ -260,7 +300,40 @@ func (s *Shell) applyLayout(value layoutApplyParam) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	s.focusCard(ids[0])
+	// The boxes take their names and leaders, and the group tree is read from the grid as the stored layout is.
+	leaders, rootNext := groupLeaders(planned.Tree, ids, oldLeaders, rootLeader)
+	for _, group := range collectGroups(planned.Tree) {
+		data, err := groupData(group.Group.Name, leaders[group.Group.Box])
+		if err != nil {
+			return nil, err
+		}
+		if !s.plane.SetData(group.Group.Box, data) {
+			return nil, fmt.Errorf("group %s is not in the layout", group.Group.Box)
+		}
+	}
+	leader := json.RawMessage("null")
+	if rootNext != "" {
+		leader, err = json.Marshal(rootNext)
+		if err != nil {
+			return nil, err
+		}
+	}
+	last, err := json.Marshal(s.planes.LastCard())
+	if err != nil {
+		return nil, err
+	}
+	tree, err := layout.ReadTree(s.plane.ToJSON(), nil, leader, last, s.groupOptions(), s.plane)
+	if err != nil {
+		return nil, err
+	}
+	s.showPlane(tree)
+	// The focus takes the first content card in workbench order, which is no window sidebar.
+	for _, card := range s.contentCards() {
+		if !isPlace(card.ID) {
+			s.focusCard(card.ID)
+			break
+		}
+	}
 	for _, id := range before {
 		if _, ok := s.plane.Card(id); !ok {
 			delete(s.operated, id)
@@ -271,11 +344,11 @@ func (s *Shell) applyLayout(value layoutApplyParam) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	tree, err := json.Marshal(named)
+	tree2, err := json.Marshal(named)
 	if err != nil {
 		return nil, err
 	}
-	applied, err := planArrangement(planRequest{Tree: tree}, space)
+	applied, err := planArrangement(planRequest{Tree: tree2}, space)
 	if err != nil {
 		return nil, err
 	}

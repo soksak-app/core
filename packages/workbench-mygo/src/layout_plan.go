@@ -3,6 +3,7 @@ package workbench
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"math"
@@ -11,6 +12,8 @@ import (
 	"slices"
 	"sort"
 	"strconv"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
@@ -25,6 +28,17 @@ type planNode struct {
 	Children  []*planNode
 	Tabs      []planEntry
 	Active    int
+	// Group is set for a group node {group: {name?}, tree}, which has no Direction; its split is Group.Tree.
+	Group *planGroup
+}
+
+// planGroup is a group node: Name is the name of its group card (empty in a request without a name), Card the identifier of the kept group
+// card or "" for a new one, Box the identifier that an apply gives its box, and Tree the split of its members.
+type planGroup struct {
+	Name string
+	Card string
+	Box  string
+	Tree *planNode
 }
 
 // planEntry is an entry of a card: an existing tab {tab}, or a tab {plugin, params} of the plugin with the params, nil for null.
@@ -34,8 +48,18 @@ type planEntry struct {
 	Params json.RawMessage
 }
 
-// MarshalJSON writes a split as {direction, children} and a card as {tabs, active}.
+// MarshalJSON writes a group as {group: {name}, tree}, a split as {direction, children} and a card as {tabs, active}.
 func (n *planNode) MarshalJSON() ([]byte, error) {
+	if n.Group != nil {
+		return json.Marshal(struct {
+			Group struct {
+				Name string `json:"name"`
+			} `json:"group"`
+			Tree *planNode `json:"tree"`
+		}{Group: struct {
+			Name string `json:"name"`
+		}{n.Group.Name}, Tree: n.Group.Tree})
+	}
 	if n.Direction != "" {
 		return json.Marshal(struct {
 			Direction string      `json:"direction"`
@@ -87,6 +111,12 @@ func readPlanTree(value any, path string) (*planNode, error) {
 	object, ok := value.(map[string]any)
 	if !ok {
 		return nil, fmt.Errorf("tree%s must be an object", path)
+	}
+	if raw, grouped := object["group"]; grouped {
+		if extra := unknownMember(object, "group", "tree"); extra != "" {
+			return nil, fmt.Errorf("tree%s has the unknown member %s", path, extra)
+		}
+		return readPlanGroup(raw, object["tree"], path)
 	}
 	if _, split := object["direction"]; split {
 		if extra := unknownMember(object, "direction", "children"); extra != "" {
@@ -140,6 +170,35 @@ func readPlanTree(value any, path string) (*planNode, error) {
 	return node, nil
 }
 
+// readPlanGroup reads a group {group: {name?}, tree}. The name is 1 to 40 characters after the white space at both ends is removed, and the
+// tree is a split: a group whose tree is a card or a group holds fewer than two cards.
+func readPlanGroup(raw any, tree any, path string) (*planNode, error) {
+	group, ok := raw.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("tree%s.group must be an object", path)
+	}
+	if extra := unknownMember(group, "name"); extra != "" {
+		return nil, fmt.Errorf("tree%s.group has the unknown member %s", path, extra)
+	}
+	name := ""
+	if raw, named := group["name"]; named {
+		text, isText := raw.(string)
+		trimmed := strings.TrimSpace(text)
+		if count := utf8.RuneCountInString(trimmed); !isText || count < 1 || count > 40 {
+			return nil, fmt.Errorf("group name must be 1 to 40 characters: %s", trimmed)
+		}
+		name = trimmed
+	}
+	inner, err := readPlanTree(tree, path+".tree")
+	if err != nil {
+		return nil, err
+	}
+	if inner.Direction == "" {
+		return nil, errors.New("a group of the tree holds at least two cards")
+	}
+	return &planNode{Group: &planGroup{Name: name, Tree: inner}}, nil
+}
+
 // readPlanEntry reads an entry {tab} or {plugin, params?}; an omitted params is null.
 func readPlanEntry(value any, path string) (planEntry, error) {
 	object, ok := value.(map[string]any)
@@ -176,6 +235,9 @@ func readPlanEntry(value any, path string) (planEntry, error) {
 
 // planLeaves is the cards of a tree in tree order.
 func planLeaves(tree *planNode) []*planNode {
+	if tree.Group != nil {
+		return planLeaves(tree.Group.Tree)
+	}
 	if tree.Direction == "" {
 		return []*planNode{tree}
 	}
@@ -194,6 +256,10 @@ func planReadingOrder(tree *planNode) []int {
 	var corners []corner
 	var walk func(node *planNode, x, y, width, height float64)
 	walk = func(node *planNode, x, y, width, height float64) {
+		if node.Group != nil {
+			walk(node.Group.Tree, x, y, width, height)
+			return
+		}
 		if node.Direction == "" {
 			corners = append(corners, corner{x, y})
 			return
@@ -461,17 +527,29 @@ type planOperations struct {
 	insert   func(target, side string, node *layout.Node) error
 	even     func() error
 	frame    func(id string) planFrame
+	// boxes are the group cards of the space, unwrap ends one of them, and group wraps the card target in the box of a group card whose
+	// inner node is node beside target toward side.
+	boxes  func() []string
+	unwrap func(id string) error
+	group  func(target, side string, node *layout.Node, box string) error
 }
 
-// buildPlanTree builds tree through ops. ids[k] is the card of the k-th card of the tree in tree order: an id of the plane that the
-// card keeps, or a new id. One card of the plane stays and every other card is withdrawn; the first card of the tree takes its place,
-// the first card of each split stands where the split stands and the other children are inserted beside it toward right or bottom from
-// the root inward, and every cut is made even. A withdrawn card that the tree keeps arrives with its data. It returns the frames of the
-// cards of the tree in tree order.
+// buildPlanTree builds tree through ops. ids[k] is the card of the k-th card of the tree in tree order: an id of the plane that the card
+// keeps, or a new id; a group node names its box in Box. The group cards of the plane are unwrapped first, so the cards stand in one
+// cut tree, and the tree is built again with its boxes. One card of the plane stays and every other card is withdrawn; the first card of
+// the tree takes its place, and each split inserts its other children beside its first card toward right or bottom, from the root
+// inward. A group wraps the first card of its tree in its box when its first split is made, so the box covers exactly the cards of the
+// group, and every cut is made even. A withdrawn card that the tree keeps arrives with its data. It returns the frames of the cards of the
+// tree in tree order.
 func buildPlanTree(ops planOperations, tree *planNode, ids []string) ([]planFrame, error) {
 	leaves := planLeaves(tree)
 	if len(ids) != len(leaves) {
 		return nil, fmt.Errorf("the tree holds %d cards and %d identifiers were given", len(leaves), len(ids))
+	}
+	for _, id := range ops.boxes() {
+		if err := ops.unwrap(id); err != nil {
+			return nil, err
+		}
 	}
 	plane := ops.cards()
 	stay := plane[0]
@@ -511,24 +589,32 @@ func buildPlanTree(ops planOperations, tree *planNode, ids []string) ([]planFram
 	}
 	var first func(node *planNode) *planNode
 	first = func(node *planNode) *planNode {
+		if node.Group != nil {
+			return first(node.Group.Tree)
+		}
 		if node.Direction == "" {
 			return node
 		}
 		return first(node.Children[0])
 	}
+	// split places the children of the split node beside its first card; box is the box of a group whose split it is, or "".
 	var place func(node *planNode) error
-	place = func(node *planNode) error {
-		if node.Direction == "" {
-			return nil
-		}
+	var split func(node *planNode, box string) error
+	split = func(node *planNode, box string) error {
 		side := "bottom"
 		if node.Direction == "row" {
 			side = "right"
 		}
 		target := idOf[first(node.Children[0])]
-		for _, child := range node.Children[1:] {
+		for k, child := range node.Children[1:] {
 			id := idOf[first(child)]
-			if err := ops.insert(target, side, arriving(id)); err != nil {
+			var err error
+			if k == 0 && box != "" {
+				err = ops.group(target, side, arriving(id), box)
+			} else {
+				err = ops.insert(target, side, arriving(id))
+			}
+			if err != nil {
 				return err
 			}
 			target = id
@@ -539,6 +625,15 @@ func buildPlanTree(ops planOperations, tree *planNode, ids []string) ([]planFram
 			}
 		}
 		return nil
+	}
+	place = func(node *planNode) error {
+		if node.Group != nil {
+			return split(node.Group.Tree, node.Group.Box)
+		}
+		if node.Direction == "" {
+			return nil
+		}
+		return split(node, "")
 	}
 	if err := place(tree); err != nil {
 		return nil, err
@@ -556,6 +651,9 @@ func buildPlanTree(ops planOperations, tree *planNode, ids []string) ([]planFram
 // planShares is the number of cards of an equal share along each axis for every card of a tree in tree order: a split multiplies the
 // count of its children along its own axis by the number of its children.
 func planShares(tree *planNode, width, height int) [][2]int {
+	if tree.Group != nil {
+		return planShares(tree.Group.Tree, width, height)
+	}
 	if tree.Direction == "" {
 		return [][2]int{{width, height}}
 	}
@@ -577,6 +675,9 @@ func withPlanCards(tree *planNode, cards []*planNode) *planNode {
 	k := 0
 	var walk func(node *planNode) *planNode
 	walk = func(node *planNode) *planNode {
+		if node.Group != nil {
+			return &planNode{Group: &planGroup{Name: node.Group.Name, Card: node.Group.Card, Box: node.Group.Box, Tree: walk(node.Group.Tree)}}
+		}
 		if node.Direction == "" {
 			card := cards[k]
 			k++
@@ -605,6 +706,7 @@ type plannedCard struct {
 	Frame  planFrame `json:"frame"`
 	Tabs   []planTab `json:"tabs"`
 	Active int       `json:"active"`
+	Group  *string   `json:"group"`
 }
 
 // planProposal is the nearest arrangement that can be built.
@@ -641,6 +743,11 @@ type planSpace struct {
 	entry   func(plugin string, params json.RawMessage) (json.RawMessage, error)
 	unsaved func(tab string) bool
 	measure func(tree *planNode) ([]planFrame, error)
+	// parent is the group card that holds a card of the plane, or "" for the root level; groupName is the name of a group card; taken are
+	// the names of every group card of the space.
+	parent    func(card string) string
+	groupName func(group string) string
+	taken     []string
 }
 
 // planRequest is the parameters of core.layout.plan.
@@ -776,6 +883,7 @@ func judgedPlan(tree *planNode, frames []planFrame, close bool, space planSpace,
 	for n, index := range order {
 		inTreeOrder[index] = resolved[n]
 	}
+	groupOf := resolveGroups(tree, inTreeOrder, order, space)
 	requestCards := make([]*planNode, len(inTreeOrder))
 	ids := make([]string, len(inTreeOrder))
 	for k, card := range inTreeOrder {
@@ -789,7 +897,7 @@ func judgedPlan(tree *planNode, frames []planFrame, close bool, space planSpace,
 	cards := []plannedCard{}
 	if frames != nil {
 		for n, index := range order {
-			card := plannedCard{Frame: frames[index], Tabs: resolved[n].tabs, Active: resolved[n].active}
+			card := plannedCard{Frame: frames[index], Tabs: resolved[n].tabs, Active: resolved[n].active, Group: groupOf[index]}
 			if resolved[n].card != "" {
 				id := resolved[n].card
 				card.Card = &id

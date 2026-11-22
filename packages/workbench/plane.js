@@ -27,7 +27,7 @@ import { drawGroupCards } from "./group-cards.js";
 import { checkTabParams, storedParamsProblem } from "./tab-params.js";
 import { checkOpenPath, chooseOpener } from "./file-open.js";
 import { layoutTree, sameJson, stateCards } from "./layout-tree.js";
-import { buildTree, planArrangement, treeCards } from "./layout-plan.js";
+import { buildTree, planArrangement, readingOrder, treeCards, treeGroups } from "./layout-plan.js";
 import { recordClosedTabs, tabClosed } from "./closed-tabs.js";
 import { clearSlotSurface, setSlotSurface, standIn } from "./compositor.js";
 import { followRing, keyboardOwed } from "./keyboard.js";
@@ -2759,10 +2759,39 @@ function windowFrame(rect) {
   const origin = plane.getBoundingClientRect();
   return { x: origin.left + rect.x, y: origin.top + rect.y, width: rect.w, height: rect.h };
 }
+/** The content cards and group cards directly inside the group card box, or directly in the root level for null, of the stored tree. */
+function directMembers(box) {
+  const members = (node) => {
+    if (node.box !== undefined) return [node.box];
+    if (node.cut) return node.kids.flatMap((kid) => members(kid.node));
+    return isPlace(node.card) ? [] : [node.card];
+  };
+  const holder = (node) => {
+    if (node.box === box) return node;
+    if (node.box !== undefined) return holder(node.inner);
+    if (node.cut) {
+      for (const kid of node.kids) {
+        const found = holder(kid.node);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+  const root = grid.toJSON().root;
+  if (box === null) return members(root);
+  return members(holder(root).inner);
+}
+
 const planOperations = {
   cards: () => contentCards().map((card) => card.id),
+  boxes: () => tree.nodes().map((node) => node.card),
+  members: (box) => directMembers(box),
+  unwrap: (id) => grid.unwrap(id),
   withdraw: (id) => grid.withdraw(id),
   insert: (target, side, node) => grid.insert(target, side, node),
+  group: (target, side, node, init) => grid.group(target, side, node, init),
+  setData: (id, data) => grid.setData(id, data),
+  head: () => tree.headStep(),
   even: () => grid.even(),
   frame: (id) => windowFrame(grid.rect(id)),
 };
@@ -2779,12 +2808,7 @@ function planSpace() {
     height: Math.max(...rects.map(({ rect }) => rect.y + rect.h)) - y0,
   };
   const shown = fullscreenCard();
-  const group = tree.order().find(({ node }) => node);
-  let refusal = null;
-  if (shown !== null) refusal = `the layout does not change while card ${shown} is fullscreen; restore the arrangement first`;
-  else if (group) {
-    refusal = `core.layout.plan arranges a space without group cards; group ${group.id} holds ${tree.readingOrder(group.node.members).map(memberId).join(", ")}`;
-  }
+  const refusal = shown !== null ? `the layout does not change while card ${shown} is fullscreen; restore the arrangement first` : null;
   // default: two tabs on the same row sort by their column.
   const tabs = rects.sort((a, b) => a.rect.y - b.rect.y || a.rect.x - b.rect.x)
     // default: a tab stored without params has the params null.
@@ -2796,13 +2820,17 @@ function planSpace() {
       return checkTabParams(kind, plugin(kind).params, params);
     },
     unsaved: (tabId) => tabModified(tabId),
+    groupNames: tree.nodes().map((node) => node.name),
+    groupName: (id) => tree.node(id).name,
+    groupOf: (card) => tree.parentOf(card)?.card ?? null,
     // The plan builds on a copy of the plane without the minimum, so it reads the size of every card and judges it by the minimum.
     measure: (shape) => tree.probe(() => {
       const kept = grid.minSize;
       grid.minSize = 0;
       try {
         const ids = treeCards(shape).map((_, index) => (index === 0 ? content[0].id : tree.issue()));
-        return buildTree(planOperations, shape, ids);
+        const groupIds = treeGroups(shape).map(() => tree.issue());
+        return buildTree(planOperations, shape, ids, groupIds).frames;
       } finally {
         grid.minSize = kept;
       }
@@ -2812,7 +2840,7 @@ function planSpace() {
 
 /** core.layout.plan: whether the arrangement can be built in the plane of the active space and what it would be. */
 export function planInLayout(params) {
-  const { ids, ...answer } = planArrangement(params, planSpace());
+  const { ids, groupIds, ...answer } = planArrangement(params, planSpace());
   return answer;
 }
 
@@ -2828,15 +2856,18 @@ export function applyInLayout(params) {
   const kept = tree.snapshot();
   // default: an entry that names no kept card takes a new identifier of the plane.
   const ids = planned.ids.map((id) => id ?? tree.issue());
+  const groupIds = planned.groupIds.map((id) => id ?? tree.issue());
+  let leader;
   try {
-    buildTree(planOperations, planned.tree, ids);
+    ({ leader } = buildTree(planOperations, planned.tree, ids, groupIds));
   } catch (error) {
     tree.restore(kept);
     throw error;
   }
   let k = 0;
-  // The tree of the result names each tab by its identifier, the new tabs included.
+  // The tree of the result names each tab by its identifier, the new tabs included, and each group card by its name.
   const place = (node) => {
+    if (node.group) return { group: { name: node.group.name }, tree: place(node.tree) };
     if (node.direction) return { direction: node.direction, children: node.children.map(place) };
     const tabs = node.tabs.map((entry) => (entry.tab !== undefined ? held.get(entry.tab) : newTab(entry.plugin, entry.params, null, "layout apply")));
     // A kept card keeps the rest of its data, its text size and its sidebars; default: a new card has no data.
@@ -2847,8 +2878,9 @@ export function applyInLayout(params) {
   };
   const named = place(planned.tree);
   recordClosedTabs(planned.closed);
-  tree.reframe();
-  focusOn(ids[0]);
+  // The group cards are read again from the grid, which holds their names and leaders (docs/spec/groups.md#storage).
+  tree = readGroupTree({ state: grid.toJSON(), leader, lastCard: tree.last }, treeOptions(), grid);
+  focusOn(ids[readingOrder(planned.tree)[0]]);
   settle();
   const applied = planArrangement({ tree: named }, planSpace());
   return { tree: applied.tree, cards: applied.cards, kept: planned.kept, closed: planned.closed };

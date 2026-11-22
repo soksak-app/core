@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"math"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -46,7 +47,8 @@ type plannedCard struct {
 		Plugin string          `json:"plugin"`
 		Params json.RawMessage `json:"params"`
 	} `json:"tabs"`
-	Active int `json:"active"`
+	Active int     `json:"active"`
+	Group  *string `json:"group"`
 }
 
 // plan runs core.layout.plan or core.layout.apply with params and reads its answer.
@@ -350,9 +352,154 @@ func TestAPlanThatCannotResolveItsTreeStatesTheReason(t *testing.T) {
 	if _, err := f.apply("core.group.create", `{"card":"b","side":"right","plugin":"plain"}`); err != nil {
 		t.Fatal(err)
 	}
+	// A space with a group card is planned like one without: the plan of two cards keeps no group, which therefore ends in the apply.
 	grouped := f.mustPlan(`{"count":2,"plugin":"notes"}`)
-	if grouped.Reason == nil || !strings.HasPrefix(*grouped.Reason, "core.layout.plan arranges a space without group cards; group card-") ||
-		!strings.Contains(*grouped.Reason, " holds b, card-") {
-		t.Fatalf("the plan of a space with a group card has the reason %v", grouped.Reason)
+	if !grouped.Feasible || grouped.Reason != nil || len(grouped.Cards) != 2 || len(grouped.Kept) != 3 {
+		t.Fatalf("the plan of a space with a group card is %+v", grouped)
+	}
+}
+
+// groupRow is the request of a row of n cards, each with one new tab of notes, in the group object group.
+func groupRow(group string, n int) string {
+	return `{"group":` + group + `,"tree":{"direction":"row","children":[` +
+		strings.TrimSuffix(strings.Repeat(`{"tabs":[{"plugin":"notes"}]},`, n), ",") + `]}}`
+}
+
+// groupNames is the name of each group card of the grid, with its member count, in the order of core.grid.
+func (f *tabShell) groupNames() []string {
+	f.t.Helper()
+	var out []string
+	grid := f.read("core.grid")
+	cards, _ := grid["cards"].([]any)
+	groups, _ := grid["groups"].([]any)
+	for _, group := range groups {
+		entry := group.(map[string]any)
+		members := 0
+		for _, card := range cards {
+			if card.(map[string]any)["parent"] == entry["id"] {
+				members++
+			}
+		}
+		out = append(out, entry["group"].(map[string]any)["name"].(string)+":"+strconv.Itoa(members))
+	}
+	return out
+}
+
+// contract: layout.apply.groups
+func TestAGroupOfFiveCardsPlansAndAppliesAsOneGroupCard(t *testing.T) {
+	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
+	before := f.described()
+	plan := f.mustPlan(`{"tree":` + groupRow(`{"name":"alpha"}`, 5) + `}`)
+	if !plan.Feasible || plan.Reason != nil {
+		t.Fatalf("the plan of a group of five cards is %+v", plan)
+	}
+	if f.described() != before {
+		t.Fatal("the plan changed the layout")
+	}
+	// The tree names the group card and keeps its five cards as the members of its row.
+	var tree struct {
+		Group struct {
+			Name string `json:"name"`
+		} `json:"group"`
+		Tree struct {
+			Direction string            `json:"direction"`
+			Children  []json.RawMessage `json:"children"`
+		} `json:"tree"`
+	}
+	if err := json.Unmarshal(plan.Tree, &tree); err != nil {
+		t.Fatal(err)
+	}
+	if tree.Group.Name != "alpha" || tree.Tree.Direction != "row" || len(tree.Tree.Children) != 5 {
+		t.Fatalf("the tree of the plan is %s", plan.Tree)
+	}
+	// Every card of a new group card is a new card of a group that the plan does not name by identifier.
+	for k, card := range plan.Cards {
+		if card.Group != nil {
+			t.Fatalf("card %d of the plan names the group %s", k+1, *card.Group)
+		}
+	}
+	answer, layout := f.twice("core.layout.apply", `{"tree":`+string(plan.Tree)+`}`)
+	if got := f.groupNames(); !slices.Equal(got, []string{"alpha:5"}) {
+		t.Fatalf("the group cards of the grid are %v after the apply %v", got, answer)
+	}
+	group := f.read("core.grid")["groups"].([]any)[0].(map[string]any)["id"].(string)
+	cards := answer["cards"].([]any)
+	if len(cards) != 5 {
+		t.Fatalf("the apply answered %d cards", len(cards))
+	}
+	for k, card := range cards {
+		if got := card.(map[string]any)["group"]; got != group {
+			t.Fatalf("card %d of the apply is in the group %v, not %s", k+1, got, group)
+		}
+	}
+	// The focus is on the first content card in workbench order, which is a member of the group.
+	if focused := layout.focusedCard(); focused == "" || focused == group {
+		t.Fatalf("the focus is on %q after the apply", focused)
+	}
+	// A repeated plan names the kept group card and its name, and a new name does not rename it.
+	again := f.mustPlan(`{"tree":` + groupRow(`{"name":"beta"}`, 5) + `}`)
+	var kept struct {
+		Group struct {
+			Name string `json:"name"`
+		} `json:"group"`
+	}
+	if err := json.Unmarshal(again.Tree, &kept); err != nil {
+		t.Fatal(err)
+	}
+	if kept.Group.Name != "alpha" || len(again.Cards) != 5 {
+		t.Fatalf("the repeated plan names the group %q with the cards %v", kept.Group.Name, planned(again.Cards))
+	}
+	for k, card := range again.Cards {
+		if card.Group == nil || *card.Group != group {
+			t.Fatalf("card %d of the repeated plan is in the group %v, not %s", k+1, card.Group, group)
+		}
+	}
+	if _, err := f.apply("core.layout.apply", `{"tree":`+string(again.Tree)+`}`); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.groupNames(); !slices.Equal(got, []string{"alpha:5"}) {
+		t.Fatalf("the kept group card is %v", got)
+	}
+	if kept := f.read("core.grid")["groups"].([]any)[0].(map[string]any)["id"]; kept != group {
+		t.Fatalf("the kept group card has the identifier %v, not %s", kept, group)
+	}
+}
+
+// contract: layout.plan.group-refusals
+func TestAGroupOfOneCardIsRefusedByThePlanAndTheApply(t *testing.T) {
+	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
+	before := f.described()
+	const want = "a group of the tree holds at least two cards"
+	tree := `{"tree":{"group":{},"tree":{"tabs":[{"plugin":"notes"}]}}}`
+	plan := f.mustPlan(tree)
+	if plan.Feasible || plan.Reason == nil || *plan.Reason != want {
+		t.Fatalf("the plan of a group of one card is feasible %v with the reason %v", plan.Feasible, plan.Reason)
+	}
+	if _, err := f.plan("core.layout.apply", tree); err == nil || err.Error() != want {
+		t.Fatalf("the apply of a group of one card answered %v", err)
+	}
+	if f.described() != before {
+		t.Fatal("the refused group changed the layout")
+	}
+}
+
+// contract: layout.plan.group-refusals
+func TestAGroupNameOutsideOneToFortyCharactersIsRefused(t *testing.T) {
+	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
+	before := f.described()
+	long := strings.Repeat("g", 41)
+	for _, name := range []string{`"   "`, `"` + long + `"`} {
+		want := "group name must be 1 to 40 characters: " + strings.TrimSpace(strings.Trim(name, `"`))
+		tree := `{"tree":` + groupRow(`{"name":`+name+`}`, 2) + `}`
+		plan := f.mustPlan(tree)
+		if plan.Feasible || plan.Reason == nil || *plan.Reason != want {
+			t.Fatalf("the plan with the name %s is feasible %v with the reason %v", name, plan.Feasible, plan.Reason)
+		}
+		if _, err := f.plan("core.layout.apply", tree); err == nil || err.Error() != want {
+			t.Fatalf("the apply with the name %s answered %v", name, err)
+		}
+	}
+	if f.described() != before {
+		t.Fatal("a refused group name changed the layout")
 	}
 }
