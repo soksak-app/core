@@ -91,6 +91,8 @@ function activityProjects() {
 const activityListeners = new Set();
 /* The receiver of the error of the activity values of a tab, which the error display of the page shows (docs/spec/activity.md). */
 let activityFailed = null;
+/* The receiver of the error of the program values of a tab, which the error display of the page shows (docs/spec/program-state.md). */
+let programFailed = null;
 
 const activityChanged = () => {
   for (const listener of activityListeners) listener();
@@ -110,8 +112,11 @@ const activity = createActivity({
   observe: (name, surface, fn) => registry.observe(name, surface, fn, { exact: true }),
   // default: a tab of a plugin that is not loaded, and a plugin record without activity, follow no status.
   statuses: (id) => (hasPlugin(id) ? plugin(id).activity ?? [] : []),
+  // default: a tab of a plugin that is not loaded, and a plugin without surface.program, has no program status.
+  programStatus: (id) => (hasPlugin(id) ? plugin(id).program ?? null : null),
   projects: activityProjects,
   failed: (tab, text) => activityFailed(tab, text),
+  programFailed: (tab, text) => programFailed(tab, text),
   changed: activityChanged,
   publish: (id, spaces) => {
     publishing = publishing.then(() => windows.projectActivity({ id, spaces })).catch((error) => {
@@ -141,6 +146,14 @@ projects.onProjectActivity(receivedProjectRecord);
 export function onActivityError(receiver) {
   activityFailed = receiver;
 }
+
+/** Sets the receiver of the error text of the program values of a tab, null when it is withdrawn (docs/spec/program-state.md#value). */
+export function onProgramError(receiver) {
+  programFailed = receiver;
+}
+
+/** The program state of a tab for core.grid, or null when the tab has none (docs/spec/program-state.md#status). */
+const programOf = (tab) => activity.programs()[tab] ?? null;
 
 /** Calls listener after the activities of this window changed. */
 export function onActivity(listener) {
@@ -289,7 +302,7 @@ function gridState() {
       pane: drawn ? pane++ : null,
       // The members of a tab are those of the layout tabs (docs/spec/groups.md#status-and-queries), beside its presentation members.
       tabs: tabs.map(({ id }) => ({ ...tabDescription(card, id, tabLabel(id)), label: tabLabel(id), notice: tabNotice(id),
-        footer: tabFooter(id), modified: tabModified(id), error: tabError(id) })),
+        footer: tabFooter(id), modified: tabModified(id), error: tabError(id), program: programOf(id) })),
       // Text that the content footer shows (docs/spec/example-model.md). default: a card that is not drawn yet has no footer text element, so the text is empty.
       status: el.querySelector(":scope > .status .status__text")?.textContent ?? "",
       active: tabs.length ? activeTab(card).id : null,

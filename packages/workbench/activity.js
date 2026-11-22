@@ -151,12 +151,17 @@ export function createProjectActivities() {
  * sync() starts and ends the watches after a layout, a project or the plugins changed; state() is {spaces, tabs} of windowActivity.
  * A project that leaves the window is not published again: the host removes its entry with its release.
  */
-export function createActivity({ observe, statuses, projects, changed, failed, publish }) {
-  // The followed tabs by id: the plugin, and each followed status by name with its value and the function that ends its watch.
+export function createActivity({ observe, statuses, programStatus = () => null, projects, changed, failed, programFailed, publish }) {
+  // The followed tabs by id: the plugin, each followed status by name with its value and the function that ends its watch, and the
+  // program status with its watch (null when the plugin declares none).
   const followed = new Map();
   // The tabs whose error is shown, with its text.
   const errors = new Map();
+  // The tabs whose program error is shown, with its text.
+  const programErrors = new Map();
   let state = { spaces: {}, tabs: {} };
+  // The program state of each tab that has one, by tab id (docs/spec/program-state.md#status).
+  let programs = {};
   // The published activities of the spaces of each project of the window, as JSON text, by project id.
   const published = new Map();
   let syncing = false;
@@ -164,8 +169,9 @@ export function createActivity({ observe, statuses, projects, changed, failed, p
   function derive() {
     if (syncing) return;
     const tabs = {};
-    for (const [tab, { plugin, watches }] of followed) {
-      const { activity, error } = tabActivity(plugin, tab, [...watches].map(([name, { value }]) => ({ name, value })));
+    const programStates = {};
+    for (const [tab, follow] of followed) {
+      const { activity, error } = tabActivity(follow.plugin, tab, [...follow.watches].map(([name, { value }]) => ({ name, value })));
       if (activity !== null) tabs[tab] = activity;
       // default: a tab without a recorded error has the error null.
       if (error !== (errors.get(tab) ?? null)) {
@@ -173,11 +179,25 @@ export function createActivity({ observe, statuses, projects, changed, failed, p
         else errors.set(tab, error);
         failed(tab, error);
       }
+      if (follow.programWatch === null) continue;
+      const { program, error: programError } = tabProgram(follow.plugin, follow.program, tab, follow.programWatch.value);
+      if (program !== null) programStates[tab] = program;
+      // default: a tab without a recorded program error has the error null.
+      if (programError !== (programErrors.get(tab) ?? null)) {
+        if (programError === null) programErrors.delete(tab);
+        else programErrors.set(tab, programError);
+        programFailed(tab, programError);
+      }
     }
     for (const tab of [...errors.keys()]) {
       if (followed.has(tab)) continue;
       errors.delete(tab);
       failed(tab, null);
+    }
+    for (const tab of [...programErrors.keys()]) {
+      if (followed.get(tab)?.programWatch) continue;
+      programErrors.delete(tab);
+      programFailed(tab, null);
     }
     const held = projects();
     const next = windowActivity(held, tabs);
@@ -192,8 +212,11 @@ export function createActivity({ observe, statuses, projects, changed, failed, p
       published.set(id, text);
       publish(id, spaces);
     }
-    if (JSON.stringify(next) === JSON.stringify(state)) return;
+    const activityChanged = JSON.stringify(next) !== JSON.stringify(state);
+    const programChanged = JSON.stringify(programStates) !== JSON.stringify(programs);
+    if (!activityChanged && !programChanged) return;
     state = next;
+    programs = programStates;
     changed();
   }
 
@@ -206,7 +229,8 @@ export function createActivity({ observe, statuses, projects, changed, failed, p
           // default: a seat card has null data, so it holds no tabs.
           for (const tab of card.data?.tabs ?? []) {
             const names = statuses(tab.plugin);
-            if (names.length) wanted.set(tab.id, { plugin: tab.plugin, names });
+            const program = programStatus(tab.plugin);
+            if (names.length || program !== null) wanted.set(tab.id, { plugin: tab.plugin, names, program });
           }
         }
       }
@@ -215,13 +239,15 @@ export function createActivity({ observe, statuses, projects, changed, failed, p
     try {
       for (const [tab, follow] of [...followed]) {
         const want = wanted.get(tab);
-        if (want?.plugin === follow.plugin && want.names.join("\n") === [...follow.watches.keys()].join("\n")) continue;
+        if (want?.plugin === follow.plugin && want.names.join("\n") === [...follow.watches.keys()].join("\n") &&
+          want.program === follow.program) continue;
         followed.delete(tab);
         for (const { stop } of follow.watches.values()) stop();
+        follow.programWatch?.stop();
       }
-      for (const [tab, { plugin, names }] of wanted) {
+      for (const [tab, { plugin, names, program }] of wanted) {
         if (followed.has(tab)) continue;
-        const follow = { plugin, watches: new Map() };
+        const follow = { plugin, watches: new Map(), program, programWatch: null };
         followed.set(tab, follow);
         for (const name of names) {
           const watch = { value: null, stop: null };
@@ -233,6 +259,16 @@ export function createActivity({ observe, statuses, projects, changed, failed, p
             derive();
           });
         }
+        if (program !== null) {
+          // A surface that has not registered the program status gives null, which gives no program state.
+          const watch = { value: null, stop: null };
+          follow.programWatch = watch;
+          watch.stop = observe(program, tab, (value) => {
+            if (followed.get(tab) !== follow) return;
+            watch.value = value;
+            derive();
+          });
+        }
       }
     } finally {
       syncing = false;
@@ -240,7 +276,26 @@ export function createActivity({ observe, statuses, projects, changed, failed, p
     derive();
   }
 
-  return { sync, state: () => state };
+  return { sync, state: () => state, programs: () => programs };
+}
+
+/** The program states of a tab, from the first to the last (docs/spec/program-state.md#value). */
+export const PROGRAM_STATES = Object.freeze(["idle", "working", "blocked"]);
+
+/**
+ * The program state of the tab tab from the value that its surface reports for the program status of plugin: an object whose only
+ * member is state, one of the program states, gives that state, and null gives none (docs/spec/program-state.md#value). Returns
+ * {program, error}: error is the text of any other value, which gives no program state, or null.
+ */
+export function tabProgram(plugin, status, tab, value) {
+  // default: a surface that has not registered the status reports null, which gives no program state.
+  if (value === null) return { program: null, error: null };
+  const keys = typeof value === "object" && !Array.isArray(value) ? Object.keys(value) : [];
+  if (keys.length === 1 && keys[0] === "state" && PROGRAM_STATES.includes(value.state)) return { program: { state: value.state }, error: null };
+  return {
+    program: null,
+    error: `${plugin} exposes ${status} on tab ${tab}: program value ${JSON.stringify(value)} is not null or an object with only the member state, one of ${PROGRAM_STATES.join(", ")}`,
+  };
 }
 
 /**
