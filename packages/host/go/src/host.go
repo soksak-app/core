@@ -287,18 +287,14 @@ func (s *Session) Shutdown() {
 	s.stopStallWatch()
 	RecordAppEvent("exit")
 	EmitClosed("exit", nil)
-	// An application update or a relaunch keeps the persistent services running for the application that starts next.
-	update := host.takeUpdate()
-	if update != nil {
+	if update := host.takeUpdate(); update != nil {
 		// The command waits for the end of this process, so it starts here, before the flush that stores its event and
 		// the error of a start that fails.
 		update.start()
-		host.sidecars.Detach()
-	} else {
-		// The quit hook ended the quit stop before the framework shut down, so this stop finds no sidecar that runs then
-		// (docs/spec/hosts.md#process-lifecycle).
-		host.sidecars.Stop()
 	}
+	// The quit hook ended the quit stop before the framework shut down, so this stop finds no sidecar that runs then
+	// (docs/spec/hosts.md#process-lifecycle).
+	host.sidecars.Stop()
 	if err := host.endpoint.Close(); err != nil {
 		LogError("endpoint close", err)
 	}

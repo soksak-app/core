@@ -1368,7 +1368,7 @@ fn the_quit_stop_exits_after_its_sidecars() {
             eprintln!("{STARTED}{pid}");
             let (end, ended) = channel::<()>();
             assert!(
-                !sidecars.quit_stop(false, move || end.send(()).unwrap()),
+                !sidecars.quit_stop(move || end.send(()).unwrap()),
                 "the quit stop accepted the exit while its sidecar runs"
             );
             // The gate holds the sidecar, so no exit can end the stop before the gate opens.
@@ -1385,12 +1385,12 @@ fn the_quit_stop_exits_after_its_sidecars() {
             ended.recv().unwrap();
             require_gone(pid);
             assert!(
-                sidecars.quit_stop(false, || panic!("the end of an ended quit stop ran again")),
+                sidecars.quit_stop(|| panic!("the end of an ended quit stop ran again")),
                 "the quit stop refused the exit after its sidecars exited"
             );
             let (empty, _empty_directory) = fixture_sidecars("on any echo\n");
             assert!(
-                empty.quit_stop(false, || panic!(
+                empty.quit_stop(|| panic!(
                     "the quit stop without a sidecar ran its end"
                 )),
                 "the quit stop without a sidecar refused the exit"
@@ -1434,18 +1434,18 @@ fn a_second_quit_kills_the_sidecars_that_the_quit_stop_waits_for() {
             eprintln!("{STARTED}{pid}");
             let (end, ended) = channel::<()>();
             assert!(
-                !sidecars.quit_stop(false, move || end.send(()).unwrap()),
+                !sidecars.quit_stop(move || end.send(()).unwrap()),
                 "the quit stop accepted the exit while its sidecar runs"
             );
             assert!(
-                !sidecars.quit_stop(false, || panic!("the second quit ran a second end")),
+                !sidecars.quit_stop(|| panic!("the second quit ran a second end")),
                 "the second quit accepted the exit while the sidecar runs"
             );
             // A second quit that kills nothing leaves the stop waiting, and the check stops at the limit of its runner.
             ended.recv().unwrap();
             require_gone(pid);
             assert!(
-                sidecars.quit_stop(false, || {}),
+                sidecars.quit_stop(|| {}),
                 "the quit stop refused the exit after the kill"
             );
         });

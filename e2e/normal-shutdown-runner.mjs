@@ -169,7 +169,17 @@ export async function runNormalShutdown({
     const { closedMs } = await untilShutdown(client, endpointFile, { from });
     let serviceObservationMs = "none";
     if (service) {
+      // The quit keeps the persistent service and its sessions for the application that starts next
+      // (docs/spec/persistent-services.md#service-transport), so the service runs and keeps its endpoint after the quit.
+      if (!existsSync(service.file)) throw new Error(`${service.file} was removed by the quit, which keeps the service`);
+      try {
+        process.kill(service.pid, 0);
+      } catch (error) {
+        throw new Error(`service PID ${service.pid} ended at the quit, which keeps the service: ${error?.message ?? error}`, { cause: error });
+      }
+      // The check ends the service that it started: the service exits on SIGTERM and removes its endpoint.
       const observationFrom = Date.now();
+      process.kill(service.pid, "SIGTERM");
       await runSokProcessWait({ binary: app.binary, configDir: app.configDir, pid: service.pid });
       if (existsSync(service.file)) throw new Error(`${service.file} remains after service PID ${service.pid} ended`);
       serviceObservationMs = Date.now() - observationFrom;

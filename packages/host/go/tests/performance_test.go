@@ -530,8 +530,8 @@ func TestTheSamplerAttributesTheKindsOfServiceMessages(t *testing.T) {
 			wakes[name] += count
 		}
 	}
-	// The echo of the close-owner request of the stop holds no ok, so it violates the protocol: a wake without a kind.
-	want := map[string]float64{"service-messages": 5, "service-messages.message": 3, "service-messages.image": 1}
+	// The stop ends the connection and sends no close-owner, so each wake is the wake of a line of a kind.
+	want := map[string]float64{"service-messages": 4, "service-messages.message": 3, "service-messages.image": 1}
 	for name, count := range want {
 		if wakes[name] != count {
 			t.Errorf("the samples count %v wakes of %s, want %v: %v", wakes[name], name, count, wakes)

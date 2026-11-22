@@ -120,7 +120,7 @@ func serveHarnessConnections(t *testing.T, listener net.Listener, connections in
 	return done
 }
 
-// contract: sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service, sidecars-transport.hello.declares-protocol-one, sidecars-transport.reconnect.after-connection-loss-preserves-owner, sidecars-transport.stop.close-owner-failure-returns-promptly
+// contract: sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service, sidecars-transport.hello.declares-protocol-one, sidecars-transport.reconnect.after-connection-loss-preserves-owner
 func TestPersistentTransportHarnessEndpointAuthConcurrentReconnectAndCloseAck(t *testing.T) {
 	// Two hosts open at the same time. The order in which a connection that one host connected again after a loss is made before the first connection of another host
 	// is also checked. The service must cut the first connection of each host regardless of that order.
@@ -215,96 +215,11 @@ func runHarnessReconnect(t *testing.T, sequential bool) {
 		}
 	}
 
-	// A failed close-owner reply ends the stop; a stop that waits past it stops at the limit of the runner.
+	// The stop ends the connections and sends no close-owner (docs/spec/persistent-services.md#service-transport).
 	first.Stop()
 	second.Stop()
 	if err := <-serverDone; err != nil {
 		t.Fatal(err)
-	}
-}
-
-// contract: sidecars-transport.stop.close-owner-then-shutdown
-func TestPersistentStopClosesOwnerThenRequestsServiceShutdown(t *testing.T) {
-	root := t.TempDir()
-	socketDirectory := support.SocketParent(t)
-	socket := filepath.Join(socketDirectory, "s.sock")
-	listener, err := net.Listen("unix", socket)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer listener.Close()
-	writeHarnessEndpoint(t, root, socket)
-
-	// The service must receive hello, open, close-owner and shutdown in this order.
-	operations := make(chan []string, 1)
-	serverDone := make(chan error, 1)
-	go func() {
-		connection, err := listener.Accept()
-		if err != nil {
-			serverDone <- err
-			return
-		}
-		defer connection.Close()
-		if err := connection.SetReadDeadline(time.Now().Add(support.Stall)); err != nil {
-			serverDone <- err
-			return
-		}
-		reader := bufio.NewReader(connection)
-		var seen []string
-		defer func() { operations <- seen }()
-		for {
-			line, err := reader.ReadBytes('\n')
-			if err != nil {
-				serverDone <- fmt.Errorf("after %v: %w", seen, err)
-				return
-			}
-			var request map[string]any
-			if err := json.Unmarshal(line, &request); err != nil {
-				serverDone <- err
-				return
-			}
-			operation, _ := request["operation"].(string)
-			if body, ok := request["body"].(map[string]any); ok {
-				operation, _ = body["operation"].(string)
-			}
-			seen = append(seen, operation)
-			var reply map[string]any
-			switch operation {
-			case "hello":
-				reply = map[string]any{"operation": "hello", "protocol": 1, "ok": true}
-			case "close-owner":
-				reply = map[string]any{"operation": "closed-owner", "request": request["request"], "ok": true}
-			case "shutdown":
-				reply = map[string]any{"operation": "shutdown", "request": request["request"], "ok": true}
-			}
-			if reply != nil {
-				encoded, _ := json.Marshal(reply)
-				if _, err := connection.Write(append(encoded, '\n')); err != nil {
-					serverDone <- err
-					return
-				}
-			}
-			if operation == "shutdown" {
-				serverDone <- nil
-				return
-			}
-		}
-	}()
-
-	sidecars, err := NewSidecars(support.HarnessDeclarations(t.TempDir()), root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	owner := support.NewSidecarRecorder(t, "/shutdown")
-	if err := owner.Send(sidecars, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
-		t.Fatal(err)
-	}
-	sidecars.Stop()
-	if err := <-serverDone; err != nil {
-		t.Fatalf("service did not receive shutdown: %v", err)
-	}
-	if got := strings.Join(<-operations, ","); got != "hello,open,close-owner,shutdown" {
-		t.Fatalf("service operations = %s, want hello,open,close-owner,shutdown", got)
 	}
 }
 
@@ -388,196 +303,6 @@ func TestPersistentStopDoesNotLogItsOwnCloseAsAReadError(t *testing.T) {
 	defer mu.Unlock()
 	if strings.Contains(written.String(), "persistent read") {
 		t.Fatalf("the stop logged its own close of the connection: %q", written.String())
-	}
-}
-
-// contract: sidecars-transport.stop.accepts-close-answers-sent-before-stop
-func TestPersistentStopAcceptsTheAnswerToACloseSentBeforeTheStop(t *testing.T) {
-	root := t.TempDir()
-	socketDirectory := support.SocketParent(t)
-	socket := filepath.Join(socketDirectory, "s.sock")
-	listener, err := net.Listen("unix", socket)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer listener.Close()
-	writeHarnessEndpoint(t, root, socket)
-
-	// The service does not reply to closed at once and replies after it receives close-owner. That reply comes after the stop started.
-	operations := make(chan []string, 1)
-	go func() {
-		var seen []string
-		defer func() { operations <- seen }()
-		connection, err := listener.Accept()
-		if err != nil {
-			return
-		}
-		defer connection.Close()
-		if err := connection.SetReadDeadline(time.Now().Add(support.Stall)); err != nil {
-			return
-		}
-		reader := bufio.NewReader(connection)
-		for {
-			line, err := reader.ReadBytes('\n')
-			if err != nil {
-				return
-			}
-			var request map[string]any
-			if err := json.Unmarshal(line, &request); err != nil {
-				return
-			}
-			operation, _ := request["operation"].(string)
-			if body, ok := request["body"].(map[string]any); ok {
-				operation, _ = body["operation"].(string)
-			}
-			if closed, _ := request["closed"].(bool); closed {
-				operation = "closed"
-			}
-			seen = append(seen, operation)
-			var replies []map[string]any
-			switch operation {
-			case "hello":
-				replies = []map[string]any{{"operation": "hello", "protocol": 1, "ok": true}}
-			case "close-owner":
-				replies = []map[string]any{
-					{"surface": "surface", "closed": true},
-					{"operation": "closed-owner", "request": request["request"], "ok": true},
-				}
-			case "shutdown":
-				replies = []map[string]any{{"operation": "shutdown", "request": request["request"], "ok": true}}
-			}
-			for _, reply := range replies {
-				encoded, _ := json.Marshal(reply)
-				if _, err := connection.Write(append(encoded, '\n')); err != nil {
-					return
-				}
-			}
-			if operation == "shutdown" {
-				return
-			}
-		}
-	}()
-
-	sidecars, err := NewSidecars(support.HarnessDeclarations(t.TempDir()), root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	owner := support.NewSidecarRecorder(t, "/late")
-	if err := owner.Send(sidecars, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
-		t.Fatal(err)
-	}
-	sidecars.Close("surface")
-	sidecars.Stop()
-	if got := strings.Join(<-operations, ","); got != "hello,open,closed,close-owner,shutdown" {
-		t.Fatalf("service operations = %s, want hello,open,closed,close-owner,shutdown", got)
-	}
-	if closing := sidecars.Closing(); len(closing) != 0 {
-		t.Fatalf("closing after stop = %v, want none", closing)
-	}
-}
-
-// contract: sidecars.image.stop-answers-late-persistent-image-before-shutdown
-func TestPersistentStopAnswersADiscardedImageBeforeServiceShutdown(t *testing.T) {
-	written := support.CaptureLog(t)
-	root := t.TempDir()
-	socketDirectory := support.SocketParent(t)
-	socket := filepath.Join(socketDirectory, "s.sock")
-	listener, err := net.Listen("unix", socket)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer listener.Close()
-	writeHarnessEndpoint(t, root, socket)
-	operations := make(chan []string, 1)
-	served := make(chan error, 1)
-	go func() {
-		connection, err := listener.Accept()
-		if err != nil {
-			served <- err
-			return
-		}
-		defer connection.Close()
-		reader := bufio.NewReader(connection)
-		seen := make([]string, 0)
-		for {
-			line, err := reader.ReadBytes('\n')
-			if err != nil {
-				served <- err
-				operations <- seen
-				return
-			}
-			var request map[string]any
-			if err := json.Unmarshal(line, &request); err != nil {
-				served <- err
-				operations <- seen
-				return
-			}
-			operation, _ := request["operation"].(string)
-			if request["closed"] == true {
-				operation = "closed"
-			}
-			body, hasBody := request["body"].(map[string]any)
-			if hasBody {
-				if bodyOperation, ok := body["operation"].(string); ok {
-					operation = bodyOperation
-				} else if image, ok := body["image"].(map[string]any); ok && image["error"] == "closed" {
-					operation = "image-reply"
-				}
-			}
-			seen = append(seen, operation)
-			switch operation {
-			case "hello":
-				_, err = io.WriteString(connection, `{"operation":"hello","protocol":1,"version":"0.0.1","ok":true}`+"\n")
-			case "close-owner":
-				image := `{"surface":"surface","body":{"image":{"format":"bgra8","generation":3,"height":10,"name":"view","raster":4,"scale":1.0,"sequence":5,"token":{"id":7,"kind":"iosurface-global"},"width":10}}}`
-				if _, err = io.WriteString(connection, image+"\n"); err == nil {
-					requestID, _ := request["request"].(string)
-					closed, _ := json.Marshal(map[string]any{"operation": "closed-owner", "request": requestID, "ok": true})
-					_, err = connection.Write(append(closed, '\n'))
-				}
-			case "shutdown":
-				requestID, _ := request["request"].(string)
-				closed, _ := json.Marshal(map[string]any{"operation": "shutdown", "request": requestID, "ok": true})
-				if _, err = connection.Write(append(closed, '\n')); err == nil {
-					operations <- seen
-					served <- nil
-					return
-				}
-			case "open":
-				_, err = io.WriteString(connection, `{"surface":"surface","body":{"event":"opened"}}`+"\n")
-			case "image-reply", "closed":
-				continue
-			}
-			if err != nil {
-				served <- err
-				operations <- seen
-				return
-			}
-		}
-	}()
-
-	declarations := support.HarnessDeclarations(t.TempDir())
-	declarations[0].Version = "0.0.1"
-	sidecars, err := NewSidecars(declarations, root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	owner := support.NewSidecarRecorder(t, "/late-image")
-	if err := owner.Send(sidecars, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
-		t.Fatal(err)
-	}
-	owner.Next(t)
-	sidecars.Close("surface")
-	sidecars.Stop()
-	got := written()
-	if strings.Contains(got, "error host sidecar fixture-service: answer of the image of closed surface surface: sidecars are stopped") {
-		t.Fatalf("stop rejected a transfer image while its persistent connection was still open: %s", got)
-	}
-	if err := <-served; err != nil {
-		t.Fatal(err)
-	}
-	if seen := <-operations; !slices.Equal(seen, []string{"hello", "open", "closed", "close-owner", "image-reply", "shutdown"}) {
-		t.Fatalf("service operations = %v, want image reply before shutdown; log=%s", seen, got)
 	}
 }
 
@@ -741,21 +466,12 @@ func TestPersistentTransportReplacesEndpointLeftByDeadService(t *testing.T) {
 			serverDone <- err
 			return
 		}
-		line, err = reader.ReadBytes('\n')
-		if err != nil {
-			serverDone <- err
+		// The stop ends the connection and sends no close-owner (docs/spec/persistent-services.md#service-transport).
+		if line, err := reader.ReadBytes('\n'); err != io.EOF {
+			serverDone <- fmt.Errorf("the stop sent %q (%v) instead of ending the connection", line, err)
 			return
 		}
-		var closeRequest map[string]any
-		if err := json.Unmarshal(line, &closeRequest); err != nil {
-			serverDone <- err
-			return
-		}
-		response, _ := json.Marshal(map[string]any{
-			"operation": "closed-owner", "request": closeRequest["request"], "ok": false, "error": "test close",
-		})
-		_, err = connection.Write(append(response, '\n'))
-		serverDone <- err
+		serverDone <- nil
 	}()
 
 	sidecars, err := NewSidecars(support.HarnessDeclarations(executableDir), configDir)
@@ -848,20 +564,12 @@ func replacesTheEndpointOfAnotherProcess(t *testing.T, pid int, published time.T
 			serverDone <- err
 			return
 		}
-		if line, err = reader.ReadBytes('\n'); err != nil {
-			serverDone <- err
+		// The stop ends the connection and sends no close-owner (docs/spec/persistent-services.md#service-transport).
+		if line, err := reader.ReadBytes('\n'); err != io.EOF {
+			serverDone <- fmt.Errorf("the stop sent %q (%v) instead of ending the connection", line, err)
 			return
 		}
-		var closeRequest map[string]any
-		if err := json.Unmarshal(line, &closeRequest); err != nil {
-			serverDone <- err
-			return
-		}
-		response, _ := json.Marshal(map[string]any{
-			"operation": "closed-owner", "request": closeRequest["request"], "ok": false, "error": "test close",
-		})
-		_, err = connection.Write(append(response, '\n'))
-		serverDone <- err
+		serverDone <- nil
 	}()
 
 	sidecars, err := NewSidecars(support.HarnessDeclarations(executableDir), configDir)
@@ -2740,10 +2448,10 @@ func TestAStopLeavesTheCloseOfAReplacementToTheReplacement(t *testing.T) {
 	}
 	close(service.hold)
 	<-stopped
-	// The replacement either sends shutdown into the room that the answers make or ends the connection because the sidecars are
-	// stopped; both end the connection without a second close-owner.
-	if err := <-replaced; err != nil && !strings.Contains(err.Error(), "sidecars are stopped") {
-		t.Fatalf("the replacement failed: %v", err)
+	// The stop ends the connection: the replacement succeeds when its shutdown was answered first, and fails otherwise. The
+	// connection ends without a second close-owner.
+	if err := <-replaced; err != nil {
+		t.Logf("the replacement ended with: %v", err)
 	}
 	// The service reads every line of the connection until it ends, so after the end it has read each close-owner that any stop
 	// could have sent.
@@ -2759,19 +2467,12 @@ func TestAStopLeavesTheCloseOfAReplacementToTheReplacement(t *testing.T) {
 	}
 }
 
-// A quit request while the quit stop waits for the close of a persistent owner ends the connection of the service and records it;
-// the stop then ends by the end of the connection (docs/spec/hosts.md#process-lifecycle).
-// contract: sidecars.stop.second-quit-ends-service-connections
-func TestASecondQuitEndsTheConnectionOfAServiceThatTheQuitStopWaitsFor(t *testing.T) {
-	written := support.CaptureLog(t)
+// The quit stop ends the connection of a persistent service and sends it no close-owner and no shutdown, so the service keeps
+// its sessions for the application that starts next (docs/spec/persistent-services.md#service-transport).
+// contract: sidecars-transport.stop.keeps-the-sessions-of-a-persistent-service
+func TestTheQuitStopKeepsTheSessionsOfAPersistentService(t *testing.T) {
 	root := t.TempDir()
 	service := serveReplaceService(t, root, "0.0.7", "0.0.7")
-	// The service holds its answer to close-owner, so only the end of the connection ends the close of the stop. A held service
-	// reads nothing, so it sees the end of the connection only after the release of its answer.
-	service.hold = make(chan struct{})
-	release := sync.OnceFunc(func() { close(service.hold) })
-	defer release()
-	service.closeOwner = make(chan struct{}, 4)
 	service.firstEnded = make(chan struct{})
 	sidecars := replaceSidecars(t, root, service)
 	owner := support.NewSidecarRecorder(t, "/replace")
@@ -2780,58 +2481,22 @@ func TestASecondQuitEndsTheConnectionOfAServiceThatTheQuitStopWaitsFor(t *testin
 	}
 	owner.Next(t)
 	ended := make(chan struct{})
-	if sidecars.QuitStop(false, func() { close(ended) }) {
-		t.Fatal("the quit stop accepted the exit while the close of the owner runs")
+	if !sidecars.QuitStop(func() { close(ended) }) {
+		// A stop that waits for an answer of the service does not end, and the check stops at the limit of its runner.
+		<-ended
 	}
-	// The close of the stop has reached the service, which holds its answer.
-	<-service.closeOwner
-	select {
-	case <-ended:
-		t.Fatal("the quit stop ended while the service holds its answer to close-owner")
-	default:
-	}
-	if sidecars.QuitStop(false, func() { t.Error("the second quit ran a second end") }) {
-		t.Fatal("the second quit accepted the exit while the close of the owner runs")
-	}
-	// A second quit that ends no connection leaves the stop waiting, and the check stops at the limit of its runner.
-	<-ended
-	// The stop ended while the service still holds its answer. Released, the service answers and reads on: its connection ends
-	// only when the second quit ended it, so a connection that stays open leaves the check at the limit of its runner.
-	release()
-	<-service.firstEnded
-	if !sidecars.QuitStop(false, func() {}) {
-		t.Fatal("the quit stop refused the exit after the end of the connection")
-	}
-	want := "info host sidecar fixture-service: the second quit ends the connection of the service\n"
-	if logged := written(); !strings.Contains(logged, want) {
-		t.Fatalf("log %q does not contain %q", logged, want)
-	}
-}
-
-// contract: sidecars-transport.detach.closes-the-connection-without-closing-the-owner
-func TestDetachClosesTheConnectionOfAPersistentServiceWithoutClosingTheOwner(t *testing.T) {
-	root := t.TempDir()
-	service := serveReplaceService(t, root, "0.0.7", "0.0.7")
-	service.firstEnded = make(chan struct{})
-	sidecars := replaceSidecars(t, root, service)
-	owner := support.NewSidecarRecorder(t, "/replace")
-	if err := owner.Send(sidecars, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
-		t.Fatal(err)
-	}
-	owner.Next(t)
-	sidecars.Detach()
 	// The connection ends, which is the only thing that the service learns, and the sessions of the service stay.
 	<-service.firstEnded
 	for _, operation := range service.received() {
 		if operation == "close-owner" || operation == "shutdown" {
-			t.Fatalf("the service received %v", service.received())
+			t.Fatalf("the quit stop sent to the service: %v", service.received())
 		}
 	}
-	// Stopping after a detach does nothing more to the service.
+	// The stop of the exit after the quit stop does nothing more to the service.
 	sidecars.Stop()
 	for _, operation := range service.received() {
 		if operation == "close-owner" || operation == "shutdown" {
-			t.Fatalf("the stop after the detach sent to the service: %v", service.received())
+			t.Fatalf("the stop after the quit stop sent to the service: %v", service.received())
 		}
 	}
 }

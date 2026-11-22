@@ -682,8 +682,6 @@ pub fn run_event(app: &AppHandle, event: RunEvent) {
         {
             stop();
         }
-        // An application update or a relaunch keeps the persistent services running for the application that starts
-        // next.
         let update = app
             .state::<windows::Windows>()
             .update
@@ -696,12 +694,10 @@ pub fn run_event(app: &AppHandle, event: RunEvent) {
             // The command waits for the end of this process, so it starts here, before the flush that stores its event
             // and the error of a start that fails.
             pending.start();
-            app.state::<WindowSidecars>().detach();
-        } else {
-            // The exit request ended the quit stop before the event loop ended, so this stop finds no sidecar that runs
-            // then (docs/spec/hosts.md#process-lifecycle).
-            app.state::<WindowSidecars>().stop();
         }
+        // The exit request ended the quit stop before the event loop ended, so this stop finds no sidecar that runs then
+        // (docs/spec/hosts.md#process-lifecycle).
+        app.state::<WindowSidecars>().stop();
         exposure::stop(app);
         if let Some(stop) = app
             .state::<LogIndexStop>()

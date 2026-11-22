@@ -337,7 +337,7 @@ fn concurrent_hosts_share_an_authenticated_service_endpoint() {
     );
 }
 
-// contract: sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service, sidecars-transport.hello.declares-protocol-one, sidecars-transport.reconnect.after-connection-loss-preserves-owner, sidecars-transport.stop.close-owner-failure-returns-promptly
+// contract: sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service, sidecars-transport.hello.declares-protocol-one, sidecars-transport.reconnect.after-connection-loss-preserves-owner
 #[test]
 fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
     let executable_directory = folder::Folder::new();
@@ -648,16 +648,13 @@ fn persistent_transport_replaces_endpoint_left_by_a_dead_service() {
         line.clear();
         reader.read_line(&mut line).unwrap();
         stream.write_all(line.as_bytes()).unwrap();
+        // The stop ends the connection and sends no close-owner (docs/spec/persistent-services.md#service-transport).
         line.clear();
-        reader.read_line(&mut line).unwrap();
-        let close: serde_json::Value = serde_json::from_str(&line).unwrap();
-        let reply = serde_json::json!({
-            "operation": "closed-owner",
-            "request": close["request"],
-            "ok": false,
-            "error": "test close"
-        });
-        writeln!(stream, "{reply}").unwrap();
+        assert_eq!(
+            reader.read_line(&mut line).unwrap(),
+            0,
+            "the stop sent {line:?} instead of ending the connection"
+        );
     });
 
     sidecars
@@ -734,16 +731,13 @@ fn replaces_the_endpoint_of_another_process(pid: u32, published: std::time::Syst
         line.clear();
         reader.read_line(&mut line).unwrap();
         stream.write_all(line.as_bytes()).unwrap();
+        // The stop ends the connection and sends no close-owner (docs/spec/persistent-services.md#service-transport).
         line.clear();
-        reader.read_line(&mut line).unwrap();
-        let close: serde_json::Value = serde_json::from_str(&line).unwrap();
-        let reply = serde_json::json!({
-            "operation": "closed-owner",
-            "request": close["request"],
-            "ok": false,
-            "error": "test close"
-        });
-        writeln!(stream, "{reply}").unwrap();
+        assert_eq!(
+            reader.read_line(&mut line).unwrap(),
+            0,
+            "the stop sent {line:?} instead of ending the connection"
+        );
     });
 
     if let Err(error) = sidecars.send_as(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#)) {
@@ -824,89 +818,6 @@ fn persistent_transport_reports_live_but_unreachable_endpoint_without_replacemen
     assert!(error.contains("connect authenticated service"), "{error}");
     assert_eq!(std::fs::read(&endpoint_path).unwrap(), original);
     sidecars.stop();
-}
-
-// contract: sidecars-transport.stop.close-owner-then-shutdown
-#[test]
-fn persistent_stop_closes_owner_then_requests_service_shutdown() {
-    let executable_directory = folder::Folder::new();
-    let config_directory = folder::Folder::new();
-    let service_directory = config_directory.path().join("services/echo");
-    std::fs::create_dir_all(&service_directory).unwrap();
-    let socket_path = service_directory.join("shutdown.sock");
-    let listener = UnixListener::bind(&socket_path).unwrap();
-    let endpoint = serde_json::json!({
-        "protocol": 1,
-        "pid": std::process::id(),
-        "socket": socket_path,
-        "token": "shutdown-token"
-    });
-    std::fs::write(
-        service_directory.join("endpoint.json"),
-        serde_json::to_vec(&endpoint).unwrap(),
-    )
-    .unwrap();
-
-    let service = std::thread::spawn(move || {
-        let (mut stream, _) = listener.accept().unwrap();
-        stream
-            .set_read_timeout(Some(Duration::from_secs(2)))
-            .unwrap();
-        let mut reader = BufReader::new(stream.try_clone().unwrap());
-        let mut line = String::new();
-        reader.read_line(&mut line).unwrap();
-        let hello: serde_json::Value = serde_json::from_str(&line).unwrap();
-        assert_eq!(hello["operation"], "hello");
-        assert_eq!(hello["token"], "shutdown-token");
-        stream
-            .write_all(
-                br#"{"operation":"hello","protocol":1,"ok":true}
-"#,
-            )
-            .unwrap();
-
-        line.clear();
-        reader.read_line(&mut line).unwrap();
-        let request: serde_json::Value = serde_json::from_str(&line).unwrap();
-        assert_eq!(request["body"]["operation"], "open");
-
-        line.clear();
-        reader.read_line(&mut line).unwrap();
-        let close: serde_json::Value = serde_json::from_str(&line).unwrap();
-        assert_eq!(close["operation"], "close-owner");
-        let close_reply = serde_json::json!({
-            "operation": "closed-owner",
-            "request": close["request"],
-            "ok": true
-        });
-        writeln!(stream, "{}", close_reply).unwrap();
-
-        line.clear();
-        reader.read_line(&mut line).unwrap();
-        let shutdown: serde_json::Value = serde_json::from_str(&line).unwrap();
-        assert_eq!(shutdown["operation"], "shutdown");
-        let shutdown_reply = serde_json::json!({
-            "operation": "shutdown",
-            "request": shutdown["request"],
-            "ok": true
-        });
-        writeln!(stream, "{}", shutdown_reply).unwrap();
-    });
-
-    let fixture = files(
-        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
-    );
-    let sidecars = Sidecars::new(
-        &declare(&fixture, executable_directory.path()),
-        config_directory.path().to_path_buf(),
-    )
-    .unwrap();
-    let (owner, _events) = owner("shutdown", "/projects/shutdown");
-    sidecars
-        .send_as(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
-        .unwrap();
-    sidecars.stop();
-    service.join().unwrap();
 }
 
 // contract: sidecars-transport.stop.own-close-is-not-a-read-error
@@ -991,308 +902,6 @@ fn persistent_stop_does_not_log_its_own_close_as_a_read_error() {
     sidecars.stop();
     release.send(()).unwrap();
     service.join().unwrap();
-}
-
-// A quit request while the quit stop waits for the close of a persistent owner ends the connection of the service and
-// records it; the stop then ends by the end of the connection (docs/spec/hosts.md#process-lifecycle).
-// contract: sidecars.stop.second-quit-ends-service-connections
-#[test]
-fn a_second_quit_ends_the_connection_of_a_service_that_the_quit_stop_waits_for() {
-    // The log is the standard error, so the same check runs as a child process and its output is read.
-    if std::env::var_os("SOKSAK_SECOND_QUIT_CHILD").is_none() {
-        let output = std::process::Command::new(std::env::current_exe().unwrap())
-            .args([
-                "--exact",
-                "a_second_quit_ends_the_connection_of_a_service_that_the_quit_stop_waits_for",
-                "--nocapture",
-            ])
-            .env("SOKSAK_SECOND_QUIT_CHILD", "1")
-            .output()
-            .unwrap();
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        assert!(output.status.success(), "the child check failed: {stderr}");
-        let want = format!(
-            "info host sidecar {ECHO}: the second quit ends the connection of the service\n"
-        );
-        assert!(
-            stderr.contains(&want),
-            "log {stderr:?} does not contain {want:?}"
-        );
-        return;
-    }
-    // The child writes its records through a writer, which prints them on its standard error at the end.
-    records::capturing(|| {
-        let executable_directory = folder::Folder::new();
-        let config_directory = folder::Folder::new();
-        let service_directory = config_directory.path().join("services/echo");
-        std::fs::create_dir_all(&service_directory).unwrap();
-        let socket_path = service_directory.join("second-quit.sock");
-        let listener = UnixListener::bind(&socket_path).unwrap();
-        let endpoint = serde_json::json!({
-            "protocol": 1,
-            "pid": std::process::id(),
-            "socket": socket_path,
-            "token": "second-quit-token"
-        });
-        std::fs::write(
-            service_directory.join("endpoint.json"),
-            serde_json::to_vec(&endpoint).unwrap(),
-        )
-        .unwrap();
-        // The service never answers close-owner, so only the end of the connection ends the close of the stop. It reads until
-        // the connection ends.
-        let (seen_sender, seen) = channel::<String>();
-        let service = thread::spawn(move || {
-            let (mut stream, _) = listener.accept().unwrap();
-            let mut reader = BufReader::new(stream.try_clone().unwrap());
-            let mut line = String::new();
-            loop {
-                line.clear();
-                if reader.read_line(&mut line).unwrap_or(0) == 0 {
-                    break;
-                }
-                let request: serde_json::Value = serde_json::from_str(&line).unwrap();
-                let operation = request["operation"].as_str().unwrap_or("").to_string();
-                if operation == "hello" {
-                    let reply =
-                        serde_json::json!({"operation": "hello", "protocol": 1, "ok": true});
-                    writeln!(stream, "{reply}").unwrap();
-                }
-                seen_sender.send(operation).unwrap();
-            }
-        });
-        let fixture = files(
-            r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
-        );
-        let sidecars = Sidecars::new(
-            &declare(&fixture, executable_directory.path()),
-            config_directory.path().to_path_buf(),
-        )
-        .unwrap();
-        let (owner, _events) = owner("second-quit", "/projects/second-quit");
-        sidecars
-            .send_as(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
-            .unwrap();
-        let (end, ended) = channel::<()>();
-        assert!(
-            !sidecars.quit_stop(false, move || end.send(()).unwrap()),
-            "the quit stop accepted the exit while the close of the owner runs"
-        );
-        // The close of the stop has reached the service, which does not answer it.
-        while seen.recv().unwrap() != "close-owner" {}
-        assert!(
-            ended.try_recv().is_err(),
-            "the quit stop ended while the service holds its answer to close-owner"
-        );
-        assert!(
-            !sidecars.quit_stop(false, || panic!("the second quit ran a second end")),
-            "the second quit accepted the exit while the close of the owner runs"
-        );
-        // A second quit that ends no connection leaves the stop waiting, and the check stops at the limit of its runner.
-        ended.recv().unwrap();
-        service.join().unwrap();
-        assert!(
-            sidecars.quit_stop(false, || {}),
-            "the quit stop refused the exit after the end of the connection"
-        );
-    });
-}
-
-// contract: sidecars-transport.stop.accepts-close-answers-sent-before-stop
-#[test]
-fn persistent_stop_accepts_the_answer_to_a_close_sent_before_the_stop() {
-    let executable_directory = folder::Folder::new();
-    let config_directory = folder::Folder::new();
-    let service_directory = config_directory.path().join("services/echo");
-    std::fs::create_dir_all(&service_directory).unwrap();
-    let socket_path = service_directory.join("late.sock");
-    let listener = UnixListener::bind(&socket_path).unwrap();
-    let endpoint = serde_json::json!({
-        "protocol": 1,
-        "pid": std::process::id(),
-        "socket": socket_path,
-        "token": "late-token"
-    });
-    std::fs::write(
-        service_directory.join("endpoint.json"),
-        serde_json::to_vec(&endpoint).unwrap(),
-    )
-    .unwrap();
-
-    // The service does not answer closed at once and answers after it received close-owner. That answer comes after the
-    // stop started.
-    let service = std::thread::spawn(move || {
-        let (mut stream, _) = listener.accept().unwrap();
-        stream
-            .set_read_timeout(Some(Duration::from_secs(2)))
-            .unwrap();
-        let mut reader = BufReader::new(stream.try_clone().unwrap());
-        let mut seen = Vec::new();
-        loop {
-            let mut line = String::new();
-            if reader.read_line(&mut line).unwrap_or(0) == 0 {
-                return seen;
-            }
-            let request: serde_json::Value = serde_json::from_str(&line).unwrap();
-            let operation = if request["closed"] == true {
-                "closed".to_string()
-            } else if let Some(operation) = request["body"]["operation"].as_str() {
-                operation.to_string()
-            } else {
-                request["operation"].as_str().unwrap_or("").to_string()
-            };
-            seen.push(operation.clone());
-            match operation.as_str() {
-                "hello" => {
-                    writeln!(stream, r#"{{"operation":"hello","protocol":1,"ok":true}}"#).unwrap()
-                }
-                "close-owner" => {
-                    writeln!(stream, r#"{{"surface":"surface","closed":true}}"#).unwrap();
-                    let reply = serde_json::json!({
-                        "operation": "closed-owner",
-                        "request": request["request"],
-                        "ok": true
-                    });
-                    writeln!(stream, "{reply}").unwrap();
-                }
-                "shutdown" => {
-                    let reply = serde_json::json!({
-                        "operation": "shutdown",
-                        "request": request["request"],
-                        "ok": true
-                    });
-                    writeln!(stream, "{reply}").unwrap();
-                    return seen;
-                }
-                _ => {}
-            }
-        }
-    });
-
-    let fixture = files(
-        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
-    );
-    let sidecars = Sidecars::new(
-        &declare(&fixture, executable_directory.path()),
-        config_directory.path().to_path_buf(),
-    )
-    .unwrap();
-    let (owner, _events) = owner("late", "/projects/late");
-    sidecars
-        .send_as(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
-        .unwrap();
-    sidecars.retain(&owner, &|_| false).unwrap();
-    sidecars.stop();
-    assert_eq!(
-        service.join().unwrap(),
-        ["hello", "open", "closed", "close-owner", "shutdown"]
-    );
-    assert!(
-        sidecars.closing().is_empty(),
-        "{:?}",
-        sidecars.closing().len()
-    );
-}
-
-// contract: sidecars.image.stop-answers-late-persistent-image-before-shutdown
-#[test]
-fn persistent_stop_answers_a_discarded_image_before_service_shutdown() {
-    let executable_directory = folder::Folder::new();
-    let config_directory = folder::Folder::new();
-    let service_directory = config_directory.path().join("services/echo");
-    std::fs::create_dir_all(&service_directory).unwrap();
-    let socket_path = service_directory.join("late-image.sock");
-    let listener = UnixListener::bind(&socket_path).unwrap();
-    let endpoint = serde_json::json!({
-        "protocol": 1,
-        "pid": std::process::id(),
-        "socket": socket_path,
-        "token": "late-image-token"
-    });
-    std::fs::write(
-        service_directory.join("endpoint.json"),
-        serde_json::to_vec(&endpoint).unwrap(),
-    )
-    .unwrap();
-
-    let service = std::thread::spawn(move || {
-        let (mut stream, _) = listener.accept().unwrap();
-        let mut reader = BufReader::new(stream.try_clone().unwrap());
-        let mut seen = Vec::new();
-        loop {
-            let mut line = String::new();
-            if reader.read_line(&mut line).unwrap_or(0) == 0 {
-                return seen;
-            }
-            let request: serde_json::Value = serde_json::from_str(&line).unwrap();
-            let operation = if request["closed"] == true {
-                "closed"
-            } else if let Some(operation) = request["body"]["operation"].as_str() {
-                operation
-            } else if request["body"]["image"]["error"] == "closed" {
-                "image-reply"
-            } else {
-                request["operation"].as_str().unwrap_or("")
-            };
-            seen.push(operation.to_string());
-            match operation {
-                "hello" => {
-                    writeln!(stream, r#"{{"operation":"hello","protocol":1,"ok":true}}"#).unwrap()
-                }
-                "open" => writeln!(
-                    stream,
-                    r#"{{"surface":"surface","body":{{"event":"opened"}}}}"#
-                )
-                .unwrap(),
-                "close-owner" => {
-                    writeln!(stream, r#"{{"surface":"surface","body":{{"image":{{"format":"bgra8","generation":3,"height":10,"name":"view","raster":4,"scale":1.0,"sequence":5,"token":{{"id":7,"kind":"iosurface-global"}},"width":10}}}}}}"#).unwrap();
-                    let reply = serde_json::json!({
-                        "operation": "closed-owner",
-                        "request": request["request"],
-                        "ok": true
-                    });
-                    writeln!(stream, "{reply}").unwrap();
-                }
-                "shutdown" => {
-                    let reply = serde_json::json!({
-                        "operation": "shutdown",
-                        "request": request["request"],
-                        "ok": true
-                    });
-                    writeln!(stream, "{reply}").unwrap();
-                    return seen;
-                }
-                _ => {}
-            }
-        }
-    });
-
-    let fixture = files(
-        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
-    );
-    let sidecars = Sidecars::new(
-        &declare(&fixture, executable_directory.path()),
-        config_directory.path().to_path_buf(),
-    )
-    .unwrap();
-    let (window, events) = owner("late-image", "/projects/late-image");
-    sidecars
-        .send_as(&window, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
-        .unwrap();
-    assert_eq!(events.recv().unwrap().body.get(), r#"{"event":"opened"}"#);
-    sidecars.retain(&window, &|_| false).unwrap();
-    sidecars.stop();
-    assert_eq!(
-        service.join().unwrap(),
-        [
-            "hello",
-            "open",
-            "closed",
-            "close-owner",
-            "image-reply",
-            "shutdown"
-        ]
-    );
 }
 
 // contract: sidecars.stop.stdin-eof-cancels-late-image
@@ -2548,16 +2157,13 @@ fn persistent_service_starts_in_a_new_session() {
         line.clear();
         reader.read_line(&mut line).unwrap();
         stream.write_all(line.as_bytes()).unwrap();
+        // The stop ends the connection and sends no close-owner (docs/spec/persistent-services.md#service-transport).
         line.clear();
-        reader.read_line(&mut line).unwrap();
-        let close: serde_json::Value = serde_json::from_str(&line).unwrap();
-        let reply = serde_json::json!({
-            "operation": "closed-owner",
-            "request": close["request"],
-            "ok": false,
-            "error": "test close"
-        });
-        writeln!(stream, "{reply}").unwrap();
+        assert_eq!(
+            reader.read_line(&mut line).unwrap(),
+            0,
+            "the stop sent {line:?} instead of ending the connection"
+        );
     });
 
     sidecars
@@ -3521,7 +3127,10 @@ fn stop_does_not_close_the_owner_again_while_a_replacement_closes_it() {
     };
     release.send(()).unwrap();
     stopping.join().unwrap();
-    replacing.join().unwrap().unwrap();
+    // The stop ends the connection: the replacement succeeds when its shutdown was answered first, and fails otherwise.
+    if let Err(error) = replacing.join().unwrap() {
+        eprintln!("the replacement ended with: {error}");
+    }
     service.join().unwrap();
     // The stop leaves the close of the owner to the replacement: of the lines that the service read after the first
     // close-owner until its connection ended, none is a second close-owner. The service thread held the sender, so the
@@ -3533,9 +3142,11 @@ fn stop_does_not_close_the_owner_again_while_a_replacement_closes_it() {
     );
 }
 
-// contract: sidecars-transport.detach.closes-the-connection-without-closing-the-owner
+// The quit stop ends the connection of a persistent service and sends it no close-owner and no shutdown, so the service
+// keeps its sessions for the application that starts next (docs/spec/persistent-services.md#service-transport).
+// contract: sidecars-transport.stop.keeps-the-sessions-of-a-persistent-service
 #[test]
-fn detach_closes_the_connection_of_a_persistent_service_without_closing_the_owner() {
+fn the_quit_stop_keeps_the_sessions_of_a_persistent_service() {
     let executable_directory = folder::Folder::new();
     let config_directory = folder::Folder::new();
     let service = serve_replace_service(
@@ -3547,12 +3158,16 @@ fn detach_closes_the_connection_of_a_persistent_service_without_closing_the_owne
         0,
     );
     let sidecars = replace_sidecars(config_directory.path(), executable_directory.path());
-    let (owner, events) = owner("detach", "/projects/detach");
+    let (owner, events) = owner("quit-stop", "/projects/quit-stop");
     sidecars
         .send_as(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     events.recv().unwrap();
-    sidecars.detach();
+    let (end, ended) = channel::<()>();
+    if !sidecars.quit_stop(move || end.send(()).unwrap()) {
+        // A stop that waits for an answer of the service does not end, and the check stops at the limit of its runner.
+        ended.recv().unwrap();
+    }
     // The connection ends, which is the only thing that the service learns, and the sessions of the service stay.
     service.first_ended.recv().unwrap();
     let operations = service.operations.lock().unwrap().clone();
@@ -3560,16 +3175,16 @@ fn detach_closes_the_connection_of_a_persistent_service_without_closing_the_owne
         !operations
             .iter()
             .any(|operation| operation == "close-owner" || operation == "shutdown"),
-        "the service received {operations:?}"
+        "the quit stop sent to the service: {operations:?}"
     );
-    // Stopping after a detach does nothing more to the service.
+    // The stop of the exit after the quit stop does nothing more to the service.
     sidecars.stop();
     let operations = service.operations.lock().unwrap().clone();
     assert!(
         !operations
             .iter()
             .any(|operation| operation == "close-owner" || operation == "shutdown"),
-        "the stop after the detach sent to the service: {operations:?}"
+        "the stop after the quit stop sent to the service: {operations:?}"
     );
     // The endpoint process of the fixture ends with the test. A process that outlives the test keeps the output of
     // the test open, so the runner waits for it to end.

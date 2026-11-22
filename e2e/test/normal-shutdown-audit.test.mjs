@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { appendFileSync, copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -135,21 +135,51 @@ test("normal shutdown fails when the host keeps its endpoint file after the end 
     /endpoint\.json exists \d+ms after the request/);
 });
 
-test("service shutdown fails when the service process still runs after the end of the connection", { timeout: 20000 }, async (t) => {
+test("service shutdown fails when the service process ended at the quit", { timeout: 20000 }, async (t) => {
   const { app } = await startApp(t, "normal-shutdown-service-quit");
-  // The service process is the process of this test, which runs: the CLI refuses and the refusal is the error of the wait.
-  serviceEndpoint(app.configDir, { protocol: 1, pid: process.pid, socket: "unused", token: "unused" });
-  await assert.rejects(runNormalShutdown({ app, env: { SOKSAK_SHUTDOWN_SERVICE: "1" }, write: QUIET }),
-    /process wait failed for service PID \d+ with exit 1: process \d+ still runs/);
-});
-
-test("service shutdown rejects a service endpoint that remains after PID observation", { timeout: 20000 }, async (t) => {
-  const { app } = await startApp(t, "normal-shutdown-service-quit");
-  // The service process is a real process that ended: its PID is gone, which the CLI reports as the end.
+  // The service process is a real process that ended: the quit keeps the service, so a gone PID is the failure.
   const service = spawnSync("true");
   serviceEndpoint(app.configDir, { protocol: 1, pid: service.pid, socket: "unused", token: "unused" });
   await assert.rejects(runNormalShutdown({ app, env: { SOKSAK_SHUTDOWN_SERVICE: "1" }, write: QUIET }),
+    new RegExp(`service PID ${service.pid} ended at the quit, which keeps the service`));
+});
+
+/**
+ * A running service process of the check: it ends on SIGTERM, and it removes the endpoint file first when `removes` holds. It
+ * answers once its SIGTERM handler is installed, so a signal of the check never finds the process without it.
+ */
+async function runningService(t, file, removes) {
+  const end = removes ? `require("node:fs").rmSync(${JSON.stringify(file)}); process.exit(0);` : "process.exit(0);";
+  const script = `process.on("SIGTERM", () => { ${end} }); process.stdout.write("ready\\n"); setInterval(() => {}, 1 << 30);`;
+  const child = spawn(process.execPath, ["-e", script], { stdio: ["ignore", "pipe", "inherit"] });
+  const exited = new Promise((resolve) => child.once("exit", resolve));
+  t.after(async () => {
+    if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+    await exited;
+  });
+  await new Promise((resolve, reject) => {
+    child.once("error", reject);
+    child.stdout.once("data", resolve);
+  });
+  return child;
+}
+
+test("service shutdown rejects a service endpoint that remains after the service ended", { timeout: 20000 }, async (t) => {
+  const { app } = await startApp(t, "normal-shutdown-service-quit");
+  const file = join(app.configDir, "services", "rasterprobe", "endpoint.json");
+  const service = await runningService(t, file, false);
+  serviceEndpoint(app.configDir, { protocol: 1, pid: service.pid, socket: "unused", token: "unused" });
+  await assert.rejects(runNormalShutdown({ app, env: { SOKSAK_SHUTDOWN_SERVICE: "1" }, write: QUIET }),
     new RegExp(`services/rasterprobe/endpoint.json remains after service PID ${service.pid} ended`));
+});
+
+test("service shutdown passes when the quit keeps the service and the check ends it", { timeout: 20000 }, async (t) => {
+  const { app } = await startApp(t, "normal-shutdown-service-quit");
+  const file = join(app.configDir, "services", "rasterprobe", "endpoint.json");
+  const service = await runningService(t, file, true);
+  serviceEndpoint(app.configDir, { protocol: 1, pid: service.pid, socket: "unused", token: "unused" });
+  const result = await runNormalShutdown({ app, env: { SOKSAK_SHUTDOWN_SERVICE: "1" }, write: QUIET });
+  assert.equal(result.appName, "wailsv3");
 });
 
 test("service shutdown names an invalid service endpoint, rejects its PID and closes the connection", { timeout: 20000 }, async (t) => {

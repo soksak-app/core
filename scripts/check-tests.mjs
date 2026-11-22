@@ -292,6 +292,21 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F1082-1",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) QuitStop(ended func()) bool {" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "pub fn quit_stop(&self, ended: impl FnOnce() + Send + 'static) -> bool {" },
+      { file: "e2e/normal-shutdown-runner.mjs", symbol: "was removed by the quit, which keeps the service" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestTheQuitStopKeepsTheSessionsOfAPersistentService" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "the_quit_stop_keeps_the_sessions_of_a_persistent_service" },
+      { file: "e2e/test/normal-shutdown-audit.test.mjs", id: "service shutdown passes when the quit keeps the service and the check ends it" },
+    ],
+    expected: "The quit stop ends the connection of each persistent service without close-owner and shutdown, so the service and its owned sessions outlive the quit on Wails, mygo and Tauri.",
+    levels: ["unit"],
+  },
+  {
     id: "F911",
     implementation: [
       { file: "packages/sok/go/src/message.go", symbol: "os.Rename(temporary, filepath.Join(folder, name))" },
@@ -1567,6 +1582,83 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1081",
+    implementation: [
+      { file: "docs/spec/persistent-services.md", symbol: "The judgement applies to the line editing of a shell that the session started" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/owned-sessions-open.test.mjs", id: "a refusal of the sidecar that states its rule and reason keeps them in the failure text" },
+    ],
+    expected: "The input guard contract judges only a shell that the session started while it runs no command.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1080-1",
+    implementation: [
+      { file: "packages/workbench/owned-sessions.js", symbol: "export function ownedReplyFailure" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/owned-sessions-open.test.mjs", id: "a refusal of the sidecar that states its rule and reason keeps them in the failure text" },
+    ],
+    expected: "The page keeps the rule and reason of a refused owned session request.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1080",
+    implementation: [
+      { file: "packages/workbench-mygo/src/owned_sessions.go", symbol: "func ownedReplyError" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/owned_sessions_io_test.go", id: "TestARefusedInputNamesTheRuleAndReasonOfTheSidecar" },
+    ],
+    expected: "mygo keeps the rule and reason of a refused owned session request.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1079",
+    implementation: [
+      { file: "packages/workbench-mygo/src/registry.go", symbol: "func (r *Registry) RunLaterOn" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/view_core_surface_command_test.go", id: "TestAViewCallOfACoreSurfaceCommandRunsOnTheSurfaceOfTheView" },
+    ],
+    expected: "A view call of a core surface command runs on the surface of the view.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1078",
+    implementation: [
+      { file: "packages/host/go/src/role_state.go", symbol: "holder[\"fixed\"] == true" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/role_state_test.go", id: "TestTheRoleHandshakeAnswersTheStatusAndStoresTheRecord" },
+    ],
+    expected: "The Go role walk skips the fixed window sidebar cards.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1071-3",
+    implementation: [
+      { file: "packages/workbench-mygo/tests/surfaces_test.go", symbol: "func pluginSurface" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/program_runs_test.go", id: "TestTheSyncRequestDeclaresTheProgramsOfAView" },
+    ],
+    expected: "The program run tests choose the surface that declares programs.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1071-4",
+    implementation: [
+      { file: "packages/host/rust/src/documents.rs", symbol: "pub(crate) use view_reload::reload_record" },
+    ],
+    tests: [
+      { file: "packages/host/rust/src/view_reload_test.rs", id: "reloading_a_ready_view_keeps_its_record_and_counts_no_failure" },
+    ],
+    expected: "The Rust host passes clippy in test and default builds.",
+    levels: ["unit"],
+  },
+  {
     id: "F1076",
     implementation: [
       { file: "docs/spec/host-contract.md", symbol: "`program.run.cancel-is-idempotent`" },
@@ -2601,8 +2693,8 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/endpoint.go", symbol: "func (c *endpointConn) onClose(end func()) (remove func()) {" },
       { file: "packages/host/rust/src/endpoint.rs", symbol: "pub fn watch(&self, on_end: impl FnOnce() + Send + 'static) -> ConnectionWatch {" },
       { file: "packages/host/go/src/platform/darwin/input.go", symbol: "goHost_surface_pressed" },
-      { file: "packages/host/go/src/sidecars.go", symbol: "c.stopDetach = detach" },
-      { file: "packages/host/rust/src/sidecars.rs", symbol: "state.stop_detach = detach;" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "c.stopProcesses([]*sidecar{process}, true, nil)" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "sidecars.stop_processes(vec![(name.to_string(), process)], true, None);" },
       { file: "packages/host/rust/src/start.rs", symbol: "pub fn serve_async(" },
       { file: "packages/host/tauriv2/src/host.rs", symbol: "register_asynchronous_uri_scheme_protocol" },
       { file: "scripts/check-host-files.mjs", symbol: "\"sp_capture_*\"" },
@@ -2766,12 +2858,11 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/platform/darwin/endpoint.go", symbol: "func (implementation) EndProcessGroup(pid int) error {" },
       { file: "packages/host/rust/src/platform/darwin/child_process.rs", symbol: "pub fn wait_process_exit(pid: u32) -> Result<(), String> {" },
       { file: "packages/host/rust/src/platform/darwin/child_process.rs", symbol: "impl Read for ExitOutput {" },
-      { file: "packages/host/go/src/sidecars.go", symbol: "return fmt.Errorf(\"sidecar %s: %s: the queue of the connection is full\", process.name, operation)" },
       { file: "packages/host/rust/src/sidecars.rs", symbol: "fn end_transport(outbox: &SyncSender<Outgoing>, socket: &PersistentSocket, name: &str) {" },
       { file: "packages/host/go/src/sidecars.go", symbol: "func (p *imagePresents) refuse() {" },
       { file: "packages/host/rust/src/images.rs", symbol: "pub(crate) fn refuse(&self) {" },
-      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) QuitStop(detach bool, ended func()) bool {" },
-      { file: "packages/host/rust/src/sidecars.rs", symbol: "pub fn quit_stop(&self, detach: bool, ended: impl FnOnce() + Send + 'static) -> bool {" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) QuitStop(ended func()) bool {" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "pub fn quit_stop(&self, ended: impl FnOnce() + Send + 'static) -> bool {" },
     ],
     tests: [
       { file: "packages/host/go/src/windows_removal_end_test.go", id: "TestARemovalRequestEndsWithTheEndOfTheOwnerPage" },
@@ -2782,8 +2873,6 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/tests/sidecars_test.rs", id: "a_sidecar_that_exits_fails_while_its_child_keeps_the_output" },
       { file: "packages/host/rust/tests/sidecars_test.rs", id: "a_sidecar_that_exits_fails_while_a_process_outside_its_group_keeps_the_output" },
       { file: "packages/host/rust/tests/sidecars_test.rs", id: "a_stop_ends_by_the_sidecar_exit_and_ends_its_process_group" },
-      { file: "packages/host/go/src/sidecars_stop_test.go", id: "TestAStopOfAPersistentServiceWaitsForNoRoomInItsQueue" },
-      { file: "packages/host/rust/src/sidecars_stop_test.rs", id: "a_close_of_a_persistent_owner_waits_for_no_room_in_its_queue" },
       { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestAnUnansweredRetainEndsWithItsConnection" },
       { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "an_unanswered_retain_ends_with_its_connection" },
       { file: "packages/host/go/src/sidecars_stop_test.go", id: "TestAPresentThatWaitsForTheMainThreadEndsWithTheStop" },
@@ -7263,7 +7352,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestDeclarationNotifiesEachOutdatedVersionChange" },
       { file: "packages/host/rust/src/sidecars_lock_test.rs", id: "disconnect_notifies_outdated_removal_without_pending_closes" },
       { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestRetainNotifiesOutdatedSessionCounts" },
-      { file: "packages/host/rust/src/sidecars_lock_test.rs", id: "detach_notifies_outdated_removal_without_pending_closes" },
+      { file: "packages/host/rust/src/sidecars_lock_test.rs", id: "stop_notifies_outdated_removal_without_pending_closes" },
     ],
     expected: "Both hosts preserve ordered immutable closing and outdated status transitions independently of UI invalidation across close, declaration, disconnect, stop and retention.",
     levels: ["unit"],
@@ -7275,10 +7364,10 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/sidecars.rs", symbol: "fn retain_layout_owners<O>" },
     ],
     tests: [
-      { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestDetachNotifiesOutdatedRemovalWithoutPendingCloses" },
+      { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestStopNotifiesOutdatedRemovalWithoutPendingCloses" },
       { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestRetainNotifiesOutdatedSessionCounts" },
       { file: "packages/host/go/src/sidecars_session_retention_test.go", id: "TestReusedRetainedSurfaceNotifiesOutdatedSessionCount" },
-      { file: "packages/host/rust/src/sidecars_lock_test.rs", id: "detach_notifies_outdated_removal_without_pending_closes" },
+      { file: "packages/host/rust/src/sidecars_lock_test.rs", id: "stop_notifies_outdated_removal_without_pending_closes" },
       { file: "packages/host/rust/src/sidecars_lock_test.rs", id: "retain_notifies_outdated_session_counts" },
       { file: "packages/host/rust/src/sidecars_lock_test.rs", id: "reused_retained_surface_notifies_outdated_session_count" },
     ],
@@ -12369,10 +12458,10 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/sidecars.rs", symbol: "pub fn stop(&self)" },
     ],
     tests: [
-      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentStopAcceptsTheAnswerToACloseSentBeforeTheStop" },
-      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_stop_accepts_the_answer_to_a_close_sent_before_the_stop" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestTheQuitStopKeepsTheSessionsOfAPersistentService" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "the_quit_stop_keeps_the_sessions_of_a_persistent_service" },
     ],
-    expected: "A persistent service's answer to a close sent before the stop is accepted, and the stop sends close-owner and then shutdown.",
+    expected: "The stop ends the connection of a persistent service without close-owner and shutdown, so the service keeps its sessions (F1082-1).",
     levels: ["unit"],
   },
   {

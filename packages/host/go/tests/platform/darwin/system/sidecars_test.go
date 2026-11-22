@@ -470,7 +470,7 @@ func TestTheQuitStopExitsAfterItsSidecars(t *testing.T) {
 	pid := childPID(t, started)
 	t.Cleanup(func() { _ = syscall.Kill(pid, syscall.SIGKILL) })
 	ended := make(chan struct{})
-	if sidecars.QuitStop(false, func() { close(ended) }) {
+	if sidecars.QuitStop(func() { close(ended) }) {
 		t.Fatal("the quit stop accepted the exit while its sidecar runs")
 	}
 	// The gate holds the sidecar, so no exit can end the stop before the gate opens.
@@ -487,7 +487,7 @@ func TestTheQuitStopExitsAfterItsSidecars(t *testing.T) {
 	}
 	<-ended
 	requireGone(t, pid)
-	if !sidecars.QuitStop(false, func() { t.Error("the end of an ended quit stop ran again") }) {
+	if !sidecars.QuitStop(func() { t.Error("the end of an ended quit stop ran again") }) {
 		t.Fatal("the quit stop refused the exit after its sidecars exited")
 	}
 	want := "info host sidecar " + support.EchoSidecar + ": the quit waits for the exit of process " + strconv.Itoa(pid) + "\n"
@@ -495,7 +495,7 @@ func TestTheQuitStopExitsAfterItsSidecars(t *testing.T) {
 		t.Fatalf("log %q does not contain %q", logged, want)
 	}
 	empty := support.FixtureSidecars(t, t.TempDir(), "on any echo\n")
-	if !empty.QuitStop(false, func() { t.Error("the quit stop without a sidecar ran its end") }) {
+	if !empty.QuitStop(func() { t.Error("the quit stop without a sidecar ran its end") }) {
 		t.Fatal("the quit stop without a sidecar refused the exit")
 	}
 }
@@ -517,16 +517,16 @@ func TestASecondQuitKillsTheSidecarsThatTheQuitStopWaitsFor(t *testing.T) {
 	pid := childPID(t, started)
 	t.Cleanup(func() { _ = syscall.Kill(pid, syscall.SIGKILL) })
 	ended := make(chan struct{})
-	if sidecars.QuitStop(false, func() { close(ended) }) {
+	if sidecars.QuitStop(func() { close(ended) }) {
 		t.Fatal("the quit stop accepted the exit while its sidecar runs")
 	}
-	if sidecars.QuitStop(false, func() { t.Error("the second quit ran a second end") }) {
+	if sidecars.QuitStop(func() { t.Error("the second quit ran a second end") }) {
 		t.Fatal("the second quit accepted the exit while the sidecar runs")
 	}
 	// A second quit that kills nothing leaves the stop waiting, and the check stops at the limit of its runner.
 	<-ended
 	requireGone(t, pid)
-	if !sidecars.QuitStop(false, func() {}) {
+	if !sidecars.QuitStop(func() {}) {
 		t.Fatal("the quit stop refused the exit after the kill")
 	}
 	want := "info host sidecar " + support.EchoSidecar + ": the second quit kills process " + strconv.Itoa(pid) + "\n"

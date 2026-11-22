@@ -155,7 +155,7 @@ func TestDisconnectNotifiesOutdatedRemovalWithoutPendingCloses(t *testing.T) {
 }
 
 // contract: sidecars-transport.hello.reports-a-service-of-another-version
-func TestDetachNotifiesOutdatedRemovalWithoutPendingCloses(t *testing.T) {
+func TestStopNotifiesOutdatedRemovalWithoutPendingCloses(t *testing.T) {
 	c, _, process := outdatedSidecarsFixture(t, "0.0.6", "0.0.7")
 	local, peer := net.Pipe()
 	t.Cleanup(func() {
@@ -166,14 +166,14 @@ func TestDetachNotifiesOutdatedRemovalWithoutPendingCloses(t *testing.T) {
 	process.conn = local
 	var snapshots []SidecarStatus
 	c.ClosingChanged = func(value SidecarStatus) { snapshots = append(snapshots, value) }
-	c.Detach()
+	c.Stop()
 	want := []SidecarStatus{{Closing: []ClosingSurface{}, Outdated: []OutdatedSidecar{}}}
 	if !reflect.DeepEqual(snapshots, want) {
-		t.Fatalf("detach notifications = %+v, want %+v", snapshots, want)
+		t.Fatalf("stop notifications = %+v, want %+v", snapshots, want)
 	}
-	c.Detach()
+	c.Stop()
 	if len(snapshots) != 1 {
-		t.Fatalf("repeated detach announced unchanged status: %+v", snapshots)
+		t.Fatalf("repeated stop announced unchanged status: %+v", snapshots)
 	}
 }
 

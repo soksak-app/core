@@ -1,46 +1,14 @@
 package host
 
 import (
-	"context"
 	"errors"
-	"net"
 	"os"
 	"os/exec"
 	"syscall"
 	"testing"
-	"time"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
-
-// A stop sends close-owner without waiting for room in the queue of the service: a full queue fails the close at once and ends the
-// connection (docs/spec/persistent-services.md#closing-and-recovery).
-// contract: sidecars-transport.stop.waits-for-no-room
-func TestAStopOfAPersistentServiceWaitsForNoRoomInItsQueue(t *testing.T) {
-	c, err := NewSidecars(nil, t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	local, peer := net.Pipe()
-	t.Cleanup(func() {
-		if err := peer.Close(); err != nil {
-			t.Error(err)
-		}
-	})
-	process := &sidecar{name: "fixture-service", persistent: true, conn: local, outbox: make(chan queuedLine, 1),
-		closeWaiters: map[string]chan error{}}
-	process.outbox <- queue([]byte("{}\n"), time.Now())
-	// A close that waits for room in the full queue does not return, and the check stops at the limit of its runner.
-	if err := c.closePersistentOwner(process, context.Background(), false); err == nil {
-		t.Fatal("the close of a service whose queue is full succeeded")
-	}
-	process.responseMutex.Lock()
-	ended := process.transportClosed
-	process.responseMutex.Unlock()
-	if !ended {
-		t.Fatal("the close failed on the full queue and left the connection open")
-	}
-}
 
 // A present that waits for the main thread ends when the sidecars stop, a presentation that the main thread runs later does not
 // wait, and a present after the stop is refused without a step (docs/spec/sidecars.md#declaration-and-startup).

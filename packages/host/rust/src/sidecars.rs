@@ -406,23 +406,15 @@ struct QuitStop {
     ended: AtomicBool,
 }
 
-/// A process of a stop that a second quit ends, and whether its stop ended.
+/// A standard-I/O process of a stop that a second quit ends with the force-kill signal to the process group whose leader is
+/// pid, and whether its stop ended; killed marks the exit as the quit itself. The stop ends the connection of each
+/// persistent service at once, so the second quit ends no connection.
 struct QuitTarget {
     name: String,
     done: Arc<AtomicBool>,
-    end: QuitEnd,
-}
-
-/// How a second quit ends a process of the quit stop.
-enum QuitEnd {
-    /// The force-kill signal to the process group whose leader is pid; killed marks the exit as the quit itself.
-    Process {
-        pid: u32,
-        exit: Arc<ProcessExit>,
-        killed: Arc<AtomicBool>,
-    },
-    /// The end of the connection of a persistent service, which ends the close of its owner.
-    Connection(PersistentSocket),
+    pid: u32,
+    exit: Arc<ProcessExit>,
+    killed: Arc<AtomicBool>,
 }
 
 /// Sets done when the thread of the stop of a process ends, also when it panics.
@@ -434,9 +426,8 @@ impl Drop for DoneGuard {
     }
 }
 
-/// The second quit: force-kills the process group of each standard-I/O sidecar of the quit stop that has not exited and
-/// ends the connection of each persistent service whose close has not ended, which ends the waits of the stop
-/// (docs/spec/hosts.md#process-lifecycle).
+/// The second quit: force-kills the process group of each standard-I/O sidecar of the quit stop that has not exited, which
+/// ends the waits of the stop (docs/spec/hosts.md#process-lifecycle).
 fn kill_quit_stop(quit: &QuitStop) {
     let targets = quit
         .targets
@@ -449,36 +440,15 @@ fn kill_quit_stop(quit: &QuitStop) {
             continue;
         }
         let place = format!("sidecar {}", target.name);
-        match &target.end {
-            QuitEnd::Process { pid, exit, killed } => {
-                killed.store(true, Ordering::Release);
-                crate::application_log::log_info(
-                    &place,
-                    format!("the second quit kills process {pid}"),
-                );
-                if let Err(error) = exit.signal_group(|| {
-                    current().and_then(|platform| platform.end_process_group(*pid))
-                }) {
-                    log_error(&place, format!("second quit: {error}"));
-                }
-            }
-            QuitEnd::Connection(socket) => {
-                crate::application_log::log_info(
-                    &place,
-                    "the second quit ends the connection of the service",
-                );
-                let socket = socket
-                    .lock()
-                    // default: a lock that a panicking thread poisoned still holds the socket, which is only shut
-                    // down; the panic hook records the panic.
-                    .unwrap_or_else(PoisonError::into_inner);
-                // A connection that ended already has nothing to shut down.
-                match socket.shutdown() {
-                    Ok(()) => {}
-                    Err(error) if error.kind() == std::io::ErrorKind::NotConnected => {}
-                    Err(error) => log_error(&place, format!("second quit: {error}")),
-                }
-            }
+        target.killed.store(true, Ordering::Release);
+        crate::application_log::log_info(
+            &place,
+            format!("the second quit kills process {}", target.pid),
+        );
+        if let Err(error) = target.exit.signal_group(|| {
+            current().and_then(|platform| platform.end_process_group(target.pid))
+        }) {
+            log_error(&place, format!("second quit: {error}"));
         }
     }
 }
@@ -493,8 +463,8 @@ struct RoomWait<'a> {
 
 /// Closes the owner of a persistent service and tells it to shut down, once for the connection: a caller that finds
 /// the close done or running by another caller waits for it and returns `Ok(false)`, and the caller that does it
-/// returns `Ok(true)`. A failed close is not done, so the next caller tries again. Without room the close fails on a
-/// full queue, and with room it waits for room in the queue.
+/// returns `Ok(true)`. A failed close is not done, so the next caller tries again. The close of a replacement waits for
+/// room in the queue (docs/spec/persistent-services.md#updates).
 #[allow(clippy::too_many_arguments)]
 fn close_persistent_owner(
     outbox: &SyncSender<Outgoing>,
@@ -503,7 +473,7 @@ fn close_persistent_owner(
     connected: &AtomicBool,
     owner_closed: &Mutex<bool>,
     prefix: &str,
-    room: Option<&RoomWait<'_>>,
+    room: &RoomWait<'_>,
     clock: &Clock,
 ) -> Result<bool, CloseFailure> {
     // default: a lock that a panicking thread poisoned still holds the close state of the owner,
@@ -581,15 +551,14 @@ fn end_transport(outbox: &SyncSender<Outgoing>, socket: &PersistentSocket, name:
     }
 }
 
-/// Queues the close-owner or shutdown line of operation. The stop waits for no room in the queue: a full queue fails
-/// the close, and the caller ends the connection. A replacement waits for room until the connection ends or the
-/// sidecars stop, which shuts the socket down; either ends the writer, which drops the queue and ends the wait
-/// (docs/spec/persistent-services.md#closing-and-recovery). A closed queue fails with `disconnected_close` as the
+/// Queues the close-owner or shutdown line of operation of a replacement, which waits for room until the connection ends
+/// or the sidecars stop, which shuts the socket down; either ends the writer, which drops the queue and ends the wait
+/// (docs/spec/persistent-services.md#updates). A closed queue fails with `disconnected_close` as the
 /// close of the transport.
 fn queue_close(
     outbox: &SyncSender<Outgoing>,
     bytes: Vec<u8>,
-    room: Option<&RoomWait<'_>>,
+    room: &RoomWait<'_>,
     operation: &str,
     disconnected_close: bool,
     clock: &Clock,
@@ -603,12 +572,6 @@ fn queue_close(
             });
         }
         Err(TrySendError::Full(line)) => line,
-    };
-    let Some(room) = room else {
-        return Err(CloseFailure {
-            text: format!("{operation}: the queue of the connection is full"),
-            send_close: true,
-        });
     };
     let socket = Arc::clone(room.socket);
     let name = room.name.to_string();
@@ -655,7 +618,7 @@ fn send_close_owner_and_shutdown(
     shutdown_waiters: &ReplyWaiters,
     connected: &AtomicBool,
     prefix: &str,
-    room: Option<&RoomWait<'_>>,
+    room: &RoomWait<'_>,
     clock: &Clock,
 ) -> Result<(), CloseFailure> {
     let request = format!("{prefix}-close");
@@ -1478,8 +1441,6 @@ struct State<O> {
     /// service is disconnected; a connection notice reaches only those surfaces.
     persistent_surfaces: HashMap<String, HashSet<String>>,
     stopped: bool,
-    /// The detach of the stop, which a start that ends after the stop applies to its own process.
-    stop_detach: bool,
     /// The stop that the quit runs before the application exits, None before it begins.
     quit_stop: Option<Arc<QuitStop>>,
     // pending_replies: buffers the immutable image responses of each sidecar in the order of sending.
@@ -2056,7 +2017,6 @@ impl<O: Owner> Sidecars<O> {
                     roots: HashMap::new(),
                     persistent_surfaces: HashMap::new(),
                     stopped: false,
-                    stop_detach: false,
                     quit_stop: None,
                     pending_replies: HashMap::new(),
                     pending_closes: HashMap::new(),
@@ -2129,7 +2089,7 @@ impl<O: Owner> Sidecars<O> {
         if let Some(changed) = closing_changed {
             changed();
         }
-        self.stop_processes(processes, false, false, None);
+        self.stop_processes(processes, false, None);
         Ok(())
     }
 
@@ -3067,7 +3027,7 @@ impl<O: Owner> Sidecars<O> {
             &connected,
             &owner_closed,
             &prefix,
-            Some(&room),
+            &room,
             &clock,
         );
         // The caller that did not close the owner leaves the transport to the one that did.
@@ -3550,12 +3510,14 @@ impl<O: Owner> Sidecars<O> {
         }
     }
 
-    /// Terminates all sidecars, the stop of the quit. It ends the waits of the starts and of the replacements, sends the
+    /// Terminates all sidecars, the stop of the exit. It ends the waits of the starts and of the replacements, sends the
     /// Close signal to the channel of each standard-I/O sidecar, so that the write thread ends and closes stdin, sends
-    /// SIGTERM to its process group and waits for its exit, which no time limit ends
-    /// (docs/spec/sidecars.md#declaration-and-startup).
+    /// SIGTERM to its process group and waits for its exit, which no time limit ends, and ends the connection of each
+    /// persistent service without close-owner and shutdown, so the service keeps its sessions for the application that
+    /// starts next (docs/spec/sidecars.md#declaration-and-startup, docs/spec/persistent-services.md#service-transport).
     pub fn stop(&self) {
-        self.stop_all(false);
+        let processes = self.stop_running();
+        self.stop_processes(processes, true, None);
     }
 
     /// The image presents of these sidecars that wait for the main thread.
@@ -3563,24 +3525,13 @@ impl<O: Owner> Sidecars<O> {
         &self.core.presents
     }
 
-    /// Stops the sidecars as `stop` does, except that a persistent service gets no close-owner and no shutdown: its
-    /// connection ends and its sessions stay for the application that starts next (docs/spec/installation.md#application-update).
-    pub fn detach(&self) {
-        self.stop_all(true);
-    }
-
-    fn stop_all(&self, detach: bool) {
-        let processes = self.stop_running(detach);
-        self.stop_processes(processes, detach, true, None);
-    }
-
     /// The stop of the sidecars that the quit runs before the application exits, which answers whether the application
     /// exits now (docs/spec/hosts.md#process-lifecycle). The first call begins the stop and answers true only when nothing
-    /// is left to wait for; otherwise `ended` runs on a thread of its own when the last process exited and the last close of
-    /// a persistent owner ended, and the caller asks for the quit again. A call while the stop runs is a second quit: it
-    /// force-kills the process group of each standard-I/O sidecar that has not exited and ends the connection of each
-    /// persistent service whose close runs, and answers false. A call after the end answers true.
-    pub fn quit_stop(&self, detach: bool, ended: impl FnOnce() + Send + 'static) -> bool {
+    /// is left to wait for; otherwise `ended` runs on a thread of its own when the last process exited and the connection
+    /// of each persistent service ended, and the caller asks for the quit again. A call while the stop runs is a second
+    /// quit: it force-kills the process group of each standard-I/O sidecar that has not exited and answers false. A call
+    /// after the end answers true.
+    pub fn quit_stop(&self, ended: impl FnOnce() + Send + 'static) -> bool {
         let (quit, begun) = {
             let mut state = self
                 .core
@@ -3605,7 +3556,7 @@ impl<O: Owner> Sidecars<O> {
             kill_quit_stop(&quit);
             return false;
         }
-        let processes = self.stop_running(detach);
+        let processes = self.stop_running();
         if processes.is_empty() {
             quit.ended.store(true, Ordering::Release);
             return true;
@@ -3613,7 +3564,6 @@ impl<O: Owner> Sidecars<O> {
         let quit_end = Arc::clone(&quit);
         let targets = self.stop_processes(
             processes,
-            detach,
             true,
             Some(Box::new(move || {
                 quit_end.ended.store(true, Ordering::Release);
@@ -3644,7 +3594,7 @@ impl<O: Owner> Sidecars<O> {
 
     /// Marks the sidecars stopped, ends the waits of the starts and takes the running sidecars out of the running list, and
     /// returns them for the stop of their processes.
-    fn stop_running(&self, detach: bool) -> Vec<(String, Process)> {
+    fn stop_running(&self) -> Vec<(String, Process)> {
         // The stop refuses each image present that waits for the main thread, which may be the thread that runs this stop, so
         // no read thread of a sidecar waits for it (docs/spec/sidecars.md#declaration-and-startup).
         self.core.presents.refuse();
@@ -3657,7 +3607,6 @@ impl<O: Owner> Sidecars<O> {
                 // amends; the panic hook records the panic.
                 .unwrap_or_else(PoisonError::into_inner);
             state.stopped = true;
-            state.stop_detach = detach;
             // The stop ends the waits that no time limit ends: a start waits for the endpoint line and the hello, and a
             // replacement for the end of the replaced process.
             self.core.stop_signal.stop();
@@ -3693,14 +3642,14 @@ impl<O: Owner> Sidecars<O> {
     }
 
     /// Stops processes, which are out of the running list, by the stop rules (docs/spec/sidecars.md#declaration-and-startup).
-    /// With `detach` a persistent service only loses its connection. The stop of the quit waits until each process ends
+    /// A persistent service loses its connection and gets no close-owner and no shutdown, so it keeps its sessions
+    /// (docs/spec/persistent-services.md#service-transport). The stop of the quit waits until each process ends
     /// and records each process that it waits for; any other stop returns at once, and each process is reaped and its end
     /// written when it exits. With `ended` the stop of the quit returns at once too, and `ended` runs on a thread of its
     /// own after the last of those waits. The answer is what a second quit ends of each process.
     fn stop_processes(
         &self,
         processes: Vec<(String, Process)>,
-        detach: bool,
         quit: bool,
         ended: Option<Box<dyn FnOnce() + Send>>,
     ) -> Vec<QuitTarget> {
@@ -3711,44 +3660,9 @@ impl<O: Owner> Sidecars<O> {
             let done = Arc::new(AtomicBool::new(false));
             let done_guard = DoneGuard(Arc::clone(&done));
             if process.child.is_none() {
-                if let Some(persistent) = &process.persistent {
-                    targets.push(QuitTarget {
-                        name: name.clone(),
-                        done,
-                        end: QuitEnd::Connection(Arc::clone(&persistent.socket)),
-                    });
-                }
                 let handle = crate::routine::spawn_named("sidecar-close", move || {
                     let _done = done_guard;
-                    let Some(persistent) = process.persistent else {
-                        return;
-                    };
-                    if detach {
-                        end_transport(&process.outbox, &persistent.socket, &name);
-                        return;
-                    }
-                    let prefix = std::process::id().to_string();
-                    let clock = clock_of(&state);
-                    // The close ends by the answers of close-owner and shutdown or by the end of the connection.
-                    let closed = close_persistent_owner(
-                        &process.outbox,
-                        &persistent.close_waiters,
-                        &persistent.shutdown_waiters,
-                        &persistent.connected,
-                        &persistent.owner_closed,
-                        &prefix,
-                        None,
-                        &clock,
-                    );
-                    // The caller that did not close the owner leaves the transport to the one that did.
-                    let send_close = match &closed {
-                        Ok(done) => *done,
-                        Err(failure) => failure.send_close,
-                    };
-                    if let Err(failure) = closed {
-                        log_error(&format!("sidecar {name}"), failure.text);
-                    }
-                    if send_close {
+                    if let Some(persistent) = process.persistent {
                         end_transport(&process.outbox, &persistent.socket, &name);
                     }
                 });
@@ -3790,11 +3704,9 @@ impl<O: Owner> Sidecars<O> {
             targets.push(QuitTarget {
                 name: name.clone(),
                 done,
-                end: QuitEnd::Process {
-                    pid,
-                    exit: Arc::clone(&exit),
-                    killed: Arc::clone(&killed),
-                },
+                pid,
+                exit: Arc::clone(&exit),
+                killed: Arc::clone(&killed),
             });
             // The stop terminates the process group, so a sidecar that ignores the end of its input ends, and so do the
             // processes that it started in its group.
@@ -4029,7 +3941,6 @@ impl<O: Owner> Core<O> {
                 .running
                 .remove(name)
                 .expect("the start registered its process under the held lock");
-            let detach = state.stop_detach;
             drop(state);
             if let Some(changed) = changed {
                 changed();
@@ -4038,7 +3949,7 @@ impl<O: Owner> Core<O> {
                 core: Arc::clone(core),
             };
             // The stop of the quit waits for each exit, and this thread waits for the exit of its own process.
-            sidecars.stop_processes(vec![(name.to_string(), process)], detach, true, None);
+            sidecars.stop_processes(vec![(name.to_string(), process)], true, None);
             return Err("sidecars are stopped".into());
         }
         Ok((state, true))

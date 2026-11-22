@@ -4,7 +4,7 @@ package system_test
 
 import (
 	"bufio"
-	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -60,21 +60,12 @@ func TestPersistentServiceStartsInANewSession(t *testing.T) {
 			serverDone <- err
 			return
 		}
-		line, err = reader.ReadBytes('\n')
-		if err != nil {
-			serverDone <- err
+		// The stop ends the connection and sends no close-owner (docs/spec/persistent-services.md#service-transport).
+		if line, err := reader.ReadBytes('\n'); err != io.EOF {
+			serverDone <- fmt.Errorf("the stop sent %q (%v) instead of ending the connection", line, err)
 			return
 		}
-		var closeRequest map[string]any
-		if err := json.Unmarshal(line, &closeRequest); err != nil {
-			serverDone <- err
-			return
-		}
-		response, _ := json.Marshal(map[string]any{
-			"operation": "closed-owner", "request": closeRequest["request"], "ok": false, "error": "test close",
-		})
-		_, err = connection.Write(append(response, '\n'))
-		serverDone <- err
+		serverDone <- nil
 	}()
 	sidecars, err := host.NewSidecars(support.HarnessDeclarations(executableDir), t.TempDir())
 	if err != nil {

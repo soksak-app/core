@@ -232,6 +232,13 @@ fn poisoned_reply_waiter_locks_still_close_the_owner_of_a_service() {
         }
     });
     let clock: super::Clock = Arc::new(Instant::now);
+    let socket = super::unconnected_socket();
+    let stop = crate::platform::StopSignal::new();
+    let room = super::RoomWait {
+        socket: &socket,
+        stop: &stop,
+        name: "test",
+    };
     let closed = close_persistent_owner(
         &outbox,
         &close_waiters,
@@ -239,7 +246,7 @@ fn poisoned_reply_waiter_locks_still_close_the_owner_of_a_service() {
         &connected,
         &owner_closed,
         "test",
-        None,
+        &room,
         &clock,
     );
     service.join().unwrap();
@@ -254,7 +261,7 @@ fn poisoned_reply_waiter_locks_still_close_the_owner_of_a_service() {
         &connected,
         &owner_closed,
         "test",
-        None,
+        &room,
         &clock,
     );
     assert!(
@@ -421,7 +428,7 @@ fn detach_notification_contains_the_complete_final_status() {
     let snapshots = Arc::new(Mutex::new(Vec::new()));
     let collected = snapshots.clone();
     sidecars.on_status_changed(move |value| collected.lock().unwrap().push(value));
-    sidecars.detach();
+    sidecars.stop();
     assert_eq!(
         *snapshots.lock().unwrap(),
         vec![super::SidecarStatus {
@@ -572,7 +579,7 @@ fn disconnect_notifies_outdated_removal_without_pending_closes() {
 
 // contract: sidecars-transport.hello.reports-a-service-of-another-version
 #[test]
-fn detach_notifies_outdated_removal_without_pending_closes() {
+fn stop_notifies_outdated_removal_without_pending_closes() {
     let (sidecars, _, _, _folder) = outdated_fixture("0.0.6", "0.0.7");
     let (outbox, _receiver) = sync_channel(2);
     sidecars
@@ -587,7 +594,7 @@ fn detach_notifies_outdated_removal_without_pending_closes() {
     let snapshots = Arc::new(Mutex::new(Vec::new()));
     let collected = snapshots.clone();
     sidecars.on_status_changed(move |value| collected.lock().unwrap().push(value));
-    sidecars.detach();
+    sidecars.stop();
     assert_eq!(
         *snapshots.lock().unwrap(),
         vec![super::SidecarStatus {
@@ -595,7 +602,7 @@ fn detach_notifies_outdated_removal_without_pending_closes() {
             outdated: vec![]
         }]
     );
-    sidecars.detach();
+    sidecars.stop();
     assert_eq!(
         snapshots.lock().unwrap().len(),
         1,

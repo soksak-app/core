@@ -2223,19 +2223,12 @@ pub(crate) fn quit(app: &AppHandle, api: crate::ExitRequestApi) {
         .collect();
     // Every termination request begins the quit state, with or without a ready window (docs/spec/hosts.md#process-lifecycle).
     if registry.quit.begin_quit_request(waiting.len()) {
-        // An application update or a relaunch keeps the persistent services running for the application that starts
-        // next.
-        let detach = registry
-            .update
-            .lock()
-            // default: a lock that a panicking thread poisoned still holds the pending update, which is only read; the
-            // panic hook records the panic.
-            .unwrap_or_else(PoisonError::into_inner)
-            .is_some();
+        // The quit keeps each persistent service and its sessions for the application that starts next
+        // (docs/spec/persistent-services.md#service-transport).
         let again = app.clone();
         if !app
             .state::<crate::sidecars::WindowSidecars>()
-            .quit_stop(detach, move || again.quit())
+            .quit_stop(move || again.quit())
         {
             api.prevent_exit();
         }

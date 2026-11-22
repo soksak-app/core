@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1082-1: A quit ends the connection of each persistent service without close-owner and shutdown on Wails, mygo and Tauri, so the service and its owned sessions outlive the quit and the next start reattaches them.
 - F1081: The input guard contract judges only a shell that the session started while it runs no command.
 - F1080-1: On Wails and Tauri a refused owned session request keeps the rule and reason of the sidecar in its failure text.
 - F1080: On mygo a refused owned session request keeps the rule and reason of the sidecar in its failure text, such as guardRefused: untracked: <reason>.

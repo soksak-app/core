@@ -719,8 +719,9 @@ func (h *Host) shouldQuit() bool {
 	if !quitNow {
 		return false
 	}
-	// An application update or a relaunch keeps the persistent services running for the application that starts next.
-	return h.sidecars.QuitStop(h.updatePending(), func() { routine.Go("quit", framework.Quit) })
+	// The quit keeps each persistent service and its sessions for the application that starts next
+	// (docs/spec/persistent-services.md#service-transport).
+	return h.sidecars.QuitStop(func() { routine.Go("quit", framework.Quit) })
 }
 
 // Chrome is the window values that the page uses to draw the first row. Controls is the region that the window buttons occupy and
