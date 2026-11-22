@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1061: Korean documents state the action instead of `짓다`, and the figurative verb check reports it. Red: `auditFigurativeVerbs reports the figurative verbs outside code` failed without the rule. Green: it passes, and the check reports no tracked document.
 - F1055-1: The tree of `core.layout.plan` and `core.layout.apply` takes a group `{group: {name?}, tree}`. A group keeps the group card that holds the card its first card keeps, a new group card takes `그룹 <n>`, and a group card that no group keeps ends once its cards moved, so a space that holds group cards is planned instead of refused. The plan judges the drawn size with the group headers, and `cards` names the group of each card.
 - F1059: The test inventory links F1033 to the toast of the page and of the mygo workbench. Red: `completed capability entries all have feature evidence links` failed with `F1033: completed capability has no feature link`. Green: the inventory test passes.
 - F1033-4: The error window checks pass on the Wails, Tauri and mygo hosts in 5 of 5 runs after F1052, F1053, F1056, F1057 and F1058: a layout draw that throws, the hidden and retained views, the sidebar sections, the project windows and a file that no plugin opens from a view through the plugin surface transport. The checks judge the error status and the application log; F1033 is complete.

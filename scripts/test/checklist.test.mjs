@@ -335,12 +335,14 @@ test("check-docs passes a text that holds no conflict marker at the start of a l
   assert.equal(result.status, 0, result.stderr);
 });
 
-// Documents state actions with literal verbs (F1036): the Korean verb stem U+B2FF and the figurative reach, drive and talk to are reported with their line,
+// Documents state actions with literal verbs (F1036, F1061): the Korean verb stems U+B2FF and U+C9D3 (to build) and the figurative reach, drive and talk to are reported with their line,
 // and code spans, code blocks and the Windows drive form are not.
 test("auditFigurativeVerbs reports the figurative verbs outside code", () => {
   const source = [
     "The message reaches the agent.",
     "이 경로는 application에 닿는다.",
+    "apply는 그 tree를 짓는다.",
+    "거짓, 몸짓, 꼭짓점, 1초 남짓, 짝을 짓고, 이름 짓는, 관련짓는다는 그대로 둔다.",
     "The test drives the window.",
     "The page talks to the host.",
     "The test `records-reach-the-class-frame` passes.",
@@ -353,7 +355,8 @@ test("auditFigurativeVerbs reports the figurative verbs outside code", () => {
   assert.deepEqual(auditFigurativeVerbs(source, "docs/a.md"), [
     "docs/a.md:1: figurative verb reaches; state the literal action",
     "docs/a.md:2: figurative verb 닿는다; state the literal action",
-    "docs/a.md:3: figurative verb drives; state the literal action",
-    "docs/a.md:4: figurative verb talks to; state the literal action",
+    "docs/a.md:3: figurative verb 짓는다; state the literal action",
+    "docs/a.md:5: figurative verb drives; state the literal action",
+    "docs/a.md:6: figurative verb talks to; state the literal action",
   ]);
 });

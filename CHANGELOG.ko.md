@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1061: 한국어 문서는 `짓다` 대신 동작을 말하고, figurative verb check가 이를 보고한다. Red: 규칙이 없을 때 `auditFigurativeVerbs reports the figurative verbs outside code`가 실패했다. Green: test가 통과하고, check는 추적되는 문서를 하나도 보고하지 않는다.
 - F1055-1: `core.layout.plan`과 `core.layout.apply`의 tree는 group `{group: {name?}, tree}`를 받는다. group은 첫 카드가 유지하는 카드를 담은 group card를 유지하고, 새 group card는 `그룹 <n>`을 받으며, 어떤 group도 유지하지 않는 group card는 카드가 옮겨진 뒤 끝난다. 그래서 group card가 있는 space를 거부하지 않고 계획한다. plan은 group header를 넣어 그린 크기로 판정하고, `cards`는 각 카드의 group을 밝힌다.
 - F1059: test inventory는 F1033을 page와 mygo workbench의 toast에 연결한다. Red: `completed capability entries all have feature evidence links`가 `F1033: completed capability has no feature link`로 실패했다. Green: inventory test가 통과한다.
 - F1033-4: F1052, F1053, F1056, F1057, F1058 뒤에 오류 window check가 Wails, Tauri, mygo host에서 5회 모두 통과한다: 예외를 던지는 layout draw, 숨긴 view와 유지한 view, sidebar section, project window, plugin surface transport로 view에서 어떤 plugin도 열지 않는 파일. check는 오류 status와 application log를 판정한다. F1033이 완료되었다.
@@ -96,7 +97,7 @@
 - F899-8, F911: 체크리스트가 F899-8과 F911을 완료로 표시한다. 그 항목들과 연결된 plugin·sidecar 항목이 완료되었다.
 - F969-9: page와 mygo workbench가 layout library 저장 tree의 `withdraw(id)`, `insert(target, side, node)`, `even()`으로 배치를 계획하고 적용한다. library는 더 이상 box 인자를 받지 않는다. plan test는 저장 tree로 space를 만들고, 한국어 skill은 plan, apply, `core.layout.move`를 설명한다. 검증: rebase된 branch에서 page test 31개 중 5개와 mygo test build의 Red, page test 31/31과 mygo package의 Green.
 - F1006-12: Go와 Rust role file writer가 `role.md` 옆에 `role.ko.md`를 쓴다. 내용은 fingerprint 사례의 `texts_ko`에 고정한 한국어 첫 줄, `ko` 텍스트, `role.md`의 fingerprint다. 검증: `ko`가 없는 writer에 대한 Go와 Rust role file test의 Red, Go host package와 Rust role file, roles, workspace test의 Green.
-- F1006-12: `docs/spec/cases/agent-roles/fingerprint.json`의 non-ASCII 지문 사례 `reviewer`가 지어낸 한국어 단어 대신 영어 용어 `reviewer`로 역할을 부르고, 기대 지문을 다시 계산했다. 검증: Go와 Rust role file test가 새 값으로 통과한다.
+- F1006-12: `docs/spec/cases/agent-roles/fingerprint.json`의 non-ASCII 지문 사례 `reviewer`가 새로 만든 한국어 단어 대신 영어 용어 `reviewer`로 역할을 부르고, 기대 지문을 다시 계산했다. 검증: Go와 Rust role file test가 새 값으로 통과한다.
 - F1006-12: `roles.json`은 형식 2다. 각 role 정의는 `text` 옆에 한국어 번역 `ko`를 요구하고, Go와 Rust store는 형식 1과 없거나 문자열이 아닌 `ko`를 거부한다. 검증: 형식 1 store에서 형식 2 사례에 대한 Go와 Rust roles test의 Red, Go host package와 Rust roles, role file, workspace test의 Green.
 - F1013-2: window check `e2e/idle-window.test.mjs`와 그 module `packages/window-check/idle-window.mjs`가 디스플레이가 낸 refresh 120개 동안 쉬는 창을 판정하며, refresh는 측정으로 host event 시계에 놓인다. 검증: unit test 8/8과 window-check package 485/485. window check 자체는 아직 실행하지 않았다.
 - F1016-14: Go test runner가 test가 통과한 뒤 package마다 검사를 한 번 실행하므로, mygo test의 선언된 element 이름처럼 package의 모든 test에 걸친 `TestMain` 판정이 실행 결과를 정한다. 검증: 바뀌지 않은 runner에서 runner unit test의 Red와 F1016-13 이전 코드(`core.plane`)에서 mygo package의 Red, runner unit test 28/28과 mygo package test 1147/1147 및 그 검사의 Green.
@@ -5477,7 +5478,7 @@
 - F138.1: 명세가 모든 글 기록의 한 형식을 정한다. `<time> <level> <layer> <where>: <text>`, level은 `error`와 `info`, layer는 `page`, `host`, `native`, `sidecar`, 기록 하나는 한 줄이며, 쓰는 쪽마다의 helper, sidecar 표준 오류를 감싸는 방법, 영속 서비스가 쓰는 형식을 함께 정하고 실패 표가 이를 쓴다. host, native 라이브러리, page는 F138.2와 F138.3까지 이전 형식을 쓴다.
 - F117.8.5: 공개 registry index가 core 0.0.9, terminal plugin 0.0.7, sidecar vt 0.0.7을 나열하고, 그 workflow는 core tag `v0.0.9`로 `sok`을 build한다.
 - F117.8.4: 선언된 모든 작업공간 버전은 0.0.9이며, 이 버전이 F117, F121, F122를 담는다.
-- F117.8.3: release workflow가 core release의 파일을 registry의 core release가 쓰는 이름 `soksak-<version>-darwin-arm64-wailsv3.zip`과 `soksak-<version>-darwin-arm64-tauriv2.zip`으로 짓고, 설치 안내가 그 이름을 쓴다.
+- F117.8.3: release workflow가 core release의 파일을 registry의 core release가 쓰는 이름 `soksak-<version>-darwin-arm64-wailsv3.zip`과 `soksak-<version>-darwin-arm64-tauriv2.zip`으로 정하고, 설치 안내가 그 이름을 쓴다.
 - F121.8: `make app-update-check HOST=wailsv3|tauriv2`가 빌드한 디버그 번들을 복사하고, 더 새 버전의 core release를 내고, 복사본을 일회용 설정 디렉터리로 시작하고, `core.app.update`를 실행한 뒤 `sok app update`가 두 host에서 번들을 교체하고 애플리케이션을 다시 시작했는지 검사한다. 시작한 애플리케이션을 끝내고 하나라도 남으면 실패한다.
 - F117.7.4: plugin 페이지의 업데이트 목록은 core release와 그 release 링크로 시작하며, F121.6이 이를 구현한다. 업데이트 N 컨트롤이 이를 센다.
 - F137: Rust `sok`의 `replace_app`이 쓰는 시작 함수의 타입에 `OpenApplication`이라는 이름을 붙여 `cargo clippy`가 통과하고, 애플리케이션 번들을 준비하고 교체하는 `sok` 테스트는 그 연산을 macOS만 구현하므로, 구현하지 않는 플랫폼에서는 그 플랫폼의 `not implemented on <os>` 메시지로 바로 끝난다(Go `requireBundles`, Rust `bundles_supported`).

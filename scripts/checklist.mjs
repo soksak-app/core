@@ -16,7 +16,7 @@ export function checklistCounts(text, file = "docs/features.md") {
 // A checklist without the corresponding record has no obligation to add it.
 // The figurative verbs that documents do not use (F1036): the Korean verb stem U+B2FF (after U+B9DE it states that two edges touch, which is literal), and reach, drive and talk to in English. Code spans and code
 // blocks hold identifiers and quoted texts, and the Windows path prefix is named the drive form, rule or prefix, so neither is reported.
-const FIGURATIVE_VERBS = /(?<!맞)닿[가-힣]*|\b(?:reach(?:es|ed|ing)?|drive[s]?|driving|talks? to|talked to|talking to)\b/gi;
+const FIGURATIVE_VERBS = /(?<!맞)닿[가-힣]*|(?<![거짝몸련꼭남]|이름 |을 )(?:짓[가-힣]*|지어[가-힣]*|지은)|\b(?:reach(?:es|ed|ing)?|drive[s]?|driving|talks? to|talked to|talking to)\b/gi;
 
 export function auditFigurativeVerbs(source, file) {
   const errors = [];
