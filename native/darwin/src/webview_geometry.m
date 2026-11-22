@@ -662,7 +662,15 @@ static void giveKeyboardAfterPress(NSWindow *window, void (^give)(void)) {
         give();
         return;
     }
-    objc_setAssociatedObject(window, &keyboardPendingKey, give, OBJC_ASSOCIATION_COPY);
+    // The moves that wait run at the release in the order they came: the last one decides where the keyboard stays, and an earlier one
+    // still runs, because a later call for a surface leaves the keyboard where it is inside that surface, such as the region that
+    // the press on the page of the surface asked for (docs/spec/native-surfaces.md#keyboard-of-a-surface).
+    void (^earlier)(void) = objc_getAssociatedObject(window, &keyboardPendingKey);
+    void (^ordered)(void) = earlier ? ^{
+        earlier();
+        give();
+    } : give;
+    objc_setAssociatedObject(window, &keyboardPendingKey, ordered, OBJC_ASSOCIATION_COPY);
     if ((sp_input_person_buttons() & 1) == 0 || objc_getAssociatedObject(window, &keyboardMonitorKey)) return;
     // The wait of a person's press ends with the first of three events, each of which AppKit gives once for the release
     // (docs/spec/native-surfaces.md#keyboard-of-a-surface). The first is the release that the application dispatches.

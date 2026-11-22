@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1043-2: press의 release를 기다리는 키보드 이동은 온 순서대로 실행된다. 그래서 terminal page를 누른 press가 region을 요청한 뒤 워크벤치가 surface를 요청해도 키보드는 region에 남는다. 전에는 나중 call이 앞선 call을 지워 키보드가 page web view에 남았다. Red: native surface keyboard test가 release 뒤 page web view를 찾았다. Green: native keyboard, press, surface, modal test가 통과한다.
 - F1039: 두 workbench에서 focus된 카드의 활성 탭은 카드 ring의 focus 색으로 테두리를 탭 안쪽에 그려 이름의 자리를 줄이지 않고, 다른 카드의 활성 탭은 그리지 않는다. Red: page style test와 mygo pixel test가 탭에서 focus 테두리를 찾지 못했다. Green: 두 test가 통과한다.
 - F1043-1: mygo workbench는 page처럼 keyboard 결정마다 cause, target, 직전 상태를 `workbench.keyboard.follow`로 기록한다. 그래서 keyboard가 따라가지 않는 focus ring을 event log에서 찾을 수 있다. event catalog check와 mygo keyboard, focus test로 확인했다.
 - F1044: 자기 bundle에서 기본 configuration directory로 실행된 release만 시작 시 사람의 setup 파일을 맞춘다. Debug build와 `--config-dir` 실행은 `host.setup.kept`를, App Translocation 폴더의 release는 오류 `host.setup.translocated`를 기록하며, 어느 쪽도 사람의 파일을 바꾸지 않는다. Red: Go와 Rust setup test가 `claude mcp add`를 실행하는 시작을 찾았다. Green: Go와 Rust setup test가 통과한다.

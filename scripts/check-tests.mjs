@@ -466,6 +466,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1043-2",
+    implementation: [
+      { file: "native/darwin/src/webview_geometry.m", symbol: "void (^earlier)(void) = objc_getAssociatedObject(window, &keyboardPendingKey);" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "the region that the press asked for holds the" },
+    ],
+    expected: "The keyboard moves that wait for the release of a press run in the order they came, so the region that a press on a terminal page asked for keeps the keyboard.",
+    levels: ["unit"],
+  },
+  {
     id: "F1039",
     implementation: [
       { file: "packages/workbench/app.css", symbol: ".card[data-focused=true] .tab[data-active=true]{box-shadow:inset 0 0 0 var(--bw) var(--focus)}" },

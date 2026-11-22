@@ -179,6 +179,17 @@ int main(void) { @autoreleasepool {
     sp_surface_press_released(window);
     check(window.firstResponder == terminalPage, "a release without a waiting move changes nothing");
 
+    // A press on the page of a surface that has a region asks the region for the keyboard, and the workbench then asks for the surface.
+    // Both moves wait for the release and run in the order they came, so the region holds the keyboard after the release; a later move
+    // that replaced the earlier one left the keyboard with the page, where no key reaches the region.
+    check(sp_input_pointer(window, 200, 250, 1, 0, 0, 0) == SP_INPUT_DELIVERED, "a press on the page of the surface is delivered");
+    sp_surface_region_focus(region);
+    sp_surface_focus(terminalHost);
+    check(sp_input_pointer(window, 200, 250, 3, 0, 0, 0) == SP_INPUT_DELIVERED, "the release of the press on the page is delivered");
+    check(window.firstResponder == (NSResponder *)region, [NSString stringWithFormat:@"the region that the press asked for holds the "
+        "keyboard after the release (first responder %@)", window.firstResponder].UTF8String);
+    check([window makeFirstResponder:terminalPage], "the page of the surface takes the keyboard back for the next cases");
+
     // The origin of a press outlives its release until the page received the release, and no press is open meanwhile.
     sp_surface_focus(browserHost);
     uint64_t kept = sp_input_press_origin_set(window, 0, 10, 10);
