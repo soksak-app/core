@@ -27,8 +27,8 @@ type pluginsHost struct {
 	// startUpdate is the list of failures of the update at start that the host reports in pluginsState.
 	startUpdate []map[string]string
 	runs        []string
-	used     []string
-	jobs     []string
+	used        []string
+	jobs        []string
 }
 
 func (p *pluginsHost) state(json.RawMessage) (any, error) {
@@ -605,7 +605,7 @@ func TestAFailureOfTheUpdateAtStartIsShownThroughTheErrorDisplay(t *testing.T) {
 		return map[string]any{"version": "1.0.0", "enabled": true, "sidecars": map[string]string{}}
 	}
 	plugins := &pluginsHost{core: "1.0.0", registry: "file:///registry/index.json", index: registryOf(map[string][]string{"alpha": {"1.0.0"}}),
-		plugins: map[string]map[string]any{"alpha": record()},
+		plugins:     map[string]map[string]any{"alpha": record()},
 		startUpdate: []map[string]string{{"where": "plugin update alpha", "text": "section browser.dom status is removed"}}}
 	stored := &storedHost{plugins: plugins, installed: `{"plugins":[
 		{"id":"alpha","package":"@scope/plugin-alpha","version":"1.0.0","manifest":{"id":"alpha","name":"알파","description":"alpha","contributes":{}}}]}`}
