@@ -60,7 +60,7 @@ A repeated operation with the returned identifiers gives the same identifiers an
 
 After a step, find the commands of the plugin of a tab with `exposure_search` or `window_describe {surface}` and run them with `command_run {surface}`. A request can name any window and any surface.
 
-A web page or an address is shown in a tab of a plugin of the window that opens it: find in `plugins` of the description a plugin whose description, `surface.params` or `opens` takes an address or the file, and open it with `core.layout.open`, so that the page stays in the window beside the work and its commands and statuses are declared. Use a browser outside the application only when no plugin of the window opens it or the person asks for one.
+Find in `plugins` of the description the plugin whose description, `surface.params` or `opens` takes an address or the file. When a plugin of the window opens web addresses, such as browser, every web page that you open, test, play or check, a local server too, goes into a tab of that plugin first: open it with core.layout.open {card, plugin, params?}, go to the address with its navigate command, such as browser.navigate {url}, and read and act through its declared commands, statuses and elements. Use an outside browser, a headless browser or a browser automation library only when no such plugin is installed or the person asks for one, and state which case applies.
 
 ## Opening a tab with an agent role
 

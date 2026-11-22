@@ -305,6 +305,23 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1105",
+    implementation: [
+      { file: "packages/sok/go/src/agents/SKILL.md", symbol: "When a plugin of the window opens web addresses, such as browser, every web page that you open, test, play or check," },
+      { file: "packages/sok/go/src/agents/mcp.json", symbol: "When a plugin of the window opens web addresses, such as browser, every web page that you open, test, play or check," },
+      { file: "packages/sok/go/src/sok.go", symbol: "web pages: When a plugin of the window opens web addresses" },
+      { file: "packages/sok/rust/src/sok.rs", symbol: "web pages: When a plugin of the window opens web addresses" },
+    ],
+    tests: [
+      { file: "scripts/test/skill-web-pages.test.mjs", id: "the agent skill states the rule of web pages: a plugin of the window first, an outside browser only without one" },
+      { file: "scripts/test/skill-web-pages.test.mjs", id: "the MCP instructions states the rule of web pages: a plugin of the window first, an outside browser only without one" },
+      { file: "scripts/test/skill-web-pages.test.mjs", id: "the usage of the Go sok states the rule of web pages: a plugin of the window first, an outside browser only without one" },
+      { file: "scripts/test/skill-web-pages.test.mjs", id: "the usage of the Rust sok states the rule of web pages: a plugin of the window first, an outside browser only without one" },
+    ],
+    expected: "The skill, the MCP instructions and the usage of both sok implementations state the one rule of web pages: a web page goes into a tab of a plugin of the window that opens web addresses first, and an outside or headless browser only without such a plugin or at the request of the person.",
+    levels: ["unit"],
+  },
+  {
     id: "F1104",
     implementation: [
       { file: "packages/window-check/test-app.mjs", symbol: "export function quitKeyCommands({ key, text, modifiers }) {" },
@@ -1987,8 +2004,8 @@ const FEATURE_LINKS = [
   },
   {
     id: "F997",
-    implementation: [{ file: "packages/sok/go/src/agents/SKILL.md", symbol: "A web page or an address is shown in a tab of a plugin of the window that opens it" }],
-    tests: [{ file: "scripts/test/skill-web-pages.test.mjs", id: "the agent skill shows a web page in a plugin of the window before a browser outside the application" }],
+    implementation: [{ file: "packages/sok/go/src/agents/SKILL.md", symbol: "Find in `plugins` of the description the plugin whose description, `surface.params` or `opens` takes an address or the file." }],
+    tests: [{ file: "scripts/test/skill-web-pages.test.mjs", id: "the agent skill states the rule of web pages in its section Acting on a layout" }],
     expected: "The agent skill shows a web page or an address in a tab of a plugin of the window and uses a browser outside the application only when no plugin opens it or the person asks for one.",
     levels: ["unit"],
   },

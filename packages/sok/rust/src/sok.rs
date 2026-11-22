@@ -66,6 +66,7 @@ commands:
   exposures [window]
   describe [window] [--surface S] [--full] [--after KEY] [--limit N]
                             prints the description of the window in pages; --after takes the next key of a page
+                            web pages: When a plugin of the window opens web addresses, such as browser, every web page that you open, test, play or check, a local server too, goes into a tab of that plugin first: open it with core.layout.open {card, plugin, params?}, go to the address with its navigate command, such as browser.navigate {url}, and read and act through its declared commands, statuses and elements. Use an outside browser, a headless browser or a browser automation library only when no such plugin is installed or the person asks for one, and state which case applies.
   status NAME [window] [--surface S] [--watch]
   element rect|click|input|dispatch NAME [window] [--surface S] [--index N] [--value V] [--event JSON]
   input pointer [window] [--pointer NAME] --x X --y Y --phase move|down|drag|up|scroll [--button left|right] [--delta-x N] [--delta-y N] [--clicks N] [--activate]

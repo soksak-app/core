@@ -60,7 +60,7 @@ soksak은 창마다 탭이 있는 카드의 레이아웃을 담는 데스크톱 
 
 한 단계 뒤에는 `exposure_search` 또는 `window_describe {surface}`로 탭 plugin의 command를 찾고, `command_run {surface}`로 실행한다. 요청은 어느 창과 어느 surface든 지정할 수 있다.
 
-웹 페이지나 주소는 그것을 여는 창의 plugin 탭에 보인다. 설명의 `plugins`에서 설명, `surface.params`, `opens` 중 하나가 주소나 파일을 받는 plugin을 찾고, `core.layout.open`으로 연다. 그러면 페이지는 작업 옆의 창에 남고, 그 command와 status가 선언된다. 창의 어느 plugin도 열지 못하거나 사람이 요청하지 않는 한 애플리케이션 밖의 browser를 쓰지 않는다.
+설명의 `plugins`에서 설명, `surface.params`, `opens` 중 하나가 주소나 파일을 받는 plugin을 찾는다. 창의 plugin이 browser처럼 web address를 열면, 여는 것, 테스트하는 것, 실행하는 것, 확인하는 것 모두, local server도 포함해 모든 web page는 먼저 그 plugin의 탭으로 간다. core.layout.open {card, plugin, params?}로 열고, browser.navigate {url} 같은 그 plugin의 navigate command로 주소로 이동하고, 선언된 command, status, element로 읽고 조작한다. 바깥 browser, headless browser, browser automation library는 그런 plugin이 설치되어 있지 않거나 사람이 요청할 때만 쓰고, 어느 경우인지 밝힌다.
 
 ## role을 가진 tab 열기
 

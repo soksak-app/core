@@ -6,20 +6,34 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-// The rule of web pages (docs/spec/cli.md#agent-skill): an agent shows a web page or an address in a tab of a plugin of the
-// window that opens it, and uses a browser outside the application only when no plugin of the window opens it or the person asks.
-const PHRASES = [
-  "A web page or an address is shown in a tab",
-  "`core.layout.open`",
-  "a browser outside the application only when no plugin of the window opens it or the person asks for one",
-];
+// The rule of web pages (docs/spec/cli.md#agent-skill), worded the same in every text that an agent reads: the skill that
+// `sok skill print` writes, the instructions of `sok mcp` and the usage of both sok implementations.
+const RULE = "When a plugin of the window opens web addresses, such as browser, every web page that you open, test, play or check, "
+  + "a local server too, goes into a tab of that plugin first: open it with core.layout.open {card, plugin, params?}, go to the "
+  + "address with its navigate command, such as browser.navigate {url}, and read and act through its declared commands, statuses "
+  + "and elements. Use an outside browser, a headless browser or a browser automation library only when no such plugin is installed "
+  + "or the person asks for one, and state which case applies.";
 
-test("the agent skill shows a web page in a plugin of the window before a browser outside the application", () => {
-  const text = readFileSync(join(ROOT, "packages/sok/go/src/agents/SKILL.md"), "utf8");
+const flat = (text) => text.replace(/\s+/g, " ");
+
+const SOURCES = {
+  "the agent skill": () => readFileSync(join(ROOT, "packages/sok/go/src/agents/SKILL.md"), "utf8"),
+  "the MCP instructions": () => JSON.parse(readFileSync(join(ROOT, "packages/sok/go/src/agents/mcp.json"), "utf8")).instructions,
+  "the usage of the Go sok": () => readFileSync(join(ROOT, "packages/sok/go/src/sok.go"), "utf8"),
+  "the usage of the Rust sok": () => readFileSync(join(ROOT, "packages/sok/rust/src/sok.rs"), "utf8"),
+};
+
+const holds = (name) => assert.ok(flat(SOURCES[name]()).includes(RULE), `${name} lacks the rule of web pages: ${RULE}`);
+
+test("the agent skill states the rule of web pages: a plugin of the window first, an outside browser only without one", () => holds("the agent skill"));
+test("the MCP instructions states the rule of web pages: a plugin of the window first, an outside browser only without one", () => holds("the MCP instructions"));
+test("the usage of the Go sok states the rule of web pages: a plugin of the window first, an outside browser only without one", () => holds("the usage of the Go sok"));
+test("the usage of the Rust sok states the rule of web pages: a plugin of the window first, an outside browser only without one", () => holds("the usage of the Rust sok"));
+
+test("the agent skill states the rule of web pages in its section Acting on a layout", () => {
+  const text = SOURCES["the agent skill"]();
   const start = text.indexOf("## Acting on a layout");
   assert.ok(start !== -1, "the agent skill has no section Acting on a layout");
   const end = text.indexOf("\n## ", start + 1);
-  const section = text.slice(start, end === -1 ? text.length : end).replace(/\s+/g, " ");
-  const missing = PHRASES.filter((phrase) => !section.includes(phrase));
-  assert.deepEqual(missing, [], `the section Acting on a layout lacks ${JSON.stringify(missing)}`);
+  assert.ok(flat(text.slice(start, end === -1 ? text.length : end)).includes(RULE), "the section Acting on a layout lacks the rule");
 });
