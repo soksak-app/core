@@ -181,6 +181,7 @@ fn update(plugin: &str, from: &str, to: &str) -> StartUpdate {
     }
 }
 
+// contract: plugins.start-update.replaces-refused-with-newest-accepted
 #[test]
 fn start_update_replaces_a_refused_installed_plugin_with_the_newest_accepted_version() {
     let config = folder::Folder::new();
@@ -215,6 +216,7 @@ fn start_update_replaces_a_refused_installed_plugin_with_the_newest_accepted_ver
     );
 }
 
+// contract: plugins.start-update.advances-older-accepted
 #[test]
 fn start_update_advances_an_older_installed_plugin_to_the_newest_accepted_version() {
     let config = folder::Folder::new();
@@ -240,6 +242,7 @@ fn start_update_advances_an_older_installed_plugin_to_the_newest_accepted_versio
     assert_eq!(installed_probe(config.path()).0, "0.0.2");
 }
 
+// contract: plugins.start-update.repeated-start-changes-nothing
 #[test]
 fn repeated_start_update_changes_nothing() {
     let config = folder::Folder::new();
@@ -267,6 +270,7 @@ fn repeated_start_update_changes_nothing() {
     assert_eq!(changes.lock().unwrap().len(), count);
 }
 
+// contract: plugins.start-update.refused-without-newer-is-reported-and-kept
 #[test]
 fn start_update_reports_a_refused_plugin_without_a_newer_accepted_version_and_keeps_it() {
     let config = folder::Folder::new();
@@ -295,6 +299,7 @@ fn start_update_reports_a_refused_plugin_without_a_newer_accepted_version_and_ke
     assert!(changes.lock().unwrap()[setup..].is_empty());
 }
 
+// contract: plugins.start-update.unreadable-registry-is-reported
 #[test]
 fn start_update_reports_an_unreadable_registry_and_changes_nothing() {
     let config = folder::Folder::new();
@@ -326,6 +331,7 @@ fn start_update_reports_an_unreadable_registry_and_changes_nothing() {
     assert_eq!(installed_probe(config.path()).1, before);
 }
 
+// contract: plugins.start-update.failure-is-kept-in-plugins-state
 #[test]
 fn start_update_failure_is_kept_in_the_plugins_state() {
     let config = folder::Folder::new();
@@ -351,6 +357,7 @@ fn start_update_failure_is_kept_in_the_plugins_state() {
     );
 }
 
+// contract: plugins.start-update.shutdown-before-start-changes-nothing
 #[test]
 fn a_shutdown_before_the_start_update_changes_nothing() {
     let config = folder::Folder::new();
@@ -387,6 +394,7 @@ fn a_shutdown_before_the_start_update_changes_nothing() {
     assert!(changes.lock().unwrap()[setup..].is_empty());
 }
 
+// contract: plugins.start-update.shutdown-during-install-applies-nothing
 #[test]
 fn a_shutdown_during_the_install_leaves_the_previous_installation() {
     let config = folder::Folder::new();

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
@@ -113,8 +114,9 @@ func TestRoleDefineRefusesPathsAndWritesNothing(t *testing.T) {
 	}
 }
 
+// contract: roles.define-writes-roles-first
 func TestRoleDefineChangesEachTabThatHoldsTheRole(t *testing.T) {
-	_, w, _ := roleFixture(t)
+	config, w, _ := roleFixture(t)
 	roleAsk(t, w, host.WorkspaceRequest{Kind: "rolePut", Tab: "tab-aaaaaa", Role: "a"})
 	answer := roleAsk(t, w, host.WorkspaceRequest{Kind: "roleDefine", ID: "a", Entry: defineEntry("Role A changed.", "역할 A 변경.")})
 	if answer.(map[string]any)["text"] != "Role A changed." {
@@ -125,8 +127,37 @@ func TestRoleDefineChangesEachTabThatHoldsTheRole(t *testing.T) {
 	if role["generation"] != float64(2) || role["state"] != "pending" || role["fingerprint"] != host.RoleFingerprint("a", "Role A changed.", nil) {
 		t.Fatalf("tab-aaaaaa holds %v, want generation 2 pending with the new fingerprint", role)
 	}
-	if other := roleAsk(t, w, host.WorkspaceRequest{Kind: "role", Tab: "tab-bbbbbb"}).(map[string]any); other["role"] != nil {
+	other := roleAsk(t, w, host.WorkspaceRequest{Kind: "role", Tab: "tab-bbbbbb"}).(map[string]any)
+	if other["role"] != nil {
 		t.Fatalf("tab-bbbbbb holds %v, want no role", other)
+	}
+	// roles.json holds the new definition in format 3, and the tab that holds the role received one change message: its seq
+	// counts the assignment and the define, while the tab without a role keeps seq 0.
+	var written map[string]any
+	if err := json.Unmarshal(readFileOrFatal(t, filepath.Join(config, "roles.json")), &written); err != nil {
+		t.Fatal(err)
+	}
+	if written["format"] != float64(3) || written["roles"].(map[string]any)["a"].(map[string]any)["text"] != "Role A changed." {
+		t.Fatalf("roles.json holds %v, want format 3 with the new definition of a", written)
+	}
+	if role["seq"] != float64(2) || other["seq"] != float64(0) {
+		t.Fatalf("tab seq is %v and %v, want 2 for the tab that holds the role and 0 for the other", role["seq"], other["seq"])
+	}
+	// A write of roles.json that fails stops the define before any tab changes.
+	if err := os.Chmod(config, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(config, 0o700)
+	before := readFileOrFatal(t, filepath.Join(config, "roles.json"))
+	failure := roleRefusal(t, w, host.WorkspaceRequest{Kind: "roleDefine", ID: "a", Entry: defineEntry("Role A again.", "역할 A 다시.")})
+	if !strings.Contains(failure, "roles: write failed") {
+		t.Fatalf("define of an unwritable roles.json refused with %q, want the write error", failure)
+	}
+	if after := readFileOrFatal(t, filepath.Join(config, "roles.json")); string(after) != string(before) {
+		t.Fatal("a failed write changed roles.json")
+	}
+	if tab := roleAsk(t, w, host.WorkspaceRequest{Kind: "role", Tab: "tab-aaaaaa"}).(map[string]any); tab["generation"] != float64(2) || tab["seq"] != float64(2) {
+		t.Fatalf("tab-aaaaaa holds %v after a failed write, want generation 2 and seq 2 unchanged", tab)
 	}
 }
 

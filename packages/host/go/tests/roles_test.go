@@ -132,3 +132,55 @@ func TestRolesReadDoesNotCreateAbsentFile(t *testing.T) {
 		t.Fatal("a read created roles.json")
 	}
 }
+
+// contract: roles.format-3-refuses-format-2
+func TestRolesRefuseFormatTwoInTheReaderAndInAnAssignment(t *testing.T) {
+	config, w, _ := roleFixture(t)
+	writeRoleFixtureFile(t, config, "roles.json", map[string]any{"format": 2, "roles": map[string]any{}})
+	path := filepath.Join(config, "roles.json")
+	want := path + ": roles: format must be 3, found 2"
+	before := readFileOrFatal(t, path)
+	if _, err := w.Apply(host.WorkspaceRequest{Kind: "roles"}); err == nil || err.Error() != want {
+		t.Fatalf("roles returned %v, want error %q", err, want)
+	}
+	if _, err := w.Apply(host.WorkspaceRequest{Kind: "rolePut", Tab: "tab-aaaaaa", Role: "a"}); err == nil || err.Error() != want {
+		t.Fatalf("rolePut returned %v, want error %q", err, want)
+	}
+	if after := readFileOrFatal(t, path); string(after) != string(before) {
+		t.Fatal("a refused rolePut changed roles.json")
+	}
+	if _, err := os.Stat(filepath.Join(config, "agents")); err == nil {
+		t.Fatal("a refused rolePut wrote a role file")
+	}
+}
+
+// contract: roles.files-reader-refusals
+func TestRolesReaderRefusesDefinitionFilesThatAreAbsentRelativeOrHoldControlCharacters(t *testing.T) {
+	cases := []struct {
+		definition map[string]any
+		reason     string
+	}{
+		{map[string]any{"text": "x", "ko": "x"}, "files must be an array of strings"},
+		{map[string]any{"text": "x", "ko": "x", "files": "/a"}, "files must be an array of strings"},
+		{map[string]any{"text": "x", "ko": "x", "files": []any{1}}, "files must be an array of strings"},
+		{map[string]any{"text": "x", "ko": "x", "files": []any{"checklist.md"}}, "file checklist.md is not absolute"},
+		{map[string]any{"text": "x", "ko": "x", "files": []any{"/a\tb"}}, "file /a\tb holds a control character"},
+	}
+	for _, c := range cases {
+		config := t.TempDir()
+		writeRoleFixtureFile(t, config, "roles.json", map[string]any{"format": 3, "roles": map[string]any{"reviewer": c.definition}})
+		path := filepath.Join(config, "roles.json")
+		want := path + ": roles: role reviewer " + c.reason
+		if _, err := host.NewWorkspace(config).Apply(host.WorkspaceRequest{Kind: "roles"}); err == nil || err.Error() != want {
+			t.Fatalf("roles returned %v, want error %q", err, want)
+		}
+	}
+	// The reader does not check that an absolute path exists.
+	config := t.TempDir()
+	writeRoleFixtureFile(t, config, "roles.json", map[string]any{"format": 3, "roles": map[string]any{"reviewer": map[string]any{
+		"text": "x", "ko": "x", "files": []any{"/soksak-no-such-file/checklist.md"},
+	}}})
+	if _, err := host.NewWorkspace(config).Apply(host.WorkspaceRequest{Kind: "roles"}); err != nil {
+		t.Fatalf("roles refused an absolute path that does not exist: %v", err)
+	}
+}

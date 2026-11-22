@@ -160,6 +160,42 @@ fn a_view_records_its_first_call() {
     assert!(!channels.has_called("other-surface"));
 }
 
+// contract: view.reload.restarts-once
+// A reload of a ready view keeps its record and counts no failure: only the failures after it count toward the stop.
+#[test]
+fn reloading_a_ready_view_keeps_its_record_and_counts_no_failure() {
+    let lifecycle = ViewLifecycle::default();
+    lifecycle.track(
+        "ready-reload",
+        7,
+        "probe",
+        "ui/page.html",
+        true,
+        Default::default(),
+    );
+    lifecycle.reset("ready-reload");
+    assert!(
+        crate::documents::reload_record(&lifecycle, "ready-reload").is_ok(),
+        "the reload of a ready view found no record to create the view from"
+    );
+    let start = Instant::now();
+    for step in 0..VIEW_RESTART_LIMIT - 1 {
+        lifecycle.fail("ready-reload", seconds_after(start, step as u64));
+    }
+    assert!(
+        !lifecycle.is_stopped("ready-reload"),
+        "the reload counted as a failure of the view"
+    );
+    lifecycle.fail(
+        "ready-reload",
+        seconds_after(start, (VIEW_RESTART_LIMIT - 1) as u64),
+    );
+    assert!(
+        lifecycle.is_stopped("ready-reload"),
+        "the view failures after the reload did not stop the view"
+    );
+}
+
 // contract: view.reload.clears-stop
 #[test]
 fn a_reset_clears_the_restart_stop_and_keeps_the_view_record() {

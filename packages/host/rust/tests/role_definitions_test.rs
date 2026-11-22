@@ -3,6 +3,7 @@
 //! status. No agent CLI runs here.
 
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
@@ -158,6 +159,63 @@ fn define_of_a_held_role_changes_the_tab_and_its_generation() {
     assert_eq!(status["state"], json!("pending"));
     assert_eq!(
         status["fingerprint"],
+        json!(role_fingerprint("a", "Role A, revised.", &[file]))
+    );
+    let _ = fs::remove_dir_all(&directory);
+}
+
+// contract: roles.define-repairs-failed-tab
+// A failed write of a tab's role files keeps the new definition in roles.json and the earlier record of the tab; a repeated
+// define of the same definition repairs that tab.
+#[test]
+fn a_failed_tab_write_keeps_the_new_definition_and_a_repeated_define_repairs_the_tab() {
+    let (directory, store) = fixture("repairs");
+    apply(
+        &store,
+        json!({"kind": "rolePut", "tab": "tab-aaaaaa", "role": "a"}),
+    )
+    .unwrap();
+    let file = directory.join("work/checklist.md").display().to_string();
+    let folder = directory.join("agents/tab-aaaaaa");
+    let entry = json!({"text": "Role A, revised.", "ko": "역할 A 수정.", "files": [file.clone()]});
+    // A read-only folder of the tab makes the write of its role files fail with an OS error.
+    fs::set_permissions(&folder, fs::Permissions::from_mode(0o500)).unwrap();
+    let error = apply(
+        &store,
+        json!({"kind": "roleDefine", "id": "a", "entry": entry.clone()}),
+    )
+    .expect_err("the define of a tab whose folder is read-only succeeded");
+    fs::set_permissions(&folder, fs::Permissions::from_mode(0o700)).unwrap();
+    assert!(
+        error.starts_with("role file ")
+            && error.contains(": write failed: ")
+            && error.contains("agents/tab-aaaaaa"),
+        "the tab error is {error}"
+    );
+    assert_eq!(
+        stored_roles(&directory)["roles"]["a"]["text"],
+        json!("Role A, revised.")
+    );
+    let kept = apply(&store, json!({"kind": "role", "tab": "tab-aaaaaa"})).unwrap();
+    assert_eq!(kept["generation"], json!(1));
+    assert_eq!(
+        kept["fingerprint"],
+        json!(role_fingerprint(
+            "a",
+            "Role A definition.",
+            std::slice::from_ref(&file)
+        ))
+    );
+    // The repeated define writes nothing for roles.json and repairs the tab.
+    apply(
+        &store,
+        json!({"kind": "roleDefine", "id": "a", "entry": entry}),
+    )
+    .unwrap();
+    let repaired = apply(&store, json!({"kind": "role", "tab": "tab-aaaaaa"})).unwrap();
+    assert_eq!(repaired["generation"], json!(2));
+    assert_eq!(
+        repaired["fingerprint"],
         json!(role_fingerprint("a", "Role A, revised.", &[file]))
     );
     let _ = fs::remove_dir_all(&directory);

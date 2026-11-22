@@ -97,3 +97,112 @@ fn roles_read_does_not_create_absent_file() {
     assert!(!directory.join("roles.json").exists());
     let _ = fs::remove_dir_all(&directory);
 }
+
+/// A configuration directory whose projects.json holds one tab without a role, and whose roles.json holds stored.
+fn tab_directory(name: &str, stored: &Value) -> (PathBuf, Workspace) {
+    let directory = config_directory(name);
+    fs::create_dir_all(directory.join("work")).unwrap();
+    fs::write(
+        directory.join("projects.json"),
+        serde_json::to_vec(&json!({
+            "format": 4,
+            "projects": [{
+                "id": "prj-aaaaaa", "root": directory.join("work"), "identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:7",
+                "spaces": [{
+                    "id": "spc-aaaaaa", "title": "SPACE1",
+                    "layout": {
+                        "state": {"root": {"card": "card-1", "data": {"tabs": [
+                            {"id": "tab-aaaaaa", "plugin": "terminal", "title": "a", "role": null}
+                        ]}},
+                        "focusedId": "card-1", "leader": "card-1", "lastCard": 1, "named": 0}
+                    }
+                }],
+                "activeSpaceId": "spc-aaaaaa"
+            }]
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    fs::write(
+        directory.join("roles.json"),
+        serde_json::to_vec(stored).unwrap(),
+    )
+    .unwrap();
+    let store = Workspace::new(directory.clone());
+    (directory, store)
+}
+
+// contract: roles.format-3-refuses-format-2
+#[test]
+fn format_two_roles_are_refused_by_the_reader_and_by_a_tab_assignment() {
+    let stored = json!({"format": 2, "roles": {}});
+    let (directory, store) = tab_directory("format-two", &stored);
+    let path = directory.join("roles.json");
+    let want = format!("{}: roles: format must be 3, found 2", path.display());
+    assert_eq!(
+        store.apply(serde_json::from_value(json!({"kind": "roles"})).unwrap()),
+        Err(want.clone())
+    );
+    assert_eq!(
+        store.apply(
+            serde_json::from_value(json!({"kind": "rolePut", "tab": "tab-aaaaaa", "role": "a"}))
+                .unwrap()
+        ),
+        Err(want)
+    );
+    let kept: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    assert_eq!(kept, stored, "a refused assignment changed roles.json");
+    assert!(
+        !directory.join("agents").exists(),
+        "a refused assignment wrote a role file"
+    );
+    let _ = fs::remove_dir_all(&directory);
+}
+
+// contract: roles.files-reader-refusals
+#[test]
+fn the_reader_refuses_definition_files_that_are_absent_relative_or_hold_control_characters() {
+    let cases = [
+        (
+            json!({"text": "x", "ko": "x"}),
+            "role reviewer files must be an array of strings",
+        ),
+        (
+            json!({"text": "x", "ko": "x", "files": "/a"}),
+            "role reviewer files must be an array of strings",
+        ),
+        (
+            json!({"text": "x", "ko": "x", "files": [1]}),
+            "role reviewer files must be an array of strings",
+        ),
+        (
+            json!({"text": "x", "ko": "x", "files": ["checklist.md"]}),
+            "role reviewer file checklist.md is not absolute",
+        ),
+        (
+            json!({"text": "x", "ko": "x", "files": ["/a\tb"]}),
+            "role reviewer file /a\tb holds a control character",
+        ),
+    ];
+    for (index, (definition, reason)) in cases.into_iter().enumerate() {
+        let stored = json!({"format": 3, "roles": {"reviewer": definition}});
+        let (directory, store) = tab_directory(&format!("files-{index}"), &stored);
+        let path = directory.join("roles.json");
+        assert_eq!(
+            store.apply(serde_json::from_value(json!({"kind": "roles"})).unwrap()),
+            Err(format!("{}: roles: {reason}", path.display())),
+            "case {index}"
+        );
+        let _ = fs::remove_dir_all(&directory);
+    }
+    // The reader does not check that an absolute path exists.
+    let stored = json!({"format": 3, "roles": {"reviewer": {"text": "x", "ko": "x", "files": ["/soksak-no-such-file/checklist.md"]}}});
+    let (directory, store) = tab_directory("files-absent-path", &stored);
+    assert!(
+        store
+            .apply(serde_json::from_value(json!({"kind": "roles"})).unwrap())
+            .is_ok(),
+        "the reader refused an absolute path that does not exist"
+    );
+    let _ = fs::remove_dir_all(&directory);
+}

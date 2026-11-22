@@ -1422,6 +1422,14 @@ fn invalid_json_closes_connection() {
 | `plugins.run.applies-before-it-notifies` | `installed.json`을 바꾸는 plugin 작업은 `plugins-changed`를 보내기 전에 변경을 사이드카에 적용한다. | all |
 | `plugins.run.rejects-invalid-and-concurrent` | `pluginsRun`은 알 수 없는 action, 비어 있지 않은 문자열이 아닌 plugin id, 명령의 message로 실패한 작업, 다른 작업이 실행 중일 때의 호출을 `another plugin operation is running`으로 거부하고, `plugins-changed` event를 보내지 않는다. | all |
 | `plugins.registry.sets-like-the-command` | registry index로 `pluginsUseRegistry`를 부르면 `sok registry use`처럼 `plugins/registry.json`을 쓰고 `{ index }`를 돌려준다. 비어 있지 않은 문자열이 아닌 `index`는 `index must be a non-empty string`으로 거부한다. | all |
+| `plugins.start-update.replaces-refused-with-newest-accepted` | start 때 reader가 `plugin.json`을 거부하는 설치된 plugin은 index의 가장 새로운 수용 version으로 갱신되고, `pluginsState`는 새 설치 version을 보고한다. | all |
+| `plugins.start-update.advances-older-accepted` | start 때 index의 가장 새로운 수용 version보다 오래된 설치된 plugin은 그 version으로 갱신된다. | all |
+| `plugins.start-update.repeated-start-changes-nothing` | 후보를 모두 갱신한 start 다음의 start는 파일을 바꾸지 않고 변경 메시지를 보내지 않는다. | all |
+| `plugins.start-update.refused-without-newer-is-reported-and-kept` | 거부되고 더 새로운 수용 version이 없는 설치된 plugin은 설치된 채 남고, start는 오류 record `plugin update <id>: <reason>`을 저장하며 `pluginsState.startUpdate`에 나열한다. | all |
+| `plugins.start-update.unreadable-registry-is-reported` | registry index를 읽을 수 없는 start는 아무것도 바꾸지 않고 오류 record `plugins update: <error>`를 저장한다. | all |
+| `plugins.start-update.failure-is-kept-in-plugins-state` | start 때의 실패한 갱신은 host가 끝날 때까지 `pluginsState.startUpdate`에 `{where, text}`로 남는다. | all |
+| `plugins.start-update.shutdown-before-start-changes-nothing` | start 갱신이 시작되기 전에 시작된 host 종료는 갱신을 시작하지 않고 설치를 바꾸지 않는다. | all |
+| `plugins.start-update.shutdown-during-install-applies-nothing` | start 때 설치 중의 host 종료는 종료가 시작된 뒤 `plugins/installed.json`을 쓰지 않고 apply 단계를 실행하지 않는다. 종료 전에 쓴 파일은 그대로 남고, start는 `plugin update <id>: the host is shutting down`을 저장한다. | all |
 | `fetch.https.reads-a-tls-response` | 설정한 인증 기관이 신뢰하는 TLS server에서 `https:` index나 release를 읽고, `sha256`이 항목과 다른 release는 실패한다. | all |
 | `fetch.https.redirects-only-to-https` | `https:` URL로의 redirect는 5번까지 따라간다. 여섯 번째 redirect와 `http:`로의 redirect는 그 문장으로 실패한다. | all |
 | `fetch.https.reports-status-size-and-timeout` | 200이 아닌 응답, 한도보다 큰 본문, 한도보다 느린 요청은 `HTTP <status>`, `larger than <bytes> bytes`, `timed out after <seconds> s`로 실패한다. | all |

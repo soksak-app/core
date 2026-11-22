@@ -246,6 +246,39 @@ fn the_sidecar_sessions_request_refuses_an_empty_sidecar() {
     );
 }
 
+// contract: sidecars-transport.sessions.refuses-standard-io-sidecar
+// A sessions query for a sidecar that is not a persistent service is refused and connects to no service endpoint.
+#[test]
+fn service_sessions_refuses_a_standard_io_sidecar_and_sends_no_line() {
+    let executable = folder::Folder::new();
+    let config = folder::Folder::new();
+    let data = r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#;
+    let declarations = vec![SidecarDeclaration {
+        name: ECHO.to_string(),
+        folder: executable.path().to_path_buf(),
+        data: data.as_bytes().to_vec(),
+        error: None,
+        version: "0.0.1".to_string(),
+        dependents: Vec::new(),
+    }];
+    // An endpoint of the service is present, so only the transport of the sidecar can refuse the query.
+    let listener = service_endpoint(config.path());
+    listener.set_nonblocking(true).unwrap();
+    let sidecars =
+        Sidecars::<SidecarRecorder>::new(&declarations, config.path().to_path_buf()).unwrap();
+
+    let refused = sidecars.service_sessions(ECHO).err();
+    sidecars.stop();
+    assert_eq!(
+        refused,
+        Some(format!("sidecar {ECHO} is not a persistent service"))
+    );
+    assert!(
+        listener.accept().is_err(),
+        "a refused sessions query connected to the service"
+    );
+}
+
 fn raw(text: &str) -> Box<RawValue> {
     RawValue::from_string(text.into()).unwrap()
 }
