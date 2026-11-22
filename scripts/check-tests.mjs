@@ -292,6 +292,135 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F1092",
+    implementation: [
+      { file: "packages/host/go/src/images.go", symbol: "func (i *Images) awaitedLocked(key ImageKey, state *ImageRasterState) bool {" },
+      { file: "packages/host/rust/src/images.rs", symbol: "fn awaited(&self, key: &Key, state: &RasterState) -> bool {" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/images_test.go", id: "TestARestartedSupplierThatSendsNoRasterEndsNoLaterWait" },
+      { file: "packages/host/rust/src/images_test.rs", id: "a_restarted_supplier_that_sends_no_raster_ends_no_later_wait" },
+    ],
+    expected: "A raster wait awaits no region whose supplier ended, so a restarted supplier that sends no raster ends no later wait on both hosts.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1091",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "func validateSessions(sessions json.RawMessage, answered bool) (json.RawMessage, error) {" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "pub program: Option<String>," },
+      { file: "packages/workbench-mygo/src/owned_sessions.go", symbol: "type ownedEntry struct {" },
+      { file: "packages/workbench/owned-sessions.js", symbol: "export async function reconcileOwnedSessions() {" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/sidecars_sessions_test.go", id: "TestSessionsRefusesAnEntryWithAnInvalidProgram" },
+      { file: "packages/host/rust/src/sidecars_sessions_test.rs", id: "service_sessions_refuses_an_entry_with_an_invalid_program" },
+      { file: "packages/workbench-mygo/tests/owned_sessions_test.go", id: "TestAnAdoptedSessionKeepsTheProgramStateOfItsEntry" },
+      { file: "packages/workbench/test/owned-sessions-restart.test.mjs", id: "the restart adopts the session whose owner is in the restored layout, ends the session whose owner is absent and states the session that did not return" },
+    ],
+    expected: "An adopted session keeps the program state of its sessions entry, and the hosts refuse an entry whose program is invalid.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1090",
+    implementation: [
+      { file: "packages/workbench-mygo/src/owned_sessions_shell.go", symbol: "func (s *Shell) mountedView(surface string, answer func(MountedView, bool, error)) {" },
+      { file: "packages/workbench/owned-sessions.js", symbol: "function ownerSend(sidecar, owner, body) {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/layout_apply_sessions_test.go", id: "TestARequestForAMountedOwnerGoesThroughItsViewSource" },
+      { file: "packages/workbench-mygo/tests/layout_apply_sessions_test.go", id: "TestARequestBeforeTheMountOfItsOwnerWaitsForTheMount" },
+      { file: "packages/workbench/test/owned-sessions-open.test.mjs", id: "the owned session messages open, resize and end a session through the owner surface" },
+    ],
+    expected: "A session request of a mounted owner goes through its view source, and a request before the mount waits for the mount.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1089",
+    implementation: [
+      { file: "packages/workbench-mygo/src/owned_sessions.go", symbol: "func screenReplyError(reply json.RawMessage) error {" },
+      { file: "packages/workbench/owned-sessions.js", symbol: "export async function readOwnedSession(params, surface) {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/owned_sessions_io_test.go", id: "TestReadRefusesAScreenReplyWithoutAValidFrom" },
+      { file: "packages/workbench/test/owned-sessions-open.test.mjs", id: "the owned session messages open, resize and end a session through the owner surface" },
+    ],
+    expected: "A read answers the first row line of its rows, and a screen reply without a valid from is refused.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1088",
+    implementation: [
+      { file: "packages/workbench-mygo/src/errors_screen.go", symbol: "func (e *ShownErrors) WithdrawTab(tab string) {" },
+      { file: "packages/workbench/surface-status.js", symbol: "onTabsClosed((ids) => {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/errors_screen_test.go", id: "TestWithdrawingATabRemovesOnlyTheErrorsThatNameIt" },
+      { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestClosingATabWithdrawsItsErrors" },
+      { file: "packages/workbench/test/surface-status.test.mjs", id: "closing a tab withdraws its tab error and its surface error" },
+    ],
+    expected: "Closing a tab withdraws the errors that name it on the page and on mygo.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1087",
+    implementation: [
+      { file: "packages/workbench-mygo/src/owned_sessions_shell.go", symbol: "func (s *Shell) sizeChangedCards(scale float64) {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/layout_apply_sessions_test.go", id: "TestACardWithoutAMeasuredFrameSendsNoSizeAndRaisesNoError" },
+    ],
+    expected: "A card without a measured frame sends no size and raises no error.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1086",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "func validateSessions(sessions json.RawMessage, answered bool) (json.RawMessage, error) {" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "pub plugin: String," },
+      { file: "packages/workbench-mygo/src/owned_sessions.go", symbol: "func (o *OwnedSessions) endAbsent(name string, port OwnedSidecar, listed []ownedEntry, index int, answer func(error), live func(surface string) bool) {" },
+      { file: "packages/workbench/owned-sessions.js", symbol: "export async function reconcileOwnedSessions() {" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/sidecars_sessions_test.go", id: "TestSessionsRefusesAnEntryWithoutPlugin" },
+      { file: "packages/host/rust/src/sidecars_sessions_test.rs", id: "service_sessions_refuses_an_entry_without_plugin" },
+      { file: "packages/workbench-mygo/tests/owned_sessions_test.go", id: "TestAnAdoptedSessionOfAnOwnerWithoutSidecarIsReadThroughItsOpeningPlugin" },
+      { file: "packages/workbench-mygo/tests/owned_sessions_test.go", id: "TestAdoptionEndsASessionWhoseOpeningPluginDeclaresNoSessions" },
+      { file: "packages/workbench/test/owned-sessions-restart.test.mjs", id: "the restart adopts the session whose owner is in the restored layout, ends the session whose owner is absent and states the session that did not return" },
+    ],
+    expected: "An adopted session is served by the plugin that opened it, and the hosts refuse a sessions entry without plugin.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1085",
+    implementation: [
+      { file: "packages/workbench-mygo/src/owned_sessions.go", symbol: "func (o *OwnedSessions) Read(caller, session string, from, count json.RawMessage, answer func(json.RawMessage, error)) {" },
+      { file: "packages/workbench/owned-sessions.js", symbol: "export async function readOwnedSession(params, surface) {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/owned_sessions_io_test.go", id: "TestReadWithFromAndCountReturnsTheRetainedRowsOfTheSidecar" },
+      { file: "packages/workbench-mygo/tests/owned_sessions_io_test.go", id: "TestReadRefusesInvalidFromAndCountBeforeARequest" },
+      { file: "packages/workbench/test/owned-sessions-open.test.mjs", id: "the owned session messages open, resize and end a session through the owner surface" },
+    ],
+    expected: "A read with from and count returns the retained rows of the session, and invalid values are refused before a request.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1084",
+    implementation: [
+      { file: "packages/workbench-mygo/src/layout_apply.go", symbol: "func (s *Shell) checkPlannedSessions(node *planNode) error {" },
+      { file: "packages/workbench/plane.js", symbol: "export function applyInLayout(params, check = () => {}, opened = () => {}) {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/layout_apply_sessions_test.go", id: "TestALayoutApplyTabThatNamesASessionShowsIt" },
+      { file: "packages/workbench-mygo/tests/layout_apply_sessions_test.go", id: "TestALayoutApplyRefusesATabThatNamesASessionThatIsNotOpen" },
+      { file: "packages/workbench/test/owned-sessions-apply.test.mjs", id: "a new tab of a layout apply that names a session shows it and sends the size of its card" },
+      { file: "packages/workbench/test/owned-sessions-apply.test.mjs", id: "a layout apply refuses a new tab that names a session that is not open and leaves the layout" },
+    ],
+    expected: "A new tab of a layout apply that names an open session shows it, and one that names a session that is not open is refused.",
+    levels: ["unit"],
+  },
+  {
     id: "F1082",
     implementation: [
       { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) QuitStop(ended func()) bool {" },
