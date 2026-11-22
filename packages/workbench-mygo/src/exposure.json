@@ -284,7 +284,7 @@
       },
       {
         "name": "core.grid",
-        "description": "The current grid: size, gap, boundary positions, and cards in workbench order with their rectangles in plane coordinates, or null, with each card's tabs (each with the members of a layout tab, tab, plugin, title, active and params, and with the title a surface reported as label, its notice, the footer text it reported, whether it holds unsaved changes as modified, and the operation error it shows as error or null) and the text its content footer shows as status, tool buttons (enabled, hidden, title), header fit, and effective card sidebars by side with set, size, actual collapsed state, requestedCollapsed, autoCollapsed and collapseReason (null or insufficient-width/insufficient-height); fullscreen is the presented card ID or null, and card rectangles describe current presentation. cards holds the content cards only, each with its tabs, the group card that holds it as parent and whether it leads its level as leader; groups holds the group cards in workbench order with their rectangles, parent, leader and group (name, level, leader), empty without group cards.",
+        "description": "The current grid: size, gap, boundary positions, and cards in workbench order with their rectangles in plane coordinates, or null, with each card's tabs (each with the members of a layout tab, tab, plugin, title, active and params, and with the title a surface reported as label, its notice, the footer text it reported, whether it holds unsaved changes as modified, and the operation error it shows as error or null, and the program state it reports as program, {state, pid} or null (docs/spec/program-state.md#status)) and the text its content footer shows as status, tool buttons (enabled, hidden, title), header fit, and effective card sidebars by side with set, size, actual collapsed state, requestedCollapsed, autoCollapsed and collapseReason (null or insufficient-width/insufficient-height); fullscreen is the presented card ID or null, and card rectangles describe current presentation. cards holds the content cards only, each with its tabs, the group card that holds it as parent and whether it leads its level as leader; groups holds the group cards in workbench order with their rectangles, parent, leader and group (name, level, leader), empty without group cards.",
         "schema": {
           "type": [
             "object",
@@ -432,6 +432,14 @@
                             "string",
                             "null"
                           ]
+                        },
+                        "program": {
+                          "type": ["object", "null"],
+                          "properties": {
+                            "state": { "enum": ["idle", "working", "blocked"] },
+                            "pid": { "type": ["integer", "null"] }
+                          },
+                          "required": ["state", "pid"]
                         }
                       }
                     }

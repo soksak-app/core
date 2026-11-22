@@ -1577,7 +1577,7 @@ const FEATURE_LINKS = [
       { file: "packages/plugin-api/test/manifest-validation.test.mjs", id: "manifest validation" },
       { file: "packages/sok/go/tests/manifest_cases_test.go", id: "TestPluginInstallReplaysTheManifestCases" },
       { file: "packages/sok/rust/tests/manifest_cases_test.rs", id: "plugin_install_replays_the_manifest_cases" },
-      { file: "packages/workbench/test/program-follow.test.mjs", id: "tabProgram gives the state of an object with only the member state, none for null, and the text for another value" },
+      { file: "packages/workbench/test/program-follow.test.mjs", id: "tabProgram gives the state and the pid of an object with the members state and pid, none for null, and the text for another value" },
       { file: "packages/workbench/test/program-follow.test.mjs", id: "the program state of a tab follows the watch of its surface, which starts when the tab shows and ends when the tab leaves" },
       { file: "packages/workbench-mygo/tests/program_test.go", id: "TestTabProgramCases" },
       { file: "packages/workbench-mygo/tests/program_test.go", id: "TestTheProgramStateOfATabFollowsTheWatchOfItsSurface" },

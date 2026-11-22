@@ -7516,6 +7516,12 @@
                       "working",
                       "blocked"
                     ]
+                  },
+                  "pid": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
                   }
                 }
               }
@@ -7687,6 +7693,12 @@
                       "idle",
                       "working"
                     ]
+                  },
+                  "pid": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
                   }
                 }
               }
@@ -7695,7 +7707,7 @@
         }
       },
       "accepted": false,
-      "error": "plugin probe: surface program probe.s must have a schema of type object and null whose state is one of idle, working, blocked",
+      "error": "plugin probe: surface program probe.s must have a schema of type object and null whose state is one of idle, working, blocked and whose pid is an integer or null",
       "packageFiles": [
         "plugin.json",
         "ui/page.html"
@@ -7736,6 +7748,12 @@
                       "working",
                       "blocked"
                     ]
+                  },
+                  "pid": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
                   }
                 }
               }
@@ -7744,7 +7762,7 @@
         }
       },
       "accepted": false,
-      "error": "plugin probe: surface program probe.s must have a schema of type object and null whose state is one of idle, working, blocked",
+      "error": "plugin probe: surface program probe.s must have a schema of type object and null whose state is one of idle, working, blocked and whose pid is an integer or null",
       "packageFiles": [
         "plugin.json",
         "ui/page.html"
@@ -7783,6 +7801,12 @@
                       "working",
                       "blocked"
                     ]
+                  },
+                  "pid": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
                   }
                 }
               }
@@ -7791,7 +7815,168 @@
         }
       },
       "accepted": false,
-      "error": "plugin probe: surface program probe.s must have a schema of type object and null whose state is one of idle, working, blocked",
+      "error": "plugin probe: surface program probe.s must have a schema of type object and null whose state is one of idle, working, blocked and whose pid is an integer or null",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.program-pid-undeclared",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "program": "probe.s"
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "required": [
+                  "state"
+                ],
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "idle",
+                      "working",
+                      "blocked"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: surface program probe.s must have a schema of type object and null whose state is one of idle, working, blocked and whose pid is an integer or null",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.program-pid-not-integer",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "program": "probe.s"
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "required": [
+                  "state"
+                ],
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "idle",
+                      "working",
+                      "blocked"
+                    ]
+                  },
+                  "pid": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: surface program probe.s must have a schema of type object and null whose state is one of idle, working, blocked and whose pid is an integer or null",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.program-pid-without-null",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "program": "probe.s"
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "required": [
+                  "state"
+                ],
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "idle",
+                      "working",
+                      "blocked"
+                    ]
+                  },
+                  "pid": {
+                    "type": [
+                      "integer"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: surface program probe.s must have a schema of type object and null whose state is one of idle, working, blocked and whose pid is an integer or null",
       "packageFiles": [
         "plugin.json",
         "ui/page.html"

@@ -203,6 +203,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [o] F1073-2 — JS, Go, Rust manifest reader가 `manifest-validation.json`의 공유 case로 `surface.program`을 검사한다. 각 reader에서 Red를 먼저 둔다.
   - [o] F1073-3 — page workbench가 선언된 status를 각 탭 표면에서 따라가고 `core.grid`에 `program`을 보고하며, 잘못된 값의 오류를 보인다. Red를 먼저 둔다.
   - [o] F1073-4 — mygo workbench가 Go에서 같은 따라가기와 `core.grid` 보고를 한다. Red를 먼저 둔다.
+  - [o] F1073-5 — program 상태가 tab의 foreground program process id를 담는다: `surface.program`이 이름 붙인 status의 값은 `{state, pid}` 또는 `null`이고, manifest reader는 `pid`를 integer 또는 null로 요구하며, `core.grid` tab이 이를 담는다.
 - [o] F1059 — P1, F1033-4의 후속: 완료된 error toast capability F1033이 test inventory에 feature link가 없어서 inventory test가 거부했다. F1033은 page와 mygo workbench의 공유 toast를 그 test에 연결한다.
 - [o] F1058 — P0, F1054의 후속: F1054 뒤에도 mygo project window check가 실패했으므로, F1054에 적은 원인은 그 실패의 원인이 아니었다. 원인: mygo workbench의 `core.project.activate`는 project를 보이기 전에 답했고, page workbench는 `showProject` 뒤에 답한다. 그래서 답 뒤에 설정을 읽은 check가 library의 common 설정을 읽었다. activation은 project가 보일 때 답하고, 거부된 activation은 `core.library.open`처럼 error display로 보인다.
 - [o] F1054 — P0, F1033-4의 후속: mygo workbench는 library에서 project를 다시 열었을 때 project override 대신 common mode를 보였다. `project windows persist files, inherit settings, and isolate native state` 5회 중 3회. 원인: 캐시한 project 기록의 override를 적용했는데, 그 기록은 window의 쓰기를 store의 change event 때에만 받는다. page workbench는 project를 선택할 때 store를 읽는다. mygo workbench는 project를 보일 때 store snapshot을 읽고 그 common 설정과 그 project의 override를 적용한다.

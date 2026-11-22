@@ -361,8 +361,8 @@ function declaredCommandNames(manifest) {
 export const PROGRAM_STATES = Object.freeze(["idle", "working", "blocked"]);
 
 /**
- * Checks surface.program: the name of a status of exposes whose schema is of type object and null, requires state, and
- * gives state the three program states (docs/spec/program-state.md#declaration).
+ * Checks surface.program: the name of a status of exposes whose schema is of type object and null, requires state, gives state the
+ * three program states, and declares pid as an integer or null (docs/spec/program-state.md#declaration).
  */
 function checkProgram(where, program, manifest) {
   if (!isText(program)) throw new Error(`${where}: surface program must be a status name`);
@@ -372,11 +372,13 @@ function checkProgram(where, program, manifest) {
   const { schema } = status;
   const types = Array.isArray(schema?.type) ? schema.type : [];
   const states = schema?.properties?.state?.enum;
+  const pidTypes = Array.isArray(schema?.properties?.pid?.type) ? schema.properties.pid.type : [];
   const valid = isObject(schema) && types.length === 2 && types.includes("object") && types.includes("null") &&
     Array.isArray(schema.required) && schema.required.includes("state") && Array.isArray(states) && states.length === PROGRAM_STATES.length &&
-    PROGRAM_STATES.every((state) => states.includes(state));
+    PROGRAM_STATES.every((state) => states.includes(state)) &&
+    pidTypes.length === 2 && pidTypes.includes("integer") && pidTypes.includes("null");
   if (!valid) {
-    throw new Error(`${where}: surface program ${program} must have a schema of type object and null whose state is one of ${PROGRAM_STATES.join(", ")}`);
+    throw new Error(`${where}: surface program ${program} must have a schema of type object and null whose state is one of ${PROGRAM_STATES.join(", ")} and whose pid is an integer or null`);
   }
 }
 

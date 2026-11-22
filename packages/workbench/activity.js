@@ -284,17 +284,20 @@ export const PROGRAM_STATES = Object.freeze(["idle", "working", "blocked"]);
 
 /**
  * The program state of the tab tab from the value that its surface reports for the program status of plugin: an object whose only
- * member is state, one of the program states, gives that state, and null gives none (docs/spec/program-state.md#value). Returns
- * {program, error}: error is the text of any other value, which gives no program state, or null.
+ * members are state, one of the program states, and pid, a positive integer or null, gives {state, pid}, and null gives none
+ * (docs/spec/program-state.md#value). Returns {program, error}: error is the text of any other value, which gives no program state, or null.
  */
 export function tabProgram(plugin, status, tab, value) {
   // default: a surface that has not registered the status reports null, which gives no program state.
   if (value === null) return { program: null, error: null };
-  const keys = typeof value === "object" && !Array.isArray(value) ? Object.keys(value) : [];
-  if (keys.length === 1 && keys[0] === "state" && PROGRAM_STATES.includes(value.state)) return { program: { state: value.state }, error: null };
+  const keys = typeof value === "object" && !Array.isArray(value) ? Object.keys(value).sort() : [];
+  const pidValid = value?.pid === null || (Number.isInteger(value?.pid) && value.pid > 0);
+  if (keys.length === 2 && keys[0] === "pid" && keys[1] === "state" && PROGRAM_STATES.includes(value.state) && pidValid) {
+    return { program: { state: value.state, pid: value.pid }, error: null };
+  }
   return {
     program: null,
-    error: `${plugin} exposes ${status} on tab ${tab}: program value ${JSON.stringify(value)} is not null or an object with only the member state, one of ${PROGRAM_STATES.join(", ")}`,
+    error: `${plugin} exposes ${status} on tab ${tab}: program value ${JSON.stringify(value)} is not null or an object with only the members state and pid, where state is one of ${PROGRAM_STATES.join(", ")} and pid is a positive integer or null`,
   };
 }
 

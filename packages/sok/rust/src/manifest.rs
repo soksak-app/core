@@ -511,8 +511,8 @@ fn check_exposes(owner: &str, exposes: &Value) -> Result<(), String> {
 /// The program states of a tab, from the first to the last (docs/spec/program-state.md#value).
 const PROGRAM_STATES: [&str; 3] = ["idle", "working", "blocked"];
 
-/// Checks surface.program: the name of a status of exposes whose schema is of type object and null, requires state, and
-/// gives state the three program states (docs/spec/program-state.md#declaration).
+/// Checks surface.program: the name of a status of exposes whose schema is of type object and null, requires state, gives state the
+/// three program states, and declares pid as an integer or null (docs/spec/program-state.md#declaration).
 fn check_program(where_: &str, raw: &Value, manifest: &Map<String, Value>) -> Result<(), String> {
     let name = raw
         .as_str()
@@ -546,15 +546,24 @@ fn check_program(where_: &str, raw: &Value, manifest: &Map<String, Value>) -> Re
         .and_then(|state| state.get("enum"))
         .and_then(Value::as_array)
         .map_or(&[][..], Vec::as_slice);
+    let pid_types = schema
+        .and_then(|schema| schema.get("properties"))
+        .and_then(|properties| properties.get("pid"))
+        .and_then(|pid| pid.get("type"))
+        .and_then(Value::as_array)
+        .map_or(&[][..], Vec::as_slice);
     let valid = types.len() == 2
         && has_text(types, "object")
         && has_text(types, "null")
         && has_text(members("required"), "state")
         && states.len() == PROGRAM_STATES.len()
-        && PROGRAM_STATES.iter().all(|want| has_text(states, want));
+        && PROGRAM_STATES.iter().all(|want| has_text(states, want))
+        && pid_types.len() == 2
+        && has_text(pid_types, "integer")
+        && has_text(pid_types, "null");
     if !valid {
         return Err(format!(
-            "{where_}: surface program {name} must have a schema of type object and null whose state is one of {}",
+            "{where_}: surface program {name} must have a schema of type object and null whose state is one of {} and whose pid is an integer or null",
             PROGRAM_STATES.join(", ")
         ));
     }

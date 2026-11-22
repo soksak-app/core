@@ -1010,7 +1010,7 @@ func statusSchema(manifest map[string]any, name string) (map[string]any, bool) {
 }
 
 // checkProgram checks surface.program: the name of a status of exposes whose schema is of type object and null, requires
-// state, and gives state the three program states (docs/spec/program-state.md#declaration).
+// state, gives state the three program states, and declares pid as an integer or null (docs/spec/program-state.md#declaration).
 func checkProgram(where string, raw any, manifest map[string]any) error {
 	name, isText := raw.(string)
 	if !isText || name == "" {
@@ -1026,13 +1026,16 @@ func checkProgram(where string, raw any, manifest map[string]any) error {
 	properties, _ := schema["properties"].(map[string]any) // default: absent or of another type is empty, which the shape check refuses.
 	state, _ := properties["state"].(map[string]any)       // default: absent or of another type is empty, which the shape check refuses.
 	states, _ := state["enum"].([]any)                     // default: absent or of another type is empty, which the shape check refuses.
+	pid, _ := properties["pid"].(map[string]any)           // default: absent or of another type is empty, which the shape check refuses.
+	pidTypes, _ := pid["type"].([]any)                     // default: absent or of another type is empty, which the shape check refuses.
 	valid := len(types) == 2 && slices.Contains(types, any("object")) && slices.Contains(types, any("null")) &&
-		slices.Contains(required, any("state")) && len(states) == len(programStates)
+		slices.Contains(required, any("state")) && len(states) == len(programStates) &&
+		len(pidTypes) == 2 && slices.Contains(pidTypes, any("integer")) && slices.Contains(pidTypes, any("null"))
 	for _, want := range programStates {
 		valid = valid && slices.Contains(states, any(want))
 	}
 	if !valid {
-		return fmt.Errorf("%s: surface program %s must have a schema of type object and null whose state is one of %s",
+		return fmt.Errorf("%s: surface program %s must have a schema of type object and null whose state is one of %s and whose pid is an integer or null",
 			where, name, strings.Join(programStates, ", "))
 	}
 	return nil

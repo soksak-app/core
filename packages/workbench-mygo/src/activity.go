@@ -3,6 +3,7 @@ package workbench
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"reflect"
 	"slices"
 	"strings"
@@ -240,31 +241,42 @@ type activityTab struct {
 	programWatch *activityWatch
 }
 
-// ProgramState is the program state of a tab (docs/spec/program-state.md#value) as core.grid reports it.
+// ProgramState is the program state of a tab (docs/spec/program-state.md#value) as core.grid reports it: the state, and the process id of
+// the foreground program of the tab, or nil when the tab runs no program.
 type ProgramState struct {
 	State string `json:"state"`
+	Pid   *int64 `json:"pid"`
 }
 
 // programStates are the program states from the first to the last (docs/spec/program-state.md#value).
 var programStates = []string{"idle", "working", "blocked"}
 
 // TabProgram is the program state of the tab tab from the value that its surface reports for the program status status of plugin: an
-// object whose only member is state, one of the program states, gives that state, and null gives none. Another value gives an error
-// with the text of docs/spec/program-state.md#value, where the JSON text of the value has its members in code point order.
+// object whose only members are state, one of the program states, and pid, a positive integer or null, gives that state and pid, and
+// null gives none. Another value gives an error with the text of docs/spec/program-state.md#value, where the JSON text of the value has
+// its members in code point order.
 func TabProgram(plugin, status, tab string, value any) (*ProgramState, error) {
 	if value == nil {
 		return nil, nil
 	}
-	if object, ok := value.(map[string]any); ok && len(object) == 1 {
-		if state, isText := object["state"].(string); isText && slices.Contains(programStates, state) {
-			return &ProgramState{State: state}, nil
+	if object, ok := value.(map[string]any); ok && len(object) == 2 {
+		state, isText := object["state"].(string)
+		if pid, hasPid := object["pid"]; hasPid && isText && slices.Contains(programStates, state) {
+			if pid == nil {
+				return &ProgramState{State: state}, nil
+			}
+			// default: JSON numbers decode as float64, so a whole number that fits the safe integer range is a process id.
+			if number, isNumber := pid.(float64); isNumber && number >= 1 && number <= 1<<53 && number == math.Trunc(number) {
+				id := int64(number)
+				return &ProgramState{State: state, Pid: &id}, nil
+			}
 		}
 	}
 	text, err := json.Marshal(value)
 	if err != nil {
 		return nil, fmt.Errorf("%s exposes %s on tab %s: program value: %w", plugin, status, tab, err)
 	}
-	return nil, fmt.Errorf("%s exposes %s on tab %s: program value %s is not null or an object with only the member state, one of %s",
+	return nil, fmt.Errorf("%s exposes %s on tab %s: program value %s is not null or an object with only the members state and pid, where state is one of %s and pid is a positive integer or null",
 		plugin, status, tab, text, strings.Join(programStates, ", "))
 }
 
