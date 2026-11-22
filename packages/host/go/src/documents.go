@@ -1018,16 +1018,16 @@ func (s *Surfaces) surfaceTerminated(viewID uint64) {
 }
 
 // closeSurfaceDocuments closes all document regions of a surface. Call it on the UI thread.
-func (s *Surfaces) closeSurfaceDocuments(surface string) {
-	s.closeSurfaceDocumentsWith(surface, system.CloseDocument)
+func (s *Surfaces) closeSurfaceDocuments(surface, caller string) {
+	s.closeSurfaceDocumentsWith(surface, caller, system.CloseDocument)
 }
 
 // closeSurfaceDocumentsWith ends the view and the documents of surface in the host state and closes each document region with
-// closeDocument, which is the native close of the platform. The documents close before the window change is announced. Call it on the
-// UI thread.
-func (s *Surfaces) closeSurfaceDocumentsWith(surface string, closeDocument func(unsafe.Pointer)) {
+// closeDocument, which is the native close of the platform. caller names the cause of the close for host.view.killed. The documents
+// close before the window change is announced. Call it on the UI thread.
+func (s *Surfaces) closeSurfaceDocumentsWith(surface, caller string, closeDocument func(unsafe.Pointer)) {
 	// The view of the surface closes with its documents (docs/spec/logging.md#principles), so no presentation can end its wait.
-	s.viewRecords().recordEnd(surface)
+	s.viewRecords().recordEnd(surface, caller)
 	s.endPresentationWait(surface, "closed")
 	if channel, ok := s.documents.view(surface); ok && s.sourceOriginState().retire(surface, channel.generation) {
 		s.windowEvent("view-source-ended", map[string]any{"plugin": channel.plugin, "surface": surface, "generation": channel.generation})
@@ -1051,7 +1051,7 @@ func (s *Surfaces) surfaceCommitted(viewID uint64) {
 		return
 	}
 	mainThreadStep(func() {
-		s.closeSurfaceDocuments(surface)
+		s.closeSurfaceDocuments(surface, "document-committed")
 		s.closeSurfaceImages(surface)
 		delete(s.compositionRevisions, surface)
 		s.images.BeginGeneration(surface)
@@ -1807,7 +1807,7 @@ func (d *Documents) currentGeneration(surface string, plugin string, generation 
 func (s *Surfaces) viewReceived(surface string, handle unsafe.Pointer, plugin string, generation uint64, value string) {
 	if s.viewReceive(surface, handle, plugin, generation, value) {
 		// The view has lost messages, so it is closed and created again (docs/spec/plugin-processes.md, rule 4).
-		s.viewFailed(surface, handle, generation, time.Now())
+		s.viewFailed(surface, handle, generation, time.Now(), "queue-overflow")
 	}
 }
 
@@ -1877,14 +1877,14 @@ func (s *Surfaces) recordRetiredViewMessage(surface, plugin, value string) {
 // now of the report. It runs on the UI thread.
 func (s *Surfaces) viewProcessEnded(surface string, handle unsafe.Pointer, generation uint64, now time.Time) {
 	LogError("view channel", surface+": the view process ended")
-	s.viewFailed(surface, handle, generation, now)
+	s.viewFailed(surface, handle, generation, now, "process-ended")
 }
 
 // viewFailed handles the end of the WebContent process of the view handle of surface, or a queue overflow of that view, which the
 // failure counts at the instant now. It closes the native objects that the end leaves and creates the view again when its record
 // allows. It runs on the UI thread.
-func (s *Surfaces) viewFailed(surface string, handle unsafe.Pointer, generation uint64, now time.Time) {
-	restart, ok := s.endView(surface, handle, generation, now, viewClosers{document: system.CloseDocument, image: system.CloseImage})
+func (s *Surfaces) viewFailed(surface string, handle unsafe.Pointer, generation uint64, now time.Time, caller string) {
+	restart, ok := s.endView(surface, handle, generation, now, viewClosers{document: system.CloseDocument, image: system.CloseImage}, caller)
 	if !ok || restart == nil {
 		return
 	}
@@ -1905,7 +1905,7 @@ type viewClosers struct {
 // nil when the restarts are stopped. It reports false for a handle of a view that was already closed or replaced. The process end ends the
 // presentation wait of the view before its documents close, so the wait ends with the reason process-ended and not with the close of the
 // documents. It runs on the UI thread.
-func (s *Surfaces) endView(surface string, handle unsafe.Pointer, generation uint64, now time.Time, closers viewClosers) (*viewSpec, bool) {
+func (s *Surfaces) endView(surface string, handle unsafe.Pointer, generation uint64, now time.Time, closers viewClosers, caller string) (*viewSpec, bool) {
 	key := DocumentKey{Surface: surface, Name: viewRegionName}
 	current, err := s.documents.Get(key)
 	channel, ok := s.documents.view(surface)
@@ -1915,7 +1915,7 @@ func (s *Surfaces) endView(surface string, handle unsafe.Pointer, generation uin
 		return nil, false
 	}
 	// The view ends here, whether its process ended or its queue overflowed (docs/spec/logging.md#principles).
-	s.viewRecords().recordEnd(surface)
+	s.viewRecords().recordEnd(surface, caller)
 	if s.sourceOriginState().retire(surface, generation) {
 		s.windowEvent("view-source-ended", map[string]any{"plugin": channel.plugin, "surface": surface, "generation": generation})
 	}
@@ -1933,7 +1933,7 @@ func (s *Surfaces) endView(surface string, handle unsafe.Pointer, generation uin
 	s.endPresentationWaitFor(surface, 0, generation, "process-ended")
 	// The regions of the view belong to the composition of the ended document, so they close with it, and the view that is created
 	// again attaches them again (docs/spec/native-surfaces.md#view-surfaces, regions).
-	s.closeSurfaceDocumentsWith(surface, closers.document)
+	s.closeSurfaceDocumentsWith(surface, caller, closers.document)
 	s.images.CloseSurface(surface, closers.image)
 	s.images.BeginGeneration(surface)
 	// Each call that the view had open ends with the reason process-ended, and the host writes its peer-lost event.

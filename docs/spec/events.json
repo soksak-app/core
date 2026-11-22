@@ -4416,6 +4416,9 @@
           "surface": {
             "type": "string"
           },
+          "caller": {
+            "type": "string"
+          },
           "unsent": {
             "type": "boolean"
           }
@@ -4423,10 +4426,11 @@
         "required": [
           "plugin",
           "surface",
+          "caller",
           "unsent"
         ]
       },
-      "description": "The host ended a view that it observes (kill, close or crash); plugin and surface name the view, and unsent is true because the records of the view that were not yet sent to the writer may be lost, which the event states and no count gives. The writer stores it through its own path, so it passes every gate."
+      "description": "The host ended a view that it observes (kill, close or crash); plugin and surface name the view, caller names the cause of the end, and unsent is true because the records of the view that were not yet sent to the writer may be lost, which the event states and no count gives. The writer stores it through its own path, so it passes every gate."
     },
     "host.view.call": {
       "layer": "host",

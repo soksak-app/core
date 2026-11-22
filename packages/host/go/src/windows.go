@@ -433,7 +433,7 @@ func (s *Surfaces) reloadSurfaceDocuments() ([]imageDetachTarget, error) {
 		if s.elements.drawn {
 			s.publishElement(id, SurfaceElement{})
 		}
-		s.closeSurfaceDocuments(id)
+		s.closeSurfaceDocuments(id, "documents-reloaded")
 		detachments = append(detachments, s.reloadSurfaceImages(id, closeImage)...)
 		ids = append(ids, id)
 	}
@@ -922,7 +922,7 @@ func (s *Surfaces) close() {
 			handles[id] = view.handle
 			views[view.handle] = view
 			// A view of the surface ends with its window (docs/spec/logging.md#principles).
-			s.viewRecords().recordEnd(id)
+			s.viewRecords().recordEnd(id, "window-closed")
 			// An element retains the surface host and the web view of the view page, so it leaves before they close and hands
 			// them back after the frame that the closed window can no longer present.
 			if s.elements.drawn {

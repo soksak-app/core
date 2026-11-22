@@ -123,7 +123,7 @@ impl ViewLifecycle {
     /// Stores `host.view.killed` for the view of surface, which the host observes to end: its process ended or its queue
     /// overflowed, its surface closed, or its window closed (docs/spec/logging.md#principles). An end is stored once: a surface
     /// without a live view, or a view that already ended, stores nothing.
-    pub fn record_end(&self, surface: &str) {
+    pub fn record_end(&self, surface: &str, caller: &str) {
         let spec = {
             let mut state = self.lock();
             if !state.live.remove(surface) {
@@ -135,16 +135,16 @@ impl ViewLifecycle {
             emit_host(
                 Level::Warn,
                 "host.view.killed",
-                view_killed_event(surface, &spec.plugin),
+                view_killed_event(surface, &spec.plugin, caller),
             );
         }
     }
 }
 
-/// The fields of `host.view.killed`: the plugin and the surface of the view, and `unsent` true, because the records of the view
-/// that the writer did not receive may be lost and the event states that loss (docs/spec/logging.md#principles).
-pub fn view_killed_event(surface: &str, plugin: &str) -> serde_json::Value {
-    json!({"plugin": plugin, "surface": surface, "unsent": true})
+/// The fields of `host.view.killed`: the plugin and the surface of the view, the caller that ended it, and `unsent` true, because the
+/// records of the view that the writer did not receive may be lost and the event states that loss (docs/spec/logging.md#principles).
+pub fn view_killed_event(surface: &str, plugin: &str, caller: &str) -> serde_json::Value {
+    json!({"plugin": plugin, "surface": surface, "caller": caller, "unsent": true})
 }
 
 /// The reason of a view that stopped its restarts. The log line and the view-stopped event carry it.

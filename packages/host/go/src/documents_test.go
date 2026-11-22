@@ -60,7 +60,7 @@ func TestAReloadDuringADocumentAttachLeavesNoRegionWithoutAName(t *testing.T) {
 	surfaces := p.s
 	key, request := DocumentKey{Surface: "probe-surface", Name: "page"}, DocumentRequest{Surface: "probe-surface", Document: "page"}
 	before := p.webviews(t)
-	t.Cleanup(func() { runOnMainThread(func() { surfaces.closeSurfaceDocuments("probe-surface") }) })
+	t.Cleanup(func() { runOnMainThread(func() { surfaces.closeSurfaceDocuments("probe-surface", "test-cleanup") }) })
 	// The reload of the surface and the attach of its new page, which run on the main thread ahead of the main-thread work of the first attach.
 	var attachedAgain error
 	reloaded := queueOnMainThread(func() {

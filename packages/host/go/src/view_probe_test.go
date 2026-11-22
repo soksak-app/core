@@ -310,7 +310,7 @@ func newViewProbe(t *testing.T, theme Theme) *viewProbe {
 	})
 	t.Cleanup(func() {
 		runOnMainThread(func() {
-			probe.s.closeSurfaceDocuments("probe-surface")
+			probe.s.closeSurfaceDocuments("probe-surface", "test-cleanup")
 			system.CloseSurface(probe.surface)
 		})
 	})

@@ -1751,6 +1751,7 @@ fn attach_view(
                         &ended_plugin,
                         &ended_origin,
                         document,
+                        "process-ended",
                     );
                 }),
             )?;
@@ -1906,7 +1907,7 @@ fn view_message(
             let overflow = is_queue_full(&error);
             log_error("view channel", error);
             if overflow {
-                view_failed(window, platform, surface, plugin, origin, document);
+                view_failed(window, platform, surface, plugin, origin, document, "queue-overflow");
             }
         }
     }
@@ -2023,6 +2024,7 @@ fn view_failed(
     plugin: &str,
     origin: &ViewOrigin,
     document: Handle,
+    caller: &str,
 ) {
     let data = match window_data(window) {
         Ok(data) => data,
@@ -2043,7 +2045,7 @@ fn view_failed(
         _ => return,
     }
     // The view ends here, whether its process ended or its queue overflowed (docs/spec/logging.md#principles).
-    data.documents.lifecycle().record_end(surface);
+    data.documents.lifecycle().record_end(surface, caller);
     // The open calls are taken before the view is removed, because the removal drops the channel of the view.
     let open_calls = data.documents.views().end_calls(surface);
     // The runs of the view end with its process (docs/spec/native-surfaces.md#program-runs).
@@ -2852,7 +2854,7 @@ pub fn remove_surface_for_reload(
     surface: &str,
 ) -> Vec<Handle> {
     // The view of the surface closes with its documents (docs/spec/logging.md#principles).
-    documents.lifecycle().record_end(surface);
+    documents.lifecycle().record_end(surface, "documents-reloaded");
     documents.views().forget(surface);
     streams.remove_surface(surface);
     documents.remove_surface(surface)
@@ -2944,7 +2946,7 @@ pub(crate) fn close_surface(window: &Window, surface: &str) {
         Err(error) => return log_error("document close", error),
     };
     // A view of the surface ends with it (docs/spec/logging.md#principles).
-    data.documents.lifecycle().record_end(surface);
+    data.documents.lifecycle().record_end(surface, "surface-removed");
     data.documents.lifecycle().forget(surface);
     let host = window.clone();
     let surface = surface.to_string();

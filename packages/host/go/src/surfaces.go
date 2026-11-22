@@ -2079,7 +2079,7 @@ func (s *Surfaces) apply(win Frontend, req SyncRequest) ([]string, []Placement, 
 			continue
 		}
 		s.setElement(id, SurfaceElement{})
-		s.closeSurfaceDocuments(id)
+		s.closeSurfaceDocuments(id, "surface-removed")
 		s.images.CloseSurface(id, func(handle unsafe.Pointer) {
 			system.CloseImage(handle)
 			s.windowChanged()

@@ -799,7 +799,7 @@ func TestViewReplyRetainsOpenCallWhenGenerationRetiresBeforePost(t *testing.T) {
 			t.Errorf("retire old view: %v", err)
 			return
 		}
-		if _, ok := p.s.endView("probe-surface", handle, generation, time.Now(), viewClosers{document: system.CloseDocument, image: system.CloseImage}); !ok {
+		if _, ok := p.s.endView("probe-surface", handle, generation, time.Now(), viewClosers{document: system.CloseDocument, image: system.CloseImage}, "test-end"); !ok {
 			t.Error("retire old view: the end of the current view was refused")
 			return
 		}

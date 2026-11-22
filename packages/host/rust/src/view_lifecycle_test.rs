@@ -25,7 +25,7 @@ fn a_view_end_stores_host_view_killed_with_its_plugin_and_surface() {
         true,
         Default::default(),
     );
-    lifecycle.record_end("end-kill");
+    lifecycle.record_end("end-kill", "process-ended");
     lifecycle.track(
         "end-close",
         8,
@@ -34,12 +34,12 @@ fn a_view_end_stores_host_view_killed_with_its_plugin_and_surface() {
         true,
         Default::default(),
     );
-    lifecycle.record_end("end-close");
+    lifecycle.record_end("end-close", "surface-removed");
     lifecycle.forget("end-close");
     // A surface without a view stores nothing, and a view that already ended stores nothing again.
-    lifecycle.record_end("end-untracked");
-    lifecycle.record_end("end-close");
-    lifecycle.record_end("end-kill");
+    lifecycle.record_end("end-untracked", "surface-removed");
+    lifecycle.record_end("end-close", "surface-removed");
+    lifecycle.record_end("end-kill", "process-ended");
     let stored: Vec<serde_json::Value> = crate::event_record::buffered_fields("host.view.killed")
         .into_iter()
         .filter(|fields| {
@@ -51,8 +51,8 @@ fn a_view_end_stores_host_view_killed_with_its_plugin_and_surface() {
     assert_eq!(
         stored,
         vec![
-            json!({"plugin": "probe", "surface": "end-kill", "unsent": true}),
-            json!({"plugin": "probe", "surface": "end-close", "unsent": true}),
+            json!({"plugin": "probe", "surface": "end-kill", "caller": "process-ended", "unsent": true}),
+            json!({"plugin": "probe", "surface": "end-close", "caller": "surface-removed", "unsent": true}),
         ]
     );
 }

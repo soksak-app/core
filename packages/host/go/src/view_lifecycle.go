@@ -94,23 +94,24 @@ func (l *viewLifecycle) forget(surface string) {
 	delete(l.stopped, surface)
 }
 
-// recordEnd stores host.view.killed for the view of surface, which the host observes to end: its process ended or its queue
-// overflowed, its surface closed, or its window closed (docs/spec/logging.md#principles). An end is stored once: a surface without a
+// recordEnd stores host.view.killed for the view of surface, which the host observes to end, and names the caller that ended it
+// (the causes are listed in docs/spec/host-contract.md under host.view.killed.is-written-on-every-end). An end is stored once: a surface without a
 // live view, or a view that already ended, stores nothing.
-func (l *viewLifecycle) recordEnd(surface string) {
+func (l *viewLifecycle) recordEnd(surface, caller string) {
 	if !l.live[surface] {
 		return
 	}
 	delete(l.live, surface)
 	if spec := l.specs[surface]; spec != nil {
-		EmitHost(LevelWarn, "host.view.killed", viewKilledFields(surface, spec.plugin))
+		EmitHost(LevelWarn, "host.view.killed", viewKilledFields(surface, spec.plugin, caller))
 	}
 }
 
-// viewKilledFields are the fields of host.view.killed: the plugin and the surface of the view, and unsent true, because the records of
-// the view that the writer did not receive may be lost and the event states that loss (docs/spec/logging.md#principles).
-func viewKilledFields(surface, plugin string) map[string]any {
-	return map[string]any{"plugin": plugin, "surface": surface, "unsent": true}
+// viewKilledFields are the fields of host.view.killed: the plugin and the surface of the view, the caller that ended it, and unsent
+// true, because the records of the view that the writer did not receive may be lost and the event states that loss
+// (docs/spec/logging.md#principles).
+func viewKilledFields(surface, plugin, caller string) map[string]any {
+	return map[string]any{"plugin": plugin, "surface": surface, "caller": caller, "unsent": true}
 }
 
 // viewOverflow is the failure of a view whose message queue is full. Its text is the reason that the view reports.

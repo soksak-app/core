@@ -2630,7 +2630,7 @@ pub fn close_window_surfaces(
     let mut failures = Vec::new();
     for (surface, handle) in surfaces {
         // The streams and the request logs end with the regions of the surface. A view of the surface ends with its window.
-        documents.lifecycle().record_end(&surface);
+        documents.lifecycle().record_end(&surface, "window-closed");
         streams.remove_surface(&surface);
         let natives = documents
             .remove_surface(&surface)

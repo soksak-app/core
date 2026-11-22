@@ -50,7 +50,7 @@ func testWindowSidecarMountDuringStart(t *testing.T, retire bool) {
 			t.Fatal("B must have sent no session request before admission resumes")
 		}
 		if retire {
-			s.closeSurfaceDocumentsWith(surface, func(unsafe.Pointer) {})
+			s.closeSurfaceDocumentsWith(surface, "test-close", func(unsafe.Pointer) {})
 			if _, exists := s.documents.view(surface); exists {
 				t.Fatal("B did not actually retire")
 			}

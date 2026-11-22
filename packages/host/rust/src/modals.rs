@@ -923,7 +923,7 @@ mod tests {
             true,
             Default::default(),
         );
-        lifecycle.record_end(surface);
+        lifecycle.record_end(surface, "test-end");
         let overlay = Overlay::default();
         // default: the test poisons the lock afterwards, so the read recovers the poisoned state; the panic hook
         // records the panic.

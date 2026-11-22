@@ -19,14 +19,14 @@ func TestAViewEndStoresHostViewKilledWithItsPluginAndSurface(t *testing.T) {
 	l := newViewLifecycle()
 	// A view that ends by a kill (its process ended) and a view that ends with its surface (a close).
 	l.track(kill, nil, "probe", "ui/page.html", true)
-	l.recordEnd(kill)
+	l.recordEnd(kill, "process-ended")
 	l.track(closed, nil, "probe", "ui/page.html", true)
-	l.recordEnd(closed)
+	l.recordEnd(closed, "surface-removed")
 	l.forget(closed)
 	// A surface without a view stores nothing, and a view that already ended stores nothing again.
-	l.recordEnd(untracked)
-	l.recordEnd(closed)
-	l.recordEnd(kill)
+	l.recordEnd(untracked, "surface-removed")
+	l.recordEnd(closed, "surface-removed")
+	l.recordEnd(kill, "process-ended")
 	var got []map[string]any
 	records.Lock()
 	for _, record := range records.buffer {
@@ -44,8 +44,8 @@ func TestAViewEndStoresHostViewKilledWithItsPluginAndSurface(t *testing.T) {
 	}
 	records.Unlock()
 	want := []map[string]any{
-		{"plugin": "probe", "surface": kill, "unsent": true},
-		{"plugin": "probe", "surface": closed, "unsent": true},
+		{"plugin": "probe", "surface": kill, "caller": "process-ended", "unsent": true},
+		{"plugin": "probe", "surface": closed, "caller": "surface-removed", "unsent": true},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("host.view.killed records %v, want %v", got, want)
@@ -166,7 +166,7 @@ func endView(t *testing.T, s *Surfaces, views *lifecycleViews, at time.Time) uns
 	restart, ok := s.endView("probe-surface", current, channel.generation, at, viewClosers{
 		document: func(handle unsafe.Pointer) { views.closed = append(views.closed, handle) },
 		image:    func(handle unsafe.Pointer) { views.closedImages = append(views.closedImages, handle) },
-	})
+	}, "process-ended")
 	if !ok {
 		t.Fatal("the end of the current view was refused")
 	}

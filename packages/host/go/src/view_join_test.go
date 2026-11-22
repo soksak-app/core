@@ -966,7 +966,7 @@ func TestTheCloseOfTheDocumentsOfASurfaceEndsThePresentationWaitOfItsView(t *tes
 	if len(joins.requests) != 1 {
 		t.Fatalf("the shown view joined %d transactions, want 1", len(joins.requests))
 	}
-	s.closeSurfaceDocumentsWith("probe-surface", func(unsafe.Pointer) {})
+	s.closeSurfaceDocumentsWith("probe-surface", "test-close", func(unsafe.Pointer) {})
 	if s.presentation.waits("probe-surface") {
 		t.Fatal("the close of the documents of the surface left its view waiting for its presentation")
 	}
