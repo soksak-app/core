@@ -173,7 +173,7 @@ The preceding macOS 26.6.2 arm64 optimized diagnostic measurement cohort retains
   - [o] F1031-11 — Follow-up to F1031-10. Refresh the host copies of the workbench declaration with the toast close metric. The two exposure audits and the workbench declaration tests pass.
 - [~] F1046 — P0, follow-up of F1034 to F1044: The push gate (`make check-preflight`) failed on five checks of the unpushed items.
   - [o] F1046-1 — A comment of the figurative verb check and its test name a Korean verb; comments are English.
-  - [ ] F1046-2 — The generated event class files differ from `docs/spec/events.json` after F1044 added `host.setup.translocated`.
+  - [o] F1046-2 — The generated event class files differ from `docs/spec/events.json` after F1044 added `host.setup.translocated`.
   - [ ] F1046-3 — The completed items F1036, F1040 and F1043 have no feature link; F1036 changes no behaviour, and F1040 and F1043 group linked items.
   - [ ] F1046-4 — The test of `packages/sok/go` reads the sources of `packages/host/go` and `packages/workbench-mygo`; a repository test judges those sources.
   - [ ] F1046-5 — The host contract case `setup.host.start-changes-no-file-of-another-run` has no scope.

@@ -173,7 +173,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [o] F1031-11 — F1031-10 후속. Toast 닫기 metric을 포함하도록 host의 workbench 선언 사본을 갱신한다. Exposure 검사 두 개와 workbench 선언 test가 통과한다.
 - [~] F1046 — P0, F1034부터 F1044까지의 후속: push gate(`make check-preflight`)가 push하지 않은 항목의 check 다섯 개에서 실패했다.
   - [o] F1046-1 — 비유 동사 check의 주석과 그 테스트 주석이 한국어 동사를 적는다. 주석은 영어다.
-  - [ ] F1046-2 — F1044가 `host.setup.translocated`를 추가한 뒤 생성된 event class 파일이 `docs/spec/events.json`과 다르다.
+  - [o] F1046-2 — F1044가 `host.setup.translocated`를 추가한 뒤 생성된 event class 파일이 `docs/spec/events.json`과 다르다.
   - [ ] F1046-3 — 완료한 F1036, F1040, F1043에 feature link가 없다. F1036은 동작을 바꾸지 않고, F1040과 F1043은 link가 있는 하위 항목을 묶는다.
   - [ ] F1046-4 — `packages/sok/go`의 테스트가 `packages/host/go`와 `packages/workbench-mygo`의 source를 읽는다. 그 source는 저장소 테스트가 판단한다.
   - [ ] F1046-5 — host contract case `setup.host.start-changes-no-file-of-another-run`에 scope가 없다.
