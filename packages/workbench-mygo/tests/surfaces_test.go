@@ -2275,12 +2275,11 @@ func TestALoadingSurfaceRecordsEachFrameRequestWithItsSurface(t *testing.T) {
 		stored.classes[class] = "off"
 	}
 	stored.classes["frame"] = "debug"
+	// The host writes the policy from the setting diagnostics.log, so the setting holds the same classes as the policy read.
+	stored.common = map[string]any{"diagnostics.log": stored.classes}
 	f := surfaceShellOn(t, installedDocument, stored)
-	var surface string
-	for id := range stored.lastSurfaces(t) {
-		surface = id
-		break
-	}
+	// Several surfaces may load at once, so each request must name one of the placed surfaces, not a chosen one.
+	placed := stored.lastSurfaces(t)
 	f.settle()
 	f.tester.Frame()
 	f.pending.drain(t)
@@ -2288,7 +2287,14 @@ func TestALoadingSurfaceRecordsEachFrameRequestWithItsSurface(t *testing.T) {
 	if len(requests) == 0 {
 		t.Fatal("the loading surface wrote no workbench.frame.request record")
 	}
-	if text := fmt.Sprint(requests[0]); !strings.Contains(text, surface) || !strings.Contains(text, "loading") {
-		t.Fatalf("frame request record %s, want the surface %s and the reason loading", text, surface)
+	for _, request := range requests {
+		text := fmt.Sprint(request)
+		named := false
+		for surface := range placed {
+			named = named || strings.Contains(text, surface)
+		}
+		if !named || !strings.Contains(text, "loading") {
+			t.Fatalf("frame request record %s, want a placed surface and the reason loading", text)
+		}
 	}
 }
