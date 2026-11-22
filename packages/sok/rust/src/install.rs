@@ -804,7 +804,9 @@ pub fn validate_registry_index(value: &Value) -> Result<Index, String> {
         validate_registry_core(core)?;
     }
     if root.get("format").and_then(Value::as_u64) != Some(REGISTRY_INDEX_FORMAT) {
-        return Err(format!("registry index: format must be {REGISTRY_INDEX_FORMAT}"));
+        return Err(format!(
+            "registry index: format must be {REGISTRY_INDEX_FORMAT}"
+        ));
     }
     type Validate = fn(&Value) -> Result<(), String>;
     let lists: [(&str, Validate); 3] = [

@@ -8,7 +8,7 @@ use std::sync::{Mutex, PoisonError, TryLockError};
 
 use serde_json::Value;
 use soksak_sok::plugins::{
-    self, PluginActionResult, PluginsState, StarterJob, StarterJobRequest, StartFailure,
+    self, PluginActionResult, PluginsState, StartFailure, StarterJob, StarterJobRequest,
 };
 
 /// The arguments of the pluginsRun call. plugin is received without a fixed type so that a value that is not a string
@@ -205,16 +205,16 @@ impl Plugins {
             Ok(None) => return vec![StartUpdate::default()],
             Err(error) => return vec![failed_start("", error)],
         };
-        let (state, manifests) = match soksak_sok::plugins::read_installed_manifests(&self.config_dir)
-        {
-            Ok(read) => read,
-            Err(error) => return vec![failed_start("", error)],
-        };
-        let outdated = match soksak_sok::plugins::outdated_plugins(&index, &state, &manifests, &self.core)
-        {
-            Ok(outdated) => outdated,
-            Err(error) => return vec![failed_start("", error)],
-        };
+        let (state, manifests) =
+            match soksak_sok::plugins::read_installed_manifests(&self.config_dir) {
+                Ok(read) => read,
+                Err(error) => return vec![failed_start("", error)],
+            };
+        let outdated =
+            match soksak_sok::plugins::outdated_plugins(&index, &state, &manifests, &self.core) {
+                Ok(outdated) => outdated,
+                Err(error) => return vec![failed_start("", error)],
+            };
         let results: Vec<StartUpdate> = outdated
             .into_iter()
             .map(|item| {
@@ -260,7 +260,10 @@ impl Plugins {
             })
             .collect();
         // default: the failure list stays writable after poison; the panic hook records the panic.
-        let mut kept = self.start_failures.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut kept = self
+            .start_failures
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
         *kept = failures;
     }
 
@@ -304,7 +307,12 @@ impl Plugins {
         match plugins::read_installed(&self.config_dir) {
             Ok(state) => match state.plugins.get(&item.id) {
                 Some(plugin) => result.to = plugin.version.clone(),
-                None => result.error = Some(format!("installed state has no plugin {} after its update", item.id)),
+                None => {
+                    result.error = Some(format!(
+                        "installed state has no plugin {} after its update",
+                        item.id
+                    ))
+                }
             },
             Err(error) => result.error = Some(error),
         }

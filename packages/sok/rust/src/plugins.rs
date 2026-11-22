@@ -1241,7 +1241,11 @@ pub fn outdated_plugins(
             // default: when no newer accepted version exists, the candidate is empty and the plugin lists no update.
             .unwrap_or_default();
         let listed = index.plugins.iter().any(|entry| {
-            entry.id == *id && entry.versions.iter().any(|item| item.version == plugin.version)
+            entry.id == *id
+                && entry
+                    .versions
+                    .iter()
+                    .any(|item| item.version == plugin.version)
         });
         if refused.is_empty() && (candidate.is_empty() || !listed) {
             continue;

@@ -139,7 +139,10 @@ fn answer(app: &AppHandle, label: &str, body: &str) -> Result<(), String> {
 }
 
 /// Runs the declared program of a view call with the environment of the sidecars of the window, and answers its reply.
-fn run_program(window: &port::Window, request: soksak_host::program_run::RunCall) -> Result<Value, String> {
+fn run_program(
+    window: &port::Window,
+    request: soksak_host::program_run::RunCall,
+) -> Result<Value, String> {
     let data = soksak_host::windows::window_data(window)?;
     let environment = window.state::<WindowSidecars>().program_environment()?;
     documents::program_run(&data, environment, request).map(|reply| json!(reply))
@@ -336,15 +339,19 @@ fn dispatch(
                 .wait()?;
                 serde_json::from_str(reply.get()).map_err(|error| error.to_string())?
             } else {
-                documents::window_sidecar_send(&data, &sidecars, window, &sidecar, &surface, &message, &cids)?;
+                documents::window_sidecar_send(
+                    &data, &sidecars, window, &sidecar, &surface, &message, &cids,
+                )?;
                 Value::Null
             }
         }
         "sidecar_sessions" => {
             let sidecar: String = argument(method, "sidecar", body)?;
-            json!(window
-                .state::<WindowSidecars>()
-                .sessions_of(soksak_host::sidecars::SidecarSessionsRequest { sidecar })?)
+            json!(
+                window
+                    .state::<WindowSidecars>()
+                    .sessions_of(soksak_host::sidecars::SidecarSessionsRequest { sidecar })?
+            )
         }
         "program_cancel" => {
             let request: soksak_host::program_run::CancelCall = argument(method, "request", body)?;
@@ -483,7 +490,9 @@ fn dispatch(
             let sidecars = window.state::<WindowSidecars>();
             if request.answer {
                 // An answered view send waits for the reply and returns its body (docs/spec/persistent-services.md#owned-session-messages).
-                let reply = documents::view_sidecar_send_answered(&data, &sidecars, &window, request)?.wait()?;
+                let reply =
+                    documents::view_sidecar_send_answered(&data, &sidecars, &window, request)?
+                        .wait()?;
                 serde_json::from_str(reply.get()).map_err(|error| error.to_string())?
             } else {
                 documents::view_sidecar_send(&data, &sidecars, &window, request)?;

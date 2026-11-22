@@ -171,7 +171,8 @@ pub fn view_killed_event(
     caller: &str,
     url: Option<&str>,
 ) -> serde_json::Value {
-    let mut fields = json!({"plugin": plugin, "surface": surface, "caller": caller, "unsent": true});
+    let mut fields =
+        json!({"plugin": plugin, "surface": surface, "caller": caller, "unsent": true});
     if let Some(url) = url {
         fields["url"] = json!(url);
     }

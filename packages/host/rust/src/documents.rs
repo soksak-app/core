@@ -911,7 +911,9 @@ impl ViewChannels {
 
     /// Reports whether the view of surface has made a call. A surface without a view has made none.
     pub fn has_called(&self, surface: &str) -> bool {
-        self.lock().get(surface).is_some_and(|channel| channel.called)
+        self.lock()
+            .get(surface)
+            .is_some_and(|channel| channel.called)
     }
 
     fn dispatch(&self, surface: &str, value: &str) -> Result<ViewDispatch, String> {
@@ -1137,7 +1139,9 @@ impl ViewChannels {
     /// order of their ids (docs/spec/native-surfaces.md#view-surfaces).
     /// Returns the origin of the view that owns surface, or None when the surface has no view channel.
     fn current_origin(&self, surface: &str) -> Option<ViewOrigin> {
-        self.lock().get(surface).map(|channel| channel.origin.clone())
+        self.lock()
+            .get(surface)
+            .map(|channel| channel.origin.clone())
     }
 
     pub fn end_calls(&self, surface: &str) -> Vec<(String, String)> {
@@ -1837,7 +1841,9 @@ fn view_state(window: &Window, surface: &str, origin: &ViewOrigin, state: &str) 
     if let Ok(loaded) = serde_json::from_str::<ViewState>(state)
         && !loaded.url.is_empty()
     {
-        data.documents.lifecycle().note_committed(surface, &loaded.url);
+        data.documents
+            .lifecycle()
+            .note_committed(surface, &loaded.url);
     }
 }
 
@@ -1912,10 +1918,13 @@ fn view_message(
         Ok(false) => {
             // A page failure sends view-stopped to the surface, so the workbench shows it instead of the loading state
             // (docs/spec/native-surfaces.md#view-surfaces).
-            let called = window_data(window).is_ok_and(|data| data.documents.views().has_called(surface));
+            let called =
+                window_data(window).is_ok_and(|data| data.documents.views().has_called(surface));
             match view_error_stop(surface, plugin, value, called) {
                 Ok(Some(payload)) => {
-                    if let Err(error) = crate::windows::emit_view_source_event(window, "view-stopped", payload) {
+                    if let Err(error) =
+                        crate::windows::emit_view_source_event(window, "view-stopped", payload)
+                    {
                         log_error("view channel", error);
                     }
                 }
@@ -1927,7 +1936,15 @@ fn view_message(
             let overflow = is_queue_full(&error);
             log_error("view channel", error);
             if overflow {
-                view_failed(window, platform, surface, plugin, origin, document, "queue-overflow");
+                view_failed(
+                    window,
+                    platform,
+                    surface,
+                    plugin,
+                    origin,
+                    document,
+                    "queue-overflow",
+                );
             }
         }
     }
@@ -2044,7 +2061,9 @@ pub fn view_error_stop(
     if reason.is_empty() || is_queue_full(reason) {
         return Ok(None);
     }
-    Ok(Some(crate::view_lifecycle::view_failed_event(surface, plugin, reason)))
+    Ok(Some(crate::view_lifecycle::view_failed_event(
+        surface, plugin, reason,
+    )))
 }
 
 fn view_failed(
@@ -2184,7 +2203,9 @@ pub fn reload_view(window: &Window, surface: &str) -> Result<(), String> {
         data.documents.lifecycle().reset(surface);
         if let Some(origin) = data.documents.views().current_origin(surface) {
             let document = data.documents.get(&key)?;
-            data.documents.lifecycle().record_end(surface, "view-reloaded");
+            data.documents
+                .lifecycle()
+                .record_end(surface, "view-reloaded");
             // The open calls are taken before the channel is removed, because the removal drops the channel of the view.
             let open_calls = data.documents.views().end_calls(surface);
             data.documents.views().forget_if_current(surface, &origin);
@@ -2963,7 +2984,9 @@ pub fn remove_surface_for_reload(
     surface: &str,
 ) -> Vec<Handle> {
     // The view of the surface closes with its documents (docs/spec/logging.md#principles).
-    documents.lifecycle().record_end(surface, "documents-reloaded");
+    documents
+        .lifecycle()
+        .record_end(surface, "documents-reloaded");
     documents.views().forget(surface);
     streams.remove_surface(surface);
     documents.remove_surface(surface)
@@ -3055,7 +3078,9 @@ pub(crate) fn close_surface(window: &Window, surface: &str) {
         Err(error) => return log_error("document close", error),
     };
     // A view of the surface ends with it (docs/spec/logging.md#principles).
-    data.documents.lifecycle().record_end(surface, "surface-removed");
+    data.documents
+        .lifecycle()
+        .record_end(surface, "surface-removed");
     data.documents.lifecycle().forget(surface);
     let host = window.clone();
     let surface = surface.to_string();
@@ -4171,11 +4196,13 @@ pub fn program_run(
 ) -> Result<Option<serde_json::Value>, String> {
     let (plugin, project) = {
         let views = data.documents.views().lock();
-        let view = views.get(&call.surface).ok_or_else(|| {
-            format!("program run: the surface {} shows no view", call.surface)
-        })?;
+        let view = views
+            .get(&call.surface)
+            .ok_or_else(|| format!("program run: the surface {} shows no view", call.surface))?;
         let project = match &view.project {
-            ViewProject::Bound(Some(root)) if !root.is_empty() => Some(std::path::PathBuf::from(root)),
+            ViewProject::Bound(Some(root)) if !root.is_empty() => {
+                Some(std::path::PathBuf::from(root))
+            }
             _ => None,
         };
         (view.plugin.clone(), project)

@@ -122,16 +122,27 @@ fn a_view_error_message_yields_view_stopped_with_its_reason() {
     let failure = r#"{"message":{"event":"view.error","plugin":"probe","reason":"script soksak://probe/ui/view.js failed to load"}}"#;
     assert_eq!(
         view_error_stop("probe-surface", "probe", failure, false),
-        Ok(Some(json!({"surface": "probe-surface", "plugin": "probe", "reason": "script soksak://probe/ui/view.js failed to load"})))
+        Ok(Some(
+            json!({"surface": "probe-surface", "plugin": "probe", "reason": "script soksak://probe/ui/view.js failed to load"})
+        ))
     );
-    let overflow = r#"{"message":{"event":"view.error","plugin":"probe","reason":"queue full for probe"}}"#;
+    let overflow =
+        r#"{"message":{"event":"view.error","plugin":"probe","reason":"queue full for probe"}}"#;
     let empty = r#"{"message":{"event":"view.error","plugin":"probe","reason":""}}"#;
-    let ready = r#"{"message":{"event":"view.ready","plugin":"probe","document":"d","time_origin":1.0}}"#;
+    let ready =
+        r#"{"message":{"event":"view.ready","plugin":"probe","document":"d","time_origin":1.0}}"#;
     for value in [overflow, empty, ready] {
-        assert_eq!(view_error_stop("probe-surface", "probe", value, false), Ok(None), "{value}");
+        assert_eq!(
+            view_error_stop("probe-surface", "probe", value, false),
+            Ok(None),
+            "{value}"
+        );
     }
     // A page that made a call and then fails keeps its surface: its failure is shown on the error display path only.
-    assert_eq!(view_error_stop("probe-surface", "probe", failure, true), Ok(None));
+    assert_eq!(
+        view_error_stop("probe-surface", "probe", failure, true),
+        Ok(None)
+    );
     // A value that is not JSON is reported, not dropped.
     assert!(view_error_stop("probe-surface", "probe", "{not json", false).is_err());
 }
@@ -165,9 +176,15 @@ fn a_reset_clears_the_restart_stop_and_keeps_the_view_record() {
     for step in 0..VIEW_RESTART_LIMIT {
         lifecycle.fail("reload-probe", seconds_after(start, step as u64));
     }
-    assert!(lifecycle.is_stopped("reload-probe"), "the failures did not stop the restarts");
+    assert!(
+        lifecycle.is_stopped("reload-probe"),
+        "the failures did not stop the restarts"
+    );
     lifecycle.reset("reload-probe");
-    assert!(!lifecycle.is_stopped("reload-probe"), "the reset kept the restart stop");
+    assert!(
+        !lifecycle.is_stopped("reload-probe"),
+        "the reset kept the restart stop"
+    );
     assert!(
         lifecycle.spec("reload-probe").is_some(),
         "the reset removed the view record that the view is created from"

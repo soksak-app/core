@@ -38,7 +38,8 @@ struct Release {
 
 /// The plugin.json of the probe fixture, which the reader accepts.
 fn valid_manifest() -> String {
-    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/plugin-probe/plugin.json");
+    let source =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/plugin-probe/plugin.json");
     std::fs::read_to_string(source).unwrap()
 }
 
@@ -130,7 +131,10 @@ fn installed_probe(config: &Path) -> (String, String) {
 /// application left in the configuration folder.
 fn refuse_installed_manifest(config: &Path, version: &str) {
     std::fs::write(
-        config.join("plugins/probe").join(version).join("plugin.json"),
+        config
+            .join("plugins/probe")
+            .join(version)
+            .join("plugin.json"),
         refused_manifest(),
     )
     .unwrap();

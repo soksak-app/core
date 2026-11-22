@@ -1823,7 +1823,11 @@ pub fn sync(window: &Window, request: SyncRequest) -> Result<PreparedSurfaces, S
     }
     // The placement declares the programs of its surfaces, and it ends the runs of the surfaces that it leaves out
     // (docs/spec/native-surfaces.md#program-runs).
-    let listed: Vec<&str> = request.surfaces.iter().map(|surface| surface.id.as_str()).collect();
+    let listed: Vec<&str> = request
+        .surfaces
+        .iter()
+        .map(|surface| surface.id.as_str())
+        .collect();
     context.program_runs.retain(&listed);
     for surface in &request.surfaces {
         context

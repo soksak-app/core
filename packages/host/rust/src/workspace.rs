@@ -115,7 +115,8 @@ pub(crate) fn check_projects(registry: &Path, projects: Vec<Value>) -> Result<Ve
         if !valid {
             return Err(format!("{}: invalid project record", registry.display()));
         }
-        let (Some(identity), Some(root)) = (project["identity"].as_str(), project["root"].as_str()) else {
+        let (Some(identity), Some(root)) = (project["identity"].as_str(), project["root"].as_str())
+        else {
             return Err(format!("{}: invalid project record", registry.display()));
         };
         if !current.is_valid_directory_identity(identity) {

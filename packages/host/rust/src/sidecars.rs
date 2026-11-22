@@ -1989,17 +1989,20 @@ impl<O: Owner> Sidecars<O> {
     /// Returns the complete environment of a program run: the environment that a sidecar process gets, as name and value pairs
     /// (docs/spec/native-surfaces.md#program-runs). The overlay comes from sidecar_environment, the same function that sets the
     /// environment of a sidecar, so the two never differ.
-    pub fn program_environment(&self) -> Result<Vec<(std::ffi::OsString, std::ffi::OsString)>, String> {
+    pub fn program_environment(
+        &self,
+    ) -> Result<Vec<(std::ffi::OsString, std::ffi::OsString)>, String> {
         let base = self.core.environment_base()?;
         let mut overlay = Command::new("sok");
         sidecar_environment(&mut overlay, &self.core.config_directory, base.clone())?;
-        let mut environment: std::collections::BTreeMap<std::ffi::OsString, std::ffi::OsString> = match base {
-            Some(base) => base
-                .into_iter()
-                .map(|(name, value)| (name.into(), value.into()))
-                .collect(),
-            None => std::env::vars_os().collect(),
-        };
+        let mut environment: std::collections::BTreeMap<std::ffi::OsString, std::ffi::OsString> =
+            match base {
+                Some(base) => base
+                    .into_iter()
+                    .map(|(name, value)| (name.into(), value.into()))
+                    .collect(),
+                None => std::env::vars_os().collect(),
+            };
         for (name, value) in overlay.get_envs() {
             match value {
                 Some(value) => {

@@ -676,7 +676,8 @@ const PROGRAM_PATTERN_MAX_BYTES: usize = 512;
 /// Reports whether a program name has the form `[a-z][a-z0-9-]*`.
 fn is_program_name(name: &str) -> bool {
     let mut chars = name.chars();
-    matches!(chars.next(), Some('a'..='z')) && chars.all(|c| matches!(c, 'a'..='z' | '0'..='9' | '-'))
+    matches!(chars.next(), Some('a'..='z'))
+        && chars.all(|c| matches!(c, 'a'..='z' | '0'..='9' | '-'))
 }
 
 /// The expression that a program pattern compiles to: it must match the whole argument (docs/spec/native-surfaces.md#program-runs).
@@ -694,7 +695,9 @@ fn check_programs(where_: &str, raw: &Value) -> Result<(), String> {
     names.sort();
     for name in names {
         if !is_program_name(name) {
-            return Err(format!("{where_}: programs.{name} name must match [a-z][a-z0-9-]*"));
+            return Err(format!(
+                "{where_}: programs.{name} name must match [a-z][a-z0-9-]*"
+            ));
         }
         let at = format!("{where_}: programs.{name}");
         let entry = programs[name]
@@ -724,14 +727,17 @@ fn check_programs(where_: &str, raw: &Value) -> Result<(), String> {
         let slots = raw_args
             .as_array()
             .filter(|slots| slots.len() <= PROGRAM_SLOTS_MAX)
-            .ok_or_else(|| format!("{at} args must be an array of at most {PROGRAM_SLOTS_MAX} slots"))?;
+            .ok_or_else(|| {
+                format!("{at} args must be an array of at most {PROGRAM_SLOTS_MAX} slots")
+            })?;
         for (index, slot) in slots.iter().enumerate() {
             let number = index + 1;
             if slot.is_string() {
                 continue;
             }
-            let slot_error =
-                format!("{at} args slot {number} must be a text or an object with the member pattern only");
+            let slot_error = format!(
+                "{at} args slot {number} must be a text or an object with the member pattern only"
+            );
             let object = slot
                 .as_object()
                 .filter(|object| object.len() == 1)
@@ -746,7 +752,7 @@ fn check_programs(where_: &str, raw: &Value) -> Result<(), String> {
                 _ => {
                     return Err(format!(
                         "{at} args slot {number} pattern must be a text of at most {PROGRAM_PATTERN_MAX_BYTES} bytes"
-                    ))
+                    ));
                 }
             }
         }
@@ -1607,7 +1613,9 @@ pub fn validate_manifest(value: &Value) -> Result<(), String> {
             return Err(format!("{where_}: sessions requires a surface"));
         }
         if sidecars.len() != 1 {
-            return Err(format!("{where_}: sessions requires one sidecar in dependencies"));
+            return Err(format!(
+                "{where_}: sessions requires one sidecar in dependencies"
+            ));
         }
     }
     if let Some(raw) = manifest.get("programs") {
