@@ -533,5 +533,39 @@ func TestAViewCreatedAfterAnUpdateServesTheInstalledVersionFolder(t *testing.T) 
 	}
 	if len(views.createdFor) != 2 || views.createdFor[1] != native {
 		t.Fatalf("views created for %d surfaces, want the second view of the same surface", len(views.createdFor))
+
+// contract: host.view.killed.is-written-on-every-end
+// A view whose document committed names the committed URL in its end record, and a view without a commit has no url field.
+func TestAViewEndStoresTheCommittedURLOfItsDocument(t *testing.T) {
+	isolateTraceRecords(t)
+	committed, uncommitted := t.Name()+"-committed", t.Name()+"-uncommitted"
+	l := newViewLifecycle()
+	l.track(committed, nil, "probe", "ui/page.html", true)
+	l.noteCommitted(committed, "soksak://probe/ui/page.html")
+	l.recordEnd(committed, "document-committed")
+	l.track(uncommitted, nil, "probe", "ui/page.html", true)
+	l.recordEnd(uncommitted, "process-ended")
+	var got []map[string]any
+	records.Lock()
+	for _, record := range records.buffer {
+		if record.event != "host.view.killed" {
+			continue
+		}
+		var fields map[string]any
+		if err := json.Unmarshal(record.fields, &fields); err != nil {
+			records.Unlock()
+			t.Fatal(err)
+		}
+		if fields["surface"] == committed || fields["surface"] == uncommitted {
+			got = append(got, fields)
+		}
+	}
+	records.Unlock()
+	want := []map[string]any{
+		{"plugin": "probe", "surface": committed, "caller": "document-committed", "url": "soksak://probe/ui/page.html", "unsent": true},
+		{"plugin": "probe", "surface": uncommitted, "caller": "process-ended", "unsent": true},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("host.view.killed records %v, want %v", got, want)
 	}
 }

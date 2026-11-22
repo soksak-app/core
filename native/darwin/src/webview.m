@@ -53,7 +53,11 @@
 @implementation SPNativeWebview
 - (void)webView:(WKWebView *)view didCommitNavigation:(WKNavigation *)navigation {
     unsigned long long identifier = self.messageIdentifier;
-    hostRunOnWorker(^{ sp_host_callback_native_committed(identifier); });
+    // The URL of the committed document is copied, because the worker runs the callback after this method returns. A document without
+    // a URL passes NULL.
+    const char *committed = view.URL.absoluteString.UTF8String;
+    char *url = committed ? strdup(committed) : NULL;
+    hostRunOnWorker(^{ sp_host_callback_native_committed(identifier, url); free(url); });
     [self evaluateJavaScript:self.backgroundEnabled ? @"window.__soksakBackground = true" : @"window.__soksakBackground = false" completionHandler:^(id result, NSError *error) {
         if (error) sp_log_error("surface background", error.localizedDescription.UTF8String);
     }];

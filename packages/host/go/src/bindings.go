@@ -765,8 +765,8 @@ func runNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 	}
 }
 
-// committedNative notifies the owning window that the native web view viewID started to show a new document.
-func committedNative(viewID uint64) {
+// committedNative notifies the owning window that the native web view viewID started to show a new document at url.
+func committedNative(viewID uint64, url string) {
 	var owner *Surfaces
 	mainThreadStep(func() {
 		if view := nativeViews[viewID]; view != nil {
@@ -774,7 +774,7 @@ func committedNative(viewID uint64) {
 		}
 	})
 	if owner != nil {
-		owner.surfaceCommitted(viewID)
+		owner.surfaceCommitted(viewID, url)
 	}
 }
 

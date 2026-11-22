@@ -166,14 +166,14 @@ func TestDispatcherHandlesACommitBeforeTheMessagesAfterIt(t *testing.T) {
 	events := make(chan string, 4)
 	held := make(chan uint64, 4)
 	dispatcher := &platform.Dispatcher{
-		Committed: func(identifier uint64) {
+		Committed: func(identifier uint64, url string) {
 			<-release
-			events <- "commit"
+			events <- "commit " + url
 		},
 		Receive: func(identifier uint64, body string) { events <- body },
 		Held:    func(identifier uint64) { held <- identifier },
 	}
-	dispatcher.Commit(7)
+	dispatcher.Commit(7, "soksak://probe/ui/page.html")
 	dispatcher.Message(7, "place")
 	dispatcher.Message(8, "other")
 
@@ -194,7 +194,7 @@ func TestDispatcherHandlesACommitBeforeTheMessagesAfterIt(t *testing.T) {
 		}
 	}
 	close(release)
-	if first, second := <-events, <-events; first != "commit" || second != "place" {
+	if first, second := <-events, <-events; first != "commit soksak://probe/ui/page.html" || second != "place" {
 		t.Fatalf("handled %q then %q, want the commit then its message", first, second)
 	}
 }

@@ -1045,12 +1045,14 @@ func (s *Surfaces) closeSurfaceDocumentsWith(surface, caller string, closeDocume
 
 // surfaceCommitted registers and cleans up the previous document and the image regions when the surface page started to show a new document.
 // The new document creates its own entries and document regions again.
-func (s *Surfaces) surfaceCommitted(viewID uint64) {
+func (s *Surfaces) surfaceCommitted(viewID uint64, url string) {
 	surface := s.surfaceOf(viewID)
 	if surface == "" {
 		return
 	}
 	mainThreadStep(func() {
+		// The URL is noted before the documents close, so the end record of the view states the committed document.
+		s.viewRecords().noteCommitted(surface, url)
 		s.closeSurfaceDocuments(surface, "document-committed")
 		s.closeSurfaceImages(surface)
 		delete(s.compositionRevisions, surface)

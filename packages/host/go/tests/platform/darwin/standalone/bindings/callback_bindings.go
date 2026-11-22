@@ -6,7 +6,7 @@ package bindings
 /*
 #cgo pkg-config: soksak-darwin
 #include "host_callbacks.h"
-extern void goHost_native_committed(unsigned long long arg0);
+extern void goHost_native_committed(unsigned long long arg0, char * arg1);
 extern void goHost_native_terminated(unsigned long long arg0);
 extern void goHost_native_message(unsigned long long arg0, char * arg1);
 extern void goHost_file_dropped(uintptr_t arg0, char * arg1);
@@ -243,8 +243,8 @@ func InstallCallbacks(callbacks abi.Callbacks) error {
 }
 
 //export goHost_native_committed
-func goHost_native_committed(arg0 C.ulonglong) {
-	callbackHandlers.NativeCommitted(uint64(arg0))
+func goHost_native_committed(arg0 C.ulonglong, arg1 *C.char) {
+	callbackHandlers.NativeCommitted(uint64(arg0), (*byte)(unsafe.Pointer(arg1)))
 }
 
 //export goHost_native_terminated

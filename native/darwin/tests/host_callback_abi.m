@@ -35,7 +35,7 @@ size_t sp_test_callback_layout(size_t *offsets, bool diagnostic) {
 int sp_test_callback_run(void) {
     const uint64_t identifier = UINT64_C(0xfedcba9876543210);
     const uintptr_t token = UINT64_C(0xfedcba9876543201);
-    sp_host_callback_native_committed(identifier);
+    sp_host_callback_native_committed(identifier, text);
     sp_host_callback_native_terminated(identifier);
     sp_host_callback_native_message(identifier, text);
     sp_host_callback_file_dropped(token, text);

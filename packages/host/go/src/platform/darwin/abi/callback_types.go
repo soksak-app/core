@@ -8,7 +8,7 @@ import "unsafe"
 // Callbacks preserves the C signatures of host_callbacks.h.
 // Native pointers are borrowed for the callback; integer contexts are never Go pointers.
 type Callbacks struct {
-	NativeCommitted           func(uint64)
+	NativeCommitted           func(uint64, *byte)
 	NativeTerminated          func(uint64)
 	NativeMessage             func(uint64, *byte)
 	FileDropped               func(uintptr, *byte)

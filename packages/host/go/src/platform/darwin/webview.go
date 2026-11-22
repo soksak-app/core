@@ -17,8 +17,8 @@ import (
 // passes the same function to all web views.
 var dispatcher platform.Dispatcher
 
-func goHost_native_committed(identifier uint64) {
-	dispatcher.Commit(uint64(identifier))
+func goHost_native_committed(identifier uint64, url *byte) {
+	dispatcher.Commit(uint64(identifier), native.GoString(url))
 }
 
 // terminated receives the end of the WebContent process of the web views; the host passes the same function to all web views, as the dispatcher does.

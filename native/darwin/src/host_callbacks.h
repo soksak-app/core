@@ -14,7 +14,7 @@
 // - native_settled_present transfers a copied completion block; the host consumes it exactly once through
 //   sp_host_presentation_complete, after which that pointer is invalid.
 #define SP_HOST_CALLBACKS(X) \
-    X(V, void, native_committed, (unsigned long long identifier), (identifier)) \
+    X(V, void, native_committed, (unsigned long long identifier, char *url), (identifier, url)) \
     X(V, void, native_terminated, (unsigned long long identifier), (identifier)) \
     X(V, void, native_message, (unsigned long long identifier, char *message), (identifier, message)) \
     X(V, void, file_dropped, (uintptr_t context, char *json), (context, json)) \

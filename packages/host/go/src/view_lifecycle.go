@@ -24,6 +24,9 @@ type viewSpec struct {
 	visible   bool
 	// The start values of the view, which the host injects again when it creates the view again.
 	start ViewStart
+	// committedURL is the URL that the native view committed since its previous end, which the next end record states. It is empty when
+	// no document committed since then.
+	committedURL string
 }
 
 // viewStopReason is the reason of a view that stopped its restarts: the log line and the view-stopped event carry it. The window is
@@ -103,15 +106,28 @@ func (l *viewLifecycle) recordEnd(surface, caller string) {
 	}
 	delete(l.live, surface)
 	if spec := l.specs[surface]; spec != nil {
-		EmitHost(LevelWarn, "host.view.killed", viewKilledFields(surface, spec.plugin, caller))
+		EmitHost(LevelWarn, "host.view.killed", viewKilledFields(surface, spec.plugin, caller, spec.committedURL))
+		spec.committedURL = ""
 	}
 }
 
-// viewKilledFields are the fields of host.view.killed: the plugin and the surface of the view, the caller that ended it, and unsent
-// true, because the records of the view that the writer did not receive may be lost and the event states that loss
-// (docs/spec/logging.md#principles).
-func viewKilledFields(surface, plugin, caller string) map[string]any {
-	return map[string]any{"plugin": plugin, "surface": surface, "caller": caller, "unsent": true}
+// noteCommitted records the URL of the document that the native view of surface committed. It runs on the UI thread before the commit
+// closes the documents of the view, so the end record of that view states the URL.
+func (l *viewLifecycle) noteCommitted(surface, url string) {
+	if spec := l.specs[surface]; spec != nil {
+		spec.committedURL = url
+	}
+}
+
+// viewKilledFields are the fields of host.view.killed: the plugin and the surface of the view, the caller that ended it, the committed
+// url when a document committed since the previous end, and unsent true, because the records of the view that the writer did not
+// receive may be lost and the event states that loss (docs/spec/logging.md#principles).
+func viewKilledFields(surface, plugin, caller, url string) map[string]any {
+	fields := map[string]any{"plugin": plugin, "surface": surface, "caller": caller, "unsent": true}
+	if url != "" {
+		fields["url"] = url
+	}
+	return fields
 }
 
 // viewOverflow is the failure of a view whose message queue is full. Its text is the reason that the view reports.

@@ -118,8 +118,9 @@ type WebviewOptions struct {
 	Hidden, Transparent bool
 	// Receive receives the messages that the document of the web view sent. It is called outside the UI thread.
 	Receive func(identifier uint64, body string)
-	// Committed receives that the web view started to show a new document. It is called outside the UI thread.
-	Committed func(identifier uint64)
+	// Committed receives that the web view started to show a new document, with its URL, which is empty for a document without one.
+	// It is called outside the UI thread.
+	Committed func(identifier uint64, url string)
 	// Terminated receives that the WebContent process of the web view ended. It is called outside the UI thread.
 	Terminated func(identifier uint64)
 }
@@ -1010,8 +1011,8 @@ func Substitute(p Platform) (restore func()) {
 type Dispatcher struct {
 	// Receive receives the messages that the document of the web view sent.
 	Receive func(identifier uint64, body string)
-	// Committed receives that the web view started to show a new document.
-	Committed func(identifier uint64)
+	// Committed receives that the web view started to show a new document, with its URL, which is empty for a document without one.
+	Committed func(identifier uint64, url string)
 	// Held is called with the web view number when a message starts to wait for the handling of an earlier commit of the same web view. It is the point at which a check observes
 	// the hold, and it is not called when nil.
 	Held func(identifier uint64)
@@ -1044,14 +1045,14 @@ func (d *Dispatcher) wait(order *documentOrder, count uint64) {
 
 // Handle changes the receiver function. It is called on the UI thread when a web view is created, and Commit and Message on other threads read it inside the same
 // lock.
-func (d *Dispatcher) Handle(receive func(identifier uint64, body string), committed func(identifier uint64)) {
+func (d *Dispatcher) Handle(receive func(identifier uint64, body string), committed func(identifier uint64, url string)) {
 	d.mu.Lock()
 	d.Receive, d.Committed = receive, committed
 	d.mu.Unlock()
 }
 
 // Commit passes a commit received on the UI thread to handler. It is called after the handling of the earlier commit of the same web view finished.
-func (d *Dispatcher) Commit(identifier uint64) {
+func (d *Dispatcher) Commit(identifier uint64, url string) {
 	d.mu.Lock()
 	handler := d.Committed
 	if handler == nil {
@@ -1071,7 +1072,7 @@ func (d *Dispatcher) Commit(identifier uint64) {
 	d.mu.Unlock()
 	routine.Go("dispatcher-commit", func() {
 		d.wait(order, count-1)
-		handler(identifier)
+		handler(identifier, url)
 		d.mu.Lock()
 		order.handled = count
 		close(order.changed)
