@@ -1567,6 +1567,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1076",
+    implementation: [
+      { file: "docs/spec/host-contract.md", symbol: "`program.run.cancel-is-idempotent`" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/program_run_test.go", id: "TestProgramRunCancelIsIdempotent" },
+    ],
+    expected: "The program run, view folder and program pattern tests of each host declare their contract cases, so the host contract check pairs them.",
+    levels: ["unit"],
+  },
+  {
     id: "F1074",
     implementation: [
       { file: "packages/plugin-api/view-answer.js", symbol: "or of its dependencies" },
@@ -14065,7 +14076,7 @@ const FEATURE_LINKS = [
   {
     id: "F336",
     implementation: [
-      { file: "scripts/check-versions.mjs", symbol: 'export const RELEASE = "0.0.46"' },
+      { file: "scripts/check-versions.mjs", symbol: 'export const RELEASE = "0.0.47"' },
     ],
     tests: [
       { file: "scripts/test/versions.test.mjs", id: "every declared workspace version is the release candidate" },
