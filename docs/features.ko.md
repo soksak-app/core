@@ -171,6 +171,12 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [o] F1031-9 — Node reporter 색상 test가 명시적인 색상 환경을 사용한다. 상위 환경에 NO_COLOR를 지정한 상태에서 두 파일의 test 39개가 통과한다.
   - [o] F1031-10 — 표시된 오류에 맞춰 toast 테두리 색상을 적용하고 닫기 control metric을 선언하며 layout fixture에 닫기 선언을 연결한다. 관련 test 13개가 통과한다.
   - [o] F1031-11 — F1031-10 후속. Toast 닫기 metric을 포함하도록 host의 workbench 선언 사본을 갱신한다. Exposure 검사 두 개와 workbench 선언 test가 통과한다.
+- [~] F1046 — P0, F1034부터 F1044까지의 후속: push gate(`make check-preflight`)가 push하지 않은 항목의 check 다섯 개에서 실패했다.
+  - [o] F1046-1 — 비유 동사 check의 주석과 그 테스트 주석이 한국어 동사를 적는다. 주석은 영어다.
+  - [ ] F1046-2 — F1044가 `host.setup.translocated`를 추가한 뒤 생성된 event class 파일이 `docs/spec/events.json`과 다르다.
+  - [ ] F1046-3 — 완료한 F1036, F1040, F1043에 feature link가 없다. F1036은 동작을 바꾸지 않고, F1040과 F1043은 link가 있는 하위 항목을 묶는다.
+  - [ ] F1046-4 — `packages/sok/go`의 테스트가 `packages/host/go`와 `packages/workbench-mygo`의 source를 읽는다. 그 source는 저장소 테스트가 판단한다.
+  - [ ] F1046-5 — host contract case `setup.host.start-changes-no-file-of-another-run`에 scope가 없다.
 - [o] F1044 — P0, F1034의 후속: 시작 시 setup이 애플리케이션의 어떤 실행에서도 사람의 agent 파일을 썼다. 입력: 창 검증을 위해 임시 폴더 `--config-dir`로 시작한 debug build, 그리고 macOS가 App Translocation 폴더에서 시작한 release. 동작: 각 시작이 MCP 등록, hook, skill, 사용자 PATH link를 자기 bundle의 `sok`으로 바꿨다. 그래서 사람의 agent가 debug build나 process와 함께 사라지는 경로를 가리켰다. 변경: `packages/host/go/src/setup.go`의 `SetupStartOf`와 `packages/host/rust/src/setup.rs`의 `setup_start_of`가 identifier, `--config-dir` option, executable로 시작을 정한다. Debug build와 `--config-dir` 실행은 `host.setup.kept`를, translocated executable은 오류 `host.setup.translocated`를 기록하고, 둘 다 환경만 읽으며 사용자 PATH part는 그 환경을 바꾸지 않고 보고한다. Red: 규칙이 없는 시작에서 `TestSetupStartOfARunBesideThePersonChangesNoFile`와 `setup_start_of_a_run_beside_the_person_changes_no_file`이 `claude mcp add`를 실행한 시작으로 실패했다. Green: Go와 Rust setup test가 통과한다. 규칙을 넣은 첫 Rust 시작은 사용자 PATH 상태를 읽지 않은 채로 두었고, 같은 test가 이를 `the user PATH environment was not read`로 찾았다.
 - [o] F1043 — P0. focus ring이 terminal card에 있는데 terminal이 keyboard를 받지 않는 경우가 남아 있다. 기대: ring이 card에 있으면 언제나 그 card의 active surface가 keyboard를 가진다(`docs/spec/exposure.md#the-keyboard-follows-the-focus-ring`). `workbench.keyboard.follow`와 `core.focus`의 event log로 둘을 어긋나게 하는 경로를 찾고, 각각을 Red와 Green test로 고친다.
   - [o] F1043-1 — mygo workbench가 page처럼 keyboard 결정마다 `workbench.keyboard.follow`를 기록한다.

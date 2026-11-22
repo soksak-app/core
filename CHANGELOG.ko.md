@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1046-1: 비유 동사 check와 그 테스트의 주석은 한국어 동사 어간을 code point로 적어서 모든 주석이 영어다. Red: 주석 언어 테스트가 두 주석을 보고했다. Green: 통과한다.
 - F1033-3.2, F1033-3.3: workbench가 보이는 모든 오류는 오류 toast에만 나타난다. library card, application update 줄, plugin card와 그 기여 줄, card 상태 행, 멈춘 surface의 placeholder, sidebar section, 설정의 setup 행, debug view는 `실패`, `표면 오류`, `열 수 없음`, `오류` 같은 짧은 상태 label을 muted 색으로 보이고 복구 동작을 유지한다. toast 밖의 어떤 element도 오류 색을 쓰지 않는다. mygo workbench는 inline 오류 drawer와 `dbg-error-gap` metric을 없애고, activity icon 길이를 em으로 선언한다. Red: 이전 구현에서 상태 행, surface 상태, library 폴더, application update, 설정 setup, 멈춘 view의 page 테스트와 plugin card, 상태 행, debug view, sidebar section의 mygo 테스트가 오류 글이 toast 밖에 있어서 실패했다. Green: page workbench suite와 mygo workbench suite가 통과한다.
 - F1036-2, F1036-3, F1036-4: 체크리스트, changelog, 영어 문서는 실제 동사로 동작을 적고, `make check-docs`는 code 밖의 `닿다`, `reach`, `drive`, `talk to`를 파일과 줄로 보고한다. `맞닿다`와 Windows `drive` 형식은 실제 뜻이라 보고하지 않는다. Red: `auditFigurativeVerbs`가 export되지 않았다. Green: `scripts/test/checklist.test.mjs`와 `make check-docs`가 통과한다.
 - F1036-1: specification과 운영 문서는 `닿다`, `reach`, `drive`, `talk to` 대신 실제 동사로 전달, 연결, 실행, 접근, 찾기를 적는다.

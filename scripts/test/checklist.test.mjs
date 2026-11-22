@@ -335,7 +335,7 @@ test("check-docs passes a text that holds no conflict marker at the start of a l
   assert.equal(result.status, 0, result.stderr);
 });
 
-// Documents state actions with literal verbs (F1036): 닿다 and the figurative reach, drive and talk to are reported with their line,
+// Documents state actions with literal verbs (F1036): the Korean verb stem U+B2FF and the figurative reach, drive and talk to are reported with their line,
 // and code spans, code blocks and the Windows drive form are not.
 test("auditFigurativeVerbs reports the figurative verbs outside code", () => {
   const source = [
