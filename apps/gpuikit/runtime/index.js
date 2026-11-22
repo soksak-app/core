@@ -152,7 +152,7 @@ const ARG = {
   documentDetach: (request) => ({ request }),
   documentSubscribe: (request) => ({ request }),
   documentUnsubscribe: (request) => ({ request }),
-  sidecarSend: ({ sidecar, surface, body, cids }) => ({ sidecar, surface, body, cids }),
+  sidecarSend: ({ sidecar, surface, body, cids, answer }) => (answer === undefined ? { sidecar, surface, body, cids } : { sidecar, surface, body, cids, answer }),
   sidecarsRetain: (request) => ({ request }),
   sidecarsReplace: (request) => ({ request }),
   sidecarsOutdated: () => ({}),

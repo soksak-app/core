@@ -16,11 +16,13 @@ import { all as allProjects, waitForInitialProjectContext } from "./projects.js"
  * (docs/spec/persistent-services.md#owned-session-messages).
  */
 function ownerSend(sidecar, owner, body) {
+  // The page reads the reply of every owned session request, so each request waits for it with a correlation identifier of its own.
+  const cids = [crypto.randomUUID()];
   const generation = sourceOrigin(undefined, owner);
-  if (generation !== undefined) return sendViewSidecar({ source: owner, generation, sidecar, surface: owner, body });
+  if (generation !== undefined) return sendViewSidecar({ source: owner, generation, sidecar, surface: owner, body, cids, answer: true });
   const port = windowSidecar(sidecar);
   if (!port) return Promise.reject(new Error(`owned session sidecar unavailable: ${sidecar}`));
-  return port.send(owner, body);
+  return port.ask(owner, body, cids);
 }
 
 /** The open sessions of this page, keyed by session identifier, in the order that they opened. */

@@ -95,8 +95,11 @@ test("Wails page regions expose operations but only composition places geometry"
   assert.deepEqual(recorded.at(-1), ["ViewSidecarRoute", [{ surface: "s1", generation: 2, sidecar: "x", id: "s1", on: false }]]);
   await host.call("viewSidecarSend", { source: "s1", generation: 2, sidecar: "x", surface: "s1", body: { value: 1 }, cids: ["b1.7"] });
   assert.deepEqual(recorded.at(-1), ["ViewSidecarSend", [{ source: "s1", generation: 2, sidecar: "x", surface: "s1", body: { value: 1 }, cids: ["b1.7"] }]]);
+  // SidecarSend takes sidecar, surface, body, cids and answer, and an absent answer is passed as null (docs/spec/persistent-services.md#owned-session-messages).
   await host.call("sidecarSend", { sidecar: "x", surface: "s1", body: { value: 1 }, cids: ["b1.7"] });
-  assert.deepEqual(recorded.at(-1), ["SidecarSend", ["x", "s1", { value: 1 }, ["b1.7"]]]);
+  assert.deepEqual(recorded.at(-1), ["SidecarSend", ["x", "s1", { value: 1 }, ["b1.7"], null]]);
+  await host.call("sidecarSend", { sidecar: "x", surface: "s1", body: { value: 2 }, cids: ["b1.8"], answer: true });
+  assert.deepEqual(recorded.at(-1), ["SidecarSend", ["x", "s1", { value: 2 }, ["b1.8"], true]]);
   await host.call("imageAttach", { surface: "s1", name: "img", sidecar: "x" });
   assert.deepEqual(recorded.at(-1), ["ImageAttach", [{ surface: "s1", name: "img", sidecar: "x" }]]);
   await host.call("imageCaret", { surface: "s1", name: "img", x: 1, y: 2, width: 3, height: 4 });

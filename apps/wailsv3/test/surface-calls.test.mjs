@@ -70,6 +70,16 @@ test("a refused call is at the level warn with the error, and the caller still g
   }
 });
 
+test("a sidecar send of a surface document passes the five arguments of SidecarSend, with answer null", async () => {
+  const { page, calls } = await surface(async () => null);
+  try {
+    await page.sidecar("x").send("s1", { value: 1 }, ["c1"]);
+    assert.deepEqual(calls.filter(([method]) => method === "SidecarSend"), [["SidecarSend", ["x", "s1", { value: 1 }, ["c1"], null]]]);
+  } finally {
+    cleanup();
+  }
+});
+
 test("the Log call is not recorded, and a long argument is cut with truncated", async () => {
   const { page, batches } = await surface(async () => undefined);
   try {

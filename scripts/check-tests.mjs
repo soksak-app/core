@@ -292,6 +292,19 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F1098",
+    implementation: [
+      { file: "packages/workbench/owned-sessions.js", symbol: "function ownerSend(sidecar, owner, body) {" },
+      { file: "apps/wailsv3/runtime/index.js", symbol: "if (name === \"sidecarSend\")" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/owned-sessions-open.test.mjs", id: "the owned session messages open, resize and end a session through the owner surface" },
+      { file: "apps/wailsv3/test/surface-calls.test.mjs", id: "a sidecar send of a surface document passes the five arguments of SidecarSend, with answer null" },
+    ],
+    expected: "Every owned session request of the page waits for its reply with answer true and its own cid, and the Wails runtime passes the five arguments of SidecarSend.",
+    levels: ["unit"],
+  },
+  {
     id: "F1099",
     implementation: [
       { file: "packages/plugin-api/index.js", symbol: "  function jsonStatusValue(name, value) {" },

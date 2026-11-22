@@ -138,7 +138,8 @@ const mainCalls = settlingCalls((name, arg, options) => {
   if (!method) return Promise.reject(new Error(`unknown host call: ${name}`));
   // A call without arguments sends no arguments. Sending one undefined makes the binding
   // reject the call because the argument count does not match.
-  if (name === "sidecarSend") return call(method, [arg.sidecar, arg.surface, arg.body, arg.cids], options.cids);
+  // SidecarSend takes answer as its fifth argument; a send that waits for no reply passes null (docs/spec/persistent-services.md#owned-session-messages).
+  if (name === "sidecarSend") return call(method, [arg.sidecar, arg.surface, arg.body, arg.cids, arg.answer ?? null], options.cids);
   if (name === "imageCaret") return call(method, [{ surface: arg.surface, name: arg.name }, arg.x, arg.y, arg.width, arg.height], options.cids);
   if (name === "imageText") return call(method, [{ surface: arg.surface, name: arg.name }, arg.text], options.cids);
   return call(method, arg === undefined ? [] : [arg], options.cids);
@@ -215,7 +216,8 @@ export const page = (() => {
       return calls.record(record.level, `workbench.record.${record.level}`, { where: record.where, text: record.text });
     },
     sidecar: (name) => ({
-      send: (surface, body, cids = []) => call("sidecarSend", name, surface, body, cids),
+      // A send of a surface document waits for no reply, so its answer argument of SidecarSend is null.
+      send: (surface, body, cids = []) => call("sidecarSend", name, surface, body, cids, null),
       // Sidecar events are received by every page of the window. Only the events that match the sidecar and the surface are handled.
       on: (surface, fn) => listen("sidecar-message", (message) => {
         if (message.sidecar === name && message.surface === surface) fn(message.body);

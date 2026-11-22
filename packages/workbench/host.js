@@ -134,9 +134,11 @@ function orderedSidecarPort(name) {
         // transport, so this owner belongs to this exact serialized operation.
         failureOwner = request.kind;
         return listenSidecarFailures().then(() => {
-          if (request.kind === "window") return bridge.call("sidecarSend", { sidecar: name, surface, body: request.body, cids });
+          // A request that waits for its reply carries answer true (docs/spec/persistent-services.md#owned-session-messages).
+          const answer = request.answer ? { answer: true } : {};
+          if (request.kind === "window") return bridge.call("sidecarSend", { sidecar: name, surface, body: request.body, cids, ...answer });
           if (request.kind === "view") return bridge.call("viewSidecarSend", {
-            source: request.source, generation: request.generation, sidecar: name, surface, body: request.body, cids,
+            source: request.source, generation: request.generation, sidecar: name, surface, body: request.body, cids, ...answer,
           });
           throw new TypeError("ordered sidecar request has no declared owner");
         });
@@ -157,17 +159,18 @@ function orderedSidecarPort(name) {
  * envelope, never public plugin parameters or a later current-source lookup. */
 export function sendViewSidecar(request) {
   if (!request || typeof request !== "object" || Array.isArray(request)
-    || Object.keys(request).some(key => !["source","generation","sidecar","surface","body","cids"].includes(key)))
+    || Object.keys(request).some(key => !["source","generation","sidecar","surface","body","cids","answer"].includes(key)))
     throw new TypeError("view sidecar authority has undeclared fields");
-  const { source, generation, sidecar, surface, body, cids = [] } = request;
+  const { source, generation, sidecar, surface, body, cids = [], answer = false } = request;
   if (typeof source !== "string" || !source || surface !== source)
     throw new TypeError("view sidecar source authority must equal its session surface");
   if (!Number.isSafeInteger(generation) || generation < 1)
     throw new TypeError("view sidecar generation authority must be a positive safe integer");
   if (typeof sidecar !== "string" || !sidecar || !Array.isArray(cids) || cids.some(cid => typeof cid !== "string"))
     throw new TypeError("view sidecar authority requires a sidecar and correlation identifiers");
+  if (typeof answer !== "boolean") throw new TypeError("view sidecar answer must be a boolean");
   // Capture immutable primitive authority before entering the shared queue.
-  return orderedSidecarPort(sidecar).send(surface, { kind: "view", source, generation, body }, [...cids]);
+  return orderedSidecarPort(sidecar).send(surface, { kind: "view", source, generation, body, answer }, [...cids]);
 }
 
 /*
@@ -253,7 +256,9 @@ export function windowSidecar(name) {
   if (!bridge) return null;
   return {
     // cids are the correlation identifiers of the inputs that the request continues (docs/spec/sidecars.md#messages).
-    send: (surface, body, cids) => orderedSidecarPort(name).send(surface, { kind: "window", body }, cids),
+    send: (surface, body, cids) => orderedSidecarPort(name).send(surface, { kind: "window", body, answer: false }, cids),
+    // ask resolves with the reply of the service that names the surface and the cids, which must not be empty.
+    ask: (surface, body, cids) => orderedSidecarPort(name).send(surface, { kind: "window", body, answer: true }, cids),
     on: (surface, listener) => onSidecarMessage(name, surface, listener),
     onFailure: (surface, listener) => onSidecarFailure(name, surface, listener),
   };

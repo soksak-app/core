@@ -4,6 +4,8 @@
   "replay": false,
   "reason": "The host side of the owned session messages lands with the host work of F1062-3; the producer runs this case once the host answers the owned session messages.",
   "variables": {
+    "owned-cid-1": {"type": "string", "example": "8a1f2c3d-4b5e-4f60-8a7b-9c0d1e2f3a4b", "source": "page"},
+    "owned-cid-2": {"type": "string", "example": "8a1f2c3d-4b5e-4f60-8a7b-9c0d1e2f3a4b", "source": "page"},
     "clock-ts-us-1": {
       "type": "integer",
       "example": 1791000000000456
@@ -235,7 +237,8 @@
         "payload": {
           "sidecar": "@scope/fixture-sidecar",
           "surface": "tab-zzzzzz",
-          "cids": [],
+          "cids": ["$owned-cid-1"],
+          "answer": true,
           "body": {
             "operation": "end",
             "session": "ses-gone"
@@ -268,7 +271,8 @@
         "payload": {
           "sidecar": "@scope/fixture-sidecar",
           "surface": "tab-aaaaa1",
-          "cids": [],
+          "cids": ["$owned-cid-2"],
+          "answer": true,
           "body": {
             "operation": "end",
             "session": "ses-orphan"
