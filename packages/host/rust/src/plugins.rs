@@ -4,7 +4,7 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Mutex, TryLockError};
+use std::sync::{Mutex, PoisonError, TryLockError};
 
 use serde_json::Value;
 use soksak_sok::plugins::{
@@ -259,9 +259,9 @@ impl Plugins {
                 })
             })
             .collect();
-        if let Ok(mut kept) = self.start_failures.lock() {
-            *kept = failures;
-        }
+        // default: the failure list stays writable after poison; the panic hook records the panic.
+        let mut kept = self.start_failures.lock().unwrap_or_else(PoisonError::into_inner);
+        *kept = failures;
     }
 
     /// Runs the update of one outdated plugin as the plugin operation of the page does: the installer, the apply step, then
@@ -274,13 +274,8 @@ impl Plugins {
             error: None,
         };
         let applied = {
-            let _running = match self.running.lock() {
-                Ok(guard) => guard,
-                Err(error) => {
-                    result.error = Some(format!("plugin operation state: {error}"));
-                    return result;
-                }
-            };
+            // default: the operation lock still serializes after poison; the panic hook records the panic.
+            let _running = self.running.lock().unwrap_or_else(PoisonError::into_inner);
             if let Err(error) = plugins::update_plugin_unless(
                 &self.config_dir,
                 &item.id,
@@ -307,13 +302,10 @@ impl Plugins {
             return result;
         }
         match plugins::read_installed(&self.config_dir) {
-            Ok(state) => {
-                result.to = state
-                    .plugins
-                    .get(&item.id)
-                    .map(|plugin| plugin.version.clone())
-                    .unwrap_or_default();
-            }
+            Ok(state) => match state.plugins.get(&item.id) {
+                Some(plugin) => result.to = plugin.version.clone(),
+                None => result.error = Some(format!("installed state has no plugin {} after its update", item.id)),
+            },
             Err(error) => result.error = Some(error),
         }
         result

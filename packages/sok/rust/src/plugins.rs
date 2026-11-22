@@ -1234,9 +1234,11 @@ pub fn outdated_plugins(
             .ok_or_else(|| format!("plugin {id} has no installed manifest"))?;
         let refused = crate::manifest::validate_manifest(&manifest.value)
             .err()
+            // default: a manifest that validates has no refusal, so its refusal text is empty.
             .unwrap_or_default();
         let candidate = newest_accepted(index, id, core)
             .filter(|candidate| crate::install::newer(candidate, &plugin.version))
+            // default: when no newer accepted version exists, the candidate is empty and the plugin lists no update.
             .unwrap_or_default();
         let listed = index.plugins.iter().any(|entry| {
             entry.id == *id && entry.versions.iter().any(|item| item.version == plugin.version)

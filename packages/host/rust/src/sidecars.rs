@@ -1735,6 +1735,7 @@ impl AnswerWaiter {
     pub fn wait(self) -> Result<Box<RawValue>, String> {
         self.receiver
             .recv()
+            // default: a closed reply channel means that the connection ended, which the wait reports as its error.
             .unwrap_or_else(|_| Err(CONNECTION_ENDED.to_string()))
     }
 }

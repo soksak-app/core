@@ -262,7 +262,7 @@ pub fn start_endpoint(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>>
 /// outcome in the event log: a failure is an error record and an update is the event host.plugins.update.
 fn start_plugin_updates(app: &AppHandle) {
     let app = app.clone();
-    std::thread::spawn(move || {
+    crate::routine::spawn_named("plugin-updates", move || {
         for update in app.state::<plugins::Plugins>().update_at_start() {
             if update.plugin.is_empty() {
                 match update.error {

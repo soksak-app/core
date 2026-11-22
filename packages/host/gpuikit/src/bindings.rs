@@ -300,6 +300,7 @@ fn dispatch(
             let data = soksak_host::windows::window_data(window)?;
             data.images.pending_detach_error(&surface)?;
             let sidecars = window.state::<WindowSidecars>();
+            // default: an absent answer member means that the caller waits for no reply.
             if answer.unwrap_or(false) {
                 let reply = documents::window_sidecar_send_answered(
                     &data, &sidecars, window, &sidecar, &surface, &message, &cids,

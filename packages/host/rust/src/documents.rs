@@ -3961,6 +3961,7 @@ pub fn view_sidecar_send_answered<O: crate::sidecars::Owner>(
     request: ViewSidecarSendRequest,
 ) -> Result<crate::sidecars::AnswerWaiter, String> {
     request.check()?;
+    // default: a send that waits for no reply carries no cids, so an absent cids member is an empty list.
     let cids = request.cids.clone().unwrap_or_default();
     sidecars.send_answered(&request.sidecar, &request.surface, &cids, || {
         let authority = view_authority(data, &request)?;

@@ -115,10 +115,12 @@ pub(crate) fn check_projects(registry: &Path, projects: Vec<Value>) -> Result<Ve
         if !valid {
             return Err(format!("{}: invalid project record", registry.display()));
         }
+        // default: the record check above requires a non-empty identity and root, so the default is never used.
         let identity = project["identity"].as_str().unwrap_or_default();
         if !current.is_valid_directory_identity(identity) {
             return Err(format!(
                 "projects.json: project {} has the identity {identity}, not {}",
+                // default: the record check above requires a non-empty root, so the default is never used.
                 project["root"].as_str().unwrap_or_default(),
                 current.directory_identity_form()
             ));

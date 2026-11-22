@@ -7,6 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/soksak-app/core/packages/host/go/src/routine"
 	sok "github.com/soksak-app/core/packages/sok/go/src"
 )
 
@@ -303,7 +304,7 @@ func (p *Plugins) updateAtStart(item sok.Outdated) StartUpdate {
 // startUpdates runs UpdateAtStart on its own goroutine and stores each outcome in the event log, so the start does not wait for the
 // registry. A failure is an error record; an update is the event host.plugins.update.
 func (h *Host) startUpdates() {
-	go func() {
+	routine.Go("plugin-updates", func() {
 		for _, update := range h.plugins.UpdateAtStart() {
 			switch {
 			case update.Plugin == "" && update.Err == nil:
@@ -316,5 +317,5 @@ func (h *Host) startUpdates() {
 				EmitHost(LevelInfo, "host.plugins.update", map[string]any{"plugin": update.Plugin, "from": update.From, "to": update.To})
 			}
 		}
-	}()
+	})
 }
