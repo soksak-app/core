@@ -1566,6 +1566,26 @@ Items:
 | `conversation.refuses-when-no-file-matches` | When no candidate matches the working directory, the read is refused with `no <agent> session file has the working directory <cwd>`. | all |
 | `conversation.selects-the-most-recently-modified-file` | When two or more candidates match, the most recently modified file is chosen. | all |
 | `sidecars.environment.sok-folder-first-on-path` | A sidecar process starts with the folder of the sok application first on PATH, and that folder appears in no other PATH entry. | all |
+| `program.run.exit-reply` | A declared program that exits with status 3 after writing `ok` to standard output and `warn` to standard error replies `{code: 3, stdout: "ok\n", stderr: "warn\n", truncated: {stdout: false, stderr: false}}`, and writes `host.program.start` and `host.program.end` with result `exited`. | all |
+| `program.run.argument-vector-without-shell` | Arguments that hold `$HOME`, `;` and a space are passed to the program unchanged, one argument each, and no shell expands them. | all |
+| `program.run.working-directory-is-project` | The working directory of a run is the project folder of its surface. | all |
+| `program.run.path-lookup-as-terminal` | A bare program name is found through the PATH of the run environment, and a name that is not found fails the run with `program not found: <program>`. | all |
+| `program.run.relative-path-from-project` | A program path with a separator resolves from the project folder, and an absolute path resolves as it is. | all |
+| `program.run.environment-as-sidecar` | The environment of a run is the environment of a sidecar process: `sok` folder first on PATH, no `PWD`, `OLDPWD`, `SHLVL` or `_`, and `SOKSAK_CONFIG_DIR` set. | all |
+| `program.run.standard-input-is-null` | A program that reads standard input receives end of file at once. | all |
+| `program.run.output-bound-truncates` | A standard output of 1048576 bytes plus 1 byte replies with 1048576 bytes of `stdout` and `truncated.stdout` `true`, the rest is read and discarded, and the run ends at the exit of the program. | all |
+| `program.run.output-not-utf8-fails` | A kept standard error that is not valid UTF-8 fails the run with `program <name>: stderr is not UTF-8` and writes `host.program.failed`. | all |
+| `program.run.start-failure-text` | A declared program file that the operating system refuses to start fails the run with `program <program>: start failed: <os error>` and writes `host.program.failed`. | all |
+| `program.run.refuses-undeclared-name` | A name that the declaration lacks is refused with `program <name> is not declared by <plugin>`, starts no process, and writes `host.program.refused`. | all |
+| `program.run.refuses-argument-count` | Two arguments for a declaration of one slot are refused with `program <name> takes 1 arguments, 2 given`. | all |
+| `program.run.refuses-argument-outside-pattern` | The second argument that does not match its pattern in full is refused with `program <name> argument 2 <text> does not match its pattern`, and the text is the argument. | all |
+| `program.run.refuses-pattern-that-does-not-compile` | A pattern that the regular expression library rejects is refused with `program <name> pattern does not compile: <reason>`. | all |
+| `program.run.refuses-without-project` | A run from a window that shows no project is refused with `program run: the window shows no project`. | all |
+| `program.run.refuses-fifth-open-run` | The fifth open run of a surface is refused with `program run: 4 runs are open on surface <surface>`, and the first four runs continue. | all |
+| `program.run.cancel-ends-the-group` | A cancel of an open run sends `SIGKILL` to the process group of the program, so a child that the program started ends too, and the run writes `host.program.end` with result `cancelled` and sends no reply. | all |
+| `program.run.view-end-ends-the-run` | The end of the view process ends its open runs with the result `process-ended`, each with `SIGKILL` to its process group. | all |
+| `program.run.surface-close-ends-the-run` | The close of a surface ends its open runs with the result `surface-closed`. | all |
+| `program.run.window-close-ends-the-run` | The end of a window ends its open runs with the result `window-closed`. | all |
 | `sidecars.environment.start-records-the-sok-folder` | The start of the sidecar channel of the installed sidecars records one event `host.sidecar.path` at the level `info` whose `folder` is the folder of the host executable and whose `sok` is the `sok` in that folder. | all |
 
 ## Workbench cases

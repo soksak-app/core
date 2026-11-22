@@ -1566,6 +1566,26 @@ fn invalid_json_closes_connection() {
 | `conversation.refuses-when-no-file-matches` | 작업 디렉터리와 일치하는 후보가 없으면 `no <agent> session file has the working directory <cwd>`로 거부한다. | all |
 | `conversation.selects-the-most-recently-modified-file` | 둘 이상의 후보가 일치하면 가장 최근에 수정된 파일을 고른다. | all |
 | `sidecars.environment.sok-folder-first-on-path` | sidecar 프로세스는 sok 애플리케이션의 folder를 PATH의 첫 항목으로 시작하며, 그 folder는 다른 PATH 항목에 나타나지 않는다. | all |
+| `program.run.exit-reply` | 표준 출력에 `ok`, 표준 오류에 `warn`을 쓰고 상태 3으로 끝나는 선언한 프로그램은 `{code: 3, stdout: "ok\n", stderr: "warn\n", truncated: {stdout: false, stderr: false}}`로 답하고, 결과 `exited`의 `host.program.start`와 `host.program.end`를 기록한다. | all |
+| `program.run.argument-vector-without-shell` | `$HOME`, `;`, 공백이 든 인자는 바뀌지 않고 인자 하나씩 프로그램에 도달하며, 셸이 그것을 펼치지 않는다. | all |
+| `program.run.working-directory-is-project` | 실행의 작업 디렉터리는 그 surface의 프로젝트 폴더다. | all |
+| `program.run.path-lookup-as-terminal` | Bare 프로그램 이름은 실행 환경의 PATH에서 찾으며, 찾지 못한 이름은 `program not found: <program>`으로 실행을 실패시킨다. | all |
+| `program.run.relative-path-from-project` | 구분자가 있는 프로그램 경로는 프로젝트 폴더 기준으로 풀리며, 절대 경로는 그대로 풀린다. | all |
+| `program.run.environment-as-sidecar` | 실행의 환경은 sidecar 프로세스의 환경이다. 즉 PATH 첫 항목은 `sok` 폴더이고, `PWD`, `OLDPWD`, `SHLVL`, `_`가 없으며, `SOKSAK_CONFIG_DIR`이 설정된다. | all |
+| `program.run.standard-input-is-null` | 표준 입력을 읽는 프로그램은 곧바로 파일 끝을 받는다. | all |
+| `program.run.output-bound-truncates` | 표준 출력 1048576 byte에 1 byte를 더한 출력은 `stdout`에 1048576 byte와 `truncated.stdout` `true`로 답하며, 나머지는 읽고 버리고, 실행은 프로그램의 종료에서 끝난다. | all |
+| `program.run.output-not-utf8-fails` | 남긴 표준 오류가 올바른 UTF-8이 아니면 `program <name>: stderr is not UTF-8`로 실행을 실패시키고 `host.program.failed`를 기록한다. | all |
+| `program.run.start-failure-text` | 운영체제가 시작을 거부하는 선언한 프로그램 파일은 `program <program>: start failed: <os error>`로 실행을 실패시키고 `host.program.failed`를 기록한다. | all |
+| `program.run.refuses-undeclared-name` | 선언에 없는 이름은 `program <name> is not declared by <plugin>`로 거부되고, 프로세스를 시작하지 않으며, `host.program.refused`를 기록한다. | all |
+| `program.run.refuses-argument-count` | slot 하나인 선언에 인자 둘을 주면 `program <name> takes 1 arguments, 2 given`으로 거부된다. | all |
+| `program.run.refuses-argument-outside-pattern` | Pattern과 전체가 맞지 않는 둘째 인자는 `program <name> argument 2 <text> does not match its pattern`으로 거부되며, `<text>`는 그 인자다. | all |
+| `program.run.refuses-pattern-that-does-not-compile` | 정규 표현식 library가 거부하는 pattern은 `program <name> pattern does not compile: <reason>`으로 거부된다. | all |
+| `program.run.refuses-without-project` | 프로젝트를 보이지 않는 창의 실행은 `program run: the window shows no project`로 거부된다. | all |
+| `program.run.refuses-fifth-open-run` | Surface의 다섯 번째 열린 실행은 `program run: 4 runs are open on surface <surface>`로 거부되며, 앞의 네 실행은 계속된다. | all |
+| `program.run.cancel-ends-the-group` | 열린 실행의 cancel은 프로그램의 process group에 `SIGKILL`을 보내므로 프로그램이 시작한 자식도 끝나며, 실행은 결과 `cancelled`의 `host.program.end`를 기록하고 응답을 보내지 않는다. | all |
+| `program.run.view-end-ends-the-run` | View process의 끝은 열린 실행을 결과 `process-ended`로 끝내며, 각 실행의 process group에 `SIGKILL`을 보낸다. | all |
+| `program.run.surface-close-ends-the-run` | Surface의 닫힘은 열린 실행을 결과 `surface-closed`로 끝낸다. | all |
+| `program.run.window-close-ends-the-run` | 창의 끝은 열린 실행을 결과 `window-closed`로 끝낸다. | all |
 | `sidecars.environment.start-records-the-sok-folder` | 설치된 sidecar의 sidecar channel의 시작은 level `info`의 event `host.sidecar.path` 하나를 기록하고, 그 `folder`는 host 실행 파일의 폴더이며 `sok`은 그 폴더의 `sok`이다. | all |
 
 ## Workbench cases

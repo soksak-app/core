@@ -88,8 +88,11 @@ plugin 동작의 창 검사는 그 plugin의 repository에서 실행된다([검�
 | `data` | 아니오 | `{ "<키>": { "schema": <스키마>, "default": <값>, "format"?: <양의 정수> } }`: plugin의 view가 프로젝트마다 읽고 쓰는 [프로젝트 데이터](#프로젝트-데이터). `surface` 또는 `sections`가 필요하다 |
 | `sessions` | 아니오 | `true`: 플러그인의 표면이 소유 세션을 열 수 있음을 선언한다([소유 세션](#소유-세션)). 표면과 `dependencies`에 선언한 사이드카 하나가 필요하며, 이 사이드카가 `transport: "persistent"`인지는 세션 요청마다 host가 확인한다. `background`는 이 선언으로 바뀌지 않는다 |
 | `background` | 아니오 | `{ "sidecar": "<선언한 사이드카>", "operation": "<동작 이름>", "settings"?: { "<요청 필드>": "<선언한 설정>" } }`: 표면이 마운트되지 않은 비활성 탭마다 네이티브 표면을 만들지 않고 선언한 사이드카 세션 하나를 유지한다. 워크벤치는 대응한 플러그인 설정의 현재 값을 요청 필드에 넣으며, `settings`는 `operation`이나 선언하지 않은 설정을 가리킬 수 없다. `surface`와 `dependencies`가 필요하다 |
+| `programs` | 아니오 | `{ "<name>": { "program": "<text>", "args"?: [ <slot>, ... ] } }`: plugin의 페이지가 이름으로 실행할 수 있는 외부 프로그램([프로그램 실행](native-surfaces.ko.md#프로그램-실행))이다. `name`은 `[a-z][a-z0-9-]*` 형식이다. `program`은 1~255 byte이며 제어 문자가 없는 text다. PATH에서 찾는 bare name, 프로젝트 폴더를 기준으로 하는 구분자가 있는 상대 경로, 또는 절대 경로 중 하나다. slot은 인자가 같아야 하는 text이거나, 인자 전체가 맞아야 하는 `{ "pattern": "<정규 표현식>" }`(512 byte 이하)다. `args`는 최대 16개 slot이며 인자를 받지 않는 프로그램은 생략한다. `surface`가 필요하다 |
 
 이 표에 없는 manifest member는 알 수 없는 member이며 그 manifest는 거부된다. 제거된 member `host`와 `hostOperations`는 `plugin <id>: <member> is removed; a section is a view of the plugin`으로 거부된다. 0.0.x release version인 동안은 저장 데이터 마이그레이션을 싣지 않으므로 어떤 manifest도 migration member를 선언하지 않는다.
+
+`programs` 항목은 manifest를 읽을 때 검증한다. Workbench 검증기([`@soksak/plugin-api`](../../packages/plugin-api/index.js))는 알 수 없는 member, 형식에 맞지 않는 `name`, 한도를 넘는 `program`, text가 아니고 `pattern` member 하나만 가진 객체도 아닌 slot을 `plugin <id>: programs.<name> <reason>`으로 거부한다. `sok plugin install`은 각 pattern을 host의 정규 표현식 library로 컴파일하며, 컴파일되지 않는 pattern은 `plugin <id>: programs.<name> pattern does not compile: <reason>`으로 거부한다. Host는 실행마다 같은 pattern을 컴파일하며, 컴파일되지 않는 pattern의 실행은 같은 문장으로 거부된다([프로그램 실행](native-surfaces.ko.md#프로그램-실행)).
 
 플러그인은 `surface`, `sections`, `contributes` 중 하나 이상이 필요하며, `data`를 가진 플러그인은 `surface` 또는 `sections`가 필요하다. 표면이 있는 플러그인만 추가 메뉴에 표시되고 레일을 갖는다. 워크벤치는 표면에 대해 아무것도 import하지 않으며, 페이지는 view가 불러온다([view 표면](#view-표면)). 표면 식별자는 URL 쿼리가 아닌 명시적인 context 멤버다. 기존 `page` 선언은 거부하며 별도 구현 경로를 선택하지 않는다. 정의되지 않은 필드는 거부한다.
 

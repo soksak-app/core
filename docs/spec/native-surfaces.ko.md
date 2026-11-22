@@ -178,6 +178,7 @@ View의 `runtime.log`는 이 application-call 중계와 open-call 감사에서 �
      - `runtime.sidecar.send`는 `{id, sidecar, body, cids}`를 `sidecar`가 이름 댄 선언된 sidecar로 보낸다. `runtime.sidecar(name).send`와 같다.
      - `runtime.clipboard.read`는 `"text"` 또는 `"fileURLs"`로 그 형식의 클립보드 값을 돌려주고, 그 형식의 payload가 클립보드에 없으면 `null`을 돌려준다. PNG payload는 view의 [binary 경로](plugin-processes.ko.md#binary-경로)로 오간다. `"png"` 읽기에서 host는 클립보드의 PNG를 `image/png`로 view의 binary store에 put하고, call은 `{present: true, type: "png", binary}`를 돌려준다. `binary`는 put의 id이고, 클립보드에 PNG payload가 없으면 `null`을 돌려준다. 읽기는 clipboard bridge가 만들듯 user-initiated다. `runtime.clipboard.writeText`는 문자열을 쓴다. `runtime.clipboard.persistPNG`는 `{binary}`(`binary`는 view가 자기 binary 경로로 올린 upload가 답한 id)를 받아 view의 binary store에서 그 id의 byte를 take하고, PNG payload로 저장한 뒤 surface context의 clipboard bridge처럼 `{path, shellQuotedPath}`를 돌려준다. `data`가 있는 params는 거부한다. `createViewBridge`의 `runtime.clipboard`가 이 call을 한다. png 읽기는 id의 byte를 내려받아 돌려주고, `persistPNG`는 byte를 올린 뒤 그 id를 보낸다.
      - `runtime.links.open`은 빈 문자열이 아닌 URL 문자열로 링크를 연다.
+     - `runtime.program.run`은 `{name, args}`로 plugin이 `name`으로 선언한 프로그램([programs](plugins.ko.md#pluginjson))을 인자 text `args`와 함께 실행하며, 프로그램이 끝나면 `{code, stdout, stderr, truncated}`로 답한다([프로그램 실행](#프로그램-실행)). `args`가 없으면 빈 배열이다. 빈 문자열이 아닌 text가 아닌 `name`은 `view call runtime.program.run requires a non-empty name`으로 거부하고, 있지만 text 배열이 아닌 `args`는 `view call runtime.program.run args must be an array of texts`로 거부한다.
      - `tab.title`, `tab.footer`, `tab.directory`, `tab.modified`, `tab.error`는 값을 params로 받아 surface의 tab report를 surface context 항목과 같은 방식으로 실행하며, 올바르지 않은 값은 같은 방식으로 거부한다. `tab.notify`는 `{text, policy}`를, `tab.keep`은 `{reason, on}`을 받는다. 각각은 `null`로 답한다.
      - `surface.menu`는 view의 좌표로 나타낸 view 안의 오른쪽 click 점 `{x, y}`를 받고, surface의 plugin이 `surface.menu`를 선언하면([plugin.json](plugins.ko.md#pluginjson)) surface의 적용된 frame만큼 그 점을 창으로 옮겨 `core.surface.menu {surface, x, y}`를 실행한다. menu를 열면 `true`를, plugin이 menu를 선언하지 않은 surface나 section surface에는 `false`를 답한다. 두 유한한 수가 아닌 점은 `view call surface.menu requires x and y as finite numbers`로, 적용된 frame이 없는 surface는 `view call surface.menu surface <surface> has no applied frame`로 거부된다. web view의 기본 menu는 Reload처럼 어떤 명령도 선언하지 않은 조작을 담으므로, view bridge는 plugin이 취소하지 않은 각 오른쪽 click의 기본 context menu를 취소하고 이 call을 보낸다.
      - `runtime.log`는 main page로 중계하지 않는다. Host가 [view record 전달](logging.ko.md#view-record-전달)의 clock/batch writer request로 직접 처리하며 main page는 이 call을 지원하지 않는다.
@@ -242,6 +243,26 @@ Tauri host는 현재 view-message envelope를 한 번 decode하고 reply, call �
 ### 섹션 자리
 
 컴포지터는 그려진 사이드바의 각 섹션 본문을 그 [section](plugins.ko.md#섹션) surface의 자리로 잰다. 이 자리는 section surface id로 구분하며, 카드 자리와 나란히 두고 카드 사이드바와 창 사이드바 모두에 적용한다. 모든 section 자리를 잰 뒤에만 배치가 완전하다. 숨겨진 섹션, 곧 접힌 섹션, 선택되지 않은 탭의 섹션, 스위치나 전체화면 카드가 숨긴 창 사이드바의 섹션은 측정되지 않은 탭 surface와 같이 `visible`이 false이고 frame이 0인 자리를 가진다. 따라서 모든 section surface는 배치마다 자리를 가진다. 보이지 않는 공간은 section surface를 갖지 않는다([섹션](plugins.ko.md#섹션)). Section view는 탭 view와 같은 배치 순서로 놓이고, 잘리고, 보인다.
+
+### 프로그램 실행
+
+View는 plugin이 선언한 프로그램을 view call `runtime.program.run`으로 실행한다. Main page는 그 call을 surface, view call의 식별자, 이름, 인자와 함께 host 명령 `programRun`에 넘기고, 그 call의 cancel은 surface와 그 식별자와 함께 host 명령 `programCancel`에 넘긴다. 두 host 명령 모두 [view 표면](#view-표면)의 plugin host call allowlist에 없으므로, 페이지는 실행을 view call을 통해서만 시작하고 취소한다.
+
+- **선언.** Workbench는 plugin의 검증한 `programs`를 composition 선언과 같이 view의 모든 외부 surface 동기화에 담는다([surface composition](surface-composition.ko.md)). Host는 선언을 surface와 함께 저장하고 실행마다 대조하므로, 선언에 없는 이름의 실행은 host만으로 거부된다.
+- **거부.** Host는 프로그램을 시작하기 전에 실행을 거부하며, view call은 오류로 답한다. 각 거부는 `host.program.refused`로도 기록한다(아래 프로그램 실행 이벤트 참조).
+  - 선언에 없는 이름은 `program <name> is not declared by <plugin>`.
+  - 인자 수가 선언의 slot 수와 다르면 `program <name> takes <m> arguments, <n> given`.
+  - Pattern과 전체가 맞지 않는 첫 인자(1부터 센다)는 `program <name> argument <i> <text> does not match its pattern`이며, `<text>`는 그 인자다.
+  - Host의 정규 표현식 library가 거부하는 pattern은 `program <name> pattern does not compile: <reason>`.
+  - 창이 프로젝트를 보이지 않는 surface는 `program run: the window shows no project`.
+  - Surface의 다섯 번째 열린 실행은 `program run: <n> runs are open on surface <surface>`. Surface는 열린 실행을 최대 네 개 가진다.
+- **일치.** Pattern은 host의 정규 표현식 library가 받는 RE2 문법의 정규 표현식이며, 인자 전체와 맞아야 한다. 각 플랫폼에서 host는 같은 방식으로 맞춘다. 같은 값의 literal slot은 인자와 byte 단위로 같을 때 맞는다.
+- **프로그램 해석.** Host는 terminal session이 `program`을 해석하는 방식과 같이 해석한다([시작 parameter](agent-roles.ko.md#start-parameters)). 즉 bare name은 실행 환경의 PATH에서, 구분자가 있는 경로는 프로젝트 폴더 기준으로, 절대 경로는 그대로 찾는다. 해석되지 않는 프로그램은 `program not found: <program>`으로 실행을 실패시키며, `<program>`은 선언한 text다.
+- **시작.** Host는 해석한 프로그램을 셸 없이 인자 벡터 `[program, args...]`로 시작하며 인자를 더하지 않는다. 작업 디렉터리는 surface의 프로젝트 폴더다. 환경은 sidecar 프로세스의 환경이다([sidecar 환경](sidecars.ko.md#surface의-프로세스)). 따라서 PATH 조회와 PATH의 `sok`은 terminal session이 보는 것과 같다. 표준 입력은 null 장치다. 운영체제가 시작을 거부하면 `program <program>: start failed: <os error>`로 실행을 실패시킨다.
+- **출력.** Host는 실행 내내 표준 출력과 표준 오류를 각각 스트림 끝까지 읽으므로 프로그램이 가득 찬 pipe에서 멈추지 않는다. 각 스트림의 앞 1048576 byte를 남기고 나머지는 버리며, 버린 바이트가 있는 스트림마다 응답의 `truncated.stdout` 또는 `truncated.stderr`를 `true`로 둔다. 잘린 스트림의 남은 바이트는 마지막 완전한 UTF-8 문자에서 끝난다. 남긴 부분이 UTF-8이 아닌 스트림은 `program <name>: <stdout or stderr> is not UTF-8`로 실행을 실패시킨다. 버린 바이트는 검사하지 않는다.
+- **응답.** 끝난 프로그램은 view call에 `{code, stdout, stderr, truncated}`로 답한다. `code`는 종료 상태 정수이며, 신호가 프로그램을 끝냈으면 `null`이다. `stdout`과 `stderr`는 남긴 text다. 신호 이름은 응답이 아니라 `host.program.end` 이벤트에 기록한다.
+- **종료.** 실행은 다음 중 먼저 일어나는 것으로 끝난다: 프로그램의 종료, 그 view call의 cancel, view process의 끝(`process-ended`), surface의 닫힘(`surface-closed`), 창의 끝(`window-closed`). 종료가 아닌 끝은 프로그램의 process group에 `SIGKILL`을 보낸다. Process group은 host가 프로그램을 시작할 때 만들므로 프로그램의 자식도 함께 끝난다. Host는 프로그램이 회수될 때까지 기다린 뒤 끝을 기록한다. 이 kill은 유예 시간과 시간 제한이 없다. 종료가 아닌 끝은 응답을 보내지 않는데, 그 view call은 이미 끝났기 때문이다. 실행에는 시간 제한이 없다. 끝나지 않는 프로그램은 위 끝 중 하나가 올 때까지 열린 채로 남으며, `core.plugin.open-calls`가 그 call을 열린 것으로 보고한다.
+- **프로그램 실행 이벤트.** 프로그램이 시작한 실행은 시작할 때 `host.program.start`, 끝날 때 `host.program.end`를 하나씩 기록하며, 시작하지 못한 실행은 `host.program.failed`만 기록한다. `host.program.end`의 결과는 `exited`, `cancelled`, `process-ended`, `surface-closed`, `window-closed` 중 하나이며, 신호가 끝냈으면 신호 이름을 함께 기록한다. 거부는 `host.program.refused`, 시작 실패나 UTF-8이 아닌 스트림은 `host.program.failed`를 기록한다. 이벤트와 필드는 카탈로그가 선언한다([events](events.json)).
 
 ## Surface host container
 
