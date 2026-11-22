@@ -193,6 +193,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [o] F1062-2 — kit의 term list에 owned session과 owner를 넣는다.
   - [o] F1062-5 — persistent services 명세가 owned session 메시지를 정한다: surface 메시지 `open`과 그 응답 `{session, creation}`, `resize`와 `end`와 각 응답, host bridge 연산 `sidecarSend`와 `sidecarSessions`.
   - [o] F1062-3 — page와 mygo workbench와 host가 command, status, event를 Red/Green test와 함께 구현한다.
+  - [o] F1062-7 — 소유 surface는 `core.session.input {session, text}`로 자기 session에 입력하고, `core.session.submit {session, text}`로 제출하며, `core.session.read {session}`(`{rows, cursor}`)로 화면을 읽는다. 다른 surface는 `session <id> is owned by <owner>`로 거부된다. 각 session의 프로그램 상태는 `core.sessions`에 있으며 소유자의 이벤트 `session.program`이 정한다. page와 mygo workbench가 Red/Green test와 함께 구현한다.
   - [ ] F1062-4 — terminal plugin과 그 sidecar가 `sessions`를 선언하고 owned session을 연다. 각 저장소의 체크리스트에 기록한다.
   - [o] F1062-6 — page와 mygo workbench는 소유 surface가 사유 `ended`의 `session.ended`를 받으면 owned session을 끝낸다. 세션은 `core.sessions`에서 빠지고 `shownBy`는 비워지며, `workbench.session.end` 사유 `ended`가 발행되고, 알 수 없는 세션은 식별자와 함께 기록된다. 각 workbench의 Red/Green test를 둔다.
 - [o] F1060 — P1: mygo와 page workbench는 이전 형식 `<device>:<inode>`의 저장된 project identity를 알아보고 자기 오류로 거부했고, 이는 이전 저장 형식을 읽는 코드다. Go와 Rust host의 `projects.json` reader는 identity를 만드는 코드 옆에서, identity가 platform 형식이 아닌 기록을 `projects.json: project <root> has the identity <identity>, not <volume UUID>:<inode>`로 거부하고, workbench의 분기는 지운다.
