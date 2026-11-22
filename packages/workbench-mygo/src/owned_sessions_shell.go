@@ -264,7 +264,7 @@ func (s *Shell) cardSizeOf(tab string) Size {
 }
 
 // sizeChangedCards sends the size of each card whose frame changed since the last layout to the sessions that its tabs show. A frame
-// that did not change sends nothing (docs/spec/plugins.md#owned-sessions).
+// that did not change and a card without a measured frame send nothing (docs/spec/plugins.md#owned-sessions).
 func (s *Shell) sizeChangedCards(scale float64) {
 	if s.cardFrames == nil {
 		s.cardFrames = map[string]layout.Rect{}
@@ -275,11 +275,17 @@ func (s *Shell) sizeChangedCards(scale float64) {
 		if !ok {
 			continue
 		}
+		size := Size{Width: float64(rect.W), Height: float64(rect.H), Scale: scale}
+		// A card without a measured frame, such as a card that a fullscreen card hides, gives no size: its frame is not recorded, so the
+		// next layout that measures the card sends its size.
+		if !size.positive() {
+			delete(s.cardFrames, id)
+			continue
+		}
 		if last, seen := s.cardFrames[id]; seen && last == rect {
 			continue
 		}
 		s.cardFrames[id] = rect
-		size := Size{Width: float64(rect.W), Height: float64(rect.H), Scale: scale}
 		for _, tab := range shown {
 			if s.cardOfTab(tab) != id {
 				continue

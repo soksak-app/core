@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1087: mygo에서 fullscreen 카드가 가린 카드처럼 측정된 frame이 없는 카드는 그 탭이 보이는 세션에 크기를 보내지 않고 오류를 내지 않으며, 세션은 카드가 다시 측정될 때 크기를 받는다.
 - F1086: owned session의 open body는 세션을 연 plugin을 적고, host는 각 sessions 항목에 이를 요구하며, 재시작 뒤 page와 mygo는 각 세션을 그 plugin의 세션으로 채택하므로 사이드카가 없는 plugin의 소유자 표면도 세션을 계속 쓴다. plugin이 설치되어 있지 않거나 sessions를 선언하지 않은 항목은 사유 plugin-absent로 끝난다.
 - F1085: page와 mygo에서 core.session.read는 사이드카 screen read의 선택적 from과 count를 받고 사이드카의 retained rows {from, count, rows}를 바꾸지 않고 답하며, 잘못된 from과 count는 사이드카 요청 전에 같은 text로 거부된다.
 - F1084: page와 mygo에서 params가 owned session을 적은 core.layout.apply의 새 탭은 세션을 보이고 카드 크기를 보내며, apply는 열려 있지 않은 세션을 거절한다.

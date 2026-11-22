@@ -65,3 +65,39 @@ func TestALayoutApplyRefusesATabThatNamesASessionThatIsNotOpen(t *testing.T) {
 	}
 	equal(t, f.status("core.sessions"), `[{"owner":"tab-owner","plugin":"term","program":null,"session":"s-1","shownBy":null}]`)
 }
+
+// A card that has no measured frame, such as a card that a fullscreen card hides, gives the session that its tab shows no size and
+// raises no error; the session takes the size of the card when the card has a measured frame again (docs/spec/plugins.md#owned-sessions).
+func TestACardWithoutAMeasuredFrameSendsNoSizeAndRaisesNoError(t *testing.T) {
+	f, owned := sessionApplyShell(t)
+	applied, err := f.plan("core.layout.apply", `{"tree":{"direction":"row","children":[{"tabs":[{"tab":"tab-owner"}]},{"tabs":[{"plugin":"term","params":{"session":"s-1"}}]}]}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := *applied.Cards[0].Card
+	before := len(owned.sent())
+	f.run(t, "core.card.fullscreen", `{"card":"`+owner+`"}`)
+	// The owner gives the session another size while its card is hidden, so the measured card has a size to send.
+	var failure error
+	f.shell.Registry().RunLaterOn("core.session.resize", json.RawMessage(`{"session":"s-1","size":{"width":100,"height":100,"scale":2}}`),
+		"tab-owner", func(_ any, err error) { failure = err })
+	f.settle()
+	if failure != nil {
+		t.Fatalf("core.session.resize: %v", failure)
+	}
+	before = len(owned.sent())
+	for _, sent := range owned.sent()[before:] {
+		t.Errorf("the hidden card sent %+v", sent.body)
+	}
+	for _, written := range f.host.written("workbench.record.error") {
+		t.Errorf("the hidden card raised %v", written)
+	}
+	f.run(t, "core.card.fullscreen", `{"card":"`+owner+`"}`)
+	sent := owned.sent()[before:]
+	if len(sent) != 1 || sent[0].body["operation"] != "resize" {
+		t.Fatalf("the measured card sent %+v, want one resize", sent)
+	}
+	if size := sent[0].body["size"].(map[string]any); size["width"] != applied.Cards[1].Frame.Width {
+		t.Fatalf("the measured card sent the size %v, want the width %v", size, applied.Cards[1].Frame.Width)
+	}
+}
