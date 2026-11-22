@@ -228,6 +228,12 @@ func (r *Registry) run(name string, params json.RawMessage) (any, error) {
 // RunLater runs the command name with params and gives answer its result: at once for a command that returns, and in a later
 // step for a command that answers later. The run is recorded when it ended.
 func (r *Registry) RunLater(name string, params json.RawMessage, answer func(value any, err error)) {
+	r.RunLaterOn(name, params, "", answer)
+}
+
+// RunLaterOn runs the command name as RunLater does, and a command that runs on the surface of its caller on surface: a view call
+// names the surface of its view (docs/spec/plugins.md#owned-sessions). An empty surface refuses such a command.
+func (r *Registry) RunLaterOn(name string, params json.RawMessage, surface string, answer func(value any, err error)) {
 	started, answered := time.Now(), answer
 	answer = r.followed(name, func(value any, err error) {
 		r.record(name, started, err)
@@ -242,7 +248,11 @@ func (r *Registry) RunLater(name string, params json.RawMessage, answer func(val
 	r.mu.Unlock()
 	if onSurface != nil {
 		// A command that runs on the surface of its caller has no tab of its own, so a run without a surface is refused.
-		answer(nil, Refuse(InvalidParams, "command %s requires a surface", name))
+		if surface == "" {
+			answer(nil, Refuse(InvalidParams, "command %s requires a surface", name))
+			return
+		}
+		onSurface(params, surface, answer)
 		return
 	}
 	if later != nil {

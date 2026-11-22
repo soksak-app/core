@@ -5,8 +5,9 @@
 
 ## 2026-11-22
 
+- F1079: mygo에서 호출자의 surface에서 실행되는 core command(core.session.open 등)의 view call이 그 view의 surface에서 실행되어, view가 owned session을 열고 쓴다.
 - F1078: Go role state가 저장된 space의 고정 window sidebar card를 건너뛴다. 이 card는 data가 없다. 그래서 core.role.define이 Wails와 mygo의 모든 project에서 더 이상 실패하지 않는다.
-- F1071-3: mygo program run test 네 개가 map의 첫 surface 대신 `pluginSurface`로 `textprobe`의 surface를 골라, sync request test가 일부 실행에서 `boxprobe`의 surface를 읽지 않는다. F1071-4: Rust host는 `reload_record`를 test build에서만 re-export하고, program run과 sidecar session test는 `tests/support/folder.rs`의 두 번째 module 대신 `crate::test_folder`를 쓰며, reload test는 `expect_err`를 호출하므로 `make check-rust-clippy`가 통과한다.
+- F1071-3: mygo program run test 네 개가 map의 첫 surface 대신 `pluginSurface`로 `textprobe`의 surface를 골라, sync request test가 일부 실행에서 `boxprobe`의 surface를 읽지 않는다. F1071-4: Rust host는 `reload_record`를 test build에서만 re-export하고, program run과 sidecar session test는 `tests/support/folder.rs`의 두 번째 module 대신 `crate::test_folder`를 쓰며, reload test는 `expect_err`를 호출하며, workspace test는 쓰지 않는 trait `Platform`을 import하지 않으므로 `make check-rust-clippy`가 통과한다.
 - F1077-1: core version이 모든 package와 crate manifest, Info.plist, Tauri 파일, Go와 pkg-config 선언, scripts/check-versions.mjs에서 0.0.47이다.
 - F1076: program run, `plugin.json`의 `programs` pattern, 준비된 view의 reload, 업데이트 뒤 view 폴더의 Go와 Rust test가 contract case를 선언하고, contract case 표는 Go와 Rust test 하나씩을 가진 case 여섯 개를 추가하므로 host contract 검사가 통과한다. F1072-4: mygo update system test는 registry index를 format 2로 쓴다.
 - F1075-4: `dependencies`의 plugin 의존은 plugin의 package를 key로 가지며, mygo workbench, 페이지, testing host `createTestHost`가 package를 그 package의 load된 plugin id로 푼다. View call `runtime.status.watch`, `runtime.data.get {key, plugin}`, `runtime.data.on {plugin}`은 plugin id를 명명한다. 이전에는 host가 key를 plugin id와 비교해서, plugin의 package에 대한 의존이 view에 그 status도 프로젝트 데이터도 주지 않았고, mygo workbench는 package를 sidecar로 다뤘다. `createTestHost`의 `dependencies` fixture는 package를 key로 가지며 각 항목이 `plugin` id를 명명한다.

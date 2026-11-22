@@ -806,7 +806,7 @@ func (s *Shell) runCommandCall(call viewCallEvent, answer viewAnswer) error {
 	case !dotted:
 		return fmt.Errorf("view call %s names no owner", call.Command)
 	case owner == "core":
-		s.registry.RunLater(call.Command, call.Params, answer)
+		s.registry.RunLaterOn(call.Command, call.Params, call.Surface, answer)
 		return nil
 	case owner == call.Plugin:
 		s.registry.RunOwned(call.Command, call.Params, call.Cids, call.Plugin, "", call.Surface, answer)
