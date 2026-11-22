@@ -10,7 +10,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { APP_NAMES } from "../app.mjs";
 import { START_PROBE } from "../start.mjs";
 import { applicationZip, buildRegistry, cachedBundle, checkEnv, checkFiles, coreVersion, DEFAULT_PACK, download,
-  installRegistry, packArgv, packFileName, parseTestAppOptions, PUBLIC_INDEX, remainingProcesses, run, sidecarEntries, step } from "../test-app.mjs";
+  installRegistry, packArgv, packFileName, parseTestAppOptions, PUBLIC_INDEX, quitKeyCommands, remainingProcesses, run, sidecarEntries, step } from "../test-app.mjs";
 
 const folder = (t, prefix = "window-check-test-app-") => {
   const path = mkdtempSync(join(tmpdir(), prefix));
@@ -317,4 +317,9 @@ test("the run module names no macOS program, bundle layout or quit key of its ow
   for (const word of [/"darwin-arm64"/, /"Contents"/, /"MacOS"/, /"ditto"/, /"lockf"/, /"ps"/, /"cmd\+q"/, /"command"\]/]) {
     assert.doesNotMatch(source, word);
   }
+});
+
+test("the quit by key sends the key down alone, because the application has no window for the key up after it quits", () => {
+  assert.deepEqual(quitKeyCommands({ key: "q", text: "q", modifiers: ["command"] }),
+    [["input", "key", "--key", "q", "--text", "q", "--modifiers", "command", "--phase", "down"]]);
 });

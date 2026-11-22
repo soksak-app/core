@@ -437,6 +437,15 @@ async function start(application, configDir, out, root) {
 }
 
 /**
+ * The `sok` arguments that send the quit key `{key, text, modifiers}`: the key down alone. The application takes the key equivalent
+ * of its quit item at the key down and closes its windows, so a key up has no window to receive it and `sok input key` refuses it
+ * with `the application has 0 windows`.
+ */
+export function quitKeyCommands({ key, text, modifiers }) {
+  return [["input", "key", "--key", key, "--text", text, "--modifiers", modifiers.join(","), "--phase", "down"]];
+}
+
+/**
  * Quits the application of `configDir` as a person does, with the `sok` of its application: `menu` selects the item of the
  * application menu whose key equivalent is the quit key of `platform`, `key` sends that key down and up. Resolves when the process
  * exited with status 0 and the lock of the configuration folder is free.
@@ -454,10 +463,7 @@ async function quit(child, sok, configDir, by, root, platform) {
     const { title } = menu.items.find((item) => item.key === keys.menu);
     await command(["host.menu.select", "--menu", menu.title, "--title", title]);
   } else {
-    const { key, text, modifiers } = keys.key;
-    for (const phase of ["down", "up"]) {
-      await command(["input", "key", "--key", key, "--text", text, "--modifiers", modifiers.join(","), "--phase", phase]);
-    }
+    for (const args of quitKeyCommands(keys.key)) await command(args);
   }
   let timer;
   const [code, signal] = await Promise.race([exited, new Promise((_, reject) => {

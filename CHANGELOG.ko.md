@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1104: `sok-test-app`의 quit key 종료는 key down만 보낸다. key down이 application을 끝내고 window를 닫아서 key up이 `sok: the application has 0 windows`와 status 2로 실패했기 때문이다. 검증: `the quit by key sends the key down alone, because the application has no window for the key up after it quits`의 Red, 이어 Green.
 - F1103: notice delivery의 record가 notice를 만들지 않는다는 check는 각 change를 flush 뒤의 file 크기 대신 그 record의 끝에서 잰다. 그래서 읽기 전에 record를 덧붙일 수 있는 첫 notice의 delivery가 CI runner에서 더 이상 check를 실패시키지 않는다. 검증: flush와 읽기 사이 50 ms pause의 Red(`size: 334 ... want the change of 970 bytes`), 이어 Green(pause로 5번 중 5번, `make repeat-rust` 100번 중 100번).
 - F1102: 저장된 tab의 Rust walk, Wails `sidecarSend`의 answer 인수, core status read 실패 보고의 default가 이유를 밝히므로 `pnpm test`의 default check와 event source check가 통과한다. 이전에는 5개 finding으로 실패했다. 검증: `scripts/test/fallbacks.test.mjs`와 `scripts/test/event-sources.test.mjs`의 Red, 이어 Green(16개 중 16개).
 - F1101-1: core version은 모든 package와 crate manifest, Info.plist, Tauri 파일, Go와 pkg-config 선언, Cargo.lock의 workspace 항목 여섯 개, scripts/check-versions.mjs에서 0.0.49다.

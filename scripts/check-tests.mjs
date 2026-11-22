@@ -305,6 +305,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1104",
+    implementation: [
+      { file: "packages/window-check/test-app.mjs", symbol: "export function quitKeyCommands({ key, text, modifiers }) {" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/test-app.test.mjs", id: "the quit by key sends the key down alone, because the application has no window for the key up after it quits" },
+    ],
+    expected: "The quit through the quit key sends the key down alone, because the key down quits the application and closes its windows.",
+    levels: ["unit"],
+  },
+  {
     id: "F1099",
     implementation: [
       { file: "packages/plugin-api/index.js", symbol: "  function jsonStatusValue(name, value) {" },
