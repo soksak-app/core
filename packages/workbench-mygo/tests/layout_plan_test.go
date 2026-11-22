@@ -5,6 +5,7 @@ package workbench_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"slices"
 	"strconv"
@@ -462,6 +463,105 @@ func TestAGroupOfFiveCardsPlansAndAppliesAsOneGroupCard(t *testing.T) {
 	}
 	if kept := f.read("core.grid")["groups"].([]any)[0].(map[string]any)["id"]; kept != group {
 		t.Fatalf("the kept group card has the identifier %v, not %s", kept, group)
+	}
+}
+
+// contract: layout.apply.groups
+func TestTwoGroupCardsBuiltByOneApplyKeepTheirIdentifiersWhenACardMovesIntoTheSecond(t *testing.T) {
+	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
+	pair := func(name string) string {
+		return `{"group":{"name":"` + name + `"},"tree":{"direction":"row","children":[{"tabs":[{"plugin":"notes"}]},{"tabs":[{"plugin":"notes"}]}]}}`
+	}
+	plan := f.mustPlan(`{"tree":{"direction":"row","children":[` + pair("G1") + `,` + pair("G2") + `]}}`)
+	if !plan.Feasible || plan.Reason != nil {
+		t.Fatalf("the plan of two group cards is %+v", plan)
+	}
+	first, err := f.plan("core.layout.apply", `{"tree":`+string(plan.Tree)+`}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Each group card is identified by its name in core.grid.
+	ids := map[string]string{}
+	for _, group := range f.read("core.grid")["groups"].([]any) {
+		entry := group.(map[string]any)
+		ids[entry["group"].(map[string]any)["name"].(string)] = entry["id"].(string)
+	}
+	if len(ids) != 2 || ids["G1"] == "" || ids["G2"] == "" {
+		t.Fatalf("the group cards after the first apply are %v", ids)
+	}
+	if len(first.Cards) != 4 || first.Cards[0].Group == nil || *first.Cards[0].Group != ids["G1"] ||
+		first.Cards[1].Group == nil || *first.Cards[1].Group != ids["G1"] ||
+		first.Cards[2].Group == nil || *first.Cards[2].Group != ids["G2"] ||
+		first.Cards[3].Group == nil || *first.Cards[3].Group != ids["G2"] {
+		t.Fatalf("the first apply built the cards %v", planned(first.Cards))
+	}
+	a, b, c, d := first.Cards[0], first.Cards[1], first.Cards[2], first.Cards[3]
+	tabOf := func(card plannedCard) string { return *card.Tabs[0].Tab }
+	// Card a stays in G1, card b moves into G2 with c and d, and G1 takes a new card with a new tab.
+	moved := fmt.Sprintf(`{"tree":{"direction":"row","children":[`+
+		`{"group":{"name":"other"},"tree":{"direction":"row","children":[{"tabs":[{"tab":"%s"}]},{"tabs":[{"plugin":"notes"}]}]}},`+
+		`{"group":{"name":"other2"},"tree":{"direction":"row","children":[{"tabs":[{"tab":"%s"}]},{"tabs":[{"tab":"%s"}]},{"tabs":[{"tab":"%s"}]}]}}`+
+		`]}}`, tabOf(a), tabOf(c), tabOf(d), tabOf(b))
+	movedPlan := f.mustPlan(moved)
+	if !movedPlan.Feasible || movedPlan.Reason != nil {
+		t.Fatalf("the plan of the moved card is %+v", movedPlan)
+	}
+	before := f.described()
+	second, err := f.plan("core.layout.apply", `{"tree":`+string(movedPlan.Tree)+`}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(second.Cards) != 5 {
+		t.Fatalf("the second apply built %d cards: %v", len(second.Cards), planned(second.Cards))
+	}
+	wantGroups := []string{ids["G1"], ids["G1"], ids["G2"], ids["G2"], ids["G2"]}
+	for k, card := range second.Cards {
+		if card.Group == nil || *card.Group != wantGroups[k] {
+			t.Fatalf("card %d of the second apply is in the group %v, not %s", k+1, card.Group, wantGroups[k])
+		}
+	}
+	// Cards a, c, d and b keep their identifiers; the new card of G1 keeps none of the first four cards.
+	if *second.Cards[0].Card != *a.Card || *second.Cards[2].Card != *c.Card || *second.Cards[3].Card != *d.Card || *second.Cards[4].Card != *b.Card {
+		t.Fatalf("the second apply kept the cards %v, not %v", planned(second.Cards), planned(first.Cards))
+	}
+	for _, old := range first.Cards {
+		if *second.Cards[1].Card == *old.Card {
+			t.Fatalf("the new card of G1 is the card %s", *old.Card)
+		}
+	}
+	// Tab b keeps its identifier and moves with its card; every other tab keeps its identifier too.
+	if tabOf(second.Cards[4]) != tabOf(b) || tabOf(second.Cards[0]) != tabOf(a) || tabOf(second.Cards[2]) != tabOf(c) || tabOf(second.Cards[3]) != tabOf(d) {
+		t.Fatalf("the second apply moved the tabs to %v", planned(second.Cards))
+	}
+	// The group cards keep their identifiers and names, and the names of the second request are not applied to them.
+	var names []string
+	for _, group := range f.read("core.grid")["groups"].([]any) {
+		entry := group.(map[string]any)
+		if entry["id"] != any(ids[entry["group"].(map[string]any)["name"].(string)]) {
+			t.Fatalf("the group %v is not one of the group cards of the first apply", entry)
+		}
+		names = append(names, entry["group"].(map[string]any)["name"].(string))
+	}
+	slices.Sort(names)
+	if !slices.Equal(names, []string{"G1", "G2"}) {
+		t.Fatalf("the group cards are named %v", names)
+	}
+	got := f.groupNames()
+	slices.Sort(got)
+	if !slices.Equal(got, []string{"G1:2", "G2:3"}) {
+		t.Fatalf("the group cards hold %v", got)
+	}
+	// A repeated apply answers the same and changes nothing.
+	after := f.described()
+	if after == before {
+		t.Fatal("the second apply changed no layout, so card b did not move")
+	}
+	again, err := f.plan("core.layout.apply", `{"tree":`+string(movedPlan.Tree)+`}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(planned(again.Cards), " ") != strings.Join(planned(second.Cards), " ") || f.described() != after {
+		t.Fatalf("the repeated apply answered %v and changed the layout", planned(again.Cards))
 	}
 }
 

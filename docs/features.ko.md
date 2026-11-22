@@ -188,11 +188,11 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
 - [o] F1059 — P1, F1033-4의 후속: 완료된 error toast capability F1033이 test inventory에 feature link가 없어서 inventory test가 거부했다. F1033은 page와 mygo workbench의 공유 toast를 그 test에 연결한다.
 - [o] F1058 — P0, F1054의 후속: F1054 뒤에도 mygo project window check가 실패했으므로, F1054에 적은 원인은 그 실패의 원인이 아니었다. 원인: mygo workbench의 `core.project.activate`는 project를 보이기 전에 답했고, page workbench는 `showProject` 뒤에 답한다. 그래서 답 뒤에 설정을 읽은 check가 library의 common 설정을 읽었다. activation은 project가 보일 때 답하고, 거부된 activation은 `core.library.open`처럼 error display로 보인다.
 - [o] F1054 — P0, F1033-4의 후속: mygo workbench는 library에서 project를 다시 열었을 때 project override 대신 common mode를 보였다. `project windows persist files, inherit settings, and isolate native state` 5회 중 3회. 원인: 캐시한 project 기록의 override를 적용했는데, 그 기록은 window의 쓰기를 store의 change event 때에만 받는다. page workbench는 project를 선택할 때 store를 읽는다. mygo workbench는 project를 보일 때 store snapshot을 읽고 그 common 설정과 그 project의 override를 적용한다.
-- [~] F1055 — P1: 여러 card의 group card 요청을 plan 한 번과 apply 한 번으로 만든다. group은 `core.group.create`와 추가 card마다 layout을 읽은 뒤의 `core.layout.open`이 필요해서, agent가 한 배치에 여러 단계를 쓴다.
+- [o] F1055 — P1: 여러 card의 group card 요청을 plan 한 번과 apply 한 번으로 만든다. group은 `core.group.create`와 추가 card마다 layout을 읽은 뒤의 `core.layout.open`이 필요해서, agent가 한 배치에 여러 단계를 쓴다.
   - [o] F1055-1 — `core.layout.plan`과 `core.layout.apply`의 tree가 이름과 children을 가진 group node를 받고, plan은 group card를 보고한다. specification과 exposure 선언을 먼저 바꾼다.
   - [o] F1055-2 — page workbench와 mygo workbench가 계획된 group card를 만들고, 반복은 아무것도 바꾸지 않는다.
   - [o] F1055-3 — soksak skill 본문은 group card를 plan 한 번과 apply 한 번으로 만들고, 요청마다 command 선언을 한 번 읽는다.
-  - [ ] F1055-4 — 유지하는 group card 하나의 카드를 유지하는 다른 group card로 옮기는 tree는 계획되고 적용되거나, 이유와 함께 거부되고 아무것도 바꾸지 않는다. 두 workbench 어디에서도 그 경로를 다루는 test가 없다.
+  - [o] F1055-4 — 유지하는 group card 하나의 카드를 유지하는 다른 group card로 옮기는 tree는 계획되고 적용되거나, 이유와 함께 거부되고 아무것도 바꾸지 않는다. 두 workbench 어디에서도 그 경로를 다루는 test가 없다.
 - [o] F1053 — P1, F1052의 후속: window check의 projects reader는 projects format 3만 받았는데, host는 F1006-9부터 format 4로 쓰므로 projects.json을 읽는 project window check가 모두 실패했다. reader는 format 4를 받는다.
 - [o] F1052 — P0, F1033-4의 후속: page workbench는 다른 space나 project의 저장된 layout card를 `state.cards`로 읽었는데, 저장된 tree layout에는 그 형식이 없어서 그런 space를 가진 window의 commit마다 Wails와 Tauri에서 `surface presentation failed: undefined is not an object (evaluating 'space.layout.state.cards')`로 실패했다. surface listing은 그 tab을 layout tree에서 읽는다.
 - [o] F1051 — P1, F1050의 후속: 준비된 geometry의 commit 검사가 CI에서 transaction이 present path로 commit해서 실패했다. present path와 view-join path는 모두 page가 present한 뒤에만 commit하므로(docs/spec/endpoint.md), 검사는 두 path를 모두 받는다.

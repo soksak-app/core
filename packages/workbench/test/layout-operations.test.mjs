@@ -823,6 +823,39 @@ test("a group of five cards in a row plans and applies one group card, and a rep
   assert.deepEqual(layout().groups.map(({ card, name }) => [card, name]), [[groups[0].card, "Row"]]);
 });
 
+// contract: layout.apply.groups
+test("two group cards built by one apply keep their identifiers and names when card b moves into the second group", { timeout: 5000 }, async () => {
+  single([view("tab-aaaaa1", PLAIN)]);
+  const pair = (name) => ({ group: { name }, tree: { direction: "row", children: terminals(2) } });
+  const plan = await run("core.layout.plan", { tree: { direction: "row", children: [pair("G1"), pair("G2")] } });
+  assert.deepEqual([plan.feasible, plan.reason], [true, null]);
+  const first = await twice("core.layout.apply", { tree: plan.tree });
+  const ids = Object.fromEntries(layout().groups.map(({ card, name }) => [name, card]));
+  assert.deepEqual(Object.keys(ids).sort(), ["G1", "G2"]);
+  const [a, b, c, d] = first.cards;
+  assert.deepEqual(first.cards.map(({ group }) => group), [ids.G1, ids.G1, ids.G2, ids.G2]);
+  const tabOf = (card) => card.tabs[0].tab;
+  // Card a and card b stay in G1 and G2 with their tabs; the second group takes card b, and G1 takes a new card with a new tab.
+  const moved = { direction: "row", children: [
+    { group: { name: "other" }, tree: { direction: "row", children: [{ tabs: [{ tab: tabOf(a) }] }, { tabs: [{ plugin: SESSION, params: { name: "new" } }] }] } },
+    { group: { name: "other2" }, tree: { direction: "row", children: [{ tabs: [{ tab: tabOf(c) }] }, { tabs: [{ tab: tabOf(d) }] }, { tabs: [{ tab: tabOf(b) }] }] } },
+  ] };
+  const movedPlan = await run("core.layout.plan", { tree: moved });
+  assert.deepEqual([movedPlan.feasible, movedPlan.reason], [true, null]);
+  const second = await twice("core.layout.apply", { tree: movedPlan.tree });
+  assert.deepEqual(second.cards.map(({ group }) => group), [ids.G1, ids.G1, ids.G2, ids.G2, ids.G2]);
+  assert.equal(second.cards[0].card, a.card, "card a is not kept");
+  assert.equal(second.cards[2].card, c.card, "card c is not kept");
+  assert.equal(second.cards[3].card, d.card, "card d is not kept");
+  assert.equal(second.cards[4].card, b.card, "card b is not kept");
+  assert.ok(![a, b, c, d].some(({ card }) => card === second.cards[1].card), "the new card of G1 keeps an existing card");
+  assert.deepEqual(second.cards.map((card) => card.tabs[0].tab), [tabOf(a), second.cards[1].tabs[0].tab, tabOf(c), tabOf(d), tabOf(b)]);
+  assert.equal(tabOf(b), tabOf(first.cards[1]), "tab b changed its identifier");
+  // G1 and G2 keep their identifiers and their names; the names of the second request are not applied to them.
+  const after = layout().groups.map(({ card, name, members }) => [name, card, members.length]);
+  assert.deepEqual(after.sort(), [["G1", ids.G1, 2], ["G2", ids.G2, 3]]);
+});
+
 // contract: layout.plan.group-refusals
 test("a group whose tree is one card or whose name is not 1 to 40 characters is refused and changes nothing", { timeout: 5000 }, async () => {
   arrange({ cut: "x", kids: [
