@@ -1354,11 +1354,8 @@ func (s *Shell) viewStopped(data []any) {
 		s.fail(fmt.Errorf("view stopped: %w", err))
 		return
 	}
-	// A view that made a call has a state, and its later failures are shown by the error display path only. The restart stop of a
-	// view comes after view-process-ended, which removed that state, so a restart stop is shown here.
-	if s.surfaces.views[event.Surface] != nil {
-		return
-	}
+	// The host sends view-stopped for a view that stopped its restarts and for a page that failed before its first call; a page that
+	// failed after a call keeps its surface (docs/spec/native-surfaces.md#view-surfaces).
 	s.surfaces.failed[event.Surface] = event.Reason
 	s.options.Invalidate()
 }

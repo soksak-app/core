@@ -54,3 +54,24 @@ func TestViewErrorMessageSendsViewStoppedWithItsReason(t *testing.T) {
 		t.Fatalf("view-stopped events %v, want one for surface probe-surface, plugin probe and the reason", stops)
 	}
 }
+
+// contract: view.error.display
+// A view.error message after the first call of the view writes its record and sends no view-stopped event, because the view continues
+// and its surface keeps its state (docs/spec/native-surfaces.md#view-surfaces).
+func TestViewErrorAfterACallSendsNoViewStopped(t *testing.T) {
+	s := registeredViewRecordSurfaces(t)
+	channel, ok := s.documents.view("probe-surface")
+	if !ok {
+		t.Fatal("the view channel of the probe surface is missing")
+	}
+	s.documents.trackViewCall("probe-surface", channel.generation, 1, "runtime.textSize.read")
+	events := recordWindowEvents(s)
+	if err := s.ViewMessage("probe-surface", `{"message":{"event":"view.error","plugin":"probe","reason":"uncaught error: boom"}}`); err != nil {
+		t.Fatalf("view.error message: %v, want the message accepted", err)
+	}
+	for _, event := range *events {
+		if event.name == "view-stopped" {
+			t.Fatalf("view-stopped event %v after the first call, want none", event.data)
+		}
+	}
+}

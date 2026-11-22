@@ -2265,27 +2265,6 @@ func TestAViewThatFailsBeforeItsFirstCallEndsItsLoadingState(t *testing.T) {
 	}
 }
 
-// contract: view.error.display
-// A view that made a call has a state, so a view-stopped event that reaches it leaves its surface ready.
-func TestAViewThatFailedAfterItsFirstCallKeepsItsSurface(t *testing.T) {
-	f, stored := surfaceShell(t)
-	var surface string
-	for id := range stored.lastSurfaces(t) {
-		surface = id
-		break
-	}
-	f.settle()
-	f.shell.Event("view-call", []any{map[string]any{"surface": surface, "plugin": "textprobe", "generation": 1, "id": 1, "command": "runtime.textSize.read"}})
-	f.pending.drain(t)
-	f.tester.Frame()
-	f.shell.Event("view-stopped", []any{map[string]any{"surface": surface, "plugin": "textprobe", "reason": "uncaught error: boom"}})
-	f.pending.drain(t)
-	f.tester.Frame()
-	if got := strings.Join(f.tester.Texts(), " "); strings.Contains(got, "표면 오류") {
-		t.Fatalf("a view with a call shows the error state after view-stopped: %q", got)
-	}
-}
-
 // A loading surface records each request of a frame with the surface that asks for it, in the frame class of the policy in force.
 // contract: workbench.frame.request.names-the-surface
 func TestALoadingSurfaceRecordsEachFrameRequestWithItsSurface(t *testing.T) {

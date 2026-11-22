@@ -1653,6 +1653,8 @@ type viewChannel struct {
 	navigations uint64
 	// calls holds the command of each call request of the view that the main page has not answered, by id.
 	calls map[uint64]string
+	// called is set by the first call request of the view. A view.error before it reaches the workbench as view-stopped.
+	called bool
 }
 
 // openViewCall is a call request of a view that was open when the view process ended.
@@ -1668,6 +1670,7 @@ func (d *Documents) trackViewCall(surface string, generation, id uint64, command
 	defer d.mu.Unlock()
 	if channel, ok := d.views[surface]; ok && channel.generation == generation {
 		channel.calls[id] = command
+		channel.called = true
 		return true
 	}
 	return false
@@ -2065,13 +2068,14 @@ func (s *Surfaces) viewMessageFrom(surface, plugin string, generation uint64, va
 		if event.Reason == "" {
 			return true, fmt.Errorf("%s: view.error has no reason", surface)
 		}
-		// A failure of the page before its first call is written on the error display path of the view, with its plugin and surface
+		// A failure of the page is written on the error display path of the view, with its plugin and surface
 		// (docs/spec/native-surfaces.md#view-surfaces). The view continues, so the message is accepted.
 		LogError(fmt.Sprintf("view %s %s", plugin, surface), event.Reason)
-		// The view-stopped event tells the workbench that the page failed. The workbench applies it to a surface whose view has made no
-		// call yet, so a page that failed before its first call shows the failure instead of the loading state
-		// (docs/spec/native-surfaces.md#view-surfaces).
-		s.emitToSurface(surface, "view-stopped", viewStoppedEvent(surface, plugin, event.Reason))
+		// A page that fails before its first call sends view-stopped, so the workbench shows the failure instead of the loading state.
+		// A page that fails after a call keeps its surface (docs/spec/native-surfaces.md#view-surfaces).
+		if channel, ok := s.documents.view(surface); ok && !channel.called {
+			s.emitToSurface(surface, "view-stopped", viewStoppedEvent(surface, plugin, event.Reason))
+		}
 		return true, nil
 	}
 	return true, fmt.Errorf("%s: view event %q is unknown", surface, event.Event)
