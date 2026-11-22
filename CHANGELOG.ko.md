@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1046-3: F1036은 동작을 바꾸지 않는 완료로, F1040과 F1043은 기능이 link된 하위 항목에 있는 완료로 적는다. Red: test inventory check가 세 항목에 feature link가 없다고 보고했다. Green: 통과한다.
 - F1046-2: page, Go command line, Rust command line의 생성된 event class 파일이 다시 `docs/spec/events.json`과 같다. Red: event class 테스트가 Go 파일이 catalog와 다르다고 보고했다. Green: 통과한다.
 - F1046-1: 비유 동사 check와 그 테스트의 주석은 한국어 동사 어간을 code point로 적어서 모든 주석이 영어다. Red: 주석 언어 테스트가 두 주석을 보고했다. Green: 통과한다.
 - F1033-3.2, F1033-3.3: workbench가 보이는 모든 오류는 오류 toast에만 나타난다. library card, application update 줄, plugin card와 그 기여 줄, card 상태 행, 멈춘 surface의 placeholder, sidebar section, 설정의 setup 행, debug view는 `실패`, `표면 오류`, `열 수 없음`, `오류` 같은 짧은 상태 label을 muted 색으로 보이고 복구 동작을 유지한다. toast 밖의 어떤 element도 오류 색을 쓰지 않는다. mygo workbench는 inline 오류 drawer와 `dbg-error-gap` metric을 없애고, activity icon 길이를 em으로 선언한다. Red: 이전 구현에서 상태 행, surface 상태, library 폴더, application update, 설정 setup, 멈춘 view의 page 테스트와 plugin card, 상태 행, debug view, sidebar section의 mygo 테스트가 오류 글이 toast 밖에 있어서 실패했다. Green: page workbench suite와 mygo workbench suite가 통과한다.
