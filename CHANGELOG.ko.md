@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1077-1: core version이 모든 package와 crate manifest, Info.plist, Tauri 파일, Go와 pkg-config 선언, scripts/check-versions.mjs에서 0.0.47이다.
 - F1076: program run, `plugin.json`의 `programs` pattern, 준비된 view의 reload, 업데이트 뒤 view 폴더의 Go와 Rust test가 contract case를 선언하고, contract case 표는 Go와 Rust test 하나씩을 가진 case 여섯 개를 추가하므로 host contract 검사가 통과한다. F1072-4: mygo update system test는 registry index를 format 2로 쓴다.
 - F1075-4: `dependencies`의 plugin 의존은 plugin의 package를 key로 가지며, mygo workbench, 페이지, testing host `createTestHost`가 package를 그 package의 load된 plugin id로 푼다. View call `runtime.status.watch`, `runtime.data.get {key, plugin}`, `runtime.data.on {plugin}`은 plugin id를 명명한다. 이전에는 host가 key를 plugin id와 비교해서, plugin의 package에 대한 의존이 view에 그 status도 프로젝트 데이터도 주지 않았고, mygo workbench는 package를 sidecar로 다뤘다. `createTestHost`의 `dependencies` fixture는 package를 key로 가지며 각 항목이 `plugin` id를 명명한다.
 - F1074와 F1075 뒤의 push 검사를 고쳤다: test inventory가 F1074와 F1075를 test에 연결하고, F344 symbol이 새 parameter를 이름에 담고, window check catalog가 workbench.session.program을 갖고, sok의 program file test가 platform 폴더 밖의 OS 조건 없이 실행된다.
@@ -119,7 +120,7 @@
 - F1031-15: Persistent connection 기록의 Go 검사는 sampler의 첫 sample 뒤에 시작하고 간격을 한 시간으로 둔다. 그래서 stop 전에 process를 읽은 sample이 stop 뒤에 저장되지 않는다. Red: 간격 1 ms의 세 번 중 한 번이 stop 뒤 sample 둘을 보고했다. Green: 다섯 번 모두 통과한다.
 - F1031-14: Native image region test의 direct pointer focus case는 test 창의 synthetic mouse event가 AppKit current event가 되었는지 판정하고, 실패하면 두 event를 기록한다. Red: wait 중에 넣은 application-defined event가 이전 같음 검사를 세 번 중 세 번 실패시켰다. Green: 세 번 모두 통과한다.
 - F1031-13: Layout library의 `cut-gaps` break가 cut room의 `let free` 선언을 찾는다. Red: check-breaks가 break를 stale로 보고했다. Green: check-breaks가 필수 break 여덟 개를 모두 잡는다.
-- F1031-12: 선언된 모든 workspace version이 0.0.46이며 Cargo.lock의 workspace 항목 여섯 개도 포함한다. 검증: version 검사가 통과한다.
+- F1031-12: 선언된 모든 workspace version이 0.0.47이며 Cargo.lock의 workspace 항목 여섯 개도 포함한다. 검증: version 검사가 통과한다.
 - F1033-7: mygo workbench가 저장된 오류 toast 자동 닫기를 시작할 때와 다른 창의 설정 변경에서 적용한다. 모든 load와 변경이 거치는 설정 적용에서 처리하며, 다른 type의 값은 오류다. Page component는 검증된 설정을 변환 없이 읽고, 설정 modal은 초 범위를 선언에서 가져오며, mygo modal은 page와 같은 label을 쓰고, mygo의 초 검증은 하나만 남는다. Red: switch를 켠 채 시작한 mygo 창이 저장된 초가 지나도 toast를 유지했다. Green: page 48개와 mygo 48개의 toast·설정 test가 통과한다.
 - F1033-6: 전역 설정 `autoDismissErrorToasts`(switch, 기본 꺼짐)와 `errorToastDismissSeconds`(1부터 2147483까지의 정수, 기본 5)가 error toast의 자동 닫기를 저장한다. switch가 꺼져 있으면 toast는 자기 ×로만 닫고, 설정 변경이 열린 toast의 시한을 다시 맞춘다. 설정 modal이 두 workbench에서 그룹을 그리고, chrome 선언의 고정 toast 시간은 지웠다. 검증: 두 workbench의 toast, 설정, 선언 test가 통과한다.
 - F1033-5: 오류가 하단 중앙에 떠서 공간을 차지하지 않는다. Toast의 닫기나 만료는 이후의 같은 글을 닫을 수 없다. Red에서 library footer와 workbench card 경계가 이동했고 toast 만료가 없었다. Green에서 page test 28개와 native test 7개가 통과한다. 실행한 mygo library에서 작은 toast가 나타나고 만료되는 동안 form 경계가 같다.

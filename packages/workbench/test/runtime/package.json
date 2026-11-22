@@ -1,6 +1,6 @@
 {
   "name": "@soksak/runtime",
-  "version": "0.0.46",
+  "version": "0.0.47",
   "private": true,
   "description": "Runtime module for workbench tests: no native host and no store.",
   "type": "module",
