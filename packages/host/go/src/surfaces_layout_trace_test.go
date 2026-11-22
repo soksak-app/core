@@ -116,8 +116,8 @@ func TestTheGeometryOfAPreparationIsCommittedWithItsTicketAfterThePresentationNo
 	composition := SurfaceComposition{Kind: "view", Page: "ui/page.html"}
 	p.s.compositions = map[string]SurfaceComposition{"probe-surface": composition}
 	trace := realTrace(t)
-	// The commit of a transaction with a joined view happens when the view presented, after the present returned: the end of the
-	// transaction of the window is the event that the native layer reports.
+	// The commit of a transaction with a joined view happens when the view presented: the end of the transaction of the window
+	// is the event that the native layer reports.
 	ended := make(chan struct{}, 8)
 	var watched error
 	runOnMainThread(func() {
@@ -181,7 +181,10 @@ func TestTheGeometryOfAPreparationIsCommittedWithItsTicketAfterThePresentationNo
 			layout = candidate
 		}
 	}
-	if layout == nil || layout["begun"] == nil || layout["committed"] == nil || layout["commitPath"] != "view-join" ||
+	// The commit of the presentation and the deferred commit of the last joined view both commit after the page presented: the
+	// view commits the transaction when it presents after the present returned, and the present commits it when the view
+	// presented before (docs/spec/endpoint.md, the commit paths).
+	if layout == nil || layout["begun"] == nil || layout["committed"] == nil || (layout["commitPath"] != "view-join" && layout["commitPath"] != "present") ||
 		layout["committed"].(float64) < noticed || layout["begun"].(float64) > noticed {
 		t.Fatalf("the transaction of the ticket %d is %v, want its begin, the presentation notice at %v and then its commit", prepared.Ticket, layout, noticed)
 	}

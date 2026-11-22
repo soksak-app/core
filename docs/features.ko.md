@@ -171,6 +171,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [o] F1031-9 — Node reporter 색상 test가 명시적인 색상 환경을 사용한다. 상위 환경에 NO_COLOR를 지정한 상태에서 두 파일의 test 39개가 통과한다.
   - [o] F1031-10 — 표시된 오류에 맞춰 toast 테두리 색상을 적용하고 닫기 control metric을 선언하며 layout fixture에 닫기 선언을 연결한다. 관련 test 13개가 통과한다.
   - [o] F1031-11 — F1031-10 후속. Toast 닫기 metric을 포함하도록 host의 workbench 선언 사본을 갱신한다. Exposure 검사 두 개와 workbench 선언 test가 통과한다.
+- [o] F1051 — P1, F1050의 후속: 준비된 geometry의 commit 검사가 CI에서 transaction이 present path로 commit해서 실패했다. present path와 view-join path는 모두 page가 present한 뒤에만 commit하므로(docs/spec/endpoint.md), 검사는 두 path를 모두 받는다.
 - [o] F1050 — P0, F1049의 후속: stop이 start를 기다리지 않는다는 검사가 CI에서 제한 시간까지 실행됐다. 원인: Go host는 stop과 hello 답 중 하나를 goroutine에서 골랐는데, 그 goroutine은 둘이 모두 일어난 뒤에야 실행될 수 있었고, 답을 고르면 start가 close-owner에 답하지 않는 service로 owner를 닫았다. 이제 Go host에서는 hello 답 읽기가 끝나기 전에 닫힌 stop이 start를 결정한다. Rust host는 stop 안에서 stop flag를 세우므로 바꾸지 않는다.
 - [o] F1049 — P0, F1031-6의 후속: sidecar write wait 검사가 CI의 두 macOS job에서, local에서는 약 일곱 번에 한 번 write wait 기록 없이 실패했다. 원인: buffer 검사의 fixture는 shell이 시작한 뒤에야 TERM을 무시하는데, trap 전에 온 stop이 writer가 queue의 줄을 쓰기 전에 fixture를 TERM으로 끝냈다. fixture는 trap 뒤에 ready FIFO에 한 줄을 쓰고, Go와 Rust 검사는 그 줄을 읽은 뒤에 보낸다.
 - [o] F1048 — P0, F1033-3과 F1046-4의 후속: test inventory가 F42, F45, F954에 F1033-3이 바꾼 테스트와 symbol을 적었고, F1046-4의 저장소 테스트를 claim하지 않았다. F954는 toast 테스트를 link하고, `scripts/check-administrator-rights.mjs`가 그 테스트가 판단하는 검사를 가진다.
