@@ -199,7 +199,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
 - [o] F1061 — P2, F1036의 후속: 한국어 문서가 계획, 파일 이름, identifier를 만드는 일에 동사 `짓다`를 썼고, 이는 실제 동작을 말하지 않는다. 문서는 동작(`만든다`, `정한다`)을 말하고, figurative verb check는 `거짓`, `몸짓`, `꼭짓점`, `남짓`, `관련짓다`, `짝을 짓다`, `이름 짓다` 밖의 `짓다`를 보고한다.
 - [~] F1073 — P1: 에이전트 탭의 프로그램 상태(`idle`, `working`, `blocked`)를 어느 plugin의 탭이든 보고한다. 입력: 에이전트 탭을 나열하는 plugin은 자기와 다른 plugin 탭의 상태가 필요하지만, `core.activity`는 activity 단계만 주고 view는 다른 plugin의 status를 읽지 못한다. 계약: `docs/spec/program-state.md`이며, plugin은 `surface.program`으로 선언하고 각 창은 그것을 `core.grid`의 `program`으로 보고한다. activity 경로는 맞지 않는다. 그 값은 `failed`를 가진 표시 단계이고 holder는 가장 높은 값을 취하기 때문이다.
   - [o] F1073-1 — `docs/spec/program-state.md`와 `plugins.md`에 계약을 영어와 한국어로 명시한다.
-  - [ ] F1073-2 — JS, Go, Rust manifest reader가 `manifest-validation.json`의 공유 case로 `surface.program`을 검사한다. 각 reader에서 Red를 먼저 둔다.
+  - [o] F1073-2 — JS, Go, Rust manifest reader가 `manifest-validation.json`의 공유 case로 `surface.program`을 검사한다. 각 reader에서 Red를 먼저 둔다.
   - [ ] F1073-3 — page workbench가 선언된 status를 각 탭 표면에서 따라가고 `core.grid`에 `program`을 보고하며, 잘못된 값의 오류를 보인다. Red를 먼저 둔다.
   - [ ] F1073-4 — mygo workbench가 Go에서 같은 따라가기와 `core.grid` 보고를 한다. Red를 먼저 둔다.
 - [o] F1059 — P1, F1033-4의 후속: 완료된 error toast capability F1033이 test inventory에 feature link가 없어서 inventory test가 거부했다. F1033은 page와 mygo workbench의 공유 toast를 그 test에 연결한다.

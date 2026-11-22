@@ -508,6 +508,58 @@ fn check_exposes(owner: &str, exposes: &Value) -> Result<(), String> {
     Ok(())
 }
 
+/// The program states of a tab, from the first to the last (docs/spec/program-state.md#value).
+const PROGRAM_STATES: [&str; 3] = ["idle", "working", "blocked"];
+
+/// Checks surface.program: the name of a status of exposes whose schema is of type object and null, requires state, and
+/// gives state the three program states (docs/spec/program-state.md#declaration).
+fn check_program(where_: &str, raw: &Value, manifest: &Map<String, Value>) -> Result<(), String> {
+    let name = raw
+        .as_str()
+        .ok_or_else(|| format!("{where_}: surface program must be a status name"))?;
+    // default: exposes or its status list that is absent or not a list declares no status, so the name is refused.
+    let statuses = manifest
+        .get("exposes")
+        .and_then(|exposes| exposes.get("status"))
+        .and_then(Value::as_array)
+        .map_or(&[][..], Vec::as_slice);
+    let schema = statuses
+        .iter()
+        .find(|entry| entry.get("name").and_then(Value::as_str) == Some(name))
+        .ok_or_else(|| {
+            format!("{where_}: surface program {name} must name a status declared in exposes")
+        })?
+        .get("schema")
+        .and_then(Value::as_object);
+    let members = |key: &str| {
+        schema
+            .and_then(|schema| schema.get(key))
+            .and_then(Value::as_array)
+            .map_or(&[][..], Vec::as_slice)
+    };
+    let types = members("type");
+    let has_text = |items: &[Value], want: &str| items.iter().any(|item| item.as_str() == Some(want));
+    let states = schema
+        .and_then(|schema| schema.get("properties"))
+        .and_then(|properties| properties.get("state"))
+        .and_then(|state| state.get("enum"))
+        .and_then(Value::as_array)
+        .map_or(&[][..], Vec::as_slice);
+    let valid = types.len() == 2
+        && has_text(types, "object")
+        && has_text(types, "null")
+        && has_text(members("required"), "state")
+        && states.len() == PROGRAM_STATES.len()
+        && PROGRAM_STATES.iter().all(|want| has_text(states, want));
+    if !valid {
+        return Err(format!(
+            "{where_}: surface program {name} must have a schema of type object and null whose state is one of {}",
+            PROGRAM_STATES.join(", ")
+        ));
+    }
+    Ok(())
+}
+
 /// The command names that exposes declares (`exposes.commands` when it is a list, else none).
 fn declared_commands(manifest: &Map<String, Value>) -> Vec<&str> {
     manifest
@@ -1082,6 +1134,7 @@ fn check_surface(
             "module",
             "composition",
             "drop",
+            "program",
             "params",
             "opens",
             "save",
@@ -1120,6 +1173,9 @@ fn check_surface(
         return Err(format!(
             "{where_}: surface drop must name a command declared in exposes"
         ));
+    }
+    if let Some(raw) = surface.get("program") {
+        check_program(where_, raw, manifest)?;
     }
     if surface.contains_key("module") {
         return Err(format!(

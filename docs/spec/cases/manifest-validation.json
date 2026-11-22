@@ -7287,6 +7287,323 @@
         "plugin.json",
         "ui/page.html"
       ]
+    },
+    {
+      "id": "surface.program-accepted",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "program": "probe.s"
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "required": [
+                  "state"
+                ],
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "idle",
+                      "working",
+                      "blocked"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "accepted": true,
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.program-not-string",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "program": 1
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "required": [
+                  "state"
+                ],
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "idle",
+                      "working",
+                      "blocked"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: surface program must be a status name",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.program-undeclared",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "program": "probe.s"
+        },
+        "mark": "P",
+        "icon": "<svg></svg>"
+      },
+      "accepted": false,
+      "error": "plugin probe: surface program probe.s must name a status declared in exposes",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.program-other-status",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "program": "probe.other"
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "required": [
+                  "state"
+                ],
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "idle",
+                      "working",
+                      "blocked"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: surface program probe.other must name a status declared in exposes",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.program-states-incomplete",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "program": "probe.s"
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "required": [
+                  "state"
+                ],
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "idle",
+                      "working"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: surface program probe.s must have a schema of type object and null whose state is one of idle, working, blocked",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.program-without-null",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "program": "probe.s"
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": [
+                  "object"
+                ],
+                "required": [
+                  "state"
+                ],
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "idle",
+                      "working",
+                      "blocked"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: surface program probe.s must have a schema of type object and null whose state is one of idle, working, blocked",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "surface.program-without-required",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "program": "probe.s"
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "idle",
+                      "working",
+                      "blocked"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: surface program probe.s must have a schema of type object and null whose state is one of idle, working, blocked",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
     }
   ]
 }

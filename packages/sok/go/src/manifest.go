@@ -972,13 +972,59 @@ func declaredCommands(manifest map[string]any) []string {
 	return names
 }
 
+// programStates are the program states of a tab, from the first to the last (docs/spec/program-state.md#value).
+var programStates = []string{"idle", "working", "blocked"}
+
+// statusSchema returns the schema of the status name of exposes and whether exposes declares that status. A schema that
+// is not an object gives nil, which the program check then refuses.
+func statusSchema(manifest map[string]any, name string) (map[string]any, bool) {
+	// default: exposes or its status list that is absent or not a list declares no status.
+	exposes, _ := manifest["exposes"].(map[string]any)
+	statuses, _ := exposes["status"].([]any)
+	for _, item := range statuses {
+		if entry, ok := item.(map[string]any); ok && entry["name"] == name {
+			schema, _ := entry["schema"].(map[string]any)
+			return schema, true
+		}
+	}
+	return nil, false
+}
+
+// checkProgram checks surface.program: the name of a status of exposes whose schema is of type object and null, requires
+// state, and gives state the three program states (docs/spec/program-state.md#declaration).
+func checkProgram(where string, raw any, manifest map[string]any) error {
+	name, isText := raw.(string)
+	if !isText || name == "" {
+		return fmt.Errorf("%s: surface program must be a status name", where)
+	}
+	schema, declared := statusSchema(manifest, name)
+	if !declared {
+		return fmt.Errorf("%s: surface program %s must name a status declared in exposes", where, name)
+	}
+	types, _ := schema["type"].([]any)
+	required, _ := schema["required"].([]any)
+	properties, _ := schema["properties"].(map[string]any)
+	state, _ := properties["state"].(map[string]any)
+	states, _ := state["enum"].([]any)
+	valid := len(types) == 2 && slices.Contains(types, any("object")) && slices.Contains(types, any("null")) &&
+		slices.Contains(required, any("state")) && len(states) == len(programStates)
+	for _, want := range programStates {
+		valid = valid && slices.Contains(states, any(want))
+	}
+	if !valid {
+		return fmt.Errorf("%s: surface program %s must have a schema of type object and null whose state is one of %s",
+			where, name, strings.Join(programStates, ", "))
+	}
+	return nil
+}
+
 // checkSurface checks the surface declaration (validateManifest of the reader).
 func checkSurface(where string, manifest map[string]any, raw any, sidecars []string) error {
 	surface, ok := raw.(map[string]any)
 	if !ok {
 		return fmt.Errorf("%s: surface must be an object", where)
 	}
-	if err := only(where+" surface", surface, "module", "composition", "drop", "params", "opens", "save", "menu", "unload"); err != nil {
+	if err := only(where+" surface", surface, "module", "composition", "drop", "program", "params", "opens", "save", "menu", "unload"); err != nil {
 		return err
 	}
 	commands := declaredCommands(manifest)
@@ -1009,6 +1055,11 @@ func checkSurface(where string, manifest map[string]any, raw any, sidecars []str
 	if raw, ok := surface["drop"]; ok {
 		if name, isText := raw.(string); !isText || !slices.Contains(commands, name) {
 			return fmt.Errorf("%s: surface drop must name a command declared in exposes", where)
+		}
+	}
+	if raw, ok := surface["program"]; ok {
+		if err := checkProgram(where, raw, manifest); err != nil {
+			return err
 		}
 	}
 	if _, ok := surface["module"]; ok {

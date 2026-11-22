@@ -357,6 +357,28 @@ function declaredCommandNames(manifest) {
   return Array.isArray(commands) ? commands.filter(isObject).map((command) => command.name) : [];
 }
 
+/** The program states of a tab, from the first to the last (docs/spec/program-state.md#value). */
+export const PROGRAM_STATES = Object.freeze(["idle", "working", "blocked"]);
+
+/**
+ * Checks surface.program: the name of a status of exposes whose schema is of type object and null, requires state, and
+ * gives state the three program states (docs/spec/program-state.md#declaration).
+ */
+function checkProgram(where, program, manifest) {
+  if (!isText(program)) throw new Error(`${where}: surface program must be a status name`);
+  const status = (manifest.exposes?.status ?? []).find((entry) => isObject(entry) && entry.name === program);
+  if (status === undefined) throw new Error(`${where}: surface program ${program} must name a status declared in exposes`);
+  const { schema } = status;
+  const types = Array.isArray(schema?.type) ? schema.type : [];
+  const states = schema?.properties?.state?.enum;
+  const valid = isObject(schema) && types.length === 2 && types.includes("object") && types.includes("null") &&
+    Array.isArray(schema.required) && schema.required.includes("state") && Array.isArray(states) && states.length === PROGRAM_STATES.length &&
+    PROGRAM_STATES.every((state) => states.includes(state));
+  if (!valid) {
+    throw new Error(`${where}: surface program ${program} must have a schema of type object and null whose state is one of ${PROGRAM_STATES.join(", ")}`);
+  }
+}
+
 /** Whether two JSON values are equal: objects have the same members in any order, and lists have equal items in order. */
 export function sameJson(a, b) {
   if (Array.isArray(a)) return Array.isArray(b) && a.length === b.length && a.every((item, index) => sameJson(item, b[index]));
@@ -755,7 +777,7 @@ export function validateManifest(manifest) {
   if (manifest.surface !== undefined) {
     const surface = manifest.surface;
     if (!isObject(surface)) throw new Error(`${where}: surface must be an object`);
-    only(`${where} surface`, surface, ["module", "composition", "drop", "params", "opens", "save", "menu", "unload"]);
+    only(`${where} surface`, surface, ["module", "composition", "drop", "program", "params", "opens", "save", "menu", "unload"]);
     // The context menu of the surface (docs/spec/plugins.md#pluginjson).
     if (surface.menu !== undefined) {
       if (!Array.isArray(surface.menu) || surface.menu.length === 0 || surface.menu.length > 16) {
@@ -813,6 +835,8 @@ export function validateManifest(manifest) {
       !declaredCommandNames(manifest).includes(surface.drop))) {
       throw new Error(`${where}: surface drop must name a command declared in exposes`);
     }
+    // The status that carries the program state of the tab (docs/spec/program-state.md#declaration).
+    if (surface.program !== undefined) checkProgram(where, surface.program, manifest);
     // The surface module is removed: a surface is a view, and its page is declared in the composition (docs/spec/plugins.md#view-surfaces).
     if (surface.module !== undefined) throw new Error(`${where}: surface module is removed; a surface is a view (docs/spec/plugins.md#view-surfaces)`);
     if (surface.composition === undefined) throw new Error(`${where}: surface requires a composition`);

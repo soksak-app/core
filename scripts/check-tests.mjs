@@ -1567,6 +1567,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1073",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "must have a schema of type object and null whose state is one of" },
+      { file: "packages/sok/go/src/manifest.go", symbol: "must have a schema of type object and null whose state is one of" },
+      { file: "packages/sok/rust/src/manifest.rs", symbol: "must have a schema of type object and null whose state is one of" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/manifest-validation.test.mjs", id: "manifest validation" },
+      { file: "packages/sok/go/tests/manifest_cases_test.go", id: "TestPluginInstallReplaysTheManifestCases" },
+      { file: "packages/sok/rust/tests/manifest_cases_test.rs", id: "plugin_install_replays_the_manifest_cases" },
+    ],
+    expected: "A surface names its program state through a status of its exposes whose schema holds the states idle, working and blocked, and the manifest checks of each reader refuse another form with the texts of docs/spec/program-state.md.",
+    levels: ["unit"],
+  },
+  {
     id: "F982",
     implementation: [
       { file: "packages/plugin-api/index.js", symbol: "activity must be true" },
