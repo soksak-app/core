@@ -301,14 +301,14 @@ func TestCommandsListsTheDeclaredCommandsInOrder(t *testing.T) {
 	}
 }
 
-// No command of sok needs administrator rights: the path entry command is gone, and no source of the command line, the host or the
-// mygo workbench starts sudo (docs/spec/cli.md#agents-in-the-application).
+// No command of sok needs administrator rights: the path entry command is gone, and no source of the command line starts sudo
+// (docs/spec/cli.md#agents-in-the-application). scripts/test/administrator-rights.test.mjs judges the sources of the hosts.
 // contract: cli.no-administrator-rights
 func TestNoCommandNeedsAdministratorRights(t *testing.T) {
 	if code, stdout, stderr := run("path", "install"); code != 2 || stdout != "" || !strings.HasPrefix(stderr, "sok: unknown command: path\n") {
 		t.Fatalf("code %d stdout %q stderr %q", code, stdout, stderr)
 	}
-	for _, folder := range []string{"../src", "../../../host/go/src", "../../../workbench-mygo/src"} {
+	for _, folder := range []string{"../src"} {
 		err := filepath.WalkDir(folder, func(path string, entry fs.DirEntry, err error) error {
 			if err != nil || entry.IsDir() || !strings.HasSuffix(path, ".go") {
 				return err
