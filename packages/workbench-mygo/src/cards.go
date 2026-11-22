@@ -900,6 +900,14 @@ func (s *Shell) drawSurfaceStatus(c *ui.Context, card, tab string) {
 			p.StrokePath(&ring, border, color)
 		})
 		ui.Text(c, text).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).FontSize(s.textCaption()).TextColor(color).Label(text).Tooltip(text)
+		if phase == "error" {
+			// The control reloads the view of the failed tab through core.tab.reload (docs/spec/native-surfaces.md#view-surfaces).
+			retry := s.binder.Press(c, "core.surface.reload", "core.tab.reload", tab, tabParam{Tab: tab})
+			s.dressHeadButton(retry, "다시 불러오기", false)
+			retry.Label("다시 불러오기").Children(func() {
+				ui.Text(c, "다시 불러오기").SingleLine().FontSize(s.textCaption()).TextColor(s.palette.Muted)
+			})
+		}
 	})
 }
 

@@ -70,3 +70,36 @@ func firstSurfaceOf(stored *surfaceHost, t *testing.T) string {
 	t.Fatal("the stored window has no surface")
 	return ""
 }
+
+// A failed surface shows the control that runs core.tab.reload of its tab.
+// contract: view.reload.restarts-once
+func TestTheFailedSurfaceShowsAReloadControlThatRunsTheCommand(t *testing.T) {
+	stored := &surfaceHost{window: workbench.WindowView{Visible: true, Scale: 2, Width: 1200, Height: 800}}
+	var reloaded []string
+	stored.extra = map[string]workbench.HostCall{"viewReload": func(_ context.Context, argument json.RawMessage) (any, error) {
+		var req struct {
+			Surface string `json:"surface"`
+		}
+		if err := json.Unmarshal(argument, &req); err != nil {
+			return nil, err
+		}
+		reloaded = append(reloaded, req.Surface)
+		return nil, nil
+	}}
+	f := surfaceShellOn(t, installedDocument, stored)
+	id := firstSurfaceOf(stored, t)
+	f.settle()
+	f.shell.Event("view-stopped", []any{map[string]any{"surface": id, "plugin": "textprobe", "reason": "the view failed"}})
+	f.pending.drain(t)
+	f.tester.Frame()
+	if err := f.tester.Click("다시 불러오기"); err != nil {
+		t.Fatalf("the failed surface has no reload control: %v", err)
+	}
+	// The failed view writes its record, which settle would refuse, so the pending steps drain without it.
+	f.pending.drain(t)
+	f.tester.Frame()
+	f.pending.drain(t)
+	if !slices.Equal(reloaded, []string{id}) {
+		t.Fatalf("the control reloaded %v, want one reload of %s", reloaded, id)
+	}
+}
