@@ -191,7 +191,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
 - [~] F1062 — P1, F1045 다음: surface는 어떤 tab도 갖지 않고 그 surface가 소유하는 session을 열고, 요청이 있을 때 tab이 그것을 보인다. 그래서 agent group은 화면의 자리 없이 member를 시작한다. 남은 일: F1062-2부터 F1062-4. 기다리는 것: 없음.
   - [o] F1062-1 — specification은 owned session을 정한다: manifest member `sessions`, `core.session.open`, `resize`, `end`, `core.layout.open`의 open argument `session`, status `core.sessions`, event, owner와 restart 규칙, occlusion 예외.
   - [ ] F1062-2 — kit의 term list에 owned session과 owner를 넣는다.
-  - [ ] F1062-3 — page와 mygo workbench와 host가 command, status, event를 Red/Green test와 함께 구현한다.
+  - [o] F1062-3 — page와 mygo workbench와 host가 command, status, event를 Red/Green test와 함께 구현한다.
   - [ ] F1062-4 — terminal plugin과 그 sidecar가 `sessions`를 선언하고 owned session을 연다. 각 저장소의 체크리스트에 기록한다.
 - [o] F1060 — P1: mygo와 page workbench는 이전 형식 `<device>:<inode>`의 저장된 project identity를 알아보고 자기 오류로 거부했고, 이는 이전 저장 형식을 읽는 코드다. Go와 Rust host의 `projects.json` reader는 identity를 만드는 코드 옆에서, identity가 platform 형식이 아닌 기록을 `projects.json: project <root> has the identity <identity>, not <volume UUID>:<inode>`로 거부하고, workbench의 분기는 지운다.
 - [o] F1061 — P2, F1036의 후속: 한국어 문서가 계획, 파일 이름, identifier를 만드는 일에 동사 `짓다`를 썼고, 이는 실제 동작을 말하지 않는다. 문서는 동작(`만든다`, `정한다`)을 말하고, figurative verb check는 `거짓`, `몸짓`, `꼭짓점`, `남짓`, `관련짓다`, `짝을 짓다`, `이름 짓다` 밖의 `짓다`를 보고한다.
