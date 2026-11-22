@@ -61,7 +61,8 @@ commands:
                             prints the messages of the agent conversation of the working directory, read from its session file
   message send [--reply [--answers TOKEN]] FOLDER TEXT
                             writes TEXT as a message of the surface of this process into the folder FOLDER, and prints its file name and the hold of the receiver; sok message send FOLDER TEXT adds to TEXT the request to report the result with sok message send --reply to the folder of the sender, so a sender writes no request; a report is sent with --reply, which adds none, and a report is never answered.
-  registry build DIRECTORY  checks a registry and writes its index.json
+  registry build DIRECTORY [--previous INDEX]
+                            checks a registry and writes its index.json; with --previous, releases that the published index INDEX lists unchanged are not read
   registry use INDEX        sets the registry index that installation reads
   plugin install|update|remove|enable|disable ID
                             changes the installed plugins of the configuration directory
@@ -87,7 +88,7 @@ var booleans = map[string]bool{"watch": true, "activate": true, "help": true, "f
 var options = map[string]bool{
 	"config-dir": true, "window": true, "project": true, "surface": true, "index": true, "value": true, "event": true,
 	"wait": true, "bundle": true, "target": true, "x": true, "y": true, "phase": true, "platform": true, "button": true, "pointer": true, "delta-x": true, "clicks": true, "delta-y": true, "points": true, "key": true, "text": true, "reason": true, "modifiers": true, "selection": true, "replacement": true,
-	"level": true, "layer": true, "session": true, "cid": true, "from": true, "to": true,
+	"level": true, "layer": true, "session": true, "cid": true, "from": true, "to": true, "previous": true,
 	"channel": true, "class": true, "event-prefix": true, "kind": true, "query": true, "run": true, "order": true, "limit": true, "after": true, "around": true, "earlier": true, "later": true, "until": true,
 }
 

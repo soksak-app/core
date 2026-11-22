@@ -18,8 +18,12 @@ import (
 	semver "github.com/Masterminds/semver/v3"
 )
 
-// InstallFormat is the format number of the registry index.
+// InstallFormat is the format number of the registry record that `registry use` writes.
 const InstallFormat = 1
+
+// RegistryIndexFormat is the format number of the registry index. Format 2 records the plugin dependencies of each
+// version in `plugins` (docs/spec/installation.md#registry-index).
+const RegistryIndexFormat = 2
 
 // Installed is the file that holds the installation state inside the configuration directory.
 const Installed = "plugins/installed.json"
@@ -300,7 +304,7 @@ func checkPackageJSONName(where string, value any) error {
 	return nil
 }
 
-func checkSidecarRanges(where string, value any) error {
+func checkDependencyRanges(where string, value any) error {
 	m, err := object(where, value)
 	if err != nil {
 		return err
@@ -433,7 +437,7 @@ func ManifestDependencies(manifest map[string]any) (map[string]string, error) {
 	if !ok {
 		return ranges, nil
 	}
-	if err := checkSidecarRanges("plugin.json dependencies", raw); err != nil {
+	if err := checkDependencyRanges("plugin.json dependencies", raw); err != nil {
 		return nil, err
 	}
 	for name, rng := range raw.(map[string]any) {
@@ -497,7 +501,8 @@ type Release struct {
 	SHA256 string `json:"sha256"`
 }
 
-// PluginVersion is one plugin version of the registry.
+// PluginVersion is one plugin version of the registry. Plugins holds the plugin dependencies of the version, which the
+// index records and an entry does not.
 type PluginVersion struct {
 	Version string  `json:"version"`
 	Release Release `json:"release"`
@@ -505,6 +510,7 @@ type PluginVersion struct {
 		Soksak string `json:"soksak"`
 	} `json:"engines"`
 	Sidecars map[string]string `json:"sidecars"`
+	Plugins  map[string]string `json:"plugins"`
 }
 
 // RegistryPlugin is a plugin entry of the registry.
@@ -599,8 +605,15 @@ func entryWhere(kind string, m map[string]any, key string) string {
 	return kind
 }
 
-// ValidateRegistryPlugin checks one plugin entry of the registry (`plugins/<id>.json`).
+// ValidateRegistryPlugin checks one plugin entry of the registry (`plugins/<id>.json`). An entry holds no plugin
+// dependencies; the index records them.
 func ValidateRegistryPlugin(value any) error {
+	return validateRegistryPlugin(value, false)
+}
+
+// validateRegistryPlugin checks one plugin entry, or one plugin of a registry index when indexed is true. An index
+// version holds the `plugins` record of its plugin dependencies.
+func validateRegistryPlugin(value any, indexed bool) error {
 	entry, err := object("registry plugin", value)
 	if err != nil {
 		return err
@@ -637,7 +650,11 @@ func ValidateRegistryPlugin(value any) error {
 		if err != nil {
 			return err
 		}
-		if err := only(where+" version", item, "engines", "release", "sidecars", "version"); err != nil {
+		fields := []string{"engines", "release", "sidecars", "version"}
+		if indexed {
+			fields = append(fields, "plugins")
+		}
+		if err := only(where+" version", item, fields...); err != nil {
 			return err
 		}
 		if err := checkVersion(where+" version", item["version"]); err != nil {
@@ -661,8 +678,13 @@ func ValidateRegistryPlugin(value any) error {
 		if err := checkReleaseEntry(where+" "+version+" release", item["release"]); err != nil {
 			return err
 		}
-		if err := checkSidecarRanges(where+" "+version+" sidecars", item["sidecars"]); err != nil {
+		if err := checkDependencyRanges(where+" "+version+" sidecars", item["sidecars"]); err != nil {
 			return err
+		}
+		if indexed {
+			if err := checkDependencyRanges(where+" "+version+" plugins", item["plugins"]); err != nil {
+				return err
+			}
 		}
 	}
 	if len(seen) == 0 {
@@ -925,13 +947,13 @@ func ValidateRegistryIndex(value any) (*Index, error) {
 			return nil, err
 		}
 	}
-	if !isOne(root["format"]) {
-		return nil, fmt.Errorf("registry index: format must be %d", InstallFormat)
+	if format, ok := root["format"].(json.Number); !ok || format.String() != strconv.Itoa(RegistryIndexFormat) {
+		return nil, fmt.Errorf("registry index: format must be %d, found %v", RegistryIndexFormat, root["format"])
 	}
 	for _, list := range []struct {
 		name     string
 		validate func(any) error
-	}{{"packs", ValidateRegistryPack}, {"plugins", ValidateRegistryPlugin}, {"sidecars", ValidateRegistrySidecar}} {
+	}{{"packs", ValidateRegistryPack}, {"plugins", func(value any) error { return validateRegistryPlugin(value, true) }}, {"sidecars", ValidateRegistrySidecar}} {
 		items, err := array("registry index "+list.name, root[list.name])
 		if err != nil {
 			return nil, err
@@ -1113,7 +1135,7 @@ func ValidateInstalled(value any) (*InstalledState, error) {
 				return nil, err
 			}
 		}
-		if err := checkSidecarRanges(where+" sidecars", item["sidecars"]); err != nil {
+		if err := checkDependencyRanges(where+" sidecars", item["sidecars"]); err != nil {
 			return nil, err
 		}
 		version, err := checkedVersion(where+" version", item["version"])

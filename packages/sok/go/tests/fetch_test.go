@@ -128,7 +128,7 @@ func TestOtherSchemesAreRejected(t *testing.T) {
 
 // contract: fetch.https.reads-a-tls-response
 func TestRegistryUseRecordsAnHTTPSIndex(t *testing.T) {
-	index := `{"format":1,"plugins":[],"sidecars":[],"packs":[],"revoked":{"plugins":[],"sidecars":[]}}`
+	index := `{"format":2,"plugins":[],"sidecars":[],"packs":[],"revoked":{"plugins":[],"sidecars":[]}}`
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, index)
 	}))
@@ -146,7 +146,7 @@ func TestRegistryUseRecordsAnHTTPSIndex(t *testing.T) {
 }
 
 // emptyIndex is the smallest registry index that the checks of reading an index serve.
-const emptyIndex = `{"format":1,"plugins":[],"sidecars":[],"packs":[],"revoked":{"plugins":[],"sidecars":[]}}`
+const emptyIndex = `{"format":2,"plugins":[],"sidecars":[],"packs":[],"revoked":{"plugins":[],"sidecars":[]}}`
 
 // indexServer is a TLS server of the check that serves emptyIndex with an ETag and answers a request that sends that ETag
 // with 304. It counts the connections, the requests and the bodies that it sent.

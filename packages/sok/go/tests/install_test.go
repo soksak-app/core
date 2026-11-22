@@ -33,7 +33,19 @@ func sidecarJSON() string {
 }
 
 func indexJSON() string {
-	return `{"format": 1, "plugins": [` + pluginJSON() + `], "sidecars": [` + sidecarJSON() + `],
+	// An index version records its plugin dependencies, which the entry of pluginJSON does not hold.
+	entry, err := sok.DecodeJSON([]byte(pluginJSON()))
+	if err != nil {
+		panic(err)
+	}
+	for _, raw := range entry.(map[string]any)["versions"].([]any) {
+		raw.(map[string]any)["plugins"] = map[string]any{}
+	}
+	plugin, err := json.Marshal(entry)
+	if err != nil {
+		panic(err)
+	}
+	return `{"format": 2, "plugins": [` + string(plugin) + `], "sidecars": [` + sidecarJSON() + `],
 		"packs": [{"name": "starter", "description": "처음 설치하는 plugin.", "plugins": ["probe"]}],
 		"revoked": {"plugins": [{"id": "probe", "version": "0.3.0", "reason": "breaks saved spaces"}], "sidecars": []}}`
 }
@@ -249,13 +261,16 @@ func TestRegistryIndexChecksNamesPacksSidecarRangesAndRevokedVersions(t *testing
 	duplicate := decode(t, indexJSON())
 	other := decode(t, pluginJSON())
 	other.(map[string]any)["id"] = "other"
+	for _, raw := range at(other, "versions").([]any) {
+		raw.(map[string]any)["plugins"] = map[string]any{}
+	}
 	duplicate.(map[string]any)["plugins"] = append(at(duplicate, "plugins").([]any), other)
 	_, err = sok.ValidateRegistryIndex(duplicate)
 	rejects(t, err, "registry index: package @scope/plugin-probe appears twice")
 	format := decode(t, indexJSON())
-	format.(map[string]any)["format"] = json.Number("2")
+	format.(map[string]any)["format"] = json.Number("1")
 	_, err = sok.ValidateRegistryIndex(format)
-	rejects(t, err, "registry index: format must be 1")
+	rejects(t, err, "registry index: format must be 2, found 1")
 }
 
 func versions(selection *sok.Selection) []string {

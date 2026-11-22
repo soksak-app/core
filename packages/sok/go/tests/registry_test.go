@@ -4,12 +4,18 @@ package tests
 
 import (
 	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/soksak-app/core/packages/sok/go/src"
 	"github.com/soksak-app/core/packages/sok/go/tests/support"
@@ -52,13 +58,13 @@ func TestRegistryBuildWritesTheIndexAfterCheckingEveryRelease(t *testing.T) {
 		t.Fatalf("code %d stderr %q", code, stderr)
 	}
 	index := filepath.Join(dir, "index.json")
-	if want := "{\n  \"core\": 0,\n  \"index\": \"" + index + "\",\n  \"packs\": 1,\n  \"plugins\": 1,\n  \"sidecars\": 1\n}\n"; stdout != want {
+	if want := "{\n  \"carried\": 0,\n  \"core\": 0,\n  \"index\": \"" + index + "\",\n  \"packs\": 1,\n  \"plugins\": 1,\n  \"read\": 2,\n  \"sidecars\": 1\n}\n"; stdout != want {
 		t.Fatalf("stdout %q, want %q", stdout, want)
 	}
 	pluginRelease, pluginHash, _ := strings.Cut(plugin, " ")
 	sidecarRelease, sidecarHash, _ := strings.Cut(sidecar, " ")
 	want := `{
-  "format": 1,
+  "format": 2,
   "plugins": [
     {
       "id": "probe",
@@ -79,7 +85,8 @@ func TestRegistryBuildWritesTheIndexAfterCheckingEveryRelease(t *testing.T) {
           },
           "sidecars": {
             "@scope/sidecar-worker": "^0.1.0"
-          }
+          },
+          "plugins": {}
         }
       ]
     }
@@ -368,5 +375,179 @@ func TestRegistryBuildRejectsMalformedCoreReleasesWithoutWritingTheIndex(t *test
 		if _, err := os.Stat(filepath.Join(dir, "index.json")); !os.IsNotExist(err) {
 			t.Fatalf("a failed build wrote index.json: %v", err)
 		}
+	}
+}
+
+// contract: cli.registry.carries-unchanged-releases
+func TestRegistryBuildCarriesUnchangedReleasesWithTheHashOfThePreviousIndex(t *testing.T) {
+	platform, err := sok.CurrentPlatform()
+	if err != nil {
+		t.Fatal(err)
+	}
+	releases := t.TempDir()
+	plugin := support.PackRelease(t, pluginTree(t), releases)
+	sidecar := support.PackRelease(t, sidecarTree(t, "0.1.0"), releases)
+	served := map[string]string{
+		"/plugin-0.2.0.tgz":        plugin["release"],
+		"/sidecar-0.1.0.tgz":       sidecar["release"],
+		"/sidecar-0.1.0-moved.tgz": sidecar["release"],
+	}
+	var mu sync.Mutex
+	silent := false
+	var published []byte
+	requests := map[string]int{}
+	stop := make(chan struct{})
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		requests[r.URL.Path]++
+		never := silent && r.URL.Path == "/plugin-0.2.0.tgz"
+		body := published
+		mu.Unlock()
+		switch {
+		case never:
+			// The release of the unchanged plugin version never answers, so a build that reads it stalls.
+			select {
+			case <-r.Context().Done():
+			case <-stop:
+			}
+		case r.URL.Path == "/index.json" && body != nil:
+			w.Write(body)
+		case served[r.URL.Path] != "":
+			data, err := os.ReadFile(served[r.URL.Path])
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Write(data)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	t.Cleanup(func() { close(stop) })
+	pool := x509.NewCertPool()
+	pool.AddCert(server.Certificate())
+	defer func(previous sok.Fetcher) { sok.DefaultFetcher = previous }(sok.DefaultFetcher)
+	sok.DefaultFetcher.TLS = &tls.Config{RootCAs: pool}
+	sok.DefaultFetcher.Release.Timeout = 2 * time.Second
+
+	dir := t.TempDir()
+	writeTree(t, dir, map[string]string{
+		"plugins/probe.json": `{"id": "probe", "package": "@scope/plugin-probe", "name": "Probe", "description": "검사용 plugin.",
+			"license": "MIT", "repository": "https://example.invalid/probe", "versions": [{"version": "0.2.0",
+			"release": {"url": "` + server.URL + `/plugin-0.2.0.tgz", "sha256": "` + plugin["sha256"] + `"},
+			"engines": {"soksak": "^0.0.2"}, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}}]}`,
+		"sidecars/scope-sidecar-worker.json": `{"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker",
+			"versions": [{"version": "0.1.0", "protocol": 1, "releases": {"` + platform + `":
+			{"url": "` + server.URL + `/sidecar-0.1.0.tgz", "sha256": "` + sidecar["sha256"] + `"}}}]}`,
+		"packs/starter.json": `{"name": "starter", "description": "처음 설치하는 plugin.", "plugins": ["probe"]}`,
+		"revoked.json":       `{"plugins": [], "sidecars": []}`,
+	})
+	succeeds(t, "registry", "build", dir)
+	data, err := os.ReadFile(filepath.Join(dir, "index.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	published = data
+	silent = true
+	requests = map[string]int{}
+	mu.Unlock()
+
+	// The sidecar release moves to a new address with the same bytes, so its entry changed; the plugin entry did not.
+	replaceIn(t, filepath.Join(dir, "sidecars/scope-sidecar-worker.json"), "/sidecar-0.1.0.tgz", "/sidecar-0.1.0-moved.tgz", 1)
+	code, stdout, stderr := run("registry", "build", dir, "--previous", server.URL+"/index.json")
+	if code != 0 {
+		t.Fatalf("code %d stderr %q", code, stderr)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if requests["/plugin-0.2.0.tgz"] != 0 || requests["/sidecar-0.1.0.tgz"] != 0 || requests["/sidecar-0.1.0-moved.tgz"] != 1 {
+		t.Fatalf("release requests %v, want only the changed sidecar release once", requests)
+	}
+	if want := "{\n  \"carried\": 1,\n  \"core\": 0,\n  \"index\": \"" + filepath.Join(dir, "index.json") + "\",\n  \"packs\": 1,\n  \"plugins\": 1,\n  \"read\": 1,\n  \"sidecars\": 1\n}\n"; stdout != want {
+		t.Fatalf("stdout %q, want %q", stdout, want)
+	}
+}
+
+// contract: cli.registry.rejects-a-previous-index-without-writing
+func TestRegistryBuildRejectsAPreviousIndexThatIsMissingOrInvalidWithoutWritingTheIndex(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/invalid.json":
+			w.Write([]byte(`{"format": 1}`))
+			return
+		case "/format1.json":
+			// The index of the earlier format, with no plugin dependencies recorded.
+			w.Write([]byte(`{"format": 1, "plugins": [], "sidecars": [], "packs": [], "revoked": {"plugins": [], "sidecars": []}}`))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(server.Close)
+	pool := x509.NewCertPool()
+	pool.AddCert(server.Certificate())
+	defer func(previous sok.Fetcher) { sok.DefaultFetcher = previous }(sok.DefaultFetcher)
+	sok.DefaultFetcher.TLS = &tls.Config{RootCAs: pool}
+	for _, location := range []string{server.URL + "/missing.json", server.URL + "/invalid.json", server.URL + "/format1.json", "relative/index.json"} {
+		dir, _, _ := registryTree(t)
+		code, _, stderr := run("registry", "build", dir, "--previous", location)
+		if code != 1 || !strings.Contains(stderr, location) {
+			t.Fatalf("%s: code %d stderr %q", location, code, stderr)
+		}
+		if _, err := os.Stat(filepath.Join(dir, "index.json")); !os.IsNotExist(err) {
+			t.Fatalf("%s: a failed build wrote index.json: %v", location, err)
+		}
+	}
+}
+
+// contract: cli.registry.checks-carried-dependencies
+func TestRegistryBuildJudgesCarriedPluginVersionsByTheirRecordedDependencies(t *testing.T) {
+	// ext 1.0.0 depends on the plugin base with ^1.0.0, and base lists 1.0.0 and 2.0.0.
+	dir := dependencyRegistry(t, base("1.0.0"), base("2.0.0"), ext("^1.0.0"))
+	succeeds(t, "registry", "build", dir)
+	index := filepath.Join(dir, "index.json")
+	previous := filepath.Join(t.TempDir(), "previous.json")
+	data, err := os.ReadFile(index)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(previous, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// base 1.0.0 leaves the entries. ext 1.0.0 is unchanged, so it is carried, and its dependency has no listed version.
+	removeVersion(t, filepath.Join(dir, "plugins/base.json"), "1.0.0")
+	if err := os.Remove(index); err != nil {
+		t.Fatal(err)
+	}
+	code, _, stderr := run("registry", "build", dir, "--previous", "file://"+previous)
+	if want := "sok: ext 1.0.0: plugin dependency @scope/plugin-base ^1.0.0 is satisfied by no listed version\n"; code != 1 || stderr != want {
+		t.Fatalf("code %d stderr %q, want %q", code, stderr, want)
+	}
+	if exists(index) {
+		t.Fatal("a failed build wrote index.json")
+	}
+}
+
+// removeVersion deletes the version of the plugin entry at path.
+func removeVersion(t *testing.T, path, version string) {
+	t.Helper()
+	var entry map[string]any
+	if err := json.Unmarshal([]byte(readText(t, path)), &entry); err != nil {
+		t.Fatal(err)
+	}
+	var kept []any
+	for _, raw := range entry["versions"].([]any) {
+		if raw.(map[string]any)["version"] != version {
+			kept = append(kept, raw)
+		}
+	}
+	entry["versions"] = kept
+	data, err := json.Marshal(entry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
 	}
 }

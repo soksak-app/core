@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -254,17 +255,107 @@ func checkPluginRelease(index *Index, plugin *RegistryPlugin, version *PluginVer
 	if !maps.Equal(sidecars, version.Sidecars) {
 		return fmt.Errorf("%s: plugin.json dependencies %s differ from the entry %s", where, quote(sidecars), quote(version.Sidecars))
 	}
-	for _, name := range sortedNames(plugins) {
-		provider := index.Plugins[slices.IndexFunc(index.Plugins, func(entry RegistryPlugin) bool { return entry.Package == name })]
-		if !slices.ContainsFunc(provider.Versions, func(candidate PluginVersion) bool { return Satisfies(candidate.Version, plugins[name]) }) {
-			return fmt.Errorf("%s %s: plugin dependency %s %s is satisfied by no listed version", plugin.ID, version.Version, name, plugins[name])
+	version.Plugins = plugins
+	return checkPluginDependencies(index, plugin, version)
+}
+
+// checkPluginDependencies judges the plugin dependencies that a plugin version records in the index: each names a listed
+// plugin, and a listed version of that plugin satisfies its range. A read version and a carried version are judged alike,
+// so a carried version whose dependency has no listed version fails the build.
+func checkPluginDependencies(index *Index, plugin *RegistryPlugin, version *PluginVersion) error {
+	for _, name := range sortedNames(version.Plugins) {
+		i := slices.IndexFunc(index.Plugins, func(entry RegistryPlugin) bool { return entry.Package == name })
+		if i < 0 {
+			return fmt.Errorf("%s %s: dependency %s is neither a plugin nor a sidecar of the registry", plugin.ID, version.Version, name)
+		}
+		rng := version.Plugins[name]
+		if !slices.ContainsFunc(index.Plugins[i].Versions, func(candidate PluginVersion) bool { return Satisfies(candidate.Version, rng) }) {
+			return fmt.Errorf("%s %s: plugin dependency %s %s is satisfied by no listed version", plugin.ID, version.Version, name, rng)
 		}
 	}
 	return nil
 }
 
-// BuildRegistry checks the registry folder, writes index.json and returns its path and the number of entries.
-func BuildRegistry(dir string) (map[string]any, error) {
+// readPreviousIndex reads the index that a previous publication wrote from location and checks it as a registry index.
+// A failure names location, and the caller writes nothing.
+func readPreviousIndex(location string) (*Index, error) {
+	data, err := DefaultFetcher.ReadIndex(location)
+	if err != nil {
+		return nil, fmt.Errorf("previous index: %w", err)
+	}
+	value, err := DecodeJSON(data)
+	if err != nil {
+		return nil, fmt.Errorf("previous index %s is not valid JSON: %w", location, err)
+	}
+	index, err := ValidateRegistryIndex(value)
+	if err != nil {
+		return nil, fmt.Errorf("previous index %s: %w", location, err)
+	}
+	return index, nil
+}
+
+// listedPlugin returns the version of the previous index that has the same plugin identity and version record as version,
+// or nil when the previous index does not list it. Such a release keeps the hash that the previous build checked, and
+// its recorded plugin dependencies are carried with it.
+func listedPlugin(previous *Index, plugin *RegistryPlugin, version *PluginVersion) *PluginVersion {
+	if previous == nil {
+		return nil
+	}
+	i := slices.IndexFunc(previous.Plugins, func(entry RegistryPlugin) bool { return entry.ID == plugin.ID })
+	if i < 0 {
+		return nil
+	}
+	old := &previous.Plugins[i]
+	if old.Package != plugin.Package || old.Name != plugin.Name || old.Repository != plugin.Repository {
+		return nil
+	}
+	j := slices.IndexFunc(old.Versions, func(candidate PluginVersion) bool { return candidate.Version == version.Version })
+	if j < 0 {
+		return nil
+	}
+	listed := &old.Versions[j]
+	if listed.Release != version.Release || listed.Engines != version.Engines || !maps.Equal(listed.Sidecars, version.Sidecars) {
+		return nil
+	}
+	return listed
+}
+
+// carriedSidecar reports whether the previous index lists the release of one platform of the sidecar version with the
+// same identity, version and protocol.
+func carriedSidecar(previous *Index, sidecar *RegistrySidecar, version *SidecarVersion, platform string, release Release) bool {
+	if previous == nil {
+		return false
+	}
+	i := slices.IndexFunc(previous.Sidecars, func(entry RegistrySidecar) bool { return entry.Name == sidecar.Name })
+	if i < 0 || previous.Sidecars[i].Repository != sidecar.Repository {
+		return false
+	}
+	j := slices.IndexFunc(previous.Sidecars[i].Versions, func(candidate SidecarVersion) bool { return candidate.Version == version.Version })
+	if j < 0 {
+		return false
+	}
+	listed := previous.Sidecars[i].Versions[j]
+	listedRelease, ok := listed.Releases[platform]
+	return ok && listed.Protocol == version.Protocol && listedRelease == release
+}
+
+// carriedCore reports whether the previous index lists the release of one key of the core version.
+func carriedCore(previous *Index, version *CoreRelease, key string, release Release) bool {
+	if previous == nil || previous.Core == nil {
+		return false
+	}
+	j := slices.IndexFunc(previous.Core.Versions, func(candidate CoreRelease) bool { return candidate.Version == version.Version })
+	if j < 0 {
+		return false
+	}
+	listed, ok := previous.Core.Versions[j].Releases[key]
+	return ok && listed == release
+}
+
+// BuildRegistry checks the registry folder, writes index.json and returns its path and the counts of its entries and of
+// the releases that it read and carried. A nil previous index is a first build that reads every release
+// (docs/spec/registry.md#build).
+func BuildRegistry(dir string, previous *Index) (map[string]any, error) {
 	plugins, err := readEntries(dir, "plugins", ValidateRegistryPlugin, func(m map[string]any) (string, error) { return m["id"].(string), nil })
 	if err != nil {
 		return nil, err
@@ -281,7 +372,15 @@ func BuildRegistry(dir string) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	root := map[string]any{"format": json.Number("1"), "plugins": plugins, "sidecars": sidecars, "packs": packs, "revoked": revoked}
+	// Each version records its plugin dependencies in the index, which an entry does not hold. The record is set below,
+	// after the index is read: a carried version takes the record of the previous index, and a read version takes the
+	// dependencies of its plugin.json. The placeholder only satisfies the index validation.
+	for _, entry := range plugins {
+		for _, raw := range entry.(map[string]any)["versions"].([]any) {
+			raw.(map[string]any)["plugins"] = map[string]any{}
+		}
+	}
+	root := map[string]any{"format": json.Number(strconv.Itoa(RegistryIndexFormat)), "plugins": plugins, "sidecars": sidecars, "packs": packs, "revoked": revoked}
 	// A registry without core.json lists no core release.
 	if _, err := os.Stat(filepath.Join(dir, "core.json")); err == nil {
 		if root["core"], err = readJSONFile(dir, "core.json"); err != nil {
@@ -298,18 +397,37 @@ func BuildRegistry(dir string) (map[string]any, error) {
 	slices.SortFunc(index.Plugins, func(a, b RegistryPlugin) int { return strings.Compare(a.ID, b.ID) })
 	slices.SortFunc(index.Sidecars, func(a, b RegistrySidecar) int { return strings.Compare(a.Name, b.Name) })
 	slices.SortFunc(index.Packs, func(a, b RegistryPack) int { return strings.Compare(a.Name, b.Name) })
+	read, carried := 0, 0
 	for i := range index.Plugins {
 		plugin := &index.Plugins[i]
 		for j := range plugin.Versions {
-			if err := checkPluginRelease(index, plugin, &plugin.Versions[j]); err != nil {
+			version := &plugin.Versions[j]
+			if listed := listedPlugin(previous, plugin, version); listed != nil {
+				carried++
+				version.Plugins = listed.Plugins
+				if err := checkPluginDependencies(index, plugin, version); err != nil {
+					return nil, err
+				}
+				continue
+			}
+			read++
+			if err := checkPluginRelease(index, plugin, version); err != nil {
 				return nil, err
 			}
 		}
 	}
-	for _, sidecar := range index.Sidecars {
-		for _, version := range sidecar.Versions {
+	for i := range index.Sidecars {
+		sidecar := &index.Sidecars[i]
+		for j := range sidecar.Versions {
+			version := &sidecar.Versions[j]
 			for _, platform := range slices.Sorted(maps.Keys(version.Releases)) {
-				if _, err := readRelease("sidecar "+sidecar.Name+" "+version.Version+" "+platform, version.Releases[platform]); err != nil {
+				release := version.Releases[platform]
+				if carriedSidecar(previous, sidecar, version, platform, release) {
+					carried++
+					continue
+				}
+				read++
+				if _, err := readRelease("sidecar "+sidecar.Name+" "+version.Version+" "+platform, release); err != nil {
 					return nil, err
 				}
 			}
@@ -318,10 +436,17 @@ func BuildRegistry(dir string) (map[string]any, error) {
 	cores := 0
 	if index.Core != nil {
 		slices.SortFunc(index.Core.Versions, func(a, b CoreRelease) int { return strings.Compare(a.Version, b.Version) })
-		for _, version := range index.Core.Versions {
+		for i := range index.Core.Versions {
+			version := &index.Core.Versions[i]
 			cores++
 			for _, key := range slices.Sorted(maps.Keys(version.Releases)) {
-				if _, err := readRelease("core "+version.Version+" "+key, version.Releases[key]); err != nil {
+				release := version.Releases[key]
+				if carriedCore(previous, version, key, release) {
+					carried++
+					continue
+				}
+				read++
+				if _, err := readRelease("core "+version.Version+" "+key, release); err != nil {
 					return nil, err
 				}
 			}
@@ -338,7 +463,7 @@ func BuildRegistry(dir string) (map[string]any, error) {
 	if err := replaceFile(path, out.Bytes()); err != nil {
 		return nil, err
 	}
-	return map[string]any{"index": path, "plugins": len(index.Plugins), "sidecars": len(index.Sidecars), "packs": len(index.Packs), "core": cores}, nil
+	return map[string]any{"index": path, "plugins": len(index.Plugins), "sidecars": len(index.Sidecars), "packs": len(index.Packs), "core": cores, "read": read, "carried": carried}, nil
 }
 
 // runRegistry runs `sok registry build <directory>`.
@@ -357,7 +482,13 @@ func runRegistry(a arguments, stdout io.Writer) error {
 	if len(a.positionals) > 3 {
 		return usage("unexpected argument %s", a.positionals[3])
 	}
-	result, err := BuildRegistry(dir)
+	var previous *Index
+	if location, given := a.values["previous"]; given {
+		if previous, err = readPreviousIndex(location); err != nil {
+			return err
+		}
+	}
+	result, err := BuildRegistry(dir, previous)
 	if err != nil {
 		return err
 	}

@@ -39,16 +39,28 @@ pull request의 검사는 base branch의 script로 pull request의 파일을 데
 - 파일 이름이 항목과 맞지 않거나 파일이 올바른 JSON이 아니다.
 - 항목이 항목 규칙을 어긴다.
 - pull request가 더하거나 바꾸는 항목을 작성자가 소유하지 않는다.
-- pull request의 registry 전체에서 `sok registry build`가 실패한다. 모든 release를 https로 읽어 `sha256`과 비교하고, 각 plugin release는 그 항목의 `plugin.json`과 `package.json`을 담아야 한다.
+- pull request의 registry 전체에서 `sok registry build --previous <게시된 index>`가 실패한다. build가 읽는 모든 release([build](#build))를 https로 읽어 `sha256`과 비교하고, build가 읽는 각 plugin release는 그 항목의 `plugin.json`과 `package.json`을 담아야 한다.
 - `revoked.json`이 철회하지 않은 plugin version의 `engines.soksak` 범위가, `core.json`이 올리고 `revoked.json`이 철회하지 않은 가장 새 core version보다 새 core version을 포함한다. 범위는 그 가장 새 core의 범위 규칙으로 읽고, 그 core의 다음 patch, minor, major version으로 검사한다. core release는 자기용 plugin release보다 먼저 게시되므로, 그런 범위는 그 core가 자기 reader로 검사한 적 없는 manifest의 plugin version을 고르게 한다. 그래서 plugin은 core release마다 version을 게시한다. 범위 `^0.0.z`, 또는 합집합 `<range> || <range>`의 그런 부분이 포함하는 뒤의 `0.0` core, 곧 `0.0.z`부터 `0.1.0` 미만의 core는 그런 오류가 아니다. core의 patch release는 호환 release이고, 그 범위는 자기 줄의 뒤 patch release를 의도로 받기 때문이다.
 
 게시는 `main`의 파일에 같은 검사를 실행한다. core version은 설치가 그것에 고르는 plugin을 검사하지 않고 `core.json`에 들어간다. plugin은 새 core와의 호환을 스스로 맞추고 그 core를 위한 version을 release한다. 올라간 core가 manifest나 소스를 거절하는 plugin은 그 core가 그 plugin만 빼고 오류를 보이며([설치된 plugin 제공](installation.ko.md#설치된-plugin-제공)), plugin이 core가 받아들이는 version을 release할 때까지 그렇다. core의 release는 registry를 읽지 않으며, `core.json`이 아직 올리지 않은 게시된 core release는 제공되지 않는다.
+
+## Build
+
+`sok registry build <directory> [--previous <location>]`([명령행](cli.ko.md#release-registry))는 registry 폴더의 `index.json`을 만든다. `<location>`은 이전 게시가 쓴 index의 https: URL 또는 절대 file: URL이며, 공개 registry에서는 `https://soksak-app.github.io/registry/index.json`이다.
+
+- `--previous`가 없으면 build는 첫 build이다. 폴더의 모든 release를 읽고 검사한다. 게시된 index가 없는 registry만 이 build를 실행한다.
+- `--previous`가 있으면 build는 이전 index를 [가져오기](installation.ko.md#받기) 규칙으로 읽고 registry index로 검사한다. 없거나, 도달할 수 없거나, JSON이 아니거나, 잘못된 이전 index는 `<location>`을 밝힌 오류로 build를 실패시킨다. 그러면 build는 아무것도 쓰지 않으며, 첫 build로 물러서지 않는다.
+- 이전 index가 같은 release를 나열하면 그 release는 이월된다. plugin version은 이전 index가 같은 plugin `id`, `package`, `name`, `repository`와 같은 version 기록(`version`, `release`, `engines`, `sidecars`)을 가질 때 이월된다. sidecar release의 platform별 release는 이전 index가 같은 sidecar `name`, `repository`, 같은 `version`과 `protocol`, 그 platform의 같은 release를 가질 때 이월된다. core release의 key별 release는 이전 index가 같은 core `version`과 그 key의 같은 release를 나열할 때 이월된다. release는 `url`과 `sha256`이 같으면 같은 것이다.
+- 이월된 release는 읽지 않는다. 그 `sha256`은 이전 build가 검사한 hash이며, 나열된 version은 바뀌지 않는다([항목 규칙](#항목-규칙)).
+- 그 밖의 release는 [검사](#검사)와 같이 읽고 검사한다. 새 release이거나, 기록된 사실이 바뀐 release이다.
+- 모든 항목은 여전히 검증되며, index는 전체로 검사되어 한 번에 쓰인다. 각 plugin version은 index의 `plugins`에 plugin 의존을 기록한다([registry index](installation.ko.md#registry-index)). 읽은 release는 그 `plugin.json`의 의존을 기록하고, 이월된 version은 이전 index의 `plugins`를 유지한다. 읽었거나 이월된 모든 plugin version은 같은 의존 검사로 나열된 version과 대조되므로, 의존이 나열된 version을 갖지 못하는 이월된 version은 build를 실패시킨다.
+- `format`이 2가 아니거나 plugin version에 `plugins`가 없는 이전 index는 `<location>`을 밝힌 오류로 build를 실패시킨다. 그러므로 이 형식 변경의 게시는 `--previous` 없이 한 번의 첫 build를 실행하고, 이후 build는 그 build가 게시한 index를 넘긴다.
 
 ## Merge와 게시
 
 - `validate.yml`은 `pull_request`에서 읽기 권한만으로 검사를 실행하므로, 관리자는 그 결과와 함께 pull request를 검토한다.
 - registry 관리자는 검사가 통과하고 검토를 마친 pull request를 merge한다.
-- `publish.yml`은 `main`으로의 각 push에서 index를 게시한다. `sok registry build`로 `index.json`을 만들고 GitHub Pages로 배포한다.
+- `publish.yml`은 `main`으로의 각 push에서 index를 게시한다. 게시된 index를 `--previous`로 하여 `sok registry build --previous`로 `index.json`을 만들고 GitHub Pages로 배포한다.
 
 검사와 게시의 `sok`은 workflow가 지정한 core release의 `sok`이다.
 

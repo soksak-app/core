@@ -666,14 +666,17 @@ func jsonText(t *testing.T, value any) string {
 }
 
 // dependencyRegistry writes the entry files of a registry folder with a packed release of each version and the release
-// of sidecar worker 0.1.0, writes index.json from the same entries, and returns the registry folder. The sidecars of
-// the index hold only the dependencies that start with @scope/sidecar-.
+// of sidecar worker 0.1.0, writes index.json from the same entries without checking them, and returns the registry
+// folder. The sidecars of a version hold only the dependencies that start with @scope/sidecar-, and its plugins hold
+// the ones that start with @scope/plugin-. The index is written here so that a test can judge a dependency that the
+// build refuses.
 func dependencyRegistry(t *testing.T, versions ...dependent) string {
 	t.Helper()
 	platform := mustPlatform(t)
 	releases := t.TempDir()
 	type entry = map[string]any
 	plugins := map[string]entry{}
+	pluginDeps := map[string]map[string]string{}
 	var ids []string
 	for _, item := range versions {
 		dir := t.TempDir()
@@ -696,6 +699,13 @@ func dependencyRegistry(t *testing.T, versions ...dependent) string {
 		}
 		plugins[item.id]["versions"] = append(plugins[item.id]["versions"].([]any), entry{"version": item.version,
 			"release": entry{"url": "file://" + result["release"], "sha256": result["sha256"]}, "engines": entry{"soksak": "^0.0.2"}, "sidecars": sidecars})
+		deps := map[string]string{}
+		for name, rng := range item.dependencies {
+			if strings.HasPrefix(name, "@scope/plugin-") {
+				deps[name] = rng
+			}
+		}
+		pluginDeps[item.id+" "+item.version] = deps
 	}
 	sidecar := support.PackRelease(t, sidecarTree(t, "0.1.0"), releases)
 	worker := entry{"name": "@scope/sidecar-worker", "repository": "https://example.invalid/worker", "versions": []any{entry{"version": "0.1.0",
@@ -706,9 +716,24 @@ func dependencyRegistry(t *testing.T, versions ...dependent) string {
 	list := []any{}
 	for _, id := range ids {
 		files["plugins/"+id+".json"] = jsonText(t, plugins[id])
-		list = append(list, plugins[id])
+		// An index version adds the plugins record that an entry does not hold.
+		indexed := entry{}
+		for key, value := range plugins[id] {
+			indexed[key] = value
+		}
+		var versions []any
+		for _, raw := range plugins[id]["versions"].([]any) {
+			version := entry{}
+			for key, value := range raw.(entry) {
+				version[key] = value
+			}
+			version["plugins"] = pluginDeps[id+" "+version["version"].(string)]
+			versions = append(versions, version)
+		}
+		indexed["versions"] = versions
+		list = append(list, indexed)
 	}
-	files["index.json"] = jsonText(t, entry{"format": 1, "plugins": list, "sidecars": []any{worker}, "packs": []any{}, "revoked": revoked})
+	files["index.json"] = jsonText(t, entry{"format": 2, "plugins": list, "sidecars": []any{worker}, "packs": []any{}, "revoked": revoked})
 	registry := t.TempDir()
 	writeTree(t, registry, files)
 	return registry
@@ -986,10 +1011,10 @@ func mismatchedIndex(t *testing.T) string {
 	result := support.PackRelease(t, dir, releases)
 	index := t.TempDir()
 	writeTree(t, index, map[string]string{
-		"index.json": `{"format": 1, "plugins": [{"id": "probe", "package": "@scope/plugin-probe", "name": "Probe", "description": "검사용 plugin.",
+		"index.json": `{"format": 2, "plugins": [{"id": "probe", "package": "@scope/plugin-probe", "name": "Probe", "description": "검사용 plugin.",
 			"license": "MIT", "repository": "https://example.invalid/probe", "versions": [{"version": "0.2.0",
 			"release": {"url": "file://` + result["release"] + `", "sha256": "` + result["sha256"] + `"},
-			"engines": {"soksak": "^0.0.2"}, "sidecars": {}}]}], "sidecars": [], "packs": [],
+			"engines": {"soksak": "^0.0.2"}, "sidecars": {}, "plugins": {}}]}], "sidecars": [], "packs": [],
 			"revoked": {"plugins": [], "sidecars": []}}`,
 	})
 	return filepath.Join(index, "index.json")
@@ -1025,10 +1050,10 @@ func schemaOutsideSubsetIndex(t *testing.T) string {
 	t.Helper()
 	index := t.TempDir()
 	writeTree(t, index, map[string]string{
-		"index.json": `{"format": 1, "plugins": [{"id": "probe", "package": "@scope/plugin-probe", "name": "Probe", "description": "검사용 plugin.",
+		"index.json": `{"format": 2, "plugins": [{"id": "probe", "package": "@scope/plugin-probe", "name": "Probe", "description": "검사용 plugin.",
 			"license": "MIT", "repository": "https://example.invalid/probe", "versions": [{"version": "0.2.0",
 			"release": {"url": "file:///nonexistent/probe-0.2.0.tgz", "sha256": "` + strings.Repeat("0", 64) + `"},
-			"engines": {"soksak": "^0.0.2"}, "sidecars": {}}]}], "sidecars": [], "packs": [],
+			"engines": {"soksak": "^0.0.2"}, "sidecars": {}, "plugins": {}}]}], "sidecars": [], "packs": [],
 			"revoked": {"plugins": [], "sidecars": []}}`,
 	})
 	return filepath.Join(index, "index.json")

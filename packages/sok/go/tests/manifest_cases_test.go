@@ -45,13 +45,13 @@ func indexForRelease(t *testing.T, path, sum string) string {
 	t.Helper()
 	dir := t.TempDir()
 	writeTree(t, dir, map[string]string{
-		"index.json": jsonText(t, map[string]any{"format": 1, "sidecars": []any{}, "packs": []any{},
+		"index.json": jsonText(t, map[string]any{"format": 2, "sidecars": []any{}, "packs": []any{},
 			"revoked": map[string]any{"plugins": []any{}, "sidecars": []any{}},
 			"plugins": []any{map[string]any{"id": "probe", "package": "@scope/plugin-probe", "name": "Probe",
 				"description": "검사용 plugin.", "license": "MIT", "repository": "https://example.invalid/probe",
 				"versions": []any{map[string]any{"version": "0.2.0",
 					"release": map[string]any{"url": "file://" + path, "sha256": sum},
-					"engines": map[string]any{"soksak": "^0.0.2"}, "sidecars": map[string]any{}}}}}}),
+					"engines": map[string]any{"soksak": "^0.0.2"}, "sidecars": map[string]any{}, "plugins": map[string]any{}}}}}}),
 	})
 	return filepath.Join(dir, "index.json")
 }
