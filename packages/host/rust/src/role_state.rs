@@ -129,50 +129,168 @@ fn checked_tab_role<'a>(
     }))
 }
 
-/// Finds the tab in the projects and returns its place. No place is returned for a tab that no stored layout holds.
-fn find_tab_role<'a>(projects: &'a [Value], tab: &str) -> Option<FoundTab<'a>> {
-    for project in projects {
-        let Some(root) = project["root"].as_str() else {
-            continue;
-        };
-        let Some(spaces) = project["spaces"].as_array() else {
-            continue;
-        };
-        for held in spaces {
-            let Some(space) = held["id"].as_str() else {
-                continue;
-            };
-            let Some(state) = held["layout"]["state"].as_object() else {
-                continue;
-            };
-            if let Some(entry) = tab_entry(&state["root"], tab) {
-                return Some(FoundTab { root, space, entry });
-            }
-        }
-    }
-    None
+/// Refuses a projects.json whose form the role operations cannot read, naming the file and what they found.
+fn invalid_stored_layout(registry: &Path, what: &str) -> String {
+    format!("{}: {what}", registry.display())
 }
 
-/// Returns the tab record of the tab id in the tree of a layout state, or None when the tree holds no such tab.
-fn tab_entry<'a>(node: &'a Value, tab: &str) -> Option<&'a Map<String, Value>> {
-    let holder = node.as_object()?;
-    if holder.contains_key("card") {
-        let tabs = holder["data"]["tabs"].as_array()?;
-        return tabs
-            .iter()
-            .find(|entry| entry["id"].as_str() == Some(tab))
-            .and_then(Value::as_object);
+/// Visits every tab record of the layout of a space, in the order of the stored tree, and refuses a stored layout whose form is
+/// not the tree of docs/spec/groups.md#storage with the file and what it found: a layout object without a state, a node that is
+/// not an object, a content card without a tab list, a tab without an identifier, a box without an inner cut and a cut without
+/// a kid list. A fixed window sidebar card holds no tabs and stores no data (docs/spec/projects.md), so the walk skips it.
+fn walk_tabs<'a>(
+    registry: &Path,
+    layout: &'a Value,
+    visit: &mut dyn FnMut(&'a str, &'a Map<String, Value>),
+) -> Result<(), String> {
+    let Some(held) = layout.as_object() else {
+        return Err(invalid_stored_layout(
+            registry,
+            "a space record whose layout is not an object",
+        ));
+    };
+    let Some(state) = held.get("state").and_then(Value::as_object) else {
+        return Err(invalid_stored_layout(
+            registry,
+            "a space layout without a state object",
+        ));
+    };
+    walk_node(registry, state.get("root").unwrap_or(&Value::Null), visit)
+}
+
+/// Visits the tab records of one node of a stored layout tree with the rules of walk_tabs.
+fn walk_node<'a>(
+    registry: &Path,
+    node: &'a Value,
+    visit: &mut dyn FnMut(&'a str, &'a Map<String, Value>),
+) -> Result<(), String> {
+    let Some(holder) = node.as_object() else {
+        return Err(invalid_stored_layout(
+            registry,
+            "a layout node that is not an object",
+        ));
+    };
+    let card = holder.get("card").is_some_and(|card| !card.is_null());
+    if card && holder.get("fixed") == Some(&Value::Bool(true)) {
+        return Ok(());
     }
-    if holder.contains_key("box") {
-        return tab_entry(&holder["inner"], tab);
+    if card {
+        let Some(data) = holder.get("data").and_then(Value::as_object) else {
+            return Err(invalid_stored_layout(
+                registry,
+                "a content card without a data object",
+            ));
+        };
+        let Some(entries) = data.get("tabs").and_then(Value::as_array) else {
+            return Err(invalid_stored_layout(
+                registry,
+                "a content card without a tab list",
+            ));
+        };
+        for entry in entries {
+            let Some(tab) = entry.as_object() else {
+                return Err(invalid_stored_layout(
+                    registry,
+                    "a tab record that is not an object",
+                ));
+            };
+            let Some(id) = tab.get("id").and_then(Value::as_str) else {
+                return Err(invalid_stored_layout(
+                    registry,
+                    "a tab record without an identifier",
+                ));
+            };
+            visit(id, tab);
+        }
+        return Ok(());
     }
-    let kids = holder["kids"].as_array()?;
+    if holder.get("box").is_some_and(|held| !held.is_null()) {
+        return walk_node(registry, holder.get("inner").unwrap_or(&Value::Null), visit);
+    }
+    let Some(kids) = holder.get("kids").and_then(Value::as_array) else {
+        return Err(invalid_stored_layout(registry, "a cut without a kid list"));
+    };
     for kid in kids {
-        if let Some(found) = tab_entry(&kid["node"], tab) {
-            return Some(found);
+        let Some(pair) = kid.as_object() else {
+            return Err(invalid_stored_layout(
+                registry,
+                "a kid of a cut that is not an object",
+            ));
+        };
+        let Some(child) = pair.get("node") else {
+            return Err(invalid_stored_layout(
+                registry,
+                "a kid of a cut without a node",
+            ));
+        };
+        walk_node(registry, child, visit)?;
+    }
+    Ok(())
+}
+
+/// Visits the stored spaces of the projects in order with the root of their project, and refuses a project or space record of
+/// another form with the file and what it found.
+fn walk_spaces<'a>(
+    registry: &Path,
+    projects: &'a [Value],
+    visit: &mut dyn FnMut(&'a str, &'a str, &'a Value) -> Result<(), String>,
+) -> Result<(), String> {
+    for project in projects {
+        let Some(root) = project.get("root").and_then(Value::as_str) else {
+            return Err(invalid_stored_layout(
+                registry,
+                "a project record without a root",
+            ));
+        };
+        let Some(spaces) = project.get("spaces").and_then(Value::as_array) else {
+            return Err(invalid_stored_layout(
+                registry,
+                "a project record without a spaces list",
+            ));
+        };
+        for item in spaces {
+            let Some(space) = item.as_object() else {
+                return Err(invalid_stored_layout(
+                    registry,
+                    "a space record that is not an object",
+                ));
+            };
+            let Some(id) = space.get("id").and_then(Value::as_str) else {
+                return Err(invalid_stored_layout(
+                    registry,
+                    "a space record without an id",
+                ));
+            };
+            visit(root, id, space.get("layout").unwrap_or(&Value::Null))?;
         }
     }
-    None
+    Ok(())
+}
+
+/// Finds the tab in the projects and returns its place. No place is returned for a tab that no stored layout holds, and a stored
+/// form that the walk cannot read is refused.
+fn find_tab_role<'a>(
+    registry: &Path,
+    projects: &'a [Value],
+    tab: &str,
+) -> Result<Option<FoundTab<'a>>, String> {
+    let mut found = None;
+    walk_spaces(registry, projects, &mut |root, space, layout| {
+        if found.is_some() {
+            return Ok(());
+        }
+        let mut held = None;
+        walk_tabs(registry, layout, &mut |id, entry| {
+            if id == tab && held.is_none() {
+                held = Some(entry);
+            }
+        })?;
+        if let Some(entry) = held {
+            found = Some(FoundTab { root, space, entry });
+        }
+        Ok(())
+    })?;
+    Ok(found)
 }
 
 /// Answers the status of the role of a tab: the record of the tab in projects.json decides every member, and a tab without a
@@ -180,7 +298,7 @@ fn tab_entry<'a>(node: &'a Value, tab: &str) -> Option<&'a Map<String, Value>> {
 pub fn role_get(directory: &Path, state: &mut RoleState, tab: &str) -> Result<Value, String> {
     let registry = directory.join("projects.json");
     let projects = checked_projects(&registry)?;
-    match find_tab_role(&projects, tab) {
+    match find_tab_role(&registry, &projects, tab)? {
         None => Ok(Value::Null),
         Some(found) => {
             let record = checked_tab_role(&registry, found.root, found.space, tab, found.entry)?;
@@ -261,7 +379,7 @@ fn role_assign(
     let fingerprint = role_fingerprint(id, text, &files);
     let registry = directory.join("projects.json");
     let projects = checked_projects(&registry)?;
-    let Some(found) = find_tab_role(&projects, tab) else {
+    let Some(found) = find_tab_role(&registry, &projects, tab)? else {
         return Err(format!("surface {tab:?} has no tab"));
     };
     let earlier = checked_tab_role(&registry, found.root, found.space, tab, found.entry)?;
@@ -323,7 +441,7 @@ fn earlier_record(entry: &Map<String, Value>) -> Map<String, Value> {
 fn role_clear(directory: &Path, state: &mut RoleState, tab: &str) -> Result<Value, String> {
     let registry = directory.join("projects.json");
     let projects = checked_projects(&registry)?;
-    let Some(found) = find_tab_role(&projects, tab) else {
+    let Some(found) = find_tab_role(&registry, &projects, tab)? else {
         return Err(format!("surface {tab:?} has no tab"));
     };
     checked_tab_role(&registry, found.root, found.space, tab, found.entry)?;
@@ -353,7 +471,7 @@ pub fn role_confirm(
     }
     let registry = directory.join("projects.json");
     let projects = checked_projects(&registry)?;
-    let Some(found) = find_tab_role(&projects, tab) else {
+    let Some(found) = find_tab_role(&registry, &projects, tab)? else {
         return Err(format!("surface {tab:?} has no tab"));
     };
     let Some(record) = checked_tab_role(&registry, found.root, found.space, tab, found.entry)?
@@ -451,8 +569,8 @@ pub fn role_define(
     let registry = directory.join("projects.json");
     let projects = checked_projects(&registry)?;
     let mut tab_errors = Vec::new();
-    for tab in tab_ids(&projects) {
-        let Some(found) = find_tab_role(&projects, &tab) else {
+    for tab in tab_ids(&registry, &projects)? {
+        let Some(found) = find_tab_role(&registry, &projects, &tab)? else {
             tab_errors.push(format!("tab {tab} is not in the layout"));
             continue;
         };
@@ -493,8 +611,8 @@ pub fn role_undefine(directory: &Path, state: &mut RoleState, id: &str) -> Resul
     }
     let registry = directory.join("projects.json");
     let projects = checked_projects(&registry)?;
-    for tab in tab_ids(&projects) {
-        let found = find_tab_role(&projects, &tab)
+    for tab in tab_ids(&registry, &projects)? {
+        let found = find_tab_role(&registry, &projects, &tab)?
             .ok_or_else(|| format!("tab {tab} is not in the layout"))?;
         let record = checked_tab_role(&registry, found.root, found.space, &tab, found.entry)?;
         if record.is_some_and(|record| record.id == id) {
@@ -531,35 +649,13 @@ fn stored_roles(path: &Path) -> Result<Map<String, Value>, String> {
 }
 
 /// Returns the ids of the tabs of the stored layouts in layout order: the projects in order, the spaces of each in order, and
-/// the tabs of each layout by its tree.
-fn tab_ids(projects: &[Value]) -> Vec<String> {
+/// the tabs of each layout by its tree, with the rules of walk_tabs.
+fn tab_ids(registry: &Path, projects: &[Value]) -> Result<Vec<String>, String> {
     let mut ids = vec![];
-    for project in projects {
-        for held in project["spaces"].as_array().into_iter().flatten() {
-            collect_tab_ids(&held["layout"]["state"]["root"], &mut ids);
-        }
-    }
-    ids
-}
-
-/// Appends the tab ids of a node of a layout tree in order, following the same node forms as tab_entry.
-fn collect_tab_ids(node: &Value, ids: &mut Vec<String>) {
-    let Some(holder) = node.as_object() else {
-        return;
-    };
-    if holder.contains_key("card") {
-        for tab in holder["data"]["tabs"].as_array().into_iter().flatten() {
-            if let Some(id) = tab["id"].as_str() {
-                ids.push(id.to_string());
-            }
-        }
-    } else if holder.contains_key("box") {
-        collect_tab_ids(&holder["inner"], ids);
-    } else {
-        for kid in holder["kids"].as_array().into_iter().flatten() {
-            collect_tab_ids(&kid["node"], ids);
-        }
-    }
+    walk_spaces(registry, projects, &mut |_, _, layout| {
+        walk_tabs(registry, layout, &mut |id, _| ids.push(id.to_string()))
+    })?;
+    Ok(ids)
 }
 
 /// Returns the tab record of the tab id in the tree of a layout state as a mutable reference.

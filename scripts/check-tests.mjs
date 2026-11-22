@@ -292,6 +292,18 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F1097",
+    implementation: [
+      { file: "packages/host/rust/src/role_state.rs", symbol: "fn walk_node<'a>(" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/role_state_test.rs", id: "the_role_handshake_refuses_its_invalid_inputs" },
+      { file: "packages/host/go/tests/role_state_test.go", id: "TestTheRoleHandshakeRefusesItsInvalidInputs" },
+    ],
+    expected: "The Rust walk of the stored tabs skips the fixed sidebar cards and refuses a content card without data with the text of the Go walk.",
+    levels: ["unit"],
+  },
+  {
     id: "F1094",
     implementation: [
       { file: "packages/plugin-api/index.js", symbol: "    follow(name, fn, surface) {" },

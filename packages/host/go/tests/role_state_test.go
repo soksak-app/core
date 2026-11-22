@@ -222,6 +222,23 @@ func TestTheRoleHandshakeRefusesItsInvalidInputs(t *testing.T) {
 	if text := roleRefusal(t, w, host.WorkspaceRequest{Kind: "rolePut", Tab: "tab-zzzzzz", Role: "a"}); text != `surface "tab-zzzzzz" has no tab` {
 		t.Fatalf("an assignment to an unknown tab answered %q", text)
 	}
+	// A stored content card without data is refused with the file and what the walk found; the fixed sidebar cards stay valid.
+	registry := filepath.Join(config, "projects.json")
+	data, err := os.ReadFile(registry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document map[string]any
+	if err := json.Unmarshal(data, &document); err != nil {
+		t.Fatal(err)
+	}
+	space := document["projects"].([]any)[0].(map[string]any)["spaces"].([]any)[0].(map[string]any)
+	content := space["layout"].(map[string]any)["state"].(map[string]any)["root"].(map[string]any)["kids"].([]any)[1].(map[string]any)["node"].(map[string]any)
+	delete(content, "data")
+	writeRoleFixtureFile(t, config, "projects.json", document)
+	if text := roleRefusal(t, w, host.WorkspaceRequest{Kind: "role", Tab: "tab-aaaaaa"}); text != registry+": a content card without a data object" {
+		t.Fatalf("a content card without data answered %q", text)
+	}
 }
 
 // contract: roles.role-state-clear-and-removal

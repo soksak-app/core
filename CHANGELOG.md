@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1097: The Rust walk of the stored tabs of the role operations skips the fixed window sidebar cards, which hold no data, and refuses another stored form with the text of the Go walk, such as `<projects.json path>: a content card without a data object`. Before, the Tauri host panicked at `role_state.rs:160:26: no entry found for key` when a tab read `core.tab.role` in a space with sidebar cards, and the workbench did not start again. Verification: Red of the seven Rust role state tests with the stored form, then Green with the Rust role file and workspace tests and the Go role tests.
 - F1095: scripts/check-tests.mjs lists F1095 among the completions without a capability, because a release item links no implementation; the release record failed the completed capability check of `pnpm test` and the test inventory check.
 - F1093: The host specification declares the Rust test of the start of the plugin updates without a Go counterpart, as row H104.
 - F1093, F1094: scripts/check-tests.mjs links each correction to its implementation and its tests.

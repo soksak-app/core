@@ -9,7 +9,8 @@ use serde_json::{Value, json};
 use soksak_host::role_file::role_fingerprint;
 use soksak_host::workspace::Workspace;
 
-/// A configuration directory whose projects.json holds one project with one space of one card of two tabs, and whose
+/// A configuration directory whose projects.json holds one project with one space of the fixed sidebar cards left and right
+/// around one card of two tabs, and whose
 /// roles.json defines the roles a and b.
 fn fixture(name: &str) -> (PathBuf, Workspace) {
     let directory = std::env::temp_dir().join(format!(
@@ -27,10 +28,16 @@ fn fixture(name: &str) -> (PathBuf, Workspace) {
                 "spaces": [{
                     "id": "spc-aaaaaa", "title": "SPACE1",
                     "layout": {
-                        "state": {"root": {"card": "card-1", "data": {"tabs": [
-                            {"id": "tab-aaaaaa", "plugin": "terminal", "title": "a", "role": null},
-                            {"id": "tab-bbbbbb", "plugin": "terminal", "title": "b", "role": null}
-                        ]}}},
+                        // The root holds the fixed window sidebar cards left and right, which carry no data, around the
+                        // content card, as the workbench stores a space (docs/spec/projects.md).
+                        "state": {"root": {"cut": "x", "kids": [
+                            {"node": {"card": "left", "fixed": true, "width": 190}, "share": 0.2},
+                            {"node": {"card": "card-1", "fixed": false, "data": {"tabs": [
+                                {"id": "tab-aaaaaa", "plugin": "terminal", "title": "a", "role": null},
+                                {"id": "tab-bbbbbb", "plugin": "terminal", "title": "b", "role": null}
+                            ]}}, "share": 0.6},
+                            {"node": {"card": "right", "fixed": true, "width": 210}, "share": 0.2}
+                        ]}},
                         "focusedId": "card-1", "leader": "card-1", "lastCard": 1, "named": 0
                     }
                 }],
@@ -76,7 +83,8 @@ fn stored_role(directory: &Path, tab: &str) -> Value {
     let document: Value = serde_json::from_str(&data).unwrap();
     for project in document["projects"].as_array().unwrap() {
         for held in project["spaces"].as_array().unwrap() {
-            for entry in held["layout"]["state"]["root"]["data"]["tabs"]
+            // The content card of the fixture is the middle kid of the root, between the fixed sidebar cards.
+            for entry in held["layout"]["state"]["root"]["kids"][1]["node"]["data"]["tabs"]
                 .as_array()
                 .unwrap()
             {
@@ -234,6 +242,22 @@ fn the_role_handshake_refuses_its_invalid_inputs() {
             json!({"kind": "rolePut", "tab": "tab-zzzzzz", "role": "a"})
         ),
         "surface \"tab-zzzzzz\" has no tab"
+    );
+    // A stored content card without data is refused with the file and what the walk found; the fixed sidebar cards stay valid.
+    let registry = directory.join("projects.json");
+    let mut document: Value =
+        serde_json::from_str(&fs::read_to_string(&registry).unwrap()).unwrap();
+    document["projects"][0]["spaces"][0]["layout"]["state"]["root"]["kids"][1]["node"]
+        .as_object_mut()
+        .unwrap()
+        .remove("data");
+    fs::write(&registry, serde_json::to_vec_pretty(&document).unwrap()).unwrap();
+    assert_eq!(
+        refusal(&store, json!({"kind": "role", "tab": "tab-aaaaaa"})),
+        format!(
+            "{}: a content card without a data object",
+            registry.display()
+        )
     );
     let _ = fs::remove_dir_all(&directory);
 }
