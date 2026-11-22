@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1055-3: The agent skill and the MCP instructions build a group card of several cards with one `core.layout.plan` of a tree that holds the group and one `core.layout.apply`, instead of `core.group.create` and one `core.layout.open` per further card, and state that an agent reads the command declarations once per request. The skill tests pass.
 - F1055-2: The page and mygo workbenches plan and apply a tree that holds a group: a group keeps its group card with its identifier and name, a new group card takes its name or `그룹 <n>`, a group card that no group keeps ends, and the plan judges the drawn size with the group headers. The workbench cases `layout.apply.groups` and `layout.plan.group-refusals` test both. Red: the group tests failed with `tree has the unknown member group` in the page and with the refusal of a space with group cards in mygo. Green: the 1736 page workbench tests and the 1176 mygo workbench tests pass.
 - F1063-1: The agent role specification states the commands `core.role.define` and `core.role.remove`, the status `core.roles`, and `roles.json` format 3, whose roles name absolute `files` that the fingerprint covers and the role file lists; the host contract and the shared cases follow it.
 - F1062-1: The plugin and persistent service specifications state owned sessions: a surface opens a session with its size regardless of occlusion, owns it, and a tab shows it with `core.layout.open {params: {session}}`; the session ends with its owner, and an owner reattaches after a restart through `core.sessions`.

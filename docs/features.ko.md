@@ -190,7 +190,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
 - [~] F1055 — P1: 여러 card의 group card 요청을 plan 한 번과 apply 한 번으로 만든다. group은 `core.group.create`와 추가 card마다 layout을 읽은 뒤의 `core.layout.open`이 필요해서, agent가 한 배치에 여러 단계를 쓴다.
   - [o] F1055-1 — `core.layout.plan`과 `core.layout.apply`의 tree가 이름과 children을 가진 group node를 받고, plan은 group card를 보고한다. specification과 exposure 선언을 먼저 바꾼다.
   - [o] F1055-2 — page workbench와 mygo workbench가 계획된 group card를 만들고, 반복은 아무것도 바꾸지 않는다.
-  - [ ] F1055-3 — soksak skill 본문은 group card를 plan 한 번과 apply 한 번으로 만들고, 요청마다 command 선언을 한 번 읽는다.
+  - [o] F1055-3 — soksak skill 본문은 group card를 plan 한 번과 apply 한 번으로 만들고, 요청마다 command 선언을 한 번 읽는다.
   - [ ] F1055-4 — 유지하는 group card 하나의 카드를 유지하는 다른 group card로 옮기는 tree는 계획되고 적용되거나, 이유와 함께 거부되고 아무것도 바꾸지 않는다. 두 workbench 어디에서도 그 경로를 다루는 test가 없다.
 - [o] F1053 — P1, F1052의 후속: window check의 projects reader는 projects format 3만 받았는데, host는 F1006-9부터 format 4로 쓰므로 projects.json을 읽는 project window check가 모두 실패했다. reader는 format 4를 받는다.
 - [o] F1052 — P0, F1033-4의 후속: page workbench는 다른 space나 project의 저장된 layout card를 `state.cards`로 읽었는데, 저장된 tree layout에는 그 형식이 없어서 그런 space를 가진 window의 commit마다 Wails와 Tauri에서 `surface presentation failed: undefined is not an object (evaluating 'space.layout.state.cards')`로 실패했다. surface listing은 그 tab을 layout tree에서 읽는다.

@@ -20,7 +20,7 @@ soksak은 창마다 탭이 있는 카드의 레이아웃을 담는 데스크톱 
 - `sok describe` 또는 `window_describe`는 창을 한 번에 설명한다. 레이아웃, 적재된 plugin, surface와 그 plugin, 현재 status 값, 실행하는 command가 있는 element, 매개변수가 있는 command를 담는다. 설명은 여러 쪽으로 나뉘며, `next`가 `null`이 될 때까지 `--after <next>`(`after`)를 넘긴다. `--full`(`full`)은 값과 schema 전체를 주고, `--surface <id>`(`surface`)는 surface 하나를 설명한다.
 - 창의 exposure 전체는 쓸 수 있다. `sok describe`, `sok exposures`, `exposure_search`는 검색어 없이 선언된 모든 command, status, element를 쪽마다 나열한다.
 - plugin을 설치, 제거, 활성화, 비활성화하면 exposure가 바뀌므로, 필요할 때 읽고 이전 session의 기억으로 판단하지 않는다.
-- 항목은 `sok commands --query <words>`, `sok exposures --kind status|command|element --query <words>` 또는 `exposure_search`로 찾는다. 검색어는 이름이나 설명이 각 단어를 담은 항목과 맞는다. 항목을 쓰기 전에는 `exposure_describe` 또는 `sok commands`의 출력으로 그 선언을 읽는다.
+- 항목은 `sok commands --query <words>`, `sok exposures --kind status|command|element --query <words>` 또는 `exposure_search`로 찾는다. 검색어는 이름이나 설명이 각 단어를 담은 항목과 맞는다. 항목을 쓰기 전에는 `exposure_describe` 또는 `sok commands`의 출력으로 그 선언을 읽는다. Agent는 요청의 command 선언을 요청마다 한 번, 그 첫 command 전에 읽으며, 요청의 각 단계 전에 다시 읽지 않는다.
 
 ## 레이아웃 다루기
 
@@ -30,7 +30,7 @@ soksak은 창마다 탭이 있는 카드의 레이아웃을 담는 데스크톱 
 
 카드 여러 개의 배치를 말하는 요청, 예컨대 "terminal 다섯 개를 연다"나 "두 줄에 terminal을 다섯 개씩 두고 browser는 탭으로 남긴다"는 먼저 계획하고 명령 하나로 만든다.
 
-- `core.layout.plan {tree, close?}` 또는 `{count, plugin, params?, close?}`는 아무것도 바꾸지 않고 `{feasible, tree, cards, plane, minimum, kept, closed, reason, needed, proposal}`로 답한다. Tree는 split `{direction, children}`이거나 카드 `{tabs, active?}`다. Split의 자식은 둘 이상이고 똑같은 몫을 가지며, 같은 방향의 split이 아니다. 카드의 항목은 기존 탭 `{tab}`이거나 탭 `{plugin, params?}`다. `count`는 plane에 맞는 `plugin` 카드 `count`개의 가장 고른 grid를 뜻한다. `cards`는 계획된 카드를 읽는 순서대로 `frame`과 함께 나열하고, `kept`는 tree가 담지 않는 탭을 나열한다. 그 탭은 첫 카드의 비활성 탭으로 남는다. `close: true`면 그 탭들은 대신 닫히고 `closed`가 그것을 나열한다.
+- `core.layout.plan {tree, close?}` 또는 `{count, plugin, params?, close?}`는 아무것도 바꾸지 않고 `{feasible, tree, cards, plane, minimum, kept, closed, reason, needed, proposal}`로 답한다. Tree는 split `{direction, children}`, 카드 `{tabs, active?}`, 또는 그룹 `{group: {name?}, tree}`다. 그룹의 `tree`는 그룹 카드 하나를 이루는 카드 둘 이상의 split이다. Split의 자식은 둘 이상이고 똑같은 몫을 가지며, 같은 방향의 split이 아니다. 카드의 항목은 기존 탭 `{tab}`이거나 탭 `{plugin, params?}`다. `count`는 plane에 맞는 `plugin` 카드 `count`개의 가장 고른 grid를 뜻한다. `cards`는 계획된 카드를 읽는 순서대로 `frame`과 함께 나열하고, `kept`는 tree가 담지 않는 탭을 나열한다. 그 탭은 첫 카드의 비활성 탭으로 남는다. `close: true`면 그 탭들은 대신 닫히고 `closed`가 그것을 나열한다.
 - 항목 `{plugin, params}`는 새 탭을 열기 전에 그 plugin의 같은 `params`를 가진 기존 탭을 가져온다. 그래서 기존 탭은 자기 surface와 함께 옮겨지고, 옮기려고 닫히지 않는다.
 - `feasible`이 true면 계획의 `tree`로 `core.layout.apply {tree, close?}`를 실행한다. 계획을 만들고 모든 탭을 식별자로 담은 `{tree, cards, kept, closed}`로 답하며, 반복해도 아무것도 바뀌지 않는다.
 - `feasible`이 false면 아무것도 적용하지 않는다. `reason`을 `needed`(tree에 필요한 plane)와 `proposal`(맞는 가장 가까운 배치, `{tree, cards}`)과 함께 사람에게 알리고, 사람이 동의할 때만 proposal을 적용한다.
@@ -40,6 +40,7 @@ soksak은 창마다 탭이 있는 카드의 레이아웃을 담는 데스크톱 
 
 - terminal 다섯 개를 연다: `core.layout.plan {count: 5, plugin: <process plugin>}`; 그 `tree`를 적용한다.
 - 두 줄에 terminal을 다섯 개씩 두고 browser는 탭으로 남긴다: `R` = `{direction: "row", children: [five cards {tabs: [{plugin: <process plugin>}]}]}`로 `core.layout.plan {tree: {direction: "column", children: [R, R]}}`; browser 탭은 첫 카드에 남는다. 계획의 `tree`를 적용한다.
+- 사람이 그룹을 요청했을 때, 그룹 카드 안의 terminal 다섯 개를 한 줄로: `core.layout.plan {tree: {group: {}, tree: {direction: "row", children: [five cards {tabs: [{plugin: <process plugin>}]}]}}}`; 계획의 `tree`를 적용한다.
 
 ### 카드나 탭 하나 바꾸기
 
@@ -75,13 +76,11 @@ agent CLI를 role과 함께 실행하는 tab은 plugin `terminal`의 `core.layou
 
 그룹 카드는 이름이 있는 헤더 아래 본문에 두 개 이상의 카드로 된 자체 plane을 가진 카드다. 카드의 줄과 열에는 그룹이 필요 없으므로, 사람이 그룹을 요청할 때만 그룹을 만든다. `layout`에서는 `group: {name, level, leader, root}`를 가진 노드이며, `root`는 그 plane의 트리다. `layout.groups`는 그룹 카드마다 한 번씩 이름과 구성 카드의 식별자를 나열하므로, 이름으로 그룹을 거기서 찾는다. Plane의 카드는 내용 카드와 그룹 카드이며, 위의 모든 operation은 어느 plane의 카드든 대상으로 삼는다. Split은 그룹을 만들지 않는다. Split은 새 카드를 나누는 카드의 plane에 넣는다.
 
-- `core.group.create {card, side, plugin, params?}`는 `{group, card, tab}`을 반환한다. `card`를 그룹 카드로 바꾸는데, 그 그룹 카드는 `card`와 `side` 쪽에 `plugin`의 탭을 가진 새 카드를 담는다. 이미 그룹 안에 있는 카드에서 실행하면 그 plane 안에 그룹을 중첩하므로, 그룹마다 한 번씩 실행한다. 같은 매개변수의 반복은 그룹이 정확히 그 두 카드를 담는 동안에만 아무것도 바꾸지 않는다.
+- `core.group.create {card, side, plugin, params?}`는 `{group, card, tab}`을 반환한다. `card` 하나를 두 카드로 된 그룹 카드로 바꾸는데, 그 그룹 카드는 `card`와 `side` 쪽에 `plugin`의 탭을 가진 새 카드를 담는다. 이미 그룹 안에 있는 카드에서 실행하면 그 plane 안에 그룹을 중첩하므로, 그룹마다 한 번씩 실행한다. 같은 매개변수의 반복은 그룹이 정확히 그 두 카드를 담는 동안에만 아무것도 바꾸지 않는다.
 - 그룹의 plane에 카드를 더하려면 `core.layout.open {card: <a card of the group>, side, plugin}`를 쓴다. 이는 `side` 쪽 이웃을 그 plane의 카드 중에서만 찾고, 그 plane에 이웃이 없으면 그 카드를 plane 안에서 나눈다. 같은 줄의 그룹 밖 카드 옆에서도 그렇게 한다. 또는 `core.card.add-tab {card: <group>, plugin}`를 쓰는데, 이는 plane의 오른쪽 가장자리에 내용 카드를 더한다. `core.layout.open {card: <group>, plugin}`은 plane 안에서 같은 `params`를 가진 `plugin`의 첫 탭을 선택하고, 그런 탭이 없을 때만 카드를 더한다.
 - `core.group.dissolve {group}`은 그룹 카드를 그 plane의 카드들로 바꾼다. `core.card.move {card, target, side}`는 내용 카드나 그룹 카드를 `target`의 plane에서 `target` 옆으로 옮긴다. `side: "centre"`와 그룹 `target`을 주면 그 plane의 오른쪽 가장자리로 옮긴다.
 
-같은 plugin의 카드 `N`개를 한 줄로 묶는 방법: `core.group.create {card: C, side: "right", plugin: P}`는 `{group: G, card: M}`을 준다. 그다음 `core.layout.open {card: M, side: "right", plugin: P}`를 `N` − 2번 실행하며, 매번 앞 단계가 반환한 카드 `M`을 쓴다. 그 카드는 plane의 오른쪽 가장자리에 있으므로, 각 단계는 같은 plane에 카드 하나를 더한다. 작업하는 동안 사람과 다른 agent가 레이아웃을 바꾸므로, 각 단계 직전에 `layout`을 다시 읽고 그 단계의 카드를 거기서 가져온다. 마지막 단계 뒤에는 `G`의 `root`가 한 줄의 카드 `N`개를 담고 그룹 노드는 없다. `bottom` 쪽으로 같은 단계를 밟으면 세로 열이 된다.
-
-예시, 설명을 읽은 뒤: 카드 `A`가 `B` 위에 있고 각각 process session을 담고 있다. 각 줄에 process session 다섯 개를 나란히 한 그룹으로 만든다. `core.group.create {card: A, side: "right", plugin: <process plugin>}`는 `{group: G1, card: A2}`를 준다. `core.layout.open {card: A2, side: "right", plugin: <process plugin>}`는 `A3`을 주고, `A3`에서 같은 것을 하면 `A4`, `A4`에서 하면 `A5`가 된다. `B`에서 같은 단계를 밟으면 `G2`와 `B`에서 `B5`까지가 나온다. `G1`은 `A`와 `A2`에서 `A5`를 담고, `G2`는 `B`와 `B2`에서 `B5`를 담으며, 어느 그룹도 다른 그룹을 담지 않는다.
+같은 plugin의 카드 여러 개를 한 줄로 담는 그룹 카드는 plan 한 번과 apply 한 번으로 만든다. 배치 계획의 예시와 같다. `core.layout.plan {tree}`에는 그룹 `{group: {name?}, tree}`를 담은 tree를 주며, 그 `tree`는 그룹의 카드들로 된 split이다. `feasible`이 true면 계획의 `tree`로 `core.layout.apply {tree}`를 실행한다. 그러면 `layout`에 그 plane의 카드를 담은 그룹 카드가 생긴다. Feasible하지 않은 계획은 어떤 부분도 적용하지 않으며, 다른 배치와 같다. 그룹 카드는 사람이 그룹을 요청할 때만 만든다. 위에서 아래로 쌓인 카드는 tree에 `column` split을 쓴다.
 
 ## 실행과 관찰
 
