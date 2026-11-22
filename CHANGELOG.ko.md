@@ -3,6 +3,10 @@
 
 [English](CHANGELOG.md)
 
+## 2026-11-23
+
+- F1090: host가 view를 마운트한 소유자에 대한 owned session 메시지는 mygo와 페이지에서 view-source-registered의 소스 generation으로 viewSidecarSend를 거치고, mygo에서 placement가 끝나지 않은 소유자에 대한 메시지는 마운트나 placement의 끝을 기다린다.
+
 ## 2026-11-22
 
 - F1089: core.session.read {session}은 {from, rows, cursor}를 답한다. from은 사이드카 화면 응답의 첫 행 absolute line number이며, 페이지와 mygo는 0 이상의 from이 없는 화면 응답을 거부한다. Workbench 선언의 mygo 사본을 갱신했다.

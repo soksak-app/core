@@ -1,12 +1,98 @@
 package workbench
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"slices"
 
+	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
+
+// viewSource is the source of a view that the host mounted on a surface: its generation and the context that carries the source, which
+// ends with the source.
+type viewSource struct {
+	generation uint64
+	ctx        context.Context
+	cancel     context.CancelFunc
+}
+
+// viewSourceEvent is the value of the events view-source-registered and view-source-ended.
+type viewSourceEvent struct {
+	Plugin     string `json:"plugin"`
+	Surface    string `json:"surface"`
+	Generation uint64 `json:"generation"`
+}
+
+// viewSourceRegistered records the source of the view that the host mounted on a surface and answers the requests that wait for it.
+func (s *Shell) viewSourceRegistered(data []any) {
+	event, err := s.viewSourceOf("view source registered", data)
+	if err != nil {
+		s.fail(err)
+		return
+	}
+	if earlier, ok := s.surfaces.sources[event.Surface]; ok {
+		earlier.cancel()
+	}
+	ctx, cancel := context.WithCancel(host.WithViewSource(s.calls.ctx, event.Surface, event.Generation))
+	s.surfaces.sources[event.Surface] = viewSource{generation: event.Generation, ctx: ctx, cancel: cancel}
+	s.answerMounts(event.Surface, nil)
+}
+
+// viewSourceEnded removes the source of a view that ended. An end of an earlier generation than the recorded one changes nothing.
+func (s *Shell) viewSourceEnded(data []any) {
+	event, err := s.viewSourceOf("view source ended", data)
+	if err != nil {
+		s.fail(err)
+		return
+	}
+	if current, ok := s.surfaces.sources[event.Surface]; ok && current.generation == event.Generation {
+		current.cancel()
+		delete(s.surfaces.sources, event.Surface)
+	}
+}
+
+func (s *Shell) viewSourceOf(place string, data []any) (viewSourceEvent, error) {
+	if len(data) != 1 {
+		return viewSourceEvent{}, fmt.Errorf("%s: the event carries %d values, want one", place, len(data))
+	}
+	event, err := decode[viewSourceEvent](data[0])
+	if err != nil {
+		return viewSourceEvent{}, fmt.Errorf("%s: %w", place, err)
+	}
+	if event.Surface == "" || event.Generation == 0 {
+		return viewSourceEvent{}, fmt.Errorf("%s: the event names no surface and generation", place)
+	}
+	return event, nil
+}
+
+// mountedView answers with the view source of surface. A held surface whose placement has not finished may still mount a view, so its
+// answer waits for the mount or the end of the placement; every other surface answers at once.
+func (s *Shell) mountedView(surface string, answer func(MountedView, bool, error)) {
+	if source, ok := s.surfaces.sources[surface]; ok {
+		answer(MountedView{Generation: source.generation, Context: source.ctx}, true, nil)
+		return
+	}
+	if held := s.surfaces.held[surface]; held != nil && !held.hosted {
+		s.surfaces.mounts[surface] = append(s.surfaces.mounts[surface], answer)
+		return
+	}
+	answer(MountedView{}, false, nil)
+}
+
+// answerMounts answers the requests that wait for the mount of surface: with err when it is not nil, and else with the current source.
+func (s *Shell) answerMounts(surface string, err error) {
+	waiting := s.surfaces.mounts[surface]
+	delete(s.surfaces.mounts, surface)
+	for _, answer := range waiting {
+		if err != nil {
+			answer(MountedView{}, false, err)
+			continue
+		}
+		s.mountedView(surface, answer)
+	}
+}
 
 // ownedPorts returns the ports of the owned sessions of the window: the sidecars of the plugins that declare sessions, the layout and the
 // status and event writers of the window.
@@ -32,18 +118,12 @@ func (s *Shell) ownedPorts() OwnedPorts {
 			slices.Sort(names)
 			return slices.Compact(names)
 		},
-		Port:   func(name string) OwnedSidecar { return s.tabs.sidecars.OwnedPort(name) },
-		Plugin: s.layoutPluginOf,
-		Mounted: func(surface string) (MountedView, bool) {
-			view := s.surfaces.views[surface]
-			if view == nil || view.generation == 0 || view.ctx == nil {
-				return MountedView{}, false
-			}
-			return MountedView{Generation: view.generation, Context: view.ctx}, true
-		},
-		Shown:  s.layoutShownSessions,
-		Random: func() string { return issueID(s.options.Random, "os-", func(string) bool { return false }) },
-		Emit:   s.emitTabEvent,
+		Port:    func(name string) OwnedSidecar { return s.tabs.sidecars.OwnedPort(name) },
+		Plugin:  s.layoutPluginOf,
+		Mounted: s.mountedView,
+		Shown:   s.layoutShownSessions,
+		Random:  func() string { return issueID(s.options.Random, "os-", func(string) bool { return false }) },
+		Emit:    s.emitTabEvent,
 		Listen: func(name, surface string, listener func(json.RawMessage), answer func(func(), error)) {
 			s.tabs.sidecars.Port(name).On(surface, listener, answer)
 		},

@@ -328,6 +328,10 @@ func (s *Shell) event(name string, data []any) {
 		s.viewEnded(data)
 	case "view-stopped":
 		s.viewStopped(data)
+	case "view-source-registered":
+		s.viewSourceRegistered(data)
+	case "view-source-ended":
+		s.viewSourceEnded(data)
 	case "view-responsiveness":
 		s.viewResponsiveness(data)
 	case "view-presentation-abandoned":
@@ -425,7 +429,7 @@ var eventsLeft = map[string]bool{"diagnostics-tick": true, "diagnostics-unlisten
 	"modal-position": true, "modal-rendered": true, "overlay-pick": true, "page-ready": true, "plugins-changed": true, "project-activate": true,
 	"run-began": true, "run-ended": true, "sidecar-failure": true, "sidecar-message": true, "sidecars-changed": true, "surface-input": true,
 	"surface-pressed": true, "theme": true, "view-call": true, "view-process-ended": true,
-	"view-reply": true, "view-source-ended": true, "view-source-registered": true, "view-stopped": true,
+	"view-reply": true, "view-stopped": true,
 	"window-active": true}
 
 // eventLeft writes an event that no part of the workbench knows to the application log. The host names notification events by type.

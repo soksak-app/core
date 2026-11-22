@@ -40,6 +40,9 @@ type ownedHost struct {
 	sessionsFailure error
 	// viewSends are the requests that a mounted view sent through viewSidecarSend.
 	viewSends []ownedViewSend
+	// sources holds the source generation of each surface on which the host mounted a view. A sidecarSend for such a surface is refused
+	// as the host refuses it (docs/spec/persistent-services.md#owned-sessions).
+	sources map[string]uint64
 }
 
 // ownedViewSend is a request of a mounted view with its source generation.
@@ -67,6 +70,10 @@ func (h *ownedHost) table() map[string]workbench.HostCall {
 				return nil, err
 			}
 			h.mu.Lock()
+			if _, mounted := h.sources[request.Surface]; mounted {
+				h.mu.Unlock()
+				return nil, errors.New("surface requires viewSidecarSend with its original source generation")
+			}
 			h.sends = append(h.sends, ownedSend{request.Surface, body, request.Cids, request.Answer})
 			reply := h.reply
 			h.mu.Unlock()
@@ -111,6 +118,28 @@ func (h *ownedHost) table() map[string]workbench.HostCall {
 	}
 }
 
+// mount records the source generation of the view that the host mounted on surface, and unmount its end.
+func (h *ownedHost) mount(surface string, generation uint64) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.sources == nil {
+		h.sources = map[string]uint64{}
+	}
+	h.sources[surface] = generation
+}
+
+func (h *ownedHost) unmount(surface string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	delete(h.sources, surface)
+}
+
+func (h *ownedHost) viewSent() []ownedViewSend {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return append([]ownedViewSend(nil), h.viewSends...)
+}
+
 func (h *ownedHost) sent() []ownedSend {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -148,9 +177,9 @@ func (f *ownedFixture) newSessions() *workbench.OwnedSessions {
 		Sidecars: func() []string { return []string{sessionSidecar} },
 		Port:     func(name string) workbench.OwnedSidecar { return f.ports.OwnedPort(name) },
 		Plugin:   func(surface string) string { return f.layout[surface] },
-		Mounted: func(surface string) (workbench.MountedView, bool) {
+		Mounted: func(surface string, answer func(workbench.MountedView, bool, error)) {
 			view, ok := f.views[surface]
-			return view, ok
+			answer(view, ok, nil)
 		},
 		Shown: func() map[string]string { return f.shown },
 		Random: func() string {

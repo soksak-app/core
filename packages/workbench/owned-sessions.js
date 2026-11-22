@@ -3,11 +3,25 @@
 // entry per open session: its plugin, its owner surface, the tab that shows it, and its sidecar. The entries are the status
 // core.sessions; the sidecar holds the sessions themselves.
 import { plugin, hasPlugin, plugins } from "./registry.js";
-import { sidecarSessions, windowSidecar, report } from "./host.js";
+import { sendViewSidecar, sidecarSessions, windowSidecar, report } from "./host.js";
+import { sourceOrigin } from "./source-origins.js";
 import { emitEvent } from "./page-log.js";
 import { onTabsClosed } from "./closed-tabs.js";
 import { hideError, showError } from "./shown-errors.js";
 import { all as allProjects, waitForInitialProjectContext } from "./projects.js";
+
+/**
+ * Sends body to the sidecar for the owner surface: through the view that the host mounted on the surface, with its source generation,
+ * and through the window for a surface without a mounted view, whose send the host refuses for a mounted surface
+ * (docs/spec/persistent-services.md#owned-session-messages).
+ */
+function ownerSend(sidecar, owner, body) {
+  const generation = sourceOrigin(undefined, owner);
+  if (generation !== undefined) return sendViewSidecar({ source: owner, generation, sidecar, surface: owner, body });
+  const port = windowSidecar(sidecar);
+  if (!port) return Promise.reject(new Error(`owned session sidecar unavailable: ${sidecar}`));
+  return port.send(owner, body);
+}
 
 /** The open sessions of this page, keyed by session identifier, in the order that they opened. */
 const sessions = new Map();
@@ -65,17 +79,15 @@ export async function openOwnedSession({ plugin: id, params, size }, surface) {
   if (surface === undefined) throw new Error("core.session.open requires the surface of its caller");
   if (!isSize(size)) throw new Error(SIZE_REFUSAL);
   const creation = crypto.randomUUID();
-  const port = windowSidecar(sidecar);
-  if (!port) throw new Error(`owned session sidecar unavailable: ${sidecar}`);
   // default: an open without params sends null, the value of an absent parameter set.
-  const reply = await port.send(surface, { operation: "open", session: { creation }, plugin: id, size: sizeBody(size), params: params ?? null });
+  const reply = await ownerSend(sidecar, surface, { operation: "open", session: { creation }, plugin: id, size: sizeBody(size), params: params ?? null });
   const failure = ownedReplyFailure("core.session.open", reply);
   if (failure) throw failure;
   if (typeof reply?.session !== "string" || reply.session === "" || reply.creation !== creation) {
     throw new Error(`core.session.open: the sidecar reply names no session of creation ${creation}`);
   }
   sessions.set(reply.session, { session: reply.session, plugin: id, owner: surface, shownBy: null, program: null, sidecar, size: sizeBody(size), pending: null });
-  listenOwner(surface, port);
+  listenOwner(surface, windowSidecar(sidecar));
   emitEvent("info", "workbench.session.open", { session: reply.session, plugin: id, owner: surface, size: sizeBody(size) });
   return { session: reply.session };
 }
@@ -99,7 +111,7 @@ export async function resizeOwnedSession({ session, size }, surface) {
  */
 async function sendSize(entry, size) {
   const { session } = entry;
-  const reply = sessionReply("core.session.resize", await windowSidecar(entry.sidecar).send(entry.owner, { operation: "resize", session, size }), session);
+  const reply = sessionReply("core.session.resize", await ownerSend(entry.sidecar, entry.owner, { operation: "resize", session, size }), session);
   if (!sameSize(reply.size, size)) throw new Error(`core.session.resize: the sidecar reply names another size for session ${session}`);
   if (sessions.get(session) === entry) entry.size = size;
 }
@@ -145,7 +157,7 @@ export function cardFramesRedrawn(sizeOf) {
 
 /** Ends the session with the sidecar and removes its entry. The reason is the one that the event names (docs/spec/plugins.md#owned-sessions). */
 async function endEntry(entry, reason) {
-  const reply = await windowSidecar(entry.sidecar).send(entry.owner, { operation: "end", session: entry.session });
+  const reply = await ownerSend(entry.sidecar, entry.owner, { operation: "end", session: entry.session });
   sessionReply(`core.session.end (${reason})`, reply, entry.session);
   if (reply.ended !== true) throw new Error(`core.session.end (${reason}): the sidecar did not end session ${entry.session}`);
   sessions.delete(entry.session);
@@ -169,7 +181,7 @@ function requireOwner(command, session, surface) {
 }
 
 /** A request of an owner command: the sidecar reply must name the session, and a failed reply states its error. */
-const ownerRequest = (entry, body, where) => windowSidecar(entry.sidecar).send(entry.owner, body).then((reply) => sessionReply(where, reply, entry.session));
+const ownerRequest = (entry, body, where) => ownerSend(entry.sidecar, entry.owner, body).then((reply) => sessionReply(where, reply, entry.session));
 
 /** core.session.input: the owner types text into its session as given. */
 export async function inputOwnedSession({ session, text }, surface) {
@@ -204,7 +216,7 @@ export async function readOwnedSession(params, surface) {
     if (!Number.isSafeInteger(count) || count < 1 || count > 200) throw new Error("core.session.read count must be an integer from 1 to 200");
     Object.assign(body, { from, count });
   }
-  const reply = await windowSidecar(entry.sidecar).send(entry.owner, body);
+  const reply = await ownerSend(entry.sidecar, entry.owner, body);
   const failure = ownedReplyFailure("core.session.read", reply);
   if (failure) throw failure;
   if (!("from" in body) && !(Number.isSafeInteger(reply?.from) && reply.from >= 0)) {
@@ -416,7 +428,7 @@ export async function reconcileOwnedSessions() {
           continue;
         }
         const reason = declared ? "owner-absent" : "plugin-absent";
-        const reply = await windowSidecar(name).send(item.surface, { operation: "end", session: item.session });
+        const reply = await ownerSend(name, item.surface, { operation: "end", session: item.session });
         sessionReply(`core.session.end (${reason})`, reply, item.session);
         emitEvent("info", "workbench.session.end", { session: item.session, reason });
       }

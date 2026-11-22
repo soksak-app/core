@@ -45,6 +45,7 @@ const plane = await import("../plane.js");
 const { installCoreExposure } = await import("../core-exposure.js");
 const { endOwnedSession, inputOwnedSession, ownedReplyFailure, openOwnedSession, ownedSessionsState, readOwnedSession, resizeOwnedSession, startOwnedSessions, submitOwnedSession } = await import("../owned-sessions.js");
 const { flushEvents } = await import("../page-log.js");
+const { endSourceOrigin, registerSourceOrigin } = await import("../source-origins.js");
 // The stored policy of the settings, which the page applies at its start, stores the lifecycle events at info (the case records them).
 const { logGate, logPolicyOf } = await import("../log-gate.js");
 logGate.set(logPolicyOf({ lifecycle: "info" }));
@@ -79,6 +80,12 @@ test("the owned session messages open, resize and end a session through the owne
   assert.deepEqual(ownedSessionsState(), [{ session: "ses-1", plugin: SESSION, owner: OWNER, shownBy: null, program: null }]);
   assert.deepEqual(await resizeOwnedSession({ session: "ses-1", size: { width: 1000, height: 600, scale: 2 } }, OWNER),
     { session: "ses-1", size: { width: 1000, height: 600, scale: 2 } });
+  // While the host holds a view source of the owner, the request goes through that view with its source generation, because the host
+  // refuses a window send for a mounted surface; the end of the source sends through the window again.
+  assert.equal(registerSourceOrigin(SESSION, OWNER, 3), true);
+  assert.deepEqual(await resizeOwnedSession({ session: "ses-1", size: { width: 900, height: 500, scale: 2 } }, OWNER),
+    { session: "ses-1", size: { width: 900, height: 500, scale: 2 } });
+  assert.equal(endSourceOrigin(SESSION, OWNER, 3), true);
   // Another surface is refused before any sidecar request, and a text that contains CR or LF is refused before the paste.
   await assert.rejects(inputOwnedSession({ session: "ses-1", text: "ls\r" }, "tab-other"), /^Error: session ses-1 is owned by tab-aaaaa1$/);
   await assert.rejects(readOwnedSession({ session: "ses-1" }, "tab-other"), /^Error: session ses-1 is owned by tab-aaaaa1$/);

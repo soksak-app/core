@@ -3,6 +3,10 @@
 
 [한국어](CHANGELOG.ko.md)
 
+## 2026-11-23
+
+- F1090: An owned session message for an owner on which the host mounted a view goes through viewSidecarSend with the source generation of view-source-registered on mygo and the page, and on mygo a message for an owner whose placement has not finished waits for the mount or the end of the placement.
+
 ## 2026-11-22
 
 - F1089: core.session.read {session} answers {from, rows, cursor}, where from is the absolute line number of the first row from the sidecar screen reply, and the page and mygo refuse a screen reply without a from of 0 or more; the mygo copy of the workbench declarations is refreshed.

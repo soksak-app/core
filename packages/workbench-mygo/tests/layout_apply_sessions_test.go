@@ -3,8 +3,11 @@
 package workbench_test
 
 import (
+	"context"
 	"encoding/json"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -99,5 +102,115 @@ func TestACardWithoutAMeasuredFrameSendsNoSizeAndRaisesNoError(t *testing.T) {
 	}
 	if size := sent[0].body["size"].(map[string]any); size["width"] != applied.Cards[1].Frame.Width {
 		t.Fatalf("the measured card sent the size %v, want the width %v", size, applied.Cards[1].Frame.Width)
+	}
+}
+
+// resizeFromOwner runs core.session.resize of s-1 from tab-owner without a call of its view and returns the answer.
+func resizeFromOwner(f *tabShell, width int) error {
+	var failure error
+	f.shell.Registry().RunLaterOn("core.session.resize", json.RawMessage(`{"session":"s-1","size":{"width":`+strconv.Itoa(width)+`,"height":100,"scale":2}}`),
+		"tab-owner", func(_ any, err error) { failure = err })
+	f.settle()
+	return failure
+}
+
+// A request for an owner surface on which the host mounted a view goes through that view with the source generation that the event
+// view-source-registered names, whether or not the view has called the workbench, and the host refuses no request
+// (docs/spec/persistent-services.md#owned-session-messages).
+func TestARequestForAMountedOwnerGoesThroughItsViewSource(t *testing.T) {
+	f, owned := sessionApplyShell(t)
+	owned.mount("tab-owner", 7)
+	f.shell.Event("view-source-registered", []any{map[string]any{"plugin": "term", "surface": "tab-owner", "generation": 7}})
+	f.settle()
+	if err := resizeFromOwner(f, 100); err != nil {
+		t.Fatalf("core.session.resize: %v", err)
+	}
+	sent := owned.viewSent()
+	if len(sent) != 1 || sent[0].surface != "tab-owner" || sent[0].generation != 7 || sent[0].body["operation"] != "resize" {
+		t.Fatalf("the view sent %+v, want one resize of tab-owner with generation 7", sent)
+	}
+	for _, written := range f.host.written("workbench.record.error") {
+		t.Errorf("the request raised %v", written)
+	}
+	// The end of the view source sends the next request through the window.
+	owned.unmount("tab-owner")
+	f.shell.Event("view-source-ended", []any{map[string]any{"plugin": "term", "surface": "tab-owner", "generation": 7}})
+	f.settle()
+	before := len(owned.sent())
+	if err := resizeFromOwner(f, 200); err != nil {
+		t.Fatalf("core.session.resize after the end of the view: %v", err)
+	}
+	if window := owned.sent()[before:]; len(window) != 1 || window[0].body["operation"] != "resize" {
+		t.Fatalf("the window sent %+v, want one resize", window)
+	}
+	if len(owned.viewSent()) != 1 {
+		t.Fatalf("the ended view sent %+v", owned.viewSent()[1:])
+	}
+}
+
+// A request for a tab whose placement has not finished waits for the mount of its view: it goes through the view with the generation of
+// view-source-registered, and the host refuses no request (docs/spec/persistent-services.md#owned-session-messages).
+func TestARequestBeforeTheMountOfItsOwnerWaitsForTheMount(t *testing.T) {
+	var mu sync.Mutex
+	var hold *gate
+	owned := &ownedHost{reply: func(op string, body map[string]any) map[string]any {
+		return map[string]any{"session": "s-2", "creation": body["session"].(map[string]any)["creation"]}
+	}}
+	extra := owned.table()
+	extra["presentSurfaces"] = func(context.Context, json.RawMessage) (any, error) {
+		mu.Lock()
+		waiting := hold
+		mu.Unlock()
+		if waiting != nil {
+			waiting.wait()
+		}
+		return []any{}, nil
+	}
+	f := newTabShell(t, &storedHost{installed: sessionPlugins, extra: extra,
+		projects: []map[string]any{gridProject(oneCard(tab("tab-owner", "term")))}})
+	f.open(t)
+	release := newGate()
+	mu.Lock()
+	hold = release
+	mu.Unlock()
+	f.shell.Registry().RunLater("core.layout.open", json.RawMessage(`{"card":"main","side":"right","plugin":"term"}`), func(_ any, err error) {
+		if err != nil {
+			t.Errorf("core.layout.open: %v", err)
+		}
+	})
+	f.settle()
+	var surfaces []struct{ Surface string }
+	if err := json.Unmarshal([]byte(f.status("core.surfaces")), &surfaces); err != nil {
+		t.Fatal(err)
+	}
+	opened := ""
+	for _, item := range surfaces {
+		if item.Surface != "tab-owner" {
+			opened = item.Surface
+		}
+	}
+	if opened == "" {
+		t.Fatalf("core.surfaces holds no opened tab: %s", f.status("core.surfaces"))
+	}
+	owned.mount(opened, 9)
+	var session any
+	var failure error
+	answered := false
+	f.shell.Registry().RunLaterOn("core.session.open", json.RawMessage(`{"plugin":"term","params":{},"size":{"width":640,"height":384,"scale":2}}`),
+		opened, func(value any, err error) { session, failure, answered = value, err, true })
+	f.settle()
+	if answered || len(owned.sent()) != 0 || len(owned.viewSent()) != 0 {
+		t.Fatalf("the open before the mount answered %v %v and sent %+v %+v", session, failure, owned.sent(), owned.viewSent())
+	}
+	f.shell.Event("view-source-registered", []any{map[string]any{"plugin": "term", "surface": opened, "generation": 9}})
+	f.settle()
+	release.open()
+	f.settle()
+	if failure != nil || !answered {
+		t.Fatalf("core.session.open answered %v, %v", answered, failure)
+	}
+	sent := owned.viewSent()
+	if len(sent) != 1 || sent[0].surface != opened || sent[0].generation != 9 || sent[0].body["operation"] != "open" {
+		t.Fatalf("the view sent %+v, want one open of %s with generation 9", sent, opened)
 	}
 }

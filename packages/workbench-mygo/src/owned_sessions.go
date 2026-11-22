@@ -38,8 +38,9 @@ type OwnedPorts struct {
 	Port func(name string) OwnedSidecar
 	// Plugin returns the plugin of a surface of the layout, or "" when no layout holds the surface.
 	Plugin func(surface string) string
-	// Mounted returns the view of a surface that a view mounts; a surface without a mounted view is false.
-	Mounted func(surface string) (MountedView, bool)
+	// Mounted answers with the view that the host mounted on a surface, or false for a surface without a mounted view. For a surface whose
+	// placement has not finished it answers when the view mounts or the placement finishes, and with an error when the surface closes first.
+	Mounted func(surface string, answer func(view MountedView, mounted bool, err error))
 	// Shown returns the sessions that the restored tabs name in their params, as tab identifier to session identifier.
 	Shown func() map[string]string
 	// Random returns a new identifier for a creation or a correlation identifier.
@@ -469,14 +470,20 @@ func (o *OwnedSessions) Adopt(live func(surface string) bool, answer func(error)
 }
 
 // request sends body for the owner surface with a new correlation identifier. A surface that a view mounts sends through the view with its
-// source generation, and any other surface through the window (docs/spec/persistent-services.md#owned-session-messages).
+// source generation, and any other surface through the window; a surface whose view may still mount waits for its mount
+// (docs/spec/persistent-services.md#owned-session-messages).
 func (o *OwnedSessions) request(port OwnedSidecar, owner string, body any, answer func(json.RawMessage, error)) {
 	cid := o.ports.Random()
-	if view, ok := o.ports.Mounted(owner); ok {
-		port.RequestMounted(view, owner, body, cid, answer)
-		return
-	}
-	port.Request(owner, body, cid, answer)
+	o.ports.Mounted(owner, func(view MountedView, mounted bool, err error) {
+		switch {
+		case err != nil:
+			answer(nil, err)
+		case mounted:
+			port.RequestMounted(view, owner, body, cid, answer)
+		default:
+			port.Request(owner, body, cid, answer)
+		}
+	})
 }
 
 // showRestored makes each restored tab that is live show the open session that its params name, and states the error of each such

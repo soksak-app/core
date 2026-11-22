@@ -242,8 +242,12 @@ type surfaceState struct {
 	row     float32
 	running bool
 	// going tells that the last placement belongs to a run.
-	going   bool
-	views   map[string]*viewState
+	going bool
+	views map[string]*viewState
+	// sources holds the view source of each surface on which the host mounted a view, from view-source-registered until
+	// view-source-ended, and mounts the requests that wait for the mount of a surface whose placement has not finished.
+	sources map[string]viewSource
+	mounts  map[string][]func(MountedView, bool, error)
 	reports map[string]*tabReport
 	// failed holds the reason of each view that stopped its restarts.
 	failed map[string]string
@@ -343,7 +347,7 @@ type storedSession struct {
 
 func newSurfaceState() surfaceState {
 	return surfaceState{held: map[string]*heldSurface{}, drawn: map[string]layout.Rect{}, applied: map[string]layout.Rect{}, seated: map[string]SidebarSeat{},
-		views: map[string]*viewState{}, reports: map[string]*tabReport{}, failed: map[string]string{}, documents: map[string]map[string]bool{},
+		views: map[string]*viewState{}, sources: map[string]viewSource{}, mounts: map[string][]func(MountedView, bool, error){}, reports: map[string]*tabReport{}, failed: map[string]string{}, documents: map[string]map[string]bool{},
 		detaching: map[string]bool{}, detachFailed: map[string]string{}, sessions: map[string]*storedSession{}, dataWrites: map[string]int{}}
 }
 
@@ -533,6 +537,7 @@ func (s *Shell) forgetSurfaces(tabs []string) {
 		}
 		s.processes.forgetView(id)
 		delete(s.surfaces.held, id)
+		s.answerMounts(id, fmt.Errorf("surface %s closed before its view mounted", id))
 		delete(s.surfaces.failed, id)
 		delete(s.surfaces.reports, id)
 		delete(s.surfaces.views, id)
@@ -790,6 +795,7 @@ func (s *Shell) placeSurfaces() {
 					for _, id := range requested {
 						if held := s.surfaces.held[id]; held != nil {
 							held.hosted = true
+							s.answerMounts(id, nil)
 						}
 					}
 				}
