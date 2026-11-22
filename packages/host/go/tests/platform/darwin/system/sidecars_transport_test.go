@@ -102,6 +102,8 @@ func TestPersistentServiceStartsInANewSession(t *testing.T) {
 		own, _ := syscall.Getsid(0)
 		t.Fatalf("the service %d is in session %d (the test is in session %d), want its own session", pid, session, own)
 	}
+	// The stop ends the connection at once, so the test takes the echo of the open before it stops.
+	owner.Next(t)
 	sidecars.Stop()
 	if err := <-serverDone; err != nil {
 		t.Fatal(err)
