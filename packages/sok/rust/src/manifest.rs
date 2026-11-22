@@ -20,7 +20,7 @@ const SET_TITLE_MAX: usize = 40;
 const MENU_TITLE_MAX: usize = 40;
 
 /// The members that plugin.json may hold (validateManifest).
-const TOP_LEVEL_KEYS: [&str; 17] = [
+const TOP_LEVEL_KEYS: [&str; 18] = [
     "id",
     "name",
     "description",
@@ -37,6 +37,7 @@ const TOP_LEVEL_KEYS: [&str; 17] = [
     "sidebars",
     "extends",
     "contributes",
+    "sessions",
     "events",
 ];
 
@@ -1509,6 +1510,17 @@ pub fn validate_manifest(value: &Value) -> Result<(), String> {
             return Err(format!("{where_}: background requires a surface"));
         }
         check_background(&where_, raw, &sidecars, manifest.get("settings"))?;
+    }
+    if let Some(raw) = manifest.get("sessions") {
+        if raw != &Value::Bool(true) {
+            return Err(format!("{where_}: sessions must be true"));
+        }
+        if !has("surface") {
+            return Err(format!("{where_}: sessions requires a surface"));
+        }
+        if sidecars.len() != 1 {
+            return Err(format!("{where_}: sessions requires one sidecar in dependencies"));
+        }
     }
     if let Some(raw) = manifest.get("surface") {
         check_surface(&where_, manifest, raw, &sidecars)?;

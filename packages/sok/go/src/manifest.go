@@ -46,7 +46,7 @@ const (
 
 // topLevelKeys are the members that plugin.json may hold (validateManifest).
 var topLevelKeys = []string{"id", "name", "description", "mark", "icon", "surface", "sections", "preview", "dependencies", "background",
-	"exposes", "settings", "data", "sidebars", "extends", "contributes", "events"}
+	"exposes", "settings", "data", "sidebars", "extends", "contributes", "events", "sessions"}
 
 // utf16Length is the length of a string in UTF-16 code units, the length that the reader's string checks count.
 func utf16Length(s string) int {
@@ -621,6 +621,17 @@ func ValidateManifest(value any) error {
 		}
 		if err := checkBackground(where, raw, sidecars, manifest["settings"]); err != nil {
 			return err
+		}
+	}
+	if raw, ok := manifest["sessions"]; ok {
+		if raw != true {
+			return fmt.Errorf("%s: sessions must be true", where)
+		}
+		if !hasSurface {
+			return fmt.Errorf("%s: sessions requires a surface", where)
+		}
+		if len(sidecars) != 1 {
+			return fmt.Errorf("%s: sessions requires one sidecar in dependencies", where)
 		}
 	}
 	if raw, ok := manifest["surface"]; ok {

@@ -655,7 +655,7 @@ export function validateManifest(manifest) {
     if (manifest[member] !== undefined) throw new Error(`plugin ${manifest.id}: ${member} is removed; a section is a view of the plugin`);
   }
   only("plugin.json", manifest, ["id", "name", "description", "mark", "icon", "surface", "sections", "preview", "dependencies", "background", "exposes", "settings",
-    "data", "sidebars", "extends", "contributes", "events"]);
+    "data", "sidebars", "extends", "contributes", "events", "sessions"]);
   validateEventsPath("plugin.json", manifest.events);
   const { id } = manifest;
   if (typeof id !== "string" || !ID.test(id)) throw new Error(`plugin.json: invalid id ${id}`);
@@ -701,6 +701,13 @@ export function validateManifest(manifest) {
   if (manifest.background !== undefined) {
     if (manifest.surface === undefined) throw new Error(`${where}: background requires a surface`);
     checkBackground(`${where}`, manifest.background, manifestSidecars(manifest), manifest.settings);
+  }
+  // default: sessions is an optional field of plugin.json; without it the surfaces of the plugin open no owned session.
+  // The persistent transport of the sidecar is checked by the host, which reads sidecar.json (docs/spec/plugins.md#owned-sessions).
+  if (manifest.sessions !== undefined) {
+    if (manifest.sessions !== true) throw new Error(`${where}: sessions must be true`);
+    if (manifest.surface === undefined) throw new Error(`${where}: sessions requires a surface`);
+    if (manifestSidecars(manifest).length !== 1) throw new Error(`${where}: sessions requires one sidecar in dependencies`);
   }
   if (manifest.surface !== undefined) {
     const surface = manifest.surface;
