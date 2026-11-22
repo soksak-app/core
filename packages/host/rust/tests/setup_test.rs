@@ -629,27 +629,27 @@ fn setup_start_of_a_run_beside_the_person_changes_no_file() {
     let moved = "/private/var/folders/x/T/AppTranslocation/ID/d/soksak.app/Contents/MacOS";
     for (identifier, config, executable, want) in [
         (
-            "app.soksak.tauri",
+            "app.soksak.example",
             None,
-            "/Applications/soksak.app/Contents/MacOS/sok-tauri",
+            "/Applications/soksak.app/Contents/MacOS/sok-example",
             SetupStart::default(),
         ),
         (
-            "app.soksak.tauri.dev",
+            "app.soksak.example.dev",
             None,
-            "/work/target/debug/sok-tauri",
-            kept("the debug build app.soksak.tauri.dev"),
+            "/work/target/debug/sok-example",
+            kept("the debug build app.soksak.example.dev"),
         ),
         (
-            "app.soksak.tauri",
+            "app.soksak.example",
             Some("/tmp/check"),
-            "/Applications/soksak.app/Contents/MacOS/sok-tauri",
+            "/Applications/soksak.app/Contents/MacOS/sok-example",
             kept("the configuration directory /tmp/check"),
         ),
         (
-            "app.soksak.tauri",
+            "app.soksak.example",
             None,
-            &format!("{moved}/sok-tauri"),
+            &format!("{moved}/sok-example"),
             SetupStart {
                 kept: None,
                 translocated: Some(moved.into()),
@@ -665,10 +665,10 @@ fn setup_start_of_a_run_beside_the_person_changes_no_file() {
     let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     for (start, event, level, field) in [
         (
-            kept("the debug build app.soksak.tauri.dev"),
+            kept("the debug build app.soksak.example.dev"),
             "host.setup.kept",
             "info",
-            "the debug build app.soksak.tauri.dev",
+            "the debug build app.soksak.example.dev",
         ),
         (
             SetupStart {

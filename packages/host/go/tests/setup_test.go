@@ -511,10 +511,10 @@ func TestSetupStartOfARunBesideThePersonChangesNoFile(t *testing.T) {
 		identifier, config, executable string
 		want                           host.SetupStart
 	}{
-		{"app.soksak.mygo", "", "/Applications/soksak.app/Contents/MacOS/sok-mygo", host.SetupStart{}},
-		{"app.soksak.mygo.dev", "", "/work/target/debug/sok-mygo.app/Contents/MacOS/sok-mygo", host.SetupStart{Kept: "the debug build app.soksak.mygo.dev"}},
-		{"app.soksak.mygo", "/tmp/check", "/Applications/soksak.app/Contents/MacOS/sok-mygo", host.SetupStart{Kept: "the configuration directory /tmp/check"}},
-		{"app.soksak.mygo", "", "/private/var/folders/x/T/AppTranslocation/ID/d/soksak.app/Contents/MacOS/sok-mygo",
+		{"app.soksak.example", "", "/Applications/soksak.app/Contents/MacOS/sok-example", host.SetupStart{}},
+		{"app.soksak.example.dev", "", "/work/target/debug/sok-example.app/Contents/MacOS/sok-example", host.SetupStart{Kept: "the debug build app.soksak.example.dev"}},
+		{"app.soksak.example", "/tmp/check", "/Applications/soksak.app/Contents/MacOS/sok-example", host.SetupStart{Kept: "the configuration directory /tmp/check"}},
+		{"app.soksak.example", "", "/private/var/folders/x/T/AppTranslocation/ID/d/soksak.app/Contents/MacOS/sok-example",
 			host.SetupStart{Translocated: "/private/var/folders/x/T/AppTranslocation/ID/d/soksak.app/Contents/MacOS"}},
 	} {
 		if got := host.SetupStartOf(c.identifier, c.config, c.executable); got != c.want {
@@ -526,7 +526,7 @@ func TestSetupStartOfARunBesideThePersonChangesNoFile(t *testing.T) {
 		event, level string
 		field        string
 	}{
-		{host.SetupStart{Kept: "the debug build app.soksak.mygo.dev"}, "host.setup.kept", "info", "the debug build app.soksak.mygo.dev"},
+		{host.SetupStart{Kept: "the debug build app.soksak.example.dev"}, "host.setup.kept", "info", "the debug build app.soksak.example.dev"},
 		{host.SetupStart{Translocated: "/private/var/folders/x/T/AppTranslocation/ID/d"}, "host.setup.translocated", "error", "/private/var/folders/x/T/AppTranslocation/ID/d"},
 	} {
 		t.Run(c.event, func(t *testing.T) {

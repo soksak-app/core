@@ -171,6 +171,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [o] F1031-9 — Node reporter 색상 test가 명시적인 색상 환경을 사용한다. 상위 환경에 NO_COLOR를 지정한 상태에서 두 파일의 test 39개가 통과한다.
   - [o] F1031-10 — 표시된 오류에 맞춰 toast 테두리 색상을 적용하고 닫기 control metric을 선언하며 layout fixture에 닫기 선언을 연결한다. 관련 test 13개가 통과한다.
   - [o] F1031-11 — F1031-10 후속. Toast 닫기 metric을 포함하도록 host의 workbench 선언 사본을 갱신한다. Exposure 검사 두 개와 workbench 선언 test가 통과한다.
+- [o] F1047 — P0, F1044와 F1046의 후속: Go와 Rust host library의 setup start 테스트가 identifier와 실행 파일에 mygo와 Tauri framework를 적었다. 언어 host library는 framework를 적지 않으므로 테스트는 identifier `app.soksak.example`을 쓴다.
 - [o] F1046 — P0, F1034부터 F1044까지의 후속: push gate(`make check-preflight`)가 push하지 않은 항목의 check 다섯 개에서 실패했다.
   - [o] F1046-1 — 비유 동사 check의 주석과 그 테스트 주석이 한국어 동사를 적는다. 주석은 영어다.
   - [o] F1046-2 — F1044가 `host.setup.translocated`를 추가한 뒤 생성된 event class 파일이 `docs/spec/events.json`과 다르다.
