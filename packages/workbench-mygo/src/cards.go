@@ -943,7 +943,7 @@ type LayoutNode struct {
 	Children  []LayoutNode
 	Card      string
 	Frame     LayoutFrame
-	Tabs      []LayoutTab
+	Tabs      []layout.TabDescription
 	// Leader tells that the card is the leader of its level, and Parent is the group card that holds it, or ""
 	// (docs/spec/groups.md#status-and-queries).
 	Leader bool
@@ -981,15 +981,6 @@ type LayoutFrame struct {
 	Height float64 `json:"height"`
 }
 
-// LayoutTab is a tab of a card of a layout description; Params are the stored parameters of the tab, null without them.
-type LayoutTab struct {
-	Tab    string          `json:"tab"`
-	Plugin string          `json:"plugin"`
-	Title  string          `json:"title"`
-	Active bool            `json:"active"`
-	Params json.RawMessage `json:"params"`
-}
-
 // MarshalJSON writes a split as {direction, size, frame, children}, a group card as {card, size, frame, leader, group} and a content
 // card as {card, size, frame, tabs} with parent inside a group card and leader on the member that leads its level
 // (docs/spec/exposure.md#window-snapshot).
@@ -1013,15 +1004,15 @@ func (n LayoutNode) MarshalJSON() ([]byte, error) {
 	}
 	tabs := n.Tabs
 	if tabs == nil {
-		tabs = []LayoutTab{}
+		tabs = []layout.TabDescription{}
 	}
 	return json.Marshal(struct {
-		Card   string      `json:"card"`
-		Size   float64     `json:"size"`
-		Frame  LayoutFrame `json:"frame"`
-		Leader bool        `json:"leader,omitempty"`
-		Parent string      `json:"parent,omitempty"`
-		Tabs   []LayoutTab `json:"tabs"`
+		Card   string                  `json:"card"`
+		Size   float64                 `json:"size"`
+		Frame  LayoutFrame             `json:"frame"`
+		Leader bool                    `json:"leader,omitempty"`
+		Parent string                  `json:"parent,omitempty"`
+		Tabs   []layout.TabDescription `json:"tabs"`
 	}{n.Card, n.Size, n.Frame, n.Leader, n.Parent, tabs})
 }
 
@@ -1120,23 +1111,22 @@ func (s *Shell) describeNode(node layout.TreeNode) (LayoutNode, error) {
 	if err != nil {
 		return LayoutNode{}, err
 	}
-	active := data.ActiveTab()
 	for _, tab := range data.TabList() {
-		params := tab.Rest["params"]
-		if params == nil {
-			params = json.RawMessage("null")
-		}
-		var reported *string
-		if report := s.surfaces.reports[tab.ID]; report != nil {
-			reported = optionalText(report.Title)
-		}
-		described.Tabs = append(described.Tabs, LayoutTab{Tab: tab.ID, Plugin: tab.Plugin, Title: layout.TabName(tab, reported, false),
-			Active: active != nil && active.ID == tab.ID, Params: params})
+		described.Tabs = append(described.Tabs, s.describeTab(data, tab))
 	}
 	return described, nil
 }
 
 // The layout operations core.layout.open, core.layout.select, core.layout.move and core.layout.close (docs/spec/cli.md#acting-on-a-layout). Each runs in
+// describeTab describes a tab of a card as the window description and core.grid report it, with the name that its view reported.
+func (s *Shell) describeTab(data *layout.CardData, tab layout.Tab) layout.TabDescription {
+	var reported *string
+	if report := s.surfaces.reports[tab.ID]; report != nil {
+		reported = optionalText(report.Title)
+	}
+	return data.DescribeTab(tab, reported)
+}
+
 // one step of the main thread, which decides and changes the layout, so the window applies them one at a time.
 
 // currentTarget is the name of the focused card, or of the active tab of the focused card, in a layout operation.

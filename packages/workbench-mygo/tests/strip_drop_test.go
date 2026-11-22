@@ -31,7 +31,7 @@ func (f *tabShell) tabIDs(card string) []string {
 	}
 	ids := []string{}
 	for _, held := range entry["tabs"].([]any) {
-		ids = append(ids, held.(map[string]any)["id"].(string))
+		ids = append(ids, held.(map[string]any)["tab"].(string))
 	}
 	return ids
 }

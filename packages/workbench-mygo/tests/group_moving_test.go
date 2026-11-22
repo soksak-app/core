@@ -149,7 +149,7 @@ func (f *tabShell) holdsTab(card, tab string) bool {
 		return false
 	}
 	for _, held := range entry["tabs"].([]any) {
-		if held.(map[string]any)["id"] == tab {
+		if held.(map[string]any)["tab"] == tab {
 			return true
 		}
 	}
@@ -264,7 +264,7 @@ func TestATabOutOfAGroupSplitsACardOfTheRootLevel(t *testing.T) {
 // that keeps one card is replaced by that card.
 func TestTheOnlyTabOutOfAGroupMovesItsCardAndDissolvesTheGroup(t *testing.T) {
 	f := outsideShell(t)
-	only := f.gridCards()["card-3"]["tabs"].([]any)[0].(map[string]any)["id"].(string)
+	only := f.gridCards()["card-3"]["tabs"].([]any)[0].(map[string]any)["tab"].(string)
 	drag := f.dropOnRightOf(t, only, "card-4")
 	if drag == nil || drag.Target == nil || strings.Join(drag.Target.Card, " ") != "card-4" || drag.Target.Zone != "right" || drag.Preview == nil {
 		t.Fatalf("the drag over the right of card-4 is %+v", drag)

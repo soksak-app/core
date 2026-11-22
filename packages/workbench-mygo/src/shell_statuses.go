@@ -72,11 +72,9 @@ type gridGroupStatus struct {
 	Leader string `json:"leader"`
 }
 
-// gridTabStatus is a tab of a card of core.grid.
+// gridTabStatus is a tab of a card of core.grid: the members of a layout tab, then its presentation members.
 type gridTabStatus struct {
-	ID       string  `json:"id"`
-	Plugin   string  `json:"plugin"`
-	Title    string  `json:"title"`
+	layout.TabDescription
 	Label    *string `json:"label"`
 	Notice   *string `json:"notice"`
 	Footer   *string `json:"footer"`
@@ -285,7 +283,7 @@ func (s *Shell) gridState() (any, error) {
 		}
 		if data != nil {
 			for _, tab := range data.TabList() {
-				entry.Tabs = append(entry.Tabs, s.gridTab(tab))
+				entry.Tabs = append(entry.Tabs, s.gridTab(data, tab))
 			}
 			if active := data.ActiveTab(); active != nil {
 				entry.Active = &active.ID
@@ -296,9 +294,9 @@ func (s *Shell) gridState() (any, error) {
 	return status, nil
 }
 
-// gridTab returns the entry of a tab with what its view reported.
-func (s *Shell) gridTab(tab layout.Tab) gridTabStatus {
-	entry := gridTabStatus{ID: tab.ID, Plugin: tab.Plugin, Title: tab.Title}
+// gridTab returns the entry of a tab of the card data with what its view reported.
+func (s *Shell) gridTab(data *layout.CardData, tab layout.Tab) gridTabStatus {
+	entry := gridTabStatus{TabDescription: s.describeTab(data, tab)}
 	if report := s.surfaces.reports[tab.ID]; report != nil {
 		entry.Label, entry.Footer, entry.Error = optionalText(report.Title), optionalText(report.Footer), optionalText(report.Error)
 		entry.Notice, entry.Modified = optionalText(s.tabNoticeText(tab.ID)), report.Modified

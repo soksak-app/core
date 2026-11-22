@@ -165,6 +165,43 @@ func TestTheCardsOfTheGridHoldContentCardsAndTheGroupsTheGroupCards(t *testing.T
 	}
 }
 
+// The tabs of core.grid hold the members of the tabs of the layout of the window description, tab, plugin, title, active and params, beside
+// the presentation members (docs/spec/groups.md#status-and-queries).
+func TestTheTabsOfTheGridHoldTheMembersOfTheLayoutTabs(t *testing.T) {
+	f := layoutShell(t, oneCard(
+		map[string]any{"id": "t1", "plugin": "notes", "title": "t1", "role": nil, "params": map[string]any{"path": "a.md"}},
+		tab("t2", "notes")))
+	var main map[string]any
+	cards, _ := f.read("core.grid")["cards"].([]any)
+	for _, entry := range cards {
+		if card, _ := entry.(map[string]any); card["id"] == "main" {
+			main = card
+		}
+	}
+	if main == nil {
+		t.Fatalf("core.grid lists no card main: %v", cards)
+	}
+	tabs, _ := main["tabs"].([]any)
+	if len(tabs) != 2 {
+		t.Fatalf("core.grid lists the tabs %v, not t1 and t2", tabs)
+	}
+	want := []map[string]any{
+		{"tab": "t1", "plugin": "notes", "title": "t1", "active": true, "params": map[string]any{"path": "a.md"}},
+		{"tab": "t2", "plugin": "notes", "title": "t2", "active": false, "params": nil},
+	}
+	for k, expected := range want {
+		entry, _ := tabs[k].(map[string]any)
+		for key, value := range expected {
+			if !reflect.DeepEqual(entry[key], value) {
+				t.Fatalf("the tab %d of core.grid has %s = %v, want %v", k, key, entry[key], value)
+			}
+		}
+		if _, kept := entry["id"]; kept {
+			t.Fatalf("the tab %d of core.grid keeps the member id: %v", k, entry)
+		}
+	}
+}
+
 // The layout of the description is the tree of the members of the root level with each group card as a node of its group and the tree
 // of its members, and groups lists every group card once with its members by identifier (docs/spec/groups.md#status-and-queries).
 func TestTheDescriptionHoldsTheGroupCardsInItsTree(t *testing.T) {
@@ -403,7 +440,7 @@ func TestACardGetCarriesTheSummaryStatusesOfEachTab(t *testing.T) {
 	}
 	for _, entry := range asJSON(t, grid).(map[string]any)["cards"].([]any) {
 		for _, each := range entry.(map[string]any)["tabs"].([]any) {
-			if each.(map[string]any)["id"] == surface {
+			if each.(map[string]any)["tab"] == surface {
 				card = entry.(map[string]any)["id"].(string)
 			}
 		}

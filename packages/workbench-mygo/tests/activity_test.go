@@ -260,7 +260,7 @@ func TestTheIconsOfAnActivityStandOnItsHolders(t *testing.T) {
 	var card string
 	for _, entry := range status[gridRead](t, r.f, "core.grid").Cards {
 		for _, tab := range entry.Tabs {
-			if tab.ID == surface {
+			if tab.Tab == surface {
 				card = entry.ID
 			}
 		}

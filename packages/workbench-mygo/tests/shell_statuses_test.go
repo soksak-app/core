@@ -46,7 +46,7 @@ type gridRead struct {
 		Pane       *int    `json:"pane"`
 		Active     *string `json:"active"`
 		Tabs       []struct {
-			ID     string `json:"id"`
+			Tab    string `json:"tab"`
 			Plugin string `json:"plugin"`
 		} `json:"tabs"`
 		Acts map[string]any `json:"acts"`

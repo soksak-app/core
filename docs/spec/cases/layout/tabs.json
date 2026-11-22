@@ -46,6 +46,10 @@
   {"call":"activeTab"},
   {"call":"cardTextSize","returns":1.5},
   {"call":"card","returns":{"textSize":1.5}}
+ ]},
+ {"name":"a tab description gives the members of a layout tab","card":{"id":"main","data":{"tabs":[{"id":"a","plugin":"alpha","title":"A"},{"id":"b","plugin":"beta","title":"B","params":{"path":"x"}}],"activeId":"b"}},"steps":[
+  {"call":"tabDescription","args":["a",null],"returns":{"tab":"a","plugin":"alpha","title":"A","active":false,"params":null}},
+  {"call":"tabDescription","args":["b","file.txt"],"returns":{"tab":"b","plugin":"beta","title":"file.txt","active":true,"params":{"path":"x"}}}
  ]}
 ],
 "names":[

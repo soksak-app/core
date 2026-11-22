@@ -29,8 +29,8 @@ export const reading = (app, records) => ({ catalog: recordCatalog(app.configDir
  */
 export function placeholderTabs(grid, surfaces) {
   const placeholders = new Set(surfaces.filter((row) => row.kind === "tab" && row.placeholder != null).map((row) => row.surface));
-  return (grid?.cards ?? []).flatMap((card) => (card.tabs ?? []).filter((tab) => placeholders.has(tab.id))
-    .map((tab) => ({ card: card.id, tab: tab.id, plugin: tab.plugin })));
+  return (grid?.cards ?? []).flatMap((card) => (card.tabs ?? []).filter((tab) => placeholders.has(tab.tab))
+    .map((tab) => ({ card: card.id, tab: tab.tab, plugin: tab.plugin })));
 }
 
 const requirePlugin = (plugin, what) => {
@@ -64,7 +64,7 @@ export async function startTab(s, { startPlugin: plugin = START_PROBE, startEntr
   requirePlugin(plugin, "the start state names no plugin for its start tab");
   const grid = await s.get("core.grid");
   const focused = grid?.cards.find((card) => card.focused);
-  const active = focused?.tabs?.find((tab) => tab.id === focused.active);
+  const active = focused?.tabs?.find((tab) => tab.tab === focused.active);
   if (active?.plugin !== plugin) {
     throw new Error(`the focused card of the start layout holds no active ${plugin} tab: ${JSON.stringify(grid?.cards ?? null)}`);
   }
@@ -94,7 +94,7 @@ export async function cardSidebar(s, { plugin, set, sections, layout = "list" } 
   }
   await s.run("core.settings.link", { place: "card-left", plugin, set: id, scope: "common" });
   const cards = (await s.get("core.grid")).cards
-    .filter((card) => card.tabs?.find((tab) => tab.id === card.active)?.plugin === plugin).map((card) => `${card.id}:left`);
+    .filter((card) => card.tabs?.find((tab) => tab.tab === card.active)?.plugin === plugin).map((card) => `${card.id}:left`);
   if (cards.length === 0) throw new Error(`no card shows an active ${plugin} tab for its card sidebar`);
   await s.until("core.sidebars", (value) => cards.every((sidebar) => value.some((item) => item.sidebar === sidebar && item.set === id)),
     `the card sidebars ${cards.join(", ")} did not show the set ${id}`);

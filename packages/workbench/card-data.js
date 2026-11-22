@@ -31,3 +31,16 @@ export function tabName(tab, reported, modified) {
   // default: a tab whose surface reported no title shows the title of its layout entry.
   return `${modified ? "● " : ""}${reported ?? tab.title}`;
 }
+
+/**
+ * The members of a tab that the layout of the window description and core.grid report (docs/spec/exposure.md#window-snapshot):
+ * {tab, plugin, title, active, params}, where title is the name the tab shows without the mark of a modified tab, active tells whether
+ * the tab is the active tab of its card, and params are the stored parameters or null.
+ */
+export function tabDescription(card, tabId, reported) {
+  const tab = tabsOf(card).find((t) => t.id === tabId);
+  if (!tab) throw new Error(`tab ${tabId} is not in card ${card.id}`);
+  return { tab: tab.id, plugin: tab.plugin, title: tabName(tab, reported, false), active: card.data.activeId === tab.id,
+    // default: a tab stored without params has the params null.
+    params: tab.params ?? null };
+}

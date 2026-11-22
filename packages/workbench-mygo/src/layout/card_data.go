@@ -226,3 +226,26 @@ func TabName(tab Tab, reported *string, modified bool) string {
 	}
 	return label
 }
+
+// TabDescription holds the members of a tab that the layout of the window description and core.grid report: the identifier, the plugin,
+// the name the tab shows, whether it is the active tab of its card, and the stored parameters or null (docs/spec/exposure.md#window-snapshot).
+type TabDescription struct {
+	Tab    string          `json:"tab"`
+	Plugin string          `json:"plugin"`
+	Title  string          `json:"title"`
+	Active bool            `json:"active"`
+	Params json.RawMessage `json:"params"`
+}
+
+// DescribeTab describes a tab of the card data, given the label its surface reported (reported nil when none). The tab must be one of
+// the tabs of the card data, so the active tab is the one that the card data selects.
+func (d *CardData) DescribeTab(tab Tab, reported *string) TabDescription {
+	params := tab.Rest["params"]
+	// default: a tab stored without params has the params null.
+	if params == nil {
+		params = json.RawMessage("null")
+	}
+	active := d.ActiveTab()
+	return TabDescription{Tab: tab.ID, Plugin: tab.Plugin, Title: TabName(tab, reported, false),
+		Active: active != nil && active.ID == tab.ID, Params: params}
+}

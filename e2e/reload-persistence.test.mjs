@@ -17,7 +17,7 @@ for (const app of Object.values(APPS)) {
     await s.run("host.window.reload");
     await s.until("core.window.workbench", (workbench) => workbench.start !== before && workbench.readyState === "complete",
       "the workbench did not start again");
-    const after = (await s.get("core.grid")).cards.flatMap((card) => card.tabs ?? []).map((tab) => tab.id);
+    const after = (await s.get("core.grid")).cards.flatMap((card) => card.tabs ?? []).map((tab) => tab.tab);
     assert.ok(!after.includes(closed.id), `the closed tab ${closed.id} returned after the reload: ${JSON.stringify(after)}`);
   });
 }

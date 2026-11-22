@@ -26,7 +26,7 @@ export function rightEdgeWidthDragPlan(grid, card) {
 export function viewCardWithDifferentPluginTab(grid, plugin, preferred) {
   assert.ok(grid && Array.isArray(grid.cards), "core.grid must expose cards for a view card");
   assert.ok(typeof plugin === "string" && plugin.length > 0, "a view card requires a plugin identity");
-  const cardHasAnchor = (card) => card?.tabs?.some((tab) => typeof tab?.id === "string" && tab.id.length > 0
+  const cardHasAnchor = (card) => card?.tabs?.some((tab) => typeof tab?.tab === "string" && tab.tab.length > 0
     && typeof tab.plugin === "string" && tab.plugin !== plugin);
   const card = grid.cards.find((item) => item.id === preferred && cardHasAnchor(item))
     ?? grid.cards.find(cardHasAnchor);

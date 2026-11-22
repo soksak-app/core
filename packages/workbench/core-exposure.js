@@ -9,6 +9,7 @@ import { createActivity } from "./activity.js";
 import { contributionsState, onContributionsChange } from "./contributions.js";
 import { checkOpenPath } from "./file-open.js";
 import { registry, connectExposure, revisitRegistrations, whenRepliesSent } from "./exposure.js";
+import { tabDescription } from "./card-data.js";
 import { log, reloadPage, report } from "./host.js";
 import { createPluginApply } from "./plugin-apply.js";
 import { trace } from "./performance.js";
@@ -284,8 +285,9 @@ function gridState() {
       // default: a card without a fixed px width has null width.
       fixed: Boolean(card.fixed), width: card.width ?? null, focused: card.id === focused(),
       pane: drawn ? pane++ : null,
-      tabs: tabs.map(({ id, plugin, title }) => ({ id, plugin, title, label: tabLabel(id), notice: tabNotice(id), footer: tabFooter(id),
-        modified: tabModified(id), error: tabError(id) })),
+      // The members of a tab are those of the layout tabs (docs/spec/groups.md#status-and-queries), beside its presentation members.
+      tabs: tabs.map(({ id }) => ({ ...tabDescription(card, id, tabLabel(id)), label: tabLabel(id), notice: tabNotice(id),
+        footer: tabFooter(id), modified: tabModified(id), error: tabError(id) })),
       // Text that the content footer shows (docs/spec/example-model.md). default: a card that is not drawn yet has no footer text element, so the text is empty.
       status: el.querySelector(":scope > .status .status__text")?.textContent ?? "",
       active: tabs.length ? activeTab(card).id : null,

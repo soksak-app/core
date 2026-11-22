@@ -713,6 +713,17 @@ func tabCall(t *testing.T, data *layout.CardData, s step) (any, bool, error) {
 	case "settleActiveTab":
 		data.SettleActiveTab()
 		return nil, false, nil
+	case "tabDescription":
+		var id string
+		var reported *string
+		arg(t, s, 0, &id)
+		arg(t, s, 1, &reported)
+		for _, tab := range data.TabList() {
+			if tab.ID == id {
+				return data.DescribeTab(tab, reported), true, nil
+			}
+		}
+		t.Fatalf("no tab %s in the card", id)
 	}
 	t.Fatalf("no tab call %s", s.Call)
 	return nil, false, nil

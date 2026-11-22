@@ -10,7 +10,7 @@ import { effectiveTextScope, keepCardScope, nextTextSize, notifyTextSize, setSur
 import { applyFrameText, chromeRow, measureAt } from "./frame-text.js";
 import { alignPlane, gridScale } from "./device-grid.js";
 import { CHROME, gripMetrics, placeFocusMark } from "./chrome-metrics.js";
-import { activeTab, appendTab, cardTextSize, removeTab, settleActiveTab, tabName as shownTabName, tabsOf } from "./card-data.js";
+import { activeTab, appendTab, cardTextSize, removeTab, settleActiveTab, tabDescription, tabsOf } from "./card-data.js";
 import { fitHead } from "./head-fit.js";
 import { hasPlugin, isPlace, plugin, plugins } from "./registry.js";
 import { sectionSurfaceShown } from "./section-surfaces.js";
@@ -2929,12 +2929,8 @@ export function layoutDescription() {
       // (docs/spec/exposure.md#window-snapshot).
       return {
         card: card.id, size, frame: frameOf(card.id), ...(parent ? { parent: parent.card } : {}), ...(leader ? { leader } : {}),
-        tabs: tabsOf(card).map((t) => ({
-          // The title is the name that the tab shows, the label that its surface announced or the tab name, without the mark of a modified tab.
-          tab: t.id, plugin: t.plugin, title: shownTabName(t, tabLabel(t.id), false), active: t.id === card.data.activeId,
-          // default: a tab stored without params has the params null.
-          params: t.params ?? null,
-        })),
+        // The members of each tab are shared with core.grid (docs/spec/groups.md#status-and-queries).
+        tabs: tabsOf(card).map((t) => tabDescription(card, t.id, tabLabel(t.id))),
       };
     });
   };

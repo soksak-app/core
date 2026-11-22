@@ -37,7 +37,7 @@ func TestEveryElementOfAHeadKeepsTheIndexOfItsCard(t *testing.T) {
 		for _, card := range status[gridRead](t, f, "core.grid").Cards {
 			cards = append(cards, card.ID)
 			for _, tab := range card.Tabs {
-				tabs = append(tabs, tab.ID)
+				tabs = append(tabs, tab.Tab)
 			}
 		}
 		tree := f.tester.ElementTree()
@@ -79,11 +79,11 @@ func TestAHiddenTabLeavesTheActiveTabInItsPlace(t *testing.T) {
 		t.Fatalf("the active tab stands at %+v after the list %+v, the gap is %v", shown, list, gap)
 	}
 	for _, tab := range card.Tabs {
-		if tab.ID == active {
+		if tab.Tab == active {
 			continue
 		}
-		if box := f.box("core.card.tab", tab.ID); box.W != 0 || box.H != 0 {
-			t.Fatalf("the hidden tab %s has the box %+v", tab.ID, box)
+		if box := f.box("core.card.tab", tab.Tab); box.W != 0 || box.H != 0 {
+			t.Fatalf("the hidden tab %s has the box %+v", tab.Tab, box)
 		}
 	}
 }
@@ -210,7 +210,7 @@ func TestTheStatusLineStandsOnItsPadding(t *testing.T) {
 	}
 	pad, _ := declared.Metric("space-2")
 	for _, card := range status[gridRead](t, f, "core.grid").Cards {
-		if len(card.Tabs) == 0 || card.Tabs[0].ID != surface {
+		if len(card.Tabs) == 0 || card.Tabs[0].Tab != surface {
 			continue
 		}
 		if got := found.X - f.box("core.card.status", card.ID).X; got != float32(pad) {

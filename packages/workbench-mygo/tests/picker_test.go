@@ -620,7 +620,7 @@ func TestASaveThatLeavesTheTabModifiedIsTheErrorOfTheTab(t *testing.T) {
 	for _, card := range status[struct {
 		Cards []struct {
 			Tabs []struct {
-				ID       string  `json:"id"`
+				Tab      string  `json:"tab"`
 				Modified bool    `json:"modified"`
 				Error    *string `json:"error"`
 			} `json:"tabs"`
@@ -628,7 +628,7 @@ func TestASaveThatLeavesTheTabModifiedIsTheErrorOfTheTab(t *testing.T) {
 	}](t, f.shellFixture, "core.grid").Cards {
 		for _, tab := range card.Tabs {
 			if tab.Error != nil {
-				reported = append(reported, fmt.Sprintf("%s %v %s", tab.ID, tab.Modified, *tab.Error))
+				reported = append(reported, fmt.Sprintf("%s %v %s", tab.Tab, tab.Modified, *tab.Error))
 			}
 		}
 	}

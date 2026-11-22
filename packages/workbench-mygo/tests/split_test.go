@@ -659,7 +659,7 @@ func TestALongStatusKeepsTheFootOfItsCard(t *testing.T) {
 		t.Fatalf("the long status is %v high, the short one %v", found.H, short.H)
 	}
 	for _, card := range status[gridRead](t, f, "core.grid").Cards {
-		if len(card.Tabs) == 0 || card.Tabs[0].ID != surface {
+		if len(card.Tabs) == 0 || card.Tabs[0].Tab != surface {
 			continue
 		}
 		if foot := f.box("core.card.status", card.ID); found.X+found.W > foot.X+foot.W {
