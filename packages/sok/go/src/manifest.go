@@ -833,16 +833,21 @@ func checkContributes(where, id string, raw any) error {
 
 var programNamePattern = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 
+// ProgramNameValid reports whether name is a program name of the form [a-z][a-z0-9-]*, the name of a declared program.
+func ProgramNameValid(name string) bool {
+	return programNamePattern.MatchString(name)
+}
+
 // Limits of the programs declaration (docs/spec/plugins.md#pluginjson). Byte limits count UTF-8 bytes, as the reader does.
 const (
-	programTextMaxBytes    = 255
-	programSlotsMax        = 16
-	programPatternMaxBytes = 512
+	ProgramTextMaxBytes    = 255
+	ProgramSlotsMax        = 16
+	ProgramPatternMaxBytes = 512
 )
 
-// programPatternSource is the expression that a program pattern compiles to: it must match the whole argument
+// ProgramPatternSource is the expression that a program pattern compiles to: it must match the whole argument
 // (docs/spec/native-surfaces.md#program-runs). The host matcher compiles this same source.
-func programPatternSource(pattern string) string {
+func ProgramPatternSource(pattern string) string {
 	return "^(?:" + pattern + ")$"
 }
 
@@ -877,16 +882,16 @@ func checkPrograms(where string, raw any) error {
 			}
 		}
 		program, _ := entry["program"].(string)
-		if program == "" || len(program) > programTextMaxBytes || hasControlCharacter(program) {
-			return fmt.Errorf("%s program must be a non-empty text of at most %d bytes without a control character", at, programTextMaxBytes)
+		if program == "" || len(program) > ProgramTextMaxBytes || hasControlCharacter(program) {
+			return fmt.Errorf("%s program must be a non-empty text of at most %d bytes without a control character", at, ProgramTextMaxBytes)
 		}
 		raw, present := entry["args"]
 		if !present {
 			continue
 		}
 		slots, ok := raw.([]any)
-		if !ok || len(slots) > programSlotsMax {
-			return fmt.Errorf("%s args must be an array of at most %d slots", at, programSlotsMax)
+		if !ok || len(slots) > ProgramSlotsMax {
+			return fmt.Errorf("%s args must be an array of at most %d slots", at, ProgramSlotsMax)
 		}
 		for index, slot := range slots {
 			number := index + 1
@@ -902,10 +907,10 @@ func checkPrograms(where string, raw any) error {
 				return fmt.Errorf("%s args slot %d must be a text or an object with the member pattern only", at, number)
 			}
 			text, ok := pattern.(string)
-			if !ok || len(text) > programPatternMaxBytes {
-				return fmt.Errorf("%s args slot %d pattern must be a text of at most %d bytes", at, number, programPatternMaxBytes)
+			if !ok || len(text) > ProgramPatternMaxBytes {
+				return fmt.Errorf("%s args slot %d pattern must be a text of at most %d bytes", at, number, ProgramPatternMaxBytes)
 			}
-			if _, err := regexp.Compile(programPatternSource(text)); err != nil {
+			if _, err := regexp.Compile(ProgramPatternSource(text)); err != nil {
 				return fmt.Errorf("%s pattern does not compile: %v", at, err)
 			}
 		}

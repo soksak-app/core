@@ -707,12 +707,17 @@ fn check_programs(where_: &str, raw: &Value) -> Result<(), String> {
                 return Err(format!("{at} member {member} is unknown"));
             }
         }
-        let program = entry.get("program").and_then(Value::as_str).unwrap_or("");
-        if program.is_empty() || program.len() > PROGRAM_TEXT_MAX_BYTES || has_control_character(program) {
-            return Err(format!(
-                "{at} program must be a non-empty text of at most {PROGRAM_TEXT_MAX_BYTES} bytes without a control character"
-            ));
-        }
+        entry
+            .get("program")
+            .and_then(Value::as_str)
+            .filter(|program| {
+                !program.is_empty() && program.len() <= PROGRAM_TEXT_MAX_BYTES && !has_control_character(program)
+            })
+            .ok_or_else(|| {
+                format!(
+                    "{at} program must be a non-empty text of at most {PROGRAM_TEXT_MAX_BYTES} bytes without a control character"
+                )
+            })?;
         let Some(raw_args) = entry.get("args") else {
             continue;
         };
