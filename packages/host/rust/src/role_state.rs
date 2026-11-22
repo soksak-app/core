@@ -8,15 +8,18 @@ use std::path::{Path, PathBuf};
 use serde_json::{Map, Value, json};
 
 use crate::role_file::{prepare_role_file, role_fingerprint};
-use crate::roles::read_roles;
+use crate::roles::{
+    check_definition, definition_files, is_role_identifier, path_fault, read_roles, write_roles,
+};
 use crate::workspace::{check_projects, read_projects, write_projects};
 
 /// The state of the role operations that this session of the host holds beside the stored record: the count of the changes of
-/// each tab, and the tabs whose role ended with their removal from the layout. The durable state of a role is its stored
-/// record, so the status is rebuilt from it after a restart.
+/// each tab, the count of the published changes of the role definitions, and the tabs whose role ended with their removal from
+/// the layout. The durable state of a role is its stored record, so the status is rebuilt from it after a restart.
 #[derive(Default)]
 pub struct RoleState {
     seq: HashMap<String, i64>,
+    roles_seq: i64,
     removed: HashSet<String>,
 }
 
@@ -235,14 +238,27 @@ fn role_change(
     id: &str,
 ) -> Result<Value, String> {
     let definitions = read_roles(&directory.join("roles.json"))?;
-    let Some(definition) = definitions.get(id).and_then(Value::as_object) else {
+    let Some(definition) = definitions.get(id) else {
         return Err(format!("unknown agent role {id}"));
     };
-    // check_roles of roles.json guarantees the two members; the reads are stated and refuse the impossible case.
+    role_assign(directory, state, tab, id, definition)
+}
+
+/// Assigns the role id with the definition to a tab, with the ordered steps and the idempotency of the specification. The
+/// definition is the stored definition of roles.json or the one that core.role.define stores.
+fn role_assign(
+    directory: &Path,
+    state: &mut RoleState,
+    tab: &str,
+    id: &str,
+    definition: &Value,
+) -> Result<Value, String> {
+    // The definitions are checked when they are stored, so the reads state the members they need and refuse a missing one.
     let (Some(text), Some(ko)) = (definition["text"].as_str(), definition["ko"].as_str()) else {
         return Err(format!("role {id} holds no text or ko"));
     };
-    let fingerprint = role_fingerprint(id, text);
+    let files = definition_files(definition).ok_or_else(|| format!("role {id} holds no files"))?;
+    let fingerprint = role_fingerprint(id, text, &files);
     let registry = directory.join("projects.json");
     let projects = checked_projects(&registry)?;
     let Some(found) = find_tab_role(&projects, tab) else {
@@ -257,7 +273,7 @@ fn role_change(
         return Ok(answer_of(directory, state, tab, Some(record)));
     }
     // Step 1: both role files are written under their temporary names and their modes are checked.
-    let prepared = prepare_role_file(directory, tab, id, text, ko)?;
+    let prepared = prepare_role_file(directory, tab, id, text, ko, &files)?;
     let generation = match &earlier {
         Some(record) if record.generation >= 1 => record.generation + 1,
         _ => 1,
@@ -397,6 +413,153 @@ fn store_tab_role(registry: &Path, tab: &str, role: Option<&Value>) -> Result<()
     };
     entry.insert("role".to_string(), stored);
     write_projects(registry, &projects).map_err(|e| write_failed(registry, &e))
+}
+
+/// Defines the role id with the definition of core.role.define (docs/spec/agent-roles.md#commands). The definition is checked
+/// first, then roles.json is written when it differs from the stored one, and then each tab of the layout whose role is id is
+/// assigned the definition in layout order. A failure of one tab is logged as that tab's error and the next tabs continue. The
+/// status core.roles gets its next seq when roles.json changed. The answer is the stored definition.
+pub fn role_define(
+    directory: &Path,
+    state: &mut RoleState,
+    id: &str,
+    definition: &Value,
+) -> Result<Value, String> {
+    let path = directory.join("roles.json");
+    if !is_role_identifier(id) {
+        return Err(format!(
+            "{}: roles: invalid role identifier {id}",
+            path.display()
+        ));
+    }
+    let files =
+        check_definition(id, definition).map_err(|e| format!("{}: roles: {e}", path.display()))?;
+    for file in &files {
+        if let Some(fault) = path_fault(file) {
+            return Err(format!("role {id}: file {file} {}", fault.reason()));
+        }
+        if !Path::new(file).exists() {
+            return Err(format!("role {id}: file {file} does not exist"));
+        }
+    }
+    let mut roles = stored_roles(&path)?;
+    let changed = roles.get(id) != Some(definition);
+    if changed {
+        roles.insert(id.to_string(), definition.clone());
+        write_roles(&path, Some(roles))?;
+    }
+    let registry = directory.join("projects.json");
+    let projects = checked_projects(&registry)?;
+    let mut tab_errors = Vec::new();
+    for tab in tab_ids(&projects) {
+        let Some(found) = find_tab_role(&projects, &tab) else {
+            tab_errors.push(format!("tab {tab} is not in the layout"));
+            continue;
+        };
+        let record = checked_tab_role(&registry, found.root, found.space, &tab, found.entry);
+        match record {
+            Ok(record) if record.as_ref().is_some_and(|record| record.id == id) => {
+                if let Err(e) = role_assign(directory, state, &tab, id, definition) {
+                    tab_errors.push(e);
+                }
+            }
+            Ok(_) => {}
+            Err(e) => tab_errors.push(e),
+        }
+    }
+    if changed {
+        state.roles_seq += 1;
+    }
+    // The roles.json write is kept when a tab fails; the answer names every tab error in layout order.
+    if !tab_errors.is_empty() {
+        return Err(tab_errors.join("; "));
+    }
+    Ok(json!({
+        "id": id,
+        "text": definition["text"],
+        "ko": definition["ko"],
+        "files": definition["files"],
+    }))
+}
+
+/// Removes the role id from roles.json (docs/spec/agent-roles.md#commands). A role that roles.json does not define, or that a tab
+/// uses, is refused and nothing is written. Otherwise roles.json is written without the role and the status core.roles gets its
+/// next seq.
+pub fn role_undefine(directory: &Path, state: &mut RoleState, id: &str) -> Result<Value, String> {
+    let path = directory.join("roles.json");
+    let mut roles = stored_roles(&path)?;
+    if roles.remove(id).is_none() {
+        return Err(format!("role {id} is not defined"));
+    }
+    let registry = directory.join("projects.json");
+    let projects = checked_projects(&registry)?;
+    for tab in tab_ids(&projects) {
+        let found = find_tab_role(&projects, &tab)
+            .ok_or_else(|| format!("tab {tab} is not in the layout"))?;
+        let record = checked_tab_role(&registry, found.root, found.space, &tab, found.entry)?;
+        if record.is_some_and(|record| record.id == id) {
+            return Err(format!("role {id} is used by tab {tab}"));
+        }
+    }
+    write_roles(&path, Some(roles))?;
+    state.roles_seq += 1;
+    Ok(Value::Bool(true))
+}
+
+/// Answers the status core.roles: every stored definition in the order of its identifiers as {id, text, ko, files}, and the
+/// count of the published changes of the session. It names no tab.
+pub fn roles_status(directory: &Path, state: &RoleState) -> Result<Value, String> {
+    let roles = stored_roles(&directory.join("roles.json"))?;
+    let list: Vec<Value> = roles
+        .iter()
+        .map(|(id, definition)| {
+            json!({"id": id, "text": definition["text"], "ko": definition["ko"], "files": definition["files"]})
+        })
+        .collect();
+    Ok(json!({"seq": state.roles_seq, "roles": list}))
+}
+
+/// Reads the role definitions of roles.json as their object, which is empty when the file does not exist.
+fn stored_roles(path: &Path) -> Result<Map<String, Value>, String> {
+    match read_roles(path)? {
+        Value::Object(roles) => Ok(roles),
+        _ => Err(format!(
+            "{}: roles: roles must be an object",
+            path.display()
+        )),
+    }
+}
+
+/// Returns the ids of the tabs of the stored layouts in layout order: the projects in order, the spaces of each in order, and
+/// the tabs of each layout by its tree.
+fn tab_ids(projects: &[Value]) -> Vec<String> {
+    let mut ids = vec![];
+    for project in projects {
+        for held in project["spaces"].as_array().into_iter().flatten() {
+            collect_tab_ids(&held["layout"]["state"]["root"], &mut ids);
+        }
+    }
+    ids
+}
+
+/// Appends the tab ids of a node of a layout tree in order, following the same node forms as tab_entry.
+fn collect_tab_ids(node: &Value, ids: &mut Vec<String>) {
+    let Some(holder) = node.as_object() else {
+        return;
+    };
+    if holder.contains_key("card") {
+        for tab in holder["data"]["tabs"].as_array().into_iter().flatten() {
+            if let Some(id) = tab["id"].as_str() {
+                ids.push(id.to_string());
+            }
+        }
+    } else if holder.contains_key("box") {
+        collect_tab_ids(&holder["inner"], ids);
+    } else {
+        for kid in holder["kids"].as_array().into_iter().flatten() {
+            collect_tab_ids(&kid["node"], ids);
+        }
+    }
 }
 
 /// Returns the tab record of the tab id in the tree of a layout state as a mutable reference.

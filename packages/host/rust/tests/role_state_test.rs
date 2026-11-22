@@ -43,10 +43,10 @@ fn fixture(name: &str) -> (PathBuf, Workspace) {
     fs::write(
         directory.join("roles.json"),
         serde_json::to_vec(&json!({
-            "format": 2,
+            "format": 3,
             "roles": {
-                "a": {"text": "Role A definition.", "ko": "역할 A 정의."},
-                "b": {"text": "Role B definition.", "ko": "역할 B 정의."}
+                "a": {"text": "Role A definition.", "ko": "역할 A 정의.", "files": []},
+                "b": {"text": "Role B definition.", "ko": "역할 B 정의.", "files": []}
             }
         }))
         .unwrap(),
@@ -99,7 +99,7 @@ fn the_role_handshake_answers_the_status_and_stores_the_record() {
         json!({"role": null, "generation": null, "state": null, "seq": 0, "fingerprint": null, "path": null})
     );
     // The assignment writes the role files, stores the record and answers pending with the path.
-    let fingerprint = role_fingerprint("a", "Role A definition.");
+    let fingerprint = role_fingerprint("a", "Role A definition.", &[]);
     let path = directory.join("agents").join("tab-aaaaaa").join("role.md");
     assert_eq!(
         ask(
@@ -128,8 +128,8 @@ fn the_role_handshake_answers_the_status_and_stores_the_record() {
 #[test]
 fn the_repetitions_of_the_role_handshake_change_nothing() {
     let (directory, store) = fixture("idempotency");
-    let fingerprint_a = role_fingerprint("a", "Role A definition.");
-    let fingerprint_b = role_fingerprint("b", "Role B definition.");
+    let fingerprint_a = role_fingerprint("a", "Role A definition.", &[]);
+    let fingerprint_b = role_fingerprint("b", "Role B definition.", &[]);
     let path = directory.join("agents").join("tab-aaaaaa").join("role.md");
     ask(
         &store,
@@ -283,7 +283,7 @@ fn the_role_handshake_clears_and_ends_the_role_of_a_removed_tab() {
 #[test]
 fn the_role_handshake_is_rebuilt_from_the_stored_record_after_a_restart() {
     let (directory, store) = fixture("restart");
-    let fingerprint = role_fingerprint("a", "Role A definition.");
+    let fingerprint = role_fingerprint("a", "Role A definition.", &[]);
     ask(
         &store,
         json!({"kind": "rolePut", "tab": "tab-aaaaaa", "role": "a"}),
@@ -417,8 +417,8 @@ fn clear_read_only(directory: &Path) {
 #[test]
 fn the_role_operations_of_one_surface_run_in_arrival_order() {
     let (directory, store) = fixture("order");
-    let fingerprint_a = role_fingerprint("a", "Role A definition.");
-    let fingerprint_b = role_fingerprint("b", "Role B definition.");
+    let fingerprint_a = role_fingerprint("a", "Role A definition.", &[]);
+    let fingerprint_b = role_fingerprint("b", "Role B definition.", &[]);
     // Consecutive changes a to b to a raise the generation at each change.
     for (step, generation) in [("a", 1), ("b", 2), ("a", 3)] {
         let answer = ask(

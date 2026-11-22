@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1063-2: The Go and Rust hosts read and write `roles.json` in format 3 with the `files` of each role, include `files` in the fingerprint and the role files, and serve the requests `roleDefine`, `roleDefinitionRemove` and `rolesStatus`; a define that fails for a tab answers with the joined tab errors after `roles.json` is written. Red: the shared role cases failed on format 3. Green: Go host 584 tests and Rust host 1149 tests pass.
 - F1055-4: Both workbenches test a second apply that moves a card from one kept group card into another: both group cards keep their identifiers and names, the moved card keeps its tab, and a repeat changes nothing. The tests passed on their first run, so the implementation of F1055-2 already met the contract; F1055 is complete.
 - F1064: `extends` requires `surface` or `sections` in the plugin specification and in `validateManifest` of the plugin API, as `data` does, so a plugin whose pages are sections provides an extension point. Red: `extends is accepted with a surface or with sections and refused without either` failed with `extends requires a surface`. Green: the 42 validation tests pass. Plugins receive it with the next core release.
 - F1055-3: The agent skill and the MCP instructions build a group card of several cards with one `core.layout.plan` of a tree that holds the group and one `core.layout.apply`, instead of `core.group.create` and one `core.layout.open` per further card, and state that an agent reads the command declarations once per request. The skill tests pass.

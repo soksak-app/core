@@ -32,6 +32,26 @@ fn with_line_feed(text: &str) -> String {
     }
 }
 
+/// Returns the file list of a case of the case file.
+fn case_files(case: &Value) -> Vec<String> {
+    case["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|file| file.as_str().unwrap().to_string())
+        .collect()
+}
+
+/// Returns the files block that the case file expects: its heading and one `- <path>` line per file, or nothing when the list is
+/// empty.
+fn expected_files_block(heading: &str, files: &[String]) -> String {
+    if files.is_empty() {
+        return String::new();
+    }
+    let lines: String = files.iter().map(|file| format!("- {file}\n")).collect();
+    format!("{heading}\n{lines}")
+}
+
 fn assert_mode(path: &Path, want: u32) {
     let mode = fs::metadata(path).unwrap().permissions().mode() & 0o777;
     assert_eq!(mode, want, "{} has mode {mode:o}", path.display());
@@ -44,7 +64,11 @@ fn role_fingerprint_matches_shared_cases() {
         let name = case["name"].as_str().unwrap();
         let text = case["text"].as_str().unwrap();
         let want = case["fingerprint"].as_str().unwrap();
-        assert_eq!(role_fingerprint(name, text), want, "case {name}");
+        assert_eq!(
+            role_fingerprint(name, text, &case_files(case)),
+            want,
+            "case {name}"
+        );
     }
 }
 
@@ -53,28 +77,38 @@ fn role_fingerprint_matches_shared_cases() {
 fn role_file_has_first_line_definition_and_fingerprint() {
     let cases = load_cases();
     let first = cases["texts"]["role_file_first_line"].as_str().unwrap();
+    let heading = cases["texts"]["files_heading"].as_str().unwrap();
     for case in cases["cases"].as_array().unwrap() {
         let name = case["name"].as_str().unwrap();
         let text = case["text"].as_str().unwrap();
         let fingerprint = case["fingerprint"].as_str().unwrap();
-        let want = format!("{first}\n{}{fingerprint}\n", with_line_feed(text));
-        assert_eq!(role_file_content(name, text), want, "layout of {name}");
+        let files = case_files(case);
+        let want = format!(
+            "{first}\n{}{}{fingerprint}\n",
+            with_line_feed(text),
+            expected_files_block(heading, &files)
+        );
+        assert_eq!(
+            role_file_content(name, text, &files),
+            want,
+            "layout of {name}"
+        );
     }
-    let got = role_file_content("ops-1", "Line one.");
+    let got = role_file_content("ops-1", "Line one.", &[]);
     let want = format!(
         "{first}\nLine one.\n{}\n",
-        role_fingerprint("ops-1", "Line one.")
+        role_fingerprint("ops-1", "Line one.", &[])
     );
     assert_eq!(got, want, "layout without a final line feed");
     let long = "Check the tests and the contract. ".repeat(150);
     let long = &long[..5000];
-    let got = role_file_content("long-role", long);
+    let got = role_file_content("long-role", long, &[]);
     assert!(
         got.contains(&format!("\n{long}\n")),
         "long definition not whole"
     );
     assert!(
-        got.ends_with(&format!("{}\n", role_fingerprint("long-role", long))),
+        got.ends_with(&format!("{}\n", role_fingerprint("long-role", long, &[]))),
         "long fingerprint"
     );
 }
@@ -89,7 +123,7 @@ fn role_texts_match_pinned_texts() {
     let mut want = BTreeMap::new();
     for (name, text) in load_cases()["texts"].as_object().unwrap() {
         let text = text.as_str().unwrap();
-        let text = if name == "role_file_first_line" {
+        let text = if name == "role_file_first_line" || name == "files_heading" {
             text.to_string()
         } else {
             text.replace("<role file>", &role_file)
@@ -104,11 +138,18 @@ fn role_texts_match_pinned_texts() {
 fn write_role_file_writes_layout_atomically_with_modes() {
     let temp = temp_config();
     let config = temp.path();
-    let path =
-        write_role_file(config, "tab-1", "reviewer", "You review.\n", "검토한다.\n").unwrap();
+    let path = write_role_file(
+        config,
+        "tab-1",
+        "reviewer",
+        "You review.\n",
+        "검토한다.\n",
+        &[],
+    )
+    .unwrap();
     assert_eq!(path, config.join("agents/tab-1/role.md"));
     let data = fs::read_to_string(&path).unwrap();
-    assert_eq!(data, role_file_content("reviewer", "You review.\n"));
+    assert_eq!(data, role_file_content("reviewer", "You review.\n", &[]));
     assert_mode(&path, 0o600);
     assert_mode(path.parent().unwrap(), 0o700);
     write_role_file(
@@ -117,12 +158,13 @@ fn write_role_file_writes_layout_atomically_with_modes() {
         "reviewer",
         "You review the tests.\n",
         "검토한다.\n",
+        &[],
     )
     .unwrap();
     let data = fs::read_to_string(&path).unwrap();
     assert_eq!(
         data,
-        role_file_content("reviewer", "You review the tests.\n")
+        role_file_content("reviewer", "You review the tests.\n", &[])
     );
     let leftovers: Vec<_> = fs::read_dir(path.parent().unwrap())
         .unwrap()
@@ -137,18 +179,33 @@ fn write_role_file_writes_layout_atomically_with_modes() {
 fn write_role_file_writes_korean_file_beside_role_file() {
     let temp = temp_config();
     let config = temp.path();
-    let first = load_cases()["texts_ko"]["role_file_first_line"]
+    let cases = load_cases();
+    let first = cases["texts_ko"]["role_file_first_line"]
         .as_str()
         .expect("the case file pins a Korean first line in texts_ko")
         .to_string();
-    let path = write_role_file(config, "tab-1", "reviewer", "You review.\n", "검토한다.").unwrap();
+    let heading_ko = cases["texts_ko"]["files_heading"]
+        .as_str()
+        .expect("the case file pins a Korean files heading in texts_ko")
+        .to_string();
+    let files = vec!["/a".to_string(), "/b c".to_string()];
+    let path = write_role_file(
+        config,
+        "tab-1",
+        "reviewer",
+        "You review.\n",
+        "검토한다.",
+        &files,
+    )
+    .unwrap();
     let korean = path.parent().unwrap().join("role.ko.md");
     // The Korean file carries the fingerprint of role.md, computed over the English text.
     assert_eq!(
         fs::read_to_string(&korean).unwrap(),
         format!(
-            "{first}\n검토한다.\n{}\n",
-            role_fingerprint("reviewer", "You review.\n")
+            "{first}\n검토한다.\n{}{}\n",
+            expected_files_block(&heading_ko, &files),
+            role_fingerprint("reviewer", "You review.\n", &files)
         )
     );
     assert_mode(&korean, 0o600);
@@ -158,13 +215,14 @@ fn write_role_file_writes_korean_file_beside_role_file() {
         "reviewer",
         "You review the tests.\n",
         "test를 검토한다.\n",
+        &[],
     )
     .unwrap();
     assert_eq!(
         fs::read_to_string(&korean).unwrap(),
         format!(
             "{first}\ntest를 검토한다.\n{}\n",
-            role_fingerprint("reviewer", "You review the tests.\n")
+            role_fingerprint("reviewer", "You review the tests.\n", &[])
         )
     );
     let leftovers: Vec<_> = fs::read_dir(path.parent().unwrap())
@@ -184,7 +242,15 @@ fn write_role_file_removes_leftover_temporary_files() {
     fs::create_dir_all(&folder).unwrap();
     let leftover = folder.join(".role-crash.tmp");
     fs::write(&leftover, b"partial").unwrap();
-    write_role_file(config, "tab-1", "reviewer", "You review.\n", "검토한다.\n").unwrap();
+    write_role_file(
+        config,
+        "tab-1",
+        "reviewer",
+        "You review.\n",
+        "검토한다.\n",
+        &[],
+    )
+    .unwrap();
     assert!(!leftover.exists(), "a leftover temporary file remains");
 }
 
@@ -195,7 +261,15 @@ fn write_role_file_refuses_surface_with_path_parts() {
     let config = temp.path();
     for surface in ["", "..", "a/b", "../x", "a\u{1}b", "a\tb"] {
         assert!(
-            write_role_file(config, surface, "reviewer", "You review.\n", "검토한다.\n").is_err(),
+            write_role_file(
+                config,
+                surface,
+                "reviewer",
+                "You review.\n",
+                "검토한다.\n",
+                &[]
+            )
+            .is_err(),
             "surface {surface:?} was accepted"
         );
     }
@@ -222,9 +296,23 @@ fn role_path_matches_shared_cases() {
             "reviewer",
             "Review the changes.",
             "검토한다.\n",
+            &[],
         )
         .unwrap();
         let want = config.path().join(case["path"].as_str().unwrap());
         assert_eq!(path, want, "case {}", case["name"]);
     }
+}
+
+// The file list of the fingerprint escapes the double quote, the backslash and the control characters: the short forms for
+// tab, line feed, carriage return, backspace and form feed, and uppercase \u00XX for the others.
+// contract: roles.fingerprint-shared-cases
+#[test]
+fn fingerprint_escapes_file_list_with_uppercase_control_escapes() {
+    use sha2::{Digest, Sha256};
+    let files = vec!["/a\u{1}\u{1f}\"\\\t".to_string()];
+    let list = r#"["/a\u0001\u001F\"\\\t"]"#;
+    let digest = Sha256::digest(format!("x\ny\n{list}").as_bytes());
+    let want: String = digest.iter().take(8).map(|b| format!("{b:02x}")).collect();
+    assert_eq!(role_fingerprint("x", "y", &files), want);
 }

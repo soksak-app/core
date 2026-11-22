@@ -4,6 +4,8 @@ package host_test
 // case in docs/spec/cases/agent-roles/fingerprint.json, the pinned texts of that file, and the atomic write of the file with its modes.
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -19,9 +21,10 @@ const fingerprintCasesPath = "../../../../docs/spec/cases/agent-roles/fingerprin
 const rolePathCasesPath = "../../../../docs/spec/cases/agent-roles/role-path.json"
 
 type fingerprintCase struct {
-	Name        string `json:"name"`
-	Text        string `json:"text"`
-	Fingerprint string `json:"fingerprint"`
+	Name        string   `json:"name"`
+	Text        string   `json:"text"`
+	Files       []string `json:"files"`
+	Fingerprint string   `json:"fingerprint"`
 }
 
 type fingerprintCases struct {
@@ -54,30 +57,43 @@ func withLineFeed(text string) string {
 // contract: roles.fingerprint-shared-cases
 func TestRoleFingerprintMatchesSharedCases(t *testing.T) {
 	for _, c := range loadFingerprintCases(t).Cases {
-		if got := host.RoleFingerprint(c.Name, c.Text); got != c.Fingerprint {
+		if got := host.RoleFingerprint(c.Name, c.Text, c.Files); got != c.Fingerprint {
 			t.Fatalf("fingerprint of %s is %q, want %q", c.Name, got, c.Fingerprint)
 		}
 	}
+}
+
+// filesLines returns the files block that the role file holds under the heading: the heading, then one line `- <path>` per file, or an
+// empty text when the list is empty.
+func filesLines(heading string, files []string) string {
+	if len(files) == 0 {
+		return ""
+	}
+	block := heading + "\n"
+	for _, file := range files {
+		block += "- " + file + "\n"
+	}
+	return block
 }
 
 // contract: roles.role-file-layout
 func TestRoleFileHasFirstLineDefinitionAndFingerprint(t *testing.T) {
 	first := loadFingerprintCases(t).Texts["role_file_first_line"]
 	for _, c := range loadFingerprintCases(t).Cases {
-		want := first + "\n" + withLineFeed(c.Text) + c.Fingerprint + "\n"
-		if got := host.RoleFileContent(c.Name, c.Text); got != want {
+		want := first + "\n" + withLineFeed(c.Text) + filesLines(loadFingerprintCases(t).Texts["files_heading"], c.Files) + c.Fingerprint + "\n"
+		if got := host.RoleFileContent(c.Name, c.Text, c.Files); got != want {
 			t.Fatalf("layout of %s is %q, want %q", c.Name, got, want)
 		}
 	}
 	// A stored definition without a final line feed gets one in the file; its fingerprint uses the stored text.
-	got := host.RoleFileContent("ops-1", "Line one.")
-	if want := first + "\nLine one.\n" + host.RoleFingerprint("ops-1", "Line one.") + "\n"; got != want {
+	got := host.RoleFileContent("ops-1", "Line one.", nil)
+	if want := first + "\nLine one.\n" + host.RoleFingerprint("ops-1", "Line one.", nil) + "\n"; got != want {
 		t.Fatalf("layout without a final line feed is %q, want %q", got, want)
 	}
 	// A definition of 5,000 characters is written whole and its fingerprint covers all of it.
 	long := strings.Repeat("Check the tests and the contract. ", 150)[:5000]
-	got = host.RoleFileContent("long-role", long)
-	if !strings.Contains(got, "\n"+long+"\n") || !strings.HasSuffix(got, host.RoleFingerprint("long-role", long)+"\n") {
+	got = host.RoleFileContent("long-role", long, nil)
+	if !strings.Contains(got, "\n"+long+"\n") || !strings.HasSuffix(got, host.RoleFingerprint("long-role", long, nil)+"\n") {
 		t.Fatal("a definition of 5,000 characters is not written whole with its fingerprint")
 	}
 }
@@ -103,7 +119,7 @@ func TestRoleTextsMatchPinnedTexts(t *testing.T) {
 // contract: roles.role-file-write
 func TestWriteRoleFileWritesLayoutAtomicallyWithModes(t *testing.T) {
 	config := t.TempDir()
-	path, err := host.WriteRoleFile(config, "tab-1", "reviewer", "You review.\n", "검토한다.\n")
+	path, err := host.WriteRoleFile(config, "tab-1", "reviewer", "You review.\n", "검토한다.\n", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,16 +130,16 @@ func TestWriteRoleFileWritesLayoutAtomicallyWithModes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := host.RoleFileContent("reviewer", "You review.\n"); string(data) != want {
+	if want := host.RoleFileContent("reviewer", "You review.\n", nil); string(data) != want {
 		t.Fatalf("file is %q, want %q", data, want)
 	}
 	assertMode(t, path, 0o600)
 	assertMode(t, filepath.Dir(path), 0o700)
-	if _, err := host.WriteRoleFile(config, "tab-1", "reviewer", "You review the tests.\n", "검토한다.\n"); err != nil {
+	if _, err := host.WriteRoleFile(config, "tab-1", "reviewer", "You review the tests.\n", "검토한다.\n", nil); err != nil {
 		t.Fatal(err)
 	}
 	data, _ = os.ReadFile(path)
-	if want := host.RoleFileContent("reviewer", "You review the tests.\n"); string(data) != want {
+	if want := host.RoleFileContent("reviewer", "You review the tests.\n", nil); string(data) != want {
 		t.Fatalf("the second write left %q, want %q", data, want)
 	}
 	if leftovers, _ := filepath.Glob(filepath.Join(filepath.Dir(path), ".role-*.tmp")); len(leftovers) != 0 {
@@ -138,7 +154,7 @@ func TestWriteRoleFileWritesKoreanFileBesideRoleFile(t *testing.T) {
 	if first == "" {
 		t.Fatal("the case file pins no Korean first line in texts_ko")
 	}
-	path, err := host.WriteRoleFile(config, "tab-1", "reviewer", "You review.\n", "검토한다.")
+	path, err := host.WriteRoleFile(config, "tab-1", "reviewer", "You review.\n", "검토한다.", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,15 +164,15 @@ func TestWriteRoleFileWritesKoreanFileBesideRoleFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The Korean file carries the fingerprint of role.md, computed over the English text.
-	if want := first + "\n검토한다.\n" + host.RoleFingerprint("reviewer", "You review.\n") + "\n"; string(data) != want {
+	if want := first + "\n검토한다.\n" + host.RoleFingerprint("reviewer", "You review.\n", nil) + "\n"; string(data) != want {
 		t.Fatalf("Korean file is %q, want %q", data, want)
 	}
 	assertMode(t, korean, 0o600)
-	if _, err := host.WriteRoleFile(config, "tab-1", "reviewer", "You review the tests.\n", "test를 검토한다.\n"); err != nil {
+	if _, err := host.WriteRoleFile(config, "tab-1", "reviewer", "You review the tests.\n", "test를 검토한다.\n", nil); err != nil {
 		t.Fatal(err)
 	}
 	data, _ = os.ReadFile(korean)
-	if want := first + "\ntest를 검토한다.\n" + host.RoleFingerprint("reviewer", "You review the tests.\n") + "\n"; string(data) != want {
+	if want := first + "\ntest를 검토한다.\n" + host.RoleFingerprint("reviewer", "You review the tests.\n", nil) + "\n"; string(data) != want {
 		t.Fatalf("the second write left the Korean file %q, want %q", data, want)
 	}
 	if leftovers, _ := filepath.Glob(filepath.Join(filepath.Dir(path), ".role-*.tmp")); len(leftovers) != 0 {
@@ -175,7 +191,7 @@ func TestWriteRoleFileRemovesLeftoverTemporaryFiles(t *testing.T) {
 	if err := os.WriteFile(leftover, []byte("partial"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := host.WriteRoleFile(config, "tab-1", "reviewer", "You review.\n", "검토한다.\n"); err != nil {
+	if _, err := host.WriteRoleFile(config, "tab-1", "reviewer", "You review.\n", "검토한다.\n", nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(leftover); !os.IsNotExist(err) {
@@ -187,7 +203,7 @@ func TestWriteRoleFileRemovesLeftoverTemporaryFiles(t *testing.T) {
 func TestWriteRoleFileRefusesSurfaceWithPathParts(t *testing.T) {
 	config := t.TempDir()
 	for _, surface := range []string{"", "..", "a/b", "../x", "a\x01b", "a\tb"} {
-		if _, err := host.WriteRoleFile(config, surface, "reviewer", "You review.\n", "검토한다.\n"); err == nil {
+		if _, err := host.WriteRoleFile(config, surface, "reviewer", "You review.\n", "검토한다.\n", nil); err == nil {
 			t.Fatalf("surface %q was accepted", surface)
 		}
 	}
@@ -228,7 +244,7 @@ func TestRolePathMatchesSharedCases(t *testing.T) {
 	for _, kase := range file.Cases {
 		t.Run(kase.Name, func(t *testing.T) {
 			config := t.TempDir()
-			path, err := host.WriteRoleFile(config, kase.Surface, "reviewer", "Review the changes.", "검토한다.\n")
+			path, err := host.WriteRoleFile(config, kase.Surface, "reviewer", "Review the changes.", "검토한다.\n", nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -236,5 +252,35 @@ func TestRolePathMatchesSharedCases(t *testing.T) {
 				t.Fatalf("WriteRoleFile returned %q, want %q", path, want)
 			}
 		})
+	}
+}
+
+// contract: roles.fingerprint-shared-cases
+func TestRoleFingerprintEscapesQuoteAndBackslashInFileList(t *testing.T) {
+	// The file list is the compact JSON array `["/a\"b\\c"]`: the quote and the backslash are escaped, the other characters are not.
+	sum := sha256.Sum256([]byte("reviewer\nYou review.\n" + `["/a\"b\\c"]`))
+	want := hex.EncodeToString(sum[:])[:16]
+	if got := host.RoleFingerprint("reviewer", "You review.", []string{`/a"b\c`}); got != want {
+		t.Fatalf("fingerprint is %q, want %q", got, want)
+	}
+}
+
+// contract: roles.role-ko-file
+func TestWriteRoleFileKoreanFileListsFilesUnderKoreanHeading(t *testing.T) {
+	config := t.TempDir()
+	files := []string{"/a/b.md", "/c d/e.md"}
+	path, err := host.WriteRoleFile(config, "tab-1", "reviewer", "You review.\n", "검토한다.", files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(path), "role.ko.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pinned := loadFingerprintCases(t).TextsKo
+	want := pinned["role_file_first_line"] + "\n검토한다.\n" + pinned["files_heading"] + "\n- /a/b.md\n- /c d/e.md\n" +
+		host.RoleFingerprint("reviewer", "You review.\n", files) + "\n"
+	if string(data) != want {
+		t.Fatalf("Korean file is %q, want %q", data, want)
 	}
 }

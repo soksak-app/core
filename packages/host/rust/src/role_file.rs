@@ -17,6 +17,9 @@ const REREAD_REQUEST_TEXT: &str = "[soksak role] Your role is not confirmed. Rea
 /// The Korean translation of the first line, the first line of role.ko.md (texts_ko of the case file).
 const ROLE_FILE_FIRST_LINE_KO: &str = "이 파일 전체를 읽는다. 이 파일이 정의하는 role을 따른다. 그다음 마지막 줄의 fingerprint로 확인한다: `sok role confirm <fingerprint>`를 실행하거나, 답에 `soksak role <fingerprint>`를 쓴다.";
 const FIRST_MESSAGE_SUFFIX_TEXT: &str = "This message comes from soksak, not from a person. Finish your current task first. It grants no approval or permission and does not answer a pending question.";
+/// The heading of the files block of role.md, and its Korean translation in role.ko.md (texts and texts_ko of the case file).
+const FILES_HEADING_TEXT: &str = "Files this role reads:";
+const FILES_HEADING_KO_TEXT: &str = "이 role이 읽는 파일:";
 
 /// The file name of the role file inside the folder of a surface.
 const ROLE_FILE_NAME: &str = "role.md";
@@ -27,9 +30,10 @@ const ROLE_TEMP_PREFIX: &str = ".role-";
 const ROLE_TEMP_SUFFIX: &str = ".tmp";
 
 /// Returns the fingerprint of a role: the first 16 lowercase hexadecimal characters of the SHA-256 digest of the identifier, one
-/// line feed, and the definition text (docs/spec/agent-roles.md#role-file).
-pub fn role_fingerprint(identifier: &str, text: &str) -> String {
-    let digest = Sha256::digest(format!("{identifier}\n{text}").as_bytes());
+/// line feed, the definition text, one line feed, and the file list as a compact JSON array (docs/spec/agent-roles.md#role-file).
+pub fn role_fingerprint(identifier: &str, text: &str, files: &[String]) -> String {
+    let digest =
+        Sha256::digest(format!("{identifier}\n{text}\n{}", file_list_json(files)).as_bytes());
     digest
         .iter()
         .take(8)
@@ -37,31 +41,76 @@ pub fn role_fingerprint(identifier: &str, text: &str) -> String {
         .collect()
 }
 
+/// Returns the file list as a compact JSON array. Only the double quote, the backslash and the control characters below U+0020
+/// are escaped, with the short forms \b \f \n \r \t and \u00XX in uppercase hexadecimal for the others; other characters stay
+/// as UTF-8 (docs/spec/cases/agent-roles/fingerprint.json, algorithm).
+fn file_list_json(files: &[String]) -> String {
+    let mut list = String::from("[");
+    for (index, file) in files.iter().enumerate() {
+        if index > 0 {
+            list.push(',');
+        }
+        list.push('"');
+        for c in file.chars() {
+            match c {
+                '"' => list.push_str("\\\""),
+                '\\' => list.push_str("\\\\"),
+                '\u{8}' => list.push_str("\\b"),
+                '\u{c}' => list.push_str("\\f"),
+                '\n' => list.push_str("\\n"),
+                '\r' => list.push_str("\\r"),
+                '\t' => list.push_str("\\t"),
+                c if (c as u32) < 0x20 => list.push_str(&format!("\\u{:04X}", c as u32)),
+                c => list.push(c),
+            }
+        }
+        list.push('"');
+    }
+    list.push(']');
+    list
+}
+
+/// Returns the files block of a role file: the heading and one line `- <path>` per file, or nothing when the list is empty.
+fn files_block(heading: &str, files: &[String]) -> String {
+    if files.is_empty() {
+        return String::new();
+    }
+    let mut block = format!("{heading}\n");
+    for file in files {
+        block.push_str(&format!("- {file}\n"));
+    }
+    block
+}
+
 /// Returns the content of the role file of a role: the first line, the definition text with one line feed at its end when it
-/// has none, and the fingerprint on the last line, each line ending with one line feed (docs/spec/agent-roles.md#role-file).
-pub fn role_file_content(identifier: &str, text: &str) -> String {
+/// has none, the files block when the list is not empty, and the fingerprint on the last line, each line ending with one line
+/// feed (docs/spec/agent-roles.md#role-file).
+pub fn role_file_content(identifier: &str, text: &str, files: &[String]) -> String {
     let body = if text.ends_with('\n') {
         text.to_string()
     } else {
         format!("{text}\n")
     };
     format!(
-        "{ROLE_FILE_FIRST_LINE}\n{body}{}\n",
-        role_fingerprint(identifier, text)
+        "{ROLE_FILE_FIRST_LINE}\n{body}{}{}\n",
+        files_block(FILES_HEADING_TEXT, files),
+        role_fingerprint(identifier, text, files)
     )
 }
 
 /// Returns the content of role.ko.md: the Korean first line, the Korean text with one line feed at its end when it has none,
-/// and the fingerprint of role.md, which is computed over the English text (docs/spec/agent-roles.md#role-file).
-fn role_ko_file_content(identifier: &str, text: &str, ko: &str) -> String {
+/// the files block with the Korean heading, and the fingerprint of role.md, which is computed over the English text
+/// (docs/spec/agent-roles.md#role-file).
+fn role_ko_file_content(identifier: &str, text: &str, ko: &str, files: &[String]) -> String {
     let body = if ko.ends_with('\n') {
         ko.to_string()
     } else {
         format!("{ko}\n")
     };
     format!(
-        "{ROLE_FILE_FIRST_LINE_KO}\n{body}{}\n",
-        role_fingerprint(identifier, text)
+        "{ROLE_FILE_FIRST_LINE_KO}\n{body}{}{}\n",
+        files_block(FILES_HEADING_KO_TEXT, files),
+        role_fingerprint(identifier, text, files)
     )
 }
 
@@ -73,6 +122,7 @@ pub fn role_texts(role_file: &str) -> BTreeMap<String, String> {
             "role_file_first_line".to_string(),
             ROLE_FILE_FIRST_LINE.to_string(),
         ),
+        ("files_heading".to_string(), FILES_HEADING_TEXT.to_string()),
         ("identity".to_string(), fill(IDENTITY_TEXT)),
         ("change_message".to_string(), fill(CHANGE_MESSAGE_TEXT)),
         ("reread_request".to_string(), fill(REREAD_REQUEST_TEXT)),
@@ -108,9 +158,10 @@ pub fn write_role_file(
     identifier: &str,
     text: &str,
     ko: &str,
+    files: &[String],
 ) -> Result<PathBuf, String> {
     let path = {
-        let prepared = prepare_role_file(config, surface, identifier, text, ko)?;
+        let prepared = prepare_role_file(config, surface, identifier, text, ko, files)?;
         let path = prepared.path.clone();
         prepared.commit()?;
         path
@@ -137,6 +188,7 @@ pub fn prepare_role_file(
     identifier: &str,
     text: &str,
     ko: &str,
+    files: &[String],
 ) -> Result<PreparedRole, String> {
     check_surface(surface)?;
     let folder = config.join("agents").join(surface);
@@ -154,13 +206,13 @@ pub fn prepare_role_file(
         }
     }
     let path = folder.join(ROLE_FILE_NAME);
-    let file = write_role_temporary(&folder, &path, &role_file_content(identifier, text))?;
+    let file = write_role_temporary(&folder, &path, &role_file_content(identifier, text, files))?;
     let ko_path = folder.join(ROLE_KO_FILE_NAME);
     // If the second write fails, dropping file removes the first temporary file.
     let ko_file = write_role_temporary(
         &folder,
         &ko_path,
-        &role_ko_file_content(identifier, text, ko),
+        &role_ko_file_content(identifier, text, ko, files),
     )?;
     Ok(PreparedRole {
         path,

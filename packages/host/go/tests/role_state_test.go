@@ -34,9 +34,9 @@ func roleFixture(t *testing.T) (string, *host.Workspace, string) {
 		t.Fatal(err)
 	}
 	writeRoleFixtureFile(t, config, "projects.json", registry)
-	roles := map[string]any{"format": 2, "roles": map[string]any{
-		"a": map[string]any{"text": "Role A definition.", "ko": "역할 A 정의."},
-		"b": map[string]any{"text": "Role B definition.", "ko": "역할 B 정의."},
+	roles := map[string]any{"format": 3, "roles": map[string]any{
+		"a": map[string]any{"text": "Role A definition.", "ko": "역할 A 정의.", "files": []any{}},
+		"b": map[string]any{"text": "Role B definition.", "ko": "역할 B 정의.", "files": []any{}},
 	}}
 	writeRoleFixtureFile(t, config, "roles.json", roles)
 	return config, host.NewWorkspace(config), filepath.Join(config, "work")
@@ -121,7 +121,7 @@ func TestTheRoleHandshakeAnswersTheStatusAndStoresTheRecord(t *testing.T) {
 	}
 	// The assignment writes the role files, stores the record and answers pending with the path.
 	got := roleAsk(t, w, host.WorkspaceRequest{Kind: "rolePut", Tab: "tab-aaaaaa", Role: "a"})
-	fingerprint := host.RoleFingerprint("a", "Role A definition.")
+	fingerprint := host.RoleFingerprint("a", "Role A definition.", nil)
 	path := filepath.Join(config, "agents", "tab-aaaaaa", "role.md")
 	want = map[string]any{"role": "a", "generation": 1, "state": "pending", "seq": 1, "fingerprint": fingerprint, "path": path}
 	if !reflect.DeepEqual(got, jsonValue(t, want)) {
@@ -145,8 +145,8 @@ func TestTheRoleHandshakeAnswersTheStatusAndStoresTheRecord(t *testing.T) {
 // contract: roles.role-state-idempotency
 func TestTheRepetitionsOfTheRoleHandshakeChangeNothing(t *testing.T) {
 	config, w, _ := roleFixture(t)
-	fingerprintA := host.RoleFingerprint("a", "Role A definition.")
-	fingerprintB := host.RoleFingerprint("b", "Role B definition.")
+	fingerprintA := host.RoleFingerprint("a", "Role A definition.", nil)
+	fingerprintB := host.RoleFingerprint("b", "Role B definition.", nil)
 	path := filepath.Join(config, "agents", "tab-aaaaaa", "role.md")
 	roleAsk(t, w, host.WorkspaceRequest{Kind: "rolePut", Tab: "tab-aaaaaa", Role: "a"})
 	before, err := os.Stat(path)
@@ -243,7 +243,7 @@ func TestTheRoleHandshakeClearsAndEndsTheRoleOfARemovedTab(t *testing.T) {
 // contract: roles.role-state-restart
 func TestTheRoleHandshakeIsRebuiltFromTheStoredRecordAfterARestart(t *testing.T) {
 	config, w, _ := roleFixture(t)
-	fingerprint := host.RoleFingerprint("a", "Role A definition.")
+	fingerprint := host.RoleFingerprint("a", "Role A definition.", nil)
 	roleAsk(t, w, host.WorkspaceRequest{Kind: "rolePut", Tab: "tab-aaaaaa", Role: "a"})
 	// A restart without a stored confirmation answers pending; the seq of a new session starts at zero.
 	restarted := host.NewWorkspace(config)
@@ -323,8 +323,8 @@ func TestTheOrderedChangeFailsAtItsStepsAndKeepsTheEarlierState(t *testing.T) {
 // contract: roles.role-state-serialization
 func TestTheRoleOperationsOfOneSurfaceRunInArrivalOrder(t *testing.T) {
 	_, w, _ := roleFixture(t)
-	fingerprintA := host.RoleFingerprint("a", "Role A definition.")
-	fingerprintB := host.RoleFingerprint("b", "Role B definition.")
+	fingerprintA := host.RoleFingerprint("a", "Role A definition.", nil)
+	fingerprintB := host.RoleFingerprint("b", "Role B definition.", nil)
 	// Consecutive changes a to b to a raise the generation at each change, and the last file holds the latest role.
 	first := roleAsk(t, w, host.WorkspaceRequest{Kind: "rolePut", Tab: "tab-aaaaaa", Role: "a"})
 	second := roleAsk(t, w, host.WorkspaceRequest{Kind: "rolePut", Tab: "tab-aaaaaa", Role: "b"})

@@ -571,6 +571,32 @@ impl Workspace {
             "rolesPut" => {
                 return write_roles(&self.directory.join("roles.json"), req.roles);
             }
+            "rolesStatus" => {
+                // default: a panicking thread poisoned no state, the lock still holds the last consistent one.
+                let state = self.role.lock().unwrap_or_else(PoisonError::into_inner);
+                return crate::role_state::roles_status(&self.directory, &state);
+            }
+            "roleDefine" => {
+                // default: a request without an identifier reaches the operation, which refuses the empty identifier with its own text.
+                let id = req.id.clone().unwrap_or_default();
+                // default: a request without an entry reaches the operation, which refuses the null definition with its own text.
+                let definition = req.entry.clone().map_or(Value::Null, Value::Object);
+                // default: a panicking thread poisoned no state, the lock still holds the last consistent one.
+                let mut state = self.role.lock().unwrap_or_else(PoisonError::into_inner);
+                return crate::role_state::role_define(
+                    &self.directory,
+                    &mut state,
+                    &id,
+                    &definition,
+                );
+            }
+            "roleDefinitionRemove" => {
+                // default: a request without an identifier reaches the operation, which refuses it as not defined.
+                let id = req.id.clone().unwrap_or_default();
+                // default: a panicking thread poisoned no state, the lock still holds the last consistent one.
+                let mut state = self.role.lock().unwrap_or_else(PoisonError::into_inner);
+                return crate::role_state::role_undefine(&self.directory, &mut state, &id);
+            }
             "role" => {
                 // default: a request without a tab reaches the operation, which refuses the empty tab with its own text.
                 let tab = req.tab.clone().unwrap_or_default();
@@ -747,7 +773,8 @@ pub fn handle(app: &AppHandle, mut request: Request) -> Result<Value, String> {
         project["root"] = folder["root"].clone();
         project["identity"] = folder["identity"].clone();
     }
-    // The tab state store, the tab sessions and the role definitions change no project or setting, so no window is notified.
+    // The tab state store, the tab sessions and the reads of the role definitions change no project or setting, so no window is
+    // notified; a define or a removal of a role changes the role definitions, so the windows are notified.
     let tab_state = matches!(
         request.kind.as_str(),
         "tabState"
@@ -757,11 +784,21 @@ pub fn handle(app: &AppHandle, mut request: Request) -> Result<Value, String> {
             | "tabSessions"
             | "roles"
             | "rolesPut"
+            | "rolesStatus"
             | "role"
     );
     let changed = request.kind != "snapshot" && !tab_state;
     let snapshot = request.kind == "snapshot";
-    let mut result = app.state::<Workspace>().apply(request)?;
+    let define = request.kind == "roleDefine";
+    let applied = app.state::<Workspace>().apply(request);
+    // A define that wrote roles.json and failed for a tab still changed the role definitions, so the windows are notified
+    // before its error is returned, as the Go host does.
+    if define && applied.is_err() {
+        for window in app.windows().values() {
+            emit_window(window, "workspace-changed", ()).map_err(|e| e.to_string())?;
+        }
+    }
+    let mut result = applied?;
     if snapshot {
         result["open"] = serde_json::to_value(opened(app)?).map_err(|e| e.to_string())?;
     }

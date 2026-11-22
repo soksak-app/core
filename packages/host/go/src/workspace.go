@@ -29,6 +29,8 @@ type Workspace struct {
 	// ended with their removal from the layout; the durable state of a role is its stored record (role_state.go).
 	roleSeq     map[string]int
 	roleRemoved map[string]bool
+	// rolesSeq counts the changes of roles.json in this session of the host; the status core.roles carries it (roles.go).
+	rolesSeq int
 }
 
 // PrepareConfigDirectory creates and normalizes the configuration directory that the storage and the service use together.
@@ -88,7 +90,8 @@ func declaredCommonOnly() []string {
 func CommonOnlyKeys() []string { return slices.Clone(commonOnly) }
 
 // WorkspaceRequest is one storage operation. Kind is one of snapshot, add, patch, remove, move, settings, tabState,
-// tabStatePut, tabSession, tabSessionPut, tabSessions, roles, rolesPut, role, rolePut, roleConfirm and roleRemove.
+// tabStatePut, tabSession, tabSessionPut, tabSessions, roles, rolesPut, rolesStatus, roleDefine, roleDefinitionRemove, role, rolePut,
+// roleConfirm and roleRemove.
 type WorkspaceRequest struct {
 	Kind        string   `json:"kind"`
 	ID          string   `json:"id,omitempty"`
@@ -563,6 +566,12 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 		return listTabSessions(w.directory)
 	case "roles":
 		return readRoles(filepath.Join(w.directory, "roles.json"))
+	case "rolesStatus":
+		return w.rolesStatus()
+	case "roleDefine":
+		return w.roleDefine(req.ID, req.Entry)
+	case "roleDefinitionRemove":
+		return w.roleDefinitionRemove(req.ID)
 	case "rolesPut":
 		return writeRoles(filepath.Join(w.directory, "roles.json"), req.Roles)
 	}
@@ -704,9 +713,13 @@ func (h *Host) runWorkspace(req WorkspaceRequest) (any, error) {
 		req.Project["root"], req.Project["identity"] = folder.Root, folder.Identity
 	}
 	result, err := h.workspace.Apply(req)
+	if err != nil && req.Kind == "roleDefine" {
+		// A define writes roles.json and may change some tabs before a later tab fails, so every window reads the layout again.
+		h.notifyWorkspace()
+	}
 	if err == nil {
 		switch req.Kind {
-		case "tabState", "tabStatePut", "tabSession", "tabSessionPut", "tabSessions", "roles", "rolesPut", "role":
+		case "tabState", "tabStatePut", "tabSession", "tabSessionPut", "tabSessions", "roles", "rolesPut", "rolesStatus", "role":
 			// The tab state store, the tab sessions, the role definitions and the role read change no project or setting, so
 			// no window is notified. The role writes change projects.json, so every window reads its spaces again.
 		case "snapshot":

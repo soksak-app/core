@@ -145,7 +145,7 @@ role 파일이 담는 정의 텍스트, 그 한국어 번역, agent가 role과 �
 
 1. 저장된 정의가 새 정의와 같으면 `roles.json`을 쓰지 않는다. 아니면 host가 format 3의 `roles.json` 전체를 원자적으로 쓴다. 쓰기가 실패하면 그 쓰기 오류로 명령을 멈추며 어떤 tab도 바꾸지 않는다.
 2. layout 순서로 각 tab을 보며, role이 이 식별자이고 기록의 fingerprint이 새 정의의 fingerprint과 다른 tab은 [Tab role state](#tab-role-state)의 1단계부터 5단계까지를 이 정의로 실행하고 변경 message를 한 번 보낸다. 기록이 이미 새 정의의 fingerprint을 가진 tab은 바꾸지 않는다. 이 규칙은 앞서 실패한 tab을 고친다.
-3. tab 하나의 실패는 그 tab의 오류로 error display 경로에 보고하며, 다음 tab은 계속한다. `roles.json`은 새 정의를 유지하고, 실패한 tab은 이전 기록과 이전 role 파일을 유지한다. 그 tab의 launch는 `core.role.define`으로 고쳐질 때까지 `role file <path>: fingerprint differs from the record`로 거부된다.
+3. tab 하나의 실패는 그 tab의 오류로 error display 경로에 보고하며, 다음 tab은 계속한다. `roles.json`은 새 정의를 유지하고, 실패한 tab은 이전 기록과 이전 role 파일을 유지한다. 그 tab의 launch는 `core.role.define`으로 고쳐질 때까지 `role file <path>: fingerprint differs from the record`로 거부된다. 그때 command는 실패한 tab의 오류를 tab 순서대로 이어 붙여 실패로 답하므로, 호출한 쪽은 각 실패를 본다.
 4. `roles.json`이 바뀌었으면 host는 상태 `core.roles`를 게시한다([role status](#role-status)).
 
 답은 저장된 정의 `{id, text, ko, files}`다.

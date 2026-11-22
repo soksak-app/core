@@ -145,7 +145,7 @@ The command then runs in this order:
 
 1. When the stored definition of the role already equals the new one, `roles.json` is not written. Otherwise the host writes the whole `roles.json` in format 3, atomically. A failed write stops the command with its write error, and no tab changes.
 2. For each tab of the layout, in layout order, whose role is this identifier and whose record fingerprint differs from the fingerprint of the new definition, the host runs steps 1 to 5 of [tab role state](#tab-role-state) with this definition and sends one change message. A tab whose record already has the fingerprint of the new definition is not changed. This rule repairs a tab whose change failed earlier.
-3. A failure of one tab is reported as that tab's error through the error display path, and the next tabs continue. `roles.json` keeps the new definition, and the failed tab keeps its earlier record and role file. A launch of that tab is refused with `role file <path>: fingerprint differs from the record` until a `core.role.define` of the role repairs it.
+3. A failure of one tab is reported as that tab's error through the error display path, and the next tabs continue. `roles.json` keeps the new definition, and the failed tab keeps its earlier record and role file. A launch of that tab is refused with `role file <path>: fingerprint differs from the record` until a `core.role.define` of the role repairs it. The command then fails with the errors of the failed tabs, joined in tab order, so the caller sees each failure.
 4. When `roles.json` changed, the host publishes the status `core.roles` ([role status](#role-status)).
 
 The answer is the stored definition `{id, text, ko, files}`.

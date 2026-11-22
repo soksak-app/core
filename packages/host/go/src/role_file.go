@@ -26,6 +26,10 @@ const rereadRequestText = "[soksak role] Your role is not confirmed. Read the ro
 const roleFileFirstLineKo = "이 파일 전체를 읽는다. 이 파일이 정의하는 role을 따른다. 그다음 마지막 줄의 fingerprint로 확인한다: `sok role confirm <fingerprint>`를 실행하거나, 답에 `soksak role <fingerprint>`를 쓴다."
 const firstMessageSuffixText = "This message comes from soksak, not from a person. Finish your current task first. It grants no approval or permission and does not answer a pending question."
 
+// roleFilesHeading and roleFilesHeadingKo head the list of the files that a role reads, in role.md and role.ko.md.
+const roleFilesHeading = "Files this role reads:"
+const roleFilesHeadingKo = "이 role이 읽는 파일:"
+
 // roleFileNames are the file names that the role file writer uses inside the folder of a surface.
 const (
 	roleFileName    = "role.md"
@@ -34,30 +38,87 @@ const (
 )
 
 // RoleFingerprint returns the fingerprint of a role: the first 16 lowercase hexadecimal characters of the SHA-256 digest of the
-// identifier, one line feed, and the definition text (docs/spec/agent-roles.md#role-file).
-func RoleFingerprint(identifier, text string) string {
-	sum := sha256.Sum256([]byte(identifier + "\n" + text))
+// identifier, one line feed, the definition text, one line feed, and the file list as a compact JSON array
+// (docs/spec/agent-roles.md#role-file).
+func RoleFingerprint(identifier, text string, files []string) string {
+	sum := sha256.Sum256([]byte(identifier + "\n" + text + "\n" + fileListJSON(files)))
 	return hex.EncodeToString(sum[:])[:16]
 }
 
+// fileListJSON returns the file list as a compact JSON array. Go's JSON encoder escapes characters that the array does not
+// escape (such as <, > and U+2028), so the array is written here: only the double quote, the backslash and the control
+// characters below U+0020 are escaped, with the short forms \b, \f, \n, \r and \t and \u00XX for the others.
+func fileListJSON(files []string) string {
+	var out strings.Builder
+	out.WriteString("[")
+	for index, file := range files {
+		if index > 0 {
+			out.WriteString(",")
+		}
+		out.WriteString(`"`)
+		// The loop works on bytes: every escaped character is ASCII, and the other bytes, UTF-8 or not, are copied as they are.
+		for position := 0; position < len(file); position++ {
+			switch b := file[position]; {
+			case b == '"':
+				out.WriteString(`\"`)
+			case b == '\\':
+				out.WriteString(`\\`)
+			case b == '\b':
+				out.WriteString(`\b`)
+			case b == '\f':
+				out.WriteString(`\f`)
+			case b == '\n':
+				out.WriteString(`\n`)
+			case b == '\r':
+				out.WriteString(`\r`)
+			case b == '\t':
+				out.WriteString(`\t`)
+			case b < 0x20:
+				fmt.Fprintf(&out, `\u00%02X`, b)
+			default:
+				out.WriteByte(b)
+			}
+		}
+		out.WriteString(`"`)
+	}
+	out.WriteString("]")
+	return out.String()
+}
+
+// filesBlock returns the lines that list the files of a role under the heading: the heading, then one `- <path>` line per file.
+// It is empty when the file list is empty.
+func filesBlock(heading string, files []string) string {
+	if len(files) == 0 {
+		return ""
+	}
+	var out strings.Builder
+	out.WriteString(heading + "\n")
+	for _, file := range files {
+		out.WriteString("- " + file + "\n")
+	}
+	return out.String()
+}
+
 // RoleFileContent returns the content of the role file of a role: the first line, the definition text with one line feed at its
-// end when it has none, and the fingerprint on the last line, each line ending with one line feed (docs/spec/agent-roles.md#role-file).
-func RoleFileContent(identifier, text string) string {
+// end when it has none, the files block when the file list is not empty, and the fingerprint on the last line, each line ending
+// with one line feed (docs/spec/agent-roles.md#role-file).
+func RoleFileContent(identifier, text string, files []string) string {
 	body := text
 	if !strings.HasSuffix(body, "\n") {
 		body += "\n"
 	}
-	return roleFileFirstLine + "\n" + body + RoleFingerprint(identifier, text) + "\n"
+	return roleFileFirstLine + "\n" + body + filesBlock(roleFilesHeading, files) + RoleFingerprint(identifier, text, files) + "\n"
 }
 
 // roleKoFileContent returns the content of role.ko.md: the Korean first line, the Korean text with one line feed at its end
-// when it has none, and the fingerprint of role.md, which is computed over the English text (docs/spec/agent-roles.md#role-file).
-func roleKoFileContent(identifier, text, ko string) string {
+// when it has none, the files block under the Korean heading, and the fingerprint of role.md, which is computed over the
+// English text and the files (docs/spec/agent-roles.md#role-file).
+func roleKoFileContent(identifier, text, ko string, files []string) string {
 	body := ko
 	if !strings.HasSuffix(body, "\n") {
 		body += "\n"
 	}
-	return roleFileFirstLineKo + "\n" + body + RoleFingerprint(identifier, text) + "\n"
+	return roleFileFirstLineKo + "\n" + body + filesBlock(roleFilesHeadingKo, files) + RoleFingerprint(identifier, text, files) + "\n"
 }
 
 // RoleTexts returns the texts of the handshake for the role file at roleFile, keyed by the names of the shared case file.
@@ -69,6 +130,7 @@ func RoleTexts(roleFile string) map[string]string {
 		"change_message":       fill(changeMessageText),
 		"reread_request":       fill(rereadRequestText),
 		"first_message_suffix": firstMessageSuffixText,
+		"files_heading":        roleFilesHeading,
 	}
 }
 
@@ -95,8 +157,8 @@ func removeTemporary(temporary string) error {
 // write. Each content is written to a temporary file of mode 0600; role.md is renamed first and role.ko.md second, so a reader
 // sees the earlier file or the new one whole. A write that the ordered change of a role drives stores the record between the
 // two steps, so the change calls prepareRoleFile and commit itself (docs/spec/agent-roles.md#tab-role-state).
-func WriteRoleFile(configDirectory, surface, identifier, text, ko string) (string, error) {
-	prepared, err := prepareRoleFile(configDirectory, surface, identifier, text, ko)
+func WriteRoleFile(configDirectory, surface, identifier, text, ko string, files []string) (string, error) {
+	prepared, err := prepareRoleFile(configDirectory, surface, identifier, text, ko, files)
 	if err != nil {
 		return "", err
 	}
@@ -115,7 +177,7 @@ type preparedRole struct {
 // prepareRoleFile performs step 1 of the ordered change: it creates the folder of the surface, removes the leftover
 // temporary files of earlier writes, and writes both contents to temporary files of mode 0600. A failure is refused with
 // `role file <path>: write failed: <os error>` or the mode text, removes what it wrote, and stores nothing.
-func prepareRoleFile(configDirectory, surface, identifier, text, ko string) (*preparedRole, error) {
+func prepareRoleFile(configDirectory, surface, identifier, text, ko string, files []string) (*preparedRole, error) {
 	if err := checkSurface(surface); err != nil {
 		return nil, err
 	}
@@ -137,10 +199,10 @@ func prepareRoleFile(configDirectory, surface, identifier, text, ko string) (*pr
 		}
 	}
 	prepared := &preparedRole{folder: folder, rolePath: filepath.Join(folder, roleFileName), koPath: filepath.Join(folder, roleKoFileName)}
-	if prepared.roleTemporary, err = writeRoleTemporary(folder, prepared.rolePath, RoleFileContent(identifier, text)); err != nil {
+	if prepared.roleTemporary, err = writeRoleTemporary(folder, prepared.rolePath, RoleFileContent(identifier, text, files)); err != nil {
 		return nil, err
 	}
-	if prepared.koTemporary, err = writeRoleTemporary(folder, prepared.koPath, roleKoFileContent(identifier, text, ko)); err != nil {
+	if prepared.koTemporary, err = writeRoleTemporary(folder, prepared.koPath, roleKoFileContent(identifier, text, ko, files)); err != nil {
 		prepared.discard()
 		return nil, err
 	}

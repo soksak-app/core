@@ -106,13 +106,15 @@ func (w *Workspace) roleChange(tab, id string) (*roleAnswer, error) {
 	if !has {
 		return nil, fmt.Errorf("unknown agent role %s", id)
 	}
-	// checkRoles of roles.json guarantees the two members; the reads are stated and refuse the impossible case.
+	// checkRoles of roles.json guarantees the members; the reads are stated and refuse the impossible case.
 	text, textOK := definition["text"].(string)
 	ko, koOK := definition["ko"].(string)
 	if !textOK || !koOK {
 		return nil, fmt.Errorf("role %s holds no text or ko", id)
 	}
-	fingerprint := RoleFingerprint(id, text)
+	// checkRoles of roles.json guarantees the files list, so stringList reads it.
+	files, _ := stringList(definition["files"])
+	fingerprint := RoleFingerprint(id, text, files)
 	projects, _, at, err := w.locateTab(tab)
 	if err != nil {
 		return nil, err
@@ -124,7 +126,7 @@ func (w *Workspace) roleChange(tab, id string) (*roleAnswer, error) {
 		// The same role with the same definition: no file is written, no generation changes and no message is sent.
 		return w.answerOf(tab, at.record), nil
 	}
-	prepared, err := prepareRoleFile(w.directory, tab, id, text, ko)
+	prepared, err := prepareRoleFile(w.directory, tab, id, text, ko, files)
 	if err != nil {
 		return nil, err
 	}
