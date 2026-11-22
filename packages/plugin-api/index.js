@@ -1781,9 +1781,13 @@ export function exposureEntries(declared, { place = () => null, inert = () => fa
   // default: an unregistered element name has no element, and the caller reports that case as an unregistered error.
   const elements = (name) => (elementEntries.get(name) ?? []).flatMap((provide) => provide()).filter((el) => el.isConnected !== false);
 
-  // A status value is JSON, and null is its no-value (docs/spec/declared-ui.md). undefined is not a JSON value, so it is refused.
+  // A status value is JSON, and null is its no-value (docs/spec/declared-ui.md). undefined is not a JSON value, so it is refused, and
+  // a promise, which JSON writes as {}, is refused, because a read that answers later delivers the value that it resolves.
   function jsonStatusValue(name, value) {
     if (value === undefined) throw new ExposureError(EXPOSURE_ERRORS.failed, `status ${name} value is undefined; a status value is JSON, and null is its no-value`);
+    if (typeof value?.then === "function") {
+      throw new ExposureError(EXPOSURE_ERRORS.failed, `status ${name} value is a promise; a status value is JSON, and a read that answers later delivers the value it resolves`);
+    }
     return value;
   }
 

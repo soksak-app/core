@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1099: read가 나중에 답하는 core status(`core.tab.role`, `core.roles`)의 변경은 가장 최근 read가 resolve한 값을 전달하고, registry는 promise인 status 값을 `status <name> value is a promise; a status value is JSON, and a read that answers later delivers the value it resolves`로 거부한다. 전에는 그런 변경이 promise를 전달했고, view는 그것을 `{}`로 받았다. 검증: plugin-api와 page case의 Red, 이어서 plugin-api test 1087개와 workbench의 status, role, exposure test와 함께 Green.
 - F1097: role operation의 저장된 tab에 대한 Rust walk는 data가 없는 고정 window sidebar 카드를 건너뛰고, 다른 저장 형태는 `<projects.json path>: a content card without a data object` 같은 Go walk의 문장으로 거부한다. 전에는 sidebar 카드가 있는 space에서 tab이 `core.tab.role`을 읽으면 Tauri host가 `role_state.rs:160:26: no entry found for key`로 panic했고, workbench가 다시 시작하지 않았다. 검증: 저장 형태로 Rust role state test 일곱 개의 Red, 이어서 Rust role file과 workspace test, Go role test와 함께 Green.
 - F1095: release item은 implementation을 link하지 않으므로 scripts/check-tests.mjs는 F1095를 capability 없는 완료 목록에 둔다. release 기록이 `pnpm test`의 완료 capability check와 test inventory check에서 실패했다.
 - F1093: host specification은 plugin update 시작의 Rust test를 Go counterpart 없는 row H104로 선언한다.

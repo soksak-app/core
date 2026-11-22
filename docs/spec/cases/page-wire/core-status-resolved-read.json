@@ -1,0 +1,152 @@
+{
+  "name": "core-status-resolved-read",
+  "description": "The page reads core.tab.role of a tab through the workspace store at the start of an observation and again at a change of the core state, and delivers each role answer that the host returns.",
+  "replay": false,
+  "reason": "The case checks how the page delivers a core status whose read answers later; the producer runs the workspace role reads in the role state cases.",
+  "steps": [
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-aaaaaa",
+              "title": "project",
+              "root": "/work/project",
+              "identity": "id",
+              "color": "#fff",
+              "named": 2,
+              "activeSpaceId": "spc-aaaaaa",
+              "spaces": [
+                {
+                  "id": "spc-aaaaaa",
+                  "title": "SPACE1",
+                  "layout": {
+                    "focusedId": "main",
+                    "named": 0,
+                    "windowSidebars": {},
+                    "sidebars": {},
+                    "leader": "main",
+                    "lastCard": 1,
+                    "state": {
+                      "root": {
+                        "card": "main",
+                        "data": {
+                          "tabs": [
+                            {
+                              "id": "tab-aaaaa1",
+                              "plugin": "fixture",
+                              "title": "fixture",
+                              "origin": {
+                                "directory": null
+                              },
+                              "role": null
+                            }
+                          ],
+                          "activeId": "tab-aaaaa1"
+                        }
+                      }
+                    }
+                  }
+                }
+              ],
+              "settings": {}
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "tabState"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "tabSessions"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": []
+      }
+    },
+    {
+      "call": {
+        "name": "windowReady"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "role",
+          "tab": "tab-aaaaa1"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "role": null,
+          "generation": null,
+          "state": null,
+          "seq": 0,
+          "fingerprint": null,
+          "path": null
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "role",
+          "tab": "tab-aaaaa1"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "role": "a",
+          "generation": 1,
+          "state": "pending",
+          "seq": 1,
+          "fingerprint": "0123456789abcdef",
+          "path": "/config/agents/tab-aaaaa1/role.md"
+        }
+      }
+    }
+  ],
+  "filter": [
+    "notificationState",
+    "setTheme",
+    "setMenuLanguage"
+  ]
+}

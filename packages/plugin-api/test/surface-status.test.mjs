@@ -73,3 +73,14 @@ test("a follow whose first read throws is refused with that error and leaves no 
   assert.throws(() => entries.follow(NAME, () => {}, "tab-a"), { message: "no role of tab-a" });
   assert.equal(subscribed.filter(({ stopped }) => !stopped).length, 0, "the refused follow left a subscription");
 });
+
+test("a changed status value that is a promise is refused instead of being sent as {}", { timeout: 5000 }, async () => {
+  const { entries, subscribed } = surfaceStatus();
+  const values = [];
+  entries.follow(NAME, (value) => values.push(value), "tab-a");
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.throws(() => subscribed[0].fn(Promise.resolve({ surface: "tab-a", role: "a" })),
+    { message: `status ${NAME} value is a promise; a status value is JSON, and a read that answers later delivers the value it resolves` });
+  assert.deepEqual(values, [{ surface: "tab-a" }], "the follow delivered the promise");
+});

@@ -292,6 +292,19 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F1099",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "  function jsonStatusValue(name, value) {" },
+      { file: "packages/workbench/core-exposure.js", symbol: "function deliverRead(value, fn, turn, latest) {" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/surface-status.test.mjs", id: "a changed status value that is a promise is refused instead of being sent as {}" },
+      { file: "packages/workbench/test/core-status-read.test.mjs", id: "an observation of core.tab.role receives the role that each read resolves, not the promise of the read" },
+    ],
+    expected: "A core status whose read answers later delivers the resolved value, and a promise as a status value is refused.",
+    levels: ["unit"],
+  },
+  {
     id: "F1097",
     implementation: [
       { file: "packages/host/rust/src/role_state.rs", symbol: "fn walk_node<'a>(" },

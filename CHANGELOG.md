@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1099: A change of a core status whose read answers later, `core.tab.role` and `core.roles`, delivers the value that the latest read resolves, and the registry refuses a status value that is a promise with `status <name> value is a promise; a status value is JSON, and a read that answers later delivers the value it resolves`. Before, such a change delivered the promise, which a view received as `{}`. Verification: Red of the plugin-api and page cases, then Green with the 1087 plugin-api tests and the workbench status, role and exposure tests.
 - F1097: The Rust walk of the stored tabs of the role operations skips the fixed window sidebar cards, which hold no data, and refuses another stored form with the text of the Go walk, such as `<projects.json path>: a content card without a data object`. Before, the Tauri host panicked at `role_state.rs:160:26: no entry found for key` when a tab read `core.tab.role` in a space with sidebar cards, and the workbench did not start again. Verification: Red of the seven Rust role state tests with the stored form, then Green with the Rust role file and workspace tests and the Go role tests.
 - F1095: scripts/check-tests.mjs lists F1095 among the completions without a capability, because a release item links no implementation; the release record failed the completed capability check of `pnpm test` and the test inventory check.
 - F1093: The host specification declares the Rust test of the start of the plugin updates without a Go counterpart, as row H104.

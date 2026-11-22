@@ -224,10 +224,22 @@ function pluginCommand(action) {
   };
 }
 
+/**
+ * Delivers to fn the value of one read of a status. A read that answers later, as core.tab.role reads the workspace store of the host,
+ * delivers the value that it resolves, and only the latest read of turn delivers, so an earlier answer that arrives late is not sent
+ * after a newer one; its failure is reported as the failure of a core watcher.
+ */
+function deliverRead(value, fn, turn, latest) {
+  if (typeof value?.then !== "function") return fn(value);
+  value.then((resolved) => { if (turn === latest()) fn(resolved); },
+    (error) => { if (turn === latest()) report(`core status: ${error?.message ?? error}`); });
+}
+
 /** Registers one core status. The value is read again when coreChanged is called. */
 function status(name, read, options) {
   registry.status(name, read, (fn, surface) => {
-    const run = () => fn(read(surface));
+    let reads = 0;
+    const run = () => deliverRead(read(surface), fn, ++reads, () => reads);
     watchers.add(run);
     return () => watchers.delete(run);
   }, options);
@@ -535,7 +547,8 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   // The role definitions (docs/spec/agent-roles.md#role-status): the status is read from the host store, and a change of roles.json
   // re-reads it while a watch of it is open (projects.onRolesChange).
   const readRoles = () => projects.rolesStatus();
-  registry.status("core.roles", readRoles, (changed) => projects.onRolesChange(() => changed(readRoles())));
+  let roleReads = 0;
+  registry.status("core.roles", readRoles, (changed) => projects.onRolesChange(() => deliverRead(readRoles(), changed, ++roleReads, () => roleReads)));
   status("core.projects", () => projects.all().map(withOpen));
   status("core.project", () => {
     const project = projects.active();
