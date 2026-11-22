@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1085: core.session.read takes the optional from and count of the sidecar screen read on the page and on mygo and answers the retained rows {from, count, rows} of the sidecar unchanged; invalid from and count are refused before any sidecar request with the same text.
 - F1084: A new tab of core.layout.apply whose params name an owned session shows the session and sends the size of its card on the page and on mygo, and the apply refuses a session that is not open.
 - F1083: The end-to-end checks find a tab of `core.grid` by its member `tab`, and the tab list of `core.grid` in the groups specification names `program`.
 - F1082-2: A restored tab whose session did not return after a restart shows `restored tab <tab>: session <id> is not open` on the page and on mygo, and the page shows the adopted session in its restored tab.

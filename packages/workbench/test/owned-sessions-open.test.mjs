@@ -1,5 +1,5 @@
 // The owned session messages of the main page against the page-wire case owned-sessions-open: the restart listing, and open, resize,
-// input, submit, read, program and end through the owner surface (docs/spec/plugins.md#owned-sessions, docs/spec/persistent-services.md#owned-session-messages).
+// input, submit, read, a read of retained rows, program and end through the owner surface (docs/spec/plugins.md#owned-sessions, docs/spec/persistent-services.md#owned-session-messages).
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -87,6 +87,23 @@ test("the owned session messages open, resize and end a session through the owne
   assert.deepEqual(await inputOwnedSession({ session: "ses-1", text: "ls\r" }, OWNER), {});
   assert.deepEqual(await submitOwnedSession({ session: "ses-1", text: "ls" }, OWNER), {});
   assert.deepEqual(await readOwnedSession({ session: "ses-1" }, OWNER), { rows: ["$ ls", "README.md"], cursor: { row: 1, column: 0 } });
+  // A read with from and count asks for those retained rows and returns the reply of the sidecar unchanged; invalid members are refused
+  // before any sidecar request.
+  for (const [params, refusal] of [
+    [{ from: 0 }, "core.session.read from and count are required together"],
+    [{ count: 1 }, "core.session.read from and count are required together"],
+    [{ from: -1, count: 1 }, "core.session.read from must be an integer of 0 or more"],
+    [{ from: 1.5, count: 1 }, "core.session.read from must be an integer of 0 or more"],
+    [{ from: "0", count: 1 }, "core.session.read from must be an integer of 0 or more"],
+    [{ from: null, count: 1 }, "core.session.read from must be an integer of 0 or more"],
+    [{ from: 2 ** 53, count: 1 }, "core.session.read from must be an integer of 0 or more"],
+    [{ from: 0, count: 0 }, "core.session.read count must be an integer from 1 to 200"],
+    [{ from: 0, count: 201 }, "core.session.read count must be an integer from 1 to 200"],
+    [{ from: 0, count: 2.5 }, "core.session.read count must be an integer from 1 to 200"],
+  ]) {
+    await assert.rejects(readOwnedSession({ session: "ses-1", ...params }, OWNER), { message: refusal });
+  }
+  assert.deepEqual(await readOwnedSession({ session: "ses-1", from: 120, count: 2 }, OWNER), { from: 120, count: 2, rows: ["$ ls", "README.md"] });
   // The sidecar reports the program state of the session to its owner; the status shows each state in turn.
   wire.deliverNotice();
   assert.deepEqual(ownedSessionsState()[0].program, { state: "working" });

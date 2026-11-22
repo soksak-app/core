@@ -1,6 +1,6 @@
 {
   "name": "owned-sessions-open",
-  "description": "The page lists the owned sessions of its sidecar at its restart, opens a session for its tab, resizes it, types, submits and reads its screen, receives the program state of its session, and ends it through the owner surface.",
+  "description": "The page lists the owned sessions of its sidecar at its restart, opens a session for its tab, resizes it, types, submits and reads its screen and 2 retained rows from row 120, receives the program state of its session, and ends it through the owner surface.",
   "replay": false,
   "reason": "The host side of the owned session messages lands with the host work of F1062-3; the producer runs this case once the host answers sidecarSessions and the owned session messages.",
   "variables": {
@@ -355,6 +355,31 @@
         "result": {
           "rows": ["$ ls", "README.md"],
           "cursor": {"row": 1, "column": 0}
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "sidecarSend",
+        "payload": {
+          "sidecar": "@scope/fixture-sidecar",
+          "surface": "tab-aaaaa1",
+          "cids": [],
+          "body": {
+            "operation": "read",
+            "session": "ses-1",
+            "from": 120,
+            "count": 2
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "from": 120,
+          "count": 2,
+          "rows": ["$ ls", "README.md"]
         }
       }
     },

@@ -4268,10 +4268,14 @@
       },
       {
         "name": "core.session.read",
-        "description": "Reads the screen of an open owned session: {rows, cursor}, where rows are the visible rows as text, top row first, and cursor is the zero-based {row, column} of the cursor in rows. Only its owner surface may call it (docs/spec/plugins.md#owned-sessions).",
+        "description": "Reads the screen of an open owned session: {rows, cursor}, where rows are the visible rows as text, top row first, and cursor is the zero-based {row, column} of the cursor in rows. With from and count, which are required together, it reads count retained rows from the absolute line number from instead and answers {from, count, rows}; from is an integer of 0 or more and count an integer from 1 to 200. Only its owner surface may call it (docs/spec/plugins.md#owned-sessions).",
         "params": {
           "type": "object",
-          "properties": { "session": { "type": "string" } },
+          "properties": {
+            "session": { "type": "string" },
+            "from": { "type": "integer" },
+            "count": { "type": "integer" }
+          },
           "required": ["session"]
         },
         "result": {
@@ -4285,9 +4289,11 @@
                 "column": { "type": "integer" }
               },
               "required": ["row", "column"]
-            }
+            },
+            "from": { "type": "integer" },
+            "count": { "type": "integer" }
           },
-          "required": ["rows", "cursor"]
+          "required": ["rows"]
         }
       },
       {

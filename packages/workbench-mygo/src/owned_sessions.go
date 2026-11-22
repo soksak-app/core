@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"sort"
 	"strings"
@@ -237,14 +238,34 @@ func (o *OwnedSessions) Submit(caller, session, text string, answer func(error))
 	})
 }
 
-// Read answers the screen of session as the sidecar replies it, unchanged when the reply states no error. Only its owner may call it.
-func (o *OwnedSessions) Read(caller, session string, answer func(json.RawMessage, error)) {
+// Read answers the screen of session as the sidecar replies it, unchanged when the reply states no error. With from and count, the
+// raw members of core.session.read, it asks for those retained rows of the session; nil stands for an absent member. Only its owner
+// may call it (docs/spec/plugins.md#owned-sessions).
+func (o *OwnedSessions) Read(caller, session string, from, count json.RawMessage, answer func(json.RawMessage, error)) {
 	current, err := o.ownedBy(caller, session)
 	if err != nil {
 		answer(nil, err)
 		return
 	}
-	o.request(o.ports.Port(o.sidecarOf(current.Plugin)), current.Owner, map[string]any{"operation": "read", "session": session}, func(reply json.RawMessage, err error) {
+	body := map[string]any{"operation": "read", "session": session}
+	if from != nil || count != nil {
+		if from == nil || count == nil {
+			answer(nil, errors.New("core.session.read from and count are required together"))
+			return
+		}
+		first, ok := integerOf(from)
+		if !ok || first < 0 {
+			answer(nil, errors.New("core.session.read from must be an integer of 0 or more"))
+			return
+		}
+		rows, ok := integerOf(count)
+		if !ok || rows < 1 || rows > 200 {
+			answer(nil, errors.New("core.session.read count must be an integer from 1 to 200"))
+			return
+		}
+		body["from"], body["count"] = first, rows
+	}
+	o.request(o.ports.Port(o.sidecarOf(current.Plugin)), current.Owner, body, func(reply json.RawMessage, err error) {
 		if err == nil {
 			err = ownedReplyError(reply)
 		}
@@ -254,6 +275,20 @@ func (o *OwnedSessions) Read(caller, session string, answer func(json.RawMessage
 		}
 		answer(reply, nil)
 	})
+}
+
+// integerOf reads raw as a JSON number that is a safe integer, as Number.isSafeInteger of the page judges it; any other value is
+// refused.
+func integerOf(raw json.RawMessage) (int64, bool) {
+	var decoded any
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		return 0, false
+	}
+	value, ok := decoded.(float64)
+	if !ok || value != math.Trunc(value) || math.Abs(value) > 1<<53-1 {
+		return 0, false
+	}
+	return int64(value), true
 }
 
 // ownedBy returns the open session of session when caller is its owner; any other caller is refused before a sidecar request.

@@ -10,10 +10,16 @@ import (
 // runRead calls Read of the owned sessions, runs the steps it posted, and returns the screen and the error that Read answered.
 func (f *ownedFixture) runRead(caller, session string) (json.RawMessage, error) {
 	f.t.Helper()
+	return f.runReadRows(caller, session, nil, nil)
+}
+
+// runReadRows calls Read with the raw from and count members of core.session.read, nil for an absent member.
+func (f *ownedFixture) runReadRows(caller, session string, from, count json.RawMessage) (json.RawMessage, error) {
+	f.t.Helper()
 	var screen json.RawMessage
 	var got error
 	answered := false
-	f.sessions.Read(caller, session, func(body json.RawMessage, err error) {
+	f.sessions.Read(caller, session, from, count, func(body json.RawMessage, err error) {
 		screen, got, answered = body, err, true
 	})
 	f.pending.drain(f.t)
@@ -115,6 +121,56 @@ func TestReadByTheOwnerReturnsTheScreenOfTheSidecar(t *testing.T) {
 	sends := f.host.sent()
 	equal(t, len(sends), 1)
 	equal(t, sends[0].body, map[string]any{"operation": "read", "session": "s-1"})
+}
+
+// A read with from and count asks the sidecar for those retained rows and answers its reply {from, count, rows} unchanged
+// (docs/spec/plugins.md#owned-sessions).
+func TestReadWithFromAndCountReturnsTheRetainedRowsOfTheSidecar(t *testing.T) {
+	f := newOwnedFixture(t)
+	openFixtureSession(t, f)
+	f.host.reply = func(op string, body map[string]any) map[string]any {
+		return map[string]any{"from": body["from"], "count": body["count"], "rows": []any{"$ ls", "README.md"}}
+	}
+	screen, err := f.runReadRows("owner-tab", "s-1", json.RawMessage(`120`), json.RawMessage(`2`))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(screen, &got); err != nil {
+		t.Fatalf("rows: %v", err)
+	}
+	equal(t, got, map[string]any{"from": float64(120), "count": float64(2), "rows": []any{"$ ls", "README.md"}})
+	sends := f.host.sent()
+	equal(t, len(sends), 1)
+	equal(t, sends[0].body, map[string]any{"operation": "read", "session": "s-1", "from": float64(120), "count": float64(2)})
+}
+
+// Invalid from and count are refused with the text of the page before any sidecar request (docs/spec/plugins.md#owned-sessions).
+func TestReadRefusesInvalidFromAndCountBeforeARequest(t *testing.T) {
+	cases := []struct {
+		from, count json.RawMessage
+		want        string
+	}{
+		{json.RawMessage(`0`), nil, "core.session.read from and count are required together"},
+		{nil, json.RawMessage(`1`), "core.session.read from and count are required together"},
+		{json.RawMessage(`-1`), json.RawMessage(`1`), "core.session.read from must be an integer of 0 or more"},
+		{json.RawMessage(`1.5`), json.RawMessage(`1`), "core.session.read from must be an integer of 0 or more"},
+		{json.RawMessage(`"0"`), json.RawMessage(`1`), "core.session.read from must be an integer of 0 or more"},
+		{json.RawMessage(`null`), json.RawMessage(`1`), "core.session.read from must be an integer of 0 or more"},
+		{json.RawMessage(`9007199254740992`), json.RawMessage(`1`), "core.session.read from must be an integer of 0 or more"},
+		{json.RawMessage(`0`), json.RawMessage(`0`), "core.session.read count must be an integer from 1 to 200"},
+		{json.RawMessage(`0`), json.RawMessage(`201`), "core.session.read count must be an integer from 1 to 200"},
+		{json.RawMessage(`0`), json.RawMessage(`2.5`), "core.session.read count must be an integer from 1 to 200"},
+	}
+	for _, c := range cases {
+		f := newOwnedFixture(t)
+		openFixtureSession(t, f)
+		_, err := f.runReadRows("owner-tab", "s-1", c.from, c.count)
+		if err == nil || err.Error() != c.want {
+			t.Fatalf("read of from %s and count %s: error = %v, want %s", c.from, c.count, err, c.want)
+		}
+		equal(t, len(f.host.sent()), 0)
+	}
 }
 
 func TestSessionProgressSetsTheProgramStateOfTheOwnersSession(t *testing.T) {

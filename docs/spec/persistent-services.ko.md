@@ -33,7 +33,7 @@
 - `{operation: "end", session}`은 같은 소유자의 세션을 끝낸다. 응답 body는 `{session, ended: true}`다. 끝낸 사유는 page가 `workbench.session.end`에 기록하며, 서비스는 사유를 받지 않는다.
 - `{operation: "input", session, text}`는 같은 소유자의 세션 프로그램에 문자열 text를 바꾸지 않고 준다. core는 text의 문자에 규칙을 적용하지 않으므로 CR이나 LF도 준 그대로 프로그램에 기록되며, 사이드카의 입력 경로가 이를 자기 입력으로 판단한다. 응답 body는 `{session}`이다.
 - `{operation: "paste", session, text}`는 같은 소유자의 세션 프로그램에 문자열 text를 한 번의 paste로 준다. 프로그램이 bracketed paste mode를 켰으면 사이드카가 이를 bracket한다. 응답 body는 `{session}`이다.
-- `{operation: "read", session}`은 같은 소유자의 세션 화면을 사이드카에 요청한다. 응답 body는 `{rows, cursor}`다. `rows`는 보이는 행의 텍스트 문자열 배열이며 위쪽 행이 먼저다. `cursor`는 `{row, column}`으로, `rows`에서 커서의 0부터 세는 행과 열이다. core는 멤버 `error`가 없으면 이 body를 바꾸지 않고 넘긴다.
+- `{operation: "read", session}`은 같은 소유자의 세션 화면을 사이드카에 요청한다. 응답 body는 `{rows, cursor}`다. `rows`는 보이는 행의 텍스트 문자열 배열이며 위쪽 행이 먼저다. `cursor`는 `{row, column}`으로, `rows`에서 커서의 0부터 세는 행과 열이다. `{operation: "read", session, from, count}`는 absolute line number `from`부터 retained rows `count`개를 요청하며, 번호와 범위는 `screen.read`의 `from`과 `count`와 같다([화면 메시지](#화면-메시지)). 응답 body는 `{from, count, rows}`이고, retained rows 밖의 범위에는 error로 답하며 행을 보내지 않는다. core는 멤버 `error`가 없으면 이 body를 바꾸지 않고 넘긴다.
 
 core는 `core.session.submit {session, text}`를 같은 세션에 대한 두 요청으로 구현하며 순서는 다음과 같다. text의 `paste`를 보내고, paste의 응답 뒤에 text `"\r"`(Enter)의 `input`을 보낸다. CR이나 LF가 있는 text는 어떤 요청도 보내기 전에 거부하므로 줄 끝은 Enter뿐이다. 이 규칙은 선언된 submit 명령([명령줄](cli.md#commands))과 같다.
 

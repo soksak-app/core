@@ -188,10 +188,22 @@ export async function submitOwnedSession({ session, text }, surface) {
   return {};
 }
 
-/** core.session.read: the owner reads the screen of its session; the sidecar reply is returned unchanged when it states no error. */
-export async function readOwnedSession({ session }, surface) {
+/**
+ * core.session.read: the owner reads the screen of its session, or with from and count those retained rows of it; the sidecar reply
+ * is returned unchanged when it states no error.
+ */
+export async function readOwnedSession(params, surface) {
+  const { session } = params;
   const entry = requireOwner("core.session.read", session, surface);
-  const reply = await windowSidecar(entry.sidecar).send(entry.owner, { operation: "read", session });
+  const body = { operation: "read", session };
+  if ("from" in params || "count" in params) {
+    const { from, count } = params;
+    if (!("from" in params && "count" in params)) throw new Error("core.session.read from and count are required together");
+    if (!Number.isSafeInteger(from) || from < 0) throw new Error("core.session.read from must be an integer of 0 or more");
+    if (!Number.isSafeInteger(count) || count < 1 || count > 200) throw new Error("core.session.read count must be an integer from 1 to 200");
+    Object.assign(body, { from, count });
+  }
+  const reply = await windowSidecar(entry.sidecar).send(entry.owner, body);
   const failure = ownedReplyFailure("core.session.read", reply);
   if (failure) throw failure;
   return reply;

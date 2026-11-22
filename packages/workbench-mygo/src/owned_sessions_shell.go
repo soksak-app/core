@@ -156,7 +156,9 @@ func (s *Shell) registerOwnedSessions() {
 		})
 	})
 	type readParam struct {
-		Session string `json:"session"`
+		Session string          `json:"session"`
+		From    json.RawMessage `json:"from"`
+		Count   json.RawMessage `json:"count"`
 	}
 	s.registry.CommandLaterOnSurface("core.session.read", func(raw json.RawMessage, surface string, answer func(any, error)) {
 		value, err := params[readParam](raw)
@@ -168,7 +170,7 @@ func (s *Shell) registerOwnedSessions() {
 			answer(nil, fmt.Errorf("core.session.read requires the surface of its caller"))
 			return
 		}
-		s.owned.Read(surface, value.Session, func(screen json.RawMessage, err error) {
+		s.owned.Read(surface, value.Session, value.From, value.Count, func(screen json.RawMessage, err error) {
 			if err != nil {
 				answer(nil, err)
 				return
