@@ -144,6 +144,7 @@ const EXACT = new Map([
   ["workbench.project.operation", "call"],
   ["workbench.session.end", "lifecycle"],
   ["workbench.session.open", "lifecycle"],
+  ["workbench.session.program", "lifecycle"],
   ["workbench.settings.change", "call"],
   ["workbench.start", "lifecycle"],
   ["workbench.surface.mount.failed", "lifecycle"],

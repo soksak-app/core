@@ -2954,6 +2954,21 @@
       },
       "description": "A command that changed the layout of the active space; `params` and `result` are the JSON text of its parameters and of its answer cut to 1024 bytes, `layout` is the JSON text of the stored layout of the space after it, {state, groups, leader, lastCard}, cut to 61440 bytes so that the fields stay within the bound of an event."
     },
+    "workbench.session.program": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "session": { "type": "string" },
+          "state": { "enum": ["idle", "working", "blocked"] }
+        },
+        "required": ["session", "state"]
+      },
+      "description": "The program state of an owned session changed to state, as its owner reported it with session.program (docs/spec/plugins.md#owned-sessions). Each accepted report that changes the state is published; a report of the state that the session already has is not."
+    },
     "workbench.session.end": {
       "layer": "workbench",
       "class": "lifecycle",

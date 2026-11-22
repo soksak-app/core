@@ -380,6 +380,35 @@
     },
     {
       "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-2",
+              "mono_ns": "$mono-ns-2",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.session.program",
+              "fields": {"session": "ses-1", "state": "working"}
+            },
+            {
+              "ts_us": "$ts-us-2",
+              "mono_ns": "$mono-ns-2",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.session.program",
+              "fields": {"session": "ses-1", "state": "idle"}
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {"result": null}
+    },
+    {
+      "call": {
         "name": "sidecarSend",
         "payload": {
           "sidecar": "@scope/fixture-sidecar",

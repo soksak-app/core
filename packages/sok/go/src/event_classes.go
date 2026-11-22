@@ -157,6 +157,7 @@ var eventClasses = map[string]Class{
 	"workbench.project.operation":            ClassCall,
 	"workbench.session.end":                  ClassLifecycle,
 	"workbench.session.open":                 ClassLifecycle,
+	"workbench.session.program":              ClassLifecycle,
 	"workbench.settings.change":              ClassCall,
 	"workbench.start":                        ClassLifecycle,
 	"workbench.surface.mount.failed":         ClassLifecycle,

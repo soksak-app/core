@@ -199,6 +199,7 @@ pub fn class_of(name: &str) -> Option<Class> {
         "workbench.project.operation" => Some(Class::Call),
         "workbench.session.end" => Some(Class::Lifecycle),
         "workbench.session.open" => Some(Class::Lifecycle),
+        "workbench.session.program" => Some(Class::Lifecycle),
         "workbench.settings.change" => Some(Class::Call),
         "workbench.start" => Some(Class::Lifecycle),
         "workbench.surface.mount.failed" => Some(Class::Lifecycle),

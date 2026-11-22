@@ -297,7 +297,10 @@ function programMessage(owner, body) {
     report(`core.session.program ${session}: surface ${owner} does not own session ${session}`);
     return;
   }
+  // A report of the state that the session already has changes nothing and publishes nothing.
+  if (entry.program?.state === state) return;
   entry.program = { state };
+  emitEvent("info", "workbench.session.program", { session, state });
 }
 
 /**
