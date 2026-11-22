@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1095: scripts/check-tests.mjs lists F1095 among the completions without a capability, because a release item links no implementation; the release record failed the completed capability check of `pnpm test` and the test inventory check.
 - F1093: The host specification declares the Rust test of the start of the plugin updates without a Go counterpart, as row H104.
 - F1093, F1094: scripts/check-tests.mjs links each correction to its implementation and its tests.
 - F1095-1: The core version is 0.0.48 in every package and crate manifest, Info.plist, Tauri file, Go and pkg-config declaration, the six workspace entries of Cargo.lock and scripts/check-versions.mjs.

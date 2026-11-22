@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1095: release item은 implementation을 link하지 않으므로 scripts/check-tests.mjs는 F1095를 capability 없는 완료 목록에 둔다. release 기록이 `pnpm test`의 완료 capability check와 test inventory check에서 실패했다.
 - F1093: host specification은 plugin update 시작의 Rust test를 Go counterpart 없는 row H104로 선언한다.
 - F1093, F1094: scripts/check-tests.mjs는 각 수정을 그 구현과 test에 연결한다.
 - F1095-1: core version은 모든 package와 crate manifest, Info.plist, Tauri 파일, Go와 pkg-config 선언, Cargo.lock의 workspace 항목 여섯 개, scripts/check-versions.mjs에서 0.0.48이다.
