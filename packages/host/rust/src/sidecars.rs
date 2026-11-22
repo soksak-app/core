@@ -1248,6 +1248,7 @@ fn write_in_order<O>(
 /// The failure of a retain whose connection ended before its answer (docs/spec/persistent-services.md#service-transport).
 const CONNECTION_ENDED: &str = "the service connection ended before the answer";
 static RETAIN_REQUESTS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+static SESSIONS_REQUESTS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 /// The maximum number of bytes of one sidecar message line before the line feed (docs/spec/sidecars.md#messages). It
 /// holds a schema snapshot of several MB with a margin of more than ten times, and it limits the memory held for one
@@ -1354,6 +1355,18 @@ struct Process {
 }
 
 type RetainWaiters = Arc<Mutex<HashMap<String, SyncSender<Result<usize, String>>>>>;
+/// The answered requests that wait for a reply, by sidecar and surface.
+type Answers = Arc<Mutex<HashMap<(String, String), Vec<AnswerEntry>>>>;
+static ANSWER_IDS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+/// One answered request: the correlation identifiers that its reply names, and the sender that ends its wait.
+struct AnswerEntry {
+    id: u64,
+    cids: Vec<String>,
+    sender: SyncSender<Result<Box<RawValue>, String>>,
+}
+/// The owned sessions of a sessions answer, or the failure of the query, by request.
+type SessionsWaiters = Arc<Mutex<HashMap<String, SyncSender<Result<Vec<OwnedSession>, String>>>>>;
 /// The clock of the sidecars.
 type Clock = Arc<dyn Fn() -> Instant + Send + Sync>;
 
@@ -1421,6 +1434,7 @@ struct PersistentConnection {
     close_waiters: ReplyWaiters,
     /// Receives the number of sessions that the service closed, or an error, for every retain request.
     retain_waiters: RetainWaiters,
+    sessions_waiters: SessionsWaiters,
     shutdown_waiters: ReplyWaiters,
     /// Whether the owner of this connection was closed and the service was told to shut down. The close of a
     /// replacement and the close of a stop run once between them.
@@ -1515,6 +1529,8 @@ struct Stopping {
 struct Core<O> {
     /// The declared sidecars. An installation adds declarations while running, so they are locked separately from
     /// state.
+    /// The answered requests that wait for their reply, by sidecar and surface (docs/spec/persistent-services.md#owned-session-messages).
+    answers: Answers,
     declarations: RwLock<Declarations>,
     config_directory: PathBuf,
     state: Arc<Mutex<State<O>>>,
@@ -1672,6 +1688,188 @@ pub struct SidecarDeclaration {
 }
 
 /// A persistent sidecar whose running service has another version than the installed one
+/// The call sidecarSend {sidecar, surface, body, cids, answer} of the main page; the argument decoder checks its form.
+#[derive(Deserialize)]
+pub struct SidecarSendRequest {
+    pub sidecar: String,
+    pub surface: String,
+    pub body: Box<RawValue>,
+    #[serde(default)]
+    pub cids: Vec<String>,
+    #[serde(default)]
+    pub answer: bool,
+}
+
+impl SidecarSendRequest {
+    /// Refuses a cids entry that a line cannot hold, and, for an answered send, an empty cids list.
+    pub fn check(self) -> Result<Self, String> {
+        if self.answer && self.cids.is_empty() {
+            return Err("sidecarSend answer requires cids".to_string());
+        }
+        check_cids(&self.cids)?;
+        Ok(self)
+    }
+}
+
+/// Refuses a correlation identifier that a line cannot hold, and names it.
+fn check_cids(cids: &[String]) -> Result<(), String> {
+    match cids.iter().find(|cid| !crate::event_log::valid_cid(cid)) {
+        Some(bad) => Err(format!(
+            "sidecarSend cids are refused: {bad} is empty or holds a quote, a backslash or a control character"
+        )),
+        None => Ok(()),
+    }
+}
+
+/// The wait of an answered send for the reply whose correlation identifiers equal the request's.
+pub struct AnswerWaiter {
+    receiver: Receiver<Result<Box<RawValue>, String>>,
+    answers: Answers,
+    key: (String, String),
+    id: u64,
+}
+
+impl AnswerWaiter {
+    /// Returns the body of the reply, or the error of a reply whose body has the member error. A connection that ends
+    /// before the reply rejects the wait with the connection error; the wait has no time limit.
+    pub fn wait(self) -> Result<Box<RawValue>, String> {
+        self.receiver
+            .recv()
+            .unwrap_or_else(|_| Err(CONNECTION_ENDED.to_string()))
+    }
+}
+
+impl Drop for AnswerWaiter {
+    fn drop(&mut self) {
+        let mut answers = self
+            .answers
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the answered requests, which the drop removes
+            // from; the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner);
+        if let Some(entries) = answers.get_mut(&self.key) {
+            entries.retain(|entry| entry.id != self.id);
+            if entries.is_empty() {
+                answers.remove(&self.key);
+            }
+        }
+    }
+}
+
+/// Resolves the answered request that waits for the reply of surface whose correlation identifiers equal cids.
+fn resolve_answer(
+    answers: &Answers,
+    sidecar: &str,
+    surface: &str,
+    cids: &[String],
+    body: &RawValue,
+) {
+    let entry = {
+        let mut answers = answers
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the answered requests, which the reader amends; the
+            // panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner);
+        let key = (sidecar.to_string(), surface.to_string());
+        let entries = answers.get_mut(&key);
+        let position = entries
+            .as_ref()
+            .and_then(|entries| entries.iter().position(|entry| entry.cids == cids));
+        let entry = match (entries, position) {
+            (Some(entries), Some(position)) => Some(entries.remove(position)),
+            _ => None,
+        };
+        if answers.get(&key).is_some_and(Vec::is_empty) {
+            answers.remove(&key);
+        }
+        entry
+    };
+    let Some(entry) = entry else {
+        return;
+    };
+    let result = match crate::sidecar_reply::error_of_body(&MessageBody::read(body.get())) {
+        Some(error) => Err(error),
+        None => Ok(body.to_owned()),
+    };
+    if entry.sender.send(result).is_err() {
+        crate::application_log::log_info(
+            &format!("sidecar {sidecar}"),
+            "the sidecarSend reply arrived after its request ended",
+        );
+    }
+}
+
+/// An owned session that a persistent service holds for the authenticated client, as its `sessions` answer lists it
+/// (docs/spec/persistent-services.md#owned-sessions). `size` holds the points and the backing scale of the window.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct OwnedSession {
+    pub session: String,
+    pub surface: String,
+    pub root: String,
+    pub creation: String,
+    pub size: OwnedSize,
+}
+
+/// The size of an owned session: the width and height of its card in points, and the backing scale of the window.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct OwnedSize {
+    pub width: f64,
+    pub height: f64,
+    pub scale: f64,
+}
+
+impl OwnedSession {
+    /// Reads one entry of a `sessions` answer, and names the first member that is not a non-empty string, an object of
+    /// positive numbers as `size`.
+    fn from_value(value: &Value) -> Result<OwnedSession, String> {
+        let text = |name: &str| {
+            value
+                .get(name)
+                .and_then(Value::as_str)
+                .filter(|text| !text.is_empty())
+                .map(str::to_string)
+                .ok_or_else(|| format!("sessions {name} is not a non-empty string"))
+        };
+        let size = value
+            .get("size")
+            .and_then(Value::as_object)
+            .ok_or_else(|| "sessions size is not an object".to_string())?;
+        let number = |name: &str| {
+            size.get(name)
+                .and_then(Value::as_f64)
+                .filter(|number| *number > 0.0)
+                .ok_or_else(|| format!("sessions size.{name} is not a positive number"))
+        };
+        Ok(OwnedSession {
+            session: text("session")?,
+            surface: text("surface")?,
+            root: text("root")?,
+            creation: text("creation")?,
+            size: OwnedSize {
+                width: number("width")?,
+                height: number("height")?,
+                scale: number("scale")?,
+            },
+        })
+    }
+}
+
+/// The call sidecarSessions {sidecar} of the main page; the argument decoder checks its form.
+#[derive(Deserialize)]
+pub struct SidecarSessionsRequest {
+    pub sidecar: String,
+}
+
+impl SidecarSessionsRequest {
+    /// Refuses an empty sidecar.
+    pub fn check(self) -> Result<Self, String> {
+        if self.sidecar.is_empty() {
+            return Err("sidecarSessions requires a non-empty sidecar".to_string());
+        }
+        Ok(self)
+    }
+}
+
 /// (docs/spec/persistent-services.md#updates). `running` is `None` when the service sent no version; `sessions` counts
 /// the open surfaces of the application that have sent to the service.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -1809,6 +2007,7 @@ impl<O: Owner> Sidecars<O> {
         let sidecars = Self {
             core: Arc::new(Core {
                 declarations: RwLock::new(Declarations::default()),
+                answers: Arc::default(),
                 config_directory,
                 state: Arc::new(Mutex::new(State {
                     running: HashMap::new(),
@@ -2139,6 +2338,94 @@ impl<O: Owner> Sidecars<O> {
     ) -> Result<(), String> {
         let current = owner.root()?;
         self.send_at_root(owner, name, surface, &current, body, cids)
+    }
+
+    /// Sends a request whose reply the caller waits for, and returns the wait (docs/spec/persistent-services.md#owned-session-messages).
+    /// The request needs correlation identifiers, a persistent sidecar, and no waiting request of the same surface and sidecar
+    /// with the same identifiers.
+    pub fn send_with_answer(
+        &self,
+        owner: &O,
+        name: &str,
+        surface: &str,
+        body: &RawValue,
+        cids: &[String],
+    ) -> Result<AnswerWaiter, String> {
+        self.send_answered(name, surface, cids, || {
+            self.send_from_page(owner, name, surface, body, cids)
+        })
+    }
+
+    /// Registers an answered request, then runs `send`, which queues the request line; the wait is returned when the
+    /// registration and the queueing succeed. The caller's `send` holds the admission of its window (docs/spec/persistent-services.md#owned-session-messages).
+    pub(crate) fn send_answered(
+        &self,
+        name: &str,
+        surface: &str,
+        cids: &[String],
+        send: impl FnOnce() -> Result<(), String>,
+    ) -> Result<AnswerWaiter, String> {
+        if cids.is_empty() {
+            return Err("sidecarSend answer requires cids".to_string());
+        }
+        check_cids(cids)?;
+        let persistent = self
+            .core
+            .declarations
+            .read()
+            // default: a lock that a panicking thread poisoned still holds the sidecar declarations, which are only read; the
+            // panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .persistent
+            .get(name)
+            .copied()
+            .ok_or_else(|| format!("sidecar {name} is not declared"))?;
+        if !persistent {
+            return Err("sidecarSend answer requires a persistent sidecar".to_string());
+        }
+        let (sender, receiver) = sync_channel(1);
+        let id = ANSWER_IDS.fetch_add(1, Ordering::Relaxed);
+        let key = (name.to_string(), surface.to_string());
+        {
+            let mut answers = self
+                .core
+                .answers
+                .lock()
+                // default: a lock that a panicking thread poisoned still holds the answered requests, which the send amends; the
+                // panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner);
+            let entries = answers.entry(key.clone()).or_default();
+            if entries.iter().any(|entry| entry.cids == cids) {
+                return Err(format!(
+                    "sidecarSend answer cids already wait for surface {surface}"
+                ));
+            }
+            entries.push(AnswerEntry {
+                id,
+                cids: cids.to_vec(),
+                sender,
+            });
+        }
+        // The waiter removes its entry when the send fails, because the drop of the waiter runs on the error path.
+        let waiter = AnswerWaiter {
+            receiver,
+            answers: Arc::clone(&self.core.answers),
+            key,
+            id,
+        };
+        send()?;
+        Ok(waiter)
+    }
+
+    /// Answers the call sidecarSessions {sidecar}: the owned sessions of the persistent service, as `{sessions}`
+    /// (docs/spec/persistent-services.md#owned-session-messages).
+    pub fn sessions_of(
+        &self,
+        request: SidecarSessionsRequest,
+    ) -> Result<serde_json::Value, String> {
+        let request = request.check()?;
+        let sessions = self.service_sessions(&request.sidecar)?;
+        Ok(serde_json::json!({ "sessions": sessions }))
     }
 
     /// Sends a request of a page. A page outlives the close of its project for a moment, and its request then starts no
@@ -3016,6 +3303,119 @@ impl<O: Owner> Sidecars<O> {
         // The list may leave an outdated service without a surface.
         self.replace_idle();
         Ok(total)
+    }
+
+    /// Returns the owned sessions that the persistent service `sidecar` holds for this application
+    /// (docs/spec/persistent-services.md#owned-sessions). The query starts the service when its endpoint exists; without an
+    /// endpoint there is no session, so the query returns none without starting a process.
+    pub fn service_sessions(&self, sidecar: &str) -> Result<Vec<OwnedSession>, String>
+    where
+        O: 'static,
+    {
+        let request = format!(
+            "sessions-{}-{}",
+            std::process::id(),
+            SESSIONS_REQUESTS.fetch_add(1, Ordering::Relaxed)
+        );
+        let (waiter, answer) = sync_channel(1);
+        {
+            let mut state = self
+                .core
+                .state
+                .lock()
+                // default: a lock that a panicking thread poisoned still holds the sidecar state, which the start reads and
+                // amends; the panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner);
+            if state.stopped {
+                return Err("sidecars are stopped".into());
+            }
+            if !state.running.contains_key(sidecar) {
+                let persistent = self
+                    .core
+                    .declarations
+                    .read()
+                    // default: a lock that a panicking thread poisoned still holds the sidecar declarations, which are only
+                    // read; the panic hook records the panic.
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .persistent
+                    .get(sidecar)
+                    .copied()
+                    .ok_or_else(|| format!("sidecar {sidecar} is not declared"))?;
+                if !persistent {
+                    return Err(format!("sidecar {sidecar} is not a persistent service"));
+                }
+                let (program, _) = self
+                    .core
+                    .declaration(sidecar)
+                    .ok_or_else(|| format!("sidecar {sidecar} is not declared"))?;
+                let basename = program
+                    .file_name()
+                    .and_then(|value| value.to_str())
+                    .ok_or_else(|| {
+                        format!("sidecar {sidecar}: executable has no valid basename")
+                    })?;
+                let endpoint = self
+                    .core
+                    .config_directory
+                    .join("services")
+                    .join(basename)
+                    .join("endpoint.json");
+                match std::fs::metadata(&endpoint) {
+                    Ok(_) => {}
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                        return Ok(Vec::new());
+                    }
+                    Err(error) => {
+                        return Err(format!("sidecar {sidecar}: read endpoint: {error}"));
+                    }
+                }
+                state = Core::ensure(&self.core, state, sidecar, None)?.0;
+            }
+            let process = state
+                .running
+                .get(sidecar)
+                .ok_or_else(|| format!("sidecar {sidecar} is not running"))?;
+            let connection = process
+                .persistent
+                .as_ref()
+                .ok_or_else(|| format!("sidecar {sidecar} is not a persistent service"))?;
+            {
+                let mut waiters = connection
+                    .sessions_waiters
+                    .lock()
+                    // default: a lock that a panicking thread poisoned still holds the waiters of the sessions replies, which
+                    // the query amends; the panic hook records the panic.
+                    .unwrap_or_else(PoisonError::into_inner);
+                // The read thread clears `connected` under this lock before it fails the waiters, so a query of a connection
+                // that ended fails here and does not wait.
+                if !connection.connected.load(Ordering::Acquire) {
+                    return Err(CONNECTION_ENDED.to_string());
+                }
+                waiters.insert(request.clone(), waiter);
+            }
+            let mut line =
+                serde_json::to_vec(&json!({"operation": "sessions", "request": request}))
+                    .map_err(|error| error.to_string())?;
+            line.push(b'\n');
+            if process
+                .outbox
+                .try_send(Outgoing::Line(QueuedLine::new(line, (state.clock)())))
+                .is_err()
+            {
+                connection
+                    .sessions_waiters
+                    .lock()
+                    // default: a lock that a panicking thread poisoned still holds the waiters of the sessions replies, which
+                    // the query amends; the panic hook records the panic.
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .remove(&request);
+                return Err(format!("sidecar {sidecar} is not keeping up"));
+            }
+        }
+        // The query ends by its answer or by the end of its connection, which fails each waiting query; no time limit ends
+        // it (docs/spec/persistent-services.md#service-transport).
+        // A failed answer rejects the query with the error of the service, unchanged.
+        answer.recv().map_err(|_| CONNECTION_ENDED.to_string())?
     }
 
     /// Returns once the writer of the running sidecar `name` writes a line larger than `above` bytes. A check uses it to know
@@ -4000,6 +4400,7 @@ impl<O: Owner> Core<O> {
         let close_waiters: ReplyWaiters = Arc::new(Mutex::new(HashMap::new()));
         let shutdown_waiters: ReplyWaiters = Arc::new(Mutex::new(HashMap::new()));
         let retain_waiters: RetainWaiters = Arc::new(Mutex::new(HashMap::new()));
+        let sessions_waiters: SessionsWaiters = Arc::new(Mutex::new(HashMap::new()));
         let connected = Arc::new(AtomicBool::new(true));
         let write_name = name.to_string();
         let write_state = Arc::clone(&core.state);
@@ -4046,6 +4447,8 @@ impl<O: Owner> Core<O> {
         let waiters = Arc::clone(&close_waiters);
         let shutdown_waiters_for_reader = Arc::clone(&shutdown_waiters);
         let retain_waiters_for_reader = Arc::clone(&retain_waiters);
+        let sessions_waiters_for_reader = Arc::clone(&sessions_waiters);
+        let answers_for_reader = Arc::clone(&core.answers);
         let tx_clone = tx.clone();
         let reader_service_pid = endpoint.pid;
         let mut reader_ready = spawn_clock;
@@ -4105,8 +4508,9 @@ impl<O: Owner> Core<O> {
                             return Some("invalid message: operation: not a string".to_string());
                         }
                     };
-                    if let Some(operation @ ("retained" | "closed-owner" | "shutdown")) =
-                        operation.as_deref()
+                    if let Some(
+                        operation @ ("retained" | "closed-owner" | "shutdown" | "sessions"),
+                    ) = operation.as_deref()
                     {
                         let reply = match reply_of(operation, &members) {
                             Ok(reply) => reply,
@@ -4131,6 +4535,24 @@ impl<O: Owner> Core<O> {
                                     {
                                         late_reply(&sidecar, "retain", result.map(|_| ()));
                                     }
+                                }
+                            }
+                            "sessions" => {
+                                // A reply whose sessions are invalid fails its query; the connection stays for the others.
+                                let result = match reply.result {
+                                    Ok(()) => owned_sessions(&members),
+                                    Err(error) => Err(error),
+                                };
+                                if let Some(sender) = sessions_waiters_for_reader
+                                    .lock()
+                                    // default: a lock that a panicking thread poisoned still holds the waiters of the sessions
+                                    // replies, which the reader amends; the panic hook records the panic.
+                                    .unwrap_or_else(PoisonError::into_inner)
+                                    .remove(&request)
+                                    && let Err(std::sync::mpsc::SendError(result)) =
+                                        sender.send(result)
+                                {
+                                    late_reply(&sidecar, "sessions", result.map(|_| ()));
                                 }
                             }
                             "closed-owner" => {
@@ -4221,6 +4643,15 @@ impl<O: Owner> Core<O> {
                         ) {
                             wake.count_as("service-messages.image");
                             continue;
+                        }
+                        if !event.cids.is_empty() {
+                            resolve_answer(
+                                &answers_for_reader,
+                                &sidecar,
+                                &event.surface,
+                                &event.cids,
+                                &event.body,
+                            );
                         }
                         owner.deliver(Message {
                             sidecar: sidecar.clone(),
@@ -4325,6 +4756,46 @@ impl<O: Owner> Core<O> {
                 }
             }
             drop(retain_waiters);
+            let mut sessions_waiters = sessions_waiters_for_reader
+                .lock()
+                // default: a lock that a panicking thread poisoned still holds the waiters of the sessions replies, which
+                // the reader ends; the panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner);
+            {
+                let mut answers = answers_for_reader
+                    .lock()
+                    // default: a lock that a panicking thread poisoned still holds the answered requests, which the reader ends;
+                    // the panic hook records the panic.
+                    .unwrap_or_else(PoisonError::into_inner);
+                let keys: Vec<(String, String)> = answers
+                    .keys()
+                    .filter(|(name, _)| *name == sidecar)
+                    .cloned()
+                    .collect();
+                for key in keys {
+                    for entry in answers.remove(&key).unwrap_or_default() {
+                        if entry
+                            .sender
+                            .send(Err(CONNECTION_ENDED.to_string()))
+                            .is_err()
+                        {
+                            crate::application_log::log_info(
+                                &format!("sidecar {sidecar}"),
+                                "the sidecarSend failure arrived after its request ended",
+                            );
+                        }
+                    }
+                }
+            }
+            for (_, sender) in sessions_waiters.drain() {
+                if sender.send(Err(CONNECTION_ENDED.to_string())).is_err() {
+                    crate::application_log::log_info(
+                        &format!("sidecar {sidecar}"),
+                        "the sessions failure arrived after its request ended",
+                    );
+                }
+            }
+            drop(sessions_waiters);
             for (_, sender) in close_waiters.drain() {
                 if sender.send(close_error.clone()).is_err() {
                     crate::application_log::log_info(
@@ -4393,6 +4864,7 @@ impl<O: Owner> Core<O> {
                     version,
                     close_waiters,
                     retain_waiters,
+                    sessions_waiters,
                     shutdown_waiters,
                     owner_closed: Arc::new(Mutex::new(false)),
                     connected,
@@ -4752,6 +5224,21 @@ struct Reply {
     request: String,
     result: Result<(), String>,
     closed: usize,
+}
+
+/// Reads the owned sessions of a `sessions` answer whose `ok` is true. A member that is invalid fails the query with its reason.
+fn owned_sessions(members: &Members<'_>) -> Result<Vec<OwnedSession>, String> {
+    let raw = members
+        .get("sessions")
+        .ok_or_else(|| "invalid message: sessions is missing".to_string())?;
+    let entries: Vec<Value> = serde_json::from_str(raw.get())
+        .map_err(|_| "invalid message: sessions is not an array".to_string())?;
+    entries
+        .iter()
+        .map(|entry| {
+            OwnedSession::from_value(entry).map_err(|error| format!("invalid message: {error}"))
+        })
+        .collect()
 }
 
 /// Checks the field types of an answer. If a type is wrong, it returns the reason to end the connection.

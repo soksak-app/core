@@ -295,18 +295,27 @@ fn dispatch(
             let surface: String = argument(method, "surface", body)?;
             let message: Box<RawValue> = argument(method, "body", body)?;
             let cids: Vec<String> = argument(method, "cids", body)?;
+            // An answered send waits for the reply and returns its body (docs/spec/persistent-services.md#owned-session-messages).
+            let answer: Option<bool> = argument(method, "answer", body)?;
             let data = soksak_host::windows::window_data(window)?;
             data.images.pending_detach_error(&surface)?;
-            documents::window_sidecar_send(
-                &data,
-                &window.state::<WindowSidecars>(),
-                window,
-                &sidecar,
-                &surface,
-                &message,
-                &cids,
-            )?;
-            Value::Null
+            let sidecars = window.state::<WindowSidecars>();
+            if answer.unwrap_or(false) {
+                let reply = documents::window_sidecar_send_answered(
+                    &data, &sidecars, window, &sidecar, &surface, &message, &cids,
+                )?
+                .wait()?;
+                serde_json::from_str(reply.get()).map_err(|error| error.to_string())?
+            } else {
+                documents::window_sidecar_send(&data, &sidecars, window, &sidecar, &surface, &message, &cids)?;
+                Value::Null
+            }
+        }
+        "sidecar_sessions" => {
+            let sidecar: String = argument(method, "sidecar", body)?;
+            json!(window
+                .state::<WindowSidecars>()
+                .sessions_of(soksak_host::sidecars::SidecarSessionsRequest { sidecar })?)
         }
         "sidecars_outdated" => json!(window.state::<WindowSidecars>().outdated()),
         "sidecars_replace" => {
@@ -436,13 +445,15 @@ fn dispatch(
             )?;
             let data = soksak_host::windows::window_data(&window)?;
             data.images.pending_detach_error(&request.surface)?;
-            documents::view_sidecar_send(
-                &data,
-                &window.state::<WindowSidecars>(),
-                &window,
-                request,
-            )?;
-            Value::Null
+            let sidecars = window.state::<WindowSidecars>();
+            if request.answer {
+                // An answered view send waits for the reply and returns its body (docs/spec/persistent-services.md#owned-session-messages).
+                let reply = documents::view_sidecar_send_answered(&data, &sidecars, &window, request)?.wait()?;
+                serde_json::from_str(reply.get()).map_err(|error| error.to_string())?
+            } else {
+                documents::view_sidecar_send(&data, &sidecars, &window, request)?;
+                Value::Null
+            }
         }
         "view_reply" => {
             let request: documents::ViewReply = argument(method, "request", body)?;

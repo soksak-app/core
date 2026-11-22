@@ -412,24 +412,48 @@ fn window_controls(window: Window) -> Result<windows::Chrome, String> {
     windows::window_chrome(&window)
 }
 
-/// Passes a message that a surface page sent to the sidecar.
+/// Passes a message that a surface page sent to the sidecar. An answered send (`answer` true) waits for the reply and returns
+/// its body (docs/spec/persistent-services.md#owned-session-messages); the call waits, so it is an async command.
 #[tauri::command]
-fn sidecar_send(
+async fn sidecar_send(
     window: Window,
     sidecar: Argument<String>,
     surface: Argument<String>,
     body: Argument<Box<RawValue>>,
     cids: Argument<Vec<String>>,
-) -> Result<(), String> {
+    answer: Argument<Option<bool>>,
+) -> Result<serde_json::Value, String> {
     let Argument(sidecar) = sidecar;
     let Argument(surface) = surface;
     let Argument(body) = body;
     let Argument(cids) = cids;
-    soksak_host::windows::window_data(&window)?
-        .images
-        .pending_detach_error(&surface)?;
-    let data = soksak_host::windows::window_data(&window)?;
-    documents::window_sidecar_send(&data, &window.state::<WindowSidecars>(), &window, &sidecar, &surface, &body, &cids)
+    let Argument(answer) = answer;
+    blocking(move || {
+        let data = soksak_host::windows::window_data(&window)?;
+        data.images.pending_detach_error(&surface)?;
+        let sidecars = window.state::<WindowSidecars>();
+        if answer.unwrap_or(false) {
+            let reply = documents::window_sidecar_send_answered(&data, &sidecars, &window, &sidecar, &surface, &body, &cids)?
+                .wait()?;
+            return serde_json::from_str(reply.get()).map_err(|error| error.to_string());
+        }
+        documents::window_sidecar_send(&data, &sidecars, &window, &sidecar, &surface, &body, &cids)?;
+        Ok(serde_json::Value::Null)
+    })
+    .await
+}
+
+/// Returns the owned sessions that the persistent service of a sidecar holds, as `{sessions}`
+/// (docs/spec/persistent-services.md#owned-session-messages). The call waits for the service, so it is an async command.
+#[tauri::command]
+async fn sidecar_sessions(window: Window, sidecar: Argument<String>) -> Result<serde_json::Value, String> {
+    let Argument(sidecar) = sidecar;
+    blocking(move || {
+        window
+            .state::<WindowSidecars>()
+            .sessions_of(soksak_host::sidecars::SidecarSessionsRequest { sidecar })
+    })
+    .await
 }
 
 /// The surface list that every project layout holds.
@@ -655,19 +679,26 @@ async fn view_sidecar_route(
     .await
 }
 
-/// Sends for the original validated native-view incarnation, independently of background sends.
+/// Sends for the original validated native-view incarnation, independently of background sends. An answered send (`answer`
+/// true) waits for the reply and returns its body (docs/spec/persistent-services.md#owned-session-messages).
 #[tauri::command]
 async fn view_sidecar_send(
     webview: Webview,
     request: Argument<documents::ViewSidecarSendRequest>,
-) -> Result<(), String> {
+) -> Result<serde_json::Value, String> {
     let Argument(request) = request;
     blocking(move || {
         let window = webview.window();
         soksak_host::exposure::authorize_main_caller(webview.label(), window.label(), "view sidecar send")?;
         let data = soksak_host::windows::window_data(&window)?;
         data.images.pending_detach_error(&request.surface)?;
-        documents::view_sidecar_send(&data, &window.state::<WindowSidecars>(), &window, request)
+        let sidecars = window.state::<WindowSidecars>();
+        if request.answer {
+            let reply = documents::view_sidecar_send_answered(&data, &sidecars, &window, request)?.wait()?;
+            return serde_json::from_str(reply.get()).map_err(|error| error.to_string());
+        }
+        documents::view_sidecar_send(&data, &sidecars, &window, request)?;
+        Ok(serde_json::Value::Null)
     })
     .await
 }

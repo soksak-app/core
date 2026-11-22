@@ -3822,6 +3822,10 @@ mod sidecar_root_admission_test;
 #[path = "window_sidecar_admission_test.rs"]
 mod window_sidecar_admission_test;
 
+#[cfg(test)]
+#[path = "window_sidecar_answer_test.rs"]
+mod window_sidecar_answer_test;
+
 /// Private main-workbench bridge. Plugin runtime.sidecar.send carries no source authority.
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -3832,6 +3836,9 @@ pub struct ViewSidecarSendRequest {
     pub surface: String,
     pub body: Box<serde_json::value::RawValue>,
     pub cids: Option<Vec<String>>,
+    /// True when the caller waits for the reply, as the answer of sidecarSend does.
+    #[serde(default)]
+    pub answer: bool,
 }
 impl ViewSidecarSendRequest {
     fn check(&self) -> Result<(), String> {
@@ -3895,6 +3902,36 @@ impl ViewSidecarAuthority<'_> {
     }
 }
 
+/// The authority of a mounted view's send: its source generation and the project root of its mount.
+fn view_authority<'a>(
+    data: &'a crate::windows::WindowData,
+    request: &ViewSidecarSendRequest,
+) -> Result<ViewSidecarAuthority<'a>, String> {
+    let _source = data
+        .view_source_origins
+        .lease_current(&request.source, request.generation)?;
+    let views = data.documents.views().lock();
+    let view = views
+        .get(&request.source)
+        .filter(|view| view.origin.generation == request.generation)
+        .ok_or_else(|| format!("view source {} is retired", request.source))?;
+    let root = match &view.project {
+        ViewProject::Bound(Some(root)) if !root.is_empty() => root.clone(),
+        _ => {
+            return Err(format!(
+                "mounted surface {} has no committed project",
+                request.source
+            ));
+        }
+    };
+    Ok(ViewSidecarAuthority {
+        data,
+        surface: request.source.clone(),
+        origin: SidecarOrigin::View(view.origin.clone()),
+        root,
+    })
+}
+
 pub fn view_sidecar_send<O: crate::sidecars::Owner>(
     data: &crate::windows::WindowData,
     sidecars: &crate::sidecars::Sidecars<O>,
@@ -3902,31 +3939,7 @@ pub fn view_sidecar_send<O: crate::sidecars::Owner>(
     request: ViewSidecarSendRequest,
 ) -> Result<(), String> {
     request.check()?;
-    let authority = {
-        let _source = data
-            .view_source_origins
-            .lease_current(&request.source, request.generation)?;
-        let views = data.documents.views().lock();
-        let view = views
-            .get(&request.source)
-            .filter(|view| view.origin.generation == request.generation)
-            .ok_or_else(|| format!("view source {} is retired", request.source))?;
-        let root = match &view.project {
-            ViewProject::Bound(Some(root)) if !root.is_empty() => root.clone(),
-            _ => {
-                return Err(format!(
-                    "mounted surface {} has no committed project",
-                    request.source
-                ));
-            }
-        };
-        ViewSidecarAuthority {
-            data,
-            surface: request.source.clone(),
-            origin: SidecarOrigin::View(view.origin.clone()),
-            root,
-        }
-    };
+    let authority = view_authority(data, &request)?;
     sidecars.send_from_view(
         owner,
         &request.sidecar,
@@ -3937,6 +3950,57 @@ pub fn view_sidecar_send<O: crate::sidecars::Owner>(
         request.cids.as_deref().unwrap_or(&[]),
         &authority,
     )
+}
+
+/// The view send of an answered request: it is admitted like view_sidecar_send, and the returned wait ends with the reply
+/// whose surface and correlation identifiers equal the request's (docs/spec/persistent-services.md#owned-session-messages).
+pub fn view_sidecar_send_answered<O: crate::sidecars::Owner>(
+    data: &crate::windows::WindowData,
+    sidecars: &crate::sidecars::Sidecars<O>,
+    owner: &O,
+    request: ViewSidecarSendRequest,
+) -> Result<crate::sidecars::AnswerWaiter, String> {
+    request.check()?;
+    let cids = request.cids.clone().unwrap_or_default();
+    sidecars.send_answered(&request.sidecar, &request.surface, &cids, || {
+        let authority = view_authority(data, &request)?;
+        sidecars.send_from_view(
+            owner,
+            &request.sidecar,
+            &request.surface,
+            &request.body,
+            &cids,
+            &authority,
+        )
+    })
+}
+
+/// The window send of an answered request: it is admitted like window_sidecar_send, and the returned wait ends with the reply
+/// whose surface and correlation identifiers equal the request's (docs/spec/persistent-services.md#owned-session-messages).
+pub fn window_sidecar_send_answered<O: crate::sidecars::Owner>(
+    data: &crate::windows::WindowData,
+    sidecars: &crate::sidecars::Sidecars<O>,
+    owner: &O,
+    sidecar: &str,
+    surface: &str,
+    body: &serde_json::value::RawValue,
+    cids: &[String],
+) -> Result<crate::sidecars::AnswerWaiter, String> {
+    let ticket = data.view_source_origins.background_ticket(surface)?;
+    if data.documents.views().has(surface) {
+        return Err(format!(
+            "mounted surface {surface} requires viewSidecarSend with its original source generation"
+        ));
+    }
+    let authority = ViewSidecarAuthority {
+        data,
+        surface: surface.to_string(),
+        origin: SidecarOrigin::Background(ticket),
+        root: owner.root()?,
+    };
+    sidecars.send_answered(sidecar, surface, cids, || {
+        sidecars.send_from_window(owner, sidecar, surface, body, cids, &authority)
+    })
 }
 
 /// Generic window/background boundary. Native-view sends use view_sidecar_send.
@@ -3952,7 +4016,7 @@ pub fn window_sidecar_send<O: crate::sidecars::Owner>(
     let ticket = data.view_source_origins.background_ticket(surface)?;
     if data.documents.views().has(surface) {
         return Err(format!(
-            "mounted surface {surface} requires original view source authority"
+            "mounted surface {surface} requires viewSidecarSend with its original source generation"
         ));
     }
     let authority = ViewSidecarAuthority {

@@ -132,7 +132,7 @@ impl ViewSourceOrigins {
         let mut state = self.lock();
         if state.views.contains_key(surface) {
             return Err(format!(
-                "mounted surface {surface} requires original view source authority"
+                "mounted surface {surface} requires viewSidecarSend with its original source generation"
             ));
         }
         let id = state

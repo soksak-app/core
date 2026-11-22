@@ -90,7 +90,8 @@ fn window_sidecar_send_cannot_implicitly_acquire_a_mounted_view_generation() {
     assert!(
         result
             .as_ref()
-            .is_err_and(|error| error.contains("requires original view source authority")),
+            .is_err_and(|error| error
+                .contains("requires viewSidecarSend with its original source generation")),
         "generic boundary must refuse mounted source: {result:?}"
     );
     assert!(read().is_none(), "generic boundary forwarded mounted work");
