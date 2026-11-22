@@ -155,6 +155,8 @@ fn walk_tabs<'a>(
             "a space layout without a state object",
         ));
     };
+    // default: a state without a root reads as null, which walk_node refuses as a layout node that is not an object, as the Go walk
+    // reads a missing key.
     walk_node(registry, state.get("root").unwrap_or(&Value::Null), visit)
 }
 
@@ -205,6 +207,8 @@ fn walk_node<'a>(
         return Ok(());
     }
     if holder.get("box").is_some_and(|held| !held.is_null()) {
+        // default: a box without an inner cut reads as null, which walk_node refuses as a layout node that is not an object, as the
+        // Go walk reads a missing key.
         return walk_node(registry, holder.get("inner").unwrap_or(&Value::Null), visit);
     }
     let Some(kids) = holder.get("kids").and_then(Value::as_array) else {
@@ -261,6 +265,8 @@ fn walk_spaces<'a>(
                     "a space record without an id",
                 ));
             };
+            // default: a space without a layout reads as null, which walk_tabs refuses as a layout that is not an object, as the Go
+            // walk reads a missing key.
             visit(root, id, space.get("layout").unwrap_or(&Value::Null))?;
         }
     }

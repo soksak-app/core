@@ -138,7 +138,7 @@ const mainCalls = settlingCalls((name, arg, options) => {
   if (!method) return Promise.reject(new Error(`unknown host call: ${name}`));
   // A call without arguments sends no arguments. Sending one undefined makes the binding
   // reject the call because the argument count does not match.
-  // SidecarSend takes answer as its fifth argument; a send that waits for no reply passes null (docs/spec/persistent-services.md#owned-session-messages).
+  // default: SidecarSend takes answer as its fifth argument; a send that waits for no reply passes null (docs/spec/persistent-services.md#owned-session-messages).
   if (name === "sidecarSend") return call(method, [arg.sidecar, arg.surface, arg.body, arg.cids, arg.answer ?? null], options.cids);
   if (name === "imageCaret") return call(method, [{ surface: arg.surface, name: arg.name }, arg.x, arg.y, arg.width, arg.height], options.cids);
   if (name === "imageText") return call(method, [{ surface: arg.surface, name: arg.name }, arg.text], options.cids);

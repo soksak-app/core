@@ -184,6 +184,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
 - [~] F1101 — P0, F1097부터 F1100 다음: core 0.0.49를 release하고 그것으로 terminal plugin의 window check를 실행한다.
   - [ ] F1101-1 — package와 crate manifest, application Info.plist와 Tauri 파일, Go와 pkg-config 선언, scripts/check-versions.mjs의 RELEASE 상수와 scripts/check-tests.mjs의 그 symbol에 version 0.0.49를 선언한다.
   - [ ] F1101-2 — candidate를 push하고 게시된 release 파일을 확인한 뒤, terminal plugin의 `e2e/owned-session.test.mjs`와 `e2e/submit.test.mjs`를 0.0.49로 실행한다.
+- [o] F1102 — P0, F1097부터 F1099 다음: 저장된 tab의 Rust walk, Wails `sidecarSend`의 answer 인수, core status read 실패 보고의 각 default가 이유를 밝힌다. 입력: `make check-preflight`. 동작: `scripts/test/fallbacks.test.mjs`와 `scripts/test/event-sources.test.mjs`가 `packages/host/rust/src/role_state.rs`, `apps/wailsv3/runtime/index.js`, `packages/workbench/core-exposure.js`의 이유 없는 default 5개로 실패했다. 기대: 각 default가 contract의 일부인 이유를 밝히고 두 check가 통과한다. Red: 두 테스트가 5개 finding으로 실패했다. Green: 두 테스트가 16개 중 16개 통과한다.
 - [o] F1095 — P0, F1093과 F1094 다음: 0.0.47 application의 수정을 담은 core 0.0.48을 release한다.
   - [o] F1095-1 — package와 crate manifest, application Info.plist와 Tauri 파일, Go와 pkg-config 선언, scripts/check-versions.mjs의 RELEASE 상수와 scripts/check-tests.mjs의 그 symbol에 version 0.0.48을 선언한다.
   - [o] F1095-2 — candidate를 push하고 게시된 release 파일을 확인한다. 완료: push, preflight, clippy, node test 명령의 local 실행이 통과했고, 0.0.48의 release run이 success로 끝나 application zip 세 개와 package release 다섯 개로 v0.0.48을 게시했다.

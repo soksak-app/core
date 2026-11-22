@@ -232,6 +232,7 @@ function pluginCommand(action) {
 function deliverRead(value, fn, turn, latest) {
   if (typeof value?.then !== "function") return fn(value);
   value.then((resolved) => { if (turn === latest()) fn(resolved); },
+    // default: a rejection value that is not an Error has no message, so the report names the value itself.
     (error) => { if (turn === latest()) report(`core status: ${error?.message ?? error}`); });
 }
 
