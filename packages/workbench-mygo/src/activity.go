@@ -16,7 +16,7 @@ import (
 // the same cases.
 
 // Activities are the activities from the highest to the lowest (docs/spec/activity.md#activities).
-var Activities = []string{"attention", "failed", "running", "idle"}
+var Activities = []string{"attention", "running", "failed", "idle"}
 
 // HighestActivity is the highest of the activities, and "" when none is given. "" stands for no activity.
 func HighestActivity(activities ...string) string {

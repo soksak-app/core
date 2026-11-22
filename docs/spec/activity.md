@@ -6,13 +6,13 @@ The activity of a tab tells a person, without opening the tab, whether its surfa
 
 ## Activities
 
-The activities, from the highest to the lowest:
+The activities, from the highest to the lowest. `running` stands above `failed`, because a holder that runs work now shows that work before a failure that already ended:
 
 | Activity | Meaning |
 | --- | --- |
 | `attention` | The surface waits for the person, such as a program that asks for an approval or an answer |
-| `failed` | What the surface ran ended with a failure |
 | `running` | The surface runs something, such as a program or an agent |
+| `failed` | What the surface ran ended with a failure |
 | `idle` | The surface does no work and has no approval or answer pending, such as a shell at its prompt or a program that rests at its own prompt |
 
 ## Declaration
@@ -29,7 +29,7 @@ The cases of `docs/spec/cases/manifest-validation.json` hold this text for the r
 
 The activity of a tab is the highest activity among the statuses of its plugin that declare `activity`, each read on the surface of the tab: a status whose value is an activity gives that activity, and a status whose value is `null` gives none. A status that the surface has not registered gives none, so a tab whose surface has not started, is unloaded ([memory saver](plugins.md#memory-saver)) or ended has no activity. A tab that no status gives an activity has none.
 
-A value that is neither an activity nor `null` is an error of the plugin: it gives no activity, and the workbench shows the text `<plugin> exposes <status> on tab <tab>: activity value <value> is not one of attention, failed, running, idle`, where `<value>` is the JSON text of the value, in the error banner of the window through the error display path, with the source `activity <tab>`; the first such status of the tab in the order of its declaration gives the text, and the error is withdrawn when the statuses of the tab report valid values again or the tab leaves the window.
+A value that is neither an activity nor `null` is an error of the plugin: it gives no activity, and the workbench shows the text `<plugin> exposes <status> on tab <tab>: activity value <value> is not one of attention, running, failed, idle`, where `<value>` is the JSON text of the value, in the error banner of the window through the error display path, with the source `activity <tab>`; the first such status of the tab in the order of its declaration gives the text, and the error is withdrawn when the statuses of the tab report valid values again or the tab leaves the window.
 
 The workbench follows each such status of each tab of the projects of its window by a watch of that surface ([relay](exposure.md#relay)), which sends each change of the value; it reads no value on a timer. It starts and ends the watches when a layout, a project or the registration of a surface changes, and derives the activities again at each value that a watch delivers.
 
@@ -53,9 +53,9 @@ The window that holds a project publishes the activities of its spaces with the 
 | --- | --- |
 | an `id` that is not a project id | `invalid project id` |
 | a window that does not hold the project | `project <id> is not owned by this window` |
-| an `activity` of a space that is not an activity | `project <id> space <space>: activity <value> is not one of attention, failed, running, idle` |
-| a value of `cards` that is not an activity | `project <id> space <space> card <card>: activity <value> is not one of attention, failed, running, idle` |
-| a value of `groups` that is not an activity | `project <id> space <space> group <card>: activity <value> is not one of attention, failed, running, idle` |
+| an `activity` of a space that is not an activity | `project <id> space <space>: activity <value> is not one of attention, running, failed, idle` |
+| a value of `cards` that is not an activity | `project <id> space <space> card <card>: activity <value> is not one of attention, running, failed, idle` |
+| a value of `groups` that is not an activity | `project <id> space <space> group <card>: activity <value> is not one of attention, running, failed, idle` |
 
 `<value>` is the JSON text of the value; the spaces are checked in code point order of their identifiers, each its `activity`, then its `cards` and its `groups` in code point order. The host removes the entry of a project when the window that published it releases the project ([projects](projects.md#project-identity)), closes, or its page ends or a new page starts, because the surfaces that gave the activities ended with it; the window that holds the project next publishes it again once its surfaces report. So a project that leaves one window for another keeps no entry of its earlier window, and a removed project has none.
 

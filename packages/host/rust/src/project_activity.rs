@@ -7,7 +7,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::{Mutex, PoisonError};
 
 /// The activities from the highest to the lowest (docs/spec/activity.md#activities).
-const ACTIVITIES: [&str; 4] = ["attention", "failed", "running", "idle"];
+const ACTIVITIES: [&str; 4] = ["attention", "running", "failed", "idle"];
 
 /// The activity of a space of a project with those of its content cards and group cards by card identifier, as the window that
 /// holds the project derives them.

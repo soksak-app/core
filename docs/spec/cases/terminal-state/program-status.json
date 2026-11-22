@@ -1672,7 +1672,7 @@
       "rejected": 0
     },
     {
-      "name": "a failed command stays failed at the next prompt",
+      "name": "a failed command gives idle at the next prompt and keeps its exit code in the state",
       "steps": [
         {
           "output": "\u001b]133;C\u0007\u001b]133;D;1\u0007\u001b]133;A\u0007"
@@ -1709,7 +1709,7 @@
         "notice": false,
         "sequence": 0
       },
-      "activity": "failed",
+      "activity": "idle",
       "rejected": 0
     },
     {

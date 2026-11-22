@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1040-1: 모든 holder의 activity 순서에서 `running`이 `failed`보다 높다. 그래서 card, group card, space, project는 일을 실행하면 끝난 실패보다 그 일을 먼저 보인다. terminal activity 계약은 실패한 command 뒤 shell이 prompt를 보이면 `idle`을 준다. Red: running tab과 failed tab을 가진 card의 공유 case가 page와 mygo workbench에서 실패했고, Go host record case가 기대값을 바꾼 뒤 실패했다. Green: page, mygo, Go host, Rust host activity test가 통과한다.
 - F1042: 두 workbench의 tab, group header, space tab, project tab에서 activity icon은 이름 글자 크기의 1.2배이고 그 크기의 절반 간격으로 이름 앞에 선다. `failed`는 새 theme 색 `fail`을 써서 모든 theme과 mode에서 네 activity가 네 색을 가지며, 어느 것도 오류 색을 쓰지 않는다. Red: mygo drawing test가 모든 holder에서 10 point icon과 `fail` 색의 부재를 찾았고, page style test가 글자 크기 비율의 부재와 `fg`의 `failed`를 찾았다. Green: 두 test와 activity, group, head, tab test가 통과한다.
 - F1043-2: press의 release를 기다리는 키보드 이동은 온 순서대로 실행된다. 그래서 terminal page를 누른 press가 region을 요청한 뒤 워크벤치가 surface를 요청해도 키보드는 region에 남는다. 전에는 나중 call이 앞선 call을 지워 키보드가 page web view에 남았다. Red: native surface keyboard test가 release 뒤 page web view를 찾았다. Green: native keyboard, press, surface, modal test가 통과한다.
 - F1039: 두 workbench에서 focus된 카드의 활성 탭은 카드 ring의 focus 색으로 테두리를 탭 안쪽에 그려 이름의 자리를 줄이지 않고, 다른 카드의 활성 탭은 그리지 않는다. Red: page style test와 mygo pixel test가 탭에서 focus 테두리를 찾지 못했다. Green: 두 test가 통과한다.

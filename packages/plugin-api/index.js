@@ -1338,7 +1338,7 @@ export function validateExposes(owner, exposes) {
 }
 
 /** The activities from the highest to the lowest (docs/spec/activity.md#activities). */
-export const ACTIVITIES = Object.freeze(["attention", "failed", "running", "idle"]);
+export const ACTIVITIES = Object.freeze(["attention", "running", "failed", "idle"]);
 
 /**
  * Validates the diagnostics.json of a plugin together with the manifest. It is `{module, exposes}`; module is the

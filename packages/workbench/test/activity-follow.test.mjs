@@ -57,7 +57,7 @@ test("the activity of a tab follows the watch of its surface, which starts when 
   // A value that is no activity gives tab-a none and shows its error until a valid value withdraws it.
   made.changed({ surface: "tab-a", name: "probe.state", value: "busy", version: 2 });
   assert.deepEqual(activity.state().tabs, { "tab-b": "attention" });
-  assert.deepEqual(errors, [["tab-a", 'probe exposes probe.state on tab tab-a: activity value "busy" is not one of attention, failed, running, idle']]);
+  assert.deepEqual(errors, [["tab-a", 'probe exposes probe.state on tab tab-a: activity value "busy" is not one of attention, running, failed, idle']]);
   made.changed({ surface: "tab-a", name: "probe.state", value: null, version: 3 });
   assert.deepEqual(activity.state().tabs, { "tab-b": "attention" });
   assert.deepEqual(errors.at(-1), ["tab-a", null]);

@@ -492,6 +492,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1040-1",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: 'export const ACTIVITIES = Object.freeze(["attention", "running", "failed", "idle"]);' },
+      { file: "packages/workbench-mygo/src/activity.go", symbol: 'var Activities = []string{"attention", "running", "failed", "idle"}' },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/activity_test.go", id: "TestActivityCases" },
+    ],
+    expected: "running stands above failed in the activity order of every holder.",
+    levels: ["unit"],
+  },
+  {
     id: "F1039",
     implementation: [
       { file: "packages/workbench/app.css", symbol: ".card[data-focused=true] .tab[data-active=true]{box-shadow:inset 0 0 0 var(--bw) var(--focus)}" },

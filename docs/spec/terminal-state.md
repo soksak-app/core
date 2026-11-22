@@ -126,7 +126,7 @@ Each terminal plugin declares the status `<plugin>.program` (`terminal.program`,
 
 Each terminal plugin also declares the status `<plugin>.activity` (`terminal.activity`, `term.activity`) for each terminal surface, and declares it for core with `activity: true`, so that core aggregates the activity of the tab, its cards, its space and its project (core F982). Its value is a core activity level or `null` for no activity. The plugin decides the level, because it knows the state, the exit code and the program status; core only aggregates the levels. The value follows each value of `<plugin>.state` and `<plugin>.program`, in this order:
 
-1. When the session has records, the highest level of its records in the core order (`attention` > `failed` > `running` > `idle`), because a program that reports its state states also whether it still waits after it called the person:
+1. When the session has records, the highest level of its records in the core order (`attention` > `running` > `failed` > `idle`), because a program that reports its state states also whether it still waits after it called the person:
 
    | Record `state` | Level |
    | --- | --- |
@@ -141,12 +141,12 @@ Each terminal plugin also declares the status `<plugin>.activity` (`terminal.act
    | `state` of `<plugin>.state` | `<plugin>.activity` |
    | --- | --- |
    | `null`, before the first change | `null` |
-   | `idle` with `exit` 0 or `null` | `idle` |
+   | `idle`, with any `exit` | `idle` |
    | `running` | `running` |
-   | `exited` or `idle` with an `exit` other than 0 | `failed` |
+   | `exited` with an `exit` other than 0 | `failed` |
    | `exited` with `exit` 0, or with `exit` `null` | `null` |
 
-An `exited` state whose mark gives no exit code reports no failure, because no code shows one. A failure of the last command lasts until the next command starts, as a record of `error` does: the prompt start that a shell sends right after `D`, such as `A` from the `precmd` of zsh, gives `idle` to the state with the exit code of the command and keeps `failed` to the activity, and the next `running` ends it. The sidecar keeps the exit code in the state, so a page that attaches after the command, or attaches again, reads the same activity as the page before it. The records of a program decide also over the exit code of its command: a program that reported `done` and whose command exits with a nonzero code gives `idle` until the next command starts, and one that reported `error` gives `failed`. An `error` record gives `failed` also beside a `working` record, because the highest level decides. The status changes only when its value changes, and a new session of the surface starts again at `null`.
+An `exited` state whose mark gives no exit code reports no failure, because no code shows one. A failure of the last command lasts until the shell shows its prompt again: the prompt start that a shell sends right after `D`, such as `A` from the `precmd` of zsh, gives `idle` to the state with the exit code of the command and `idle` to the activity, because a shell at its prompt does no work and waits for nothing; the exit code stays in the state for a reader of the last command. A record of `error` still gives `failed`, because the program reports it. The sidecar keeps the exit code in the state, so a page that attaches after the command, or attaches again, reads the same activity as the page before it. The records of a program decide also over the exit code of its command: a program that reported `done` and whose command exits with a nonzero code gives `idle` until the next command starts, and one that reported `error` gives `failed`. An `error` record beside a `working` record gives `running`, because the highest level decides. The status changes only when its value changes, and a new session of the surface starts again at `null`.
 
 `attention` holds exactly while the session has a `blocked` record, or has no record and the notice is `true`. So it is entered at the report of a `blocked` record and at a notice of a session without records, and it is left when the program replaces or clears its last `blocked` record, at a command finished mark and a prompt start mark, which end that record and the notice, at a full reset, when the session ends, and, for a notice, when the person focuses or types into the terminal. A report of a record does not change the notice: a session with records gives no `attention` from it, and its `attention` returns when the records are cleared while the notice is `true`. `failed` of a record is left when the program replaces or clears the record, when a command starts, at a full reset and when the session ends.
 

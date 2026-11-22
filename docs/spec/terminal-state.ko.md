@@ -126,7 +126,7 @@ program이 답을 기다린다는 것과 얼마나 기다리는지는 `blocked` 
 
 각 terminal plugin은 각 terminal surface에 status `<plugin>.activity`(`terminal.activity`, `term.activity`)도 선언하며, core가 tab, 그 card, space, project의 activity를 모으도록 `activity: true`로 core에 선언한다(core F982). 그 값은 core activity level이거나 activity가 없음을 뜻하는 `null`이다. plugin이 상태, exit code, program status를 알기 때문에 level은 plugin이 정하고, core는 level을 모으기만 한다. 값은 `<plugin>.state`와 `<plugin>.program`의 각 값을 이 순서로 따른다:
 
-1. session에 record가 있으면, core 순서(`attention` > `failed` > `running` > `idle`)에서 그 record들의 가장 높은 level. 자기 상태를 보고하는 program은 사람을 부른 뒤에도 아직 기다리는지를 말하기 때문이다:
+1. session에 record가 있으면, core 순서(`attention` > `running` > `failed` > `idle`)에서 그 record들의 가장 높은 level. 자기 상태를 보고하는 program은 사람을 부른 뒤에도 아직 기다리는지를 말하기 때문이다:
 
    | record `state` | level |
    | --- | --- |
@@ -141,12 +141,12 @@ program이 답을 기다린다는 것과 얼마나 기다리는지는 `blocked` 
    | `<plugin>.state`의 `state` | `<plugin>.activity` |
    | --- | --- |
    | 첫 변화 전의 `null` | `null` |
-   | `exit` 0 또는 `null`을 가진 `idle` | `idle` |
+   | 어떤 `exit`를 가진 `idle`이든 | `idle` |
    | `running` | `running` |
-   | 0이 아닌 `exit`를 가진 `exited` 또는 `idle` | `failed` |
+   | 0이 아닌 `exit`를 가진 `exited` | `failed` |
    | `exit` 0 또는 `exit` `null`을 가진 `exited` | `null` |
 
-mark가 exit code를 주지 않은 `exited` 상태는 실패를 보고하지 않는다. 실패를 보여 주는 code가 없기 때문이다. 마지막 command의 실패는 `error` record처럼 다음 command가 시작할 때까지 간다: zsh의 `precmd`가 보내는 `A`처럼 shell이 `D` 바로 뒤에 보내는 prompt 시작은 상태에 command의 exit code와 함께 `idle`을 주고 activity에는 `failed`를 지니게 하며, 다음 `running`이 그것을 끝낸다. sidecar가 exit code를 상태에 지니므로, command 뒤에 attach하거나 다시 attach하는 page는 그 전의 page와 같은 activity를 읽는다. program의 record는 그 command의 exit code보다도 앞선다: `done`을 보고했고 command가 0이 아닌 code로 끝난 program은 다음 command가 시작할 때까지 `idle`을 주고, `error`를 보고한 program은 `failed`를 준다. `error` record는 가장 높은 level이 정하므로 `working` record 옆에서도 `failed`를 준다. status는 값이 바뀔 때만 바뀌며, surface의 새 session은 다시 `null`에서 시작한다.
+mark가 exit code를 주지 않은 `exited` 상태는 실패를 보고하지 않는다. 실패를 보여 주는 code가 없기 때문이다. 마지막 command의 실패는 shell이 prompt를 다시 보일 때까지 간다: zsh의 `precmd`가 보내는 `A`처럼 shell이 `D` 바로 뒤에 보내는 prompt 시작은 상태에 command의 exit code와 함께 `idle`을 주고 activity에도 `idle`을 준다. prompt의 shell은 일하지 않고 아무것도 기다리지 않기 때문이다. exit code는 마지막 command를 읽는 쪽을 위해 상태에 남는다. `error` record는 program이 보고하므로 계속 `failed`를 준다. sidecar가 exit code를 상태에 지니므로, command 뒤에 attach하거나 다시 attach하는 page는 그 전의 page와 같은 activity를 읽는다. program의 record는 그 command의 exit code보다도 앞선다: `done`을 보고했고 command가 0이 아닌 code로 끝난 program은 다음 command가 시작할 때까지 `idle`을 주고, `error`를 보고한 program은 `failed`를 준다. `working` record 옆의 `error` record는 가장 높은 level이 정하므로 `running`을 준다. status는 값이 바뀔 때만 바뀌며, surface의 새 session은 다시 `null`에서 시작한다.
 
 `attention`은 정확히 session에 `blocked` record가 있는 동안, 또는 record가 없고 notice가 `true`인 동안 유지된다. 그래서 `blocked` record의 report와 record가 없는 session의 notice에서 들어가고, program이 마지막 `blocked` record를 바꾸거나 지울 때, 그 record와 notice를 끝내는 command 종료 mark와 prompt 시작 mark에서, full reset에서, session이 끝날 때, 그리고 notice라면 사람이 terminal에 focus를 주거나 입력할 때 나온다. record의 report는 notice를 바꾸지 않는다: record가 있는 session은 notice에서 `attention`을 얻지 않으며, notice가 `true`인 동안 record가 지워지면 `attention`이 돌아온다. record의 `failed`는 program이 그 record를 바꾸거나 지울 때, command가 시작할 때, full reset에서, session이 끝날 때 나온다.
 

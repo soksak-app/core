@@ -6,13 +6,13 @@ tab의 activity는 사람이 tab을 열지 않고도 그 surface가 무언가를
 
 ## Activity의 종류
 
-activity는 높은 것부터 낮은 것 순서로 다음과 같다:
+activity는 높은 것부터 낮은 것 순서로 다음과 같다. `running`은 `failed`보다 높다. 지금 일을 실행하는 holder는 이미 끝난 실패보다 그 일을 먼저 보이기 때문이다:
 
 | Activity | 뜻 |
 | --- | --- |
 | `attention` | surface가 사람을 기다린다. 예를 들어 program이 승인이나 답을 묻는다 |
-| `failed` | surface가 실행한 것이 실패로 끝났다 |
 | `running` | surface가 program이나 agent 같은 무언가를 실행한다 |
+| `failed` | surface가 실행한 것이 실패로 끝났다 |
 | `idle` | surface가 일하지 않고 대기 중인 승인이나 답이 없다. 예를 들어 prompt의 shell이나 자기 prompt에서 쉬는 program이다 |
 
 ## 선언
@@ -29,7 +29,7 @@ plugin의 status 항목은 surface의 activity를 보고하는 status를 멤버 
 
 tab의 activity는 그 plugin의 status 가운데 `activity`를 선언한 것들을 각각 그 tab의 surface에서 읽어 얻은 activity 중 가장 높은 것이다. 값이 activity인 status는 그 activity를 주고, 값이 `null`인 status는 아무것도 주지 않는다. surface가 등록하지 않은 status는 아무것도 주지 않으므로, surface가 시작하지 않았거나, unload되었거나([메모리 절약](plugins.ko.md#메모리-절약)) 끝난 tab은 activity가 없다. 어떤 status도 activity를 주지 않는 tab은 activity가 없다.
 
-activity도 `null`도 아닌 값은 plugin의 오류다. 그 값은 activity를 주지 않고, workbench는 문구 `<plugin> exposes <status> on tab <tab>: activity value <value> is not one of attention, failed, running, idle`을 오류 표시 경로로 창의 오류 banner에 출처 `activity <tab>`로 보인다. `<value>`는 그 값의 JSON 문구다. 문구는 tab의 status 가운데 선언 순서로 처음인 그런 status가 정하고, 오류는 tab의 status들이 다시 올바른 값을 보고하거나 tab이 창을 떠나면 거두어진다.
+activity도 `null`도 아닌 값은 plugin의 오류다. 그 값은 activity를 주지 않고, workbench는 문구 `<plugin> exposes <status> on tab <tab>: activity value <value> is not one of attention, running, failed, idle`을 오류 표시 경로로 창의 오류 banner에 출처 `activity <tab>`로 보인다. `<value>`는 그 값의 JSON 문구다. 문구는 tab의 status 가운데 선언 순서로 처음인 그런 status가 정하고, 오류는 tab의 status들이 다시 올바른 값을 보고하거나 tab이 창을 떠나면 거두어진다.
 
 workbench는 자기 창의 project들의 각 tab의 그런 status를 그 surface의 watch로 따른다([전달](exposure.ko.md#전달)). watch는 값의 변화마다 보낸다. workbench는 timer로 값을 읽지 않는다. layout, project, surface의 등록이 바뀔 때 watch를 시작하고 끝내며, watch가 값을 보낼 때마다 activity를 다시 얻는다.
 
@@ -53,9 +53,9 @@ project를 가진 창은 그 space들의 activity가 바뀔 때마다 host call 
 | --- | --- |
 | project id가 아닌 `id` | `invalid project id` |
 | project를 가지지 않은 창 | `project <id> is not owned by this window` |
-| activity가 아닌 space의 `activity` | `project <id> space <space>: activity <value> is not one of attention, failed, running, idle` |
-| activity가 아닌 `cards`의 값 | `project <id> space <space> card <card>: activity <value> is not one of attention, failed, running, idle` |
-| activity가 아닌 `groups`의 값 | `project <id> space <space> group <card>: activity <value> is not one of attention, failed, running, idle` |
+| activity가 아닌 space의 `activity` | `project <id> space <space>: activity <value> is not one of attention, running, failed, idle` |
+| activity가 아닌 `cards`의 값 | `project <id> space <space> card <card>: activity <value> is not one of attention, running, failed, idle` |
+| activity가 아닌 `groups`의 값 | `project <id> space <space> group <card>: activity <value> is not one of attention, running, failed, idle` |
 
 `<value>`는 값의 JSON 문장이다. space들은 식별자의 code point 순서로, 각각 그 `activity`, 다음으로 `cards`와 `groups`를 code point 순서로 검사한다. host는 project를 알린 창이 그 project를 놓을 때([project](projects.ko.md#프로젝트-식별)), 닫힐 때, 또는 그 page가 끝나거나 새 page가 시작할 때 그 project의 항목을 지운다. activity를 준 surface들이 그와 함께 끝났기 때문이다. 다음에 project를 가진 창은 그 surface들이 보고하면 다시 알린다. 그러므로 한 창을 떠나 다른 창으로 간 project에는 앞 창의 항목이 남지 않고, 지운 project에는 항목이 없다.
 

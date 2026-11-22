@@ -190,7 +190,7 @@ func TestTheActivityOfATabFollowsTheWatchOfItsSurface(t *testing.T) {
 	f.deliver("tab-b", "textprobe.screen", `"attention"`, 1)
 	// A value that is no activity gives tab-a none and shows its error until a valid value withdraws it.
 	f.deliver("tab-a", "textprobe.screen", `"busy"`, 2)
-	want := "textprobe exposes textprobe.screen on tab tab-a: activity value \"busy\" is not one of attention, failed, running, idle"
+	want := "textprobe exposes textprobe.screen on tab tab-a: activity value \"busy\" is not one of attention, running, failed, idle"
 	if !slices.Equal(shown, [][2]string{{"tab-a", want}}) {
 		t.Fatalf("the shown errors are %q", shown)
 	}
