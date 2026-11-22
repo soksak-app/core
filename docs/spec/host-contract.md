@@ -1579,13 +1579,16 @@ Items:
 | `program.run.refuses-undeclared-name` | A name that the declaration lacks is refused with `program <name> is not declared by <plugin>`, starts no process, and writes `host.program.refused`. | all |
 | `program.run.refuses-argument-count` | Two arguments for a declaration of one slot are refused with `program <name> takes 1 arguments, 2 given`. | all |
 | `program.run.refuses-argument-outside-pattern` | The second argument that does not match its pattern in full is refused with `program <name> argument 2 <text> does not match its pattern`, and the text is the argument. | all |
-| `program.run.refuses-pattern-that-does-not-compile` | A pattern that the regular expression library rejects is refused with `program <name> pattern does not compile: <reason>`. | all |
+| `program.run.refuses-pattern-that-does-not-compile` | A declared pattern that the regular expression library rejects is refused when the declaration is read, with `programs.<name> pattern does not compile: <reason>`. | all |
 | `program.run.refuses-without-project` | A run from a window that shows no project is refused with `program run: the window shows no project`. | all |
 | `program.run.refuses-fifth-open-run` | The fifth open run of a surface is refused with `program run: 4 runs are open on surface <surface>`, and the first four runs continue. | all |
 | `program.run.cancel-ends-the-group` | A cancel of an open run sends `SIGKILL` to the process group of the program, so a child that the program started ends too, and the run writes `host.program.end` with result `cancelled` and sends no reply. | all |
 | `program.run.view-end-ends-the-run` | The end of the view process ends its open runs with the result `process-ended`, each with `SIGKILL` to its process group. | all |
 | `program.run.surface-close-ends-the-run` | The close of a surface ends its open runs with the result `surface-closed`. | all |
 | `program.run.window-close-ends-the-run` | The end of a window ends its open runs with the result `window-closed`. | all |
+| `program.run.refuses-argument-not-equal-text` | A literal argument that differs from its text refuses the run with `program status argument 1 stat does not equal its text`. | all |
+| `program.run.refuses-open-call-id` | A view call identifier that names a run still open on the surface is refused with `program run: call 1 is already open on surface s1`; the same identifier on another surface is accepted. | all |
+| `program.run.declaration-is-checked-at-the-boundary` | A declaration member that the host rejects is refused with `programs.Lint name is not of the form [a-z][a-z0-9-]*`, `programs.lint has an unknown member extra`, `programs.lint args.0 is neither a text nor an object with the single member pattern`, or `programs.lint pattern does not compile: <reason>`; a valid declaration reads its program, text slots and pattern slots. | all |
 | `sidecars.environment.start-records-the-sok-folder` | The start of the sidecar channel of the installed sidecars records one event `host.sidecar.path` at the level `info` whose `folder` is the folder of the host executable and whose `sok` is the `sok` in that folder. | all |
 
 ## Workbench cases

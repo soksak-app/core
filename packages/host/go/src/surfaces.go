@@ -559,6 +559,8 @@ type Surfaces struct {
 	compositionRevisions map[string]uint64
 	// lifecycle counts the failures of each view surface and keeps the record that creates its view again (view_lifecycle.go).
 	lifecycle *viewLifecycle
+	// programs holds the open runs of the declared programs of the views of the window (program_run_host.go).
+	programs programRuns
 	// events receives the window events of this window in place of the window, when it is set. The tests set it.
 	events func(name string, data any)
 	// presentation holds the views that wait for their presentation after a card layout change (presentation_wait.go).
@@ -1965,6 +1967,7 @@ func CloseWindowSurfaces(surfaces map[string]unsafe.Pointer, documents *Document
 
 // closeRemovedSurface closes the sidecar sessions associated with a native surface removed by a complete placement.
 func (s *Surfaces) closeRemovedSurface(id string) {
+	s.programs.end(id, ProgramSurfaceClosed)
 	s.sidecars.NativeViewRemoved(id)
 }
 

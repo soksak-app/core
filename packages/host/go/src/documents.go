@@ -1921,6 +1921,8 @@ func (s *Surfaces) endView(surface string, handle unsafe.Pointer, generation uin
 	}
 	// The open calls are taken before the view is removed, because the removal drops the channel of the view.
 	openCalls := s.documents.endViewCalls(surface)
+	// The runs of the programs of the view end with the reason process-ended (docs/spec/native-surfaces.md#program-runs).
+	s.programs.end(surface, ProgramProcessEnded)
 	if _, err := s.documents.Remove(key); err != nil {
 		LogError("view channel", err)
 		return nil, false

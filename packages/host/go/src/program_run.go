@@ -16,6 +16,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
+	"github.com/soksak-app/core/packages/host/go/src/routine"
 )
 
 // programOutputMaxBytes is the number of bytes that a run keeps of each output stream; the bytes beyond it are read and discarded.
@@ -168,9 +169,9 @@ func RunProgram(ctx context.Context, run ProgramRun) (ProgramOutcome, error) {
 		run.OnStart(command.Process.Pid)
 	}
 	waited := make(chan error, 1)
-	go func() {
+	routine.Go("program-wait", func() {
 		waited <- command.Wait()
-	}()
+	})
 	outcome := ProgramOutcome{}
 	select {
 	case waitErr := <-waited:

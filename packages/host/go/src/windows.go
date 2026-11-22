@@ -885,6 +885,8 @@ func (s *Surfaces) close() {
 	// A window that ends keeps no tab, so a removal that asked it is allowed.
 	s.host.removals.Abandon(s.name)
 	s.host.endProjectActivities(s)
+	// The runs of the programs of the window end with the reason window-closed (docs/spec/native-surfaces.md#program-runs).
+	s.programs.endAll(ProgramWindowClosed)
 	mainThreadStep(func() {
 		s.closed = true
 		// The close cancels the layouts of the window in its own step, while the framework still holds the window: a work queued for a

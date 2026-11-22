@@ -208,14 +208,20 @@ func (s *Setups) SidecarEnvironment() (map[string]string, error) {
 	if s.envErr != nil {
 		return nil, s.envErr
 	}
-	variables := make(map[string]string, len(s.env.Variables))
-	for name, value := range s.env.Variables {
-		variables[name] = value
+	return withoutShellProcessVariables(s.env.Variables), nil
+}
+
+// withoutShellProcessVariables returns a copy of variables without the ones that a shell sets for each process it starts
+// (shellProcessVariables), so the environment of a sidecar and of a program run holds none of them.
+func withoutShellProcessVariables(variables map[string]string) map[string]string {
+	result := make(map[string]string, len(variables))
+	for name, value := range variables {
+		result[name] = value
 	}
 	for _, name := range shellProcessVariables {
-		delete(variables, name)
+		delete(result, name)
 	}
-	return variables, nil
+	return result
 }
 
 // State returns the setup parts with the current state of the user PATH registration.

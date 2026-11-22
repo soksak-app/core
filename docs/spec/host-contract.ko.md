@@ -1579,13 +1579,16 @@ fn invalid_json_closes_connection() {
 | `program.run.refuses-undeclared-name` | 선언에 없는 이름은 `program <name> is not declared by <plugin>`로 거부되고, 프로세스를 시작하지 않으며, `host.program.refused`를 기록한다. | all |
 | `program.run.refuses-argument-count` | slot 하나인 선언에 인자 둘을 주면 `program <name> takes 1 arguments, 2 given`으로 거부된다. | all |
 | `program.run.refuses-argument-outside-pattern` | Pattern과 전체가 맞지 않는 둘째 인자는 `program <name> argument 2 <text> does not match its pattern`으로 거부되며, `<text>`는 그 인자다. | all |
-| `program.run.refuses-pattern-that-does-not-compile` | 정규 표현식 library가 거부하는 pattern은 `program <name> pattern does not compile: <reason>`으로 거부된다. | all |
+| `program.run.refuses-pattern-that-does-not-compile` | 정규 표현식 library가 거부하는 선언된 pattern은 선언을 읽을 때 `programs.<name> pattern does not compile: <reason>`으로 거부된다. | all |
 | `program.run.refuses-without-project` | 프로젝트를 보이지 않는 창의 실행은 `program run: the window shows no project`로 거부된다. | all |
 | `program.run.refuses-fifth-open-run` | Surface의 다섯 번째 열린 실행은 `program run: 4 runs are open on surface <surface>`로 거부되며, 앞의 네 실행은 계속된다. | all |
 | `program.run.cancel-ends-the-group` | 열린 실행의 cancel은 프로그램의 process group에 `SIGKILL`을 보내므로 프로그램이 시작한 자식도 끝나며, 실행은 결과 `cancelled`의 `host.program.end`를 기록하고 응답을 보내지 않는다. | all |
 | `program.run.view-end-ends-the-run` | View process의 끝은 열린 실행을 결과 `process-ended`로 끝내며, 각 실행의 process group에 `SIGKILL`을 보낸다. | all |
 | `program.run.surface-close-ends-the-run` | Surface의 닫힘은 열린 실행을 결과 `surface-closed`로 끝낸다. | all |
 | `program.run.window-close-ends-the-run` | 창의 끝은 열린 실행을 결과 `window-closed`로 끝낸다. | all |
+| `program.run.refuses-argument-not-equal-text` | text와 다른 고정 인자는 `program status argument 1 stat does not equal its text`로 실행을 거부한다. | all |
+| `program.run.refuses-open-call-id` | surface에서 아직 열린 실행이 이름하는 view call 식별자는 `program run: call 1 is already open on surface s1`로 거부되며, 다른 surface의 같은 식별자는 허용된다. | all |
+| `program.run.declaration-is-checked-at-the-boundary` | host가 거부하는 선언 member는 `programs.Lint name is not of the form [a-z][a-z0-9-]*`, `programs.lint has an unknown member extra`, `programs.lint args.0 is neither a text nor an object with the single member pattern`, `programs.lint pattern does not compile: <reason>`으로 거부되며, 올바른 선언은 program과 text slot, pattern slot을 읽는다. | all |
 | `sidecars.environment.start-records-the-sok-folder` | 설치된 sidecar의 sidecar channel의 시작은 level `info`의 event `host.sidecar.path` 하나를 기록하고, 그 `folder`는 host 실행 파일의 폴더이며 `sok`은 그 폴더의 `sok`이다. | all |
 
 ## Workbench cases
