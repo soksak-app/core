@@ -74,6 +74,14 @@ func TestProgramRunRefusesAnOpenCallIdentifier(t *testing.T) {
 	}
 }
 
+// A run of a surface without a view, or of a surface that has closed, is refused with the no-view text of the spec.
+func TestProgramRunOfASurfaceWithoutAViewIsRefused(t *testing.T) {
+	s := &Surfaces{}
+	if _, err := s.programView("s1"); err == nil || err.Error() != "program run: surface s1 has no view" {
+		t.Fatalf("error %v", err)
+	}
+}
+
 // contract: program.run.declaration-is-checked-at-the-boundary
 func TestProgramDeclarationIsCheckedAtTheBoundary(t *testing.T) {
 	declared, err := parseProgramDeclarations(json.RawMessage(`{"lint":{"program":"bin/lint","args":["src",{"pattern":"[a-z]+"}]},"version":{"program":"/usr/bin/true"}}`))
