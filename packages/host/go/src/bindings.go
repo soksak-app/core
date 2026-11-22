@@ -9,6 +9,7 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -530,37 +531,83 @@ func (h *Host) SidecarsReplace(ctx context.Context, reqJSON json.RawMessage) err
 	return h.sidecars.Replace(ctx, req.Sidecar)
 }
 
-func (h *Host) SidecarSend(ctx context.Context, nameJSON json.RawMessage, surfaceJSON json.RawMessage, body json.RawMessage, cidsJSON json.RawMessage) error {
+// SidecarSend sends body from the window to the sidecar for surface (docs/spec/persistent-services.md#owned-session-messages). Without
+// answer, or with answer false, it resolves with null once the request line is queued. With answer true it resolves with the body of the
+// reply that names the same surface and identifiers, and a reply body with the member error rejects the call.
+func (h *Host) SidecarSend(ctx context.Context, nameJSON json.RawMessage, surfaceJSON json.RawMessage, body json.RawMessage, cidsJSON json.RawMessage, answerJSON json.RawMessage) (json.RawMessage, error) {
 	name, err := argument[string]("sidecar", nameJSON)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	surface, err := argument[string]("surface", surfaceJSON)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	cids, err := argument[[]string]("cids", cidsJSON)
 	if err != nil {
-		return err
+		return nil, err
+	}
+	answer := false
+	if len(answerJSON) > 0 && string(answerJSON) != "null" {
+		if answer, err = argument[bool]("answer", answerJSON); err != nil {
+			return nil, err
+		}
 	}
 	s, err := h.surface(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return s.windowSidecarSend(ctx, name, surface, body, cids)
+	if !answer {
+		if err := checkSendCids(cids); err != nil {
+			return nil, err
+		}
+		return nil, s.windowSidecarSend(ctx, name, surface, body, cids)
+	}
+	return s.sidecars.awaitSend(ctx, name, surface, cids, func() error {
+		return s.windowSidecarSend(ctx, name, surface, body, cids)
+	})
 }
 
-// ViewSidecarSend sends only for the original host-issued view generation.
-func (h *Host) ViewSidecarSend(ctx context.Context, raw json.RawMessage) error {
+// SidecarSessionsRequest names the persistent sidecar whose owned sessions the window reads.
+type SidecarSessionsRequest struct {
+	Sidecar string `json:"sidecar"`
+}
+
+// SidecarSessionsResult is the owned sessions that the persistent service holds for the client, as the answer of the request `sessions`.
+type SidecarSessionsResult struct {
+	Sessions json.RawMessage `json:"sessions"`
+}
+
+// SidecarSessions returns the owned sessions of a persistent sidecar (docs/spec/persistent-services.md#owned-sessions).
+func (h *Host) SidecarSessions(ctx context.Context, reqJSON json.RawMessage) (SidecarSessionsResult, error) {
+	req, err := argument[SidecarSessionsRequest]("request", reqJSON)
+	if err != nil {
+		return SidecarSessionsResult{}, err
+	}
+	if req.Sidecar == "" {
+		return SidecarSessionsResult{}, errors.New("sidecarSessions requires a non-empty sidecar")
+	}
+	if _, err := h.surface(ctx); err != nil {
+		return SidecarSessionsResult{}, err
+	}
+	sessions, err := h.sidecars.Sessions(req.Sidecar)
+	if err != nil {
+		return SidecarSessionsResult{}, err
+	}
+	return SidecarSessionsResult{Sessions: sessions}, nil
+}
+
+// ViewSidecarSend sends only for the original host-issued view generation; with answer true it resolves with the reply body.
+func (h *Host) ViewSidecarSend(ctx context.Context, raw json.RawMessage) (json.RawMessage, error) {
 	req, err := viewSidecarSendRequestFrom(raw)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	s, err := h.surface(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return s.sendViewSidecar(ctx, req)
+	return s.answerViewSidecar(ctx, req)
 }
 
 // nativeCall is one call that bridge.js sent.

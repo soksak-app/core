@@ -144,6 +144,8 @@ type sidecar struct {
 	transportClosed bool
 	// retained is the number of sessions that the service closed for each retain request.
 	retained map[string]int
+	// listed holds the sessions of each answer to a sessions request, by request, until its waiter reads them. c.mu protects it.
+	listed map[string]json.RawMessage
 	// surfaces are the surfaces that sent requests to this process. They are the surfaces to tell about a failure. c.mu protects it.
 	surfaces map[string]bool
 	// closedSurfaces marks sessions this process must no longer deliver after native-view removal. c.mu protects it.
@@ -222,6 +224,10 @@ type Sidecars struct {
 	imageDetachRequests map[string]*imageDetachWaiter
 	// requests remembers the requests with correlation identifiers that wait for a reply (sidecar_reply.go).
 	requests requestLedger
+	// awaited holds the waiter of each send that awaits the reply with its correlation identifier (sidecars_sessions.go). c.mu protects it.
+	awaited map[awaitKey]chan awaitedReply
+	// dropped holds the awaited sends whose call ended before their reply, so that the reply is logged as late. c.mu protects it.
+	dropped map[awaitKey]bool
 	// declarations protects declared, displayNames, persistent, basenames and refused.
 	// An installation adds declarations while the application runs and a start
 	// reads the executable outside c.mu, so it is separate from c.mu.
@@ -457,6 +463,8 @@ type OutdatedSidecar struct {
 // is wrong.
 func NewSidecars(declarations []SidecarDeclaration, configDirectory string) (*Sidecars, error) {
 	c := &Sidecars{
+		awaited:             map[awaitKey]chan awaitedReply{},
+		dropped:             map[awaitKey]bool{},
 		imageDetachRequests: map[string]*imageDetachWaiter{},
 		declared:            map[string]string{},
 		displayNames:        map[string]string{},
@@ -2729,6 +2737,7 @@ func (c *Sidecars) relay(process *sidecar, stdout io.Reader) string {
 		event := sidecarEvent{Surface: *output.Surface, Body: output.Body}
 		body := ReadMessageBody(output.Body)
 		c.recordReply(process.name, event.Surface, output.Cids, body)
+		c.deliverReply(process.name, event.Surface, output.Cids, event.Body)
 		c.mu.Lock()
 		owner := c.owners[event.Surface]
 		addressed := process.surfaces[event.Surface]
@@ -2794,6 +2803,7 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 	for _, waiter := range waiters {
 		waiter <- errServiceDisconnected
 	}
+	c.failAwaited(process.name, errAnswerEnded)
 	close(process.exited)
 	EmitHost(LevelInfo, "host.sidecar.disconnect", disconnectFields(process.name, process.servicePID, stopping, violation, end, waiting))
 	PerformanceProcessRemove(process.servicePID)
@@ -2913,7 +2923,7 @@ func (c *Sidecars) handlePersistentLine(process *sidecar, line []byte) (string, 
 			return fmt.Sprintf("invalid message: operation: %v", err), true
 		}
 	}
-	if operation == "closed-owner" || operation == "shutdown" || operation == "retained" {
+	if operation == "closed-owner" || operation == "shutdown" || operation == "retained" || operation == "sessions" {
 		var request string
 		if err := json.Unmarshal(value.Request, &request); err != nil || request == "" {
 			return fmt.Sprintf("invalid message: %s request is not a non-empty string", operation), true
@@ -2942,6 +2952,12 @@ func (c *Sidecars) handlePersistentLine(process *sidecar, line []byte) (string, 
 				process.retained = map[string]int{}
 			}
 			process.retained[request] = closed
+		}
+		if operation == "sessions" && waiter != nil && ok {
+			if process.listed == nil {
+				process.listed = map[string]json.RawMessage{}
+			}
+			process.listed[request] = value.Sessions
 		}
 		c.mu.Unlock()
 		if waiter != nil {
@@ -2983,6 +2999,7 @@ func (c *Sidecars) handlePersistentLine(process *sidecar, line []byte) (string, 
 	event := sidecarEvent{Surface: *output.Surface, Body: output.Body}
 	body := ReadMessageBody(output.Body)
 	c.recordReply(process.name, event.Surface, output.Cids, body)
+	c.deliverReply(process.name, event.Surface, output.Cids, event.Body)
 	c.mu.Lock()
 	owner := c.owners[event.Surface]
 	c.mu.Unlock()

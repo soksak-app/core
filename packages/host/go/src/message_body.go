@@ -35,6 +35,7 @@ type sidecarLine struct {
 	Cids      json.RawMessage `json:"cids"`
 	Process   json.RawMessage `json:"process"`
 	Started   json.RawMessage `json:"started"`
+	Sessions  json.RawMessage `json:"sessions"`
 }
 
 // decodeSidecarLine decodes a message line of a sidecar; it is an error when the line is not a JSON object.

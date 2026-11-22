@@ -181,6 +181,7 @@ type ViewSidecarSendRequest struct {
 	Surface    string          `json:"surface"`
 	Body       json.RawMessage `json:"body,nullvalue"`
 	Cids       []string        `json:"cids,omitempty"`
+	Answer     bool            `json:"answer,omitempty"`
 }
 
 func viewSidecarSendRequestFrom(raw json.RawMessage) (ViewSidecarSendRequest, error) {

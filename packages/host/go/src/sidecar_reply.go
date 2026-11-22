@@ -7,6 +7,7 @@ package host
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -185,6 +186,7 @@ func (c *Sidecars) recordReply(sidecar, surface string, cids []string, body Mess
 // identifiers and the reason that the failure of the sidecar gives the page.
 func (c *Sidecars) failRequests(sidecar, reason string) {
 	c.failImageDetaches(sidecar)
+	c.failAwaited(sidecar, errors.New(reason))
 	surfaces, byCid := c.requests.failed(sidecar)
 	text, cut := sok.CutText(fmt.Sprintf("%d: %s", codeInternal, reason), CallTextBytes)
 	for _, surface := range surfaces {
