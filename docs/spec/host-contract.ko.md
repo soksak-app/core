@@ -1630,6 +1630,8 @@ Wails와 Tauri 호스트의 메인 페이지와 mygo 호스트의 workbench는 �
 | `project-data.replace.read-value-is-its-base` | 그 파일의 각 저장 값에 `runtime.data.get`이 답한 값을 `base`로 돌려보내면 `true`를 답한다. |
 | `project-data.replace.requires-base` | `base`가 없는 `runtime.data.replace`는 `view call runtime.data.replace requires base`로 실패한다. |
 | `project-data.replace.refusal-answers-the-view` | store가 거부한 replace는 view call을 실패시키고 key의 값을 그대로 둔다. |
+| `project-data.dependency.reads-and-follows` | Plugin이 적은 의존 plugin에 대한 `runtime.data.get {key, plugin}`은 시작 프로젝트에서 그 의존 plugin의 저장 값, 또는 default를 답하고, 그 값이 바뀌면 view에 event `data:<plugin>` `{key}`가 가며 view는 값을 다시 읽는다. |
+| `project-data.dependency.refusals` | 시작 plugin의 의존이 아닌 plugin, 또는 plugin 자신을 명명한 `runtime.data.get`이나 `runtime.data.on`은 `view call <command> <plugin> is not a dependency of <plugin of the view>`로 실패하고, `plugin`을 명명한 set, replace, change는 `view call <command> <plugin> is read-only for <plugin of the view>: a view changes only the project data of its own plugin`로 실패하며 아무것도 저장하지 않는다. |
 | `exposure.keyboard.closing-the-focused-card-clears-the-ring` | `core.card.close`나 마지막 탭의 닫기로 focus된 카드를 닫으면 focus된 카드가 없고, 그 뒤 `current`는 어느 카드도 가리키지 않는다. 다른 카드, 다른 카드의 마지막 탭, 카드가 남는 focus된 카드의 탭을 닫으면 ring은 focus된 카드에 남는다. |
 | `layout.open.adds-a-tab-once` | 그런 탭이 없는 카드에 두 번 적용한 `core.layout.open {card, plugin, params}`는 params를 가진 plugin의 탭 하나를 더하고, 그 탭은 focus된 카드에서 선택된다. 두 적용은 같은 `{card, tab}`으로 답하고, 각 적용 뒤 설명의 `layout`은 같다. |
 | `layout.open.selects-the-first-equal-tab` | `params`가 주어진 것과 JSON 값으로서 같은 plugin의 탭을 담은 카드에서, member의 순서와 수의 형태는 차이가 없으며, `core.layout.open`은 그중 탭 순서의 첫 탭을 고르고 탭을 더하지 않는다. 값 하나가 다른 `params`는 탭을 더한다. 생략한 `params`는 `null`과 같다. |

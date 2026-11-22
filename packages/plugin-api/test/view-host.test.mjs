@@ -54,6 +54,13 @@ const base = () => ({
   project: START_PROJECT,
 });
 
+/** The fixtures of the probe-reader view of the dependency cases: its plugin lists other, whose note is stored as "from other". */
+const dependencyBase = () => ({
+  ...base(),
+  plugin: "probe-reader",
+  dependencies: { other: { data: { note: { schema: { type: "string" }, default: "default" } }, values: { note: "from other" } } },
+});
+
 /** A fixture that answers its values in order, and fails when the values are used up. */
 const queue = (...values) => () => {
   if (values.length === 0) throw new Error("the fixture has no reply left");
@@ -65,6 +72,9 @@ const queue = (...values) => () => {
 const FIXTURES = {
   // The probe plugin lists other in its dependencies, so other's declared status is followed; other2 is not a dependency.
   "view-calls-status-watch-dependency": () => ({ ...base(), dependencies: { other: { status: [{ name: "other.count" }] } }, statuses: { "other.count": null } }),
+  // The probe-reader plugin lists other in its dependencies, so other's project data is read and followed; other2 is not a dependency.
+  "view-calls-data-dependency": dependencyBase,
+  "view-calls-data-dependency-refused": dependencyBase,
   "view-calls-cancel-pending": (releases) => ({ ...base(), sidecar: { "fixture-sidecar": () => new Promise((resolve) => releases.push(() => resolve(null))) } }),
   "view-calls-pending-id-refused": (releases) => ({ ...base(), sidecar: { "fixture-sidecar": () => new Promise((resolve) => releases.push(() => resolve(null))) } }),
   // The first run of probe-tool is held until the replay ends, and its cancel ends the call; the second run answers its result.
@@ -228,7 +238,8 @@ const CHANGE = {
   logLevels: (change, body) => change.logLevels(body.value),
   status: (change, body) => change.status(body.name, body.value, body.surface),
   run: (change, body) => change.run(body.value),
-  data: (change, body) => change.data(body.key, body.value),
+  // A data change names the dependency of the plugin that it changes, or none for the data of the plugin itself.
+  data: (change, body) => (body.plugin === undefined ? change.data(body.key, body.value) : change.dependencyData(body.plugin, body.key, body.value)),
   leftOut: (change, body) => change.leftOut(body.value),
   frame: (change, body) => change.frame(body.value),
 };

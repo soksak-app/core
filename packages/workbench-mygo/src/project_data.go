@@ -145,14 +145,59 @@ func (s *Shell) writeProjectData(project *projectRecord, unit *installedUnit, ke
 	return nil
 }
 
-// dataChanged pushes the event data to each view of the plugin in the project that follows it.
+// dataChanged pushes the event data to each view of the plugin in the project that follows it, and the event data:<plugin> to each view
+// that follows the project data of a dependency of its plugin (docs/spec/plugins.md#project-data).
 func (s *Shell) dataChanged(project, plugin, key string) {
 	for surface, view := range s.surfaces.views {
 		held := s.surfaces.held[surface]
-		if view.data && held != nil && held.tab.Plugin == plugin && held.project.ID == project {
+		if held == nil || held.project.ID != project {
+			continue
+		}
+		if view.data && held.tab.Plugin == plugin {
 			s.pushView(surface, view, "data", map[string]string{"key": key})
 		}
+		if view.dependencyData[plugin] {
+			s.pushView(surface, view, "data:"+plugin, map[string]string{"key": key})
+		}
 	}
+}
+
+// dataDependency returns the dependency that a data call names in the raw plugin member. The name must be a non-empty text, and the
+// dependency must be a loaded plugin that the plugin of unit lists in dependencies (docs/spec/plugins.md#project-data).
+func (s *Shell) dataDependency(call viewCallEvent, unit *installedUnit, raw json.RawMessage) (*installedUnit, error) {
+	var name string
+	if err := json.Unmarshal(raw, &name); err != nil || name == "" {
+		return nil, fmt.Errorf("view call %s requires a non-empty plugin", call.Command)
+	}
+	dependency := s.units[name]
+	if name == unit.ID || dependency == nil || !s.dependsOn(unit.ID, name) {
+		return nil, fmt.Errorf("view call %s %s is not a dependency of %s", call.Command, name, unit.ID)
+	}
+	return dependency, nil
+}
+
+// dataPluginName is the text of a raw plugin member for a refusal: the name when it is text, and the raw value otherwise.
+func dataPluginName(raw json.RawMessage) string {
+	var name string
+	if err := json.Unmarshal(raw, &name); err != nil {
+		return string(raw)
+	}
+	return name
+}
+
+// onDataPlugin returns the raw plugin member of the params of runtime.data.on, or nil when the subscription names none: null params or
+// params without the member name none.
+func onDataPlugin(call viewCallEvent) (json.RawMessage, error) {
+	if len(call.Params) == 0 || string(call.Params) == "null" {
+		return nil, nil
+	}
+	fields, err := viewFields[struct {
+		Plugin json.RawMessage `json:"plugin"`
+	}](call)
+	if err != nil {
+		return nil, err
+	}
+	return fields.Plugin, nil
 }
 
 // runDataCall serves a call runtime.data of a view of the project of its start values.
@@ -166,14 +211,31 @@ func (s *Shell) runDataCall(call viewCallEvent, unit *installedUnit, view *viewS
 		return fmt.Errorf("view call %s requires a project", call.Command)
 	}
 	if call.Command == "runtime.data.on" {
-		view.data = true
+		raw, err := onDataPlugin(call)
+		if err != nil {
+			return err
+		}
+		if raw == nil {
+			view.data = true
+			answer(nil, nil)
+			return nil
+		}
+		dependency, err := s.dataDependency(call, unit, raw)
+		if err != nil {
+			return err
+		}
+		if view.dependencyData == nil {
+			view.dependencyData = map[string]bool{}
+		}
+		view.dependencyData[dependency.ID] = true
 		answer(nil, nil)
 		return nil
 	}
 	fields, err := viewFields[struct {
-		Key   string          `json:"key"`
-		Base  json.RawMessage `json:"base"`
-		Value json.RawMessage `json:"value"`
+		Key    string          `json:"key"`
+		Base   json.RawMessage `json:"base"`
+		Value  json.RawMessage `json:"value"`
+		Plugin json.RawMessage `json:"plugin"`
 	}](call)
 	if err != nil {
 		return err
@@ -181,13 +243,23 @@ func (s *Shell) runDataCall(call viewCallEvent, unit *installedUnit, view *viewS
 	if fields.Key == "" {
 		return fmt.Errorf("view call %s requires a non-empty key", call.Command)
 	}
-	if _, ok := unit.Data[fields.Key]; !ok {
-		return fmt.Errorf("view call %s %s is not a data key of %s", call.Command, fields.Key, unit.ID)
+	// A write names no plugin, whatever the plugin is: a view changes the project data of its own plugin only.
+	owner := unit
+	if fields.Plugin != nil {
+		if call.Command != "runtime.data.get" {
+			return fmt.Errorf("view call %s %s is read-only for %s: a view changes only the project data of its own plugin", call.Command, dataPluginName(fields.Plugin), unit.ID)
+		}
+		if owner, err = s.dataDependency(call, unit, fields.Plugin); err != nil {
+			return err
+		}
+	}
+	if _, ok := owner.Data[fields.Key]; !ok {
+		return fmt.Errorf("view call %s %s is not a data key of %s", call.Command, fields.Key, owner.ID)
 	}
 	if call.Command == "runtime.data.set" {
 		return s.writeProjectData(project, unit, fields.Key, fields.Value, answer)
 	}
-	value, err := readProjectData(project, unit, fields.Key)
+	value, err := readProjectData(project, owner, fields.Key)
 	if err != nil {
 		return err
 	}

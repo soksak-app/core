@@ -60,8 +60,9 @@ type viewState struct {
 	scale    float64
 	// levels tells that the view follows the log levels.
 	levels bool
-	// data tells that the view follows the project data of its plugin.
-	data bool
+	// data tells that the view follows the project data of its plugin, and dependencyData holds the dependencies whose project data it follows.
+	data           bool
+	dependencyData map[string]bool
 	// commands holds the commands that the view registered, and requests the answer of each request that it has not replied.
 	commands map[string]bool
 	requests map[uint64]viewAnswer

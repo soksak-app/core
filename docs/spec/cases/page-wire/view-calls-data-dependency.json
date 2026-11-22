@@ -1,0 +1,30 @@
+{
+  "name": "view-calls-data-dependency",
+  "description": "A view of probe-reader, which lists other in its dependencies, reads the key note of other for the start project, subscribes to the changes of other, and follows a change of the note of other that the window reads from the store; the page pushes the event data:other.",
+  "replay": false,
+  "reason": "The view calls reach the page as the notice view-call of a view that the host runs in a window, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {"ts-us-1":{"type":"integer","example":1791000000288421,"source":"page"},"mono-ns-1":{"type":"integer","example":5287965747,"source":"page"},"page-identity":{"type":"string","example":"0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e","source":"page"}},
+  "steps": [
+    {"call":{"name":"workspace","payload":{"kind":"snapshot"}}},
+    {"reply":{"result":{"common":{},"projects":[{"id":"p1","root":"/projects/p1","identity":"p1","title":"p1","color":"#fff","named":1,"activeSpaceId":"spc-p1","spaces":[{"id":"spc-p1","title":"SPACE1","layout":{"state":{"root":{"card":"main"}}}}],"settings":{},"plugins":{"other":{"note":{"format":1,"value":"from other"}}}}],"open":[]}}},
+    {"call":{"name":"workspace","payload":{"kind":"tabState"}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"workspace","payload":{"kind":"tabSessions"}}},
+    {"reply":{"result":[]}},
+    {"call":{"name":"windowReady"}},
+    {"reply":{"result":null}},
+    {"call":{"name":"compositionDeclare","payload":{"plugin":"probe-reader","composition":{"kind":"view","page":"ui/page.html","regions":[],"overlays":[]},"surface":"probe-surface"}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"view-call","payload":{"surface":"probe-surface","plugin":"probe-reader","generation":1,"id":1,"command":"runtime.data.get","params":{"key":"note","plugin":"other"}}}},
+    {"call":{"name":"viewReply","payload":{"id":1,"result":"from other","page":"$page-identity","generation":1,"surface":"probe-surface"}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"view-call","payload":{"surface":"probe-surface","plugin":"probe-reader","generation":1,"id":2,"command":"runtime.data.on","params":{"plugin":"other"}}}},
+    {"call":{"name":"viewReply","payload":{"id":2,"result":null,"page":"$page-identity","generation":1,"surface":"probe-surface"}}},
+    {"reply":{"result":null}},
+    {"change":{"state":"data","plugin":"other","key":"note","value":"moved"}},
+    {"call":{"name":"viewEvent","payload":{"generation":1,"event":"data:other","data":{"key":"note"},"surface":"probe-surface"}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":"$ts-us-1","mono_ns":"$mono-ns-1","start":"$page-identity","level":"info","event":"workbench.log.gated","fields":{"class":"call","level":"debug","count":4}}]}}},
+    {"reply":{"result":null}}
+  ]
+}

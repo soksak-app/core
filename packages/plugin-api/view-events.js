@@ -20,7 +20,8 @@ const statusData = (name, surface, value) => (surface === undefined ? { name, va
  *                 resolves with the off function
  *     settings    settings(fn): registers fn(values) for the changes of the settings of the plugin, as runtime.settings.on does;
  *                 resolves with the off function
- *     data        data(fn): registers fn(key) for the changes of the project data of the plugin for the start project of the view;
+ *     data        data(plugin, fn): registers fn(key) for the changes of the project data of the plugin for the start project of the view, the plugin
+ *                 of the view when plugin is undefined and a dependency of it otherwise;
  *                 resolves with the off function
  *     logLevels   {read(), on(fn)}: read() returns the stored level of each class {<class>: <level>}, and on(fn) registers fn for each
  *                 change of the policy in force; on resolves with the off function
@@ -42,7 +43,7 @@ const statusData = (name, surface, value) => (surface === undefined ? { name, va
  *   that follow. The surface modules give an emitEvent of the level debug and a dispatch of an ErrorEvent, which hands an
  *   exception of a listener to the error event of the window instead of throwing it.
  *
- * Returns {native(name), sidecarMessage(id, name), sidecarFailure(id), textSize(), settings(), data(), logLevels(), statusWatch(name, surface),
+ * Returns {native(name), sidecarMessage(id, name), sidecarFailure(id), textSize(), settings(), data(plugin), logLevels(), statusWatch(name, surface),
  * statusUnwatch(name, surface), idle(), restart(), close()}. A subscription call resolves with null, and a second call for the same name or id registers
  * nothing; a status watch is keyed by its name and its surface.
  * restart() ends current subscriptions and invalidates pending deliveries while allowing the new document to subscribe again. An unwatch
@@ -152,10 +153,12 @@ export function createViewSubscriptions({ native, sidecar, textSize, settings, d
       });
     },
     // A change of a key of the project data is pushed as the event data with {key}; the view reads the value with runtime.data.get.
-    data() {
-      return subscribe("data", () => {
+    // data(plugin) follows the plugin's own data when plugin is undefined (event data), or the data of a dependency of the view (event data:<plugin>).
+    data(plugin) {
+      const event = plugin === undefined ? "data" : `data:${plugin}`;
+      return subscribe(event, () => {
         const owner = generation;
-        return data((key) => forward("data", { key }, owner));
+        return data(plugin, (key) => forward(event, { key }, owner));
       });
     },
     // The stored levels are read again at each change of the policy, and only levels that differ from the last are pushed.

@@ -263,7 +263,7 @@ test("a settings subscription is registered once and pushes each change of the s
 
 test("a data subscription is registered once and pushes the key of each change of the project data", async () => {
   const { subs } = open("data", () => ({
-    data: (listener) => Promise.resolve(onDataChange((project, plugin, key) => { if (plugin === "probe") listener(key); })),
+    data: (owner, listener) => Promise.resolve(onDataChange((project, plugin, key) => { if (plugin === (owner ?? "probe")) listener(key); })),
   }));
   assert.equal(await viewCall(subs, "runtime.data.on", () => subs.data()), null);
   assert.equal(await viewCall(subs, "runtime.data.on", () => subs.data()), null, "a second subscription did not reply null");

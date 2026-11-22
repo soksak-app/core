@@ -474,9 +474,11 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
     // The surface runtime returns the off function at once; the view subscriptions take a promise of it (@soksak/plugin-api view-events.js).
     textSize: (listener) => Promise.resolve(context.runtime.textSize.on(listener)),
     settings: (listener) => Promise.resolve(context.runtime.settings.on(listener)),
-    // The changes of the project data of the plugin for the start project of the view (docs/spec/plugins.md#project-data).
-    data: (listener) => Promise.resolve(onDataChange((project, plugin, key) => {
-      if (plugin === surface.pluginId && project === viewStartProjectOf(surface.surfaceId)?.id) listener(key);
+    // The changes of the project data of the plugin for the start project of the view: of the plugin of the view when owner is undefined, and
+    // of a dependency of the plugin otherwise (docs/spec/plugins.md#project-data).
+    data: (owner, listener) => Promise.resolve(onDataChange((project, plugin, key) => {
+      // default: a listener without an owner follows the data of its own plugin.
+      if (plugin === (owner ?? surface.pluginId) && project === viewStartProjectOf(surface.surfaceId)?.id) listener(key);
     })),
     // The value of a status of the view: the registry follows the status and reports each value to the listener. A status that the
     // exposure declares names no status of the view, so the declaration is checked before the observation (view-answer.js of @soksak/plugin-api).
@@ -586,7 +588,7 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
         sidecarFailure: (id) => subscriptions.sidecarFailure(id),
         textSize: () => subscriptions.textSize(),
         settings: () => subscriptions.settings(),
-        data: () => subscriptions.data(),
+        data: (plugin) => subscriptions.data(plugin),
         logLevels: () => subscriptions.logLevels(),
         statusWatch: (name, watched) => {
           if (!registry.declared("status", name)) throw new Error(`view call runtime.status.watch ${name} is not a declared status`);

@@ -33,7 +33,8 @@ const KINDS = Object.values(EXPOSE_KINDS);
  *
  *     plugin, surface   the plugin id and the surface id of the view (required)
  *     declarations      the exposure of the plugin, {status, commands, element} as lists of {name}
- *     dependencies      the plugins that the plugin lists in dependencies: {plugin: {status: [{name}]}}, with the statuses each declares
+ *     dependencies      the plugins that the plugin lists in dependencies: {plugin: {status: [{name}], data: {key: {schema, default}}, values: {key: value}}},
+ *                       with the statuses and the project data each declares, and the values of its data for the start project
  *     contributions     the installed plugins {id, package, version, manifest}, from which the contributions of the view resolve
  *     surfaces          [{surface, plugin}]: the surfaces that the window holds
  *     sidecars          the sidecar names that the plugin declares
@@ -103,6 +104,7 @@ export function createTestHost(fixtures) {
   const coreDeclared = declarationMap({ status: core.status.map((name) => ({ name })), commands: core.commands.map((name) => ({ name })) });
   // default: a fixture without dependencies lists no plugin in dependencies, so the view follows no status of another plugin.
   const dependencies = fixtures.dependencies ?? {};
+  // default: a dependency fixture without a status list declares no status.
   const dependencyDeclared = declarationMap({ status: Object.values(dependencies).flatMap((entry) => entry.status ?? []) });
   // default: a name is declared when the plugin, core or a dependency of the plugin declares it.
   const declares = (kind, name) => pluginDeclared.has(declarationKey(kind, name)) || coreDeclared.has(declarationKey(kind, name)) || dependencyDeclared.has(declarationKey(kind, name));
@@ -162,11 +164,36 @@ export function createTestHost(fixtures) {
   const declaredData = fixtures.data ?? {};
   const stores = new Map();
   const dataListeners = new Set();
+  // The listeners of the changes of the data of each dependency, by plugin id.
+  const dependencyDataListeners = new Map();
   // The number of reads of each key by the view, which fixtures.onDataRead receives.
   const dataReads = new Map();
-  const storeOf = (project) => {
+  // The stored values of the plugin and of each dependency for a project; a dependency starts with the values of its fixture.
+  const storeOf = (project, owner = plugin) => {
     if (!stores.has(project.id)) stores.set(project.id, new Map());
-    return stores.get(project.id);
+    const byOwner = stores.get(project.id);
+    // default: a dependency fixture without values starts with empty project data.
+    if (!byOwner.has(owner)) byOwner.set(owner, new Map(Object.entries(owner === plugin ? {} : dependencies[owner]?.values ?? {})));
+    return byOwner.get(owner);
+  };
+  // A change of a dependency's data as its own view makes it: the value is checked against the declaration of the dependency, stored,
+  // and each listener of the changes of that dependency is called with the key.
+  const writeDependencyData = (project, owner, key, value) => {
+    // default: a dependency fixture without data declares no key, which checkProjectData refuses.
+    storeOf(project, owner).set(key, checkProjectData(owner, dependencies[owner]?.data ?? {}, key, value));
+    for (const listener of [...listenersOf(dependencyDataListeners, owner)]) listener(key);
+  };
+  // The data of a dependency for a project, which the view reads and does not write.
+  const dependencyDataOf = (project, owner) => {
+    // default: a dependency fixture without data declares no key.
+    const declared = dependencies[owner]?.data ?? {};
+    return {
+      declares: (key) => Object.hasOwn(declared, key),
+      get: (key) => {
+        if (!Object.hasOwn(declared, key)) throw new Error(`${owner} data ${key} is not declared`);
+        return storeOf(project, owner).has(key) ? storeOf(project, owner).get(key) : structuredClone(declared[key].default);
+      },
+    };
   };
   // A write of the project data, as any view makes it: the value is checked against its declaration, stored, recorded in observed.data,
   // and each listener of the data is called with the key.
@@ -177,7 +204,10 @@ export function createTestHost(fixtures) {
     for (const listener of [...dataListeners]) listener(key);
   };
   const dataOf = (project, owner) => {
-    if (owner !== plugin) throw new Error(`data of ${owner} is not served to ${plugin}`);
+    if (owner !== plugin) {
+      if (!Object.hasOwn(dependencies, owner)) throw new Error(`data of ${owner} is not served to ${plugin}`);
+      return dependencyDataOf(project, owner);
+    }
     const current = (key) => (storeOf(project).has(key) ? storeOf(project).get(key) : declaredData[key]?.default);
     const write = (key, value) => writeData(project, key, value);
     return {
@@ -266,7 +296,7 @@ export function createTestHost(fixtures) {
     sidecar,
     textSize: (listener) => subscribeTo(textSizeListeners, listener),
     settings: (listener) => subscribeTo(settingListeners, listener),
-    data: (listener) => subscribeTo(dataListeners, listener),
+    data: (owner, listener) => subscribeTo(owner === undefined ? dataListeners : listenersOf(dependencyDataListeners, owner), listener),
     logLevels: { read: () => logLevelValues, on: (listener) => subscribeTo(logListeners, listener) },
     // A status value is delivered when the watch starts, if the value is present; each later value comes from change.status.
     status: (name, watched, listener) => {
@@ -371,7 +401,7 @@ export function createTestHost(fixtures) {
         sidecarFailure: (id) => subscriptions.sidecarFailure(id),
         textSize: () => subscriptions.textSize(),
         settings: () => subscriptions.settings(),
-        data: () => subscriptions.data(),
+        data: (owner) => subscriptions.data(owner),
         logLevels: () => subscriptions.logLevels(),
         statusWatch: (name, watched) => {
           if (!declares("status", name)) throw new Error(`view call runtime.status.watch ${name} is not a declared status`);
@@ -448,6 +478,10 @@ export function createTestHost(fixtures) {
     data(key, value) {
       if (!fixtures.project) throw new TypeError("change.data requires the start project of the view");
       writeData(fixtures.project, key, value);
+    },
+    dependencyData(owner, key, value) {
+      if (!fixtures.project) throw new TypeError("change.dependencyData requires the start project of the view");
+      writeDependencyData(fixtures.project, owner, key, value);
     },
     leftOut(value) {
       if (typeof value !== "boolean") throw new TypeError("change.leftOut requires true or false");

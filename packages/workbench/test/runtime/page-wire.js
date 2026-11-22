@@ -31,7 +31,7 @@ const SHAPE = {
   others: {
     change(change, where, fail, only) {
       if (!Object.hasOwn(CHANGE_MEMBERS, change.state)) fail(`${where} change must name a state of ${Object.keys(CHANGE_MEMBERS).join(", ")}`);
-      only(["state", "value", "name", "surface", "key", "view"]);
+      only(["state", "value", "name", "surface", "key", "view", "plugin"]);
       if (!("value" in change)) fail(`${where} change must have a value`);
       for (const member of CHANGE_MEMBERS[change.state]) {
         if (typeof change[member] !== "string" || change[member] === "") fail(`${where} change ${change.state} must name its ${member}`);

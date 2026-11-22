@@ -1026,6 +1026,23 @@ test("published view bridge cases match calls, replies, events, and refusals", a
   }
 });
 
+test("runtime.data.get and runtime.data.on name a dependency's plugin, and its changes arrive under data:<plugin>", async (t) => {
+  const { posted, host } = setup(t);
+  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const read = runtime.data.get("note", { plugin: "other" });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.data.get", params: { key: "note", plugin: "other" } });
+  host({ sok: 1, id: 1, result: "from other" });
+  assert.equal(await read, "from other");
+  const seen = [];
+  const subscribed = runtime.data.on((change) => seen.push(change.key), { plugin: "other" });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 2, command: "runtime.data.on", params: { plugin: "other" } });
+  host({ sok: 1, id: 2, result: null });
+  await subscribed;
+  host({ sok: 1, event: "data:other", data: { key: "note" } });
+  host({ sok: 1, event: "data", data: { key: "marks" } });
+  assert.deepEqual(seen, ["note"], "a change of the own data does not reach a listener of a dependency");
+});
+
 test("runtime.data.on subscribes once and passes the key of each change of the project data to every listener", async (t) => {
   const { posted, host } = setup(t);
   const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });

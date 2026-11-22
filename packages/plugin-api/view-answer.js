@@ -306,8 +306,13 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
       const project = startProject();
       if (project === null) throw new Error(`view call ${command} requires a project`);
       if (typeof fields.key !== "string" || fields.key === "") throw new TypeError(`view call ${command} requires a non-empty key`);
-      const data = runtime.data.of(project, plugin);
-      if (!data.declares(fields.key)) throw new Error(`view call ${command} ${fields.key} is not a data key of ${plugin}`);
+      // A write names no plugin, whatever the plugin is: a view changes the project data of its own plugin only.
+      if (command !== "runtime.data.get" && Object.hasOwn(fields, "plugin")) {
+        throw new Error(`view call ${command} ${fields.plugin} is read-only for ${plugin}: a view changes only the project data of its own plugin`);
+      }
+      const owner = dataOwnerOf(command, fields.plugin, plugin, runtime.dependsOn);
+      const data = runtime.data.of(project, owner);
+      if (!data.declares(fields.key)) throw new Error(`view call ${command} ${fields.key} is not a data key of ${owner}`);
       if (command === "runtime.data.get") return data.get(fields.key);
       if (command === "runtime.data.replace") {
         if (!Object.hasOwn(fields, "base")) throw new TypeError(`view call ${command} requires base`);
@@ -316,10 +321,15 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
       await data.set(fields.key, fields.value);
       return null;
     }
-    case "runtime.data.on":
+    // A subscription to the project data of the plugin, or of a dependency that the call names (docs/spec/plugins.md#project-data).
+    case "runtime.data.on": {
       if (startProject() === null) throw new Error(`view call ${command} requires a project`);
-      await runtime.subscribe.data();
+      // default: a subscription without params, or with null as runtime.data.on sends it, names no plugin.
+      const named = params === null || params === undefined ? undefined : objectOf(command, params).plugin;
+      const owner = dataOwnerOf(command, named, plugin, runtime.dependsOn);
+      await runtime.subscribe.data(owner === plugin ? undefined : owner);
       return null;
+    }
     case "runtime.links.open":
       if (typeof params !== "string" || params === "") throw new TypeError(`view call ${command} requires a non-empty URL`);
       await runtime.links.open(params);
@@ -523,6 +533,18 @@ function statusNameOf(command, name, plugin, dependsOn) {
     throw new Error(`view call ${command} ${name} is neither a core status nor a status of ${plugin} or of its dependencies`);
   }
   return name;
+}
+
+/**
+ * The plugin whose project data a data call reads or follows (docs/spec/plugins.md#project-data): the plugin of the view when the call
+ * names none (named is undefined), and otherwise the dependency that it names, which the plugin of the view lists in its dependencies
+ * (dependsOn(plugin, owner)). The plugin of the view itself is refused as no dependency, and so is an empty or non-text name.
+ */
+function dataOwnerOf(command, named, plugin, dependsOn) {
+  if (named === undefined) return plugin;
+  if (typeof named !== "string" || named === "") throw new TypeError(`view call ${command} requires a non-empty plugin`);
+  if (named === plugin || !dependsOn(plugin, named)) throw new Error(`view call ${command} ${named} is not a dependency of ${plugin}`);
+  return named;
 }
 
 /** The params of a call that takes named fields. Any other value is refused. */

@@ -111,6 +111,11 @@ function requireDataKey(command, key) {
   if (typeof key !== "string" || key === "") throw new TypeError(`${command} requires a non-empty key`);
 }
 
+/** A plugin that a data call names: the dependency whose project data a view reads or follows (docs/spec/plugins.md#project-data). */
+function requireDataPlugin(command, plugin) {
+  if (typeof plugin !== "string" || plugin === "") throw new TypeError(`${command} requires a non-empty plugin`);
+}
+
 /**
  * Creates the calls of a view over one view channel. The calls are createCalls(), sending through the channel. The channel has one
  * listener, which passes every message to the calls.
@@ -274,14 +279,22 @@ export function createViewBridge({ handler, report }) {
     // The project data of the plugin for the project of the view (docs/spec/plugins.md#project-data): get(key) resolves with the stored
     // value or the default, and set(key, value) resolves with null after the store accepted the write. on(listener) registers listener({key})
     // for each change of a key, by a view of this window or by another window, under one subscription of the page.
+    // get(key, {plugin}) and on(listener, {plugin}) name a dependency of the plugin of the view, whose project data they read and follow under
+    // the event data:<plugin>; a set or a change names no plugin, because a view changes only the project data of its own plugin.
     // change(key, next) stores what next makes of the value it receives, and resolves with the value that stands: another write
     // between the read and the write starts it over from a new read, next returning undefined writes nothing, and a read that
     // no writer changed or too many other writers fail it.
     data: {
-      on: (listener) => listen("data", () => calls.request("runtime.data.on", null), listener),
-      get: (key) => {
+      on: (listener, { plugin } = {}) => {
+        if (plugin === undefined) return listen("data", () => calls.request("runtime.data.on", null), listener);
+        requireDataPlugin("runtime.data.on", plugin);
+        return listen(`data:${plugin}`, () => calls.request("runtime.data.on", { plugin }), listener);
+      },
+      get: (key, { plugin } = {}) => {
         requireDataKey("runtime.data.get", key);
-        return calls.request("runtime.data.get", { key });
+        if (plugin === undefined) return calls.request("runtime.data.get", { key });
+        requireDataPlugin("runtime.data.get", plugin);
+        return calls.request("runtime.data.get", { key, plugin });
       },
       set: (key, value) => {
         requireDataKey("runtime.data.set", key);
@@ -390,7 +403,7 @@ export function createViewBridge({ handler, report }) {
   };
   // The key of the listeners of a host event: a sidecar event has the session id in its data, and a theme has one key.
   const keyOf = (message) => {
-    if (["theme", "textSize", "settings", "data", "log.levels"].includes(message.event)) {
+    if (["theme", "textSize", "settings", "data", "log.levels"].includes(message.event) || message.event.startsWith("data:")) {
       return message.event;
     }
     if (message.event === "sidecar.message" || message.event === "sidecar.failure") return `${message.event}:${message.data?.id}`;

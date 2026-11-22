@@ -172,7 +172,7 @@ test("a page module reads the bare globals of a browser page from the window of 
 test("each change of the window after open reaches the page subscriptions through view.change", { timeout: 5000 }, async () => {
   const view = await openView("probe", { start: START, declarations: PROBE, host: fixtures({ declarations: PROBE }) });
   try {
-    assert.deepEqual(Object.keys(view.change).sort(), ["data", "frame", "leftOut", "logLevels", "run", "settings", "status", "textSize"]);
+    assert.deepEqual(Object.keys(view.change).sort(), ["data", "dependencyData", "frame", "leftOut", "logLevels", "run", "settings", "status", "textSize"]);
     const page = await view.load(PAGE_CHANGES);
     await page.ready;
     await view.change.settings({ theme: "light" });
