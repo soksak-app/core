@@ -592,10 +592,10 @@ export async function openOnlyTab(s, plugin) {
   const card = cards[0].id;
   const { tab } = await s.run("core.card.add-tab", { card, plugin });
   for (const { tabs } of cards) {
-    for (const { id } of tabs ?? []) {
-      if (id === tab) continue;
-      const { closed } = await s.run("core.tab.close", { tab: id });
-      if (closed !== true) throw new Error(`core.tab.close kept tab ${id} of window ${s.window} (closed ${closed})`);
+    for (const { tab: other } of tabs ?? []) {
+      if (other === tab) continue;
+      const { closed } = await s.run("core.tab.close", { tab: other });
+      if (closed !== true) throw new Error(`core.tab.close kept tab ${other} of window ${s.window} (closed ${closed})`);
     }
   }
   await s.until("core.surfaces", (list) => list.some((surface) => surface.surface === tab && surface.status?.phase === "ready"),
