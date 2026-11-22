@@ -173,6 +173,26 @@ Host는 작업을 한 번에 하나만 실행한다. 다른 작업이 실행 중
 
 `plugins-changed`를 받은 창은 워크벤치를 저장된 상태에서 다시 시작해 `installed.json`이 나열한 plugin을 불러온다. Wails와 Tauri 호스트는 메인 페이지를 다시 불러오고, mygo 호스트는 native 워크벤치를 다시 만든다. 다시 시작하기 전에 창의 수정된 탭마다 그 탭에서 선택 layer `<name> 탭에 저장하지 않은 변경이 있습니다`로 묻는다. 저장하고 적용(`surface.save`가 있을 때만)은 저장 명령을 실행하고 탭이 더 이상 수정되지 않았으면 계속한다. 저장하지 않고 적용은 계속하고 새 시작으로 변경을 버린다. 적용하지 않기나 layer 닫기는 그 창의 워크벤치를 유지한다. 실패한 저장은 탭을 닫을 때처럼([plugins](plugins.ko.md)) 그 오류를 탭의 오류로 보고하고 워크벤치를 유지한다. 유지한 워크벤치: 그 창의 plugin은 불러온 그대로이고, 바뀐 plugin의 카드는 `core.plugins.apply`가 같은 질문 뒤에 워크벤치를 다시 시작할 때까지 상태 `reload`를 보인다. `core.plugins.apply`는 새 시작 전에 `{reloaded}`로 답한다: mygo 워크벤치는 apply가 다시 시작하기로 정하기 전에 전달된 요청의 답을, `core.plugins.apply`의 답을 포함해, host가 모두 받은 뒤 다시 시작하고, 그 뒤에 전달된 요청은 시작을 늦추지 않으며 시작이 그것을 1003으로 끝낸다([page 끝](hosts.ko.md#프로세스-생명주기)). 새 시작이 실패한 창은 오류 표시로 그 오류를 보인다. 워크벤치는 project를 initialise한 뒤에만 `plugins-changed`를 따른다. apply가 project를 저장하기 때문이다. 워크벤치는 먼저 구독한 뒤 plugin 상태를 한 번 읽는다. 설치된 plugin이 불러온 plugin과 다르면 그 변경을 적용하므로, 구독 전의 변경도 적용되고 이후의 변경은 event를 보낸다. apply는 한 번에 하나만 실행된다. 실행 중인 apply 동안의 event는 apply 하나를 더 예약하고, 그 apply는 앞의 apply가 끝난 뒤 상태를 다시 읽고 실행되므로, 새 변경을 앞의 상태를 읽은 apply가 맡지 않는다.
 
+### 시작 때 업데이트
+
+Host가 시작할 때마다 registry index를 읽은 뒤 한 번, 실행 중인 core가 설치된 그대로는 쓸 수 없는 설치 plugin을 업데이트한다. 설치 plugin이 다음 중 하나에 해당하면 후보다.
+
+- 설치된 `plugin.json`이 reader의 `validateManifest`에 거부된다([plugin release](#plugin-release)의 검사).
+- 설치된 version이 받아들이는 가장 새 version보다 오래되었다.
+
+받아들이는 가장 새 version은 index의 version 가운데 취소되지 않았고 `engines.soksak`이 실행 중인 core를 포함하는 가장 새 것이다. Index가 나열하지 않은 version을 설치한 plugin은 거부된 경우에만 후보다.
+
+시작은 plugin id 순서로 다음을 실행한다.
+
+- Registry가 설정되지 않았으면 아무것도 업데이트하지 않고 info record `plugins: no registry is configured`를 남긴다.
+- Index를 읽지 못하면 아무것도 업데이트하지 않고 error record `plugins update: <error>`를 남긴다.
+- 거부된 plugin에 설치된 version보다 새롭고 받아들여지는 version이 없으면 그대로 두고 error record `plugin update <id>: <reason>`를 남긴다. `<reason>`은 설치된 `plugin.json`에 대한 reader의 오류 문장이다.
+- 그 밖의 후보는 그 id에 대해 [pluginsRun](#애플리케이션-안의-plugin-작업)의 동작 `update`를 실행한다. 이는 `core.plugins.update`와 같은 설치 호출, 같은 [변경 적용](#변경-적용), 같은 `plugins-changed` event다. 성공하면 info 수준의 event `host.plugins.update`(`plugin`, `from`, `to`)를 남기고, 실패하면 error record `plugin update <id>: <error>`를 남긴 뒤 다음 후보를 실행한다.
+
+시작 업데이트의 실패는 시작 업데이트가 끝날 때까지 host가 보관하며, `pluginsState`는 이를 `startUpdate`로 알린다. `{where, text}` 목록이며 `where`는 각 기록의 자리(`plugins update` 또는 `plugin update <id>`), `text`는 그 내용이다. 각 창은 상태를 읽을 때 `startUpdate`의 항목마다 오류 표시로 보이므로, 사람은 애플리케이션 log 없이도 실패를 본다. 시작 업데이트가 도는 동안 host가 종료하면, 시작 업데이트는 다음 plugin을 시작하지 않고, 아직 `plugins/installed.json`을 쓰지 않은 설치는 아무것도 쓰지 않는다. 종료가 시작된 뒤에는 release를 풀지 않고, `installed.json`을 쓰지 않으며, 적용 단계를 실행하지 않는다. 종료 전에 쓴 `installed.json`은 쓴 그대로 남고, 시작 업데이트는 그 중단을 error record `plugin update <id>: the host is shutting down`으로 남긴다.
+
+시작은 다른 plugin 작업이 실행 중이어도 후보를 거부하지 않고 그 작업이 끝날 때까지 기다린다. 시작은 자기 thread에서 실행하므로 창은 registry를 기다리지 않고 열린다. 설치된 plugin이 모두 받아들여지고 받아들여지는 가장 새 version을 가지면 다시 시작해도 아무것도 바뀌지 않는다. Index를 읽는 실패를 포함한 각 실패는 애플리케이션 log의 error record이며, registry 오류는 [Plugin 화면](#plugin-화면)이 보이는 대로 보인다.
+
 ## Plugin 화면
 
 창의 라이브러리 화면([프로젝트](projects.ko.md#프로젝트-식별))에는 머리줄 앞의 탭으로 고르는 두 페이지, 프로젝트와 플러그인이 있다. 탭은 `projects` 또는 `plugins`로 `core.library.page {page}`를 실행한다. 플러그인이 plugin 화면이다. 이 화면은 plugin을 그 설명과 함께 나열하고 plugin 작업을 실행한다. 설정 창은 불러온 plugin의 설정만 담는다([설정 창](settings.ko.md#플러그인)). `core.plugins.browse`는 설정 창이 열려 있으면 닫고, 창이 작업 화면을 보이면 라이브러리를 보이고, 플러그인을 고른다. `core.projects.browse`는 프로젝트를 고른다. 창은 작업 화면을 보이는 동안에도 plugin 검색어를 유지한다.

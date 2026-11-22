@@ -28,6 +28,8 @@ type PluginsState struct {
 	Installed sok.InstalledState `json:"installed"`
 	FirstRun  bool               `json:"firstRun"`
 	Starter   *sok.StarterJob    `json:"starter"`
+	// StartUpdate lists the failures of the update at start that the host keeps (docs/spec/installation.md#update-at-start).
+	StartUpdate []sok.StartFailure `json:"startUpdate,omitempty"`
 }
 
 // PluginsStatus is the value of `core.plugins`.
@@ -229,6 +231,8 @@ type PluginOperations struct {
 	failure   *PluginFailure
 	operation *PluginOperation
 	outdated  []OutdatedSidecar
+	// startUpdate holds the failures of the update at start that the last read of the state reported.
+	startUpdate []sok.StartFailure
 }
 
 // NewPluginOperations returns the operations of a window over its host calls.
@@ -238,6 +242,9 @@ func NewPluginOperations(calls *Calls, begin BeginOperation, loaded func() []Loa
 
 // State returns the plugin state of the host, and nil before it was read.
 func (p *PluginOperations) State() *PluginsState { return p.state }
+
+// StartFailures returns the failures of the update at start that the last read of the state reported.
+func (p *PluginOperations) StartFailures() []sok.StartFailure { return p.startUpdate }
 
 // Failure returns why the state or the index could not be read, and nil when it could.
 func (p *PluginOperations) Failure() *PluginFailure { return p.failure }
@@ -252,6 +259,7 @@ func (p *PluginOperations) Refresh(done func()) {
 			var state PluginsState
 			if state, err = decode[PluginsState](value); err == nil {
 				p.state = &state
+				p.startUpdate = state.StartUpdate
 				if state.Index != nil && state.Index.Error != nil {
 					p.failure = &PluginFailure{Kind: "index", Message: *state.Index.Error}
 				}

@@ -3,10 +3,13 @@
 //! runs at a time, and it announces the change after it.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, TryLockError};
 
 use serde_json::Value;
-use soksak_sok::plugins::{self, PluginActionResult, PluginsState, StarterJob, StarterJobRequest};
+use soksak_sok::plugins::{
+    self, PluginActionResult, PluginsState, StarterJob, StarterJobRequest, StartFailure,
+};
 
 /// The arguments of the pluginsRun call. plugin is received without a fixed type so that a value that is not a string
 /// is rejected.
@@ -45,6 +48,10 @@ pub struct Plugins {
     core: String,
     platform: String,
     running: Mutex<()>,
+    /// Set when the shutdown of the host begins; the update at start checks it before each step that changes the installation.
+    stopped: AtomicBool,
+    /// The failures of the update at start, which the state reports (docs/spec/installation.md#update-at-start).
+    start_failures: Mutex<Vec<StartFailure>>,
     /// Applies an operation to the sidecars (docs/spec/installation.md#applying-a-change).
     apply: Box<dyn Fn() -> Result<(), String> + Send + Sync>,
     changed: Box<dyn Fn(Changed) + Send + Sync>,
@@ -62,6 +69,8 @@ impl Plugins {
             core: soksak_sok::version::CORE_VERSION.to_string(),
             platform: soksak_sok::current_platform()?,
             running: Mutex::new(()),
+            stopped: AtomicBool::new(false),
+            start_failures: Mutex::new(vec![]),
             apply,
             changed,
         })
@@ -74,7 +83,13 @@ impl Plugins {
 
     /// Returns the registry address, the checked index and the installation state.
     pub fn state(&self) -> Result<PluginsState, String> {
-        plugins::read_plugins_state(&self.config_dir, &self.core)
+        let mut state = plugins::read_plugins_state(&self.config_dir, &self.core)?;
+        state.start_update = self
+            .start_failures
+            .lock()
+            .map_err(|error| format!("plugin operation state: {error}"))?
+            .clone();
+        Ok(state)
     }
 
     /// Sets the registry index like sok registry use <index> and returns its output.
@@ -160,5 +175,159 @@ impl Plugins {
         });
         applied.map_err(|error| format!("apply {action} {plugin}: {error}"))?;
         Ok(result)
+    }
+}
+
+/// The outcome of one step of the update at start (docs/spec/installation.md#update-at-start). `plugin` is the id of the plugin
+/// that the step concerns; it is empty for a step about the registry. `error` is the failure of the step, None when the plugin was
+/// updated from `from` to `to`. A value with an empty `plugin` and no `error` reports that no registry is configured.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct StartUpdate {
+    pub plugin: String,
+    pub from: String,
+    pub to: String,
+    pub error: Option<String>,
+}
+
+impl Plugins {
+    /// Begins the shutdown of the host: the update at start starts no further plugin and changes no installation step after
+    /// this call (docs/spec/installation.md#update-at-start).
+    pub fn stop(&self) {
+        self.stopped.store(true, Ordering::SeqCst);
+    }
+
+    /// Updates the installed plugins that the running core refuses or that are older than the newest accepted version
+    /// (docs/spec/installation.md#update-at-start). Each update runs the same installer call, apply step and notification as the
+    /// plugin operation of the page, and it waits for another plugin operation to end.
+    pub fn update_at_start(&self) -> Vec<StartUpdate> {
+        let index = match soksak_sok::plugins::read_registry_if_set(&self.config_dir) {
+            Ok(Some(index)) => index,
+            Ok(None) => return vec![StartUpdate::default()],
+            Err(error) => return vec![failed_start("", error)],
+        };
+        let (state, manifests) = match soksak_sok::plugins::read_installed_manifests(&self.config_dir)
+        {
+            Ok(read) => read,
+            Err(error) => return vec![failed_start("", error)],
+        };
+        let outdated = match soksak_sok::plugins::outdated_plugins(&index, &state, &manifests, &self.core)
+        {
+            Ok(outdated) => outdated,
+            Err(error) => return vec![failed_start("", error)],
+        };
+        let results: Vec<StartUpdate> = outdated
+            .into_iter()
+            .map(|item| {
+                if item.candidate.is_empty() {
+                    StartUpdate {
+                        plugin: item.id,
+                        from: item.installed,
+                        to: String::new(),
+                        error: Some(item.refused),
+                    }
+                } else if self.stopped.load(Ordering::SeqCst) {
+                    StartUpdate {
+                        plugin: item.id,
+                        from: item.installed,
+                        to: String::new(),
+                        error: Some(STOPPING.to_string()),
+                    }
+                } else {
+                    self.update_one_at_start(&item)
+                }
+            })
+            .collect();
+        self.keep_start_failures(&results);
+        results
+    }
+
+    /// Keeps the failures among the results of this update at start for the state. A failure of the registry has the place
+    /// plugins update, and a failure of a plugin has the place plugin update <id>.
+    fn keep_start_failures(&self, results: &[StartUpdate]) {
+        let failures: Vec<StartFailure> = results
+            .iter()
+            .filter_map(|result| {
+                let error = result.error.clone()?;
+                let r#where = if result.plugin.is_empty() {
+                    "plugins update".to_string()
+                } else {
+                    format!("plugin update {}", result.plugin)
+                };
+                Some(StartFailure {
+                    r#where,
+                    text: error,
+                })
+            })
+            .collect();
+        if let Ok(mut kept) = self.start_failures.lock() {
+            *kept = failures;
+        }
+    }
+
+    /// Runs the update of one outdated plugin as the plugin operation of the page does: the installer, the apply step, then
+    /// the notification.
+    fn update_one_at_start(&self, item: &soksak_sok::plugins::Outdated) -> StartUpdate {
+        let mut result = StartUpdate {
+            plugin: item.id.clone(),
+            from: item.installed.clone(),
+            to: String::new(),
+            error: None,
+        };
+        let applied = {
+            let _running = match self.running.lock() {
+                Ok(guard) => guard,
+                Err(error) => {
+                    result.error = Some(format!("plugin operation state: {error}"));
+                    return result;
+                }
+            };
+            if let Err(error) = plugins::update_plugin_unless(
+                &self.config_dir,
+                &item.id,
+                &self.core,
+                &self.platform,
+                &|| self.stopped.load(Ordering::SeqCst),
+            ) {
+                result.error = Some(error);
+                return result;
+            }
+            // The apply step changes the sidecars of the installation, so it does not run after the shutdown began.
+            if self.stopped.load(Ordering::SeqCst) {
+                result.error = Some(STOPPING.to_string());
+                return result;
+            }
+            (self.apply)()
+        };
+        (self.changed)(Changed {
+            action: "update".to_string(),
+            plugin: item.id.clone(),
+        });
+        if let Err(error) = applied {
+            result.error = Some(format!("apply update {}: {error}", item.id));
+            return result;
+        }
+        match plugins::read_installed(&self.config_dir) {
+            Ok(state) => {
+                result.to = state
+                    .plugins
+                    .get(&item.id)
+                    .map(|plugin| plugin.version.clone())
+                    .unwrap_or_default();
+            }
+            Err(error) => result.error = Some(error),
+        }
+        result
+    }
+}
+
+/// The failure of an update at start that the shutdown of the host ended before it began.
+const STOPPING: &str = "the host is shutting down";
+
+/// A failed step of the update at start that concerns the registry or the installation state, not one plugin.
+fn failed_start(plugin: &str, error: String) -> StartUpdate {
+    StartUpdate {
+        plugin: plugin.to_string(),
+        error: Some(error),
+        ..StartUpdate::default()
     }
 }

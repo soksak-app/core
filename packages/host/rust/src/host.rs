@@ -250,8 +250,36 @@ pub fn manage_start_state(app: &AppHandle) {
 /// exists, without it; a panic that waits for the writer ends its wait there (docs/spec/hosts.md#process-lifecycle).
 pub fn start_endpoint(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let started = open_endpoint(app);
+    // The update at start follows the open event log (docs/spec/installation.md#update-at-start).
+    if started.is_ok() {
+        start_plugin_updates(app);
+    }
     crate::routine::notify_start_ended();
     started
+}
+
+/// Runs the update of the installed plugins on its own thread, so the start does not wait for the registry, and stores each
+/// outcome in the event log: a failure is an error record and an update is the event host.plugins.update.
+fn start_plugin_updates(app: &AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        for update in app.state::<plugins::Plugins>().update_at_start() {
+            if update.plugin.is_empty() {
+                match update.error {
+                    None => application_log::log_info("plugins", "no registry is configured"),
+                    Some(error) => log_error("plugins update", error),
+                }
+            } else if let Some(error) = update.error {
+                log_error(&format!("plugin update {}", update.plugin), error);
+            } else {
+                event_record::emit_host(
+                    crate::event_log::Level::Info,
+                    "host.plugins.update",
+                    serde_json::json!({"plugin": update.plugin, "from": update.from, "to": update.to}),
+                );
+            }
+        }
+    });
 }
 
 /// The steps of [`start_endpoint`].
@@ -628,6 +656,11 @@ pub fn run_event(app: &AppHandle, event: RunEvent) {
             api.prevent_exit();
             return;
         }
+    }
+    // The shutdown ends the update at start: it starts no further plugin and changes no installation step after this
+    // (docs/spec/installation.md#update-at-start).
+    if matches!(event, RunEvent::ExitRequested { .. } | RunEvent::Exit) {
+        app.state::<plugins::Plugins>().stop();
     }
     if let RunEvent::Exit = event {
         // The exit ends the watch of the main thread before its own work on the main thread, and the stop waits for

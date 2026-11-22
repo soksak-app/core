@@ -252,6 +252,10 @@ func Prepare(adapter Framework, assets fs.FS, options Options) (_ *Session, fail
 	host.sidecars = sidecars
 	sidecars.ClosingChanged = host.sidecarsChanged
 	sidecars.ClosingInvalidated = host.notifySidecars
+	// The update at start runs once the event log is open, after the install state is read (docs/spec/installation.md#update-at-start).
+	host.startUpdates()
+	// The shutdown of the host ends the update at start (docs/spec/installation.md#update-at-start).
+	session.cleanups = append(session.cleanups, host.plugins.Stop)
 	return session, nil
 }
 

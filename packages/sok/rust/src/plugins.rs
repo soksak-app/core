@@ -143,6 +143,33 @@ pub struct PluginsState {
     #[serde(rename = "firstRun")]
     pub first_run: bool,
     pub starter: Option<StarterJob>,
+    /// The failures of the update at start that the host keeps (docs/spec/installation.md#update-at-start).
+    #[serde(rename = "startUpdate", skip_serializing_if = "Vec::is_empty")]
+    pub start_update: Vec<StartFailure>,
+}
+
+/// One failure of the update at start: `where` is the place of its record and `text` its content.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct StartFailure {
+    pub r#where: String,
+    pub text: String,
+}
+
+/// The failure of an installation that stop stopped before it changed the configuration folder.
+const STOPPED: &str = "the host is shutting down; the plugin installation is not applied";
+
+/// Updates an installed plugin as the plugin operation does. It checks stop before each step that changes the configuration folder:
+/// the extraction of the releases, the sidecar installation and the write of installed.json. When stop reports true at a check, it
+/// fails with STOPPED, and installed.json keeps the content it had before the call (docs/spec/installation.md#update-at-start).
+/// The release download is not interrupted.
+pub fn update_plugin_unless(
+    config_dir: &Path,
+    id: &str,
+    core: &str,
+    platform: &str,
+    stop: &dyn Fn() -> bool,
+) -> Result<PluginResult, String> {
+    install_plugin_unless(config_dir, id, core, platform, true, stop)
 }
 
 /// The durable snapshot of a starter pack installation.
@@ -200,6 +227,7 @@ pub fn read_plugins_state(config_dir: &Path, core: &str) -> Result<PluginsState,
         installed,
         first_run,
         starter,
+        start_update: vec![],
     })
 }
 
@@ -633,6 +661,18 @@ pub fn install_plugin(
     platform: &str,
     update: bool,
 ) -> Result<PluginResult, String> {
+    install_plugin_unless(config_dir, id, core, platform, update, &|| false)
+}
+
+/// install_plugin with the check of stop before each step that changes the configuration folder (update_plugin_unless).
+fn install_plugin_unless(
+    config_dir: &Path,
+    id: &str,
+    core: &str,
+    platform: &str,
+    update: bool,
+    stop: &dyn Fn() -> bool,
+) -> Result<PluginResult, String> {
     let index = read_registry(config_dir)?;
     let (state, manifests) = read_installed_manifests(config_dir)?;
     if update && !state.plugins.contains_key(id) {
@@ -665,6 +705,9 @@ pub fn install_plugin(
     if !changed {
         return Ok(plugin_result(&state, id));
     }
+    if stop() {
+        return Err(STOPPED.to_string());
+    }
     for changed in &order {
         let Some(data) = releases.get(changed) else {
             continue;
@@ -674,6 +717,9 @@ pub fn install_plugin(
             .map_err(|error| format!("plugin {changed} {} package: {error}", plugin.version))?;
     }
     drop_unnamed_sidecars(&mut state);
+    if stop() {
+        return Err(STOPPED.to_string());
+    }
     for (name, sidecar) in &sidecars {
         let Some(installed) = state
             .sidecars
@@ -689,6 +735,9 @@ pub fn install_plugin(
         )?;
     }
     install::validate_installed(&serde_json::to_value(&state).map_err(|error| error.to_string())?)?;
+    if stop() {
+        return Err(STOPPED.to_string());
+    }
     write_installed(config_dir, &state)?;
     prune_folders(config_dir, &state)?;
     Ok(plugin_result(&state, id))
@@ -1126,4 +1175,81 @@ pub(crate) fn run_plugins(
         release();
     }
     result
+}
+
+/// Reads the index that plugins/registry.json specifies. It is None when the file does not exist, and then no index is read.
+pub fn read_registry_if_set(config_dir: &Path) -> Result<Option<crate::install::Index>, String> {
+    let Some(url) = read_registry_url(config_dir)? else {
+        return Ok(None);
+    };
+    Ok(Some(read_index_at(&url, &Fetcher::default())?.0))
+}
+
+/// An installed plugin that the update at start replaces (docs/spec/installation.md#update-at-start). `candidate` is the newest
+/// accepted version that is newer than the installed one, or empty. `refused` is the reader's error text of the installed plugin.json,
+/// or empty when the reader accepts it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Outdated {
+    pub id: String,
+    pub installed: String,
+    pub candidate: String,
+    pub refused: String,
+}
+
+/// Returns the newest version of the plugin id that is not revoked and whose engines range contains core, or None when no
+/// version is accepted.
+pub fn newest_accepted(index: &crate::install::Index, id: &str, core: &str) -> Option<String> {
+    index
+        .plugins
+        .iter()
+        .filter(|plugin| plugin.id == id)
+        .flat_map(|plugin| plugin.versions.iter())
+        .filter(|item| {
+            !index
+                .revoked
+                .plugins
+                .iter()
+                .any(|revoked| revoked.id == id && revoked.version == item.version)
+                && crate::install::satisfies(core, &item.engines.soksak)
+        })
+        .fold(None, |best: Option<String>, item| match best {
+            Some(best) if !crate::install::newer(&item.version, &best) => Some(best),
+            _ => Some(item.version.clone()),
+        })
+}
+
+/// Lists the installed plugins that the update at start replaces, sorted by id. A plugin is listed when its installed plugin.json
+/// is refused by validate_manifest, and then candidate is empty unless a newer accepted version exists. A plugin whose installed
+/// plugin.json is accepted is listed when the index lists its installed version and newest_accepted is newer.
+pub fn outdated_plugins(
+    index: &crate::install::Index,
+    state: &crate::install::InstalledState,
+    manifests: &BTreeMap<String, InstalledManifest>,
+    core: &str,
+) -> Result<Vec<Outdated>, String> {
+    let mut outdated = vec![];
+    for (id, plugin) in &state.plugins {
+        let manifest = manifests
+            .get(id)
+            .ok_or_else(|| format!("plugin {id} has no installed manifest"))?;
+        let refused = crate::manifest::validate_manifest(&manifest.value)
+            .err()
+            .unwrap_or_default();
+        let candidate = newest_accepted(index, id, core)
+            .filter(|candidate| crate::install::newer(candidate, &plugin.version))
+            .unwrap_or_default();
+        let listed = index.plugins.iter().any(|entry| {
+            entry.id == *id && entry.versions.iter().any(|item| item.version == plugin.version)
+        });
+        if refused.is_empty() && (candidate.is_empty() || !listed) {
+            continue;
+        }
+        outdated.push(Outdated {
+            id: id.clone(),
+            installed: plugin.version.clone(),
+            candidate,
+            refused,
+        });
+    }
+    Ok(outdated)
 }

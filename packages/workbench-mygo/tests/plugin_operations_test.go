@@ -24,14 +24,20 @@ type pluginsHost struct {
 	firstRun bool
 	starter  any
 	outdated []any
-	runs     []string
+	// startUpdate is the list of failures of the update at start that the host reports in pluginsState.
+	startUpdate []map[string]string
+	runs        []string
 	used     []string
 	jobs     []string
 }
 
 func (p *pluginsHost) state(json.RawMessage) (any, error) {
-	return map[string]any{"core": p.core, "registry": p.registry, "index": p.index, "firstRun": p.firstRun, "starter": p.starter,
-		"installed": map[string]any{"format": 1, "plugins": p.plugins, "sidecars": p.sidecars}}, nil
+	state := map[string]any{"core": p.core, "registry": p.registry, "index": p.index, "firstRun": p.firstRun, "starter": p.starter,
+		"installed": map[string]any{"format": 1, "plugins": p.plugins, "sidecars": p.sidecars}}
+	if p.startUpdate != nil {
+		state["startUpdate"] = p.startUpdate
+	}
+	return state, nil
 }
 
 func (p *pluginsHost) run(argument json.RawMessage) (any, error) {
@@ -590,5 +596,31 @@ func TestSurfacesListATabOfAPluginThatIsNotLoadedWithItsPlaceholderReason(t *tes
 	f.settle()
 	if rows := placeholders(); rows["textprobe"]["placeholder"] != "disabled" || rows["boxprobe"]["placeholder"] != "missing" {
 		t.Fatalf("the placeholder rows of a disabled plugin are %v", rows)
+	}
+}
+
+// contract: workbench.plugins.start-update-failure-is-shown
+func TestAFailureOfTheUpdateAtStartIsShownThroughTheErrorDisplay(t *testing.T) {
+	record := func() map[string]any {
+		return map[string]any{"version": "1.0.0", "enabled": true, "sidecars": map[string]string{}}
+	}
+	plugins := &pluginsHost{core: "1.0.0", registry: "file:///registry/index.json", index: registryOf(map[string][]string{"alpha": {"1.0.0"}}),
+		plugins: map[string]map[string]any{"alpha": record()},
+		startUpdate: []map[string]string{{"where": "plugin update alpha", "text": "section browser.dom status is removed"}}}
+	stored := &storedHost{plugins: plugins, installed: `{"plugins":[
+		{"id":"alpha","package":"@scope/plugin-alpha","version":"1.0.0","manifest":{"id":"alpha","name":"알파","description":"alpha","contributes":{}}}]}`}
+	f := startedShell(t, stored)
+	f.pending.drain(t)
+	f.tester.Frame()
+	f.pending.drain(t)
+	// The record of an error holds its place and its text as the fields where and text (events.go record).
+	recorded := f.host.written("workbench.record.error")
+	shown := false
+	for _, event := range recorded {
+		fields, _ := event["fields"].(map[string]any)
+		shown = shown || (fields["where"] == "plugin update alpha" && fields["text"] == "section browser.dom status is removed")
+	}
+	if !shown {
+		t.Fatalf("the shell recorded %v, want the failure of the update at start", recorded)
 	}
 }

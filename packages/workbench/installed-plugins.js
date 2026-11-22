@@ -4,6 +4,7 @@ import { pluginUnits, refusedPlugins } from "./environment.js";
 import { createAppUpdate } from "./app-update.js";
 import { createPluginOperations } from "./plugin-operations.js";
 import { emitEvent } from "./page-log.js";
+import { showError } from "./shown-errors.js";
 
 const listeners = new Set();
 const notify = () => { for (const fn of listeners) fn(); };
@@ -16,6 +17,11 @@ export const appUpdate = createAppUpdate({ host, plugins: () => pluginOperations
 /** Calls fn whenever the plugin operation state changes. */
 export function onPluginOperations(fn) {
   listeners.add(fn);
+}
+
+/** Shows each failure of the update at start that the state read reported through the error display (docs/spec/installation.md#update-at-start). */
+function showStartFailures() {
+  for (const failure of pluginOperations.startFailures()) showError(document, failure.where, failure.text);
 }
 
 /**
@@ -51,10 +57,12 @@ export async function followPluginChanges(apply) {
   };
   host.on("plugins-changed", async () => {
     await pluginOperations.refresh();
+    showStartFailures();
     await pluginOperations.refreshOutdated();
     await once();
   });
   await pluginOperations.refresh();
+  showStartFailures();
   await pluginOperations.refreshOutdated();
   if (pluginOperations.status().reload) await once();
 }

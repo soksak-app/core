@@ -188,6 +188,8 @@ A row shows a record without its time, as `<level> <layer> <where>: <text>`.
 | a path of a drop on a mygo window no longer resolves ([native surfaces](native-surfaces.md)) | `error host file drop: <reason>` |
 | the Tauri host cannot deliver the progress or the end of a save of the logs folder to the window that asked | `error host debug save: debug-save-progress: <reason>` or `error host debug save: debug-save-done: <reason>` |
 | a startup step of the host fails | `error host startup: <reason>`, and the process ends with the status 1 |
+| the update at start cannot read the registry or the installed plugins | `error host plugins update: <text>` ([update at start](installation.md#update-at-start)) |
+| an installed plugin is refused and has no newer accepted version, or its update at start fails | `error host plugin update <id>: <text>`, where the text is the reader's refusal or the error of the update ([update at start](installation.md#update-at-start)) |
 
 A failure that the caller of an operation receives, and that the caller shows through the error display, is recorded by that display: a request of the endpoint answers its failure to its client, a `sok` command ends with its status and its message on the standard error, and a plugin shows the failed navigation of its document region, which the host reports as the `failure` of the document, with `tab.error` ([plugins](plugins.md)), whose display writes `error workbench tab error <tab id>: <text>`.
 

@@ -170,6 +170,25 @@ type PluginsState struct {
 	// FirstRun is true when plugins/installed.json does not exist. The application then installs the starter pack.
 	FirstRun bool        `json:"firstRun"`
 	Starter  *StarterJob `json:"starter"`
+	// StartUpdate lists the failures of the update at start that the host keeps (docs/spec/installation.md#update-at-start).
+	StartUpdate []StartFailure `json:"startUpdate,omitempty"`
+}
+
+// StartFailure is one failure of the update at start: where is the place of its record and text is its content.
+type StartFailure struct {
+	Where string `json:"where"`
+	Text  string `json:"text"`
+}
+
+// errStopped is the failure of an installation that stop stopped before it changed the installation.
+var errStopped = errors.New("the host is shutting down; the plugin installation is not applied")
+
+// UpdatePluginUnless updates an installed plugin as RunPluginAction does. It checks stop before each step that changes the
+// configuration folder: the extraction of the releases, the sidecar installation and the write of installed.json. When stop
+// reports true at a check, it ends with errStopped, and installed.json keeps the content it had before the call
+// (docs/spec/installation.md#update-at-start). The release download is not interrupted.
+func UpdatePluginUnless(configDir, id, core, platform string, stop func() bool) (map[string]any, error) {
+	return installPlugin(configDir, id, core, platform, true, stop)
 }
 
 // StarterJob is the durable snapshot of a starter pack installation.
@@ -556,6 +575,13 @@ func pluginResult(state *InstalledState, id string) map[string]any {
 // installed plugin. It reads the plugin.json of every selected plugin version and completes the plan before it extracts
 // an release.
 func InstallPlugin(configDir, id, core, platform string, update bool) (map[string]any, error) {
+	return installPlugin(configDir, id, core, platform, update, nil)
+}
+
+// installPlugin is InstallPlugin with the check of stop before each step that changes the configuration folder (UpdatePluginUnless).
+// A nil stop never stops.
+func installPlugin(configDir, id, core, platform string, update bool, stop func() bool) (map[string]any, error) {
+	stopped := func() bool { return stop != nil && stop() }
 	index, err := readRegistry(configDir)
 	if err != nil {
 		return nil, err
@@ -576,6 +602,9 @@ func InstallPlugin(configDir, id, core, platform string, update bool) (map[strin
 	if !plan.changed {
 		return pluginResult(state, id), nil
 	}
+	if stopped() {
+		return nil, errStopped
+	}
 	for _, changed := range plan.order {
 		data, ok := plan.releases[changed]
 		if !ok {
@@ -587,6 +616,9 @@ func InstallPlugin(configDir, id, core, platform string, update bool) (map[strin
 		}
 	}
 	dropUnnamedSidecars(state)
+	if stopped() {
+		return nil, errStopped
+	}
 	for _, name := range sortedNames(plan.selectedSidecars()) {
 		sidecar := plan.sidecars[name]
 		installed, ok := state.Sidecars[name]
@@ -603,6 +635,9 @@ func InstallPlugin(configDir, id, core, platform string, update bool) (map[strin
 	}
 	if _, err := ValidateInstalled(value); err != nil {
 		return nil, err
+	}
+	if stopped() {
+		return nil, errStopped
 	}
 	if err := writeInstalled(configDir, state); err != nil {
 		return nil, err
@@ -1148,4 +1183,85 @@ func runPlugins(a arguments, stdout io.Writer, options Options) error {
 		return usage("unknown command: %s", command)
 	}
 	return printJSON(stdout, result)
+}
+
+// ReadRegistry reads the index that plugins/registry.json designates. configured is false when the file does not exist, and then
+// no index is read and no error is returned.
+func ReadRegistry(configDir string) (index *Index, configured bool, err error) {
+	url, exists, err := readRegistryURL(configDir)
+	if err != nil {
+		return nil, true, err
+	}
+	if !exists {
+		return nil, false, nil
+	}
+	index, _, err = ReadIndexAt(url, DefaultFetcher)
+	return index, true, err
+}
+
+// Outdated is an installed plugin that the update at start replaces (docs/spec/installation.md#update-at-start). Candidate is
+// the newest accepted version that is newer than the installed one, or empty. Refused is the reader's error text of the installed
+// plugin.json, or empty when the reader accepts it.
+type Outdated struct {
+	ID        string
+	Installed string
+	Candidate string
+	Refused   string
+}
+
+// NewestAccepted returns the newest version of the plugin id that is not revoked and whose engines range contains core, or empty
+// when no version is accepted.
+func NewestAccepted(index *Index, id, core string) string {
+	best := ""
+	for _, plugin := range index.Plugins {
+		if plugin.ID != id {
+			continue
+		}
+		for _, version := range plugin.Versions {
+			if revokedPlugin(index, id, version.Version) || !Satisfies(core, version.Engines.Soksak) {
+				continue
+			}
+			if best == "" || newer(version.Version, best) {
+				best = version.Version
+			}
+		}
+	}
+	return best
+}
+
+// listsVersion reports whether the index lists the version of the plugin id.
+func listsVersion(index *Index, id, version string) bool {
+	for _, plugin := range index.Plugins {
+		if plugin.ID == id && slices.ContainsFunc(plugin.Versions, func(item PluginVersion) bool { return item.Version == version }) {
+			return true
+		}
+	}
+	return false
+}
+
+// OutdatedPlugins lists the installed plugins that the update at start replaces, sorted by id. A plugin is listed when its
+// installed plugin.json is refused by ValidateManifest, and then Candidate is empty unless a newer accepted version exists. A plugin
+// whose installed plugin.json is accepted is listed when the index lists its installed version and NewestAccepted is newer.
+func OutdatedPlugins(index *Index, state *InstalledState, manifests map[string]InstalledManifest, core string) ([]Outdated, error) {
+	var outdated []Outdated
+	for _, id := range sortedPluginIDs(state.Plugins) {
+		installed := state.Plugins[id].Version
+		manifest, ok := manifests[id]
+		if !ok {
+			return nil, fmt.Errorf("plugin %s has no installed manifest", id)
+		}
+		refused := ""
+		if err := ValidateManifest(manifest.Value); err != nil {
+			refused = err.Error()
+		}
+		candidate := NewestAccepted(index, id, core)
+		if candidate != "" && !newer(candidate, installed) {
+			candidate = ""
+		}
+		if refused == "" && (candidate == "" || !listsVersion(index, id, installed)) {
+			continue
+		}
+		outdated = append(outdated, Outdated{ID: id, Installed: installed, Candidate: candidate, Refused: refused})
+	}
+	return outdated, nil
 }

@@ -244,6 +244,7 @@ func (s *Shell) pluginsChanged() {
 		return
 	}
 	s.pluginOperations.Refresh(func() {
+		s.showStartFailures()
 		s.pluginOperations.RefreshOutdated(func() { s.applyPlugins(func(bool, error) {}) })
 	})
 }

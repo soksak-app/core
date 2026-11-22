@@ -4540,6 +4540,32 @@
       },
       "description": "The host started the detached command that replaces the application bundle."
     },
+    "host.plugins.update": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "plugin": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plugin",
+          "from",
+          "to"
+        ]
+      },
+      "description": "The host updated an installed plugin at start because its installed release is refused or older than the newest accepted version (docs/spec/installation.md#update-at-start)."
+    },
     "native.connection.activity": {
       "layer": "native",
       "class": "lifecycle",

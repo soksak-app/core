@@ -161,6 +161,7 @@ func (s *Shell) browsePlugins() error {
 // the job installed.
 func (s *Shell) startPlugins(done func(installed bool)) {
 	s.pluginOperations.Refresh(func() {
+		s.showStartFailures()
 		s.pluginOperations.RefreshOutdated(func() {
 			s.pluginOperations.InstallStarter(s.starter.Pack, s.starter.Registry, func(text string) {
 				s.fail(fmt.Errorf("%s", text))
@@ -342,4 +343,12 @@ func placeholderOf(plugin, reason string, installable bool) (line, action, label
 		return "창을 다시 불러오면 " + plugin + " 플러그인이 열립니다.", "", ""
 	}
 	return plugin + " 플러그인을 사용하지 않습니다.", "enable", "사용"
+}
+
+// showStartFailures shows each failure of the update at start that the last read of the plugin state reported, through the error
+// display (docs/spec/installation.md#update-at-start).
+func (s *Shell) showStartFailures() {
+	for _, failure := range s.pluginOperations.StartFailures() {
+		s.errors.Show(failure.Where, failure.Text, "")
+	}
 }

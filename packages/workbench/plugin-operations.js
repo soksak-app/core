@@ -98,6 +98,8 @@ export function createPluginOperations({ host, loaded, refused, changed }) {
   let operation = null;
   // The outdated persistent services that the host reports: `[{sidecar, running, installed, sessions}]`.
   let outdated = [];
+  // The failures of the update at start that the last state read reported.
+  let startUpdate = [];
   // The number of the last started read of the plugin state.
   let lastRead = 0;
   // What the listeners last heard. The host answers an activation and every plugin event with a read, and a read that
@@ -146,6 +148,8 @@ export function createPluginOperations({ host, loaded, refused, changed }) {
       const value = await host.call("pluginsState");
       if (read !== lastRead) return;
       state = value;
+      // The failures of the update at start that the host keeps; a state without the member has none (docs/spec/installation.md#update-at-start).
+      startUpdate = Array.isArray(value.startUpdate) ? value.startUpdate : [];
       failure = state.index && typeof state.index.error === "string" ? { kind: "index", message: state.index.error } : null;
       report();
     } catch (error) {
@@ -262,5 +266,5 @@ export function createPluginOperations({ host, loaded, refused, changed }) {
     }
   }
 
-  return { state: () => state, refresh, refreshOutdated, replace, run: runAction, updateAll, useRegistry, status, installStarter, failure: () => failure, hosted: Boolean(host) };
+  return { state: () => state, startFailures: () => startUpdate, refresh, refreshOutdated, replace, run: runAction, updateAll, useRegistry, status, installStarter, failure: () => failure, hosted: Boolean(host) };
 }

@@ -1,0 +1,62 @@
+{
+  "name": "plugin-operations-start-update-failed",
+  "description": "The page subscribes to plugins-changed, reads the plugin state, which reports the failure of the update at start of the plugin probe in startUpdate, and reads the outdated sidecars.",
+  "replay": false,
+  "reason": "The case reports the failure of an update at start that the Go producer runs no window to observe, and the notice subscription needs a window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+    {
+      "call": {
+        "name": "pluginsState"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "core": "0.0.46",
+          "registry": "file:///registry/index.json",
+          "index": {
+            "format": 2,
+            "plugins": [],
+            "sidecars": [],
+            "packs": [],
+            "revoked": {
+              "plugins": [],
+              "sidecars": [],
+              "core": []
+            }
+          },
+          "installed": {
+            "format": 3,
+            "plugins": {
+              "probe": {
+                "version": "0.0.1",
+                "path": "plugins/probe/0.0.1",
+                "enabled": true,
+                "sidecars": {}
+              }
+            },
+            "sidecars": {}
+          },
+          "firstRun": false,
+          "starter": null,
+          "startUpdate": [
+            {
+              "where": "plugin update probe",
+              "text": "section browser.dom status is removed"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "sidecarsOutdated"
+      }
+    },
+    {
+      "reply": {
+        "result": []
+      }
+    }
+  ]
+}

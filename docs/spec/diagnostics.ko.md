@@ -188,6 +188,8 @@ Still은 녹화 창과 그 child window를 window server가 합성한 그대로 
 | mygo 창에 놓인 경로가 더 이상 파일을 가리키지 않는다([native surface](native-surfaces.ko.md)) | `error host file drop: <reason>` |
 | Tauri host가 logs 폴더 저장의 진행이나 끝을 요청한 창에 전달할 수 없다 | `error host debug save: debug-save-progress: <reason>` 또는 `error host debug save: debug-save-done: <reason>` |
 | 호스트의 시작 단계가 실패한다 | `error host startup: <reason>`, 그리고 프로세스가 상태 1로 끝난다 |
+| 시작 때 업데이트가 registry나 설치된 plugin을 읽지 못한다 | `error host plugins update: <text>` ([시작 때 업데이트](installation.ko.md#시작-때-업데이트)) |
+| 설치된 plugin이 거부되었고 더 새로운 받아들여지는 version이 없거나, 시작 때 업데이트가 실패한다 | `error host plugin update <id>: <text>`. text는 reader의 거부 문장이거나 업데이트의 오류다 ([시작 때 업데이트](installation.ko.md#시작-때-업데이트)) |
 
 호출자가 받아 오류 표시로 보이는 실패는 그 표시가 기록한다. endpoint 요청은 실패를 client에 답하고, `sok` 명령은 상태와 메시지를 표준 오류로 끝내며, plugin은 host가 문서의 `failure`로 알린 document region의 탐색 실패를 `tab.error`([plugins](plugins.md))로 보이고 그 표시가 `error workbench tab error <tab id>: <text>`를 쓴다.
 
