@@ -37,6 +37,8 @@ const BINARY_ID = /^[0-9a-f]{32}$/;
  *                   returns the host reply {present: true, type: "png", binary} or {present: false, type: "png"}, and persistPNG takes
  *                   the binary id of a PNG in the store and returns the host reply {path}
  *                 links.open(url): opens a link, as runtime.links.open
+ *                 program.run(name, args): runs the program that the plugin declares as name, and resolves with the host reply
+ *                   {code, stdout, stderr, truncated} (docs/spec/native-surfaces.md#program-runs); args is an array of texts
  *                 report(line): writes the error line `<where>: <text>` to the application log, the record path of the error
  *                   display of the page
  *                 textSize: {read(), on(listener)} of the surface, as runtime.textSize of the surface context has
@@ -320,6 +322,16 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
       if (typeof params !== "string" || params === "") throw new TypeError(`view call ${command} requires a non-empty URL`);
       await runtime.links.open(params);
       return null;
+    // A program that the plugin declares runs with the argument texts; an absent args is an empty list (docs/spec/native-surfaces.md#program-runs).
+    case "runtime.program.run": {
+      const fields = objectOf(command, params);
+      if (typeof fields.name !== "string" || fields.name === "") throw new TypeError(`view call ${command} requires a non-empty name`);
+      const args = Object.hasOwn(fields, "args") ? fields.args : [];
+      if (!Array.isArray(args) || !args.every((arg) => typeof arg === "string")) {
+        throw new TypeError(`view call ${command} args must be an array of texts`);
+      }
+      return runtime.program.run(fields.name, args);
+    }
     case "tab.title":
       tab.title(params);
       return null;

@@ -40,6 +40,8 @@ const KINDS = Object.values(EXPOSE_KINDS);
  *     native            {name: fn(payload)}: the host calls of runtime.native.call
  *     sidecar           {name: fn(body)}: the sends to a declared sidecar
  *     clipboard         {read(type), writeText(text), readPNG(), persistPNG(binary)}
+ *     programs          {name: fn(args)}: the reply of each run of a declared program, which runs with the argument texts; the reply is
+ *                       {code, stdout, stderr, truncated} (docs/spec/native-surfaces.md#program-runs)
  *     composition       {declaration(), place(regions, overlays), report(text), document: {attach, load, zoom, go, post, subscribe,
  *                       unsubscribe, detach}, image: {attach, focus, caret, text, detach}}
  *     data              the project data declarations {key: {schema, default}}; the values are stored by the host
@@ -56,7 +58,7 @@ const KINDS = Object.values(EXPOSE_KINDS);
  *                       write stores a value of the key as another view does, so a replace of the view that follows the read sees it
  *     viewEvent         fn(event, data): the reply of each push of the view, which the host answers; without it the reply is null
  *
- * A route is the name of a host call, of a command or of a fixture: native.<name>, sidecar.<name>, command.<name>, clipboard.<op>,
+ * A route is the name of a host call, of a command or of a fixture: native.<name>, sidecar.<name>, command.<name>, clipboard.<op>, program.<name>,
  * composition.<path>, state.read and state.write, and viewEvent for the pushes of the view. A route whose fixture is missing rejects
  * with the error `view host: <route> has no fixture` and the failure is recorded in observed.failures. A route with a declared
  * fault rejects with the fault message. Every route work is tracked, so settled waits for it.
@@ -72,7 +74,8 @@ const KINDS = Object.values(EXPOSE_KINDS);
  *     observed  tab: the last title, footer, directory, modified, error and focus, and the lists notify and keep
  *               data: each stored value {key, value}; sidecar: each send {sidecar, id, body, cids}; commands: each run {name, params,
  *               cids, surface}; document: the host calls of the view in order, native calls as {name, payload} and pushes as
- *               {name: "viewEvent", payload: {event, data}}; errors: each report line; links: each opened URL; failures: the missing
+ *               {name: "viewEvent", payload: {event, data}}; errors: each report line; links: each opened URL; programs: each run {name, args};
+ *               failures: the missing
  *               fixtures; events: each event record {level, event, fields}; contributions: each refused item {plugin, point, index, reason};
  *               timers: each timer or animation frame that the page window started, {kind, delay} (delay null for an animation frame)
  *     push      push(event, data) delivers a host event to the subscriptions of the view: a native event of the plugin gate, or the
@@ -101,7 +104,7 @@ export function createTestHost(fixtures) {
   const declares = (kind, name) => pluginDeclared.has(declarationKey(kind, name)) || coreDeclared.has(declarationKey(kind, name));
   const observed = {
     tab: { title: null, footer: null, directory: null, modified: null, error: null, focus: null, notify: [], keep: [] },
-    data: [], sidecar: [], commands: [], document: [], errors: [], links: [], failures: [], events: [], contributions: [], timers: [],
+    data: [], sidecar: [], commands: [], document: [], errors: [], links: [], programs: [], failures: [], events: [], contributions: [], timers: [],
   };
   const works = new Set();
   const track = (promise) => {
@@ -343,6 +346,12 @@ export function createTestHost(fixtures) {
         persistPNG: (binary) => route("clipboard.persistPNG", at("clipboard", "persistPNG"), [binary]),
       },
       links: { open: (url) => { observed.links.push(url); return Promise.resolve(null); } },
+      program: {
+        run: (name, args) => {
+          observed.programs.push({ name, args });
+          return route(`program.${name}`, at("programs", name), [args]);
+        },
+      },
       report: (line) => { observed.errors.push(line); return Promise.resolve(null); },
       textSize: { read: () => textSizeValue, on: (listener) => subscribeTo(textSizeListeners, listener) },
       settings: { read: () => settingValues, on: (listener) => subscribeTo(settingListeners, listener) },

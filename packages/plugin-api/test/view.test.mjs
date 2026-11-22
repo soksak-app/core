@@ -1043,3 +1043,30 @@ test("runtime.data.on subscribes once and passes the key of each change of the p
   host({ sok: 1, event: "data", data: { key: "names" } });
   assert.deepEqual(seen.at(-1), ["b", "names"], "a removed listener receives no later change");
 });
+
+test("runtime.program.run sends the name and the arguments as a view call, and an absent args is an empty array", async (t) => {
+  const { posted, host } = setup(t);
+  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const reply = { code: 0, stdout: "ok", stderr: "", truncated: { stdout: false, stderr: false } };
+  const run = runtime.program.run("probe-tool", ["a", "b"]);
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 1, command: "runtime.program.run", params: { name: "probe-tool", args: ["a", "b"] } });
+  host({ sok: 1, id: 1, result: reply });
+  assert.deepEqual(await run, reply);
+  const bare = runtime.program.run("probe-tool");
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 2, command: "runtime.program.run", params: { name: "probe-tool", args: [] } });
+  host({ sok: 1, id: 2, result: reply });
+  await bare;
+  assert.throws(() => runtime.program.run(""), /runtime.program.run requires a non-empty name/);
+  assert.throws(() => runtime.program.run("probe-tool", "a"), /runtime.program.run args must be an array of texts/);
+  assert.throws(() => runtime.program.run("probe-tool", ["a", 1]), /runtime.program.run args must be an array of texts/);
+});
+
+test("runtime.program.run with a signal sends the cancel of its view call when the signal aborts, and rejects with cancelled", async (t) => {
+  const { posted } = setup(t);
+  const { runtime } = createViewBridge({ handler: { postMessage: (message) => posted.push(message) }, report: () => {} });
+  const controller = new AbortController();
+  const run = runtime.program.run("probe-tool", [], { signal: controller.signal });
+  controller.abort();
+  await assert.rejects(run, { reason: "cancelled" });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 1, cancel: true });
+});

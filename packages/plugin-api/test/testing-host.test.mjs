@@ -425,3 +425,22 @@ test("a record that a view writes through runtime.log names no surface, which th
     await view.close();
   }
 });
+
+test("a program run of the view reaches the program fixture with its arguments and the reply returns to the view", { timeout: 5000 }, async () => {
+  const view = await openView("probe", {
+    start: START,
+    host: fixtures({ programs: { "probe-tool": (args) => ({ code: 0, stdout: args.join(" "), stderr: "", truncated: { stdout: false, stderr: false } }) } }),
+  });
+  const reply = await view.bridge.runtime.program.run("probe-tool", ["a", "b"]);
+  assert.deepEqual(reply, { code: 0, stdout: "a b", stderr: "", truncated: { stdout: false, stderr: false } });
+  assert.deepEqual(view.observed.programs, [{ name: "probe-tool", args: ["a", "b"] }]);
+  await view.settled();
+  await view.close();
+});
+
+test("a program run without a fixture rejects in the view and close names the route", { timeout: 5000 }, async () => {
+  const view = await openView("probe", { start: START, host: fixtures() });
+  await assert.rejects(view.bridge.runtime.program.run("probe-tool", []), /view host: program.probe-tool has no fixture/);
+  await view.settled();
+  await assert.rejects(view.close(), /view host: program.probe-tool has no fixture/);
+});

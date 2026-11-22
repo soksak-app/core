@@ -65,6 +65,20 @@ const queue = (...values) => () => {
 const FIXTURES = {
   "view-calls-cancel-pending": (releases) => ({ ...base(), sidecar: { "fixture-sidecar": () => new Promise((resolve) => releases.push(() => resolve(null))) } }),
   "view-calls-pending-id-refused": (releases) => ({ ...base(), sidecar: { "fixture-sidecar": () => new Promise((resolve) => releases.push(() => resolve(null))) } }),
+  // The first run of probe-tool is held until the replay ends, and its cancel ends the call; the second run answers its result.
+  "view-calls-program-run": (releases) => {
+    let runs = 0;
+    return {
+      ...base(),
+      programs: {
+        "probe-tool": () => {
+          runs += 1;
+          if (runs === 1) return new Promise((resolve) => releases.push(() => resolve(null)));
+          return { code: 0, stdout: "ok", stderr: "", truncated: { stdout: false, stderr: false } };
+        },
+      },
+    };
+  },
   "view-calls-clipboard-persist-png": () => ({ ...base(), clipboard: { persistPNG: () => ({ path: "/tmp/it's.png" }) } }),
   "view-calls-clipboard-read-png-invalid": () => ({ ...base(), clipboard: { readPNG: () => ({ present: true, type: "png", data: "AQID" }) } }),
   "view-calls-clipboard-read-png": () => ({

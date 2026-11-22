@@ -314,6 +314,18 @@ export function createViewBridge({ handler, report }) {
       read: () => calls.request("runtime.settings.read", null),
       on: (listener) => listen("settings", () => calls.request("runtime.settings.on", null), listener),
     },
+    // The external programs that the plugin declares (docs/spec/native-surfaces.md#program-runs): run(name, args, {signal}) resolves with the
+    // reply {code, stdout, stderr, truncated} when the program exits. An absent args is an empty list. A signal that aborts sends the cancel
+    // of the view call, and the run rejects with cancelled.
+    program: {
+      run: (name, args = [], { signal } = {}) => {
+        if (typeof name !== "string" || name === "") throw new TypeError("runtime.program.run requires a non-empty name");
+        if (!Array.isArray(args) || !args.every((arg) => typeof arg === "string")) {
+          throw new TypeError("runtime.program.run args must be an array of texts");
+        }
+        return calls.request("runtime.program.run", { name, args }, { signal });
+      },
+    },
     // The clipboard of the view page (docs/spec/native-surfaces.md#view-surfaces, view calls). read returns what the clipboard bridge of
     // a surface context returns: the text, the file URLs or the PNG bytes, or null when the clipboard holds no payload of the type. A PNG
     // travels through the binary path: a png read downloads the bytes of the id that the reply names, and persistPNG uploads the bytes
