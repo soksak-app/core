@@ -8,7 +8,7 @@ import { checkLinkedPanels } from "./linked-panels.mjs";
 import { panelSurfaceRect, requireCleared, tabSwitchPair } from "./card-panel-checks.mjs";
 import { storedCard } from "./stored-layout.mjs";
 /** The card of the grid that holds the tab surface. */
-const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab) => tab.id === surface));
+const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab) => tab.tab === surface));
 const geometry=grid=>grid.cards.map(({id,x,y,w,h})=>({id,x,y,w,h})).sort((a,b)=>a.id.localeCompare(b.id));
 
 for (const app of Object.values(APPS)) {
@@ -191,7 +191,7 @@ for (const app of Object.values(APPS)) {
     // The tab switch check always uses a tab of another plugin. If the card has none, it adds a tab of the second layout probe
     // instead of moving a tab of another card.
     // Moving it would leave that card empty, remove it, and change the layout.
-    if (!card0.tabs.some((tab) => tab.plugin !== card0.tabs.find((item) => item.id === card0.active).plugin)) {
+    if (!card0.tabs.some((tab) => tab.plugin !== card0.tabs.find((item) => item.tab === card0.active).plugin)) {
       const { tab } = await s.run("core.card.add-tab", { card: card0.id, plugin: "layoutprobe2" });
       s.cleanup(() => s.run("core.tab.close", { tab }));
       await s.run("core.tab.select", { tab: card0.active });
@@ -299,9 +299,9 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     await keepCommonSettings(s);
     const { values } = await s.get("core.settings");
-    const card = (await s.get("core.grid")).cards.find((item) => item.tabs?.some((tab) => tab.id === item.active && tab.plugin));
+    const card = (await s.get("core.grid")).cards.find((item) => item.tabs?.some((tab) => tab.tab === item.active && tab.plugin));
     assert.ok(card, "no card with a declared active plugin");
-    const plugin = card.tabs.find((tab) => tab.id === card.active).plugin;
+    const plugin = card.tabs.find((tab) => tab.tab === card.active).plugin;
     const set = values.sets[0]?.id;
     assert.ok(set, "no sidebar set in the fixture");
     const failures = [];

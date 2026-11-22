@@ -166,11 +166,11 @@ const commands = (server) => server.requests.filter(({ method }) => method === "
 /** The failure of a wait that no value satisfies: the case ends it with the close of the connection by the host. */
 const unsatisfied = (message) => ({ message: `fixture: ${message} (endpoint connection closed)` });
 
-const anchorTab = (id) => ({ id, plugin: ANCHOR_PLUGIN });
+const anchorTab = (tab) => ({ tab, plugin: ANCHOR_PLUGIN });
 const card = (id, h, tabs, rows = [0, 1]) => ({ id, x: 0, y: 0, w: 400, h, r0: rows[0], r1: rows[1], c0: 0, c1: 1, tabs });
 
 test("the section placement anchors on the preferred card with a layoutprobe tab, else on the first such card", () => {
-  const grid = { cards: [card("card-1", 300, [{ id: "plain-1", plugin: "probeplain" }]), card("card-2", 300, [anchorTab("t-2")]),
+  const grid = { cards: [card("card-1", 300, [{ tab: "plain-1", plugin: "probeplain" }]), card("card-2", 300, [anchorTab("t-2")]),
     card("card-3", 300, [anchorTab("t-3")])] };
   assert.equal(SECTION_PLACEMENT.card(grid, "probeplain", "card-3"), "card-3");
   assert.equal(SECTION_PLACEMENT.card(grid, "probeplain", "card-1"), "card-2");

@@ -6,7 +6,7 @@ import { SIDES, orders, placeMismatches, reportMismatches, thicknesses } from ".
 
 const card = (id, x, y, w, h) => ({ id, x, y, w, h, tabs: [] });
 const content = card("main", 196, 196, 608, 408);
-content.tabs = [{ id: "tab", plugin: "layoutprobe" }];
+content.tabs = [{ tab: "tab", plugin: "layoutprobe" }];
 const grid = (...cards) => ({ width: 1000, height: 800, gap: 6, plane: { x: 0, y: 40 }, cards: [content, ...cards] });
 // The default order: left and right reach across the height, top and bottom stand between them.
 const ordered = grid(card("left", 0, 0, 190, 800), card("right", 810, 0, 190, 800), card("top", 196, 0, 608, 190), card("bottom", 196, 610, 608, 190));

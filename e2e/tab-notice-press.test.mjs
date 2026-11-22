@@ -9,7 +9,7 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: clicking a tab notice of a tab out of view selects its tab`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
-    const cardOf = (grid, surface) => grid.cards.find((card) => card.tabs.some((tab) => tab.id === surface));
+    const cardOf = (grid, surface) => grid.cards.find((card) => card.tabs.some((tab) => tab.tab === surface));
     const start = (await s.get("core.grid")).cards.find((card) => card.focused);
     if (!start) throw new Error("the start layout has no focused card");
     const shown = start.active;
@@ -20,7 +20,7 @@ for (const app of Object.values(APPS)) {
     await s.until("core.grid", (grid) => cardOf(grid, shown).active === shown && cardOf(grid, shown).focused,
       "the first tab did not return to view in its focused card");
     await s.run(`${START_PLUGIN}.notify`, { text: "PRESS-NOTICE", policy: "tab" }, hidden);
-    await s.until("core.grid", (grid) => cardOf(grid, hidden).tabs.find((item) => item.id === hidden).notice === "PRESS-NOTICE",
+    await s.until("core.grid", (grid) => cardOf(grid, hidden).tabs.find((item) => item.tab === hidden).notice === "PRESS-NOTICE",
       "the tab out of view did not show a tab notice");
     const index = (await s.get("core.grid")).cards.flatMap((card) => card.tabs).findIndex((item) => item.id === hidden);
     if (index < 0) throw new Error("the tab out of view is not rendered");

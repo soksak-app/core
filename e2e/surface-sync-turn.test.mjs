@@ -11,7 +11,7 @@ for (const app of Object.values(APPS)) {
     { timeout: 60000 }, async (t) => {
       const s = await open(t, app);
       const { surface } = await fresh(s, { performanceTrace: false, log: { frame: "trace" }, reads: ["host.frame.surface.dispatch"] });
-      const card = (await s.get("core.grid")).cards.find((c) => c.tabs.some((tab) => tab.id === surface));
+      const card = (await s.get("core.grid")).cards.find((c) => c.tabs.some((tab) => tab.tab === surface));
       assert.ok(card, `no card holds the start tab ${surface}`);
       await s.presented();
       const offsets = currentEventOffsets(app.configDir);

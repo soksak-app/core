@@ -17,7 +17,7 @@ for (const app of Object.values(APPS))
   test(`${app.name}: stills of the activity icons in each mode`, { timeout: 180000 }, async (t) => {
     const s = await open(t, app);
     const { surface, plugin } = await fresh(s);
-    const card = (await s.get("core.grid")).cards.find((entry) => entry.tabs.some((tab) => tab.id === surface)).id;
+    const card = (await s.get("core.grid")).cards.find((entry) => entry.tabs.some((tab) => tab.tab === surface)).id;
     const { tab: running } = await s.run("core.card.add-tab", { card, plugin });
     const group = await s.run("core.group.create", { card, side: "right", plugin });
     const { tab: idle } = await s.run("core.card.add-tab", { card: group.card, plugin });

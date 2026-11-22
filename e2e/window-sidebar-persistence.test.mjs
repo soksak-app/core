@@ -30,7 +30,7 @@ for (const app of Object.values(APPS))
       // the card of the start tab, the focused card, and not the first card that holds a probe tab: every card of the start layout holds one.
       const target = initial.cards.find((card) => card.focused && card.active === start);
       assert.ok(target, `the focused card does not show the start tab ${start}: ${JSON.stringify(initial.cards)}`);
-      const probe = target.tabs.find((tab) => tab.id === start);
+      const probe = target.tabs.find((tab) => tab.tab === start);
       // Stored list sets of the layout probe sections: the general left link shows one, and the right override of the probe, which
       // binds the fixed sidebar to the card of the probe tab, the other.
       await keepCommonSettings(s);

@@ -6,7 +6,7 @@ import test from "node:test";
 import { APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 
-const tabOf = (grid, id) => grid.cards.flatMap((card) => card.tabs ?? []).find((tab) => tab.id === id);
+const tabOf = (grid, id) => grid.cards.flatMap((card) => card.tabs ?? []).find((tab) => tab.tab === id);
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: save replies that retain modified state keep the native tab open`, { timeout: 120000 }, async (t) => {

@@ -9,7 +9,7 @@ const panes = (grid) => grid.cards.filter((card) => card.pane !== null);
 const card = (grid, id) => grid.cards.find((item) => item.id === id);
 const spread = (values) => Math.max(...values) - Math.min(...values);
 /** The card of the grid that holds the tab surface. */
-const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab) => tab.id === surface)).id;
+const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab) => tab.tab === surface)).id;
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the auto-arrange button gives three over four cards a fair share`, { timeout: 120000 }, async (t) => {

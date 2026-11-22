@@ -41,7 +41,7 @@ for (const app of Object.values(APPS)) {
     assert.ok(initialImages.length > 0, `raster probe ${surface} has no image-mode event before hiding`);
 
     const grid = await s.get("core.grid");
-    const card = grid.cards.find((item) => item.tabs.some((tab) => tab.id === surface));
+    const card = grid.cards.find((item) => item.tabs.some((tab) => tab.tab === surface));
     assert.ok(card, `no card holds raster probe ${surface}`);
     const { tab: cover } = await s.run("core.card.add-tab", { card: card.id, plugin: START_PLUGIN });
     await s.until("core.surfaces", (items) => items.some((item) => item.visible && item.surface === cover),

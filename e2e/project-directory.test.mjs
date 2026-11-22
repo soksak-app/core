@@ -13,7 +13,7 @@ import { fresh } from "./fixture.mjs";
  */
 async function addTab(s, start, plugin) {
   const card = (await s.get("core.grid")).cards.find((item) => item.pane !== null && item.tabs.length > 0
-    && !item.tabs.some((tab) => tab.id === start));
+    && !item.tabs.some((tab) => tab.tab === start));
   assert.ok(card, "the start layout has no second card with tabs");
   const { tab } = await s.run("core.card.add-tab", { card: card.id, plugin });
   s.cleanup(() => s.run("core.tab.close", { tab }));

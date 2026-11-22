@@ -17,7 +17,7 @@ for (const app of Object.values(APPS)) {
     const probe = await inputProbeTab(s);
     const project = await s.get("core.project");
     const space = project.spaces.find(item => item.id === project.activeSpaceId);
-    const card = (await s.get("core.grid")).cards.find(item => item.tabs.some(tab => tab.id === probe.surface));
+    const card = (await s.get("core.grid")).cards.find(item => item.tabs.some(tab => tab.tab === probe.surface));
     assert.ok(space && card, "the fixture view has no active space or owning card");
     const initialWindow = await s.get("host.window");
     assert.equal(initialWindow.active, false, "the inactive input check requires a background application");

@@ -31,9 +31,9 @@ test("a transaction acknowledges a vowel key, a Backspace and a Space by its act
 });
 
 test("a probe tab joins the focused card, else the first card that holds tabs", { timeout: 5000 }, () => {
-  const fixed = { id: "c0", fixed: true, tabs: [{ id: "t0" }] };
+  const fixed = { id: "c0", fixed: true, tabs: [{ tab: "t0" }] };
   assert.equal(focusedCard({ cards: [fixed, { id: "c1", tabs: [] }, { id: "c2", focused: true, tabs: [] }] }).id, "c2");
-  assert.equal(focusedCard({ cards: [fixed, { id: "c1", tabs: [] }, { id: "c2", tabs: [{ id: "t2" }] }] }).id, "c2");
+  assert.equal(focusedCard({ cards: [fixed, { id: "c1", tabs: [] }, { id: "c2", tabs: [{ tab: "t2" }] }] }).id, "c2");
   assert.throws(() => focusedCard({ cards: [fixed] }), /the layout has no card for an input probe tab/);
 });
 
@@ -111,8 +111,8 @@ test("the element index of a tab counts the tabs of the cards before its card", 
   // probe tab of the focused lower card follows the tab of the upper card and the tabs before it in its own card.
   const grid = { cards: [
     { id: "left", fixed: true, tabs: [] },
-    { id: "terminal", tabs: [{ id: "tab-layout-1" }] },
-    { id: "browser", tabs: [{ id: "tab-layout-2" }, { id: "tab-raster-1" }, { id: "tab-raster-2" }] },
+    { id: "terminal", tabs: [{ tab: "tab-layout-1" }] },
+    { id: "browser", tabs: [{ tab: "tab-layout-2" }, { tab: "tab-raster-1" }, { tab: "tab-raster-2" }] },
   ] };
   assert.equal(tabElementIndex(grid, "tab-raster-2"), 3);
   assert.equal(tabElementIndex(grid, "tab-layout-1"), 0);

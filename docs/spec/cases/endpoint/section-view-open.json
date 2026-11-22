@@ -5,7 +5,7 @@
   "reason": "The case plays the requests of a section view check on a workbench with a layout that the replay cannot arrange.",
   "steps": [
     {"send":{"jsonrpc":"2.0","id":1,"method":"status.get","params":{"window":"main","name":"core.grid"}}},
-    {"reply":{"jsonrpc":"2.0","id":1,"result":{"cards":[{"id":"card-1","x":0,"y":0,"w":400,"h":200,"r0":0,"r1":1,"c0":0,"c1":1,"tabs":[{"id":"t-1","plugin":"layoutprobe"}]},{"id":"card-2","x":0,"y":0,"w":400,"h":420,"r0":0,"r1":1,"c0":0,"c1":1,"tabs":[{"id":"t-2","plugin":"layoutprobe"}]},{"id":"card-3","x":0,"y":0,"w":400,"h":500,"r0":0,"r1":1,"c0":0,"c1":1,"tabs":[{"id":"plain-1","plugin":"probeplain"}]}]}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"cards":[{"id":"card-1","x":0,"y":0,"w":400,"h":200,"r0":0,"r1":1,"c0":0,"c1":1,"tabs":[{"tab":"t-1","plugin":"layoutprobe"}]},{"id":"card-2","x":0,"y":0,"w":400,"h":420,"r0":0,"r1":1,"c0":0,"c1":1,"tabs":[{"tab":"t-2","plugin":"layoutprobe"}]},{"id":"card-3","x":0,"y":0,"w":400,"h":500,"r0":0,"r1":1,"c0":0,"c1":1,"tabs":[{"tab":"plain-1","plugin":"probeplain"}]}]}}},
     {"send":{"jsonrpc":"2.0","id":2,"method":"command.run","params":{"window":"main","name":"core.card.split","params":{"card":"card-2","side":"bottom","plugin":"layoutprobe"}}}},
     {"reply":{"jsonrpc":"2.0","id":2,"result":{"card":"card-4","tab":"t-4"}}},
     {"send":{"jsonrpc":"2.0","id":3,"method":"status.watch","params":{"window":"main","name":"core.sidebars"}}},
@@ -18,6 +18,6 @@
     {"send":{"jsonrpc":"2.0","id":6,"method":"status.get","params":{"window":"main","name":"core.project"}}},
     {"reply":{"jsonrpc":"2.0","id":6,"result":{"id":"project-1","root":"/config/test-project"}}},
     {"send":{"jsonrpc":"2.0","id":7,"method":"status.get","params":{"window":"main","name":"core.grid"}}},
-    {"reply":{"jsonrpc":"2.0","id":7,"result":{"cards":[{"id":"card-1","x":0,"y":0,"w":400,"h":200,"r0":0,"r1":1,"c0":0,"c1":1,"tabs":[{"id":"t-1","plugin":"layoutprobe"}]},{"id":"card-2","x":0,"y":0,"w":400,"h":420,"r0":0,"r1":1,"c0":0,"c1":1,"tabs":[{"id":"t-2","plugin":"layoutprobe"}]},{"id":"card-3","x":0,"y":0,"w":400,"h":500,"r0":0,"r1":1,"c0":0,"c1":1,"tabs":[{"id":"plain-1","plugin":"probeplain"}]},{"id":"card-4","x":0,"y":0,"w":400,"h":200,"r0":0,"r1":1,"c0":0,"c1":1,"tabs":[{"id":"t-4","plugin":"layoutprobe"}],"active":"t-4"}]}}}
+    {"reply":{"jsonrpc":"2.0","id":7,"result":{"cards":[{"id":"card-1","x":0,"y":0,"w":400,"h":200,"r0":0,"r1":1,"c0":0,"c1":1,"tabs":[{"tab":"t-1","plugin":"layoutprobe"}]},{"id":"card-2","x":0,"y":0,"w":400,"h":420,"r0":0,"r1":1,"c0":0,"c1":1,"tabs":[{"tab":"t-2","plugin":"layoutprobe"}]},{"id":"card-3","x":0,"y":0,"w":400,"h":500,"r0":0,"r1":1,"c0":0,"c1":1,"tabs":[{"tab":"plain-1","plugin":"probeplain"}]},{"id":"card-4","x":0,"y":0,"w":400,"h":200,"r0":0,"r1":1,"c0":0,"c1":1,"tabs":[{"tab":"t-4","plugin":"layoutprobe"}],"active":"t-4"}]}}}
   ]
 }

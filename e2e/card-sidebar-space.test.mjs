@@ -47,7 +47,7 @@ for (const app of Object.values(APPS))
       await s.run("core.settings.theme", { name: "midnight", mode: "dark" });
       const card = (await s.get("core.grid")).cards.find((c) => c.tabs.some((tab) => tab.plugin === plugin));
       assert.ok(card, `${plugin} card absent`);
-      await s.run("core.tab.select", { tab: card.tabs.find((tab) => tab.plugin === plugin).id });
+      await s.run("core.tab.select", { tab: card.tabs.find((tab) => tab.plugin === plugin).tab });
       const settings = (await s.get("core.settings")).values;
       // Two fixed-height sections of the layout probe, shown as a list on three sides and as tabs on the right.
       const sections = ["layoutprobe.alpha", "layoutprobe.beta"];

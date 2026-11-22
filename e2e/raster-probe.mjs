@@ -116,7 +116,7 @@ export async function ensureRasters(s, count) {
   while (visible < count) {
     // The fixed sidebars and the card sidebars take space, so splitting in one direction only would hit the minimum card size.
     const grid = await s.get("core.grid");
-    const [card] = grid.cards.filter((item) => item.tabs?.find((tab) => tab.id === item.active)?.plugin === RASTER)
+    const [card] = grid.cards.filter((item) => item.tabs?.find((tab) => tab.tab === item.active)?.plugin === RASTER)
       .sort((a, b) => b.w * b.h - a.w * a.h);
     assert.ok(card, "no visible raster probe card to split");
     await s.run("core.card.split", { card: card.id, side: card.w >= card.h ? "right" : "bottom", plugin: RASTER });
@@ -201,6 +201,6 @@ export function rasterServiceSnapshot(configDir) {
 export async function closeRasterTabs(s) {
   const grid = await s.get("core.grid");
   for (const tab of grid.cards.flatMap((card) => card.tabs).filter((tab) => tab.plugin === RASTER)) {
-    await s.run("core.tab.close", { tab: tab.id });
+    await s.run("core.tab.close", { tab: tab.tab });
   }
 }

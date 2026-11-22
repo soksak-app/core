@@ -14,7 +14,7 @@ const SECOND = "layoutprobe2";
 /** The sections of the inset card sidebar that the checks put on the start card. */
 const CARD_SECTIONS = ["layoutprobe.alpha", "layoutprobe.beta"];
 /** The card of the grid that holds the tab surface. */
-const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab) => tab.id === surface)).id;
+const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab) => tab.tab === surface)).id;
 
 /** Current controls of the settings window. */
 const controls = async (s) => (await s.get("core.settings-modal")).controls;

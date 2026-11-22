@@ -44,12 +44,12 @@ async function assertGridFillsPlane(session, message) {
  */
 async function twoNoticeViews(s) {
   const { surface: shown } = await fresh(s);
-  const cardOf = (grid, surface) => grid.cards.find((card) => card.tabs.some((tab) => tab.id === surface));
-  const notice = (grid, surface) => cardOf(grid, surface).tabs.find((tab) => tab.id === surface).notice;
+  const cardOf = (grid, surface) => grid.cards.find((card) => card.tabs.some((tab) => tab.tab === surface));
+  const notice = (grid, surface) => cardOf(grid, surface).tabs.find((tab) => tab.tab === surface).notice;
   const { tab: hidden } = await s.run("core.card.split", { card: cardOf(await s.get("core.grid"), shown).id, side: "right", plugin: START_PLUGIN });
   s.cleanup(async () => {
     const grid = await s.get("core.grid");
-    if (grid.cards.some((card) => card.tabs.some((tab) => tab.id === hidden))) await s.run("core.tab.close", { tab: hidden });
+    if (grid.cards.some((card) => card.tabs.some((tab) => tab.tab === hidden))) await s.run("core.tab.close", { tab: hidden });
   });
   await s.until("core.surfaces", (surfaces) => surfaces.some((item) => item.surface === hidden && item.visible &&
     item.exposes.includes("command layoutprobe.notify")), "the split view did not register its notice command");
@@ -83,7 +83,7 @@ for (const app of Object.values(APPS)) {
     const regionsOf = (host) => rasters.map((raster) => regionOf(host, raster.surface));
     for (let round = 1; round <= 5; round++) {
       const grid = await s.get("core.grid");
-      const own = grid.cards.find((card) => card.tabs.some((tab) => tab.id === rasters[0].surface));
+      const own = grid.cards.find((card) => card.tabs.some((tab) => tab.tab === rasters[0].surface));
       // The first raster card narrows by a third of its width, so the balance changes the size of every card of the row.
       const width = grid.lines.x[own.c1] - grid.lines.x[own.c0];
       await s.run("core.boundary.move", { axis: "x", line: own.c1, position: grid.lines.x[own.c1] - Math.round(width / 3) });
@@ -153,7 +153,7 @@ for (const app of Object.values(APPS)) {
     await fresh(s);
     const rasters = await ensureRasters(s, 3);
     const documentCard = (await s.get("core.grid")).cards.find((card) =>
-      card.tabs.find((tab) => tab.id === card.active)?.plugin === START_PLUGIN);
+      card.tabs.find((tab) => tab.tab === card.active)?.plugin === START_PLUGIN);
     assert.ok(documentCard, `the fixture must keep a visible ${START_PLUGIN} card`);
     await s.run("core.card.split", { card: documentCard.id, side: "right", plugin: START_PLUGIN });
     const documentViews = (surfaces) => surfaces.filter((item) => item.visible && item.kind === "tab" && item.plugin === START_PLUGIN);
@@ -280,7 +280,7 @@ for (const app of Object.values(APPS)) {
       const { x, y, w, h } = current.applied;
       await s.click(x + w / 2, y + h / 2);
       await s.until("core.grid", (grid) => grid.cards.some((card) => card.focused &&
-        card.tabs.some((tab) => tab.id === raster.surface)), `the card of ${raster.surface} did not take focus`);
+        card.tabs.some((tab) => tab.tab === raster.surface)), `the card of ${raster.surface} did not take focus`);
       const host = await s.until("host.window", (window) => window.responder?.surface === raster.surface,
         `${raster.surface} did not become the native first responder after its click`);
       assert.deepEqual(host.regions.filter((region) => region.focused).map((region) => region.surface), [raster.surface]);
@@ -294,10 +294,10 @@ for (const app of Object.values(APPS)) {
     const tabs = (grid) => grid.cards.flatMap((card) => card.tabs);
     s.cleanup(() => s.run("layoutprobe.title", { text: null }, surface));
     await s.run("layoutprobe.title", { text: title }, surface);
-    const grid = await s.until("core.grid", (value) => tabs(value).find((tab) => tab.id === surface)?.label === title,
+    const grid = await s.until("core.grid", (value) => tabs(value).find((tab) => tab.tab === surface)?.label === title,
       "the tab did not show the long title that its view reported");
     // The tabs of every card are in document order, which is the order of the cards and of their tabs in core.grid.
-    const rect = await s.rect("core.card.tab", tabs(grid).findIndex((tab) => tab.id === surface));
+    const rect = await s.rect("core.card.tab", tabs(grid).findIndex((tab) => tab.tab === surface));
     assert.ok(rect.width <= 200, `the tab with a title of ${title.length} characters is ${rect.width} points wide, more than 200`);
   });
 
@@ -413,7 +413,7 @@ for (const app of Object.values(APPS)) {
     const made = await s.run("core.card.split", { card: card.id, side: "right", plugin: START_PLUGIN });
     s.cleanup(async () => {
       const grid = await s.get("core.grid");
-      if (grid.cards.some((item) => item.tabs.some((tab) => tab.id === made.tab))) await s.run("core.tab.close", { tab: made.tab });
+      if (grid.cards.some((item) => item.tabs.some((tab) => tab.tab === made.tab))) await s.run("core.tab.close", { tab: made.tab });
     });
     await s.until("core.surfaces", (surfaces) => surfaces.some((item) => item.surface === made.tab && item.visible &&
       item.exposes.includes("status layoutprobe.view")), "the split view did not register");

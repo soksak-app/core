@@ -47,7 +47,7 @@ async function rasterProcessSnapshot(s, message) {
   const sessions = [];
   for (const tab of tabs) {
     sessions.push(await s.until("rasterprobe.session", (value) => value?.connected === true && typeof value.session === "string",
-      `${message}: ${tab.id} has no session`, { surface: tab.id }));
+      `${message}: ${tab.tab} has no session`, { surface: tab.tab }));
   }
   const services = new Set(sessions.map((session) => session.service?.pid));
   assert.equal(services.size, 1, `${message}: the raster probe sessions do not share one service: ${JSON.stringify(sessions)}`);
@@ -97,7 +97,7 @@ async function assertNoOrphanNativeSurfaces(s, message) {
   const grid = await s.get("core.grid");
   const host = await s.get("host.window");
   const sections = (await s.get("core.sidebars")).flatMap((sidebar) => sidebar.sections.map((section) => section.surfaceId));
-  const owned = new Set([...grid.cards.flatMap((card) => card.tabs.map((tab) => tab.id)), ...sections]);
+  const owned = new Set([...grid.cards.flatMap((card) => card.tabs.map((tab) => tab.tab)), ...sections]);
   const orphan = host.surfaces.filter((surface) => !owned.has(surface.id));
   assert.deepEqual(orphan, [], `${message}: orphan native surfaces ${orphan.map((surface) => surface.id).join(", ")}`);
 }
@@ -167,7 +167,7 @@ for (const app of Object.values(APPS)) {
     // If the return command restores only the DOM and displays the native image raster late, this check fails.
     let rasterCount = (await s.surfaces(RASTER)).filter((surface) => surface.visible).length;
     if (rasterCount === 0) {
-      const source = grid.cards.find((card) => card.tabs?.some((tab) => tab.id === startTab));
+      const source = grid.cards.find((card) => card.tabs?.some((tab) => tab.tab === startTab));
       assert.ok(source, "raster source card not found");
       await s.run("core.card.split", { card: source.id, side: "right", plugin: RASTER });
       await s.until("core.surfaces", (surfaces) => surfaces.filter((surface) =>
@@ -350,7 +350,7 @@ for (const app of Object.values(APPS)) {
     const { tab: probe } = await other.run("core.card.add-tab", { card: focused.id, plugin: "layoutprobe" });
     await other.until("core.surfaces", (surfaces) => surfaces.some((item) => item.surface === probe && item.status?.phase === "ready"),
       `the probe tab ${probe} of the project did not become ready`);
-    const tabs = (await other.get("core.grid")).cards.flatMap((card) => card.tabs ?? []).map((tab) => tab.id);
+    const tabs = (await other.get("core.grid")).cards.flatMap((card) => card.tabs ?? []).map((tab) => tab.tab);
     rmSync(folder, { recursive: true });
     // This check shows the missing folder in the library and makes the project unopenable. Both errors are shown on the screen and recorded.
     s.expectError(new RegExp(`^error workbench library project ${folder.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}: `));

@@ -26,7 +26,7 @@ const FOLLOW = "layoutprobe.follow";
  */
 async function soleStartCard(s, surface) {
   const grid = await s.get("core.grid");
-  const own = grid.cards.find((card) => card.tabs?.some((tab) => tab.id === surface)).id;
+  const own = grid.cards.find((card) => card.tabs?.some((tab) => tab.tab === surface)).id;
   const other = grid.cards.find((card) => card.id !== own && card.tabs?.length > 0)?.id;
   assert.ok(other, "the start layout has no second card with tabs");
   const { tab } = await s.run("core.card.add-tab", { card: other, plugin: SECOND });

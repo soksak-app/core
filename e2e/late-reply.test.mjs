@@ -11,7 +11,7 @@ import { readEventLines } from "@soksak/window-check/event-log.mjs";
 import { heldRepliesSent, lateReplyFindings } from "./late-reply.mjs";
 
 /** A card that has a tab id. */
-const holder = (grid, tab) => grid?.cards.find((card) => card.tabs.some((entry) => entry.id === tab));
+const holder = (grid, tab) => grid?.cards.find((card) => card.tabs.some((entry) => entry.tab === tab));
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a surface reply that arrives after its surface closed is discarded as an observation`, { timeout: 60000 }, async (t) => {

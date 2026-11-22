@@ -7,7 +7,7 @@ import { fresh } from "./fixture.mjs";
 
 const card = (grid, id) => grid.cards.find((item) => item.id === id);
 /** The card of the grid that holds the tab surface. */
-const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab) => tab.id === surface)).id;
+const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab) => tab.tab === surface)).id;
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a narrow card folds its tools into a menu that runs them and keeps its title`, { timeout: 120000 }, async (t) => {

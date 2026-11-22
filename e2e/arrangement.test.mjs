@@ -43,10 +43,10 @@ for (const app of Object.values(APPS)) {
         assert.ok(spread(cards.map((card) => card.w)) <= 1, `the widths of a row differ: ${JSON.stringify(cards.map((card) => card.w))}`);
       }
       assert.ok(Math.abs(rows[0][0].h - rows[1][0].h) <= 1, `the rows do not halve the height: ${JSON.stringify(grid.cards)}`);
-      const holder = grid.cards.find((card) => card.tabs.some((tab) => tab.id === document));
+      const holder = grid.cards.find((card) => card.tabs.some((tab) => tab.tab === document));
       assert.ok(holder, `the document tab ${document} is gone: ${JSON.stringify(grid.cards)}`);
       assert.notEqual(holder.active, document, "the document tab is the active tab of its card");
-      assert.ok(grid.cards.some((card) => card.tabs.some((tab) => tab.id === surface)), `the start tab ${surface} is gone`);
+      assert.ok(grid.cards.some((card) => card.tabs.some((tab) => tab.tab === surface)), `the start tab ${surface} is gone`);
       assert.equal(applied.cards.length, 10, `the apply answers ${applied.cards.length} cards`);
     });
 }

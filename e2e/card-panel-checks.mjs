@@ -12,7 +12,7 @@ export function requireCleared(sidebars) {
  * from holds the id of that card. It fails when no tab of another plugin exists, because the check cannot run.
  */
 export function tabSwitchPair(card, cards) {
-  const original = card.tabs.find((tab) => tab.id === card.active);
+  const original = card.tabs.find((tab) => tab.tab === card.active);
   const own = card.tabs.find((tab) => tab.plugin !== original.plugin);
   if (own) return { original, other: own, from: card.id };
   const source = cards.find((item) => item.id !== card.id && item.tabs.some((tab) => tab.plugin !== original.plugin));

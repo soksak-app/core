@@ -11,7 +11,7 @@ const stopReply = (count) => ({ frames: "fixture-recording", stills: "fixture-re
 /** A window with two installed views but only one open card. */
 function fixture({ openedOnly = false } = {}) {
   const applied = { x: 20, y: 40, w: 120, h: 80 };
-  const card = { id: "probe-card", x: 0, y: 0, w: 160, h: 140, focused: true, tabs: [{ id: "probe-original", plugin: "layoutprobe" }] };
+  const card = { id: "probe-card", x: 0, y: 0, w: 160, h: 140, focused: true, tabs: [{ tab: "probe-original", plugin: "layoutprobe" }] };
   const surface = (id, plugin) => ({ surface: id, plugin, visible: true, composition: "view", applied, declared: applied,
     status: { phase: "ready", error: null }, exposes: ["status core.surface.document"] });
   const original = surface("probe-original", "layoutprobe");

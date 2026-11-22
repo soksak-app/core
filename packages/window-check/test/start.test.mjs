@@ -38,8 +38,8 @@ function starterLayout() {
   return {
     grid: { cards: [
       { id: "left", fixed: true, focused: false, active: null },
-      { id: "upper", focused: true, active: "t1", tabs: [{ id: "t1", plugin: "starter-a" }] },
-      { id: "lower", focused: false, active: "b1", tabs: [{ id: "b1", plugin: "starter-b" }] },
+      { id: "upper", focused: true, active: "t1", tabs: [{ tab: "t1", plugin: "starter-a" }] },
+      { id: "lower", focused: false, active: "b1", tabs: [{ tab: "b1", plugin: "starter-b" }] },
     ] },
     surfaces: [
       { kind: "tab", surface: "t1", plugin: "starter-a", visible: true, placeholder: "missing", status: { phase: "loading" }, exposes: [] },

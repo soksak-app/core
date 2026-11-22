@@ -23,7 +23,7 @@ async function fresh(s, options) {
 /** The second layout probe: a plugin whose tab view exposes elements. */
 const SECOND = "layoutprobe2";
 /** The card of the grid that holds the tab surface. */
-const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab) => tab.id === surface)).id;
+const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab) => tab.tab === surface)).id;
 
 /** Waits until a visible raster probe tab of the window is ready (rasterReady) and returns its surface id. */
 async function readyRaster(s, message) {
@@ -52,7 +52,7 @@ for (const app of Object.values(APPS)) {
     // A raster probe tab on the start card gives the window a native image region. The saved layout keeps it through the reload.
     s.cleanup(async () => {
       for (const card of (await s.get("core.grid")).cards) {
-        for (const tab of card.tabs ?? []) if (tab.plugin === RASTER) await s.run("core.tab.close", { tab: tab.id });
+        for (const tab of card.tabs ?? []) if (tab.plugin === RASTER) await s.run("core.tab.close", { tab: tab.tab });
       }
     });
     // The image regions of the window draw while it is covered (addRasterTab and rasterReady).

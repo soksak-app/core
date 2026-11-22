@@ -45,7 +45,7 @@ for (const app of Object.values(APPS)) {
     const { surface } = await inputProbeTab(s);
     await s.presented();
     await focusDocument(s, surface);
-    const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === surface)).id;
+    const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.tab === surface)).id;
     await s.run("core.card.menu", { card, menu: "add" });
     await s.until("core.picker", (picker) => picker.open, "the add picker did not open");
     t.diagnostic(`picker open: ${JSON.stringify((await s.get("host.window")).responder)}`);
@@ -84,7 +84,7 @@ for (const app of Object.values(APPS)) {
       const { surface } = await inputProbeTab(s);
       await s.presented();
       await focusDocument(s, surface);
-      const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === surface)).id;
+      const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.tab === surface)).id;
       await s.run("core.card.menu", { card, menu: "add" });
       const before = await lastKey(s, surface);
       const offsets = currentEventOffsets(s.app.configDir);

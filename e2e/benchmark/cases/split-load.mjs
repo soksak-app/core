@@ -76,7 +76,7 @@ export async function startStress(s, app) {
   const conditions = await b3Conditions(s, B3_SETTINGS["split-load"]);
   const initialWindow = await s.get("host.window");
   const initialGrid = await s.get("core.grid");
-  const source = initialGrid.cards.find((card) => card.tabs?.some((tab) => tab.id === start.surface))?.id;
+  const source = initialGrid.cards.find((card) => card.tabs?.some((tab) => tab.tab === start.surface))?.id;
   assert.ok(source, `the start tab ${start.surface} is in no card of the stress layout`);
   const baseline = hostRssKb(app.configDir);
   assert.ok(Number.isInteger(baseline), "host RSS was not measurable before stress");

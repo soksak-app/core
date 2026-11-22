@@ -44,7 +44,7 @@ export function publicHostState({layout,grid,surfaces,modal,hits,normalize=text=
     settings:layout.settings,project:layout.project,overridden:layout.overridden,
     grid:{fullscreen:grid.fullscreen,gap:grid.gap,cards:grid.cards.map(card=>({id:card.id,c0:card.c0,c1:card.c1,r0:card.r0,r1:card.r1,
       fixed:card.fixed,fullscreen:card.fullscreen,focused:card.focused,pane:card.pane,status:card.status,active:card.active,
-      tabs:card.tabs.map(tab=>({id:tab.id,plugin:tab.plugin}))}))},
+      tabs:card.tabs.map(tab=>({id:tab.tab,plugin:tab.plugin}))}))},
     surfaces:surfaceSemantics,modal:{open:modal.open}})));
   return {semantics,geometry:JSON.parse(normalize(JSON.stringify(geometry)))};
 }

@@ -9,9 +9,9 @@ export async function checkLinkedPanels(s, t, name) {
   const set = settings.values.sets[0];
   assert.ok(set, "no sidebar set in the fixture");
   const grid = await s.get("core.grid");
-  const card = grid.cards.find((item) => item.tabs?.some((tab) => tab.id === item.active && tab.plugin));
+  const card = grid.cards.find((item) => item.tabs?.some((tab) => tab.tab === item.active && tab.plugin));
   assert.ok(card, "no card with a declared active plugin");
-  const plugin = card.tabs.find((tab) => tab.id === card.active).plugin;
+  const plugin = card.tabs.find((tab) => tab.tab === card.active).plugin;
   const failures = [];
   for (const side of ["top", "bottom", "left", "right"]) {
     await s.run("core.card.sidebar.set", { card: card.id, side, set: "inherit" });

@@ -62,7 +62,7 @@ for (const app of Object.values(APPS)) {
     const { tab: surface } = await s.run("core.card.add-tab", { card: card.id, plugin: PROBE });
     const closeTarget = async () => {
       const current = await s.get("core.grid");
-      if (current.cards.some((entry) => entry.tabs.some((tab) => tab.id === surface))) {
+      if (current.cards.some((entry) => entry.tabs.some((tab) => tab.tab === surface))) {
         assert.equal((await s.run("core.tab.close", { tab: surface })).closed, true,
           "the fault target remained open after the check");
       }

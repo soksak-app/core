@@ -31,7 +31,7 @@
     {"send":{"jsonrpc":"2.0","id":13,"method":"status.unwatch","params":{"window":"w2","name":"host.window"}}},
     {"reply":{"jsonrpc":"2.0","id":13,"result":null}},
     {"send":{"jsonrpc":"2.0","id":14,"method":"status.get","params":{"window":"w2","name":"core.grid"}}},
-    {"reply":{"jsonrpc":"2.0","id":14,"result":{"cards":[{"id":"c1","fixed":false,"tabs":[{"id":"t-old","plugin":"other"}]}]}}},
+    {"reply":{"jsonrpc":"2.0","id":14,"result":{"cards":[{"id":"c1","fixed":false,"tabs":[{"tab":"t-old","plugin":"other"}]}]}}},
     {"send":{"jsonrpc":"2.0","id":15,"method":"command.run","params":{"window":"w2","name":"core.card.add-tab","params":{"card":"c1","plugin":"rasterprobe"}}}},
     {"reply":{"jsonrpc":"2.0","id":15,"result":{"tab":"tab-1"}}},
     {"send":{"jsonrpc":"2.0","id":16,"method":"command.run","params":{"window":"w2","name":"core.tab.close","params":{"tab":"t-old"}}}},

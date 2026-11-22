@@ -73,11 +73,11 @@ for (const app of Object.values(APPS)) {
     s.cleanup(() => rmSync(join(project.root, folder), { recursive: true, force: true }));
     // No loaded fixture plugin declares the extension zzz, so core.file.open, which the view runs, fails, and the view receives the
     // failure as the answer of its call.
-    const before = new Set((await s.get("core.grid")).cards.flatMap((card) => (card.tabs ?? []).map((tab) => tab.id)));
+    const before = new Set((await s.get("core.grid")).cards.flatMap((card) => (card.tabs ?? []).map((tab) => tab.tab)));
     const answer = await s.run("layoutprobe.open", { path }, surface);
     assert.deepEqual(answer, { tab: null, error: `no plugin opens ${path}` }, "the view did not receive the failure of core.file.open");
     assert.equal(await s.get("core.workbench.error"), null, "the failure to open a file reached the error display");
-    const after = (await s.get("core.grid")).cards.flatMap((card) => (card.tabs ?? []).map((tab) => tab.id));
+    const after = (await s.get("core.grid")).cards.flatMap((card) => (card.tabs ?? []).map((tab) => tab.tab));
     assert.deepEqual(after.filter((tab) => !before.has(tab)), [], "the failed open added a tab");
   });
 }

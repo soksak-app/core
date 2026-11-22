@@ -132,7 +132,7 @@ export async function rasterProbeTab(s, { card, split } = {}) {
   await s.until("core.surfaces", (list) => list.some((item) => item.surface === tab && item.visible && item.status?.phase === "ready"),
     `the raster probe tab ${tab} did not become ready`);
   await readyRasterProbe(s, tab);
-  const holder = (await s.get("core.grid")).cards.find((item) => item.tabs?.some((entry) => entry.id === tab));
+  const holder = (await s.get("core.grid")).cards.find((item) => item.tabs?.some((entry) => entry.tab === tab));
   return { surface: tab, card: holder.id };
 }
 
@@ -296,7 +296,7 @@ export async function receivedAfter(s, surface, after, message) {
  * of `tab`; the index of the tab in its own card names another tab when an earlier card holds tabs.
  */
 export function tabElementIndex(grid, tab) {
-  const index = grid.cards.flatMap((card) => card.tabs ?? []).findIndex((entry) => entry.id === tab);
+  const index = grid.cards.flatMap((card) => card.tabs ?? []).findIndex((entry) => entry.tab === tab);
   if (index < 0) throw new Error(`core.grid has no tab ${tab}`);
   return index;
 }

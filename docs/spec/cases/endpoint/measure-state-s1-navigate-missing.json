@@ -19,7 +19,7 @@
     {"send":{"jsonrpc":"2.0","id":7,"method":"command.run","params":{"window":"w1","name":"core.settings.change","params":{"key":"diagnostics.performance","value":false,"scope":"common"}}}},
     {"reply":{"jsonrpc":"2.0","id":7,"result":null}},
     {"send":{"jsonrpc":"2.0","id":8,"method":"status.get","params":{"window":"w1","name":"core.grid"}}},
-    {"reply":{"jsonrpc":"2.0","id":8,"result":{"cards":[{"id":"left","fixed":true,"tabs":[]},{"id":"c1","fixed":false,"tabs":[{"id":"t-old","plugin":"probeunload"}]}]}}},
+    {"reply":{"jsonrpc":"2.0","id":8,"result":{"cards":[{"id":"left","fixed":true,"tabs":[]},{"id":"c1","fixed":false,"tabs":[{"tab":"t-old","plugin":"probeunload"}]}]}}},
     {"send":{"jsonrpc":"2.0","id":9,"method":"command.run","params":{"window":"w1","name":"core.card.add-tab","params":{"card":"c1","plugin":"probeinput"}}}},
     {"reply":{"jsonrpc":"2.0","id":9,"result":{"tab":"t-term"}}},
     {"send":{"jsonrpc":"2.0","id":10,"method":"command.run","params":{"window":"w1","name":"core.tab.close","params":{"tab":"t-old"}}}},

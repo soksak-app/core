@@ -5,7 +5,7 @@ import { checkLinkedPanels } from "../linked-panels.mjs";
 // Injects wrong results at the declared status and command boundaries of the linked sidebar checker.
 async function check(fault) {
   const sides = ["top", "bottom", "left", "right"];
-  const card = { id: "card", active: "tab", tabs: [{ id: "tab", plugin: "fixture" }], sidebars: {} };
+  const card = { id: "card", active: "tab", tabs: [{ tab: "tab", plugin: "fixture" }], sidebars: {} };
   const saved = {};
   const values = { sets: [{ id: "fixture-set" }], links: [] };
   // The stored layout tree of one card node (docs/spec/groups.md#storage).

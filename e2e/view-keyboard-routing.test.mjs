@@ -148,7 +148,7 @@ for (const app of MAIN_PAGE_APPS) {
   test(`${app.name}: an Escape pressed while the page picker loads dismisses the picker once`, { timeout: 60000 }, async (t) => {
     const s = await openProbe(t, app);
     const { surface } = await focusedDocument(s);
-    const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === surface));
+    const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.tab === surface));
     assert.ok(card, "the probe has no owning card");
 
     let held = false;
@@ -198,7 +198,7 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: native picker Escape dismisses its modal once`, { timeout: 60000 }, async (t) => {
     const s = await openProbe(t, app);
     const { surface } = await focusedDocument(s);
-    const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === surface));
+    const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.tab === surface));
     assert.ok(card, "the probe has no owning card");
     await s.run("core.card.menu", { card: card.id, menu: "add" });
     await s.until("core.picker", (picker) => picker.open, "the native picker did not open");
@@ -301,7 +301,7 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: native cmd+= runs the text-size menu command without view keydown`, { timeout: 60000 }, async (t) => {
     const s = await openProbe(t, app);
     const probe = await focusedField(s);
-    const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === probe.surface));
+    const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.tab === probe.surface));
     assert.ok(card, "the probe has no owning card");
     await s.until("core.text", (value) => value.scope.kind === "card" && value.scope.card === card.id,
       "the probe did not select its owning text-size scope");

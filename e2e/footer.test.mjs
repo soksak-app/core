@@ -13,10 +13,10 @@ for (const app of Object.values(APPS)) {
     const { footer } = await s.get("layoutprobe.view", surface);
     const shows = async (text, message) => {
       const grid = await s.until("core.grid", (value) => {
-        const card = value.cards.find((item) => item.tabs?.some((tab) => tab.id === surface));
-        return card?.active === surface && card.tabs.find((tab) => tab.id === surface)?.footer === text;
+        const card = value.cards.find((item) => item.tabs?.some((tab) => tab.tab === surface));
+        return card?.active === surface && card.tabs.find((tab) => tab.tab === surface)?.footer === text;
       }, message);
-      const card = grid.cards.find((item) => item.tabs?.some((tab) => tab.id === surface));
+      const card = grid.cards.find((item) => item.tabs?.some((tab) => tab.tab === surface));
       assert.equal(card.status, text, `the card footer does not show the footer of its active tab: ${JSON.stringify(card)}`);
     };
     assert.ok(footer, "the layout probe declared no footer at its start");

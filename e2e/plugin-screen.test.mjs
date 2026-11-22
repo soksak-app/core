@@ -112,7 +112,7 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     await fresh(s);
     const start = async () => (await s.get("core.window.workbench")).start;
-    const tabOf = (grid, id) => grid.cards.flatMap((card) => card.tabs ?? []).find((tab) => tab.id === id);
+    const tabOf = (grid, id) => grid.cards.flatMap((card) => card.tabs ?? []).find((tab) => tab.tab === id);
 
     // The save-close probe reports its tab modified and counts each call of its save command, across a new start of the workbench.
     const card = (await s.get("core.grid")).cards.find((item) => item.focused);

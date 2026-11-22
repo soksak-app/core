@@ -5,7 +5,7 @@
   "reason": "The case opens a view of a plugin under a recording, which needs a plugin and a display that the replay does not have.",
   "steps": [
     {"send":{"jsonrpc":"2.0","id":1,"method":"status.get","params":{"window":"main","name":"core.grid"}}},
-    {"reply":{"jsonrpc":"2.0","id":1,"result":{"cards":[{"id":"selected-card","active":"anchor","tabs":[{"id":"anchor","plugin":"other-fixture"},{"id":"old-target","plugin":"fixture"}]}]}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"cards":[{"id":"selected-card","active":"anchor","tabs":[{"tab":"anchor","plugin":"other-fixture"},{"tab":"old-target","plugin":"fixture"}]}]}}},
     {"send":{"jsonrpc":"2.0","id":2,"method":"status.get","params":{"window":"main","name":"host.window"}}},
     {"reply":{"jsonrpc":"2.0","id":2,"result":{"refreshRate":null}}},
     {"send":{"jsonrpc":"2.0","id":3,"method":"diagnostics.clock","params":{"window":"main"}}},

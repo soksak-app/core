@@ -13,7 +13,7 @@ import { retainDesignStateCapture } from "./still-capture.mjs";
 const cardOf = (grid, id) => grid?.cards.find((c) => c.id === id);
 
 /** A card that has a tab id. */
-const holder = (grid, tab) => grid?.cards.find((c) => c.tabs.some((t) => t.id === tab));
+const holder = (grid, tab) => grid?.cards.find((c) => c.tabs.some((t) => t.tab === tab));
 
 /** A card that can be operated (a card with tool buttons). Sidebar and rail places are excluded. */
 const panes = (grid) => grid.cards.filter((c) => c.pane !== null);
@@ -61,12 +61,12 @@ for (const app of Object.values(APPS)) {
     assert.equal((await s.get("core.picker")).open, false, "picking must close the menu");
     const added = cardOf(picked, own);
     assert.equal(added.tabs.at(-1).plugin, ADDED);
-    assert.equal(added.active, added.tabs.at(-1).id, "the added tab must be active");
+    assert.equal(added.active, added.tabs.at(-1).tab, "the added tab must be active");
 
-    await s.run("core.tab.select", { tab: first.tabs[0].id });
-    await s.until("core.grid", (grid) => cardOf(grid, own).active === first.tabs[0].id,
+    await s.run("core.tab.select", { tab: first.tabs[0].tab });
+    await s.until("core.grid", (grid) => cardOf(grid, own).active === first.tabs[0].tab,
       "core.tab.select did not activate the tab");
-    await s.run("core.tab.close", { tab: added.tabs.at(-1).id });
+    await s.run("core.tab.close", { tab: added.tabs.at(-1).tab });
     await s.until("core.grid", (grid) => cardOf(grid, own).tabs.length === first.tabs.length,
       "core.tab.close did not close the tab");
 

@@ -17,7 +17,7 @@ async function addedTab(session, card, plugin) {
   const { tab } = await session.run("core.card.add-tab", { card, plugin });
   session.cleanup(async () => {
     const grid = await session.get("core.grid");
-    if (grid.cards.some(item => item.tabs?.some(entry => entry.id === tab))) {
+    if (grid.cards.some(item => item.tabs?.some(entry => entry.tab === tab))) {
       const result = await session.run("core.tab.close", { tab });
       assert.equal(result.closed, true, `hidden status fixture ${tab} did not close`);
     }
@@ -34,7 +34,7 @@ test("hidden view statuses notify through every inactive host session", { timeou
       const { card, surface } = await addRasterTab(session);
       session.cleanup(async () => {
         const grid = await session.get("core.grid");
-        if (grid.cards.some(item => item.tabs?.some(entry => entry.id === surface))) {
+        if (grid.cards.some(item => item.tabs?.some(entry => entry.tab === surface))) {
           const result = await session.run("core.tab.close", { tab: surface });
           assert.equal(result.closed, true, `hidden status fixture ${surface} did not close`);
         }

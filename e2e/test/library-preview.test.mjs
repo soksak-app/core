@@ -7,8 +7,8 @@ import { previewGaps, startPreviewPanes } from "../library-preview.mjs";
 const grid = {
   cards: [
     { id: "left", x: 0, y: 0, w: 190, h: 800, fixed: true, tabs: [] },
-    { id: "terminal", x: 190, y: 0, w: 800, h: 416, tabs: [{ id: "tab-upper" }], focused: false },
-    { id: "browser", x: 190, y: 416, w: 800, h: 384, tabs: [{ id: "tab-lower" }], focused: true },
+    { id: "terminal", x: 190, y: 0, w: 800, h: 416, tabs: [{ tab: "tab-upper" }], focused: false },
+    { id: "browser", x: 190, y: 416, w: 800, h: 384, tabs: [{ tab: "tab-lower" }], focused: true },
     { id: "right", x: 990, y: 0, w: 210, h: 800, fixed: true, tabs: [] },
   ],
 };

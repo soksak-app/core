@@ -13,7 +13,7 @@ function fixture() {
   return {layout:{window:{content:{width:400,height:300},scale:2,
     surfaces:[{id:"tab-a",visible:true,frame:{x:10,y:20,width:100,height:60}}]},
     document:{width:400,height:300,scale:2},settings:{left:true},project:null,overridden:{}},
-    grid:{cards:[{id:"card-a",pane:"pane-a",active:"tab-a",tabs:[{id:"tab-a",plugin:"layoutprobe"}]}]},
+    grid:{cards:[{id:"card-a",pane:"pane-a",active:"tab-a",tabs:[{tab:"tab-a",plugin:"layoutprobe"}]}]},
     surfaces:[{surface:"tab-a",plugin:"layoutprobe",visible:true,dim:false,declared:{...rect},applied:{...rect},composition:"view",kind:"tab",state:"loaded"}],
     modal:{open:false},hits:{"tab-a":{kind:"document",surface:"tab-a",document:""}}};
 }

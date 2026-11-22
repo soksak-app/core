@@ -11,7 +11,7 @@ for (const app of Object.values(APPS))
     const initial = await s.get("core.grid");
     assert.equal(initial.fullscreen, null, "start observation from normal card presentation");
     const linkOf = (card) => {
-      const plugin = card.tabs?.find((tab) => tab.id === card.active)?.plugin;
+      const plugin = card.tabs?.find((tab) => tab.tab === card.active)?.plugin;
       return settings.links.find((link) => link.place === "card-right" && link.plugin === plugin && plugin !== undefined);
     };
     const target = initial.cards.find(linkOf);

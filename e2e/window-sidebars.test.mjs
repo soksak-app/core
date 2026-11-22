@@ -23,7 +23,7 @@ async function probeLinks(s, plugin) {
 }
 
 /** The card of the grid that holds the tab surface. */
-const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab) => tab.id === surface)).id;
+const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab) => tab.tab === surface)).id;
 const geometry = (grid) =>
   grid.cards.map(({ id, x, y, w, h }) => ({ id, x, y, w, h })).sort((a, b) => a.id.localeCompare(b.id));
 for (const app of Object.values(APPS))
@@ -82,7 +82,7 @@ for (const app of Object.values(APPS))
         assert.equal(bar.set, selected.set);
         assert.equal(bar.plugin, override ? tab.plugin : null);
         assert.equal(bar.card, override ? card.id : null);
-        assert.equal(bar.surface, override ? tab.id : null);
+        assert.equal(bar.surface, override ? tab.tab : null);
         const set = settings.sets.find((set) => set.id === selected.set);
         assert.equal(bar.layout, set.layout);
         assert.deepEqual(
@@ -107,11 +107,11 @@ for (const app of Object.values(APPS))
     try {
       for (const card of baseline.cards.filter((card) => card.tabs.length))
         for (const tab of card.tabs) {
-          await s.run("core.tab.select", { tab: tab.id });
+          await s.run("core.tab.select", { tab: tab.tab });
           await s.until(
             "core.grid",
             (grid) =>
-              grid.cards.find((item) => item.id === card.id)?.active === tab.id &&
+              grid.cards.find((item) => item.id === card.id)?.active === tab.tab &&
               grid.cards.find((item) => item.id === card.id)?.focused === true,
             "tab selection did not settle",
           );
@@ -155,7 +155,7 @@ for (const app of Object.values(APPS))
         const grid = await s.get("core.grid");
         const focused = grid.cards.find((card) => card.focused);
         assert.ok(focused, `${label}: no focused card`);
-        const tab = focused.tabs.find((item) => item.id === focused.active);
+        const tab = focused.tabs.find((item) => item.tab === focused.active);
         for (const side of ["left", "right"]) {
           const override = links.find((link) => link.place === `window-${side}` && link.plugin === tab.plugin);
           const general = links.find((link) => link.place === side && link.plugin === null);
@@ -168,12 +168,12 @@ for (const app of Object.values(APPS))
                 found !== undefined &&
                 found.plugin === (override ? tab.plugin : null) &&
                 found.card === (override ? focused.id : null) &&
-                found.surface === (override ? tab.id : null) &&
+                found.surface === (override ? tab.tab : null) &&
                 (found.layout !== "tabs" ||
                   found.sections.some((section) => section.id === found.tab && section.mounted))
               );
             },
-            `${label}: ${side} sidebar context did not follow ${focused.id}/${tab.id} (${tab.plugin})`,
+            `${label}: ${side} sidebar context did not follow ${focused.id}/${tab.tab} (${tab.plugin})`,
           );
           const shown = bar.find((item) => item.sidebar === side);
           assert.equal(shown.set, (override ?? general).set, `${label}: ${side} sidebar shows the wrong set`);
@@ -200,7 +200,7 @@ for (const app of Object.values(APPS))
       await s.run("core.card.focus", { card: own });
       await expectContext("start card focus");
       const start = (await s.get("core.grid")).cards.find((card) => card.id === own);
-      const moved = start.tabs.find((item) => item.id === start.active);
+      const moved = start.tabs.find((item) => item.tab === start.active);
       await s.run("core.tab.move", { tab: moved.id, card: other, zone: "centre" });
       await expectContext("tab moved into the other card");
       await s.run("core.card.focus", { card: own });
@@ -235,7 +235,7 @@ for (const app of Object.values(APPS))
       const settings = (await s.get("core.settings")).values;
       const grid = await s.get("core.grid");
       const focused = grid.cards.find((card) => card.focused);
-      const plugin = focused?.tabs.find((tab) => tab.id === focused.active)?.plugin ?? null;
+      const plugin = focused?.tabs.find((tab) => tab.tab === focused.active)?.plugin ?? null;
       const held = settings.sidebarOrder.filter((side) => settings[side] && settings.links.some((link) =>
         link.place === side || link.place === `window-${side}`));
       const expected = held.filter((side) => settings.links.some((link) =>

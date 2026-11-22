@@ -91,7 +91,7 @@ for (const app of Object.values(APPS)) {
       // it; with no surface holding the sidecar, the host ends it after the list of the layouts.
       async () => {
         for (const card of (await s.get("core.grid")).cards) {
-          for (const tab of card.tabs) if (tab.plugin === RASTER) await s.run("core.tab.close", { tab: tab.id });
+          for (const tab of card.tabs) if (tab.plugin === RASTER) await s.run("core.tab.close", { tab: tab.tab });
         }
       },
       async () => {

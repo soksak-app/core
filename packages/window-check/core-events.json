@@ -882,6 +882,181 @@
       },
       "description": "An exposure reply matched no waiting request, and the host refused it: held says where the relay keeps the id, as other-target (a request of another document waits under it), ended (the request ended before this reply), or none (the relay holds no request under it)."
     },
+    "host.program.start": {
+      "layer": "host",
+      "class": "call",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "plugin": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "program": {
+            "type": "string"
+          },
+          "args": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "cwd": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plugin",
+          "surface",
+          "name",
+          "program",
+          "args",
+          "cwd"
+        ]
+      },
+      "description": "A declared program of a plugin page starts. name is the declared name, program the declared text, args the argument texts of the run and cwd the project folder of the surface (docs/spec/native-surfaces.md#program-runs)."
+    },
+    "host.program.end": {
+      "layer": "host",
+      "class": "call",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "plugin": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "exited",
+              "cancelled",
+              "process-ended",
+              "surface-closed",
+              "window-closed"
+            ]
+          },
+          "code": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "signal": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "stdoutBytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "stderrBytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "stdoutTruncated": {
+            "type": "boolean"
+          },
+          "stderrTruncated": {
+            "type": "boolean"
+          },
+          "durationUs": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "plugin",
+          "surface",
+          "name",
+          "result",
+          "code",
+          "signal",
+          "stdoutBytes",
+          "stderrBytes",
+          "stdoutTruncated",
+          "stderrTruncated",
+          "durationUs"
+        ]
+      },
+      "description": "A run of a declared program ends. result is exited for an exit, or the end that ended the run; code is the exit status, null when a signal ended the program, and signal names that signal. stdoutBytes and stderrBytes count every byte the program wrote, kept or discarded (docs/spec/native-surfaces.md#program-runs)."
+    },
+    "host.program.refused": {
+      "layer": "host",
+      "class": "call",
+      "level": "error",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "plugin": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plugin",
+          "surface",
+          "name",
+          "reason"
+        ]
+      },
+      "description": "A run of a declared program was refused before its program started; reason is the refusal text that the view call answers (docs/spec/native-surfaces.md#program-runs)."
+    },
+    "host.program.failed": {
+      "layer": "host",
+      "class": "call",
+      "level": "error",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "plugin": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plugin",
+          "surface",
+          "name",
+          "reason"
+        ]
+      },
+      "description": "A run of a declared program failed after the start was attempted: the program did not start, or a kept output stream is not UTF-8; reason is the failure text that the view call answers (docs/spec/native-surfaces.md#program-runs)."
+    },
     "host.call.peer-lost": {
       "layer": "host",
       "class": "call",
@@ -1070,6 +1245,34 @@
         "additionalProperties": false
       },
       "description": "The performance trace of an existing surface-layout UI admission or native callback. queued_ns is sampled immediately before the existing dispatch or callback registration, entered_ns at the UI closure or callback entry, and returned_ns at that closure or callback's end. All three are canonical decimal nanoseconds from the host event clock (CLOCK_UPTIME_RAW on macOS). ticket is omitted until the sync request has assigned one. The operation composition records the placement of the regions and overlays of one surface, which surface names; the records of the window layout have no surface. The record does not include the caller's resume time after a synchronous dispatch."
+    },
+    "workbench.frame.request": {
+      "layer": "workbench",
+      "class": "frame",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "surface": {
+            "type": "string"
+          },
+          "card": {
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "loading"
+            ]
+          }
+        },
+        "required": [
+          "surface",
+          "card",
+          "reason"
+        ]
+      },
+      "description": "The workbench requested the next animation frame of a surface in the loading phase, which is the reason of the request; the surface and the card are the ones that asked for it, so a frame record can be traced to its requester."
     },
     "host.frame.commit": {
       "layer": "host",
@@ -2751,6 +2954,57 @@
       },
       "description": "A command that changed the layout of the active space; `params` and `result` are the JSON text of its parameters and of its answer cut to 1024 bytes, `layout` is the JSON text of the stored layout of the space after it, {state, groups, leader, lastCard}, cut to 61440 bytes so that the fields stay within the bound of an event."
     },
+    "workbench.session.end": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "session": { "type": "string" },
+          "reason": { "type": "string" }
+        },
+        "required": ["session", "reason"]
+      },
+      "description": "An owned session ended with its reason: ended by its owner, owner-closed when its owner surface closed, or owner-absent when its owner did not return after a restart (docs/spec/plugins.md#owned-sessions)."
+    },
+    "workbench.session.open": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "session": {
+            "type": "string"
+          },
+          "plugin": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "size": {
+            "type": "object",
+            "properties": {
+              "width": { "type": "number", "exclusiveMinimum": 0 },
+              "height": { "type": "number", "exclusiveMinimum": 0 },
+              "scale": { "type": "number", "exclusiveMinimum": 0 }
+            },
+            "required": ["width", "height", "scale"]
+          }
+        },
+        "required": [
+          "session",
+          "plugin",
+          "owner",
+          "size"
+        ]
+      },
+      "description": "The workbench opened an owned session for its owner surface (docs/spec/plugins.md#owned-sessions)."
+    },
     "workbench.background.session": {
       "layer": "workbench",
       "class": "lifecycle",
@@ -4190,6 +4444,12 @@
           "surface": {
             "type": "string"
           },
+          "caller": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
           "unsent": {
             "type": "boolean"
           }
@@ -4197,10 +4457,11 @@
         "required": [
           "plugin",
           "surface",
+          "caller",
           "unsent"
         ]
       },
-      "description": "The host ended a view that it observes (kill, close or crash); plugin and surface name the view, and unsent is true because the records of the view that were not yet sent to the writer may be lost, which the event states and no count gives. The writer stores it through its own path, so it passes every gate."
+      "description": "The host ended a view that it observes (kill, close or crash); plugin and surface name the view, caller names the cause of the end, and unsent is true because the records of the view that were not yet sent to the writer may be lost, which the event states and no count gives. The writer stores it through its own path, so it passes every gate."
     },
     "host.view.call": {
       "layer": "host",
@@ -4539,6 +4800,32 @@
         ]
       },
       "description": "The host started the detached command that replaces the application bundle."
+    },
+    "host.plugins.update": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "plugin": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plugin",
+          "from",
+          "to"
+        ]
+      },
+      "description": "The host updated an installed plugin at start because its installed release is refused or older than the newest accepted version (docs/spec/installation.md#update-at-start)."
     },
     "native.connection.activity": {
       "layer": "native",

@@ -81,7 +81,7 @@ for (const app of Object.values(APPS)) {
     const tab = await modifiedTab(s);
     s.cleanup(async () => {
       const grid = await s.get("core.grid");
-      if (!grid.cards.some((card) => (card.tabs ?? []).some((entry) => entry.id === tab))) return;
+      if (!grid.cards.some((card) => (card.tabs ?? []).some((entry) => entry.tab === tab))) return;
       const { closed } = await s.run("core.tab.close", { tab });
       if (closed) return;
       const picker = await s.until("core.picker", (value) => value.open, "the close question did not open");
@@ -110,7 +110,7 @@ for (const app of Object.values(APPS)) {
       for (const card of grid.cards) {
         for (const tab of card.tabs ?? []) {
           if (tab.modified) {
-            const { closed } = await s.run("core.tab.close", { tab: tab.id });
+            const { closed } = await s.run("core.tab.close", { tab: tab.tab });
             if (!closed) {
               const picker = await s.until("core.picker", (value) => value.open, "the close question did not open");
               await s.run("core.picker.pick", { index: picker.items.findIndex((item) => item.name === "저장하지 않고 닫기") });

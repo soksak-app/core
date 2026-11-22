@@ -6,7 +6,7 @@ import { fresh, probeSidebarSets } from "./fixture.mjs";
 import { tabElementIndex } from "./input-probe.mjs";
 
 /** The card of the grid that holds the tab surface. */
-const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab) => tab.id === surface)).id;
+const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab) => tab.tab === surface)).id;
 
 async function clickFullscreen(t, s, card, expected) {
   const control = await s.rect("core.card.fullscreen", card.pane);
@@ -31,7 +31,7 @@ for (const app of Object.values(APPS)) {
     const target = initial.cards.find((card) => card.tabs.some((tab) => tab.plugin === plugin));
     assert.ok(target, `no ${plugin} card for native fullscreen observation`);
     const tab = target.tabs.find((tab) => tab.plugin === plugin);
-    await s.run("core.tab.select", { tab: tab.id });
+    await s.run("core.tab.select", { tab: tab.tab });
     for (const side of ["top", "bottom", "left", "right"]) {
       await s.run("core.card.sidebar.set", { card: target.id, side, set: "off" });
     }
@@ -51,11 +51,11 @@ for (const app of Object.values(APPS)) {
     const surfaces = await s.get("core.surfaces");
     assert.deepEqual(surfaces.map((surface) => surface.surface).sort(), beforeSurfaces.map((surface) => surface.surface).sort(),
       "fullscreen disposed a live sibling surface");
-    assert.deepEqual(surfaces.filter((surface) => surface.visible).map((surface) => surface.surface), [tab.id]);
+    assert.deepEqual(surfaces.filter((surface) => surface.visible).map((surface) => surface.surface), [tab.tab]);
     const nativeFacts = (await s.get("host.window")).surfaces.filter(surface => surface.visible);
     assert.equal(nativeFacts.length, 1, "fullscreen left sibling native views visible");
-    assert.equal(nativeFacts[0].id, tab.id, "fullscreen presented the wrong native view");
-    const native = surfaces.find((surface) => surface.surface === tab.id);
+    assert.equal(nativeFacts[0].id, tab.tab, "fullscreen presented the wrong native view");
+    const native = surfaces.find((surface) => surface.surface === tab.tab);
     assert.ok(Math.abs(native.applied.w - (shown.w - 2)) <= 1, `native fullscreen width: ${JSON.stringify(native)}`);
     assert.ok(Math.abs(native.applied.h - (shown.h - 56)) <= 1, `native fullscreen height: ${JSON.stringify(native)}`);
     const icon = await s.rect("core.card.fullscreen", shown.pane);
@@ -78,7 +78,7 @@ for (const app of Object.values(APPS)) {
       const resizedCard = resized.cards.find(card => card.id === target.id);
       assert.equal(resized.fullscreen, target.id);
       assert.deepEqual([resizedCard.x, resizedCard.y, resizedCard.w, resizedCard.h], [0, 0, resized.width, resized.height]);
-      const resizedNative = (await s.get("core.surfaces")).find(surface => surface.surface === tab.id);
+      const resizedNative = (await s.get("core.surfaces")).find(surface => surface.surface === tab.tab);
       assert.ok(Math.abs(resizedNative.applied.w - (resizedCard.w - 2)) <= 1);
       assert.ok(Math.abs(resizedNative.applied.h - (resizedCard.h - 56)) <= 1);
     } finally {
@@ -119,7 +119,7 @@ for (const app of Object.values(APPS)) {
     const target = (await s.get("core.grid")).cards.find(card => card.tabs.some(tab => tab.plugin === plugin));
     assert.ok(target);
     const tab = target.tabs.find(tab => tab.plugin === plugin);
-    await s.run("core.tab.select", { tab: tab.id });
+    await s.run("core.tab.select", { tab: tab.tab });
     for (const side of ["top", "bottom", "left", "right"]) {
       await s.run("core.card.sidebar.set", { card: target.id, side, set: "inherit" });
     }
@@ -135,7 +135,7 @@ for (const app of Object.values(APPS)) {
       const grid = await s.get("core.grid");
       const card = grid.cards.find(card => card.id === target.id);
       const region = (await s.get("core.sidebars")).find(sidebar => sidebar.sidebar === `${target.id}:left`);
-      const native = (await s.get("core.surfaces")).find(surface => surface.surface === tab.id);
+      const native = (await s.get("core.surfaces")).find(surface => surface.surface === tab.tab);
       assert.ok(settings.values.links.some(link => link.place === "card-left" && link.plugin === plugin && link.set === set.id), `${mode}: setting was not saved`);
       assert.equal(grid.fullscreen, mode === "fullscreen" ? target.id : null);
       assert.equal(card.sidebars.left?.set, set.id, `${mode}: card did not adopt its settings`);
@@ -163,7 +163,7 @@ for (const app of Object.values(APPS)) {
     const added = await s.until("core.grid", grid => grid.cards.find(item => item.id === own)?.tabs.length === 2,
       "the second tab did not appear");
     const card = added.cards.find(item => item.id === own);
-    const other = card.tabs.find(tab => tab.id !== card.active);
+    const other = card.tabs.find(tab => tab.tab !== card.active);
     await s.run("core.card.fullscreen", { card: own });
     await s.until("core.grid", grid => grid.fullscreen === own, "the card did not become fullscreen");
     const recording = await s.record();

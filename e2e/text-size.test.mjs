@@ -35,14 +35,14 @@ for (const app of Object.values(APPS)) {
       await s.run("core.settings.set", { patch: { textSize: 1 }, scope: "common" });
     });
     // A tab of the second layout probe draws a line of text at 13 points times the text size of its surface and reports its height.
-    const start = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === surface));
+    const start = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.tab === surface));
     const { tab: probe } = await s.run("core.card.add-tab", { card: start.id, plugin: "layoutprobe2" });
     s.cleanup(() => s.run("core.tab.close", { tab: probe }));
     await s.run("core.tab.select", { tab: probe });
     // until resolves with the status value that satisfies the predicate, so the text is read from that value.
     const { text: before } = await s.until("layoutprobe2.surface", (value) => value?.text?.factor === 1 && value.text.height > 0,
       "the probe tab did not draw its text at text size 1", { surface: probe });
-    const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === probe));
+    const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.tab === probe));
     await s.presented();
 
     // When a card is pressed, that card is the scope, and the menu item changes only the scale of that card.

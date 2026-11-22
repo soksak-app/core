@@ -415,7 +415,7 @@ for (const app of Object.values(APPS)) {
     const assertActiveViewsReady = async (window, phase) => {
       await window.until("core.grid", (grid) => grid?.cards.length > 0, `${phase}: project cards did not render`);
       const grid = await window.get("core.grid");
-      const active = new Set(grid.cards.filter((card) => card.tabs?.find((tab) => tab.id === card.active)?.plugin === START_PLUGIN)
+      const active = new Set(grid.cards.filter((card) => card.tabs?.find((tab) => tab.tab === card.active)?.plugin === START_PLUGIN)
         .map((card) => card.active));
       assert.ok(active.size > 0, `${phase}: no card shows an active probe view: ${JSON.stringify(grid.cards)}`);
       const surfaces = await window.until("core.surfaces", (items) =>

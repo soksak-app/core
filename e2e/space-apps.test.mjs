@@ -8,7 +8,7 @@ import { fresh } from "./fixture.mjs";
 const card = (grid, id) => grid.cards.find((item) => item.id === id);
 const panes = (grid) => grid.cards.filter((item) => item.pane !== null);
 /** The card of the grid that holds the tab surface. */
-const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab) => tab.id === surface)).id;
+const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab) => tab.tab === surface)).id;
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a fullscreen card lists the apps of the space by card and switches to a picked one`, { timeout: 120000 }, async (t) => {

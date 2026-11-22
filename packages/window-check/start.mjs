@@ -68,10 +68,10 @@ export async function startTab(s, { startPlugin: plugin = START_PROBE, startEntr
   if (active?.plugin !== plugin) {
     throw new Error(`the focused card of the start layout holds no active ${plugin} tab: ${JSON.stringify(grid?.cards ?? null)}`);
   }
-  await s.until("core.surfaces", (surfaces) => surfaces.some((row) => row.surface === active.id && row.visible && row.status?.phase === "ready"),
-    `the start tab ${active.id} did not become ready`);
-  await s.registered(active.id, entries);
-  return { surface: active.id, plugin };
+  await s.until("core.surfaces", (surfaces) => surfaces.some((row) => row.surface === active.tab && row.visible && row.status?.phase === "ready"),
+    `the start tab ${active.tab} did not become ready`);
+  await s.registered(active.tab, entries);
+  return { surface: active.tab, plugin };
 }
 
 /**

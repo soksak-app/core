@@ -54,7 +54,7 @@ for (const app of Object.values(APPS)) {
     // The new-space layout names plugins that a fixture configuration does not load; each of its tabs becomes a layout probe tab.
     await replacePlaceholders(child);
     const initialGrid = await child.until("core.grid", (grid) => grid.cards.some((card) => card.focused
-      && card.tabs.find((tab) => tab.id === card.active)?.plugin === START_PLUGIN), "the focused card did not show a layout probe tab");
+      && card.tabs.find((tab) => tab.tab === card.active)?.plugin === START_PLUGIN), "the focused card did not show a layout probe tab");
     const cardId = initialGrid.cards.find((card) => card.focused).id;
     const probeCard = (grid) => grid.cards.find((card) => card.id === cardId);
     const initialCard = probeCard(initialGrid);
@@ -66,7 +66,7 @@ for (const app of Object.values(APPS)) {
     await child.run("core.tab.select", { tab: activeTab });
     const storedGrid = await child.until("core.grid", (grid) => {
       const card = probeCard(grid);
-      return card?.active === activeTab && card.tabs.some((tab) => tab.id === hiddenTab && tab.plugin === UNLOADABLE);
+      return card?.active === activeTab && card.tabs.some((tab) => tab.tab === hiddenTab && tab.plugin === UNLOADABLE);
     }, "the unloadable tab was not saved as inactive");
     assert.equal(probeCard(storedGrid).tabs.length, 2, "the stored probe card must contain exactly two tabs");
     await child.run("core.projects.flush");
@@ -106,7 +106,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(memoryTab(unloaded, hiddenTab).plugin, UNLOADABLE);
     const coldGrid = await child.until("core.grid", (grid) => {
       const card = probeCard(grid);
-      return card?.active === activeTab && card.tabs.some((tab) => tab.id === hiddenTab && tab.plugin === UNLOADABLE);
+      return card?.active === activeTab && card.tabs.some((tab) => tab.tab === hiddenTab && tab.plugin === UNLOADABLE);
     }, "the unloaded tab was not retained as an inactive saved tab");
     assert.equal(probeCard(coldGrid).tabs.length, 2, "the cold probe card must retain both saved tabs");
     assert.equal((await child.get("host.window")).surfaces.some((item) => item.id === hiddenTab), false,
@@ -128,7 +128,7 @@ for (const app of Object.values(APPS)) {
       "the loaded hidden tab did not report the off protection");
     const loadedGrid = await child.until("core.grid", (grid) => {
       const card = probeCard(grid);
-      return card?.active === activeTab && card.tabs.some((tab) => tab.id === hiddenTab && tab.plugin === UNLOADABLE);
+      return card?.active === activeTab && card.tabs.some((tab) => tab.tab === hiddenTab && tab.plugin === UNLOADABLE);
     }, "the loaded tab was not retained as an inactive saved tab");
     assert.equal(probeCard(loadedGrid).tabs.length, 2, "the loaded probe card must retain both saved tabs");
     await child.until("core.surface.document", (document) => document?.readyState === "complete" && document.themed,

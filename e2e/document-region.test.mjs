@@ -63,7 +63,7 @@ async function placed(s, surface, message) {
 }
 
 /** The card of the grid that holds the tab surface. */
-const cardOf = (grid, surface) => grid.cards.find((card) => (card.tabs ?? []).some((tab) => tab.id === surface));
+const cardOf = (grid, surface) => grid.cards.find((card) => (card.tabs ?? []).some((tab) => tab.tab === surface));
 
 /** Waits until the new tab `tab` of the probe is visible and registered its document status. */
 async function probeTab(s, tab) {

@@ -17,7 +17,7 @@ for (const app of Object.values(APPS)) {
     await keepCommonSettings(s);
     // The text field of the view of the input probe reports its focus and its value.
     const probe = await inputProbeTab(s);
-    const card = (await s.get("core.grid")).cards.find(item => item.tabs.some(tab => tab.id === probe.surface));
+    const card = (await s.get("core.grid")).cards.find(item => item.tabs.some(tab => tab.tab === probe.surface));
     assert.ok(card, "the input probe has no owning card");
     const field = await fieldPoint(s, probe.surface);
     const recording = await s.record();

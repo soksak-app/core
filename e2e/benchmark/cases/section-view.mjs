@@ -89,7 +89,7 @@ export function requireSectionDeclarations(view) {
  */
 export const ANCHOR_PLUGIN = START_PLUGIN;
 
-const hasAnchorTab = (card) => card?.tabs?.some((tab) => typeof tab?.id === "string" && tab.id.length > 0 && tab.plugin === ANCHOR_PLUGIN);
+const hasAnchorTab = (card) => card?.tabs?.some((tab) => typeof tab?.tab === "string" && tab.tab.length > 0 && tab.plugin === ANCHOR_PLUGIN);
 
 /** The id of the tallest card of `grid` with an ANCHOR_PLUGIN tab, the first in document order among equals; none is an error. */
 function tallestAnchorCard(grid, plugin) {
@@ -112,7 +112,7 @@ async function requireSectionState(s, owner, card) {
     throw new Error(`${owner} starts with the project ${FIXTURE_PROJECT}, not with ${project === null ? "no project" : project.root}`);
   }
   const shown = (await s.get("core.grid")).cards.find((item) => item.id === card);
-  const active = shown?.tabs.find((tab) => tab.id === shown.active);
+  const active = shown?.tabs.find((tab) => tab.tab === shown.active);
   if (active?.plugin !== ANCHOR_PLUGIN) {
     throw new Error(`${owner} starts with a ${ANCHOR_PLUGIN} tab active in card ${card}, not with ${active?.plugin ?? "no active tab"}`);
   }

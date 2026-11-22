@@ -80,7 +80,7 @@ for (const app of Object.values(APPS)) {
     for (const card of grid.cards.filter((item) => item.tabs.length)) {
       await s.run("core.card.focus", { card: card.id });
       await s.presented();
-      const plugin = card.tabs.find((tab) => tab.id === card.active)?.plugin;
+      const plugin = card.tabs.find((tab) => tab.tab === card.active)?.plugin;
       const window = await s.get("host.window");
       seen.focus.push({ card: card.id, plugin, cursor: window.cursor, responder: window.responder });
     }

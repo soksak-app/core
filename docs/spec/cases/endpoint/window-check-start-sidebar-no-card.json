@@ -9,6 +9,6 @@
     {"send":{"jsonrpc":"2.0","id":2,"method":"command.run","params":{"window":"main","name":"core.settings.link","params":{"place":"card-left","plugin":"startplugin","set":"x","scope":"common"}}}},
     {"reply":{"jsonrpc":"2.0","id":2,"result":null}},
     {"send":{"jsonrpc":"2.0","id":3,"method":"status.get","params":{"window":"main","name":"core.grid"}}},
-    {"reply":{"jsonrpc":"2.0","id":3,"result":{"cards":[{"id":"left","fixed":true,"focused":false,"active":null},{"id":"upper","focused":true,"active":"t1","tabs":[{"id":"t1","plugin":"starter-a"}]},{"id":"lower","focused":false,"active":"b1","tabs":[{"id":"b1","plugin":"starter-b"}]}]}}}
+    {"reply":{"jsonrpc":"2.0","id":3,"result":{"cards":[{"id":"left","fixed":true,"focused":false,"active":null},{"id":"upper","focused":true,"active":"t1","tabs":[{"tab":"t1","plugin":"starter-a"}]},{"id":"lower","focused":false,"active":"b1","tabs":[{"tab":"b1","plugin":"starter-b"}]}]}}}
   ]
 }

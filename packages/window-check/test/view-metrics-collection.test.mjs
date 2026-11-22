@@ -76,16 +76,16 @@ test("generic view process samples preserve both event clocks and pair the first
 
 test("view anchor selection prefers the requested card and finds another card when needed", { timeout: 5000 }, () => {
   const grid = { cards: [
-    { id: "target", active: "same", tabs: [{ id: "same", plugin: "fixture" }] },
-    { id: "anchor", active: "other", tabs: [{ id: "other", plugin: "other-fixture" }] },
+    { id: "target", active: "same", tabs: [{ tab: "same", plugin: "fixture" }] },
+    { id: "anchor", active: "other", tabs: [{ tab: "other", plugin: "other-fixture" }] },
     { id: "preferred", active: "target-2", tabs: [
-      { id: "target-2", plugin: "fixture" }, { id: "anchor-2", plugin: "other-fixture" },
+      { tab: "target-2", plugin: "fixture" }, { tab: "anchor-2", plugin: "other-fixture" },
     ] },
   ] };
   assert.equal(viewCardWithDifferentPluginTab(grid, "fixture", "preferred"), "preferred");
   assert.equal(viewCardWithDifferentPluginTab(grid, "fixture", "target"), "anchor");
   assert.throws(() => viewCardWithDifferentPluginTab({ cards: [{ id: "only", tabs: [
-    { id: "same", plugin: "fixture" },
+    { tab: "same", plugin: "fixture" },
   ] }] }, "fixture"), /no card with an open plugin other than fixture/);
 });
 
@@ -476,7 +476,7 @@ test("a view descriptor without a placement is refused by every collector with a
 });
 
 test("the tab placement chooses a card with a tab of another plugin, adds the view as a tab and closes it as a tab", { timeout: 5000 }, async (t) => {
-  const grid = { cards: [{ id: "card-1", tabs: [{ id: "other", plugin: "other-fixture" }] }] };
+  const grid = { cards: [{ id: "card-1", tabs: [{ tab: "other", plugin: "other-fixture" }] }] };
   assert.equal(TAB_PLACEMENT.card(grid, "fixture", "card-1"), viewCardWithDifferentPluginTab(grid, "fixture", "card-1"));
   // The case holds the add of the tab, its close and the wait until the registry lists no view, and then a close that the host
   // reports as not closed.

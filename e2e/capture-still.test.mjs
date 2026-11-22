@@ -18,10 +18,10 @@ for (const app of Object.values(APPS))
     // reads the pixels of the window wherever it is in the window order (docs/spec/native-surfaces.md#image-regions).
     s.cleanup(await holdCovered(s));
     await s.run("core.settings.theme", { name: "midnight", mode: "dark" });
-    const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.id === start.surface));
+    const card = (await s.get("core.grid")).cards.find((item) => item.tabs.some((tab) => tab.tab === start.surface));
     assert.ok(card, "start card absent");
-    const tab = card.tabs.find((tab) => tab.id === start.surface);
-    await s.run("core.tab.select", { tab: tab.id });
+    const tab = card.tabs.find((tab) => tab.tab === start.surface);
+    await s.run("core.tab.select", { tab: tab.tab });
     const set = (await s.get("core.settings")).values.sets.find((item) => item.sections.length);
     assert.ok(set, "section set absent");
     for (const side of ["left", "right"]) {
@@ -32,7 +32,7 @@ for (const app of Object.values(APPS))
     // A capture activates nothing: the check judges that the activation of the application did not change, not whether the
     // application is active, which a person who brings it forward changes (docs/spec/hosts.md#launch-activation).
     const before = await s.get("host.window");
-    const surface = (await s.surfaces()).find((item) => item.surface === tab.id);
+    const surface = (await s.surfaces()).find((item) => item.surface === tab.tab);
     assert.ok(surface?.applied, "native surface absent");
     const { path } = await readStillCapture(s, t);
     assert.ok(existsSync(path), `the still capture ${path} was not written`);
