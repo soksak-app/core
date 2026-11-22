@@ -86,12 +86,12 @@ func answerSessions(t *testing.T, c *Sidecars, process *sidecar, answer func(req
 func TestSessionsReturnsTheSessionsOfTheService(t *testing.T) {
 	c, process := sessionsFixture(t)
 	sessions, err := answerSessions(t, c, process, func(request string) string {
-		return `{"operation":"sessions","request":"` + request + `","ok":true,"sessions":[{"session":"s1","surface":"tab-a","root":"/work","creation":"c1","size":{"width":640,"height":384,"scale":2},"plugin":"terminal"}]}`
+		return `{"operation":"sessions","request":"` + request + `","ok":true,"sessions":[{"session":"s1","surface":"tab-a","root":"/work","creation":"c1","size":{"width":640,"height":384,"scale":2},"plugin":"terminal","program":"working"}]}`
 	})
 	if err != nil {
 		t.Fatalf("Sessions: %v", err)
 	}
-	if want := `[{"session":"s1","surface":"tab-a","root":"/work","creation":"c1","size":{"width":640,"height":384,"scale":2},"plugin":"terminal"}]`; string(sessions) != want {
+	if want := `[{"session":"s1","surface":"tab-a","root":"/work","creation":"c1","size":{"width":640,"height":384,"scale":2},"plugin":"terminal","program":"working"}]`; string(sessions) != want {
 		t.Fatalf("Sessions = %s, want %s", sessions, want)
 	}
 }
@@ -139,6 +139,23 @@ func TestSessionsRefusesAnEntryWithoutPlugin(t *testing.T) {
 	})
 	if err == nil || err.Error() != "invalid message: sessions plugin is not a non-empty string" {
 		t.Fatalf("Sessions error = %v", err)
+	}
+}
+
+// contract: sidecars-transport.sessions.refuses-an-invalid-program
+func TestSessionsRefusesAnEntryWithAnInvalidProgram(t *testing.T) {
+	for _, program := range []string{`"done"`, `{"state":"idle"}`, ``} {
+		c, process := sessionsFixture(t)
+		member := ""
+		if program != "" {
+			member = `,"program":` + program
+		}
+		_, err := answerSessions(t, c, process, func(request string) string {
+			return `{"operation":"sessions","request":"` + request + `","ok":true,"sessions":[{"session":"s1","surface":"tab-a","root":"/work","creation":"c1","size":{"width":640,"height":384,"scale":2},"plugin":"terminal"` + member + `}]}`
+		})
+		if err == nil || err.Error() != "invalid message: sessions program is not idle, working, blocked or null" {
+			t.Fatalf("Sessions error for program %q = %v", program, err)
+		}
 	}
 }
 

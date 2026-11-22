@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1091: Each owned session entry of the `sessions` answer carries `program`, the last program state that its program reported, or `null`; the Go and Rust hosts refuse any other value with `invalid message: sessions program is not idle, working, blocked or null`, and the page and mygo adopt a session after a restart with that state. Before, an adopted session had no program state until its program reported a change, so an idle member of a room was refused. Verification: Red of the Go, Rust, mygo and page cases, then Green of the Go and Rust host session tests, the mygo workbench tests and the page owned session tests.
 - F1090: An owned session message for an owner on which the host mounted a view goes through viewSidecarSend with the source generation of view-source-registered on mygo and the page, and on mygo a message for an owner whose placement has not finished waits for the mount or the end of the placement.
 
 ## 2026-11-22

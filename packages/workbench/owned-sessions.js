@@ -423,7 +423,9 @@ export async function reconcileOwnedSessions() {
         // The session belongs to the plugin that opened it, which the entry names; the owner surface may be of a plugin without sessions.
         const declared = hasPlugin(item.plugin) && plugin(item.plugin).sessions === name;
         if (declared && tabs.has(item.surface)) {
-          sessions.set(item.session, { session: item.session, plugin: item.plugin, owner: item.surface, shownBy: null, program: null, sidecar: name, size: sizeBody(item.size), pending: null });
+          // A program reports its state only when it changes, so the adopted session takes the state that the sidecar kept.
+          const program = item.program === null ? null : { state: item.program };
+          sessions.set(item.session, { session: item.session, plugin: item.plugin, owner: item.surface, shownBy: null, program, sidecar: name, size: sizeBody(item.size), pending: null });
           listenOwner(item.surface, windowSidecar(name));
           continue;
         }

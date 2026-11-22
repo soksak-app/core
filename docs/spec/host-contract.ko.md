@@ -950,6 +950,7 @@ fn invalid_json_closes_connection() {
 | `sidecars-transport.sessions.ends-with-connection` | 서비스가 답하지 않은 `sessions` 질의는 연결이 끝나면 `the service connection ended before the answer`로 거부되며, 그 전에는 시간 제한이 없다. | all |
 | `sidecars-transport.sessions.refuses-invalid-member` | `size.width`가 양의 수가 아닌 `sessions` 항목은 `sidecarSessions`를 `invalid message: sessions size.width is not a positive number`로 거부한다. | all |
 | `sidecars-transport.sessions.refuses-an-entry-without-plugin` | 세션을 연 plugin인 `plugin`이 빈 값이 아닌 문자열이 아닌 `sessions` 항목은 `sidecarSessions`를 `invalid message: sessions plugin is not a non-empty string`로 거부한다. | all |
+| `sidecars-transport.sessions.refuses-an-invalid-program` | `program`이 `idle`, `working`, `blocked`, `null`이 아닌 `sessions` 항목은 `sidecarSessions`를 `invalid message: sessions program is not idle, working, blocked or null`로 거부한다. | all |
 | `sidecars-transport.sessions.refuses-a-size-that-is-not-an-object` | `size`가 객체가 아닌 `sessions` 항목은 `sidecarSessions`를 `invalid message: sessions size is not an object`로 거부한다. | all |
 | `sidecars-transport.sessions.empty-without-endpoint` | 엔드포인트가 없는 선언된 persistent 사이드카의 `sidecarSessions`는 세션 없이 해결되며 프로세스를 시작하지 않는다. | all |
 | `sidecars-transport.sessions.refuses-empty-sidecar` | 빈 `sidecar`의 `sidecarSessions`는 `sidecarSessions requires a non-empty sidecar`로 거부된다. | all |

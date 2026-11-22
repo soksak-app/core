@@ -1772,6 +1772,9 @@ pub struct OwnedSession {
     pub size: OwnedSize,
     /// The plugin that opened the session.
     pub plugin: String,
+    /// The last program state that the program of the session reported, `idle`, `working` or `blocked`, or None while it
+    /// reported none.
+    pub program: Option<String>,
 }
 
 /// The size of an owned session: the width and height of its card in points, and the backing scale of the window.
@@ -1784,7 +1787,7 @@ pub struct OwnedSize {
 
 impl OwnedSession {
     /// Reads one entry of a `sessions` answer, and names the first member that is not a non-empty string, an object of
-    /// positive numbers as `size`.
+    /// positive numbers as `size`, or a program state or null as `program`.
     fn from_value(value: &Value) -> Result<OwnedSession, String> {
         let text = |name: &str| {
             value
@@ -1815,6 +1818,19 @@ impl OwnedSession {
                 scale: number("scale")?,
             },
             plugin: text("plugin")?,
+            program: match value.get("program") {
+                Some(Value::Null) => None,
+                Some(Value::String(state))
+                    if ["idle", "working", "blocked"].contains(&state.as_str()) =>
+                {
+                    Some(state.clone())
+                }
+                _ => {
+                    return Err(
+                        "sessions program is not idle, working, blocked or null".to_string()
+                    );
+                }
+            },
         })
     }
 }

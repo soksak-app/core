@@ -414,8 +414,8 @@ func TestRetireEndsTheSessionsOfOwnersThatLeftEveryLayout(t *testing.T) {
 func TestAdoptionKeepsTheSessionsOfRestoredOwnersAndEndsTheOthers(t *testing.T) {
 	f := newOwnedFixture(t)
 	f.host.sessions = []map[string]any{
-		{"session": "s-3", "surface": "kept-tab", "root": "/work", "creation": "c3", "size": map[string]any{"width": 640, "height": 384, "scale": 2}, "plugin": "terminal"},
-		{"session": "s-4", "surface": "gone-tab", "root": "/work", "creation": "c4", "size": map[string]any{"width": 640, "height": 384, "scale": 2}, "plugin": "terminal"},
+		{"session": "s-3", "surface": "kept-tab", "root": "/work", "creation": "c3", "size": map[string]any{"width": 640, "height": 384, "scale": 2}, "plugin": "terminal", "program": nil},
+		{"session": "s-4", "surface": "gone-tab", "root": "/work", "creation": "c4", "size": map[string]any{"width": 640, "height": 384, "scale": 2}, "plugin": "terminal", "program": nil},
 	}
 	var adopted error
 	answered := false
@@ -439,7 +439,7 @@ func TestAdoptionKeepsTheSessionsOfRestoredOwnersAndEndsTheOthers(t *testing.T) 
 func TestAnAdoptedSessionOfAnOwnerWithoutSidecarIsReadThroughItsOpeningPlugin(t *testing.T) {
 	f := newOwnedFixture(t)
 	f.host.sessions = []map[string]any{
-		{"session": "s-5", "surface": "plain-tab", "root": "/work", "creation": "c5", "size": map[string]any{"width": 640, "height": 384, "scale": 2}, "plugin": "terminal"},
+		{"session": "s-5", "surface": "plain-tab", "root": "/work", "creation": "c5", "size": map[string]any{"width": 640, "height": 384, "scale": 2}, "plugin": "terminal", "program": nil},
 	}
 	if err := f.run(func(answer func(error)) {
 		f.sessions.Adopt(func(surface string) bool { return surface == "plain-tab" }, answer)
@@ -464,13 +464,32 @@ func TestAnAdoptedSessionOfAnOwnerWithoutSidecarIsReadThroughItsOpeningPlugin(t 
 	equal(t, sends[0].body, map[string]any{"operation": "read", "session": "s-5"})
 }
 
+// An adopted session keeps the program state that its sessions entry lists, because a program reports its state only when it changes, and
+// an entry without a reported state is adopted without one (docs/spec/persistent-services.md#owned-sessions).
+func TestAnAdoptedSessionKeepsTheProgramStateOfItsEntry(t *testing.T) {
+	f := newOwnedFixture(t)
+	f.host.sessions = []map[string]any{
+		{"session": "s-6", "surface": "tab-a", "root": "/work", "creation": "c6", "size": map[string]any{"width": 640, "height": 384, "scale": 2}, "plugin": "terminal", "program": "idle"},
+		{"session": "s-7", "surface": "tab-a", "root": "/work", "creation": "c7", "size": map[string]any{"width": 640, "height": 384, "scale": 2}, "plugin": "terminal", "program": nil},
+	}
+	if err := f.run(func(answer func(error)) {
+		f.sessions.Adopt(func(surface string) bool { return surface == "tab-a" }, answer)
+	}); err != nil {
+		t.Fatalf("adopt = %v", err)
+	}
+	equal(t, f.sessions.Status(), []map[string]any{
+		{"session": "s-6", "plugin": "terminal", "owner": "tab-a", "shownBy": nil, "program": map[string]any{"state": "idle"}},
+		{"session": "s-7", "plugin": "terminal", "owner": "tab-a", "shownBy": nil, "program": nil},
+	})
+}
+
 // A sessions entry whose opening plugin is not installed or declares no sessions is ended with reason plugin-absent, also when its owner
 // surface is in the restored layout (docs/spec/persistent-services.md#owned-sessions).
 func TestAdoptionEndsASessionWhoseOpeningPluginDeclaresNoSessions(t *testing.T) {
 	f := newOwnedFixture(t)
 	f.host.sessions = []map[string]any{
-		{"session": "s-6", "surface": "owner-tab", "root": "/work", "creation": "c6", "size": map[string]any{"width": 640, "height": 384, "scale": 2}, "plugin": "plain"},
-		{"session": "s-7", "surface": "owner-tab", "root": "/work", "creation": "c7", "size": map[string]any{"width": 640, "height": 384, "scale": 2}, "plugin": "removed"},
+		{"session": "s-6", "surface": "owner-tab", "root": "/work", "creation": "c6", "size": map[string]any{"width": 640, "height": 384, "scale": 2}, "plugin": "plain", "program": nil},
+		{"session": "s-7", "surface": "owner-tab", "root": "/work", "creation": "c7", "size": map[string]any{"width": 640, "height": 384, "scale": 2}, "plugin": "removed", "program": nil},
 	}
 	if err := f.run(func(answer func(error)) { f.sessions.Adopt(func(string) bool { return true }, answer) }); err != nil {
 		t.Fatalf("adopt = %v", err)
@@ -523,7 +542,7 @@ func TestMountedOwnerSendsItsRequestsThroughItsView(t *testing.T) {
 func TestRestoredTabShowsItsOpenSessionAfterAdoption(t *testing.T) {
 	f := newOwnedFixture(t)
 	f.host.sessions = []map[string]any{
-		{"session": "s-3", "surface": "owner-tab", "root": "/work", "creation": "c3", "size": map[string]any{"width": 640, "height": 384, "scale": 2}, "plugin": "terminal"},
+		{"session": "s-3", "surface": "owner-tab", "root": "/work", "creation": "c3", "size": map[string]any{"width": 640, "height": 384, "scale": 2}, "plugin": "terminal", "program": nil},
 	}
 	f.shown = map[string]string{"kept-tab": "s-3", "gone-tab": "s-missing"}
 	var adopted error
@@ -558,7 +577,7 @@ func TestWindowCloseKeepsTheSessionAndTheReopenedWindowReattachesIt(t *testing.T
 	// The window closes: its state is dropped without a request, and the service keeps the session.
 	f.sessions = f.newSessions()
 	f.host.sessions = []map[string]any{
-		{"session": "s-7", "surface": "owner-tab", "root": "/work", "creation": "c1", "size": map[string]any{"width": 640, "height": 384, "scale": 2}, "plugin": "terminal"},
+		{"session": "s-7", "surface": "owner-tab", "root": "/work", "creation": "c1", "size": map[string]any{"width": 640, "height": 384, "scale": 2}, "plugin": "terminal", "program": nil},
 	}
 	f.shown = map[string]string{"kept-tab": "s-7"}
 	var adopted error

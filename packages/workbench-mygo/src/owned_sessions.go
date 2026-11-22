@@ -523,6 +523,8 @@ type ownedEntry struct {
 	Surface string `json:"surface"`
 	Size    Size   `json:"size"`
 	Plugin  string `json:"plugin"`
+	// Program is the last program state that the program of the session reported, or nil while it reported none.
+	Program *string `json:"program"`
 }
 
 // endAbsent adopts or ends listed[index:] of the sidecar name in order and answers when all of them are done. An entry whose opening plugin
@@ -540,7 +542,12 @@ func (o *OwnedSessions) endAbsent(name string, port OwnedSidecar, listed []owned
 	if !declared || sidecar != name {
 		reason = "plugin-absent"
 	} else if live(item.Surface) {
-		o.add(&OwnedSession{Session: item.Session, Plugin: item.Plugin, Owner: item.Surface, Size: item.Size})
+		adopted := &OwnedSession{Session: item.Session, Plugin: item.Plugin, Owner: item.Surface, Size: item.Size}
+		// A program reports its state only when it changes, so the adopted session takes the state that the sidecar kept.
+		if item.Program != nil {
+			adopted.Program = *item.Program
+		}
+		o.add(adopted)
 		o.endAbsent(name, port, listed, index+1, answer, live)
 		return
 	}

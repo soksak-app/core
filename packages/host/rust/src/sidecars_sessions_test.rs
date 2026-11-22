@@ -99,7 +99,8 @@ fn session_entry(session: &str, surface: &str, width: f64, height: f64) -> serde
         "root": "/project",
         "creation": format!("creation-{session}"),
         "size": {"width": width, "height": height, "scale": 2.0},
-        "plugin": "terminal"
+        "plugin": "terminal",
+        "program": "idle"
     })
 }
 
@@ -630,7 +631,39 @@ fn service_sessions_refuses_an_entry_without_plugin() {
     let error = sidecars.service_sessions(ECHO).unwrap_err();
     sidecars.stop();
     thread.join().unwrap();
-    assert_eq!(error, "invalid message: sessions plugin is not a non-empty string");
+    assert_eq!(
+        error,
+        "invalid message: sessions plugin is not a non-empty string"
+    );
+}
+
+// contract: sidecars-transport.sessions.refuses-an-invalid-program
+#[test]
+fn service_sessions_refuses_an_entry_with_an_invalid_program() {
+    let executable = folder::Folder::new();
+    let config = folder::Folder::new();
+    let listener = service_endpoint(config.path());
+    let (_received, thread) = sessions_service(listener, |request| {
+        let mut entry = session_entry("session-1", "tab-a", 640.0, 384.0);
+        entry["program"] = serde_json::json!("done");
+        Some(serde_json::json!({
+            "operation": "sessions",
+            "request": request["request"],
+            "ok": true,
+            "sessions": [entry]
+        }))
+    });
+    let sidecars =
+        Sidecars::<SidecarRecorder>::new(&declare(executable.path()), config.path().to_path_buf())
+            .unwrap();
+
+    let error = sidecars.service_sessions(ECHO).unwrap_err();
+    sidecars.stop();
+    thread.join().unwrap();
+    assert_eq!(
+        error,
+        "invalid message: sessions program is not idle, working, blocked or null"
+    );
 }
 
 // contract: sidecars-transport.sessions.refuses-a-size-that-is-not-an-object

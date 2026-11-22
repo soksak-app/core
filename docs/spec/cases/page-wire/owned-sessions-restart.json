@@ -184,7 +184,8 @@
               "root": "/work/project",
               "creation": "c-keep",
               "size": {"width": 640, "height": 384, "scale": 2},
-              "plugin": "fixture-session"
+              "plugin": "fixture-session",
+              "program": "idle"
             },
             {
               "session": "ses-room",
@@ -192,7 +193,8 @@
               "root": "/work/project",
               "creation": "c-room",
               "size": {"width": 640, "height": 384, "scale": 2},
-              "plugin": "fixture-session"
+              "plugin": "fixture-session",
+              "program": null
             },
             {
               "session": "ses-gone",
@@ -200,7 +202,8 @@
               "root": "/work/project",
               "creation": "c-gone",
               "size": {"width": 640, "height": 384, "scale": 2},
-              "plugin": "fixture-session"
+              "plugin": "fixture-session",
+              "program": null
             },
             {
               "session": "ses-orphan",
@@ -208,7 +211,8 @@
               "root": "/work/project",
               "creation": "c-orphan",
               "size": {"width": 640, "height": 384, "scale": 2},
-              "plugin": "fixture-removed"
+              "plugin": "fixture-removed",
+              "program": null
             }
           ]
         }

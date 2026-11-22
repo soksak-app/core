@@ -3624,6 +3624,10 @@ func validateSessions(sessions json.RawMessage, answered bool) (json.RawMessage,
 				return nil, fmt.Errorf("invalid message: sessions size.%s is not a positive number", member)
 			}
 		}
+		var program *string
+		if err := json.Unmarshal(entry["program"], &program); err != nil || (program != nil && !slices.Contains([]string{"idle", "working", "blocked"}, *program)) {
+			return nil, errors.New("invalid message: sessions program is not idle, working, blocked or null")
+		}
 	}
 	return sessions, nil
 }
