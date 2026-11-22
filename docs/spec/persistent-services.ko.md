@@ -28,7 +28,7 @@
 
 소유 세션은 [사이드카 메시지](sidecars.ko.md#메시지)의 page 요청 형식을 쓴다. host는 `{"surface": owner, "root": root, "cids": [id, …], "body": value}`를 plugin의 persistent 사이드카에 보낸다. 여기서 `owner`는 소유 표면이고 `root`는 소유자 창의 프로젝트 root이며, body는 `operation`으로 연산을 고른다. 사이드카는 `{"surface": owner, "cids": [id, …], "body": reply}`로 답하고, `error` 멤버를 가진 응답 body는 실패한 요청을 뜻한다. 메시지는 다음과 같다:
 
-- `{operation: "open", session: {creation}, size, params}`는 소유 표면이 소유하는 세션을 연다. `creation`은 page가 요청마다 만드는 불투명 식별자이고, `size`는 `{width, height, scale}`이다. `width`와 `height`는 세션이 차지하는 카드의 양의 포인트 수이고, `scale`은 창의 양의 backing scale이며, 사이드카가 이 크기를 자기 단위로 바꾼다. `params`는 요청의 `params` 값으로 사이드카가 그대로 받는다. 서비스는 소유자와 `creation`으로 세션을 구분한다. 같은 `creation`의 반복 open은 처음 open의 응답을 돌려주며 자식 프로세스를 시작하지 않는다. 응답 body는 `{session, creation}`이고, `session`은 서비스가 할당한 안정 세션 식별자, `creation`은 요청의 식별자다.
+- `{operation: "open", session: {creation}, size, params}`는 소유 표면이 소유하는 세션을 연다. `creation`은 page가 요청마다 만드는 불투명 식별자이고, `size`는 `{width, height, scale}`이다. `width`와 `height`는 세션이 차지하는 카드의 양의 포인트 수이고, `scale`은 창의 양의 backing scale이며, 사이드카가 이 크기를 자기 단위로 바꾼다. `params`는 요청의 `params` 값으로 사이드카가 그대로 받는다. 서비스는 소유자와 `creation`으로 세션을 구분한다. 같은 `creation`의 반복 open은 처음 open의 응답을 돌려주며 자식 프로세스를 시작하지 않는다. 응답 body는 `{session, creation}`이고, `session`은 사이드카가 세션에 배정하고 그 응답이 담는 안정 세션 식별자, `creation`은 요청의 식별자다. host는 사이드카 응답의 `session`을 읽으며 스스로 배정하지 않는다.
 - `{operation: "resize", session, size}`는 같은 소유자의 세션 크기를 `size`의 형식으로 정한다. 응답 body는 `{session, size}`다.
 - `{operation: "end", session}`은 같은 소유자의 세션을 끝낸다. 응답 body는 `{session, ended: true}`다. 끝낸 사유는 page가 `workbench.session.end`에 기록하며, 서비스는 사유를 받지 않는다.
 
