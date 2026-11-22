@@ -71,7 +71,14 @@ export function coreChanged() {
   scheduled = true;
   queueMicrotask(() => {
     scheduled = false;
-    for (const run of watchers) run();
+    // A watcher whose read fails reports its error and the other watchers still receive their values.
+    for (const run of watchers) {
+      try {
+        run();
+      } catch (error) {
+        report(`core status: ${error.message}`);
+      }
+    }
   });
 }
 
@@ -218,12 +225,12 @@ function pluginCommand(action) {
 }
 
 /** Registers one core status. The value is read again when coreChanged is called. */
-function status(name, read) {
-  registry.status(name, read, (fn) => {
-    const run = () => fn(read());
+function status(name, read, options) {
+  registry.status(name, read, (fn, surface) => {
+    const run = () => fn(read(surface));
     watchers.add(run);
     return () => watchers.delete(run);
-  });
+  }, options);
 }
 
 let verified = null;
@@ -504,10 +511,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   // On this host the workbench is the main page: a start is its page identity, and it started at its time origin.
   // The role handshake of a tab (docs/spec/agent-roles.md#tab-role-state): the status is read from the host store with the
   // surface of its request, and a change of the stored workspace refreshes every open watch (exposure.js).
-  status("core.tab.role", (surface) => {
-    if (surface === undefined) throw new Error("status.get for core.tab.role requires a surface");
-    return projects.roleOf(surface);
-  }, () => () => {});
+  status("core.tab.role", (surface) => projects.roleOf(surface), { surface: true });
   status("core.window.workbench", () => ({
     start: pageIdentity,
     startedAt: performance.timeOrigin,

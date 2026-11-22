@@ -162,7 +162,13 @@ func (r *Registry) Method(method string, run LaterCommand) {
 	r.methods[method] = run
 }
 
-// Status registers the reader of the declared status name.
+// ReadsSurface tells whether the status name reads the surface of its request, as StatusOnSurface registers it.
+func (r *Registry) ReadsSurface(name string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.statusSurface[name] != nil
+}
+
 // StatusOnSurface registers the read of the declared status name that answers the surface of its request.
 func (r *Registry) StatusOnSurface(name string, read SurfaceStatus) {
 	if !r.declared.Statuses[name] {
@@ -176,6 +182,7 @@ func (r *Registry) StatusOnSurface(name string, read SurfaceStatus) {
 	r.statusSurface[name] = read
 }
 
+// Status registers the reader of the declared status name.
 func (r *Registry) Status(name string, read Status) {
 	if !r.declared.Statuses[name] {
 		panic(fmt.Sprintf("status %s is not declared", name))

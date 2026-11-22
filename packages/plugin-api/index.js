@@ -1825,6 +1825,8 @@ export function exposureEntries(declared, { place = () => null, inert = () => fa
     const reads = entries.filter(({ kind, declaration }) => kind === "status" && statuses.has(declaration.name)).map(({ declaration }) => {
       let read;
       try {
+        // A status that reads the surface of its request has no value without one, as a status.get without a surface.
+        if (statuses.get(declaration.name).surface) throw new Error(`status.get for ${declaration.name} requires a surface`);
         read = Promise.resolve(statuses.get(declaration.name).read()).then((value) => ({ ...declaration, value: jsonStatusValue(declaration.name, value) }));
       } catch (error) {
         read = Promise.reject(error);
@@ -1848,8 +1850,10 @@ export function exposureEntries(declared, { place = () => null, inert = () => fa
      * Follows one status registered in this document from inside the document. fn(value) is called with the current value and with each
      * later changed value. Throws when the name is not registered. Returns the function that stops following.
      */
-    follow(name, fn) {
+    follow(name, fn, surface) {
       const entry = status(name);
+      // A status that reads the surface of its request is refused without one before it subscribes, so no subscription stays.
+      if (entry.surface && surface === undefined) throw new Error(`status.watch for ${name} requires a surface`);
       let active = true;
       let text;
       const deliver = (value) => {
@@ -1858,8 +1862,17 @@ export function exposureEntries(declared, { place = () => null, inert = () => fa
         text = next;
         fn(value);
       };
-      const stopper = entry.subscribe(deliver);
-      Promise.resolve(entry.read()).then(deliver);
+      const stopper = entry.subscribe(deliver, surface);
+      let first;
+      try {
+        first = entry.read(surface);
+      } catch (error) {
+        // A first read that throws refuses the follow, so its subscription ends with it.
+        active = false;
+        if (typeof stopper === "function") stopper();
+        throw error;
+      }
+      Promise.resolve(first).then(deliver);
       return () => {
         active = false;
         if (typeof stopper === "function") stopper();
@@ -1871,13 +1884,17 @@ export function exposureEntries(declared, { place = () => null, inert = () => fa
       return kind === "element" ? elements(name).length > 0 : tables[kind].has(name);
     },
 
-    status(name, read, subscribe) {
+    /**
+     * Registers the status name with read(surface) and subscribe(fn, surface). With surface set, the status reads the surface of its
+     * request, so a read, a watch and a follow without a surface are refused (docs/spec/exposure.md, the surface member of a request).
+     */
+    status(name, read, subscribe, { surface = false } = {}) {
       declaration("status", name);
       if (statuses.has(name)) throw new Error(`status ${name} is already registered`);
       if (typeof read !== "function" || typeof subscribe !== "function") {
         throw new Error(`status ${name} requires read and subscribe functions`);
       }
-      statuses.set(name, { name, read, subscribe, watching: false, stop: null, changed: null, first: null, text: undefined, value: null, version: 0 });
+      statuses.set(name, { name, read, subscribe, surface, watching: false, stop: null, changed: null, first: null, text: undefined, value: null, version: 0 });
     },
 
     command(name, run) {
@@ -1927,6 +1944,9 @@ export function exposureEntries(declared, { place = () => null, inert = () => fa
       if (!found) throw new ExposureError(EXPOSURE_ERRORS.unknownName, `unknown ${kind} ${name}`);
       // The read receives the surface of the request when it names one, so a status of a tab reads the state of that tab
       // (docs/spec/exposure.md, the surface member of a request).
+      if ((method === "status.get" || method === "status.watch") && status(name).surface && params.surface === undefined) {
+        throw new ExposureError(EXPOSURE_ERRORS.invalidParams, `${method} for ${name} requires a surface`);
+      }
       if (method === "status.get") return jsonStatusValue(name, await status(name).read(params.surface));
       if (method === "status.watch") {
         const entry = status(name);
@@ -1943,7 +1963,7 @@ export function exposureEntries(declared, { place = () => null, inert = () => fa
         }
         entry.watching = true;
         const listen = (value) => update(entry, value);
-        entry.stop = entry.subscribe(listen);
+        entry.stop = entry.subscribe(listen, params.surface);
         const read = () => entry.read(params.surface);
         const first = Promise.resolve().then(read).then(listen);
         entry.first = first;

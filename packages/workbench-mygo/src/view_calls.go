@@ -652,6 +652,10 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 		if owner := ownerOf(fields.Name); owner != "core" && owner != call.Plugin && !s.dependsOn(call.Plugin, owner) {
 			return fmt.Errorf("view call %s %s is neither a core status nor a status of %s or of its dependencies", call.Command, fields.Name, call.Plugin)
 		}
+		// A status that reads the surface of its request has no value without one, so the watch is refused as the page refuses it.
+		if fields.Surface == nil && call.Command == "runtime.status.watch" && s.registry.ReadsSurface(fields.Name) {
+			return fmt.Errorf("status.watch for %s requires a surface", fields.Name)
+		}
 		if fields.Surface != nil || registeredBySurface(fields.Name) {
 			return s.observeForView(call, view, fields.Name, fields.Surface, answer)
 		}

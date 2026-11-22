@@ -903,3 +903,20 @@ test("closing the focused card clears the ring, and closing another card or tab 
   await run("core.layout.close", { tab: "tab-aaaaa2" });
   assert.equal(plane.focused(), null, "closing the last tab of the focused card moved the ring to another card");
 });
+
+// The role status of a tab reads the surface of its request (docs/spec/agent-roles.md#tab-role-state). An observation of it without a
+// surface is refused before it subscribes, an observation with a surface reads that surface, and a refused observation leaves no
+// watcher that stops the later core watchers.
+test("an observation of core.tab.role reads its surface, and a refused one leaves the other core watches delivered", { timeout: 5000 }, async () => {
+  assert.throws(() => registry.observe("core.tab.role", undefined, () => {}), { message: "status.watch for core.tab.role requires a surface" });
+  assert.throws(() => registry.observe("core.tab.role", "tab-aaaaa1", () => {}), { message: "projects.roleOf: the projects are not initialised" });
+  const screens = [];
+  const stop = registry.observe("core.screen", undefined, (value) => screens.push(value.screen));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const before = screens.length;
+  document.body.dataset.screen = "role-observation-probe";
+  coreChanged();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  stop();
+  assert.deepEqual(screens.slice(before), ["role-observation-probe"], "a change of core.screen was not delivered after the refused observations");
+});

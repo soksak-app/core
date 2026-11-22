@@ -549,7 +549,7 @@ export function createRegistry({ call = null, report = null } = {}) {
     },
 
     /** Registers a core status. subscribe(fn) returns a function that unsubscribes. */
-    status: (name, read, subscribe) => core.status(name, read, subscribe),
+    status: (name, read, subscribe, options) => core.status(name, read, subscribe, options),
     // The handler receives the context of the request, {cids} with the correlation identifiers of its cause when the request has them
     // and {surface} with the surface of the caller when the request names one (a view that runs a core command, docs/spec/exposure.md).
     command: (name, run) => core.command(name, async (params, context) => {
@@ -646,11 +646,12 @@ export function createRegistry({ call = null, report = null } = {}) {
 
     /**
      * Follows a status: fn(value, from) receives its value and each change, and the function returns an unsubscribe function. A
-     * status that the core table of this document registers is followed there when no surface is wanted, because no surface
-     * registers it; from is then "core".
+     * status that the core table of this document registers is followed there, because no surface registers it, and a wanted
+     * surface is the surface of its read, as for core.tab.role; from is then "core".
      */
     observe(name, surface, fn, { exact = false } = {}) {
-      if (surface == null && core.registered("status", name)) return core.follow(name, (value) => fn(value, "core"));
+      // default: an observation that names no surface reads the core status without one.
+      if (core.registered("status", name)) return core.follow(name, (value) => fn(value, "core"), surface ?? undefined);
       // default: an observation that names no surface has null as the wanted surface.
       const observer = { name, wanted: surface ?? null, exact, fn, surface: undefined, watch: null, listener: null,
         pageEntry: null, stopPage: null };

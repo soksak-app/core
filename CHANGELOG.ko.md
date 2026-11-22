@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1094: surface 없는 `core.tab.role`의 view watch는 page와 mygo에서 subscribe하기 전에 `status.watch for core.tab.role requires a surface`로 거부되고, view가 자기 surface로 follow하는 core status는 그 surface를 읽으며, read가 실패한 core watcher는 `core status: <error>`를 보고하고 나머지 core watcher는 계속 실행된다. 이전에는 거부된 watch가 watcher를 남겼고, 그 실패하는 read가 Wails와 Tauri에서 core watcher loop를 끝내서, 그 뒤에 watch된 core status, 곧 terminal tab이 기다리는 status가 더 값을 받지 못했다. 검증: plugin-api, page, mygo case의 Red, 그 뒤 plugin-api test, workbench test 346개, mygo workbench test와 함께 Green.
 - F1093: 설치된 plugin의 시작 때 update는 plugins와 sidecars state가 생긴 뒤 host setup의 끝에서 시작하고, plugins state 없는 시작은 호출한 thread에서 거부되므로, Tauri application은 endpoint.json을 쓰기 전에 thread `plugin-updates`의 panic으로 status 101로 끝나지 않는다. 검증: panic을 읽은 `a_start_of_the_update_without_the_plugins_state_is_refused_without_a_thread`의 Red, 그 뒤 Rust host의 start update test 8개와 함께 Green.
 - F1082-1: stop이 연결을 즉시 끝내서 service fixture가 echo를 쓰기 전에 끝낼 수 있으므로, `TestPersistentServiceStartsInANewSession`은 sidecar stop 전에 open의 echo를 받는다. 검증: 20회 반복 실행이 변경 전에는 `write: broken pipe`로 실패하고 변경 후에는 통과한다.
 - F1082-1: normal shutdown audit 시험의 실행 중 service fixture는 window-source audit가 거부하는 반복 timer 대신 열린 standard input으로 계속 실행된다. 검증: window-source audit 시험은 `e2e/test/normal-shutdown-audit.test.mjs:153: uses a repeating timer`로 실패한 뒤 통과하고, normal shutdown audit 시험 16개가 통과한다.

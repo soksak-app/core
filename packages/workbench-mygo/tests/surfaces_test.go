@@ -728,6 +728,17 @@ func TestViewCallFollowsAStatusOfTheWorkbench(t *testing.T) {
 	}
 }
 
+// A view watch of a status that reads the surface of its request names that surface; without one it is refused with the text of the
+// page, and the view receives no value (docs/spec/agent-roles.md#tab-role-state).
+func TestAViewWatchOfASurfaceStatusWithoutASurfaceIsRefused(t *testing.T) {
+	f, stored := surfaceShell(t)
+	surface := anySurface(t, stored)
+	reply := viewCall(t, f, stored, surface, "runtime.status.watch", map[string]any{"name": "core.tab.role"})
+	if failure, _ := reply["error"].(map[string]any); failure == nil || failure["message"] != "status.watch for core.tab.role requires a surface" {
+		t.Fatalf("the reply is %v", reply)
+	}
+}
+
 func TestViewCallReportsItsFocus(t *testing.T) {
 	f, stored := surfaceShell(t)
 	surface := anySurface(t, stored)
