@@ -1874,7 +1874,15 @@ fn view_message(
                 log_error("view channel", error);
             }
         }
-        Ok(false) => {}
+        Ok(false) => {
+            // A page failure sends view-stopped to the surface, so the workbench shows it instead of the loading state
+            // (docs/spec/native-surfaces.md#view-surfaces).
+            if let Some(payload) = view_error_stop(surface, plugin, value) {
+                if let Err(error) = crate::windows::emit_view_source_event(window, "view-stopped", payload) {
+                    log_error("view channel", error);
+                }
+            }
+        }
         Err(error) => {
             let overflow = is_queue_full(&error);
             log_error("view channel", error);
@@ -1971,6 +1979,20 @@ fn view_log_reply_message(id: u64, result: &Result<Value, String>) -> Value {
 /// Handles the failure of the view document of surface: its process ended, or its message queue overflowed. The view is closed, and it
 /// is created again unless the failure stops the restarts (docs/spec/plugin-processes.md, rule 5). A document that is not the current
 /// view of the surface was already replaced, so its failure is not counted again.
+/// Returns the view-stopped payload of a view.error message whose reason is not a queue overflow, or None for any other message.
+pub fn view_error_stop(surface: &str, plugin: &str, value: &str) -> Option<serde_json::Value> {
+    let parsed: serde_json::Value = serde_json::from_str(value).ok()?;
+    let message = parsed.get("message")?;
+    if message.get("event")?.as_str()? != "view.error" {
+        return None;
+    }
+    let reason = message.get("reason")?.as_str()?;
+    if reason.is_empty() || is_queue_full(reason) {
+        return None;
+    }
+    Some(crate::view_lifecycle::view_failed_event(surface, plugin, reason))
+}
+
 fn view_failed(
     window: &Window,
     platform: &'static dyn Platform,

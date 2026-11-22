@@ -111,3 +111,23 @@ fn view_restart_keeps_the_start_values_of_its_record() {
         "the record keeps the start values, which the host injects again when it creates the view again"
     );
 }
+
+// contract: view.error.display
+// A view.error message with a reason other than a queue overflow yields the view-stopped payload of its surface, plugin and reason. Any
+// other message yields none, so the host sends view-stopped only for a page failure (docs/spec/host-contract.md).
+#[test]
+fn a_view_error_message_yields_view_stopped_with_its_reason() {
+    use crate::documents::view_error_stop;
+    use serde_json::json;
+    let failure = r#"{"message":{"event":"view.error","plugin":"probe","reason":"script soksak://probe/ui/view.js failed to load"}}"#;
+    assert_eq!(
+        view_error_stop("probe-surface", "probe", failure),
+        Some(json!({"surface": "probe-surface", "plugin": "probe", "reason": "script soksak://probe/ui/view.js failed to load"}))
+    );
+    let overflow = r#"{"message":{"event":"view.error","plugin":"probe","reason":"queue full for probe"}}"#;
+    let empty = r#"{"message":{"event":"view.error","plugin":"probe","reason":""}}"#;
+    let ready = r#"{"message":{"event":"view.ready","plugin":"probe","document":"d","time_origin":1.0}}"#;
+    for value in [overflow, empty, ready] {
+        assert_eq!(view_error_stop("probe-surface", "probe", value), None, "{value}");
+    }
+}
