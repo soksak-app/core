@@ -76,7 +76,7 @@ func hostCalls(h *host.Host) map[string]HostCall {
 		"viewReply":                doneOf(h.ViewReply),
 		"viewRequest":              answerOf(h.ViewRequest),
 		"viewSidecarRoute":         doneOf(h.ViewSidecarRoute),
-		"viewSidecarSend":          doneOf(h.ViewSidecarSend),
+		"viewSidecarSend":          answerOf(h.ViewSidecarSend),
 		"sidecarListen":            doneOf(h.SidecarListen),
 		"viewSourceOrigins":        readOf(h.ViewSourceOrigins),
 		"documentDetach":           doneOf(h.DocumentDetach),
@@ -111,11 +111,11 @@ func hostCalls(h *host.Host) map[string]HostCall {
 		"setupInstall":             request(h.SetupInstall),
 		"setupChange":              request(h.SetupChange),
 		"sidecarSend": func(ctx context.Context, argument json.RawMessage) (any, error) {
-			var call struct{ Sidecar, Surface, Body, Cids json.RawMessage }
+			var call struct{ Sidecar, Surface, Body, Cids, Answer json.RawMessage }
 			if err := json.Unmarshal(argument, &call); err != nil {
 				return nil, fmt.Errorf("sidecarSend: %w", err)
 			}
-			return nil, h.SidecarSend(ctx, call.Sidecar, call.Surface, call.Body, call.Cids)
+			return h.SidecarSend(ctx, call.Sidecar, call.Surface, call.Body, call.Cids, call.Answer)
 		},
 		"imageCaret": func(ctx context.Context, argument json.RawMessage) (any, error) {
 			var call struct {
