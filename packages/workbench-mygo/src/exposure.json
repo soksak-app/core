@@ -354,7 +354,7 @@
                     "items": {
                       "type": "object",
                       "properties": {
-                        "id": {
+                        "tab": {
                           "type": "string"
                         },
                         "plugin": {
@@ -362,6 +362,12 @@
                         },
                         "title": {
                           "type": "string"
+                        },
+                        "active": {
+                          "type": "boolean"
+                        },
+                        "params": {
+                          "type": ["object", "null"]
                         },
                         "label": {
                           "type": [
