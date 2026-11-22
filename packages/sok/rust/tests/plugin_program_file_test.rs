@@ -1,8 +1,6 @@
 //! Checks the program file of a plugin at install of a release (docs/spec/plugins.md#pluginjson): a programs member whose
 //! program is plugin:<path> needs a regular file with an execute bit at <path> in the installed version folder.
 
-#![cfg(unix)]
-
 use std::path::Path;
 
 use serde_json::json;

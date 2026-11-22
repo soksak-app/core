@@ -1567,6 +1567,33 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1074",
+    implementation: [
+      { file: "packages/plugin-api/view-answer.js", symbol: "or of its dependencies" },
+      { file: "packages/workbench-mygo/src/view_calls.go", symbol: "or of its dependencies" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/view-host.test.mjs", id: "the page-wire case ${name} replays through answerViewCall" },
+      { file: "packages/workbench-mygo/tests/view_dependency_test.go", id: "TestAViewFollowsAStatusOfADependency" },
+    ],
+    expected: "A view follows the declared statuses of a plugin that its plugin lists in dependencies, and a status of any other plugin is refused.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1075",
+    implementation: [
+      { file: "packages/plugin-api/view-answer.js", symbol: "is not a dependency of" },
+      { file: "packages/workbench-mygo/src/project_data.go", symbol: "is not a dependency of" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/view-host.test.mjs", id: "the page-wire case ${name} replays through answerViewCall" },
+      { file: "packages/workbench-mygo/tests/view_data_dependency_test.go", id: "TestAViewReadsAndFollowsTheProjectDataOfADependency" },
+      { file: "packages/workbench-mygo/tests/view_data_dependency_test.go", id: "TestAViewIsRefusedAChangeOfADependencyAndAReadOfAPluginThatIsNoDependency" },
+    ],
+    expected: "A view reads and follows the project data of a plugin that its plugin lists in dependencies, and a change of that data or a read of a plugin that is no dependency is refused.",
+    levels: ["unit"],
+  },
+  {
     id: "F1073",
     implementation: [
       { file: "packages/plugin-api/index.js", symbol: "must have a schema of type object and null whose state is one of" },
@@ -13967,7 +13994,7 @@ const FEATURE_LINKS = [
   {
     id: "F344",
     implementation: [
-      { file: "packages/plugin-api/view-answer.js", symbol: "function statusWatchOf(command, params, plugin, holdsSurface)" },
+      { file: "packages/plugin-api/view-answer.js", symbol: "function statusWatchOf(command, params, plugin, holdsSurface, dependsOn)" },
     ],
     tests: [
       { file: "packages/workbench/test/view-calls.test.mjs", id: "a status unwatch of a surface that the window no longer holds ends the view's own watch" },
