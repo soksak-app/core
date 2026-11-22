@@ -2751,6 +2751,57 @@
       },
       "description": "A command that changed the layout of the active space; `params` and `result` are the JSON text of its parameters and of its answer cut to 1024 bytes, `layout` is the JSON text of the stored layout of the space after it, {state, groups, leader, lastCard}, cut to 61440 bytes so that the fields stay within the bound of an event."
     },
+    "workbench.session.end": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "session": { "type": "string" },
+          "reason": { "type": "string" }
+        },
+        "required": ["session", "reason"]
+      },
+      "description": "An owned session ended with its reason: ended by its owner, owner-closed when its owner surface closed, or owner-absent when its owner did not return after a restart (docs/spec/plugins.md#owned-sessions)."
+    },
+    "workbench.session.open": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "session": {
+            "type": "string"
+          },
+          "plugin": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "size": {
+            "type": "object",
+            "properties": {
+              "width": { "type": "number", "exclusiveMinimum": 0 },
+              "height": { "type": "number", "exclusiveMinimum": 0 },
+              "scale": { "type": "number", "exclusiveMinimum": 0 }
+            },
+            "required": ["width", "height", "scale"]
+          }
+        },
+        "required": [
+          "session",
+          "plugin",
+          "owner",
+          "size"
+        ]
+      },
+      "description": "The workbench opened an owned session for its owner surface (docs/spec/plugins.md#owned-sessions)."
+    },
     "workbench.background.session": {
       "layer": "workbench",
       "class": "lifecycle",

@@ -86,7 +86,7 @@ plugin 동작의 창 검사는 그 plugin의 repository에서 실행된다([검�
 | `extends` | 아니오 | `{ "<point>": { "version": "x.y.z", "schema": <스키마>, "modules"?: { "<bare specifier>": "<경로>" } } }`: 다른 plugin이 기여하는 [확장 지점](#확장-지점). `surface` 또는 `sections`가 필요하다 |
 | `contributes` | 아니오 | `{ "<plugin id>.<point>": [ { "range": "<version range>", "module": "<경로>", ... } ] }`: plugin이 다른 plugin의 확장 지점에 기여하는 항목 |
 | `data` | 아니오 | `{ "<키>": { "schema": <스키마>, "default": <값>, "format"?: <양의 정수> } }`: plugin의 view가 프로젝트마다 읽고 쓰는 [프로젝트 데이터](#프로젝트-데이터). `surface` 또는 `sections`가 필요하다 |
-| `sessions` | 아니오 | `true`: 플러그인의 표면이 소유 세션을 열 수 있음을 선언한다([소유 세션](#소유-세션)). `dependencies`에 선언한 `transport: "persistent"` 사이드카가 필요하다. `background`는 이 선언으로 바뀌지 않는다 |
+| `sessions` | 아니오 | `true`: 플러그인의 표면이 소유 세션을 열 수 있음을 선언한다([소유 세션](#소유-세션)). 표면과 `dependencies`에 선언한 사이드카 하나가 필요하며, 이 사이드카가 `transport: "persistent"`인지는 세션 요청마다 host가 확인한다. `background`는 이 선언으로 바뀌지 않는다 |
 | `background` | 아니오 | `{ "sidecar": "<선언한 사이드카>", "operation": "<동작 이름>", "settings"?: { "<요청 필드>": "<선언한 설정>" } }`: 표면이 마운트되지 않은 비활성 탭마다 네이티브 표면을 만들지 않고 선언한 사이드카 세션 하나를 유지한다. 워크벤치는 대응한 플러그인 설정의 현재 값을 요청 필드에 넣으며, `settings`는 `operation`이나 선언하지 않은 설정을 가리킬 수 없다. `surface`와 `dependencies`가 필요하다 |
 
 이 표에 없는 manifest member는 알 수 없는 member이며 그 manifest는 거부된다. 제거된 member `host`와 `hostOperations`는 `plugin <id>: <member> is removed; a section is a view of the plugin`으로 거부된다. 0.0.x release version인 동안은 저장 데이터 마이그레이션을 싣지 않으므로 어떤 manifest도 migration member를 선언하지 않는다.
@@ -188,11 +188,11 @@ Wails와 Tauri host의 OS 창마다 앱 DOM WebView가 하나 있고, mygo host�
 
 ## 소유 세션
 
-`sessions`를 선언한 플러그인의 표면은 `core.session.open {plugin, params, cols, rows}`로 소유 세션을 열며, 이 명령은 `{session}`을 반환한다. 호출한 표면이 세션의 소유자이고, 세션은 창이 가려졌는지와 관계없이 그 크기로 열린다. `core.session.resize {session, cols, rows}`와 `core.session.end {session}`는 세션에 작용한다. 어떤 탭도 세션을 보이지 않을 때 크기를 바꿀 수 있는 것은 소유자뿐이며, 세션을 끝낼 수 있는 것도 소유자뿐이다.
+`sessions`를 선언한 플러그인의 표면은 `core.session.open {plugin, params, size}`로 소유 세션을 열며, 이 명령은 `{session}`을 반환한다. `size`는 `{width, height, scale}`로, 카드의 포인트 단위 너비와 높이, 그리고 창의 backing scale이다. 호출한 표면이 세션의 소유자이고, 세션은 창이 가려졌는지와 관계없이 그 크기로 열린다. `core.session.resize {session, size}`와 `core.session.end {session}`는 세션에 작용한다. 어떤 탭도 세션을 보이지 않을 때 크기를 바꿀 수 있는 것은 소유자뿐이며, 세션을 끝낼 수 있는 것도 소유자뿐이다.
 
-탭은 `core.layout.open {card, plugin, params: {session}}`로 세션을 보인다. 탭은 카드의 크기를 따르며, 보이던 탭을 닫아도 세션은 마지막 크기를 유지한다. status `core.sessions`는 열린 세션마다 `{session, plugin, owner, shownBy}`를 나열하며, `shownBy`는 보이는 탭이거나 `null`이다.
+탭은 `core.layout.open {card, plugin, params: {session}}`로 세션을 보인다. 보이는 탭은 세션에 카드의 크기를 준다. 탭이 보일 때와 카드의 frame이 바뀔 때, view 없이 core가 카드의 frame 크기와 scale로 `core.session.resize`를 보낸다. 플러그인의 사이드카가 자기 글꼴로 이 크기를 자기 단위로 바꾼다. 보이던 탭을 닫아도 세션은 마지막 크기를 유지한다. 복원된 탭의 params가 열린 세션을 가리키면 그 탭은 그 세션을 보인다. status `core.sessions`는 열린 세션마다 `{session, plugin, owner, shownBy}`를 나열하며, `shownBy`는 보이는 탭이거나 `null`이다.
 
-세션은 소유자가 끝내거나 소유자 표면이 닫힐 때 끝난다. 이벤트 `workbench.session.end {session, reason}`가 사유를 담으며, 닫힌 소유자 표면의 사유는 `owner-closed`다. 세션이 열리면 이벤트 `workbench.session.open`이 발생한다. 거부 사유는 `session <id> is not open`, `surface <id> does not own session <id>`, `plugin <id> declares no sessions`다. 소유 세션의 재시작과 retain 규칙은 [영속 서비스](persistent-services.ko.md#소유-세션)에 있다. `background` 선언은 바뀌지 않으며 소유 세션을 열지 않는다.
+세션은 소유자가 끝내거나 소유자 표면이 닫힐 때 끝난다. 창을 닫아도 그 창의 소유 세션은 유지되며, 복원된 소유자가 세션에 다시 붙는다. `core.session.end`의 사유는 `ended`다. 이벤트 `workbench.session.end {session, reason}`가 사유를 담으며, 사유는 `core.session.end`이면 `ended`, 닫힌 소유자 표면이면 `owner-closed`, 재시작 뒤 돌아오지 않은 소유자이면 `owner-absent`다([영속 서비스](persistent-services.ko.md#소유-세션)). 세션이 열리면 이벤트 `workbench.session.open`이 발생한다. 거부 사유는 `session <id> is not open`, `surface <id> does not own session <id>`, `plugin <id> declares no sessions`, `plugin <id> must declare one sidecar for its sessions`, `size width, height and scale must be positive numbers`다. 매니페스트 reader는 `sessions`가 `true`가 아니면 `plugin <id>: sessions must be true`로, 표면이 없으면 `plugin <id>: sessions requires a surface`로, `dependencies`가 사이드카를 정확히 하나 이름 짓지 않으면 `plugin <id>: sessions requires one sidecar in dependencies`로 거부한다. 세션 요청의 경로는 [소유 세션 메시지](persistent-services.ko.md#소유-세션-메시지)를 따른다. 소유 세션의 재시작과 retain 규칙은 [영속 서비스](persistent-services.ko.md#소유-세션)에 있다. `background` 선언은 바뀌지 않으며 소유 세션을 열지 않는다.
 
 ## view 표면
 

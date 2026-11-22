@@ -22,7 +22,27 @@
 
 페이지의 retain 목록은 소유 세션마다 소유자 표면과 그 프로젝트 root를 담는다. 따라서 retain은 소유자 표면이 모든 레이아웃을 떠난 소유 세션만 닫는다.
 
-재시작 뒤 서비스는 이 절과 [종료와 복구](#종료와-복구)가 정한 대로 소유 세션을 유지한다. 다시 시작한 소유자는 `core.sessions`를 읽어 세션에 다시 연결한다. 소유자가 돌아오지 않은 세션은 사유 `owner-absent`로 끝난다.
+재시작 뒤 서비스는 이 절과 [종료와 복구](#종료와-복구)가 정한 대로 소유 세션을 유지한다. 창 닫기와 앱 종료는 복원용으로 남긴 레이아웃의 소유 세션을 유지하며, 복원된 소유자는 재시작 뒤와 같이 세션에 다시 붙는다. 다시 시작한 소유자는 `core.sessions`를 읽어 세션에 다시 연결한다. 소유자가 돌아오지 않은 세션은 사유 `owner-absent`로 끝난다.
+
+### 소유 세션 메시지
+
+소유 세션은 [사이드카 메시지](sidecars.ko.md#메시지)의 page 요청 형식을 쓴다. host는 `{"surface": owner, "root": root, "cids": [id, …], "body": value}`를 plugin의 persistent 사이드카에 보낸다. 여기서 `owner`는 소유 표면이고 `root`는 소유자 창의 프로젝트 root이며, body는 `operation`으로 연산을 고른다. 사이드카는 `{"surface": owner, "cids": [id, …], "body": reply}`로 답하고, `error` 멤버를 가진 응답 body는 실패한 요청을 뜻한다. 메시지는 다음과 같다:
+
+- `{operation: "open", session: {creation}, size, params}`는 소유 표면이 소유하는 세션을 연다. `creation`은 page가 요청마다 만드는 불투명 식별자이고, `size`는 `{width, height, scale}`이다. `width`와 `height`는 세션이 차지하는 카드의 양의 포인트 수이고, `scale`은 창의 양의 backing scale이며, 사이드카가 이 크기를 자기 단위로 바꾼다. `params`는 요청의 `params` 값으로 사이드카가 그대로 받는다. 서비스는 소유자와 `creation`으로 세션을 구분한다. 같은 `creation`의 반복 open은 처음 open의 응답을 돌려주며 자식 프로세스를 시작하지 않는다. 응답 body는 `{session, creation}`이고, `session`은 서비스가 할당한 안정 세션 식별자, `creation`은 요청의 식별자다.
+- `{operation: "resize", session, size}`는 같은 소유자의 세션 크기를 `size`의 형식으로 정한다. 응답 body는 `{session, size}`다.
+- `{operation: "end", session}`은 같은 소유자의 세션을 끝낸다. 응답 body는 `{session, ended: true}`다. 끝낸 사유는 page가 `workbench.session.end`에 기록하며, 서비스는 사유를 받지 않는다.
+
+열려 있지 않은 세션이나 다른 소유자의 세션에 대한 메시지는 오류 텍스트 `session <id> is not open` 또는 `surface <id> does not own session <id>`로 답한다.
+
+표면 메시지 envelope에는 요청 식별자가 없으므로, 소유 세션 요청의 상관(correlation)은 `cids`다([사이드카 메시지](sidecars.ko.md#메시지)). 응답을 기다리는 요청은 빈 목록이 아닌 `cids`를 보내고, 서비스는 같은 목록을 `cids`로 답한다. 같은 표면과 사이드카에서 기다리는 다른 요청과 `cids` 목록이 같은 요청은 거부한다.
+
+host는 envelope만 검사한다. 사이드카 이름과 표면은 빈 값이 아니어야 하고, `cids`는 한 줄이 담을 수 있는 식별자의 목록이어야 한다. host는 `operation`, `session`, `creation`, `size`, `params`를 읽지 않고 body를 그대로 전달한다. 이 값들의 검사와 거부는 서비스가 하며, 서비스는 거부를 오류 body로 답한다.
+
+host bridge 연산은 `sidecarSend {sidecar, surface, body, cids, answer}`와 `sidecarSessions {sidecar}`다. `sidecarSend`는 소유 표면과 함께 위 세 메시지를 보낸다. view가 마운트한 소유자는 다른 사이드카 메시지와 같이 그 view의 소스 generation을 쓰는 `viewSidecarSend {source, generation, sidecar, surface, body, cids, answer}`로 대신 보내며, `viewSidecarSend`는 `answer`에 대해 `sidecarSend`와 같이 응답하고 거부한다. `sidecarSend`는 마운트된 표면을 `mounted surface <surface> requires viewSidecarSend with its original source generation`로 거부한다. `answer`가 없거나 false이면 요청 줄이 큐에 들어갈 때 해결된다. `answer`가 true이면, 표면이 소유자이고 `cids`가 요청의 `cids`와 같은 서비스 메시지 중 처음 것의 body로 해결되며, 그 메시지는 `sidecar-message` 이벤트로도 전달된다. `error` 멤버를 가진 응답 body는 그 오류로 호출을 거부한다. 오류는 문자열이면 그대로, 다른 값이면 JSON 텍스트다. 호출에는 시간 제한이 없으며, 응답 전에 서비스 연결이 끝나면 `the service connection ended before the answer`로 거부된다. page가 호출을 버리면 뒤늦은 응답은 `the sidecarSend reply arrived after its request ended`로 기록한다. `answer`가 true이면 `cids`가 비어 있지 않아야 하고 사이드카는 persistent여야 한다. 거부 텍스트는 `sidecarSend answer requires cids`, `sidecarSend answer requires a persistent sidecar`, `sidecarSend answer cids already wait for surface <surface>`다. `cids`의 잘못된 식별자는 `sidecarSend cids are refused: <cid> is empty or holds a quote, a backslash or a control character`로 거부한다.
+
+`sidecarSessions {sidecar}`는 인증된 client가 서비스에 가진 소유 세션 `{sessions: [{session, surface, root, creation, size}]}`로 해결된다. host는 서비스에 `{operation: "sessions", request}`를 보내고, 서비스는 `{operation: "sessions", request, ok: true, sessions}`로 답하거나 `ok: false`와 `error`로 답한다. 실패한 답은 그 `error`를 그대로 담아 bridge 호출을 거부한다. host는 각 항목을 검사한다. `session`, `surface`, `root`, `creation`은 빈 값이 아닌 문자열이고 `size`는 `width`, `height`, `scale`이 양의 수인 객체여야 하며, 다른 멤버는 읽지 않는다. 검사에 실패한 답은 `invalid message: sessions is missing`, `invalid message: sessions is not an array`, `invalid message: sessions <member> is not a non-empty string`, `invalid message: sessions size is not an object` 또는 `invalid message: sessions size.<member> is not a positive number`로 호출을 거부하며, `<member>`는 처음 실패한 항목의 멤버 이름이다. 빈 `sidecar`의 `sidecarSessions` 호출은 `sidecarSessions requires a non-empty sidecar`로 거부한다. 선언되지 않은 사이드카는 `sidecar <name> is not declared`로, persistent 서비스가 아닌 사이드카는 `sidecar <name> is not a persistent service`로 거부한다. 선언된 persistent 사이드카의 서비스에 엔드포인트가 없으면 서비스는 소유 세션을 갖지 않으므로, 호출은 `{sessions: []}`로 해결되며 프로세스를 시작하지 않는다. 그 밖의 경우 호출은 retain과 같이 서비스를 시작한다. 재시작 뒤 page는 `sidecarSessions`를 호출해서, 복원된 레이아웃에 소유자 표면이 있는 세션은 채택하고, 나머지 세션은 `end`로 사유 `owner-absent`와 함께 끝낸다.
+
+retain은 [서비스 전송](#서비스-전송)에 소유 세션 형식을 따로 두지 않는다. 소유 세션의 `surface`는 소유자이므로, 소유자가 목록에 없으면 retain이 그 세션을 닫는다.
 
 ## 종료와 복구
 
@@ -32,7 +52,7 @@
 
 첫 줄 단위 JSON 메시지는 `{operation: "hello", protocol: 1, token, client}`이며 `client`는 애플리케이션의 설정 폴더다. 서비스는 `{operation: "hello", protocol: 1, version, ok: true}`(`version`은 그 사이드카의 version) 또는 `{operation: "hello", ok: false, error}`로 답한다. 답을 받은 뒤 host 는 deadline 없이 연결을 읽으므로, 말이 없는 서비스도 연결이 유지되고 그 read thread 는 깨어나지 않는다. 인증 후 표면 메시지는 선언된 사이드카 봉투를 유지하며, process query와 그 답도 자기 줄 형태를 유지한다([프로세스 identity](sidecars.ko.md#프로세스-identity)). 호스트는 parent가 `endpoint.json`의 서비스 프로세스인 프로세스에 대해 연결로 query를 보낸다. `{operation: "close-owner", request}`는 인증한 클라이언트의 세션을 종료하고 정리 뒤 `{operation: "closed-owner", request, ok: true}` 또는 `ok: false`와 `error`로 답한다. `{operation: "shutdown", request}`는 소유자 닫기 이후에만 수락하고 `{operation: "shutdown", request, ok: true}`로 답하며, 클라이언트 연결이 모두 종료된 뒤 서비스를 종료하도록 허용한다. 소켓 EOF는 세션을 보존한다. 엔드포인트 파일만으로 해당 PID를 종료하지 않으며 프로토콜·인증 실패 시 경쟁 서비스를 시작하지 않는다. 좀비로만 남은 프로세스 — 죽은 클라이언트가 기다리지 않은 스폰 — 는 존재하는 서비스로 치지 않으므로 그것이 게시한 낡은 엔드포인트는 교체된다.
 
-표면 숨김, 라이브러리 이동, 앱 연결 단절은 세션을 보존한다. 세션의 명시적 닫기는 해당 세션을 종료한다. 정상 창 닫기는 그 창 소유 세션을, 정상 앱 종료는 모든 소유 세션을 종료한다. 중지는 연결의 queue에 자리를 기다리지 않고 `close-owner`와 `shutdown`을 보낸다. queue가 가득 차 있으면 호스트는 그 자리에서 연결을 끝내고(socket을 shutdown한다), 이것이 연결의 writer와 reader를 끝내며 기다리는 close-owner와 shutdown을 실패시킨다. 서비스는 연결이 끊겼을 때처럼 세션을 지킨다. 중지는 `close-owner`와 `shutdown`의 답이나 연결의 끝 중 먼저 오는 것을 기다리고, 그 기다림을 끝내는 time limit은 없다. 앱의 quit이 아닌 중지는 그 기다림을 연결에 맡기고 바로 반환한다. 관리 대상 작업 종료, 자식 회수, 장치 핸들 해제, 출력 완료 또는 실패 보고, 연결 작업 제거 후에만 종료 완료다. 종료 오류를 성공으로 바꾸지 않는다.
+표면 숨김, 라이브러리 이동, 앱 연결 단절, 창 닫기, 앱 종료는 세션을 보존한다. 세션의 명시적 닫기는 해당 세션을 종료한다. 창 닫기는 복원용 레이아웃을 남기고, 복원된 소유자가 세션에 다시 붙는다. 소유 세션은 명시적 종료, 소유자 표면 닫힘(`owner-closed`), 또는 재시작 뒤 복원된 레이아웃에 소유자가 없을 때(`owner-absent`)에만 끝난다. 중지는 연결의 queue에 자리를 기다리지 않고 `close-owner`와 `shutdown`을 보낸다. queue가 가득 차 있으면 호스트는 그 자리에서 연결을 끝내고(socket을 shutdown한다), 이것이 연결의 writer와 reader를 끝내며 기다리는 close-owner와 shutdown을 실패시킨다. 서비스는 연결이 끊겼을 때처럼 세션을 지킨다. 중지는 `close-owner`와 `shutdown`의 답이나 연결의 끝 중 먼저 오는 것을 기다리고, 그 기다림을 끝내는 time limit은 없다. 앱의 quit이 아닌 중지는 그 기다림을 연결에 맡기고 바로 반환한다. 관리 대상 작업 종료, 자식 회수, 장치 핸들 해제, 출력 완료 또는 실패 보고, 연결 작업 제거 후에만 종료 완료다. 종료 오류를 성공으로 바꾸지 않는다.
 
 앱 충돌과 명시적 업데이트 재시작은 서비스를 유지한다. 재연결은 같은 세션, 자식 프로세스, 세션 상태를 복원하며 새 앱 프로세스의 네이티브 이미지는 새로 만들고 프로세스 사이에서 재사용하지 않는다. 서비스는 연결이 없어도 출력을 읽고 처리한다. EOF는 연결 단절이며 세션 종료 명령이 아니다. 서비스가 EOF를 읽기 전에 출력 쪽이 닫힌 클라이언트도 연결 단절이므로, 서비스는 그 클라이언트를 분리하고 세션을 유지한다. 종료 의도를 응답 전에 기록하여 중단된 닫기가 의도적으로 종료한 세션을 복원하지 않게 한다.
 
