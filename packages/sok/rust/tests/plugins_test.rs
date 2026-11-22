@@ -1025,7 +1025,30 @@ fn dependency_registry(versions: &[Dependent]) -> Registry {
     for (id, entry) in &plugins {
         files.push((format!("plugins/{id}.json"), entry.to_string()));
     }
-    let index = json!({"format": 2, "plugins": plugins.values().collect::<Vec<_>>(), "sidecars": [worker],
+    // The index records the plugin dependencies of each version; the entries of the plugin folder do not hold them.
+    let indexed: Vec<Value> = plugins
+        .iter()
+        .map(|(id, entry)| {
+            let mut entry = entry.clone();
+            for version in entry["versions"].as_array_mut().unwrap() {
+                let item = versions
+                    .iter()
+                    .find(|item| {
+                        item.id == *id && Some(item.version) == version["version"].as_str()
+                    })
+                    .unwrap();
+                version["plugins"] = item
+                    .dependencies
+                    .iter()
+                    .filter(|(name, _)| !name.starts_with("@scope/sidecar-"))
+                    .map(|(name, range)| (name.to_string(), Value::from(*range)))
+                    .collect::<serde_json::Map<String, Value>>()
+                    .into();
+            }
+            entry
+        })
+        .collect();
+    let index = json!({"format": 2, "plugins": indexed, "sidecars": [worker],
         "packs": [], "revoked": revoked});
     files.push(("index.json".to_string(), index.to_string()));
     let files: Vec<(&str, &str)> = files
@@ -1396,7 +1419,7 @@ fn mismatched_index() -> Registry {
         "description": "검사용 plugin.", "license": "MIT", "repository": "https://example.invalid/probe",
         "versions": [{"version": "0.2.0",
             "release": {"url": format!("file://{}", result["release"].as_str().unwrap()), "sha256": result["sha256"]},
-            "engines": {"soksak": "^0.0.2"}, "sidecars": {}}]});
+            "engines": {"soksak": "^0.0.2"}, "sidecars": {}, "plugins": {}}]});
     let index_json = json!({"format": 2, "plugins": [plugin], "sidecars": [], "packs": [],
         "revoked": {"plugins": [], "sidecars": []}});
     write_tree(index.path(), &[("index.json", &index_json.to_string())]);
@@ -1458,7 +1481,7 @@ fn schema_outside_subset_index() -> Registry {
         "description": "검사용 plugin.", "license": "MIT", "repository": "https://example.invalid/probe",
         "versions": [{"version": "0.2.0",
             "release": {"url": "file:///nonexistent/probe-0.2.0.tgz", "sha256": "0".repeat(64)},
-            "engines": {"soksak": "^0.0.2"}, "sidecars": {}}]});
+            "engines": {"soksak": "^0.0.2"}, "sidecars": {}, "plugins": {}}]});
     let index_json = json!({"format": 2, "plugins": [plugin], "sidecars": [], "packs": [],
         "revoked": {"plugins": [], "sidecars": []}});
     write_tree(dir.path(), &[("index.json", &index_json.to_string())]);

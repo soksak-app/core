@@ -473,6 +473,8 @@ pub struct PluginVersion {
     pub release: Release,
     pub engines: Engines,
     pub sidecars: BTreeMap<String, String>,
+    /// The plugin dependencies of the version. An entry of plugins/<id>.json does not hold them; the index does.
+    pub plugins: BTreeMap<String, String>,
 }
 
 /// A plugin entry of the registry.
@@ -582,6 +584,12 @@ fn entry_at(kind: &str, map: &Map<String, Value>, key: &str) -> String {
 
 /// Checks one plugin entry of the registry (`plugins/<id>.json`).
 pub fn validate_registry_plugin(value: &Value) -> Result<(), String> {
+    check_registry_plugin(value, false)
+}
+
+/// Checks one plugin entry. An entry of the index (`indexed`) also holds the plugin dependencies of each version in `plugins`,
+/// which an entry of plugins/<id>.json does not hold (docs/spec/installation.md#registry-index).
+fn check_registry_plugin(value: &Value, indexed: bool) -> Result<(), String> {
     let entry = object("registry plugin", Some(value))?;
     let at = entry_at("registry plugin", entry, "id");
     only(
@@ -614,11 +622,12 @@ pub fn validate_registry_plugin(value: &Value) -> Result<(), String> {
     let mut seen = BTreeSet::new();
     for raw in array(&format!("{at} versions"), entry.get("versions"))? {
         let item = object(&format!("{at} version"), Some(raw))?;
-        only(
-            &format!("{at} version"),
-            item,
-            &["engines", "release", "sidecars", "version"],
-        )?;
+        let keys: &[&str] = if indexed {
+            &["engines", "plugins", "release", "sidecars", "version"]
+        } else {
+            &["engines", "release", "sidecars", "version"]
+        };
+        only(&format!("{at} version"), item, keys)?;
         let version = check_version(&format!("{at} version"), item.get("version"))?;
         if !seen.insert(version.to_string()) {
             return Err(format!("{at}: version {version} appears twice"));
@@ -632,6 +641,9 @@ pub fn validate_registry_plugin(value: &Value) -> Result<(), String> {
         )?;
         check_release_entry(&format!("{at} {version} release"), item.get("release"))?;
         check_sidecar_ranges(&format!("{at} {version} sidecars"), item.get("sidecars"))?;
+        if indexed {
+            check_sidecar_ranges(&format!("{at} {version} plugins"), item.get("plugins"))?;
+        }
     }
     if seen.is_empty() {
         return Err(format!("{at}: versions is empty"));
@@ -809,15 +821,17 @@ pub fn validate_registry_index(value: &Value) -> Result<Index, String> {
         ));
     }
     type Validate = fn(&Value) -> Result<(), String>;
-    let lists: [(&str, Validate); 3] = [
+    let lists: [(&str, Validate); 2] = [
         ("packs", validate_registry_pack),
-        ("plugins", validate_registry_plugin),
         ("sidecars", validate_registry_sidecar),
     ];
     for (name, validate) in lists {
         for item in array(&format!("registry index {name}"), root.get(name))? {
             validate(item)?;
         }
+    }
+    for item in array("registry index plugins", root.get("plugins"))? {
+        check_registry_plugin(item, true)?;
     }
     validate_revoked(&root["revoked"])?;
     let index: Index = typed(value)?;

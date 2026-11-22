@@ -142,7 +142,7 @@ fn registry_build_writes_the_index_after_checking_every_release() {
     assert_eq!(
         stdout,
         format!(
-            "{{\n  \"core\": 0,\n  \"index\": \"{index_text}\",\n  \"packs\": 1,\n  \"plugins\": 1,\n  \"sidecars\": 1\n}}\n"
+            "{{\n  \"carried\": 0,\n  \"core\": 0,\n  \"index\": \"{index_text}\",\n  \"packs\": 1,\n  \"plugins\": 1,\n  \"read\": 2,\n  \"sidecars\": 1\n}}\n"
         )
     );
     let want = format!(
@@ -168,7 +168,8 @@ fn registry_build_writes_the_index_after_checking_every_release() {
           }},
           "sidecars": {{
             "@scope/sidecar-worker": "^0.1.0"
-          }}
+          }},
+          "plugins": {{}}
         }}
       ]
     }}
@@ -534,6 +535,153 @@ fn registry_build_lists_the_core_key_of_each_host() {
         assert!(
             index.contains(&format!("\"{key}\": {{")),
             "the index lists no {key} release: {index}"
+        );
+    }
+}
+
+/// Writes a copy of the index whose version 1.0.0 of plugin ext records the plugin dependency name with range, and returns
+/// the folder that holds it with its file: URL.
+fn previous_with_dependency(index: &Path, name: &str, range: &str) -> (Folder, String) {
+    let mut document: Value = serde_json::from_slice(&std::fs::read(index).unwrap()).unwrap();
+    let plugin = document["plugins"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|entry| entry["id"] == "ext")
+        .unwrap();
+    plugin["versions"][0]["plugins"] = json!({ name: range });
+    let folder = Folder::new("registry");
+    let path = folder.path().join("previous.json");
+    std::fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
+    (folder, format!("file://{}", path.display()))
+}
+
+// contract: cli.registry.carries-unchanged-releases
+#[test]
+fn registry_build_carries_the_releases_that_the_previous_index_lists_unchanged() {
+    let registry = registry_tree();
+    let (code, _, stderr) = run(&["registry", "build", registry.dir.text()]);
+    assert_eq!(code, 0, "{stderr}");
+    let index = registry.dir.path().join("index.json");
+    let previous = Folder::new("registry");
+    let previous_path = previous.path().join("previous.json");
+    std::fs::copy(&index, &previous_path).unwrap();
+    let location = format!("file://{}", previous_path.display());
+    // The unchanged plugin release is removed, so a build that reads it fails. The sidecar release moves to a file of the
+    // same bytes, so its entry changes and the build reads that release once.
+    let moved = format!("{}.moved", registry.sidecar.0);
+    std::fs::copy(&registry.sidecar.0, &moved).unwrap();
+    std::fs::remove_file(&registry.plugin.0).unwrap();
+    std::fs::remove_file(&registry.sidecar.0).unwrap();
+    replace_in(
+        &registry
+            .dir
+            .path()
+            .join("sidecars/scope-sidecar-worker.json"),
+        &registry.sidecar.0,
+        &moved,
+    );
+    let (code, stdout, stderr) = run(&[
+        "registry",
+        "build",
+        registry.dir.text(),
+        "--previous",
+        &location,
+    ]);
+    assert_eq!(code, 0, "{stderr}");
+    let index_text = index.to_str().unwrap();
+    assert_eq!(
+        stdout,
+        format!(
+            "{{\n  \"carried\": 1,\n  \"core\": 0,\n  \"index\": \"{index_text}\",\n  \"packs\": 1,\n  \"plugins\": 1,\n  \"read\": 1,\n  \"sidecars\": 1\n}}\n"
+        )
+    );
+}
+
+// contract: cli.registry.checks-carried-dependencies
+#[test]
+fn registry_build_judges_a_carried_plugin_version_by_its_recorded_dependencies() {
+    let (dir, _releases) =
+        dependency_tree(&[("base", &[]), ("ext", &[("@scope/plugin-base", "^1.0.0")])]);
+    let (code, _, stderr) = run(&["registry", "build", dir.text()]);
+    assert_eq!(code, 0, "{stderr}");
+    let index = dir.path().join("index.json");
+    let written = std::fs::read(&index).unwrap();
+    // ext 1.0.0 is unchanged, so it is carried, and its recorded dependency no listed version satisfies.
+    let (_unsatisfied, location) = previous_with_dependency(&index, "@scope/plugin-base", "^2.0.0");
+    let (code, _, stderr) = run(&["registry", "build", dir.text(), "--previous", &location]);
+    assert_eq!(code, 1);
+    assert!(
+        stderr.contains(
+            "plugin dependency @scope/plugin-base ^2.0.0 is satisfied by no listed version"
+        ),
+        "{stderr}"
+    );
+    // ext 1.0.0 records a dependency that names neither a listed plugin nor a listed sidecar.
+    let (_unknown, location) = previous_with_dependency(&index, "@scope/plugin-gone", "^1.0.0");
+    let (code, _, stderr) = run(&["registry", "build", dir.text(), "--previous", &location]);
+    assert_eq!(code, 1);
+    assert!(
+        stderr.contains(
+            "dependency @scope/plugin-gone is neither a plugin nor a sidecar of the registry"
+        ),
+        "{stderr}"
+    );
+    assert_eq!(
+        std::fs::read(&index).unwrap(),
+        written,
+        "a failed build changed index.json"
+    );
+}
+
+// contract: cli.registry.rejects-a-previous-index-without-writing
+#[test]
+fn registry_build_rejects_a_previous_index_that_is_missing_invalid_or_of_another_format() {
+    let registry = registry_tree();
+    let (code, _, stderr) = run(&["registry", "build", registry.dir.text()]);
+    assert_eq!(code, 0, "{stderr}");
+    let index = registry.dir.path().join("index.json");
+    let written = std::fs::read(&index).unwrap();
+    let folder = Folder::new("registry");
+    let write = |name: &str, text: String| -> String {
+        let path = folder.path().join(name);
+        std::fs::write(&path, text).unwrap();
+        format!("file://{}", path.display())
+    };
+    // A format 2 index whose plugin version has no plugins member.
+    let mut without_plugins: Value = serde_json::from_slice(&written).unwrap();
+    without_plugins["plugins"][0]["versions"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("plugins");
+    let locations = [
+        format!("file://{}", folder.path().join("missing.json").display()),
+        write("invalid.json", r#"{"format": 1}"#.to_string()),
+        write(
+            "format1.json",
+            r#"{"format": 1, "plugins": [], "sidecars": [], "packs": [], "revoked": {"plugins": [], "sidecars": []}}"#
+                .to_string(),
+        ),
+        write("without-plugins.json", without_plugins.to_string()),
+        "relative/index.json".to_string(),
+    ];
+    for location in locations {
+        let (code, _, stderr) = run(&[
+            "registry",
+            "build",
+            registry.dir.text(),
+            "--previous",
+            &location,
+        ]);
+        assert_eq!(code, 1, "{location}");
+        assert!(
+            stderr.contains(&location),
+            "{stderr} does not name {location}"
+        );
+        assert_eq!(
+            std::fs::read(&index).unwrap(),
+            written,
+            "{location}: a failed build changed index.json"
         );
     }
 }

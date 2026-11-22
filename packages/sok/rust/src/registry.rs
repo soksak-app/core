@@ -8,7 +8,10 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
 use crate::Error;
-use crate::install::{self, Index, PluginVersion, RegistryPlugin, Release};
+use crate::install::{
+    self, CoreRelease, Index, PluginVersion, RegistryPlugin, RegistrySidecar, Release,
+    SidecarVersion,
+};
 use crate::output::{hex, print_json, read_json_file, replace_file};
 
 type Validate = fn(&Value) -> Result<(), String>;
@@ -196,14 +199,13 @@ pub(crate) fn read_release(at: &str, release: &Release) -> Result<Vec<u8>, Strin
     Ok(data)
 }
 
-/// Checks that a plugin release holds the plugin.json id and the package.json of its entry, that the sidecar
-/// dependencies of plugin.json equal the sidecars of the entry, and that a listed version satisfies the range of each
-/// plugin dependency.
+/// Checks that a plugin release holds the plugin.json id and the package.json of its entry, and that the sidecar
+/// dependencies of plugin.json equal the sidecars of the entry. It returns the plugin dependencies of plugin.json.
 fn check_plugin_release(
     index: &Index,
     plugin: &RegistryPlugin,
     version: &PluginVersion,
-) -> Result<(), String> {
+) -> Result<BTreeMap<String, String>, String> {
     let at = format!("plugin {} {} package", plugin.id, version.version);
     let data = read_release(&at, &version.release)?;
     let files = release_files(&data, &["package.json", "plugin.json"])
@@ -245,12 +247,27 @@ fn check_plugin_release(
             json!(version.sidecars)
         ));
     }
-    for (name, range) in &plugins {
-        let satisfied = index
-            .plugins
+    Ok(plugins)
+}
+
+/// Checks the plugin dependencies that a plugin version records in the index: each names a listed plugin, and a listed version
+/// of that plugin satisfies its range. A read version and a carried version are judged alike, so a carried version whose
+/// dependency has no listed version fails the build.
+fn check_plugin_dependencies(
+    index: &Index,
+    plugin: &RegistryPlugin,
+    version: &PluginVersion,
+) -> Result<(), String> {
+    for (name, range) in &version.plugins {
+        let Some(entry) = index.plugins.iter().find(|entry| &entry.package == name) else {
+            return Err(format!(
+                "{} {}: dependency {name} is neither a plugin nor a sidecar of the registry",
+                plugin.id, version.version
+            ));
+        };
+        let satisfied = entry
+            .versions
             .iter()
-            .filter(|entry| &entry.package == name)
-            .flat_map(|entry| &entry.versions)
             .any(|candidate| install::satisfies(&candidate.version, range));
         if !satisfied {
             return Err(format!(
@@ -262,9 +279,104 @@ fn check_plugin_release(
     Ok(())
 }
 
-/// Checks the registry folder, writes index.json, and returns its path and the number of entries.
-pub fn build_registry(dir: &Path) -> Result<Value, String> {
-    let plugins = read_entries(dir, "plugins", install::validate_registry_plugin, |value| {
+/// Reads the index that a previous publication wrote from location and checks it as a registry index. A failure names
+/// location, and the caller writes nothing (docs/spec/registry.md#build).
+pub(crate) fn read_previous_index(location: &str) -> Result<Index, String> {
+    let fetcher = crate::fetch::Fetcher::default();
+    let data = fetcher
+        .read_index(location)
+        .map_err(|error| format!("previous index {location}: {error}"))?;
+    let value: Value = serde_json::from_slice(&data)
+        .map_err(|error| format!("previous index {location} is not valid JSON: {error}"))?;
+    install::validate_registry_index(&value)
+        .map_err(|error| format!("previous index {location}: {error}"))
+}
+
+/// Returns the version of the previous index that has the same plugin identity and version record as version, or None when
+/// the previous index does not list it. Such a release keeps the hash that the previous build checked, and its recorded
+/// plugin dependencies are carried with it.
+fn listed_plugin<'a>(
+    previous: Option<&'a Index>,
+    plugin: &RegistryPlugin,
+    version: &PluginVersion,
+) -> Option<&'a PluginVersion> {
+    let previous = previous?;
+    let old = previous
+        .plugins
+        .iter()
+        .find(|entry| entry.id == plugin.id)?;
+    if old.package != plugin.package
+        || old.name != plugin.name
+        || old.repository != plugin.repository
+    {
+        return None;
+    }
+    let listed = old
+        .versions
+        .iter()
+        .find(|candidate| candidate.version == version.version)?;
+    if listed.release != version.release
+        || listed.engines.soksak != version.engines.soksak
+        || listed.sidecars != version.sidecars
+    {
+        return None;
+    }
+    Some(listed)
+}
+
+/// Reports whether the previous index lists the release of one platform of the sidecar version with the same identity,
+/// version and protocol.
+fn carried_sidecar(
+    previous: Option<&Index>,
+    sidecar: &RegistrySidecar,
+    version: &SidecarVersion,
+    platform: &str,
+    release: &Release,
+) -> bool {
+    let Some(previous) = previous else {
+        return false;
+    };
+    let Some(old) = previous
+        .sidecars
+        .iter()
+        .find(|entry| entry.name == sidecar.name)
+    else {
+        return false;
+    };
+    if old.repository != sidecar.repository {
+        return false;
+    }
+    let Some(listed) = old
+        .versions
+        .iter()
+        .find(|candidate| candidate.version == version.version)
+    else {
+        return false;
+    };
+    listed.protocol == version.protocol && listed.releases.get(platform) == Some(release)
+}
+
+/// Reports whether the previous index lists the release of one key of the core version.
+fn carried_core(
+    previous: Option<&Index>,
+    version: &CoreRelease,
+    key: &str,
+    release: &Release,
+) -> bool {
+    let Some(old) = previous.and_then(|previous| previous.core.as_ref()) else {
+        return false;
+    };
+    old.versions
+        .iter()
+        .find(|candidate| candidate.version == version.version)
+        .and_then(|listed| listed.releases.get(key))
+        == Some(release)
+}
+
+/// Checks the registry folder, writes index.json, and returns its path, the number of entries, and the numbers of releases read
+/// and carried. A None previous index is a first build that reads every release (docs/spec/registry.md#build).
+pub fn build_registry(dir: &Path, previous: Option<&Index>) -> Result<Value, String> {
+    let mut plugins = read_entries(dir, "plugins", install::validate_registry_plugin, |value| {
         value["id"]
             .as_str()
             .map(String::from)
@@ -283,6 +395,16 @@ pub fn build_registry(dir: &Path) -> Result<Value, String> {
             .ok_or_else(|| "name is required".into())
     })?;
     let revoked = read_json_file(dir, "revoked.json")?;
+    // Each version records its plugin dependencies in the index, which an entry does not hold. The record is set below, after
+    // the index is read: a carried version takes the record of the previous index, and a read version takes the dependencies
+    // of its plugin.json. The placeholder only satisfies the index validation.
+    for entry in plugins.iter_mut() {
+        if let Some(versions) = entry["versions"].as_array_mut() {
+            for version in versions {
+                version["plugins"] = json!({});
+            }
+        }
+    }
     let mut root = json!({"format": install::REGISTRY_INDEX_FORMAT, "plugins": plugins, "sidecars": sidecars, "packs": packs, "revoked": revoked});
     // A registry without core.json lists no core release.
     if dir.join("core.json").exists() {
@@ -293,14 +415,33 @@ pub fn build_registry(dir: &Path) -> Result<Value, String> {
     index.plugins.sort_by(|a, b| a.id.cmp(&b.id));
     index.sidecars.sort_by(|a, b| a.name.cmp(&b.name));
     index.packs.sort_by(|a, b| a.name.cmp(&b.name));
-    for plugin in &index.plugins {
-        for version in &plugin.versions {
-            check_plugin_release(&index, plugin, version)?;
+    let (mut read, mut carried) = (0, 0);
+    for i in 0..index.plugins.len() {
+        for j in 0..index.plugins[i].versions.len() {
+            let plugin = index.plugins[i].clone();
+            let version = plugin.versions[j].clone();
+            let dependencies = match listed_plugin(previous, &plugin, &version) {
+                Some(listed) => {
+                    carried += 1;
+                    listed.plugins.clone()
+                }
+                None => {
+                    read += 1;
+                    check_plugin_release(&index, &plugin, &version)?
+                }
+            };
+            index.plugins[i].versions[j].plugins = dependencies;
+            check_plugin_dependencies(&index, &plugin, &index.plugins[i].versions[j])?;
         }
     }
     for sidecar in &index.sidecars {
         for version in &sidecar.versions {
             for (platform, release) in &version.releases {
+                if carried_sidecar(previous, sidecar, version, platform, release) {
+                    carried += 1;
+                    continue;
+                }
+                read += 1;
                 read_release(
                     &format!("sidecar {} {} {platform}", sidecar.name, version.version),
                     release,
@@ -308,12 +449,19 @@ pub fn build_registry(dir: &Path) -> Result<Value, String> {
             }
         }
     }
-    let mut cores = 0;
     if let Some(core) = index.core.as_mut() {
         core.versions.sort_by(|a, b| a.version.cmp(&b.version));
+    }
+    let mut cores = 0;
+    if let Some(core) = &index.core {
         for version in &core.versions {
             cores += 1;
             for (key, release) in &version.releases {
+                if carried_core(previous, version, key, release) {
+                    carried += 1;
+                    continue;
+                }
+                read += 1;
                 read_release(&format!("core {} {key}", version.version), release)?;
             }
         }
@@ -325,12 +473,17 @@ pub fn build_registry(dir: &Path) -> Result<Value, String> {
     replace_file(&path, &out)?;
     Ok(
         json!({"index": path.display().to_string(), "plugins": index.plugins.len(),
-        "sidecars": index.sidecars.len(), "packs": index.packs.len(), "core": cores}),
+        "sidecars": index.sidecars.len(), "packs": index.packs.len(), "core": cores,
+        "read": read, "carried": carried}),
     )
 }
 
-/// Runs `sok registry build <directory>`.
-pub(crate) fn run_registry(positionals: &[String], stdout: &mut dyn Write) -> Result<(), Error> {
+/// Runs `sok registry build <directory> [--previous <location>]`.
+pub(crate) fn run_registry(
+    positionals: &[String],
+    values: &std::collections::HashMap<String, String>,
+    stdout: &mut dyn Write,
+) -> Result<(), Error> {
     let action = positionals
         .get(1)
         .ok_or_else(|| Error::Usage("registry action is required".into()))?;
@@ -343,6 +496,10 @@ pub(crate) fn run_registry(positionals: &[String], stdout: &mut dyn Write) -> Re
     if let Some(extra) = positionals.get(3) {
         return Err(Error::Usage(format!("unexpected argument {extra}")));
     }
-    let result = build_registry(Path::new(dir))?;
+    let previous = match values.get("previous") {
+        Some(location) => Some(read_previous_index(location)?),
+        None => None,
+    };
+    let result = build_registry(Path::new(dir), previous.as_ref())?;
     Ok(print_json(stdout, &result)?)
 }

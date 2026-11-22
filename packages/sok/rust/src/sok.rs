@@ -138,6 +138,7 @@ const OPTIONS: &[&str] = &[
     "bundle",
     "target",
     "config-dir",
+    "previous",
     "window",
     "project",
     "surface",
@@ -967,7 +968,7 @@ fn execute(
         return plugins::run_plugins(&a.positionals, &a.values, stdout, options);
     }
     if a.positionals.first().map(String::as_str) == Some("registry") {
-        return registry::run_registry(&a.positionals, stdout);
+        return registry::run_registry(&a.positionals, &a.values, stdout);
     }
     if first_two == (Some("plugin"), None) {
         return Err(Error::Usage("plugin action is required".into()));

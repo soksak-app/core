@@ -28,7 +28,12 @@ fn sidecar() -> Value {
 }
 
 fn index() -> Value {
-    json!({"format": 2, "plugins": [plugin()], "sidecars": [sidecar()],
+    // The index records the plugin dependencies of each version; a plugin entry does not hold them.
+    let mut entry = plugin();
+    for version in entry["versions"].as_array_mut().unwrap() {
+        version["plugins"] = json!({});
+    }
+    json!({"format": 2, "plugins": [entry], "sidecars": [sidecar()],
         "packs": [{"name": "starter", "description": "처음 설치하는 plugin.", "plugins": ["probe"]}],
         "revoked": {"plugins": [{"id": "probe", "version": "0.3.0", "reason": "breaks saved spaces"}], "sidecars": []}})
 }
@@ -387,6 +392,9 @@ fn registry_index_checks_names_packs_sidecar_ranges_and_revoked_versions() {
     let mut duplicate = index();
     let mut other = plugin();
     other["id"] = json!("other");
+    for version in other["versions"].as_array_mut().unwrap() {
+        version["plugins"] = json!({});
+    }
     duplicate["plugins"].as_array_mut().unwrap().push(other);
     rejects(
         install::validate_registry_index(&duplicate),

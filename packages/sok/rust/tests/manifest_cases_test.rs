@@ -71,7 +71,7 @@ fn index_for_release(path: &Path, sum: &str) -> Folder {
         "description": "검사용 plugin.", "license": "MIT", "repository": "https://example.invalid/probe",
         "versions": [{"version": "0.2.0",
             "release": {"url": format!("file://{}", path.display()), "sha256": sum},
-            "engines": {"soksak": "^0.0.2"}, "sidecars": {}}]});
+            "engines": {"soksak": "^0.0.2"}, "sidecars": {}, "plugins": {}}]});
     let index = json!({"format": 2, "plugins": [plugin], "sidecars": [], "packs": [],
         "revoked": {"plugins": [], "sidecars": []}});
     write_tree(dir.path(), &[("index.json", &index.to_string())]);
