@@ -15,16 +15,22 @@ import (
 	host "github.com/soksak-app/core/packages/host/go/src"
 )
 
-// roleFixture is a configuration directory whose projects.json holds one project with one space of one card of two tabs, and
+// roleFixture is a configuration directory whose projects.json holds one project with one space of the fixed sidebar cards left and right around one card of two tabs, and
 // whose roles.json defines the roles a and b.
 func roleFixture(t *testing.T) (string, *host.Workspace, string) {
 	t.Helper()
 	config := t.TempDir()
 	space := map[string]any{"id": "spc-aaaaaa", "title": "SPACE1", "layout": map[string]any{
-		"state": map[string]any{"root": map[string]any{"card": "card-1", "data": map[string]any{"tabs": []any{
-			map[string]any{"id": "tab-aaaaaa", "plugin": "terminal", "title": "a", "role": nil},
-			map[string]any{"id": "tab-bbbbbb", "plugin": "terminal", "title": "b", "role": nil},
-		}}}},
+		// The root holds the fixed window sidebar cards left and right, which carry no data, around the content card, as the
+		// workbench stores a space (docs/spec/projects.md).
+		"state": map[string]any{"root": map[string]any{"cut": "x", "kids": []any{
+			map[string]any{"node": map[string]any{"card": "left", "fixed": true, "width": 190}, "share": 0.2},
+			map[string]any{"node": map[string]any{"card": "card-1", "fixed": false, "data": map[string]any{"tabs": []any{
+				map[string]any{"id": "tab-aaaaaa", "plugin": "terminal", "title": "a", "role": nil},
+				map[string]any{"id": "tab-bbbbbb", "plugin": "terminal", "title": "b", "role": nil},
+			}}}, "share": 0.6},
+			map[string]any{"node": map[string]any{"card": "right", "fixed": true, "width": 210}, "share": 0.2},
+		}}},
 		"focusedId": "card-1", "leader": "card-1", "lastCard": 1, "named": 0,
 	}}
 	registry := map[string]any{"format": 4, "projects": []any{map[string]any{

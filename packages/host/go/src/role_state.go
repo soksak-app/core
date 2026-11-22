@@ -400,6 +400,10 @@ func walkTabs(registry string, layout any, visit func(found foundTab)) error {
 		if !isObject {
 			return invalidStoredLayout(registry, "a layout node that is not an object")
 		}
+		// A fixed window sidebar card holds no tabs and stores no data (docs/spec/projects.md).
+		if holder["card"] != nil && holder["fixed"] == true {
+			return nil
+		}
 		if holder["card"] != nil {
 			data, hasData := holder["data"].(map[string]any)
 			if !hasData {
