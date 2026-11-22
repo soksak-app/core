@@ -53,6 +53,10 @@ export class HostWorkspaceStore {
   role(tab) { return this.host.call("workspace", { kind: "role", tab }); }
   rolePut(tab, role) { return this.host.call("workspace", { kind: "rolePut", tab, role }); }
   roleConfirm(tab, fingerprint) { return this.host.call("workspace", { kind: "roleConfirm", tab, fingerprint }); }
+  /** The role definitions and their sequence (docs/spec/agent-roles.md#role-status), and the define and the remove of a role (docs/spec/agent-roles.md#commands). */
+  rolesStatus() { return this.host.call("workspace", { kind: "rolesStatus" }); }
+  roleDefine(id, entry) { return this.host.call("workspace", { kind: "roleDefine", id, entry }); }
+  roleDefinitionRemove(id) { return this.host.call("workspace", { kind: "roleDefinitionRemove", id }); }
   settings(id, values, cids) {
     const patch = {}, remove = [];
     for (const [key, value] of Object.entries(values)) {

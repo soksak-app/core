@@ -116,6 +116,48 @@ export const roleConfirm = (tab, fingerprint) => {
   return store.roleConfirm(tab, fingerprint);
 };
 
+/** Reads the role definitions through the host store (docs/spec/agent-roles.md#role-status). The store exists after initialise. */
+export const rolesStatus = () => {
+  if (!store) throw new Error("projects.rolesStatus: the projects are not initialised");
+  return store.rolesStatus();
+};
+
+/** Defines a role through the host store (docs/spec/agent-roles.md#commands). The store exists after initialise. */
+export const roleDefine = (id, entry) => {
+  if (!store) throw new Error("projects.roleDefine: the projects are not initialised");
+  return store.roleDefine(id, entry);
+};
+
+/** Removes a role through the host store (docs/spec/agent-roles.md#commands). The store exists after initialise. */
+export const roleDefinitionRemove = (id) => {
+  if (!store) throw new Error("projects.roleDefinitionRemove: the projects are not initialised");
+  return store.roleDefinitionRemove(id);
+};
+
+// The sequence of the last role status that a change of the stored workspace read, and the open listeners of the role status.
+// The sequence starts absent, so the first read after a listener opens reports a change.
+let rolesSeq = null;
+const rolesListeners = new Set();
+
+/**
+ * Calls fn after a change of the role definitions, and returns the function that ends the listener. The host publishes a change of the
+ * definitions with a new sequence of the role status (docs/spec/agent-roles.md#role-status), so a change of the stored workspace reads
+ * the sequence only while a listener is open, and calls the listeners only when it rose.
+ */
+export function onRolesChange(fn) {
+  rolesListeners.add(fn);
+  return () => rolesListeners.delete(fn);
+}
+
+/** Reads the role sequence after a change of the stored workspace while a listener is open, and calls the listeners when it rose. */
+async function rereadRoles() {
+  if (rolesListeners.size === 0) return;
+  const { seq } = await store.rolesStatus();
+  if (seq === rolesSeq) return;
+  rolesSeq = seq;
+  for (const fn of rolesListeners) fn();
+}
+
 /** The tab ids of the layouts of all spaces of project. */
 const projectTabs = (project) => new Set(spaceTabIds(project));
 
@@ -329,6 +371,7 @@ async function initialiseWindow(storage, unloadOf) {
     failed(error);
   }
   store.onChange((read) => { rereadChange(read).catch(failed); });
+  store.onChange(() => { rereadRoles().catch(failed); });
   await windows.onActivate((id) => activateHere(id).catch(failed));
   await windows.onCloseRequest(() => closeWindow().catch(failed));
   await windows.onRemoveProjectRequest((id) => answerRemoval(id).catch(failed));

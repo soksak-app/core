@@ -1,5 +1,6 @@
 {
   "status": [
+    "core.roles",
     "core.tab.role",
     "core.window.workbench",
     "core.screen",
@@ -145,6 +146,8 @@
     "core.error.dismiss",
     "core.tab.role",
     "core.tab.role.confirm",
+    "core.role.define",
+    "core.role.remove",
     "core.tab.select",
     "core.tab.close",
     "core.tab.move",

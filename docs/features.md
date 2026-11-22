@@ -182,7 +182,7 @@ The preceding macOS 26.6.2 arm64 optimized diagnostic measurement cohort retains
   - [o] F1063-1 — The specification states `core.role.define`, `core.role.remove`, the status `core.roles`, `roles.json` format 3 with `files`, the fingerprint over `files` and the role file block of files, with the host contract cases and the shared cases.
   - [o] F1063-2 — The Go and Rust host stores read and write format 3, run the commands and publish the status, with Red/Green tests over the shared cases; a `roles.json` of the person is edited into format 3 in the same change.
   - [ ] F1063-3 — The agent skill and the MCP instructions state that the role commands write `roles.json`.
-  - [ ] F1063-4 — The page and mygo workbenches register `core.role.define`, `core.role.remove` and the status `core.roles` over the host requests `roleDefine`, `roleDefinitionRemove` and `rolesStatus`, and declare them in the exposure.
+  - [o] F1063-4 — The page and mygo workbenches register `core.role.define`, `core.role.remove` and the status `core.roles` over the host requests `roleDefine`, `roleDefinitionRemove` and `rolesStatus`, and declare them in the exposure.
 - [~] F1062 — P1, follows F1045: A surface opens a session that no tab holds, owned by that surface, and a tab shows it on request, so an agent group starts its members without a place on the screen. Remaining: F1062-2 to F1062-4; waits for nothing.
   - [o] F1062-1 — The specification states owned sessions: the manifest member `sessions`, `core.session.open`, `resize` and `end`, the open argument `session` of `core.layout.open`, the status `core.sessions`, the events, the owner and restart rules and the occlusion exception.
   - [ ] F1062-2 — The term list of the kit names owned session and owner.

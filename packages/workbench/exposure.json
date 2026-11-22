@@ -2,6 +2,43 @@
   "exposes": {
     "status": [
     {
+      "name": "core.roles",
+      "description": "The role definitions of the host in identifier order, each with its text, its Korean text and the files that the agent reads with the role, and the sequence that rises at each change of roles.json; the value changes only when a define or a remove changes the stored definitions.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "seq": {
+            "type": "integer"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                },
+                "ko": {
+                  "type": "string"
+                },
+                "files": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": ["id", "text", "ko", "files"]
+            }
+          }
+        },
+        "required": ["seq", "roles"]
+      }
+    },
+    {
       "name": "core.tab.role",
       "description": "The role handshake of a tab: the role, the generation, the state pending or ready or null without a role, the change count of this session of the host, the fingerprint of the role file and its path, null without a role.",
       "schema": {
@@ -4439,6 +4476,68 @@
               "type": ["string", "null"]
             }
           }
+        }
+      },
+      {
+        "name": "core.role.define",
+        "description": "Defines a role or changes the definition of the role with the identifier: the text, the Korean text and the absolute paths of the files that the agent reads with the role. A change of roles.json notifies every window, and each tab that holds the role receives the change. The answer is the stored definition.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "ko": {
+              "type": "string"
+            },
+            "files": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["id", "text", "ko", "files"]
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "ko": {
+              "type": "string"
+            },
+            "files": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["id", "text", "ko", "files"]
+        }
+      },
+      {
+        "name": "core.role.remove",
+        "description": "Removes the definition of a role that no tab uses. A role that is not defined or that a tab uses is refused, and nothing is written.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": ["id"]
+        },
+        "result": {
+          "type": "boolean"
         }
       },
       {

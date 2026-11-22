@@ -205,6 +205,35 @@ func (s *Shell) register() {
 				answer(value, err)
 			})
 	})
+	// The role definitions (docs/spec/agent-roles.md#commands): the host notifies every window of a change of roles.json, which reads
+	// core.roles again (refreshRolesStatus).
+	s.registry.Status("core.roles", s.rolesDefinitions)
+	s.registry.CommandLater("core.role.define", func(raw json.RawMessage, answer func(any, error)) {
+		var params struct {
+			ID    string   `json:"id"`
+			Text  string   `json:"text"`
+			Ko    string   `json:"ko"`
+			Files []string `json:"files"`
+		}
+		if err := json.Unmarshal(raw, &params); err != nil {
+			answer(nil, err)
+			return
+		}
+		entry := map[string]any{"text": params.Text, "ko": params.Ko, "files": params.Files}
+		s.calls.CallInOrder("role define", "workspace", map[string]any{"kind": "roleDefine", "id": params.ID, "entry": entry},
+			func(value any, err error) { answer(value, err) })
+	})
+	s.registry.CommandLater("core.role.remove", func(raw json.RawMessage, answer func(any, error)) {
+		var params struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(raw, &params); err != nil {
+			answer(nil, err)
+			return
+		}
+		s.calls.CallInOrder("role remove", "workspace", map[string]any{"kind": "roleDefinitionRemove", "id": params.ID},
+			func(value any, err error) { answer(value, err) })
+	})
 	s.registry.CommandLaterOnSurface("core.tab.role.confirm", func(raw json.RawMessage, surface string, answer func(any, error)) {
 		var params struct {
 			Fingerprint string `json:"fingerprint"`

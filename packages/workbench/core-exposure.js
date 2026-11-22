@@ -495,6 +495,10 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   document.addEventListener("visibilitychange", coreChanged);
   onBinding(coreChanged);
   status("core.activity", activityState);
+  // The role definitions (docs/spec/agent-roles.md#role-status): the status is read from the host store, and a change of roles.json
+  // re-reads it while a watch of it is open (projects.onRolesChange).
+  const readRoles = () => projects.rolesStatus();
+  registry.status("core.roles", readRoles, (changed) => projects.onRolesChange(() => changed(readRoles())));
   status("core.projects", () => projects.all().map(withOpen));
   status("core.project", () => {
     const project = projects.active();
@@ -779,6 +783,9 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   registry.command("core.tab.select", ({ tab }) => { trace("action", { kind: "tab.select", tab }); selectTab(tab); });
   // The role handshake of a tab (docs/spec/agent-roles.md#change-of-a-running-agent): the ordered change and the confirmation run
   // in the host store; the confirmation names no tab, because it runs on the surface of its caller.
+  // The role definitions (docs/spec/agent-roles.md#commands): the host answers the stored definition and notifies every window.
+  registry.command("core.role.define", ({ id, text, ko, files }) => projects.roleDefine(id, { text, ko, files }));
+  registry.command("core.role.remove", ({ id }) => projects.roleDefinitionRemove(id));
   registry.command("core.tab.role", ({ tab, role }) => projects.rolePut(tab, role));
   registry.command("core.tab.role.confirm", ({ fingerprint }, { surface }) => {
     if (surface === undefined) throw new Error("core.tab.role.confirm requires the surface of its caller");

@@ -54,6 +54,9 @@ type storedHost struct {
 	// detaching are the surfaces whose image detach is pending when a window starts.
 	detaching []string
 	projects  []map[string]any
+	// roles are the role definitions of roles.json by identifier, and rolesSeq counts their changes as the host status core.roles does.
+	roles    map[string]map[string]any
+	rolesSeq int
 	// opens holds the requests of projectOpen, owners the window of each project with 0 as the window of the shell, and windows the
 	// number of further windows that the requests made.
 	opens   []projectOpenRequest
@@ -496,6 +499,7 @@ func (h *storedHost) workspace(argument json.RawMessage) (any, error) {
 		Tab         string
 		Role        any
 		Fingerprint string
+		Entry       map[string]any
 	}
 	if err := json.Unmarshal(argument, &request); err != nil {
 		return nil, err
@@ -550,6 +554,27 @@ func (h *storedHost) workspace(argument json.RawMessage) (any, error) {
 			"fingerprint": nil, "path": nil}, nil
 	case "tabSessions":
 		return []string{}, nil
+	case "roleDefine":
+		if h.roles == nil {
+			h.roles = map[string]map[string]any{}
+		}
+		definition := map[string]any{"text": request.Entry["text"], "ko": request.Entry["ko"], "files": request.Entry["files"]}
+		h.roles[request.ID] = definition
+		h.rolesSeq++
+		return map[string]any{"id": request.ID, "text": definition["text"], "ko": definition["ko"], "files": definition["files"]}, nil
+	case "roleDefinitionRemove":
+		if _, held := h.roles[request.ID]; !held {
+			return nil, fmt.Errorf("role %s is not defined", request.ID)
+		}
+		delete(h.roles, request.ID)
+		h.rolesSeq++
+		return true, nil
+	case "rolesStatus":
+		list := []any{}
+		for _, id := range slices.Sorted(maps.Keys(h.roles)) {
+			list = append(list, map[string]any{"id": id, "text": h.roles[id]["text"], "ko": h.roles[id]["ko"], "files": h.roles[id]["files"]})
+		}
+		return map[string]any{"seq": h.rolesSeq, "roles": list}, nil
 	case "tabStatePut", "tabSessionPut":
 		return 1, nil
 	case "add":

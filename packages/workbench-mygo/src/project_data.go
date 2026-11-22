@@ -246,6 +246,7 @@ func (s *Shell) workspaceChanged() {
 			s.fail(err)
 		}
 		s.refreshRoles()
+		s.refreshRolesRead()
 	})
 }
 

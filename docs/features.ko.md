@@ -182,7 +182,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [o] F1063-1 — specification은 `core.role.define`, `core.role.remove`, status `core.roles`, `files`가 있는 `roles.json` format 3, `files`를 포함한 fingerprint, role file의 파일 목록 block을 host contract case, 공용 case와 함께 정한다.
   - [o] F1063-2 — Go와 Rust host store가 format 3을 읽고 쓰며 command를 실행하고 status를 publish한다. 공용 case에 대한 Red/Green test가 있고, 사람이 가진 `roles.json`은 같은 변경에서 format 3으로 고친다.
   - [ ] F1063-3 — agent skill과 MCP instructions는 role command가 `roles.json`을 쓴다고 말한다.
-  - [ ] F1063-4 — page와 mygo workbench는 host 요청 `roleDefine`, `roleDefinitionRemove`, `rolesStatus`로 `core.role.define`, `core.role.remove`, status `core.roles`를 등록하고, exposure에 선언한다.
+  - [o] F1063-4 — page와 mygo workbench는 host 요청 `roleDefine`, `roleDefinitionRemove`, `rolesStatus`로 `core.role.define`, `core.role.remove`, status `core.roles`를 등록하고, exposure에 선언한다.
 - [~] F1062 — P1, F1045 다음: surface는 어떤 tab도 갖지 않고 그 surface가 소유하는 session을 열고, 요청이 있을 때 tab이 그것을 보인다. 그래서 agent group은 화면의 자리 없이 member를 시작한다. 남은 일: F1062-2부터 F1062-4. 기다리는 것: 없음.
   - [o] F1062-1 — specification은 owned session을 정한다: manifest member `sessions`, `core.session.open`, `resize`, `end`, `core.layout.open`의 open argument `session`, status `core.sessions`, event, owner와 restart 규칙, occlusion 예외.
   - [ ] F1062-2 — kit의 term list에 owned session과 owner를 넣는다.
