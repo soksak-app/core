@@ -86,15 +86,20 @@ func storedRole(t *testing.T, config, tab string) any {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The content card of the fixture is the middle kid of the root, between the fixed sidebar cards left and right.
 	var document struct {
 		Projects []struct {
 			Spaces []struct {
 				Layout struct {
 					State struct {
 						Root struct {
-							Data struct {
-								Tabs []map[string]any `json:"tabs"`
-							} `json:"data"`
+							Kids []struct {
+								Node struct {
+									Data struct {
+										Tabs []map[string]any `json:"tabs"`
+									} `json:"data"`
+								} `json:"node"`
+							} `json:"kids"`
 						} `json:"root"`
 					} `json:"state"`
 				} `json:"layout"`
@@ -106,9 +111,11 @@ func storedRole(t *testing.T, config, tab string) any {
 	}
 	for _, project := range document.Projects {
 		for _, space := range project.Spaces {
-			for _, entry := range space.Layout.State.Root.Data.Tabs {
-				if entry["id"] == tab {
-					return entry["role"]
+			for _, kid := range space.Layout.State.Root.Kids {
+				for _, entry := range kid.Node.Data.Tabs {
+					if entry["id"] == tab {
+						return entry["role"]
+					}
 				}
 			}
 		}
