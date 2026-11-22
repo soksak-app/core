@@ -601,6 +601,11 @@ func (s *Shell) drawTab(c *ui.Context, card string, tab layout.Tab, on bool, siz
 			start += m.activityIcon + m.tabGap
 		}
 		pill.Children(func() {
+			// .tab[data-active=true] of the focused card: the border of the active tab takes the focus color of the ring of the card. It
+			// stands over the pill, so it takes no room from the name (docs/spec/example-model.md#card-tabs).
+			if on && card == s.focused {
+				ui.Box(c).Absolute().Left(0).Top(0).Fill().Radius(s.radiusSmall()).Border(s.palette.BorderWidth, s.palette.Focus).PassThrough()
+			}
 			ui.Row(c).Padding(0, m.tabGap+mark+2*m.tabXPad+m.tabPadX, 0, start).Children(func() {
 				drawCutText(c, name, size, m.lineHeight, family, color, width)
 			})

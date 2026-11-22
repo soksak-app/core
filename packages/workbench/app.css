@@ -319,6 +319,9 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
   flex:0 0 auto;max-width:var(--tab-max-w)}
 .tab:hover{color:var(--fg)}
 .tab[data-active=true]{color:var(--fg);background:var(--chip-sel)}
+/* The active tab of the focused card draws its border in the focus color of the ring of the card, so the keyboard, the ring and the
+   tab show one focus. An inset shadow takes no room from the name (docs/spec/example-model.md#card-tabs). */
+.card[data-focused=true] .tab[data-active=true]{box-shadow:inset 0 0 0 var(--bw) var(--focus)}
 .tab[data-dragging=true]{opacity:var(--tab-dragging-opacity)}
 .tab__name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 /* A tab with a notification reported by a surface and the tab list button of its card show a dot. */

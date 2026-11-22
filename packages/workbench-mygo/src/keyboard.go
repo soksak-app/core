@@ -80,7 +80,6 @@ func (s *Shell) recordKeyboard(cause string, target *string, decision string, de
 	}, nil)
 }
 
-
 // sendKeyboard sends the host call surfaceFocus to target in the order of the keyboard calls.
 func (s *Shell) sendKeyboard(target *string, decided bool) {
 	request := map[string]any{"surface": target}

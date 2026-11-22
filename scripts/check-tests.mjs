@@ -466,6 +466,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1039",
+    implementation: [
+      { file: "packages/workbench/app.css", symbol: ".card[data-focused=true] .tab[data-active=true]{box-shadow:inset 0 0 0 var(--bw) var(--focus)}" },
+      { file: "packages/workbench-mygo/src/cards.go", symbol: "if on && card == s.focused {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/tab-focus-border.test.mjs", id: "the active tab of the focused card takes the focus border, and another card's active tab takes none" },
+      { file: "packages/workbench-mygo/tests/tab_focus_border_test.go", id: "TestTheActiveTabOfTheFocusedCardTakesTheFocusBorder" },
+    ],
+    expected: "The active tab of the focused card draws its border in the focus color in both workbenches, and another card's active tab draws none.",
+    levels: ["unit"],
+  },
+  {
     id: "F1044",
     implementation: [
       { file: "packages/host/go/src/setup.go", symbol: "func SetupStartOf(identifier, configDirectory, executable string) SetupStart {" },
