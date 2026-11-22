@@ -8,6 +8,7 @@ use std::collections::BTreeSet;
 
 use serde_json::{Map, Value};
 
+use crate::hook::has_control_character;
 use crate::install::RANGE_SEPARATOR;
 
 /// The limits that the reader names (PLUGIN_DESCRIPTION_MAX, SETTING_LABEL_MAX, SETTING_DESCRIPTION_MAX, ADDRESS_MAX,
@@ -20,7 +21,7 @@ const SET_TITLE_MAX: usize = 40;
 const MENU_TITLE_MAX: usize = 40;
 
 /// The members that plugin.json may hold (validateManifest).
-const TOP_LEVEL_KEYS: [&str; 18] = [
+const TOP_LEVEL_KEYS: [&str; 19] = [
     "id",
     "name",
     "description",
@@ -31,6 +32,7 @@ const TOP_LEVEL_KEYS: [&str; 18] = [
     "preview",
     "dependencies",
     "background",
+    "programs",
     "exposes",
     "settings",
     "data",
@@ -660,6 +662,87 @@ fn check_contributes(where_: &str, id: &str, raw: &Value) -> Result<(), String> 
                 return Err(format!(
                     "{at} module must be a JavaScript path inside the package"
                 ));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Limits of the programs declaration (docs/spec/plugins.md#pluginjson). Byte limits count UTF-8 bytes, as the reader does.
+const PROGRAM_TEXT_MAX_BYTES: usize = 255;
+const PROGRAM_SLOTS_MAX: usize = 16;
+const PROGRAM_PATTERN_MAX_BYTES: usize = 512;
+
+/// Reports whether a program name has the form `[a-z][a-z0-9-]*`.
+fn is_program_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    matches!(chars.next(), Some('a'..='z')) && chars.all(|c| matches!(c, 'a'..='z' | '0'..='9' | '-'))
+}
+
+/// The expression that a program pattern compiles to: it must match the whole argument (docs/spec/native-surfaces.md#program-runs).
+/// The host matcher compiles this same source.
+pub(crate) fn program_pattern_source(pattern: &str) -> String {
+    format!("^(?:{pattern})$")
+}
+
+/// Checks the programs declaration: the programs that a page runs through a view call.
+fn check_programs(where_: &str, raw: &Value) -> Result<(), String> {
+    let programs = raw
+        .as_object()
+        .ok_or_else(|| format!("{where_}: programs must be an object"))?;
+    let mut names: Vec<&String> = programs.keys().collect();
+    names.sort();
+    for name in names {
+        if !is_program_name(name) {
+            return Err(format!("{where_}: programs.{name} name must match [a-z][a-z0-9-]*"));
+        }
+        let at = format!("{where_}: programs.{name}");
+        let entry = programs[name]
+            .as_object()
+            .ok_or_else(|| format!("{at} must be an object"))?;
+        let mut members: Vec<&String> = entry.keys().collect();
+        members.sort();
+        for member in members {
+            if member != "program" && member != "args" {
+                return Err(format!("{at} member {member} is unknown"));
+            }
+        }
+        let program = entry.get("program").and_then(Value::as_str).unwrap_or("");
+        if program.is_empty() || program.len() > PROGRAM_TEXT_MAX_BYTES || has_control_character(program) {
+            return Err(format!(
+                "{at} program must be a non-empty text of at most {PROGRAM_TEXT_MAX_BYTES} bytes without a control character"
+            ));
+        }
+        let Some(raw_args) = entry.get("args") else {
+            continue;
+        };
+        let slots = raw_args
+            .as_array()
+            .filter(|slots| slots.len() <= PROGRAM_SLOTS_MAX)
+            .ok_or_else(|| format!("{at} args must be an array of at most {PROGRAM_SLOTS_MAX} slots"))?;
+        for (index, slot) in slots.iter().enumerate() {
+            let number = index + 1;
+            if slot.is_string() {
+                continue;
+            }
+            let slot_error =
+                format!("{at} args slot {number} must be a text or an object with the member pattern only");
+            let object = slot
+                .as_object()
+                .filter(|object| object.len() == 1)
+                .ok_or_else(|| slot_error.clone())?;
+            let pattern = object.get("pattern").ok_or(slot_error)?;
+            match pattern.as_str() {
+                Some(text) if text.len() <= PROGRAM_PATTERN_MAX_BYTES => {
+                    if let Err(error) = regex::Regex::new(&program_pattern_source(text)) {
+                        return Err(format!("{at} pattern does not compile: {error}"));
+                    }
+                }
+                _ => {
+                    return Err(format!(
+                        "{at} args slot {number} pattern must be a text of at most {PROGRAM_PATTERN_MAX_BYTES} bytes"
+                    ))
+                }
             }
         }
     }
@@ -1522,6 +1605,12 @@ pub fn validate_manifest(value: &Value) -> Result<(), String> {
             return Err(format!("{where_}: sessions requires one sidecar in dependencies"));
         }
     }
+    if let Some(raw) = manifest.get("programs") {
+        if !has("surface") {
+            return Err(format!("{where_}: programs requires a surface"));
+        }
+        check_programs(&where_, raw)?;
+    }
     if let Some(raw) = manifest.get("surface") {
         check_surface(&where_, manifest, raw, &sidecars)?;
     }
@@ -1558,4 +1647,39 @@ pub fn validate_manifest(value: &Value) -> Result<(), String> {
         check_sidebar_defaults(&where_, manifest, raw)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod programs_tests {
+    use serde_json::{Value, json};
+
+    use super::validate_manifest;
+
+    /// A valid view plugin whose programs member holds one entry with the given pattern.
+    fn programs_manifest(pattern: &str) -> Value {
+        json!({
+            "id": "probe",
+            "name": "Probe",
+            "description": "Sample.",
+            "surface": {"composition": {"kind": "view", "page": "ui/page.html"}},
+            "mark": "P",
+            "icon": "<svg></svg>",
+            "programs": {"run": {"program": "git", "args": [{"pattern": pattern}]}}
+        })
+    }
+
+    // A pattern that the regular expression library does not compile is refused at install (docs/spec/plugins.md#pluginjson).
+    #[test]
+    fn program_pattern_that_does_not_compile_is_refused() {
+        let error = validate_manifest(&programs_manifest("(")).unwrap_err();
+        assert!(
+            error.starts_with("plugin probe: programs.run pattern does not compile: "),
+            "error = {error}"
+        );
+    }
+
+    #[test]
+    fn program_pattern_that_compiles_is_accepted() {
+        validate_manifest(&programs_manifest("[a-z]+")).unwrap();
+    }
 }

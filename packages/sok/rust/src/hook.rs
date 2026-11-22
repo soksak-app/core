@@ -596,7 +596,7 @@ pub fn remove_hooks(setup: &Setup) -> Result<(), String> {
 }
 
 /// Reports whether text holds a control character.
-fn has_control_character(text: &str) -> bool {
+pub(crate) fn has_control_character(text: &str) -> bool {
     text.chars().any(|c| (c as u32) < 0x20 || c as u32 == 0x7f)
 }
 

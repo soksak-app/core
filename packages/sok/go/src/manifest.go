@@ -46,7 +46,7 @@ const (
 
 // topLevelKeys are the members that plugin.json may hold (validateManifest).
 var topLevelKeys = []string{"id", "name", "description", "mark", "icon", "surface", "sections", "preview", "dependencies", "background",
-	"exposes", "settings", "data", "sidebars", "extends", "contributes", "events", "sessions"}
+	"programs", "exposes", "settings", "data", "sidebars", "extends", "contributes", "events", "sessions"}
 
 // utf16Length is the length of a string in UTF-16 code units, the length that the reader's string checks count.
 func utf16Length(s string) int {
@@ -634,6 +634,14 @@ func ValidateManifest(value any) error {
 			return fmt.Errorf("%s: sessions requires one sidecar in dependencies", where)
 		}
 	}
+	if raw, ok := manifest["programs"]; ok {
+		if !hasSurface {
+			return fmt.Errorf("%s: programs requires a surface", where)
+		}
+		if err := checkPrograms(where, raw); err != nil {
+			return err
+		}
+	}
 	if raw, ok := manifest["surface"]; ok {
 		if err := checkSurface(where, manifest, raw, sidecars); err != nil {
 			return err
@@ -817,6 +825,88 @@ func checkContributes(where, id string, raw any) error {
 			}
 			if !isModulePath(entry["module"]) {
 				return fmt.Errorf("%s module must be a JavaScript path inside the package", at)
+			}
+		}
+	}
+	return nil
+}
+
+var programNamePattern = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+
+// Limits of the programs declaration (docs/spec/plugins.md#pluginjson). Byte limits count UTF-8 bytes, as the reader does.
+const (
+	programTextMaxBytes    = 255
+	programSlotsMax        = 16
+	programPatternMaxBytes = 512
+)
+
+// programPatternSource is the expression that a program pattern compiles to: it must match the whole argument
+// (docs/spec/native-surfaces.md#program-runs). The host matcher compiles this same source.
+func programPatternSource(pattern string) string {
+	return "^(?:" + pattern + ")$"
+}
+
+// checkPrograms checks the programs declaration: the programs that a page runs through a view call.
+func checkPrograms(where string, raw any) error {
+	programs, ok := raw.(map[string]any)
+	if !ok {
+		return fmt.Errorf("%s: programs must be an object", where)
+	}
+	names := make([]string, 0, len(programs))
+	for name := range programs {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	for _, name := range names {
+		if !programNamePattern.MatchString(name) {
+			return fmt.Errorf("%s: programs.%s name must match [a-z][a-z0-9-]*", where, name)
+		}
+		at := where + ": programs." + name
+		entry, ok := programs[name].(map[string]any)
+		if !ok {
+			return fmt.Errorf("%s must be an object", at)
+		}
+		members := make([]string, 0, len(entry))
+		for member := range entry {
+			members = append(members, member)
+		}
+		slices.Sort(members)
+		for _, member := range members {
+			if member != "program" && member != "args" {
+				return fmt.Errorf("%s member %s is unknown", at, member)
+			}
+		}
+		program, _ := entry["program"].(string)
+		if program == "" || len(program) > programTextMaxBytes || hasControlCharacter(program) {
+			return fmt.Errorf("%s program must be a non-empty text of at most %d bytes without a control character", at, programTextMaxBytes)
+		}
+		raw, present := entry["args"]
+		if !present {
+			continue
+		}
+		slots, ok := raw.([]any)
+		if !ok || len(slots) > programSlotsMax {
+			return fmt.Errorf("%s args must be an array of at most %d slots", at, programSlotsMax)
+		}
+		for index, slot := range slots {
+			number := index + 1
+			if _, ok := slot.(string); ok {
+				continue
+			}
+			object, ok := slot.(map[string]any)
+			if !ok || len(object) != 1 {
+				return fmt.Errorf("%s args slot %d must be a text or an object with the member pattern only", at, number)
+			}
+			pattern, present := object["pattern"]
+			if !present {
+				return fmt.Errorf("%s args slot %d must be a text or an object with the member pattern only", at, number)
+			}
+			text, ok := pattern.(string)
+			if !ok || len(text) > programPatternMaxBytes {
+				return fmt.Errorf("%s args slot %d pattern must be a text of at most %d bytes", at, number, programPatternMaxBytes)
+			}
+			if _, err := regexp.Compile(programPatternSource(text)); err != nil {
+				return fmt.Errorf("%s pattern does not compile: %v", at, err)
 			}
 		}
 	}

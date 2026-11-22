@@ -7626,6 +7626,7 @@ dependencies = [
  "libc",
  "memchr",
  "rcgen",
+ "regex",
  "rmcp",
  "rustix",
  "rustls",

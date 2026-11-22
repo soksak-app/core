@@ -6803,6 +6803,490 @@
         "plugin.json",
         "ui/page.html"
       ]
+    },
+    {
+      "id": "programs.accepts-bare-path-and-patterns",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "run": {
+            "program": "git",
+            "args": [
+              "status"
+            ]
+          },
+          "check": {
+            "program": "./bin/lint",
+            "args": [
+              {
+                "pattern": "^[a-z]+$"
+              },
+              "--json"
+            ]
+          }
+        }
+      },
+      "accepted": true,
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "programs.accepts-without-args",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "list": {
+            "program": "ls"
+          },
+          "empty": {
+            "program": "ls",
+            "args": []
+          }
+        }
+      },
+      "accepted": true,
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "programs.not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": []
+      },
+      "accepted": false,
+      "error": "plugin probe: programs must be an object",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "programs.entry-not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "run": "git"
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: programs.run must be an object",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "programs.name-invalid",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "Run": {
+            "program": "git"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: programs.Run name must match [a-z][a-z0-9-]*",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "programs.entry-unknown-member",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "run": {
+            "program": "git",
+            "cwd": "/"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: programs.run member cwd is unknown",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "programs.program-empty",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "run": {
+            "program": ""
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: programs.run program must be a non-empty text of at most 255 bytes without a control character",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "programs.program-control-character",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "run": {
+            "program": "git\n"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: programs.run program must be a non-empty text of at most 255 bytes without a control character",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "programs.program-too-long",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "run": {
+            "program": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: programs.run program must be a non-empty text of at most 255 bytes without a control character",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "programs.args-not-array",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "run": {
+            "program": "git",
+            "args": "status"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: programs.run args must be an array of at most 16 slots",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "programs.args-too-many",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "run": {
+            "program": "git",
+            "args": [
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x",
+              "x"
+            ]
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: programs.run args must be an array of at most 16 slots",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "programs.slot-object-unknown-member",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "run": {
+            "program": "git",
+            "args": [
+              {
+                "pattern": "a",
+                "x": 1
+              }
+            ]
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: programs.run args slot 1 must be a text or an object with the member pattern only",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "programs.slot-not-text-or-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "run": {
+            "program": "git",
+            "args": [
+              1
+            ]
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: programs.run args slot 1 must be a text or an object with the member pattern only",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "programs.pattern-too-long",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "run": {
+            "program": "git",
+            "args": [
+              "x",
+              {
+                "pattern": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              }
+            ]
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: programs.run args slot 2 pattern must be a text of at most 512 bytes",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "programs.pattern-not-text",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "run": {
+            "program": "git",
+            "args": [
+              {
+                "pattern": 5
+              }
+            ]
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: programs.run args slot 1 pattern must be a text of at most 512 bytes",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "programs.requires-surface",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "dependencies": {
+          "@scope/x": "^0.1.0"
+        },
+        "programs": {
+          "run": {
+            "program": "git"
+          }
+        },
+        "contributes": {
+          "other.p": [
+            {
+              "range": "^1.0.0",
+              "module": "a.js"
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: programs requires a surface",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
     }
   ]
 }

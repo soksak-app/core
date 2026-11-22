@@ -545,6 +545,45 @@ function checkRegions(where, regions, overlays, sidecars) {
   }
 }
 
+const PROGRAM_NAME = /^[a-z][a-z0-9-]*$/;
+const PROGRAM_TEXT_MAX_BYTES = 255;
+const PROGRAM_SLOTS_MAX = 16;
+const PROGRAM_PATTERN_MAX_BYTES = 512;
+// Control characters are U+0000 to U+001F and U+007F; the byte limits count UTF-8 bytes, as the hosts do.
+const hasControlCharacter = (text) => /[\u0000-\u001f\u007f]/.test(text);
+const utf8Length = (text) => new TextEncoder().encode(text).length;
+
+/** Checks the programs declaration (docs/spec/plugins.md#pluginjson): the programs a page runs through a view call. */
+function checkPrograms(where, programs) {
+  if (!isObject(programs)) throw new Error(`${where}: programs must be an object`);
+  for (const [name, entry] of sortedEntries(programs)) {
+    if (!PROGRAM_NAME.test(name)) throw new Error(`${where}: programs.${name} name must match [a-z][a-z0-9-]*`);
+    const at = `${where}: programs.${name}`;
+    if (!isObject(entry)) throw new Error(`${at} must be an object`);
+    for (const member of Object.keys(entry).sort(compareKeys)) {
+      if (member !== "program" && member !== "args") throw new Error(`${at} member ${member} is unknown`);
+    }
+    const { program } = entry;
+    if (typeof program !== "string" || program.length === 0 || utf8Length(program) > PROGRAM_TEXT_MAX_BYTES || hasControlCharacter(program)) {
+      throw new Error(`${at} program must be a non-empty text of at most ${PROGRAM_TEXT_MAX_BYTES} bytes without a control character`);
+    }
+    if (entry.args === undefined) continue;
+    if (!Array.isArray(entry.args) || entry.args.length > PROGRAM_SLOTS_MAX) {
+      throw new Error(`${at} args must be an array of at most ${PROGRAM_SLOTS_MAX} slots`);
+    }
+    entry.args.forEach((slot, index) => {
+      const number = index + 1;
+      if (typeof slot === "string") return;
+      if (!isObject(slot) || Object.keys(slot).length !== 1 || !("pattern" in slot)) {
+        throw new Error(`${at} args slot ${number} must be a text or an object with the member pattern only`);
+      }
+      if (typeof slot.pattern !== "string" || utf8Length(slot.pattern) > PROGRAM_PATTERN_MAX_BYTES) {
+        throw new Error(`${at} args slot ${number} pattern must be a text of at most ${PROGRAM_PATTERN_MAX_BYTES} bytes`);
+      }
+    });
+  }
+}
+
 function checkBackground(where, background, sidecars, settings = {}) {
   if (!isObject(background)) throw new Error(`${where}: background must be an object`);
   only(`${where} background`, background, ["sidecar", "operation", "settings"]);
@@ -654,7 +693,7 @@ export function validateManifest(manifest) {
   for (const member of ["host", "hostOperations"]) {
     if (manifest[member] !== undefined) throw new Error(`plugin ${manifest.id}: ${member} is removed; a section is a view of the plugin`);
   }
-  only("plugin.json", manifest, ["id", "name", "description", "mark", "icon", "surface", "sections", "preview", "dependencies", "background", "exposes", "settings",
+  only("plugin.json", manifest, ["id", "name", "description", "mark", "icon", "surface", "sections", "preview", "dependencies", "background", "programs", "exposes", "settings",
     "data", "sidebars", "extends", "contributes", "events", "sessions"]);
   validateEventsPath("plugin.json", manifest.events);
   const { id } = manifest;
@@ -708,6 +747,10 @@ export function validateManifest(manifest) {
     if (manifest.sessions !== true) throw new Error(`${where}: sessions must be true`);
     if (manifest.surface === undefined) throw new Error(`${where}: sessions requires a surface`);
     if (manifestSidecars(manifest).length !== 1) throw new Error(`${where}: sessions requires one sidecar in dependencies`);
+  }
+  if (manifest.programs !== undefined) {
+    if (manifest.surface === undefined) throw new Error(`${where}: programs requires a surface`);
+    checkPrograms(where, manifest.programs);
   }
   if (manifest.surface !== undefined) {
     const surface = manifest.surface;
