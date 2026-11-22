@@ -292,6 +292,32 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F1094",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "    follow(name, fn, surface) {" },
+      { file: "packages/workbench/core-exposure.js", symbol: "function status(name, read, options) {" },
+      { file: "packages/workbench-mygo/src/registry.go", symbol: "func (r *Registry) ReadsSurface(name string) bool {" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/surface-status.test.mjs", id: "a follow of a surface status without a surface is refused and leaves no subscription" },
+      { file: "packages/workbench/test/layout-operations.test.mjs", id: "an observation of core.tab.role reads its surface, and a refused one leaves the other core watches delivered" },
+      { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestAViewWatchOfASurfaceStatusWithoutASurfaceIsRefused" },
+    ],
+    expected: "A watch of core.tab.role without a surface is refused before it subscribes on the page and on mygo, a watch with a surface reads it, and a failing core watcher stops no other.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1093",
+    implementation: [
+      { file: "packages/host/rust/src/host.rs", symbol: "pub fn start_plugin_updates(app: &AppHandle) -> Result<std::thread::JoinHandle<()>, String> {" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/plugins_start_order_test.rs", id: "a_start_of_the_update_without_the_plugins_state_is_refused_without_a_thread" },
+    ],
+    expected: "The update at start begins after the setup added the plugins state, and a start without it is refused on the calling thread without a thread.",
+    levels: ["unit"],
+  },
+  {
     id: "F1092",
     implementation: [
       { file: "packages/host/go/src/images.go", symbol: "func (i *Images) awaitedLocked(key ImageKey, state *ImageRasterState) bool {" },

@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1093, F1094: scripts/check-tests.mjs links each correction to its implementation and its tests.
 - F1095-1: The core version is 0.0.48 in every package and crate manifest, Info.plist, Tauri file, Go and pkg-config declaration, the six workspace entries of Cargo.lock and scripts/check-versions.mjs.
 - F1094: A view watch of `core.tab.role` without a surface is refused with `status.watch for core.tab.role requires a surface` before it subscribes on the page and on mygo, a core status that a view follows with its surface reads that surface, and a core watcher whose read fails reports `core status: <error>` while the other core watchers still run. Before, the refused watch left a watcher whose failing read ended the loop of the core watchers on Wails and Tauri, so the core statuses watched after it, which a terminal tab waits for, received no further value. Verification: Red of the plugin-api, page and mygo cases, then Green with the plugin-api tests, 346 workbench tests and the mygo workbench tests.
 - F1093: The update at start of the installed plugins begins at the end of the host setup, after the plugins and sidecars states exist, and a start without the plugins state is refused on the calling thread, so the Tauri application no longer exits with status 101 from a panic of the thread `plugin-updates` before it writes endpoint.json. Verification: Red of `a_start_of_the_update_without_the_plugins_state_is_refused_without_a_thread`, which read the panic, then Green with the 8 start update tests of the Rust host.
