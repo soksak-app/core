@@ -2235,3 +2235,52 @@ func errorOnlyInToast(t *testing.T, f *shellFixture, text string) {
 	}
 	walk(tree)
 }
+
+// contract: view.error-before-ready-shows-failure
+// A view-stopped event of a surface whose view has made no call yet ends its loading state: the status row shows the error state, the
+// reason is written once on the error display path, and no turning ring keeps asking for frames for it (docs/spec/native-surfaces.md#view-surfaces).
+// A view-stopped event of a surface whose view has made a call keeps its state: its later failure is shown by the error display path only.
+func TestAViewThatFailsBeforeItsFirstCallEndsItsLoadingState(t *testing.T) {
+	f, stored := surfaceShell(t)
+	var surface string
+	for id := range stored.lastSurfaces(t) {
+		surface = id
+		break
+	}
+	f.settle()
+	loadingBefore := strings.Count(strings.Join(f.tester.Texts(), " "), "불러오는 중")
+	reason := "script soksak://textprobe/ui/view.js failed to load"
+	f.shell.Event("view-stopped", []any{map[string]any{"surface": surface, "plugin": "textprobe", "reason": reason}})
+	f.pending.drain(t)
+	f.tester.Frame()
+	loadingAfter := strings.Count(strings.Join(f.tester.Texts(), " "), "불러오는 중")
+	if loadingAfter != loadingBefore-1 || !strings.Contains(strings.Join(f.tester.Texts(), " "), "표면 오류") {
+		t.Fatalf("loading texts %d -> %d, and the texts %q, want the loading text of the failed surface replaced by the error state", loadingBefore, loadingAfter, f.tester.Texts())
+	}
+	f.pending.drain(t)
+	f.tester.Frame()
+	if errors := f.host.written("workbench.record.error"); len(errors) != 1 || !strings.Contains(fmt.Sprint(errors[0]), reason) {
+		t.Fatalf("the shell recorded %v, want one record with the reason of the view", errors)
+	}
+}
+
+// contract: view.error-after-call-keeps-surface
+// A view that made a call has a state, so a view-stopped event that reaches it leaves its surface ready.
+func TestAViewThatFailedAfterItsFirstCallKeepsItsSurface(t *testing.T) {
+	f, stored := surfaceShell(t)
+	var surface string
+	for id := range stored.lastSurfaces(t) {
+		surface = id
+		break
+	}
+	f.settle()
+	f.shell.Event("view-call", []any{map[string]any{"surface": surface, "plugin": "textprobe", "generation": 1, "id": 1, "command": "runtime.textSize.read"}})
+	f.pending.drain(t)
+	f.tester.Frame()
+	f.shell.Event("view-stopped", []any{map[string]any{"surface": surface, "plugin": "textprobe", "reason": "uncaught error: boom"}})
+	f.pending.drain(t)
+	f.tester.Frame()
+	if got := strings.Join(f.tester.Texts(), " "); strings.Contains(got, "표면 오류") {
+		t.Fatalf("a view with a call shows the error state after view-stopped: %q", got)
+	}
+}

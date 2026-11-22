@@ -34,3 +34,24 @@ func TestViewErrorMessageIsWrittenOnTheErrorDisplayPathWithItsView(t *testing.T)
 		t.Fatalf("host.record.error records: %v, want exactly one with where %q and text %q", errors, "view probe probe-surface", "uncaught error: boom")
 	}
 }
+
+// contract: view.error.before-ready-stops-surface
+// A view.error message that arrives before the view's ready message means the page failed before its first call, so the view has no
+// channel to its workbench. The surface receives one view-stopped event with the plugin and the reason, so its status shows the failure
+// and no loading state waits for a view that never comes (docs/spec/native-surfaces.md#view-surfaces).
+func TestViewErrorBeforeReadyStopsTheSurface(t *testing.T) {
+	s := registeredViewRecordSurfaces(t)
+	events := recordWindowEvents(s)
+	if err := s.ViewMessage("probe-surface", `{"message":{"event":"view.error","plugin":"probe","reason":"script soksak://probe/ui/view.js failed to load"}}`); err != nil {
+		t.Fatalf("view.error message: %v, want the message accepted", err)
+	}
+	var stops []map[string]any
+	for _, event := range *events {
+		if event.name == "view-stopped" {
+			stops = append(stops, event.data.(map[string]any))
+		}
+	}
+	if len(stops) != 1 || stops[0]["surface"] != "probe-surface" || stops[0]["plugin"] != "probe" || stops[0]["reason"] != "script soksak://probe/ui/view.js failed to load" {
+		t.Fatalf("view-stopped events %v, want one for surface probe-surface, plugin probe and the reason", stops)
+	}
+}

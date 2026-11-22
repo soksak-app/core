@@ -2068,6 +2068,10 @@ func (s *Surfaces) viewMessageFrom(surface, plugin string, generation uint64, va
 		// A failure of the page before its first call is written on the error display path of the view, with its plugin and surface
 		// (docs/spec/native-surfaces.md#view-surfaces). The view continues, so the message is accepted.
 		LogError(fmt.Sprintf("view %s %s", plugin, surface), event.Reason)
+		// The view-stopped event tells the workbench that the page failed. The workbench applies it to a surface whose view has made no
+		// call yet, so a page that failed before its first call shows the failure instead of the loading state
+		// (docs/spec/native-surfaces.md#view-surfaces).
+		s.emitToSurface(surface, "view-stopped", viewStoppedEvent(surface, plugin, event.Reason))
 		return true, nil
 	}
 	return true, fmt.Errorf("%s: view event %q is unknown", surface, event.Event)
