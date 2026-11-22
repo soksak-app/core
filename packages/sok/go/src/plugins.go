@@ -671,8 +671,10 @@ func checkProgramFiles(configDir string, state *InstalledState, ids []string) er
 		}
 		slices.Sort(names)
 		for _, name := range names {
+			// default: the manifest check accepted this manifest, so each entry is an object with a text program; another form
+			// gives "", which names no plugin program and is skipped.
 			entry, _ := programs[name].(map[string]any)
-			program, _ := entry["program"].(string)
+			program, _ := entry["program"].(string) // default: another form gives "", which names no plugin program.
 			if !strings.HasPrefix(program, ProgramPluginPrefix) {
 				continue
 			}
