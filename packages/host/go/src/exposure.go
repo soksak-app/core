@@ -795,6 +795,9 @@ func (s *Surfaces) reloadPage() error {
 		// written at that moment is lost (docs/spec/native-host.md#page-reload).
 		s.askPageToReload(func() { s.window.Emit("page-reload") })
 	} else {
+		s.mu.Lock()
+		s.startCause = "host.window.reload"
+		s.mu.Unlock()
 		mainThreadStep(func() { s.window.StartWorkbench() })
 	}
 	select {

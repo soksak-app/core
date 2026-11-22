@@ -117,7 +117,7 @@ function windowOverlays() {
 export const native = Boolean(bridge);
 
 // The reload request of the host. The page is read again after every call it sent has received its reply (docs/spec/native-host.md#page-reload).
-if (bridge) bridge.on("page-reload", () => bridge.reload());
+if (bridge) bridge.on("page-reload", () => reloadPage("host.window.reload"));
 
 /*
  * One ordered port per sidecar name. The host can process send calls concurrently, so the next send must be called
@@ -418,8 +418,20 @@ export function watchCalls(fn) {
 }
 
 /** Sends one failure line to the application log. For a document without a host (the browser example), the log is the error level of the console. */
-/** Reloads this page after every sent call has its answer (docs/spec/native-host.md#page-reload). */
-export const reloadPage = () => bridge.reload();
+/**
+ * Reloads this page after every sent call has its answer (docs/spec/native-host.md#page-reload). The record workbench.page.reload names
+ * the operation that caused it, because the reload ends every view of the window (documents-reloaded) and the next page cannot tell why.
+ */
+export function reloadPage(cause) {
+  recordPageReload(cause);
+  return bridge.reload();
+}
+
+/** Writes workbench.page.reload with the operation that reloads this page; a reload without a named cause is refused. */
+export function recordPageReload(cause) {
+  if (typeof cause !== "string" || cause === "") throw new Error(`a page reload needs its cause, not ${JSON.stringify(cause)}`);
+  emitEvent("info", "workbench.page.reload", { cause });
+}
 
 /** Restarts the view of the tab surface through the host (core.tab.reload, docs/spec/native-surfaces.md#view-surfaces). */
 export const reloadView = (surface) => {

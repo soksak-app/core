@@ -52,6 +52,9 @@ pub struct WindowData {
     /// Set when the host asked the ready page to reload, until the new page starts. The page no longer
     /// answers the calls of the surface documents in that time (docs/spec/native-host.md#page-reload).
     pub page_reloading: AtomicBool,
+    /// The host operation that starts the next page, `host.window.reload` when the host starts the workbench of a page that was not
+    /// ready; none when the page reloads itself, whose `workbench.page.reload` names its cause.
+    pub(crate) start_cause: Mutex<Option<&'static str>>,
     /// The first responder that the page last received (window-responder). The lock also orders the reads and sends, so
     /// a later change is never sent before an earlier one.
     pub responder: Mutex<Option<serde_json::Value>>,
@@ -1890,6 +1893,7 @@ pub(crate) fn page_started(window: &Window) -> Result<(), String> {
         }
         crate::exposure::page_reloaded(window, &data);
         answer_close_question(&data, || close_window(window))?;
+        record_page_start(&data);
         reload_surface_documents(window)?;
         crate::modals::discard(window, &data.overlay)?;
         Ok(())
@@ -2405,6 +2409,10 @@ pub(crate) fn window_controls(window: &Window) -> Result<Rect, String> {
 mod records_test;
 
 #[cfg(test)]
+#[path = "page_start_record_test.rs"]
+mod page_start_record_test;
+
+#[cfg(test)]
 #[path = "debug_follow_notices_test.rs"]
 mod debug_follow_notices_test;
 
@@ -2423,3 +2431,28 @@ mod ends_test;
 #[cfg(test)]
 #[path = "../tests/project_data_order/project_data_order_test.rs"]
 mod project_data_order_test;
+
+/// Writes `host.page.started` with the cause of the start of the page of the window and the number of views that the start ends with
+/// the caller `documents-reloaded`, so a query names why the views of a window ended. The cause is the host operation that started the
+/// page, or `page` when the page started by itself: its own reload, whose `workbench.page.reload` names the cause, the first start, or a
+/// start of WebKit.
+pub(crate) fn record_page_start(data: &WindowData) {
+    let cause = data
+        .start_cause
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the cause; the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .take()
+        .unwrap_or("page");
+    let views = data
+        .surface_hosts
+        .lock()
+        // default: as above.
+        .unwrap_or_else(PoisonError::into_inner)
+        .len();
+    crate::event_record::emit_host(
+        crate::event_log::Level::Info,
+        "host.page.started",
+        serde_json::json!({"cause": cause, "views": views}),
+    );
+}

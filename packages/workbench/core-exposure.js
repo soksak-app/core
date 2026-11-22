@@ -203,7 +203,7 @@ async function dropFiles(payload) {
 
 /** Applies a plugin change to this window: the questions of modified tabs, then a page reload (core.plugins.apply). */
 const applyPluginChange = createPluginApply({
-  settle: settleModifiedTabs, flush: projects.flush, reload: () => whenRepliesSent().then(reloadPage),
+  settle: settleModifiedTabs, flush: projects.flush, reload: (cause) => whenRepliesSent().then(() => reloadPage(cause)),
 });
 
 /**
@@ -752,7 +752,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   registry.command("core.plugins.remove", pluginCommand("remove"));
   registry.command("core.plugins.enable", pluginCommand("enable"));
   registry.command("core.plugins.disable", pluginCommand("disable"));
-  registry.command("core.plugins.apply", () => applyPluginChange());
+  registry.command("core.plugins.apply", () => applyPluginChange("core.plugins.apply"));
   registry.command("core.plugins.update-all", () => pluginOperations.updateAll());
   registry.command("core.app.update", () => appUpdate.update());
   registry.command("core.app.release", (params, cause) => appUpdate.openRelease(cause));

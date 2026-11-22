@@ -169,6 +169,7 @@ func (h *Host) pageStarting(s *Surfaces) error {
 	var detachments []imageDetachTarget
 	var reloadErr error
 	s.invoke(func() {
+		recordPageStart(s.takeStartCause(), len(s.views))
 		detachments, reloadErr = s.reloadSurfaceDocuments()
 	})
 	if reloadErr != nil {
@@ -178,4 +179,23 @@ func (h *Host) pageStarting(s *Surfaces) error {
 		return fmt.Errorf("page reload image detach: %w", err)
 	}
 	return nil
+}
+
+// takeStartCause returns and clears the host operation that starts the next page of s, or "page" when the page started by itself: its
+// own reload, whose workbench.page.reload names the cause, the first start, or a start of WebKit.
+func (s *Surfaces) takeStartCause() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cause := s.startCause
+	s.startCause = ""
+	if cause == "" {
+		return "page"
+	}
+	return cause
+}
+
+// recordPageStart writes host.page.started with the cause of the start and the number of views that the start ends with the caller
+// documents-reloaded, so a query names why the views of a window ended.
+func recordPageStart(cause string, views int) {
+	EmitHost(LevelInfo, "host.page.started", map[string]any{"cause": cause, "views": views})
 }

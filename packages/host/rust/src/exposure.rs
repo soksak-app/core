@@ -2746,6 +2746,12 @@ fn reload(
                 .map_err(internal)
             } else {
                 let target = window.clone();
+                *data
+                    .start_cause
+                    .lock()
+                    // default: a lock that a panicking thread poisoned still holds the cause; the panic hook records the panic.
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                    Some("host.window.reload");
                 on_main(window, move || {
                     target.start_workbench().map_err(|error| error.to_string())
                 })

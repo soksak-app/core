@@ -2722,6 +2722,30 @@
       },
       "description": "A view page started; a reload starts a new document with a new clock."
     },
+    "workbench.page.reload": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "cause": {
+            "type": "string",
+            "enum": [
+              "host.window.reload",
+              "core.plugins.apply",
+              "plugins-changed",
+              "starter-installed"
+            ]
+          }
+        },
+        "required": [
+          "cause"
+        ]
+      },
+      "description": "The workbench reloads its page, which ends every view of the window with the caller documents-reloaded; cause names the operation: the request of the host (host.window.reload), the command core.plugins.apply, a plugin change of the host (plugins-changed), or the installation of the starter pack (starter-installed)."
+    },
     "workbench.start": {
       "layer": "workbench",
       "class": "lifecycle",
@@ -4444,6 +4468,33 @@
         ]
       },
       "description": "A process.lock that was not locked when this run started was left by an earlier run that ended without removing it, and this run took it over. boot and pid are the boot identifier and the process identifier of that run when the file is the current form, and null otherwise; previous holds the content of the file, cut to 256 bytes, when the file is not the current form."
+    },
+    "host.page.started": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "cause": {
+            "type": "string",
+            "enum": [
+              "host.window.reload",
+              "page"
+            ]
+          },
+          "views": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "cause",
+          "views"
+        ]
+      },
+      "description": "A page of the window started, before the host ends the views of the earlier page with the caller documents-reloaded. cause is host.window.reload when the host started the workbench of a page that was not ready, and page when the page started by itself: its own reload, whose workbench.page.reload names the cause, the first start, or a start of WebKit; views is the number of surfaces of the window that the start ends."
     },
     "host.view.killed": {
       "layer": "host",

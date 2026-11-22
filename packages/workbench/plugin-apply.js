@@ -7,11 +7,11 @@
  * It answers {reloaded} as core.plugins.apply does, before the reload ends the page.
  */
 export function createPluginApply({ settle, flush, reload }) {
-  return async function apply() {
+  return async function apply(cause) {
     if (!(await settle())) return { reloaded: false };
     await flush();
     // The reload rejects through the document's unhandledrejection, which shows the error.
-    reload();
+    reload(cause);
     return { reloaded: true };
   };
 }

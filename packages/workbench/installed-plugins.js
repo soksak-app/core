@@ -44,7 +44,7 @@ export async function followPluginChanges(apply) {
     }
     running = (async () => {
       try {
-        return await apply();
+        return await apply("plugins-changed");
       } finally {
         running = null;
         if (due) {

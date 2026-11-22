@@ -79,7 +79,7 @@ import { chromeSwitches } from "./window-sidebars.js";
 import { createPageLayout, reportUncaught, verificationRows } from "./page-layout.js";
 
 /* Application interface. When it is absent, an implementation that does nothing is used. */
-import { chrome, log, onDocumentState, onImageDetachEnded, onMemoryPressure, onMenuCommand, retainSidecarSessions, surfaces as host } from "./host.js";
+import { chrome, log, onDocumentState, recordPageReload, onImageDetachEnded, onMemoryPressure, onMenuCommand, retainSidecarSessions, surfaces as host } from "./host.js";
 import { holdImageDetachSurfaces, imageDetachEnded } from "./image-detach-waits.js";
 import { pressesFrame, setTextScope } from "./text-size.js";
 import { applyFrameText, chromeRow, drawnFrameText } from "./frame-text.js";
@@ -631,6 +631,7 @@ try {
   // On the first run, the starter pack is installed and the page is reloaded to load the installed plugins (docs/spec/installation.md).
   // While reloading, this page does not create a space.
   if (await pluginOperations.installStarter(starterPack(), defaultRegistry(), log, showError)) {
+    recordPageReload("starter-installed");
     location.reload();
     await new Promise(() => {});
   }

@@ -9,19 +9,19 @@ function steps(settled) {
   const apply = createPluginApply({
     settle: async () => { done.push("settle"); return settled; },
     flush: async () => { done.push("flush"); },
-    reload: () => { done.push("reload"); },
+    reload: (cause) => { done.push(`reload ${cause}`); },
   });
   return { apply, done };
 }
 
 test("a window whose modified tabs are settled saves its projects and reloads its page", async () => {
   const { apply, done } = steps(true);
-  assert.deepEqual(await apply(), { reloaded: true });
-  assert.deepEqual(done, ["settle", "flush", "reload"]);
+  assert.deepEqual(await apply("plugins-changed"), { reloaded: true });
+  assert.deepEqual(done, ["settle", "flush", "reload plugins-changed"]);
 });
 
 test("a window that keeps a modified tab keeps its page", async () => {
   const { apply, done } = steps(false);
-  assert.deepEqual(await apply(), { reloaded: false });
+  assert.deepEqual(await apply("plugins-changed"), { reloaded: false });
   assert.deepEqual(done, ["settle"]);
 });

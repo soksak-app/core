@@ -620,6 +620,9 @@ type Surfaces struct {
 	imageDetachFailures map[string]map[string]string
 	endedImageDetaches  []map[string]any
 	detachPageReady     bool
+	// startCause names the host operation that starts the next page, host.window.reload when the host starts the workbench of a page that
+	// was not ready; empty when the page reloads itself, whose workbench.page.reload names its cause. Guarded by mu.
+	startCause string
 	// reload hooks replace native calls only in owning host tests; production uses the platform operations.
 	reloadCancelLayout  func() error
 	reloadKeysPageEnded func()
