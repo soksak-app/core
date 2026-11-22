@@ -10,6 +10,8 @@ fn seconds_after(start: Instant, seconds: u64) -> Instant {
     start + Duration::from_secs(seconds)
 }
 
+// contract: view.reload.restarts-once
+// A reload of a ready view keeps its record and counts no failure: only the failures after it count toward the stop.
 #[test]
 fn reloading_a_ready_view_keeps_its_record_and_counts_no_failure() {
     let lifecycle = ViewLifecycle::default();

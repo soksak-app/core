@@ -456,7 +456,7 @@ func stagedUpdate(t *testing.T, config string) string {
 	}
 	folder := t.TempDir()
 	index := filepath.Join(folder, "index.json")
-	text := fmt.Sprintf(`{"format": 1, "plugins": [], "sidecars": [], "packs": [], "revoked": {"plugins": [], "sidecars": []}, "core": {"versions": [{"version": "99.0.0", "releases": {"%s-mygo": {"url": "file:///release.zip", "sha256": "%s"}}}]}}`,
+	text := fmt.Sprintf(`{"format": 2, "plugins": [], "sidecars": [], "packs": [], "revoked": {"plugins": [], "sidecars": []}, "core": {"versions": [{"version": "99.0.0", "releases": {"%s-mygo": {"url": "file:///release.zip", "sha256": "%s"}}}]}}`,
 		platform, strings.Repeat("0", 64))
 	if err := os.WriteFile(index, []byte(text), 0o644); err != nil {
 		t.Fatal(err)

@@ -126,6 +126,7 @@ func TestProgramRunOutputBeyondTheBoundIsDiscardedAndMarked(t *testing.T) {
 	}
 }
 
+// contract: program.run.output-bound-keeps-whole-characters
 // A kept part that ends inside a UTF-8 character ends before that character (docs/spec/native-surfaces.md#program-runs).
 func TestProgramRunTruncationKeepsWholeCharacters(t *testing.T) {
 	outcome := runProgramOrFail(t, ProgramRun{
@@ -281,6 +282,7 @@ func TestProgramRunRefusesAnOpenCallIdentifier(t *testing.T) {
 	}
 }
 
+// contract: program.run.refuses-surface-without-view
 // A run of a surface without a view, or of a surface that has closed, is refused with the no-view text of the spec.
 func TestProgramRunOfASurfaceWithoutAViewIsRefused(t *testing.T) {
 	s := &Surfaces{}
@@ -327,6 +329,7 @@ func TestProgramRunRefusesAWindowWithoutProject(t *testing.T) {
 	}
 }
 
+// contract: program.run.accepts-matching-arguments
 // A run whose declaration matches starts with the declared program and the matched arguments.
 func TestProgramRunAcceptsAMatchingRun(t *testing.T) {
 	run, err := checkProgramRun(programDeclarations, "plugin-x", "status", []string{"status", "-s"}, programProject)
@@ -357,6 +360,7 @@ func TestProgramRunRefusesTheFifthOpenRunOfASurface(t *testing.T) {
 	}
 }
 
+// contract: program.run.surface-close-ends-the-run, program.run.window-close-ends-the-run
 // Ending a surface cancels its open runs with the cause and leaves the runs of other surfaces open.
 func TestProgramRunsEndWithTheirSurface(t *testing.T) {
 	var runs programRuns
@@ -381,6 +385,7 @@ func TestProgramRunsEndWithTheirSurface(t *testing.T) {
 	}
 }
 
+// contract: program.run.cancel-is-idempotent
 // A cancel of a run that is open ends it with ProgramCancelled; a cancel of a run that ended changes nothing.
 func TestProgramRunCancelIsIdempotent(t *testing.T) {
 	var runs programRuns
@@ -428,6 +433,7 @@ func TestProgramRunEnvironmentIsTheSidecarEnvironment(t *testing.T) {
 	}
 }
 
+// contract: program.run.call-id-is-an-integer
 // The view call identifier is the integer id of the view-call protocol (docs/spec/native-surfaces.md#view-surfaces): the page sends it
 // as a JSON integer, and a text identifier is refused at decoding.
 func TestProgramCallRequestsDecodeTheIntegerViewCallID(t *testing.T) {

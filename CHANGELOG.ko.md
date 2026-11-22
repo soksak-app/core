@@ -5,6 +5,7 @@
 
 ## 2026-11-22
 
+- F1076: program run, `plugin.json`의 `programs` pattern, 준비된 view의 reload, 업데이트 뒤 view 폴더의 Go와 Rust test가 contract case를 선언하고, contract case 표는 Go와 Rust test 하나씩을 가진 case 여섯 개를 추가하므로 host contract 검사가 통과한다. F1072-4: mygo update system test는 registry index를 format 2로 쓴다.
 - F1075-4: `dependencies`의 plugin 의존은 plugin의 package를 key로 가지며, mygo workbench, 페이지, testing host `createTestHost`가 package를 그 package의 load된 plugin id로 푼다. View call `runtime.status.watch`, `runtime.data.get {key, plugin}`, `runtime.data.on {plugin}`은 plugin id를 명명한다. 이전에는 host가 key를 plugin id와 비교해서, plugin의 package에 대한 의존이 view에 그 status도 프로젝트 데이터도 주지 않았고, mygo workbench는 package를 sidecar로 다뤘다. `createTestHost`의 `dependencies` fixture는 package를 key로 가지며 각 항목이 `plugin` id를 명명한다.
 - F1074와 F1075 뒤의 push 검사를 고쳤다: test inventory가 F1074와 F1075를 test에 연결하고, F344 symbol이 새 parameter를 이름에 담고, window check catalog가 workbench.session.program을 갖고, sok의 program file test가 platform 폴더 밖의 OS 조건 없이 실행된다.
 - F1075: View는 `dependencies`에 적힌 plugin의 프로젝트 데이터를 `runtime.data.get {key, plugin}`으로 읽고, `runtime.data.on {plugin}`으로 event `data:<plugin>` 아래 그 변경을 따라간다. `plugin`을 명명한 set, replace, change는 `view call <command> <plugin> is read-only for <plugin of the view>: a view changes only the project data of its own plugin`로 실패하고, 의존이 아닌 `plugin`은 `view call <command> <plugin> is not a dependency of <plugin of the view>`로 실패한다.

@@ -15,6 +15,7 @@ fn programs_manifest(pattern: &str) -> Value {
     })
 }
 
+// contract: install.plugin-program-pattern
 // A pattern that the regular expression library does not compile is refused at install (docs/spec/plugins.md#pluginjson).
 #[test]
 fn program_pattern_that_does_not_compile_is_refused() {
@@ -25,6 +26,7 @@ fn program_pattern_that_does_not_compile_is_refused() {
     );
 }
 
+// contract: install.plugin-program-pattern
 #[test]
 fn program_pattern_that_compiles_is_accepted() {
     validate_manifest(&programs_manifest("[a-z]+")).unwrap();

@@ -1605,6 +1605,12 @@ Items:
 | `program.run.plugin-path-not-found` | A `plugin:bin/missing` program whose file does not exist fails the run with `program not found: plugin:bin/missing`, writes `host.program.failed`, and starts no process. | all |
 | `program.run.plugin-path-not-executable` | A `plugin:bin/tool` program whose file is not a regular file with an execute bit fails the run with `program plugin:bin/tool is not a regular executable file` and writes `host.program.failed`. | all |
 | `install.plugin-program-file` | `sok plugin install` refuses a release whose `programs.run` names `plugin:bin/tool` when the installed version folder has no executable regular file there, with `plugin probe: programs.run program plugin:bin/tool is not a regular executable file`, and installs the release when that file is executable. | all |
+| `install.plugin-program-pattern` | Validation of `plugin.json` refuses a `programs.run` pattern that the regular expression library does not compile with `plugin probe: programs.run pattern does not compile: <reason>`, and accepts a pattern that compiles. | all |
+| `program.run.output-bound-keeps-whole-characters` | A kept standard output whose bound falls inside a UTF-8 character ends before that character, so 1048575 bytes of `a` followed by `é` keep 1048575 bytes with `truncated.stdout` `true`. | all |
+| `program.run.refuses-surface-without-view` | A run of a surface that has no view, or whose view has closed, is refused with `program run: surface <surface> has no view`. | all |
+| `program.run.accepts-matching-arguments` | A run whose arguments equal the text slots and match the pattern slots in full starts the declared program with those arguments in the project folder. | all |
+| `program.run.cancel-is-idempotent` | A second cancel of the same run, or a cancel of an identifier that is not open, changes nothing: the run ends once with the result `cancelled`. | all |
+| `program.run.call-id-is-an-integer` | The `id` of the run and cancel calls is the integer identifier of the view call, and a call whose `id` is a text is refused when it is decoded. | all |
 | `sidecars.environment.start-records-the-sok-folder` | The start of the sidecar channel of the installed sidecars records one event `host.sidecar.path` at the level `info` whose `folder` is the folder of the host executable and whose `sok` is the `sok` in that folder. | all |
 
 ## Workbench cases

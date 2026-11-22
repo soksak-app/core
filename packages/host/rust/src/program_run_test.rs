@@ -366,6 +366,7 @@ fn a_name_that_the_declaration_lacks_is_refused_before_a_start() {
     assert_eq!(error, "program missing is not declared by plugin-a");
 }
 
+// contract: program.run.refuses-surface-without-view
 #[test]
 fn a_run_of_a_surface_without_a_view_is_refused_with_the_no_view_text() {
     let project = folder::Folder::new();
@@ -634,4 +635,80 @@ fn a_placement_that_leaves_out_a_surface_ends_its_open_runs() {
         ))
         .unwrap_err();
     assert_eq!(refused, "program run: surface surface-a has no view");
+}
+
+// contract: program.run.output-bound-keeps-whole-characters
+#[test]
+fn a_bound_inside_a_character_keeps_the_part_before_that_character() {
+    let project = folder::Folder::new();
+    script(
+        project.path(),
+        "bin/tool",
+        "head -c 1048575 /dev/zero | tr '\\000' a; printf '\\303\\251'",
+    );
+    let runs = runs_with(declared("bin/tool", vec![]));
+    let finished = runs.run(request(1, "run", &[], project.path())).unwrap();
+    assert_eq!(finished.stdout.text.len(), (1 << 20) - 1);
+    assert!(finished.stdout.truncated);
+}
+
+// contract: program.run.accepts-matching-arguments
+#[test]
+fn a_run_whose_arguments_match_its_slots_starts_the_program_with_them() {
+    let project = folder::Folder::new();
+    script(project.path(), "bin/tool", "echo \"$1 $2\"; pwd -P");
+    let slots = vec![
+        Slot::Text("status".to_string()),
+        Slot::Pattern("-[a-z]+".to_string()),
+    ];
+    let runs = runs_with(declared("bin/tool", slots));
+    let finished = runs
+        .run(request(1, "run", &["status", "-s"], project.path()))
+        .unwrap();
+    let root = std::fs::canonicalize(project.path()).unwrap();
+    assert_eq!(
+        finished.stdout.text,
+        format!("status -s\n{}\n", root.display())
+    );
+}
+
+// contract: program.run.cancel-is-idempotent
+#[test]
+fn a_repeated_cancel_ends_the_run_once_and_a_cancel_of_another_id_changes_nothing() {
+    let project = folder::Folder::new();
+    script(project.path(), "bin/tool", HOLDING_BODY);
+    let runs = runs_with(declared("bin/tool", vec![Slot::Pattern(".*".to_string())]));
+    let marker = project.path().join("child");
+    let handle = start_holding(&runs, project.path(), 1, &marker);
+    wait_for_child(&marker);
+    runs.cancel(SURFACE, 2);
+    runs.cancel(SURFACE, 1);
+    runs.cancel(SURFACE, 1);
+    let finished = handle.join().unwrap().unwrap();
+    assert_eq!(finished.end, Some(End::Cancelled));
+    runs.cancel(SURFACE, 1);
+}
+
+// contract: program.run.call-id-is-an-integer
+#[test]
+fn the_run_and_cancel_calls_decode_the_integer_view_call_id() {
+    use crate::program_run::{CancelCall, RunCall};
+    let run: RunCall = serde_json::from_value(
+        serde_json::json!({"surface": "s1", "id": 7, "name": "lint", "args": ["src"]}),
+    )
+    .unwrap();
+    assert_eq!(
+        (run.surface.as_str(), run.id, run.name.as_str()),
+        ("s1", 7, "lint")
+    );
+    let cancel: CancelCall =
+        serde_json::from_value(serde_json::json!({"surface": "s1", "id": 7})).unwrap();
+    assert_eq!(cancel.id, 7);
+    assert!(
+        serde_json::from_value::<RunCall>(
+            serde_json::json!({"surface": "s1", "id": "7", "name": "lint", "args": []})
+        )
+        .is_err(),
+        "a text view call identifier decoded as a run call"
+    );
 }

@@ -160,9 +160,6 @@ fn a_view_records_its_first_call() {
     assert!(!channels.has_called("other-surface"));
 }
 
-// contract: view.reload.restarts-once
-// A reload of a ready view keeps its record and counts no failure: only the failures after it count toward the stop.
-
 // contract: host.view.killed.is-written-on-every-end
 #[test]
 fn a_view_end_stores_the_committed_url_of_its_document() {

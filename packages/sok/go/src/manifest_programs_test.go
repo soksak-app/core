@@ -20,6 +20,7 @@ func programsManifest(pattern string) map[string]any {
 	}
 }
 
+// contract: install.plugin-program-pattern
 // A pattern that the RE2 library does not compile is refused at install with its name and the reason (docs/spec/plugins.md#pluginjson).
 func TestProgramPatternThatDoesNotCompileIsRefused(t *testing.T) {
 	err := ValidateManifest(programsManifest("("))
@@ -31,6 +32,7 @@ func TestProgramPatternThatDoesNotCompileIsRefused(t *testing.T) {
 	}
 }
 
+// contract: install.plugin-program-pattern
 // A pattern that compiles is accepted.
 func TestProgramPatternThatCompilesIsAccepted(t *testing.T) {
 	if err := ValidateManifest(programsManifest("[a-z]+")); err != nil {

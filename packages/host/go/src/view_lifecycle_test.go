@@ -500,6 +500,7 @@ func writeViewPluginVersion(t *testing.T, config, version string) {
 	}
 }
 
+// contract: document.plugin.folder
 // TestAViewCreatedAfterAnUpdateServesTheInstalledVersionFolder checks that a view whose surface is kept across a workbench restart
 // takes the folder of the version that installed.json records when the view is created again. The surface id and the start values
 // of the view, which carry its restore state, are the same before and after the update.

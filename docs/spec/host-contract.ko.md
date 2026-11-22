@@ -1605,6 +1605,12 @@ fn invalid_json_closes_connection() {
 | `program.run.plugin-path-not-found` | 파일이 없는 `plugin:bin/missing` program의 실행은 `program not found: plugin:bin/missing`으로 실패하고, `host.program.failed`를 기록하며, 프로세스를 시작하지 않는다. | all |
 | `program.run.plugin-path-not-executable` | 실행 권한 bit가 있는 일반 파일이 아닌 `plugin:bin/tool` program의 실행은 `program plugin:bin/tool is not a regular executable file`으로 실패하고 `host.program.failed`를 기록한다. | all |
 | `install.plugin-program-file` | 설치된 version 폴더에 실행 가능한 일반 파일이 없는 `programs.run`의 `plugin:bin/tool` release는 `sok plugin install`이 `plugin probe: programs.run program plugin:bin/tool is not a regular executable file`로 거부하고, 그 파일이 실행 가능하면 설치한다. | all |
+| `install.plugin-program-pattern` | `plugin.json` 검증은 regular expression library가 compile하지 못하는 `programs.run` pattern을 `plugin probe: programs.run pattern does not compile: <reason>`으로 거부하고, compile되는 pattern은 받아들인다. | all |
+| `program.run.output-bound-keeps-whole-characters` | 보관한 standard output의 한도가 UTF-8 문자 안에 떨어지면 그 문자 앞에서 끝나므로, `a` 1048575 byte 뒤의 `é`는 1048575 byte와 `truncated.stdout` `true`를 남긴다. | all |
+| `program.run.refuses-surface-without-view` | view가 없거나 view가 닫힌 surface의 run은 `program run: surface <surface> has no view`로 거부된다. | all |
+| `program.run.accepts-matching-arguments` | 인자가 text slot과 같고 pattern slot에 전체로 맞는 run은 선언된 program을 그 인자로 project 폴더에서 시작한다. | all |
+| `program.run.cancel-is-idempotent` | 같은 run의 두 번째 cancel이나 열려 있지 않은 식별자의 cancel은 아무것도 바꾸지 않으며, run은 결과 `cancelled`로 한 번 끝난다. | all |
+| `program.run.call-id-is-an-integer` | run과 cancel call의 `id`는 view call의 정수 식별자이고, `id`가 text인 call은 decode할 때 거부된다. | all |
 | `sidecars.environment.start-records-the-sok-folder` | 설치된 sidecar의 sidecar channel의 시작은 level `info`의 event `host.sidecar.path` 하나를 기록하고, 그 `folder`는 host 실행 파일의 폴더이며 `sok`은 그 폴더의 `sok`이다. | all |
 
 ## Workbench cases
