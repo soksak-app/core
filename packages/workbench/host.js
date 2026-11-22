@@ -17,6 +17,7 @@ import { logGate } from "./log-gate.js";
 import { errorToasts } from "./shown-errors.js";
 import { pageIdentity } from "./page-identity.js";
 import { surfaceSyncRequestDifference, surfaceSyncRequestWithDeclarationTable } from "./surface-sync-request.js";
+import { programsOfSurface } from "./program-runs.js";
 
 /**
  * Returns the computed CSS color as [r, g, b, a]. The alpha is 1 when the color has none.
@@ -695,6 +696,8 @@ export const surfaces = native ? {
           dim: s.dim,
           plugin: s.surface.pluginId,
           composition: s.surface.composition,
+          // The programs that the plugin of a view declares, which the host checks each run against (docs/spec/native-surfaces.md#program-runs).
+          ...programsOfSurface(s.surface),
           visible: s.visible,
           ...toPage(s.applied),
           // The start values of the view of a view surface (docs/spec/native-surfaces.md#view-surfaces); a surface of another

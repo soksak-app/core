@@ -33,6 +33,8 @@ export function defaultRegistry() {
 function surfaceOf(name, pluginId, surface) {
   return (tabId) => ({ composition: surface.composition, surfaceId: tabId,
     pluginId, declarations: surface.declarations, sidecars: surface.sidecars, diagnostics: surface.diagnostics,
+    // default: programs is an optional field of plugin.json; a surface without it runs no program (null).
+    programs: surface.programs,
     // default: a surface without surface.unload (undeclared, or beside background) is never unloaded.
     unload: surface.unload ?? false,
     contributions: (point) => contributionsOf(pluginId, point) });
@@ -117,6 +119,8 @@ export function installEnvironment(environmentDocument, installedDocument) {
           // diagnostics.json (docs/spec/plugins.md#diagnostic-declarations).
           diagnostics,
           sidecars: manifestSidecars(manifest, pluginNames),
+          // default: programs is an optional field of plugin.json; without it the plugin runs no program (null).
+          programs: manifest.programs ?? null,
         }),
       });
     }

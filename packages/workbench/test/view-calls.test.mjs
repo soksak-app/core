@@ -852,6 +852,23 @@ test("a cancel ends the pending call, which replies cancelled, and the pending c
   await h.close();
 });
 
+test("a program run reaches programRun with its arguments, a cancel ends it with programCancel, and a later run replies its result", { timeout: 5000 }, async () => {
+  const h = await mountView("program-run");
+  const from = wire.calls.length;
+  // runtime.program.run {name: "probe-tool", args: ["a"]} with the id 5, whose host reply is held
+  assert.deepEqual(await h.deliver(), []);
+  assert.deepEqual(h.after(from).map(({ name }) => name), ["programRun"]);
+  // the cancel of the run 5 ends it in the host, and the call 5 replies for the call that it ends
+  const [cancelled] = await h.deliver();
+  assert.deepEqual([cancelled.id, cancelled.error.message], [5, "cancelled"]);
+  assert.deepEqual(h.after(from).map(({ name }) => name), ["programRun", "programCancel"]);
+  // runtime.program.run {name: "probe-tool"} with the id 6 replies the host result, and no arguments are sent as an empty list
+  const reply = await h.call();
+  assert.deepEqual([reply.id, reply.result.code, reply.result.stdout], [6, 0, "ok"]);
+  wire.release();
+  await h.close();
+});
+
 test("a cancel of a call that has no pending call ends nothing", { timeout: 5000 }, async () => {
   const h = await mountView("cancel-none");
   const from = wire.calls.length;

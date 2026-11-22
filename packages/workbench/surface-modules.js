@@ -19,6 +19,7 @@ import { forgetTab, reportDirectory, reportError, reportFooter, reportKeep, repo
 import { icon } from "./icons.js";
 import { active, tabStateStore, tabStatesReady, waitForInitialProjectContext } from "./projects.js";
 import { forgetView, presentationAbandoned, viewResponsiveness } from "./plugin-processes.js";
+import { createProgramRuns } from "./program-runs.js";
 import { pluginRecords } from "./plugin-records.js";
 import { logGate } from "./log-gate.js";
 import { emitEvent } from "./page-log.js";
@@ -447,6 +448,8 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
   const { tab } = context;
   // The plugin-facing native handle of the view: its region calls and view bridge calls are refused here (view-answer.js of @soksak/plugin-api).
   const gate = pluginNativeGate(scoped.native);
+  // The program runs of the view: programRun and programCancel go to the host with the surface of the view (program-runs.js).
+  const programRuns = createProgramRuns(surface.surfaceId, (name, payload) => scoped.native.call(name, payload));
   // The pending calls of this view, by id. A cancel ends the pending call that it names.
   let pending = new Map();
   let documentGeneration = 0;
@@ -643,6 +646,10 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
     }
     refreshViewCommands(currentSource);
     if (event?.cancel === true) {
+      // A cancel of an open program run ends the run in the host (docs/spec/native-surfaces.md#program-runs).
+      programRuns.cancel(event.id).catch((error) => {
+        dispatchEvent(new ErrorEvent("error", { message: `view call ${event.id} program cancel: ${error.message}` }));
+      });
       // A cancel has no reply: the call that it ends replies cancelled.
       answerViewCall(event, { ...options, pending }).catch((error) => {
         dispatchEvent(new ErrorEvent("error", { message: `view call ${event.id} cancel: ${error.message}` }));
@@ -664,6 +671,7 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
     const receivedSourceGeneration = event.generation;
     const receivedPending = pending;
     const receivedOptions = { ...options, pending: receivedPending, runtime: { ...options.runtime,
+      program: { run: (name, args) => programRuns.run(event.id, name, args) },
       sidecar: { send: (id, body, cids, name) => {
         if (!surface.sidecars.includes(name)) throw new Error(`surface ${surface.surfaceId} cannot send to sidecar ${name}`);
         if (id !== surface.surfaceId) throw new Error(`surface ${surface.surfaceId} cannot send to sidecar surface ${id}`);
