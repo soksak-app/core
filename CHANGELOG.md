@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1120: The Rust sok library registers a platform through `platform::register`, and a Rust app update test checks that the update and the relaunch start the application after the platform wait returned. Verification: Red with the wait of the update removed, then Green of the ten app update tests.
 - F1115: A request that the endpoint sends to a window and that has no result 10 seconds later is the error record of the place `endpoint window request` in both hosts; the request keeps waiting. Verification: Red of the record tests of both hosts, then Green.
 - F1114-2: A test in each host reads `failed: 1` of `host.endpoint.end` and the error record of the place `endpoint release` when the page refuses the release of a closed connection. Verification: Red with the count and the record removed, then Green in both hosts.
 - F1117-4: The Node checks and scripts read the process table through `processes` of `packages/window-check/platform/platform.mjs`, which calls libSystem through koffi on macOS and reads procfs on Linux, and start no `ps`, `pgrep` or `lsof`; `make check-process-tools` covers Node sources; the redraw measurement drops the CPU time of the window server and B3 drops the start condition on the CPU share of fseventsd, because no interface without privileges reads the CPU time of a process of another user. Verification: Red of the Node case and the repository case of `check-process-tools.test.mjs`, then Green of them and of the changed tests.

@@ -931,7 +931,9 @@ fn read_index(file: &File, records: bool) -> std::io::Result<(Vec<u8>, usize)> {
 
 /// Opens the event file and its index, locks the index, and checks that both are still the files at their paths, so a rotation cannot mix
 /// two files. The caller releases the lock by closing the index with `close_index`.
-fn locked_index(path: &Path) -> Result<(File, File, Box<dyn Platform>), String> {
+fn locked_index(
+    path: &Path,
+) -> Result<(File, File, std::sync::Arc<dyn Platform + Send + Sync>), String> {
     let system = platform::current()?;
     let idx_path = index_path(path);
     for _ in 0..8 {

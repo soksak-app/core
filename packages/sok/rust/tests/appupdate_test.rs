@@ -4,6 +4,8 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use sha2::{Digest, Sha256};
 use soksak_sok::appupdate::{
@@ -11,6 +13,7 @@ use soksak_sok::appupdate::{
     stage_app_update,
 };
 use soksak_sok::install::{CoreRelease, Index, RegistryCore, Release, Revoked, RevokedCore};
+use soksak_sok::platform::{self, Connection, Platform};
 
 #[path = "support/folder.rs"]
 mod folder;
@@ -169,6 +172,7 @@ fn staging_checks_the_hash_extracts_the_bundle_and_checks_its_version() {
     if !bundles_supported() {
         return;
     }
+    let _serial = serial();
     let (config, work) = (Folder::new("appupdate"), Folder::new("appupdate"));
     let (zip, sum) = bundle_zip(work.path(), "0.0.9");
     let bundle = stage_app_update(config.path(), &update(&zip, "0.0.9", &sum)).unwrap();
@@ -186,6 +190,7 @@ fn staging_rejects_a_wrong_hash_and_a_wrong_bundle_version() {
     if !bundles_supported() {
         return;
     }
+    let _serial = serial();
     let (config, work) = (Folder::new("appupdate"), Folder::new("appupdate"));
     let (zip, sum) = bundle_zip(work.path(), "0.0.9");
     let error =
@@ -236,6 +241,7 @@ fn the_bundle_is_replaced_after_the_process_ended_and_the_application_starts() {
     if !bundles_supported() {
         return;
     }
+    let _serial = serial();
     let parent = Folder::new("appupdate");
     let target = bundle_fixture(parent.path(), "soksak.app", "old");
     let staged = bundle_fixture(&parent.path().join("updates/0.0.9"), "soksak.app", "new");
@@ -287,6 +293,7 @@ fn the_earlier_bundle_starts_again_when_the_new_one_fails_to_start() {
     if !bundles_supported() {
         return;
     }
+    let _serial = serial();
     let parent = Folder::new("appupdate");
     let target = bundle_fixture(parent.path(), "soksak.app", "old");
     let staged = bundle_fixture(parent.path(), "staged.app", "new");
@@ -322,6 +329,7 @@ fn the_replacement_refuses_what_is_not_a_bundle() {
     if !bundles_supported() {
         return;
     }
+    let _serial = serial();
     let parent = Folder::new("appupdate");
     let staged = bundle_fixture(parent.path(), "staged.app", "new");
     let mut process = ending();
@@ -359,6 +367,7 @@ fn the_replacement_waits_for_the_exit_without_a_limit() {
     if !bundles_supported() {
         return;
     }
+    let _serial = serial();
     let parent = Folder::new("appupdate");
     let target = bundle_fixture(parent.path(), "soksak.app", "old");
     let staged = bundle_fixture(&parent.path().join("updates/0.0.9"), "soksak.app", "new");
@@ -393,6 +402,7 @@ fn the_relaunch_starts_the_same_bundle_in_the_background_after_the_process_ended
     if !bundles_supported() {
         return;
     }
+    let _serial = serial();
     let parent = Folder::new("appupdate");
     let target = bundle_fixture(parent.path(), "soksak.app", "same");
     let mut process = ending();
@@ -437,6 +447,7 @@ fn the_relaunch_refuses_a_folder_that_is_not_a_bundle_and_waits_for_the_exit() {
     if !bundles_supported() {
         return;
     }
+    let _serial = serial();
     let parent = Folder::new("appupdate");
     let mut process = ending();
     let pid = process.id() as i32;
@@ -478,4 +489,220 @@ fn the_relaunch_refuses_a_folder_that_is_not_a_bundle_and_waits_for_the_exit() {
     });
     relaunching.unwrap();
     assert_eq!(starts.into_inner(), 1, "the application starts once");
+}
+
+/// The platform of the operating system with a wait for the end of a process that records that it was entered and returned.
+struct WaitedPlatform {
+    system: Arc<dyn Platform + Send + Sync>,
+    wait: fn(i32) -> Result<(), String>,
+    entered: Arc<AtomicBool>,
+    returned: Arc<AtomicBool>,
+}
+
+impl Platform for WaitedPlatform {
+    fn process_running(&self, pid: i32) -> Result<(), String> {
+        self.system.process_running(pid)
+    }
+    fn connect(&self, address: &str) -> Result<Box<dyn Connection>, String> {
+        self.system.connect(address)
+    }
+    fn on_interrupt(
+        &self,
+        interrupted: Box<dyn FnOnce(&'static str) + Send>,
+    ) -> Result<(), String> {
+        self.system.on_interrupt(interrupted)
+    }
+    fn config_dir(&self) -> Result<PathBuf, String> {
+        self.system.config_dir()
+    }
+    fn executable(&self, metadata: &std::fs::Metadata) -> bool {
+        self.system.executable(metadata)
+    }
+    fn key(&self) -> Result<String, String> {
+        self.system.key()
+    }
+    fn user_path(&self) -> Result<(), String> {
+        self.system.user_path()
+    }
+    fn user_path_state(
+        &self,
+        environment: &soksak_sok::setup::Environment,
+    ) -> Result<soksak_sok::setup::Part, String> {
+        self.system.user_path_state(environment)
+    }
+    fn configure_user_path(
+        &self,
+        environment: &soksak_sok::setup::Environment,
+        shell: &str,
+        executable: &std::path::Path,
+        enabled: Option<bool>,
+    ) -> Result<bool, String> {
+        self.system
+            .configure_user_path(environment, shell, executable, enabled)
+    }
+    fn set_executable(&self, path: &std::path::Path, executable: bool) -> Result<(), String> {
+        self.system.set_executable(path, executable)
+    }
+    fn close_file(&self, file: std::fs::File, path: &std::path::Path) -> Result<(), String> {
+        self.system.close_file(file, path)
+    }
+    fn extract_bundle(
+        &self,
+        zip: &std::path::Path,
+        folder: &std::path::Path,
+    ) -> Result<(), String> {
+        self.system.extract_bundle(zip, folder)
+    }
+    fn bundle_version(&self, bundle: &std::path::Path) -> Result<String, String> {
+        self.system.bundle_version(bundle)
+    }
+    fn wait_process_end(&self, pid: i32) -> Result<(), String> {
+        self.entered.store(true, Ordering::SeqCst);
+        let result = (self.wait)(pid);
+        self.returned.store(true, Ordering::SeqCst);
+        result
+    }
+    fn copy_bundle(
+        &self,
+        source: &std::path::Path,
+        destination: &std::path::Path,
+    ) -> Result<(), String> {
+        self.system.copy_bundle(source, destination)
+    }
+    fn monotonic_nanos(&self) -> Result<u64, String> {
+        self.system.monotonic_nanos()
+    }
+    fn open_index(&self, path: &std::path::Path) -> Result<std::fs::File, String> {
+        self.system.open_index(path)
+    }
+    fn lock_file(&self, file: &std::fs::File) -> Result<(), String> {
+        self.system.lock_file(file)
+    }
+    fn same_file(&self, file: &std::fs::File, path: &std::path::Path) -> Result<bool, String> {
+        self.system.same_file(file, path)
+    }
+    fn prepare_log_directory(&self, path: &std::path::Path) -> Result<(), String> {
+        self.system.prepare_log_directory(path)
+    }
+    fn create_log_file(&self, path: &std::path::Path) -> Result<std::fs::File, String> {
+        self.system.create_log_file(path)
+    }
+    fn append_log_file(&self, path: &std::path::Path) -> Result<std::fs::File, String> {
+        self.system.append_log_file(path)
+    }
+    fn open_process_lock_file(&self, path: &std::path::Path) -> Result<std::fs::File, String> {
+        self.system.open_process_lock_file(path)
+    }
+    fn open_application(
+        &self,
+        bundle: &std::path::Path,
+        arguments: &[String],
+        activate: bool,
+    ) -> Result<(), String> {
+        self.system.open_application(bundle, arguments, activate)
+    }
+    fn read_only_volume(&self, path: &std::path::Path) -> Result<bool, String> {
+        self.system.read_only_volume(path)
+    }
+    fn registrable_sok(&self, sok: &std::path::Path) -> Result<bool, String> {
+        self.system.registrable_sok(sok)
+    }
+    fn exec(&self, program: &std::path::Path, arguments: &[String]) -> String {
+        self.system.exec(program, arguments)
+    }
+}
+
+/// Registers a WaitedPlatform whose wait returns at once, and returns whether the wait was entered and returned. The
+/// registration ends with the returned guard.
+fn waited_platform() -> (Arc<AtomicBool>, Arc<AtomicBool>, Registered) {
+    let (entered, returned) = (
+        Arc::new(AtomicBool::new(false)),
+        Arc::new(AtomicBool::new(false)),
+    );
+    let system = platform::current().unwrap();
+    platform::register(Some(Arc::new(WaitedPlatform {
+        system,
+        wait: |_| Ok(()),
+        entered: Arc::clone(&entered),
+        returned: Arc::clone(&returned),
+    })));
+    (entered, returned, Registered)
+}
+
+/// The tests of this file run one at a time, because the registration of waited_platform holds for the whole process.
+fn serial() -> std::sync::MutexGuard<'static, ()> {
+    static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let serial = SERIAL.lock();
+    // default: a poisoned lock is a test that failed and holds no state.
+    serial.unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Ends the registration of waited_platform.
+struct Registered;
+
+impl Drop for Registered {
+    fn drop(&mut self) {
+        platform::register(None);
+    }
+}
+
+// The update and the relaunch give the platform wait only the PID, so they take no time limit. The start of the application
+// checks that the wait of the platform was entered and returned, so an operation that does not wait fails at its start.
+// contract: app-update.replace.refuses-before-it-changes-anything
+// contract: app-relaunch.refuses-a-folder-that-is-not-a-bundle-and-waits-for-the-exit
+#[test]
+fn the_update_and_the_relaunch_wait_for_the_end_of_the_wait_of_the_platform() {
+    if !bundles_supported() {
+        return;
+    }
+    let _serial = serial();
+    for operation in ["update", "relaunch"] {
+        let parent = Folder::new("appupdate");
+        let target = bundle_fixture(parent.path(), "soksak.app", "old");
+        let staged = bundle_fixture(&parent.path().join("updates/0.0.9"), "soksak.app", "new");
+        let (entered, returned, _registered) = waited_platform();
+        let starts = std::sync::atomic::AtomicUsize::new(0);
+        let check = || {
+            starts.fetch_add(1, Ordering::SeqCst);
+            assert!(
+                entered.load(Ordering::SeqCst) && returned.load(Ordering::SeqCst),
+                "{operation}: the application started before the wait of the platform (entered {}, returned {})",
+                entered.load(Ordering::SeqCst),
+                returned.load(Ordering::SeqCst)
+            );
+        };
+        if operation == "update" {
+            replace_app(
+                &ReplaceOptions {
+                    pid: 1234,
+                    bundle: staged,
+                    target,
+                    arguments: vec![],
+                },
+                &|_: &Path, _: &[String]| {
+                    check();
+                    Ok(())
+                },
+            )
+            .unwrap();
+        } else {
+            relaunch_app(
+                &RelaunchOptions {
+                    pid: 1234,
+                    target,
+                    arguments: vec![],
+                },
+                &|_: &Path, _: &[String], _: bool| {
+                    check();
+                    Ok(())
+                },
+            )
+            .unwrap();
+        }
+        assert_eq!(
+            starts.into_inner(),
+            1,
+            "{operation}: the application starts once"
+        );
+    }
 }

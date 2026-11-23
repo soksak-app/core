@@ -3,6 +3,7 @@
 
 use std::io::{Read, Write};
 use std::path::PathBuf;
+use std::sync::PoisonError;
 
 /// One endpoint connection.
 pub trait Connection: Read + Write + Send {
@@ -110,14 +111,32 @@ mod linux;
 #[path = "windows/windows.rs"]
 mod windows;
 
-/// The implementation for the current operating system.
-pub fn current() -> Result<Box<dyn Platform>, String> {
+/// The implementation that `register` set in place of the one of the operating system; a test of an operation registers one
+/// that records the calls of the operation, as the Go library does with platform.Register.
+static REGISTERED: std::sync::Mutex<Option<std::sync::Arc<dyn Platform + Send + Sync>>> =
+    std::sync::Mutex::new(None);
+
+/// Sets the implementation that `current` returns, or with None the one of the operating system again.
+pub fn register(platform: Option<std::sync::Arc<dyn Platform + Send + Sync>>) {
+    let registered = REGISTERED.lock();
+    // default: a poisoned lock holds a valid registration.
+    *registered.unwrap_or_else(PoisonError::into_inner) = platform;
+}
+
+/// The registered implementation, or the implementation for the current operating system.
+pub fn current() -> Result<std::sync::Arc<dyn Platform + Send + Sync>, String> {
+    let registered = REGISTERED.lock();
+    // default: a poisoned lock holds a valid registration.
+    let registered = registered.unwrap_or_else(PoisonError::into_inner);
+    if let Some(platform) = registered.clone() {
+        return Ok(platform);
+    }
     #[cfg(target_os = "macos")]
-    return Ok(Box::new(darwin::Darwin));
+    return Ok(std::sync::Arc::new(darwin::Darwin));
     #[cfg(target_os = "linux")]
-    return Ok(Box::new(linux::Linux));
+    return Ok(std::sync::Arc::new(linux::Linux));
     #[cfg(windows)]
-    return Ok(Box::new(windows::Windows));
+    return Ok(std::sync::Arc::new(windows::Windows));
     #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
     return Err("no platform implementation exists for this operating system".into());
 }

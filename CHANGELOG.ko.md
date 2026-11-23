@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1120: Rust sok library는 `platform::register`로 platform을 등록하고, Rust app update 테스트는 update와 relaunch가 platform wait가 돌아온 뒤 애플리케이션을 시작하는지 확인한다. 검증: update의 wait를 없앤 Red, 그 뒤 app update 테스트 10개의 Green.
 - F1115: endpoint가 window에 보낸 request가 10초 뒤에도 결과가 없으면 두 host에서 place `endpoint window request`의 error record가 된다. request는 계속 기다린다. 검증: 두 host record 테스트의 Red, 그 뒤 Green.
 - F1114-2: 각 host의 테스트는 page가 닫힌 연결의 해제를 거부할 때 `host.endpoint.end`의 `failed: 1`과 place `endpoint release`의 오류 record를 읽는다. 검증: count와 record를 없앤 Red, 그 뒤 두 host의 Green.
 - F1117-4: Node check와 script는 macOS에서 koffi로 libSystem을 호출하고 Linux에서 procfs를 읽는 `packages/window-check/platform/platform.mjs`의 `processes`로 process table을 읽으며, `ps`, `pgrep`, `lsof`를 시작하지 않는다. `make check-process-tools`가 Node source를 포함한다. 권한 없는 interface는 다른 사용자 process의 CPU time을 읽지 못하므로, redraw 측정은 window server의 CPU time을 빼고 B3는 fseventsd CPU 비율의 시작 조건을 뺀다. 검증: `check-process-tools.test.mjs`의 Node case와 repository case의 Red, 그 뒤 그것들과 바뀐 테스트의 Green.
