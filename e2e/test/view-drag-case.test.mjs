@@ -142,8 +142,8 @@ test("the B3 values of the view drag are the first-drag figures in the state 0 a
   });
 
 test("the processes of the drag are the rows of the application with the CPU time of each and its peak footprint", { timeout: 5000 }, () => {
-  // The recorded outputs of ps -axo pid=,time= and of footprint -p PID -f bytes for the processes 7 and 9.
-  const cpu = cpuSecondsOf({ status: 0, stdout: "  7 0:01.50\n  9 1:00.25\n 11 0:00.10\n", stderr: "" });
+  // The process table rows with CPU time of the processes 7, 9 and 11, and the recorded output of footprint -p PID -f bytes for 7 and 9.
+  const cpu = cpuSecondsOf([{ pid: 7, cpuSeconds: 1.5 }, { pid: 9, cpuSeconds: 60.25 }, { pid: 11, cpuSeconds: 0.1 }]);
   const read = [];
   const footprintOf = (pid) => {
     read.push(pid);

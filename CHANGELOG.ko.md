@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1117-5: view drag 테스트는 `cpuSecondsOf`에 process table row를 넘기고, window-check harness의 `endGroup`은 group의 member가 하나도 돌지 않을 때 끝나므로, 중단된 command 뒤의 process table 읽기에 실행 중인 child가 없다. 검증: interrupt 테스트 동시 실행 36번 중 7번 Red, 이어 36번 중 0번 Green.
 - F1109: window check `e2e/surface-status-reload.test.mjs`는 main page reload 뒤 raster probe surface 세 개가 각자 자기 session을 읽고 자기 색을 그리는지 확인한다. 검증: wailsv3, tauriv2, mygo에서 3개 중 3개. host의 surface mapping과 workbench 등록은 F1109의 원인이 아니다.
 - F1106: `surface.params`가 이름하지 않은 tab 인자는 알 수 없는 command 인자처럼 새 탭을 실패시키고 저장된 탭을 placeholder로 열며, terminal tab의 시작 인자가 `directory`를 이름한다. 검증: `tab-params.test.mjs`의 Red, 그 뒤 Green.
 - F1120: Rust sok library는 `platform::register`로 platform을 등록하고, Rust app update 테스트는 update와 relaunch가 platform wait가 돌아온 뒤 애플리케이션을 시작하는지 확인한다. 검증: update의 wait를 없앤 Red, 그 뒤 app update 테스트 10개의 Green.
