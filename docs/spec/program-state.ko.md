@@ -14,13 +14,13 @@
 | --- | --- |
 | 문자열이 아닌 `surface.program` | `<plugin>: surface program must be a status name` |
 | `exposes.status`가 선언하지 않은 이름 | `<plugin>: surface program <name> must name a status declared in exposes` |
-| 아래 schema가 아닌 status | `<plugin>: surface program <name> must have a schema of type object and null whose state is one of idle, working, blocked and whose pid is an integer or null` |
+| 아래 schema가 아닌 status | `<plugin>: surface program <name> must have a schema of type object and null whose state is one of idle, working, blocked, whose pid is an integer or null and whose app is a string or null` |
 
-status의 schema는 `type`이 `object`와 `null`을 담는 list이고, `required`가 `state`를 담는 list이며, `properties.state`가 `{type: "string", enum}`이고 그 `enum`이 `idle`, `working`, `blocked` 세 값만 담으며, `properties.pid`가 `{type}`이고 그 `type` list가 `integer`와 `null`을 담는다. 각 언어의 reader는 같은 조건을 검사하며, `docs/spec/cases/manifest-validation.json`의 공유 case가 그것을 정한다.
+status의 schema는 `type`이 `object`와 `null`을 담는 list이고, `required`가 `state`를 담는 list이며, `properties.state`가 `{type: "string", enum}`이고 그 `enum`이 `idle`, `working`, `blocked` 세 값만 담으며, `properties.pid`가 `{type}`이고 그 `type` list가 `integer`와 `null`을 담으며, `properties.app`이 `{type}`이고 그 `type` list가 `string`과 `null`을 담는다. 각 언어의 reader는 같은 조건을 검사하며, `docs/spec/cases/manifest-validation.json`의 공유 case가 그것을 정한다.
 
 ## 값
 
-status의 값은 탭에 프로그램 상태가 없을 때 `null`이고, 그렇지 않으면 member가 `state`와 `pid`뿐인 객체다:
+status의 값은 탭에 프로그램 상태가 없을 때 `null`이고, 그렇지 않으면 member가 `state`, `pid`, `app`뿐인 객체다:
 
 | `state` | 뜻 |
 | --- | --- |
@@ -30,7 +30,9 @@ status의 값은 탭에 프로그램 상태가 없을 때 `null`이고, 그렇�
 
 `pid`는 탭의 foreground 프로그램의 process id로, 양의 정수이거나 탭이 프로그램을 실행하지 않으면 `null`이다. schema 검사는 `pid`의 부호를 보지 않으며, 워크벤치는 양의 정수가 아닌 `pid`를 값 오류로 거부한다.
 
-`null`도 아니고 member가 `state`, 세 값 중 하나인 값, `pid`(양의 정수 또는 `null`)뿐인 객체가 아닌 값은 plugin의 오류다. 그 탭은 프로그램 상태가 없고, 워크벤치는 창의 오류 banner에 오류 표시 경로로 `<plugin> exposes <status> on tab <tab>: program value <value> is not null or an object with only the members state and pid, where state is one of idle, working, blocked and pid is a positive integer or null` 글을 원인 `program <tab>`과 함께 보인다. `<value>`는 값의 JSON 글이다. status가 다시 올바른 값을 보고하거나 탭이 창을 떠나면 오류가 사라진다.
+`app`은 plugin이 탭에서 알아본 프로그램의 이름으로, `claude-code`나 `codex`처럼 1자에서 64자의 글이거나, plugin이 이름을 정하지 않으면 `null`이다. view는 사람이 shell에서 시작한 프로그램처럼 선언된 program 없이 탭이 실행하는 프로그램의 이름으로 그것을 보인다.
+
+`null`도 아니고 member가 `state`(세 값 중 하나), `pid`(양의 정수 또는 `null`), `app`(1자에서 64자의 글 또는 `null`)뿐인 객체가 아닌 값은 plugin의 오류다. 그 탭은 프로그램 상태가 없고, 워크벤치는 창의 오류 banner에 오류 표시 경로로 `<plugin> exposes <status> on tab <tab>: program value <value> is not null or an object with only the members state, pid and app, where state is one of idle, working, blocked, pid is a positive integer or null and app is a text of 1 to 64 characters or null` 글을 원인 `program <tab>`과 함께 보인다. `<value>`는 값의 JSON 글이다. status가 다시 올바른 값을 보고하거나 탭이 창을 떠나면 오류가 사라진다.
 
 ## 따라가기
 
@@ -38,4 +40,4 @@ status의 값은 탭에 프로그램 상태가 없을 때 `null`이고, 그렇�
 
 ## 보고
 
-`core.grid`는 내용 카드의 각 탭에 대해 `cards[].tabs[]`의 `program`을 보고한다([group](groups.ko.md#모델)). 값은 탭의 status 값과 같은 `{state, pid}`이거나, 탭에 프로그램 상태가 없으면 `null`이다. 두 워크벤치에서 이 member의 뜻은 같다. plugin은 core status인 `core.grid`에서 어느 plugin 탭의 프로그램 상태든 읽으며, view는 그것을 읽으려고 선언을 두지 않는다.
+`core.grid`는 내용 카드의 각 탭에 대해 `cards[].tabs[]`의 `program`을 보고한다([group](groups.ko.md#모델)). 값은 탭의 status 값과 같은 `{state, pid, app}`이거나, 탭에 프로그램 상태가 없으면 `null`이다. 두 워크벤치에서 이 member의 뜻은 같다. plugin은 core status인 `core.grid`에서 어느 plugin 탭의 프로그램 상태든 읽으며, view는 그것을 읽으려고 선언을 두지 않는다.

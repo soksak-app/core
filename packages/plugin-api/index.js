@@ -362,7 +362,7 @@ export const PROGRAM_STATES = Object.freeze(["idle", "working", "blocked"]);
 
 /**
  * Checks surface.program: the name of a status of exposes whose schema is of type object and null, requires state, gives state the
- * three program states, and declares pid as an integer or null (docs/spec/program-state.md#declaration).
+ * three program states, and declares pid as an integer or null and app as a string or null (docs/spec/program-state.md#declaration).
  */
 function checkProgram(where, program, manifest) {
   if (!isText(program)) throw new Error(`${where}: surface program must be a status name`);
@@ -373,12 +373,14 @@ function checkProgram(where, program, manifest) {
   const types = Array.isArray(schema?.type) ? schema.type : [];
   const states = schema?.properties?.state?.enum;
   const pidTypes = Array.isArray(schema?.properties?.pid?.type) ? schema.properties.pid.type : [];
+  const appTypes = Array.isArray(schema?.properties?.app?.type) ? schema.properties.app.type : [];
   const valid = isObject(schema) && types.length === 2 && types.includes("object") && types.includes("null") &&
     Array.isArray(schema.required) && schema.required.includes("state") && Array.isArray(states) && states.length === PROGRAM_STATES.length &&
     PROGRAM_STATES.every((state) => states.includes(state)) &&
-    pidTypes.length === 2 && pidTypes.includes("integer") && pidTypes.includes("null");
+    pidTypes.length === 2 && pidTypes.includes("integer") && pidTypes.includes("null") &&
+    appTypes.length === 2 && appTypes.includes("string") && appTypes.includes("null");
   if (!valid) {
-    throw new Error(`${where}: surface program ${program} must have a schema of type object and null whose state is one of ${PROGRAM_STATES.join(", ")} and whose pid is an integer or null`);
+    throw new Error(`${where}: surface program ${program} must have a schema of type object and null whose state is one of ${PROGRAM_STATES.join(", ")}, whose pid is an integer or null and whose app is a string or null`);
   }
 }
 

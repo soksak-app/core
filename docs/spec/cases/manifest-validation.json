@@ -4283,11 +4283,31 @@
             },
             "height": "fill",
             "actions": [
-              {"icon": "plus", "label": "Add", "command": "probe.add"},
-              {"icon": "plus", "label": "Add", "command": "probe.add"},
-              {"icon": "plus", "label": "Add", "command": "probe.add"},
-              {"icon": "plus", "label": "Add", "command": "probe.add"},
-              {"icon": "plus", "label": "Add", "command": "probe.add"}
+              {
+                "icon": "plus",
+                "label": "Add",
+                "command": "probe.add"
+              },
+              {
+                "icon": "plus",
+                "label": "Add",
+                "command": "probe.add"
+              },
+              {
+                "icon": "plus",
+                "label": "Add",
+                "command": "probe.add"
+              },
+              {
+                "icon": "plus",
+                "label": "Add",
+                "command": "probe.add"
+              },
+              {
+                "icon": "plus",
+                "label": "Add",
+                "command": "probe.add"
+              }
             ]
           }
         ]
@@ -4328,7 +4348,9 @@
               "page": "ui/page.html"
             },
             "height": "fill",
-            "actions": ["plus"]
+            "actions": [
+              "plus"
+            ]
           }
         ]
       },
@@ -4369,7 +4391,12 @@
             },
             "height": "fill",
             "actions": [
-              {"icon": "plus", "label": "Add", "command": "probe.add", "x": 1}
+              {
+                "icon": "plus",
+                "label": "Add",
+                "command": "probe.add",
+                "x": 1
+              }
             ]
           }
         ]
@@ -4411,7 +4438,11 @@
             },
             "height": "fill",
             "actions": [
-              {"icon": "trash", "label": "Add", "command": "probe.add"}
+              {
+                "icon": "trash",
+                "label": "Add",
+                "command": "probe.add"
+              }
             ]
           }
         ]
@@ -4453,7 +4484,11 @@
             },
             "height": "fill",
             "actions": [
-              {"icon": "plus", "label": "", "command": "probe.add"}
+              {
+                "icon": "plus",
+                "label": "",
+                "command": "probe.add"
+              }
             ]
           }
         ]
@@ -4495,7 +4530,11 @@
             },
             "height": "fill",
             "actions": [
-              {"icon": "plus", "label": "01234567890123456789012345678901234567890", "command": "probe.add"}
+              {
+                "icon": "plus",
+                "label": "01234567890123456789012345678901234567890",
+                "command": "probe.add"
+              }
             ]
           }
         ]
@@ -4537,7 +4576,11 @@
             },
             "height": "fill",
             "actions": [
-              {"icon": "plus", "label": "Add", "command": "probe.missing"}
+              {
+                "icon": "plus",
+                "label": "Add",
+                "command": "probe.missing"
+              }
             ]
           }
         ]
@@ -4567,7 +4610,9 @@
                     "type": "string"
                   }
                 },
-                "required": ["path"]
+                "required": [
+                  "path"
+                ]
               },
               "result": {
                 "type": "object"
@@ -4585,7 +4630,11 @@
             },
             "height": "fill",
             "actions": [
-              {"icon": "plus", "label": "Add", "command": "probe.add"}
+              {
+                "icon": "plus",
+                "label": "Add",
+                "command": "probe.add"
+              }
             ]
           }
         ]
@@ -4627,10 +4676,26 @@
             },
             "height": "fill",
             "actions": [
-              {"icon": "plus", "label": "Add", "command": "probe.add"},
-              {"icon": "plus", "label": "Add another", "command": "probe.add"},
-              {"icon": "settings", "label": "0123456789012345678901234567890123456789", "command": "probe.add"},
-              {"icon": "more", "label": "More", "command": "probe.add"}
+              {
+                "icon": "plus",
+                "label": "Add",
+                "command": "probe.add"
+              },
+              {
+                "icon": "plus",
+                "label": "Add another",
+                "command": "probe.add"
+              },
+              {
+                "icon": "settings",
+                "label": "0123456789012345678901234567890123456789",
+                "command": "probe.add"
+              },
+              {
+                "icon": "more",
+                "label": "More",
+                "command": "probe.add"
+              }
             ]
           }
         ]
@@ -7954,6 +8019,12 @@
                       "integer",
                       "null"
                     ]
+                  },
+                  "app": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 }
               }
@@ -8131,6 +8202,12 @@
                       "integer",
                       "null"
                     ]
+                  },
+                  "app": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 }
               }
@@ -8139,7 +8216,7 @@
         }
       },
       "accepted": false,
-      "error": "plugin probe: surface program probe.s must have a schema of type object and null whose state is one of idle, working, blocked and whose pid is an integer or null",
+      "error": "plugin probe: surface program probe.s must have a schema of type object and null whose state is one of idle, working, blocked, whose pid is an integer or null and whose app is a string or null",
       "packageFiles": [
         "plugin.json",
         "ui/page.html"
@@ -8186,6 +8263,12 @@
                       "integer",
                       "null"
                     ]
+                  },
+                  "app": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 }
               }
@@ -8194,7 +8277,7 @@
         }
       },
       "accepted": false,
-      "error": "plugin probe: surface program probe.s must have a schema of type object and null whose state is one of idle, working, blocked and whose pid is an integer or null",
+      "error": "plugin probe: surface program probe.s must have a schema of type object and null whose state is one of idle, working, blocked, whose pid is an integer or null and whose app is a string or null",
       "packageFiles": [
         "plugin.json",
         "ui/page.html"
@@ -8239,6 +8322,12 @@
                       "integer",
                       "null"
                     ]
+                  },
+                  "app": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 }
               }
@@ -8247,7 +8336,7 @@
         }
       },
       "accepted": false,
-      "error": "plugin probe: surface program probe.s must have a schema of type object and null whose state is one of idle, working, blocked and whose pid is an integer or null",
+      "error": "plugin probe: surface program probe.s must have a schema of type object and null whose state is one of idle, working, blocked, whose pid is an integer or null and whose app is a string or null",
       "packageFiles": [
         "plugin.json",
         "ui/page.html"
@@ -8289,6 +8378,12 @@
                       "working",
                       "blocked"
                     ]
+                  },
+                  "app": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 }
               }
@@ -8297,7 +8392,7 @@
         }
       },
       "accepted": false,
-      "error": "plugin probe: surface program probe.s must have a schema of type object and null whose state is one of idle, working, blocked and whose pid is an integer or null",
+      "error": "plugin probe: surface program probe.s must have a schema of type object and null whose state is one of idle, working, blocked, whose pid is an integer or null and whose app is a string or null",
       "packageFiles": [
         "plugin.json",
         "ui/page.html"
@@ -8345,6 +8440,12 @@
                       "string",
                       "null"
                     ]
+                  },
+                  "app": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 }
               }
@@ -8353,7 +8454,7 @@
         }
       },
       "accepted": false,
-      "error": "plugin probe: surface program probe.s must have a schema of type object and null whose state is one of idle, working, blocked and whose pid is an integer or null",
+      "error": "plugin probe: surface program probe.s must have a schema of type object and null whose state is one of idle, working, blocked, whose pid is an integer or null and whose app is a string or null",
       "packageFiles": [
         "plugin.json",
         "ui/page.html"
@@ -8400,6 +8501,12 @@
                     "type": [
                       "integer"
                     ]
+                  },
+                  "app": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 }
               }
@@ -8408,11 +8515,128 @@
         }
       },
       "accepted": false,
-      "error": "plugin probe: surface program probe.s must have a schema of type object and null whose state is one of idle, working, blocked and whose pid is an integer or null",
+      "error": "plugin probe: surface program probe.s must have a schema of type object and null whose state is one of idle, working, blocked, whose pid is an integer or null and whose app is a string or null",
       "packageFiles": [
         "plugin.json",
         "ui/page.html"
       ]
+    },
+    {
+      "id": "surface.refuses-program-schema-without-app",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "program": "probe.s"
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "required": [
+                  "state"
+                ],
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "idle",
+                      "working",
+                      "blocked"
+                    ]
+                  },
+                  "pid": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ],
+      "accepted": false,
+      "error": "plugin probe: surface program probe.s must have a schema of type object and null whose state is one of idle, working, blocked, whose pid is an integer or null and whose app is a string or null"
+    },
+    {
+      "id": "surface.refuses-program-app-without-null",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "program": "probe.s"
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "required": [
+                  "state"
+                ],
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "idle",
+                      "working",
+                      "blocked"
+                    ]
+                  },
+                  "pid": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "app": {
+                    "type": [
+                      "string"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ],
+      "error": "plugin probe: surface program probe.s must have a schema of type object and null whose state is one of idle, working, blocked, whose pid is an integer or null and whose app is a string or null"
     }
   ]
 }

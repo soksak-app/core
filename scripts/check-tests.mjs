@@ -1660,6 +1660,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1133",
+    implementation: [
+      { file: "packages/workbench/activity.js", symbol: "export function tabProgram(plugin, status, tab, value) {" },
+      { file: "packages/workbench-mygo/src/activity.go", symbol: "func TabProgram(plugin, status, tab string, value any) (*ProgramState, error) {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/program-follow.test.mjs", id: "tabProgram gives the state, the pid and the app of an object with the members state, pid and app, none for null, and the text for another value" },
+      { file: "packages/workbench-mygo/tests/program_test.go", id: "TestTabProgramCases" },
+    ],
+    expected: "The program state of a tab carries the name of the program, which core.grid reports for each tab.",
+    levels: ["unit"],
+  },
+  {
     id: "F1115",
     implementation: [
       { file: "packages/host/go/src/endpoint.go", symbol: "func (e *Endpoint) pageRequest(ctx context.Context, window, method string, params json.RawMessage) (json.RawMessage, error) {" },
@@ -2115,7 +2128,7 @@ const FEATURE_LINKS = [
       { file: "packages/plugin-api/test/manifest-validation.test.mjs", id: "manifest validation" },
       { file: "packages/sok/go/tests/manifest_cases_test.go", id: "TestPluginInstallReplaysTheManifestCases" },
       { file: "packages/sok/rust/tests/manifest_cases_test.rs", id: "plugin_install_replays_the_manifest_cases" },
-      { file: "packages/workbench/test/program-follow.test.mjs", id: "tabProgram gives the state and the pid of an object with the members state and pid, none for null, and the text for another value" },
+      { file: "packages/workbench/test/program-follow.test.mjs", id: "tabProgram gives the state, the pid and the app of an object with the members state, pid and app, none for null, and the text for another value" },
       { file: "packages/workbench/test/program-follow.test.mjs", id: "the program state of a tab follows the watch of its surface, which starts when the tab shows and ends when the tab leaves" },
       { file: "packages/workbench-mygo/tests/program_test.go", id: "TestTabProgramCases" },
       { file: "packages/workbench-mygo/tests/program_test.go", id: "TestTheProgramStateOfATabFollowsTheWatchOfItsSurface" },

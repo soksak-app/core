@@ -1031,14 +1031,17 @@ func checkProgram(where string, raw any, manifest map[string]any) error {
 	states, _ := state["enum"].([]any)                     // default: absent or of another type is empty, which the shape check refuses.
 	pid, _ := properties["pid"].(map[string]any)           // default: absent or of another type is empty, which the shape check refuses.
 	pidTypes, _ := pid["type"].([]any)                     // default: absent or of another type is empty, which the shape check refuses.
+	app, _ := properties["app"].(map[string]any)           // default: absent or of another type is empty, which the shape check refuses.
+	appTypes, _ := app["type"].([]any)                     // default: absent or of another type is empty, which the shape check refuses.
 	valid := len(types) == 2 && slices.Contains(types, any("object")) && slices.Contains(types, any("null")) &&
 		slices.Contains(required, any("state")) && len(states) == len(programStates) &&
-		len(pidTypes) == 2 && slices.Contains(pidTypes, any("integer")) && slices.Contains(pidTypes, any("null"))
+		len(pidTypes) == 2 && slices.Contains(pidTypes, any("integer")) && slices.Contains(pidTypes, any("null")) &&
+		len(appTypes) == 2 && slices.Contains(appTypes, any("string")) && slices.Contains(appTypes, any("null"))
 	for _, want := range programStates {
 		valid = valid && slices.Contains(states, any(want))
 	}
 	if !valid {
-		return fmt.Errorf("%s: surface program %s must have a schema of type object and null whose state is one of %s and whose pid is an integer or null",
+		return fmt.Errorf("%s: surface program %s must have a schema of type object and null whose state is one of %s, whose pid is an integer or null and whose app is a string or null",
 			where, name, strings.Join(programStates, ", "))
 	}
 	return nil

@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1133: The program state of a tab carries `app`, the name of the program, and `core.grid` reports it; the manifest readers require `properties.app`.
 - F1132: The repository checks pass for F1127, F1130 and F1131: feature links, stated default reasons, contract lines and the recorded element names.
 - F1131: `core.sessions` lists the `params` of each owned session, which the service stores and lists, so a view tells the program and the role of a session.
 - F1127: A sidebar section declares header actions, which the manifest readers check and the workbench draws as buttons at the right end of the section header.

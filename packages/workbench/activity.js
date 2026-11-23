@@ -284,7 +284,8 @@ export const PROGRAM_STATES = Object.freeze(["idle", "working", "blocked"]);
 
 /**
  * The program state of the tab tab from the value that its surface reports for the program status of plugin: an object whose only
- * members are state, one of the program states, and pid, a positive integer or null, gives {state, pid}, and null gives none
+ * members are state, one of the program states, pid, a positive integer or null, and app, a text of 1 to 64 characters or null, gives
+ * {state, pid, app}, and null gives none
  * (docs/spec/program-state.md#value). Returns {program, error}: error is the text of any other value, which gives no program state, or null.
  */
 export function tabProgram(plugin, status, tab, value) {
@@ -292,12 +293,14 @@ export function tabProgram(plugin, status, tab, value) {
   if (value === null) return { program: null, error: null };
   const keys = typeof value === "object" && !Array.isArray(value) ? Object.keys(value).sort() : [];
   const pidValid = value?.pid === null || (Number.isInteger(value?.pid) && value.pid > 0);
-  if (keys.length === 2 && keys[0] === "pid" && keys[1] === "state" && PROGRAM_STATES.includes(value.state) && pidValid) {
-    return { program: { state: value.state, pid: value.pid }, error: null };
+  const appValid = value?.app === null || (typeof value?.app === "string" && [...value.app].length >= 1 && [...value.app].length <= 64);
+  if (keys.length === 3 && keys[0] === "app" && keys[1] === "pid" && keys[2] === "state" && PROGRAM_STATES.includes(value.state) && pidValid &&
+    appValid) {
+    return { program: { state: value.state, pid: value.pid, app: value.app }, error: null };
   }
   return {
     program: null,
-    error: `${plugin} exposes ${status} on tab ${tab}: program value ${JSON.stringify(value)} is not null or an object with only the members state and pid, where state is one of ${PROGRAM_STATES.join(", ")} and pid is a positive integer or null`,
+    error: `${plugin} exposes ${status} on tab ${tab}: program value ${JSON.stringify(value)} is not null or an object with only the members state, pid and app, where state is one of ${PROGRAM_STATES.join(", ")}, pid is a positive integer or null and app is a text of 1 to 64 characters or null`,
   };
 }
 

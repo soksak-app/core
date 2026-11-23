@@ -632,6 +632,12 @@ fn check_program(where_: &str, raw: &Value, manifest: &Map<String, Value>) -> Re
         .and_then(|pid| pid.get("type"))
         .and_then(Value::as_array)
         .map_or(&[][..], Vec::as_slice);
+    let app_types = schema
+        .and_then(|schema| schema.get("properties"))
+        .and_then(|properties| properties.get("app"))
+        .and_then(|app| app.get("type"))
+        .and_then(Value::as_array)
+        .map_or(&[][..], Vec::as_slice);
     let valid = types.len() == 2
         && has_text(types, "object")
         && has_text(types, "null")
@@ -640,10 +646,13 @@ fn check_program(where_: &str, raw: &Value, manifest: &Map<String, Value>) -> Re
         && PROGRAM_STATES.iter().all(|want| has_text(states, want))
         && pid_types.len() == 2
         && has_text(pid_types, "integer")
-        && has_text(pid_types, "null");
+        && has_text(pid_types, "null")
+        && app_types.len() == 2
+        && has_text(app_types, "string")
+        && has_text(app_types, "null");
     if !valid {
         return Err(format!(
-            "{where_}: surface program {name} must have a schema of type object and null whose state is one of {} and whose pid is an integer or null",
+            "{where_}: surface program {name} must have a schema of type object and null whose state is one of {}, whose pid is an integer or null and whose app is a string or null",
             PROGRAM_STATES.join(", ")
         ));
     }

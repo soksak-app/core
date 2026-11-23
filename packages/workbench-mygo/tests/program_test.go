@@ -10,24 +10,26 @@ import (
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
-// TestTabProgramCases states the program state of a tab from a value: an object whose only members are state and pid, null for none, and
+// TestTabProgramCases states the program state of a tab from a value: an object whose only members are state, pid and app, null for none, and
 // the error text for any other value.
 func TestTabProgramCases(t *testing.T) {
 	const status = "textprobe.program"
-	const errSuffix = ` is not null or an object with only the members state and pid, where state is one of idle, working, blocked and pid is a positive integer or null`
+	const errSuffix = ` is not null or an object with only the members state, pid and app, where state is one of idle, working, blocked, pid is a positive integer or null and app is a text of 1 to 64 characters or null`
 	for _, c := range []struct {
 		value   string
 		want    string
 		errText string
 	}{
-		{`{"state":"blocked","pid":42}`, `{"state":"blocked","pid":42}`, ""},
-		{`{"state":"idle","pid":null}`, `{"state":"idle","pid":null}`, ""},
+		{`{"state":"blocked","pid":42,"app":"codex"}`, `{"state":"blocked","pid":42,"app":"codex"}`, ""},
+		{`{"state":"idle","pid":null,"app":null}`, `{"state":"idle","pid":null,"app":null}`, ""},
+		{`{"state":"idle","pid":7}`, ``, `textprobe exposes textprobe.program on tab tab-a: program value {"pid":7,"state":"idle"}` + errSuffix},
+		{`{"state":"idle","pid":7,"app":""}`, ``, `textprobe exposes textprobe.program on tab tab-a: program value {"app":"","pid":7,"state":"idle"}` + errSuffix},
 		{`null`, `null`, ""},
 		{`{"state":"busy","pid":1}`, ``, `textprobe exposes textprobe.program on tab tab-a: program value {"pid":1,"state":"busy"}` + errSuffix},
 		{`{"state":"idle"}`, ``, `textprobe exposes textprobe.program on tab tab-a: program value {"state":"idle"}` + errSuffix},
 		{`{"state":"idle","pid":0}`, ``, `textprobe exposes textprobe.program on tab tab-a: program value {"pid":0,"state":"idle"}` + errSuffix},
 		{`{"state":"idle","pid":1.5}`, ``, `textprobe exposes textprobe.program on tab tab-a: program value {"pid":1.5,"state":"idle"}` + errSuffix},
-		{`{"state":"idle","pid":1,"extra":1}`, ``, `textprobe exposes textprobe.program on tab tab-a: program value {"extra":1,"pid":1,"state":"idle"}` + errSuffix},
+		{`{"state":"idle","pid":1,"app":"codex","extra":1}`, ``, `textprobe exposes textprobe.program on tab tab-a: program value {"app":"codex","extra":1,"pid":1,"state":"idle"}` + errSuffix},
 		{`"working"`, ``, `textprobe exposes textprobe.program on tab tab-a: program value "working"` + errSuffix},
 	} {
 		var value any
@@ -60,7 +62,7 @@ func TestTheProgramStateOfATabFollowsTheWatchOfItsSurface(t *testing.T) {
 	f.reply = func(map[string]any) (any, error) { return nil, nil }
 	if err := f.registry.Declare("programprobe", workbench.Exposes{Status: []json.RawMessage{json.RawMessage(`{"name": "programprobe.program",
 		"description": "the program state", "schema": {"type": ["object", "null"], "required": ["state"],
-		"properties": {"state": {"type": "string", "enum": ["idle", "working", "blocked"]}, "pid": {"type": ["integer", "null"]}}}}`)}}); err != nil {
+		"properties": {"state": {"type": "string", "enum": ["idle", "working", "blocked"]}, "pid": {"type": ["integer", "null"]}, "app": {"type": ["string", "null"]}}}}`)}}); err != nil {
 		t.Fatal(err)
 	}
 	f.plugins["tab-a"] = "programprobe"
@@ -86,19 +88,19 @@ func TestTheProgramStateOfATabFollowsTheWatchOfItsSurface(t *testing.T) {
 	if got := follow.Programs(); len(got) != 0 {
 		t.Fatalf("a program state before a value is %v", got)
 	}
-	f.deliver("tab-a", "programprobe.program", `{"state":"working","pid":101}`, 1)
+	f.deliver("tab-a", "programprobe.program", `{"state":"working","pid":101,"app":"codex"}`, 1)
 	if got := follow.Programs()["tab-a"]; got == nil || got.State != "working" || got.Pid == nil || *got.Pid != 101 {
 		t.Fatalf("the program state after working is %+v", got)
 	}
 	f.deliver("tab-a", "programprobe.program", `{"state":"busy","pid":101}`, 2)
-	want := `programprobe exposes programprobe.program on tab tab-a: program value {"pid":101,"state":"busy"} is not null or an object with only the members state and pid, where state is one of idle, working, blocked and pid is a positive integer or null`
+	want := `programprobe exposes programprobe.program on tab tab-a: program value {"pid":101,"state":"busy"} is not null or an object with only the members state, pid and app, where state is one of idle, working, blocked, pid is a positive integer or null and app is a text of 1 to 64 characters or null`
 	if !slices.Equal(shown[len(shown)-1:], [][2]string{{"tab-a", want}}) {
 		t.Fatalf("the shown program errors are %q", shown)
 	}
 	if got := follow.Programs(); len(got) != 0 {
 		t.Fatalf("an invalid value gives the tab no program state, got %v", got)
 	}
-	f.deliver("tab-a", "programprobe.program", `{"state":"blocked","pid":null}`, 3)
+	f.deliver("tab-a", "programprobe.program", `{"state":"blocked","pid":null,"app":null}`, 3)
 	if got := follow.Programs()["tab-a"]; got == nil || got.State != "blocked" || got.Pid != nil {
 		t.Fatalf("the program state after blocked is %+v", got)
 	}

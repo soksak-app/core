@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -244,31 +245,33 @@ type activityTab struct {
 // ProgramState is the program state of a tab (docs/spec/program-state.md#value) as core.grid reports it: the state, and the process id of
 // the foreground program of the tab, or nil when the tab runs no program.
 type ProgramState struct {
-	State string `json:"state"`
-	Pid   *int64 `json:"pid"`
+	State string  `json:"state"`
+	Pid   *int64  `json:"pid"`
+	App   *string `json:"app"`
 }
 
 // programStates are the program states from the first to the last (docs/spec/program-state.md#value).
 var programStates = []string{"idle", "working", "blocked"}
 
 // TabProgram is the program state of the tab tab from the value that its surface reports for the program status status of plugin: an
-// object whose only members are state, one of the program states, and pid, a positive integer or null, gives that state and pid, and
-// null gives none. Another value gives an error with the text of docs/spec/program-state.md#value, where the JSON text of the value has
+// object whose only members are state, one of the program states, pid, a positive integer or null, and app, a text of 1 to 64
+// characters or null, gives that state, pid and app, and null gives none. Another value gives an error with the text of docs/spec/program-state.md#value, where the JSON text of the value has
 // its members in code point order.
 func TabProgram(plugin, status, tab string, value any) (*ProgramState, error) {
 	if value == nil {
 		return nil, nil
 	}
-	if object, ok := value.(map[string]any); ok && len(object) == 2 {
+	if object, ok := value.(map[string]any); ok && len(object) == 3 {
 		state, isText := object["state"].(string)
-		if pid, hasPid := object["pid"]; hasPid && isText && slices.Contains(programStates, state) {
+		app, appValid := programApp(object)
+		if pid, hasPid := object["pid"]; hasPid && isText && appValid && slices.Contains(programStates, state) {
 			if pid == nil {
-				return &ProgramState{State: state}, nil
+				return &ProgramState{State: state, App: app}, nil
 			}
 			// default: JSON numbers decode as float64, so a whole number that fits the safe integer range is a process id.
 			if number, isNumber := pid.(float64); isNumber && number >= 1 && number <= 1<<53 && number == math.Trunc(number) {
 				id := int64(number)
-				return &ProgramState{State: state, Pid: &id}, nil
+				return &ProgramState{State: state, Pid: &id, App: app}, nil
 			}
 		}
 	}
@@ -276,7 +279,7 @@ func TabProgram(plugin, status, tab string, value any) (*ProgramState, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s exposes %s on tab %s: program value: %w", plugin, status, tab, err)
 	}
-	return nil, fmt.Errorf("%s exposes %s on tab %s: program value %s is not null or an object with only the members state and pid, where state is one of %s and pid is a positive integer or null",
+	return nil, fmt.Errorf("%s exposes %s on tab %s: program value %s is not null or an object with only the members state, pid and app, where state is one of %s, pid is a positive integer or null and app is a text of 1 to 64 characters or null",
 		plugin, status, tab, text, strings.Join(programStates, ", "))
 }
 
@@ -640,4 +643,21 @@ func (s *Shell) activityError(tab, text string) {
 		s.errors.ShowFrom(workbenchErrorPlace, "activity "+tab, text, "")
 	}
 	s.options.Invalidate()
+}
+
+// programApp reads the member app of a program value: a text of 1 to 64 characters or null, and whether the member holds one of them
+// (docs/spec/program-state.md#value).
+func programApp(object map[string]any) (*string, bool) {
+	value, present := object["app"]
+	if !present {
+		return nil, false
+	}
+	if value == nil {
+		return nil, true
+	}
+	text, isText := value.(string)
+	if !isText || utf8.RuneCountInString(text) < 1 || utf8.RuneCountInString(text) > 64 {
+		return nil, false
+	}
+	return &text, true
 }

@@ -108,7 +108,7 @@ plugin 동작의 창 검사는 그 plugin의 repository에서 실행된다([검�
 
 `surface.drop`이 있으면 파일이 표면에 놓였을 때 페이지가 그 표면에서 실행할 `exposes`의 명령을 가리키며, `{urls}`에 놓인 파일 URL을 담는다([네이티브 표면](native-surfaces.ko.md#네이티브-뷰-위의-입력)).
 
-`surface.program`이 있으면 plugin의 `exposes.status` 중 탭의 프로그램 상태를 값으로 담는 status를 가리킨다. 값은 `{state, pid}`이거나 `null`이며, `state`는 `idle`, `working`, `blocked`, `pid`는 foreground 프로그램의 process id 또는 `null`이고, 각 창은 그것을 탭마다 `core.grid`에 보고한다([프로그램 상태](program-state.ko.md)).
+`surface.program`이 있으면 plugin의 `exposes.status` 중 탭의 프로그램 상태를 값으로 담는 status를 가리킨다. 값은 `{state, pid, app}`이거나 `null`이며, `state`는 `idle`, `working`, `blocked`, `pid`는 foreground 프로그램의 process id 또는 `null`, `app`은 프로그램의 이름 또는 `null`이고, 각 창은 그것을 탭마다 `core.grid`에 보고한다([프로그램 상태](program-state.ko.md)).
 
 `surface.composition`은 `{ "kind": "view", "page": "<path>" }` 선언이며 `regions`와 `overlays`를 추가로 가질 수 있다([view 표면](#view-표면)). 그림 영역은 `dependencies`에 이미 나열한 사이드카를 지정하고 표시 방식 `present`를 `copy`나 `lease`로 선언한다([그림 영역](native-surfaces.ko.md#그림-영역)). manifest 선언은 호스트에 전달하는 권한 데이터다. 페이지 코드는 선언에 없는 영역, 공급자, 입력 소유자, 쌓임 항목을 추가할 수 없다. `kind: "hybrid"`와 `kind: "dom"`은 제거되었다. reader는 두 종류를 plugin과 필드 `surface.composition`을 밝힌 오류로 거부하며, `surface.module`은 `plugin <id>: surface module is removed; a surface is a view`로 거부한다.
 

@@ -437,9 +437,10 @@
                           "type": ["object", "null"],
                           "properties": {
                             "state": { "enum": ["idle", "working", "blocked"] },
-                            "pid": { "type": ["integer", "null"] }
+                            "pid": { "type": ["integer", "null"] },
+                            "app": { "type": ["string", "null"], "minLength": 1, "maxLength": 64 }
                           },
-                          "required": ["state", "pid"]
+                          "required": ["state", "pid", "app"]
                         }
                       }
                     }
