@@ -307,7 +307,7 @@ const FEATURE_LINKS = [
   {
     id: "F1108-2",
     implementation: [
-      { file: "packages/plugin-api/view.js", symbol: "const recordTheme = (source, theme) => writeLog(\"info\", \"page.theme.applied\", { scheme: theme.scheme, source });" },
+      { file: "packages/plugin-api/view.js", symbol: "const recordTheme = (source, theme) => {" },
       { file: "packages/host/go/src/documents.go", symbol: "func recordThemeDeferred(surface string) {" },
       { file: "packages/host/rust/src/documents.rs", symbol: "pub(crate) fn record_theme_deferred(surface: &str) {" },
       { file: "packages/host/go/src/event_relay.go", symbol: "case \"page.theme.applied\":" },

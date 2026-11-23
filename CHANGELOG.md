@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1108-5: The view emits `page.theme.applied` through `batcher.emit` with its literal name, so the event catalog check finds its emit site. Verification: Red of `make check-events` in the release run, then Green with the structure checks and the plugin-api suite.
 - F1110-1: The test framework of the Go window tests has a `Quit`, so a test that closes the only window of its host ends instead of panicking in the quit that F1110 asks for. Verification: Red of three window tests on main, then Green (450 of 450).
 - F1112: The Go host reads the `programs` member of each surface of the sync request and checks each program run against it, as the Rust host does; before, it read `programs` from the start declarations of the view, which hold only the exposes, and refused every run with `program <name> is not declared by <plugin>`. Verification: Red of the Go sync test with the earlier reading, then Green of the Go and Rust tests of `program.run.reads-the-programs-of-the-sync-surface`.
 - F1111: `host.window.raise` orders the window through the implementation of AppKit, so a raise of the virtual key window puts it in front of the windows of other applications; before, the refusal of the own orders of the virtual key window also refused the raise, which still answered success. Verification: Red of `window_order_test` with a window of another process in front of the virtual key window, then Green with `input_virtual_test` and `window_facts_test`.

@@ -219,7 +219,8 @@ export function createViewBridge({ handler, report }) {
   // The identifiers of the operations that start in this view page (docs/spec/logging.md#operation-chains).
   const nextOperationCids = createOperationCids(window.sokView.page);
   let batcher = null;
-  const writeLog = (level, event, fields, cids) => {
+  // Creates the batcher of the view at the first record and starts it with page.start.
+  const writer = () => {
     if (batcher === null) {
       batcher = createEventBatcher({
         call: (request) => calls.request("runtime.log", request),
@@ -229,12 +230,18 @@ export function createViewBridge({ handler, report }) {
       });
       batcher.emit("info", "page.start", { time_origin: window.sokView.timeOrigin, url: window.location.href });
     }
+  };
+  const writeLog = (level, event, fields, cids) => {
+    writer();
     // events: forwarded
     batcher.emit(level, event, fields, cids);
   };
   // Each theme that the view applies is recorded with its scheme and its source, the start script or a theme message of the host, so
   // a query compares the scheme of each view with the scheme of its window (docs/spec/native-surfaces.md#view-surfaces).
-  const recordTheme = (source, theme) => writeLog("info", "page.theme.applied", { scheme: theme.scheme, source });
+  const recordTheme = (source, theme) => {
+    writer();
+    batcher.emit("info", "page.theme.applied", { scheme: theme.scheme, source });
+  };
   recordTheme("start", window.sokTheme);
   // The records of a view name no surface: the host adds the surface that it binds to the view channel and refuses a record that
   // names one (docs/spec/logging.md#view-record-delivery).
