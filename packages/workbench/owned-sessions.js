@@ -67,8 +67,8 @@ function sessionReply(where, reply, session) {
 const PROGRAM_STATES = ["idle", "working", "blocked"];
 
 /** The status core.sessions: each open session with its plugin, owner surface, showing tab (or null) and program state (or null). */
-export const ownedSessionsState = () => [...sessions.values()].map(({ session, plugin: id, owner, shownBy, program }) =>
-  ({ session, plugin: id, owner, shownBy, program }));
+export const ownedSessionsState = () => [...sessions.values()].map(({ session, plugin: id, owner, shownBy, program, params }) =>
+  ({ session, plugin: id, owner, shownBy, program, params }));
 
 /**
  * core.session.open: the caller surface opens a session of its plugin with the size and the params. The page names the session with a
@@ -88,7 +88,7 @@ export async function openOwnedSession({ plugin: id, params, size }, surface) {
   if (typeof reply?.session !== "string" || reply.session === "" || reply.creation !== creation) {
     throw new Error(`core.session.open: the sidecar reply names no session of creation ${creation}`);
   }
-  sessions.set(reply.session, { session: reply.session, plugin: id, owner: surface, shownBy: null, program: null, sidecar, size: sizeBody(size), pending: null });
+  sessions.set(reply.session, { session: reply.session, plugin: id, owner: surface, shownBy: null, program: null, params: params ?? null, sidecar, size: sizeBody(size), pending: null });
   listenOwner(surface, windowSidecar(sidecar));
   emitEvent("info", "workbench.session.open", { session: reply.session, plugin: id, owner: surface, size: sizeBody(size) });
   return { session: reply.session };
@@ -427,7 +427,7 @@ export async function reconcileOwnedSessions() {
         if (declared && tabs.has(item.surface)) {
           // A program reports its state only when it changes, so the adopted session takes the state that the sidecar kept.
           const program = item.program === null ? null : { state: item.program };
-          sessions.set(item.session, { session: item.session, plugin: item.plugin, owner: item.surface, shownBy: null, program, sidecar: name, size: sizeBody(item.size), pending: null });
+          sessions.set(item.session, { session: item.session, plugin: item.plugin, owner: item.surface, shownBy: null, program, params: item.params, sidecar: name, size: sizeBody(item.size), pending: null });
           listenOwner(item.surface, windowSidecar(name));
           continue;
         }

@@ -79,7 +79,7 @@ test("a new tab of a layout apply that names a session shows it and sends the si
   const { session } = await openOwnedSession({ plugin: SESSION, params: { name: "agent" }, size: OPEN_SIZE }, OWNER);
   const applied = plane.applyInLayout(tree(session), applySessionCheck, applySessionShow);
   const shown = applied.cards[1].tabs[0].tab;
-  assert.deepEqual(ownedSessionsState(), [{ session, plugin: SESSION, owner: OWNER, shownBy: shown, program: null }]);
+  assert.deepEqual(ownedSessionsState(), [{ session, plugin: SESSION, owner: OWNER, shownBy: shown, program: null, params: { name: "agent" } }]);
   await endOwnedSession({ session }, OWNER);
   await flushEvents();
   assert.deepEqual(wire.calls.filter(({ name }) => name === "sidecarSend").map(({ payload }) => payload.body.operation), ["open", "resize", "end"]);

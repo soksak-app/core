@@ -77,7 +77,7 @@ test("the owned session messages open, resize and end a session through the owne
   await startOwnedSessions();
   const opened = await openOwnedSession({ plugin: SESSION, params: { name: "agent" }, size: { width: 640, height: 384, scale: 2 } }, OWNER);
   assert.deepEqual(opened, { session: "ses-1" });
-  assert.deepEqual(ownedSessionsState(), [{ session: "ses-1", plugin: SESSION, owner: OWNER, shownBy: null, program: null }]);
+  assert.deepEqual(ownedSessionsState(), [{ session: "ses-1", plugin: SESSION, owner: OWNER, shownBy: null, program: null, params: { name: "agent" } }]);
   assert.deepEqual(await resizeOwnedSession({ session: "ses-1", size: { width: 1000, height: 600, scale: 2 } }, OWNER),
     { session: "ses-1", size: { width: 1000, height: 600, scale: 2 } });
   // While the host holds a view source of the owner, the request goes through that view with its source generation, because the host

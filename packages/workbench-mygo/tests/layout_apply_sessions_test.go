@@ -52,7 +52,7 @@ func TestALayoutApplyTabThatNamesASessionShowsIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	shown := *applied.Cards[1].Tabs[0].Tab
-	equal(t, f.status("core.sessions"), `[{"owner":"tab-owner","plugin":"term","program":null,"session":"s-1","shownBy":"`+shown+`"}]`)
+	equal(t, f.status("core.sessions"), `[{"owner":"tab-owner","params":{},"plugin":"term","program":null,"session":"s-1","shownBy":"`+shown+`"}]`)
 	// The showing tab gives the session the size of its card at once.
 	sent := owned.sent()[before:]
 	if len(sent) != 1 || sent[0].body["operation"] != "resize" || sent[0].body["session"] != "s-1" {
@@ -66,7 +66,7 @@ func TestALayoutApplyRefusesATabThatNamesASessionThatIsNotOpen(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "session s-9 is not open") {
 		t.Fatalf("the apply answered %v, want the refusal of s-9", err)
 	}
-	equal(t, f.status("core.sessions"), `[{"owner":"tab-owner","plugin":"term","program":null,"session":"s-1","shownBy":null}]`)
+	equal(t, f.status("core.sessions"), `[{"owner":"tab-owner","params":{},"plugin":"term","program":null,"session":"s-1","shownBy":null}]`)
 }
 
 // A card that has no measured frame, such as a card that a fullscreen card hides, gives the session that its tab shows no size and

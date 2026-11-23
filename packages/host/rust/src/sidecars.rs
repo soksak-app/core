@@ -1777,6 +1777,8 @@ pub struct OwnedSession {
     /// The last program state that the program of the session reported, `idle`, `working` or `blocked`, or None while it
     /// reported none.
     pub program: Option<String>,
+    /// The parameters of the open request that the service stores with the session: an object, or null.
+    pub params: Value,
 }
 
 /// The size of an owned session: the width and height of its card in points, and the backing scale of the window.
@@ -1789,7 +1791,7 @@ pub struct OwnedSize {
 
 impl OwnedSession {
     /// Reads one entry of a `sessions` answer, and names the first member that is not a non-empty string, an object of
-    /// positive numbers as `size`, or a program state or null as `program`.
+    /// positive numbers as `size`, a program state or null as `program`, or an object or null as `params`.
     fn from_value(value: &Value) -> Result<OwnedSession, String> {
         let text = |name: &str| {
             value
@@ -1831,6 +1833,12 @@ impl OwnedSession {
                     return Err(
                         "sessions program is not idle, working, blocked or null".to_string()
                     );
+                }
+            },
+            params: match value.get("params") {
+                Some(params @ (Value::Object(_) | Value::Null)) => params.clone(),
+                _ => {
+                    return Err("sessions params is not an object or null".to_string());
                 }
             },
         })

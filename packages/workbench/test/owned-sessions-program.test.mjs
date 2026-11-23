@@ -66,8 +66,8 @@ plane.nameWindow("main");
 test("session.program refuses an invalid state, an unknown session and another owner's session, and publishes the accepted change", async () => {
   await startOwnedSessions();
   assert.deepEqual(ownedSessionsState(), [
-    { session: "ses-keep", plugin: SESSION, owner: OWNER, shownBy: null, program: null },
-    { session: "ses-other", plugin: SESSION, owner: OTHER, shownBy: null, program: null },
+    { session: "ses-keep", plugin: SESSION, owner: OWNER, shownBy: null, program: null, params: { program: "claude", role: "manager-lead" } },
+    { session: "ses-other", plugin: SESSION, owner: OTHER, shownBy: null, program: null, params: null },
   ]);
   // Each refused report is reported and changes no state; the status keeps the state that it had.
   wire.deliverNotice();

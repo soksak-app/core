@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1131: `core.sessions`는 각 owned session의 `params`를 나열하며, 서비스가 그것을 저장하고 나열하므로 view가 session의 program과 role을 안다.
 - F1127: sidebar section은 header action을 선언하고, manifest reader가 그것을 검사하며, workbench는 section header 오른쪽 끝에 버튼으로 그린다.
 - F1130: host의 log policy reader는 write in place가 읽기와 겹치면 다음 알림을 기다리므로, 부분 파일을 거부하지 않는다.
 - F1126-1: Go stop test fixture가 read goroutine처럼 persistent 연결을 읽으므로, 연결의 끝을 기다리는 stop이 끝난다.

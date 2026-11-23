@@ -189,7 +189,8 @@
                 "scale": 2
               },
               "plugin": "fixture-session",
-              "program": null
+              "program": null,
+              "params": {"program": "claude", "role": "manager-lead"}
             }
           ]
         }

@@ -76,6 +76,8 @@ type OwnedSession struct {
 	ShownBy                string
 	// Program is the program state reported by the sidecar (idle, working or blocked), or "" while none is reported.
 	Program string
+	// Params are the decoded parameters of the open request, which the sidecar stores and lists; nil when the open named none.
+	Params any
 }
 
 // OwnedSessions holds the owned sessions of a window (docs/spec/plugins.md#owned-sessions). A session is open from its open reply until
@@ -119,8 +121,14 @@ func (o *OwnedSessions) Open(owner, plugin string, params json.RawMessage, size 
 		answer("", errors.New("size width, height and scale must be positive numbers"))
 		return
 	}
+	// default: an open without params sends null, the value of an absent parameter set, which the sidecar receives unchanged.
 	if len(params) == 0 {
-		params = json.RawMessage("{}")
+		params = json.RawMessage("null")
+	}
+	var decoded any
+	if err := json.Unmarshal(params, &decoded); err != nil {
+		answer("", fmt.Errorf("params of plugin %s are not JSON: %v", plugin, err))
+		return
 	}
 	creation := o.ports.Random()
 	body := map[string]any{"operation": "open", "session": map[string]any{"creation": creation}, "plugin": plugin, "size": size.body(), "params": params}
@@ -141,7 +149,7 @@ func (o *OwnedSessions) Open(owner, plugin string, params json.RawMessage, size 
 			answer("", fmt.Errorf("the open reply of plugin %s names no session of creation %s", plugin, creation))
 			return
 		}
-		o.add(&OwnedSession{Session: answered.Session, Plugin: plugin, Owner: owner, Size: size})
+		o.add(&OwnedSession{Session: answered.Session, Plugin: plugin, Owner: owner, Size: size, Params: decoded})
 		o.ports.Emit("info", "workbench.session.open", map[string]any{"session": answered.Session, "plugin": plugin, "owner": owner, "size": size.body()})
 		o.ports.Changed()
 		answer(answered.Session, nil)
@@ -395,7 +403,8 @@ func (o *OwnedSessions) IsOpen(session string) bool {
 	return o.sessions[session] != nil
 }
 
-// Status returns each open session as {session, plugin, owner, shownBy}, where shownBy is the tab that shows it or nil.
+// Status returns each open session as {session, plugin, owner, shownBy, program, params}, where shownBy is the tab that shows it or nil
+// and params are the parameters of its open (docs/spec/plugins.md#owned-sessions).
 func (o *OwnedSessions) Status() []map[string]any {
 	list := []map[string]any{}
 	for _, id := range o.order {
@@ -408,7 +417,7 @@ func (o *OwnedSessions) Status() []map[string]any {
 		if current.Program != "" {
 			program = map[string]any{"state": current.Program}
 		}
-		list = append(list, map[string]any{"session": current.Session, "plugin": current.Plugin, "owner": current.Owner, "shownBy": shown, "program": program})
+		list = append(list, map[string]any{"session": current.Session, "plugin": current.Plugin, "owner": current.Owner, "shownBy": shown, "program": program, "params": current.Params})
 	}
 	return list
 }
@@ -525,6 +534,8 @@ type ownedEntry struct {
 	Plugin  string `json:"plugin"`
 	// Program is the last program state that the program of the session reported, or nil while it reported none.
 	Program *string `json:"program"`
+	// Params are the parameters of the open request that the sidecar stored with the session; the host refused an entry without them.
+	Params any `json:"params"`
 }
 
 // endAbsent adopts or ends listed[index:] of the sidecar name in order and answers when all of them are done. An entry whose opening plugin
@@ -542,7 +553,7 @@ func (o *OwnedSessions) endAbsent(name string, port OwnedSidecar, listed []owned
 	if !declared || sidecar != name {
 		reason = "plugin-absent"
 	} else if live(item.Surface) {
-		adopted := &OwnedSession{Session: item.Session, Plugin: item.Plugin, Owner: item.Surface, Size: item.Size}
+		adopted := &OwnedSession{Session: item.Session, Plugin: item.Plugin, Owner: item.Surface, Size: item.Size, Params: item.Params}
 		// A program reports its state only when it changes, so the adopted session takes the state that the sidecar kept.
 		if item.Program != nil {
 			adopted.Program = *item.Program

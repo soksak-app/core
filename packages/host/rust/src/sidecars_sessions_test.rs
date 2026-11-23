@@ -100,7 +100,8 @@ fn session_entry(session: &str, surface: &str, width: f64, height: f64) -> serde
         "creation": format!("creation-{session}"),
         "size": {"width": width, "height": height, "scale": 2.0},
         "plugin": "terminal",
-        "program": "idle"
+        "program": "idle",
+        "params": {"program": "claude"}
     })
 }
 
@@ -113,6 +114,11 @@ fn service_sessions_returns_the_sessions_the_service_answers() {
     let entries = vec![
         session_entry("session-1", "tab-a", 800.0, 240.0),
         session_entry("session-2", "tab-b", 1200.0, 400.0),
+        {
+            let mut entry = session_entry("session-3", "tab-c", 800.0, 240.0);
+            entry["params"] = serde_json::Value::Null;
+            entry
+        },
     ];
     let answered = entries.clone();
     let (received, thread) = sessions_service(listener, move |request| {
@@ -663,6 +669,64 @@ fn service_sessions_refuses_an_entry_with_an_invalid_program() {
     assert_eq!(
         error,
         "invalid message: sessions program is not idle, working, blocked or null"
+    );
+}
+
+// contract: sidecars-transport.sessions.refuses-an-entry-without-params
+#[test]
+fn service_sessions_refuses_an_entry_without_params() {
+    let executable = folder::Folder::new();
+    let config = folder::Folder::new();
+    let listener = service_endpoint(config.path());
+    let (_received, thread) = sessions_service(listener, |request| {
+        let mut entry = session_entry("session-1", "tab-a", 640.0, 384.0);
+        entry.as_object_mut().unwrap().remove("params");
+        Some(serde_json::json!({
+            "operation": "sessions",
+            "request": request["request"],
+            "ok": true,
+            "sessions": [entry]
+        }))
+    });
+    let sidecars =
+        Sidecars::<SidecarRecorder>::new(&declare(executable.path()), config.path().to_path_buf())
+            .unwrap();
+
+    let error = sidecars.service_sessions(ECHO).unwrap_err();
+    sidecars.stop();
+    thread.join().unwrap();
+    assert_eq!(
+        error,
+        "invalid message: sessions params is not an object or null"
+    );
+}
+
+// contract: sidecars-transport.sessions.refuses-invalid-params
+#[test]
+fn service_sessions_refuses_params_that_is_not_an_object_or_null() {
+    let executable = folder::Folder::new();
+    let config = folder::Folder::new();
+    let listener = service_endpoint(config.path());
+    let (_received, thread) = sessions_service(listener, |request| {
+        let mut entry = session_entry("session-1", "tab-a", 640.0, 384.0);
+        entry["params"] = serde_json::json!(3);
+        Some(serde_json::json!({
+            "operation": "sessions",
+            "request": request["request"],
+            "ok": true,
+            "sessions": [entry]
+        }))
+    });
+    let sidecars =
+        Sidecars::<SidecarRecorder>::new(&declare(executable.path()), config.path().to_path_buf())
+            .unwrap();
+
+    let error = sidecars.service_sessions(ECHO).unwrap_err();
+    sidecars.stop();
+    thread.join().unwrap();
+    assert_eq!(
+        error,
+        "invalid message: sessions params is not an object or null"
     );
 }
 

@@ -61,7 +61,7 @@ plane.nameWindow("main");
 
 test("session.ended of the owner ends its session once and refuses its repetition", async () => {
   await startOwnedSessions();
-  assert.deepEqual(ownedSessionsState(), [{ session: "ses-keep", plugin: SESSION, owner: OWNER, shownBy: null, program: null }]);
+  assert.deepEqual(ownedSessionsState(), [{ session: "ses-keep", plugin: SESSION, owner: OWNER, shownBy: null, program: null, params: { program: "claude", role: "manager-lead" } }]);
   wire.deliverNotice();
   assert.deepEqual(ownedSessionsState(), []);
   wire.deliverNotice();

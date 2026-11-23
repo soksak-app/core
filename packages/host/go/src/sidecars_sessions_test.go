@@ -86,12 +86,12 @@ func answerSessions(t *testing.T, c *Sidecars, process *sidecar, answer func(req
 func TestSessionsReturnsTheSessionsOfTheService(t *testing.T) {
 	c, process := sessionsFixture(t)
 	sessions, err := answerSessions(t, c, process, func(request string) string {
-		return `{"operation":"sessions","request":"` + request + `","ok":true,"sessions":[{"session":"s1","surface":"tab-a","root":"/work","creation":"c1","size":{"width":640,"height":384,"scale":2},"plugin":"terminal","program":"working"}]}`
+		return `{"operation":"sessions","request":"` + request + `","ok":true,"sessions":[{"session":"s1","surface":"tab-a","root":"/work","creation":"c1","size":{"width":640,"height":384,"scale":2},"plugin":"terminal","program":"working","params":{"program":"claude"}},{"session":"s2","surface":"tab-b","root":"/work","creation":"c2","size":{"width":640,"height":384,"scale":2},"plugin":"terminal","program":null,"params":null}]}`
 	})
 	if err != nil {
 		t.Fatalf("Sessions: %v", err)
 	}
-	if want := `[{"session":"s1","surface":"tab-a","root":"/work","creation":"c1","size":{"width":640,"height":384,"scale":2},"plugin":"terminal","program":"working"}]`; string(sessions) != want {
+	if want := `[{"session":"s1","surface":"tab-a","root":"/work","creation":"c1","size":{"width":640,"height":384,"scale":2},"plugin":"terminal","program":"working","params":{"program":"claude"}},{"session":"s2","surface":"tab-b","root":"/work","creation":"c2","size":{"width":640,"height":384,"scale":2},"plugin":"terminal","program":null,"params":null}]`; string(sessions) != want {
 		t.Fatalf("Sessions = %s, want %s", sessions, want)
 	}
 }
@@ -155,6 +155,19 @@ func TestSessionsRefusesAnEntryWithAnInvalidProgram(t *testing.T) {
 		})
 		if err == nil || err.Error() != "invalid message: sessions program is not idle, working, blocked or null" {
 			t.Fatalf("Sessions error for program %q = %v", program, err)
+		}
+	}
+}
+
+// contract: sidecars-transport.sessions.refuses-an-invalid-params
+func TestSessionsRefusesAnEntryWithInvalidParams(t *testing.T) {
+	for _, member := range []string{``, `,"params":3`} {
+		c, process := sessionsFixture(t)
+		_, err := answerSessions(t, c, process, func(request string) string {
+			return `{"operation":"sessions","request":"` + request + `","ok":true,"sessions":[{"session":"s1","surface":"tab-a","root":"/work","creation":"c1","size":{"width":640,"height":384,"scale":2},"plugin":"terminal","program":"idle"` + member + `}]}`
+		})
+		if err == nil || err.Error() != "invalid message: sessions params is not an object or null" {
+			t.Fatalf("Sessions error for member %q = %v", member, err)
 		}
 	}
 }

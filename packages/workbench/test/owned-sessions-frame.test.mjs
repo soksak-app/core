@@ -67,7 +67,7 @@ test("a shown session takes the card size at once, and a card frame sends a resi
   // Showing the session sends the size of its card at once, and the resize is held by the case until the test releases it.
   bindShown(session, OWNER, LARGE_CARD);
   await drained();
-  assert.deepEqual(ownedSessionsState(), [{ session, plugin: SESSION, owner: OWNER, shownBy: OWNER, program: null }]);
+  assert.deepEqual(ownedSessionsState(), [{ session, plugin: SESSION, owner: OWNER, shownBy: OWNER, program: null, params: { name: "agent" } }]);
   // A frame of the same size while the resize is pending sends nothing.
   cardFrameChanged(OWNER, LARGE_CARD);
   await drained();

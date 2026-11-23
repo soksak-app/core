@@ -3632,6 +3632,10 @@ func validateSessions(sessions json.RawMessage, answered bool) (json.RawMessage,
 		if err := json.Unmarshal(entry["program"], &program); err != nil || (program != nil && !slices.Contains([]string{"idle", "working", "blocked"}, *program)) {
 			return nil, errors.New("invalid message: sessions program is not idle, working, blocked or null")
 		}
+		var params *map[string]json.RawMessage
+		if err := json.Unmarshal(entry["params"], &params); err != nil {
+			return nil, errors.New("invalid message: sessions params is not an object or null")
+		}
 	}
 	return sessions, nil
 }

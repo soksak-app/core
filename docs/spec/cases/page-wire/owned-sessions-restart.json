@@ -187,7 +187,8 @@
               "creation": "c-keep",
               "size": {"width": 640, "height": 384, "scale": 2},
               "plugin": "fixture-session",
-              "program": "idle"
+              "program": "idle",
+              "params": {"program": "claude", "role": "manager-lead"}
             },
             {
               "session": "ses-room",
@@ -196,7 +197,8 @@
               "creation": "c-room",
               "size": {"width": 640, "height": 384, "scale": 2},
               "plugin": "fixture-session",
-              "program": null
+              "program": null,
+              "params": null
             },
             {
               "session": "ses-gone",
@@ -205,7 +207,8 @@
               "creation": "c-gone",
               "size": {"width": 640, "height": 384, "scale": 2},
               "plugin": "fixture-session",
-              "program": null
+              "program": null,
+              "params": null
             },
             {
               "session": "ses-orphan",
@@ -214,7 +217,8 @@
               "creation": "c-orphan",
               "size": {"width": 640, "height": 384, "scale": 2},
               "plugin": "fixture-removed",
-              "program": null
+              "program": null,
+              "params": null
             }
           ]
         }

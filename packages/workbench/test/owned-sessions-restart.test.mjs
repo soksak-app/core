@@ -76,8 +76,8 @@ test("the restart adopts the session whose owner is in the restored layout, ends
   // restored tab <tab>: session <id> is not open (docs/spec/plugins.md#owned-sessions).
   // The session that the room owns belongs to the plugin that opened it, which its entry names (docs/spec/persistent-services.md#owned-sessions).
   // The adopted session keeps the program state that its entry lists, because a program reports its state only when it changes.
-  assert.deepEqual(ownedSessionsState(), [{ session: "ses-keep", plugin: SESSION, owner: OWNER, shownBy: OWNER, program: { state: "idle" } },
-    { session: "ses-room", plugin: SESSION, owner: ROOM, shownBy: null, program: null }]);
+  assert.deepEqual(ownedSessionsState(), [{ session: "ses-keep", plugin: SESSION, owner: OWNER, shownBy: OWNER, program: { state: "idle" }, params: { program: "claude", role: "manager-lead" } },
+    { session: "ses-room", plugin: SESSION, owner: ROOM, shownBy: null, program: null, params: null }]);
   // The error of the restored tab shows as a toast of the error display, and the close of that tab withdraws it, because the state
   // that it describes ended with the tab (docs/spec/exposure.md#error-presentation).
   const { errorToasts } = await import("../shown-errors.js");

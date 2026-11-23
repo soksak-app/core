@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1131: `core.sessions` lists the `params` of each owned session, which the service stores and lists, so a view tells the program and the role of a session.
 - F1127: A sidebar section declares header actions, which the manifest readers check and the workbench draws as buttons at the right end of the section header.
 - F1130: The log policy reader of the hosts waits for the next notification when a write in place overlapped its read, so no partial file is refused.
 - F1126-1: The Go stop test fixture reads its persistent connection as the read goroutine does, so the stop that waits for the end of the connection ends.
