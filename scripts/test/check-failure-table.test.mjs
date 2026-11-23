@@ -48,6 +48,17 @@ test('a Go framework adapter writes its error records in the layer of the host',
   ]);
 });
 
+test('a Rust framework adapter writes its error records in the layer of the host (F1136-5)', () => {
+  const sources = new Map([
+    ['packages/host/tauriv2/src/frontend.rs', 'log_error("window show", error);'],
+    ['packages/host/gpuikit/src/bindings.rs', 'soksak_host::application_log::log_error("page call", error.clone());'],
+  ]);
+  assert.deepEqual(failureSites(sources).map(({ layer, place, filled }) => [layer, place, filled]), [
+    ['host', 'window show', false],
+    ['host', 'page call', false],
+  ]);
+});
+
 test('a record is missing from the table when the table does not write it with its layer and place', () => {
   const sites = failureSites(new Map([
     [GO, 'LogError("endpoint", a)\nLogError("endpoint timeout", b)\nLogError("sidecar "+name, c)\nLogError("image frame", d)'],

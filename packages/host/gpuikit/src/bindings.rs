@@ -458,6 +458,12 @@ fn dispatch(
                 .listen(&request.sidecar, &request.id, request.on);
             Value::Null
         }
+        // Restarts the view of a tab of the surface (docs/spec/native-surfaces.md#view-surfaces).
+        "view_reload" => {
+            let surface: String = argument(method, "surface", body)?;
+            documents::reload_view(window, &surface)?;
+            Value::Null
+        }
         "view_sidecar_route" => {
             let request: soksak_host::sidecar_routes::ViewSidecarRouteRequest =
                 argument(method, "request", body)?;

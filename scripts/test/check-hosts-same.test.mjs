@@ -9,6 +9,8 @@ import { allowedEndpointMethods, allowedPortMethods, auditCommonOnlyKeys, auditH
 const sources = () => ({
   tauriv2Runtime: 'const COMMAND = {\n  windowNew: "window_new",\n  overlayShow: "overlay_show",\n};',
   tauriv2Bindings: 'macro_rules! bindings {}\nbindings! {\n#[tauri::command]\nfn window_new() {}\n#[tauri::command(async)]\nasync fn overlay_show() {}\n}',
+  gpuikitRuntime: 'const COMMAND = {\n  windowNew: "window_new",\n  overlayShow: "overlay_show",\n};',
+  gpuikitBindings: 'fn dispatch(\n    method: &str,\n) -> Result<Value, String> {\n    let value = match method {\n        "window_new" => {\n            Value::Null\n        }\n        "overlay_show" => Value::Null,\n        unknown => return Err(unknown),\n    };\n}',
   wailsv3Runtime: 'const METHOD = {\n  windowNew: "WindowNew",\n  overlayShow: "OverlayShow",\n}',
   mygoCallsSource: 'func hostCalls(h *host.Host, ctx context.Context) map[string]HostCall {\n\treturn map[string]HostCall{\n\t\t"windowNew": run(h.WindowNew),\n\t\t"setDialogBackground": doneOf(h.SetDialogBackground),\n\t}\n}',
   wailsv3HostSources: { "host.go": "func (h *Host) WindowNew(ctx context.Context) error { return nil }\nfunc (h *Host) SetDialogBackground(ctx context.Context) error { return nil }\nfunc (h *Host) OverlayShow(ctx context.Context) error { return nil }" },
@@ -188,7 +190,7 @@ test("a call name that exists on one host only fails", () => {
   const changed = sources();
   changed.tauriv2Runtime = changed.tauriv2Runtime.replace('windowNew: "window_new",', 'windowNew: "window_new",\n  linkOpen: "link_open",');
   changed.tauriv2Bindings = changed.tauriv2Bindings.replace('fn window_new() {}', 'fn window_new() {}\n#[tauri::command]\nfn link_open() {}');
-  assert.deepEqual(auditHostParity(changed), ["tauriv2 host.call(link_open) does not exist on wailsv3"]);
+  assert.deepEqual(auditHostParity(changed), ["tauriv2 host.call(link_open) does not exist on wailsv3", "tauriv2 host.call(link_open) does not exist on gpuikit"]);
 });
 
 test("a call name without its host implementation fails", () => {
@@ -463,4 +465,23 @@ test("the library crate of a host is the package name in Rust form and its root 
     /Cargo.toml declares no package name or no \[lib\] path under src\//);
   assert.throws(() => libraryCrate('[lib]\npath = "src/host.rs"\n', "Cargo.toml"),
     /Cargo.toml declares no package name or no \[lib\] path under src\//);
+});
+
+// F1136-5: gpuikit is compared with tauriv2, the other Rust host: each frontend runtime accepts the same host.call names, and each
+// name of the gpuikit runtime has an arm of the dispatch of the GPUI adapter.
+test("a call that tauriv2 or gpuikit has and the other host has not fails (F1136-5)", () => {
+  const missing = sources();
+  missing.gpuikitRuntime = missing.gpuikitRuntime.replace('  overlayShow: "overlay_show",\n', "");
+  missing.gpuikitBindings = missing.gpuikitBindings.replace('        "overlay_show" => Value::Null,\n', "");
+  assert.deepEqual(auditHostParity(missing), ["tauriv2 host.call(overlay_show) does not exist on gpuikit"]);
+  const extra = sources();
+  extra.gpuikitRuntime = extra.gpuikitRuntime.replace('windowNew: "window_new",', 'windowNew: "window_new",\n  linkOpen: "link_open",');
+  extra.gpuikitBindings = extra.gpuikitBindings.replace('"overlay_show" => Value::Null,', '"overlay_show" => Value::Null,\n        "link_open" => Value::Null,');
+  assert.deepEqual(auditHostParity(extra), ["gpuikit host.call(link_open) does not exist on tauriv2"]);
+});
+
+test("a call of the gpuikit runtime without an arm of the dispatch fails (F1136-5)", () => {
+  const changed = sources();
+  changed.gpuikitBindings = changed.gpuikitBindings.replace('        "overlay_show" => Value::Null,\n', "");
+  assert.deepEqual(auditHostParity(changed), ["gpuikit host.call(overlay_show) has no dispatch arm"]);
 });

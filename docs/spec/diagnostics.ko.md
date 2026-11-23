@@ -90,6 +90,11 @@ Still은 녹화 창과 그 child window를 window server가 합성한 그대로 
 |---|---|
 | main page의 module이 불러오지 못하거나 불러오는 중 던진다 | `error workbench start: <text> @ <file>:<line>`([page 시작](native-host.ko.md#page-시작)) |
 | host가 page가 요청한 파일을 내줄 수 없다 | `error host page asset: <path>: not found`, 경로마다 한 번 |
+| GPUI host가 page의 call에 답할 수 없다: message가 call이 아니거나, 알려진 method나 열린 web view를 이름으로 들지 않거나, 인자가 decode되지 않는다 | `error host page call: <error>`, call의 error로 page에도 전달 |
+| GPUI host가 여는 window의 main web view를 만들 수 없다 | `error host new window: <error>` |
+| GPUI host가 window의 resize, move, key, close notification을 관찰할 수 없다 | `error host frontend: window events: <error>` |
+| GPUI host가 page에 전달하는 script를 evaluate할 수 없다 | `error host page delivery: <error>` |
+| GPUI host가 window에 추가하는 web view를 만들 수 없다 | `error host add child webview: <error>` |
 | main page가 첫 화면 뒤에 던지거나 reject한다 | page 오류 표시의 `error workbench <where>: <text>` |
 | view가 자기 page에 오류를 보여 준다 | view call `runtime.error`가 쓰는 `error workbench surface <surface> <where>: <text>`([native surfaces](native-surfaces.ko.md#view-표면)) |
 | Wails host에서 modal의 WebContent process가 끝난다 | `error native surface webview: web content process terminated: <address>`. Tauri host는 surface와 modal을 포함한 모든 web view의 종료를 `error host page process: <label>: terminated`로 쓴다 |

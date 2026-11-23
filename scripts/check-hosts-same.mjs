@@ -36,6 +36,20 @@ export function rustHandlers(bindings) {
     .map((match) => match[1]));
 }
 
+/**
+ * The set of method names that the GPUI adapter answers: the arms of the match of its dispatch and each method that the
+ * answer of a call takes before the dispatch (`wire.method == "..."`).
+ */
+export function gpuikitDispatch(bindings) {
+  const start = bindings.search(/^fn dispatch\(/m);
+  if (start < 0) throw new Error('the bindings of gpuikit have no dispatch function');
+  const body = bindings.slice(start, bindings.indexOf('\n}\n', start) + 1 || undefined);
+  return new Set([
+    ...[...body.matchAll(/^\s+"([a-z][a-z0-9_]*)"\s*=>/gm)].map((match) => match[1]),
+    ...[...bindings.matchAll(/wire\.method == "([a-z][a-z0-9_]*)"/g)].map((match) => match[1]),
+  ]);
+}
+
 /** The set of exported method names of the bound Host struct over all Go host packages. */
 export function goHostMethods(sources) {
   const methods = new Set();
@@ -524,7 +538,7 @@ export function hostProductSources(directory, extension) {
 }
 
 /** Judges propositions 1, 2, 3 and 6 on the injected sources and returns the list of failures. */
-export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtime, wailsv3HostSources, mygoCallsSource,
+export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, gpuikitRuntime, gpuikitBindings, wailsv3Runtime, wailsv3HostSources, mygoCallsSource,
   tauriv2EndpointSource, wailsv3EndpointSource, wailsv3DiagnosticsSource,
   hostContractSpec, tauriv2MenuSource, wailsv3MenuSource, hostsSpec, endpointSpec,
   tauriv2DeclarationSource, wailsv3DeclarationSource, workbenchDeclarationSource,
@@ -550,6 +564,20 @@ export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtim
   }
   for (const name of [...wailsv3.calls].filter((item) => !wailsv3.methods.has(item)).sort()) {
     failures.push(`wailsv3 host.call(${name}) has no Host method`);
+  }
+  // gpuikit is the other Rust host, and its runtime accepts the host.call names of tauriv2 (F1136-5).
+  const gpuikit = {
+    calls: runtimeCalls(gpuikitRuntime, 'const COMMAND = {', 'gpuikit runtime'),
+    dispatch: gpuikitDispatch(gpuikitBindings),
+  };
+  for (const name of [...tauriv2.calls].filter((item) => !gpuikit.calls.has(item)).sort()) {
+    failures.push(`tauriv2 host.call(${name}) does not exist on gpuikit`);
+  }
+  for (const name of [...gpuikit.calls].filter((item) => !tauriv2.calls.has(item)).sort()) {
+    failures.push(`gpuikit host.call(${name}) does not exist on tauriv2`);
+  }
+  for (const name of [...gpuikit.calls].filter((item) => !gpuikit.dispatch.has(item)).sort()) {
+    failures.push(`gpuikit host.call(${name}) has no dispatch arm`);
   }
   const mygo = goHostCalls(mygoCallsSource);
   const absent = absentOnMygo(hostsSpec);
@@ -629,6 +657,8 @@ if (process.argv[1] && process.argv[1].endsWith('check-hosts-same.mjs')) {
   const failures = auditHostParity({
     tauriv2Runtime: read('apps/tauriv2/runtime/index.js'),
     tauriv2Bindings: read('packages/host/tauriv2/src/bindings.rs'),
+    gpuikitRuntime: read('apps/gpuikit/runtime/index.js'),
+    gpuikitBindings: read('packages/host/gpuikit/src/bindings.rs'),
     wailsv3Runtime: read('apps/wailsv3/runtime/index.js'),
     wailsv3HostSources: wailsv3Sources,
     mygoCallsSource: read('packages/workbench-mygo/src/host_calls.go'),

@@ -90,6 +90,11 @@ A row shows a record without its time, as `<level> <layer> <where>: <text>`.
 |---|---|
 | a module of the main page fails to load or throws while it loads | `error workbench start: <text> @ <file>:<line>` ([page start](native-host.md#page-start)) |
 | the host cannot serve a file that the page requests | `error host page asset: <path>: not found`, once for each path |
+| the GPUI host cannot answer a call of the page: the message is no call, names no known method or no open web view, or its arguments do not decode | `error host page call: <error>`, also delivered to the page as the error of the call |
+| the GPUI host cannot create the main web view of a window that it opens | `error host new window: <error>` |
+| the GPUI host cannot observe the resize, move, key and close notifications of a window | `error host frontend: window events: <error>` |
+| the GPUI host cannot evaluate a script that it delivers to a page | `error host page delivery: <error>` |
+| the GPUI host cannot create a web view that it adds to a window | `error host add child webview: <error>` |
 | the main page throws or rejects after its first screen | `error workbench <where>: <text>` of the page's error display |
 | a view shows an error on its own page | `error workbench surface <surface> <where>: <text>`, written by the view call `runtime.error` ([native surfaces](native-surfaces.md#view-surfaces)) |
 | the WebContent process of a modal ends in the Wails host | `error native surface webview: web content process terminated: <address>`; the Tauri host writes the end of every web view, including a surface and a modal, as `error host page process: <label>: terminated` |

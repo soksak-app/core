@@ -5,6 +5,7 @@
 
 ## 2026-11-24
 
+- F1136-5: The host comparison checks include gpuikit: `check-hosts-same` compares the host.call names of the GPUI page runtime with those of Tauri and with the dispatch of the adapter, and `check-failure-table` reads the error records of the adapter. The GPUI host gains the calls `view_reload` and `sidecar_sessions` that it lacked, and the failure table lists its five error places.
 - F1136-1: The host test runner checks gpuikit as the fourth host: the Rust language host library and the Rust sok serve both Rust hosts, the GPUI framework adapter declares each `all` case of its port, and `make test-gpuikit` runs its contract.
 
 ## 2026-11-23

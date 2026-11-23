@@ -6,7 +6,7 @@
 
 ## 명제
 
-1. **공개 바인딩은 같은 집합이다.** 각 호스트가 등록하는 페이지 대상 명령면 — Tauri framework adapter의 Rust `bindings!` 블록이 정의하고 등록하는 명령의 이름과 Go language host library의 내보낸 `Host` 메서드, snake case 로 비교 — 이 하나의 집합이다. 한쪽에만 있는 명령은 검사를 실패시킨다.
+1. **공개 바인딩은 같은 집합이다.** 각 호스트가 등록하는 페이지 대상 명령면 — Tauri framework adapter의 Rust `bindings!` 블록이 정의하고 등록하는 명령의 이름과 Go language host library의 내보낸 `Host` 메서드, snake case 로 비교 — 이 하나의 집합이다. 한쪽에만 있는 명령은 검사를 실패시킨다. Rust language host library의 다른 adapter인 GPUI framework adapter는 Tauri와 비교한다. 그 page runtime(`apps/gpuikit/runtime/index.js`)은 Tauri page runtime의 host.call 이름을 받고, 각 이름은 `packages/host/gpuikit/src/bindings.rs`의 dispatch arm을 가진다.
 2. **엔드포인트 메서드는 같은 집합이다.** 각 빌드가 선언하는 [엔드포인트](endpoint.ko.md) 메서드 이름 — 기본 메서드, 구독 메서드, 진단 빌드 전용 추가 — 이 같은 빌드 맛에서 두 호스트 하나의 집합이다. 호스트가 선언하는 진단 빌드 전용 메서드는 각각 [진단 빌드](endpoint.ko.md#진단-빌드) 표의 행이고, 그 표의 각 행은 어느 호스트가 선언하는 메서드다.
 3. **애플리케이션 메뉴는 선언된 계약이다.** 두 호스트의 메뉴 바는 [호스트 계약](host-contract.ko.md)의 메뉴 계약 표대로 같은 항목을 같은 순서·같은 단축키로 담는다. 검사는 실행 중인 호스트의 실제 메뉴 바를 열거하고, 한쪽에만 있는 항목은 실패시킨다.
 4. **단일 호스트 면제는 여전히 참이어야 한다.** 호스트 계약 사례 표의 모든 `<host> only: <이유>` 행은 관측이 여전히 확인하는 차이를 인용한다. 인용한 차이가 더 참이 아니면 면제는 낡았고, 사례가 `all` 이 될 때까지 검사는 실패한다.
