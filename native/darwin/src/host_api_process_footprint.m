@@ -54,7 +54,9 @@ int hostProcessFootprint(int pid, uint64_t *values, int *step, uint32_t *count,
         (int64_t)info.ledger_tag_neural_footprint,
         (int64_t)info.ledger_tag_neural_footprint_compressed,
     };
-    hostProcessFootprintValues(ledgers, values, negativeLedger, negativeValue);
+    if (hostProcessFootprintValues(ledgers, values, negativeLedger, negativeValue)) {
+        values[8] = (uint64_t)info.resident_size / 1024;
+    }
     return KERN_SUCCESS;
 }
 

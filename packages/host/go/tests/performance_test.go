@@ -132,8 +132,9 @@ func TestSamplerReportsAFailedReading(t *testing.T) {
 	if _, ok := record["rss_host_kb"]; ok {
 		t.Fatalf("a failed reading was recorded as a size: %v", record)
 	}
-	if text, _ := record["error"].(string); text == "" {
-		t.Fatalf("a failed reading has no error: %v", record)
+	// The resident size is read with the footprint in one task_info call, so the failure names that call and starts no process.
+	if text, _ := record["error"].(string); !strings.HasPrefix(text, "task_name_for_pid for pid 1073741824: kern_return ") {
+		t.Fatalf("a failed reading names %q, want the failed task_name_for_pid call", text)
 	}
 	own := host.PerformanceMemory(os.Getpid())
 	if size, _ := own["rss_host_kb"].(uint64); size == 0 {

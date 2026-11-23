@@ -4,8 +4,8 @@ package darwin
 
 // The physical footprint of a process and its parts are the ledgers of task_info TASK_VM_INFO (mach/task_info.h of the macOS
 // SDK, revision 3), read through the task name port of task_name_for_pid (mach/mach_traps.h), which a process of the same user
-// grants. No library of the module reads them: the syscall package has no Mach task interface, and gopsutil reports the
-// resident size.
+// grants. The resident size of the process is resident_size of the same reply. No library of the module reads the ledgers: the
+// syscall package has no Mach task interface.
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ import (
 // ProcessFootprint returns the physical footprint of the process pid and its ledger parts (KB, each rounded down). The error
 // names the failed call and its kern_return_t, which the Rust host also names.
 func (implementation) ProcessFootprint(pid int) (platform.ProcessFootprint, error) {
-	var values [8]uint64
+	var values [9]uint64
 	var step, negativeLedger int32
 	var count, expected uint32
 	var negativeValue int64
@@ -33,7 +33,7 @@ func (implementation) ProcessFootprint(pid int) (platform.ProcessFootprint, erro
 	}
 	return platform.ProcessFootprint{
 		Total: values[0], Internal: values[1], Compressed: values[2], Purgeable: values[3],
-		Graphics: values[4], Media: values[5], Network: values[6], Neural: values[7],
+		Graphics: values[4], Media: values[5], Network: values[6], Neural: values[7], Resident: values[8],
 	}, nil
 }
 

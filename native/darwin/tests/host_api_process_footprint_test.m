@@ -14,8 +14,9 @@ int main(void) {
     const int64_t ledgers[13] = {
         2049, 4095, 8193, 513, 512, 1023, 1025, 2048, 3073, 0, 1023, INT64_MAX, INT64_MAX,
     };
-    const uint64_t expected[8] = {2, 3, 8, 1, 2, 5, 0, (UINT64_MAX - 1) / 1024};
-    uint64_t values[8] = {0};
+    // The conversion writes the eight ledger values; the resident size, the ninth value, comes from the reply and stays 0 here.
+    const uint64_t expected[9] = {2, 3, 8, 1, 2, 5, 0, (UINT64_MAX - 1) / 1024, 0};
+    uint64_t values[9] = {0};
     int negativeLedger = 77;
     int64_t negativeValue = 99;
     CHECK(hostProcessFootprintValues(ledgers, values, &negativeLedger, &negativeValue),
@@ -23,7 +24,7 @@ int main(void) {
     CHECK(!memcmp(values, expected, sizeof values), "all eight KB values preserve pair sums before rounding and unsigned range");
     CHECK(negativeLedger == -1 && negativeValue == 0, "valid conversion clears negative-ledger metadata");
 
-    const uint64_t sentinel[8] = {91, 92, 93, 94, 95, 96, 97, 98};
+    const uint64_t sentinel[9] = {91, 92, 93, 94, 95, 96, 97, 98, 99};
     for (int index = 0; index < 13; index++) {
         int64_t invalid[13];
         memcpy(invalid, ledgers, sizeof invalid);
@@ -58,5 +59,6 @@ int main(void) {
         "own process returns a complete real Mach revision-three reply");
     CHECK(negativeLedger == -1 && negativeValue == 0 && values[0] > 0,
         "own process produces a nonzero physical footprint through the conversion contract");
+    CHECK(values[8] > 0, "own process produces a nonzero resident size from the same reply");
     return failures ? 1 : 0;
 }

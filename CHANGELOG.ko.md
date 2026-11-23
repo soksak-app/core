@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1117-1: 두 host의 sampler가 process의 상주 크기를 footprint 읽기의 `task_info` `TASK_VM_INFO` 응답에서 읽고 `ps`를 시작하지 않는다. 검증: 두 host의 실패한 판독 테스트의 Red, 이어 그것과 native footprint 테스트의 Green.
 - F1118-1: core version은 모든 package와 crate manifest, Info.plist, Tauri 파일, Go와 pkg-config 선언, Cargo.lock의 workspace 항목 여섯 개, scripts/check-versions.mjs에서 0.0.50이다.
 - F1114-4: endpoint가 끝난 연결을 세고, endpoint page harness가 그 count를 기다린다. writer queue가 `host.endpoint.end`를 거부할 수 있기 때문이다. event 대기는 writer가 `log.dropped`를 저장하면 즉시 실패한다. 검증: `make repeat-go`에서 unwatch bound 테스트의 Red(사본 8개 중 1개), 이어 800번 실행과 두 host의 endpoint 테스트의 diagnostics 유무 Green.
 - F1116-1: 실제 platform의 app update 테스트가 결과, bundle의 한 번의 시작, `cmd.Wait`의 반환을 확인하고 process의 상태는 판정하지 않는다. kernel이 process가 zombie가 되기 전에 `NOTE_EXIT`를 보내기 때문이다. platform wait 테스트는 wait가 진입하고 반환하지 않았으면 시작에서 실패한다. 검증: wait를 지운 platform wait 테스트의 Red, 이어 package 테스트의 Green.

@@ -424,6 +424,8 @@ pub struct ProcessFootprint {
     pub media: u64,
     pub network: u64,
     pub neural: u64,
+    /// The resident size of the process from the same reading.
+    pub resident: u64,
 }
 
 /// The creation values of a document web view: a document region or a view (docs/spec/native-surfaces.md#document-regions).

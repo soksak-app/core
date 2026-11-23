@@ -487,12 +487,12 @@ fn process_memory(mut record: Value, pid: u32) -> Value {
         record["error"] = json!(format!("the web process has not started (pid {pid})"));
         return record;
     }
-    match (resident_kb(pid), footprint(pid)) {
-        (Ok(size), Ok(footprint)) => {
-            record["rss_kb"] = json!(size);
+    match footprint(pid) {
+        Ok(footprint) => {
+            record["rss_kb"] = json!(footprint.resident);
             add_footprint(&mut record, &footprint);
         }
-        (Err(error), _) | (_, Err(error)) => record["error"] = json!(error),
+        Err(error) => record["error"] = json!(error),
     }
     record
 }
@@ -553,31 +553,14 @@ pub fn sampler_running() -> bool {
 
 /// The memory event of pid that the sampler records. When the read fails, it records the error instead of the size.
 pub fn memory_record(pid: u32) -> Value {
-    match (resident_kb(pid), footprint(pid)) {
-        (Ok(size), Ok(footprint)) => {
-            let mut record = json!({"event":"memory", "rss_host_kb":size});
+    match footprint(pid) {
+        Ok(footprint) => {
+            let mut record = json!({"event":"memory", "rss_host_kb":footprint.resident});
             add_footprint(&mut record, &footprint);
             record
         }
-        (Err(error), _) | (_, Err(error)) => json!({"event":"memory", "error":error}),
+        Err(error) => json!({"event":"memory", "error":error}),
     }
-}
-
-/// The resident size of pid (KB). It is an error when ps cannot run or returns no size (when the process has ended).
-fn resident_kb(pid: u32) -> Result<u64, String> {
-    let output = std::process::Command::new("ps")
-        .args(["-o", "rss=", "-p", &pid.to_string()])
-        .output()
-        .map_err(|error| format!("ps for pid {pid}: {error}"))?;
-    String::from_utf8_lossy(&output.stdout)
-        .trim()
-        .parse()
-        .map_err(|_| {
-            format!(
-                "ps reported no resident size for pid {pid} (status {})",
-                output.status
-            )
-        })
 }
 
 #[cfg(test)]

@@ -164,11 +164,13 @@ fn sampler_reports_a_failed_reading() {
         record.get("rss_host_kb").is_none(),
         "a failed reading was recorded as a size: {record}"
     );
+    // The resident size is read with the footprint in one task_info call, so the failure names that call and starts no process.
     assert!(
+        record["error"].as_str().is_some_and(
+            |text| text.starts_with("task_name_for_pid for pid 1073741824: kern_return ")
+        ),
+        "a failed reading names {}, want the failed task_name_for_pid call",
         record["error"]
-            .as_str()
-            .is_some_and(|text| !text.is_empty()),
-        "a failed reading has no error: {record}"
     );
     let own = performance::memory_record(std::process::id());
     assert!(

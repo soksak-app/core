@@ -24,10 +24,6 @@ import (
 )
 
 // Rect is a region in CSS pixels relative to the page viewport.
-// ProcessFootprint is the physical footprint of one process (KB) with the ledgers that the system divides it into
-// (docs/spec/performance-trace.md). The parts do not sum to Total exactly: the footprint also counts mapped IOKit memory and
-// page tables, which the system does not report per process, and subtracts the internal memory that it also counts as mapped
-// IOKit memory.
 // ProcessEntry is the parent and the start time of a process in the process table. Started is in milliseconds since the Unix
 // epoch, the form of the `started` of a process query answer (docs/spec/sidecars.md#messages).
 type ProcessEntry struct {
@@ -35,6 +31,10 @@ type ProcessEntry struct {
 	Started int64
 }
 
+// ProcessFootprint is the physical footprint of one process (KB) with the ledgers that the system divides it into
+// (docs/spec/performance-trace.md). The parts do not sum to Total exactly: the footprint also counts mapped IOKit memory and
+// page tables, which the system does not report per process, and subtracts the internal memory that it also counts as mapped
+// IOKit memory. Resident is the resident size of the process from the same reading.
 type ProcessFootprint struct {
 	Total      uint64
 	Internal   uint64
@@ -44,6 +44,7 @@ type ProcessFootprint struct {
 	Media      uint64
 	Network    uint64
 	Neural     uint64
+	Resident   uint64
 }
 
 // DocumentOptions are the creation values of a document web view: a document region or a view

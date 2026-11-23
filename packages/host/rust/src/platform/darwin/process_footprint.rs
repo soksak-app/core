@@ -1,6 +1,6 @@
 //! The physical footprint of a process and its parts: the ledgers of task_info TASK_VM_INFO (mach/task_info.h of the macOS SDK,
 //! revision 3), read through the task name port of task_name_for_pid (mach/mach_traps.h), which a process of the same user
-//! grants. The mach2 crate declares the calls and task_vm_info; it has no TASK_VM_INFO_REV3_COUNT, which is written here.
+//! grants. The resident size of the process is resident_size of the same reply. The mach2 crate declares the calls and task_vm_info; it has no TASK_VM_INFO_REV3_COUNT, which is written here.
 
 use mach2::kern_return::KERN_SUCCESS;
 use mach2::mach_port::mach_port_deallocate;
@@ -117,5 +117,6 @@ pub fn process_footprint(pid: u32) -> Result<ProcessFootprint, String> {
         media: kb(&[7, 8]),
         network: kb(&[9, 10]),
         neural: kb(&[11, 12]),
+        resident: info.resident_size / 1024,
     })
 }

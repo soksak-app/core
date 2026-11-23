@@ -6,9 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
-	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -325,17 +322,12 @@ func processMemory(record map[string]any, pid int) map[string]any {
 		record["error"] = fmt.Sprintf("the web process has not started (pid %d)", pid)
 		return record
 	}
-	size, err := residentKB(pid)
-	if err != nil {
-		record["error"] = err.Error()
-		return record
-	}
 	footprint, err := processFootprint(pid)
 	if err != nil {
 		record["error"] = err.Error()
 		return record
 	}
-	record["rss_kb"] = size
+	record["rss_kb"] = footprint.Resident
 	addFootprint(record, footprint)
 	return record
 }
@@ -430,28 +422,11 @@ func PerformanceSamplerRunning() bool {
 // PerformanceMemory is the memory event of pid that the sampler records.
 // When the read fails, it records that error instead of a size.
 func PerformanceMemory(pid int) map[string]any {
-	size, err := residentKB(pid)
-	if err != nil {
-		return map[string]any{"event": "memory", "error": err.Error()}
-	}
 	footprint, err := processFootprint(pid)
 	if err != nil {
 		return map[string]any{"event": "memory", "error": err.Error()}
 	}
-	record := map[string]any{"event": "memory", "rss_host_kb": size}
+	record := map[string]any{"event": "memory", "rss_host_kb": footprint.Resident}
 	addFootprint(record, footprint)
 	return record
-}
-
-// residentKB is the resident size (KB) of pid. It is an error when ps cannot be run or returns no size (the process ended).
-func residentKB(pid int) (uint64, error) {
-	out, err := exec.Command("ps", "-o", "rss=", "-p", strconv.Itoa(pid)).Output()
-	if err != nil {
-		return 0, fmt.Errorf("ps for pid %d: %w", pid, err)
-	}
-	value, err := strconv.ParseUint(strings.TrimSpace(string(out)), 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("ps reported no resident size for pid %d: %w", pid, err)
-	}
-	return value, nil
 }
