@@ -245,11 +245,46 @@ func eachTab(cards []layout.Card, visit func(tab layout.Tab, active bool)) {
 func (s *Shell) backgroundTabs() []BackgroundTab {
 	var tabs []BackgroundTab
 	if s.plane != nil {
+		// default: a window without a project has no root, so a tab whose origin records no directory has no start directory.
+		root := ""
+		if project := s.opened(); project != nil {
+			root = project.Root
+		}
 		eachTab(s.contentCards(), func(tab layout.Tab, active bool) {
-			tabs = append(tabs, BackgroundTab{tab.ID, tab.Plugin, active})
+			directory, params, err := tabStart(tab, root)
+			if err != nil {
+				// A tab whose stored origin or params are not of their form opens no background session, and the reason is shown.
+				s.options.Report(fmt.Sprintf("background session %s: %v", tab.ID, err))
+				return
+			}
+			tabs = append(tabs, BackgroundTab{ID: tab.ID, Plugin: tab.Plugin, Active: active, Directory: directory, Params: params})
 		})
 	}
 	return tabs
+}
+
+// tabStart returns the start directory of tab, the directory of its origin or else root, nil when both are empty, and its tab
+// parameters (docs/spec/plugins.md#background-sessions).
+func tabStart(tab layout.Tab, root string) (*string, map[string]json.RawMessage, error) {
+	var origin struct {
+		Directory *string `json:"directory"`
+	}
+	if raw, ok := tab.Rest["origin"]; ok {
+		if err := json.Unmarshal(raw, &origin); err != nil {
+			return nil, nil, fmt.Errorf("origin is not {directory}: %w", err)
+		}
+	}
+	directory := origin.Directory
+	if directory == nil && root != "" {
+		directory = &root
+	}
+	var params map[string]json.RawMessage
+	if raw, ok := tab.Rest["params"]; ok {
+		if err := json.Unmarshal(raw, &params); err != nil {
+			return nil, nil, fmt.Errorf("params are not an object: %w", err)
+		}
+	}
+	return directory, params, nil
 }
 
 // layoutTabs returns the tabs of the layouts of the window, with the plane in the place of the shown space, and the tabs that are shown.

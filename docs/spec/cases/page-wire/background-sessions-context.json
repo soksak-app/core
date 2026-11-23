@@ -298,7 +298,7 @@
     {"reply":{"result":true}},
     {"call":{"name":"windowReady"}},
     {"reply":{"result":null}},
-    {"call":{"name":"sidecarSend","payload":{"sidecar":"@scope/fixture-sidecar","surface":"tab-bbbbbb","body":{"operation":"open"},"cids":[]}}},
+    {"call":{"name":"sidecarSend","payload":{"sidecar":"@scope/fixture-sidecar","surface":"tab-bbbbbb","body":{"directory":"/work/session","program":"claude","args":["--verbose"],"operation":"open"},"cids":[]}}},
     {"reply":{"result":null}},
     {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":"$ts-us-4","mono_ns":"$mono-ns-4","start":"$page-identity","level":"info","event":"workbench.log.gated","fields":{"class":"input","level":"debug","count":2}},{"ts_us":"$ts-us-5","mono_ns":"$mono-ns-5","start":"$page-identity","level":"info","event":"workbench.log.gated","fields":{"class":"call","level":"info","count":1}}]}}},
     {"reply":{"result":null}},

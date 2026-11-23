@@ -17,7 +17,8 @@ const COMMON = { "diagnostics.log": { lifecycle: "info" } };
 const STORED_LAYOUT = {
   state: { root: { card: "main", data: {
     tabs: [{ id: "tab-aaaaaa", plugin: owner, title: "shown", origin: { directory: "/work/session" }, role: null },
-    { id: "tab-bbbbbb", plugin: owner, title: "hidden", origin: { directory: "/work/session" }, role: null }], activeId: "tab-aaaaaa" } } },
+    { id: "tab-bbbbbb", plugin: owner, title: "hidden", origin: { directory: "/work/session" }, role: null,
+      params: { program: "claude", args: ["--verbose"] } }], activeId: "tab-aaaaaa" } } },
   leader: "main", lastCard: 1, focusedId: "main", windowSidebars: {}, named: 0, sidebars: {},
 };
 // The replies of the host settle in the turns that follow the call.
@@ -63,8 +64,11 @@ test("a background session opens only for a tab without a mounted surface and en
     sidebars: { sets: [], links: [] },
   }, { plugins: [
     { id: owner, package: "@scope/fixture-session", version: "0.0.1", manifest: {
-      id: owner, name: "Session", description: "검사용 세션 표면.", mark: "s", icon: "<path/>", surface,
-      dependencies: { [sidecar]: "0.0.1" }, background: { sidecar, operation: "open" } } },
+      id: owner, name: "Session", description: "검사용 세션 표면.", mark: "s", icon: "<path/>",
+      // The tab parameters program and args, which the background request maps into its fields.
+      surface: { ...surface, params: { type: "object", properties: { program: { type: "string" }, args: { type: "array", items: { type: "string" } } } } },
+      dependencies: { [sidecar]: "0.0.1" }, background: { sidecar, operation: "open", directory: "directory",
+        params: { program: "program", args: "args", directory: "directory" } } } },
     { id: other, package: "@scope/fixture-document", version: "0.0.1", manifest: {
       id: other, name: "Document", description: "검사용 문서 표면.", mark: "d", icon: "<path/>", surface } },
   ] }), [], "the fixture environment refused a plugin");
@@ -134,6 +138,9 @@ test("a background session opens only for a tab without a mounted surface and en
     assert.ok(modules.mountedSurface(shown), "the first draw did not mount the shown tab");
     // After the project context commits, the hidden tab has no surface and gets its background session.
     assert.equal(opens(hidden).length, 1, "the tab without a surface got no background open");
+    // The request starts the session as the surface would: in the directory of the origin of the tab, with its mapped parameters, and
+    // without the field of a parameter that the tab does not hold (docs/spec/plugins.md#background-sessions).
+    assert.deepEqual(opens(hidden)[0].payload.body, { directory: "/work/session", program: "claude", args: ["--verbose"], operation: "open" });
     assert.deepEqual(await decisions(hidden), ["open:absent"]);
     // The calls of the page that open a session, with the steps of the test between them: a send that a step causes comes after the mark of that step.
     const marks = [];

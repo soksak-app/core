@@ -44,11 +44,11 @@ import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { setSurfaceStatus, setTabError, surfaceErrorText } from "./surface-status.js";
 import { imageDetachHold } from "./image-detach-waits.js";
 import { clearVisibleNotices, missingOriginRecords, onTabReports, recordOrigin, reportError, setVisibleTab, storedLayoutState, tabButtonData, tabError, tabFooter,
-  tabLabel, tabModified, tabNotice } from "./tab-reports.js";
+  tabLabel, tabModified, tabNotice, tabOrigin } from "./tab-reports.js";
 import { hideError, showError } from "./shown-errors.js";
 import { registry } from "./exposure.js";
 import { configureSystemNotifications, systemNotifications } from "./system-notifications.js";
-import { all as allProjects, initialProjectContextFailed, initialProjectContextReady, local as localProjects, storedTabTaken, waitForInitialProjectContext } from "./projects.js";
+import { active as activeProject, all as allProjects, initialProjectContextFailed, initialProjectContextReady, local as localProjects, storedTabTaken, waitForInitialProjectContext } from "./projects.js";
 
 const NEEDS = ["cards", "card", "insertAt", "moveTo", "standings", "moveBoundary", "zoneAt",
   "splitToward", "replace"];
@@ -1444,6 +1444,17 @@ function syncBackgroundSessions() {
       const values = pluginSettings(tab.plugin);
       // default: background.settings is an optional field, and when it is absent no setting value is added (docs/spec/plugins.md).
       const fields = Object.fromEntries(Object.entries(descriptor.settings ?? {}).map(([field, setting]) => [field, values[setting]]));
+      // The request starts the session as the surface of the tab would: in the start directory of the tab, the directory of its origin
+      // or else the root of the project, and with the mapped parameters that the tab holds (docs/spec/plugins.md#background-sessions).
+      if (descriptor.directory !== undefined) {
+        // default: a window without a project has no root, and then the field is not sent.
+        const directory = tabOrigin(tab.id).directory ?? activeProject()?.root ?? null;
+        if (directory !== null) fields[descriptor.directory] = directory;
+      }
+      // default: params is an optional member of the declaration, and a tab without params holds no parameter.
+      for (const [field, param] of Object.entries(descriptor.params ?? {})) {
+        if (tab.params != null && Object.hasOwn(tab.params, param)) fields[field] = tab.params[param];
+      }
       return port.send(tab.id, { ...fields, operation: descriptor.operation });
     };
     Promise.resolve(port.on(tab.id, (body) => {

@@ -948,7 +948,7 @@ func checkBackground(where string, raw any, sidecars []string, settings any) err
 	if !ok {
 		return fmt.Errorf("%s: background must be an object", where)
 	}
-	if err := only(where+" background", background, "sidecar", "operation", "settings"); err != nil {
+	if err := only(where+" background", background, "sidecar", "operation", "settings", "directory", "params"); err != nil {
 		return err
 	}
 	// default: settings that are not an object declare no setting, so no background field names one.
@@ -965,6 +965,39 @@ func checkBackground(where string, raw any, sidecars []string, settings any) err
 			setting, isText := fields[field].(string)
 			if _, has := declared[setting]; !isText || !has {
 				return fmt.Errorf("%s background: setting %s is not declared by the plugin", where, jsValueText(fields[field]))
+			}
+		}
+	}
+	// directory names the request field that receives the start directory of the tab, and params maps request fields to tab
+	// parameters (docs/spec/plugins.md#background-sessions). Neither names a field of settings.
+	// default: settings that are not an object were refused above, so an absent settings has no field.
+	settingFields, _ := background["settings"].(map[string]any)
+	if raw, ok := background["directory"]; ok {
+		directory, isText := raw.(string)
+		if !isText || directory == "" {
+			return fmt.Errorf("%s background: directory must be a request field name", where)
+		}
+		if directory == "operation" {
+			return fmt.Errorf("%s background: directory cannot replace operation", where)
+		}
+		if _, has := settingFields[directory]; has {
+			return fmt.Errorf("%s background: field %s of settings is named again by directory", where, directory)
+		}
+	}
+	if raw, ok := background["params"]; ok {
+		params, isObject := raw.(map[string]any)
+		if !isObject {
+			return fmt.Errorf("%s background: params must map request fields to tab parameter names", where)
+		}
+		for _, field := range sortedKeys(params) {
+			if field == "operation" {
+				return fmt.Errorf("%s background: a tab parameter cannot replace operation", where)
+			}
+			if param, isText := params[field].(string); !isText || param == "" {
+				return fmt.Errorf("%s background: the tab parameter of field %s must be a non-empty name", where, field)
+			}
+			if _, has := settingFields[field]; has {
+				return fmt.Errorf("%s background: field %s of settings is named again by params", where, field)
 			}
 		}
 	}

@@ -10,6 +10,10 @@ type BackgroundTab struct {
 	ID     string
 	Plugin string
 	Active bool
+	// Directory is the start directory of the tab: the directory of its origin, else the root of the project, or nil without both.
+	Directory *string
+	// Params are the tab parameters, by name.
+	Params map[string]json.RawMessage
 }
 
 // BackgroundDeclaration is the background declaration of a plugin: the operation that the tabs of the plugin keep a session of, and
@@ -19,6 +23,10 @@ type BackgroundDeclaration struct {
 	Operation string
 	// Settings maps a request field to a declared setting.
 	Settings map[string]string
+	// Directory names the request field of the start directory of the tab, or is empty, and Params maps a request field to a tab
+	// parameter (docs/spec/plugins.md#background-sessions).
+	Directory string
+	Params    map[string]string
 }
 
 // BackgroundSidecar is the port of one sidecar of the window.
@@ -106,6 +114,15 @@ func (s *BackgroundSessions) open(tab BackgroundTab, declaration *BackgroundDecl
 	fields := map[string]any{}
 	for field, setting := range declaration.Settings {
 		if value, found := values[setting]; found {
+			fields[field] = value
+		}
+	}
+	// The request starts the session as the surface of the tab would; a mapped parameter replaces the start directory in its field.
+	if declaration.Directory != "" && tab.Directory != nil {
+		fields[declaration.Directory] = *tab.Directory
+	}
+	for field, param := range declaration.Params {
+		if value, found := tab.Params[param]; found {
 			fields[field] = value
 		}
 	}

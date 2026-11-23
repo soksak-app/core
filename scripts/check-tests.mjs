@@ -1673,6 +1673,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1134",
+    implementation: [
+      { file: "packages/workbench/plane.js", symbol: "const directory = tabOrigin(tab.id).directory ?? activeProject()?.root ?? null;" },
+      { file: "packages/workbench-mygo/src/shell_tabs.go", symbol: "func tabStart(tab layout.Tab, root string) (*string, map[string]json.RawMessage, error) {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/background-sessions.test.mjs", id: "a background session opens only for a tab without a mounted surface and ends when its surface mounts" },
+      { file: "packages/workbench-mygo/tests/background_sessions_test.go", id: "TestTheStartDirectoryAndTheMappedTabParametersFillTheirRequestFields" },
+    ],
+    expected: "A background session starts in the start directory of the tab with the mapped tab parameters, as the surface of the tab would start it.",
+    levels: ["unit"],
+  },
+  {
     id: "F1115",
     implementation: [
       { file: "packages/host/go/src/endpoint.go", symbol: "func (e *Endpoint) pageRequest(ctx context.Context, window, method string, params json.RawMessage) (json.RawMessage, error) {" },

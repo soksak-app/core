@@ -116,6 +116,8 @@ type backgroundHarness struct {
 	wait     func(error)
 	settings map[string]any
 	missing  bool
+	// start declares the fields directory and params of the declaration.
+	start bool
 }
 
 func newBackground() *backgroundHarness {
@@ -134,6 +136,10 @@ func newBackground() *backgroundHarness {
 			declaration := &workbench.BackgroundDeclaration{Sidecar: backgroundSidecar, Operation: "open"}
 			if h.settings != nil {
 				declaration.Settings = map[string]string{"shell": "program", "absent": "unset"}
+			}
+			if h.start {
+				declaration.Directory = "directory"
+				declaration.Params = map[string]string{"program": "program", "args": "args", "directory": "directory"}
 			}
 			return declaration
 		},
@@ -266,6 +272,29 @@ func TestTheDeclaredSettingsFillTheirRequestFields(t *testing.T) {
 	h.tabs = []workbench.BackgroundTab{{ID: "a", Plugin: "session"}}
 	h.sync(t)
 	equal(t, h.sidecar.opened()[0].body, `{"operation":"open","shell":"zsh"}`)
+}
+
+// The request starts the session as the surface of the tab would: in the start directory of the tab, with the mapped parameters that
+// the tab holds, a parameter replacing the start directory in the same field (docs/spec/plugins.md#background-sessions).
+func TestTheStartDirectoryAndTheMappedTabParametersFillTheirRequestFields(t *testing.T) {
+	h := newBackground()
+	h.start = true
+	root := "/work/session"
+	h.tabs = []workbench.BackgroundTab{
+		{ID: "a", Plugin: "session", Directory: &root, Params: map[string]json.RawMessage{"program": json.RawMessage(`"claude"`), "args": json.RawMessage(`["--verbose"]`)}},
+		{ID: "b", Plugin: "session", Directory: &root, Params: map[string]json.RawMessage{"directory": json.RawMessage(`"/work/other"`)}},
+		{ID: "c", Plugin: "session"},
+	}
+	h.sync(t)
+	opened := h.sidecar.opened()
+	equal(t, len(opened), 3)
+	bodies := map[string]string{}
+	for _, message := range opened {
+		bodies[message.surface] = message.body
+	}
+	equal(t, bodies["a"], `{"args":["--verbose"],"directory":"/work/session","operation":"open","program":"claude"}`)
+	equal(t, bodies["b"], `{"directory":"/work/other","operation":"open"}`)
+	equal(t, bodies["c"], `{"operation":"open"}`)
 }
 
 func TestAReconnectionOpensAgainWithTheCurrentSettingsAndIsRecordedEachTime(t *testing.T) {

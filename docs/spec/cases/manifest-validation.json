@@ -2249,6 +2249,353 @@
       ]
     },
     {
+      "id": "background.accepts-directory-and-params",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": "^0.1.0"
+        },
+        "settings": {
+          "interval": {
+            "label": "Interval",
+            "type": "integer",
+            "default": 5,
+            "minimum": 1,
+            "maximum": 10
+          }
+        },
+        "background": {
+          "sidecar": "@scope/x",
+          "operation": "run",
+          "settings": {
+            "interval": "interval"
+          },
+          "directory": "directory",
+          "params": {
+            "program": "program",
+            "directory": "directory"
+          }
+        }
+      },
+      "accepted": true,
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "background.directory-not-a-name",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": "^0.1.0"
+        },
+        "settings": {
+          "interval": {
+            "label": "Interval",
+            "type": "integer",
+            "default": 5,
+            "minimum": 1,
+            "maximum": 10
+          }
+        },
+        "background": {
+          "sidecar": "@scope/x",
+          "operation": "run",
+          "settings": {
+            "interval": "interval"
+          },
+          "directory": ""
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe background: directory must be a request field name",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "background.directory-replaces-operation",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": "^0.1.0"
+        },
+        "settings": {
+          "interval": {
+            "label": "Interval",
+            "type": "integer",
+            "default": 5,
+            "minimum": 1,
+            "maximum": 10
+          }
+        },
+        "background": {
+          "sidecar": "@scope/x",
+          "operation": "run",
+          "settings": {
+            "interval": "interval"
+          },
+          "directory": "operation"
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe background: directory cannot replace operation",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "background.directory-names-a-setting-field",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": "^0.1.0"
+        },
+        "settings": {
+          "interval": {
+            "label": "Interval",
+            "type": "integer",
+            "default": 5,
+            "minimum": 1,
+            "maximum": 10
+          }
+        },
+        "background": {
+          "sidecar": "@scope/x",
+          "operation": "run",
+          "settings": {
+            "interval": "interval"
+          },
+          "directory": "interval"
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe background: field interval of settings is named again by directory",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "background.params-not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": "^0.1.0"
+        },
+        "settings": {
+          "interval": {
+            "label": "Interval",
+            "type": "integer",
+            "default": 5,
+            "minimum": 1,
+            "maximum": 10
+          }
+        },
+        "background": {
+          "sidecar": "@scope/x",
+          "operation": "run",
+          "settings": {
+            "interval": "interval"
+          },
+          "params": [
+            "program"
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe background: params must map request fields to tab parameter names",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "background.param-replaces-operation",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": "^0.1.0"
+        },
+        "settings": {
+          "interval": {
+            "label": "Interval",
+            "type": "integer",
+            "default": 5,
+            "minimum": 1,
+            "maximum": 10
+          }
+        },
+        "background": {
+          "sidecar": "@scope/x",
+          "operation": "run",
+          "settings": {
+            "interval": "interval"
+          },
+          "params": {
+            "operation": "program"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe background: a tab parameter cannot replace operation",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "background.param-not-a-name",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": "^0.1.0"
+        },
+        "settings": {
+          "interval": {
+            "label": "Interval",
+            "type": "integer",
+            "default": 5,
+            "minimum": 1,
+            "maximum": 10
+          }
+        },
+        "background": {
+          "sidecar": "@scope/x",
+          "operation": "run",
+          "settings": {
+            "interval": "interval"
+          },
+          "params": {
+            "program": ""
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe background: the tab parameter of field program must be a non-empty name",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "background.params-names-a-setting-field",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dependencies": {
+          "@scope/x": "^0.1.0"
+        },
+        "settings": {
+          "interval": {
+            "label": "Interval",
+            "type": "integer",
+            "default": 5,
+            "minimum": 1,
+            "maximum": 10
+          }
+        },
+        "background": {
+          "sidecar": "@scope/x",
+          "operation": "run",
+          "settings": {
+            "interval": "interval"
+          },
+          "params": {
+            "interval": "program"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe background: field interval of settings is named again by params",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
       "id": "surface.unknown-field",
       "manifest": {
         "id": "probe",

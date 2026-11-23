@@ -944,7 +944,7 @@ fn check_background(
     only(
         &format!("{where_} background"),
         background,
-        &["sidecar", "operation", "settings"],
+        &["sidecar", "operation", "settings", "directory", "params"],
     )?;
     if let Some(fields_raw) = background.get("settings") {
         let fields = fields_raw.as_object().ok_or_else(|| {
@@ -963,6 +963,54 @@ fn check_background(
                 return Err(format!(
                     "{where_} background: setting {} is not declared by the plugin",
                     js_value_text(&fields[field.as_str()])
+                ));
+            }
+        }
+    }
+    // directory names the request field that receives the start directory of the tab, and params maps request fields to tab
+    // parameters (docs/spec/plugins.md#background-sessions). Neither names a field of settings.
+    let setting_fields = background.get("settings").and_then(Value::as_object);
+    let names_setting =
+        |field: &str| setting_fields.is_some_and(|fields| fields.contains_key(field));
+    if let Some(raw) = background.get("directory") {
+        let directory = raw
+            .as_str()
+            .filter(|text| !text.is_empty())
+            .ok_or_else(|| {
+                format!("{where_} background: directory must be a request field name")
+            })?;
+        if directory == "operation" {
+            return Err(format!(
+                "{where_} background: directory cannot replace operation"
+            ));
+        }
+        if names_setting(directory) {
+            return Err(format!(
+                "{where_} background: field {directory} of settings is named again by directory"
+            ));
+        }
+    }
+    if let Some(raw) = background.get("params") {
+        let params = raw.as_object().ok_or_else(|| {
+            format!("{where_} background: params must map request fields to tab parameter names")
+        })?;
+        for field in sorted_keys(params) {
+            if field == "operation" {
+                return Err(format!(
+                    "{where_} background: a tab parameter cannot replace operation"
+                ));
+            }
+            if !params[field.as_str()]
+                .as_str()
+                .is_some_and(|param| !param.is_empty())
+            {
+                return Err(format!(
+                    "{where_} background: the tab parameter of field {field} must be a non-empty name"
+                ));
+            }
+            if names_setting(&field) {
+                return Err(format!(
+                    "{where_} background: field {field} of settings is named again by params"
                 ));
             }
         }

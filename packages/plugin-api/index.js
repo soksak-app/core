@@ -661,7 +661,7 @@ function checkPrograms(where, programs) {
 
 function checkBackground(where, background, sidecars, settings = {}) {
   if (!isObject(background)) throw new Error(`${where}: background must be an object`);
-  only(`${where} background`, background, ["sidecar", "operation", "settings"]);
+  only(`${where} background`, background, ["sidecar", "operation", "settings", "directory", "params"]);
   // settings maps a request field name to a setting name that this plugin declares. When the core opens a session, it puts the value
   // of that setting into the request field.
   if (background.settings !== undefined) {
@@ -672,6 +672,29 @@ function checkBackground(where, background, sidecars, settings = {}) {
       if (typeof setting !== "string" || !Object.hasOwn(settings ?? {}, setting)) {
         throw new Error(`${where} background: setting ${setting} is not declared by the plugin`);
       }
+    }
+  }
+  // directory names the request field that receives the start directory of the tab, and params maps request fields to tab parameters
+  // (docs/spec/plugins.md#background-sessions). Neither names a field of settings, whose value would then depend on the order.
+  // default: settings is an optional member; without it no field of settings exists.
+  const settingFields = Object.keys(background.settings ?? {});
+  if (background.directory !== undefined) {
+    if (typeof background.directory !== "string" || background.directory.length === 0) {
+      throw new Error(`${where} background: directory must be a request field name`);
+    }
+    if (background.directory === "operation") throw new Error(`${where} background: directory cannot replace operation`);
+    if (settingFields.includes(background.directory)) {
+      throw new Error(`${where} background: field ${background.directory} of settings is named again by directory`);
+    }
+  }
+  if (background.params !== undefined) {
+    if (!isObject(background.params)) throw new Error(`${where} background: params must map request fields to tab parameter names`);
+    for (const [field, param] of sortedEntries(background.params)) {
+      if (field === "operation") throw new Error(`${where} background: a tab parameter cannot replace operation`);
+      if (typeof param !== "string" || param.length === 0) {
+        throw new Error(`${where} background: the tab parameter of field ${field} must be a non-empty name`);
+      }
+      if (settingFields.includes(field)) throw new Error(`${where} background: field ${field} of settings is named again by params`);
     }
   }
   if (typeof background.sidecar !== "string" || !sidecars.includes(background.sidecar)) {
