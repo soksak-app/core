@@ -743,8 +743,18 @@ impl Drop for Watching {
             return;
         }
         let pid: libc::pid_t = self.pid.parse().expect("the pid of the watch");
-        // default: the child may have ended since the check failed, and the kill of an ended child changes nothing.
-        let _ = unsafe { libc::kill(pid, libc::SIGKILL) };
+        // A child that ended before the kill answers ESRCH, which is its end; any other error fails the check.
+        if unsafe { libc::kill(pid, libc::SIGKILL) } != 0 {
+            let error = std::io::Error::last_os_error();
+            // A drop during the unwind of a failed check reports on the standard error, because a second panic aborts the test.
+            if error.raw_os_error() != Some(libc::ESRCH) {
+                if std::thread::panicking() {
+                    eprintln!("kill of the child {pid}: {error}");
+                } else {
+                    panic!("kill of the child {pid}: {error}");
+                }
+            }
+        }
     }
 }
 
