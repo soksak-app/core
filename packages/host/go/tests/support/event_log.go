@@ -3,7 +3,6 @@ package support
 import (
 	"fmt"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -30,18 +29,9 @@ func UseEventLog(t *testing.T) *host.EventLog {
 	}
 	StoreEveryLevel(t, log)
 	host.UseHostEventLog(log)
-	current.Store(log)
 	// The writer ends before the folder of the test is removed; a writer that outlives the test writes into a removed folder.
-	t.Cleanup(func() { current.CompareAndSwap(log, nil); host.UseHostEventLog(nil); log.Close() })
+	t.Cleanup(func() { host.UseHostEventLog(nil); log.Close() })
 	return log
-}
-
-// current is the writer that UseEventLog or UseRoomyEventLog attached to the host and that the test has not ended.
-var current atomic.Pointer[host.EventLog]
-
-// CurrentEventLog is the writer that the test attached with UseEventLog or UseRoomyEventLog, or nil.
-func CurrentEventLog() *host.EventLog {
-	return current.Load()
 }
 
 // UseRoomyEventLog is UseEventLog with a queue that holds the records of a flood of messages.
@@ -56,9 +46,7 @@ func UseRoomyEventLog(t *testing.T) *host.EventLog {
 	}
 	StoreEveryLevel(t, log)
 	host.UseHostEventLog(log)
-	current.Store(log)
 	t.Cleanup(func() {
-		current.CompareAndSwap(log, nil)
 		host.UseHostEventLog(nil)
 		if err := log.Flush(); err != nil {
 			t.Errorf("flush event log before closing: %v", err)
@@ -173,6 +161,12 @@ func AwaitEvents(t *testing.T, log *host.EventLog, name string, count int, bound
 			names = append(names, fmt.Sprint(event["event"]))
 			if event["event"] == name {
 				found = append(found, event)
+			}
+			// A loss can hold an awaited event, which then never comes, so the wait fails at the loss.
+			if event["event"] == "log.dropped" && len(found) < count {
+				fields, _ := event["fields"].(map[string]any)
+				t.Fatalf("the writer dropped seq %v to %v (%v) while %d of %d events %s were stored, so an awaited event can be lost",
+					fields["from_seq"], fields["to_seq"], fields["reason"], len(found), count, name)
 			}
 		}
 		if len(found) >= count {

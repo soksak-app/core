@@ -45,11 +45,6 @@ func heldPageExchange(name, payload, result string) casePageExchange {
 // exchanges, and an exchange that it did not send, fail the test.
 func servePage(t *testing.T, exchanges ...casePageExchange) (*host.Endpoint, string, string, *casePage) {
 	t.Helper()
-	// The end of each connection is the event host.endpoint.end, which the check waits for; a test that attached a writer keeps it.
-	log := support.CurrentEventLog()
-	if log == nil {
-		log = support.UseEventLog(t)
-	}
 	page := newTierBackend([]string{"main"})
 	page.script = exchanges
 	endpoint, address, config := serve(t, page)
@@ -57,12 +52,31 @@ func servePage(t *testing.T, exchanges ...casePageExchange) (*host.Endpoint, str
 		// The connections that dial made are closed by their own cleanups, which run first; the check waits for the end of each,
 		// so every call that a connection sends to the page, such as the status.unwatch of its last watch, has arrived
 		// (docs/spec/endpoint.md#recording). Each release is answered at once by the case page, so the ends come well within the bound.
-		support.AwaitEvents(t, log, "host.endpoint.end", dialed(address), 10*time.Second)
+		awaitEnded(t, endpoint, dialed(address), 10*time.Second)
 		for _, problem := range page.finish() {
 			t.Errorf("the page of the endpoint: %s", problem)
 		}
 	})
 	return endpoint, address, config, page
+}
+
+// awaitEnded waits until count connections of endpoint ended. The count of the endpoint is the fact that
+// host.endpoint.end records, which the queue of a writer can refuse, so the wait reads the endpoint and not the event log.
+func awaitEnded(t *testing.T, endpoint *host.Endpoint, count int, bound time.Duration) {
+	t.Helper()
+	limit := time.NewTimer(bound)
+	defer limit.Stop()
+	for {
+		ended, change := endpoint.Ended()
+		if ended >= count {
+			return
+		}
+		select {
+		case <-change:
+		case <-limit.C:
+			t.Fatalf("%d of %d connections ended within %v", ended, count, bound)
+		}
+	}
 }
 
 // listenUnix listens on a unix socket in a new folder that the test removes when it ends.

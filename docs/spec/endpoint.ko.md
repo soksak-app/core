@@ -91,7 +91,7 @@ HTTP 요청 줄은 최대 길이보다 큰 길이 접두 또는 올바르지 않
 
 host는 선언된 메서드를 부른 client의 모든 요청을 성능 trace가 켜져 있는지와 상관없이 event `host.endpoint.call`로 저장한다. 메서드, 받은 그대로의 params(1024바이트로 자름), 결과, 마이크로초를 담는다([logging](logging.ko.md#입구)). 연결을 닫게 하는 frame(한도를 넘은 frame, 잘못된 JSON, JSON-RPC 2.0 요청이 아닌 값, 선언되지 않은 메서드)은 메서드의 요청이 아니므로 host는 닫는 이유를 `endpoint` 자리의 record로 저장한다.
 
-연결의 끝은 `subscriptions`(해제가 성공한 그 연결의 subscription 수)와 `failed`(해제가 실패한 수)를 가진 event `host.endpoint.end`다. 실패한 해제 각각은 place `endpoint release`의 오류 record이기도 하다. host는 그 subscription 각각의 해제가 결과를 얻은 뒤, 곧 마지막 watch의 해제가 page에 보내는 `status.unwatch`까지 포함해 결과를 얻은 뒤 이를 저장하므로, 기록을 읽는 쪽은 그 연결이 더 보내는 것이 없음을 안다([logging](logging.md#entrances)). `status.unwatch`를 보내는 해제는 page 요청이며 시간 한도가 없다. page의 답, page의 끝 또는 reload가 그것을 끝내고, event는 그 끝 뒤에만 저장된다.
+연결의 끝은 `subscriptions`(해제가 성공한 그 연결의 subscription 수)와 `failed`(해제가 실패한 수)를 가진 event `host.endpoint.end`다. 실패한 해제 각각은 place `endpoint release`의 오류 record이기도 하다. host는 그 subscription 각각의 해제가 결과를 얻은 뒤, 곧 마지막 watch의 해제가 page에 보내는 `status.unwatch`까지 포함해 결과를 얻은 뒤 이를 저장하므로, 기록을 읽는 쪽은 그 연결이 더 보내는 것이 없음을 안다([logging](logging.md#entrances)). `status.unwatch`를 보내는 해제는 page 요청이며 시간 한도가 없다. page의 답, page의 끝 또는 reload가 그것을 끝내고, event는 그 끝 뒤에만 저장된다. event writer는 queue bound에서 이 event를 거부할 수 있으므로(`log.dropped`), endpoint는 같은 시점에 끝난 연결도 세고 각 변화를 알린다(Go `Endpoint.Ended`, Rust `Endpoint::await_ended`). 연결의 끝을 기다리는 check는 그 count를 읽으며, 어떤 bound도 그것을 버리지 않는다.
 
 ## Log query
 

@@ -290,6 +290,10 @@ type Endpoint struct {
 	// closeReleased holds each press whose release the close of its connection delivered, until the next delivered down of its
 	// pointer and button in its window, so a refused drag or up of it names that close (closeRefusal).
 	closeReleased map[pressKey]bool
+	// endedMu protects ended, the number of connections whose end is stored, and endedChange, which closes at the next end.
+	endedMu     sync.Mutex
+	ended       int
+	endedChange chan struct{}
 }
 
 // LockOwner is the owner that process.lock holds: the process identifier and the boot identifier of its host run
@@ -481,7 +485,18 @@ func (lock *processLock) close() error {
 
 // NewEndpoint creates an endpoint that uses backend.
 func NewEndpoint(backend Backend) *Endpoint {
-	return &Endpoint{backend: backend, conns: map[*endpointConn]bool{}, counts: map[topic]int{}, queues: map[topic][]func(){}}
+	return &Endpoint{
+		backend: backend, conns: map[*endpointConn]bool{}, counts: map[topic]int{}, queues: map[topic][]func(){},
+		endedChange: make(chan struct{}),
+	}
+}
+
+// Ended returns the number of connections that ended and a channel that closes at the next end. The
+// count is the fact that host.endpoint.end records, and no bound of the event writer sheds it (docs/spec/endpoint.md#recording).
+func (e *Endpoint) Ended() (int, <-chan struct{}) {
+	e.endedMu.Lock()
+	defer e.endedMu.Unlock()
+	return e.ended, e.endedChange
 }
 
 // Serve obtains the ownership of configDir and starts accepting connections of listener. Publish writes endpoint.json
@@ -1295,6 +1310,11 @@ func (e *Endpoint) drop(c *endpointConn, reason string) {
 		EmitHost(LevelDebug, "host.endpoint.end", map[string]any{
 			"subscriptions": int64(len(held)) - failed.Load(), "failed": failed.Load(),
 		})
+		e.endedMu.Lock()
+		e.ended++
+		close(e.endedChange)
+		e.endedChange = make(chan struct{})
+		e.endedMu.Unlock()
 	}
 	if len(held) == 0 {
 		ended()

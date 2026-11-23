@@ -21,11 +21,10 @@ mod child;
 mod records;
 
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 use serde_json::{Value, json};
 use soksak_host::endpoint;
-use soksak_host::event_log::EventLog;
 use soksak_host::event_record::use_host_event_log;
 
 /// The records of the host are process-wide, so the tests of this file run one at a time.

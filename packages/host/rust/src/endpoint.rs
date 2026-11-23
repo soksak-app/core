@@ -16,7 +16,7 @@ use std::fs::{File, TryLockError};
 use std::io::{ErrorKind, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
@@ -612,14 +612,24 @@ struct Ending {
     total: u64,
     remaining: AtomicU64,
     failed: AtomicU64,
+    ended: Arc<Ended>,
+}
+
+/// The number of connections that ended, and the condition that tells each change. The count is the
+/// fact that `host.endpoint.end` records, and no bound of the event writer sheds it (docs/spec/endpoint.md#recording).
+#[derive(Default)]
+struct Ended {
+    count: Mutex<u64>,
+    change: Condvar,
 }
 
 impl Ending {
-    fn new(total: u64) -> Arc<Self> {
+    fn new(total: u64, ended: Arc<Ended>) -> Arc<Self> {
         let release = Arc::new(Self {
             total,
             remaining: AtomicU64::new(total),
             failed: AtomicU64::new(0),
+            ended,
         });
         if total == 0 {
             release.ended();
@@ -653,6 +663,13 @@ impl Ending {
             "host.endpoint.end",
             json!({"subscriptions": self.total - failed, "failed": failed}),
         );
+        *self
+            .ended
+            .count
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the count.
+            .unwrap_or_else(PoisonError::into_inner) += 1;
+        self.ended.change.notify_all();
     }
 }
 
@@ -726,6 +743,8 @@ struct Shared {
     /// Whether the endpoint holds the connection activity of the platform (`hold_connection_activity`). It changes only
     /// while the lock of `peers` is held.
     activity: AtomicBool,
+    /// The ends of the connections.
+    ended: Arc<Ended>,
 }
 
 /// Sends a notification to the connections. After the endpoint stops there is no connection to send to.
@@ -1308,6 +1327,7 @@ impl Endpoint {
             stopping: AtomicBool::new(false),
             config: directory.to_path_buf(),
             activity: AtomicBool::new(false),
+            ended: Arc::default(),
         });
         let mut endpoint = Endpoint {
             shared,
@@ -1385,6 +1405,21 @@ impl Endpoint {
     /// The value that sends notifications to the connections of this endpoint.
     pub fn notifier(&self) -> Notifier {
         Notifier(self.shared.clone())
+    }
+
+    /// Waits up to bound until count connections of the endpoint ended, and returns the number of connections
+    /// that ended. The count is the fact that `host.endpoint.end` records, which the queue of the event writer
+    /// can refuse (docs/spec/endpoint.md#recording).
+    pub fn await_ended(&self, count: u64, bound: std::time::Duration) -> u64 {
+        let ended = &self.shared.ended;
+        // default: a lock that a panicking thread poisoned still holds the count.
+        let guard = ended.count.lock().unwrap_or_else(PoisonError::into_inner);
+        let (guard, _) = ended
+            .change
+            .wait_timeout_while(guard, bound, |ended| *ended < count)
+            // default: a wait whose lock a panicking thread poisoned still returns the count.
+            .unwrap_or_else(PoisonError::into_inner);
+        *guard
     }
 
     /// Stops accepting new connections and removes the address file and endpoint.json. It can be called several times.
@@ -2334,7 +2369,7 @@ fn forget(shared: &Arc<Shared>, peer: u64) {
         None => return,
     };
     drop(peers);
-    let ending = Ending::new(topics.len() as u64);
+    let ending = Ending::new(topics.len() as u64, shared.ended.clone());
     for topic in topics {
         change(shared, peer, topic, false, None, Some(ending.clone()), 0);
     }

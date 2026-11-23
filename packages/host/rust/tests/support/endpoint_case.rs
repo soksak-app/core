@@ -500,7 +500,7 @@ pub struct Served {
     pub endpoint: Endpoint,
     pub page: Arc<CasePage>,
     pub config: Folder,
-    /// The writer of the events of the host, which stores the `host.endpoint.end` of each connection.
+    /// The writer of the events of the host.
     pub log: Arc<EventLog>,
     opened: std::sync::atomic::AtomicUsize,
 }
@@ -534,20 +534,19 @@ impl Served {
         endpoint_client::connect(self.endpoint.address())
     }
 
-    /// Stops the endpoint, which closes its connections, waits for the `host.endpoint.end` of each connection that `open` made, so
-    /// every call that a connection sends to the page, such as the `status.unwatch` of its last watch, has arrived, and fails the
-    /// test on a deviation of the endpoint from the exchanges, and on an exchange that it did not send
-    /// (docs/spec/endpoint.md#recording).
+    /// Stops the endpoint, which closes its connections, waits for the end of each connection that `open` made, so every call
+    /// that a connection sends to the page, such as the `status.unwatch` of its last watch, has arrived, and fails the test on a
+    /// deviation of the endpoint from the exchanges, and on an exchange that it did not send (docs/spec/endpoint.md#recording).
+    /// The wait reads the count of the endpoint, because the queue of the event writer can refuse `host.endpoint.end`.
     pub fn finish(&self) {
         self.endpoint.stop();
-        let opened = self.opened.load(std::sync::atomic::Ordering::Relaxed);
-        // Each release is answered at once by the case page, so the ends are stored well within the bound.
-        records::await_events(
-            &self.log,
-            self.config.path(),
-            "host.endpoint.end",
-            opened,
-            Duration::from_secs(10),
+        let opened = self.opened.load(std::sync::atomic::Ordering::Relaxed) as u64;
+        // Each release is answered at once by the case page, so the ends come well within the bound.
+        let bound = Duration::from_secs(10);
+        let ended = self.endpoint.await_ended(opened, bound);
+        assert!(
+            ended >= opened,
+            "{ended} of {opened} connections ended within {bound:?}"
         );
         let problems = self.page.finish();
         assert!(

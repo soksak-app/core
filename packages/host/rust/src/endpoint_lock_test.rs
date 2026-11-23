@@ -109,6 +109,7 @@ fn shared(service: Pages) -> Arc<Shared> {
         stopping: AtomicBool::new(false),
         config: PathBuf::new(),
         activity: AtomicBool::new(false),
+        ended: Arc::default(),
     })
 }
 

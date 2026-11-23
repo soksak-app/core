@@ -61,6 +61,19 @@ pub fn await_events(
             .filter(|event| event["event"] == name)
             .cloned()
             .collect();
+        if found.len() < count {
+            // A loss can hold an awaited event, which then never comes, so the wait fails at the loss.
+            if let Some(dropped) = events.iter().find(|event| event["event"] == "log.dropped") {
+                let fields = &dropped["fields"];
+                panic!(
+                    "the writer dropped seq {} to {} ({}) while {} of {count} events {name} were stored, so an awaited event can be lost",
+                    fields["from_seq"],
+                    fields["to_seq"],
+                    fields["reason"],
+                    found.len()
+                );
+            }
+        }
         if found.len() >= count {
             return found;
         }
