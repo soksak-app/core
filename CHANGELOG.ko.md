@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1113-1: `make -C native/darwin repeat`은 `PARALLEL=<copies>`를 받아 실행마다 테스트 사본을 그만큼 실행한다. 검증: F1113 이전 테스트의 Red(사본 8개 중 8개 실패), 이어 고친 테스트의 Green(사본 8개씩 4번).
 - F1113: `webview_dialogs_test`의 테스트 delegate는 download가 되는 navigation의 policy 변경 failure(`WebKitErrorDomain` 102)를 navigation의 끝으로 세지 않는다. WebKit이 이를 download 시작의 앞이나 뒤에 보고하기 때문이다. 검증: 병렬 32번 중 19번 Red, 이어 32번 중 32번과 직렬 반복 3번 Green.
 - F1112-1: contract row `program.run.reads-the-programs-of-the-sync-surface`가 scope `all`을 적으므로 host test run이 이를 읽는다. 검증: release run의 host test job Red, 이어 `scripts/test/test-hosts.test.mjs` Green.
 - F1108-5: view가 literal 이름으로 `batcher.emit`을 통해 `page.theme.applied`를 emit하므로 event catalog check가 emit site를 찾는다. 검증: release run에서 `make check-events`의 Red, 이어 structure check와 plugin-api suite와 함께 Green.

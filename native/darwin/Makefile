@@ -532,13 +532,22 @@ test-ime-wire-document: $(BUILD)/ime_wire_document_test
 build-test: $(BUILD)/$(TEST)
 	@case "$(TEST)" in *_test) ;; *) echo "build-test requires TEST=<name>_test" >&2; exit 2;; esac
 
+# PARALLEL starts that many copies of the test in each run, so a failure that appears only under load is repeated through
+# this target; a run fails when one of its copies fails.
+PARALLEL ?= 1
+
 repeat: $(BUILD)/$(TEST)
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "repeat requires TEST=<name>_test and a positive COUNT" >&2; exit 2;; esac
+	@case "$(PARALLEL)" in ''|*[!0-9]*|0) echo "repeat requires a positive PARALLEL" >&2; exit 2;; esac
 	@i=1; while [ $$i -le $(COUNT) ]; do \
-	  echo "START: $(TEST) run $$i of $(COUNT)"; \
-	  node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) $(TEST) || { echo "FAIL: $(TEST) run $$i of $(COUNT); load $$(uptime)" >&2; exit 1; }; \
+	  echo "START: $(TEST) run $$i of $(COUNT) with $(PARALLEL) copies"; \
+	  pids=""; c=1; while [ $$c -le $(PARALLEL) ]; do \
+	    node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) $(TEST) & pids="$$pids $$!"; c=$$((c + 1)); \
+	  done; \
+	  failed=0; for pid in $$pids; do wait $$pid || failed=$$((failed + 1)); done; \
+	  [ $$failed -eq 0 ] || { echo "FAIL: $(TEST) run $$i of $(COUNT): $$failed of $(PARALLEL) copies failed; load $$(uptime)" >&2; exit 1; }; \
 	  i=$$((i + 1)); \
-	done; echo "PASS: $(TEST) passed $(COUNT) consecutive runs"
+	done; echo "PASS: $(TEST) passed $(COUNT) consecutive runs of $(PARALLEL) copies"
 
 # Each run of the suite is one run of scripts/native-tests.mjs over the suite, so every test is named, timed and limited as in test.
 repeat-suite: $(addprefix $(BUILD)/,$(NATIVE_TEST_EXECUTABLES))

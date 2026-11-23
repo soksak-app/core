@@ -446,7 +446,7 @@ Terminal view benchmark는 process 및 one-shot layout 증거에 전체 performa
 
 간헐 실패는 다음 추적 대상으로 재현하고 수용한다.
 
-- 네이티브 테스트 하나: `make -C native/darwin repeat TEST=<name>_test COUNT=<n>`.
+- 네이티브 테스트 하나: `make -C native/darwin repeat TEST=<name>_test COUNT=<n> [PARALLEL=<copies>]`. `PARALLEL`은 실행마다 테스트 사본을 그만큼 동시에 시작하므로, 부하가 있는 기계에서만 나타나는 실패도 반복된다. 사본 하나가 실패하면 그 실행이 실패한다.
 - process identity package의 테스트 하나: `make -C native/darwin/process-identity repeat TEST=<name>_test COUNT=<n>`.
 - 네이티브 기본 모음: `make -C native/darwin repeat-suite COUNT=<n>`.
 - Rust 패키지의 테스트: `make repeat-rust PACKAGE=<package> COUNT=<n> [TEST=<name>] [FEATURES=<features>]`.

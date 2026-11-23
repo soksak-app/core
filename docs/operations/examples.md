@@ -448,7 +448,7 @@ Input-method (IME) behavior is verified only through the activation tier (`make 
 
 Reproduce and accept an intermittent failure with these tracked targets:
 
-- One native test: `make -C native/darwin repeat TEST=<name>_test COUNT=<n>`.
+- One native test: `make -C native/darwin repeat TEST=<name>_test COUNT=<n> [PARALLEL=<copies>]`. `PARALLEL` starts that many copies of the test in each run, so a failure that appears only on a loaded machine is repeated; a run fails when one copy fails.
 - One test of the process identity package: `make -C native/darwin/process-identity repeat TEST=<name>_test COUNT=<n>`.
 - The default native suite: `make -C native/darwin repeat-suite COUNT=<n>`.
 - Rust tests of a package: `make repeat-rust PACKAGE=<package> COUNT=<n> [TEST=<name>] [FEATURES=<features>]`.
