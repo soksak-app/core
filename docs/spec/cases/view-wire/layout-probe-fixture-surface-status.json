@@ -4,6 +4,28 @@
   "plugin": "layoutprobe",
   "replay": false,
   "reason": "The calls of this case other than runtime.log are answered by the page of the workbench, which only a running application has; the runtime.log steps are replayed by the cases log-clock and log-batch.",
+  "variables": {
+    "theme-events": {
+      "type": "array",
+      "example": [],
+      "source": "page"
+    },
+    "ts-us": {
+      "type": "integer",
+      "example": 1000000,
+      "source": "host"
+    },
+    "mono-ns": {
+      "type": "integer",
+      "example": 1000000000,
+      "source": "host"
+    },
+    "events": {
+      "type": "array",
+      "example": [],
+      "source": "page"
+    }
+  },
   "steps": [
     {"call":{"command":"tab.footer","params":"Layout probe"}},
     {"reply":{"result":null}},
@@ -67,6 +89,20 @@
     {"notice":{"event":"theme","data":{"scheme":"light","tokens":{}}}},
     {"notice":{"event":"exposure-request","data":{"id":1002,"method":"status.get","params":{"name":"layoutprobe.surface"}}}},
     {"call":{"command":"runtime.native.call","params":{"name":"exposureReply","payload":{"id":1002,"result":{"width":300,"height":400,"scale":2,"region":{"x":8,"y":8,"width":284,"height":384},"visibility":"visible","theme":{"scheme":"light","background":"rgb(250, 250, 250)"}}}}}},
+    {"reply":{"result":null}},
+    {"call":{"command":"runtime.log","params":{"action":"clock"}}},
+    {"reply":{"result":{"ts_us":"$ts-us","mono_ns":"$mono-ns"}}},
+    {"call":{"command":"runtime.log","params":{"action":"clock"}}},
+    {"reply":{"result":{"ts_us":"$ts-us","mono_ns":"$mono-ns"}}},
+    {"call":{"command":"runtime.log","params":{"action":"clock"}}},
+    {"reply":{"result":{"ts_us":"$ts-us","mono_ns":"$mono-ns"}}},
+    {"call":{"command":"runtime.log","params":{"action":"clock"}}},
+    {"reply":{"result":{"ts_us":"$ts-us","mono_ns":"$mono-ns"}}},
+    {"call":{"command":"runtime.log","params":{"action":"clock"}}},
+    {"reply":{"result":{"ts_us":"$ts-us","mono_ns":"$mono-ns"}}},
+    {"call":{"command":"runtime.log","params":{"action":"batch","events":"$events"}}},
+    {"reply":{"result":null}},
+    {"call":{"command":"runtime.log","params":{"action":"batch","events":"$theme-events"}}},
     {"reply":{"result":null}}
   ]
 }

@@ -4,6 +4,23 @@
   "plugin": "layoutprobe",
   "replay": false,
   "reason": "The calls of this case other than runtime.log are answered by the page of the workbench, which only a running application has; the runtime.log steps are replayed by the cases log-clock and log-batch.",
+  "variables": {
+    "ts-us": {
+      "type": "integer",
+      "example": 1000000,
+      "source": "host"
+    },
+    "mono-ns": {
+      "type": "integer",
+      "example": 1000000000,
+      "source": "host"
+    },
+    "events": {
+      "type": "array",
+      "example": [],
+      "source": "page"
+    }
+  },
   "steps": [
     {"call":{"command":"runtime.command.register","params":{"name":"layoutprobe.open"}}},
     {"reply":{"result":null}},
@@ -43,6 +60,18 @@
     {"reply":{"result":null}},
     {"notice":{"event":"exposure-request","data":{"id":1004,"method":"status.get","params":{"name":"layoutprobe.section"}}}},
     {"call":{"command":"runtime.native.call","params":{"name":"exposureReply","payload":{"id":1004,"result":{"id":"layoutprobe.follow","sidebar":"right","card":null,"width":190,"height":72,"overflows":false,"follows":true,"surface":null,"view":null}}}}},
+    {"reply":{"result":null}},
+    {"call":{"command":"runtime.log","params":{"action":"clock"}}},
+    {"reply":{"result":{"ts_us":"$ts-us","mono_ns":"$mono-ns"}}},
+    {"call":{"command":"runtime.log","params":{"action":"clock"}}},
+    {"reply":{"result":{"ts_us":"$ts-us","mono_ns":"$mono-ns"}}},
+    {"call":{"command":"runtime.log","params":{"action":"clock"}}},
+    {"reply":{"result":{"ts_us":"$ts-us","mono_ns":"$mono-ns"}}},
+    {"call":{"command":"runtime.log","params":{"action":"clock"}}},
+    {"reply":{"result":{"ts_us":"$ts-us","mono_ns":"$mono-ns"}}},
+    {"call":{"command":"runtime.log","params":{"action":"clock"}}},
+    {"reply":{"result":{"ts_us":"$ts-us","mono_ns":"$mono-ns"}}},
+    {"call":{"command":"runtime.log","params":{"action":"batch","events":"$events"}}},
     {"reply":{"result":null}}
   ]
 }

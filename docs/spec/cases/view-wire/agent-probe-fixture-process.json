@@ -4,6 +4,23 @@
   "plugin": "agentprobe",
   "replay": false,
   "reason": "The calls of this case other than runtime.log are answered by the page of the workbench, which only a running application has; the runtime.log steps are replayed by the cases log-clock and log-batch.",
+  "variables": {
+    "ts-us": {
+      "type": "integer",
+      "example": 1000000,
+      "source": "host"
+    },
+    "mono-ns": {
+      "type": "integer",
+      "example": 1000000000,
+      "source": "host"
+    },
+    "events": {
+      "type": "array",
+      "example": [],
+      "source": "page"
+    }
+  },
   "steps": [
     {"call":{"command":"runtime.sidecar.on","params":{"id":"tab-4","sidecar":"@sok-check/sidecar-agentprobe"}}},
     {"reply":{"result":null}},
@@ -48,6 +65,18 @@
     {"notice":{"event":"exposure-request","data":{"id":1005,"method":"status.get","params":{"name":"agentprobe.process"}}}},
     {"call":{"command":"runtime.native.call","params":{"name":"exposureReply","payload":{"id":1005,"result":{"error":"process of tab-4: run /missing/sok: No such file or directory (os error 2)"}}}}},
     {"reply":{"result":null}},
-    {"request":{"id":1006,"command":"agentprobe.start","params":{"sok":""}}}
+    {"request":{"id":1006,"command":"agentprobe.start","params":{"sok":""}}},
+    {"call":{"command":"runtime.log","params":{"action":"clock"}}},
+    {"reply":{"result":{"ts_us":"$ts-us","mono_ns":"$mono-ns"}}},
+    {"call":{"command":"runtime.log","params":{"action":"clock"}}},
+    {"reply":{"result":{"ts_us":"$ts-us","mono_ns":"$mono-ns"}}},
+    {"call":{"command":"runtime.log","params":{"action":"clock"}}},
+    {"reply":{"result":{"ts_us":"$ts-us","mono_ns":"$mono-ns"}}},
+    {"call":{"command":"runtime.log","params":{"action":"clock"}}},
+    {"reply":{"result":{"ts_us":"$ts-us","mono_ns":"$mono-ns"}}},
+    {"call":{"command":"runtime.log","params":{"action":"clock"}}},
+    {"reply":{"result":{"ts_us":"$ts-us","mono_ns":"$mono-ns"}}},
+    {"call":{"command":"runtime.log","params":{"action":"batch","events":"$events"}}},
+    {"reply":{"result":null}}
   ]
 }

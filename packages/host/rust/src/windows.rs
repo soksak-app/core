@@ -2445,11 +2445,12 @@ pub(crate) fn record_page_start(data: &WindowData) {
         // default: a lock that a panicking thread poisoned still holds the cause; the panic hook records the panic.
         .unwrap_or_else(PoisonError::into_inner)
         .take()
+        // default: a start that no reload of the host caused is the start of the page itself.
         .unwrap_or("page");
     let views = data
         .surface_hosts
         .lock()
-        // default: as above.
+        // default: a lock that a panicking thread poisoned still holds the views; the panic hook records the panic.
         .unwrap_or_else(PoisonError::into_inner)
         .len();
     crate::event_record::emit_host(

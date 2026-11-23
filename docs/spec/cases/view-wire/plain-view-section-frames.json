@@ -5,6 +5,11 @@
   "replay": false,
   "reason": "The calls of this case other than runtime.log are answered by the page of the workbench, which only a running application has; the runtime.log steps are replayed by the cases log-clock and log-batch.",
   "variables": {
+    "later-events": {
+      "type": "array",
+      "example": [],
+      "source": "page"
+    },
     "ts-us": {
       "type": "integer",
       "example": 1000000,
@@ -54,6 +59,8 @@
     {"reply":{"result":null}},
     {"request":{"id":1003,"command":"probeplain.view.frames","params":{"action":"stop"}}},
     {"request":{"id":1004,"command":"probeplain.view.frames","params":{"action":"stop"}}},
-    {"request":{"id":1005,"command":"probeplain.view.frames","params":{"action":"pause"}}}
+    {"request":{"id":1005,"command":"probeplain.view.frames","params":{"action":"pause"}}},
+    {"call":{"command":"runtime.log","params":{"action":"batch","events":"$later-events"}}},
+    {"reply":{"result":null}}
   ]
 }

@@ -81,9 +81,10 @@ test('the catalog declares the chain of each operation of the page and the first
 test('the catalog puts the events that the workbench writes in the layer workbench and keeps the records of a view page in the layer page', () => {
   const real = JSON.parse(readFileSync(new URL('../../docs/spec/events.json', import.meta.url), 'utf8'));
   assert.deepEqual(real.layers, ['native', 'host', 'workbench', 'page', 'sidecar', 'sok']);
-  // A view page writes its start and the records of its batcher; every other event of a document is written by the workbench.
+  // A view page writes its start, the theme that it applies and the records of its batcher; every other event of a document is
+  // written by the workbench.
   assert.deepEqual(Object.keys(real.events).filter((name) => name.startsWith('page.')).sort(),
-    ['page.log.clock', 'page.log.dropped', 'page.log.gated', 'page.start']);
+    ['page.log.clock', 'page.log.dropped', 'page.log.gated', 'page.start', 'page.theme.applied']);
   for (const [name, event] of Object.entries(real.events)) {
     assert.equal(event.layer === 'workbench', name.startsWith('workbench.'), name);
   }

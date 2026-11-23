@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1108-4: catalog 테스트가 `page.theme.applied`를 나열하고, `record_page_start`의 default가 이유를 적으며, e2e fixture의 view-wire case가 view 시작 기록의 log call을 나열하므로 release check가 통과한다. 검증: release run에서 세 테스트의 Red, 이어 fixture 테스트 여섯과 두 view-wire producer와 함께 Green.
 - F1108-3: published view bridge case가 report를 지우지 않고 view 시작 기록의 open-call report 여섯 쌍을 정확히 확인하며, 각 case 순서가 그것으로 시작한다. 검증: 시작 report 하나를 더한 Red(case 8개 중 7개 실패, 지우는 형태는 8개 통과), 이어 Green(64개 중 64개).
 - F1108-2: 각 view는 적용한 theme을 scheme, source와 함께 `page.theme.applied`로 기록하고, 두 host relay는 이를 view의 surface와 함께 저장한다. 두 host는 ready 문서가 없는 view가 ready message로 받을 theme 변경을 `host.view.theme.deferred`로 기록한다. 그래서 모든 view가 시작부터 `runtime.log` call을 보내므로, plugin-api 테스트의 test host는 `packages/plugin-api/test/support/log-host.mjs`로 host처럼 답하고(clock 요청에는 clock reading, batch에는 null), case table은 자기 call 번호를 유지하며, view-wire case `testing-command-request`, `testing-status-watch`, `testing-refused-call`, `testing-writer-batches`는 시작 기록의 log call을 나열한다. 검증: view, relay, host 기록 테스트의 Red, 이어 Green; plugin-api suite가 1088개 중 1088개 통과한다. source 거부는 두 host 모두 찾은 값을 JSON text로 적는다. Go relay는 Rust relay가 `"page"`를 적는 곳에 `page`를 적었고, 두 relay 테스트가 이제 정확한 text를 비교한다(Go 형태에서 Red, 이어 Green).
 - F1110: 두 host에서 마지막 창을 닫으면 종료 중이든 아니든 원인 `last-window-closed`로 애플리케이션이 종료한다. 이전에는 마지막 창을 닫으면 process가 창 없이 남았다. 검증: Go와 Rust 마지막 창 테스트의 Red, 이어 Green.

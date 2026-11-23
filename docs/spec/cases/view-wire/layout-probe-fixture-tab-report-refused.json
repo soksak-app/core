@@ -4,6 +4,23 @@
   "plugin": "layoutprobe",
   "replay": false,
   "reason": "The calls of this case other than runtime.log are answered by the page of the workbench, which only a running application has; the runtime.log steps are replayed by the cases log-clock and log-batch.",
+  "variables": {
+    "ts-us": {
+      "type": "integer",
+      "example": 1000000,
+      "source": "host"
+    },
+    "mono-ns": {
+      "type": "integer",
+      "example": 1000000000,
+      "source": "host"
+    },
+    "events": {
+      "type": "array",
+      "example": [],
+      "source": "page"
+    }
+  },
   "steps": [
     {"call":{"command":"tab.footer","params":"Layout probe"}},
     {"reply":{"result":null}},
@@ -64,6 +81,18 @@
     {"reply":{"error":"a tab title must be 1 to 256 characters without control characters"}},
     {"notice":{"event":"exposure-request","data":{"id":1002,"method":"status.get","params":{"name":"layoutprobe.view"}}}},
     {"call":{"command":"runtime.native.call","params":{"name":"exposureReply","payload":{"id":1002,"result":{"surface":"tab-7","params":{"path":"notes/a.lprobe"},"path":"notes/a.lprobe","origin":{"directory":null},"project":{"id":"prj-1","root":"/work/project"},"directory":"/work/project","settings":{"shade":"plain","rows":4,"caption":"probe"},"title":null,"footer":"Layout probe","reported":null,"notice":null}}}}},
+    {"reply":{"result":null}},
+    {"call":{"command":"runtime.log","params":{"action":"clock"}}},
+    {"reply":{"result":{"ts_us":"$ts-us","mono_ns":"$mono-ns"}}},
+    {"call":{"command":"runtime.log","params":{"action":"clock"}}},
+    {"reply":{"result":{"ts_us":"$ts-us","mono_ns":"$mono-ns"}}},
+    {"call":{"command":"runtime.log","params":{"action":"clock"}}},
+    {"reply":{"result":{"ts_us":"$ts-us","mono_ns":"$mono-ns"}}},
+    {"call":{"command":"runtime.log","params":{"action":"clock"}}},
+    {"reply":{"result":{"ts_us":"$ts-us","mono_ns":"$mono-ns"}}},
+    {"call":{"command":"runtime.log","params":{"action":"clock"}}},
+    {"reply":{"result":{"ts_us":"$ts-us","mono_ns":"$mono-ns"}}},
+    {"call":{"command":"runtime.log","params":{"action":"batch","events":"$events"}}},
     {"reply":{"result":null}}
   ]
 }
