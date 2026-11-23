@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1109: The window check `e2e/surface-status-reload.test.mjs` requires that each of three raster probe surfaces reads its own session and draws its own color after a reload of the main page. Verification: 3 of 3 on wailsv3, tauriv2 and mygo; the surface mapping of the host and the registration of the workbench are not the cause of F1109.
 - F1106: A tab parameter that `surface.params` does not name fails a new tab and opens a stored tab as a placeholder, as an unknown command parameter is refused, and the start parameters of a terminal tab name `directory`. Verification: Red of `tab-params.test.mjs`, then Green.
 - F1120: The Rust sok library registers a platform through `platform::register`, and a Rust app update test checks that the update and the relaunch start the application after the platform wait returned. Verification: Red with the wait of the update removed, then Green of the ten app update tests.
 - F1115: A request that the endpoint sends to a window and that has no result 10 seconds later is the error record of the place `endpoint window request` in both hosts; the request keeps waiting. Verification: Red of the record tests of both hosts, then Green.
