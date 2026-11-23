@@ -65,7 +65,8 @@ fn play(scenario: &str) -> Value {
         Ok(ended) => ended,
         Err(_) => {
             // The child outlived its limit: stop it, which ends the reading thread.
-            let _ = Command::new("kill").arg("-9").arg(id.to_string()).status();
+            // default: the child may have ended after the limit, and the kill of an ended child changes nothing.
+            let _ = unsafe { libc::kill(id as libc::pid_t, libc::SIGKILL) };
             panic!("the scenario {scenario} did not end within {SCENARIO_LIMIT:?}");
         }
     };

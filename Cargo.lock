@@ -7604,6 +7604,7 @@ dependencies = [
 name = "soksak-host-tauriv2"
 version = "0.0.50"
 dependencies = [
+ "libc",
  "serde",
  "serde_json",
  "soksak-host",

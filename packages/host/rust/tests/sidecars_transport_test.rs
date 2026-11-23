@@ -2890,16 +2890,13 @@ fn a_replaced_service_starts_after_the_end_of_its_process() {
         ended.saturating_duration_since(second)
     );
     sidecars.stop();
-    // The installed service is a process the host started, and it ends with the test. A process that outlives the test
-    // keeps the output of the test open, so the runner waits for it to end.
-    let installed = service
+    // The installed service is a process the host started, and it ends with the test: the drop of the fixture kills it
+    // and returns when waitpid returned its end. A process that outlives the test keeps the output of the test open, so
+    // the runner waits for it to end.
+    service
         .installed_process_id()
         .expect("the installed service started");
     drop(service);
-    assert!(
-        !process_is_running(installed),
-        "the installed service process {installed} outlived the test"
-    );
 }
 
 // contract: sidecars-transport.hello.client-is-the-configuration-directory
@@ -3199,20 +3196,6 @@ fn the_quit_stop_keeps_the_sessions_of_a_persistent_service() {
 /// Whether a process of this identifier exists, which signal 0 checks without sending a signal.
 fn process_is_alive(process_id: u32) -> bool {
     unsafe { libc::kill(process_id as i32, 0) == 0 }
-}
-
-/// Whether a process of this identifier runs. A zombie has ended, releases its output, and does not count.
-fn process_is_running(process_id: u32) -> bool {
-    if !process_is_alive(process_id) {
-        return false;
-    }
-    let state = std::process::Command::new("ps")
-        .args(["-o", "stat=", "-p", &process_id.to_string()])
-        .output()
-        .expect("ps lists the process state");
-    !String::from_utf8_lossy(&state.stdout)
-        .trim_start()
-        .starts_with('Z')
 }
 
 // contract: sidecars-transport.persistent.connection-events

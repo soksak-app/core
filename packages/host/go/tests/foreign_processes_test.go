@@ -2,12 +2,12 @@ package host_test
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 )
@@ -19,19 +19,16 @@ import (
 func TestTheStartEndsNoProcessOfAnotherApplication(t *testing.T) {
 	foreign := exec.Command("/bin/sleep", "30")
 	foreign.Args[0] = "com.apple.WebKit.Networking"
+	started := time.Now()
 	if err := foreign.Start(); err != nil {
 		t.Fatal(err)
 	}
-	defer foreign.Wait()
-	defer foreign.Process.Kill()
 	ended := exec.Command("/usr/bin/true")
 	if err := ended.Run(); err != nil {
 		t.Fatal(err)
 	}
-	lstart, err := exec.Command("ps", "-o", "lstart=", "-p", fmt.Sprint(foreign.Process.Pid)).Output()
-	if err != nil {
-		t.Fatal(err)
-	}
+	// The record of an earlier run named each child with its start time in the form of ps lstart.
+	lstart := started.Format("Mon Jan _2 15:04:05 2006")
 	config := t.TempDir()
 	type child struct {
 		PID    int    `json:"pid"`
@@ -41,7 +38,7 @@ func TestTheStartEndsNoProcessOfAnotherApplication(t *testing.T) {
 	record, err := json.Marshal(struct {
 		HostPID  int     `json:"host_pid"`
 		Children []child `json:"children"`
-	}{ended.Process.Pid, []child{{foreign.Process.Pid, "Networking", strings.TrimSpace(string(lstart))}}})
+	}{ended.Process.Pid, []child{{foreign.Process.Pid, "Networking", lstart}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,8 +49,20 @@ func TestTheStartEndsNoProcessOfAnotherApplication(t *testing.T) {
 	if _, err := host.PrepareConfigDirectory(config); err != nil {
 		t.Fatal(err)
 	}
-	state, _ := exec.Command("ps", "-o", "stat=", "-p", fmt.Sprint(foreign.Process.Pid)).Output()
-	if s := strings.TrimSpace(string(state)); s == "" || strings.HasPrefix(s, "Z") {
-		t.Fatalf("the start ended process %d of another application (state %q)", foreign.Process.Pid, s)
+	// The process ends only by a signal. The test sends SIGKILL now, so the wait status names SIGKILL unless the start sent an
+	// earlier signal that ended it.
+	if err := foreign.Process.Kill(); err != nil {
+		t.Fatalf("the start ended process %d of another application: %v", foreign.Process.Pid, err)
+	}
+	var status syscall.WaitStatus
+	if err := foreign.Wait(); err != nil {
+		exit, ok := err.(*exec.ExitError)
+		if !ok {
+			t.Fatal(err)
+		}
+		status = exit.Sys().(syscall.WaitStatus)
+	}
+	if !status.Signaled() || status.Signal() != syscall.SIGKILL {
+		t.Fatalf("the start ended process %d of another application (wait status %v)", foreign.Process.Pid, status)
 	}
 }

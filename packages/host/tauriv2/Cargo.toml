@@ -30,6 +30,8 @@ webview2-com = "0.39"
 windows = { version = "0.62", features = ["Win32_Foundation"] }
 
 [dev-dependencies]
+# The check ends a fixture that outlived its limit with kill(2); the standard library kills only a Child that it holds.
+libc = "0.2"
 tempfile = "3"
 
 [lints]

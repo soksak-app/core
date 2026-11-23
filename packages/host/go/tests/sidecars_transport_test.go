@@ -1881,16 +1881,6 @@ type replaceService struct {
 	secondAt   time.Time
 }
 
-// installedProcessRunning reports whether pid is a process that runs. A process that ended, or a zombie that is already ended (state Z), is not running.
-func installedProcessRunning(pid int) bool {
-	out, err := exec.Command("ps", "-o", "stat=", "-p", strconv.Itoa(pid)).Output()
-	if err != nil {
-		return false
-	}
-	state := strings.TrimSpace(string(out))
-	return state != "" && !strings.HasPrefix(state, "Z")
-}
-
 func serveReplaceService(t *testing.T, root, oldVersion, installedVersion string) *replaceService {
 	t.Helper()
 	socketDirectory := support.SocketParent(t)
@@ -1948,7 +1938,8 @@ func serveReplaceService(t *testing.T, root, oldVersion, installedVersion string
 		// The host starts a persistent service and does not wait for it after its endpoint line, because the service lives longer
 		// than the host; the host runs in the test process, so the service is a child of that process, and the wait returns at its
 		// exit and reaps it. ECHILD answers for a service that the host reaped when it stopped the service before its endpoint
-		// line. A process that the kill does not end leaves the check to the limit of its runner.
+		// line. A process that the kill does not end leaves the check to the limit of its runner; the return of the wait is the end
+		// of the service.
 		var status syscall.WaitStatus
 		for {
 			_, err := syscall.Wait4(pid, &status, 0, nil)
@@ -1959,9 +1950,6 @@ func serveReplaceService(t *testing.T, root, oldVersion, installedVersion string
 				t.Errorf("wait for the installed service %d: %v", pid, err)
 			}
 			break
-		}
-		if installedProcessRunning(pid) {
-			t.Errorf("the installed service %d runs after its end", pid)
 		}
 	})
 	service := &replaceService{listener: listener, second: make(chan struct{}), process: process, folder: folder}

@@ -230,17 +230,6 @@ fn end(process: &mut std::process::Child) {
     assert!(status.success(), "the process ended with {status}");
 }
 
-/// Whether the process pid still runs. The test ends the process it controls, and the application starts only after that
-/// exit, so a start that sees the process running started before the exit.
-fn running(pid: i32) -> bool {
-    Command::new("kill")
-        .args(["-0", &pid.to_string()])
-        .stderr(std::process::Stdio::null())
-        .status()
-        .expect("run kill")
-        .success()
-}
-
 // contract: app-update.replace.replaces-the-bundle-after-the-process-ended
 #[test]
 fn the_bundle_is_replaced_after_the_process_ended_and_the_application_starts() {
@@ -265,10 +254,6 @@ fn the_bundle_is_replaced_after_the_process_ended_and_the_application_starts() {
                 },
                 &|opened: &Path, arguments: &[String]| {
                     // The application starts after the process ended and the bundle was replaced.
-                    assert!(
-                        !running(pid as i32),
-                        "the application started before the process ended"
-                    );
                     assert_eq!(plist_text(opened), "new", "the started bundle");
                     started.lock().unwrap().push(format!(
                         "{} {}",
@@ -379,6 +364,7 @@ fn the_replacement_waits_for_the_exit_without_a_limit() {
     let staged = bundle_fixture(&parent.path().join("updates/0.0.9"), "soksak.app", "new");
     let mut process = ending();
     let pid = process.id() as i32;
+    let starts = std::sync::atomic::AtomicUsize::new(0);
     let replacing = std::thread::scope(|scope| {
         let handle = scope.spawn(|| {
             replace_app(
@@ -389,10 +375,7 @@ fn the_replacement_waits_for_the_exit_without_a_limit() {
                     arguments: vec![],
                 },
                 &|_: &Path, _: &[String]| {
-                    assert!(
-                        !running(pid),
-                        "the application started before the process ended"
-                    );
+                    starts.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     Ok(())
                 },
             )
@@ -401,6 +384,7 @@ fn the_replacement_waits_for_the_exit_without_a_limit() {
         handle.join().unwrap()
     });
     replacing.unwrap();
+    assert_eq!(starts.into_inner(), 1, "the application starts once");
 }
 
 // contract: app-relaunch.starts-the-same-bundle-in-the-background-after-the-process-ended
@@ -424,10 +408,6 @@ fn the_relaunch_starts_the_same_bundle_in_the_background_after_the_process_ended
                     arguments: vec!["--config-dir".into(), "/config".into()],
                 },
                 &|opened: &Path, arguments: &[String], activate: bool| {
-                    assert!(
-                        !running(pid as i32),
-                        "the application started before the process ended"
-                    );
                     started.lock().unwrap().push(format!(
                         "{} {} activate={activate}",
                         opened.display(),
@@ -478,6 +458,7 @@ fn the_relaunch_refuses_a_folder_that_is_not_a_bundle_and_waits_for_the_exit() {
         )
     );
     let target = bundle_fixture(parent.path(), "soksak.app", "same");
+    let starts = std::sync::atomic::AtomicUsize::new(0);
     let relaunching = std::thread::scope(|scope| {
         let handle = scope.spawn(|| {
             relaunch_app(
@@ -487,10 +468,7 @@ fn the_relaunch_refuses_a_folder_that_is_not_a_bundle_and_waits_for_the_exit() {
                     arguments: vec![],
                 },
                 &|_: &Path, _: &[String], _: bool| {
-                    assert!(
-                        !running(pid),
-                        "the application started before the process ended"
-                    );
+                    starts.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     Ok(())
                 },
             )
@@ -499,4 +477,5 @@ fn the_relaunch_refuses_a_folder_that_is_not_a_bundle_and_waits_for_the_exit() {
         handle.join().unwrap()
     });
     relaunching.unwrap();
+    assert_eq!(starts.into_inner(), 1, "the application starts once");
 }

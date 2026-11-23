@@ -742,10 +742,9 @@ impl Drop for Watching {
         if self.ended {
             return;
         }
-        let _ = std::process::Command::new("kill")
-            .args(["-KILL", &self.pid])
-            .stderr(std::process::Stdio::null())
-            .status();
+        let pid: libc::pid_t = self.pid.parse().expect("the pid of the watch");
+        // default: the child may have ended since the check failed, and the kill of an ended child changes nothing.
+        let _ = unsafe { libc::kill(pid, libc::SIGKILL) };
     }
 }
 
@@ -793,11 +792,13 @@ fn an_interrupt_ends_a_watch_that_waits_in_a_write() {
     }
     assert_eq!(seen, b"1\n\"");
     let pid = watching.pid.clone();
-    let signal = std::process::Command::new("kill")
-        .args(["-TERM", &pid])
-        .status()
-        .expect("kill runs");
-    assert!(signal.success(), "kill -TERM {pid} failed");
+    let process: libc::pid_t = pid.parse().expect("the pid of the watch");
+    assert_eq!(
+        unsafe { libc::kill(process, libc::SIGTERM) },
+        0,
+        "SIGTERM to {pid}: {}",
+        std::io::Error::last_os_error()
+    );
     // The pipe stays unread while sok ends, so its write still waits. A sok that does not end leaves the test to the limit of
     // its runner, which reports the stall.
     let status = child.wait().expect("wait");
