@@ -1332,6 +1332,20 @@ func (e *Endpoint) drop(c *endpointConn, reason string) {
 	}
 }
 
+// WindowRequestBound is the time after which a request that the endpoint sent to a window and that has no result is an error record
+// (docs/spec/endpoint.md#recording).
+const WindowRequestBound = 10 * time.Second
+
+// pageRequest sends a request to the page of window. A timer writes the error record of the place endpoint window request when the
+// request has no result at WindowRequestBound, because a request that is not answered gives no event; the request keeps waiting.
+func (e *Endpoint) pageRequest(ctx context.Context, window, method string, params json.RawMessage) (json.RawMessage, error) {
+	late := time.AfterFunc(WindowRequestBound, func() {
+		LogError("endpoint window request", fmt.Sprintf("%s on %s is in progress after %v", method, window, WindowRequestBound))
+	})
+	defer late.Stop()
+	return e.backend.PageRequest(ctx, window, method, params)
+}
+
 // notifyPage sends the first subscription or the last release of a topic to the page. Host statuses are not sent to the page.
 func (e *Endpoint) notifyPage(t topic, on bool) error {
 	var err error
@@ -1339,13 +1353,13 @@ func (e *Endpoint) notifyPage(t topic, on bool) error {
 	switch {
 	case diagnostic:
 		method, params := request(on)
-		_, err = e.backend.PageRequest(context.Background(), t.window, method, mustJSON(params))
+		_, err = e.pageRequest(context.Background(), t.window, method, mustJSON(params))
 	case isHostName(t.name):
 		e.backend.HostWatched(t.window, t.name, on)
 	case on:
-		_, err = e.backend.PageRequest(context.Background(), t.window, "status.watch", mustJSON(t.watchParams()))
+		_, err = e.pageRequest(context.Background(), t.window, "status.watch", mustJSON(t.watchParams()))
 	default:
-		_, err = e.backend.PageRequest(context.Background(), t.window, "status.unwatch", mustJSON(t.watchParams()))
+		_, err = e.pageRequest(context.Background(), t.window, "status.unwatch", mustJSON(t.watchParams()))
 	}
 	return err
 }
@@ -1496,7 +1510,7 @@ func surfaceWindow(e *Endpoint, _ *endpointConn, params json.RawMessage, scope *
 			}
 			continue
 		}
-		reply, err := e.backend.PageRequest(scope.Context(), entry.Window, "surface.window", asked)
+		reply, err := e.pageRequest(scope.Context(), entry.Window, "surface.window", asked)
 		if WindowClosed(err) {
 			if loading == "" {
 				loading = entry.Window
@@ -1620,7 +1634,7 @@ func exposureList(e *Endpoint, _ *endpointConn, params json.RawMessage, scope *R
 		if *fields.Owner != "host" {
 			return nil, rpcError(codeInvalidParams, "exposure.list owner must be host")
 		}
-	} else if reply, err = e.backend.PageRequest(scope.Context(), window, "exposure.list", json.RawMessage(`{}`)); err != nil {
+	} else if reply, err = e.pageRequest(scope.Context(), window, "exposure.list", json.RawMessage(`{}`)); err != nil {
 		return nil, err
 	}
 	// A list that is not a JSON object (an array, null, a number, a string or a boolean) is refused with the text of the value,
@@ -1670,7 +1684,7 @@ func exposureSnapshot(e *Endpoint, _ *endpointConn, params json.RawMessage, scop
 	if _, one := fields["surface"]; !one {
 		own = hostGroup(e.backend, window)
 	}
-	reply, err := e.backend.PageRequest(scope.Context(), window, "exposure.snapshot", withoutWindow(params))
+	reply, err := e.pageRequest(scope.Context(), window, "exposure.snapshot", withoutWindow(params))
 	if err != nil {
 		return nil, err
 	}
@@ -1741,7 +1755,7 @@ func statusGet(e *Endpoint, _ *endpointConn, params json.RawMessage, reply *Repl
 		}
 		return e.backend.HostStatus(window, name)
 	}
-	return e.backend.PageRequest(reply.Context(), window, "status.get", withoutWindow(params))
+	return e.pageRequest(reply.Context(), window, "status.get", withoutWindow(params))
 }
 
 // watchTopic reads the topic to change from the params of status.watch and status.unwatch.
@@ -1798,7 +1812,7 @@ func commandRun(e *Endpoint, _ *endpointConn, params json.RawMessage, reply *Rep
 		}
 		return e.backend.HostCommand(window, name, fields.Params, reply)
 	}
-	return e.backend.PageRequest(reply.Context(), window, "command.run", withoutWindow(params))
+	return e.pageRequest(reply.Context(), window, "command.run", withoutWindow(params))
 }
 
 func elementRequest(method string) endpointMethod {
@@ -1810,7 +1824,7 @@ func elementRequest(method string) endpointMethod {
 		if isHostName(name) {
 			return nil, rpcError(codeUnknownName, "the host declares no element entry %s", name)
 		}
-		return e.backend.PageRequest(reply.Context(), window, method, withoutWindow(params))
+		return e.pageRequest(reply.Context(), window, method, withoutWindow(params))
 	}
 }
 

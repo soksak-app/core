@@ -1600,6 +1600,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1115",
+    implementation: [
+      { file: "packages/host/go/src/endpoint.go", symbol: "func (e *Endpoint) pageRequest(ctx context.Context, window, method string, params json.RawMessage) (json.RawMessage, error) {" },
+      { file: "packages/host/rust/src/endpoint.rs", symbol: "fn call_window(" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/endpoint_record_test.go", id: "TestAWindowRequestWithoutAResultAfterTheBoundIsAnErrorRecord" },
+      { file: "packages/host/rust/tests/endpoint_record_test.rs", id: "a_window_request_without_a_result_after_the_bound_is_an_error_record" },
+    ],
+    expected: "A request that the endpoint sends to a window and that has no result 10 seconds later is the error record of the place endpoint window request, while the request keeps waiting.",
+    levels: ["unit"],
+  },
+  {
     id: "F972",
     implementation: [
       { file: "scripts/platform/darwin/prepare-app-bundle.mjs", symbol: "function runningBundleProcesses(bundle) {" },

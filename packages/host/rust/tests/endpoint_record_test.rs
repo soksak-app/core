@@ -263,3 +263,54 @@ fn a_failed_release_of_a_closed_connection_is_counted_and_an_error_record() {
     served.finish();
     use_host_event_log(None);
 }
+
+// contract: endpoint.record.unanswered-request-is-an-error
+#[test]
+fn a_window_request_without_a_result_after_the_bound_is_an_error_record() {
+    let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
+    let served = serve_page(
+        "test-record",
+        vec![
+            exchange("status.watch", json!({"name": "core.layout"}), Value::Null).held(),
+            exchange(
+                "status.unwatch",
+                json!({"name": "core.layout"}),
+                Value::Null,
+            ),
+        ],
+    );
+    let mut connection = served.open();
+    endpoint::write_frame(
+        &mut connection,
+        &json!({"jsonrpc": "2.0", "id": 1, "method": "status.watch", "params": {"window": "main", "name": "core.layout"}}),
+    )
+    .unwrap();
+    assert!(
+        served.page.await_call(),
+        "the page received no status.watch"
+    );
+    // The record comes at the bound of 10 seconds after the request; the wait ends a case whose record does not come.
+    let records = records::await_events(
+        &served.log,
+        served.config.path(),
+        "host.record.error",
+        1,
+        std::time::Duration::from_secs(20),
+    );
+    assert_eq!(
+        records[0]["fields"]["where"], "endpoint window request",
+        "{records:?}"
+    );
+    assert_eq!(
+        records[0]["fields"]["text"], "status.watch on main is in progress after 10s",
+        "{records:?}"
+    );
+    served.page.release().unwrap();
+    let reply = endpoint::read_frame(&mut connection)
+        .unwrap()
+        .expect("the endpoint closed the connection");
+    assert_eq!(reply["result"], Value::Null, "{reply}");
+    drop(connection);
+    served.finish();
+    use_host_event_log(None);
+}

@@ -150,3 +150,27 @@ func TestAFailedReleaseOfAClosedConnectionIsCountedAndAnErrorRecord(t *testing.T
 		t.Fatalf("the error records of the place endpoint release are %v", releases)
 	}
 }
+
+// contract: endpoint.record.unanswered-request-is-an-error
+func TestAWindowRequestWithoutAResultAfterTheBoundIsAnErrorRecord(t *testing.T) {
+	log := support.UseEventLog(t)
+	_, address, _, page := servePage(t, heldPageExchange("status.watch", `{"name":"core.layout"}`, `null`),
+		pageExchange("status.unwatch", `{"name":"core.layout"}`, `null`))
+	conn := dial(t, address)
+	send(t, conn, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "status.watch", "params": map[string]any{"window": "main", "name": "core.layout"}})
+	if !page.awaitCall() {
+		t.Fatal("the page received no status.watch")
+	}
+	// The record comes at the bound of 10 seconds after the request; the wait ends a case whose record does not come.
+	records := support.AwaitEvents(t, log, "host.record.error", 1, 20*time.Second)
+	fields := records[0]["fields"].(map[string]any)
+	if fields["where"] != "endpoint window request" || fields["text"] != "status.watch on main is in progress after 10s" {
+		t.Fatalf("the error records are %v", records)
+	}
+	if err := page.release(); err != nil {
+		t.Fatal(err)
+	}
+	if got := receiveInTurn(t, conn); got.Error != nil || string(got.Result) != "null" {
+		t.Fatalf("the watch answered %+v after the record, want null", got)
+	}
+}

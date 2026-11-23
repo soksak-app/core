@@ -11,13 +11,15 @@
 #[path = "endpoint_response_test.rs"]
 mod response_tests;
 
+use std::collections::BTreeMap;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs::{File, TryLockError};
 use std::io::{ErrorKind, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, PoisonError};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
@@ -396,6 +398,103 @@ impl Drop for ReplyCompletion {
     fn drop(&mut self) {
         self.finish(ReplyOutcome::Abandoned);
     }
+}
+
+/// The time after which a request that the endpoint sent to a window and that has no result is an error record
+/// (docs/spec/endpoint.md#recording).
+pub const WINDOW_REQUEST_BOUND: Duration = Duration::from_secs(10);
+
+/// The requests of the endpoint to windows that wait for their result, by the number of each request: the instant of its bound,
+/// the method and the window. One thread writes the error record of the place `endpoint window request` of each request that
+/// reaches its bound, because a request that is not answered gives no event; the request keeps waiting.
+#[derive(Default)]
+struct Pending {
+    last: u64,
+    requests: BTreeMap<u64, (Instant, String, String)>,
+}
+
+#[derive(Default)]
+struct WindowRequests {
+    pending: Mutex<Pending>,
+    change: Condvar,
+}
+
+impl WindowRequests {
+    fn shared() -> &'static Arc<WindowRequests> {
+        static REQUESTS: OnceLock<Arc<WindowRequests>> = OnceLock::new();
+        REQUESTS.get_or_init(|| {
+            let requests = Arc::new(WindowRequests::default());
+            let watched = Arc::clone(&requests);
+            std::thread::Builder::new()
+                .name("endpoint-window-requests".into())
+                .spawn(move || watched.watch())
+                .expect("the thread of the window requests of the endpoint starts");
+            requests
+        })
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, Pending> {
+        // default: a poisoned lock holds a valid map of pending requests.
+        self.pending.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    fn watch(&self) {
+        let mut pending = self.lock();
+        loop {
+            let next = pending
+                .requests
+                .iter()
+                .map(|(id, (at, _, _))| (*at, *id))
+                .min();
+            let Some((at, id)) = next else {
+                let wait = self.change.wait(pending);
+                // default: a poisoned lock holds a valid map of pending requests.
+                pending = wait.unwrap_or_else(PoisonError::into_inner);
+                continue;
+            };
+            let now = Instant::now();
+            if at > now {
+                let wait = self.change.wait_timeout(pending, at - now);
+                // default: a poisoned lock holds a valid map of pending requests.
+                pending = wait.unwrap_or_else(PoisonError::into_inner).0;
+                continue;
+            }
+            if let Some((_, method, window)) = pending.requests.remove(&id) {
+                log_error(
+                    "endpoint window request",
+                    format!(
+                        "{method} on {window} is in progress after {}s",
+                        WINDOW_REQUEST_BOUND.as_secs()
+                    ),
+                );
+            }
+        }
+    }
+}
+
+/// Runs `method` in `window` through `service` and records the request when it has no result at WINDOW_REQUEST_BOUND.
+fn call_window(
+    service: &dyn Service,
+    window: &str,
+    method: &str,
+    params: Map<String, Value>,
+    reply: Option<ReplyScope>,
+) -> Result<Box<RawValue>, Failure> {
+    let requests = WindowRequests::shared();
+    let id = {
+        let mut pending = requests.lock();
+        pending.last += 1;
+        let id = pending.last;
+        let bound = Instant::now() + WINDOW_REQUEST_BOUND;
+        pending
+            .requests
+            .insert(id, (bound, method.to_string(), window.to_string()));
+        id
+    };
+    requests.change.notify_all();
+    let result = service.call(window, method, params, reply);
+    requests.lock().requests.remove(&id);
+    result
 }
 
 /// Runs endpoint requests in windows and pages.
@@ -1999,7 +2098,7 @@ fn drain(shared: &Shared, topic: Topic) {
             .as_ref()
             .map(|answer| answer.completion.scope.clone());
         let (outcome, following) = if next.on && !page {
-            match shared.service.call(topic.window(), method, params, reply) {
+            match call_window(&*shared.service, topic.window(), method, params, reply) {
                 Ok(result) => (Ok(result), true),
                 Err(failure) => {
                     // If this connection did not change this target again after that, the start is reverted.
@@ -2017,7 +2116,7 @@ fn drain(shared: &Shared, topic: Topic) {
         } else if !next.on && next.last && page {
             // Even if the page fails a stop request, a later start request is sent to the page again.
             (
-                shared.service.call(topic.window(), method, params, reply),
+                call_window(&*shared.service, topic.window(), method, params, reply),
                 false,
             )
         } else {
@@ -2117,7 +2216,7 @@ fn run(
     match method {
         "exposure.list" => {
             return crate::exposure::exposure_list(&params, || {
-                shared.service.call(&window, method, Map::new(), reply)
+                call_window(&*shared.service, &window, method, Map::new(), reply)
             });
         }
         "exposure.snapshot" => {
@@ -2129,9 +2228,9 @@ fn run(
                 |name| {
                     let mut request = Map::new();
                     request.insert("name".into(), Value::String(name.into()));
-                    shared.service.call(&window, "status.get", request, None)
+                    call_window(&*shared.service, &window, "status.get", request, None)
                 },
-                || shared.service.call(&window, method, params.clone(), reply),
+                || call_window(&*shared.service, &window, method, params.clone(), reply),
             );
         }
         "status.get" | "command.run" | "element.rect" | "element.act" => {
@@ -2154,7 +2253,7 @@ fn run(
         }
         _ => {}
     }
-    shared.service.call(&window, method, params, reply)
+    call_window(&*shared.service, &window, method, params, reply)
 }
 
 /// Answers `agent.surface`: `{surface}` of the process that made the connection, which the host reads from the socket and
@@ -2215,10 +2314,13 @@ fn surface_window(
         }
         let mut asked = Map::new();
         asked.insert("surface".into(), Value::String(surface.clone()));
-        let answer = match shared
-            .service
-            .call(window, "surface.window", asked, reply.clone())
-        {
+        let answer = match call_window(
+            &*shared.service,
+            window,
+            "surface.window",
+            asked,
+            reply.clone(),
+        ) {
             Err(failure) if failure.code == MISSING_DOCUMENT => {
                 loading.get_or_insert_with(|| window.to_string());
                 continue;
@@ -2567,10 +2669,13 @@ fn release(shared: &Shared, key: PressKey, press: Press) {
             // read; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner)
             .lifts;
-        let failure = match shared
-            .service
-            .call(&key.window, "input.pointer", params.clone(), None)
-        {
+        let failure = match call_window(
+            &*shared.service,
+            &key.window,
+            "input.pointer",
+            params.clone(),
+            None,
+        ) {
             Ok(_) => {
                 shared
                     .presses
