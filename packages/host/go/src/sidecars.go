@@ -1588,11 +1588,14 @@ func (c *Sidecars) stopProcesses(processes []*sidecar, quit bool, ended func()) 
 			if p.persistent {
 				// The stop ends the connection and sends no close-owner and no shutdown, so the service keeps its sessions
 				// (docs/spec/persistent-services.md#service-transport).
+				// The stop ends when the read goroutine handled the end of the connection: it removes the service from the
+				// sampled processes and records host.sidecar.disconnect before it closes exited.
 				if p.ownerMutex.TryLock() {
-					defer p.ownerMutex.Unlock()
 					if !p.transportClosed {
 						p.closeTransport()
 					}
+					p.ownerMutex.Unlock()
+					<-p.exited
 					return
 				}
 				// A replacement closes the owner and holds the owner mutex: the end of the connection fails its waits, and the
@@ -1600,6 +1603,7 @@ func (c *Sidecars) stopProcesses(processes []*sidecar, quit bool, ended func()) 
 				if err := p.conn.Close(); err != nil {
 					LogError("sidecar "+p.name, fmt.Sprintf("stop: %v", err))
 				}
+				<-p.exited
 				return
 			}
 			// The read goroutine closes exited after the exit of the process ended its output.
@@ -2780,9 +2784,9 @@ func (c *Sidecars) readPersistent(process *sidecar, reader *bufio.Reader) {
 		waiter <- errServiceDisconnected
 	}
 	c.failAwaited(process.name, errAnswerEnded)
-	close(process.exited)
 	EmitHost(LevelInfo, "host.sidecar.disconnect", disconnectFields(process.name, process.servicePID, stopping, violation, end, waiting))
 	PerformanceProcessRemove(process.servicePID)
+	close(process.exited)
 	if stopping {
 		c.failStoppedRequests(process.name)
 	}

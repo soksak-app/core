@@ -1311,7 +1311,8 @@ struct Process {
     /// Sessions closed after native-view removal, whose later messages are discarded while a persistent owner remains.
     closed_surfaces: HashSet<String>,
     /// Ends when the read thread of a standard-I/O process has read the output to its end and judged it, so the stop
-    /// reads the record of that judgment after it (docs/spec/sidecars.md#declaration-and-startup).
+    /// reads the record of that judgment after it (docs/spec/sidecars.md#declaration-and-startup), and when the reader of a
+    /// persistent connection has handled the end of the connection, so the stop ends after it.
     read_ended: Option<Receiver<()>>,
     /// True once the stop sent the terminate signal to the process group: a line that the writer could not write after
     /// it is a line that the stop ended, not a failure.
@@ -3685,6 +3686,14 @@ impl<O: Owner> Sidecars<O> {
                     if let Some(persistent) = process.persistent {
                         end_transport(&process.outbox, &persistent.socket, &name);
                     }
+                    // The stop ends after the reader handled the end of the connection: it removes the service from the
+                    // sampled processes and records host.sidecar.disconnect before it drops its sender.
+                    if let Some(read_ended) = process.read_ended {
+                        match read_ended.recv() {
+                            // The reader sends nothing and drops the sender, which ends this receive.
+                            Ok(()) | Err(RecvError) => {}
+                        }
+                    }
                 });
                 handles.push(handle);
                 continue;
@@ -4420,6 +4429,8 @@ impl<O: Owner> Core<O> {
         let reader_service_pid = endpoint.pid;
         let mut reader_ready = spawn_clock;
         let reader_connected = Arc::clone(&connected);
+        // The reader drops this sender after it handled the end of the connection, which ends the wait of the stop.
+        let (read_end, read_ended) = sync_channel::<()>(0);
         threads.push(Box::new(move || {
             struct ConnectionGuard(Arc<AtomicBool>);
             impl Drop for ConnectionGuard {
@@ -4692,6 +4703,8 @@ impl<O: Owner> Core<O> {
             );
             crate::performance::process_remove(reader_service_pid);
             end_process_queries(&state, &sidecar, reader_service_pid);
+            // The service is out of the sampled processes and its disconnect is recorded, so the stop that waits ends.
+            drop(read_end);
             let close_error =
                 Err("persistent service disconnected before close-owner ack".to_string());
             let error = Err("persistent service disconnected before shutdown ack".to_string());
@@ -4826,7 +4839,7 @@ impl<O: Owner> Core<O> {
                 writing,
                 surfaces: HashSet::new(),
                 closed_surfaces: HashSet::new(),
-                read_ended: None,
+                read_ended: Some(read_ended),
                 terminated: Arc::default(),
                 persistent: Some(PersistentConnection {
                     version,

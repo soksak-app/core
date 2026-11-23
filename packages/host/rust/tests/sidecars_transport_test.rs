@@ -3265,6 +3265,20 @@ fn persistent_connections_are_recorded_as_events() {
         // The sampler names the service while it is connected and not after the connection ended.
         soksak_host::performance::sample();
         sidecars.stop();
+        // The stop ends after the reader handled the end of the connection, so its disconnect is recorded when stop returns.
+        writer.flush().unwrap();
+        let stopped = records::read_events(&records::event_log_path(Path::new(&config)))
+            .into_iter()
+            .filter(|event| {
+                event["event"] == "host.sidecar.disconnect"
+                    && event["fields"]["name"] == ECHO
+                    && event["fields"]["stopping"] == true
+            })
+            .count();
+        assert_eq!(
+            stopped, 1,
+            "disconnects of the stop recorded when stop returned"
+        );
         soksak_host::performance::sample();
         service.join().unwrap();
         soksak_host::performance::command(serde_json::json!({"action": "off"})).unwrap();

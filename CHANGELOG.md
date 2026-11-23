@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1126: The stop of the sidecars ends after the reader of each persistent connection removed the service from the sampled processes and recorded `host.sidecar.disconnect`, in both hosts, so a sample after the stop no longer names the service. Verification: Red on the unchanged hosts, then Green Go 120 of 120 and Rust 60 of 60 repeated runs.
 - F1117-7: The bundle preparation tests start a waiting copy of the Node executable, which runs on a system whose sleep is a multi-call program. Verification: Red in the Linux CI job, Green of the refusal test in an Ubuntu 26.04 container and 3 of 3 on macOS.
 - F1117-8: The `kill(2)` calls of the sok and window race tests fail the check on any error other than `ESRCH` instead of dropping it.
 - F1125-1: The core version is 0.0.51 in every package and crate manifest, Info.plist, Tauri file, Go and pkg-config declaration, the six workspace entries of Cargo.lock and scripts/check-versions.mjs.

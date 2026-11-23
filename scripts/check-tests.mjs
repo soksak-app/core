@@ -1607,6 +1607,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1126",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) stopProcesses(processes []*sidecar, quit bool, ended func()) {" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn stop_processes(" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentConnectionsAreRecordedAsEvents" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_connections_are_recorded_as_events" },
+    ],
+    expected: "The stop of the sidecars ends after the reader of each persistent connection removed the service from the sampled processes and recorded host.sidecar.disconnect.",
+    levels: ["unit"],
+  },
+  {
     id: "F1115",
     implementation: [
       { file: "packages/host/go/src/endpoint.go", symbol: "func (e *Endpoint) pageRequest(ctx context.Context, window, method string, params json.RawMessage) (json.RawMessage, error) {" },

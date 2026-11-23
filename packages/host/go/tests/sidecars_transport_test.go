@@ -2575,6 +2575,19 @@ func TestPersistentConnectionsAreRecordedAsEvents(t *testing.T) {
 	}
 	connected := sampledService()
 	sidecars.Stop()
+	// The stop ends after the reader handled the end of the connection, so its disconnect is recorded when Stop returns.
+	if err := log.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	stopped := 0
+	for _, event := range support.ReadEvents(t, support.EventLogPath(t, config)) {
+		if fields, ok := event["fields"].(map[string]any); ok && event["event"] == "host.sidecar.disconnect" && fields["name"] == eventsService && fields["stopping"] == true {
+			stopped++
+		}
+	}
+	if stopped != 1 {
+		t.Fatalf("disconnects of the stop recorded when Stop returned: %d, want 1", stopped)
+	}
 	if ended := sampledService(); connected == 0 || ended != connected {
 		t.Fatalf("samples of the service: %d while connected, %d after the connection ended", connected, ended)
 	}
