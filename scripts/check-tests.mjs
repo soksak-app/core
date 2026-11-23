@@ -17995,13 +17995,14 @@ const NON_CAPABILITY_COMPLETIONS = new Set(["F1132", "F1125-1", "F1123", "F1120"
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66), the window checks of plugins (F110) and the registry listing of the hwp plugin (F141, registry items G37 and G38). Core cannot read
 // those repositories, so they have no link here and each repository checks its own evidence.
+// F1135 states the guard rule of inserted control characters, which the terminal sidecar implements and tests (sidecars/alacritty S255).
 // F167, F224, F287, R3 and R5 wrote the term list, the record check and the release gate, which F355-3-2 moves to the
 // kit; the kit holds their implementation and tests. F239-170, F239-197, F239-247, F273 and F273-1 wrote rules of
 // the event source check, which F355-3-5 moves to the kit.
 // F596 is a change of the mygo fork: its tests are there, and no host draws through that plugin.
 // F6 is the selection, paste, file drop and inline image contract of the terminal plugin. F715-2 removes its window checks from
 // core, whose checks reach views only through fixtures; the terminal plugin repository checks it.
-const MOVED_COMPLETIONS = new Set(["F6", "F596","F239-170", "F239-197", "F239-247", "F273", "F273-1", "F167", "F224", "F287", "R3", "R5", "F0.3", "F1.4", "F2.1-1", "F2.10", "F2.1", "F2.4-1", "F2.4", "F2.5", "F2.8", "F2.9", "F2", "F3", "F6.3-10", "F6.6-1", "F6.6-2", "F7.14", "F7.15", "F7.16", "F7.17", "F7", "G1.2", "F18", "F19", "F98", "F100", "F101", "F109", "F110", "F203", "F210", "F141"]);
+const MOVED_COMPLETIONS = new Set(["F1135", "F6", "F596","F239-170", "F239-197", "F239-247", "F273", "F273-1", "F167", "F224", "F287", "R3", "R5", "F0.3", "F1.4", "F2.1-1", "F2.10", "F2.1", "F2.4-1", "F2.4", "F2.5", "F2.8", "F2.9", "F2", "F3", "F6.3-10", "F6.6-1", "F6.6-2", "F7.14", "F7.15", "F7.16", "F7.17", "F7", "G1.2", "F18", "F19", "F98", "F100", "F101", "F109", "F110", "F203", "F210", "F141"]);
 
 // Completed capabilities whose implementation a later item removed: F68 wrote the WebKit child record, which F196.22
 // removed with the start that ended the recorded processes.
