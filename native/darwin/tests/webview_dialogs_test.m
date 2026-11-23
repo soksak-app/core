@@ -20,7 +20,9 @@ static void check(BOOL condition, NSString *message) {
 
 // The delegates of the framework of a test web view. The UI delegate answers each open panel as cancelled and counts it, as a
 // person who closes the panel. The navigation delegate records the end of each navigation and each navigation that became a
-// download. When it places downloads it writes each of them into its own folder, and when it observes downloads it sees
+// download. A provisional navigation that fails as interrupted by a policy change (WebKitErrorFrameLoadInterruptedByPolicyChange)
+// became a download and is not counted as an end: WebKit reports that failure before or after the start of the download, so
+// counting it ended a wait for the download before the download started. When it places downloads it writes each of them into its own folder, and when it observes downloads it sees
 // their end without placing them.
 @interface FrameworkDelegate : NSObject <WKUIDelegate, WKNavigationDelegate, WKDownloadDelegate>
 @property (nonatomic) NSInteger panels;
@@ -53,7 +55,10 @@ static void check(BOOL condition, NSString *message) {
 }
 
 - (void)webView:(WKWebView *)webView didFailProvisionalNavigation:(WKNavigation *)navigation withError:(NSError *)error {
-    (void)webView; (void)navigation; (void)error;
+    (void)webView; (void)navigation;
+    // WebKit still reports this failure as WebKitErrorDomain 102, and the only constants that name it are deprecated since
+    // macOS 10.14 (WebKitErrors.h); no current constant names it.
+    if ([error.domain isEqual:@"WebKitErrorDomain"] && error.code == 102) return;
     self.navigationsEnded += 1;
 }
 

@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1113: `webview_dialogs_test`의 테스트 delegate는 download가 되는 navigation의 policy 변경 failure(`WebKitErrorDomain` 102)를 navigation의 끝으로 세지 않는다. WebKit이 이를 download 시작의 앞이나 뒤에 보고하기 때문이다. 검증: 병렬 32번 중 19번 Red, 이어 32번 중 32번과 직렬 반복 3번 Green.
 - F1112-1: contract row `program.run.reads-the-programs-of-the-sync-surface`가 scope `all`을 적으므로 host test run이 이를 읽는다. 검증: release run의 host test job Red, 이어 `scripts/test/test-hosts.test.mjs` Green.
 - F1108-5: view가 literal 이름으로 `batcher.emit`을 통해 `page.theme.applied`를 emit하므로 event catalog check가 emit site를 찾는다. 검증: release run에서 `make check-events`의 Red, 이어 structure check와 plugin-api suite와 함께 Green.
 - F1110-1: Go window 테스트의 test framework가 `Quit`을 가지므로, host의 유일한 창을 닫는 테스트가 F1110이 요청하는 quit에서 panic하지 않고 끝난다. 검증: main에서 window 테스트 셋의 Red, 이어 Green(450개 중 450개).

@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1113: The test delegate of `webview_dialogs_test` does not count the policy-change failure (`WebKitErrorDomain` 102) of a navigation that becomes a download as the end of a navigation, because WebKit reports it before or after the start of the download. Verification: Red of 19 of 32 parallel runs, then Green of 32 of 32 and 3 serial repeats.
 - F1112-1: The contract row `program.run.reads-the-programs-of-the-sync-surface` states its scope `all`, so the host test runs read it. Verification: Red of the host test jobs of the release run, then Green of `scripts/test/test-hosts.test.mjs`.
 - F1108-5: The view emits `page.theme.applied` through `batcher.emit` with its literal name, so the event catalog check finds its emit site. Verification: Red of `make check-events` in the release run, then Green with the structure checks and the plugin-api suite.
 - F1110-1: The test framework of the Go window tests has a `Quit`, so a test that closes the only window of its host ends instead of panicking in the quit that F1110 asks for. Verification: Red of three window tests on main, then Green (450 of 450).
