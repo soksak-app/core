@@ -271,7 +271,7 @@ jobs:
           GOFLAGS: -mod=readonly
           CARGO_NET_OFFLINE: 'true'
           CARGO_INCREMENTAL: '0'
-        run: make -C core check-docs check-commands check-boundaries check-platform-files check-host-files check-exposure check-tests check-hosts-same check-events
+        run: make -C core check-docs check-commands check-boundaries check-process-tools check-platform-files check-host-files check-exposure check-tests check-hosts-same check-events
       # The owner tests of scripts/test run the sok executable of the declared build, which the tests name when it is missing.
       - name: Build the sok executable
         env:

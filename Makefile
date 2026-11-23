@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: check-push check-preflight check-events benchmark-rust benchmark-go check-tools install build test-all check-browser-example check-docs check-commits check-checklist-history install-hooks check-boundaries check-platform-files check-windows-build check-windows-rust check-host-files check-app-tests create-test-certificates test-app-card-sidebar-current test-app-view-focus-current test-app-shutdown benchmark-view-drag benchmark-resize-catch-up benchmark-empty-window benchmark-idle-tab benchmark-split-load benchmark-click-cpu benchmark-scroll-cpu benchmark-layout-redraw repeat-app-test benchmark-b3 check-b3 check-exposure check-tests check-hosts-same test-language check-release test-rust-alone repeat-rust repeat-go repeat-node check-temp-files measure-page-memory measure-object-counts measure-host-calls measure-app-usage measure-terminal-redraw measure-terminal-text measure-terminal-input measure-terminal-resize measure-trace-share measure-host-allocations check-app-update check-host-debug check-commands test-headless-owners
+.PHONY: check-push check-preflight check-events benchmark-rust benchmark-go check-tools install build test-all check-browser-example check-docs check-commits check-checklist-history install-hooks check-boundaries check-process-tools check-platform-files check-windows-build check-windows-rust check-host-files check-app-tests create-test-certificates test-app-card-sidebar-current test-app-view-focus-current test-app-shutdown benchmark-view-drag benchmark-resize-catch-up benchmark-empty-window benchmark-idle-tab benchmark-split-load benchmark-click-cpu benchmark-scroll-cpu benchmark-layout-redraw repeat-app-test benchmark-b3 check-b3 check-exposure check-tests check-hosts-same test-language check-release test-rust-alone repeat-rust repeat-go repeat-node check-temp-files measure-page-memory measure-object-counts measure-host-calls measure-app-usage measure-terminal-redraw measure-terminal-text measure-terminal-input measure-terminal-resize measure-trace-share measure-host-allocations check-app-update check-host-debug check-commands test-headless-owners
 
 check-docs:
 	@node scripts/check-docs.mjs
@@ -177,6 +177,10 @@ measure-trace-share:
 measure-host-allocations:
 	@case "$(CONFIG_DIR)" in '') echo "measure-host-allocations requires CONFIG_DIR=DIR TRACE=0|1 [MINUTES=10] [SOK=PATH] [B3_OUT=FILE]" >&2; exit 2;; esac
 	@node scripts/measure-host-allocations.mjs --sok $(or $(SOK),target/debug/sok) --config-dir "$(CONFIG_DIR)" --trace "$(TRACE)" --minutes $(or $(MINUTES),10) $(if $(B3_OUT),--b3-out "$(B3_OUT)")
+
+# Checks that no Go or Rust source or test starts ps, kill, pgrep or lsof as a subprocess.
+check-process-tools:
+	@node scripts/check-process-tools.mjs
 
 # Checks that core, plugin, and sidecar sources do not name each other.
 check-boundaries:

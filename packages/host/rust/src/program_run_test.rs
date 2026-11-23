@@ -95,14 +95,9 @@ fn wait_for_child(marker: &Path) -> u32 {
     }
 }
 
+/// Whether a process of this identifier exists, which signal 0 checks without sending a signal.
 fn process_alive(pid: u32) -> bool {
-    Command::new("/bin/ps")
-        .args(["-p", &pid.to_string()])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .unwrap()
-        .success()
+    unsafe { libc::kill(pid as libc::pid_t, 0) == 0 }
 }
 
 fn assert_ends_with_group_kill(pid: u32) {

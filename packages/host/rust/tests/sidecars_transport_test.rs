@@ -951,11 +951,7 @@ fn stdio_stop_cancels_an_image_emitted_after_stdin_eof() {
     );
     let pid = std::fs::read_to_string(executable_directory.path().join("pid")).unwrap();
     assert!(
-        !Command::new("/bin/kill")
-            .args(["-0", pid.trim()])
-            .status()
-            .unwrap()
-            .success(),
+        !process_is_alive(pid.trim().parse().unwrap()),
         "the stdio sidecar child remained alive after stop"
     );
 }

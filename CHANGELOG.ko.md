@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1117-3: `make check-process-tools`가 `ps`, `kill`, `pgrep`, `lsof`를 시작하는 Go나 Rust source와 테스트에서 실패하고, CI의 structure check와 함께 실행되며, AGENTS.md가 그 규칙을 적는다. Rust 테스트 두 개가 더 `kill(2)` signal 0으로 process를 확인한다. 검증: 되돌린 이전 Go 테스트에서 check 테스트의 Red, 이어 그것과 check, 바뀐 Rust 테스트의 Green.
 - F1117-2: 두 host와 sok의 process 테스트가 `ps`를 읽지 않고 `kill`을 시작하지 않는다. 자기 child의 wait status로 process를 판정하고 `kill(2)`로 signal을 보낸다. 검증: 바뀐 Go 테스트와 Rust test target 다섯 개의 Green.
 - F1117-1: 두 host의 sampler가 process의 상주 크기를 footprint 읽기의 `task_info` `TASK_VM_INFO` 응답에서 읽고 `ps`를 시작하지 않는다. 검증: 두 host의 실패한 판독 테스트의 Red, 이어 그것과 native footprint 테스트의 Green.
 - F1118-1: core version은 모든 package와 crate manifest, Info.plist, Tauri 파일, Go와 pkg-config 선언, Cargo.lock의 workspace 항목 여섯 개, scripts/check-versions.mjs에서 0.0.50이다.

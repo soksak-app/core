@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1117-3: `make check-process-tools` fails on a Go or Rust source or test that starts `ps`, `kill`, `pgrep` or `lsof`, runs with the structure checks of CI, and AGENTS.md states the rule; two more Rust tests check a process with `kill(2)` signal 0. Verification: Red of the check test on the restored earlier Go test, then Green of it, of the check and of the changed Rust tests.
 - F1117-2: The process tests of both hosts and of sok read no `ps` and start no `kill`: they judge a process by the wait status of their own child and signal through `kill(2)`. Verification: Green of the changed Go tests and of five Rust test targets.
 - F1117-1: The sampler reads the resident size of a process from the `task_info` `TASK_VM_INFO` reply of the footprint reading in both hosts and starts no `ps`. Verification: Red of the failed-reading test of both hosts, then Green of them and of the native footprint test.
 - F1118-1: The core version is 0.0.50 in every package and crate manifest, Info.plist, Tauri file, Go and pkg-config declaration, the six workspace entries of Cargo.lock and scripts/check-versions.mjs.
