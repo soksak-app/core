@@ -1008,7 +1008,7 @@ fn check_background(
                     "{where_} background: the tab parameter of field {field} must be a non-empty name"
                 ));
             }
-            if names_setting(&field) {
+            if names_setting(field) {
                 return Err(format!(
                     "{where_} background: field {field} of settings is named again by params"
                 ));
