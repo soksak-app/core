@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1116: The app update tests judge the exit of the ended process by the state that `ps` reports, because an exited process that was not yet waited for still answers `kill -0`. Verification: Red of `TestAnExitedProcessThatWasNotYetWaitedForDoesNotRun`, then Green of it and of the five exit tests (4 copies of 20 runs).
 - F1114-1: The end of an endpoint connection is the event `host.endpoint.end` with `subscriptions` and `failed` in both hosts, and the endpoint page harnesses check the page only after the end of each connection, so a late call fails its case; three cases now declare their closing `status.unwatch`, and the Rust host records a failed release. Verification: Red of the two event tests on the earlier hosts and of the Rust record case under the new harness, then Green of the three Rust endpoint files and the Go `servePage` tests, with and without the diagnostics tag.
 - F1114: The endpoint record case declares the `status.unwatch` that the close of its connection sends, and `make repeat-go` takes `PARALLEL=<copies>`. Verification: Red of 1 of 8 parallel copies with the diagnostics tag, then Green of 8 copies of 100 runs.
 - F1113-3: The failure line of the native repeat target keeps `FAIL: <test> run <i> of <n>; ` and adds the count of failed copies. Verification: Red of `native-repeat.test.mjs` on linux-node, then Green.

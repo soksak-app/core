@@ -180,6 +180,51 @@ func bundleFixture(t *testing.T, parent, name, text string) string {
 // endingProcess starts a process that ends when its standard input closes, and returns its pid and a function that
 // closes that input and receives the end of the process. The process has no end of its own in time, so its end is the
 // event of the test.
+// runs reports whether the process pid still runs. A process that exited and that its parent has not yet waited for keeps its
+// process identifier and answers a signal of 0, so the state that ps reports decides: no row is a collected process, and the
+// state Z is an exited one.
+func runs(t *testing.T, pid int) bool {
+	t.Helper()
+	out, err := exec.Command("ps", "-o", "stat=", "-p", strconv.Itoa(pid)).Output()
+	var exit *exec.ExitError
+	if errors.As(err, &exit) && exit.ExitCode() == 1 && len(out) == 0 {
+		return false
+	}
+	if err != nil {
+		t.Fatalf("ps of process %d: %v", pid, err)
+	}
+	return !strings.HasPrefix(strings.TrimSpace(string(out)), "Z")
+}
+
+// An exited process that its parent has not yet waited for does not run, as the relaunch observes it: the operating system
+// reports its exit before the parent collects its status.
+func TestAnExitedProcessThatWasNotYetWaitedForDoesNotRun(t *testing.T) {
+	command := exec.Command("true")
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	pid := command.Process.Pid
+	t.Cleanup(func() { _ = command.Wait() })
+	// The real exit, as the relaunch waits for it; the status of the process is collected only after the judgment.
+	current, err := platform.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := current.WaitProcessEnd(pid); err != nil {
+		if strings.Contains(err.Error(), "not implemented on ") {
+			t.Skip(err.Error())
+		}
+		t.Fatal(err)
+	}
+	running := runs(t, pid)
+	if err := command.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	if running {
+		t.Fatalf("the exited process %d that was not yet waited for is judged as running", pid)
+	}
+}
+
 func endingProcess(t *testing.T) (int, func()) {
 	t.Helper()
 	command := exec.Command("cat")
@@ -215,7 +260,7 @@ func TestTheBundleIsReplacedAfterTheProcessEndedAndTheApplicationStarts(t *testi
 	var started []string
 	open := func(bundle string, arguments []string) error {
 		// The application starts after the process ended and the bundle was replaced.
-		if err := exec.Command("kill", "-0", strconv.Itoa(pid)).Run(); err == nil {
+		if runs(t, pid) {
 			t.Error("the application started before the process ended")
 		}
 		data, err := os.ReadFile(filepath.Join(bundle, "Contents", "Info.plist"))
@@ -313,7 +358,7 @@ func TestTheReplacementWaitsForTheExitWithoutALimit(t *testing.T) {
 	staged := bundleFixture(t, filepath.Join(parent, "updates", "0.0.9"), "soksak.app", "new")
 	pid, end := endingProcess(t)
 	open := func(string, []string) error {
-		if err := exec.Command("kill", "-0", strconv.Itoa(pid)).Run(); err == nil {
+		if runs(t, pid) {
 			t.Error("the application started before the process ended")
 		}
 		return nil
@@ -335,7 +380,7 @@ func TestTheRelaunchStartsTheSameBundleInTheBackgroundAfterTheProcessEnded(t *te
 	pid, end := endingProcess(t)
 	var started []string
 	open := func(bundle string, arguments []string, activate bool) error {
-		if err := exec.Command("kill", "-0", strconv.Itoa(pid)).Run(); err == nil {
+		if runs(t, pid) {
 			t.Error("the application started before the process ended")
 		}
 		started = append(started, fmt.Sprintf("%s %s activate=%v", bundle, strings.Join(arguments, " "), activate))
@@ -375,7 +420,7 @@ func TestTheRelaunchRefusesAFolderThatIsNotABundleAndWaitsForTheExit(t *testing.
 	target := bundleFixture(t, parent, "soksak.app", "same")
 	// The test ends the process it controls; the relaunch then starts the bundle after the exit.
 	open := func(string, []string, bool) error {
-		if err := exec.Command("kill", "-0", strconv.Itoa(pid)).Run(); err == nil {
+		if runs(t, pid) {
 			t.Error("the application started before the process ended")
 		}
 		return nil
