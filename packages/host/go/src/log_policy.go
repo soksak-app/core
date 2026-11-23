@@ -165,7 +165,14 @@ func StartLogPolicy(log *EventLog, applied func(source, detail string)) (stop fu
 		mu.Lock()
 		defer mu.Unlock()
 		source := "file"
+		// silent: the size and the modification time around the read tell whether a write in place overlapped it; such a read
+		// holds a part of the file, and the completion of the write gives the next notification (F1130).
+		before, beforeErr := os.Stat(log.PolicyPath())
 		data, readErr := os.ReadFile(log.PolicyPath())
+		after, afterErr := os.Stat(log.PolicyPath())
+		if beforeErr == nil && afterErr == nil && (before.Size() != after.Size() || !before.ModTime().Equal(after.ModTime())) {
+			return
+		}
 		var policy LogPolicy
 		var failure string
 		switch {

@@ -187,7 +187,19 @@ pub fn start_log_policy(
             let mut source = "file";
             let mut policy = LogPolicy::default();
             let mut failure = String::new();
-            match std::fs::read(&path) {
+            // silent: the size and the modification time around the read tell whether a write in place overlapped it; such a read
+            // holds a part of the file, and the completion of the write gives the next notification (F1130).
+            let stamp = |path: &std::path::Path| {
+                std::fs::metadata(path).map(|meta| (meta.len(), meta.modified().ok()))
+            };
+            let before = stamp(&path);
+            let read = std::fs::read(&path);
+            if let (Ok(before), Ok(after)) = (&before, &stamp(&path))
+                && before != after
+            {
+                return;
+            }
+            match read {
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => source = "default",
                 Err(error) => {
                     source = "error";

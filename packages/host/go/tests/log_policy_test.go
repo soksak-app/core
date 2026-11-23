@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
@@ -198,6 +199,46 @@ func TestTheStartOfTheWorkbenchPassesAGateThatTurnsTheLifecycleOff(t *testing.T)
 }
 
 // contract: log.policy.file-is-watched, log.policy.default-stores-errors
+// F1130 (docs/spec/logging.md#policy): a write in place is read whole or not at all; a load that overlaps the write is no
+// refused file, because the completion of the write gives the next notification.
+func TestAWriteInPlaceIsNeverRefusedAsAPartialFile(t *testing.T) {
+	config := t.TempDir()
+	options := support.EventLogOptions(filepath.Join(config, "logs"))
+	options.PolicyPath = filepath.Join(config, "log-policy.json")
+	log, err := host.StartEventLog(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	var refused []string
+	stop, err := host.StartLogPolicy(log, func(source, detail string) {
+		if source == "error" {
+			mu.Lock()
+			refused = append(refused, detail)
+			mu.Unlock()
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	narrow := `{"schema":1,"classes":{"lifecycle":"trace","input":"trace","call":"info","io":"trace","frame":"trace"}}`
+	for round := 0; round < 200; round++ {
+		content := everything
+		if round%2 == 1 {
+			content = narrow
+		}
+		if err := os.WriteFile(options.PolicyPath, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	stop()
+	mu.Lock()
+	defer mu.Unlock()
+	if len(refused) > 0 {
+		t.Fatalf("writes in place refused as partial files: %q", refused)
+	}
+}
+
 func TestThePolicyFileIsWatchedAndEveryChangeIsAppliedOnce(t *testing.T) {
 	config := t.TempDir()
 	options := support.EventLogOptions(filepath.Join(config, "logs"))

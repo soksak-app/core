@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1130: The log policy reader of the hosts waits for the next notification when a write in place overlapped its read, so no partial file is refused.
 - F1126-1: The Go stop test fixture reads its persistent connection as the read goroutine does, so the stop that waits for the end of the connection ends.
 - F1126: The stop of the sidecars ends after the reader of each persistent connection removed the service from the sampled processes and recorded `host.sidecar.disconnect`, in both hosts, so a sample after the stop no longer names the service. Verification: Red on the unchanged hosts, then Green Go 120 of 120 and Rust 60 of 60 repeated runs.
 - F1117-7: The bundle preparation tests start a waiting copy of the Node executable, which runs on a system whose sleep is a multi-call program. Verification: Red in the Linux CI job, Green of the refusal test in an Ubuntu 26.04 container and 3 of 3 on macOS.

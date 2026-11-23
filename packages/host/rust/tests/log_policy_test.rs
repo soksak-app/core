@@ -316,6 +316,52 @@ fn the_policy_file_is_watched_and_every_change_is_applied_once() {
     drop(watch);
 }
 
+// F1130 (docs/spec/logging.md#policy): a write in place is read whole or not at all; a load that overlaps the write is no
+// refused file, because the completion of the write gives the next notification.
+#[test]
+fn a_write_in_place_is_never_refused_as_a_partial_file() {
+    let config = folder::Folder::new();
+    let policy_path = config.path().join("log-policy.json");
+    let log = Arc::new(
+        event_log::start(options(
+            &config.path().join("logs"),
+            Some(policy_path.clone()),
+        ))
+        .unwrap(),
+    );
+    let (sender, applied) = channel::<(String, String)>();
+    let sender = std::sync::Mutex::new(sender);
+    let watch = start_log_policy(
+        &log,
+        Some(Box::new(move |source: &str, detail: &str| {
+            sender
+                .lock()
+                .unwrap()
+                .send((source.to_string(), detail.to_string()))
+                .unwrap();
+        })),
+    )
+    .unwrap();
+    let narrow = r#"{"schema":1,"classes":{"lifecycle":"trace","input":"trace","call":"info","io":"trace","frame":"trace"}}"#;
+    for round in 0..200 {
+        fs::write(
+            &policy_path,
+            if round % 2 == 0 { EVERYTHING } else { narrow },
+        )
+        .unwrap();
+    }
+    drop(watch);
+    let refused: Vec<String> = applied
+        .try_iter()
+        .filter(|(source, _)| source == "error")
+        .map(|(_, detail)| detail)
+        .collect();
+    assert!(
+        refused.is_empty(),
+        "writes in place refused as partial files: {refused:?}"
+    );
+}
+
 /// Checks the gate of a writer under the default policy: an error event of every class is stored and an event of every class below
 /// error is refused.
 fn assert_default_gate(log: &EventLog, step: &str) {
