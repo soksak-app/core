@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1123: The exit wait of the setup tests waits again after EINTR, so a signal of the Go runtime no longer fails `TestSetupFailsWhenTheLoginShellGivesNoEnvironment`. Verification: Red in `make test-mygo`, then Green 317 of 317 repeated runs.
 - F1117-5: The view drag test passes process table rows to `cpuSecondsOf`, and `endGroup` of the window-check harness ends when no member of the group runs, so a read of the process table after an interrupted command finds no running child. Verification: Red 7 of 36 concurrent runs of the interrupt test, then Green 0 of 36.
 - F1109: The window check `e2e/surface-status-reload.test.mjs` requires that each of three raster probe surfaces reads its own session and draws its own color after a reload of the main page. Verification: 3 of 3 on wailsv3, tauriv2 and mygo; the surface mapping of the host and the registration of the workbench are not the cause of F1109.
 - F1106: A tab parameter that `surface.params` does not name fails a new tab and opens a stored tab as a placeholder, as an unknown command parameter is refused, and the start parameters of a terminal tab name `directory`. Verification: Red of `tab-params.test.mjs`, then Green.

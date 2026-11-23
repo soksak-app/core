@@ -184,7 +184,8 @@ func pidOf(t *testing.T, file string) int {
 }
 
 // waitExited waits for the exit of the process pid through the process exit event of kqueue; a process that already ended is
-// refused by the registration with ESRCH.
+// refused by the registration with ESRCH. A signal of the Go runtime, such as the preemption signal, interrupts the wait with
+// EINTR, and the wait starts again, because the process has not ended.
 func waitExited(t *testing.T, pid int) {
 	t.Helper()
 	queue, err := unix.Kqueue()
@@ -194,8 +195,15 @@ func waitExited(t *testing.T, pid int) {
 	defer unix.Close(queue)
 	change := unix.Kevent_t{Ident: uint64(pid), Filter: unix.EVFILT_PROC, Flags: unix.EV_ADD | unix.EV_ONESHOT, Fflags: unix.NOTE_EXIT}
 	events := make([]unix.Kevent_t, 1)
-	if _, err := unix.Kevent(queue, []unix.Kevent_t{change}, events, nil); err != nil && !errors.Is(err, syscall.ESRCH) {
-		t.Fatalf("watch the exit of %d: %v", pid, err)
+	for {
+		_, err := unix.Kevent(queue, []unix.Kevent_t{change}, events, nil)
+		if errors.Is(err, syscall.EINTR) {
+			continue
+		}
+		if err != nil && !errors.Is(err, syscall.ESRCH) {
+			t.Fatalf("watch the exit of %d: %v", pid, err)
+		}
+		return
 	}
 }
 
