@@ -68,7 +68,11 @@ fn play(scenario: &str) -> Value {
             // A child that ended before the kill answers ESRCH, which is its end; any other error fails the check.
             if unsafe { libc::kill(id as libc::pid_t, libc::SIGKILL) } != 0 {
                 let error = std::io::Error::last_os_error();
-                assert_eq!(error.raw_os_error(), Some(libc::ESRCH), "kill of the child {id}: {error}");
+                assert_eq!(
+                    error.raw_os_error(),
+                    Some(libc::ESRCH),
+                    "kill of the child {id}: {error}"
+                );
             }
             panic!("the scenario {scenario} did not end within {SCENARIO_LIMIT:?}");
         }

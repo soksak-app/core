@@ -8,6 +8,7 @@
 - F1126: 두 host에서 sidecar 중지는 각 persistent connection의 reader가 service를 sample되는 process에서 지우고 `host.sidecar.disconnect`를 기록한 뒤에 끝나므로, 중지 뒤의 sample이 더 이상 service를 이름하지 않는다. 검증: 바뀌지 않은 host에서 Red, 이어 반복 실행 Go 120번 중 120번과 Rust 60번 중 60번 Green.
 - F1117-7: bundle preparation 테스트는 기다리는 Node 실행 파일의 복사본을 시작하므로, sleep이 multi-call program인 system에서도 돈다. 검증: Linux CI job에서 Red, Ubuntu 26.04 container에서 거부 테스트 Green, macOS에서 3개 중 3개.
 - F1117-8: sok과 window race 테스트의 `kill(2)` 호출은 오류를 버리지 않고 `ESRCH` 말고 다른 오류에서 check를 실패시킨다.
+- F1117-9: window race 테스트의 kill 검사가 rustfmt 형식을 따른다.
 - F1125-1: core version은 모든 package와 crate manifest, Info.plist, Tauri 파일, Go와 pkg-config 선언, Cargo.lock의 workspace 항목 여섯 개, scripts/check-versions.mjs에서 0.0.51이다.
 - F1117-6: command 테스트의 process check는 zombie처럼 exiting process도 끝난 것으로 본다. 검증: `make test-headless-owners`에서 Red, 이어 세 번 실행에서 Green.
 - F1123: setup 테스트의 exit 대기는 EINTR 뒤 다시 기다리므로, Go runtime의 signal이 더 이상 `TestSetupFailsWhenTheLoginShellGivesNoEnvironment`를 실패시키지 않는다. 검증: `make test-mygo`에서 Red, 이어 반복 실행 317번 중 317번 Green.
