@@ -14,30 +14,37 @@ function dryRun(target, ...skipped) {
 
 function debugConfiguration() {
   const tauri = dryRun("build-tauriv2", "copy-frontend-tauriv2").match(/cargo build --locked -p sok-tauriv2 --features (\S+)/);
+  const gpuikit = dryRun("build-gpuikit", "copy-frontend-gpuikit").match(/cargo build --locked -p sok-gpuikit --features (\S+)/);
   const wails = dryRun("build-wailsv3", "copy-frontend-wailsv3").match(/go build -C apps\/wailsv3 -tags "([^"]+)"/);
   assert.ok(tauri, "build-tauriv2 names its features");
+  assert.ok(gpuikit, "build-gpuikit names its features");
   assert.ok(wails, "build-wailsv3 names its tags");
-  return { features: tauri[1], tags: wails[1] };
+  return { features: tauri[1], gpuikitFeatures: gpuikit[1], tags: wails[1] };
 }
 
 function assertCompilesDebugConfiguration(output) {
-  const { features, tags } = debugConfiguration();
+  const { features, gpuikitFeatures, tags } = debugConfiguration();
   assert.ok(
     output.includes(`cargo check --locked --tests -p soksak-sok -p soksak-host -p soksak-host-tauriv2 -p sok-tauriv2 --features ${features}`),
+    output,
+  );
+  // F1136-6: the GPUI framework adapter and the gpuikit application compile with the features of the gpuikit debug bundle.
+  assert.ok(
+    output.includes(`cargo check --locked --tests -p soksak-sok -p soksak-host-gpuikit -p sok-gpuikit --features ${gpuikitFeatures}`),
     output,
   );
   for (const module of modules) assert.ok(output.includes(`go vet -C ${module} -tags "${tags}" ./src/...`), output);
 }
 
 test("the debug check compiles the features and tags of the debug apps", { timeout: 60000 }, () => {
-  assertCompilesDebugConfiguration(dryRun("check-host-debug", "copy-frontend-wailsv3", "copy-frontend-tauriv2", "copy-frontend-mygo"));
+  assertCompilesDebugConfiguration(dryRun("check-host-debug", "copy-frontend-wailsv3", "copy-frontend-tauriv2", "copy-frontend-mygo", "copy-frontend-gpuikit"));
 });
 
 test("check-host-files runs the debug check", { timeout: 60000 }, () => {
-  assertCompilesDebugConfiguration(dryRun("check-host-files", "copy-frontend-wailsv3", "copy-frontend-tauriv2", "copy-frontend-mygo"));
+  assertCompilesDebugConfiguration(dryRun("check-host-files", "copy-frontend-wailsv3", "copy-frontend-tauriv2", "copy-frontend-mygo", "copy-frontend-gpuikit"));
 });
 
 test("the debug check builds the native test library that the compiled tests link", { timeout: 60000 }, () => {
-  const output = dryRun("check-host-debug", "copy-frontend-wailsv3", "copy-frontend-tauriv2", "copy-frontend-mygo");
+  const output = dryRun("check-host-debug", "copy-frontend-wailsv3", "copy-frontend-tauriv2", "copy-frontend-mygo", "copy-frontend-gpuikit");
   assert.match(output, /build-host-test build-host-callback-abi build-host-callback-worker/, output);
 });

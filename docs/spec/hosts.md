@@ -254,7 +254,7 @@ On Windows both hosts implement directory identity (`platform/windows/identity.*
 
 `make check-host-files` runs `make check-windows-build`, which vets the sources of the Go language host library and of the Wails framework adapter for `windows/arm64` in the default and the diagnostics build.
 
-`make check-host-files` also runs `make check-host-debug`, which compiles the sources and the tests of the three hosts and the three apps for macOS with the features and the tags of the debug apps. `make build-tauriv2`, `make build-wailsv3`, `make build-mygo`, and this check read that configuration from one definition in the Makefile.
+`make check-host-files` also runs `make check-host-debug`, which compiles the sources and the tests of the four hosts and the four apps for macOS with the features and the tags of the debug apps. `make build-tauriv2`, `make build-wailsv3`, `make build-mygo`, `make build-gpuikit`, and this check read that configuration from one definition in the Makefile.
 
 ## Main thread of the Wails host
 

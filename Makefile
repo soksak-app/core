@@ -373,9 +373,10 @@ check-windows-rust: check-cargo
 # Compiles the sources and the tests of the two native hosts and the two native apps for macOS in the configuration of the debug apps.
 # A source behind a diagnostic feature or tag fails here and not in the build of an app. The Go tests link the native test library,
 # so it is built. The core frontend is staged because the apps include it at compile time.
-check-host-debug: check-cargo build-native build-native-tests copy-frontend-wailsv3 copy-frontend-tauriv2 copy-frontend-mygo
+check-host-debug: check-cargo build-native build-native-tests copy-frontend-wailsv3 copy-frontend-tauriv2 copy-frontend-mygo copy-frontend-gpuikit
 	@echo "START: Rust hosts cargo check --tests --features $(TAURI_DEBUG_FEATURES)"
 	@$(CARGO_ENV) $(CARGO) check --locked --tests -p soksak-sok -p soksak-host -p soksak-host-tauriv2 -p sok-tauriv2 --features $(TAURI_DEBUG_FEATURES)
+	@$(CARGO_ENV) $(CARGO) check --locked --tests -p soksak-sok -p soksak-host-gpuikit -p sok-gpuikit --features gpuikit,$(TAURI_DEBUG_FEATURES)
 	@echo "PASS: Rust hosts in the debug configuration"
 	@echo "START: Go hosts go vet -tags \"$(WAILS_DEBUG_TAGS)\""
 	@$(GO_ENV) go vet -C apps/wailsv3 -tags "$(WAILS_DEBUG_TAGS)" ./src/...

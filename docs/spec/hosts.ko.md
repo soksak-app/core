@@ -254,7 +254,7 @@ Windows에서 두 호스트는 디렉터리 식별(`platform/windows/identity.*`
 
 `make check-host-files`는 `make check-windows-build`를 실행하며, 이 target은 Go language host library와 Wails framework adapter의 source를 기본 build와 diagnostics build에서 `windows/arm64`용으로 vet한다.
 
-`make check-host-files`는 `make check-host-debug`도 실행하며, 이 target은 세 host와 세 앱의 source와 test를 debug 앱의 feature와 tag로 macOS용으로 컴파일한다. `make build-tauriv2`, `make build-wailsv3`, `make build-mygo`, 이 check는 그 구성을 Makefile의 정의 하나에서 읽는다.
+`make check-host-files`는 `make check-host-debug`도 실행하며, 이 target은 네 host와 네 앱의 source와 test를 debug 앱의 feature와 tag로 macOS용으로 컴파일한다. `make build-tauriv2`, `make build-wailsv3`, `make build-mygo`, `make build-gpuikit`, 이 check는 그 구성을 Makefile의 정의 하나에서 읽는다.
 
 ## Wails host의 main thread
 

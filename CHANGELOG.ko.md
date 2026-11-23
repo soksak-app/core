@@ -5,6 +5,7 @@
 
 ## 2026-11-24
 
+- F1136-6: `make check-host-debug`는 GPUI framework adapter와 gpuikit application을 gpuikit debug bundle의 feature로 컴파일한다.
 - F1136-2: CI는 job `macos-gpuikit`에서 gpuikit host contract를 실행하고, gate `required`와 push preflight가 그 job을 읽는다.
 - F1136-5: host 비교 검사가 gpuikit을 포함한다. `check-hosts-same`은 GPUI page runtime의 host.call 이름을 Tauri의 이름, adapter의 dispatch와 비교하고, `check-failure-table`은 adapter의 error record를 읽는다. GPUI host는 빠져 있던 call `view_reload`와 `sidecar_sessions`를 얻고, failure table은 그 다섯 error 위치를 든다.
 - F1136-1: host test runner는 gpuikit을 네 번째 host로 검사한다. Rust language host library와 Rust sok은 두 Rust host를 맡고, GPUI framework adapter는 자기 port의 각 `all` 사례를 선언하며, `make test-gpuikit`이 그 계약을 실행한다.
