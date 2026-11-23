@@ -322,8 +322,8 @@ func TestSyncRequestRejectsAViewWithoutACurrentPageDeclaration(t *testing.T) {
 func TestReloadRetiresThePreviousPageCompositionDeclarations(t *testing.T) {
 	composition := SurfaceComposition{Kind: "view", Page: "ui/page.html"}
 	s := &Surfaces{
-		compositions:         map[string]SurfaceComposition{"tab-old": composition},
-		surfacePlugins:       map[string]string{"tab-old": "probe"},
+		compositions:   map[string]SurfaceComposition{"tab-old": composition},
+		surfacePlugins: map[string]string{"tab-old": "probe"}, surfacePrograms: map[string]map[string]programDeclaration{},
 		compositionRevisions: map[string]uint64{"tab-old": 1},
 		reloadCancelLayout:   func() error { return nil },
 		reloadKeysPageEnded:  func() {},

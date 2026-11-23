@@ -123,6 +123,51 @@ fn a_view_without_start_keeps_the_values_that_the_host_holds() {
 mod declaration_table {
     use super::super::SyncRequest;
 
+    // A view surface of the sync request carries the programs that its plugin declares; the host checks each run against them, and
+    // refuses the sync of a surface whose programs member it rejects.
+    // contract: program.run.reads-the-programs-of-the-sync-surface
+    #[test]
+    fn a_program_run_reads_the_programs_that_the_sync_request_carries_for_the_surface() {
+        let sync = |program: &str| -> SyncRequest {
+            crate::arguments::decode("request", &serde_json::json!({
+                "settled": true,
+                "titlebar": 40.0, "viewport": {"width": 800.0, "height": 600.0},
+                "declarations": [{}],
+                "surfaces": [{"id":"tab-a","x":0.0,"y":0.0,"w":10.0,"h":10.0,"visible":true,"dim":false,
+                              "plugin":"plugin-x","composition":{"kind":"view","page":"ui/page.html"},
+                              "start":{"params":{},"origin":{},"project":{"id":"p","root":"/projects/p"},"declarations":0,
+                                       "diagnostics":null,"section":null},
+                              "programs":{"agent-file":{"program":program,"args":[{"pattern":"[a-z.]+"}]}}}]
+            }))
+            .expect("the page request decodes")
+        };
+        let resolved = sync("echo")
+            .resolve()
+            .expect("the declaration index resolves");
+        let project = tempfile::tempdir().expect("a project folder");
+        let runs = crate::program_run::ProgramRuns::new();
+        runs.declare("tab-a", "plugin-x", resolved.surfaces[0].programs.clone());
+        let finished = runs
+            .run(crate::program_run::Request {
+                surface: "tab-a".to_string(),
+                plugin: "plugin-x".to_string(),
+                id: 1,
+                name: "agent-file".to_string(),
+                args: vec!["notes.md".to_string()],
+                project: Some(project.path().to_path_buf()),
+                plugin_folder: Ok(project.path().join("plugin")),
+                environment: std::env::vars_os().collect(),
+            })
+            .expect("the declared program of the sync surface runs");
+        assert_eq!(finished.code, Some(0));
+        assert_eq!(
+            sync("").resolve().err().as_deref(),
+            Some(
+                "surface \"tab-a\": programs.agent-file program is not a text of 1 to 255 bytes without a control character"
+            )
+        );
+    }
+
     // The page sends the start values of a view through the host call decoder, which skips a null member of a struct as the
     // Wails host leaves a typed field unchanged; the Wails host keeps the null of its raw start values, so this decoder keeps it.
     // contract: view.start-values.keeps-null-members

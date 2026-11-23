@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -217,7 +218,16 @@ func TestProgramRunEndKindsAreReportedAsTheirResult(t *testing.T) {
 }
 
 // programDeclarations is the programs declaration of a view start, as the workbench sends it: one run of git with two slots.
-var programDeclarations = json.RawMessage(`{"programs":{"status":{"program":"git","args":["status",{"pattern":"-[a-z]+"}]},"bare":{"program":"ls"}}}`)
+var programDeclarations = mustProgramDeclarations(`{"status":{"program":"git","args":["status",{"pattern":"-[a-z]+"}]},"bare":{"program":"ls"}}`)
+
+// mustProgramDeclarations parses the programs member of a sync surface for a test whose declaration is valid.
+func mustProgramDeclarations(text string) map[string]programDeclaration {
+	declared, err := parseProgramDeclarations(json.RawMessage(text))
+	if err != nil {
+		panic(err)
+	}
+	return declared
+}
 
 var programProject = &SurfaceProject{ID: "p", Root: "/projects/p"}
 
@@ -251,8 +261,7 @@ func TestProgramRunRefusesAnArgumentOutsideItsPattern(t *testing.T) {
 
 // contract: program.run.refuses-pattern-that-does-not-compile
 func TestProgramRunRefusesAPatternThatDoesNotCompile(t *testing.T) {
-	decls := json.RawMessage(`{"programs":{"bad":{"program":"git","args":[{"pattern":"("}]}}}`)
-	_, err := checkProgramRun(decls, "plugin-x", "bad", []string{"x"}, programProject)
+	_, err := parseProgramDeclarations(json.RawMessage(`{"bad":{"program":"git","args":[{"pattern":"("}]}}`))
 	if err == nil || !strings.HasPrefix(err.Error(), "programs.bad pattern does not compile: ") {
 		t.Fatalf("error %v", err)
 	}
@@ -520,5 +529,35 @@ func TestProgramDeclarationRefusesAnInvalidPluginPath(t *testing.T) {
 		if err == nil || err.Error() != want {
 			t.Fatalf("%s: error %v, want %q", program, err, want)
 		}
+	}
+}
+
+// contract: program.run.reads-the-programs-of-the-sync-surface
+func TestProgramRunReadsTheProgramsThatTheSyncRequestCarriesForTheSurface(t *testing.T) {
+	const surface = `"id":"tab-a","visible":true,"dim":false,"plugin":"plugin-x","composition":{"kind":"view","page":"ui/page.html"},"x":0,"y":0,"w":10,"h":10,"start":{"params":{},"origin":{},"project":{"id":"p","root":"/projects/p"},"diagnostics":null,"section":null,"declarations":0}`
+	request := json.RawMessage(`{"settled":true,"titlebar":40,"viewport":{"width":800,"height":600},"declarations":[{}],"surfaces":[{` + surface + `,"programs":{"agent-file":{"program":"echo","args":[{"pattern":"[a-z.]+"}]}}}]}`)
+	decoded, err := decodeSyncRequest(request)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	s := &Surfaces{compositions: map[string]SurfaceComposition{}, surfacePlugins: map[string]string{},
+		surfacePrograms: map[string]map[string]programDeclaration{}}
+	s.recordSyncedSurface(decoded.Surfaces[0])
+	spec := s.viewRecords().track("tab-a", nil, "plugin-x", "ui/page.html", true)
+	spec.start = *decoded.Surfaces[0].Start
+	view, err := s.programView("tab-a")
+	if err != nil {
+		t.Fatalf("view: %v", err)
+	}
+	run, err := checkProgramRun(view.programs, view.plugin, "agent-file", []string{"notes.md"}, view.project)
+	if err != nil {
+		t.Fatalf("the declared program of the sync surface was refused: %v", err)
+	}
+	if run.Program != "echo" || !reflect.DeepEqual(run.Args, []string{"notes.md"}) {
+		t.Fatalf("run %+v", run)
+	}
+	if _, err := decodeSyncRequest(json.RawMessage(strings.Replace(string(request), `"program":"echo"`, `"program":""`, 1))); err == nil ||
+		err.Error() != `surface "tab-a": programs.agent-file program is not a text of 1 to 255 bytes without a control character` {
+		t.Fatalf("an invalid programs member was not refused at the sync: %v", err)
 	}
 }

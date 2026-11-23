@@ -47,6 +47,18 @@ type Surface struct {
 	// Start holds the start values of the view of a view surface, which the host injects as window.sokSurface before the page
 	// runs (docs/spec/native-surfaces.md#view-surfaces). A surface of another composition carries none.
 	Start *ViewStart `json:"start,omitempty"`
+	// Programs holds the programs that the plugin of the surface declares, by name, which the host checks each run against
+	// (docs/spec/native-surfaces.md#program-runs). A surface whose request carries no programs member declares none.
+	Programs map[string]programDeclaration `json:"-"`
+}
+
+// recordSyncedSurface records the composition, the plugin and the declared programs of a surface of a sync request.
+func (s *Surfaces) recordSyncedSurface(surface Surface) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.compositions[surface.ID] = surface.Composition
+	s.surfacePlugins[surface.ID] = surface.Plugin
+	s.surfacePrograms[surface.ID] = surface.Programs
 }
 
 // SurfaceProject is the id and the canonical root of the project that the window shows, or nil when the window shows no project
@@ -394,7 +406,8 @@ type syncSurfaceWire struct {
 	Plugin      string             `json:"plugin"`
 	Composition SurfaceComposition `json:"composition"`
 	Rect
-	Start *syncViewStartWire `json:"start,omitempty"`
+	Start    *syncViewStartWire `json:"start,omitempty"`
+	Programs json.RawMessage    `json:"programs,omitempty"`
 }
 
 type syncViewStartWire struct {
@@ -429,7 +442,14 @@ func decodeSyncRequest(raw json.RawMessage) (SyncRequest, error) {
 	for i, item := range wire.Surfaces {
 		surface := Surface{
 			ID: item.ID, Visible: item.Visible, Dim: item.Dim, Plugin: item.Plugin,
-			Composition: item.Composition, Rect: item.Rect,
+			Composition: item.Composition, Rect: item.Rect, Programs: map[string]programDeclaration{},
+		}
+		if item.Programs != nil {
+			programs, err := parseProgramDeclarations(item.Programs)
+			if err != nil {
+				return SyncRequest{}, fmt.Errorf("surface %q: %v", item.ID, err)
+			}
+			surface.Programs = programs
 		}
 		if item.Composition.Kind == "view" && item.Start != nil {
 			indexText := strings.TrimSpace(string(item.Start.Declarations))
@@ -555,7 +575,9 @@ type Surfaces struct {
 	views        map[string]*nativeWebview
 	compositions map[string]SurfaceComposition
 	// surfacePlugins is the plugin of each surface that declared its composition.
-	surfacePlugins       map[string]string
+	surfacePlugins map[string]string
+	// surfacePrograms holds the declared programs of each surface of the last sync (docs/spec/native-surfaces.md#program-runs).
+	surfacePrograms      map[string]map[string]programDeclaration
 	compositionRevisions map[string]uint64
 	// lifecycle counts the failures of each view surface and keeps the record that creates its view again (view_lifecycle.go).
 	lifecycle *viewLifecycle
@@ -676,6 +698,7 @@ func NewSurfaces(win Frontend, sidecars *Sidecars) *Surfaces {
 		views:                map[string]*nativeWebview{},
 		compositions:         map[string]SurfaceComposition{},
 		surfacePlugins:       map[string]string{},
+		surfacePrograms:      map[string]map[string]programDeclaration{},
 		compositionRevisions: map[string]uint64{},
 		named:                map[uintptr]string{},
 		shapes:               map[string]*nativeShape{},
@@ -2046,10 +2069,7 @@ func (s *Surfaces) apply(win Frontend, req SyncRequest) ([]string, []Placement, 
 
 	placed := make([]Placement, 0, len(desired))
 	for _, item := range desired {
-		s.mu.Lock()
-		s.compositions[item.id] = item.decl.Composition
-		s.surfacePlugins[item.id] = item.decl.Plugin
-		s.mu.Unlock()
+		s.recordSyncedSurface(item.decl)
 		s.images.SetSurfaceVisible(item.id, item.visible)
 		// The view of a view surface is created by its first sync and fills the surface (docs/spec/plugins.md#view-surfaces).
 		start, err := s.viewStartOf(item.decl)
@@ -2093,6 +2113,7 @@ func (s *Surfaces) apply(win Frontend, req SyncRequest) ([]string, []Placement, 
 		s.mu.Lock()
 		delete(s.compositions, id)
 		delete(s.surfacePlugins, id)
+		delete(s.surfacePrograms, id)
 		s.mu.Unlock()
 		// A surface that is removed and created again is a reopened tab, which clears the failures of its view.
 		s.viewRecords().forget(id)

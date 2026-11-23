@@ -113,6 +113,7 @@ func TestTheGeometryOfAPreparationIsCommittedWithItsTicketAfterThePresentationNo
 	p.s.window = window
 	p.s.first.Do(func() {})
 	p.s.surfacePlugins = map[string]string{"probe-surface": "probe"}
+	p.s.surfacePrograms = map[string]map[string]programDeclaration{}
 	composition := SurfaceComposition{Kind: "view", Page: "ui/page.html"}
 	p.s.compositions = map[string]SurfaceComposition{"probe-surface": composition}
 	trace := realTrace(t)

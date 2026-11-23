@@ -424,27 +424,14 @@ func programMatches(slot programSlot, arg string) (bool, error) {
 	return expression.MatchString(arg), nil
 }
 
-// checkProgramRun checks a run request against the programs declaration of the view start values and the project of the surface.
+// checkProgramRun checks a run request against the declared programs of the surface, which the sync request carries, and the project
+// of the surface.
 // It refuses in the order of the Rust host: a window without a project, a name that the declaration lacks, an argument count that
 // differs from the slots, an argument that its slot does not accept, and a pattern that does not compile. Each refusal is the text of
 // docs/spec/native-surfaces.md#program-runs.
-func checkProgramRun(declarations json.RawMessage, plugin, name string, args []string, project *SurfaceProject) (programRunSpec, error) {
+func checkProgramRun(declared map[string]programDeclaration, plugin, name string, args []string, project *SurfaceProject) (programRunSpec, error) {
 	if project == nil {
 		return programRunSpec{}, fmt.Errorf("program run: the window shows no project")
-	}
-	declared := map[string]programDeclaration{}
-	if declarations != nil {
-		var all map[string]json.RawMessage
-		if err := json.Unmarshal(declarations, &all); err != nil {
-			return programRunSpec{}, fmt.Errorf("the declarations are not an object")
-		}
-		if raw, ok := all["programs"]; ok {
-			parsed, err := parseProgramDeclarations(raw)
-			if err != nil {
-				return programRunSpec{}, err
-			}
-			declared = parsed
-		}
 	}
 	decl, ok := declared[name]
 	if !ok {
@@ -558,9 +545,9 @@ func (r *programRuns) endAll(cause ProgramEnd) {
 
 // programView is what a run needs of its view: the plugin, the declarations of its start values and the project of the window.
 type programView struct {
-	plugin       string
-	declarations json.RawMessage
-	project      *SurfaceProject
+	plugin   string
+	programs map[string]programDeclaration
+	project  *SurfaceProject
 }
 
 // programView reads the view of surface from the lifecycle record. It runs on the main thread, which owns the record.
@@ -569,7 +556,10 @@ func (s *Surfaces) programView(surface string) (programView, error) {
 	if spec == nil {
 		return programView{}, fmt.Errorf("program run: surface %s has no view", surface)
 	}
-	return programView{plugin: spec.plugin, declarations: spec.start.Declarations, project: spec.start.Project}, nil
+	s.mu.Lock()
+	programs := s.surfacePrograms[surface]
+	s.mu.Unlock()
+	return programView{plugin: spec.plugin, programs: programs, project: spec.start.Project}, nil
 }
 
 // refuseProgramRun writes the refusal of a run as host.program.refused and returns the refusal as the answer of the call.
@@ -594,7 +584,7 @@ func (h *Host) ProgramRun(ctx context.Context, reqJSON json.RawMessage) (Program
 	if err != nil {
 		return ProgramRunReply{}, refuseProgramRun(req.Surface, programView{}, req.Name, err)
 	}
-	spec, err := checkProgramRun(view.declarations, view.plugin, req.Name, req.Args, view.project)
+	spec, err := checkProgramRun(view.programs, view.plugin, req.Name, req.Args, view.project)
 	if err != nil {
 		return ProgramRunReply{}, refuseProgramRun(req.Surface, view, req.Name, err)
 	}

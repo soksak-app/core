@@ -24,7 +24,7 @@ func TestAPreparationPlacesTheSurfaceThatItCreatesInAWindowWithoutAMainPage(t *t
 	framework = pagelessFramework{window: window}
 	t.Cleanup(func() { framework = previousFramework })
 	s := &Surfaces{window: window, invoke: func(task func()) { task() }, views: map[string]*nativeWebview{}, named: map[uintptr]string{},
-		compositions: map[string]SurfaceComposition{}, surfacePlugins: map[string]string{}, images: NewImages(), documents: NewDocuments(),
+		compositions: map[string]SurfaceComposition{}, surfacePlugins: map[string]string{}, surfacePrograms: map[string]map[string]programDeclaration{}, images: NewImages(), documents: NewDocuments(),
 		sidecars: &Sidecars{}}
 	// The views of the two surfaces exist before the preparation, so it only places them: their documents are web views of the real
 	// platform in a surface that the test creates for them.

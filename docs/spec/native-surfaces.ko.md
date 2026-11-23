@@ -249,7 +249,7 @@ Tauri host는 현재 view-message envelope를 한 번 decode하고 reply, call �
 
 View는 plugin이 선언한 프로그램을 view call `runtime.program.run`으로 실행한다. Main page는 그 call을 surface, view call의 정수 식별자, 이름, 인자와 함께 host 명령 `programRun`에 넘기고, 그 call의 cancel은 surface와 그 식별자와 함께 host 명령 `programCancel`에 넘긴다. 두 host 명령 모두 [view 표면](#view-표면)의 plugin host call allowlist에 없으므로, 페이지는 실행을 view call을 통해서만 시작하고 취소한다.
 
-- **선언.** Plugin의 `programs`는 view start 값의 `declarations`에 든 member `programs`이며([view start](#view-표면)), workbench가 `plugin.json`을 읽을 때 검증한다. Host는 view에 대해 가진 start 값에서 이를 읽고 실행마다 대조하므로, 선언에 없는 이름의 실행은 host만으로 거부된다. View가 없는 surface는 `program run: surface <surface> has no view`로 답한다.
+- **선언.** Plugin의 `programs`는 sync 요청에 든 surface의 member `programs`이며(`packages/workbench/program-runs.js`, `programsOfSurface`), workbench가 `plugin.json`을 읽을 때 검증한다. 이 member가 없는 surface는 아무것도 선언하지 않는다. Host는 sync마다 이 member를 읽고, 거부하는 member를 가진 surface의 sync를 `surface "<surface>": <reason>`(아래 거부의 reason)으로 거부하며, 마지막 sync의 surface마다 선언을 유지하고 실행마다 대조하므로, 선언에 없는 이름의 실행은 host만으로 거부된다. View가 없는 surface는 `program run: surface <surface> has no view`로 답한다.
 - **거부.** Host는 프로그램을 시작하기 전에 실행을 거부하며, view call은 오류로 답한다. 각 거부는 `host.program.refused`로도 기록한다(아래 프로그램 실행 이벤트 참조).
   - 선언에 없는 이름은 `program <name> is not declared by <plugin>`.
   - 인자 수가 선언의 slot 수와 다르면 `program <name> takes <m> arguments, <n> given`.

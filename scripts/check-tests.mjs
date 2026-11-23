@@ -324,6 +324,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1112",
+    implementation: [
+      { file: "packages/host/go/src/surfaces.go", symbol: "func (s *Surfaces) recordSyncedSurface(surface Surface) {" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/program_run_test.go", id: "TestProgramRunReadsTheProgramsThatTheSyncRequestCarriesForTheSurface" },
+      { file: "packages/host/rust/src/surfaces_test.rs", id: "a_program_run_reads_the_programs_that_the_sync_request_carries_for_the_surface" },
+    ],
+    expected: "Both hosts check a program run against the programs member of the surface in the sync request.",
+    levels: ["unit"],
+  },
+  {
     id: "F1111",
     implementation: [
       { file: "native/darwin/src/input_virtual.m", symbol: "void sp_input_virtual_order_front_regardless(void *handle) {" },

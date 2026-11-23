@@ -6,6 +6,7 @@
 ## 2026-11-23
 
 - F1110-1: Go window 테스트의 test framework가 `Quit`을 가지므로, host의 유일한 창을 닫는 테스트가 F1110이 요청하는 quit에서 panic하지 않고 끝난다. 검증: main에서 window 테스트 셋의 Red, 이어 Green(450개 중 450개).
+- F1112: Go host가 Rust host처럼 sync 요청의 각 surface의 `programs` member를 읽고 각 프로그램 실행을 대조한다. 이전에는 exposes만 가진 view의 start declarations에서 `programs`를 읽어 모든 실행을 `program <name> is not declared by <plugin>`으로 거부했다. 검증: 이전 읽기에서 Go sync 테스트의 Red, 이어 `program.run.reads-the-programs-of-the-sync-surface`의 Go, Rust 테스트 Green.
 - F1111: `host.window.raise`가 AppKit의 구현으로 창을 정렬하므로, virtual key window의 raise가 그 창을 다른 애플리케이션 창 앞에 둔다. 이전에는 virtual key window 자신의 정렬 거부가 raise도 거부했고 raise는 여전히 성공으로 답했다. 검증: virtual key window 앞에 다른 프로세스 창을 둔 `window_order_test`의 Red, 이어 `input_virtual_test`, `window_facts_test`와 함께 Green.
 - F1108-4: catalog 테스트가 `page.theme.applied`를 나열하고, `record_page_start`의 default가 이유를 적으며, e2e fixture의 view-wire case가 view 시작 기록의 log call을 나열하므로 release check가 통과한다. 검증: release run에서 세 테스트의 Red, 이어 fixture 테스트 여섯과 두 view-wire producer와 함께 Green.
 - F1108-3: published view bridge case가 report를 지우지 않고 view 시작 기록의 open-call report 여섯 쌍을 정확히 확인하며, 각 case 순서가 그것으로 시작한다. 검증: 시작 report 하나를 더한 Red(case 8개 중 7개 실패, 지우는 형태는 8개 통과), 이어 Green(64개 중 64개).

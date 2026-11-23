@@ -48,6 +48,7 @@ func documentAttachSurfaces(t *testing.T) *viewProbe {
 	}
 	p.s.host.configDir = config
 	p.s.surfacePlugins = map[string]string{"probe-surface": "probe"}
+	p.s.surfacePrograms = map[string]map[string]programDeclaration{}
 	p.s.compositions = map[string]SurfaceComposition{"probe-surface": {Kind: "view", Regions: []SurfaceRegion{
 		{Name: "page", Kind: "document"},
 	}}}
