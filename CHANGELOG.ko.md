@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1125-1: core version은 모든 package와 crate manifest, Info.plist, Tauri 파일, Go와 pkg-config 선언, Cargo.lock의 workspace 항목 여섯 개, scripts/check-versions.mjs에서 0.0.51이다.
 - F1117-6: command 테스트의 process check는 zombie처럼 exiting process도 끝난 것으로 본다. 검증: `make test-headless-owners`에서 Red, 이어 세 번 실행에서 Green.
 - F1123: setup 테스트의 exit 대기는 EINTR 뒤 다시 기다리므로, Go runtime의 signal이 더 이상 `TestSetupFailsWhenTheLoginShellGivesNoEnvironment`를 실패시키지 않는다. 검증: `make test-mygo`에서 Red, 이어 반복 실행 317번 중 317번 Green.
 - F1117-5: view drag 테스트는 `cpuSecondsOf`에 process table row를 넘기고, window-check harness의 `endGroup`은 group의 member가 하나도 돌지 않을 때 끝나므로, 중단된 command 뒤의 process table 읽기에 실행 중인 child가 없다. 검증: interrupt 테스트 동시 실행 36번 중 7번 Red, 이어 36번 중 0번 Green.

@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1125-1: The core version is 0.0.51 in every package and crate manifest, Info.plist, Tauri file, Go and pkg-config declaration, the six workspace entries of Cargo.lock and scripts/check-versions.mjs.
 - F1117-6: The process check of the command tests takes an exiting process as ended, as a zombie is. Verification: Red in `make test-headless-owners`, then Green in three runs.
 - F1123: The exit wait of the setup tests waits again after EINTR, so a signal of the Go runtime no longer fails `TestSetupFailsWhenTheLoginShellGivesNoEnvironment`. Verification: Red in `make test-mygo`, then Green 317 of 317 repeated runs.
 - F1117-5: The view drag test passes process table rows to `cpuSecondsOf`, and `endGroup` of the window-check harness ends when no member of the group runs, so a read of the process table after an interrupted command finds no running child. Verification: Red 7 of 36 concurrent runs of the interrupt test, then Green 0 of 36.
