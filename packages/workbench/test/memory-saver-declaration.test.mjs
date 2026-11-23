@@ -7,8 +7,8 @@ import { registerPlugin, registerSection } from "../registry.js";
 
 test("a section surface takes its declaration from its own unload", () => {
   registerPlugin({ id: "fixture-background", background: { sidecar: "fixture", operation: "keep" }, surface: () => null });
-  registerSection({ id: "fixture-sections.tree", name: "Tree", plugin: "fixture-sections", surface: () => null });
-  registerSection({ id: "fixture-background.side", name: "Side", plugin: "fixture-background", surface: () => null });
+  registerSection({ actions: [], id: "fixture-sections.tree", name: "Tree", plugin: "fixture-sections", surface: () => null });
+  registerSection({ actions: [], id: "fixture-background.side", name: "Side", plugin: "fixture-background", surface: () => null });
   assert.equal(unloadDeclaration({ plugin: "fixture-background", kind: "tab", unload: false }), "background");
   assert.equal(unloadDeclaration({ plugin: "fixture-sections", kind: "section", unload: true }), "unload");
   assert.equal(unloadDeclaration({ plugin: "fixture-sections", kind: "section", unload: false }), "undeclared");

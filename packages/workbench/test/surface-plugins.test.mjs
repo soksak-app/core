@@ -8,9 +8,9 @@ const { registerPlugin, registerSection, surfacePlugins } = registry;
 
 test("a plugin with only sections is a plugin that draws a surface, once", () => {
   registerPlugin({ id: "fixture-tab", surface: () => null });
-  registerSection({ id: "fixture-sections.tree", name: "Tree", plugin: "fixture-sections", surface: () => null });
-  registerSection({ id: "fixture-sections.marks", name: "Marks", plugin: "fixture-sections", surface: () => null });
-  registerSection({ id: "fixture-tab.side", name: "Side", plugin: "fixture-tab", surface: () => null });
+  registerSection({ actions: [], id: "fixture-sections.tree", name: "Tree", plugin: "fixture-sections", surface: () => null });
+  registerSection({ actions: [], id: "fixture-sections.marks", name: "Marks", plugin: "fixture-sections", surface: () => null });
+  registerSection({ actions: [], id: "fixture-tab.side", name: "Side", plugin: "fixture-tab", surface: () => null });
   assert.deepEqual(surfacePlugins(), ["fixture-tab", "fixture-sections"]);
 });
 

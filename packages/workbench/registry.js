@@ -41,8 +41,10 @@ export function registerPlugin(plugin) {
  * @param {string} section.id    a set refers to the section by this id
  * @param {string} section.name  name shown in the sidebar
  * @param {object} section.surface  the surface that draws the section
+ * @param {object[]} section.actions  the actions of its header, {icon, label, command}, in declared order (docs/spec/plugins.md#sections)
  */
 export function registerSection(section) {
+  if (!Array.isArray(section.actions)) throw new Error(`section ${section.id} actions must be an array`);
   if (registeredSections.some((s) => s.id === section.id)) {
     throw new Error(`section already registered: ${section.id}`);
   }

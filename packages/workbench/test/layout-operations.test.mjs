@@ -595,7 +595,7 @@ test("surface.window answers the space null for a section surface that a sidebar
   const { clearSet, drawSet } = await import("../sidebar-sections.js");
   const composition = { kind: "view", page: "ui/tree.html" };
   registerPlugin({ id: "probe", name: "Probe", mark: "p", svg: "<path/>", ink: null, background: null, drop: null, surface: () => null });
-  registerSection({ id: "probe.tree", name: "Tree", plugin: "probe", composition, height: "fill",
+  registerSection({ actions: [], id: "probe.tree", name: "Tree", plugin: "probe", composition, height: "fill",
     surface: (surfaceId, start) => ({ composition, surfaceId, pluginId: "probe", declarations: {}, sidecars: [], diagnostics: null, unload: false,
       params: null, section: start }) });
   single([view("tab-aaaaa1", PLAIN)]);

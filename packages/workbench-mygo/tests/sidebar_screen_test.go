@@ -86,6 +86,29 @@ func TestAListSidebarDrawsItsHeadersAndFoldsASection(t *testing.T) {
 	}
 }
 
+// contract: plugins.sections.actions (docs/spec/plugins.md#sections)
+func TestASectionDrawsItsActionsAtTheRightEndOfItsHeader(t *testing.T) {
+	frame := listFrame()
+	frame.Sections[1].Actions = []workbench.SectionAction{{Icon: "plus", Label: "추가", Command: "git.add"}, {Icon: "more", Label: "더 보기", Command: "git.add"}}
+	tt := drawSidebar(&frame, recorder(t, new([]call), sidebarCommands...))
+	header := element(t, tt, "core.sidebar.section.header", "left/git.log")
+	first := element(t, tt, "core.sidebar.section.action", "left/git.log/0")
+	second := element(t, tt, "core.sidebar.section.action", "left/git.log/1")
+	if first.Label != "추가" || second.Label != "더 보기" {
+		t.Fatalf("action labels %q and %q", first.Label, second.Label)
+	}
+	if first.Actions&ui.ActionPress == 0 || second.Actions&ui.ActionPress == 0 {
+		t.Fatalf("an action takes no press: %+v %+v", first, second)
+	}
+	right := header.Bounds.X + header.Bounds.W
+	if math.Abs(float64(second.Bounds.X+second.Bounds.W-(right-sidebarMetrics.SectionHeadPad))) > 0.5 || first.Bounds.X >= second.Bounds.X {
+		t.Fatalf("the actions are not at the right end of the header in declared order: header %+v, actions %+v %+v", header.Bounds, first.Bounds, second.Bounds)
+	}
+	if _, ok := keyed(tt.ElementTree(), "core.sidebar.section.action", "left/fieldprobe.tree/0"); ok {
+		t.Fatal("a section without actions draws an action")
+	}
+}
+
 func TestAFoldedSectionKeepsOnlyItsHeader(t *testing.T) {
 	seats := map[string]bool{}
 	binder := recorder(t, new([]call), sidebarCommands...)

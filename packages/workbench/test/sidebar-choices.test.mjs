@@ -20,8 +20,8 @@ registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", imp
 registerPlugin({ id: "probe", name: "Probe", mark: "p", svg: "<path/>", ink: null, drop: null, background: null, surface: () => null });
 const surface = (surfaceId, section) => ({ composition: { kind: "view", page: "ui/section.html" }, surfaceId, pluginId: "probe",
   declarations: {}, sidecars: [], diagnostics: null, unload: false, params: null, section });
-registerSection({ id: "probe.one", name: "하나", height: "fill", plugin: "probe", surface });
-registerSection({ id: "probe.two", name: "둘", height: 80, plugin: "probe", surface });
+registerSection({ actions: [], id: "probe.one", name: "하나", height: "fill", plugin: "probe", surface });
+registerSection({ actions: [], id: "probe.two", name: "둘", height: 80, plugin: "probe", surface });
 
 test("the selected tab and folded sections are reported for saving and restored from a saved space", () => {
   const tabs = document.createElement("div");
@@ -56,7 +56,7 @@ test("a dragged section height is applied, reported, saved with the space and re
   list.className = "set";
   tabs.className = "set";
   document.body.append(list, tabs);
-  registerSection({ id: "probe.three", name: "셋", height: 60, plugin: "probe", surface });
+  registerSection({ actions: [], id: "probe.three", name: "셋", height: 60, plugin: "probe", surface });
   const context = { orientation: "vertical", card: null, surface: null, space: "spc-bbbbbb" };
   sections.restoreSidebarChoices({});
   sections.drawSet(list, "right", { id: "set-r", title: "R", sections: ["probe.one", "probe.two", "probe.three"], layout: "list" }, context);
@@ -95,4 +95,26 @@ test("a dragged section height is applied, reported, saved with the space and re
   assert.deepEqual(sizes(), { "probe.one": 240, "probe.two": null, "probe.three": null });
   assert.throws(() => sections.restoreSidebarChoices({ right: { tab: null, folded: [], sizes: { "probe.one": 10 } } }),
     { message: "sidebar right stores an invalid size of probe.one: 10" });
+});
+
+test("a section draws the buttons of its actions at the right end of its header, bound to its commands on the section surface", () => {
+  registry.declare("probe", { commands: [{ name: "probe.add", description: "Adds.", params: { type: "object" }, result: { type: "null" } }] });
+  registerSection({ actions: [{ icon: "plus", label: "추가", command: "probe.add" }, { icon: "more", label: "더 보기", command: "probe.add" }],
+    id: "probe.acts", name: "동작", height: 60, plugin: "probe", surface });
+  const list = document.createElement("div");
+  list.className = "set";
+  document.body.append(list);
+  const context = { orientation: "vertical", card: null, surface: null, space: "spc-cccccc" };
+  sections.drawSet(list, "bottom", { id: "set-a", title: "A", sections: ["probe.acts", "probe.one"], layout: "list" }, context);
+  const element = list.querySelector('[data-section="probe.acts"]');
+  const bar = element.querySelector(".set__actions");
+  assert.ok(bar, "a section with actions has no action bar");
+  assert.equal(bar.dataset.surface, "spc-cccccc/bottom/probe.acts", "the actions do not run on the section surface");
+  assert.equal(bar.previousElementSibling, element.querySelector(".set__head"), "the action bar does not follow the header");
+  const buttons = [...bar.querySelectorAll("button")];
+  assert.deepEqual(buttons.map((button) => [button.dataset.expose, button.getAttribute("aria-label"), button.title]),
+    [["core.sidebar.section.action", "추가", "추가"], ["core.sidebar.section.action", "더 보기", "더 보기"]]);
+  assert.ok(buttons.every((button) => button.querySelector("svg")), "an action button has no icon");
+  assert.equal(element.querySelector(".set__head button"), null, "a button is nested in the header button");
+  assert.equal(list.querySelector('[data-section="probe.one"] .set__actions'), null, "a section without actions has an action bar");
 });

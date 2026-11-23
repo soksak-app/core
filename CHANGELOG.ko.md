@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1127: sidebar section은 header action을 선언하고, manifest reader가 그것을 검사하며, workbench는 section header 오른쪽 끝에 버튼으로 그린다.
 - F1130: host의 log policy reader는 write in place가 읽기와 겹치면 다음 알림을 기다리므로, 부분 파일을 거부하지 않는다.
 - F1126-1: Go stop test fixture가 read goroutine처럼 persistent 연결을 읽으므로, 연결의 끝을 기다리는 stop이 끝난다.
 - F1126: 두 host에서 sidecar 중지는 각 persistent connection의 reader가 service를 sample되는 process에서 지우고 `host.sidecar.disconnect`를 기록한 뒤에 끝나므로, 중지 뒤의 sample이 더 이상 service를 이름하지 않는다. 검증: 바뀌지 않은 host에서 Red, 이어 반복 실행 Go 120번 중 120번과 Rust 60번 중 60번 Green.

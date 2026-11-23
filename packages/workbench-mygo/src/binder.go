@@ -58,6 +58,24 @@ func (b *Binder) Press(c *ui.Context, name, command, item string, params any) ui
 	}), name)
 }
 
+// PressOn creates a button without a look that runs the plugin command command with no parameter on surface, and gives it the element
+// name name, as a section action does (docs/spec/plugins.md#sections). A failure goes to the binder.
+func (b *Binder) PressOn(c *ui.Context, name, command, item, surface string) ui.Element {
+	if !b.registry.declared.Elements[name] {
+		panic(fmt.Sprintf("element name %s is not declared", name))
+	}
+	return b.Bound(ui.ButtonBase(c.Key(Exposed{Name: name, Command: command, Item: item})).OnClick(func() {
+		if b.pointer != nil {
+			b.pointer.Click(name)
+		}
+		b.registry.RunOn(command, json.RawMessage(`{}`), surface, func(_ any, err error) {
+			if err != nil {
+				b.fail(command, err)
+			}
+		})
+	}), name)
+}
+
 // Absent creates an element that the window holds but does not show, as the page holds an element under display:none. It keeps the
 // index of its name and takes the press of a request, and it has no size, so neither the pointer nor the keyboard stops at it.
 func (b *Binder) Absent(c *ui.Context, name, command, item string, params any) ui.Element {

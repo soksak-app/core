@@ -229,7 +229,7 @@ test("the surfaces of every layout are listed with their project root, and remov
 test("the layouts hold the sections of every space of every project, whatever the window draws, with the sets of each project", async () => {
   // Each section names the plugin that declares it, and a section that no loaded plugin declares (gone.list) has no surface.
   for (const [id, plugin] of [["alpha.tree", "alpha"], ["alpha.bookmarks", "alpha"], ["other.list", "other"]]) {
-    registerSection({ id, name: id, plugin, surface: { composition: { kind: "view" } } });
+    registerSection({ actions: [], id, name: id, plugin, surface: { composition: { kind: "view" } } });
   }
   await start("projects-switch-sections");
   assert.deepEqual(projects.layoutSurfaces(), [

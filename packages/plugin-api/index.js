@@ -505,6 +505,42 @@ function checkUnload(where, label, unload) {
   only(`${where} ${label} unload`, unload, ["format", "maxBytes"]);
 }
 
+// The icons, the entry count and the label length of a section action (docs/spec/plugins.md#sections).
+const SECTION_ACTION_ICONS = Object.freeze(["plus", "settings", "more"]);
+const SECTION_ACTIONS_MAX = 4;
+const SECTION_ACTION_LABEL_MAX = 40;
+
+/**
+ * Validates the actions of each section. It runs after validateExposes, because an action names a command that exposes declares,
+ * and the command's parameters must accept the empty object: the action runs the command with no parameter.
+ */
+function checkSectionActions(where, manifest) {
+  for (const section of manifest.sections ?? []) {
+    // default: actions is optional; a section without it has no button in its header.
+    if (section.actions === undefined) continue;
+    if (!Array.isArray(section.actions)) throw new Error(`${where}: section ${section.id} actions must be an array`);
+    if (section.actions.length > SECTION_ACTIONS_MAX) {
+      throw new Error(`${where}: section ${section.id} actions must have at most ${SECTION_ACTIONS_MAX} entries`);
+    }
+    section.actions.forEach((action, index) => {
+      const at = `${where}: section ${section.id} action ${index}`;
+      if (!isObject(action)) throw new Error(`${at} must be an object`);
+      only(`${where} section ${section.id} action ${index}`, action, ["icon", "label", "command"]);
+      if (!SECTION_ACTION_ICONS.includes(action.icon)) {
+        throw new Error(`${at} icon must be one of ${SECTION_ACTION_ICONS.join(", ")}`);
+      }
+      if (!isText(action.label) || action.label.length > SECTION_ACTION_LABEL_MAX) {
+        throw new Error(`${at} label must be 1 to ${SECTION_ACTION_LABEL_MAX} characters`);
+      }
+      if (!isText(action.command) || !declaredCommandNames(manifest).includes(action.command)) {
+        throw new Error(`${at} command must name a command declared in exposes`);
+      }
+      const declaration = manifest.exposes.commands.find((command) => command.name === action.command);
+      if (!matchesSchema(declaration.params, {})) throw new Error(`${at} command ${action.command} has required parameters`);
+    });
+  }
+}
+
 /** Validates the surface composition declaration. This declaration is the host's list of region permissions. */
 function checkComposition(where, composition, sidecars) {
   if (!isObject(composition)) throw new Error(`${where}: composition must be an object`);
@@ -873,7 +909,7 @@ export function validateManifest(manifest) {
       for (const field of ["fill", "module", "status"]) {
         if (section[field] !== undefined) throw new Error(`${where}: section ${section.id} ${field} is removed; a section takes composition and height`);
       }
-      only(`${where} section`, section, ["id", "name", "composition", "height", "unload"]);
+      only(`${where} section`, section, ["id", "name", "composition", "height", "unload", "actions"]);
       if (typeof section.id !== "string" || !section.id.startsWith(`${id}.`) || !ID.test(section.id.slice(id.length + 1))) {
         throw new Error(`${where}: section id ${section.id} must be ${id}.<name>`);
       }
@@ -909,6 +945,7 @@ export function validateManifest(manifest) {
     }
     validateExposes(id, manifest.exposes);
   }
+  checkSectionActions(where, manifest);
   checkSettings(`${where}`, manifest.settings);
   if (manifest.surface === undefined && manifest.sections === undefined && manifest.contributes === undefined) {
     throw new Error(`${where}: a plugin requires a surface, sections or contributes`);

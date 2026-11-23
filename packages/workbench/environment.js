@@ -135,6 +135,8 @@ export function installEnvironment(environmentDocument, installedDocument) {
     // default: sections is an optional field of plugin.json; without it there are no sections.
     for (const section of manifest.sections ?? []) {
       registerSection({ id: section.id, name: section.name, height: section.height, plugin: manifest.id,
+        // default: actions is an optional field of a section; without it the header has no button.
+        actions: section.actions ?? [],
         // default: exposes is an optional field of plugin.json; without it there is no declaration.
         surface: sectionSurfaceOf(manifest.id, section, exposes ?? {}, diagnostics, manifestSidecars(manifest, pluginNames)) });
     }

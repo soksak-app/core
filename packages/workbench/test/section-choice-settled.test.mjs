@@ -48,10 +48,10 @@ test("folding, selecting and sizing a section lay out the plane again", { timeou
   registerPlugin({ id: "probe", name: "Probe", mark: "p", svg: "<path/>", ink: null, drop: null, background: null, surface: () => null });
   const surface = (surfaceId, section) => ({ composition: { kind: "view", page: "ui/section.html" }, surfaceId, pluginId: "probe",
     declarations: {}, sidecars: [], diagnostics: null, unload: false, params: null, section });
-  registerSection({ id: "fixture.marks", name: "표시", height: "fill", plugin: "probe", surface });
-  registerSection({ id: "fixture.notes", name: "메모", height: 80, plugin: "probe", surface });
-  registerSection({ id: "fixture.list", name: "목록", height: "fill", plugin: "probe", surface });
-  registerSection({ id: "fixture.tree", name: "트리", height: "fill", plugin: "probe", surface });
+  registerSection({ actions: [], id: "fixture.marks", name: "표시", height: "fill", plugin: "probe", surface });
+  registerSection({ actions: [], id: "fixture.notes", name: "메모", height: 80, plugin: "probe", surface });
+  registerSection({ actions: [], id: "fixture.list", name: "목록", height: "fill", plugin: "probe", surface });
+  registerSection({ actions: [], id: "fixture.tree", name: "트리", height: "fill", plugin: "probe", surface });
   const list = document.createElement("div");
   const tabs = document.createElement("div");
   list.className = "set";

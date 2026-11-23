@@ -508,6 +508,86 @@ fn check_exposes(owner: &str, exposes: &Value) -> Result<(), String> {
     Ok(())
 }
 
+/// The icons that a section action may show (SECTION_ACTION_ICONS of the reader).
+const SECTION_ACTION_ICONS: [&str; 3] = ["plus", "settings", "more"];
+/// The most actions that a section header shows (SECTION_ACTIONS_MAX of the reader).
+const SECTION_ACTIONS_MAX: usize = 4;
+/// The most UTF-16 units that a section action label has (SECTION_ACTION_LABEL_MAX of the reader).
+const SECTION_ACTION_LABEL_MAX: usize = 40;
+
+/// Checks the actions of each section (checkSectionActions of the reader). A section without actions has no button in its
+/// header. It runs after exposes, because an action names a command that exposes declares.
+fn check_section_actions(where_: &str, manifest: &Map<String, Value>) -> Result<(), String> {
+    let Some(sections) = manifest.get("sections").and_then(Value::as_array) else {
+        return Ok(());
+    };
+    let commands = declared_commands(manifest);
+    for item in sections {
+        let section = item
+            .as_object()
+            .ok_or_else(|| format!("{where_}: section must be an object"))?;
+        // default: actions is optional; a section without it has no button in its header.
+        let Some(raw) = section.get("actions") else {
+            continue;
+        };
+        let section_id = js_field_text(section, "id");
+        let actions = raw
+            .as_array()
+            .ok_or_else(|| format!("{where_}: section {section_id} actions must be an array"))?;
+        if actions.len() > SECTION_ACTIONS_MAX {
+            return Err(format!(
+                "{where_}: section {section_id} actions must have at most {SECTION_ACTIONS_MAX} entries"
+            ));
+        }
+        for (index, item) in actions.iter().enumerate() {
+            let at = format!("{where_}: section {section_id} action {index}");
+            let action = item
+                .as_object()
+                .ok_or_else(|| format!("{at} must be an object"))?;
+            only(
+                &format!("{where_} section {section_id} action {index}"),
+                action,
+                &["icon", "label", "command"],
+            )?;
+            let icon = action.get("icon").and_then(Value::as_str);
+            if !icon.is_some_and(|icon| SECTION_ACTION_ICONS.contains(&icon)) {
+                return Err(format!(
+                    "{at} icon must be one of {}",
+                    SECTION_ACTION_ICONS.join(", ")
+                ));
+            }
+            let label = action.get("label").and_then(Value::as_str);
+            if !label.is_some_and(|label| {
+                !label.is_empty() && utf16_length(label) <= SECTION_ACTION_LABEL_MAX
+            }) {
+                return Err(format!(
+                    "{at} label must be 1 to {SECTION_ACTION_LABEL_MAX} characters"
+                ));
+            }
+            let command = action
+                .get("command")
+                .and_then(Value::as_str)
+                .filter(|name| commands.contains(name))
+                .ok_or_else(|| format!("{at} command must name a command declared in exposes"))?;
+            let params = manifest
+                .get("exposes")
+                .and_then(|exposes| exposes.get("commands"))
+                .and_then(Value::as_array)
+                .and_then(|list| {
+                    list.iter()
+                        .find(|entry| entry.get("name").and_then(Value::as_str) == Some(command))
+                })
+                .and_then(|entry| entry.get("params"))
+                .and_then(Value::as_object)
+                .ok_or_else(|| format!("{at} command {command} declares no params object"))?;
+            if !matches_schema(params, &Value::Object(Map::new())) {
+                return Err(format!("{at} command {command} has required parameters"));
+            }
+        }
+    }
+    Ok(())
+}
+
 /// The program states of a tab, from the first to the last (docs/spec/program-state.md#value).
 const PROGRAM_STATES: [&str; 3] = ["idle", "working", "blocked"];
 
@@ -1255,7 +1335,7 @@ fn check_sections(where_: &str, id: &str, sidecars: &[&str], raw: &Value) -> Res
         only(
             &format!("{where_} section"),
             section,
-            &["id", "name", "composition", "height", "unload"],
+            &["id", "name", "composition", "height", "unload", "actions"],
         )?;
         let section_id = section.get("id").and_then(Value::as_str);
         let section_id = match section_id {
@@ -1734,6 +1814,7 @@ pub fn validate_manifest(value: &Value) -> Result<(), String> {
         }
         check_exposes(id, raw)?;
     }
+    check_section_actions(&where_, manifest)?;
     if let Some(raw) = manifest.get("settings") {
         check_settings(&where_, raw)?;
     }

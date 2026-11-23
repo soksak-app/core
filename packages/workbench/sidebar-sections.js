@@ -209,6 +209,34 @@ function dividedSection(choice, above, below) {
  * Passes the drag of the divider between the sections above and below to core.sidebar.section.size at each move. The drag keeps the
  * other section of the divider at least the minimum height (docs/spec/plugins.md#sections).
  */
+// The core icon of each section action icon (docs/spec/plugins.md#sections).
+const ACTION_ICONS = Object.freeze({ plus: "plus", settings: "settings", more: "ellipsis" });
+
+/**
+ * The buttons of the actions of a section, at the right end of its header in declared order. The header is a button, so the actions are
+ * its siblings, placed over its right end. A press runs the command of the action through the binder on the section surface with no
+ * parameter.
+ */
+function sectionActions(section, surfaceId) {
+  if (section.actions.length === 0) return [];
+  const bar = document.createElement("div");
+  bar.className = "set__actions";
+  // The binder runs a plugin command on the surface of the nearest data-surface, so the actions run on the section surface.
+  bar.dataset.surface = surfaceId;
+  for (const action of section.actions) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "set__action";
+    button.dataset.expose = "core.sidebar.section.action";
+    button.title = action.label;
+    button.setAttribute("aria-label", action.label);
+    button.innerHTML = icon(ACTION_ICONS[action.icon]);
+    bind(button, action.command, {});
+    bar.append(button);
+  }
+  return [bar];
+}
+
 function bindSectionDivider(divider, sidebar, above, below) {
   divider.addEventListener("pointerdown", (event) => {
     event.stopPropagation();
@@ -328,7 +356,7 @@ export function drawSet(container, sidebar, set, context) {
         entry.header.innerHTML = `<span class="set__chevron" aria-hidden="true">${icon("chevron-down")}</span><span class="set__name" data-expose="core.sidebar.section.name"></span>`;
         entry.header.querySelector(".set__name").textContent = section.name;
         bind(entry.header, "core.sidebar.section.fold", params);
-        element.append(entry.header, entry.body);
+        element.append(entry.header, ...sectionActions(section, surfaceId), entry.body);
         if (record.entries.length > 0) {
           entry.divider = document.createElement("div");
           entry.divider.className = "set__divider";

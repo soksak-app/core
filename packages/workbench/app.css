@@ -712,6 +712,12 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .set__chevron svg{width:var(--fill);height:var(--fill);fill:none;stroke:currentColor;stroke-width:var(--chevron-stroke);stroke-linecap:round;stroke-linejoin:round}
 .set__head[aria-expanded=false] .set__chevron{transform:rotate(-90deg)}
 .set__name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* The actions of a section lie over the right end of its head, which is a button and holds no other button (docs/spec/plugins.md#sections). */
+.set__section{position:relative}
+.set__actions{position:absolute;top:0;right:var(--section-head-pad);display:flex;align-items:center;gap:var(--section-head-gap);height:var(--head-h)}
+.set__action{display:flex;align-items:center;justify-content:center;width:var(--head-h);height:var(--head-h);padding:0;border:0;background:none;color:var(--muted);cursor:pointer}
+.set__action:hover{color:var(--fg)}
+.set__action svg{width:var(--chevron);height:var(--chevron);fill:none;stroke:currentColor;stroke-width:var(--chevron-stroke);stroke-linecap:round;stroke-linejoin:round}
 .set__section[data-folded=true] .set__body{display:none}
 /* The tab strip scrolls horizontally when it overflows, like the card tab strip, and tabs neither wrap nor shrink. The bottom line is a shadow, so
    the tabs fill the full height of the strip. */

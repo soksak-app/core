@@ -19,6 +19,13 @@ const (
 	sectionHeightMax = 4096
 )
 
+// actionIcons are the icons of section actions, plus, settings and ellipsis of Lucide, as the page draws them.
+var actionIcons = map[string]*ui.SVG{
+	"plus":     strokeIcon(`<path d="M5 12h14"/><path d="M12 5v14"/>`),
+	"settings": strokeIcon(`<path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/>`),
+	"more":     strokeIcon(`<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>`),
+}
+
 var (
 	chevronDown  = chevronIcon("m6 9 6 6 6-6")
 	chevronRight = chevronIcon("m9 18 6-6-6-6")
@@ -96,6 +103,8 @@ type SidebarSection struct {
 	Composition json.RawMessage
 	// Unload holds the declaration of unload of the section.
 	Unload *surfaceUnload
+	// Actions are the buttons at the right end of the header.
+	Actions []SectionAction
 }
 
 // SidebarFrame is what a sidebar draws.
@@ -366,6 +375,15 @@ func drawSectionHeader(c *ui.Context, binder *Binder, frame SidebarFrame, sectio
 		}
 		ui.Icon(c, icon).Size(metrics.SectionHeadText, metrics.SectionHeadText)
 		ui.Text(binder.Name(c, "core.sidebar.section.name", item), section.Name).Label(section.Name).SingleLine().Ellipsis("…").FontSize(metrics.SectionHeadText).LineHeight(metrics.SectionHeadLine).Font(metrics.SectionHeadFont).FontWeight(int(metrics.SectionHeadWeight)).TextColor(theme.Text)
+		// The actions lie at the right end of the header, in declared order; a press runs the command on the section surface.
+		if len(section.Actions) > 0 {
+			ui.Box(c).Grow(1)
+		}
+		for index, action := range section.Actions {
+			button := binder.PressOn(c, "core.sidebar.section.action", action.Command, fmt.Sprintf("%s/%d", item, index), seatOf(frame, section).SurfaceID).
+				Role(ui.RoleButton).Label(action.Label).Size(metrics.HeadH, metrics.HeadH).AlignItems(ui.Center).Justify(ui.Center)
+			button.Children(func() { ui.Icon(c, actionIcons[action.Icon]).Size(metrics.SectionHeadText, metrics.SectionHeadText) })
+		}
 	})
 }
 

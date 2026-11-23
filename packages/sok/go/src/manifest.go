@@ -674,6 +674,9 @@ func ValidateManifest(value any) error {
 			return err
 		}
 	}
+	if err := checkSectionActions(where, manifest); err != nil {
+		return err
+	}
 	if raw, ok := manifest["settings"]; ok {
 		if err := checkSettings(where, raw); err != nil {
 			return err
@@ -1213,7 +1216,7 @@ func checkSections(where, id string, sidecars []string, raw any) error {
 				return fmt.Errorf("%s: section %s %s is removed; a section takes composition and height", where, jsFieldText(section, "id"), field)
 			}
 		}
-		if err := only(where+" section", section, "id", "name", "composition", "height", "unload"); err != nil {
+		if err := only(where+" section", section, "id", "name", "composition", "height", "unload", "actions"); err != nil {
 			return err
 		}
 		sectionID, ok := section["id"].(string)
@@ -1247,6 +1250,74 @@ func checkSections(where, id string, sidecars []string, raw any) error {
 		if raw, has := section["unload"]; has {
 			if err := checkUnload(where, "section "+sectionID, raw); err != nil {
 				return err
+			}
+		}
+	}
+	return nil
+}
+
+// The icons, the entry count and the label length of a section action (docs/spec/plugins.md#sections).
+var sectionActionIcons = []string{"plus", "settings", "more"}
+
+const (
+	sectionActionsMax     = 4
+	sectionActionLabelMax = 40
+)
+
+// checkSectionActions checks the actions of each section (checkSectionActions of the reader). It runs after checkExposes, because an
+// action names a command that exposes declares, and the parameters of the command must accept the empty object: the action runs the
+// command with no parameter.
+func checkSectionActions(where string, manifest map[string]any) error {
+	// default: sections that are not a list were refused by checkSections.
+	sections, _ := manifest["sections"].([]any)
+	for _, item := range sections {
+		// default: a section that is not an object was refused by checkSections.
+		section, _ := item.(map[string]any)
+		raw, has := section["actions"]
+		// default: actions is optional; a section without it has no button in its header.
+		if !has {
+			continue
+		}
+		sectionID := jsFieldText(section, "id")
+		actions, ok := raw.([]any)
+		if !ok {
+			return fmt.Errorf("%s: section %s actions must be an array", where, sectionID)
+		}
+		if len(actions) > sectionActionsMax {
+			return fmt.Errorf("%s: section %s actions must have at most %d entries", where, sectionID, sectionActionsMax)
+		}
+		for index, entry := range actions {
+			at := fmt.Sprintf("%s: section %s action %d", where, sectionID, index)
+			action, ok := entry.(map[string]any)
+			if !ok {
+				return fmt.Errorf("%s must be an object", at)
+			}
+			if err := only(fmt.Sprintf("%s section %s action %d", where, sectionID, index), action, "icon", "label", "command"); err != nil {
+				return err
+			}
+			if icon, _ := action["icon"].(string); !slices.Contains(sectionActionIcons, icon) {
+				return fmt.Errorf("%s icon must be one of %s", at, strings.Join(sectionActionIcons, ", "))
+			}
+			label, _ := action["label"].(string)
+			if !isText(action["label"]) || len(utf16.Encode([]rune(label))) > sectionActionLabelMax {
+				return fmt.Errorf("%s label must be 1 to %d characters", at, sectionActionLabelMax)
+			}
+			command, _ := action["command"].(string)
+			if !isText(action["command"]) || !slices.Contains(declaredCommands(manifest), command) {
+				return fmt.Errorf("%s command must name a command declared in exposes", at)
+			}
+			// default: checkExposes accepted every declared command, so its params is a schema object.
+			exposes, _ := manifest["exposes"].(map[string]any)
+			commands, _ := exposes["commands"].([]any)
+			for _, declared := range commands {
+				declaration, _ := declared.(map[string]any)
+				if declaration["name"] != command {
+					continue
+				}
+				params, _ := declaration["params"].(map[string]any)
+				if !MatchesSchema(params, map[string]any{}) {
+					return fmt.Errorf("%s command %s has required parameters", at, command)
+				}
 			}
 		}
 	}

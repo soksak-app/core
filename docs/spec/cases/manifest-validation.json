@@ -4210,6 +4210,438 @@
       ]
     },
     {
+      "id": "sections.actions-not-array",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "exposes": {
+          "commands": [
+            {
+              "name": "probe.add",
+              "description": "Add.",
+              "params": {
+                "type": "object"
+              },
+              "result": {
+                "type": "object"
+              }
+            }
+          ]
+        },
+        "sections": [
+          {
+            "id": "probe.a",
+            "name": "A",
+            "composition": {
+              "kind": "view",
+              "page": "ui/page.html"
+            },
+            "height": "fill",
+            "actions": {
+              "icon": "plus",
+              "label": "Add",
+              "command": "probe.add"
+            }
+          }
+        ]
+      },
+      "accepted": false,
+      "error": "plugin probe: section probe.a actions must be an array",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sections.actions-too-many",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "exposes": {
+          "commands": [
+            {
+              "name": "probe.add",
+              "description": "Add.",
+              "params": {
+                "type": "object"
+              },
+              "result": {
+                "type": "object"
+              }
+            }
+          ]
+        },
+        "sections": [
+          {
+            "id": "probe.a",
+            "name": "A",
+            "composition": {
+              "kind": "view",
+              "page": "ui/page.html"
+            },
+            "height": "fill",
+            "actions": [
+              {"icon": "plus", "label": "Add", "command": "probe.add"},
+              {"icon": "plus", "label": "Add", "command": "probe.add"},
+              {"icon": "plus", "label": "Add", "command": "probe.add"},
+              {"icon": "plus", "label": "Add", "command": "probe.add"},
+              {"icon": "plus", "label": "Add", "command": "probe.add"}
+            ]
+          }
+        ]
+      },
+      "accepted": false,
+      "error": "plugin probe: section probe.a actions must have at most 4 entries",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sections.action-not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "exposes": {
+          "commands": [
+            {
+              "name": "probe.add",
+              "description": "Add.",
+              "params": {
+                "type": "object"
+              },
+              "result": {
+                "type": "object"
+              }
+            }
+          ]
+        },
+        "sections": [
+          {
+            "id": "probe.a",
+            "name": "A",
+            "composition": {
+              "kind": "view",
+              "page": "ui/page.html"
+            },
+            "height": "fill",
+            "actions": ["plus"]
+          }
+        ]
+      },
+      "accepted": false,
+      "error": "plugin probe: section probe.a action 0 must be an object",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sections.action-unknown-field",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "exposes": {
+          "commands": [
+            {
+              "name": "probe.add",
+              "description": "Add.",
+              "params": {
+                "type": "object"
+              },
+              "result": {
+                "type": "object"
+              }
+            }
+          ]
+        },
+        "sections": [
+          {
+            "id": "probe.a",
+            "name": "A",
+            "composition": {
+              "kind": "view",
+              "page": "ui/page.html"
+            },
+            "height": "fill",
+            "actions": [
+              {"icon": "plus", "label": "Add", "command": "probe.add", "x": 1}
+            ]
+          }
+        ]
+      },
+      "accepted": false,
+      "error": "plugin probe section probe.a action 0: unknown field x",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sections.action-icon-unknown",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "exposes": {
+          "commands": [
+            {
+              "name": "probe.add",
+              "description": "Add.",
+              "params": {
+                "type": "object"
+              },
+              "result": {
+                "type": "object"
+              }
+            }
+          ]
+        },
+        "sections": [
+          {
+            "id": "probe.a",
+            "name": "A",
+            "composition": {
+              "kind": "view",
+              "page": "ui/page.html"
+            },
+            "height": "fill",
+            "actions": [
+              {"icon": "trash", "label": "Add", "command": "probe.add"}
+            ]
+          }
+        ]
+      },
+      "accepted": false,
+      "error": "plugin probe: section probe.a action 0 icon must be one of plus, settings, more",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sections.action-label-empty",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "exposes": {
+          "commands": [
+            {
+              "name": "probe.add",
+              "description": "Add.",
+              "params": {
+                "type": "object"
+              },
+              "result": {
+                "type": "object"
+              }
+            }
+          ]
+        },
+        "sections": [
+          {
+            "id": "probe.a",
+            "name": "A",
+            "composition": {
+              "kind": "view",
+              "page": "ui/page.html"
+            },
+            "height": "fill",
+            "actions": [
+              {"icon": "plus", "label": "", "command": "probe.add"}
+            ]
+          }
+        ]
+      },
+      "accepted": false,
+      "error": "plugin probe: section probe.a action 0 label must be 1 to 40 characters",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sections.action-label-long",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "exposes": {
+          "commands": [
+            {
+              "name": "probe.add",
+              "description": "Add.",
+              "params": {
+                "type": "object"
+              },
+              "result": {
+                "type": "object"
+              }
+            }
+          ]
+        },
+        "sections": [
+          {
+            "id": "probe.a",
+            "name": "A",
+            "composition": {
+              "kind": "view",
+              "page": "ui/page.html"
+            },
+            "height": "fill",
+            "actions": [
+              {"icon": "plus", "label": "01234567890123456789012345678901234567890", "command": "probe.add"}
+            ]
+          }
+        ]
+      },
+      "accepted": false,
+      "error": "plugin probe: section probe.a action 0 label must be 1 to 40 characters",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sections.action-command-undeclared",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "exposes": {
+          "commands": [
+            {
+              "name": "probe.add",
+              "description": "Add.",
+              "params": {
+                "type": "object"
+              },
+              "result": {
+                "type": "object"
+              }
+            }
+          ]
+        },
+        "sections": [
+          {
+            "id": "probe.a",
+            "name": "A",
+            "composition": {
+              "kind": "view",
+              "page": "ui/page.html"
+            },
+            "height": "fill",
+            "actions": [
+              {"icon": "plus", "label": "Add", "command": "probe.missing"}
+            ]
+          }
+        ]
+      },
+      "accepted": false,
+      "error": "plugin probe: section probe.a action 0 command must name a command declared in exposes",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sections.action-command-required-params",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "exposes": {
+          "commands": [
+            {
+              "name": "probe.add",
+              "description": "Add.",
+              "params": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  }
+                },
+                "required": ["path"]
+              },
+              "result": {
+                "type": "object"
+              }
+            }
+          ]
+        },
+        "sections": [
+          {
+            "id": "probe.a",
+            "name": "A",
+            "composition": {
+              "kind": "view",
+              "page": "ui/page.html"
+            },
+            "height": "fill",
+            "actions": [
+              {"icon": "plus", "label": "Add", "command": "probe.add"}
+            ]
+          }
+        ]
+      },
+      "accepted": false,
+      "error": "plugin probe: section probe.a action 0 command probe.add has required parameters",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "sections.accepts-actions",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "exposes": {
+          "commands": [
+            {
+              "name": "probe.add",
+              "description": "Add.",
+              "params": {
+                "type": "object"
+              },
+              "result": {
+                "type": "object"
+              }
+            }
+          ]
+        },
+        "sections": [
+          {
+            "id": "probe.a",
+            "name": "A",
+            "composition": {
+              "kind": "view",
+              "page": "ui/page.html"
+            },
+            "height": "fill",
+            "actions": [
+              {"icon": "plus", "label": "Add", "command": "probe.add"},
+              {"icon": "plus", "label": "Add another", "command": "probe.add"},
+              {"icon": "settings", "label": "0123456789012345678901234567890123456789", "command": "probe.add"},
+              {"icon": "more", "label": "More", "command": "probe.add"}
+            ]
+          }
+        ]
+      },
+      "accepted": true,
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
       "id": "preview.requires-surface",
       "manifest": {
         "id": "probe",

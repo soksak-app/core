@@ -35,7 +35,7 @@ const descriptor = (pluginId, section) => (surfaceId, start) => {
 for (const section of [
   { id: "probe.tree", name: "Tree", composition, height: "fill" },
   { id: "probe.marks", name: "Marks", composition, height: 120 },
-]) registerSection({ ...section, plugin: "probe", surface: descriptor("probe", section) });
+]) registerSection({ actions: [], ...section, plugin: "probe", surface: descriptor("probe", section) });
 
 const list = { id: "probe.list", title: "List", layout: "list", sections: ["probe.tree", "probe.marks"] };
 const tabs = { id: "probe.tabs", title: "Tabs", layout: "tabs", sections: ["probe.tree", "probe.marks"] };

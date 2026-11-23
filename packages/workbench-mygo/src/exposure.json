@@ -5415,6 +5415,11 @@
         "many": true
       },
       {
+        "name": "core.sidebar.section.action",
+        "description": "The action buttons at the right end of the section headers of list-layout sidebars, in workbench order and declared order; each runs the command of its action on the section surface.",
+        "many": true
+      },
+      {
         "name": "core.sidebar.tabs",
         "description": "The tab strips of tabs-layout sidebars in workbench order.",
         "many": true
