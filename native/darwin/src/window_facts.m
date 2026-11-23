@@ -498,7 +498,7 @@ bool sp_window_raise(void *handle) {
         sp_log_error("window facts", "the window to raise is missing or not ordered in");
         return false;
     }
-    [window orderFrontRegardless];
+    sp_input_virtual_order_front_regardless(window);
     return true;
 }
 

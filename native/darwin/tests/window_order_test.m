@@ -8,6 +8,7 @@
 #import "webview_geometry.h"
 #import "window_facts.h"
 #import "window_order.h"
+#import "input_virtual.h"
 
 static int failures = 0;
 
@@ -105,7 +106,78 @@ static void checkWindowsInFrontOfAList(void) {
     check(sp_window_in_front_in(list, 9) == nil, @"a window that is not in the list has no windows in front of it");
 }
 
-int main(void) { @autoreleasepool {
+// The child mode of the check: another process orders a window in front over the frame that its argument names and keeps it
+// until its standard input ends, so the check has a window of another application in front of its own window.
+static int runFrontWindow(const char *frame) {
+    [NSApplication sharedApplication];
+    [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
+    [NSApp finishLaunching];
+    NSRect rect = NSRectFromString([NSString stringWithUTF8String:frame]);
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:rect styleMask:NSWindowStyleMaskTitled
+        backing:NSBackingStoreBuffered defer:NO];
+    window.releasedWhenClosed = NO;
+    [window orderFrontRegardless];
+    // The run loop of the main thread runs, so the window server shows the window; the end of standard input ends the process.
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
+        [[NSFileHandle fileHandleWithStandardInput] readDataToEndOfFile];
+        exit(0);
+    });
+    printf("ready %ld\n", (long)window.windowNumber);
+    fflush(stdout);
+    [NSApp run];
+    return 0;
+}
+
+// Whether the facts of the window report another window in front of it; nil while they report no place.
+static NSNumber *otherInFrontOf(NSWindow *window) {
+    id order = factsOf(window)[@"order"];
+    return [order isKindOfClass:NSDictionary.class] ? order[@"otherInFront"] : nil;
+}
+
+// The raise of a window of an inactive application puts it in front of a window of another application at its level
+// (host.window.raise, docs/spec/hosts.md): the other window stands in front before the raise and behind it after the raise,
+// read through the same window order facts that host.window reports.
+// virtual makes the window the virtual key window before the raise, whose own orders of the window stay refused
+// (docs/spec/exposure.md#virtual-key-window), while the raise of the host orders it.
+static void checkRaiseInFrontOfAnotherApplication(const char *program, BOOL virtual) {
+    NSWindow *window = makeWindow(NSMakeRect(420, 420, 300, 200));
+    [window orderFrontRegardless];
+    NSTask *child = [[[NSTask alloc] init] autorelease];
+    child.executableURL = [NSURL fileURLWithPath:[NSString stringWithUTF8String:program]];
+    child.arguments = @[ @"front-window", NSStringFromRect(NSMakeRect(440, 440, 300, 200)) ];
+    NSPipe *input = [NSPipe pipe];
+    NSPipe *output = [NSPipe pipe];
+    child.standardInput = input;
+    child.standardOutput = output;
+    NSError *error = nil;
+    if (![child launchAndReturnError:&error]) {
+        check(NO, [NSString stringWithFormat:@"the window of another process did not start: %@", error]);
+        [window close];
+        return;
+    }
+    NSData *line = [output.fileHandleForReading availableData];
+    check([[[[NSString alloc] initWithData:line encoding:NSUTF8StringEncoding] autorelease] hasPrefix:@"ready"],
+        @"the other process ordered its window in");
+    eventWait(@"the window of the other process stands in front of the window", ^BOOL {
+        return [otherInFrontOf(window) isEqual:@YES];
+    });
+    if (virtual) check(sp_input_virtual_enter(window), @"the window becomes the virtual key window");
+    BOOL active = NSApp.isActive;
+    check(sp_window_raise(window), @"the raise of a window behind a window of another process is accepted");
+    NSString *missed = eventWaitUntil(@"the raised window stands in front of the window of the other process", 5, ^BOOL {
+        return [otherInFrontOf(window) isEqual:@NO];
+    }, ^NSString * { return [NSString stringWithFormat:@"%@", factsOf(window)[@"order"]]; });
+    check(missed == nil, [NSString stringWithFormat:@"the raise did not put the window in front of the window of the other "
+        "process: %@", missed]);
+    check(NSApp.isActive == active, @"the raise in front of another process does not change the active application");
+    if (virtual) sp_input_virtual_end("check end");
+    [input.fileHandleForWriting closeFile];
+    [child waitUntilExit];
+    [window close];
+}
+
+int main(int argc, const char **argv) { @autoreleasepool {
+    if (argc == 3 && strcmp(argv[1], "front-window") == 0) return runFrontWindow(argv[2]);
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     [NSApp finishLaunching];
@@ -157,6 +229,8 @@ int main(void) { @autoreleasepool {
     [above close];
     [below close];
     [hidden close];
+    checkRaiseInFrontOfAnotherApplication(argv[0], NO);
+    checkRaiseInFrontOfAnotherApplication(argv[0], YES);
     if (failures) fprintf(stderr, "%d failure(s)\n", failures);
     return failures ? 1 : 0;
 } }

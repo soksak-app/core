@@ -324,6 +324,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1111",
+    implementation: [
+      { file: "native/darwin/src/input_virtual.m", symbol: "void sp_input_virtual_order_front_regardless(void *handle) {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/window_order_test.m", id: "the raise did not put the window in front of the window of the other" },
+    ],
+    expected: "The raise of the host puts the virtual key window in front of the windows of other applications at its level.",
+    levels: ["unit"],
+  },
+  {
     id: "F1110",
     implementation: [
       { file: "packages/host/go/src/windows.go", symbol: "func (h *Host) removeWindowRecords(s *Surfaces, id uint) bool {" },

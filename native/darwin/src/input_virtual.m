@@ -175,6 +175,15 @@ static void moveMakeKeyWindow(NSWindow *self, SEL selector) {
     appKitMakeKeyWindow(self, selector);
 }
 
+// The raise of the host (host.window.raise) orders the window through the implementation of AppKit, so the virtual key window,
+// whose own orders stay refused, also goes in front when the host raises it. Before the first virtual key window the methods of
+// AppKit are not replaced and the window orders itself.
+void sp_input_virtual_order_front_regardless(void *handle) {
+    NSWindow *window = (NSWindow *)handle;
+    if (appKitOrderFrontRegardless) appKitOrderFrontRegardless(window, @selector(orderFrontRegardless));
+    else [window orderFrontRegardless];
+}
+
 static void refuseOrderFrontRegardless(NSWindow *self, SEL selector) {
     if (self == answering()) { record("order refused", "orderFrontRegardless"); return; }
     appKitOrderFrontRegardless(self, selector);

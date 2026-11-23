@@ -25,6 +25,10 @@ bool sp_input_virtual_is(void *window);
 // Whether any window is the virtual key window. Any thread.
 bool sp_input_virtual_any(void);
 
+// Orders window in front of every window of its level without activation, also while it is the virtual key window, whose own
+// orders are refused (host.window.raise).
+void sp_input_virtual_order_front_regardless(void *window);
+
 // Records the point of the last injected input of the virtual key window, in window coordinates.
 void sp_input_virtual_set_point(void *window, double x, double y);
 
