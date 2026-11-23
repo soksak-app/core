@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1135: destructive command guard 계약은 삽입 텍스트의 control character를 해당 키로 읽는다.
 - F1134: background 세션은 새 `background` member `directory`와 `params`로 탭의 시작 디렉터리와 선언이 대응한 탭 매개변수를 받아 시작한다.
 - F1133: 탭의 프로그램 상태는 프로그램 이름 `app`을 담고 `core.grid`가 그것을 보고하며, manifest reader는 `properties.app`을 요구한다.
 - F1132: F1127, F1130, F1131의 저장소 검사가 통과한다. feature link, default 이유, contract 줄, 기록된 element 이름을 고쳤다.
