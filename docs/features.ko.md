@@ -83,7 +83,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
 - [~] F1136 — P0, F914와 함께: gpuikit은 모든 host 목록의 네 번째 host다. host test, host 비교 검사, CI, release는 wailsv3, tauriv2, mygo, gpuikit을 이름으로 든다. 진행: `main`에서 개발 중이며 F1136-2(CI), F1136-3(release), F1136-4(hosts 표)가 남았고, 다른 항목을 기다리지 않는다.
   - [o] F1136-1 — host test runner(`scripts/test-hosts.mjs`, `make test-gpuikit`)는 gpuikit을 검사한다. Rust language host library와 Rust sok은 두 Rust host를 맡고, 각 Rust run은 자기 host를 이름으로 들며, GPUI framework adapter는 자기 port를 거치는 각 `all` 사례를 선언한다.
   - [o] F1136-5 — host 비교 검사 `check-hosts-same`과 `check-failure-table`은 gpuikit을 포함하고, gpuikit의 각 차이는 [hosts](spec/hosts.md)의 행이다. `check-host-api`와 `check-host-callbacks`는 gpuikit이 쓰지 않는 Go host의 native interface만 비교하고, `check-preflight`는 F1136-2의 CI job을 따른다.
-  - [ ] F1136-2 — CI는 다른 host처럼 macOS에서 gpuikit을 빌드하고 테스트한다.
+  - [~] F1136-2 — CI는 다른 host처럼 macOS에서 gpuikit을 빌드하고 테스트한다. 진행: job `macos-gpuikit`가 `make test-gpuikit`를 실행하고 gate `required`가 그 결과를 읽는다. 남은 것: `main`에서 처음 실행한 결과.
   - [ ] F1136-3 — release는 다른 bundle과 함께 gpuikit bundle을 빌드, 서명, 게시하고, `check-release`, `check-app-update`, `test-app`은 그것을 따른다.
   - [ ] F1136-4 — [hosts](spec/hosts.md)는 host를 나열하는 모든 표와 규칙에서 gpuikit을 이름으로 든다.
 - [o] F1135 — P0, sidecars/alacritty S255와 함께: destructive command guard는 삽입된 텍스트의 control character를 해당 키로 읽는다. 입력: untracked 줄에 `terminal.input {bytes: "\u0003"}`, DEL이나 커서 이동을 담은 삽입 텍스트. 동작: guard가 삽입된 ETX를 텍스트로 읽어서, 셸은 줄을 버렸지만 guard는 줄을 untracked로 두고 이후 제출을 모두 거부했으며, 삽입된 ESC sequence는 셸 커서를 옮겼지만 guard는 줄을 일반 텍스트로 따라갔다. 기대: [destructive command guard](spec/persistent-services.md#destructive-command-guard)가 규칙을 정하고 sidecar가 구현한다.

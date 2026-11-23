@@ -124,7 +124,7 @@ test('ci keeps language host checks independent and gates release on every requi
   const ci = read('.github/workflows/ci.yml');
   const jobsText = /^jobs:\n([\s\S]*)$/m.exec(ci)?.[1] ?? '';
   const jobNames = [...jobsText.matchAll(/^  ([a-z][a-z0-9-]+):\s*$/gm)].map((match) => match[1]);
-  const required = ['core-node', 'macos-wailsv3', 'macos-tauriv2', 'macos-mygo', 'build-native', 'equivalence', 'linux-node', 'required'];
+  const required = ['core-node', 'macos-wailsv3', 'macos-tauriv2', 'macos-mygo', 'macos-gpuikit', 'build-native', 'equivalence', 'linux-node', 'required'];
   for (const name of required) assert.ok(jobNames.includes(name), `ci.yml has no required job ${name}`);
   // The applications are verified on macOS only; Linux runs the headless owner tests, and the Sok CLI tests run in the macOS host jobs.
   assert.deepEqual(jobNames.filter((name) => !required.includes(name)), [], 'ci.yml has a job outside the declared scope');
@@ -137,6 +137,7 @@ test('ci keeps language host checks independent and gates release on every requi
   assert.match(job('macos-wailsv3'), /test-wailsv3/);
   assert.match(job('macos-tauriv2'), /test-tauriv2/);
   assert.match(steps(job('macos-mygo')).find((step) => step.name === 'mygo host tests')?.text ?? '', /make -C core test-mygo/);
+  assert.match(steps(job('macos-gpuikit')).find((step) => step.name === 'gpuikit host tests')?.text ?? '', /make -C core test-gpuikit/);
   assert.match(job('core-node'), /node core\/scripts\/node-tests\.mjs --exclude scripts\/ --exclude native\//);
   assert.match(job('equivalence'), /node core\/scripts\/node-tests\.mjs --only scripts\//);
   assert.doesNotMatch(job('equivalence'), /needs:/, 'equivalence installs and builds its own inputs');
@@ -151,8 +152,8 @@ test('ci keeps language host checks independent and gates release on every requi
   // Each host suite runs once: the host jobs run it, and the audit of each host is separable, so equivalence runs no host suite.
   for (const name of jobNames) {
     const text = job(name);
-    const suites = (text.match(/\btest-(?:hosts|wailsv3|tauriv2|mygo)\b/g) ?? []);
-    const expected = { 'macos-wailsv3': ['test-wailsv3'], 'macos-tauriv2': ['test-tauriv2'], 'macos-mygo': ['test-mygo'] }[name] ?? [];
+    const suites = (text.match(/\btest-(?:hosts|wailsv3|tauriv2|mygo|gpuikit)\b/g) ?? []);
+    const expected = { 'macos-wailsv3': ['test-wailsv3'], 'macos-tauriv2': ['test-tauriv2'], 'macos-mygo': ['test-mygo'], 'macos-gpuikit': ['test-gpuikit'] }[name] ?? [];
     assert.deepEqual(suites, expected, `${name} runs the host suites ${JSON.stringify(suites)}`);
   }
   assert.match(steps(job('macos-tauriv2')).find((step) => step.name === 'Tauri host tests')?.text ?? '', /CARGO_INCREMENTAL: '0'/,
@@ -162,7 +163,7 @@ test('ci keeps language host checks independent and gates release on every requi
   const gate = job('required');
   for (const [name, variable] of [
     ['core-node', 'CORE_NODE'], ['macos-wailsv3', 'WAILS'], ['macos-tauriv2', 'TAURI'], ['macos-mygo', 'MYGO'],
-    ['build-native', 'NATIVE'], ['equivalence', 'EQUIVALENCE'], ['linux-node', 'LINUX_NODE'],
+    ['macos-gpuikit', 'GPUIKIT'], ['build-native', 'NATIVE'], ['equivalence', 'EQUIVALENCE'], ['linux-node', 'LINUX_NODE'],
   ]) {
     assert.match(gate, new RegExp(`${variable}: \\$\\{\\{ needs\\.${name}\\.result \\}\\}`), `required gate does not read ${name}`);
   }
@@ -170,9 +171,10 @@ test('ci keeps language host checks independent and gates release on every requi
   const gateLoop = /for result in ([^;]+); do/.exec(gate);
   assert.ok(gateLoop, 'required gate does not loop over its job results');
   assert.deepEqual(gateLoop[1].match(/"\$([A-Z_]+)"/g),
-    ['"$CORE_NODE"', '"$WAILS"', '"$TAURI"', '"$MYGO"', '"$NATIVE"', '"$EQUIVALENCE"', '"$LINUX_NODE"']);
+    ['"$CORE_NODE"', '"$WAILS"', '"$TAURI"', '"$MYGO"', '"$GPUIKIT"', '"$NATIVE"', '"$EQUIVALENCE"', '"$LINUX_NODE"']);
   for (const [host, jobName, testName] of [
     ['wailsv3', 'macos-wailsv3', 'Wails host tests'], ['tauriv2', 'macos-tauriv2', 'Tauri host tests'], ['mygo', 'macos-mygo', 'mygo host tests'],
+    ['gpuikit', 'macos-gpuikit', 'gpuikit host tests'],
   ]) {
     const list = steps(job(jobName));
     assert.ok(list.some((step) => step.name === testName), `${host}: no host test step`);

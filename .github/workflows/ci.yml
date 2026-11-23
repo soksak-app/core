@@ -174,6 +174,41 @@ jobs:
         if: always()
         run: git -C core diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
 
+  macos-gpuikit:
+    runs-on: macos-15
+    # The contract run of the gpuikit host builds the Rust language host library, the Rust sok and the GPUI framework
+    # adapter; line tables reduce the debug information of these test builds as in the Tauri job, and the Rust format and
+    # clippy checks of the workspace, which holds the adapter, run in the Tauri job.
+    env:
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: core
+      - uses: ./core/.github/actions/setup-node
+        with:
+          root: core
+      - uses: ./core/.github/actions/setup-rust
+        with:
+          root: core
+      - uses: ./core/.github/actions/setup-native
+        with:
+          root: core
+      - name: Fetch locked Node dependencies
+        run: pnpm -C core install --frozen-lockfile
+      - name: Fetch locked Rust dependencies
+        working-directory: core
+        run: cargo fetch --locked
+      - name: gpuikit host tests
+        env:
+          npm_config_offline: 'true'
+          CARGO_NET_OFFLINE: 'true'
+          CARGO_INCREMENTAL: '0'
+        run: make -C core test-gpuikit
+      - name: Reject lockfile changes
+        if: always()
+        run: git -C core diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
+
   build-native:
     runs-on: macos-15
     steps:
@@ -338,6 +373,7 @@ jobs:
       - macos-wailsv3
       - macos-tauriv2
       - macos-mygo
+      - macos-gpuikit
       - build-native
       - equivalence
       - linux-node
@@ -349,10 +385,11 @@ jobs:
           WAILS: ${{ needs.macos-wailsv3.result }}
           TAURI: ${{ needs.macos-tauriv2.result }}
           MYGO: ${{ needs.macos-mygo.result }}
+          GPUIKIT: ${{ needs.macos-gpuikit.result }}
           NATIVE: ${{ needs.build-native.result }}
           EQUIVALENCE: ${{ needs.equivalence.result }}
           LINUX_NODE: ${{ needs.linux-node.result }}
         run: |
-          for result in "$CORE_NODE" "$WAILS" "$TAURI" "$MYGO" "$NATIVE" "$EQUIVALENCE" "$LINUX_NODE"; do
+          for result in "$CORE_NODE" "$WAILS" "$TAURI" "$MYGO" "$GPUIKIT" "$NATIVE" "$EQUIVALENCE" "$LINUX_NODE"; do
             test "$result" = success || exit 1
           done

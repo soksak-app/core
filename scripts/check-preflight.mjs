@@ -7,7 +7,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const JOBS = ["linux-node", "equivalence", "macos-wailsv3", "macos-tauriv2", "macos-mygo"];
+const JOBS = ["linux-node", "equivalence", "macos-wailsv3", "macos-tauriv2", "macos-mygo", "macos-gpuikit"];
 const TARGET_TIMEOUT_MS = 900000;
 const NON_STATIC_PREREQUISITE = /^(build|copy|pack|release|fetch|install)-|^(build|copy|pack|release|fetch|install)$/;
 
