@@ -217,6 +217,7 @@ fn invalid_json_closes_connection() {
 | `endpoint.record.call-is-an-event` | endpoint client의 모든 요청(구독 변경도)은 성능 trace가 꺼져 있을 때도 layer `host`, level `debug`이고 `name`, `args`(받은 그대로의 params, 없으면 `null`), `micros`, `ok: true`, `truncated: false`를 가진 event `host.endpoint.call`이다. | all |
 | `endpoint.record.failure-names-the-error` | 실패한 요청은 level `warn`이고 `ok: false`와 client가 받는 코드와 메시지인 `error` `<code>: <message>`를 가진 event `host.endpoint.call`이다. | all |
 | `endpoint.record.end-is-an-event` | endpoint 연결의 끝은 layer `host`, level `debug`의 event `host.endpoint.end`이며, `subscriptions`는 해제가 성공한 subscription 수이고 `failed`는 해제가 실패한 수다. 해제된 마지막 watch 각각의 `status.unwatch`에 page가 답한 뒤 저장된다. | all |
+| `endpoint.record.failed-release-is-counted` | page가 거부한 해제는 `host.endpoint.end`의 `failed`에 세어지고, topic, window, 오류 text를 가진 place `endpoint release`의 error record다. | all |
 | `endpoint.record.arguments-are-cut-before-copying` | `args`는 문자 경계에서 자른 최대 1024바이트이고, params가 더 길면 event에 `truncated: true`가 있다. | all |
 | `endpoint.response.follows-the-socket-write` | 요청이 응답 뒤에 등록한 작업은 응답이 queue 에 들어갈 때가 아니라 실제 쓰기와 flush 가 끝나고 연결 writer 잠금이 풀린 뒤 한 번 실행된다. 완료 뒤에 등록한 작업은 같은 결과로 바로 실행된다. | all |
 | `endpoint.response.reports-its-outcome` | 응답의 완료는 응답 기록, 응답 없는 notification, 쓰기 실패, 답 포기를 구분해 알린다. 쓰기 실패, 거부된 frame, encode 할 수 없는 응답, 닫힌 연결은 응답을 쓴 것이 아니며 문맥의 복사본을 버려도 완료되지 않는다. | all |

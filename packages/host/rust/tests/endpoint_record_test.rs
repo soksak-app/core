@@ -13,7 +13,7 @@ use endpoint_client::Connection;
 #[path = "support/endpoint_case.rs"]
 mod endpoint_case;
 
-use endpoint_case::{Exchange, exchange, serve_page};
+use endpoint_case::{Exchange, exchange, refused_exchange, serve_page};
 
 #[path = "support/child.rs"]
 mod child;
@@ -207,6 +207,58 @@ fn the_end_of_a_connection_is_an_event_after_the_unwatch_of_its_watch() {
         ends[0]["fields"],
         json!({"subscriptions": 1, "failed": 0}),
         "{ends:?}"
+    );
+    served.finish();
+    use_host_event_log(None);
+}
+
+// contract: endpoint.record.failed-release-is-counted
+#[test]
+fn a_failed_release_of_a_closed_connection_is_counted_and_an_error_record() {
+    let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
+    let served = serve_page(
+        "test-record",
+        vec![
+            exchange("status.watch", json!({"name": "core.layout"}), Value::Null),
+            refused_exchange(
+                "status.unwatch",
+                json!({"name": "core.layout"}),
+                1002,
+                "the page refused the release",
+            ),
+        ],
+    );
+    let mut connection = served.open();
+    request(
+        &mut connection,
+        1,
+        "status.watch",
+        json!({"window": "main", "name": "core.layout"}),
+    );
+    drop(connection);
+    let ends = records::await_events(
+        &served.log,
+        served.config.path(),
+        "host.endpoint.end",
+        1,
+        std::time::Duration::from_secs(10),
+    );
+    assert_eq!(ends.len(), 1, "{ends:?}");
+    assert_eq!(
+        ends[0]["fields"],
+        json!({"subscriptions": 0, "failed": 1}),
+        "{ends:?}"
+    );
+    let releases: Vec<Value> = records::read_events(&records::event_log_path(served.config.path()))
+        .into_iter()
+        .filter(|event| {
+            event["event"] == "host.record.error" && event["fields"]["where"] == "endpoint release"
+        })
+        .collect();
+    assert_eq!(releases.len(), 1, "{releases:?}");
+    assert_eq!(
+        releases[0]["fields"]["text"], "core.layout on main: the page refused the release",
+        "{releases:?}"
     );
     served.finish();
     use_host_event_log(None);

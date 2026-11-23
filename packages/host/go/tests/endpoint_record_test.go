@@ -126,3 +126,27 @@ func TestTheEndOfAConnectionIsAnEventAfterTheUnwatchOfItsWatch(t *testing.T) {
 		t.Fatalf("the events host.endpoint.end are %v", ends)
 	}
 }
+
+// contract: endpoint.record.failed-release-is-counted
+func TestAFailedReleaseOfAClosedConnectionIsCountedAndAnErrorRecord(t *testing.T) {
+	log := support.UseEventLog(t)
+	refused := pageExchange("status.unwatch", `{"name":"core.layout"}`, ``)
+	refused.reply = casePageReply{Error: &host.RPCError{Code: 1002, Message: "the page refused the release"}}
+	_, address, _, _ := servePage(t, pageExchange("status.watch", `{"name":"core.layout"}`, `null`), refused)
+	conn := dial(t, address)
+	call(t, conn, 1, "status.watch", map[string]any{"window": "main", "name": "core.layout"})
+	_ = conn.Close()
+	ends := support.AwaitEvents(t, log, "host.endpoint.end", 1, 10*time.Second)
+	if len(ends) != 1 || fmt.Sprint(ends[0]["fields"]) != "map[failed:1 subscriptions:0]" {
+		t.Fatalf("the events host.endpoint.end are %v", ends)
+	}
+	var releases []map[string]any
+	for _, event := range readEventLog(t, log.Path()) {
+		if fields, ok := event["fields"].(map[string]any); ok && event["event"] == "host.record.error" && fields["where"] == "endpoint release" {
+			releases = append(releases, fields)
+		}
+	}
+	if len(releases) != 1 || releases[0]["text"] != "core.layout on main: 1002: the page refused the release" {
+		t.Fatalf("the error records of the place endpoint release are %v", releases)
+	}
+}

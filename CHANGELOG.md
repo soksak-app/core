@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1114-2: A test in each host reads `failed: 1` of `host.endpoint.end` and the error record of the place `endpoint release` when the page refuses the release of a closed connection. Verification: Red with the count and the record removed, then Green in both hosts.
 - F1117-4: The Node checks and scripts read the process table through `processes` of `packages/window-check/platform/platform.mjs`, which calls libSystem through koffi on macOS and reads procfs on Linux, and start no `ps`, `pgrep` or `lsof`; `make check-process-tools` covers Node sources; the redraw measurement drops the CPU time of the window server and B3 drops the start condition on the CPU share of fseventsd, because no interface without privileges reads the CPU time of a process of another user. Verification: Red of the Node case and the repository case of `check-process-tools.test.mjs`, then Green of them and of the changed tests.
 - F1117-3: `make check-process-tools` fails on a Go or Rust source or test that starts `ps`, `kill`, `pgrep` or `lsof`, runs with the structure checks of CI, and AGENTS.md states the rule; two more Rust tests check a process with `kill(2)` signal 0. Verification: Red of the check test on the restored earlier Go test, then Green of it, of the check and of the changed Rust tests.
 - F1117-2: The process tests of both hosts and of sok read no `ps` and start no `kill`: they judge a process by the wait status of their own child and signal through `kill(2)`. Verification: Green of the changed Go tests and of five Rust test targets.
