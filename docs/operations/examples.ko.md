@@ -450,7 +450,7 @@ Terminal view benchmark는 process 및 one-shot layout 증거에 전체 performa
 - process identity package의 테스트 하나: `make -C native/darwin/process-identity repeat TEST=<name>_test COUNT=<n>`.
 - 네이티브 기본 모음: `make -C native/darwin repeat-suite COUNT=<n>`.
 - Rust 패키지의 테스트: `make repeat-rust PACKAGE=<package> COUNT=<n> [TEST=<name>] [FEATURES=<features>]`.
-- Go 패키지의 테스트: `make repeat-go PACKAGE=<path> COUNT=<n> [TEST=<regexp>] [TAGS=<tags>]`.
+- Go 패키지의 테스트: `make repeat-go PACKAGE=<path> COUNT=<n> [TEST=<regexp>] [TAGS=<tags>] [PARALLEL=<copies>]`. `PARALLEL`은 반복의 사본을 그만큼 동시에 실행하며, 사본 하나가 실패하면 target이 실패한다.
 - 창 검사 밖의 Node 테스트: `make repeat-node FILE=<file> NAME=<pattern> COUNT=<n>`.
 - 테스트 순서 의존: `make test-rust-alone PACKAGE=<package> [FEATURES=<features>]`가 각 테스트를 혼자 실행한다.
 

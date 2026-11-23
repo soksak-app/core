@@ -34,7 +34,9 @@ func TestAnEndpointRequestIsAnEventWhileTheTraceIsOff(t *testing.T) {
 	}
 	_, address, _, _ := servePage(t,
 		pageExchange("status.get", `{"name":"core.layout"}`, `null`),
-		pageExchange("status.watch", `{"name":"core.layout"}`, `null`))
+		pageExchange("status.watch", `{"name":"core.layout"}`, `null`),
+		// The close of the connection at the end of the test ends its watch, so the endpoint sends this unwatch to the page.
+		pageExchange("status.unwatch", `{"name":"core.layout"}`, `null`))
 	conn := dial(t, address)
 	call(t, conn, 1, "windows.list", nil)
 	call(t, conn, 2, "status.get", map[string]any{"window": "main", "name": "core.layout"})

@@ -294,10 +294,19 @@ repeat-rust: check-cargo
 # Each test of each package is its own process with the limit TEST_TIMEOUT, named when it starts and reported with its result and elapsed time (scripts/go-tests.mjs).
 # A pattern whose packages have no test files fails when none has test files; a run in which no test matches fails.
 # This target reproduces and accepts an intermittent failure. The runner reports the run number and the system load at the first failure.
+# PARALLEL runs that many copies of the repeat at once, so a failure that appears only under load is repeated; the target fails
+# when one copy fails.
+PARALLEL ?= 1
+
 repeat-go:
-	@case "$(PACKAGE)" in '') echo "repeat-go requires PACKAGE=<go package path> COUNT=<n> [TEST=<regexp>] [TAGS=<tags>] [GO_LDFLAGS=<flags>]" >&2; exit 2;; esac
+	@case "$(PACKAGE)" in '') echo "repeat-go requires PACKAGE=<go package path> COUNT=<n> [TEST=<regexp>] [TAGS=<tags>] [GO_LDFLAGS=<flags>] [PARALLEL=<copies>]" >&2; exit 2;; esac
 	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "repeat-go requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
-	@$(call go-env) node scripts/go-tests.mjs --package '$(PACKAGE)' $(if $(TAGS),--tags '$(TAGS)') $(if $(TEST),--test '$(TEST)') --count $(COUNT) --timeout $(TEST_TIMEOUT) --ldflags='$(GO_LDFLAGS)' --cgo-ldflags='$(GO_LINK)'
+	@case "$(PARALLEL)" in ''|*[!0-9]*|0) echo "repeat-go requires a positive PARALLEL" >&2; exit 2;; esac
+	@pids=""; c=1; while [ $$c -le $(PARALLEL) ]; do \
+	  $(call go-env) node scripts/go-tests.mjs --package '$(PACKAGE)' $(if $(TAGS),--tags '$(TAGS)') $(if $(TEST),--test '$(TEST)') --count $(COUNT) --timeout $(TEST_TIMEOUT) --ldflags='$(GO_LDFLAGS)' --cgo-ldflags='$(GO_LINK)' & pids="$$pids $$!"; c=$$((c + 1)); \
+	done; \
+	failed=0; for pid in $$pids; do wait $$pid || failed=$$((failed + 1)); done; \
+	[ $$failed -eq 0 ] || { echo "FAIL: repeat-go: $$failed of $(PARALLEL) copies failed; load $$(uptime)" >&2; exit 1; }
 
 # Runs the tests whose name matches the pattern in a Node test file COUNT times in sequence from the repository root.
 # Each repeat is one process of node --test with the limit TEST_TIMEOUT: the runner kills it at the limit and names it when it starts

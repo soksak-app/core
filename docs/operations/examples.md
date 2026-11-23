@@ -452,7 +452,7 @@ Reproduce and accept an intermittent failure with these tracked targets:
 - One test of the process identity package: `make -C native/darwin/process-identity repeat TEST=<name>_test COUNT=<n>`.
 - The default native suite: `make -C native/darwin repeat-suite COUNT=<n>`.
 - Rust tests of a package: `make repeat-rust PACKAGE=<package> COUNT=<n> [TEST=<name>] [FEATURES=<features>]`.
-- Go tests of a package: `make repeat-go PACKAGE=<path> COUNT=<n> [TEST=<regexp>] [TAGS=<tags>]`.
+- Go tests of a package: `make repeat-go PACKAGE=<path> COUNT=<n> [TEST=<regexp>] [TAGS=<tags>] [PARALLEL=<copies>]`. `PARALLEL` runs that many copies of the repeat at once; the target fails when one copy fails.
 - Node tests outside window checks: `make repeat-node FILE=<file> NAME=<pattern> COUNT=<n>`.
 - Test order dependence: `make test-rust-alone PACKAGE=<package> [FEATURES=<features>]` runs each test alone.
 

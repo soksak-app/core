@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1114: The endpoint record case declares the `status.unwatch` that the close of its connection sends, and `make repeat-go` takes `PARALLEL=<copies>`. Verification: Red of 1 of 8 parallel copies with the diagnostics tag, then Green of 8 copies of 100 runs.
 - F1113-3: The failure line of the native repeat target keeps `FAIL: <test> run <i> of <n>; ` and adds the count of failed copies. Verification: Red of `native-repeat.test.mjs` on linux-node, then Green.
 - F1113-2: The completion audit of `scripts/check-tests.mjs` lists F1113 and F1113-1 as completions that add no capability. Verification: Red of `make check-tests` in the release run, then Green of `make check-tests` and `check-tests.test.mjs` (54 of 54).
 - F1113-1: `make -C native/darwin repeat` takes `PARALLEL=<copies>` and runs that many copies of the test in each run. Verification: Red of the test before F1113 (8 of 8 copies failed), then Green of the fixed test (4 runs of 8 copies).
