@@ -10,6 +10,7 @@ const EXACT = new Map([
   ["host.call.peer-lost", "call"],
   ["host.crash.found", "lifecycle"],
   ["host.endpoint.call", "call"],
+  ["host.endpoint.end", "lifecycle"],
   ["host.frame.commit", "frame"],
   ["host.frame.complete", "frame"],
   ["host.frame.record", "frame"],

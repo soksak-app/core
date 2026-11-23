@@ -23,6 +23,7 @@ var eventClasses = map[string]Class{
 	"host.call.peer-lost":                    ClassCall,
 	"host.crash.found":                       ClassLifecycle,
 	"host.endpoint.call":                     ClassCall,
+	"host.endpoint.end":                      ClassLifecycle,
 	"host.frame.commit":                      ClassFrame,
 	"host.frame.complete":                    ClassFrame,
 	"host.frame.record":                      ClassFrame,

@@ -65,6 +65,7 @@ pub fn class_of(name: &str) -> Option<Class> {
         "host.call.peer-lost" => Some(Class::Call),
         "host.crash.found" => Some(Class::Lifecycle),
         "host.endpoint.call" => Some(Class::Call),
+        "host.endpoint.end" => Some(Class::Lifecycle),
         "host.frame.commit" => Some(Class::Frame),
         "host.frame.complete" => Some(Class::Frame),
         "host.frame.record" => Some(Class::Frame),

@@ -2910,6 +2910,30 @@
       },
       "description": "A method that a client of the endpoint called; `args` is the params as received (`null` when absent) cut to 1024 bytes, `error` is the code and the message that the client received."
     },
+    "host.endpoint.end": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "subscriptions": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "failed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "subscriptions",
+          "failed"
+        ]
+      },
+      "description": "A connection of the endpoint ended; `subscriptions` is the number of its subscriptions whose release succeeded and `failed` the number whose release failed, and the event is stored after each release has its result, so the connection sends nothing more."
+    },
     "host.binding.call": {
       "layer": "host",
       "class": "call",

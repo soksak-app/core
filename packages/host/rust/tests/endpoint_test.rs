@@ -913,14 +913,18 @@ fn endpoint_file_is_written_only_after_the_first_window_exists() {
 #[cfg(feature = "diagnostics")]
 #[test]
 fn subscriber_count_follows_the_watches_of_a_window() {
-    // The page receives the first watch only: the second connection joins the watch, and the first connection leaves it.
+    // The page receives the first watch only: the second connection joins the watch, and the first connection leaves it; the
+    // close of the second connection at the end of the case ends the watch with one status.unwatch.
     let served = serve_page(
         "test-subscribers",
-        vec![exchange(
-            "status.watch",
-            json!({"name": "core.layout"}),
-            Value::Null,
-        )],
+        vec![
+            exchange("status.watch", json!({"name": "core.layout"}), Value::Null),
+            exchange(
+                "status.unwatch",
+                json!({"name": "core.layout"}),
+                Value::Null,
+            ),
+        ],
     );
     let notifier = served.endpoint.notifier();
     assert_eq!(notifier.subscribers("main"), 0);
