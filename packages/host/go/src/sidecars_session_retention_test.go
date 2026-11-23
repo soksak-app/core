@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net"
 	"reflect"
 	"testing"
@@ -164,6 +165,15 @@ func TestStopNotifiesOutdatedRemovalWithoutPendingCloses(t *testing.T) {
 		}
 	})
 	process.conn = local
+	// The read goroutine of a connected service closes exited after the end of its connection, and the stop waits for it
+	// (docs/spec/persistent-services.md#service-transport); the fixture reads the connection as that goroutine does.
+	process.exited = make(chan struct{})
+	go func() {
+		defer close(process.exited)
+		if _, err := io.Copy(io.Discard, peer); err != nil {
+			t.Error(err)
+		}
+	}()
 	var snapshots []SidecarStatus
 	c.ClosingChanged = func(value SidecarStatus) { snapshots = append(snapshots, value) }
 	c.Stop()

@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1126-1: Go stop test fixture가 read goroutine처럼 persistent 연결을 읽으므로, 연결의 끝을 기다리는 stop이 끝난다.
 - F1126: 두 host에서 sidecar 중지는 각 persistent connection의 reader가 service를 sample되는 process에서 지우고 `host.sidecar.disconnect`를 기록한 뒤에 끝나므로, 중지 뒤의 sample이 더 이상 service를 이름하지 않는다. 검증: 바뀌지 않은 host에서 Red, 이어 반복 실행 Go 120번 중 120번과 Rust 60번 중 60번 Green.
 - F1117-7: bundle preparation 테스트는 기다리는 Node 실행 파일의 복사본을 시작하므로, sleep이 multi-call program인 system에서도 돈다. 검증: Linux CI job에서 Red, Ubuntu 26.04 container에서 거부 테스트 Green, macOS에서 3개 중 3개.
 - F1117-8: sok과 window race 테스트의 `kill(2)` 호출은 오류를 버리지 않고 `ESRCH` 말고 다른 오류에서 check를 실패시킨다.
