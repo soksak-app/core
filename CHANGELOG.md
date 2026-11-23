@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1110-1: The test framework of the Go window tests has a `Quit`, so a test that closes the only window of its host ends instead of panicking in the quit that F1110 asks for. Verification: Red of three window tests on main, then Green (450 of 450).
 - F1111: `host.window.raise` orders the window through the implementation of AppKit, so a raise of the virtual key window puts it in front of the windows of other applications; before, the refusal of the own orders of the virtual key window also refused the raise, which still answered success. Verification: Red of `window_order_test` with a window of another process in front of the virtual key window, then Green with `input_virtual_test` and `window_facts_test`.
 - F1108-4: The catalog test lists `page.theme.applied`, the defaults of `record_page_start` state their reasons, and the view-wire cases of the e2e fixtures list the log calls of the start records of a view, so the release checks pass. Verification: Red of the three tests in the release run, then Green with the six fixture tests and both view-wire producers.
 - F1108-3: The published view bridge cases assert the exact open-call reports of the start records of a view, six open and close pairs, and each case sequence starts with them, instead of clearing the reports. Verification: Red with one extra start report (7 of 8 cases fail; the clearing form passed 8 of 8), then Green (64 of 64).

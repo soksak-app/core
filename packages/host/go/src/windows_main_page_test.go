@@ -24,6 +24,10 @@ func (pagelessFramework) MainPage() bool                     { return false }
 func (pagelessFramework) Step(task func())                   { task() }
 func (f pagelessFramework) NewWindow(WindowOptions) Frontend { return f.window }
 
+// Quit ends nothing: the close of the only window of a test quits the application (docs/spec/hosts.md#process-lifecycle), and the
+// test has no application to end.
+func (pagelessFramework) Quit() {}
+
 // pagelessWindow is a window of pagelessFramework that records its show.
 type pagelessWindow struct {
 	frontendRecord
