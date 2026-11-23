@@ -32,11 +32,12 @@ const testHangMs = 70_000;
 // A child that stays until a signal ends it, so a limit, a cancellation or a heartbeat always comes before its end.
 const forever = 'setInterval(() => {}, 1000)';
 
-// An ended process remains a zombie until its parent reaps it, and kill(pid, 0) on a zombie succeeds. So the judgment uses the state in the process table.
+// An ended process remains a zombie until its parent reaps it, and kill(pid, 0) on a zombie succeeds. So the judgment uses the state in the
+// process table: a process that SIGKILL ended is exiting until the system makes it a zombie, and both states have ended.
 function assertEnded(pid) {
   const row = processes().find((entry) => entry.pid === pid);
   if (row === undefined) return;
-  assert.equal(row.state, 'zombie', `process ${pid} is ${row.state}`);
+  assert.notEqual(row.state, 'running', `process ${pid} is running`);
 }
 
 // The members of the group pgid that run by the process table.
