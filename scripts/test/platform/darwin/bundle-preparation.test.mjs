@@ -13,11 +13,15 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "fixtures", "bundle-preparation");
 const prepare = (bundle, application) => prepareBundle(bundle, application, { platform: "darwin" });
 
-/** Starts a copy of /bin/sleep at `executable` (or at `launch` from `cwd`), ended when the test ends, and resolves once it executes. */
+/**
+ * Starts a copy of the Node executable that waits at `executable` (or at `launch` from `cwd`), ended when the test ends, and resolves
+ * once it executes. A copy of /bin/sleep does not run on a system whose sleep is a program of a multi-call binary, such as the coreutils
+ * of Ubuntu 26.04, which ends a copy with another name at once.
+ */
 async function sleeping(t, executable, { launch = executable, cwd } = {}) {
   mkdirSync(dirname(executable), { recursive: true });
-  copyFileSync("/bin/sleep", executable);
-  const child = spawn(launch, ["600"], { cwd, stdio: "ignore" });
+  copyFileSync(process.execPath, executable);
+  const child = spawn(launch, ["-e", "setInterval(() => {}, 1000)"], { cwd, stdio: "ignore" });
   t.after(() => child.kill("SIGKILL"));
   await once(child, "spawn");
   return child;
