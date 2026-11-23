@@ -1,7 +1,9 @@
 package support
 
 import (
+	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -28,9 +30,18 @@ func UseEventLog(t *testing.T) *host.EventLog {
 	}
 	StoreEveryLevel(t, log)
 	host.UseHostEventLog(log)
+	current.Store(log)
 	// The writer ends before the folder of the test is removed; a writer that outlives the test writes into a removed folder.
-	t.Cleanup(func() { host.UseHostEventLog(nil); log.Close() })
+	t.Cleanup(func() { current.CompareAndSwap(log, nil); host.UseHostEventLog(nil); log.Close() })
 	return log
+}
+
+// current is the writer that UseEventLog or UseRoomyEventLog attached to the host and that the test has not ended.
+var current atomic.Pointer[host.EventLog]
+
+// CurrentEventLog is the writer that the test attached with UseEventLog or UseRoomyEventLog, or nil.
+func CurrentEventLog() *host.EventLog {
+	return current.Load()
 }
 
 // UseRoomyEventLog is UseEventLog with a queue that holds the records of a flood of messages.
@@ -45,7 +56,9 @@ func UseRoomyEventLog(t *testing.T) *host.EventLog {
 	}
 	StoreEveryLevel(t, log)
 	host.UseHostEventLog(log)
+	current.Store(log)
 	t.Cleanup(func() {
+		current.CompareAndSwap(log, nil)
 		host.UseHostEventLog(nil)
 		if err := log.Flush(); err != nil {
 			t.Errorf("flush event log before closing: %v", err)
@@ -132,4 +145,43 @@ func WriteWaits(t *testing.T, log *host.EventLog) []map[string]any {
 		}
 	}
 	return waits
+}
+
+// AwaitEvents returns the events named name that log stored once there are at least count of them. The writer tells each batch
+// that it wrote (SetOnWrite), and the events are read again after each batch, so an event that a goroutine of the host writes
+// ends the wait when its batch is written. An event that has not come within bound fails the test with the names of the events
+// that the writer stored, so a missing event is an assertion and not the limit of the runner.
+func AwaitEvents(t *testing.T, log *host.EventLog, name string, count int, bound time.Duration) []map[string]any {
+	t.Helper()
+	wrote := make(chan struct{}, 1)
+	log.SetOnWrite(func(string, int64) {
+		select {
+		case wrote <- struct{}{}:
+		default:
+		}
+	})
+	defer log.SetOnWrite(func(string, int64) {})
+	limit := time.NewTimer(bound)
+	defer limit.Stop()
+	for {
+		if err := log.Flush(); err != nil {
+			t.Fatal(err)
+		}
+		var found []map[string]any
+		var names []string
+		for _, event := range ReadEvents(t, log.Path()) {
+			names = append(names, fmt.Sprint(event["event"]))
+			if event["event"] == name {
+				found = append(found, event)
+			}
+		}
+		if len(found) >= count {
+			return found
+		}
+		select {
+		case <-wrote:
+		case <-limit.C:
+			t.Fatalf("%d of %d events %s within %v; the writer stored %v", len(found), count, name, bound, names)
+		}
+	}
 }

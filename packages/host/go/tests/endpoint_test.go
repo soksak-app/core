@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"runtime/debug"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"testing"
@@ -44,19 +45,19 @@ func heldPageExchange(name, payload, result string) casePageExchange {
 // exchanges, and an exchange that it did not send, fail the test.
 func servePage(t *testing.T, exchanges ...casePageExchange) (*host.Endpoint, string, string, *casePage) {
 	t.Helper()
+	// The end of each connection is the event host.endpoint.end, which the check waits for; a test that attached a writer keeps it.
+	log := support.CurrentEventLog()
+	if log == nil {
+		log = support.UseEventLog(t)
+	}
 	page := newTierBackend([]string{"main"})
 	page.script = exchanges
 	endpoint, address, config := serve(t, page)
 	t.Cleanup(func() {
-		// A request that a closed connection of the test ends, such as the last status.unwatch, may still be on its way.
-		for {
-			page.mu.Lock()
-			sent := page.next >= len(page.script)
-			page.mu.Unlock()
-			if sent || !page.awaitCall() {
-				break
-			}
-		}
+		// The connections that dial made are closed by their own cleanups, which run first; the check waits for the end of each,
+		// so every call that a connection sends to the page, such as the status.unwatch of its last watch, has arrived
+		// (docs/spec/endpoint.md#recording). Each release is answered at once by the case page, so the ends come well within the bound.
+		support.AwaitEvents(t, log, "host.endpoint.end", dialed(address), 10*time.Second)
 		for _, problem := range page.finish() {
 			t.Errorf("the page of the endpoint: %s", problem)
 		}
@@ -143,12 +144,26 @@ func TestProcessLockIsOwnerOnly(t *testing.T) {
 	}
 }
 
+// dials counts the connections that dial made to each address, so servePage waits for the end of each.
+var dials sync.Map
+
+// dialed is the number of connections that dial made to address.
+func dialed(address string) int {
+	count, _ := dials.Load(address)
+	if count == nil {
+		return 0
+	}
+	return int(count.(*atomic.Int64).Load())
+}
+
 func dial(t *testing.T, address string) net.Conn {
 	t.Helper()
 	conn, err := net.Dial("unix", address)
 	if err != nil {
 		t.Fatal(err)
 	}
+	count, _ := dials.LoadOrStore(address, new(atomic.Int64))
+	count.(*atomic.Int64).Add(1)
 	t.Cleanup(func() { _ = conn.Close() })
 	return conn
 }

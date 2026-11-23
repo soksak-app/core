@@ -1287,10 +1287,26 @@ func (e *Endpoint) drop(c *endpointConn, reason string) {
 	e.mu.Unlock()
 	// The close releases the presses that the connection owns, in its turn (docs/spec/exposure.md#methods).
 	e.releasePresses(c)
+	// The end of the connection is stored after the release of each of its subscriptions has its result, so a reader of the
+	// record knows that the connection sends nothing more; a failed release is counted as failed (docs/spec/endpoint.md#recording).
+	var remaining, failed atomic.Int64
+	remaining.Store(int64(len(held)))
+	ended := func() {
+		EmitHost(LevelDebug, "host.endpoint.end", map[string]any{
+			"subscriptions": int64(len(held)) - failed.Load(), "failed": failed.Load(),
+		})
+	}
+	if len(held) == 0 {
+		ended()
+	}
 	for _, t := range held {
 		e.enqueue(t, false, func() {
 			if err := e.change(c, t, false); err != nil {
+				failed.Add(1)
 				LogError("endpoint release", fmt.Sprintf("%s on %s: %v", t.name, t.window, err))
+			}
+			if remaining.Add(-1) == 0 {
+				ended()
 			}
 		})
 	}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
@@ -100,5 +101,28 @@ func TestTheArgumentsOfAnEndpointEventAreCutAtTheBound(t *testing.T) {
 	args := fields["args"].(string)
 	if len(args) > host.CallTextBytes || len(args) < host.CallTextBytes-3 || fields["truncated"] != true {
 		t.Fatalf("args of %d bytes, truncated %v; want at most %d bytes and true", len(args), fields["truncated"], host.CallTextBytes)
+	}
+}
+
+// contract: endpoint.record.end-is-an-event
+func TestTheEndOfAConnectionIsAnEventAfterTheUnwatchOfItsWatch(t *testing.T) {
+	log := support.UseEventLog(t)
+	_, address, _, page := servePage(t,
+		pageExchange("status.watch", `{"name":"core.layout"}`, `null`),
+		pageExchange("status.unwatch", `{"name":"core.layout"}`, `null`))
+	conn := dial(t, address)
+	call(t, conn, 1, "status.watch", map[string]any{"window": "main", "name": "core.layout"})
+	_ = conn.Close()
+	// The release of the watch is answered at once by the case page, so the end is stored well within the bound.
+	ends := support.AwaitEvents(t, log, "host.endpoint.end", 1, 10*time.Second)
+	page.mu.Lock()
+	sent := page.next
+	page.mu.Unlock()
+	if sent != 2 {
+		t.Fatalf("the end was stored after %d of the 2 calls of the page", sent)
+	}
+	if len(ends) != 1 || ends[0]["layer"] != "host" || ends[0]["level"] != "debug" ||
+		fmt.Sprint(ends[0]["fields"]) != "map[failed:0 subscriptions:1]" {
+		t.Fatalf("the events host.endpoint.end are %v", ends)
 	}
 }

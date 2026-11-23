@@ -234,7 +234,15 @@ fn a_subscription_change_is_applied_when_the_lines_lock_is_poisoned() {
         .unwrap()
         .insert(1, peer(writer_of(&sink), &[]));
     poison(&shared.lines);
-    change(&shared, 1, Topic::Status(watch("state")), true, None, 0);
+    change(
+        &shared,
+        1,
+        Topic::Status(watch("state")),
+        true,
+        None,
+        None,
+        0,
+    );
     assert!(
         recovered(&shared.peers)[&1]
             .watches
@@ -256,7 +264,15 @@ fn a_subscription_change_is_applied_when_the_peer_list_lock_is_poisoned() {
         .unwrap()
         .insert(1, peer(writer_of(&sink), &[]));
     poison(&shared.peers);
-    change(&shared, 1, Topic::Status(watch("state")), true, None, 0);
+    change(
+        &shared,
+        1,
+        Topic::Status(watch("state")),
+        true,
+        None,
+        None,
+        0,
+    );
     assert!(
         recovered(&shared.peers)[&1]
             .watches
@@ -289,6 +305,7 @@ fn a_queued_change_is_sent_to_the_page_when_the_lines_lock_is_poisoned() {
                 on: true,
                 last: false,
                 answer: None,
+                ending: None,
             }]),
             running: true,
             page: false,
@@ -325,6 +342,7 @@ fn a_refused_start_is_reverted_when_the_peer_list_lock_is_poisoned() {
                 on: true,
                 last: false,
                 answer: None,
+                ending: None,
             }]),
             running: true,
             page: false,

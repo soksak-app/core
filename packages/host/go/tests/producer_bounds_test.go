@@ -154,7 +154,9 @@ func TestTheSubscriptionChangesOfATopicHoldAtMost256AndTheRestIsRefusedAndCounte
 	log := support.UseEventLog(t)
 	// The page holds the reply of the first watch: the other watches wait behind it, and only the first subscription of a topic
 	// reaches the page.
-	_, address, _, page := servePage(t, heldPageExchange("status.watch", `{"name":"core.layout"}`, `null`))
+	// The close of the connection at the end of the case ends the watch with one status.unwatch.
+	_, address, _, page := servePage(t, heldPageExchange("status.watch", `{"name":"core.layout"}`, `null`),
+		pageExchange("status.unwatch", `{"name":"core.layout"}`, `null`))
 	conn := dial(t, address)
 	watch := map[string]any{"window": "main", "name": "core.layout"}
 	request := func(id int, method string) {

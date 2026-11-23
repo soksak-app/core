@@ -44,8 +44,8 @@ fn receive(connection: &mut Connection) -> Value {
 // contract: endpoint.status.ended-ends-a-watch
 #[test]
 fn a_watch_ends_with_its_producer() {
-    // The page receives a status.watch of the surface, one of the plain status and, after the end, a second one of the surface,
-    // and never a status.unwatch.
+    // The page receives a status.watch of the surface, one of the plain status and, after the end, a second one of the surface;
+    // the end sends no status.unwatch, and the close of the connection at the end of the case ends the second watch with one.
     let watch = |params: Value| exchange("status.watch", params, Value::Null);
     let served = serve_page(
         "test-ended",
@@ -53,6 +53,11 @@ fn a_watch_ends_with_its_producer() {
             watch(json!({"name": "core.view", "surface": "tab-1"})),
             watch(json!({"name": "core.view"})),
             watch(json!({"name": "core.view", "surface": "tab-1"})),
+            exchange(
+                "status.unwatch",
+                json!({"name": "core.view", "surface": "tab-1"}),
+                Value::Null,
+            ),
         ],
     );
     let notifier = served.endpoint.notifier();

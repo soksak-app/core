@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1114-1: 두 host에서 endpoint 연결의 끝은 `subscriptions`와 `failed`를 가진 event `host.endpoint.end`이고, endpoint page harness는 각 연결의 끝 뒤에만 page를 검사하므로 늦은 호출이 그 case를 실패시킨다. 세 case가 이제 닫힘 `status.unwatch`를 선언하고, Rust host는 실패한 해제를 기록한다. 검증: 이전 host에서 두 event 테스트의 Red와 새 harness에서 Rust record case의 Red, 이어 세 Rust endpoint 파일과 Go `servePage` 테스트의 Green(diagnostics tag 유무 모두).
 - F1114: endpoint record case가 연결을 닫을 때 보내지는 `status.unwatch`를 선언하고, `make repeat-go`는 `PARALLEL=<copies>`를 받는다. 검증: diagnostics tag로 병렬 사본 8개 중 1개 Red, 이어 100번씩 사본 8개 Green.
 - F1113-3: 네이티브 repeat target의 실패 줄은 `FAIL: <test> run <i> of <n>; `를 유지하고 실패한 사본 수를 더한다. 검증: linux-node에서 `native-repeat.test.mjs` Red, 이어 Green.
 - F1113-2: `scripts/check-tests.mjs`의 완료 감사가 F1113과 F1113-1을 capability를 더하지 않는 완료로 적는다. 검증: release run의 `make check-tests` Red, 이어 `make check-tests`와 `check-tests.test.mjs`의 Green(54개 중 54개).

@@ -568,6 +568,12 @@ fn surface_watches_are_separate() {
                 json!({"name": "probe.lines", "surface": "tab-a"}),
                 Value::Null,
             ),
+            // The close of the connection at the end of the case ends the watch without a surface.
+            exchange(
+                "status.unwatch",
+                json!({"name": "probe.lines"}),
+                Value::Null,
+            ),
         ],
     );
     let notifier = served.endpoint.notifier();

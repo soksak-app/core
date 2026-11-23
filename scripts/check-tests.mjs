@@ -324,6 +324,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1114-1",
+    implementation: [
+      { file: "packages/host/go/src/endpoint.go", symbol: "func (e *Endpoint) drop(c *endpointConn, reason string) {" },
+      { file: "packages/host/rust/src/endpoint.rs", symbol: "impl Ending {" },
+      { file: "packages/host/rust/tests/support/endpoint_case.rs", symbol: "pub fn finish(&self) {" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/endpoint_record_test.go", id: "TestTheEndOfAConnectionIsAnEventAfterTheUnwatchOfItsWatch" },
+      { file: "packages/host/rust/tests/endpoint_record_test.rs", id: "the_end_of_a_connection_is_an_event_after_the_unwatch_of_its_watch" },
+      { file: "packages/host/rust/tests/endpoint_record_test.rs", id: "an_endpoint_request_is_an_event_while_the_trace_is_off" },
+    ],
+    expected: "Both hosts store host.endpoint.end after the releases of a closed connection have their results, and the page harnesses check the page only after the end of each connection of the case.",
+    levels: ["unit"],
+  },
+  {
     id: "F1112",
     implementation: [
       { file: "packages/host/go/src/surfaces.go", symbol: "func (s *Surfaces) recordSyncedSurface(surface Surface) {" },

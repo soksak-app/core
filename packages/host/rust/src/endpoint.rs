@@ -27,6 +27,8 @@ use crate::application_log::{log_error, log_info};
 use crate::bounds::ENDPOINT_TOPIC_CHANGES;
 use crate::buffer_bounds::record_buffer_drop;
 use crate::endpoint_record::Call;
+use crate::event_log::Level;
+use crate::event_record::emit_host;
 use crate::platform::{self, Listener};
 
 pub use crate::platform::Connection;
@@ -600,6 +602,58 @@ struct Change {
     on: bool,
     last: bool,
     answer: Option<Answer>,
+    ending: Option<Arc<Ending>>,
+}
+
+/// The release of the subscriptions of a closed connection. The end of the connection is the event `host.endpoint.end`, stored
+/// after the release of each subscription has its result, with the releases that succeeded and those that failed; each failed
+/// release is also an error record of the place `endpoint release` (docs/spec/endpoint.md#recording).
+struct Ending {
+    total: u64,
+    remaining: AtomicU64,
+    failed: AtomicU64,
+}
+
+impl Ending {
+    fn new(total: u64) -> Arc<Self> {
+        let release = Arc::new(Self {
+            total,
+            remaining: AtomicU64::new(total),
+            failed: AtomicU64::new(0),
+        });
+        if total == 0 {
+            release.ended();
+        }
+        release
+    }
+
+    /// Takes the result of the release of topic; the last result stores the end of the connection.
+    fn done(&self, topic: &Topic, outcome: &Result<Box<RawValue>, Failure>) {
+        if let Err(failure) = outcome {
+            self.failed.fetch_add(1, Ordering::Relaxed);
+            log_error(
+                "endpoint release",
+                format!(
+                    "{} on {}: {}",
+                    topic.name(),
+                    topic.window(),
+                    failure.message
+                ),
+            );
+        }
+        if self.remaining.fetch_sub(1, Ordering::AcqRel) == 1 {
+            self.ended();
+        }
+    }
+
+    fn ended(&self) {
+        let failed = self.failed.load(Ordering::Relaxed);
+        emit_host(
+            Level::Debug,
+            "host.endpoint.end",
+            json!({"subscriptions": self.total - failed, "failed": failed}),
+        );
+    }
 }
 
 /// The pending changes of one target. page shows whether the page follows this target.
@@ -1678,7 +1732,7 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
         };
         if SUBSCRIPTIONS.contains(&request.method.as_str()) {
             match subscription(&shared, &request.method, request.params) {
-                Ok((topic, on)) => change(&shared, peer, topic, on, Some(answer), body.len()),
+                Ok((topic, on)) => change(&shared, peer, topic, on, Some(answer), None, body.len()),
                 Err(failure) => answer.send(Err(failure)),
             }
             continue;
@@ -1808,6 +1862,7 @@ fn change(
     topic: Topic,
     on: bool,
     answer: Option<Answer>,
+    ending: Option<Arc<Ending>>,
     size: usize,
 ) {
     let (start, refused, unchanged) = {
@@ -1821,6 +1876,9 @@ fn change(
         // A change is applied to the peer at once, so what the peer holds is its last change, queued or held.
         let watched = peers.get(&peer).is_some_and(|state| topic.held(state));
         if !on && !watched {
+            if let Some(ending) = &ending {
+                ending.done(&topic, &raw(&Value::Null));
+            }
             (false, None, answer)
         } else if on && answer.is_some() && waiting >= ENDPOINT_TOPIC_CHANGES {
             (false, answer, None)
@@ -1842,6 +1900,7 @@ fn change(
                 on,
                 last,
                 answer,
+                ending,
             });
             (!std::mem::replace(&mut line.running, true), None, None)
         }
@@ -1936,6 +1995,9 @@ fn drain(shared: &Shared, topic: Topic) {
             line.page = following;
         }
         drop(lines);
+        if let Some(ending) = &next.ending {
+            ending.done(&topic, &outcome);
+        }
         if let Some(answer) = next.answer {
             answer.send(outcome);
             if let (Topic::Status(watch), true) = (&topic, next.on) {
@@ -2272,8 +2334,9 @@ fn forget(shared: &Arc<Shared>, peer: u64) {
         None => return,
     };
     drop(peers);
+    let ending = Ending::new(topics.len() as u64);
     for topic in topics {
-        change(shared, peer, topic, false, None, 0);
+        change(shared, peer, topic, false, None, Some(ending.clone()), 0);
     }
     {
         let mut peers = shared

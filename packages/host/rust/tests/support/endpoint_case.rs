@@ -500,6 +500,9 @@ pub struct Served {
     pub endpoint: Endpoint,
     pub page: Arc<CasePage>,
     pub config: Folder,
+    /// The writer of the events of the host, which stores the `host.endpoint.end` of each connection.
+    pub log: Arc<EventLog>,
+    opened: std::sync::atomic::AtomicUsize,
 }
 
 /// Starts the endpoint for the application with the window main and publishes it. The page follows exchanges.
@@ -514,25 +517,39 @@ pub fn serve_page(application: &str, exchanges: Vec<Exchange>) -> Served {
     )
     .unwrap();
     endpoint.publish("main").unwrap();
+    let log = records::start_writer(config.path());
     Served {
         endpoint,
         page,
         config,
+        log,
+        opened: std::sync::atomic::AtomicUsize::new(0),
     }
 }
 
 impl Served {
     pub fn open(&self) -> Connection {
+        self.opened
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         endpoint_client::connect(self.endpoint.address())
     }
 
-    /// Waits for the requests of the page that a closed connection of the test may still send, such as the last `status.unwatch`,
-    /// stops the endpoint and fails the test on a deviation of the endpoint from the exchanges, and on an exchange that it did
-    /// not send.
+    /// Stops the endpoint, which closes its connections, waits for the `host.endpoint.end` of each connection that `open` made, so
+    /// every call that a connection sends to the page, such as the `status.unwatch` of its last watch, has arrived, and fails the
+    /// test on a deviation of the endpoint from the exchanges, and on an exchange that it did not send
+    /// (docs/spec/endpoint.md#recording).
     pub fn finish(&self) {
-        while !self.page.exhausted() && self.page.await_call() {}
-        let problems = self.page.finish();
         self.endpoint.stop();
+        let opened = self.opened.load(std::sync::atomic::Ordering::Relaxed);
+        // Each release is answered at once by the case page, so the ends are stored well within the bound.
+        records::await_events(
+            &self.log,
+            self.config.path(),
+            "host.endpoint.end",
+            opened,
+            Duration::from_secs(10),
+        );
+        let problems = self.page.finish();
         assert!(
             problems.is_empty(),
             "the page of the endpoint:\n{}",

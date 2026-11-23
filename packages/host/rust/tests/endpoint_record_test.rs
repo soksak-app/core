@@ -41,11 +41,10 @@ fn calls_of(exchanges: Vec<Exchange>, body: impl FnOnce(&mut Connection)) -> Vec
         "the performance trace is on"
     );
     let served = serve_page("test-record", exchanges);
-    let log: Arc<EventLog> = records::start_writer(served.config.path());
     let mut connection = served.open();
     body(&mut connection);
     served.finish();
-    log.flush().unwrap();
+    served.log.flush().unwrap();
     let calls = events_of(served.config.path());
     use_host_event_log(None);
     calls
@@ -76,6 +75,12 @@ fn an_endpoint_request_is_an_event_while_the_trace_is_off() {
         vec![
             exchange("status.get", json!({"name": "core.layout"}), Value::Null),
             exchange("status.watch", json!({"name": "core.layout"}), Value::Null),
+            // The close of the connection ends its watch, so the endpoint sends this unwatch to the page.
+            exchange(
+                "status.unwatch",
+                json!({"name": "core.layout"}),
+                Value::Null,
+            ),
         ],
         |connection| {
             request(connection, 1, "windows.list", Value::Null);
@@ -159,4 +164,51 @@ fn the_arguments_of_an_endpoint_event_are_cut_at_the_bound() {
         args.len()
     );
     assert_eq!(calls[0]["fields"]["truncated"], true);
+}
+
+// contract: endpoint.record.end-is-an-event
+#[test]
+fn the_end_of_a_connection_is_an_event_after_the_unwatch_of_its_watch() {
+    let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
+    let served = serve_page(
+        "test-record",
+        vec![
+            exchange("status.watch", json!({"name": "core.layout"}), Value::Null),
+            exchange(
+                "status.unwatch",
+                json!({"name": "core.layout"}),
+                Value::Null,
+            ),
+        ],
+    );
+    let mut connection = served.open();
+    request(
+        &mut connection,
+        1,
+        "status.watch",
+        json!({"window": "main", "name": "core.layout"}),
+    );
+    drop(connection);
+    // The release of the watch is answered at once by the case page, so the end is stored well within the bound.
+    let ends = records::await_events(
+        &served.log,
+        served.config.path(),
+        "host.endpoint.end",
+        1,
+        std::time::Duration::from_secs(10),
+    );
+    assert!(
+        served.page.exhausted(),
+        "the end was stored before the unwatch of the page"
+    );
+    assert_eq!(ends.len(), 1, "{ends:?}");
+    assert_eq!(ends[0]["layer"], "host", "{ends:?}");
+    assert_eq!(ends[0]["level"], "debug", "{ends:?}");
+    assert_eq!(
+        ends[0]["fields"],
+        json!({"subscriptions": 1, "failed": 0}),
+        "{ends:?}"
+    );
+    served.finish();
+    use_host_event_log(None);
 }

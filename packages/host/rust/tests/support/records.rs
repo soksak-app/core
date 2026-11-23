@@ -38,6 +38,43 @@ pub fn await_text(writer: &EventLog, config: &Path, text: &str) -> String {
     }
 }
 
+/// The events named `name` that the writer stored in `config`, once there are at least `count` of them. The writer tells each batch
+/// that it wrote (`set_on_write`), and the events are read again after each batch. An event that has not come within `bound` fails
+/// the test with the names of the events that the writer stored, so a missing event is an assertion and not the limit of the runner.
+pub fn await_events(
+    writer: &EventLog,
+    config: &Path,
+    name: &str,
+    count: usize,
+    bound: Duration,
+) -> Vec<Value> {
+    let (wrote, written) = std::sync::mpsc::sync_channel::<()>(1);
+    writer.set_on_write(Box::new(move |_, _| {
+        let _ = wrote.try_send(());
+    }));
+    let deadline = std::time::Instant::now() + bound;
+    loop {
+        writer.flush().unwrap();
+        let events = read_events(&event_log_path(config));
+        let found: Vec<Value> = events
+            .iter()
+            .filter(|event| event["event"] == name)
+            .cloned()
+            .collect();
+        if found.len() >= count {
+            return found;
+        }
+        let left = deadline.saturating_duration_since(std::time::Instant::now());
+        if written.recv_timeout(left).is_err() {
+            let names: Vec<&Value> = events.iter().map(|event| &event["event"]).collect();
+            panic!(
+                "{} of {count} events {name} within {bound:?}; the writer stored {names:?}",
+                found.len()
+            );
+        }
+    }
+}
+
 /// The events of a process of the host: the lines of the main file at `path` and, when it exists, of the debug file beside it, in
 /// the order of `seq` (the writer assigns `seq` across both files).
 pub fn read_events(path: &Path) -> Vec<Value> {
