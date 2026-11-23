@@ -68,6 +68,7 @@ A terminal tab that runs an agent CLI takes these parameters of `core.layout.ope
 
 - `program`: the name or the path of the agent CLI. Absent means that the tab starts the shell, as before.
 - `args`: an array of texts, the arguments of the program. Absent means an empty array.
+- `directory`: an absolute path, the folder in which the session starts.
 - `role`: `null` or an agent role identifier. A tab with a role has its role file written before the launch ([role file](#role-file)), and its first message carries the identity.
 
 Core passes `args` to `program` as given and adds no argument. A `role` without a `program` is refused with `role requires program`, and `args` without a `program` is refused with `args require program`; in both cases no program starts.

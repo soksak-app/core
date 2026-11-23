@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1106: `surface.params`가 이름하지 않은 tab 인자는 알 수 없는 command 인자처럼 새 탭을 실패시키고 저장된 탭을 placeholder로 열며, terminal tab의 시작 인자가 `directory`를 이름한다. 검증: `tab-params.test.mjs`의 Red, 그 뒤 Green.
 - F1120: Rust sok library는 `platform::register`로 platform을 등록하고, Rust app update 테스트는 update와 relaunch가 platform wait가 돌아온 뒤 애플리케이션을 시작하는지 확인한다. 검증: update의 wait를 없앤 Red, 그 뒤 app update 테스트 10개의 Green.
 - F1115: endpoint가 window에 보낸 request가 10초 뒤에도 결과가 없으면 두 host에서 place `endpoint window request`의 error record가 된다. request는 계속 기다린다. 검증: 두 host record 테스트의 Red, 그 뒤 Green.
 - F1114-2: 각 host의 테스트는 page가 닫힌 연결의 해제를 거부할 때 `host.endpoint.end`의 `failed: 1`과 place `endpoint release`의 오류 record를 읽는다. 검증: count와 record를 없앤 Red, 그 뒤 두 host의 Green.

@@ -24,3 +24,10 @@ test("a stored tab whose params do not match its plugin states the reason for it
   assert.equal(storedParamsProblem("plain", "0.0.6", null, { path: "x" }),
     "plain 0.0.6 탭의 인자가 선언과 맞지 않습니다: plugin plain declares no tab params");
 });
+
+test("params with a member that the declaration does not name do not match it, in a new tab and in a stored tab", () => {
+  assert.throws(() => checkTabParams("probe", declaration, { path: "notes.md", directory: "/tmp" }),
+    /^Error: params do not match probe surface.params: unknown parameter directory$/);
+  assert.equal(storedParamsProblem("probe", "0.0.2", declaration, { path: "notes.md", directory: "/tmp" }),
+    "probe 0.0.2 탭의 인자가 선언과 맞지 않습니다: params do not match probe surface.params: unknown parameter directory");
+});

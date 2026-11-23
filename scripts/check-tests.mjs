@@ -1600,6 +1600,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1106",
+    implementation: [{ file: "packages/workbench/tab-params.js", symbol: "function mismatch(plugin, declaration, params) {" }],
+    tests: [{ file: "packages/workbench/test/tab-params.test.mjs", id: "params with a member that the declaration does not name do not match it, in a new tab and in a stored tab" }],
+    expected: "A tab parameter that the properties of surface.params do not name fails a new tab and opens a stored tab as a placeholder with the reason.",
+    levels: ["unit"],
+  },
+  {
     id: "F1115",
     implementation: [
       { file: "packages/host/go/src/endpoint.go", symbol: "func (e *Endpoint) pageRequest(ctx context.Context, window, method string, params json.RawMessage) (json.RawMessage, error) {" },

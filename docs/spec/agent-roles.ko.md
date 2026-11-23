@@ -68,6 +68,7 @@ terminal tab이 agent CLI를 실행할 때 `core.layout.open`의 `params`에 다
 
 - `program`: agent CLI의 이름 또는 경로. 없으면 tab은 이전과 같이 shell을 시작한다.
 - `args`: 텍스트의 배열이며 program의 인자다. 없으면 빈 배열이다.
+- `directory`: 절대 경로이며, session이 시작하는 folder다.
 - `role`: `null` 또는 agent role 식별자. role이 있는 tab은 launch 전에 role 파일을 쓰며([role 파일](#role-file)), 첫 message가 identity를 싣는다.
 
 core는 `args`를 `program`에 그대로 넘기며 인자를 더하지 않는다. `program` 없이 `role`이 오면 `role requires program`으로, `program` 없이 `args`가 오면 `args require program`으로 거부하며, 두 경우 모두 어떤 program도 시작하지 않는다.
