@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1118-1: The core version is 0.0.50 in every package and crate manifest, Info.plist, Tauri file, Go and pkg-config declaration, the six workspace entries of Cargo.lock and scripts/check-versions.mjs.
 - F1114-4: The endpoint counts the connections that ended, and the endpoint page harnesses wait on that count, because the writer queue can refuse `host.endpoint.end`; a wait for events fails at once when the writer stores `log.dropped`. Verification: Red of the unwatch bound test under `make repeat-go` (1 of 8 copies), then Green of 800 runs and of the endpoint tests of both hosts with and without diagnostics.
 - F1116-1: The app update tests on the real platform check the result, the one start of the bundle and the return of `cmd.Wait`, and judge no state of the process, because the kernel posts `NOTE_EXIT` before the process becomes a zombie; the platform wait test fails at the start when the wait was not entered and returned. Verification: Red of the platform wait test with the waits removed, then Green of the package tests.
 - F1114-3: The shipped event catalog copy and the generated class tables name `host.endpoint.end`, and the diagnostics subscriber case declares its closing `status.unwatch`. Verification: Red of the release run of F1114-1, then Green of the catalog and class table tests and of the Rust endpoint files with the diagnostics feature.

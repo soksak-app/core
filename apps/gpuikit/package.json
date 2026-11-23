@@ -1,6 +1,6 @@
 {
   "name": "@soksak/gpuikit",
-  "version": "0.0.49",
+  "version": "0.0.50",
   "private": true,
   "type": "module",
   "description": "GPUI application hosting the workbench with native webview surfaces.",
