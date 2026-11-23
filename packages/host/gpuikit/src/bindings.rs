@@ -751,3 +751,7 @@ fn dispatch(
     };
     Ok(value)
 }
+
+#[cfg(test)]
+#[path = "../tests/bindings/bindings_test.rs"]
+mod bindings_test;

@@ -11,3 +11,6 @@ mod darwin;
 
 #[cfg(target_os = "macos")]
 pub(crate) use darwin::*;
+
+#[cfg(target_os = "macos")]
+pub use darwin::window_notifications;

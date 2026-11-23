@@ -3,6 +3,10 @@
 
 [한국어](CHANGELOG.ko.md)
 
+## 2026-11-24
+
+- F1136-1: The host test runner checks gpuikit as the fourth host: the Rust language host library and the Rust sok serve both Rust hosts, the GPUI framework adapter declares each `all` case of its port, and `make test-gpuikit` runs its contract.
+
 ## 2026-11-23
 
 - F1125-2: Core 0.0.51 is released with the three application zips and the five package releases.

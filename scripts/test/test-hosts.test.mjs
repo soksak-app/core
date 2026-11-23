@@ -61,6 +61,7 @@ function hosts({ go = GO, rust = RUST, goRuns, rustRuns } = {}) {
     { name: 'wailsv3', language: 'go', ...wails, items: [], runs: goRuns ?? [owners(GO_OWNER, [['TestShared', 'pass'], ['TestWailsOnly', 'pass']])] },
     { name: 'tauriv2', language: 'rust', ...tauri, items: [], runs: rustRuns ?? [owners('.', [['shared', 'pass']])] },
     { name: 'mygo', language: 'go', ...parseDeclarations(MYGO, 'go', `${MYGO_OWNER}/mygo_test.go`), items: [], runs: [owners(MYGO_OWNER, [['TestShared', 'pass']])] },
+    { name: 'gpuikit', language: 'rust', ...parseDeclarations(rust, 'rust', 'gpuikit_test.rs'), items: [], runs: rustRuns ?? [owners('.', [['shared', 'pass']])] },
   ];
 }
 
@@ -71,7 +72,7 @@ test('the scope all covers every host, and a list of hosts names each host with 
     '| `a.one` | One host does this. | wailsv3 only: the framework owns it |',
     '| `a.two` | Two hosts do this. | wailsv3, tauriv2 only: a main web view |',
   ].join('\n')));
-  assert.deepEqual([...cases.get('a.every').hosts].sort(), ['mygo', 'tauriv2', 'wailsv3']);
+  assert.deepEqual([...cases.get('a.every').hosts].sort(), ['gpuikit', 'mygo', 'tauriv2', 'wailsv3']);
   assert.deepEqual(cases.get('a.one').hosts, ['wailsv3']);
   assert.deepEqual([...cases.get('a.two').hosts].sort(), ['tauriv2', 'wailsv3']);
   const goHosts = parseContractCases(section('| `a.go` | Each Go host does this. | wailsv3, mygo only: a reason |'));
@@ -97,7 +98,7 @@ test('host contract passes when each host runs a passing test for every case in 
 
 test('single-host audit keeps shared cases while limiting required coverage to the selected host', () => {
   const cases = parseContractCases(SPEC);
-  assert.deepEqual(cases.get('area.shared').hosts, ['wailsv3', 'tauriv2', 'mygo']);
+  assert.deepEqual(cases.get('area.shared').hosts, ['wailsv3', 'tauriv2', 'mygo', 'gpuikit']);
   const { errors, covered } = auditHostContract(cases, [
     { name: 'tauriv2', language: 'rust', ...parseDeclarations(RUST, 'rust', 'tauri_test.rs'), items: [], runs: [owners('.', [['shared', 'pass']])] },
   ], { selectedHosts: ['tauriv2'] });
@@ -372,10 +373,13 @@ test('every contract case of each host scope has a declaring test in the current
   const mygo = sourcesOf(['packages/host/go', 'packages/host/mygo', 'packages/sok/go'], '_test.go');
   const tauri = sourcesOf(['packages/host/rust/tests', 'packages/host/rust/src', 'packages/host/tauriv2/tests', 'packages/host/tauriv2/src',
     'packages/sok/rust/tests', 'packages/sok/rust/src'], '.rs');
+  const gpuikit = sourcesOf(['packages/host/rust/tests', 'packages/host/rust/src', 'packages/host/gpuikit/tests', 'packages/host/gpuikit/src',
+    'packages/sok/rust/tests', 'packages/sok/rust/src'], '.rs');
   const { declared } = auditDeclarations(cases, [
     { name: 'wailsv3', language: 'go', ...wails },
     { name: 'tauriv2', language: 'rust', ...tauri },
     { name: 'mygo', language: 'go', ...mygo },
+    { name: 'gpuikit', language: 'rust', ...gpuikit },
   ]);
   assert.deepEqual(uncoveredCases(cases, declared), []);
 });
@@ -404,8 +408,8 @@ test('a declaration takes its result only from the items of its own owner', () =
   const body = 'package tests\n\n// contract: area.shared\nfunc TestShared(t *testing.T) {}\n';
   const tests = [...parseDeclarations(body, 'go', `${host}/a_test.go`).tests, ...parseDeclarations(body, 'go', `${sok}/a_test.go`).tests];
   const wails = { name: 'wailsv3', language: 'go', tests, errors: [], items: [], runs: [owners(host, [['TestShared', 'pass']])] };
-  const [, tauri, mygo] = hosts({ go: body });
-  const { errors } = auditHostContract(parseContractCases(ONE_CASE), [wails, tauri, mygo]);
+  const [, tauri, mygo, gpuikit] = hosts({ go: body });
+  const { errors } = auditHostContract(parseContractCases(ONE_CASE), [wails, tauri, mygo, gpuikit]);
   assert.deepEqual(errors, [`wailsv3: ${sok}/a_test.go:4 TestShared (area.shared) did not run`]);
 });
 
@@ -416,8 +420,8 @@ test('owners of one run do not merge: a failing owner reports its own declaratio
   const tests = [...parseDeclarations(body, 'go', `${host}/a_test.go`).tests, ...parseDeclarations(body, 'go', `${sok}/a_test.go`).tests];
   const runs = [new Map([[host, new Map([['TestShared', 'pass']])], [sok, new Map([['TestShared', 'fail']])]])];
   const wails = { name: 'wailsv3', language: 'go', tests, errors: [], items: [], runs };
-  const [, tauri, mygo] = hosts({ go: body });
-  const { errors } = auditHostContract(parseContractCases(ONE_CASE), [wails, tauri, mygo]);
+  const [, tauri, mygo, gpuikit] = hosts({ go: body });
+  const { errors } = auditHostContract(parseContractCases(ONE_CASE), [wails, tauri, mygo, gpuikit]);
   assert.deepEqual(errors, [`wailsv3: ${sok}/a_test.go:4 TestShared (area.shared) reported fail`]);
 });
 
@@ -470,10 +474,10 @@ test('the static audit reports each case of a host scope that no test declares',
   const wails = parseDeclarations(GO, 'go', `${GO_OWNER}/wails_test.go`);
   const tauri = parseDeclarations('// contract: area.shared\n#[test]\nfn shared() {}\n', 'rust', 'tauri_test.rs');
   const mygo = parseDeclarations(MYGO, 'go', `${MYGO_OWNER}/mygo_test.go`);
-  const { declared } = auditDeclarations(cases, [staticHost('wailsv3', 'go', wails), staticHost('tauriv2', 'rust', tauri), staticHost('mygo', 'go', mygo)]);
+  const { declared } = auditDeclarations(cases, [staticHost('wailsv3', 'go', wails), staticHost('tauriv2', 'rust', tauri), staticHost('mygo', 'go', mygo), staticHost('gpuikit', 'rust', tauri)]);
   assert.deepEqual(uncoveredCases(cases, declared), []);
   const missing = parseDeclarations('// contract: area.shared\n#[test]\nfn shared() {}\n', 'rust', 'tauri_test.rs');
-  const partial = auditDeclarations(cases, [staticHost('wailsv3', 'go', parseDeclarations('package tests\n', 'go', 'w_test.go')), staticHost('tauriv2', 'rust', missing), staticHost('mygo', 'go', mygo)]);
+  const partial = auditDeclarations(cases, [staticHost('wailsv3', 'go', parseDeclarations('package tests\n', 'go', 'w_test.go')), staticHost('tauriv2', 'rust', missing), staticHost('mygo', 'go', mygo), staticHost('gpuikit', 'rust', missing)]);
   assert.deepEqual(uncoveredCases(cases, partial.declared), ['wailsv3 declares no test for contract case area.shared', 'wailsv3 declares no test for contract case area.wails-only']);
 });
 
@@ -632,4 +636,30 @@ test('a case with the scope e2e only needs its window check file to declare it',
   assert.deepEqual(e2eDeclarationErrors(cases, () => '// contract: c.d, a.b\nimport x'), []);
   assert.deepEqual(e2eDeclarationErrors(cases, () => '// contract: c.d\n'), ['e2e/a.test.mjs declares no contract case a.b']);
   assert.deepEqual(e2eDeclarationErrors(cases, () => null), ['contract case a.b names the window check e2e/a.test.mjs, which does not exist']);
+});
+
+// F1136: gpuikit is the fourth host. Like the two Go hosts, the two Rust hosts run the Rust language host library and the Rust sok, so
+// a test of those sources declares a case of either Rust host, and each Rust host counts only the cases of its own scope.
+const rustTest = (name, ...ids) => `// contract: ${ids.join(', ')}\n#[test]\nfn ${name}() {}\n`;
+const rustLibraryTest = (name, ...ids) => parseDeclarations(rustTest(name, ...ids), 'rust', 'packages/host/rust/tests/a_test.rs', 'packages/host/rust');
+const gpuikitAdapterTest = (name, ...ids) => parseDeclarations(rustTest(name, ...ids), 'rust', 'packages/host/gpuikit/tests/a_test.rs', 'packages/host/gpuikit');
+
+test('a test of the Rust language sources declares a case of either Rust host, and its own host counts only the cases of its scope (F1136)', { timeout: 1000 }, () => {
+  const cases = parseContractCases(SCOPES);
+  const { errors, declared } = auditDeclarations(cases, [{ name: 'gpuikit', language: 'rust', ...rustLibraryTest('both', 'area.tauri', 'area.shared') }]);
+  assert.deepEqual(errors, []);
+  assert.deepEqual([...declared.get('gpuikit')], ['area.shared']);
+  const adapter = auditDeclarations(cases, [{ name: 'gpuikit', language: 'rust', ...gpuikitAdapterTest('tauri', 'area.tauri') }]);
+  assert.deepEqual(adapter.errors, ['gpuikit: packages/host/gpuikit/tests/a_test.rs:3 tauri declares area.tauri, which the specification limits to tauriv2']);
+});
+
+test('the Rust runs name their hosts: the library and sok runs serve tauriv2 and gpuikit, and each adapter run serves its own host (F1136)', { timeout: 1000 }, () => {
+  const byHost = (host) => RUST_RUNS.filter((run) => run.hosts.includes(host)).map((run) => run.packageName);
+  assert.ok(RUST_RUNS.every((run) => Array.isArray(run.hosts) && run.hosts.length > 0), 'every Rust run names its hosts');
+  assert.ok(byHost('gpuikit').includes('soksak-host-gpuikit'));
+  assert.ok(!byHost('gpuikit').includes('soksak-host-tauriv2'));
+  assert.ok(!byHost('tauriv2').includes('soksak-host-gpuikit'));
+  for (const shared of ['soksak-host', 'soksak-sok']) {
+    assert.ok(byHost('tauriv2').includes(shared) && byHost('gpuikit').includes(shared), `${shared} serves both Rust hosts`);
+  }
 });

@@ -427,7 +427,7 @@ TAURI_DEBUG_FEATURES = diagnostics,dev
 WAILS_DEBUG_TAGS     = diagnostics dev
 # The declared core release candidate is the RELEASE constant of scripts/check-versions.mjs.
 DIAGNOSTIC_RELEASE := $(filter 0.0.%,$(shell sed -n 's/^export const RELEASE = "\(.*\)";$$/\1/p' scripts/check-versions.mjs))
-.PHONY: build-native build-sok build-fixture-registry build-fixture-registry-from-sok copy-frontend-browser run-browser copy-frontend-wailsv3 copy-frontend-tauriv2 copy-frontend-mygo copy-frontend-gpuikit build-gpuikit build-gpuikit-release test-wailsv3 test-tauriv2 test-mygo test-hosts check-release-wailsv3 check-release-tauriv2 check-release-mygo check-rust-format check-rust-clippy check-go-format run-tauriv2 run-tauriv2-release build-tauriv2 build-tauriv2-release run-wailsv3 run-wailsv3-release build-wailsv3 build-wailsv3-release run-mygo run-mygo-release build-mygo build-mygo-release test-app test-app-capture-input-closetest-app-host-go test-app-host-go-library test-app-activation test-app-section-design test-app-activity-icons benchmark-input-latency measure-examples-size run-tauriv2 run-tauriv2-release run-wailsv3 run-wailsv3-release test-app
+.PHONY: build-native build-sok build-fixture-registry build-fixture-registry-from-sok copy-frontend-browser run-browser copy-frontend-wailsv3 copy-frontend-tauriv2 copy-frontend-mygo copy-frontend-gpuikit build-gpuikit build-gpuikit-release test-wailsv3 test-tauriv2 test-mygo test-gpuikit test-hosts check-release-wailsv3 check-release-tauriv2 check-release-mygo check-rust-format check-rust-clippy check-go-format run-tauriv2 run-tauriv2-release build-tauriv2 build-tauriv2-release run-wailsv3 run-wailsv3-release build-wailsv3 build-wailsv3-release run-mygo run-mygo-release build-mygo build-mygo-release test-app test-app-capture-input-closetest-app-host-go test-app-host-go-library test-app-activation test-app-section-design test-app-activity-icons benchmark-input-latency measure-examples-size run-tauriv2 run-tauriv2-release run-wailsv3 run-wailsv3-release test-app
 
 # rustup installs cargo in $(CARGO_HOME)/bin, which is ~/.cargo/bin when CARGO_HOME is not set, and adds the path to
 # the shell profile. The shell of make does not read the profile, and a hosted runner sets CARGO_HOME outside HOME.
@@ -711,6 +711,10 @@ test-wailsv3: check-host-callbacks check-host-api build-native build-native-test
 
 test-tauriv2: check-cargo build-native build-native-tests copy-frontend-tauriv2
 	@$(CARGO_ENV) node scripts/test-hosts.mjs --host tauriv2
+
+# The contract run of the gpuikit host: the Rust language host library, the Rust sok and the GPUI framework adapter.
+test-gpuikit: check-cargo build-native build-native-tests
+	@$(CARGO_ENV) node scripts/test-hosts.mjs --host gpuikit
 
 # The contract run of the mygo host, and the unit tests of its workbench and of its application.
 test-mygo: build-native-mygo build-native-tests copy-frontend-mygo

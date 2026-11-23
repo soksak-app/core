@@ -20,6 +20,7 @@ pub use frontend::Frontend;
 use gpui::{App, Styled as _};
 use gpui_kit as gpui;
 pub use menu::key_equivalent;
+pub use platform::window_notifications;
 use soksak_host::assets::Assets;
 use soksak_host::framework::{AppHandle, BlockingBody, BlockingTask};
 use soksak_host::{RunEvent, Setup};

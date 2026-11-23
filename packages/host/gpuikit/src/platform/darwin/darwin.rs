@@ -390,25 +390,11 @@ static LISTENERS: std::sync::OnceLock<
 static OBSERVED: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<usize>>> =
     std::sync::OnceLock::new();
 
-/// Observes the resize, move, key and close notifications of the window and reports them as port events. The
-/// observations live as long as the window; a listener that ends leaves its calls unused.
-pub(crate) fn observe_window(
-    window: *mut c_void,
-    listener: Box<dyn Fn(&WindowEvent) + Send + Sync>,
-) {
-    let key = window as usize;
-    crate::frontend::locked(LISTENERS.get_or_init(Default::default), "window listeners")
-        .entry(key)
-        .or_default()
-        .push(listener);
-    let mut observed =
-        crate::frontend::locked(OBSERVED.get_or_init(Default::default), "observed windows");
-    if !observed.insert(key) {
-        return;
-    }
+/// The AppKit notifications of a window that the adapter observes, each with the port event that it reports.
+pub fn window_notifications() -> Vec<(&'static objc2_foundation::NSString, WindowEvent)> {
+    // SAFETY: the notification names are constant NSString objects of AppKit that live as long as the process.
     unsafe {
-        let center = objc2_foundation::NSNotificationCenter::defaultCenter();
-        for (name, event) in [
+        vec![
             (
                 objc2_app_kit::NSWindowDidResizeNotification,
                 WindowEvent::Resized,
@@ -429,7 +415,29 @@ pub(crate) fn observe_window(
                 objc2_app_kit::NSWindowWillCloseNotification,
                 WindowEvent::Destroyed,
             ),
-        ] {
+        ]
+    }
+}
+
+/// Observes the resize, move, key and close notifications of the window and reports them as port events. The
+/// observations live as long as the window; a listener that ends leaves its calls unused.
+pub(crate) fn observe_window(
+    window: *mut c_void,
+    listener: Box<dyn Fn(&WindowEvent) + Send + Sync>,
+) {
+    let key = window as usize;
+    crate::frontend::locked(LISTENERS.get_or_init(Default::default), "window listeners")
+        .entry(key)
+        .or_default()
+        .push(listener);
+    let mut observed =
+        crate::frontend::locked(OBSERVED.get_or_init(Default::default), "observed windows");
+    if !observed.insert(key) {
+        return;
+    }
+    unsafe {
+        let center = objc2_foundation::NSNotificationCenter::defaultCenter();
+        for (name, event) in window_notifications() {
             let block = block2::RcBlock::new(
                 move |note: std::ptr::NonNull<objc2_foundation::NSNotification>| {
                     let note = note.as_ptr();

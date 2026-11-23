@@ -1,4 +1,4 @@
-// Checks that the hosts (Wails, Tauri and mygo) run the contract cases of the host specification at the same level.
+// Checks that the hosts (Wails, Tauri, mygo and gpuikit) run the contract cases of the host specification at the same level.
 //
 // The contract cases are defined by the "Contract cases" table of docs/spec/host-contract.md. The test function of each host declares the case it runs with the line
 // `// contract: <id>[, <id>]` right above it. The dynamic check runs the tests of each host in the default, diagnostics and development
@@ -18,10 +18,13 @@ import { temporaryFolder } from './temporary-folder.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const SPEC = 'docs/spec/host-contract.md';
-const HOSTS = ['wailsv3', 'tauriv2', 'mygo'];
+const HOSTS = ['wailsv3', 'tauriv2', 'mygo', 'gpuikit'];
 // Both Go hosts run the Go language host library and the Go sok, so a test of those sources may declare a case of either host.
 const GO_HOSTS = ['wailsv3', 'mygo'];
 const GO_LANGUAGE_OWNER = /^packages\/(host\/go|sok\/go)(\/|$)/;
+// Both Rust hosts run the Rust language host library and the Rust sok, so a test of those sources may declare a case of either host.
+const RUST_HOSTS = ['tauriv2', 'gpuikit'];
+const RUST_LANGUAGE_OWNER = /^packages\/(host\/rust|sok\/rust)(\/|$)/;
 const CASE_ID = /^[a-z][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)+$/;
 
 /**
@@ -204,9 +207,10 @@ function statusOf(test, language, runs) {
   return statuses.includes('skip') ? 'skip' : 'pass';
 }
 
-/** Whether a test of the Go language sources, which both Go hosts run, declares a case of the other Go host. */
-function declaresOfTheOtherGoHost(name, test, contract) {
-  return GO_HOSTS.includes(name) && GO_LANGUAGE_OWNER.test(test.owner) && contract.hosts.some((host) => GO_HOSTS.includes(host));
+/** Whether a test of the language sources that the hosts of one language run declares a case of another host of that language. */
+function declaresOfTheOtherLanguageHost(name, test, contract) {
+  const shared = (hosts, owner) => hosts.includes(name) && owner.test(test.owner) && contract.hosts.some((host) => hosts.includes(host));
+  return shared(GO_HOSTS, GO_LANGUAGE_OWNER) || shared(RUST_HOSTS, RUST_LANGUAGE_OWNER);
 }
 
 /**
@@ -231,7 +235,7 @@ export function auditDeclarations(cases, hosts) {
         const contract = cases.get(id);
         if (!contract) errors.push(`${where} declares undefined contract case ${id}`);
         else if (contract.hosts.includes(host.name)) declared.get(host.name).add(id);
-        else if (!declaresOfTheOtherGoHost(host.name, test, contract)) errors.push(`${where} declares ${id}, which the specification limits to ${contract.hosts.join(', ')}`);
+        else if (!declaresOfTheOtherLanguageHost(host.name, test, contract)) errors.push(`${where} declares ${id}, which the specification limits to ${contract.hosts.join(', ')}`);
       }
     }
   }
@@ -442,20 +446,33 @@ export const GO_RUNS = {
 };
 
 // The feature host-test links the native host test library into the tests that start a child whose crash exception they serve.
+// hosts names the hosts whose contract a run serves: the Rust language host library and the Rust sok serve both Rust hosts, and
+// each framework adapter serves its own host.
 export const RUST_RUNS = [
-  { id: 'tauriv2-tests', packageName: 'soksak-host', features: 'host-test' },
-  { id: 'tauriv2-diagnostics-tests', packageName: 'soksak-host', features: 'diagnostics,host-test' },
-  { id: 'tauriv2-adapter-tests', packageName: 'soksak-host-tauriv2' },
-  { id: 'tauriv2-adapter-diagnostics-tests', packageName: 'soksak-host-tauriv2', features: 'diagnostics' },
-  { id: 'tauriv2-sok-tests', packageName: 'soksak-sok' },
-  { id: 'tauriv2-sok-diagnostics-tests', packageName: 'soksak-sok', features: 'diagnostics' },
-  { id: 'tauriv2-sok-dev-tests', packageName: 'soksak-sok', features: 'diagnostics,dev' },
+  { id: 'rust-tests', packageName: 'soksak-host', features: 'host-test', hosts: RUST_HOSTS },
+  { id: 'rust-diagnostics-tests', packageName: 'soksak-host', features: 'diagnostics,host-test', hosts: RUST_HOSTS },
+  { id: 'tauriv2-adapter-tests', packageName: 'soksak-host-tauriv2', hosts: ['tauriv2'] },
+  { id: 'tauriv2-adapter-diagnostics-tests', packageName: 'soksak-host-tauriv2', features: 'diagnostics', hosts: ['tauriv2'] },
+  // test-seam exposes the window pointer of a view to the main-thread window test of the adapter (packages/host/gpuikit/Cargo.toml).
+  { id: 'gpuikit-adapter-tests', packageName: 'soksak-host-gpuikit', features: 'test-seam', hosts: ['gpuikit'] },
+  { id: 'gpuikit-adapter-diagnostics-tests', packageName: 'soksak-host-gpuikit', features: 'diagnostics,test-seam', hosts: ['gpuikit'] },
+  { id: 'rust-sok-tests', packageName: 'soksak-sok', hosts: RUST_HOSTS },
+  { id: 'rust-sok-diagnostics-tests', packageName: 'soksak-sok', features: 'diagnostics', hosts: RUST_HOSTS },
+  { id: 'rust-sok-dev-tests', packageName: 'soksak-sok', features: 'diagnostics,dev', hosts: RUST_HOSTS },
 ];
+
+/** The hosts of the Rust run whose id is `id`. */
+function runHosts(id) {
+  const run = RUST_RUNS.find((entry) => entry.id === id);
+  if (!run) throw new Error(`unknown Rust run ${id}`);
+  return run.hosts;
+}
 
 /** The source files in the Rust host and CLI crates, including files excluded by this target's cfg. */
 function rustSourceFiles() {
   return [...sources('packages/host/rust/tests', '.rs'), ...sources('packages/host/rust/src', '.rs'),
     ...sources('packages/host/tauriv2/tests', '.rs'), ...sources('packages/host/tauriv2/src', '.rs'),
+    ...sources('packages/host/gpuikit/tests', '.rs'), ...sources('packages/host/gpuikit/src', '.rs'),
     ...sources('packages/sok/rust/tests', '.rs'), ...sources('packages/sok/rust/src', '.rs')];
 }
 
@@ -524,7 +541,7 @@ function rustSourceDeclarations() {
 }
 
 /** The Rust crates of the hosts and the CLI, whose manifests declare their test targets. */
-const RUST_CRATES = ['packages/host/rust', 'packages/host/tauriv2', 'packages/sok/rust'];
+const RUST_CRATES = ['packages/host/rust', 'packages/host/tauriv2', 'packages/host/gpuikit', 'packages/sok/rust'];
 
 /**
  * The source files of the test targets that the manifests of the Rust crates declare with `harness = false`, as paths from the
@@ -550,7 +567,7 @@ export function harnessLessTestFiles(root = ROOT, crates = RUST_CRATES) {
 
 /** The declarations of the test sources of one host, read without running test bodies. */
 function parseHostSources(name, rustItems = []) {
-  if (name === 'tauriv2') {
+  if (RUST_HOSTS.includes(name)) {
     const selected = selectRustDeclarations(rustItems, rustSourceDeclarations());
     return { language: 'rust', tests: selected.tests, errors: selected.errors };
   }
@@ -569,8 +586,11 @@ function parseHostSources(name, rustItems = []) {
 
 /** The static check builds and lists selected Rust tests but does not execute test bodies. */
 function checkDeclarations(cases, rustItems, rustFailures = []) {
-  const hosts = HOSTS.map((name) => ({ name, ...parseHostSources(name, name === 'tauriv2' ? rustItems : []), items: name === 'tauriv2' ? rustItems : [] }));
-  hosts.find((host) => host.name === 'tauriv2').errors.push(...rustFailures);
+  const hosts = HOSTS.map((name) => {
+    const items = RUST_HOSTS.includes(name) ? rustItems.filter((item) => runHosts(item.run).includes(name)) : [];
+    return { name, ...parseHostSources(name, items), items };
+  });
+  for (const name of RUST_HOSTS) hosts.find((host) => host.name === name).errors.push(...rustFailures);
   const { errors, declared } = auditDeclarations(cases, hosts);
   errors.push(...uncoveredCases(cases, declared));
   errors.push(...e2eDeclarationErrors(cases, (path) => existsSync(join(ROOT, path)) ? readFileSync(join(ROOT, path), 'utf8') : null));
@@ -599,7 +619,7 @@ async function main(argv) {
     options: { 'go-ldflags': { type: 'string' }, 'cgo-ldflags': { type: 'string' }, host: { type: 'string' }, run: { type: 'string' }, only: { type: 'string' }, static: { type: 'boolean' } },
   });
   const cases = parseContractCases(readFileSync(join(ROOT, SPEC), 'utf8'));
-  if (values.host !== undefined && !HOSTS.includes(values.host)) throw new Error('--host must be wailsv3, tauriv2 or mygo');
+  if (values.host !== undefined && !HOSTS.includes(values.host)) throw new Error('--host must be wailsv3, tauriv2, mygo or gpuikit');
   if (values.host !== undefined && values.static) throw new Error('--host cannot be combined with --static');
   // --static checks declarations from the current compiler target. Rust test executables are built and listed, but never run;
   // each is removed once listed, so the seven runs hold one run of executables on the disk at a time.
@@ -634,7 +654,7 @@ export async function runRustRuns({ runs, cwd, env, write, concurrency, timeoutM
   const results = new Map();
   for (const run of runs) {
     const discovered = await discoverRust({ ...run, cwd, env, write, timeoutMs });
-    found.push(discovered);
+    found.push({ ...discovered, id: run.id });
     const tests = discovered.tests.filter(selected);
     if (tests.length === 0) continue;
     write(`RUN  ${tests.length} tests of ${run.id} with ${concurrency} at once, each limited to ${timeoutMs / 1000}s`);
@@ -658,11 +678,14 @@ async function runContract(values, cases, buildDir, write, concurrency) {
   const discoverRuns = (name) => (selectedHosts.includes(name)
     ? Promise.all(GO_RUNS[name]({ ldflags: values['go-ldflags'], cgoLdflags: values['cgo-ldflags'] }).filter((run) => run.id.includes(runText)).map((run) => discoverGo({ ...run, cwd: ROOT, buildDir, write, concurrency, timeoutMs: TEST_TIMEOUT_MS })))
     : Promise.resolve([]));
-  const rustRuns = selectedHosts.includes('tauriv2')
-    ? runRustRuns({ runs: RUST_RUNS.filter((entry) => entry.id.includes(runText)), cwd: ROOT, write, concurrency, timeoutMs: TEST_TIMEOUT_MS, selected })
+  // The Rust runs of the selected Rust hosts; a run that serves both builds and runs once.
+  const rustSelected = RUST_RUNS.filter((entry) => entry.id.includes(runText) && entry.hosts.some((host) => selectedHosts.includes(host)));
+  const rustRuns = rustSelected.length > 0
+    ? runRustRuns({ runs: rustSelected, cwd: ROOT, write, concurrency, timeoutMs: TEST_TIMEOUT_MS, selected })
     : Promise.resolve({ found: [], results: new Map() });
   const [wailsFound, mygoFound, rust] = await Promise.all([discoverRuns('wailsv3'), discoverRuns('mygo'), rustRuns]);
-  const found = { wailsv3: wailsFound, mygo: mygoFound, tauriv2: rust.found };
+  const rustOf = (host) => rust.found.filter((entry) => runHosts(entry.id).includes(host));
+  const found = { wailsv3: wailsFound, mygo: mygoFound, tauriv2: rustOf('tauriv2'), gpuikit: rustOf('gpuikit') };
   const goItems = [...wailsFound, ...mygoFound].flatMap((entry) => entry.tests).filter(selected);
   // A scoped run shows the tests it ran; the contract audit needs every test, so it belongs to the full run.
   if (only !== null && goItems.length + rust.results.size === 0) throw new Error(`no test name contains ${JSON.stringify(only)}`);
@@ -684,8 +707,8 @@ async function runContract(values, cases, buildDir, write, concurrency) {
   const hosts = [];
   for (const name of selectedHosts) {
     const own = found[name].flatMap((entry) => entry.tests);
-    const { language, tests, errors: sourceErrors } = parseHostSources(name, name === 'tauriv2' ? own : []);
-    // default: the Rust run of tauriv2 has no package checks.
+    const { language, tests, errors: sourceErrors } = parseHostSources(name, RUST_HOSTS.includes(name) ? own : []);
+    // default: the Rust runs have no package checks.
     const errors = [...found[name].flatMap((entry) => entry.failures), ...sourceErrors, ...(checked[name] ?? [])];
     for (const item of own) {
       if (results.get(item.name).status === 'timeout') errors.push(`${item.name} exceeded its limit of ${TEST_TIMEOUT_MS / 1000}s`);
