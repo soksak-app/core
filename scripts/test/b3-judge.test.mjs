@@ -108,7 +108,6 @@ test("a run outside the run conditions, a failed run, a missing run and an unkno
   record("S0", 1, "mygo").display.refreshRate = 60;
   record("S0", 2, "mygo").display.backingScale = 1;
   record("S0", 3, "mygo").start.swap.usedBytes = 536870912;
-  record("S1", 1, "mygo").start.fseventsdCores = 0.1;
   record("S1", 2, "wailsv3").failures.push("make measure-app-usage STATE=S1 exited with code 1");
   record("S1", 3, "tauriv2").values["G2-S0-frames"] = 0;
   record("S5", 1, "mygo").conditions["make benchmark-view-drag TRACE=0"].refreshRate = 60;
@@ -119,7 +118,6 @@ test("a run outside the run conditions, a failed run, a missing run and an unkno
   assert.deepEqual(failedLines(judgeSession(fixtureGoals(), session)), [
     "failed run 2 of mygo in S0: the backing scale of the window is 1, expected 2",
     "failed run 3 of mygo in S0: swap use 536870912 B is not below 0.5 of the swap total 1073741824 B",
-    "failed run 1 of mygo in S1: fseventsd uses 0.1 of a core, not below 0.1",
     "failed run 2 of wailsv3 in S1: make measure-app-usage STATE=S1 exited with code 1",
     "failed run 3 of tauriv2 in S1: it records G2-S0-frames, which is no value of S1",
     "failed run 2 of mygo in S5: the run records no conditions of its targets (undefined)",
@@ -176,7 +174,7 @@ function sessionMeeting(goals, path, rate = 120) {
         const values = Object.fromEntries(goals.values.filter((value) => value.scenario === scenario).map((value) => [value.id, reading(value)]));
         lines.push(JSON.stringify({
           scenario, run, application: name, values, failures: [],
-          start: { loadAverage: [1, 1, 1], swap: { usedBytes: 0, totalBytes: 1 << 30 }, fseventsdCores: 0 },
+          start: { loadAverage: [1, 1, 1], swap: { usedBytes: 0, totalBytes: 1 << 30 } },
           display: { refreshRate: rate, backingScale: goals.conditions.backingScale }, end: { loadAverage: [1, 1, 1] },
           conditions: Object.fromEntries(goals.values.filter((value) => value.scenario === scenario).map((value) => [value.target, {
             refreshRate: rate, backingScale: goals.conditions.backingScale, traceState: false, logPolicy: { lifecycle: "error", input: "error", call: "error", io: "error", frame: "error" },
@@ -230,7 +228,7 @@ test("a target of S9 reports a covered window and a target of any other scenario
 test("the judge refuses a session whose run records a covered window", () => {
   const goals = readGoals(readFileSync(GOALS_FILE, "utf8"), "performance-goals.json");
   const record = {
-    scenario: "S5", start: { loadAverage: [1, 1, 1], swap: { usedBytes: 0, totalBytes: 1 << 30 }, fseventsdCores: 0 },
+    scenario: "S5", start: { loadAverage: [1, 1, 1], swap: { usedBytes: 0, totalBytes: 1 << 30 } },
     display: { refreshRate: 120, backingScale: goals.conditions.backingScale }, end: { loadAverage: [1, 1, 1] },
     conditions: { "make benchmark-view-drag TRACE=0": {
       refreshRate: 120, backingScale: goals.conditions.backingScale, window: goals.conditions.window, occluded: true, active: true,

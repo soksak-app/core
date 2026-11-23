@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import childProcess, { execFileSync, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { untilFolderState } from '@soksak/window-check/folder-wait.mjs';
+import { processes } from '@soksak/window-check/platform/platform.mjs';
 import { runCommand } from '../test-command.mjs';
 
 const node = process.execPath;
@@ -32,17 +33,14 @@ const testHangMs = 70_000;
 const forever = 'setInterval(() => {}, 1000)';
 
 // An ended process remains a zombie until its parent reaps it, and kill(pid, 0) on a zombie succeeds. So the judgment uses the state in the process table.
-// This file uses the function as imported, not childProcess.execFileSync, which other tests of this file replace.
 function assertEnded(pid) {
-  let state;
-  try {
-    state = execFileSync('ps', ['-o', 'stat=', '-p', String(pid)], { encoding: 'utf8' }).trim();
-  } catch (error) {
-    if (error.status === 1 && error.stdout === '') return;
-    throw error;
-  }
-  assert.match(state, /^Z/, `process ${pid} is running with state ${state}`);
+  const row = processes().find((entry) => entry.pid === pid);
+  if (row === undefined) return;
+  assert.equal(row.state, 'zombie', `process ${pid} is ${row.state}`);
 }
+
+// The members of the group pgid that run by the process table.
+const runningInGroup = (pgid) => processes().filter((row) => row.pgid === pgid && row.state === 'running');
 
 test('emits ordered start and terminal events with visible output', { timeout: testHangMs }, async () => {
   const events = [];
@@ -99,28 +97,23 @@ test('reports an absent executable as fail with an error', { timeout: testHangMs
 
 test('a refused SIGTERM at the limit to a group that holds only zombies still reports timeout', { timeout: 10000 }, async (t) => {
   // Injects the refusal of macOS for a group without a running member at the limit: the SIGTERM ends the leader, and the system answers
-  // EPERM because the group then holds only the zombie that the process table shows. The group has nothing to end, so the refusal is no
-  // signal failure.
+  // EPERM because the group then holds only the ended leader that the real process table shows. The group has nothing to end, so the
+  // refusal is no signal failure.
   const originalKill = process.kill;
-  const originalExecFileSync = childProcess.execFileSync;
   t.after(() => {
     process.kill = originalKill;
-    childProcess.execFileSync = originalExecFileSync;
   });
-  let group;
   process.kill = (pid, signal) => {
     if (pid < 0 && signal === 'SIGTERM') {
-      group = -pid;
       originalKill(pid, signal);
+      // The refusal is answered inside this synchronous call, so no exit event of the leader can arrive before it; the table is read
+      // until the leader has ended, which the SIGTERM causes at once.
+      while (runningInGroup(-pid).length > 0) {}
       const error = new Error('kill EPERM');
       error.code = 'EPERM';
       throw error;
     }
     return originalKill(pid, signal);
-  };
-  childProcess.execFileSync = (file, args, options) => {
-    if (file !== 'ps') return originalExecFileSync(file, args, options);
-    return `${group} ${group} Z\n`;
   };
   const [command, args] = task(forever);
   const result = await runCommand({ id: 'refused-kill', command, args, timeoutMs: 50, onEvent: () => {} });
@@ -312,15 +305,8 @@ test('ends its own leader when every process-group signal is refused', { timeout
     }
     return originalKill(pid, signal);
   };
-  // The children of this process by the process table. pgrep exits with 1 when no child matches, and it does not list itself.
-  const childrenOfThisProcess = () => {
-    try {
-      return execFileSync('pgrep', ['-P', String(process.pid)], { encoding: 'utf8' }).trim().split('\n');
-    } catch (error) {
-      if (error.status === 1 && error.stdout === '') return [];
-      throw error;
-    }
-  };
+  // The running children of this process by the process table.
+  const childrenOfThisProcess = () => processes().filter((row) => row.ppid === process.pid && row.state === 'running').map((row) => row.pid);
   let result;
   let childrenBefore;
   let childrenAfter;
@@ -397,19 +383,20 @@ test('rejects invalid arguments', { timeout: 2000 }, () => {
 });
 
 test('reports a refused group signal of the cleanup while a member of the group runs', { timeout: testHangMs }, async (t) => {
-  // Injects a member that this user cannot signal: the SIGTERM of the cleanup is refused with EPERM while the process table shows it
-  // running, so the cleanup after the exit of the leader cannot end the group, and the result names the member.
+  // Injects a member that this user cannot signal: the leader starts a member of its group that stays and exits, and the SIGTERM of the
+  // cleanup is refused with EPERM while the process table shows that member running, so the cleanup cannot end the group, and the
+  // result names the member.
+  const directory = await mkdtemp(join(tmpdir(), 'test-command-refused-'));
+  const pidFile = join(directory, 'pid');
   const originalKill = process.kill;
-  const originalExecFileSync = childProcess.execFileSync;
   let group;
-  t.after(() => {
+  t.after(async () => {
     process.kill = originalKill;
-    childProcess.execFileSync = originalExecFileSync;
+    if (group) {
+      try { process.kill(-group, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+    }
+    await rm(directory, { recursive: true, force: true });
   });
-  childProcess.execFileSync = (file, args, options) => {
-    if (file !== 'ps') return originalExecFileSync(file, args, options);
-    return `${group} ${group} S\n`;
-  };
   process.kill = (pid, signal) => {
     if (pid < 0) group = -pid;
     if (pid < 0 && signal === 'SIGTERM') {
@@ -420,10 +407,12 @@ test('reports a refused group signal of the cleanup while a member of the group 
     if (pid < 0 && signal === 0) return true;
     return originalKill(pid, signal);
   };
-  const result = await runCommand({ id: 'refused-cleanup', command: node, args: ['-e', 'process.exit(0)'], timeoutMs: hangMs, onEvent: () => {} });
+  const source = `const {spawn}=require('node:child_process'); const {writeFileSync}=require('node:fs'); const child=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'}); writeFileSync(${JSON.stringify(pidFile)},String(child.pid)); process.exit(0);`;
+  const result = await runCommand({ id: 'refused-cleanup', command: node, args: ['-e', source], timeoutMs: hangMs, onEvent: () => {} });
+  const member = Number(await readFile(pidFile, 'utf8'));
   assert.equal(result.status, 'fail', JSON.stringify(result));
   assert.equal(result.error.code, 'EPERM');
-  assert.match(result.error.message, new RegExp(`^SIGTERM to process group ${group}: kill EPERM; running: pid ${group} S$`));
+  assert.match(result.error.message, new RegExp(`^SIGTERM to process group ${group}: kill EPERM; running: pid ${member} running$`));
 });
 
 test('ends at its limit with the cause when a process outside its group keeps the output open', { timeout: testHangMs }, async (t) => {
@@ -446,28 +435,20 @@ test('ends at its limit with the cause when a process outside its group keeps th
   assert.match(result.error.message, /a process outside the group holds it$/);
 });
 
-test('counts a process group that holds only zombies as gone after a denied probe', { timeout: testHangMs }, async (t) => {
-  // Injects the measured state. For a group in which every member has ended but has not been reaped, kill(-pgid, sig) of macOS returns EPERM, and
-  // the process table shows that member as a zombie (Z).
+test('counts a process group without a running member as gone after a denied probe', { timeout: testHangMs }, async (t) => {
+  // Injects the refusal that macOS gives for a group in which every member has ended: kill(-pgid, sig) returns EPERM, and the real
+  // process table shows no running member of the group, because the leader exited.
   const originalKill = process.kill;
-  const originalExecFileSync = childProcess.execFileSync;
   t.after(() => {
     process.kill = originalKill;
-    childProcess.execFileSync = originalExecFileSync;
   });
-  let group;
   process.kill = (pid, signal) => {
     if (pid < 0) {
-      group = -pid;
       const error = new Error('kill EPERM');
       error.code = 'EPERM';
       throw error;
     }
     return originalKill(pid, signal);
-  };
-  childProcess.execFileSync = (file, args, options) => {
-    if (file !== 'ps') return originalExecFileSync(file, args, options);
-    return `    1     1 Ss\n${group + 1} ${group} Z\n`;
   };
   const result = await runCommand({ id: 'zombie-group', command: node, args: ['-e', 'process.exit(0)'], timeoutMs: hangMs, onEvent: () => {} });
   assert.equal(result.status, 'pass', JSON.stringify(result));
@@ -476,7 +457,7 @@ test('counts a process group that holds only zombies as gone after a denied prob
 });
 
 test('reads the members of a group from the real process table after a denied probe', { timeout: testHangMs }, async (t) => {
-  // Only the check is rejected, and the process table is read with the real ps. A descendant that remained at the first check appears running and disappears after the SIGKILL of the cleanup.
+  // Only the check is rejected, and the real process table is read. A descendant that remained at the first check appears running and disappears after the SIGKILL of the cleanup.
   const directory = await mkdtemp(join(tmpdir(), 'test-command-members-'));
   const pidFile = join(directory, 'pid');
   const originalKill = process.kill;

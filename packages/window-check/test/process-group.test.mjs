@@ -13,10 +13,10 @@ const MEMBER_SOURCE = "process.on('SIGTERM', () => {}); console.log(process.pid)
 const LEADER_SOURCE = `process.on('SIGTERM', () => {}); require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(MEMBER_SOURCE)}], { stdio: ['pipe', 'inherit', 'ignore'] });`;
 
 test("does not count a member that is exiting as running", () => {
-  // ps(1) marks a process that is trying to exit with the flag E in its state. The measured state of F292-58 was ?NE, which the zombie check
-  // (a state that starts with Z) did not recognize, so the exiting member counted as running and failed a passing test.
-  assert.deepEqual(runningMembers(10, [{ pid: 11, state: "?NE" }, { pid: 12, state: "SE" }, { pid: 13, state: "Z" }]), []);
-  assert.deepEqual(runningMembers(10, [{ pid: 14, state: "S" }, { pid: 15, state: "SE" }]), [{ pid: 14, state: "S" }]);
+  // The kernel marks a process that is trying to exit (P_WEXIT). The measured exiting member of F292-58 counted as running under a
+  // zombie-only check and failed a passing test.
+  assert.deepEqual(runningMembers(10, [{ pid: 11, state: "exiting" }, { pid: 13, state: "zombie" }]), []);
+  assert.deepEqual(runningMembers(10, [{ pid: 14, state: "running" }, { pid: 15, state: "exiting" }]), [{ pid: 14, state: "running" }]);
 });
 
 test("does not report a member that already received SIGKILL again at the exit of the leader", { timeout: 20000 }, async (t) => {
@@ -42,7 +42,7 @@ test("does not report a member that already received SIGKILL again at the exit o
   };
   const members = (group) => {
     const rows = groupMembers(group).filter((member) => member.pid !== memberPid || !afterKill);
-    if (afterKill) rows.push({ pid: memberPid, state: "R" });
+    if (afterKill) rows.push({ pid: memberPid, state: "running" });
     return rows;
   };
   const records = [];

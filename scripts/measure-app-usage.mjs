@@ -3,12 +3,12 @@
 // The host is the process whose command line has --config-dir DIR. The sidecars are the processes whose executable is under DIR/sidecars/.
 // The page and document processes come from sok windows and from sok status host.window of each window; a window whose host.window
 // reports pageProcess null has no main page and no page row. The WebKit GPU, networking and WebContent services belong to the application
-// whose host lists them in its launchd domain (launchctl print pid/<host>). A WebKit GPU or networking process (pgrep -f
-// com.apple.WebKit.GPU|Networking) that no application claims is printed as unattributed, and one that ends during the measurement leaves that list without an error. The memory of a process is its phys_footprint
+// whose host lists them in its launchd domain (launchctl print pid/<host>). A WebKit GPU or networking process (a process whose command line
+// holds com.apple.WebKit.GPU or com.apple.WebKit.Networking) that no application claims is printed as unattributed, and one that ends during the measurement leaves that list without an error. The memory of a process is its phys_footprint
 // and its phys_footprint_peak (footprint -p PID -f bytes); each footprint is read after the readings of every process settle by the rule of
 // G3 that scripts/footprints.mjs reads: two consecutive readings 5 seconds apart differ by less than 1,024 KB, and the reading is at least
 // 3 seconds after the last frame. The U7 records of the pointer step are read through scripts/frame-records.mjs. The CPU time of a
-// process is the CPU time that ps reports, read at two points INTERVAL seconds apart. The sidecars are summed apart from the application.
+// process is the CPU time of the process table (@soksak/window-check/platform/platform.mjs), read at two points INTERVAL seconds apart. The sidecars are summed apart from the application.
 //
 // --trace 0|1 sets the trace state with core.settings.change before the measurement (scripts/measure-trace.mjs); --trace frame-records,
 // which needs --step pointer, sets the trace state of the frame records (FRAME_RECORDS) for both moves of the pointer step. --state
@@ -63,6 +63,7 @@ import { connect } from "@soksak/client";
 import { Session } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEventErrors, untilEventLine } from "@soksak/window-check/event-log.mjs";
 import { readPolicy } from "@soksak/window-check/log-policy.mjs";
+import { processes } from "@soksak/window-check/platform/platform.mjs";
 import { launchdServicesOfResult } from "@soksak/window-check/stall-sample.mjs";
 import { catalogOf } from "./check-events.mjs";
 import { b3Conditions, b3End, writeB3Out } from "./b3-out.mjs";
@@ -115,31 +116,9 @@ export function cpuPercent(before, after, intervalSeconds) {
   return ((after - before) / intervalSeconds) * 100;
 }
 
-/** The output limit of the process table, whose command lines reach several MB on a machine with many extensions. */
-export const PROCESS_TABLE_BYTES = 64 * 1024 * 1024;
-
-/** Parses the rows of ps -axo pid=,command= into { pid, command }. */
-export function parseProcessTable(text) {
-  return text
-    .split("\n")
-    .filter((line) => line.trim() !== "")
-    .map((line) => {
-      const match = /^\s*(\d+)\s+(.*)$/.exec(line);
-      if (!match) throw new Error(`process row "${line}" has no pid`);
-      return { pid: Number(match[1]), command: match[2] };
-    });
-}
-
-/** Parses the rows of ps -axo pid=,time= into a map from pid to CPU seconds. */
-export function parseCpuSamples(text) {
-  const samples = new Map();
-  for (const line of text.split("\n")) {
-    if (line.trim() === "") continue;
-    const match = /^\s*(\d+)\s+(\S+)\s*$/.exec(line);
-    if (!match) throw new Error(`cpu sample row "${line}" has no pid and time`);
-    samples.set(Number(match[1]), parseCpuTime(match[2]));
-  }
-  return samples;
+/** Every process of the system as { pid, command }, read from the process table; `command` is the command line as one text. */
+export function processTable() {
+  return processes({ command: true }).map(({ pid, command }) => ({ pid, command }));
 }
 
 /** The lexical form of a path: doubled and trailing slashes removed. A launch command line can carry a doubled slash that the path does not need. */
@@ -962,28 +941,29 @@ async function toolOutput(command, args) {
   return outputOf(command, args, await execute(command, args));
 }
 
-/** The CPU seconds of every process, as a map from pid to seconds, from the result of ps -axo pid=,time=. */
-export function cpuSecondsOf(result) {
-  return parseCpuSamples(outputOf("ps", ["-axo", "pid=,time="], result));
+/**
+ * The CPU seconds of the process table rows `rows`, as a map from pid to seconds. A row without cpuSeconds, the CPU time of a process
+ * that the system does not give to this user, is left out.
+ */
+export function cpuSecondsOf(rows) {
+  return new Map(rows.filter((row) => row.cpuSeconds !== undefined).map(({ pid, cpuSeconds }) => [pid, cpuSeconds]));
 }
 
-/** The CPU seconds of every process, as a map from pid to seconds, read with ps -axo pid=,time=. */
+/** The CPU seconds of every process that this user can read, as a map from pid to seconds, read from the process table. */
 export async function readCpuSeconds() {
-  return cpuSecondsOf(await execute("ps", ["-axo", "pid=,time="]));
+  return cpuSecondsOf(processes({ cpuSeconds: true }));
 }
 
-/** The running WebKit GPU or networking processes (`name` GPU or Networking) of every application, as { pid, role }, from the result of pgrep -f com.apple.WebKit.<name>. pgrep exits with 1 when none runs. */
-export function webkitPidsOf(name, result) {
-  if (result.status === 1) return [];
-  if (result.error || result.status !== 0) throw new Error(`pgrep failed: ${result.error?.message ?? String(result.stderr).trim()}`);
-  return result.stdout.split("\n").filter((line) => line !== "").map((pid) => ({ pid: Number(pid), role: `webkit ${name.toLowerCase()}` }));
+/** The WebKit GPU or networking processes (`name` GPU or Networking) of the process table rows `table`, as { pid, role }: the rows whose command line holds com.apple.WebKit.<name>. */
+export function webkitPidsOf(name, table) {
+  const service = `com.apple.WebKit.${name}`;
+  return table.filter(({ command }) => command.includes(service)).map(({ pid }) => ({ pid, role: `webkit ${name.toLowerCase()}` }));
 }
 
 /** The running WebKit GPU and networking processes of every application, as { pid, role }. */
 async function webkitPids() {
-  const found = [];
-  for (const name of ["GPU", "Networking"]) found.push(...webkitPidsOf(name, await execute("pgrep", ["-f", `com.apple.WebKit.${name}`])));
-  return found;
+  const table = processTable();
+  return ["GPU", "Networking"].flatMap((name) => webkitPidsOf(name, table));
 }
 
 /** The host.window reply of a window through sok. */
@@ -1017,11 +997,11 @@ export function applicationRowsOf({ table, configDir, realPath, host, webkit }) 
 }
 
 /**
- * The processes of the application of the configuration folder configDir, read with ps and launchctl (applicationRowsOf). A missing or
+ * The processes of the application of the configuration folder configDir, read from the process table and with launchctl (applicationRowsOf). A missing or
  * duplicate host and a launchd domain that cannot be read are errors.
  */
 export async function applicationRows({ configDir }) {
-  const table = parseProcessTable(await toolOutput("ps", ["-axww", "-o", "pid=,command="]));
+  const table = processTable();
   const realPath = realpathSync(configDir);
   const host = applicationHost({ table, configDir, realPath });
   const webkit = await attributeWebKit([{ configDir, pid: host.pid }]);
@@ -1139,7 +1119,7 @@ export function unreadOutcome({ unread, last }) {
  * settleAfter also reads the settled footprints after the span as bytesAfter. span() is the interval of the CPU readings, by default
  * INTERVAL seconds (intervalWaitMs from the instant after the first CPU reading); marks.before() and marks.after() run right before the
  * first and right after the last CPU reading, and their results are returned as marks. The peak footprint of each process is read after
- * the last CPU reading. The processes are read with ps, pgrep, launchctl, footprint and sok, and the judgements are the functions of
+ * the last CPU reading. The processes are read from the process table and with launchctl, footprint and sok, and the judgements are the functions of
  * their results above.
  */
 export async function measureApps({
@@ -1153,7 +1133,7 @@ export async function measureApps({
     const shown = await windowStatuses(configDir, sok, errors);
     const { rows, errors: rowErrors } = await windowApplicationRows({ configDir, statuses: shown.statuses });
     errors.push(...rowErrors);
-    // The WebKit GPU and networking processes of the launchd domain belong to the application, so pgrep does not list them as unattributed.
+    // The WebKit GPU and networking processes of the launchd domain belong to the application, so webkitPids does not list them as unattributed.
     for (const row of rows.filter(({ attribution }) => attribution === "launchd domain")) claimed.add(row.pid);
     apps.push({ configDir, rows, windows: shown.windows });
   }

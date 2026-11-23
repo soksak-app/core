@@ -7,7 +7,7 @@ import { realpathSync } from "node:fs";
 
 import { hostProcess } from "../../../scripts/measure-app-usage.mjs";
 import { fresh } from "../../fixture.mjs";
-import { processTable } from "@soksak/window-check/process-table.mjs";
+import { processes } from "@soksak/window-check/platform/platform.mjs";
 import { failureWithSlowestPhase, phasedSession } from "../../reload-phases.mjs";
 import { b3Conditions, fixtureSettings } from "./b3-run.mjs";
 import { B3_SETTINGS } from "../measurements.mjs";
@@ -25,24 +25,21 @@ export const SPLIT_LOAD_ROUNDS = 32;
 export const SPLIT_LOAD_GROWTH_BOUND_KB = performanceGoalBound("SPLIT_LOAD_GROWTH_BOUND_KB", "below");
 
 /**
- * The resident set size (KB) of the host process of the configuration folder `configDir` in `table`, the output of
- * `ps -ax -o pid=,rss=,command=`: the one process whose command line has `--config-dir` of the folder (hostProcess of
+ * The resident set size (KB) of the host process of the configuration folder `configDir` in `rows`, the `{pid, command, residentKb}`
+ * rows of the process table: the one process whose command line has `--config-dir` of the folder (hostProcess of
  * scripts/measure-app-usage.mjs), so the host of a release bundle and of a debug build of any application is found alike. realPath is
- * the real path of the folder. A row without a pid and a size, no such host and two such hosts are errors.
+ * the real path of the folder. No such host, two such hosts and a host without a resident size are errors.
  */
-export function hostRssKbOf(table, configDir, realPath) {
-  const rows = table.split("\n").filter((line) => line.trim() !== "").map((line) => {
-    const match = /^\s*(\d+)\s+(\d+)\s+(.*)$/.exec(line);
-    if (!match) throw new Error(`process row "${line}" has no pid and resident size`);
-    return { pid: Number(match[1]), rss: Number(match[2]), command: match[3] };
-  });
+export function hostRssKbOf(rows, configDir, realPath) {
   const { pid } = hostProcess(rows, configDir, realPath);
-  return rows.find((row) => row.pid === pid).rss;
+  const size = rows.find((row) => row.pid === pid).residentKb;
+  if (size === undefined) throw new Error(`the host process ${pid} has no readable resident size`);
+  return size;
 }
 
 /** The resident set size (KB) of the host process of the configuration folder of the application now. */
 function hostRssKb(configDir) {
-  return hostRssKbOf(processTable("pid=,rss=,command="), configDir, realpathSync(configDir));
+  return hostRssKbOf(processes({ command: true, residentKb: true }), configDir, realpathSync(configDir));
 }
 
 /**

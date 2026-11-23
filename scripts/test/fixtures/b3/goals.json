@@ -4,7 +4,6 @@
   "conditions": {
     "backingScale": 2,
     "swapUseBelow": 0.5,
-    "fseventsdCoreBelow": 0.1,
     "window": { "width": 1200, "height": 760 },
     "scenarioWindows": { "S2": { "width": 760, "height": 614 } },
     "occludedScenarios": []

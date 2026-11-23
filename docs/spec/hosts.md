@@ -784,7 +784,6 @@ The judge applies these rules:
 | Runs of each application in a session | 7 |
 | Backing scale of each window | 2 |
 | Swap use at the start of a run | below 0.5 of the swap total |
-| CPU share of `fseventsd` at the start of a run | below 0.1 of a core |
 | Content size of the window of each scenario | 1200×760 points |
 | Content size of the window of S2 | 760×614 points |
 | Scenarios whose window is covered | S9 |

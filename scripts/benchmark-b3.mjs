@@ -65,8 +65,7 @@ import { createHash } from 'node:crypto';
 import { once } from 'node:events';
 import { appendFileSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { loadavg } from 'node:os';
-import { basename, join, resolve } from 'node:path';
-import { setTimeout as sleep } from 'node:timers/promises';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual, parseArgs } from 'node:util';
 import { connect } from '@soksak/client';
@@ -75,7 +74,6 @@ import { displayFailures, GOALS_FILE, readGoals, startConditionFailures, targetC
 import { readB3Out } from './b3-out.mjs';
 import { trusted } from '@soksak/window-check/accessibility.mjs';
 import { runPlan } from './test-app.mjs';
-import { parseCpuTime } from './measure-app-usage.mjs';
 import { FRAME_RECORDS, traceSettings } from './measure-trace.mjs';
 import { B3_MEASUREMENTS, B3_SETTINGS } from '../e2e/benchmark/measurements.mjs';
 
@@ -84,8 +82,6 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const SYSTEM = 'darwin';
 /** The platform of the releases that the applications install. */
 const PLATFORM = `${SYSTEM}-arm64`;
-/** The interval over which the CPU share of fseventsd is read before a run. */
-const FSEVENTSD_INTERVAL_S = 5;
 /** The applications of a session in the order of each round of runs: name, host and build. */
 const APPLICATIONS = [
   ['mygo', 'mygo', 'current'], ['wailsv3', 'wailsv3', 'current'], ['tauriv2', 'tauriv2', 'current'],
@@ -232,21 +228,6 @@ export function parseSwapUsage(text) {
   const match = /total = ([\d.]+)([KMG])\s+used = ([\d.]+)([KMG])/.exec(text);
   if (!match) throw new Error(`sysctl vm.swapusage printed ${JSON.stringify(text.trim())}, which names no total and no used size`);
   return { usedBytes: Number(match[3]) * SIZE_UNITS[match[4]], totalBytes: Number(match[1]) * SIZE_UNITS[match[2]] };
-}
-
-/** The CPU time of fseventsd in hundredths of a second in the output of `ps -axo pid=,time=,comm=`, with its process identifier. */
-function fseventsdTime(text) {
-  const line = text.split('\n').map((entry) => entry.trim().split(/\s+/)).find((fields) => fields.length >= 3 && basename(fields.slice(2).join(' ')) === 'fseventsd');
-  if (!line) throw new Error('the process list holds no fseventsd process');
-  return { pid: Number(line[0]), centiseconds: Math.round(parseCpuTime(line[1]) * 100) };
-}
-
-/** The share of a core that fseventsd used between two process lists `seconds` apart. */
-export function fseventsdCores(before, after, seconds) {
-  const first = fseventsdTime(before);
-  const second = fseventsdTime(after);
-  if (first.pid !== second.pid) throw new Error(`fseventsd changed from process ${first.pid} to process ${second.pid} while its CPU time was read`);
-  return (second.centiseconds - first.centiseconds) / 100 / seconds;
 }
 
 /** The five applications of a session with the paths of their release bundles and the index that each installs: `index`, or `baselineIndex` for the baseline hosts. */
@@ -567,15 +548,11 @@ async function runTargetCommand(command, { log, interrupted }) {
   }
 }
 
-/** The readings of the start conditions of a run: the load average, the swap use and the CPU share of fseventsd. */
+/** The readings of the start conditions of a run: the load average and the swap use. */
 async function readStartConditions() {
-  const before = execFileSync('ps', ['-axo', 'pid=,time=,comm='], { encoding: 'utf8', maxBuffer: 1 << 26 });
-  await sleep(FSEVENTSD_INTERVAL_S * 1000);
-  const after = execFileSync('ps', ['-axo', 'pid=,time=,comm='], { encoding: 'utf8', maxBuffer: 1 << 26 });
   return {
     loadAverage: loadavg(),
     swap: parseSwapUsage(execFileSync('sysctl', ['-n', 'vm.swapusage'], { encoding: 'utf8' })),
-    fseventsdCores: fseventsdCores(before, after, FSEVENTSD_INTERVAL_S),
   };
 }
 

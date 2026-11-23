@@ -7,7 +7,7 @@ import test from "node:test";
 
 import { APPS, failure, open, recordingSummary } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
-import { processTable } from "@soksak/window-check/process-table.mjs";
+import { processes } from "@soksak/window-check/platform/platform.mjs";
 import { previewGaps, startPreviewPanes } from "./library-preview.mjs";
 import { RASTER, rasterReady } from "./raster-probe.mjs";
 
@@ -53,12 +53,11 @@ async function rasterProcessSnapshot(s, message) {
   assert.equal(services.size, 1, `${message}: the raster probe sessions do not share one service: ${JSON.stringify(sessions)}`);
   const [service] = services;
   assert.ok(Number.isInteger(service) && service > 0, `${message}: the raster probe service pid is missing`);
-  const rows = processTable("pid=,ppid=,stat=").trim().split("\n").map((line) => line.trim().split(/\s+/))
-    .map(([pid, parent, state]) => ({ pid: Number(pid), parent: Number(parent), state }));
+  const rows = processes().map(({ pid, ppid, state }) => ({ pid, parent: ppid, state }));
   const running = rows.find((row) => row.pid === service);
-  assert.ok(running && !running.state.includes("Z"), `${message}: the raster probe service ${service} is not running`);
+  assert.ok(running && running.state !== "zombie", `${message}: the raster probe service ${service} is not running`);
   const children = rows.filter((row) => row.parent === service);
-  for (const child of children) assert.equal(child.state.includes("Z"), false, `${message}: raster probe child ${child.pid} is a zombie`);
+  for (const child of children) assert.equal(child.state === "zombie", false, `${message}: raster probe child ${child.pid} is a zombie`);
   const reported = sessions.map((session) => session.child).sort((a, b) => a - b);
   assert.deepEqual(children.map((row) => row.pid).sort((a, b) => a - b), reported,
     `${message}: the children of the raster probe service are not the children of its sessions`);

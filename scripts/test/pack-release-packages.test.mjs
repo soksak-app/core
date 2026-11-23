@@ -95,8 +95,9 @@ test('a pnpm project with the default settings installs the window check release
   const release = files.find((file) => file.endsWith(releaseFileName('@soksak/window-check', JSON.parse(readFileSync(join(ROOT, 'packages/window-check/package.json'), 'utf8')).version)));
   assert.ok(release, 'the window check release file is not packed');
   writeFileSync(join(project.path, 'package.json'), `${JSON.stringify({ name: 'consumer', private: true, type: 'module', devDependencies: { '@soksak/window-check': `file:${release}` } })}\n`);
-  // The one setting of the consumer is the approval of the install script of @parcel/watcher, a registry dependency of the window check; no security setting is lowered.
-  writeFileSync(join(project.path, 'pnpm-workspace.yaml'), "allowBuilds:\n  '@parcel/watcher': true\n");
+  // The settings of the consumer decide the install scripts of the two registry dependencies of the window check: @parcel/watcher runs its
+  // script, and koffi runs none, because its package holds the prebuilt binary of each platform; no security setting is lowered.
+  writeFileSync(join(project.path, 'pnpm-workspace.yaml'), "allowBuilds:\n  '@parcel/watcher': true\n  koffi: false\n");
   execFileSync('pnpm', ['install', '--prefer-offline'], { cwd: project.path, stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', env: { ...process.env, npm_config_user_agent: '' } });
   const imported = execFileSync(process.execPath, ['--input-type=module', '-e',
     "for (const m of ['catalog.mjs', 'start.mjs']) await import(`@soksak/window-check/${m}`); console.log('imported');"], { cwd: project.path, encoding: 'utf8' });

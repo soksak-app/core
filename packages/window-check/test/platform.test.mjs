@@ -32,7 +32,7 @@ test("on macOS the application of an extracted zip is its bundle, whose Contents
   assert.deepEqual(await quitKeys({ platform }), { menu: "cmd+q", key: { key: "q", text: "q", modifiers: ["command"] } });
 });
 
-test("on macOS the run extracts with ditto, waits for a lock with lockf and lists processes with ps", async () => {
+test("on macOS the run extracts with ditto and waits for a lock with lockf", async () => {
   const platform = "darwin";
   const extract = recorder();
   await extractApplication("/c/a.zip", "/c/a.partial", { platform, run: extract.run });
@@ -40,12 +40,17 @@ test("on macOS the run extracts with ditto, waits for a lock with lockf and list
   const lock = recorder();
   await waitForLockRelease("/r/process.lock", 60, { platform, run: lock.run });
   assert.deepEqual(lock.calls, [["lockf", "-s", "-t", "60", "/r/process.lock", "true"]]);
-  const ps = recorder("  10 /c/soksak.app/Contents/MacOS/sok-mygo --config-dir /root/x\n 11 /usr/bin/other\n\n");
-  assert.deepEqual(await listProcesses({ platform, run: ps.run }),
-    [{ pid: 10, command: "/c/soksak.app/Contents/MacOS/sok-mygo --config-dir /root/x" }, { pid: 11, command: "/usr/bin/other" }]);
-  assert.deepEqual(ps.calls, [["ps", "-axo", "pid=,command="]]);
-  await assert.rejects(listProcesses({ platform, run: recorder("pid command\n").run }),
-    /^Error: ps printed the line "pid command", which names no process$/);
+});
+
+test("the process list holds this process with its command line", async () => {
+  const listed = await listProcesses();
+  const own = listed.filter((entry) => entry.pid === process.pid);
+  assert.equal(own.length, 1, `the list holds ${own.length} records of process ${process.pid}`);
+  assert.deepEqual(Object.keys(own[0]), ["pid", "command"]);
+  // The test runner starts this file with its own options and with the path as it was given, so the command line starts with the
+  // executable of Node and ends with a path of this file.
+  assert.ok(own[0].command.startsWith(`${process.execPath} `) && own[0].command.endsWith("platform.test.mjs"),
+    `the command line ${own[0].command} names no ${process.execPath} and no platform.test.mjs`);
 });
 
 test("an operation that the platform does not implement rejects with its name and runs nothing", async () => {
@@ -57,7 +62,6 @@ test("an operation that the platform does not implement rejects with its name an
       extractApplication: () => extractApplication("/c/a.zip", "/c/a", { platform, run }),
       quitKeys: () => quitKeys({ platform }),
       waitForLockRelease: () => waitForLockRelease("/r/process.lock", 60, { platform, run }),
-      listProcesses: () => listProcesses({ platform, run }),
     };
     for (const [operation, call] of Object.entries(operations)) {
       await assert.rejects(call(), (error) => error instanceof PlatformOperationNotImplemented && error.operation === operation

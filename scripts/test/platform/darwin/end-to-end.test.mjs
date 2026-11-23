@@ -4,32 +4,12 @@ import { mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { crashReports, listProcesses, openApplication, parseProcessTable, waitForLockRelease } from '../../../platform/darwin/end-to-end.mjs';
+import { crashReports, listProcesses, openApplication, waitForLockRelease } from '../../../platform/darwin/end-to-end.mjs';
 
-const EXECUTABLE_HEADER = 'E'.repeat(1024);
-/** A row of the table that `ps -axww -o pid=PID,ppid=PPID,comm=<header>,args=ARGS` prints. */
-const row = (pid, ppid, executable, args) => `${String(pid).padStart(5)} ${String(ppid).padStart(5)} ${executable.padEnd(EXECUTABLE_HEADER.length)} ${args}`;
-
-test('listProcesses parses the darwin process table into records, also for an executable path with spaces', { timeout: 10000 }, async () => {
-  const table = [
-    `  PID  PPID ${EXECUTABLE_HEADER} ARGS`,
-    row(1, 0, '/sbin/launchd', '/sbin/launchd'),
-    row(534, 1, '/System/Library/CoreServices/Software Update.app/Contents/Resources/softwareupdated', '/System/Library/CoreServices/Software Update.app/Contents/Resources/softwareupdated --flag'),
-    row(4242, 534, '/work/target/debug/sok-mygo.app/Contents/MacOS/sok-mygo', '/work/target/debug/sok-mygo.app/Contents/MacOS/sok-mygo --config-dir /work/config dir'),
-    '',
-  ].join('\n');
-  const calls = [];
-  const records = await listProcesses({ execute: async (file, args) => { calls.push([file, args]); return { stdout: table }; } });
-  assert.deepEqual(calls, [['ps', ['-axww', '-o', `pid=PID,ppid=PPID,comm=${EXECUTABLE_HEADER},args=ARGS`]]]);
-  assert.deepEqual(records, [
-    { pid: 1, ppid: 0, executable: '/sbin/launchd', arguments: '/sbin/launchd' },
-    { pid: 534, ppid: 1, executable: '/System/Library/CoreServices/Software Update.app/Contents/Resources/softwareupdated',
-      arguments: '/System/Library/CoreServices/Software Update.app/Contents/Resources/softwareupdated --flag' },
-    { pid: 4242, ppid: 534, executable: '/work/target/debug/sok-mygo.app/Contents/MacOS/sok-mygo',
-      arguments: '/work/target/debug/sok-mygo.app/Contents/MacOS/sok-mygo --config-dir /work/config dir' },
-  ]);
-  assert.throws(() => parseProcessTable('  PID  PPID COMMAND ARGS\n    1     0 /sbin/launchd /sbin/launchd'), /the process table has no expected header/);
-  assert.throws(() => parseProcessTable(`  PID  PPID ${EXECUTABLE_HEADER} ARGS\nnot a row`), /does not match the table header/);
+test('listProcesses lists this process with its parent, executable and arguments', { timeout: 10000 }, async () => {
+  const own = (await listProcesses()).find((record) => record.pid === process.pid);
+  assert.deepEqual([own.ppid, own.executable], [process.ppid, process.execPath]);
+  assert.ok(own.arguments.startsWith(process.execPath) && own.arguments.includes('end-to-end.test.mjs'), own.arguments);
 });
 
 test('waitForLockRelease reports a released lock, a lock still held at its limit, and another end of lockf as an error', { timeout: 10000 }, async () => {

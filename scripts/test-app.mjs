@@ -136,7 +136,7 @@ export async function e2ePlan({ root, configRoot, script, native, only, platform
  */
 export function remainingProcesses(processes, paths, self = process.pid) {
   return processes.filter(({ pid, executable, arguments: line }) => pid !== self
-    && paths.some((path) => executable.includes(path) || line.includes(path))).map(({ pid, arguments: line }) => `${pid} ${line}`);
+    && paths.some((path) => (executable !== null && executable.includes(path)) || line.includes(path))).map(({ pid, arguments: line }) => `${pid} ${line}`);
 }
 
 /** The end of a child: `{code, signal}` once it exits, also when it exited before the call. */

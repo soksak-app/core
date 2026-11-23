@@ -64,7 +64,7 @@ The package holds what every plugin repository needs for those checks, so a plug
 - `@soksak/window-check/drag-measurement.mjs` exports `transactionCadence`, the cadence of the layout transactions of a drag.
 - `@soksak/window-check/chains.mjs` reads the event log through `log.query`: `allRows(s, query)` reads every page of a query, `tailOf(s)` the tail of the log now, and `chainOf(s, chains, name, since, fields)` waits until every event of an operation chain carries the correlation identifier of its first event ([operation chains](logging.md#operation-chains)).
 - `@soksak/window-check/project-resource.mjs` exports `temporaryProject(s, prefix)`, a temporary project folder that the session closes and removes in its cleanup, and `ownProjectWindow(session, child)`, which closes the window of a project once.
-- `@soksak/window-check/process-table.mjs` exports `processTable(columns)`, the output of `ps -A -o <columns>`, and `@soksak/window-check/region-raster.mjs` exports `presentsFrame(region, scale)`, whether the presented raster of a native image region has the size of its frame.
+- `@soksak/window-check/platform/platform.mjs` exports `processes(fields)`, the rows of the [process table](verification.md#process-table), and `@soksak/window-check/region-raster.mjs` exports `presentsFrame(region, scale)`, whether the presented raster of a native image region has the size of its frame.
 - `@soksak/window-check/accessibility.mjs` reads the accessibility elements of the windows of an application (`trusted`, `windowElementsOf`, `readWindowElements`) for the benchmarks that count them; it posts no input and brings no window to the front.
 
 ## plugin.json

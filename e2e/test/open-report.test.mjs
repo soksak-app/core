@@ -17,6 +17,6 @@ test("open stages list the workbench rows with their elapsed time", () => {
 
 test("the system state names the load average and the processes that use the most CPU", () => {
   const state = systemState();
-  assert.match(state, /^load average \d+\.\d \d+\.\d \d+\.\d on \d+ processors; top CPU: \S/);
-  assert.equal(state.split("top CPU: ")[1].split("; ").length, 5);
+  assert.match(state, /^load average \d+\.\d \d+\.\d \d+\.\d on \d+ processors; top CPU time: \d+\.\d s \S/);
+  assert.equal(state.split("top CPU time: ")[1].split("; ").length, 5);
 });

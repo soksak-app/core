@@ -15,7 +15,7 @@
 //   baseline.json           the copy of the baseline record that the session read
 //   runs.jsonl              one run record per line, in the order of the runs:
 //                           {"scenario": <scenario>, "run": <1..runs>, "application": <application>,
-//                            "start": {"loadAverage": [<1 min>, <5 min>, <15 min>], "swap": {"usedBytes": <n>, "totalBytes": <n>}, "fseventsdCores": <n>},
+//                            "start": {"loadAverage": [<1 min>, <5 min>, <15 min>], "swap": {"usedBytes": <n>, "totalBytes": <n>}},
 //                            "display": {"refreshRate": <Hz>, "backingScale": <scale>} | null, "end": {"loadAverage": [<1 min>, <5 min>, <15 min>]},
 //                            "installed": [{"kind": "plugin" | "sidecar", "id": <id>, "version": <version>, "sha256": <hash>}],
 //                            "values": {<value id>: <number> | "passed" | "failed"},
@@ -38,7 +38,7 @@ export const GOALS_FILE = join(ROOT, "docs", "spec", "performance-goals.json");
 const UNITS = { count: null, verdict: null, s: "above", ms: "above", KB: "above", "frames/s": "below" };
 const BOUNDS = ["equals", "atMost", "atLeast", "below"];
 /** The numeric run conditions; the window conditions are the content size of the window of each scenario and of the scenarios that differ. */
-const CONDITIONS = ["backingScale", "swapUseBelow", "fseventsdCoreBelow"];
+const CONDITIONS = ["backingScale", "swapUseBelow"];
 const WINDOW_CONDITIONS = ["window", "scenarioWindows", "occludedScenarios"];
 const VALUE_KEYS = new Set(["id", "goal", "scenario", "target", "measurement", "unit", "over", "bound", "periods", "relative", "against", "constant"]);
 const VERDICTS = new Set(["passed", "failed"]);
@@ -133,20 +133,17 @@ export function readSession(folder) {
 
 /**
  * The failures of the start conditions of `goals` in the readings `start` of a run: swap use below its share of the swap total, where a
- * swap total of zero holds no swap in use, the CPU share of fseventsd below its share of a core, and a load average.
+ * swap total of zero holds no swap in use, and a load average.
  */
 export function startConditionFailures(goals, start) {
   const failures = [];
-  const { swapUseBelow, fseventsdCoreBelow } = goals.conditions;
+  const { swapUseBelow } = goals.conditions;
   const swap = start?.swap;
   if (!(Number.isFinite(swap?.usedBytes) && swap.usedBytes >= 0 && Number.isFinite(swap?.totalBytes) && swap.totalBytes >= 0)) {
     failures.push(`the run records no swap use (${JSON.stringify(swap)})`);
   } else if (!(swap.usedBytes === 0 || swap.usedBytes < swapUseBelow * swap.totalBytes)) {
     failures.push(`swap use ${swap.usedBytes} B is not below ${swapUseBelow} of the swap total ${swap.totalBytes} B`);
   }
-  const cores = start?.fseventsdCores;
-  if (!Number.isFinite(cores)) failures.push(`the run records no CPU share of fseventsd (${JSON.stringify(cores)})`);
-  else if (!(cores < fseventsdCoreBelow)) failures.push(`fseventsd uses ${cores} of a core, not below ${fseventsdCoreBelow}`);
   if (!isLoadAverage(start?.loadAverage)) failures.push(`the run records no load average at its start (${JSON.stringify(start?.loadAverage)})`);
   return failures;
 }

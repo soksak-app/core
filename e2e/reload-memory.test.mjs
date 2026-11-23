@@ -2,13 +2,14 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import test from "node:test";
 import { MAIN_PAGE_APPS, open } from "@soksak/window-check/app.mjs";
+import { processes } from "@soksak/window-check/platform/platform.mjs";
 import { fresh } from "./fixture.mjs";
 
 /** RSS (KB) of the process. */
 function resident(pid) {
-  const text = execFileSync("ps", ["-o", "rss=", "-p", String(pid)], { encoding: "utf8" }).trim();
-  assert.match(text, /^\d+$/, `RSS of ${pid} was not measurable`);
-  return Number(text);
+  const size = processes({ residentKb: true }).find((row) => row.pid === pid)?.residentKb;
+  assert.ok(Number.isInteger(size), `RSS of ${pid} was not measurable`);
+  return size;
 }
 
 /** Physical footprint (bytes) of the process. Resident memory does not shrink while the allocator holds released pages. */

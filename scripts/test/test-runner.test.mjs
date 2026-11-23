@@ -8,6 +8,7 @@ import { spawn, spawnSync } from "node:child_process";
 import test from "node:test";
 
 import { EVENT_PREFIX } from "../test-event-reporter.mjs";
+import { processes } from "@soksak/window-check/platform/platform.mjs";
 import { killGroup, processTable, stopGroup } from "@soksak/window-check/process-group.mjs";
 import { eventWatchdog, runTests } from "../test-runner.mjs";
 
@@ -278,14 +279,14 @@ test("a test that does not end itself at its own limit is ended at the stack lim
 
 // Blocks the event loop of the runner from the start of a test that writes its process id to `marker` and exits until the test exited
 // and `ms` passed, as a runner whose own process stalls, so the limit of the test passes while its exit waits for the runner. The loop of
-// this process is the loop that is blocked, so no event can end the wait: it reads the marker and then the state of the process, which
-// stays a zombie until the runner reaps it, and `ms` is the stall that the check sets as its input.
+// this process is the loop that is blocked, so no event can end the wait: it reads the marker and then the state of the process in the
+// process table, which stays a zombie until the runner reaps it, and `ms` is the stall that the check sets as its input.
 async function stalledRun(item, marker, ms) {
   const pending = run([item], { concurrency: 1 });
   const start = performance.now();
   let pid = "";
   while (pid === "") pid = existsSync(marker) ? readFileSync(marker, "utf8") : "";
-  while (!spawnSync("ps", ["-o", "stat=", "-p", pid], { encoding: "utf8" }).stdout.trim().startsWith("Z")) {}
+  while (processes().find((row) => row.pid === Number(pid))?.state !== "zombie") {}
   while (performance.now() - start < ms) {}
   return pending;
 }
@@ -324,27 +325,28 @@ test("stacksAtLimit needs a limit of the test", async () => {
 });
 
 test("a test over its limit is stopped before the process table is read, and its elapsed time is taken at the stop", async () => {
-  // The runner reads the process table at the limit through its declared option processTable. This reader records the state of the test
-  // process and the time at which the read began, so the check sees that the test process was stopped (T) when the table was read and
-  // that the elapsed time of the test ends before that read. The read takes 5 seconds, as a read under load can, so an elapsed time
-  // taken after the read ends after its start.
-  const directory = mkdtempSync(join(tmpdir(), "soksak-runner-ps-"));
-  const pidFile = join(directory, "pid");
+  // The runner reads the process table at the limit through its declared option processTable. The test process writes a counter to a
+  // file every 10 ms, and this reader records the counter and the time at which the read began, then the counter again after its
+  // 5 second read, as a read under load can take. An unchanged counter over the read shows that the test process was stopped when the
+  // table was read, and an elapsed time taken after the read would end after its start.
+  const directory = mkdtempSync(join(tmpdir(), "soksak-runner-table-"));
+  const counterFile = join(directory, "counter");
   const reads = [];
   const slowTable = () => {
-    const state = spawnSync("ps", ["-o", "stat=", "-p", readFileSync(pidFile, "utf8")], { encoding: "utf8" }).stdout.trim();
-    reads.push([Math.floor(performance.timeOrigin + performance.now()), state]);
+    const at = performance.now();
+    const first = readFileSync(counterFile, "utf8");
     spawnSync("sleep", ["5"]);
+    reads.push([at, first, readFileSync(counterFile, "utf8")]);
     return processTable();
   };
   try {
-    const before = Math.ceil(performance.timeOrigin + performance.now());
-    const source = `require("node:fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); ${sleeping(60000)}`;
+    const before = performance.now();
+    const source = `const fs = require("node:fs"); let n = 0; fs.writeFileSync(${JSON.stringify(counterFile)}, "0"); setInterval(() => fs.writeFileSync(${JSON.stringify(counterFile)}, String(++n)), 10)`;
     const { results } = await run([node("slow", source, { timeoutMs: 2000 })], { concurrency: 1, processTable: slowTable });
     const result = results.get("slow");
     assert.equal(result.status, "timeout", result.detail);
-    const [read, state] = reads[0];
-    assert.match(state, /^T/, `the test process was in state ${state} when the process table was read`);
+    const [read, first, last] = reads[0];
+    assert.equal(last, first, `the test process advanced its counter from ${first} to ${last} while the process table was read`);
     assert.ok(result.elapsedMs <= read - before,
       `the elapsed time ${result.elapsedMs} ms ends after the read of the process table, ${read - before} ms after the start`);
   } finally {
@@ -522,7 +524,7 @@ test("a test with samplesAtLimit leaves the stacks of its processes and of their
     const match = /^exceeded 2\.000s and was killed; samples: ([^;]+); services: pid (\d+) service\.of\.(\d+) state (\S+)$/.exec(result.detail);
     assert.ok(match, result.detail);
     assert.equal(Number(match[2]), service.pid, result.detail);
-    assert.match(match[4], /^S/, result.detail);
+    assert.equal(match[4], "running", result.detail);
     for (const path of match[1].split(", ")) {
       assert.ok(path.startsWith(`${runFolder}/`), `${path} is not in the folder of the run`);
       assert.match(readFileSync(path, "utf8"), /Call graph:/, `${path} holds no thread stacks`);

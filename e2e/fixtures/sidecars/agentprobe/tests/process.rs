@@ -151,10 +151,17 @@ fn now() -> i64 {
     i64::try_from(elapsed.as_millis()).expect("the milliseconds fit")
 }
 
-/// The ids of the child processes of `parent`, which pgrep reads from the process table.
+/// The ids of the child processes of `parent`, which proc_listchildpids of libproc reads from the process table.
 fn children(parent: u32) -> Vec<u32> {
-    let output = Command::new("pgrep").arg("-P").arg(parent.to_string()).output().expect("pgrep runs");
-    String::from_utf8(output.stdout).expect("pgrep writes text").lines().map(|line| line.parse().expect("pgrep writes process ids")).collect()
+    let parent = libc::pid_t::try_from(parent).expect("a process id fits pid_t");
+    let mut ids = [0 as libc::pid_t; 64];
+    let size = libc::c_int::try_from(std::mem::size_of_val(&ids)).expect("the buffer size fits c_int");
+    // SAFETY: the buffer holds `size` bytes, and proc_listchildpids writes at most that many.
+    let count = unsafe { libc::proc_listchildpids(parent, ids.as_mut_ptr().cast(), size) };
+    assert!(count >= 0, "proc_listchildpids({parent}) failed: {}", std::io::Error::last_os_error());
+    let count = usize::try_from(count).expect("the count is not negative");
+    assert!(count < ids.len(), "the process {parent} has more children than the buffer holds");
+    ids[..count].iter().map(|&id| u32::try_from(id).expect("a process id is positive")).collect()
 }
 
 #[test]

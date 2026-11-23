@@ -10,7 +10,7 @@
 - 네이티브 bundle build는 [네이티브 bundle build](docs/operations/examples.ko.md#네이티브-bundle-build) 절차를 따른다.
 - 유지되는 library가 제공하는 기능은 그 library를 쓴다. 계약을 충족하는 library가 없을 때만 직접 작성하고, 충족하지 못하는 요구를 code에 적는다.
 - 상태 변화는 event로 발행하고 구독자가 처리한다. event 원천이 없을 때만 polling이나 timer를 쓰고 이유를 적는다. 작업은 멱등하게 하고, 각 발생은 검색하지 않고도 event, status, log로 기계적으로 관측 가능하게 한다.
-- 어떤 code도 `ps`, `kill`, `pgrep`, `lsof`를 subprocess로 시작하지 않는다. process는 platform interface나 native library로 읽고, `kill(2)`로 signal을 보내고, child는 그 wait status로 판정한다. `make check-process-tools`가 Go와 Rust source에서 이를 강제하며, F1117-4가 Node 사이트를 옮긴다.
+- 어떤 code도 `ps`, `kill`, `pgrep`, `lsof`를 subprocess로 시작하지 않는다. process는 platform interface나 native library로 읽고, `kill(2)`로 signal을 보내고, child는 그 wait status로 판정한다. Node는 [process table](docs/spec/verification.ko.md#process-table) module로 읽으며, `make check-process-tools`가 Go, Rust, Node source에서 이를 강제한다.
 - 로컬 개발은 설치된 dependency 위치를 개발 디렉터리에 심볼릭 링크로 잇고 저장소를 clone하거나 복사하지 않는다. 빌드는 연결된 소스와 실제 설치에 같은 선언 경로를 쓰고, 경로는 선언이나 발견으로 해석한다([로컬 개발 연결](docs/operations/install.ko.md#로컬-개발-연결)).
 - window가 보이는 display의 refresh rate는 미리 알 수 없고 display를 옮기면 바뀐다. 애플리케이션도 검사도 rate를 가정하지 않는다. 코드는 필요한 순간에 window display의 rate를 관측해 그 값을 따르거나, window의 display frame으로 일을 맞추거나 display가 전달한 frame으로 판정해 rate와 무관하게 설계한다. 고정 frame 시간(16 ms, 8.33 ms, 1/60 s)이나 요구하는 refresh rate는 결함이다.
 - 저장소와 workspace 폴더에는 추적되는 파일과 선언된 build 출력만 둔다. 실행의 log, 임시 script, 메시지 파일은 session 임시 폴더에 두고 기록에서 인용하지 않는다. `sok-check docs`는 추적되지 않는 파일을 보고한다.

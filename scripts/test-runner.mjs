@@ -3,13 +3,14 @@
 // (node:test `timeout`, or the per-test default that the harness passes to node --test). An item may declare `timeoutMs` for a
 // command that has no per-test limit, such as a build; no such limit is above 10 minutes. The exit limit (`exitLimitMs`) bounds only the
 // exit of a test file process after its tests ended, when no test runs.
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { appendFileSync, mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 // The process table reader of the command supervisor: a process group is read from the table, because kill(-pgid, 0) on macOS
 // also answers for a group that holds only zombies (test-command.mjs).
+import { processes } from '@soksak/window-check/platform/platform.mjs';
 import { hasEnded, killGroup, processTable, runningMembers, stopGroup } from '@soksak/window-check/process-group.mjs';
 import { EVENT_PREFIX } from './test-event-reporter.mjs';
 import { createNodeTestEvidence } from './node-test-evidence.mjs';
@@ -135,18 +136,8 @@ function leftoverNames(pgid, leader, escaped, table) {
   const inGroup = runningMembers(pgid, table.filter((row) => row.pgid === pgid));
   const members = [...inGroup.filter((member) => member.pid !== leader), ...escaped.map((pid) => ({ pid }))];
   if (members.length === 0) return [];
-  // Only the members are read: the commands of every process of the system can exceed the output buffer of execFileSync. ps exits
-  // with 1 when no listed process remains, which leaves the members unnamed.
-  const listed = spawnSync('ps', ['-o', 'pid=,command=', '-p', members.map((member) => member.pid).join(',')], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
-  if (listed.error) throw new Error(`ps of the members of process group ${pgid}: ${listed.error.message}`);
-  if (listed.status !== 0 && !(listed.status === 1 && listed.stdout === '')) {
-    throw new Error(`ps of the members of process group ${pgid} exited with ${listed.status}: ${listed.stderr.trim()}`);
-  }
-  const commands = new Map();
-  for (const line of listed.stdout.split('\n')) {
-    const match = /^\s*(\d+)\s+(.*)$/.exec(line);
-    if (match) commands.set(Number(match[1]), match[2]);
-  }
+  const wanted = new Set(members.map((member) => member.pid));
+  const commands = new Map(processes({ command: true }).filter((row) => wanted.has(row.pid)).map((row) => [row.pid, row.command]));
   return members.map((member) => `pid ${member.pid} ${commands.get(member.pid) ?? '(ended while it was named)'}`);
 }
 

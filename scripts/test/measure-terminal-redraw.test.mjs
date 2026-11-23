@@ -12,7 +12,7 @@ import { Session } from "@soksak/window-check/app.mjs";
 
 import { readB3Out, writeB3Out } from "../b3-out.mjs";
 
-import { B3_MEASUREMENTS, formatReport, frameCost, readRedrawConditions, redrawConditions, regionCost, readRegion, requireUncovered, parseOptions, parseWindowServer, prepareRedraw, presentedFramesOf, readCovered, redrawMeasurements, requireRows, screenText, coveredWaitMs } from "../measure-terminal-redraw.mjs";
+import { B3_MEASUREMENTS, formatReport, frameCost, readRedrawConditions, redrawConditions, regionCost, readRegion, requireUncovered, parseOptions, prepareRedraw, presentedFramesOf, readCovered, redrawMeasurements, requireRows, screenText, coveredWaitMs } from "../measure-terminal-redraw.mjs";
 
 /** The session of the window w1 on a client that is connected to the player of the endpoint case `name`; closing the player fails when the case was not played. */
 async function play(t, name) {
@@ -151,19 +151,17 @@ test("the region read fails while the window is occluded", { timeout: 30000 }, a
   await covered.server.played;
 });
 
-test("the cost of the region divides the cpu time by the presented frames between the marks and adds the cpu time of the window server", () => {
+test("the cost of the region divides the cpu time of the application by the presented frames between the marks", () => {
   const measurement = {
     seconds: 10,
     marks: { before: { presented: 120, status: { content: { x: 0, y: 28, width: 760, height: 614 } } }, after: { presented: 420 } },
     apps: [{ rows: [{ role: "host", pid: 10, cpuSeconds: 1.5 }], totals: { application: { cpuSeconds: 1.5 }, sidecars: { cpuSeconds: 0 }, total: { cpuSeconds: 1.5 } } }],
     errors: [],
   };
-  const result = regionCost({ measurement, first: { pid: 77, seconds: 100 }, last: { pid: 77, seconds: 100.9 } });
+  const result = regionCost({ measurement });
   assert.equal(result.cost.presented, 300);
   assert.equal(result.cost.totals.total, 5);
-  assert.equal(result.cost.windowServer.pid, 77);
-  assert.equal(result.cost.windowServer.cpuSeconds.toFixed(2), "0.90");
-  assert.equal(result.cost.windowServer.msPerFrame.toFixed(2), "3.00");
+  assert.equal(Object.hasOwn(result.cost, "windowServer"), false);
   assert.deepEqual(result.status.content, { x: 0, y: 28, width: 760, height: 614 });
 });
 
@@ -194,23 +192,15 @@ test("a reading of a covered window is its host.window value, and the second rea
   await covered.server.played;
 });
 
-test("the window server is the process of that name in the process table, and a table without it is an error", () => {
-  const table = "  101  0:01.20 /usr/libexec/logd\n77164 223:45.54 /System/Library/PrivateFrameworks/SkyLight.framework/Versions/A/Resources/WindowServer\n  202  0:00.10 /tmp/WindowServer-copy\n";
-  assert.deepEqual(parseWindowServer(table), { pid: 77164, seconds: 223 * 60 + 45.54 });
-  assert.throws(() => parseWindowServer("  101  0:01.20 /usr/libexec/logd\n"), /the process table has no window server/);
-});
-
-test("the report adds the window server to the sums of the application, because the screen of the terminal costs it too", () => {
+test("the report ends with the sums of the application and its sidecars", () => {
   const rows = [{ role: "host", pid: 10, cpuSeconds: 1.5 }];
   const totals = { application: { cpuSeconds: 1.5 }, sidecars: { cpuSeconds: 0.3 }, total: { cpuSeconds: 1.8 } };
-  const cost = { ...frameCost({ rows, totals, presented: 300, seconds: 10 }), windowServer: { pid: 77, cpuSeconds: 0.9, msPerFrame: 3 } };
+  const cost = { ...frameCost({ rows, totals, presented: 300, seconds: 10 }) };
   const lines = formatReport({ plugin: "rasterprobe", rows: 20, rate: 30, window: "w2", tab: "tab-1", seconds: 10, cost }).split("\n");
-  assert.deepEqual(lines.slice(-5), [
+  assert.deepEqual(lines.slice(-3), [
     "application without sidecars 5.00 ms/frame",
     "sidecars 1.00 ms/frame",
     "total 6.00 ms/frame",
-    "window server 77 0.900 3.00 the whole screen",
-    "total with the window server 9.00 ms/frame",
   ]);
 });
 

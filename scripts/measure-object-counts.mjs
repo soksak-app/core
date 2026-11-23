@@ -21,7 +21,7 @@ import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { promisify } from "node:util";
 import { parseArgs } from "node:util";
-import { PROCESS_TABLE_BYTES, hostProcess, parseProcessTable, requireOcclusion } from "./measure-app-usage.mjs";
+import { hostProcess, processTable, requireOcclusion } from "./measure-app-usage.mjs";
 import { applyTrace, parseTrace, traceSettings } from "./measure-trace.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -383,7 +383,7 @@ if (import.meta.main) {
   }
   const window = windows[0].window;
   // The host is found before the trace state changes anything, so an application without a host process fails first.
-  const { pid: host } = hostProcess(parseProcessTable(execFileSync("ps", ["-axww", "-o", "pid=,command="], { encoding: "utf8", maxBuffer: PROCESS_TABLE_BYTES })),
+  const { pid: host } = hostProcess(processTable(),
     configDir, realpathSync(configDir));
   await applyTrace((command, params) => run([command, "--params", JSON.stringify(params)]), options.trace, configDir);
   const watches = ["host.window", "host.windows"].map((name) => {

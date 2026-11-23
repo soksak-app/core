@@ -1,45 +1,46 @@
-// Runs the bundle preparation of macOS against a disposable bundle. The process table is a recorded `ps -axww -o pid=,command=`
-// output that a reader with the signature of spawnSync returns, so the preparation is checked on any system.
+// Runs the bundle preparation of macOS against a disposable bundle, with processes that the test starts from it and ends.
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { once } from "node:events";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { table } from "../../fixtures/bundle-preparation/process-table.mjs";
 import { prepareBundle } from "../../../platform/darwin/prepare-app-bundle.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "fixtures", "bundle-preparation");
-const prepare = (bundle, application, rows = []) => prepareBundle(bundle, application, { platform: "darwin", run: table(rows) });
+const prepare = (bundle, application) => prepareBundle(bundle, application, { platform: "darwin" });
+
+/** Starts a copy of /bin/sleep at `executable` (or at `launch` from `cwd`), ended when the test ends, and resolves once it executes. */
+async function sleeping(t, executable, { launch = executable, cwd } = {}) {
+  mkdirSync(dirname(executable), { recursive: true });
+  copyFileSync("/bin/sleep", executable);
+  const child = spawn(launch, ["600"], { cwd, stdio: "ignore" });
+  t.after(() => child.kill("SIGKILL"));
+  await once(child, "spawn");
+  return child;
+}
 /** The staging bundle of `bundle`, `<folder>/.staging/<name>.app` (docs/spec/hosts.md). */
 const staged = (bundle) => join(dirname(bundle), ".staging", basename(bundle));
 
-test("bundle preparation refuses a running bundle executable before removing Contents", { timeout: 10000 }, () => {
-  const temporary = mkdtempSync(join(tmpdir(), "soksak-bundle-preparation-"));
+test("bundle preparation refuses a running bundle executable before removing Contents", { timeout: 10000 }, async (t) => {
+  const temporary = realpathSync(mkdtempSync(join(tmpdir(), "soksak-bundle-preparation-")));
+  t.after(() => rmSync(temporary, { recursive: true, force: true }));
   const bundle = join(temporary, "sok-tauriv2.app");
-  const contents = join(bundle, "Contents");
-  const executable = join(contents, "MacOS", "sok-tauriv2");
-  const sentinel = join(contents, "Resources", "preserve-me.txt");
-  mkdirSync(dirname(executable), { recursive: true });
+  const executable = join(bundle, "Contents", "MacOS", "sok-tauriv2");
+  const sentinel = join(bundle, "Contents", "Resources", "preserve-me.txt");
   mkdirSync(dirname(sentinel), { recursive: true });
-  writeFileSync(executable, "");
   writeFileSync(sentinel, "bundle contents are in use\n");
-  const calls = [];
-  try {
-    assert.throws(() => prepareBundle(bundle, "tauriv2", { platform: "darwin", run: table([[1, "/sbin/launchd"], [4242, executable]], calls) }),
-      (error) => {
-        assert.match(error.message, /PID 4242/);
-        assert.ok(error.message.includes(bundle), `preparation error omitted the bundle path ${bundle}: ${error.message}`);
-        return true;
-      });
-    assert.deepEqual(calls, [["ps", ["-axww", "-o", "pid=,command="]]]);
-    assert.ok(existsSync(sentinel), `preparation removed ${sentinel}`);
-    assert.ok(existsSync(executable), `preparation removed the running executable ${executable}`);
-  } finally {
-    rmSync(temporary, { recursive: true, force: true });
-  }
+  const child = await sleeping(t, executable);
+  assert.throws(() => prepare(bundle, "tauriv2"), (error) => {
+    assert.match(error.message, new RegExp(`PID ${child.pid}\\b`));
+    assert.ok(error.message.includes(bundle), `preparation error omitted the bundle path ${bundle}: ${error.message}`);
+    return true;
+  });
+  assert.ok(existsSync(sentinel), `preparation removed ${sentinel}`);
+  assert.ok(existsSync(executable), `preparation removed the running executable ${executable}`);
 });
 
 test("bundle preparation creates the Contents of the staging bundle anew and leaves the bundle when no process uses it", { timeout: 10000 }, () => {
@@ -57,7 +58,7 @@ test("bundle preparation creates the Contents of the staging bundle anew and lea
     const earlier = join(staged(bundle), "Contents", "Resources", "remove-me.txt");
     mkdirSync(dirname(earlier), { recursive: true });
     copyFileSync(join(FIXTURES, "remove-me.txt"), earlier);
-    assert.equal(prepare(bundle, "tauriv2", [[1, "/sbin/launchd"], [77, `${join(temporary, "other.app")}/Contents/MacOS/other`]]), staged(bundle));
+    assert.equal(prepare(bundle, "tauriv2"), staged(bundle));
     assert.ok(existsSync(sentinel), "preparation changed the bundle");
     assert.equal(existsSync(earlier), false, "preparation kept the contents of an earlier staging bundle");
     assert.ok(existsSync(join(staged(bundle), "Contents", "Info.plist")), "preparation did not write Info.plist");
@@ -67,51 +68,25 @@ test("bundle preparation creates the Contents of the staging bundle anew and lea
   }
 });
 
-test("bundle preparation reads the whole process table while other processes carry commands larger than a read buffer", { timeout: 20000 }, (t) => {
-  // Three processes carry arguments of 450 KB each, so the commands of all processes exceed the 1 MiB output buffer of spawnSync.
-  const large = Array.from({ length: 3 }, (_, index) => [100 + index, `${process.execPath} -e setInterval(() => {}, 1000) ${"x".repeat(450 * 1024)}`]);
-  const temporary = mkdtempSync(join(tmpdir(), "soksak-bundle-preparation-large-"));
-  t.after(() => rmSync(temporary, { recursive: true, force: true }));
-  const bundle = join(temporary, "sok-tauriv2.app");
-  prepare(bundle, "tauriv2", large);
-  assert.ok(existsSync(join(staged(bundle), "Contents", "Info.plist")), "preparation did not write Info.plist");
-});
-
-test("bundle preparation attributes a relative executable path by the working directory of its process", { timeout: 10000 }, () => {
+test("bundle preparation attributes a relative executable path by the working directory of its process", { timeout: 10000 }, async (t) => {
   // Two checkouts build the same relative bundle path; a process of the other checkout was started with that relative path.
-  // lsof reports the resolved path of a working directory, as the working directory of this process is.
   const temporary = realpathSync(mkdtempSync(join(tmpdir(), "soksak-bundle-preparation-relative-")));
+  t.after(() => rmSync(temporary, { recursive: true, force: true }));
   const here = join(temporary, "here");
   const other = join(temporary, "other");
   const relative = "target/debug/sok-mygo.app";
-  const command = `${relative}/Contents/MacOS/sok-mygo --config-dir /tmp/check`;
-  // The process table and the working directory of each process, as `lsof -a -p <pid> -d cwd -Fn` reports it.
-  const cwds = { 31: other, 32: here };
-  const reader = (rows, calls) => {
-    const ps = table(rows, calls);
-    return (file, args, options) => {
-      if (file !== "lsof") return ps(file, args, options);
-      calls.push([file, args]);
-      const pid = Number(args[args.indexOf("-p") + 1]);
-      return { status: 0, stdout: `p${pid}\nfcwd\nn${cwds[pid]}\n`, stderr: "" };
-    };
-  };
-  const previous = process.cwd();
+  const launch = `${relative}/Contents/MacOS/sok-mygo`;
+  await sleeping(t, join(other, launch), { launch, cwd: other });
   mkdirSync(here, { recursive: true });
+  const previous = process.cwd();
   process.chdir(here);
-  try {
-    const calls = [];
-    prepareBundle(relative, "mygo", { platform: "darwin", run: reader([[31, command]], calls) });
-    assert.ok(existsSync(join(staged(join(here, relative)), "Contents", "Info.plist")), "the process of the other checkout blocked the preparation");
-    assert.deepEqual(calls.filter(([file]) => file === "lsof"), [["lsof", ["-a", "-p", "31", "-d", "cwd", "-Fn"]]]);
-    assert.throws(() => prepareBundle(relative, "mygo", { platform: "darwin", run: reader([[31, command], [32, command]], []) }),
-      (error) => {
-        assert.match(error.message, /process PID 32 is executing/);
-        assert.ok(error.message.includes(join(here, relative)), error.message);
-        return true;
-      }, "the process of this checkout did not block the preparation");
-  } finally {
-    process.chdir(previous);
-    rmSync(temporary, { recursive: true, force: true });
-  }
+  t.after(() => process.chdir(previous));
+  prepare(relative, "mygo");
+  assert.ok(existsSync(join(staged(join(here, relative)), "Contents", "Info.plist")), "the process of the other checkout blocked the preparation");
+  const child = await sleeping(t, join(here, launch), { launch, cwd: here });
+  assert.throws(() => prepare(relative, "mygo"), (error) => {
+    assert.match(error.message, new RegExp(`process PID ${child.pid} is executing`));
+    assert.ok(error.message.includes(join(here, relative)), error.message);
+    return true;
+  }, "the process of this checkout did not block the preparation");
 });

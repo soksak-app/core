@@ -39,7 +39,7 @@
     "./display-refresh.mjs": "./display-refresh.mjs",
     "./idle-window.mjs": "./idle-window.mjs",
     "./project-resource.mjs": "./project-resource.mjs",
-    "./process-table.mjs": "./process-table.mjs",
+    "./platform/platform.mjs": "./platform/platform.mjs",
     "./process-group.mjs": "./process-group.mjs",
     "./region-raster.mjs": "./region-raster.mjs",
     "./chains.mjs": "./chains.mjs",
@@ -84,7 +84,6 @@
     "idle-window.mjs",
     "project-resource.mjs",
     "process-group.mjs",
-    "process-table.mjs",
     "region-raster.mjs",
     "chains.mjs",
     "fixtures/"
@@ -103,6 +102,7 @@
     "@parcel/watcher": "2.6.0",
     "@soksak/client": "workspace:*",
     "@soksak/log-contract": "workspace:*",
-    "@soksak/plugin-api": "workspace:*"
+    "@soksak/plugin-api": "workspace:*",
+    "koffi": "3.3.7"
   }
 }

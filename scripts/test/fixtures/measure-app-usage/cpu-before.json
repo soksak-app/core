@@ -1,0 +1,47 @@
+{
+  "recorded": "The CPU seconds of the processes of the recording before an interval, as rows {pid, cpuSeconds} of the process table.",
+  "rows": [
+    {
+      "pid": 64435,
+      "cpuSeconds": 0.07
+    },
+    {
+      "pid": 64436,
+      "cpuSeconds": 0
+    },
+    {
+      "pid": 64437,
+      "cpuSeconds": 0.08
+    },
+    {
+      "pid": 64438,
+      "cpuSeconds": 0
+    },
+    {
+      "pid": 64439,
+      "cpuSeconds": 0.06
+    },
+    {
+      "pid": 64440,
+      "cpuSeconds": 0.07
+    },
+    {
+      "pid": 64441,
+      "cpuSeconds": 1.02
+    },
+    {
+      "pid": 64442,
+      "cpuSeconds": 0
+    }
+  ],
+  "pids": {
+    "host": 64435,
+    "sidecar": 64436,
+    "linkedHost": 64437,
+    "linkedSidecar": 64438,
+    "nodeTool": 64439,
+    "sokTool": 64440,
+    "busy": 64441,
+    "ender": 64442
+  }
+}

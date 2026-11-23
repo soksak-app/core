@@ -1,42 +1,23 @@
 // Signals the process group of a test or of a command and reads its members from the process table, by one rule for every caller:
 // the command supervisor (scripts/test-command.mjs), the bounded command (packages/soksak/scripts/bounded.mjs), the test runner
 // (scripts/test-runner.mjs) and the commands of the harness (test-app.mjs).
-import childProcess from "node:child_process";
+import { processes } from "./platform/platform.mjs";
 
 // kill(-pgid, sig) of macOS returns EPERM when the group has no member that can receive the signal. A member that has ended but whose parent has not yet reaped it
 // (a zombie) stays in the group until it is reaped, and a group that holds only zombies also receives this answer. So a rejected check
 // reads the members of the group and their states from the process table and judges from them.
 export function groupMembers(pgid) {
-  const table = childProcess.execFileSync("ps", ["-A", "-o", "pid=,pgid=,stat="], { encoding: "utf8" });
-  const members = [];
-  for (const line of table.split("\n")) {
-    if (line.trim() === "") continue;
-    const fields = line.trim().split(/\s+/);
-    const memberPid = Number(fields[0]);
-    const memberGroup = Number(fields[1]);
-    if (fields.length !== 3 || !Number.isInteger(memberPid) || !Number.isInteger(memberGroup)) throw new Error(`ps returned an unreadable process line: ${JSON.stringify(line)}`);
-    if (memberGroup === pgid) members.push({ pid: memberPid, state: fields[2] });
-  }
-  return members;
+  return processes().filter((row) => row.pgid === pgid).map(({ pid, state }) => ({ pid, state }));
 }
 
-/** The processes of the system as pid, parent, group and state. Only numbers and states are read, so the output stays small. */
+/** The processes of the system as pid, parent, group and state (docs/spec/verification.md#process-table). */
 export function processTable() {
-  const table = childProcess.execFileSync("ps", ["-A", "-o", "pid=,ppid=,pgid=,stat="], { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
-  return table.split("\n").filter((line) => line.trim() !== "").map((line) => {
-    const fields = line.trim().split(/\s+/);
-    const row = { pid: Number(fields[0]), ppid: Number(fields[1]), pgid: Number(fields[2]), state: fields[3] };
-    if (fields.length !== 4 || !Number.isInteger(row.pid) || !Number.isInteger(row.ppid) || !Number.isInteger(row.pgid)) {
-      throw new Error(`ps returned an unreadable process line: ${JSON.stringify(line)}`);
-    }
-    return row;
-  });
+  return processes().map(({ pid, ppid, pgid, state }) => ({ pid, ppid, pgid, state }));
 }
 
-// ps(1) state: the first character is the run state, and the characters after it are flags. Z is a zombie, which has ended and waits to be
-// reaped. The flag E marks a process that is trying to exit, which has also ended its work.
+// A zombie has ended and waits to be reaped, and an exiting process has also ended its work.
 export function hasEnded(state) {
-  return state.startsWith("Z") || state.slice(1).includes("E");
+  return state !== "running";
 }
 
 /** The members that can still run: a zombie or an exiting process has ended its work. */

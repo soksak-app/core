@@ -66,6 +66,26 @@ export async function waitForLockRelease(lock, seconds, { platform = runPlatform
 }
 
 /** Every process of the system as `{pid, command}` records; `command` is the command line as one text. */
-export async function listProcesses({ platform = runPlatform(), run } = {}) {
-  return (await implementation("listProcesses", platform))(run);
+export async function listProcesses() {
+  return processes({ command: true }).map(({ pid, command }) => ({ pid, command }));
+}
+
+// The process table is read synchronously by the group signals of the test runner, so its implementation is loaded once with this
+// module; a platform without one rejects each read with the named error.
+const processTables = new Map([["darwin", "./darwin/processes.mjs"], ["linux", "./linux/processes.mjs"]]);
+const processTable = processTables.has(runPlatform()) ? await import(processTables.get(runPlatform())) : undefined;
+
+/**
+ * The processes of the system: `{pid, ppid, pgid, state, name}` with `state` `running`, `exiting` or `zombie`, and `command`,
+ * `executable`, `residentKb` and `cpuSeconds` when `fields` names them (docs/spec/verification.md#process-table).
+ */
+export function processes(fields = {}) {
+  if (processTable === undefined) throw new PlatformOperationNotImplemented("processes", runPlatform());
+  return processTable.processes(fields);
+}
+
+/** The working directory of the process pid, or null when it ended. */
+export function workingDirectory(pid) {
+  if (processTable === undefined) throw new PlatformOperationNotImplemented("workingDirectory", runPlatform());
+  return processTable.workingDirectory(pid);
 }

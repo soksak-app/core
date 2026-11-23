@@ -1,5 +1,5 @@
 // Functions that the project opening checks use to report the stage of a late reply and the system state at that time.
-import { spawnSync } from "node:child_process";
+import { processes } from "@soksak/window-check/platform/platform.mjs";
 import { availableParallelism, loadavg } from "node:os";
 
 /**
@@ -14,13 +14,13 @@ export function openStages(rows) {
     `@${Date.parse(row.ts) - start}ms`).join(", ");
 }
 
-/** The system state at the measurement: the load average and the five processes with the highest CPU use. It separates whether a late reply is caused by the load of other processes. */
+/**
+ * The system state at the measurement: the load average and the five processes with the most CPU time that this user can read. It
+ * separates whether a late reply is caused by the load of other processes.
+ */
 export function systemState() {
-  // `ps -A -o pcpu=,comm=` is the POSIX form; the CPU order is made here, because the sort option of ps differs between systems.
-  const ps = spawnSync("ps", ["-A", "-o", "pcpu=,comm="], { encoding: "utf8", maxBuffer: Infinity });
-  if (ps.status !== 0) throw new Error(`ps failed with ${ps.status}: ${ps.stderr}`);
-  const top = ps.stdout.split("\n").map((line) => line.trim()).filter((line) => line !== "")
-    .map((line) => ({ line, cpu: Number.parseFloat(line) })).sort((a, b) => b.cpu - a.cpu)
-    .slice(0, 5).map(({ line }) => line).join("; ");
-  return `load average ${loadavg().map((value) => value.toFixed(1)).join(" ")} on ${availableParallelism()} processors; top CPU: ${top}`;
+  const top = processes({ cpuSeconds: true }).filter((row) => row.cpuSeconds !== undefined)
+    .sort((a, b) => b.cpuSeconds - a.cpuSeconds).slice(0, 5)
+    .map((row) => `${row.cpuSeconds.toFixed(1)} s ${row.name}`).join("; ");
+  return `load average ${loadavg().map((value) => value.toFixed(1)).join(" ")} on ${availableParallelism()} processors; top CPU time: ${top}`;
 }

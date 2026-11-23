@@ -1,9 +1,8 @@
 // The macOS operations of the end-to-end run (docs/operations/examples.md#end-to-end-run).
-import { execFile } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { promisify } from 'node:util';
+import { processes } from '@soksak/window-check/platform/platform.mjs';
 import { crashFault } from '../../crash-fault.mjs';
 import { describeEnd, runProgram } from '../process.mjs';
 
@@ -70,31 +69,14 @@ export async function waitForLockRelease(lock, seconds, { run = runProgram } = {
   throw new Error(`lockf ended with ${describeEnd(end)}`);
 }
 
-/** The header of the executable column; its length is the width of that column, PATH_MAX, so no executable path is cut. */
-const EXECUTABLE_HEADER = 'E'.repeat(1024);
-
 /**
- * Parses the table of `ps -axww -o pid=PID,ppid=PPID,comm=<EXECUTABLE_HEADER>,args=ARGS` into `{pid, ppid, executable, arguments}`
- * records. The executable column has the fixed width of its header and the arguments column is the rest of each line, so a path
- * with spaces is read whole. `arguments` is the argument vector as ps prints it, joined by spaces.
+ * Lists every process of the system as `{pid, ppid, executable, arguments}` records from the process table of window-check
+ * (docs/spec/verification.md#process-table). `executable` is the path that the process executes, or null for a process without one,
+ * and `arguments` is the argument vector joined by spaces.
  */
-export function parseProcessTable(text) {
-  const [header, ...rows] = text.split('\n');
-  const executableStart = header.indexOf(EXECUTABLE_HEADER);
-  const argumentsStart = executableStart + EXECUTABLE_HEADER.length + 1;
-  if (executableStart < 0 || header.slice(argumentsStart).trim() !== 'ARGS') throw new Error(`the process table has no expected header: ${header.slice(0, 80)}`);
-  return rows.filter((row) => row.trim() !== '').map((row) => {
-    const ids = /^\s*(\d+)\s+(\d+) $/.exec(row.slice(0, executableStart));
-    if (ids === null || row[argumentsStart - 1] !== ' ') throw new Error(`process row ${JSON.stringify(row.slice(0, 120))} does not match the table header`);
-    return { pid: Number(ids[1]), ppid: Number(ids[2]), executable: row.slice(executableStart, argumentsStart - 1).trimEnd(), arguments: row.slice(argumentsStart) };
-  });
-}
-
-/** Lists every process of the system as `{pid, ppid, executable, arguments}` records. */
-export async function listProcesses({ execute = promisify(execFile) } = {}) {
-  const { stdout } = await execute('ps', ['-axww', '-o', `pid=PID,ppid=PPID,comm=${EXECUTABLE_HEADER},args=ARGS`],
-    { encoding: 'utf8', maxBuffer: 1 << 26 });
-  return parseProcessTable(stdout);
+export async function listProcesses() {
+  return processes({ command: true, executable: true })
+    .map(({ pid, ppid, executable, command }) => ({ pid, ppid, executable, arguments: command }));
 }
 
 /**

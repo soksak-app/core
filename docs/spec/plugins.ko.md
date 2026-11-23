@@ -64,7 +64,7 @@ plugin 동작의 창 검사는 그 plugin의 repository에서 실행된다([검�
 - `@soksak/window-check/drag-measurement.mjs`는 drag의 layout transaction cadence `transactionCadence`를 export한다.
 - `@soksak/window-check/chains.mjs`는 `log.query`로 event log를 읽는다. `allRows(s, query)`는 query의 모든 page를, `tailOf(s)`는 지금 log의 tail을 읽고, `chainOf(s, chains, name, since, fields)`는 operation chain의 모든 event가 첫 event의 correlation identifier를 가질 때까지 기다린다([작업 사슬](logging.ko.md#작업-사슬)).
 - `@soksak/window-check/project-resource.mjs`는 session이 cleanup에서 닫고 지우는 임시 project 폴더 `temporaryProject(s, prefix)`와, project의 window를 한 번 닫는 `ownProjectWindow(session, child)`를 export한다.
-- `@soksak/window-check/process-table.mjs`는 `ps -A -o <columns>`의 출력 `processTable(columns)`를 export하고, `@soksak/window-check/region-raster.mjs`는 native image region의 presented raster가 그 frame 크기인지를 말하는 `presentsFrame(region, scale)`을 export한다.
+- `@soksak/window-check/platform/platform.mjs`는 [process table](verification.ko.md#process-table)의 행 `processes(fields)`를 export하고, `@soksak/window-check/region-raster.mjs`는 native image region의 presented raster가 그 frame 크기인지를 말하는 `presentsFrame(region, scale)`을 export한다.
 - `@soksak/window-check/accessibility.mjs`는 그 수를 세는 benchmark를 위해 application window의 accessibility element를 읽는다(`trusted`, `windowElementsOf`, `readWindowElements`). 입력을 보내지 않고 window를 앞으로 가져오지 않는다.
 
 ## plugin.json

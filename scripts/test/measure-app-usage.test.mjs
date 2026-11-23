@@ -35,11 +35,10 @@ import {
   logLineCounts,
   movePointer,
   notMeasuredLines,
-  outputOf,
-  parseCpuSamples,
   parseCpuTime,
   parseOptions,
-  parseProcessTable,
+  processTable,
+  readCpuSeconds,
   pointerGesture,
   pointerPath,
   prepareState,
@@ -65,13 +64,13 @@ import {
 
 const DIR = "/Users/tester/Library/Application Support/sok-check";
 
-// The recordings of the real tools (ps, launchctl, pgrep, footprint) that the judgements of the measurement read: each file holds the command
-// that produced it and its process result {status, stdout, stderr}, recorded on macOS with the names of the machine replaced
-// by neutral names (scripts/test/fixtures/measure-app-usage).
+// The recordings that the judgements of the measurement read: the rows of the process table (process-table, cpu-before, cpu-after),
+// and the process results {status, stdout, stderr} of launchctl and footprint with the command that produced each, recorded on macOS with
+// the names of the machine replaced by neutral names (scripts/test/fixtures/measure-app-usage).
 const RECORDINGS = fileURLToPath(new URL("./fixtures/measure-app-usage/", import.meta.url));
 const recorded = (name) => JSON.parse(readFileSync(join(RECORDINGS, `${name}.json`), "utf8"));
-const PS = recorded("ps-table");
-const TABLE = parseProcessTable(PS.stdout);
+const PS = recorded("process-table");
+const TABLE = PS.rows;
 const PIDS = PS.pids;
 
 /**
@@ -124,37 +123,41 @@ test("cpu percent rejects a decrease and a non-positive interval", () => {
   assert.throws(() => cpuPercent(1, 2, 0), /interval must be a positive number of seconds \(0\)/);
 });
 
-test("parses ps cpu samples into seconds per pid", () => {
-  const samples = parseCpuSamples("  123  0:01.50\n  456 1:02:03.00\n");
+test("the cpu seconds of process table rows map each pid to its seconds and leave out a row without cpuSeconds", () => {
+  const samples = cpuSecondsOf([{ pid: 123, cpuSeconds: 1.5 }, { pid: 88 }, { pid: 456, cpuSeconds: 3723 }]);
   assert.deepEqual([...samples.entries()], [[123, 1.5], [456, 3723]]);
 });
 
-test("parses ps command rows and rejects a malformed row", () => {
-  assert.deepEqual(parseProcessTable("  123 /a/b --config-dir /d\n  456 /c\n"), [
-    { pid: 123, command: "/a/b --config-dir /d" },
-    { pid: 456, command: "/c" },
-  ]);
-  assert.throws(() => parseProcessTable("not-a-row\n"), /process row "not-a-row" has no pid/);
+test("the cpu seconds read from the process table hold this process with the CPU time it used", async () => {
+  const seconds = (await readCpuSeconds()).get(process.pid);
+  assert.ok(seconds > 0, `the CPU seconds of this process are ${seconds}`);
+});
+
+test("the process table holds this process with its command line", () => {
+  const row = processTable().find(({ pid }) => pid === process.pid);
+  assert.ok(row, "the process table holds this process");
+  assert.deepEqual(Object.keys(row), ["pid", "command"]);
+  assert.ok(row.command.startsWith(process.execPath) || row.command.startsWith(process.argv0), `command ${row.command}`);
 });
 
 test("finds the host by the config-dir argument and skips tools, sidecars and WebKit", () => {
-  const table = parseProcessTable([
-    `  10 /Applications/sok-check.app/Contents/MacOS/soksak --config-dir ${DIR}`,
-    `  11 node scripts/measure-app-usage.mjs --sok /x/sok --config-dir ${DIR}`,
-    `  12 /x/target/debug/sok windows --config-dir ${DIR}`,
-    `  13 ${DIR}/sidecars/probe-service/build/probe --config-dir ${DIR}`,
-    `  14 /System/Library/WebKit.framework/com.apple.WebKit.Networking --config-dir ${DIR}`,
-    "  15 /usr/bin/other --config-dir /elsewhere",
-  ].join("\n"));
+  const table = [
+    { pid: 10, command: `/Applications/sok-check.app/Contents/MacOS/soksak --config-dir ${DIR}` },
+    { pid: 11, command: `node scripts/measure-app-usage.mjs --sok /x/sok --config-dir ${DIR}` },
+    { pid: 12, command: `/x/target/debug/sok windows --config-dir ${DIR}` },
+    { pid: 13, command: `${DIR}/sidecars/probe-service/build/probe --config-dir ${DIR}` },
+    { pid: 14, command: `/System/Library/WebKit.framework/com.apple.WebKit.Networking --config-dir ${DIR}` },
+    { pid: 15, command: "/usr/bin/other --config-dir /elsewhere" },
+  ];
   assert.deepEqual(hostProcess(table, DIR), { pid: 10 });
 });
 
 test("matches a data folder whose launch path has a doubled slash", () => {
   const launched = DIR.replace("/Library/", "//Library/");
-  const table = parseProcessTable([
-    `  10 /Applications/sok-check.app/Contents/MacOS/soksak --config-dir ${launched} --registry-ca ${launched}/ca.pem`,
-    `  11 ${launched}/sidecars/probe/bin/probe --config-dir ${launched}`,
-  ].join("\n"));
+  const table = [
+    { pid: 10, command: `/Applications/sok-check.app/Contents/MacOS/soksak --config-dir ${launched} --registry-ca ${launched}/ca.pem` },
+    { pid: 11, command: `${launched}/sidecars/probe/bin/probe --config-dir ${launched}` },
+  ];
   assert.deepEqual(hostProcess(table, DIR), { pid: 10 });
   assert.deepEqual(sidecarProcesses(table, DIR), [{ role: "sidecar probe", pid: 11, attribution: "executable path" }]);
 });
@@ -162,27 +165,27 @@ test("matches a data folder whose launch path has a doubled slash", () => {
 test("finds the host and the sidecars of a data folder that the processes launch by its real path", () => {
   const given = "/var/tester/sok-check";
   const real = "/private/var/tester/sok-check";
-  const table = parseProcessTable([
-    `  10 /Applications/sok-check.app/Contents/MacOS/soksak --config-dir ${real}`,
-    `  11 ${real}/sidecars/probe/bin/probe --x`,
-  ].join("\n"));
+  const table = [
+    { pid: 10, command: `/Applications/sok-check.app/Contents/MacOS/soksak --config-dir ${real}` },
+    { pid: 11, command: `${real}/sidecars/probe/bin/probe --x` },
+  ];
   assert.deepEqual(hostProcess(table, given, real), { pid: 10 });
   assert.deepEqual(sidecarProcesses(table, given, real), [{ role: "sidecar probe", pid: 11, attribution: "executable path" }]);
 });
 
 test("reports a missing or duplicate host", () => {
-  const none = parseProcessTable("  15 /usr/bin/other --config-dir /elsewhere\n");
+  const none = [{ pid: 15, command: "/usr/bin/other --config-dir /elsewhere" }];
   assert.throws(() => hostProcess(none, DIR), /no host process has --config-dir .*sok-check/);
-  const two = parseProcessTable(`  10 /a/soksak --config-dir ${DIR}\n  20 /b/soksak --config-dir ${DIR}\n`);
+  const two = [{ pid: 10, command: `/a/soksak --config-dir ${DIR}` }, { pid: 20, command: `/b/soksak --config-dir ${DIR}` }];
   assert.throws(() => hostProcess(two, DIR), /2 host processes have --config-dir/);
 });
 
 test("lists the sidecars whose executable is under the config dir", () => {
-  const table = parseProcessTable([
-    `  21 ${DIR}/sidecars/probe-service/build/probe-service --flag`,
-    `  22 ${DIR}/sidecars/worker/bin/worker`,
-    `  23 /other/sidecars/worker/bin/worker`,
-  ].join("\n"));
+  const table = [
+    { pid: 21, command: `${DIR}/sidecars/probe-service/build/probe-service --flag` },
+    { pid: 22, command: `${DIR}/sidecars/worker/bin/worker` },
+    { pid: 23, command: `/other/sidecars/worker/bin/worker` },
+  ];
   assert.deepEqual(sidecarProcesses(table, DIR), [
     { role: "sidecar probe-service", pid: 21, attribution: "executable path" },
     { role: "sidecar worker", pid: 22, attribution: "executable path" },
@@ -808,22 +811,20 @@ function marksOfTwo({ frames = [[340, 340], [512, 513]], commandBuffers = [[338,
   return { before: mark(0), after: mark(1) };
 }
 
-const CPU_BEFORE = cpuSecondsOf(recorded("ps-cpu-before"));
-const CPU_AFTER = cpuSecondsOf(recorded("ps-cpu-after"));
+const CPU_BEFORE = cpuSecondsOf(recorded("cpu-before").rows);
+const CPU_AFTER = cpuSecondsOf(recorded("cpu-after").rows);
 /** The interval, in seconds, of the two recorded CPU readings: the recording of the readings states it. */
 const CPU_SECONDS = 2;
 
 /** A measured entry of a process of the recording: the row and the place that names it in an error. */
 const entry = (role, pid, name) => ({ row: { role, pid }, where: `${name} ${role} (pid ${pid})` });
 
-test("the cpu readings of ps are the cpu seconds of every process, and a failing ps is an error that names the command", () => {
+test("the recorded cpu readings are the cpu seconds of every process", () => {
   assert.equal(CPU_BEFORE.size, 8);
   assert.equal(CPU_AFTER.size, 7, "the process that ended is not in the reading after the interval");
   assert.equal(CPU_BEFORE.get(PIDS.busy), 1.02);
   assert.equal(CPU_AFTER.get(PIDS.busy), 3.03);
   assert.equal(CPU_BEFORE.get(PIDS.ender), 0);
-  assert.throws(() => cpuSecondsOf(recorded("ps-failure")), /^Error: ps -axo pid=,time= exited with 1: ps: bogus: keyword not found/);
-  assert.throws(() => outputOf("ps", ["-axo", "pid=,bogus="], recorded("ps-failure")), /^Error: ps -axo pid=,bogus= exited with 1: ps: bogus: keyword not found/);
 });
 
 test("the cpu figures of a process are its cpu seconds over the interval, and a process of the application that ends is an error", () => {
@@ -853,18 +854,16 @@ test("a process of no application that ends between the cpu reads leaves the lis
   assert.equal(measured[1].row.cpuSeconds, 0, "the other processes keep their figures");
 });
 
-test("the WebKit processes that no application claims are the unattributed rows, and pgrep without a match or with an invalid pattern is judged by its exit", () => {
-  const gpu = webkitPidsOf("GPU", recorded("pgrep-gpu"));
-  const networking = webkitPidsOf("Networking", recorded("pgrep-networking"));
-  assert.deepEqual(gpu, [1413, 1638, 90524].map((pid) => ({ pid, role: "webkit gpu" })));
-  assert.deepEqual(networking, [1635, 76149, 90525].map((pid) => ({ pid, role: "webkit networking" })));
-  assert.deepEqual(unattributedRows([...gpu, ...networking], new Set([1413, 1635, 1638])), [
-    { role: "webkit gpu", pid: 90524, attribution: "unattributed" },
+test("the WebKit processes are the rows whose command line names the service, and those that no application claims are the unattributed rows", () => {
+  const gpu = webkitPidsOf("GPU", TABLE);
+  const networking = webkitPidsOf("Networking", TABLE);
+  assert.deepEqual(gpu, [1413, 1638].map((pid) => ({ pid, role: "webkit gpu" })));
+  assert.deepEqual(networking, [1635, 76149].map((pid) => ({ pid, role: "webkit networking" })));
+  assert.deepEqual(unattributedRows([...gpu, ...networking], new Set([1413, 1635])), [
+    { role: "webkit gpu", pid: 1638, attribution: "unattributed" },
     { role: "webkit networking", pid: 76149, attribution: "unattributed" },
-    { role: "webkit networking", pid: 90525, attribution: "unattributed" },
   ]);
-  assert.deepEqual(webkitPidsOf("GPU", recorded("pgrep-none")), [], "pgrep exits with 1 when no process matches");
-  assert.throws(() => webkitPidsOf("GPU", recorded("pgrep-invalid")), /^Error: pgrep failed: pgrep: Cannot compile regular expression/);
+  assert.deepEqual(webkitPidsOf("GPU", TABLE.filter(({ command }) => !command.includes("WebKit"))), [], "a table without the service has no row of it");
 });
 
 test("a footprint reading is the footprint and the peak of the recorded output, and a process that is gone is an error that names it", () => {

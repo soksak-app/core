@@ -1,16 +1,16 @@
 // Checks installation with real macOS bundle signatures and the native exchange tool.
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { once } from "node:events";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { table } from "../../../fixtures/bundle-preparation/process-table.mjs";
 import { installBundle, prepareBundle } from "../../../../platform/darwin/prepare-app-bundle.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../../../..");
-const prepare = (bundle, application) => prepareBundle(bundle, application, { platform: "darwin", run: table([]) });
+const prepare = (bundle, application) => prepareBundle(bundle, application, { platform: "darwin" });
 
 /** The tool of the installation, built by its make target of native/darwin. */
 function swapTool() {
@@ -55,7 +55,7 @@ test("a bundle build leaves the signed bundle unchanged until one rename install
   sign(staging);
   unchanged("the signature of the staging bundle");
   const signed = readFileSync(join(staging, "Contents", "MacOS", "sok-tauriv2"));
-  installBundle(bundle, { platform: "darwin", run: table([]), swap: swapTool() });
+  installBundle(bundle, { platform: "darwin", swap: swapTool() });
   assert.ok(verifies(bundle), "the installed bundle does not verify");
   assert.ok(readFileSync(join(bundle, "Contents", "MacOS", "sok-tauriv2")).equals(signed), "the bundle is not the new bundle");
   assert.equal(existsSync(staging), false, "the installation left the earlier bundle at the staging path");
@@ -68,7 +68,7 @@ test("the installation places the staging bundle at a bundle path that holds no 
   const staging = prepare(bundle, "tauriv2");
   copyFileSync("/usr/bin/true", join(staging, "Contents", "MacOS", "sok-tauriv2"));
   sign(staging);
-  installBundle(bundle, { platform: "darwin", run: table([]), swap: swapTool() });
+  installBundle(bundle, { platform: "darwin", swap: swapTool() });
   assert.ok(verifies(bundle), "the installed bundle does not verify");
   assert.equal(existsSync(staging), false, "the installation left the staging bundle");
 });
@@ -83,7 +83,7 @@ test("the installation refuses a staging bundle that does not verify and leaves 
   copyFileSync("/usr/bin/false", join(staging, "Contents", "MacOS", "sok-tauriv2"));
   sign(staging);
   writeFileSync(join(staging, "Contents", "Resources", "added-after-signing.txt"), "a file that the signature does not seal\n");
-  assert.throws(() => installBundle(bundle, { platform: "darwin", run: table([]), swap: swapTool() }), (error) => {
+  assert.throws(() => installBundle(bundle, { platform: "darwin", swap: swapTool() }), (error) => {
     assert.ok(error.message.startsWith(`refusing to install ${staging} at ${bundle}: the staging bundle does not verify: `), error.message);
     return true;
   });
@@ -91,7 +91,7 @@ test("the installation refuses a staging bundle that does not verify and leaves 
   assert.ok(readFileSync(join(bundle, "Contents", "MacOS", "sok-tauriv2")).equals(earlier), "the refused installation replaced the bundle");
 });
 
-test("the installation refuses a bundle that a process runs before it changes anything", { timeout: 60000 }, (t) => {
+test("the installation refuses a bundle that a process runs before it changes anything", { timeout: 60000 }, async (t) => {
   const temporary = realpathSync(mkdtempSync(join(tmpdir(), "soksak-bundle-install-running-")));
   t.after(() => rmSync(temporary, { recursive: true, force: true }));
   const bundle = join(temporary, "sok-tauriv2.app");
@@ -101,8 +101,14 @@ test("the installation refuses a bundle that a process runs before it changes an
   copyFileSync("/usr/bin/false", join(staging, "Contents", "MacOS", "sok-tauriv2"));
   sign(staging);
   const executable = join(bundle, "Contents", "MacOS", "sok-tauriv2");
-  assert.throws(() => installBundle(bundle, { platform: "darwin", run: table([[4243, executable]]), swap: swapTool() }), (error) => {
-    assert.equal(error.message, `refusing to replace bundle ${bundle}: process PID 4243 is executing from its Contents/MacOS directory`);
+  // A process executes a second file of the executable directory of the bundle.
+  const running = join(bundle, "Contents", "MacOS", "helper");
+  copyFileSync("/bin/sleep", running);
+  const child = spawn(running, ["600"], { stdio: "ignore" });
+  t.after(() => child.kill("SIGKILL"));
+  await once(child, "spawn");
+  assert.throws(() => installBundle(bundle, { platform: "darwin", swap: swapTool() }), (error) => {
+    assert.equal(error.message, `refusing to replace bundle ${bundle}: process PID ${child.pid} is executing from its Contents/MacOS directory`);
     return true;
   });
   assert.ok(readFileSync(executable).equals(earlier), "the refused installation replaced the bundle");

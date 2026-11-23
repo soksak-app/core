@@ -7,7 +7,6 @@ import assert from "node:assert/strict";
 import { readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { holdCovered } from "@soksak/window-check/app.mjs";
-import { processTable } from "@soksak/window-check/process-table.mjs";
 import { processRows } from "./service-processes.mjs";
 
 /** The plugin id of the raster probe. */
@@ -186,14 +185,14 @@ export function rasterServiceSnapshot(configDir) {
   const endpoint = JSON.parse(readFileSync(join(serviceDir, "endpoint.json"), "utf8"));
   assert.equal(endpoint.protocol, 1, "the raster probe service protocol does not match");
   assert.ok(Number.isInteger(endpoint.pid) && endpoint.pid > 0, "the raster probe service PID is missing");
-  const rows = processRows(processTable("pid=,ppid=,stat=,command="));
+  const rows = processRows();
   // The host passes the service folder as one argument of the command, wherever it stands.
   const services = rows.filter((row) => ` ${row.command} `.includes(` --service-dir ${serviceDir} `));
   assert.equal(services.length, 1, "the configuration must own exactly one raster probe service");
   assert.equal(services[0].pid, endpoint.pid, "the published service PID differs from the running process");
-  assert.equal(services[0].state.includes("Z"), false, "the raster probe service is a zombie");
+  assert.equal(services[0].state === "zombie", false, "the raster probe service is a zombie");
   const children = rows.filter((row) => row.parent === endpoint.pid);
-  for (const child of children) assert.equal(child.state.includes("Z"), false, `the session child ${child.pid} is a zombie`);
+  for (const child of children) assert.equal(child.state === "zombie", false, `the session child ${child.pid} is a zombie`);
   return { service: endpoint.pid, children: children.map(({ pid }) => pid).sort((a, b) => a - b) };
 }
 

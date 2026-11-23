@@ -541,8 +541,7 @@ export async function testApp({ root, apps = requiredApps(process.env), pack = D
       }
     }
     try {
-      const processes = await listProcesses({ platform,
-        run: (file, args) => run(file, args, { cwd: root, timeout: LIMITS.command, capture: true }) });
+      const processes = await listProcesses();
       const left = remainingProcesses(processes, [configRoot, ...bundles.values()]);
       if (left.length > 0) failures.push(`remaining processes: ${left.length} processes remain: ${left.join("; ")}`);
     } catch (error) {

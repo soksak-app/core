@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 import { policyOfSetting } from "@soksak/window-check/log-policy.mjs";
 import { judgeSession, readGoals, readSession } from "../b3-judge.mjs";
 import {
-  appendRecord, b3Folder, baselineRecordFile, buildSteps, applicationsOf, attributionUnits, baselineCheckoutFailures, baselinePluginFailures, createSession, fseventsdCores, installedReleases, parseSwapUsage,
+  appendRecord, b3Folder, baselineRecordFile, buildSteps, applicationsOf, attributionUnits, baselineCheckoutFailures, baselinePluginFailures, createSession, installedReleases, parseSwapUsage,
   activateWindow, readBaselineRecord, readCheckout, readTargetOutput, runUnit, scenarioTargets, sessionUnits, sidecarReleaseFailures,
   surfacePlugins, targetCommand, traceStateOf, unitPlan,
 } from "../benchmark-b3.mjs";
@@ -112,22 +112,18 @@ test("the surface plugins are the installed plugins whose manifest declares a su
   assert.deepEqual(surfacePlugins(installed, (path) => manifests[path]), ["probeplain"]);
 });
 
-test("the run conditions are read from injected readings of swap use, of fseventsd and of the display", { timeout: 1000 }, () => {
+test("the swap use of a run is read from the output of sysctl vm.swapusage", { timeout: 1000 }, () => {
   assert.deepEqual(parseSwapUsage("total = 2048.00M  used = 1023.25M  free = 1024.75M  (encrypted)\n"), { usedBytes: 1023.25 * 1048576, totalBytes: 2048 * 1048576 });
   assert.deepEqual(parseSwapUsage("total = 0.00M  used = 0.00M  free = 0.00M  (encrypted)\n"), { usedBytes: 0, totalBytes: 0 });
   assert.throws(() => parseSwapUsage("vm.swapusage: unknown"), /^Error: sysctl vm\.swapusage printed "vm\.swapusage: unknown", which names no total and no used size$/);
-  const before = "  1 0:10.00 /sbin/launchd\n 88 1:00.00 /usr/sbin/fseventsd\n";
-  const after = "  1 0:10.50 /sbin/launchd\n 88 1:00.40 /usr/sbin/fseventsd\n";
-  assert.equal(fseventsdCores(before, after, 5), 0.08);
-  assert.throws(() => fseventsdCores(" 1 0:10.00 /sbin/launchd\n", after, 5), /^Error: the process list holds no fseventsd process$/);
 });
 
 test("a swap total of zero leaves no swap in use, so the run may start", { timeout: 1000 }, async () => {
   const { startConditionFailures } = await import("../b3-judge.mjs");
   const goals = fixtureGoals();
-  assert.deepEqual(startConditionFailures(goals, { loadAverage: [1, 1, 1], swap: { usedBytes: 0, totalBytes: 0 }, fseventsdCores: 0 }), []);
-  assert.deepEqual(startConditionFailures(goals, { loadAverage: [1, 1, 1], swap: { usedBytes: 6, totalBytes: 10 }, fseventsdCores: 0.2 }),
-    ["swap use 6 B is not below 0.5 of the swap total 10 B", "fseventsd uses 0.2 of a core, not below 0.1"]);
+  assert.deepEqual(startConditionFailures(goals, { loadAverage: [1, 1, 1], swap: { usedBytes: 0, totalBytes: 0 } }), []);
+  assert.deepEqual(startConditionFailures(goals, { loadAverage: [1, 1, 1], swap: { usedBytes: 6, totalBytes: 10 } }),
+    ["swap use 6 B is not below 0.5 of the swap total 10 B"]);
 });
 
 test("the runs interleave the five applications, run S0b in the application that S3 leaves, and run a scenario without a relative value only on the mygo host", { timeout: 1000 }, () => {
@@ -439,7 +435,7 @@ function fixtureContext(t, { refreshRate = 120, backingScale = 2, exit = false, 
   // The fixture index holds no sidecar, so the baseline record of the run holds none.
   const context = {
     goals, session, write: (line) => lines.push(line), benchmarks: BENCHMARKS, baseline: { ...baselineRecord(), sidecars: [] },
-    readStart: async () => ({ loadAverage: [1, 1, 1], swap: { usedBytes: 0, totalBytes: 1 << 30 }, fseventsdCores: 0.01 }),
+    readStart: async () => ({ loadAverage: [1, 1, 1], swap: { usedBytes: 0, totalBytes: 1 << 30 } }),
     loadAverage: () => [1, 2, 3], processes: fixtureProcesses(session),
     runTarget: async (command, { target }) => {
       targets.push(target);
@@ -520,7 +516,7 @@ test("a run whose window stays covered after its activation waits on its watch u
 
 test("a run that starts outside the run conditions starts no application", { timeout: 10000 }, async (t) => {
   const { context, application, lines } = fixtureContext(t);
-  context.readStart = async () => ({ loadAverage: [1, 1, 1], swap: { usedBytes: 600, totalBytes: 1000 }, fseventsdCores: 0.01 });
+  context.readStart = async () => ({ loadAverage: [1, 1, 1], swap: { usedBytes: 600, totalBytes: 1000 } });
   const [record] = await runUnit({ scenarios: ["S0"], run: 1, application }, context);
   assert.deepEqual(record.failures, ["swap use 600 B is not below 0.5 of the swap total 1000 B"]);
   assert.ok(!lines.some((line) => line.startsWith("running start ")), lines.join("\n"));

@@ -1,0 +1,70 @@
+{
+  "recorded": "The process table rows {pid, command} of processTable with the host of an application, its sidecar, a host launched through a symbolic link of its data folder with its sidecar launched by the real path, two tools that carry --config-dir, and the WebKit services of three applications; the rows of other processes are left out. Paths and application names are replaced by neutral names (the folder of the recording by /var/tester/rec, the node executable by /usr/local/bin/node).",
+  "rows": [
+    {
+      "pid": 1413,
+      "command": "/System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.GPU.xpc/Contents/MacOS/com.apple.WebKit.GPU"
+    },
+    {
+      "pid": 1635,
+      "command": "/System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.Networking.xpc/Contents/MacOS/com.apple.WebKit.Networking"
+    },
+    {
+      "pid": 1638,
+      "command": "/System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.GPU.xpc/Contents/MacOS/com.apple.WebKit.GPU"
+    },
+    {
+      "pid": 1648,
+      "command": "/System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebKit.WebContent"
+    },
+    {
+      "pid": 64435,
+      "command": "/var/tester/rec/sok-mygo.app/Contents/MacOS/soksak -e setInterval(() => {}, 1e6) -- --config-dir /var/tester/rec/soksak-check-mygo"
+    },
+    {
+      "pid": 64436,
+      "command": "/var/tester/rec/soksak-check-mygo/sidecars/probe/bin/probe 600"
+    },
+    {
+      "pid": 64437,
+      "command": "/var/tester/rec/sok-mygo.app/Contents/MacOS/soksak -e setInterval(() => {}, 1e6) -- --config-dir /var/tester/rec/link-to-linked"
+    },
+    {
+      "pid": 64438,
+      "command": "/var/tester/rec/soksak-check-linked/sidecars/worker/bin/worker 600"
+    },
+    {
+      "pid": 64439,
+      "command": "/usr/local/bin/node -e setInterval(() => {}, 1e6) -- --config-dir /var/tester/rec/soksak-check-mygo"
+    },
+    {
+      "pid": 64440,
+      "command": "/var/tester/rec/bin/sok -e setInterval(() => {}, 1e6) -- status host.window --config-dir /var/tester/rec/soksak-check-mygo"
+    },
+    {
+      "pid": 64441,
+      "command": "/usr/local/bin/node -e const end = Date.now() + 4000; while (Date.now() < end) {}"
+    },
+    {
+      "pid": 64442,
+      "command": "/bin/sleep 1.5"
+    },
+    {
+      "pid": 76149,
+      "command": "/System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.Networking.xpc/Contents/MacOS/com.apple.WebKit.Networking"
+    }
+  ],
+  "configDir": "/var/tester/rec/soksak-check-mygo",
+  "linkedConfigDir": "/var/tester/rec/link-to-linked",
+  "linkedRealPath": "/var/tester/rec/soksak-check-linked",
+  "pids": {
+    "host": 64435,
+    "sidecar": 64436,
+    "linkedHost": 64437,
+    "linkedSidecar": 64438,
+    "nodeTool": 64439,
+    "sokTool": 64440,
+    "busy": 64441,
+    "ender": 64442
+  }
+}

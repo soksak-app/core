@@ -39,7 +39,7 @@ const lane = (capability, language, implementation, tests, options = {}) => ({
 // The connections of existing components are also kept as a file list. They are not interpreted as behavior evidence.
 const MATRIX = [
   lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/repeat-rust.test.mjs", "scripts/test/platform/darwin/system/repeat-rust.test.mjs", "scripts/test/check-windows-build.test.mjs", "scripts/test/host-debug-check.test.mjs", "scripts/test/create-test-certificates.test.mjs", "scripts/test/macos-minimum-commands.test.mjs", "scripts/test/makefile-recipes.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
-  lane("macOS application bundle preparation", "js-ts", ["scripts/platform/darwin/prepare-app-bundle.mjs"], ["scripts/test/platform/darwin/bundle-preparation.test.mjs", "scripts/test/platform/darwin/system/bundle-installation.test.mjs", "scripts/test/fixtures/bundle-preparation/process-table.mjs"], { sharedTests: true }),
+  lane("macOS application bundle preparation", "js-ts", ["scripts/platform/darwin/prepare-app-bundle.mjs"], ["scripts/test/platform/darwin/bundle-preparation.test.mjs", "scripts/test/platform/darwin/system/bundle-installation.test.mjs"], { sharedTests: true }),
   lane("macOS application bundle exchange", "objective-c", ["native/darwin/src/tools/swap_bundle.m"], ["scripts/test/platform/darwin/system/bundle-installation.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("sok agent guidance", "document", ["packages/sok/go/src/agents/SKILL.md", "packages/sok/go/src/agents/mcp.json", "docs/spec/cli.md"], ["scripts/test/submit-guidance.test.mjs", "scripts/test/skill-groups.test.mjs", "scripts/test/message-report-guidance.test.mjs", "scripts/test/skill-captures.test.mjs", "scripts/test/skill-web-pages.test.mjs", "scripts/test/skill-delegation.test.mjs"], { testLanguage: "js-ts" }),
   lane("preflight check", "js-ts", ["scripts/check-preflight.mjs"], ["scripts/test/check-preflight.test.mjs"]),
@@ -161,7 +161,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   ], ["packages/client/test/**/*.mjs"]),
   lane("mygo workbench layout", "go", ["packages/workbench-mygo/src/**/*.go"], ["packages/workbench-mygo/tests/**/*.go"]),
   // The C file is the fault injection library that test/folder-wait-stream-start.test.mjs compiles and loads into its child process.
-  lane("window check harness", "js-ts", ["packages/window-check/*.mjs", "packages/window-check/platform/*.mjs", "packages/window-check/fixtures/*.mjs", "packages/window-check/fixtures/*/*.mjs"], ["packages/window-check/test/**/*.mjs", "packages/window-check/test/platform/darwin/*.c", "packages/window-check/test/fixtures/*.json"], { testExtensions: new Set([".mjs", ".c", ".json"]), sharedTests: true }),
+  lane("window check harness", "js-ts", ["packages/window-check/*.mjs", "packages/window-check/platform/*.mjs", "packages/window-check/platform/*/*.mjs", "packages/window-check/fixtures/*.mjs", "packages/window-check/fixtures/*/*.mjs"], ["packages/window-check/test/**/*.mjs", "packages/window-check/test/platform/darwin/*.c", "packages/window-check/test/fixtures/*.json"], { testExtensions: new Set([".mjs", ".c", ".json"]), sharedTests: true }),
   // The start probe that @soksak/window-check ships for the checks of plugin repositories.
   lane("window check start probe declaration", "declaration", ["packages/window-check/fixtures/start-probe/plugin.json"], ["packages/window-check/test/start.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("window check start probe view", "js-ts", ["packages/window-check/fixtures/start-probe/ui/app.js"], ["packages/window-check/test/start.test.mjs"], { sharedTests: true }),
@@ -1602,12 +1602,12 @@ const FEATURE_LINKS = [
   {
     id: "F972",
     implementation: [
-      { file: "scripts/platform/darwin/prepare-app-bundle.mjs", symbol: "function workingDirectory(pid, run) {" },
+      { file: "scripts/platform/darwin/prepare-app-bundle.mjs", symbol: "function runningBundleProcesses(bundle) {" },
     ],
     tests: [
       { file: "scripts/test/platform/darwin/bundle-preparation.test.mjs", id: "bundle preparation attributes a relative executable path by the working directory of its process" },
     ],
-    expected: "A running process is attributed to a bundle only by its absolute executable path, a relative one resolved against the working directory of the process.",
+    expected: "A running process is attributed to a bundle only by the absolute executable path that the system reports for it, which resolves a relative launch path against the working directory of the process.",
     levels: ["unit"],
   },
   {
@@ -2271,14 +2271,15 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/window-check/platform/platform.mjs", symbol: "export class PlatformOperationNotImplemented extends Error {" },
       { file: "packages/window-check/platform/platform.mjs", symbol: "export function releasePlatform({ platform = runPlatform(), arch = process.arch } = {}) {" },
-      { file: "packages/window-check/platform/darwin.mjs", symbol: "export async function listProcesses(run) {" },
+      { file: "packages/window-check/platform/platform.mjs", symbol: "export async function listProcesses() {" },
       { file: "packages/window-check/test-app.mjs", symbol: "export async function cachedBundle(cache, version, host, { platform = runPlatform(), arch = process.arch, signal, releases, write = () => {} } = {}) {" },
       { file: "packages/window-check/test-app.mjs", symbol: "async function quit(child, sok, configDir, by, root, platform) {" },
     ],
     tests: [
       { file: "packages/window-check/test/platform.test.mjs", id: "the release platform of the run is the system and the architecture of the computer that runs it" },
       { file: "packages/window-check/test/platform.test.mjs", id: "on macOS the application of an extracted zip is its bundle, whose Contents/MacOS holds the application and sok" },
-      { file: "packages/window-check/test/platform.test.mjs", id: "on macOS the run extracts with ditto, waits for a lock with lockf and lists processes with ps" },
+      { file: "packages/window-check/test/platform.test.mjs", id: "on macOS the run extracts with ditto and waits for a lock with lockf" },
+      { file: "packages/window-check/test/platform.test.mjs", id: "the process list holds this process with its command line" },
       { file: "packages/window-check/test/platform.test.mjs", id: "an operation that the platform does not implement rejects with its name and runs nothing" },
       { file: "packages/window-check/test/platform.test.mjs", id: "the package ships the platform operations of the run" },
       { file: "packages/window-check/test/test-app.test.mjs", id: "the run uses the published application zip of the core release of this package for the platform that runs it" },
@@ -3783,7 +3784,7 @@ const FEATURE_LINKS = [
       { file: "scripts/test/test-language-test-adapters.test.mjs", id: "refuses a build without its own limit and names the case" },
       { file: "scripts/test/test-language-test-manifest.test.mjs", id: "each committed case of a compiled language declares its build, so the limit of the case measures only the test" },
       { file: "scripts/test/test-command.test.mjs", id: "a refused SIGTERM at the limit to a group that holds only zombies still reports timeout" },
-      { file: "scripts/test/test-command.test.mjs", id: "counts a process group that holds only zombies as gone after a denied probe" },
+      { file: "scripts/test/test-command.test.mjs", id: "counts a process group without a running member as gone after a denied probe" },
     ],
     expected: "Each language case of a compiled language runs its declared build before its tests under a limit of its own, a failed build runs no test and reports its status, the limit of the case measures only the tests, and the command supervisor judges each group signal and probe by the rule of signalGroup.",
     levels: ["unit"],
@@ -4384,7 +4385,7 @@ const FEATURE_LINKS = [
       { file: "scripts/measure-app-usage.mjs", symbol: "export function windowRows(window, configDir, status)" },
       { file: "scripts/measure-terminal-redraw.mjs", symbol: "export async function prepareRedraw(s, plugin, root)" },
       { file: "scripts/measure-terminal-redraw.mjs", symbol: "export async function readRegion(s, tab)" },
-      { file: "scripts/measure-terminal-redraw.mjs", symbol: "export function regionCost({ measurement, first, last })" },
+      { file: "scripts/measure-terminal-redraw.mjs", symbol: "export function regionCost({ measurement })" },
       { file: "scripts/measure-terminal-redraw.mjs", symbol: "export function frameCost({ rows, totals, presented, seconds })" },
       { file: "scripts/measure-app-usage.mjs", symbol: "export function usageMeasurements({ app, marks, faultLines, gesture })" },
       { file: "scripts/measure-app-usage.mjs", symbol: "export function usageOutput({ options, measurement, gesture, faultLines })" },
@@ -4411,7 +4412,7 @@ const FEATURE_LINKS = [
       { file: "scripts/test/measure-app-usage.test.mjs", id: "a nested step is part of the step that contains it and is not added again" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the processes of an application are its host, its sidecars and the WebKit services of the launchd domain of its host, read from the recorded process table" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the processes of the windows of an application are its listing with the page and document rows of each window, one row per pid" },
-      { file: "scripts/test/measure-app-usage.test.mjs", id: "the cpu readings of ps are the cpu seconds of every process, and a failing ps is an error that names the command" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the cpu seconds read from the process table hold this process with the CPU time it used" },
       { file: "scripts/test/platform/darwin/system/measure-app-usage.test.mjs", id: "a command that runs resolves to its status and output, and a command that does not start resolves to its error" },
       { file: "scripts/test/measure-terminal-redraw.test.mjs", id: "the B3 measurements of the redraw are the cpu milliseconds per presented frame, the frame rate and the presented frames" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "a window without a main page has no page process row and is no error" },
@@ -4688,7 +4689,7 @@ const FEATURE_LINKS = [
       { file: "scripts/test/benchmark-b3.test.mjs", id: "a BASELINE checkout whose head differs from the last head of the baseline record or whose working tree holds changes fails before the first run" },
       { file: "scripts/test/benchmark-b3.test.mjs", id: "the installed sidecars of every application and the installed plugins of a baseline host that differ in version or sha256 from the baseline record fail the run" },
       { file: "scripts/test/benchmark-b3.test.mjs", id: "the surface plugins are the installed plugins whose manifest declares a surface" },
-      { file: "scripts/test/benchmark-b3.test.mjs", id: "the run conditions are read from injected readings of swap use, of fseventsd and of the display" },
+      { file: "scripts/test/benchmark-b3.test.mjs", id: "the swap use of a run is read from the output of sysctl vm.swapusage" },
       { file: "scripts/test/benchmark-b3.test.mjs", id: "a swap total of zero leaves no swap in use, so the run may start" },
       { file: "scripts/test/benchmark-b3.test.mjs", id: "the runs interleave the five applications, run S0b in the application that S3 leaves, and run a scenario without a relative value only on the mygo host" },
       { file: "scripts/test/benchmark-b3.test.mjs", id: "the targets of a scenario come from the goals in their order, and STEP=pointer runs after every other reading of the scenario" },
@@ -9168,7 +9169,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/sidecars.rs", symbol: "shutdown_waiters" },
       { file: "packages/host/go/src/sidecars.go", symbol: "CloseOwner" },
     ],
-    tests: [{ file: "e2e/test/service-processes.test.mjs", id: "process measurement preserves identities" }],
+    tests: [{ file: "e2e/test/service-processes.test.mjs", id: "the process rows hold this process with its parent, state and command" }],
     expected: "Normal application quit acknowledges owned-session closure, stops the service, and removes its endpoint.",
     levels: ["application"],
   },
@@ -9177,7 +9178,7 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/host/go/src/sidecars.go", symbol: "Close" },
     ],
-    tests: [{ file: "e2e/test/service-processes.test.mjs", id: "process measurement preserves identities" }],
+    tests: [{ file: "e2e/test/service-processes.test.mjs", id: "the process rows hold this process with its parent, state and command" }],
     expected: "Closing raster probe tabs reaps their session children while retaining the shared persistent service.",
     levels: ["native", "application"],
   },
@@ -12203,7 +12204,7 @@ const FEATURE_LINKS = [
     id: "F63",
     implementation: [{ file: "packages/window-check/process-group.mjs", symbol: "export function groupMembers(pgid)" }],
     tests: [
-      { file: "scripts/test/test-command.test.mjs", id: "counts a process group that holds only zombies as gone after a denied probe" },
+      { file: "scripts/test/test-command.test.mjs", id: "counts a process group without a running member as gone after a denied probe" },
       { file: "scripts/test/test-command.test.mjs", id: "reads the members of a group from the real process table after a denied probe" },
       { file: "scripts/test/test-command.test.mjs", id: "reports a refused group signal of the cleanup while a member of the group runs" },
     ],
@@ -17889,7 +17890,7 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // F1114-3 updates the copies of the catalog and a case, F1114-4 makes the endpoint harnesses wait on the count of the endpoint, and F1113-2 lists them here;
 // F1118 releases the core candidate 0.0.50, F1117-1 reads a resident size through the existing footprint call, F1117-2 changes tests only, F1117-3 adds a structure check;
 // they add no capability.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F1117-3", "F1117-2", "F1117-1", "F1118", "F1114-4", "F1114-3", "F1116-1", "F1116", "F1114", "F1113", "F1113-1", "F1113-2", "F1113-3", "F1103", "F1102", "F1100", "F1095", "F1077", "F1077-2", "F1061", "F1060", "F1059", "F1058", "F1054", "F1057", "F1056", "F1053", "F1052", "F1051", "F1050", "F1049", "F1048", "F1047", "F1046", "F1043", "F1040", "F1036", "F1041", "F1031", "F1017", "F1005", "F982-7", "F982-8", "F982-10", "F993", "F989", "F904", "F907", "F897", "F887", "F886", "F883-1", "F873", "F872", "F871", "F870", "F869", "F867-11", "F867-10", "F867-9", "F867-8", "F867-7", "F867", "F523", "F866", "F865", "F864", "F863","F862", "F861", "F860", "F859", "F858", "F857", "F856", "F855", "F854", "F853", "F852", "F851", "F850", "F849", "F848", "F847", "F846", "F845", "F835", "F843", "F842", "F841", "F840", "F839", "F838", "F837", "F836", "F834", "F833", "F832", "F830-3", "F830-2", "F830-1", "F830", "F825-1", "F829", "F827-1", "F827", "F828", "F826", "F825", "F820-1", "F823-1", "F824", "F822", "F823", "F821", "F819", "F818", "F817", "F816", "F814", "F813", "F812", "F811", "F810", "F809", "F808", "F805", "F804", "F803", "F802", "F801", "F800", "F799", "F795-5", "F798", "F795-1-1", "F795-7", "F796", "F795-2", "F795-1", "F788", "F676", "F673", "F510", "F664-1", "F648", "F646", "F582", "F497", "F496", "F494", "F492", "F495", "F493", "F491", "F490", "F489", "F488", "F639", "F637", "F629", "F486", "F487", "F485", "F484", "F435-8-2", "F483-1", "F435-8-1", "F435-7", "F483", "F482", "F435-6", "F631", "F481", "F479", "F435-5", "F478", "F477", "F476", "F474", "F475", "F473", "F472", "F471", "F239-276", "F97", "F16", "F470", "F469", "F468", "F466", "F467", "F465", "F463", "F464", "F561", "F581", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
+const NON_CAPABILITY_COMPLETIONS = new Set(["F1117", "F1117-4", "F1117-3", "F1117-2", "F1117-1", "F1118", "F1114-4", "F1114-3", "F1116-1", "F1116", "F1114", "F1113", "F1113-1", "F1113-2", "F1113-3", "F1103", "F1102", "F1100", "F1095", "F1077", "F1077-2", "F1061", "F1060", "F1059", "F1058", "F1054", "F1057", "F1056", "F1053", "F1052", "F1051", "F1050", "F1049", "F1048", "F1047", "F1046", "F1043", "F1040", "F1036", "F1041", "F1031", "F1017", "F1005", "F982-7", "F982-8", "F982-10", "F993", "F989", "F904", "F907", "F897", "F887", "F886", "F883-1", "F873", "F872", "F871", "F870", "F869", "F867-11", "F867-10", "F867-9", "F867-8", "F867-7", "F867", "F523", "F866", "F865", "F864", "F863","F862", "F861", "F860", "F859", "F858", "F857", "F856", "F855", "F854", "F853", "F852", "F851", "F850", "F849", "F848", "F847", "F846", "F845", "F835", "F843", "F842", "F841", "F840", "F839", "F838", "F837", "F836", "F834", "F833", "F832", "F830-3", "F830-2", "F830-1", "F830", "F825-1", "F829", "F827-1", "F827", "F828", "F826", "F825", "F820-1", "F823-1", "F824", "F822", "F823", "F821", "F819", "F818", "F817", "F816", "F814", "F813", "F812", "F811", "F810", "F809", "F808", "F805", "F804", "F803", "F802", "F801", "F800", "F799", "F795-5", "F798", "F795-1-1", "F795-7", "F796", "F795-2", "F795-1", "F788", "F676", "F673", "F510", "F664-1", "F648", "F646", "F582", "F497", "F496", "F494", "F492", "F495", "F493", "F491", "F490", "F489", "F488", "F639", "F637", "F629", "F486", "F487", "F485", "F484", "F435-8-2", "F483-1", "F435-8-1", "F435-7", "F483", "F482", "F435-6", "F631", "F481", "F479", "F435-5", "F478", "F477", "F476", "F474", "F475", "F473", "F472", "F471", "F239-276", "F97", "F16", "F470", "F469", "F468", "F466", "F467", "F465", "F463", "F464", "F561", "F581", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66), the window checks of plugins (F110) and the registry listing of the hwp plugin (F141, registry items G37 and G38). Core cannot read

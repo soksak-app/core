@@ -14,7 +14,6 @@ import test from "node:test";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, untilEventLine } from "@soksak/window-check/event-log.mjs";
-import { processTable } from "@soksak/window-check/process-table.mjs";
 import { fresh, pluginChangeStarted, reading } from "./fixture.mjs";
 import { addRasterTab, RASTER, RASTER_SIDECAR as SIDECAR } from "./raster-probe.mjs";
 import { processRows, rowsRunningFrom } from "./service-processes.mjs";
@@ -32,7 +31,7 @@ function replaceFile(file, text) {
 /** The processes that run an executable inside the folder root, by its path as given and as resolved. */
 function runningFrom(root) {
   const roots = existsSync(root) ? [...new Set([root, realpathSync(root)])] : [root];
-  return rowsRunningFrom(processRows(processTable("pid=,ppid=,stat=,command=")), roots);
+  return rowsRunningFrom(processRows(), roots);
 }
 
 /**

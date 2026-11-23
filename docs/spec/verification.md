@@ -96,6 +96,21 @@ The runner emits a start event, progress at least every five seconds while runni
 
 The command supervisor takes an explicit identifier, executable/arguments, working directory, and positive timeout. It does not use a shell, silently substitute a missing executable, or convert nonzero exits to success. On timeout or cancellation it terminates only its own command process group and waits for cleanup; descendants cannot outlive a successfully completed supervised command. It must not terminate an independently running inspection application or persistent user session.
 
+## Process table
+
+No source starts `ps`, `kill`, `pgrep` or `lsof` as a subprocess; `make check-process-tools` finds such a start in every tracked Go, Rust and Node source. A process tool reads a table that changes while it runs, adds a process of its own to it, and gives text that each caller parses again. The hosts read a process through the native library and signal through `kill(2)`, and a test judges its own child by its wait status.
+
+Node has no process table interface, so the Node checks and scripts read the table through one module, `processes(fields)` and `workingDirectory(pid)` of `packages/window-check/platform/platform.mjs`, which loads the module of the platform:
+
+- `platform/darwin/processes.mjs` calls the C functions of the system libSystem through koffi, a maintained foreign function library: `sysctl` `KERN_PROC_ALL` for the table, `KERN_PROCARGS2` for the arguments, `proc_pidpath` for the executable, `proc_pidinfo` `PROC_PIDTASKINFO` for the resident size and the CPU time, and `PROC_PIDVNODEPATHINFO` for the working directory.
+- `platform/linux/processes.mjs` reads procfs.
+
+A row is `{pid, ppid, pgid, state, name}` with `state` `running`, `exiting` or `zombie`, and with `command`, `executable`, `residentKb` and `cpuSeconds` when the caller names them. A value that the system does not give to this user, such as the CPU time of a process of another user, is absent from its row, and a process that ends while the table is read is left out. koffi installs a prebuilt binary of its own release, so the workspace runs no build script of it, and a repository that installs `@soksak/window-check` declares `koffi: false` in the `allowBuilds` of its pnpm workspace, because pnpm fails an install whose build script no setting decides.
+
+macOS gives a process that is not root no CPU time of a process of another user: `proc_pidinfo` `PROC_PIDTASKINFO` and `proc_pid_rusage` of such a process, such as `WindowServer` (user `_windowserver`) or `fseventsd` (root), return `EPERM`. `ps` reads that time only because `/bin/ps` is setuid root (mode `rwsr-xr-x`, owner root), and no source starts it. No interface that a process without privileges can call reads the CPU time of a process of another user, so the measurements hold no such value: the redraw measurement has no CPU time of the window server, and a B3 run has no start condition on the CPU share of fseventsd.
+
+Two other forms were rejected. A Node addon or a shared library of core that reads the table adds a native build, staging and distribution to every package that reads a process, which a call of the system library does not need. A helper executable that prints the table is a subprocess that reads the table again, which is the defect that the rule removes.
+
 ## Application acceptance
 
 A window check does not capture, restore or judge the frontmost application. An application action may activate its window as specified, and another application that a person brings forward during a check is not caused by the check; activating an earlier application would take the activation away from that person. A check that needs activation state asserts it through the declared status of the action it tests.

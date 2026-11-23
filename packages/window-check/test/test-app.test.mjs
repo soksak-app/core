@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, watch, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
@@ -8,6 +7,7 @@ import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { APP_NAMES } from "../app.mjs";
+import { processes } from "../platform/platform.mjs";
 import { START_PROBE } from "../start.mjs";
 import { applicationZip, buildRegistry, cachedBundle, checkEnv, checkFiles, coreVersion, DEFAULT_PACK, download,
   installRegistry, packArgv, packFileName, parseTestAppOptions, PUBLIC_INDEX, quitKeyCommands, remainingProcesses, run, sidecarEntries, step } from "../test-app.mjs";
@@ -140,14 +140,10 @@ function programWithChild(t, marker) {
 }
 
 /**
- * Whether the process `pid` still runs, from its ps(1) state: a process that SIGKILL ended is absent, a zombie (Z) or exiting (E),
- * because the system ends it after the signal returns.
+ * Whether the process `pid` still runs, from its state in the process table: a process that SIGKILL ended is absent, a zombie or
+ * exiting, because the system ends it after the signal returns.
  */
-const alive = (pid) => {
-  const result = spawnSync("ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8" });
-  const state = result.stdout.trim();
-  return state !== "" && !state.startsWith("Z") && !state.slice(1).includes("E");
-};
+const alive = (pid) => processes().find((row) => row.pid === Number(pid))?.state === "running";
 
 test("a command at its limit ends with every process it started", { timeout: 30000 }, async (t) => {
   const { args, started } = programWithChild(t, join(folder(t), "child"));

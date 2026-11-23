@@ -27,13 +27,3 @@ export function quitKeys() {
 export async function waitForLockRelease(lock, seconds, run) {
   await run("lockf", ["-s", "-t", String(seconds), lock, "true"]);
 }
-
-/** The processes of `ps -axo pid=,command=`, one `<pid> <command>` line each. */
-export async function listProcesses(run) {
-  const listing = await run("ps", ["-axo", "pid=,command="]);
-  return listing.split("\n").map((line) => line.trim()).filter((line) => line !== "").map((line) => {
-    const match = /^(\d+)\s+(.*)$/.exec(line);
-    if (match === null) throw new Error(`ps printed the line ${JSON.stringify(line)}, which names no process`);
-    return { pid: Number(match[1]), command: match[2] };
-  });
-}

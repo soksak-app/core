@@ -96,6 +96,21 @@ E2E 실행기는 시험 child를 시작하기 전에 비어 있지 않은 `SOKSA
 
 명령 감독기는 명시적 식별자, 실행 파일·인자, 작업 디렉터리, 양의 타임아웃을 받는다. 셸을 사용하거나 없는 실행 파일을 몰래 대체하거나 비정상 종료를 성공으로 바꾸지 않는다. 시간 초과·취소 시 자신이 실행한 명령의 프로세스 그룹만 종료하고 정리를 기다린다. 성공한 감독 명령의 자손이 남아서는 안 된다. 독립적으로 실행 중인 검사 앱이나 영속 사용자 세션은 종료하지 않는다.
 
+## Process table
+
+어떤 source도 `ps`, `kill`, `pgrep`, `lsof`를 subprocess로 시작하지 않는다. `make check-process-tools`가 추적되는 모든 Go, Rust, Node source에서 그런 시작을 찾는다. process tool은 실행 중에 바뀌는 표를 읽고, 자기 process를 그 표에 더하며, 호출하는 쪽마다 다시 parse하는 text를 준다. host는 native library로 process를 읽고 `kill(2)`로 signal을 보내며, test는 자기 child를 그 wait status로 판정한다.
+
+Node에는 process table interface가 없으므로, Node check와 script는 하나의 module로 표를 읽는다. 그 module은 `packages/window-check/platform/platform.mjs`의 `processes(fields)`와 `workingDirectory(pid)`이며, platform의 module을 load한다:
+
+- `platform/darwin/processes.mjs`는 관리되는 foreign function library인 koffi로 system libSystem의 C 함수를 호출한다. 표는 `sysctl` `KERN_PROC_ALL`, 인자는 `KERN_PROCARGS2`, executable은 `proc_pidpath`, resident size와 CPU time은 `proc_pidinfo` `PROC_PIDTASKINFO`, working directory는 `PROC_PIDVNODEPATHINFO`로 읽는다.
+- `platform/linux/processes.mjs`는 procfs를 읽는다.
+
+행은 `{pid, ppid, pgid, state, name}`이고 `state`는 `running`, `exiting`, `zombie` 중 하나이며, 호출하는 쪽이 지정하면 `command`, `executable`, `residentKb`, `cpuSeconds`를 가진다. 다른 사용자 process의 CPU time처럼 system이 이 사용자에게 주지 않는 값은 그 행에 없고, 표를 읽는 동안 끝난 process는 빠진다. koffi는 자기 release의 prebuilt binary를 설치하므로 workspace는 그 build script를 실행하지 않는다. pnpm은 어떤 설정도 정하지 않은 build script가 있는 install을 실패시키므로, `@soksak/window-check`를 설치하는 저장소는 pnpm workspace의 `allowBuilds`에 `koffi: false`를 선언한다.
+
+macOS는 root가 아닌 process에게 다른 사용자 process의 CPU time을 주지 않는다. `WindowServer`(사용자 `_windowserver`)나 `fseventsd`(root) 같은 process에 대한 `proc_pidinfo` `PROC_PIDTASKINFO`와 `proc_pid_rusage`는 `EPERM`을 돌려준다. `ps`가 그 time을 읽는 것은 `/bin/ps`가 setuid root(mode `rwsr-xr-x`, owner root)이기 때문이며, 어떤 source도 그것을 시작하지 않는다. 권한 없는 process가 호출할 수 있는 어떤 interface도 다른 사용자 process의 CPU time을 읽지 못하므로, 측정은 그런 값을 갖지 않는다. redraw 측정에는 window server의 CPU time이 없고, B3 run에는 fseventsd의 CPU 비율에 대한 시작 조건이 없다.
+
+다른 두 형태는 채택하지 않았다. 표를 읽는 core의 Node addon이나 shared library는 process를 읽는 모든 package에 native build, staging, 배포를 더하는데, system library 호출에는 그것이 필요 없다. 표를 출력하는 helper executable은 표를 다시 읽는 subprocess이며, 이 규칙이 없애는 결함 그 자체다.
+
 ## 앱 인수 검증
 
 창 검사는 frontmost application을 저장하거나 복원하거나 판정하지 않는다. 명세된 애플리케이션 동작은 자기 창을 활성화할 수 있고, 검사 중 사람이 앞으로 가져온 다른 애플리케이션은 검사가 일으킨 것이 아니며, 이전 애플리케이션을 활성화하면 그 사람에게서 활성화를 빼앗기 때문이다. 활성화 상태가 필요한 검사는 시험하는 동작의 선언된 status로 이를 확인한다.

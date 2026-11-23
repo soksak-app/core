@@ -8,6 +8,8 @@ packages:
 allowBuilds:
   '@parcel/watcher': true
   esbuild: true
+  # koffi ships prebuilt binaries for each platform, so its install script, which builds from source, does not run.
+  koffi: false
 patchedDependencies:
   '@parcel/watcher@2.6.0': patches/@parcel__watcher@2.6.0.patch
 overrides:
