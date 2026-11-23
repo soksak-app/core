@@ -438,7 +438,7 @@
                           "properties": {
                             "state": { "enum": ["idle", "working", "blocked"] },
                             "pid": { "type": ["integer", "null"] },
-                            "app": { "type": ["string", "null"], "minLength": 1, "maxLength": 64 }
+                            "app": { "type": ["string", "null"] }
                           },
                           "required": ["state", "pid", "app"]
                         }
