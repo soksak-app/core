@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1125-2: core 0.0.51을 application zip 3개와 package release 5개로 release했다.
 - F1135: destructive command guard 계약은 삽입 텍스트의 control character를 해당 키로 읽는다.
 - F1134: background 세션은 새 `background` member `directory`와 `params`로 탭의 시작 디렉터리와 선언이 대응한 탭 매개변수를 받아 시작한다.
 - F1133: 탭의 프로그램 상태는 프로그램 이름 `app`을 담고 `core.grid`가 그것을 보고하며, manifest reader는 `properties.app`을 요구한다.
