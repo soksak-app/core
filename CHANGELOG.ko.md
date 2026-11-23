@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1116-1: 실제 platform의 app update 테스트가 결과, bundle의 한 번의 시작, `cmd.Wait`의 반환을 확인하고 process의 상태는 판정하지 않는다. kernel이 process가 zombie가 되기 전에 `NOTE_EXIT`를 보내기 때문이다. platform wait 테스트는 wait가 진입하고 반환하지 않았으면 시작에서 실패한다. 검증: wait를 지운 platform wait 테스트의 Red, 이어 package 테스트의 Green.
 - F1114-3: 배포되는 event catalog 사본과 생성된 class table이 `host.endpoint.end`를 적고, diagnostics subscriber case가 닫힘 `status.unwatch`를 선언한다. 검증: F1114-1의 release run Red, 이어 catalog와 class table 테스트, diagnostics feature로 Rust endpoint 파일의 Green.
 - F1116: app update 테스트가 끝난 process의 종료를 `ps`가 보고하는 상태로 판정한다. 종료했지만 아직 wait되지 않은 process는 여전히 `kill -0`에 답하기 때문이다. 검증: `TestAnExitedProcessThatWasNotYetWaitedForDoesNotRun`의 Red, 이어 그것과 다섯 종료 테스트의 Green(20번씩 사본 4개).
 - F1114-1: 두 host에서 endpoint 연결의 끝은 `subscriptions`와 `failed`를 가진 event `host.endpoint.end`이고, endpoint page harness는 각 연결의 끝 뒤에만 page를 검사하므로 늦은 호출이 그 case를 실패시킨다. 세 case가 이제 닫힘 `status.unwatch`를 선언하고, Rust host는 실패한 해제를 기록한다. 검증: 이전 host에서 두 event 테스트의 Red와 새 harness에서 Rust record case의 Red, 이어 세 Rust endpoint 파일과 Go `servePage` 테스트의 Green(diagnostics tag 유무 모두).

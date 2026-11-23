@@ -14,9 +14,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/soksak-app/core/packages/sok/go/src"
@@ -178,53 +178,10 @@ func bundleFixture(t *testing.T, parent, name, text string) string {
 }
 
 // endingProcess starts a process that ends when its standard input closes, and returns its pid and a function that
-// closes that input and receives the end of the process. The process has no end of its own in time, so its end is the
-// event of the test.
-// runs reports whether the process pid still runs. A process that exited and that its parent has not yet waited for keeps its
-// process identifier and answers a signal of 0, so the state that ps reports decides: no row is a collected process, and the
-// state Z is an exited one.
-func runs(t *testing.T, pid int) bool {
-	t.Helper()
-	out, err := exec.Command("ps", "-o", "stat=", "-p", strconv.Itoa(pid)).Output()
-	var exit *exec.ExitError
-	if errors.As(err, &exit) && exit.ExitCode() == 1 && len(out) == 0 {
-		return false
-	}
-	if err != nil {
-		t.Fatalf("ps of process %d: %v", pid, err)
-	}
-	return !strings.HasPrefix(strings.TrimSpace(string(out)), "Z")
-}
-
-// An exited process that its parent has not yet waited for does not run, as the relaunch observes it: the operating system
-// reports its exit before the parent collects its status.
-func TestAnExitedProcessThatWasNotYetWaitedForDoesNotRun(t *testing.T) {
-	command := exec.Command("true")
-	if err := command.Start(); err != nil {
-		t.Fatal(err)
-	}
-	pid := command.Process.Pid
-	t.Cleanup(func() { _ = command.Wait() })
-	// The real exit, as the relaunch waits for it; the status of the process is collected only after the judgment.
-	current, err := platform.Current()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := current.WaitProcessEnd(pid); err != nil {
-		if strings.Contains(err.Error(), "not implemented on ") {
-			t.Skip(err.Error())
-		}
-		t.Fatal(err)
-	}
-	running := runs(t, pid)
-	if err := command.Wait(); err != nil {
-		t.Fatal(err)
-	}
-	if running {
-		t.Fatalf("the exited process %d that was not yet waited for is judged as running", pid)
-	}
-}
-
+// closes that input and returns when cmd.Wait of the process returned. The process has no end of its own in time, so its
+// end is the event of the test. The test does not judge the state of the process at the start of the bundle: the
+// operations wait through the platform, and their order is the property of
+// TestTheUpdateAndTheRelaunchWaitForTheEndOfTheWaitOfThePlatform.
 func endingProcess(t *testing.T) (int, func()) {
 	t.Helper()
 	command := exec.Command("cat")
@@ -259,10 +216,6 @@ func TestTheBundleIsReplacedAfterTheProcessEndedAndTheApplicationStarts(t *testi
 	pid, end := endingProcess(t)
 	var started []string
 	open := func(bundle string, arguments []string) error {
-		// The application starts after the process ended and the bundle was replaced.
-		if runs(t, pid) {
-			t.Error("the application started before the process ended")
-		}
 		data, err := os.ReadFile(filepath.Join(bundle, "Contents", "Info.plist"))
 		if err != nil || string(data) != "new" {
 			t.Errorf("the started bundle holds %q (%v)", data, err)
@@ -357,10 +310,9 @@ func TestTheReplacementWaitsForTheExitWithoutALimit(t *testing.T) {
 	target := bundleFixture(t, parent, "soksak.app", "old")
 	staged := bundleFixture(t, filepath.Join(parent, "updates", "0.0.9"), "soksak.app", "new")
 	pid, end := endingProcess(t)
+	starts := 0
 	open := func(string, []string) error {
-		if runs(t, pid) {
-			t.Error("the application started before the process ended")
-		}
+		starts++
 		return nil
 	}
 	done := make(chan error, 1)
@@ -371,6 +323,9 @@ func TestTheReplacementWaitsForTheExitWithoutALimit(t *testing.T) {
 	if err := <-done; err != nil {
 		t.Fatal(err)
 	}
+	if starts != 1 {
+		t.Fatalf("the application started %d times, want 1", starts)
+	}
 }
 
 // contract: app-relaunch.starts-the-same-bundle-in-the-background-after-the-process-ended
@@ -380,9 +335,6 @@ func TestTheRelaunchStartsTheSameBundleInTheBackgroundAfterTheProcessEnded(t *te
 	pid, end := endingProcess(t)
 	var started []string
 	open := func(bundle string, arguments []string, activate bool) error {
-		if runs(t, pid) {
-			t.Error("the application started before the process ended")
-		}
 		started = append(started, fmt.Sprintf("%s %s activate=%v", bundle, strings.Join(arguments, " "), activate))
 		return nil
 	}
@@ -419,10 +371,9 @@ func TestTheRelaunchRefusesAFolderThatIsNotABundleAndWaitsForTheExit(t *testing.
 	}
 	target := bundleFixture(t, parent, "soksak.app", "same")
 	// The test ends the process it controls; the relaunch then starts the bundle after the exit.
+	starts := 0
 	open := func(string, []string, bool) error {
-		if runs(t, pid) {
-			t.Error("the application started before the process ended")
-		}
+		starts++
 		return nil
 	}
 	done := make(chan error, 1)
@@ -433,28 +384,31 @@ func TestTheRelaunchRefusesAFolderThatIsNotABundleAndWaitsForTheExit(t *testing.
 	if err := <-done; err != nil {
 		t.Fatal(err)
 	}
+	if starts != 1 {
+		t.Fatalf("the application started %d times, want 1", starts)
+	}
 }
 
-// beganPlatform is a platform whose process wait signals that it began and then waits until the test releases it.
-func beganPlatform(t *testing.T) (began, release chan struct{}) {
+// waitedPlatform is a platform whose process wait records that it was entered and that it returned.
+func waitedPlatform(t *testing.T) (entered, returned *atomic.Bool) {
 	t.Helper()
 	previous, err := platform.Current()
 	if err != nil {
 		t.Fatal(err)
 	}
-	began, release = make(chan struct{}), make(chan struct{})
+	entered, returned = new(atomic.Bool), new(atomic.Bool)
 	platform.Register(processWaitPlatform{Platform: previous, wait: func(int) error {
-		close(began)
-		<-release
+		entered.Store(true)
+		returned.Store(true)
 		return nil
 	}})
 	t.Cleanup(func() { platform.Register(previous) })
-	return began, release
+	return entered, returned
 }
 
-// The update and the relaunch give the platform wait only the PID, so they take no time limit. When the wait began the
-// operation has not ended; the test checks that at that point, then ends the wait, and the operation then starts the
-// application.
+// The update and the relaunch give the platform wait only the PID, so they take no time limit. The start of the
+// application checks that the wait of the platform was entered and returned, so an operation that does not wait fails
+// at its start.
 // contract: app-update.replace.refuses-before-it-changes-anything
 // contract: app-relaunch.refuses-a-folder-that-is-not-a-bundle-and-waits-for-the-exit
 func TestTheUpdateAndTheRelaunchWaitForTheEndOfTheWaitOfThePlatform(t *testing.T) {
@@ -464,35 +418,25 @@ func TestTheUpdateAndTheRelaunchWaitForTheEndOfTheWaitOfThePlatform(t *testing.T
 			parent := t.TempDir()
 			target := bundleFixture(t, parent, "soksak.app", "old")
 			staged := bundleFixture(t, filepath.Join(parent, "updates", "0.0.9"), "soksak.app", "new")
-			began, release := beganPlatform(t)
-			var waitEnded bool
-			done := make(chan error, 1)
-			go func() {
-				if operation == "update" {
-					done <- sok.ReplaceApp(sok.ReplaceOptions{PID: 1234, Bundle: staged, Target: target}, func(string, []string) error {
-						if !waitEnded {
-							t.Error("the application started before the wait ended")
-						}
-						return nil
-					})
-					return
+			entered, returned := waitedPlatform(t)
+			check := func() {
+				if !entered.Load() || !returned.Load() {
+					t.Errorf("the application started before the wait of the platform (entered %v, returned %v)", entered.Load(), returned.Load())
 				}
-				done <- sok.RelaunchApp(sok.RelaunchOptions{PID: 1234, Target: target}, func(string, []string, bool) error {
-					if !waitEnded {
-						t.Error("the application started before the wait ended")
-					}
+			}
+			var err error
+			if operation == "update" {
+				err = sok.ReplaceApp(sok.ReplaceOptions{PID: 1234, Bundle: staged, Target: target}, func(string, []string) error {
+					check()
 					return nil
 				})
-			}()
-			<-began
-			select {
-			case err := <-done:
-				t.Fatalf("the %s ended before the wait of the platform ended: %v", operation, err)
-			default:
+			} else {
+				err = sok.RelaunchApp(sok.RelaunchOptions{PID: 1234, Target: target}, func(string, []string, bool) error {
+					check()
+					return nil
+				})
 			}
-			waitEnded = true
-			close(release)
-			if err := <-done; err != nil {
+			if err != nil {
 				t.Fatal(err)
 			}
 		})
