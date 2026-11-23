@@ -88,6 +88,7 @@ export async function openOwnedSession({ plugin: id, params, size }, surface) {
   if (typeof reply?.session !== "string" || reply.session === "" || reply.creation !== creation) {
     throw new Error(`core.session.open: the sidecar reply names no session of creation ${creation}`);
   }
+  // default: an open without params records null, the value that the sidecar received.
   sessions.set(reply.session, { session: reply.session, plugin: id, owner: surface, shownBy: null, program: null, params: params ?? null, sidecar, size: sizeBody(size), pending: null });
   listenOwner(surface, windowSidecar(sidecar));
   emitEvent("info", "workbench.session.open", { session: reply.session, plugin: id, owner: surface, size: sizeBody(size) });

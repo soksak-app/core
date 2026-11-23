@@ -955,6 +955,7 @@ Items:
 | `sidecars-transport.sessions.refuses-invalid-member` | A `sessions` entry whose `size.width` is not a positive number rejects `sidecarSessions` with `invalid message: sessions size.width is not a positive number`. | all |
 | `sidecars-transport.sessions.refuses-an-entry-without-plugin` | A `sessions` entry without a non-empty string `plugin`, the plugin that opened the session, rejects `sidecarSessions` with `invalid message: sessions plugin is not a non-empty string`. | all |
 | `sidecars-transport.sessions.refuses-an-invalid-program` | A `sessions` entry whose `program` is not `idle`, `working`, `blocked` or `null` rejects `sidecarSessions` with `invalid message: sessions program is not idle, working, blocked or null`. | all |
+| `sidecars-transport.sessions.refuses-invalid-params` | A `sessions` entry without `params`, or whose `params` is neither an object nor `null`, rejects `sidecarSessions` with `invalid message: sessions params is not an object or null`. | all |
 | `sidecars-transport.sessions.refuses-a-size-that-is-not-an-object` | A `sessions` entry whose `size` is not an object rejects `sidecarSessions` with `invalid message: sessions size is not an object`. | all |
 | `sidecars-transport.sessions.empty-without-endpoint` | `sidecarSessions` of a declared persistent sidecar without a service endpoint resolves with no sessions and starts no process. | all |
 | `sidecars-transport.sessions.refuses-empty-sidecar` | `sidecarSessions` with an empty `sidecar` is refused with `sidecarSessions requires a non-empty sidecar`. | all |

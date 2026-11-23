@@ -515,6 +515,7 @@ const SECTION_ACTION_LABEL_MAX = 40;
  * and the command's parameters must accept the empty object: the action runs the command with no parameter.
  */
 function checkSectionActions(where, manifest) {
+  // default: sections is optional; a manifest without it has no section actions.
   for (const section of manifest.sections ?? []) {
     // default: actions is optional; a section without it has no button in its header.
     if (section.actions === undefined) continue;

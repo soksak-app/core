@@ -1620,6 +1620,46 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1127",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "function checkSectionActions(where, manifest) {" },
+      { file: "packages/workbench/sidebar-sections.js", symbol: "function sectionActions(section, surfaceId) {" },
+      { file: "packages/workbench-mygo/src/binder.go", symbol: "func (b *Binder) PressOn(c *ui.Context, name, command, item, surface string) ui.Element {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/sidebar-choices.test.mjs", id: "a section draws the buttons of its actions at the right end of its header, bound to its commands on the section surface" },
+      { file: "packages/workbench-mygo/tests/sidebar_screen_test.go", id: "TestASectionDrawsItsActionsAtTheRightEndOfItsHeader" },
+    ],
+    expected: "A section declares header actions, which the manifest readers check and the workbench draws as buttons at the right end of the section header.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1130",
+    implementation: [
+      { file: "packages/host/rust/src/log_policy.rs", symbol: "pub fn start_log_policy(" },
+      { file: "packages/host/go/src/log_policy.go", symbol: "func StartLogPolicy(" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/log_policy_test.rs", id: "a_write_in_place_is_never_refused_as_a_partial_file" },
+      { file: "packages/host/go/tests/log_policy_test.go", id: "TestAWriteInPlaceIsNeverRefusedAsAPartialFile" },
+    ],
+    expected: "A load of the log policy that overlaps a write in place waits for the next notification and refuses no partial file.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1131",
+    implementation: [
+      { file: "packages/workbench/owned-sessions.js", symbol: "export async function openOwnedSession({ plugin: id, params, size }, surface) {" },
+      { file: "packages/workbench-mygo/src/owned_sessions.go", symbol: "func (o *OwnedSessions) Status() []map[string]any {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/owned-sessions-restart.test.mjs", id: "the restart adopts the session whose owner is in the restored layout, ends the session whose owner is absent and states the session that did not return" },
+      { file: "packages/workbench-mygo/tests/owned_sessions_test.go", id: "TestOpenWithoutParamsSendsNullAndRecordsNull" },
+    ],
+    expected: "core.sessions lists the params of each owned session at its open and after a restart.",
+    levels: ["unit"],
+  },
+  {
     id: "F1115",
     implementation: [
       { file: "packages/host/go/src/endpoint.go", symbol: "func (e *Endpoint) pageRequest(ctx context.Context, window, method string, params json.RawMessage) (json.RawMessage, error) {" },

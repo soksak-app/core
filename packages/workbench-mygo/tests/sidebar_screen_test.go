@@ -86,11 +86,11 @@ func TestAListSidebarDrawsItsHeadersAndFoldsASection(t *testing.T) {
 	}
 }
 
-// contract: plugins.sections.actions (docs/spec/plugins.md#sections)
 func TestASectionDrawsItsActionsAtTheRightEndOfItsHeader(t *testing.T) {
 	frame := listFrame()
 	frame.Sections[1].Actions = []workbench.SectionAction{{Icon: "plus", Label: "추가", Command: "git.add"}, {Icon: "more", Label: "더 보기", Command: "git.add"}}
 	tt := drawSidebar(&frame, recorder(t, new([]call), sidebarCommands...))
+	noteElementNames(tt.ElementTree())
 	header := element(t, tt, "core.sidebar.section.header", "left/git.log")
 	first := element(t, tt, "core.sidebar.section.action", "left/git.log/0")
 	second := element(t, tt, "core.sidebar.section.action", "left/git.log/1")

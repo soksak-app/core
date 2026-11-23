@@ -1295,25 +1295,31 @@ func checkSectionActions(where string, manifest map[string]any) error {
 			if err := only(fmt.Sprintf("%s section %s action %d", where, sectionID, index), action, "icon", "label", "command"); err != nil {
 				return err
 			}
+			// default: an icon that is not a text is no icon of the set, which the check refuses.
 			if icon, _ := action["icon"].(string); !slices.Contains(sectionActionIcons, icon) {
 				return fmt.Errorf("%s icon must be one of %s", at, strings.Join(sectionActionIcons, ", "))
 			}
+			// default: a label that is not a text is refused by isText below.
 			label, _ := action["label"].(string)
 			if !isText(action["label"]) || len(utf16.Encode([]rune(label))) > sectionActionLabelMax {
 				return fmt.Errorf("%s label must be 1 to %d characters", at, sectionActionLabelMax)
 			}
+			// default: a command that is not a text is refused by isText below.
 			command, _ := action["command"].(string)
 			if !isText(action["command"]) || !slices.Contains(declaredCommands(manifest), command) {
 				return fmt.Errorf("%s command must name a command declared in exposes", at)
 			}
-			// default: checkExposes accepted every declared command, so its params is a schema object.
+			// default: checkExposes accepted exposes as an object, because an action names a declared command.
 			exposes, _ := manifest["exposes"].(map[string]any)
+			// default: checkExposes accepted exposes, so commands is a list whenever a command is declared.
 			commands, _ := exposes["commands"].([]any)
 			for _, declared := range commands {
+				// default: checkExposes accepted each declared command as an object.
 				declaration, _ := declared.(map[string]any)
 				if declaration["name"] != command {
 					continue
 				}
+				// default: checkExposes accepted the params of each declared command as a schema object.
 				params, _ := declaration["params"].(map[string]any)
 				if !MatchesSchema(params, map[string]any{}) {
 					return fmt.Errorf("%s command %s has required parameters", at, command)

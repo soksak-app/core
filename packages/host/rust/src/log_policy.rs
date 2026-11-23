@@ -190,6 +190,7 @@ pub fn start_log_policy(
             // silent: the size and the modification time around the read tell whether a write in place overlapped it; such a read
             // holds a part of the file, and the completion of the write gives the next notification (F1130).
             let stamp = |path: &std::path::Path| {
+                // default: a file system that keeps no modification time compares the size alone.
                 std::fs::metadata(path).map(|meta| (meta.len(), meta.modified().ok()))
             };
             let before = stamp(&path);

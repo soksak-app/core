@@ -159,7 +159,7 @@ func TestSessionsRefusesAnEntryWithAnInvalidProgram(t *testing.T) {
 	}
 }
 
-// contract: sidecars-transport.sessions.refuses-an-invalid-params
+// contract: sidecars-transport.sessions.refuses-invalid-params
 func TestSessionsRefusesAnEntryWithInvalidParams(t *testing.T) {
 	for _, member := range []string{``, `,"params":3`} {
 		c, process := sessionsFixture(t)

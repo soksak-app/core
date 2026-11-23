@@ -318,6 +318,7 @@ fn the_policy_file_is_watched_and_every_change_is_applied_once() {
 
 // F1130 (docs/spec/logging.md#policy): a write in place is read whole or not at all; a load that overlaps the write is no
 // refused file, because the completion of the write gives the next notification.
+// contract: log.policy.file-is-watched
 #[test]
 fn a_write_in_place_is_never_refused_as_a_partial_file() {
     let config = folder::Folder::new();

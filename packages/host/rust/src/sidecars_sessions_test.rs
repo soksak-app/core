@@ -672,7 +672,7 @@ fn service_sessions_refuses_an_entry_with_an_invalid_program() {
     );
 }
 
-// contract: sidecars-transport.sessions.refuses-an-entry-without-params
+// contract: sidecars-transport.sessions.refuses-invalid-params
 #[test]
 fn service_sessions_refuses_an_entry_without_params() {
     let executable = folder::Folder::new();

@@ -303,7 +303,6 @@ func TestOpenSendsTheOpenRequestToTheOwnerAndRecordsTheSession(t *testing.T) {
 	equal(t, f.sessions.Status(), []map[string]any{{"session": "s-1", "plugin": "terminal", "owner": "owner-tab", "shownBy": nil, "program": nil, "params": map[string]any{"cwd": "/work"}}})
 }
 
-// contract: persistent-services.open.params-unchanged
 func TestOpenWithoutParamsSendsNullAndRecordsNull(t *testing.T) {
 	f := newOwnedFixture(t)
 	f.host.reply = func(op string, body map[string]any) map[string]any {
