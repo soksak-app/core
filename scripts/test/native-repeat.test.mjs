@@ -52,7 +52,7 @@ test('make repeat names the native test of each run, reports its result and elap
   assert.match(result.stdout, /^  probe 2$/m, 'the output of the failed run is missing');
   assert.equal(result.stdout.split('\n').filter((line) => line.startsWith('RUN  ')).length, 2, result.stdout);
   assert.notEqual(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stderr, /FAIL: repeat_probe_test run 2 of 3; /, result.stdout + result.stderr);
+  assert.match(result.stderr, /FAIL: repeat_probe_test run 2 of 3; 1 of 1 copies failed; load /, result.stdout + result.stderr);
 });
 
 test('test-app-activation-backspace-repeat forwards its focused variant and stops at its first failed run', (t) => {

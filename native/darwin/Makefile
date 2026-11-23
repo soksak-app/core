@@ -545,7 +545,7 @@ repeat: $(BUILD)/$(TEST)
 	    node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) $(TEST) & pids="$$pids $$!"; c=$$((c + 1)); \
 	  done; \
 	  failed=0; for pid in $$pids; do wait $$pid || failed=$$((failed + 1)); done; \
-	  [ $$failed -eq 0 ] || { echo "FAIL: $(TEST) run $$i of $(COUNT): $$failed of $(PARALLEL) copies failed; load $$(uptime)" >&2; exit 1; }; \
+	  [ $$failed -eq 0 ] || { echo "FAIL: $(TEST) run $$i of $(COUNT); $$failed of $(PARALLEL) copies failed; load $$(uptime)" >&2; exit 1; }; \
 	  i=$$((i + 1)); \
 	done; echo "PASS: $(TEST) passed $(COUNT) consecutive runs of $(PARALLEL) copies"
 

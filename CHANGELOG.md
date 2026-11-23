@@ -5,6 +5,7 @@
 
 ## 2026-11-23
 
+- F1113-3: The failure line of the native repeat target keeps `FAIL: <test> run <i> of <n>; ` and adds the count of failed copies. Verification: Red of `native-repeat.test.mjs` on linux-node, then Green.
 - F1113-2: The completion audit of `scripts/check-tests.mjs` lists F1113 and F1113-1 as completions that add no capability. Verification: Red of `make check-tests` in the release run, then Green of `make check-tests` and `check-tests.test.mjs` (54 of 54).
 - F1113-1: `make -C native/darwin repeat` takes `PARALLEL=<copies>` and runs that many copies of the test in each run. Verification: Red of the test before F1113 (8 of 8 copies failed), then Green of the fixed test (4 runs of 8 copies).
 - F1113: The test delegate of `webview_dialogs_test` does not count the policy-change failure (`WebKitErrorDomain` 102) of a navigation that becomes a download as the end of a navigation, because WebKit reports it before or after the start of the download. Verification: Red of 19 of 32 parallel runs, then Green of 32 of 32 and 3 serial repeats.
