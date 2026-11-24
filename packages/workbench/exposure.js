@@ -35,19 +35,27 @@ const ownerOf = (name) => name.slice(0, name.indexOf("."));
 const surfaceName = (name) => ownerOf(name) !== "core" || surfaceDocumentEntry(name);
 
 /**
- * Whether a surface id names a section surface, `<space id>/<sidebar id>/<section id>` (docs/spec/plugins.md#sections). A tab id has no "/",
- * so the form tells the two kinds apart.
+ * Whether a surface id names a dialog surface, `dialog/<plugin id>/<dialog name>` (docs/spec/plugins.md#dialogs). No space has the id
+ * dialog, so a section id never has this form.
  */
-export function isSectionSurface(surface) {
-  return surface.includes("/");
+export function isDialogSurface(surface) {
+  return surface.startsWith("dialog/");
 }
 
 /**
- * The surfaces of owners that a request without surface may choose, in registration order: the tab surfaces. A section surface answers
- * only a request that names it or a command that its own view runs (docs/spec/exposure.md#choosing-a-surface).
+ * Whether a surface id names a section surface, `<space id>/<sidebar id>/<section id>` (docs/spec/plugins.md#sections). A tab id has no "/",
+ * so the form tells a tab from a section and a dialog, and a dialog id starts with dialog/.
+ */
+export function isSectionSurface(surface) {
+  return surface.includes("/") && !isDialogSurface(surface);
+}
+
+/**
+ * The surfaces of owners that a request without surface may choose, in registration order: the tab surfaces, whose ids have no "/". A
+ * section or dialog surface answers only a request that names it or a command that its own view runs (docs/spec/exposure.md#choosing-a-surface).
  */
 // default: a name that no surface registered has no owners, so it has no tab surfaces.
-const tabSurfacesOf = (owners) => [...(owners?.keys() ?? [])].filter((surface) => !isSectionSurface(surface));
+const tabSurfacesOf = (owners) => [...(owners?.keys() ?? [])].filter((surface) => !surface.includes("/"));
 
 /** The key of one watch. A watch that names a surface and a watch that does not are different. */
 // default: as stated above, the surface of a watch that names no surface is null.

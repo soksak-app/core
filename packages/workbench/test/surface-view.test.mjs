@@ -525,6 +525,7 @@ test("the start values of a view carry its params, origin, project, declarations
     declarations: { status: [], commands: [], element: [] },
     diagnostics,
     section: null,
+    dialog: null,
     process: "plugin",
   });
   recordOrigin("tab-without-directory", null, "test fixture");
@@ -535,6 +536,7 @@ test("the start values of a view carry its params, origin, project, declarations
     declarations: { status: [], commands: [], element: [] },
     diagnostics: null,
     section: null,
+    dialog: null,
     process: "plugin",
   });
 });

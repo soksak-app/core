@@ -342,6 +342,7 @@
                 "declarations": 0,
                 "diagnostics": null,
                 "section": null,
+                "dialog": null,
                 "process": "plugin"
               }
             }
@@ -1022,6 +1023,7 @@
                 "declarations": 0,
                 "diagnostics": null,
                 "section": null,
+                "dialog": null,
                 "process": "plugin"
               }
             }

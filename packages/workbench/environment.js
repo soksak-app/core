@@ -5,7 +5,7 @@
 import { contributionsOf, installContributions } from "./contributions.js";
 import { registry as exposure } from "./exposure.js";
 import { declareProjectData } from "./plugin-data.js";
-import { registerPlugin, registerSection } from "./registry.js";
+import { registerDialog, registerPlugin, registerSection } from "./registry.js";
 import { compositionKindOf } from "./surface-composition-kind.js";
 import { setPluginSettings, setSidebarDefaults } from "./settings.js";
 import {
@@ -49,6 +49,17 @@ function sectionSurfaceOf(pluginId, section, declarations, diagnostics, sidecars
     // default: a section without unload is never unloaded, as a surface without surface.unload (docs/spec/plugins.md#memory-saver).
     unload: section.unload ?? false,
     params: null, section: start,
+    contributions: (point) => contributionsOf(pluginId, point) });
+}
+
+/**
+ * Converts a dialog declaration into a function that returns the target of its dialog surface for the surface of the view that opens
+ * it and the params of the open call (docs/spec/plugins.md#dialogs). A window holds one dialog, so the id names the plugin and the
+ * dialog; its "/" keeps it out of the tab surfaces, and no space has the id dialog.
+ */
+function dialogSurfaceOf(pluginId, name, page, declarations, diagnostics, sidecars) {
+  return (opener, params) => ({ composition: { kind: "view", page }, surfaceId: `dialog/${pluginId}/${name}`, pluginId, declarations, sidecars,
+    diagnostics, unload: false, params, section: null, dialog: { name, opener },
     contributions: (point) => contributionsOf(pluginId, point) });
 }
 
@@ -139,6 +150,12 @@ export function installEnvironment(environmentDocument, installedDocument) {
         actions: section.actions ?? [],
         // default: exposes is an optional field of plugin.json; without it there is no declaration.
         surface: sectionSurfaceOf(manifest.id, section, exposes ?? {}, diagnostics, manifestSidecars(manifest, pluginNames)) });
+    }
+    // default: dialogs is an optional field of plugin.json; without it the plugin opens no dialog.
+    for (const [name, { page }] of Object.entries(manifest.dialogs ?? {})) {
+      registerDialog({ plugin: manifest.id, name, page,
+        // default: exposes is an optional field of plugin.json; without it there is no declaration.
+        surface: dialogSurfaceOf(manifest.id, name, page, exposes ?? {}, diagnostics, manifestSidecars(manifest, pluginNames)) });
     }
     if (exposes) exposure.declare(manifest.id, exposes);
     // default: data is an optional field of plugin.json; without it the plugin declares no project data.

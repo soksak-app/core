@@ -162,15 +162,16 @@ installer는 view page가 없는 release를 거부하듯 dialog page가 없는 r
   - dialog가 열려 있는 동안의 열기: `view call runtime.dialog.open: the window shows the dialog <name> of <plugin>`
   - native modal이 보이는 동안의 열기: `view call runtime.dialog.open: the window shows the modal <id>`
 
-  그 밖에는 dialog surface를 창의 layout에 더한다. 그 start value는 view의 start value다. `params`는 `params`, `origin`은 `{directory: null}`, `project`는 창의 project, `section`은 `null`이다. 여기에 start value `dialog` `{name, opener}`가 더해지며, `opener`는 호출한 view의 surface다([start value](native-surfaces.ko.md#view-표면)).
+  그 밖에는 dialog surface `dialog/<plugin>/<name>`을 창의 layout에 더한다. 그 start value는 view의 start value다. `params`는 `params`, `origin`은 `{directory: null}`, `project`는 창의 project, `section`은 `null`이다. 여기에 start value `dialog` `{name, opener}`가 더해지며, `opener`는 호출한 view의 surface다([start value](native-surfaces.ko.md#view-표면)).
 - **Page.** dialog의 문서는 투명하다. 모든 host에서 start value에 `dialog`가 있는 page는 `@soksak/plugin-api`가 50% 불투명도의 검정 backdrop을 root element에 둔다. page는 자기 card를 직접 그린다. 닫는 방법은 page가 정한다. 닫기 button이나 Escape가 그 예이며, page는 그때 스스로 닫는다.
-- **닫기.** dialog view는 `runtime.dialog.close {result}`를 호출하며, SDK는 `runtime.dialog.close(result)`에 이 호출을 보낸다. main page는 dialog surface를 지우고 열기 호출에 `result`로 답한다. 다른 view의 close 호출은 `view call runtime.dialog.close is served only to a dialog`로 거부된다. 열기 호출의 cancel은 dialog surface를 지운다.
+- **닫기.** dialog view는 `runtime.dialog.close {result}`를 호출하며, SDK는 `runtime.dialog.close(result)`에 이 호출을 보낸다. main page는 dialog surface를 지우고 열기 호출에 `result`로 답한다. 다른 view의 close 호출은 `view call runtime.dialog.close is served only to a dialog`로 거부된다. cancel을 포함해 답이 아닌 열기 호출의 모든 끝은 dialog surface를 지운다.
 - **끝.** 열기 호출은 [plugin processes](plugin-processes.ko.md) 규칙 3에 따라 끝난다.
   - opener surface가 닫히면 호출은 `surface-closed`로 끝나고 dialog surface가 지워진다.
   - opener process가 끝나면 호출은 `process-ended`로 끝난다.
   - main page가 끝나면 두 view가 모두 끝난다.
 
   dialog view는 process가 끝나면 모든 view처럼 자기 start value로 다시 시작하고, 열기 호출은 열린 채로 남는다. 재시작이 [view 표면](#view-표면)의 한도에 이른 dialog surface는 지워진다. 그때 오류 표시는 place `dialog <plugin> <name>`으로 `the view failed 4 times within 300 seconds and is created again when its dialog is opened again`을 보이고, 열기 호출은 그 text로 실패한다.
+- **Id.** id `dialog/<plugin>/<name>`에는 `/`가 있으므로, surface를 정하지 않은 요청은 tab처럼 dialog를 고르지 않는다([표면 선택](exposure.ko.md#표면-선택)). id가 `dialog`인 space는 없으므로 이 id는 section surface를 가리키지 않는다.
 - **Status.**
   - `core.modal`은 열린 dialog를 `{id, mode: "dialog", document: null, plugin}`로 알린다. `id`는 dialog surface이고 `plugin`은 그 plugin이다([exposure](exposure.ko.md#모달-문서)).
   - `core.surfaces`는 dialog surface를 자기 plugin, `dialog` `{name, opener}`, `null`인 `card`와 `section`으로 나열한다.

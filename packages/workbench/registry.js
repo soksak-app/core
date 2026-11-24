@@ -10,6 +10,7 @@ import { WINDOW_SIDES } from "@soksak/plugin-api";
 
 const registeredPlugins = [];
 const registeredSections = [];
+const registeredDialogs = [];
 
 /**
  * Registers one plugin.
@@ -50,6 +51,25 @@ export function registerSection(section) {
   }
   registeredSections.push(section);
 }
+
+/**
+ * Registers one dialog of a plugin (docs/spec/plugins.md#dialogs).
+ *
+ * @param {object} dialog
+ * @param {string} dialog.plugin  the plugin that declares it
+ * @param {string} dialog.name    its name in dialogs of plugin.json
+ * @param {string} dialog.page    the page of the dialog
+ * @param {(opener: string, params: unknown) => object} dialog.surface  the surface of the dialog that the view opener opens with params
+ */
+export function registerDialog(dialog) {
+  if (registeredDialogs.some((d) => d.plugin === dialog.plugin && d.name === dialog.name)) {
+    throw new Error(`dialog already registered: ${dialog.plugin} ${dialog.name}`);
+  }
+  registeredDialogs.push(dialog);
+}
+
+/** The dialog name of the plugin, or null when the plugin declares no dialog of that name. */
+export const dialog = (pluginId, name) => registeredDialogs.find((d) => d.plugin === pluginId && d.name === name) ?? null;
 
 /** Returns the plugins in registration order. The `+` menu uses this order. */
 export const plugins = () => registeredPlugins;

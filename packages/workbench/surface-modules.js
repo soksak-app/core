@@ -293,12 +293,13 @@ function originOf(surface) {
  * The origin of the context and the start values of surface. A section surface has no opening tab, so its origin records no
  * directory (docs/spec/native-surfaces.md#view-surfaces).
  */
+// A section and a dialog surface were opened by no tab, so their origin records no directory (docs/spec/native-surfaces.md#view-surfaces).
 function surfaceOrigin(surface) {
-  return surface.section ? { directory: null } : originOf(surface);
+  return surface.section || surface.dialog ? { directory: null } : originOf(surface);
 }
 
 function viewStartOrigin(surface) {
-  if (surface.section) return surfaceOrigin(surface);
+  if (surface.section || surface.dialog) return surfaceOrigin(surface);
   // The layout read refuses a view tab first and the place leaves it out; a refusal that reaches this point is a defect, so it throws.
   const refusal = viewRefusal(surface.surfaceId);
   if (refusal !== null) throw new TypeError(refusal);
@@ -317,6 +318,8 @@ function viewStartValuesFromDeclarations(surface, project, origin, declarations)
     diagnostics: surface.diagnostics,
     // default: the surface of a tab has no section, so its start value section is null (docs/spec/native-surfaces.md#view-surfaces).
     section: surface.section ?? null,
+    // default: only a dialog surface has a dialog, so the start value dialog of a tab or a section is null (docs/spec/plugins.md#dialogs).
+    dialog: surface.dialog ?? null,
     // The setting viewProcess at the creation of the view decides whether it shares the process of its plugin
     // (docs/spec/plugin-processes.md#view-processes).
     process: settingValue("viewProcess"),
@@ -561,7 +564,8 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
       dependsOn: (viewPlugin, dependency) => viewPlugin === surface.pluginId && plugin(viewPlugin).plugins.includes(dependency),
       // The surface menu of a right click in the view (view-answer.js of @soksak/plugin-api): a section declares no menu, and the frame moves the point into the window.
       menu: {
-        declared: () => !isSectionSurface(surface.surfaceId) && plugin(surface.pluginId).menu !== null,
+        // Only a tab surface has the menu of surface.menu; a section and a dialog surface have a "/" in their id.
+        declared: () => !surface.surfaceId.includes("/") && plugin(surface.pluginId).menu !== null,
         frame: () => registry.surfaceFrame(surface.surfaceId),
       },
       // The project data of the plugin for a project, which the data calls of the view read and write (view-answer.js of @soksak/plugin-api).
