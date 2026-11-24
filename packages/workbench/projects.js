@@ -19,6 +19,10 @@ import { stateCards } from "./layout-tree.js";
 let store;
 let projects = [];
 let activeProjectId = null;
+// The project that the library address of a start names: the project that the window held when it showed the library, which the
+// library returns to although the start does not draw it (docs/spec/installation.md#applying-a-change, F1149-1). A shown project
+// replaces it.
+let returnTo = null;
 let browsing = true;
 let openProjects = new Set();
 const owned = new Set();
@@ -190,6 +194,8 @@ function spaceCards() {
 }
 // default: a window without an active project (the library) has null.
 export const active = () => projects.find((p) => p.id === activeProjectId) ?? null;
+/** The project that the way back of the library opens: the shown project, else the project that the library address names. */
+export const returnable = () => active() ?? projects.find((p) => p.id === returnTo) ?? null;
 export const local = () => projects.filter((p) => owned.has(p.id));
 export const inLibrary = () => browsing;
 export const isOpen = (id) => openProjects.has(id) || owned.has(id);
@@ -233,7 +239,10 @@ function showLibrary() {
 async function emptyToLibrary() {
   await awaited("projects.read.empty", () => listener.empty(showLibrary));
   browsing = true;
-  history.replaceState(null, "", location.pathname);
+  // A new start of the page, such as the apply of a plugin change, starts at the library and keeps the way back to the project that
+  // the window holds, without drawing it (F1149, F1149-1).
+  const held = returnable();
+  history.replaceState(null, "", held === null ? location.pathname : `${location.pathname}?library=${encodeURIComponent(held.id)}`);
 }
 
 export function browse() {
@@ -296,7 +305,10 @@ export function begin(snapshot) {
   openProjects = new Set(snapshot.open ?? []);
   projects = snapshot.projects;
   // default: a window that names no project, or a project that is not in the registry, starts at the library.
-  const requested = projects.find((p) => p.id === new URL(location.href).searchParams.get("project")) ?? null;
+  const address = new URL(location.href).searchParams;
+  const requested = projects.find((p) => p.id === address.get("project")) ?? null;
+  // default: an address without a library project, or one that no window holds open, gives the library no way back.
+  returnTo = projects.some((p) => p.id === address.get("library") && openProjects.has(p.id)) ? address.get("library") : null;
   const layout = requested?.spaces.find((s) => s.id === requested.activeSpaceId)?.layout;
   let opened = null;
   if (layout) {
@@ -570,6 +582,7 @@ async function showProject(id, openedProject = null, stagedOwner = false) {
   }
   owned.add(id);
   activeProjectId = id;
+  returnTo = null;
   browsing = false;
   history.replaceState(null, "", `${location.pathname}?project=${encodeURIComponent(id)}`);
   changed();

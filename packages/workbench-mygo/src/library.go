@@ -137,14 +137,22 @@ func (s *Shell) registerLibrary() {
 			s.removeProjectThen(value.ID, func(_ bool, err error) { done(err) })
 		}, func() { answer(nil, nil) })
 	})
-	act(s, "core.library.return", func(struct{}) error {
+	// The return shows the project over which the library opened, or after a new start the project that the library address names,
+	// which the window activates as core.project.activate does (F1149-1).
+	later(s, "core.library.return", func(_ struct{}, answer func(any, error)) {
 		if s.opened() == nil {
-			return fmt.Errorf("there is no workspace to return to")
+			project := s.returnable()
+			if project == nil {
+				answer(nil, fmt.Errorf("there is no workspace to return to"))
+				return
+			}
+			s.activateThen(project.ID, func(err error) { answer(nil, err) })
+			return
 		}
 		s.browsing = false
 		s.options.Invalidate()
 		// The project shows its settings again (beginSettings).
-		return s.beginSettings(s.settings.Common())
+		answer(nil, s.beginSettings(s.settings.Common()))
 	})
 	act(s, "core.library.window", func(struct{}) error {
 		s.performLibrary(s.newWindow, func() {})

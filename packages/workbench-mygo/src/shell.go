@@ -51,8 +51,11 @@ type ShellOptions struct {
 	Detaching func() []string
 	// Project is the project that the address of the window names, and "" without one.
 	Project string
-	// Located names the project that the window shows from now on, and "" when it shows none.
-	Located func(project string)
+	// Library is the project that the library address of the window names as the one to return to, and "" without one (F1149-1).
+	Library string
+	// Located names the project that the window shows from now on, "" when it shows none, and held the project that the library
+	// returns to, "" when it shows a project or holds none.
+	Located func(shown, held string)
 	// Elements are the elements of the window, which the element requests answer from.
 	Elements Elements
 	// Element returns the surface host and the key view of the surface id, for its native view element.
@@ -760,14 +763,14 @@ func (s *Shell) showRequested(done func()) {
 		return
 	}
 	if s.project(s.options.Project) == nil {
-		s.options.Located("")
+		s.options.Located("", "")
 		done()
 		return
 	}
 	s.activateThen(s.options.Project, func(err error) {
 		s.failed(err)
 		if s.active == "" {
-			s.options.Located("")
+			s.options.Located("", "")
 		}
 		done()
 	})
@@ -863,6 +866,18 @@ func (s *Shell) isOpen(id string) bool { return s.windowProjects[id] || s.otherO
 
 // opened returns the project that the window shows, or nil.
 func (s *Shell) opened() *projectRecord { return s.project(s.active) }
+
+// returnable is the project that the way back of the library opens: the shown project, else the project that the library address
+// names while a window holds it open, as returnable of packages/workbench/projects.js.
+func (s *Shell) returnable() *projectRecord {
+	if project := s.opened(); project != nil {
+		return project
+	}
+	if s.options.Library == "" || !s.isOpen(s.options.Library) {
+		return nil
+	}
+	return s.project(s.options.Library)
+}
 
 // issueID returns a new id of the form of packages/workbench/ids.js from the bytes of source: three letters and six base32 characters.
 func issueID(source io.Reader, prefix string, taken func(id string) bool) string {

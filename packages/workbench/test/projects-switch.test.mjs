@@ -467,6 +467,45 @@ test("an activation received while a removed project is clearing waits for the c
 // rendering update. If the switch to the library happens in that reaction, elements of the work area that the observation round
 // already delivered (the file tree, the terminal screen) become 0x0 and a loop error occurs (F43). The switch must happen in the drawing that clears the plane,
 // that is, in the next task, which runs outside the observation round.
+test("a start at the library address draws no project and returns to the project that it names (F1149-1)", async () => {
+  await prepare("projects-switch-library-address");
+  const project = { ...structuredClone(PROJECT), id: "prj-back", root: "/work/back" };
+  const snapshot = { common: {}, projects: [structuredClone(project)], open: [project.id] };
+  addressWith(`?library=${project.id}`);
+  plane.events.length = 0;
+  projects.begin(structuredClone(snapshot));
+  assert.equal(projects.inLibrary(), true, "the start did not show the library");
+  assert.deepEqual(plane.events, [], "the start drew the project");
+  assert.equal(projects.active(), null);
+  assert.equal(projects.returnable().id, project.id, "the library has no way back to the project of the address");
+  const from = wire.calls.length;
+  const store = new HostWorkspaceStore(host);
+  await connectSettings(store);
+  await projects.initialise(store);
+  assert.deepEqual(openedFrom(from), [], "the start opened the project before the person returned to it");
+  await projects.activate(projects.returnable().id);
+  assert.equal(projects.active().id, project.id);
+  assert.equal(projects.inLibrary(), false);
+  assert.deepEqual(plane.events, ["load"], "the return did not draw the project");
+  assert.equal(globalThis.location.search, `?project=${project.id}`);
+  await projects.flush();
+  wire.finish();
+});
+
+test("a start at a library address of a project that no window holds open has no way back", async () => {
+  await prepare("projects-switch-library-closed");
+  const project = { ...structuredClone(PROJECT), id: "prj-gone", root: "/work/gone" };
+  addressWith(`?library=${project.id}`);
+  projects.begin({ common: {}, projects: [structuredClone(project)], open: [] });
+  assert.equal(projects.inLibrary(), true);
+  assert.equal(projects.returnable(), null);
+  const store = new HostWorkspaceStore(host);
+  await connectSettings(store);
+  await projects.initialise(store);
+  assert.equal(projects.returnable(), null);
+  wire.finish();
+});
+
 test("browsing shows the library in the draw that empties the plane, not where a later host reply resolves", { timeout: 5000 }, async () => {
   await start("projects-switch-browse-draw");
   await projects.activate(PROJECT.id);
@@ -488,9 +527,10 @@ test("browsing shows the library in the draw that empties the plane, not where a
     await browsing;
     inRound = false;
     assert.deepEqual(switches, ["library in the empty draw"], "the library screen was not drawn by the draw that empties the plane");
-    // A reload of the page, such as the apply of a plugin change, starts at the screen of the address, so the library holds no project
-    // in the address (F1149).
-    assert.equal(globalThis.location.search, "", "the address still names the project after browsing");
+    // A reload of the page, such as the apply of a plugin change, starts at the screen of the address, so the library names the project
+    // of the window as the one to return to, not as the one to show (F1149, F1149-1).
+    assert.equal(globalThis.location.search, `?library=${PROJECT.id}`, "the address does not name the project to return to");
+    assert.equal(projects.returnable().id, PROJECT.id);
   } finally {
     projects.onChange(() => {});
   }

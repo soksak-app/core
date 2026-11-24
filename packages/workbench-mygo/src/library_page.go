@@ -608,7 +608,7 @@ func (s *Shell) drawLibraryFooter(c *ui.Context, width float32) {
 	ui.Row(c).Size(width, m.libraryFooterH).PaddingX(m.space3).Gap(m.space3).AlignItems(ui.Center).Background(s.palette.Card).
 		BorderWidth(s.palette.BorderWidth, 0, 0, 0).BorderColor(s.palette.Edge).Children(func() {
 		ui.Text(c, fmt.Sprintf("프로젝트 %d · 열림 %d", len(s.projects), s.openCount())).SingleLine().LineHeight(s.metrics.lineHeight).FontSize(size).TextColor(s.palette.Muted)
-		if s.opened() != nil {
+		if s.returnable() != nil {
 			text(s.binder.Press(c, "core.library.return", "core.library.return", "", nil), "작업 화면으로 돌아가기")
 		}
 		ui.Spacer(c).Grow(1)

@@ -51,12 +51,25 @@ func projectOfAddress(address string) string {
 	return parsed.Query().Get("project")
 }
 
-// addressOfProject returns the address of a window that shows project, and of a window that shows none when it is "".
-func addressOfProject(project string) string {
-	if project == "" {
-		return "/"
+// libraryOfAddress returns the project that a library address names as the one to return to, and "" without one.
+func libraryOfAddress(address string) string {
+	parsed, err := url.Parse(address)
+	if err != nil {
+		return "" // silent: the host writes the address, and a window without a readable one has no way back.
 	}
-	return "/?project=" + url.QueryEscape(project)
+	return parsed.Query().Get("library")
+}
+
+// addressOfProject returns the address of a window that shows project, and when it is "" of the library that returns to held, or
+// of the library without a way back when held is "" too.
+func addressOfProject(project, held string) string {
+	if project != "" {
+		return "/?project=" + url.QueryEscape(project)
+	}
+	if held != "" {
+		return "/?library=" + url.QueryEscape(held)
+	}
+	return "/"
 }
 
 // AppOptions is what the application gives the workbench.
@@ -145,7 +158,8 @@ func (a *App) Build(window host.Frontend) func(c *ui.Context) {
 		},
 		Detaching:   func() []string { return a.options.Detaching(window) },
 		Project:     projectOfAddress(painted.Address()),
-		Located:     func(project string) { painted.SetAddress(addressOfProject(project)) },
+		Library:     libraryOfAddress(painted.Address()),
+		Located:     func(shown, held string) { painted.SetAddress(addressOfProject(shown, held)) },
 		Backdrop:    painted.SetBackdrop,
 		FirstScreen: painted.FirstScreen,
 		OpenLayout:  painted.OpenLayout,

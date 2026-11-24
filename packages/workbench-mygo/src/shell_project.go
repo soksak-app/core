@@ -467,7 +467,8 @@ func (s *Shell) showThen(id string, done func(err error)) {
 	// The shown project has no spaces that this window stored, as select of packages/workbench/projects.js.
 	s.savedLayout = ""
 	s.windowProjects[id] = true
-	s.options.Located(id)
+	s.options.Library = ""
+	s.options.Located(id, "")
 	s.errors.Hide(workbenchErrorPlace)
 	// The settings of the shown project are those that the store holds, which a write of this window reaches in the record only at
 	// the change event of the store, so the window reads the store first, as selectProject of packages/workbench/settings.js does.
@@ -764,13 +765,17 @@ func (s *Shell) leavePlace() {
 }
 
 // browse shows the library, as the project button does. The library shows the common settings (beginSettings), and the address names
-// no project, so a new start of the workbench, such as the apply of a plugin change, starts at the library
-// (docs/spec/installation.md#applying-a-change).
+// no project to show but the project to return to, so a new start of the workbench, such as the apply of a plugin change, starts at
+// the library with the way back (docs/spec/installation.md#applying-a-change).
 func (s *Shell) browse() error {
 	s.keep()
 	s.leavePlace()
 	s.browsing = true
-	s.options.Located("")
+	held := ""
+	if project := s.returnable(); project != nil {
+		held = project.ID
+	}
+	s.options.Located("", held)
 	s.options.Invalidate()
 	return s.beginSettings(s.settings.Common())
 }
@@ -854,7 +859,8 @@ func (s *Shell) dropProject(id string) {
 		s.active, s.browsing, s.fullscreen = "", true, ""
 		s.savedLayout = ""
 		s.showPlane(nil)
-		s.options.Located("")
+		s.options.Library = ""
+		s.options.Located("", "")
 		// The library shows the common settings until another project shows (beginSettings).
 		s.failed(s.beginSettings(s.settings.Common()))
 		for _, project := range s.projects {

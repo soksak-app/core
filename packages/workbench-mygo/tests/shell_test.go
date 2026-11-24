@@ -47,8 +47,11 @@ type storedHost struct {
 	plugins    *pluginsHost
 	// reloads counts the starts of the workbench that the shell asked for.
 	reloads int
-	// located is the project that the shell last named as the one that its window shows.
-	located string
+	// located is the project that the shell last named as the one that its window shows, and held the project that the library
+	// named as the one to return to (F1149-1).
+	located, held string
+	// address is the project and library is the held project that the address of the window names at the start of a shell.
+	address, library string
 	// backdrops are the colors that the shell gave the window behind its surfaces.
 	backdrops []string
 	// detaching are the surfaces whose image detach is pending when a window starts.
@@ -739,7 +742,9 @@ func startedShellOf(t testing.TB, stored *storedHost, declared *workbench.Declar
 		Post:        f.pending.post,
 		Report:      func(line string) { f.lines = append(f.lines, line) },
 		Reload:      func() { stored.reloads++ },
-		Located:     func(project string) { stored.located = project },
+		Project:     stored.address,
+		Library:     stored.library,
+		Located:     func(shown, held string) { stored.located, stored.held = shown, held },
 		Backdrop:    func(color string) error { stored.backdrops = append(stored.backdrops, color); return nil },
 		FirstScreen: func() {},
 		Name:        windowName,

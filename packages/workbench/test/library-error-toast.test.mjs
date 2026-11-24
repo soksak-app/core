@@ -11,6 +11,8 @@ test("the project form uses the shared error toast when its folder is empty", as
     dom.window.matchMedia = (query) => ({ media: query, matches: true, addEventListener() {}, removeEventListener() {} });
     globalThis.window = dom.window;
     globalThis.document = dom.window.document;
+    // The page reads the start address of the window (docs/spec/installation.md#applying-a-change, F1149-1).
+    globalThis.location = dom.window.location;
     globalThis.devicePixelRatio = dom.window.devicePixelRatio;
     globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
     const { installExposure } = await import("../exposure.js");

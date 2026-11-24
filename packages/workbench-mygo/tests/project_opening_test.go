@@ -207,3 +207,39 @@ func TestTheLibraryNamesNoProjectInTheAddress(t *testing.T) {
 		t.Fatalf("the address of the library names the project %s", f.host.located)
 	}
 }
+
+// A new start of the workbench at the library, such as the apply of a plugin change, draws no project and keeps the way back to the
+// project that the window holds (docs/spec/installation.md#applying-a-change, F1149-1).
+func TestANewStartAtTheLibraryReturnsToTheProjectOfTheWindow(t *testing.T) {
+	f := openingShell(t, "tabs")
+	alpha := f.projectOf("/work/alpha")
+	f.run("core.projects.browse", nil)
+	if f.host.located != "" || f.host.held != alpha {
+		t.Fatalf("the library address names the project %q and the held project %q, want none and %s", f.host.located, f.host.held, alpha)
+	}
+	stored := f.host
+	stored.open, stored.address, stored.library = []string{alpha}, "", stored.held
+	g := newShell(t, stored)
+	if stored.located != "" {
+		t.Fatalf("the new start shows the project %s", stored.located)
+	}
+	if err := g.finish("core.library.return", nil); err != nil {
+		t.Fatal(err)
+	}
+	if stored.located != alpha || stored.held != "" {
+		t.Fatalf("the return shows %q and holds %q, want %s", stored.located, stored.held, alpha)
+	}
+}
+
+// A library address of a project that no window holds open gives the library no way back.
+func TestALibraryAddressOfAProjectThatNoWindowHoldsHasNoWayBack(t *testing.T) {
+	f := openingShell(t, "tabs")
+	alpha := f.projectOf("/work/alpha")
+	f.run("core.projects.browse", nil)
+	stored := f.host
+	stored.open, stored.address, stored.library = nil, "", alpha
+	g := newShell(t, stored)
+	if err := g.finish("core.library.return", nil); err == nil || err.Error() != "there is no workspace to return to" {
+		t.Fatalf("the return answered %v", err)
+	}
+}

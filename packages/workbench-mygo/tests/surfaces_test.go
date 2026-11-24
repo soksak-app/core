@@ -392,7 +392,7 @@ func surfaceShellOn(t testing.TB, document string, stored *surfaceHost) *shellFi
 	shell, err := workbench.NewShell(workbench.ShellOptions{
 		Now:         func() time.Time { return stored.now },
 		Detaching:   func() []string { return nil },
-		Located:     func(string) {},
+		Located:     func(string, string) {},
 		Backdrop:    func(string) error { return nil },
 		FirstScreen: func() {},
 		Declared:    declared,

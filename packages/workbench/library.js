@@ -471,7 +471,7 @@ export function createLibrary(root, rendered = () => {}) {
     const all=projects.all(), open=all.filter(p=>projects.isOpen(p.id));
     checkFolders(all);
     root.querySelector('.library-count').textContent=`프로젝트 ${all.length} · 열림 ${open.length}`;
-    back.hidden=!projects.active();
+    back.hidden=!projects.returnable();
     showPage();
     if (page === 'plugins') {
       place(grid, []);
@@ -569,7 +569,7 @@ export function createLibrary(root, rendered = () => {}) {
     // Same operation as closing a project tab. It deletes only the record and the space and does not touch the folder.
     remove:(id)=>perform(()=>projects.close(id)),
     newWindow:()=>perform(()=>projects.newWindow()),
-    back(){ if(back.hidden) throw new Error('there is no workspace to return to'); return perform(()=>projects.activate(projects.active().id)); },
+    back(){ if(back.hidden) throw new Error('there is no workspace to return to'); return perform(()=>projects.activate(projects.returnable().id)); },
     openForm:(mode)=>showForm(mode),
     cancelForm(){ if(form.hidden) throw new Error('the form is not open'); closeForm(); },
     setField(name,value){ formField(name).value=value; rendered(); },
