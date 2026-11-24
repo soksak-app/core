@@ -41,7 +41,7 @@ func (s *Shell) askModified(card string, tab layout.Tab, words modifiedAnswers, 
 	if save != "" {
 		items = slices.Insert(items, 0, pickerItem{Key: "save", Name: words.save})
 	}
-	layer := s.openPicker(s.tabName(tab)+" 탭에 저장하지 않은 변경이 있습니다", items, func(key string) error {
+	layer, err := s.openPicker(s.tabName(tab)+" 탭에 저장하지 않은 변경이 있습니다", items, func(key string) error {
 		switch key {
 		case "keep":
 			answered(false)
@@ -52,6 +52,12 @@ func (s *Shell) askModified(card string, tab layout.Tab, words modifiedAnswers, 
 		}
 		return nil
 	})
+	if err != nil {
+		// A refused question keeps the tab, as the keep answer does.
+		s.fail(err)
+		answered(false)
+		return
+	}
 	layer.anchor = "core.card.tab/" + tab.ID
 	if _, drawn := layer.drawn[layer.anchor]; !drawn {
 		layer.anchor = "core.card/" + card

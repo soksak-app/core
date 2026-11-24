@@ -71,6 +71,8 @@ type installedUnit struct {
 	// Activity holds the names of the statuses that declare activity, which the activity of each tab of the plugin follows
 	// (docs/spec/activity.md).
 	Activity []string
+	// Dialogs holds the page of each dialog that the plugin declares (docs/spec/plugins.md#dialogs).
+	Dialogs map[string]string
 }
 
 // surfaceUnload is the declaration surface.unload of a plugin.
@@ -105,6 +107,9 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 				Dependencies map[string]any             `json:"dependencies"`
 				Settings     map[string]json.RawMessage `json:"settings"`
 				Data         map[string]dataDeclaration `json:"data"`
+				Dialogs      map[string]struct {
+					Page string `json:"page"`
+				} `json:"dialogs"`
 			} `json:"manifest"`
 		} `json:"plugins"`
 	}
@@ -128,6 +133,12 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 		unit.Background = plugin.Manifest.Background
 		unit.Sessions = plugin.Manifest.Sessions
 		unit.Programs = plugin.Manifest.Programs
+		for name, dialog := range plugin.Manifest.Dialogs {
+			if unit.Dialogs == nil {
+				unit.Dialogs = map[string]string{}
+			}
+			unit.Dialogs[name] = dialog.Page
+		}
 		if plugin.Manifest.Surface != nil {
 			unit.Opens = plugin.Manifest.Surface.Opens.Extensions
 		}

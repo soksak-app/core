@@ -130,6 +130,7 @@ type surfaceStatus struct {
 	Composition *string      `json:"composition"`
 	Kind        string       `json:"kind"`
 	Sidebar     *string      `json:"sidebar"`
+	Dialog      *dialogStart `json:"dialog"`
 	State       string       `json:"state"`
 }
 
@@ -478,6 +479,11 @@ func (s *Shell) surfacesState() ([]any, error) {
 			entry.Composition = optionalText("view")
 			entry.Kind = "section"
 			entry.Sidebar = &held.section.Sidebar
+		}
+		if held.dialog != nil {
+			entry.Composition = optionalText("view")
+			entry.Kind = "dialog"
+			entry.Dialog = held.dialog
 		}
 		status = append(status, entry)
 	}

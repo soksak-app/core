@@ -222,6 +222,15 @@ func (s *Shell) answerKeyboard(err error) {
 // window shows the library, while a rename field is open, and for a card without a surface. It reads the seats of the frame that
 // was drawn.
 func (s *Shell) keyboardTarget() *string {
+	// An open dialog surface holds the keyboard as a modal of the kind dialog, from the placement that holds it
+	// (docs/spec/plugins.md#dialogs).
+	if s.dialog != nil {
+		id := s.dialog.id()
+		if _, seated := s.surfaces.drawn[id]; !seated {
+			return nil
+		}
+		return &id
+	}
 	if s.modalName() != nil || s.browsing || s.renaming != nil || s.plane == nil || s.opened() == nil {
 		return nil
 	}

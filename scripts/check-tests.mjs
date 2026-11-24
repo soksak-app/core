@@ -359,6 +359,36 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1129",
+    implementation: [
+      { file: "packages/plugin-api/view.js", symbol: "    dialog: Object.assign((name, params = null, { signal } = {}) => {" },
+      { file: "packages/workbench/dialogs.js", symbol: "export function openDialog({ plugin, name, params, opener, signal, modal }) {" },
+      { file: "packages/workbench-mygo/src/dialog_surface.go", symbol: "func (s *Shell) openDialog(call viewCallEvent, view *viewState, unit *installedUnit, answer viewAnswer) error {" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/view-answer-dialog.test.mjs", id: "runtime.dialog.open passes the name, the params and the signal of the call to the runtime and replies its result" },
+      { file: "packages/workbench/test/dialog-surface.test.mjs", id: "an open dialog resolves with the result of the close of the dialog view, and the window then shows none" },
+      { file: "packages/workbench-mygo/tests/dialog_surface_test.go", id: "TestADialogOpensOverTheWindowAndRepliesWithTheResultOfItsClose" },
+    ],
+    expected: "A view opens a declared page of its plugin as a dialog over the whole window on every workbench, and the open call resolves with the result of the close of the dialog view.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1129-4",
+    implementation: [
+      { file: "packages/workbench-mygo/src/dialog_surface.go", symbol: "func (s *Shell) openDialog(call viewCallEvent, view *viewState, unit *installedUnit, answer viewAnswer) error {" },
+      { file: "packages/workbench-mygo/src/dialog_surface.go", symbol: "func (s *Shell) drawDialogSurface(c *ui.Context, width, height float32) {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/dialog_surface_test.go", id: "TestADialogOpensOverTheWindowAndRepliesWithTheResultOfItsClose" },
+      { file: "packages/workbench-mygo/tests/dialog_surface_test.go", id: "TestAnUndeclaredDialogASecondDialogAndACloseOfAnotherViewAreRefused" },
+      { file: "packages/workbench-mygo/tests/dialog_surface_test.go", id: "TestTheCancelOfTheOpenCallRemovesTheDialog" },
+      { file: "packages/workbench-mygo/tests/dialog_surface_test.go", id: "TestAModalOfTheWorkbenchIsRefusedWhileADialogIsOpen" },
+    ],
+    expected: "The mygo workbench opens one declared dialog over the window, replies with the close result, removes the dialog at every other end and refuses its own modals beside it.",
+    levels: ["unit"],
+  },
+  {
     id: "F1129-5",
     implementation: [
       { file: "packages/host/go/src/modals.go", symbol: "func (s *Surfaces) dialogKeysFocused(surface string) {" },

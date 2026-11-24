@@ -41,6 +41,8 @@ type viewPending struct {
 	done bool
 	// program tells that the call runs a declared program, whose cancel the workbench passes to programCancel.
 	program bool
+	// abort runs at every end of the call other than its reply: an open dialog is removed (docs/spec/plugins.md#dialogs).
+	abort func()
 }
 
 // viewState is what the workbench holds for the document of a view.
@@ -82,6 +84,9 @@ func (v *viewState) end() {
 	for id, pending := range v.pending {
 		pending.done = true
 		delete(v.pending, id)
+		if pending.abort != nil {
+			pending.abort()
+		}
 	}
 	if v.cancel != nil {
 		v.cancel()
@@ -185,6 +190,9 @@ func (s *Shell) viewCall(data []any) {
 		if pending := view.pending[call.ID]; pending != nil {
 			pending.done = true
 			delete(view.pending, call.ID)
+			if pending.abort != nil {
+				pending.abort()
+			}
 			// The cancel of an open program run ends the run in the host (docs/spec/native-surfaces.md#program-runs).
 			if pending.program {
 				s.calls.Call("programCancel", map[string]any{"surface": call.Surface, "id": call.ID}, func(_ any, err error) { s.failed(err) })
@@ -409,6 +417,10 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 		done()
 	case "runtime.native.call":
 		return s.runNativeCall(call, view, unit, answer)
+	case "runtime.dialog.open":
+		return s.openDialog(call, view, unit, answer)
+	case "runtime.dialog.close":
+		return s.closeDialog(call, answer)
 	case "runtime.native.on":
 		fields, err := viewFields[struct {
 			Name string `json:"name"`
@@ -1362,6 +1374,10 @@ func (s *Shell) viewStopped(data []any) {
 	// The host sends view-stopped for a view that stopped its restarts and for a page that failed before its first call; a page that
 	// failed after a call keeps its surface (docs/spec/native-surfaces.md#view-surfaces).
 	s.surfaces.failed[event.Surface] = event.Reason
+	// A dialog whose view stopped its restarts is removed, and its open call fails (docs/spec/plugins.md#dialogs).
+	if s.dialog != nil && s.dialog.id() == event.Surface {
+		s.failDialog(event.Reason)
+	}
 	s.options.Invalidate()
 }
 

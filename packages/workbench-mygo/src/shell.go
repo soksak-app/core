@@ -434,7 +434,9 @@ type Shell struct {
 
 	settings       *SettingsStore
 	settingsWindow settingsWindow
-	debugView      debugViewState
+	// dialog is the open dialog surface of the window, or nil (docs/spec/plugins.md#dialogs).
+	dialog    *dialogSurface
+	debugView debugViewState
 	// Diagnostic listing input belongs to this shell lifetime, not the live log store.
 	debugFixtureEntries []DebugEntry
 	debugFixtureActive  bool
@@ -1019,6 +1021,7 @@ func (s *Shell) View(c *ui.Context) {
 		}
 	})
 	s.drawViewsBehindDialog(c)
+	s.drawDialogSurface(c, width, height)
 	if !dialogOpen {
 		ui.Overlay(c, func() { s.drawErrorToasts(c, width) })
 	}

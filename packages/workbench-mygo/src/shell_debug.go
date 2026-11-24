@@ -452,6 +452,10 @@ func (s *Shell) openDebug(answer func(any, error)) {
 		answer(nil, nil)
 		return
 	}
+	if err := s.dialogRefusal(); err != nil {
+		answer(nil, err)
+		return
+	}
 	s.settingsWindow.open = false
 	*d = debugViewState{open: true, tasks: d.tasks, tokens: d.tokens}
 	s.options.Invalidate()

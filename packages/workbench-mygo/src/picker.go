@@ -94,11 +94,15 @@ func (s *Shell) toggled(anchor string) bool {
 }
 
 // openPicker replaces the layer with a new one and returns it for what the placement adds.
-func (s *Shell) openPicker(title string, items []pickerItem, pick func(key string) error) *picker {
+func (s *Shell) openPicker(title string, items []pickerItem, pick func(key string) error) (*picker, error) {
+	// A dialog surface and a modal of the workbench are never open together (docs/spec/native-modals.md).
+	if err := s.dialogRefusal(); err != nil {
+		return nil, err
+	}
 	s.closePicker()
 	s.picker = picker{open: true, title: title, items: items, pick: pick, drawn: s.picker.drawn}
 	s.options.Invalidate()
-	return &s.picker
+	return &s.picker, nil
 }
 
 // closePicker closes the layer. A question that waits for its answer learns that the layer closed without a pick.
@@ -129,14 +133,14 @@ func (s *Shell) pickItem(index int) error {
 }
 
 // openAddMenu asks which plugin a new tab of the card takes, for the tool add or a split tool, under the anchor.
-func (s *Shell) openAddMenu(anchor, tool, card string) {
+func (s *Shell) openAddMenu(anchor, tool, card string) error {
 	items := []pickerItem{}
 	for _, plugin := range s.plugins {
 		if plugin.Surface {
 			items = append(items, pickerItem{Key: plugin.ID, Name: plugin.Name, Mark: plugin.Mark, Icon: plugin.Icon})
 		}
 	}
-	s.openPicker(pickerAsk[tool], items, func(plugin string) error {
+	layer, err := s.openPicker(pickerAsk[tool], items, func(plugin string) error {
 		if tool == "add" {
 			_, err := s.addTab(card, plugin, nil)
 			return err
@@ -148,7 +152,12 @@ func (s *Shell) openAddMenu(anchor, tool, card string) {
 		}
 		_, err := s.splitCard(card, toolSides[tool], plugin)
 		return err
-	}).anchor = anchor
+	})
+	if err != nil {
+		return err
+	}
+	layer.anchor = anchor
+	return nil
 }
 
 // openCardMenu opens the add or split menu of a card, and closes it when it is open.
@@ -186,8 +195,7 @@ func (s *Shell) openCardMenu(card, menu string) error {
 	}
 	s.focusCard(s.planes.Focusable(card))
 	s.settle()
-	s.openAddMenu(anchor, tool.tool, card)
-	return nil
+	return s.openAddMenu(anchor, tool.tool, card)
 }
 
 // openCardTools opens the tool menu of a card, which holds the tools that its narrow head folds, and closes it when it is open.
@@ -220,7 +228,7 @@ func (s *Shell) openCardTools(card string) error {
 	}
 	s.focusCard(s.planes.Focusable(card))
 	s.settle()
-	s.openPicker("카드 도구", items, func(key string) error {
+	layer, err := s.openPicker("카드 도구", items, func(key string) error {
 		if key == "close" && s.isGroup(card) {
 			return s.openGroupMenu(card, anchor)
 		}
@@ -240,9 +248,12 @@ func (s *Shell) openCardTools(card string) error {
 			s.binder.run("core.card.sidebar.toggle", cardSideParam{Card: card, Side: side})
 			return nil
 		}
-		s.openAddMenu(anchor, key, card)
-		return nil
-	}).anchor = anchor
+		return s.openAddMenu(anchor, key, card)
+	})
+	if err != nil {
+		return err
+	}
+	layer.anchor = anchor
 	return nil
 }
 
@@ -274,10 +285,13 @@ func (s *Shell) openTabList(card string) error {
 		}
 		items = append(items, item)
 	}
-	layer := s.openPicker(fmt.Sprintf("탭 %d개", len(tabs)), items, func(tab string) error {
+	layer, err := s.openPicker(fmt.Sprintf("탭 %d개", len(tabs)), items, func(tab string) error {
 		s.focusCard(card)
 		return s.selectTab(tab)
 	})
+	if err != nil {
+		return err
+	}
 	layer.anchor, layer.start = anchor, true
 	return nil
 }
@@ -316,10 +330,13 @@ func (s *Shell) openSpaceApps(id string) error {
 			items = append(items, item)
 		}
 	}
-	layer := s.openPicker(fmt.Sprintf("스페이스 앱 %d개", len(items)), items, func(key string) error {
+	layer, err := s.openPicker(fmt.Sprintf("스페이스 앱 %d개", len(items)), items, func(key string) error {
 		card, tab, _ := strings.Cut(key, "/") // silent: the items of this layer have keys of the form card/tab.
 		return s.showFullscreen(card, tab)
 	})
+	if err != nil {
+		return err
+	}
 	layer.groups, layer.anchor, layer.start = groups, anchor, true
 	return nil
 }
@@ -373,7 +390,7 @@ func (s *Shell) openSurfaceMenu(surface string, x, y float64) error {
 	for _, item := range owner.Menu {
 		items = append(items, pickerItem{Key: item.Command, Name: item.Title})
 	}
-	layer := s.openPicker(owner.Name, items, func(command string) error {
+	layer, err := s.openPicker(owner.Name, items, func(command string) error {
 		s.registry.RunOn(command, nil, surface, func(_ any, err error) {
 			if err != nil {
 				s.fail(err)
@@ -381,6 +398,9 @@ func (s *Shell) openSurfaceMenu(surface string, x, y float64) error {
 		})
 		return nil
 	})
+	if err != nil {
+		return err
+	}
 	layer.x, layer.y = float32(x), float32(y)
 	return nil
 }
@@ -458,9 +478,12 @@ func (s *Shell) openTabMenu(id string, x, y float64) error {
 		return err
 	}
 	kept := items[0].Active
-	layer := s.openPicker(layout.TabName(tab, nil, false), items, func(string) error {
+	layer, err := s.openPicker(layout.TabName(tab, nil, false), items, func(string) error {
 		return s.tabs.saver.Keep(id, !kept)
 	})
+	if err != nil {
+		return err
+	}
 	layer.x, layer.y = float32(x), float32(y)
 	return nil
 }
@@ -543,11 +566,17 @@ func (s *Shell) dialogScrim() ui.Color {
 }
 
 // dialogOpen tells whether a dialog of the window is open. A menu has no background.
-func (s *Shell) dialogOpen() bool { return s.settingsWindow.open || s.debugView.open }
+// dialogOpen tells whether a dialog stands over the workbench, which blurs its drawing: the settings, the debug view or a dialog
+// surface.
+func (s *Shell) dialogOpen() bool {
+	return s.settingsWindow.open || s.debugView.open || s.dialog != nil
+}
 
 // tellBackground tells the host when a dialog opened or closed, so the host blurs the documents of the window.
 func (s *Shell) tellBackground() {
-	open := s.dialogOpen()
+	// The host derives the blur of a dialog surface from its placement and leaves the dialog unblurred, so only the dialogs that the
+	// workbench draws itself are told (docs/spec/native-surfaces.md).
+	open := s.settingsWindow.open || s.debugView.open
 	if open == s.backgroundTold {
 		return
 	}
@@ -577,13 +606,18 @@ func (s *Shell) modalName() *string {
 
 // modalStatus is the value of the status core.modal. Document is always null: this host creates no modal web view.
 type modalStatus struct {
-	ID       string `json:"id"`
-	Mode     string `json:"mode"`
-	Document any    `json:"document"`
+	ID       string  `json:"id"`
+	Mode     string  `json:"mode"`
+	Document any     `json:"document"`
+	Plugin   *string `json:"plugin"`
 }
 
-// modalStatus returns the value of core.modal: the open modal, or nil.
+// modalStatus returns the value of core.modal: the open modal, or nil. An open dialog surface is the modal of the mode dialog with
+// its plugin (docs/spec/plugins.md#dialogs).
 func (s *Shell) modalStatus() any {
+	if s.dialog != nil {
+		return &modalStatus{ID: s.dialog.id(), Mode: "dialog", Plugin: &s.dialog.plugin}
+	}
 	name := s.modalName()
 	if name == nil {
 		return nil

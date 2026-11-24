@@ -584,7 +584,7 @@ func TestTheModalStatusStatesTheOpenModal(t *testing.T) {
 		t.Fatalf("core.modal is %s with no modal", got)
 	}
 	f.click("core.card.add", f.tabbedCards()[0])
-	if got, want := f.status("core.modal"), `{"id":"picker","mode":"menu","document":null}`; got != want {
+	if got, want := f.status("core.modal"), `{"id":"picker","mode":"menu","document":null,"plugin":null}`; got != want {
 		t.Fatalf("core.modal is %s, want %s", got, want)
 	}
 	f.run("core.picker.close", nil)
@@ -594,7 +594,7 @@ func TestTheModalStatusStatesTheOpenModal(t *testing.T) {
 	}
 	f.run("core.settings.open", nil)
 	f.settle()
-	if got, want := f.status("core.modal"), `{"id":"settings","mode":"dialog","document":null}`; got != want {
+	if got, want := f.status("core.modal"), `{"id":"settings","mode":"dialog","document":null,"plugin":null}`; got != want {
 		t.Fatalf("core.modal is %s, want %s", got, want)
 	}
 }

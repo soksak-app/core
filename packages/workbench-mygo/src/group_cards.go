@@ -414,14 +414,18 @@ func (s *Shell) openGroupMenu(id, anchor string) error {
 	if s.fullscreen == "" && s.planes.IsGroup(id) {
 		items = append(items, pickerItem{Key: "dissolve", Name: names["group-dissolve"], Icon: s.headIconElements("card-split-x")})
 	}
-	s.openPicker(names["group-menu"], items, func(key string) error {
+	layer, err := s.openPicker(names["group-menu"], items, func(key string) error {
 		if key == "dissolve" {
 			s.binder.run("core.group.dissolve", groupParam{Group: id})
 			return nil
 		}
 		_, err := s.askedCloseCard(id)
 		return err
-	}).anchor = anchor
+	})
+	if err != nil {
+		return err
+	}
+	layer.anchor = anchor
 	return nil
 }
 

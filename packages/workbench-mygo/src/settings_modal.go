@@ -1304,6 +1304,9 @@ func windowAct(s *Shell, name string, run func(value windowParam) error) {
 func (s *Shell) registerSettingsWindow() {
 	w := &s.settingsWindow
 	act(s, "core.settings.open", func(struct{}) error {
+		if err := s.dialogRefusal(); err != nil {
+			return err
+		}
 		s.closeDebug()
 		s.closePicker()
 		w.open = true
