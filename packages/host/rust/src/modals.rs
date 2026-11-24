@@ -18,6 +18,13 @@ use crate::windows::{
     NativeFailure, emit_window, open_owner, root_view, window_data, with_native_owner,
 };
 
+/// Tells whether surface is the id of a dialog surface, `dialog/<plugin>/<name>` (docs/spec/plugins.md#dialogs): the host marks its
+/// surface host, so the native container keeps it above every other surface host, and derives the dialog of the window from its
+/// placement.
+pub fn is_dialog_surface(surface: &str) -> bool {
+    surface.starts_with("dialog/")
+}
+
 /// The values that are needed to show a [data-native-modal] element in the main DOM.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -234,7 +241,7 @@ impl Overlay {
     pub fn placed_dialog(&self, placed: &[crate::surfaces::Placement]) -> DialogPlacement {
         let shown = placed
             .iter()
-            .rfind(|placement| placement.visible && placement.id.starts_with("dialog/"))
+            .rfind(|placement| placement.visible && is_dialog_surface(&placement.id))
             .map(|placement| placement.id.clone());
         let mut held = self
             .dialog_surface

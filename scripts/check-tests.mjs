@@ -359,6 +359,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1129-6",
+    implementation: [
+      { file: "packages/host/go/src/modals.go", symbol: "func IsDialogSurface(surface string) bool { return strings.HasPrefix(surface, \"dialog/\") }" },
+      { file: "packages/host/rust/src/modals.rs", symbol: "pub fn is_dialog_surface(surface: &str) -> bool {" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/modals_test.go", id: "TestTheHostMarksTheSurfaceHostOfEachDialogSurface" },
+      { file: "packages/host/rust/tests/modals_test.rs", id: "the_host_marks_the_surface_host_of_each_dialog_surface" },
+    ],
+    expected: "Each host marks the surface host of each dialog surface and only of a dialog surface.",
+    levels: ["unit"],
+  },
+  {
     id: "F1142",
     implementation: [
       { file: "packages/sok/go/src/plugins.go", symbol: "func checkServiceFolders(configDir string, state *InstalledState) error {" },

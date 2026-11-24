@@ -1723,7 +1723,7 @@ fn apply_surfaces(
                     let handle = platform.create_surface(native_owner(window)?)?;
                     // The surface host of a dialog surface stays above every surface host made after it
                     // (docs/spec/plugins.md#dialogs).
-                    if s.id.starts_with("dialog/")
+                    if crate::modals::is_dialog_surface(&s.id)
                         && let Err(error) = platform.mark_dialog_surface(handle)
                     {
                         log_failure("dialog surface host", platform.close_surface(handle));

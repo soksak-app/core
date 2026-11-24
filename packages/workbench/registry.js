@@ -69,6 +69,7 @@ export function registerDialog(dialog) {
 }
 
 /** The dialog name of the plugin, or null when the plugin declares no dialog of that name. */
+// default: null states that the plugin declares no dialog of that name, which the open call refuses.
 export const dialog = (pluginId, name) => registeredDialogs.find((d) => d.plugin === pluginId && d.name === name) ?? null;
 
 /** Returns the plugins in registration order. The `+` menu uses this order. */

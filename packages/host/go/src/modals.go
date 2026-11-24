@@ -73,6 +73,11 @@ type modal struct {
 	view *nativeWebview
 }
 
+// IsDialogSurface tells whether surface is the id of a dialog surface, dialog/<plugin>/<name> (docs/spec/plugins.md#dialogs): the
+// host marks its surface host, so the native container keeps it above every other surface host, and derives the dialog of the
+// window from its placement.
+func IsDialogSurface(surface string) bool { return strings.HasPrefix(surface, "dialog/") }
+
 // OverlayPick publishes the key and value that the modal page changed. The main page decides the meaning.
 func (s *Surfaces) OverlayPick(id string, instance uint64, key string, value string) error {
 	s.mu.Lock()
@@ -556,7 +561,7 @@ func (s *Surfaces) rendered(id string) {
 func (s *Surfaces) placedDialog(placed []Placement) {
 	dialog := ""
 	for _, placement := range placed {
-		if placement.Visible && strings.HasPrefix(placement.ID, "dialog/") {
+		if placement.Visible && IsDialogSurface(placement.ID) {
 			dialog = placement.ID
 		}
 	}

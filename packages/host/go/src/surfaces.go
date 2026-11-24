@@ -2087,7 +2087,7 @@ func (s *Surfaces) apply(win Frontend, req SyncRequest) ([]string, []Placement, 
 			view, err = s.createRegisteredSurface(mainThreadStep, surface.ID, func() (unsafe.Pointer, error) {
 				handle, err := system.CreateSurface(win.NativeWindow())
 				// The surface host of a dialog surface stays above every surface host made after it (docs/spec/plugins.md#dialogs).
-				if err != nil || !strings.HasPrefix(surface.ID, "dialog/") {
+				if err != nil || !IsDialogSurface(surface.ID) {
 					return handle, err
 				}
 				if err := system.MarkDialogSurface(handle); err != nil {

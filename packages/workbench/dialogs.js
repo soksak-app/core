@@ -22,7 +22,7 @@ export function onDialogChange(fn) {
 }
 
 /** The surface id of the open dialog, or null when the window shows none. */
-export const dialogSurface = () => open?.surface.surfaceId ?? null;
+export const dialogSurface = () => (open === null ? null : open.surface.surfaceId);
 
 /** The open dialog as the statuses report it, {surface, plugin, name, opener}, or null. */
 export const dialogState = () => (open === null ? null

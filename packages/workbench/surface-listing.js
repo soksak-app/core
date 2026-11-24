@@ -9,6 +9,7 @@ import { stateCards } from "./layout-tree.js";
 export function surfaceKindOf(descriptor) {
   // default: a tab descriptor has no section and no dialog.
   const section = descriptor.section ?? null;
+  // default: a tab or a section descriptor has no dialog.
   const dialog = descriptor.dialog ?? null;
   if (dialog !== null) return { kind: "dialog", sidebar: null, dialog: { name: dialog.name, opener: dialog.opener } };
   return section === null ? { kind: "tab", sidebar: null, dialog: null } : { kind: "section", sidebar: section.sidebar, dialog: null };

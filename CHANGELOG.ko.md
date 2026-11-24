@@ -5,6 +5,7 @@
 
 ## 2026-11-24
 
+- F1129-6: 두 host는 surface가 dialog surface인지 한 check로 정하고, 그 check로 surface host를 표시하고 창의 dialog를 정하며, 각 host가 `surface-host.dialog-host-stays-on-top`의 test를 선언한다. dialog 코드의 default는 이유를 적고, section 또는 dialog surface의 origin은 그 존재를 판정한다.
 - F1142: host가 서비스 폴더 이름을 실행 파일 base name으로 정하므로, `sok plugin install`과 `update`는 설치된 각 사이드카의 `sidecar.json`을 읽고, 실행 파일 base name이 다른 것과 같은 두 번째 persistent 사이드카를 `installed.json`을 쓰기 전에 `sidecar <later>: executable base name <name> is already the service folder of sidecar <earlier>`로 거부한다. host는 이미 시작 때 그런 선언을 거부했고, 이제 명세가 두 거부를 모두 적는다. Go와 Rust 설치 test는 변경 전에 실패했고 변경 후 통과한다.
 - F1140: 명세의 어떤 operation도 이전 version을 복원하지 않으므로 `plugins/installed.json`은 더 이상 `previous`를 기록하지 않고, `sok`는 plugin마다 쓰는 version의 폴더만 남긴다. Go와 Rust reader는 `previous`를 가진 plugin 항목을 `unknown field previous`로 거부하며, 로컬 애플리케이션의 설치 파일은 현재 형식으로 고쳤다. Go와 Rust update test와 reader test는 변경 전에 실패했고 변경 후 통과한다.
 - F1141: 실행 중인 persistent 서비스는 실행되는 동안 사이드카를 나열했던 plugin을 기억하고, `sessions` 수는 제거되거나 비활성화된 plugin의 layout 표면을 포함한다. 따라서 사이드카의 유일한 plugin을 제거하면 선언 없는 서비스가 그 세션 수와 함께 나열되고, 그 세션이 layout을 떠나거나 사람이 서비스를 교체할 때까지 어느 세션도 끝나지 않는다. Go와 Rust 제거 test는 변경 전에 host가 서비스를 즉시 교체해서 실패했고, 변경 후 통과한다.

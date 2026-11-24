@@ -40,3 +40,20 @@ fn a_reply_of_a_modal_that_is_not_open_is_dropped_with_the_fields_of_its_record(
         );
     }
 }
+
+// contract: surface-host.dialog-host-stays-on-top
+#[test]
+fn the_host_marks_the_surface_host_of_each_dialog_surface() {
+    for (surface, want) in [
+        ("dialog/probe/edit", true),
+        ("tab-a", false),
+        ("dialogs/probe/edit", false),
+        ("space-b/left/probe.section", false),
+    ] {
+        assert_eq!(
+            soksak_host::modals::is_dialog_surface(surface),
+            want,
+            "{surface}"
+        );
+    }
+}

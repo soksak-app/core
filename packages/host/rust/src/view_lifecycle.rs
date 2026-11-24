@@ -183,7 +183,7 @@ pub fn view_killed_event(
 /// surface, whose id starts with dialog/, is created again when its dialog is opened again, and any other view when its tab or its
 /// section is shown again (docs/spec/plugins.md#dialogs).
 pub fn view_stop_reason(surface: &str) -> String {
-    let again = if surface.starts_with("dialog/") {
+    let again = if crate::modals::is_dialog_surface(surface) {
         "its dialog is opened again"
     } else {
         "its tab is reopened"

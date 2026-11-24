@@ -2,7 +2,6 @@ package host
 
 import (
 	"fmt"
-	"strings"
 	"time"
 	"unsafe"
 )
@@ -35,7 +34,7 @@ type viewSpec struct {
 // again when its dialog is opened again, and any other view when its tab or its section is shown again (docs/spec/plugins.md#dialogs).
 func viewStopReason(surface string) string {
 	again := "its tab is reopened"
-	if strings.HasPrefix(surface, "dialog/") {
+	if IsDialogSurface(surface) {
 		again = "its dialog is opened again"
 	}
 	return fmt.Sprintf("the view failed %d times within %d seconds and is created again when %s", viewRestartLimit, int(viewRestartWindow/time.Second), again)

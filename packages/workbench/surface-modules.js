@@ -296,7 +296,7 @@ function originOf(surface) {
  */
 // A section and a dialog surface were opened by no tab, so their origin records no directory (docs/spec/native-surfaces.md#view-surfaces).
 function surfaceOrigin(surface) {
-  return surface.section || surface.dialog ? { directory: null } : originOf(surface);
+  return surface.section != null || surface.dialog != null ? { directory: null } : originOf(surface);
 }
 
 function viewStartOrigin(surface) {

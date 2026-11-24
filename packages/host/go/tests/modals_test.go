@@ -30,3 +30,12 @@ func TestAReplyOfAModalThatIsNotOpenIsDroppedWithTheFieldsOfItsRecord(t *testing
 		}
 	}
 }
+
+// contract: surface-host.dialog-host-stays-on-top
+func TestTheHostMarksTheSurfaceHostOfEachDialogSurface(t *testing.T) {
+	for surface, want := range map[string]bool{"dialog/probe/edit": true, "tab-a": false, "dialogs/probe/edit": false, "space-b/left/probe.section": false} {
+		if got := host.IsDialogSurface(surface); got != want {
+			t.Fatalf("IsDialogSurface(%q) = %v, want %v", surface, got, want)
+		}
+	}
+}
