@@ -2,6 +2,7 @@
 //! renames it into place, and changes installed.json once at the end, so a failed installation does not change the
 //! previous installation.
 
+use crate::service_hold::{Running, end_held, held_by, recorded_versions};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io::{Read, Write};
@@ -167,9 +168,10 @@ pub fn update_plugin_unless(
     id: &str,
     core: &str,
     platform: &str,
+    running: &Running<'_>,
     stop: &dyn Fn() -> bool,
 ) -> Result<PluginResult, String> {
-    install_plugin_unless(config_dir, id, core, platform, true, stop)
+    install_plugin_unless(config_dir, id, core, platform, true, running, stop)
 }
 
 /// The durable snapshot of a starter pack installation.
@@ -397,6 +399,7 @@ pub fn run_plugin_action(
     id: &str,
     core: &str,
     platform: &str,
+    running: &Running<'_>,
 ) -> Result<PluginActionResult, String> {
     // The hosts call this inside their own ownership of the configuration directory, so it takes no lock; the command
     // line entry owns the directory for the duration of the write (docs/spec/installation.md).
@@ -407,9 +410,10 @@ pub fn run_plugin_action(
             core,
             platform,
             action == "update",
+            running,
         )?)),
         "remove" | "enable" | "disable" => Ok(PluginActionResult::Changed(change_plugin(
-            config_dir, id, action,
+            config_dir, id, action, running,
         )?)),
         _ => Err(format!("unknown plugin action {action:?}")),
     }
@@ -704,8 +708,9 @@ pub fn install_plugin(
     core: &str,
     platform: &str,
     update: bool,
+    running: &Running<'_>,
 ) -> Result<PluginResult, String> {
-    install_plugin_unless(config_dir, id, core, platform, update, &|| false)
+    install_plugin_unless(config_dir, id, core, platform, update, running, &|| false)
 }
 
 /// install_plugin with the check of stop before each step that changes the configuration folder (update_plugin_unless).
@@ -715,6 +720,7 @@ fn install_plugin_unless(
     core: &str,
     platform: &str,
     update: bool,
+    running: &Running<'_>,
     stop: &dyn Fn() -> bool,
 ) -> Result<PluginResult, String> {
     let index = read_registry(config_dir)?;
@@ -722,6 +728,7 @@ fn install_plugin_unless(
     if update && !state.plugins.contains_key(id) {
         return Err(format!("plugin {id} is not installed"));
     }
+    let recorded = recorded_versions(&state);
     let mut plan = DependencyPlan {
         config_dir,
         core,
@@ -748,6 +755,12 @@ fn install_plugin_unless(
     } = plan;
     if !changed {
         return Ok(plugin_result(&state, id));
+    }
+    // A plan that changes the version of a sidecar whose service runs extracts nothing unless the host ends that service
+    // (docs/spec/persistent-services.md#updates).
+    let (held, holding) = held_by(id, &state, &recorded, &running.services);
+    if !held.is_empty() && running.end.is_none() {
+        return end_held(&held, holding, running).map(|()| plugin_result(&state, id));
     }
     if stop() {
         return Err(STOPPED.to_string());
@@ -783,6 +796,7 @@ fn install_plugin_unless(
     if stop() {
         return Err(STOPPED.to_string());
     }
+    end_held(&held, holding, running)?;
     write_installed(config_dir, &state)?;
     prune_folders(config_dir, &state)?;
     Ok(plugin_result(&state, id))
@@ -1130,6 +1144,7 @@ pub fn change_plugin(
     config_dir: &Path,
     id: &str,
     action: &str,
+    running: &Running<'_>,
 ) -> Result<Option<InstalledPlugin>, String> {
     let (mut state, manifests) = read_installed_manifests(config_dir)?;
     let Some(plugin) = state.plugins.get(id) else {
@@ -1158,6 +1173,10 @@ pub fn change_plugin(
         drop_unnamed_sidecars(&mut state);
     } else if let Some(plugin) = state.plugins.get_mut(id) {
         plugin.enabled = action == "enable";
+    }
+    if action == "enable" {
+        let (held, holding) = held_by(id, &state, &recorded_versions(&state), &running.services);
+        end_held(&held, holding, running)?;
     }
     write_installed(config_dir, &state)?;
     if action == "remove" {
@@ -1204,12 +1223,22 @@ pub(crate) fn run_plugins(
                 } else {
                     String::new()
                 };
+                // The command line reads no hello, so it holds every operation that changes the recorded version of a
+                // sidecar whose service runs (docs/spec/persistent-services.md#updates).
+                let mut running = Running::default();
+                if action == "install" || action == "update" || action == "enable" {
+                    running.services = crate::service_hold::live_services(
+                        &config_dir,
+                        &read_installed(&config_dir)?,
+                    )?;
+                }
                 let result = run_plugin_action(
                     &config_dir,
                     action,
                     &positionals[2],
                     options.core_version,
                     &platform,
+                    &running,
                 )?;
                 Ok(print_json(stdout, &result)?)
             }

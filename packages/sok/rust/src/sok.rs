@@ -44,6 +44,7 @@ mod registry;
 pub mod replay;
 pub mod replay_inputs;
 pub mod routine;
+pub mod service_hold;
 pub mod setup;
 pub mod skill;
 pub mod version;

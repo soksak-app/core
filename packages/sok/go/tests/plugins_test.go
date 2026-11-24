@@ -421,7 +421,7 @@ func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 	}
 	index := pluginVersions(t, "0.2.0")
 	runJSON(t, "registry", "use", index, "--config-dir", config)
-	if _, err := sok.RunPluginAction(config, "install", "probe", "0.0.2", mustPlatform(t)); err != nil {
+	if _, err := sok.RunPluginAction(config, "install", "probe", "0.0.2", mustPlatform(t), sok.Running{}); err != nil {
 		t.Fatal(err)
 	}
 	state, err := sok.ReadPluginsState(config, sok.CoreVersion)
@@ -509,7 +509,7 @@ func TestStarterJobTransitionsAreDurableAndBoundToTheSnapshot(t *testing.T) {
 	if got := readText(t, path); got != before {
 		t.Fatalf("mismatched completion changed starter job: %s", got)
 	}
-	if _, err := sok.RunPluginAction(config, "install", "probe", sok.CoreVersion, mustPlatform(t)); err != nil {
+	if _, err := sok.RunPluginAction(config, "install", "probe", sok.CoreVersion, mustPlatform(t), sok.Running{}); err != nil {
 		t.Fatal(err)
 	}
 	state, err = sok.ReadPluginsState(config, sok.CoreVersion)
@@ -529,7 +529,7 @@ func TestStarterJobTransitionsAreDurableAndBoundToTheSnapshot(t *testing.T) {
 	if _, err := sok.UseRegistry(config, request.Registry, sok.DefaultFetcher); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := sok.RunPluginAction(config, "disable", "probe", sok.CoreVersion, ""); err != nil {
+	if _, err := sok.RunPluginAction(config, "disable", "probe", sok.CoreVersion, "", sok.Running{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := sok.WriteStarterJob(config, sok.StarterJobRequest{State: "complete", Pack: request.Pack, Registry: request.Registry, Plugins: request.Plugins}); err != nil {
@@ -545,7 +545,7 @@ func TestStarterJobTransitionsAreDurableAndBoundToTheSnapshot(t *testing.T) {
 	if _, err := sok.UseRegistry(legacy, request.Registry, sok.DefaultFetcher); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := sok.RunPluginAction(legacy, "install", "probe", sok.CoreVersion, mustPlatform(t)); err != nil {
+	if _, err := sok.RunPluginAction(legacy, "install", "probe", sok.CoreVersion, mustPlatform(t), sok.Running{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := sok.WriteStarterJob(legacy, request); err == nil {
@@ -560,10 +560,10 @@ func TestStarterJobTransitionsAreDurableAndBoundToTheSnapshot(t *testing.T) {
 func TestRunPluginActionMatchesThePluginCommands(t *testing.T) {
 	config := t.TempDir()
 	runJSON(t, "registry", "use", pluginVersions(t, "0.2.0"), "--config-dir", config)
-	if _, err := sok.RunPluginAction(config, "install", "probe", "0.0.2", mustPlatform(t)); err != nil {
+	if _, err := sok.RunPluginAction(config, "install", "probe", "0.0.2", mustPlatform(t), sok.Running{}); err != nil {
 		t.Fatal(err)
 	}
-	disabled, err := sok.RunPluginAction(config, "disable", "probe", "0.0.2", "")
+	disabled, err := sok.RunPluginAction(config, "disable", "probe", "0.0.2", "", sok.Running{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -574,10 +574,10 @@ func TestRunPluginActionMatchesThePluginCommands(t *testing.T) {
 	if !strings.Contains(stdout, `"enabled": false`) {
 		t.Fatalf("plugin list after disable %s", stdout)
 	}
-	if _, err := sok.RunPluginAction(config, "rename", "probe", "0.0.2", ""); err == nil || err.Error() != `unknown plugin action "rename"` {
+	if _, err := sok.RunPluginAction(config, "rename", "probe", "0.0.2", "", sok.Running{}); err == nil || err.Error() != `unknown plugin action "rename"` {
 		t.Fatalf("unknown action: %v", err)
 	}
-	if removed, err := sok.RunPluginAction(config, "remove", "probe", "0.0.2", ""); err != nil || removed != nil {
+	if removed, err := sok.RunPluginAction(config, "remove", "probe", "0.0.2", "", sok.Running{}); err != nil || removed != nil {
 		t.Fatalf("remove = %v, %v", removed, err)
 	}
 	if exists(filepath.Join(config, "plugins/probe")) {
@@ -926,7 +926,7 @@ func TestPluginRemoveUsesTheManifestThatTheReaderReturned(t *testing.T) {
 		}
 	})
 	defer sok.SetAfterPluginFileRead(nil)
-	_, err := sok.ChangePlugin(config, "base", "remove")
+	_, err := sok.ChangePlugin(config, "base", "remove", sok.Running{})
 	if err == nil || err.Error() != "plugin base is required by ext ^1.0.0" {
 		t.Fatalf("remove base: error %v", err)
 	}
@@ -1025,7 +1025,7 @@ func TestPluginInstallRefusesAReleaseWhosePluginIDDiffers(t *testing.T) {
 	index := mismatchedIndex(t)
 	config := t.TempDir()
 	runJSON(t, "registry", "use", index, "--config-dir", config)
-	_, err := sok.RunPluginAction(config, "install", "probe", "0.0.2", mustPlatform(t))
+	_, err := sok.RunPluginAction(config, "install", "probe", "0.0.2", mustPlatform(t), sok.Running{})
 	rejects(t, err, "plugin.json id other differs from the installed plugin probe")
 	if exists(filepath.Join(config, "plugins", "installed.json")) || exists(filepath.Join(config, "plugins", "probe")) {
 		t.Fatal("a refused install wrote to the configuration directory")
@@ -1068,7 +1068,7 @@ func TestPluginInstallRefusesAManifestWithASchemaOutsideTheSubset(t *testing.T) 
 		"package.json": `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"}, "files": ["plugin.json"]}`,
 		"plugin.json":  `{"id": "probe", "name": "Probe", "description": "Sample.", "surface": {"params": {"type": "object", "additionalProperties": false}}}`,
 	})
-	_, err := sok.RunPluginAction(config, "install", "probe", "0.0.2", mustPlatform(t))
+	_, err := sok.RunPluginAction(config, "install", "probe", "0.0.2", mustPlatform(t), sok.Running{})
 	rejects(t, err, "plugin probe surface params: unknown field additionalProperties")
 	if exists(filepath.Join(config, "plugins", "installed.json")) {
 		t.Fatal("a refused install wrote installed.json")
@@ -1084,7 +1084,7 @@ func TestManifestDeclaringMigrationsIsRefusedAsAnUnknownMember(t *testing.T) {
 		"package.json": `{"name": "@scope/plugin-probe", "version": "0.2.0", "engines": {"soksak": "^0.0.2"}, "files": ["plugin.json"]}`,
 		"plugin.json":  `{"id": "probe", "name": "Probe", "description": "Sample.", "migrations": [{"from": "0.1.0", "module": "ui/migrate.js"}]}`,
 	})
-	_, err := sok.RunPluginAction(config, "install", "probe", "0.0.2", mustPlatform(t))
+	_, err := sok.RunPluginAction(config, "install", "probe", "0.0.2", mustPlatform(t), sok.Running{})
 	rejects(t, err, "plugin.json: unknown field migrations")
 	if exists(filepath.Join(config, "plugins", "installed.json")) {
 		t.Fatal("a refused install wrote installed.json")

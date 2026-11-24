@@ -117,7 +117,8 @@ fn run_plugin_action_takes_no_lock_beside_a_live_owner() {
     fs::write(config.join("process.lock"), owner_text()).unwrap();
     let owner = std::fs::File::open(config.join("process.lock")).unwrap();
     owner.try_lock().unwrap();
-    if let Err(error) = run_plugin_action(&config, "disable", "probe", "", "") {
+    if let Err(error) = run_plugin_action(&config, "disable", "probe", "", "", &Default::default())
+    {
         panic!("the host entry refused beside its own lock: {error}");
     }
 }

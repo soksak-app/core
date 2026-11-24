@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/soksak-app/core/packages/sok/go/src/platform"
 )
@@ -16,6 +17,10 @@ func init() { platform.Register(windows{}) }
 
 func (windows) ProcessRunning(int) error {
 	return errors.New("process check is not implemented on windows")
+}
+
+func (windows) ServiceProcessExists(int, time.Time) (bool, error) {
+	return false, errors.New("service process inspection is not implemented on windows")
 }
 
 func (windows) Key() (string, error) {

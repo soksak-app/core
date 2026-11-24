@@ -609,8 +609,15 @@ fn plugins_state_reports_the_registry_and_the_installation() {
         config.text(),
     ]);
     let platform = soksak_sok::current_platform().expect("platform");
-    soksak_sok::plugins::run_plugin_action(config.path(), "install", "probe", "0.0.2", &platform)
-        .expect("install");
+    soksak_sok::plugins::run_plugin_action(
+        config.path(),
+        "install",
+        "probe",
+        "0.0.2",
+        &platform,
+        &Default::default(),
+    )
+    .expect("install");
     let state: Value = serde_json::from_str(&state_json(&config)).unwrap();
     assert_eq!(state["registry"], format!("file://{}", registry.index()));
     assert_eq!(state["index"]["plugins"][0]["id"], "probe");
@@ -709,6 +716,7 @@ fn starter_job_transitions_are_durable_and_bound_to_the_snapshot() {
         "probe",
         soksak_sok::version::CORE_VERSION,
         &platform,
+        &Default::default(),
     )
     .expect("install starter plugin");
     let resumed_state =
@@ -737,6 +745,7 @@ fn starter_job_transitions_are_durable_and_bound_to_the_snapshot() {
         "probe",
         soksak_sok::version::CORE_VERSION,
         "",
+        &Default::default(),
     )
     .expect("disable starter plugin");
     assert_eq!(
@@ -764,6 +773,7 @@ fn starter_job_transitions_are_durable_and_bound_to_the_snapshot() {
         "probe",
         soksak_sok::version::CORE_VERSION,
         &platform,
+        &Default::default(),
     )
     .expect("install legacy plugin");
     let pending = StarterJobRequest {
@@ -789,22 +799,47 @@ fn run_plugin_action_matches_the_plugin_commands() {
         config.text(),
     ]);
     let platform = soksak_sok::current_platform().expect("platform");
-    soksak_sok::plugins::run_plugin_action(config.path(), "install", "probe", "0.0.2", &platform)
-        .expect("install");
-    let disabled =
-        soksak_sok::plugins::run_plugin_action(config.path(), "disable", "probe", "0.0.2", "")
-            .expect("disable");
+    soksak_sok::plugins::run_plugin_action(
+        config.path(),
+        "install",
+        "probe",
+        "0.0.2",
+        &platform,
+        &Default::default(),
+    )
+    .expect("install");
+    let disabled = soksak_sok::plugins::run_plugin_action(
+        config.path(),
+        "disable",
+        "probe",
+        "0.0.2",
+        "",
+        &Default::default(),
+    )
+    .expect("disable");
     assert_eq!(serde_json::to_value(&disabled).unwrap()["enabled"], false);
     let (_, stdout, _) = run(&["plugin", "list", "--config-dir", config.text()]);
     assert!(stdout.contains(r#""enabled": false"#), "{stdout}");
-    let error =
-        soksak_sok::plugins::run_plugin_action(config.path(), "rename", "probe", "0.0.2", "")
-            .err()
-            .expect("unknown action fails");
+    let error = soksak_sok::plugins::run_plugin_action(
+        config.path(),
+        "rename",
+        "probe",
+        "0.0.2",
+        "",
+        &Default::default(),
+    )
+    .err()
+    .expect("unknown action fails");
     assert_eq!(error, r#"unknown plugin action "rename""#);
-    let removed =
-        soksak_sok::plugins::run_plugin_action(config.path(), "remove", "probe", "0.0.2", "")
-            .expect("remove");
+    let removed = soksak_sok::plugins::run_plugin_action(
+        config.path(),
+        "remove",
+        "probe",
+        "0.0.2",
+        "",
+        &Default::default(),
+    )
+    .expect("remove");
     assert_eq!(serde_json::to_string(&removed).unwrap(), "null");
     assert!(!config.path().join("plugins/probe").exists());
 }
@@ -1342,7 +1377,8 @@ fn plugin_remove_uses_the_manifest_that_the_reader_returned() {
             std::fs::remove_file(&dependent).expect("remove the dependent plugin.json");
         }
     })));
-    let result = soksak_sok::plugins::change_plugin(config.path(), "base", "remove");
+    let result =
+        soksak_sok::plugins::change_plugin(config.path(), "base", "remove", &Default::default());
     soksak_sok::plugins::set_after_plugin_file_read(None);
     assert_eq!(
         result.expect_err("base is required by ext"),

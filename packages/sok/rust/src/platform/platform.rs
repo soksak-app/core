@@ -19,6 +19,15 @@ pub trait Connection: Read + Write + Send {
 pub trait Platform {
     /// Ok when the process pid is running.
     fn process_running(&self, pid: i32) -> Result<(), String>;
+    /// Checks whether `pid` is the live sidecar service process that published the endpoint whose modification time is
+    /// `published`: a process that started later received the pid after the publisher ended
+    /// (docs/spec/persistent-services.md#endpoint-publisher). The hosts read it before they reuse an endpoint, and the
+    /// installer before it changes the version of a sidecar (docs/spec/persistent-services.md#updates).
+    fn service_process_exists(
+        &self,
+        pid: u32,
+        published: std::time::SystemTime,
+    ) -> Result<bool, String>;
     /// Connects to the address of endpoint.json.
     fn connect(&self, address: &str) -> Result<Box<dyn Connection>, String>;
     /// Calls interrupted with the name of the first interrupt signal (`SIGINT`, `SIGTERM`) when it arrives.

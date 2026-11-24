@@ -12,7 +12,6 @@ use std::os::fd::AsRawFd;
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use super::super::{Connection, Listener};
 
@@ -95,42 +94,6 @@ pub fn process_entry(pid: u32) -> Result<Option<super::super::ProcessEntry>, Str
         parent: parent as u32,
         started: seconds * 1000 + microseconds / 1000,
     }))
-}
-
-pub fn service_process_exists(pid: u32, published: SystemTime) -> Result<bool, String> {
-    if pid == 0 || pid > i32::MAX as u32 {
-        return Ok(false);
-    }
-    let mut info: libc::proc_bsdinfo = unsafe { std::mem::zeroed() };
-    let size = std::mem::size_of::<libc::proc_bsdinfo>() as libc::c_int;
-    let written = unsafe {
-        libc::proc_pidinfo(
-            pid as libc::c_int,
-            libc::PROC_PIDTBSDINFO,
-            0,
-            (&raw mut info).cast(),
-            size,
-        )
-    };
-    if written <= 0 {
-        let error = std::io::Error::last_os_error();
-        return match error.raw_os_error() {
-            Some(libc::ESRCH | libc::EPERM) => Ok(false),
-            Some(code) => Err(format!(
-                "cannot inspect service process {pid}: errno {code}"
-            )),
-            None => Err(format!("cannot inspect service process {pid}: {error}")),
-        };
-    }
-    if written != size {
-        return Err(format!(
-            "cannot inspect service process {pid}: the table answered {written} of {size} bytes"
-        ));
-    }
-    let started =
-        UNIX_EPOCH + Duration::new(info.pbi_start_tvsec, info.pbi_start_tvusec as u32 * 1000);
-    let owned = info.pbi_uid == unsafe { geteuid() };
-    Ok(owned && info.pbi_status != libc::SZOMB && started <= published)
 }
 
 /// The identifier of the user event that wakes the wait for a service process when its stop stops.

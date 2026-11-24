@@ -1045,13 +1045,6 @@ impl Platform for Darwin {
     fn secure_service_directory(&self, path: &Path) -> Result<(), String> {
         private_files::secure_service_directory(path)
     }
-    fn service_process_exists(
-        &self,
-        pid: u32,
-        published: std::time::SystemTime,
-    ) -> Result<bool, String> {
-        endpoint::service_process_exists(pid, published)
-    }
     fn process_entry(&self, pid: u32) -> Result<Option<super::ProcessEntry>, String> {
         endpoint::process_entry(pid)
     }

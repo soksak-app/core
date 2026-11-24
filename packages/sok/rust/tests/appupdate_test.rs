@@ -503,6 +503,13 @@ impl Platform for WaitedPlatform {
     fn process_running(&self, pid: i32) -> Result<(), String> {
         self.system.process_running(pid)
     }
+    fn service_process_exists(
+        &self,
+        pid: u32,
+        published: std::time::SystemTime,
+    ) -> Result<bool, String> {
+        self.system.service_process_exists(pid, published)
+    }
     fn connect(&self, address: &str) -> Result<Box<dyn Connection>, String> {
         self.system.connect(address)
     }

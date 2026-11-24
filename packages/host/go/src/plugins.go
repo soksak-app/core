@@ -93,7 +93,7 @@ func (p *Plugins) Run(request PluginsRunRequest) (any, error) {
 	if !p.running.TryLock() {
 		return nil, errPluginOperationRunning
 	}
-	result, err := sok.RunPluginAction(p.configDir, request.Action, plugin, p.core, p.platform)
+	result, err := sok.RunPluginAction(p.configDir, request.Action, plugin, p.core, p.platform, sok.Running{})
 	if err != nil {
 		p.running.Unlock()
 		return nil, err
@@ -274,7 +274,7 @@ func (p *Plugins) keepStartFailures(results []StartUpdate) {
 func (p *Plugins) updateAtStart(item sok.Outdated) StartUpdate {
 	result := StartUpdate{Plugin: item.ID, From: item.Installed}
 	p.running.Lock()
-	if _, err := sok.UpdatePluginUnless(p.configDir, item.ID, p.core, p.platform, p.stopped.Load); err != nil {
+	if _, err := sok.UpdatePluginUnless(p.configDir, item.ID, p.core, p.platform, sok.Running{}, p.stopped.Load); err != nil {
 		p.running.Unlock()
 		result.Err = err
 		return result

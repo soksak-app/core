@@ -426,6 +426,7 @@ fn a_shutdown_during_the_install_leaves_the_previous_installation() {
         "probe",
         soksak_sok::version::CORE_VERSION,
         &platform,
+        &Default::default(),
         &stop,
     );
     let error = match error {

@@ -1372,14 +1372,6 @@ pub trait Platform: CoreRootHost + Send + Sync {
     fn connect_service(&self, address: &str) -> Result<Box<dyn PersistentStream>, String>;
     /// Makes the service directory for the current user only.
     fn secure_service_directory(&self, path: &Path) -> Result<(), String>;
-    /// Checks whether `pid` is the live process that published the persistent service endpoint whose modification time
-    /// is `published`: a process that started later received the pid after the publisher ended
-    /// (docs/spec/persistent-services.md#endpoint-publisher).
-    fn service_process_exists(
-        &self,
-        pid: u32,
-        published: std::time::SystemTime,
-    ) -> Result<bool, String>;
     /// Waits until the service process `pid` ends or `stop` stops, and answers whether it ended. A process that does not
     /// exist has ended. No time limit ends the wait. The wait uses the kernel notification of the end of a process, which
     /// also reports a process that stays as a zombie, so it does not poll (docs/spec/persistent-services.md#updates).

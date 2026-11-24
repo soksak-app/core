@@ -4198,7 +4198,9 @@ impl<O: Owner> Core<O> {
                     .map_err(|e| format!("sidecar {name}: invalid endpoint: {e}"))?;
                 // The endpoint names the service only while its pid is the process that published it
                 // (docs/spec/persistent-services.md#endpoint-publisher).
-                if !current()?.service_process_exists(endpoint.pid, published)? {
+                if !soksak_sok::platform::current()?
+                    .service_process_exists(endpoint.pid, published)?
+                {
                     std::fs::remove_file(&endpoint_path)
                         .map_err(|e| format!("sidecar {name}: remove stale endpoint: {e}"))?;
                     // It re-enters the only creation path. A stale endpoint is an explicit crash recovery case and not

@@ -596,10 +596,6 @@ func (implementation) Listen(string, string) (net.Listener, platform.Endpoint, e
 	return nil, platform.Endpoint{}, unsupported("local endpoint")
 }
 
-func (implementation) ServiceProcessExists(int, time.Time) (bool, error) {
-	return false, unsupported("service process inspection")
-}
-
 func (implementation) WaitServiceProcessEnd(int, <-chan struct{}) (bool, error) {
 	return false, unsupported("service process wait")
 }

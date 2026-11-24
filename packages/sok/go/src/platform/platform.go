@@ -7,12 +7,19 @@ package platform
 import (
 	"errors"
 	"os"
+	"time"
 )
 
 // Platform is the operating system specific behavior.
 type Platform interface {
 	// ProcessRunning returns nil when the process pid is running.
 	ProcessRunning(pid int) error
+	// ServiceProcessExists checks whether pid is the live sidecar service process that published the endpoint whose modification
+	// time is published: a process that started later received the pid after the publisher ended
+	// (docs/spec/persistent-services.md#endpoint-publisher). The hosts read it before they reuse an endpoint, and the installer
+	// before it changes the version of a sidecar (docs/spec/persistent-services.md#updates). It is an error when this cannot be
+	// determined.
+	ServiceProcessExists(pid int, published time.Time) (bool, error)
 	// Key is the release key (`<os>-<arch>`) of this platform; an architecture without a key is an error.
 	Key() (string, error)
 	// UserPath is nil when this operating system has the user PATH registration, and otherwise the reason that it has none

@@ -104,6 +104,14 @@ impl Platform for Windows {
         Err("application bundles are not implemented on windows".into())
     }
 
+    fn service_process_exists(
+        &self,
+        _pid: u32,
+        _published: std::time::SystemTime,
+    ) -> Result<bool, String> {
+        Err("service process inspection is not implemented on windows".into())
+    }
+
     fn wait_process_end(&self, _pid: i32) -> Result<(), String> {
         Err("waiting for a process end is not implemented on windows".into())
     }

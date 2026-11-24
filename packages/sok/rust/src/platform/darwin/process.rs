@@ -200,6 +200,52 @@ impl Platform for Darwin {
     }
 
     /// Waits with the kernel notification of the end of a process, so no timer asks whether it ended.
+    /// Reads the process from proc_pidinfo PROC_PIDTBSDINFO. A pid that the table does not describe has ended or belongs to
+    /// another user, a zombie has ended, a process of another user did not publish the endpoint, and a process that started
+    /// later than `published` received the pid after the publisher ended.
+    fn service_process_exists(
+        &self,
+        pid: u32,
+        published: std::time::SystemTime,
+    ) -> Result<bool, String> {
+        if pid == 0 || pid > i32::MAX as u32 {
+            return Ok(false);
+        }
+        // SAFETY: proc_bsdinfo is plain data, which zeroes describe.
+        let mut info: libc::proc_bsdinfo = unsafe { std::mem::zeroed() };
+        let size = std::mem::size_of::<libc::proc_bsdinfo>() as libc::c_int;
+        // SAFETY: proc_pidinfo writes at most size bytes into info.
+        let written = unsafe {
+            libc::proc_pidinfo(
+                pid as libc::c_int,
+                libc::PROC_PIDTBSDINFO,
+                0,
+                (&raw mut info).cast(),
+                size,
+            )
+        };
+        if written <= 0 {
+            let error = std::io::Error::last_os_error();
+            return match error.raw_os_error() {
+                Some(libc::ESRCH | libc::EPERM) => Ok(false),
+                Some(code) => Err(format!(
+                    "cannot inspect service process {pid}: errno {code}"
+                )),
+                None => Err(format!("cannot inspect service process {pid}: {error}")),
+            };
+        }
+        if written != size {
+            return Err(format!(
+                "cannot inspect service process {pid}: the table answered {written} of {size} bytes"
+            ));
+        }
+        let started = std::time::UNIX_EPOCH
+            + std::time::Duration::new(info.pbi_start_tvsec, info.pbi_start_tvusec as u32 * 1000);
+        // SAFETY: geteuid reads the effective user of this process.
+        let owned = info.pbi_uid == unsafe { libc::geteuid() };
+        Ok(owned && info.pbi_status != libc::SZOMB && started <= published)
+    }
+
     fn wait_process_end(&self, pid: i32) -> Result<(), String> {
         if pid <= 0 {
             return Ok(());

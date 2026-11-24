@@ -14,7 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 	"github.com/soksak-app/core/packages/host/go/src/routine"
@@ -102,30 +101,6 @@ func (implementation) Listen(directory, application string) (net.Listener, platf
 		return nil, platform.Endpoint{}, err
 	}
 	return listener, platform.Endpoint{Transport: "unix", Address: address}, nil
-}
-
-// ServiceProcessExists checks whether pid is the live process that published the persistent service endpoint whose modification
-// time is published (docs/spec/persistent-services.md#endpoint-publisher). It reads the process from the process table of the
-// kern.proc.pid sysctl. A pid that the table does not list has ended; a zombie has ended too, as a spawn that was not waited for
-// stays one (V5-106), and so has a process in its exit (P_WEXIT), which the table lists after its exit event and before it is a
-// zombie; a process of another user did not publish the endpoint, because the service runs as the user of the host;
-// and a process that started later than published received the pid after the publisher ended. It is an error when the table
-// cannot be read.
-func (implementation) ServiceProcessExists(pid int, published time.Time) (bool, error) {
-	if pid <= 0 || pid > math.MaxInt32 {
-		return false, nil
-	}
-	processes, err := unix.SysctlKinfoProcSlice("kern.proc.pid", pid)
-	if err != nil {
-		return false, fmt.Errorf("cannot inspect service process %d: %w", pid, systemError(err))
-	}
-	if len(processes) == 0 {
-		return false, nil
-	}
-	process := processes[0].Proc
-	started := time.Unix(process.P_starttime.Sec, int64(process.P_starttime.Usec)*int64(time.Microsecond))
-	owned := processes[0].Eproc.Ucred.Uid == uint32(os.Geteuid())
-	return owned && process.P_stat != sZomb && process.P_flag&pWExit == 0 && !started.After(published), nil
 }
 
 // PeerProcess reads the process that connected conn with getsockopt SOL_LOCAL LOCAL_PEERPID, which the kernel records when the

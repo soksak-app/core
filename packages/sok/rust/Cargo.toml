@@ -45,6 +45,10 @@ name = "setup_darwin"
 path = "tests/platform/darwin/setup_test.rs"
 
 [[test]]
+name = "service_process_darwin"
+path = "tests/platform/darwin/service_process_test.rs"
+
+[[test]]
 name = "private_files_windows"
 path = "tests/platform/windows/private_files_test.rs"
 

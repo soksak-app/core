@@ -164,7 +164,7 @@ func TestRunPluginActionTakesNoLockBesideALiveOwner(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(config, "process.lock"), []byte(fmt.Sprintf("%d", os.Getpid())), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := sok.RunPluginAction(config, "disable", "probe", "", ""); err != nil {
+	if _, err := sok.RunPluginAction(config, "disable", "probe", "", "", sok.Running{}); err != nil {
 		t.Fatalf("the host entry refused beside its own lock: %v", err)
 	}
 }

@@ -741,11 +741,6 @@ type Platform interface {
 	// application is part of the address name.
 	// When the listener is closed, the address is also removed.
 	Listen(directory, application string) (net.Listener, Endpoint, error)
-	// ServiceProcessExists checks, before an endpoint is reused after the application restarted, whether pid is the live
-	// sidecar service process that published the endpoint whose modification time is published: a process that started later
-	// received the pid after the publisher ended (docs/spec/persistent-services.md#endpoint-publisher). It is an error when
-	// this cannot be determined.
-	ServiceProcessExists(pid int, published time.Time) (bool, error)
 	// WaitServiceProcessEnd waits until the service process pid ends or stop closes, and answers whether it ended. A process
 	// that does not exist has ended. The wait uses the kernel notification of the end of a process, which also reports a
 	// process that stays as a zombie, so it does not poll, and no time limit ends it (docs/spec/persistent-services.md#updates).

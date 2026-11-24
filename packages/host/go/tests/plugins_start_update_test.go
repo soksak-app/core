@@ -316,7 +316,7 @@ func TestAShutdownDuringTheInstallLeavesThePreviousInstallation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := sok.UpdatePluginUnless(config, "probe", sok.CoreVersion, platform, stop); err == nil || !strings.Contains(err.Error(), "shutting down") {
+	if _, err := sok.UpdatePluginUnless(config, "probe", sok.CoreVersion, platform, sok.Running{}, stop); err == nil || !strings.Contains(err.Error(), "shutting down") {
 		t.Fatalf("update during the shutdown: %v", err)
 	}
 	if _, after := installedProbe(t, config); after != before {

@@ -187,8 +187,8 @@ var errStopped = errors.New("the host is shutting down; the plugin installation 
 // configuration folder: the extraction of the releases, the sidecar installation and the write of installed.json. When stop
 // reports true at a check, it ends with errStopped, and installed.json keeps the content it had before the call
 // (docs/spec/installation.md#update-at-start). The release download is not interrupted.
-func UpdatePluginUnless(configDir, id, core, platform string, stop func() bool) (map[string]any, error) {
-	return installPlugin(configDir, id, core, platform, true, stop)
+func UpdatePluginUnless(configDir, id, core, platform string, running Running, stop func() bool) (map[string]any, error) {
+	return installPlugin(configDir, id, core, platform, true, running, stop)
 }
 
 // StarterJob is the durable snapshot of a starter pack installation.
@@ -385,12 +385,12 @@ func WriteStarterJob(configDir string, request StarterJobRequest) (*StarterJob, 
 // update, remove, enable and disable. The hosts call it inside their own ownership of the configuration directory, so
 // it takes no lock; the command line entry owns the directory for the duration of the write
 // (docs/spec/installation.md).
-func RunPluginAction(configDir, action, id, core, platform string) (any, error) {
+func RunPluginAction(configDir, action, id, core, platform string, running Running) (any, error) {
 	switch action {
 	case "install", "update":
-		return InstallPlugin(configDir, id, core, platform, action == "update")
+		return InstallPlugin(configDir, id, core, platform, action == "update", running)
 	case "remove", "enable", "disable":
-		return ChangePlugin(configDir, id, action)
+		return ChangePlugin(configDir, id, action, running)
 	default:
 		return nil, fmt.Errorf("unknown plugin action %q", action)
 	}
@@ -574,13 +574,13 @@ func pluginResult(state *InstalledState, id string) map[string]any {
 // InstallPlugin installs the selected version of a plugin and its plugin dependencies. With update it accepts only an
 // installed plugin. It reads the plugin.json of every selected plugin version and completes the plan before it extracts
 // an release.
-func InstallPlugin(configDir, id, core, platform string, update bool) (map[string]any, error) {
-	return installPlugin(configDir, id, core, platform, update, nil)
+func InstallPlugin(configDir, id, core, platform string, update bool, running Running) (map[string]any, error) {
+	return installPlugin(configDir, id, core, platform, update, running, nil)
 }
 
 // installPlugin is InstallPlugin with the check of stop before each step that changes the configuration folder (UpdatePluginUnless).
 // A nil stop never stops.
-func installPlugin(configDir, id, core, platform string, update bool, stop func() bool) (map[string]any, error) {
+func installPlugin(configDir, id, core, platform string, update bool, running Running, stop func() bool) (map[string]any, error) {
 	stopped := func() bool { return stop != nil && stop() }
 	index, err := readRegistry(configDir)
 	if err != nil {
@@ -593,6 +593,7 @@ func installPlugin(configDir, id, core, platform string, update bool, stop func(
 	if _, installed := state.Plugins[id]; update && !installed {
 		return nil, fmt.Errorf("plugin %s is not installed", id)
 	}
+	recorded := recordedVersions(state)
 	plan := &dependencyPlan{configDir: configDir, core: core, platform: platform, index: index, state: state,
 		manifests: manifests, dependencies: map[string]map[string]string{}, providers: map[string]map[string]string{},
 		releases: map[string][]byte{}, sidecars: map[string]SelectedSidecar{}, placed: map[string]bool{}}
@@ -601,6 +602,12 @@ func installPlugin(configDir, id, core, platform string, update bool, stop func(
 	}
 	if !plan.changed {
 		return pluginResult(state, id), nil
+	}
+	// A plan that changes the version of a sidecar whose service runs extracts nothing unless the host ends that service
+	// (docs/spec/persistent-services.md#updates).
+	held, holding := heldBy(id, state, recorded, running.Services)
+	if len(held) > 0 && running.End == nil {
+		return nil, holding
 	}
 	if stopped() {
 		return nil, errStopped
@@ -641,6 +648,9 @@ func installPlugin(configDir, id, core, platform string, update bool, stop func(
 	}
 	if stopped() {
 		return nil, errStopped
+	}
+	if err := endHeld(held, holding, running); err != nil {
+		return nil, err
 	}
 	if err := writeInstalled(configDir, state); err != nil {
 		return nil, err
@@ -1120,7 +1130,7 @@ func pruneFolders(configDir string, state *InstalledState) error {
 }
 
 // ChangePlugin removes an installed plugin or turns it on or off.
-func ChangePlugin(configDir, id, action string) (any, error) {
+func ChangePlugin(configDir, id, action string, running Running) (any, error) {
 	state, manifests, err := ReadInstalledManifests(configDir)
 	if err != nil {
 		return nil, err
@@ -1160,6 +1170,12 @@ func ChangePlugin(configDir, id, action string) (any, error) {
 	case "enable", "disable":
 		plugin.Enabled = action == "enable"
 		state.Plugins[id] = plugin
+	}
+	if action == "enable" {
+		held, holding := heldBy(id, state, recordedVersions(state), running.Services)
+		if err := endHeld(held, holding, running); err != nil {
+			return nil, err
+		}
 	}
 	if err := writeInstalled(configDir, state); err != nil {
 		return nil, err
@@ -1221,7 +1237,19 @@ func runPlugins(a arguments, stdout io.Writer, options Options) error {
 				return err
 			}
 		}
-		if result, err = RunPluginAction(configDir, a.positionals[1], a.positionals[2], options.CoreVersion, platform); err != nil {
+		// The command line reads no hello, so it holds every operation that changes the recorded version of a sidecar whose service
+		// runs (docs/spec/persistent-services.md#updates).
+		var running Running
+		if action := a.positionals[1]; action == "install" || action == "update" || action == "enable" {
+			state, err := ReadInstalled(configDir)
+			if err != nil {
+				return err
+			}
+			if running.Services, err = LiveServices(configDir, state); err != nil {
+				return err
+			}
+		}
+		if result, err = RunPluginAction(configDir, a.positionals[1], a.positionals[2], options.CoreVersion, platform, running); err != nil {
 			return err
 		}
 	default:

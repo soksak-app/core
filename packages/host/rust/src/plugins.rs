@@ -163,6 +163,7 @@ impl Plugins {
                 &plugin,
                 &self.core,
                 &self.platform,
+                &Default::default(),
             )?;
             (result, (self.apply)())
         };
@@ -284,6 +285,7 @@ impl Plugins {
                 &item.id,
                 &self.core,
                 &self.platform,
+                &Default::default(),
                 &|| self.stopped.load(Ordering::SeqCst),
             ) {
                 result.error = Some(error);

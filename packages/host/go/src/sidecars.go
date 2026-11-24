@@ -39,6 +39,7 @@ import (
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 	"github.com/soksak-app/core/packages/host/go/src/routine"
 	sok "github.com/soksak-app/core/packages/sok/go/src"
+	sokplatform "github.com/soksak-app/core/packages/sok/go/src/platform"
 )
 
 // SidecarMessage is the event value that passes a message sent by a sidecar to the page.
@@ -2249,7 +2250,11 @@ func (c *Sidecars) processPersistent(name, program string, lost *revival) (*side
 		}
 		// The endpoint names the service only while its pid is the process that published it
 		// (docs/spec/persistent-services.md#endpoint-publisher).
-		exists, err := current.ServiceProcessExists(endpoint.PID, published)
+		inspector, err := sokplatform.Current()
+		if err != nil {
+			return nil, err
+		}
+		exists, err := inspector.ServiceProcessExists(endpoint.PID, published)
 		if err != nil {
 			return nil, err
 		}

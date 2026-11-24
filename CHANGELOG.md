@@ -5,6 +5,7 @@
 
 ## 2026-11-24
 
+- F1138-1: The installer of `sok` in Go and Rust holds an install, update or enable whose planned state changes the version of a persistent sidecar whose service runs: it writes nothing and fails with `plugin <id> <version>: sidecar <name> <planned> waits for the end of its running service <running>`, and an end of the services that the caller gives runs after the extraction and before `installed.json` is written. The publisher check of an endpoint moves from the host libraries into the platform of `sok`, which both read. Verification: Red and Green of the three hold tests in Go and Rust.
 - F1139: A page reloads only through the host: a plugin change sends `pageReload {cause}`, and the host ends the generation of the page as for `host.window.reload`, so a plugin change no longer leaves a page that refuses every call with `the page is reloading`.
 - F1137-1: The store listing test of the Go host library declares its contract case, whose text states that the end leaves out a directory that vanishes during the listing.
 - F1136-2: Each test of the GPUI adapter declares its contract case: the adapter cases are rows `gpuikit.*` of the host contract, and the declaration paths list the gpuikit folders.

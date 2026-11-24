@@ -183,6 +183,14 @@ impl Platform for Linux {
         Err("application bundles are not implemented on linux".into())
     }
 
+    fn service_process_exists(
+        &self,
+        _pid: u32,
+        _published: std::time::SystemTime,
+    ) -> Result<bool, String> {
+        Err("service process inspection is not implemented on linux".into())
+    }
+
     fn wait_process_end(&self, _pid: i32) -> Result<(), String> {
         Err("waiting for a process end is not implemented on linux".into())
     }

@@ -340,6 +340,25 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1138-1",
+    implementation: [
+      { file: "packages/sok/go/src/service_hold.go", symbol: "func heldBy(id string, state *InstalledState, recorded map[string]string, services Services) ([]string, error) {" },
+      { file: "packages/sok/rust/src/service_hold.rs", symbol: "pub(crate) fn held_by(" },
+      { file: "packages/sok/go/src/plugins.go", symbol: "if err := endHeld(held, holding, running); err != nil {" },
+      { file: "packages/sok/rust/src/plugins.rs", symbol: "end_held(&held, holding, running)?;" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/service_hold_test.go", id: "TestAnUpdateThatChangesTheSidecarOfARunningServiceWritesNothing" },
+      { file: "packages/sok/go/tests/service_hold_test.go", id: "TestAnOperationOfTheHostEndsTheHoldingServiceBeforeItWritesTheState" },
+      { file: "packages/sok/go/tests/service_hold_test.go", id: "TestAnEnableBesideAServiceOfAnotherVersionIsHeld" },
+      { file: "packages/sok/rust/tests/service_hold_test.rs", id: "an_update_that_changes_the_sidecar_of_a_running_service_writes_nothing" },
+      { file: "packages/sok/rust/tests/service_hold_test.rs", id: "an_operation_of_the_host_ends_the_holding_service_before_it_writes_the_state" },
+      { file: "packages/sok/rust/tests/service_hold_test.rs", id: "an_enable_beside_a_service_of_another_version_is_held" },
+    ],
+    expected: "An install, update or enable whose planned state changes the version of a persistent sidecar whose service runs writes nothing and fails with the held error, unless the caller ends the service after the extraction and before installed.json is written.",
+    levels: ["unit"],
+  },
+  {
     id: "F1139",
     implementation: [
       { file: "packages/workbench/host.js", symbol: "export const requestPageReload = (cause) => bridge.call(\"pageReload\", { cause });" },
@@ -16097,8 +16116,8 @@ const FEATURE_LINKS = [
   {
     id: "F943",
     implementation: [
-      { file: "packages/host/go/src/platform/darwin/endpoint.go", symbol: "return owned && process.P_stat != sZomb && process.P_flag&pWExit == 0 && !started.After(published), nil" },
-      { file: "packages/host/rust/src/platform/darwin/endpoint.rs", symbol: "Ok(owned && info.pbi_status != libc::SZOMB && started <= published)" },
+      { file: "packages/sok/go/src/platform/darwin/process.go", symbol: "return owned && process.P_stat != sZomb && process.P_flag&pWExit == 0 && !started.After(published), nil" },
+      { file: "packages/sok/rust/src/platform/darwin/process.rs", symbol: "Ok(owned && info.pbi_status != libc::SZOMB && started <= published)" },
     ],
     tests: [
       { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentTransportReplacesTheEndpointOfAReusedPID" },

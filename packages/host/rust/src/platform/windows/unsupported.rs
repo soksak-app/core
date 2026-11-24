@@ -752,13 +752,6 @@ pub fn process_entry(_pid: u32) -> Result<Option<super::super::ProcessEntry>, St
     missing("process entry")
 }
 
-pub fn service_process_exists(
-    _pid: u32,
-    _published: std::time::SystemTime,
-) -> Result<bool, String> {
-    missing("service process inspection")
-}
-
 pub fn wait_service_process_end(
     _pid: u32,
     _stop: &super::super::StopSignal,
