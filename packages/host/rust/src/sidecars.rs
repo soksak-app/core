@@ -4213,6 +4213,7 @@ impl<O: Owner> Core<O> {
             .dependents
             .get(name)
             .cloned()
+            // default: a sidecar that no plugin lists in dependencies has no plugins whose layout surfaces count as its sessions.
             .unwrap_or_default();
         state.running.insert(name.to_string(), process);
         for thread in threads {

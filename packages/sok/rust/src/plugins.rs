@@ -511,7 +511,13 @@ fn check_service_folders(config_dir: &Path, state: &InstalledState) -> Result<()
         let base = Path::new(&declaration.executable)
             .file_name()
             .map(|base| base.to_string_lossy().into_owned())
-            .unwrap_or_default();
+            .ok_or_else(|| {
+                format!(
+                    "{}: executable {:?} has no base name",
+                    file.display(),
+                    declaration.executable
+                )
+            })?;
         if let Some(holder) = holders.get(&base) {
             return Err(format!(
                 "sidecar {name}: executable base name {base} is already the service folder of sidecar {holder}"

@@ -402,6 +402,7 @@ export function createLibrary(root, rendered = () => {}) {
     const running = status.operation?.state === 'running';
     for (const row of rows) {
       const operation = status.operation?.plugin === row.id ? status.operation : null;
+      // default: null states that no running service holds an operation of the plugin.
       const held = status.held.find((entry) => entry.plugin === row.id) ?? null;
       const key = JSON.stringify([row, pluginOperations.hosted, running, operation, held, contributionsState().filter((item) => item.plugin === row.id)]);
       const kept = pluginCards.get(row.id);

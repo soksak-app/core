@@ -172,6 +172,27 @@ fn an_installation_refuses_a_second_persistent_sidecar_with_the_executable_base_
         )
     );
     assert_eq!(std::fs::read_to_string(&installed).unwrap(), before);
+    // An installed sidecar.json whose executable has no base name names no service folder, and the installation refuses it.
+    let platform = soksak_sok::current_platform().expect("platform");
+    let file = config.path().join(format!(
+        "sidecars/scope-sidecar-one/0.1.0/{platform}/sidecar.json"
+    ));
+    std::fs::write(
+        &file,
+        r#"{"executable": "", "protocol": 1, "displayName": "soksak://sidecar/one", "transport": "persistent"}"#,
+    )
+    .unwrap();
+    let (code, _, stderr) = run(&["plugin", "install", "two", "--config-dir", config.text()]);
+    assert_eq!(
+        (code, stderr),
+        (
+            1,
+            format!(
+                "sok: {}: executable \"\" has no base name\n",
+                file.display()
+            )
+        )
+    );
     // A sidecar of standard I/O has no service folder, so it shares the base name.
     let config = Folder::new("plugins");
     let registry = service_folder_registry(&["one"]);

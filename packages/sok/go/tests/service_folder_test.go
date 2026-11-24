@@ -69,6 +69,13 @@ func TestAnInstallationRefusesASecondPersistentSidecarWithTheExecutableBaseNameO
 	if after := readText(t, filepath.Join(config, "plugins/installed.json")); after != before {
 		t.Fatalf("installed.json changed to %s", after)
 	}
+	// An installed sidecar.json whose executable has no base name names no service folder, and the installation refuses it.
+	file := filepath.Join(config, "sidecars/scope-sidecar-one/0.1.0/"+mustPlatform(t)+"/sidecar.json")
+	writeTree(t, filepath.Dir(file), map[string]string{"sidecar.json": `{"executable": "", "protocol": 1, "displayName": "soksak://sidecar/one", "transport": "persistent"}`})
+	code, _, stderr = run("plugin", "install", "two", "--config-dir", config)
+	if want := "sok: " + file + ": executable \"\" has no base name\n"; code != 1 || stderr != want {
+		t.Fatalf("the install beside a sidecar without a base name: code %d stderr %q, want %q", code, stderr, want)
+	}
 	// A sidecar of standard I/O has no service folder, so it shares the base name.
 	config = t.TempDir()
 	useRegistry(t, config, serviceFolderRegistry(t, map[string]string{"one": "persistent"}))

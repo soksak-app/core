@@ -359,6 +359,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1143",
+    implementation: [
+      { file: "packages/sok/go/src/plugins.go", symbol: "return fmt.Errorf(\"%s: executable %q has no base name\", file, declaration.Executable)" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/service_folder_test.go", id: "TestAnInstallationRefusesASecondPersistentSidecarWithTheExecutableBaseNameOfAnother" },
+      { file: "packages/sok/rust/tests/service_folder_test.rs", id: "an_installation_refuses_a_second_persistent_sidecar_with_the_executable_base_name_of_another" },
+    ],
+    expected: "An installation refuses an installed sidecar.json whose executable has no base name.",
+    levels: ["unit"],
+  },
+  {
     id: "F1129-6",
     implementation: [
       { file: "packages/host/go/src/modals.go", symbol: "func IsDialogSurface(surface string) bool { return strings.HasPrefix(surface, \"dialog/\") }" },

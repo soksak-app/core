@@ -710,6 +710,9 @@ func checkServiceFolders(configDir string, state *InstalledState) error {
 			continue
 		}
 		base := path.Base(declaration.Executable)
+		if declaration.Executable == "" || base == "." || base == "/" {
+			return fmt.Errorf("%s: executable %q has no base name", file, declaration.Executable)
+		}
 		if holder, held := holders[base]; held {
 			return fmt.Errorf("sidecar %s: executable base name %s is already the service folder of sidecar %s", name, base, holder)
 		}
