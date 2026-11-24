@@ -109,6 +109,9 @@ type sidecar struct {
 	stdin      io.WriteCloser
 	conn       net.Conn
 	persistent bool
+	// plugins are the plugins that listed the sidecar in dependencies while this process ran, so a layout surface of a plugin that
+	// was removed or disabled still counts as a session of the service (docs/spec/persistent-services.md#updates). c.mu protects it.
+	plugins []string
 	// servicePID is the process of the service endpoint that a persistent connection reached.
 	servicePID int
 	// spawnedAt is the time before the host started the process, or the zero time when the host did not start it.
@@ -521,6 +524,15 @@ func (c *Sidecars) Declare(declarations []SidecarDeclaration) error {
 		c.mu.Unlock()
 		return err
 	}
+	c.declarations.RLock()
+	for name, process := range c.running {
+		for _, plugin := range c.dependents[name] {
+			if !slices.Contains(process.plugins, plugin) {
+				process.plugins = append(process.plugins, plugin)
+			}
+		}
+	}
+	c.declarations.RUnlock()
 	declarationChanged := !reflect.DeepEqual(before, c.statusLocked())
 	if declarationChanged {
 		c.closingChanged()
@@ -1204,7 +1216,7 @@ func (c *Sidecars) outdatedLocked() []OutdatedSidecar {
 		if !process.persistent || (process.version != nil && installed != nil && *process.version == *installed) {
 			continue
 		}
-		sessions := c.sessionsLocked(name, process)
+		sessions := c.sessionsLocked(process)
 		var running *string
 		if process.version != nil {
 			version := *process.version
@@ -1216,10 +1228,10 @@ func (c *Sidecars) outdatedLocked() []OutdatedSidecar {
 	return list
 }
 
-// sessionsLocked counts the sessions of the service process of the sidecar name: the open surfaces of the application that have sent
-// to it, and each surface of the layouts of a plugin that depends on it, which may hold a session that an earlier application left.
-// Call it with c.mu and c.declarations held.
-func (c *Sidecars) sessionsLocked(name string, process *sidecar) int {
+// sessionsLocked counts the sessions of the service process: the open surfaces of the application that have sent
+// to it, and each surface of the layouts of a plugin that listed it while the process ran, which may hold a session that an earlier
+// application left. Call it with c.mu held.
+func (c *Sidecars) sessionsLocked(process *sidecar) int {
 	sessions := 0
 	for surface := range process.surfaces {
 		if c.owners[surface] != nil {
@@ -1227,7 +1239,7 @@ func (c *Sidecars) sessionsLocked(name string, process *sidecar) int {
 		}
 	}
 	for surface, plugin := range c.layout {
-		if slices.Contains(c.dependents[name], plugin) && !(process.surfaces[surface] && c.owners[surface] != nil) {
+		if slices.Contains(process.plugins, plugin) && !(process.surfaces[surface] && c.owners[surface] != nil) {
 			sessions++
 		}
 	}
@@ -1354,8 +1366,6 @@ func (c *Sidecars) RunningServices() (sok.Services, error) {
 func (c *Sidecars) HeldServices(held sok.Held) ([]sok.HeldService, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.declarations.RLock()
-	defer c.declarations.RUnlock()
 	services := make([]sok.HeldService, 0, len(held.Sidecars))
 	holds := false
 	for _, sidecar := range held.Sidecars {
@@ -1368,7 +1378,7 @@ func (c *Sidecars) HeldServices(held sok.Held) ([]sok.HeldService, bool) {
 			}
 			holds = holds || service.Running == nil || *service.Running != sidecar.Planned
 			if c.layout != nil {
-				sessions := c.sessionsLocked(sidecar.Sidecar, process)
+				sessions := c.sessionsLocked(process)
 				service.Sessions = &sessions
 			}
 		}
@@ -2113,6 +2123,9 @@ func (c *Sidecars) processContext(ctx context.Context, name string, lost *reviva
 		c.mu.Lock()
 		return nil, false, errors.New("sidecars are stopped")
 	}
+	c.declarations.RLock()
+	process.plugins = slices.Clone(c.dependents[name])
+	c.declarations.RUnlock()
 	c.running[name] = process
 	process.begin()
 	return process, true, nil
@@ -3400,8 +3413,6 @@ func connectionNotice(failure error) (json.RawMessage, error) {
 	return json.Marshal(body)
 }
 
-// Declared reports whether a plugin declares the sidecar name; a sidecar that no plugin declares any more ended with the
-// removal of its plugin.
 // dependsOn reports whether the plugin lists the sidecar name in dependencies.
 func (c *Sidecars) dependsOn(plugin, name string) bool {
 	c.declarations.RLock()

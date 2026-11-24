@@ -359,6 +359,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1141",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) sessionsLocked(process *sidecar) int {" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn sessions_of<O>(state: &State<O>, process: &Process) -> usize {" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestTheRemovalOfThePluginOfAServiceKeepsTheSessionsOfItsLayoutSurfaces" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "the_removal_of_the_plugin_of_a_service_keeps_the_sessions_of_its_layout_surfaces" },
+    ],
+    expected: "The removal of the only plugin of a sidecar ends no session that a layout holds without the person: the undeclared service stays listed with the sessions of the layout surfaces of the removed plugin.",
+    levels: ["unit"],
+  },
+  {
     id: "F1129",
     implementation: [
       { file: "packages/plugin-api/view.js", symbol: "    dialog: Object.assign((name, params = null, { signal } = {}) => {" },

@@ -2225,6 +2225,36 @@ func TestAnOutdatedServiceKeepsASurfaceThatALayoutHolds(t *testing.T) {
 	}
 }
 
+// contract: sidecars-transport.replace.counts-the-surfaces-of-a-removed-plugin
+func TestTheRemovalOfThePluginOfAServiceKeepsTheSessionsOfItsLayoutSurfaces(t *testing.T) {
+	root := t.TempDir()
+	service := serveReplaceService(t, root, "0.0.7", "0.0.7")
+	sidecars := replaceSidecars(t, root, service)
+	layout := []host.RetainedSurface{{Surface: "space-b/left/probe.section", Root: "/replace", Plugin: "probe"}}
+	if _, err := sidecars.Retain(layout); err != nil {
+		t.Fatal(err)
+	}
+	owner := support.NewSidecarRecorder(t, "/replace")
+	if err := owner.Send(sidecars, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	owner.Next(t)
+	sidecars.Close("surface-1")
+	// The removal of probe leaves the sidecar undeclared, and the layouts still hold the section of probe, whose session the service
+	// may hold.
+	if err := sidecars.Declare(nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sidecars.Retain(layout); err != nil {
+		t.Fatal(err)
+	}
+	requireNoReplacement(t, service, sidecars)
+	got, _ := json.Marshal(sidecars.Outdated())
+	if want := `[{"sidecar":"fixture-service","running":"0.0.7","installed":null,"sessions":1}]`; string(got) != want {
+		t.Fatalf("outdated after the removal = %s, want %s", got, want)
+	}
+}
+
 // contract: sidecars-transport.replace.counts-the-surfaces-of-the-plugins-of-the-sidecar
 func TestALayoutSurfaceOfAnotherPluginDoesNotHoldAnOutdatedService(t *testing.T) {
 	root := t.TempDir()

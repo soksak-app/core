@@ -254,7 +254,7 @@ fn status_locked<O>(core: &Core<O>, state: &State<O>) -> SidecarStatus {
                 sidecar: name.clone(),
                 running: connection.version.clone(),
                 installed,
-                sessions: sessions_of(state, &declarations, name, process),
+                sessions: sessions_of(state, process),
             })
         })
         .collect();
@@ -263,13 +263,9 @@ fn status_locked<O>(core: &Core<O>, state: &State<O>) -> SidecarStatus {
 }
 
 /// The sessions of the service process of the sidecar name: the open surfaces of the application that have sent to it, and each
-/// surface of the layouts of a plugin that depends on it, which may hold a session that an earlier application left.
-fn sessions_of<O>(
-    state: &State<O>,
-    declarations: &Declarations,
-    name: &str,
-    process: &Process,
-) -> usize {
+/// surface of the layouts of a plugin that listed it while the process ran, which may hold a session that an earlier application
+/// left.
+fn sessions_of<O>(state: &State<O>, process: &Process) -> usize {
     process
         .surfaces
         .iter()
@@ -280,10 +276,7 @@ fn sessions_of<O>(
             .iter()
             .flatten()
             .filter(|(surface, plugin)| {
-                declarations
-                    .dependents
-                    .get(name)
-                    .is_some_and(|plugins| plugins.contains(plugin))
+                process.plugins.contains(plugin)
                     && !(process.surfaces.contains(*surface) && state.owners.contains_key(*surface))
             })
             .count()
@@ -1314,6 +1307,9 @@ struct Process {
     /// The size in bytes of the line that the writer is writing, and 0 between lines.
     writing: Arc<LineWrite>,
     persistent: Option<PersistentConnection>,
+    /// The plugins that listed the sidecar in dependencies while this process ran, so a layout surface of a plugin that was
+    /// removed or disabled still counts as a session of the service (docs/spec/persistent-services.md#updates).
+    plugins: Vec<String>,
     /// The surfaces that sent a request to this process. They are the surfaces to which a failure is reported.
     surfaces: HashSet<String>,
     /// Sessions closed after native-view removal, whose later messages are discarded while a persistent owner remains.
@@ -2100,6 +2096,22 @@ impl<O: Owner> Sidecars<O> {
                 .unwrap_or_else(PoisonError::into_inner);
             let before = status_locked(&self.core, &state);
             let changed = self.replace_declarations(declarations);
+            {
+                let current = self
+                    .core
+                    .declarations
+                    .read()
+                    // default: a lock that a panicking thread poisoned still holds the sidecar declarations, which are only
+                    // read; the panic hook records the panic.
+                    .unwrap_or_else(PoisonError::into_inner);
+                for (name, process) in state.running.iter_mut() {
+                    for plugin in current.dependents.get(name).into_iter().flatten() {
+                        if !process.plugins.contains(plugin) {
+                            process.plugins.push(plugin.clone());
+                        }
+                    }
+                }
+            }
             let declaration_changed = before != status_locked(&self.core, &state);
             let declaration_notification = closing_notification(&state, declaration_changed);
             // A sidecar that is starting registers when its start ends, so the start is awaited before the running
@@ -2757,7 +2769,6 @@ impl<O: Owner> Sidecars<O> {
         delivered
     }
 
-    /// Notifies all running sidecars of the surfaces of the window owner that are not in alive.
     /// Reports whether the plugin lists the sidecar in its dependencies (docs/spec/plugins.md, manifest).
     pub fn depends_on(&self, plugin: &str, name: &str) -> bool {
         self.core
@@ -3087,13 +3098,6 @@ impl<O: Owner> Sidecars<O> {
             // default: a lock that a panicking thread poisoned still holds the sidecar state, which is only read; the
             // panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner);
-        let declarations = self
-            .core
-            .declarations
-            .read()
-            // default: a lock that a panicking thread poisoned still holds the sidecar declarations, which are only read;
-            // the panic hook records the panic.
-            .unwrap_or_else(PoisonError::into_inner);
         let mut holds = false;
         let services = held
             .sidecars
@@ -3111,12 +3115,7 @@ impl<O: Owner> Sidecars<O> {
                     service.running = connection.version.clone();
                     holds |= service.running.as_ref() != Some(&sidecar.planned);
                     if state.layout.is_some() {
-                        service.sessions = Some(sessions_of(
-                            &state,
-                            &declarations,
-                            &sidecar.sidecar,
-                            process,
-                        ));
+                        service.sessions = Some(sessions_of(&state, process));
                     }
                 }
                 service
@@ -4201,7 +4200,20 @@ impl<O: Owner> Core<O> {
         let mut state = core.state.lock().unwrap_or_else(PoisonError::into_inner);
         state.starting.remove(name);
         core.started.notify_all();
-        let Started { process, threads } = started?;
+        let Started {
+            mut process,
+            threads,
+        } = started?;
+        process.plugins = core
+            .declarations
+            .read()
+            // default: a lock that a panicking thread poisoned still holds the sidecar declarations, which are only read; the
+            // panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .dependents
+            .get(name)
+            .cloned()
+            .unwrap_or_default();
         state.running.insert(name.to_string(), process);
         for thread in threads {
             crate::routine::spawn_named("sidecar-transport", thread);
@@ -4382,6 +4394,7 @@ impl<O: Owner> Core<O> {
                 outbox: tx,
                 writing,
                 persistent: None,
+                plugins: Vec::new(),
                 surfaces: HashSet::new(),
                 closed_surfaces: HashSet::new(),
                 read_ended: Some(read_ended),
@@ -5099,6 +5112,7 @@ impl<O: Owner> Core<O> {
                 exit: None,
                 outbox: tx,
                 writing,
+                plugins: Vec::new(),
                 surfaces: HashSet::new(),
                 closed_surfaces: HashSet::new(),
                 read_ended: Some(read_ended),

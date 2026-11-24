@@ -2796,6 +2796,40 @@ fn an_outdated_service_keeps_a_surface_that_a_layout_holds() {
     sidecars.stop();
 }
 
+// contract: sidecars-transport.replace.counts-the-surfaces-of-a-removed-plugin
+#[test]
+fn the_removal_of_the_plugin_of_a_service_keeps_the_sessions_of_its_layout_surfaces() {
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
+    let service = serve_replace_service(
+        config_directory.path(),
+        executable_directory.path(),
+        "0.0.7",
+        "0.0.7",
+        Duration::ZERO,
+        0,
+    );
+    let sidecars = replace_sidecars(config_directory.path(), executable_directory.path());
+    let layout = [layout_surface("space-b/left/probe.section")];
+    sidecars.retain_sessions(&layout).unwrap();
+    let (owner, events) = owner("replace", "/projects/replace");
+    sidecars
+        .send_as(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    events.recv().unwrap();
+    sidecars.retain(&owner, &|_| false).unwrap();
+    // The removal of probe leaves the sidecar undeclared, and the layouts still hold the section of probe, whose session the
+    // service may hold.
+    sidecars.declare(&[]).unwrap();
+    sidecars.retain_sessions(&layout).unwrap();
+    assert_no_replacement(&service, &sidecars);
+    assert_eq!(
+        serde_json::to_string(&sidecars.outdated()).unwrap(),
+        format!(r#"[{{"sidecar":"{ECHO}","running":"0.0.7","installed":null,"sessions":1}}]"#)
+    );
+    sidecars.stop();
+}
+
 // contract: sidecars-transport.replace.counts-the-surfaces-of-the-plugins-of-the-sidecar
 #[test]
 fn a_layout_surface_of_another_plugin_does_not_hold_an_outdated_service() {

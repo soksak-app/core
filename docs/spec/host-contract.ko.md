@@ -954,6 +954,7 @@ fn invalid_json_closes_connection() {
 | `image.drawing.covered-window-never-draws-without-diagnostics` | 진단이 없는 build에는 가려진 채 그리기의 setter가 없고 `diagnostics.window.draw-covered`를 선언하지 않는다. 가려진 창의 region은 창이 화면에 다시 있을 때만 그린다. | all |
 | `sidecars-transport.replace.runs-when-sessions-reach-zero` | layout 목록이 오래된 service에 표면을 남기지 않으면 host가 그 service를 교체한다. | all |
 | `sidecars-transport.replace.keeps-a-service-that-a-layout-holds` | 이 process에서 보낸 적이 없는, 그 사이드카의 plugin 표면을 layout이 쥐는 동안에는 표면이 닫혀도 오래된 service가 남고 그 표면은 `sessions`에 들어간다. 그 표면이 없는 목록이 오면 service를 교체한다. | all |
+| `sidecars-transport.replace.counts-the-surfaces-of-a-removed-plugin` | 서비스가 실행되는 동안 사이드카를 나열했던 plugin의 layout 표면은 그 plugin이 제거된 뒤에도 세션으로 세므로, host는 선언 없는 서비스를 끝내지 않는다. | all |
 | `sidecars-transport.replace.counts-the-surfaces-of-the-plugins-of-the-sidecar` | plugin이 그 사이드카를 나열하지 않는 layout 표면은 오래된 service를 붙들지 않는다. | all |
 | `sidecars-transport.replace.waits-for-the-first-layout-list` | layout의 첫 목록 전에는 표면이 닫혀도 오래된 service를 교체하지 않는다. | all |
 | `sidecars-transport.persistent.starts-in-new-session` | 호스트가 시작한 영속 서비스는 새 session의 leader이므로 애플리케이션의 process group이나 terminal의 signal을 받지 않는다. | all |

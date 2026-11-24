@@ -321,7 +321,9 @@ func sendDuringARetain(t *testing.T, s *Surfaces, send func(c *Sidecars, name st
 	c := s.sidecars
 	c.stopped = false
 	c.persistent["fixture-sidecar"] = true
-	service := &sidecar{name: "fixture-sidecar", persistent: true, outbox: make(chan queuedLine, 4), closeWaiters: map[string]chan error{}, retained: map[string]int{}, surfaces: map[string]bool{}}
+	// The registration of a started service records the plugins that list its sidecar.
+	service := &sidecar{name: "fixture-sidecar", persistent: true, plugins: c.dependents["fixture-sidecar"], outbox: make(chan queuedLine, 4),
+		closeWaiters: map[string]chan error{}, retained: map[string]int{}, surfaces: map[string]bool{}}
 	c.running[service.name] = service
 	c.RetainSending = func(name string) { send(c, name) }
 	done := make(chan error, 1)
