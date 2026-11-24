@@ -194,3 +194,16 @@ func TestAClosingWindowStoresItsGeometry(t *testing.T) {
 		t.Fatalf("the calls are %v", f.host.calls)
 	}
 }
+
+// The library names no project in the address of the window, so a new start of the workbench, such as the apply of a plugin change,
+// starts at the library (docs/spec/installation.md#applying-a-change).
+func TestTheLibraryNamesNoProjectInTheAddress(t *testing.T) {
+	f := openingShell(t, "tabs")
+	if alpha := f.projectOf("/work/alpha"); f.host.located != alpha {
+		t.Fatalf("the window shows %s, want %s", f.host.located, alpha)
+	}
+	f.run("core.projects.browse", nil)
+	if f.host.located != "" {
+		t.Fatalf("the address of the library names the project %s", f.host.located)
+	}
+}

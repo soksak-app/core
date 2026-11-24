@@ -225,10 +225,15 @@ function showLibrary() {
   changed();
 }
 
-/** Empties the plane and shows the library in that drawing. Even if the drawing fails, the transition ends at the library. The layout queue reported the failure. */
+/**
+ * Empties the plane and shows the library in that drawing. Even if the drawing fails, the transition ends at the library. The layout queue
+ * reported the failure. The address names no project, so a reload of the page, such as the apply of a plugin change, starts at the
+ * library (docs/spec/installation.md#applying-a-change).
+ */
 async function emptyToLibrary() {
   await awaited("projects.read.empty", () => listener.empty(showLibrary));
   browsing = true;
+  history.replaceState(null, "", location.pathname);
 }
 
 export function browse() {
@@ -408,7 +413,6 @@ function failed(error) { dispatchEvent(new ErrorEvent("error", { message: error.
 async function leaveBegun() {
   activeProjectId = null;
   savedLayout = "";
-  history.replaceState(null, "", location.pathname);
   await selectProject(null);
   await emptyToLibrary();
   finishInitialProjectContext();
@@ -479,7 +483,6 @@ async function readProjects(readSnapshot = () => store.snapshot()) {
   const ended = activeProjectId !== null && !active();
   if (ended) {
     activeProjectId = null;
-    history.replaceState(null, "", location.pathname);
     savedLayout = "";
     await awaited("projects.read.selectProject", () => selectProject(null));
     await inTurn(emptyToLibrary);

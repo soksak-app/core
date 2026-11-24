@@ -763,11 +763,14 @@ func (s *Shell) leavePlace() {
 	s.text.KeepPressedCard(func(string) bool { return false })
 }
 
-// browse shows the library, as the project button does. The library shows the common settings (beginSettings).
+// browse shows the library, as the project button does. The library shows the common settings (beginSettings), and the address names
+// no project, so a new start of the workbench, such as the apply of a plugin change, starts at the library
+// (docs/spec/installation.md#applying-a-change).
 func (s *Shell) browse() error {
 	s.keep()
 	s.leavePlace()
 	s.browsing = true
+	s.options.Located("")
 	s.options.Invalidate()
 	return s.beginSettings(s.settings.Common())
 }

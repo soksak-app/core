@@ -59,9 +59,14 @@ recordWorkbenchStart(location, performance.timeOrigin);
 await flushEvents();
 wire.finish();
 
-/** Starts the page over the case of a test: the settings and the project list connect to the store of that case, so no call of the page reaches the case of an earlier test. */
-async function start(name) {
+/**
+ * Starts the page over the case of a test: the settings and the project list connect to the store of that case, so no call of the page
+ * reaches the case of an earlier test. The address of the start names the project `project`, or no project, so no test starts at the
+ * address that an earlier test left.
+ */
+async function start(name, { project = null } = {}) {
   wire = selectPageWire(name);
+  history.replaceState(null, "", project === null ? location.pathname : `${location.pathname}?project=${project}`);
   order.length = 0;
   asks.length = 0;
   const store = new HostWorkspaceStore(host);
@@ -108,7 +113,8 @@ test("a window close request asks about modified tabs before it saves and closes
 });
 
 test("a kept modified tab keeps the window open and unsaved", async () => {
-  await start("projects-close-window-kept");
+  // The case starts the window at the project of its address.
+  await start("projects-close-window-kept", { project: PROJECT.id });
   kept = true;
   const from = wire.calls.length;
   wire.deliverNotice();
@@ -121,7 +127,8 @@ test("a kept modified tab keeps the window open and unsaved", async () => {
 });
 
 test("removing the project shown in the window asks about modified tabs before it removes the project", async () => {
-  await start("projects-close-window-remove-shown");
+  // The case starts the window at the project of its address.
+  await start("projects-close-window-remove-shown", { project: PROJECT.id });
   kept = true;
   const from = wire.calls.length;
   assert.equal(await projects.close(PROJECT.id), false);
@@ -192,7 +199,8 @@ test("a removal request for the project shown here asks about modified tabs and 
 });
 
 test("opening a project, removing it, opening a window and closing it are operations whose identifiers go with their host calls", async () => {
-  await start("projects-close-window-operation-cids");
+  // The case starts the window at the project of its address.
+  await start("projects-close-window-operation-cids", { project: PROJECT.id });
   const from = wire.calls.length;
   kept = false;
   await projects.activate(PROJECT.id);
@@ -230,7 +238,8 @@ test("opening a project, removing it, opening a window and closing it are operat
 });
 
 test("the page flushes its event queue after the operation of the close starts and before its host call", async () => {
-  await start("projects-close-window-log-flush");
+  // The case starts the window at the project of its address.
+  await start("projects-close-window-log-flush", { project: PROJECT.id });
   await projects.activate(PROJECT.id);
   kept = false;
   // A settings write that the host has not answered stands when the close request arrives; the close saves the settings first.
@@ -262,7 +271,8 @@ test("the page flushes its event queue after the operation of the close starts a
 test("a close request that follows a registry change without the shown project asks after the window ends that project", async () => {
   // Another window removed the project after this window answered its question; the registry change reaches this window
   // before the close request, and the read of the registry is still running when the request arrives (F292-50).
-  await start("projects-close-window-registry-change");
+  // The case starts the window at the project of its address.
+  await start("projects-close-window-registry-change", { project: PROJECT.id });
   await projects.activate(PROJECT.id);
   kept = false;
   order.length = 0;

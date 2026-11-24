@@ -5,6 +5,7 @@
 
 ## 2026-11-24
 
+- F1149: plugin 변경이 workbench를 다시 시작해도 library에 있던 창은 library에 머문다. JS workbench와 mygo에서 library가 창 주소의 project를 비우므로, 새 시작이 library 전에 보이던 project를 더는 열지 않는다. Red/Green: `projects-switch.test.mjs`와 `TestTheLibraryNamesNoProjectInTheAddress`. `TestTheWindowNamesTheProjectThatItShows`는 이제 library가 project를 담지 않는다고 단언하고, `projects-close-window.test.mjs`의 test들은 시작 주소를 정한다. 새 시작 뒤 project로 돌아가는 길은 F1149-1이다.
 - F1152: surface 없이 sections를 가진 plugin도 `programs`를 선언할 수 있고, 그 section과 dialog surface가 이를 담으므로 section page가 선언된 program을 실행한다. 둘 다 없는 plugin은 `programs requires a surface or sections`로 거부한다. Red/Green: JS, Go, Rust reader의 공유 manifest case와 `environment.test.mjs`.
 - F1151: dialog page의 status와 element가 등록된다. registry는 열린 dialog surface를 dialog의 plugin으로 알므로, dialog surface를 지정한 요청은 그 element에 전달된다. Red/Green: `dialog-surface.test.mjs`.
 - F1150: plugin dialog가 열린다. memory saver는 dialog surface를 담은 commit을 `memory saver: surface dialog/<plugin>/<name> has kind dialog`로 거부하지 않고 그 surface를 넣지 않는다. Red/Green: `memory-saver.test.mjs`.

@@ -933,9 +933,14 @@ func TestTheWindowNamesTheProjectThatItShows(t *testing.T) {
 	if f.host.located != id {
 		t.Fatalf("the window names %q, not %s", f.host.located, id)
 	}
+	// The library shows no project, so its address names none, and a new start of the workbench starts at the library (F1149).
 	f.run("core.projects.browse", nil)
+	if f.host.located != "" {
+		t.Fatalf("the library names the project %q", f.host.located)
+	}
+	f.run("core.project.activate", map[string]string{"id": id})
 	if f.host.located != id {
-		t.Fatal("the library over an open project gave up the project of the window")
+		t.Fatalf("the window names %q after the activation, not %s", f.host.located, id)
 	}
 	if err := f.finish("core.project.close", map[string]string{"id": id}); err != nil {
 		t.Fatal(err)

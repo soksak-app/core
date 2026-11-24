@@ -359,6 +359,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1149",
+    implementation: [
+      { file: "packages/workbench/projects.js", symbol: "async function emptyToLibrary() {" },
+      { file: "packages/workbench-mygo/src/shell_project.go", symbol: "func (s *Shell) browse() error {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "browsing shows the library in the draw that empties the plane, not where a later host reply resolves" },
+      { file: "packages/workbench-mygo/tests/project_opening_test.go", id: "TestTheLibraryNamesNoProjectInTheAddress" },
+    ],
+    expected: "The library names no project in the window address, so a new start of the workbench after a plugin change starts at the library.",
+    levels: ["unit"],
+  },
+  {
     id: "F1152",
     implementation: [
       { file: "packages/plugin-api/index.js", symbol: "programs requires a surface or sections" },

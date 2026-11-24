@@ -488,6 +488,9 @@ test("browsing shows the library in the draw that empties the plane, not where a
     await browsing;
     inRound = false;
     assert.deepEqual(switches, ["library in the empty draw"], "the library screen was not drawn by the draw that empties the plane");
+    // A reload of the page, such as the apply of a plugin change, starts at the screen of the address, so the library holds no project
+    // in the address (F1149).
+    assert.equal(globalThis.location.search, "", "the address still names the project after browsing");
   } finally {
     projects.onChange(() => {});
   }

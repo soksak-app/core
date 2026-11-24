@@ -5,6 +5,7 @@
 
 ## 2026-11-24
 
+- F1149: A window at the library stays at the library when a plugin change starts its workbench again: the library clears the project from the window address in the JS workbench and in mygo, so the new start no longer opens the project shown before the library. Red/Green: `projects-switch.test.mjs` and `TestTheLibraryNamesNoProjectInTheAddress`; `TestTheWindowNamesTheProjectThatItShows` now asserts that the library names no project, and the tests of `projects-close-window.test.mjs` name their start address. The way back to the project after the new start is F1149-1.
 - F1152: A plugin with sections and no surface may declare `programs`, and its section and dialog surfaces carry them, so a section page runs a declared program; a plugin with neither is refused with `programs requires a surface or sections`. Red/Green: the shared manifest cases on the JS, Go and Rust readers and `environment.test.mjs`.
 - F1151: The statuses and elements of a dialog page are registered: the registry knows the open dialog surface by the plugin of the dialog, so a request that names the dialog surface is answered by its elements. Red/Green: `dialog-surface.test.mjs`.
 - F1150: A plugin dialog opens: the memory saver leaves out a dialog surface instead of refusing the commit that holds it with `memory saver: surface dialog/<plugin>/<name> has kind dialog`. Red/Green: `memory-saver.test.mjs`.
