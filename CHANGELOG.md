@@ -5,6 +5,7 @@
 
 ## 2026-11-25
 
+- F1162: The mygo workbench declares the programs of a plugin for each surface whose composition is a view, so a section or a dialog of a plugin without a tab surface runs its declared programs; before, the host refused each run with `program <name> is not declared by <plugin>`. Red/Green: `TestTheSyncRequestDeclaresTheProgramsOfASectionOfAPluginWithoutATabSurface`.
 - F1157: The view call `runtime.contributions` gives each item `folder`, the installed folder of its contributor, so a provider view such as the definitions section of agents lists a maker group; before, the folder of a view item was absent.
 - F1157-1: The page-wire case `view-calls-contributions` records `folder`, and the view host of `testing.js` gives each connected item `folder`, so the workbench and view host tests replay the reply of F1157; before, both refused the field. Validation: `packages/plugin-api` and `packages/workbench` tests, 2934 passed.
 - F1158: The Go host accepts `pluginsRun` without `end` again, so the update, install and enable of a plugin on mygo and Wails no longer fail with `argument request.end is missing`; the host contract states `plugins.run.end-is-optional`. Validation: `TestPluginsRunRequestDecodesWithoutEnd` failed before and passes, and `plugins_run_request_decodes_without_end` passes.

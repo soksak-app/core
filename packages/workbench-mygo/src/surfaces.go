@@ -644,7 +644,12 @@ func (s *Shell) surfaceRequest() (map[string]any, error) {
 				// (docs/spec/plugin-processes.md#view-processes).
 				"process": s.settings.Value("viewProcess")}}
 		// The programs that the plugin of a view declares, which the host checks each run against (docs/spec/native-surfaces.md#program-runs).
-		if unit.Declaration.Kind == "view" && len(unit.Programs) > 0 {
+		// The composition of the surface decides, because a section or a dialog of a plugin without a tab surface is a view too.
+		var composition surfaceDeclaration
+		if err := json.Unmarshal(held.composition, &composition); err != nil {
+			return nil, fmt.Errorf("surface %s: composition: %w", id, err)
+		}
+		if composition.Kind == "view" && len(unit.Programs) > 0 {
 			entry["programs"] = unit.Programs
 		}
 		surfaces = append(surfaces, entry)

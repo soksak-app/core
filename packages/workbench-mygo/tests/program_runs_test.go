@@ -89,3 +89,31 @@ func TestTheCancelOfAnOpenProgramRunSendsProgramCancel(t *testing.T) {
 		t.Fatalf("programCancel received %v, want one cancel %v", stored.programCancels, want)
 	}
 }
+
+// A plugin without a tab surface still runs its programs from its sections and dialogs, so the sync request of each view of the
+// plugin carries the programs, whatever the plugin declares as its surface.
+func TestTheSyncRequestDeclaresTheProgramsOfASectionOfAPluginWithoutATabSurface(t *testing.T) {
+	document := strings.Replace(sidebarsInstalled, `"manifest":{"id":"fieldprobe","name":"파일","description":"fieldprobe",`,
+		`"manifest":{"id":"fieldprobe","name":"파일","description":"fieldprobe","programs":{"probe-tool":{"program":"probe-tool","args":["a"]}},`, 1)
+	if document == sidebarsInstalled {
+		t.Fatal("the installed document holds no fieldprobe manifest to declare the programs in")
+	}
+	f, stored := surfaceShellOf(t, document)
+	cards := f.tabbedCards()
+	f.run("core.card.sidebar.set", map[string]string{"card": cards[0], "side": "left", "set": "set-install"})
+	f.settle()
+	want := map[string]any{"probe-tool": map[string]any{"program": "probe-tool", "args": []any{"a"}}}
+	found := false
+	for id, surface := range stored.lastSurfaces(t) {
+		if surface["plugin"] != "fieldprobe" {
+			continue
+		}
+		found = true
+		if got := surface["programs"]; !reflect.DeepEqual(got, want) {
+			t.Fatalf("the sync request of the section %s declares programs %v, want %v", id, got, want)
+		}
+	}
+	if !found {
+		t.Fatal("no section of fieldprobe stands in the card")
+	}
+}
