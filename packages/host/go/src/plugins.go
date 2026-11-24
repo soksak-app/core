@@ -16,11 +16,12 @@ import (
 
 // PluginsRunRequest is the argument of the pluginsRun call (docs/spec/installation.md#plugin-operations-in-the-application).
 // Plugin is received without a fixed type so that a value that is not a string is rejected.
-// End is received without a fixed type so that a value other than true is rejected.
+// End is received without a fixed type so that a value other than true is rejected; it is optional, because an operation that ends no
+// service has no end.
 type PluginsRunRequest struct {
 	Action string `json:"action"`
 	Plugin any    `json:"plugin"`
-	End    any    `json:"end"`
+	End    any    `json:"end,omitempty"`
 }
 
 // PluginsRegistryRequest is the argument of the pluginsUseRegistry call. Index is received without a fixed type so that a value that is not a string

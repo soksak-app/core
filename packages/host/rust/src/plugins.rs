@@ -496,3 +496,7 @@ fn failed_start(plugin: &str, error: String) -> StartUpdate {
         ..StartUpdate::default()
     }
 }
+
+#[cfg(test)]
+#[path = "plugins_request_test.rs"]
+mod plugins_request_test;
