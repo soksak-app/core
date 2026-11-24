@@ -144,3 +144,35 @@ func TestAPlacedDialogSurfaceBlursTheOtherDocumentsButNotItsOwn(t *testing.T) {
 		t.Fatalf("with the dialog surface hidden the state is %v and the document has the background %v", s.dialog(), probe.documentBlurred(t))
 	}
 }
+
+// The placement that first shows a dialog surface starts a key wait of the window, which the keyboard of the dialog surface ends, so the
+// keys that waited go to the dialog; a placement that hides the dialog before it took the keyboard ends the wait too
+// (docs/spec/plugins.md#dialogs).
+// contract: keyboard.dialog-surface-key-wait
+func TestTheKeysWaitForTheDialogSurfaceUntilItTakesTheKeyboard(t *testing.T) {
+	s := &Surfaces{invoke: func(work func()) { work() }, documents: NewDocuments(), images: NewImages()}
+	shown := []Placement{{ID: "tab-1", Visible: true}, {ID: "dialog/probe/edit", Visible: true}}
+	s.placedDialog(shown)
+	if !s.dialogKeys {
+		t.Fatal("the first placement of the dialog surface starts no key wait")
+	}
+	s.placedDialog(shown)
+	s.dialogKeysFocused("tab-1")
+	if !s.dialogKeys {
+		t.Fatal("a placement of the shown dialog or the keyboard of another surface ended the key wait")
+	}
+	s.dialogKeysFocused("dialog/probe/edit")
+	if s.dialogKeys {
+		t.Fatal("the keyboard of the dialog surface does not end the key wait")
+	}
+	s.placedDialog(shown)
+	if s.dialogKeys {
+		t.Fatal("a later placement of the same dialog starts another key wait")
+	}
+	s.placedDialog(nil)
+	s.placedDialog(shown)
+	s.placedDialog(nil)
+	if s.dialogKeys {
+		t.Fatal("a placement without the dialog surface leaves its key wait")
+	}
+}

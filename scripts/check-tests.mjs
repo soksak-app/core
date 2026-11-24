@@ -359,10 +359,23 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1129-5",
+    implementation: [
+      { file: "packages/host/go/src/modals.go", symbol: "func (s *Surfaces) dialogKeysFocused(surface string) {" },
+      { file: "packages/host/rust/src/modals.rs", symbol: "pub fn dialog_keys_focused(&self, surface: &str) -> bool {" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/modals_workbench_test.go", id: "TestTheKeysWaitForTheDialogSurfaceUntilItTakesTheKeyboard" },
+      { file: "packages/host/rust/src/modals.rs", id: "the_keys_wait_for_the_dialog_surface_until_it_takes_the_keyboard" },
+    ],
+    expected: "Both hosts hold the keys of the window from the first placement of a dialog surface until the dialog surface takes the keyboard, or until the dialog or the page ends.",
+    levels: ["unit"],
+  },
+  {
     id: "F1129-3",
     implementation: [
       { file: "packages/host/go/src/modals.go", symbol: "func (s *Surfaces) placedDialog(placed []Placement) {" },
-      { file: "packages/host/rust/src/modals.rs", symbol: "pub fn placed_dialog(&self, placed: &[crate::surfaces::Placement]) -> bool {" },
+      { file: "packages/host/rust/src/modals.rs", symbol: "pub fn placed_dialog(&self, placed: &[crate::surfaces::Placement]) -> DialogPlacement {" },
       { file: "native/darwin/src/webview_geometry.m", symbol: "void sp_surface_mark_dialog(void *handle) {" },
       { file: "packages/host/go/src/view_lifecycle.go", symbol: "func viewStopReason(surface string) string {" },
       { file: "packages/host/rust/src/view_lifecycle.rs", symbol: "pub fn view_stop_reason(surface: &str) -> String {" },

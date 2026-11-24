@@ -1217,7 +1217,15 @@ pub fn focus(window: &Window, request: FocusRequest) -> Result<(), String> {
     let focus_window = window.clone();
     let decided = request.decided;
     match with_native_owner(window, move |owner| {
-        let focused = focus_on_main(platform, &focus_window, owner, request.surface);
+        let focused = focus_on_main(platform, &focus_window, owner, request.surface.clone());
+        // The keyboard of the dialog surface ends its key wait after the move, so the keys that waited go to the dialog.
+        if let Some(surface) = &request.surface
+            && window_data(&focus_window)?
+                .overlay
+                .dialog_keys_focused(surface)
+        {
+            platform.modal_hold_end(owner)?;
+        }
         // A refused surface still gives the keys: they wait for no later decision of this call.
         if decided {
             platform.keys_decided(owner)?;
@@ -2039,11 +2047,21 @@ fn apply_layout(turn: &LayoutTurn, request: &ResolvedSyncRequest, allowed: bool)
             |change: &TitlebarChange| {
                 let placements = apply_surfaces(turn, request, &mut opened, &mut removed)?;
                 // A dialog surface that the placement shows or hides changes the blur of the window.
-                if turn.context.overlay.placed_dialog(&placements) {
+                let dialog = turn.context.overlay.placed_dialog(&placements);
+                if dialog.changed {
                     log_failure(
                         "dialog background",
                         crate::modals::set_background(window, turn.context.overlay.dialog()),
                     );
+                }
+                if let Some(hold) = dialog.keys {
+                    let owner = native_owner(window)?;
+                    let held = if hold {
+                        platform.modal_hold(owner)
+                    } else {
+                        platform.modal_hold_end(owner)
+                    };
+                    log_failure("dialog keys", held);
                 }
                 Ok(PreparedSurfaces {
                     ticket,

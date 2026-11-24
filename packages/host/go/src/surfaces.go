@@ -664,7 +664,9 @@ type Surfaces struct {
 	workbenchDialog bool
 	// dialogSurface is the id of the dialog surface that the last placement shows, or empty (placedDialog).
 	dialogSurface string
-	shapes        map[string]*nativeShape
+	// dialogKeys is true while the keys of the window wait for the dialog surface to take the keyboard. Only the UI thread uses it.
+	dialogKeys bool
+	shapes     map[string]*nativeShape
 	// documents are the document regions that the surface pages attached.
 	documents *Documents
 	// sourceOrigins assigns generations to view incarnations and exposes their current window snapshot.
@@ -1764,6 +1766,7 @@ func (s *Surfaces) FocusSurface(req FocusRequest) error {
 		} else {
 			system.FocusSurface(view.handle)
 		}
+		s.dialogKeysFocused(*req.Surface)
 		done <- nil
 	}); err != nil {
 		return err

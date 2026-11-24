@@ -1897,6 +1897,8 @@ pub(crate) fn page_started(window: &Window) -> Result<(), String> {
         answer_close_question(&data, || close_window(window))?;
         record_page_start(&data);
         reload_surface_documents(window)?;
+        // The dialog surface of the previous page ended with it; the discard ends the native key wait.
+        data.overlay.end_dialog();
         crate::modals::discard(window, &data.overlay)?;
         Ok(())
     })();

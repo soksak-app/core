@@ -75,6 +75,13 @@ struct Modal {
 }
 
 /// The modal webview inside the main window and the modal that the webview shows.
+/// What a placement changed of the dialog surface (Overlay::placed_dialog): whether the shown dialog changed, and
+/// `Some(true)` when the key wait of the dialog starts or `Some(false)` when it ends.
+pub(crate) struct DialogPlacement {
+    pub changed: bool,
+    pub keys: Option<bool>,
+}
+
 #[derive(Default)]
 pub(crate) struct Overlay {
     pub view: Mutex<Option<Webview>>,
@@ -88,6 +95,8 @@ pub(crate) struct Overlay {
     process_ended: Mutex<Option<u64>>,
     /// The dialog surface that the last placement shows (placed_dialog).
     dialog_surface: Mutex<Option<String>>,
+    /// Whether the keys of the window wait for the dialog surface to take the keyboard.
+    dialog_keys: Mutex<bool>,
 }
 
 impl Overlay {
@@ -189,10 +198,40 @@ impl Overlay {
             .clone()
     }
 
+    /// Ends the key wait of the dialog surface when surface, which took the keyboard, is that dialog surface, and returns
+    /// whether it ended: the workbench gives the dialog the keyboard after the placement that shows it has presented, so the
+    /// keys that waited go to the dialog in their order.
+    pub fn dialog_keys_focused(&self, surface: &str) -> bool {
+        self.dialog_surface().as_deref() == Some(surface) && self.take_dialog_keys()
+    }
+
+    /// Ends the dialog surface of a workbench whose main page ended, and returns whether its key wait was open.
+    pub fn end_dialog(&self) -> bool {
+        *self
+            .dialog_surface
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the dialog surface, which this call clears;
+            // the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner) = None;
+        self.take_dialog_keys()
+    }
+
+    /// Ends the key wait of the dialog surface and returns whether one was open.
+    fn take_dialog_keys(&self) -> bool {
+        std::mem::take(
+            &mut *self
+                .dialog_keys
+                .lock()
+                // default: a lock that a panicking thread poisoned still holds the key wait, which this call ends; the
+                // panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner),
+        )
+    }
+
     /// Records the dialog surface that the placement shows and returns whether it changed. The dialog state of the host
     /// derives it from the placed surfaces, because the workbench reports no other state of a dialog surface
     /// (docs/spec/plugins.md#dialogs).
-    pub fn placed_dialog(&self, placed: &[crate::surfaces::Placement]) -> bool {
+    pub fn placed_dialog(&self, placed: &[crate::surfaces::Placement]) -> DialogPlacement {
         let shown = placed
             .iter()
             .rfind(|placement| placement.visible && placement.id.starts_with("dialog/"))
@@ -204,8 +243,35 @@ impl Overlay {
             // the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner);
         let changed = *held != shown;
+        let starts = shown.is_some();
         *held = shown;
-        changed
+        drop(held);
+        if !changed {
+            return DialogPlacement {
+                changed,
+                keys: None,
+            };
+        }
+        // The placement that first shows the dialog starts a key wait of the window, so a key that the person presses as
+        // the dialog opens waits for the dialog; a dialog that ends before it took the keyboard ends the wait.
+        let mut keys = self
+            .dialog_keys
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the key wait, which this call amends; the panic
+            // hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner);
+        let change = if starts && !*keys {
+            Some(true)
+        } else if !starts && *keys {
+            Some(false)
+        } else {
+            None
+        };
+        *keys = starts && (*keys || change == Some(true));
+        DialogPlacement {
+            changed,
+            keys: change,
+        }
     }
 
     /// Returns whether the regions of surface are blurred: while a dialog is open, every region but those of the dialog
@@ -968,10 +1034,12 @@ mod tests {
         let overlay = Overlay::default();
         assert!(!overlay.dialog(), "no dialog before a placement");
         assert!(
-            overlay.placed_dialog(&[
-                placement("tab-1", true),
-                placement("dialog/probe/edit", true)
-            ]),
+            overlay
+                .placed_dialog(&[
+                    placement("tab-1", true),
+                    placement("dialog/probe/edit", true)
+                ])
+                .changed,
             "the first placement of the dialog changes the state"
         );
         assert!(overlay.dialog(), "the shown dialog surface is a dialog");
@@ -984,16 +1052,75 @@ mod tests {
             "a region of the dialog is not blurred"
         );
         assert!(
-            !overlay.placed_dialog(&[placement("dialog/probe/edit", true)]),
+            !overlay
+                .placed_dialog(&[placement("dialog/probe/edit", true)])
+                .changed,
             "a placement of the same dialog changes nothing"
         );
         assert!(
-            overlay.placed_dialog(&[placement("dialog/probe/edit", false)]),
+            overlay
+                .placed_dialog(&[placement("dialog/probe/edit", false)])
+                .changed,
             "a hidden dialog surface ends the dialog"
         );
         assert!(
             !overlay.dialog() && !overlay.background_of("tab-1"),
             "no dialog after it"
+        );
+    }
+
+    // The placement that first shows a dialog surface starts a key wait of the window, which the keyboard of the dialog
+    // surface ends, so the keys that waited go to the dialog; a placement that hides the dialog before it took the keyboard
+    // ends the wait too (docs/spec/plugins.md#dialogs).
+    // contract: keyboard.dialog-surface-key-wait
+    #[test]
+    fn the_keys_wait_for_the_dialog_surface_until_it_takes_the_keyboard() {
+        let overlay = Overlay::default();
+        let shown = [
+            placement("tab-1", true),
+            placement("dialog/probe/edit", true),
+        ];
+        assert_eq!(
+            overlay.placed_dialog(&shown).keys,
+            Some(true),
+            "the first placement of the dialog starts the key wait"
+        );
+        assert_eq!(
+            overlay.placed_dialog(&shown).keys,
+            None,
+            "a later placement keeps it"
+        );
+        assert!(
+            !overlay.dialog_keys_focused("tab-1"),
+            "the keyboard of another surface keeps it"
+        );
+        assert!(
+            overlay.dialog_keys_focused("dialog/probe/edit"),
+            "the keyboard of the dialog ends it"
+        );
+        assert!(
+            !overlay.dialog_keys_focused("dialog/probe/edit"),
+            "an ended wait ends once"
+        );
+        assert_eq!(
+            overlay.placed_dialog(&[]).keys,
+            None,
+            "the end of a dialog that took the keyboard has no wait to end"
+        );
+        assert_eq!(overlay.placed_dialog(&shown).keys, Some(true));
+        assert_eq!(
+            overlay.placed_dialog(&[]).keys,
+            Some(false),
+            "the end of a dialog that did not take the keyboard ends its wait"
+        );
+        overlay.placed_dialog(&shown);
+        assert!(
+            overlay.end_dialog(),
+            "the start of a main page ends the dialog and its wait"
+        );
+        assert!(
+            !overlay.dialog(),
+            "no dialog after the start of a main page"
         );
     }
 

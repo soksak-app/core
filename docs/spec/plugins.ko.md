@@ -180,7 +180,7 @@ installer는 view page가 없는 release를 거부하듯 dialog page가 없는 r
 - seat가 sidebar를 덮으므로, dialog 뒤의 section view는 pointer를 받지 않는다.
 - `addSubview:`는 새 host를 맨 위에 두므로, native container는 나중의 surface host를 dialog host 아래에 넣는다.
 - host의 dialog 상태는 native modal과 workbench의 flag만 읽으므로, host는 배치된 dialog surface에서 blur를 끌어낸다.
-- view는 그리기 전인 document start에 `view.ready`를 알리므로, key 대기는 dialog의 첫 placement가 present되면 끝난다.
+- view는 그리기 전인 document start에 `view.ready`를 알리고, 대기가 풀어 주는 key는 마지막 keyboard 이동으로 가므로, key 대기는 dialog의 첫 placement가 present된 뒤 dialog의 keyboard 호출에서 끝난다.
 - dialog에는 다시 열 tab이 없으므로, dialog의 재시작 한도는 자기 text를 가진다.
 
 기각한 방법은 넷이다.

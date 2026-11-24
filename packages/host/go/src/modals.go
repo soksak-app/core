@@ -319,8 +319,13 @@ func (s *Surfaces) discardOverlay() {
 	}
 	s.modal = nil
 	s.workbenchDialog = false
+	// The dialog surface of the previous workbench ended with it; the native key wait ends below.
+	s.dialogSurface = ""
 	s.mu.Unlock()
-	s.invoke(s.endModalHold)
+	s.invoke(func() {
+		s.dialogKeys = false
+		s.endModalHold()
+	})
 	if view != nil {
 		view.Close()
 	}
@@ -559,9 +564,42 @@ func (s *Surfaces) placedDialog(placed []Placement) {
 	changed := s.dialogSurface != dialog
 	s.dialogSurface = dialog
 	s.mu.Unlock()
-	if changed {
-		s.setBackground()
+	if !changed {
+		return
 	}
+	// The placement that first shows the dialog starts a key wait of the window, so a key that the person presses as the dialog
+	// opens waits for the dialog instead of going to the view behind it; a dialog that ends before it took the keyboard ends the
+	// wait, which gives the keys to the last keyboard move.
+	if dialog != "" && !s.dialogKeys {
+		s.dialogKeys = true
+		if s.window != nil {
+			system.ModalHold(s.window.NativeWindow())
+		}
+	} else if dialog == "" {
+		s.endDialogKeys()
+	}
+	s.setBackground()
+}
+
+// dialogKeysFocused ends the key wait of the dialog surface when surface, which took the keyboard, is that dialog surface: the
+// workbench gives the dialog the keyboard after the placement that shows it has presented, so the keys that waited go to the dialog
+// in their order. Call it on the UI thread after the keyboard move.
+func (s *Surfaces) dialogKeysFocused(surface string) {
+	s.mu.Lock()
+	dialog := s.dialogSurface
+	s.mu.Unlock()
+	if surface == dialog {
+		s.endDialogKeys()
+	}
+}
+
+// endDialogKeys ends the key wait of the dialog surface when one waits. Call it on the UI thread.
+func (s *Surfaces) endDialogKeys() {
+	if !s.dialogKeys {
+		return
+	}
+	s.dialogKeys = false
+	s.endModalHold()
 }
 
 // backgroundOf tells whether the regions of surface are blurred: while a dialog is open, every region but those of the dialog surface.
