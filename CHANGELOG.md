@@ -5,6 +5,7 @@
 
 ## 2026-11-24
 
+- F1150: A plugin dialog opens: the memory saver leaves out a dialog surface instead of refusing the commit that holds it with `memory saver: surface dialog/<plugin>/<name> has kind dialog`. Red/Green: `memory-saver.test.mjs`.
 - F1147-1: An error toast shows above an open dialog surface and its close control takes a press: the page cuts each toast while a dialog surface is open, and an element of an error toast is not inert behind the dialog. Red/Green: `toast-over-dialog.test.mjs`.
 - F1147: On the Wails and Tauri hosts an error toast shows above the surfaces: the page sends each toast as a window overlay with `cut`, and the window composition masks the container of the surface hosts without those rectangles, so the main web view shows and takes the pointer there. A sync request whose overlay has no `cut` is refused with `window overlay needs cut`. Red/Green: page, plane, Go, Rust and native tests; a Wails debug window showed the toast above a browser surface and closed it on a pointer press.
 - F1144-2: v0.0.52 is released with the mygo, Tauri and Wails application zips and the client, log-contract, native process-identity, plugin-api and window-check releases; it holds none of F1145, F1146 or F1147.

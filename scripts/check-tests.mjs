@@ -359,6 +359,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1150",
+    implementation: [
+      { file: "packages/workbench/memory-saver.js", symbol: "if (kind === \"dialog\") continue;" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/memory-saver.test.mjs", id: "a dialog surface is left out of the memory saver, and an unknown kind is refused" },
+    ],
+    expected: "The memory saver leaves out a dialog surface, which ends with its dialog and is never unloaded, so a commit that holds an open dialog presents it, and a surface of another unknown kind is still refused.",
+    levels: ["unit"],
+  },
+  {
     id: "F1147-1",
     implementation: [
       { file: "packages/workbench/host.js", symbol: "if (dialog !== null) return element !== null ? !inErrorToast(element) : surface !== dialog;" },

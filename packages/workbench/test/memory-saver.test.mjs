@@ -151,6 +151,18 @@ test("the delay unloads a hidden tab and a show restores it", () => {
   assert.deepEqual(h.place([{ id: "a" }, { id: "b" }]).surfaces.map((surface) => surface.id), ["a", "b"]);
 });
 
+// A dialog surface ends with its dialog and is never unloaded, so the memory saver leaves it out, and a surface of another unknown kind
+// is refused (docs/spec/plugins.md#memory-saver).
+test("a dialog surface is left out of the memory saver, and an unknown kind is refused", () => {
+  const h = harness();
+  h.observe(new Set(["a", "dialog/probe/edit"]), [...tabs("a"), { id: "dialog/probe/edit", plugin: "fixture", kind: "dialog" }]);
+  h.observe(new Set(["a"]), [...tabs("a"), { id: "dialog/probe/edit", plugin: "fixture", kind: "dialog" }]);
+  h.tick(120 * MINUTE);
+  assert.equal(h.state("dialog/probe/edit"), null);
+  assert.deepEqual(h.commits, []);
+  assert.throws(() => h.observe(new Set(), [{ id: "x", plugin: "fixture", kind: "window" }]), /^TypeError: memory saver: surface x has kind window$/);
+});
+
 test("shown protects the shown tab", () => {
   const h = harness();
   h.observe(new Set(["a"]), tabs("a"));

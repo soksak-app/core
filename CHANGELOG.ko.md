@@ -5,6 +5,7 @@
 
 ## 2026-11-24
 
+- F1150: plugin dialog가 열린다. memory saver는 dialog surface를 담은 commit을 `memory saver: surface dialog/<plugin>/<name> has kind dialog`로 거부하지 않고 그 surface를 넣지 않는다. Red/Green: `memory-saver.test.mjs`.
 - F1147-1: error toast는 열린 dialog surface 위에 보이고 close control이 누름을 받는다. page는 dialog surface가 열려 있는 동안에도 각 toast를 cut하고, error toast의 element는 dialog 뒤에서 inert가 아니다. Red/Green: `toast-over-dialog.test.mjs`.
 - F1147: Wails와 Tauri host에서 error toast는 surface 위에 보인다. page는 각 toast를 `cut`이 있는 창 overlay로 보내고, 창 composition은 surface host container를 그 사각형을 뺀 모양으로 mask하므로 그곳에서는 main web view가 보이고 pointer를 받는다. overlay에 `cut`이 없는 동기화 요청은 `window overlay needs cut`으로 거부한다. Red/Green: page, plane, Go, Rust, native test. Wails debug 창에서 toast가 browser surface 위에 보였고 pointer로 누르자 닫혔다.
 - F1144-2: v0.0.52는 mygo, Tauri, Wails application zip과 client, log-contract, native process-identity, plugin-api, window-check release로 release되었고, F1145, F1146, F1147은 담지 않는다.
