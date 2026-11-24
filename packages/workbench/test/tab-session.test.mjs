@@ -199,3 +199,19 @@ test("a failed coalesced write is shown through the error display", async () => 
   assert.deepEqual(failures, ["tab session of tab-a: disk full"]);
   wire.finish();
 });
+
+// A dialog surface ends with its close and no layout reopens it, so the session of its regions is neither read nor written; the host
+// refuses a session file of a dialog id (docs/spec/projects.md#persistence).
+test("the regions of a dialog surface keep no tab session", async () => {
+  const core = tabSessionCore();
+  core.navigated("dialog/card/edit", "page", at(0, "https://a.test/"), 0);
+  assert.equal(core.deadline(), null, "a navigation of a dialog region starts no read");
+
+  const wire = selectPageWire("tab-session-import");
+  const { regions, sessions } = start();
+  regions.attached("dialog/card/edit", "page");
+  assert.equal(await sessions.read("dialog/card/edit"), undefined);
+  sessions.navigated("dialog/card/edit", "page", at(0, "https://a.test/"));
+  await sessions.flush();
+  assert.deepEqual(wire.calls.filter(({ name }) => name === "workspace"), [], "no session of the dialog is read or written");
+});

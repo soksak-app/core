@@ -561,3 +561,31 @@ func TestTheHostStoreCallsTheWorkspaceKindsInOrder(t *testing.T) {
 		`{"kind":"tabSessions"}`,
 	})
 }
+
+// A dialog surface ends with its close and no layout reopens it, so the session of its regions is neither read nor written; the host
+// refuses a session file of a dialog id (docs/spec/projects.md#persistence).
+func TestTheRegionsOfADialogSurfaceKeepNoTabSession(t *testing.T) {
+	h := newSessions()
+	dialog := "dialog/card/edit"
+	h.attached = []string{dialog}
+	h.history[dialog] = map[string]string{"page": "S-d"}
+	h.sessions.Navigated(dialog, "page", at(0, "https://a.test/"))
+	h.timers.tick(1000)
+	flushed := false
+	h.sessions.Flush(func() { flushed = true })
+	equal(t, flushed, true)
+	equal(t, len(h.store.puts), 0)
+	answered := false
+	h.sessions.Read(dialog, func(regions map[string]string, err error) {
+		answered = true
+		if err != nil || regions != nil {
+			t.Fatalf("the read of a dialog answered %v, %v", regions, err)
+		}
+	})
+	equal(t, answered, true)
+	for _, event := range h.events.events {
+		if event.name == "workbench.tab.session.read" {
+			t.Fatalf("the sessions of a dialog were read: %v", event)
+		}
+	}
+}

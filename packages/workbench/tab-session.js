@@ -3,7 +3,12 @@
 // navigation commit of a region, at most once per second per tab, at unload and at quit, through the workspace kind
 // tabSessionPut; each tab has its own file, so a write rewrites no other tab.
 
+import { isDialogSurface } from "./exposure.js";
 import { emitEvent } from "./page-log.js";
+
+// A dialog surface ends with its close and no layout reopens it, so the regions of a dialog keep no session, and the host refuses a session
+// file of a dialog id (docs/spec/projects.md#persistence).
+const keepsSession = (tab) => !isDialogSurface(tab);
 
 const COALESCE_MS = 1000;
 /** What asks for a read of the sessions of a tab: a navigation commit, the save of a window, or the unload of a tab. */
@@ -49,6 +54,7 @@ export function tabSessionCore() {
      * navigation.
      */
     navigated(tab, name, history, at) {
+      if (!keepsSession(tab)) return;
       if (removed.has(tab)) return;
       let regions = histories.get(tab);
       if (!regions) histories.set(tab, regions = new Map());
@@ -183,6 +189,7 @@ export function createTabSessions({ store, interaction, tabs, failed }) {
   return {
     /** The stored interactionState of each region of tab, {name: session}, or undefined for a tab without a file. */
     async read(tab) {
+      if (!keepsSession(tab)) return undefined;
       const document = await store.tabSession(tab);
       if (document === null) return undefined;
       return Object.fromEntries(Object.entries(document.regions).map(([name, region]) => [name, region.session]));
@@ -211,7 +218,7 @@ export function createTabSessions({ store, interaction, tabs, failed }) {
     },
     /** Writes the session of every tab with attached regions now; the page calls it at quit, before the regions close. */
     async flush() {
-      await Promise.all(tabs().map((tab) => reported(tab, "flush")));
+      await Promise.all(tabs().filter(keepsSession).map((tab) => reported(tab, "flush")));
     },
     /**
      * Resolves when the reads and the writes started so far have ended: the sessions that a timer or a flush started, and

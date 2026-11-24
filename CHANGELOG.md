@@ -5,6 +5,7 @@
 
 ## 2026-11-25
 
+- F1164: The page workbench and the mygo workbench keep no tab session for the document regions of a dialog surface, so a sign-in page in a dialog region no longer shows `invalid tab session tab: dialog/<plugin>/<name>`. Red/Green: `the regions of a dialog surface keep no tab session` and `TestTheRegionsOfADialogSurfaceKeepNoTabSession`.
 - F1163: `dialogs.<name>` of `plugin.json` is `{page, regions?}`, and a dialog surface has the composition `{kind: "view", page, regions}`, so a dialog page shows a web document in a document region of its own element; the readers of `@soksak/plugin-api`, the Go `sok` and the Rust `sok` check the regions as those of a view composition and refuse another member with `dialogs.<name> must be {page, regions?}`. Red/Green: the dialog cases of `manifest-validation.json`, the environment test of the workbench and `TestADialogSurfaceHasTheRegionsOfItsDeclaration`.
 - F1162: The mygo workbench declares the programs of a plugin for each surface whose composition is a view, so a section or a dialog of a plugin without a tab surface runs its declared programs; before, the host refused each run with `program <name> is not declared by <plugin>`. Red/Green: `TestTheSyncRequestDeclaresTheProgramsOfASectionOfAPluginWithoutATabSurface`.
 - F1157: The view call `runtime.contributions` gives each item `folder`, the installed folder of its contributor, so a provider view such as the definitions section of agents lists a maker group; before, the folder of a view item was absent.

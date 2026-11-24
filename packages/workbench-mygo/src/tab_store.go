@@ -6,6 +6,8 @@ import (
 	"maps"
 	"slices"
 	"strings"
+
+	host "github.com/soksak-app/core/packages/host/go/src"
 )
 
 const (
@@ -446,8 +448,16 @@ func (s *TabSessions) reported(tab, cause string, answer func()) {
 	})
 }
 
-// Read answers with the stored interactionState of each region of tab, or nil for a tab without a file.
+// keepsSession reports whether the regions of tab keep a session. A dialog surface ends with its close and no layout reopens it, so its
+// regions keep none, and the host refuses a session file of a dialog id (docs/spec/projects.md#persistence).
+func keepsSession(tab string) bool { return !host.IsDialogSurface(tab) }
+
+// Read answers with the stored interactionState of each region of tab, or nil for a tab without a file and for a dialog surface.
 func (s *TabSessions) Read(tab string, answer func(sessions map[string]string, err error)) {
+	if !keepsSession(tab) {
+		answer(nil, nil)
+		return
+	}
 	s.ports.Store.TabSession(tab, func(document json.RawMessage, err error) {
 		if err != nil || len(document) == 0 {
 			answer(nil, err)
@@ -471,7 +481,7 @@ func (s *TabSessions) Read(tab string, answer func(sessions map[string]string, e
 // Navigated takes the history of a document state of the region name of tab. A changed index or address list is a navigation commit,
 // and the session of the tab is written at most once per second. A changed title alone is no navigation.
 func (s *TabSessions) Navigated(tab, name string, history TabHistory) {
-	if s.removed[tab] {
+	if !keepsSession(tab) || s.removed[tab] {
 		return
 	}
 	urls := make([]string, len(history.Entries))
@@ -543,7 +553,7 @@ func (s *TabSessions) Reconcile(kept func(tab string) bool, answer func(err erro
 
 // Flush writes the session of every tab with attached regions now. The window calls it at quit, before the regions close.
 func (s *TabSessions) Flush(answer func()) {
-	tabs := s.ports.Tabs()
+	tabs := slices.DeleteFunc(slices.Clone(s.ports.Tabs()), func(tab string) bool { return !keepsSession(tab) })
 	left := len(tabs)
 	if left == 0 {
 		answer()
