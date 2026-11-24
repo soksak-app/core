@@ -5,6 +5,7 @@
 
 ## 2026-11-24
 
+- F1145: The add card of the library runs `core.library.form.open` with `mode` `create`, so a press opens the form to create a project. `packages/workbench/test/library-commands.test.mjs` checks that each pressable element of the library carries the parameters that its command requires.
 - F1144-1: The core version is 0.0.52 in every package and crate manifest, Info.plist, Tauri file, Go and pkg-config declaration, the six workspace entries of Cargo.lock and scripts/check-versions.mjs.
 - F1143: The installation refuses an installed `sidecar.json` whose `executable` has no base name with `<file>: executable "<executable>" has no base name`, and the defaults of the session count and of the held plugin row state their reasons. The Go and Rust installation tests failed without the refusal and pass with it.
 - F1129-6: Both hosts decide whether a surface is a dialog surface through one check, which marks its surface host and derives the dialog of the window, and each host declares a test of `surface-host.dialog-host-stays-on-top`. The defaults of the dialog code state their reasons, and the origin of a section or a dialog surface tests for their presence.

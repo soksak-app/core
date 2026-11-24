@@ -359,6 +359,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1145",
+    implementation: [
+      { file: "packages/workbench/library.js", symbol: "mark(add,'core.library.form.open',{mode:'create'});" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/library-commands.test.mjs", id: "each pressable element of the library carries the parameters that its command requires" },
+    ],
+    expected: "Each pressable element of the library runs its command with the parameters that the declaration of the command requires.",
+    levels: ["unit"],
+  },
+  {
     id: "F1143",
     implementation: [
       { file: "packages/sok/go/src/plugins.go", symbol: "return fmt.Errorf(\"%s: executable %q has no base name\", file, declaration.Executable)" },

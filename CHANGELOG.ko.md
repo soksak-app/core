@@ -5,6 +5,7 @@
 
 ## 2026-11-24
 
+- F1145: library의 add card는 `mode` `create`로 `core.library.form.open`을 실행하므로 누르면 project를 만드는 form이 열린다. `packages/workbench/test/library-commands.test.mjs`는 library의 누를 수 있는 각 element가 command가 요구하는 parameter를 갖는지 확인한다.
 - F1144-1: core version은 모든 package와 crate manifest, Info.plist, Tauri 파일, Go와 pkg-config 선언, Cargo.lock의 workspace 항목 여섯 개, scripts/check-versions.mjs에서 0.0.52다.
 - F1143: 설치는 `executable`에 base name이 없는 설치된 `sidecar.json`을 `<file>: executable "<executable>" has no base name`으로 거부하고, 세션 수와 보류된 plugin 행의 default는 그 이유를 적는다. Go와 Rust 설치 test는 거부가 없으면 실패하고 있으면 통과한다.
 - F1129-6: 두 host는 surface가 dialog surface인지 한 check로 정하고, 그 check로 surface host를 표시하고 창의 dialog를 정하며, 각 host가 `surface-host.dialog-host-stays-on-top`의 test를 선언한다. dialog 코드의 default는 이유를 적고, section 또는 dialog surface의 origin은 그 존재를 판정한다.

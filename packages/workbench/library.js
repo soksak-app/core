@@ -79,7 +79,7 @@ export function createLibrary(root, rendered = () => {}) {
   const failureLine = { key: null, node: null };
   const noPlugins = element('p', 'library-plugins-none', '찾는 플러그인이 없습니다.');
   const add=element('button','library-add','＋ 프로젝트 만들기');add.type='button';add.dataset.action='create';add.dataset.expose='core.library.add';
-  mark(add,'core.library.form.open');
+  mark(add,'core.library.form.open',{mode:'create'});
   const noResults=element('p','library-no-results','일치하는 프로젝트가 없습니다.'); noResults.dataset.expose='core.library.no-results';
   const search = root.querySelector('[data-expose="core.library.search"]');
   const sort = root.querySelector('select');
