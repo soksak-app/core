@@ -5,6 +5,7 @@
 
 ## 2026-11-24
 
+- F1137-1: The store listing test of the Go host library declares its contract case, whose text states that the end leaves out a directory that vanishes during the listing.
 - F1136-2: Each test of the GPUI adapter declares its contract case: the adapter cases are rows `gpuikit.*` of the host contract, and the declaration paths list the gpuikit folders.
 - F1136-4: The host specification states each behavior that the language host libraries give every host for every host, names the screen on which GPUI opens a window, and lists the dispatch test of the GPUI adapter as row H105 of the framework table.
 - F1137: The end of the view data stores after the Go host library tests leaves out a directory that the WebKit network process removes during the listing, so a passing run no longer fails on `no such file or directory`.

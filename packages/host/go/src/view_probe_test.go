@@ -449,6 +449,7 @@ func (f vanishingFS) ReadDir(name string) ([]fs.DirEntry, error) {
 
 // F1137: a directory that vanishes while the store folder is listed has no store to end, so the listing leaves it out and lists the
 // other directories; a folder that is missing itself fails the listing.
+// contract: verification.native-test-facade.view-stores-end-before-removal
 func TestTheListingOfTheStoreFolderLeavesOutADirectoryThatVanishes(t *testing.T) {
 	files := fstest.MapFS{
 		"Origins/a/salt": {Data: []byte("a")},
