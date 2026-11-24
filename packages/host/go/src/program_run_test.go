@@ -534,7 +534,7 @@ func TestProgramDeclarationRefusesAnInvalidPluginPath(t *testing.T) {
 
 // contract: program.run.reads-the-programs-of-the-sync-surface
 func TestProgramRunReadsTheProgramsThatTheSyncRequestCarriesForTheSurface(t *testing.T) {
-	const surface = `"id":"tab-a","visible":true,"dim":false,"plugin":"plugin-x","composition":{"kind":"view","page":"ui/page.html"},"x":0,"y":0,"w":10,"h":10,"start":{"params":{},"origin":{},"project":{"id":"p","root":"/projects/p"},"diagnostics":null,"section":null,"declarations":0}`
+	const surface = `"id":"tab-a","visible":true,"dim":false,"plugin":"plugin-x","composition":{"kind":"view","page":"ui/page.html"},"x":0,"y":0,"w":10,"h":10,"start":{"params":{},"origin":{},"project":{"id":"p","root":"/projects/p"},"diagnostics":null,"section":null,"dialog":null,"declarations":0}`
 	request := json.RawMessage(`{"settled":true,"titlebar":40,"viewport":{"width":800,"height":600},"declarations":[{}],"surfaces":[{` + surface + `,"programs":{"agent-file":{"program":"echo","args":[{"pattern":"[a-z.]+"}]}}}]}`)
 	decoded, err := decodeSyncRequest(request)
 	if err != nil {

@@ -338,6 +338,10 @@ func TestASectionStandsInItsSurface(t *testing.T) {
 	if start["id"] != "fieldprobe.tree" || start["sidebar"] != "left" || start["card"] != nil {
 		t.Fatalf("the start value of the section is %v", start)
 	}
+	// The start values of a section carry the dialog null, which only a dialog surface sets (docs/spec/plugins.md#dialogs).
+	if dialog, held := surface["start"].(map[string]any)["dialog"]; !held || dialog != nil {
+		t.Fatalf("the start value dialog of the section is %#v, held %v", dialog, held)
+	}
 	// The start values carry the setting viewProcess, whose default is plugin (docs/spec/plugin-processes.md#view-processes).
 	if process := surface["start"].(map[string]any)["process"]; process != "plugin" {
 		t.Fatalf("the start value process of the section is %#v", process)

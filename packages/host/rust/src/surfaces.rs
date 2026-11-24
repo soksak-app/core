@@ -114,6 +114,10 @@ pub struct ViewStart {
     /// same check.
     #[serde(default, deserialize_with = "present_value")]
     pub(crate) section: Option<Value>,
+    /// The dialog {name, opener} of the view or null, kept raw so that a missing dialog is refused (check_view_dialog,
+    /// docs/spec/plugins.md#dialogs); the Go host runs the same check.
+    #[serde(default, deserialize_with = "present_value")]
+    pub(crate) dialog: Option<Value>,
     /// "plugin" when the view shares the WebContent process of the other views of its plugin and "view" when it starts its own
     /// (docs/spec/plugin-processes.md#view-processes); the Go host runs the same check (checkViewProcess).
     #[serde(default)]
@@ -130,12 +134,13 @@ struct ViewStartRequest {
     declarations: u64,
     diagnostics: Option<Value>,
     section: Option<Value>,
+    dialog: Option<Value>,
     process: Option<String>,
 }
 
 impl<'de> Deserialize<'de> for ViewStartRequest {
     /// Reads the start values as a map, so that the host call decoder, which skips a null member of a struct, keeps a null
-    /// origin, diagnostics and section as present values; the Wails host keeps them raw (ViewStart).
+    /// origin, diagnostics, section and dialog as present values; the Wails host keeps them raw (ViewStart).
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct Fields;
         impl<'de> Visitor<'de> for Fields {
@@ -152,6 +157,7 @@ impl<'de> Deserialize<'de> for ViewStartRequest {
                 let mut declarations = None;
                 let mut diagnostics = None;
                 let mut section = None;
+                let mut dialog = None;
                 let mut process = None;
                 while let Some(key) = map.next_key::<String>()? {
                     match key.as_str() {
@@ -161,6 +167,7 @@ impl<'de> Deserialize<'de> for ViewStartRequest {
                         "declarations" => declarations = Some(map.next_value::<u64>()?),
                         "diagnostics" => diagnostics = Some(map.next_value::<Value>()?),
                         "section" => section = Some(map.next_value::<Value>()?),
+                        "dialog" => dialog = Some(map.next_value::<Value>()?),
                         "process" => process = map.next_value::<Option<String>>()?,
                         _ => {
                             map.next_value::<de::IgnoredAny>()?;
@@ -175,6 +182,7 @@ impl<'de> Deserialize<'de> for ViewStartRequest {
                         .ok_or_else(|| de::Error::missing_field("declarations"))?,
                     diagnostics,
                     section,
+                    dialog,
                     process,
                 })
             }
@@ -256,6 +264,7 @@ fn validate_view_start(surface: &str, start: &ViewStart) -> Result<(), String> {
     view_origin_directory(surface, start.origin.as_ref())?;
     check_view_diagnostics(surface, start.diagnostics.as_ref())?;
     check_view_section(surface, start.section.as_ref())?;
+    check_view_dialog(surface, start.section.as_ref(), start.dialog.as_ref())?;
     check_view_process(surface, start.process.as_deref())
 }
 
@@ -323,6 +332,40 @@ pub(crate) fn check_view_section(surface: &str, section: Option<&Value>) -> Resu
     } else {
         Err(malformed())
     }
+}
+
+/// Checks the dialog of the start values of the view of surface: it is required, it is null or an object with exactly a non-empty
+/// name and a non-empty opener, and a view with a section has no dialog (docs/spec/plugins.md#dialogs). The section has been checked.
+pub(crate) fn check_view_dialog(
+    surface: &str,
+    section: Option<&Value>,
+    dialog: Option<&Value>,
+) -> Result<(), String> {
+    let Some(dialog) = dialog else {
+        return Err(format!("surface {surface:?}: view start dialog is missing"));
+    };
+    if dialog.is_null() {
+        return Ok(());
+    }
+    let non_empty_text = |fields: &serde_json::Map<String, Value>, key: &str| {
+        fields
+            .get(key)
+            .and_then(Value::as_str)
+            .is_some_and(|text| !text.is_empty())
+    };
+    if !dialog.as_object().is_some_and(|fields| {
+        fields.len() == 2 && non_empty_text(fields, "name") && non_empty_text(fields, "opener")
+    }) {
+        return Err(format!(
+            "surface {surface:?}: view start dialog is not {{name, opener}}"
+        ));
+    }
+    if section.is_some_and(|section| !section.is_null()) {
+        return Err(format!(
+            "surface {surface:?}: view start is a section and a dialog"
+        ));
+    }
+    Ok(())
 }
 
 pub fn validate_rect(name: &str, x: f64, y: f64, w: f64, h: f64) -> Result<(), String> {
@@ -693,6 +736,7 @@ impl SyncRequest {
                         declarations: Some(declarations.clone()),
                         diagnostics: start.diagnostics,
                         section: start.section,
+                        dialog: start.dialog,
                         process: start.process,
                     })
                 }

@@ -3580,10 +3580,15 @@ pub fn surface_start_script(
         Some(value @ Value::Object(_)) => format!("Object.freeze({value})"),
         _ => "null".to_string(),
     };
+    crate::surfaces::check_view_dialog(surface, start.section.as_ref(), start.dialog.as_ref())?;
+    let dialog = match start.dialog.as_ref() {
+        Some(value @ Value::Object(_)) => format!("Object.freeze({value})"),
+        _ => "null".to_string(),
+    };
     let levels = Value::Object(levels.clone());
     let id = Value::String(surface.to_string());
     Ok(format!(
-        "window.sokSurface = Object.freeze({{\"surface\":{id},\"params\":{params},\"origin\":Object.freeze({{\"directory\":{directory}}}),\"project\":{project},\"declarations\":Object.freeze({declarations}),\"diagnostics\":{diagnostics},\"section\":{section},\"levels\":Object.freeze({levels})}});"
+        "window.sokSurface = Object.freeze({{\"surface\":{id},\"params\":{params},\"origin\":Object.freeze({{\"directory\":{directory}}}),\"project\":{project},\"declarations\":Object.freeze({declarations}),\"diagnostics\":{diagnostics},\"section\":{section},\"dialog\":{dialog},\"levels\":Object.freeze({levels})}});"
     ))
 }
 

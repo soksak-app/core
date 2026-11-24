@@ -13,7 +13,7 @@ import (
 // viewStart is the start values of a view surface whose tab recorded no directory, whose plugin has no diagnostic declaration
 // and which is a tab view, so its section is null.
 func viewStart() *host.ViewStart {
-	return &host.ViewStart{Origin: json.RawMessage(`{"directory":null}`), Diagnostics: json.RawMessage(`null`), Section: json.RawMessage(`null`), Process: "plugin"}
+	return &host.ViewStart{Origin: json.RawMessage(`{"directory":null}`), Diagnostics: json.RawMessage(`null`), Section: json.RawMessage(`null`), Dialog: json.RawMessage(`null`), Process: "plugin"}
 }
 
 // contract: surfaces-geometry.rect.accepts-zero-size, surfaces-geometry.rect.rejects-negative-size, surfaces-geometry.rect.rejects-non-finite

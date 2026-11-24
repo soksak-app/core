@@ -37,7 +37,7 @@ fn sync_request_resolves_request_local_view_declaration_indices() {
                 "project": {"id": "prj-one", "root": "/work/one"},
                 "declarations": index,
                 "diagnostics": null,
-                "section": null,
+                "section": null, "dialog": null,
                 "process": "plugin",
             },
         })
@@ -79,7 +79,7 @@ fn sync_request_resolves_request_local_view_declaration_indices() {
     );
 
     let negative_zero: Result<SyncRequest, _> = serde_json::from_str(
-        r#"{"settled":true,"titlebar":40,"viewport":{"width":800,"height":600},"declarations":[{"commands":[]}],"surfaces":[{"id":"tab-zero","x":0,"y":0,"w":10,"h":10,"visible":true,"dim":false,"plugin":"page","composition":{"kind":"view","page":"ui/page.html"},"start":{"origin":{"directory":null},"declarations":-0,"diagnostics":null,"section":null,"process":"plugin"}}]}"#,
+        r#"{"settled":true,"titlebar":40,"viewport":{"width":800,"height":600},"declarations":[{"commands":[]}],"surfaces":[{"id":"tab-zero","x":0,"y":0,"w":10,"h":10,"visible":true,"dim":false,"plugin":"page","composition":{"kind":"view","page":"ui/page.html"},"start":{"origin":{"directory":null},"declarations":-0,"diagnostics":null,"section":null,"dialog":null,"process":"plugin"}}]}"#,
     );
     assert!(
         negative_zero.is_err(),
@@ -149,7 +149,7 @@ fn surface(id: &str, w: f64) -> serde_json::Value {
     serde_json::json!({
         "id": id, "module": "surface.js", "x": 0.0, "y": 0.0, "w": w, "h": 10.0,
         "visible": true, "dim": false, "plugin": "page", "composition": {"kind": "view", "page": "ui/page.html", "regions": [{"name": "page", "kind": "document", "input": "native"}], "overlays": []},
-        "start": {"origin": {"directory": null}, "declarations": 0, "diagnostics": null, "section": null, "process": "plugin"},
+        "start": {"origin": {"directory": null}, "declarations": 0, "diagnostics": null, "section": null, "dialog": null, "process": "plugin"},
     })
 }
 
@@ -410,7 +410,7 @@ fn sync_request_check_refuses_a_view_origin_without_a_directory_form() {
     let request = sync_request(serde_json::json!({
         "settled": true, "titlebar": 40.0, "viewport": {"width": 800.0, "height": 600.0},
         "declarations": [{"commands": []}],
-        "surfaces": [view(Some(serde_json::json!({"origin": {"directory": null}, "declarations": 0, "diagnostics": null, "section": null, "process": "plugin"})))],
+        "surfaces": [view(Some(serde_json::json!({"origin": {"directory": null}, "declarations": 0, "diagnostics": null, "section": null, "dialog": null, "process": "plugin"})))],
     }));
     assert!(check_sync_request(&request, &held, &plugins).is_ok());
 }
@@ -428,7 +428,7 @@ fn sync_request_check_refuses_a_view_section_of_another_form() {
     )]);
     let plugins = HashMap::from([("tab-1".to_string(), "page".to_string())]);
     let check = |section: Option<serde_json::Value>| {
-        let mut start = serde_json::json!({"origin": {"directory": null}, "declarations": 0, "diagnostics": null, "process": "plugin"});
+        let mut start = serde_json::json!({"origin": {"directory": null}, "declarations": 0, "diagnostics": null, "process": "plugin", "dialog": null});
         if let Some(section) = section {
             start["section"] = section;
         }
@@ -473,6 +473,71 @@ fn sync_request_check_refuses_a_view_section_of_another_form() {
     }
 }
 
+// A view surface whose start values carry no dialog, a dialog that is neither null nor {name, opener} of the form, or a section and a
+// dialog together, is refused with its reason. The dialog is checked after the section (docs/spec/plugins.md#dialogs).
+// contract: view.start-values.refuses-a-missing-dialog
+// contract: view.start-values.refuses-a-dialog-of-another-form
+#[test]
+fn sync_request_check_refuses_a_view_dialog_of_another_form() {
+    let held = HashMap::from([(
+        "tab-1".to_string(),
+        serde_json::from_value(serde_json::json!({"kind": "view", "page": "ui/page.html"}))
+            .expect("the composition fixture is valid"),
+    )]);
+    let plugins = HashMap::from([("tab-1".to_string(), "page".to_string())]);
+    let check = |section: serde_json::Value, dialog: Option<serde_json::Value>| {
+        let mut start = serde_json::json!({"origin": {"directory": null}, "declarations": 0, "diagnostics": null, "process": "plugin", "section": section});
+        if let Some(dialog) = dialog {
+            start["dialog"] = dialog;
+        }
+        let request = sync_request(serde_json::json!({
+            "settled": true, "titlebar": 40.0, "viewport": {"width": 800.0, "height": 600.0}, "declarations": [{"commands": []}],
+            "surfaces": [{
+                "id": "tab-1", "module": null, "x": 0.0, "y": 0.0, "w": 10.0, "h": 10.0,
+                "visible": true, "dim": false, "plugin": "page",
+                "composition": {"kind": "view", "page": "ui/page.html"}, "start": start,
+            }],
+        }));
+        check_sync_request(&request, &held, &plugins)
+    };
+    assert_eq!(
+        check(serde_json::Value::Null, None).unwrap_err(),
+        r#"surface "tab-1": view start dialog is missing"#
+    );
+    for dialog in [
+        serde_json::json!([]),
+        serde_json::json!("edit"),
+        serde_json::json!({"name": "edit"}),
+        serde_json::json!({"name": "", "opener": "tab-a"}),
+        serde_json::json!({"name": "edit", "opener": ""}),
+        serde_json::json!({"name": 3, "opener": "tab-a"}),
+        serde_json::json!({"name": "edit", "opener": "tab-a", "title": "Edit"}),
+    ] {
+        assert_eq!(
+            check(serde_json::Value::Null, Some(dialog.clone())).unwrap_err(),
+            r#"surface "tab-1": view start dialog is not {name, opener}"#,
+            "the dialog {dialog} is refused"
+        );
+    }
+    assert_eq!(
+        check(
+            serde_json::json!({"id": "probe.tree", "sidebar": "left", "card": null}),
+            Some(serde_json::json!({"name": "edit", "opener": "tab-a"}))
+        )
+        .unwrap_err(),
+        r#"surface "tab-1": view start is a section and a dialog"#
+    );
+    for dialog in [
+        serde_json::json!(null),
+        serde_json::json!({"name": "edit", "opener": "tab-a"}),
+    ] {
+        assert!(
+            check(serde_json::Value::Null, Some(dialog.clone())).is_ok(),
+            "the dialog {dialog} is accepted"
+        );
+    }
+}
+
 // A view surface whose start values carry no process, or a process other than plugin and view, is refused with its reason; both
 // declared processes are accepted (docs/spec/plugin-processes.md#view-processes). The Go host runs the same cases.
 // contract: view.start-values.refuses-a-process-of-another-form
@@ -485,7 +550,7 @@ fn sync_request_check_refuses_a_process_of_another_form() {
     )]);
     let plugins = HashMap::from([("tab-1".to_string(), "page".to_string())]);
     let check = |process: Option<serde_json::Value>| {
-        let mut start = serde_json::json!({"origin": {"directory": null}, "declarations": 0, "diagnostics": null, "section": null});
+        let mut start = serde_json::json!({"origin": {"directory": null}, "declarations": 0, "diagnostics": null, "section": null, "dialog": null});
         if let Some(process) = process {
             start["process"] = process;
         }

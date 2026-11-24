@@ -24,11 +24,12 @@ fn the_start_values_script_freezes_the_start_values_for_the_first_page_script() 
         "declarations": {"commands": []},
         "diagnostics": {"module": "ui/probe-diagnostics.js", "exposes": {}},
         "section": {"card": "c3", "id": "probe.tree", "sidebar": "c3:right"},
+        "dialog": null,
     }))
     .expect("the start values have their form");
     assert_eq!(
         surface_start_script("probe-surface", &start, &default_levels()).expect("the origin has its form"),
-        r##"window.sokSurface = Object.freeze({"surface":"probe-surface","params":{"path":"a.md"},"origin":Object.freeze({"directory":"/work/one"}),"project":Object.freeze({"id":"prj-one","root":"/work/one"}),"declarations":Object.freeze({"commands":[]}),"diagnostics":Object.freeze({"exposes":{},"module":"ui/probe-diagnostics.js"}),"section":Object.freeze({"card":"c3","id":"probe.tree","sidebar":"c3:right"}),"##.to_string() + DEFAULT_LEVELS + "});",
+        r##"window.sokSurface = Object.freeze({"surface":"probe-surface","params":{"path":"a.md"},"origin":Object.freeze({"directory":"/work/one"}),"project":Object.freeze({"id":"prj-one","root":"/work/one"}),"declarations":Object.freeze({"commands":[]}),"diagnostics":Object.freeze({"exposes":{},"module":"ui/probe-diagnostics.js"}),"section":Object.freeze({"card":"c3","id":"probe.tree","sidebar":"c3:right"}),"dialog":null,"##.to_string() + DEFAULT_LEVELS + "});",
         "the script sets the frozen start values"
     );
 }
@@ -40,12 +41,12 @@ fn the_start_values_script_carries_absent_values_as_null() {
     let start: ViewStart = serde_json::from_value(json!({
         "origin": {"directory": null},
         "diagnostics": null,
-        "section": null,
+        "section": null, "dialog": null,
     }))
     .expect("the start values have their form");
     assert_eq!(
         surface_start_script("probe-surface", &start, &default_levels()).expect("the origin has its form"),
-        r##"window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({}),"diagnostics":null,"section":null,"##.to_string() + DEFAULT_LEVELS + "});",
+        r##"window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({}),"diagnostics":null,"section":null,"dialog":null,"##.to_string() + DEFAULT_LEVELS + "});",
         "the script carries the absent values as null"
     );
 }
@@ -94,6 +95,24 @@ fn the_start_values_script_refuses_a_section_of_another_form() {
     }
 }
 
+// A view start whose dialog is an object injects it frozen into window.sokSurface, after the section (docs/spec/plugins.md#dialogs).
+// contract: view.start-values.first-script
+#[test]
+fn the_start_values_script_injects_the_dialog() {
+    let start: ViewStart = serde_json::from_value(json!({
+        "origin": {"directory": null},
+        "diagnostics": null,
+        "section": null,
+        "dialog": {"name": "edit", "opener": "tab-a"},
+    }))
+    .expect("the start values have their form");
+    assert_eq!(
+        surface_start_script("probe-surface", &start, &default_levels()).expect("the start values have their form"),
+        r##"window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({}),"diagnostics":null,"section":null,"dialog":Object.freeze({"name":"edit","opener":"tab-a"}),"##.to_string() + DEFAULT_LEVELS + "});",
+        "the script sets the frozen dialog"
+    );
+}
+
 // A start value script without an origin is refused; the host never builds one with a null directory in its place.
 // contract: view.start-values.refuses-a-missing-origin
 #[test]
@@ -131,7 +150,7 @@ fn the_origin_directory_refuses_a_path_that_is_not_local_absolute() {
 #[test]
 fn the_start_values_script_carries_the_stored_level_of_each_class() {
     let start: ViewStart = serde_json::from_value(
-        json!({"origin": {"directory": null}, "diagnostics": null, "section": null}),
+        json!({"origin": {"directory": null}, "diagnostics": null, "section": null, "dialog": null}),
     )
     .expect("the start values have their form");
     let mut levels = default_levels();

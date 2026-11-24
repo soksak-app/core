@@ -19,7 +19,7 @@ impl Owner for MountedOwner {
     fn deliver_failure(&self, _failure: Failure) {}
 }
 pub(super) fn start(root: &str) -> ViewStart {
-    serde_json::from_value(serde_json::json!({"origin":{"directory":null},"project":{"id":"project","root":root},"diagnostics":null,"section":null})).unwrap()
+    serde_json::from_value(serde_json::json!({"origin":{"directory":null},"project":{"id":"project","root":root},"diagnostics":null,"section":null,"dialog":null})).unwrap()
 }
 pub(super) fn mount(data: &WindowData, root: &str) -> super::ViewOrigin {
     let start = start(root);

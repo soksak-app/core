@@ -82,6 +82,9 @@ type ViewStart struct {
 	Diagnostics json.RawMessage `json:"diagnostics,omitempty"`
 	// Section is the section of the view or JSON null, kept raw so that a missing section is refused (validateViewStart).
 	Section json.RawMessage `json:"section,omitempty"`
+	// Dialog is the dialog {name, opener} of the view or JSON null, kept raw so that a missing dialog is refused (validateViewStart,
+	// docs/spec/plugins.md#dialogs).
+	Dialog json.RawMessage `json:"dialog,omitempty"`
 	// Process is "plugin" when the view shares the WebContent process of the other views of its plugin and "view" when it starts
 	// its own (docs/spec/plugin-processes.md#view-processes).
 	Process string `json:"process,omitempty"`
@@ -123,6 +126,9 @@ func validateViewStart(surface string, start *ViewStart) error {
 		return err
 	}
 	if err := checkViewSection(surface, start.Section); err != nil {
+		return err
+	}
+	if err := checkViewDialog(surface, start.Section, start.Dialog); err != nil {
 		return err
 	}
 	return checkViewProcess(surface, start.Process)
@@ -167,6 +173,34 @@ func checkViewSection(surface string, section json.RawMessage) error {
 	}
 	if value.ID == nil || *value.ID == "" || value.Sidebar == nil || *value.Sidebar == "" || (value.Card != nil && *value.Card == "") {
 		return malformed
+	}
+	return nil
+}
+
+// checkViewDialog checks the dialog of the start values of the view of surface: it is required, it is null or an object with exactly
+// a non-empty name and a non-empty opener, and a view with a section has no dialog (docs/spec/plugins.md#dialogs). The section has
+// been checked.
+func checkViewDialog(surface string, section, dialog json.RawMessage) error {
+	if dialog == nil {
+		return fmt.Errorf("surface %q: view start dialog is missing", surface)
+	}
+	if strings.TrimSpace(string(dialog)) == "null" {
+		return nil
+	}
+	malformed := fmt.Errorf("surface %q: view start dialog is not {name, opener}", surface)
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(dialog, &fields); err != nil || len(fields) != 2 {
+		return malformed
+	}
+	var value struct {
+		Name   *string `json:"name"`
+		Opener *string `json:"opener"`
+	}
+	if err := json.Unmarshal(dialog, &value); err != nil || value.Name == nil || *value.Name == "" || value.Opener == nil || *value.Opener == "" {
+		return malformed
+	}
+	if strings.TrimSpace(string(section)) != "null" {
+		return fmt.Errorf("surface %q: view start is a section and a dialog", surface)
 	}
 	return nil
 }
@@ -417,6 +451,7 @@ type syncViewStartWire struct {
 	Declarations json.RawMessage `json:"declarations"`
 	Diagnostics  json.RawMessage `json:"diagnostics,omitempty"`
 	Section      json.RawMessage `json:"section,omitempty"`
+	Dialog       json.RawMessage `json:"dialog,omitempty"`
 	Process      string          `json:"process,omitempty"`
 }
 
@@ -467,6 +502,7 @@ func decodeSyncRequest(raw json.RawMessage) (SyncRequest, error) {
 			surface.Start = &ViewStart{
 				Params: item.Start.Params, Origin: item.Start.Origin, Project: item.Start.Project,
 				Declarations: declarations[index], Diagnostics: item.Start.Diagnostics, Section: item.Start.Section,
+				Dialog:  item.Start.Dialog,
 				Process: item.Start.Process,
 			}
 		} else if item.Start != nil {

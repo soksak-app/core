@@ -190,6 +190,8 @@ type heldSurface struct {
 	owner string
 	// section is the start value of a section surface, and nil for the surface of a tab.
 	section *sectionStart
+	// dialog is the start value of a dialog surface, and nil for the surface of a tab or a section (docs/spec/plugins.md#dialogs).
+	dialog *dialogStart
 	// unload is the declaration of unload of a section surface.
 	unload *surfaceUnload
 	// declared tells that the host took its composition, and hosted that a placement that held it finished, so the host holds its
@@ -203,6 +205,12 @@ type sectionStart struct {
 	ID      string  `json:"id"`
 	Sidebar string  `json:"sidebar"`
 	Card    *string `json:"card"`
+}
+
+// dialogStart is the start value dialog of a dialog surface: the name of the dialog and the surface of the view that opened it.
+type dialogStart struct {
+	Name   string `json:"name"`
+	Opener string `json:"opener"`
 }
 
 // projectStart is the project of the start values of a view.
@@ -620,6 +628,7 @@ func (s *Shell) surfaceRequest() (map[string]any, error) {
 			"composition": held.composition, "x": held.box.X, "y": held.box.Y, "w": held.box.W, "h": held.box.H,
 			"start": map[string]any{"params": tabMember(held.tab, "params", "null"), "origin": tabMember(held.tab, "origin", `{"directory":null}`),
 				"project": held.project, "declarations": index, "diagnostics": rawOrNull(unit.Diagnostics), "section": held.section,
+				"dialog": held.dialog,
 				// The setting viewProcess at the creation of the view decides whether it shares the process of its plugin
 				// (docs/spec/plugin-processes.md#view-processes).
 				"process": s.settings.Value("viewProcess")}}

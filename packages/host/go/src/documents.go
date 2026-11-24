@@ -655,6 +655,13 @@ func surfaceStartScript(surface string, start ViewStart, levels map[string]strin
 	if text := strings.TrimSpace(string(start.Section)); text != "null" {
 		section = "Object.freeze(" + text + ")"
 	}
+	if err := checkViewDialog(surface, start.Section, start.Dialog); err != nil {
+		return "", err
+	}
+	dialog := "null"
+	if text := strings.TrimSpace(string(start.Dialog)); text != "null" {
+		dialog = "Object.freeze(" + text + ")"
+	}
 	stored, err := json.Marshal(levels)
 	if err != nil {
 		return "", fmt.Errorf("view start levels cannot be serialized: %w", err)
@@ -666,6 +673,7 @@ func surfaceStartScript(surface string, start ViewStart, levels map[string]strin
 		",\"declarations\":Object.freeze(" + declarations + ")" +
 		",\"diagnostics\":" + diagnostics +
 		",\"section\":" + section +
+		",\"dialog\":" + dialog +
 		",\"levels\":Object.freeze(" + string(stored) + ")});", nil
 }
 

@@ -12,7 +12,7 @@ import (
 // is a tab view, so its section is null.
 func nullOriginStart() ViewStart {
 	var start ViewStart
-	if err := json.Unmarshal([]byte(`{"origin":{"directory":null},"diagnostics":null,"section":null}`), &start); err != nil {
+	if err := json.Unmarshal([]byte(`{"origin":{"directory":null},"diagnostics":null,"section":null,"dialog":null}`), &start); err != nil {
 		panic(err)
 	}
 	return start
@@ -23,14 +23,14 @@ func nullOriginStart() ViewStart {
 // frozen start values {surface, params, origin, project, declarations, diagnostics, section} of its surface, so the first page script reads them.
 func TestViewCreationAddsTheStartValuesScriptBeforeTheLoad(t *testing.T) {
 	var start ViewStart
-	if err := json.Unmarshal([]byte(`{"params":{"path":"a.md"},"origin":{"directory":"/work/one"},"project":{"id":"prj-one","root":"/work/one"},"declarations":{"commands":[]},"diagnostics":{"module":"ui/probe-diagnostics.js","exposes":{}},"section":null}`), &start); err != nil {
+	if err := json.Unmarshal([]byte(`{"params":{"path":"a.md"},"origin":{"directory":"/work/one"},"project":{"id":"prj-one","root":"/work/one"},"declarations":{"commands":[]},"diagnostics":{"module":"ui/probe-diagnostics.js","exposes":{}},"section":null,"dialog":null}`), &start); err != nil {
 		t.Fatalf("start values: %v", err)
 	}
 	opened := realViewProbe(t, Theme{}, start).waitCall(t, "probe.opened")
 	want := map[string]any{
 		"surface": "probe-surface", "params": map[string]any{"path": "a.md"}, "origin": map[string]any{"directory": "/work/one"},
 		"project": map[string]any{"id": "prj-one", "root": "/work/one"}, "declarations": map[string]any{"commands": []any{}},
-		"diagnostics": map[string]any{"module": "ui/probe-diagnostics.js", "exposes": map[string]any{}}, "section": nil,
+		"diagnostics": map[string]any{"module": "ui/probe-diagnostics.js", "exposes": map[string]any{}}, "section": nil, "dialog": nil,
 		"levels": map[string]any{"call": "trace", "frame": "trace", "input": "trace", "io": "trace", "lifecycle": "trace"},
 	}
 	if !reflect.DeepEqual(opened["surface"], want) {
@@ -41,7 +41,7 @@ func TestViewCreationAddsTheStartValuesScriptBeforeTheLoad(t *testing.T) {
 // The start values script carries the start values that the surface has none of as JSON null.
 // contract: view.start-values.first-script
 func TestSurfaceStartScriptCarriesAbsentValuesAsNull(t *testing.T) {
-	want := `window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({}),"diagnostics":null,"section":null,"levels":Object.freeze({"call":"error","frame":"error","input":"error","io":"error","lifecycle":"error"})});`
+	want := `window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({}),"diagnostics":null,"section":null,"dialog":null,"levels":Object.freeze({"call":"error","frame":"error","input":"error","io":"error","lifecycle":"error"})});`
 	got, err := surfaceStartScript("probe-surface", nullOriginStart(), defaultLevels())
 	if err != nil {
 		t.Fatalf("start values script: %v", err)
@@ -94,7 +94,7 @@ func TestSyncRequestValidatesTheStartValuesOfAView(t *testing.T) {
 
 // contract: view.start-values.declaration-table
 func TestSyncRequestRequiresAndResolvesItsDeclarationTable(t *testing.T) {
-	const surface = `"id":"probe","visible":true,"dim":false,"plugin":"probe","composition":{"kind":"view","page":"ui/page.html"},"x":0,"y":0,"w":10,"h":10,"start":{"params":{"path":"/work/one"},"origin":{"directory":"/work/one"},"project":{"id":"prj-one","root":"/work/one"},"diagnostics":null,"section":null`
+	const surface = `"id":"probe","visible":true,"dim":false,"plugin":"probe","composition":{"kind":"view","page":"ui/page.html"},"x":0,"y":0,"w":10,"h":10,"start":{"params":{"path":"/work/one"},"origin":{"directory":"/work/one"},"project":{"id":"prj-one","root":"/work/one"},"diagnostics":null,"section":null,"dialog":null`
 	request := func(table, index string) json.RawMessage {
 		return json.RawMessage(`{"settled":true,"titlebar":40,"viewport":{"width":800,"height":600},"declarations":` + table + `,"surfaces":[{` + surface + `,"declarations":` + index + `}}]}`)
 	}
@@ -200,12 +200,12 @@ func TestSyncRequestRefusesAViewWithoutAnOriginDirectory(t *testing.T) {
 		{"origin without directory", `{` + view + `,"start":{"origin":{}}}`, malformed},
 		{"directory that is not a string", `{` + view + `,"start":{"origin":{"directory":1}}}`, malformed},
 		{"origin with another member", `{` + view + `,"start":{"origin":{"directory":"/work/one","root":"/work/one"}}}`, malformed},
-		{"no process", `{` + view + `,"start":{"origin":{"directory":null},"diagnostics":null,"section":null}}`,
+		{"no process", `{` + view + `,"start":{"origin":{"directory":null},"diagnostics":null,"section":null,"dialog":null}}`,
 			`surface "probe": view start process "" is not plugin or view`},
-		{"another process", `{` + view + `,"start":{"origin":{"directory":null},"diagnostics":null,"section":null,"process":"window"}}`,
+		{"another process", `{` + view + `,"start":{"origin":{"directory":null},"diagnostics":null,"section":null,"dialog":null,"process":"window"}}`,
 			`surface "probe": view start process "window" is not plugin or view`},
-		{"null directory", `{` + view + `,"start":{"origin":{"directory":null},"diagnostics":null,"section":null,"process":"plugin"}}`, ""},
-		{"process of its own", `{` + view + `,"start":{"origin":{"directory":null},"diagnostics":null,"section":null,"process":"view"}}`, ""},
+		{"null directory", `{` + view + `,"start":{"origin":{"directory":null},"diagnostics":null,"section":null,"dialog":null,"process":"plugin"}}`, ""},
+		{"process of its own", `{` + view + `,"start":{"origin":{"directory":null},"diagnostics":null,"section":null,"dialog":null,"process":"view"}}`, ""},
 	}
 	for _, tc := range cases {
 		var surface Surface
@@ -248,7 +248,7 @@ func TestSyncRequestDecoderKeepsTheNullStartValues(t *testing.T) {
 	request, err := decodeSyncRequest(json.RawMessage(`{"settled":true,"titlebar":40,"viewport":{"width":800,"height":600},"declarations":[{"commands":[]}],
 		"surfaces":[{"id":"spc-aaaaaa/left/probe.tree","x":0,"y":0,"w":10,"h":10,"visible":true,"dim":false,"plugin":"probe",
 		"composition":{"kind":"view","page":"tree.html"},
-		"start":{"params":null,"origin":{"directory":null},"project":null,"declarations":0,"diagnostics":null,"section":null}}]}`))
+		"start":{"params":null,"origin":{"directory":null},"project":null,"declarations":0,"diagnostics":null,"section":null,"dialog":null}}]}`))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -275,7 +275,7 @@ func TestSyncRequestRefusesAViewWithoutASection(t *testing.T) {
 func TestSyncRequestRefusesASectionOfAnotherForm(t *testing.T) {
 	const view = `"id":"probe","plugin":"probe","composition":{"kind":"view","page":"ui/page.html"}`
 	const malformed = `surface "probe": view start section is not {id, sidebar, card}`
-	const start = `"origin":{"directory":null},"diagnostics":null,"process":"plugin","section":`
+	const start = `"origin":{"directory":null},"diagnostics":null,"process":"plugin","dialog":null,"section":`
 	cases := []struct{ name, section, want string }{
 		{"tab section null", `null`, ""},
 		{"section object", `{"id":"probe.tree","sidebar":"left","card":null}`, ""},
@@ -306,10 +306,72 @@ func TestSyncRequestRefusesASectionOfAnotherForm(t *testing.T) {
 // contract: view.start-values.first-script
 func TestSurfaceStartScriptInjectsTheSection(t *testing.T) {
 	var start ViewStart
-	if err := json.Unmarshal([]byte(`{"origin":{"directory":null},"diagnostics":null,"section":{"card":"c3","id":"probe.tree","sidebar":"c3:right"}}`), &start); err != nil {
+	if err := json.Unmarshal([]byte(`{"origin":{"directory":null},"diagnostics":null,"section":{"card":"c3","id":"probe.tree","sidebar":"c3:right"},"dialog":null}`), &start); err != nil {
 		t.Fatalf("start values: %v", err)
 	}
-	want := `window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({}),"diagnostics":null,"section":Object.freeze({"card":"c3","id":"probe.tree","sidebar":"c3:right"}),"levels":Object.freeze({"call":"error","frame":"error","input":"error","io":"error","lifecycle":"error"})});`
+	want := `window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({}),"diagnostics":null,"section":Object.freeze({"card":"c3","id":"probe.tree","sidebar":"c3:right"}),"dialog":null,"levels":Object.freeze({"call":"error","frame":"error","input":"error","io":"error","lifecycle":"error"})});`
+	got, err := surfaceStartScript("probe-surface", start, defaultLevels())
+	if err != nil {
+		t.Fatalf("start values script: %v", err)
+	}
+	if got != want {
+		t.Fatalf("start values script %q, want %q", got, want)
+	}
+}
+
+// A view surface whose start values carry no dialog is refused with its reason. The dialog is checked after the section.
+// contract: view.start-values.refuses-a-missing-dialog
+func TestSyncRequestRefusesAViewWithoutADialog(t *testing.T) {
+	const view = `"id":"probe","plugin":"probe","composition":{"kind":"view","page":"ui/page.html"}`
+	const missing = `surface "probe": view start dialog is missing`
+	if err := checkViewSurface(t, `{`+view+`,"start":{"origin":{"directory":null},"diagnostics":null,"section":null,"process":"plugin"}}`); err == nil || err.Error() != missing {
+		t.Fatalf("no dialog: %v, want %q", err, missing)
+	}
+}
+
+// A view dialog is null or an object with exactly a non-empty name and a non-empty opener, and a view is not a section and a dialog;
+// any other value is refused with its reason, and the forms of the contract are accepted (docs/spec/plugins.md#dialogs).
+// contract: view.start-values.refuses-a-dialog-of-another-form
+func TestSyncRequestRefusesADialogOfAnotherForm(t *testing.T) {
+	const view = `"id":"probe","plugin":"probe","composition":{"kind":"view","page":"ui/page.html"}`
+	const malformed = `surface "probe": view start dialog is not {name, opener}`
+	const start = `"origin":{"directory":null},"diagnostics":null,"process":"plugin","section":null,"dialog":`
+	cases := []struct{ name, dialog, want string }{
+		{"dialog null", `null`, ""},
+		{"dialog object", `{"name":"edit","opener":"tab-a"}`, ""},
+		{"dialog of another type", `[]`, malformed},
+		{"text dialog", `"edit"`, malformed},
+		{"missing opener", `{"name":"edit"}`, malformed},
+		{"empty name", `{"name":"","opener":"tab-a"}`, malformed},
+		{"empty opener", `{"name":"edit","opener":""}`, malformed},
+		{"name of another type", `{"name":3,"opener":"tab-a"}`, malformed},
+		{"another member", `{"name":"edit","opener":"tab-a","title":"Edit"}`, malformed},
+	}
+	for _, tc := range cases {
+		err := checkViewSurface(t, `{`+view+`,"start":{`+start+tc.dialog+`}}`)
+		if tc.want == "" {
+			if err != nil {
+				t.Fatalf("%s: %v, want accepted", tc.name, err)
+			}
+		} else if err == nil || err.Error() != tc.want {
+			t.Fatalf("%s: %v, want %q", tc.name, err, tc.want)
+		}
+	}
+	both := `"origin":{"directory":null},"diagnostics":null,"process":"plugin","section":{"id":"probe.tree","sidebar":"left","card":null},"dialog":{"name":"edit","opener":"tab-a"}`
+	const twice = `surface "probe": view start is a section and a dialog`
+	if err := checkViewSurface(t, `{`+view+`,"start":{`+both+`}}`); err == nil || err.Error() != twice {
+		t.Fatalf("section and dialog: %v, want %q", err, twice)
+	}
+}
+
+// A view start whose dialog is an object injects it frozen into window.sokSurface, after the section.
+// contract: view.start-values.first-script
+func TestSurfaceStartScriptInjectsTheDialog(t *testing.T) {
+	var start ViewStart
+	if err := json.Unmarshal([]byte(`{"origin":{"directory":null},"diagnostics":null,"section":null,"dialog":{"name":"edit","opener":"tab-a"}}`), &start); err != nil {
+		t.Fatalf("start values: %v", err)
+	}
+	want := `window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({}),"diagnostics":null,"section":null,"dialog":Object.freeze({"name":"edit","opener":"tab-a"}),"levels":Object.freeze({"call":"error","frame":"error","input":"error","io":"error","lifecycle":"error"})});`
 	got, err := surfaceStartScript("probe-surface", start, defaultLevels())
 	if err != nil {
 		t.Fatalf("start values script: %v", err)
@@ -395,7 +457,7 @@ func TestAViewWithoutStartKeepsTheValuesThatTheHostHolds(t *testing.T) {
 func TestASyncRequestKeepsTheProcessOfAViewStart(t *testing.T) {
 	request, err := decodeSyncRequest(json.RawMessage(`{"settled":true,"titlebar":40,"viewport":{"width":800,"height":600},"declarations":[{}],"surfaces":[{"id":"probe","visible":true,"dim":false,"x":0,"y":0,"w":10,"h":10,"plugin":"probe",` +
 		`"composition":{"kind":"view","page":"ui/page.html"},"start":{"origin":{"directory":null},"declarations":0,` +
-		`"diagnostics":null,"section":null,"process":"view"}}]}`))
+		`"diagnostics":null,"section":null,"dialog":null,"process":"view"}}]}`))
 	if err != nil {
 		t.Fatal(err)
 	}

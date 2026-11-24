@@ -92,7 +92,7 @@ fn a_view_without_start_keeps_the_values_that_the_host_holds() {
         "a view without start values uses the values that the host holds"
     );
     let carried = request(surface(
-        r#","start":{"params":{"path":"/work/next"},"origin":{"directory":null},"project":null,"declarations":0,"diagnostics":null,"section":null,"process":"plugin"}"#,
+        r#","start":{"params":{"path":"/work/next"},"origin":{"directory":null},"project":null,"declarations":0,"diagnostics":null,"section":null,"dialog":null,"process":"plugin"}"#,
     ));
     assert_eq!(
         view_start_of(&lifecycle, &carried.surfaces[0])
@@ -136,7 +136,7 @@ mod declaration_table {
                 "surfaces": [{"id":"tab-a","x":0.0,"y":0.0,"w":10.0,"h":10.0,"visible":true,"dim":false,
                               "plugin":"plugin-x","composition":{"kind":"view","page":"ui/page.html"},
                               "start":{"params":{},"origin":{},"project":{"id":"p","root":"/projects/p"},"declarations":0,
-                                       "diagnostics":null,"section":null},
+                                       "diagnostics":null,"section":null,"dialog":null},
                               "programs":{"agent-file":{"program":program,"args":[{"pattern":"[a-z.]+"}]}}}]
             }))
             .expect("the page request decodes")
@@ -180,7 +180,7 @@ mod declaration_table {
             "surfaces": [{"id":"spc-aaaaaa/left/probe.tree","x":0.0,"y":0.0,"w":10.0,"h":10.0,"visible":true,"dim":false,
                           "plugin":"probe","composition":{"kind":"view","page":"tree.html"},
                           "start":{"params":null,"origin":{"directory":null},"project":null,"declarations":0,
-                                   "diagnostics":null,"section":null,"process":"plugin"}}]
+                                   "diagnostics":null,"section":null,"dialog":null,"process":"plugin"}}]
         }))
         .expect("the page request decodes");
         let resolved = request.resolve().expect("the declaration index resolves");
@@ -204,10 +204,10 @@ mod declaration_table {
                 {"id":"one","x":0.0,"y":0.0,"w":10.0,"h":10.0,"visible":true,"dim":false,
                  "plugin":"page","composition":{"kind":"view","page":"one.html"},
                  "start":{"params":{"path":"one.md"},"origin":{"directory":"/work/one"},
-                          "project":{"id":"project-one","root":"/work/one"},"declarations":0,"diagnostics":null,"section":null,"process":"plugin"}},
+                          "project":{"id":"project-one","root":"/work/one"},"declarations":0,"diagnostics":null,"section":null,"dialog":null,"process":"plugin"}},
                 {"id":"two","x":0.0,"y":0.0,"w":10.0,"h":10.0,"visible":true,"dim":false,
                  "plugin":"page","composition":{"kind":"view","page":"two.html"},
-                 "start":{"params":null,"origin":{"directory":null},"project":null,"declarations":0,"diagnostics":null,"section":null,"process":"plugin"}}
+                 "start":{"params":null,"origin":{"directory":null},"project":null,"declarations":0,"diagnostics":null,"section":null,"dialog":null,"process":"plugin"}}
             ]
         }))
         .expect("the indexed wire request is valid");
@@ -246,7 +246,7 @@ mod declaration_table {
                 &soksak_sok::log_policy::LogPolicy::default().classes()
             )
             .expect("the resolved start values form a valid script"),
-            r##"window.sokSurface = Object.freeze({"surface":"two","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({"commands":["open"],"element":["alpha"],"nested":{"keep":true}}),"diagnostics":null,"section":null,"levels":Object.freeze({"call":"error","frame":"error","input":"error","io":"error","lifecycle":"error"})});"##
+            r##"window.sokSurface = Object.freeze({"surface":"two","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({"commands":["open"],"element":["alpha"],"nested":{"keep":true}}),"diagnostics":null,"section":null,"dialog":null,"levels":Object.freeze({"call":"error","frame":"error","input":"error","io":"error","lifecycle":"error"})});"##
         );
 
         let next: SyncRequest = serde_json::from_value(serde_json::json!({
