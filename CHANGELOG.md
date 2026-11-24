@@ -5,6 +5,7 @@
 
 ## 2026-11-24
 
+- F1136-2: Each test of the GPUI adapter declares its contract case: the adapter cases are rows `gpuikit.*` of the host contract, and the declaration paths list the gpuikit folders.
 - F1136-4: The host specification states each behavior that the language host libraries give every host for every host, names the screen on which GPUI opens a window, and lists the dispatch test of the GPUI adapter as row H105 of the framework table.
 - F1137: The end of the view data stores after the Go host library tests leaves out a directory that the WebKit network process removes during the listing, so a passing run no longer fails on `no such file or directory`.
 - F1136-6: `make check-host-debug` compiles the GPUI framework adapter and the gpuikit application with the features of the gpuikit debug bundle.

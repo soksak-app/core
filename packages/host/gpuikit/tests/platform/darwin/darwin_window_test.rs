@@ -8,6 +8,7 @@ use objc2::{ClassType, MainThreadMarker, msg_send, rc::Retained};
 use objc2_app_kit::NSView;
 use soksak_host_gpuikit::platform::darwin::window_pointer_for_test;
 
+// contract: gpuikit.platform.view-outside-a-window-has-no-window
 fn a_view_outside_a_window_has_no_native_window() -> Result<(), String> {
     if MainThreadMarker::new().is_none() {
         return Err("the test runs off the main thread".to_string());

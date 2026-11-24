@@ -7,6 +7,7 @@ use soksak_host::assets::Assets;
 use super::frontend::{locked, read_locked, write_locked};
 use super::{StagedFrontend, logged_response};
 
+// contract: host.locks.poisoned-state-is-recovered
 #[test]
 fn a_poisoned_mutex_yields_the_value_it_stored_to_locked() {
     let mutex = Arc::new(Mutex::new(vec![1, 2, 3]));
@@ -27,6 +28,7 @@ fn a_poisoned_mutex_yields_the_value_it_stored_to_locked() {
     assert_eq!(*locked(&mutex, "test"), vec![1, 2, 3]);
 }
 
+// contract: host.locks.poisoned-state-is-recovered
 #[test]
 fn a_poisoned_table_yields_its_value_to_read_locked_and_write_locked() {
     let table = Arc::new(RwLock::new(String::from("kept")));
@@ -49,6 +51,7 @@ fn a_poisoned_table_yields_its_value_to_read_locked_and_write_locked() {
     assert_eq!(*read_locked(&table, "test"), "kept!");
 }
 
+// contract: gpuikit.page-files.failed-response-is-500
 #[test]
 fn a_response_builder_error_is_answered_with_500() {
     let built = http::Response::builder()
@@ -62,6 +65,7 @@ fn a_response_builder_error_is_answered_with_500() {
     assert_eq!(response.status(), http::StatusCode::INTERNAL_SERVER_ERROR);
 }
 
+// contract: gpuikit.page-files.reads-the-staged-frontend
 #[test]
 fn a_missing_file_is_a_miss_and_an_unreadable_path_is_a_logged_miss() {
     let folder = std::env::temp_dir().join(format!("gpuikit-locking-test-{}", std::process::id()));

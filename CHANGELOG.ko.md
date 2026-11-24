@@ -5,6 +5,7 @@
 
 ## 2026-11-24
 
+- F1136-2: GPUI adapter의 각 test가 contract case를 선언한다. adapter case는 host contract의 `gpuikit.*` 행이고, 선언 경로는 gpuikit folder를 나열한다.
 - F1136-4: host 명세는 language host library가 모든 host에 주는 동작을 모든 host의 동작으로 적고, GPUI가 window를 여는 screen을 밝히며, GPUI adapter의 dispatch test를 framework 표의 행 H105로 든다.
 - F1137: Go host library test 뒤 view data store 종료는 나열 중 WebKit network process가 지운 directory를 빼므로, 통과한 실행이 더 이상 `no such file or directory`로 실패하지 않는다.
 - F1136-6: `make check-host-debug`는 GPUI framework adapter와 gpuikit application을 gpuikit debug bundle의 feature로 컴파일한다.

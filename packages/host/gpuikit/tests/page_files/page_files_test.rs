@@ -12,6 +12,7 @@ fn staged_folder() -> tempfile::TempDir {
     folder
 }
 
+// contract: gpuikit.page-files.reads-the-staged-frontend
 #[test]
 fn the_staged_frontend_reads_a_file_by_its_page_path() {
     let folder = staged_folder();
@@ -25,6 +26,7 @@ fn the_staged_frontend_reads_a_file_by_its_page_path() {
 
 /// The library reads the core files of the bundled frontend by their name without the leading separator
 /// (`modules/@soksak/plugin-api/view-start.js`, `core-root.json`), as the asset key of Tauri accepts it.
+// contract: gpuikit.page-files.reads-the-staged-frontend
 #[test]
 fn the_staged_frontend_reads_a_file_named_without_the_leading_separator() {
     let folder = staged_folder();
@@ -36,6 +38,7 @@ fn the_staged_frontend_reads_a_file_named_without_the_leading_separator() {
     );
 }
 
+// contract: gpuikit.page-files.reads-the-staged-frontend
 #[test]
 fn the_root_address_serves_the_index_document() {
     let folder = staged_folder();
@@ -50,6 +53,7 @@ fn the_root_address_serves_the_index_document() {
     assert_eq!(response.body(), b"<!doctype html>");
 }
 
+// contract: gpuikit.page-files.reads-the-staged-frontend
 #[test]
 fn the_installed_plugin_list_is_served_at_its_page_path() {
     let folder = staged_folder();
@@ -69,6 +73,7 @@ fn the_installed_plugin_list_is_served_at_its_page_path() {
     );
 }
 
+// contract: gpuikit.start.answers-the-document-of-its-web-view
 #[test]
 fn a_start_document_request_is_answered_with_the_document_of_its_web_view() {
     let (sender, receiver) = mpsc::channel();

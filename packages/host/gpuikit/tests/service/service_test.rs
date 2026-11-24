@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 /// The library waits on the main thread for the result of a task that it posts there (exposure::app_on_main), so the
 /// port requires a task posted on the main thread to run before post returns; a queued task would wait for the thread
 /// that waits for it.
+// contract: gpuikit.service.post-on-the-main-thread-runs-at-once
 #[test]
 fn a_task_posted_on_the_main_thread_runs_before_post_returns() {
     super::MAIN_THREAD.get_or_init(|| std::thread::current().id());
