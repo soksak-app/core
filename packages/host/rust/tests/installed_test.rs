@@ -79,12 +79,18 @@ fn text(data: Vec<u8>) -> String {
 #[test]
 fn installed_plugins_document_lists_enabled_plugins_by_id() {
     let config = installed_fixture();
-    let release = with_config(&config, r#"{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","folder":"CONFIG/plugins/alpha/1.0.0","manifest":{"id":"alpha"}},{"id":"tty","package":"@scope/plugin-tty","version":"0.1.0","folder":"CONFIG/plugins/tty/0.1.0","manifest":{"id":"tty","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{}}}]}"#);
+    let release = with_config(
+        &config,
+        r#"{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","folder":"CONFIG/plugins/alpha/1.0.0","manifest":{"id":"alpha"}},{"id":"tty","package":"@scope/plugin-tty","version":"0.1.0","folder":"CONFIG/plugins/tty/0.1.0","manifest":{"id":"tty","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{}}}]}"#,
+    );
     assert_eq!(
         text(installed::installed_plugins_document(config.path(), false)),
         release
     );
-    let diagnostic = with_config(&config, r#"{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","folder":"CONFIG/plugins/alpha/1.0.0","manifest":{"id":"alpha"}},{"id":"tty","package":"@scope/plugin-tty","version":"0.1.0","folder":"CONFIG/plugins/tty/0.1.0","manifest":{"id":"tty","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{}},"diagnostics":{"module":"ui/d.js","exposes":{}}}]}"#);
+    let diagnostic = with_config(
+        &config,
+        r#"{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","folder":"CONFIG/plugins/alpha/1.0.0","manifest":{"id":"alpha"}},{"id":"tty","package":"@scope/plugin-tty","version":"0.1.0","folder":"CONFIG/plugins/tty/0.1.0","manifest":{"id":"tty","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{}},"diagnostics":{"module":"ui/d.js","exposes":{}}}]}"#,
+    );
     assert_eq!(
         text(installed::installed_plugins_document(config.path(), true)),
         diagnostic
