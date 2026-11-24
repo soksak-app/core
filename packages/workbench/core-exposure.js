@@ -10,7 +10,7 @@ import { contributionsState, onContributionsChange } from "./contributions.js";
 import { checkOpenPath } from "./file-open.js";
 import { registry, connectExposure, revisitRegistrations, whenRepliesSent } from "./exposure.js";
 import { tabDescription } from "./card-data.js";
-import { log, reloadPage, reloadView, report } from "./host.js";
+import { log, reloadView, report, requestPageReload } from "./host.js";
 import { createPluginApply } from "./plugin-apply.js";
 import { trace } from "./performance.js";
 import { focusName, focusState } from "./focus-state.js";
@@ -203,7 +203,7 @@ async function dropFiles(payload) {
 
 /** Applies a plugin change to this window: the questions of modified tabs, then a page reload (core.plugins.apply). */
 const applyPluginChange = createPluginApply({
-  settle: settleModifiedTabs, flush: projects.flush, reload: (cause) => whenRepliesSent().then(() => reloadPage(cause)),
+  settle: settleModifiedTabs, flush: projects.flush, reload: (cause) => whenRepliesSent().then(() => requestPageReload(cause)),
 });
 
 /**

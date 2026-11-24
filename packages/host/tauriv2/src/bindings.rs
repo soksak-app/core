@@ -685,6 +685,19 @@ async fn sidecar_listen(
     .await
 }
 
+/// Reloads the main page that applies a plugin change through the reload of host.window.reload, with the cause that the page
+/// names (docs/spec/native-host.md#page-reload).
+#[tauri::command]
+fn page_reload(
+    webview: Webview,
+    request: Argument<soksak_host::exposure::PageReloadRequest>,
+) -> Result<(), String> {
+    let Argument(request) = request;
+    let window = webview.window();
+    soksak_host::exposure::authorize_main_caller(webview.label(), window.label(), "page reload")?;
+    soksak_host::exposure::request_page_reload(&window, &request.cause)
+}
+
 /// Restarts the view of a tab surface (core.tab.reload).
 #[tauri::command]
 fn view_reload(window: Window, surface: Argument<String>) -> Result<(), String> {

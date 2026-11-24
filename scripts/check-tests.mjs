@@ -340,6 +340,22 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1139",
+    implementation: [
+      { file: "packages/workbench/host.js", symbol: "export const requestPageReload = (cause) => bridge.call(\"pageReload\", { cause });" },
+      { file: "packages/host/go/src/exposure.go", symbol: "func (s *Surfaces) requestPageReload(cause string) error {" },
+      { file: "packages/host/rust/src/exposure.rs", symbol: "pub fn request_page_reload(window: &Window, cause: &str) -> Result<(), String> {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/page-reload-request.test.mjs", id: "a page that applies a plugin change asks the host to reload it with the operation of the change" },
+      { file: "packages/workbench/test/page-reload-request.test.mjs", id: "the apply of a plugin change asks the host for the reload and never reloads the page by itself" },
+      { file: "packages/host/go/src/page_end_test.go", id: "TestAPageReloadThatThePageRequestsEndsThePageWithItsCause" },
+      { file: "packages/host/rust/src/page_end_test.rs", id: "a_page_reload_that_the_page_requests_starts_with_its_cause_and_records_its_failure" },
+    ],
+    expected: "A plugin change reloads the main page only through the host call pageReload, which ends the generation of the page as host.window.reload does.",
+    levels: ["unit"],
+  },
+  {
     id: "F1112",
     implementation: [
       { file: "packages/host/go/src/surfaces.go", symbol: "func (s *Surfaces) recordSyncedSurface(surface Surface) {" },

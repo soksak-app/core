@@ -116,8 +116,16 @@ function windowOverlays() {
  */
 export const native = Boolean(bridge);
 
-// The reload request of the host. The page is read again after every call it sent has received its reply (docs/spec/native-host.md#page-reload).
-if (bridge) bridge.on("page-reload", () => reloadPage("host.window.reload"));
+// The reload request of the host, which names its cause. The page is read again after every call it sent has received its reply
+// (docs/spec/native-host.md#page-reload).
+if (bridge) bridge.on("page-reload", (event) => reloadPage(pageReloadCause(event)));
+
+/** The cause that the page-reload event of the host names; an event without a cause is refused. */
+export function pageReloadCause(event) {
+  const cause = event?.cause;
+  if (typeof cause !== "string" || cause === "") throw new Error(`the page-reload event names no cause: ${JSON.stringify(event)}`);
+  return cause;
+}
 
 /*
  * One ordered port per sidecar name. The host can process send calls concurrently, so the next send must be called
@@ -421,8 +429,9 @@ export function watchCalls(fn) {
 /**
  * Reloads this page after every sent call has its answer (docs/spec/native-host.md#page-reload). The record workbench.page.reload names
  * the operation that caused it, because the reload ends every view of the window (documents-reloaded) and the next page cannot tell why.
+ * Only the page-reload event of the host runs it, because only the host ends the generation of the page.
  */
-export function reloadPage(cause) {
+function reloadPage(cause) {
   recordPageReload(cause);
   return bridge.reload();
 }
@@ -432,6 +441,12 @@ export function recordPageReload(cause) {
   if (typeof cause !== "string" || cause === "") throw new Error(`a page reload needs its cause, not ${JSON.stringify(cause)}`);
   emitEvent("info", "workbench.page.reload", { cause });
 }
+
+/**
+ * Asks the host to reload this page for the operation cause that applies a plugin change; the host answers at once and sends the
+ * event page-reload (docs/spec/native-host.md#page-reload).
+ */
+export const requestPageReload = (cause) => bridge.call("pageReload", { cause });
 
 /** Restarts the view of the tab surface through the host (core.tab.reload, docs/spec/native-surfaces.md#view-surfaces). */
 export const reloadView = (surface) => {

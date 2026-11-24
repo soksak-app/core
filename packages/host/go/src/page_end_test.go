@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -18,8 +19,10 @@ type pageEndWindow struct {
 	settlingWindow
 	listeners map[WindowEvent][]func()
 	sent      chan string
-	mu        sync.Mutex
-	closes    int
+	// reloads receives the payload of each page-reload event.
+	reloads chan []any
+	mu      sync.Mutex
+	closes  int
 	// settled is nil for a window whose screen presents through the main web view of the platform. Otherwise the screen never presents:
 	// its presentation is a function of the window, as the presentation of a framework that draws its workbench itself is, and settled
 	// receives one signal each time a settled wait asks it to present.
@@ -39,10 +42,15 @@ func (w *pageEndWindow) SettledPresentation() (unsafe.Pointer, error) {
 func (w *pageEndWindow) OnWindowEvent(event WindowEvent, listener func()) {
 	w.listeners[event] = append(w.listeners[event], listener)
 }
-func (w *pageEndWindow) Emit(name string, _ ...any) { w.sent <- name }
-func (w *pageEndWindow) StartWorkbench()            { w.sent <- "start" }
-func (w *pageEndWindow) CallWorkbench(string)       {}
-func (w *pageEndWindow) Name() string               { return "main" }
+func (w *pageEndWindow) Emit(name string, payload ...any) {
+	if name == "page-reload" {
+		w.reloads <- payload
+	}
+	w.sent <- name
+}
+func (w *pageEndWindow) StartWorkbench()      { w.sent <- "start" }
+func (w *pageEndWindow) CallWorkbench(string) {}
+func (w *pageEndWindow) Name() string         { return "main" }
 func (w *pageEndWindow) Close() {
 	w.mu.Lock()
 	w.closes++
@@ -93,7 +101,7 @@ func newPageEndWindow(t *testing.T, screen bool) (*Host, *Surfaces, *pageEndWind
 		<-served
 	})
 	window := &pageEndWindow{settlingWindow: settlingWindow{pagelessWindow: pagelessWindow{native: native}},
-		listeners: map[WindowEvent][]func(){}, sent: make(chan string, 64)}
+		listeners: map[WindowEvent][]func(){}, sent: make(chan string, 64), reloads: make(chan []any, 4)}
 	if screen {
 		window.settled = make(chan struct{}, 4)
 	}
@@ -305,6 +313,50 @@ func TestTheReloadRequestEndsTheRequestsToThePage(t *testing.T) {
 	reply := askPage(t, h, s, window)
 	s.askPageToReload(func() {})
 	wantClosedDocument(t, reply, "the command request to the reloading page")
+}
+
+// A page that applies a plugin change asks the host to reload it: the host answers the call at once, ends the generation of the page
+// as for host.window.reload and names the cause in the page-reload event, and a failure of that reload, which has no caller, is an
+// error record (docs/spec/native-host.md#page-reload).
+// contract: application.page-reload.requested-by-the-page
+func TestAPageReloadThatThePageRequestsEndsThePageWithItsCause(t *testing.T) {
+	isolateTraceRecords(t)
+	h, s, window := pageEndFixture(t)
+	reply := askPage(t, h, s, window)
+	if err := s.requestPageReload("plugins-changed"); err != nil {
+		t.Fatalf("the page reload request = %v, want it answered at once", err)
+	}
+	payload := <-window.reloads
+	if want := []any{map[string]string{"cause": "plugins-changed"}}; fmt.Sprint(payload) != fmt.Sprint(want) {
+		t.Fatalf("the page-reload event carried %v, want %v", payload, want)
+	}
+	wantClosedDocument(t, reply, "the command request to the page whose reload it requested")
+	s.endWindow()
+	text := ReloadEndText(windowClosedEnd, "none")
+	// Each later error record wakes the wait; a record that never comes leaves the check to the limit of the runner.
+	for count := 1; ; count++ {
+		for _, record := range awaitTraces(t, "host.record.error", count) {
+			if record["where"] == "page reload" && record["text"] == text {
+				return
+			}
+		}
+	}
+}
+
+// A page reload request names one of the operations that apply a plugin change; another cause is refused before anything changes.
+// contract: application.page-reload.requested-by-the-page
+func TestAPageReloadRequestWithAnotherCauseIsRefused(t *testing.T) {
+	_, s, window := pageEndFixture(t)
+	err := s.requestPageReload("host.window.reload")
+	want := "request.cause must be one of core.plugins.apply, plugins-changed, starter-installed, not host.window.reload"
+	if err == nil || err.Error() != want {
+		t.Fatalf("the request with the cause host.window.reload = %v, want %q", err, want)
+	}
+	select {
+	case got := <-window.sent:
+		t.Fatalf("the refused request sent %q to the window", got)
+	default:
+	}
 }
 
 // The close of the window ends the reload of its page: the window can no longer report ready (docs/spec/native-host.md#page-reload).

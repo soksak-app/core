@@ -1,0 +1,11 @@
+{
+  "name": "page-reload-request",
+  "description": "A page that applies a plugin change asks the host to reload it with pageReload and the operation of the change, and the host answers at once.",
+  "replay": false,
+  "reason": "The reload that the call starts ends the page, so the producer, which runs one page per case, plays no call that ends its page; the host side of pageReload is covered by the host tests of the case application.page-reload.requested-by-the-page.",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "pageReload", "payload": { "cause": "plugins-changed" } } },
+    { "reply": { "result": null } }
+  ]
+}

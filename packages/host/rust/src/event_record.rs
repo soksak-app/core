@@ -229,9 +229,9 @@ pub(crate) fn buffered_fields_of(name: &str, surface: &str) -> Vec<serde_json::V
         .collect()
 }
 
-/// The text of each buffered error record of the host whose place is place, in the order of the buffer. The tests of a framework
-/// adapter read them through the test-seam feature of this crate.
-#[cfg(feature = "test-seam")]
+/// The text of each buffered error record of the host whose place is place, in the order of the buffer. The tests of this crate
+/// read them, and the tests of a framework adapter read them through the test-seam feature of this crate.
+#[cfg(any(test, feature = "test-seam"))]
 pub fn buffered_host_error_texts(place: &str) -> Vec<String> {
     records()
         .buffer

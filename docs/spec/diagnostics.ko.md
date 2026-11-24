@@ -90,6 +90,7 @@ Still은 녹화 창과 그 child window를 window server가 합성한 그대로 
 |---|---|
 | main page의 module이 불러오지 못하거나 불러오는 중 던진다 | `error workbench start: <text> @ <file>:<line>`([page 시작](native-host.ko.md#page-시작)) |
 | host가 page가 요청한 파일을 내줄 수 없다 | `error host page asset: <path>: not found`, 경로마다 한 번 |
+| page가 `pageReload`로 요청한 reload가 새 page가 ready를 알리기 전에 끝난다([page 다시 읽기](native-host.ko.md#page-다시-읽기)) | `error host page reload: <text>`. `<text>`는 `host.window.reload`의 reload를 끝내는 실패다 |
 | GPUI host가 page의 call에 답할 수 없다: message가 call이 아니거나, 알려진 method나 열린 web view를 이름으로 들지 않거나, 인자가 decode되지 않는다 | `error host page call: <error>`, call의 error로 page에도 전달 |
 | GPUI host가 여는 window의 main web view를 만들 수 없다 | `error host new window: <error>` |
 | GPUI host가 window의 resize, move, key, close notification을 관찰할 수 없다 | `error host frontend: window events: <error>` |

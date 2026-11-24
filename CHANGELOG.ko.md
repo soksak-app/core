@@ -5,6 +5,7 @@
 
 ## 2026-11-24
 
+- F1139: page는 host를 통해서만 reload한다. plugin 변경은 `pageReload {cause}`를 보내고, host는 `host.window.reload`처럼 page의 generation을 끝내므로, plugin 변경이 모든 call을 `the page is reloading`으로 거부하는 page를 더 이상 남기지 않는다.
 - F1137-1: Go host library의 store 나열 test가 contract case를 선언하고, 그 case 문장은 종료가 나열 중에 사라진 directory를 뺀다고 말한다.
 - F1136-2: GPUI adapter의 각 test가 contract case를 선언한다. adapter case는 host contract의 `gpuikit.*` 행이고, 선언 경로는 gpuikit folder를 나열한다.
 - F1136-4: host 명세는 language host library가 모든 host에 주는 동작을 모든 host의 동작으로 적고, GPUI가 window를 여는 screen을 밝히며, GPUI adapter의 dispatch test를 framework 표의 행 H105로 든다.

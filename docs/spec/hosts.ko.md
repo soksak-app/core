@@ -416,6 +416,7 @@ host는 `application.Run` 바로 앞에서 framework가 init에서 main thread�
 | H96 | 없음 | `tests/window_race_test.rs`, `tests/fixtures/window-race/` | 없음 | 없음 | 이 test는 `tests/fixtures/window-race`의 fixture program이 build하는 실제 Tauri application에서, 실제 window가 Tauri의 close 경로로 닫히는 동안 Tauri host의 main-thread step을 실행한다. Wails host와 mygo host는 test의 Go process에서 step을 실행하고 같은 step을 자기 test에서 검사한다 |
 | B1 | `overlayShow`, `overlayPlace`, `overlayUpdate`, `overlayHide`, `setShape`, `clearShape` | `overlayShow`, `overlayPlace`, `overlayUpdate`, `overlayHide`, `setShape`, `clearShape` | none | `overlayShow`, `overlayPlace`, `overlayUpdate`, `overlayHide`, `setShape`, `clearShape` | native modal web view와 surface 위 shape의 call이다. mygo host의 window는 modal과 shape를 native UI로 그리므로 `packages/workbench-mygo`의 `hostCalls`에는 이 call이 없다. |
 | B2 | none | none | `setDialogBackground` | none | workbench가 직접 그리는 dialog를 host에 알리는 call이다. Wails와 Tauri host에서는 mode `dialog`의 modal web view가 document를 blur하고, mygo host의 window에는 그런 web view가 없다(B 행 B1). |
+| B3 | `pageReload` | `pageReload` | none | `pageReload` | plugin 변경을 적용하는 page가 host에 reload를 요청하는 호출이다([page 다시 읽기](native-host.ko.md#page-다시-읽기)). mygo host의 window에는 page가 없고, 그 workbench는 framework adapter의 `StartWorkbench`로 자신을 다시 만든다. |
 | A1 | 내용만 다름 | 내용만 다름 | 없음 | content differs | `runtime/index.js`가 각 프레임워크의 호출 방식을 사용한다. mygo 애플리케이션에는 runtime이 없다(A6 행). |
 | A2 | 없음 | `build.rs` | 없음 | none | Tauri는 `tauri_build::build()`를 요구한다 |
 | A3 | 없음 | `tauri.conf.json`, `capabilities/`, `icons/`, `gen/` | 없음 | none | Tauri 설정 |

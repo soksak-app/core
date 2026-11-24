@@ -90,6 +90,7 @@ A row shows a record without its time, as `<level> <layer> <where>: <text>`.
 |---|---|
 | a module of the main page fails to load or throws while it loads | `error workbench start: <text> @ <file>:<line>` ([page start](native-host.md#page-start)) |
 | the host cannot serve a file that the page requests | `error host page asset: <path>: not found`, once for each path |
+| the reload that a page asked for with `pageReload` ends before the new page reports ready ([page reload](native-host.md#page-reload)) | `error host page reload: <text>`, where `<text>` is the failure that ends the reload of `host.window.reload` |
 | the GPUI host cannot answer a call of the page: the message is no call, names no known method or no open web view, or its arguments do not decode | `error host page call: <error>`, also delivered to the page as the error of the call |
 | the GPUI host cannot create the main web view of a window that it opens | `error host new window: <error>` |
 | the GPUI host cannot observe the resize, move, key and close notifications of a window | `error host frontend: window events: <error>` |

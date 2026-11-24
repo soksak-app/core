@@ -779,6 +779,39 @@ func (s *Surfaces) reloadPage() error {
 			return err
 		}
 	}
+	return s.restartPage("host.window.reload")
+}
+
+// pageReloadCauses are the operations of a page that apply a plugin change and ask the host to reload that page.
+var pageReloadCauses = []string{"core.plugins.apply", "plugins-changed", "starter-installed"}
+
+// requestPageReload answers the pageReload call of a page that applies a plugin change: it refuses another cause, and it starts the
+// reload of host.window.reload with the cause and returns at once, because the page reloads only after the reply of each call that it
+// sent. The page saved its projects before the call. A failure of the reload has no caller, so it is an error record
+// (docs/spec/native-host.md#page-reload).
+func (s *Surfaces) requestPageReload(cause string) error {
+	if !slices.Contains(pageReloadCauses, cause) {
+		return fmt.Errorf("request.cause must be one of %s, not %s", strings.Join(pageReloadCauses, ", "), cause)
+	}
+	routine.Go("page-reload", func() {
+		err := s.restartPage(cause)
+		// The record states the text of the failure; its code belongs to an endpoint reply, which this reload has not.
+		var rpc *RPCError
+		if errors.As(err, &rpc) {
+			LogError("page reload", rpc.Message)
+		} else if err != nil {
+			LogError("page reload", err.Error())
+		}
+	})
+	return nil
+}
+
+// restartPage asks a ready page to reload with the event page-reload {cause}, or starts the workbench of a page that is not ready, and
+// waits until the new page reports that it is ready.
+func (s *Surfaces) restartPage(cause string) error {
+	s.host.mu.Lock()
+	pageReady := s.ready
+	s.host.mu.Unlock()
 	// The reload has no time limit: the ready report of the new page ends it, and so do a start of the new page that fails, the
 	// close of the window and the end of its page process, after which no ready report comes (docs/spec/native-host.md#page-reload).
 	// A page process that ended before the reload does not end it, because the reload starts a new page.
@@ -793,7 +826,7 @@ func (s *Surfaces) reloadPage() error {
 	if pageReady {
 		// A ready page reads again by itself after all calls it sent received a reply. When the host reads again, the reply that was being
 		// written at that moment is lost (docs/spec/native-host.md#page-reload).
-		s.askPageToReload(func() { s.window.Emit("page-reload") })
+		s.askPageToReload(func() { s.window.Emit("page-reload", map[string]string{"cause": cause}) })
 	} else {
 		s.mu.Lock()
 		s.startCause = "host.window.reload"

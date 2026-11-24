@@ -458,6 +458,19 @@ fn dispatch(
                 .listen(&request.sidecar, &request.id, request.on);
             Value::Null
         }
+        // Reloads the main page that applies a plugin change (docs/spec/native-host.md#page-reload).
+        "page_reload" => {
+            let request: soksak_host::exposure::PageReloadRequest =
+                argument(method, "request", body)?;
+            let window = webview.window();
+            soksak_host::exposure::authorize_main_caller(
+                webview.label(),
+                window.label(),
+                "page reload",
+            )?;
+            soksak_host::exposure::request_page_reload(&window, &request.cause)?;
+            Value::Null
+        }
         // Restarts the view of a tab of the surface (docs/spec/native-surfaces.md#view-surfaces).
         "view_reload" => {
             let surface: String = argument(method, "surface", body)?;

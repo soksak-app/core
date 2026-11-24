@@ -2718,11 +2718,81 @@ fn reload(
         flush.insert("params".into(), Value::Object(Map::new()));
         host.page(window, "command.run", flush, reply)?;
     }
+    restart_page(window, &data, mark, ready, "host.window.reload")
+}
+
+/// The argument of the `pageReload` call: the operation of the page that applies a plugin change.
+#[derive(Debug, serde::Deserialize)]
+pub struct PageReloadRequest {
+    pub cause: String,
+}
+
+/// The operations of a page that apply a plugin change and ask the host to reload that page.
+pub const PAGE_RELOAD_CAUSES: [&str; 3] =
+    ["core.plugins.apply", "plugins-changed", "starter-installed"];
+
+/// Answers the `pageReload` call of a page that applies a plugin change: it refuses another cause, and it starts the reload of
+/// `host.window.reload` with the cause and returns at once, because the page reloads only after the reply of each call that it
+/// sent. The page saved its projects before the call. A failure of the reload has no caller, so it is an error record of the place
+/// `page reload` (docs/spec/native-host.md#page-reload).
+pub fn request_page_reload(window: &Window, cause: &str) -> Result<(), String> {
+    let data = window_data(window)?;
+    let target = window.clone();
+    page_reload_request(cause, move |cause| {
+        let mark = data.ends.mark();
+        let ready = data.ready.load(Ordering::Relaxed);
+        std::thread::Builder::new()
+            .name("page-reload".into())
+            .spawn(move || report_page_reload(restart_page(&target, &data, mark, ready, cause)))
+            .map(|_| ())
+            .map_err(|error| format!("page reload: {error}"))
+    })
+}
+
+/// Refuses a cause that is not one of `PAGE_RELOAD_CAUSES` before anything changes, and otherwise gives the cause to start.
+pub(crate) fn page_reload_request(
+    cause: &str,
+    start: impl FnOnce(&'static str) -> Result<(), String>,
+) -> Result<(), String> {
+    let cause = PAGE_RELOAD_CAUSES
+        .into_iter()
+        .find(|known| *known == cause)
+        .ok_or_else(|| {
+            format!(
+                "request.cause must be one of {}, not {cause}",
+                PAGE_RELOAD_CAUSES.join(", ")
+            )
+        })?;
+    start(cause)
+}
+
+/// Writes the failure of a reload that a page requested as an error record of the place `page reload`: the reload has no caller,
+/// and the record states the text of the failure, whose code belongs to an endpoint reply.
+pub(crate) fn report_page_reload(ended: Result<Value, Failure>) {
+    if let Err(failure) = ended {
+        crate::application_log::log_error("page reload", failure.message);
+    }
+}
+
+/// The payload of the event `page-reload`, which names the cause of the reload.
+pub(crate) fn page_reload_event(cause: &str) -> Value {
+    json!({"cause": cause})
+}
+
+/// Asks a ready page to reload with the event `page-reload {cause}`, or starts the workbench of a page that is not ready, and waits
+/// until the new page reports ready.
+fn restart_page(
+    window: &Window,
+    data: &Arc<WindowData>,
+    mark: u64,
+    ready: bool,
+    cause: &'static str,
+) -> Result<Value, Failure> {
     // The reload has no time limit: the ready page ends it, and so do the close of the window and the end of its page process
     // (WindowData::end_waits), each with 1003 that names the end and the host calls that still run, and a start of the new
     // page that fails, with 1003 and its error.
     await_reload(
-        &data,
+        data,
         mark,
         || {
             if ready {
@@ -2730,10 +2800,10 @@ fn reload(
                 // it, the response being written at that moment would be lost (docs/spec/native-host.md#page-reload).
                 crate::windows::reload_ready_page(
                     &window.state::<Exposure>().relay,
-                    &data,
+                    data,
                     window.label(),
                     || {
-                        crate::windows::emit_window(window, "page-reload", serde_json::json!({}))
+                        crate::windows::emit_window(window, "page-reload", page_reload_event(cause))
                             .map_err(|error| error.to_string())
                     },
                     || {

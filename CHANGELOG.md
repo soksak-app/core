@@ -5,6 +5,7 @@
 
 ## 2026-11-24
 
+- F1139: A page reloads only through the host: a plugin change sends `pageReload {cause}`, and the host ends the generation of the page as for `host.window.reload`, so a plugin change no longer leaves a page that refuses every call with `the page is reloading`.
 - F1137-1: The store listing test of the Go host library declares its contract case, whose text states that the end leaves out a directory that vanishes during the listing.
 - F1136-2: Each test of the GPUI adapter declares its contract case: the adapter cases are rows `gpuikit.*` of the host contract, and the declaration paths list the gpuikit folders.
 - F1136-4: The host specification states each behavior that the language host libraries give every host for every host, names the screen on which GPUI opens a window, and lists the dispatch test of the GPUI adapter as row H105 of the framework table.

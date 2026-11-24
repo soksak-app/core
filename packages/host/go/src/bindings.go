@@ -162,6 +162,25 @@ func (h *Host) ViewReload(ctx context.Context, reqJSON json.RawMessage) error {
 	return s.ReloadView(req.Surface)
 }
 
+// PageReloadRequest names the operation of the page that applies a plugin change.
+type PageReloadRequest struct {
+	Cause string `json:"cause"`
+}
+
+// PageReload reloads the main page that sent it through the reload of host.window.reload, with the cause that the page names
+// (docs/spec/native-host.md#page-reload).
+func (h *Host) PageReload(ctx context.Context, reqJSON json.RawMessage) error {
+	req, err := argument[PageReloadRequest]("request", reqJSON)
+	if err != nil {
+		return err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return err
+	}
+	return s.requestPageReload(req.Cause)
+}
+
 // CancelSurfaces ends a preparation that the page does not present, so the windows that wait for its transaction continue.
 func (h *Host) CancelSurfaces(ctx context.Context, reqJSON json.RawMessage) error {
 	req, err := argument[CancelRequest]("request", reqJSON)

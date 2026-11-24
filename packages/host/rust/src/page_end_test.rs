@@ -340,3 +340,45 @@ fn the_end_of_the_page_leaves_the_presented_wait_of_an_endpoint_request() {
         "the presented wait of an endpoint request",
     );
 }
+
+/// A page that applies a plugin change asks the host to reload it with one of the operations of that change: the request gives
+/// the cause to the reload, the event `page-reload` names it, and a failure of the reload, which has no caller, is an error record
+/// of the place `page reload` with the text of the failure (docs/spec/native-host.md#page-reload).
+// contract: application.page-reload.requested-by-the-page
+#[test]
+fn a_page_reload_that_the_page_requests_starts_with_its_cause_and_records_its_failure() {
+    let mut started = None;
+    crate::exposure::page_reload_request("plugins-changed", |cause| {
+        started = Some(cause);
+        Ok(())
+    })
+    .expect("the request with the cause plugins-changed is accepted");
+    assert_eq!(started, Some("plugins-changed"));
+    assert_eq!(
+        crate::exposure::page_reload_event("plugins-changed"),
+        serde_json::json!({"cause": "plugins-changed"})
+    );
+    let text = crate::running_calls::reload_end_text("the window closed", "none");
+    crate::exposure::report_page_reload(Err(Failure::new(MISSING_DOCUMENT, text.clone())));
+    let recorded = crate::event_record::buffered_host_error_texts("page reload");
+    assert!(
+        recorded.contains(&text),
+        "the error records of the page reload are {recorded:?}, want {text:?}"
+    );
+}
+
+/// A page reload request names one of the operations that apply a plugin change; another cause is refused before anything changes.
+// contract: application.page-reload.requested-by-the-page
+#[test]
+fn a_page_reload_request_with_another_cause_is_refused() {
+    let mut started = false;
+    let refused = crate::exposure::page_reload_request("host.window.reload", |_| {
+        started = true;
+        Ok(())
+    });
+    assert_eq!(
+        refused,
+        Err("request.cause must be one of core.plugins.apply, plugins-changed, starter-installed, not host.window.reload".to_string())
+    );
+    assert!(!started, "the refused request started a reload");
+}
