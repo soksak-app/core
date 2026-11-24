@@ -37,7 +37,7 @@ import { issueId } from "./ids.js";
 import { drawActivity } from "./activity.js";
 import { bind, delegate, mark, run, runOn } from "./commands.js";
 import { fillPicker, pickerAnswer, pickerColumns, pickerGroups, pickerItems } from "./picker-layer.js";
-import { mountSurface, mountedSurface, placePluginPlaceholder, surfaceForTab } from "./surface-modules.js";
+import { emptySlot, mountSurface, mountedSurface, placePluginPlaceholder, surfaceForTab } from "./surface-modules.js";
 import { onDialogChange } from "./dialogs.js";
 import { drawDialogSeat } from "./dialog-seat.js";
 import { emitEvent } from "./page-log.js";
@@ -346,7 +346,8 @@ function updateCard(el, card, rect) {
     if (set) {
       // A plugin override uses the active surface of the focused card.
       const owner = kind === null ? { card: null, surface: null }
-        : { card: focusedId, surface: activeTab(grid.card(focusedId)).id };
+        // default: an empty focused card has no active surface (null).
+        : { card: focusedId, surface: activeTab(grid.card(focusedId))?.id ?? null };
       // The content of an ordinary sidebar has no card-surface link and no rail.
       drawSet(holder, card.id, set, { ...owner, space: heldSpace, orientation: windowOrientation(side), window: true, plugin: kind, side });
     } else {
@@ -476,6 +477,16 @@ function updateCard(el, card, rect) {
   // id has the same value in every space, the same surface would be used even in a different space.
   const slot = el.querySelector(".slot");
   const shown = activeTab(card);
+  if (!shown) {
+    // An empty card shows no surface and no placeholder: its body stays empty below the head with the add-tab control.
+    clearSlotSurface(slot);
+    for (const key of ["nativeSurface", "nativeSurfaceId", "nativeLayer", "nativePlugin", "nativeTitle", "nativeDim"]) delete slot.dataset[key];
+    emptySlot(slot);
+    slot.dataset.surfaceStatus = "empty";
+    cardFolds.set(card.id, folded);
+    setText(statusText, cardStatusText(card, tabs, folded));
+    return;
+  }
   const paramsProblem = hasPlugin(shown.plugin) ? storedParamsProblem(shown.plugin,
     pluginUnits().find((unit) => unit.id === shown.plugin).version, plugin(shown.plugin).params, shown.params) : null;
   // A tab whose image detach is pending is not placed, so the host creates no view for it, and it shows its starting state;
@@ -629,14 +640,8 @@ async function closeTab(cardId, tabId) {
   // the surface in the host (docs/spec/native-surfaces.md#region-lifetime); the settled barrier of the command waits for that commit.
   removeTab(card, tabId);
   recordClosedTabs([tabId]);
-  if (card.data.tabs.length === 0) {
-    // A card that cannot be closed remains, so one tab is inserted again. Its kind is what the focus was showing, or the first
-    // registered plugin if there is none. If a name were written here, this file would have to change each time a plugin is added.
-    if (tree.canClose(cardId)) tree.close(cardId);
-    // default: as the comment above says, when no plugin is focused, a tab of the first registered plugin is opened.
-    // The closed tab leaves no source tab, so the new tab records null, as the released workbench does (docs/spec/projects.md#tab-origin).
-    else card.data.tabs = [newTab(focusedPlugin() ?? plugins()[0].id, null, null, "card refill")];
-  }
+  // A card that cannot be closed stays as an empty card (docs/spec/cli.md#acting-on-a-layout).
+  if (card.data.tabs.length === 0 && tree.canClose(cardId)) tree.close(cardId);
   settleActiveTab(card);
   // A focused card that left the plane clears the ring: the workbench chooses no other card for it
   // (docs/spec/exposure.md#the-keyboard-follows-the-focus-ring).
@@ -1795,7 +1800,8 @@ function seats(rects) {
   // judges the prediction on that grid, because the display can change scale before the check.
   const pixels = gridScale();
   for (const card of grid.cards) {
-    if (isPlace(card.id)) continue;
+    // An empty card shows no surface, so it has no seat (docs/spec/projects.md#persistence).
+    if (isPlace(card.id) || !activeTab(card)) continue;
     const el = cardElement(card.id);
     const slot = el?.querySelector(":scope > .slot[data-native-surface]");
     let inset = null;
@@ -1827,7 +1833,7 @@ function seats(rects) {
  */
 function seatsHeld(seated) {
   if (!grid) return false;
-  const cards = grid.cards.filter((card) => !isPlace(card.id));
+  const cards = grid.cards.filter((card) => !isPlace(card.id) && activeTab(card));
   return cards.length === seated.size && cards.every((card) => {
     const seat = seated.get(card.id);
     return seat !== undefined && seat.id === activeTab(card).id && seat.dim === dimmed(card.id);

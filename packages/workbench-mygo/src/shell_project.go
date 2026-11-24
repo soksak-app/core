@@ -1284,8 +1284,8 @@ func (s *Shell) selectTab(id string) error {
 	return nil
 }
 
-// closeTab closes the tab id. The last tab of a card closes the card; a card that cannot close takes a new tab instead, as closeTab of
-// packages/workbench/plane.js does.
+// closeTab closes the tab id. The last tab of a card closes the card; a card that cannot close stays as an empty card, as closeTab of
+// packages/workbench/plane.js does (docs/spec/cli.md#acting-on-a-layout).
 func (s *Shell) closeTab(id string) error {
 	card := s.cardOfTab(id)
 	if card == "" {
@@ -1299,53 +1299,12 @@ func (s *Shell) closeTab(id string) error {
 		return s.closeCard(card)
 	}
 	data.RemoveTab(id)
-	if len(data.TabList()) == 0 {
-		refill, err := s.refillTab(card)
-		if err != nil {
-			return err
-		}
-		data.AppendTab(refill)
-	}
 	data.SettleActiveTab()
 	if err := s.storeCard(card, data); err != nil {
 		return err
 	}
 	s.settleThen(s.droppedTabs([]string{id}))
 	return nil
-}
-
-// refillTab is the new tab of the card id that lost its last tab and cannot close: a tab of the plugin of the active tab of the focused
-// card, or of the first plugin with a tab surface when the focused card shows no tab. The closed tab leaves no source tab, so the new
-// tab records the null origin (docs/spec/projects.md#tab-origin).
-func (s *Shell) refillTab(id string) (layout.Tab, error) {
-	plugin := ""
-	if s.focused != id {
-		if _, ok := s.findCard(s.focused); ok && !isPlace(s.focused) {
-			focused, err := s.cardData(s.focused)
-			if err != nil {
-				return layout.Tab{}, err
-			}
-			if tab := focused.ActiveTab(); tab != nil {
-				plugin = tab.Plugin
-			}
-		}
-	}
-	if plugin == "" {
-		for _, loaded := range s.plugins {
-			if loaded.Surface {
-				plugin = loaded.ID
-				break
-			}
-		}
-	}
-	if plugin == "" {
-		return layout.Tab{}, fmt.Errorf("card %s cannot close and no plugin opens a tab in it", id)
-	}
-	known, err := s.knownPlugin(plugin)
-	if err != nil {
-		return layout.Tab{}, err
-	}
-	return s.newTabOf(known, nil)
 }
 
 // sidebarOrder is the order of the window sidebars, the setting sidebarOrder (docs/spec/external-sidebars.md).

@@ -167,7 +167,7 @@ export const tabLabel = (tabId) => labels.get(tabId) ?? null;
 /**
  * The origin of a new tab: the directory that the source tab recorded at that moment. The caller passes null when there is no source
  * tab. A source tab that recorded no directory gives null, which is the value of the origin (docs/spec/projects.md#tab-origin).
- * path names the operation that creates the tab (add space, card refill, new tab, split), for the refusal of a missing origin.
+ * path names the operation that creates the tab (add space, new tab, split), for the refusal of a missing origin.
  */
 export function recordOrigin(tabId, fromTabId, path) {
   if (typeof path !== "string" || path === "") throw new TypeError("recordOrigin requires the path that creates the tab");

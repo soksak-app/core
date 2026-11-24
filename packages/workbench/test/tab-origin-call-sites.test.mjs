@@ -1,5 +1,5 @@
-// The call sites of the tab origin in the plane (docs/spec/projects.md#tab-origin, docs/spec/native-surfaces.md#view-surfaces): the
-// last-tab close records a null origin (F238-a-9), a restored view tab starts with its stored origin (F238-a-10), and a refused view tab
+// The call sites of the tab origin in the plane (docs/spec/projects.md#tab-origin, docs/spec/native-surfaces.md#view-surfaces): a
+// restored view tab starts with its stored origin (F238-a-10), and a refused view tab
 // is logged and shown on its tab (F238-a-16). The unit tests of tab-reports.js cover the recording; these tests reach the call sites
 // through the plane, so that removing one call fails a test.
 import assert from "node:assert/strict";
@@ -40,8 +40,7 @@ document.head.appendChild(style);
 Object.defineProperty(document, "adoptedStyleSheets", { value: [] });
 after(() => dom.window.close());
 
-// The environment of the page: the view plugin is a loaded plugin, and the plugin of the plain tab is not, so its tab is not a view tab. The card is fixed,
-// so that the close of its last tab opens a tab (F238-a-9).
+// The environment of the page: the view plugin is a loaded plugin, and the plugin of the plain tab is not, so its tab is not a view tab.
 const { installEnvironment } = await import("../environment.js");
 assert.deepEqual(installEnvironment({
   runtime: "runtime",
@@ -90,21 +89,6 @@ test("a restored view tab starts with its stored origin on the first build of th
   assert.deepEqual(env.tabOrigins.tabOrigin("built-view"), { directory: "/b" }, "the first build did not restore the stored origin");
   assert.equal(env.tabOrigins.viewRefusal("built-view"), null);
   assert.deepEqual(await errorLines(env.from), [], "the first build wrote a refusal for a valid origin");
-});
-
-test("closing the last tab of a fixed card opens a tab that records a null origin without throwing (F238-a-9)", { timeout: 5000 }, async () => {
-  const env = setup();
-  env.plane.adopt(env.plane.fresh(), "spc-aaaaaa");
-  const card = env.plane.currentGrid().card("main");
-  const only = card.data.tabs[0];
-  assert.equal(card.data.tabs.length, 1, "the fixture does not start with one tab");
-  const closed = await env.plane.closeTabById(only.id);
-  assert.deepEqual(closed, { closed: true });
-  const opened = card.data.tabs;
-  assert.equal(opened.length, 1, "closing the last tab of a fixed card did not open a replacement tab");
-  assert.notEqual(opened[0].id, only.id);
-  assert.deepEqual(env.tabOrigins.tabOrigin(opened[0].id), { directory: null },
-    "the replacement tab of the last-tab close did not record the null origin of its closed source");
 });
 
 test("a restored view tab starts with its stored origin and is not refused (F238-a-10)", { timeout: 5000 }, async () => {

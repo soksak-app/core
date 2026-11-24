@@ -5,6 +5,7 @@
 
 ## 2026-11-24
 
+- F1148-1: content card는 tab을 갖지 않을 수 있다. 빈 card는 `activeId`로 `null`을 저장하고 두 workbench가 그것을 읽으며, 닫을 수 없는 card에서 마지막 tab이 떠나면 다른 tab을 열지 않고 빈 채로 남고, JS plane은 빈 card를 head와 빈 body로 그린다.
 - F1149-1: 창의 library 주소는 `?library=<id>`이므로, plugin 변경 적용 같은 워크벤치의 새 시작 뒤에도 library가 창이 가진 project로 가는 작업 화면으로 돌아가기를 유지한다. JS workbench와 mygo가 같다.
 - F1153: 모든 view의 start values가 `dataFolder`, 곧 Go와 Rust host가 view 시작 전에 mode 0700으로 만드는 configuration directory의 folder `plugin-data/<plugin id>`를 담으므로, plugin이 어떤 project에도 속하지 않는 사람의 값을 둔다.
 - F1149: plugin 변경이 workbench를 다시 시작해도 library에 있던 창은 library에 머문다. JS workbench와 mygo에서 library가 창 주소의 project를 비우므로, 새 시작이 library 전에 보이던 project를 더는 열지 않는다. Red/Green: `projects-switch.test.mjs`와 `TestTheLibraryNamesNoProjectInTheAddress`. `TestTheWindowNamesTheProjectThatItShows`는 이제 library가 project를 담지 않는다고 단언하고, `projects-close-window.test.mjs`의 test들은 시작 주소를 정한다. 새 시작 뒤 project로 돌아가는 길은 F1149-1이다.

@@ -372,6 +372,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1148-1",
+    implementation: [
+      { file: "packages/workbench/stored-layout.js", symbol: "const active = tabs.length === 0" },
+      { file: "packages/workbench/surface-modules.js", symbol: "export function emptySlot(slot) {" },
+      { file: "packages/workbench-mygo/src/layout/stored.go", symbol: "active := len(tabs) == 0" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/plane-empty-card.test.mjs", id: "closing the only tab of the only card leaves the card empty" },
+      { file: "packages/workbench-mygo/tests/layout_operations_test.go", id: "TestClosingTheOnlyTabOfAFixedCardLeavesTheCardEmpty" },
+    ],
+    expected: "A content card without tabs is stored, read and drawn, and the last tab of a card that cannot close leaves it empty.",
+    levels: ["unit"],
+  },
+  {
     id: "F1149-1",
     implementation: [
       { file: "packages/workbench/projects.js", symbol: "export const returnable = () =>" },

@@ -910,10 +910,9 @@ func TestClosingATabOfAFullscreenCardRestoresTheArrangement(t *testing.T) {
 	}
 }
 
-// Closing the only tab of a card that cannot close opens a replacement tab with a null origin, as closeTab of
-// packages/workbench/plane.js does (F238-a-9): its plugin is the plugin of the active tab of the focused card, and the first plugin
-// with a tab surface when the focused card has no tab left.
-func TestClosingTheOnlyTabOfAFixedCardOpensAReplacementTab(t *testing.T) {
+// Closing the only tab of a card that cannot close leaves the card empty, with no tab and no active tab, as closeTab of
+// packages/workbench/plane.js does (docs/spec/cli.md#acting-on-a-layout, F1148-1).
+func TestClosingTheOnlyTabOfAFixedCardLeavesTheCardEmpty(t *testing.T) {
 	for _, command := range []string{"core.tab.close", "core.layout.close"} {
 		t.Run(command, func(t *testing.T) {
 			f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
@@ -925,11 +924,11 @@ func TestClosingTheOnlyTabOfAFixedCardOpensAReplacementTab(t *testing.T) {
 				t.Fatalf("%s answered %s", command, answer)
 			}
 			main, ok := f.layout().card("main")
-			if !ok || len(main.Tabs) != 1 || main.Tabs[0].Tab == "tab-aaaaaa" || main.Tabs[0].Plugin != "notes" || !main.Tabs[0].Active {
-				t.Fatalf("after the close the card main holds %+v, want one active tab of notes, the first plugin", main.Tabs)
+			if !ok || len(main.Tabs) != 0 {
+				t.Fatalf("after the close the card main holds %+v, want an empty card", main.Tabs)
 			}
-			if stored, want := f.stored(), `"origin":{"directory":null}`; !strings.Contains(stored, want) {
-				t.Fatalf("the stored replacement tab has no null origin: %s", stored)
+			if stored, want := f.stored(), `"data":{"activeId":null,"tabs":[]}`; !strings.Contains(stored, want) {
+				t.Fatalf("the stored card is not empty: %s", stored)
 			}
 		})
 	}

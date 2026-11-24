@@ -253,11 +253,12 @@ func CheckStoredLayout(layout json.RawMessage, units []PluginUnit) error {
 			}
 		}
 		tabs, ok := list(fields["tabs"])
-		if !dataObject || !ok || len(tabs) == 0 {
+		if !dataObject || !ok {
 			return fmt.Errorf("invalid stored content card %s", id)
 		}
 		activeID, hasActive := fields["activeId"]
-		active := false
+		// An empty card stores the active id null, and a card with tabs the id of one of them (docs/spec/projects.md#persistence).
+		active := len(tabs) == 0 && hasActive && jsonKind(activeID) == 'n'
 		for _, rawTab := range tabs {
 			if jsonKind(rawTab) == 'n' {
 				return fmt.Errorf("a tab of card %s is null", id)

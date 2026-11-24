@@ -79,14 +79,16 @@ export function checkStoredLayout(kept) {
         if (card.data && Object.hasOwn(card.data, key)) throw new Error(`card ${card.id} stores ${key}, an earlier form of sidebars`);
       }
       const tabs = card.data?.tabs;
-      if (!Array.isArray(tabs) || !tabs.length) throw new Error(`invalid stored content card ${card.id}`);
+      if (!Array.isArray(tabs)) throw new Error(`invalid stored content card ${card.id}`);
       // A tab of a plugin that is not loaded opens as a placeholder, and a loaded plugin must have a surface (docs/spec/plugins.md).
       for (const tab of tabs) {
         const unit = units.find(item => item.id === tab.plugin);
         if (unit && !unit.surface) throw new Error(`stored tab plugin ${tab.plugin} has no surface`);
         checkTabRole(tab);
       }
-      if (!tabs.some(tab => tab.id === card.data.activeId)) throw new Error(`invalid stored active tab ${card.id}`);
+      // An empty card stores the active id null, and a card with tabs the id of one of them (docs/spec/projects.md#persistence).
+      const active = tabs.length === 0 ? card.data.activeId === null : tabs.some(tab => tab.id === card.data.activeId);
+      if (!active) throw new Error(`invalid stored active tab ${card.id}`);
     }
   }
   const content = new Set(stateCards(kept.state).filter((card) => card.data).map((card) => card.id));

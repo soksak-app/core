@@ -257,6 +257,20 @@ export function placePluginPlaceholder(slot, surfaceId, element) {
   placeholders.set(surfaceId, element);
 }
 
+/**
+ * Empties the slot of an empty card: a mounted surface in the slot is moved to the holding place, as when another surface is mounted,
+ * and a placeholder in the slot is removed (docs/spec/projects.md#persistence).
+ */
+export function emptySlot(slot) {
+  for (const other of mounted.values()) {
+    if (other.slot === slot) {
+      other.host.dataset.surfaceSuspended = "true";
+      other.host.remove();
+    }
+  }
+  clearSlotPlaceholders(slot, null);
+}
+
 /** Removes the placeholder of another tab left in the slot. If another tab of the same card is visible, the placeholder of that tab does not remain. */
 function clearSlotPlaceholders(slot, surfaceId) {
   for (const [id, element] of placeholders) {
