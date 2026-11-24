@@ -47,7 +47,7 @@ function toolchains(line) {
   // A line that prints the name of a step runs no command.
   if (/^\s*echo /.test(line)) return { go: false, goLink: false, rust: false };
   const go = GO_COMMAND.exec(line);
-  const goRunner = /scripts\/(?:go-tests\.mjs|benchmarks\.mjs go )/.test(line) || (/scripts\/test-hosts\.mjs/.test(line) && !/--host tauriv2/.test(line));
+  const goRunner = /scripts\/(?:go-tests\.mjs|benchmarks\.mjs go )/.test(line) || (/scripts\/test-hosts\.mjs/.test(line) && !/--host (?:tauriv2|gpuikit)/.test(line));
   const rustRunner = /scripts\/(?:rust-tests\.mjs|benchmarks\.mjs cargo )/.test(line)
     || (/scripts\/test-hosts\.mjs/.test(line) && !/--host (?:wailsv3|mygo)/.test(line));
   const languages = /scripts\/language-test-adapters\.mjs/.test(line);
@@ -56,7 +56,7 @@ function toolchains(line) {
   const hostRunner = /scripts\/test-hosts\.mjs/.test(line);
   const mygo = hostRunner && /--host(?:=|\s+)mygo\b/.test(line);
   const wails = hostRunner && /--host(?:=|\s+)wailsv3\b/.test(line);
-  const mixed = hostRunner && !/--host(?:=|\s+)(?:wailsv3|mygo|tauriv2)\b/.test(line);
+  const mixed = hostRunner && !/--host(?:=|\s+)(?:wailsv3|mygo|tauriv2|gpuikit)\b/.test(line);
   const cgoFree = /\bCGO_ENABLED=0\b/.test(line) || mygo;
   const linksGo = !windows && ((go !== null && go[1] !== "vet") || goRunner);
   return {
