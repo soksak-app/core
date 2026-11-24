@@ -43,7 +43,7 @@ const KINDS = Object.values(EXPOSE_KINDS);
  *     dependencies      the plugins that the plugin lists in dependencies, by package as plugin.json names them:
  *                       {package: {plugin, status: [{name}], data: {key: {schema, default}}, values: {key: value}}}, with the plugin id that the
  *                       view calls name, the statuses and the project data each declares, and the values of its data for the start project
- *     contributions     the installed plugins {id, package, version, manifest}, from which the contributions of the view resolve
+ *     contributions     the installed plugins {id, package, version, folder, manifest}, from which the contributions of the view resolve
  *     surfaces          [{surface, plugin}]: the surfaces that the window holds
  *     sidecars          the sidecar names that the plugin declares
  *     commands          {name: fn(params, cids)}: the core commands and the commands of the plugin that the view runs
@@ -286,6 +286,7 @@ export function createTestHost(fixtures) {
       index: entry.index,
       item: entry.item,
       module: entry.module,
+      folder: entry.folder,
       fail: (reason) => observed.contributions.push({ plugin: entry.plugin, point: entry.point, index: entry.index, reason }),
     }));
   };

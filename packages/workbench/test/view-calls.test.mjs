@@ -711,14 +711,14 @@ test("runtime.error refuses a place or a text that the error line cannot carry a
   await h.close();
 });
 
-test("runtime.contributions returns the connected items of the point with their modules on the core root", async () => {
+test("runtime.contributions returns the connected items of the point with their modules on the core root and the folders of their contributors", async () => {
   installContributions(CONTRIBUTORS());
   const h = await mountView("contributions");
   const from = wire.calls.length;
   // runtime.contributions {point: "language"} and {point: "format"}
   assert.deepEqual((await h.call()).result, [
-    { plugin: "one", index: 0, item: { name: "one" }, module: "soksak://core/modules/@scope/plugin-one/ui/one.js" },
-    { plugin: "two", index: 1, item: { name: "two" }, module: "soksak://core/modules/@scope/plugin-two/ui/two.js" },
+    { plugin: "one", index: 0, item: { name: "one" }, module: "soksak://core/modules/@scope/plugin-one/ui/one.js", folder: "/installed/plugin" },
+    { plugin: "two", index: 1, item: { name: "two" }, module: "soksak://core/modules/@scope/plugin-two/ui/two.js", folder: "/installed/plugin" },
   ]);
   assert.match((await h.call()).error.message, /extension point format is not declared by probe/);
   assert.deepEqual(h.after(from), []);

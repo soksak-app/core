@@ -8,7 +8,7 @@
     {"call":{"name":"compositionDeclare","payload":{"plugin":"probe","composition":{"kind":"view","page":"ui/page.html","regions":[],"overlays":[]},"surface":"probe-surface"}}},
     {"reply":{"result":null}},
     {"notice":{"event":"view-call","payload":{"surface":"probe-surface","plugin":"probe","generation":1,"id":1,"command":"runtime.contributions","params":{"point":"language"}}}},
-    {"call":{"name":"viewReply","payload":{"id":1,"result":[{"plugin":"one","index":0,"item":{"name":"one"},"module":"soksak://core/modules/@scope/plugin-one/ui/one.js"},{"plugin":"two","index":1,"item":{"name":"two"},"module":"soksak://core/modules/@scope/plugin-two/ui/two.js"}],"page":"$page-identity","generation":1,"surface":"probe-surface"}}},
+    {"call":{"name":"viewReply","payload":{"id":1,"result":[{"plugin":"one","index":0,"item":{"name":"one"},"module":"soksak://core/modules/@scope/plugin-one/ui/one.js","folder":"/installed/plugin"},{"plugin":"two","index":1,"item":{"name":"two"},"module":"soksak://core/modules/@scope/plugin-two/ui/two.js","folder":"/installed/plugin"}],"page":"$page-identity","generation":1,"surface":"probe-surface"}}},
     {"reply":{"result":null}},
     {"notice":{"event":"view-call","payload":{"surface":"probe-surface","plugin":"probe","generation":1,"id":2,"command":"runtime.contributions","params":{"point":"format"}}}},
     {"call":{"name":"viewReply","payload":{"id":2,"error":{"code":-32000,"message":"extension point format is not declared by probe"},"page":"$page-identity","generation":1,"surface":"probe-surface"}}},
