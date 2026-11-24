@@ -5,6 +5,7 @@
 
 ## 2026-11-24
 
+- F1144-2: v0.0.52 is released with the mygo, Tauri and Wails application zips and the client, log-contract, native process-identity, plugin-api and window-check releases; it holds none of F1145, F1146 or F1147.
 - F1146-1: The status `core.window.close` states the step that a pending close of the window waits for (`registry`, `tabs`, `save`, `commands` or `close`), and on the mygo host the names of the commands that keep it, so a close that does not end is read from the window.
 - F1145: The add card of the library runs `core.library.form.open` with `mode` `create`, so a press opens the form to create a project. `packages/workbench/test/library-commands.test.mjs` checks that each pressable element of the library carries the parameters that its command requires.
 - F1144-1: The core version is 0.0.52 in every package and crate manifest, Info.plist, Tauri file, Go and pkg-config declaration, the six workspace entries of Cargo.lock and scripts/check-versions.mjs.

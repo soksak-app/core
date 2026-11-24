@@ -5,6 +5,7 @@
 
 ## 2026-11-24
 
+- F1144-2: v0.0.52는 mygo, Tauri, Wails application zip과 client, log-contract, native process-identity, plugin-api, window-check release로 release되었고, F1145, F1146, F1147은 담지 않는다.
 - F1146-1: status `core.window.close`는 기다리는 창 close가 기다리는 단계(`registry`, `tabs`, `save`, `commands`, `close`)와 mygo host에서 close를 붙잡는 command 이름을 알려서 끝나지 않는 close를 창에서 읽는다.
 - F1145: library의 add card는 `mode` `create`로 `core.library.form.open`을 실행하므로 누르면 project를 만드는 form이 열린다. `packages/workbench/test/library-commands.test.mjs`는 library의 누를 수 있는 각 element가 command가 요구하는 parameter를 갖는지 확인한다.
 - F1144-1: core version은 모든 package와 crate manifest, Info.plist, Tauri 파일, Go와 pkg-config 선언, Cargo.lock의 workspace 항목 여섯 개, scripts/check-versions.mjs에서 0.0.52다.

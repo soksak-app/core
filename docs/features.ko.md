@@ -86,9 +86,9 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [o] F1146-1 — `core.window.close`는 기다리는 창 close가 기다리는 단계를, mygo host에서는 close를 붙잡는 command도 알려서 끝나지 않는 close를 창에서 읽는다.
   - [ ] F1146-2 — 멈춘 close의 `core.window.close`를 읽고 그 원인을 owning module의 tracked test로 재현한 뒤 close를 끝낸다.
 - [o] F1145 — P0, F967 다음: library의 add card가 project를 만드는 form을 연다. card는 declaration이 요구하는 parameter `mode` 없이 `core.library.form.open`을 실행했고, 누르면 `command core.library.form.open: parameter mode is required`를 보이며 form을 열지 않았다.
-- [~] F1144 — P0, F1129, F1140, F1141, F1142, F1143 다음: core 0.0.52를 release한다. 남은 일: candidate의 release run을 기다리는 F1144-2.
+- [o] F1144 — P0, F1129, F1140, F1141, F1142, F1143 다음: core 0.0.52를 release한다. v0.0.52는 F1144-1의 candidate를 담고 F1145, F1146, F1147은 담지 않으며, 이들은 release되지 않았다.
   - [o] F1144-1 — package와 crate manifest, application Info.plist와 Tauri 파일, Go와 pkg-config 선언, scripts/check-versions.mjs의 RELEASE 상수와 scripts/check-tests.mjs의 그 symbol에 version 0.0.52를 선언한다.
-  - [~] F1144-2 — candidate를 push하고 release run이 success로 끝나며 v0.0.52가 세 application zip과 다섯 package release를 나열하는지 확인한다. 남은 일: candidate의 release run 결론.
+  - [o] F1144-2 — candidate를 push하고 release run이 success로 끝나며 v0.0.52가 세 application zip과 다섯 package release를 나열하는지 확인한다. Release run은 success로 끝났고, v0.0.52는 mygo, Tauri, Wails zip과 client, log-contract, native process-identity, plugin-api, window-check release를 나열한다.
 - [o] F1143 — P2, F1141, F1142, F1138 후속: F1141과 F1138이 더한 default는 그 이유를 적고, 설치는 `executable`에 base name이 없는 설치된 `sidecar.json`을 빈 base name으로 읽지 않고 `<file>: executable "<executable>" has no base name`으로 거부한다.
 - [o] F1142 — P2: 설치는 실행 파일 base name이 다른 것과 같은 두 번째 persistent 사이드카를 아무것도 쓰기 전에 두 사이드카와 base name을 밝힌 오류로 거부하므로, 두 서비스가 `services/<executable-name>`과 그 잠금, `endpoint.json`을 함께 쓰지 않는다 ([persistent services](spec/persistent-services.ko.md#서비스-전송)).
 - [o] F1141 — P1: plugin 제거가 더 이상 묻지 않고 실행 중인 세션을 끝내지 않는다. 실행 중인 persistent 서비스는 실행되는 동안 사이드카를 나열했던 plugin을 기억하고, `sessions` 수는 제거되거나 비활성화된 plugin의 layout 표면을 포함하므로, 선언 없는 서비스는 그 세션이 layout을 떠나거나 사람이 교체할 때까지 그 세션 수와 함께 나열된다 ([persistent services](spec/persistent-services.ko.md#updates)).
