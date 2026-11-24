@@ -288,7 +288,7 @@ export async function openView(name, { cases, host: fixtures, start, declaration
   if (root !== undefined && !(root instanceof NodeURL && root.protocol === "file:")) throw new TypeError(`openView root must be the file URL of the plugin directory, found ${inspect(root)}`);
   // In host mode name is the plugin id of the view, so the fixtures do not name it a second time.
   if (fixtures !== undefined && "plugin" in fixtures) throw new TypeError("openView host fixtures take no plugin: the plugin of the view is the name");
-  const testHost = fixtures === undefined ? null : createTestHost({ ...fixtures, plugin: name });
+  const testHost = fixtures === undefined ? null : createTestHost({ ...fixtures, plugin: name, dialog: start?.dialog ?? null });
   const kase = testHost === null ? readCase(cases, name, SHAPE) : null;
   const plugin = testHost === null ? kase.plugin : name;
   const wire = kase === null ? null : createWire(name, kase, SHAPE);

@@ -134,6 +134,9 @@ export function createViewBridge({ handler, report }) {
   // view document before any page script draws, and each later theme message in dispatch (docs/spec/native-surfaces.md#view-surfaces).
   if (window.sokTheme === undefined) throw new Error(`view ${plugin} has no start theme`);
   applyTheme(window.document.documentElement, window.sokTheme);
+  // The document of a dialog is transparent over the window, so the bridge sets the backdrop on its root before any page script
+  // draws, and the page draws its own card on it (docs/spec/plugins.md#dialogs).
+  if (window.sokSurface?.dialog != null) window.document.documentElement.style.backgroundColor = "rgba(0, 0, 0, 0.5)";
   const channel = createViewChannel({ handler });
   let onCall = null;
   let onCoreExposure = null;
@@ -341,6 +344,15 @@ export function createViewBridge({ handler, report }) {
     // The external programs that the plugin declares (docs/spec/native-surfaces.md#program-runs): run(name, args, {signal}) resolves with the
     // reply {code, stdout, stderr, truncated} when the program exits. An absent args is an empty list. A signal that aborts sends the cancel
     // of the view call, and the run rejects with cancelled.
+    // The dialogs that the plugin declares (docs/spec/plugins.md#dialogs): dialog(name, params, {signal}) opens the dialog name over
+    // the window and resolves with the result of its close; an absent params is null, and a signal that aborts removes the dialog.
+    // dialog.close(result) closes the dialog of the calling dialog view; an absent result is null.
+    dialog: Object.assign((name, params = null, { signal } = {}) => {
+      if (typeof name !== "string" || name === "") throw new TypeError("runtime.dialog requires a non-empty name");
+      return calls.request("runtime.dialog.open", { name, params }, { signal });
+    }, {
+      close: (result = null) => calls.request("runtime.dialog.close", { result }).then(() => undefined),
+    }),
     program: {
       run: (name, args = [], { signal } = {}) => {
         if (typeof name !== "string" || name === "") throw new TypeError("runtime.program.run requires a non-empty name");

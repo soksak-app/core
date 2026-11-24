@@ -440,6 +440,20 @@ test("a program run of the view reaches the program fixture with its arguments a
   await view.close();
 });
 
+test("a dialog open resolves with its fixture, and only a dialog view closes itself", { timeout: 5000 }, async () => {
+  const view = await openView("probe", { start: START, host: fixtures({ dialogs: { edit: (params) => ({ saved: params.row }) } }) });
+  assert.deepEqual(await view.bridge.runtime.dialog("edit", { row: 3 }), { saved: 3 });
+  assert.deepEqual(view.observed.dialogs, [{ name: "edit", params: { row: 3 } }]);
+  await assert.rejects(view.bridge.runtime.dialog.close(null), /view call runtime.dialog.close is served only to a dialog/);
+  await view.settled();
+  await view.close();
+  const dialog = await openView("probe", { start: { ...START, dialog: { name: "edit", opener: "probe-tab" } }, host: fixtures() });
+  await dialog.bridge.runtime.dialog.close({ saved: true });
+  assert.deepEqual(dialog.observed.closes, [{ saved: true }]);
+  await dialog.settled();
+  await dialog.close();
+});
+
 test("a program run without a fixture rejects in the view and close names the route", { timeout: 5000 }, async () => {
   const view = await openView("probe", { start: START, host: fixtures() });
   await assert.rejects(view.bridge.runtime.program.run("probe-tool", []), /view host: program.probe-tool has no fixture/);

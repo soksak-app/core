@@ -90,6 +90,7 @@ export async function answerViewCall(event, options) {
       ...options,
       runOwned: (name, value, owner, surface) => options.runOwned(name, value, owner, carried, surface, options.surface),
       runCore: (name, value) => options.runCore(name, value, carried),
+      signal: controller.signal,
     };
     return await untilCancelled(run(command, params, withCause), controller.signal);
   } finally {
@@ -184,7 +185,7 @@ function regionOf(command, params) {
   return fields;
 }
 
-async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent, contributions, runCore, runOwned, startProject, runtime, composition }) {
+async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent, contributions, runCore, runOwned, startProject, runtime, composition, signal }) {
 
   switch (command) {
     case "tab.state.read":
@@ -343,6 +344,20 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
         throw new TypeError(`view call ${command} args must be an array of texts`);
       }
       return runtime.program.run(fields.name, args);
+    }
+    // The open call of a dialog lasts until the dialog closes; the runtime receives the signal of the call, which aborts at every
+    // end of the call other than its reply, and removes the dialog then (docs/spec/plugins.md#dialogs).
+    case "runtime.dialog.open": {
+      const fields = objectOf(command, params);
+      if (typeof fields.name !== "string" || fields.name === "") throw new TypeError(`view call ${command} requires a non-empty name`);
+      if (Object.keys(fields).some((key) => key !== "name" && key !== "params")) throw new TypeError(`view call ${command} takes only name and params`);
+      return runtime.dialog.open(fields.name, Object.hasOwn(fields, "params") ? fields.params : null, signal);
+    }
+    case "runtime.dialog.close": {
+      const fields = objectOf(command, params);
+      if (Object.keys(fields).some((key) => key !== "result")) throw new TypeError(`view call ${command} takes only result`);
+      await runtime.dialog.close(Object.hasOwn(fields, "result") ? fields.result : null);
+      return null;
     }
     case "tab.title":
       tab.title(params);

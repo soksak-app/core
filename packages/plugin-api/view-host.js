@@ -52,6 +52,9 @@ const KINDS = Object.values(EXPOSE_KINDS);
  *     clipboard         {read(type), writeText(text), readPNG(), persistPNG(binary)}
  *     programs          {name: fn(args)}: the reply of each run of a declared program, which runs with the argument texts; the reply is
  *                       {code, stdout, stderr, truncated} (docs/spec/native-surfaces.md#program-runs)
+ *     dialogs           {name: fn(params)}: the result of each dialog that the view opens, which receives the params of the open call
+ *                       (docs/spec/plugins.md#dialogs)
+ *     dialog            the start value dialog {name, opener} of the view, which openView passes, or null: only a dialog view closes itself
  *     composition       {declaration(), place(regions, overlays), report(text), document: {attach, load, zoom, go, post, subscribe,
  *                       unsubscribe, detach}, image: {attach, focus, caret, text, detach}}
  *     data              the project data declarations {key: {schema, default}}; the values are stored by the host
@@ -85,6 +88,7 @@ const KINDS = Object.values(EXPOSE_KINDS);
  *               data: each stored value {key, value}; sidecar: each send {sidecar, id, body, cids}; commands: each run {name, params,
  *               cids, surface}; document: the host calls of the view in order, native calls as {name, payload} and pushes as
  *               {name: "viewEvent", payload: {event, data}}; errors: each report line; links: each opened URL; programs: each run {name, args};
+ *               dialogs: each open {name, params}; closes: each result of a close;
  *               failures: the missing
  *               fixtures; events: each event record {level, event, fields}; contributions: each refused item {plugin, point, index, reason};
  *               timers: each timer or animation frame that the page window started, {kind, delay} (delay null for an animation frame)
@@ -118,7 +122,7 @@ export function createTestHost(fixtures) {
   const declares = (kind, name) => pluginDeclared.has(declarationKey(kind, name)) || coreDeclared.has(declarationKey(kind, name)) || dependencyDeclared.has(declarationKey(kind, name));
   const observed = {
     tab: { title: null, footer: null, directory: null, modified: null, error: null, focus: null, notify: [], keep: [] },
-    data: [], sidecar: [], commands: [], document: [], errors: [], links: [], programs: [], failures: [], events: [], contributions: [], timers: [],
+    data: [], sidecar: [], commands: [], document: [], errors: [], links: [], programs: [], dialogs: [], closes: [], failures: [], events: [], contributions: [], timers: [],
   };
   const works = new Set();
   const track = (promise) => {
@@ -394,6 +398,17 @@ export function createTestHost(fixtures) {
         run: (name, args) => {
           observed.programs.push({ name, args });
           return route(`program.${name}`, at("programs", name), [args]);
+        },
+      },
+      dialog: {
+        open: (name, params) => {
+          observed.dialogs.push({ name, params });
+          return route(`dialog.${name}`, at("dialogs", name), [params]);
+        },
+        close: (result) => {
+          if (fixtures.dialog == null) return Promise.reject(new Error("view call runtime.dialog.close is served only to a dialog"));
+          observed.closes.push(result);
+          return Promise.resolve(null);
         },
       },
       report: (line) => { observed.errors.push(line); return Promise.resolve(null); },

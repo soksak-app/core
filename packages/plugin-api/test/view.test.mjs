@@ -1101,6 +1101,67 @@ test("runtime.program.run sends the name and the arguments as a view call, and a
   assert.throws(() => runtime.program.run("probe-tool", ["a", 1]), /runtime.program.run args must be an array of texts/);
 });
 
+// Sets the start values of a surface view and the visual viewport that its surface document entries read, which jsdom does
+// not define.
+const surfaceStart = (start) => {
+  globalThis.window.sokSurface = start;
+  const viewport = new globalThis.window.EventTarget();
+  Object.assign(viewport, { width: 400, height: 200 });
+  Object.defineProperty(globalThis.window, "visualViewport", { value: viewport });
+};
+
+test("runtime.dialog sends the open call of a declared dialog with its params, and an absent params is null", async (t) => {
+  const { posted, host } = setup(t);
+  const { runtime } = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
+  const open = runtime.dialog("edit", { row: 3 });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: lastId(posted), command: "runtime.dialog.open", params: { name: "edit", params: { row: 3 } } });
+  host({ sok: 1, id: lastId(posted), result: { saved: true } });
+  assert.deepEqual(await open, { saved: true }, "the open call resolves with the result of the close of the dialog");
+  const bare = runtime.dialog("edit");
+  assert.deepEqual(posted.at(-1), { sok: 1, id: lastId(posted), command: "runtime.dialog.open", params: { name: "edit", params: null } });
+  host({ sok: 1, id: lastId(posted), result: null });
+  assert.equal(await bare, null);
+  assert.throws(() => runtime.dialog(""), /runtime.dialog requires a non-empty name/);
+  assert.throws(() => runtime.dialog(3), /runtime.dialog requires a non-empty name/);
+});
+
+test("runtime.dialog with a signal sends the cancel of its open call when the signal aborts, and rejects with cancelled", async (t) => {
+  const { posted } = setup(t);
+  const { runtime } = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
+  const controller = new AbortController();
+  const open = runtime.dialog("edit", null, { signal: controller.signal });
+  controller.abort();
+  await assert.rejects(open, { reason: "cancelled" });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: 1, cancel: true });
+});
+
+test("runtime.dialog.close sends the close call with its result, and an absent result is null", async (t) => {
+  const { posted, host } = setup(t);
+  const { runtime } = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
+  const close = runtime.dialog.close({ saved: true });
+  assert.deepEqual(posted.at(-1), { sok: 1, id: lastId(posted), command: "runtime.dialog.close", params: { result: { saved: true } } });
+  host({ sok: 1, id: lastId(posted), result: null });
+  assert.equal(await close, undefined);
+  const bare = runtime.dialog.close();
+  assert.deepEqual(posted.at(-1), { sok: 1, id: lastId(posted), command: "runtime.dialog.close", params: { result: null } });
+  host({ sok: 1, id: lastId(posted), result: null });
+  await bare;
+});
+
+test("the page of a dialog surface has the backdrop on its root", (t) => {
+  setup(t);
+  surfaceStart({ surface: "probe-dialog", params: null, declarations: {}, section: null, dialog: { name: "edit", opener: "probe-tab" } });
+  createViewBridge({ handler: viewHandler(() => {}), report: () => {} });
+  assert.equal(globalThis.window.document.documentElement.style.backgroundColor, "rgba(0, 0, 0, 0.5)");
+});
+
+test("the page of a tab surface has no backdrop on its root", (t) => {
+  setup(t);
+  surfaceStart({ surface: "probe-tab", params: null, declarations: {}, section: null, dialog: null });
+  createViewBridge({ handler: viewHandler(() => {}), report: () => {} });
+  assert.equal(globalThis.window.document.documentElement.style.backgroundColor, "");
+});
+
 test("runtime.program.run with a signal sends the cancel of its view call when the signal aborts, and rejects with cancelled", async (t) => {
   const { posted } = setup(t);
   const { runtime } = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
