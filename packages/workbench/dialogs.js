@@ -28,6 +28,9 @@ export const dialogSurface = () => (open === null ? null : open.surface.surfaceI
 export const dialogState = () => (open === null ? null
   : { surface: open.surface.surfaceId, plugin: open.plugin, name: open.name, opener: open.opener });
 
+/** The plugin of the surface when it is the surface of the open dialog, or null for any other surface. */
+export const dialogSurfacePlugin = (surface) => (open !== null && open.surface.surfaceId === surface ? open.plugin : null);
+
 /** The refusal of a native modal while a dialog is open, or null when the window shows no dialog (docs/spec/native-modals.md). */
 export const dialogRefusal = () => (open === null ? null : `the window shows the dialog ${open.name} of ${open.plugin}`);
 

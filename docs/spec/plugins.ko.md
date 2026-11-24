@@ -172,6 +172,7 @@ installer는 view page가 없는 release를 거부하듯 dialog page가 없는 r
 
   dialog view는 process가 끝나면 모든 view처럼 자기 start value로 다시 시작하고, 열기 호출은 열린 채로 남는다. 재시작이 [view 표면](#view-표면)의 한도에 이른 dialog surface는 지워진다. 그때 오류 표시는 place `dialog <plugin> <name>`으로 `the view failed 4 times within 300 seconds and is created again when its dialog is opened again`을 보이고, 열기 호출은 그 text로 실패한다.
 - **Id.** id `dialog/<plugin>/<name>`에는 `/`가 있으므로, surface를 정하지 않은 요청은 tab처럼 dialog를 고르지 않는다([표면 선택](exposure.ko.md#표면-선택)). id가 `dialog`인 space는 없으므로 이 id는 section surface를 가리키지 않는다.
+- **Exposure.** dialog의 page는 view처럼 자기 status와 element를 등록한다([view 표면](native-surfaces.ko.md#view-표면)). registry는 열린 dialog의 plugin으로 dialog surface를 알므로, dialog surface를 지정한 요청은 dialog가 열려 있는 동안 그 element에 전달된다.
 - **Status.**
   - `core.modal`은 열린 dialog를 `{id, mode: "dialog", document: null, plugin}`로 알린다. `id`는 dialog surface이고 `plugin`은 그 plugin이다([exposure](exposure.ko.md#모달-문서)).
   - `core.surfaces`는 dialog surface를 자기 plugin, `kind` `dialog`, `sidebar` `null`, `dialog` `{name, opener}`로 나열하고, 다른 모든 surface는 `dialog` `null`을 보고한다.

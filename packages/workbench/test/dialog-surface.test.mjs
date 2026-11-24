@@ -17,7 +17,8 @@ globalThis.innerHeight = 600;
 selectPageWire("overlay-none");
 const { behindDialog, modalState, onModalState, overlay } = await import("../host.js");
 const { registerDialog } = await import("../registry.js");
-const { closeDialog, dialogState, openDialog } = await import("../dialogs.js");
+const dialogs = await import("../dialogs.js");
+const { closeDialog, dialogState, openDialog } = dialogs;
 const at = (id) => document.getElementById(id);
 
 const surfaceOf = (name) => (opener, params) => ({ surfaceId: `dialog/probe/${name}`, pluginId: "probe", params, section: null, dialog: { name, opener } });
@@ -71,6 +72,18 @@ test("core.modal reports the open dialog with its plugin and a native modal with
   assert.equal(modalState(), null);
   stop();
   assert.deepEqual(seen, ["dialog", null]);
+});
+
+// The registry applies a status or element registration of a surface only when it knows the plugin of the surface, so the open
+// dialog surface names its plugin; a registration of the dialog page otherwise stayed pending and the dialog exposed no element (F1151).
+test("the open dialog surface names its plugin, and no surface does once the dialog ends", async () => {
+  assert.equal(typeof dialogs.dialogSurfacePlugin, "function", "dialogs.js exports dialogSurfacePlugin");
+  const open = opening("edit");
+  assert.deepEqual([dialogs.dialogSurfacePlugin("dialog/probe/edit"), dialogs.dialogSurfacePlugin("dialog/probe/confirm"), dialogs.dialogSurfacePlugin("tab-a")],
+    ["probe", null, null]);
+  closeDialog("dialog/probe/edit", null);
+  await open;
+  assert.equal(dialogs.dialogSurfacePlugin("dialog/probe/edit"), null);
 });
 
 test("a native modal is refused while a dialog is open", async () => {

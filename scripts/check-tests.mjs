@@ -359,6 +359,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1151",
+    implementation: [
+      { file: "packages/workbench/dialogs.js", symbol: "export const dialogSurfacePlugin = (surface) =>" },
+      { file: "packages/workbench/core-exposure.js", symbol: "const owner = sectionSurfacePlugin(surface) ?? dialogSurfacePlugin(surface);" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/dialog-surface.test.mjs", id: "the open dialog surface names its plugin, and no surface does once the dialog ends" },
+    ],
+    expected: "The plugin lookup of the registry names the plugin of the open dialog for its surface, so the statuses and elements of a dialog page are registered and a request that names the dialog surface is answered by them.",
+    levels: ["unit"],
+  },
+  {
     id: "F1150",
     implementation: [
       { file: "packages/workbench/memory-saver.js", symbol: "if (kind === \"dialog\") continue;" },
@@ -14764,7 +14776,7 @@ const FEATURE_LINKS = [
     id: "F365",
     implementation: [
       { file: "packages/workbench/registry.js", symbol: "export function sectionSurfacePlugin(surface)" },
-      { file: "packages/workbench/core-exposure.js", symbol: "const owner = sectionSurfacePlugin(surface);" },
+      { file: "packages/workbench/core-exposure.js", symbol: "const owner = sectionSurfacePlugin(surface) ?? dialogSurfacePlugin(surface);" },
     ],
     tests: [
       { file: "packages/workbench/test/surface-plugins.test.mjs", id: "a section surface id names the plugin of its registered section" },

@@ -41,6 +41,7 @@ import {
   behindDialog, filePlace, modalState, onFilesDropped, onModalState, onWindowResponder, orderedCallsAnswered, overlayElementRect,
 } from "./host.js";
 import { keyboardResponder } from "./keyboard.js";
+import { dialogSurfacePlugin } from "./dialogs.js";
 import { hasPlugin, plugin, sectionSurfacePlugin } from "./registry.js";
 import { compositionKindOf } from "./surface-composition-kind.js";
 import { retainedSurfaceEntries, surfaceKindOf } from "./surface-listing.js";
@@ -270,9 +271,12 @@ const planeOrigin = () => {
 
 const shift = (rect, origin) => ({ x: rect.x + origin.x, y: rect.y + origin.y, w: rect.w, h: rect.h });
 
-/** Finds the plugin of a surface: the plugin of its section, or the plugin of a tab of the active space or of a stored space. */
+/**
+ * Finds the plugin of a surface: the plugin of its section, the plugin of the open dialog, or the plugin of a tab of the active space or
+ * of a stored space.
+ */
 function surfacePlugin(surface) {
-  const owner = sectionSurfacePlugin(surface);
+  const owner = sectionSurfacePlugin(surface) ?? dialogSurfacePlugin(surface);
   if (owner !== null) return owner;
   // default: there is no card before the plane is created.
   for (const card of currentGrid()?.cards ?? []) {
