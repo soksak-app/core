@@ -340,12 +340,33 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1138-2",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) EndServices(ctx context.Context, held sok.Held) error {" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "pub fn end_services(&self, held: &soksak_sok::service_hold::Held) -> Result<(), String> {" },
+      { file: "packages/host/go/src/plugins.go", symbol: "func (p *Plugins) operate(action, plugin string, end bool, stop func() bool) operation {" },
+      { file: "packages/host/rust/src/plugins.rs", symbol: "    fn operate(" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestTheRunningServicesAttachToALiveServiceAndStartNone" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestAPluginOperationEndsTheHoldingServiceAndStartsTheNextAfterIt" },
+      { file: "packages/host/go/tests/plugins_held_test.go", id: "TestAHeldUpdateIsListedAndRunsWithTheEndOfItsService" },
+      { file: "packages/host/go/tests/plugins_held_test.go", id: "TestAnUpdateAtStartThatAServiceHoldsStaysAndIsListed" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "the_running_services_attach_to_a_live_service_and_start_none" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "a_plugin_operation_ends_the_holding_service_and_starts_the_next_after_it" },
+      { file: "packages/host/rust/tests/plugins_held_test.rs", id: "a_held_update_is_listed_and_runs_with_the_end_of_its_service" },
+      { file: "packages/host/rust/tests/plugins_held_test.rs", id: "an_update_at_start_that_a_service_holds_stays_and_is_listed" },
+    ],
+    expected: "Both hosts give the installer the hello versions of the live persistent services without starting one, start no persistent service during a plugin operation, list held operations in pluginsState, run end: true by ending the holding services before installed.json is written, and keep a held update at start.",
+    levels: ["unit"],
+  },
+  {
     id: "F1138-1",
     implementation: [
-      { file: "packages/sok/go/src/service_hold.go", symbol: "func heldBy(id string, state *InstalledState, recorded map[string]string, services Services) ([]string, error) {" },
+      { file: "packages/sok/go/src/service_hold.go", symbol: "func heldBy(id string, state *InstalledState, recorded map[string]string, services Services) *Held {" },
       { file: "packages/sok/rust/src/service_hold.rs", symbol: "pub(crate) fn held_by(" },
-      { file: "packages/sok/go/src/plugins.go", symbol: "if err := endHeld(held, holding, running); err != nil {" },
-      { file: "packages/sok/rust/src/plugins.rs", symbol: "end_held(&held, holding, running)?;" },
+      { file: "packages/sok/go/src/plugins.go", symbol: "if err := endHeld(held, running); err != nil {" },
+      { file: "packages/sok/rust/src/plugins.rs", symbol: "end_held(held.as_ref(), running)?;" },
     ],
     tests: [
       { file: "packages/sok/go/tests/service_hold_test.go", id: "TestAnUpdateThatChangesTheSidecarOfARunningServiceWritesNothing" },

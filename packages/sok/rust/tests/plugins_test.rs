@@ -598,7 +598,7 @@ fn plugins_state_reports_the_registry_and_the_installation() {
     assert_eq!(
         state_json(&config),
         format!(r#"{{"core":"{}","#, soksak_sok::version::CORE_VERSION)
-            + r#""registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"starter":null}"#
+            + r#""registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"starter":null,"held":[]}"#
     );
     let registry = plugin_versions(&["0.2.0"]);
     run_json(&[
@@ -655,7 +655,7 @@ fn plugins_state_reads_and_rejects_invalid_starter_job() {
     assert_eq!(
         state_json(&config),
         format!(r#"{{"core":"{}","#, soksak_sok::version::CORE_VERSION)
-            + r#""registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"starter":{"format":1,"state":"pending","pack":"starter","registry":"file:///registry/index.json","plugins":["alpha","beta"]}}"#
+            + r#""registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"starter":{"format":1,"state":"pending","pack":"starter","registry":"file:///registry/index.json","plugins":["alpha","beta"]},"held":[]}"#
     );
     for invalid in [
         r#"{"format":2,"state":"pending","pack":"starter","registry":"file:///registry/index.json","plugins":["alpha"]}"#,

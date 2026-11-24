@@ -128,7 +128,7 @@ func (c *Changes) List() []host.PluginsChanged {
 func NewPlugins(t *testing.T, config string) (*host.Plugins, *Changes) {
 	t.Helper()
 	seen := &Changes{}
-	plugins, err := host.NewPlugins(config, func() error { return nil }, seen.Add)
+	plugins, err := host.NewPlugins(config, func() host.PluginServices { return nil }, func() error { return nil }, seen.Add)
 	if err != nil {
 		t.Fatal(err)
 	}

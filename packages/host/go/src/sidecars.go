@@ -280,6 +280,10 @@ type Sidecars struct {
 	// stopSignal closes when the sidecars stop. It ends the waits of a start and of a replacement, which no time limit ends
 	// (docs/spec/persistent-services.md#service-transport).
 	stopSignal chan struct{}
+	// operation closes when the running plugin operation ends, and is nil while none runs. While it runs no persistent service
+	// starts, so the comparison of the operation with the live services holds until it writes installed.json
+	// (docs/spec/persistent-services.md#updates). c.mu protects it.
+	operation chan struct{}
 	// Now is the clock of the restart limit of the sidecars of either transport (docs/spec/sidecars.md#failure) and of the waits of their
 	// lines in the write queue and the write (docs/spec/logging.md#entrances). A test injects it; nil uses time.Now.
 	Now func() time.Time
@@ -841,7 +845,7 @@ func (c *Sidecars) sendAtRootGuarded(ctx context.Context, owner SidecarOwner, na
 		}
 		return fmt.Errorf("sidecar %s: restart limit", name)
 	}
-	process, started, err := c.processContext(ctx, name, nil)
+	process, started, err := c.processContext(ctx, name, nil, false)
 	if err != nil {
 		return err
 	}
@@ -1200,18 +1204,7 @@ func (c *Sidecars) outdatedLocked() []OutdatedSidecar {
 		if !process.persistent || (process.version != nil && installed != nil && *process.version == *installed) {
 			continue
 		}
-		sessions := 0
-		for surface := range process.surfaces {
-			if c.owners[surface] != nil {
-				sessions++
-			}
-		}
-		// A surface of a layout that has not sent in this process may hold a session that an earlier application left.
-		for surface, plugin := range c.layout {
-			if slices.Contains(c.dependents[name], plugin) && !(process.surfaces[surface] && c.owners[surface] != nil) {
-				sessions++
-			}
-		}
+		sessions := c.sessionsLocked(name, process)
 		var running *string
 		if process.version != nil {
 			version := *process.version
@@ -1221,6 +1214,24 @@ func (c *Sidecars) outdatedLocked() []OutdatedSidecar {
 	}
 	sort.Slice(list, func(i, j int) bool { return list[i].Sidecar < list[j].Sidecar })
 	return list
+}
+
+// sessionsLocked counts the sessions of the service process of the sidecar name: the open surfaces of the application that have sent
+// to it, and each surface of the layouts of a plugin that depends on it, which may hold a session that an earlier application left.
+// Call it with c.mu and c.declarations held.
+func (c *Sidecars) sessionsLocked(name string, process *sidecar) int {
+	sessions := 0
+	for surface := range process.surfaces {
+		if c.owners[surface] != nil {
+			sessions++
+		}
+	}
+	for surface, plugin := range c.layout {
+		if slices.Contains(c.dependents[name], plugin) && !(process.surfaces[surface] && c.owners[surface] != nil) {
+			sessions++
+		}
+	}
+	return sessions
 }
 
 // outdated reports whether process is a persistent service whose version differs from the installed version of its
@@ -1283,6 +1294,140 @@ func (c *Sidecars) reserveReplacementLocked(name string) (*sidecar, error) {
 	c.declarations.RUnlock()
 	c.replacing[name] = replacement{running: process.version, installed: installed, pid: process.servicePID}
 	return process, nil
+}
+
+// BeginPluginOperation holds every start of a persistent service until EndPluginOperation, so no service starts between the
+// comparison of a plugin operation with the live services and its write (docs/spec/persistent-services.md#updates). A send that
+// needs a service waits for the end of the operation.
+func (c *Sidecars) BeginPluginOperation() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.operation = make(chan struct{})
+}
+
+// EndPluginOperation lets the starts that BeginPluginOperation holds run.
+func (c *Sidecars) EndPluginOperation() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.operation != nil {
+		close(c.operation)
+		c.operation = nil
+	}
+}
+
+// RunningServices returns the version that the live service of each declared persistent sidecar runs: the hello version of its
+// connection, which an attach creates for a live service that this host has not connected; the attach starts no executable. A nil
+// version is a service that sent no version (docs/spec/persistent-services.md#updates).
+func (c *Sidecars) RunningServices() (sok.Services, error) {
+	c.declarations.RLock()
+	names := make([]string, 0, len(c.persistent))
+	for name, persistent := range c.persistent {
+		if persistent {
+			names = append(names, name)
+		}
+	}
+	c.declarations.RUnlock()
+	sort.Strings(names)
+	services := sok.Services{}
+	for _, name := range names {
+		c.mu.Lock()
+		process, _, err := c.processContext(context.Background(), name, nil, true)
+		var version *string
+		if err == nil && process.version != nil {
+			running := *process.version
+			version = &running
+		}
+		c.mu.Unlock()
+		if errors.Is(err, errNoLiveService) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		services[name] = version
+	}
+	return services, nil
+}
+
+// HeldServices returns the running version and the sessions count of the service of each sidecar of held, and reports false when no
+// connected service holds the operation any longer. The count is nil before the first list of the layouts.
+func (c *Sidecars) HeldServices(held sok.Held) ([]sok.HeldService, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.declarations.RLock()
+	defer c.declarations.RUnlock()
+	services := make([]sok.HeldService, 0, len(held.Sidecars))
+	holds := false
+	for _, sidecar := range held.Sidecars {
+		service := sok.HeldService{Sidecar: sidecar.Sidecar, Planned: sidecar.Planned, Running: sidecar.Running}
+		if process, running := c.running[sidecar.Sidecar]; running {
+			service.Running = nil
+			if process.version != nil {
+				version := *process.version
+				service.Running = &version
+			}
+			holds = holds || service.Running == nil || *service.Running != sidecar.Planned
+			if c.layout != nil {
+				sessions := c.sessionsLocked(sidecar.Sidecar, process)
+				service.Sessions = &sessions
+			}
+		}
+		services = append(services, service)
+	}
+	return services, holds
+}
+
+// EndServices ends each service that holds the plugin operation held, as a replacement ends a service: close-owner, shutdown, the
+// close of the connection and the wait for the exit of its process. The reconnection that follows starts the installed executable
+// after the plugin operation (docs/spec/persistent-services.md#updates). Before the first list of the layouts the sessions of a service
+// are not known, and it ends nothing.
+func (c *Sidecars) EndServices(ctx context.Context, held sok.Held) error {
+	c.mu.Lock()
+	known := c.layout != nil
+	c.mu.Unlock()
+	if !known {
+		return fmt.Errorf("plugin %s: the sessions of sidecar %s are not known", held.Plugin, held.Sidecars[0].Sidecar)
+	}
+	current, err := platform.Current()
+	if err != nil {
+		return err
+	}
+	for _, sidecar := range held.Sidecars {
+		c.mu.Lock()
+		process, running := c.running[sidecar.Sidecar]
+		if !running || c.stopped {
+			c.mu.Unlock()
+			if c.stopped {
+				return errors.New("sidecars are stopped")
+			}
+			continue
+		}
+		if _, replacing := c.replacing[sidecar.Sidecar]; replacing {
+			c.mu.Unlock()
+			return fmt.Errorf("sidecar %s: a replacement is running", sidecar.Sidecar)
+		}
+		c.declarations.RLock()
+		installed := c.installedLocked(sidecar.Sidecar)
+		c.declarations.RUnlock()
+		c.replacing[sidecar.Sidecar] = replacement{running: process.version, installed: installed, pid: process.servicePID}
+		c.mu.Unlock()
+		if err := c.runReplacement(ctx, sidecar.Sidecar, process); err != nil {
+			return err
+		}
+		ended, err := current.WaitServiceProcessEnd(process.servicePID, c.stopSignal)
+		if err != nil {
+			return fmt.Errorf("sidecar %s: %w", sidecar.Sidecar, err)
+		}
+		if !ended {
+			return errors.New("sidecars are stopped")
+		}
+		version := "none"
+		if process.version != nil {
+			version = *process.version
+		}
+		LogInfo("sidecar "+sidecar.Sidecar, fmt.Sprintf("service %s ended for plugin %s %s", version, held.Plugin, held.Version))
+	}
+	return nil
 }
 
 // Replacing returns the sidecars whose replacement is recorded, sorted by name. A call that replaces records each replacement
@@ -1900,11 +2045,13 @@ func (c *Sidecars) queueClose(process *sidecar, ctx context.Context, operation s
 // of a lost persistent connection that runs this start, nil for a send or a retain. While the restart limit stops the sidecar, it starts nothing;
 // a counted start failure of a persistent service can stop it (docs/spec/persistent-services.md#service-transport).
 func (c *Sidecars) process(name string, lost *revival) (process *sidecar, started bool, err error) {
-	return c.processContext(context.Background(), name, lost)
+	return c.processContext(context.Background(), name, lost, false)
 }
 
-// The caller owns c.mu. Cancellation stops only this waiter, never a shared launch.
-func (c *Sidecars) processContext(ctx context.Context, name string, lost *revival) (process *sidecar, started bool, err error) {
+// The caller owns c.mu. Cancellation stops only this waiter, never a shared launch. attach connects only to a live persistent
+// service: it starts no executable, which the error errNoLiveService reports, and neither the restart limit nor a running
+// plugin operation holds it. Any other start of a persistent service waits for the end of a running plugin operation.
+func (c *Sidecars) processContext(ctx context.Context, name string, lost *revival, attach bool) (process *sidecar, started bool, err error) {
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
@@ -1914,6 +2061,19 @@ func (c *Sidecars) processContext(ctx context.Context, name string, lost *reviva
 		}
 		if c.stopped {
 			return nil, false, errors.New("sidecars are stopped")
+		}
+		if operation := c.operation; operation != nil && !attach && c.IsPersistent(name) {
+			c.mu.Unlock()
+			LogInfo("sidecar "+name, "the start waits for the end of the plugin operation")
+			select {
+			case <-operation:
+			case <-c.stopSignal:
+			case <-ctx.Done():
+				c.mu.Lock()
+				return nil, false, ctx.Err()
+			}
+			c.mu.Lock()
+			continue
 		}
 		wait, ok := c.starting[name]
 		if !ok {
@@ -1928,13 +2088,13 @@ func (c *Sidecars) processContext(ctx context.Context, name string, lost *reviva
 		}
 		c.mu.Lock()
 	}
-	if c.restartStopped(name) {
+	if !attach && c.restartStopped(name) {
 		return nil, false, fmt.Errorf("sidecar %s: restart limit", name)
 	}
 	done := make(chan struct{})
 	c.starting[name] = done
 	c.mu.Unlock()
-	process, err = c.launch(name, lost)
+	process, err = c.launch(name, lost, attach)
 	c.mu.Lock()
 	delete(c.starting, name)
 	close(done)
@@ -1958,15 +2118,18 @@ func (c *Sidecars) processContext(ctx context.Context, name string, lost *reviva
 	return process, true, nil
 }
 
-// launch starts the sidecar name; lost is the revival that runs the start of a persistent service, or nil. Call it without the lock; it does
-// not register.
-func (c *Sidecars) launch(name string, lost *revival) (*sidecar, error) {
+// launch starts the sidecar name; lost is the revival that runs the start of a persistent service, or nil, and attach connects only to a
+// live persistent service. Call it without the lock; it does not register.
+func (c *Sidecars) launch(name string, lost *revival, attach bool) (*sidecar, error) {
 	program, persistent, ok := c.declaration(name)
 	if !ok {
 		return nil, c.undeclared(name)
 	}
 	if persistent {
-		return c.processPersistent(name, program, lost)
+		return c.processPersistent(name, program, lost, attach)
+	}
+	if attach {
+		return nil, errNoLiveService
 	}
 	// A host with a configuration directory has the folder `logs`, where a sidecar writes its event file (docs/spec/sidecars.md#log).
 	arguments := []string{}
@@ -2225,10 +2388,13 @@ func readEndpointFile(path string) ([]byte, time.Time, error) {
 	return data, info.ModTime(), file.Close()
 }
 
-// processPersistent connects to the persistent service name, and starts it when no live service has an endpoint. lost is the revival that runs
-// it, or nil: a revival that finds no live service counts the end of the service process before it spawns, and the restart limit can stop it
-// there (docs/spec/persistent-services.md#service-transport).
-func (c *Sidecars) processPersistent(name, program string, lost *revival) (*sidecar, error) {
+// errNoLiveService is the result of an attach to a sidecar without a live persistent service.
+var errNoLiveService = errors.New("no live service")
+
+// processPersistent connects to the persistent service name, and starts it when no live service has an endpoint; with attach it starts
+// none and fails with errNoLiveService. lost is the revival that runs it, or nil: a revival that finds no live service counts the end of
+// the service process before it spawns, and the restart limit can stop it there (docs/spec/persistent-services.md#service-transport).
+func (c *Sidecars) processPersistent(name, program string, lost *revival, attach bool) (*sidecar, error) {
 	serviceDir := filepath.Join(c.configDir, "services", filepath.Base(program))
 	current, err := platform.Current()
 	if err != nil {
@@ -2264,9 +2430,12 @@ func (c *Sidecars) processPersistent(name, program string, lost *revival) (*side
 			}
 			// This endpoint was left by a service that ended. Only this record, which was confirmed to be stale, is removed, and
 			// the common single creation path is entered.
-			return c.processPersistent(name, program, lost)
+			return c.processPersistent(name, program, lost, attach)
 		}
 	} else if errors.Is(err, os.ErrNotExist) {
+		if attach {
+			return nil, errNoLiveService
+		}
 		if lost != nil {
 			c.mu.Lock()
 			stopped := c.countServiceFailure(name, lost)
@@ -3086,7 +3255,15 @@ func (c *Sidecars) revivePersistent(name, loss string) {
 		if replaced.running != nil {
 			running = *replaced.running
 		}
-		LogInfo("sidecar "+name, fmt.Sprintf("service %s replaced by %s", running, *replaced.installed))
+		// A plugin operation that ended the service declared another version after the end, so the log names the version that
+		// the reconnection started.
+		c.declarations.RLock()
+		installed := "none"
+		if version := c.installedLocked(name); version != nil {
+			installed = *version
+		}
+		c.declarations.RUnlock()
+		LogInfo("sidecar "+name, fmt.Sprintf("service %s replaced by %s", running, installed))
 		c.notifyConnection(name, nil)
 		c.mu.Lock()
 		c.closingChanged()

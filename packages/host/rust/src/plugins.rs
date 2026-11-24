@@ -2,22 +2,45 @@
 //! plugin installation of the configuration folder into the installer library of the command line. Only one operation
 //! runs at a time, and it announces the change after it.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Mutex, PoisonError, TryLockError};
+use std::sync::{Arc, Mutex, PoisonError, TryLockError};
 
 use serde_json::Value;
 use soksak_sok::plugins::{
-    self, PluginActionResult, PluginsState, StartFailure, StarterJob, StarterJobRequest,
+    self, HeldOperation, HeldService, PluginActionResult, PluginsState, StartFailure, StarterJob,
+    StarterJobRequest,
 };
+use soksak_sok::service_hold::{Held, Running, Services};
 
-/// The arguments of the pluginsRun call. plugin is received without a fixed type so that a value that is not a string
-/// is rejected.
+/// The arguments of the pluginsRun call. plugin and end are received without a fixed type so that a value that is not a
+/// string, or an end other than true, is rejected.
 #[derive(Debug, serde::Deserialize)]
 pub struct RunRequest {
     pub action: String,
     pub plugin: Value,
+    #[serde(default)]
+    pub end: Option<Value>,
 }
+
+/// What a plugin operation reads and ends of the persistent services of the host (docs/spec/persistent-services.md#updates).
+/// The sidecars implement it.
+pub trait PluginServices: Send + Sync {
+    /// Holds every start of a persistent service until end_plugin_operation.
+    fn begin_plugin_operation(&self);
+    /// Lets the held starts run.
+    fn end_plugin_operation(&self);
+    /// The version that the live service of each declared persistent sidecar runs; it starts no service.
+    fn running_services(&self) -> Result<Services, String>;
+    /// The running version and the sessions count of each service of held, and whether one still holds it.
+    fn held_services(&self, held: &Held) -> (Vec<HeldService>, bool);
+    /// Ends the services that hold held and waits for the exit of their processes.
+    fn end_services(&self, held: &Held) -> Result<(), String>;
+}
+
+/// Returns the persistent services of the host, None while the host has no sidecars.
+pub type ServicesSource = Box<dyn Fn() -> Option<Arc<dyn PluginServices>> + Send + Sync>;
 
 /// The arguments of the pluginsUseRegistry call. index is received without a fixed type so that a value that is not a
 /// string is rejected.
@@ -52,6 +75,9 @@ pub struct Plugins {
     stopped: AtomicBool,
     /// The failures of the update at start, which the state reports (docs/spec/installation.md#update-at-start).
     start_failures: Mutex<Vec<StartFailure>>,
+    /// The latest held operation of each plugin, with its action.
+    held: Mutex<BTreeMap<String, (String, Held)>>,
+    services: ServicesSource,
     /// Applies an operation to the sidecars (docs/spec/installation.md#applying-a-change).
     apply: Box<dyn Fn() -> Result<(), String> + Send + Sync>,
     changed: Box<dyn Fn(Changed) + Send + Sync>,
@@ -59,8 +85,10 @@ pub struct Plugins {
 
 impl Plugins {
     /// Works with the core version and the platform of this application.
+    /// services returns the persistent services of the host, or None while it has none.
     pub fn new(
         config_dir: PathBuf,
+        services: ServicesSource,
         apply: Box<dyn Fn() -> Result<(), String> + Send + Sync>,
         changed: Box<dyn Fn(Changed) + Send + Sync>,
     ) -> Result<Plugins, String> {
@@ -71,6 +99,8 @@ impl Plugins {
             running: Mutex::new(()),
             stopped: AtomicBool::new(false),
             start_failures: Mutex::new(vec![]),
+            held: Mutex::new(BTreeMap::new()),
+            services,
             apply,
             changed,
         })
@@ -81,7 +111,9 @@ impl Plugins {
         &self.config_dir
     }
 
-    /// Returns the registry address, the checked index and the installation state.
+    /// Returns the registry address, the checked index, the installation state, the failures of the update at start and the
+    /// held operations. A held operation whose services no longer hold it is dropped
+    /// (docs/spec/persistent-services.md#updates).
     pub fn state(&self) -> Result<PluginsState, String> {
         let mut state = plugins::read_plugins_state(&self.config_dir, &self.core)?;
         state.start_update = self
@@ -89,7 +121,119 @@ impl Plugins {
             .lock()
             .map_err(|error| format!("plugin operation state: {error}"))?
             .clone();
+        let services = (self.services)();
+        let mut held = self
+            .held
+            .lock()
+            .map_err(|error| format!("plugin operation state: {error}"))?;
+        held.retain(|plugin, (action, entry)| {
+            let Some(services) = &services else {
+                return false;
+            };
+            let (sidecars, holds) = services.held_services(entry);
+            if holds {
+                state.held.push(HeldOperation {
+                    plugin: plugin.clone(),
+                    action: action.clone(),
+                    version: entry.version.clone(),
+                    error: entry.error.clone(),
+                    sidecars,
+                });
+            }
+            holds
+        });
         Ok(state)
+    }
+
+    /// Runs the installer for action on plugin with what it needs of the running services: the services are held from the
+    /// comparison to the end of the apply step, a held operation is kept for the state, and with end the services that hold
+    /// it end before installed.json is written (docs/spec/persistent-services.md#updates). stop runs the update at start. The
+    /// caller holds the operation lock.
+    fn operate(
+        &self,
+        action: &str,
+        plugin: &str,
+        end: bool,
+        stop: Option<&dyn Fn() -> bool>,
+    ) -> Operation {
+        let services =
+            (self.services)().filter(|_| matches!(action, "install" | "update" | "enable"));
+        let held_now = std::cell::Cell::new(false);
+        let keep = |held: &Held| {
+            held_now.set(true);
+            self.held
+                .lock()
+                // default: the held list stays writable after poison; the panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner)
+                .insert(plugin.to_string(), (action.to_string(), held.clone()));
+        };
+        let ending = |held: &Held| match &services {
+            Some(services) => services.end_services(held),
+            // default: without services no operation is held, so no end is asked for.
+            None => Ok(()),
+        };
+        let mut running = Running::default();
+        if let Some(services) = &services {
+            services.begin_plugin_operation();
+            match services.running_services() {
+                Ok(live) => running.services = live,
+                Err(error) => {
+                    services.end_plugin_operation();
+                    return Operation::failed(error);
+                }
+            }
+            running.held = Some(&keep);
+            if end {
+                running.end = Some(&ending);
+            }
+        }
+        let outcome = (|| {
+            let result = match stop {
+                Some(stop) => plugins::update_plugin_unless(
+                    &self.config_dir,
+                    plugin,
+                    &self.core,
+                    &self.platform,
+                    &running,
+                    stop,
+                )
+                .map(PluginActionResult::Installed),
+                None => plugins::run_plugin_action(
+                    &self.config_dir,
+                    action,
+                    plugin,
+                    &self.core,
+                    &self.platform,
+                    &running,
+                ),
+            };
+            let result = match result {
+                Ok(result) => result,
+                Err(error) => {
+                    return Operation {
+                        held: held_now.get(),
+                        ..Operation::failed(error)
+                    };
+                }
+            };
+            self.held
+                .lock()
+                // default: the held list stays writable after poison; the panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner)
+                .remove(plugin);
+            // The apply step changes the sidecars of the installation, so it does not run after the shutdown began.
+            if stop.is_some_and(|stop| stop()) {
+                return Operation::failed(STOPPING.to_string());
+            }
+            Operation {
+                result: Ok((result, (self.apply)())),
+                held: false,
+            }
+        })();
+        if let Some(services) = &services {
+            services.end_plugin_operation();
+        }
+        outcome
     }
 
     /// Sets the registry index like sok registry use <index> and returns its output.
@@ -147,6 +291,16 @@ impl Plugins {
             Some(plugin) if !plugin.is_empty() => plugin.to_string(),
             _ => return Err("plugin must be a non-empty string".to_string()),
         };
+        let end = match &request.end {
+            None => false,
+            Some(Value::Bool(true)) => {
+                if !matches!(request.action.as_str(), "install" | "update" | "enable") {
+                    return Err(format!("end does not apply to {}", request.action));
+                }
+                true
+            }
+            Some(_) => return Err("end must be true".to_string()),
+        };
         let (result, applied) = {
             let _running = match self.running.try_lock() {
                 Ok(guard) => guard,
@@ -157,15 +311,7 @@ impl Plugins {
                     return Err(format!("plugin operation state: {error}"));
                 }
             };
-            let result = plugins::run_plugin_action(
-                &self.config_dir,
-                &request.action,
-                &plugin,
-                &self.core,
-                &self.platform,
-                &Default::default(),
-            )?;
-            (result, (self.apply)())
+            self.operate(&request.action, &plugin, end, None).result?
         };
         // installed.json changed, so the windows are notified also when the apply step fails; that failure is the
         // error of the operation.
@@ -182,12 +328,30 @@ impl Plugins {
 /// The outcome of one step of the update at start (docs/spec/installation.md#update-at-start). `plugin` is the id of the plugin
 /// that the step concerns; it is empty for a step about the registry. `error` is the failure of the step, None when the plugin was
 /// updated from `from` to `to`. A value with an empty `plugin` and no `error` reports that no registry is configured.
+/// `held` reports that a running service holds the update, which stays as it is (docs/spec/persistent-services.md#updates).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct StartUpdate {
     pub plugin: String,
     pub from: String,
     pub to: String,
     pub error: Option<String>,
+    pub held: bool,
+}
+
+/// The outcome of operate: the result of the installer with the result of the apply step, which runs after a change of
+/// installed.json, or the error of the installer; and whether a running service held the operation.
+struct Operation {
+    result: Result<(PluginActionResult, Result<(), String>), String>,
+    held: bool,
+}
+
+impl Operation {
+    fn failed(error: String) -> Operation {
+        Operation {
+            result: Err(error),
+            held: false,
+        }
+    }
 }
 
 impl Plugins {
@@ -225,6 +389,7 @@ impl Plugins {
                         from: item.installed,
                         to: String::new(),
                         error: Some(item.refused),
+                        held: false,
                     }
                 } else if self.stopped.load(Ordering::SeqCst) {
                     StartUpdate {
@@ -232,6 +397,7 @@ impl Plugins {
                         from: item.installed,
                         to: String::new(),
                         error: Some(STOPPING.to_string()),
+                        held: false,
                     }
                 } else {
                     self.update_one_at_start(&item)
@@ -247,6 +413,7 @@ impl Plugins {
     fn keep_start_failures(&self, results: &[StartUpdate]) {
         let failures: Vec<StartFailure> = results
             .iter()
+            .filter(|result| !result.held)
             .filter_map(|result| {
                 let error = result.error.clone()?;
                 let r#where = if result.plugin.is_empty() {
@@ -274,29 +441,25 @@ impl Plugins {
         let mut result = StartUpdate {
             plugin: item.id.clone(),
             from: item.installed.clone(),
-            to: String::new(),
-            error: None,
+            ..StartUpdate::default()
         };
         let applied = {
             // default: the operation lock still serializes after poison; the panic hook records the panic.
             let _running = self.running.lock().unwrap_or_else(PoisonError::into_inner);
-            if let Err(error) = plugins::update_plugin_unless(
-                &self.config_dir,
+            let outcome = self.operate(
+                "update",
                 &item.id,
-                &self.core,
-                &self.platform,
-                &Default::default(),
-                &|| self.stopped.load(Ordering::SeqCst),
-            ) {
-                result.error = Some(error);
-                return result;
+                false,
+                Some(&|| self.stopped.load(Ordering::SeqCst)),
+            );
+            match outcome.result {
+                Ok((_, applied)) => applied,
+                Err(error) => {
+                    result.error = Some(error);
+                    result.held = outcome.held;
+                    return result;
+                }
             }
-            // The apply step changes the sidecars of the installation, so it does not run after the shutdown began.
-            if self.stopped.load(Ordering::SeqCst) {
-                result.error = Some(STOPPING.to_string());
-                return result;
-            }
-            (self.apply)()
         };
         (self.changed)(Changed {
             action: "update".to_string(),

@@ -124,26 +124,31 @@ func TestAnOperationOfTheHostEndsTheHoldingServiceBeforeItWritesTheState(t *test
 	useRegistry(t, config, heldRegistry(t, "0.2.0", "0.3.0"))
 	running := "0.1.0"
 	platform := mustPlatform(t)
-	held := sok.Running{Services: sok.Services{heldSidecar: &running}}
-	if _, err := sok.RunPluginAction(config, "update", "probe", "0.0.2", platform, held); err == nil ||
-		err.Error() != "plugin probe 0.3.0: sidecar "+heldSidecar+" 0.2.0 waits for the end of its running service 0.1.0" {
+	var given []sok.Held
+	held := sok.Running{Services: sok.Services{heldSidecar: &running}, Held: func(held sok.Held) { given = append(given, held) }}
+	want := "plugin probe 0.3.0: sidecar " + heldSidecar + " 0.2.0 waits for the end of its running service 0.1.0"
+	if _, err := sok.RunPluginAction(config, "update", "probe", "0.0.2", platform, held); err == nil || err.Error() != want {
 		t.Fatalf("the update of the host beside service 0.1.0 returned %v", err)
 	}
+	operation := sok.Held{Plugin: "probe", Version: "0.3.0", Sidecars: []sok.HeldSidecar{{Sidecar: heldSidecar, Planned: "0.2.0", Running: &running}}, Error: want}
+	if !reflect.DeepEqual(given, []sok.Held{operation}) {
+		t.Fatalf("the held operation was given as %+v", given)
+	}
 	// End sees the extracted releases and the earlier installed.json, so a failed end writes nothing.
-	var ended [][]string
-	held.End = func(sidecars []string) error {
+	var ended []sok.Held
+	held.End = func(operation sok.Held) error {
 		state := installedOf(t, config)
 		if state.Plugins["probe"].Version != "0.2.0" || !exists(filepath.Join(config, "plugins/probe/0.3.0")) ||
 			!exists(filepath.Join(config, "sidecars/scope-sidecar-worker/0.2.0")) {
 			t.Errorf("at the end of the service installed.json records %+v", state)
 		}
-		ended = append(ended, sidecars)
+		ended = append(ended, operation)
 		return nil
 	}
 	if _, err := sok.RunPluginAction(config, "update", "probe", "0.0.2", platform, held); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(ended, [][]string{{heldSidecar}}) {
+	if !reflect.DeepEqual(ended, []sok.Held{operation}) || len(given) != 1 {
 		t.Fatalf("the update ended the services %v", ended)
 	}
 	if version := installedOf(t, config).Sidecars[heldSidecar].Version; version != "0.2.0" {

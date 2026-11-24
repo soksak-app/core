@@ -254,31 +254,39 @@ fn status_locked<O>(core: &Core<O>, state: &State<O>) -> SidecarStatus {
                 sidecar: name.clone(),
                 running: connection.version.clone(),
                 installed,
-                sessions: process
-                    .surfaces
-                    .iter()
-                    .filter(|surface| state.owners.contains_key(*surface))
-                    .count()
-                    // A surface of a layout that has not sent in this process may hold a session that an earlier
-                    // application left.
-                    + state
-                        .layout
-                        .iter()
-                        .flatten()
-                        .filter(|(surface, plugin)| {
-                            declarations
-                                .dependents
-                                .get(name)
-                                .is_some_and(|plugins| plugins.contains(plugin))
-                                && !(process.surfaces.contains(*surface)
-                                    && state.owners.contains_key(*surface))
-                        })
-                        .count(),
+                sessions: sessions_of(state, &declarations, name, process),
             })
         })
         .collect();
     outdated.sort_by(|left, right| left.sidecar.cmp(&right.sidecar));
     SidecarStatus { closing, outdated }
+}
+
+/// The sessions of the service process of the sidecar name: the open surfaces of the application that have sent to it, and each
+/// surface of the layouts of a plugin that depends on it, which may hold a session that an earlier application left.
+fn sessions_of<O>(
+    state: &State<O>,
+    declarations: &Declarations,
+    name: &str,
+    process: &Process,
+) -> usize {
+    process
+        .surfaces
+        .iter()
+        .filter(|surface| state.owners.contains_key(*surface))
+        .count()
+        + state
+            .layout
+            .iter()
+            .flatten()
+            .filter(|(surface, plugin)| {
+                declarations
+                    .dependents
+                    .get(name)
+                    .is_some_and(|plugins| plugins.contains(plugin))
+                    && !(process.surfaces.contains(*surface) && state.owners.contains_key(*surface))
+            })
+            .count()
 }
 
 /// Handles line of the process `pid` when it is an answer to closed. It returns Ok(false) when it is not an answer,
@@ -1411,6 +1419,9 @@ struct PersistentConnection {
     service_pid: u32,
 }
 
+/// The result of an attach to a sidecar without a live persistent service.
+const NO_LIVE_SERVICE: &str = "no live service";
+
 /// The versions of a persistent service that is being replaced.
 struct Replacement {
     running: Option<String>,
@@ -1455,6 +1466,10 @@ struct State<O> {
     /// The persistent services that `replace` closes, with the running and the installed version, which the
     /// reconnection after the close writes to the log.
     replacing: HashMap<String, Replacement>,
+    /// True while a plugin operation runs. No persistent service starts then, so the comparison of the operation with the
+    /// live services holds until it writes installed.json (docs/spec/persistent-services.md#updates); its end notifies
+    /// `started`.
+    operation: bool,
     /// For the process of each stopping standard-I/O sidecar, the record that its read thread writes until the end of the
     /// output (docs/spec/sidecars.md#messages). A stop outside the quit returns before the exit, so a new process of the
     /// same sidecar may run beside the stopping one, and the record is found by the process.
@@ -2051,6 +2066,7 @@ impl<O: Owner> Sidecars<O> {
                     pending_closes: HashMap::new(),
                     unannounced_loss: std::collections::HashSet::new(),
                     replacing: HashMap::new(),
+                    operation: false,
                     stopping: HashMap::new(),
                     requests: RequestLedger::default(),
                     clock: Arc::new(Instant::now),
@@ -2647,7 +2663,7 @@ impl<O: Owner> Sidecars<O> {
         // The first start, for which no loss was announced, has no notification. When the start consumes the record of
         // an earlier connection loss, this call sends the connection notification (V5-106). If the start fails, the
         // error of this send conveys that failure to the caller.
-        let (mut state, started) = Core::ensure(&self.core, state, name, None)?;
+        let (mut state, started) = Core::ensure(&self.core, state, name, None, false)?;
         let lease = authority.map(|authority| authority.lease()).transpose()?;
         let restarted = started && state.unannounced_loss.remove(name);
         // The lock was released during the start, so the owner of the surface is checked again.
@@ -2989,6 +3005,189 @@ impl<O: Owner> Sidecars<O> {
         names
     }
 
+    /// Holds every start of a persistent service until end_plugin_operation, so no service starts between the comparison of
+    /// a plugin operation with the live services and its write (docs/spec/persistent-services.md#updates). A send that needs
+    /// a service waits for the end of the operation.
+    pub fn begin_plugin_operation(&self) {
+        self.core
+            .state
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the sidecar state, which the call amends; the
+            // panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .operation = true;
+    }
+
+    /// Lets the starts that begin_plugin_operation holds run.
+    pub fn end_plugin_operation(&self) {
+        self.core
+            .state
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the sidecar state, which the call amends; the
+            // panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .operation = false;
+        self.core.started.notify_all();
+    }
+
+    /// The version that the live service of each declared persistent sidecar runs: the hello version of its connection,
+    /// which an attach creates for a live service that this host has not connected; the attach starts no executable. None is
+    /// a service that sent no version (docs/spec/persistent-services.md#updates).
+    pub fn running_services(&self) -> Result<soksak_sok::service_hold::Services, String> {
+        let mut names: Vec<String> = {
+            let declarations = self
+                .core
+                .declarations
+                .read()
+                // default: a lock that a panicking thread poisoned still holds the sidecar declarations, which are only
+                // read; the panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner);
+            declarations
+                .persistent
+                .iter()
+                .filter(|(_, persistent)| **persistent)
+                .map(|(name, _)| name.clone())
+                .collect()
+        };
+        names.sort();
+        let mut services = soksak_sok::service_hold::Services::new();
+        for name in names {
+            let state = self
+                .core
+                .state
+                .lock()
+                // default: a lock that a panicking thread poisoned still holds the sidecar state, which the attach amends;
+                // the panic hook records the panic.
+                .unwrap_or_else(PoisonError::into_inner);
+            match Core::ensure(&self.core, state, &name, None, true) {
+                Ok((state, _)) => {
+                    let version = state.running[&name]
+                        .persistent
+                        .as_ref()
+                        .and_then(|connection| connection.version.clone());
+                    services.insert(name, version);
+                }
+                Err(error) if error == NO_LIVE_SERVICE => {}
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(services)
+    }
+
+    /// The running version and the sessions count of the service of each sidecar of held, and whether a connected service
+    /// still holds the operation. The count is None before the first list of the layouts.
+    pub fn held_services(
+        &self,
+        held: &soksak_sok::service_hold::Held,
+    ) -> (Vec<soksak_sok::plugins::HeldService>, bool) {
+        let state = self
+            .core
+            .state
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the sidecar state, which is only read; the
+            // panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner);
+        let declarations = self
+            .core
+            .declarations
+            .read()
+            // default: a lock that a panicking thread poisoned still holds the sidecar declarations, which are only read;
+            // the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner);
+        let mut holds = false;
+        let services = held
+            .sidecars
+            .iter()
+            .map(|sidecar| {
+                let mut service = soksak_sok::plugins::HeldService {
+                    sidecar: sidecar.sidecar.clone(),
+                    planned: sidecar.planned.clone(),
+                    running: sidecar.running.clone(),
+                    sessions: None,
+                };
+                if let Some(process) = state.running.get(&sidecar.sidecar)
+                    && let Some(connection) = process.persistent.as_ref()
+                {
+                    service.running = connection.version.clone();
+                    holds |= service.running.as_ref() != Some(&sidecar.planned);
+                    if state.layout.is_some() {
+                        service.sessions = Some(sessions_of(
+                            &state,
+                            &declarations,
+                            &sidecar.sidecar,
+                            process,
+                        ));
+                    }
+                }
+                service
+            })
+            .collect();
+        (services, holds)
+    }
+
+    /// Ends each service that holds the plugin operation held, as a replacement ends a service: close-owner, shutdown, the
+    /// close of the connection and the wait for the exit of its process. The reconnection that follows starts the installed
+    /// executable after the plugin operation (docs/spec/persistent-services.md#updates). Before the first list of the layouts
+    /// the sessions of a service are not known, and it ends nothing.
+    pub fn end_services(&self, held: &soksak_sok::service_hold::Held) -> Result<(), String> {
+        let known = self
+            .core
+            .state
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the sidecar state, which is only read; the
+            // panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .layout
+            .is_some();
+        if !known {
+            let first = held
+                .sidecars
+                .first()
+                .map(|sidecar| sidecar.sidecar.as_str())
+                // default: a held operation names at least one sidecar.
+                .unwrap_or_default();
+            return Err(format!(
+                "plugin {}: the sessions of sidecar {first} are not known",
+                held.plugin
+            ));
+        }
+        for sidecar in &held.sidecars {
+            let name = sidecar.sidecar.as_str();
+            let reserved = {
+                let mut state = self
+                    .core
+                    .state
+                    .lock()
+                    // default: a lock that a panicking thread poisoned still holds the sidecar state, which the call amends;
+                    // the panic hook records the panic.
+                    .unwrap_or_else(PoisonError::into_inner);
+                if state.stopped {
+                    return Err("sidecars are stopped".to_string());
+                }
+                if !state.running.contains_key(name) {
+                    continue;
+                }
+                self.reserve(&mut state, name, false)?
+            };
+            let (handles, running, pid) = reserved;
+            self.run_replacement(name, handles)?;
+            if !current()?.wait_service_process_end(pid, &self.core.stop_signal)? {
+                return Err("sidecars are stopped".to_string());
+            }
+            crate::application_log::log_info(
+                &format!("sidecar {name}"),
+                format!(
+                    "service {} ended for plugin {} {}",
+                    // default: a service that sent no version has none to name.
+                    running.as_deref().unwrap_or("none"),
+                    held.plugin,
+                    held.version
+                ),
+            );
+        }
+        Ok(())
+    }
+
     /// Records the replacement of the persistent service of the sidecar name, which a replacement that is already
     /// recorded or a service that is not outdated refuses, and returns the handles of its connection. The caller holds
     /// the state lock.
@@ -2997,6 +3196,19 @@ impl<O: Owner> Sidecars<O> {
         state: &mut State<O>,
         name: &str,
     ) -> Result<ReplaceHandles, String> {
+        self.reserve(state, name, true)
+            .map(|(handles, _, _)| handles)
+    }
+
+    /// Records the replacement of the persistent service of the sidecar name and returns the handles of its connection, its
+    /// running version and the process of its endpoint. A recorded replacement refuses it, and with outdated a service that is
+    /// not outdated does too. The caller holds the state lock.
+    fn reserve(
+        &self,
+        state: &mut State<O>,
+        name: &str,
+        outdated: bool,
+    ) -> Result<(ReplaceHandles, Option<String>, u32), String> {
         let refused = || {
             format!("sidecar {name}: no running service of another version than the installed one")
         };
@@ -3004,7 +3216,7 @@ impl<O: Owner> Sidecars<O> {
             return Err(refused());
         }
         let process = state.running.get(name).ok_or_else(refused)?;
-        if !is_outdated(&self.core, name, process) {
+        if outdated && !is_outdated(&self.core, name, process) {
             return Err(refused());
         }
         let Some(connection) = process.persistent.as_ref() else {
@@ -3026,12 +3238,12 @@ impl<O: Owner> Sidecars<O> {
         state.replacing.insert(
             name.to_string(),
             Replacement {
-                running,
+                running: running.clone(),
                 installed: self.core.installed(name),
                 pid: service_pid,
             },
         );
-        Ok(handles)
+        Ok((handles, running, service_pid))
     }
 
     /// Closes the owner of the recorded replacement of name and its connection; a failed close drops the record.
@@ -3242,7 +3454,7 @@ impl<O: Owner> Sidecars<O> {
                             return Err(format!("sidecar {name}: read endpoint: {error}"));
                         }
                     }
-                    state = Core::ensure(&self.core, state, &name, None)?.0;
+                    state = Core::ensure(&self.core, state, &name, None, false)?.0;
                 }
             }
             // The hook runs after the service started and before the sessions to keep are read, so a session first sent during
@@ -3394,7 +3606,7 @@ impl<O: Owner> Sidecars<O> {
                         return Err(format!("sidecar {sidecar}: read endpoint: {error}"));
                     }
                 }
-                state = Core::ensure(&self.core, state, sidecar, None)?.0;
+                state = Core::ensure(&self.core, state, sidecar, None, false)?.0;
             }
             let process = state
                 .running
@@ -3637,8 +3849,9 @@ impl<O: Owner> Sidecars<O> {
                 .unwrap_or_else(PoisonError::into_inner);
             state.stopped = true;
             // The stop ends the waits that no time limit ends: a start waits for the endpoint line and the hello, and a
-            // replacement for the end of the replaced process.
+            // replacement for the end of the replaced process. A start that waits for the end of a plugin operation ends too.
             self.core.stop_signal.stop();
+            self.core.started.notify_all();
             // The host stops before the pending image detaches are acknowledged.
             image_detach::release_image_detaches(&mut state.image_detaches, false, |_| true);
             // The stop waits for no start: a start that ends after this registers nothing and stops its own process
@@ -3927,19 +4140,45 @@ impl<O: Owner> Core<O> {
     /// a persistent service, so it is done with the lock released. Meanwhile requests of other sidecars do not wait,
     /// and requests of the same sidecar wait for that start to end. The second value is whether this call started it.
     /// lost is the revival of a lost persistent connection that runs this start, None for a send or a retain. While the
-    /// restart limit stops the sidecar, it starts nothing (docs/spec/persistent-services.md#service-transport).
+    /// restart limit stops the sidecar, it starts nothing (docs/spec/persistent-services.md#service-transport). attach connects
+    /// only to a live persistent service: it starts no executable, which the error NO_LIVE_SERVICE reports, and neither the
+    /// restart limit nor a running plugin operation holds it. Any other start of a persistent service waits for the end of a
+    /// running plugin operation.
     fn ensure<'a>(
         core: &'a Arc<Self>,
         mut state: MutexGuard<'a, State<O>>,
         name: &str,
         lost: Option<&Revival>,
+        attach: bool,
     ) -> Result<(MutexGuard<'a, State<O>>, bool), String> {
+        let mut waited = false;
         loop {
             if state.running.contains_key(name) {
                 return Ok((state, false));
             }
             if state.stopped {
                 return Err("sidecars are stopped".into());
+            }
+            if state.operation
+                && !attach
+                && core
+                    .declaration(name)
+                    .is_some_and(|(_, persistent)| persistent)
+            {
+                if !waited {
+                    waited = true;
+                    crate::application_log::log_info(
+                        &format!("sidecar {name}"),
+                        "the start waits for the end of the plugin operation",
+                    );
+                }
+                state = core
+                    .started
+                    .wait(state)
+                    // default: a wait that a poisoned lock ends still returns the guard of the sidecar state, which the
+                    // start amends; the panic hook records the panic.
+                    .unwrap_or_else(PoisonError::into_inner);
+                continue;
             }
             if !state.starting.contains(name) {
                 break;
@@ -3951,12 +4190,12 @@ impl<O: Owner> Core<O> {
                 // start amends; the panic hook records the panic.
                 .unwrap_or_else(PoisonError::into_inner);
         }
-        if restart_stopped(&state, name) {
+        if !attach && restart_stopped(&state, name) {
             return Err(format!("sidecar {name}: restart limit"));
         }
         state.starting.insert(name.to_string());
         drop(state);
-        let started = Self::start(core, name, lost);
+        let started = Self::start(core, name, lost, attach);
         // default: a lock that a panicking thread poisoned still holds the sidecar state, which the start amends; the
         // panic hook records the panic.
         let mut state = core.state.lock().unwrap_or_else(PoisonError::into_inner);
@@ -3994,14 +4233,23 @@ impl<O: Owner> Core<O> {
 
     /// Starts a sidecar. A persistent declaration attaches to the service, and otherwise it is started as a child
     /// process of the window. The write and read threads are returned so that they are started after the registration.
-    /// lost is the revival that runs the start of a persistent service, or None.
-    fn start(core: &Arc<Self>, name: &str, lost: Option<&Revival>) -> Result<Started, String> {
+    /// lost is the revival that runs the start of a persistent service, or None, and attach connects only to a live
+    /// persistent service.
+    fn start(
+        core: &Arc<Self>,
+        name: &str,
+        lost: Option<&Revival>,
+        attach: bool,
+    ) -> Result<Started, String> {
         let (program, persistent) = core
             .declaration(name)
             .ok_or_else(|| core.undeclared(name))?;
         // default: a sidecar that did not declare persistent runs for each window.
         if persistent {
-            return Self::start_persistent(core, name, &program, lost);
+            return Self::start_persistent(core, name, &program, lost, attach);
+        }
+        if attach {
+            return Err(NO_LIVE_SERVICE.to_string());
         }
         let mut threads: Vec<Thread> = Vec::new();
         let mut command = Command::new(&program);
@@ -4166,6 +4414,7 @@ impl<O: Owner> Core<O> {
         name: &str,
         program: &Path,
         lost: Option<&Revival>,
+        attach: bool,
     ) -> Result<Started, String> {
         #[derive(Deserialize)]
         struct Endpoint {
@@ -4205,11 +4454,14 @@ impl<O: Owner> Core<O> {
                         .map_err(|e| format!("sidecar {name}: remove stale endpoint: {e}"))?;
                     // It re-enters the only creation path. A stale endpoint is an explicit crash recovery case and not
                     // a fallback transport.
-                    return Self::start_persistent(core, name, program, lost);
+                    return Self::start_persistent(core, name, program, lost, attach);
                 }
                 endpoint
             }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                if attach {
+                    return Err(NO_LIVE_SERVICE.to_string());
+                }
                 if lost.is_some() {
                     // default: a lock that a panicking thread poisoned still holds the restart-limit records, which the
                     // count amends; the panic hook records the panic.
@@ -5000,8 +5252,10 @@ fn revive_persistent<O: Owner>(core: &Arc<Core<O>>, name: &str, loss: &str) {
                 &format!("sidecar {name}"),
                 format!(
                     "service {running} replaced by {}",
+                    // A plugin operation that ended the service declared another version after the end, so the log names
+                    // the version that the reconnection started.
                     // default: a replacement of an undeclared sidecar ends in end_undeclared_replacement and starts nothing.
-                    replaced.installed.as_deref().unwrap_or("none")
+                    core.installed(name).as_deref().unwrap_or("none")
                 ),
             );
             let state = core
@@ -5142,7 +5396,7 @@ fn revive_attempt<O: Owner>(
     if state.stopped || state.running.contains_key(name) || restart_stopped(&state, name) {
         return Ok(false);
     }
-    let (mut state, started) = Core::ensure(core, state, name, Some(lost))?;
+    let (mut state, started) = Core::ensure(core, state, name, Some(lost), false)?;
     Ok(started && state.unannounced_loss.remove(name))
 }
 
@@ -5795,6 +6049,36 @@ fn try_handle_image_envelope<O: Owner>(
 /// The window used by the sidecar channel. It is distinguished by the window label and uses the project directory of
 /// the window as root.
 pub type WindowSidecars = Sidecars<Window>;
+
+impl<O: Owner + Send + Sync + 'static> Sidecars<O> {
+    /// The plugin operations' view of these sidecars, which shares their state (docs/spec/persistent-services.md#updates).
+    pub fn plugin_services(&self) -> Arc<dyn crate::plugins::PluginServices> {
+        Arc::new(Sidecars {
+            core: Arc::clone(&self.core),
+        })
+    }
+}
+
+impl<O: Owner + Send + Sync + 'static> crate::plugins::PluginServices for Sidecars<O> {
+    fn begin_plugin_operation(&self) {
+        Sidecars::begin_plugin_operation(self);
+    }
+    fn end_plugin_operation(&self) {
+        Sidecars::end_plugin_operation(self);
+    }
+    fn running_services(&self) -> Result<soksak_sok::service_hold::Services, String> {
+        Sidecars::running_services(self)
+    }
+    fn held_services(
+        &self,
+        held: &soksak_sok::service_hold::Held,
+    ) -> (Vec<soksak_sok::plugins::HeldService>, bool) {
+        Sidecars::held_services(self, held)
+    }
+    fn end_services(&self, held: &soksak_sok::service_hold::Held) -> Result<(), String> {
+        Sidecars::end_services(self, held)
+    }
+}
 
 /// Returns the performance trace event of an answer to a frame of the surface: the image name and the answer as the
 /// sidecar receives it, whether the frame was consumed or refused.

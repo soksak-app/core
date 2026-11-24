@@ -113,6 +113,7 @@ fn new_plugins(config: &Path) -> (Plugins, Arc<Mutex<Vec<Changed>>>) {
     let sink = seen.clone();
     let plugins = Plugins::new(
         config.to_path_buf(),
+        Box::new(|| None),
         Box::new(|| Ok(())),
         Box::new(move |change| sink.lock().unwrap().push(change)),
     )
@@ -124,6 +125,7 @@ fn request(action: &str, plugin: Value) -> RunRequest {
     RunRequest {
         action: action.to_string(),
         plugin,
+        end: None,
     }
 }
 
@@ -139,7 +141,7 @@ fn plugins_state_reports_the_registry_and_the_installation() {
     assert_eq!(
         state_text(&plugins),
         format!(
-            r#"{{"core":"{}","registry":null,"index":null,"installed":{{"format":3,"plugins":{{}},"sidecars":{{}}}},"firstRun":true,"starter":null}}"#,
+            r#"{{"core":"{}","registry":null,"index":null,"installed":{{"format":3,"plugins":{{}},"sidecars":{{}}}},"firstRun":true,"starter":null,"held":[]}}"#,
             soksak_sok::version::CORE_VERSION
         )
     );
@@ -282,6 +284,7 @@ fn plugins_run_applies_the_change_before_it_notifies() {
     let (applied, changed) = (steps.clone(), steps.clone());
     let plugins = Plugins::new(
         config.path().to_path_buf(),
+        Box::new(|| None),
         Box::new(move || {
             applied.lock().unwrap().push("apply".to_string());
             Ok(())

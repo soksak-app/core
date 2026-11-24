@@ -12,15 +12,36 @@ use crate::install::InstalledState;
 /// caller does not read, as on the command line.
 pub type Services = BTreeMap<String, Option<String>>;
 
-/// The end of the live services of the named sidecars, which hold an operation.
-pub type End<'a> = &'a dyn Fn(&[String]) -> Result<(), String>;
+/// A persistent sidecar whose live service holds a plugin operation: planned is the version that the operation plans, and
+/// running the version that the service runs, None when the caller does not read it.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct HeldSidecar {
+    pub sidecar: String,
+    pub planned: String,
+    pub running: Option<String>,
+}
 
-/// What a plugin operation knows of the running services. `end` ends the services that hold the operation after the releases
-/// are extracted and before installed.json is written; None holds the operation.
+/// A held plugin operation: the plugin, its planned version, the sidecars whose services hold it in name order and the error of
+/// the hold, which names the first (docs/spec/persistent-services.md#updates).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Held {
+    pub plugin: String,
+    pub version: String,
+    pub sidecars: Vec<HeldSidecar>,
+    pub error: String,
+}
+
+/// The end of the services of a held operation.
+pub type End<'a> = &'a dyn Fn(&Held) -> Result<(), String>;
+
+/// What a plugin operation knows of the running services. `end` ends the services of a held operation after the releases are
+/// extracted and before installed.json is written; None holds the operation before it extracts anything, and `held`, when it is
+/// set, receives the held operation before the operation fails with its error.
 #[derive(Default)]
 pub struct Running<'a> {
     pub services: Services,
     pub end: Option<End<'a>>,
+    pub held: Option<&'a dyn Fn(&Held)>,
 }
 
 /// The version that state records for each sidecar, read before a plan changes state.
@@ -32,72 +53,79 @@ pub(crate) fn recorded_versions(state: &InstalledState) -> BTreeMap<String, Stri
         .collect()
 }
 
-/// The sidecars, in name order, whose live service holds the operation of plugin id that leads to the planned state, with the
-/// error of the first: a persistent sidecar that an enabled plugin of state names and whose live service runs another version
-/// than state plans, or, for a service whose version is not read, a sidecar whose planned version differs from the version that
-/// recorded holds.
+/// The operation of plugin id that leads to the planned state when a live service holds it, and None otherwise: the service of
+/// a persistent sidecar that an enabled plugin of state names holds it when it runs another version than state plans, or, for a
+/// service whose version is not read, when the planned version differs from the version that recorded holds.
 pub(crate) fn held_by(
     id: &str,
     state: &InstalledState,
     recorded: &BTreeMap<String, String>,
     services: &Services,
-) -> (Vec<String>, Option<String>) {
+) -> Option<Held> {
     let named: BTreeSet<&String> = state
         .plugins
         .values()
         .filter(|plugin| plugin.enabled)
         .flat_map(|plugin| plugin.sidecars.keys())
         .collect();
-    let mut held = Vec::new();
-    let mut first = None;
+    let mut sidecars = Vec::new();
     for name in named {
         let Some(running) = services.get(name) else {
             continue;
         };
-        // default: a sidecar that an enabled plugin names has a version in the planned state; none plans no version.
         let planned = state
             .sidecars
             .get(name)
-            .map(|sidecar| sidecar.version.as_str())
+            .map(|sidecar| sidecar.version.clone())
+            // default: a sidecar that an enabled plugin names has a version in the planned state; none plans no version.
             .unwrap_or_default();
         let unchanged = match running {
-            Some(running) => running == planned,
-            None => recorded.get(name).map(String::as_str) == Some(planned),
+            Some(running) => *running == planned,
+            None => recorded.get(name) == Some(&planned),
         };
-        if unchanged {
-            continue;
-        }
-        held.push(name.clone());
-        if first.is_none() {
-            first = Some(format!(
-                "plugin {id} {}: sidecar {name} {planned} waits for the end of its running service {}",
-                state
-                    .plugins
-                    .get(id)
-                    .map(|plugin| plugin.version.as_str())
-                    .unwrap_or_default(),
-                running.as_deref().unwrap_or("unknown")
-            ));
+        if !unchanged {
+            sidecars.push(HeldSidecar {
+                sidecar: name.clone(),
+                planned,
+                running: running.clone(),
+            });
         }
     }
-    (held, first)
+    let first = sidecars.first()?;
+    let version = state
+        .plugins
+        .get(id)
+        .map(|plugin| plugin.version.clone())
+        // default: the plugin of the operation is in its planned state.
+        .unwrap_or_default();
+    let error = format!(
+        "plugin {id} {version}: sidecar {} {} waits for the end of its running service {}",
+        first.sidecar,
+        first.planned,
+        // default: a service whose hello reported no version runs a version that is not known.
+        first.running.as_deref().unwrap_or("unknown")
+    );
+    Some(Held {
+        plugin: id.to_string(),
+        version,
+        sidecars,
+        error,
+    })
 }
 
-/// Ends the services of held through running.end before the planned state is written, or returns the error of the hold when
-/// the operation has no end.
-pub(crate) fn end_held(
-    held: &[String],
-    holding: Option<String>,
-    running: &Running<'_>,
-) -> Result<(), String> {
-    if held.is_empty() {
+/// Ends the services of a held operation through running.end before the planned state is written, or, without an end, gives the
+/// operation to running.held and returns the error of the hold.
+pub(crate) fn end_held(held: Option<&Held>, running: &Running<'_>) -> Result<(), String> {
+    let Some(held) = held else {
         return Ok(());
+    };
+    if let Some(end) = running.end {
+        return end(held);
     }
-    match running.end {
-        Some(end) => end(held),
-        // default: a hold always carries the error of its first sidecar.
-        None => Err(holding.unwrap_or_default()),
+    if let Some(give) = running.held {
+        give(held);
     }
+    Err(held.error.clone())
 }
 
 /// The live services of the persistent sidecars that state records: the service of a sidecar is live when the endpoint.json in
@@ -119,9 +147,9 @@ pub fn live_services(config_dir: &Path, state: &InstalledState) -> Result<Servic
         if declaration.transport != "persistent" {
             continue;
         }
-        // default: an executable path without a final component names no service folder, which holds no endpoint.
         let executable = Path::new(&declaration.executable)
             .file_name()
+            // default: an executable path without a final component names no service folder, which holds no endpoint.
             .unwrap_or_default();
         let endpoint = config_dir
             .join("services")

@@ -3961,3 +3961,145 @@ fn a_persistent_line_is_decoded_once_before_its_dispatch() {
         "the line, the body and the member image are decoded once each: {failures:?}"
     );
 }
+
+/// The update of plugin probe to 0.3.0 that the service of the replace fixture, which runs 0.0.6, holds.
+fn held_by_fixture() -> soksak_sok::service_hold::Held {
+    soksak_sok::service_hold::Held {
+        plugin: "probe".to_string(),
+        version: "0.3.0".to_string(),
+        sidecars: vec![soksak_sok::service_hold::HeldSidecar {
+            sidecar: ECHO.to_string(),
+            planned: "0.0.8".to_string(),
+            running: Some("0.0.6".to_string()),
+        }],
+        error: format!(
+            "plugin probe 0.3.0: sidecar {ECHO} 0.0.8 waits for the end of its running service 0.0.6"
+        ),
+    }
+}
+
+// contract: sidecars-transport.plugin-operation.reads-the-running-version-without-a-start
+#[test]
+fn the_running_services_attach_to_a_live_service_and_start_none() {
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
+    let service = serve_replace_service(
+        config_directory.path(),
+        executable_directory.path(),
+        "0.0.6",
+        "0.0.7",
+        Duration::ZERO,
+        0,
+    );
+    let sidecars = replace_sidecars(config_directory.path(), executable_directory.path());
+    assert_eq!(
+        sidecars.running_services().unwrap(),
+        soksak_sok::service_hold::Services::from([(ECHO.to_string(), Some("0.0.6".to_string()))])
+    );
+    assert_eq!(*service.operations.lock().unwrap(), ["hello"]);
+    sidecars.stop();
+    // A sidecar without a live service has none, and the attach starts no executable for it.
+    let empty = folder::Folder::new();
+    let unstarted = replace_sidecars(empty.path(), executable_directory.path());
+    assert_eq!(
+        unstarted.running_services().unwrap(),
+        soksak_sok::service_hold::Services::new()
+    );
+    assert!(!empty.path().join("services/echo/endpoint.json").exists());
+    unstarted.stop();
+}
+
+// contract: sidecars-transport.plugin-operation.ends-the-holding-service-and-holds-its-start
+#[test]
+fn a_plugin_operation_ends_the_holding_service_and_starts_the_next_after_it() {
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
+    let writer = records::start_writer(config_directory.path());
+    let mut service = serve_replace_service(
+        config_directory.path(),
+        executable_directory.path(),
+        "0.0.6",
+        "0.0.8",
+        Duration::ZERO,
+        0,
+    );
+    let sidecars = replace_sidecars(config_directory.path(), executable_directory.path());
+    let (owner, events) = owner("replace", "/projects/replace");
+    sidecars
+        .send_as(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
+        .unwrap();
+    events.recv().unwrap();
+    let held = held_by_fixture();
+    // Before the first list of the layouts the sessions of the service are not known, so the operation ends nothing.
+    let (services, holds) = sidecars.held_services(&held);
+    assert!(holds && services[0].sessions.is_none(), "{services:?}");
+    assert_eq!(
+        sidecars.end_services(&held),
+        Err(format!(
+            "plugin probe: the sessions of sidecar {ECHO} are not known"
+        ))
+    );
+    sidecars
+        .retain_sessions(&[layout_surface("surface-1")])
+        .unwrap();
+    let (services, holds) = sidecars.held_services(&held);
+    assert!(holds && services[0].sessions == Some(1), "{services:?}");
+    sidecars.begin_plugin_operation();
+    sidecars.end_services(&held).unwrap();
+    assert_eq!(
+        *service.operations.lock().unwrap(),
+        ["hello", "", "retain", "close-owner", "shutdown"]
+    );
+    // The reconnection waits for the end of the operation, so the installed service starts after it: the first of the
+    // waiting record and the start of the installed service decides the check.
+    let (first, order) = channel();
+    let waited = first.clone();
+    let (writer_handle, config) = (Arc::clone(&writer), config_directory.path().to_path_buf());
+    thread::spawn(move || {
+        records::await_text(
+            &writer_handle,
+            &config,
+            &format!("sidecar {ECHO}: the start waits for the end of the plugin operation"),
+        );
+        // The check stopped waiting after the first event, so no one receives a later one.
+        let _ = waited.send("waits");
+    });
+    let second = std::mem::replace(&mut service.second, channel().1);
+    let (started_sender, started) = channel();
+    thread::spawn(move || {
+        if let Ok(time) = second.recv() {
+            let _ = started_sender.send(time);
+            let _ = first.send("started");
+        }
+    });
+    assert_eq!(
+        order.recv().unwrap(),
+        "waits",
+        "a service started during the plugin operation"
+    );
+    sidecars.end_plugin_operation();
+    started.recv().unwrap();
+    let notice = events.recv().unwrap();
+    let event: serde_json::Value = serde_json::from_str(notice.body.get()).unwrap();
+    assert_eq!(
+        (event["event"].as_str(), event["connected"].as_bool()),
+        (Some("connection"), Some(true))
+    );
+    let log = records::records_text(config_directory.path(), &writer);
+    let ended = format!("sidecar {ECHO}: service 0.0.6 ended for plugin probe 0.3.0");
+    assert!(log.contains(&ended), "the log has no {ended:?}: {log}");
+    let planned = soksak_sok::service_hold::Held {
+        sidecars: vec![soksak_sok::service_hold::HeldSidecar {
+            sidecar: ECHO.to_string(),
+            planned: "0.0.8".to_string(),
+            running: None,
+        }],
+        ..held
+    };
+    let (services, holds) = sidecars.held_services(&planned);
+    assert!(
+        !holds,
+        "the service of the planned version still holds: {services:?}"
+    );
+    sidecars.stop();
+}

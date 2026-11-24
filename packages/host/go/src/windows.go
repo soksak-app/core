@@ -164,7 +164,14 @@ func newHost(directory string, quit *Quit) (*Host, error) {
 		}
 		return h.sidecars.Declare(declarations)
 	}
-	plugins, err := NewPlugins(directory, apply, h.notifyPlugins)
+	// The sidecars exist after Prepare; a host without them has no persistent service.
+	services := func() PluginServices {
+		if h.sidecars == nil {
+			return nil
+		}
+		return h.sidecars
+	}
+	plugins, err := NewPlugins(directory, services, apply, h.notifyPlugins)
 	if err != nil {
 		return nil, err
 	}

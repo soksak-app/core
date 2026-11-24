@@ -172,6 +172,28 @@ type PluginsState struct {
 	Starter  *StarterJob `json:"starter"`
 	// StartUpdate lists the failures of the update at start that the host keeps (docs/spec/installation.md#update-at-start).
 	StartUpdate []StartFailure `json:"startUpdate,omitempty"`
+	// Held lists the latest held operation of each plugin that the host keeps, sorted by plugin
+	// (docs/spec/persistent-services.md#updates).
+	Held []HeldOperation `json:"held"`
+}
+
+// HeldOperation is a held plugin operation as pluginsState reports it: the action, the planned version of the plugin, the error
+// of the hold and the services that hold it.
+type HeldOperation struct {
+	Plugin   string        `json:"plugin"`
+	Action   string        `json:"action"`
+	Version  string        `json:"version"`
+	Error    string        `json:"error"`
+	Sidecars []HeldService `json:"sidecars"`
+}
+
+// HeldService is a service that holds an operation: the planned and the running version of its sidecar and the sessions count
+// of the service, nil before the host lists the layouts.
+type HeldService struct {
+	Sidecar  string  `json:"sidecar"`
+	Planned  string  `json:"planned"`
+	Running  *string `json:"running"`
+	Sessions *int    `json:"sessions"`
 }
 
 // StartFailure is one failure of the update at start: where is the place of its record and text is its content.
@@ -224,7 +246,7 @@ func ReadPluginsState(configDir, core string) (*PluginsState, error) {
 	if statErr != nil && !errors.Is(statErr, fs.ErrNotExist) {
 		return nil, fileError(path, statErr)
 	}
-	state := &PluginsState{Core: core, Installed: installed, FirstRun: statErr != nil, Starter: starter}
+	state := &PluginsState{Core: core, Installed: installed, FirstRun: statErr != nil, Starter: starter, Held: []HeldOperation{}}
 	url, exists, err := readRegistryURL(configDir)
 	switch {
 	case err != nil:
@@ -605,9 +627,9 @@ func installPlugin(configDir, id, core, platform string, update bool, running Ru
 	}
 	// A plan that changes the version of a sidecar whose service runs extracts nothing unless the host ends that service
 	// (docs/spec/persistent-services.md#updates).
-	held, holding := heldBy(id, state, recorded, running.Services)
-	if len(held) > 0 && running.End == nil {
-		return nil, holding
+	held := heldBy(id, state, recorded, running.Services)
+	if held != nil && running.End == nil {
+		return nil, endHeld(held, running)
 	}
 	if stopped() {
 		return nil, errStopped
@@ -649,7 +671,7 @@ func installPlugin(configDir, id, core, platform string, update bool, running Ru
 	if stopped() {
 		return nil, errStopped
 	}
-	if err := endHeld(held, holding, running); err != nil {
+	if err := endHeld(held, running); err != nil {
 		return nil, err
 	}
 	if err := writeInstalled(configDir, state); err != nil {
@@ -1172,8 +1194,7 @@ func ChangePlugin(configDir, id, action string, running Running) (any, error) {
 		state.Plugins[id] = plugin
 	}
 	if action == "enable" {
-		held, holding := heldBy(id, state, recordedVersions(state), running.Services)
-		if err := endHeld(held, holding, running); err != nil {
+		if err := endHeld(heldBy(id, state, recordedVersions(state), running.Services), running); err != nil {
 			return nil, err
 		}
 	}

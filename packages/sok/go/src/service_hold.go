@@ -19,11 +19,30 @@ import (
 // whose version the caller does not read, as on the command line (docs/spec/persistent-services.md#updates).
 type Services map[string]*string
 
-// Running is what a plugin operation knows of the running services. End ends the live services of the named sidecars, which hold
-// the operation, after the releases are extracted and before installed.json is written; a nil End holds the operation.
+// HeldSidecar is a persistent sidecar whose live service holds a plugin operation: Planned is the version that the operation
+// plans, and Running the version that the service runs, nil when the caller does not read it.
+type HeldSidecar struct {
+	Sidecar string  `json:"sidecar"`
+	Planned string  `json:"planned"`
+	Running *string `json:"running"`
+}
+
+// Held is a held plugin operation: the plugin, its planned version, the sidecars whose services hold it in name order and the
+// error of the hold, which names the first (docs/spec/persistent-services.md#updates).
+type Held struct {
+	Plugin   string
+	Version  string
+	Sidecars []HeldSidecar
+	Error    string
+}
+
+// Running is what a plugin operation knows of the running services. End ends the services of a held operation after the releases
+// are extracted and before installed.json is written; a nil End holds the operation before it extracts anything, and Held, when it
+// is set, receives the held operation before the operation fails with its error.
 type Running struct {
 	Services Services
-	End      func(sidecars []string) error
+	End      func(held Held) error
+	Held     func(held Held)
 }
 
 // recordedVersions holds the version that state records for each sidecar, read before a plan changes state.
@@ -35,11 +54,10 @@ func recordedVersions(state *InstalledState) map[string]string {
 	return versions
 }
 
-// heldBy returns the sidecars, in name order, whose live service holds the operation of plugin id that leads to the planned
-// state, with the error of the first: a persistent sidecar that an enabled plugin of state names and whose live service runs
-// another version than state plans, or, for a service whose version is not read, a sidecar whose planned version differs from
-// the version that recorded holds (docs/spec/persistent-services.md#updates).
-func heldBy(id string, state *InstalledState, recorded map[string]string, services Services) ([]string, error) {
+// heldBy returns the operation of plugin id that leads to the planned state when a live service holds it, and nil otherwise: the
+// service of a persistent sidecar that an enabled plugin of state names holds it when it runs another version than state plans,
+// or, for a service whose version is not read, when the planned version differs from the version that recorded holds.
+func heldBy(id string, state *InstalledState, recorded map[string]string, services Services) *Held {
 	named := map[string]bool{}
 	for _, plugin := range state.Plugins {
 		if !plugin.Enabled {
@@ -49,42 +67,44 @@ func heldBy(id string, state *InstalledState, recorded map[string]string, servic
 			named[name] = true
 		}
 	}
-	var held []string
-	var first error
+	var sidecars []HeldSidecar
 	for _, name := range slices.Sorted(maps.Keys(named)) {
 		running, live := services[name]
 		if !live {
 			continue
 		}
 		planned := state.Sidecars[name].Version
-		shown := "unknown"
-		if running != nil {
-			shown = *running
-			if *running == planned {
-				continue
-			}
-		} else if recorded[name] == planned {
+		if running != nil && *running == planned || running == nil && recorded[name] == planned {
 			continue
 		}
-		held = append(held, name)
-		if first == nil {
-			first = fmt.Errorf("plugin %s %s: sidecar %s %s waits for the end of its running service %s",
-				id, state.Plugins[id].Version, name, planned, shown)
-		}
+		sidecars = append(sidecars, HeldSidecar{Sidecar: name, Planned: planned, Running: running})
 	}
-	return held, first
-}
-
-// endHeld ends the services of held through running.End before the planned state is written, or returns the error of the hold
-// when the operation has no End.
-func endHeld(held []string, holding error, running Running) error {
-	if len(held) == 0 {
+	if len(sidecars) == 0 {
 		return nil
 	}
-	if running.End == nil {
-		return holding
+	first := sidecars[0]
+	shown := "unknown"
+	if first.Running != nil {
+		shown = *first.Running
 	}
-	return running.End(held)
+	version := state.Plugins[id].Version
+	return &Held{Plugin: id, Version: version, Sidecars: sidecars, Error: fmt.Sprintf(
+		"plugin %s %s: sidecar %s %s waits for the end of its running service %s", id, version, first.Sidecar, first.Planned, shown)}
+}
+
+// endHeld ends the services of a held operation through running.End before the planned state is written, or, without an End, gives
+// the operation to running.Held and returns the error of the hold.
+func endHeld(held *Held, running Running) error {
+	if held == nil {
+		return nil
+	}
+	if running.End != nil {
+		return running.End(*held)
+	}
+	if running.Held != nil {
+		running.Held(*held)
+	}
+	return errors.New(held.Error)
 }
 
 // LiveServices reads the live services of the persistent sidecars that state records: the service of a sidecar is live when the

@@ -147,6 +147,30 @@ pub struct PluginsState {
     /// The failures of the update at start that the host keeps (docs/spec/installation.md#update-at-start).
     #[serde(rename = "startUpdate", skip_serializing_if = "Vec::is_empty")]
     pub start_update: Vec<StartFailure>,
+    /// The latest held operation of each plugin that the host keeps, sorted by plugin
+    /// (docs/spec/persistent-services.md#updates).
+    pub held: Vec<HeldOperation>,
+}
+
+/// A held plugin operation as pluginsState reports it: the action, the planned version of the plugin, the error of the hold
+/// and the services that hold it.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct HeldOperation {
+    pub plugin: String,
+    pub action: String,
+    pub version: String,
+    pub error: String,
+    pub sidecars: Vec<HeldService>,
+}
+
+/// A service that holds an operation: the planned and the running version of its sidecar and the sessions count of the
+/// service, None before the host lists the layouts.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct HeldService {
+    pub sidecar: String,
+    pub planned: String,
+    pub running: Option<String>,
+    pub sessions: Option<usize>,
 }
 
 /// One failure of the update at start: `where` is the place of its record and `text` its content.
@@ -230,6 +254,7 @@ pub fn read_plugins_state(config_dir: &Path, core: &str) -> Result<PluginsState,
         first_run,
         starter,
         start_update: vec![],
+        held: vec![],
     })
 }
 
@@ -758,9 +783,9 @@ fn install_plugin_unless(
     }
     // A plan that changes the version of a sidecar whose service runs extracts nothing unless the host ends that service
     // (docs/spec/persistent-services.md#updates).
-    let (held, holding) = held_by(id, &state, &recorded, &running.services);
-    if !held.is_empty() && running.end.is_none() {
-        return end_held(&held, holding, running).map(|()| plugin_result(&state, id));
+    let held = held_by(id, &state, &recorded, &running.services);
+    if held.is_some() && running.end.is_none() {
+        return end_held(held.as_ref(), running).map(|()| plugin_result(&state, id));
     }
     if stop() {
         return Err(STOPPED.to_string());
@@ -796,7 +821,7 @@ fn install_plugin_unless(
     if stop() {
         return Err(STOPPED.to_string());
     }
-    end_held(&held, holding, running)?;
+    end_held(held.as_ref(), running)?;
     write_installed(config_dir, &state)?;
     prune_folders(config_dir, &state)?;
     Ok(plugin_result(&state, id))
@@ -1175,8 +1200,8 @@ pub fn change_plugin(
         plugin.enabled = action == "enable";
     }
     if action == "enable" {
-        let (held, holding) = held_by(id, &state, &recorded_versions(&state), &running.services);
-        end_held(&held, holding, running)?;
+        let held = held_by(id, &state, &recorded_versions(&state), &running.services);
+        end_held(held.as_ref(), running)?;
     }
     write_installed(config_dir, &state)?;
     if action == "remove" {

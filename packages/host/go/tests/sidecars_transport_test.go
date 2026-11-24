@@ -25,6 +25,7 @@ import (
 	host "github.com/soksak-app/core/packages/host/go/src"
 	testplatform "github.com/soksak-app/core/packages/host/go/tests/platform"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
+	sok "github.com/soksak-app/core/packages/sok/go/src"
 )
 
 type SidecarMessage = host.SidecarMessage
@@ -2998,5 +2999,95 @@ func TestAPersistentLineIsDecodedOnceBeforeItsDispatch(t *testing.T) {
 		if got := host.MessageDecodes() - before; got != item.decodes {
 			t.Errorf("the reader decoded the message of the body %s %d times, want %d: the line, the body and the member image once each", item.body, got, item.decodes)
 		}
+	}
+}
+
+// heldByFixture is the update of plugin probe to 0.3.0 that the service of fixture-service, which runs 0.0.6, holds.
+func heldByFixture() sok.Held {
+	running := "0.0.6"
+	return sok.Held{Plugin: "probe", Version: "0.3.0", Sidecars: []sok.HeldSidecar{{Sidecar: "fixture-service", Planned: "0.0.8", Running: &running}},
+		Error: "plugin probe 0.3.0: sidecar fixture-service 0.0.8 waits for the end of its running service 0.0.6"}
+}
+
+// contract: sidecars-transport.plugin-operation.reads-the-running-version-without-a-start
+func TestTheRunningServicesAttachToALiveServiceAndStartNone(t *testing.T) {
+	root := t.TempDir()
+	service := serveReplaceService(t, root, "0.0.6", "0.0.7")
+	sidecars := replaceSidecars(t, root, service)
+	services, err := sidecars.RunningServices()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if running := services["fixture-service"]; len(services) != 1 || running == nil || *running != "0.0.6" {
+		t.Fatalf("the running services are %v", services)
+	}
+	if got := service.received(); !slices.Equal(got, []string{"hello"}) {
+		t.Fatalf("the service received %v", got)
+	}
+	// A sidecar without a live service has none, and the attach starts no executable for it.
+	empty := t.TempDir()
+	unstarted := replaceSidecars(t, empty, &replaceService{folder: t.TempDir()})
+	if services, err := unstarted.RunningServices(); err != nil || len(services) != 0 {
+		t.Fatalf("the running services without an endpoint are %v, %v", services, err)
+	}
+	if _, err := os.Stat(filepath.Join(empty, "services", "service", "endpoint.json")); !os.IsNotExist(err) {
+		t.Fatalf("the attach started a service: %v", err)
+	}
+}
+
+// contract: sidecars-transport.plugin-operation.ends-the-holding-service-and-holds-its-start
+func TestAPluginOperationEndsTheHoldingServiceAndStartsTheNextAfterIt(t *testing.T) {
+	written, await := support.CaptureLogAwait(t)
+	root := t.TempDir()
+	service := serveReplaceService(t, root, "0.0.6", "0.0.8")
+	sidecars := replaceSidecars(t, root, service)
+	owner := support.NewSidecarRecorder(t, "/operation")
+	if err := owner.Send(sidecars, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		t.Fatal(err)
+	}
+	owner.Next(t)
+	held := heldByFixture()
+	// Before the first list of the layouts the sessions of the service are not known, so the operation ends nothing.
+	if services, holds := sidecars.HeldServices(held); !holds || services[0].Sessions != nil {
+		t.Fatalf("the held services before the layouts are %+v, %v", services, holds)
+	}
+	want := "plugin probe: the sessions of sidecar fixture-service are not known"
+	if err := sidecars.EndServices(context.Background(), held); err == nil || err.Error() != want {
+		t.Fatalf("the end before the layouts returned %v, want %q", err, want)
+	}
+	if _, err := sidecars.Retain([]host.RetainedSurface{{Surface: "surface-1", Root: root, Plugin: "probe"}}); err != nil {
+		t.Fatal(err)
+	}
+	if services, holds := sidecars.HeldServices(held); !holds || services[0].Sessions == nil || *services[0].Sessions != 1 {
+		t.Fatalf("the held services after the layouts are %+v, %v", services, holds)
+	}
+	sidecars.BeginPluginOperation()
+	if err := sidecars.EndServices(context.Background(), held); err != nil {
+		t.Fatal(err)
+	}
+	if got := service.received(); !slices.Equal(got, []string{"hello", "", "retain", "close-owner", "shutdown"}) {
+		t.Fatalf("the old service received %v", got)
+	}
+	// The reconnection waits for the end of the operation, so the installed service starts after it.
+	await("sidecar fixture-service: the start waits for the end of the plugin operation")
+	select {
+	case <-service.second:
+		t.Fatal("a service started during the plugin operation")
+	default:
+	}
+	sidecars.EndPluginOperation()
+	// The surface that sent to the sidecar receives the connection notice of the installed service.
+	notice := owner.Next(t)
+	var event map[string]any
+	if err := json.Unmarshal(notice.Body, &event); err != nil || event["event"] != "connection" || event["connected"] != true {
+		t.Fatalf("the notice after the end of the operation is %s (%v)", notice.Body, err)
+	}
+	text := written()
+	if want := "sidecar fixture-service: service 0.0.6 ended for plugin probe 0.3.0"; !strings.Contains(text, want) {
+		t.Fatalf("the log has no %q: %q", want, text)
+	}
+	if services, holds := sidecars.HeldServices(sok.Held{Plugin: "probe", Version: "0.3.0",
+		Sidecars: []sok.HeldSidecar{{Sidecar: "fixture-service", Planned: "0.0.8"}}}); holds {
+		t.Fatalf("the service of the planned version still holds: %+v", services)
 	}
 }

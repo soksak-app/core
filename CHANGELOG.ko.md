@@ -5,6 +5,7 @@
 
 ## 2026-11-24
 
+- F1138-2: 두 host는 plugin 작업에 살아 있는 상주 service의 `hello` version을 준다. 실행 파일을 시작하지 않는 attach로 읽는다. 작업이 실행되는 동안 상주 service를 시작하지 않고, 보류된 작업마다 session 수와 함께 `pluginsState`의 `held`에 나열한다. `end: true`인 `pluginsRun`은 install, update, enable을 보류시킨 service를 끝내고 그 process가 종료된 뒤 `installed.json`을 쓴다. service가 보류시킨 start 때의 update는 그대로 남고 나열된다. 검증: Go와 Rust의 service 및 plugin 작업 테스트의 Red와 Green.
 - F1138-1: Go와 Rust의 `sok` installer는 계획한 상태가 service가 실행 중인 persistent sidecar의 version을 바꾸는 install, update, enable을 보류한다. 아무것도 쓰지 않고 `plugin <id> <version>: sidecar <name> <planned> waits for the end of its running service <running>`으로 실패하며, 호출자가 주는 service 종료는 release를 푼 뒤 `installed.json`을 쓰기 전에 실행된다. Endpoint의 게시자 판정은 host library에서 두 쪽이 모두 읽는 `sok`의 platform으로 옮긴다. 검증: Go와 Rust의 보류 테스트 세 개의 Red와 Green.
 - F1139: page는 host를 통해서만 reload한다. plugin 변경은 `pageReload {cause}`를 보내고, host는 `host.window.reload`처럼 page의 generation을 끝내므로, plugin 변경이 모든 call을 `the page is reloading`으로 거부하는 page를 더 이상 남기지 않는다.
 - F1137-1: Go host library의 store 나열 test가 contract case를 선언하고, 그 case 문장은 종료가 나열 중에 사라진 directory를 뺀다고 말한다.

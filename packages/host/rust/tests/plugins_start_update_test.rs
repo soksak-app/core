@@ -145,6 +145,7 @@ fn new_plugins(config: &Path) -> (Plugins, Arc<Mutex<Vec<Changed>>>) {
     let sink = seen.clone();
     let plugins = Plugins::new(
         config.to_path_buf(),
+        Box::new(|| None),
         Box::new(|| Ok(())),
         Box::new(move |change| sink.lock().unwrap().push(change)),
     )
@@ -160,6 +161,7 @@ fn install_probe(plugins: &Plugins, config: &Path, index: &str) {
         .run(RunRequest {
             action: "install".to_string(),
             plugin: json!("probe"),
+            end: None,
         })
         .expect("install");
 }
@@ -178,6 +180,7 @@ fn update(plugin: &str, from: &str, to: &str) -> StartUpdate {
         from: from.to_string(),
         to: to.to_string(),
         error: None,
+        held: false,
     }
 }
 

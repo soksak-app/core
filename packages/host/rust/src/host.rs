@@ -275,7 +275,12 @@ pub fn start_plugin_updates(app: &AppHandle) -> Result<std::thread::JoinHandle<(
                     Some(error) => log_error("plugins update", error),
                 }
             } else if let Some(error) = update.error {
-                log_error(&format!("plugin update {}", update.plugin), error);
+                if update.held {
+                    // The update waits for the person, who ends the services that hold it from the card of the plugin.
+                    application_log::log_info(&format!("plugin update {}", update.plugin), error);
+                } else {
+                    log_error(&format!("plugin update {}", update.plugin), error);
+                }
             } else {
                 event_record::emit_host(
                     crate::event_log::Level::Info,
@@ -468,8 +473,16 @@ pub fn setup(app: &AppHandle, setup: Setup) -> Result<(), Box<dyn std::error::Er
     // that reloads uses the installed executables (docs/spec/installation.md#applying-a-change).
     let applying = app.clone();
     let installed = directory.clone();
+    // The sidecars are added to the application before the first plugin operation runs; without them no persistent service
+    // runs.
+    let serving = app.clone();
     app.manage(plugins::Plugins::new(
         directory.clone(),
+        Box::new(move || {
+            serving
+                .try_state::<WindowSidecars>()
+                .map(|sidecars| sidecars.plugin_services())
+        }),
         Box::new(move || {
             installed::apply_plugin_event_classes(
                 &applying.state::<std::sync::Arc<event_log::EventLog>>(),

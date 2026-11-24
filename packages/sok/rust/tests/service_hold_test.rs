@@ -6,7 +6,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 use serde_json::Value;
-use soksak_sok::service_hold::{Running, Services};
+use soksak_sok::service_hold::{Held, HeldSidecar, Running, Services};
 
 #[path = "support/folder.rs"]
 mod folder;
@@ -248,9 +248,12 @@ fn an_operation_of_the_host_ends_the_holding_service_before_it_writes_the_state(
     use_registry(&config, &registry);
     let platform = soksak_sok::current_platform().expect("platform");
     let services = Services::from([(SIDECAR.to_string(), Some("0.1.0".to_string()))]);
+    let given = RefCell::new(Vec::new());
+    let give = |held: &Held| given.borrow_mut().push(held.clone());
     let held = Running {
         services: services.clone(),
         end: None,
+        held: Some(&give),
     };
     let error = soksak_sok::plugins::run_plugin_action(
         config.path(),
@@ -267,9 +270,21 @@ fn an_operation_of_the_host_ends_the_holding_service_before_it_writes_the_state(
             "plugin probe 0.3.0: sidecar @scope/sidecar-worker 0.2.0 waits for the end of its running service 0.1.0"
         )
     );
+    let want = "plugin probe 0.3.0: sidecar @scope/sidecar-worker 0.2.0 waits for the end of its running service 0.1.0";
+    let operation = Held {
+        plugin: "probe".to_string(),
+        version: "0.3.0".to_string(),
+        sidecars: vec![HeldSidecar {
+            sidecar: SIDECAR.to_string(),
+            planned: "0.2.0".to_string(),
+            running: Some("0.1.0".to_string()),
+        }],
+        error: want.to_string(),
+    };
+    assert_eq!(*given.borrow(), vec![operation.clone()]);
     // The end sees the extracted releases and the earlier installed.json, so a failed end writes nothing.
     let ended = RefCell::new(Vec::new());
-    let end = |sidecars: &[String]| {
+    let end = |held: &Held| {
         let state = soksak_sok::plugins::read_installed(config.path())?;
         assert_eq!(state.plugins["probe"].version, "0.2.0");
         assert!(config.path().join("plugins/probe/0.3.0").exists());
@@ -279,12 +294,13 @@ fn an_operation_of_the_host_ends_the_holding_service_before_it_writes_the_state(
                 .join("sidecars/scope-sidecar-worker/0.2.0")
                 .exists()
         );
-        ended.borrow_mut().push(sidecars.to_vec());
+        ended.borrow_mut().push(held.clone());
         Ok(())
     };
     let ending = Running {
         services,
         end: Some(&end),
+        held: None,
     };
     soksak_sok::plugins::run_plugin_action(
         config.path(),
@@ -295,7 +311,7 @@ fn an_operation_of_the_host_ends_the_holding_service_before_it_writes_the_state(
         &ending,
     )
     .expect("the update that ends the service");
-    assert_eq!(*ended.borrow(), vec![vec![SIDECAR.to_string()]]);
+    assert_eq!(*ended.borrow(), vec![operation]);
     let state = soksak_sok::plugins::read_installed(config.path()).unwrap();
     assert_eq!(state.sidecars[SIDECAR].version, "0.2.0");
 }
@@ -311,6 +327,7 @@ fn an_enable_beside_a_service_of_another_version_is_held() {
     let other = Running {
         services: Services::from([(SIDECAR.to_string(), Some("0.0.9".to_string()))]),
         end: None,
+        held: None,
     };
     let error = soksak_sok::plugins::run_plugin_action(
         config.path(),
@@ -332,6 +349,7 @@ fn an_enable_beside_a_service_of_another_version_is_held() {
     let recorded = Running {
         services: Services::from([(SIDECAR.to_string(), Some("0.1.0".to_string()))]),
         end: None,
+        held: None,
     };
     soksak_sok::plugins::run_plugin_action(
         config.path(),
