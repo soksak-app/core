@@ -46,7 +46,7 @@ const (
 
 // topLevelKeys are the members that plugin.json may hold (validateManifest).
 var topLevelKeys = []string{"id", "name", "description", "mark", "icon", "surface", "sections", "preview", "dependencies", "background",
-	"programs", "exposes", "settings", "data", "sidebars", "extends", "contributes", "events", "sessions"}
+	"programs", "exposes", "settings", "data", "sidebars", "dialogs", "extends", "contributes", "events", "sessions"}
 
 // utf16Length is the length of a string in UTF-16 code units, the length that the reader's string checks count.
 func utf16Length(s string) int {
@@ -602,6 +602,14 @@ func ValidateManifest(value any) error {
 		dependencies = deps
 	}
 	sidecars := sortedKeys(dependencies)
+	if raw, ok := manifest["dialogs"]; ok {
+		if _, hasSections := manifest["sections"]; !hasSurface && !hasSections {
+			return fmt.Errorf("%s: dialogs requires a surface or sections", where)
+		}
+		if err := checkDialogs(where, raw); err != nil {
+			return err
+		}
+	}
 	if raw, ok := manifest["extends"]; ok {
 		if _, hasSections := manifest["sections"]; !hasSurface && !hasSections {
 			return fmt.Errorf("%s: extends requires a surface or sections", where)
@@ -1655,6 +1663,29 @@ func checkExposes(owner string, raw any) error {
 			if raw, has := entry["activity"]; has && raw != true {
 				return fmt.Errorf("%s: activity must be true", at)
 			}
+		}
+	}
+	return nil
+}
+
+// checkDialogs checks the dialogs of plugin.json: each name has the form of a region name and maps to {page}, whose page
+// is a page of the plugin as the page of a view composition (docs/spec/plugins.md#dialogs). The names are read in sorted
+// order, as the other readers read them.
+func checkDialogs(where string, raw any) error {
+	dialogs, ok := raw.(map[string]any)
+	if !ok {
+		return fmt.Errorf("%s: dialogs must be an object", where)
+	}
+	for _, name := range sortedKeys(dialogs) {
+		if !regionPattern.MatchString(name) {
+			return fmt.Errorf("%s: dialogs.%s is not a dialog name", where, name)
+		}
+		dialog, ok := dialogs[name].(map[string]any)
+		if _, hasPage := dialog["page"]; !ok || len(dialog) != 1 || !hasPage {
+			return fmt.Errorf("%s: dialogs.%s must be {page}", where, name)
+		}
+		if !isViewPage(dialog["page"]) {
+			return fmt.Errorf("%s: dialogs.%s page must be a path inside the plugin release that ends in .html", where, name)
 		}
 	}
 	return nil

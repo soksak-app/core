@@ -287,8 +287,8 @@ func TestPluginInstallRefusesAReleaseEntryOutsidePackage(t *testing.T) {
 }
 
 // contract: cli.plugin.install-requires-loaded-modules
-// The surface module and the view page that plugin.json loads are files of the release, so a release without one is
-// refused before anything is installed (F355-2).
+// The surface module, the view page and the dialog pages that plugin.json loads are files of the release, so a release
+// without one is refused before anything is installed (F355-2, F1129-1).
 func TestPluginInstallRefusesAReleaseWithoutTheViewPage(t *testing.T) {
 	config, code, stderr := installRelease(t, probeEntries(viewManifest, support.ReleaseEntry{Name: "package/ui/b.js", Content: "b", Mode: 0o644}))
 	if code != 1 || stderr != "sok: plugin probe 0.2.0 package: plugin.json: view page ui/page.html is not in the release\n" {
@@ -298,6 +298,13 @@ func TestPluginInstallRefusesAReleaseWithoutTheViewPage(t *testing.T) {
 		t.Fatal("a refused release changed the installation")
 	}
 	if _, code, stderr := installRelease(t, probeEntries(viewManifest, support.ReleaseEntry{Name: "package/ui/page.html", Content: "<!doctype html>", Mode: 0o644})); code != 0 || stderr != "" {
+		t.Fatalf("code %d stderr %q", code, stderr)
+	}
+	dialogManifest := strings.Replace(viewManifest, `"surface":`, `"dialogs": {"edit": {"page": "ui/edit.html"}}, "surface":`, 1)
+	if _, code, stderr := installRelease(t, probeEntries(dialogManifest, support.ReleaseEntry{Name: "package/ui/page.html", Content: "<!doctype html>", Mode: 0o644})); code != 1 || stderr != "sok: plugin probe 0.2.0 package: plugin.json: dialog page ui/edit.html is not in the release\n" {
+		t.Fatalf("code %d stderr %q", code, stderr)
+	}
+	if _, code, stderr := installRelease(t, probeEntries(dialogManifest, support.ReleaseEntry{Name: "package/ui/page.html", Content: "<!doctype html>", Mode: 0o644}, support.ReleaseEntry{Name: "package/ui/edit.html", Content: "<!doctype html>", Mode: 0o644})); code != 0 || stderr != "" {
 		t.Fatalf("code %d stderr %q", code, stderr)
 	}
 }

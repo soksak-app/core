@@ -8984,6 +8984,290 @@
         "ui/page.html"
       ],
       "error": "plugin probe: surface program probe.s must have a schema of type object and null whose state is one of idle, working, blocked, whose pid is an integer or null and whose app is a string or null"
+    },
+    {
+      "id": "dialogs.accepts-surface",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dialogs": {
+          "edit": {
+            "page": "ui/edit.html"
+          },
+          "confirm-2": {
+            "page": "ui/page.html"
+          }
+        }
+      },
+      "accepted": true,
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html",
+        "ui/edit.html"
+      ]
+    },
+    {
+      "id": "dialogs.accepts-sections",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.list",
+              "description": "Sample.",
+              "schema": {
+                "type": "object"
+              }
+            }
+          ]
+        },
+        "sections": [
+          {
+            "id": "probe.list",
+            "name": "List",
+            "composition": {
+              "kind": "view",
+              "page": "ui/page.html"
+            },
+            "height": "fill"
+          }
+        ],
+        "dialogs": {
+          "edit": {
+            "page": "ui/edit.html"
+          }
+        }
+      },
+      "accepted": true,
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html",
+        "ui/edit.html"
+      ]
+    },
+    {
+      "id": "dialogs.not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dialogs": [
+          {
+            "page": "ui/edit.html"
+          }
+        ]
+      },
+      "accepted": false,
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html",
+        "ui/edit.html"
+      ],
+      "error": "plugin probe: dialogs must be an object"
+    },
+    {
+      "id": "dialogs.name-invalid",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dialogs": {
+          "Edit": {
+            "page": "ui/edit.html"
+          }
+        }
+      },
+      "accepted": false,
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html",
+        "ui/edit.html"
+      ],
+      "error": "plugin probe: dialogs.Edit is not a dialog name"
+    },
+    {
+      "id": "dialogs.entry-not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dialogs": {
+          "edit": "ui/edit.html"
+        }
+      },
+      "accepted": false,
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html",
+        "ui/edit.html"
+      ],
+      "error": "plugin probe: dialogs.edit must be {page}"
+    },
+    {
+      "id": "dialogs.entry-member",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dialogs": {
+          "edit": {
+            "page": "ui/edit.html",
+            "title": "Edit"
+          }
+        }
+      },
+      "accepted": false,
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html",
+        "ui/edit.html"
+      ],
+      "error": "plugin probe: dialogs.edit must be {page}"
+    },
+    {
+      "id": "dialogs.entry-without-page",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dialogs": {
+          "edit": {}
+        }
+      },
+      "accepted": false,
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html",
+        "ui/edit.html"
+      ],
+      "error": "plugin probe: dialogs.edit must be {page}"
+    },
+    {
+      "id": "dialogs.page-not-html",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dialogs": {
+          "edit": {
+            "page": "ui/edit.js"
+          }
+        }
+      },
+      "accepted": false,
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html",
+        "ui/edit.html"
+      ],
+      "error": "plugin probe: dialogs.edit page must be a path inside the plugin release that ends in .html"
+    },
+    {
+      "id": "dialogs.page-outside",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "dialogs": {
+          "edit": {
+            "page": "../edit.html"
+          }
+        }
+      },
+      "accepted": false,
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html",
+        "ui/edit.html"
+      ],
+      "error": "plugin probe: dialogs.edit page must be a path inside the plugin release that ends in .html"
+    },
+    {
+      "id": "dialogs.requires-view",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "dialogs": {
+          "edit": {
+            "page": "ui/edit.html"
+          }
+        }
+      },
+      "accepted": false,
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html",
+        "ui/edit.html"
+      ],
+      "error": "plugin probe: dialogs requires a surface or sections"
     }
   ]
 }

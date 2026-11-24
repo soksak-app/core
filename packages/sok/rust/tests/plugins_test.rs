@@ -407,8 +407,8 @@ fn plugin_install_refuses_a_release_entry_outside_package() {
 }
 
 // contract: cli.plugin.install-requires-loaded-modules
-// The surface module and the view page that plugin.json loads are files of the release, so a release without one is refused
-// before anything is installed (F355-2).
+// The surface module, the view page and the dialog pages that plugin.json loads are files of the release, so a release
+// without one is refused before anything is installed (F355-2, F1129-1).
 #[test]
 fn plugin_install_refuses_a_release_without_the_view_page() {
     let registry = plugin_versions_for("0.0.2", &["0.2.0"]);
@@ -429,6 +429,36 @@ fn plugin_install_refuses_a_release_without_the_view_page() {
         probe_items(
             VIEW_MANIFEST,
             &[("package/ui/page.html", "<!doctype html>")],
+        ),
+    );
+    assert_eq!((code, stderr.as_str()), (0, ""));
+    let dialog_manifest = VIEW_MANIFEST.replacen(
+        r#""surface":"#,
+        r#""dialogs": {"edit": {"page": "ui/edit.html"}}, "surface":"#,
+        1,
+    );
+    let (_, code, stderr) = install_release(
+        &plugin_versions_for("0.0.2", &["0.2.0"]),
+        probe_items(
+            &dialog_manifest,
+            &[("package/ui/page.html", "<!doctype html>")],
+        ),
+    );
+    assert_eq!(
+        (code, stderr.as_str()),
+        (
+            1,
+            "sok: plugin probe 0.2.0 package: plugin.json: dialog page ui/edit.html is not in the release\n"
+        )
+    );
+    let (_, code, stderr) = install_release(
+        &plugin_versions_for("0.0.2", &["0.2.0"]),
+        probe_items(
+            &dialog_manifest,
+            &[
+                ("package/ui/page.html", "<!doctype html>"),
+                ("package/ui/edit.html", "<!doctype html>"),
+            ],
         ),
     );
     assert_eq!((code, stderr.as_str()), (0, ""));

@@ -79,6 +79,7 @@ plugin 동작의 창 검사는 그 plugin의 repository에서 실행된다([검�
 | `mark` | `surface`가 있으면 | 추가 메뉴와 새 탭 제목에 표시하는 짧은 텍스트 |
 | `icon` | `surface`가 있으면 | 16×16 뷰박스용 SVG 요소 |
 | `sections` | 아니오 | 사이드바 섹션 `{ "id": "<플러그인 id>.<이름>", "name", "composition", "height", "unload"?, "actions"? }`. 각 섹션은 [section surface](#섹션), 즉 사이드바에 그려지는 plugin의 view다. `composition`은 `view` 합성이고, `height`는 `"fill"` 또는 포인트 단위 양의 정수다 |
+| `dialogs` | 아니오 | `{ "<name>": { "page": "<path>" } }`: plugin의 view가 [dialog](#dialogs)로 여는 page. `name`은 `[a-z0-9][a-z0-9-]{0,63}` 형식이고 `page`는 view composition의 `page`와 같은 page 경로다. `surface`나 `sections`가 필요하다 |
 | `sidebars` | 아니오 | 로컬 기본 세트와 선택적인 네 변 `card` 연결([기본 사이드바 세트](#기본-사이드바-세트)) |
 | `preview` | 아니오 | `{ "ink": "--<토큰>" }`: 라이브러리 미리보기에서 플러그인 카드의 색을 정하는 테마 토큰 이름. `surface`가 필요하다 |
 | `dependencies` | 아니오 | `{ "<package>": "<version range>" }`: plugin이 필요로 하는 sidecar와 plugin, 그리고 plugin이 함께 동작하는 그 version의 범위([version과 범위](installation.ko.md#version과-범위)). 의존은 plugin의 view나 상태 모듈이 쓰는 [사이드카](sidecars.ko.md)를 가리키며 그때 `surface`, `sections`나 `state`가 필요하거나, plugin이 기여하는 [확장 지점](#확장-지점)을 가진 plugin이나, 그 plugin의 선언된 status나 프로젝트 데이터를 plugin의 view가 따라가거나 읽는 plugin을 가리키며 plugin을 설치하면 그것도 설치된다. status를 위해 가리킨 plugin은 `exposes.status`에 선언한 status만 plugin의 view에 준다([view calls](native-surfaces.ko.md#view-표면)). command, element나 다른 항목은 주지 않는다. 프로젝트 데이터를 위해 가리킨 plugin은 `data`에 선언한 key만 plugin의 view에 준다([프로젝트 데이터](#프로젝트-데이터)). registry index나 `installed.json`의 plugin이 그 package 이름을 가지면 의존은 plugin을 가리키고, 아니면 sidecar를 가리킨다. Plugin 의존의 key는 그 plugin의 package(예: `@soksak/plugin-agents`)이며 plugin id가 아니다. 각 host는 key를 그 package의 load된 plugin id로 풀고, 의존을 읽거나 따라가는 view call은 그 plugin id(예: `agents`)를 명명한다. plugin이 다른 sidecar와 plugin에 요구하는 것의 유일한 선언이다 |
@@ -142,6 +143,50 @@ section surface는 보이는 스페이스의 사이드바가 그 섹션을 가�
 세로 `list` sidebar에서는 이웃한 두 열린 section 사이마다 divider가 있고, 사람은 그것을 끌어 크기를 바꾼다. divider를 끌면 움직일 때마다 `core.sidebar.section.size {sidebar, section, height}`가 실행된다. divider 아래 section이 정수 높이를 가지면 그 section의 크기를, 그렇지 않으면 위 section의 크기를 바꾼다. 높이는 32에서 4096 pixel의 정수이고, 끌기는 divider의 다른 section을 적어도 32 pixel 높이로 유지한다. 명령은 `list` layout을 쓰지 않는 sidebar, sidebar가 갖지 않은 section, 다른 높이를 거부한다. 크기를 바꾼 section은 `fill` section도 선언된 `height` 대신 저장된 높이를 가지며, 저장된 높이는 선택된 tab과 접힌 section처럼 sidebar마다 유지되어 space와 함께 저장된다([프로젝트](projects.ko.md#저장)). 접힌 section 옆의 divider와 가로 list의 section에는 divider가 없고, 가로 list는 너비를 똑같이 나눈다. `core.sidebars`는 각 section의 저장된 `size`나 `null`을 보고한다. section 선택과 크기는 plane을 다시 배치하므로 compositor가 section surface의 자리를 publish한다.
 
 사이드바는 그것을 담은 카드의 id로 식별한다. `left`, `right`, `top`, `bottom`, 또는 카드 내부 사이드바의 `카드id:변`(`top`, `bottom`, `left`, `right`)이다. 섹션 머리를 접고 펴면 `core.sidebar.section.fold`를, 탭을 고르면 `core.sidebar.section.select`를 `{sidebar, section}`으로 실행한다. status `core.sidebars`는 그려진 모든 사이드바의 세트, 레이아웃, 방향, 고른 탭, 각 섹션의 접힘 상태, surface id, 따르는 `surface`를 알린다. 컴포지터는 각 섹션의 본문을 그 section surface의 [섹션 자리](native-surfaces.ko.md#섹션-자리)로 측정한다.
+
+## Dialogs
+
+plugin의 view는 자기 plugin의 page를 창 전체 위의 dialog로 연다. 그래서 section이나 tab에 맞지 않는 form을 창의 content 위에 그린다. dialog는 plugin의 view surface인 dialog surface다. 그 seat는 창의 content, 곧 title bar 아래의 plane 전체이며 sidebar를 포함한다([dialog seat](native-surfaces.ko.md#dialog-seat)). 창은 dialog를 많아야 하나 가지며, dialog와 [native modal](native-modals.ko.md)은 함께 열리지 않는다.
+
+`plugin.json`의 `dialogs`는 각 dialog page를 `{<name>: {page}}`로 선언한다. `@soksak/plugin-api`, Go `sok`, Rust `sok`의 reader는 name을 정렬된 순서로 읽고 다음을 거부한다.
+- object가 아닌 `dialogs`: `plugin <id>: dialogs must be an object`
+- 다른 형식의 name: `plugin <id>: dialogs.<name> is not a dialog name`
+- member `page`만 가진 object가 아닌 항목: `plugin <id>: dialogs.<name> must be {page}`
+- plugin release 안의 경로이고 `.html`로 끝나는 경로가 아닌 page: `plugin <id>: dialogs.<name> page must be a path inside the plugin release that ends in .html`
+- `surface`나 `sections`가 없는 `dialogs`: `plugin <id>: dialogs requires a surface or sections`. view만 dialog를 열기 때문이다.
+
+installer는 view page가 없는 release를 거부하듯 dialog page가 없는 release를 `plugin.json: dialog page <path> is not in the release`로 거부한다. case table `docs/spec/cases/manifest-validation.json`이 모든 reader를 위한 이 case를 가진다.
+
+- **열기.** view는 `runtime.dialog.open {name, params}`를 호출한다. SDK는 `runtime.dialog(name, params)`에 이 호출을 보내며, `params`는 dialog의 page가 검사하는 JSON 값이다. main page는 다음 셋을 거부한다.
+  - plugin이 선언하지 않은 name: `view call runtime.dialog.open <name> is not a dialog of <plugin>`
+  - dialog가 열려 있는 동안의 열기: `view call runtime.dialog.open: the window shows the dialog <name> of <plugin>`
+  - native modal이 보이는 동안의 열기: `view call runtime.dialog.open: the window shows the modal <id>`
+
+  그 밖에는 dialog surface를 창의 layout에 더한다. 그 start value는 view의 start value다. `params`는 `params`, `origin`은 `{directory: null}`, `project`는 창의 project, `section`은 `null`이다. 여기에 start value `dialog` `{name, opener}`가 더해지며, `opener`는 호출한 view의 surface다([start value](native-surfaces.ko.md#view-표면)).
+- **Page.** dialog의 문서는 투명하다. 모든 host에서 start value에 `dialog`가 있는 page는 `@soksak/plugin-api`가 50% 불투명도의 검정 backdrop을 root element에 둔다. page는 자기 card를 직접 그린다. 닫는 방법은 page가 정한다. 닫기 button이나 Escape가 그 예이며, page는 그때 스스로 닫는다.
+- **닫기.** dialog view는 `runtime.dialog.close {result}`를 호출하며, SDK는 `runtime.dialog.close(result)`에 이 호출을 보낸다. main page는 dialog surface를 지우고 열기 호출에 `result`로 답한다. 다른 view의 close 호출은 `view call runtime.dialog.close is served only to a dialog`로 거부된다. 열기 호출의 cancel은 dialog surface를 지운다.
+- **끝.** 열기 호출은 [plugin processes](plugin-processes.ko.md) 규칙 3에 따라 끝난다.
+  - opener surface가 닫히면 호출은 `surface-closed`로 끝나고 dialog surface가 지워진다.
+  - opener process가 끝나면 호출은 `process-ended`로 끝난다.
+  - main page가 끝나면 두 view가 모두 끝난다.
+
+  dialog view는 process가 끝나면 모든 view처럼 자기 start value로 다시 시작하고, 열기 호출은 열린 채로 남는다. 재시작이 [view 표면](#view-표면)의 한도에 이른 dialog surface는 지워진다. 그때 오류 표시는 place `dialog <plugin> <name>`으로 `the view failed 4 times within 300 seconds and is created again when its dialog is opened again`을 보이고, 열기 호출은 그 text로 실패한다.
+- **Status.**
+  - `core.modal`은 열린 dialog를 `{id, mode: "dialog", document: null, plugin}`로 알린다. `id`는 dialog surface이고 `plugin`은 그 plugin이다([exposure](exposure.ko.md#모달-문서)).
+  - `core.surfaces`는 dialog surface를 자기 plugin, `dialog` `{name, opener}`, `null`인 `card`와 `section`으로 나열한다.
+
+규칙의 이유는 다음과 같다.
+- seat가 sidebar를 덮으므로, dialog 뒤의 section view는 pointer를 받지 않는다.
+- `addSubview:`는 새 host를 맨 위에 두므로, native container는 나중의 surface host를 dialog host 아래에 넣는다.
+- host의 dialog 상태는 native modal과 workbench의 flag만 읽으므로, host는 배치된 dialog surface에서 blur를 끌어낸다.
+- view는 그리기 전인 document start에 `view.ready`를 알리므로, key 대기는 dialog의 첫 placement가 present되면 끝난다.
+- dialog에는 다시 열 tab이 없으므로, dialog의 재시작 한도는 자기 text를 가진다.
+
+기각한 방법은 넷이다.
+- plugin page를 load하는 modal web view: page에 view channel도, 호출을 위한 surface identity도, placement sequence 안의 자리도 주지 않는다.
+- document region을 통해 native modal의 복사된 문서 안에 두는 page: document region은 surface의 web document를 보여 주며, view channel을 가진 page를 보여 주지 않는다.
+- dialog surface 아래에 main page가 그리는 backdrop: surface는 main web view 위에 있다.
+- 호출에서 경로로 지정하는 dialog page: 선언된 page는 호출이 실행되기 전에 reader가 검사하는 계약이다.
 
 ## 프로젝트 데이터
 per-key 형식은 코어가 소유한 file 안의 값마다 형태를 정하며, 다른 형태의 값은 변환되지 않고 거부된다([저장 데이터 형식](installation.ko.md#저장-데이터-형식)).

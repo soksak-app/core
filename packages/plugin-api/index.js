@@ -495,6 +495,21 @@ export function settingDeclarations(manifest) {
 const isViewPage = (page) => isText(page) && page.endsWith(".html") &&
   page.split("/").every((segment) => segment !== "" && segment !== "." && segment !== ".." && segment !== ".binary");
 
+// checkDialogs checks the dialogs of plugin.json: each name has the form of a region name and maps to {page}, whose page is
+// a page of the plugin as the page of a view composition (docs/spec/plugins.md#dialogs).
+function checkDialogs(where, dialogs) {
+  if (!isObject(dialogs)) throw new Error(`${where}: dialogs must be an object`);
+  // The names are read in sorted order, as the Go and Rust readers read them, so each reader names the same entry.
+  for (const name of Object.keys(dialogs).sort()) {
+    const dialog = dialogs[name];
+    if (!REGION.test(name)) throw new Error(`${where}: dialogs.${name} is not a dialog name`);
+    if (!isObject(dialog) || Object.keys(dialog).length !== 1 || !Object.hasOwn(dialog, "page")) {
+      throw new Error(`${where}: dialogs.${name} must be {page}`);
+    }
+    if (!isViewPage(dialog.page)) throw new Error(`${where}: dialogs.${name} page must be a path inside the plugin release that ends in .html`);
+  }
+}
+
 /**
  * Checks an unload declaration of a surface or a section: {format, maxBytes} with positive integers
  * (docs/spec/plugins.md#memory-saver). label names the owner in the messages.
@@ -792,7 +807,7 @@ export function validateManifest(manifest) {
     if (manifest[member] !== undefined) throw new Error(`plugin ${manifest.id}: ${member} is removed; a section is a view of the plugin`);
   }
   only("plugin.json", manifest, ["id", "name", "description", "mark", "icon", "surface", "sections", "preview", "dependencies", "background", "programs", "exposes", "settings",
-    "data", "sidebars", "extends", "contributes", "events", "sessions"]);
+    "data", "sidebars", "dialogs", "extends", "contributes", "events", "sessions"]);
   validateEventsPath("plugin.json", manifest.events);
   const { id } = manifest;
   if (typeof id !== "string" || !ID.test(id)) throw new Error(`plugin.json: invalid id ${id}`);
@@ -829,6 +844,10 @@ export function validateManifest(manifest) {
       throw new Error(`${where}: dependencies require a surface, sections or contributes`);
     }
     checkDependencies(where, manifest.dependencies);
+  }
+  if (manifest.dialogs !== undefined) {
+    if (manifest.surface === undefined && manifest.sections === undefined) throw new Error(`${where}: dialogs requires a surface or sections`);
+    checkDialogs(where, manifest.dialogs);
   }
   if (manifest.extends !== undefined) {
     if (manifest.surface === undefined && manifest.sections === undefined) throw new Error(`${where}: extends requires a surface or sections`);

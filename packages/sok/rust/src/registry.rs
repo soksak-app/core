@@ -66,7 +66,8 @@ pub(crate) const PACKAGE_ROOT: &str = "package/";
 /// plugin release cannot hold a file under it (docs/spec/native-surfaces.md).
 pub(crate) const BINARY_SEGMENT: &str = ".binary";
 
-/// The modules that plugin.json loads and their names: the surface module and the page of a view composition.
+/// The modules that plugin.json loads and their names: the surface module, the page of a view composition and the page of
+/// each dialog, in the sorted order of the dialog names.
 pub(crate) fn manifest_modules(manifest: &Value) -> Vec<(String, String)> {
     let mut modules = vec![];
     let mut add = |what: String, value: &Value| {
@@ -80,6 +81,11 @@ pub(crate) fn manifest_modules(manifest: &Value) -> Vec<(String, String)> {
             "view page".into(),
             &manifest["surface"]["composition"]["page"],
         );
+    }
+    if let Some(dialogs) = manifest["dialogs"].as_object() {
+        for dialog in dialogs.values() {
+            add("dialog page".into(), &dialog["page"]);
+        }
     }
     modules
 }

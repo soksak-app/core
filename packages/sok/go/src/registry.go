@@ -60,7 +60,7 @@ const packageRoot = "package/"
 const binarySegment = ".binary"
 
 // manifestModules are the modules that plugin.json loads and their names: the surface module, the page of a view
-// composition.
+// composition and the page of each dialog, in the sorted order of the dialog names.
 func manifestModules(manifest map[string]any) [][2]string {
 	var modules [][2]string
 	add := func(what string, value any) {
@@ -72,6 +72,13 @@ func manifestModules(manifest map[string]any) [][2]string {
 		add("surface module", surface["module"])
 		if composition, ok := surface["composition"].(map[string]any); ok && composition["kind"] == "view" {
 			add("view page", composition["page"])
+		}
+	}
+	if dialogs, ok := manifest["dialogs"].(map[string]any); ok {
+		for _, name := range sortedKeys(dialogs) {
+			if dialog, ok := dialogs[name].(map[string]any); ok {
+				add("dialog page", dialog["page"])
+			}
 		}
 	}
 	return modules

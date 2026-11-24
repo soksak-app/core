@@ -11,9 +11,10 @@ mygo host는 modal web view를 만들지 않는다: 그 workbench의 modal은 na
 | 모드 | 웹뷰 영역 | 배경 | 닫기 |
 | --- | --- | --- | --- |
 | `dialog` | 메인 콘텐츠 뷰포트 | 불투명도 50%의 검정색; 각 배경 웹 문서와 image region에 3px 블러 | 설정은 × 버튼으로 닫기 |
+| dialog surface | sidebar를 포함한 창의 content | dialog의 page가 그리는 불투명도 50%의 검정색; 다른 각 문서와 image region에 3px 블러 | page가 닫는다([dialog](plugins.ko.md#dialogs)) |
 | `menu` | 선택 메뉴 사각형 | 배경색 및 블러 없음 | 선택, 외부 클릭, Escape |
 
-메인 문서가 카드 사각형을 측정한다. 카드 이동은 전체 뷰포트 대화상자 웹뷰를 이동하지 않고 DOM 위치를 갱신한다. 대화상자 웹뷰는 메인 창과 함께 크기를 변경하고, 배경 입력을 차단하며, 새로 생성된 표면 위에 표시된다.
+메인 문서가 카드 사각형을 측정한다. 카드 이동은 전체 뷰포트 대화상자 웹뷰를 이동하지 않고 DOM 위치를 갱신한다. 대화상자 웹뷰는 메인 창과 함께 크기를 변경하고, 배경 입력을 차단하며, 새로 생성된 표면 위에 표시된다. 이 웹뷰는 dialog surface가 열려 있지 않을 때만 열린다. [dialog surface](plugins.ko.md#dialogs)는 modal web view가 아니라 plugin의 view surface이며, 그 순서는 [surface host container](native-surfaces.ko.md#surface-host-container)의 규칙이다.
 
 대화상자 문서가 `body::before` 의사 요소로 반투명 배경을 그린다. 복사된 workbench의 `body::before` 배경과 네이티브 페인트 클립은 대화상자 문서에서 꺼야 한다. 그렇지 않으면 복사된 애플리케이션 배경이 네이티브 표면을 가린다. 카드는 의사 요소 위에 놓이며 선명하게 유지한다. 메인 웹뷰는 자기 콘텐츠에 CSS 블러를 적용하고, 호스트는 각 document web view, 곧 view 표면의 page와 각 document region, 그리고 각 image region을 같은 반경의 native filter로 흐리게 한다([native surfaces](native-surfaces.ko.md)). 대화상자의 CSS 필터는 다른 네이티브 웹뷰를 흐리게 만들 수 없다. 호스트는 웹뷰 API로 불리언 `window.__soksakBackground`를 설정한다. 배경 스크립트는 초기화 전에 설정된 상태를 적용하고 이후 설정도 같은 속성으로 처리한다.
 
@@ -33,7 +34,7 @@ modal web view 는 그 문서가 렌더를 마쳤다고 알릴 때(`modalReady`)
 
 빈 값이나 다른 값은 `show()`가 거절한다. 요소에는 비어 있지 않은 고유 `id`와
 `aria-label`도 필요하다. 모드는 열기 전에 정하고, 바꾸려면 닫은 뒤 다시 연다.
-한 번에 하나만 열린다. 다른 것을 열면 이전 네이티브 뷰가 닫히며, 이전 원본 DOM의
+한 번에 하나만 열린다. dialog surface가 열려 있는 동안 `show()`는 요소를 `the window shows the dialog <name> of <plugin>`으로 거부한다. 다른 것을 열면 이전 네이티브 뷰가 닫히며, 이전 원본 DOM의
 정리는 소유 컴포넌트가 맡는다.
 Modal은 `show()`부터 열려 있으므로 `core.modal`과 워크벤치의 키보드가 곧바로
 따르고, `hide()` 때까지 또는 호스트가 그 `overlayShow`를 거부할 때까지 열려 있다.

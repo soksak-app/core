@@ -11,9 +11,10 @@ The application owns the existing settings and picker DOM. `overlay.show()` rend
 | Mode | Webview area | Background | Dismissal |
 | --- | --- | --- | --- |
 | `dialog` | Main content viewport | Black at 50% opacity; 3px blur on each background web document and image region | Settings closes with its × button |
+| dialog surface | Content of the window, sidebars included | Black at 50% opacity drawn by the page of the dialog; 3px blur on each other document and image region | The page closes it ([dialogs](plugins.md#dialogs)) |
 | `menu` | Picker rectangle | No backdrop or blur | Selection, outside click, or Escape |
 
-The main document measures the card rectangle. Moving the card updates its DOM position without moving the full-viewport dialog webview. The dialog webview resizes with the main window, blocks background input, and remains above newly created surfaces.
+The main document measures the card rectangle. Moving the card updates its DOM position without moving the full-viewport dialog webview. The dialog webview resizes with the main window, blocks background input, and remains above newly created surfaces; it opens only while no dialog surface is open. A [dialog surface](plugins.md#dialogs) is a view surface of a plugin, not a modal web view: its order is the rule of the [surface host container](native-surfaces.md#surface-host-container).
 
 The dialog document draws the translucent backdrop with its `body::before` pseudo-element. The copied workbench `body::before` background and native paint clip must be disabled in the dialog document; otherwise the copied application background hides the native surfaces. The card is above the pseudo-element and remains clear. The main webview applies the CSS blur to its own content, and the host blurs each document web view, the page of a view surface and each document region, and each image region, with a native filter of the same radius ([native surfaces](native-surfaces.md)). A CSS filter in the dialog cannot blur a separate native webview. Hosts assign the boolean `window.__soksakBackground` through webview APIs. The background script applies state assigned before its initialization and handles later assignments through the same property.
 
@@ -34,7 +35,7 @@ A modal web view takes the keyboard of the window when its document reports that
 An empty value or any other value is rejected by `show()`. The element also
 needs a unique, nonempty `id` and a nonempty `aria-label`. Choose the mode before
 opening; to change modes, close and open the view again.
-Only one overlay is open at a time. Opening another closes the previous native
+Only one overlay is open at a time, and `show()` refuses an element while a dialog surface is open with `the window shows the dialog <name> of <plugin>`. Opening another closes the previous native
 view; its owner remains responsible for cleaning up the previous DOM.
 The modal is open from `show()`, so `core.modal` and the keyboard of the
 workbench follow it at once, and it stays open until `hide()` or until the host

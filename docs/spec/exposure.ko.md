@@ -121,7 +121,7 @@ status `core.focus`는 창의 first responder를 가진 문서에서 키보드 �
 
 창이 key이고 modal이 열려 있지 않은 동안 focus ring이 있는 card의 active surface가 키보드를 가지며, 둘은 어긋나지 않는다. ring을 옮기거나 그 card의 active surface를 바꾸는 모든 경로는 키보드도 옮긴다. 새 탭, 탭 press, `core.tab.select`, `core.card.focus`, card가 남는 동안 focus된 card의 탭 닫기, 프로젝트 열기, space 복원이 여기에 든다. 각 워크벤치는 ring을 한 함수에서 옮기고, 하나의 host call `surfaceFocus {surface}`([surface의 키보드](native-surfaces.ko.md#surface의-키보드))를 보낸다. 앞선 placement가 호스트에 준 surface는 보이든 숨겨졌든 그것을 보여 주는 placement보다 먼저 호출을 보낸다. 그래서 호스트는 ring을 옮긴 press의 release에서 키보드를 주고, release 뒤의 키는 surface에 전달된다. 호스트가 아직 갖지 않은 surface는 그것을 보여 주는 placement 뒤에 호출을 받아, 준비되는 때에 키보드를 받는다. ring을 옮긴 명령은 그 이동을 보여 주는 placement와, 그 뒤 키보드 호출에 대한 호스트의 응답이 끝난 뒤에 답한다. 그래서 호출자가 응답 뒤에 보낸 키는 surface에 전달된다. surface가 키보드를 가져야 하는 동안 first responder가 워크벤치에 들어오면 surface로 돌아간다. 워크벤치 위 left press의 release는 각각 워크벤치에 decided 호출 `surfaceFocus {surface, decided: true}`를 요청하고, 워크벤치는 press의 handler들이 실행된 뒤, page는 그 release를 dispatch하는 턴에, mygo 워크벤치는 click을 실행하는 pass에, press가 바꾼 것을 반영해 그 호출을 보낸다. 대상이 그대로이거나 워크벤치가 키보드를 가질 때도 보낸다([surface의 키보드](native-surfaces.ko.md#surface의-키보드)). 빈 곳, scroll bar, divider 등 워크벤치의 어떤 element에 대한 press도 press로 센다. 반면 surface가 담지 않는 app의 child web view, 곧 native modal 문서 위의 press는 press로 세지 않는다. 그 문서는 키보드 결정에 응답하지 않으므로 그 release는 결정을 요청하지 않고 어떤 키도 기다리지 않는다.
 
-- modal이 열려 있는 동안 키보드는 modal에 머물고, modal이 닫히면 surface로 돌아간다.
+- modal이 열려 있는 동안 키보드는 modal에 머물고, modal이 닫히면 surface로 돌아간다. 이 규칙에서 [dialog surface](plugins.ko.md#dialogs)는 종류가 `dialog`인 modal이다. 열려 있는 동안 ring이 움직여도 키보드는 움직이지 않고, 닫히면 focus ring을 가진 card의 active surface가 키보드를 받는다.
 - surface가 없는 card(빈 card, 설치되지 않은 플러그인의 placeholder)와 library는 키보드를 워크벤치에 둔다(`surface: null`).
 - 워크벤치의 편집 가능한 element(library 양식 필드, 이름 변경 필드)는 포커스가 있는 동안 키보드를 가진다. [키보드 단축키](#키보드-단축키)에서 그 필드를 조건으로 하는 단축키가 이를 요구하기 때문이다. 필드가 포커스를 잃거나 닫히면 키보드는 surface로 돌아간다.
 - 탭 pointer press는 element focus를 남기지 않는다. `Tab` 키는 여전히 탭에 멈추고, 키보드가 워크벤치에 있는 동안 그 멈춤을 유지한다.
@@ -204,7 +204,7 @@ view는 그 표면의 네이티브 승인이 완료된 뒤에 코어·플러그�
 
 ### 모달 문서
 
-네이티브 모달 문서는 렌더, 배치, 테마 변경, 내용의 스크롤마다 모달 응답 경로로 키 `document`를 사용해 자기 상태를 메인 페이지에 보고하므로 요소 사각형이 press가 도달하는 자리를 이름 짓는다. 워크벤치는 이를 status `core.modal`로 공개한다. 열린 모달이 없으면 `null`이고, 있으면 `{id, mode, document}`다. `document`는 모달 web view를 만드는 호스트에서만 알리며, 첫 보고 전에는 `null`이며 이후 `{mode, filter, htmlBackground, bodyBackground, scrimBackground, loaded, rect}`다: 렌더한 요소의 `data-native-modal`, 루트의 계산된 `filter`, 루트와 body의 계산된 배경색, 대화상자 scrim에 사용하는 `body::before`의 계산된 배경색, 문서가 첫 내용 요청의 응답을 처리했는지(적용한 변경보다 오래되어 버린 경우도 포함), CSS 픽셀 단위 요소 사각형, 그리고 문서의 이름 있는 요소를 문서 순서로 담은 `elements`: `[{name, x, y, width, height}]`.
+네이티브 모달 문서는 렌더, 배치, 테마 변경, 내용의 스크롤마다 모달 응답 경로로 키 `document`를 사용해 자기 상태를 메인 페이지에 보고하므로 요소 사각형이 press가 도달하는 자리를 이름 짓는다. 워크벤치는 이를 status `core.modal`로 공개한다. 열린 모달이 없으면 `null`이고, 있으면 `{id, mode, document, plugin}`이며, native modal의 `plugin`은 `null`이다. 열린 [dialog surface](plugins.ko.md#dialogs)는 dialog surface를 `id`로, 그 plugin을 `plugin`으로 가진 `{id, mode: "dialog", document: null, plugin}`이다. `document`는 모달 web view를 만드는 호스트에서만 알리며, 첫 보고 전에는 `null`이며 이후 `{mode, filter, htmlBackground, bodyBackground, scrimBackground, loaded, rect}`다: 렌더한 요소의 `data-native-modal`, 루트의 계산된 `filter`, 루트와 body의 계산된 배경색, 대화상자 scrim에 사용하는 `body::before`의 계산된 배경색, 문서가 첫 내용 요청의 응답을 처리했는지(적용한 변경보다 오래되어 버린 경우도 포함), CSS 픽셀 단위 요소 사각형, 그리고 문서의 이름 있는 요소를 문서 순서로 담은 `elements`: `[{name, x, y, width, height}]`.
 
 모달 문서에는 status watch 경로가 없다. 메인 페이지는 status watch를 surface에만 전달한다. 그래서 모달 문서의 exposure port는 watch된 값을 `status <name> of document <id> cannot be sent: a modal document has no status watch route`로 거부한다. 따라서 page API는 문서 시작에서 그 port를 받아들이고, 값은 보고 없이 문서를 떠나지 않는다.
 
@@ -313,7 +313,7 @@ window check 는 이것을 쓰지 않는다. check 는 사람의 창 뒤에서 �
 
 `index`는 0 이상의 정수이며, 타입이 다른 `index`를 준 요청은 -32602로 거부한다.
 
-열린 dialog 는 그 바깥의 모든 element 를 inert 로 만든다. dialog 는 종류가 `dialog` 인 modal, 곧 settings 와 debug view 이고, 종류가 `menu` 인 modal 인 picker 는 어떤 element 도 inert 로 만들지 않는다. inert element 는 layout 을 유지하므로 dialog 가 덮고 있어도 `element.rect` 는 그 사각형을 답하고, 어떤 점이 무엇을 가리키는지는 `host.hit` 이 답한다. inert element 에 대한 `element.act` 는 어느 document 에서든 1010 과 메시지 `element <name> is behind the open dialog and takes no action` 을 돌려준다.
+열린 dialog 는 그 바깥의 모든 element 를 inert 로 만든다. dialog 는 종류가 `dialog` 인 modal, 곧 settings 와 debug view, 또는 [dialog surface](plugins.ko.md#dialogs) 이고, 종류가 `menu` 인 modal 인 picker 는 어떤 element 도 inert 로 만들지 않는다. inert element 는 layout 을 유지하므로 dialog 가 덮고 있어도 `element.rect` 는 그 사각형을 답하고, 어떤 점이 무엇을 가리키는지는 `host.hit` 이 답한다. inert element 에 대한 `element.act` 는 어느 document 에서든 1010 과 메시지 `element <name> is behind the open dialog and takes no action` 을 돌려준다.
 
 네이티브 포인터 주입은 pointer와 버튼별로 누름을 받은 뷰를 누름의 창과 함께 유지한다. 포인터가 다른 뷰를 가로질러도 끌기와 뗌을 그 뷰에 전달하며 뗌의 수신 확인은 누름을 받은 문서를 기다린다. 그 창에서 pointer의 일치하는 누름 없는 끌기·뗌, pointer가 같은 버튼을 누른 상태에서의 추가 누름, 제거된 누름 대상 뷰는 명시적 입력 거부를 반환한다. 스크롤과 버튼 없는 이동은 현재 포인터 위치를 사용한다.
 

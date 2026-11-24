@@ -21,7 +21,7 @@ const SET_TITLE_MAX: usize = 40;
 const MENU_TITLE_MAX: usize = 40;
 
 /// The members that plugin.json may hold (validateManifest).
-const TOP_LEVEL_KEYS: [&str; 19] = [
+const TOP_LEVEL_KEYS: [&str; 20] = [
     "id",
     "name",
     "description",
@@ -37,6 +37,7 @@ const TOP_LEVEL_KEYS: [&str; 19] = [
     "settings",
     "data",
     "sidebars",
+    "dialogs",
     "extends",
     "contributes",
     "sessions",
@@ -1045,6 +1046,32 @@ fn is_view_page(value: Option<&Value>) -> bool {
     })
 }
 
+/// Checks the dialogs of plugin.json (checkDialogs of the reader): each name has the form of a region name and maps to
+/// {page}, whose page is a page of the plugin as the page of a view composition (docs/spec/plugins.md#dialogs). The map
+/// of serde_json is sorted, so the names are read in the sorted order of the other readers.
+fn check_dialogs(where_: &str, raw: &Value) -> Result<(), String> {
+    let Some(dialogs) = raw.as_object() else {
+        return Err(format!("{where_}: dialogs must be an object"));
+    };
+    for (name, dialog) in dialogs {
+        if !is_region_name(name) {
+            return Err(format!("{where_}: dialogs.{name} is not a dialog name"));
+        }
+        let Some(dialog) = dialog
+            .as_object()
+            .filter(|dialog| dialog.len() == 1 && dialog.contains_key("page"))
+        else {
+            return Err(format!("{where_}: dialogs.{name} must be {{page}}"));
+        };
+        if !is_view_page(dialog.get("page")) {
+            return Err(format!(
+                "{where_}: dialogs.{name} page must be a path inside the plugin release that ends in .html"
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// Checks the regions and the overlays of a view (checkRegions of the reader).
 fn check_regions(
     where_: &str,
@@ -1813,6 +1840,12 @@ pub fn validate_manifest(value: &Value) -> Result<(), String> {
         .into_iter()
         .map(String::as_str)
         .collect();
+    if let Some(raw) = manifest.get("dialogs") {
+        if !has("surface") && !has("sections") {
+            return Err(format!("{where_}: dialogs requires a surface or sections"));
+        }
+        check_dialogs(&where_, raw)?;
+    }
     if let Some(raw) = manifest.get("extends") {
         if !has("surface") && !has("sections") {
             return Err(format!("{where_}: extends requires a surface or sections"));
