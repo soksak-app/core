@@ -30,7 +30,7 @@ mygo host는 modal web view를 만들지 않는다: 그 workbench의 modal은 na
 
 워크벤치의 error toast([exposure](exposure.md))는 창의 가장 위 layer다. Wails와 Tauri host에서 toast component는 main page의 element이고 surface host container는 main web view 위에 있으므로, surface가 toast를 가릴 수 있다. Modal web view가 열려 있지 않은 동안 page는 각 toast의 rectangle을 `cut`이 true인 창 overlay로 보낸다([surface host container](native-surfaces.ko.md#surface-host-container)). Host는 surface host container를 container의 bounds에서 각 cut rectangle을 뺀 모양으로 mask하므로, 각 toast 자리에서는 main web view가 보이고 다른 창 overlay처럼 pointer를 받는다. Toast가 열리거나 닫히면 page가 plane을 다시 배치하므로 cut rectangle은 toast stack을 따른다.
 
-- **Modal.** Dialog modal은 자기 document에 toast를 담고, menu modal은 창의 pointer를 정하므로, 그중 하나가 열려 있는 동안 page는 cut rectangle을 보내지 않는다. Dialog surface는 surface host container 안에 있으므로 cut은 toast를 dialog 위에 보이게 하고, toast는 dialog 뒤에서 inert가 아니다([exposure](exposure.ko.md#메서드)). 따라서 dialog page가 보고한 거부는 그 dialog 위에 보인다.
+- **Modal.** Dialog modal은 자기 document에 toast를 담고, menu modal은 창의 pointer를 정하므로, 그중 하나가 열려 있는 동안 page는 cut rectangle을 보내지 않는다. Dialog surface는 surface host container 안에 있으므로 cut은 toast를 dialog 위에 보이게 하고, toast는 dialog 뒤에서 inert가 아니다([exposure](exposure.ko.md#메서드)). 따라서 dialog가 열려 있는 동안 나타난 워크벤치 오류는 그 dialog 위에 보인다. Dialog page는 자기 오류를 자기 page에 보인다([view 표면](native-surfaces.ko.md#view-표면)).
 - **Input.** Keyboard는 그대로 있다. Toast 자리에서는 main web view가 pointer를 받고, toast의 close control은 `core.error.dismiss`를 실행한다.
 - **Visibility period.** Page가 각 toast의 visibility period를 가진다. 배치가 그 period를 다시 시작하지 않는다.
 

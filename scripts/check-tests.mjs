@@ -377,7 +377,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/workbench/test/toast-over-dialog.test.mjs", id: "an error toast is cut out of the surface hosts and takes the pointer while a dialog surface is open" },
     ],
-    expected: "While a dialog surface is open, the page still cuts each error toast out of the container of the surface hosts, and an element of an error toast is not inert behind the dialog, so a refusal that a dialog reports shows above it and closes on a press.",
+    expected: "While a dialog surface is open, the page still cuts each error toast out of the container of the surface hosts, and an element of an error toast is not inert behind the dialog, so an error of the workbench that appears while a dialog is open shows above it and closes on a press.",
     levels: ["unit"],
   },
   {

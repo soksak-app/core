@@ -1,6 +1,7 @@
 // Checks that an error toast stays the topmost layer while a dialog surface is open (F1147-1, docs/spec/native-modals.md#toast-overlay):
 // the sync request cuts the toast out of the container of the surface hosts, which holds the dialog host, and the close control of the
-// toast is not behind the dialog, so a refusal that a dialog reports shows above the dialog and closes on a press.
+// toast is not behind the dialog, so an error of the workbench that appears while a dialog is open shows above the dialog and closes on a
+// press.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
