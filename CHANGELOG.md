@@ -5,6 +5,7 @@
 
 ## 2026-11-24
 
+- F1152: A plugin with sections and no surface may declare `programs`, and its section and dialog surfaces carry them, so a section page runs a declared program; a plugin with neither is refused with `programs requires a surface or sections`. Red/Green: the shared manifest cases on the JS, Go and Rust readers and `environment.test.mjs`.
 - F1151: The statuses and elements of a dialog page are registered: the registry knows the open dialog surface by the plugin of the dialog, so a request that names the dialog surface is answered by its elements. Red/Green: `dialog-surface.test.mjs`.
 - F1150: A plugin dialog opens: the memory saver leaves out a dialog surface instead of refusing the commit that holds it with `memory saver: surface dialog/<plugin>/<name> has kind dialog`. Red/Green: `memory-saver.test.mjs`.
 - F1147-1: An error toast shows above an open dialog surface and its close control takes a press: the page cuts each toast while a dialog surface is open, and an element of an error toast is not inert behind the dialog. Red/Green: `toast-over-dialog.test.mjs`.

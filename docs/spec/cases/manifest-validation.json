@@ -8318,7 +8318,39 @@
         }
       },
       "accepted": false,
-      "error": "plugin probe: programs requires a surface",
+      "error": "plugin probe: programs requires a surface or sections",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "programs.accepts-with-sections",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "sections": [
+          {
+            "id": "probe.a",
+            "name": "A",
+            "composition": {
+              "kind": "view",
+              "page": "ui/page.html"
+            },
+            "height": "fill"
+          }
+        ],
+        "programs": {
+          "run": {
+            "program": "git",
+            "args": [
+              "--version"
+            ]
+          }
+        }
+      },
+      "accepted": true,
       "packageFiles": [
         "plugin.json",
         "ui/page.html"

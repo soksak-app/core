@@ -866,7 +866,7 @@ export function validateManifest(manifest) {
     if (manifestSidecars(manifest).length !== 1) throw new Error(`${where}: sessions requires one sidecar in dependencies`);
   }
   if (manifest.programs !== undefined) {
-    if (manifest.surface === undefined) throw new Error(`${where}: programs requires a surface`);
+    if (manifest.surface === undefined && manifest.sections === undefined) throw new Error(`${where}: programs requires a surface or sections`);
     checkPrograms(where, manifest.programs);
   }
   if (manifest.surface !== undefined) {

@@ -359,6 +359,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1152",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "programs requires a surface or sections" },
+      { file: "packages/sok/go/src/manifest.go", symbol: "programs requires a surface or sections" },
+      { file: "packages/sok/rust/src/manifest.rs", symbol: "programs requires a surface or sections" },
+      { file: "packages/workbench/environment.js", symbol: "function sectionSurfaceOf(pluginId, section, declarations, diagnostics, sidecars, programs) {" },
+      { file: "packages/workbench/environment.js", symbol: "function dialogSurfaceOf(pluginId, name, page, declarations, diagnostics, sidecars, programs) {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/environment.test.mjs", id: "the environment registers card plugins, sections, and sidebar defaults from the installed manifests" },
+    ],
+    expected: "programs requires a surface or sections in the JS, Go and Rust readers, and the section and dialog surfaces of a plugin carry its programs, so the page of a section runs a declared program.",
+    levels: ["unit"],
+  },
+  {
     id: "F1151",
     implementation: [
       { file: "packages/workbench/dialogs.js", symbol: "export const dialogSurfacePlugin = (surface) =>" },

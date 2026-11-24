@@ -5,6 +5,7 @@
 
 ## 2026-11-24
 
+- F1152: surface 없이 sections를 가진 plugin도 `programs`를 선언할 수 있고, 그 section과 dialog surface가 이를 담으므로 section page가 선언된 program을 실행한다. 둘 다 없는 plugin은 `programs requires a surface or sections`로 거부한다. Red/Green: JS, Go, Rust reader의 공유 manifest case와 `environment.test.mjs`.
 - F1151: dialog page의 status와 element가 등록된다. registry는 열린 dialog surface를 dialog의 plugin으로 알므로, dialog surface를 지정한 요청은 그 element에 전달된다. Red/Green: `dialog-surface.test.mjs`.
 - F1150: plugin dialog가 열린다. memory saver는 dialog surface를 담은 commit을 `memory saver: surface dialog/<plugin>/<name> has kind dialog`로 거부하지 않고 그 surface를 넣지 않는다. Red/Green: `memory-saver.test.mjs`.
 - F1147-1: error toast는 열린 dialog surface 위에 보이고 close control이 누름을 받는다. page는 dialog surface가 열려 있는 동안에도 각 toast를 cut하고, error toast의 element는 dialog 뒤에서 inert가 아니다. Red/Green: `toast-over-dialog.test.mjs`.

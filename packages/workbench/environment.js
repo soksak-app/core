@@ -42,10 +42,11 @@ function surfaceOf(name, pluginId, surface) {
 
 /**
  * Converts a section declaration into a function that returns the target of its section surface for a surface id and the start
- * value section {id, sidebar, card} (docs/spec/plugins.md#sections). A section surface has no tab parameters.
+ * value section {id, sidebar, card} (docs/spec/plugins.md#sections). A section surface has no tab parameters. It carries the programs of
+ * the plugin, which every view of the plugin may run (docs/spec/native-surfaces.md#program-runs).
  */
-function sectionSurfaceOf(pluginId, section, declarations, diagnostics, sidecars) {
-  return (surfaceId, start) => ({ composition: section.composition, surfaceId, pluginId, declarations, sidecars, diagnostics,
+function sectionSurfaceOf(pluginId, section, declarations, diagnostics, sidecars, programs) {
+  return (surfaceId, start) => ({ composition: section.composition, surfaceId, pluginId, declarations, sidecars, diagnostics, programs,
     // default: a section without unload is never unloaded, as a surface without surface.unload (docs/spec/plugins.md#memory-saver).
     unload: section.unload ?? false,
     params: null, section: start,
@@ -56,10 +57,11 @@ function sectionSurfaceOf(pluginId, section, declarations, diagnostics, sidecars
  * Converts a dialog declaration into a function that returns the target of its dialog surface for the surface of the view that opens
  * it and the params of the open call (docs/spec/plugins.md#dialogs). A window holds one dialog, so the id names the plugin and the
  * dialog; its "/" keeps it out of the tab surfaces, and no space has the id dialog.
+ * It carries the programs of the plugin, as a section surface does.
  */
-function dialogSurfaceOf(pluginId, name, page, declarations, diagnostics, sidecars) {
+function dialogSurfaceOf(pluginId, name, page, declarations, diagnostics, sidecars, programs) {
   return (opener, params) => ({ composition: { kind: "view", page }, surfaceId: `dialog/${pluginId}/${name}`, pluginId, declarations, sidecars,
-    diagnostics, unload: false, params, section: null, dialog: { name, opener },
+    diagnostics, programs, unload: false, params, section: null, dialog: { name, opener },
     contributions: (point) => contributionsOf(pluginId, point) });
 }
 
@@ -149,13 +151,13 @@ export function installEnvironment(environmentDocument, installedDocument) {
         // default: actions is an optional field of a section; without it the header has no button.
         actions: section.actions ?? [],
         // default: exposes is an optional field of plugin.json; without it there is no declaration.
-        surface: sectionSurfaceOf(manifest.id, section, exposes ?? {}, diagnostics, manifestSidecars(manifest, pluginNames)) });
+        surface: sectionSurfaceOf(manifest.id, section, exposes ?? {}, diagnostics, manifestSidecars(manifest, pluginNames), manifest.programs ?? null) });
     }
     // default: dialogs is an optional field of plugin.json; without it the plugin opens no dialog.
     for (const [name, { page }] of Object.entries(manifest.dialogs ?? {})) {
       registerDialog({ plugin: manifest.id, name, page,
         // default: exposes is an optional field of plugin.json; without it there is no declaration.
-        surface: dialogSurfaceOf(manifest.id, name, page, exposes ?? {}, diagnostics, manifestSidecars(manifest, pluginNames)) });
+        surface: dialogSurfaceOf(manifest.id, name, page, exposes ?? {}, diagnostics, manifestSidecars(manifest, pluginNames), manifest.programs ?? null) });
     }
     if (exposes) exposure.declare(manifest.id, exposes);
     // default: data is an optional field of plugin.json; without it the plugin declares no project data.

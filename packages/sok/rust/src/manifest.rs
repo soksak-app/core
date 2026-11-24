@@ -1875,8 +1875,8 @@ pub fn validate_manifest(value: &Value) -> Result<(), String> {
         }
     }
     if let Some(raw) = manifest.get("programs") {
-        if !has("surface") {
-            return Err(format!("{where_}: programs requires a surface"));
+        if !has("surface") && !has("sections") {
+            return Err(format!("{where_}: programs requires a surface or sections"));
         }
         check_programs(&where_, raw)?;
     }

@@ -643,8 +643,8 @@ func ValidateManifest(value any) error {
 		}
 	}
 	if raw, ok := manifest["programs"]; ok {
-		if !hasSurface {
-			return fmt.Errorf("%s: programs requires a surface", where)
+		if _, hasSections := manifest["sections"]; !hasSurface && !hasSections {
+			return fmt.Errorf("%s: programs requires a surface or sections", where)
 		}
 		if err := checkPrograms(where, raw); err != nil {
 			return err

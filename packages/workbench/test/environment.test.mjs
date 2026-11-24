@@ -33,6 +33,8 @@ const files = {
     exposes: { status: [{ name: "side.count", description: "검사용 상태.", schema: { type: "object" } }, { name: "side.list", description: "검사용 상태.", schema: { type: "object" } }] },
     sections: [{ id: "side.list", name: "List", composition: { kind: "view", page: "ui/list.html" }, height: "fill" },
       { id: "side.count", name: "Count", composition: { kind: "view", page: "ui/count.html" }, height: 48, unload: { format: 1, maxBytes: 4096 } }],
+    dialogs: { edit: { page: "ui/edit.html" } },
+    programs: { version: { program: "git", args: ["--version"] } },
   },
 };
 // The install list of a release build has no diagnostics declaration.
@@ -71,6 +73,9 @@ test("the environment registers card plugins, sections, and sidebar defaults fro
   assert.deepEqual([counted.composition, counted.surfaceId, counted.pluginId, counted.unload, counted.params, counted.section],
     [{ kind: "view", page: "ui/count.html" }, "spc-aaaaaa/left/side.count", "side", { format: 1, maxBytes: 4096 }, null, start]);
   assert.equal(registry.section("side.list").surface("spc-aaaaaa/left/side.list", start).unload, false, "a section without unload is never unloaded");
+  // The programs of a plugin are run by every view of the plugin, so its section and dialog surfaces carry them (F1152).
+  assert.deepEqual([counted.programs, registry.dialog("side", "edit").surface("spc-aaaaaa/left/side.count", {}).programs],
+    [files.side.programs, files.side.programs]);
   assert.deepEqual(settings.defaults.sets, files["/environment.json"].sidebars.sets);
   assert.deepEqual(settings.defaults.links, files["/environment.json"].sidebars.links);
   assert.equal(settings.value("card.cursor.shape"), "beam");
