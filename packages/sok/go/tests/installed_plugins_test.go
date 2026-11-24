@@ -8,9 +8,9 @@ import (
 	sok "github.com/soksak-app/core/packages/sok/go/src"
 )
 
-const installedAlpha = `{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha","name":"Alpha","description":"검사용.","contributes":{}}}`
+const installedAlpha = `{"id":"alpha","package":"plugin-alpha","version":"1.0.0","folder":"/installed/plugin","manifest":{"id":"alpha","name":"Alpha","description":"검사용.","contributes":{}}}`
 
-const installedProbe = `{"id":"probe","package":"@fixture/probe","version":"0.1.0","manifest":{"id":"probe","name":"Probe","description":"검사용.","contributes":{},` +
+const installedProbe = `{"id":"probe","package":"@fixture/probe","version":"0.1.0","folder":"/installed/plugin","manifest":{"id":"probe","name":"Probe","description":"검사용.","contributes":{},` +
 	`"dependencies":{"@fixture/sidecar-probe":"^0.1.0"}},"sidecars":`
 
 func acceptOne(t *testing.T, plugin string) error {
@@ -37,7 +37,7 @@ func (e errString) Error() string { return string(e) }
 
 // contract: installed.document.acceptance-of-the-workbench
 func TestAcceptingLeavesOutEachRefusedPluginWithItsError(t *testing.T) {
-	unnamed := `{"id":"beta","package":"plugin-beta","version":"0.0.1","manifest":{"id":"beta","description":"이름이 없는 manifest."}}`
+	unnamed := `{"id":"beta","package":"plugin-beta","version":"0.0.1","folder":"/installed/plugin","manifest":{"id":"beta","description":"이름이 없는 manifest."}}`
 	badPackage := strings.NewReplacer(`"plugin-alpha"`, `"Bad"`, `"alpha"`, `"gamma"`).Replace(installedAlpha)
 	accepted, err := sok.AcceptInstalledPlugins(decode(t, `{"plugins":[`+unnamed+`,`+installedAlpha+`,`+badPackage+`]}`))
 	if err != nil {
@@ -92,14 +92,16 @@ func TestAnInstalledEntryFollowsTheRulesOfThePage(t *testing.T) {
 	}
 	for plugin, want := range map[string]string{
 		`1`: "every plugin must be an object",
-		entry(`"id":"alpha",`, `"id":"alpha","extra":1,`):              "unknown field extra",
-		entry(`"id":"alpha",`, `"id":"Alpha",`):                        "plugin id Alpha is invalid",
-		entry(`"plugin-alpha"`, `"Bad"`):                               "plugin alpha package must be a package.json name",
-		entry(`"version":"1.0.0",`, ``):                                "plugin alpha version is required",
-		`{"id":"alpha","package":"plugin-alpha","version":"1.0.0"}`:    "plugin alpha manifest is required",
-		entry(`"manifest":{"id":"alpha"`, `"manifest":{"id":"beta"`):   "plugin alpha has a plugin.json with id beta",
-		entry(`"name":"Alpha",`, ``):                                   "installed plugin alpha 1.0.0 (plugin-alpha): ",
-		strings.TrimSuffix(installedAlpha, `}`) + `,"diagnostics":[]}`: "plugin alpha diagnostics must be an object",
+		entry(`"id":"alpha",`, `"id":"alpha","extra":1,`):                                        "unknown field extra",
+		entry(`"id":"alpha",`, `"id":"Alpha",`):                                                  "plugin id Alpha is invalid",
+		entry(`"plugin-alpha"`, `"Bad"`):                                                         "plugin alpha package must be a package.json name",
+		entry(`"version":"1.0.0",`, ``):                                                          "plugin alpha version is required",
+		entry(`"folder":"/installed/plugin",`, ``):                                               "plugin alpha folder must be an absolute path",
+		entry(`"/installed/plugin"`, `"installed/plugin"`):                                       "plugin alpha folder must be an absolute path",
+		`{"id":"alpha","package":"plugin-alpha","version":"1.0.0","folder":"/installed/plugin"}`: "plugin alpha manifest is required",
+		entry(`"manifest":{"id":"alpha"`, `"manifest":{"id":"beta"`):                             "plugin alpha has a plugin.json with id beta",
+		entry(`"name":"Alpha",`, ``):                                                             "installed plugin alpha 1.0.0 (plugin-alpha): ",
+		strings.TrimSuffix(installedAlpha, `}`) + `,"diagnostics":[]}`:                           "plugin alpha diagnostics must be an object",
 	} {
 		rejects(t, acceptOne(t, plugin), want)
 	}

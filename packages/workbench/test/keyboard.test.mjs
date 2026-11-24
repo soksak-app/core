@@ -60,7 +60,7 @@ async function page() {
       root: { card: "main", tabs: [{ plugin: pluginId, title: "main" }] },
     } },
     sidebars: { sets: [], links: [] },
-  }, { plugins: [{ id: pluginId, package: "@fixture/keyboard", version: "0.0.1", manifest: {
+  }, { plugins: [{ id: pluginId, package: "@fixture/keyboard", version: "0.0.1", folder: "/installed/plugin", manifest: {
     id: pluginId, name: "Fixture", description: "fixture", mark: "f", icon: "<path/>",
     surface: { composition: { kind: "view", page: "ui/index.html" } },
   } }] }), [], "the fixture environment refused a plugin");

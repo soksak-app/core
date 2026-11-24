@@ -44,7 +44,7 @@ test("a frame factor change prepares the row of the next draw and writes the fac
       root: { card: "main", tabs: [{ plugin: pluginId, title: "main" }] },
     } },
     sidebars: { sets: [], links: [] },
-  }, { plugins: [{ id: pluginId, package: `@fixture/${pluginId}`, version: "0.0.1", manifest: {
+  }, { plugins: [{ id: pluginId, package: `@fixture/${pluginId}`, version: "0.0.1", folder: "/installed/plugin", manifest: {
     id: pluginId, name: "Fixture", description: "검사용 표면.", mark: "f", icon: "<path/>",
     surface: { composition: { kind: "view", page: "ui/page.html" } },
   } }] });

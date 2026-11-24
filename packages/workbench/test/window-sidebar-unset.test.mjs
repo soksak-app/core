@@ -53,7 +53,7 @@ test("core.sidebars reports a window sidebar that shows no set with its rectangl
       sets: [{ id: setId, title: "Fixture", layout: "list", sections: [`${otherId}.tree`] }],
       links: [{ place: "window-top", plugin: otherId, set: setId }],
     },
-  }, { plugins: [pluginId, otherId].map((id) => ({ id, package: `@fixture/${id}`, version: "0.0.1", manifest: manifest(id) })) }), [],
+  }, { plugins: [pluginId, otherId].map((id) => ({ id, package: `@fixture/${id}`, version: "0.0.1", folder: "/installed/plugin", manifest: manifest(id) })) }), [],
   "the fixture environment refused a plugin");
   const { beginSettings } = await import("../settings.js");
   beginSettings({ common: { top: true, sidebarWidth: 120 }, projects: [] }, null);

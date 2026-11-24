@@ -32,7 +32,7 @@ const installErrors = installEnvironment({
   runtime: "runtime",
   workspace: { focus: "main", grid: { root: { card: "main", tabs: [{ plugin: first.id, title: "t" }] } } },
   sidebars: { sets: [], links: [] },
-}, { plugins: stored.plugins.map((plugin) => ({ id: plugin.id, package: `@fixture/${plugin.id}`, version: "0.0.1", manifest: manifestOf(plugin) })) });
+}, { plugins: stored.plugins.map((plugin) => ({ id: plugin.id, package: `@fixture/${plugin.id}`, version: "0.0.1", folder: "/installed/plugin", manifest: manifestOf(plugin) })) });
 assert.deepEqual(installErrors, [], "the plugins of the cases are not loaded");
 const { checkStoredLayout } = await import("../stored-layout.js");
 const { restoreWindowSidebars } = await import("../window-sidebars.js");

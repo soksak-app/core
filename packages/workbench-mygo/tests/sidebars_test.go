@@ -20,12 +20,12 @@ const sidebarsEnvironment = `{"sidebars":{"sets":[
 	"links":[{"place":"left","plugin":null,"set":"set-install"},{"place":"window-right","plugin":"boxprobe","set":"set-boxprobe"}]}}`
 
 const sidebarsInstalled = `{"plugins":[
-	{"id":"boxprobe","package":"b","version":"1.0.0","manifest":{"id":"boxprobe","name":"브라우저","description":"boxprobe","mark":"www","icon":"<path d=\"M1 1h14\"/>","surface":{"composition":{"kind":"view","page":"ui/index.html"}},"sections":[
+	{"id":"boxprobe","package":"b","version":"1.0.0","folder": "/installed/plugin", "manifest":{"id":"boxprobe","name":"브라우저","description":"boxprobe","mark":"www","icon":"<path d=\"M1 1h14\"/>","surface":{"composition":{"kind":"view","page":"ui/index.html"}},"sections":[
 		{"id":"boxprobe.tabs","name":"탭","composition":{"kind":"view","page":"ui/section.html"},"height":160},
 		{"id":"boxprobe.history","name":"기록","composition":{"kind":"view","page":"ui/section.html"},"height":"fill"},
 		{"id":"boxprobe.dom","name":"DOM","composition":{"kind":"view","page":"ui/section.html"},"height":"fill"},
 		{"id":"boxprobe.network","name":"네트워크","composition":{"kind":"view","page":"ui/section.html"},"height":"fill"}]}},
-	{"id":"fieldprobe","package":"f","version":"1.0.0","manifest":{"id":"fieldprobe","name":"파일","description":"fieldprobe","sections":[
+	{"id":"fieldprobe","package":"f","version":"1.0.0","folder": "/installed/plugin", "manifest":{"id":"fieldprobe","name":"파일","description":"fieldprobe","sections":[
 		{"id":"fieldprobe.tree","name":"파일 트리","composition":{"kind":"view","page":"ui/tree.html"},"height":"fill"},
 		{"id":"fieldprobe.bookmarks","name":"북마크","composition":{"kind":"view","page":"ui/bookmarks.html"},"height":160}]}}]}`
 
@@ -112,7 +112,7 @@ func TestTheFocusedPluginChoosesItsWindowSidebar(t *testing.T) {
 }
 
 func TestPluginDefaultsApplyWithoutEnvironmentSidebars(t *testing.T) {
-	installed := `{"plugins":[{"id":"fieldprobe","package":"f","version":"1.0.0","manifest":{
+	installed := `{"plugins":[{"id":"fieldprobe","package":"f","version":"1.0.0","folder": "/installed/plugin", "manifest":{
 		"sections":[{"id":"fieldprobe.tree","name":"파일 트리","composition":{"kind":"view","page":"ui/tree.html"},"height":"fill"}],
 		"sidebars":{"sets":[{"id":"main","title":"파일","sections":["fieldprobe.tree"],"layout":"list"}],"window":{"right":"main"}}}}]}`
 	f := newSidebars(t, `{}`, installed)

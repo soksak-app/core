@@ -52,7 +52,7 @@ test("a stored tab whose params do not match its plugin is an error shown once, 
       ] },
     } },
     sidebars: { sets: [], links: [] },
-  }, { plugins: [{ id: pluginId, package: "@fixture/placeholder-params", version, manifest: {
+  }, { plugins: [{ id: pluginId, package: "@fixture/placeholder-params", version, folder: "/installed/plugin", manifest: {
     id: pluginId, name: "Fixture", description: "검사용 표면.", mark: "f", icon: "<path/>",
     surface: {
       composition: { kind: "view", page: "ui/index.html" },

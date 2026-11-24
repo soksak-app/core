@@ -39,7 +39,7 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
     workspace: { focus: "main", grid: {
       root: { card: "main", tabs: [{ plugin: pluginId, title: "main" }] },
     } },
-  }, { plugins: [{ id: pluginId, package: "@fixture/start-handoff", version: "0.0.1", manifest: {
+  }, { plugins: [{ id: pluginId, package: "@fixture/start-handoff", version: "0.0.1", folder: "/installed/plugin", manifest: {
     id: pluginId, name: "Fixture", description: "Fixture surface.", mark: "f", icon: "<path/>",
     surface: {
       composition: { kind: "view", page: "ui/index.html" },

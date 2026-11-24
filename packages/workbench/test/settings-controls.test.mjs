@@ -17,7 +17,7 @@ test("every setting form is drawn with its one control", async (t) => {
     runtime: "runtime",
     workspace: { focus: "main", grid: { root: { card: "main", tabs: [{ plugin: "fixture", title: "Fixture" }] } } },
     sidebars: { sets: [{ id: "set-1", title: "탐색기", sections: [], layout: "list" }], links: [] },
-  }, { plugins: [{ id: "fixture", package: "@fixture/fixture", version: "1.0.0", manifest: {
+  }, { plugins: [{ id: "fixture", package: "@fixture/fixture", version: "1.0.0", folder: "/installed/plugin", manifest: {
     id: "fixture", name: "Fixture", description: "Fixture card.", mark: "f", icon: "<path/>", surface,
     settings: {
       shape: { label: "모양", type: "enum", values: ["block", "underline", "beam"], default: "block" },

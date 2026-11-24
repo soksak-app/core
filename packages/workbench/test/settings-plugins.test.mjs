@@ -20,11 +20,11 @@ test("the plugins section lists only loaded plugins by name and leaves operation
     workspace: { focus: "main", grid: { root: { card: "main", tabs: [{ plugin: "alpha", title: "알파" }] } } },
     sidebars: { sets: [], links: [] },
   }, { plugins: [
-    { id: "alpha", package: "@fixture/alpha", version: "1.0.0", manifest: {
+    { id: "alpha", package: "@fixture/alpha", version: "1.0.0", folder: "/installed/plugin", manifest: {
       id: "alpha", name: "알파", description: "알파 표면.", mark: "a", icon: "<path/>", surface,
     } },
     // A plugin declares a surface, sections or contributions (validateManifest), so the plugin without a surface declares one section.
-    { id: "beta", package: "@fixture/beta", version: "1.0.0", manifest: {
+    { id: "beta", package: "@fixture/beta", version: "1.0.0", folder: "/installed/plugin", manifest: {
       id: "beta", name: "베타", description: "베타 목록.",
       sections: [{ id: "beta.list", name: "목록", height: "fill", composition: { kind: "view", page: "ui/list.html" } }],
     } },

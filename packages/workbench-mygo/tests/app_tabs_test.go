@@ -17,7 +17,7 @@ import (
 )
 
 // unloadDocument is the document of the installed plugins with a view that the memory saver can unload.
-const unloadDocument = `{"plugins": [{"id": "notes", "package": "@scope/plugin-notes", "version": "1.0.0", "manifest": {"id": "notes", "name": "노트", "description": "notes",
+const unloadDocument = `{"plugins": [{"id": "notes", "package": "@scope/plugin-notes", "version": "1.0.0", "folder": "/installed/plugin", "manifest": {"id": "notes", "name": "노트", "description": "notes",
 	"mark": "n", "icon": "<path d=\"M1 1h14\"/>", "surface": {"unload": {"format": 1, "maxBytes": 1024}, "composition": {"kind": "view", "page": "ui/index.html"}}}}]}`
 
 // tabApp is an application workbench whose window draws in a tester.
@@ -374,15 +374,15 @@ func TestAnAttachThatTheHostAnswersAfterItsProjectClosedKeepsNoRegion(t *testing
 
 // sectionsDocument is the document of the installed plugins with a tab view, sections that declare unload and sections that do not.
 const sectionsDocument = `{"plugins": [
-	{"id": "notes", "package": "@scope/plugin-notes", "version": "1.0.0", "manifest": {"id": "notes", "name": "노트", "description": "notes",
+	{"id": "notes", "package": "@scope/plugin-notes", "version": "1.0.0", "folder": "/installed/plugin", "manifest": {"id": "notes", "name": "노트", "description": "notes",
 		"mark": "n", "icon": "<path d=\"M1 1h14\"/>", "surface": {"unload": {"format": 1, "maxBytes": 1024}, "composition": {"kind": "view", "page": "ui/index.html"}}}},
-	{"id": "boxprobe", "package": "b", "version": "1.0.0", "manifest": {"id": "boxprobe", "name": "브라우저", "description": "boxprobe", "mark": "www", "icon": "<path d=\"M1 1h14\"/>",
+	{"id": "boxprobe", "package": "b", "version": "1.0.0", "folder": "/installed/plugin", "manifest": {"id": "boxprobe", "name": "브라우저", "description": "boxprobe", "mark": "www", "icon": "<path d=\"M1 1h14\"/>",
 		"surface": {"composition": {"kind": "view", "page": "ui/index.html"}}, "sections": [
 		{"id": "boxprobe.tabs", "name": "탭", "composition": {"kind": "view", "page": "ui/section.html"}, "height": 160, "unload": {"format": 2, "maxBytes": 16}},
 		{"id": "boxprobe.history", "name": "기록", "composition": {"kind": "view", "page": "ui/section.html"}, "height": "fill"},
 		{"id": "boxprobe.dom", "name": "DOM", "composition": {"kind": "view", "page": "ui/section.html"}, "height": "fill"},
 		{"id": "boxprobe.network", "name": "네트워크", "composition": {"kind": "view", "page": "ui/section.html"}, "height": "fill"}]}},
-	{"id": "fieldprobe", "package": "f", "version": "1.0.0", "manifest": {"id": "fieldprobe", "name": "파일", "description": "fieldprobe", "sections": [
+	{"id": "fieldprobe", "package": "f", "version": "1.0.0", "folder": "/installed/plugin", "manifest": {"id": "fieldprobe", "name": "파일", "description": "fieldprobe", "sections": [
 		{"id": "fieldprobe.tree", "name": "파일 트리", "composition": {"kind": "view", "page": "ui/tree.html"}, "height": "fill"},
 		{"id": "fieldprobe.bookmarks", "name": "북마크", "composition": {"kind": "view", "page": "ui/bookmarks.html"}, "height": 160}]}}]}`
 
@@ -528,9 +528,9 @@ func TestASectionWritesItsStateUnderItsOwnDeclaration(t *testing.T) {
 // hiddenTabsDocument is the document of the installed plugins with a view that declares unload, a view that does not and a view of a plugin
 // with a background session.
 const hiddenTabsDocument = `{"plugins": [
-	{"id": "notes", "package": "@scope/plugin-notes", "version": "1.0.0", "manifest": {"id": "notes", "name": "노트", "description": "notes",
+	{"id": "notes", "package": "@scope/plugin-notes", "version": "1.0.0", "folder": "/installed/plugin", "manifest": {"id": "notes", "name": "노트", "description": "notes",
 		"mark": "n", "icon": "<path d=\"M1 1h14\"/>", "surface": {"unload": {"format": 1, "maxBytes": 1024}, "composition": {"kind": "view", "page": "ui/index.html"}}}},
-	{"id": "plain", "package": "@scope/plugin-plain", "version": "1.0.0", "manifest": {"id": "plain", "name": "평문", "description": "plain",
+	{"id": "plain", "package": "@scope/plugin-plain", "version": "1.0.0", "folder": "/installed/plugin", "manifest": {"id": "plain", "name": "평문", "description": "plain",
 		"mark": "p", "icon": "<path d=\"M1 1h14\"/>", "surface": {"composition": {"kind": "view", "page": "ui/index.html"}}}}]}`
 
 // hiddenTabsApp opens a project with a shown tab and two hidden tabs, with the setting memorySaver.

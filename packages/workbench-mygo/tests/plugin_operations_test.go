@@ -159,7 +159,7 @@ func (f *shellFixture) pluginStatus() pluginsStatus {
 	return status
 }
 
-const loadedAlpha = `{"plugins":[{"id":"alpha","package":"alpha","version":"1.0.0","manifest":{"id":"alpha","name":"Alpha","description":"Loaded alpha",
+const loadedAlpha = `{"plugins":[{"id":"alpha","package":"alpha","version":"1.0.0","folder": "/installed/plugin", "manifest":{"id":"alpha","name":"Alpha","description":"Loaded alpha",
 	"mark":"a","icon":"<path d=\"M1 1h14\"/>","surface":{"composition":{"kind":"view","page":"ui/index.html"}},"dependencies":{"hello":"^2.0.0"}}}]}`
 
 func TestPluginRowsFollowTheStateOfThePage(t *testing.T) {
@@ -394,8 +394,8 @@ func TestAnInstalledPluginWithARefusedManifestIsRefused(t *testing.T) {
 		plugins: map[string]map[string]any{"alpha": record(), "beta": record()}}
 	plugins.core = "1.0.0"
 	stored := &storedHost{plugins: plugins, installed: `{"plugins":[
-		{"id":"alpha","package":"@scope/plugin-alpha","version":"1.0.0","manifest":{"id":"alpha","name":"알파","description":"alpha","contributes":{}}},
-		{"id":"beta","package":"@scope/plugin-beta","version":"1.0.0","manifest":{"id":"beta","name":"베타","description":"beta","contributes":{},"state":{}}}]}`}
+		{"id":"alpha","package":"@scope/plugin-alpha","version":"1.0.0","folder": "/installed/plugin", "manifest":{"id":"alpha","name":"알파","description":"alpha","contributes":{}}},
+		{"id":"beta","package":"@scope/plugin-beta","version":"1.0.0","folder": "/installed/plugin", "manifest":{"id":"beta","name":"베타","description":"beta","contributes":{},"state":{}}}]}`}
 	f := startedShell(t, stored)
 	f.pending.drain(t)
 	f.tester.Frame()
@@ -660,7 +660,7 @@ func TestAFailureOfTheUpdateAtStartIsShownThroughTheErrorDisplay(t *testing.T) {
 		plugins:     map[string]map[string]any{"alpha": record()},
 		startUpdate: []map[string]string{{"where": "plugin update alpha", "text": "section browser.dom status is removed"}}}
 	stored := &storedHost{plugins: plugins, installed: `{"plugins":[
-		{"id":"alpha","package":"@scope/plugin-alpha","version":"1.0.0","manifest":{"id":"alpha","name":"알파","description":"alpha","contributes":{}}}]}`}
+		{"id":"alpha","package":"@scope/plugin-alpha","version":"1.0.0","folder": "/installed/plugin", "manifest":{"id":"alpha","name":"알파","description":"alpha","contributes":{}}}]}`}
 	f := startedShell(t, stored)
 	f.pending.drain(t)
 	f.tester.Frame()

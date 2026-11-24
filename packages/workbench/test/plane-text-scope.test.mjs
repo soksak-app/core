@@ -39,7 +39,7 @@ test("the scope of a pressed card ends with the card and its space", { timeout: 
       ] },
     } },
     sidebars: { sets: [], links: [] },
-  }, { plugins: [{ id: pluginId, package: `@fixture/${pluginId}`, version: "0.0.1", manifest: {
+  }, { plugins: [{ id: pluginId, package: `@fixture/${pluginId}`, version: "0.0.1", folder: "/installed/plugin", manifest: {
     id: pluginId, name: "Fixture", description: "검사용 표면.", mark: "f", icon: "<path d='M0 0h1v1H0z'/>",
     surface: { composition: { kind: "view", page: "ui/page.html" } },
   } }] });

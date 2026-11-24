@@ -31,7 +31,7 @@ assert.deepEqual(installEnvironment({
   runtime: "runtime",
   workspace: { focus: "main", grid: { root: { card: "main", tabs: [{ plugin: PLAIN, title: "t" }] } } },
   sidebars: { sets: [], links: [] },
-}, { plugins: [{ id: PLAIN, package: "@fixture/plain", version: "0.0.1", manifest: manifest(PLAIN) }] }), [],
+}, { plugins: [{ id: PLAIN, package: "@fixture/plain", version: "0.0.1", folder: "/installed/plugin", manifest: manifest(PLAIN) }] }), [],
 "the fixture environment refused a plugin");
 const { registry } = await import("../exposure.js");
 registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);

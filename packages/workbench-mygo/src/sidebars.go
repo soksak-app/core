@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -215,6 +216,11 @@ func readInstalled(document []byte) ([]InstalledPlugin, error) {
 	}
 	if read.Error != "" {
 		return nil, errors.New(read.Error)
+	}
+	for _, plugin := range read.Plugins {
+		if !filepath.IsAbs(plugin.Folder) {
+			return nil, fmt.Errorf("installed plugins: plugin %s folder must be an absolute path", plugin.ID)
+		}
 	}
 	return read.Plugins, nil
 }

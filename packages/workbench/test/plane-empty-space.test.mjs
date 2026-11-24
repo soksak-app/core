@@ -35,7 +35,7 @@ test("a new space of a grid with an empty content card starts with the card empt
     runtime: "runtime",
     workspace: { focus: "main", grid: { root: { card: "main", tabs: [] } } },
     sidebars: { sets: [], links: [] },
-  }, { plugins: [{ id: pluginId, package: "@fixture/tab-close", version: "0.0.1", manifest: {
+  }, { plugins: [{ id: pluginId, package: "@fixture/tab-close", version: "0.0.1", folder: "/installed/plugin", manifest: {
     id: pluginId, name: "Fixture", description: "Fixture surface.", mark: "f", icon: "<path/>",
     surface: { composition: { kind: "view", page: "ui/index.html" } },
   } }] }), [], "the fixture environment refused a plugin");

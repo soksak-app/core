@@ -39,8 +39,8 @@ const files = {
 };
 // The install list of a release build has no diagnostics declaration.
 const installed = { plugins: [
-  { id: "card", package: "@fixture/card", version: "0.0.1", manifest: files.card },
-  { id: "side", package: "@fixture/side", version: "0.0.1", manifest: files.side },
+  { id: "card", package: "@fixture/card", version: "0.0.1", folder: "/installed/plugin", manifest: files.card },
+  { id: "side", package: "@fixture/side", version: "0.0.1", folder: "/installed/plugin", manifest: files.side },
 ] };
 
 const { environment, installEnvironment, pluginDiagnostics, pluginUnits } = await import("../environment.js");

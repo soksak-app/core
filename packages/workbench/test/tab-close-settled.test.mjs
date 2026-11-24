@@ -36,7 +36,7 @@ test("core.tab.close answers after the tab close and its draw", { timeout: 5000 
     runtime: "runtime",
     workspace: { focus: "main", grid: { root: { card: "main", tabs: [{ plugin: pluginId, title: "first" }, { plugin: pluginId, title: "second" }] } } },
     sidebars: { sets: [], links: [] },
-  }, { plugins: [{ id: pluginId, package: "@fixture/tab-close", version: "0.0.1", manifest: {
+  }, { plugins: [{ id: pluginId, package: "@fixture/tab-close", version: "0.0.1", folder: "/installed/plugin", manifest: {
     id: pluginId, name: "Fixture", description: "Fixture surface.", mark: "f", icon: "<path/>",
     surface: { composition: { kind: "view", page: "ui/index.html" } },
   } }] }), [], "the fixture environment refused a plugin");

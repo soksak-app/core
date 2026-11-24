@@ -45,11 +45,11 @@ func installedFixture(t *testing.T) string {
 // contract: installed.document.lists-enabled-plugins
 func TestInstalledPluginsDocumentListsEnabledPluginsById(t *testing.T) {
 	config := installedFixture(t)
-	release := `{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"tty","package":"@scope/plugin-tty","version":"0.1.0","manifest":{"id":"tty","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{}}}]}`
+	release := withConfig(config, `{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","folder":"CONFIG/plugins/alpha/1.0.0","manifest":{"id":"alpha"}},{"id":"tty","package":"@scope/plugin-tty","version":"0.1.0","folder":"CONFIG/plugins/tty/0.1.0","manifest":{"id":"tty","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{}}}]}`)
 	if got := string(host.InstalledPluginsDocument(config, false)); got != release {
 		t.Fatalf("release document %s", got)
 	}
-	diagnostic := `{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"tty","package":"@scope/plugin-tty","version":"0.1.0","manifest":{"id":"tty","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{}},"diagnostics":{"module":"ui/d.js","exposes":{}}}]}`
+	diagnostic := withConfig(config, `{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","folder":"CONFIG/plugins/alpha/1.0.0","manifest":{"id":"alpha"}},{"id":"tty","package":"@scope/plugin-tty","version":"0.1.0","folder":"CONFIG/plugins/tty/0.1.0","manifest":{"id":"tty","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{}},"diagnostics":{"module":"ui/d.js","exposes":{}}}]}`)
 	if got := string(host.InstalledPluginsDocument(config, true)); got != diagnostic {
 		t.Fatalf("diagnostic document %s", got)
 	}
@@ -58,13 +58,16 @@ func TestInstalledPluginsDocumentListsEnabledPluginsById(t *testing.T) {
 	}
 }
 
+// withConfig puts the configuration directory of the test for CONFIG, because folder is the absolute path of the installed folder.
+func withConfig(config, text string) string { return strings.ReplaceAll(text, "CONFIG", config) }
+
 // contract: installed.document.sidecar-facts
 func TestInstalledPluginsDocumentDeclaresTheMessageFormOfEachSidecar(t *testing.T) {
 	config := installedFixture(t)
 	support.WriteInstalled(t, config, map[string]string{
 		"sidecars/scope-sidecar-worker/0.1.2/darwin-arm64/sidecar.json": `{"executable": "build/worker", "protocol": 1, "displayName": "soksak://sidecar/probe", "message": {"form": "json-object", "operationField": "operation"}, "hostReadOperations": ["list"]}`,
 	})
-	want := `{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"tty","package":"@scope/plugin-tty","version":"0.1.0","manifest":{"id":"tty","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{"message":{"form":"json-object","operationField":"operation"}}}}]}`
+	want := withConfig(config, `{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","folder":"CONFIG/plugins/alpha/1.0.0","manifest":{"id":"alpha"}},{"id":"tty","package":"@scope/plugin-tty","version":"0.1.0","folder":"CONFIG/plugins/tty/0.1.0","manifest":{"id":"tty","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{"message":{"form":"json-object","operationField":"operation"}}}}]}`)
 	if got := string(host.InstalledPluginsDocument(config, false)); got != want {
 		t.Fatalf("document %s", got)
 	}
@@ -74,7 +77,7 @@ func TestInstalledPluginsDocumentDeclaresTheMessageFormOfEachSidecar(t *testing.
 func TestInstalledPluginsDocumentReadsTheNameFromThePackageJSON(t *testing.T) {
 	config := installedFixture(t)
 	support.WriteInstalled(t, config, map[string]string{"plugins/alpha/1.0.0/package.json": `{"name": "plugin-renamed"}`})
-	if got := string(host.InstalledPluginsDocument(config, false)); !strings.Contains(got, `{"id":"alpha","package":"plugin-renamed",`) {
+	if got := string(host.InstalledPluginsDocument(config, false)); !strings.Contains(got, `{"id":"alpha","package":"plugin-renamed","version":"1.0.0","folder":`) {
 		t.Fatalf("renamed document %s", got)
 	}
 	if err := os.Remove(filepath.Join(config, "plugins/alpha/1.0.0/package.json")); err != nil {

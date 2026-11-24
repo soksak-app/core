@@ -59,9 +59,9 @@ func contributed(t *testing.T) []workbench.InstalledPlugin {
 	t.Helper()
 	var installed []workbench.InstalledPlugin
 	err := json.Unmarshal([]byte(`[
-		{"id": "probe", "package": "@scope/plugin-probe", "version": "0.1.0", "manifest": {
+		{"id": "probe", "package": "@scope/plugin-probe", "version": "0.1.0", "folder": "/installed/probe", "manifest": {
 			"extends": {"list": {"version": "1.0.0", "schema": {"type": "object", "properties": {"label": {"type": "string"}}}}}}},
-		{"id": "tidy", "package": "@scope/plugin-tidy", "version": "0.0.1", "manifest": {
+		{"id": "tidy", "package": "@scope/plugin-tidy", "version": "0.0.1", "folder": "/installed/tidy", "manifest": {
 			"contributes": {"probe.list": [
 				{"range": "^1.0.0", "module": "ui/a.js", "label": "first"},
 				{"range": "^1.0.0", "module": "ui/b.js", "label": "second"}]}}}]`), &installed)
@@ -96,7 +96,7 @@ func TestAFailedContributionLeavesTheProvider(t *testing.T) {
 	if !tester.HasText("first") || !tester.HasText("second") {
 		t.Fatalf("the provider shows %q", tester.Texts())
 	}
-	if items[0].Module != "/modules/@scope/plugin-tidy/ui/a.js" || items[1].Index != 1 || items[1].Plugin != "tidy" {
+	if items[0].Module != "/modules/@scope/plugin-tidy/ui/a.js" || items[0].Folder != "/installed/tidy" || items[1].Index != 1 || items[1].Plugin != "tidy" {
 		t.Fatalf("the items are %+v", items)
 	}
 

@@ -432,7 +432,7 @@ func TestAddTabStoresTheDeclaredParamsAndFocusesTheCard(t *testing.T) {
 }
 
 func TestAPluginWithoutDeclaredParamsRefusesThem(t *testing.T) {
-	f := newShell(t, &storedHost{installed: `{"plugins":[{"id":"plain","package":"plain","version":"1.0.0","manifest":{"id":"plain","name":"Plain","description":"plain","mark":"Pl","icon":"<path d=\"M1 1h14\"/>",
+	f := newShell(t, &storedHost{installed: `{"plugins":[{"id":"plain","package":"plain","version":"1.0.0","folder": "/installed/plugin", "manifest":{"id":"plain","name":"Plain","description":"plain","mark":"Pl","icon":"<path d=\"M1 1h14\"/>",
 		"surface":{"composition":{"kind":"view","page":"a.html"}}}}]}`})
 	f.run("core.library.form.open", map[string]string{"mode": "open"})
 	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
@@ -445,7 +445,7 @@ func TestAPluginWithoutDeclaredParamsRefusesThem(t *testing.T) {
 // modifiedShell is a shown project with the tabs a and b of a plugin that saves. The tab a is modified.
 func modifiedShell(t *testing.T) *tabShell {
 	t.Helper()
-	f := newTabShell(t, &storedHost{installed: `{"plugins":[{"id":"notes","package":"notes","version":"1.0.0","manifest":{"id":"notes","name":"Notes",
+	f := newTabShell(t, &storedHost{installed: `{"plugins":[{"id":"notes","package":"notes","version":"1.0.0","folder": "/installed/plugin", "manifest":{"id":"notes","name":"Notes",
 		"description":"notes","mark":"N","icon":"<path d=\"M1 1h14\"/>","surface":{"composition":{"kind":"view","page":"n.html"},"save":"notes.save"},
 		"exposes":{"commands":[{"name":"notes.save","description":"saves","params":{"type":"object","properties":{}},"result":{"type":"null"}}]}}}]}`,
 		projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"), tab("tab-bbbbbb", "notes"))}})
@@ -1170,7 +1170,7 @@ func manyPluginsNamed(count int, prefix string) *storedHost {
 	plugins := []string{}
 	for index := range count {
 		id := fmt.Sprintf("p%02d", index)
-		plugins = append(plugins, fmt.Sprintf(`{"id":%q,"package":%q,"version":"1.0.0","manifest":{"id":%q,"name":%q,"description":"a surface",`+
+		plugins = append(plugins, fmt.Sprintf(`{"id":%q,"package":%q,"version":"1.0.0","folder": "/installed/plugin", "manifest":{"id":%q,"name":%q,"description":"a surface",`+
 			`"mark":"Pl","icon":"<path d=\"M1 1h14\"/>","surface":{"composition":{"kind":"view","page":"a.html"}}}}`, id, id, id, prefix+id))
 	}
 	return &storedHost{common: map[string]any{}, installed: `{"plugins":[` + strings.Join(plugins, ",") + `]}`}

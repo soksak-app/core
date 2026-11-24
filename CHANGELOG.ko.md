@@ -3,6 +3,10 @@
 
 [English](CHANGELOG.md)
 
+## 2026-11-25
+
+- F1154: `/installed-plugins.json`의 각 entry가 configuration directory에서 plugin의 기록된 `path`의 절대 경로인 `folder`를 Go와 Rust host, host 없는 application의 staging에서 가진다. page, mygo, `sok`은 절대 `folder`가 없는 entry를 `installed-plugins.json: plugin <id> folder must be an absolute path`로 거부하고, `contributions(point)`의 각 connected item은 기여자의 설치 folder인 `folder`를 준다. Red/Green: Go와 Rust host와 `sok`의 installed document test, plugin-api의 `contributions.test.mjs`, mygo의 `TestContributionCases`.
+
 ## 2026-11-24
 
 - F1148-2: 각 application의 새 space는 window sidebar 사이의 빈 card 하나로 시작한다. `workspace.grid`의 content card는 비어도 되는 `tabs`를 선언하며, window check 시작은 빈 card에 layout probe를 더한다.

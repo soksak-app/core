@@ -24,7 +24,7 @@ test("the project form uses the shared error toast when its folder is empty", as
       runtime: "runtime",
       workspace: { focus: "main", grid: { root: { card: "main", tabs: [{ plugin: "fixture-note", title: "Note" }] } } },
       sidebars: { sets: [], links: [] },
-    }, { plugins: [{ id: "fixture-note", package: "@fixture/note", version: "0.0.1", manifest: {
+    }, { plugins: [{ id: "fixture-note", package: "@fixture/note", version: "0.0.1", folder: "/installed/plugin", manifest: {
       id: "fixture-note", name: "Note", description: "Shows a note.", mark: "n", icon: "<path/>",
       surface: { composition: { kind: "view", page: "ui/index.html" } },
     } }] }), []);

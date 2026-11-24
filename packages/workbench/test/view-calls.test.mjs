@@ -193,7 +193,7 @@ const patches = (h, from) => h.sent(from, ["workspace"]).map(([, payload]) => pa
 
 // The installed plugins whose manifests give the extension point language to probe and two contributions to it. The entry 0 of
 // the plugin two names a range that the point does not accept, so only its entry 1 is connected.
-const plugin = (id, manifest) => ({ id, package: `@scope/plugin-${id}`, version: "0.1.0", manifest: { id, name: id, description: "검사용.", ...manifest } });
+const plugin = (id, manifest) => ({ id, package: `@scope/plugin-${id}`, version: "0.1.0", folder: "/installed/plugin", manifest: { id, name: id, description: "검사용.", ...manifest } });
 const CONTRIBUTORS = () => [
   plugin("probe", { mark: "p", icon: "<path/>", surface: { module: "ui/probe.js", composition: { kind: "dom" } },
     extends: { language: { version: "1.0.0", schema: { type: "object" } } } }),

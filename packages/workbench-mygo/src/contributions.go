@@ -33,6 +33,7 @@ type InstalledPlugin struct {
 	ID       string         `json:"id"`
 	Package  string         `json:"package"`
 	Version  string         `json:"version"`
+	Folder   string         `json:"folder"`
 	Manifest PluginManifest `json:"manifest"`
 }
 
@@ -46,12 +47,13 @@ type ContributionStatus struct {
 }
 
 // ResolvedContribution is a contributed item. A connected item also has its provider, its fields without range and module, and
-// the URL of its module.
+// the URL of its module and the installed folder of its plugin.
 type ResolvedContribution struct {
 	ContributionStatus
 	Provider string         `json:"provider,omitempty"`
 	Item     map[string]any `json:"item,omitempty"`
 	Module   string         `json:"module,omitempty"`
+	Folder   string         `json:"folder,omitempty"`
 }
 
 // ConnectedItem is an item that a provider receives. Fail makes the item invalid and leaves the other items connected.
@@ -60,6 +62,8 @@ type ConnectedItem struct {
 	Index  int
 	Item   map[string]any
 	Module string
+	// Folder is the absolute path of the installed folder of the contributor (docs/spec/plugins.md#extension-points).
+	Folder string
 	Fail   func(reason error)
 }
 
@@ -110,7 +114,7 @@ func ResolveContributions(installed []InstalledPlugin) ([]ResolvedContribution, 
 					}
 					base.State = "connected"
 					resolved = append(resolved, ResolvedContribution{ContributionStatus: base, Provider: providerID, Item: item,
-						Module: "/modules/" + plugin.Package + "/" + module})
+						Module: "/modules/" + plugin.Package + "/" + module, Folder: plugin.Folder})
 				}
 			}
 		}
@@ -181,7 +185,7 @@ func (c *Contributions) Of(provider, point string) ([]ConnectedItem, error) {
 		if entry.Point != name || entry.State != "connected" {
 			continue
 		}
-		items = append(items, ConnectedItem{Plugin: entry.Plugin, Index: entry.Index, Item: maps.Clone(entry.Item), Module: entry.Module,
+		items = append(items, ConnectedItem{Plugin: entry.Plugin, Index: entry.Index, Item: maps.Clone(entry.Item), Module: entry.Module, Folder: entry.Folder,
 			Fail: func(reason error) {
 				text := "extend failed: " + reason.Error()
 				entry.State, entry.Reason = "invalid", &text

@@ -296,9 +296,9 @@ function formContains(range, version) {
 }
 
 /**
- * Resolves the contributions of the installed and enabled plugins ({id, package, version, manifest})
+ * Resolves the contributions of the installed and enabled plugins ({id, package, version, folder, manifest})
  * (docs/spec/plugins.md#extension-points). Each item is {plugin, point, index, state, reason}; a connected item also has
- * provider, item (the fields without range and module) and module (a URL). Items are sorted by plugin id, point and index.
+ * provider, item (the fields without range and module), module (a URL) and folder (the installed folder of the contributor). Items are sorted by plugin id, point and index.
  */
 export function resolveContributions(installed) {
   const providers = new Map(installed.map((plugin) => [plugin.id, plugin]));
@@ -319,7 +319,7 @@ export function resolveContributions(installed) {
           return resolved.push({ ...base, state: "version-mismatch", reason: `range ${range} does not contain ${point} ${declaration.version}` });
         }
         if (!matchesSchema(declaration.schema, item)) return resolved.push({ ...base, state: "invalid", reason: `item does not match the schema of ${point}` });
-        resolved.push({ ...base, state: "connected", reason: null, provider: providerId, item, module: `/${modulePath(plugin.package, module)}` });
+        resolved.push({ ...base, state: "connected", reason: null, provider: providerId, item, module: `/${modulePath(plugin.package, module)}`, folder: plugin.folder });
       });
     }
   }
@@ -1563,12 +1563,13 @@ function installedDocument(document) {
  */
 function checkInstalledPlugin(plugin) {
   if (!isObject(plugin)) throw new Error(`${INSTALLED_PLUGINS}: every plugin must be an object`);
-  only(`${INSTALLED_PLUGINS} plugin ${plugin.id}`, plugin, ["id", "package", "version", "manifest", "sidecars", "diagnostics"]);
+  only(`${INSTALLED_PLUGINS} plugin ${plugin.id}`, plugin, ["id", "package", "version", "folder", "manifest", "sidecars", "diagnostics"]);
   if (!isText(plugin.id) || !ID.test(plugin.id)) throw new Error(`${INSTALLED_PLUGINS}: plugin id ${plugin.id} is invalid`);
   if (!isText(plugin.package) || !PACKAGE.test(plugin.package)) {
     throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} package must be a package.json name`);
   }
   if (!isText(plugin.version)) throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} version is required`);
+  if (!isText(plugin.folder) || !plugin.folder.startsWith("/")) throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} folder must be an absolute path`);
   if (plugin.manifest === undefined) throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} manifest is required`);
   if (!isObject(plugin.manifest) || plugin.manifest.id !== plugin.id) {
     throw new Error(`${INSTALLED_PLUGINS}: plugin ${plugin.id} has a plugin.json with id ${plugin.manifest?.id}`);

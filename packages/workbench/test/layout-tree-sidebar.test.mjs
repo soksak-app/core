@@ -43,9 +43,9 @@ assert.deepEqual(installEnvironment({
   sidebars: { sets: [{ id: "set-list", title: "List", sections: ["fixture-sections.list"], layout: "list" }],
     links: sides.map((side) => ({ place: side, plugin: null, set: "set-list" })) },
 }, { plugins: [
-  { id: PLAIN, package: "@fixture/plain", version: "0.0.1", manifest: { id: PLAIN, name: PLAIN, description: "검사용 표면.", mark: "f", icon: "<path/>",
+  { id: PLAIN, package: "@fixture/plain", version: "0.0.1", folder: "/installed/plugin", manifest: { id: PLAIN, name: PLAIN, description: "검사용 표면.", mark: "f", icon: "<path/>",
     surface: { composition: { kind: "view", page: "ui/index.html" } } } },
-  { id: "fixture-sections", package: "@fixture/sections", version: "0.0.1", manifest: { id: "fixture-sections", name: "Sections",
+  { id: "fixture-sections", package: "@fixture/sections", version: "0.0.1", folder: "/installed/plugin", manifest: { id: "fixture-sections", name: "Sections",
     description: "검사용 섹션.", sections: [{ id: "fixture-sections.list", name: "List", composition: { kind: "view", page: "ui/list.html" }, height: "fill" }] } },
 ] }), [], "the fixture environment refused a plugin");
 // The sidebar draws its section controls, which connect only to declared core commands.

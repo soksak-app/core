@@ -25,7 +25,7 @@ const SHORTCUT_ROWS = [
   { key: "Escape", owner: "view", command: "none" },
   { key: "text input keys", owner: "view", command: "none" },
 ];
-const plugin = (id, manifest) => ({ id, package: `@scope/plugin-${id}`, version: "0.1.0", manifest: { id, name: id, ...manifest } });
+const plugin = (id, manifest) => ({ id, package: `@scope/plugin-${id}`, version: "0.1.0", folder: "/installed/plugin", manifest: { id, name: id, ...manifest } });
 // The installed plugins: probe declares the extension point language, and one and two contribute to it. Entry 0 of two names a range that
 // the point does not accept, so only its entry 1 is connected.
 const INSTALLED = () => [

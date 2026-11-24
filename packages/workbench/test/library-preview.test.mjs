@@ -19,7 +19,7 @@ const manifest = {
 };
 
 const { installEnvironment } = await import("../environment.js");
-installEnvironment(environmentFile, { plugins: [{ id: "probe", package: "@fixture/probe", version: "0.0.1", manifest }] });
+installEnvironment(environmentFile, { plugins: [{ id: "probe", package: "@fixture/probe", version: "0.0.1", folder: "/installed/plugin", manifest }] });
 const { preview } = await import("../library-preview.js");
 
 const project = (plugin) => ({

@@ -25,8 +25,8 @@ const side = {
   dialogs: { confirm: { page: "ui/confirm.html" } },
 };
 const installed = { plugins: [
-  { id: "card", package: "@fixture/card", version: "0.0.1", manifest: card },
-  { id: "side", package: "@fixture/side", version: "0.0.1", manifest: side },
+  { id: "card", package: "@fixture/card", version: "0.0.1", folder: "/installed/plugin", manifest: card },
+  { id: "side", package: "@fixture/side", version: "0.0.1", folder: "/installed/plugin", manifest: side },
 ] };
 
 const { installEnvironment } = await import("../environment.js");

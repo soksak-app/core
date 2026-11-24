@@ -5,7 +5,7 @@ import test from "node:test";
 import { manifestSidecars, resolveContributions } from "../index.js";
 
 const provider = {
-  id: "probe", package: "@scope/plugin-probe", version: "0.1.0",
+  id: "probe", package: "@scope/plugin-probe", version: "0.1.0", folder: "/installed/probe",
   manifest: {
     id: "probe", name: "Probe", description: "검사용 표면.", mark: "p", icon: "<path/>",
     surface: { composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } },
@@ -13,7 +13,7 @@ const provider = {
   },
 };
 const contributor = (id, items, point = "probe.language") => ({
-  id, package: `@scope/plugin-${id}`, version: "0.0.1",
+  id, package: `@scope/plugin-${id}`, version: "0.0.1", folder: `/installed/${id}`,
   manifest: { id, name: id, description: "검사용 기여.", contributes: { [point]: items } },
 });
 
@@ -29,7 +29,7 @@ test("each contributed item is connected, missing its provider, mismatched or in
     { plugin: "lost", point: "absent.language", index: 0, state: "provider-missing", reason: "plugin absent is not installed or not enabled" },
     { plugin: "other", point: "probe.format", index: 0, state: "invalid", reason: "probe 0.1.0 declares no extension point format" },
     { plugin: "tidy", point: "probe.language", index: 0, state: "connected", reason: null,
-      provider: "probe", item: { extensions: ["tidy"] }, module: "/modules/@scope/plugin-tidy/ui/tidy.js" },
+      provider: "probe", item: { extensions: ["tidy"] }, module: "/modules/@scope/plugin-tidy/ui/tidy.js", folder: "/installed/tidy" },
     { plugin: "tidy", point: "probe.language", index: 1, state: "version-mismatch", reason: "range ^2.0.0 does not contain probe.language 1.2.0" },
     { plugin: "tidy", point: "probe.language", index: 2, state: "invalid", reason: "item does not match the schema of probe.language" },
   ]);

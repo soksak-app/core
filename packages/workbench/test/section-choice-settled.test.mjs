@@ -36,7 +36,7 @@ test("folding, selecting and sizing a section lay out the plane again", { timeou
       root: { card: "main", tabs: [{ plugin: "fixture-choice", title: "main" }] },
     } },
     sidebars: { sets: [], links: [] },
-  }, { plugins: [{ id: "fixture-choice", package: "@fixture/choice", version: "0.0.1", manifest: {
+  }, { plugins: [{ id: "fixture-choice", package: "@fixture/choice", version: "0.0.1", folder: "/installed/plugin", manifest: {
     id: "fixture-choice", name: "Fixture", description: "검사용 표면.", mark: "f", icon: "<path/>",
     surface: { composition: { kind: "view", page: "ui/index.html" } },
   } }] }), [], "the fixture environment refused a plugin");

@@ -167,8 +167,8 @@ test("an application without a host stages the enabled installed plugins as a ho
   const configuration = installedConfiguration(t);
   stage(app, "--installed", configuration);
   assert.deepEqual(JSON.parse(readFileSync(join(app, "out/installed-plugins.json"), "utf8")), { plugins: [
-    { id: "alpha", package: "plugin-alpha", version: "1.0.0", manifest: MANIFESTS.alpha },
-    { id: "probe", package: "@fixture/probe", version: "0.1.0", manifest: MANIFESTS.probe },
+    { id: "alpha", package: "plugin-alpha", version: "1.0.0", folder: join(configuration, "plugins/alpha/1.0.0"), manifest: MANIFESTS.alpha },
+    { id: "probe", package: "@fixture/probe", version: "0.1.0", folder: join(configuration, "plugins/probe/0.1.0"), manifest: MANIFESTS.probe },
   ] });
   assert.equal(readFileSync(join(app, "out/modules/@fixture/probe/ui/probe.js"), "utf8"), "export function mount() {}\n");
   assert.equal(existsSync(join(app, "out/modules/plugin-off")), false);

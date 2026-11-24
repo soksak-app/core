@@ -13,7 +13,7 @@ import (
 
 // sessionPlugins holds the plugin term, which declares sessions and one sidecar, and whose tabs take the session in their params.
 const sessionPlugins = `{"plugins": [
-	{"id": "term", "package": "@scope/plugin-term", "version": "1.0.0", "manifest": {"id": "term", "name": "Term", "description": "term", "mark": "t", "icon": "<path d=\"M1 1h14\"/>",
+	{"id": "term", "package": "@scope/plugin-term", "version": "1.0.0", "folder": "/installed/plugin", "manifest": {"id": "term", "name": "Term", "description": "term", "mark": "t", "icon": "<path d=\"M1 1h14\"/>",
 		"surface": {"composition": {"kind": "view", "page": "ui/index.html"}, "params": {"type": "object", "properties": {"session": {"type": "string"}}}},
 		"dependencies": {"` + sessionSidecar + `": "1.0.0"}, "sessions": true}}
 ]}`

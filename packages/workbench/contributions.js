@@ -26,8 +26,8 @@ export function onContributionsChange(fn) {
 }
 
 /**
- * The items connected to the extension point point of the plugin provider, each {plugin, index, item, module, fail(reason)};
- * index is the position of the entry in the contributes of its plugin. fail makes that item invalid and leaves the other items
+ * The items connected to the extension point point of the plugin provider, each {plugin, index, item, module, folder, fail(reason)};
+ * index is the position of the entry in the contributes of its plugin, and folder the installed folder of the contributor. fail makes that item invalid and leaves the other items
  * connected. A point that the provider does not declare is an error.
  */
 export function contributionsOf(provider, point) {
@@ -38,6 +38,7 @@ export function contributionsOf(provider, point) {
     index: entry.index,
     item: structuredClone(entry.item),
     module: entry.module,
+    folder: entry.folder,
     fail(reason) {
       entry.state = "invalid";
       entry.reason = `extend failed: ${reason instanceof Error ? reason.message : String(reason)}`;

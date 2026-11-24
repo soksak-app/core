@@ -41,7 +41,7 @@ test("a sidebar draws the section surface ids of the space of the held layout wh
       root: { card: "main", tabs: [{ plugin: pluginId, title: "main" }] },
     } },
     sidebars: { sets: [{ id: setId, title: "Fixture", layout: "list", sections: [`${pluginId}.tree`] }], links: [] },
-  }, { plugins: [{ id: pluginId, package: "@fixture/space", version: "0.0.1", manifest: {
+  }, { plugins: [{ id: pluginId, package: "@fixture/space", version: "0.0.1", folder: "/installed/plugin", manifest: {
     id: pluginId, name: "Fixture", description: "검사용 표면.", mark: "f", icon: "<path/>",
     surface: { composition: { kind: "view", page: "ui/index.html" } },
     sections: [{ id: `${pluginId}.tree`, name: "Tree", height: "fill", composition: { kind: "view", page: "ui/tree.html" } }],

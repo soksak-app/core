@@ -107,6 +107,7 @@ pub fn installed_plugins_document(config_dir: &Path, diagnostics: bool) -> Vec<u
         id: String,
         package: String,
         version: String,
+        folder: String,
         manifest: Box<RawValue>,
         #[serde(skip_serializing_if = "Option::is_none")]
         sidecars: Option<BTreeMap<String, serde_json::Map<String, serde_json::Value>>>,
@@ -134,6 +135,7 @@ pub fn installed_plugins_document(config_dir: &Path, diagnostics: bool) -> Vec<u
             id: plugin.id,
             package: plugin.package,
             version: plugin.version,
+            folder: plugin.dir.display().to_string(),
             manifest: plugin.manifest,
             diagnostics: None,
         };

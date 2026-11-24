@@ -16,7 +16,7 @@ const reader = (files) => async (path) => {
   return files[path];
 };
 // probe-id is the plugin id, probe-name is its package, and the staged module of the package is under modules/probe-name.
-const installed = { plugins: [{ id: "probe-id", package: "probe-name", version: "0.1.0", manifest: manifest("probe-id") }] };
+const installed = { plugins: [{ id: "probe-id", package: "probe-name", version: "0.1.0", folder: "/installed/plugin", manifest: manifest("probe-id") }] };
 
 test("pagePlugin of a soksak page is its host and the manifest on its own origin", () => {
   assert.deepEqual(pagePlugin(locationOf("soksak://probe/ui/index.html")), { host: "probe", manifest: "/plugin.json" });
@@ -70,7 +70,7 @@ test("a staged page whose module has no installed entry fails with the package",
 });
 
 test("a staged page starts when another installed plugin is refused", async () => {
-  const refused = { id: "earlier", package: "earlier-name", version: "0.0.1", manifest: { id: "earlier", description: "이름이 없는 manifest." } };
+  const refused = { id: "earlier", package: "earlier-name", version: "0.0.1", folder: "/installed/plugin", manifest: { id: "earlier", description: "이름이 없는 manifest." } };
   const identity = await pageIdentity(locationOf("https://example.test/modules/probe-name/ui/index.html"), reader({
     "/installed-plugins.json": { plugins: [refused, ...installed.plugins] },
     "/modules/probe-name/plugin.json": manifest("probe-id"),

@@ -22,8 +22,8 @@ const environmentFile = {
 };
 const { installEnvironment } = await import("../environment.js");
 installEnvironment(environmentFile, { plugins: [
-  { id: "probe-view", package: "@fixture/probe-view", version: "0.0.1", manifest: viewManifest },
-  { id: "probe-plain", package: "@fixture/probe-plain", version: "0.0.1", manifest: plainManifest },
+  { id: "probe-view", package: "@fixture/probe-view", version: "0.0.1", folder: "/installed/plugin", manifest: viewManifest },
+  { id: "probe-plain", package: "@fixture/probe-plain", version: "0.0.1", folder: "/installed/plugin", manifest: plainManifest },
 ] });
 const { checkStoredLayout, recordStoredOrigins } = await import("../stored-layout.js");
 const { tabOrigin, viewRefusal, tabError } = await import("../tab-reports.js");

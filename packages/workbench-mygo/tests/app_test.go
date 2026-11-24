@@ -448,7 +448,7 @@ func TestAPluginChangeStartsAfterTheReplyOfARunningCommand(t *testing.T) {
 }
 
 // installedSession is the document of the installed plugins with a plugin that keeps a background session.
-const installedSession = `{"plugins": [{"id": "session", "package": "@scope/plugin-session", "version": "1.0.0", "manifest": {
+const installedSession = `{"plugins": [{"id": "session", "package": "@scope/plugin-session", "version": "1.0.0", "folder": "/installed/plugin", "manifest": {
 	"id": "session", "name": "세션", "description": "session", "mark": "s", "icon": "<path d=\"M1 1h14\"/>", "dependencies": {"@scope/sidecar-session": "^1.0.0"},
 	"background": {"sidecar": "@scope/sidecar-session", "operation": "open", "settings": {"shell": "shell"}},
 	"settings": {"shell": {"type": "string", "label": "셸", "default": "login", "maxLength": 64}, "other": {"type": "string", "label": "다른 값", "default": "x", "maxLength": 64}},
@@ -592,7 +592,7 @@ func TestAShownTabShowsTheFailureOfItsImageDetach(t *testing.T) {
 }
 
 // installedSessionView is installedSession with a plugin that stands in a view of its tab.
-const installedSessionView = `{"plugins": [{"id": "session", "package": "@scope/plugin-session", "version": "1.0.0", "manifest": {
+const installedSessionView = `{"plugins": [{"id": "session", "package": "@scope/plugin-session", "version": "1.0.0", "folder": "/installed/plugin", "manifest": {
 	"id": "session", "name": "세션", "description": "session", "mark": "s", "icon": "<path d=\"M1 1h14\"/>", "dependencies": {"@scope/sidecar-session": "^1.0.0"},
 	"background": {"sidecar": "@scope/sidecar-session", "operation": "open"},
 	"surface": {"composition": {"kind": "view", "page": "ui/index.html"}}}}]}`

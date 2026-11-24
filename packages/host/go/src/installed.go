@@ -125,6 +125,7 @@ func InstalledPluginsDocument(configDir string, diagnostics bool) []byte {
 		ID          string                  `json:"id"`
 		Package     string                  `json:"package"`
 		Version     string                  `json:"version"`
+		Folder      string                  `json:"folder"`
 		Manifest    json.RawMessage         `json:"manifest"`
 		Sidecars    map[string]sidecarFacts `json:"sidecars,omitempty"`
 		Diagnostics json.RawMessage         `json:"diagnostics,omitempty"`
@@ -146,7 +147,7 @@ func InstalledPluginsDocument(configDir string, diagnostics bool) []byte {
 	}
 	entries := []entry{}
 	for _, plugin := range plugins {
-		item := entry{ID: plugin.id, Package: plugin.pkg, Version: plugin.version, Manifest: plugin.manifest, Sidecars: facts[plugin.id]}
+		item := entry{ID: plugin.id, Package: plugin.pkg, Version: plugin.version, Folder: plugin.dir, Manifest: plugin.manifest, Sidecars: facts[plugin.id]}
 		if diagnostics {
 			file := filepath.Join(plugin.dir, "diagnostics.json")
 			data, err := os.ReadFile(file)

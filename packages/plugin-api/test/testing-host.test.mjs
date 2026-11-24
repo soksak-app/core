@@ -345,7 +345,7 @@ test("document.adoptedStyleSheets takes constructed style sheets, and refuses an
 const PAGE_CONTRIBUTION = new URL("./fixtures/page-contribution.js", import.meta.url);
 // The installed plugins of a contribution: the view plugin probe declares the point language, and the plugin one contributes its module.
 const contributionsOf = (modules) => [
-  { id: "probe", package: "@fixture/probe", version: "1.0.0", manifest: { extends: { language: { version: "1.0.0", schema: { type: "object" } } } } },
+  { id: "probe", package: "@fixture/probe", version: "1.0.0", folder: "/installed/plugin", manifest: { extends: { language: { version: "1.0.0", schema: { type: "object" } } } } },
   {
     id: "one",
     package: "@fixture/one",

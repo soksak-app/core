@@ -13,7 +13,7 @@ const manifest = {
 };
 
 const { installEnvironment } = await import("../environment.js");
-installEnvironment(environmentFile, { plugins: [{ id: "pane", package: "@fixture/pane", version: "0.0.1", manifest }] });
+installEnvironment(environmentFile, { plugins: [{ id: "pane", package: "@fixture/pane", version: "0.0.1", folder: "/installed/plugin", manifest }] });
 const { checkStoredLayout } = await import("../stored-layout.js");
 const { restoreWindowSidebars } = await import("../window-sidebars.js");
 

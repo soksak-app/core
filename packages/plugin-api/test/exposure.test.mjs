@@ -487,8 +487,8 @@ test("diagnostic declarations extend a plugin with a surface or sections once an
 });
 
 test("accepting the installed plugin document leaves out each refused plugin with its error and keeps the others", () => {
-  const alpha = { id: "alpha", package: "plugin-alpha", version: "1.0.0", manifest: { id: "alpha", name: "Alpha", description: "검사용.", exposes: { status: [{ name: "alpha.list", description: "검사용.", schema: { type: "object" } }] }, sections: [{ id: "alpha.list", name: "List", composition: { kind: "view", page: "ui/page.html" }, height: "fill" }] } };
-  const unnamed = { id: "beta", package: "plugin-beta", version: "0.0.1", manifest: { id: "beta", description: "이름이 없는 manifest." } };
+  const alpha = { id: "alpha", package: "plugin-alpha", version: "1.0.0", folder: "/installed/plugin", manifest: { id: "alpha", name: "Alpha", description: "검사용.", exposes: { status: [{ name: "alpha.list", description: "검사용.", schema: { type: "object" } }] }, sections: [{ id: "alpha.list", name: "List", composition: { kind: "view", page: "ui/page.html" }, height: "fill" }] } };
+  const unnamed = { id: "beta", package: "plugin-beta", version: "0.0.1", folder: "/installed/plugin", manifest: { id: "beta", description: "이름이 없는 manifest." } };
   const badPackage = { ...alpha, id: "gamma", package: "Bad", manifest: { ...alpha.manifest, id: "gamma" } };
   const { plugins, errors } = acceptInstalledPlugins({ plugins: [unnamed, alpha, badPackage] });
   const { refused } = acceptInstalledPlugins({ plugins: [unnamed, alpha, badPackage] });
@@ -506,8 +506,8 @@ test("accepting the installed plugin document leaves out each refused plugin wit
 
 test("the installed plugin document lists plugins with their manifests and diagnostics and reports the host's error", () => {
   const plugins = [
-    { id: "alpha", package: "plugin-alpha", version: "1.0.0", manifest: { id: "alpha", name: "Alpha", description: "검사용.", exposes: { status: [{ name: "alpha.list", description: "검사용.", schema: { type: "object" } }] }, sections: [{ id: "alpha.list", name: "List", composition: { kind: "view", page: "ui/page.html" }, height: "fill" }] } },
-    { id: "probe", package: "@fixture/probe", version: "0.1.0", manifest: { id: "probe", name: "Probe", description: "검사용.", exposes: { status: [{ name: "probe.list", description: "검사용.", schema: { type: "object" } }] }, sections: [{ id: "probe.list", name: "List", composition: { kind: "view", page: "ui/page.html" }, height: "fill" }] },
+    { id: "alpha", package: "plugin-alpha", version: "1.0.0", folder: "/installed/plugin", manifest: { id: "alpha", name: "Alpha", description: "검사용.", exposes: { status: [{ name: "alpha.list", description: "검사용.", schema: { type: "object" } }] }, sections: [{ id: "alpha.list", name: "List", composition: { kind: "view", page: "ui/page.html" }, height: "fill" }] } },
+    { id: "probe", package: "@fixture/probe", version: "0.1.0", folder: "/installed/plugin", manifest: { id: "probe", name: "Probe", description: "검사용.", exposes: { status: [{ name: "probe.list", description: "검사용.", schema: { type: "object" } }] }, sections: [{ id: "probe.list", name: "List", composition: { kind: "view", page: "ui/page.html" }, height: "fill" }] },
       diagnostics: { module: "ui/d.js", exposes: {} } },
   ];
   assert.equal(validateInstalledPlugins({ plugins }), plugins);
@@ -531,7 +531,7 @@ test("the installed plugin document validates the sidecar facts of each sidecar 
   const manifest = { id: "probe", name: "Probe", description: "검사용.", mark: "p", icon: "<path/>", surface: { composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } },
     dependencies: { "@fixture/sidecar-probe": "^0.1.0" } };
   const facts = { message: { form: "json-object", operationField: "operation" } };
-  const plugin = { id: "probe", package: "@fixture/probe", version: "0.1.0", manifest };
+  const plugin = { id: "probe", package: "@fixture/probe", version: "0.1.0", folder: "/installed/plugin", manifest };
   const withSidecars = (sidecars) => ({ plugins: [{ ...plugin, sidecars }] });
   assert.deepEqual(validateInstalledPlugins({ plugins: [plugin] }), [plugin]);
   assert.deepEqual(validateInstalledPlugins(withSidecars({ "@fixture/sidecar-probe": facts })), withSidecars({ "@fixture/sidecar-probe": facts }).plugins);
@@ -548,7 +548,7 @@ test("the installed plugin document validates the sidecar facts of each sidecar 
 });
 
 test("a rejected installed manifest names the plugin, its version and package", () => {
-  const plugin = { id: "alpha", package: "plugin-alpha", version: "0.0.3",
+  const plugin = { id: "alpha", package: "plugin-alpha", version: "0.0.3", folder: "/installed/plugin",
     manifest: { id: "alpha", name: "Alpha", description: "검사용.", sidecars: ["@fixture/sidecar"] } };
   assert.throws(() => validateInstalledPlugins({ plugins: [plugin] }),
     /^Error: installed plugin alpha 0\.0\.3 \(plugin-alpha\): plugin\.json: unknown field sidecars$/);

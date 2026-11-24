@@ -168,7 +168,7 @@ if (installedDirectory) {
   const document = [];
   for (const plugin of plugins) {
     cpSync(plugin.dir, join(target, modulePath(plugin.package, "")), { recursive: true });
-    const entry = { id: plugin.id, package: plugin.package, version: plugin.version, manifest: readJson(join(plugin.dir, "plugin.json")) };
+    const entry = { id: plugin.id, package: plugin.package, version: plugin.version, folder: resolve(plugin.dir), manifest: readJson(join(plugin.dir, "plugin.json")) };
     // Places the shared modules of extension points where a host serves /shared/<plugin id>.<point>/<specifier>.js (docs/spec/installation.md).
     // default: extends is an optional field of plugin.json; a plugin without it shares no module.
     for (const [point, declaration] of Object.entries(entry.manifest.extends ?? {})) {

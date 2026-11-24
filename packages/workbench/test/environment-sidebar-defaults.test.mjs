@@ -15,8 +15,8 @@ const files = {
       window: { left: "tree" } } },
 };
 const installed = { plugins: [
-  { id: "fixture", package: "@fixture/card", version: "0.0.1", manifest: files.card },
-  { id: "sections", package: "@fixture/sections", version: "0.0.1", manifest: files.sections },
+  { id: "fixture", package: "@fixture/card", version: "0.0.1", folder: "/installed/plugin", manifest: files.card },
+  { id: "sections", package: "@fixture/sections", version: "0.0.1", folder: "/installed/plugin", manifest: files.sections },
 ] };
 
 test("an environment without sidebar overrides supplies normalized plugin defaults to settings", async () => {

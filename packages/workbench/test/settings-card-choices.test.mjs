@@ -15,7 +15,7 @@ test("missing card sidebar links display off without an inherit option", async (
     runtime: "runtime",
     workspace: { focus: "main", grid: { root: { card: "main", tabs: [{ plugin: "fixture", title: "Fixture" }] } } },
     sidebars: { sets: [], links: [] },
-  }, { plugins: [{ id: "fixture", package: "@fixture/fixture", version: "1.0.0", manifest: {
+  }, { plugins: [{ id: "fixture", package: "@fixture/fixture", version: "1.0.0", folder: "/installed/plugin", manifest: {
     id: "fixture", name: "Fixture", description: "Fixture card.", mark: "f", icon: "<path/>", surface,
   } }] }), [], "the fixture environment refused a plugin");
   const { scopedValue } = await import("../settings.js");

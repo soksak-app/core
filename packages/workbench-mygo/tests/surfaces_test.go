@@ -22,7 +22,7 @@ import (
 
 // installedDocument is the document of the installed plugins with one plugin of a view and one without a surface.
 const installedDocument = `{"plugins": [
-	{"id": "textprobe", "package": "@scope/plugin-textprobe", "version": "1.0.0", "sidecars": {"@scope/sidecar-probe": {}},
+	{"id": "textprobe", "package": "@scope/plugin-textprobe", "version": "1.0.0", "folder": "/installed/plugin", "sidecars": {"@scope/sidecar-probe": {}},
 		"manifest": {"id": "textprobe", "name": "터미널", "description": "textprobe", "mark": "◊", "icon": "<path d=\"M1 1h14\"/>",
 			"dependencies": {"@scope/sidecar-probe": "^1.0.0"},
 			"exposes": {"element": [{"name": "textprobe.view", "description": "the view"}], "status": [{"name": "textprobe.screen", "description": "the screen", "schema": {"type": "object", "properties": {}}}], "commands": [{"name": "textprobe.drop", "description": "does it", "params": {"type": "object", "properties": {}}, "result": {"type": "null"}}, {"name": "textprobe.input", "description": "does it", "params": {"type": "object", "properties": {}}, "result": {"type": "null"}}, {"name": "textprobe.close", "description": "does it", "params": {"type": "object", "properties": {}}, "result": {"type": "null"}}]},
@@ -31,7 +31,7 @@ const installedDocument = `{"plugins": [
 				"point": {"schema": {"type": "object"}, "default": {}}},
 			"settings": {"cursor.shape": {"type": "enum", "label": "모양", "default": "block", "values": ["block", "beam"]}, "shell": {"type": "string", "label": "셸", "default": "login", "maxLength": 64}},
 			"surface": {"menu": [{"title": "닫기", "command": "textprobe.close"}], "drop": "textprobe.drop", "composition": {"kind": "view", "page": "ui/textprobe.html", "regions": [{"name": "view", "kind": "image", "input": "dom", "sidecar": "@scope/sidecar-probe", "present": "copy"}]}}}},
-	{"id": "boxprobe", "package": "@scope/plugin-boxprobe", "version": "1.0.0",
+	{"id": "boxprobe", "package": "@scope/plugin-boxprobe", "version": "1.0.0", "folder": "/installed/plugin",
 		"diagnostics": {"module": "ui/diagnostics.js", "exposes": {"status": [{"name": "boxprobe.probe"}]}},
 		"manifest": {"id": "boxprobe", "name": "브라우저", "description": "boxprobe", "mark": "www", "icon": "<path d=\"M1 1h14\"/>",
 			"surface": {"composition": {"kind": "view", "page": "ui/index.html"}}, "sections": [
@@ -1908,7 +1908,7 @@ func TestSurfaceStatusExposesOnlyTheDeclaredCompositionKind(t *testing.T) {
 		t.Fatal(err)
 	}
 	document.Plugins = append(document.Plugins, map[string]any{"id": "no-view", "package": "@scope/plugin-no-view", "version": "1.0.0",
-		"manifest": map[string]any{"id": "no-view", "name": "No view", "description": "No surface declaration", "contributes": map[string]any{}, "mark": "n", "icon": "<path d=\"M1 1h14\"/>"}})
+		"folder": "/installed/plugin", "manifest": map[string]any{"id": "no-view", "name": "No view", "description": "No surface declaration", "contributes": map[string]any{}, "mark": "n", "icon": "<path d=\"M1 1h14\"/>"}})
 	encoded, err := json.Marshal(document)
 	if err != nil {
 		t.Fatal(err)

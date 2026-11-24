@@ -43,8 +43,8 @@ assert.deepEqual(installEnvironment({
   runtime: "runtime",
   workspace: { focus: "main", grid: { root: { card: "main", tabs: [{ plugin: SESSION, title: "t" }] } } },
   sidebars: { sets: [], links: [] },
-}, { plugins: [{ id: SESSION, package: "@fixture/session", version: "0.0.1", manifest },
-  { id: ROOM_PLUGIN, package: "@fixture/room", version: "0.0.1", manifest: { id: ROOM_PLUGIN, name: ROOM_PLUGIN, description: "검사용 방.", mark: "r",
+}, { plugins: [{ id: SESSION, package: "@fixture/session", version: "0.0.1", folder: "/installed/plugin", manifest },
+  { id: ROOM_PLUGIN, package: "@fixture/room", version: "0.0.1", folder: "/installed/plugin", manifest: { id: ROOM_PLUGIN, name: ROOM_PLUGIN, description: "검사용 방.", mark: "r",
     icon: "<path/>", surface: manifest.surface } }] }), [], "the fixture environment refused a plugin");
 const { registry } = await import("../exposure.js");
 registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);

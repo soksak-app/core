@@ -3,6 +3,10 @@
 
 [한국어](CHANGELOG.ko.md)
 
+## 2026-11-25
+
+- F1154: Each entry of `/installed-plugins.json` holds `folder`, the absolute path of the recorded `path` of the plugin in the configuration directory, on the Go and Rust hosts and in the staging of an application without a host; the page, mygo and `sok` refuse an entry without an absolute `folder` with `installed-plugins.json: plugin <id> folder must be an absolute path`, and each connected item of `contributions(point)` gives `folder`, the installed folder of its contributor. Red/Green: the installed document tests of the Go and Rust hosts and of `sok`, `contributions.test.mjs` of plugin-api and `TestContributionCases` of mygo.
+
 ## 2026-11-24
 
 - F1148-2: A new space of each application starts with one empty card between the window sidebars; a content card of `workspace.grid` declares `tabs`, which may be empty, and the window check start adds the layout probe to an empty card.

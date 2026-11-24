@@ -23,11 +23,11 @@ import (
 
 // layoutPlugins are the plugins of the layout cases: notes takes the tab params path and line and saves, and plain takes no params.
 const layoutPlugins = `{"plugins": [
-	{"id": "notes", "package": "@scope/plugin-notes", "version": "1.0.0", "manifest": {"id": "notes", "name": "노트", "description": "notes", "mark": "n", "icon": "<path d=\"M1 1h14\"/>",
+	{"id": "notes", "package": "@scope/plugin-notes", "version": "1.0.0", "folder": "/installed/plugin", "manifest": {"id": "notes", "name": "노트", "description": "notes", "mark": "n", "icon": "<path d=\"M1 1h14\"/>",
 		"surface": {"composition": {"kind": "view", "page": "ui/index.html"}, "save": "notes.save",
 			"params": {"type": "object", "properties": {"path": {"type": "string"}, "line": {"type": "number"}}}},
 		"exposes": {"commands": [{"name": "notes.save", "description": "saves", "params": {"type": "object", "properties": {}}, "result": {"type": "null"}}]}}},
-	{"id": "plain", "package": "@scope/plugin-plain", "version": "1.0.0", "manifest": {"id": "plain", "name": "Plain", "description": "plain", "mark": "p", "icon": "<path d=\"M1 1h14\"/>",
+	{"id": "plain", "package": "@scope/plugin-plain", "version": "1.0.0", "folder": "/installed/plugin", "manifest": {"id": "plain", "name": "Plain", "description": "plain", "mark": "p", "icon": "<path d=\"M1 1h14\"/>",
 		"surface": {"composition": {"kind": "view", "page": "ui/plain.html"}}}}
 ]}`
 

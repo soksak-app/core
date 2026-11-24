@@ -1104,7 +1104,7 @@ func (s *Shell) readClipboard(call viewCallEvent, text func() (string, error), a
 func viewContributions(items []ConnectedItem) []map[string]any {
 	listed := make([]map[string]any, len(items))
 	for i, item := range items {
-		listed[i] = map[string]any{"plugin": item.Plugin, "index": item.Index, "item": item.Item, "module": coreRoot + item.Module}
+		listed[i] = map[string]any{"plugin": item.Plugin, "index": item.Index, "item": item.Item, "module": coreRoot + item.Module, "folder": item.Folder}
 	}
 	return listed
 }

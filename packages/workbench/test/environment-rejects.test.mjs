@@ -7,7 +7,7 @@ const environmentFile = {
   workspace: { focus: "main", grid: { root: { card: "main", tabs: [{ plugin: "side", title: "m" }] } } },
   sidebars: { sets: [], links: [] },
 };
-const installed = { plugins: [{ id: "side", package: "@fixture/side", version: "0.0.1",
+const installed = { plugins: [{ id: "side", package: "@fixture/side", version: "0.0.1", folder: "/installed/plugin",
   manifest: { id: "side", name: "Side", description: "검사용 섹션.", sections: [{ id: "side.list", name: "List", composition: { kind: "view", page: "ui/list.html" }, height: "fill" }], exposes: { status: [{ name: "side.list", description: "검사용 상태.", schema: { type: "object" } }] } } }] };
 
 const { installEnvironment } = await import("../environment.js");

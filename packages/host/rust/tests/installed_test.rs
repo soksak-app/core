@@ -65,6 +65,12 @@ fn installed_fixture() -> folder::Folder {
     config
 }
 
+/// with_config puts the configuration directory of the test for CONFIG, because folder is the absolute path of the
+/// installed folder.
+fn with_config(config: &folder::Folder, text: &str) -> String {
+    text.replace("CONFIG", &config.path().display().to_string())
+}
+
 fn text(data: Vec<u8>) -> String {
     String::from_utf8(data).unwrap()
 }
@@ -73,12 +79,12 @@ fn text(data: Vec<u8>) -> String {
 #[test]
 fn installed_plugins_document_lists_enabled_plugins_by_id() {
     let config = installed_fixture();
-    let release = r#"{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"tty","package":"@scope/plugin-tty","version":"0.1.0","manifest":{"id":"tty","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{}}}]}"#;
+    let release = with_config(&config, r#"{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","folder":"CONFIG/plugins/alpha/1.0.0","manifest":{"id":"alpha"}},{"id":"tty","package":"@scope/plugin-tty","version":"0.1.0","folder":"CONFIG/plugins/tty/0.1.0","manifest":{"id":"tty","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{}}}]}"#);
     assert_eq!(
         text(installed::installed_plugins_document(config.path(), false)),
         release
     );
-    let diagnostic = r#"{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"tty","package":"@scope/plugin-tty","version":"0.1.0","manifest":{"id":"tty","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{}},"diagnostics":{"module":"ui/d.js","exposes":{}}}]}"#;
+    let diagnostic = with_config(&config, r#"{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","folder":"CONFIG/plugins/alpha/1.0.0","manifest":{"id":"alpha"}},{"id":"tty","package":"@scope/plugin-tty","version":"0.1.0","folder":"CONFIG/plugins/tty/0.1.0","manifest":{"id":"tty","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{}},"diagnostics":{"module":"ui/d.js","exposes":{}}}]}"#);
     assert_eq!(
         text(installed::installed_plugins_document(config.path(), true)),
         diagnostic
@@ -103,7 +109,10 @@ fn installed_plugins_document_declares_the_message_form_and_host_operations_of_e
     );
     assert_eq!(
         text(installed::installed_plugins_document(config.path(), false)),
-        r#"{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","manifest":{"id":"alpha"}},{"id":"tty","package":"@scope/plugin-tty","version":"0.1.0","manifest":{"id":"tty","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{"message":{"form":"json-object","operationField":"operation"}}}}]}"#
+        with_config(
+            &config,
+            r#"{"plugins":[{"id":"alpha","package":"plugin-alpha","version":"1.0.0","folder":"CONFIG/plugins/alpha/1.0.0","manifest":{"id":"alpha"}},{"id":"tty","package":"@scope/plugin-tty","version":"0.1.0","folder":"CONFIG/plugins/tty/0.1.0","manifest":{"id":"tty","dependencies":{"@scope/sidecar-worker":"^0.1.0"}},"sidecars":{"@scope/sidecar-worker":{"message":{"form":"json-object","operationField":"operation"}}}}]}"#
+        )
     );
 }
 
@@ -120,7 +129,7 @@ fn installed_plugins_document_reads_the_name_from_the_package_json() {
     );
     let renamed = text(installed::installed_plugins_document(config.path(), false));
     assert!(
-        renamed.contains(r#"{"id":"alpha","package":"plugin-renamed","#),
+        renamed.contains(r#"{"id":"alpha","package":"plugin-renamed","version":"1.0.0","folder":"#),
         "renamed document {renamed}"
     );
     let file = config.path().join("plugins/alpha/1.0.0/package.json");

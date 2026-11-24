@@ -44,7 +44,7 @@ test("a switched window sidebar keeps its section surfaces hidden in the plane, 
       sets: [{ id: setId, title: "Fixture", layout: "list", sections: [`${pluginId}.tree`] }],
       links: [{ place: "left", plugin: null, set: setId }, { place: "right", plugin: null, set: setId }],
     },
-  }, { plugins: [{ id: pluginId, package: "@fixture/keep", version: "0.0.1", manifest: {
+  }, { plugins: [{ id: pluginId, package: "@fixture/keep", version: "0.0.1", folder: "/installed/plugin", manifest: {
     id: pluginId, name: "Fixture", description: "검사용 표면.", mark: "f", icon: "<path/>",
     surface: { composition: { kind: "view", page: "ui/index.html" } },
     sections: [{ id: `${pluginId}.tree`, name: "Tree", height: "fill", composition: { kind: "view", page: "ui/tree.html" } }],

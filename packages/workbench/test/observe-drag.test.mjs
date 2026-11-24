@@ -41,7 +41,7 @@ installEnvironment({
     ] },
   } },
   sidebars: { sets: [], links: [] },
-}, { plugins: [{ id: "fixture-drag", package: "@scope/fixture-drag", version: "0.0.1", manifest: {
+}, { plugins: [{ id: "fixture-drag", package: "@scope/fixture-drag", version: "0.0.1", folder: "/installed/plugin", manifest: {
   id: "fixture-drag", name: "Drag", description: "검사용 표면.", mark: "d", icon: "<path/>",
   surface: { composition: { kind: "view", page: "ui/index.html" } },
 } }] });

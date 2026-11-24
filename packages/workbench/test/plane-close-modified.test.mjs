@@ -54,7 +54,7 @@ test(behaviorName, { timeout: 5000 }, async (t) => {
         { plugin: pluginId, title: "document" }, { plugin: pluginId, title: "other" },
       ] } } },
     sidebars: { sets: [], links: [] },
-  }, { plugins: [{ id: pluginId, package: "@fixture/close-modified", version: "0.0.1", manifest: {
+  }, { plugins: [{ id: pluginId, package: "@fixture/close-modified", version: "0.0.1", folder: "/installed/plugin", manifest: {
     id: pluginId, name: "Fixture", description: "Fixture surface.", mark: "f", icon: "<path/>",
     surface: { composition: { kind: "view", page: "ui/index.html" }, save: saveName },
     exposes: { commands: [{ name: saveName, description: "Saves the tab.", params: { type: "object", properties: {} }, result: { type: "null" } }] },

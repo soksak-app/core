@@ -1,6 +1,6 @@
 {
   "surface": "packages/plugin-api/index.js#resolveContributions",
-  "description": "Resolved contributions of the installed and enabled plugins, one case per outcome of resolveContributions. A case gives installed, the plugins of {id, package, version, manifest}, and output, the items that the function returns in order. Each item is {plugin, point, index, state, reason}; a connected item also has provider, item (the fields without range and module) and module (a URL on the core root). The states are connected, provider-missing, invalid (an undeclared extension point, a provider without extends, or an item that does not match the schema) and version-mismatch (the range does not contain the declared version). Items are sorted by plugin id, point and index.",
+  "description": "Resolved contributions of the installed and enabled plugins, one case per outcome of resolveContributions. A case gives installed, the plugins of {id, package, version, folder, manifest}, and output, the items that the function returns in order. Each item is {plugin, point, index, state, reason}; a connected item also has provider, item (the fields without range and module) module (a URL on the core root) and folder (the installed folder of the contributor). The states are connected, provider-missing, invalid (an undeclared extension point, a provider without extends, or an item that does not match the schema) and version-mismatch (the range does not contain the declared version). Items are sorted by plugin id, point and index.",
   "cases": [
     {
       "id": "contributions.resolve.connects-a-matching-item",
@@ -9,6 +9,7 @@
           "id": "probe",
           "package": "@scope/plugin-probe",
           "version": "0.1.0",
+          "folder": "/installed/probe",
           "manifest": {
             "id": "probe",
             "name": "Probe",
@@ -51,6 +52,7 @@
           "id": "tidy",
           "package": "@scope/plugin-tidy",
           "version": "0.0.1",
+          "folder": "/installed/tidy",
           "manifest": {
             "id": "tidy",
             "name": "tidy",
@@ -82,7 +84,8 @@
               "tidy"
             ]
           },
-          "module": "/modules/@scope/plugin-tidy/ui/tidy.js"
+          "module": "/modules/@scope/plugin-tidy/ui/tidy.js",
+          "folder": "/installed/tidy"
         }
       ]
     },
@@ -93,6 +96,7 @@
           "id": "lost",
           "package": "@scope/plugin-lost",
           "version": "0.0.1",
+          "folder": "/installed/lost",
           "manifest": {
             "id": "lost",
             "name": "lost",
@@ -128,6 +132,7 @@
           "id": "probe",
           "package": "@scope/plugin-probe",
           "version": "0.1.0",
+          "folder": "/installed/probe",
           "manifest": {
             "id": "probe",
             "name": "Probe",
@@ -170,6 +175,7 @@
           "id": "other",
           "package": "@scope/plugin-other",
           "version": "0.0.1",
+          "folder": "/installed/other",
           "manifest": {
             "id": "other",
             "name": "other",
@@ -205,6 +211,7 @@
           "id": "probe",
           "package": "@scope/plugin-probe",
           "version": "0.1.0",
+          "folder": "/installed/probe",
           "manifest": {
             "id": "probe",
             "name": "Probe",
@@ -231,6 +238,7 @@
           "id": "tidy",
           "package": "@scope/plugin-tidy",
           "version": "0.0.1",
+          "folder": "/installed/tidy",
           "manifest": {
             "id": "tidy",
             "name": "tidy",
@@ -266,6 +274,7 @@
           "id": "probe",
           "package": "@scope/plugin-probe",
           "version": "0.1.0",
+          "folder": "/installed/probe",
           "manifest": {
             "id": "probe",
             "name": "Probe",
@@ -308,6 +317,7 @@
           "id": "tidy",
           "package": "@scope/plugin-tidy",
           "version": "0.0.1",
+          "folder": "/installed/tidy",
           "manifest": {
             "id": "tidy",
             "name": "tidy",
@@ -343,6 +353,7 @@
           "id": "probe",
           "package": "@scope/plugin-probe",
           "version": "0.1.0",
+          "folder": "/installed/probe",
           "manifest": {
             "id": "probe",
             "name": "Probe",
@@ -385,6 +396,7 @@
           "id": "tidy",
           "package": "@scope/plugin-tidy",
           "version": "0.0.1",
+          "folder": "/installed/tidy",
           "manifest": {
             "id": "tidy",
             "name": "tidy",
@@ -418,6 +430,7 @@
           "id": "probe",
           "package": "@scope/plugin-probe",
           "version": "0.1.0",
+          "folder": "/installed/probe",
           "manifest": {
             "id": "probe",
             "name": "Probe",
@@ -460,6 +473,7 @@
           "id": "zed",
           "package": "@scope/plugin-zed",
           "version": "0.0.1",
+          "folder": "/installed/zed",
           "manifest": {
             "id": "zed",
             "name": "zed",
@@ -488,6 +502,7 @@
           "id": "amy",
           "package": "@scope/plugin-amy",
           "version": "0.0.1",
+          "folder": "/installed/amy",
           "manifest": {
             "id": "amy",
             "name": "amy",
@@ -535,7 +550,8 @@
               "tidy"
             ]
           },
-          "module": "/modules/@scope/plugin-amy/ui/tidy.js"
+          "module": "/modules/@scope/plugin-amy/ui/tidy.js",
+          "folder": "/installed/amy"
         },
         {
           "plugin": "zed",
@@ -549,7 +565,8 @@
               "tidy"
             ]
           },
-          "module": "/modules/@scope/plugin-zed/ui/tidy.js"
+          "module": "/modules/@scope/plugin-zed/ui/tidy.js",
+          "folder": "/installed/zed"
         },
         {
           "plugin": "zed",
@@ -563,7 +580,8 @@
               "tidy"
             ]
           },
-          "module": "/modules/@scope/plugin-zed/ui/tidy.js"
+          "module": "/modules/@scope/plugin-zed/ui/tidy.js",
+          "folder": "/installed/zed"
         }
       ]
     },
@@ -574,6 +592,7 @@
           "id": "probe",
           "package": "@scope/plugin-probe",
           "version": "0.1.0",
+          "folder": "/installed/probe",
           "manifest": {
             "id": "probe",
             "name": "Probe",

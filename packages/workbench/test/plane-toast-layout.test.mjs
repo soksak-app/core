@@ -40,8 +40,8 @@ assert.deepEqual(installEnvironment({
   sidebars: { sets: [{ id: "set-tabs", title: "Tabs", sections: [`${BROWSER}.tabs`], layout: "list" }],
     links: [{ place: "window-right", plugin: BROWSER, set: "set-tabs" }] },
 }, { plugins: [
-  { id: PLAIN, package: "@fixture/plain", version: "0.0.1", manifest: manifest(PLAIN, {}) },
-  { id: BROWSER, package: "@fixture/browser", version: "0.0.1", manifest: manifest(BROWSER, {
+  { id: PLAIN, package: "@fixture/plain", version: "0.0.1", folder: "/installed/plugin", manifest: manifest(PLAIN, {}) },
+  { id: BROWSER, package: "@fixture/browser", version: "0.0.1", folder: "/installed/plugin", manifest: manifest(BROWSER, {
     sections: [{ id: `${BROWSER}.tabs`, name: "Tabs", composition: { kind: "view", page: "ui/tabs.html" }, height: "fill" }] }) },
 ] }), [], "the fixture environment refused a plugin");
 const { registry } = await import("../exposure.js");

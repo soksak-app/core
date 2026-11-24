@@ -462,7 +462,7 @@ func AcceptInstalledPlugins(value any) (AcceptedInstalled, error) {
 	return accepted, nil
 }
 
-// checkInstalledPlugin checks one entry of the installed plugin document: { id, package, version, manifest, sidecars?, diagnostics? }.
+// checkInstalledPlugin checks one entry of the installed plugin document: { id, package, version, folder, manifest, sidecars?, diagnostics? }.
 // The error names the plugin.
 func checkInstalledPlugin(value any) error {
 	plugin, ok := value.(map[string]any)
@@ -470,7 +470,7 @@ func checkInstalledPlugin(value any) error {
 		return fmt.Errorf("%s: every plugin must be an object", installedPluginsFile)
 	}
 	id := jsFieldText(plugin, "id")
-	if err := only(installedPluginsFile+" plugin "+id, plugin, "id", "package", "version", "manifest", "sidecars", "diagnostics"); err != nil {
+	if err := only(installedPluginsFile+" plugin "+id, plugin, "id", "package", "version", "folder", "manifest", "sidecars", "diagnostics"); err != nil {
 		return err
 	}
 	if !isText(plugin["id"]) || !idPattern.MatchString(id) {
@@ -481,6 +481,9 @@ func checkInstalledPlugin(value any) error {
 	}
 	if !isText(plugin["version"]) {
 		return fmt.Errorf("%s: plugin %s version is required", installedPluginsFile, id)
+	}
+	if folder, ok := plugin["folder"].(string); !ok || !strings.HasPrefix(folder, "/") {
+		return fmt.Errorf("%s: plugin %s folder must be an absolute path", installedPluginsFile, id)
 	}
 	if _, ok := plugin["manifest"]; !ok {
 		return fmt.Errorf("%s: plugin %s manifest is required", installedPluginsFile, id)

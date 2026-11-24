@@ -46,7 +46,7 @@ assert.deepEqual(installEnvironment({
   runtime: "runtime",
   workspace: { focus: "main", grid: { root: { card: "main", fixed: true, tabs: [{ plugin: plainId, title: "only" }] } } },
   sidebars: { sets: [], links: [] },
-}, { plugins: [{ id: viewId, package: "@fixture/origin-view", version, manifest: {
+}, { plugins: [{ id: viewId, package: "@fixture/origin-view", version, folder: "/installed/plugin", manifest: {
   id: viewId, name: "View", description: "검사용 view.", mark: "f", icon: "<path/>",
   surface: { composition: { kind: "view", page: "ui/index.html" }, params: { type: "object", properties: {} } },
 } }] }), [], "the fixture environment refused a plugin");

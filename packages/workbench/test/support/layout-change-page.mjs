@@ -35,7 +35,7 @@ export async function openLayoutChangePage(caseName) {
     runtime: "runtime",
     workspace: { focus: "main", grid: { root: { card: "main", tabs: [{ plugin: PLAIN, title: "t" }] } } },
     sidebars: { sets: [], links: [] },
-  }, { plugins: [{ id: PLAIN, package: "@fixture/plain", version: "0.0.1", manifest: { id: PLAIN, name: PLAIN, description: "검사용 표면.",
+  }, { plugins: [{ id: PLAIN, package: "@fixture/plain", version: "0.0.1", folder: "/installed/plugin", manifest: { id: PLAIN, name: PLAIN, description: "검사용 표면.",
     mark: "f", icon: "<path/>", surface: { composition: { kind: "view", page: "ui/index.html" } } } }] }), []);
   const { registry } = await import("../../exposure.js");
   registry.declare("core", JSON.parse(readFileSync(new URL("../../exposure.json", import.meta.url), "utf8")).exposes);

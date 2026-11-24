@@ -98,8 +98,8 @@ func (s modalStatus) labels(name string) []string {
 
 // acmeDocument is the document of two installed plugins: one with a surface, sections and settings, and one without them.
 const acmeDocument = `{"plugins":[
-	{"id":"plain","package":"plain","version":"1.0.0","manifest":{"id":"plain","name":"Plain","description":"nothing","contributes":{}}},
-	{"id":"acme","package":"acme","version":"1.0.0","manifest":{"id":"acme","name":"Acme","description":"the files",
+	{"id":"plain","package":"plain","version":"1.0.0","folder": "/installed/plugin", "manifest":{"id":"plain","name":"Plain","description":"nothing","contributes":{}}},
+	{"id":"acme","package":"acme","version":"1.0.0","folder": "/installed/plugin", "manifest":{"id":"acme","name":"Acme","description":"the files",
 		"mark":"Ac","icon":"<path d=\"M1 1h14\"/>","exposes":{"commands":[{"name":"acme.copy","description":"copies","params":{"type":"object","properties":{}},"result":{"type":"null"}}]},
 		"surface":{"composition":{"kind":"view","page":"a.html"},"menu":[{"command":"acme.copy","title":"복사"}],
 			"params":{"type":"object","properties":{"path":{"type":"string"}}}},
@@ -543,7 +543,7 @@ func TestDraggingTheHeaderMovesTheCardInsideTheWindow(t *testing.T) {
 }
 
 func TestTheEnvironmentValueReplacesTheDefaultOfThePlugin(t *testing.T) {
-	f := newShell(t, &storedHost{installed: `{"plugins":[{"id":"textprobe","package":"textprobe","version":"1.0.0","manifest":{"id":"textprobe",
+	f := newShell(t, &storedHost{installed: `{"plugins":[{"id":"textprobe","package":"textprobe","version":"1.0.0","folder": "/installed/plugin", "manifest":{"id":"textprobe",
 		"name":"Terminal","description":"the textprobe","contributes":{},"settings":{"cursor.shape":{"type":"enum","label":"모양","values":["bar","block"],"default":"bar"}}}}]}`})
 	f.click("core.chrome.settings", "")
 	if got := f.settingValues()["textprobe.cursor.shape"]; got != "block" {

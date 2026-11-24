@@ -45,7 +45,7 @@ test("a background session whose tab closes before its subscription finished end
         { plugin: owner, title: "shown" }, { plugin: owner, title: "hidden" }] },
     } },
     sidebars: { sets: [], links: [] },
-  }, { plugins: [{ id: owner, package: "@scope/fixture-session", version: "0.0.1", manifest: {
+  }, { plugins: [{ id: owner, package: "@scope/fixture-session", version: "0.0.1", folder: "/installed/plugin", manifest: {
     id: owner, name: "Session", description: "검사용 세션 표면.", mark: "s", icon: "<path/>",
     surface: { composition: { kind: "view", page: "ui/index.html" } },
     dependencies: { [sidecar]: "0.0.1" },

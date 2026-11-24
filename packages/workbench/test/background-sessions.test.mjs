@@ -63,13 +63,13 @@ test("a background session opens only for a tab without a mounted surface and en
     } },
     sidebars: { sets: [], links: [] },
   }, { plugins: [
-    { id: owner, package: "@scope/fixture-session", version: "0.0.1", manifest: {
+    { id: owner, package: "@scope/fixture-session", version: "0.0.1", folder: "/installed/plugin", manifest: {
       id: owner, name: "Session", description: "검사용 세션 표면.", mark: "s", icon: "<path/>",
       // The tab parameters program and args, which the background request maps into its fields.
       surface: { ...surface, params: { type: "object", properties: { program: { type: "string" }, args: { type: "array", items: { type: "string" } } } } },
       dependencies: { [sidecar]: "0.0.1" }, background: { sidecar, operation: "open", directory: "directory",
         params: { program: "program", args: "args", directory: "directory" } } } },
-    { id: other, package: "@scope/fixture-document", version: "0.0.1", manifest: {
+    { id: other, package: "@scope/fixture-document", version: "0.0.1", folder: "/installed/plugin", manifest: {
       id: other, name: "Document", description: "검사용 문서 표면.", mark: "d", icon: "<path/>", surface } },
   ] }), [], "the fixture environment refused a plugin");
   const { registry } = await import("../exposure.js");

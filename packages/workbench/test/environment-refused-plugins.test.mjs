@@ -8,9 +8,9 @@ const environmentFile = {
   workspace: { focus: "main", grid: { root: { card: "main", tabs: [{ plugin: "absent", title: "m" }] } } },
   sidebars: { sets: [], links: [] },
 };
-const accepted = { id: "side", package: "@fixture/side", version: "0.0.1",
+const accepted = { id: "side", package: "@fixture/side", version: "0.0.1", folder: "/installed/plugin",
   manifest: { id: "side", name: "Side", description: "검사용 섹션.", sections: [{ id: "side.list", name: "List", composition: { kind: "view", page: "ui/list.html" }, height: "fill" }], exposes: { status: [{ name: "side.list", description: "검사용 상태.", schema: { type: "object" } }] } } };
-const refused = { id: "earlier", package: "@fixture/earlier", version: "0.0.1", manifest: { id: "earlier", description: "이름이 없는 manifest." } };
+const refused = { id: "earlier", package: "@fixture/earlier", version: "0.0.1", folder: "/installed/plugin", manifest: { id: "earlier", description: "이름이 없는 manifest." } };
 
 test("an installed plugin whose manifest is refused is left out with its error and the other plugins are registered", async () => {
   const { installEnvironment, pluginUnits } = await import("../environment.js?test=refused-manifest");

@@ -26,7 +26,7 @@ test("the plugin page of a window without a host lists the loaded plugin and off
     runtime: "runtime",
     workspace: { focus: "main", grid: { root: { card: "main", tabs: [{ plugin: "tty", title: "t" }] } } },
     sidebars: { sets: [], links: [] },
-  }, { plugins: [{ id: "tty", package: "@scope/tty", version: "0.1.0", manifest: {
+  }, { plugins: [{ id: "tty", package: "@scope/tty", version: "0.1.0", folder: "/installed/plugin", manifest: {
     id: "tty", name: "터미널", description: "명령을 실행하는 표면.", mark: "t", icon: "<path/>",
     surface: { composition: { kind: "view", page: "ui/index.html" } },
   } }] }), [], "the fixture environment refused a plugin");
