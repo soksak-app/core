@@ -18,6 +18,17 @@ import { errorToasts } from "./shown-errors.js";
 import { pageIdentity } from "./page-identity.js";
 import { surfaceSyncRequestDifference, surfaceSyncRequestWithDeclarationTable } from "./surface-sync-request.js";
 import { programsOfSurface } from "./program-runs.js";
+// The readers of the dialog of the window, which the dialog module gives at its load (useDialogs). The dialog module reads the modules
+// of the surfaces, which read this module, so this module imports none of it; without the dialog module no dialog is open.
+let dialogs = { surface: () => null, state: () => null, refusal: () => null };
+const dialogSurface = () => dialogs.surface();
+const dialogState = () => dialogs.state();
+const dialogRefusal = () => dialogs.refusal();
+
+/** Gives this module the readers {surface, state, refusal} of the dialog of the window (dialogs.js). */
+export function useDialogs(readers) {
+  dialogs = readers;
+}
 
 /**
  * Returns the computed CSS color as [r, g, b, a]. The alpha is 1 when the color has none.
@@ -95,8 +106,12 @@ function overlayFrame(el, rect) {
     : toPage(rect);
 }
 
-/** Keeps native input that passed through an application DOM modal from reaching the native surfaces. */
+/**
+ * Keeps native input that passed through an application DOM modal from reaching the native surfaces. While a dialog surface is open
+ * this document takes no point of the window, so every point of the content is a point of the dialog (docs/spec/plugins.md#dialogs).
+ */
 function windowOverlays() {
+  if (dialogSurface() !== null) return [];
   if (!shown) return [];
   const el = document.getElementById(shown);
   if (!el || el.hidden) return [];
@@ -781,7 +796,8 @@ export const surfaces = native ? {
           settled: record.settled !== false,
           // The window overlays: the bounds of a shown modal and the grab area of each divider of the layout, in which this document
           // takes the pointer before the native views (docs/spec/native-surfaces.md#surface-host-container).
-          overlays: [...windowOverlays(), ...record.grabs.map(toPage)],
+          // While a dialog surface is open, the dividers take no pointer, so no grab area stands over the dialog.
+          overlays: [...windowOverlays(), ...(dialogSurface() === null ? record.grabs.map(toPage) : [])],
           surfaces: requestedSurfaces,
           // The height (pt) of the first row that the next drawing will show. The host sets the window title bar to this height in the transaction of this preparation.
           titlebar: record.titlebar,
@@ -958,22 +974,36 @@ export function overlayElementRect(element) {
 
 /**
  * Whether the open dialog stands over the element, which makes the element inert (docs/spec/exposure.md). null names the document
- * of a surface, which a dialog covers as a whole. A modal of the kind menu makes no element inert.
+ * of the surface, which a dialog covers as a whole. A modal of the kind menu makes no element inert. A dialog surface stands over
+ * every element of this document and over the document of every other surface (docs/spec/plugins.md#dialogs).
  */
-export function behindDialog(element) {
+export function behindDialog(element, surface) {
+  const dialog = dialogSurface();
+  if (dialog !== null) return element !== null || surface !== dialog;
   const el = shown ? document.getElementById(shown) : null;
   return el?.dataset.nativeModal === "dialog" && !el.contains(element);
 }
 
-/** The open modal and the state its document reported. It is null when no modal is open. */
+/**
+ * The open modal and the state its document reported, with plugin null; an open dialog surface is the modal of the mode dialog
+ * with document null and the plugin of the dialog (docs/spec/plugins.md#dialogs). It is null when no modal is open.
+ */
 export function modalState() {
+  const dialog = dialogState();
+  if (dialog !== null) return { id: dialog.surface, mode: "dialog", document: null, plugin: dialog.plugin };
   if (!shown) return null;
   const el = document.getElementById(shown);
   if (!el) throw new Error(`the shown modal ${shown} is not in the document`);
-  return { id: shown, mode: el.dataset.nativeModal, document: modalDocument };
+  return { id: shown, mode: el.dataset.nativeModal, document: modalDocument, plugin: null };
 }
 
-/** Calls fn when the modal state changes. Returns an unsubscribe function. */
+/** The id of the shown native modal, or null; a dialog surface is no native modal. */
+export const nativeModal = () => shown;
+
+/** The dialog of the window opened or ended, which changes the modal state (dialogs.js). */
+export const dialogChanged = () => modalChanged();
+
+/** Calls fn when the modal state changes, the open and the end of a dialog surface included. Returns an unsubscribe function. */
 export function onModalState(fn) {
   modalListeners.add(fn);
   return () => modalListeners.delete(fn);
@@ -1083,6 +1113,10 @@ export const overlay = native ? {
      * modal on display, it closes as hide() does in the turn of the answer, and refused(reason) lets its owner close its layer.
      */
     show(el, rect, onPick, refused) {
+      // A dialog surface and a native modal are never open together, so the command that opens the modal fails
+      // (docs/spec/native-modals.md).
+      const refusal = dialogRefusal();
+      if (refusal !== null) throw new Error(refusal);
       // This interface shows one modal at a time. If the one on display is not closed, its window stays
       // in the application and nothing refers to it.
       if (shown) this.hide();

@@ -38,6 +38,8 @@ import { drawActivity } from "./activity.js";
 import { bind, delegate, mark, run, runOn } from "./commands.js";
 import { fillPicker, pickerAnswer, pickerColumns, pickerGroups, pickerItems } from "./picker-layer.js";
 import { mountSurface, mountedSurface, placePluginPlaceholder, surfaceForTab } from "./surface-modules.js";
+import { onDialogChange } from "./dialogs.js";
+import { drawDialogSeat } from "./dialog-seat.js";
 import { emitEvent } from "./page-log.js";
 import { trace } from "./performance.js";
 import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
@@ -609,6 +611,9 @@ function pluginPlaceholder(tab, paramsProblem) {
 onPluginOperations(() => {
   if (grid && grid.cards.some((card) => tabsOf(card).some((tab) => !hasPlugin(tab.plugin)))) settle();
 });
+
+// A dialog that opens or ends changes what the plane draws: the draw holds the seat of the open dialog (docs/spec/plugins.md#dialogs).
+onDialogChange(() => { if (grid) settle(); });
 
 /* ── T5 — closing the card when the last tab moves ─────────────────────────── */
 
@@ -1951,6 +1956,8 @@ function build(kept) {
         divider.dataset.expose = "core.divider";
       }
       keepHiddenSidebars();
+      // The seat of the dialog covers the content of the window below the title bar, the first row of the window.
+      drawDialogSeat(plane, document.querySelector(".chrome-bar").getBoundingClientRect().bottom);
       const fullscreen = view.fullscreenCard;
       drawGroupCards(plane, tree, drawnRects(fullscreen), { head: HEADER, fullscreen, focused: focusedId,
         renaming: groupRename.state(), renameField: () => groupRename.field() });

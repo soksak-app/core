@@ -2,13 +2,16 @@
 import { stateCards } from "./layout-tree.js";
 
 /**
- * The kind of a surface and the sidebar of a section surface, as core.surfaces reports them (docs/spec/plugins.md#sections): a
- * descriptor with a section is a section surface of that sidebar, and any other is a tab surface with sidebar null.
+ * The kind of a surface, the sidebar of a section surface and the dialog of a dialog surface, as core.surfaces reports them
+ * (docs/spec/plugins.md#sections, docs/spec/plugins.md#dialogs): a descriptor with a section is a section surface of that sidebar, a
+ * descriptor with a dialog is the dialog surface {name, opener}, and any other is a tab surface with sidebar and dialog null.
  */
 export function surfaceKindOf(descriptor) {
-  // default: a tab descriptor has no section.
+  // default: a tab descriptor has no section and no dialog.
   const section = descriptor.section ?? null;
-  return section === null ? { kind: "tab", sidebar: null } : { kind: "section", sidebar: section.sidebar };
+  const dialog = descriptor.dialog ?? null;
+  if (dialog !== null) return { kind: "dialog", sidebar: null, dialog: { name: dialog.name, opener: dialog.opener } };
+  return section === null ? { kind: "tab", sidebar: null, dialog: null } : { kind: "section", sidebar: section.sidebar, dialog: null };
 }
 
 /**

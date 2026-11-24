@@ -1,5 +1,6 @@
 import { createSurfaceContext, releaseSurfaceReady } from "@soksak/plugin-api";
-import { native, onSurfacePrepared, surfaces as hostSurfaces, surfaceContextRuntime, sendViewSidecar } from "./host.js";
+import { native, nativeModal, onSurfacePrepared, surfaces as hostSurfaces, surfaceContextRuntime, sendViewSidecar } from "./host.js";
+import { closeDialog, openDialog } from "./dialogs.js";
 import { surfaceErrorText } from "./surface-status.js";
 import { isSectionSurface, markViewSurface, registry } from "./exposure.js";
 import { shownSectionSurfaces } from "./section-surfaces.js";
@@ -562,6 +563,12 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
       // the other plugin declares; the environment resolves each package to the id of its plugin (view-answer.js of @soksak/plugin-api,
       // docs/spec/plugins.md#pluginjson).
       dependsOn: (viewPlugin, dependency) => viewPlugin === surface.pluginId && plugin(viewPlugin).plugins.includes(dependency),
+      // The dialogs of the plugin (docs/spec/plugins.md#dialogs): the view opens a declared dialog over the window, and the dialog view
+      // closes itself; the signal of the open call removes the dialog at every end of the call other than its reply.
+      dialog: {
+        open: (name, params, signal) => openDialog({ plugin: surface.pluginId, name, params, opener: surface.surfaceId, signal, modal: nativeModal() }),
+        close: (result) => closeDialog(surface.surfaceId, result),
+      },
       // The surface menu of a right click in the view (view-answer.js of @soksak/plugin-api): a section declares no menu, and the frame moves the point into the window.
       menu: {
         // Only a tab surface has the menu of surface.menu; a section and a dialog surface have a "/" in their id.

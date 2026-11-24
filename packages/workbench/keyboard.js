@@ -8,7 +8,8 @@
 // Each release of a left press in this document asks for one decided call, which goes out in the dispatch of the release, from what
 // the press changed, also for the same target or for the workbench: the keys of the window wait for it on the host
 // (docs/spec/native-surfaces.md#keyboard-of-a-surface).
-import { modalState, onModalState, report, surfaces } from "./host.js";
+import { nativeModal, onModalState, report, surfaces } from "./host.js";
+import { dialogSurface } from "./dialogs.js";
 import { emitEvent } from "./page-log.js";
 
 /* The surface of the ring, which the plane registers. */
@@ -29,8 +30,14 @@ let idleWaits = [];
 
 const editable = (element) => element !== null && element.matches("input, textarea, select, [contenteditable]");
 
-/** The surface that holds the keyboard, or null when the workbench holds it. */
+/**
+ * The surface that holds the keyboard, or null when the workbench holds it. An open dialog surface holds it as a modal of the kind
+ * dialog: it waits for the placement that shows the dialog, as a surface that the host does not hold yet waits, and each release
+ * decides for it (docs/spec/plugins.md#dialogs).
+ */
 function target() {
+  const dialog = dialogSurface();
+  if (dialog !== null) return dialog;
   if (editable(document.activeElement)) return null;
   return ringSurface();
 }
@@ -72,7 +79,7 @@ function record(cause, surface, decision, decided = false) {
 
 /** Sends the call when the host holds the target. A target that no placement placed yet waits for the placement. */
 function follow(cause) {
-  if (modalState() !== null) {
+  if (nativeModal() !== null) {
     owed = true;
     record(cause, null, "modal");
     return;
@@ -125,7 +132,7 @@ export function keyboardPressed() {
   try {
     const ring = target();
     surface = ring !== null && (shown.has(ring) || held.has(ring)) ? ring : null;
-    if (modalState() !== null) decision = "modal";
+    if (nativeModal() !== null) decision = "modal";
     else if (surface === sent && !owed) decision = "same";
   } finally {
     record("press", surface, decision, true);
@@ -155,7 +162,7 @@ export function idle() {
 export function keyboardPlaced(ids, placedIds) {
   shown = new Set(ids);
   held = new Set(placedIds);
-  if (modalState() !== null) {
+  if (nativeModal() !== null) {
     owed = true;
     record("placed", null, "modal");
     return flight;

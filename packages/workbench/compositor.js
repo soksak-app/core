@@ -453,12 +453,32 @@ export function publishAhead(rects, seated, titlebar, grabs) {
   // are no card seat. A layout that holds the card of the side again draws them into that card at seats that the document before the
   // draw does not show, so that layout is no prediction and the commit after its draw measures them.
   let unseated = 0;
+  // The seat of the dialog covers the content of the window below the title bar and stands in no card (docs/spec/plugins.md#dialogs),
+  // so the prediction measures it in the document, where its fixed position already follows the window, and counts it apart from the
+  // card seats.
+  let dialogs = 0;
   // The device pixel scale that this layout was made on, which every card seat of seated carries (plane.js). Each surface of the
   // prediction names it (verify V7c), a kept section as well.
   // default: a layout without a card seat names no scale (null), so its record is no prediction.
   const layoutGrid = seated.values().next().value?.grid ?? null;
   for (const slot of slots()) {
     const id = slot.dataset.nativeSurfaceId;
+    if (slot.dataset.nativeSeat === "dialog") {
+      dialogs++;
+      seats.push({
+        id,
+        layer: Number(slot.dataset.nativeLayer),
+        title: slot.dataset.nativeTitle,
+        plugin: slot.dataset.nativePlugin,
+        dim: false,
+        bands: null,
+        grid: layoutGrid,
+        visible: effectiveVisible(slot),
+        surface: slotSurface(slot),
+        frame: planeFrame(slot.getBoundingClientRect(), plane.getBoundingClientRect()),
+      });
+      continue;
+    }
     const el = cardEl(slot);
     if (!el && slot.closest("[hidden]")) {
       unseated++;
@@ -541,7 +561,7 @@ export function publishAhead(rects, seated, titlebar, grabs) {
       } : { x: 0, y: 0, w: 0, h: 0 },
     });
   }
-  aheadComplete &&= seats.length - unseated === seated.size && (unseated === 0 || layoutGrid !== null);
+  aheadComplete &&= seats.length - unseated - dialogs === seated.size && (unseated + dialogs === 0 || layoutGrid !== null);
   aheadSeq = ++seq;
   return deliver(aheadSeq, seats, titlebar, grabs.map(({ x, y, w, h }) => ({ x, y, w, h })));
 }

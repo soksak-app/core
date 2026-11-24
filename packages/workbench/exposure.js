@@ -340,7 +340,7 @@ export function createRegistry({ call = null, report = null } = {}) {
       return null;
     }
     const surface = pick(kind, name, requested);
-    if (method === "element.act" && options.elementInert(null)) throw inertRefusal(name);
+    if (method === "element.act" && options.elementInert(null, surface)) throw inertRefusal(name);
     if (method !== "status.watch") return forward(surface, method, params, origin);
     // The watch exists before the surface answers, because the surface sends the current value as it starts the watch. Each watch
     // receives from version 0, so a watch of a name that the surface already follows receives the current value again.
@@ -408,7 +408,7 @@ export function createRegistry({ call = null, report = null } = {}) {
         throw new ExposureError(EXPOSURE_ERRORS.failed, `surface ${surface} has no valid applied frame`);
       }
     }
-    const inert = options.elementInert(null);
+    const inert = options.elementInert(null, surface);
     return {
       status, commands,
       element: element.map((entry) => ({ ...entry, items: entry.items.map(({ rect, command, params, ...item }) => ({

@@ -359,6 +359,24 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1129-2",
+    implementation: [
+      { file: "packages/workbench/dialogs.js", symbol: "export function openDialog({ plugin, name, params, opener, signal, modal }) {" },
+      { file: "packages/workbench/dialog-seat.js", symbol: "export function drawDialogSeat(container, top) {" },
+      { file: "packages/workbench/host.js", symbol: "export function behindDialog(element, surface) {" },
+      { file: "packages/workbench/keyboard.js", symbol: "if (dialog !== null) return dialog;" },
+      { file: "packages/workbench/surface-listing.js", symbol: "export function surfaceKindOf(descriptor) {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/dialog-surface.test.mjs", id: "a dialog that the plugin does not declare, a second dialog and a dialog beside a native modal are refused" },
+      { file: "packages/workbench/test/dialog-surface.test.mjs", id: "an open dialog stands over every element of the main page and over the document of every other surface, but not its own" },
+      { file: "packages/workbench/test/dialog-keyboard.test.mjs", id: "the keyboard waits for the placement of the dialog, goes to the dialog surface, and returns to the ring when it ends" },
+      { file: "packages/workbench/test/surface-listing.test.mjs", id: "a dialog surface is listed with kind dialog, sidebar null and its dialog {name, opener}" },
+    ],
+    expected: "The workbench opens one declared dialog at a time as a surface over the content of the window, resolves the open call with the close result, removes the dialog at every other end, and keeps the input and the keyboard in it while it is open.",
+    levels: ["unit"],
+  },
+  {
     id: "F1138",
     implementation: [
       { file: "packages/sok/go/src/service_hold.go", symbol: "func heldBy(id string, state *InstalledState, recorded map[string]string, services Services) *Held {" },
@@ -16156,7 +16174,7 @@ const FEATURE_LINKS = [
     id: "F949",
     implementation: [
       { file: "packages/soksak/src/dom.ts", symbol: "this.options.commit(on, drawn, snapshot.dividers.map((divider) => ({ ...divider, ...onGrid(divider, step) })));" },
-      { file: "packages/workbench/host.js", symbol: "overlays: [...windowOverlays(), ...record.grabs.map(toPage)]," },
+      { file: "packages/workbench/host.js", symbol: "overlays: [...windowOverlays(), ...(dialogSurface() === null ? record.grabs.map(toPage) : [])]," },
       { file: "packages/workbench-mygo/src/dividers.go", symbol: "Size(float32(divider.W), float32(divider.H)).Cursor(cursor).Focusable().KeepFocus().FocusRing(false)." },
     ],
     tests: [

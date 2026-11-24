@@ -585,7 +585,7 @@
       },
       {
         "name": "core.surfaces",
-        "description": "The native surfaces of the current plane with their plugin, visibility, dimming, declared and applied frames in window coordinates, registered entries as \"<kind> <name>\", and the page status shown in the card status row: phase loading, ready, or error, and the error message. A tab of a plugin that is not loaded is reported with its plugin, visible true and placeholder set to the reason (missing, disabled, reload, refused, host, unread or params); a mounted surface reports placeholder null. state is the memory saver state of the tab: loaded, unloaded or restoring. kind is tab for the surface of a tab and section for a section surface, and sidebar is the sidebar id of a section surface or null.",
+        "description": "The native surfaces of the current plane with their plugin, visibility, dimming, declared and applied frames in window coordinates, registered entries as \"<kind> <name>\", and the page status shown in the card status row: phase loading, ready, or error, and the error message. A tab of a plugin that is not loaded is reported with its plugin, visible true and placeholder set to the reason (missing, disabled, reload, refused, host, unread or params); a mounted surface reports placeholder null. state is the memory saver state of the tab: loaded, unloaded or restoring. kind is tab for the surface of a tab, section for a section surface and dialog for the dialog surface, sidebar is the sidebar id of a section surface or null, and dialog is {name, opener} of the dialog surface or null.",
         "schema": {
           "type": "array",
           "items": {
@@ -594,7 +594,8 @@
               "kind": {
                 "enum": [
                   "tab",
-                  "section"
+                  "section",
+                  "dialog"
                 ]
               },
               "sidebar": {
@@ -602,6 +603,20 @@
                   "string",
                   "null"
                 ]
+              },
+              "dialog": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "opener": {
+                    "type": "string"
+                  }
+                }
               },
               "state": {
                 "enum": [
@@ -1886,12 +1901,18 @@
       },
       {
         "name": "core.modal",
-        "description": "The open native modal of this window, or null; document, the state that the modal document reported, is reported only on a host that creates modal web views.",
+        "description": "The open native modal of this window, or null; document, the state that the modal document reported, is reported only on a host that creates modal web views. An open dialog surface is the modal of the mode dialog with the dialog surface as id, document null and its plugin as plugin; a native modal reports plugin null.",
         "schema": {
           "type": "object",
           "properties": {
             "id": {
               "type": "string"
+            },
+            "plugin": {
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "mode": {
               "type": "string"

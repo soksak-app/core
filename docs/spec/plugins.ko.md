@@ -174,7 +174,7 @@ installer는 view page가 없는 release를 거부하듯 dialog page가 없는 r
 - **Id.** id `dialog/<plugin>/<name>`에는 `/`가 있으므로, surface를 정하지 않은 요청은 tab처럼 dialog를 고르지 않는다([표면 선택](exposure.ko.md#표면-선택)). id가 `dialog`인 space는 없으므로 이 id는 section surface를 가리키지 않는다.
 - **Status.**
   - `core.modal`은 열린 dialog를 `{id, mode: "dialog", document: null, plugin}`로 알린다. `id`는 dialog surface이고 `plugin`은 그 plugin이다([exposure](exposure.ko.md#모달-문서)).
-  - `core.surfaces`는 dialog surface를 자기 plugin, `dialog` `{name, opener}`, `null`인 `card`와 `section`으로 나열한다.
+  - `core.surfaces`는 dialog surface를 자기 plugin, `kind` `dialog`, `sidebar` `null`, `dialog` `{name, opener}`로 나열하고, 다른 모든 surface는 `dialog` `null`을 보고한다.
 
 규칙의 이유는 다음과 같다.
 - seat가 sidebar를 덮으므로, dialog 뒤의 section view는 pointer를 받지 않는다.

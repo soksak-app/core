@@ -1,0 +1,35 @@
+{
+  "name": "keyboard-dialog",
+  "description": "While a dialog surface is open the keyboard waits for the placement that shows the dialog and then goes to the dialog surface, and the end of the dialog gives it back to the workbench when no card holds the ring; the host answers each keyboard call with null.",
+  "replay": false,
+  "reason": "The keyboard call needs a window, and the Go producer runs only the log and workspace calls without a window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {},
+  "steps": [
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "dialog/probe/edit"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": null
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ]
+}
