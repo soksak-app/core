@@ -5,6 +5,7 @@
 
 ## 2026-11-24
 
+- F1137: The end of the view data stores after the Go host library tests leaves out a directory that the WebKit network process removes during the listing, so a passing run no longer fails on `no such file or directory`.
 - F1136-6: `make check-host-debug` compiles the GPUI framework adapter and the gpuikit application with the features of the gpuikit debug bundle.
 - F1136-2: CI runs the gpuikit host contract in the job `macos-gpuikit`, which the gate `required` and the push preflight read.
 - F1136-5: The host comparison checks include gpuikit: `check-hosts-same` compares the host.call names of the GPUI page runtime with those of Tauri and with the dispatch of the adapter, and `check-failure-table` reads the error records of the adapter. The GPUI host gains the calls `view_reload` and `sidecar_sessions` that it lacked, and the failure table lists its five error places.

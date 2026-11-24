@@ -5,6 +5,7 @@
 
 ## 2026-11-24
 
+- F1137: Go host library test 뒤 view data store 종료는 나열 중 WebKit network process가 지운 directory를 빼므로, 통과한 실행이 더 이상 `no such file or directory`로 실패하지 않는다.
 - F1136-6: `make check-host-debug`는 GPUI framework adapter와 gpuikit application을 gpuikit debug bundle의 feature로 컴파일한다.
 - F1136-2: CI는 job `macos-gpuikit`에서 gpuikit host contract를 실행하고, gate `required`와 push preflight가 그 job을 읽는다.
 - F1136-5: host 비교 검사가 gpuikit을 포함한다. `check-hosts-same`은 GPUI page runtime의 host.call 이름을 Tauri의 이름, adapter의 dispatch와 비교하고, `check-failure-table`은 adapter의 error record를 읽는다. GPUI host는 빠져 있던 call `view_reload`와 `sidecar_sessions`를 얻고, failure table은 그 다섯 error 위치를 든다.

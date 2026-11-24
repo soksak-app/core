@@ -7,9 +7,11 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
+	"testing/fstest"
 	"time"
 	"unsafe"
 
@@ -107,18 +109,9 @@ func viewStoreDirectory(t *testing.T) string {
 // once, so the directories are not told apart. The stores end together, because a store that stays open while another ends starts the
 // network process of WebKit again. It runs on a goroutine of a test, never on the main thread, which runs the ends.
 func endViewStores(folder string) error {
-	var directories []string
-	walked := filepath.WalkDir(folder, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if entry.IsDir() {
-			directories = append(directories, path)
-		}
-		return nil
-	})
-	if walked != nil {
-		return fmt.Errorf("the directories of the data stores of %s were not listed: %w", folder, walked)
+	directories, err := storeDirectories(os.DirFS(folder), folder)
+	if err != nil {
+		return fmt.Errorf("the directories of the data stores of %s were not listed: %w", folder, err)
 	}
 	refusals := make(chan error, len(directories))
 	for _, directory := range directories {
@@ -131,6 +124,30 @@ func endViewStores(folder string) error {
 		}
 	}
 	return errors.Join(failures...)
+}
+
+// storeDirectories lists folder and each directory under it, read through fsys, which is folder itself. The WebKit network process of
+// another store removes its own directories under Origins/ while the listing runs, so a directory that vanishes between the listing of
+// its parent and its own listing is left out (F1137): it has no store to end. A failure of folder itself, or any other failure, ends the
+// listing with its error.
+func storeDirectories(fsys fs.FS, folder string) ([]string, error) {
+	var directories []string
+	err := fs.WalkDir(fsys, ".", func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			if path != "." && errors.Is(err, fs.ErrNotExist) {
+				if len(directories) > 0 && directories[len(directories)-1] == filepath.Join(folder, path) {
+					directories = directories[:len(directories)-1]
+				}
+				return fs.SkipDir
+			}
+			return err
+		}
+		if entry.IsDir() {
+			directories = append(directories, filepath.Join(folder, path))
+		}
+		return nil
+	})
+	return directories, err
 }
 
 // removeViewStore ends the data stores of the views and removes their folder when the run of the tests ended, and reports a failure on
@@ -414,4 +431,39 @@ func (p *viewProbe) openCalls() []openViewCall {
 		}
 	}
 	return calls
+}
+
+// vanishingFS is a file system in which the directory vanished disappears between the listing of its parent and its own listing, as a
+// directory under Origins/ of a data store does when the WebKit network process removes it.
+type vanishingFS struct {
+	fstest.MapFS
+	vanished string
+}
+
+func (f vanishingFS) ReadDir(name string) ([]fs.DirEntry, error) {
+	if name == f.vanished {
+		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
+	}
+	return f.MapFS.ReadDir(name)
+}
+
+// F1137: a directory that vanishes while the store folder is listed has no store to end, so the listing leaves it out and lists the
+// other directories; a folder that is missing itself fails the listing.
+func TestTheListingOfTheStoreFolderLeavesOutADirectoryThatVanishes(t *testing.T) {
+	files := fstest.MapFS{
+		"Origins/a/salt": {Data: []byte("a")},
+		"Origins/b/salt": {Data: []byte("b")},
+		"WebsiteData/x":  {Data: []byte("x")},
+	}
+	got, err := storeDirectories(vanishingFS{MapFS: files, vanished: "Origins/a"}, "/store")
+	if err != nil {
+		t.Fatalf("list the store folder: %v", err)
+	}
+	want := []string{"/store", filepath.Join("/store", "Origins"), filepath.Join("/store", "Origins/b"), filepath.Join("/store", "WebsiteData")}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("the directories are %q, want %q", got, want)
+	}
+	if _, err := storeDirectories(vanishingFS{MapFS: files, vanished: "."}, "/store"); err == nil {
+		t.Fatal("the listing of a missing store folder succeeded")
+	}
 }
