@@ -3,6 +3,8 @@ package host
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -20,7 +22,7 @@ func nullOriginStart() ViewStart {
 
 // contract: view.start-values.first-script
 // A view that the host creates receives, before its page loads, the document-start script that sets window.sokSurface to the
-// frozen start values {surface, params, origin, project, declarations, diagnostics, section} of its surface, so the first page script reads them.
+// frozen start values {surface, params, origin, project, declarations, diagnostics, section, dialog, levels, dataFolder} of its surface, so the first page script reads them.
 func TestViewCreationAddsTheStartValuesScriptBeforeTheLoad(t *testing.T) {
 	var start ViewStart
 	if err := json.Unmarshal([]byte(`{"params":{"path":"a.md"},"origin":{"directory":"/work/one"},"project":{"id":"prj-one","root":"/work/one"},"declarations":{"commands":[]},"diagnostics":{"module":"ui/probe-diagnostics.js","exposes":{}},"section":null,"dialog":null}`), &start); err != nil {
@@ -33,6 +35,12 @@ func TestViewCreationAddsTheStartValuesScriptBeforeTheLoad(t *testing.T) {
 		"diagnostics": map[string]any{"module": "ui/probe-diagnostics.js", "exposes": map[string]any{}}, "section": nil, "dialog": nil,
 		"levels": map[string]any{"call": "trace", "frame": "trace", "input": "trace", "io": "trace", "lifecycle": "trace"},
 	}
+	read, _ := opened["surface"].(map[string]any)
+	folder, _ := read["dataFolder"].(string)
+	if !filepath.IsAbs(folder) || !strings.HasSuffix(folder, "/plugin-data/probe") {
+		t.Fatalf("the first script of the page read the data folder %v, want <configuration directory>/plugin-data/probe", read["dataFolder"])
+	}
+	want["dataFolder"] = folder
 	if !reflect.DeepEqual(opened["surface"], want) {
 		t.Fatalf("the first script of the page read the start values %v, want %v", opened["surface"], want)
 	}
@@ -41,8 +49,8 @@ func TestViewCreationAddsTheStartValuesScriptBeforeTheLoad(t *testing.T) {
 // The start values script carries the start values that the surface has none of as JSON null.
 // contract: view.start-values.first-script
 func TestSurfaceStartScriptCarriesAbsentValuesAsNull(t *testing.T) {
-	want := `window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({}),"diagnostics":null,"section":null,"dialog":null,"levels":Object.freeze({"call":"error","frame":"error","input":"error","io":"error","lifecycle":"error"})});`
-	got, err := surfaceStartScript("probe-surface", nullOriginStart(), defaultLevels())
+	want := `window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({}),"diagnostics":null,"section":null,"dialog":null,"levels":Object.freeze({"call":"error","frame":"error","input":"error","io":"error","lifecycle":"error"}),"dataFolder":"/data"});`
+	got, err := surfaceStartScript("probe-surface", nullOriginStart(), defaultLevels(), "/data")
 	if err != nil {
 		t.Fatalf("start values script: %v", err)
 	}
@@ -109,7 +117,7 @@ func TestSyncRequestRequiresAndResolvesItsDeclarationTable(t *testing.T) {
 		string(start.Declarations) != `{"commands":[{"name":"probe.command","params":{"path":"/work/one"}}]}` {
 		t.Fatalf("resolved start values %+v", start)
 	}
-	script, err := surfaceStartScript("probe", *start, defaultLevels())
+	script, err := surfaceStartScript("probe", *start, defaultLevels(), "/data")
 	if err != nil || !strings.Contains(script, `"declarations":Object.freeze({"commands":[{"name":"probe.command","params":{"path":"/work/one"}}]})`) {
 		t.Fatalf("resolved declarations were not retained for injection: %q, error %v", script, err)
 	}
@@ -223,7 +231,7 @@ func TestSyncRequestRefusesAViewWithoutAnOriginDirectory(t *testing.T) {
 			t.Fatalf("%s: %v, want %q", tc.name, err, tc.want)
 		}
 	}
-	if _, err := surfaceStartScript("probe", ViewStart{}, defaultLevels()); err == nil {
+	if _, err := surfaceStartScript("probe", ViewStart{}, defaultLevels(), "/data"); err == nil {
 		t.Fatalf("start values script without an origin: no error, want a refusal")
 	}
 }
@@ -309,8 +317,8 @@ func TestSurfaceStartScriptInjectsTheSection(t *testing.T) {
 	if err := json.Unmarshal([]byte(`{"origin":{"directory":null},"diagnostics":null,"section":{"card":"c3","id":"probe.tree","sidebar":"c3:right"},"dialog":null}`), &start); err != nil {
 		t.Fatalf("start values: %v", err)
 	}
-	want := `window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({}),"diagnostics":null,"section":Object.freeze({"card":"c3","id":"probe.tree","sidebar":"c3:right"}),"dialog":null,"levels":Object.freeze({"call":"error","frame":"error","input":"error","io":"error","lifecycle":"error"})});`
-	got, err := surfaceStartScript("probe-surface", start, defaultLevels())
+	want := `window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({}),"diagnostics":null,"section":Object.freeze({"card":"c3","id":"probe.tree","sidebar":"c3:right"}),"dialog":null,"levels":Object.freeze({"call":"error","frame":"error","input":"error","io":"error","lifecycle":"error"}),"dataFolder":"/data"});`
+	got, err := surfaceStartScript("probe-surface", start, defaultLevels(), "/data")
 	if err != nil {
 		t.Fatalf("start values script: %v", err)
 	}
@@ -371,8 +379,8 @@ func TestSurfaceStartScriptInjectsTheDialog(t *testing.T) {
 	if err := json.Unmarshal([]byte(`{"origin":{"directory":null},"diagnostics":null,"section":null,"dialog":{"name":"edit","opener":"tab-a"}}`), &start); err != nil {
 		t.Fatalf("start values: %v", err)
 	}
-	want := `window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({}),"diagnostics":null,"section":null,"dialog":Object.freeze({"name":"edit","opener":"tab-a"}),"levels":Object.freeze({"call":"error","frame":"error","input":"error","io":"error","lifecycle":"error"})});`
-	got, err := surfaceStartScript("probe-surface", start, defaultLevels())
+	want := `window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({}),"diagnostics":null,"section":null,"dialog":Object.freeze({"name":"edit","opener":"tab-a"}),"levels":Object.freeze({"call":"error","frame":"error","input":"error","io":"error","lifecycle":"error"}),"dataFolder":"/data"});`
+	got, err := surfaceStartScript("probe-surface", start, defaultLevels(), "/data")
 	if err != nil {
 		t.Fatalf("start values script: %v", err)
 	}
@@ -410,11 +418,11 @@ func defaultLevels() map[string]string { return DefaultLogPolicy().Classes() }
 func TestSurfaceStartScriptCarriesTheStoredLevelOfEachClass(t *testing.T) {
 	levels := defaultLevels()
 	levels["frame"] = "debug"
-	got, err := surfaceStartScript("probe-surface", nullOriginStart(), levels)
+	got, err := surfaceStartScript("probe-surface", nullOriginStart(), levels, "/data")
 	if err != nil {
 		t.Fatalf("start values script: %v", err)
 	}
-	want := `,"levels":Object.freeze({"call":"error","frame":"debug","input":"error","io":"error","lifecycle":"error"})});`
+	want := `,"levels":Object.freeze({"call":"error","frame":"debug","input":"error","io":"error","lifecycle":"error"}),"dataFolder":"/data"});`
 	if !strings.HasSuffix(got, want) {
 		t.Fatalf("start values script %q, want the suffix %q", got, want)
 	}
@@ -463,5 +471,37 @@ func TestASyncRequestKeepsTheProcessOfAViewStart(t *testing.T) {
 	}
 	if got := request.Surfaces[0].Start.Process; got != "view" {
 		t.Fatalf("the decoded start process is %q, want view", got)
+	}
+}
+
+// The start value dataFolder is the data folder of the plugin of the view, which the host creates with mode 0700 before the view
+// starts (docs/spec/native-surfaces.md#view-surfaces).
+// contract: view.start-values.data-folder
+func TestSurfaceStartScriptCarriesTheDataFolderOfThePlugin(t *testing.T) {
+	configDir := t.TempDir()
+	folder, err := PluginDataFolder(configDir, "probe")
+	if err != nil {
+		t.Fatalf("plugin data folder: %v", err)
+	}
+	if want := filepath.Join(configDir, "plugin-data", "probe"); folder != want {
+		t.Fatalf("plugin data folder %q, want %q", folder, want)
+	}
+	info, err := os.Stat(folder)
+	if err != nil {
+		t.Fatalf("plugin data folder: %v", err)
+	}
+	if !info.IsDir() || info.Mode().Perm() != 0o700 {
+		t.Fatalf("plugin data folder mode %v, want a folder with mode 0700", info.Mode())
+	}
+	got, err := surfaceStartScript("probe-surface", nullOriginStart(), defaultLevels(), folder)
+	if err != nil {
+		t.Fatalf("start values script: %v", err)
+	}
+	want := `,"dataFolder":"` + folder + `"});`
+	if !strings.HasSuffix(got, want) {
+		t.Fatalf("start values script %q, want the suffix %q", got, want)
+	}
+	if _, err := PluginDataFolder("relative", "probe"); err == nil {
+		t.Fatalf("a relative configuration directory gave a data folder")
 	}
 }

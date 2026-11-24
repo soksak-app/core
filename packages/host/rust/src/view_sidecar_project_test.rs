@@ -27,6 +27,7 @@ pub(super) fn mount(data: &WindowData, root: &str) -> super::ViewOrigin {
         "probe-surface",
         &start,
         &soksak_sok::log_policy::LogPolicy::default().classes(),
+        std::path::Path::new("/data"),
     )
     .unwrap();
     assert!(

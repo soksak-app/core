@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -25,6 +26,10 @@ import (
 // documentData is the directory inside the configuration directory that holds the persistent site data of document regions. It differs from the
 // storage of the app document (docs/spec/native-surfaces.md#document-regions).
 const documentData = "document-data"
+
+// pluginData is the folder of the configuration directory that holds the data folder of each plugin, which its views read from their
+// start values (docs/spec/native-surfaces.md#view-surfaces).
+const pluginData = "plugin-data"
 
 var documentName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
 
@@ -574,7 +579,7 @@ func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, director
 		err = viewStepFault("script")
 	}
 	if err == nil {
-		err = s.addStartScript(handle, surfaceID, start)
+		err = s.addStartScript(handle, surfaceID, plugin, start)
 	}
 	if err == nil && (!system.LoadDocument(handle, "soksak://"+plugin+"/"+page) || viewLoadFault()) {
 		err = fmt.Errorf("view of surface %q cannot load soksak://%s/%s", surfaceID, plugin, page)
@@ -605,19 +610,36 @@ func (s *Surfaces) addThemeScript(document unsafe.Pointer) error {
 
 // addStartScript adds the start values script of the view document, with the values that the page declared for the surface,
 // before the view loads its page (docs/spec/native-surfaces.md#view-surfaces).
-func (s *Surfaces) addStartScript(document unsafe.Pointer, surfaceID string, start ViewStart) error {
-	script, err := surfaceStartScript(surfaceID, start, StoredLevels())
+func (s *Surfaces) addStartScript(document unsafe.Pointer, surfaceID, plugin string, start ViewStart) error {
+	folder, err := PluginDataFolder(s.host.configDir, plugin)
+	if err != nil {
+		return err
+	}
+	script, err := surfaceStartScript(surfaceID, start, StoredLevels(), folder)
 	if err != nil {
 		return err
 	}
 	return system.AddDocumentScript(document, script)
 }
 
+// PluginDataFolder creates the data folder of plugin in the configuration directory with mode 0700, so only the person reads what the
+// plugin keeps there, and returns its absolute path (docs/spec/native-surfaces.md#view-surfaces).
+func PluginDataFolder(configDir, plugin string) (string, error) {
+	if !filepath.IsAbs(configDir) {
+		return "", fmt.Errorf("plugin data folder of %s: configuration directory %q is not absolute", plugin, configDir)
+	}
+	folder := filepath.Join(configDir, pluginData, plugin)
+	if err := os.MkdirAll(folder, 0o700); err != nil {
+		return "", fmt.Errorf("plugin data folder of %s: %w", plugin, err)
+	}
+	return folder, nil
+}
+
 // surfaceStartScript returns the document-start script that sets window.sokSurface to the frozen start values of the view of
 // surface, which the first page script of the view reads (docs/spec/native-surfaces.md#view-surfaces). A value that the surface
-// has none of is carried as JSON null. levels is the stored level of each class of the host writer, which the host adds to the values
-// that the page sent.
-func surfaceStartScript(surface string, start ViewStart, levels map[string]string) (string, error) {
+// has none of is carried as JSON null. levels is the stored level of each class of the host writer, and dataFolder is the data folder
+// of the plugin of the view, which the host adds to the values that the page sent.
+func surfaceStartScript(surface string, start ViewStart, levels map[string]string, dataFolder string) (string, error) {
 	id, err := json.Marshal(surface)
 	if err != nil {
 		return "", fmt.Errorf("view start surface cannot be serialized: %w", err)
@@ -679,6 +701,10 @@ func surfaceStartScript(surface string, start ViewStart, levels map[string]strin
 	if err != nil {
 		return "", fmt.Errorf("view start levels cannot be serialized: %w", err)
 	}
+	folder, err := json.Marshal(dataFolder)
+	if err != nil {
+		return "", fmt.Errorf("view start data folder cannot be serialized: %w", err)
+	}
 	return "window.sokSurface = Object.freeze({\"surface\":" + string(id) +
 		",\"params\":" + params +
 		",\"origin\":Object.freeze({\"directory\":" + directory + "})" +
@@ -687,7 +713,8 @@ func surfaceStartScript(surface string, start ViewStart, levels map[string]strin
 		",\"diagnostics\":" + diagnostics +
 		",\"section\":" + section +
 		",\"dialog\":" + dialog +
-		",\"levels\":Object.freeze(" + string(stored) + ")});", nil
+		",\"levels\":Object.freeze(" + string(stored) + ")" +
+		",\"dataFolder\":" + string(folder) + "});", nil
 }
 
 // viewResponsiveness relays a responsiveness notice of the view of surface: it writes the trace event of the notice and sends the

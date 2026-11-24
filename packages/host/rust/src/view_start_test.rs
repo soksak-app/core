@@ -1,6 +1,8 @@
 //! The start values script of a view (docs/spec/native-surfaces.md#view-surfaces): the document-start script sets
 //! window.sokSurface to the frozen start values that the page declared for the surface. The same cases run in the Go host.
 
+use std::path::Path;
+
 use serde_json::json;
 
 use super::surface_start_script;
@@ -28,8 +30,8 @@ fn the_start_values_script_freezes_the_start_values_for_the_first_page_script() 
     }))
     .expect("the start values have their form");
     assert_eq!(
-        surface_start_script("probe-surface", &start, &default_levels()).expect("the origin has its form"),
-        r##"window.sokSurface = Object.freeze({"surface":"probe-surface","params":{"path":"a.md"},"origin":Object.freeze({"directory":"/work/one"}),"project":Object.freeze({"id":"prj-one","root":"/work/one"}),"declarations":Object.freeze({"commands":[]}),"diagnostics":Object.freeze({"exposes":{},"module":"ui/probe-diagnostics.js"}),"section":Object.freeze({"card":"c3","id":"probe.tree","sidebar":"c3:right"}),"dialog":null,"##.to_string() + DEFAULT_LEVELS + "});",
+        surface_start_script("probe-surface", &start, &default_levels(), Path::new("/data")).expect("the origin has its form"),
+        r##"window.sokSurface = Object.freeze({"surface":"probe-surface","params":{"path":"a.md"},"origin":Object.freeze({"directory":"/work/one"}),"project":Object.freeze({"id":"prj-one","root":"/work/one"}),"declarations":Object.freeze({"commands":[]}),"diagnostics":Object.freeze({"exposes":{},"module":"ui/probe-diagnostics.js"}),"section":Object.freeze({"card":"c3","id":"probe.tree","sidebar":"c3:right"}),"dialog":null,"##.to_string() + DEFAULT_LEVELS + r##","dataFolder":"/data"});"##,
         "the script sets the frozen start values"
     );
 }
@@ -45,8 +47,8 @@ fn the_start_values_script_carries_absent_values_as_null() {
     }))
     .expect("the start values have their form");
     assert_eq!(
-        surface_start_script("probe-surface", &start, &default_levels()).expect("the origin has its form"),
-        r##"window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({}),"diagnostics":null,"section":null,"dialog":null,"##.to_string() + DEFAULT_LEVELS + "});",
+        surface_start_script("probe-surface", &start, &default_levels(), Path::new("/data")).expect("the origin has its form"),
+        r##"window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({}),"diagnostics":null,"section":null,"dialog":null,"##.to_string() + DEFAULT_LEVELS + r##","dataFolder":"/data"});"##,
         "the script carries the absent values as null"
     );
 }
@@ -61,7 +63,12 @@ fn the_start_values_script_refuses_a_missing_section() {
     }))
     .expect("the start values have their form");
     assert_eq!(
-        surface_start_script("probe-surface", &start, &default_levels()),
+        surface_start_script(
+            "probe-surface",
+            &start,
+            &default_levels(),
+            Path::new("/data")
+        ),
         Err(r#"surface "probe-surface": view start section is missing"#.to_string()),
         "the script names the missing section"
     );
@@ -88,7 +95,12 @@ fn the_start_values_script_refuses_a_section_of_another_form() {
         }))
         .expect("the start values have their form");
         assert_eq!(
-            surface_start_script("probe-surface", &start, &default_levels()),
+            surface_start_script(
+                "probe-surface",
+                &start,
+                &default_levels(),
+                Path::new("/data")
+            ),
             Err(text.to_string()),
             "the section {section} is refused"
         );
@@ -107,8 +119,8 @@ fn the_start_values_script_injects_the_dialog() {
     }))
     .expect("the start values have their form");
     assert_eq!(
-        surface_start_script("probe-surface", &start, &default_levels()).expect("the start values have their form"),
-        r##"window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({}),"diagnostics":null,"section":null,"dialog":Object.freeze({"name":"edit","opener":"tab-a"}),"##.to_string() + DEFAULT_LEVELS + "});",
+        surface_start_script("probe-surface", &start, &default_levels(), Path::new("/data")).expect("the start values have their form"),
+        r##"window.sokSurface = Object.freeze({"surface":"probe-surface","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({}),"diagnostics":null,"section":null,"dialog":Object.freeze({"name":"edit","opener":"tab-a"}),"##.to_string() + DEFAULT_LEVELS + r##","dataFolder":"/data"});"##,
         "the script sets the frozen dialog"
     );
 }
@@ -118,7 +130,12 @@ fn the_start_values_script_injects_the_dialog() {
 #[test]
 fn the_start_values_script_refuses_a_missing_origin() {
     assert_eq!(
-        surface_start_script("probe-surface", &ViewStart::default(), &default_levels()),
+        surface_start_script(
+            "probe-surface",
+            &ViewStart::default(),
+            &default_levels(),
+            Path::new("/data")
+        ),
         Err(r#"surface "probe-surface": view start origin is missing"#.to_string()),
         "the script names the missing origin"
     );
@@ -155,10 +172,37 @@ fn the_start_values_script_carries_the_stored_level_of_each_class() {
     .expect("the start values have their form");
     let mut levels = default_levels();
     levels.insert("frame".to_string(), json!("debug"));
-    let script =
-        surface_start_script("probe-surface", &start, &levels).expect("the origin has its form");
+    let script = surface_start_script("probe-surface", &start, &levels, Path::new("/data"))
+        .expect("the origin has its form");
     assert!(
-        script.ends_with(r##","levels":Object.freeze({"call":"error","frame":"debug","input":"error","io":"error","lifecycle":"error"})});"##),
+        script.ends_with(r##","levels":Object.freeze({"call":"error","frame":"debug","input":"error","io":"error","lifecycle":"error"}),"dataFolder":"/data"});"##),
         "{script}"
     );
+}
+
+/// The start value dataFolder is the data folder of the plugin of the view, which the host creates with mode 0700 before the view
+/// starts (docs/spec/native-surfaces.md#view-surfaces).
+// contract: view.start-values.data-folder
+#[test]
+fn the_start_values_script_carries_the_data_folder_of_the_plugin() {
+    use std::os::unix::fs::PermissionsExt;
+    let config = tempfile::tempdir().expect("a temporary configuration directory");
+    let folder = crate::documents::plugin_data_folder(config.path(), "probe")
+        .expect("the data folder is created");
+    assert_eq!(folder, config.path().join("plugin-data").join("probe"));
+    let metadata = std::fs::metadata(&folder).expect("the data folder exists");
+    assert!(metadata.is_dir());
+    assert_eq!(metadata.permissions().mode() & 0o777, 0o700);
+    let start: ViewStart = serde_json::from_value(
+        json!({"origin": {"directory": null}, "diagnostics": null, "section": null, "dialog": null}),
+    )
+    .expect("the start values have their form");
+    let script = surface_start_script("probe-surface", &start, &default_levels(), &folder)
+        .expect("the origin has its form");
+    let want = format!(
+        ",\"dataFolder\":{}}});",
+        serde_json::Value::String(folder.to_str().unwrap().to_string())
+    );
+    assert!(script.ends_with(&want), "{script}");
+    assert!(crate::documents::plugin_data_folder(Path::new("relative"), "probe").is_err());
 }

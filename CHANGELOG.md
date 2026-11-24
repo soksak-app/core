@@ -5,6 +5,7 @@
 
 ## 2026-11-24
 
+- F1153: The start values of every view carry `dataFolder`, the folder `plugin-data/<plugin id>` of the configuration directory, which the Go and Rust hosts create with mode 0700 before the view starts, so a plugin keeps values of the person that belong to no project.
 - F1149: A window at the library stays at the library when a plugin change starts its workbench again: the library clears the project from the window address in the JS workbench and in mygo, so the new start no longer opens the project shown before the library. Red/Green: `projects-switch.test.mjs` and `TestTheLibraryNamesNoProjectInTheAddress`; `TestTheWindowNamesTheProjectThatItShows` now asserts that the library names no project, and the tests of `projects-close-window.test.mjs` name their start address. The way back to the project after the new start is F1149-1.
 - F1152: A plugin with sections and no surface may declare `programs`, and its section and dialog surfaces carry them, so a section page runs a declared program; a plugin with neither is refused with `programs requires a surface or sections`. Red/Green: the shared manifest cases on the JS, Go and Rust readers and `environment.test.mjs`.
 - F1151: The statuses and elements of a dialog page are registered: the registry knows the open dialog surface by the plugin of the dialog, so a request that names the dialog surface is answered by its elements. Red/Green: `dialog-surface.test.mjs`.

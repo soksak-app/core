@@ -41,6 +41,9 @@ use crate::windows::{
 /// from the storage of the app document.
 /// (docs/spec/native-surfaces.md#document-regions).
 pub(crate) const DOCUMENT_DATA: &str = "document-data";
+/// The folder of the configuration directory that holds the data folder of each plugin, which its views read from their start values
+/// (docs/spec/native-surfaces.md#view-surfaces).
+pub(crate) const PLUGIN_DATA: &str = "plugin-data";
 
 /// A document region call of a surface page. Each call uses only the fields that it needs.
 #[derive(Clone, Debug, Deserialize)]
@@ -1809,9 +1812,16 @@ fn attach_view(
             let theme = crate::theme::get(window)?;
             let theme = serde_json::to_value(&theme).map_err(|error| error.to_string())?;
             platform.add_document_script(document, &theme_script(&theme))?;
+            let config = crate::config_directory(window.app_handle()).map_err(|e| e.to_string())?;
+            let data_folder = plugin_data_folder(&config, plugin)?;
             platform.add_document_script(
                 document,
-                &surface_start_script(surface, &start, &crate::log_policy::stored_levels())?,
+                &surface_start_script(
+                    surface,
+                    &start,
+                    &crate::log_policy::stored_levels(),
+                    &data_folder,
+                )?,
             )?;
             record_view_process_request(surface, plugin);
             Ok(())
@@ -3550,14 +3560,35 @@ pub fn theme_script(theme: &Value) -> String {
     format!("window.sokTheme = Object.freeze({theme});")
 }
 
+/// Creates the data folder of `plugin` in the configuration directory `config` with mode 0700, so only the person reads what the
+/// plugin keeps there, and returns its absolute path (docs/spec/native-surfaces.md#view-surfaces).
+pub fn plugin_data_folder(
+    config: &std::path::Path,
+    plugin: &str,
+) -> Result<std::path::PathBuf, String> {
+    if !config.is_absolute() {
+        return Err(format!(
+            "plugin data folder of {plugin}: configuration directory {} is not absolute",
+            config.display()
+        ));
+    }
+    let folder = config.join(PLUGIN_DATA).join(plugin);
+    crate::platform::current()?
+        .create_private_directories(&folder)
+        .map_err(|error| format!("plugin data folder of {plugin}: {error}"))?;
+    Ok(folder)
+}
+
 /// The document-start script that sets window.sokSurface to the frozen start values of the view of surface, which the first page
 /// script of the view reads (docs/spec/native-surfaces.md#view-surfaces). A value that the surface has none of is carried as JSON
 /// null, except the origin, which must be present and of its form; a missing or malformed origin is refused. `levels` is the stored
-/// level of each class of the host writer, which the host adds to the values that the page sent.
+/// level of each class of the host writer, and `data_folder` is the data folder of the plugin of the view, which the host adds to the
+/// values that the page sent.
 pub fn surface_start_script(
     surface: &str,
     start: &ViewStart,
     levels: &serde_json::Map<String, Value>,
+    data_folder: &std::path::Path,
 ) -> Result<String, String> {
     let params = start
         .params
@@ -3595,9 +3626,20 @@ pub fn surface_start_script(
         _ => "null".to_string(),
     };
     let levels = Value::Object(levels.clone());
+    let data_folder = Value::String(
+        data_folder
+            .to_str()
+            .ok_or_else(|| {
+                format!(
+                    "view start data folder {} is not UTF-8",
+                    data_folder.display()
+                )
+            })?
+            .to_string(),
+    );
     let id = Value::String(surface.to_string());
     Ok(format!(
-        "window.sokSurface = Object.freeze({{\"surface\":{id},\"params\":{params},\"origin\":Object.freeze({{\"directory\":{directory}}}),\"project\":{project},\"declarations\":Object.freeze({declarations}),\"diagnostics\":{diagnostics},\"section\":{section},\"dialog\":{dialog},\"levels\":Object.freeze({levels})}});"
+        "window.sokSurface = Object.freeze({{\"surface\":{id},\"params\":{params},\"origin\":Object.freeze({{\"directory\":{directory}}}),\"project\":{project},\"declarations\":Object.freeze({declarations}),\"diagnostics\":{diagnostics},\"section\":{section},\"dialog\":{dialog},\"levels\":Object.freeze({levels}),\"dataFolder\":{data_folder}}});"
     ))
 }
 

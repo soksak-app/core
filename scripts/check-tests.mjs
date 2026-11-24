@@ -372,6 +372,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1153",
+    implementation: [
+      { file: "packages/host/go/src/documents.go", symbol: "func PluginDataFolder(configDir, plugin string) (string, error) {" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "pub fn plugin_data_folder(" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/view_start_test.go", id: "TestSurfaceStartScriptCarriesTheDataFolderOfThePlugin" },
+      { file: "packages/host/go/src/view_start_test.go", id: "TestViewCreationAddsTheStartValuesScriptBeforeTheLoad" },
+      { file: "packages/host/rust/src/view_start_test.rs", id: "the_start_values_script_carries_the_data_folder_of_the_plugin" },
+    ],
+    expected: "The start values of every view carry dataFolder, the folder plugin-data/<plugin id> of the configuration directory, which the Go and Rust hosts create with mode 0700 before the view starts.",
+    levels: ["unit"],
+  },
+  {
     id: "F1152",
     implementation: [
       { file: "packages/plugin-api/index.js", symbol: "programs requires a surface or sections" },

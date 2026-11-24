@@ -243,10 +243,11 @@ mod declaration_table {
             crate::documents::surface_start_script(
                 "two",
                 two,
-                &soksak_sok::log_policy::LogPolicy::default().classes()
+                &soksak_sok::log_policy::LogPolicy::default().classes(),
+                std::path::Path::new("/data")
             )
             .expect("the resolved start values form a valid script"),
-            r##"window.sokSurface = Object.freeze({"surface":"two","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({"commands":["open"],"element":["alpha"],"nested":{"keep":true}}),"diagnostics":null,"section":null,"dialog":null,"levels":Object.freeze({"call":"error","frame":"error","input":"error","io":"error","lifecycle":"error"})});"##
+            r##"window.sokSurface = Object.freeze({"surface":"two","params":null,"origin":Object.freeze({"directory":null}),"project":null,"declarations":Object.freeze({"commands":["open"],"element":["alpha"],"nested":{"keep":true}}),"diagnostics":null,"section":null,"dialog":null,"levels":Object.freeze({"call":"error","frame":"error","input":"error","io":"error","lifecycle":"error"}),"dataFolder":"/data"});"##
         );
 
         let next: SyncRequest = serde_json::from_value(serde_json::json!({
