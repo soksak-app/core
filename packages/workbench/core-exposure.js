@@ -276,6 +276,7 @@ const shift = (rect, origin) => ({ x: rect.x + origin.x, y: rect.y + origin.y, w
  * of a stored space.
  */
 function surfacePlugin(surface) {
+  // default: a surface that is no section is looked up as the page of the open dialog.
   const owner = sectionSurfacePlugin(surface) ?? dialogSurfacePlugin(surface);
   if (owner !== null) return owner;
   // default: there is no card before the plane is created.

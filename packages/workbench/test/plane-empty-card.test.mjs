@@ -59,7 +59,7 @@ test("closing the only tab of the only card leaves the card empty", { timeout: 5
     assert.ok(main, "the card that cannot close was closed");
     assert.deepEqual({ tabs: main.data.tabs, activeId: main.data.activeId }, { tabs: [], activeId: null },
       "the card took another tab instead of staying empty");
-    // The empty card draws its head with the card tools, whose 탭 추가 opens a tab, and a body without a surface.
+    // The empty card draws its head with the card tools, whose add tab tool opens a tab, and a body without a surface.
     held?.();
     const el = document.querySelector('[data-card-id="main"]');
     assert.ok(el?.querySelector('[data-expose="core.card.tools"]'), "the empty card has no card tools in its head");

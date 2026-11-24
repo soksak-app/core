@@ -195,6 +195,7 @@ function spaceCards() {
 // default: a window without an active project (the library) has null.
 export const active = () => projects.find((p) => p.id === activeProjectId) ?? null;
 /** The project that the way back of the library opens: the shown project, else the project that the library address names. */
+// default: a library without a shown project and without a way back has null.
 export const returnable = () => active() ?? projects.find((p) => p.id === returnTo) ?? null;
 export const local = () => projects.filter((p) => owned.has(p.id));
 export const inLibrary = () => browsing;
@@ -304,8 +305,8 @@ export function begin(snapshot) {
   // default: the store of the browser example has no other window, so it carries no open.
   openProjects = new Set(snapshot.open ?? []);
   projects = snapshot.projects;
-  // default: a window that names no project, or a project that is not in the registry, starts at the library.
   const address = new URL(location.href).searchParams;
+  // default: a window that names no project, or a project that is not in the registry, starts at the library.
   const requested = projects.find((p) => p.id === address.get("project")) ?? null;
   // default: an address without a library project, or one that no window holds open, gives the library no way back.
   returnTo = projects.some((p) => p.id === address.get("library") && openProjects.has(p.id)) ? address.get("library") : null;

@@ -56,7 +56,7 @@ test("a new space of a grid with an empty content card starts with the card empt
     const main = plane.currentGrid().card("main");
     assert.deepEqual({ tabs: main.data.tabs, activeId: main.data.activeId }, { tabs: [], activeId: null },
       "the new space did not start with an empty card");
-    // The empty card draws its head with the card tools, whose 탭 추가 opens a tab, and a body without a surface.
+    // The empty card draws its head with the card tools, whose add tab tool opens a tab, and a body without a surface.
     const el = document.querySelector('[data-card-id="main"]');
     assert.ok(el?.querySelector('[data-expose="core.card.tools"]'), "the empty card has no card tools in its head");
     const slot = el.querySelector(":scope > .slot");
