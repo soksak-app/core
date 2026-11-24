@@ -5,6 +5,7 @@
 
 ## 2026-11-25
 
+- F1155-1: core version은 모든 package와 crate manifest, Info.plist, Tauri 파일, Go와 pkg-config 선언, Cargo.lock의 workspace 항목 여섯 개, scripts/check-versions.mjs에서 0.0.53이에요.
 - F1154: `/installed-plugins.json`의 각 entry가 configuration directory에서 plugin의 기록된 `path`의 절대 경로인 `folder`를 Go와 Rust host, host 없는 application의 staging에서 가진다. page, mygo, `sok`은 절대 `folder`가 없는 entry를 `installed-plugins.json: plugin <id> folder must be an absolute path`로 거부하고, `contributions(point)`의 각 connected item은 기여자의 설치 folder인 `folder`를 준다. Red/Green: Go와 Rust host와 `sok`의 installed document test, plugin-api의 `contributions.test.mjs`, mygo의 `TestContributionCases`.
 
 ## 2026-11-24

@@ -1,6 +1,6 @@
 [package]
 name = "soksak-host-gpuikit"
-version = "0.0.52"
+version = "0.0.53"
 edition = "2024"
 description = "GPUI framework adapter of the soksak host"
 
