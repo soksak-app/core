@@ -194,7 +194,7 @@ fn sync_request_check_rejects_an_invalid_window_overlay_rectangle() {
     let held = HashMap::new();
     let valid = sync_request(serde_json::json!({
         "settled": true, "titlebar": 40.0, "viewport": {"width": 800.0, "height": 600.0}, "declarations": [], "surfaces": [],
-        "overlays": [{"x": 1.0, "y": 2.0, "w": 3.0, "h": 4.0}, {"x": 5.0, "y": 6.0, "w": 7.0, "h": 8.0, "visible": false}],
+        "overlays": [{"x": 1.0, "y": 2.0, "w": 3.0, "h": 4.0, "cut": true}, {"x": 5.0, "y": 6.0, "w": 7.0, "h": 8.0, "visible": false, "cut": false}],
     }));
     assert_eq!(
         check_sync_request(&valid, &held, &HashMap::new())
@@ -206,6 +206,7 @@ fn sync_request_check_rejects_an_invalid_window_overlay_rectangle() {
                 w: 3.0,
                 h: 4.0,
                 visible: true,
+                cut: true,
             },
             WindowOverlay {
                 x: 5.0,
@@ -213,12 +214,21 @@ fn sync_request_check_rejects_an_invalid_window_overlay_rectangle() {
                 w: 7.0,
                 h: 8.0,
                 visible: false,
+                cut: false,
             },
         ]
     );
+    let uncut = sync_request(serde_json::json!({
+        "settled": true, "titlebar": 40.0, "viewport": {"width": 800.0, "height": 600.0}, "declarations": [], "surfaces": [],
+        "overlays": [{"x": 1.0, "y": 2.0, "w": 3.0, "h": 4.0}],
+    }));
+    assert_eq!(
+        check_sync_request(&uncut, &held, &HashMap::new()).unwrap_err(),
+        "window overlay needs cut"
+    );
     let negative = sync_request(serde_json::json!({
         "settled": true, "titlebar": 40.0, "viewport": {"width": 800.0, "height": 600.0}, "declarations": [], "surfaces": [],
-        "overlays": [{"x": 1.0, "y": 2.0, "w": 3.0, "h": 4.0}, {"x": 0.0, "y": 0.0, "w": 3.0, "h": -4.0}],
+        "overlays": [{"x": 1.0, "y": 2.0, "w": 3.0, "h": 4.0, "cut": false}, {"x": 0.0, "y": 0.0, "w": 3.0, "h": -4.0, "cut": false}],
     }));
     assert_eq!(
         check_sync_request(&negative, &held, &HashMap::new()).unwrap_err(),

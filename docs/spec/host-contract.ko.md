@@ -996,7 +996,7 @@ fn invalid_json_closes_connection() {
 | `surfaces-geometry.rect.rejects-negative-size` | 크기가 음수인 사각형은 잘라 맞추지 않고 거부한다. | all |
 | `surfaces-geometry.rect.rejects-non-finite` | 크기가 유한하지 않은 사각형을 거부한다. | all |
 | `surfaces-geometry.sync.rejects-surface-rect-before-layout` | 배치 트랜잭션을 시작하기 전에 실행하는 검사는 표면 사각형의 크기가 음수인 동기화 요청을 `surface "<id>" geometry must not have a negative size`로 거부하고, 올바른 요청은 받는다. | all |
-| `surfaces-geometry.sync.rejects-overlay-rect-before-layout` | 배치 트랜잭션을 시작하기 전에 실행하는 검사는 창 overlay 사각형의 크기가 음수인 동기화 요청을 `window overlay geometry must not have a negative size`로 거부하고, 올바른 요청의 overlay를 표시 여부와 함께 반환한다. | all |
+| `surfaces-geometry.sync.rejects-overlay-rect-before-layout` | 배치 트랜잭션을 시작하기 전에 실행하는 검사는 창 overlay 사각형의 크기가 음수인 동기화 요청을 `window overlay geometry must not have a negative size`로, `cut`이 없는 창 overlay를 `window overlay needs cut`으로 거부하고, 올바른 요청의 overlay를 표시 여부, cut과 함께 반환한다. | all |
 | `surfaces-geometry.sync.plugin` | 동기화 요청은 표면마다 그 plugin을 적는다. 배치 트랜잭션을 시작하기 전에 실행하는 검사는 plugin이 없는 표면을 `surface "<id>" requires its plugin`으로, 이미 받은 표면의 plugin이 다르면 `surface "<id>" changed its composition declaration`으로 거부하고, plugin과 composition이 같은 표면은 받는다. 동기화가 받은 표면의 페이지 composition 선언은 같은 plugin을 적는다. | all |
 | `surfaces.sync.failure-leaves-no-begun-layout` | 표면 동기화는 배치 트랜잭션을 시작하기 전에 창 덮개를 놓으므로 거부된 덮개는 트랜잭션을 시작하지 않고, 뒤 단계가 실패하면 시작한 트랜잭션을 취소한다. 성공한 동기화는 취소하지 않는다. | all |
 | `surfaces.sync.titlebar.accepts-heights-in-range` | 배치 트랜잭션을 시작하기 전에 실행하는 검사는 `titlebar` 가 32 이상 200 이하 point 인 동기화 요청을 받는다. | all |
@@ -1060,7 +1060,7 @@ fn invalid_json_closes_connection() {
 | `host.stall.stop-waits-for-the-sample` | host 의 shutdown 은 main thread 에서의 자기 작업 전에 watch 를 멈춘다. stop 은 도는 sample 이 끝나 그 `host.stall.sampled` 를 저장한 뒤에 돌아오고, stop 뒤에는 stall 을 기록하지도 sample 을 시작하지도 않으므로 sample process 가 host 보다 오래 남지 않는다. | all |
 | `window-close.surfaces.closed-once` | surface sync 가 제거하는 surface 는 handle 을 닫기 전에 창의 surface registry 에서 빠지므로, 그 닫기보다 먼저 실행된 창 닫기는 그 handle 을 받지 않고 모든 surface handle 은 한 번만 닫힌다. 제거된 surface 하나의 닫기가 실패해도 나머지를 닫고, sync 는 모든 실패를 surface id 와 함께 반환한다. | tauriv2 only: Wails host 는 surface 를 view 객체로 닫고 그 객체가 main-thread 단계의 C 호출([hosts](hosts.ko.md#wails-host의-main-thread))에서 handle 을 비우므로 두 번째 닫기는 native code 에 넘어가지 않는다. Tauri host 는 surface 를 handle 로 닫고 그 handle 은 registry 항목만 가진다 |
 | `surfaces.sync.name-outlives-native-surface` | surface sync가 제거하는 surface는 native surface가 닫힐 때까지 이름을 유지한다. 닫기와 이름 제거가 main thread의 한 단계에서 실행되므로, 창의 native surface 읽기(`host.window`)는 이름이 있는 surface를 찾거나 surface를 찾지 않는다. 닫기가 실패해도 이름을 제거하고 실패를 반환한다. | tauriv2 only: Wails host는 worker가 main thread에 전달한 C 호출([hosts](hosts.ko.md#wails-host의-main-thread))로 view를 닫고 그 main-thread 단계가 끝난 뒤 이름을 제거하므로, 둘 사이의 창 읽기는 surface를 찾지 않고 이름은 알려진 상태다. Tauri host는 sync의 thread에서 main thread로 닫기를 보낸다 |
-| `window-overlay.rects.packs-four-values-per-rect` | 보이는 오버레이는 입력 순서대로 x, y, width, height 값으로 묶인다. | all |
+| `window-overlay.rects.packs-five-values-per-rect` | 보이는 오버레이는 입력 순서대로 x, y, width, height, cut 값으로 묶인다. cut은 surface host container가 빼는 오버레이에서 1, 그 밖에는 0이다. | all |
 | `window-overlay.rects.filters-hidden` | 숨긴 오버레이는 묶은 목록에서 빠진다. | all |
 | `workspace.config-dir.creates-requested-path` | 없는 설정 디렉터리를 준비하면 만들고 정규 경로를 반환한다. | all |
 | `workspace.config-dir.creates-owner-only` | 준비 과정이 만든 설정 디렉터리의 권한은 0700이며, 이미 있는 디렉터리는 권한을 유지한다. | all |

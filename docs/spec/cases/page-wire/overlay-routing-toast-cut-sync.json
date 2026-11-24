@@ -1,0 +1,10 @@
+{
+  "name": "overlay-routing-toast-cut-sync",
+  "description": "The page lays out the surfaces with no surface while an error toast is shown and no modal or dialog surface is open, and the sync request carries the rectangle of the toast as a window overlay with cut true, so the container of the surface hosts leaves out the toast and the toast is drawn above the surfaces; the host answers with no placement and the window chrome.",
+  "replay": false,
+  "reason": "syncSurfaces places native surfaces in a window, and only the native host with a window produces its answer (the native tier of docs/operations/examples.md#test-kinds).",
+  "steps": [
+    { "call": { "name": "syncSurfaces", "payload": { "settled": true, "overlays": [{ "x": 300, "y": 520, "w": 420, "h": 44, "cut": true }], "surfaces": [], "declarations": [] } } },
+    { "reply": { "result": { "placements": [], "chrome": { "controls": { "x": 13, "y": 13, "w": 54, "h": 14 }, "row": 40 } } } }
+  ]
+}

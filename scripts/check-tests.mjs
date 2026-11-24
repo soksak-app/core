@@ -359,6 +359,26 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1147",
+    implementation: [
+      { file: "packages/workbench/host.js", symbol: "function toastCuts() {" },
+      { file: "packages/workbench/plane.js", symbol: "errorToasts(document).watch(() => { if (grid) settle(); });" },
+      { file: "packages/host/go/src/surfaces.go", symbol: "window overlay needs cut" },
+      { file: "packages/host/rust/src/surfaces.rs", symbol: "let cut = overlay.cut.ok_or(\"window overlay needs cut\")?;" },
+      { file: "native/darwin/src/webview_geometry.m", symbol: "- (void)applyCuts" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/overlay-routing.test.mjs", id: "native surface synchronization cuts each error toast out of the container of the surface hosts" },
+      { file: "packages/workbench/test/plane-toast-layout.test.mjs", id: "an error toast that opens or closes lays out the plane again" },
+      { file: "packages/host/go/tests/window_overlay_test.go", id: "TestVisibleWindowOverlayRectsPacksTheCutOfEachRect" },
+      { file: "packages/host/rust/tests/window_overlay_test.rs", id: "packs_the_cut_of_each_rect" },
+      { file: "packages/host/go/tests/surfaces_geometry_test.go", id: "TestSyncRequestCheckRejectsAnInvalidWindowOverlayRectangle" },
+      { file: "packages/host/rust/tests/surfaces_geometry_test.rs", id: "sync_request_check_rejects_an_invalid_window_overlay_rectangle" },
+    ],
+    expected: "While no modal and no dialog surface is open, the page sends each error toast as a window overlay with cut true and lays out again when a toast opens or closes, both hosts require cut and pack it as the fifth value, and the window composition masks the container of the surface hosts without the cut rectangles, so the toast is drawn above the surfaces.",
+    levels: ["unit"],
+  },
+  {
     id: "F1146-1",
     implementation: [
       { file: "packages/workbench/projects.js", symbol: "export const closeStatus = () => ({ step: closeStep, commands: [] });" },
@@ -16327,7 +16347,7 @@ const FEATURE_LINKS = [
     id: "F949",
     implementation: [
       { file: "packages/soksak/src/dom.ts", symbol: "this.options.commit(on, drawn, snapshot.dividers.map((divider) => ({ ...divider, ...onGrid(divider, step) })));" },
-      { file: "packages/workbench/host.js", symbol: "overlays: [...windowOverlays(), ...(dialogSurface() === null ? record.grabs.map(toPage) : [])]," },
+      { file: "packages/workbench/host.js", symbol: "...(dialogSurface() === null ? record.grabs.map((grab) => ({ ...toPage(grab), cut: false })) : [])," },
       { file: "packages/workbench-mygo/src/dividers.go", symbol: "Size(float32(divider.W), float32(divider.H)).Cursor(cursor).Focusable().KeepFocus().FocusRing(false)." },
     ],
     tests: [

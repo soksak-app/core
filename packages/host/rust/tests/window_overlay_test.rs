@@ -1,8 +1,8 @@
 use soksak_host::platform::{WindowOverlay, visible_window_overlay_rects};
 
-// contract: window-overlay.rects.packs-four-values-per-rect
+// contract: window-overlay.rects.packs-five-values-per-rect
 #[test]
-fn packs_two_rects_with_four_values_each() {
+fn packs_the_cut_of_each_rect() {
     let overlays = [
         WindowOverlay {
             x: 1.0,
@@ -10,6 +10,7 @@ fn packs_two_rects_with_four_values_each() {
             w: 3.0,
             h: 4.0,
             visible: true,
+            cut: false,
         },
         WindowOverlay {
             x: 5.0,
@@ -17,11 +18,12 @@ fn packs_two_rects_with_four_values_each() {
             w: 7.0,
             h: 8.0,
             visible: true,
+            cut: true,
         },
     ];
     assert_eq!(
         visible_window_overlay_rects(&overlays),
-        vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
+        vec![1.0, 2.0, 3.0, 4.0, 0.0, 5.0, 6.0, 7.0, 8.0, 1.0]
     );
 }
 
@@ -35,6 +37,7 @@ fn filters_hidden_rects() {
             w: 3.0,
             h: 4.0,
             visible: false,
+            cut: false,
         },
         WindowOverlay {
             x: 5.0,
@@ -42,10 +45,11 @@ fn filters_hidden_rects() {
             w: 7.0,
             h: 8.0,
             visible: true,
+            cut: false,
         },
     ];
     assert_eq!(
         visible_window_overlay_rects(&overlays),
-        vec![5.0, 6.0, 7.0, 8.0]
+        vec![5.0, 6.0, 7.0, 8.0, 0.0]
     );
 }

@@ -26,6 +26,16 @@ The visual definition is shared web code. Each platform still requires a working
 
 The [private native API inventory](../operations/private-native-apis.md) records transparency and input dependencies and their necessity. Review it first if modal behavior fails after a native update.
 
+## Toast overlay
+
+The error toasts of the workbench ([exposure](exposure.md)) are the topmost layer of a window. On the Wails and Tauri hosts the toast component is an element of the main page, and the container of the surface hosts lies above the main web view, so a surface would cover a toast. While no modal web view and no dialog surface is open, the page sends the rectangle of each toast in the window overlays with `cut` true ([surface host container](native-surfaces.md#surface-host-container)). The host masks the container of the surface hosts with the bounds of the container minus each cut rectangle, so the main web view shows through at each toast and takes the pointer there, as in every window overlay. The page lays out the plane again when a toast opens or closes, so the cut rectangles follow the toast stack.
+
+- **Modals.** A dialog modal holds the toasts in its own document, and a menu modal or a dialog surface decides the pointer of the window, so the page sends no cut rectangle while one is open.
+- **Input.** The keyboard stays where it is: the main web view takes the pointer at a toast, and the close control of a toast runs `core.error.dismiss`.
+- **Visibility period.** The page keeps the visibility period of each toast; a placement does not restart it.
+
+The mygo host draws its toasts above its surfaces in native UI and sends no window overlay.
+
 ## Keyboard
 
 A modal web view takes the keyboard of the window when its document reports that it rendered (`modalReady`), and not earlier, because a hidden web view that holds the keyboard would take keys that the person cannot see. A key that the person presses as the modal opens therefore waits for the modal instead of delivering keys to the view behind it: the show of a modal starts a key wait of the window before it removes the previous modal and creates the web view, and the keys that waited are delivered to the modal in their order once the ready request gave it the keyboard. Only keys wait; no pointer event is held, so a press on the scrim or on the modal is delivered to it. The wait also ends when the modal closes, when its show fails, when the process of its document ends, when a main page starts and when the window closes, which drops the keys; no time ends it. A show that replaces a modal keeps the wait for the replacement. The modal wait is the key wait of the window for the decision of the workbench ([keyboard of a surface](native-surfaces.md#keyboard-of-a-surface)): the keys wait while either waits. A core command that opens a modal answers after the host answered its show, so the wait is open when the command answers ([exposure](exposure.md#registration)).

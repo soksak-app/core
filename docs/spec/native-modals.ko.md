@@ -26,6 +26,16 @@ mygo host는 modal web view를 만들지 않는다: 그 workbench의 modal은 na
 
 비공개 투명도·입력 의존성과 필요성은 [비공개 네이티브 API 목록](../operations/private-native-apis.ko.md)에 기록한다. 네이티브 업데이트 후 모달 동작이 실패하면 이 문서부터 검토한다.
 
+## Toast overlay
+
+워크벤치의 error toast([exposure](exposure.md))는 창의 가장 위 layer다. Wails와 Tauri host에서 toast component는 main page의 element이고 surface host container는 main web view 위에 있으므로, surface가 toast를 가릴 수 있다. Modal web view와 dialog surface가 열려 있지 않은 동안 page는 각 toast의 rectangle을 `cut`이 true인 창 overlay로 보낸다([surface host container](native-surfaces.ko.md#surface-host-container)). Host는 surface host container를 container의 bounds에서 각 cut rectangle을 뺀 모양으로 mask하므로, 각 toast 자리에서는 main web view가 보이고 다른 창 overlay처럼 pointer를 받는다. Toast가 열리거나 닫히면 page가 plane을 다시 배치하므로 cut rectangle은 toast stack을 따른다.
+
+- **Modal.** Dialog modal은 자기 document에 toast를 담고, menu modal이나 dialog surface는 창의 pointer를 정하므로, 그중 하나가 열려 있는 동안 page는 cut rectangle을 보내지 않는다.
+- **Input.** Keyboard는 그대로 있다. Toast 자리에서는 main web view가 pointer를 받고, toast의 close control은 `core.error.dismiss`를 실행한다.
+- **Visibility period.** Page가 각 toast의 visibility period를 가진다. 배치가 그 period를 다시 시작하지 않는다.
+
+mygo host는 toast를 native UI로 surface 위에 그리며 창 overlay를 보내지 않는다.
+
 ## 키보드
 
 modal web view 는 그 문서가 렌더를 마쳤다고 알릴 때(`modalReady`) 창의 키보드를 받고, 그 전에는 받지 않는다. 숨은 web view 가 키보드를 가지면 사람이 볼 수 없는 곳이 키를 받기 때문이다. 그래서 modal 이 열리는 순간 사람이 누른 키는 뒤의 view 에 전달되지 않고 modal 을 기다린다. modal 의 show 는 이전 modal 을 제거하고 web view 를 만들기 전에 창의 키 대기를 시작하고, ready 요청이 modal 에 키보드를 주면 기다린 키는 순서대로 modal 에 전달된다. 기다리는 것은 키뿐이고 pointer event 는 붙잡지 않으므로, scrim 이나 modal 위의 press 는 곧바로 전달된다. modal 이 닫히거나, show 가 실패하거나, 그 문서의 process 가 끝나거나, main page 가 시작하거나, 창이 닫혀도 대기는 끝나고, 창 닫힘은 키를 버린다. 시간은 대기를 끝내지 않는다. modal 을 교체하는 show 는 교체한 modal 을 위해 대기를 유지한다. modal 대기는 워크벤치의 결정을 기다리는 창의 키 대기와 같은 대기다([surface 의 키보드](native-surfaces.ko.md#surface의-키보드)). 둘 중 하나라도 기다리는 동안 키는 기다린다. modal 을 여는 core command 는 호스트가 그 show 에 응답한 뒤에 응답하므로, command 가 응답할 때 대기는 열려 있다([exposure](exposure.ko.md#등록)).

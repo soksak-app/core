@@ -203,7 +203,7 @@ pub fn file_drop(main: Handle, receive: Box<dyn Fn(String)>) -> Result<(), Strin
 pub fn set_window_overlays(main: Handle, overlays: &[WindowOverlay]) {
     let values = visible_window_overlay_rects(overlays);
     unsafe {
-        sp_surface_set_window_overlays(main as *mut c_void, values.as_ptr(), values.len() / 4)
+        sp_surface_set_window_overlays(main as *mut c_void, values.as_ptr(), values.len() / 5)
     }
 }
 

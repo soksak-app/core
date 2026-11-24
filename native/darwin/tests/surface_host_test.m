@@ -1,5 +1,6 @@
 // A logical surface does not add an app DOM webview and owns only native content.
 #import <Cocoa/Cocoa.h>
+#import <QuartzCore/QuartzCore.h>
 #import <WebKit/WebKit.h>
 #import "webview_geometry.h"
 #import "window_facts.h"
@@ -120,13 +121,29 @@ int main(void) { @autoreleasepool {
     hit = [window.contentView hitTest:fieldPoint];
     check(hit == main || [hit isDescendantOf:main], "declared DOM overlay owns input above native content");
     webviewSetSurfaceOverlays(surface, NULL, 0);
-    double modal[4] = {0, 0, 800, 500};
+    double modal[5] = {0, 0, 800, 500, 0};
     sp_surface_set_window_overlays(main, modal, 1);
     hit = [window.contentView hitTest:fieldPoint];
     check(hit == main || [hit isDescendantOf:main], "window DOM modal blocks native document input");
     sp_surface_set_window_overlays(main, NULL, 0);
     hit = [window.contentView hitTest:fieldPoint];
     check(hit == field || [hit isDescendantOf:field], "closing a DOM modal restores native input");
+    check(coordinates.layer.mask == nil, "an overlay without a cut leaves the container of the surface hosts whole");
+    // An error toast of the page is a window overlay with cut: the container of the surface hosts leaves it out, so the main web view
+    // shows through at the toast and takes the pointer there (docs/spec/native-modals.md#toast-overlay).
+    NSRect fieldInMain = [field convertRect:field.bounds toView:main];
+    double toast[5] = {NSMinX(fieldInMain), NSMinY(fieldInMain), 40, 20, 1};
+    sp_surface_set_window_overlays(main, toast, 1);
+    CAShapeLayer *cut = (CAShapeLayer *)coordinates.layer.mask;
+    check([cut isKindOfClass:CAShapeLayer.class], "a cut overlay masks the container of the surface hosts");
+    NSPoint inToast = [coordinates convertPointToLayer:[coordinates convertPoint:NSMakePoint(NSMinX(fieldInMain) + 5, NSMinY(fieldInMain) + 5) fromView:main]];
+    NSPoint besideToast = [coordinates convertPointToLayer:[coordinates convertPoint:NSMakePoint(NSMinX(fieldInMain) + 60, NSMinY(fieldInMain) + 5) fromView:main]];
+    check(!CGPathContainsPoint(cut.path, NULL, inToast, true), "the mask leaves out the rectangle of the cut");
+    check(CGPathContainsPoint(cut.path, NULL, besideToast, true), "the mask keeps the container beside the cut");
+    hit = [window.contentView hitTest:[main convertPoint:NSMakePoint(NSMinX(fieldInMain) + 5, NSMinY(fieldInMain) + 5) toView:window.contentView.superview]];
+    check(hit == main || [hit isDescendantOf:main], "the main web view takes the pointer at a cut");
+    sp_surface_set_window_overlays(main, NULL, 0);
+    check(coordinates.layer.mask == nil, "removing the cut removes the mask");
     NSPoint outside = [surface convertPoint:NSMakePoint(-1, 10) toView:window.contentView.superview];
     hit = [window.contentView hitTest:outside];
     check(hit != field && ![hit isDescendantOf:field], "native input cannot cross the surface boundary");

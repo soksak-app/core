@@ -195,7 +195,7 @@ func (implementation) SetWindowOverlays(main unsafe.Pointer, overlays []platform
 	if len(values) > 0 {
 		data = &values[0]
 	}
-	native.MainSpSurfaceSetWindowOverlays(main, data, uint64(len(values)/4))
+	native.MainSpSurfaceSetWindowOverlays(main, data, uint64(len(values)/5))
 	return nil
 }
 

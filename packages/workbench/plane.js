@@ -47,7 +47,7 @@ import { setSurfaceStatus, setTabError, surfaceErrorText } from "./surface-statu
 import { imageDetachHold } from "./image-detach-waits.js";
 import { clearVisibleNotices, missingOriginRecords, onTabReports, recordOrigin, reportError, setVisibleTab, storedLayoutState, tabButtonData, tabError, tabFooter,
   tabLabel, tabModified, tabNotice, tabOrigin } from "./tab-reports.js";
-import { hideError, showError } from "./shown-errors.js";
+import { errorToasts, hideError, showError } from "./shown-errors.js";
 import { registry } from "./exposure.js";
 import { configureSystemNotifications, systemNotifications } from "./system-notifications.js";
 import { active as activeProject, all as allProjects, initialProjectContextFailed, initialProjectContextReady, local as localProjects, storedTabTaken, waitForInitialProjectContext } from "./projects.js";
@@ -614,6 +614,10 @@ onPluginOperations(() => {
 
 // A dialog that opens or ends changes what the plane draws: the draw holds the seat of the open dialog (docs/spec/plugins.md#dialogs).
 onDialogChange(() => { if (grid) settle(); });
+
+// An error toast that opens or closes changes the window overlays: the next placement cuts each open toast out of the container of the
+// surface hosts, so the toast is drawn above the native surfaces (docs/spec/native-surfaces.md#surface-host-container).
+errorToasts(document).watch(() => { if (grid) settle(); });
 
 /* ── T5 — closing the card when the last tab moves ─────────────────────────── */
 

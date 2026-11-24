@@ -52,16 +52,22 @@ func TestSyncRequestCheckRejectsAnInvalidSurfaceRectangle(t *testing.T) {
 
 // contract: surfaces-geometry.sync.rejects-overlay-rect-before-layout
 func TestSyncRequestCheckRejectsAnInvalidWindowOverlayRectangle(t *testing.T) {
-	hidden := false
-	request := host.SyncRequest{Settled: true, Titlebar: 40, Overlays: []host.WindowOverlayRequest{{X: 1, Y: 2, W: 3, H: 4}, {X: 5, Y: 6, W: 7, H: 8, Visible: &hidden}}}
+	hidden, cut, whole := false, true, false
+	request := host.SyncRequest{Settled: true, Titlebar: 40, Overlays: []host.WindowOverlayRequest{{X: 1, Y: 2, W: 3, H: 4, Cut: &cut}, {X: 5, Y: 6, W: 7, H: 8, Visible: &hidden, Cut: &whole}}}
 	overlays, err := host.CheckSyncRequest(request, map[string]host.SurfaceComposition{}, map[string]string{})
 	if err != nil {
 		t.Fatalf("a valid sync request was refused: %v", err)
 	}
-	if want := []platform.WindowOverlay{{X: 1, Y: 2, W: 3, H: 4, Visible: true}, {X: 5, Y: 6, W: 7, H: 8}}; !reflect.DeepEqual(overlays, want) {
+	if want := []platform.WindowOverlay{{X: 1, Y: 2, W: 3, H: 4, Visible: true, Cut: true}, {X: 5, Y: 6, W: 7, H: 8}}; !reflect.DeepEqual(overlays, want) {
 		t.Fatalf("overlays %v, want %v", overlays, want)
 	}
-	request.Overlays = append(request.Overlays, host.WindowOverlayRequest{W: 3, H: -4})
+	uncut := request
+	uncut.Overlays = []host.WindowOverlayRequest{{X: 1, Y: 2, W: 3, H: 4}}
+	_, err = host.CheckSyncRequest(uncut, map[string]host.SurfaceComposition{}, map[string]string{})
+	if want := "window overlay needs cut"; err == nil || err.Error() != want {
+		t.Fatalf("the sync check of an overlay without cut returned %v, want %q", err, want)
+	}
+	request.Overlays = append(request.Overlays, host.WindowOverlayRequest{W: 3, H: -4, Cut: &cut})
 	_, err = host.CheckSyncRequest(request, map[string]host.SurfaceComposition{}, map[string]string{})
 	if want := "window overlay geometry must not have a negative size"; err == nil || err.Error() != want {
 		t.Fatalf("the sync check returned %v before the layout began, want %q", err, want)

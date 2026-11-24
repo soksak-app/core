@@ -782,6 +782,9 @@ struct WindowOverlayRequest {
     h: f64,
     #[serde(default = "visible_overlay")]
     visible: bool,
+    /// Required: the page states for each overlay whether the container of the surface hosts leaves it out. It is read as an option
+    /// so the check refuses its absence with the text of the Go host.
+    cut: Option<bool>,
 }
 
 fn visible_overlay() -> bool {
@@ -1597,12 +1600,14 @@ fn check_resolved_sync_request(
         .iter()
         .map(|overlay| {
             validate_rect("window overlay", overlay.x, overlay.y, overlay.w, overlay.h)?;
+            let cut = overlay.cut.ok_or("window overlay needs cut")?;
             Ok(platform::WindowOverlay {
                 x: overlay.x,
                 y: overlay.y,
                 w: overlay.w,
                 h: overlay.h,
                 visible: overlay.visible,
+                cut,
             })
         })
         .collect()

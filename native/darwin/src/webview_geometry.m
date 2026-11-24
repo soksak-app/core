@@ -187,7 +187,11 @@ static void configureWebViewTransparency(WKWebView *view) {
 @property(nonatomic, retain) WKWebView *mainWebview;
 @property(nonatomic, assign) SPSurfaceCoordinates *coordinates;
 @property(nonatomic, retain) NSArray<NSValue *> *overlays;
+// The overlays that the container of the surface hosts leaves out, so the main web view below shows through them: the error
+// toasts of the page, which are the topmost layer of the window (docs/spec/native-modals.md#toast-overlay).
+@property(nonatomic, retain) NSArray<NSValue *> *cuts;
 @property(nonatomic, assign) SPFileDropView *fileDrop;
+- (void)applyCuts;
 @end
 
 @implementation SPWindowComposition
@@ -203,7 +207,30 @@ static void configureWebViewTransparency(WKWebView *view) {
     sp_window_object_change(SP_WINDOW_OBJECT_COMPOSITION, -1);
     [_mainWebview release];
     [_overlays release];
+    [_cuts release];
     [super dealloc];
+}
+// Masks the container of the surface hosts with its bounds minus each cut, in the coordinates of the main web view, which are
+// the coordinates of the container. No cut removes the mask.
+- (void)applyCuts {
+    NSView *container = self.coordinates;
+    if (!container.layer) return;
+    if (self.cuts.count == 0) {
+        container.layer.mask = nil;
+        return;
+    }
+    CAShapeLayer *mask = [CAShapeLayer layer];
+    mask.frame = container.layer.bounds;
+    mask.fillRule = kCAFillRuleEvenOdd;
+    CGMutablePathRef path = CGPathCreateMutable();
+    CGPathAddRect(path, NULL, container.layer.bounds);
+    for (NSValue *value in self.cuts) {
+        NSRect inContainer = [container convertRect:value.rectValue fromView:self.mainWebview];
+        CGPathAddRect(path, NULL, [container convertRectToLayer:inContainer]);
+    }
+    mask.path = path;
+    CGPathRelease(path);
+    container.layer.mask = mask;
 }
 // The file drop view is placed at the top of the composite view. The page receives a dropped file even when a view was added later.
 - (void)didAddSubview:(NSView *)subview {
@@ -402,6 +429,8 @@ static void notifyScale(NSView *view) {
     [super setFrameSize:size];
     // NSView geometry is expressed in AppKit points. The backing scale belongs to the raster size and not to frame or bounds coordinates.
     self.bounds = NSMakeRect(0, 0, size.width, size.height);
+    // The mask of the cuts covers the bounds of this container, so it follows the new size.
+    if ([self.superview isKindOfClass:SPWindowComposition.class]) [(SPWindowComposition *)self.superview applyCuts];
     surfaceTransactionCommit();
 }
 // A web view of a surface host passes cursorUpdate: up its superviews to this container, and the view that holds the
@@ -980,11 +1009,22 @@ void sp_surface_set_window_overlays(void *mainHandle, const double *rects, size_
     if (![main.superview isKindOfClass:SPWindowComposition.class]) return;
     SPWindowComposition *composition = (SPWindowComposition *)main.superview;
     NSMutableArray<NSValue *> *overlays = [NSMutableArray arrayWithCapacity:count];
+    NSMutableArray<NSValue *> *cuts = [NSMutableArray array];
     for (size_t index = 0; index < count; index++) {
-        const double *rect = rects + index * 4;
-        [overlays addObject:[NSValue valueWithRect:NSMakeRect(rect[0], rect[1], rect[2], rect[3])]];
+        // Each overlay is x, y, width, height and cut, which is 1 for an overlay that the container of the surface hosts leaves out.
+        const double *rect = rects + index * 5;
+        NSValue *value = [NSValue valueWithRect:NSMakeRect(rect[0], rect[1], rect[2], rect[3])];
+        [overlays addObject:value];
+        if (rect[4] != 0) [cuts addObject:value];
     }
     composition.overlays = overlays;
+    if (![composition.cuts isEqualToArray:cuts]) {
+        composition.cuts = cuts;
+        [CATransaction begin];
+        [CATransaction setDisableActions:YES];
+        [composition applyCuts];
+        [CATransaction commit];
+    }
 }
 
 void *webviewSurfaceNativePlane(void *handle) {

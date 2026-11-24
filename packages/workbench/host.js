@@ -116,10 +116,25 @@ function windowOverlays() {
   const el = document.getElementById(shown);
   if (!el || el.hidden) return [];
   if (el.dataset.nativeModal === "dialog") {
-    return [{ x: 0, y: 0, w: innerWidth, h: innerHeight }];
+    return [{ x: 0, y: 0, w: innerWidth, h: innerHeight, cut: false }];
   }
   const rect = el.getBoundingClientRect();
-  return [{ x: rect.left, y: rect.top, w: rect.width, h: rect.height }];
+  return [{ x: rect.left, y: rect.top, w: rect.width, h: rect.height, cut: false }];
+}
+
+/**
+ * The error toasts of this document as window overlays that the host cuts out of the container of the surface hosts, so each toast is
+ * drawn above the native surfaces and takes the pointer (docs/spec/native-surfaces.md#surface-host-container). A shown modal or dialog
+ * surface holds the toasts in its own document or decides the pointer of the window, so no toast is cut while one is open.
+ */
+function toastCuts() {
+  if (dialogSurface() !== null || shown) return [];
+  const holder = document.getElementById("errorToasts");
+  if (!holder || holder.parentElement !== document.body) return [];
+  return [...holder.querySelectorAll(":scope > .error-toast")]
+    .map((toast) => toast.getBoundingClientRect())
+    .filter((rect) => rect.width > 0 && rect.height > 0)
+    .map((rect) => ({ x: rect.left, y: rect.top, w: rect.width, h: rect.height, cut: true }));
 }
 
 /**
@@ -797,7 +812,12 @@ export const surfaces = native ? {
           // The window overlays: the bounds of a shown modal and the grab area of each divider of the layout, in which this document
           // takes the pointer before the native views (docs/spec/native-surfaces.md#surface-host-container).
           // While a dialog surface is open, the dividers take no pointer, so no grab area stands over the dialog.
-          overlays: [...windowOverlays(), ...(dialogSurface() === null ? record.grabs.map(toPage) : [])],
+          // Each error toast is cut out of the container of the surface hosts while no modal is open.
+          overlays: [
+            ...windowOverlays(),
+            ...(dialogSurface() === null ? record.grabs.map((grab) => ({ ...toPage(grab), cut: false })) : []),
+            ...toastCuts(),
+          ],
           surfaces: requestedSurfaces,
           // The height (pt) of the first row that the next drawing will show. The host sets the window title bar to this height in the transaction of this preparation.
           titlebar: record.titlebar,

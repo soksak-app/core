@@ -502,6 +502,9 @@ pub struct WindowOverlay {
     pub w: f64,
     pub h: f64,
     pub visible: bool,
+    /// Whether the container of the surface hosts leaves the rectangle out, so the main web view shows through it
+    /// (docs/spec/native-modals.md#toast-overlay).
+    pub cut: bool,
 }
 
 /// A value read from the system clipboard of the user. `Absent` is not an error.
@@ -517,7 +520,15 @@ pub fn visible_window_overlay_rects(overlays: &[WindowOverlay]) -> Vec<f64> {
     overlays
         .iter()
         .filter(|overlay| overlay.visible)
-        .flat_map(|overlay| [overlay.x, overlay.y, overlay.w, overlay.h])
+        .flat_map(|overlay| {
+            [
+                overlay.x,
+                overlay.y,
+                overlay.w,
+                overlay.h,
+                if overlay.cut { 1.0 } else { 0.0 },
+            ]
+        })
         .collect()
 }
 

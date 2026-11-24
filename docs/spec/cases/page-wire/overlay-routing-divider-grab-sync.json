@@ -5,7 +5,7 @@
   "reason": "syncSurfaces and presentSurfaces place native surfaces in a window, and only the native host with a window produces their answers (the native tier of docs/operations/examples.md#test-kinds).",
   "variables": {},
   "steps": [
-    { "call": { "name": "syncSurfaces", "payload": { "settled": true, "overlays": [{ "x": 594, "y": 40, "w": 11, "h": 600 }], "surfaces": [], "titlebar": 40, "declarations": [], "viewport": { "width": 1024, "height": 768 } } } },
+    { "call": { "name": "syncSurfaces", "payload": { "settled": true, "overlays": [{ "x": 594, "y": 40, "w": 11, "h": 600, "cut": false }], "surfaces": [], "titlebar": 40, "declarations": [], "viewport": { "width": 1024, "height": 768 } } } },
     { "reply": { "result": { "ticket": 1, "placements": [], "chrome": { "controls": { "x": 0, "y": 0, "w": 0, "h": 0 }, "row": 40 } } } },
     { "call": { "name": "presentSurfaces", "payload": { "ticket": 1, "placements": [], "settled": true } } },
     { "reply": { "result": [] } }

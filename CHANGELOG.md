@@ -5,6 +5,7 @@
 
 ## 2026-11-24
 
+- F1147: On the Wails and Tauri hosts an error toast shows above the surfaces: the page sends each toast as a window overlay with `cut`, and the window composition masks the container of the surface hosts without those rectangles, so the main web view shows and takes the pointer there. A sync request whose overlay has no `cut` is refused with `window overlay needs cut`. Red/Green: page, plane, Go, Rust and native tests; a Wails debug window showed the toast above a browser surface and closed it on a pointer press.
 - F1144-2: v0.0.52 is released with the mygo, Tauri and Wails application zips and the client, log-contract, native process-identity, plugin-api and window-check releases; it holds none of F1145, F1146 or F1147.
 - F1146-1: The status `core.window.close` states the step that a pending close of the window waits for (`registry`, `tabs`, `save`, `commands` or `close`), and on the mygo host the names of the commands that keep it, so a close that does not end is read from the window.
 - F1145: The add card of the library runs `core.library.form.open` with `mode` `create`, so a press opens the form to create a project. `packages/workbench/test/library-commands.test.mjs` checks that each pressable element of the library carries the parameters that its command requires.

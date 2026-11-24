@@ -526,6 +526,8 @@ type WindowOverlayRequest struct {
 	W       float64 `json:"w"`
 	H       float64 `json:"h"`
 	Visible *bool   `json:"visible"`
+	// Cut is required: the page states for each overlay whether the container of the surface hosts leaves it out.
+	Cut *bool `json:"cut"`
 }
 
 // nativeWebviewOptions are the creation values of modal web views.
@@ -1192,7 +1194,10 @@ func CheckSyncRequest(req SyncRequest, held map[string]SurfaceComposition, plugi
 		if overlay.Visible != nil {
 			visible = *overlay.Visible
 		}
-		windowOverlays = append(windowOverlays, platform.WindowOverlay{X: overlay.X, Y: overlay.Y, W: overlay.W, H: overlay.H, Visible: visible})
+		if overlay.Cut == nil {
+			return nil, fmt.Errorf("window overlay needs cut")
+		}
+		windowOverlays = append(windowOverlays, platform.WindowOverlay{X: overlay.X, Y: overlay.Y, W: overlay.W, H: overlay.H, Visible: visible, Cut: *overlay.Cut})
 	}
 	return windowOverlays, nil
 }

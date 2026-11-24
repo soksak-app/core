@@ -85,6 +85,9 @@ type DOMOverlay struct {
 type WindowOverlay struct {
 	X, Y, W, H float64
 	Visible    bool
+	// Cut tells that the container of the surface hosts leaves the rectangle out, so the main web view shows through it
+	// (docs/spec/native-modals.md#toast-overlay).
+	Cut bool
 }
 
 // ClipboardValue distinguishes an empty clipboard from an operation error.
@@ -97,12 +100,16 @@ type ClipboardValue struct {
 }
 
 func VisibleWindowOverlayRects(overlays []WindowOverlay) []float64 {
-	values := make([]float64, 0, len(overlays)*4)
+	values := make([]float64, 0, len(overlays)*5)
 	for _, overlay := range overlays {
 		if !overlay.Visible {
 			continue
 		}
-		values = append(values, overlay.X, overlay.Y, overlay.W, overlay.H)
+		cut := 0.0
+		if overlay.Cut {
+			cut = 1
+		}
+		values = append(values, overlay.X, overlay.Y, overlay.W, overlay.H, cut)
 	}
 	return values
 }
