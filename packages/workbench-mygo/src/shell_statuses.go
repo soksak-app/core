@@ -3,6 +3,7 @@ package workbench
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"math"
 	"slices"
 
@@ -615,6 +616,7 @@ func (s *Shell) registerStatuses() {
 		return map[string]any{"controlsWidth": math.Max(0, float64(s.controlsWidth)), "projectTabs": s.projectTabsPlace()}
 	})
 	s.registry.Status("core.rail", func() any { return s.railState() })
+	s.registry.Status("core.window.close", func() any { return s.closeStatus() })
 	s.registry.Status("core.window.workbench", func() any {
 		window, err := s.windowView()
 		if err != nil {
@@ -648,4 +650,23 @@ func (s *Shell) registerStatuses() {
 		return
 	}
 	s.registry.Status("core.themes", func() any { return declaration.Themes })
+}
+
+// closeStatus is the value of core.window.close: the step that the close of the window waits for, and in the step commands the
+// names of the commands up to the close mark that have not answered, in their start order (docs/spec/exposure.md).
+func (s *Shell) closeStatus() map[string]any {
+	commands := []string{}
+	if s.closeStep == "commands" {
+		numbers := slices.Sorted(maps.Keys(s.answering))
+		for _, number := range numbers {
+			if number <= s.closeMark {
+				commands = append(commands, s.answering[number])
+			}
+		}
+	}
+	var step any
+	if s.closeStep != "" {
+		step = s.closeStep
+	}
+	return map[string]any{"step": step, "commands": commands}
 }

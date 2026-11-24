@@ -484,10 +484,14 @@ type Shell struct {
 	// frameRequests counts the frames that the shell asked for, so a command reads whether its run asked for one. A part of the
 	// shell may ask from another goroutine.
 	frameRequests atomic.Int64
-	// commands is the number of the last command that started, answering holds the number of each command that runs and has not
-	// answered, and answerWaits what waits for the answers of the commands up to a number (afterCommands).
-	commands     int
-	answering    map[int]bool
+	// commands is the number of the last command that started, answering holds the name of each command that runs and has not
+	// answered by its number, and answerWaits what waits for the answers of the commands up to a number (afterCommands).
+	commands  int
+	answering map[int]string
+	// closeStep is the step that the close of the window waits for, empty while no close is pending, and closeMark the number of
+	// the last command that the step commands waits for (core.window.close).
+	closeStep    string
+	closeMark    int
 	answerWaits  []answerWait
 	pointer      *PointerSequence
 	verification *Verification

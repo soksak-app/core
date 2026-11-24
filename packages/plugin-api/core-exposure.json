@@ -3,6 +3,7 @@
     "core.roles",
     "core.tab.role",
     "core.window.workbench",
+    "core.window.close",
     "core.screen",
     "core.workbench.error",
     "core.workbench.audit",

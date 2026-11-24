@@ -109,6 +109,31 @@
         }
       },
       {
+        "name": "core.window.close",
+        "description": "The close of the window that the host asked for and that the workbench has not ended: step is null while no close is pending, and otherwise registry, tabs, save, commands or close; commands lists the names of the commands that the step commands waits for, in their start order.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "step": {
+              "enum": [
+                "registry",
+                "tabs",
+                "save",
+                "commands",
+                "close",
+                null
+              ]
+            },
+            "commands": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      {
         "name": "core.screen",
         "description": "The shown screen and the open modal of the workbench.",
         "schema": {

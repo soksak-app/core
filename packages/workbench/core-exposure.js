@@ -529,6 +529,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   // The role handshake of a tab (docs/spec/agent-roles.md#tab-role-state): the status is read from the host store with the
   // surface of its request, and a change of the stored workspace refreshes every open watch (exposure.js).
   status("core.tab.role", (surface) => projects.roleOf(surface), { surface: true });
+  status("core.window.close", () => projects.closeStatus());
   status("core.window.workbench", () => ({
     start: pageIdentity,
     startedAt: performance.timeOrigin,

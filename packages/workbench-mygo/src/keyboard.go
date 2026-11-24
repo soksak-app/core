@@ -128,9 +128,9 @@ func (s *Shell) followCommand(name string, answer func(value any, err error)) fu
 	s.commands++
 	number := s.commands
 	if s.answering == nil {
-		s.answering = map[int]bool{}
+		s.answering = map[int]string{}
 	}
-	s.answering[number] = true
+	s.answering[number] = name
 	answered := func(value any, err error) {
 		answer(value, err)
 		delete(s.answering, number)

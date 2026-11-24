@@ -40,13 +40,15 @@ const { flushEvents, recordWorkbenchStart } = await import("../page-log.js");
 
 /* Whether the person keeps a modified tab; the question is recorded in `order` and `asks`. */
 let kept = false;
+/* When set, the answer about the modified tabs waits for this promise. */
+let held = null;
 /* The questions and the emptied planes in the order of the callbacks, and the number of host calls at each question. */
 const order = [];
 const asks = [];
 projects.onSwitch({
   check: () => {}, save: () => PROJECT.spaces[0].layout, load: () => {}, update: () => {}, retain: async () => {},
   presented: async () => {}, empty: async () => { order.push("empty"); },
-  settleTabs: async () => { order.push("ask"); asks.push(wire.calls.length); return !kept; },
+  settleTabs: async () => { order.push("ask"); asks.push(wire.calls.length); if (held) await held; return !kept; },
 });
 
 // The start of the page: the first screen is the library, and the start of the document is the first event that leaves the log.
@@ -87,11 +89,20 @@ test("a window close request asks about modified tabs before it saves and closes
   asks.length = 0;
   kept = false;
   const from = wire.calls.length;
+  assert.deepEqual(projects.closeStatus(), { step: null, commands: [] });
+  // The answer about the modified tabs waits, so core.window.close states that step (docs/spec/exposure.md).
+  let answer;
+  held = new Promise((resolve) => { answer = resolve; });
   wire.deliverNotice();
+  await drained();
+  assert.deepEqual(projects.closeStatus(), { step: "tabs", commands: [] }, "the close that waits for the answer about the modified tabs states no step");
+  answer();
+  held = null;
   await drained();
   assert.deepEqual(order, ["ask"]);
   assert.equal(asks[0], from, `the window saved or closed before the question: ${namesFrom(from)}`);
   assert.equal(wire.calls.at(-1).name, "windowClose");
+  assert.deepEqual(projects.closeStatus(), { step: null, commands: [] }, "the close that the host answered still states a step");
   assert.deepEqual(reported, []);
   wire.finish();
 });

@@ -359,6 +359,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1146-1",
+    implementation: [
+      { file: "packages/workbench/projects.js", symbol: "export const closeStatus = () => ({ step: closeStep, commands: [] });" },
+      { file: "packages/workbench-mygo/src/shell_statuses.go", symbol: "func (s *Shell) closeStatus() map[string]any {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/projects-close-window.test.mjs", id: "a window close request asks about modified tabs before it saves and closes" },
+      { file: "packages/workbench-mygo/tests/window_close_status_test.go", id: "TestThePendingCloseStatesTheCommandsThatItWaitsFor" },
+    ],
+    expected: "core.window.close states the step that a pending close waits for and, on the mygo host, the commands that keep it, and states no step after the host answered the close.",
+    levels: ["unit"],
+  },
+  {
     id: "F1145",
     implementation: [
       { file: "packages/workbench/library.js", symbol: "mark(add,'core.library.form.open',{mode:'create'});" },

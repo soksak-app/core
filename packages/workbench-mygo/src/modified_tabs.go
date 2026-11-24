@@ -215,12 +215,15 @@ func (s *Shell) settleModified(words modifiedAnswers, done func(settled bool)) {
 // closeWindowAsked answers a close request of the window: a modified tab that the person keeps keeps the window open, and the host hears
 // of it, because the request may belong to a quit.
 func (s *Shell) closeWindowAsked() {
+	s.closeStep = "tabs"
 	s.settleModified(closeAnswers, func(settled bool) {
 		// The close is decided here, so it waits for the commands that run now and for none that starts later (afterCommands).
 		mark := s.commandMark()
 		if !settled {
+			s.closeStep = "close"
 			cids := s.events.BeginOperation("workbench.window.operation", map[string]any{"action": "close_kept"})
 			s.calls.Caused(cids).CallInOrder("workspace", "windowCloseKept", nil, func(_ any, err error) {
+				s.closeStep = ""
 				if err != nil {
 					s.fail(err)
 				}
@@ -228,6 +231,7 @@ func (s *Shell) closeWindowAsked() {
 			return
 		}
 		s.keep()
+		s.closeStep = "save"
 		s.saveGeometry(func(err error) {
 			if err != nil {
 				s.fail(err)
@@ -235,10 +239,13 @@ func (s *Shell) closeWindowAsked() {
 			s.flushTabs(func() {
 				// The call ends the workbench of the window, so its first event leaves before the call, and it waits for the answers
 				// that the window owed when the close was decided, as the answer of the pick that closes it (afterCommands).
+				s.closeStep, s.closeMark = "commands", mark
 				s.afterCommands(mark, func() {
+					s.closeStep = "close"
 					cids := s.events.BeginOperation("workbench.window.operation", map[string]any{"action": "close"})
 					s.events.Flush(func() {
 						s.calls.Caused(cids).CallInOrder("workspace", "windowClose", nil, func(_ any, err error) {
+							s.closeStep = ""
 							if err != nil {
 								s.fail(err)
 							}

@@ -753,21 +753,37 @@ export async function flush() {
   await tabStates.flush();
 }
 
+/** The step that the close of the window waits for, or null while no close is pending (core.window.close, docs/spec/exposure.md). */
+let closeStep = null;
+
+/** The value of core.window.close. The page waits for no command before the close, so commands is empty. */
+export const closeStatus = () => ({ step: closeStep, commands: [] });
+
 async function closeWindow() {
-  // The close follows the registry reads that this window started before the request: a project that another window
-  // removed after this window answered for its tabs ends first, so its tabs are not asked about again (F292-50). A failed
-  // read was reported by the reread that started it and does not keep the window, so the close waits for the read to
-  // settle without taking its result.
-  await Promise.allSettled([refreshing]);
-  // A modified tab that the person keeps keeps the window open (docs/spec/plugins.md#tab-reports).
-  if (!(await listener.settleTabs())) {
-    await windows.closeKept(beginOperation("workbench.window.operation", { action: "close_kept" }));
-    return;
+  try {
+    // The close follows the registry reads that this window started before the request: a project that another window
+    // removed after this window answered for its tabs ends first, so its tabs are not asked about again (F292-50). A failed
+    // read was reported by the reread that started it and does not keep the window, so the close waits for the read to
+    // settle without taking its result.
+    closeStep = "registry";
+    await Promise.allSettled([refreshing]);
+    // A modified tab that the person keeps keeps the window open (docs/spec/plugins.md#tab-reports).
+    closeStep = "tabs";
+    if (!(await listener.settleTabs())) {
+      closeStep = "close";
+      await windows.closeKept(beginOperation("workbench.window.operation", { action: "close_kept" }));
+      return;
+    }
+    closeStep = "save";
+    await flush();
+    // The operation starts before the drain: its first event must be in the queue that the drain hands to the writer of the
+    // host, because the call ends the page and the host refuses a batch of a window that is gone (F161.26).
+    closeStep = "close";
+    const cids = beginOperation("workbench.window.operation", { action: "close" });
+    await flushEvents();
+    await windows.close(cids);
+  } finally {
+    // A failed step ends the close as its answer does; the caller reports the failure.
+    closeStep = null;
   }
-  await flush();
-  // The operation starts before the drain: its first event must be in the queue that the drain hands to the writer of the
-  // host, because the call ends the page and the host refuses a batch of a window that is gone (F161.26).
-  const cids = beginOperation("workbench.window.operation", { action: "close" });
-  await flushEvents();
-  await windows.close(cids);
 }
