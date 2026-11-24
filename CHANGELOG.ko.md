@@ -5,6 +5,7 @@
 
 ## 2026-11-25
 
+- F1157: view call `runtime.contributions`가 각 항목에 기여자의 설치 folder인 `folder`를 줘서, agents의 정의 section 같은 provider view가 maker group을 나열해요. 전에는 view 항목에 folder가 없었어요.
 - F1156: F1154에 feature link가 생겼고, test 주석 두 개가 add tab tool을 영어로 부르고, workbench의 nullish default 세 개가 이유를 적어서 core suite의 구조 검사가 통과해요.
 - F1155-1: core version은 모든 package와 crate manifest, Info.plist, Tauri 파일, Go와 pkg-config 선언, Cargo.lock의 workspace 항목 여섯 개, scripts/check-versions.mjs에서 0.0.53이에요.
 - F1154: `/installed-plugins.json`의 각 entry가 configuration directory에서 plugin의 기록된 `path`의 절대 경로인 `folder`를 Go와 Rust host, host 없는 application의 staging에서 가진다. page, mygo, `sok`은 절대 `folder`가 없는 entry를 `installed-plugins.json: plugin <id> folder must be an absolute path`로 거부하고, `contributions(point)`의 각 connected item은 기여자의 설치 folder인 `folder`를 준다. Red/Green: Go와 Rust host와 `sok`의 installed document test, plugin-api의 `contributions.test.mjs`, mygo의 `TestContributionCases`.

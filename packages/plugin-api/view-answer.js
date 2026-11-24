@@ -411,9 +411,10 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
     case "runtime.shortcuts.read":
       return viewShortcuts(shortcuts);
     case "runtime.contributions": {
-      // The module of an item is a path of the main page; a view imports it from the core root.
+      // The module of an item is a path of the main page; a view imports it from the core root. folder is the installed folder of the
+      // contributor, which a provider names to a program that it runs (docs/spec/plugins.md, provider interface).
       const fields = objectOf(command, params);
-      return contributions(fields.point).map(({ plugin: owner, index, item, module }) => ({ plugin: owner, index, item, module: `${CORE_ROOT}${module}` }));
+      return contributions(fields.point).map(({ plugin: owner, index, item, module, folder }) => ({ plugin: owner, index, item, module: `${CORE_ROOT}${module}`, folder }));
     }
     case "runtime.contributions.fail": {
       const fields = objectOf(command, params);

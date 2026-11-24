@@ -448,6 +448,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1157",
+    implementation: [
+      { file: "packages/plugin-api/view-answer.js", symbol: "module: `${CORE_ROOT}${module}`, folder" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/view-answer-contributions.test.mjs", id: "runtime.contributions gives a view the folder of the contributor of each item" },
+    ],
+    expected: "A view receives each connected item with the installed folder of its contributor, as the surface context gives it.",
+    levels: ["unit"],
+  },
+  {
     id: "F1153",
     implementation: [
       { file: "packages/host/go/src/documents.go", symbol: "func PluginDataFolder(configDir, plugin string) (string, error) {" },
