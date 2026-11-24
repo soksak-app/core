@@ -5,6 +5,7 @@
 
 ## 2026-11-25
 
+- F1163: `plugin.json`의 `dialogs.<name>`은 `{page, regions?}`이고 dialog surface가 composition `{kind: "view", page, regions}`를 가져서, dialog page가 자기 element의 document region에 web document를 보여 줘요. `@soksak/plugin-api`, Go `sok`, Rust `sok`의 reader가 region을 view composition의 region처럼 검사하고 다른 member를 `dialogs.<name> must be {page, regions?}`로 거절해요. Red/Green: `manifest-validation.json`의 dialog case, workbench의 environment test, `TestADialogSurfaceHasTheRegionsOfItsDeclaration`.
 - F1162: mygo workbench가 composition이 view인 각 surface에 plugin의 programs를 선언해서, tab surface가 없는 plugin의 section과 dialog가 선언한 program을 실행해요. 전에는 host가 각 실행을 `program <name> is not declared by <plugin>`으로 거절했어요. Red/Green: `TestTheSyncRequestDeclaresTheProgramsOfASectionOfAPluginWithoutATabSurface`.
 - F1157: view call `runtime.contributions`가 각 항목에 기여자의 설치 folder인 `folder`를 줘서, agents의 정의 section 같은 provider view가 maker group을 나열해요. 전에는 view 항목에 folder가 없었어요.
 - F1157-1: page-wire case `view-calls-contributions`가 `folder`를 기록하고 `testing.js`의 view host가 각 연결된 항목에 `folder`를 줘서, workbench와 view host test가 F1157의 응답을 재생해요. 전에는 둘 다 그 field를 거절했어요. 검증: `packages/plugin-api`와 `packages/workbench` test 2934개 통과.

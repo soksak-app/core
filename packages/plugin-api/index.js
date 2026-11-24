@@ -495,18 +495,24 @@ export function settingDeclarations(manifest) {
 const isViewPage = (page) => isText(page) && page.endsWith(".html") &&
   page.split("/").every((segment) => segment !== "" && segment !== "." && segment !== ".." && segment !== ".binary");
 
-// checkDialogs checks the dialogs of plugin.json: each name has the form of a region name and maps to {page}, whose page is
-// a page of the plugin as the page of a view composition (docs/spec/plugins.md#dialogs).
-function checkDialogs(where, dialogs) {
+// checkDialogs checks the dialogs of plugin.json: each name has the form of a region name and maps to {page, regions?}, whose page is
+// a page of the plugin as the page of a view composition and whose regions are the regions of a view composition
+// (docs/spec/plugins.md#dialogs).
+function checkDialogs(where, dialogs, sidecars) {
   if (!isObject(dialogs)) throw new Error(`${where}: dialogs must be an object`);
   // The names are read in sorted order, as the Go and Rust readers read them, so each reader names the same entry.
   for (const name of Object.keys(dialogs).sort()) {
     const dialog = dialogs[name];
     if (!REGION.test(name)) throw new Error(`${where}: dialogs.${name} is not a dialog name`);
-    if (!isObject(dialog) || Object.keys(dialog).length !== 1 || !Object.hasOwn(dialog, "page")) {
-      throw new Error(`${where}: dialogs.${name} must be {page}`);
+    if (!isObject(dialog) || !Object.hasOwn(dialog, "page") || Object.keys(dialog).some((key) => key !== "page" && key !== "regions")) {
+      throw new Error(`${where}: dialogs.${name} must be {page, regions?}`);
     }
     if (!isViewPage(dialog.page)) throw new Error(`${where}: dialogs.${name} page must be a path inside the plugin release that ends in .html`);
+    if (dialog.regions === undefined) continue;
+    if (!Array.isArray(dialog.regions) || dialog.regions.length === 0) {
+      throw new Error(`${where}: dialogs.${name} composition: regions must be a non-empty array`);
+    }
+    checkRegions(`${where}: dialogs.${name}`, dialog.regions, [], sidecars);
   }
 }
 
@@ -847,7 +853,7 @@ export function validateManifest(manifest) {
   }
   if (manifest.dialogs !== undefined) {
     if (manifest.surface === undefined && manifest.sections === undefined) throw new Error(`${where}: dialogs requires a surface or sections`);
-    checkDialogs(where, manifest.dialogs);
+    checkDialogs(where, manifest.dialogs, manifestSidecars(manifest));
   }
   if (manifest.extends !== undefined) {
     if (manifest.surface === undefined && manifest.sections === undefined) throw new Error(`${where}: extends requires a surface or sections`);

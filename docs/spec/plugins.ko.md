@@ -79,7 +79,7 @@ plugin 동작의 창 검사는 그 plugin의 repository에서 실행된다([검�
 | `mark` | `surface`가 있으면 | 추가 메뉴와 새 탭 제목에 표시하는 짧은 텍스트 |
 | `icon` | `surface`가 있으면 | 16×16 뷰박스용 SVG 요소 |
 | `sections` | 아니오 | 사이드바 섹션 `{ "id": "<플러그인 id>.<이름>", "name", "composition", "height", "unload"?, "actions"? }`. 각 섹션은 [section surface](#섹션), 즉 사이드바에 그려지는 plugin의 view다. `composition`은 `view` 합성이고, `height`는 `"fill"` 또는 포인트 단위 양의 정수다 |
-| `dialogs` | 아니오 | `{ "<name>": { "page": "<path>" } }`: plugin의 view가 [dialog](#dialogs)로 여는 page. `name`은 `[a-z0-9][a-z0-9-]{0,63}` 형식이고 `page`는 view composition의 `page`와 같은 page 경로다. `surface`나 `sections`가 필요하다 |
+| `dialogs` | 아니오 | `{ "<name>": { "page": "<path>", "regions"?: [ ... ] } }`: plugin의 view가 [dialog](#dialogs)로 여는 page. `name`은 `[a-z0-9][a-z0-9-]{0,63}` 형식이고, `page`는 view composition의 `page`와 같은 page 경로이며, `regions`는 view composition의 `regions`와 같은 dialog page의 region이다. `surface`나 `sections`가 필요하다 |
 | `sidebars` | 아니오 | 로컬 기본 세트와 선택적인 네 변 `card` 연결([기본 사이드바 세트](#기본-사이드바-세트)) |
 | `preview` | 아니오 | `{ "ink": "--<토큰>" }`: 라이브러리 미리보기에서 플러그인 카드의 색을 정하는 테마 토큰 이름. `surface`가 필요하다 |
 | `dependencies` | 아니오 | `{ "<package>": "<version range>" }`: plugin이 필요로 하는 sidecar와 plugin, 그리고 plugin이 함께 동작하는 그 version의 범위([version과 범위](installation.ko.md#version과-범위)). 의존은 plugin의 view나 상태 모듈이 쓰는 [사이드카](sidecars.ko.md)를 가리키며 그때 `surface`, `sections`나 `state`가 필요하거나, plugin이 기여하는 [확장 지점](#확장-지점)을 가진 plugin이나, 그 plugin의 선언된 status나 프로젝트 데이터를 plugin의 view가 따라가거나 읽는 plugin을 가리키며 plugin을 설치하면 그것도 설치된다. status를 위해 가리킨 plugin은 `exposes.status`에 선언한 status만 plugin의 view에 준다([view calls](native-surfaces.ko.md#view-표면)). command, element나 다른 항목은 주지 않는다. 프로젝트 데이터를 위해 가리킨 plugin은 `data`에 선언한 key만 plugin의 view에 준다([프로젝트 데이터](#프로젝트-데이터)). registry index나 `installed.json`의 plugin이 그 package 이름을 가지면 의존은 plugin을 가리키고, 아니면 sidecar를 가리킨다. Plugin 의존의 key는 그 plugin의 package(예: `@soksak/plugin-agents`)이며 plugin id가 아니다. 각 host는 key를 그 package의 load된 plugin id로 풀고, 의존을 읽거나 따라가는 view call은 그 plugin id(예: `agents`)를 명명한다. plugin이 다른 sidecar와 plugin에 요구하는 것의 유일한 선언이다 |
@@ -148,11 +148,13 @@ section surface는 보이는 스페이스의 사이드바가 그 섹션을 가�
 
 plugin의 view는 자기 plugin의 page를 창 전체 위의 dialog로 연다. 그래서 section이나 tab에 맞지 않는 form을 창의 content 위에 그린다. dialog는 plugin의 view surface인 dialog surface다. 그 seat는 창의 content, 곧 title bar 아래의 plane 전체이며 sidebar를 포함한다([dialog seat](native-surfaces.ko.md#dialog-seat)). 창은 dialog를 많아야 하나 가지며, dialog와 [native modal](native-modals.ko.md)은 함께 열리지 않는다.
 
-`plugin.json`의 `dialogs`는 각 dialog page를 `{<name>: {page}}`로 선언한다. `@soksak/plugin-api`, Go `sok`, Rust `sok`의 reader는 name을 정렬된 순서로 읽고 다음을 거부한다.
+`plugin.json`의 `dialogs`는 각 dialog page를 `{<name>: {page, regions?}}`로 선언한다. dialog surface는 선언의 composition `{kind: "view", page, regions}`를 가지며, 선언에 `regions`가 없으면 `regions`도 없다. 그래서 dialog page는 dialog가 실행하는 program의 sign-in page 같은 web document를 자기 element의 document region에 보여 준다([document regions](native-surfaces.md#document-regions)). `@soksak/plugin-api`, Go `sok`, Rust `sok`의 reader는 name을 정렬된 순서로 읽고 다음을 거부한다.
 - object가 아닌 `dialogs`: `plugin <id>: dialogs must be an object`
 - 다른 형식의 name: `plugin <id>: dialogs.<name> is not a dialog name`
-- member `page`만 가진 object가 아닌 항목: `plugin <id>: dialogs.<name> must be {page}`
+- member `page`가 있고 `page`와 `regions` 외의 member가 없는 object가 아닌 항목: `plugin <id>: dialogs.<name> must be {page, regions?}`
 - plugin release 안의 경로이고 `.html`로 끝나는 경로가 아닌 page: `plugin <id>: dialogs.<name> page must be a path inside the plugin release that ends in .html`
+- 비어 있지 않은 array가 아닌 `regions`: `plugin <id>: dialogs.<name> composition: regions must be a non-empty array`
+- view composition의 region과 같은 거부를 받는 region. 그 text는 `plugin <id>: dialogs.<name> composition`으로 시작한다.
 - `surface`나 `sections`가 없는 `dialogs`: `plugin <id>: dialogs requires a surface or sections`. view만 dialog를 열기 때문이다.
 
 installer는 view page가 없는 release를 거부하듯 dialog page가 없는 release를 `plugin.json: dialog page <path> is not in the release`로 거부한다. case table `docs/spec/cases/manifest-validation.json`이 모든 reader를 위한 이 case를 가진다.

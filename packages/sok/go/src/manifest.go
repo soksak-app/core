@@ -609,7 +609,7 @@ func ValidateManifest(value any) error {
 		if _, hasSections := manifest["sections"]; !hasSurface && !hasSections {
 			return fmt.Errorf("%s: dialogs requires a surface or sections", where)
 		}
-		if err := checkDialogs(where, raw); err != nil {
+		if err := checkDialogs(where, raw, sidecars); err != nil {
 			return err
 		}
 	}
@@ -1671,10 +1671,10 @@ func checkExposes(owner string, raw any) error {
 	return nil
 }
 
-// checkDialogs checks the dialogs of plugin.json: each name has the form of a region name and maps to {page}, whose page
-// is a page of the plugin as the page of a view composition (docs/spec/plugins.md#dialogs). The names are read in sorted
-// order, as the other readers read them.
-func checkDialogs(where string, raw any) error {
+// checkDialogs checks the dialogs of plugin.json: each name has the form of a region name and maps to {page, regions?}, whose
+// page is a page of the plugin as the page of a view composition and whose regions are the regions of a view composition
+// (docs/spec/plugins.md#dialogs). The names are read in sorted order, as the other readers read them.
+func checkDialogs(where string, raw any, sidecars []string) error {
 	dialogs, ok := raw.(map[string]any)
 	if !ok {
 		return fmt.Errorf("%s: dialogs must be an object", where)
@@ -1684,11 +1684,27 @@ func checkDialogs(where string, raw any) error {
 			return fmt.Errorf("%s: dialogs.%s is not a dialog name", where, name)
 		}
 		dialog, ok := dialogs[name].(map[string]any)
-		if _, hasPage := dialog["page"]; !ok || len(dialog) != 1 || !hasPage {
-			return fmt.Errorf("%s: dialogs.%s must be {page}", where, name)
+		_, hasPage := dialog["page"]
+		valid := ok && hasPage
+		for key := range dialog {
+			valid = valid && (key == "page" || key == "regions")
+		}
+		if !valid {
+			return fmt.Errorf("%s: dialogs.%s must be {page, regions?}", where, name)
 		}
 		if !isViewPage(dialog["page"]) {
 			return fmt.Errorf("%s: dialogs.%s page must be a path inside the plugin release that ends in .html", where, name)
+		}
+		raw, has := dialog["regions"]
+		if !has {
+			continue
+		}
+		regions, ok := raw.([]any)
+		if !ok || len(regions) == 0 {
+			return fmt.Errorf("%s: dialogs.%s composition: regions must be a non-empty array", where, name)
+		}
+		if err := checkRegions(fmt.Sprintf("%s: dialogs.%s", where, name), regions, []any{}, sidecars); err != nil {
+			return err
 		}
 	}
 	return nil

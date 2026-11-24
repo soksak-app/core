@@ -42,7 +42,7 @@ func (s *Shell) openDialog(call viewCallEvent, view *viewState, unit *installedU
 	if err != nil {
 		return err
 	}
-	page, declared := unit.Dialogs[fields.Name]
+	dialog, declared := unit.Dialogs[fields.Name]
 	if !declared {
 		return fmt.Errorf("view call runtime.dialog.open %s is not a dialog of %s", fields.Name, unit.ID)
 	}
@@ -52,7 +52,11 @@ func (s *Shell) openDialog(call viewCallEvent, view *viewState, unit *installedU
 	if modal := s.modalName(); modal != nil {
 		return fmt.Errorf("view call runtime.dialog.open: the window shows the modal %s", *modal)
 	}
-	composition, err := json.Marshal(map[string]string{"kind": "view", "page": page})
+	composition, err := json.Marshal(struct {
+		Kind    string          `json:"kind"`
+		Page    string          `json:"page"`
+		Regions json.RawMessage `json:"regions,omitempty"`
+	}{"view", dialog.Page, dialog.Regions})
 	if err != nil {
 		return err
 	}

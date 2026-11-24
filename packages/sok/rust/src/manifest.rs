@@ -1047,9 +1047,10 @@ fn is_view_page(value: Option<&Value>) -> bool {
 }
 
 /// Checks the dialogs of plugin.json (checkDialogs of the reader): each name has the form of a region name and maps to
-/// {page}, whose page is a page of the plugin as the page of a view composition (docs/spec/plugins.md#dialogs). The map
-/// of serde_json is sorted, so the names are read in the sorted order of the other readers.
-fn check_dialogs(where_: &str, raw: &Value) -> Result<(), String> {
+/// {page, regions?}, whose page is a page of the plugin as the page of a view composition and whose regions are the regions
+/// of a view composition (docs/spec/plugins.md#dialogs). The map of serde_json is sorted, so the names are read in the
+/// sorted order of the other readers.
+fn check_dialogs(where_: &str, raw: &Value, sidecars: &[&str]) -> Result<(), String> {
     let Some(dialogs) = raw.as_object() else {
         return Err(format!("{where_}: dialogs must be an object"));
     };
@@ -1057,17 +1058,29 @@ fn check_dialogs(where_: &str, raw: &Value) -> Result<(), String> {
         if !is_region_name(name) {
             return Err(format!("{where_}: dialogs.{name} is not a dialog name"));
         }
-        let Some(dialog) = dialog
-            .as_object()
-            .filter(|dialog| dialog.len() == 1 && dialog.contains_key("page"))
-        else {
-            return Err(format!("{where_}: dialogs.{name} must be {{page}}"));
+        let Some(dialog) = dialog.as_object().filter(|dialog| {
+            dialog.contains_key("page")
+                && dialog.keys().all(|key| key == "page" || key == "regions")
+        }) else {
+            return Err(format!(
+                "{where_}: dialogs.{name} must be {{page, regions?}}"
+            ));
         };
         if !is_view_page(dialog.get("page")) {
             return Err(format!(
                 "{where_}: dialogs.{name} page must be a path inside the plugin release that ends in .html"
             ));
         }
+        let Some(raw) = dialog.get("regions") else {
+            continue;
+        };
+        let regions = raw
+            .as_array()
+            .filter(|list| !list.is_empty())
+            .ok_or_else(|| {
+                format!("{where_}: dialogs.{name} composition: regions must be a non-empty array")
+            })?;
+        check_regions(&format!("{where_}: dialogs.{name}"), regions, &[], sidecars)?;
     }
     Ok(())
 }
@@ -1844,7 +1857,7 @@ pub fn validate_manifest(value: &Value) -> Result<(), String> {
         if !has("surface") && !has("sections") {
             return Err(format!("{where_}: dialogs requires a surface or sections"));
         }
-        check_dialogs(&where_, raw)?;
+        check_dialogs(&where_, raw, &sidecars)?;
     }
     if let Some(raw) = manifest.get("extends") {
         if !has("surface") && !has("sections") {

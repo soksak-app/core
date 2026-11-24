@@ -134,3 +134,17 @@ func TestAModalOfTheWorkbenchIsRefusedWhileADialogIsOpen(t *testing.T) {
 		t.Fatalf("core.modal is %s", f.status("core.modal"))
 	}
 }
+
+// A dialog surface has the composition of its declaration, with the document regions that the dialog page shows.
+func TestADialogSurfaceHasTheRegionsOfItsDeclaration(t *testing.T) {
+	document := strings.Replace(installedDocument, `"surface": {"menu": [{"title": "닫기"`,
+		`"dialogs": {"edit": {"page": "ui/edit.html", "regions": [{"name": "page", "kind": "document", "input": "native"}]}}, "surface": {"menu": [{"title": "닫기"`, 1)
+	f, stored := surfaceShellOf(t, document)
+	opener := pluginSurface(t, stored, "textprobe")
+	dialogCall(f, opener, 5, "runtime.dialog.open", map[string]any{"name": "edit", "params": nil})
+	placed := stored.lastSurfaces(t)[dialogSurfaceID]
+	got, _ := json.Marshal(placed["composition"])
+	if want := `{"kind":"view","page":"ui/edit.html","regions":[{"input":"native","kind":"document","name":"page"}]}`; string(got) != want {
+		t.Fatalf("the dialog surface has the composition %s, want %s", got, want)
+	}
+}

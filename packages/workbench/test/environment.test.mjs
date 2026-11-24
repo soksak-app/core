@@ -33,7 +33,7 @@ const files = {
     exposes: { status: [{ name: "side.count", description: "검사용 상태.", schema: { type: "object" } }, { name: "side.list", description: "검사용 상태.", schema: { type: "object" } }] },
     sections: [{ id: "side.list", name: "List", composition: { kind: "view", page: "ui/list.html" }, height: "fill" },
       { id: "side.count", name: "Count", composition: { kind: "view", page: "ui/count.html" }, height: 48, unload: { format: 1, maxBytes: 4096 } }],
-    dialogs: { edit: { page: "ui/edit.html" } },
+    dialogs: { edit: { page: "ui/edit.html" }, login: { page: "ui/login.html", regions: [{ name: "page", kind: "document", input: "native" }] } },
     programs: { version: { program: "git", args: ["--version"] } },
   },
 };
@@ -76,6 +76,9 @@ test("the environment registers card plugins, sections, and sidebar defaults fro
   // The programs of a plugin are run by every view of the plugin, so its section and dialog surfaces carry them (F1152).
   assert.deepEqual([counted.programs, registry.dialog("side", "edit").surface("spc-aaaaaa/left/side.count", {}).programs],
     [files.side.programs, files.side.programs]);
+  // A dialog surface has the composition of its declaration, with the document regions that the dialog page shows.
+  assert.deepEqual([registry.dialog("side", "edit").surface("x", {}).composition, registry.dialog("side", "login").surface("x", {}).composition],
+    [{ kind: "view", page: "ui/edit.html" }, { kind: "view", page: "ui/login.html", regions: [{ name: "page", kind: "document", input: "native" }] }]);
   assert.deepEqual(settings.defaults.sets, files["/environment.json"].sidebars.sets);
   assert.deepEqual(settings.defaults.links, files["/environment.json"].sidebars.links);
   assert.equal(settings.value("card.cursor.shape"), "beam");

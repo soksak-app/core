@@ -71,8 +71,14 @@ type installedUnit struct {
 	// Activity holds the names of the statuses that declare activity, which the activity of each tab of the plugin follows
 	// (docs/spec/activity.md).
 	Activity []string
-	// Dialogs holds the page of each dialog that the plugin declares (docs/spec/plugins.md#dialogs).
-	Dialogs map[string]string
+	// Dialogs holds the declaration of each dialog that the plugin declares (docs/spec/plugins.md#dialogs).
+	Dialogs map[string]dialogDeclaration
+}
+
+// dialogDeclaration is the declaration of a dialog: its page and the regions of its composition, nil without regions.
+type dialogDeclaration struct {
+	Page    string          `json:"page"`
+	Regions json.RawMessage `json:"regions,omitempty"`
 }
 
 // surfaceUnload is the declaration surface.unload of a plugin.
@@ -100,16 +106,14 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 						Extensions []string `json:"extensions"`
 					} `json:"opens"`
 				} `json:"surface"`
-				Background   *BackgroundDeclaration     `json:"background"`
-				Sessions     bool                       `json:"sessions"`
-				Programs     json.RawMessage            `json:"programs"`
-				Exposes      json.RawMessage            `json:"exposes"`
-				Dependencies map[string]any             `json:"dependencies"`
-				Settings     map[string]json.RawMessage `json:"settings"`
-				Data         map[string]dataDeclaration `json:"data"`
-				Dialogs      map[string]struct {
-					Page string `json:"page"`
-				} `json:"dialogs"`
+				Background   *BackgroundDeclaration       `json:"background"`
+				Sessions     bool                         `json:"sessions"`
+				Programs     json.RawMessage              `json:"programs"`
+				Exposes      json.RawMessage              `json:"exposes"`
+				Dependencies map[string]any               `json:"dependencies"`
+				Settings     map[string]json.RawMessage   `json:"settings"`
+				Data         map[string]dataDeclaration   `json:"data"`
+				Dialogs      map[string]dialogDeclaration `json:"dialogs"`
 			} `json:"manifest"`
 		} `json:"plugins"`
 	}
@@ -135,9 +139,9 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 		unit.Programs = plugin.Manifest.Programs
 		for name, dialog := range plugin.Manifest.Dialogs {
 			if unit.Dialogs == nil {
-				unit.Dialogs = map[string]string{}
+				unit.Dialogs = map[string]dialogDeclaration{}
 			}
-			unit.Dialogs[name] = dialog.Page
+			unit.Dialogs[name] = dialog
 		}
 		if plugin.Manifest.Surface != nil {
 			unit.Opens = plugin.Manifest.Surface.Opens.Extensions
