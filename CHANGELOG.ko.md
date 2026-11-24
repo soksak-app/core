@@ -5,6 +5,7 @@
 
 ## 2026-11-24
 
+- F1142: host가 서비스 폴더 이름을 실행 파일 base name으로 정하므로, `sok plugin install`과 `update`는 설치된 각 사이드카의 `sidecar.json`을 읽고, 실행 파일 base name이 다른 것과 같은 두 번째 persistent 사이드카를 `installed.json`을 쓰기 전에 `sidecar <later>: executable base name <name> is already the service folder of sidecar <earlier>`로 거부한다. host는 이미 시작 때 그런 선언을 거부했고, 이제 명세가 두 거부를 모두 적는다. Go와 Rust 설치 test는 변경 전에 실패했고 변경 후 통과한다.
 - F1140: 명세의 어떤 operation도 이전 version을 복원하지 않으므로 `plugins/installed.json`은 더 이상 `previous`를 기록하지 않고, `sok`는 plugin마다 쓰는 version의 폴더만 남긴다. Go와 Rust reader는 `previous`를 가진 plugin 항목을 `unknown field previous`로 거부하며, 로컬 애플리케이션의 설치 파일은 현재 형식으로 고쳤다. Go와 Rust update test와 reader test는 변경 전에 실패했고 변경 후 통과한다.
 - F1141: 실행 중인 persistent 서비스는 실행되는 동안 사이드카를 나열했던 plugin을 기억하고, `sessions` 수는 제거되거나 비활성화된 plugin의 layout 표면을 포함한다. 따라서 사이드카의 유일한 plugin을 제거하면 선언 없는 서비스가 그 세션 수와 함께 나열되고, 그 세션이 layout을 떠나거나 사람이 서비스를 교체할 때까지 어느 세션도 끝나지 않는다. Go와 Rust 제거 test는 변경 전에 host가 서비스를 즉시 교체해서 실패했고, 변경 후 통과한다.
 - F1129-4: mygo workbench가 web workbench처럼 `runtime.dialog.open`과 `runtime.dialog.close`를 제공한다. 선언되지 않은 dialog, 두 번째 dialog, workbench modal 옆의 dialog를 거부한다. dialog view를 title bar 아래 창의 content 위에 다른 모든 view보다 위로 그리고, 그 뒤의 자기 그림을 흐리게 하며, dialog에 keyboard를 준다. `core.modal`에는 plugin과 함께, `core.surfaces`에는 `kind` `dialog`로 dialog를 보고한다. 열기 호출의 취소, 연 view의 끝, dialog view의 재시작 한도는 dialog를 없애고, dialog가 열려 있는 동안 설정, debug view, picker는 거부된다. `core.modal`은 workbench modal에 `plugin` `null`을 보고한다. mygo dialog test는 dialog 호출이 없으면 실패하고 있으면 통과한다.

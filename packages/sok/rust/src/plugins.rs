@@ -487,6 +487,41 @@ pub fn read_installed_manifests(
     Ok((state, manifests))
 }
 
+/// Refuses a state in which two persistent sidecars name executables with one base name: the host gives a persistent service the
+/// folder `services/<base name>` with its lock and endpoint, so the second sidecar would reach the service of the first
+/// (docs/spec/persistent-services.md#service-transport). It reads the sidecar.json of each sidecar of state in name order, so the
+/// sidecar that the error names second is the later one.
+fn check_service_folders(config_dir: &Path, state: &InstalledState) -> Result<(), String> {
+    #[derive(serde::Deserialize)]
+    struct Declaration {
+        #[serde(default)]
+        executable: String,
+        #[serde(default)]
+        transport: String,
+    }
+    let mut holders: HashMap<String, &str> = HashMap::new();
+    for (name, sidecar) in &state.sidecars {
+        let file = config_dir.join(&sidecar.path).join("sidecar.json");
+        let data = std::fs::read(&file).map_err(|error| format!("{}: {error}", file.display()))?;
+        let declaration: Declaration = serde_json::from_slice(&data)
+            .map_err(|error| format!("{}: {error}", file.display()))?;
+        if declaration.transport != "persistent" {
+            continue;
+        }
+        let base = Path::new(&declaration.executable)
+            .file_name()
+            .map(|base| base.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        if let Some(holder) = holders.get(&base) {
+            return Err(format!(
+                "sidecar {name}: executable base name {base} is already the service folder of sidecar {holder}"
+            ));
+        }
+        holders.insert(base, name);
+    }
+    Ok(())
+}
+
 /// Checks the program files of the plugins whose version changed: each program whose text has the form `plugin:<path>` names a
 /// regular file with an execute bit in the installed version folder (docs/spec/plugins.md#pluginjson). The manifests were checked
 /// by the reader, so each path has the form that the reader accepts.
@@ -817,6 +852,7 @@ fn install_plugin_unless(
             &config_dir.join(&installed.path),
         )?;
     }
+    check_service_folders(config_dir, &state)?;
     install::validate_installed(&serde_json::to_value(&state).map_err(|error| error.to_string())?)?;
     if stop() {
         return Err(STOPPED.to_string());

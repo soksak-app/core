@@ -15,6 +15,7 @@ import (
 	"io/fs"
 	"maps"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -661,6 +662,9 @@ func installPlugin(configDir, id, core, platform string, update bool, running Ru
 			return nil, err
 		}
 	}
+	if err := checkServiceFolders(configDir, state); err != nil {
+		return nil, err
+	}
 	value, err := stateValue(state)
 	if err != nil {
 		return nil, err
@@ -681,6 +685,37 @@ func installPlugin(configDir, id, core, platform string, update bool, running Ru
 		return nil, err
 	}
 	return pluginResult(state, id), nil
+}
+
+// checkServiceFolders refuses a state in which two persistent sidecars name executables with one base name: the host gives a
+// persistent service the folder services/<base name> with its lock and endpoint, so the second sidecar would reach the service of
+// the first (docs/spec/persistent-services.md#service-transport). It reads the sidecar.json of each sidecar of state in name order,
+// so the sidecar that the error names second is the later one.
+func checkServiceFolders(configDir string, state *InstalledState) error {
+	holders := map[string]string{}
+	for _, name := range slices.Sorted(maps.Keys(state.Sidecars)) {
+		file := filepath.Join(configDir, filepath.FromSlash(state.Sidecars[name].Path), "sidecar.json")
+		data, err := os.ReadFile(file)
+		if err != nil {
+			return fileError(file, err)
+		}
+		var declaration struct {
+			Executable string `json:"executable"`
+			Transport  string `json:"transport"`
+		}
+		if err := json.Unmarshal(data, &declaration); err != nil {
+			return fmt.Errorf("%s: %w", file, err)
+		}
+		if declaration.Transport != "persistent" {
+			continue
+		}
+		base := path.Base(declaration.Executable)
+		if holder, held := holders[base]; held {
+			return fmt.Errorf("sidecar %s: executable base name %s is already the service folder of sidecar %s", name, base, holder)
+		}
+		holders[base] = name
+	}
+	return nil
 }
 
 // checkProgramFiles checks the program files of the plugins whose version changed: each programs member whose program has the

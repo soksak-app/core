@@ -359,6 +359,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1142",
+    implementation: [
+      { file: "packages/sok/go/src/plugins.go", symbol: "func checkServiceFolders(configDir string, state *InstalledState) error {" },
+      { file: "packages/sok/rust/src/plugins.rs", symbol: "fn check_service_folders(config_dir: &Path, state: &InstalledState) -> Result<(), String> {" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/service_folder_test.go", id: "TestAnInstallationRefusesASecondPersistentSidecarWithTheExecutableBaseNameOfAnother" },
+      { file: "packages/sok/rust/tests/service_folder_test.rs", id: "an_installation_refuses_a_second_persistent_sidecar_with_the_executable_base_name_of_another" },
+    ],
+    expected: "An installation refuses a second persistent sidecar whose executable has the base name of another before it writes installed.json.",
+    levels: ["unit"],
+  },
+  {
     id: "F1140",
     implementation: [
       { file: "packages/sok/go/src/plugins.go", symbol: "			if version.Name() != plugin.Version {" },
