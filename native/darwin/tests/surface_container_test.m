@@ -237,6 +237,32 @@ static void checkWorkbenchHit(void) {
     [window release];
 }
 
+// contract: surface-host.dialog-host-stays-on-top
+// The dialog host stays above every other surface host of its container: a surface host created while it is in the container is
+// inserted below it, and the hosts created before it stay below it (docs/spec/native-surfaces.md#surface-host-container).
+static void checkDialogHostOrder(void) {
+    SPScaledWindow *window = makeWindow(NSMakeRect(0, 0, 400, 300), 2);
+    NSView *holder = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)] autorelease];
+    [window.contentView addSubview:holder];
+    NSView *before = (NSView *)sp_surface_create(holder);
+    NSView *dialog = (NSView *)sp_surface_create(holder);
+    sp_surface_mark_dialog(dialog);
+    NSView *after = (NSView *)sp_surface_create(holder);
+    NSView *later = (NSView *)sp_surface_create(holder);
+    NSArray<NSView *> *order = dialog.superview.subviews;
+    check([order isEqualToArray:@[before, after, later, dialog]],
+        [NSString stringWithFormat:@"the surface hosts created after the dialog host stand below it (order %@)", order]);
+    sp_surface_close(dialog);
+    NSView *free = (NSView *)sp_surface_create(holder);
+    check(free.superview.subviews.lastObject == free, @"without a dialog host a new surface host stands above the others");
+    sp_surface_close(before);
+    sp_surface_close(after);
+    sp_surface_close(later);
+    sp_surface_close(free);
+    [window close];
+    [window release];
+}
+
 int main(void) { @autoreleasepool {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
@@ -246,5 +272,6 @@ int main(void) { @autoreleasepool {
     checkCursorUpdate();
     checkNativeView();
     checkWorkbenchHit();
+    checkDialogHostOrder();
     return failures == 0 ? 0 : 1;
 } }

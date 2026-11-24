@@ -822,6 +822,16 @@ func Functions(library uintptr) (abi.NativeFunctions, error) {
 		purego.RegisterFunc(&functions.MainSpSurfaceFocusForRegion, address)
 	}
 	{
+		address, err := purego.Dlsym(library, "main_sp_surface_mark_dialog")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_surface_mark_dialog: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_surface_mark_dialog: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.MainSpSurfaceMarkDialog, address)
+	}
+	{
 		address, err := purego.Dlsym(library, "main_sp_surface_set_window_overlays")
 		if err != nil {
 			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_surface_set_window_overlays: %w", err)

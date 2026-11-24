@@ -1823,7 +1823,7 @@ fn attach_on_main(
     }
     // The dialog is read in the task that registers the region, so a later change of the dialog, whose task runs on the
     // same thread, finds the region.
-    seat_background(&data.overlay, handle, |handle, enabled| {
+    seat_background(&data.overlay, &key.0, handle, |handle, enabled| {
         platform.set_image_background(handle, enabled)
     })
 }
@@ -1831,10 +1831,11 @@ fn attach_on_main(
 /// Blurs a registered image region when a dialog is open.
 fn seat_background(
     overlay: &crate::modals::Overlay,
+    surface: &str,
     handle: Handle,
     set: impl Fn(Handle, bool) -> Result<(), String>,
 ) -> Result<(), String> {
-    set(handle, overlay.dialog())
+    set(handle, overlay.background_of(surface))
 }
 
 /// Makes the image region the first responder and sends the focus event.

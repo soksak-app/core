@@ -197,6 +197,7 @@ type NativeFunctions struct {
 	MainSpSurfaceCreate                    func(uintptr) unsafe.Pointer
 	MainSpSurfaceFocus                     func(unsafe.Pointer)
 	MainSpSurfaceFocusForRegion            func(unsafe.Pointer)
+	MainSpSurfaceMarkDialog                func(unsafe.Pointer)
 	MainSpSurfaceSetWindowOverlays         func(unsafe.Pointer, *float64, uint64)
 	MainSpViewImportMapSet                 func(*byte)
 	MainSpWebviewCollectGarbage            func(unsafe.Pointer) bool
@@ -540,6 +541,9 @@ func (functions NativeFunctions) Validate() error {
 	}
 	if functions.MainSpSurfaceFocusForRegion == nil {
 		return fmt.Errorf("native API function is missing: main_sp_surface_focus_for_region")
+	}
+	if functions.MainSpSurfaceMarkDialog == nil {
+		return fmt.Errorf("native API function is missing: main_sp_surface_mark_dialog")
 	}
 	if functions.MainSpSurfaceSetWindowOverlays == nil {
 		return fmt.Errorf("native API function is missing: main_sp_surface_set_window_overlays")

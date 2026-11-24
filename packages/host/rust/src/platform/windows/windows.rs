@@ -198,6 +198,9 @@ impl Platform for Windows {
     fn create_surface(&self, window: Handle) -> Result<Handle, String> {
         unsupported::create_surface(window)
     }
+    fn mark_dialog_surface(&self, surface: Handle) -> Result<(), String> {
+        unsupported::mark_dialog_surface(surface)
+    }
     fn close_surface(&self, surface: Handle) -> Result<(), String> {
         unsupported::close_surface(surface)
     }

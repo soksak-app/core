@@ -233,23 +233,58 @@ fn a_failed_attach_takes_back_its_name_and_its_request_log() {
     );
 }
 
+fn regions_of(entries: &[(usize, &str)]) -> std::collections::HashMap<usize, (String, String)> {
+    entries
+        .iter()
+        .map(|&(handle, surface)| (handle, (surface.to_string(), "region".to_string())))
+        .collect()
+}
+
 // contract: modal.dialog-blurs-each-document-and-image-region
 #[test]
 fn a_dialog_blurs_each_document_and_image_region() {
     let documents = std::cell::RefCell::new(Vec::new());
     let images = std::cell::RefCell::new(Vec::new());
     super::set_regions_background(
-        vec![1, 2],
-        vec![3],
-        |handle| {
-            documents.borrow_mut().push(handle);
+        regions_of(&[(1, "tab-1"), (2, "tab-2")]),
+        regions_of(&[(3, "tab-1")]),
+        None,
+        true,
+        |handle, enabled| {
+            documents.borrow_mut().push((handle, enabled));
             Ok(())
         },
-        |handle| {
-            images.borrow_mut().push(handle);
+        |handle, enabled| {
+            images.borrow_mut().push((handle, enabled));
             Ok(())
         },
     );
-    assert_eq!(*documents.borrow(), vec![1, 2]);
-    assert_eq!(*images.borrow(), vec![3]);
+    documents.borrow_mut().sort();
+    assert_eq!(*documents.borrow(), vec![(1, true), (2, true)]);
+    assert_eq!(*images.borrow(), vec![(3, true)]);
+}
+
+// The page and the regions of a dialog surface are the dialog, which no dialog blurs (docs/spec/plugins.md#dialogs).
+// contract: modal.dialog-surface-blurs-the-other-documents
+#[test]
+fn a_dialog_surface_blurs_the_regions_of_the_other_surfaces_only() {
+    let documents = std::cell::RefCell::new(Vec::new());
+    let images = std::cell::RefCell::new(Vec::new());
+    super::set_regions_background(
+        regions_of(&[(1, "tab-1"), (2, "dialog/probe/edit")]),
+        regions_of(&[(3, "dialog/probe/edit")]),
+        Some("dialog/probe/edit".to_string()),
+        true,
+        |handle, enabled| {
+            documents.borrow_mut().push((handle, enabled));
+            Ok(())
+        },
+        |handle, enabled| {
+            images.borrow_mut().push((handle, enabled));
+            Ok(())
+        },
+    );
+    documents.borrow_mut().sort();
+    assert_eq!(*documents.borrow(), vec![(1, true), (2, false)]);
+    assert_eq!(*images.borrow(), vec![(3, false)]);
 }

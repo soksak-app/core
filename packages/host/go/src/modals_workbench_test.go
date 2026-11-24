@@ -79,7 +79,7 @@ func TestAWorkbenchStartingEndsItsPredecessorsDialogBackground(t *testing.T) {
 		t.Fatal("successor image registration failed")
 	}
 	// This is the same registration-time policy call as attachImage, after Set.
-	runOnMainThread(func() { s.seatImageBackground(newImage) })
+	runOnMainThread(func() { s.seatImageBackground("tab-1", newImage) })
 	var blurred bool
 	runOnMainThread(func() { blurred = nativeImageBlurred(t, newImage) })
 	if blurred {
@@ -108,5 +108,39 @@ func TestEndingAWorkbenchDialogPreservesACurrentNativeDialogBackground(t *testin
 	}
 	if !probe.imageBlurred(t) {
 		t.Error("ending the workbench dialog unblurred the image under a current native dialog")
+	}
+}
+
+// A dialog surface that a placement shows is a dialog of the window: the host blurs every document and image region of the other
+// surfaces and none of the dialog surface, and a placement without the dialog surface ends the blur (docs/spec/plugins.md#dialogs).
+// contract: modal.dialog-surface-blurs-the-other-documents
+func TestAPlacedDialogSurfaceBlursTheOtherDocumentsButNotItsOwn(t *testing.T) {
+	probe := newRegionsProbe(t)
+	s := &Surfaces{invoke: func(work func()) { work() }, documents: NewDocuments(), images: NewImages()}
+	documentKey := DocumentKey{Surface: "tab-1", Name: "page"}
+	if err := s.documents.Reserve(documentKey); err != nil {
+		t.Fatal(err)
+	}
+	s.documents.Set(documentKey, probe.document)
+	imageKey := ImageKey{Surface: "dialog/probe/edit", Name: "viewer"}
+	if err := s.images.Reserve(imageKey, &ImageOwner{SidecarName: "viewer-sidecar", SidecarOwner: imageStatusTestOwner{}}); err != nil {
+		t.Fatal(err)
+	}
+	s.images.Set(imageKey, probe.image)
+	runOnMainThread(func() {
+		s.placedDialog([]Placement{{ID: "tab-1", Visible: true}, {ID: "dialog/probe/edit", Visible: true}})
+	})
+	if !s.dialog() || !probe.documentBlurred(t) || probe.imageBlurred(t) {
+		t.Fatalf("with the dialog surface shown the state is %v, the other document has the background %v and the region of the dialog %v",
+			s.dialog(), probe.documentBlurred(t), probe.imageBlurred(t))
+	}
+	if s.backgroundOf("dialog/probe/edit") || !s.backgroundOf("tab-1") {
+		t.Fatal("a region made for the dialog surface is blurred or a region made for another surface is not")
+	}
+	runOnMainThread(func() {
+		s.placedDialog([]Placement{{ID: "tab-1", Visible: true}, {ID: "dialog/probe/edit", Visible: false}})
+	})
+	if s.dialog() || probe.documentBlurred(t) {
+		t.Fatalf("with the dialog surface hidden the state is %v and the document has the background %v", s.dialog(), probe.documentBlurred(t))
 	}
 }

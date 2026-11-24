@@ -150,6 +150,7 @@ func Functions() abi.NativeFunctions {
 		MainSpSurfaceCreate:         func(a0 uintptr) unsafe.Pointer { return C.main_sp_surface_create(C.uintptr_t(a0)) },
 		MainSpSurfaceFocus:          func(a0 unsafe.Pointer) { C.main_sp_surface_focus(a0) },
 		MainSpSurfaceFocusForRegion: func(a0 unsafe.Pointer) { C.main_sp_surface_focus_for_region(a0) },
+		MainSpSurfaceMarkDialog:     func(a0 unsafe.Pointer) { C.main_sp_surface_mark_dialog(a0) },
 		MainSpSurfaceSetWindowOverlays: func(a0 unsafe.Pointer, a1 *float64, a2 uint64) {
 			C.main_sp_surface_set_window_overlays(a0, (*C.double)(unsafe.Pointer(a1)), C.size_t(a2))
 		},

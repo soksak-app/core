@@ -28,6 +28,7 @@ unsafe extern "C" {
     fn sp_window_composition(window: *mut c_void) -> *mut c_void;
     fn sp_surface_create(view: *mut c_void) -> *mut c_void;
     fn sp_surface_close(surface: *mut c_void);
+    fn sp_surface_mark_dialog(surface: *mut c_void);
     fn webviewSetFrame(view: *mut c_void, x: f64, y: f64, width: f64, height: f64);
     fn sp_surface_set_window_overlays(main: *mut c_void, rects: *const f64, count: usize);
 }
@@ -44,6 +45,11 @@ pub fn create_surface(window: Handle) -> Result<Handle, String> {
     } else {
         Ok(surface)
     }
+}
+
+/// Marks the surface host of a dialog surface, so the surface hosts created after it stand below it.
+pub fn mark_dialog_surface(surface: Handle) {
+    unsafe { sp_surface_mark_dialog(surface as *mut c_void) }
 }
 
 pub fn close_surface(surface: Handle) {

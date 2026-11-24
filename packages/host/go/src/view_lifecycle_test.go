@@ -352,7 +352,7 @@ func TestViewStopSendsTheStopEventOnceToTheSurface(t *testing.T) {
 	if !ok {
 		t.Fatalf("view-stopped payload is %T, want a map", stops[0].data)
 	}
-	if payload["surface"] != "probe-surface" || payload["plugin"] != "probe" || payload["reason"] != viewStopReason() {
+	if payload["surface"] != "probe-surface" || payload["plugin"] != "probe" || payload["reason"] != viewStopReason("probe-surface") {
 		t.Fatalf("view-stopped payload %v, want surface probe-surface, plugin probe and the stop reason", payload)
 	}
 }
@@ -361,7 +361,16 @@ func TestViewStopSendsTheStopEventOnceToTheSurface(t *testing.T) {
 // The stop reason names the restart window in seconds, the same text as the Tauri host.
 func TestViewStopReasonNamesTheWindowInSeconds(t *testing.T) {
 	const want = "the view failed 4 times within 300 seconds and is created again when its tab is reopened"
-	if got := viewStopReason(); got != want {
+	if got := viewStopReason("probe-surface"); got != want {
+		t.Fatalf("stop reason %q, want %q", got, want)
+	}
+}
+
+// contract: view.restart.limit-shows-dialog-error
+// The stop reason of a dialog surface states that the view is created again when its dialog is opened again (docs/spec/plugins.md#dialogs).
+func TestViewStopReasonOfADialogNamesTheDialog(t *testing.T) {
+	const want = "the view failed 4 times within 300 seconds and is created again when its dialog is opened again"
+	if got := viewStopReason("dialog/probe/edit"); got != want {
 		t.Fatalf("stop reason %q, want %q", got, want)
 	}
 }

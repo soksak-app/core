@@ -449,6 +449,10 @@ func (implementation) CloseSurface(unsafe.Pointer) {
 	unreachable("surface host removal")
 }
 
+func (implementation) MarkDialogSurface(unsafe.Pointer) error {
+	return unsupported("dialog surface host")
+}
+
 func (implementation) SetSurfaceBounds(unsafe.Pointer, float64, float64, float64, float64) {
 	unreachable("surface host placement")
 }

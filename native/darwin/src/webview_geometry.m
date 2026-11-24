@@ -102,6 +102,8 @@ static void recordKeys(const char *name, uint8_t level, NSUInteger count, const 
 @property(nonatomic, retain) NSMutableArray<NSEvent *> *keptKeys;
 // The keys over the limit since the last delivery.
 @property(nonatomic) NSUInteger droppedKeys;
+// The host holds the surface of a dialog: the surface hosts made after it stand below it (sp_surface_mark_dialog).
+@property(nonatomic) BOOL dialogHost;
 @end
 
 // A surface places native regions below its view WebView. CSS transparency does not turn off the native opaque
@@ -574,8 +576,21 @@ void *sp_surface_create(void *handle) {
     surfaceLayoutObserveWorkbench(^bool(void *window, double x, double y) { return pressOnWorkbench(window, x, y); });
     SPSurfaceHost *surface = [[SPSurfaceHost alloc] initWithFrame:NSZeroRect];
     surface.hidden = YES;
-    [surfaceContainer(view) addSubview:surface];
+    NSView *container = surfaceContainer(view);
+    // addSubview: puts each new host on top, so a host made while a dialog host is in the container goes below the dialog host
+    // (docs/spec/native-surfaces.md#surface-host-container).
+    NSView *dialog = nil;
+    for (NSView *host in container.subviews) {
+        if ([host isKindOfClass:SPSurfaceHost.class] && ((SPSurfaceHost *)host).dialogHost) dialog = host;
+    }
+    if (dialog) [container addSubview:surface positioned:NSWindowBelow relativeTo:dialog];
+    else [container addSubview:surface];
     return surface;
+}
+
+void sp_surface_mark_dialog(void *handle) {
+    NSCAssert(NSThread.isMainThread, @"surface hosts belong to the main thread");
+    ((SPSurfaceHost *)handle).dialogHost = YES;
 }
 
 void sp_view_give_up_keyboard(void *handle) {

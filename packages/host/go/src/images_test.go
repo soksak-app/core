@@ -728,7 +728,7 @@ func TestAnImageRegionMadeUnderADialogStartsBlurred(t *testing.T) {
 	for _, dialog := range []bool{true, false} {
 		runOnMainThread(func() {
 			probe.s.setWorkbenchDialog(dialog)
-			probe.s.seatImageBackground(probe.image)
+			probe.s.seatImageBackground("probe-surface", probe.image)
 		})
 		if blurred := probe.imageBlurred(t); blurred != dialog {
 			t.Fatalf("a region made with the dialog %t has the background %t", dialog, blurred)

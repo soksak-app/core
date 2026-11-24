@@ -1034,8 +1034,23 @@ fn view_stop_event_is_sent_once_at_the_fourth_failure() {
     );
     assert_eq!(
         event["reason"],
-        view_stop_reason(),
+        view_stop_reason("probe-surface"),
         "the stop event carries the stop reason"
+    );
+}
+
+// contract: view.restart.limit-shows-dialog-error
+// The stop reason of a dialog surface states that the view is created again when its dialog is opened again (docs/spec/plugins.md#dialogs).
+#[test]
+fn view_stop_reason_of_a_dialog_names_the_dialog() {
+    assert_eq!(
+        view_stop_reason("dialog/probe/edit"),
+        "the view failed 4 times within 300 seconds and is created again when its dialog is opened again"
+    );
+    assert_eq!(
+        view_stopped_event("dialog/probe/edit", "probe")["reason"],
+        "the view failed 4 times within 300 seconds and is created again when its dialog is opened again",
+        "the stop event of a dialog carries the dialog reason"
     );
 }
 
@@ -1043,7 +1058,7 @@ fn view_stop_event_is_sent_once_at_the_fourth_failure() {
 #[test]
 fn view_stop_event_names_the_surface_plugin_and_reason() {
     assert_eq!(
-        view_stop_reason(),
+        view_stop_reason("probe-surface"),
         "the view failed 4 times within 300 seconds and is created again when its tab is reopened"
     );
     let event = view_stopped_event("probe-surface", "probe");
@@ -1054,7 +1069,7 @@ fn view_stop_event_names_the_surface_plugin_and_reason() {
     assert_eq!(event["plugin"], "probe", "the event names the plugin");
     assert_eq!(
         event["reason"],
-        view_stop_reason(),
+        view_stop_reason("probe-surface"),
         "the event carries the stop reason"
     );
 }

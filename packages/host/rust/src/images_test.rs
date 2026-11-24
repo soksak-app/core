@@ -1259,7 +1259,7 @@ fn window_region_reports_its_native_blur() {
 fn an_image_region_made_under_a_dialog_starts_blurred() {
     let seated = |overlay: &crate::modals::Overlay| {
         let background = std::cell::Cell::new(None);
-        super::seat_background(overlay, 7, |handle, enabled| {
+        super::seat_background(overlay, "tab-1", 7, |handle, enabled| {
             assert_eq!(handle, 7);
             background.set(Some(enabled));
             Ok(())

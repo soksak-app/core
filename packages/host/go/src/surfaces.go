@@ -662,7 +662,9 @@ type Surfaces struct {
 	lastPageCallEnd string
 	// workbenchDialog is true while a dialog that the workbench draws itself is open (SetDialogBackground).
 	workbenchDialog bool
-	shapes          map[string]*nativeShape
+	// dialogSurface is the id of the dialog surface that the last placement shows, or empty (placedDialog).
+	dialogSurface string
+	shapes        map[string]*nativeShape
 	// documents are the document regions that the surface pages attached.
 	documents *Documents
 	// sourceOrigins assigns generations to view incarnations and exposes their current window snapshot.
@@ -2080,7 +2082,16 @@ func (s *Surfaces) apply(win Frontend, req SyncRequest) ([]string, []Placement, 
 		if made {
 			var err error
 			view, err = s.createRegisteredSurface(mainThreadStep, surface.ID, func() (unsafe.Pointer, error) {
-				return system.CreateSurface(win.NativeWindow())
+				handle, err := system.CreateSurface(win.NativeWindow())
+				// The surface host of a dialog surface stays above every surface host made after it (docs/spec/plugins.md#dialogs).
+				if err != nil || !strings.HasPrefix(surface.ID, "dialog/") {
+					return handle, err
+				}
+				if err := system.MarkDialogSurface(handle); err != nil {
+					system.CloseSurface(handle)
+					return nil, err
+				}
+				return handle, nil
 			})
 			if err != nil {
 				rollback()
@@ -2161,6 +2172,7 @@ func (s *Surfaces) apply(win Frontend, req SyncRequest) ([]string, []Placement, 
 	for _, surface := range opened {
 		s.sidecars.SurfaceOpened(surface.Plugin, surface.ID)
 	}
+	s.placedDialog(placed)
 	return gone, placed, nil
 }
 

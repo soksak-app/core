@@ -5,6 +5,10 @@
 // the NSView that holds that container and lies in a window. The function makes the container when view holds none. On the
 // hosts with a main web view, view is the window composition that sp_window_set_main_webview returns.
 void *sp_surface_create(void *view);
+// Marks the surface host as the dialog host of its container (docs/spec/native-surfaces.md#surface-host-container): a surface host that
+// sp_surface_create makes in that container while the dialog host is in it is inserted below the dialog host, so the dialog stays above
+// every other surface host. The host marks the surface host of a dialog surface when it creates it. Call it on the main thread.
+void sp_surface_mark_dialog(void *surface);
 // Whether view is a surface host that sp_surface_create made. Call it on the main thread.
 bool sp_surface_is_host(void *view);
 // Wraps the main web view in the window composition, which holds the window overlays, the file drop view and, above the web

@@ -2,6 +2,7 @@ package host
 
 import (
 	"fmt"
+	"strings"
 	"time"
 	"unsafe"
 )
@@ -29,10 +30,15 @@ type viewSpec struct {
 	committedURL string
 }
 
-// viewStopReason is the reason of a view that stopped its restarts: the log line and the view-stopped event carry it. The window is
-// written in whole seconds, as the Tauri host writes it.
-func viewStopReason() string {
-	return fmt.Sprintf("the view failed %d times within %d seconds and is created again when its tab is reopened", viewRestartLimit, int(viewRestartWindow/time.Second))
+// viewStopReason is the reason of the view of surface that stopped its restarts: the log line and the view-stopped event carry it. The
+// window is written in whole seconds, as the Tauri host writes it. The view of a dialog surface, whose id starts with dialog/, is created
+// again when its dialog is opened again, and any other view when its tab or its section is shown again (docs/spec/plugins.md#dialogs).
+func viewStopReason(surface string) string {
+	again := "its tab is reopened"
+	if strings.HasPrefix(surface, "dialog/") {
+		again = "its dialog is opened again"
+	}
+	return fmt.Sprintf("the view failed %d times within %d seconds and is created again when %s", viewRestartLimit, int(viewRestartWindow/time.Second), again)
 }
 
 // viewLifecycle counts the failures of each view surface and keeps the record that creates its view again. The failures are instants

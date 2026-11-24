@@ -359,6 +359,26 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1129-3",
+    implementation: [
+      { file: "packages/host/go/src/modals.go", symbol: "func (s *Surfaces) placedDialog(placed []Placement) {" },
+      { file: "packages/host/rust/src/modals.rs", symbol: "pub fn placed_dialog(&self, placed: &[crate::surfaces::Placement]) -> bool {" },
+      { file: "native/darwin/src/webview_geometry.m", symbol: "void sp_surface_mark_dialog(void *handle) {" },
+      { file: "packages/host/go/src/view_lifecycle.go", symbol: "func viewStopReason(surface string) string {" },
+      { file: "packages/host/rust/src/view_lifecycle.rs", symbol: "pub fn view_stop_reason(surface: &str) -> String {" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/modals_workbench_test.go", id: "TestAPlacedDialogSurfaceBlursTheOtherDocumentsButNotItsOwn" },
+      { file: "packages/host/rust/src/modals.rs", id: "a_placed_dialog_surface_is_a_dialog_that_blurs_the_other_surfaces" },
+      { file: "packages/host/rust/src/documents_test.rs", id: "a_dialog_surface_blurs_the_regions_of_the_other_surfaces_only" },
+      { file: "native/darwin/tests/surface_container_test.m", id: "checkDialogHostOrder" },
+      { file: "packages/host/go/src/view_lifecycle_test.go", id: "TestViewStopReasonOfADialogNamesTheDialog" },
+      { file: "packages/host/rust/tests/documents_test.rs", id: "view_stop_reason_of_a_dialog_names_the_dialog" },
+    ],
+    expected: "Both hosts blur every region but those of a shown dialog surface, the native container keeps the dialog host above later surface hosts, and the restart limit of a dialog view names the dialog.",
+    levels: ["unit"],
+  },
+  {
     id: "F1129-2",
     implementation: [
       { file: "packages/workbench/dialogs.js", symbol: "export function openDialog({ plugin, name, params, opener, signal, modal }) {" },

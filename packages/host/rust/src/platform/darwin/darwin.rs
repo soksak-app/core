@@ -303,6 +303,10 @@ impl Platform for Darwin {
     fn create_surface(&self, window: Handle) -> Result<Handle, String> {
         webview::create_surface(window)
     }
+    fn mark_dialog_surface(&self, surface: Handle) -> Result<(), String> {
+        webview::mark_dialog_surface(surface);
+        Ok(())
+    }
     fn close_surface(&self, surface: Handle) -> Result<(), String> {
         webview::close_surface(surface);
         Ok(())

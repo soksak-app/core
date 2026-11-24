@@ -140,6 +140,11 @@ func (implementation) CreateSurface(window platform.Window) (unsafe.Pointer, err
 	return handle, nil
 }
 
+func (implementation) MarkDialogSurface(surface unsafe.Pointer) error {
+	native.MainSpSurfaceMarkDialog(surface)
+	return nil
+}
+
 func (implementation) CloseSurface(surface unsafe.Pointer) { native.MainSpSurfaceClose(surface) }
 func (implementation) SetSurfaceBounds(surface unsafe.Pointer, x, y, width, height float64) {
 	native.MainWebviewSetFrame(surface, float64(x), float64(y), float64(width), float64(height))

@@ -238,6 +238,19 @@ func (d *Documents) Names() map[uint64]DocumentKey {
 	return names
 }
 
+// Entries are the created documents by key.
+func (d *Documents) Entries() map[DocumentKey]unsafe.Pointer {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	entries := map[DocumentKey]unsafe.Pointer{}
+	for key, handle := range d.handles {
+		if handle != nil {
+			entries[key] = handle
+		}
+	}
+	return entries
+}
+
 // All are the created documents.
 func (d *Documents) All() []unsafe.Pointer {
 	d.mu.Lock()
@@ -355,7 +368,7 @@ func (s *Surfaces) createDocument(key DocumentKey, restore string, effects []Str
 		name:    key.Name,
 		restore: restore,
 		dark:    dark,
-		dialog:  s.dialog(),
+		dialog:  s.backgroundOf(key.Surface),
 		message: func(value string) { s.documentMessage(key, value) },
 		stream:  func(value string) { s.documentStream(key, value) },
 		effects: effects,
@@ -1071,18 +1084,22 @@ func (s *Surfaces) surfaceCommitted(viewID uint64, url string) {
 
 // setDocumentsBackground blurs the document and image regions while a dialog is open. Call it on the UI thread.
 func (s *Surfaces) setDocumentsBackground(enabled bool) {
-	for _, handle := range s.documents.All() {
-		system.SetDocumentBackground(handle, enabled)
+	s.mu.Lock()
+	dialog := s.dialogSurface
+	s.mu.Unlock()
+	// The page and the regions of the dialog surface are the dialog, which no dialog blurs.
+	for key, handle := range s.documents.Entries() {
+		system.SetDocumentBackground(handle, enabled && key.Surface != dialog)
 	}
-	for _, handle := range s.images.All() {
-		system.SetImageBackground(handle, enabled)
+	for key, handle := range s.images.Entries() {
+		system.SetImageBackground(handle, enabled && key.Surface != dialog)
 	}
 }
 
 // seatImageBackground blurs a registered image region when a dialog is open. It reads the dialog on the UI thread after
 // the region is registered, so a later change of the dialog, whose task runs on the same thread, finds the region.
-func (s *Surfaces) seatImageBackground(handle unsafe.Pointer) {
-	system.SetImageBackground(handle, s.dialog())
+func (s *Surfaces) seatImageBackground(surface string, handle unsafe.Pointer) {
+	system.SetImageBackground(handle, s.backgroundOf(surface))
 }
 
 // The event goes to the app DOM, and the receiver of the module checks the surface owner of the payload.
@@ -1196,7 +1213,7 @@ func (s *Surfaces) attachImageOnMain(key ImageKey, req ImageRequest) error {
 		return fmt.Errorf("image %q lost its name while it was created", key.Name)
 	}
 	// The dialog is read in the step that registers the region, so a later change of the dialog, which runs on the same thread, finds the region.
-	s.seatImageBackground(handle)
+	s.seatImageBackground(key.Surface, handle)
 	return nil
 }
 
@@ -1971,7 +1988,7 @@ func (s *Surfaces) endViewWith(surface string, handle unsafe.Pointer, generation
 		return spec, true
 	}
 	if !lifecycle.fail(surface, now) {
-		reason := viewStopReason()
+		reason := viewStopReason(surface)
 		LogError("view channel", fmt.Errorf("%s: %s", surface, reason))
 		if spec == nil {
 			LogError("view channel", fmt.Errorf("%s: the view record is missing, so the view-stopped event is not sent", surface))

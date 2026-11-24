@@ -2137,7 +2137,10 @@ fn view_failed(
             }
             let record = data.documents.lifecycle().spec(surface);
             if !data.documents.lifecycle().fail(surface, Instant::now()) {
-                log_error("view channel", format!("{surface}: {}", view_stop_reason()));
+                log_error(
+                    "view channel",
+                    format!("{surface}: {}", view_stop_reason(surface)),
+                );
                 let Some(spec) = record else {
                     return log_error(
                         "view channel",
@@ -2493,7 +2496,7 @@ fn attach_on_main(
         window,
         key,
         platform,
-        data.overlay.dialog(),
+        data.overlay.background_of(&key.0),
         restore,
         effects,
     ) {
@@ -3054,16 +3057,20 @@ pub(crate) fn close_surface(window: &Window, surface: &str) {
 
 /// Sets the background of each document and image region. The failure of one does not stop the rest.
 fn set_regions_background(
-    documents: Vec<Handle>,
-    images: Vec<Handle>,
-    document: impl Fn(Handle) -> Result<(), String>,
-    image: impl Fn(Handle) -> Result<(), String>,
+    documents: HashMap<Handle, Key>,
+    images: HashMap<Handle, crate::images::Key>,
+    dialog: Option<String>,
+    enabled: bool,
+    document: impl Fn(Handle, bool) -> Result<(), String>,
+    image: impl Fn(Handle, bool) -> Result<(), String>,
 ) {
-    for handle in documents {
-        log_failure("document background", document(handle));
+    // The page and the regions of the dialog surface are the dialog, which no dialog blurs.
+    let blurred = |surface: &str| enabled && dialog.as_deref() != Some(surface);
+    for (handle, key) in documents {
+        log_failure("document background", document(handle, blurred(&key.0)));
     }
-    for handle in images {
-        log_failure("image background", image(handle));
+    for (handle, key) in images {
+        log_failure("image background", image(handle, blurred(&key.0)));
     }
 }
 
@@ -3083,10 +3090,12 @@ pub(crate) fn set_background(window: &Window, enabled: bool) {
         window
             .post(move || {
                 set_regions_background(
-                    data.documents.all(),
-                    data.images.all(),
-                    |handle| platform.set_document_background(handle, enabled),
-                    |handle| platform.set_image_background(handle, enabled),
+                    data.documents.names(),
+                    data.images.names(),
+                    data.overlay.dialog_surface(),
+                    enabled,
+                    |handle, enabled| platform.set_document_background(handle, enabled),
+                    |handle, enabled| platform.set_image_background(handle, enabled),
                 );
             })
             .map_err(|e| e.to_string()),

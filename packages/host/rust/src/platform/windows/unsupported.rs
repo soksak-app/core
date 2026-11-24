@@ -141,6 +141,9 @@ pub fn render_occluded(_view: &PlatformWebview, _render: bool) -> Result<(), Str
 pub fn create_surface(_window: Handle) -> Result<Handle, String> {
     missing("surface host")
 }
+pub fn mark_dialog_surface(_surface: Handle) -> Result<(), String> {
+    missing("dialog surface host")
+}
 pub fn close_surface(_surface: Handle) -> Result<(), String> {
     missing("surface host removal")
 }

@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strings"
 )
 
 // OverlayRequest holds the values needed to render a [data-native-modal] element in another view.
@@ -544,10 +545,41 @@ func (s *Surfaces) rendered(id string) {
 	s.windowChanged()
 }
 
+// placedDialog records the dialog surface that the placement shows, whose id starts with dialog/, and applies the blur when it changes.
+// The dialog state of the host derives it from the placed surfaces, because the workbench reports no other state of a dialog surface
+// (docs/spec/plugins.md#dialogs). Call it on the UI thread.
+func (s *Surfaces) placedDialog(placed []Placement) {
+	dialog := ""
+	for _, placement := range placed {
+		if placement.Visible && strings.HasPrefix(placement.ID, "dialog/") {
+			dialog = placement.ID
+		}
+	}
+	s.mu.Lock()
+	changed := s.dialogSurface != dialog
+	s.dialogSurface = dialog
+	s.mu.Unlock()
+	if changed {
+		s.setBackground()
+	}
+}
+
+// backgroundOf tells whether the regions of surface are blurred: while a dialog is open, every region but those of the dialog surface.
+func (s *Surfaces) backgroundOf(surface string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.dialogLocked() && surface != s.dialogSurface
+}
+
 func (s *Surfaces) dialog() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.workbenchDialog || s.modal != nil && s.modal.content.Mode == "dialog"
+	return s.dialogLocked()
+}
+
+// dialogLocked is the dialog state with s.mu held: a dialog of the workbench, a native modal of the mode dialog, or a shown dialog surface.
+func (s *Surfaces) dialogLocked() bool {
+	return s.workbenchDialog || s.modal != nil && s.modal.content.Mode == "dialog" || s.dialogSurface != ""
 }
 
 // DialogBackground is the argument of SetDialogBackground.

@@ -179,10 +179,17 @@ pub fn view_killed_event(
     fields
 }
 
-/// The reason of a view that stopped its restarts. The log line and the view-stopped event carry it.
-pub fn view_stop_reason() -> String {
+/// The reason of the view of surface that stopped its restarts. The log line and the view-stopped event carry it. The view of a dialog
+/// surface, whose id starts with dialog/, is created again when its dialog is opened again, and any other view when its tab or its
+/// section is shown again (docs/spec/plugins.md#dialogs).
+pub fn view_stop_reason(surface: &str) -> String {
+    let again = if surface.starts_with("dialog/") {
+        "its dialog is opened again"
+    } else {
+        "its tab is reopened"
+    };
     format!(
-        "the view failed {VIEW_RESTART_LIMIT} times within {} seconds and is created again when its tab is reopened",
+        "the view failed {VIEW_RESTART_LIMIT} times within {} seconds and is created again when {again}",
         VIEW_RESTART_WINDOW.as_secs()
     )
 }
@@ -190,7 +197,7 @@ pub fn view_stop_reason() -> String {
 /// The payload of the view-stopped event of the view of surface, which has the plugin id and the reason. The main page answers it by
 /// showing the reason on the card of the surface (docs/spec/native-surfaces.md#view-surfaces).
 pub fn view_stopped_event(surface: &str, plugin: &str) -> serde_json::Value {
-    serde_json::json!({"surface": surface, "plugin": plugin, "reason": view_stop_reason()})
+    serde_json::json!({"surface": surface, "plugin": plugin, "reason": view_stop_reason(surface)})
 }
 
 /// The payload of the view-stopped event of the view of surface when its page failed with reason (a view.error message). The main page

@@ -86,6 +86,8 @@ pub(crate) struct Overlay {
     /// The instance of the open modal whose WebContent process ended: its first frame cannot come, so its paint wait ends
     /// with a failure. It is read and written while `open` is held.
     process_ended: Mutex<Option<u64>>,
+    /// The dialog surface that the last placement shows (placed_dialog).
+    dialog_surface: Mutex<Option<String>>,
 }
 
 impl Overlay {
@@ -177,12 +179,47 @@ impl Overlay {
             .map(|modal| (modal.id.clone(), modal.content.mode.clone(), modal.visible))
     }
 
-    /// Returns whether the open modal is in dialog mode.
+    /// The dialog surface that the last placement shows, whose id starts with `dialog/`, or `None`.
+    pub fn dialog_surface(&self) -> Option<String> {
+        self.dialog_surface
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the dialog surface, which is only read; the
+            // panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
+    /// Records the dialog surface that the placement shows and returns whether it changed. The dialog state of the host
+    /// derives it from the placed surfaces, because the workbench reports no other state of a dialog surface
+    /// (docs/spec/plugins.md#dialogs).
+    pub fn placed_dialog(&self, placed: &[crate::surfaces::Placement]) -> bool {
+        let shown = placed
+            .iter()
+            .rfind(|placement| placement.visible && placement.id.starts_with("dialog/"))
+            .map(|placement| placement.id.clone());
+        let mut held = self
+            .dialog_surface
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the dialog surface, which this call replaces;
+            // the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner);
+        let changed = *held != shown;
+        *held = shown;
+        changed
+    }
+
+    /// Returns whether the regions of surface are blurred: while a dialog is open, every region but those of the dialog
+    /// surface.
+    pub fn background_of(&self, surface: &str) -> bool {
+        self.dialog() && self.dialog_surface().as_deref() != Some(surface)
+    }
+
+    /// Returns whether a dialog is open: a modal in dialog mode or a shown dialog surface.
     pub fn dialog(&self) -> bool {
         // default: a lock that a panicking thread poisoned still holds the modal record, which is only read; the panic
         // hook records the panic.
         let open = self.open.lock().unwrap_or_else(PoisonError::into_inner);
-        open.as_ref().is_some_and(|m| m.content.mode == "dialog")
+        open.as_ref().is_some_and(|m| m.content.mode == "dialog") || self.dialog_surface().is_some()
     }
 
     /// Removes the modal record and the modal webview.
@@ -201,7 +238,8 @@ impl Overlay {
             .unwrap_or_else(PoisonError::into_inner)
             .take();
         if let Some(view) = view {
-            set_background(&view.window(), false)?;
+            // Ending the modal keeps the blur of a dialog that another owner holds.
+            set_background(&view.window(), self.dialog())?;
             close_view(
                 || end_input(&view),
                 || view.close().map_err(|e| e.to_string()),
@@ -909,6 +947,55 @@ mod tests {
     use super::{Modal, Overlay, OverlayContent};
     use crate::event_record::buffered_fields;
     use std::sync::PoisonError;
+
+    fn placement(id: &str, visible: bool) -> crate::surfaces::Placement {
+        crate::surfaces::Placement {
+            id: id.to_string(),
+            x: 0.0,
+            y: 0.0,
+            w: 10.0,
+            h: 10.0,
+            visible,
+            scale: None,
+        }
+    }
+
+    // A dialog surface that a placement shows is a dialog of the window, which blurs every region but its own, and a
+    // placement without it ends the dialog (docs/spec/plugins.md#dialogs).
+    // contract: modal.dialog-surface-blurs-the-other-documents
+    #[test]
+    fn a_placed_dialog_surface_is_a_dialog_that_blurs_the_other_surfaces() {
+        let overlay = Overlay::default();
+        assert!(!overlay.dialog(), "no dialog before a placement");
+        assert!(
+            overlay.placed_dialog(&[
+                placement("tab-1", true),
+                placement("dialog/probe/edit", true)
+            ]),
+            "the first placement of the dialog changes the state"
+        );
+        assert!(overlay.dialog(), "the shown dialog surface is a dialog");
+        assert!(
+            overlay.background_of("tab-1"),
+            "a region of another surface is blurred"
+        );
+        assert!(
+            !overlay.background_of("dialog/probe/edit"),
+            "a region of the dialog is not blurred"
+        );
+        assert!(
+            !overlay.placed_dialog(&[placement("dialog/probe/edit", true)]),
+            "a placement of the same dialog changes nothing"
+        );
+        assert!(
+            overlay.placed_dialog(&[placement("dialog/probe/edit", false)]),
+            "a hidden dialog surface ends the dialog"
+        );
+        assert!(
+            !overlay.dialog() && !overlay.background_of("tab-1"),
+            "no dialog after it"
+        );
+    }
 
     // contract: modal.state.poisoned-lock-is-recovered, host.locks.poisoned-state-is-recovered
     #[test]

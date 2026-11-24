@@ -524,6 +524,9 @@ type Platform interface {
 	// CreateSurface creates a logical SurfaceHost in the view that holds the surface hosts of window: below the main DOM web view, or
 	// in the native view of a window without one.
 	CreateSurface(window Window) (unsafe.Pointer, error)
+	// MarkDialogSurface marks the surface host of a dialog surface, so the surface hosts created after it stand below it
+	// (docs/spec/native-surfaces.md#surface-host-container). Call it on the main thread right after CreateSurface.
+	MarkDialogSurface(surface unsafe.Pointer) error
 	// RetainView keeps a view alive through its close until ReleaseView, and ReleaseView ends that. Call them on the main thread.
 	RetainView(view unsafe.Pointer)
 	ReleaseView(view unsafe.Pointer)

@@ -1712,7 +1712,16 @@ fn apply_surfaces(
             opened.push((s.plugin.clone(), s.id.clone()));
             let handle = create_in_open_window(&window_data(window), || {
                 create_registered_surface(&context.views.0, surface_hosts, &s.id, || {
-                    platform.create_surface(native_owner(window)?)
+                    let handle = platform.create_surface(native_owner(window)?)?;
+                    // The surface host of a dialog surface stays above every surface host made after it
+                    // (docs/spec/plugins.md#dialogs).
+                    if s.id.starts_with("dialog/")
+                        && let Err(error) = platform.mark_dialog_surface(handle)
+                    {
+                        log_failure("dialog surface host", platform.close_surface(handle));
+                        return Err(error);
+                    }
+                    Ok(handle)
                 })
             })?;
             crate::performance::surface("created", &s.id, None);
@@ -2029,6 +2038,13 @@ fn apply_layout(turn: &LayoutTurn, request: &ResolvedSyncRequest, allowed: bool)
             },
             |change: &TitlebarChange| {
                 let placements = apply_surfaces(turn, request, &mut opened, &mut removed)?;
+                // A dialog surface that the placement shows or hides changes the blur of the window.
+                if turn.context.overlay.placed_dialog(&placements) {
+                    log_failure(
+                        "dialog background",
+                        crate::modals::set_background(window, turn.context.overlay.dialog()),
+                    );
+                }
                 Ok(PreparedSurfaces {
                     ticket,
                     placements,

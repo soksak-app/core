@@ -1078,6 +1078,19 @@ func (i *Images) Names() map[uint64]ImageKey {
 	return names
 }
 
+// Entries are the created image regions by key.
+func (i *Images) Entries() map[ImageKey]unsafe.Pointer {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	entries := map[ImageKey]unsafe.Pointer{}
+	for key, handle := range i.handles {
+		if handle != nil {
+			entries[key] = handle
+		}
+	}
+	return entries
+}
+
 // All are the created image regions.
 func (i *Images) All() []unsafe.Pointer {
 	i.mu.Lock()
