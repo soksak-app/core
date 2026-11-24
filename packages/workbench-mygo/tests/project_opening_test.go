@@ -3,6 +3,7 @@ package workbench_test
 import (
 	"encoding/json"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -241,5 +242,28 @@ func TestALibraryAddressOfAProjectThatNoWindowHoldsHasNoWayBack(t *testing.T) {
 	g := newShell(t, stored)
 	if err := g.finish("core.library.return", nil); err == nil || err.Error() != "there is no workspace to return to" {
 		t.Fatalf("the return answered %v", err)
+	}
+}
+
+// A content card of the grid that declares no tab starts as an empty card in a new space (docs/spec/plugins.md#environmentjson,
+// F1148-2).
+func TestANewSpaceStartsWithTheEmptyCardOfTheGrid(t *testing.T) {
+	env := string(environment(t))
+	declared := `"tabs":[{"plugin":"boxprobe","title":"www 문서"}]`
+	compact, err := json.Marshal(json.RawMessage(env))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(compact), declared) {
+		t.Fatalf("the test environment declares no tab of boxprobe: %s", compact)
+	}
+	f := newShell(t, &storedHost{common: map[string]any{"projectOpening": "tabs"}, environment: []byte(strings.Replace(string(compact), declared, `"tabs":[]`, 1))})
+	f.openFolder("/work/alpha")
+	stored, err := json.Marshal(f.host.projects)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `"card":"boxprobe","data":{"activeId":null,"tabs":[]}`; !strings.Contains(string(stored), want) {
+		t.Fatalf("the new space holds no empty card boxprobe: %s", stored)
 	}
 }

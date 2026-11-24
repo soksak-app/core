@@ -1169,9 +1169,11 @@ export function validateEnvironment(environment) {
     if (card[size] !== undefined && !(Number.isFinite(card[size]) && card[size] > 0)) {
       throw new Error(`environment.json: card ${card.card} ${size} must be a finite positive number`);
     }
+    // A content card declares its tabs, an empty list for a card that a new space starts empty (docs/spec/plugins.md#environmentjson).
+    if (!side && card.tabs === undefined) throw new Error(`environment.json: card ${card.card} is a content card and declares tabs`);
     if (card.tabs !== undefined) {
-      if (!Array.isArray(card.tabs) || card.tabs.length === 0) {
-        throw new Error(`environment.json: card ${card.card} tabs must be a non-empty array`);
+      if (!Array.isArray(card.tabs)) {
+        throw new Error(`environment.json: card ${card.card} tabs must be an array`);
       }
       for (const tab of card.tabs) {
         if (!isObject(tab) || !isText(tab.plugin) || !isText(tab.title)) {
@@ -1182,7 +1184,7 @@ export function validateEnvironment(environment) {
     }
   }
   if (!gridCards(grid).some((card) => card.card === workspace.focus && card.tabs)) {
-    throw new Error("environment.json: workspace.focus must name a card with tabs");
+    throw new Error("environment.json: workspace.focus must name a content card");
   }
   if (environment.sidebars !== undefined) validateSidebars(environment.sidebars, "environment.json");
   return environment;

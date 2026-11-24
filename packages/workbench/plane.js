@@ -262,6 +262,7 @@ function initial(random) {
   const made = (node) => {
     if (node.cut) return { cut: node.cut, kids: node.kids.map((kid) => ({ share: kid.share, node: made(kid.node) })) };
     const { tabs, ...card } = node;
+    // A window sidebar declares no tabs and has no data; a content card that declares no tab starts empty.
     if (!tabs) return { ...card };
     // A tab of a new space has no source tab, so it records null (docs/spec/projects.md#tab-origin).
     const opened = tabs.map((t) => {
@@ -269,7 +270,8 @@ function initial(random) {
       recordOrigin(one.id, null, "new space");
       return one;
     });
-    return { ...card, data: { tabs: opened, activeId: opened[0].id } };
+    // default: an empty card has no active tab (null).
+    return { ...card, data: { tabs: opened, activeId: opened[0]?.id ?? null } };
   };
   return { root: made(declared.root) };
 }

@@ -40,16 +40,31 @@ const requirePlugin = (plugin, what) => {
 /** The entries that a ready start tab of `plugin` has registered when the check names none. */
 const entriesOf = (plugin) => (plugin === START_PROBE ? START_PROBE_ENTRIES : []);
 
+// The reserved card ids of the window sidebars, which hold no tab (docs/spec/external-sidebars.md).
+const WINDOW_SIDES = new Set(["left", "right", "top", "bottom"]);
+
+/** The content cards of `grid` (core.grid) that hold no tab: the empty cards of the start layout. */
+export function emptyCards(grid) {
+  return (grid?.cards ?? []).filter((card) => !WINDOW_SIDES.has(card.id) && (card.tabs ?? []).length === 0).map((card) => card.id);
+}
+
 /**
- * Replaces every placeholder tab of the start layout by a tab of `plugin` in its card: the new tab is added and activated first,
- * so the card never loses its last tab, and the placeholder tab is closed. Returns the new tabs as `{card, tab}`.
+ * Gives the start layout a tab of `plugin` in each card: each placeholder tab is replaced by a tab of `plugin` in its card, which is
+ * added and activated first, so the card never loses its last tab, before the placeholder tab is closed, and each empty card
+ * (docs/spec/projects.md#persistence) gets a tab of `plugin`. Returns the new tabs as `{card, tab}`.
  */
 export async function replacePlaceholders(s, plugin = START_PROBE) {
   requirePlugin(plugin, "the start state names no plugin for the tabs that replace the placeholders");
   const added = [];
-  for (const { card, tab } of placeholderTabs(await s.get("core.grid"), await s.get("core.surfaces"))) {
+  // A card with a placeholder tab is no empty card, so the empty cards of the same read stay empty while the placeholders change.
+  const grid = await s.get("core.grid");
+  for (const { card, tab } of placeholderTabs(grid, await s.get("core.surfaces"))) {
     const { tab: opened } = await s.run("core.card.add-tab", { card, plugin });
     await s.run("core.tab.close", { tab });
+    added.push({ card, tab: opened });
+  }
+  for (const card of emptyCards(grid)) {
+    const { tab: opened } = await s.run("core.card.add-tab", { card, plugin });
     added.push({ card, tab: opened });
   }
   return added;

@@ -5,6 +5,7 @@
 
 ## 2026-11-24
 
+- F1148-2: A new space of each application starts with one empty card between the window sidebars; a content card of `workspace.grid` declares `tabs`, which may be empty, and the window check start adds the layout probe to an empty card.
 - F1148-1: A content card may hold no tabs: an empty card stores `activeId` `null`, both workbenches read it, the last tab that leaves a card that cannot close leaves it empty instead of opening another tab, and the JS plane draws an empty card with its head and an empty body.
 - F1149-1: The library address of a window is `?library=<id>`, so the library after a new start of the workbench, such as the apply of a plugin change, keeps 작업 화면으로 돌아가기 to the project that the window holds, in the JS workbench and in mygo.
 - F1153: The start values of every view carry `dataFolder`, the folder `plugin-data/<plugin id>` of the configuration directory, which the Go and Rust hosts create with mode 0700 before the view starts, so a plugin keeps values of the person that belong to no project.

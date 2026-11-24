@@ -9,7 +9,7 @@ import { startCasePlayer } from "@soksak/client/testing";
 
 import { Session } from "../app.mjs";
 
-import { addTabOfPlugin, cardSidebar, placeholderTabs, reading, replacePlaceholders, restoreRegistry, START_PROBE, START_PROBE_ENTRIES, startLayout, startTab,
+import { addTabOfPlugin, cardSidebar, emptyCards, placeholderTabs, reading, replacePlaceholders, restoreRegistry, START_PROBE, START_PROBE_ENTRIES, startLayout, startTab,
   useRegistry } from "../start.mjs";
 
 const PLUGIN = "startplugin";
@@ -48,6 +48,18 @@ function starterLayout() {
     ],
   };
 }
+
+test("the empty cards of a layout are its content cards without tabs, and no window sidebar is one (F1148-2)", () => {
+  const grid = { cards: [
+    { id: "left", fixed: true, tabs: [] },
+    { id: "main", tabs: [] },
+    { id: "card-2", fixed: true, tabs: [] },
+    { id: "card-3", tabs: [{ tab: "tab-a", plugin: "probe" }] },
+    { id: "right", fixed: true, tabs: [] },
+  ] };
+  assert.deepEqual(emptyCards(grid), ["main", "card-2"]);
+  assert.deepEqual(emptyCards(null), []);
+});
 
 test("the placeholder tabs of a layout are the tabs that core.surfaces reports with a placeholder, in card order", () => {
   const { grid, surfaces } = starterLayout();

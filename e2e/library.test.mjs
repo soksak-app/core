@@ -6,7 +6,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, failure, open, recordingSummary } from "@soksak/window-check/app.mjs";
-import { fresh } from "./fixture.mjs";
+import { fresh, START_PLUGIN } from "./fixture.mjs";
 import { processes } from "@soksak/window-check/platform/platform.mjs";
 import { previewGaps, startPreviewPanes } from "./library-preview.mjs";
 import { RASTER, rasterReady } from "./raster-probe.mjs";
@@ -131,7 +131,11 @@ for (const app of Object.values(APPS)) {
       },
     );
 
-    const grid = await s.until("core.grid", (value) => value?.cards?.length > 0, "the project grid did not render");
+    // The start layout holds one content card between the window sidebars (docs/spec/plugins.md#environmentjson); the check splits it
+    // into an upper and a lower card, so the preview shows rows and columns.
+    await s.run("core.layout.open", { card: "current", side: "bottom", plugin: START_PLUGIN });
+    const grid = await s.until("core.grid", (value) => value?.cards?.filter((card) => !card.fixed).length === 2,
+      "the project grid did not show the split start card");
     const geometry = grid.cards.map(({ id, x, y, w, h }) => ({ id, x, y, w, h }));
     const first = await s.get("core.project");
     await s.run("core.settings.set", { patch: { projectOpening: "windows" }, scope: "common" });

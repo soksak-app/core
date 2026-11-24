@@ -90,8 +90,12 @@ func (s *Shell) newLayout() (json.RawMessage, error) {
 					made = append(made, layout.Tab{ID: s.issueTab(made), Plugin: tab.Plugin, Title: tab.Title,
 						Rest: map[string]json.RawMessage{"origin": json.RawMessage(`{"directory":null}`), "role": json.RawMessage("null")}})
 				}
+				// A content card that declares no tab starts empty, with the active id null
+				// (docs/spec/plugins.md#environmentjson).
 				if len(made) > 0 {
 					out["data"] = tabData(made, made[0].ID)
+				} else {
+					out["data"] = map[string]any{"tabs": made, "activeId": nil}
 				}
 			}
 		}

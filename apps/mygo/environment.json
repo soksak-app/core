@@ -12,7 +12,7 @@
     }
   },
   "workspace": {
-    "focus": "terminal",
+    "focus": "main",
     "grid": {
       "root": {
         "cut": "x",
@@ -28,33 +28,8 @@
           {
             "share": 0.3333333333333333,
             "node": {
-              "cut": "y",
-              "kids": [
-                {
-                  "share": 0.52,
-                  "node": {
-                    "card": "terminal",
-                    "tabs": [
-                      {
-                        "plugin": "terminal",
-                        "title": "터미널"
-                      }
-                    ]
-                  }
-                },
-                {
-                  "share": 0.48,
-                  "node": {
-                    "card": "browser",
-                    "tabs": [
-                      {
-                        "plugin": "browser",
-                        "title": "www 문서"
-                      }
-                    ]
-                  }
-                }
-              ]
+              "card": "main",
+              "tabs": []
             }
           },
           {

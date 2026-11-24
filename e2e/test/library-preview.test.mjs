@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { previewGaps, startPreviewPanes } from "../library-preview.mjs";
 
-// The start layout of environment.json: the sidebars left and right and the cards terminal above browser between them. The start
-// state replaces the placeholder tab of each card in turn, and adding a tab focuses its card, so the lower card holds the focus.
+// The layout of the library check: the sidebars left and right and between them the start card above the card that the check
+// splits from it, which holds the focus.
 const grid = {
   cards: [
     { id: "left", x: 0, y: 0, w: 190, h: 800, fixed: true, tabs: [] },

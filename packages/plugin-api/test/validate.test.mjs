@@ -184,8 +184,10 @@ test("an environment is rejected for each invalid field", () => {
     [(e) => { e.runtime = ""; }, /runtime must be a directory/],
     [(e) => { e.runtime = null; }, /runtime must be a directory/],
     [(e) => { e.plugins = ["@scope/plugin-probe"]; }, /unknown field plugins/],
-    [(e) => { e.workspace.focus = "left"; }, /focus must name a card with tabs/],
-    [(e) => { e.workspace.grid.root.kids[1].node.tabs = []; }, /non-empty array/],
+    [(e) => { e.workspace.focus = "left"; }, /environment.json: workspace.focus must name a content card/],
+    [(e) => { e.workspace.grid.root.kids[1].node.tabs = {}; }, /environment.json: card main tabs must be an array/],
+    // A content card declares its tabs, an empty list for an empty card, so that no grid card becomes a card without data (F1148-2).
+    [(e) => { delete e.workspace.grid.root.kids[1].node.tabs; }, /environment.json: card main is a content card and declares tabs/],
     [(e) => { e.sidebars.links[0].set = "missing"; }, /known set/],
     [(e) => { e.sidebars.links[0].set = null; }, /known set/],
     [(e) => { e.sidebars.sets.push(e.sidebars.sets[0]); }, /duplicate set/],
@@ -215,6 +217,12 @@ test("a top or bottom window sidebar card of the environment declares its height
   const value = environment();
   value.workspace.grid.root.kids.push({ share: 0, node: { card: "top", height: 96, fixed: true } }, { share: 0, node: { card: "bottom", fixed: true } });
   assert.doesNotThrow(() => validateEnvironment(value));
+});
+
+test("a content card of the environment may declare no tab, and a new space starts with it empty (F1148-2)", () => {
+  const value = environment();
+  value.workspace.grid.root.kids[1].node.tabs = [];
+  assert.equal(validateEnvironment(value), value);
 });
 
 test("environment setting values are checked against the owning manifest", () => {

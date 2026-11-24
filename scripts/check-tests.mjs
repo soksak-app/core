@@ -386,6 +386,34 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1148",
+    implementation: [
+      { file: "packages/workbench/stored-layout.js", symbol: "const active = tabs.length === 0" },
+      { file: "packages/plugin-api/index.js", symbol: "is a content card and declares tabs" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/plane-empty-space.test.mjs", id: "a new space of a grid with an empty content card starts with the card empty" },
+      { file: "packages/workbench/test/plane-empty-card.test.mjs", id: "closing the only tab of the only card leaves the card empty" },
+    ],
+    expected: "A new workspace shows one empty card, which the layout model stores, reads and draws.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1148-2",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "is a content card and declares tabs" },
+      { file: "packages/window-check/start.mjs", symbol: "export function emptyCards(grid) {" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/validate.test.mjs", id: "a content card of the environment may declare no tab, and a new space starts with it empty (F1148-2)" },
+      { file: "packages/workbench/test/plane-empty-space.test.mjs", id: "a new space of a grid with an empty content card starts with the card empty" },
+      { file: "packages/workbench-mygo/tests/project_opening_test.go", id: "TestANewSpaceStartsWithTheEmptyCardOfTheGrid" },
+      { file: "packages/window-check/test/start.test.mjs", id: "the empty cards of a layout are its content cards without tabs, and no window sidebar is one (F1148-2)" },
+    ],
+    expected: "A new space starts with the empty card that its grid declares, and the window check start gives an empty card the layout probe.",
+    levels: ["unit"],
+  },
+  {
     id: "F1149-1",
     implementation: [
       { file: "packages/workbench/projects.js", symbol: "export const returnable = () =>" },

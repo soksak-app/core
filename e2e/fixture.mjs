@@ -2,8 +2,8 @@
 // each application has every plugin of the fixture registry pack `fixtures` installed, and no real plugin. The start state of
 // @soksak/window-check/start.mjs opens the new-space layout that environment.json of the application declares (workspace.grid); its
 // tabs name the plugins of the published starter, which a fixture configuration does not load, so they open as placeholders. The
-// preparation replaces each such placeholder by a tab of the layout probe fixture `layoutprobe` in the same card and returns the tab
-// of the focused card.
+// preparation replaces each such placeholder by a tab of the layout probe fixture `layoutprobe` in the same card, adds such a tab to
+// each empty card, and returns the tab of the focused card.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { keepCommonSettings } from "@soksak/window-check/app.mjs";

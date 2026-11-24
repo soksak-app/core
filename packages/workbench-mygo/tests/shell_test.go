@@ -50,6 +50,8 @@ type storedHost struct {
 	// located is the project that the shell last named as the one that its window shows, and held the project that the library
 	// named as the one to return to (F1149-1).
 	located, held string
+	// environment is the environment.json of the shell, and the test environment when it is nil.
+	environment []byte
 	// address is the project and library is the held project that the address of the window names at the start of a shell.
 	address, library string
 	// backdrops are the colors that the shell gave the window behind its surfaces.
@@ -656,6 +658,15 @@ func environment(t testing.TB) []byte {
 	return text
 }
 
+// environmentOf is the environment.json of the shell of stored.
+func environmentOf(t testing.TB, stored *storedHost) []byte {
+	t.Helper()
+	if stored.environment != nil {
+		return stored.environment
+	}
+	return environment(t)
+}
+
 // treeCards is the card nodes of a stored tree whose root node is root, in the order of the tree, each with its id as id as well.
 func treeCards(root map[string]any) []map[string]any {
 	cards := []map[string]any{}
@@ -735,7 +746,7 @@ func startedShellOf(t testing.TB, stored *storedHost, declared *workbench.Declar
 		OpenLayout:  func() (uint64, error) { return 0, nil },
 		Declared:    declared,
 		Calls:       workbench.NewCalls(table, f.pending.post),
-		Environment: environment(t),
+		Environment: environmentOf(t, stored),
 		Installed:   []byte(stored.installedDocument()),
 		Invalidate:  func() { f.frames++ },
 		Elements:    fixtureElements{f},

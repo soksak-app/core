@@ -4,8 +4,8 @@
 /**
  * The preview panes `{left, upper, lower, right}` of the start layout: the fixed sidebars left and right and between them two
  * content cards, one above the other. `grid` is core.grid and `preview` the panes `{id, x, y, w, h}` of the project in core.library.
- * The upper and the lower card stand by the geometry of the grid, not by the focus: the start state focuses the card of its last
- * replaced placeholder, which is the lower one.
+ * The upper and the lower card stand by the geometry of the grid, not by the focus: the check splits the start card toward the
+ * bottom, and the new lower card holds the focus.
  */
 export function startPreviewPanes(grid, preview) {
   const content = grid.cards.filter((card) => !card.fixed && card.tabs?.length > 0).sort((a, b) => a.y - b.y);
