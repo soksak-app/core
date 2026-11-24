@@ -216,11 +216,15 @@ export function followPlugins() {
 
 /** Handler of the core.plugins.<action> commands. plugin is a non-empty string (Plugin screen of docs/spec/installation.md). */
 function pluginCommand(action) {
-  return async ({ plugin }) => {
+  // An install, update or enable that a running service holds runs with end, which ends that service
+  // (docs/spec/persistent-services.md#updates).
+  const ends = ["install", "update", "enable"].includes(action);
+  return async ({ plugin, ...rest }) => {
     if (typeof plugin !== "string" || plugin === "") {
       throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "plugin must be a non-empty string");
     }
-    await pluginOperations.run(action, plugin);
+    if (ends && "end" in rest && rest.end !== true) throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "end must be true");
+    await pluginOperations.run(action, plugin, ends && rest.end === true);
   };
 }
 

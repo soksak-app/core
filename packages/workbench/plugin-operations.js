@@ -161,15 +161,18 @@ export function createPluginOperations({ host, loaded, refused, changed }) {
     }
   }
 
-  /** Runs one operation. It records running before the run and done or failed after it ends. */
-  async function runAction(action, plugin) {
+  /**
+   * Runs one operation. It records running before the run and done or failed after it ends. end runs a held install, update or enable
+   * and ends the services that hold it (docs/spec/persistent-services.md#updates).
+   */
+  async function runAction(action, plugin, end = false) {
     if (!PLUGIN_ACTIONS.includes(action)) throw new Error(`unknown plugin action ${action}`);
     if (!host) throw new Error("plugin operations need a native host");
     operation = { action, plugin, state: "running", error: null };
     report();
     const cids = beginOperation("workbench.plugin.operation", { action, plugin });
     try {
-      await host.call("pluginsRun", { action, plugin }, { cids });
+      await host.call("pluginsRun", end ? { action, plugin, end: true } : { action, plugin }, { cids });
       operation = { action, plugin, state: "done", error: null };
     } catch (error) {
       operation = { action, plugin, state: "failed", error: errorText(error) };
@@ -207,6 +210,8 @@ export function createPluginOperations({ host, loaded, refused, changed }) {
       reload: rows.some((row) => row.state === "reload"),
       updates: rows.filter(hasUpdate).map((row) => ({ id: row.id, installed: row.installed.version, latest: row.latest })),
       outdated,
+      // default: before the state is read, if it could not be read, or without a host, no operation is held ([]).
+      held: state?.held ?? [],
     };
   }
 

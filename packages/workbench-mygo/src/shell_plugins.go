@@ -15,6 +15,8 @@ const pluginsPage = "plugins"
 
 type pluginParam struct {
 	Plugin string `json:"plugin"`
+	// End is nil when the params have no end, and a button that binds the params writes none.
+	End *bool `json:"end,omitempty"`
 }
 
 // libraryPlugins is `plugins` of `core.library`.
@@ -56,7 +58,7 @@ type libraryStatus struct {
 func (s *Shell) pluginPage() PluginPage {
 	status := s.pluginOperations.Status()
 	page := PluginPage{Hosted: true, Core: status.Core, Query: s.library.pluginQuery, Failure: s.pluginOperations.Failure(), Plugins: status.Plugins,
-		Operation: status.Operation, Updates: status.Updates, Outdated: status.Outdated, App: s.appUpdates.Status()}
+		Operation: status.Operation, Updates: status.Updates, Outdated: status.Outdated, Held: status.Held, App: s.appUpdates.Status()}
 	for _, entry := range s.contributions.Status() {
 		contribution := PluginContribution{Plugin: entry.Plugin, Point: entry.Point, Index: entry.Index, State: entry.State}
 		if entry.Reason != nil {
@@ -194,7 +196,13 @@ func (s *Shell) registerPlugins() {
 			if value.Plugin == "" {
 				return Refuse(InvalidParams, "plugin must be a non-empty string")
 			}
-			s.pluginOperations.Run(action, value.Plugin, answer)
+			// An install, update or enable that a running service holds runs with end, which ends that service
+			// (docs/spec/persistent-services.md#updates).
+			ends := action == "install" || action == "update" || action == "enable"
+			if ends && value.End != nil && !*value.End {
+				return Refuse(InvalidParams, "end must be true")
+			}
+			s.pluginOperations.Run(action, value.Plugin, ends && value.End != nil, answer)
 			return nil
 		}
 	}
@@ -268,7 +276,7 @@ func (s *Shell) drawPluginPlaceholder(c *ui.Context, tab layout.Tab) {
 		ui.Text(c, line).LineHeight(s.metrics.lineHeight).FontSize(s.textBody()).TextColor(s.palette.Muted)
 		if action != "" {
 			command := "core.plugins." + action
-			s.uiButton(c, s.binder.Press(c, "core.card.placeholder-action", command, tab.Plugin, pluginParam{tab.Plugin}), label, false)
+			s.uiButton(c, s.binder.Press(c, "core.card.placeholder-action", command, tab.Plugin, pluginParam{Plugin: tab.Plugin}), label, false)
 		}
 	})
 }

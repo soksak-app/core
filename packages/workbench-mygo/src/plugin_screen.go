@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/ui"
+	sok "github.com/soksak-app/core/packages/sok/go/src"
 )
 
 // The plugin screen, the plugin page of the library (docs/spec/installation.md#plugin-screen). Its values are those of
@@ -123,6 +124,7 @@ type PluginPage struct {
 	Operation     *PluginOperation
 	Updates       []PluginUpdate
 	Outdated      []OutdatedSidecar
+	Held          []sok.HeldOperation
 	App           AppUpdate
 	Contributions []PluginContribution
 	// Reveal brings the update list into view in this frame.
@@ -473,6 +475,7 @@ func drawPluginCard(c *ui.Context, binder *Binder, page PluginPage, row PluginRo
 		}
 		drawPluginContributions(c, binder, page, row, shown, look)
 		drawCardActions(c, binder, page, row, look)
+		drawCardHeld(c, binder, page, row, shown, look)
 		drawCardOperation(c, page, row, shown, look)
 	})
 }
@@ -515,6 +518,47 @@ func drawCardActions(c *ui.Context, binder *Binder, page PluginPage, row PluginR
 			button := binder.Press(c, "core.library.plugins.action", pluginCommands[action.Action], row.ID+"/"+action.Action, params)
 			look.button(c, button.Disabled(action.Disabled), actionLabel(action.Action))
 		}
+	})
+}
+
+// heldActions are the labels of the operations that a held entry runs (docs/spec/installation.md#plugin-screen).
+var heldActions = map[string]string{"install": "설치", "update": "업데이트", "enable": "사용"}
+
+// heldOf returns the held operation of the plugin, or nil.
+func heldOf(page PluginPage, plugin string) *sok.HeldOperation {
+	for index := range page.Held {
+		if page.Held[index].Plugin == plugin {
+			return &page.Held[index]
+		}
+	}
+	return nil
+}
+
+// drawCardHeld shows the error of a held operation of the plugin and the action that ends the sessions of the services that
+// hold it and runs the operation with end; a sessions count that is not known offers no action
+// (docs/spec/persistent-services.md#updates).
+func drawCardHeld(c *ui.Context, binder *Binder, page PluginPage, row PluginRow, shown *ShownErrors, look PluginLook) {
+	where := "library plugin " + row.ID + " held"
+	held := heldOf(page, row.ID)
+	if held == nil {
+		shown.Hide(where)
+		return
+	}
+	shown.Show(where, held.Error, "")
+	if !page.Hosted {
+		return
+	}
+	sessions := 0
+	for _, sidecar := range held.Sidecars {
+		if sidecar.Sessions == nil {
+			return
+		}
+		sessions += *sidecar.Sessions
+	}
+	disabled := page.Operation != nil && page.Operation.State == "running"
+	ui.Row(c).Gap(look.Space2).Margin(look.Space1, 0, 0, 0).Children(func() {
+		button := binder.Press(c, "core.library.plugins.end", pluginCommands[held.Action], row.ID, map[string]any{"plugin": row.ID, "end": true})
+		look.button(c, button.Disabled(disabled), fmt.Sprintf("세션 %d개를 끝내고 %s", sessions, heldActions[held.Action]))
 	})
 }
 

@@ -7,10 +7,12 @@ import (
 	"github.com/egoist/mygo/ui"
 	"image/color"
 	"math"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
 
+	sok "github.com/soksak-app/core/packages/sok/go/src"
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
@@ -26,9 +28,11 @@ type pluginsHost struct {
 	outdated []any
 	// startUpdate is the list of failures of the update at start that the host reports in pluginsState.
 	startUpdate []map[string]string
-	runs        []string
-	used        []string
-	jobs        []string
+	// held is the held list of pluginsState; nil reports an empty list.
+	held []any
+	runs []string
+	used []string
+	jobs []string
 }
 
 func (p *pluginsHost) state(json.RawMessage) (any, error) {
@@ -37,15 +41,28 @@ func (p *pluginsHost) state(json.RawMessage) (any, error) {
 	if p.startUpdate != nil {
 		state["startUpdate"] = p.startUpdate
 	}
+	state["held"] = []any{}
+	if p.held != nil {
+		state["held"] = p.held
+	}
 	return state, nil
 }
 
 func (p *pluginsHost) run(argument json.RawMessage) (any, error) {
-	var request struct{ Action, Plugin string }
+	var request struct {
+		Action, Plugin string
+		End            *bool
+	}
 	if err := json.Unmarshal(argument, &request); err != nil {
 		return nil, err
 	}
-	p.runs = append(p.runs, request.Action+" "+request.Plugin)
+	run := request.Action + " " + request.Plugin
+	if request.End != nil {
+		run += fmt.Sprintf(" end %v", *request.End)
+		// The run with end ends the services that hold the operation, which the next state no longer lists.
+		p.held = nil
+	}
+	p.runs = append(p.runs, run)
 	if request.Action == "update" || request.Action == "enable" || request.Action == "disable" {
 		if p.plugins[request.Plugin] == nil {
 			return nil, errors.New("plugin " + request.Plugin + " is not installed")
@@ -122,6 +139,7 @@ type pluginsStatus struct {
 	}
 	Updates  []workbench.PluginUpdate
 	Outdated []workbench.OutdatedSidecar
+	Held     []sok.HeldOperation
 }
 
 func (f *shellFixture) pluginStatus() pluginsStatus {
@@ -400,6 +418,41 @@ func TestAPluginCommandRefusesAnEmptyPlugin(t *testing.T) {
 	f := pluginShell(t, &pluginsHost{}, `{"plugins":[]}`)
 	if err := f.finish("core.plugins.install", map[string]string{"plugin": ""}); err == nil {
 		t.Fatal("an empty plugin ran")
+	}
+}
+
+func TestAHeldOperationIsListedAndItsActionRunsItWithEnd(t *testing.T) {
+	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(map[string][]string{"alpha": {"1.0.0", "1.2.0"}}),
+		plugins: map[string]map[string]any{"alpha": {"version": "1.0.0", "enabled": true, "sidecars": map[string]string{"hello": "^2.0.0"}}},
+		held: []any{map[string]any{"plugin": "alpha", "action": "update", "version": "1.2.0",
+			"error":    "plugin alpha 1.2.0: sidecar hello 2.1.0 waits for the end of its running service 2.0.0",
+			"sidecars": []any{map[string]any{"sidecar": "hello", "planned": "2.1.0", "running": "2.0.0", "sessions": 2}}}}}
+	f := pluginShell(t, plugins, loadedAlpha)
+	f.shell.Registry().RunLater("core.library.page", json.RawMessage(`{"page":"plugins"}`), func(_ any, err error) {
+		if err != nil {
+			t.Error(err)
+		}
+	})
+	// The card shows the error of the held operation through the error display, which records it once.
+	if got, want := f.shownRecords(), []shownRecord{{"library plugin alpha held", "plugin alpha 1.2.0: sidecar hello 2.1.0 waits for the end of its running service 2.0.0"}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("the shell recorded %+v, want %+v", got, want)
+	}
+	running, sessions := "2.0.0", 2
+	want := []sok.HeldOperation{{Plugin: "alpha", Action: "update", Version: "1.2.0",
+		Error:    "plugin alpha 1.2.0: sidecar hello 2.1.0 waits for the end of its running service 2.0.0",
+		Sidecars: []sok.HeldService{{Sidecar: "hello", Planned: "2.1.0", Running: &running, Sessions: &sessions}}}}
+	if got := f.pluginStatus().Held; !reflect.DeepEqual(got, want) {
+		t.Fatalf("held is %+v, want %+v", got, want)
+	}
+	if err := f.finish("core.plugins.update", map[string]any{"plugin": "alpha", "end": false}); err == nil || err.Error() != "end must be true" {
+		t.Fatalf("an end of false answered %v", err)
+	}
+	f.click("core.library.plugins.end", "alpha")
+	if want := []string{"update alpha end true"}; !slices.Equal(plugins.runs, want) {
+		t.Fatalf("the operations are %v, want %v", plugins.runs, want)
+	}
+	if got := f.pluginStatus().Held; len(got) != 0 {
+		t.Fatalf("held after the run is %+v", got)
 	}
 }
 

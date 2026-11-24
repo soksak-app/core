@@ -184,6 +184,21 @@ test("an operation is recorded as running before the host call and its result af
   wire.finish();
 });
 
+test("status lists the held operations of the state, and a run with end passes end to the host", async () => {
+  const operations = createPluginOperations({ host: open("held"), loaded: () => loaded, refused: () => new Set(), changed: () => {} });
+  assert.deepEqual(operations.status().held, [], "a status before the first read lists held operations");
+  await operations.refresh();
+  assert.deepEqual(operations.status().held, [{
+    plugin: "tty", action: "update", version: "0.10.0",
+    error: "plugin tty 0.10.0: sidecar @scope/sidecar-probe 0.2.0 waits for the end of its running service 0.1.0",
+    sidecars: [{ sidecar: "@scope/sidecar-probe", planned: "0.2.0", running: "0.1.0", sessions: 1 }],
+  }]);
+  await operations.run("update", "tty", true);
+  assert.deepEqual(sent(), [["pluginsState"], ["pluginsRun", { action: "update", plugin: "tty", end: true }], ["pluginsState"]]);
+  assert.deepEqual(operations.status().held, []);
+  wire.finish();
+});
+
 test("an unreadable registry index keeps the installed rows and an unreadable state lists none", async () => {
   const operations = createPluginOperations({ host: open("unreadable"), loaded: () => loaded, refused: () => new Set(), changed: () => {} });
   await operations.refresh();

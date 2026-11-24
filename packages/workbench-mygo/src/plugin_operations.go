@@ -30,18 +30,21 @@ type PluginsState struct {
 	Starter   *sok.StarterJob    `json:"starter"`
 	// StartUpdate lists the failures of the update at start that the host keeps (docs/spec/installation.md#update-at-start).
 	StartUpdate []sok.StartFailure `json:"startUpdate,omitempty"`
+	// Held lists the latest held operation of each plugin (docs/spec/persistent-services.md#updates).
+	Held []sok.HeldOperation `json:"held"`
 }
 
 // PluginsStatus is the value of `core.plugins`.
 type PluginsStatus struct {
-	Core      *string           `json:"core"`
-	Registry  *string           `json:"registry"`
-	Error     *string           `json:"error"`
-	Plugins   []PluginRow       `json:"plugins"`
-	Operation *PluginOperation  `json:"operation"`
-	Reload    bool              `json:"reload"`
-	Updates   []PluginUpdate    `json:"updates"`
-	Outdated  []OutdatedSidecar `json:"outdated"`
+	Core      *string             `json:"core"`
+	Registry  *string             `json:"registry"`
+	Error     *string             `json:"error"`
+	Plugins   []PluginRow         `json:"plugins"`
+	Operation *PluginOperation    `json:"operation"`
+	Reload    bool                `json:"reload"`
+	Updates   []PluginUpdate      `json:"updates"`
+	Outdated  []OutdatedSidecar   `json:"outdated"`
+	Held      []sok.HeldOperation `json:"held"`
 }
 
 // acceptInstalled checks the document of the installed plugins as the page does, and returns the document of the plugins that the
@@ -293,12 +296,17 @@ func (p *PluginOperations) RefreshOutdated(done func()) {
 	})
 }
 
-// Run runs one operation and reads the state again, and then answers with its failure.
-func (p *PluginOperations) Run(action, plugin string, answer func(err error)) {
+// Run runs one operation and reads the state again, and then answers with its failure. end runs a held install, update or
+// enable and ends the services that hold it (docs/spec/persistent-services.md#updates).
+func (p *PluginOperations) Run(action, plugin string, end bool, answer func(err error)) {
 	p.operation = &PluginOperation{Action: action, Plugin: plugin, State: "running"}
 	p.changed()
 	cids := p.begin("workbench.plugin.operation", map[string]any{"action": action, "plugin": plugin})
-	p.calls.Caused(cids).Call("pluginsRun", map[string]string{"action": action, "plugin": plugin}, func(_ any, err error) {
+	request := map[string]any{"action": action, "plugin": plugin}
+	if end {
+		request["end"] = true
+	}
+	p.calls.Caused(cids).Call("pluginsRun", request, func(_ any, err error) {
 		p.operation = &PluginOperation{Action: action, Plugin: plugin, State: "done"}
 		if err != nil {
 			p.operation.State, p.operation.Error = "failed", err.Error()
@@ -315,7 +323,7 @@ func (p *PluginOperations) UpdateAll(answer func(err error)) {
 			answer(nil)
 			return
 		}
-		p.Run("update", rest[0].ID, func(err error) {
+		p.Run("update", rest[0].ID, false, func(err error) {
 			if err != nil {
 				answer(err)
 				return
@@ -346,7 +354,8 @@ func (p *PluginOperations) Replace(sidecar string, answer func(err error)) {
 
 // Status returns the value of `core.plugins`.
 func (p *PluginOperations) Status() PluginsStatus {
-	status := PluginsStatus{Plugins: []PluginRow{}, Operation: p.operation, Updates: []PluginUpdate{}, Outdated: p.outdated}
+	status := PluginsStatus{Plugins: []PluginRow{}, Operation: p.operation, Updates: []PluginUpdate{}, Outdated: p.outdated,
+		Held: []sok.HeldOperation{}}
 	if p.failure != nil {
 		status.Error = &p.failure.Message
 	}
@@ -354,6 +363,9 @@ func (p *PluginOperations) Status() PluginsStatus {
 		return status
 	}
 	status.Core, status.Registry = &p.state.Core, p.state.Registry
+	if p.state.Held != nil {
+		status.Held = p.state.Held
+	}
 	rows, err := PluginRows(p.loaded(), p.state, p.refused())
 	if err != nil {
 		message := err.Error()
@@ -508,7 +520,7 @@ func (r *starterRun) install(rest []string) {
 		r.install(rest[1:])
 		return
 	}
-	r.plugins.Run("install", id, func(err error) {
+	r.plugins.Run("install", id, false, func(err error) {
 		if r.failed(err) {
 			return
 		}

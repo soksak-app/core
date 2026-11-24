@@ -10,6 +10,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	sok "github.com/soksak-app/core/packages/sok/go/src"
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
@@ -225,6 +226,37 @@ func TestAnOutdatedServiceHasItsReplaceAction(t *testing.T) {
 	want := []call{{"core.plugins.replace", map[string]any{"sidecar": "gone"}}}
 	if !reflect.DeepEqual(calls, want) {
 		t.Fatalf("commands %+v, want %+v", calls, want)
+	}
+}
+
+func TestAHeldOperationShowsItsErrorAndTheActionThatEndsItsSessions(t *testing.T) {
+	var calls []call
+	var lines []string
+	page := hostedPlugins()
+	one, two := 1, 2
+	page.Held = []sok.HeldOperation{
+		{Plugin: "alpha", Action: "update", Version: "1.2.0", Error: "plugin alpha 1.2.0: sidecar hello 2.1.0 waits for the end of its running service 2.0.0",
+			Sidecars: []sok.HeldService{{Sidecar: "hello", Planned: "2.1.0", Sessions: &one}, {Sidecar: "other", Planned: "1.1.0", Sessions: &two}}},
+		// The sessions of the service that holds the enable of gamma are not known, so its card offers no action.
+		{Plugin: "gamma", Action: "enable", Version: "1.0.0", Error: "plugin gamma 1.0.0: sidecar third 0.2.0 waits for the end of its running service unknown",
+			Sidecars: []sok.HeldService{{Sidecar: "third", Planned: "0.2.0"}}},
+	}
+	tt := drawPlugins(&page, workbench.NewShownErrors(func(line string) { lines = append(lines, line) }), recorder(t, &calls, screenCommands...))
+	if !tt.HasText("세션 3개를 끝내고 업데이트") || tt.HasText("세션 0개를 끝내고 사용") {
+		t.Fatalf("the page shows %q", tt.Texts())
+	}
+	positional(t, tt, "core.library.plugins.end", 0)
+	if _, ok := exposedNode(tt.ElementTree(), "core.library.plugins.end", "gamma"); ok {
+		t.Fatal("a held operation with sessions that are not known offers its action")
+	}
+	pressPositional(t, tt, "core.library.plugins.end", 0)
+	if want := []call{{"core.plugins.update", map[string]any{"plugin": "alpha", "end": true}}}; !reflect.DeepEqual(calls, want) {
+		t.Fatalf("commands %+v, want %+v", calls, want)
+	}
+	want := []string{"library plugin alpha held: plugin alpha 1.2.0: sidecar hello 2.1.0 waits for the end of its running service 2.0.0",
+		"library plugin gamma held: plugin gamma 1.0.0: sidecar third 0.2.0 waits for the end of its running service unknown"}
+	if !slices.Equal(lines, want) {
+		t.Fatalf("written lines %q, want %q", lines, want)
 	}
 }
 

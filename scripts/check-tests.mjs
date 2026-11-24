@@ -340,6 +340,40 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1138",
+    implementation: [
+      { file: "packages/sok/go/src/service_hold.go", symbol: "func heldBy(id string, state *InstalledState, recorded map[string]string, services Services) *Held {" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) EndServices(ctx context.Context, held sok.Held) error {" },
+      { file: "packages/workbench/library.js", symbol: "button.dataset.expose = 'core.library.plugins.end'; button.dataset.action = held.action;" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/service_hold_test.go", id: "TestAnUpdateThatChangesTheSidecarOfARunningServiceWritesNothing" },
+      { file: "packages/host/go/tests/plugins_held_test.go", id: "TestAHeldUpdateIsListedAndRunsWithTheEndOfItsService" },
+      { file: "packages/host/rust/tests/plugins_held_test.rs", id: "a_held_update_is_listed_and_runs_with_the_end_of_its_service" },
+      { file: "packages/workbench/test/library-plugins.test.mjs", id: "the plugin page of the library lists each plugin with its description, versions, sidecars and actions" },
+    ],
+    expected: "No plugin operation leaves a running persistent service of another version than installed.json records: a held operation writes nothing and is listed, and its action on the plugin card ends the holding services before installed.json is written.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1138-3",
+    implementation: [
+      { file: "packages/workbench/library.js", symbol: "button.dataset.expose = 'core.library.plugins.end'; button.dataset.action = held.action;" },
+      { file: "packages/workbench/core-exposure.js", symbol: "if (ends && \"end\" in rest && rest.end !== true) throw new ExposureError(EXPOSURE_ERRORS.invalidParams, \"end must be true\");" },
+      { file: "packages/workbench-mygo/src/plugin_screen.go", symbol: "func drawCardHeld(c *ui.Context, binder *Binder, page PluginPage, row PluginRow, shown *ShownErrors, look PluginLook) {" },
+      { file: "packages/workbench-mygo/src/shell_plugins.go", symbol: "if ends && value.End != nil && !*value.End {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/library-plugins.test.mjs", id: "the plugin page of the library lists each plugin with its description, versions, sidecars and actions" },
+      { file: "packages/workbench/test/plugin-operations.test.mjs", id: "status lists the held operations of the state, and a run with end passes end to the host" },
+      { file: "packages/workbench/test/plugin-command-end.test.mjs", id: "a plugin command passes end true to the operation and refuses another end" },
+      { file: "packages/workbench-mygo/tests/plugin_screen_test.go", id: "TestAHeldOperationShowsItsErrorAndTheActionThatEndsItsSessions" },
+      { file: "packages/workbench-mygo/tests/plugin_operations_test.go", id: "TestAHeldOperationIsListedAndItsActionRunsItWithEnd" },
+    ],
+    expected: "The workbench and mygo plugin screens show the error of a held operation through the error display and the action 세션 <n>개를 끝내고 업데이트 (설치, 사용), which runs its command with end true and is absent while a sessions count is not known; core.plugins reports held, and the commands refuse an end other than true.",
+    levels: ["unit"],
+  },
+  {
     id: "F1138-2",
     implementation: [
       { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) EndServices(ctx context.Context, held sok.Held) error {" },

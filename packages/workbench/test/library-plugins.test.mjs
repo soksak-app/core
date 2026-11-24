@@ -123,6 +123,16 @@ test("the plugin page of the library lists each plugin with its description, ver
     assert.equal(text("lone", "sidecars"), null, "a card without a selected version names no sidecars");
     // A command without params writes no data-params (createBinder mark), so the apply button has none.
     assert.deepEqual(actions("kept")[0], ["적용", "core.plugins.apply", undefined, true]);
+    // A held operation shows its error, and the action that ends the sessions of the services that hold it runs the operation with end.
+    // The enable of plain waits for a service whose sessions are not known, so it offers no action.
+    const ends = (id) => [...card(id).querySelectorAll('[data-expose="core.library.plugins.end"]')]
+      .map((button) => [button.textContent, button.dataset.command, button.dataset.params, button.disabled]);
+    assert.deepEqual(ends("tty"), [["세션 2개를 끝내고 업데이트", "core.plugins.update", JSON.stringify({ plugin: "tty", end: true }), true]]);
+    assert.deepEqual(ends("plain"), []);
+    assert.deepEqual(ends("db"), []);
+    const shown = (where) => document.querySelector(`[data-error="${where}"]`)?.textContent ?? null;
+    assert.match(shown("library plugin tty held"), /plugin tty 0\.2\.0: sidecar @scope\/sidecar-probe 0\.1\.3 waits for the end of its running service 0\.1\.2/);
+    assert.match(shown("library plugin plain held"), /plugin plain 1\.0\.0: sidecar @x\/plain 0\.2\.0 waits for the end of its running service unknown/);
 
     // The host ends the installation, and the page reads the plugin state again.
     wire.release();

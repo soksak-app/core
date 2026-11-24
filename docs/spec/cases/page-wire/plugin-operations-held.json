@@ -1,0 +1,15 @@
+{
+  "name": "plugin-operations-held",
+  "description": "The page reads the plugin state, which lists a held update of tty, runs the update with end, and reads the state again, which lists no held operation.",
+  "replay": false,
+  "reason": "pluginsState and the plugin operations read and change the installed plugins of the configuration directory and its registry, which the Go producer builds no state for (docs/spec/cases/page-wire/README.md#limits).",
+  "variables": {"op-cid-1":{"type":"string","example":"p5a0c9e7b-1f2d-4c3e-8b4a-6d7e8f901233.1","source":"page"}},
+  "steps": [
+    {"call":{"name":"pluginsState"}},
+    {"reply":{"result":{"core":"0.0.24","registry":"file:///registry/index.json","index":{"plugins":[{"id":"tty","package":"plugin-tty","name":"Terminal","description":"Terminal 설명.","versions":[{"version":"0.1.0","engines":{"soksak":"*"},"sidecars":{}},{"version":"0.10.0","engines":{"soksak":"*"},"sidecars":{}}]}],"revoked":{"plugins":[],"sidecars":[],"core":[]}},"installed":{"format":3,"plugins":{"tty":{"version":"0.1.0","enabled":true,"sidecars":{}}},"sidecars":{}},"firstRun":false,"starter":null,"held":[{"plugin":"tty","action":"update","version":"0.10.0","error":"plugin tty 0.10.0: sidecar @scope/sidecar-probe 0.2.0 waits for the end of its running service 0.1.0","sidecars":[{"sidecar":"@scope/sidecar-probe","planned":"0.2.0","running":"0.1.0","sessions":1}]}]}}},
+    {"call":{"name":"pluginsRun","payload":{"action":"update","plugin":"tty","end":true},"cids":["$op-cid-1"]}},
+    {"reply":{"result":{"plugin":{"version":"0.10.0","enabled":true,"sidecars":{}},"sidecars":{}}}},
+    {"call":{"name":"pluginsState"}},
+    {"reply":{"result":{"core":"0.0.24","registry":"file:///registry/index.json","index":{"plugins":[{"id":"tty","package":"plugin-tty","name":"Terminal","description":"Terminal 설명.","versions":[{"version":"0.1.0","engines":{"soksak":"*"},"sidecars":{}},{"version":"0.10.0","engines":{"soksak":"*"},"sidecars":{}}]}],"revoked":{"plugins":[],"sidecars":[],"core":[]}},"installed":{"format":3,"plugins":{"tty":{"version":"0.10.0","enabled":true,"sidecars":{}}},"sidecars":{}},"firstRun":false,"starter":null,"held":[]}}}
+  ]
+}

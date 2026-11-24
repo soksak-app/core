@@ -41,6 +41,8 @@ function folderReason(message) {
 const PAGES = [['projects', '프로젝트'], ['plugins', '플러그인']];
 
 /** Status text of a plugin card. */
+// The label of the operation that a held entry runs (docs/spec/installation.md#plugin-screen).
+const HELD_ACTIONS = { install: '설치', update: '업데이트', enable: '사용' };
 const PLUGIN_STATES = { loaded: '사용 중', disabled: '사용 안 함', available: '설치 안 됨', reload: '창을 다시 불러오면 적용', refused: '불러오지 못함' };
 // The states of contributions to extension points (docs/spec/plugins.md#extension-points); invalid shows through the error display.
 const CONTRIBUTION_STATES = { connected: '연결됨', 'provider-missing': '제공자 없음', 'version-mismatch': 'version 불일치', invalid: '오류' };
@@ -250,6 +252,7 @@ export function createLibrary(root, rendered = () => {}) {
       if (entry.state === 'invalid') showError(document, where, `${entry.point} 기여 ${entry.index + 1}: ${entry.reason}`);
       else hideError(document, where);
     }
+    const held = status.held.find((entry) => entry.plugin === row.id);
     if (pluginOperations.hosted) {
       const actions = element('div', 'library-plugin__actions');
       // core.plugins.apply reloads the window for every changed plugin, so it takes no plugin.
@@ -265,8 +268,20 @@ export function createLibrary(root, rendered = () => {}) {
       if (row.state === 'reload') action('적용', 'apply', {});
       if (row.installed) action(row.installed.enabled ? '사용 안 함' : '사용', row.installed.enabled ? 'disable' : 'enable');
       if (row.installed) action('제거', 'remove');
+      // A held operation runs with end, which ends the services that hold it; its count is the sessions that end, and an unknown count
+      // offers no action (docs/spec/persistent-services.md#updates).
+      if (held && held.sidecars.every((sidecar) => sidecar.sessions !== null)) {
+        const sessions = held.sidecars.reduce((sum, sidecar) => sum + sidecar.sessions, 0);
+        const button = element('button', 'ui-button', `세션 ${sessions}개를 끝내고 ${HELD_ACTIONS[held.action]}`); button.type = 'button';
+        button.dataset.expose = 'core.library.plugins.end'; button.dataset.action = held.action;
+        mark(button, `core.plugins.${held.action}`, { plugin: row.id, end: true });
+        button.disabled = status.operation?.state === 'running';
+        actions.append(button);
+      }
       if (actions.children.length) card.append(actions);
     }
+    if (held) showError(document, `library plugin ${row.id} held`, held.error);
+    else hideError(document, `library plugin ${row.id} held`);
     const operation = status.operation;
     // A plugin operation that succeeds reloads the window, so a done operation shows no line.
     if (operation && operation.plugin === row.id && operation.state !== 'done') {
@@ -387,7 +402,8 @@ export function createLibrary(root, rendered = () => {}) {
     const running = status.operation?.state === 'running';
     for (const row of rows) {
       const operation = status.operation?.plugin === row.id ? status.operation : null;
-      const key = JSON.stringify([row, pluginOperations.hosted, running, operation, contributionsState().filter((item) => item.plugin === row.id)]);
+      const held = status.held.find((entry) => entry.plugin === row.id) ?? null;
+      const key = JSON.stringify([row, pluginOperations.hosted, running, operation, held, contributionsState().filter((item) => item.plugin === row.id)]);
       const kept = pluginCards.get(row.id);
       if (kept?.key === key) { wanted.push(kept.card); continue; }
       const card = pluginCard(row, status);
