@@ -5,6 +5,7 @@
 
 ## 2026-11-24
 
+- F1144-1: The core version is 0.0.52 in every package and crate manifest, Info.plist, Tauri file, Go and pkg-config declaration, the six workspace entries of Cargo.lock and scripts/check-versions.mjs.
 - F1143: The installation refuses an installed `sidecar.json` whose `executable` has no base name with `<file>: executable "<executable>" has no base name`, and the defaults of the session count and of the held plugin row state their reasons. The Go and Rust installation tests failed without the refusal and pass with it.
 - F1129-6: Both hosts decide whether a surface is a dialog surface through one check, which marks its surface host and derives the dialog of the window, and each host declares a test of `surface-host.dialog-host-stays-on-top`. The defaults of the dialog code state their reasons, and the origin of a section or a dialog surface tests for their presence.
 - F1142: `sok plugin install` and `update` read the `sidecar.json` of each installed sidecar and refuse a second persistent sidecar whose executable has the base name of another with `sidecar <later>: executable base name <name> is already the service folder of sidecar <earlier>`, before `installed.json` is written, because the host names the service folder by that base name. The host already refused such a declaration at startup; the specification now states both. The Go and Rust installation tests failed before the change and pass after it.
