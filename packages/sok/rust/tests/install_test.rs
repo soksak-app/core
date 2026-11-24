@@ -472,7 +472,6 @@ fn installed(id: &str, version: &str, range: &str, used: &str) -> InstalledState
             path: format!("/config/plugins/{id}/{version}"),
             enabled: true,
             sidecars: [("@scope/sidecar-worker".to_string(), range.to_string())].into(),
-            previous: None,
         },
     );
     state.sidecars.insert(
@@ -567,15 +566,14 @@ fn plugin_id_core_is_reserved_for_the_core_root() {
 fn installed_state_names_one_version_of_each_plugin_and_sidecar() {
     let state = json!({"format": 3, "plugins": {
         "probe": {"version": "0.2.0", "path": "plugins/probe/0.2.0", "enabled": true,
-            "previous": "0.1.0", "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
+            "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
         "side": {"version": "1.0.0", "path": "plugins/side/1.0.0", "enabled": false, "sidecars": {}}},
         "sidecars": {"@scope/sidecar-worker": {"version": "0.1.1", "path": "sidecars/scope-sidecar-worker/0.1.1/darwin-arm64"}}});
     let read = install::validate_installed(&state).expect("installed");
-    assert_eq!(read.plugins["probe"].previous.as_deref(), Some("0.1.0"));
     assert_eq!(read.sidecars["@scope/sidecar-worker"].version, "0.1.1");
     assert_eq!(read.plugins["probe"].path, "plugins/probe/0.2.0");
     type Change = fn(&mut Value);
-    let cases: [(Change, &str); 14] = [
+    let cases: [(Change, &str); 15] = [
         (
             |v| {
                 _ = v["plugins"]["probe"]
@@ -588,6 +586,10 @@ fn installed_state_names_one_version_of_each_plugin_and_sidecar() {
         (
             |v| v["plugins"]["side"]["package"] = json!("plugin-side"),
             "plugins/installed.json side: unknown field package",
+        ),
+        (
+            |v| v["plugins"]["probe"]["previous"] = json!("0.1.0"),
+            "plugins/installed.json probe: unknown field previous",
         ),
         (
             |v| _ = v.as_object_mut().unwrap().remove("sidecars"),

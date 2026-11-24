@@ -1044,7 +1044,6 @@ func (p *dependencyPlan) replace(id string, current InstalledPlugin, installed b
 	entry := InstalledPlugin{Version: version, Path: pluginPath, Enabled: true, Sidecars: maps.Clone(selection.Version.Sidecars)}
 	if installed {
 		entry.Enabled = current.Enabled
-		entry.Previous = current.Version
 	}
 	p.state.Plugins[id] = entry
 	for _, sidecar := range selection.Sidecars {
@@ -1083,8 +1082,8 @@ func stateValue(state *InstalledState) (any, error) {
 	return DecodeJSON(data)
 }
 
-// pruneFolders removes the plugin folders and version folders that are not the version in use or previous of an
-// installed plugin, and the sidecar folders and version folders that installed.json does not designate. It reports
+// pruneFolders removes the plugin folders and the version folders that are not the version in use of an installed
+// plugin, and the sidecar folders and version folders that installed.json does not designate. It reports
 // every folder that it could not remove.
 func pruneFolders(configDir string, state *InstalledState) error {
 	var failures []error
@@ -1113,7 +1112,7 @@ func pruneFolders(configDir string, state *InstalledState) error {
 			continue
 		}
 		for _, version := range versions {
-			if version.Name() != plugin.Version && version.Name() != plugin.Previous {
+			if version.Name() != plugin.Version {
 				remove(filepath.Join(plugins, folder.Name(), version.Name()))
 			}
 		}

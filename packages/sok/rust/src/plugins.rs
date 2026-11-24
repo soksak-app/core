@@ -1061,7 +1061,6 @@ impl DependencyPlan<'_> {
             path: plugin_path,
             enabled: current.is_none_or(|plugin| plugin.enabled),
             sidecars: selection.version.sidecars.clone(),
-            previous: current.map(|plugin| plugin.version.clone()),
         };
         self.state.plugins.insert(id.to_string(), entry);
         for sidecar in selection.sidecars {
@@ -1117,7 +1116,7 @@ fn folder_names(path: &Path) -> Result<Vec<(String, bool)>, String> {
     Ok(names)
 }
 
-/// Removes the plugin folders and version folders that are neither the version in use nor the previous version of an installed plugin, and the sidecar folders and
+/// Removes the plugin folders and the version folders that are not the version in use of an installed plugin, and the sidecar folders and
 /// version folders that installed.json does not specify. It reports every folder that it could not remove.
 fn prune_folders(config_dir: &Path, state: &InstalledState) -> Result<(), String> {
     let mut failures = vec![];
@@ -1136,7 +1135,7 @@ fn prune_folders(config_dir: &Path, state: &InstalledState) -> Result<(), String
             continue;
         };
         for (version, _) in folder_names(&plugins.join(&name))? {
-            if version != plugin.version && Some(&version) != plugin.previous.as_ref() {
+            if version != plugin.version {
                 remove(plugins.join(&name).join(&version));
             }
         }

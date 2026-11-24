@@ -1052,7 +1052,6 @@ type InstalledPlugin struct {
 	Path     string            `json:"path"`
 	Enabled  bool              `json:"enabled"`
 	Sidecars map[string]string `json:"sidecars"`
-	Previous string            `json:"previous,omitempty"`
 }
 
 // InstalledSidecar is one installed sidecar. Path is the folder that installation extracted its platform release into,
@@ -1063,8 +1062,7 @@ type InstalledSidecar struct {
 }
 
 // InstalledState is the installation state file (`plugins/installed.json`). For each plugin id it holds the version in
-// use, the extracted folder, whether the plugin is enabled, the sidecar ranges of that version and the previous version
-// to return to. For each sidecar it holds the one version that all plugins share and its folder. The installation
+// use, the extracted folder, whether the plugin is enabled and the sidecar ranges of that version. For each sidecar it holds the one version that all plugins share and its folder. The installation
 // records the folders and the host reads only the recorded folders.
 type InstalledState struct {
 	Format   int                         `json:"format"`
@@ -1124,16 +1122,11 @@ func ValidateInstalled(value any) (*InstalledState, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := only(where, item, "enabled", "path", "previous", "sidecars", "version"); err != nil {
+		if err := only(where, item, "enabled", "path", "sidecars", "version"); err != nil {
 			return nil, err
 		}
 		if _, ok := item["enabled"].(bool); !ok {
 			return nil, fmt.Errorf("%s: enabled must be true or false", where)
-		}
-		if previous, ok := item["previous"]; ok {
-			if err := checkVersion(where+" previous", previous); err != nil {
-				return nil, err
-			}
 		}
 		if err := checkDependencyRanges(where+" sidecars", item["sidecars"]); err != nil {
 			return nil, err

@@ -549,7 +549,7 @@ fn plugin_install_refuses_a_release_with_a_binary_path() {
 
 // contract: cli.plugin.update-remove-enable-list
 #[test]
-fn plugin_update_keeps_previous_and_remove_deletes_the_folders() {
+fn plugin_update_keeps_only_the_version_in_use_and_remove_deletes_the_folders() {
     let config = Folder::new("plugins");
     let first = plugin_versions(&["0.2.0"]);
     run_json(&[
@@ -568,7 +568,7 @@ fn plugin_update_keeps_previous_and_remove_deletes_the_folders() {
     let disabled = run_json(&["plugin", "disable", "probe", "--config-dir", config.text()]);
     assert_eq!(disabled["enabled"], false);
     let mut registries = vec![first];
-    for (version, previous) in [("0.3.0", "0.2.0"), ("0.4.0", "0.3.0")] {
+    for version in ["0.3.0", "0.4.0"] {
         let registry = plugin_versions(&["0.2.0", version]);
         run_json(&[
             "registry",
@@ -579,7 +579,7 @@ fn plugin_update_keeps_previous_and_remove_deletes_the_folders() {
         ]);
         let updated = run_json(&["plugin", "update", "probe", "--config-dir", config.text()]);
         assert_eq!(updated["plugin"]["version"], version);
-        assert_eq!(updated["plugin"]["previous"], previous);
+        assert!(updated["plugin"].get("previous").is_none(), "{updated}");
         assert_eq!(updated["plugin"]["enabled"], false);
         registries.push(registry);
     }
@@ -588,7 +588,7 @@ fn plugin_update_keeps_previous_and_remove_deletes_the_folders() {
         .map(|entry| entry.unwrap().file_name().into_string().unwrap())
         .collect();
     names.sort();
-    assert_eq!(names, ["0.3.0", "0.4.0"]);
+    assert_eq!(names, ["0.4.0"]);
     let (code, stdout, _) = run(&["plugin", "list", "--config-dir", config.text()]);
     assert!(
         code == 0 && stdout.contains(r#""probe": {"#) && stdout.contains(r#""format": 3"#),
@@ -1171,12 +1171,8 @@ fn plugin_install_installs_the_plugin_dependencies() {
     let state = installed_of(&config);
     let provider = &state.plugins["base"];
     assert_eq!(
-        (
-            provider.version.as_str(),
-            provider.enabled,
-            provider.previous.as_deref()
-        ),
-        ("1.1.0", true, None)
+        (provider.version.as_str(), provider.enabled),
+        ("1.1.0", true)
     );
     assert_eq!(
         serde_json::to_string(&provider.sidecars).unwrap(),
@@ -1201,12 +1197,8 @@ fn plugin_install_installs_the_plugin_dependencies() {
     succeeds(&["plugin", "install", "ext", "--config-dir", config.text()]);
     let provider = &installed_of(&config).plugins["base"];
     assert_eq!(
-        (
-            provider.version.as_str(),
-            provider.enabled,
-            provider.previous.as_deref()
-        ),
-        ("1.0.0", true, None)
+        (provider.version.as_str(), provider.enabled),
+        ("1.0.0", true)
     );
     // An installed provider that does not satisfy the range gets the newest version that satisfies it.
     let config = Folder::new("plugins");
@@ -1214,10 +1206,7 @@ fn plugin_install_installs_the_plugin_dependencies() {
     succeeds(&["plugin", "install", "base", "--config-dir", config.text()]);
     succeeds(&["plugin", "install", "ext", "--config-dir", config.text()]);
     let provider = &installed_of(&config).plugins["base"];
-    assert_eq!(
-        (provider.version.as_str(), provider.previous.as_deref()),
-        ("1.1.0", Some("2.0.0"))
-    );
+    assert_eq!(provider.version, "1.1.0");
 }
 
 // contract: cli.plugin.dependencies-install
@@ -1342,10 +1331,7 @@ fn plugin_update_selects_a_provider_version_that_satisfies_every_dependent() {
     use_registry(&config, &full);
     succeeds(&["plugin", "update", "base", "--config-dir", config.text()]);
     let provider = &installed_of(&config).plugins["base"];
-    assert_eq!(
-        (provider.version.as_str(), provider.previous.as_deref()),
-        ("1.1.0", Some("1.0.0"))
-    );
+    assert_eq!(provider.version, "1.1.0");
     // A disabled dependent also names a range.
     succeeds(&["plugin", "disable", "ext", "--config-dir", config.text()]);
     succeeds(&["plugin", "update", "base", "--config-dir", config.text()]);
@@ -1353,10 +1339,7 @@ fn plugin_update_selects_a_provider_version_that_satisfies_every_dependent() {
     succeeds(&["plugin", "remove", "ext", "--config-dir", config.text()]);
     succeeds(&["plugin", "update", "base", "--config-dir", config.text()]);
     let provider = &installed_of(&config).plugins["base"];
-    assert_eq!(
-        (provider.version.as_str(), provider.previous.as_deref()),
-        ("2.0.0", Some("1.1.0"))
-    );
+    assert_eq!(provider.version, "2.0.0");
 }
 
 // contract: cli.plugin.dependencies-required

@@ -351,7 +351,7 @@ func TestPluginInstallRefusesAReleaseWithABinaryPath(t *testing.T) {
 }
 
 // contract: cli.plugin.update-remove-enable-list
-func TestPluginUpdateKeepsPreviousAndRemoveDeletesTheFolders(t *testing.T) {
+func TestPluginUpdateKeepsOnlyTheVersionInUseAndRemoveDeletesTheFolders(t *testing.T) {
 	config := t.TempDir()
 	runJSON(t, "registry", "use", pluginVersions(t, "0.2.0"), "--config-dir", config)
 	code, _, stderr := run("plugin", "update", "probe", "--config-dir", config)
@@ -363,12 +363,12 @@ func TestPluginUpdateKeepsPreviousAndRemoveDeletesTheFolders(t *testing.T) {
 	if code != 0 || !strings.Contains(stdout, `"enabled": false`) {
 		t.Fatalf("disable %d %q", code, stdout)
 	}
-	for _, step := range [][2]string{{"0.3.0", "0.2.0"}, {"0.4.0", "0.3.0"}} {
-		runJSON(t, "registry", "use", pluginVersions(t, "0.2.0", step[0]), "--config-dir", config)
+	for _, version := range []string{"0.3.0", "0.4.0"} {
+		runJSON(t, "registry", "use", pluginVersions(t, "0.2.0", version), "--config-dir", config)
 		code, stdout, stderr := run("plugin", "update", "probe", "--config-dir", config)
-		if code != 0 || !strings.Contains(stdout, `"version": "`+step[0]+`"`) || !strings.Contains(stdout, `"previous": "`+step[1]+`"`) ||
+		if code != 0 || !strings.Contains(stdout, `"version": "`+version+`"`) || strings.Contains(stdout, `"previous"`) ||
 			!strings.Contains(stdout, `"enabled": false`) {
-			t.Fatalf("update to %s: %d %q %q", step[0], code, stdout, stderr)
+			t.Fatalf("update to %s: %d %q %q", version, code, stdout, stderr)
 		}
 	}
 	entries, err := os.ReadDir(filepath.Join(config, "plugins/probe"))
@@ -379,7 +379,7 @@ func TestPluginUpdateKeepsPreviousAndRemoveDeletesTheFolders(t *testing.T) {
 	for _, entry := range entries {
 		names = append(names, entry.Name())
 	}
-	if fmt.Sprint(names) != "[0.3.0 0.4.0]" {
+	if fmt.Sprint(names) != "[0.4.0]" {
 		t.Fatalf("version folders %v", names)
 	}
 	code, stdout, _ = run("plugin", "list", "--config-dir", config)
@@ -800,7 +800,7 @@ func TestPluginInstallInstallsThePluginDependencies(t *testing.T) {
 		t.Fatalf("install ext %q", stdout)
 	}
 	state := installedOf(t, config)
-	if provider := state.Plugins["base"]; provider.Version != "1.1.0" || !provider.Enabled || provider.Previous != "" ||
+	if provider := state.Plugins["base"]; provider.Version != "1.1.0" || !provider.Enabled ||
 		fmt.Sprint(provider.Sidecars) != "map[@scope/sidecar-worker:^0.1.0]" || state.Sidecars["@scope/sidecar-worker"].Version != "0.1.0" {
 		t.Fatalf("installed %+v", state)
 	}
@@ -814,7 +814,7 @@ func TestPluginInstallInstallsThePluginDependencies(t *testing.T) {
 	succeeds(t, "plugin", "disable", "base", "--config-dir", config)
 	useRegistry(t, config, full)
 	succeeds(t, "plugin", "install", "ext", "--config-dir", config)
-	if provider := installedOf(t, config).Plugins["base"]; provider.Version != "1.0.0" || !provider.Enabled || provider.Previous != "" {
+	if provider := installedOf(t, config).Plugins["base"]; provider.Version != "1.0.0" || !provider.Enabled {
 		t.Fatalf("kept provider %+v", provider)
 	}
 	// An installed provider that does not satisfy the range gets the newest version that satisfies it.
@@ -822,7 +822,7 @@ func TestPluginInstallInstallsThePluginDependencies(t *testing.T) {
 	useRegistry(t, config, full)
 	succeeds(t, "plugin", "install", "base", "--config-dir", config)
 	succeeds(t, "plugin", "install", "ext", "--config-dir", config)
-	if provider := installedOf(t, config).Plugins["base"]; provider.Version != "1.1.0" || provider.Previous != "2.0.0" {
+	if provider := installedOf(t, config).Plugins["base"]; provider.Version != "1.1.0" {
 		t.Fatalf("replaced provider %+v", provider)
 	}
 }
@@ -903,7 +903,7 @@ func TestPluginUpdateSelectsAProviderVersionThatSatisfiesEveryDependent(t *testi
 	succeeds(t, "plugin", "install", "ext", "--config-dir", config)
 	useRegistry(t, config, dependencyRegistry(t, base("1.0.0"), base("1.1.0"), base("2.0.0"), ext("^1.0.0")))
 	succeeds(t, "plugin", "update", "base", "--config-dir", config)
-	if provider := installedOf(t, config).Plugins["base"]; provider.Version != "1.1.0" || provider.Previous != "1.0.0" {
+	if provider := installedOf(t, config).Plugins["base"]; provider.Version != "1.1.0" {
 		t.Fatalf("update with a dependent %+v", provider)
 	}
 	// A disabled dependent also names a range.
@@ -914,7 +914,7 @@ func TestPluginUpdateSelectsAProviderVersionThatSatisfiesEveryDependent(t *testi
 	}
 	succeeds(t, "plugin", "remove", "ext", "--config-dir", config)
 	succeeds(t, "plugin", "update", "base", "--config-dir", config)
-	if provider := installedOf(t, config).Plugins["base"]; provider.Version != "2.0.0" || provider.Previous != "1.1.0" {
+	if provider := installedOf(t, config).Plugins["base"]; provider.Version != "2.0.0" {
 		t.Fatalf("update without a dependent %+v", provider)
 	}
 }

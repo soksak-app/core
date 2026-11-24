@@ -359,6 +359,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1140",
+    implementation: [
+      { file: "packages/sok/go/src/plugins.go", symbol: "			if version.Name() != plugin.Version {" },
+      { file: "packages/sok/rust/src/plugins.rs", symbol: "            if version != plugin.version {" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/plugins_test.go", id: "TestPluginUpdateKeepsOnlyTheVersionInUseAndRemoveDeletesTheFolders" },
+      { file: "packages/sok/go/tests/install_test.go", id: "TestInstalledStateNamesOneVersionOfEachPluginAndSidecar" },
+      { file: "packages/sok/rust/tests/plugins_test.rs", id: "plugin_update_keeps_only_the_version_in_use_and_remove_deletes_the_folders" },
+      { file: "packages/sok/rust/tests/install_test.rs", id: "installed_state_names_one_version_of_each_plugin_and_sidecar" },
+    ],
+    expected: "installed.json records no previous version, an update keeps only the folder of the version in use, and a reader refuses a plugin entry with previous.",
+    levels: ["unit"],
+  },
+  {
     id: "F1141",
     implementation: [
       { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) sessionsLocked(process *sidecar) int {" },

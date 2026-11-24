@@ -380,11 +380,11 @@ func TestPluginIDCoreIsReservedForTheCoreRoot(t *testing.T) {
 // contract: install.installed.consistency
 func TestInstalledStateNamesOneVersionOfEachPluginAndSidecar(t *testing.T) {
 	text := `{"format": 3, "plugins": {
-		"probe": {"version": "0.2.0", "path": "plugins/probe/0.2.0", "enabled": true, "previous": "0.1.0", "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
+		"probe": {"version": "0.2.0", "path": "plugins/probe/0.2.0", "enabled": true, "sidecars": {"@scope/sidecar-worker": "^0.1.0"}},
 		"side": {"version": "1.0.0", "path": "plugins/side/1.0.0", "enabled": false, "sidecars": {}}},
 		"sidecars": {"@scope/sidecar-worker": {"version": "0.1.1", "path": "sidecars/scope-sidecar-worker/0.1.1/darwin-arm64"}}}`
 	state, err := sok.ValidateInstalled(decode(t, text))
-	if err != nil || state.Plugins["probe"].Previous != "0.1.0" || state.Sidecars["@scope/sidecar-worker"].Version != "0.1.1" ||
+	if err != nil || state.Sidecars["@scope/sidecar-worker"].Version != "0.1.1" ||
 		state.Plugins["probe"].Path != "plugins/probe/0.2.0" {
 		t.Fatalf("%v %v", state, err)
 	}
@@ -394,6 +394,7 @@ func TestInstalledStateNamesOneVersionOfEachPluginAndSidecar(t *testing.T) {
 	}{
 		{func(v any) { delete(at(v, "plugins", "probe").(map[string]any), "enabled") }, "plugins/installed.json probe: enabled must be true or false"},
 		{func(v any) { at(v, "plugins", "side").(map[string]any)["package"] = "plugin-side" }, "plugins/installed.json side: unknown field package"},
+		{func(v any) { at(v, "plugins", "probe").(map[string]any)["previous"] = "0.1.0" }, "plugins/installed.json probe: unknown field previous"},
 		{func(v any) { delete(v.(map[string]any), "sidecars") }, "plugins/installed.json sidecars: expected an object"},
 		{func(v any) { delete(at(v, "plugins", "side").(map[string]any), "sidecars") }, "plugins/installed.json side sidecars: expected an object"},
 		{func(v any) { v.(map[string]any)["sidecars"] = map[string]any{} }, "plugins/installed.json probe: sidecar @scope/sidecar-worker has no version in use"},

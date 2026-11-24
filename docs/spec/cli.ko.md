@@ -106,8 +106,8 @@ Go 도구의 모든 goroutine은 `Go`(`src/routine.go`)로, Rust 도구의 모�
 `sok plugin install <id>`는 `plugins/registry.json`이 지정한 index와 `plugins/installed.json`(없으면 설치된 것이 없다)을 읽고, 이 `sok`의 core version과 실행 중인 플랫폼에 맞는 version을 고른 뒤([version 선택](installation.ko.md#version-선택)) 다음을 한다.
 
 1. 아직 설치되지 않은 고른 release마다 읽어 `sha256`을 비교하고, 설치 경로 옆 임시 폴더에 푼 뒤 이름을 바꿔 제자리에 둔다.
-2. `plugins/installed.json`을 한 번에 쓴다. Plugin은 version, `enabled: true`, 그 version의 sidecar 범위, 다른 version을 바꿀 때의 `previous`를 가진다. 고른 sidecar version을 담고, 어느 plugin도 지정하지 않은 sidecar는 담지 않는다.
-3. 설치된 plugin의 쓰는 version과 `previous`가 아닌 모든 plugin 폴더와 version 폴더, `installed.json`이 지정하지 않은 모든 sidecar 폴더와 version 폴더를 지운다.
+2. `plugins/installed.json`을 한 번에 쓴다. Plugin은 version, `enabled: true`, 그 version의 sidecar 범위를 가진다. 고른 sidecar version을 담고, 어느 plugin도 지정하지 않은 sidecar는 담지 않는다.
+3. 설치된 plugin의 쓰는 version이 아닌 모든 plugin 폴더와 version 폴더, `installed.json`이 지정하지 않은 모든 sidecar 폴더와 version 폴더를 지운다.
 
 이미 고른 version으로 설치된 plugin은 바꾸지 않는다. 1단계나 2단계가 실패하면 `installed.json`은 그대로이고 그 단계를 보고한다. 3단계가 실패하면 지우지 못한 폴더를 보고한다. 풀기는 `..` 없는 상대 경로의 일반 파일과 폴더만 받고, 실행 bit가 있는 파일은 mode 0755, 그 밖에는 0644로 둔다. 1단계 전에 명령은 고른 각 version의 `plugin.json`을 [plugin release](installation.ko.md#plugin-release)의 규칙으로 검사한다. 거부되는 manifest는 위치와 reader의 문구로 명령을 실패시키며, 아무것도 바꾸지 않는다. 출력은 `{ plugin, sidecars }`이며, `installed.json`의 plugin 항목과 그것이 쓰는 sidecar version이다.
 

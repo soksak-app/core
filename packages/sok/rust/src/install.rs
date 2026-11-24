@@ -947,8 +947,6 @@ pub struct InstalledPlugin {
     pub path: String,
     pub enabled: bool,
     pub sidecars: BTreeMap<String, String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub previous: Option<String>,
 }
 
 /// One installed sidecar. path is the absolute folder that installation extracted its platform release into.
@@ -959,7 +957,7 @@ pub struct InstalledSidecar {
 }
 
 /// The installation state file (`plugins/installed.json`). For each plugin id it holds the package.json name, the version in use, the unpacked folder, whether the plugin is enabled, the
-/// sidecar ranges of that version and the previous version to restore. For each sidecar it holds the one version that all plugins share and its
+/// sidecar ranges of that version. For each sidecar it holds the one version that all plugins share and its
 /// folder. The installation records the folder, and the host reads only recorded folders.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct InstalledState {
@@ -1022,16 +1020,9 @@ pub fn validate_installed(value: &Value) -> Result<InstalledState, String> {
             return Err(format!("{at}: id must be a lowercase identifier"));
         }
         let item = object(&at, plugins.get(id))?;
-        only(
-            &at,
-            item,
-            &["enabled", "path", "previous", "sidecars", "version"],
-        )?;
+        only(&at, item, &["enabled", "path", "sidecars", "version"])?;
         if !item.get("enabled").is_some_and(Value::is_boolean) {
             return Err(format!("{at}: enabled must be true or false"));
-        }
-        if let Some(previous) = item.get("previous") {
-            check_version(&format!("{at} previous"), Some(previous))?;
         }
         check_sidecar_ranges(&format!("{at} sidecars"), item.get("sidecars"))?;
         let version = check_version(&format!("{at} version"), item.get("version"))?;
