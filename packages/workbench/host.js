@@ -127,8 +127,14 @@ function windowOverlays() {
  * drawn above the native surfaces and takes the pointer (docs/spec/native-surfaces.md#surface-host-container). A shown modal or dialog
  * surface holds the toasts in its own document or decides the pointer of the window, so no toast is cut while one is open.
  */
+// Whether the element is in an error toast of the main document.
+function inErrorToast(element) {
+  const holder = document.getElementById("errorToasts");
+  return holder !== null && holder.parentElement === document.body && holder.contains(element);
+}
+
 function toastCuts() {
-  if (dialogSurface() !== null || shown) return [];
+  if (shown) return [];
   const holder = document.getElementById("errorToasts");
   if (!holder || holder.parentElement !== document.body) return [];
   return [...holder.querySelectorAll(":scope > .error-toast")]
@@ -995,11 +1001,12 @@ export function overlayElementRect(element) {
 /**
  * Whether the open dialog stands over the element, which makes the element inert (docs/spec/exposure.md). null names the document
  * of the surface, which a dialog covers as a whole. A modal of the kind menu makes no element inert. A dialog surface stands over
- * every element of this document and over the document of every other surface (docs/spec/plugins.md#dialogs).
+ * every element of this document but an error toast, and over the document of every other surface (docs/spec/plugins.md#dialogs).
  */
 export function behindDialog(element, surface) {
   const dialog = dialogSurface();
-  if (dialog !== null) return element !== null || surface !== dialog;
+  // An error toast is the topmost layer of the window, above a dialog surface too (docs/spec/native-modals.md#toast-overlay).
+  if (dialog !== null) return element !== null ? !inErrorToast(element) : surface !== dialog;
   const el = shown ? document.getElementById(shown) : null;
   return el?.dataset.nativeModal === "dialog" && !el.contains(element);
 }

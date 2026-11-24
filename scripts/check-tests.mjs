@@ -359,6 +359,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1147-1",
+    implementation: [
+      { file: "packages/workbench/host.js", symbol: "if (dialog !== null) return element !== null ? !inErrorToast(element) : surface !== dialog;" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/toast-over-dialog.test.mjs", id: "an error toast is cut out of the surface hosts and takes the pointer while a dialog surface is open" },
+    ],
+    expected: "While a dialog surface is open, the page still cuts each error toast out of the container of the surface hosts, and an element of an error toast is not inert behind the dialog, so a refusal that a dialog reports shows above it and closes on a press.",
+    levels: ["unit"],
+  },
+  {
     id: "F1147",
     implementation: [
       { file: "packages/workbench/host.js", symbol: "function toastCuts() {" },
@@ -375,7 +386,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/tests/surfaces_geometry_test.go", id: "TestSyncRequestCheckRejectsAnInvalidWindowOverlayRectangle" },
       { file: "packages/host/rust/tests/surfaces_geometry_test.rs", id: "sync_request_check_rejects_an_invalid_window_overlay_rectangle" },
     ],
-    expected: "While no modal and no dialog surface is open, the page sends each error toast as a window overlay with cut true and lays out again when a toast opens or closes, both hosts require cut and pack it as the fifth value, and the window composition masks the container of the surface hosts without the cut rectangles, so the toast is drawn above the surfaces.",
+    expected: "While no modal is open, the page sends each error toast as a window overlay with cut true and lays out again when a toast opens or closes, both hosts require cut and pack it as the fifth value, and the window composition masks the container of the surface hosts without the cut rectangles, so the toast is drawn above the surfaces.",
     levels: ["unit"],
   },
   {
