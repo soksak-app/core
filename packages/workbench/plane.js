@@ -181,7 +181,7 @@ let named = 0;
       T3 and T4 handle moving an existing tab.
    T3 Drop in the center = the tab joins the target card. The layout stays as it is.
    T4 Drop on an edge = a new slot is needed on that side.
-   T5 When the last tab leaves, the card disappears — no empty card remains.        */
+   T5 When the last tab leaves, the card disappears, unless the layout cannot close it, which keeps it as an empty card. */
 // A tab stores params only when it was opened with them (docs/spec/plugins.md#pluginjson).
 // A new tab id is held by no tab that this page issued, no tab of a stored layout, no tab that this window closed and no surface that
 // waits for its image detach; the tabs of the plane are issued or stored tabs.

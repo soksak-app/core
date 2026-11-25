@@ -554,6 +554,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1198",
+    implementation: [
+      { file: "packages/workbench/verify.js", symbol: "const empty = cards.filter((c) => !isPlace(c.id) && tabsOf(c).length === 0 && tree.canClose(c.id));" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/verify-empty-card.test.mjs", id: "T5 accepts the empty card of a layout that cannot close it" },
+      { file: "packages/workbench/test/verify-empty-card.test.mjs", id: "T5 fails for an empty card that the layout could close" },
+    ],
+    expected: "The diagnostic check T5 fails only for an empty card that the layout could close.",
+    levels: ["unit"],
+  },
+  {
     id: "F1197",
     implementation: [
       { file: "packages/workbench/library-preview.js", symbol: "else if(active) pane.dataset.plugin=active.plugin;" },

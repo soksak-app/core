@@ -438,8 +438,8 @@ export function verify(controls = null) {
       `최대 ${bandOff.toFixed(2)}px · 카드 ${banded}장 · ` +
         `머리 ${band.headerPx.toFixed(1)}px · 발 ${band.footerPx.toFixed(1)}px`);
 
-  // T5 — an empty card is not a reachable state.
-  const empty = cards.filter((c) => !isPlace(c.id) && tabsOf(c).length === 0);
+  // T5 — an empty card remains only where the layout cannot close it, such as the last content card (docs/spec/cli.md#acting-on-a-layout).
+  const empty = cards.filter((c) => !isPlace(c.id) && tabsOf(c).length === 0 && tree.canClose(c.id));
   add("T5 빈 카드 0", empty.length === 0, `${cards.length - empty.length}/${cards.length} 카드가 내용을 가짐`);
 
   // Checks that every window sidebar is placed by its own rule. It measures the drawn width, not the declared value.
