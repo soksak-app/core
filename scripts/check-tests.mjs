@@ -496,6 +496,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1192",
+    implementation: [
+      { file: "packages/workbench-mygo/src/keyboard.go", symbol: "owed := !registeredBySurface(name)" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/page_end_test.go", id: "TestTheCloseOfAWindowWaitsForNoCommandThatASurfaceServes" },
+    ],
+    expected: "The close of a mygo window, and so the quit of the application, waits for no command that a surface of the window serves.",
+    levels: ["unit"],
+  },
+  {
     id: "F1189",
     implementation: [
       { file: "apps/gpuikit/platform/darwin/AppIcon.icon/icon.json", symbol: '"image-name-specializations" : [' },

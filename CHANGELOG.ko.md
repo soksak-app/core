@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1192-1: test inventory의 feature link가 F1192를 그 구현과 test에 잇는다.
 - F1191-1: core version은 모든 package와 crate manifest, Info.plist, Tauri 파일, Go와 pkg-config 선언, Cargo.lock의 workspace 항목 여섯 개, scripts/check-versions.mjs에서 0.0.58이다.
 - F1190-1: session이 돌아오지 않은 복원 탭의 toast는 저장된 title로 탭을 밝히고 그 session이 재시작 전에 끝났다고 말한다. mygo와 page workbench가 같다.
 - F1192: mygo 창의 닫기와 그에 따른 application 종료는 표면이 처리하는 명령을 기다리지 않으므로, 몇 시간을 기다리는 plugin 명령이 더는 종료를 붙잡지 않는다.
