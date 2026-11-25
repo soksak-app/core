@@ -53,7 +53,7 @@ fn index_for_release(path: &Path, sum: &str) -> Folder {
 
 /// Packages a view plugin whose programs.run names plugin:bin/tool with the given package files, which are executable when
 /// executable is true, and installs it. Returns the exit code, the standard error and whether the installation state was written.
-fn install_program_probe(files: &[&str], executable: bool) -> (i32, String, bool) {
+fn install_program_probe(files: &[&str], executable: bool) -> (i32, String, bool, bool) {
     let manifest = json!({"id": "probe", "name": "Probe", "description": "Sample.",
         "surface": {"composition": {"kind": "view", "page": "ui/page.html"}},
         "mark": "P", "icon": "<svg></svg>",
@@ -92,7 +92,8 @@ fn install_program_probe(files: &[&str], executable: bool) -> (i32, String, bool
     assert_eq!(code, 0, "registry use: {stderr}");
     let (code, _, stderr) = run(&["plugin", "install", "probe", "--config-dir", config.text()]);
     let installed = config.path().join("plugins/installed.json").exists();
-    (code, stderr, installed)
+    let folder = config.path().join("plugins/probe/0.2.0").exists();
+    (code, stderr, installed, folder)
 }
 
 /// Sets the owner, group and other execute bits of a file that is written by a test.
@@ -105,23 +106,35 @@ fn set_executable(path: &Path, executable: bool) {
 // contract: install.plugin-program-file
 #[test]
 fn plugin_install_checks_the_program_file_of_the_plugin() {
-    let (code, stderr, installed) = install_program_probe(&["bin/tool"], true);
+    let (code, stderr, installed, _) = install_program_probe(&["bin/tool"], true);
     assert!(
         code == 0 && installed,
         "an executable program file: code {code} stderr {stderr:?}"
     );
 
-    let (code, stderr, installed) = install_program_probe(&["bin/tool"], false);
+    let (code, stderr, installed, _) = install_program_probe(&["bin/tool"], false);
     let want = "sok: plugin probe: programs.run program plugin:bin/tool is not a regular executable file\n";
     assert!(
         code == 1 && stderr == want && !installed,
         "a program file without an execute bit: code {code} stderr {stderr:?}"
     );
 
-    let (code, stderr, installed) = install_program_probe(&[], true);
+    let (code, stderr, installed, _) = install_program_probe(&[], true);
     let want = "sok: plugin probe: programs.run program plugin:bin/tool is not found\n";
     assert!(
         code == 1 && stderr == want && !installed,
         "a missing program file: code {code} stderr {stderr:?}"
     );
+}
+
+/// A refused installation removes the version folder that it extracted, so the next installation of the same version extracts the
+/// release again instead of reading the refused files (docs/spec/installation.md#installation-layout).
+#[test]
+fn a_refused_plugin_install_leaves_no_version_folder() {
+    let (code, stderr, installed, folder) = install_program_probe(&["bin/tool"], false);
+    assert!(
+        code == 1 && !installed,
+        "a program file without an execute bit: code {code} stderr {stderr:?}"
+    );
+    assert!(!folder, "the refused installation left plugins/probe/0.2.0");
 }

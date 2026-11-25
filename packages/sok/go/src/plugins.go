@@ -486,7 +486,7 @@ func writeInstalled(configDir string, state *InstalledState) error {
 // extract extracts a tar.gz release into a temporary folder next to target and then moves it to target by rename. It
 // accepts only regular files and folders and rejects absolute paths and `..`. Every entry must be inside packageRoot,
 // which is removed from the installed paths: a plugin and a sidecar release hold their files under `package/`
-// (docs/spec/installation.md#plugin-release).
+// (docs/spec/installation.md#installation-layout).
 func extract(data []byte, target string) (err error) {
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return fileError(filepath.Dir(target), err)
@@ -602,9 +602,18 @@ func InstallPlugin(configDir, id, core, platform string, update bool, running Ru
 }
 
 // installPlugin is InstallPlugin with the check of stop before each step that changes the configuration folder (UpdatePluginUnless).
-// A nil stop never stops.
-func installPlugin(configDir, id, core, platform string, update bool, running Running, stop func() bool) (map[string]any, error) {
+// A nil stop never stops. A refused or stopped installation removes the version folders that it extracted, because the plan reads an
+// existing version folder as installed and would read the refused files again (docs/spec/installation.md#installation-layout).
+func installPlugin(configDir, id, core, platform string, update bool, running Running, stop func() bool) (result map[string]any, err error) {
 	stopped := func() bool { return stop != nil && stop() }
+	var extracted []string
+	defer func() {
+		if err != nil {
+			for _, folder := range extracted {
+				err = withCleanup(err, folder, os.RemoveAll)
+			}
+		}
+	}()
 	index, err := readRegistry(configDir)
 	if err != nil {
 		return nil, err
@@ -641,9 +650,11 @@ func installPlugin(configDir, id, core, platform string, update bool, running Ru
 			continue
 		}
 		plugin := state.Plugins[changed]
-		if err := extract(data, filepath.Join(configDir, plugin.Path)); err != nil {
+		folder := filepath.Join(configDir, plugin.Path)
+		if err := extract(data, folder); err != nil {
 			return nil, fmt.Errorf("plugin %s %s package: %w", changed, plugin.Version, err)
 		}
+		extracted = append(extracted, folder)
 	}
 	if err := checkProgramFiles(configDir, state, plan.order); err != nil {
 		return nil, err
@@ -658,8 +669,13 @@ func installPlugin(configDir, id, core, platform string, update bool, running Ru
 		if !ok || installed.Version != sidecar.Version {
 			continue
 		}
-		if err := installRelease("sidecar "+sidecar.Name+" "+sidecar.Version+" "+platform, sidecar.Release, filepath.Join(configDir, installed.Path)); err != nil {
+		folder := filepath.Join(configDir, installed.Path)
+		_, statErr := os.Stat(folder)
+		if err := installRelease("sidecar "+sidecar.Name+" "+sidecar.Version+" "+platform, sidecar.Release, folder); err != nil {
 			return nil, err
+		}
+		if errors.Is(statErr, fs.ErrNotExist) {
+			extracted = append(extracted, folder)
 		}
 	}
 	if err := checkServiceFolders(configDir, state); err != nil {
@@ -681,6 +697,8 @@ func installPlugin(configDir, id, core, platform string, update bool, running Ru
 	if err := writeInstalled(configDir, state); err != nil {
 		return nil, err
 	}
+	// The written state names the extracted folders, so a later error keeps them.
+	extracted = nil
 	if err := pruneFolders(configDir, state); err != nil {
 		return nil, err
 	}
@@ -1058,7 +1076,7 @@ func (p *dependencyPlan) replace(id string, current InstalledPlugin, installed b
 		return err
 	}
 	// The reader checks the manifest before its id is compared, so every case of the manifest case table gets the
-	// reader's text (docs/spec/installation.md#plugin-release).
+	// reader's text (docs/spec/installation.md#installation-layout).
 	if err := ValidateManifest(manifest); err != nil {
 		return fmt.Errorf("%s: %w", file, err)
 	}

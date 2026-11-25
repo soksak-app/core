@@ -5,6 +5,7 @@
 
 ## 2026-11-25
 
+- F1165: Go와 Rust의 `sok plugin install`과 `sok plugin update`가 `plugins/installed.json`을 쓰기 전에 거절되거나 멈춘 설치가 푼 각 version 폴더를 지워서, 같은 version의 다음 설치가 release를 다시 풀어요. Red/Green: `TestARefusedPluginInstallLeavesNoVersionFolder`, `a_refused_plugin_install_leaves_no_version_folder`.
 - F1166-1: core version은 모든 package와 crate manifest, Info.plist, Tauri 파일, Go와 pkg-config 선언, Cargo.lock의 workspace 항목 여섯 개, scripts/check-versions.mjs에서 0.0.54예요.
 - F1164: page workbench와 mygo workbench가 dialog surface의 document region에 tab session을 두지 않아서, dialog region의 sign-in page가 더 이상 `invalid tab session tab: dialog/<plugin>/<name>`을 보이지 않아요. Red/Green: `the regions of a dialog surface keep no tab session`, `TestTheRegionsOfADialogSurfaceKeepNoTabSession`.
 - F1163: `plugin.json`의 `dialogs.<name>`은 `{page, regions?}`이고 dialog surface가 composition `{kind: "view", page, regions}`를 가져서, dialog page가 자기 element의 document region에 web document를 보여 줘요. `@soksak/plugin-api`, Go `sok`, Rust `sok`의 reader가 region을 view composition의 region처럼 검사하고 다른 member를 `dialogs.<name> must be {page, regions?}`로 거절해요. Red/Green: `manifest-validation.json`의 dialog case, workbench의 environment test, `TestADialogSurfaceHasTheRegionsOfItsDeclaration`.

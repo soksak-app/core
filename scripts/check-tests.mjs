@@ -470,6 +470,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1165",
+    implementation: [
+      { file: "packages/sok/go/src/plugins.go", symbol: "extracted = append(extracted, folder)" },
+      { file: "packages/sok/rust/src/plugins.rs", symbol: "extracted.push(folder);" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/plugin_program_file_test.go", id: "TestARefusedPluginInstallLeavesNoVersionFolder" },
+      { file: "packages/sok/rust/tests/plugin_program_file_test.rs", id: "a_refused_plugin_install_leaves_no_version_folder" },
+    ],
+    expected: "A refused or stopped plugin installation removes the version folders that it extracted before it wrote the installation state.",
+    levels: ["unit"],
+  },
+  {
     id: "F1164",
     implementation: [
       { file: "packages/workbench/tab-session.js", symbol: "const keepsSession = (tab) => !isDialogSurface(tab);" },

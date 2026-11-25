@@ -665,7 +665,7 @@ pub(crate) fn write_installed(config_dir: &Path, state: &InstalledState) -> Resu
 
 /// Unpacks a tar.gz release into a temporary folder next to target, then renames it to target. It accepts only regular files and folders and rejects absolute paths and
 /// `..`. Every entry must be inside PACKAGE_ROOT, which is removed from the installed paths: a plugin and a sidecar release hold
-/// their files under `package/` (docs/spec/installation.md#plugin-release).
+/// their files under `package/` (docs/spec/installation.md#installation-layout).
 fn extract(data: &[u8], target: &Path) -> Result<(), String> {
     create_parent(target)?;
     let name = target
@@ -828,44 +828,67 @@ fn install_plugin_unless(
     if held.is_some() && running.end.is_none() {
         return end_held(held.as_ref(), running).map(|()| plugin_result(&state, id));
     }
-    if stop() {
-        return Err(STOPPED.to_string());
-    }
-    for changed in &order {
-        let Some(data) = releases.get(changed) else {
-            continue;
-        };
-        let plugin = &state.plugins[changed];
-        extract(data, &config_dir.join(&plugin.path))
-            .map_err(|error| format!("plugin {changed} {} package: {error}", plugin.version))?;
-    }
-    check_program_files(config_dir, &state, &order)?;
-    drop_unnamed_sidecars(&mut state);
-    if stop() {
-        return Err(STOPPED.to_string());
-    }
-    for (name, sidecar) in &sidecars {
-        let Some(installed) = state
-            .sidecars
-            .get(name)
-            .filter(|installed| installed.version == sidecar.version)
-        else {
-            continue;
-        };
-        install_release(
-            &format!("sidecar {} {} {platform}", sidecar.name, sidecar.version),
-            &sidecar.release,
-            &config_dir.join(&installed.path),
+    // A refused or stopped installation removes the version folders that it extracted, because the plan reads an existing version
+    // folder as installed and would read the refused files again (docs/spec/installation.md#installation-layout).
+    let mut extracted: Vec<std::path::PathBuf> = vec![];
+    let outcome = (|| -> Result<(), String> {
+        if stop() {
+            return Err(STOPPED.to_string());
+        }
+        for changed in &order {
+            let Some(data) = releases.get(changed) else {
+                continue;
+            };
+            let plugin = &state.plugins[changed];
+            let folder = config_dir.join(&plugin.path);
+            extract(data, &folder)
+                .map_err(|error| format!("plugin {changed} {} package: {error}", plugin.version))?;
+            extracted.push(folder);
+        }
+        check_program_files(config_dir, &state, &order)?;
+        drop_unnamed_sidecars(&mut state);
+        if stop() {
+            return Err(STOPPED.to_string());
+        }
+        for (name, sidecar) in &sidecars {
+            let Some(installed) = state
+                .sidecars
+                .get(name)
+                .filter(|installed| installed.version == sidecar.version)
+            else {
+                continue;
+            };
+            let folder = config_dir.join(&installed.path);
+            let absent = !folder.exists();
+            install_release(
+                &format!("sidecar {} {} {platform}", sidecar.name, sidecar.version),
+                &sidecar.release,
+                &folder,
+            )?;
+            if absent {
+                extracted.push(folder);
+            }
+        }
+        check_service_folders(config_dir, &state)?;
+        install::validate_installed(
+            &serde_json::to_value(&state).map_err(|error| error.to_string())?,
         )?;
+        if stop() {
+            return Err(STOPPED.to_string());
+        }
+        end_held(held.as_ref(), running)?;
+        write_installed(config_dir, &state)?;
+        // The written state names the extracted folders, so a later error keeps them.
+        extracted.clear();
+        prune_folders(config_dir, &state)?;
+        Ok(())
+    })();
+    if let Err(mut error) = outcome {
+        for folder in &extracted {
+            error = crate::files::with_cleanup(error, folder, |path| std::fs::remove_dir_all(path));
+        }
+        return Err(error);
     }
-    check_service_folders(config_dir, &state)?;
-    install::validate_installed(&serde_json::to_value(&state).map_err(|error| error.to_string())?)?;
-    if stop() {
-        return Err(STOPPED.to_string());
-    }
-    end_held(held.as_ref(), running)?;
-    write_installed(config_dir, &state)?;
-    prune_folders(config_dir, &state)?;
     Ok(plugin_result(&state, id))
 }
 
@@ -1086,7 +1109,7 @@ impl DependencyPlan<'_> {
         };
         let manifest = parse_manifest(&file, &data)?;
         // The reader checks the manifest before its id is compared, so every case of the manifest case table gets the
-        // reader's text (docs/spec/installation.md#plugin-release).
+        // reader's text (docs/spec/installation.md#installation-layout).
         crate::manifest::validate_manifest(&manifest)
             .map_err(|error| format!("{file}: {error}"))?;
         install::check_plugin_id(id, &manifest).map_err(|error| format!("{file}: {error}"))?;
