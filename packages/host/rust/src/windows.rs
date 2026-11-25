@@ -1212,7 +1212,7 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             }
             log_failure(
                 "sidecar retain",
-                host.state::<WindowSidecars>().retain(&host, &|_| false),
+                host.state::<WindowSidecars>().window_closed(&host),
             );
             let registry = host.state::<Windows>();
             crate::performance::window_remove(host.label());

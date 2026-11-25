@@ -74,6 +74,83 @@ fn native_view_removal_still_closes_a_standard_io_session() {
     assert!(matches!(receiver.try_recv(), Err(TryRecvError::Empty)));
 }
 
+// contract: sidecars.window-close.keeps-persistent-sessions
+// A window close keeps the sessions of its layout surfaces in a persistent service, which the restored owner reattaches, and
+// closes the sessions of its surfaces in a sidecar on standard input and output (docs/spec/persistent-services.md#closing-and-recovery).
+#[test]
+fn a_window_close_keeps_the_persistent_sessions_of_its_surfaces() {
+    let folder = crate::test_folder::Folder::new();
+    let sidecars = Sidecars::<TestOwner>::new(&[], folder.path().to_path_buf()).unwrap();
+    let owner = TestOwner;
+    let surface = "tab-kept";
+    let (standard_sender, standard) = sync_channel(2);
+    let (service_sender, service) = sync_channel(2);
+    {
+        let mut state = sidecars.core.state.lock().unwrap();
+        state.owners.insert(surface.into(), owner.clone());
+        state.roots.insert(surface.into(), "/project".into());
+        state.persistent_surfaces.insert(
+            surface.into(),
+            HashSet::from(["fixture-service".to_string()]),
+        );
+        state.running.insert(
+            "fixture-standard".into(),
+            Process {
+                child: None,
+                exit: None,
+                outbox: standard_sender,
+                writing: Arc::new(LineWrite::default()),
+                persistent: None,
+                plugins: Vec::new(),
+                surfaces: HashSet::from([surface.into()]),
+                closed_surfaces: HashSet::new(),
+                read_ended: None,
+                terminated: Default::default(),
+            },
+        );
+        state.running.insert(
+            "fixture-service".into(),
+            Process {
+                child: None,
+                exit: None,
+                outbox: service_sender,
+                writing: Arc::new(LineWrite::default()),
+                persistent: Some(super::PersistentConnection {
+                    version: None,
+                    close_waiters: Default::default(),
+                    retain_waiters: Default::default(),
+                    sessions_waiters: Default::default(),
+                    shutdown_waiters: Default::default(),
+                    owner_closed: Default::default(),
+                    connected: Arc::new(std::sync::atomic::AtomicBool::new(true)),
+                    socket: super::unconnected_socket(),
+                    service_pid: 0,
+                }),
+                plugins: Vec::new(),
+                surfaces: HashSet::from([surface.into()]),
+                closed_surfaces: HashSet::new(),
+                read_ended: None,
+                terminated: Default::default(),
+            },
+        );
+    }
+
+    sidecars.window_closed(&owner).unwrap();
+
+    if let Ok(Outgoing::Line(line)) = service.try_recv() {
+        panic!(
+            "the window close sent {} to the persistent service, which ends the session of a layout surface",
+            String::from_utf8_lossy(&line.bytes)
+        );
+    }
+    let Outgoing::Line(line) = standard.try_recv().unwrap() else {
+        panic!("the window close sent a non-line message to the standard sidecar")
+    };
+    let request: serde_json::Value = serde_json::from_slice(&line.bytes).unwrap();
+    assert_eq!(request["surface"], surface);
+    assert_eq!(request["closed"], true);
+}
+
 #[derive(Clone)]
 struct FixtureOwner {
     registered_surfaces: Arc<Mutex<HashSet<String>>>,

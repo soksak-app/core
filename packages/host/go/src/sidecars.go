@@ -1558,7 +1558,9 @@ func (c *Sidecars) forgetClosing(name string) bool {
 	return true
 }
 
-// CloseOwner notifies the sidecars of all surfaces of the owner window. Call it when the window closes.
+// CloseOwner notifies the sidecars of all surfaces of the owner window. Call it when the window closes. A window close keeps
+// the sessions of its layout surfaces in a persistent service, which the restored owner reattaches, and closes the sessions in
+// the sidecars on standard input and output (docs/spec/persistent-services.md#closing-and-recovery).
 func (c *Sidecars) CloseOwner(owner SidecarOwner) {
 	c.mu.Lock()
 	surfaces := make([]string, 0)
@@ -1569,7 +1571,7 @@ func (c *Sidecars) CloseOwner(owner SidecarOwner) {
 	}
 	c.mu.Unlock()
 	for _, surface := range surfaces {
-		c.Close(surface)
+		c.NativeViewRemoved(surface)
 	}
 }
 

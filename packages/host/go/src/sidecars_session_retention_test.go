@@ -43,6 +43,45 @@ func TestNativeViewRemovalStillClosesAStandardIOSession(t *testing.T) {
 	}
 }
 
+// contract: sidecars.window-close.keeps-persistent-sessions
+// A window close keeps the sessions of its layout surfaces in a persistent service, which the restored owner reattaches, and
+// closes the sessions of its surfaces in a sidecar on standard input and output (docs/spec/persistent-services.md#closing-and-recovery).
+func TestAWindowCloseKeepsThePersistentSessionsOfItsSurfaces(t *testing.T) {
+	s := sidecarSessionSurfaces(t)
+	c := s.sidecars
+	c.stopped = false
+	const surface = "tab-kept"
+	service := &sidecar{name: "fixture-service", persistent: true, outbox: make(chan queuedLine, 2),
+		closeWaiters: map[string]chan error{}, retained: map[string]int{}, surfaces: map[string]bool{surface: true}}
+	standard := &sidecar{name: "fixture-standard", outbox: make(chan queuedLine, 2),
+		closeWaiters: map[string]chan error{}, retained: map[string]int{}, surfaces: map[string]bool{surface: true}}
+	c.running[service.name] = service
+	c.running[standard.name] = standard
+	c.owners[surface] = s
+	c.roots[surface] = "/fixture/root"
+	c.persistentSurfaces = map[string]map[string]bool{surface: {service.name: true}}
+
+	c.CloseOwner(s)
+
+	select {
+	case line := <-service.outbox:
+		t.Fatalf("the window close sent %s to the persistent service, which ends the session of a layout surface", line.bytes)
+	default:
+	}
+	select {
+	case line := <-standard.outbox:
+		var request sidecarRequest
+		if err := json.Unmarshal(line.bytes, &request); err != nil {
+			t.Fatalf("standard sidecar close request: %v", err)
+		}
+		if request.Surface != surface || !request.Closed {
+			t.Fatalf("standard sidecar request: %+v, want closed %q", request, surface)
+		}
+	default:
+		t.Fatal("the window close did not close the standard-I/O session")
+	}
+}
+
 // contract: sidecars.close.answer-ends-closing
 func TestFastCloseAnswerPreservesBothClosingTransitions(t *testing.T) {
 	s := sidecarSessionSurfaces(t)

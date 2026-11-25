@@ -2786,6 +2786,13 @@ impl<O: Owner> Sidecars<O> {
         self.close_owned(owner, &|surface| !alive(surface))
     }
 
+    /// Closes the surfaces of a closed window. A window close keeps the sessions of its layout surfaces in a persistent
+    /// service, which the restored owner reattaches, and closes the sessions in the sidecars on standard input and output
+    /// (docs/spec/persistent-services.md#closing-and-recovery).
+    pub fn window_closed(&self, owner: &O) -> Result<(), String> {
+        self.close_owned_mode(owner, &|_| true, true)
+    }
+
     /// Removes native views while keeping sessions that belong to persistent sidecars.
     pub fn native_views_removed(&self, owner: &O, removed: &HashSet<String>) -> Result<(), String> {
         self.close_owned_mode(owner, &|surface| removed.contains(surface), true)
