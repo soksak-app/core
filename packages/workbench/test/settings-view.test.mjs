@@ -44,11 +44,11 @@ test("the settings surface follows the plugin page, and its seat follows the sea
   view.showSettingsView("probe");
   assert.equal(changes, 1, "a repeated show of the same page changes nothing");
   drawSettingsSeat(at("plane"));
-  assert.deepEqual([seatOf()?.dataset.nativeSurfaceId, seatOf()?.dataset.nativeSeat, seatOf()?.hidden, seatOf()?.dataset.nativeClip],
-    ["settings/probe", "settings", true, undefined], "a seat that the modal document has not reported is hidden");
+  assert.equal(seatOf(), null, "a seat that the modal document has not reported has no slot, so no placement carries it without a clip");
   wire.deliverNotice();
   assert.equal(changes, 2, "the report of the seat is a change of the settings surface");
   drawSettingsSeat(at("plane"));
+  assert.deepEqual([seatOf().dataset.nativeSurfaceId, seatOf().dataset.nativeSeat], ["settings/probe", "settings"]);
   assert.deepEqual([seatOf().style.left, seatOf().style.top, seatOf().style.width, seatOf().style.height, seatOf().hidden],
     ["100px", "300px", "400px", "400px", false]);
   assert.deepEqual(JSON.parse(seatOf().dataset.nativeClip), { x: 100, y: 80, w: 400, h: 400 });

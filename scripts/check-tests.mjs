@@ -516,6 +516,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1128-7",
+    implementation: [
+      { file: "packages/host/go/src/surfaces.go", symbol: "Composition: item.Composition, Rect: item.Rect, Programs: map[string]programDeclaration{}, Clip: item.Clip," },
+      { file: "packages/workbench/settings-seat.js", symbol: "    if (entry.slot.parentElement === container) {" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/view_start_test.go", id: "TestDecodedSyncRequestKeepsTheClipOfTheSettingsSurface" },
+      { file: "packages/host/rust/src/surfaces_test.rs", id: "a_decoded_sync_request_keeps_the_clip_of_the_settings_surface" },
+      { file: "packages/workbench/test/settings-view.test.mjs", id: "the settings surface follows the plugin page, and its seat follows the seat and the pane that the modal document reports" },
+    ],
+    expected: "The Go host keeps the clip of a sync request, and the plane holds no slot of the settings seat until the modal document reports it.",
+    levels: ["unit"],
+  },
+  {
     id: "F1128-6",
     implementation: [
       { file: "packages/workbench/memory-saver.js", symbol: "if (kind === \"dialog\" || kind === \"settings\") continue;" },

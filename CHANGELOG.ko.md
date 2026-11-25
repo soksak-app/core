@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1128-7: Go host가 동기화 요청의 surface clip을 유지하고, plane은 modal 문서가 settings seat를 보고할 때까지 그 slot을 두지 않아서, host는 settings surface를 clip과 함께 받는다.
 - F1128-6: page workbench의 memory saver가 settings surface를 넣지 않아서, Wails와 Tauri의 settings 창에 plugin의 settings view가 보인다.
 - F1197: library preview가 탭 없는 content card를 빈 pane으로 그려서, library가 새 프로젝트를 보이는 workbench의 시작이 더는 실패하지 않는다.
 - F1128-5: settings surface의 host 테스트가 contract case `surface-host.settings-container-over-modal`, `modal.settings-window-leaves-the-settings-surface-unblurred`, `view.restart.limit-shows-settings-error`를 선언하고, settings page의 주석은 영어이며, workbench의 files 선언은 `settings-view.js`와 `settings-seat.js`를 나열하고, settings seat와 Rust modal lock은 각 기본값의 이유를 적는다. F1128-2의 CI 실행은 이 각각에서 실패했다.

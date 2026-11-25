@@ -445,6 +445,8 @@ type syncSurfaceWire struct {
 	Rect
 	Start    *syncViewStartWire `json:"start,omitempty"`
 	Programs json.RawMessage    `json:"programs,omitempty"`
+	// Clip is the pane of the settings window that only the settings surface carries (docs/spec/native-modals.md#settings-surface).
+	Clip *Rect `json:"clip,omitempty"`
 }
 
 type syncViewStartWire struct {
@@ -480,7 +482,7 @@ func decodeSyncRequest(raw json.RawMessage) (SyncRequest, error) {
 	for i, item := range wire.Surfaces {
 		surface := Surface{
 			ID: item.ID, Visible: item.Visible, Dim: item.Dim, Plugin: item.Plugin,
-			Composition: item.Composition, Rect: item.Rect, Programs: map[string]programDeclaration{},
+			Composition: item.Composition, Rect: item.Rect, Programs: map[string]programDeclaration{}, Clip: item.Clip,
 		}
 		if item.Programs != nil {
 			programs, err := parseProgramDeclarations(item.Programs)

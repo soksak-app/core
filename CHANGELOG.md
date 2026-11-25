@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1128-7: The Go host keeps the clip of a surface of a sync request, and the plane holds no slot of the settings seat until the modal document reports it, so the hosts receive the settings surface with its clip.
 - F1128-6: The memory saver of the page workbench leaves the settings surface out, so the settings view of a plugin shows in the Wails and Tauri settings windows.
 - F1197: The library preview draws a content card without tabs as an empty pane, so the start of a workbench whose library shows a new project no longer fails.
 - F1128-5: The host tests of the settings surface declare the contract cases `surface-host.settings-container-over-modal`, `modal.settings-window-leaves-the-settings-surface-unblurred` and `view.restart.limit-shows-settings-error`, the comments of the settings page are in English, the files declaration of the workbench lists `settings-view.js` and `settings-seat.js`, and the settings seat and the Rust modal lock state the reason of each default; the CI run of F1128-2 had failed on each of them.

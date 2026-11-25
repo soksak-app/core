@@ -11,7 +11,7 @@ const shows = ({ frame, clip }) => Math.min(frame.x + frame.w, clip.x + clip.w) 
 
 /**
  * Draws the seat of the open settings surface in the container of the plane at its measured place, and removes the seat of a surface that
- * ended. The slot is hidden while the seat is not measured or no part of it shows. The first draw mounts the view; a view that fails ends
+ * ended. The plane holds no slot while the seat is not measured, and the slot is hidden while no part of the seat shows. The first draw mounts the view; a view that fails ends
  * the surface until its page is shown again, and the error display shows the error at settings <plugin>.
  */
 export function drawSettingsSeat(container) {
@@ -26,15 +26,18 @@ export function drawSettingsSeat(container) {
   const seat = settingsSeat();
   entry.seat = seat;
   if (seat === null) {
-    // A seat that the modal document has not reported has no place, so its slot stays hidden and carries no clip.
-    entry.slot.hidden = true;
-    delete entry.slot.dataset.nativeClip;
-  } else {
-    const { frame, clip } = seat;
-    Object.assign(entry.slot.style, { left: `${frame.x}px`, top: `${frame.y}px`, width: `${frame.w}px`, height: `${frame.h}px` });
-    entry.slot.hidden = !shows(seat);
-    entry.slot.dataset.nativeClip = JSON.stringify(clip);
+    // A seat that the modal document has not reported has no place and no clip, which the host requires of the settings surface, so
+    // the plane holds no slot of it until the report.
+    if (entry.slot.parentElement === container) {
+      clearSlotSurface(entry.slot);
+      entry.slot.remove();
+    }
+    return;
   }
+  const { frame, clip } = seat;
+  Object.assign(entry.slot.style, { left: `${frame.x}px`, top: `${frame.y}px`, width: `${frame.w}px`, height: `${frame.h}px` });
+  entry.slot.hidden = !shows(seat);
+  entry.slot.dataset.nativeClip = JSON.stringify(clip);
   if (entry.slot.parentElement !== container) container.append(entry.slot);
   setSlotSurface(entry.slot, entry.surface);
   if (entry.mounted) return;

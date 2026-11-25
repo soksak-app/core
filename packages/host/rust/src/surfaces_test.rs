@@ -1570,3 +1570,20 @@ fn the_end_of_the_page_process_cancels_the_layout_of_its_window() {
         "the queued work of the end of the page cancelled no layout"
     );
 }
+
+// contract: surfaces-geometry.sync.decode-keeps-the-settings-clip
+#[test]
+fn a_decoded_sync_request_keeps_the_clip_of_the_settings_surface() {
+    let request: super::SyncRequest = serde_json::from_value(serde_json::json!({
+        "settled": true, "titlebar": 40.0, "viewport": {"width": 800.0, "height": 600.0}, "declarations": [],
+        "surfaces": [{"id":"settings/probe","x":10.0,"y":20.0,"w":300.0,"h":400.0,"visible":true,"dim":false,
+            "plugin":"probe","composition":{"kind":"view","page":"ui/settings.html"},
+            "clip":{"x":10.0,"y":30.0,"w":300.0,"h":200.0}}]
+    }))
+    .expect("a settings surface with a clip is a valid wire request");
+    let resolved = request.resolve().expect("the request resolves");
+    let clip = resolved.surfaces[0]
+        .clip
+        .expect("the decoded surface keeps its clip");
+    assert_eq!((clip.x, clip.y, clip.w, clip.h), (10.0, 30.0, 300.0, 200.0));
+}

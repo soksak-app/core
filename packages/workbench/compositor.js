@@ -218,11 +218,11 @@ const planeFrame = (rect, host) => ({ x: rect.left - host.left, y: rect.top - ho
 
 /**
  * The clip of the settings surface relative to the plane: the pane of the settings window, which the slot of the settings seat carries in
- * CSS pixels of the window (docs/spec/native-surfaces.md#settings-seat). Every other slot, and a settings seat that is not measured, has
- * no clip (null).
+ * CSS pixels of the window (docs/spec/native-surfaces.md#settings-seat); the plane holds the slot only while the seat is measured. Every
+ * other slot has no clip (null).
  */
 const slotClip = (slot, host) => {
-  if (slot.dataset.nativeSeat !== "settings" || slot.dataset.nativeClip === undefined) return null;
+  if (slot.dataset.nativeSeat !== "settings") return null;
   const clip = JSON.parse(slot.dataset.nativeClip);
   return { x: clip.x - host.left, y: clip.y - host.top, w: clip.w, h: clip.h };
 };
@@ -479,8 +479,6 @@ export function publishAhead(rects, seated, titlebar, grabs) {
     // so the prediction measures it in the document at its fixed position, as the seat of a dialog.
     if (slot.dataset.nativeSeat === "dialog" || slot.dataset.nativeSeat === "settings") {
       dialogs++;
-      // A layout with a settings surface is complete only when its seat is measured.
-      if (slot.dataset.nativeSeat === "settings" && slot.dataset.nativeClip === undefined) aheadComplete = false;
       seats.push({
         id,
         layer: Number(slot.dataset.nativeLayer),

@@ -505,3 +505,15 @@ func TestSurfaceStartScriptCarriesTheDataFolderOfThePlugin(t *testing.T) {
 		t.Fatalf("a relative configuration directory gave a data folder")
 	}
 }
+
+// contract: surfaces-geometry.sync.decode-keeps-the-settings-clip
+func TestDecodedSyncRequestKeepsTheClipOfTheSettingsSurface(t *testing.T) {
+	const surface = `"id":"settings/probe","visible":true,"dim":false,"plugin":"probe","composition":{"kind":"view","page":"ui/settings.html"},"x":10,"y":20,"w":300,"h":400`
+	decoded, err := decodeSyncRequest(json.RawMessage(`{"settled":true,"titlebar":40,"viewport":{"width":800,"height":600},"declarations":[],"surfaces":[{` + surface + `,"clip":{"x":10,"y":30,"w":300,"h":200}}]}`))
+	if err != nil {
+		t.Fatalf("a settings surface with a clip: %v", err)
+	}
+	if got := decoded.Surfaces[0].Clip; got == nil || *got != (Rect{X: 10, Y: 30, W: 300, H: 200}) {
+		t.Fatalf("decoded clip %+v, want {10 30 300 200}", got)
+	}
+}
