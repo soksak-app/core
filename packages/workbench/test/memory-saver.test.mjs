@@ -151,6 +151,17 @@ test("the delay unloads a hidden tab and a show restores it", () => {
   assert.deepEqual(h.place([{ id: "a" }, { id: "b" }]).surfaces.map((surface) => surface.id), ["a", "b"]);
 });
 
+// The settings surface ends with the plugin page of the settings window and is never unloaded, so the memory saver leaves it out
+// (docs/spec/plugins.md#memory-saver).
+test("a settings surface is left out of the memory saver", () => {
+  const h = harness();
+  h.observe(new Set(["a", "settings/probe"]), [...tabs("a"), { id: "settings/probe", plugin: "fixture", kind: "settings" }]);
+  h.observe(new Set(["a"]), [...tabs("a"), { id: "settings/probe", plugin: "fixture", kind: "settings" }]);
+  h.tick(120 * MINUTE);
+  assert.equal(h.state("settings/probe"), null);
+  assert.deepEqual(h.commits, []);
+});
+
 // A dialog surface ends with its dialog and is never unloaded, so the memory saver leaves it out, and a surface of another unknown kind
 // is refused (docs/spec/plugins.md#memory-saver).
 test("a dialog surface is left out of the memory saver, and an unknown kind is refused", () => {

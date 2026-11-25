@@ -278,8 +278,9 @@ export function memorySaverCore({ declaration }) {
       const time = input.at;
       const nextEntries = new Map();
       for (const { id, plugin, kind, unload } of tabs) {
-        // A dialog surface ends with its dialog and is never unloaded (docs/spec/plugins.md#memory-saver).
-        if (kind === "dialog") continue;
+        // A dialog surface ends with its dialog and the settings surface with the plugin page of the settings window, and neither is
+        // unloaded (docs/spec/plugins.md#memory-saver).
+        if (kind === "dialog" || kind === "settings") continue;
         if (kind !== "tab" && kind !== "section") throw new TypeError(`memory saver: surface ${id} has kind ${kind}`);
         let entry = entries.get(id);
         const isShown = shown.has(id);

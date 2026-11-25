@@ -516,6 +516,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1128-6",
+    implementation: [
+      { file: "packages/workbench/memory-saver.js", symbol: "if (kind === \"dialog\" || kind === \"settings\") continue;" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/memory-saver.test.mjs", id: "a settings surface is left out of the memory saver" },
+    ],
+    expected: "The memory saver of the page workbench leaves the settings surface out.",
+    levels: ["unit"],
+  },
+  {
     id: "F1197",
     implementation: [
       { file: "packages/workbench/library-preview.js", symbol: "else if(active) pane.dataset.plugin=active.plugin;" },
@@ -787,7 +798,7 @@ const FEATURE_LINKS = [
   {
     id: "F1150",
     implementation: [
-      { file: "packages/workbench/memory-saver.js", symbol: "if (kind === \"dialog\") continue;" },
+      { file: "packages/workbench/memory-saver.js", symbol: "if (kind === \"dialog\" || kind === \"settings\") continue;" },
     ],
     tests: [
       { file: "packages/workbench/test/memory-saver.test.mjs", id: "a dialog surface is left out of the memory saver, and an unknown kind is refused" },

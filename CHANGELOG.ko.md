@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1128-6: page workbench의 memory saver가 settings surface를 넣지 않아서, Wails와 Tauri의 settings 창에 plugin의 settings view가 보인다.
 - F1197: library preview가 탭 없는 content card를 빈 pane으로 그려서, library가 새 프로젝트를 보이는 workbench의 시작이 더는 실패하지 않는다.
 - F1128-5: settings surface의 host 테스트가 contract case `surface-host.settings-container-over-modal`, `modal.settings-window-leaves-the-settings-surface-unblurred`, `view.restart.limit-shows-settings-error`를 선언하고, settings page의 주석은 영어이며, workbench의 files 선언은 `settings-view.js`와 `settings-seat.js`를 나열하고, settings seat와 Rust modal lock은 각 기본값의 이유를 적는다. F1128-2의 CI 실행은 이 각각에서 실패했다.
 - F1128-3: Wails와 Tauri의 settings 창이 plugin page에 plugin의 settings view를 보인다. page는 modal 문서로 seat를 재고 pane을 clip으로 실어 배치하며, host는 그 host를 modal web view 바로 위의 잘린 container에 세운다. element `core.settings-modal.pane`과 `core.settings-modal.plugin-view`가 선언되고, surface container의 hit test는 frame 원점에서 점을 잰다.

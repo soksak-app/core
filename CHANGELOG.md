@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1128-6: The memory saver of the page workbench leaves the settings surface out, so the settings view of a plugin shows in the Wails and Tauri settings windows.
 - F1197: The library preview draws a content card without tabs as an empty pane, so the start of a workbench whose library shows a new project no longer fails.
 - F1128-5: The host tests of the settings surface declare the contract cases `surface-host.settings-container-over-modal`, `modal.settings-window-leaves-the-settings-surface-unblurred` and `view.restart.limit-shows-settings-error`, the comments of the settings page are in English, the files declaration of the workbench lists `settings-view.js` and `settings-seat.js`, and the settings seat and the Rust modal lock state the reason of each default; the CI run of F1128-2 had failed on each of them.
 - F1128-3: The Wails and Tauri settings windows show the settings view of a plugin on its plugin page: the page measures its seat from the modal document and places it with the pane as its clip, and the hosts stand its host in a clipped container directly above the modal web view; the elements `core.settings-modal.pane` and `core.settings-modal.plugin-view` are declared, and the hit test of a surface container measures a point from its frame origin.
