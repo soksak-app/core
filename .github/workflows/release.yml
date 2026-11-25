@@ -42,6 +42,8 @@ jobs:
     if: needs.gate.outputs.release == 'true'
     runs-on: macos-15
     env:
+      # The selected Xcode of the image cannot read the Icon Composer source of the application icon (docs/spec/hosts.md#frontend-and-executables).
+      ACTOOL: /Applications/Xcode_26.3.app/Contents/Developer/usr/bin/actool
       GOTOOLCHAIN: local
     permissions:
       contents: read
@@ -103,6 +105,9 @@ jobs:
     needs: gate
     if: needs.gate.outputs.release == 'true'
     runs-on: macos-15
+    env:
+      # The selected Xcode of the image cannot read the Icon Composer source of the application icon (docs/spec/hosts.md#frontend-and-executables).
+      ACTOOL: /Applications/Xcode_26.3.app/Contents/Developer/usr/bin/actool
     permissions:
       contents: read
     defaults:
@@ -151,6 +156,8 @@ jobs:
     if: needs.gate.outputs.release == 'true'
     runs-on: macos-15
     env:
+      # The selected Xcode of the image cannot read the Icon Composer source of the application icon (docs/spec/hosts.md#frontend-and-executables).
+      ACTOOL: /Applications/Xcode_26.3.app/Contents/Developer/usr/bin/actool
       GOTOOLCHAIN: local
     permissions:
       contents: read

@@ -8,6 +8,8 @@
 	<string>sok-tauriv2</string>
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
 	<key>CFBundleName</key>
 	<string>soksak</string>
 	<key>CFBundleDisplayName</key>

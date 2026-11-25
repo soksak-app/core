@@ -485,13 +485,16 @@ GPUKIT_RELEASE = $(GPUKIT_RELEASE_BUNDLE)/Contents/MacOS/sok-gpuikit
 # rename, so a launch finds the complete earlier bundle or the complete new one (docs/spec/hosts.md). The argument is the bundle.
 staging = $(dir $(1)).staging/$(notdir $(1))
 
-# Writes the Info.plist and the Dock icon into the staging bundle of the bundle. The first argument is the bundle and the second is the application. The app name
+# Writes the Info.plist and the compiled application icon into the staging bundle of the bundle. The first argument is the bundle and the second is the application. The app name
 # is set by CFBundleDisplayName of Info.plist (the supported languages are declared in CFBundleLocalizations of the same plist).
 # When the name differs by language, the .lproj/InfoPlist.strings of that language is added again at that time.
 # The staging bundle is created anew at each build so an earlier sidecar or other removed file cannot remain in the bundle. The Darwin
 # preparation helper checks the bundle first and refuses with the active process PID and bundle path when a process is executing from its
 # Contents/MacOS directory.
-bundle-info = node scripts/platform/darwin/prepare-app-bundle.mjs --bundle "$(1)" --app "$(2)"
+# ACTOOL is the actool that compiles the Icon Composer source of the application icon; actool before Xcode 26 cannot read that source,
+# so a system whose selected Xcode is earlier names the actool of a later installed Xcode (docs/spec/hosts.md#frontend-and-executables).
+ACTOOL ?= $(shell xcrun --find actool)
+bundle-info = node scripts/platform/darwin/prepare-app-bundle.mjs --bundle "$(1)" --app "$(2)" --actool "$(ACTOOL)"
 # So that the debug bundle runs beside the release application, appends .dev to the release identifier in Info.plist and uses the bundle name
 # as the executable name (docs/spec/hosts.md#frontend-and-executables). The first argument is the bundle and the second is the application.
 bundle-dev = plutil -replace CFBundleIdentifier -string "$$(plutil -extract CFBundleIdentifier raw $(call staging,$(1))/Contents/Info.plist).dev" $(call staging,$(1))/Contents/Info.plist \

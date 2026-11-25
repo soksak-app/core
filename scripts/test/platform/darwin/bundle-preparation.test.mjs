@@ -56,9 +56,9 @@ test("bundle preparation creates the Contents of the staging bundle anew and lea
   copyFileSync(join(FIXTURES, "remove-me.txt"), sentinel);
   try {
     // The Makefile prepares a bundle with this script.
-    const planned = spawnSync("make", ["-n", "--no-print-directory", "-f", join(ROOT, "Makefile"), "-f", join(FIXTURES, "bundle-preparation.mk"), "bundle-preparation-test", `BUNDLE=${bundle}`], { cwd: ROOT, encoding: "utf8" });
+    const planned = spawnSync("make", ["-n", "--no-print-directory", "-f", join(ROOT, "Makefile"), "-f", join(FIXTURES, "bundle-preparation.mk"), "bundle-preparation-test", `BUNDLE=${bundle}`, "ACTOOL=/Applications/Xcode.app/Contents/Developer/usr/bin/actool"], { cwd: ROOT, encoding: "utf8" });
     assert.equal(planned.status, 0, planned.stderr);
-    assert.equal(planned.stdout.trim(), `node scripts/platform/darwin/prepare-app-bundle.mjs --bundle "${bundle}" --app "tauriv2"`);
+    assert.equal(planned.stdout.trim(), `node scripts/platform/darwin/prepare-app-bundle.mjs --bundle "${bundle}" --app "tauriv2" --actool "/Applications/Xcode.app/Contents/Developer/usr/bin/actool"`);
     const earlier = join(staged(bundle), "Contents", "Resources", "remove-me.txt");
     mkdirSync(dirname(earlier), { recursive: true });
     copyFileSync(join(FIXTURES, "remove-me.txt"), earlier);
@@ -66,7 +66,6 @@ test("bundle preparation creates the Contents of the staging bundle anew and lea
     assert.ok(existsSync(sentinel), "preparation changed the bundle");
     assert.equal(existsSync(earlier), false, "preparation kept the contents of an earlier staging bundle");
     assert.ok(existsSync(join(staged(bundle), "Contents", "Info.plist")), "preparation did not write Info.plist");
-    assert.ok(existsSync(join(staged(bundle), "Contents", "Resources", "AppIcon.icns")), "preparation did not write the app icon");
   } finally {
     rmSync(temporary, { recursive: true, force: true });
   }

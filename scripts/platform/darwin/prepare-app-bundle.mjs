@@ -2,7 +2,8 @@
 // bundle (docs/spec/hosts.md). Preparation creates the staging bundle `<folder>/.staging/<name>.app` anew; the build writes and signs
 // it; installation verifies its signature and exchanges it with the bundle.
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, realpathSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { processes } from "@soksak/window-check/platform/platform.mjs";
 import { fileURLToPath } from "node:url";
@@ -39,7 +40,7 @@ function refuseRunning(bundle) {
 }
 
 /**
- * Creates the staging bundle of `bundle` for `application` anew, with the Info.plist and the icon of the application, and returns its
+ * Creates the staging bundle of `bundle` for `application` anew, with the Info.plist of the application, and returns its
  * path, unless a process executes from `bundle`. The bundle itself does not change. `platform` is the system that the bundle is
  * prepared on; a test passes it.
  */
@@ -53,8 +54,39 @@ export function prepareBundle(bundle, application, { platform = process.platform
   mkdirSync(join(contents, "MacOS"), { recursive: true });
   mkdirSync(join(contents, "Resources"), { recursive: true });
   copyFileSync(join(ROOT, "apps", application, "platform", "darwin", "Info.plist"), join(contents, "Info.plist"));
-  copyFileSync(join(ROOT, "apps", application, "platform", "darwin", "AppIcon.icns"), join(contents, "Resources", "AppIcon.icns"));
   return staging;
+}
+
+/**
+ * Compiles the Icon Composer source `apps/<application>/platform/darwin/AppIcon.icon` with the `actool` at `actool` into the Resources
+ * of the staging bundle `staging`: `Assets.car`, which macOS 26 and later read through CFBundleIconName, and `AppIcon.icns` for earlier
+ * systems, for the minimum system version that the Info.plist of the bundle declares (docs/spec/hosts.md#frontend-and-executables).
+ * Throws with the output of actool when it fails or does not write both files.
+ */
+export function compileAppIcon(staging, application, actool) {
+  if (typeof actool !== "string" || actool === "") throw new Error("compiling the app icon needs the path of actool");
+  const contents = join(staging, "Contents");
+  const minimum = spawnSync("plutil", ["-extract", "LSMinimumSystemVersion", "raw", join(contents, "Info.plist")], { encoding: "utf8" });
+  if (minimum.error || minimum.status !== 0) {
+    throw new Error(`reading LSMinimumSystemVersion of ${join(contents, "Info.plist")} failed: ${minimum.error?.message ?? minimum.stderr.trim()}`);
+  }
+  const resources = join(contents, "Resources");
+  const partial = mkdtempSync(join(tmpdir(), "soksak-app-icon-"));
+  try {
+    const source = join(ROOT, "apps", application, "platform", "darwin", "AppIcon.icon");
+    const compiled = spawnSync(actool, [source, "--compile", resources, "--app-icon", "AppIcon", "--platform", "macosx", "--target-device", "mac",
+      "--minimum-deployment-target", minimum.stdout.trim(), "--output-partial-info-plist", join(partial, "Info.plist"),
+      "--errors", "--warnings", "--output-format", "human-readable-text"],
+      // actool runs with the developer folder of its own Xcode, which may differ from the selected one.
+      { encoding: "utf8", env: { ...process.env, DEVELOPER_DIR: resolve(dirname(actool), "..", "..") } });
+    const output = `${compiled.stdout ?? ""}${compiled.stderr ?? ""}`.trim();
+    if (compiled.error || compiled.status !== 0 || /com\.apple\.actool\.(errors|warnings)/.test(output)
+      || !existsSync(join(resources, "Assets.car")) || !existsSync(join(resources, "AppIcon.icns"))) {
+      throw new Error(`compiling ${source} with ${actool} failed: ${compiled.error?.message ?? output}`);
+    }
+  } finally {
+    rmSync(partial, { recursive: true, force: true });
+  }
 }
 
 /**
@@ -82,19 +114,19 @@ export function installBundle(bundle, { platform = process.platform, swap } = {}
 function main(args) {
   const { values, positionals } = parseArgs({
     args,
-    options: { bundle: { type: "string" }, app: { type: "string" }, install: { type: "boolean" }, swap: { type: "string" } },
+    options: { bundle: { type: "string" }, app: { type: "string" }, install: { type: "boolean" }, swap: { type: "string" }, actool: { type: "string" } },
     allowPositionals: true,
     strict: true,
   });
-  const usage = "usage: prepare-app-bundle.mjs --bundle PATH --app gpuikit|mygo|tauriv2|wailsv3 | --install --bundle PATH --swap SOK_SWAP_BUNDLE";
+  const usage = "usage: prepare-app-bundle.mjs --bundle PATH --app gpuikit|mygo|tauriv2|wailsv3 --actool ACTOOL | --install --bundle PATH --swap SOK_SWAP_BUNDLE";
   if (positionals.length > 0 || !values.bundle) throw new Error(usage);
   if (values.install) {
-    if (values.app !== undefined || !values.swap) throw new Error(usage);
+    if (values.app !== undefined || values.actool !== undefined || !values.swap) throw new Error(usage);
     installBundle(values.bundle, { swap: values.swap });
     return;
   }
-  if (!values.app || values.swap !== undefined) throw new Error(usage);
-  prepareBundle(values.bundle, values.app);
+  if (!values.app || !values.actool || values.swap !== undefined) throw new Error(usage);
+  compileAppIcon(prepareBundle(values.bundle, values.app), values.app, values.actool);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

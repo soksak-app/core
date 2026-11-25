@@ -6,6 +6,8 @@
 ## 2026-11-25
 
 - F1180: Go host의 generation counter는 Rust file의 counterpart인 `images.go`로, 그 test는 `images_test.go`로 옮겼다. F1173과 F1175는 test를 link하고 Rust host의 clock default는 이유를 쓰므로 CI의 structure check가 통과한다.
+- F1179: F1173의 검증은 더 이상 `staleGeneration` 답이 없다는 것을 근거로 들지 않는다. 그 검증의 VT service 0.0.48은 그 답을 줄 수 없다.
+- F1178: 빌드가 각 application의 Icon Composer 원본 `AppIcon.icon`을 `actool`로 `Assets.car`와 `AppIcon.icns`로 compile하므로, macOS는 icon을 light, dark, tinted appearance로 다른 application과 같은 크기로 테두리 없이 보인다.
 - F1177-1: core version은 모든 package와 crate manifest, Info.plist, Tauri file, Go와 pkg-config 선언, Cargo.lock의 workspace 항목 여섯 개, scripts/check-versions.mjs에서 0.0.56이다.
 - F1176: application icon과 title bar의 brand mark가 새 brand mark를 보여 준다.
 - F1175: window close와 종료는 persistent service에 있는 layout의 terminal session을 유지하고 standard input and output sidecar의 session만 닫는다. 이전에는 두 host가 닫힌 window의 모든 surface에 `closed`를 보내서 종료가 일부 session을 끝냈고 복원된 tab은 새 shell을 시작했다.
