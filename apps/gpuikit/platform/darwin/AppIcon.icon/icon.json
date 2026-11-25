@@ -18,11 +18,11 @@
         {
           "image-name-specializations" : [
             {
-              "value" : "mark-light.svg"
+              "value" : "soksak-light.svg"
             },
             {
               "appearance" : "dark",
-              "value" : "mark-dark.svg"
+              "value" : "soksak-dark.svg"
             }
           ],
           "name" : "mark"

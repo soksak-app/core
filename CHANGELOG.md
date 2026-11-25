@@ -5,6 +5,7 @@
 
 ## 2026-11-25
 
+- F1189-1: The layer images of the application icon source are `soksak-light.svg` and `soksak-dark.svg`.
 - F1189: The application icon shows the light brand mark on its green background in the light appearance.
 - F1188: Core 0.0.57 is released with the three application zips and the five package releases.
 - F1188-1: The core version is 0.0.57 in every package and crate manifest, Info.plist, Tauri file, Go and pkg-config declaration, the six workspace entries of Cargo.lock and scripts/check-versions.mjs.

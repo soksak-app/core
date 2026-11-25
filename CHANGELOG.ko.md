@@ -5,6 +5,7 @@
 
 ## 2026-11-25
 
+- F1189-1: application icon source의 layer image는 `soksak-light.svg`와 `soksak-dark.svg`다.
 - F1189: application icon은 light appearance에서 초록 배경의 light brand mark를 보인다.
 - F1188: core 0.0.57이 세 application zip과 다섯 package release와 함께 release되었다.
 - F1188-1: core version은 모든 package와 crate manifest, Info.plist, Tauri file, Go와 pkg-config 선언, Cargo.lock의 workspace 항목 여섯 개, scripts/check-versions.mjs에서 0.0.57이다.
