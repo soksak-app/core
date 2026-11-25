@@ -5,6 +5,7 @@
 
 ## 2026-11-25
 
+- F1170: A drag of a section divider changes only the two sections beside it, and `core.sidebar.section.size {sidebar, heights}` sets the heights of several sections at once; a fill section beside the divider takes the change when no other open section fills.
 - F1169: The host contract case `install.refused-install-leaves-no-version-folder` states that a refused `sok plugin install` removes the version folder it extracted, and the Go and the Rust test of F1165 declare it, so the host contract check of each host passes.
 - F1168-1: The core version is 0.0.55 in every package and crate manifest, Info.plist, Tauri file, Go and pkg-config declaration, the six workspace entries of Cargo.lock and scripts/check-versions.mjs.
 - F1167: On the mygo host the view call `composition.declaration` of an open dialog answers the kind and the regions of the dialog and no overlays, so a dialog page that declares a document region creates its composition instead of stopping at `composition regions must exactly match the surface declaration (expected none)`.

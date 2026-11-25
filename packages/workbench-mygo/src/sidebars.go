@@ -1,6 +1,7 @@
 package workbench
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -671,24 +672,72 @@ func validSectionHeight(height int) bool {
 	return height >= sectionHeightMin && height <= sectionHeightMax
 }
 
-// sizeSection sets the dragged height of one section of a sidebar with the list layout.
+// sizeSection sets the dragged heights {<section>: <height>} of sections of a sidebar with the list layout, all at once.
 func (s *Sidebars) sizeSection(value sectionSizeParam) error {
-	drawn, err := s.held(value.Sidebar, value.Section)
-	if err != nil {
-		return err
+	type entry struct {
+		section string
+		height  json.Number
 	}
-	if drawn.frame.Layout != "list" {
-		return fmt.Errorf("sidebar %s does not use the list layout", value.Sidebar)
+	var entries []entry
+	decoder := json.NewDecoder(bytes.NewReader(value.Heights))
+	decoder.UseNumber()
+	if token, err := decoder.Token(); err != nil || token != json.Delim('{') {
+		return fmt.Errorf("section heights must name at least one section, got %s", rawJSONText(value.Heights))
 	}
-	if !validSectionHeight(value.Height) {
-		return fmt.Errorf("section height must be an integer from %d to %d, got %d", sectionHeightMin, sectionHeightMax, value.Height)
+	for decoder.More() {
+		key, err := decoder.Token()
+		if err != nil {
+			return fmt.Errorf("section heights: %w", err)
+		}
+		var height any
+		if err := decoder.Decode(&height); err != nil {
+			return fmt.Errorf("section heights: %w", err)
+		}
+		number, _ := height.(json.Number)
+		entries = append(entries, entry{key.(string), number})
+		if number == "" {
+			encoded, _ := json.Marshal(height)
+			return fmt.Errorf("section height must be an integer from %d to %d, got %s", sectionHeightMin, sectionHeightMax, encoded)
+		}
+	}
+	if len(entries) == 0 {
+		return fmt.Errorf("section heights must name at least one section, got {}")
+	}
+	heights := make(map[string]int, len(entries))
+	for _, item := range entries {
+		drawn, err := s.held(value.Sidebar, item.section)
+		if err != nil {
+			return err
+		}
+		if drawn.frame.Layout != "list" {
+			return fmt.Errorf("sidebar %s does not use the list layout", value.Sidebar)
+		}
+		height, err := item.height.Int64()
+		if err != nil || !validSectionHeight(int(height)) {
+			return fmt.Errorf("section height must be an integer from %d to %d, got %s", sectionHeightMin, sectionHeightMax, item.height)
+		}
+		heights[item.section] = int(height)
 	}
 	choice := s.choice(value.Sidebar)
 	if choice.Sizes == nil {
 		choice.Sizes = map[string]int{}
 	}
-	choice.Sizes[value.Section] = value.Height
+	for section, height := range heights {
+		choice.Sizes[section] = height
+	}
 	return nil
+}
+
+// rawJSONText is the JSON text of a value as the page writes it, null for an absent value.
+func rawJSONText(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return "null"
+	}
+	var compact bytes.Buffer
+	if err := json.Compact(&compact, raw); err != nil {
+		return string(raw)
+	}
+	return compact.String()
 }
 
 // sectionCommand registers a command that changes a choice.

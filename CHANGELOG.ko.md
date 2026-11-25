@@ -5,6 +5,7 @@
 
 ## 2026-11-25
 
+- F1170: section divider를 끌면 그 옆의 두 section만 바뀌고, `core.sidebar.section.size {sidebar, heights}`가 여러 section의 높이를 한 번에 정한다. 다른 열린 section 중 fill이 없으면 divider 옆의 fill section이 변화를 받는다.
 - F1169: host contract case `install.refused-install-leaves-no-version-folder`가 거부된 `sok plugin install`이 추출한 version 폴더를 지운다고 정하고, F1165의 Go와 Rust test가 그 case를 선언한다. 그래서 각 host의 host contract check가 통과한다.
 - F1168-1: 모든 package와 crate manifest, Info.plist, Tauri file, Go와 pkg-config 선언, Cargo.lock의 workspace 항목 6개, scripts/check-versions.mjs의 core version은 0.0.55다.
 - F1167: mygo host에서 열린 dialog의 view call `composition.declaration`이 dialog의 kind와 region을 답하고 overlay는 답하지 않는다. 그래서 document region을 선언한 dialog page가 `composition regions must exactly match the surface declaration (expected none)`에서 멈추지 않고 composition을 만든다.

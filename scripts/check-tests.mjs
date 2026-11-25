@@ -496,6 +496,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1170",
+    implementation: [
+      { file: "packages/workbench/sidebar-sections.js", symbol: "export function dividerHeights(open, below, delta) {" },
+      { file: "packages/workbench-mygo/src/sidebar_screen.go", symbol: "func dividerHeights(open []dividerSection, below int, delta float32) map[string]int {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/section-divider.test.mjs", id: "a divider between two sections with integer heights sizes both and leaves the fill section elsewhere" },
+      { file: "packages/workbench-mygo/tests/sidebar_screen_test.go", id: "TestDraggingADividerChangesOnlyTheTwoSectionsBesideIt" },
+    ],
+    expected: "A drag of a section divider changes only the two sections beside it through core.sidebar.section.size {sidebar, heights}.",
+    levels: ["unit"],
+  },
+  {
     id: "F1169",
     implementation: [
       { file: "packages/sok/go/tests/plugin_program_file_test.go", symbol: "// contract: install.refused-install-leaves-no-version-folder" },
@@ -14955,8 +14968,8 @@ const FEATURE_LINKS = [
   {
     id: "F373",
     implementation: [
-      { file: "packages/workbench/sidebar-sections.js", symbol: "export function sizeSection(sidebar, section, height)" },
-      { file: "packages/workbench/sidebar-sections.js", symbol: "function bindSectionDivider(divider, sidebar, above, below)" },
+      { file: "packages/workbench/sidebar-sections.js", symbol: "export function sizeSections(sidebar, heights)" },
+      { file: "packages/workbench/sidebar-sections.js", symbol: "function bindSectionDivider(divider, record, above, below)" },
     ],
     tests: [
       { file: "packages/workbench/test/sidebar-choices.test.mjs", id: "a dragged section height is applied, reported, saved with the space and restored" },

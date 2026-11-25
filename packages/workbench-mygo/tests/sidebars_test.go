@@ -184,7 +184,7 @@ func TestSizingAndSelectingASection(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := f.run("core.sidebar.section.size", `{"sidebar":"left","section":"fieldprobe.bookmarks","height":200}`); err != nil {
+	if err := f.run("core.sidebar.section.size", `{"sidebar":"left","heights":{"fieldprobe.bookmarks":200}}`); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.run("core.sidebar.section.select", `{"sidebar":"right","section":"boxprobe.history"}`); err != nil {
@@ -210,7 +210,8 @@ func TestTheSectionCommandsRefuseWhatTheSidebarDoesNotHold(t *testing.T) {
 		{"core.sidebar.section.fold", `{"sidebar":"right","section":"fieldprobe.tree"}`, "no sidebar right is drawn"},
 		{"core.sidebar.section.fold", `{"sidebar":"left","section":"gone.section"}`, "sidebar left has no section gone.section"},
 		{"core.sidebar.section.select", `{"sidebar":"left","section":"fieldprobe.tree"}`, "sidebar left does not use the tabs layout"},
-		{"core.sidebar.section.size", `{"sidebar":"left","section":"fieldprobe.tree","height":31}`, "section height must be an integer from 32 to 4096, got 31"},
+		{"core.sidebar.section.size", `{"sidebar":"left","heights":{}}`, "section heights must name at least one section, got {}"},
+		{"core.sidebar.section.size", `{"sidebar":"left","heights":{"fieldprobe.tree":31}}`, "section height must be an integer from 32 to 4096, got 31"},
 	}
 	for _, test := range cases {
 		if err := f.run(test.name, test.params); err == nil || err.Error() != test.want {
@@ -220,7 +221,7 @@ func TestTheSectionCommandsRefuseWhatTheSidebarDoesNotHold(t *testing.T) {
 	f.frame(t, "right", workbench.FocusedSurface{Card: "c1", Tab: "tab-1", Plugin: "boxprobe"})
 	for name, params := range map[string]string{
 		"core.sidebar.section.fold": `{"sidebar":"right","section":"boxprobe.tabs"}`,
-		"core.sidebar.section.size": `{"sidebar":"right","section":"boxprobe.tabs","height":100}`,
+		"core.sidebar.section.size": `{"sidebar":"right","heights":{"boxprobe.tabs":100}}`,
 	} {
 		err := f.run(name, params)
 		if err == nil || err.Error() != "sidebar right does not use the list layout" {

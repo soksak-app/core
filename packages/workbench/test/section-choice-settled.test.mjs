@@ -79,7 +79,7 @@ test("folding, selecting and sizing a section lay out the plane again", { timeou
     });
     await registry.run("core.sidebar.section.fold", { sidebar: "fixture-list", section: "fixture.marks" });
     await registry.run("core.sidebar.section.select", { sidebar: "fixture-tabs", section: "fixture.tree" });
-    await registry.run("core.sidebar.section.size", { sidebar: "fixture-list", section: "fixture.marks", height: 200 });
+    await registry.run("core.sidebar.section.size", { sidebar: "fixture-list", heights: { "fixture.marks": 200 } });
     const folded = { tab: null, folded: ["fixture.marks"] };
     assert.deepEqual(layouts, [
       { list: folded, tabs: { tab: "fixture.list", folded: [] } },

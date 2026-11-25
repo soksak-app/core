@@ -204,17 +204,12 @@ func TestTheSelectedTabHasTheRailMarkOnItsPlainBackground(t *testing.T) {
 	}
 }
 
-func TestDraggingADividerSizesTheSectionBelowItWithAnIntegerHeight(t *testing.T) {
+// dragDivider presses the divider above the section, moves it up by 20 and by 400 points with a frame after each move and releases it.
+func dragDivider(t *testing.T, frame workbench.SidebarFrame, section string) []call {
+	t.Helper()
 	var calls []call
-	frame := workbench.SidebarFrame{
-		Sidebar: "left", Space: "spc-1", Layout: "list", Set: "set-1", Orientation: "vertical", Side: "left", Status: "s",
-		Sections: []workbench.SidebarSection{
-			{ID: "a", Name: "A", Plugin: "p", Height: 100},
-			{ID: "b", Name: "B", Plugin: "p", Height: 100},
-		},
-	}
 	tt := drawSidebar(&frame, recorder(t, &calls, sidebarCommands...))
-	divider := element(t, tt, "core.sidebar.section.divider", "left/b")
+	divider := element(t, tt, "core.sidebar.section.divider", "left/"+section)
 	x, y := divider.Bounds.X+divider.Bounds.W/2, divider.Bounds.Y+divider.Bounds.H/2
 	tt.Press(x, y)
 	tt.Move(x, y-20)
@@ -222,12 +217,53 @@ func TestDraggingADividerSizesTheSectionBelowItWithAnIntegerHeight(t *testing.T)
 	tt.Move(x, y-400)
 	tt.Frame()
 	tt.Release(x, y-400)
-	want := []call{
-		{"core.sidebar.section.size", map[string]any{"sidebar": "left", "section": "b", "height": 120.0}},
-		{"core.sidebar.section.size", map[string]any{"sidebar": "left", "section": "b", "height": 168.0}},
+	return calls
+}
+
+func listOf(sections ...workbench.SidebarSection) workbench.SidebarFrame {
+	return workbench.SidebarFrame{
+		Sidebar: "left", Space: "spc-1", Layout: "list", Set: "set-1", Orientation: "vertical", Side: "left", Status: "s", Sections: sections,
 	}
+}
+
+func sized(heights map[string]float64) call {
+	value := map[string]any{}
+	for id, height := range heights {
+		value[id] = height
+	}
+	return call{"core.sidebar.section.size", map[string]any{"sidebar": "left", "heights": value}}
+}
+
+func TestDraggingADividerChangesOnlyTheTwoSectionsBesideIt(t *testing.T) {
+	calls := dragDivider(t, listOf(
+		workbench.SidebarSection{ID: "a", Name: "A", Plugin: "p", Fill: true},
+		workbench.SidebarSection{ID: "b", Name: "B", Plugin: "p", Height: 100},
+		workbench.SidebarSection{ID: "c", Name: "C", Plugin: "p", Height: 100},
+	), "c")
+	want := []call{sized(map[string]float64{"b": 80, "c": 120}), sized(map[string]float64{"b": 32, "c": 168})}
 	if !reflect.DeepEqual(calls, want) {
 		t.Fatalf("commands %+v, want %+v", calls, want)
+	}
+}
+
+func TestDraggingADividerBetweenTwoSectionsWithoutAFillSectionSizesBoth(t *testing.T) {
+	calls := dragDivider(t, listOf(
+		workbench.SidebarSection{ID: "a", Name: "A", Plugin: "p", Height: 100},
+		workbench.SidebarSection{ID: "b", Name: "B", Plugin: "p", Height: 100},
+	), "b")
+	want := []call{sized(map[string]float64{"a": 80, "b": 120}), sized(map[string]float64{"a": 32, "b": 168})}
+	if !reflect.DeepEqual(calls, want) {
+		t.Fatalf("commands %+v, want %+v", calls, want)
+	}
+}
+
+func TestAFillSectionBesideADividerTakesTheChangeWhenNoOtherSectionFills(t *testing.T) {
+	calls := dragDivider(t, listOf(
+		workbench.SidebarSection{ID: "a", Name: "A", Plugin: "p", Fill: true},
+		workbench.SidebarSection{ID: "b", Name: "B", Plugin: "p", Height: 100},
+	), "b")
+	if len(calls) != 2 || !reflect.DeepEqual(calls[0], sized(map[string]float64{"b": 120})) {
+		t.Fatalf("commands %+v, want the height of b alone, 120 first", calls)
 	}
 }
 

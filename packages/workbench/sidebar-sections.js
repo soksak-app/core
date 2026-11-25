@@ -195,20 +195,29 @@ function apply(record) {
     if (!entry.divider) return;
     const above = record.entries[index - 1];
     entry.divider.hidden = record.context.orientation !== "vertical" || choice.folded.has(above.section.id) || choice.folded.has(entry.section.id);
-    mark(entry.divider, "core.sidebar.section.size", { sidebar: record.sidebar, section: dividedSection(choice, above, entry).section.id });
+    mark(entry.divider, "core.sidebar.section.size", { sidebar: record.sidebar });
   });
 }
 
-/** The section that the divider between above and below sizes: below when it has an integer height, otherwise above. */
-function dividedSection(choice, above, below) {
-  // default: a section that was not dragged has its declared height.
-  return Number.isInteger(choice.sizes.get(below.section.id) ?? below.section.height) ? below : above;
+/**
+ * The heights that a drag of the divider above the open section at index below sets, from the open sections {id, height, fills} of a
+ * vertical list in order, with the heights they had when the drag started, and the distance of the pointer, positive downward. The
+ * section above grows by the distance and the section below shrinks by it, within the minimum and the maximum height. Both are sized,
+ * except when no other open section fills: then a section of the two that fills takes the change, and of two that fill the section above
+ * is sized (docs/spec/plugins.md#sections).
+ */
+export function dividerHeights(open, below, delta) {
+  const upper = open[below - 1];
+  const lower = open[below];
+  const room = upper.height + lower.height;
+  const top = Math.min(SECTION_HEIGHT.max, room - SECTION_HEIGHT.min, Math.max(SECTION_HEIGHT.min, room - SECTION_HEIGHT.max, upper.height + delta));
+  const heights = { [upper.id]: Math.round(top), [lower.id]: Math.round(room - top) };
+  if (open.some((entry, index) => entry.fills && index !== below - 1 && index !== below)) return heights;
+  if (upper.fills) return lower.fills ? { [upper.id]: heights[upper.id] } : { [lower.id]: heights[lower.id] };
+  if (lower.fills) return { [upper.id]: heights[upper.id] };
+  return heights;
 }
 
-/**
- * Passes the drag of the divider between the sections above and below to core.sidebar.section.size at each move. The drag keeps the
- * other section of the divider at least the minimum height (docs/spec/plugins.md#sections).
- */
 // The core icon of each section action icon (docs/spec/plugins.md#sections).
 const ACTION_ICONS = Object.freeze({ plus: "plus", settings: "settings", more: "ellipsis" });
 
@@ -237,21 +246,28 @@ function sectionActions(section, surfaceId) {
   return [bar];
 }
 
-function bindSectionDivider(divider, sidebar, above, below) {
+/**
+ * Passes the drag of the divider between the sections above and below to core.sidebar.section.size at each move, with the heights of
+ * dividerHeights from the heights of the open sections when the drag started (docs/spec/plugins.md#sections).
+ */
+function bindSectionDivider(divider, record, above, below) {
+  const sidebar = record.sidebar;
   divider.addEventListener("pointerdown", (event) => {
     event.stopPropagation();
     divider.setPointerCapture(event.pointerId);
-    const target = dividedSection(choiceOf(sidebar), above, below);
-    const other = target === below ? above : below;
+    const choice = choiceOf(sidebar);
+    // default: a section that was not dragged has its declared height.
+    const open = record.entries.filter((entry) => !choice.folded.has(entry.section.id)).map((entry) => ({
+      id: entry.section.id, height: entry.body.getBoundingClientRect().height, fills: (choice.sizes.get(entry.section.id) ?? entry.section.height) === "fill",
+    }));
+    const index = open.findIndex((entry) => entry.id === below.section.id);
     const startY = event.clientY;
-    const start = target.body.getBoundingClientRect().height;
-    const room = start + other.body.getBoundingClientRect().height;
-    if (![startY, start, room].every(Number.isFinite)) throw new Error(`invalid section drag extent in sidebar ${sidebar}`);
+    if (index < 1 || open[index - 1].id !== above.section.id) throw new Error(`the divider of section ${below.section.id} in sidebar ${sidebar} lies between no two open sections`);
+    if (![startY, ...open.map((entry) => entry.height)].every(Number.isFinite)) throw new Error(`invalid section drag extent in sidebar ${sidebar}`);
     const move = (e) => {
-      const delta = target === below ? startY - e.clientY : e.clientY - startY;
+      const delta = e.clientY - startY;
       if (!Number.isFinite(delta)) throw new Error(`invalid section pointer displacement in sidebar ${sidebar}`);
-      const height = Math.round(Math.min(SECTION_HEIGHT.max, room - SECTION_HEIGHT.min, Math.max(SECTION_HEIGHT.min, start + delta)));
-      run("core.sidebar.section.size", { sidebar, section: target.section.id, height });
+      run("core.sidebar.section.size", { sidebar, heights: dividerHeights(open, index, delta) });
     };
     const end = () => {
       divider.removeEventListener("pointermove", move);
@@ -364,7 +380,7 @@ export function drawSet(container, sidebar, set, context) {
           entry.divider.dataset.section = section.id;
           entry.divider.setAttribute("role", "separator");
           entry.divider.setAttribute("aria-orientation", "horizontal");
-          bindSectionDivider(entry.divider, sidebar, record.entries.at(-1), entry);
+          bindSectionDivider(entry.divider, record, record.entries.at(-1), entry);
           container.append(entry.divider);
         }
       }
@@ -428,12 +444,20 @@ function checkSectionHeight(height) {
   }
 }
 
-/** Sets the dragged height of one section in a sidebar with the list layout. */
-export function sizeSection(sidebar, section, height) {
-  const records = recordsOf(sidebar, section);
-  if (records[0].layout !== "list") throw new Error(`sidebar ${sidebar} does not use the list layout`);
-  checkSectionHeight(height);
-  choiceOf(sidebar).sizes.set(section, height);
+/** Sets the dragged heights {<section>: <height>} of sections in a sidebar with the list layout, all at once. */
+export function sizeSections(sidebar, heights) {
+  if (heights === null || typeof heights !== "object" || Array.isArray(heights) || Object.keys(heights).length === 0) {
+    throw new Error(`section heights must name at least one section, got ${JSON.stringify(heights)}`);
+  }
+  const records = new Set();
+  for (const [section, height] of Object.entries(heights)) {
+    const held = recordsOf(sidebar, section);
+    if (held[0].layout !== "list") throw new Error(`sidebar ${sidebar} does not use the list layout`);
+    checkSectionHeight(height);
+    for (const record of held) records.add(record);
+  }
+  const choice = choiceOf(sidebar);
+  for (const [section, height] of Object.entries(heights)) choice.sizes.set(section, height);
   for (const record of records) apply(record);
   notify();
   choiceListener();

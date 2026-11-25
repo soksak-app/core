@@ -3829,21 +3829,18 @@
       },
       {
         "name": "core.sidebar.section.size",
-        "description": "Sets the height of one section of a vertical sidebar whose set uses the list layout, an integer from 32 to 4096 pixels; the height is kept for that sidebar and saved with the space.",
+        "description": "Sets the heights of sections of a vertical sidebar whose set uses the list layout, all at once: heights maps the id of each section to an integer from 32 to 4096 pixels. The heights are kept for that sidebar and saved with the space; a drag of a divider sets the two sections beside it.",
         "params": {
           "type": "object",
           "properties": {
             "sidebar": {
               "type": "string"
             },
-            "section": {
-              "type": "string"
-            },
-            "height": {
-              "type": "integer"
+            "heights": {
+              "type": "object"
             }
           },
-          "required": ["sidebar", "section", "height"]
+          "required": ["sidebar", "heights"]
         },
         "result": {
           "type": "null"

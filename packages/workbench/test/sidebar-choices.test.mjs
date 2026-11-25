@@ -66,7 +66,7 @@ test("a dragged section height is applied, reported, saved with the space and re
   let saved = 0;
   sections.onChoicesChange(() => { saved++; });
 
-  sections.sizeSection("right", "probe.one", 240);
+  sections.sizeSections("right", { "probe.one": 240 });
   const element = list.querySelector('[data-section="probe.one"]');
   assert.equal(element.dataset.height, "240", "a sized fill section keeps its declared height");
   assert.equal(element.style.getPropertyValue("--section-height"), "240px");
@@ -80,10 +80,10 @@ test("a dragged section height is applied, reported, saved with the space and re
   assert.deepEqual(dividers(), [], "a divider next to a folded section remains");
   sections.foldSection("right", "probe.two");
 
-  assert.throws(() => sections.sizeSection("rail-sizes", "probe.one", 100), { message: "sidebar rail-sizes does not use the list layout" });
-  assert.throws(() => sections.sizeSection("right", "probe.missing", 100), { message: "sidebar right has no section probe.missing" });
+  assert.throws(() => sections.sizeSections("rail-sizes", { "probe.one": 100 }), { message: "sidebar rail-sizes does not use the list layout" });
+  assert.throws(() => sections.sizeSections("right", { "probe.missing": 100 }), { message: "sidebar right has no section probe.missing" });
   for (const height of [31, 4097, 100.5, "100"]) {
-    assert.throws(() => sections.sizeSection("right", "probe.two", height),
+    assert.throws(() => sections.sizeSections("right", { "probe.two": height }),
       { message: `section height must be an integer from 32 to 4096, got ${JSON.stringify(height)}` });
   }
 

@@ -155,9 +155,43 @@ type SidebarSeat struct {
 type SectionDrag struct {
 	divider int
 	dragged bool
-	start   float32
-	room    float32
-	moved   float32
+	// open holds the open sections with the heights they had when the drag started, and index the section below the divider in it.
+	open  []dividerSection
+	index int
+	moved float32
+}
+
+// dividerSection is an open section of a vertical list at the start of a drag.
+type dividerSection struct {
+	id     string
+	height float32
+	fills  bool
+}
+
+// dividerHeights returns the heights that a drag of the divider above the open section at index below sets, from the open sections
+// with the heights they had when the drag started and the distance of the pointer, positive downward. The section above grows by the
+// distance and the section below shrinks by it, within the minimum and the maximum height. Both are sized, except when no other open
+// section fills: then a section of the two that fills takes the change, and of two that fill the section above is sized
+// (docs/spec/plugins.md#sections).
+func dividerHeights(open []dividerSection, below int, delta float32) map[string]int {
+	upper, lower := open[below-1], open[below]
+	room := upper.height + lower.height
+	top := min(sectionHeightMax, room-sectionHeightMin, max(sectionHeightMin, room-sectionHeightMax, upper.height+delta))
+	heights := map[string]int{upper.id: int(math.Round(float64(top))), lower.id: int(math.Round(float64(room - top)))}
+	for i, section := range open {
+		if section.fills && i != below-1 && i != below {
+			return heights
+		}
+	}
+	switch {
+	case upper.fills && lower.fills:
+		return map[string]int{upper.id: heights[upper.id]}
+	case upper.fills:
+		return map[string]int{lower.id: heights[lower.id]}
+	case lower.fills:
+		return map[string]int{upper.id: heights[upper.id]}
+	}
+	return heights
 }
 
 // SidebarSeats returns the seat of each section of the frame, in the order of the set.
@@ -239,11 +273,17 @@ type sectionParam struct {
 	Section string `json:"section"`
 }
 
-// sectionSizeParam is the parameter of core.sidebar.section.size.
+// sectionSizeParam is the parameter of core.sidebar.section.size. Heights keeps the members in their order, so a refusal names the
+// first invalid member as the page does.
 type sectionSizeParam struct {
-	Sidebar string `json:"sidebar"`
-	Section string `json:"section"`
-	Height  int    `json:"height"`
+	Sidebar string          `json:"sidebar"`
+	Heights json.RawMessage `json:"heights"`
+}
+
+// sectionSizeRun is the parameter that a drag of a divider passes to core.sidebar.section.size.
+type sectionSizeRun struct {
+	Sidebar string         `json:"sidebar"`
+	Heights map[string]int `json:"heights"`
 }
 
 // settingsPatchParam is the parameter of core.settings.set.
@@ -423,17 +463,12 @@ func drawVerticalList(c *ui.Context, binder *Binder, drag *SectionDrag, frame Si
 	})
 }
 
-// drawDivider draws the divider above the section below, and passes its drag to `core.sidebar.section.size` at each move. It
-// sizes the section below when that section has an integer height, and otherwise the section above, and keeps the other
-// section of the divider at least the minimum height.
+// drawDivider draws the divider above the section below, and passes its drag to `core.sidebar.section.size` at each move with the
+// heights of dividerHeights from the heights of the open sections when the drag started.
 func drawDivider(c *ui.Context, binder *Binder, drag *SectionDrag, frame SidebarFrame, below int, heights []float32, top, width float32, metrics SidebarMetrics) {
-	target, other, sign := below, below-1, float32(-1)
-	if frame.Sections[below].fills() {
-		target, other, sign = below-1, below, 1
-	}
 	run := binder.Control(c, "core.sidebar.section.divider", "core.sidebar.section.size", sectionItem(frame, frame.Sections[below]))
 	divider := ui.Box(c).Absolute().Left(0).Top(top).Size(width, metrics.SectionDivider).
-		Role(ui.RoleSplitter).Label(frame.Sections[target].Name).Cursor(ui.CursorResizeNS)
+		Role(ui.RoleSplitter).Label(frame.Sections[below].Name).Cursor(ui.CursorResizeNS)
 	_, dy, pressed := divider.Dragged()
 	if !pressed {
 		if drag.divider == below {
@@ -442,14 +477,22 @@ func drawDivider(c *ui.Context, binder *Binder, drag *SectionDrag, frame Sidebar
 		return
 	}
 	if !drag.dragged || drag.divider != below {
-		*drag = SectionDrag{divider: below, dragged: true, start: heights[target], room: heights[target] + heights[other]}
+		*drag = SectionDrag{divider: below, dragged: true}
+		for i, section := range frame.Sections {
+			if section.Folded {
+				continue
+			}
+			if i == below {
+				drag.index = len(drag.open)
+			}
+			drag.open = append(drag.open, dividerSection{id: section.ID, height: heights[i], fills: section.fills()})
+		}
 	}
 	if dy == 0 {
 		return
 	}
-	drag.moved += sign * dy
-	size := min(sectionHeightMax, drag.room-sectionHeightMin, max(sectionHeightMin, drag.start+drag.moved))
-	run(sectionSizeParam{frame.Sidebar, frame.Sections[target].ID, int(math.Round(float64(size)))})
+	drag.moved += dy
+	run(sectionSizeRun{frame.Sidebar, dividerHeights(drag.open, drag.index, drag.moved)})
 }
 
 // drawHorizontalList divides the width equally among the open sections within the height of the set.
