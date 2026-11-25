@@ -48,6 +48,19 @@ struct SurfaceRequest {
     /// declares none, which is the empty object.
     #[serde(default = "no_programs")]
     programs: serde_json::Value,
+    /// The part of the window that shows the settings surface, the pane of the settings window, in the coordinates of the
+    /// rectangle; only the settings surface carries it (docs/spec/native-modals.md#settings-surface).
+    #[serde(default)]
+    clip: Option<SurfaceClip>,
+}
+
+/// The clip of the settings surface, in CSS pixels relative to the page viewport.
+#[derive(Clone, Copy, Debug, Deserialize)]
+pub(crate) struct SurfaceClip {
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
 }
 
 /// The programs of a surface request that carries no `programs` member.
@@ -68,6 +81,7 @@ pub(crate) struct Surface {
     composition: SurfaceComposition,
     start: Option<ViewStart>,
     programs: crate::program_run::Declarations,
+    clip: Option<SurfaceClip>,
 }
 
 /// Returns the start values that the view of surface uses: those of the request or, when the request
@@ -756,6 +770,7 @@ impl SyncRequest {
                 composition: surface.composition,
                 start,
                 programs,
+                clip: surface.clip,
             });
         }
         if let Some(index) = referenced.iter().position(|used| !used) {
@@ -1576,6 +1591,35 @@ fn check_resolved_sync_request(
         if surface.plugin.is_empty() {
             return Err(format!("surface {:?} requires its plugin", surface.id));
         }
+        // The settings surface shows only in the pane of the settings window, so it carries that clip, and no other surface is
+        // clipped (docs/spec/native-modals.md#settings-surface).
+        match (
+            crate::modals::is_settings_surface(&surface.id),
+            surface.clip,
+        ) {
+            (true, None) => {
+                return Err(format!(
+                    "surface {:?} needs the clip of its settings seat",
+                    surface.id
+                ));
+            }
+            (true, Some(clip)) => {
+                validate_rect(
+                    &format!("surface {:?} clip", surface.id),
+                    clip.x,
+                    clip.y,
+                    clip.w,
+                    clip.h,
+                )?;
+            }
+            (false, Some(_)) => {
+                return Err(format!(
+                    "surface {:?} has a clip, which only the settings surface has",
+                    surface.id
+                ));
+            }
+            (false, None) => {}
+        }
         if let Some(start) = &surface.start {
             validate_view_start(&surface.id, start)?;
         }
@@ -1674,6 +1718,39 @@ struct LayoutTurn {
     ticket: u64,
 }
 
+/// The native web view of the modal of the settings window, which the settings surface stands above
+/// (docs/spec/native-modals.md#settings-surface). It runs on the main thread, where `with_webview` runs its work before it returns.
+fn settings_modal_handle(
+    context: &crate::windows::WindowData,
+    platform: &'static dyn platform::Platform,
+) -> Result<Handle, String> {
+    let dialog = context
+        .overlay
+        .open_state()
+        .is_some_and(|(_, mode, _)| mode == "dialog");
+    // default: a lock that a panicking thread poisoned still holds the modal web view, which is only read; the panic hook records
+    // the panic.
+    let view = context
+        .overlay
+        .view
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    let Some(view) = view.as_ref().filter(|_| dialog) else {
+        return Err("the settings surface needs the modal web view of the settings window, and no modal of the mode dialog is open".into());
+    };
+    let (handle_tx, handle_rx) = mpsc::channel::<Result<Handle, String>>();
+    view.with_webview(move |webview| {
+        if handle_tx.send(platform.view_id(&webview)).is_err() {
+            crate::application_log::log_info(
+                "surface",
+                "modal webview handle arrived after its request ended",
+            );
+        }
+    })
+    .map_err(|e| e.to_string())?;
+    handle_rx.recv().map_err(|e| e.to_string())?
+}
+
 /// Creates, fits and removes the surface views. It runs on the main thread inside the layout transaction, so no other
 /// main-thread work runs among its steps. A surface removed before a failure stays in `removed`.
 fn apply_surfaces(
@@ -1746,6 +1823,13 @@ fn apply_surfaces(
                 platform.set_surface_hidden_handle(handle, hidden)
             })?;
             platform.set_surface_alpha_handle(handle, solid)?;
+            // The settings surface stands above the modal web view of the settings window, clipped to the pane, before its
+            // frame is set, because its frame is relative to the container that clips it (docs/spec/native-modals.md#settings-surface).
+            if let Some(clip) = s.clip {
+                let modal = settings_modal_handle(context, platform)?;
+                let (cx, cy, cw, ch) = aligned(clip.x, clip.y, clip.w, clip.h, scale);
+                platform.seat_surface_over_modal(handle, modal, cx, cy, cw, ch)?;
+            }
             if visible {
                 platform.place_surface(handle, ax, ay, aw, ah)?;
             }

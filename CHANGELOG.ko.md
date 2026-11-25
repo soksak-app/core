@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1128-3: Wails와 Tauri의 settings 창이 plugin page에 plugin의 settings view를 보인다. page는 modal 문서로 seat를 재고 pane을 clip으로 실어 배치하며, host는 그 host를 modal web view 바로 위의 잘린 container에 세운다. element `core.settings-modal.pane`과 `core.settings-modal.plugin-view`가 선언되고, surface container의 hit test는 frame 원점에서 점을 잰다.
 - F1128-2: mygo settings window가 plugin page에 plugin의 settings view를 settings surface `settings/<plugin>`으로 보이고, host는 그것을 blur하지 않는다.
 - F1128-1: plugin.json reader가 `settingsView`를 받아들이고 installer가 그 page가 없는 release를 거부한다.
 - F1195: specification이 plugin의 settings view, 그 surface, settings window의 plugin page 안의 seat, settings modal 위의 자리를 기술한다.

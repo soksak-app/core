@@ -47,6 +47,9 @@ type Surface struct {
 	// Start holds the start values of the view of a view surface, which the host injects as window.sokSurface before the page
 	// runs (docs/spec/native-surfaces.md#view-surfaces). A surface of another composition carries none.
 	Start *ViewStart `json:"start,omitempty"`
+	// Clip is the part of the window that shows the settings surface, the pane of the settings window, in the coordinates of the
+	// rectangle; only the settings surface carries it (docs/spec/native-modals.md#settings-surface).
+	Clip *Rect `json:"clip,omitempty"`
 	// Programs holds the programs that the plugin of the surface declares, by name, which the host checks each run against
 	// (docs/spec/native-surfaces.md#program-runs). A surface whose request carries no programs member declares none.
 	Programs map[string]programDeclaration `json:"-"`
@@ -1170,6 +1173,18 @@ func CheckSyncRequest(req SyncRequest, held map[string]SurfaceComposition, plugi
 		if surface.Plugin == "" {
 			return nil, fmt.Errorf("surface %q requires its plugin", surface.ID)
 		}
+		// The settings surface shows only in the pane of the settings window, so it carries that clip, and no other surface is clipped
+		// (docs/spec/native-modals.md#settings-surface).
+		if IsSettingsSurface(surface.ID) {
+			if surface.Clip == nil {
+				return nil, fmt.Errorf("surface %q needs the clip of its settings seat", surface.ID)
+			}
+			if err := ValidateRect(fmt.Sprintf("surface %q clip", surface.ID), surface.Clip.X, surface.Clip.Y, surface.Clip.W, surface.Clip.H); err != nil {
+				return nil, err
+			}
+		} else if surface.Clip != nil {
+			return nil, fmt.Errorf("surface %q has a clip, which only the settings surface has", surface.ID)
+		}
 		if surface.Start != nil {
 			if err := validateViewStart(surface.ID, surface.Start); err != nil {
 				return nil, err
@@ -2137,6 +2152,11 @@ func (s *Surfaces) apply(win Frontend, req SyncRequest) ([]string, []Placement, 
 		if err := s.syncView(item.id, item.view.NativeView(), item.decl.Plugin, item.decl.Composition.Page, item.visible, start); err != nil {
 			return nil, nil, err
 		}
+		if IsSettingsSurface(item.id) {
+			if err := s.seatSettingsSurface(win, item.view, *item.decl.Clip); err != nil {
+				return nil, nil, err
+			}
+		}
 		system.SetSurfaceAlphaHandle(item.view.NativeView(), alphaFor(item.decl.Dim))
 		// A window without a main page sets the frame of a surface in the frame that draws its card, when its native view element gives
 		// its placement (docs/spec/hosts.md#operation-groups). A surface that the preparation creates has no element in the frame of the
@@ -2182,6 +2202,28 @@ func (s *Surfaces) apply(win Frontend, req SyncRequest) ([]string, []Placement, 
 	}
 	s.placedDialog(placed)
 	return gone, placed, nil
+}
+
+// seatSettingsSurface stands the host of the settings surface above the modal web view of the settings window, clipped to clip,
+// before its frame is set, because the frame of the host is relative to the container that clips it
+// (docs/spec/native-modals.md#settings-surface).
+func (s *Surfaces) seatSettingsSurface(win Frontend, view *nativeWebview, clip Rect) error {
+	s.mu.Lock()
+	var modalView *nativeWebview
+	if s.modal != nil && s.modal.content.Mode == "dialog" {
+		modalView = s.modal.view
+	}
+	s.mu.Unlock()
+	if modalView == nil {
+		return fmt.Errorf("the settings surface needs the modal web view of the settings window, and no modal of the mode dialog is open")
+	}
+	var at Rect
+	var err error
+	mainThreadStep(func() { at, _, err = aligned(win, clip) })
+	if err != nil {
+		return err
+	}
+	return system.SeatSurfaceOverModal(view.NativeView(), modalView.NativeView(), at.X, at.Y, at.W, at.H)
 }
 
 // placedRect is the rectangle that a visible surface has in the frame that shows the layout, and the frame of a hidden one.

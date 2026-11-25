@@ -19,6 +19,9 @@ void *main_sp_window_native_view(uintptr_t window) { return ON_MAIN(void *, sp_w
 void *main_sp_surface_create(uintptr_t window) { return ON_MAIN(void *, sp_surface_create(sp_window_composition((void *)window))); }
 void main_sp_surface_close(void *surface) { hostRunOnMain(^{ sp_surface_close(surface); }); }
 void main_sp_surface_mark_dialog(void *surface) { hostRunOnMain(^{ sp_surface_mark_dialog(surface); }); }
+bool main_sp_surface_seat_over_modal(void *surface, void *modal, double x, double y, double width, double height) {
+    return ON_MAIN(bool, sp_surface_seat_over_modal(surface, modal, x, y, width, height));
+}
 void main_webviewSetFrame(void *view, double x, double y, double width, double height) {
     hostRunOnMain(^{ webviewSetFrame(view, x, y, width, height); });
 }

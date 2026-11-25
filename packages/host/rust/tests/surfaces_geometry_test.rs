@@ -585,3 +585,61 @@ fn sync_request_check_refuses_a_process_of_another_form() {
     assert!(check(Some(serde_json::json!("plugin"))).is_ok());
     assert!(check(Some(serde_json::json!("view"))).is_ok());
 }
+
+// contract: surfaces-geometry.sync.settings-clip
+// F1128-3: the settings surface carries the clip of its settings seat, the pane, and no other surface carries a clip
+// (docs/spec/native-modals.md#settings-surface).
+#[test]
+fn sync_request_check_requires_the_clip_of_the_settings_surface_only() {
+    let composition: serde_json::Value = surface("tab-1", 10.0)["composition"].clone();
+    let held = HashMap::from([
+        (
+            "settings/probe".to_string(),
+            serde_json::from_value(composition.clone()).expect("the composition fixture is valid"),
+        ),
+        (
+            "tab-1".to_string(),
+            serde_json::from_value(composition).expect("the composition fixture is valid"),
+        ),
+    ]);
+    let plugins = HashMap::from([
+        ("settings/probe".to_string(), "page".to_string()),
+        ("tab-1".to_string(), "page".to_string()),
+    ]);
+    let check = |value: serde_json::Value| {
+        check_sync_request(
+            &sync_request(
+                serde_json::json!({"settled": true, "titlebar": 40.0, "viewport": {"width": 800.0, "height": 600.0}, "declarations": [{"commands": []}], "surfaces": [value]}),
+            ),
+            &held,
+            &plugins,
+        )
+    };
+    let mut settings = surface("settings/probe", 300.0);
+    settings["clip"] = serde_json::json!({"x": 10.0, "y": 60.0, "w": 300.0, "h": 200.0});
+    assert!(
+        check(settings.clone()).is_ok(),
+        "a settings surface with its clip was refused"
+    );
+    let mut unclipped = settings.clone();
+    unclipped
+        .as_object_mut()
+        .expect("the surface fixture is an object")
+        .remove("clip");
+    assert_eq!(
+        check(unclipped).unwrap_err(),
+        r#"surface "settings/probe" needs the clip of its settings seat"#
+    );
+    let mut negative = settings;
+    negative["clip"] = serde_json::json!({"x": 0.0, "y": 0.0, "w": -1.0, "h": 10.0});
+    assert_eq!(
+        check(negative).unwrap_err(),
+        r#"surface "settings/probe" clip geometry must not have a negative size"#
+    );
+    let mut tab = surface("tab-1", 10.0);
+    tab["clip"] = serde_json::json!({"x": 0.0, "y": 0.0, "w": 10.0, "h": 10.0});
+    assert_eq!(
+        check(tab).unwrap_err(),
+        r#"surface "tab-1" has a clip, which only the settings surface has"#
+    );
+}

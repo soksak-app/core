@@ -368,6 +368,7 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .slot{position:relative}
 /* The seat of the dialog of the window covers the content below the title bar, sidebars included (docs/spec/plugins.md#dialogs). */
 .slot.dialog-seat{position:fixed;left:0;right:0;bottom:0;z-index:30}
+.slot.settings-seat{position:fixed;z-index:40}
 /* Places the sidebars on four sides and the content slot inside a card in rows and columns. */
 .card:has(> .card-sidebar){
   grid-template-columns:var(--pl,0px) minmax(0,1fr) var(--pr,0px);

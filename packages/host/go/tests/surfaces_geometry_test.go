@@ -92,3 +92,34 @@ func TestSyncRequestCheckRequiresTheSamePluginOfEachSurface(t *testing.T) {
 		t.Fatalf("the sync check returned %v for a surface without a plugin, want %q", err, want)
 	}
 }
+
+// contract: surfaces-geometry.sync.settings-clip
+// F1128-3: the settings surface carries the clip of its settings seat, the pane, and no other surface carries a clip
+// (docs/spec/native-modals.md#settings-surface).
+func TestSyncRequestCheckRequiresTheClipOfTheSettingsSurfaceOnly(t *testing.T) {
+	view := host.SurfaceComposition{Kind: "view", Page: "ui/settings.html", Overlays: []string{}}
+	held := map[string]host.SurfaceComposition{"settings/probe": view, "tab-1": view}
+	plugins := map[string]string{"settings/probe": "probe", "tab-1": "probe"}
+	check := func(surface host.Surface) error {
+		_, err := host.CheckSyncRequest(host.SyncRequest{Settled: true, Titlebar: 40, Surfaces: []host.Surface{surface}}, held, plugins)
+		return err
+	}
+	settings := host.Surface{ID: "settings/probe", Visible: true, Plugin: "probe", Composition: view, Start: viewStart(), Rect: host.Rect{X: 10, Y: 20, W: 300, H: 400}, Clip: &host.Rect{X: 10, Y: 60, W: 300, H: 200}}
+	if err := check(settings); err != nil {
+		t.Fatalf("a settings surface with its clip was refused: %v", err)
+	}
+	unclipped := settings
+	unclipped.Clip = nil
+	if want := `surface "settings/probe" needs the clip of its settings seat`; check(unclipped) == nil || check(unclipped).Error() != want {
+		t.Fatalf("the sync check of a settings surface without a clip returned %v, want %q", check(unclipped), want)
+	}
+	negative := settings
+	negative.Clip = &host.Rect{W: -1, H: 10}
+	if want := `surface "settings/probe" clip geometry must not have a negative size`; check(negative) == nil || check(negative).Error() != want {
+		t.Fatalf("the sync check of a negative clip returned %v, want %q", check(negative), want)
+	}
+	tab := host.Surface{ID: "tab-1", Visible: true, Plugin: "probe", Composition: view, Start: viewStart(), Rect: host.Rect{W: 10, H: 10}, Clip: &host.Rect{W: 10, H: 10}}
+	if want := `surface "tab-1" has a clip, which only the settings surface has`; check(tab) == nil || check(tab).Error() != want {
+		t.Fatalf("the sync check of a tab with a clip returned %v, want %q", check(tab), want)
+	}
+}

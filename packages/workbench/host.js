@@ -774,6 +774,8 @@ export const surfaces = native ? {
           ...programsOfSurface(s.surface),
           visible: s.visible,
           ...toPage(s.applied),
+          // The settings surface shows only in the pane of the settings window (docs/spec/native-modals.md#settings-surface).
+          ...(s.clip ? { clip: toPage(s.clip) } : {}),
           // The start values of the view of a view surface (docs/spec/native-surfaces.md#view-surfaces); a surface of another
           // composition carries none.
           ...(s.start ? { start: s.start } : {}),
@@ -996,6 +998,19 @@ export function overlayElementRect(element) {
   if (!reported) throw new Error(`modal ${shown} has reported no element ${name} at index ${index}`);
   const { x, y, width, height } = reported;
   return { x, y, width, height, document: { x: modalFrame.x, y: modalFrame.y } };
+}
+
+/**
+ * The rectangle of the first element name that the document of the open native modal reported, in CSS pixels of the window: the
+ * reported rectangle moved by the frame of the modal (docs/spec/native-surfaces.md#settings-seat). It is null while no native modal
+ * is open, before its document reported its elements, and when the document reported no element of that name.
+ */
+export function modalElementWindowRect(name) {
+  if (!shown || !modalDocument?.elements || modalFrame === null) return null;
+  const reported = modalDocument.elements.find((element) => element.name === name);
+  // default: a document that reported no element of the name has no place for it, as a document that reported nothing.
+  if (!reported) return null;
+  return { x: modalFrame.x + reported.x, y: modalFrame.y + reported.y, w: reported.width, h: reported.height };
 }
 
 /**

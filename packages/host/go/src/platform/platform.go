@@ -534,6 +534,10 @@ type Platform interface {
 	// MarkDialogSurface marks the surface host of a dialog surface, so the surface hosts created after it stand below it
 	// (docs/spec/native-surfaces.md#surface-host-container). Call it on the main thread right after CreateSurface.
 	MarkDialogSurface(surface unsafe.Pointer) error
+	// SeatSurfaceOverModal stands the surface host of the settings surface above the modal web view modal in a container whose
+	// frame is the clip x, y, width, height of the window content, so the host shows and takes the pointer only inside the clip
+	// (docs/spec/native-modals.md#settings-surface). Call it on the main thread before the frame of the surface is set.
+	SeatSurfaceOverModal(surface, modal unsafe.Pointer, x, y, width, height float64) error
 	// RetainView keeps a view alive through its close until ReleaseView, and ReleaseView ends that. Call them on the main thread.
 	RetainView(view unsafe.Pointer)
 	ReleaseView(view unsafe.Pointer)

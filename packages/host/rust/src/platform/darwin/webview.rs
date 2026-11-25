@@ -29,6 +29,14 @@ unsafe extern "C" {
     fn sp_surface_create(view: *mut c_void) -> *mut c_void;
     fn sp_surface_close(surface: *mut c_void);
     fn sp_surface_mark_dialog(surface: *mut c_void);
+    fn sp_surface_seat_over_modal(
+        surface: *mut c_void,
+        modal: *mut c_void,
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+    ) -> bool;
     fn webviewSetFrame(view: *mut c_void, x: f64, y: f64, width: f64, height: f64);
     fn sp_surface_set_window_overlays(main: *mut c_void, rects: *const f64, count: usize);
 }
@@ -50,6 +58,24 @@ pub fn create_surface(window: Handle) -> Result<Handle, String> {
 /// Marks the surface host of a dialog surface, so the surface hosts created after it stand below it.
 pub fn mark_dialog_surface(surface: Handle) {
     unsafe { sp_surface_mark_dialog(surface as *mut c_void) }
+}
+
+/// Stands the surface host of the settings surface above the modal web view in a container whose frame is the clip.
+pub fn seat_surface_over_modal(
+    surface: Handle,
+    modal: Handle,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+) -> Result<(), String> {
+    if unsafe {
+        sp_surface_seat_over_modal(surface as *mut c_void, modal as *mut c_void, x, y, w, h)
+    } {
+        Ok(())
+    } else {
+        Err("the settings surface host cannot stand above the modal web view, which is not in the content view of its window".into())
+    }
 }
 
 pub fn close_surface(surface: Handle) {

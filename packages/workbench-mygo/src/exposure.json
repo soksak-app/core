@@ -6069,6 +6069,14 @@
         "description": "The 목록 button of a plugin page, which returns to the plugin list."
       },
       {
+        "name": "core.settings-modal.pane",
+        "description": "The pane of the settings window, the box below the head that scrolls and holds the controls of the shown page."
+      },
+      {
+        "name": "core.settings-modal.plugin-view",
+        "description": "The seat of the settings view of a plugin, below the rows of 설정 of its plugin page, as wide as the content of the pane and as high as its visible box; the settings surface settings/<plugin> shows in it, clipped to the pane."
+      },
+      {
         "name": "core.settings-modal.manage",
         "description": "The 플러그인 관리 button of the plugins section, bound to core.plugins.browse."
       },

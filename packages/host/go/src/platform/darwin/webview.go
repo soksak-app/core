@@ -145,6 +145,13 @@ func (implementation) MarkDialogSurface(surface unsafe.Pointer) error {
 	return nil
 }
 
+func (implementation) SeatSurfaceOverModal(surface, modal unsafe.Pointer, x, y, width, height float64) error {
+	if !native.MainSpSurfaceSeatOverModal(surface, modal, x, y, width, height) {
+		return fmt.Errorf("the settings surface host cannot stand above the modal web view, which is not in the content view of its window")
+	}
+	return nil
+}
+
 func (implementation) CloseSurface(surface unsafe.Pointer) { native.MainSpSurfaceClose(surface) }
 func (implementation) SetSurfaceBounds(surface unsafe.Pointer, x, y, width, height float64) {
 	native.MainWebviewSetFrame(surface, float64(x), float64(y), float64(width), float64(height))

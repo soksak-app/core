@@ -201,6 +201,17 @@ impl Platform for Windows {
     fn mark_dialog_surface(&self, surface: Handle) -> Result<(), String> {
         unsupported::mark_dialog_surface(surface)
     }
+    fn seat_surface_over_modal(
+        &self,
+        surface: Handle,
+        modal: Handle,
+        x: f64,
+        y: f64,
+        w: f64,
+        h: f64,
+    ) -> Result<(), String> {
+        unsupported::seat_surface_over_modal(surface, modal, x, y, w, h)
+    }
     fn close_surface(&self, surface: Handle) -> Result<(), String> {
         unsupported::close_surface(surface)
     }

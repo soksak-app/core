@@ -5,7 +5,7 @@
 import { contributionsOf, installContributions } from "./contributions.js";
 import { registry as exposure } from "./exposure.js";
 import { declareProjectData } from "./plugin-data.js";
-import { registerDialog, registerPlugin, registerSection } from "./registry.js";
+import { registerDialog, registerSettingsView, registerPlugin, registerSection } from "./registry.js";
 import { compositionKindOf } from "./surface-composition-kind.js";
 import { setPluginSettings, setSidebarDefaults } from "./settings.js";
 import {
@@ -65,6 +65,15 @@ function dialogSurfaceOf(pluginId, name, { page, regions }, declarations, diagno
   return (opener, params) => ({ composition, surfaceId: `dialog/${pluginId}/${name}`, pluginId, declarations, sidecars,
     diagnostics, programs, unload: false, params, section: null, dialog: { name, opener },
     contributions: (point) => contributionsOf(pluginId, point) });
+}
+
+// The settings surface of the plugin, settings/<plugin> (docs/spec/plugins.md#settings-views): a view opened by no tab, so its params,
+// section and dialog are null and its origin records no directory.
+function settingsSurfaceOf(pluginId, { page, regions }, declarations, diagnostics, sidecars, programs) {
+  // default: regions is optional in a settings view; a settings view without it declares no region, as a view composition without regions.
+  const composition = regions === undefined ? { kind: "view", page } : { kind: "view", page, regions };
+  return () => ({ composition, surfaceId: `settings/${pluginId}`, pluginId, declarations, sidecars, diagnostics, programs, unload: false,
+    params: null, section: null, dialog: null, settings: true, contributions: (point) => contributionsOf(pluginId, point) });
 }
 
 /* Diagnostic module loaded for each plugin id in a diagnostic build. The registration starts the loading and waits for it when it raises a surface. */
@@ -161,6 +170,12 @@ export function installEnvironment(environmentDocument, installedDocument) {
         // default: exposes is an optional field of plugin.json; without it there is no declaration.
         surface: dialogSurfaceOf(manifest.id, name, dialog, exposes ?? {}, diagnostics, manifestSidecars(manifest, pluginNames), manifest.programs ?? null) });
     }
+    // default: settingsView is an optional field of plugin.json; without it the plugin page shows no settings view.
+    if (manifest.settingsView) {
+      registerSettingsView({ plugin: manifest.id,
+        // default: exposes is an optional field of plugin.json; without it there is no declaration.
+        surface: settingsSurfaceOf(manifest.id, manifest.settingsView, exposes ?? {}, diagnostics, manifestSidecars(manifest, pluginNames), manifest.programs ?? null) });
+    }
     if (exposes) exposure.declare(manifest.id, exposes);
     // default: data is an optional field of plugin.json; without it the plugin declares no project data.
     declareProjectData(manifest.id, manifest.data ?? {});
@@ -173,6 +188,8 @@ export function installEnvironment(environmentDocument, installedDocument) {
     unload: manifest.surface?.unload ?? false,
     // default: sections is an optional field of plugin.json; without it there are no sections.
     sections: (manifest.sections ?? []).map((s) => s.id),
+    // Whether the plugin page shows a settings view (docs/spec/plugins.md#settings-views).
+    settingsView: manifest.settingsView !== undefined,
     // default: dependencies is an optional field of plugin.json; without it there are no sidecars.
     dependencies: manifest.dependencies ?? {},
   }));

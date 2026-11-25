@@ -42,6 +42,7 @@ import {
 } from "./host.js";
 import { keyboardResponder } from "./keyboard.js";
 import { dialogSurfacePlugin } from "./dialogs.js";
+import { settingsSurfacePlugin } from "./settings-view.js";
 import { hasPlugin, plugin, sectionSurfacePlugin } from "./registry.js";
 import { compositionKindOf } from "./surface-composition-kind.js";
 import { retainedSurfaceEntries, surfaceKindOf } from "./surface-listing.js";
@@ -272,12 +273,12 @@ const planeOrigin = () => {
 const shift = (rect, origin) => ({ x: rect.x + origin.x, y: rect.y + origin.y, w: rect.w, h: rect.h });
 
 /**
- * Finds the plugin of a surface: the plugin of its section, the plugin of the open dialog, or the plugin of a tab of the active space or
- * of a stored space.
+ * Finds the plugin of a surface: the plugin of its section, the plugin of the open dialog, the plugin of the open settings surface, or the
+ * plugin of a tab of the active space or of a stored space.
  */
 function surfacePlugin(surface) {
-  // default: a surface that is no section is looked up as the page of the open dialog.
-  const owner = sectionSurfacePlugin(surface) ?? dialogSurfacePlugin(surface);
+  // default: a surface that is no section is looked up as the page of the open dialog, then as the open settings surface.
+  const owner = sectionSurfacePlugin(surface) ?? dialogSurfacePlugin(surface) ?? settingsSurfacePlugin(surface);
   if (owner !== null) return owner;
   // default: there is no card before the plane is created.
   for (const card of currentGrid()?.cards ?? []) {

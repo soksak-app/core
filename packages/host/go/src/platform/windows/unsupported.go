@@ -453,6 +453,10 @@ func (implementation) MarkDialogSurface(unsafe.Pointer) error {
 	return unsupported("dialog surface host")
 }
 
+func (implementation) SeatSurfaceOverModal(unsafe.Pointer, unsafe.Pointer, float64, float64, float64, float64) error {
+	return unsupported("settings surface host")
+}
+
 func (implementation) SetSurfaceBounds(unsafe.Pointer, float64, float64, float64, float64) {
 	unreachable("surface host placement")
 }

@@ -30,7 +30,7 @@ import { layoutTree, sameJson, stateCards } from "./layout-tree.js";
 import { buildTree, planArrangement, readingOrder, treeCards, treeGroups } from "./layout-plan.js";
 import { recordClosedTabs, tabClosed } from "./closed-tabs.js";
 import { clearSlotSurface, setSlotSurface, standIn } from "./compositor.js";
-import { followRing, keyboardOwed } from "./keyboard.js";
+import { followRing, keyboardOwed, pressSettingsSurface } from "./keyboard.js";
 import { native, onSurfaceInput, overlay, report, shapes, windowSidecar } from "./host.js";
 import { declaredIcons, icon } from "./icons.js";
 import { issueId } from "./ids.js";
@@ -40,6 +40,8 @@ import { fillPicker, pickerAnswer, pickerColumns, pickerGroups, pickerItems } fr
 import { emptySlot, mountSurface, mountedSurface, placePluginPlaceholder, surfaceForTab } from "./surface-modules.js";
 import { onDialogChange } from "./dialogs.js";
 import { drawDialogSeat } from "./dialog-seat.js";
+import { drawSettingsSeat } from "./settings-seat.js";
+import { onSettingsViewChange, settingsSurface } from "./settings-view.js";
 import { emitEvent } from "./page-log.js";
 import { trace } from "./performance.js";
 import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
@@ -88,6 +90,8 @@ const pressSurface = (tabId) => {
   const card = slot?.closest(".card")?.dataset.cardId ?? null;
   const decision = !slot ? "no-slot" : card === focusedId ? "focused" : "focus";
   emitEvent("debug", "workbench.surface.press", { surface: tabId, card, focused: focusedId, decision });
+  // A press on the settings surface gives it the keyboard (docs/spec/plugins.md#settings-views).
+  if (tabId === settingsSurface()) pressSettingsSurface();
   slot?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
 };
 
@@ -627,6 +631,7 @@ onPluginOperations(() => {
 
 // A dialog that opens or ends changes what the plane draws: the draw holds the seat of the open dialog (docs/spec/plugins.md#dialogs).
 onDialogChange(() => { if (grid) settle(); });
+onSettingsViewChange(() => { if (grid) settle(); });
 
 // An error toast that opens or closes changes the window overlays: the next placement cuts each open toast out of the container of the
 // surface hosts, so the toast is drawn above the native surfaces (docs/spec/native-surfaces.md#surface-host-container).
@@ -1981,6 +1986,8 @@ function build(kept) {
       keepHiddenSidebars();
       // The seat of the dialog covers the content of the window below the title bar, the first row of the window.
       drawDialogSeat(plane, document.querySelector(".chrome-bar").getBoundingClientRect().bottom);
+      // The seat of the settings surface lies in the pane of the settings window (docs/spec/native-surfaces.md#settings-seat).
+      drawSettingsSeat(plane);
       const fullscreen = view.fullscreenCard;
       drawGroupCards(plane, tree, drawnRects(fullscreen), { head: HEADER, fullscreen, focused: focusedId,
         renaming: groupRename.state(), renameField: () => groupRename.field() });

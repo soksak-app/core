@@ -1,0 +1,16 @@
+{
+  "name": "settings-view-seat",
+  "description": "The page opens the dialog modal of the settings element, which spans the whole window, and the modal document reports the seat core.settings-modal.plugin-view and the pane core.settings-modal.pane of a plugin page, then the seat scrolled out of the pane, then the seat back inside it; the page measures the seat of the settings surface from each report and closes the modal by its element id, which the host answers with null.",
+  "replay": false,
+  "reason": "overlayShow opens a native modal view in the window, and the modal document sends its state through the overlay-pick notice; only the native host with a window produces them (the native tier of docs/operations/examples.md#test-kinds).",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "overlayShow", "payload": { "id": "settings", "title": "Settings", "rect": { "x": 0, "y": 0, "w": 800, "h": 600 }, "mode": "dialog", "card": { "x": 0, "y": 0, "w": 0, "h": 0 }, "className": "", "html": "", "css": "", "border": "rgb(1, 2, 3)", "radius": 0 } } },
+    { "reply": { "result": { "x": 0, "y": 0, "w": 800, "h": 600 } } },
+    { "notice": { "event": "overlay-pick", "payload": { "id": "settings", "key": "document", "value": "{\"elements\":[{\"name\":\"core.settings-modal.pane\",\"x\":100,\"y\":80,\"width\":400,\"height\":400},{\"name\":\"core.settings-modal.plugin-view\",\"x\":100,\"y\":300,\"width\":400,\"height\":400}]}" } } },
+    { "notice": { "event": "overlay-pick", "payload": { "id": "settings", "key": "document", "value": "{\"elements\":[{\"name\":\"core.settings-modal.pane\",\"x\":100,\"y\":80,\"width\":400,\"height\":400},{\"name\":\"core.settings-modal.plugin-view\",\"x\":100,\"y\":500,\"width\":400,\"height\":400}]}" } } },
+    { "notice": { "event": "overlay-pick", "payload": { "id": "settings", "key": "document", "value": "{\"elements\":[{\"name\":\"core.settings-modal.pane\",\"x\":100,\"y\":80,\"width\":400,\"height\":400},{\"name\":\"core.settings-modal.plugin-view\",\"x\":100,\"y\":80,\"width\":400,\"height\":400}]}" } } },
+    { "call": { "name": "overlayHide", "payload": "settings" } },
+    { "reply": { "result": null } }
+  ]
+}

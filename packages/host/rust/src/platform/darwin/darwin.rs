@@ -307,6 +307,17 @@ impl Platform for Darwin {
         webview::mark_dialog_surface(surface);
         Ok(())
     }
+    fn seat_surface_over_modal(
+        &self,
+        surface: Handle,
+        modal: Handle,
+        x: f64,
+        y: f64,
+        w: f64,
+        h: f64,
+    ) -> Result<(), String> {
+        webview::seat_surface_over_modal(surface, modal, x, y, w, h)
+    }
     fn close_surface(&self, surface: Handle) -> Result<(), String> {
         webview::close_surface(surface);
         Ok(())

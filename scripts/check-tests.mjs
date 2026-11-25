@@ -485,7 +485,7 @@ const FEATURE_LINKS = [
   {
     id: "F1164",
     implementation: [
-      { file: "packages/workbench/tab-session.js", symbol: "const keepsSession = (tab) => !isDialogSurface(tab);" },
+      { file: "packages/workbench/tab-session.js", symbol: "const keepsSession = (tab) => !isDialogSurface(tab) && !isSettingsSurface(tab);" },
       { file: "packages/workbench-mygo/src/tab_store.go", symbol: "func keepsSession(tab string) bool { return !host.IsDialogSurface(tab) && !host.IsSettingsSurface(tab) }" },
     ],
     tests: [
@@ -513,6 +513,26 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/documents_test.rs", id: "the_background_of_the_settings_window_leaves_the_settings_surface_unblurred" },
     ],
     expected: "The mygo settings window shows the settings view of a plugin as the settings surface settings/<plugin> at its seat in the plugin page, and the hosts leave the settings surface unblurred.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1128-3",
+    implementation: [
+      { file: "packages/workbench/settings-view.js", symbol: "export function showSettingsView(plugin) {" },
+      { file: "packages/workbench/settings-seat.js", symbol: "export function drawSettingsSeat(container) {" },
+      { file: "packages/host/go/src/surfaces.go", symbol: "func (s *Surfaces) seatSettingsSurface(win Frontend, view *nativeWebview, clip Rect) error {" },
+      { file: "packages/host/rust/src/surfaces.rs", symbol: "fn settings_modal_handle(" },
+      { file: "native/darwin/src/webview_geometry.m", symbol: "bool sp_surface_seat_over_modal(void *handle, void *modalHandle, double x, double y, double width, double height) {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/settings-view.test.mjs", id: "the settings surface follows the plugin page, and its seat follows the seat and the pane that the modal document reports" },
+      { file: "packages/workbench/test/settings-view.test.mjs", id: "a stopped settings view ends its surface with its error until the page of the plugin is shown again" },
+      { file: "packages/workbench/test/settings-view.test.mjs", id: "the settings surface is no section, has the kind settings and keeps no tab session" },
+      { file: "packages/host/go/tests/surfaces_geometry_test.go", id: "TestSyncRequestCheckRequiresTheClipOfTheSettingsSurfaceOnly" },
+      { file: "packages/host/rust/tests/surfaces_geometry_test.rs", id: "sync_request_check_requires_the_clip_of_the_settings_surface_only" },
+      { file: "native/darwin/tests/surface_container_test.m", id: "checkSettingsContainer" },
+    ],
+    expected: "The Wails and Tauri settings windows show the settings view of a plugin as the settings surface settings/<plugin> at its seat, clipped to the pane, with its host directly above the modal web view.",
     levels: ["unit"],
   },
   {
@@ -745,7 +765,7 @@ const FEATURE_LINKS = [
     id: "F1151",
     implementation: [
       { file: "packages/workbench/dialogs.js", symbol: "export const dialogSurfacePlugin = (surface) =>" },
-      { file: "packages/workbench/core-exposure.js", symbol: "const owner = sectionSurfacePlugin(surface) ?? dialogSurfacePlugin(surface);" },
+      { file: "packages/workbench/core-exposure.js", symbol: "const owner = sectionSurfacePlugin(surface) ?? dialogSurfacePlugin(surface) ?? settingsSurfacePlugin(surface);" },
     ],
     tests: [
       { file: "packages/workbench/test/dialog-surface.test.mjs", id: "the open dialog surface names its plugin, and no surface does once the dialog ends" },
@@ -15159,7 +15179,7 @@ const FEATURE_LINKS = [
     id: "F365",
     implementation: [
       { file: "packages/workbench/registry.js", symbol: "export function sectionSurfacePlugin(surface)" },
-      { file: "packages/workbench/core-exposure.js", symbol: "const owner = sectionSurfacePlugin(surface) ?? dialogSurfacePlugin(surface);" },
+      { file: "packages/workbench/core-exposure.js", symbol: "const owner = sectionSurfacePlugin(surface) ?? dialogSurfacePlugin(surface) ?? settingsSurfacePlugin(surface);" },
     ],
     tests: [
       { file: "packages/workbench/test/surface-plugins.test.mjs", id: "a section surface id names the plugin of its registered section" },

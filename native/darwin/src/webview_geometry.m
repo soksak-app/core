@@ -16,6 +16,9 @@
 
 @interface SPSurfaceCoordinates : NSView
 @property CGFloat scale;
+// The container is the settings container of its window, which stands above the modal web view of the settings window and
+// clips the settings surface host to the pane (sp_surface_seat_over_modal).
+@property(nonatomic) BOOL overModal;
 @end
 
 static void normalizeCoordinateBounds(SPSurfaceCoordinates *coordinates) {
@@ -408,10 +411,11 @@ static void notifyScale(NSView *view) {
 }
 - (NSView *)hitTest:(NSPoint)point {
     if (self.hidden || self.alphaValue <= 0 || NSWidth(self.frame) <= 0 || NSHeight(self.frame) <= 0) return nil;
-    // AppKit passes frame-unit coordinates to the child in the hitTest: of the parent. This container has a different axis
-    // direction from its parent and its bounds are larger by the device scale, so the two are converted explicitly.
-    CGFloat x = NSMinX(self.bounds) + point.x * NSWidth(self.bounds) / NSWidth(self.frame);
-    CGFloat yFraction = point.y / NSHeight(self.frame);
+    // AppKit passes the point in the coordinates of the parent to the hitTest: of a child. This container has a different axis
+    // direction from its parent and its bounds are larger by the device scale, so the two are converted explicitly from the
+    // offset of the point from the frame origin, which the settings container does not have at the origin of its parent.
+    CGFloat x = NSMinX(self.bounds) + (point.x - NSMinX(self.frame)) * NSWidth(self.bounds) / NSWidth(self.frame);
+    CGFloat yFraction = (point.y - NSMinY(self.frame)) / NSHeight(self.frame);
     if (self.isFlipped != self.superview.isFlipped) yFraction = 1 - yFraction;
     NSPoint local = NSMakePoint(x, NSMinY(self.bounds) + yFraction * NSHeight(self.bounds));
     if (!NSPointInRect(local, self.bounds)) return nil;
@@ -620,6 +624,53 @@ void *sp_surface_create(void *handle) {
 void sp_surface_mark_dialog(void *handle) {
     NSCAssert(NSThread.isMainThread, @"surface hosts belong to the main thread");
     ((SPSurfaceHost *)handle).dialogHost = YES;
+}
+
+// Orders the subviews of the content view so that the settings container follows the modal web view that the context names.
+static NSComparisonResult settingsContainerOrder(NSView *first, NSView *second, void *context) {
+    NSArray<NSView *> *order = (NSArray<NSView *> *)context;
+    NSUInteger a = [order indexOfObjectIdenticalTo:first], b = [order indexOfObjectIdenticalTo:second];
+    return a < b ? NSOrderedAscending : a > b ? NSOrderedDescending : NSOrderedSame;
+}
+
+bool sp_surface_seat_over_modal(void *handle, void *modalHandle, double x, double y, double width, double height) {
+    NSCAssert(NSThread.isMainThread, @"surface hosts belong to the main thread");
+    SPSurfaceHost *host = (SPSurfaceHost *)handle;
+    NSView *modal = (NSView *)modalHandle;
+    NSView *content = host.window.contentView;
+    if (!content || modal.superview != content) {
+        sp_log_error("surface", "the modal web view of the settings surface is not a view of the content view of the window of its host");
+        return false;
+    }
+    SPSurfaceCoordinates *over = nil;
+    for (NSView *child in content.subviews) {
+        if ([child isKindOfClass:SPSurfaceCoordinates.class] && ((SPSurfaceCoordinates *)child).overModal) over = (SPSurfaceCoordinates *)child;
+    }
+    surfaceTransactionBegin();
+    [CATransaction setDisableActions:YES];
+    if (!over) {
+        over = [[[SPSurfaceCoordinates alloc] initWithFrame:NSZeroRect] autorelease];
+        over.overModal = YES;
+        over.autoresizesSubviews = NO;
+        over.layer.masksToBounds = YES;
+        [content addSubview:over positioned:NSWindowAbove relativeTo:modal];
+    } else {
+        // A modal web view made after the container is added above it, so the subviews are sorted in place, which keeps every view in
+        // the window, instead of adding the container again.
+        NSMutableArray<NSView *> *order = [[content.subviews mutableCopy] autorelease];
+        [order removeObjectIdenticalTo:over];
+        [order insertObject:over atIndex:[order indexOfObjectIdenticalTo:modal] + 1];
+        if (![order isEqualToArray:content.subviews]) [content sortSubviewsUsingFunction:settingsContainerOrder context:order];
+    }
+    over.frame = NSMakeRect(x, content.isFlipped ? y : NSHeight(content.bounds) - y - height, width, height);
+    if (host.superview != over) {
+        [host retain];
+        [host removeFromSuperview];
+        [over addSubview:host];
+        [host release];
+    }
+    surfaceTransactionCommit();
+    return true;
 }
 
 void sp_view_give_up_keyboard(void *handle) {

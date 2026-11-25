@@ -3,12 +3,12 @@
 // navigation commit of a region, at most once per second per tab, at unload and at quit, through the workspace kind
 // tabSessionPut; each tab has its own file, so a write rewrites no other tab.
 
-import { isDialogSurface } from "./exposure.js";
+import { isDialogSurface, isSettingsSurface } from "./exposure.js";
 import { emitEvent } from "./page-log.js";
 
 // A dialog surface ends with its close and no layout reopens it, so the regions of a dialog keep no session, and the host refuses a session
 // file of a dialog id (docs/spec/projects.md#persistence).
-const keepsSession = (tab) => !isDialogSurface(tab);
+const keepsSession = (tab) => !isDialogSurface(tab) && !isSettingsSurface(tab);
 
 const COALESCE_MS = 1000;
 /** What asks for a read of the sessions of a tab: a navigation commit, the save of a window, or the unload of a tab. */

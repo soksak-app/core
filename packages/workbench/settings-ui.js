@@ -26,6 +26,7 @@ import { setupParts } from "./setup-exposure.js";
 import { missingKinds } from "./setup-parts.js";
 import { errorToasts, hideError, showError } from "./shown-errors.js";
 import { hasSection, section, sectionNames } from "./registry.js";
+import { showSettingsView } from "./settings-view.js";
 import {
   CHOICES, ERROR_TOAST_DISMISS_SECONDS, FONTS, LAYOUT_RANGES, MEMORY_SAVER_DELAY, MENU_LANGUAGES, SHAPE_RANGES, THEMES, debugOn, scopedValue, settingProject, settingProjectRoot, overridden, sourceScope,
   settingDefinitions,
@@ -539,8 +540,20 @@ function drawPluginPage(unit) {
   body.append(group(unit.name, unit.id, [row("", back)]));
 
   const declared = Object.entries(settingDefinitions()).filter(([, d]) => d.plugin === unit.id);
+  // The seat of the settings view of the plugin stands below the rows of 설정: as wide as the content of the pane and as high as its
+  // visible box, so the whole page of the view shows when the pane scrolls to it (docs/spec/plugins.md#settings-views).
+  const seat = [];
+  if (unit.settingsView) {
+    const view = document.createElement("div");
+    view.className = "set-plugin-view";
+    view.dataset.expose = "core.settings-modal.plugin-view";
+    view.style.height = `${body.clientHeight}px`;
+    seat.push(view);
+  }
   if (declared.length) {
-    body.append(group("설정", `${unit.name} 플러그인이 선언한 설정.`, declared.flatMap(([key, d]) => declaredRow(key, d))));
+    body.append(group("설정", `${unit.name} 플러그인이 선언한 설정.`, [...declared.flatMap(([key, d]) => declaredRow(key, d)), ...seat]));
+  } else if (seat.length) {
+    body.append(group("설정", `${unit.name} 플러그인이 선언한 설정.`, seat));
   } else {
     const none = document.createElement("p");
     none.className = "set-caption";
@@ -570,6 +583,9 @@ function drawPlugins() {
     drawPluginList();
   }
 }
+
+/** The plugin of the shown plugin page, which holds the settings surface of the plugin, or null for any other page. */
+const shownPluginPage = () => (card !== null && here === "plugins" ? chosen : null);
 
 const SIZE_LABELS = {
   sidebarMinWidth: "최소 폭",
@@ -698,7 +714,7 @@ function makeCard() {
     '</header>' +
     '<div class="set-card__body">' +
       '<nav class="set-card__nav"></nav>' +
-      '<div class="set-card__pane"></div>' +
+      '<div class="set-card__pane" data-expose="core.settings-modal.pane"></div>' +
     '</div>';
   // Without a host, the card of this document receives the input. It runs the command that the control points to.
   delegate(el);
@@ -868,6 +884,7 @@ export function drawSettings() {
   if (native) overlay.place(card, rect);
   else standIn(true, rect);
   restoreScroll(card, positions);
+  showSettingsView(shownPluginPage());
 }
 
 /**
@@ -955,6 +972,8 @@ export function closeSettings() {
   if (!card) return;
   queueMicrotask(() => drawn());
   setupParts.show(false);
+  // The settings surface leaves the layout before the modal closes (docs/spec/native-modals.md#settings-surface).
+  showSettingsView(null);
   if (native) overlay.hide(card);
   else {
     errorToasts(document).place(document.body);
@@ -969,4 +988,9 @@ export function closeSettings() {
 
 // A settings card dragged to an edge must stay inside the parent window whose size changed.
 // Its native webview follows the same clamped DOM rectangle.
-addEventListener("resize", () => { if (card) moveBy(0, 0); });
+// The seat of a settings view is as high as the visible box of the pane, which follows the size of the window.
+addEventListener("resize", () => {
+  if (!card) return;
+  moveBy(0, 0);
+  if (shownPluginPage() !== null) drawSettings();
+});

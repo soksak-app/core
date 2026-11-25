@@ -308,13 +308,14 @@ function originOf(surface) {
  * The origin of the context and the start values of surface. A section surface has no opening tab, so its origin records no
  * directory (docs/spec/native-surfaces.md#view-surfaces).
  */
-// A section and a dialog surface were opened by no tab, so their origin records no directory (docs/spec/native-surfaces.md#view-surfaces).
+// A section, a dialog and a settings surface were opened by no tab, so their origin records no directory
+// (docs/spec/native-surfaces.md#view-surfaces, docs/spec/plugins.md#settings-views).
 function surfaceOrigin(surface) {
-  return surface.section != null || surface.dialog != null ? { directory: null } : originOf(surface);
+  return surface.section != null || surface.dialog != null || surface.settings === true ? { directory: null } : originOf(surface);
 }
 
 function viewStartOrigin(surface) {
-  if (surface.section || surface.dialog) return surfaceOrigin(surface);
+  if (surface.section || surface.dialog || surface.settings === true) return surfaceOrigin(surface);
   // The layout read refuses a view tab first and the place leaves it out; a refusal that reaches this point is a defect, so it throws.
   const refusal = viewRefusal(surface.surfaceId);
   if (refusal !== null) throw new TypeError(refusal);
