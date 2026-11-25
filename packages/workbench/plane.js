@@ -1433,6 +1433,17 @@ function syncBackgroundSessions() {
     const owner = grid.cards.find((card) => tabsOf(card).some((item) => item.id === tab.id));
     const active = owner?.data?.activeId === tab.id;
     const surface = mountedSurface(tab.id) ? "mounted" : "absent";
+    // A tab whose params name an owned session shows that session: its surface attaches to it, and the sidecar keeps it without a
+    // surface. A background open would start a second session on the surface of the tab, which then refuses the attach.
+    if (tab.params?.session !== undefined) {
+      const session = backgroundSessions.get(tab.id);
+      if (session) {
+        stopBackground(session);
+        backgroundSessions.delete(tab.id);
+      }
+      recordBackground(tab, descriptor, "owned", surface);
+      continue;
+    }
     // A shown tab and a tab whose surface stays mounted while another tab of its card is shown own their session through the
     // surface, which opened it with its image region. A background open for them would be a second owner of the same surface,
     // and a reconnection would send it again, so the background session of such a tab ends and none opens (F192).

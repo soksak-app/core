@@ -292,7 +292,7 @@
     {"reply":{"result":null}},
     {"call":{"name":"waitPresented"}},
     {"reply":{"result":"$presented-ms"}},
-    {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":"$ts-us-3","mono_ns":"$mono-ns-3","start":"$page-identity","level":"info","event":"workbench.background.session","fields":{"tab":"tab-bbbbbb","plugin":"fixture-session","sidecar":"@scope/fixture-sidecar","action":"open","surface":"absent"}}]}}},
+    {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":"$ts-us-3","mono_ns":"$mono-ns-3","start":"$page-identity","level":"info","event":"workbench.background.session","fields":{"tab":"tab-bbbbbb","plugin":"fixture-session","sidecar":"@scope/fixture-sidecar","action":"open","surface":"absent"}},{"ts_us":"$ts-us-3","mono_ns":"$mono-ns-3","start":"$page-identity","level":"info","event":"workbench.background.session","fields":{"tab":"tab-cccccc","plugin":"fixture-session","sidecar":"@scope/fixture-sidecar","action":"owned","surface":"absent"}}]}}},
     {"reply":{"result":null}},
     {"call":{"name":"workspace","payload":{"kind":"patch","id":"prj-session","patch":{"lastOpened":"$opened-at-1"}}}},
     {"reply":{"result":true}},

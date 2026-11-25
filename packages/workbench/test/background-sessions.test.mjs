@@ -18,7 +18,10 @@ const STORED_LAYOUT = {
   state: { root: { card: "main", data: {
     tabs: [{ id: "tab-aaaaaa", plugin: owner, title: "shown", origin: { directory: "/work/session" }, role: null },
     { id: "tab-bbbbbb", plugin: owner, title: "hidden", origin: { directory: "/work/session" }, role: null,
-      params: { program: "claude", args: ["--verbose"] } }], activeId: "tab-aaaaaa" } } },
+      params: { program: "claude", args: ["--verbose"] } },
+    // A tab that shows an owned session: its surface attaches to that session, so the background opens none for it.
+    { id: "tab-cccccc", plugin: owner, title: "member", origin: { directory: "/work/session" }, role: null,
+      params: { session: "owned-1" } }], activeId: "tab-aaaaaa" } } },
   leader: "main", lastCard: 1, focusedId: "main", windowSidebars: {}, named: 0, sidebars: {},
 };
 // The replies of the host settle in the turns that follow the call.
@@ -142,6 +145,10 @@ test("a background session opens only for a tab without a mounted surface and en
     // without the field of a parameter that the tab does not hold (docs/spec/plugins.md#background-sessions).
     assert.deepEqual(opens(hidden)[0].payload.body, { directory: "/work/session", program: "claude", args: ["--verbose"], operation: "open" });
     assert.deepEqual(await decisions(hidden), ["open:absent"]);
+    // A background open for the tab of an owned session started a second session on its surface, and the attach of that surface was
+    // then refused with "surface already holds a session".
+    assert.equal(opens("tab-cccccc").length, 0, "the tab of an owned session got a background open");
+    assert.deepEqual(await decisions("tab-cccccc"), ["owned:absent"]);
     // The calls of the page that open a session, with the steps of the test between them: a send that a step causes comes after the mark of that step.
     const marks = [];
     const step = (label) => marks.push([label, wire.calls.length]);

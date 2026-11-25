@@ -496,6 +496,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1187",
+    implementation: [
+      { file: "packages/workbench/plane.js", symbol: "if (tab.params?.session !== undefined) {" },
+      { file: "packages/workbench-mygo/src/background_sessions.go", symbol: "if _, owned := tab.Params[\"session\"]; owned {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/background-sessions.test.mjs", id: "a background session opens only for a tab without a mounted surface and ends when its surface mounts" },
+      { file: "packages/workbench-mygo/tests/background_sessions_test.go", id: "TestATabThatShowsAnOwnedSessionOpensNoBackgroundSession" },
+    ],
+    expected: "A tab whose params name an owned session gets no background session and records the decision owned.",
+    levels: ["unit"],
+  },
+  {
     id: "F1186",
     implementation: [
       { file: "apps/gpuikit/platform/darwin/AppIcon.icon/icon.json", symbol: '"fill-specializations" : [' },

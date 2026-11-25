@@ -267,6 +267,16 @@ func (s *BackgroundSessions) Sync() error {
 		}
 		surface := s.surfaceOf(tab.ID)
 		session := s.sessions[tab.ID]
+		// A tab whose params name an owned session shows that session: its surface attaches to it, and the sidecar keeps it without a
+		// surface. A background open would start a second session on the surface of the tab, which then refuses the attach.
+		if _, owned := tab.Params["session"]; owned {
+			if session != nil {
+				session.end()
+				delete(s.sessions, tab.ID)
+			}
+			s.record(tab, declaration, "owned", surface)
+			continue
+		}
 		// A shown tab and a tab whose surface stays mounted while another tab of its card is shown own their session through the surface,
 		// so a background open would be a second owner of it.
 		if tab.Active || surface == "mounted" {

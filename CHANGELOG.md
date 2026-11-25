@@ -5,6 +5,7 @@
 
 ## 2026-11-25
 
+- F1187: A tab that shows an owned session opens no background session, so showing it attaches its session instead of failing with `surface already holds a session`.
 - F1177: Core 0.0.56 is released with the three application zips and the five package releases.
 - F1186: The application icon shows the light brand mark in the light appearance and the dark brand mark in the dark appearance.
 - F1185: The stop scenarios of the stall watch name the events that the watch stored when the stop does not return.

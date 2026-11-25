@@ -5,6 +5,7 @@
 
 ## 2026-11-25
 
+- F1187: owned session을 보이는 탭은 background 세션을 열지 않으므로, 그 탭을 보이면 `surface already holds a session`으로 실패하지 않고 세션에 붙는다.
 - F1177: core 0.0.56이 세 application zip과 다섯 package release와 함께 release되었다.
 - F1186: application icon은 light appearance에서 light brand mark를, dark appearance에서 dark brand mark를 보인다.
 - F1185: stop이 돌아오지 않을 때 stall watch의 stop scenario는 watch가 저장한 event를 밝힌다.

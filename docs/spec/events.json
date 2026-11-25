@@ -3126,7 +3126,7 @@
           "surface"
         ]
       },
-      "description": "A decision of the background session of a tab: open and reopen send the declared operation, skip sends nothing for a tab whose surface is mounted, stop ends the session of a tab that is shown or whose surface mounted. surface is mounted or absent."
+      "description": "A decision of the background session of a tab: open and reopen send the declared operation, skip sends nothing for a tab whose surface is mounted, owned sends nothing for a tab whose params name an owned session, stop ends the session of a tab that is shown or whose surface mounted. surface is mounted or absent."
     },
     "workbench.plugin.operation": {
       "layer": "workbench",

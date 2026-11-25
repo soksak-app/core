@@ -452,3 +452,27 @@ func recordCall(calls *[]string, name string, done chan struct{}) workbench.Host
 		return nil, nil
 	}
 }
+
+// A tab whose params name an owned session shows that session through its surface, which attaches to it; the sidecar keeps the owned
+// session without a surface. A background open for such a tab started a second session on the surface of the tab, and the attach of
+// the surface that became visible was then refused with "surface already holds a session".
+func TestATabThatShowsAnOwnedSessionOpensNoBackgroundSession(t *testing.T) {
+	h := newBackground()
+	h.start = true
+	owned := map[string]json.RawMessage{"session": json.RawMessage(`"owned-1"`)}
+	h.tabs = []workbench.BackgroundTab{{ID: "shown", Plugin: "session", Active: true}, {ID: "member", Plugin: "session", Params: owned}}
+	h.mounted["shown"] = true
+	h.sync(t)
+	h.sync(t)
+	equal(t, h.opens("member"), 0)
+	equal(t, h.sidecar.listensTo("member"), false)
+	equal(t, h.decisions("member"), []string{"owned:absent"})
+
+	// The tab is shown: its surface mounts and attaches to the owned session, and no background session ends.
+	h.tabs[0].Active, h.tabs[1].Active = false, true
+	h.mounted["member"] = true
+	h.sync(t)
+	equal(t, h.opens("member"), 0)
+	equal(t, h.decisions("member"), []string{"owned:absent", "owned:mounted"})
+	equal(t, len(h.reports), 0)
+}
