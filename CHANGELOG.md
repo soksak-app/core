@@ -5,6 +5,7 @@
 
 ## 2026-11-25
 
+- F1172: The registry specification states that the publication deploys the uploaded artifact by its id, never by a lookup of its name.
 - F1170: A drag of a section divider changes only the two sections beside it, and `core.sidebar.section.size {sidebar, heights}` sets the heights of several sections at once; a fill section beside the divider takes the change when no other open section fills.
 - F1169: The host contract case `install.refused-install-leaves-no-version-folder` states that a refused `sok plugin install` removes the version folder it extracted, and the Go and the Rust test of F1165 declare it, so the host contract check of each host passes.
 - F1168-1: The core version is 0.0.55 in every package and crate manifest, Info.plist, Tauri file, Go and pkg-config declaration, the six workspace entries of Cargo.lock and scripts/check-versions.mjs.

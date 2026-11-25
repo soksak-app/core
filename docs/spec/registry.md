@@ -60,7 +60,7 @@ Publication runs the same checks on the files of `main`. A core version enters `
 
 - `validate.yml` runs the check on `pull_request` with read permission only, so the maintainers review a pull request with its result.
 - The registry maintainers merge a pull request after its check passes and they have reviewed it.
-- `publish.yml` publishes the index on each push to `main`: it builds `index.json` with `sok registry build --previous` of the published index and deploys it with GitHub Pages.
+- `publish.yml` publishes the index on each push to `main`: it builds `index.json` with `sok registry build --previous` of the published index and deploys it with GitHub Pages by the id of the artifact that its upload returns. A lookup of the artifact by name lists the artifacts of the run, which is empty for an artifact finalized less than a second earlier and holds two after a re-run, so the deployment never looks the artifact up by name and a re-run of the workflow deploys again.
 
 The `sok` of the check and of publication is the `sok` of the core release named by the workflow.
 

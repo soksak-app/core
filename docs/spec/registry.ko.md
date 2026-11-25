@@ -60,7 +60,7 @@ pull request의 검사는 base branch의 script로 pull request의 파일을 데
 
 - `validate.yml`은 `pull_request`에서 읽기 권한만으로 검사를 실행하므로, 관리자는 그 결과와 함께 pull request를 검토한다.
 - registry 관리자는 검사가 통과하고 검토를 마친 pull request를 merge한다.
-- `publish.yml`은 `main`으로의 각 push에서 index를 게시한다. 게시된 index를 `--previous`로 하여 `sok registry build --previous`로 `index.json`을 만들고 GitHub Pages로 배포한다.
+- `publish.yml`은 `main`으로의 각 push에서 index를 게시한다. 게시된 index를 `--previous`로 하여 `sok registry build --previous`로 `index.json`을 만들고 upload가 돌려준 artifact id로 GitHub Pages에 배포한다. 이름으로 artifact를 찾으면 run의 artifact 목록을 읽는데, 그 목록은 1초 안에 finalize된 artifact에는 비어 있고 다시 실행한 뒤에는 둘을 담는다. 그래서 배포는 이름으로 artifact를 찾지 않고, workflow를 다시 실행해도 다시 배포된다.
 
 검사와 게시의 `sok`은 workflow가 지정한 core release의 `sok`이다.
 
