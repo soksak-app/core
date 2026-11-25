@@ -19,10 +19,11 @@ function documentStore(document = null) {
   return store;
 }
 
-function open(store, failures = []) {
+function open(store, failures = [], stored = []) {
   return openTabStates({
     store,
-    failed: (error) => failures.push(error.message),
+    failed: (source, error) => failures.push(`${source}: ${error.message}`),
+    stored: (source) => stored.push(source),
     // The plugin "declaring" declares surface.unload as {format, maxBytes}; "undeclared" declares false.
     unloadOf: (plugin) => (plugin === "declaring" ? { format: 1, maxBytes: 1024 } : false),
   });
@@ -51,6 +52,7 @@ test("writes of one tab are coalesced to one per second and each store write is 
   ]);
   assert.equal(core.deadline(), null, "no deadline is pending after the writes");
   assert.deepEqual(core.written("tab-a", 42), [
+    { type: "stored", source: "tab state tab-a" },
     { type: "event", level: "debug", event: "workbench.tab.state.stored", fields: { tab: "tab-a", bytes: 42 } },
   ]);
   core.change("tab-a", "kept", undefined, 1000);
@@ -140,6 +142,25 @@ test("a failed store write is reported and the entry stays in memory", async () 
   const states = await open(store, failures);
   states.setKept("tab-a", true);
   await states.flush();
-  assert.deepEqual(failures, ["tab state of tab-a: disk full"]);
+  assert.deepEqual(failures, ["tab state tab-a: tab state of tab-a: disk full"]);
   assert.deepEqual(states.entry("tab-a"), { kept: true });
+});
+
+// F1194-1 (docs/spec/exposure.md#error-presentation): the error of a failed write belongs to the tab state of its tab, and the next write
+// of that tab state that succeeds withdraws it.
+test("a succeeding write withdraws the error of the failed write of its tab", async () => {
+  const store = documentStore();
+  const put = store.tabStatePut;
+  store.tabStatePut = async () => { throw new Error("no space left on device"); };
+  const failures = [];
+  const stored = [];
+  const states = await open(store, failures, stored);
+  states.setKept("tab-a", true);
+  await states.flush();
+  assert.deepEqual(failures, ["tab state tab-a: tab state of tab-a: no space left on device"]);
+  assert.deepEqual(stored, []);
+  store.tabStatePut = put;
+  states.setKept("tab-a", false);
+  await states.flush();
+  assert.deepEqual(stored, ["tab state tab-a"]);
 });

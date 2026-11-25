@@ -23,7 +23,8 @@ export function checkTabStateDocument(document) {
  * COALESCE_MS after its first pending change; a call returns the actions that the shell runs, in order:
  *   {type: "write", tab, entry}                 store the entry of tab; null removes its entry from the file;
  *   {type: "event", level, event, fields}       an event of the page log;
- *   {type: "failed", error}                     a failed write for the error display of the page.
+ *   {type: "failed", source, error}             a failed write of source for the error display of the page;
+ *   {type: "stored", source}                    a succeeding write of source, which withdraws the error of its failed write.
  * `deadline()` is the earliest instant at which a pending write is due, or null; the shell runs `due` at that instant, because
  * elapsed time has no event source.
  */
@@ -83,9 +84,12 @@ export function tabStateCore(initial) {
       ];
     },
     /** The actions of a write that the store confirmed with its bytes. */
-    written: (tab, bytes) => [{ type: "event", level: "debug", event: "workbench.tab.state.stored", fields: { tab, bytes } }],
+    written: (tab, bytes) => [
+      { type: "stored", source: `tab state ${tab}` },
+      { type: "event", level: "debug", event: "workbench.tab.state.stored", fields: { tab, bytes } },
+    ],
     /** The actions of a write that the store refused. */
-    failed: (tab, error) => [{ type: "failed", error: new Error(`tab state of ${tab}: ${error.message}`) }],
+    failed: (tab, error) => [{ type: "failed", source: `tab state ${tab}`, error: new Error(`tab state of ${tab}: ${error.message}`) }],
     /** The earliest instant of a pending write, or null when none is pending. */
     deadline: () => (pending.size ? Math.min(...pending.values()) : null),
   };
@@ -93,10 +97,11 @@ export function tabStateCore(initial) {
 
 /**
  * Reads the store and returns its entries. store has tabState() and tabStatePut(tab, entry);
- * failed reports a failed write through the error display; unloadOf(plugin) returns the
- * surface.unload declaration of a plugin.
+ * failed(source, error) reports a failed write of source through the error display, and stored(source) withdraws that error after a
+ * write of source succeeds, because a display shows only the current state (docs/spec/exposure.md#error-presentation); unloadOf(plugin)
+ * returns the surface.unload declaration of a plugin.
  */
-export async function openTabStates({ store, failed, unloadOf }) {
+export async function openTabStates({ store, failed, stored, unloadOf }) {
   const core = tabStateCore(Object.entries(checkTabStateDocument(await store.tabState())));
   let timer = null;
   let writing = Promise.resolve();
@@ -116,7 +121,8 @@ export async function openTabStates({ store, failed, unloadOf }) {
         // events: workbench.tab.state.orphan, workbench.tab.state.stored
         emitEvent(action.level, action.event, action.fields);
       }
-      else if (action.type === "failed") failed(action.error);
+      else if (action.type === "failed") failed(action.source, action.error);
+      else if (action.type === "stored") stored(action.source);
       else throw new Error(`tab state action ${action.type} is not declared`);
     }
   }

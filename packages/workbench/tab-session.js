@@ -114,9 +114,10 @@ export function tabSessionCore() {
 /**
  * Creates the tab sessions over store, which has tabSession(tab), tabSessionPut(tab, regions) and tabSessions();
  * interaction(tab) resolves the interactionState of each region of the tab, or undefined; tabs() lists the tabs that
- * have attached regions; failed reports a failed write through the error display.
+ * have attached regions; failed(source, error) reports a failed write of source through the error display, and stored(source) withdraws
+ * that error after a write of source succeeds.
  */
-export function createTabSessions({ store, interaction, tabs, failed }) {
+export function createTabSessions({ store, interaction, tabs, failed, stored }) {
   const core = tabSessionCore();
   let timer = null;
   let writing = Promise.resolve();
@@ -148,6 +149,7 @@ export function createTabSessions({ store, interaction, tabs, failed }) {
   // resolves to the error of a failed write instead of rejecting, so the next write still runs.
   function put(tab, regions) {
     const next = writing.then(() => store.tabSessionPut(tab, regions).then((bytes) => {
+      stored(`tab session ${tab}`);
       perform(core.written(tab, bytes, regions));
       return null;
     }, (error) => error));
@@ -178,7 +180,7 @@ export function createTabSessions({ store, interaction, tabs, failed }) {
     }
   }
 
-  const reported = (tab, cause) => track(readAndStore(tab, cause).catch((error) => failed(new Error(`tab session of ${tab}: ${error.message}`))));
+  const reported = (tab, cause) => track(readAndStore(tab, cause).catch((error) => failed(`tab session ${tab}`, new Error(`tab session of ${tab}: ${error.message}`))));
 
   function removeTab(tab) {
     const action = core.remove(tab);

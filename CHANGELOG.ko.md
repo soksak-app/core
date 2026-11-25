@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1194-1: page workbench는 실패한 tab state나 tab session 쓰기의 error를 같은 store의 다음 쓰기가 성공한 뒤 mygo workbench처럼 거둔다.
 - F1194: 한 tab의 tab state나 tab session 쓰기가 성공하면 같은 tab의 같은 store에서 실패한 쓰기의 error를 거둔다.
 - F1192-1: test inventory의 feature link가 F1192를 그 구현과 test에 잇는다.
 - F1191-1: core version은 모든 package와 crate manifest, Info.plist, Tauri 파일, Go와 pkg-config 선언, Cargo.lock의 workspace 항목 여섯 개, scripts/check-versions.mjs에서 0.0.58이다.

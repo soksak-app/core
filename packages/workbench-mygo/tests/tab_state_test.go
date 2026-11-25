@@ -333,6 +333,7 @@ type sessionHarness struct {
 	timers   *clock
 	events   *stateEvents
 	failures []string
+	stored   []string
 	history  map[string]map[string]string
 	attached []string
 }
@@ -347,7 +348,7 @@ func newSessions() *sessionHarness {
 		},
 		Tabs:   func() []string { return h.attached },
 		Failed: func(source, text string) { h.failures = append(h.failures, text) },
-		Stored: func(string) {},
+		Stored: func(source string) { h.stored = append(h.stored, source) },
 		Emit:   h.events.emit,
 		After:  h.timers.after,
 	})
@@ -514,6 +515,21 @@ func TestAFailedCoalescedWriteIsShownThroughTheErrorDisplay(t *testing.T) {
 	h.sessions.Navigated("tab-a", "page", at(0, "https://a.test/"))
 	h.timers.tick(1000)
 	equal(t, h.failures, []string{"tab session of tab-a: disk full"})
+}
+
+// F1194: the next write of the session of a tab that succeeds withdraws the error of its failed write.
+func TestASucceedingWriteWithdrawsTheErrorOfTheFailedSessionWriteOfItsTab(t *testing.T) {
+	h := newSessions()
+	h.store.refuse = errors.New("disk full")
+	h.history["tab-a"] = map[string]string{"page": "AAAA"}
+	h.sessions.Navigated("tab-a", "page", at(0, "https://a.test/"))
+	h.timers.tick(1000)
+	equal(t, h.failures, []string{"tab session of tab-a: disk full"})
+	equal(t, len(h.stored), 0)
+	h.store.refuse = nil
+	h.sessions.Navigated("tab-a", "page", at(1, "https://a.test/", "https://b.test/"))
+	h.timers.tick(3000)
+	equal(t, h.stored, []string{"tab session tab-a"})
 }
 
 func TestACaptureForTheUnloadAnswersWithItsFailure(t *testing.T) {

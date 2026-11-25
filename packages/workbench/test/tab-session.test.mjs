@@ -12,10 +12,10 @@ const { createTabSessions, decodedBytes, SESSION_LIMIT, tabSessionCore } = await
 const { flushEvents } = await import("../page-log.js");
 
 // One start of the page: the document regions and the tab sessions over the host store.
-function start(failures = []) {
+function start(failures = [], stored = []) {
   const regions = createDocumentRegions();
   const store = new HostWorkspaceStore(host);
-  const sessions = createTabSessions({ store, failed: (error) => failures.push(error.message),
+  const sessions = createTabSessions({ store, failed: (source, error) => failures.push(error.message), stored: (source) => stored.push(source),
     interaction: (tab) => regions.interaction(tab), tabs: () => regions.tabs() });
   regions.useSessions((tab) => sessions.read(tab));
   return { regions, sessions, store };
@@ -197,6 +197,24 @@ test("a failed coalesced write is shown through the error display", async () => 
   await sessions.flush();
   await sessions.idle();
   assert.deepEqual(failures, ["tab session of tab-a: disk full"]);
+  wire.finish();
+});
+
+// F1194-1 (docs/spec/exposure.md#error-presentation): the next write of the session of a tab that succeeds withdraws the error of its
+// failed write.
+test("a succeeding write withdraws the error of the failed session write of its tab", async () => {
+  const wire = selectPageWire("tab-session-write-recovered");
+  const failures = [];
+  const stored = [];
+  const { regions, sessions } = start(failures, stored);
+  regions.attached("tab-a", "page");
+  sessions.navigated("tab-a", "page", { index: 0, entries: [{ url: "https://a.test/", title: "" }] });
+  await sessions.flush();
+  await sessions.idle();
+  assert.deepEqual({ failures, stored }, { failures: ["tab session of tab-a: disk full"], stored: [] });
+  await sessions.flush();
+  await sessions.idle();
+  assert.deepEqual(stored, ["tab session tab-a"]);
   wire.finish();
 });
 

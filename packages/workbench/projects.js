@@ -10,6 +10,7 @@ import { windows } from "@soksak/runtime";
 import { log, retainSidecarSessions, windowSidecar } from "./host.js";
 import { compareProjectData, configureData } from "./plugin-data.js";
 import { openTabStates } from "./tab-state.js";
+import { errorToasts, hideError } from "./shown-errors.js";
 import { createTabSessions } from "./tab-session.js";
 import { documentRegions } from "./document-regions.js";
 import { sectionSurfacePlugin } from "./registry.js";
@@ -362,11 +363,11 @@ async function initialiseWindow(storage, unloadOf) {
     data: { get: (id, plugin) => projects.find((p) => p.id === id)?.plugins?.[plugin] ?? {}, set: setPluginData },
   });
   await refresh();
-  tabSessions = createTabSessions({ store, failed, interaction: (tab) => documentRegions.interaction(tab),
+  tabSessions = createTabSessions({ store, failed: writeFailed, stored: writeStored, interaction: (tab) => documentRegions.interaction(tab),
     tabs: () => documentRegions.tabs() });
   documentRegions.useSessions((tab) => tabSessions.read(tab));
   try {
-    tabStates = await openTabStates({ store, failed, unloadOf });
+    tabStates = await openTabStates({ store, failed: writeFailed, stored: writeStored, unloadOf });
     if (!tabStatesOpenSettled) {
       tabStatesOpenSettled = true;
       openedTabStates({ opened: true });
@@ -421,6 +422,11 @@ async function answerRemoval(id) {
 }
 
 function failed(error) { dispatchEvent(new ErrorEvent("error", { message: error.message })); }
+
+// A failed write of a tab state or a tab session is an error of the workbench from its source, and a later write of the same source
+// that succeeds withdraws it, because a display shows only the current state (docs/spec/exposure.md#error-presentation).
+function writeFailed(source, error) { errorToasts(document).show(error.message, "", source); }
+function writeStored(source) { hideError(document, source); }
 
 /** Closes the project that was drawn on the first screen but could not be opened, and shows the library. */
 async function leaveBegun() {

@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1194-1: The page workbench withdraws the error of a failed tab state or tab session write after the next write of the same store succeeds, as the mygo workbench does.
 - F1194: A write of the tab state or the tab session of a tab that succeeds withdraws the error of the failed write of the same store of that tab.
 - F1192-1: The feature links of the test inventory link F1192 to its implementation and its test.
 - F1191-1: The core version is 0.0.58 in every package and crate manifest, Info.plist, Tauri file, Go and pkg-config declaration, the six workspace entries of Cargo.lock and scripts/check-versions.mjs.

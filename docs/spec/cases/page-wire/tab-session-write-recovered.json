@@ -1,0 +1,80 @@
+{
+  "name": "tab-session-write-recovered",
+  "description": "The flush of the quit reads the interactionState of the region of a tab and the host refuses the write of its session with the error disk full; the next flush reads it again and the host stores the session.",
+  "replay": false,
+  "reason": "The tab sessions read and write the tab-sessions files of the configuration directory and the document regions read the state of a window; the producer builds neither state (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {
+    "bytes": {
+      "type": "integer",
+      "example": 52
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "documentInteractionState",
+        "payload": {
+          "surface": "tab-a",
+          "document": "page"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": "AAAA"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "tabSessionPut",
+          "tab": "tab-a",
+          "regions": {
+            "page": {
+              "session": "AAAA"
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "error": "disk full"
+      }
+    },
+    {
+      "call": {
+        "name": "documentInteractionState",
+        "payload": {
+          "surface": "tab-a",
+          "document": "page"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": "AAAA"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "tabSessionPut",
+          "tab": "tab-a",
+          "regions": {
+            "page": {
+              "session": "AAAA"
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": "$bytes"
+      }
+    }
+  ]
+}
