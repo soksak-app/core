@@ -6,7 +6,7 @@ This specification states where plugin code runs and how its processes communica
 
 ## Decision
 
-Plugin code runs outside the workbench page. Each plugin view is a separate web view on the `soksak://<plugin id>` origin, with one view per tab and one view per sidebar section ([sections](plugins.md#sections)). A plugin draws every screen it owns in its views by any means, and the workbench draws no plugin content. The views of one plugin share one WebContent process unless the setting `viewProcess` gives each view its own ([view processes](#view-processes)).
+Plugin code runs outside the workbench page. Each plugin view is a separate web view on the `soksak://<plugin id>` origin, with one view per tab, one view per sidebar section ([sections](plugins.md#sections)), one per dialog surface and one per settings surface. A plugin draws every screen it owns in its views by any means, and the workbench draws no plugin content. The views of one plugin share one WebContent process unless the setting `viewProcess` gives each view its own ([view processes](#view-processes)).
 
 Measurements do not reverse this decision. They fix the process counts, the per-plugin budgets and the pass values. When a pass value is not met, the design reopens. It does not return to mounting plugin surfaces on the workbench page.
 
@@ -247,7 +247,7 @@ The start layout of a core window check (`fresh` of `e2e/fixture.mjs`) is the ne
 
 ## Tabs and processes
 
-- A view is one per tab. No public API assigns processes.
+- A view is one per tab, section surface, dialog surface or settings surface ([plugins](plugins.md#settings-views)). No public API assigns processes.
 - The repository has a private policy that forces a new process (`_WKNavigationActionPolicyAllowInNewProcess`, [`webview_navigation.m`](../../native/darwin/src/webview_navigation.m), [private native APIs](../operations/private-native-apis.md)). The main web view uses this policy (`native/darwin/src/window_facts.m`). The same policy was also used to open each document in a new process, which raised navigation time from about 0.6 s to 1.1 s and lost the process-local cache, and that use was reverted. Views do not use the policy, and no private API is added for it.
 - Two views of one plugin were measured under (a) the default assignment and (b) the policy assignment, with the process count, the base cost of one process and the view creation time. Views use the default assignment.
 - **Measurement** (`make -C native/darwin benchmark-view-processes`, load average 17):

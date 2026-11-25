@@ -118,7 +118,7 @@ divider drag처럼 이어지는 갱신인 호스트의 run은 그 ticket의 트�
 
 ## view 표면
 
-view는 `view` 합성을 가진 표면의 native 웹뷰다([plugins](plugins.ko.md#view-표면)). 각 view는 탭마다 하나의 웹뷰이며 `soksak://<plugin id>` origin에서 그 plugin의 페이지를 실행한다. 워크벤치 페이지는 plugin 코드를 실행하지 않는다.
+view는 `view` 합성을 가진 표면의 native 웹뷰다([plugins](plugins.ko.md#view-표면)). 각 view는 탭, section surface, dialog surface, [settings surface](plugins.ko.md#settings-views)마다 하나의 웹뷰이며 `soksak://<plugin id>` origin에서 그 plugin의 페이지를 실행한다. 워크벤치 페이지는 plugin 코드를 실행하지 않는다.
 
 view는 run이 시작될 때 event `run-start`를 받고 animation frame을 한 번 요청한다. idle document는 새 크기를 바로 render한 뒤 display를 기다리지만, run의 이후 크기는 이미 display를 기다리는 document에 도착한다. 그래서 이 frame이 없으면 run의 두 번째 크기가 display frame 하나를 놓친다. view는 frame loop를 두지 않는다. 모든 view의 frame loop는 run의 각 layout을 늘리기 때문이다.
 
@@ -249,6 +249,13 @@ Tauri host는 현재 view-message envelope를 한 번 decode하고 reply, call �
 ### Dialog seat
 
 layout이 [dialog surface](plugins.ko.md#dialogs)를 가지는 동안 compositor는 dialog surface id를 key로 dialog seat를 잰다. dialog seat는 창의 content의 frame, 곧 title bar 아래에서 sidebar를 포함한 plane 전체다. 이 seat는 보이며, dialog surface를 가진 layout은 dialog seat를 잰 뒤에만 완전하다. dialog surface는 tab view와 같은 placement sequence로 배치되고 clip되고 보인다.
+
+### Settings seat
+
+settings window가 [settings view](plugins.ko.md#settings-views)를 선언한 plugin의 page를 보이는 동안 layout은 그 settings surface를 가지며, compositor는 settings surface id를 key로 settings seat를 잰다. settings seat는 pane, 곧 element `core.settings-modal.pane`의 사각형으로 자른 plugin page의 element `core.settings-modal.plugin-view`의 사각형이다. seat는 그 일부가 보이는 동안 보이며, settings surface가 있는 layout은 settings seat를 잰 뒤에만 완결된다. settings surface는 tab view와 같은 placement sequence로 배치되고, 잘리고, 보인다. pane의 scroll과 window 크기의 변경은 element를 옮기므로 seat를 다시 잰다. timer는 그것을 재지 않는다.
+
+- **mygo.** settings window는 workbench의 native UI이므로, plugin page는 pane의 scroll 안에서 settings surface의 native view를 자기 element로 그리고, framework가 그것을 pane으로 자르고 window가 그 위에 그리는 것으로 덮는다.
+- **Wails와 Tauri.** settings window는 mode `dialog`의 native modal web view이고([native modals](native-modals.ko.md)), surface host 위에 놓인다. workbench는 modal이 render, placement, scroll마다 보고하는 `document`의 `elements` 항목 `core.settings-modal.plugin-view`와 `core.settings-modal.pane`으로 seat를 잰다([모달 문서](exposure.ko.md#모달-문서)). host는 settings surface의 host를 modal web view 위, 그 seat에 놓는다. 그래서 view는 pane에 보이고 그곳에서 pointer를 받으며, modal web view는 그 밖의 모든 곳에서 pointer를 유지한다([native modals](native-modals.ko.md#settings-surface)).
 
 ### 프로그램 실행
 

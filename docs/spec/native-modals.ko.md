@@ -14,7 +14,7 @@ mygo host는 modal web view를 만들지 않는다: 그 workbench의 modal은 na
 | dialog surface | sidebar를 포함한 창의 content | dialog의 page가 그리는 불투명도 50%의 검정색; 다른 각 문서와 image region에 3px 블러 | page가 닫는다([dialog](plugins.ko.md#dialogs)) |
 | `menu` | 선택 메뉴 사각형 | 배경색 및 블러 없음 | 선택, 외부 클릭, Escape |
 
-메인 문서가 카드 사각형을 측정한다. 카드 이동은 전체 뷰포트 대화상자 웹뷰를 이동하지 않고 DOM 위치를 갱신한다. 대화상자 웹뷰는 메인 창과 함께 크기를 변경하고, 배경 입력을 차단하며, 새로 생성된 표면 위에 표시된다. 이 웹뷰는 dialog surface가 열려 있지 않을 때만 열린다. [dialog surface](plugins.ko.md#dialogs)는 modal web view가 아니라 plugin의 view surface이며, 그 순서는 [surface host container](native-surfaces.ko.md#surface-host-container)의 규칙이다.
+메인 문서가 카드 사각형을 측정한다. 카드 이동은 전체 뷰포트 대화상자 웹뷰를 이동하지 않고 DOM 위치를 갱신한다. 대화상자 웹뷰는 메인 창과 함께 크기를 변경하고, 배경 입력을 차단하며, settings window의 [settings surface](#settings-surface)를 뺀 새로 생성된 표면 위에 표시된다. 이 웹뷰는 dialog surface가 열려 있지 않을 때만 열린다. [dialog surface](plugins.ko.md#dialogs)는 modal web view가 아니라 plugin의 view surface이며, 그 순서는 [surface host container](native-surfaces.ko.md#surface-host-container)의 규칙이다.
 
 대화상자 문서가 `body::before` 의사 요소로 반투명 배경을 그린다. 복사된 workbench의 `body::before` 배경과 네이티브 페인트 클립은 대화상자 문서에서 꺼야 한다. 그렇지 않으면 복사된 애플리케이션 배경이 네이티브 표면을 가린다. 카드는 의사 요소 위에 놓이며 선명하게 유지한다. 메인 웹뷰는 자기 콘텐츠에 CSS 블러를 적용하고, 호스트는 각 document web view, 곧 view 표면의 page와 각 document region, 그리고 각 image region을 같은 반경의 native filter로 흐리게 한다([native surfaces](native-surfaces.ko.md)). 대화상자의 CSS 필터는 다른 네이티브 웹뷰를 흐리게 만들 수 없다. 호스트는 웹뷰 API로 불리언 `window.__soksakBackground`를 설정한다. 배경 스크립트는 초기화 전에 설정된 상태를 적용하고 이후 설정도 같은 속성으로 처리한다.
 
@@ -25,6 +25,10 @@ mygo host는 modal web view를 만들지 않는다: 그 workbench의 modal은 na
 시각 효과 정의는 공통 웹 코드다. 각 플랫폼에는 작동하는 네이티브 웹뷰 호스트와 동작 검증이 필요하다. 현재 Wails의 추가 웹뷰 생성은 macOS에만 구현되어 있다. Windows와 Linux 실행은 미검증이다.
 
 비공개 투명도·입력 의존성과 필요성은 [비공개 네이티브 API 목록](../operations/private-native-apis.ko.md)에 기록한다. 네이티브 업데이트 후 모달 동작이 실패하면 이 문서부터 검토한다.
+
+## Settings surface
+
+settings window가 [settings view](plugins.ko.md#settings-views)를 선언한 plugin의 page를 보이는 동안, host는 그 settings surface의 host를 settings modal web view 위, [settings seat](native-surfaces.ko.md#settings-seat)에 둔다. view는 배경이 아니라 settings window의 content의 일부이기 때문이다. settings surface는 seat 안에서 pointer를 받고, modal web view는 그 밖의 모든 곳에서 pointer와 배경 차단을 유지한다. background effect는 settings surface를 blur하지 않는다. `host.window`는 다른 각 view surface의 `blurred`를 `true`로, settings surface의 `blurred`를 `false`로 보고한다. settings surface는 modal이 닫히기 전에 layout에서 빠지므로, 닫힌 뒤 main web view 위에 남는 surface host는 없다. acceptance는 seat 안의 점의 native hit이 settings surface이고 seat 밖 pane의 점의 native hit이 modal web view인지, 그리고 settings surface와 tab view의 `blurred`를 확인한다.
 
 ## Toast overlay
 

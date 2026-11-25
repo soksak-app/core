@@ -116,7 +116,7 @@ The window title bar joins the layout transaction, so the window buttons move in
 
 ## View surfaces
 
-A view is the native web view of a surface whose composition is `view` ([plugins](plugins.md#view-surfaces)). Each view is one web view on the `soksak://<plugin id>` origin, one per tab, and it runs the page of its plugin. The workbench page runs no plugin code.
+A view is the native web view of a surface whose composition is `view` ([plugins](plugins.md#view-surfaces)). Each view is one web view on the `soksak://<plugin id>` origin, one per tab, section surface, dialog surface or [settings surface](plugins.md#settings-views), and it runs the page of its plugin. The workbench page runs no plugin code.
 
 A view receives the event `run-start` at the start of a run and requests one animation frame. An idle document renders a new size at once and then waits for the display, while each later size of a run is applied to a document that already waits for the display, so without this frame the second size of a run misses a display frame. The view keeps no frame loop, because a frame loop in every view lengthens each layout of the run.
 
@@ -247,6 +247,13 @@ The compositor measures the body of each section of a drawn sidebar as the seat 
 ### Dialog seat
 
 While the layout holds a [dialog surface](plugins.md#dialogs), the compositor measures the dialog seat, keyed by the dialog surface id: the frame of the content of the window, the whole plane with its sidebars below the title bar. The seat is visible, and a layout with a dialog surface is complete only when the dialog seat is measured. The dialog surface is placed, clipped and shown by the same placement sequence as a tab view.
+
+### Settings seat
+
+While the settings window shows the page of a plugin that declares a [settings view](plugins.md#settings-views), the layout holds its settings surface and the compositor measures the settings seat, keyed by the settings surface id: the rectangle of the element `core.settings-modal.plugin-view` of the plugin page, clipped to the rectangle of the pane, the element `core.settings-modal.pane`. The seat is visible while any part of it shows, and a layout with a settings surface is complete only when the settings seat is measured. The settings surface is placed, clipped and shown by the same placement sequence as a tab view. A scroll of the pane and a change of the size of the window measure the seat again, because both move the element; no timer measures it.
+
+- **mygo.** The settings window is native UI of the workbench, so the plugin page draws the native view of the settings surface as its element, inside the scroll of the pane, and the framework clips it to the pane and covers it with what the window draws over it.
+- **Wails and Tauri.** The settings window is the native modal web view of the mode `dialog` ([native modals](native-modals.md)), which lies above the surface hosts. The workbench measures the seat from the `elements` entries `core.settings-modal.plugin-view` and `core.settings-modal.pane` of the `document` that the modal reports after each render, placement and scroll ([modal documents](exposure.md#modal-documents)), and the host places the host of the settings surface above the modal web view at that seat, so the view shows in the pane and takes the pointer there, and the modal web view keeps the pointer everywhere else ([native modals](native-modals.md#settings-surface)).
 
 ### Program runs
 
