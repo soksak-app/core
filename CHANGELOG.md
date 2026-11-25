@@ -5,6 +5,7 @@
 
 ## 2026-11-25
 
+- F1168-1: The core version is 0.0.55 in every package and crate manifest, Info.plist, Tauri file, Go and pkg-config declaration, the six workspace entries of Cargo.lock and scripts/check-versions.mjs.
 - F1167: On the mygo host the view call `composition.declaration` of an open dialog answers the kind and the regions of the dialog and no overlays, so a dialog page that declares a document region creates its composition instead of stopping at `composition regions must exactly match the surface declaration (expected none)`.
 - F1165: `sok plugin install` and `sok plugin update` of Go and Rust remove each version folder that a refused or stopped installation extracted before it wrote `plugins/installed.json`, so the next installation of the same version extracts the release again. Red/Green: `TestARefusedPluginInstallLeavesNoVersionFolder` and `a_refused_plugin_install_leaves_no_version_folder`.
 - F1166-1: The core version is 0.0.54 in every package and crate manifest, Info.plist, Tauri file, Go and pkg-config declaration, the six workspace entries of Cargo.lock and scripts/check-versions.mjs.
