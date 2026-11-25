@@ -118,7 +118,6 @@ struct Inner {
     ended_detachments: Vec<serde_json::Value>,
     /// Whether the page is ready to receive image-detach-ended events.
     detach_page_ready: bool,
-    next_generation: u64,
     /// The ends of the layout transactions of the window, and the ends of the connections of the sidecars of its regions with the
     /// name of the last one, so a raster wait ends with the event that ends it (docs/spec/native-surfaces.md#layout-transaction).
     wait_ends: u64,
@@ -240,8 +239,7 @@ impl Inner {
     }
 
     fn begin_generation(&mut self, surface: &str) -> u64 {
-        self.next_generation += 1;
-        let generation = self.next_generation;
+        let generation = next_image_generation();
         self.generations.insert(surface.to_string(), generation);
         self.forget_detached_rasters(surface);
         for (key, state) in &mut self.states {
@@ -884,8 +882,7 @@ impl Images {
         let generation = match inner.generations.get(&key.0).copied() {
             Some(generation) => generation,
             None => {
-                inner.next_generation += 1;
-                let generation = inner.next_generation;
+                let generation = next_image_generation();
                 inner.generations.insert(key.0.clone(), generation);
                 generation
             }
@@ -1720,6 +1717,27 @@ mod draw_covered;
 #[cfg(not(feature = "diagnostics"))]
 #[path = "images_draw_covered_release.rs"]
 mod draw_covered;
+
+/// The last generation that this process issued to an image attachment.
+static LAST_IMAGE_GENERATION: Mutex<u64> = Mutex::new(0);
+
+/// Issues the next generation of an image attachment of the process. A persistent supplier outlives the application process
+/// and keeps the generation of each surface, and a surface moves between windows, so every window of the process takes its
+/// generations from this one counter, and each generation is the larger of the previous one plus 1 and the boot clock of the
+/// platform in microseconds (docs/spec/surface-composition.md).
+fn next_image_generation() -> u64 {
+    // The platform of a running host implements the clock, because a host that misses an operation of its platform fails at
+    // startup (docs/spec/hosts.md); a failure here is a defect of the platform, and the panic is stored as `host.panic`.
+    let nanos = crate::platform::current()
+        .and_then(|system| system.monotonic_ns())
+        .unwrap_or_else(|error| panic!("image generation: the boot clock cannot be read: {error}"));
+    let mut last = LAST_IMAGE_GENERATION
+        .lock()
+        // default: no code panics while it holds the lock, which guards one assignment of a number.
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    *last = (*last + 1).max(nanos / 1000);
+    *last
+}
 
 #[cfg(test)]
 #[path = "images_test.rs"]

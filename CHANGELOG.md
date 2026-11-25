@@ -5,6 +5,7 @@
 
 ## 2026-11-25
 
+- F1173: The host issues image generations from one counter of the process, and each generation is the larger of the previous one plus 1 and the boot clock in microseconds, so a restart or a move to another window no longer gives a surface a lower generation than the persistent VT service keeps, which left the region blank without an error.
 - F1172: The registry specification states that the publication deploys the uploaded artifact by its id, never by a lookup of its name.
 - F1170: A drag of a section divider changes only the two sections beside it, and `core.sidebar.section.size {sidebar, heights}` sets the heights of several sections at once; a fill section beside the divider takes the change when no other open section fills.
 - F1169: The host contract case `install.refused-install-leaves-no-version-folder` states that a refused `sok plugin install` removes the version folder it extracted, and the Go and the Rust test of F1165 declare it, so the host contract check of each host passes.

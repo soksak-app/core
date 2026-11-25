@@ -2133,3 +2133,68 @@ fn screen_message_without_name_is_not_answered() {
         "the error records of the screen message without a name"
     );
 }
+
+// contract: images.generation.increases-across-windows
+// A persistent supplier keeps the generation of a surface, and a surface moves between windows, so the windows of one
+// process issue the generations of their image attachments from one counter (docs/spec/surface-composition.md).
+#[test]
+fn the_windows_of_a_process_issue_increasing_image_generations() {
+    let (first, second) = (super::Images::default(), super::Images::default());
+    let before = first.begin_generation("tab-moved");
+    let after = second.begin_generation("tab-moved");
+    let reserved = ("tab-reserved".to_string(), "view".to_string());
+    second.reserve(&reserved, "owner", "vt").unwrap();
+    let reserved_generation = second.lock().states[&reserved].generation;
+    assert!(
+        before < after && after < reserved_generation,
+        "the generations of the second window are {after} and {reserved_generation} after {before} of the first window, want each greater than the one before"
+    );
+}
+
+// contract: images.generation.increases-across-restarts
+// A persistent supplier outlives the application process, so the first generation of a later process is greater than
+// every generation of an earlier process of the same boot, also after a burst of generations (docs/spec/surface-composition.md).
+// The later process is a child run of this test binary.
+#[test]
+fn a_later_process_issues_greater_image_generations_than_an_earlier_one() {
+    const NAME: &str =
+        "images::images_test::a_later_process_issues_greater_image_generations_than_an_earlier_one";
+    if std::env::var_os("SOKSAK_IMAGE_GENERATION_CHILD").is_some() {
+        println!(
+            "generation={}",
+            super::Images::default().begin_generation("tab-restored")
+        );
+        return;
+    }
+    let images = super::Images::default();
+    let mut last = 0;
+    for index in 0..1000 {
+        let next = images.begin_generation(&format!("tab-{index}"));
+        assert!(
+            next > last,
+            "the earlier process issued {next} after {last}"
+        );
+        last = next;
+    }
+    let output = std::process::Command::new(std::env::current_exe().expect("test executable"))
+        .args([NAME, "--exact", "--nocapture", "--test-threads=1"])
+        .env("SOKSAK_IMAGE_GENERATION_CHILD", "1")
+        .output()
+        .expect("the later process");
+    let text = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "the later process ended with {}: {text}",
+        output.status
+    );
+    let first: u64 = text
+        .split_once("generation=")
+        .and_then(|(_, rest)| rest.split(|c: char| !c.is_ascii_digit()).next())
+        .unwrap_or_else(|| panic!("the later process printed no generation: {text}"))
+        .parse()
+        .expect("a generation");
+    assert!(
+        first > last,
+        "the later process issued {first} first, want more than {last} of the earlier process"
+    );
+}

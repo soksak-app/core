@@ -5,6 +5,7 @@
 
 ## 2026-11-25
 
+- F1173: host는 image generation을 process 하나의 counter에서 발급하며, 각 generation은 이전 generation에 1을 더한 값과 boot clock의 microsecond 값 중 큰 값이다. 그래서 재시작이나 다른 window로의 이동이 더 이상 surface에 persistent VT service가 가진 것보다 낮은 generation을 주지 않는다. 이전에는 그 때문에 region이 오류 없이 빈 채로 남았다.
 - F1172: registry 명세는 게시가 upload한 artifact를 이름으로 찾지 않고 그 id로 배포한다고 적는다.
 - F1170: section divider를 끌면 그 옆의 두 section만 바뀌고, `core.sidebar.section.size {sidebar, heights}`가 여러 section의 높이를 한 번에 정한다. 다른 열린 section 중 fill이 없으면 divider 옆의 fill section이 변화를 받는다.
 - F1169: host contract case `install.refused-install-leaves-no-version-folder`가 거부된 `sok plugin install`이 추출한 version 폴더를 지운다고 정하고, F1165의 Go와 Rust test가 그 case를 선언한다. 그래서 각 host의 host contract check가 통과한다.

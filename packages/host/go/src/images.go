@@ -107,7 +107,6 @@ type Images struct {
 	// The generation and the raster that a detached image region used last. A region attached again in the same generation counts from the next raster, because the sidecar
 	// ignores a configuration whose (generation, raster) did not increase as a past configuration. It is cleared when the generation of the surface changes.
 	detachedRasters map[ImageKey][2]uint64
-	nextGeneration  uint64
 	changed         chan struct{}
 	// waitEnds counts the ends of the layout transactions of the window, and endedSidecars the ends of the connections of the
 	// sidecars of its regions, each with the name of the last one, so a raster wait ends with the event that ends it
@@ -482,12 +481,12 @@ func (i *Images) changedLocked() {
 func (i *Images) BeginGeneration(surface string) uint64 {
 	i.mu.Lock()
 	defer i.mu.Unlock()
-	i.nextGeneration++
-	i.generations[surface] = i.nextGeneration
+	generation := imageGenerations.next()
+	i.generations[surface] = generation
 	i.forgetDetachedRastersLocked(surface)
 	for key, state := range i.states {
 		if key.Surface == surface {
-			state.Generation = i.nextGeneration
+			state.Generation = generation
 			state.Configured = false
 			// The drawing state names the generation, so the new generation is sent again.
 			state.DrawingSent = false
@@ -501,7 +500,7 @@ func (i *Images) BeginGeneration(surface string) uint64 {
 		}
 	}
 	i.changedLocked()
-	return i.nextGeneration
+	return generation
 }
 
 // EndGeneration ends the current generation of a removed surface. The number is not reused.
@@ -566,8 +565,7 @@ func (i *Images) Reserve(key ImageKey, owner *ImageOwner) error {
 	i.owners[key] = owner
 	generation := i.generations[key.Surface]
 	if generation == 0 {
-		i.nextGeneration++
-		generation = i.nextGeneration
+		generation = imageGenerations.next()
 		i.generations[key.Surface] = generation
 	}
 	state := &ImageRasterState{Generation: generation}
