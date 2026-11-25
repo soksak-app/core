@@ -40,10 +40,10 @@ jobs:
   release-wailsv3:
     needs: gate
     if: needs.gate.outputs.release == 'true'
-    runs-on: macos-15
+    # The actool of Xcode 26.3 on macOS 15 ends with a dyld error while it compiles the Icon Composer source of the application icon
+    # (docs/spec/hosts.md#frontend-and-executables, F1183).
+    runs-on: macos-26
     env:
-      # The selected Xcode of the image cannot read the Icon Composer source of the application icon (docs/spec/hosts.md#frontend-and-executables).
-      ACTOOL: /Applications/Xcode_26.3.app/Contents/Developer/usr/bin/actool
       GOTOOLCHAIN: local
     permissions:
       contents: read
@@ -104,10 +104,9 @@ jobs:
   release-tauriv2:
     needs: gate
     if: needs.gate.outputs.release == 'true'
-    runs-on: macos-15
-    env:
-      # The selected Xcode of the image cannot read the Icon Composer source of the application icon (docs/spec/hosts.md#frontend-and-executables).
-      ACTOOL: /Applications/Xcode_26.3.app/Contents/Developer/usr/bin/actool
+    # The actool of Xcode 26.3 on macOS 15 ends with a dyld error while it compiles the Icon Composer source of the application icon
+    # (docs/spec/hosts.md#frontend-and-executables, F1183).
+    runs-on: macos-26
     permissions:
       contents: read
     defaults:
@@ -154,10 +153,10 @@ jobs:
   release-mygo:
     needs: gate
     if: needs.gate.outputs.release == 'true'
-    runs-on: macos-15
+    # The actool of Xcode 26.3 on macOS 15 ends with a dyld error while it compiles the Icon Composer source of the application icon
+    # (docs/spec/hosts.md#frontend-and-executables, F1183).
+    runs-on: macos-26
     env:
-      # The selected Xcode of the image cannot read the Icon Composer source of the application icon (docs/spec/hosts.md#frontend-and-executables).
-      ACTOOL: /Applications/Xcode_26.3.app/Contents/Developer/usr/bin/actool
       GOTOOLCHAIN: local
     permissions:
       contents: read

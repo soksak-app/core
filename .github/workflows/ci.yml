@@ -259,7 +259,9 @@ jobs:
         run: git -C core diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
 
   equivalence:
-    runs-on: macos-15
+    # The system tests of the scripts compile the Icon Composer source of the application icon; the actool of Xcode 26.3 on macOS 15
+    # ends with a dyld error (docs/spec/hosts.md#frontend-and-executables, F1183).
+    runs-on: macos-26
     env:
       GOTOOLCHAIN: local
     steps:
