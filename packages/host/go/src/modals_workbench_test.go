@@ -145,8 +145,7 @@ func TestAPlacedDialogSurfaceBlursTheOtherDocumentsButNotItsOwn(t *testing.T) {
 	}
 }
 
-// F1128-2: the settings surface is a part of the settings window, so the background of the settings window blurs every other region
-// and none of the settings surface (docs/spec/native-modals.md#settings-surface).
+// contract: modal.settings-window-leaves-the-settings-surface-unblurred
 func TestTheBackgroundOfTheSettingsWindowLeavesTheSettingsSurfaceUnblurred(t *testing.T) {
 	probe := newRegionsProbe(t)
 	s := &Surfaces{invoke: func(work func()) { work() }, documents: NewDocuments(), images: NewImages()}

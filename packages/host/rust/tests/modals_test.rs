@@ -58,7 +58,7 @@ fn the_host_marks_the_surface_host_of_each_dialog_surface() {
     }
 }
 
-// F1128-2: the settings surface of a plugin has the id settings/<plugin> (docs/spec/plugins.md#settings-views).
+// contract: surface-host.settings-container-over-modal
 #[test]
 fn the_host_knows_the_settings_surface_of_a_plugin() {
     for (surface, want) in [

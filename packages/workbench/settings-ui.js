@@ -540,7 +540,7 @@ function drawPluginPage(unit) {
   body.append(group(unit.name, unit.id, [row("", back)]));
 
   const declared = Object.entries(settingDefinitions()).filter(([, d]) => d.plugin === unit.id);
-  // The seat of the settings view of the plugin stands below the rows of 설정: as wide as the content of the pane and as high as its
+  // The seat of the settings view of the plugin stands below the rows of the settings group: as wide as the content of the pane and as high as its
   // visible box, so the whole page of the view shows when the pane scrolls to it (docs/spec/plugins.md#settings-views).
   const seat = [];
   if (unit.settingsView) {

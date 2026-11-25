@@ -375,8 +375,7 @@ func TestViewStopReasonOfADialogNamesTheDialog(t *testing.T) {
 	}
 }
 
-// F1128-2: the stop reason of a settings surface states that the view is created again when the settings page of its plugin is shown
-// again (docs/spec/plugins.md#settings-views).
+// contract: view.restart.limit-shows-settings-error
 func TestViewStopReasonOfASettingsSurfaceNamesTheSettingsPage(t *testing.T) {
 	const want = "the view failed 4 times within 300 seconds and is created again when the settings page of the plugin is shown again"
 	if got := viewStopReason("settings/probe"); got != want {

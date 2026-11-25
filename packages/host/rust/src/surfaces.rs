@@ -1728,12 +1728,12 @@ fn settings_modal_handle(
         .overlay
         .open_state()
         .is_some_and(|(_, mode, _)| mode == "dialog");
-    // default: a lock that a panicking thread poisoned still holds the modal web view, which is only read; the panic hook records
-    // the panic.
     let view = context
         .overlay
         .view
         .lock()
+        // default: a lock that a panicking thread poisoned still holds the modal web view, which is only read; the panic hook
+        // records the panic.
         .unwrap_or_else(PoisonError::into_inner);
     let Some(view) = view.as_ref().filter(|_| dialog) else {
         return Err("the settings surface needs the modal web view of the settings window, and no modal of the mode dialog is open".into());

@@ -25,11 +25,16 @@ export function drawSettingsSeat(container) {
   const entry = open;
   const seat = settingsSeat();
   entry.seat = seat;
-  const { frame, clip } = seat ?? { frame: { x: 0, y: 0, w: 0, h: 0 }, clip: null };
-  Object.assign(entry.slot.style, { left: `${frame.x}px`, top: `${frame.y}px`, width: `${frame.w}px`, height: `${frame.h}px` });
-  entry.slot.hidden = seat === null || !shows(seat);
-  if (clip === null) delete entry.slot.dataset.nativeClip;
-  else entry.slot.dataset.nativeClip = JSON.stringify(clip);
+  if (seat === null) {
+    // A seat that the modal document has not reported has no place, so its slot stays hidden and carries no clip.
+    entry.slot.hidden = true;
+    delete entry.slot.dataset.nativeClip;
+  } else {
+    const { frame, clip } = seat;
+    Object.assign(entry.slot.style, { left: `${frame.x}px`, top: `${frame.y}px`, width: `${frame.w}px`, height: `${frame.h}px` });
+    entry.slot.hidden = !shows(seat);
+    entry.slot.dataset.nativeClip = JSON.stringify(clip);
+  }
   if (entry.slot.parentElement !== container) container.append(entry.slot);
   setSlotSurface(entry.slot, entry.surface);
   if (entry.mounted) return;

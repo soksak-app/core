@@ -289,8 +289,7 @@ fn a_dialog_surface_blurs_the_regions_of_the_other_surfaces_only() {
     assert_eq!(*images.borrow(), vec![(3, false)]);
 }
 
-// F1128-2: the settings surface is a part of the settings window, so the background of the settings window blurs every other region
-// and none of the settings surface (docs/spec/native-modals.md#settings-surface).
+// contract: modal.settings-window-leaves-the-settings-surface-unblurred
 #[test]
 fn the_background_of_the_settings_window_leaves_the_settings_surface_unblurred() {
     let documents = std::cell::RefCell::new(Vec::new());

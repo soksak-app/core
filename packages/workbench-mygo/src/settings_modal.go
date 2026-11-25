@@ -123,7 +123,7 @@ type settingsRow struct {
 type settingsGroup struct {
 	name, text string
 	rows       []settingsRow
-	// view tells that the seat of the settings view of the plugin stands below the rows (docs/spec/settings.md#플러그인).
+	// view tells that the seat of the settings view of the plugin stands below the rows (docs/spec/plugins.md#settings-views).
 	view bool
 }
 
