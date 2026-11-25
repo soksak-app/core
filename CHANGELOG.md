@@ -5,6 +5,7 @@
 
 ## 2026-11-25
 
+- F1180: The generation counter of the Go host moved into `images.go` and its tests into `images_test.go`, the counterparts of the Rust files; F1173 and F1175 link their tests, and the clock default of the Rust host states its reason, so the structure checks of CI pass.
 - F1177-1: The core version is 0.0.56 in every package and crate manifest, Info.plist, Tauri file, Go and pkg-config declaration, the six workspace entries of Cargo.lock and scripts/check-versions.mjs.
 - F1176: The application icon and the brand mark of the title bar show the new brand mark.
 - F1175: A window close and a quit keep the terminal sessions of the layout in the persistent service and close only the sessions in sidecars on standard input and output; both hosts sent `closed` for every surface of the closed window, so a quit ended some sessions and restored tabs started new shells.

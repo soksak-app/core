@@ -1730,6 +1730,7 @@ fn next_image_generation() -> u64 {
     // startup (docs/spec/hosts.md); a failure here is a defect of the platform, and the panic is stored as `host.panic`.
     let nanos = crate::platform::current()
         .and_then(|system| system.monotonic_ns())
+        // default: a clock that cannot be read ends the process by a panic, which the panic hook records.
         .unwrap_or_else(|error| panic!("image generation: the boot clock cannot be read: {error}"));
     let mut last = LAST_IMAGE_GENERATION
         .lock()
