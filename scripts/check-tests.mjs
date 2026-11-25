@@ -342,9 +342,9 @@ const FEATURE_LINKS = [
   {
     id: "F1129-1",
     implementation: [
-      { file: "packages/plugin-api/index.js", symbol: "function checkDialogs(where, dialogs) {" },
-      { file: "packages/sok/go/src/manifest.go", symbol: "func checkDialogs(where string, raw any) error {" },
-      { file: "packages/sok/rust/src/manifest.rs", symbol: "fn check_dialogs(where_: &str, raw: &Value) -> Result<(), String> {" },
+      { file: "packages/plugin-api/index.js", symbol: "function checkDialogs(where, dialogs, sidecars) {" },
+      { file: "packages/sok/go/src/manifest.go", symbol: "func checkDialogs(where string, raw any, sidecars []string) error {" },
+      { file: "packages/sok/rust/src/manifest.rs", symbol: "fn check_dialogs(where_: &str, raw: &Value, sidecars: &[&str]) -> Result<(), String> {" },
       { file: "packages/sok/go/src/registry.go", symbol: "add(\"dialog page\", dialog[\"page\"])" },
       { file: "packages/sok/rust/src/registry.rs", symbol: "add(\"dialog page\".into(), &dialog[\"page\"]);" },
     ],
@@ -470,6 +470,45 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1164",
+    implementation: [
+      { file: "packages/workbench/tab-session.js", symbol: "const keepsSession = (tab) => !isDialogSurface(tab);" },
+      { file: "packages/workbench-mygo/src/tab_store.go", symbol: "func keepsSession(tab string) bool { return !host.IsDialogSurface(tab) }" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/tab-session.test.mjs", id: "the regions of a dialog surface keep no tab session" },
+      { file: "packages/workbench-mygo/tests/tab_state_test.go", id: "TestTheRegionsOfADialogSurfaceKeepNoTabSession" },
+    ],
+    expected: "The page workbench and the mygo workbench neither read nor write a tab session of a dialog surface.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1163",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "function checkDialogs(where, dialogs, sidecars) {" },
+      { file: "packages/workbench/environment.js", symbol: "function dialogSurfaceOf(pluginId, name, { page, regions }, declarations, diagnostics, sidecars, programs) {" },
+      { file: "packages/workbench-mygo/src/surfaces.go", symbol: "Regions json.RawMessage `json:\"regions,omitempty\"`" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/manifest-validation.test.mjs", id: "manifest validation" },
+      { file: "packages/workbench/test/environment.test.mjs", id: "the environment registers card plugins, sections, and sidebar defaults from the installed manifests" },
+      { file: "packages/workbench-mygo/tests/dialog_surface_test.go", id: "TestADialogSurfaceHasTheRegionsOfItsDeclaration" },
+    ],
+    expected: "A dialog declares {page, regions?}, the three plugin.json readers check its regions, and the composition of the dialog surface holds them in both workbenches.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1162",
+    implementation: [
+      { file: "packages/workbench-mygo/src/surfaces.go", symbol: "if composition.Kind == \"view\" && len(unit.Programs) > 0 {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/program_runs_test.go", id: "TestTheSyncRequestDeclaresTheProgramsOfASectionOfAPluginWithoutATabSurface" },
+    ],
+    expected: "The mygo workbench declares the programs of a plugin for each view surface, also for a plugin without a tab surface.",
+    levels: ["unit"],
+  },
+  {
     id: "F1158",
     implementation: [
       { file: "packages/host/go/src/plugins.go", symbol: "End    any    `json:\"end,omitempty\"`" },
@@ -502,7 +541,7 @@ const FEATURE_LINKS = [
       { file: "packages/sok/go/src/manifest.go", symbol: "programs requires a surface or sections" },
       { file: "packages/sok/rust/src/manifest.rs", symbol: "programs requires a surface or sections" },
       { file: "packages/workbench/environment.js", symbol: "function sectionSurfaceOf(pluginId, section, declarations, diagnostics, sidecars, programs) {" },
-      { file: "packages/workbench/environment.js", symbol: "function dialogSurfaceOf(pluginId, name, page, declarations, diagnostics, sidecars, programs) {" },
+      { file: "packages/workbench/environment.js", symbol: "function dialogSurfaceOf(pluginId, name, { page, regions }, declarations, diagnostics, sidecars, programs) {" },
     ],
     tests: [
       { file: "packages/workbench/test/environment.test.mjs", id: "the environment registers card plugins, sections, and sidebar defaults from the installed manifests" },
@@ -18475,12 +18514,12 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // tests in parallel copies, F1116 and F1116-1 judge the exit of a process in a test,
 // F1114-3 updates the copies of the catalog and a case, F1114-4 makes the endpoint harnesses wait on the count of the endpoint, and F1113-2 lists them here;
 // F1118 releases the core candidate 0.0.50, F1117-1 reads a resident size through the existing footprint call, F1117-2 changes tests only, F1117-3 adds a structure check, F1123 changes a test helper only, F1125-1 declares the version 0.0.51;
-// F1166-1 declares the version 0.0.54;
+// F1166-1 declares the version 0.0.54, and F1155 completed the release of 0.0.53 after its release run;
 // F1155 releases the core 0.0.53, F1155-1 declares the version 0.0.53 and F1156 corrects records and comments that the checks read;
 // F1144 releases the core 0.0.52, F1144-1 declares the version 0.0.52 and F1144-2 confirms the release run;
 // F1125 releases the core 0.0.51, F1137 corrects the end of the data stores of a test helper and F1137-1 declares the
 // contract case of its test; they add no capability.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F1166-1", "F1156", "F1155-1", "F1144-2", "F1144", "F1144-1", "F1137-1", "F1137", "F1132", "F1125", "F1125-1", "F1123", "F1120", "F1114-2", "F1117", "F1117-4", "F1117-3", "F1117-2", "F1117-1", "F1118", "F1114-4", "F1114-3", "F1116-1", "F1116", "F1114", "F1113", "F1113-1", "F1113-2", "F1113-3", "F1103", "F1102", "F1100", "F1095", "F1077", "F1077-2", "F1061", "F1060", "F1059", "F1058", "F1054", "F1057", "F1056", "F1053", "F1052", "F1051", "F1050", "F1049", "F1048", "F1047", "F1046", "F1043", "F1040", "F1036", "F1041", "F1031", "F1017", "F1005", "F982-7", "F982-8", "F982-10", "F993", "F989", "F904", "F907", "F897", "F887", "F886", "F883-1", "F873", "F872", "F871", "F870", "F869", "F867-11", "F867-10", "F867-9", "F867-8", "F867-7", "F867", "F523", "F866", "F865", "F864", "F863","F862", "F861", "F860", "F859", "F858", "F857", "F856", "F855", "F854", "F853", "F852", "F851", "F850", "F849", "F848", "F847", "F846", "F845", "F835", "F843", "F842", "F841", "F840", "F839", "F838", "F837", "F836", "F834", "F833", "F832", "F830-3", "F830-2", "F830-1", "F830", "F825-1", "F829", "F827-1", "F827", "F828", "F826", "F825", "F820-1", "F823-1", "F824", "F822", "F823", "F821", "F819", "F818", "F817", "F816", "F814", "F813", "F812", "F811", "F810", "F809", "F808", "F805", "F804", "F803", "F802", "F801", "F800", "F799", "F795-5", "F798", "F795-1-1", "F795-7", "F796", "F795-2", "F795-1", "F788", "F676", "F673", "F510", "F664-1", "F648", "F646", "F582", "F497", "F496", "F494", "F492", "F495", "F493", "F491", "F490", "F489", "F488", "F639", "F637", "F629", "F486", "F487", "F485", "F484", "F435-8-2", "F483-1", "F435-8-1", "F435-7", "F483", "F482", "F435-6", "F631", "F481", "F479", "F435-5", "F478", "F477", "F476", "F474", "F475", "F473", "F472", "F471", "F239-276", "F97", "F16", "F470", "F469", "F468", "F466", "F467", "F465", "F463", "F464", "F561", "F581", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
+const NON_CAPABILITY_COMPLETIONS = new Set(["F1166-1", "F1155", "F1156", "F1155-1", "F1144-2", "F1144", "F1144-1", "F1137-1", "F1137", "F1132", "F1125", "F1125-1", "F1123", "F1120", "F1114-2", "F1117", "F1117-4", "F1117-3", "F1117-2", "F1117-1", "F1118", "F1114-4", "F1114-3", "F1116-1", "F1116", "F1114", "F1113", "F1113-1", "F1113-2", "F1113-3", "F1103", "F1102", "F1100", "F1095", "F1077", "F1077-2", "F1061", "F1060", "F1059", "F1058", "F1054", "F1057", "F1056", "F1053", "F1052", "F1051", "F1050", "F1049", "F1048", "F1047", "F1046", "F1043", "F1040", "F1036", "F1041", "F1031", "F1017", "F1005", "F982-7", "F982-8", "F982-10", "F993", "F989", "F904", "F907", "F897", "F887", "F886", "F883-1", "F873", "F872", "F871", "F870", "F869", "F867-11", "F867-10", "F867-9", "F867-8", "F867-7", "F867", "F523", "F866", "F865", "F864", "F863","F862", "F861", "F860", "F859", "F858", "F857", "F856", "F855", "F854", "F853", "F852", "F851", "F850", "F849", "F848", "F847", "F846", "F845", "F835", "F843", "F842", "F841", "F840", "F839", "F838", "F837", "F836", "F834", "F833", "F832", "F830-3", "F830-2", "F830-1", "F830", "F825-1", "F829", "F827-1", "F827", "F828", "F826", "F825", "F820-1", "F823-1", "F824", "F822", "F823", "F821", "F819", "F818", "F817", "F816", "F814", "F813", "F812", "F811", "F810", "F809", "F808", "F805", "F804", "F803", "F802", "F801", "F800", "F799", "F795-5", "F798", "F795-1-1", "F795-7", "F796", "F795-2", "F795-1", "F788", "F676", "F673", "F510", "F664-1", "F648", "F646", "F582", "F497", "F496", "F494", "F492", "F495", "F493", "F491", "F490", "F489", "F488", "F639", "F637", "F629", "F486", "F487", "F485", "F484", "F435-8-2", "F483-1", "F435-8-1", "F435-7", "F483", "F482", "F435-6", "F631", "F481", "F479", "F435-5", "F478", "F477", "F476", "F474", "F475", "F473", "F472", "F471", "F239-276", "F97", "F16", "F470", "F469", "F468", "F466", "F467", "F465", "F463", "F464", "F561", "F581", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66), the window checks of plugins (F110) and the registry listing of the hwp plugin (F141, registry items G37 and G38). Core cannot read
