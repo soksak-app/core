@@ -5,6 +5,7 @@
 
 ## 2026-11-25
 
+- F1166-1: core version은 모든 package와 crate manifest, Info.plist, Tauri 파일, Go와 pkg-config 선언, Cargo.lock의 workspace 항목 여섯 개, scripts/check-versions.mjs에서 0.0.54예요.
 - F1164: page workbench와 mygo workbench가 dialog surface의 document region에 tab session을 두지 않아서, dialog region의 sign-in page가 더 이상 `invalid tab session tab: dialog/<plugin>/<name>`을 보이지 않아요. Red/Green: `the regions of a dialog surface keep no tab session`, `TestTheRegionsOfADialogSurfaceKeepNoTabSession`.
 - F1163: `plugin.json`의 `dialogs.<name>`은 `{page, regions?}`이고 dialog surface가 composition `{kind: "view", page, regions}`를 가져서, dialog page가 자기 element의 document region에 web document를 보여 줘요. `@soksak/plugin-api`, Go `sok`, Rust `sok`의 reader가 region을 view composition의 region처럼 검사하고 다른 member를 `dialogs.<name> must be {page, regions?}`로 거절해요. Red/Green: `manifest-validation.json`의 dialog case, workbench의 environment test, `TestADialogSurfaceHasTheRegionsOfItsDeclaration`.
 - F1162: mygo workbench가 composition이 view인 각 surface에 plugin의 programs를 선언해서, tab surface가 없는 plugin의 section과 dialog가 선언한 program을 실행해요. 전에는 host가 각 실행을 `program <name> is not declared by <plugin>`으로 거절했어요. Red/Green: `TestTheSyncRequestDeclaresTheProgramsOfASectionOfAPluginWithoutATabSurface`.
