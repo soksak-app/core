@@ -516,6 +516,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1197",
+    implementation: [
+      { file: "packages/workbench/library-preview.js", symbol: "else if(active) pane.dataset.plugin=active.plugin;" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/library-preview.test.mjs", id: "a library preview draws a content card without tabs as an empty pane" },
+    ],
+    expected: "The library preview draws a content card without tabs as an empty pane without a plugin and a mark.",
+    levels: ["unit"],
+  },
+  {
     id: "F1128-3",
     implementation: [
       { file: "packages/workbench/settings-view.js", symbol: "export function showSettingsView(plugin) {" },

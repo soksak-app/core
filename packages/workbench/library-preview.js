@@ -40,9 +40,11 @@ export function preview(project) {
     pane.style.gridArea=`${card.r0+1} / ${card.c0+1} / ${card.r1+1} / ${card.c1+1}`;
     // default: a place card has data null, so it has no tab.
     const tabs=card.data?.tabs ?? [];
-    // A content card that passed the check has the active tab of a registered plugin. A place card has no tab.
+    // A content card that passed the check has the active tab of a registered plugin, or no tab, which a new project stores. A place
+    // card has no tab. A pane without an active tab carries no plugin and draws no mark.
     const active=tabs.find(t=>t.id===card.data?.activeId);
-    pane.dataset.plugin=aside(card.id)?'sidebar':active.plugin;
+    if(aside(card.id)) pane.dataset.plugin='sidebar';
+    else if(active) pane.dataset.plugin=active.plugin;
     // A tab of a plugin that is not loaded is drawn as a placeholder slot without a display (docs/spec/plugins.md).
     if(active&&!hasPlugin(active.plugin)) pane.dataset.placeholder='true';
     else if(active) {

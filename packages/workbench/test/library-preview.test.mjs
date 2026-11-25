@@ -47,3 +47,14 @@ test("a library preview draws a tab of a plugin that is not loaded as a placehol
   const panes = [...el.querySelectorAll(".library-preview__pane")];
   assert.deepEqual(panes.map((pane) => [pane.dataset.plugin, pane.dataset.placeholder]), [["gone", "true"]]);
 });
+
+// A new project stores a content card without tabs, so its preview draws an empty pane without a mark (docs/spec/projects.md).
+test("a library preview draws a content card without tabs as an empty pane", () => {
+  const stored = project("probe");
+  stored.spaces[0].layout.state.root.data = { activeId: null, tabs: [] };
+  const el = preview(stored);
+  assert.equal(el.dataset.previewError, undefined, el.dataset.previewError);
+  const panes = [...el.querySelectorAll(".library-preview__pane")];
+  assert.deepEqual(panes.map((pane) => [pane.dataset.plugin, pane.dataset.placeholder, pane.querySelector(".library-preview__mark")]),
+    [[undefined, undefined, null]]);
+});
