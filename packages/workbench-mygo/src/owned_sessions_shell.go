@@ -379,9 +379,9 @@ func (s *Shell) sizeChangedCards(scale float64) {
 	}
 }
 
-// layoutShownSessions returns the sessions that the tabs of the layouts name in their params, as tab identifier to session identifier.
-func (s *Shell) layoutShownSessions() map[string]string {
-	shown := map[string]string{}
+// layoutShownSessions returns the sessions that the tabs of the layouts name in their params, with the stored titles of the tabs.
+func (s *Shell) layoutShownSessions() map[string]ShownTab {
+	shown := map[string]ShownTab{}
 	for i := range s.projects {
 		for _, space := range s.projects[i].Spaces {
 			var stored storedLayout
@@ -401,7 +401,7 @@ func (s *Shell) layoutShownSessions() map[string]string {
 					return
 				}
 				if session != "" {
-					shown[tab.ID] = session
+					shown[tab.ID] = ShownTab{Session: session, Title: tab.Title}
 				}
 			})
 		}

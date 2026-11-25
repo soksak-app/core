@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1190-1: session이 돌아오지 않은 복원 탭의 toast는 저장된 title로 탭을 밝히고 그 session이 재시작 전에 끝났다고 말한다. mygo와 page workbench가 같다.
 - F1192: mygo 창의 닫기와 그에 따른 application 종료는 표면이 처리하는 명령을 기다리지 않으므로, 몇 시간을 기다리는 plugin 명령이 더는 종료를 붙잡지 않는다.
 
 ## 2026-11-25

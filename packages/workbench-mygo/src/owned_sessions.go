@@ -27,6 +27,12 @@ type MountedView struct {
 	Context    context.Context
 }
 
+// ShownTab is a restored tab whose params name a session: the session and the stored title of the tab.
+type ShownTab struct {
+	Session string
+	Title   string
+}
+
 // OwnedPorts is what the owned sessions use. Every port and every answer runs in a step of the main thread.
 type OwnedPorts struct {
 	// Sidecar returns the name of the persistent sidecar of plugin, and whether the plugin declares sessions. The name is empty when the
@@ -41,8 +47,8 @@ type OwnedPorts struct {
 	// Mounted answers with the view that the host mounted on a surface, or false for a surface without a mounted view. For a surface whose
 	// placement has not finished it answers when the view mounts or the placement finishes, and with an error when the surface closes first.
 	Mounted func(surface string, answer func(view MountedView, mounted bool, err error))
-	// Shown returns the sessions that the restored tabs name in their params, as tab identifier to session identifier.
-	Shown func() map[string]string
+	// Shown returns the sessions that the restored tabs name in their params, as tab identifier to the session and the stored title.
+	Shown func() map[string]ShownTab
 	// Random returns a new identifier for a creation or a correlation identifier.
 	Random  func() string
 	Emit    func(level, name string, fields map[string]any)
@@ -507,14 +513,14 @@ func (o *OwnedSessions) showRestored(live func(surface string) bool) {
 	sort.Strings(tabs)
 	changed := false
 	for _, tab := range tabs {
-		session := shown[tab]
+		session := shown[tab].Session
 		if !live(tab) {
 			continue
 		}
 		current := o.sessions[session]
 		if current == nil {
 			if _, declares := o.ports.Sidecar(o.ports.Plugin(tab)); declares {
-				o.ports.Fail("restored tab "+tab, "session "+session+" is not open")
+				o.ports.Fail("restored tab "+tab, fmt.Sprintf("the session %s of tab %q ended before the restart", session, shown[tab].Title))
 			}
 			continue
 		}

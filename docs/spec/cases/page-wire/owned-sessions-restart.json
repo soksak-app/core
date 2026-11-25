@@ -354,7 +354,7 @@
               "event": "workbench.record.error",
               "fields": {
                 "where": "restored tab tab-aaaaa2",
-                "text": "session ses-missing is not open"
+                "text": "the session ses-missing of tab \"fixture-session\" ended before the restart"
               }
             }
           ]

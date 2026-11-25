@@ -73,7 +73,7 @@ plane.nameWindow("main");
 test("the restart adopts the session whose owner is in the restored layout, ends the session whose owner is absent and states the session that did not return", async () => {
   await startOwnedSessions();
   // The restored tab that names the adopted session shows it, and the tab whose session did not return shows the error
-  // restored tab <tab>: session <id> is not open (docs/spec/plugins.md#owned-sessions).
+  // restored tab <tab>: the session <id> of tab "<title>" ended before the restart (docs/spec/plugins.md#owned-sessions).
   // The session that the room owns belongs to the plugin that opened it, which its entry names (docs/spec/persistent-services.md#owned-sessions).
   // The adopted session keeps the program state that its entry lists, because a program reports its state only when it changes.
   assert.deepEqual(ownedSessionsState(), [{ session: "ses-keep", plugin: SESSION, owner: OWNER, shownBy: OWNER, program: { state: "idle" }, params: { program: "claude", role: "manager-lead" } },
@@ -82,7 +82,7 @@ test("the restart adopts the session whose owner is in the restored layout, ends
   // that it describes ended with the tab (docs/spec/exposure.md#error-presentation).
   const { errorToasts } = await import("../shown-errors.js");
   const { recordClosedTabs } = await import("../closed-tabs.js");
-  assert.equal(errorToasts(document).text(`restored tab ${STALE}`), "session ses-missing is not open");
+  assert.equal(errorToasts(document).text(`restored tab ${STALE}`), `the session ses-missing of tab "${SESSION}" ended before the restart`);
   recordClosedTabs([STALE]);
   assert.equal(errorToasts(document).text(`restored tab ${STALE}`), null);
   assert.equal(errorToasts(document).newest(), null);

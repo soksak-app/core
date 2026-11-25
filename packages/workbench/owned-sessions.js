@@ -389,7 +389,7 @@ function restoredShownSessions() {
     if (node.cut !== undefined) for (const kid of node.kids) walk(kid.node);
     // default: a card without a tab list holds no tabs to restore.
     else for (const tab of node.data?.tabs ?? []) {
-      if (typeof tab.params?.session === "string") shown.push({ tab: tab.id, plugin: tab.plugin, session: tab.params.session });
+      if (typeof tab.params?.session === "string") shown.push({ tab: tab.id, title: tab.title, plugin: tab.plugin, session: tab.params.session });
     }
   };
   // default: a project without spaces, or a space without a layout state, holds no tabs to restore.
@@ -452,10 +452,10 @@ export async function reconcileOwnedSessions() {
  * of a sidecar whose sessions could not be read is judged by nothing, because its failure is already reported.
  */
 function showRestored(read) {
-  for (const { tab, plugin: id, session } of restoredShownSessions()) {
+  for (const { tab, title, plugin: id, session } of restoredShownSessions()) {
     if (!hasPlugin(id) || !read.has(plugin(id).sessions)) continue;
     const entry = sessions.get(session);
     if (entry && entry.plugin === id) bindShown(session, tab);
-    else showError(document, `restored tab ${tab}`, `session ${session} is not open`);
+    else showError(document, `restored tab ${tab}`, `the session ${session} of tab ${JSON.stringify(title)} ended before the restart`);
   }
 }
