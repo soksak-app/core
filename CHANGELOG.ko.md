@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1199-1: 선언된 모든 workspace 버전이 core 릴리즈 0.0.59를 가리킨다.
 - F1198: diagnostic 검사 T5는 layout이 닫을 수 있었던 빈 card에서만 실패하므로, 새 프로젝트의 시작은 오류를 기록하지 않는다.
 - F1128-4: Wails와 Tauri debug 창이 settings 창의 pane에 agents의 settings view를 보이고, 그 seat에서 pointer와 keyboard를 받으며, pane으로 자른다.
 - F1128-8: page와 mygo workbench에서 settings surface의 element는 settings 창 뒤에서 inert가 아니어서 그 element에 대한 action이 view에 전달된다. debug view와 dialog surface는 여전히 그 위에 선다.

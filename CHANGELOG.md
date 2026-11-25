@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1199-1: Every declared workspace version names the core release 0.0.59.
 - F1198: The diagnostic check T5 fails only for an empty card that the layout could close, so the start of a new project records no error.
 - F1128-4: A Wails and a Tauri debug window show the settings view of agents in the pane of the settings window, take the pointer and the keyboard in its seat, and clip it to the pane.
 - F1128-8: An element of the settings surface is not inert behind the settings window, in the page and the mygo workbench, so the workbench delivers an action on it to the view; the debug view and a dialog surface still stand over it.

@@ -151,7 +151,7 @@ $(PKGCONFIG): pkgconfig-current | $(BUILD)
 	  'dynamic_library=$(MYGO_LIBRARY)' \
 	  'Name: soksak-darwin' \
 	  'Description: Shared macOS window, webview, and surface layout code' \
-	  'Version: 0.0.58' \
+	  'Version: 0.0.59' \
 	  'Cflags: -I$(CURDIR)/src $(MINIMUM)' \
 	  'Libs: -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) $(MINIMUM)' > $@.next
 	@if cmp -s $@.next $@; then rm $@.next; else mv $@.next $@; fi
@@ -591,7 +591,7 @@ $(HOST_TEST_PKGCONFIG): pkgconfig-current Makefile | $(BUILD)
 	  'callback_worker_library=$(HOST_CALLBACK_WORKER_LIBRARY)' \
 	  'Name: soksak-host-test' \
 	  'Description: Native-only test sampler, recorder, dispatcher and transfer frame support' \
-	  'Version: 0.0.58' \
+	  'Version: 0.0.59' \
 	  'Cflags: -I$(CURDIR)/tests/support $(MINIMUM)' \
 	  'Libs: -L$(HOST_TEST_BUILD) -lhost_test $(HOST_TEST_FRAMEWORKS) $(MINIMUM)' > $@.next
 	@if cmp -s $@.next $@; then rm $@.next; else mv $@.next $@; fi
