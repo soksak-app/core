@@ -314,7 +314,7 @@ window check 는 이것을 쓰지 않는다. check 는 사람의 창 뒤에서 �
 
 `index`는 0 이상의 정수이며, 타입이 다른 `index`를 준 요청은 -32602로 거부한다.
 
-열린 dialog 는 그 바깥의 모든 element 를 inert 로 만든다. dialog 는 종류가 `dialog` 인 modal, 곧 settings 와 debug view, 또는 [dialog surface](plugins.ko.md#dialogs) 이고, 종류가 `menu` 인 modal 인 picker 는 어떤 element 도 inert 로 만들지 않는다. main page의 error toast는 창의 가장 위 layer이므로 dialog surface 뒤에서 inert가 아니다([toast overlay](native-modals.ko.md#toast-overlay)). inert element 는 layout 을 유지하므로 dialog 가 덮고 있어도 `element.rect` 는 그 사각형을 답하고, 어떤 점이 무엇을 가리키는지는 `host.hit` 이 답한다. inert element 에 대한 `element.act` 는 어느 document 에서든 1010 과 메시지 `element <name> is behind the open dialog and takes no action` 을 돌려준다.
+열린 dialog 는 그 바깥의 모든 element 를 inert 로 만든다. dialog 는 종류가 `dialog` 인 modal, 곧 settings 와 debug view, 또는 [dialog surface](plugins.ko.md#dialogs) 이고, 종류가 `menu` 인 modal 인 picker 는 어떤 element 도 inert 로 만들지 않는다. main page의 error toast는 창의 가장 위 layer이므로 dialog surface 뒤에서 inert가 아니다([toast overlay](native-modals.ko.md#toast-overlay)). [settings surface](plugins.ko.md#settings-views)는 settings 창 안의 자기 seat에 있으므로 settings 창 뒤에서 inert가 아니고, debug view와 dialog surface는 그 위에 선다. inert element 는 layout 을 유지하므로 dialog 가 덮고 있어도 `element.rect` 는 그 사각형을 답하고, 어떤 점이 무엇을 가리키는지는 `host.hit` 이 답한다. inert element 에 대한 `element.act` 는 어느 document 에서든 1010 과 메시지 `element <name> is behind the open dialog and takes no action` 을 돌려준다.
 
 네이티브 포인터 주입은 pointer와 버튼별로 누름을 받은 뷰를 누름의 창과 함께 유지한다. 포인터가 다른 뷰를 가로질러도 끌기와 뗌을 그 뷰에 전달하며 뗌의 수신 확인은 누름을 받은 문서를 기다린다. 그 창에서 pointer의 일치하는 누름 없는 끌기·뗌, pointer가 같은 버튼을 누른 상태에서의 추가 누름, 제거된 누름 대상 뷰는 명시적 입력 거부를 반환한다. 스크롤과 버튼 없는 이동은 현재 포인터 위치를 사용한다.
 

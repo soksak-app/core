@@ -572,6 +572,15 @@ func (s *Shell) dialogOpen() bool {
 	return s.settingsWindow.open || s.debugView.open || s.dialog != nil
 }
 
+// surfaceBehindDialog tells whether an open dialog stands over the document of surface. The settings surface stands in its seat in the
+// settings window, so only the debug view or a dialog surface stands over it (docs/spec/exposure.md).
+func (s *Shell) surfaceBehindDialog(surface string) bool {
+	if s.isSettingsSurface(surface) {
+		return s.debugView.open || s.dialog != nil
+	}
+	return s.dialogOpen()
+}
+
 // tellBackground tells the host when a dialog opened or closed, so the host blurs the documents of the window.
 func (s *Shell) tellBackground() {
 	// The host derives the blur of a dialog surface from its placement and leaves the dialog unblurred, so only the dialogs that the

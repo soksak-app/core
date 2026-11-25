@@ -516,6 +516,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1128-8",
+    implementation: [
+      { file: "packages/workbench/host.js", symbol: "if (element === null && isSettingsSurface(surface) && el.querySelector('[data-expose=\"core.settings-modal.plugin-view\"]') !== null) {" },
+      { file: "packages/workbench-mygo/src/picker.go", symbol: "func (s *Shell) surfaceBehindDialog(surface string) bool {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/behind-dialog.test.mjs", id: "the settings window does not stand over the settings surface in its seat" },
+      { file: "packages/workbench-mygo/tests/settings_surface_test.go", id: "TestTheSettingsWindowDoesNotStandOverTheSettingsSurface" },
+    ],
+    expected: "An element of the settings surface is not inert behind the settings window in the page and the mygo workbench.",
+    levels: ["unit"],
+  },
+  {
     id: "F1128-7",
     implementation: [
       { file: "packages/host/go/src/surfaces.go", symbol: "Composition: item.Composition, Rect: item.Rect, Programs: map[string]programDeclaration{}, Clip: item.Clip," },

@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1128-8: An element of the settings surface is not inert behind the settings window, in the page and the mygo workbench, so the workbench delivers an action on it to the view; the debug view and a dialog surface still stand over it.
 - F1128-7: The Go host keeps the clip of a surface of a sync request, and the plane holds no slot of the settings seat until the modal document reports it, so the hosts receive the settings surface with its clip.
 - F1128-6: The memory saver of the page workbench leaves the settings surface out, so the settings view of a plugin shows in the Wails and Tauri settings windows.
 - F1197: The library preview draws a content card without tabs as an empty pane, so the start of a workbench whose library shows a new project no longer fails.

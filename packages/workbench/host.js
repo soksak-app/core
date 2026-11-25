@@ -12,7 +12,7 @@ import { trace } from "./performance.js";
 import { host as bridge } from "@soksak/runtime";
 import { surfacePlugins } from "./registry.js";
 import { createClipboardBridge, createExpose, createLinkBridge, orderedSidecar } from "@soksak/plugin-api";
-import { gatedExposureReply, registerSurfacePort, registry } from "./exposure.js";
+import { gatedExposureReply, isSettingsSurface, registerSurfacePort, registry } from "./exposure.js";
 import { logGate } from "./log-gate.js";
 import { errorToasts } from "./shown-errors.js";
 import { pageIdentity } from "./page-identity.js";
@@ -1016,14 +1016,19 @@ export function modalElementWindowRect(name) {
 /**
  * Whether the open dialog stands over the element, which makes the element inert (docs/spec/exposure.md). null names the document
  * of the surface, which a dialog covers as a whole. A modal of the kind menu makes no element inert. A dialog surface stands over
- * every element of this document but an error toast, and over the document of every other surface (docs/spec/plugins.md#dialogs).
+ * every element of this document but an error toast, and over the document of every other surface (docs/spec/plugins.md#dialogs). The
+ * settings surface stands in its seat in the settings window, so the settings window does not stand over its document.
  */
 export function behindDialog(element, surface) {
   const dialog = dialogSurface();
   // An error toast is the topmost layer of the window, above a dialog surface too (docs/spec/native-modals.md#toast-overlay).
   if (dialog !== null) return element !== null ? !inErrorToast(element) : surface !== dialog;
   const el = shown ? document.getElementById(shown) : null;
-  return el?.dataset.nativeModal === "dialog" && !el.contains(element);
+  if (el?.dataset.nativeModal !== "dialog") return false;
+  if (element === null && isSettingsSurface(surface) && el.querySelector('[data-expose="core.settings-modal.plugin-view"]') !== null) {
+    return false;
+  }
+  return !el.contains(element);
 }
 
 /**

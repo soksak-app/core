@@ -55,7 +55,7 @@ func newSurfaceRequests(t *testing.T) *surfaceRequests {
 		Plugin:       func(surface string) string { return f.plugins[surface] },
 		Preferred:    func() []string { return f.preferred },
 		Unloaded:     func(surface string) bool { return f.unloaded[surface] },
-		BehindDialog: func() bool { return f.behind },
+		BehindDialog: func(string) bool { return f.behind },
 		Frame: func(surface string) (float64, float64, bool) {
 			frame, ok := f.frames[surface]
 			return frame[0], frame[1], ok

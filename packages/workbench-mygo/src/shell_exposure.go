@@ -39,7 +39,7 @@ func (s *Shell) linkSurfaces() {
 			}
 			return held.box.X, held.box.Y, true
 		},
-		BehindDialog: s.dialogOpen,
+		BehindDialog: s.surfaceBehindDialog,
 		Forward: func(request map[string]any, answer func(value any, err error)) {
 			s.calls.Call("exposureForward", request, answer)
 		},

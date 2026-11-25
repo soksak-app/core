@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1128-8: page와 mygo workbench에서 settings surface의 element는 settings 창 뒤에서 inert가 아니어서 그 element에 대한 action이 view에 전달된다. debug view와 dialog surface는 여전히 그 위에 선다.
 - F1128-7: Go host가 동기화 요청의 surface clip을 유지하고, plane은 modal 문서가 settings seat를 보고할 때까지 그 slot을 두지 않아서, host는 settings surface를 clip과 함께 받는다.
 - F1128-6: page workbench의 memory saver가 settings surface를 넣지 않아서, Wails와 Tauri의 settings 창에 plugin의 settings view가 보인다.
 - F1197: library preview가 탭 없는 content card를 빈 pane으로 그려서, library가 새 프로젝트를 보이는 workbench의 시작이 더는 실패하지 않는다.

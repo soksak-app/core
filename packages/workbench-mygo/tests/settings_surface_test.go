@@ -1,9 +1,13 @@
 package workbench_test
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
+	"sync"
 	"testing"
+
+	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
 // The settings view of a plugin (docs/spec/plugins.md#settings-views): the plugin page of the settings window shows the page that the
@@ -135,4 +139,34 @@ func targets(keyboard []*string) []string {
 		}
 	}
 	return texts
+}
+
+// The settings surface stands in its seat in the settings window, so the open settings window does not stand over its document: an
+// action on its element reaches it (docs/spec/exposure.md).
+func TestTheSettingsWindowDoesNotStandOverTheSettingsSurface(t *testing.T) {
+	var mu sync.Mutex
+	var replies, forwards []string
+	record := func(into *[]string) workbench.HostCall {
+		return func(_ context.Context, argument json.RawMessage) (any, error) {
+			mu.Lock()
+			defer mu.Unlock()
+			*into = append(*into, string(argument))
+			return nil, nil
+		}
+	}
+	stored := &surfaceHost{extra: map[string]workbench.HostCall{"exposureReply": record(&replies), "exposureForward": record(&forwards)}}
+	document := strings.Replace(installedDocument, `"surface": {"menu": [{"title": "닫기"`,
+		`"settingsView": {"page": "ui/settings.html"}, "surface": {"menu": [{"title": "닫기"`, 1)
+	f := surfaceShellOn(t, document, stored)
+	showPluginPage(f)
+	f.shell.Event("exposure-registered", []any{map[string]any{"surface": settingsSurfaceID, "kind": "element", "name": "textprobe.view"}})
+	f.settle()
+	f.shell.Event("exposure-request", []any{map[string]any{"id": 1, "method": "element.act",
+		"params": json.RawMessage(`{"name":"textprobe.view","action":"click","surface":"` + settingsSurfaceID + `"}`)}})
+	f.settle()
+	mu.Lock()
+	defer mu.Unlock()
+	if len(forwards) != 1 || strings.Contains(strings.Join(replies, " "), "behind the open dialog") {
+		t.Fatalf("the action on the settings surface was forwarded %d times and answered %v", len(forwards), replies)
+	}
 }

@@ -42,3 +42,21 @@ test("an open picker makes no element inert", async () => {
   await orderedCallsAnswered();
   wire.finish();
 });
+
+// The settings surface stands in its seat in the settings window, so the settings window does not stand over its document, and it
+// stands over the document of every other surface (docs/spec/exposure.md).
+test("the settings window does not stand over the settings surface in its seat", async () => {
+  const wire = selectPageWire("overlay-dialog");
+  overlay.show(at("settings"), { x: 0, y: 0, w: 800, h: 600 }, () => {});
+  // The plugin page of the settings window draws the seat after the window opened.
+  const seat = document.createElement("div");
+  seat.id = "seat";
+  seat.dataset.expose = "core.settings-modal.plugin-view";
+  at("settings").append(seat);
+  assert.deepEqual([behindDialog(null, "settings/probe"), behindDialog(null, "tab-a"), behindDialog(null)], [false, true, true]);
+  at("seat").remove();
+  assert.equal(behindDialog(null, "settings/probe"), true, "a settings window without the seat stands over the settings surface");
+  overlay.hide();
+  await orderedCallsAnswered();
+  wire.finish();
+});

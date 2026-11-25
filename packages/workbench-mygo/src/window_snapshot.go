@@ -309,7 +309,7 @@ func (r *Registry) placePart(surface string, result any, group snapshotGroup) er
 	if !placed {
 		return Refuse(Failed, "surface %s has no valid applied frame", surface)
 	}
-	inert := r.surfaces.links.BehindDialog()
+	inert := r.surfaces.links.BehindDialog(surface)
 	status, err := snapshotRows(surface, part.Status)
 	if err != nil {
 		return err
