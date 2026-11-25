@@ -9,7 +9,8 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const WORKFLOWS = join(ROOT, '.github', 'workflows');
-const HOSTED = ['macos-15', 'ubuntu-26.04-arm'];
+// macos-26 runs the jobs that compile the Icon Composer source of the application icon (F1183).
+const HOSTED = ['macos-15', 'macos-26', 'ubuntu-26.04-arm'];
 
 const read = (path) => readFileSync(join(ROOT, path), 'utf8');
 
