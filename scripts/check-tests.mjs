@@ -486,13 +486,33 @@ const FEATURE_LINKS = [
     id: "F1164",
     implementation: [
       { file: "packages/workbench/tab-session.js", symbol: "const keepsSession = (tab) => !isDialogSurface(tab);" },
-      { file: "packages/workbench-mygo/src/tab_store.go", symbol: "func keepsSession(tab string) bool { return !host.IsDialogSurface(tab) }" },
+      { file: "packages/workbench-mygo/src/tab_store.go", symbol: "func keepsSession(tab string) bool { return !host.IsDialogSurface(tab) && !host.IsSettingsSurface(tab) }" },
     ],
     tests: [
       { file: "packages/workbench/test/tab-session.test.mjs", id: "the regions of a dialog surface keep no tab session" },
       { file: "packages/workbench-mygo/tests/tab_state_test.go", id: "TestTheRegionsOfADialogSurfaceKeepNoTabSession" },
     ],
     expected: "The page workbench and the mygo workbench neither read nor write a tab session of a dialog surface.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1128-2",
+    implementation: [
+      { file: "packages/workbench-mygo/src/settings_surface.go", symbol: "func (s *Shell) followSettingsSurface() {" },
+      { file: "packages/workbench-mygo/src/settings_surface.go", symbol: "func (s *Shell) drawSettingsSeat(c *ui.Context, height float32) {" },
+      { file: "packages/host/go/src/modals.go", symbol: "func IsSettingsSurface(surface string) bool {" },
+      { file: "packages/host/rust/src/modals.rs", symbol: "pub fn is_settings_surface(surface: &str) -> bool {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/settings_surface_test.go", id: "TestThePluginPageShowsTheSettingsViewOfItsPluginAsASettingsSurface" },
+      { file: "packages/workbench-mygo/tests/settings_surface_test.go", id: "TestAPressOnTheSettingsSurfaceGivesItTheKeyboard" },
+      { file: "packages/workbench-mygo/tests/settings_surface_test.go", id: "TestAStoppedSettingsViewIsRemovedUntilItsPageIsShownAgain" },
+      { file: "packages/host/go/tests/modals_test.go", id: "TestTheHostKnowsTheSettingsSurfaceOfAPlugin" },
+      { file: "packages/host/go/src/modals_workbench_test.go", id: "TestTheBackgroundOfTheSettingsWindowLeavesTheSettingsSurfaceUnblurred" },
+      { file: "packages/host/rust/tests/modals_test.rs", id: "the_host_knows_the_settings_surface_of_a_plugin" },
+      { file: "packages/host/rust/src/documents_test.rs", id: "the_background_of_the_settings_window_leaves_the_settings_surface_unblurred" },
+    ],
+    expected: "The mygo settings window shows the settings view of a plugin as the settings surface settings/<plugin> at its seat in the plugin page, and the hosts leave the settings surface unblurred.",
     levels: ["unit"],
   },
   {

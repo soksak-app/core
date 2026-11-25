@@ -39,3 +39,12 @@ func TestTheHostMarksTheSurfaceHostOfEachDialogSurface(t *testing.T) {
 		}
 	}
 }
+
+// F1128-2: the settings surface of a plugin has the id settings/<plugin> (docs/spec/plugins.md#settings-views).
+func TestTheHostKnowsTheSettingsSurfaceOfAPlugin(t *testing.T) {
+	for surface, want := range map[string]bool{"settings/probe": true, "tab-a": false, "dialog/probe/edit": false, "settings": false, "settings/probe/x": false, "space-b/left/probe.section": false} {
+		if got := host.IsSettingsSurface(surface); got != want {
+			t.Fatalf("IsSettingsSurface(%q) = %v, want %v", surface, got, want)
+		}
+	}
+}

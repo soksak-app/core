@@ -1054,6 +1054,16 @@ fn view_stop_reason_of_a_dialog_names_the_dialog() {
     );
 }
 
+// F1128-2: the stop reason of a settings surface states that the view is created again when the settings page of its plugin is shown
+// again (docs/spec/plugins.md#settings-views).
+#[test]
+fn view_stop_reason_of_a_settings_surface_names_the_settings_page() {
+    assert_eq!(
+        view_stop_reason("settings/probe"),
+        "the view failed 4 times within 300 seconds and is created again when the settings page of the plugin is shown again"
+    );
+}
+
 // contract: view.restart.limit-shows-error
 #[test]
 fn view_stop_event_names_the_surface_plugin_and_reason() {

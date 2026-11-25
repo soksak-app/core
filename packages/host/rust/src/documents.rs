@@ -3074,8 +3074,13 @@ fn set_regions_background(
     document: impl Fn(Handle, bool) -> Result<(), String>,
     image: impl Fn(Handle, bool) -> Result<(), String>,
 ) {
-    // The page and the regions of the dialog surface are the dialog, which no dialog blurs.
-    let blurred = |surface: &str| enabled && dialog.as_deref() != Some(surface);
+    // The page and the regions of the dialog surface are the dialog, and those of the settings surface a part of the settings window,
+    // which no dialog blurs (docs/spec/native-modals.md#settings-surface).
+    let blurred = |surface: &str| {
+        enabled
+            && dialog.as_deref() != Some(surface)
+            && !crate::modals::is_settings_surface(surface)
+    };
     for (handle, key) in documents {
         log_failure("document background", document(handle, blurred(&key.0)));
     }

@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1128-2: The mygo settings window shows the settings view of a plugin on its plugin page as the settings surface `settings/<plugin>`, and the hosts leave it unblurred.
 - F1128-1: The plugin.json readers accept `settingsView` and the installer refuses a release without its page.
 - F1195: The specification states the settings view of a plugin, its surface, its seat in the plugin page of the settings window and its place above the settings modal.
 - F1194-1: The page workbench withdraws the error of a failed tab state or tab session write after the next write of the same store succeeds, as the mygo workbench does.

@@ -486,6 +486,10 @@ func (s *Shell) surfacesState() ([]any, error) {
 			entry.Kind = "dialog"
 			entry.Dialog = held.dialog
 		}
+		if s.isSettingsSurface(id) {
+			entry.Composition = optionalText("view")
+			entry.Kind = "settings"
+		}
 		status = append(status, entry)
 	}
 	for _, row := range s.unloadedSections() {

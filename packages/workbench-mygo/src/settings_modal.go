@@ -123,6 +123,8 @@ type settingsRow struct {
 type settingsGroup struct {
 	name, text string
 	rows       []settingsRow
+	// view tells that the seat of the settings view of the plugin stands below the rows (docs/spec/settings.md#플러그인).
+	view bool
 }
 
 // settingsModel is the card: its section buttons, its scope buttons, the folder of the project scope and its groups.
@@ -150,6 +152,15 @@ type settingsWindow struct {
 	scroll          ui.ScrollState
 	scrollKey       string
 	drafts          map[string]string
+	// viewPage is the plugin whose settings view the last frame showed, viewStopped tells that its view stopped its restarts, and viewKeys
+	// that a press gave the settings surface the keyboard (docs/spec/plugins.md#settings-views).
+	viewPage    string
+	viewStopped bool
+	viewKeys    bool
+	// paneBounds is the pane in the last frame, in window DIPs, and paneHeight the height of its visible box, which the seat of a settings
+	// view takes.
+	paneBounds ui.Rect
+	paneHeight float32
 }
 
 func newSettingsWindow() settingsWindow {
@@ -600,6 +611,9 @@ func (s *Shell) buildPluginPage(b *settingsBuilder, plugin *LoadedPlugin) error 
 		rows = []settingsRow{{description: "이 플러그인에는 설정이 없습니다."}}
 	}
 	b.group("설정", plugin.Name+" 플러그인이 선언한 설정.", rows...)
+	if unit := s.units[plugin.ID]; unit != nil && unit.SettingsView != nil {
+		b.model.groups[len(b.model.groups)-1].view = true
+	}
 	ids := make([]string, len(plugin.Sections))
 	for i, section := range plugin.Sections {
 		ids[i] = section.ID

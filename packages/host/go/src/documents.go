@@ -1114,12 +1114,13 @@ func (s *Surfaces) setDocumentsBackground(enabled bool) {
 	s.mu.Lock()
 	dialog := s.dialogSurface
 	s.mu.Unlock()
-	// The page and the regions of the dialog surface are the dialog, which no dialog blurs.
+	// The page and the regions of the dialog surface are the dialog, and those of the settings surface a part of the settings window,
+	// which no dialog blurs (docs/spec/native-modals.md#settings-surface).
 	for key, handle := range s.documents.Entries() {
-		system.SetDocumentBackground(handle, enabled && key.Surface != dialog)
+		system.SetDocumentBackground(handle, enabled && key.Surface != dialog && !IsSettingsSurface(key.Surface))
 	}
 	for key, handle := range s.images.Entries() {
-		system.SetImageBackground(handle, enabled && key.Surface != dialog)
+		system.SetImageBackground(handle, enabled && key.Surface != dialog && !IsSettingsSurface(key.Surface))
 	}
 }
 

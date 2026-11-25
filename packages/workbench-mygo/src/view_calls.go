@@ -401,6 +401,15 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 			answer(map[string]any{"kind": declaration.Kind, "regions": nonNil(declaration.Regions), "overlays": []string{}}, nil)
 			return nil
 		}
+		// The view of a settings surface has the composition of the settings view of its plugin (docs/spec/plugins.md#settings-views).
+		if s.isSettingsSurface(call.Surface) {
+			var declaration surfaceDeclaration
+			if err := json.Unmarshal(s.settingsView.surface.composition, &declaration); err != nil {
+				return fmt.Errorf("settings view of %s: composition: %w", s.settingsView.plugin, err)
+			}
+			answer(map[string]any{"kind": declaration.Kind, "regions": nonNil(declaration.Regions), "overlays": []string{}}, nil)
+			return nil
+		}
 		answer(map[string]any{"kind": unit.Declaration.Kind, "regions": nonNil(unit.Declaration.Regions), "overlays": nonNil(unit.Declaration.Overlays)}, nil)
 	case "composition.place":
 		fields, err := viewFields[struct {
@@ -1388,6 +1397,10 @@ func (s *Shell) viewStopped(data []any) {
 	if s.dialog != nil && s.dialog.id() == event.Surface {
 		s.failDialog(event.Reason)
 	}
+	// A settings surface whose view stopped its restarts is removed until its page is shown again (docs/spec/plugins.md#settings-views).
+	if s.isSettingsSurface(event.Surface) {
+		s.failSettingsSurface(event.Reason)
+	}
 	s.options.Invalidate()
 }
 
@@ -1414,7 +1427,7 @@ func (s *Shell) sidecarFailed(data []any) {
 
 // surfacePressed is the press of a pointer on a surface.
 func (s *Shell) surfacePressed(data []any) {
-	if len(data) != 1 || s.plane == nil {
+	if len(data) != 1 {
 		return
 	}
 	surface, err := decode[string](data[0])
