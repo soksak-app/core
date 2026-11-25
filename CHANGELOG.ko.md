@@ -5,6 +5,7 @@
 
 ## 2026-11-25
 
+- F1184: mygo의 chrome test는 새 brand mark의 중심을 읽는다.
 - F1181: presentation의 Go host test는 Rust test처럼 configuration이 발급한 generation을 보낸다.
 - F1180: Go host의 generation counter는 Rust file의 counterpart인 `images.go`로, 그 test는 `images_test.go`로 옮겼다. F1173과 F1175는 test를 link하고 Rust host의 clock default는 이유를 쓰므로 CI의 structure check가 통과한다.
 - F1179: F1173의 검증은 더 이상 `staleGeneration` 답이 없다는 것을 근거로 들지 않는다. 그 검증의 VT service 0.0.48은 그 답을 줄 수 없다.

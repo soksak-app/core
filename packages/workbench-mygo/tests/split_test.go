@@ -955,8 +955,9 @@ func TestTheChromeBarHoldsTheLogoAndTheSwitchesOfThePage(t *testing.T) {
 	logo := f.box("core.brand", "")
 	image := f.tester.Image()
 	scale := float32(image.Bounds().Dx()) / 1200
-	tile := image.RGBAAt(int((logo.X+logo.H/8)*scale), int((logo.Y+logo.H/2)*scale))
-	if want := (color.RGBA{0x16, 0x18, 0x1d, 255}); tile != want {
+	// The centre of the square mark lies on its green face, between the prompt and the mouth (packages/workbench/workbench.json brand-logo).
+	tile := image.RGBAAt(int((logo.X+logo.H/2)*scale), int((logo.Y+logo.H/2)*scale))
+	if want := (color.RGBA{0x1f, 0xe3, 0x6e, 255}); tile != want {
 		t.Fatalf("the tile of the logo is %v, want %v", tile, want)
 	}
 	left, _ := settings()["left"].(bool)
