@@ -496,6 +496,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1167",
+    implementation: [
+      { file: "packages/workbench-mygo/src/view_calls.go", symbol: "if s.dialog != nil && s.dialog.id() == call.Surface {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/dialog_surface_test.go", id: "TestTheViewOfADialogReadsTheCompositionOfTheDialog" },
+    ],
+    expected: "The view of an open dialog on the mygo host reads the kind and the regions of its dialog and no overlays.",
+    levels: ["unit"],
+  },
+  {
     id: "F1163",
     implementation: [
       { file: "packages/plugin-api/index.js", symbol: "function checkDialogs(where, dialogs, sidecars) {" },

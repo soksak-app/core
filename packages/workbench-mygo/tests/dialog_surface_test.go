@@ -148,3 +148,19 @@ func TestADialogSurfaceHasTheRegionsOfItsDeclaration(t *testing.T) {
 		t.Fatalf("the dialog surface has the composition %s, want %s", got, want)
 	}
 }
+
+// The view of a dialog reads the composition of the dialog, not the one of the tab surface of its plugin, so the document regions that
+// the dialog declares can be created in the dialog page.
+func TestTheViewOfADialogReadsTheCompositionOfTheDialog(t *testing.T) {
+	document := strings.Replace(installedDocument, `"surface": {"menu": [{"title": "닫기"`,
+		`"dialogs": {"edit": {"page": "ui/edit.html", "regions": [{"name": "page", "kind": "document", "input": "native"}]}}, "surface": {"menu": [{"title": "닫기"`, 1)
+	f, stored := surfaceShellOf(t, document)
+	opener := pluginSurface(t, stored, "textprobe")
+	dialogCall(f, opener, 5, "runtime.dialog.open", map[string]any{"name": "edit", "params": nil})
+	dialogCall(f, dialogSurfaceID, 6, "composition.declaration", nil)
+	reply := replyOf(stored, dialogSurfaceID, 6)
+	got, _ := json.Marshal(reply["result"])
+	if want := `{"kind":"view","overlays":[],"regions":[{"input":"native","kind":"document","name":"page"}]}`; reply == nil || reply["error"] != nil || string(got) != want {
+		t.Fatalf("the dialog view read the composition %v %s, want %s", reply, got, want)
+	}
+}

@@ -391,6 +391,16 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 	}
 	switch call.Command {
 	case "composition.declaration":
+		// The view of a dialog has the composition of its dialog, with the regions that the dialog declares and no overlays, not the one
+		// of the tab surface of its plugin (docs/spec/plugins.md#dialogs).
+		if s.dialog != nil && s.dialog.id() == call.Surface {
+			var declaration surfaceDeclaration
+			if err := json.Unmarshal(s.dialog.surface.composition, &declaration); err != nil {
+				return fmt.Errorf("dialog %s of %s: composition: %w", s.dialog.name, s.dialog.plugin, err)
+			}
+			answer(map[string]any{"kind": declaration.Kind, "regions": nonNil(declaration.Regions), "overlays": []string{}}, nil)
+			return nil
+		}
 		answer(map[string]any{"kind": unit.Declaration.Kind, "regions": nonNil(unit.Declaration.Regions), "overlays": nonNil(unit.Declaration.Overlays)}, nil)
 	case "composition.place":
 		fields, err := viewFields[struct {
