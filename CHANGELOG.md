@@ -5,6 +5,7 @@
 
 ## 2026-11-25
 
+- F1176: The application icon and the brand mark of the title bar show the new brand mark.
 - F1175: A window close and a quit keep the terminal sessions of the layout in the persistent service and close only the sessions in sidecars on standard input and output; both hosts sent `closed` for every surface of the closed window, so a quit ended some sessions and restored tabs started new shells.
 - F1174: A resize of the window with a restored project of 16 terminal cards moves the layout to the new size, because no region stays blank after F1173.
 - F1173: The host issues image generations from one counter of the process, and each generation is the larger of the previous one plus 1 and the boot clock in microseconds, so a restart or a move to another window no longer gives a surface a lower generation than the persistent VT service keeps, which left the region blank without an error.

@@ -5,6 +5,7 @@
 
 ## 2026-11-25
 
+- F1176: application icon과 title bar의 brand mark가 새 brand mark를 보여 준다.
 - F1175: window close와 종료는 persistent service에 있는 layout의 terminal session을 유지하고 standard input and output sidecar의 session만 닫는다. 이전에는 두 host가 닫힌 window의 모든 surface에 `closed`를 보내서 종료가 일부 session을 끝냈고 복원된 tab은 새 shell을 시작했다.
 - F1174: terminal card 16개가 있는 복원된 project에서 window를 resize하면 layout이 새 크기로 옮겨간다. F1173 이후 빈 region이 남지 않기 때문이다.
 - F1173: host는 image generation을 process 하나의 counter에서 발급하며, 각 generation은 이전 generation에 1을 더한 값과 boot clock의 microsecond 값 중 큰 값이다. 그래서 재시작이나 다른 window로의 이동이 더 이상 surface에 persistent VT service가 가진 것보다 낮은 generation을 주지 않는다. 이전에는 그 때문에 region이 오류 없이 빈 채로 남았다.
