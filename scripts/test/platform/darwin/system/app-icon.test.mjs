@@ -36,5 +36,13 @@ test("each application bundle holds the compiled icon in the light, dark and tin
       .map((rendition) => rendition.Appearance)
       .sort();
     assert.deepEqual(appearances, ["ISAppearanceTintable", "NSAppearanceNameAqua", "NSAppearanceNameDarkAqua"], `the ${application} icon`);
+    // The light appearance has the white background of the light brand mark and the dark appearance the #0E1116 background of
+    // the dark brand mark; actool writes each solid fill as an srgb color of the catalog.
+    const fills = renditions
+      .filter((rendition) => rendition.AssetType === "Color" && rendition.Colorspace === "srgb")
+      .map((rendition) => rendition["Color components"].slice(0, 3).map((value) => Math.round(value * 1000) / 1000));
+    for (const [name, fill] of [["white", [1, 1, 1]], ["#0E1116", [0.055, 0.067, 0.086]]]) {
+      assert.ok(fills.some((components) => components.every((value, index) => value === fill[index])), `the ${application} icon has no ${name} fill: ${JSON.stringify(fills)}`);
+    }
   }
 });

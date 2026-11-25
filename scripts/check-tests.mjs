@@ -496,6 +496,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1186",
+    implementation: [
+      { file: "apps/gpuikit/platform/darwin/AppIcon.icon/icon.json", symbol: '"fill-specializations" : [' },
+      { file: "apps/mygo/platform/darwin/AppIcon.icon/icon.json", symbol: '"fill-specializations" : [' },
+      { file: "apps/tauriv2/platform/darwin/AppIcon.icon/icon.json", symbol: '"fill-specializations" : [' },
+      { file: "apps/wailsv3/platform/darwin/AppIcon.icon/icon.json", symbol: '"fill-specializations" : [' },
+    ],
+    tests: [
+      { file: "scripts/test/platform/darwin/system/app-icon.test.mjs", id: "each application bundle holds the compiled icon in the light, dark and tinted appearances" },
+    ],
+    expected: "The light appearance of the application icon is the light brand mark on white and the dark appearance the dark brand mark on #0E1116.",
+    levels: ["native"],
+  },
+  {
     id: "F1178",
     implementation: [
       { file: "scripts/platform/darwin/prepare-app-bundle.mjs", symbol: "export function compileAppIcon(staging, application, actool) {" },

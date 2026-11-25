@@ -5,6 +5,7 @@
 
 ## 2026-11-25
 
+- F1186: The application icon shows the light brand mark in the light appearance and the dark brand mark in the dark appearance.
 - F1185: The stop scenarios of the stall watch name the events that the watch stored when the stop does not return.
 - F1183: The release jobs and the job of the script system tests run on `macos-26`, whose selected Xcode compiles the Icon Composer source of the application icon.
 - F1184: The chrome test of mygo reads the centre of the new brand mark.

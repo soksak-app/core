@@ -5,6 +5,7 @@
 
 ## 2026-11-25
 
+- F1186: application icon은 light appearance에서 light brand mark를, dark appearance에서 dark brand mark를 보인다.
 - F1185: stop이 돌아오지 않을 때 stall watch의 stop scenario는 watch가 저장한 event를 밝힌다.
 - F1183: release job과 script system test job은 선택된 Xcode가 application icon의 Icon Composer 원본을 compile하는 `macos-26`에서 실행된다.
 - F1184: mygo의 chrome test는 새 brand mark의 중심을 읽는다.
