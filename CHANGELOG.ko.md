@@ -5,6 +5,7 @@
 
 ## 2026-11-25
 
+- F1177-1: core version은 모든 package와 crate manifest, Info.plist, Tauri file, Go와 pkg-config 선언, Cargo.lock의 workspace 항목 여섯 개, scripts/check-versions.mjs에서 0.0.56이다.
 - F1176: application icon과 title bar의 brand mark가 새 brand mark를 보여 준다.
 - F1175: window close와 종료는 persistent service에 있는 layout의 terminal session을 유지하고 standard input and output sidecar의 session만 닫는다. 이전에는 두 host가 닫힌 window의 모든 surface에 `closed`를 보내서 종료가 일부 session을 끝냈고 복원된 tab은 새 shell을 시작했다.
 - F1174: terminal card 16개가 있는 복원된 project에서 window를 resize하면 layout이 새 크기로 옮겨간다. F1173 이후 빈 region이 남지 않기 때문이다.

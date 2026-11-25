@@ -5,6 +5,7 @@
 
 ## 2026-11-25
 
+- F1177-1: The core version is 0.0.56 in every package and crate manifest, Info.plist, Tauri file, Go and pkg-config declaration, the six workspace entries of Cargo.lock and scripts/check-versions.mjs.
 - F1176: The application icon and the brand mark of the title bar show the new brand mark.
 - F1175: A window close and a quit keep the terminal sessions of the layout in the persistent service and close only the sessions in sidecars on standard input and output; both hosts sent `closed` for every surface of the closed window, so a quit ended some sessions and restored tabs started new shells.
 - F1174: A resize of the window with a restored project of 16 terminal cards moves the layout to the new size, because no region stays blank after F1173.
