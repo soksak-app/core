@@ -693,12 +693,15 @@ func (s *Sidebars) sizeSection(value sectionSizeParam) error {
 		if err := decoder.Decode(&height); err != nil {
 			return fmt.Errorf("section heights: %w", err)
 		}
-		number, _ := height.(json.Number)
-		entries = append(entries, entry{key.(string), number})
-		if number == "" {
-			encoded, _ := json.Marshal(height)
+		number, isNumber := height.(json.Number)
+		if !isNumber {
+			encoded, err := json.Marshal(height)
+			if err != nil {
+				return fmt.Errorf("section heights: %w", err)
+			}
 			return fmt.Errorf("section height must be an integer from %d to %d, got %s", sectionHeightMin, sectionHeightMax, encoded)
 		}
+		entries = append(entries, entry{key.(string), number})
 	}
 	if len(entries) == 0 {
 		return fmt.Errorf("section heights must name at least one section, got {}")

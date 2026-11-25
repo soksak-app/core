@@ -256,9 +256,10 @@ function bindSectionDivider(divider, record, above, below) {
     event.stopPropagation();
     divider.setPointerCapture(event.pointerId);
     const choice = choiceOf(sidebar);
-    // default: a section that was not dragged has its declared height.
     const open = record.entries.filter((entry) => !choice.folded.has(entry.section.id)).map((entry) => ({
-      id: entry.section.id, height: entry.body.getBoundingClientRect().height, fills: (choice.sizes.get(entry.section.id) ?? entry.section.height) === "fill",
+      id: entry.section.id, height: entry.body.getBoundingClientRect().height,
+      // default: a section that was not dragged has its declared height.
+      fills: (choice.sizes.get(entry.section.id) ?? entry.section.height) === "fill",
     }));
     const index = open.findIndex((entry) => entry.id === below.section.id);
     const startY = event.clientY;
