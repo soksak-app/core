@@ -363,7 +363,11 @@ fn stop_waits(config: &Path) -> Result<(), String> {
     match event.recv_timeout(DEADLINE) {
         Ok(Event::Returned) => {}
         Ok(Event::Waiting) | Err(_) => {
-            return Err("the stop of the watch did not return after the sample ended".to_string());
+            // The stored events show whether the sample ended: a missing host.stall.sampled is a sample that still runs.
+            return Err(format!(
+                "the stop of the watch did not return after the sample ended; the watch stored {:?}",
+                run.joined()
+            ));
         }
     }
     if run.joined() != "host.stall,host.stall.sampled" {

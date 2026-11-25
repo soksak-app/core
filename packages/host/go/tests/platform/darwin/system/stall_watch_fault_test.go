@@ -197,7 +197,8 @@ func stopWaitsScenario(config string) error {
 	select {
 	case <-returned:
 	case <-time.After(stallScenarioDeadline):
-		return errors.New("the stop of the watch did not return after the sample ended")
+		// The stored events show whether the sample ended: a missing host.stall.sampled is a sample that still runs.
+		return fmt.Errorf("the stop of the watch did not return after the sample ended; the watch stored %q", run.joined())
 	}
 	if got := run.joined(); got != "host.stall,host.stall.sampled" {
 		return fmt.Errorf("the stop returned with the events %q, want the stall and its sample", got)
