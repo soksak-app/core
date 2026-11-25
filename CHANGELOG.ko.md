@@ -3,6 +3,10 @@
 
 [English](CHANGELOG.md)
 
+## 2026-11-26
+
+- F1192: mygo 창의 닫기와 그에 따른 application 종료는 표면이 처리하는 명령을 기다리지 않으므로, 몇 시간을 기다리는 plugin 명령이 더는 종료를 붙잡지 않는다.
+
 ## 2026-11-25
 
 - F1189-1: application icon source의 layer image는 `soksak-light.svg`와 `soksak-dark.svg`다.

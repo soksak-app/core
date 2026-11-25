@@ -156,3 +156,28 @@ func lastPlacementHolds(stored *surfaceHost, id string) bool {
 	}
 	return false
 }
+
+// The close of a window waits for no command that a surface of the window serves: the close ends the surface, which ends that command
+// with surface-closed, so a command of a plugin that waits for hours, as a relay of a conversation does, holds no close and no quit of
+// the application (docs/spec/exposure.md#registration).
+func TestTheCloseOfAWindowWaitsForNoCommandThatASurfaceServes(t *testing.T) {
+	f := newTabShell(t, &storedHost{installed: `{"plugins":[{"id":"notes","package":"notes","version":"1.0.0","folder": "/installed/plugin", "manifest":{"id":"notes","name":"Notes",
+		"description":"notes","mark":"N","icon":"<path d=\"M1 1h14\"/>","surface":{"composition":{"kind":"view","page":"n.html"}},
+		"exposes":{"commands":[{"name":"notes.send","description":"sends","params":{"type":"object","properties":{}},"result":{"type":"null"}}]}}}]}`,
+		projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"))}})
+	f.open(t)
+	f.viewCalled("tab-aaaaaa", "runtime.command.register", map[string]any{"name": "notes.send"})
+	f.host.holdForwards = newGate()
+	t.Cleanup(f.host.holdForwards.open)
+	f.shell.Registry().Reply("command.run", json.RawMessage(`{"name":"notes.send","params":{}}`), nil, func(any, error) {})
+	f.settle()
+	if len(f.host.forwards) != 1 {
+		t.Fatalf("the command was not forwarded to its surface: %v", f.host.forwards)
+	}
+	f.host.geometry = map[string]any{"x": 10, "y": 20, "width": 900, "height": 700}
+	f.shell.Event("project-close-request", nil)
+	f.settle()
+	if !f.host.called("windowClose") {
+		t.Fatalf("the close waited for the command that its surface serves; the calls are %v", f.host.calls)
+	}
+}

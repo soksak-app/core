@@ -3,6 +3,10 @@
 
 [한국어](CHANGELOG.ko.md)
 
+## 2026-11-26
+
+- F1192: The close of a mygo window, and so the quit of the application, waits for no command that a surface serves, so a plugin command that waits for hours no longer holds the quit.
+
 ## 2026-11-25
 
 - F1189-1: The layer images of the application icon source are `soksak-light.svg` and `soksak-dark.svg`.

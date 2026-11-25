@@ -127,14 +127,22 @@ func (s *Shell) followCommand(name string, answer func(value any, err error)) fu
 	requests, writes := s.frameRequests.Load(), s.settingsIssued
 	s.commands++
 	number := s.commands
-	if s.answering == nil {
-		s.answering = map[int]string{}
+	// A command that a surface serves is no answer that the window owes: the close of the window ends its surface, which ends the
+	// command with surface-closed, so a close waits for none of them, and a command of a plugin that waits for hours holds no close
+	// and no quit (afterCommands, docs/spec/exposure.md#registration).
+	owed := !registeredBySurface(name)
+	if owed {
+		if s.answering == nil {
+			s.answering = map[int]string{}
+		}
+		s.answering[number] = name
 	}
-	s.answering[number] = name
 	answered := func(value any, err error) {
 		answer(value, err)
-		delete(s.answering, number)
-		s.endAnswerWaits()
+		if owed {
+			delete(s.answering, number)
+			s.endAnswerWaits()
+		}
 	}
 	once := false
 	return func(value any, err error) {
