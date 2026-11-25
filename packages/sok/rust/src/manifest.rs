@@ -21,7 +21,7 @@ const SET_TITLE_MAX: usize = 40;
 const MENU_TITLE_MAX: usize = 40;
 
 /// The members that plugin.json may hold (validateManifest).
-const TOP_LEVEL_KEYS: [&str; 20] = [
+const TOP_LEVEL_KEYS: [&str; 21] = [
     "id",
     "name",
     "description",
@@ -38,6 +38,7 @@ const TOP_LEVEL_KEYS: [&str; 20] = [
     "data",
     "sidebars",
     "dialogs",
+    "settingsView",
     "extends",
     "contributes",
     "sessions",
@@ -1085,6 +1086,32 @@ fn check_dialogs(where_: &str, raw: &Value, sidecars: &[&str]) -> Result<(), Str
     Ok(())
 }
 
+/// Checks the settings view of plugin.json (checkSettingsView of the reader): {page, regions?}, whose page is a page of the
+/// plugin as the page of a view composition and whose regions are the regions of a view composition
+/// (docs/spec/plugins.md#settings-views).
+fn check_settings_view(where_: &str, raw: &Value, sidecars: &[&str]) -> Result<(), String> {
+    let Some(view) = raw.as_object().filter(|view| {
+        view.contains_key("page") && view.keys().all(|key| key == "page" || key == "regions")
+    }) else {
+        return Err(format!("{where_}: settingsView must be {{page, regions?}}"));
+    };
+    if !is_view_page(view.get("page")) {
+        return Err(format!(
+            "{where_}: settingsView page must be a path inside the plugin release that ends in .html"
+        ));
+    }
+    let Some(raw) = view.get("regions") else {
+        return Ok(());
+    };
+    let regions = raw
+        .as_array()
+        .filter(|list| !list.is_empty())
+        .ok_or_else(|| {
+            format!("{where_}: settingsView composition: regions must be a non-empty array")
+        })?;
+    check_regions(&format!("{where_}: settingsView"), regions, &[], sidecars)
+}
+
 /// Checks the regions and the overlays of a view (checkRegions of the reader).
 fn check_regions(
     where_: &str,
@@ -1858,6 +1885,9 @@ pub fn validate_manifest(value: &Value) -> Result<(), String> {
             return Err(format!("{where_}: dialogs requires a surface or sections"));
         }
         check_dialogs(&where_, raw, &sidecars)?;
+    }
+    if let Some(raw) = manifest.get("settingsView") {
+        check_settings_view(&where_, raw, &sidecars)?;
     }
     if let Some(raw) = manifest.get("extends") {
         if !has("surface") && !has("sections") {

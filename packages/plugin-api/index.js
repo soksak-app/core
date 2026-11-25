@@ -516,6 +516,18 @@ function checkDialogs(where, dialogs, sidecars) {
   }
 }
 
+// checkSettingsView checks the settings view of plugin.json: {page, regions?}, whose page is a page of the plugin as the page of a
+// view composition and whose regions are the regions of a view composition (docs/spec/plugins.md#settings-views).
+function checkSettingsView(where, view, sidecars) {
+  if (!isObject(view) || !Object.hasOwn(view, "page") || Object.keys(view).some((key) => key !== "page" && key !== "regions")) {
+    throw new Error(`${where}: settingsView must be {page, regions?}`);
+  }
+  if (!isViewPage(view.page)) throw new Error(`${where}: settingsView page must be a path inside the plugin release that ends in .html`);
+  if (view.regions === undefined) return;
+  if (!Array.isArray(view.regions) || view.regions.length === 0) throw new Error(`${where}: settingsView composition: regions must be a non-empty array`);
+  checkRegions(`${where}: settingsView`, view.regions, [], sidecars);
+}
+
 /**
  * Checks an unload declaration of a surface or a section: {format, maxBytes} with positive integers
  * (docs/spec/plugins.md#memory-saver). label names the owner in the messages.
@@ -813,7 +825,7 @@ export function validateManifest(manifest) {
     if (manifest[member] !== undefined) throw new Error(`plugin ${manifest.id}: ${member} is removed; a section is a view of the plugin`);
   }
   only("plugin.json", manifest, ["id", "name", "description", "mark", "icon", "surface", "sections", "preview", "dependencies", "background", "programs", "exposes", "settings",
-    "data", "sidebars", "dialogs", "extends", "contributes", "events", "sessions"]);
+    "data", "sidebars", "dialogs", "settingsView", "extends", "contributes", "events", "sessions"]);
   validateEventsPath("plugin.json", manifest.events);
   const { id } = manifest;
   if (typeof id !== "string" || !ID.test(id)) throw new Error(`plugin.json: invalid id ${id}`);
@@ -855,6 +867,7 @@ export function validateManifest(manifest) {
     if (manifest.surface === undefined && manifest.sections === undefined) throw new Error(`${where}: dialogs requires a surface or sections`);
     checkDialogs(where, manifest.dialogs, manifestSidecars(manifest));
   }
+  if (manifest.settingsView !== undefined) checkSettingsView(where, manifest.settingsView, manifestSidecars(manifest));
   if (manifest.extends !== undefined) {
     if (manifest.surface === undefined && manifest.sections === undefined) throw new Error(`${where}: extends requires a surface or sections`);
     checkExtends(where, manifest.extends);

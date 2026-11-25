@@ -496,6 +496,25 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1128-1",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "function checkSettingsView(where, view, sidecars) {" },
+      { file: "packages/sok/go/src/manifest.go", symbol: "func checkSettingsView(where string, raw any, sidecars []string) error {" },
+      { file: "packages/sok/rust/src/manifest.rs", symbol: "fn check_settings_view(where_: &str, raw: &Value, sidecars: &[&str]) -> Result<(), String> {" },
+      { file: "packages/sok/go/src/registry.go", symbol: "add(\"settingsView page\", view[\"page\"])" },
+      { file: "packages/sok/rust/src/registry.rs", symbol: "\"settingsView page\".into()," },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/manifest-validation.test.mjs", id: "manifest validation" },
+      { file: "packages/sok/go/tests/manifest_cases_test.go", id: "TestPluginInstallReplaysTheManifestCases" },
+      { file: "packages/sok/rust/tests/manifest_cases_test.rs", id: "plugin_install_replays_the_manifest_cases" },
+      { file: "packages/sok/go/tests/plugins_test.go", id: "TestPluginInstallRefusesAReleaseWithoutTheViewPage" },
+      { file: "packages/sok/rust/tests/plugins_test.rs", id: "plugin_install_refuses_a_release_without_the_view_page" },
+    ],
+    expected: "The three plugin.json readers accept a settingsView {page, regions?} and refuse each other form with the same text, and the installer refuses a release without its page.",
+    levels: ["unit"],
+  },
+  {
     id: "F1194",
     implementation: [
       { file: "packages/workbench-mygo/src/tab_store.go", symbol: 's.ports.Stored("tab state " + tab)' },
