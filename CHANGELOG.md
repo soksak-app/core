@@ -5,6 +5,8 @@
 
 ## 2026-11-25
 
+- F1185: The stop scenarios of the stall watch name the events that the watch stored when the stop does not return.
+- F1183: The release jobs and the job of the script system tests run on `macos-26`, whose selected Xcode compiles the Icon Composer source of the application icon.
 - F1184: The chrome test of mygo reads the centre of the new brand mark.
 - F1181: The Go host tests of presentation send the generation that the configuration issued, as the Rust tests do.
 - F1180: The generation counter of the Go host moved into `images.go` and its tests into `images_test.go`, the counterparts of the Rust files; F1173 and F1175 link their tests, and the clock default of the Rust host states its reason, so the structure checks of CI pass.
