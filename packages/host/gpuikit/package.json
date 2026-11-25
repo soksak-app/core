@@ -1,6 +1,6 @@
 {
   "name": "@soksak/host-gpuikit",
-  "version": "0.0.57",
+  "version": "0.0.58",
   "private": true,
   "description": "GPUI framework adapter: the run of the GPUI application and the framework port of the Rust language host library."
 }

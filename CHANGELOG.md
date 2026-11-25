@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1191-1: The core version is 0.0.58 in every package and crate manifest, Info.plist, Tauri file, Go and pkg-config declaration, the six workspace entries of Cargo.lock and scripts/check-versions.mjs.
 - F1190-1: The toast of a restored tab whose session did not return names the tab by its stored title and states that its session ended before the restart, in mygo and in the page workbench.
 - F1192: The close of a mygo window, and so the quit of the application, waits for no command that a surface serves, so a plugin command that waits for hours no longer holds the quit.
 
