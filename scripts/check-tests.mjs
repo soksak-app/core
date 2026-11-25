@@ -496,6 +496,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1189",
+    implementation: [
+      { file: "apps/gpuikit/platform/darwin/AppIcon.icon/icon.json", symbol: '"image-name-specializations" : [' },
+      { file: "apps/mygo/platform/darwin/AppIcon.icon/icon.json", symbol: '"image-name-specializations" : [' },
+      { file: "apps/tauriv2/platform/darwin/AppIcon.icon/icon.json", symbol: '"image-name-specializations" : [' },
+      { file: "apps/wailsv3/platform/darwin/AppIcon.icon/icon.json", symbol: '"image-name-specializations" : [' },
+    ],
+    tests: [
+      { file: "scripts/test/platform/darwin/system/app-icon.test.mjs", id: "each application bundle holds the compiled icon in the light, dark and tinted appearances" },
+    ],
+    expected: "The light appearance of the application icon is the light brand mark on #1FE36E and the dark appearance the dark brand mark on #0E1116.",
+    levels: ["native"],
+  },
+  {
     id: "F1187",
     implementation: [
       { file: "packages/workbench/plane.js", symbol: "if (tab.params?.session !== undefined) {" },
