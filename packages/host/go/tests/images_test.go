@@ -175,7 +175,7 @@ func TestAttachedImageIsPresented(t *testing.T) {
 			"height":     600,
 			"scale":      2.0,
 			"format":     "bgra8",
-			"generation": uint64(1),
+			"generation": configured.Generation,
 			"raster":     uint64(1),
 			"sequence":   1,
 		},
@@ -783,7 +783,7 @@ func TestEnvelopeFromTheAttachedSidecarIsPresented(t *testing.T) {
 		t.Fatalf("reserve failed: %v", err)
 	}
 	images.Set(key, unsafe.Pointer(&a))
-	configureImage(t, images, key, 800, 600, 2.0)
+	configured := configureImage(t, images, key, 800, 600, 2.0)
 
 	nonce := "AAAAAAAAAAAAAAAAAAAAAA=="
 	body := map[string]any{
@@ -798,7 +798,7 @@ func TestEnvelopeFromTheAttachedSidecarIsPresented(t *testing.T) {
 			"height":     600,
 			"scale":      2.0,
 			"format":     "bgra8",
-			"generation": uint64(1),
+			"generation": configured.Generation,
 			"raster":     uint64(1),
 			"sequence":   1,
 		},
@@ -848,7 +848,7 @@ func TestPresentationFailureIsReported(t *testing.T) {
 		t.Fatalf("reserve failed: %v", err)
 	}
 	images.Set(key, unsafe.Pointer(&a))
-	configureImage(t, images, key, 800, 600, 2.0)
+	configured := configureImage(t, images, key, 800, 600, 2.0)
 
 	nonce := "AAAAAAAAAAAAAAAAAAAAAA=="
 	body := map[string]any{
@@ -863,7 +863,7 @@ func TestPresentationFailureIsReported(t *testing.T) {
 			"height":     600,
 			"scale":      2.0,
 			"format":     "bgra8",
-			"generation": uint64(1),
+			"generation": configured.Generation,
 			"raster":     uint64(1),
 			"sequence":   1,
 		},

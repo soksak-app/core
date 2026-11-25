@@ -5,6 +5,7 @@
 
 ## 2026-11-25
 
+- F1181: The Go host tests of presentation send the generation that the configuration issued, as the Rust tests do.
 - F1180: The generation counter of the Go host moved into `images.go` and its tests into `images_test.go`, the counterparts of the Rust files; F1173 and F1175 link their tests, and the clock default of the Rust host states its reason, so the structure checks of CI pass.
 - F1179: The verification of F1173 no longer cites the absence of a `staleGeneration` answer, which the VT service 0.0.48 of that verification cannot give.
 - F1178: The build compiles the Icon Composer source `AppIcon.icon` of each application with `actool` into `Assets.car` and `AppIcon.icns`, so macOS shows the icon in the light, dark and tinted appearances at the size of other applications and without a frame.
