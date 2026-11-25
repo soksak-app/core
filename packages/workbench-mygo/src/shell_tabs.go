@@ -101,7 +101,6 @@ func (s *Shell) pluginOf(id string) *ShellPlugin {
 func (s *Shell) connectTabs(ports TabPorts) {
 	tabs := &shellTabs{ports: ports, sidecars: NewHostSidecars(s.calls, s.options.Report)}
 	s.tabs = tabs
-	failed := func(text string) { s.fail(errors.New(text)) }
 	// A timer of these parts does not outlive the window, whose host calls end with it.
 	tabs.after = func(milliseconds int64, run func()) (cancel func()) {
 		return ports.After(milliseconds, func() {
@@ -134,13 +133,13 @@ func (s *Shell) connectTabs(ports TabPorts) {
 			}
 			s.options.Invalidate()
 		},
-		Failed:       failed,
+		Failed:       func(text string) { s.fail(errors.New(text)) },
 		StateChanged: ports.Surfaces.ReportState,
 		Emit:         ports.Emit,
 		After:        tabs.after,
 	})
 	tabs.sessions = NewTabSessions(TabSessionPorts{Store: HostTabStore{s.calls}, Interaction: ports.Surfaces.Interaction, Tabs: ports.Surfaces.AttachedTabs,
-		Failed: failed, Emit: ports.Emit, After: tabs.after})
+		Failed: s.writeFailed, Stored: s.writeStored, Emit: ports.Emit, After: tabs.after})
 	tabs.background = NewBackgroundSessions(BackgroundPorts{
 		Ready:  func() bool { return tabs.shown },
 		Failed: func() bool { return tabs.failed },
@@ -167,6 +166,20 @@ func (s *Shell) connectTabs(ports TabPorts) {
 
 // openTabs opens the tab state store and runs next. A store that does not open is shown, and the memory saver then observes nothing,
 // because the mark kept and the label cache live in that store.
+// writeFailed shows the failed write of source, a tab state or a tab session, as an error of that source.
+func (s *Shell) writeFailed(source, text string) {
+	s.errors.ShowFrom(workbenchErrorPlace, source, text, "")
+	s.options.Invalidate()
+}
+
+// writeStored withdraws the error of the failed write of source after a write of source succeeds, because a display shows only the
+// current state (docs/spec/exposure.md#error-presentation).
+func (s *Shell) writeStored(source string) {
+	if s.errors.HideFrom(workbenchErrorPlace, source) {
+		s.options.Invalidate()
+	}
+}
+
 func (s *Shell) openTabs(next func()) {
 	if s.tabs == nil {
 		next()
@@ -174,7 +187,8 @@ func (s *Shell) openTabs(next func()) {
 	}
 	OpenTabStates(TabStatePorts{
 		Store:  HostTabStore{s.calls},
-		Failed: func(text string) { s.fail(errors.New(text)) },
+		Failed: s.writeFailed,
+		Stored: s.writeStored,
 		UnloadOf: func(id string) bool {
 			plugin := s.pluginOf(id)
 			return plugin != nil && plugin.Unload

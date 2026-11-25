@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1194: 한 tab의 tab state나 tab session 쓰기가 성공하면 같은 tab의 같은 store에서 실패한 쓰기의 error를 거둔다.
 - F1192-1: test inventory의 feature link가 F1192를 그 구현과 test에 잇는다.
 - F1191-1: core version은 모든 package와 crate manifest, Info.plist, Tauri 파일, Go와 pkg-config 선언, Cargo.lock의 workspace 항목 여섯 개, scripts/check-versions.mjs에서 0.0.58이다.
 - F1190-1: session이 돌아오지 않은 복원 탭의 toast는 저장된 title로 탭을 밝히고 그 session이 재시작 전에 끝났다고 말한다. mygo와 page workbench가 같다.

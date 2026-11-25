@@ -195,8 +195,10 @@ func CheckTabStateDocument(document json.RawMessage) (map[string]TabEntry, error
 // TabStatePorts is what the tab state store uses. Every port and every answer runs in a step of the main thread.
 type TabStatePorts struct {
 	Store TabStateStore
-	// Failed shows a failed write through the error display.
-	Failed func(text string)
+	// Failed shows a failed write of source through the error display, and Stored withdraws that error after a write of source
+	// succeeds, because a display shows only the current state (docs/spec/exposure.md#error-presentation).
+	Failed func(source, text string)
+	Stored func(source string)
 	// UnloadOf tells whether plugin declares surface.unload.
 	UnloadOf func(plugin string) bool
 	Emit     func(level, name string, fields map[string]any)
@@ -237,8 +239,9 @@ func (s *TabStates) put(tab string) {
 	s.writes.start()
 	s.ports.Store.TabStatePut(tab, entry, func(bytes int, err error) {
 		if err != nil {
-			s.ports.Failed(fmt.Sprintf("tab state of %s: %s", tab, err))
+			s.ports.Failed("tab state "+tab, fmt.Sprintf("tab state of %s: %s", tab, err))
 		} else {
+			s.ports.Stored("tab state " + tab)
 			s.ports.Emit("debug", "workbench.tab.state.stored", map[string]any{"tab": tab, "bytes": bytes})
 		}
 		s.writes.end()
@@ -364,8 +367,10 @@ type TabSessionPorts struct {
 	Interaction func(tab string, answer func(history map[string]string, err error))
 	// Tabs lists the tabs that have attached regions.
 	Tabs func() []string
-	// Failed shows a failed write through the error display.
-	Failed func(text string)
+	// Failed shows a failed write of source through the error display, and Stored withdraws that error after a write of source
+	// succeeds.
+	Failed func(source, text string)
+	Stored func(source string)
 	Emit   func(level, name string, fields map[string]any)
 	After  func(milliseconds int64, run func()) (cancel func())
 }
@@ -392,6 +397,9 @@ func NewTabSessions(ports TabSessionPorts) *TabSessions {
 func (s *TabSessions) put(tab string, regions map[string]TabRegionSession, answer func(err error)) {
 	s.writes.start()
 	s.ports.Store.TabSessionPut(tab, regions, func(bytes int, err error) {
+		if err == nil {
+			s.ports.Stored("tab session " + tab)
+		}
 		if err == nil && regions != nil {
 			s.ports.Emit("debug", "workbench.tab.session.stored", map[string]any{"tab": tab, "bytes": bytes})
 		}
@@ -442,7 +450,7 @@ func (s *TabSessions) Capture(tab, cause string, answer func(err error)) {
 func (s *TabSessions) reported(tab, cause string, answer func()) {
 	s.Capture(tab, cause, func(err error) {
 		if err != nil {
-			s.ports.Failed(fmt.Sprintf("tab session of %s: %s", tab, err))
+			s.ports.Failed("tab session "+tab, fmt.Sprintf("tab session of %s: %s", tab, err))
 		}
 		answer()
 	})
@@ -490,7 +498,7 @@ func (s *TabSessions) Navigated(tab, name string, history TabHistory) {
 	}
 	encoded, err := json.Marshal([]any{history.Index, urls})
 	if err != nil {
-		s.ports.Failed(fmt.Sprintf("tab session of %s: %s", tab, err))
+		s.ports.Failed("tab session "+tab, fmt.Sprintf("tab session of %s: %s", tab, err))
 		return
 	}
 	regions := s.histories[tab]

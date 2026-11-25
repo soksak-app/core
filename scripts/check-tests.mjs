@@ -496,6 +496,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1194",
+    implementation: [
+      { file: "packages/workbench-mygo/src/tab_store.go", symbol: 's.ports.Stored("tab state " + tab)' },
+      { file: "packages/workbench-mygo/src/shell_tabs.go", symbol: "func (s *Shell) writeStored(source string) {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/tab_state_test.go", id: "TestASucceedingWriteWithdrawsTheErrorOfTheFailedWriteOfItsTab" },
+    ],
+    expected: "A write of the tab state or the tab session of a tab that succeeds withdraws the error of the failed write of the same store of that tab.",
+    levels: ["unit"],
+  },
+  {
     id: "F1192",
     implementation: [
       { file: "packages/workbench-mygo/src/keyboard.go", symbol: "owed := !registeredBySurface(name)" },

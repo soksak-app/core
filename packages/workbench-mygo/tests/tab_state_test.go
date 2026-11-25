@@ -73,12 +73,19 @@ func (s *stateStore) TabStatePut(tab string, entry *workbench.TabEntry, answer f
 }
 
 func openStates(t *testing.T, store *stateStore) (*workbench.TabStates, *clock, *stateEvents, *[]string) {
+	states, timers, events, failures, _ := openStatesStored(t, store)
+	return states, timers, events, failures
+}
+
+// openStatesStored is openStates that also answers the sources whose later write succeeded.
+func openStatesStored(t *testing.T, store *stateStore) (*workbench.TabStates, *clock, *stateEvents, *[]string, *[]string) {
 	t.Helper()
-	timers, events, failures := &clock{}, &stateEvents{}, &[]string{}
+	timers, events, failures, stored := &clock{}, &stateEvents{}, &[]string{}, &[]string{}
 	var opened *workbench.TabStates
 	workbench.OpenTabStates(workbench.TabStatePorts{
 		Store:    store,
-		Failed:   func(text string) { *failures = append(*failures, text) },
+		Failed:   func(source, text string) { *failures = append(*failures, source+": "+text) },
+		Stored:   func(source string) { *stored = append(*stored, source) },
 		UnloadOf: func(plugin string) bool { return plugin == "declaring" },
 		Emit:     events.emit,
 		After:    timers.after,
@@ -91,7 +98,7 @@ func openStates(t *testing.T, store *stateStore) (*workbench.TabStates, *clock, 
 	if opened == nil {
 		t.Fatal("the store did not open")
 	}
-	return opened, timers, events, failures
+	return opened, timers, events, failures, stored
 }
 
 func state(value int) json.RawMessage {
@@ -180,7 +187,7 @@ func TestIdleWaitsForTheWritesStartedSoFar(t *testing.T) {
 	store := &heldStateStore{held: &held}
 	timers, events := &clock{}, &stateEvents{}
 	var states *workbench.TabStates
-	workbench.OpenTabStates(workbench.TabStatePorts{Store: store, Failed: func(string) {}, UnloadOf: func(string) bool { return true }, Emit: events.emit, After: timers.after},
+	workbench.OpenTabStates(workbench.TabStatePorts{Store: store, Failed: func(string, string) {}, Stored: func(string) {}, UnloadOf: func(string) bool { return true }, Emit: events.emit, After: timers.after},
 		func(opened *workbench.TabStates, err error) { states = opened })
 	states.SetKept("a", true)
 	done := false
@@ -259,8 +266,23 @@ func TestAFailedStoreWriteIsReportedAndTheEntryStaysInMemory(t *testing.T) {
 	states, _, _, failures := openStates(t, store)
 	states.SetKept("tab-a", true)
 	states.Flush(func() {})
-	equal(t, *failures, []string{"tab state of tab-a: disk full"})
+	equal(t, *failures, []string{"tab state tab-a: tab state of tab-a: disk full"})
 	equal(t, entryOf(states, "tab-a"), `{"kept":true}`)
+}
+
+// F1194: the error of a failed write belongs to the tab state of its tab, and the next write of that tab state that succeeds withdraws
+// it, because a display shows only the current state.
+func TestASucceedingWriteWithdrawsTheErrorOfTheFailedWriteOfItsTab(t *testing.T) {
+	store := &stateStore{refuse: errors.New("no space left on device")}
+	states, _, _, failures, stored := openStatesStored(t, store)
+	states.SetKept("tab-a", true)
+	states.Flush(func() {})
+	equal(t, *failures, []string{"tab state tab-a: tab state of tab-a: no space left on device"})
+	equal(t, *stored, []string{})
+	store.refuse = nil
+	states.SetKept("tab-a", false)
+	states.Flush(func() {})
+	equal(t, *stored, []string{"tab state tab-a"})
 }
 
 // sessionStore is a store over the session files.
@@ -324,7 +346,8 @@ func newSessions() *sessionHarness {
 			answer(h.history[tab], nil)
 		},
 		Tabs:   func() []string { return h.attached },
-		Failed: func(text string) { h.failures = append(h.failures, text) },
+		Failed: func(source, text string) { h.failures = append(h.failures, text) },
+		Stored: func(string) {},
 		Emit:   h.events.emit,
 		After:  h.timers.after,
 	})
