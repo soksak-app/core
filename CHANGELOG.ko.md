@@ -5,6 +5,7 @@
 
 ## 2026-11-25
 
+- F1169: host contract case `install.refused-install-leaves-no-version-folder`가 거부된 `sok plugin install`이 추출한 version 폴더를 지운다고 정하고, F1165의 Go와 Rust test가 그 case를 선언한다. 그래서 각 host의 host contract check가 통과한다.
 - F1168-1: 모든 package와 crate manifest, Info.plist, Tauri file, Go와 pkg-config 선언, Cargo.lock의 workspace 항목 6개, scripts/check-versions.mjs의 core version은 0.0.55다.
 - F1167: mygo host에서 열린 dialog의 view call `composition.declaration`이 dialog의 kind와 region을 답하고 overlay는 답하지 않는다. 그래서 document region을 선언한 dialog page가 `composition regions must exactly match the surface declaration (expected none)`에서 멈추지 않고 composition을 만든다.
 - F1165: Go와 Rust의 `sok plugin install`과 `sok plugin update`가 `plugins/installed.json`을 쓰기 전에 거절되거나 멈춘 설치가 푼 각 version 폴더를 지워서, 같은 version의 다음 설치가 release를 다시 풀어요. Red/Green: `TestARefusedPluginInstallLeavesNoVersionFolder`, `a_refused_plugin_install_leaves_no_version_folder`.

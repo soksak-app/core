@@ -1633,6 +1633,7 @@ fn invalid_json_closes_connection() {
 | `program.run.plugin-path-not-found` | 파일이 없는 `plugin:bin/missing` program의 실행은 `program not found: plugin:bin/missing`으로 실패하고, `host.program.failed`를 기록하며, 프로세스를 시작하지 않는다. | all |
 | `program.run.plugin-path-not-executable` | 실행 권한 bit가 있는 일반 파일이 아닌 `plugin:bin/tool` program의 실행은 `program plugin:bin/tool is not a regular executable file`으로 실패하고 `host.program.failed`를 기록한다. | all |
 | `install.plugin-program-file` | 설치된 version 폴더에 실행 가능한 일반 파일이 없는 `programs.run`의 `plugin:bin/tool` release는 `sok plugin install`이 `plugin probe: programs.run program plugin:bin/tool is not a regular executable file`로 거부하고, 그 파일이 실행 가능하면 설치한다. | all |
+| `install.refused-install-leaves-no-version-folder` | version 폴더를 추출한 뒤 release를 거부한 `sok plugin install`(실행 bit가 없는 program 파일 등)은 그 폴더를 지우고 `plugins/installed.json`을 쓰지 않는다. 그래서 같은 version의 다음 설치가 release를 다시 추출한다. | all |
 | `install.plugin-program-pattern` | `plugin.json` 검증은 regular expression library가 compile하지 못하는 `programs.run` pattern을 `plugin probe: programs.run pattern does not compile: <reason>`으로 거부하고, compile되는 pattern은 받아들인다. | all |
 | `program.run.output-bound-keeps-whole-characters` | 보관한 standard output의 한도가 UTF-8 문자 안에 떨어지면 그 문자 앞에서 끝나므로, `a` 1048575 byte 뒤의 `é`는 1048575 byte와 `truncated.stdout` `true`를 남긴다. | all |
 | `program.run.refuses-surface-without-view` | view가 없거나 view가 닫힌 surface의 run은 `program run: surface <surface> has no view`로 거부된다. | all |

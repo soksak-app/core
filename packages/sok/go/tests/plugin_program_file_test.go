@@ -63,6 +63,7 @@ func TestPluginInstallChecksTheProgramFileOfThePlugin(t *testing.T) {
 
 // A refused installation removes the version folder that it extracted, so the next installation of the same version extracts the
 // release again instead of reading the refused files (docs/spec/installation.md#installation-layout).
+// contract: install.refused-install-leaves-no-version-folder
 func TestARefusedPluginInstallLeavesNoVersionFolder(t *testing.T) {
 	code, stderr, installed, config := installProgramProbe(t, []string{"bin/tool"}, false)
 	if code != 1 || installed {

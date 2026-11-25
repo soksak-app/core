@@ -129,6 +129,7 @@ fn plugin_install_checks_the_program_file_of_the_plugin() {
 
 /// A refused installation removes the version folder that it extracted, so the next installation of the same version extracts the
 /// release again instead of reading the refused files (docs/spec/installation.md#installation-layout).
+// contract: install.refused-install-leaves-no-version-folder
 #[test]
 fn a_refused_plugin_install_leaves_no_version_folder() {
     let (code, stderr, installed, folder) = install_program_probe(&["bin/tool"], false);

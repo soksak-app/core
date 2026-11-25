@@ -496,6 +496,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1169",
+    implementation: [
+      { file: "packages/sok/go/tests/plugin_program_file_test.go", symbol: "// contract: install.refused-install-leaves-no-version-folder" },
+      { file: "packages/sok/rust/tests/plugin_program_file_test.rs", symbol: "// contract: install.refused-install-leaves-no-version-folder" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/plugin_program_file_test.go", id: "TestARefusedPluginInstallLeavesNoVersionFolder" },
+      { file: "packages/sok/rust/tests/plugin_program_file_test.rs", id: "a_refused_plugin_install_leaves_no_version_folder" },
+    ],
+    expected: "The tests of a refused plugin installation declare the host contract case install.refused-install-leaves-no-version-folder.",
+    levels: ["unit"],
+  },
+  {
     id: "F1167",
     implementation: [
       { file: "packages/workbench-mygo/src/view_calls.go", symbol: "if s.dialog != nil && s.dialog.id() == call.Surface {" },
