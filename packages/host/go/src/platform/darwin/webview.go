@@ -157,6 +157,12 @@ func (implementation) SetSurfaceBounds(surface unsafe.Pointer, x, y, width, heig
 	native.MainWebviewSetFrame(surface, float64(x), float64(y), float64(width), float64(height))
 }
 
+func (implementation) FillSurfaceWithWindowBackground(surface unsafe.Pointer, filled bool) {
+	native.MainSpSurfaceFillWindowBackground(surface, filled)
+}
+func (implementation) FillWindowSurfaceBackgrounds(window platform.Window) {
+	native.MainSpWindowFillSurfaceBackgrounds(uintptr(window))
+}
 func (implementation) SetSurfaceClip(surface unsafe.Pointer, clipped bool, x, y, width, height float64) {
 	native.MainSpSurfaceSetClip(surface, clipped, x, y, width, height)
 }

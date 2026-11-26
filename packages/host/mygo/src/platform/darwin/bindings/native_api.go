@@ -842,6 +842,16 @@ func Functions(library uintptr) (abi.NativeFunctions, error) {
 		purego.RegisterFunc(&functions.MainSpSurfaceSeatOverModal, address)
 	}
 	{
+		address, err := purego.Dlsym(library, "main_sp_surface_fill_window_background")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_surface_fill_window_background: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_surface_fill_window_background: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.MainSpSurfaceFillWindowBackground, address)
+	}
+	{
 		address, err := purego.Dlsym(library, "main_sp_surface_set_clip")
 		if err != nil {
 			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_surface_set_clip: %w", err)
@@ -930,6 +940,16 @@ func Functions(library uintptr) (abi.NativeFunctions, error) {
 			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_window_facts: symbol has a null address")
 		}
 		purego.RegisterFunc(&functions.MainSpWindowFacts, address)
+	}
+	{
+		address, err := purego.Dlsym(library, "main_sp_window_fill_surface_backgrounds")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_window_fill_surface_backgrounds: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_window_fill_surface_backgrounds: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.MainSpWindowFillSurfaceBackgrounds, address)
 	}
 	{
 		address, err := purego.Dlsym(library, "main_sp_window_focus_workbench")

@@ -534,3 +534,20 @@ func TestOnlyAWindowWithAMainPageSeatsTheSettingsSurfaceOverItsModal(t *testing.
 		t.Fatal("a window with a main page does not seat only the settings surface over its modal web view")
 	}
 }
+
+// A window without a main page shows the surfaces below its settings window in the holes that it draws, so only its settings surface
+// host fills itself with the background of the window, the color of the pane; a window with a main page seats the settings surface over
+// its modal web view, which draws the pane below it (docs/spec/native-surfaces.md#settings-seat, F1206).
+// contract: surfaces-geometry.sync.settings-surface-fills-the-window-background
+func TestOnlyTheSettingsSurfaceOfAWindowWithoutAMainPageFillsTheWindowBackground(t *testing.T) {
+	previous := framework
+	t.Cleanup(func() { framework = previous })
+	framework = pagelessFramework{}
+	if !fillsWindowBackground("settings/probe") || fillsWindowBackground("tab-1") {
+		t.Fatal("a window without a main page does not fill only its settings surface with the window background")
+	}
+	framework = mainThreadFramework{}
+	if fillsWindowBackground("settings/probe") || fillsWindowBackground("tab-1") {
+		t.Fatal("a window with a main page fills a surface with the window background")
+	}
+}

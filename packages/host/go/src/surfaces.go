@@ -2159,6 +2159,9 @@ func (s *Surfaces) apply(win Frontend, req SyncRequest) ([]string, []Placement, 
 				return nil, nil, err
 			}
 		}
+		if fillsWindowBackground(item.id) {
+			system.FillSurfaceWithWindowBackground(item.view.NativeView(), true)
+		}
 		system.SetSurfaceAlphaHandle(item.view.NativeView(), alphaFor(item.decl.Dim))
 		// A window without a main page sets the frame of a surface in the frame that draws its card, when its native view element gives
 		// its placement (docs/spec/hosts.md#operation-groups). A surface that the preparation creates has no element in the frame of the
@@ -2210,6 +2213,11 @@ func (s *Surfaces) apply(win Frontend, req SyncRequest) ([]string, []Placement, 
 // of a window with a main page, whose settings window is that modal. A window without a main page draws its settings window itself and
 // holds the settings surface in the native view element of the seat, which the pane clips (docs/spec/native-modals.md#settings-surface).
 func seatsOverModal(id string) bool { return IsSettingsSurface(id) && framework.MainPage() }
+
+// fillsWindowBackground tells whether the host fills the surface host of id with the background of its window: only the settings surface
+// of a window without a main page, which shows the surfaces below its settings window in the holes that it draws; the workbench sets the
+// background of the window to the color of the pane (docs/spec/native-surfaces.md#settings-seat).
+func fillsWindowBackground(id string) bool { return IsSettingsSurface(id) && !framework.MainPage() }
 
 // seatSettingsSurface stands the host of the settings surface above the modal web view of the settings window, clipped to clip,
 // before its frame is set, because the frame of the host is relative to the container that clips it

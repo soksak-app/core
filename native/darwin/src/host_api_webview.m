@@ -25,6 +25,12 @@ bool main_sp_surface_seat_over_modal(void *surface, void *modal, double x, doubl
 void main_sp_surface_set_clip(void *surface, bool clipped, double x, double y, double width, double height) {
     hostRunOnMain(^{ sp_surface_set_clip(surface, clipped, x, y, width, height); });
 }
+void main_sp_surface_fill_window_background(void *surface, bool filled) {
+    hostRunOnMain(^{ sp_surface_fill_window_background(surface, filled); });
+}
+void main_sp_window_fill_surface_backgrounds(uintptr_t window) {
+    hostRunOnMain(^{ sp_window_fill_surface_backgrounds((void *)window); });
+}
 void main_webviewSetFrame(void *view, double x, double y, double width, double height) {
     hostRunOnMain(^{ webviewSetFrame(view, x, y, width, height); });
 }

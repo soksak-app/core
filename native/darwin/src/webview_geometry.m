@@ -107,6 +107,8 @@ static void recordKeys(const char *name, uint8_t level, NSUInteger count, const 
 @property(nonatomic) NSUInteger droppedKeys;
 // The host holds the surface of a dialog: the surface hosts made after it stand below it (sp_surface_mark_dialog).
 @property(nonatomic) BOOL dialogHost;
+// The host fills itself with the background color of its window (sp_surface_fill_window_background).
+@property(nonatomic) BOOL fillsWindowBackground;
 @end
 
 // A surface places native regions below its view WebView. CSS transparency does not turn off the native opaque
@@ -692,6 +694,37 @@ void sp_surface_set_clip(void *handle, bool clipped, double x, double y, double 
         mask.frame = [host convertRectToLayer:rect];
     }
     [CATransaction commit];
+}
+
+static void fillWindowBackground(SPSurfaceHost *host) {
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    host.layer.backgroundColor = host.fillsWindowBackground && host.window ? host.window.backgroundColor.CGColor : NULL;
+    [CATransaction commit];
+}
+
+void sp_surface_fill_window_background(void *handle, bool filled) {
+    NSCAssert(NSThread.isMainThread, @"surface hosts belong to the main thread");
+    SPSurfaceHost *host = (SPSurfaceHost *)handle;
+    host.fillsWindowBackground = filled;
+    fillWindowBackground(host);
+}
+
+// Fills each filling surface host of the views below view again.
+static void fillSurfaceBackgrounds(NSView *view) {
+    for (NSView *child in view.subviews) {
+        if ([child isKindOfClass:SPSurfaceHost.class]) {
+            if (((SPSurfaceHost *)child).fillsWindowBackground) fillWindowBackground((SPSurfaceHost *)child);
+        } else {
+            fillSurfaceBackgrounds(child);
+        }
+    }
+}
+
+void sp_window_fill_surface_backgrounds(void *handle) {
+    NSCAssert(NSThread.isMainThread, @"windows belong to the main thread");
+    NSWindow *window = (NSWindow *)handle;
+    fillSurfaceBackgrounds(window.contentView.superview ?: window.contentView);
 }
 
 void sp_view_give_up_keyboard(void *handle) {

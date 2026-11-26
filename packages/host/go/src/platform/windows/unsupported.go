@@ -465,6 +465,14 @@ func (implementation) SetSurfaceClip(unsafe.Pointer, bool, float64, float64, flo
 	unreachable("surface host clip")
 }
 
+func (implementation) FillSurfaceWithWindowBackground(unsafe.Pointer, bool) {
+	unreachable("surface host background")
+}
+
+func (implementation) FillWindowSurfaceBackgrounds(platform.Window) {
+	unreachable("surface host background")
+}
+
 func (implementation) SurfaceFrame(unsafe.Pointer) platform.Rect {
 	unreachable("surface host frame")
 	return platform.Rect{}

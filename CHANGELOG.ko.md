@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1206: mygo application의 settings view는 투명한 page를 통해 다른 surface를 보이지 않는다. host가 settings surface host를 pane의 색인 window 배경으로 채운다.
 - F1205: mygo application의 surface host는 native view element의 clip만 보이므로, settings view와 그 document region은 settings window의 pane 안에 머문다.
 - F1204: mygo application은 project가 없는 window에서 끝나지 않고 plugin의 settings view를 보이며, 그 settings surface는 project null로 시작한다.
 - F1201-2: core 0.0.60의 release 실행이 success로 끝났고, v0.0.60은 애플리케이션 zip 세 개와 package release 다섯 개를 나열한다.

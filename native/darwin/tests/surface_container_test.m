@@ -313,6 +313,34 @@ static void checkSettingsContainer(void) {
     [window release];
 }
 
+// contract: surface-host.fills-the-window-background
+// A window without a main page shows the surfaces below its settings window in the holes that it draws, so the settings surface
+// host fills itself with the background of its window, which the workbench sets to the color of the pane, and fills itself again when
+// the window changes its background; a host that stops filling shows what is below it again (docs/spec/native-surfaces.md#settings-seat).
+static void checkWindowBackgroundFill(void) {
+    SPScaledWindow *window = makeWindow(NSMakeRect(0, 0, 400, 300), 2);
+    NSView *content = window.contentView;
+    window.backgroundColor = [NSColor colorWithSRGBRed:1 green:0 blue:0 alpha:1];
+    void *surface = sp_surface_create(content);
+    NSView *host = (NSView *)surface;
+    BOOL (^filledWith)(NSColor *) = ^BOOL(NSColor *color) {
+        return host.layer.backgroundColor && CGColorEqualToColor(host.layer.backgroundColor, color.CGColor);
+    };
+    sp_surface_fill_window_background(surface, true);
+    check(filledWith(window.backgroundColor), @"the host fills itself with the background of its window");
+    window.backgroundColor = [NSColor colorWithSRGBRed:0 green:0 blue:1 alpha:1];
+    sp_window_fill_surface_backgrounds((__bridge void *)window);
+    check(filledWith(window.backgroundColor), @"the host fills itself again with the changed background of its window");
+    sp_surface_fill_window_background(surface, false);
+    check(host.layer.backgroundColor == NULL, @"a host that stops filling has no background");
+    window.backgroundColor = NSColor.greenColor;
+    sp_window_fill_surface_backgrounds((__bridge void *)window);
+    check(host.layer.backgroundColor == NULL, @"a host that does not fill keeps no background when the window changes its background");
+    sp_surface_close(surface);
+    [window close];
+    [window release];
+}
+
 int main(void) { @autoreleasepool {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
@@ -324,5 +352,6 @@ int main(void) { @autoreleasepool {
     checkWorkbenchHit();
     checkDialogHostOrder();
     checkSettingsContainer();
+    checkWindowBackgroundFill();
     return failures == 0 ? 0 : 1;
 } }

@@ -554,6 +554,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1206",
+    implementation: [
+      { file: "packages/host/go/src/surfaces.go", symbol: "func fillsWindowBackground(id string) bool { return IsSettingsSurface(id) && !framework.MainPage() }" },
+      { file: "native/darwin/src/webview_geometry.m", symbol: "void sp_surface_fill_window_background(void *handle, bool filled) {" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/view_start_test.go", id: "TestOnlyTheSettingsSurfaceOfAWindowWithoutAMainPageFillsTheWindowBackground" },
+      { file: "native/darwin/tests/surface_container_test.m", id: "checkWindowBackgroundFill" },
+    ],
+    expected: "The settings surface host of a window without a main page fills itself with the window background.",
+    levels: ["unit"],
+  },
+  {
     id: "F1205",
     implementation: [
       { file: "packages/host/mygo/src/frontend.go", symbol: "system.SetSurfaceClip(handle, true, clip.X-view.Box.X, clip.Y-view.Box.Y, clip.W, clip.H)" },

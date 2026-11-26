@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1206: The settings view of the mygo application shows no other surface through its transparent page: the host fills the settings surface host with the window background, the color of the pane.
 - F1205: A surface host of the mygo application shows only the clip of its native view element, so the settings view and its document regions stay inside the pane of the settings window.
 - F1204: The mygo application shows the settings view of a plugin in a window without a project, whose settings surface starts with the project null, instead of ending.
 - F1201-2: The release run of core 0.0.60 concluded success, and v0.0.60 lists the three application zips and the five package releases.

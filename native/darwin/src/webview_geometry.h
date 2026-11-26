@@ -22,6 +22,14 @@ bool sp_surface_seat_over_modal(void *surface, void *modal, double x, double y, 
 // rectangle. A window without a main page places a surface host at the box of its native view element and clips it to the part of the
 // box that the element shows (docs/spec/native-surfaces.md#settings-seat). Call it on the main thread.
 void sp_surface_set_clip(void *surface, bool clipped, double x, double y, double width, double height);
+// Fills the surface host with the background color of its window when filled is true, and removes the fill when it is false. A window
+// without a main page shows the surfaces below its settings window in the holes that it draws, so the host of the settings surface
+// fills itself with the window background, which the workbench sets to the color of the pane (docs/spec/native-surfaces.md#settings-seat).
+// Call it on the main thread.
+void sp_surface_fill_window_background(void *surface, bool filled);
+// Fills each surface host of window that fills itself with the window background again with the current background color of the
+// window. Call it on the main thread after the background of the window changes.
+void sp_window_fill_surface_backgrounds(void *window);
 // Whether view is a surface host that sp_surface_create made. Call it on the main thread.
 bool sp_surface_is_host(void *view);
 // Wraps the main web view in the window composition, which holds the window overlays, the file drop view and, above the web
