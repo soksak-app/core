@@ -2154,7 +2154,7 @@ func (s *Surfaces) apply(win Frontend, req SyncRequest) ([]string, []Placement, 
 		if err := s.syncView(item.id, item.view.NativeView(), item.decl.Plugin, item.decl.Composition.Page, item.visible, start); err != nil {
 			return nil, nil, err
 		}
-		if IsSettingsSurface(item.id) {
+		if seatsOverModal(item.id) {
 			if err := s.seatSettingsSurface(win, item.view, *item.decl.Clip); err != nil {
 				return nil, nil, err
 			}
@@ -2205,6 +2205,11 @@ func (s *Surfaces) apply(win Frontend, req SyncRequest) ([]string, []Placement, 
 	s.placedDialog(placed)
 	return gone, placed, nil
 }
+
+// seatsOverModal tells whether the host seats the surface id over the modal web view of the settings window: only the settings surface
+// of a window with a main page, whose settings window is that modal. A window without a main page draws its settings window itself and
+// holds the settings surface in the native view element of the seat, which the pane clips (docs/spec/native-modals.md#settings-surface).
+func seatsOverModal(id string) bool { return IsSettingsSurface(id) && framework.MainPage() }
 
 // seatSettingsSurface stands the host of the settings surface above the modal web view of the settings window, clipped to clip,
 // before its frame is set, because the frame of the host is relative to the container that clips it

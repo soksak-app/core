@@ -118,8 +118,9 @@ func (s *Shell) drawSettingsSeat(c *ui.Context, height float32) {
 	left, top := max(bounds.X, pane.X), max(bounds.Y, pane.Y)
 	right, bottom := min(bounds.X+bounds.W, pane.X+pane.W), min(bounds.Y+bounds.H, pane.Y+pane.H)
 	box := DevicePixels(layout.Rect{X: float64(bounds.X), Y: float64(bounds.Y), W: float64(bounds.W), H: float64(bounds.H)}, window.Scale)
-	if box != view.surface.box {
-		view.surface.box = box
+	clip := DevicePixels(layout.Rect{X: float64(pane.X), Y: float64(pane.Y), W: float64(pane.W), H: float64(pane.H)}, window.Scale)
+	if box != view.surface.box || view.surface.clip == nil || clip != *view.surface.clip {
+		view.surface.box, view.surface.clip = box, &clip
 		s.options.Invalidate()
 	}
 	if right > left && bottom > top && bounds.W > 0 {

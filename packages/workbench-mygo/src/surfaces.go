@@ -213,6 +213,9 @@ type heldSurface struct {
 	dialog *dialogStart
 	// unload is the declaration of unload of a section surface.
 	unload *surfaceUnload
+	// clip is the pane of the settings window on device pixels, which only the settings surface carries and the host requires of it
+	// (docs/spec/native-modals.md#settings-surface).
+	clip *layout.Rect
 	// declared tells that the host took its composition, and hosted that a placement that held it finished, so the host holds its
 	// view.
 	declared bool
@@ -667,6 +670,9 @@ func (s *Shell) surfaceRequest() (map[string]any, error) {
 		}
 		if composition.Kind == "view" && len(unit.Programs) > 0 {
 			entry["programs"] = unit.Programs
+		}
+		if held.clip != nil {
+			entry["clip"] = map[string]any{"x": held.clip.X, "y": held.clip.Y, "w": held.clip.W, "h": held.clip.H}
 		}
 		surfaces = append(surfaces, entry)
 	}

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
+	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
 // The settings view of a plugin (docs/spec/plugins.md#settings-views): the plugin page of the settings window shows the page that the
@@ -168,5 +169,28 @@ func TestTheSettingsWindowDoesNotStandOverTheSettingsSurface(t *testing.T) {
 	defer mu.Unlock()
 	if len(forwards) != 1 || strings.Contains(strings.Join(replies, " "), "behind the open dialog") {
 		t.Fatalf("the action on the settings surface was forwarded %d times and answered %v", len(forwards), replies)
+	}
+}
+
+// The sync request carries the clip of the settings surface, the pane of the settings window on device pixels, which the host requires
+// of a settings surface and refuses without (docs/spec/native-modals.md#settings-surface, F1200).
+func TestTheSettingsSurfaceCarriesThePaneAsItsClip(t *testing.T) {
+	f, stored := settingsViewShell(t)
+	showPluginPage(f)
+	placed := stored.lastSurfaces(t)[settingsSurfaceID]
+	clip, _ := placed["clip"].(map[string]any)
+	if clip == nil {
+		t.Fatalf("the settings surface is placed without a clip: %v", placed)
+	}
+	pane := element(t, f.tester, "core.settings-modal.pane", "").Bounds
+	want := workbench.DevicePixels(layout.Rect{X: float64(pane.X), Y: float64(pane.Y), W: float64(pane.W), H: float64(pane.H)}, stored.window.Scale)
+	got := layout.Rect{X: clip["x"].(float64), Y: clip["y"].(float64), W: clip["w"].(float64), H: clip["h"].(float64)}
+	if got != want {
+		t.Fatalf("the settings surface has the clip %+v, want the pane %+v", got, want)
+	}
+	for id, other := range stored.lastSurfaces(t) {
+		if _, clipped := other["clip"]; clipped && id != settingsSurfaceID {
+			t.Fatalf("the surface %s carries a clip: %v", id, other)
+		}
 	}
 }

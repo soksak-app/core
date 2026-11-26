@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1200: The settings view of a plugin shows in the mygo application: the mygo workbench sends the pane as the clip of the settings surface, and the host seats the settings surface over a modal web view only in a window with a main page.
 - F1199-1: Every declared workspace version names the core release 0.0.59.
 - F1198: The diagnostic check T5 fails only for an empty card that the layout could close, so the start of a new project records no error.
 - F1128-4: A Wails and a Tauri debug window show the settings view of agents in the pane of the settings window, take the pointer and the keyboard in its seat, and clip it to the pane.

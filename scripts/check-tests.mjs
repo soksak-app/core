@@ -554,6 +554,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1200",
+    implementation: [
+      { file: "packages/workbench-mygo/src/surfaces.go", symbol: "entry[\"clip\"] = map[string]any{\"x\": held.clip.X, \"y\": held.clip.Y, \"w\": held.clip.W, \"h\": held.clip.H}" },
+      { file: "packages/host/go/src/surfaces.go", symbol: "func seatsOverModal(id string) bool { return IsSettingsSurface(id) && framework.MainPage() }" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/settings_surface_test.go", id: "TestTheSettingsSurfaceCarriesThePaneAsItsClip" },
+      { file: "packages/host/go/src/view_start_test.go", id: "TestOnlyAWindowWithAMainPageSeatsTheSettingsSurfaceOverItsModal" },
+    ],
+    expected: "The mygo workbench sends the pane as the clip of the settings surface, and only a window with a main page seats it over a modal web view.",
+    levels: ["unit"],
+  },
+  {
     id: "F1198",
     implementation: [
       { file: "packages/workbench/verify.js", symbol: "const empty = cards.filter((c) => !isPlace(c.id) && tabsOf(c).length === 0 && tree.canClose(c.id));" },
