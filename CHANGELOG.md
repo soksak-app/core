@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1208-1: Every declared workspace version names the core release 0.0.61, which publishes F1204, F1205, F1206 and F1207.
 - F1207: The seat of a settings view stands below the heading of the plugin page and takes the height that the pane leaves below it, so the whole page of the view and its end show inside the pane, and a wheel outside the view scrolls the pane; Red and Green in workbench-mygo and workbench unit tests.
 - F1206: The settings view of the mygo application shows no other surface through its transparent page: the host fills the settings surface host with the window background, the color of the pane.
 - F1205: A surface host of the mygo application shows only the clip of its native view element, so the settings view and its document regions stay inside the pane of the settings window.

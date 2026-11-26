@@ -1,6 +1,6 @@
 [package]
 name = "soksak-sok"
-version = "0.0.60"
+version = "0.0.61"
 edition = "2024"
 description = "Command line sok in Rust"
 
