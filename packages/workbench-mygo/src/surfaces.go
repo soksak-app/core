@@ -262,6 +262,11 @@ type surfaceState struct {
 	drawnLibrary bool
 	// dataWrites counts the writes of project data of each project that the store has not answered.
 	dataWrites map[string]int
+	// pluginData holds the plugin keys of the last snapshot by plugin and key, pluginDataError the error of a refused
+	// plugin-data.json, and pluginWrites the writes of plugin keys that the store has not answered (docs/spec/plugins.md#plugin-data).
+	pluginData      map[string]map[string]json.RawMessage
+	pluginDataError *string
+	pluginWrites    int
 	// placed is the lines of the last request, titlebar the title bar height of the window, which the last request gave or the
 	// start read (adopt), and running tells that a placement has not finished. Before the start, and while the window showed no
 	// title bar at the start, titlebar is 0 and no frame places for the first row alone.

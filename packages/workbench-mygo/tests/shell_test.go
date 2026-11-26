@@ -9,6 +9,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -97,6 +98,9 @@ type storedHost struct {
 	startFails bool
 	// refusedFiles are the errors of refused stored files that the snapshot carries, projectsError and settingsError.
 	refusedFiles map[string]string
+	// pluginData holds the entries of the plugin keys by plugin and key, as plugin-data.json of the host
+	// (docs/spec/plugins.md#plugin-data).
+	pluginData map[string]map[string]any
 	// retains holds the argument of each sidecarsRetain call, and holdRetains, when set, keeps the answer of each retain until it
 	// opens.
 	retains     []json.RawMessage
@@ -505,6 +509,10 @@ func (h *storedHost) workspace(argument json.RawMessage) (any, error) {
 		Role        any
 		Fingerprint string
 		Entry       map[string]any
+		Plugin      string
+		Key         string
+		Base        json.RawMessage
+		Default     json.RawMessage
 	}
 	if err := json.Unmarshal(argument, &request); err != nil {
 		return nil, err
@@ -528,7 +536,14 @@ func (h *storedHost) workspace(argument json.RawMessage) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		snapshot := map[string]any{"projects": json.RawMessage(projects), "open": h.open, "common": h.common}
+		pluginData, err := json.Marshal(h.pluginData)
+		if err != nil {
+			return nil, err
+		}
+		snapshot := map[string]any{"projects": json.RawMessage(projects), "open": h.open, "common": h.common, "pluginData": json.RawMessage(pluginData)}
+		if h.pluginData == nil {
+			snapshot["pluginData"] = map[string]any{}
+		}
 		for member, text := range h.refusedFiles {
 			snapshot[member] = text
 		}
@@ -591,6 +606,33 @@ func (h *storedHost) workspace(argument json.RawMessage) (any, error) {
 		delete(request.Project, "settings") // The settings of a project are the file of its folder.
 		h.projects = append(h.projects, request.Project)
 		return request.Project, nil
+	case "pluginData":
+		// The store compares base with the stored value of the key, or its default, as JSON values (docs/spec/plugins.md#plugin-data).
+		if request.Base != nil {
+			standing := request.Default
+			if entry, ok := h.pluginData[request.Plugin][request.Key]; ok {
+				text, err := json.Marshal(entry.(map[string]any)["value"])
+				if err != nil {
+					return nil, err
+				}
+				standing = text
+			}
+			var stored, base any
+			if json.Unmarshal(standing, &stored) != nil || json.Unmarshal(request.Base, &base) != nil {
+				return nil, fmt.Errorf("pluginData base or default is not JSON")
+			}
+			if !reflect.DeepEqual(stored, base) {
+				return false, nil
+			}
+		}
+		if h.pluginData == nil {
+			h.pluginData = map[string]map[string]any{}
+		}
+		if h.pluginData[request.Plugin] == nil {
+			h.pluginData[request.Plugin] = map[string]any{}
+		}
+		h.pluginData[request.Plugin][request.Key] = request.Entry
+		return true, nil
 	case "patch":
 		project := h.project(request.ID)
 		if project == nil {

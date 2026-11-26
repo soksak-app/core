@@ -793,10 +793,14 @@ func (s *Shell) adopt(value any, chrome windowChrome) error {
 		ProjectsError *string           `json:"projectsError"`
 		SettingsError *string           `json:"settingsError"`
 		Common        map[string]any    `json:"common"`
+		// The plugin keys of plugin-data.json, or the error of a refused file (docs/spec/plugins.md#plugin-data).
+		PluginData      map[string]map[string]json.RawMessage `json:"pluginData"`
+		PluginDataError *string                               `json:"pluginDataError"`
 	}](value)
 	if err != nil {
 		return err
 	}
+	s.takePluginData(snapshot.PluginData, snapshot.PluginDataError)
 	// A refused projects.json or settings.json is left out of the snapshot with its error, so the error is shown and the
 	// workbench starts without the file (docs/spec/projects.md#settings), as storedFileErrors of packages/workbench/host-store.js.
 	for _, refused := range []*string{snapshot.ProjectsError, snapshot.SettingsError} {

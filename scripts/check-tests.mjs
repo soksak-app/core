@@ -554,6 +554,32 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1210",
+    implementation: [
+      { file: "packages/workbench/plugin-data.js", symbol: "export function comparePluginData(before, after) {" },
+      { file: "packages/workbench-mygo/src/project_data.go", symbol: "func (s *Shell) writePluginKey(" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/plugin-keys.test.mjs", id: "a view with a project reads the same plugin key as a view without one" },
+      { file: "packages/workbench-mygo/tests/plugin_keys_test.go", id: "TestAPluginKeyOfAnotherWindowReachesAViewAndAnotherFormatFails" },
+    ],
+    expected: "A plugin stores data that belongs to no project, and every window reads and writes it, with or without a project.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1210-4",
+    implementation: [
+      { file: "packages/workbench-mygo/src/project_data.go", symbol: "func (s *Shell) writePluginKey(" },
+      { file: "packages/workbench-mygo/src/project_data.go", symbol: "func (s *Shell) takePluginData(" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/plugin_keys_test.go", id: "TestAViewWithoutAProjectReadsWritesAndReplacesAPluginKey" },
+      { file: "packages/workbench-mygo/tests/plugin_keys_test.go", id: "TestAPluginKeyOfAnotherWindowReachesAViewAndAnotherFormatFails" },
+    ],
+    expected: "The mygo workbench serves the plugin keys to the views of any window, with or without a project.",
+    levels: ["unit"],
+  },
+  {
     id: "F1210-3",
     implementation: [
       { file: "packages/workbench/plugin-data.js", symbol: "export function comparePluginData(before, after) {" },

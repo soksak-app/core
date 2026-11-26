@@ -20,6 +20,13 @@ type dataDeclaration struct {
 	Schema  any             `json:"schema"`
 	Default json.RawMessage `json:"default"`
 	Format  *int            `json:"format"`
+	Scope   *string         `json:"scope"`
+}
+
+// pluginScope tells whether the key belongs to the plugin instead of a project (docs/spec/plugins.md#plugin-data); a key that declares
+// no scope is a project key.
+func (d dataDeclaration) pluginScope() bool {
+	return d.Scope != nil && *d.Scope == "plugin"
 }
 
 // format is the declared format of a key: 1 for a key that declares none.
@@ -50,19 +57,33 @@ func storedPlugins(project *projectRecord) (map[string]map[string]json.RawMessag
 // readProjectData returns the value of a key of the plugin in the project: its default until it is stored. A value that is
 // stored in another format, or without a format, fails the read and stays unchanged, as the workbench converts no stored value.
 func readProjectData(project *projectRecord, unit *installedUnit, key string) (json.RawMessage, error) {
-	declared, ok := unit.Data[key]
-	if !ok {
+	if _, ok := unit.Data[key]; !ok {
 		return nil, fmt.Errorf("%s data %s is not declared", unit.ID, key)
 	}
 	plugins, err := storedPlugins(project)
 	if err != nil {
 		return nil, err
 	}
-	raw, ok := plugins[unit.ID][key]
+	return readEntry(unit, key, plugins[unit.ID], fmt.Sprintf("project %s plugin %s data %s", project.ID, unit.ID, key))
+}
+
+// readPluginKey returns the value of a plugin key of the plugin: its default until it is stored (docs/spec/plugins.md#plugin-data). A
+// refused plugin-data.json fails the read with its error.
+func (s *Shell) readPluginKey(unit *installedUnit, key string) (json.RawMessage, error) {
+	if s.surfaces.pluginDataError != nil {
+		return nil, errors.New(*s.surfaces.pluginDataError)
+	}
+	return readEntry(unit, key, s.surfaces.pluginData[unit.ID], fmt.Sprintf("plugin %s data %s", unit.ID, key))
+}
+
+// readEntry returns the value of the stored entry of a key among the stored keys of a plugin, or the default of the key when it stores
+// none. An entry of another format, or without a format, fails with where, the name of the key.
+func readEntry(unit *installedUnit, key string, keys map[string]json.RawMessage, where string) (json.RawMessage, error) {
+	declared := unit.Data[key]
+	raw, ok := keys[key]
 	if !ok {
 		return declared.Default, nil
 	}
-	where := fmt.Sprintf("project %s plugin %s data %s", project.ID, unit.ID, key)
 	var stored storedData
 	if err := json.Unmarshal(raw, &stored); err != nil || stored.Format == nil || stored.Value == nil {
 		return nil, fmt.Errorf("%s: stored without a format is not declared format %d", where, declared.format())
@@ -145,12 +166,78 @@ func (s *Shell) writeProjectData(project *projectRecord, unit *installedUnit, ke
 	return nil
 }
 
+// writePluginKey stores a value of a plugin key of the plugin through the store, which decides a replace against the writes of every
+// window when base is given with the declared default, and answers whether the store stored it; a stored entry is taken into the plugin
+// keys that the window holds and reported to the views of every project (docs/spec/plugins.md#plugin-data).
+func (s *Shell) writePluginKey(unit *installedUnit, key string, value, base json.RawMessage, answer func(stored bool, err error)) error {
+	if err := checkProjectData(unit, key, value); err != nil {
+		return err
+	}
+	if s.surfaces.pluginDataError != nil {
+		return errors.New(*s.surfaces.pluginDataError)
+	}
+	declared := unit.Data[key]
+	format := declared.format()
+	entry, err := json.Marshal(storedData{Format: &format, Value: &value})
+	if err != nil {
+		return err
+	}
+	request := map[string]any{"kind": "pluginData", "plugin": unit.ID, "key": key, "entry": json.RawMessage(entry)}
+	if base != nil {
+		request["base"], request["default"] = base, declared.Default
+	}
+	s.surfaces.pluginWrites++
+	s.calls.CallInOrder("workspace", "workspace", request, func(value any, err error) {
+		s.surfaces.pluginWrites--
+		if err != nil {
+			answer(false, err)
+			return
+		}
+		stored, ok := value.(bool)
+		if !ok {
+			answer(false, fmt.Errorf("pluginData answered %v, not true or false", value))
+			return
+		}
+		if stored {
+			if s.surfaces.pluginData == nil {
+				s.surfaces.pluginData = map[string]map[string]json.RawMessage{}
+			}
+			if s.surfaces.pluginData[unit.ID] == nil {
+				s.surfaces.pluginData[unit.ID] = map[string]json.RawMessage{}
+			}
+			s.surfaces.pluginData[unit.ID][key] = entry
+		}
+		answer(stored, nil)
+		if stored {
+			s.dataChanged("", unit.ID, key)
+		}
+	})
+	return nil
+}
+
+// takePluginData takes the plugin keys of a workspace snapshot and reports each key that changed, unless a write of this window waits
+// for the store: that read stands before the write, and the host answers the write with a change again (docs/spec/plugins.md#plugin-data).
+func (s *Shell) takePluginData(data map[string]map[string]json.RawMessage, refused *string) {
+	if s.surfaces.pluginWrites > 0 {
+		return
+	}
+	before := s.surfaces.pluginData
+	if data == nil {
+		data = map[string]map[string]json.RawMessage{}
+	}
+	s.surfaces.pluginData, s.surfaces.pluginDataError = data, refused
+	for _, changed := range changedKeys(before, data) {
+		s.dataChanged("", changed[0], changed[1])
+	}
+}
+
 // dataChanged pushes the event data to each view of the plugin in the project that follows it, and the event data:<plugin> to each view
-// that follows the project data of a dependency of its plugin (docs/spec/plugins.md#project-data).
+// that follows the project data of a dependency of its plugin (docs/spec/plugins.md#project-data). A plugin key names the project "" and
+// reaches the views of every project and of no project (docs/spec/plugins.md#plugin-data).
 func (s *Shell) dataChanged(project, plugin, key string) {
 	for surface, view := range s.surfaces.views {
 		held := s.surfaces.held[surface]
-		if held == nil || held.project == nil || held.project.ID != project {
+		if held == nil || (project != "" && (held.project == nil || held.project.ID != project)) {
 			continue
 		}
 		if view.data && held.tab.Plugin == plugin {
@@ -207,9 +294,7 @@ func (s *Shell) runDataCall(call viewCallEvent, unit *installedUnit, view *viewS
 	if held != nil && held.project != nil {
 		project = s.project(held.project.ID)
 	}
-	if project == nil {
-		return fmt.Errorf("view call %s requires a project", call.Command)
-	}
+	// A view without a project follows the plugin keys only, since no project key of it changes (docs/spec/plugins.md#plugin-data).
 	if call.Command == "runtime.data.on" {
 		raw, err := onDataPlugin(call)
 		if err != nil {
@@ -253,8 +338,15 @@ func (s *Shell) runDataCall(call viewCallEvent, unit *installedUnit, view *viewS
 			return err
 		}
 	}
-	if _, ok := owner.Data[fields.Key]; !ok {
+	declared, ok := owner.Data[fields.Key]
+	if !ok {
 		return fmt.Errorf("view call %s %s is not a data key of %s", call.Command, fields.Key, owner.ID)
+	}
+	if declared.pluginScope() {
+		return s.runPluginKeyCall(call, unit, owner, fields.Key, fields.Base, fields.Value, answer)
+	}
+	if project == nil {
+		return fmt.Errorf("view call %s requires a project", call.Command)
 	}
 	if call.Command == "runtime.data.set" {
 		return s.writeProjectData(project, unit, fields.Key, fields.Value, answer)
@@ -284,6 +376,32 @@ func (s *Shell) runDataCall(call viewCallEvent, unit *installedUnit, view *viewS
 			return
 		}
 		answer(true, nil)
+	})
+}
+
+// runPluginKeyCall serves a call runtime.data on a plugin key of owner, the plugin of the view or a dependency that a read names, in a
+// window with or without a project (docs/spec/plugins.md#plugin-data).
+func (s *Shell) runPluginKeyCall(call viewCallEvent, unit, owner *installedUnit, key string, base, value json.RawMessage, answer viewAnswer) error {
+	switch call.Command {
+	case "runtime.data.get":
+		read, err := s.readPluginKey(owner, key)
+		if err != nil {
+			return err
+		}
+		answer(read, nil)
+		return nil
+	case "runtime.data.set":
+		return s.writePluginKey(unit, key, value, nil, func(_ bool, err error) { answer(nil, err) })
+	}
+	if base == nil {
+		return fmt.Errorf("view call %s requires base", call.Command)
+	}
+	return s.writePluginKey(unit, key, value, base, func(stored bool, err error) {
+		if err != nil {
+			answer(nil, err)
+			return
+		}
+		answer(stored, nil)
 	})
 }
 
@@ -381,13 +499,17 @@ func (s *Shell) refreshSettings(value any) error {
 // project that this window does not hold takes its whole record, and one that it holds takes its plugin data.
 func (s *Shell) compareData(value any) error {
 	snapshot, err := decode[struct {
-		Projects      []json.RawMessage `json:"projects"`
-		Open          []string          `json:"open"`
-		ProjectsError *string           `json:"projectsError"`
+		Projects        []json.RawMessage                     `json:"projects"`
+		Open            []string                              `json:"open"`
+		ProjectsError   *string                               `json:"projectsError"`
+		PluginData      map[string]map[string]json.RawMessage `json:"pluginData"`
+		PluginDataError *string                               `json:"pluginDataError"`
 	}](value)
 	if err != nil {
 		return err
 	}
+	// The plugin keys do not depend on projects.json, so a refused projects.json leaves them taken (docs/spec/plugins.md#plugin-data).
+	s.takePluginData(snapshot.PluginData, snapshot.PluginDataError)
 	if snapshot.ProjectsError != nil {
 		return errors.New(*snapshot.ProjectsError)
 	}
