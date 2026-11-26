@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1212: project 없는 window의 settings surface test는 두 frame 뒤 판정하는 대신 surface를 보이게 하는 placement를 기다린다.
 - F1211: contract 표는 F1206과 F1209가 scope all로 넣은 native library만의 두 동작을 더 나열하지 않는다. native test는 그 check를 유지하고, host inventory check가 다시 통과한다.
 - F1209: surface의 page가 쓰지 않은 wheel은 surface 뒤의 content를 scroll한다. 짧거나 끝에 있는 settings view 아래의 settings window pane, document region 아래의 surface web view, 그 밖의 surface 아래의 main web view나 workbench가 scroll하고, dialog host는 넘기지 않는다.
 - F1208-1: 선언된 모든 workspace 버전은 core release 0.0.61을 가리키고, 이 release는 F1204, F1205, F1206, F1207을 게시한다.

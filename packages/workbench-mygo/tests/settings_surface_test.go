@@ -201,10 +201,16 @@ func TestTheSettingsSurfaceOfAWindowWithoutAProjectStartsWithANullProject(t *tes
 	f, stored := settingsViewShell(t)
 	f.run("core.project.close", map[string]string{"id": f.host.projects[0]["id"].(string)})
 	showPluginPage(f)
-	placed := stored.lastSurfaces(t)[settingsSurfaceID]
-	if placed == nil || placed["visible"] != true {
-		t.Fatalf("the settings surface of a window without a project is not placed visible: %v", placed)
-	}
+	// The seat takes its top from the frame before it, so the frame that places the surface visible can follow the host answer of an
+	// earlier placement; the test waits for that placement instead of a count of frames.
+	var placed map[string]any
+	f.until(func() bool {
+		if len(stored.requests) == 0 {
+			return false
+		}
+		placed = stored.lastSurfaces(t)[settingsSurfaceID]
+		return placed != nil && placed["visible"] == true
+	})
 	start := placed["start"].(map[string]any)
 	if project, held := start["project"]; !held || project != nil {
 		t.Fatalf("the settings surface of a window without a project starts with the project %v, want null", start["project"])
