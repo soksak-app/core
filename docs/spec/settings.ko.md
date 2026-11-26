@@ -80,8 +80,8 @@ chrome 버튼과 app 메뉴의 항목 설정…(Settings…), 단축키 `cmd+,`�
 
 - 목록: `core.settings-modal.plugin {plugin: null}`을 실행해 같은 검색어의 목록으로 돌아가는 버튼.
 - 플러그인 이름과, 그 아래 설명 줄의 플러그인 id.
+- 설정 view: [settings view](plugins.ko.md#settings-views)를 선언한 plugin에는 목록 버튼 아래, 설정 행 앞에 element `core.settings-modal.plugin-view`가 있고, pane content의 너비와 pane이 머리 아래에 남기는 높이로 그 view의 page를 보인다. scroll하는 pane은 element `core.settings-modal.pane`이다. settings view가 없는 plugin에는 그 element가 없다.
 - 설정: manifest가 선언한 설정마다 한 행을 manifest 순서로 보여 주고, 행 이름은 `label`이며 `description`이 있으면 행 아래에 보인다. 각 행은 그 형식의 [컨트롤](#컨트롤)이다. `enum`은 선택 상자, `integer`는 경계 사이의 슬라이더, `string`과 `address`는 글자 입력이다. 설정이 없는 플러그인은 "이 플러그인에는 설정이 없습니다."를 보여 준다.
-- 설정 view: [settings view](plugins.ko.md#settings-views)를 선언한 plugin에는 설정 행 아래에 element `core.settings-modal.plugin-view`가 있고, pane content의 너비와 pane의 보이는 상자의 높이로 그 view의 page를 보인다. scroll하는 pane은 element `core.settings-modal.pane`이다. settings view가 없는 plugin에는 그 element가 없다.
 - 섹션: 플러그인이 선언한 섹션의 이름을 한 줄 글로 보여 준다.
 - 사이드바: 모든 플러그인은 window-left, window-right, window-top, window-bottom 선택이 있고, 그 플러그인의 탭이 포커스 카드의 활성 탭인 동안 세트가 그 변 고정 사이드바의 내용을 바꾼다는 설명 아래에 있다. 표면이 있는 플러그인은 카드 내부 네 변 선택도 있다. 모든 선택은 사용 안 함과 모든 세트를 제공하고 `core.settings.link {place, plugin, set}`을 실행한다.
 

@@ -98,13 +98,19 @@ func (s *Shell) isSettingsSurface(surface string) bool {
 }
 
 // drawSettingsSeat draws the seat of the settings view in the plugin page: the element core.settings-modal.plugin-view in the width of the
-// pane and the height of its visible box, which holds the native view of the settings surface. The seat of the frame is the bounds of the
+// pane and the height of settingsSeatHeight, which holds the native view of the settings surface. The seat of the frame is the bounds of the
 // element clipped to the bounds of the pane in the last frame; a change of either draws the frame again, so a scroll and a resize of the
 // window measure it again (docs/spec/native-surfaces.md#settings-seat).
-func (s *Shell) drawSettingsSeat(c *ui.Context, height float32) {
+func (s *Shell) drawSettingsSeat(c *ui.Context, pane settingsPane) {
 	view := s.settingsView
 	seat := s.exposedBox(c, "core.settings-modal.plugin-view", "", "")
-	seat.FillWidth().Height(height).Role(ui.RoleGroup).Label("설정 view")
+	// The top of the seat in the content of the pane, from the last frame, gives the seat its height; the height does not move the top,
+	// so the second frame of a page draws the seat at its height.
+	if top := seat.Bounds().Y - s.settingsWindow.paneBounds.Y + s.settingsWindow.scroll.Y; top != s.settingsWindow.seatTop {
+		s.settingsWindow.seatTop = top
+		s.options.Invalidate()
+	}
+	seat.FillWidth().Height(settingsSeatHeight(&s.settingsWindow, pane)).Role(ui.RoleGroup).Label("설정 view")
 	if view == nil {
 		return
 	}
@@ -114,11 +120,11 @@ func (s *Shell) drawSettingsSeat(c *ui.Context, height float32) {
 		s.failWindowRead(err)
 		return
 	}
-	bounds, pane := seat.Bounds(), s.settingsWindow.paneBounds
-	left, top := max(bounds.X, pane.X), max(bounds.Y, pane.Y)
-	right, bottom := min(bounds.X+bounds.W, pane.X+pane.W), min(bounds.Y+bounds.H, pane.Y+pane.H)
+	bounds, paneBox := seat.Bounds(), s.settingsWindow.paneBounds
+	left, top := max(bounds.X, paneBox.X), max(bounds.Y, paneBox.Y)
+	right, bottom := min(bounds.X+bounds.W, paneBox.X+paneBox.W), min(bounds.Y+bounds.H, paneBox.Y+paneBox.H)
 	box := DevicePixels(layout.Rect{X: float64(bounds.X), Y: float64(bounds.Y), W: float64(bounds.W), H: float64(bounds.H)}, window.Scale)
-	clip := DevicePixels(layout.Rect{X: float64(pane.X), Y: float64(pane.Y), W: float64(pane.W), H: float64(pane.H)}, window.Scale)
+	clip := DevicePixels(layout.Rect{X: float64(paneBox.X), Y: float64(paneBox.Y), W: float64(paneBox.W), H: float64(paneBox.H)}, window.Scale)
 	if box != view.surface.box || view.surface.clip == nil || clip != *view.surface.clip {
 		view.surface.box, view.surface.clip = box, &clip
 		s.options.Invalidate()

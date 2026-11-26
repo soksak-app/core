@@ -23,6 +23,7 @@ import { SIDE_NAMES, WINDOW_SIDES } from "./window-sidebars.js";
 import { matchPlugins } from "./plugin-search.js";
 import { restoreScroll, scrollPositions } from "./scroll-keep.js";
 import { setupParts } from "./setup-exposure.js";
+import { seatHeight } from "./settings-view.js";
 import { missingKinds } from "./setup-parts.js";
 import { errorToasts, hideError, showError } from "./shown-errors.js";
 import { hasSection, section, sectionNames } from "./registry.js";
@@ -537,23 +538,21 @@ function drawPluginList() {
 /** The settings page of one loaded plugin: the button that returns to the list, the settings, the sections and the sidebar choices. */
 function drawPluginPage(unit) {
   const back = button("plugins:list", "core.settings-modal.back", "목록", "core.settings-modal.plugin", { plugin: null });
-  body.append(group(unit.name, unit.id, [row("", back)]));
+  // The seat of the settings view of the plugin stands below the back button, so only the heading and the scope tabs stand above it and
+  // every other group follows it; it takes the height that the pane leaves below them (docs/spec/plugins.md#settings-views).
+  const heading = [row("", back)];
+  let seat = null;
+  if (unit.settingsView) {
+    seat = document.createElement("div");
+    seat.className = "set-plugin-view";
+    seat.dataset.expose = "core.settings-modal.plugin-view";
+    heading.push(seat);
+  }
+  body.append(group(unit.name, unit.id, heading));
 
   const declared = Object.entries(settingDefinitions()).filter(([, d]) => d.plugin === unit.id);
-  // The seat of the settings view of the plugin stands below the rows of the settings group: as wide as the content of the pane and as high as its
-  // visible box, so the whole page of the view shows when the pane scrolls to it (docs/spec/plugins.md#settings-views).
-  const seat = [];
-  if (unit.settingsView) {
-    const view = document.createElement("div");
-    view.className = "set-plugin-view";
-    view.dataset.expose = "core.settings-modal.plugin-view";
-    view.style.height = `${body.clientHeight}px`;
-    seat.push(view);
-  }
   if (declared.length) {
-    body.append(group("설정", `${unit.name} 플러그인이 선언한 설정.`, [...declared.flatMap(([key, d]) => declaredRow(key, d)), ...seat]));
-  } else if (seat.length) {
-    body.append(group("설정", `${unit.name} 플러그인이 선언한 설정.`, seat));
+    body.append(group("설정", `${unit.name} 플러그인이 선언한 설정.`, declared.flatMap(([key, d]) => declaredRow(key, d))));
   } else {
     const none = document.createElement("p");
     none.className = "set-caption";
@@ -573,6 +572,27 @@ function drawPluginPage(unit) {
     ...[["left", "왼쪽"], ["right", "오른쪽"], ["top", "상단"], ["bottom", "하단"]].map(([side,label]) =>
       row(`카드 ${label} 사이드바`, linkControl(`link:card-${side}:${unit.id}`, `card-${side}`, unit.id))),
   ]));
+  if (seat) sizeSeat(seat);
+}
+
+/**
+ * Sets the height of the seat of the settings view from the pane and the rows above it (docs/spec/plugins.md#settings-views). The visible
+ * height of the pane is its largest height, the largest height of the card minus its head and its borders, because the card ends with its
+ * content.
+ */
+function sizeSeat(view) {
+  const cardStyle = getComputedStyle(card);
+  const head = card.querySelector(".set-card__head");
+  const visible = parseFloat(cardStyle.maxHeight) - head.offsetHeight - parseFloat(cardStyle.borderTopWidth) - parseFloat(cardStyle.borderBottomWidth);
+  const paneStyle = getComputedStyle(body);
+  const tabs = body.querySelector(".set-scope-tabs");
+  view.style.height = `${seatHeight({
+    visible,
+    top: view.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop,
+    paddingTop: parseFloat(paneStyle.paddingTop),
+    paddingBottom: parseFloat(paneStyle.paddingBottom),
+    scope: tabs.offsetHeight + parseFloat(getComputedStyle(tabs).marginBottom),
+  })}px`;
 }
 
 function drawPlugins() {

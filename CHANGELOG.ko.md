@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1207: settings view의 seat는 plugin page의 머리 아래에 서고 pane이 그 아래에 남기는 높이를 가진다. 그래서 view의 page 전체와 그 끝이 pane 안에 보이고, view 밖의 wheel은 pane을 scroll한다. workbench-mygo와 workbench unit test에서 Red와 Green을 확인했다.
 - F1206: mygo application의 settings view는 투명한 page를 통해 다른 surface를 보이지 않는다. host가 settings surface host를 pane의 색인 window 배경으로 채운다.
 - F1205: mygo application의 surface host는 native view element의 clip만 보이므로, settings view와 그 document region은 settings window의 pane 안에 머문다.
 - F1204: mygo application은 project가 없는 window에서 끝나지 않고 plugin의 settings view를 보이며, 그 settings surface는 project null로 시작한다.

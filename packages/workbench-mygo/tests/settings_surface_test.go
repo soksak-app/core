@@ -210,3 +210,47 @@ func TestTheSettingsSurfaceOfAWindowWithoutAProjectStartsWithANullProject(t *tes
 		t.Fatalf("the settings surface of a window without a project starts with the project %v, want null", start["project"])
 	}
 }
+
+// The seat of a settings view stands below the heading and takes the height that the pane leaves below it, so the whole seat shows inside the
+// pane and the page of the view scrolls its own content to its end; a wheel over the view never scrolls the pane
+// (docs/spec/plugins.md#settings-views, F1207).
+func TestTheSeatBelowTheHeadingEndsInsideThePane(t *testing.T) {
+	f, _ := settingsViewShell(t)
+	showPluginPage(f)
+	f.settle()
+	pane := element(t, f.tester, "core.settings-modal.pane", "").Bounds
+	seat := element(t, f.tester, "core.settings-modal.plugin-view", "").Bounds
+	if seat.H <= 0 {
+		t.Fatalf("the seat has the height %v", seat.H)
+	}
+	if seat.Y+seat.H > pane.Y+pane.H {
+		t.Fatalf("the seat ends at %v, below the bottom %v of the pane", seat.Y+seat.H, pane.Y+pane.H)
+	}
+	if pane.Y+pane.H-(seat.Y+seat.H) > 40 {
+		t.Fatalf("the seat ends at %v and leaves %v of the pane below it", seat.Y+seat.H, pane.Y+pane.H-(seat.Y+seat.H))
+	}
+}
+
+// When the rows above the seat leave less than the scope tabs, the seat is as high as the visible pane minus the scope tabs and both
+// paddings: the pane overflows, and a scroll of the pane shows the whole seat below a strip of rows as high as the scope tabs
+// (docs/spec/plugins.md#settings-views, F1207).
+func TestTheSeatOfAShortPaneShowsWholeBelowAStripOfRows(t *testing.T) {
+	f, _ := settingsViewShell(t)
+	f.tester.SetSize(1200, 300)
+	showPluginPage(f)
+	f.settle()
+	pane := element(t, f.tester, "core.settings-modal.pane", "").Bounds
+	scopes := element(t, f.tester, "core.settings-modal.scope", "pick:scope:common").Bounds
+	for range 80 {
+		seat := element(t, f.tester, "core.settings-modal.plugin-view", "").Bounds
+		if seat.Y >= pane.Y+scopes.H && seat.Y+seat.H <= pane.Y+pane.H {
+			return
+		}
+		if seat.Y < pane.Y {
+			t.Fatalf("the pane scrolled the seat %+v past its top without showing it whole in the pane %+v", seat, pane)
+		}
+		f.tester.Scroll(float32(pane.X+10), float32(pane.Y+10), 0, 4)
+		f.settle()
+	}
+	t.Fatalf("no scroll of the pane %+v shows the whole seat below the scope tabs", pane)
+}

@@ -87,3 +87,11 @@ test("the settings surface is no section, has the kind settings and keeps no tab
   assert.equal(isSectionSurface("settings/probe"), false);
   assert.deepEqual(surfaceKindOf(surface()), { kind: "settings", sidebar: null, dialog: null });
 });
+
+// The seat takes the height that the pane leaves below the heading, and when the heading leaves less than the scope tabs, the visible height
+// minus the scope tabs and both paddings (docs/spec/plugins.md#settings-views, F1207).
+test("the seat takes the height that the pane leaves below the heading", () => {
+  assert.equal(view.seatHeight({ visible: 516, top: 271, paddingTop: 20, paddingBottom: 24, scope: 50 }), 221);
+  assert.equal(view.seatHeight({ visible: 516, top: 271 + 171, paddingTop: 20, paddingBottom: 24, scope: 50 }), 50);
+  assert.equal(view.seatHeight({ visible: 516, top: 271 + 172, paddingTop: 20, paddingBottom: 24, scope: 50 }), 422);
+});

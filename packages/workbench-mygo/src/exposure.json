@@ -6074,7 +6074,7 @@
       },
       {
         "name": "core.settings-modal.plugin-view",
-        "description": "The seat of the settings view of a plugin, below the rows of 설정 of its plugin page, as wide as the content of the pane and as high as its visible box; the settings surface settings/<plugin> shows in it, clipped to the pane."
+        "description": "The seat of the settings view of a plugin, below the button 목록 of its plugin page, as wide as the content of the pane and as high as the pane leaves below the heading; the settings surface settings/<plugin> shows in it, clipped to the pane."
       },
       {
         "name": "core.settings-modal.manage",

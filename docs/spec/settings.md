@@ -80,8 +80,8 @@ The page of a plugin replaces the search field and the list. It shows:
 
 - 목록: a button that runs `core.settings-modal.plugin {plugin: null}` and returns to the list with the same query.
 - The plugin name, with the plugin id as its caption.
+- 설정 view: for a plugin that declares a [settings view](plugins.md#settings-views), the element `core.settings-modal.plugin-view` below the button 목록 and before the rows of 설정, which shows the page of that view in the width of the content of the pane and the height that the pane leaves below the heading; the scrolling pane is the element `core.settings-modal.pane`. A plugin without a settings view has no such element.
 - 설정: one row per setting the manifest declares, in manifest order, named with its `label` and followed by its `description` when it has one. Each row has the [control](#controls) of its form: an `enum` a select box, an `integer` a slider between its bounds, and a `string` or an `address` a text field. A plugin without settings shows "이 플러그인에는 설정이 없습니다."
-- 설정 view: for a plugin that declares a [settings view](plugins.md#settings-views), the element `core.settings-modal.plugin-view` below the rows of 설정, which shows the page of that view in the width of the content of the pane and the height of its visible box; the scrolling pane is the element `core.settings-modal.pane`. A plugin without a settings view has no such element.
 - 섹션: the names of the sections the plugin declares, as one line of text.
 - 사이드바: every plugin has window-left, window-right, window-top and window-bottom selectors, under the statement that the set replaces the content of the fixed sidebar of that side while a tab of the plugin is the active tab of the focused card. A plugin with a surface also has four internal card-side selectors. Every selector offers 사용 안 함 and all sets, and runs `core.settings.link {place, plugin, set}`.
 

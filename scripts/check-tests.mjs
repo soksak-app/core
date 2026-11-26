@@ -499,7 +499,7 @@ const FEATURE_LINKS = [
     id: "F1128-2",
     implementation: [
       { file: "packages/workbench-mygo/src/settings_surface.go", symbol: "func (s *Shell) followSettingsSurface() {" },
-      { file: "packages/workbench-mygo/src/settings_surface.go", symbol: "func (s *Shell) drawSettingsSeat(c *ui.Context, height float32) {" },
+      { file: "packages/workbench-mygo/src/settings_surface.go", symbol: "func (s *Shell) drawSettingsSeat(c *ui.Context, pane settingsPane) {" },
       { file: "packages/host/go/src/modals.go", symbol: "func IsSettingsSurface(surface string) bool {" },
       { file: "packages/host/rust/src/modals.rs", symbol: "pub fn is_settings_surface(surface: &str) -> bool {" },
     ],
@@ -551,6 +551,20 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/memory-saver.test.mjs", id: "a settings surface is left out of the memory saver" },
     ],
     expected: "The memory saver of the page workbench leaves the settings surface out.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1207",
+    implementation: [
+      { file: "packages/workbench-mygo/src/settings_draw.go", symbol: "func settingsSeatHeight(w *settingsWindow, pane settingsPane) float32 {" },
+      { file: "packages/workbench/settings-view.js", symbol: "export function seatHeight({ visible, top, paddingTop, paddingBottom, scope }) {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/settings_surface_test.go", id: "TestTheSeatBelowTheHeadingEndsInsideThePane" },
+      { file: "packages/workbench-mygo/tests/settings_surface_test.go", id: "TestTheSeatOfAShortPaneShowsWholeBelowAStripOfRows" },
+      { file: "packages/workbench/test/settings-view.test.mjs", id: "the seat takes the height that the pane leaves below the heading" },
+    ],
+    expected: "The seat of a settings view stands below the heading and takes the height that the pane leaves below it, so the whole page of the view shows inside the pane.",
     levels: ["unit"],
   },
   {

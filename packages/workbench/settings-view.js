@@ -71,6 +71,16 @@ export const settingsSurfacePlugin = (surface) => (open !== null && open.surface
 export const settingsSurface = () => (open === null ? null : open.surface.surfaceId);
 
 /**
+ * The height of the seat of a settings view (docs/spec/plugins.md#settings-views): the height that the pane leaves below the rows, the
+ * visible height of the pane minus the top of the seat in its content and its bottom padding; when that is less than the scope tabs with
+ * their margin, the visible height minus the scope tabs and both paddings.
+ */
+export function seatHeight({ visible, top, paddingTop, paddingBottom, scope }) {
+  const rest = visible - top - paddingBottom;
+  return rest >= scope ? rest : visible - scope - paddingTop - paddingBottom;
+}
+
+/**
  * The seat of the settings surface: frame is the rectangle of the element core.settings-modal.plugin-view and clip the rectangle of the
  * pane core.settings-modal.pane, in CSS pixels of the window, as the modal document reported them; null before it reported both.
  */

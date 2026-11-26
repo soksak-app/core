@@ -157,10 +157,13 @@ type settingsWindow struct {
 	viewPage    string
 	viewStopped bool
 	viewKeys    bool
-	// paneBounds is the pane in the last frame, in window DIPs, and paneHeight the height of its visible box, which the seat of a settings
-	// view takes.
+	// paneBounds is the pane in the last frame, in window DIPs, and paneHeight the height of its visible box.
 	paneBounds ui.Rect
 	paneHeight float32
+	// scopeHeight is the height of the scope tabs with their margin, and seatTop the top of the seat in the content of the pane, both
+	// in the last frame; the seat takes its height from them (docs/spec/plugins.md#settings-views).
+	scopeHeight float32
+	seatTop     float32
 }
 
 func newSettingsWindow() settingsWindow {
@@ -593,6 +596,11 @@ func (s *Shell) buildPluginPage(b *settingsBuilder, plugin *LoadedPlugin) error 
 	scope := s.controlScope("links")
 	back := b.button("plugins:list", "core.settings-modal.back", "목록", "core.settings-modal.plugin", map[string]any{"plugin": nil})
 	b.group(plugin.Name, plugin.ID, settingsRow{controls: []*SettingsControl{back}})
+	// The seat of the settings view stands below the back button, so only the heading and the scope tabs stand above it and every
+	// other group follows it (docs/spec/plugins.md#settings-views).
+	if unit := s.units[plugin.ID]; unit != nil && unit.SettingsView != nil {
+		b.model.groups[len(b.model.groups)-1].view = true
+	}
 	var rows []settingsRow
 	for _, definition := range s.settings.Definitions {
 		if definition.Plugin != plugin.ID {
@@ -611,9 +619,6 @@ func (s *Shell) buildPluginPage(b *settingsBuilder, plugin *LoadedPlugin) error 
 		rows = []settingsRow{{description: "이 플러그인에는 설정이 없습니다."}}
 	}
 	b.group("설정", plugin.Name+" 플러그인이 선언한 설정.", rows...)
-	if unit := s.units[plugin.ID]; unit != nil && unit.SettingsView != nil {
-		b.model.groups[len(b.model.groups)-1].view = true
-	}
 	ids := make([]string, len(plugin.Sections))
 	for i, section := range plugin.Sections {
 		ids[i] = section.ID
