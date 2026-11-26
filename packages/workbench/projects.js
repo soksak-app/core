@@ -8,7 +8,7 @@ import { beginSettings, projectSidebars, selectProject, value, flushSettings } f
 import { flushEvents } from "./page-log.js";
 import { windows } from "@soksak/runtime";
 import { log, retainSidecarSessions, windowSidecar } from "./host.js";
-import { compareProjectData, configureData } from "./plugin-data.js";
+import { comparePluginData, compareProjectData, configureData } from "./plugin-data.js";
 import { openTabStates } from "./tab-state.js";
 import { errorToasts, hideError } from "./shown-errors.js";
 import { createTabSessions } from "./tab-session.js";
@@ -35,6 +35,12 @@ let refreshing = Promise.resolve();
 // The writes of project data of each project that the store has not answered, and the end of the last write: each write carries the
 // data of the write before it, so the store takes them in order.
 const dataWrites = new Map();
+/* The plugin keys of the last snapshot, as the window holds them, and the error of a refused plugin-data.json, or null
+   (docs/spec/plugins.md#plugin-data). */
+let pluginEntries = {};
+let pluginDataError = null;
+/* The writes of plugin keys of this window that the store has not answered yet. */
+let pluginWrites = 0;
 let dataWriting = Promise.resolve();
 /* Project that was drawn on the first screen and is not activated yet. The activation of initialise takes it over. */
 let begun = null;
@@ -345,6 +351,21 @@ export function begin(snapshot) {
   savedLayout = JSON.stringify({ spaces: opened.spaces, activeSpaceId: opened.activeSpaceId, named: opened.named });
 }
 
+/**
+ * Stores one entry of a plugin key through the store, which decides a replace against the writes of every window, and takes a stored
+ * entry into the plugin keys that the window holds (docs/spec/plugins.md#plugin-data). Resolves whether the store stored it.
+ */
+async function putPluginKey(plugin, key, entry, base, fallback) {
+  pluginWrites += 1;
+  try {
+    const stored = await store.pluginData(plugin, key, entry, base, fallback);
+    if (stored) pluginEntries = { ...pluginEntries, [plugin]: { ...pluginEntries[plugin], [key]: entry } };
+    return stored;
+  } finally {
+    pluginWrites -= 1;
+  }
+}
+
 /** Starts the project list of the window over storage; unloadOf(plugin) returns the surface.unload declaration of a plugin. */
 export async function initialise(storage, unloadOf) {
   try {
@@ -360,7 +381,17 @@ async function initialiseWindow(storage, unloadOf) {
   configureData({
     sidecar: windowSidecar,
     // default: the data of a project that stored no plugin data is empty.
-    data: { get: (id, plugin) => projects.find((p) => p.id === id)?.plugins?.[plugin] ?? {}, set: setPluginData },
+    data: {
+      get: (id, plugin) => projects.find((p) => p.id === id)?.plugins?.[plugin] ?? {},
+      set: setPluginData,
+      plugin: {
+        get: (plugin) => {
+          if (pluginDataError !== null) throw new Error(pluginDataError);
+          return pluginEntries[plugin] ?? {}; // default: a plugin that stores no plugin key has no entries.
+        },
+        put: putPluginKey,
+      },
+    },
   });
   await refresh();
   tabSessions = createTabSessions({ store, failed: writeFailed, stored: writeStored, interaction: (tab) => documentRegions.interaction(tab),
@@ -497,6 +528,14 @@ async function readProjects(readSnapshot = () => store.snapshot()) {
     return old && dataWrites.get(p.id) > 0 ? { ...kept, plugins: old.plugins } : kept;
   });
   compareProjectData(read, projects);
+  // A read that started before a write of this window was stored keeps the plugin keys as the window holds them; the host answers that
+  // write with a change again.
+  if (pluginWrites === 0) {
+    const before = pluginEntries;
+    pluginDataError = snapshot.pluginDataError ?? null; // default: a snapshot of a plugin-data.json that is not refused has no error.
+    pluginEntries = snapshot.pluginData ?? {}; // default: a refused plugin-data.json carries no plugin keys.
+    comparePluginData(before, pluginEntries);
+  }
   const removed = [...owned].filter(id => !projects.some(p => p.id === id));
   for (const id of removed) owned.delete(id);
   const ended = activeProjectId !== null && !active();

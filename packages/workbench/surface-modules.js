@@ -498,7 +498,8 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
     // of a dependency of the plugin otherwise (docs/spec/plugins.md#project-data).
     data: (owner, listener) => Promise.resolve(onDataChange((project, plugin, key) => {
       // default: a listener without an owner follows the data of its own plugin.
-      if (plugin === (owner ?? surface.pluginId) && project === viewStartProjectOf(surface.surfaceId)?.id) listener(key);
+      // A plugin key names no project and reaches the views of every window (docs/spec/plugins.md#plugin-data).
+      if (plugin === (owner ?? surface.pluginId) && (project === null || project === viewStartProjectOf(surface.surfaceId)?.id)) listener(key);
     })),
     // The value of a status of the view: the registry follows the status and reports each value to the listener. A status that the
     // exposure declares names no status of the view, so the declaration is checked before the observation (view-answer.js of @soksak/plugin-api).

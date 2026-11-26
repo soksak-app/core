@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1210-3: The web workbench and the test host of the SDK serve the plugin keys of `plugin-data.json` to the views of any window, with or without a project; a project key of a view without a project is refused with `view call <command> requires a project`.
 - F1210-2: The plugin.json checks of sok and of the plugin API accept `scope` `project` or `plugin` on a key of `data` and refuse another value with `data <key> scope must be project or plugin`.
 - F1213-2: In the debug mygo application the settings view shows in a seat of its reported content height, and the pane stands still at its end.
 - F1213-3: Before the first report of its view, the seat of a settings view is as high as the pane, so its surface is placed visible and the view starts and reports its content height.

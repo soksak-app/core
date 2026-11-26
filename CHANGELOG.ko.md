@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1210-3: web workbench와 SDK의 test host는 `plugin-data.json`의 plugin key를 project가 있든 없든 모든 창의 view에 제공한다. project 없는 view의 project key는 `view call <command> requires a project`로 거부된다.
 - F1210-2: sok와 plugin API의 plugin.json 검사는 `data` key의 `scope`로 `project`나 `plugin`을 받고, 다른 값은 `data <key> scope must be project or plugin`으로 거부한다.
 - F1213-2: debug mygo application에서 settings view는 알린 내용 높이의 seat에 보이고, pane은 끝에서 움직이지 않는다.
 - F1213-3: view의 첫 알림 전에는 settings view의 seat가 pane만큼 높다. 그래서 surface가 visible로 놓이고 view가 시작해서 내용 높이를 알린다.

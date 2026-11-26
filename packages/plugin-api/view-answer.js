@@ -305,7 +305,6 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
     case "runtime.data.replace": {
       const fields = objectOf(command, params);
       const project = startProject();
-      if (project === null) throw new Error(`view call ${command} requires a project`);
       if (typeof fields.key !== "string" || fields.key === "") throw new TypeError(`view call ${command} requires a non-empty key`);
       // A write names no plugin, whatever the plugin is: a view changes the project data of its own plugin only.
       if (command !== "runtime.data.get" && Object.hasOwn(fields, "plugin")) {
@@ -314,6 +313,8 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
       const owner = dataOwnerOf(command, fields.plugin, plugin, runtime.dependsOn);
       const data = runtime.data.of(project, owner);
       if (!data.declares(fields.key)) throw new Error(`view call ${command} ${fields.key} is not a data key of ${owner}`);
+      // A plugin key belongs to no project, and a project key needs the project of the view (docs/spec/plugins.md#plugin-data).
+      if (project === null && data.scope(fields.key) === "project") throw new Error(`view call ${command} requires a project`);
       if (command === "runtime.data.get") return data.get(fields.key);
       if (command === "runtime.data.replace") {
         if (!Object.hasOwn(fields, "base")) throw new TypeError(`view call ${command} requires base`);
@@ -324,7 +325,7 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
     }
     // A subscription to the project data of the plugin, or of a dependency that the call names (docs/spec/plugins.md#project-data).
     case "runtime.data.on": {
-      if (startProject() === null) throw new Error(`view call ${command} requires a project`);
+      // A view without a project follows the plugin keys only, since no project key of it changes (docs/spec/plugins.md#plugin-data).
       // default: a subscription without params, or with null as runtime.data.on sends it, names no plugin.
       const named = params === null || params === undefined ? undefined : objectOf(command, params).plugin;
       const owner = dataOwnerOf(command, named, plugin, runtime.dependsOn);

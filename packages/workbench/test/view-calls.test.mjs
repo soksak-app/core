@@ -364,7 +364,8 @@ test("runtime.data calls refuse a view whose start values carry no project, and 
   await h.close();
 });
 
-test("runtime.data.on subscribes to the changes of the project data of the start project, and a view without project is refused", async () => {
+// A view without a project subscribes too, since it follows the plugin keys of its plugin (docs/spec/plugins.md#plugin-data).
+test("runtime.data.on subscribes to the changes of the project data of the start project, and a view without a project subscribes to the plugin keys", async () => {
   const h = await mountView("data-on", { project: START_PROJECT });
   await h.mount("probe-surface-none", "probe", null);
   const from = wire.calls.length;
@@ -373,8 +374,8 @@ test("runtime.data.on subscribes to the changes of the project data of the start
   assert.equal(h.sent(from, ["viewEvent"]).length, 0);
   assert.equal((await h.call()).result, null);
   assert.deepEqual(h.sent(from, ["viewEvent"]), [["viewEvent", { generation: 1, event: "data", data: { key: "note" }, surface: "probe-surface" }]]);
-  assert.match((await h.call()).error.message, /^view call runtime.data.on requires a project$/);
-  assert.equal(h.sent(from, ["viewEvent"]).length, 1);
+  assert.equal((await h.call()).result, null);
+  assert.equal(h.sent(from, ["viewEvent"]).length, 1, "a write of a project key reaches no view without a project");
   await h.close();
 });
 

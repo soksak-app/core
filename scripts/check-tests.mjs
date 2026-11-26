@@ -554,6 +554,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1210-3",
+    implementation: [
+      { file: "packages/workbench/plugin-data.js", symbol: "export function comparePluginData(before, after) {" },
+      { file: "packages/workbench/projects.js", symbol: "async function putPluginKey(plugin, key, entry, base, fallback) {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/plugin-keys.test.mjs", id: "a view without a project reads, writes and replaces a plugin key through the plugin store" },
+      { file: "packages/plugin-api/test/view-answer-plugin-keys.test.mjs", id: "a view without a project reads, writes, replaces and follows a plugin key" },
+    ],
+    expected: "The web workbench serves the plugin keys to the views of any window, with or without a project.",
+    levels: ["unit"],
+  },
+  {
     id: "F1210-2",
     implementation: [
       { file: "packages/sok/go/src/manifest.go", symbol: "func checkData(where string, manifest map[string]any) error {" },

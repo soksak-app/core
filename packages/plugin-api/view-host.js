@@ -181,7 +181,17 @@ export function createTestHost(fixtures) {
   // The number of reads of each key by the view, which fixtures.onDataRead receives.
   const dataReads = new Map();
   // The stored values of the plugin and of each dependency for a project; a dependency starts with the values of its fixture.
-  const storeOf = (project, owner = plugin) => {
+  // The declared scope of a key of the plugin or of a dependency: plugin for a key that belongs to no project, project otherwise
+  // (docs/spec/plugins.md#plugin-data).
+  const scopeOf = (owner, key) => {
+    // default: a dependency fixture without data declares no key.
+    const declared = owner === plugin ? declaredData : dependencies[owner]?.data ?? {};
+    return declared[key]?.scope ?? "project"; // default: a key without a scope is a project key.
+  };
+  // The store of a key: the store of the project for a project key, and the one store of no project for a plugin key, which every
+  // project and a view without a project share.
+  const storeOf = (project, owner = plugin, key = undefined) => {
+    if (key !== undefined && scopeOf(owner, key) === "plugin") project = { id: null };
     if (!stores.has(project.id)) stores.set(project.id, new Map());
     const byOwner = stores.get(project.id);
     // default: a dependency fixture without values starts with empty project data.
@@ -192,7 +202,7 @@ export function createTestHost(fixtures) {
   // and each listener of the changes of that dependency is called with the key.
   const writeDependencyData = (project, owner, key, value) => {
     // default: a dependency fixture without data declares no key, which checkProjectData refuses.
-    storeOf(project, owner).set(key, checkProjectData(owner, dependencies[owner]?.data ?? {}, key, value));
+    storeOf(project, owner, key).set(key, checkProjectData(owner, dependencies[owner]?.data ?? {}, key, value));
     for (const listener of [...listenersOf(dependencyDataListeners, owner)]) listener(key);
   };
   // The data of a dependency for a project, which the view reads and does not write.
@@ -201,9 +211,10 @@ export function createTestHost(fixtures) {
     const declared = dependencies[owner]?.data ?? {};
     return {
       declares: (key) => Object.hasOwn(declared, key),
+      scope: (key) => scopeOf(owner, key),
       get: (key) => {
         if (!Object.hasOwn(declared, key)) throw new Error(`${owner} data ${key} is not declared`);
-        return storeOf(project, owner).has(key) ? storeOf(project, owner).get(key) : structuredClone(declared[key].default);
+        return storeOf(project, owner, key).has(key) ? storeOf(project, owner, key).get(key) : structuredClone(declared[key].default);
       },
     };
   };
@@ -211,7 +222,7 @@ export function createTestHost(fixtures) {
   // and each listener of the data is called with the key.
   const writeData = (project, key, value) => {
     const checked = checkProjectData(plugin, declaredData, key, value);
-    storeOf(project).set(key, checked);
+    storeOf(project, plugin, key).set(key, checked);
     observed.data.push({ key, value: checked });
     for (const listener of [...dataListeners]) listener(key);
   };
@@ -220,10 +231,11 @@ export function createTestHost(fixtures) {
       if (!Object.hasOwn(dependencies, owner)) throw new Error(`data of ${owner} is not served to ${plugin}`);
       return dependencyDataOf(project, owner);
     }
-    const current = (key) => (storeOf(project).has(key) ? storeOf(project).get(key) : declaredData[key]?.default);
+    const current = (key) => (storeOf(project, plugin, key).has(key) ? storeOf(project, plugin, key).get(key) : declaredData[key]?.default);
     const write = (key, value) => writeData(project, key, value);
     return {
       declares: (key) => Object.hasOwn(declaredData, key),
+      scope: (key) => scopeOf(plugin, key),
       // A read answers the stored value, then fixtures.onDataRead runs with the read count of the key and a writer of another view, so a
       // write made there lands between this read and the replace that follows it.
       get: (key) => {

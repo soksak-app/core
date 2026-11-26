@@ -42,6 +42,12 @@ export class HostWorkspaceStore {
   snapshot() { return this.host.call("workspace", { kind: "snapshot" }); }
   add(project) { return this.host.call("workspace", { kind: "add", project }); }
   patch(id, patch) { return this.host.call("workspace", { kind: "patch", id, patch }); }
+  /** Stores one entry of a plugin key, against base and the declared default when they are given (docs/spec/plugins.md#plugin-data). */
+  pluginData(plugin, key, entry, base, fallback) {
+    const request = { kind: "pluginData", plugin, key, entry };
+    if (base !== undefined) Object.assign(request, { base, default: fallback });
+    return this.host.call("workspace", request);
+  }
   tabState() { return this.host.call("workspace", { kind: "tabState" }); }
   tabStatePut(tab, entry) { return this.host.call("workspace", { kind: "tabStatePut", tab, entry }); }
   tabSession(tab) { return this.host.call("workspace", { kind: "tabSession", tab }); }
