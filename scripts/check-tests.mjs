@@ -554,6 +554,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1213-3",
+    implementation: [
+      { file: "packages/workbench-mygo/src/settings_surface.go", symbol: "func (s *Shell) drawSettingsSeat(c *ui.Context) {" },
+      { file: "packages/workbench/settings-ui.js", symbol: "function sizeSeat(view) {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/settings_surface_test.go", id: "TestTheSeatTakesTheContentHeightThatTheViewReports" },
+      { file: "packages/workbench/test/settings-seat-height.test.mjs", id: "the seat of the settings view takes the content height that the view reports" },
+    ],
+    expected: "Before the first report of its view, the seat of a settings view is as high as the pane, so its surface is placed visible and the view starts.",
+    levels: ["unit"],
+  },
+  {
     id: "F1213-1",
     implementation: [
       { file: "packages/plugin-api/view.js", symbol: "const followSeatHeight = () => {" },

@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1213-3: Before the first report of its view, the seat of a settings view is as high as the pane, so its surface is placed visible and the view starts and reports its content height.
 - F1213-1: The seat of a settings view takes the content height that its view reports with `runtime.seat.height`, which the plugin SDK sends through `followSeatHeight()`, so no gap stands below a short view and the seat height no longer follows the scroll of the pane.
 - F1210-1: The Go and Rust host stores keep the plugin keys in `plugin-data.json`: the snapshot carries them as `pluginData`, or a refused file as `pluginDataError`, and the workspace operation `pluginData` stores one entry and decides a replace against its `base`.
 - F1212: The test of the settings surface of a window without a project waits for the placement that shows the surface instead of judging after two frames.

@@ -88,13 +88,13 @@ test("the settings surface is no section, has the kind settings and keeps no tab
   assert.deepEqual(surfaceKindOf(surface()), { kind: "settings", sidebar: null, dialog: null });
 });
 
-// The seat takes the content height that its settings view reports with runtime.seat.height: 0 before the first report and again for the
+// The seat takes the content height that its settings view reports with runtime.seat.height: null before the first report and again for the
 // surface of a page shown again, and a surface that is not the open settings surface is refused (docs/spec/plugins.md#settings-views, F1213).
 test("the seat takes the content height that its settings view reports", () => {
   let changes = 0;
   const stop = view.onSettingsViewChange(() => changes++);
   view.showSettingsView("probe");
-  assert.equal(view.seatContentHeight(), 0);
+  assert.equal(view.seatContentHeight(), null);
   const before = changes;
   view.setSeatHeight("settings/probe", 180);
   assert.equal(view.seatContentHeight(), 180);
@@ -102,10 +102,10 @@ test("the seat takes the content height that its settings view reports", () => {
   assert.equal(changes, before + 1, "a repeated height changes nothing");
   assert.throws(() => view.setSeatHeight("tab-a", 10), /^Error: view call runtime.seat.height is served only for a settings surface$/);
   view.showSettingsView(null);
-  assert.equal(view.seatContentHeight(), 0);
+  assert.equal(view.seatContentHeight(), null);
   assert.throws(() => view.setSeatHeight("settings/probe", 10), /served only for a settings surface/);
   view.showSettingsView("probe");
-  assert.equal(view.seatContentHeight(), 0, "the surface of a page shown again starts without a report");
+  assert.equal(view.seatContentHeight(), null, "the surface of a page shown again starts without a report");
   view.showSettingsView(null);
   stop();
 });

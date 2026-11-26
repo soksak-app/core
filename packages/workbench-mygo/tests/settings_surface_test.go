@@ -233,17 +233,24 @@ func TestTheSettingsSurfaceOfAWindowWithoutAProjectStartsWithANullProject(t *tes
 	}
 }
 
-// The seat of a settings view takes the content height that its view reports with runtime.seat.height, 0 before the first report, so the
-// groups below follow the content of the view without a gap; a height that is negative or absent and a call of another surface are
+// The seat of a settings view takes the content height that its view reports with runtime.seat.height, so the groups below follow the
+// content of the view without a gap; before the first report it is as high as the pane and its surface is placed visible, so the view
+// starts and can report; a height that is negative or absent and a call of another surface are
 // refused (docs/spec/plugins.md#settings-views, F1213).
 func TestTheSeatTakesTheContentHeightThatTheViewReports(t *testing.T) {
 	f, stored := settingsViewShell(t)
 	openPluginPage(f)
 	f.settle()
 	seat := func() float32 { return element(t, f.tester, "core.settings-modal.plugin-view", "").Bounds.H }
-	if got := seat(); got != 0 {
-		t.Fatalf("the seat has the height %v before the view reports its content height, want 0", got)
+	pane := element(t, f.tester, "core.settings-modal.pane", "").Bounds
+	if got := seat(); got != pane.H {
+		t.Fatalf("the seat has the height %v before the view reports its content height, want the height %v of the pane", got, pane.H)
 	}
+	f.until(func() bool {
+		placed := stored.lastSurfaces(t)[settingsSurfaceID]
+		return placed != nil && placed["visible"] == true
+	})
+	seatTop := element(t, f.tester, "core.settings-modal.plugin-view", "").Bounds.Y
 	// The first control of the page below the seat: the plugin page holds only the button 목록 above the seat.
 	below := func() float32 {
 		node, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.set", "")
@@ -252,7 +259,7 @@ func TestTheSeatTakesTheContentHeightThatTheViewReports(t *testing.T) {
 		}
 		return node.Bounds.Y
 	}
-	settings := below()
+	gap := below() - (seatTop + pane.H)
 	if reply := viewCall(t, f, stored, settingsSurfaceID, "runtime.seat.height", map[string]any{"height": 180}); reply["error"] != nil {
 		t.Fatalf("runtime.seat.height replied %v", reply)
 	}
@@ -260,8 +267,8 @@ func TestTheSeatTakesTheContentHeightThatTheViewReports(t *testing.T) {
 	if got := seat(); got != 180 {
 		t.Fatalf("the seat has the height %v after the report of 180", got)
 	}
-	if moved := below() - settings; moved != 180 {
-		t.Fatalf("the group below the seat moved by %v after the report of 180, want 180", moved)
+	if after := below() - (seatTop + 180); after != gap {
+		t.Fatalf("the control below the seat stands %v below its end after the report of 180, want %v as before", after, gap)
 	}
 	for _, params := range []any{map[string]any{"height": -1}, map[string]any{}, map[string]any{"height": "180"}} {
 		reply := viewCall(t, f, stored, settingsSurfaceID, "runtime.seat.height", params)

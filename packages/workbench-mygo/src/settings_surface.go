@@ -15,9 +15,9 @@ import (
 type settingsSurface struct {
 	surface *heldSurface
 	plugin  string
-	// height is the content height that the view reports with runtime.seat.height, 0 before the first report
+	// height is the content height that the view reports with runtime.seat.height, nil before the first report
 	// (docs/spec/plugins.md#settings-views).
-	height float32
+	height *float32
 }
 
 // id is the surface id of the settings surface, settings/<plugin>.
@@ -103,8 +103,8 @@ func (s *Shell) setSeatHeight(surface string, height float32) error {
 	if !s.isSettingsSurface(surface) {
 		return errors.New("view call runtime.seat.height is served only for a settings surface")
 	}
-	if s.settingsView.height != height {
-		s.settingsView.height = height
+	if s.settingsView.height == nil || *s.settingsView.height != height {
+		s.settingsView.height = &height
 		s.options.Invalidate()
 	}
 	return nil
@@ -121,10 +121,15 @@ func (s *Shell) isSettingsSurface(surface string) bool {
 // the bounds of the pane in the last frame; a change of either draws the frame again, so a scroll and a resize of the window measure it
 // again (docs/spec/plugins.md#settings-views, docs/spec/native-surfaces.md#settings-seat).
 func (s *Shell) drawSettingsSeat(c *ui.Context) {
+	// Before the first report the seat is as high as the pane of the last frame: a seat without a height places its surface as
+	// invisible, and an invisible view never starts and never reports.
 	view := s.settingsView
 	var height float32
 	if view != nil {
-		height = view.height
+		height = s.settingsWindow.paneBounds.H
+		if view.height != nil {
+			height = *view.height
+		}
 	}
 	seat := s.exposedBox(c, "core.settings-modal.plugin-view", "", "").FillWidth().Height(height).Role(ui.RoleGroup).Label("설정 view")
 	if view == nil {

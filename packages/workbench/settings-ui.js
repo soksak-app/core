@@ -574,9 +574,14 @@ function drawPluginPage(unit) {
   if (seat) sizeSeat(seat);
 }
 
-/** Sets the height of the seat of the settings view to the content height that its view reported (docs/spec/plugins.md#settings-views). */
+/**
+ * Sets the height of the seat of the settings view to the content height that its view reported, and to the height of the pane before the
+ * first report: a seat without a height places its surface as invisible, and an invisible view never starts and never reports
+ * (docs/spec/plugins.md#settings-views).
+ */
 function sizeSeat(view) {
-  view.style.height = `${seatContentHeight()}px`;
+  const height = seatContentHeight();
+  view.style.height = `${height === null ? view.closest('[data-expose="core.settings-modal.pane"]').clientHeight : height}px`;
 }
 
 // A new content height of the view sets the height of the seat that the plugin page shows.

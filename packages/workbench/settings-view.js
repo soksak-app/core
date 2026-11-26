@@ -13,7 +13,7 @@ const SEAT = "core.settings-modal.plugin-view";
 const PANE = "core.settings-modal.pane";
 
 /* The settings surface of the shown plugin page: {surface, plugin, slot, mounted, seat, height}, or null. seat is the last measured seat and
-   height the content height that its view reported, 0 before the first report. */
+   height the content height that its view reported, null before the first report. */
 let open = null;
 /* The plugin whose plugin page the settings window shows, or null. */
 let shownPlugin = null;
@@ -60,7 +60,7 @@ export function showSettingsView(plugin) {
     slot.dataset.nativePlugin = plugin;
     slot.dataset.nativeTitle = "settings";
     slot.dataset.nativeDim = "false";
-    open = { surface, plugin, slot, mounted: false, seat: null, height: 0 };
+    open = { surface, plugin, slot, mounted: false, seat: null, height: null };
   }
   changed();
 }
@@ -82,8 +82,8 @@ export function setSeatHeight(surface, height) {
   changed();
 }
 
-/** The height of the seat of the open settings surface: the content height that its view reported, 0 before the first report or without a surface. */
-export const seatContentHeight = () => (open === null ? 0 : open.height);
+/** The content height that the view of the open settings surface reported, or null before the first report or without a surface. */
+export const seatContentHeight = () => (open === null ? null : open.height);
 
 /**
  * The seat of the settings surface: frame is the rectangle of the element core.settings-modal.plugin-view and clip the rectangle of the
