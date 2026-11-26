@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1215-2: The plugin.json checks of the plugin SDK and of the Go and Rust `sok` check the member `accounts`: its kinds, its programs `status`, `login` and `logout`, which must be declared programs with two pattern arguments, and the data key `accounts` with the scope plugin and the default `[]`, and refuse another form with `plugin <id>: accounts <reason>`.
 - F1215-1: The specification states the accounts of a plugin: the manifest member `accounts`, the records `{id, name, kind}` of the plugin key `accounts`, the account homes, the runs of the programs `status`, `login` and `logout` without a surface, the commands `core.accounts.*`, the status `core.accounts` and the group 계정 of the plugin page.
 - F1214: The settings view of a plugin is removed: `settingsView` leaves the manifest, the hosts, `sok`, the plugin SDK and both workbenches with the settings surface, its seat, its clip and window background fill, the element `core.settings-modal.plugin-view` and `runtime.seat.height` with `followSeatHeight()`; a manifest with `settingsView` is refused with `plugin <id>: settingsView is removed; a plugin declares its settings`. Red: the earlier reader of the plugin SDK accepted the case `settingsView.removed` (pass 310, fail 1); Green: pass 311.
 - F1210-4: The mygo workbench serves the plugin keys of `plugin-data.json` to the views of any window, with or without a project; a project key of a view without a project is refused with `view call <command> requires a project`.

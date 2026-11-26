@@ -9546,6 +9546,1163 @@
         "ui/page.html",
         "ui/settings.html"
       ]
+    },
+    {
+      "id": "accounts.accepted",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "account-status": {
+            "program": "plugin:bin/account.mjs",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          },
+          "account-login": {
+            "program": "plugin:bin/account.mjs",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          },
+          "account-logout": {
+            "program": "node",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          }
+        },
+        "data": {
+          "accounts": {
+            "schema": {
+              "type": "array"
+            },
+            "default": [],
+            "scope": "plugin"
+          }
+        },
+        "accounts": {
+          "kinds": [
+            {
+              "value": "claude",
+              "label": "Claude"
+            },
+            {
+              "value": "codex",
+              "label": "Codex"
+            }
+          ],
+          "programs": {
+            "status": "account-status",
+            "login": "account-login",
+            "logout": "account-logout"
+          }
+        }
+      },
+      "accepted": true,
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html",
+        "bin/account.mjs"
+      ]
+    },
+    {
+      "id": "accounts.form",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "account-status": {
+            "program": "plugin:bin/account.mjs",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          },
+          "account-login": {
+            "program": "plugin:bin/account.mjs",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          },
+          "account-logout": {
+            "program": "node",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          }
+        },
+        "data": {
+          "accounts": {
+            "schema": {
+              "type": "array"
+            },
+            "default": [],
+            "scope": "plugin"
+          }
+        },
+        "accounts": {
+          "kinds": [
+            {
+              "value": "claude",
+              "label": "Claude"
+            },
+            {
+              "value": "codex",
+              "label": "Codex"
+            }
+          ],
+          "programs": {
+            "status": "account-status",
+            "login": "account-login",
+            "logout": "account-logout"
+          },
+          "extra": 1
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: accounts must be {kinds, programs}",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html",
+        "bin/account.mjs"
+      ]
+    },
+    {
+      "id": "accounts.kinds-empty",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "account-status": {
+            "program": "plugin:bin/account.mjs",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          },
+          "account-login": {
+            "program": "plugin:bin/account.mjs",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          },
+          "account-logout": {
+            "program": "node",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          }
+        },
+        "data": {
+          "accounts": {
+            "schema": {
+              "type": "array"
+            },
+            "default": [],
+            "scope": "plugin"
+          }
+        },
+        "accounts": {
+          "kinds": [],
+          "programs": {
+            "status": "account-status",
+            "login": "account-login",
+            "logout": "account-logout"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: accounts kinds must be a non-empty list of {value, label}",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html",
+        "bin/account.mjs"
+      ]
+    },
+    {
+      "id": "accounts.kind-member",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "account-status": {
+            "program": "plugin:bin/account.mjs",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          },
+          "account-login": {
+            "program": "plugin:bin/account.mjs",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          },
+          "account-logout": {
+            "program": "node",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          }
+        },
+        "data": {
+          "accounts": {
+            "schema": {
+              "type": "array"
+            },
+            "default": [],
+            "scope": "plugin"
+          }
+        },
+        "accounts": {
+          "kinds": [
+            {
+              "value": "claude",
+              "label": "Claude",
+              "icon": "x"
+            },
+            {
+              "value": "codex",
+              "label": "Codex"
+            }
+          ],
+          "programs": {
+            "status": "account-status",
+            "login": "account-login",
+            "logout": "account-logout"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: accounts kinds must be a non-empty list of {value, label}",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html",
+        "bin/account.mjs"
+      ]
+    },
+    {
+      "id": "accounts.kind-form",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "account-status": {
+            "program": "plugin:bin/account.mjs",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          },
+          "account-login": {
+            "program": "plugin:bin/account.mjs",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          },
+          "account-logout": {
+            "program": "node",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          }
+        },
+        "data": {
+          "accounts": {
+            "schema": {
+              "type": "array"
+            },
+            "default": [],
+            "scope": "plugin"
+          }
+        },
+        "accounts": {
+          "kinds": [
+            {
+              "value": "Claude",
+              "label": "Claude"
+            },
+            {
+              "value": "codex",
+              "label": "Codex"
+            }
+          ],
+          "programs": {
+            "status": "account-status",
+            "login": "account-login",
+            "logout": "account-logout"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: accounts kind Claude is not of the form [a-z][a-z0-9-]*",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html",
+        "bin/account.mjs"
+      ]
+    },
+    {
+      "id": "accounts.kind-repeats",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "account-status": {
+            "program": "plugin:bin/account.mjs",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          },
+          "account-login": {
+            "program": "plugin:bin/account.mjs",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          },
+          "account-logout": {
+            "program": "node",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          }
+        },
+        "data": {
+          "accounts": {
+            "schema": {
+              "type": "array"
+            },
+            "default": [],
+            "scope": "plugin"
+          }
+        },
+        "accounts": {
+          "kinds": [
+            {
+              "value": "claude",
+              "label": "Claude"
+            },
+            {
+              "value": "claude",
+              "label": "Codex"
+            }
+          ],
+          "programs": {
+            "status": "account-status",
+            "login": "account-login",
+            "logout": "account-logout"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: accounts kind claude repeats",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html",
+        "bin/account.mjs"
+      ]
+    },
+    {
+      "id": "accounts.kind-label",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "account-status": {
+            "program": "plugin:bin/account.mjs",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          },
+          "account-login": {
+            "program": "plugin:bin/account.mjs",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          },
+          "account-logout": {
+            "program": "node",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          }
+        },
+        "data": {
+          "accounts": {
+            "schema": {
+              "type": "array"
+            },
+            "default": [],
+            "scope": "plugin"
+          }
+        },
+        "accounts": {
+          "kinds": [
+            {
+              "value": "claude",
+              "label": ""
+            },
+            {
+              "value": "codex",
+              "label": "Codex"
+            }
+          ],
+          "programs": {
+            "status": "account-status",
+            "login": "account-login",
+            "logout": "account-logout"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: accounts kind claude label must be 1 to 40 characters",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html",
+        "bin/account.mjs"
+      ]
+    },
+    {
+      "id": "accounts.programs-form",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "account-status": {
+            "program": "plugin:bin/account.mjs",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          },
+          "account-login": {
+            "program": "plugin:bin/account.mjs",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          },
+          "account-logout": {
+            "program": "node",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          }
+        },
+        "data": {
+          "accounts": {
+            "schema": {
+              "type": "array"
+            },
+            "default": [],
+            "scope": "plugin"
+          }
+        },
+        "accounts": {
+          "kinds": [
+            {
+              "value": "claude",
+              "label": "Claude"
+            },
+            {
+              "value": "codex",
+              "label": "Codex"
+            }
+          ],
+          "programs": {
+            "status": "account-status",
+            "login": "account-login"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: accounts programs must be {status, login, logout}",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html",
+        "bin/account.mjs"
+      ]
+    },
+    {
+      "id": "accounts.program-undeclared",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "account-status": {
+            "program": "plugin:bin/account.mjs",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          },
+          "account-login": {
+            "program": "plugin:bin/account.mjs",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          },
+          "account-logout": {
+            "program": "node",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          }
+        },
+        "data": {
+          "accounts": {
+            "schema": {
+              "type": "array"
+            },
+            "default": [],
+            "scope": "plugin"
+          }
+        },
+        "accounts": {
+          "kinds": [
+            {
+              "value": "claude",
+              "label": "Claude"
+            },
+            {
+              "value": "codex",
+              "label": "Codex"
+            }
+          ],
+          "programs": {
+            "status": "account-status",
+            "login": "sign-in",
+            "logout": "account-logout"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: accounts program sign-in is not declared",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html",
+        "bin/account.mjs"
+      ]
+    },
+    {
+      "id": "accounts.program-args",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "account-status": {
+            "program": "plugin:bin/account.mjs",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          },
+          "account-login": {
+            "program": "plugin:bin/account.mjs",
+            "args": [
+              {
+                "pattern": "^.+$"
+              }
+            ]
+          },
+          "account-logout": {
+            "program": "node",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          }
+        },
+        "data": {
+          "accounts": {
+            "schema": {
+              "type": "array"
+            },
+            "default": [],
+            "scope": "plugin"
+          }
+        },
+        "accounts": {
+          "kinds": [
+            {
+              "value": "claude",
+              "label": "Claude"
+            },
+            {
+              "value": "codex",
+              "label": "Codex"
+            }
+          ],
+          "programs": {
+            "status": "account-status",
+            "login": "account-login",
+            "logout": "account-logout"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: accounts program account-login must take two pattern arguments",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html",
+        "bin/account.mjs"
+      ]
+    },
+    {
+      "id": "accounts.program-text-args",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "account-status": {
+            "program": "plugin:bin/account.mjs",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          },
+          "account-login": {
+            "program": "plugin:bin/account.mjs",
+            "args": [
+              "fixed",
+              {
+                "pattern": "^.+$"
+              }
+            ]
+          },
+          "account-logout": {
+            "program": "node",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          }
+        },
+        "data": {
+          "accounts": {
+            "schema": {
+              "type": "array"
+            },
+            "default": [],
+            "scope": "plugin"
+          }
+        },
+        "accounts": {
+          "kinds": [
+            {
+              "value": "claude",
+              "label": "Claude"
+            },
+            {
+              "value": "codex",
+              "label": "Codex"
+            }
+          ],
+          "programs": {
+            "status": "account-status",
+            "login": "account-login",
+            "logout": "account-logout"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: accounts program account-login must take two pattern arguments",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html",
+        "bin/account.mjs"
+      ]
+    },
+    {
+      "id": "accounts.data-key",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "account-status": {
+            "program": "plugin:bin/account.mjs",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          },
+          "account-login": {
+            "program": "plugin:bin/account.mjs",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          },
+          "account-logout": {
+            "program": "node",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          }
+        },
+        "data": {
+          "accounts": {
+            "schema": {
+              "type": "array"
+            },
+            "default": [],
+            "scope": "project"
+          }
+        },
+        "accounts": {
+          "kinds": [
+            {
+              "value": "claude",
+              "label": "Claude"
+            },
+            {
+              "value": "codex",
+              "label": "Codex"
+            }
+          ],
+          "programs": {
+            "status": "account-status",
+            "login": "account-login",
+            "logout": "account-logout"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: accounts requires the data key accounts with the scope plugin and the default []",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html",
+        "bin/account.mjs"
+      ]
+    },
+    {
+      "id": "accounts.data-default",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "account-status": {
+            "program": "plugin:bin/account.mjs",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          },
+          "account-login": {
+            "program": "plugin:bin/account.mjs",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          },
+          "account-logout": {
+            "program": "node",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          }
+        },
+        "data": {
+          "accounts": {
+            "schema": {
+              "type": "array"
+            },
+            "default": [
+              {
+                "id": "a"
+              }
+            ],
+            "scope": "plugin"
+          }
+        },
+        "accounts": {
+          "kinds": [
+            {
+              "value": "claude",
+              "label": "Claude"
+            },
+            {
+              "value": "codex",
+              "label": "Codex"
+            }
+          ],
+          "programs": {
+            "status": "account-status",
+            "login": "account-login",
+            "logout": "account-logout"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: accounts requires the data key accounts with the scope plugin and the default []",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html",
+        "bin/account.mjs"
+      ]
+    },
+    {
+      "id": "accounts.data-missing",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "account-status": {
+            "program": "plugin:bin/account.mjs",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          },
+          "account-login": {
+            "program": "plugin:bin/account.mjs",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          },
+          "account-logout": {
+            "program": "node",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          }
+        },
+        "accounts": {
+          "kinds": [
+            {
+              "value": "claude",
+              "label": "Claude"
+            },
+            {
+              "value": "codex",
+              "label": "Codex"
+            }
+          ],
+          "programs": {
+            "status": "account-status",
+            "login": "account-login",
+            "logout": "account-logout"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe: accounts requires the data key accounts with the scope plugin and the default []",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html",
+        "bin/account.mjs"
+      ]
     }
   ]
 }

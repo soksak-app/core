@@ -46,7 +46,7 @@ const (
 
 // topLevelKeys are the members that plugin.json may hold (validateManifest).
 var topLevelKeys = []string{"id", "name", "description", "mark", "icon", "surface", "sections", "preview", "dependencies", "background",
-	"programs", "exposes", "settings", "data", "sidebars", "dialogs", "extends", "contributes", "events", "sessions"}
+	"programs", "exposes", "settings", "data", "sidebars", "dialogs", "extends", "contributes", "events", "sessions", "accounts"}
 
 // utf16Length is the length of a string in UTF-16 code units, the length that the reader's string checks count.
 func utf16Length(s string) int {
@@ -657,6 +657,11 @@ func ValidateManifest(value any) error {
 			return err
 		}
 	}
+	if _, ok := manifest["accounts"]; ok {
+		if err := checkAccounts(where, manifest); err != nil {
+			return err
+		}
+	}
 	if raw, ok := manifest["surface"]; ok {
 		if err := checkSurface(where, manifest, raw, sidecars); err != nil {
 			return err
@@ -891,6 +896,89 @@ func ProgramPatternSource(pattern string) string {
 }
 
 // checkPrograms checks the programs declaration: the programs that a page runs through a view call.
+// accountLabelMax is the most characters of the label of an account kind (docs/spec/plugins.md#accounts).
+const accountLabelMax = 40
+
+// checkAccounts checks the accounts declaration (docs/spec/plugins.md#accounts): the kinds of the accounts and the programs that
+// the workbench runs for them.
+func checkAccounts(where string, manifest map[string]any) error {
+	at := where + ": accounts"
+	accounts, ok := manifest["accounts"].(map[string]any)
+	_, hasKinds := accounts["kinds"]
+	_, hasPrograms := accounts["programs"]
+	if !ok || len(accounts) != 2 || !hasKinds || !hasPrograms {
+		return fmt.Errorf("%s must be {kinds, programs}", at)
+	}
+	kinds, ok := accounts["kinds"].([]any)
+	if !ok || len(kinds) == 0 {
+		return fmt.Errorf("%s kinds must be a non-empty list of {value, label}", at)
+	}
+	for _, raw := range kinds {
+		kind, ok := raw.(map[string]any)
+		_, hasValue := kind["value"]
+		_, hasLabel := kind["label"]
+		if !ok || len(kind) != 2 || !hasValue || !hasLabel {
+			return fmt.Errorf("%s kinds must be a non-empty list of {value, label}", at)
+		}
+	}
+	seen := map[string]bool{}
+	for _, raw := range kinds {
+		kind := raw.(map[string]any)
+		value, ok := kind["value"].(string)
+		if !ok || !idPattern.MatchString(value) {
+			return fmt.Errorf("%s kind %s is not of the form [a-z][a-z0-9-]*", at, jsFieldText(kind, "value"))
+		}
+		if seen[value] {
+			return fmt.Errorf("%s kind %s repeats", at, value)
+		}
+		seen[value] = true
+		label, ok := kind["label"].(string)
+		if count := len([]rune(label)); !ok || count < 1 || count > accountLabelMax {
+			return fmt.Errorf("%s kind %s label must be 1 to %d characters", at, value, accountLabelMax)
+		}
+	}
+	roles := []string{"status", "login", "logout"}
+	programs, ok := accounts["programs"].(map[string]any)
+	if ok && len(programs) == len(roles) {
+		for _, role := range roles {
+			if _, text := programs[role].(string); !text {
+				ok = false
+			}
+		}
+	}
+	if !ok || len(programs) != len(roles) {
+		return fmt.Errorf("%s programs must be {status, login, logout}", at)
+	}
+	declared, _ := manifest["programs"].(map[string]any)
+	for _, role := range roles {
+		name := programs[role].(string)
+		entry, ok := declared[name].(map[string]any)
+		if !ok {
+			return fmt.Errorf("%s program %s is not declared", at, name)
+		}
+		// The workbench passes the kind and the home folder of the account as the two arguments
+		// (docs/spec/native-surfaces.md#account-runs).
+		args, ok := entry["args"].([]any)
+		if ok && len(args) == 2 {
+			for _, slot := range args {
+				if _, object := slot.(map[string]any); !object {
+					ok = false
+				}
+			}
+		}
+		if !ok || len(args) != 2 {
+			return fmt.Errorf("%s program %s must take two pattern arguments", at, name)
+		}
+	}
+	data, _ := manifest["data"].(map[string]any)
+	key, ok := data["accounts"].(map[string]any)
+	defaults, list := key["default"].([]any)
+	if !ok || key["scope"] != "plugin" || !list || len(defaults) != 0 {
+		return fmt.Errorf("%s requires the data key accounts with the scope plugin and the default []", at)
+	}
+	return nil
+}
+
 func checkPrograms(where string, raw any) error {
 	programs, ok := raw.(map[string]any)
 	if !ok {

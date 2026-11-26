@@ -21,7 +21,7 @@ const SET_TITLE_MAX: usize = 40;
 const MENU_TITLE_MAX: usize = 40;
 
 /// The members that plugin.json may hold (validateManifest).
-const TOP_LEVEL_KEYS: [&str; 20] = [
+const TOP_LEVEL_KEYS: [&str; 21] = [
     "id",
     "name",
     "description",
@@ -42,6 +42,7 @@ const TOP_LEVEL_KEYS: [&str; 20] = [
     "contributes",
     "sessions",
     "events",
+    "accounts",
 ];
 
 /// The keywords that a schema may hold (checkSchema of packages/plugin-api).
@@ -849,6 +850,112 @@ pub fn plugin_path_valid(path: &str) -> bool {
 /// The host matcher compiles this same source.
 pub(crate) fn program_pattern_source(pattern: &str) -> String {
     format!("^(?:{pattern})$")
+}
+
+/// The most characters of the label of an account kind (docs/spec/plugins.md#accounts).
+const ACCOUNT_LABEL_MAX: usize = 40;
+
+/// Checks the accounts declaration (docs/spec/plugins.md#accounts): the kinds of the accounts and the programs that the
+/// workbench runs for them.
+fn check_accounts(where_: &str, manifest: &Map<String, Value>) -> Result<(), String> {
+    let at = format!("{where_}: accounts");
+    let accounts = manifest
+        .get("accounts")
+        .and_then(Value::as_object)
+        .filter(|accounts| {
+            accounts.len() == 2
+                && accounts.contains_key("kinds")
+                && accounts.contains_key("programs")
+        })
+        .ok_or_else(|| format!("{at} must be {{kinds, programs}}"))?;
+    let kinds = accounts
+        .get("kinds")
+        .and_then(Value::as_array)
+        .filter(|kinds| !kinds.is_empty())
+        .and_then(|kinds| {
+            kinds
+                .iter()
+                .map(|kind| {
+                    kind.as_object().filter(|kind| {
+                        kind.len() == 2 && kind.contains_key("value") && kind.contains_key("label")
+                    })
+                })
+                .collect::<Option<Vec<_>>>()
+        })
+        .ok_or_else(|| format!("{at} kinds must be a non-empty list of {{value, label}}"))?;
+    let mut seen = std::collections::HashSet::new();
+    for kind in kinds {
+        let value = kind
+            .get("value")
+            .and_then(Value::as_str)
+            .filter(|value| is_id(value))
+            .ok_or_else(|| {
+                format!(
+                    "{at} kind {} is not of the form [a-z][a-z0-9-]*",
+                    js_field_text(kind, "value")
+                )
+            })?;
+        if !seen.insert(value) {
+            return Err(format!("{at} kind {value} repeats"));
+        }
+        let count = kind
+            .get("label")
+            .and_then(Value::as_str)
+            .map(|label| label.chars().count());
+        if !count.is_some_and(|count| (1..=ACCOUNT_LABEL_MAX).contains(&count)) {
+            return Err(format!(
+                "{at} kind {value} label must be 1 to {ACCOUNT_LABEL_MAX} characters"
+            ));
+        }
+    }
+    let roles = ["status", "login", "logout"];
+    let programs = accounts
+        .get("programs")
+        .and_then(Value::as_object)
+        .filter(|programs| {
+            programs.len() == roles.len()
+                && roles
+                    .iter()
+                    .all(|role| programs.get(*role).is_some_and(Value::is_string))
+        })
+        .ok_or_else(|| format!("{at} programs must be {{status, login, logout}}"))?;
+    let declared = manifest.get("programs").and_then(Value::as_object);
+    for role in roles {
+        let name = programs[role].as_str().unwrap_or_default();
+        let entry = declared
+            .and_then(|declared| declared.get(name))
+            .and_then(Value::as_object)
+            .ok_or_else(|| format!("{at} program {name} is not declared"))?;
+        // The workbench passes the kind and the home folder of the account as the two arguments
+        // (docs/spec/native-surfaces.md#account-runs).
+        let two_patterns = entry
+            .get("args")
+            .and_then(Value::as_array)
+            .is_some_and(|args| args.len() == 2 && args.iter().all(Value::is_object));
+        if !two_patterns {
+            return Err(format!(
+                "{at} program {name} must take two pattern arguments"
+            ));
+        }
+    }
+    let key = manifest
+        .get("data")
+        .and_then(Value::as_object)
+        .and_then(|data| data.get("accounts"))
+        .and_then(Value::as_object);
+    let declared_key = key.is_some_and(|key| {
+        key.get("scope").and_then(Value::as_str) == Some("plugin")
+            && key
+                .get("default")
+                .and_then(Value::as_array)
+                .is_some_and(Vec::is_empty)
+    });
+    if !declared_key {
+        return Err(format!(
+            "{at} requires the data key accounts with the scope plugin and the default []"
+        ));
+    }
+    Ok(())
 }
 
 /// Checks the programs declaration: the programs that a page runs through a view call.
@@ -1907,6 +2014,9 @@ pub fn validate_manifest(value: &Value) -> Result<(), String> {
             return Err(format!("{where_}: programs requires a surface or sections"));
         }
         check_programs(&where_, raw)?;
+    }
+    if manifest.contains_key("accounts") {
+        check_accounts(&where_, manifest)?;
     }
     if let Some(raw) = manifest.get("surface") {
         check_surface(&where_, manifest, raw, &sidecars)?;

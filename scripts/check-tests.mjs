@@ -535,6 +535,32 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1215-2",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "function checkAccounts(where, manifest) {" },
+      { file: "packages/sok/go/src/manifest.go", symbol: "func checkAccounts(where string, manifest map[string]any) error {" },
+      { file: "packages/sok/rust/src/manifest.rs", symbol: "fn check_accounts(where_: &str, manifest: &Map<String, Value>) -> Result<(), String> {" },
+    ],
+    tests: [
+      { file: "docs/spec/cases/manifest-validation.json", id: "accounts.accepted" },
+      { file: "docs/spec/cases/manifest-validation.json", id: "accounts.form" },
+      { file: "docs/spec/cases/manifest-validation.json", id: "accounts.kinds-empty" },
+      { file: "docs/spec/cases/manifest-validation.json", id: "accounts.kind-member" },
+      { file: "docs/spec/cases/manifest-validation.json", id: "accounts.kind-form" },
+      { file: "docs/spec/cases/manifest-validation.json", id: "accounts.kind-repeats" },
+      { file: "docs/spec/cases/manifest-validation.json", id: "accounts.kind-label" },
+      { file: "docs/spec/cases/manifest-validation.json", id: "accounts.programs-form" },
+      { file: "docs/spec/cases/manifest-validation.json", id: "accounts.program-undeclared" },
+      { file: "docs/spec/cases/manifest-validation.json", id: "accounts.program-args" },
+      { file: "docs/spec/cases/manifest-validation.json", id: "accounts.program-text-args" },
+      { file: "docs/spec/cases/manifest-validation.json", id: "accounts.data-key" },
+      { file: "docs/spec/cases/manifest-validation.json", id: "accounts.data-default" },
+      { file: "docs/spec/cases/manifest-validation.json", id: "accounts.data-missing" },
+    ],
+    expected: "The plugin.json checks accept an accounts declaration with its kinds, its declared programs of two pattern arguments and the plugin key accounts, and refuse each other form with its reason.",
+    levels: ["unit"],
+  },
+  {
     id: "F1214",
     implementation: [
       { file: "packages/plugin-api/index.js", symbol: "if (manifest.settingsView !== undefined) throw new Error(`plugin ${manifest.id}: settingsView is removed; a plugin declares its settings`);" },

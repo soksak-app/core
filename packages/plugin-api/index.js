@@ -644,6 +644,9 @@ const PROGRAM_PATTERN_MAX_BYTES = 512;
 const hasControlCharacter = (text) => /[\u0000-\u001f\u007f]/.test(text);
 const utf8Length = (text) => new TextEncoder().encode(text).length;
 
+const ACCOUNT_KIND = /^[a-z][a-z0-9-]*$/;
+const ACCOUNT_LABEL_MAX = 40;
+
 /** Checks the programs declaration (docs/spec/plugins.md#pluginjson): the programs a page runs through a view call. */
 function checkPrograms(where, programs) {
   if (!isObject(programs)) throw new Error(`${where}: programs must be an object`);
@@ -677,6 +680,44 @@ function checkPrograms(where, programs) {
         throw new Error(`${at} args slot ${number} pattern must be a text of at most ${PROGRAM_PATTERN_MAX_BYTES} bytes`);
       }
     });
+  }
+}
+
+/** Checks the accounts declaration (docs/spec/plugins.md#accounts): the kinds of the accounts and the programs that the workbench runs for them. */
+function checkAccounts(where, manifest) {
+  const at = `${where}: accounts`;
+  const { accounts } = manifest;
+  if (!isObject(accounts) || Object.keys(accounts).length !== 2 || !("kinds" in accounts) || !("programs" in accounts)) {
+    throw new Error(`${at} must be {kinds, programs}`);
+  }
+  const { kinds, programs } = accounts;
+  const kindForm = (kind) => isObject(kind) && Object.keys(kind).length === 2 && "value" in kind && "label" in kind;
+  if (!Array.isArray(kinds) || kinds.length === 0 || !kinds.every(kindForm)) throw new Error(`${at} kinds must be a non-empty list of {value, label}`);
+  const seen = new Set();
+  for (const { value, label } of kinds) {
+    if (typeof value !== "string" || !ACCOUNT_KIND.test(value)) throw new Error(`${at} kind ${value} is not of the form [a-z][a-z0-9-]*`);
+    if (seen.has(value)) throw new Error(`${at} kind ${value} repeats`);
+    seen.add(value);
+    if (typeof label !== "string" || [...label].length < 1 || [...label].length > ACCOUNT_LABEL_MAX) {
+      throw new Error(`${at} kind ${value} label must be 1 to ${ACCOUNT_LABEL_MAX} characters`);
+    }
+  }
+  const roles = ["status", "login", "logout"];
+  if (!isObject(programs) || Object.keys(programs).length !== roles.length || !roles.every((role) => typeof programs[role] === "string")) {
+    throw new Error(`${at} programs must be {status, login, logout}`);
+  }
+  for (const role of roles) {
+    const name = programs[role];
+    const entry = isObject(manifest.programs) ? manifest.programs[name] : undefined;
+    if (!isObject(entry)) throw new Error(`${at} program ${name} is not declared`);
+    // The workbench passes the kind and the home folder of the account as the two arguments (docs/spec/native-surfaces.md#account-runs).
+    if (!Array.isArray(entry.args) || entry.args.length !== 2 || !entry.args.every((slot) => isObject(slot))) {
+      throw new Error(`${at} program ${name} must take two pattern arguments`);
+    }
+  }
+  const key = isObject(manifest.data) ? manifest.data.accounts : undefined;
+  if (!isObject(key) || key.scope !== "plugin" || !Array.isArray(key.default) || key.default.length !== 0) {
+    throw new Error(`${at} requires the data key accounts with the scope plugin and the default []`);
   }
 }
 
@@ -815,7 +856,7 @@ export function validateManifest(manifest) {
   // The settings view is removed: a plugin declares its settings, which the settings window draws (docs/spec/settings.md#controls).
   if (manifest.settingsView !== undefined) throw new Error(`plugin ${manifest.id}: settingsView is removed; a plugin declares its settings`);
   only("plugin.json", manifest, ["id", "name", "description", "mark", "icon", "surface", "sections", "preview", "dependencies", "background", "programs", "exposes", "settings",
-    "data", "sidebars", "dialogs", "extends", "contributes", "events", "sessions"]);
+    "data", "sidebars", "dialogs", "extends", "contributes", "events", "sessions", "accounts"]);
   validateEventsPath("plugin.json", manifest.events);
   const { id } = manifest;
   if (typeof id !== "string" || !ID.test(id)) throw new Error(`plugin.json: invalid id ${id}`);
@@ -881,6 +922,7 @@ export function validateManifest(manifest) {
     if (manifest.surface === undefined && manifest.sections === undefined) throw new Error(`${where}: programs requires a surface or sections`);
     checkPrograms(where, manifest.programs);
   }
+  if (manifest.accounts !== undefined) checkAccounts(where, manifest);
   if (manifest.surface !== undefined) {
     const surface = manifest.surface;
     if (!isObject(surface)) throw new Error(`${where}: surface must be an object`);
