@@ -456,10 +456,9 @@ func (s *TabSessions) reported(tab, cause string, answer func()) {
 	})
 }
 
-// keepsSession reports whether the regions of tab keep a session. A dialog surface ends with its close, a settings surface with its page,
-// and no layout reopens either, so their regions keep none, and the host refuses a session file of either id
-// (docs/spec/projects.md#persistence).
-func keepsSession(tab string) bool { return !host.IsDialogSurface(tab) && !host.IsSettingsSurface(tab) }
+// keepsSession reports whether the regions of tab keep a session. A dialog surface ends with its close and no layout reopens it, so its
+// regions keep none, and the host refuses a session file of its id (docs/spec/projects.md#persistence).
+func keepsSession(tab string) bool { return !host.IsDialogSurface(tab) }
 
 // Read answers with the stored interactionState of each region of tab, or nil for a tab without a file and for a dialog surface.
 func (s *TabSessions) Read(tab string, answer func(sessions map[string]string, err error)) {

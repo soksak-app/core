@@ -485,72 +485,14 @@ const FEATURE_LINKS = [
   {
     id: "F1164",
     implementation: [
-      { file: "packages/workbench/tab-session.js", symbol: "const keepsSession = (tab) => !isDialogSurface(tab) && !isSettingsSurface(tab);" },
-      { file: "packages/workbench-mygo/src/tab_store.go", symbol: "func keepsSession(tab string) bool { return !host.IsDialogSurface(tab) && !host.IsSettingsSurface(tab) }" },
+      { file: "packages/workbench/tab-session.js", symbol: "const keepsSession = (tab) => !isDialogSurface(tab);" },
+      { file: "packages/workbench-mygo/src/tab_store.go", symbol: "func keepsSession(tab string) bool { return !host.IsDialogSurface(tab) }" },
     ],
     tests: [
       { file: "packages/workbench/test/tab-session.test.mjs", id: "the regions of a dialog surface keep no tab session" },
       { file: "packages/workbench-mygo/tests/tab_state_test.go", id: "TestTheRegionsOfADialogSurfaceKeepNoTabSession" },
     ],
     expected: "The page workbench and the mygo workbench neither read nor write a tab session of a dialog surface.",
-    levels: ["unit"],
-  },
-  {
-    id: "F1128-2",
-    implementation: [
-      { file: "packages/workbench-mygo/src/settings_surface.go", symbol: "func (s *Shell) followSettingsSurface() {" },
-      { file: "packages/workbench-mygo/src/settings_surface.go", symbol: "func (s *Shell) drawSettingsSeat(c *ui.Context) {" },
-      { file: "packages/host/go/src/modals.go", symbol: "func IsSettingsSurface(surface string) bool {" },
-      { file: "packages/host/rust/src/modals.rs", symbol: "pub fn is_settings_surface(surface: &str) -> bool {" },
-    ],
-    tests: [
-      { file: "packages/workbench-mygo/tests/settings_surface_test.go", id: "TestThePluginPageShowsTheSettingsViewOfItsPluginAsASettingsSurface" },
-      { file: "packages/workbench-mygo/tests/settings_surface_test.go", id: "TestAPressOnTheSettingsSurfaceGivesItTheKeyboard" },
-      { file: "packages/workbench-mygo/tests/settings_surface_test.go", id: "TestAStoppedSettingsViewIsRemovedUntilItsPageIsShownAgain" },
-      { file: "packages/host/go/tests/modals_test.go", id: "TestTheHostKnowsTheSettingsSurfaceOfAPlugin" },
-      { file: "packages/host/go/src/modals_workbench_test.go", id: "TestTheBackgroundOfTheSettingsWindowLeavesTheSettingsSurfaceUnblurred" },
-      { file: "packages/host/rust/tests/modals_test.rs", id: "the_host_knows_the_settings_surface_of_a_plugin" },
-      { file: "packages/host/rust/src/documents_test.rs", id: "the_background_of_the_settings_window_leaves_the_settings_surface_unblurred" },
-    ],
-    expected: "The mygo settings window shows the settings view of a plugin as the settings surface settings/<plugin> at its seat in the plugin page, and the hosts leave the settings surface unblurred.",
-    levels: ["unit"],
-  },
-  {
-    id: "F1128-8",
-    implementation: [
-      { file: "packages/workbench/host.js", symbol: "if (element === null && isSettingsSurface(surface) && el.querySelector('[data-expose=\"core.settings-modal.plugin-view\"]') !== null) {" },
-      { file: "packages/workbench-mygo/src/picker.go", symbol: "func (s *Shell) surfaceBehindDialog(surface string) bool {" },
-    ],
-    tests: [
-      { file: "packages/workbench/test/behind-dialog.test.mjs", id: "the settings window does not stand over the settings surface in its seat" },
-      { file: "packages/workbench-mygo/tests/settings_surface_test.go", id: "TestTheSettingsWindowDoesNotStandOverTheSettingsSurface" },
-    ],
-    expected: "An element of the settings surface is not inert behind the settings window in the page and the mygo workbench.",
-    levels: ["unit"],
-  },
-  {
-    id: "F1128-7",
-    implementation: [
-      { file: "packages/host/go/src/surfaces.go", symbol: "Composition: item.Composition, Rect: item.Rect, Programs: map[string]programDeclaration{}, Clip: item.Clip," },
-      { file: "packages/workbench/settings-seat.js", symbol: "    if (entry.slot.parentElement === container) {" },
-    ],
-    tests: [
-      { file: "packages/host/go/src/view_start_test.go", id: "TestDecodedSyncRequestKeepsTheClipOfTheSettingsSurface" },
-      { file: "packages/host/rust/src/surfaces_test.rs", id: "a_decoded_sync_request_keeps_the_clip_of_the_settings_surface" },
-      { file: "packages/workbench/test/settings-view.test.mjs", id: "the settings surface follows the plugin page, and its seat follows the seat and the pane that the modal document reports" },
-    ],
-    expected: "The Go host keeps the clip of a sync request, and the plane holds no slot of the settings seat until the modal document reports it.",
-    levels: ["unit"],
-  },
-  {
-    id: "F1128-6",
-    implementation: [
-      { file: "packages/workbench/memory-saver.js", symbol: "if (kind === \"dialog\" || kind === \"settings\") continue;" },
-    ],
-    tests: [
-      { file: "packages/workbench/test/memory-saver.test.mjs", id: "a settings surface is left out of the memory saver" },
-    ],
-    expected: "The memory saver of the page workbench leaves the settings surface out.",
     levels: ["unit"],
   },
   {
@@ -573,7 +515,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/src/project_data.go", symbol: "func (s *Shell) takePluginData(" },
     ],
     tests: [
-      { file: "packages/workbench-mygo/tests/plugin_keys_test.go", id: "TestAViewWithoutAProjectReadsWritesAndReplacesAPluginKey" },
+      { file: "packages/workbench-mygo/tests/plugin_keys_test.go", id: "TestAViewReadsWritesAndReplacesAPluginKeyThroughThePluginStore" },
       { file: "packages/workbench-mygo/tests/plugin_keys_test.go", id: "TestAPluginKeyOfAnotherWindowReachesAViewAndAnotherFormatFails" },
     ],
     expected: "The mygo workbench serves the plugin keys to the views of any window, with or without a project.",
@@ -593,6 +535,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1214",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "if (manifest.settingsView !== undefined) throw new Error(`plugin ${manifest.id}: settingsView is removed; a plugin declares its settings`);" },
+      { file: "packages/sok/go/src/manifest.go", symbol: "return fmt.Errorf(\"plugin %s: settingsView is removed; a plugin declares its settings\", jsFieldText(manifest, \"id\"))" },
+      { file: "packages/sok/rust/src/manifest.rs", symbol: "\"plugin {}: settingsView is removed; a plugin declares its settings\"," },
+    ],
+    tests: [
+      { file: "docs/spec/cases/manifest-validation.json", id: "settingsView.removed" },
+    ],
+    expected: "The plugin.json checks refuse a manifest with settingsView, which is removed, with the error that names the plugin.",
+    levels: ["unit"],
+  },
+  {
     id: "F1210-2",
     implementation: [
       { file: "packages/sok/go/src/manifest.go", symbol: "func checkData(where string, manifest map[string]any) error {" },
@@ -604,36 +559,6 @@ const FEATURE_LINKS = [
       { file: "docs/spec/cases/manifest-validation.json", id: "data.scope-other" },
     ],
     expected: "The plugin.json checks accept scope project or plugin on a key of data and refuse another value.",
-    levels: ["unit"],
-  },
-  {
-    id: "F1213-3",
-    implementation: [
-      { file: "packages/workbench-mygo/src/settings_surface.go", symbol: "func (s *Shell) drawSettingsSeat(c *ui.Context) {" },
-      { file: "packages/workbench/settings-ui.js", symbol: "function sizeSeat(view) {" },
-    ],
-    tests: [
-      { file: "packages/workbench-mygo/tests/settings_surface_test.go", id: "TestTheSeatTakesTheContentHeightThatTheViewReports" },
-      { file: "packages/workbench/test/settings-seat-height.test.mjs", id: "the seat of the settings view takes the content height that the view reports" },
-    ],
-    expected: "Before the first report of its view, the seat of a settings view is as high as the pane, so its surface is placed visible and the view starts.",
-    levels: ["unit"],
-  },
-  {
-    id: "F1213-1",
-    implementation: [
-      { file: "packages/plugin-api/view.js", symbol: "const followSeatHeight = () => {" },
-      { file: "packages/workbench/settings-view.js", symbol: "export function setSeatHeight(surface, height) {" },
-      { file: "packages/workbench-mygo/src/settings_surface.go", symbol: "func (s *Shell) setSeatHeight(surface string, height float32) error {" },
-    ],
-    tests: [
-      { file: "packages/plugin-api/test/view.test.mjs", id: "followSeatHeight sends the height of the root element from the first observation and at each change" },
-      { file: "packages/plugin-api/test/view-answer-seat.test.mjs", id: "runtime.seat.height refuses a height that is negative, not finite or not a number, and sets no seat" },
-      { file: "packages/workbench/test/settings-seat-height.test.mjs", id: "the seat of the settings view takes the content height that the view reports" },
-      { file: "packages/workbench-mygo/tests/settings_surface_test.go", id: "TestTheSeatTakesTheContentHeightThatTheViewReports" },
-      { file: "packages/workbench-mygo/tests/settings_surface_test.go", id: "TestTheSeatHoldsItsHeightWhileThePaneScrollsToItsEnd" },
-    ],
-    expected: "The seat of a settings view takes the content height that its view reports and holds it while the pane scrolls.",
     levels: ["unit"],
   },
   {
@@ -662,19 +587,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F1206",
-    implementation: [
-      { file: "packages/host/go/src/surfaces.go", symbol: "func fillsWindowBackground(id string) bool { return IsSettingsSurface(id) && !framework.MainPage() }" },
-      { file: "native/darwin/src/webview_geometry.m", symbol: "void sp_surface_fill_window_background(void *handle, bool filled) {" },
-    ],
-    tests: [
-      { file: "packages/host/go/src/view_start_test.go", id: "TestOnlyTheSettingsSurfaceOfAWindowWithoutAMainPageFillsTheWindowBackground" },
-      { file: "native/darwin/tests/surface_container_test.m", id: "checkWindowBackgroundFill" },
-    ],
-    expected: "The settings surface host of a window without a main page fills itself with the window background.",
-    levels: ["unit"],
-  },
-  {
     id: "F1205",
     implementation: [
       { file: "packages/host/mygo/src/frontend.go", symbol: "system.SetSurfaceClip(handle, true, clip.X-view.Box.X, clip.Y-view.Box.Y, clip.W, clip.H)" },
@@ -682,26 +594,6 @@ const FEATURE_LINKS = [
     ],
     tests: [{ file: "packages/host/mygo/src/frames_test.go", id: "TestASurfaceHostShowsOnlyTheClipOfItsElement" }],
     expected: "A surface host of the mygo application shows only the clip of its native view element.",
-    levels: ["unit"],
-  },
-  {
-    id: "F1204",
-    implementation: [{ file: "packages/workbench-mygo/src/surfaces.go", symbol: "surface.project = &projectStart{ID: project.ID, Root: project.Root}" }],
-    tests: [{ file: "packages/workbench-mygo/tests/settings_surface_test.go", id: "TestTheSettingsSurfaceOfAWindowWithoutAProjectStartsWithANullProject" }],
-    expected: "The settings surface of a mygo window without a project starts with the project null.",
-    levels: ["unit"],
-  },
-  {
-    id: "F1200",
-    implementation: [
-      { file: "packages/workbench-mygo/src/surfaces.go", symbol: "entry[\"clip\"] = map[string]any{\"x\": held.clip.X, \"y\": held.clip.Y, \"w\": held.clip.W, \"h\": held.clip.H}" },
-      { file: "packages/host/go/src/surfaces.go", symbol: "func seatsOverModal(id string) bool { return IsSettingsSurface(id) && framework.MainPage() }" },
-    ],
-    tests: [
-      { file: "packages/workbench-mygo/tests/settings_surface_test.go", id: "TestTheSettingsSurfaceCarriesThePaneAsItsClip" },
-      { file: "packages/host/go/src/view_start_test.go", id: "TestOnlyAWindowWithAMainPageSeatsTheSettingsSurfaceOverItsModal" },
-    ],
-    expected: "The mygo workbench sends the pane as the clip of the settings surface, and only a window with a main page seats it over a modal web view.",
     levels: ["unit"],
   },
   {
@@ -725,45 +617,6 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/library-preview.test.mjs", id: "a library preview draws a content card without tabs as an empty pane" },
     ],
     expected: "The library preview draws a content card without tabs as an empty pane without a plugin and a mark.",
-    levels: ["unit"],
-  },
-  {
-    id: "F1128-3",
-    implementation: [
-      { file: "packages/workbench/settings-view.js", symbol: "export function showSettingsView(plugin) {" },
-      { file: "packages/workbench/settings-seat.js", symbol: "export function drawSettingsSeat(container) {" },
-      { file: "packages/host/go/src/surfaces.go", symbol: "func (s *Surfaces) seatSettingsSurface(win Frontend, view *nativeWebview, clip Rect) error {" },
-      { file: "packages/host/rust/src/surfaces.rs", symbol: "fn settings_modal_handle(" },
-      { file: "native/darwin/src/webview_geometry.m", symbol: "bool sp_surface_seat_over_modal(void *handle, void *modalHandle, double x, double y, double width, double height) {" },
-    ],
-    tests: [
-      { file: "packages/workbench/test/settings-view.test.mjs", id: "the settings surface follows the plugin page, and its seat follows the seat and the pane that the modal document reports" },
-      { file: "packages/workbench/test/settings-view.test.mjs", id: "a stopped settings view ends its surface with its error until the page of the plugin is shown again" },
-      { file: "packages/workbench/test/settings-view.test.mjs", id: "the settings surface is no section, has the kind settings and keeps no tab session" },
-      { file: "packages/host/go/tests/surfaces_geometry_test.go", id: "TestSyncRequestCheckRequiresTheClipOfTheSettingsSurfaceOnly" },
-      { file: "packages/host/rust/tests/surfaces_geometry_test.rs", id: "sync_request_check_requires_the_clip_of_the_settings_surface_only" },
-      { file: "native/darwin/tests/surface_container_test.m", id: "checkSettingsContainer" },
-    ],
-    expected: "The Wails and Tauri settings windows show the settings view of a plugin as the settings surface settings/<plugin> at its seat, clipped to the pane, with its host directly above the modal web view.",
-    levels: ["unit"],
-  },
-  {
-    id: "F1128-1",
-    implementation: [
-      { file: "packages/plugin-api/index.js", symbol: "function checkSettingsView(where, view, sidecars) {" },
-      { file: "packages/sok/go/src/manifest.go", symbol: "func checkSettingsView(where string, raw any, sidecars []string) error {" },
-      { file: "packages/sok/rust/src/manifest.rs", symbol: "fn check_settings_view(where_: &str, raw: &Value, sidecars: &[&str]) -> Result<(), String> {" },
-      { file: "packages/sok/go/src/registry.go", symbol: "add(\"settingsView page\", view[\"page\"])" },
-      { file: "packages/sok/rust/src/registry.rs", symbol: "\"settingsView page\".into()," },
-    ],
-    tests: [
-      { file: "packages/plugin-api/test/manifest-validation.test.mjs", id: "manifest validation" },
-      { file: "packages/sok/go/tests/manifest_cases_test.go", id: "TestPluginInstallReplaysTheManifestCases" },
-      { file: "packages/sok/rust/tests/manifest_cases_test.rs", id: "plugin_install_replays_the_manifest_cases" },
-      { file: "packages/sok/go/tests/plugins_test.go", id: "TestPluginInstallRefusesAReleaseWithoutTheViewPage" },
-      { file: "packages/sok/rust/tests/plugins_test.rs", id: "plugin_install_refuses_a_release_without_the_view_page" },
-    ],
-    expected: "The three plugin.json readers accept a settingsView {page, regions?} and refuse each other form with the same text, and the installer refuses a release without its page.",
     levels: ["unit"],
   },
   {
@@ -977,7 +830,7 @@ const FEATURE_LINKS = [
     id: "F1151",
     implementation: [
       { file: "packages/workbench/dialogs.js", symbol: "export const dialogSurfacePlugin = (surface) =>" },
-      { file: "packages/workbench/core-exposure.js", symbol: "const owner = sectionSurfacePlugin(surface) ?? dialogSurfacePlugin(surface) ?? settingsSurfacePlugin(surface);" },
+      { file: "packages/workbench/core-exposure.js", symbol: "const owner = sectionSurfacePlugin(surface) ?? dialogSurfacePlugin(surface);" },
     ],
     tests: [
       { file: "packages/workbench/test/dialog-surface.test.mjs", id: "the open dialog surface names its plugin, and no surface does once the dialog ends" },
@@ -988,7 +841,7 @@ const FEATURE_LINKS = [
   {
     id: "F1150",
     implementation: [
-      { file: "packages/workbench/memory-saver.js", symbol: "if (kind === \"dialog\" || kind === \"settings\") continue;" },
+      { file: "packages/workbench/memory-saver.js", symbol: "if (kind === \"dialog\") continue;" },
     ],
     tests: [
       { file: "packages/workbench/test/memory-saver.test.mjs", id: "a dialog surface is left out of the memory saver, and an unknown kind is refused" },
@@ -15391,7 +15244,7 @@ const FEATURE_LINKS = [
     id: "F365",
     implementation: [
       { file: "packages/workbench/registry.js", symbol: "export function sectionSurfacePlugin(surface)" },
-      { file: "packages/workbench/core-exposure.js", symbol: "const owner = sectionSurfacePlugin(surface) ?? dialogSurfacePlugin(surface) ?? settingsSurfacePlugin(surface);" },
+      { file: "packages/workbench/core-exposure.js", symbol: "const owner = sectionSurfacePlugin(surface) ?? dialogSurfacePlugin(surface);" },
     ],
     tests: [
       { file: "packages/workbench/test/surface-plugins.test.mjs", id: "a section surface id names the plugin of its registered section" },
@@ -19021,7 +18874,9 @@ const MOVED_COMPLETIONS = new Set(["F1135", "F6", "F596","F239-170", "F239-197",
 // F239-148, F239-149, F239-178, F239-245, F239-259, F610 and F239-242 wrote those parts, so they have no implementation left.
 // F239-194 loads the diagnostic modules at startup, which stays; its only check was the drag identity check that F746 removes.
 // F1213 replaces the seat height of F1207, the height that the pane leaves below the heading, with the content height of the view.
-const REMOVED_COMPLETIONS = new Set(["F1207", "F239-189", "F239-47-40-3", "F239-123", "F239-234", "F239-75", "F750", "F698", "F239-136",
+// F1214 removes the settings view of a plugin, so F1128-1, F1128-2, F1128-3, F1128-6, F1128-7, F1128-8, F1200, F1204, F1206,
+// F1213-1 and F1213-3, which wrote its declaration, surface, seat, clip, background and seat height, have no implementation left.
+const REMOVED_COMPLETIONS = new Set(["F1128-1", "F1128-2", "F1128-3", "F1128-6", "F1128-7", "F1128-8", "F1200", "F1204", "F1206", "F1213-1", "F1213-3", "F1207", "F239-189", "F239-47-40-3", "F239-123", "F239-234", "F239-75", "F750", "F698", "F239-136",
   "F239-143", "F239-144", "F239-146", "F239-148", "F239-149", "F239-178", "F239-245", "F239-259", "F610", "F239-242", "F239-194", "F747", "F749", "F160.26", "F239-98", "F239-98-1", "F239-98-1-1", "F239-98-2", "F239-98-3", "F239-98-4", "F239-47-17",
   "F239-153", "F239-221-2", "F239-233", "F442", "F701", "F652", "F652-1", "F652-2", "F668", "F343", "F430", "F437", "F35", "F594", "F755",
   "F239-47-19", "F239-134", "F239-158", "F239-175", "F239-47-10", "F239-47-12", "F239-47-13", "F239-47-14", "F212.12-1-15-5", "F212.9-3-1", "F212.9a-1", "F239-107-1", "F239-220", "F239-40", "F239-43",

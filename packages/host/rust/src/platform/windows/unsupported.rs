@@ -144,16 +144,6 @@ pub fn create_surface(_window: Handle) -> Result<Handle, String> {
 pub fn mark_dialog_surface(_surface: Handle) -> Result<(), String> {
     missing("dialog surface host")
 }
-pub fn seat_surface_over_modal(
-    _surface: Handle,
-    _modal: Handle,
-    _x: f64,
-    _y: f64,
-    _w: f64,
-    _h: f64,
-) -> Result<(), String> {
-    missing("settings surface host")
-}
 pub fn close_surface(_surface: Handle) -> Result<(), String> {
     missing("surface host removal")
 }

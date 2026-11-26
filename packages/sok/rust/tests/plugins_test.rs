@@ -462,7 +462,7 @@ fn plugin_install_refuses_a_release_without_the_view_page() {
         ),
     );
     assert_eq!((code, stderr.as_str()), (0, ""));
-    // F1128-1: the page of the settings view is a file of the release too (docs/spec/plugins.md#settings-views).
+    // The settings view is removed: a plugin declares its settings, which the settings window draws (docs/spec/settings.md#controls).
     let settings_manifest = VIEW_MANIFEST.replacen(
         r#""surface":"#,
         r#""settingsView": {"page": "ui/settings.html"}, "surface":"#,
@@ -479,20 +479,9 @@ fn plugin_install_refuses_a_release_without_the_view_page() {
         (code, stderr.as_str()),
         (
             1,
-            "sok: plugin probe 0.2.0 package: plugin.json: settingsView page ui/settings.html is not in the release\n"
+            "sok: plugin probe 0.2.0 package: plugin.json: plugin probe: settingsView is removed; a plugin declares its settings\n"
         )
     );
-    let (_, code, stderr) = install_release(
-        &plugin_versions_for("0.0.2", &["0.2.0"]),
-        probe_items(
-            &settings_manifest,
-            &[
-                ("package/ui/page.html", "<!doctype html>"),
-                ("package/ui/settings.html", "<!doctype html>"),
-            ],
-        ),
-    );
-    assert_eq!((code, stderr.as_str()), (0, ""));
 }
 
 // contract: cli.plugin.install-requires-sidecar-executable

@@ -46,7 +46,7 @@ const (
 
 // topLevelKeys are the members that plugin.json may hold (validateManifest).
 var topLevelKeys = []string{"id", "name", "description", "mark", "icon", "surface", "sections", "preview", "dependencies", "background",
-	"programs", "exposes", "settings", "data", "sidebars", "dialogs", "settingsView", "extends", "contributes", "events", "sessions"}
+	"programs", "exposes", "settings", "data", "sidebars", "dialogs", "extends", "contributes", "events", "sessions"}
 
 // utf16Length is the length of a string in UTF-16 code units, the length that the reader's string checks count.
 func utf16Length(s string) int {
@@ -565,6 +565,10 @@ func ValidateManifest(value any) error {
 			return fmt.Errorf("plugin %s: %s is removed; a section is a view of the plugin", jsFieldText(manifest, "id"), member)
 		}
 	}
+	// The settings view is removed: a plugin declares its settings, which the settings window draws (docs/spec/settings.md#controls).
+	if _, ok := manifest["settingsView"]; ok {
+		return fmt.Errorf("plugin %s: settingsView is removed; a plugin declares its settings", jsFieldText(manifest, "id"))
+	}
 	if err := only("plugin.json", manifest, topLevelKeys...); err != nil {
 		return err
 	}
@@ -610,11 +614,6 @@ func ValidateManifest(value any) error {
 			return fmt.Errorf("%s: dialogs requires a surface or sections", where)
 		}
 		if err := checkDialogs(where, raw, sidecars); err != nil {
-			return err
-		}
-	}
-	if raw, ok := manifest["settingsView"]; ok {
-		if err := checkSettingsView(where, raw, sidecars); err != nil {
 			return err
 		}
 	}
@@ -1717,32 +1716,6 @@ func checkDialogs(where string, raw any, sidecars []string) error {
 		}
 	}
 	return nil
-}
-
-// checkSettingsView checks the settings view of plugin.json: {page, regions?}, whose page is a page of the plugin as the page of
-// a view composition and whose regions are the regions of a view composition (docs/spec/plugins.md#settings-views).
-func checkSettingsView(where string, raw any, sidecars []string) error {
-	view, ok := raw.(map[string]any)
-	_, hasPage := view["page"]
-	valid := ok && hasPage
-	for key := range view {
-		valid = valid && (key == "page" || key == "regions")
-	}
-	if !valid {
-		return fmt.Errorf("%s: settingsView must be {page, regions?}", where)
-	}
-	if !isViewPage(view["page"]) {
-		return fmt.Errorf("%s: settingsView page must be a path inside the plugin release that ends in .html", where)
-	}
-	rawRegions, has := view["regions"]
-	if !has {
-		return nil
-	}
-	regions, ok := rawRegions.([]any)
-	if !ok || len(regions) == 0 {
-		return fmt.Errorf("%s: settingsView composition: regions must be a non-empty array", where)
-	}
-	return checkRegions(where+": settingsView", regions, []any{}, sidecars)
 }
 
 // isViewPage reports whether the value is the page of a view: a path inside the release that ends in .html, with no empty,

@@ -226,35 +226,35 @@ type surfaceClip struct {
 }
 
 // A surface host shows only the part of its native view element that the frame shows: an element whose clip is smaller than its box,
-// such as the seat of the settings surface below the bottom of the pane, clips its host to the clip in the bounds of the host, and an
-// element that shows whole clips nothing (docs/spec/native-surfaces.md#settings-seat, F1205).
+// such as a tab below the bottom of the pane, clips its host to the clip in the bounds of the host, and an element that shows whole clips
+// nothing (F1205).
 // contract: mygo.framework.surface-host-follows-the-clip-of-its-element
 func TestASurfaceHostShowsOnlyTheClipOfItsElement(t *testing.T) {
-	var settings, tab int
-	surfaces := map[uintptr]unsafe.Pointer{1: unsafe.Pointer(&settings), 2: unsafe.Pointer(&tab)}
+	var partly, tab int
+	surfaces := map[uintptr]unsafe.Pointer{1: unsafe.Pointer(&partly), 2: unsafe.Pointer(&tab)}
 	surface := func(view uintptr) (unsafe.Pointer, bool) {
 		handle, ok := surfaces[view]
 		return handle, ok
 	}
 	system := &clipPlatform{clips: map[unsafe.Pointer][]surfaceClip{}}
 	f := &Frontend{frames: host.NewWindowFrames("main")}
-	seat := mygo.RectF{X: 475, Y: 388, W: 386, H: 516}
+	partBox := mygo.RectF{X: 475, Y: 388, W: 386, H: 516}
 	tabBox := mygo.RectF{X: 0, Y: 40, W: 200, H: 300}
 	f.placeSurfaces(system, surface, []mygo.NativePlacement{
-		{View: 1, Box: seat, Clip: mygo.RectF{X: 475, Y: 388, W: 386, H: 245}},
+		{View: 1, Box: partBox, Clip: mygo.RectF{X: 475, Y: 388, W: 386, H: 245}},
 		{View: 2, Box: tabBox, Clip: tabBox},
 	})
 	if got, want := system.clips[surfaces[1]], []surfaceClip{{clipped: true, rect: mygo.RectF{X: 0, Y: 0, W: 386, H: 245}}}; !equalClips(got, want) {
-		t.Fatalf("the settings surface host has the clips %+v, want %+v", got, want)
+		t.Fatalf("the partly clipped surface host has the clips %+v, want %+v", got, want)
 	}
 	if got, want := system.clips[surfaces[2]], []surfaceClip{{clipped: false}}; !equalClips(got, want) {
 		t.Fatalf("the tab surface host has the clips %+v, want %+v", got, want)
 	}
-	// A scroll that shows the whole seat removes the clip, and the same placement again sets nothing.
-	f.placeSurfaces(system, surface, []mygo.NativePlacement{{View: 1, Box: seat, Clip: seat}, {View: 2, Box: tabBox, Clip: tabBox}})
-	f.placeSurfaces(system, surface, []mygo.NativePlacement{{View: 1, Box: seat, Clip: seat}, {View: 2, Box: tabBox, Clip: tabBox}})
+	// A placement that shows the whole box removes the clip, and the same placement again sets nothing.
+	f.placeSurfaces(system, surface, []mygo.NativePlacement{{View: 1, Box: partBox, Clip: partBox}, {View: 2, Box: tabBox, Clip: tabBox}})
+	f.placeSurfaces(system, surface, []mygo.NativePlacement{{View: 1, Box: partBox, Clip: partBox}, {View: 2, Box: tabBox, Clip: tabBox}})
 	if got, want := system.clips[surfaces[1]], []surfaceClip{{clipped: true, rect: mygo.RectF{X: 0, Y: 0, W: 386, H: 245}}, {clipped: false}}; !equalClips(got, want) {
-		t.Fatalf("the settings surface host has the clips %+v, want %+v", got, want)
+		t.Fatalf("the partly clipped surface host has the clips %+v, want %+v", got, want)
 	}
 }
 

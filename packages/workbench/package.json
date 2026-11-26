@@ -99,8 +99,6 @@
     "plugin-search.js",
     "settings-scope.js",
     "settings-ui.js",
-    "settings-view.js",
-    "settings-seat.js",
     "tab-menu.js",
     "tab-params.js",
     "tab-reports.js",

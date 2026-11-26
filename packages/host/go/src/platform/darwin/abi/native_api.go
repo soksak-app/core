@@ -198,8 +198,6 @@ type NativeFunctions struct {
 	MainSpSurfaceFocus                     func(unsafe.Pointer)
 	MainSpSurfaceFocusForRegion            func(unsafe.Pointer)
 	MainSpSurfaceMarkDialog                func(unsafe.Pointer)
-	MainSpSurfaceSeatOverModal             func(unsafe.Pointer, unsafe.Pointer, float64, float64, float64, float64) bool
-	MainSpSurfaceFillWindowBackground      func(unsafe.Pointer, bool)
 	MainSpSurfaceSetClip                   func(unsafe.Pointer, bool, float64, float64, float64, float64)
 	MainSpSurfaceSetWindowOverlays         func(unsafe.Pointer, *float64, uint64)
 	MainSpViewImportMapSet                 func(*byte)
@@ -209,7 +207,6 @@ type NativeFunctions struct {
 	MainSpWindowEndResponderObservation    func(unsafe.Pointer)
 	MainSpWindowEndSheetObservation        func(unsafe.Pointer)
 	MainSpWindowFacts                      func(uintptr) *byte
-	MainSpWindowFillSurfaceBackgrounds     func(uintptr)
 	MainSpWindowFocusWorkbench             func(uintptr)
 	MainSpWindowHit                        func(uintptr, float64, float64) *byte
 	MainSpWindowKeysDecided                func(uintptr)
@@ -549,12 +546,6 @@ func (functions NativeFunctions) Validate() error {
 	if functions.MainSpSurfaceMarkDialog == nil {
 		return fmt.Errorf("native API function is missing: main_sp_surface_mark_dialog")
 	}
-	if functions.MainSpSurfaceSeatOverModal == nil {
-		return fmt.Errorf("native API function is missing: main_sp_surface_seat_over_modal")
-	}
-	if functions.MainSpSurfaceFillWindowBackground == nil {
-		return fmt.Errorf("native API function is missing: main_sp_surface_fill_window_background")
-	}
 	if functions.MainSpSurfaceSetClip == nil {
 		return fmt.Errorf("native API function is missing: main_sp_surface_set_clip")
 	}
@@ -581,9 +572,6 @@ func (functions NativeFunctions) Validate() error {
 	}
 	if functions.MainSpWindowFacts == nil {
 		return fmt.Errorf("native API function is missing: main_sp_window_facts")
-	}
-	if functions.MainSpWindowFillSurfaceBackgrounds == nil {
-		return fmt.Errorf("native API function is missing: main_sp_window_fill_surface_backgrounds")
 	}
 	if functions.MainSpWindowFocusWorkbench == nil {
 		return fmt.Errorf("native API function is missing: main_sp_window_focus_workbench")

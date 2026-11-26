@@ -288,27 +288,3 @@ fn a_dialog_surface_blurs_the_regions_of_the_other_surfaces_only() {
     assert_eq!(*documents.borrow(), vec![(1, true), (2, false)]);
     assert_eq!(*images.borrow(), vec![(3, false)]);
 }
-
-// contract: modal.settings-window-leaves-the-settings-surface-unblurred
-#[test]
-fn the_background_of_the_settings_window_leaves_the_settings_surface_unblurred() {
-    let documents = std::cell::RefCell::new(Vec::new());
-    let images = std::cell::RefCell::new(Vec::new());
-    super::set_regions_background(
-        regions_of(&[(1, "tab-1"), (2, "settings/probe")]),
-        regions_of(&[(3, "settings/probe")]),
-        None,
-        true,
-        |handle, enabled| {
-            documents.borrow_mut().push((handle, enabled));
-            Ok(())
-        },
-        |handle, enabled| {
-            images.borrow_mut().push((handle, enabled));
-            Ok(())
-        },
-    );
-    documents.borrow_mut().sort();
-    assert_eq!(*documents.borrow(), vec![(1, true), (2, false)]);
-    assert_eq!(*images.borrow(), vec![(3, false)]);
-}

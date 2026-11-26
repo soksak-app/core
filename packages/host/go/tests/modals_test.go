@@ -39,12 +39,3 @@ func TestTheHostMarksTheSurfaceHostOfEachDialogSurface(t *testing.T) {
 		}
 	}
 }
-
-// contract: surface-host.settings-container-over-modal
-func TestTheHostKnowsTheSettingsSurfaceOfAPlugin(t *testing.T) {
-	for surface, want := range map[string]bool{"settings/probe": true, "tab-a": false, "dialog/probe/edit": false, "settings": false, "settings/probe/x": false, "space-b/left/probe.section": false} {
-		if got := host.IsSettingsSurface(surface); got != want {
-			t.Fatalf("IsSettingsSurface(%q) = %v, want %v", surface, got, want)
-		}
-	}
-}

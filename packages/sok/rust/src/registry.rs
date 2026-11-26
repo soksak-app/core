@@ -87,10 +87,6 @@ pub(crate) fn manifest_modules(manifest: &Value) -> Vec<(String, String)> {
             add("dialog page".into(), &dialog["page"]);
         }
     }
-    add(
-        "settingsView page".into(),
-        &manifest["settingsView"]["page"],
-    );
     modules
 }
 

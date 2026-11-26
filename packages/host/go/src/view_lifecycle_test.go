@@ -375,14 +375,6 @@ func TestViewStopReasonOfADialogNamesTheDialog(t *testing.T) {
 	}
 }
 
-// contract: view.restart.limit-shows-settings-error
-func TestViewStopReasonOfASettingsSurfaceNamesTheSettingsPage(t *testing.T) {
-	const want = "the view failed 4 times within 300 seconds and is created again when the settings page of the plugin is shown again"
-	if got := viewStopReason("settings/probe"); got != want {
-		t.Fatalf("stop reason %q, want %q", got, want)
-	}
-}
-
 // contract: view.restart.limit-shows-error
 // The view-stopped payload carries the surface, the plugin and the reason.
 func TestViewStoppedEventCarriesSurfaceAndReason(t *testing.T) {

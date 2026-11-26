@@ -151,10 +151,6 @@ func Functions() abi.NativeFunctions {
 		MainSpSurfaceFocus:          func(a0 unsafe.Pointer) { C.main_sp_surface_focus(a0) },
 		MainSpSurfaceFocusForRegion: func(a0 unsafe.Pointer) { C.main_sp_surface_focus_for_region(a0) },
 		MainSpSurfaceMarkDialog:     func(a0 unsafe.Pointer) { C.main_sp_surface_mark_dialog(a0) },
-		MainSpSurfaceSeatOverModal: func(a0 unsafe.Pointer, a1 unsafe.Pointer, a2 float64, a3 float64, a4 float64, a5 float64) bool {
-			return bool(C.main_sp_surface_seat_over_modal(a0, a1, C.double(a2), C.double(a3), C.double(a4), C.double(a5)))
-		},
-		MainSpSurfaceFillWindowBackground: func(a0 unsafe.Pointer, a1 bool) { C.main_sp_surface_fill_window_background(a0, C.bool(a1)) },
 		MainSpSurfaceSetClip: func(a0 unsafe.Pointer, a1 bool, a2 float64, a3 float64, a4 float64, a5 float64) {
 			C.main_sp_surface_set_clip(a0, C.bool(a1), C.double(a2), C.double(a3), C.double(a4), C.double(a5))
 		},
@@ -172,7 +168,6 @@ func Functions() abi.NativeFunctions {
 		MainSpWindowEndResponderObservation: func(a0 unsafe.Pointer) { C.main_sp_window_end_responder_observation(a0) },
 		MainSpWindowEndSheetObservation:     func(a0 unsafe.Pointer) { C.main_sp_window_end_sheet_observation(a0) },
 		MainSpWindowFacts:                   func(a0 uintptr) *byte { return (*byte)(unsafe.Pointer(C.main_sp_window_facts(C.uintptr_t(a0)))) },
-		MainSpWindowFillSurfaceBackgrounds:  func(a0 uintptr) { C.main_sp_window_fill_surface_backgrounds(C.uintptr_t(a0)) },
 		MainSpWindowFocusWorkbench:          func(a0 uintptr) { C.main_sp_window_focus_workbench(C.uintptr_t(a0)) },
 		MainSpWindowHit: func(a0 uintptr, a1 float64, a2 float64) *byte {
 			return (*byte)(unsafe.Pointer(C.main_sp_window_hit(C.uintptr_t(a0), C.double(a1), C.double(a2))))

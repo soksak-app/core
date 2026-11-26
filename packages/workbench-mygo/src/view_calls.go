@@ -401,15 +401,6 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 			answer(map[string]any{"kind": declaration.Kind, "regions": nonNil(declaration.Regions), "overlays": []string{}}, nil)
 			return nil
 		}
-		// The view of a settings surface has the composition of the settings view of its plugin (docs/spec/plugins.md#settings-views).
-		if s.isSettingsSurface(call.Surface) {
-			var declaration surfaceDeclaration
-			if err := json.Unmarshal(s.settingsView.surface.composition, &declaration); err != nil {
-				return fmt.Errorf("settings view of %s: composition: %w", s.settingsView.plugin, err)
-			}
-			answer(map[string]any{"kind": declaration.Kind, "regions": nonNil(declaration.Regions), "overlays": []string{}}, nil)
-			return nil
-		}
 		answer(map[string]any{"kind": unit.Declaration.Kind, "regions": nonNil(unit.Declaration.Regions), "overlays": nonNil(unit.Declaration.Overlays)}, nil)
 	case "composition.place":
 		fields, err := viewFields[struct {
@@ -563,22 +554,6 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 			return err
 		}
 		done()
-	case "runtime.seat.height":
-		// The content height of the page of a settings view, which sets the height of its seat (docs/spec/plugins.md#settings-views).
-		fields, err := viewFields[struct {
-			Height json.RawMessage `json:"height"`
-		}](call)
-		if err != nil {
-			return err
-		}
-		var height float64
-		if json.Unmarshal(fields.Height, &height) != nil || height < 0 || math.IsInf(height, 0) {
-			return fmt.Errorf("view call %s requires a height that is not negative", call.Command)
-		}
-		if err := s.setSeatHeight(call.Surface, float32(height)); err != nil {
-			return err
-		}
-		answer(nil, nil)
 	case "runtime.links.open":
 		url, err := text()
 		if err != nil {
@@ -1412,10 +1387,6 @@ func (s *Shell) viewStopped(data []any) {
 	// A dialog whose view stopped its restarts is removed, and its open call fails (docs/spec/plugins.md#dialogs).
 	if s.dialog != nil && s.dialog.id() == event.Surface {
 		s.failDialog(event.Reason)
-	}
-	// A settings surface whose view stopped its restarts is removed until its page is shown again (docs/spec/plugins.md#settings-views).
-	if s.isSettingsSurface(event.Surface) {
-		s.failSettingsSurface(event.Reason)
 	}
 	s.options.Invalidate()
 }

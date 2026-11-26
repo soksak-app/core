@@ -332,15 +332,6 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
       await runtime.subscribe.data(owner === plugin ? undefined : owner);
       return null;
     }
-    // The content height of the page of a settings view, which sets the height of its seat (docs/spec/plugins.md#settings-views).
-    case "runtime.seat.height": {
-      const fields = objectOf(command, params);
-      if (typeof fields.height !== "number" || !Number.isFinite(fields.height) || fields.height < 0) {
-        throw new TypeError(`view call ${command} requires a height that is not negative`);
-      }
-      runtime.seat.height(surface, fields.height);
-      return null;
-    }
     case "runtime.links.open":
       if (typeof params !== "string" || params === "") throw new TypeError(`view call ${command} requires a non-empty URL`);
       await runtime.links.open(params);

@@ -78,13 +78,6 @@ type modal struct {
 // window from its placement.
 func IsDialogSurface(surface string) bool { return strings.HasPrefix(surface, "dialog/") }
 
-// IsSettingsSurface tells whether surface is the id of the settings surface of a plugin, settings/<plugin>
-// (docs/spec/plugins.md#settings-views): the settings window shows it, so no background blurs it.
-func IsSettingsSurface(surface string) bool {
-	plugin, found := strings.CutPrefix(surface, "settings/")
-	return found && plugin != "" && !strings.Contains(plugin, "/")
-}
-
 // OverlayPick publishes the key and value that the modal page changed. The main page decides the meaning.
 func (s *Surfaces) OverlayPick(id string, instance uint64, key string, value string) error {
 	s.mu.Lock()
@@ -618,7 +611,7 @@ func (s *Surfaces) endDialogKeys() {
 func (s *Surfaces) backgroundOf(surface string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.dialogLocked() && surface != s.dialogSurface && !IsSettingsSurface(surface)
+	return s.dialogLocked() && surface != s.dialogSurface
 }
 
 func (s *Surfaces) dialog() bool {

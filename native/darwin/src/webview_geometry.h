@@ -9,32 +9,16 @@ void *sp_surface_create(void *view);
 // sp_surface_create makes in that container while the dialog host is in it is inserted below the dialog host, so the dialog stays above
 // every other surface host. The host marks the surface host of a dialog surface when it creates it. Call it on the main thread.
 void sp_surface_mark_dialog(void *surface);
-// Seats the surface host of the settings surface above the modal web view modal of the settings window
-// (docs/spec/native-modals.md#settings-surface): the host moves into the settings container of the window, a container of surface
-// hosts that stands directly above modal and whose frame is the clip x, y, width, height, in points from the top left of the
-// content area, so the host shows and takes the pointer only inside the clip and modal takes every other point. A later call
-// changes the clip and stands the container above modal again. Returns false when modal is not a view of the content view of the
-// window of the host. Call it on the main thread, before the frame of the host is set, because the frame of the host is relative to
-// its container.
-bool sp_surface_seat_over_modal(void *surface, void *modal, double x, double y, double width, double height);
 // Passes a wheel event that the page of the web view did not use to the content behind it: a document region to the web view of its
-// surface, the web view of a surface over the modal to the modal web view, and the web view of another surface to the main web view
-// of the window or the view that draws its workbench. Answers false for a web view outside every surface host and for a dialog host,
-// whose content behind it is not the content of the dialog (docs/spec/native-surfaces.md#unused-wheels).
+// surface and the web view of another surface to the main web view of the window or the view that draws its workbench. Answers
+// false for a web view outside every surface host and for a dialog host, whose content behind it is not the content of the dialog
+// (docs/spec/native-surfaces.md#unused-wheels).
 bool sp_surface_pass_unused_wheel(void *webview, void *event);
 // Clips the surface host to the rectangle x, y, width, height in its own bounds, top left origin, when clipped is true, and removes the
 // clip when it is false: the host and every view in it, such as its native plane and the document regions there, draw only inside the
 // rectangle. A window without a main page places a surface host at the box of its native view element and clips it to the part of the
-// box that the element shows (docs/spec/native-surfaces.md#settings-seat). Call it on the main thread.
+// box that the element shows. Call it on the main thread.
 void sp_surface_set_clip(void *surface, bool clipped, double x, double y, double width, double height);
-// Fills the surface host with the background color of its window when filled is true, and removes the fill when it is false. A window
-// without a main page shows the surfaces below its settings window in the holes that it draws, so the host of the settings surface
-// fills itself with the window background, which the workbench sets to the color of the pane (docs/spec/native-surfaces.md#settings-seat).
-// Call it on the main thread.
-void sp_surface_fill_window_background(void *surface, bool filled);
-// Fills each surface host of window that fills itself with the window background again with the current background color of the
-// window. Call it on the main thread after the background of the window changes.
-void sp_window_fill_surface_backgrounds(void *window);
 // Whether view is a surface host that sp_surface_create made. Call it on the main thread.
 bool sp_surface_is_host(void *view);
 // Wraps the main web view in the window composition, which holds the window overlays, the file drop view and, above the web

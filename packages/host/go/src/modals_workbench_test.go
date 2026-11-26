@@ -145,33 +145,6 @@ func TestAPlacedDialogSurfaceBlursTheOtherDocumentsButNotItsOwn(t *testing.T) {
 	}
 }
 
-// contract: modal.settings-window-leaves-the-settings-surface-unblurred
-func TestTheBackgroundOfTheSettingsWindowLeavesTheSettingsSurfaceUnblurred(t *testing.T) {
-	probe := newRegionsProbe(t)
-	s := &Surfaces{invoke: func(work func()) { work() }, documents: NewDocuments(), images: NewImages()}
-	documentKey := DocumentKey{Surface: "settings/probe", Name: "login"}
-	if err := s.documents.Reserve(documentKey); err != nil {
-		t.Fatal(err)
-	}
-	s.documents.Set(documentKey, probe.document)
-	imageKey := ImageKey{Surface: "tab-1", Name: "viewer"}
-	if err := s.images.Reserve(imageKey, &ImageOwner{SidecarName: "viewer-sidecar", SidecarOwner: imageStatusTestOwner{}}); err != nil {
-		t.Fatal(err)
-	}
-	s.images.Set(imageKey, probe.image)
-	s.mu.Lock()
-	s.workbenchDialog = true
-	s.mu.Unlock()
-	runOnMainThread(func() { s.setBackground() })
-	if probe.documentBlurred(t) || !probe.imageBlurred(t) {
-		t.Fatalf("with the settings window open the region of the settings surface has the background %v and the region of a tab %v",
-			probe.documentBlurred(t), probe.imageBlurred(t))
-	}
-	if s.backgroundOf("settings/probe") || !s.backgroundOf("tab-1") {
-		t.Fatal("a region made for the settings surface is blurred or a region made for a tab is not")
-	}
-}
-
 // The placement that first shows a dialog surface starts a key wait of the window, which the keyboard of the dialog surface ends, so the
 // keys that waited go to the dialog; a placement that hides the dialog before it took the keyboard ends the wait too
 // (docs/spec/plugins.md#dialogs).

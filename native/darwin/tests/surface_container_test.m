@@ -263,83 +263,6 @@ static void checkDialogHostOrder(void) {
     [window release];
 }
 
-// contract: surface-host.settings-container-over-modal
-// The settings surface host stands in the settings container directly above the modal web view of the settings window, which
-// clips it to the pane; a point inside the clip is the host, a point of the modal outside it is the modal, and a view added above
-// the container later leaves the container directly above the modal at the next seat (docs/spec/native-modals.md#settings-surface).
-static void checkSettingsContainer(void) {
-    SPScaledWindow *window = makeWindow(NSMakeRect(0, 0, 400, 300), 2);
-    NSView *content = window.contentView;
-    NSView *holder = [[[NSView alloc] initWithFrame:content.bounds] autorelease];
-    [content addSubview:holder];
-    NSView *modal = [[[NSView alloc] initWithFrame:content.bounds] autorelease];
-    [content addSubview:modal positioned:NSWindowAbove relativeTo:holder];
-    void *surface = sp_surface_create(holder);
-    NSView *host = (NSView *)surface;
-    WKWebView *web = [[[WKWebView alloc] initWithFrame:NSZeroRect] autorelease];
-    check(sp_surface_place_view(surface, web), @"the settings container fixture places its web view");
-    check(sp_surface_seat_over_modal(surface, modal, 50, 40, 200, 100), @"the settings surface host is seated over the modal");
-    NSView *over = host.superview;
-    check(over.superview == content && [content.subviews indexOfObjectIdenticalTo:over] == [content.subviews indexOfObjectIdenticalTo:modal] + 1,
-        [NSString stringWithFormat:@"the settings container stands directly above the modal (subviews %@)", content.subviews]);
-    check(NSEqualRects(over.frame, NSMakeRect(50, 300 - 40 - 100, 200, 100)),
-        [NSString stringWithFormat:@"the settings container has the frame of the clip (%@)", NSStringFromRect(over.frame)]);
-    webviewSetFrame(surface, 50, 20, 200, 300);
-    webviewSetSurfaceHidden(surface, false);
-    double rect[4] = {0};
-    webviewGetFrame(surface, rect);
-    check(rect[0] == 50 && rect[1] == 20 && rect[2] == 200 && rect[3] == 300,
-        [NSString stringWithFormat:@"the seated host keeps its frame in window content coordinates (%g, %g, %g, %g)", rect[0], rect[1], rect[2], rect[3]]);
-    NSView *(^hit)(double, double) = ^NSView *(double x, double y) {
-        NSView *found = [content hitTest:[content convertPoint:NSMakePoint(x, 300 - y) toView:content.superview]];
-        while (found && found != modal && ![found isKindOfClass:WKWebView.class]) found = found.superview;
-        return found;
-    };
-    check(hit(100, 80) == web, [NSString stringWithFormat:@"a point inside the clip is the settings surface (%@)", hit(100, 80)]);
-    check(hit(100, 30) == modal, [NSString stringWithFormat:@"a point of the host outside the clip is the modal (%@)", hit(100, 30)]);
-    check(hit(300, 80) == modal, [NSString stringWithFormat:@"a point outside the host is the modal (%@)", hit(300, 80)]);
-    NSView *later = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, 10, 10)] autorelease];
-    [content addSubview:later];
-    check(sp_surface_seat_over_modal(surface, modal, 60, 40, 200, 100) && host.superview == over && host.window == window,
-        @"a second seat keeps the host in the settings container");
-    check([content.subviews isEqualToArray:@[holder, modal, over, later]],
-        [NSString stringWithFormat:@"the settings container stands again directly above the modal (subviews %@)", content.subviews]);
-    NSView *outside = [[[NSView alloc] initWithFrame:NSZeroRect] autorelease];
-    check(!sp_surface_seat_over_modal(surface, outside, 0, 0, 10, 10), @"a modal outside the content view is refused");
-    sp_surface_unplace_view(web);
-    [web removeFromSuperview];
-    sp_surface_close(surface);
-    [window close];
-    [window release];
-}
-
-// A window without a main page shows the surfaces below its settings window in the holes that it draws, so the settings surface
-// host fills itself with the background of its window, which the workbench sets to the color of the pane, and fills itself again when
-// the window changes its background; a host that stops filling shows what is below it again (docs/spec/native-surfaces.md#settings-seat).
-static void checkWindowBackgroundFill(void) {
-    SPScaledWindow *window = makeWindow(NSMakeRect(0, 0, 400, 300), 2);
-    NSView *content = window.contentView;
-    window.backgroundColor = [NSColor colorWithSRGBRed:1 green:0 blue:0 alpha:1];
-    void *surface = sp_surface_create(content);
-    NSView *host = (NSView *)surface;
-    BOOL (^filledWith)(NSColor *) = ^BOOL(NSColor *color) {
-        return host.layer.backgroundColor && CGColorEqualToColor(host.layer.backgroundColor, color.CGColor);
-    };
-    sp_surface_fill_window_background(surface, true);
-    check(filledWith(window.backgroundColor), @"the host fills itself with the background of its window");
-    window.backgroundColor = [NSColor colorWithSRGBRed:0 green:0 blue:1 alpha:1];
-    sp_window_fill_surface_backgrounds((__bridge void *)window);
-    check(filledWith(window.backgroundColor), @"the host fills itself again with the changed background of its window");
-    sp_surface_fill_window_background(surface, false);
-    check(host.layer.backgroundColor == NULL, @"a host that stops filling has no background");
-    window.backgroundColor = NSColor.greenColor;
-    sp_window_fill_surface_backgrounds((__bridge void *)window);
-    check(host.layer.backgroundColor == NULL, @"a host that does not fill keeps no background when the window changes its background");
-    sp_surface_close(surface);
-    [window close];
-    [window release];
-}
-
 int main(void) { @autoreleasepool {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
@@ -350,7 +273,5 @@ int main(void) { @autoreleasepool {
     checkNativeView();
     checkWorkbenchHit();
     checkDialogHostOrder();
-    checkSettingsContainer();
-    checkWindowBackgroundFill();
     return failures == 0 ? 0 : 1;
 } }

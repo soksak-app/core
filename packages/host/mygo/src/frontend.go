@@ -313,17 +313,7 @@ func (f *Frontend) Invalidate() { f.window.Invalidate() }
 // SetBackdrop sets the color of the window behind its content. Every surface lies under the content, in a hole of it, so a page without
 // a background of its own shows this color.
 func (f *Frontend) SetBackdrop(color string) error {
-	if err := f.window.SetBackgroundColor(color); err != nil {
-		return err
-	}
-	// The settings surface host fills itself with the background of the window, the color of the pane, so it takes the new color
-	// (docs/spec/native-surfaces.md#settings-seat).
-	system, err := platform.Current()
-	if err != nil {
-		return err
-	}
-	system.FillWindowSurfaceBackgrounds(f.NativeWindow())
-	return nil
+	return f.window.SetBackgroundColor(color)
 }
 
 // Show puts the window on the screen once its workbench showed its first screen (FirstScreen). The host shows a window after it holds

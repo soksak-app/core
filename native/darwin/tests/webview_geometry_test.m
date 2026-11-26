@@ -670,9 +670,8 @@ static void wheelAt(NSWindow *window, double x, double y) {
 }
 
 // A wheel that the page of a web view in a surface host does not use goes to the content behind it, as a wheel at the end of an
-// iframe scrolls its parent document: the web view of a surface passes it to the main web view of the window, the web view of a
-// settings surface over the modal to the modal web view, and a document region to the web view of its surface
-// (docs/spec/native-surfaces.md#unused-wheels).
+// iframe scrolls its parent document: the web view of a surface passes it to the main web view of the window, and a document
+// region to the web view of its surface (docs/spec/native-surfaces.md#unused-wheels).
 static void checkUnusedWheel(NSWindow *window, WKWebView *main) {
     currentStep = __func__;
     NSString *tall = @"<!doctype html><body style='margin:0'><div style='height:5000px'></div></body>";
@@ -719,27 +718,6 @@ static void checkUnusedWheel(NSWindow *window, WKWebView *main) {
     webviewInputUnregister(view);
     sp_surface_unplace_view(view);
     sp_surface_close(surface);
-
-    // A settings surface over the modal passes the wheel that its page does not use to the modal web view below its container.
-    WKWebView *modal = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 600, 400)] autorelease];
-    [window.contentView addSubview:modal positioned:NSWindowAbove relativeTo:nil];
-    load(modal, tall);
-    void *settings = sp_surface_create(sp_window_set_main_webview(main.window, main));
-    WKWebView *settingsView = [[[WKWebView alloc] initWithFrame:NSZeroRect] autorelease];
-    check(SPPlaceSurfaceView(settings, settingsView), @"the unused wheel check places the web view of the settings surface");
-    webviewInputRegister(settingsView);
-    load(settingsView, shortPage);
-    check(sp_surface_seat_over_modal(settings, modal, 40, 30, 300, 200), @"the settings surface seats over the modal");
-    webviewSetFrame(settings, 40, 30, 300, 200);
-    webviewSetSurfaceHidden(settings, false);
-    nextPresentation(settingsView);
-    wheelAt(window, 190, 130);
-    double over = scrolledWithin(modal, 20);
-    check(over > 0, [NSString stringWithFormat:@"a wheel that the page of a settings surface does not use scrolls the modal web view below it (%g)", over]);
-    webviewInputUnregister(settingsView);
-    sp_surface_unplace_view(settingsView);
-    sp_surface_close(settings);
-    [modal removeFromSuperview];
 }
 
 int main(void) { @autoreleasepool {

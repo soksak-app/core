@@ -453,29 +453,17 @@ func (implementation) MarkDialogSurface(unsafe.Pointer) error {
 	return unsupported("dialog surface host")
 }
 
-func (implementation) SeatSurfaceOverModal(unsafe.Pointer, unsafe.Pointer, float64, float64, float64, float64) error {
-	return unsupported("settings surface host")
-}
-
 func (implementation) SetSurfaceBounds(unsafe.Pointer, float64, float64, float64, float64) {
 	unreachable("surface host placement")
-}
-
-func (implementation) SetSurfaceClip(unsafe.Pointer, bool, float64, float64, float64, float64) {
-	unreachable("surface host clip")
-}
-
-func (implementation) FillSurfaceWithWindowBackground(unsafe.Pointer, bool) {
-	unreachable("surface host background")
-}
-
-func (implementation) FillWindowSurfaceBackgrounds(platform.Window) {
-	unreachable("surface host background")
 }
 
 func (implementation) SurfaceFrame(unsafe.Pointer) platform.Rect {
 	unreachable("surface host frame")
 	return platform.Rect{}
+}
+
+func (implementation) SetSurfaceClip(unsafe.Pointer, bool, float64, float64, float64, float64) {
+	unreachable("surface host clip")
 }
 
 func (implementation) SetSurfaceHiddenHandle(unsafe.Pointer, bool) {

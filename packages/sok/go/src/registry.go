@@ -81,9 +81,6 @@ func manifestModules(manifest map[string]any) [][2]string {
 			}
 		}
 	}
-	if view, ok := manifest["settingsView"].(map[string]any); ok {
-		add("settingsView page", view["page"])
-	}
 	return modules
 }
 

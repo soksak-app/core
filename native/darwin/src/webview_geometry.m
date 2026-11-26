@@ -16,9 +16,6 @@
 
 @interface SPSurfaceCoordinates : NSView
 @property CGFloat scale;
-// The container is the settings container of its window, which stands above the modal web view of the settings window and
-// clips the settings surface host to the pane (sp_surface_seat_over_modal).
-@property(nonatomic) BOOL overModal;
 @end
 
 static void normalizeCoordinateBounds(SPSurfaceCoordinates *coordinates) {
@@ -107,8 +104,6 @@ static void recordKeys(const char *name, uint8_t level, NSUInteger count, const 
 @property(nonatomic) NSUInteger droppedKeys;
 // The host holds the surface of a dialog: the surface hosts made after it stand below it (sp_surface_mark_dialog).
 @property(nonatomic) BOOL dialogHost;
-// The host fills itself with the background color of its window (sp_surface_fill_window_background).
-@property(nonatomic) BOOL fillsWindowBackground;
 @end
 
 // A surface places native regions below its view WebView. CSS transparency does not turn off the native opaque
@@ -415,7 +410,7 @@ static void notifyScale(NSView *view) {
     if (self.hidden || self.alphaValue <= 0 || NSWidth(self.frame) <= 0 || NSHeight(self.frame) <= 0) return nil;
     // AppKit passes the point in the coordinates of the parent to the hitTest: of a child. This container has a different axis
     // direction from its parent and its bounds are larger by the device scale, so the two are converted explicitly from the
-    // offset of the point from the frame origin, which the settings container does not have at the origin of its parent.
+    // offset of the point from the frame origin, which the container does not have at the origin of its parent.
     CGFloat x = NSMinX(self.bounds) + (point.x - NSMinX(self.frame)) * NSWidth(self.bounds) / NSWidth(self.frame);
     CGFloat yFraction = (point.y - NSMinY(self.frame)) / NSHeight(self.frame);
     if (self.isFlipped != self.superview.isFlipped) yFraction = 1 - yFraction;
@@ -628,64 +623,10 @@ void sp_surface_mark_dialog(void *handle) {
     ((SPSurfaceHost *)handle).dialogHost = YES;
 }
 
-// Orders the subviews of the content view so that the settings container follows the modal web view that the context names.
-static NSComparisonResult settingsContainerOrder(NSView *first, NSView *second, void *context) {
-    NSArray<NSView *> *order = (NSArray<NSView *> *)context;
-    NSUInteger a = [order indexOfObjectIdenticalTo:first], b = [order indexOfObjectIdenticalTo:second];
-    return a < b ? NSOrderedAscending : a > b ? NSOrderedDescending : NSOrderedSame;
-}
-
-bool sp_surface_seat_over_modal(void *handle, void *modalHandle, double x, double y, double width, double height) {
-    NSCAssert(NSThread.isMainThread, @"surface hosts belong to the main thread");
-    SPSurfaceHost *host = (SPSurfaceHost *)handle;
-    NSView *modal = (NSView *)modalHandle;
-    NSView *content = host.window.contentView;
-    if (!content || modal.superview != content) {
-        sp_log_error("surface", "the modal web view of the settings surface is not a view of the content view of the window of its host");
-        return false;
-    }
-    SPSurfaceCoordinates *over = nil;
-    for (NSView *child in content.subviews) {
-        if ([child isKindOfClass:SPSurfaceCoordinates.class] && ((SPSurfaceCoordinates *)child).overModal) over = (SPSurfaceCoordinates *)child;
-    }
-    surfaceTransactionBegin();
-    [CATransaction setDisableActions:YES];
-    if (!over) {
-        over = [[[SPSurfaceCoordinates alloc] initWithFrame:NSZeroRect] autorelease];
-        over.overModal = YES;
-        over.autoresizesSubviews = NO;
-        over.layer.masksToBounds = YES;
-        [content addSubview:over positioned:NSWindowAbove relativeTo:modal];
-    } else {
-        // A modal web view made after the container is added above it, so the subviews are sorted in place, which keeps every view in
-        // the window, instead of adding the container again.
-        NSMutableArray<NSView *> *order = [[content.subviews mutableCopy] autorelease];
-        [order removeObjectIdenticalTo:over];
-        [order insertObject:over atIndex:[order indexOfObjectIdenticalTo:modal] + 1];
-        if (![order isEqualToArray:content.subviews]) [content sortSubviewsUsingFunction:settingsContainerOrder context:order];
-    }
-    over.frame = NSMakeRect(x, content.isFlipped ? y : NSHeight(content.bounds) - y - height, width, height);
-    if (host.superview != over) {
-        [host retain];
-        [host removeFromSuperview];
-        [over addSubview:host];
-        [host release];
-    }
-    surfaceTransactionCommit();
-    return true;
-}
-
 static NSView *frameworkKeyView(NSView *view);
 
-// The view that draws the content behind a surface host: the modal web view below the settings container, else the main web view of
-// the window or the view that draws its workbench.
+// The view that draws the content behind a surface host: the main web view of the window or the view that draws its workbench.
 static NSView *behindSurface(SPSurfaceHost *host) {
-    NSView *container = host.superview;
-    if ([container isKindOfClass:SPSurfaceCoordinates.class] && ((SPSurfaceCoordinates *)container).overModal) {
-        NSArray<NSView *> *siblings = container.superview.subviews;
-        NSUInteger index = [siblings indexOfObjectIdenticalTo:container];
-        return index != NSNotFound && index > 0 ? siblings[index - 1] : nil;
-    }
     NSWindow *window = host.window;
     return (NSView *)sp_window_main_webview(window) ?: frameworkKeyView(window.contentView);
 }
@@ -724,37 +665,6 @@ void sp_surface_set_clip(void *handle, bool clipped, double x, double y, double 
         mask.frame = [host convertRectToLayer:rect];
     }
     [CATransaction commit];
-}
-
-static void fillWindowBackground(SPSurfaceHost *host) {
-    [CATransaction begin];
-    [CATransaction setDisableActions:YES];
-    host.layer.backgroundColor = host.fillsWindowBackground && host.window ? host.window.backgroundColor.CGColor : NULL;
-    [CATransaction commit];
-}
-
-void sp_surface_fill_window_background(void *handle, bool filled) {
-    NSCAssert(NSThread.isMainThread, @"surface hosts belong to the main thread");
-    SPSurfaceHost *host = (SPSurfaceHost *)handle;
-    host.fillsWindowBackground = filled;
-    fillWindowBackground(host);
-}
-
-// Fills each filling surface host of the views below view again.
-static void fillSurfaceBackgrounds(NSView *view) {
-    for (NSView *child in view.subviews) {
-        if ([child isKindOfClass:SPSurfaceHost.class]) {
-            if (((SPSurfaceHost *)child).fillsWindowBackground) fillWindowBackground((SPSurfaceHost *)child);
-        } else {
-            fillSurfaceBackgrounds(child);
-        }
-    }
-}
-
-void sp_window_fill_surface_backgrounds(void *handle) {
-    NSCAssert(NSThread.isMainThread, @"windows belong to the main thread");
-    NSWindow *window = (NSWindow *)handle;
-    fillSurfaceBackgrounds(window.contentView.superview ?: window.contentView);
 }
 
 void sp_view_give_up_keyboard(void *handle) {

@@ -8,9 +8,8 @@
 // Each release of a left press in this document asks for one decided call, which goes out in the dispatch of the release, from what
 // the press changed, also for the same target or for the workbench: the keys of the window wait for it on the host
 // (docs/spec/native-surfaces.md#keyboard-of-a-surface).
-import { nativeModal, onModalState, onWindowResponder, report, surfaces } from "./host.js";
+import { nativeModal, onModalState, report, surfaces } from "./host.js";
 import { dialogSurface } from "./dialogs.js";
-import { settingsSurface } from "./settings-view.js";
 import { emitEvent } from "./page-log.js";
 
 /* The surface of the ring, which the plane registers. */
@@ -78,34 +77,9 @@ function record(cause, surface, decision, decided = false) {
   emitEvent("debug", "workbench.keyboard.follow", { cause, target: surface, sent, owed, decided, decision });
 }
 
-/*
- * Whether a press inside the settings seat gave the keyboard to the settings surface, which keeps it while the settings window is open
- * until the first responder of the window leaves that surface (docs/spec/plugins.md#settings-views).
- */
-let settingsKeys = false;
-
-/** A press on the settings surface gives it the keyboard, as a press on a tab view does (docs/spec/plugins.md#settings-views). */
-export function pressSettingsSurface() {
-  settingsKeys = true;
-  queueFollow("settings");
-}
-
-// A press elsewhere in the settings window moves the first responder of the window to the modal web view, which then holds the keyboard.
-onWindowResponder((event) => {
-  if (settingsKeys && event?.surface !== settingsSurface()) settingsKeys = false;
-});
-
 /** Sends the call when the host holds the target. A target that no placement placed yet waits for the placement. */
 function follow(cause) {
   if (nativeModal() !== null) {
-    // The settings surface is a part of the content of the settings window, so a press inside its seat moves the keyboard to it.
-    const settings = settingsKeys ? settingsSurface() : null;
-    if (settings === null) settingsKeys = false;
-    else if (shown.has(settings) || held.has(settings)) {
-      record(cause, settings, settings === sent && !owed ? "same" : "send");
-      send(settings);
-      return;
-    }
     owed = true;
     record(cause, null, "modal");
     return;

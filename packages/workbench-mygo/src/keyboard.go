@@ -239,14 +239,6 @@ func (s *Shell) keyboardTarget() *string {
 		}
 		return &id
 	}
-	// The settings surface holds the keyboard after a press on it, while the settings window shows it (docs/spec/plugins.md#settings-views).
-	if s.settingsView != nil && s.settingsWindow.viewKeys {
-		id := s.settingsView.id()
-		if _, seated := s.surfaces.drawn[id]; !seated {
-			return nil
-		}
-		return &id
-	}
 	if s.modalName() != nil || s.browsing || s.renaming != nil || s.plane == nil || s.opened() == nil {
 		return nil
 	}
@@ -313,12 +305,6 @@ func sameSurface(a, b *string) bool {
 // keyboardLeft follows a first responder that reached the workbench while a surface should hold the keyboard: a press on the
 // workbench, or AppKit moving it from a view that it hides or closes.
 func (s *Shell) keyboardLeft(responder Responder) {
-	// A press elsewhere in the settings window gives the keyboard back to the settings window (docs/spec/plugins.md#settings-views).
-	if responder.Owner == "workbench" && s.settingsView != nil && s.settingsWindow.viewKeys {
-		s.settingsWindow.viewKeys = false
-		s.options.Invalidate()
-		return
-	}
 	if target := s.keyboardTarget(); responder.Owner == "workbench" && target != nil {
 		s.recordKeyboard("responder", target, "wait", false)
 		s.keyboard.owed = true

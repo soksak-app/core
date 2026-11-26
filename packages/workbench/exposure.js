@@ -43,19 +43,11 @@ export function isDialogSurface(surface) {
 }
 
 /**
- * Whether a surface id names the settings surface of a plugin, `settings/<plugin id>` (docs/spec/plugins.md#settings-views). No space has
- * the id settings and a section id has three parts, so a section id never has this form.
- */
-export function isSettingsSurface(surface) {
-  return /^settings\/[^/]+$/.test(surface);
-}
-
-/**
  * Whether a surface id names a section surface, `<space id>/<sidebar id>/<section id>` (docs/spec/plugins.md#sections). A tab id has no "/",
- * so the form tells a tab from a section, a dialog and a settings surface, a dialog id starts with dialog/ and a settings id is settings/<plugin>.
+ * so the form tells a tab from a section and a dialog, a dialog id starts with dialog/.
  */
 export function isSectionSurface(surface) {
-  return surface.includes("/") && !isDialogSurface(surface) && !isSettingsSurface(surface);
+  return surface.includes("/") && !isDialogSurface(surface);
 }
 
 /**

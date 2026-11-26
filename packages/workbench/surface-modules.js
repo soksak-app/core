@@ -5,7 +5,6 @@ import { surfaceErrorText } from "./surface-status.js";
 import { isSectionSurface, markViewSurface, registry } from "./exposure.js";
 import { shownSectionSurfaces } from "./section-surfaces.js";
 import { onDataChange, viewDataOf } from "./plugin-data.js";
-import { setSeatHeight } from "./settings-view.js";
 import { answerViewCall, pluginNativeGate, viewStopState } from "@soksak/plugin-api/view-answer";
 import { createViewSubscriptions } from "@soksak/plugin-api/view-events";
 import { createViewCommands } from "@soksak/plugin-api/view-commands";
@@ -309,14 +308,14 @@ function originOf(surface) {
  * The origin of the context and the start values of surface. A section surface has no opening tab, so its origin records no
  * directory (docs/spec/native-surfaces.md#view-surfaces).
  */
-// A section, a dialog and a settings surface were opened by no tab, so their origin records no directory
-// (docs/spec/native-surfaces.md#view-surfaces, docs/spec/plugins.md#settings-views).
+// A section and a dialog surface were opened by no tab, so their origin records no directory
+// (docs/spec/native-surfaces.md#view-surfaces).
 function surfaceOrigin(surface) {
-  return surface.section != null || surface.dialog != null || surface.settings === true ? { directory: null } : originOf(surface);
+  return surface.section != null || surface.dialog != null ?  { directory: null } : originOf(surface);
 }
 
 function viewStartOrigin(surface) {
-  if (surface.section || surface.dialog || surface.settings === true) return surfaceOrigin(surface);
+  if (surface.section || surface.dialog) return surfaceOrigin(surface);
   // The layout read refuses a view tab first and the place leaves it out; a refusal that reaches this point is a defect, so it throws.
   const refusal = viewRefusal(surface.surfaceId);
   if (refusal !== null) throw new TypeError(refusal);
@@ -594,8 +593,6 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
       },
       // The project data of the plugin for a project, which the data calls of the view read and write (view-answer.js of @soksak/plugin-api).
       data: { of: viewDataOf },
-      // The seat of a settings view, whose height is the content height that the view reports (docs/spec/plugins.md#settings-views).
-      seat: { height: setSeatHeight },
       // The clipboard of the view (view-answer.js of @soksak/plugin-api): text and file URLs as the surface context reads them, and a PNG through the binary
       // store of the view.
       clipboard: {

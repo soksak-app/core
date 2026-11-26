@@ -307,12 +307,9 @@ func TestPluginInstallRefusesAReleaseWithoutTheViewPage(t *testing.T) {
 	if _, code, stderr := installRelease(t, probeEntries(dialogManifest, support.ReleaseEntry{Name: "package/ui/page.html", Content: "<!doctype html>", Mode: 0o644}, support.ReleaseEntry{Name: "package/ui/edit.html", Content: "<!doctype html>", Mode: 0o644})); code != 0 || stderr != "" {
 		t.Fatalf("code %d stderr %q", code, stderr)
 	}
-	// F1128-1: the page of the settings view is a file of the release too (docs/spec/plugins.md#settings-views).
+	// The settings view is removed: a plugin declares its settings, which the settings window draws (docs/spec/settings.md#controls).
 	settingsManifest := strings.Replace(viewManifest, `"surface":`, `"settingsView": {"page": "ui/settings.html"}, "surface":`, 1)
-	if _, code, stderr := installRelease(t, probeEntries(settingsManifest, support.ReleaseEntry{Name: "package/ui/page.html", Content: "<!doctype html>", Mode: 0o644})); code != 1 || stderr != "sok: plugin probe 0.2.0 package: plugin.json: settingsView page ui/settings.html is not in the release\n" {
-		t.Fatalf("code %d stderr %q", code, stderr)
-	}
-	if _, code, stderr := installRelease(t, probeEntries(settingsManifest, support.ReleaseEntry{Name: "package/ui/page.html", Content: "<!doctype html>", Mode: 0o644}, support.ReleaseEntry{Name: "package/ui/settings.html", Content: "<!doctype html>", Mode: 0o644})); code != 0 || stderr != "" {
+	if _, code, stderr := installRelease(t, probeEntries(settingsManifest, support.ReleaseEntry{Name: "package/ui/page.html", Content: "<!doctype html>", Mode: 0o644})); code != 1 || stderr != "sok: plugin probe 0.2.0 package: plugin.json: plugin probe: settingsView is removed; a plugin declares its settings\n" {
 		t.Fatalf("code %d stderr %q", code, stderr)
 	}
 }

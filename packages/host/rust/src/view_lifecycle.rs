@@ -180,14 +180,11 @@ pub fn view_killed_event(
 }
 
 /// The reason of the view of surface that stopped its restarts. The log line and the view-stopped event carry it. The view of a dialog
-/// surface, whose id starts with dialog/, is created again when its dialog is opened again, the view of a settings surface when the
-/// settings page of its plugin is shown again, and any other view when its tab or its section is shown again
-/// (docs/spec/plugins.md#dialogs, docs/spec/plugins.md#settings-views).
+/// surface, whose id starts with dialog/, is created again when its dialog is opened again, and any other view when its tab or its
+/// section is shown again (docs/spec/plugins.md#dialogs).
 pub fn view_stop_reason(surface: &str) -> String {
     let again = if crate::modals::is_dialog_surface(surface) {
         "its dialog is opened again"
-    } else if crate::modals::is_settings_surface(surface) {
-        "the settings page of the plugin is shown again"
     } else {
         "its tab is reopened"
     };

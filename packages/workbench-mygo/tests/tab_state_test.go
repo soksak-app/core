@@ -604,12 +604,12 @@ func TestTheHostStoreCallsTheWorkspaceKindsInOrder(t *testing.T) {
 // A dialog surface ends with its close and no layout reopens it, so the session of its regions is neither read nor written; the host
 // refuses a session file of a dialog id (docs/spec/projects.md#persistence).
 func TestTheRegionsOfADialogSurfaceKeepNoTabSession(t *testing.T) {
-	for _, dialog := range []string{"dialog/card/edit", "settings/card"} {
+	for _, dialog := range []string{"dialog/card/edit"} {
 		t.Run(dialog, func(t *testing.T) { regionsKeepNoTabSession(t, dialog) })
 	}
 }
 
-// regionsKeepNoTabSession checks that the regions of the surface dialog, a dialog surface or a settings surface (F1128-2,
+// regionsKeepNoTabSession checks that the regions of the surface dialog, a dialog surface (F1128-2,
 // docs/spec/projects.md#persistence), keep no tab session.
 func regionsKeepNoTabSession(t *testing.T, dialog string) {
 	h := newSessions()

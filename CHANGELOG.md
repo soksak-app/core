@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1214: The settings view of a plugin is removed: `settingsView` leaves the manifest, the hosts, `sok`, the plugin SDK and both workbenches with the settings surface, its seat, its clip and window background fill, the element `core.settings-modal.plugin-view` and `runtime.seat.height` with `followSeatHeight()`; a manifest with `settingsView` is refused with `plugin <id>: settingsView is removed; a plugin declares its settings`. Red: the earlier reader of the plugin SDK accepted the case `settingsView.removed` (pass 310, fail 1); Green: pass 311.
 - F1210-4: The mygo workbench serves the plugin keys of `plugin-data.json` to the views of any window, with or without a project; a project key of a view without a project is refused with `view call <command> requires a project`.
 - F1210-3: The web workbench and the test host of the SDK serve the plugin keys of `plugin-data.json` to the views of any window, with or without a project; a project key of a view without a project is refused with `view call <command> requires a project`.
 - F1210-2: The plugin.json checks of sok and of the plugin API accept `scope` `project` or `plugin` on a key of `data` and refuse another value with `data <key> scope must be project or plugin`.

@@ -6,7 +6,7 @@
 
 ## 결정
 
-Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 `soksak://<plugin id>` origin의 별도 웹뷰이며 탭마다 하나, sidebar section마다 하나([섹션](plugins.ko.md#섹션)), dialog surface마다 하나, settings surface마다 하나다. Plugin은 자기가 가진 모든 화면을 어떤 수단으로든 자기 view에 그리며, workbench는 plugin 내용을 그리지 않는다. 한 plugin의 view들은 설정 `viewProcess`가 view마다 따로 두지 않는 한 WebContent process 하나를 함께 쓴다([View 프로세스](#view-프로세스)).
+Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 `soksak://<plugin id>` origin의 별도 웹뷰이며 탭마다 하나, sidebar section마다 하나([섹션](plugins.ko.md#섹션)), dialog surface마다 하나다. Plugin은 자기가 가진 모든 화면을 어떤 수단으로든 자기 view에 그리며, workbench는 plugin 내용을 그리지 않는다. 한 plugin의 view들은 설정 `viewProcess`가 view마다 따로 두지 않는 한 WebContent process 하나를 함께 쓴다([View 프로세스](#view-프로세스)).
 
 측정은 이 결정을 뒤집지 않는다. 측정은 프로세스 수, plugin별 예산, 통과값을 정한다. 통과값을 만족하지 못하면 설계를 다시 연다. workbench 페이지에 plugin surface를 mount하는 방식으로 돌아가지 않는다.
 
@@ -246,7 +246,7 @@ core window check 의 시작 layout(`e2e/fixture.mjs` 의 `fresh`)은 앱 환경
 
 ## 탭과 프로세스
 
-- view는 탭, section surface, dialog surface, settings surface마다 하나다([plugins](plugins.ko.md#settings-views)). 프로세스 배정을 정하는 공개 API는 없다.
+- view는 탭, section surface, dialog surface마다 하나다([plugins](plugins.ko.md#view-표면)). 프로세스 배정을 정하는 공개 API는 없다.
 - 저장소에는 새 프로세스를 강제하는 비공개 정책(`_WKNavigationActionPolicyAllowInNewProcess`, [`webview_navigation.m`](../../native/darwin/src/webview_navigation.m), [비공개 native API](../operations/private-native-apis.ko.md))이 있다. 메인 웹뷰는 이 정책을 쓴다(`native/darwin/src/window_facts.m`). 같은 정책은 문서마다 새 프로세스를 띄우는 데도 쓰였다. 그 결과 이동 시간이 약 0.6초에서 1.1초로 늘었고 프로세스 안 cache를 잃어서 그 쓰임은 되돌렸다. view는 이 정책을 쓰지 않으며, 그 정책을 위한 비공개 API는 추가하지 않는다.
 - 한 plugin의 view 둘을 (a) 기본 배정과 (b) 이 정책을 쓴 배정으로 재어 프로세스 수, 프로세스 하나의 기본 비용, view 생성 시간을 얻었다. view에는 기본 배정을 쓴다.
 - **측정** (`make -C native/darwin benchmark-view-processes`, load average 17):

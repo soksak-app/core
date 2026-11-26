@@ -719,18 +719,6 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// Marks the surface host of a dialog surface, so the surface hosts created after it stand below it
     /// (docs/spec/native-surfaces.md#surface-host-container). Call it on the main thread right after create_surface.
     fn mark_dialog_surface(&self, surface: Handle) -> Result<(), String>;
-    /// Stands the surface host of the settings surface above the modal web view `modal` in a container whose frame is the
-    /// clip x, y, w, h of the window content, so the host shows and takes the pointer only inside the clip
-    /// (docs/spec/native-modals.md#settings-surface). Call it on the main thread before the surface is placed.
-    fn seat_surface_over_modal(
-        &self,
-        surface: Handle,
-        modal: Handle,
-        x: f64,
-        y: f64,
-        w: f64,
-        h: f64,
-    ) -> Result<(), String>;
     fn close_surface(&self, surface: Handle) -> Result<(), String>;
     fn place_surface(&self, surface: Handle, x: f64, y: f64, w: f64, h: f64) -> Result<(), String>;
     fn surface_frame(&self, surface: Handle) -> Result<[f64; 4], String>;

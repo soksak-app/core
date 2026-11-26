@@ -11,7 +11,6 @@ import { WINDOW_SIDES } from "@soksak/plugin-api";
 const registeredPlugins = [];
 const registeredSections = [];
 const registeredDialogs = [];
-const registeredSettingsViews = [];
 
 /**
  * Registers one plugin.
@@ -72,22 +71,6 @@ export function registerDialog(dialog) {
 /** The dialog name of the plugin, or null when the plugin declares no dialog of that name. */
 // default: null states that the plugin declares no dialog of that name, which the open call refuses.
 export const dialog = (pluginId, name) => registeredDialogs.find((d) => d.plugin === pluginId && d.name === name) ?? null;
-
-/**
- * Registers the settings view of a plugin (docs/spec/plugins.md#settings-views).
- *
- * @param {object} view
- * @param {string} view.plugin  the plugin that declares it
- * @param {() => object} view.surface  the settings surface of the plugin
- */
-export function registerSettingsView(view) {
-  if (registeredSettingsViews.some((v) => v.plugin === view.plugin)) throw new Error(`settings view already registered: ${view.plugin}`);
-  registeredSettingsViews.push(view);
-}
-
-/** The settings view of the plugin, or null when the plugin declares none. */
-// default: null states that the plugin declares no settings view, so its plugin page shows none.
-export const settingsView = (pluginId) => registeredSettingsViews.find((v) => v.plugin === pluginId) ?? null;
 
 /** Returns the plugins in registration order. The `+` menu uses this order. */
 export const plugins = () => registeredPlugins;

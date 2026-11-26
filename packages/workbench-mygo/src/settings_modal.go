@@ -123,8 +123,6 @@ type settingsRow struct {
 type settingsGroup struct {
 	name, text string
 	rows       []settingsRow
-	// view tells that the seat of the settings view of the plugin stands below the rows (docs/spec/plugins.md#settings-views).
-	view bool
 }
 
 // settingsModel is the card: its section buttons, its scope buttons, the folder of the project scope and its groups.
@@ -152,13 +150,6 @@ type settingsWindow struct {
 	scroll          ui.ScrollState
 	scrollKey       string
 	drafts          map[string]string
-	// viewPage is the plugin whose settings view the last frame showed, viewStopped tells that its view stopped its restarts, and viewKeys
-	// that a press gave the settings surface the keyboard (docs/spec/plugins.md#settings-views).
-	viewPage    string
-	viewStopped bool
-	viewKeys    bool
-	// paneBounds is the pane in the last frame, in window DIPs.
-	paneBounds ui.Rect
 }
 
 func newSettingsWindow() settingsWindow {
@@ -591,11 +582,6 @@ func (s *Shell) buildPluginPage(b *settingsBuilder, plugin *LoadedPlugin) error 
 	scope := s.controlScope("links")
 	back := b.button("plugins:list", "core.settings-modal.back", "목록", "core.settings-modal.plugin", map[string]any{"plugin": nil})
 	b.group(plugin.Name, plugin.ID, settingsRow{controls: []*SettingsControl{back}})
-	// The seat of the settings view stands below the back button, so only the heading and the scope tabs stand above it and every
-	// other group follows it (docs/spec/plugins.md#settings-views).
-	if unit := s.units[plugin.ID]; unit != nil && unit.SettingsView != nil {
-		b.model.groups[len(b.model.groups)-1].view = true
-	}
 	var rows []settingsRow
 	for _, definition := range s.settings.Definitions {
 		if definition.Plugin != plugin.ID {

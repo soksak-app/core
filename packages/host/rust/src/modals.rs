@@ -25,14 +25,6 @@ pub fn is_dialog_surface(surface: &str) -> bool {
     surface.starts_with("dialog/")
 }
 
-/// Tells whether surface is the id of the settings surface of a plugin, `settings/<plugin>` (docs/spec/plugins.md#settings-views): the
-/// settings window shows it, so no background blurs it.
-pub fn is_settings_surface(surface: &str) -> bool {
-    surface
-        .strip_prefix("settings/")
-        .is_some_and(|plugin| !plugin.is_empty() && !plugin.contains('/'))
-}
-
 /// The values that are needed to show a [data-native-modal] element in the main DOM.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -292,9 +284,7 @@ impl Overlay {
     /// Returns whether the regions of surface are blurred: while a dialog is open, every region but those of the dialog
     /// surface.
     pub fn background_of(&self, surface: &str) -> bool {
-        self.dialog()
-            && self.dialog_surface().as_deref() != Some(surface)
-            && !is_settings_surface(surface)
+        self.dialog() && self.dialog_surface().as_deref() != Some(surface)
     }
 
     /// Returns whether a dialog is open: a modal in dialog mode or a shown dialog surface.

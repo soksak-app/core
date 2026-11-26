@@ -572,12 +572,8 @@ func (s *Shell) dialogOpen() bool {
 	return s.settingsWindow.open || s.debugView.open || s.dialog != nil
 }
 
-// surfaceBehindDialog tells whether an open dialog stands over the document of surface. The settings surface stands in its seat in the
-// settings window, so only the debug view or a dialog surface stands over it (docs/spec/exposure.md).
-func (s *Shell) surfaceBehindDialog(surface string) bool {
-	if s.isSettingsSurface(surface) {
-		return s.debugView.open || s.dialog != nil
-	}
+// surfaceBehindDialog tells whether an open dialog stands over the document of a surface.
+func (s *Shell) surfaceBehindDialog(string) bool {
 	return s.dialogOpen()
 }
 

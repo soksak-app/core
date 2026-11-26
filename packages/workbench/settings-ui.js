@@ -26,7 +26,6 @@ import { setupParts } from "./setup-exposure.js";
 import { missingKinds } from "./setup-parts.js";
 import { errorToasts, hideError, showError } from "./shown-errors.js";
 import { hasSection, section, sectionNames } from "./registry.js";
-import { onSettingsViewChange, seatContentHeight, showSettingsView } from "./settings-view.js";
 import {
   CHOICES, ERROR_TOAST_DISMISS_SECONDS, FONTS, LAYOUT_RANGES, MEMORY_SAVER_DELAY, MENU_LANGUAGES, SHAPE_RANGES, THEMES, debugOn, scopedValue, settingProject, settingProjectRoot, overridden, sourceScope,
   settingDefinitions,
@@ -537,17 +536,7 @@ function drawPluginList() {
 /** The settings page of one loaded plugin: the button that returns to the list, the settings, the sections and the sidebar choices. */
 function drawPluginPage(unit) {
   const back = button("plugins:list", "core.settings-modal.back", "목록", "core.settings-modal.plugin", { plugin: null });
-  // The seat of the settings view of the plugin stands below the back button, so only the heading and the scope tabs stand above it and
-  // every other group follows it; it takes the content height that the view reports (docs/spec/plugins.md#settings-views).
-  const heading = [row("", back)];
-  let seat = null;
-  if (unit.settingsView) {
-    seat = document.createElement("div");
-    seat.className = "set-plugin-view";
-    seat.dataset.expose = "core.settings-modal.plugin-view";
-    heading.push(seat);
-  }
-  body.append(group(unit.name, unit.id, heading));
+  body.append(group(unit.name, unit.id, [row("", back)]));
 
   const declared = Object.entries(settingDefinitions()).filter(([, d]) => d.plugin === unit.id);
   if (declared.length) {
@@ -571,24 +560,7 @@ function drawPluginPage(unit) {
     ...[["left", "왼쪽"], ["right", "오른쪽"], ["top", "상단"], ["bottom", "하단"]].map(([side,label]) =>
       row(`카드 ${label} 사이드바`, linkControl(`link:card-${side}:${unit.id}`, `card-${side}`, unit.id))),
   ]));
-  if (seat) sizeSeat(seat);
 }
-
-/**
- * Sets the height of the seat of the settings view to the content height that its view reported, and to the height of the pane before the
- * first report: a seat without a height places its surface as invisible, and an invisible view never starts and never reports
- * (docs/spec/plugins.md#settings-views).
- */
-function sizeSeat(view) {
-  const height = seatContentHeight();
-  view.style.height = `${height === null ? view.closest('[data-expose="core.settings-modal.pane"]').clientHeight : height}px`;
-}
-
-// A new content height of the view sets the height of the seat that the plugin page shows.
-onSettingsViewChange(() => {
-  const seat = body?.querySelector('[data-expose="core.settings-modal.plugin-view"]');
-  if (seat) sizeSeat(seat);
-});
 
 function drawPlugins() {
   const unit = pluginUnits().find((u) => u.id === chosen);
@@ -598,9 +570,6 @@ function drawPlugins() {
     drawPluginList();
   }
 }
-
-/** The plugin of the shown plugin page, which holds the settings surface of the plugin, or null for any other page. */
-const shownPluginPage = () => (card !== null && here === "plugins" ? chosen : null);
 
 const SIZE_LABELS = {
   sidebarMinWidth: "최소 폭",
@@ -899,7 +868,6 @@ export function drawSettings() {
   if (native) overlay.place(card, rect);
   else standIn(true, rect);
   restoreScroll(card, positions);
-  showSettingsView(shownPluginPage());
 }
 
 /**
@@ -987,8 +955,6 @@ export function closeSettings() {
   if (!card) return;
   queueMicrotask(() => drawn());
   setupParts.show(false);
-  // The settings surface leaves the layout before the modal closes (docs/spec/native-modals.md#settings-surface).
-  showSettingsView(null);
   if (native) overlay.hide(card);
   else {
     errorToasts(document).place(document.body);
@@ -1003,9 +969,7 @@ export function closeSettings() {
 
 // A settings card dragged to an edge must stay inside the parent window whose size changed.
 // Its native webview follows the same clamped DOM rectangle.
-// The seat of a settings view is as high as the visible box of the pane, which follows the size of the window.
 addEventListener("resize", () => {
   if (!card) return;
   moveBy(0, 0);
-  if (shownPluginPage() !== null) drawSettings();
 });

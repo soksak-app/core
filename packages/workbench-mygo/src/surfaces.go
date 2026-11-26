@@ -73,8 +73,6 @@ type installedUnit struct {
 	Activity []string
 	// Dialogs holds the declaration of each dialog that the plugin declares (docs/spec/plugins.md#dialogs).
 	Dialogs map[string]dialogDeclaration
-	// SettingsView is the declaration of the settings view of the plugin, or nil (docs/spec/plugins.md#settings-views).
-	SettingsView *dialogDeclaration
 }
 
 // dialogDeclaration is the declaration of a dialog: its page and the regions of its composition, nil without regions.
@@ -116,7 +114,6 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 				Settings     map[string]json.RawMessage   `json:"settings"`
 				Data         map[string]dataDeclaration   `json:"data"`
 				Dialogs      map[string]dialogDeclaration `json:"dialogs"`
-				SettingsView *dialogDeclaration           `json:"settingsView"`
 			} `json:"manifest"`
 		} `json:"plugins"`
 	}
@@ -140,7 +137,6 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 		unit.Background = plugin.Manifest.Background
 		unit.Sessions = plugin.Manifest.Sessions
 		unit.Programs = plugin.Manifest.Programs
-		unit.SettingsView = plugin.Manifest.SettingsView
 		for name, dialog := range plugin.Manifest.Dialogs {
 			if unit.Dialogs == nil {
 				unit.Dialogs = map[string]dialogDeclaration{}
@@ -204,7 +200,7 @@ type heldSurface struct {
 	tab         layout.Tab
 	composition json.RawMessage
 	box         layout.Rect
-	// project is the project of the window that holds the surface, and nil for the settings surface of a window without a project.
+	// project is the project of the window that holds the surface, and nil for a window without a project.
 	project *projectStart
 	// owner is the project whose layout holds the surface.
 	owner string
@@ -214,9 +210,6 @@ type heldSurface struct {
 	dialog *dialogStart
 	// unload is the declaration of unload of a section surface.
 	unload *surfaceUnload
-	// clip is the pane of the settings window on device pixels, which only the settings surface carries and the host requires of it
-	// (docs/spec/native-modals.md#settings-surface).
-	clip *layout.Rect
 	// declared tells that the host took its composition, and hosted that a placement that held it finished, so the host holds its
 	// view.
 	declared bool
@@ -443,8 +436,6 @@ func (s *Shell) holdSurface(surface *heldSurface) {
 	if s.surfaces.held[id] != nil {
 		return
 	}
-	// A window without a project shows only the settings surface, whose start value project is null
-	// (docs/spec/plugins.md#settings-views).
 	project := s.opened()
 	if project != nil {
 		surface.project = &projectStart{ID: project.ID, Root: project.Root}
@@ -514,14 +505,6 @@ func (s *Shell) drawViewsBehindDialog(c *ui.Context) {
 // pressSurface is a press on the card that holds a surface: the card of its tab or of its section, or the card of the window
 // sidebar of its section. The press makes that card the scope of the text size and focuses it. A window sidebar takes no focus.
 func (s *Shell) pressSurface(surface string) {
-	// A press on the settings surface gives it the keyboard, as a press on a tab view does (docs/spec/plugins.md#settings-views).
-	if s.isSettingsSurface(surface) {
-		if !s.settingsWindow.viewKeys {
-			s.settingsWindow.viewKeys = true
-			s.options.Invalidate()
-		}
-		return
-	}
 	if s.plane == nil {
 		return
 	}
@@ -680,9 +663,6 @@ func (s *Shell) surfaceRequest() (map[string]any, error) {
 		}
 		if composition.Kind == "view" && len(unit.Programs) > 0 {
 			entry["programs"] = unit.Programs
-		}
-		if held.clip != nil {
-			entry["clip"] = map[string]any{"x": held.clip.X, "y": held.clip.Y, "w": held.clip.W, "h": held.clip.H}
 		}
 		surfaces = append(surfaces, entry)
 	}

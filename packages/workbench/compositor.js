@@ -216,17 +216,6 @@ function syncNativePaintClip(rects) {
  */
 const planeFrame = (rect, host) => ({ x: rect.left - host.left, y: rect.top - host.top, w: rect.width, h: rect.height });
 
-/**
- * The clip of the settings surface relative to the plane: the pane of the settings window, which the slot of the settings seat carries in
- * CSS pixels of the window (docs/spec/native-surfaces.md#settings-seat); the plane holds the slot only while the seat is measured. Every
- * other slot has no clip (null).
- */
-const slotClip = (slot, host) => {
-  if (slot.dataset.nativeSeat !== "settings") return null;
-  const clip = JSON.parse(slot.dataset.nativeClip);
-  return { x: clip.x - host.left, y: clip.y - host.top, w: clip.w, h: clip.h };
-};
-
 export function publish() {
   const mine = ++seq;
   const host = plane.getBoundingClientRect();
@@ -241,7 +230,6 @@ export function publish() {
       dim: slot.dataset.nativeDim === "true",
       visible: effectiveVisible(slot),
       frame,
-      clip: slotClip(slot, host),
       surface: slotSurface(slot),
     });
   }
@@ -475,9 +463,8 @@ export function publishAhead(rects, seated, titlebar, grabs) {
   const layoutGrid = seated.values().next().value?.grid ?? null;
   for (const slot of slots()) {
     const id = slot.dataset.nativeSurfaceId;
-    // The seat of the settings surface lies in the settings window and stands in no card (docs/spec/native-surfaces.md#settings-seat),
-    // so the prediction measures it in the document at its fixed position, as the seat of a dialog.
-    if (slot.dataset.nativeSeat === "dialog" || slot.dataset.nativeSeat === "settings") {
+    // The seat of a dialog lies in the window and stands in no card, so the prediction measures it in the document at its fixed position.
+    if (slot.dataset.nativeSeat === "dialog") {
       dialogs++;
       seats.push({
         id,
@@ -490,7 +477,6 @@ export function publishAhead(rects, seated, titlebar, grabs) {
         visible: effectiveVisible(slot),
         surface: slotSurface(slot),
         frame: planeFrame(slot.getBoundingClientRect(), plane.getBoundingClientRect()),
-        clip: slotClip(slot, plane.getBoundingClientRect()),
       });
       continue;
     }
@@ -603,8 +589,6 @@ function commit(mine, snapshot, final, titlebar, grabs) {
     const declared = {
       id: s.id, plugin: s.plugin, layer: s.layer, declared: s.frame, applied: seat,
       visible: s.visible, dim: s.dim,
-      // default: a surface other than the settings surface has no clip (null).
-      clip: s.clip ?? null,
       // default: a surface of a measured commit has no predicted bands (null).
       bands: s.bands ?? null,
       // default: a surface of a measured commit or a section surface has no predicted grid (null).

@@ -12,7 +12,7 @@ import { trace } from "./performance.js";
 import { host as bridge } from "@soksak/runtime";
 import { surfacePlugins } from "./registry.js";
 import { createClipboardBridge, createExpose, createLinkBridge, orderedSidecar } from "@soksak/plugin-api";
-import { gatedExposureReply, isSettingsSurface, registerSurfacePort, registry } from "./exposure.js";
+import { gatedExposureReply, registerSurfacePort, registry } from "./exposure.js";
 import { logGate } from "./log-gate.js";
 import { errorToasts } from "./shown-errors.js";
 import { pageIdentity } from "./page-identity.js";
@@ -774,8 +774,6 @@ export const surfaces = native ? {
           ...programsOfSurface(s.surface),
           visible: s.visible,
           ...toPage(s.applied),
-          // The settings surface shows only in the pane of the settings window (docs/spec/native-modals.md#settings-surface).
-          ...(s.clip ? { clip: toPage(s.clip) } : {}),
           // The start values of the view of a view surface (docs/spec/native-surfaces.md#view-surfaces); a surface of another
           // composition carries none.
           ...(s.start ? { start: s.start } : {}),
@@ -1001,23 +999,9 @@ export function overlayElementRect(element) {
 }
 
 /**
- * The rectangle of the first element name that the document of the open native modal reported, in CSS pixels of the window: the
- * reported rectangle moved by the frame of the modal (docs/spec/native-surfaces.md#settings-seat). It is null while no native modal
- * is open, before its document reported its elements, and when the document reported no element of that name.
- */
-export function modalElementWindowRect(name) {
-  if (!shown || !modalDocument?.elements || modalFrame === null) return null;
-  const reported = modalDocument.elements.find((element) => element.name === name);
-  // default: a document that reported no element of the name has no place for it, as a document that reported nothing.
-  if (!reported) return null;
-  return { x: modalFrame.x + reported.x, y: modalFrame.y + reported.y, w: reported.width, h: reported.height };
-}
-
-/**
  * Whether the open dialog stands over the element, which makes the element inert (docs/spec/exposure.md). null names the document
  * of the surface, which a dialog covers as a whole. A modal of the kind menu makes no element inert. A dialog surface stands over
- * every element of this document but an error toast, and over the document of every other surface (docs/spec/plugins.md#dialogs). The
- * settings surface stands in its seat in the settings window, so the settings window does not stand over its document.
+ * every element of this document but an error toast, and over the document of every other surface (docs/spec/plugins.md#dialogs).
  */
 export function behindDialog(element, surface) {
   const dialog = dialogSurface();
@@ -1025,9 +1009,6 @@ export function behindDialog(element, surface) {
   if (dialog !== null) return element !== null ? !inErrorToast(element) : surface !== dialog;
   const el = shown ? document.getElementById(shown) : null;
   if (el?.dataset.nativeModal !== "dialog") return false;
-  if (element === null && isSettingsSurface(surface) && el.querySelector('[data-expose="core.settings-modal.plugin-view"]') !== null) {
-    return false;
-  }
   return !el.contains(element);
 }
 

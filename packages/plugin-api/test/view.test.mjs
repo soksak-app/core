@@ -1172,35 +1172,3 @@ test("runtime.program.run with a signal sends the cancel of its view call when t
   assert.deepEqual(posted.at(-1), { sok: 1, id: 1, cancel: true });
 });
 
-// The seat of a settings view takes the content height of its page (docs/spec/plugins.md#settings-views): followSeatHeight observes the
-// root element from the next animation frame and sends each new height, rounded up to a whole pixel, with runtime.seat.height.
-test("followSeatHeight sends the height of the root element from the first observation and at each change", (t) => {
-  const { posted } = setup(t);
-  const frames = [];
-  const observers = [];
-  globalThis.window.requestAnimationFrame = (callback) => frames.push(callback);
-  globalThis.window.cancelAnimationFrame = () => {};
-  globalThis.window.ResizeObserver = class {
-    constructor(callback) { this.callback = callback; this.observed = []; this.ended = false; observers.push(this); }
-    observe(element) { this.observed.push(element); }
-    disconnect() { this.ended = true; }
-  };
-  let height = 120.2;
-  globalThis.window.document.documentElement.getBoundingClientRect = () => ({ height });
-  const bridge = createViewBridge({ handler: viewHandler((message) => posted.push(message)), report: () => {} });
-  const stop = bridge.followSeatHeight();
-  const seatCalls = () => posted.filter(({ command }) => command === "runtime.seat.height").map(({ params }) => params.height);
-  assert.deepEqual(observers[0].observed, [], "the observation waits for the animation frame");
-  frames.forEach((frame) => frame());
-  assert.deepEqual(observers[0].observed, [globalThis.window.document.documentElement]);
-  observers[0].callback();
-  observers[0].callback();
-  height = 300;
-  observers[0].callback();
-  assert.deepEqual(seatCalls(), [121, 300], "a repeated height is not sent again");
-  stop();
-  height = 10;
-  observers[0].callback();
-  assert.equal(observers[0].ended, true);
-  assert.deepEqual(seatCalls(), [121, 300]);
-});

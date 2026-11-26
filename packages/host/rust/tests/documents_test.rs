@@ -1054,15 +1054,6 @@ fn view_stop_reason_of_a_dialog_names_the_dialog() {
     );
 }
 
-// contract: view.restart.limit-shows-settings-error
-#[test]
-fn view_stop_reason_of_a_settings_surface_names_the_settings_page() {
-    assert_eq!(
-        view_stop_reason("settings/probe"),
-        "the view failed 4 times within 300 seconds and is created again when the settings page of the plugin is shown again"
-    );
-}
-
 // contract: view.restart.limit-shows-error
 #[test]
 fn view_stop_event_names_the_surface_plugin_and_reason() {

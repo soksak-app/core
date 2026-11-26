@@ -168,7 +168,6 @@ func (s *Shell) drawSettingsBody(c *ui.Context, model *settingsModel, width, mos
 		w.scrollKey, w.scroll.X, w.scroll.Y = key, 0, 0
 	}
 	scroll := ui.Scroll(c.Key(Exposed{Name: "core.settings-modal.pane"}))
-	w.paneBounds = scroll.Bounds()
 	scroll.TrackScroll(&w.scroll).Width(width).MaxHeight(most).Children(func() {
 		// The pane fills the room the scroll container gives it, beside its classic bar when the content overflows, as the pane of
 		// packages/workbench/app.css does.
@@ -218,9 +217,6 @@ func (s *Shell) drawSettingsGroup(c *ui.Context, group settingsGroup, pane setti
 		ui.Text(c, group.text).Wrap().LineHeight(pane.lineHeight).TextColor(s.palette.Muted).FontSize(s.textSmall()).Margin(0, 0, pane.captionGap, 0)
 		for _, row := range group.rows {
 			s.drawSettingsRow(c, row, pane)
-		}
-		if group.view {
-			s.drawSettingsSeat(c)
 		}
 	})
 }

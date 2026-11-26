@@ -145,26 +145,9 @@ func (implementation) MarkDialogSurface(surface unsafe.Pointer) error {
 	return nil
 }
 
-func (implementation) SeatSurfaceOverModal(surface, modal unsafe.Pointer, x, y, width, height float64) error {
-	if !native.MainSpSurfaceSeatOverModal(surface, modal, x, y, width, height) {
-		return fmt.Errorf("the settings surface host cannot stand above the modal web view, which is not in the content view of its window")
-	}
-	return nil
-}
-
 func (implementation) CloseSurface(surface unsafe.Pointer) { native.MainSpSurfaceClose(surface) }
 func (implementation) SetSurfaceBounds(surface unsafe.Pointer, x, y, width, height float64) {
 	native.MainWebviewSetFrame(surface, float64(x), float64(y), float64(width), float64(height))
-}
-
-func (implementation) FillSurfaceWithWindowBackground(surface unsafe.Pointer, filled bool) {
-	native.MainSpSurfaceFillWindowBackground(surface, filled)
-}
-func (implementation) FillWindowSurfaceBackgrounds(window platform.Window) {
-	native.MainSpWindowFillSurfaceBackgrounds(uintptr(window))
-}
-func (implementation) SetSurfaceClip(surface unsafe.Pointer, clipped bool, x, y, width, height float64) {
-	native.MainSpSurfaceSetClip(surface, clipped, x, y, width, height)
 }
 
 // SurfaceFrame returns the current region of a surface. The host fits the declared region to pixels, so
@@ -173,6 +156,9 @@ func (implementation) SurfaceFrame(surface unsafe.Pointer) platform.Rect {
 	var out [4]float64
 	native.MainWebviewGetFrame(surface, &out[0])
 	return platform.Rect{X: float64(out[0]), Y: float64(out[1]), W: float64(out[2]), H: float64(out[3])}
+}
+func (implementation) SetSurfaceClip(surface unsafe.Pointer, clipped bool, x, y, width, height float64) {
+	native.MainSpSurfaceSetClip(surface, clipped, x, y, width, height)
 }
 func (implementation) SetSurfaceHiddenHandle(surface unsafe.Pointer, hidden bool) {
 	native.MainWebviewSetSurfaceHidden(surface, bool(hidden))
