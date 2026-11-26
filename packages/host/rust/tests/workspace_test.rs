@@ -12,9 +12,7 @@ mod records;
 use serde_json::{Value, json};
 use soksak_host::platform;
 use soksak_host::projects::folder;
-use soksak_host::workspace::{
-    Workspace, common_only_keys, notifies_windows, prepare_config_directory,
-};
+use soksak_host::workspace::{Workspace, common_only_keys, prepare_config_directory};
 
 fn apply(store: &Workspace, request: Value) -> Value {
     store
@@ -1041,15 +1039,4 @@ fn a_refused_plugin_data_file_is_reported_and_refuses_writes() {
         assert_eq!(attempt(&store, request), Err(error.clone()), "{text}");
         assert_eq!(fs::read_to_string(&path).unwrap(), text);
     }
-}
-
-// The host answers each stored entry of a plugin key with workspace-changed to every window, and a replace that stored nothing notifies
-// no window (docs/spec/plugins.md#plugin-data).
-// contract: workspace.plugin-data.notifies-stored-entries
-#[test]
-fn a_stored_plugin_entry_notifies_every_window_and_a_refused_replace_none() {
-    assert!(notifies_windows("pluginData", &json!(true)));
-    assert!(!notifies_windows("pluginData", &json!(false)));
-    assert!(notifies_windows("patch", &json!(true)));
-    assert!(!notifies_windows("snapshot", &json!({})));
 }

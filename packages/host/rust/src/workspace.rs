@@ -939,3 +939,7 @@ pub fn handle(app: &AppHandle, mut request: Request) -> Result<Value, String> {
 #[cfg(test)]
 #[path = "workspace_lock_test.rs"]
 mod lock_test;
+
+#[cfg(test)]
+#[path = "plugin_data_notice_test.rs"]
+mod plugin_data_notice_test;
