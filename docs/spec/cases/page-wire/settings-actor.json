@@ -21,7 +21,7 @@
   },
   "steps": [
     { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
-    { "reply": { "result": { "common": {}, "projects": [] } } },
+    { "reply": { "result": { "common": {}, "pluginData": {}, "projects": [] } } },
     { "call": { "name": "performance", "payload": { "action": "off" } } },
     { "reply": { "result": null } },
     { "call": { "name": "log", "payload": { "action": "clock" } } },
@@ -50,6 +50,6 @@
     { "call": { "name": "setMenuLanguage", "payload": "$language" } },
     { "reply": { "result": null } },
     { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
-    { "reply": { "result": { "common": { "gap": 9, "radius": 3 }, "projects": [] } } }
+    { "reply": { "result": { "common": { "gap": 9, "radius": 3 }, "pluginData": {}, "projects": [] } } }
   ]
 }

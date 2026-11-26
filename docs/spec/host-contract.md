@@ -1120,6 +1120,10 @@ Items:
 | `workspace.projects.move-reorders` | Moving a project changes its position in the saved order. | all |
 | `workspace.projects.move-requires-delta` | A `move` request without `delta`, or with `delta` `null`, fails with `move delta is missing` and leaves the order unchanged. | all |
 | `workspace.projects.plugin-data-patched` | A project patch stores its `plugins` object, and a patch of another unknown field is rejected. | all |
+| `workspace.plugin-data.stores-one-entry` | The operation `pluginData` stores one entry of a plugin key in `plugin-data.json` and leaves the other keys, the snapshot carries the keys as `pluginData`, a missing file holds no keys, and a request without a non-empty `plugin` or `key`, an entry of the current form, or with only one of `base` and `default` is refused with `pluginData requires <member>`. | all |
+| `workspace.plugin-data.replace-compares-base` | With `base` and `default` the operation stores the entry only when the stored value, or `default` for a key without an entry, equals `base` as a JSON value, and otherwise answers `false` and stores nothing. | all |
+| `workspace.plugin-data.refused-file` | A refused `plugin-data.json` is reported as `pluginDataError` of the snapshot, which still carries the projects, and each operation fails with its error and leaves the file unchanged. | all |
+| `workspace.plugin-data.notifies-stored-entries` | The host answers each stored entry of a plugin key with `workspace-changed` to every window, and a replace that stored nothing notifies no window. | all |
 | `workspace.projects.remove-keeps-remaining-order` | Removing a project keeps the order of the remaining projects. | all |
 | `workspace.folder.aliases-share-identity` | A directory and a symbolic link to it resolve to the same project folder. | all |
 | `workspace.folder.rejects-file` | A regular file is rejected as a project folder. | all |

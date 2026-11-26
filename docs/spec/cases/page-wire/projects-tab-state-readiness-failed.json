@@ -13,7 +13,7 @@
     { "call": { "name": "setMenuLanguage", "payload": "$language" } },
     { "reply": { "result": null } },
     { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
-    { "reply": { "result": { "common": {}, "projects": [], "open": [] } } },
+    { "reply": { "result": { "common": {}, "pluginData": {}, "projects": [], "open": [] } } },
     { "call": { "name": "workspace", "payload": { "kind": "tabState" } } },
     { "reply": { "error": "tab-state startup fixture failed" } }
   ]

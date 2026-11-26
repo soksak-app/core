@@ -118,6 +118,7 @@ Core version과 플랫폼에 맞춰 plugin을 설치하면, `engines.soksak`이 
 | `settings.json`, `<project root>/.soksak/settings.json` | 코어 | `format` | numbered |
 | [사용자 `agent-setup.json`](cli.ko.md#사용자-path-등록) | 코어 | `format` | numbered |
 | `projects.json` | 코어 | `format` | numbered |
+| `plugin-data.json` | 코어 | `format` | numbered |
 | `tab-state.json` | 코어 | `format` | numbered |
 | `tab-sessions/<tab>.json` | 코어 | `format` | numbered |
 | `roles.json` | 코어 | `format` | numbered |
@@ -130,7 +131,7 @@ Core version과 플랫폼에 맞춰 plugin을 설치하면, `engines.soksak`이 
 
 모든 reader는 각 계약 file의 공유 reader 입구에서 file을 읽을 때 member를 검사하므로, 모든 process의 모든 reader — 시작에서와 이후의 모든 읽기에서의 host, 그 file을 읽는 모든 `sok` 입구 — 가 현재가 아닌 형태를 거부한다. Reader는 없는 file을 만들지 않는다. 없는 file은 현재 형식의 빈 상태다. 각 writer는 현재 형태만 쓴다.
 
-plugin은 설정 폴더에 저장 file을 소유하지 않는다. plugin이 남기는 값은 `projects.json`의 key로 살고 그 per-key 형식은 [프로젝트 데이터](plugins.ko.md#프로젝트-데이터)의 검사가 읽는다. plugin이 쓰는 탭 상태는 코어가 소유하는 `tab-state.json`에 plugin이 `surface.unload`에 선언한 형식으로 산다([메모리 절약](plugins.ko.md#메모리-절약)). sidecar는 자기 `services/<name>/` 트리의 file을 소유하고 그 형태를 스스로 정한다. 공개된 plugin과 settings section의 식별자는 한 번 공개되면 불변이다. 이름을 바꾸면 저장된 참조가 해석되지 않는다([저장 데이터 형식](#저장-데이터-형식)).
+plugin은 설정 폴더에 저장 file을 소유하지 않는다. plugin이 남기는 값은 `projects.json`의 key로, plugin의 key는 `plugin-data.json`의 key로 살고 그 per-key 형식은 [프로젝트 데이터](plugins.ko.md#프로젝트-데이터)의 검사가 읽는다. plugin이 쓰는 탭 상태는 코어가 소유하는 `tab-state.json`에 plugin이 `surface.unload`에 선언한 형식으로 산다([메모리 절약](plugins.ko.md#메모리-절약)). sidecar는 자기 `services/<name>/` 트리의 file을 소유하고 그 형태를 스스로 정한다. 공개된 plugin과 settings section의 식별자는 한 번 공개되면 불변이다. 이름을 바꾸면 저장된 참조가 해석되지 않는다([저장 데이터 형식](#저장-데이터-형식)).
 
 ## 설치된 plugin 제공
 

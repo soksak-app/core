@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"slices"
 	"sort"
@@ -105,6 +106,11 @@ type WorkspaceRequest struct {
 	Roles       Record   `json:"roles,omitempty"`
 	Role        any      `json:"role,omitempty"`
 	Fingerprint string   `json:"fingerprint,omitempty"`
+	// Plugin, Key, Base and Default are the members of the operation pluginData (docs/spec/plugins.md#plugin-data).
+	Plugin  string          `json:"plugin,omitempty"`
+	Key     string          `json:"key,omitempty"`
+	Base    json.RawMessage `json:"base,omitempty"`
+	Default json.RawMessage `json:"default,omitempty"`
 }
 
 // readProjects reads the projects of projects.json, which holds them under the `projects` member beside the format
@@ -186,6 +192,11 @@ func snapshot(directory string, projects []Record, projectsErr error) (Record, e
 	// The format member is the carrier of the stored form, not a setting, so the snapshot does not show it
 	// (docs/spec/installation.md#stored-data-formats).
 	delete(common, "format")
+	if plugins, err := readPluginData(filepath.Join(directory, "plugin-data.json")); err != nil {
+		document["pluginDataError"] = err.Error()
+	} else {
+		document["pluginData"] = plugins
+	}
 	document["projects"] = projects
 	document["common"] = common
 	return document, nil
@@ -290,6 +301,92 @@ func readProjectsDocument(path string) (Record, error) {
 		return nil, err
 	}
 	return nil, fmt.Errorf("%s: projects: format must be %d, found %s", path, projectsFormat, text)
+}
+
+// pluginDataFormat is the format of plugin-data.json (docs/spec/installation.md#stored-data-formats).
+const pluginDataFormat = 1
+
+// readPluginData reads the plugin keys of plugin-data.json: an object of plugin ids, each an object of keys. A missing file holds no keys
+// (docs/spec/plugins.md#plugin-data).
+func readPluginData(path string) (Record, error) {
+	document, err := readStored(path, "plugin-data.json", pluginDataFormat)
+	if err != nil || document == nil {
+		return Record{}, err
+	}
+	plugins, ok := document["plugins"].(map[string]any)
+	if !ok || len(document) != 2 {
+		return nil, fmt.Errorf("%s: plugin-data.json must hold only format and the object plugins", path)
+	}
+	for plugin, keys := range plugins {
+		if _, ok := keys.(map[string]any); !ok {
+			return nil, fmt.Errorf("%s: plugins.%s must be an object", path, plugin)
+		}
+	}
+	return Record(plugins), nil
+}
+
+// putPluginData stores one entry of a plugin key in plugin-data.json and leaves the other keys. With base and default it stores the entry
+// only when the stored value, or default for a key that stores no entry, equals base as a JSON value, and answers whether it stored the
+// entry (docs/spec/plugins.md#plugin-data).
+func putPluginData(path string, req WorkspaceRequest) (bool, error) {
+	// The entry is read as the decoded JSON that a request of a page carries, so a caller in Go that gives Go numbers is checked alike.
+	encoded, err := json.Marshal(req.Entry)
+	if err != nil {
+		return false, err
+	}
+	var entry Record
+	if err := json.Unmarshal(encoded, &entry); err != nil {
+		return false, err
+	}
+	switch {
+	case req.Plugin == "":
+		return false, errors.New("pluginData requires plugin")
+	case req.Key == "":
+		return false, errors.New("pluginData requires key")
+	case !isDataEntry(entry):
+		return false, errors.New("pluginData requires entry")
+	case (req.Base == nil) != (req.Default == nil):
+		return false, errors.New("pluginData requires base and default")
+	}
+	plugins, err := readPluginData(path)
+	if err != nil {
+		return false, err
+	}
+	keys, _ := plugins[req.Plugin].(map[string]any) // silent: a plugin that stores no keys starts from none.
+	if keys == nil {
+		keys = map[string]any{}
+	}
+	if req.Base != nil {
+		var standing, base any
+		if err := json.Unmarshal(req.Default, &standing); err != nil {
+			return false, fmt.Errorf("pluginData default: %w", err)
+		}
+		if err := json.Unmarshal(req.Base, &base); err != nil {
+			return false, fmt.Errorf("pluginData base: %w", err)
+		}
+		if stored, held := keys[req.Key].(map[string]any); held {
+			standing = stored["value"]
+		}
+		// Both values are decoded JSON, so the order of members, the form of a number and the escapes of a text make no difference,
+		// and numbers compare as double-precision numbers.
+		if !reflect.DeepEqual(standing, base) {
+			return false, nil
+		}
+	}
+	keys[req.Key] = map[string]any(entry)
+	plugins[req.Plugin] = keys
+	if err := writeJSON(path, Record{"format": pluginDataFormat, "plugins": plugins}); err != nil {
+		return false, err
+	}
+	EmitHost(LevelInfo, "host.workspace.plugin-data", map[string]any{"plugin": req.Plugin, "key": req.Key})
+	return true, nil
+}
+
+// isDataEntry tells whether a stored entry has the current form: exactly a positive integer format and a value.
+func isDataEntry(entry Record) bool {
+	format, held := entry["format"].(float64)
+	_, valued := entry["value"]
+	return len(entry) == 2 && held && valued && format >= 1 && format == float64(int64(format))
 }
 
 // formatMustBe is the refusal of a stored file whose format is not the number that its contract requires.
@@ -574,6 +671,8 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 		return w.roleDefinitionRemove(req.ID)
 	case "rolesPut":
 		return writeRoles(filepath.Join(w.directory, "roles.json"), req.Roles)
+	case "pluginData":
+		return putPluginData(filepath.Join(w.directory, "plugin-data.json"), req)
 	}
 	registry := filepath.Join(w.directory, "projects.json")
 	// The file holds the projects under the `projects` member beside the format member (docs/spec/installation.md#stored-data-formats).
@@ -719,6 +818,11 @@ func (h *Host) runWorkspace(req WorkspaceRequest) (any, error) {
 	}
 	if err == nil {
 		switch req.Kind {
+		case "pluginData":
+			// Only a stored entry changes the plugin keys, so a replace that stored nothing notifies no window.
+			if result == true {
+				h.notifyWorkspace()
+			}
 		case "tabState", "tabStatePut", "tabSession", "tabSessionPut", "tabSessions", "roles", "rolesPut", "rolesStatus", "role":
 			// The tab state store, the tab sessions, the role definitions and the role read change no project or setting, so
 			// no window is notified. The role writes change projects.json, so every window reads its spaces again.

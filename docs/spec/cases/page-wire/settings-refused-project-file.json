@@ -13,11 +13,11 @@
     { "call": { "name": "setMenuLanguage", "payload": "$language" } },
     { "reply": { "result": null } },
     { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
-    { "reply": { "result": { "common": { "gap": 8 }, "projects": [ { "id": "prj-a", "root": "/work/a", "settings": { "gap": 12 } } ] } } },
+    { "reply": { "result": { "common": { "gap": 8 }, "pluginData": {}, "projects": [ { "id": "prj-a", "root": "/work/a", "settings": { "gap": 12 } } ] } } },
     { "call": { "name": "performance", "payload": { "action": "off" } } },
     { "reply": { "result": null } },
     { "notice": { "event": "workspace-changed" } },
     { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
-    { "reply": { "result": { "common": { "gap": 8 }, "projects": [ { "id": "prj-a", "root": "/work/a", "settingsError": "/work/a/.soksak/settings.json: settings.json: format must be 1" } ] } } }
+    { "reply": { "result": { "common": { "gap": 8 }, "pluginData": {}, "projects": [ { "id": "prj-a", "root": "/work/a", "settingsError": "/work/a/.soksak/settings.json: settings.json: format must be 1" } ] } } }
   ]
 }

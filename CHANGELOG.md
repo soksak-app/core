@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1210-1: The Go and Rust host stores keep the plugin keys in `plugin-data.json`: the snapshot carries them as `pluginData`, or a refused file as `pluginDataError`, and the workspace operation `pluginData` stores one entry and decides a replace against its `base`.
 - F1212: The test of the settings surface of a window without a project waits for the placement that shows the surface instead of judging after two frames.
 - F1211: The contract table no longer lists the two behaviors of the native library alone that F1206 and F1209 added with the scope all; their native tests keep the checks, and the host inventory check passes again.
 - F1209: A wheel that the page of a surface does not use scrolls the content behind the surface: the pane of the settings window under a short or ended settings view, the web view of the surface under a document region, and the main web view or the workbench under other surfaces; a dialog host passes none.

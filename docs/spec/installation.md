@@ -118,6 +118,7 @@ The stored files of the contract, with their owner, the member that carries thei
 | `settings.json`, `<project root>/.soksak/settings.json` | core | `format` | numbered |
 | [User `agent-setup.json`](cli.md#user-path-registration) | core | `format` | numbered |
 | `projects.json` | core | `format` | numbered |
+| `plugin-data.json` | core | `format` | numbered |
 | `tab-state.json` | core | `format` | numbered |
 | `tab-sessions/<tab>.json` | core | `format` | numbered |
 | `roles.json` | core | `format` | numbered |
@@ -130,7 +131,7 @@ The stored files of the contract, with their owner, the member that carries thei
 
 Every reader checks the member when it reads the file, at the entry of the shared reader of each contract file, so every reader in every process — the host at start and on every later read, every `sok` entry that reads the file — refuses a form that is not current. A reader never creates an absent file: a missing file is the empty state of the current format. Each writer writes the current form only.
 
-A plugin owns no stored file of a configuration folder: the values it persists live as keys of `projects.json` under the per-key format that the [project data](plugins.md#project-data) check reads, and the tab state it writes lives in `tab-state.json`, which core owns, under the format the plugin declares in `surface.unload` ([memory saver](plugins.md#memory-saver)). A sidecar owns the files under its `services/<name>/` tree and sets their form itself. Released identifiers of plugins and their settings sections are immutable once published: a rename leaves the stored references to them unresolved.
+A plugin owns no stored file of a configuration folder: the values it persists live as keys of `projects.json`, or of `plugin-data.json` for a key of the plugin, under the per-key format that the [project data](plugins.md#project-data) check reads, and the tab state it writes lives in `tab-state.json`, which core owns, under the format the plugin declares in `surface.unload` ([memory saver](plugins.md#memory-saver)). A sidecar owns the files under its `services/<name>/` tree and sets their form itself. Released identifiers of plugins and their settings sections are immutable once published: a rename leaves the stored references to them unresolved.
 
 ## Serving installed plugins
 

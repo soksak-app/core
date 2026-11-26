@@ -41,6 +41,7 @@
             "call": "info"
           }
         },
+        "pluginData": {},
         "projects": [
           {
             "id": "prj-one",

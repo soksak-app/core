@@ -38,6 +38,7 @@
       "reply": {
         "result": {
           "common": {},
+          "pluginData": {},
           "projects": [
             {
               "id": "prj-a",
@@ -225,6 +226,7 @@
       "reply": {
         "result": {
           "common": {},
+          "pluginData": {},
           "projects": [
             {
               "id": "prj-b",

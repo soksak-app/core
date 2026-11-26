@@ -9,7 +9,7 @@
   },
   "steps": [
     { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
-    { "reply": { "result": { "common": {}, "projects": [], "open": [] } } },
+    { "reply": { "result": { "common": {}, "pluginData": {}, "projects": [], "open": [] } } },
     { "call": { "name": "workspace", "payload": { "kind": "tabState" } } },
     { "reply": { "result": null, "held": true } },
     { "notice": { "event": "view-call", "payload": { "surface": "fixture-tab-state-view-surface", "plugin": "fixture-tab-state-view", "generation": 1, "id": 1, "command": "tab.state.read", "params": null } } },

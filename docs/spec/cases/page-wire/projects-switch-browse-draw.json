@@ -6,9 +6,9 @@
   "variables": {"cid-1":{"type":"string","example":"p67dd1fae-612d-490b-af4c-9b33bc86c537.1","source":"page"},"last-opened-1":{"type":"integer","example":1794625054217,"source":"page"},"cid-2":{"type":"string","example":"pb975036b-df0b-4823-ba18-154010f12ef5.2","source":"page"},"cid-3":{"type":"string","example":"p47290b47-1fb8-40e9-89a9-76d536f1370e.2","source":"page"}},
   "steps": [
     {"call":{"name":"workspace","payload":{"kind":"snapshot"}}},
-    {"reply":{"result":{"common":{},"projects":[{"id":"prj-one","root":"/work/one","identity":"1:1","title":"one","color":"#fff","named":1,"activeSpaceId":"spc-one","spaces":[{"id":"spc-one","title":"SPACE1","layout":{"state":{"root":{"card":"main"},"name":"one"}}}],"settings":{}}],"open":[]}}},
+    {"reply":{"result":{"common":{},"pluginData": {}, "projects":[{"id":"prj-one","root":"/work/one","identity":"1:1","title":"one","color":"#fff","named":1,"activeSpaceId":"spc-one","spaces":[{"id":"spc-one","title":"SPACE1","layout":{"state":{"root":{"card":"main"},"name":"one"}}}],"settings":{}}],"open":[]}}},
     {"call":{"name":"workspace","payload":{"kind":"snapshot"}}},
-    {"reply":{"result":{"common":{},"projects":[{"id":"prj-one","root":"/work/one","identity":"1:1","title":"one","color":"#fff","named":1,"activeSpaceId":"spc-one","spaces":[{"id":"spc-one","title":"SPACE1","layout":{"state":{"root":{"card":"main"},"name":"one"}}}],"settings":{}}],"open":[]}}},
+    {"reply":{"result":{"common":{},"pluginData": {}, "projects":[{"id":"prj-one","root":"/work/one","identity":"1:1","title":"one","color":"#fff","named":1,"activeSpaceId":"spc-one","spaces":[{"id":"spc-one","title":"SPACE1","layout":{"state":{"root":{"card":"main"},"name":"one"}}}],"settings":{}}],"open":[]}}},
     {"call":{"name":"workspace","payload":{"kind":"tabState"}}},
     {"reply":{"result":null}},
     {"call":{"name":"workspace","payload":{"kind":"tabSessions"}}},
@@ -20,7 +20,7 @@
     {"call":{"name":"projectOpen","payload":{"id":"prj-one","root":"/work/one","separate":true,"geometry":null},"cids":["$cid-1"]}},
     {"reply":{"result":{"local":true,"staged":true}}},
     {"call":{"name":"workspace","payload":{"kind":"snapshot"}}},
-    {"reply":{"result":{"common":{},"projects":[{"id":"prj-one","root":"/work/one","identity":"1:1","title":"one","color":"#fff","named":1,"activeSpaceId":"spc-one","spaces":[{"id":"spc-one","title":"SPACE1","layout":{"state":{"root":{"card":"main"},"name":"one"}}}],"settings":{}}],"open":[]}}},
+    {"reply":{"result":{"common":{},"pluginData": {}, "projects":[{"id":"prj-one","root":"/work/one","identity":"1:1","title":"one","color":"#fff","named":1,"activeSpaceId":"spc-one","spaces":[{"id":"spc-one","title":"SPACE1","layout":{"state":{"root":{"card":"main"},"name":"one"}}}],"settings":{}}],"open":[]}}},
     {"call":{"name":"projectShown","payload":{"project":{"id":"prj-one","root":"/work/one","title":"one"}}}},
     {"reply":{"result":null}},
     {"call":{"name":"workspace","payload":{"kind":"patch","id":"prj-one","patch":{"lastOpened":"$last-opened-1"}}}},
@@ -30,7 +30,7 @@
     {"call":{"name":"windowState"}},
     {"reply":{"result":null}},
     {"call":{"name":"workspace","payload":{"kind":"snapshot"}}},
-    {"reply":{"result":{"common":{},"projects":[{"id":"prj-one","root":"/work/one","identity":"1:1","title":"one","color":"#fff","named":1,"activeSpaceId":"spc-one","spaces":[{"id":"spc-one","title":"SPACE1","layout":{"state":{"root":{"card":"main"},"name":"one"}}}],"settings":{}}],"open":[]},"held":true}},
+    {"reply":{"result":{"common":{},"pluginData": {}, "projects":[{"id":"prj-one","root":"/work/one","identity":"1:1","title":"one","color":"#fff","named":1,"activeSpaceId":"spc-one","spaces":[{"id":"spc-one","title":"SPACE1","layout":{"state":{"root":{"card":"main"},"name":"one"}}}],"settings":{}}],"open":[]},"held":true}},
     {"call":{"name":"projectShown","payload":{"project":null}}},
     {"reply":{"result":null}},
     {"call":{"name":"projectRemoveAsk","payload":"prj-one","cids":["$cid-2"]}},
@@ -40,6 +40,6 @@
     {"call":{"name":"workspace","payload":{"kind":"remove","id":"prj-one"}}},
     {"reply":{"result":true}},
     {"call":{"name":"workspace","payload":{"kind":"snapshot"}}},
-    {"reply":{"result":{"common":{},"projects":[{"id":"prj-one","root":"/work/one","identity":"1:1","title":"one","color":"#fff","named":1,"activeSpaceId":"spc-one","spaces":[{"id":"spc-one","title":"SPACE1","layout":{"state":{"root":{"card":"main"},"name":"one"}}}],"settings":{}}],"open":[]}}}
+    {"reply":{"result":{"common":{},"pluginData": {}, "projects":[{"id":"prj-one","root":"/work/one","identity":"1:1","title":"one","color":"#fff","named":1,"activeSpaceId":"spc-one","spaces":[{"id":"spc-one","title":"SPACE1","layout":{"state":{"root":{"card":"main"},"name":"one"}}}],"settings":{}}],"open":[]}}}
   ]
 }

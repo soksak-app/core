@@ -6,6 +6,6 @@
   "variables": {},
   "steps": [
     { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
-    { "reply": { "result": { "common": { "sets": [ { "id": "set-kept", "title": "남은 세트", "sections": [], "layout": "list" } ], "links": [ { "place": "left", "plugin": null, "set": "set-kept" }, { "place": "right", "plugin": null, "set": "set-gone" } ] }, "projects": [] } } }
+    { "reply": { "result": { "common": { "sets": [ { "id": "set-kept", "title": "남은 세트", "sections": [], "layout": "list" } ], "links": [ { "place": "left", "plugin": null, "set": "set-kept" }, { "place": "right", "plugin": null, "set": "set-gone" } ] }, "pluginData": {}, "projects": [] } } }
   ]
 }

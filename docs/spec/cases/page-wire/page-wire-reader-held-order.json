@@ -9,7 +9,7 @@
   },
   "steps": [
     { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
-    { "reply": { "result": { "common": {}, "projects": [], "open": [] }, "held": true } },
+    { "reply": { "result": { "common": {}, "pluginData": {}, "projects": [], "open": [] }, "held": true } },
     { "call": { "name": "log", "payload": { "action": "clock" } } },
     { "reply": { "result": { "ts_us": "$clock-ts-us", "mono_ns": "$clock-mono-ns" }, "held": true } },
     { "call": { "name": "workspace", "payload": { "kind": "settings", "id": null, "patch": { "left": false }, "remove": [] } } },

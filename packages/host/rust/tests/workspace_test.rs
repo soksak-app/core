@@ -12,7 +12,9 @@ mod records;
 use serde_json::{Value, json};
 use soksak_host::platform;
 use soksak_host::projects::folder;
-use soksak_host::workspace::{Workspace, common_only_keys, prepare_config_directory};
+use soksak_host::workspace::{
+    Workspace, common_only_keys, notifies_windows, prepare_config_directory,
+};
 
 fn apply(store: &Workspace, request: Value) -> Value {
     store
@@ -815,7 +817,7 @@ fn a_project_with_an_identity_of_another_form_is_refused_by_name() {
     let refusal = format!("projects.json: project /x has the identity 1:1, not {form}");
     assert_eq!(
         apply(&store, json!({"kind":"snapshot"})),
-        json!({"projects": [], "common": {}, "projectsError": refusal})
+        json!({"projects": [], "common": {}, "pluginData": {}, "projectsError": refusal})
     );
     let add = serde_json::from_value(json!({"kind":"add", "project":{"id":"prj-b", "root":"/y", "identity":"6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:9"}})).unwrap();
     assert_eq!(store.apply(add).unwrap_err(), refusal);
@@ -842,7 +844,7 @@ fn earlier_stored_forms_are_reported_by_snapshot_and_refused_by_writes() {
     );
     assert_eq!(
         apply(json!({"kind":"snapshot"})).unwrap(),
-        json!({"projects": [], "common": {}, "projectsError": refusal_bare})
+        json!({"projects": [], "common": {}, "pluginData": {}, "projectsError": refusal_bare})
     );
     // A file of format 3 holds tabs without the member role (docs/spec/agent-roles.md#tab-role-state), so it is refused as a whole.
     let earlier = concat!(
@@ -852,7 +854,7 @@ fn earlier_stored_forms_are_reported_by_snapshot_and_refused_by_writes() {
     fs::write(&projects, earlier).unwrap();
     assert_eq!(
         apply(json!({"kind":"snapshot"})).unwrap(),
-        json!({"projects": [], "common": {}, "projectsError": refusal})
+        json!({"projects": [], "common": {}, "pluginData": {}, "projectsError": refusal})
     );
     assert_eq!(
         apply(json!({"kind":"add","project":{"id":"prj-b","root":"/y","identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:2"}}))
@@ -878,7 +880,7 @@ fn earlier_stored_forms_are_reported_by_snapshot_and_refused_by_writes() {
     let refusal = format!("{}: settings.json: format must be 1", settings.display());
     assert_eq!(
         apply(json!({"kind":"snapshot"})).unwrap(),
-        json!({"projects": [], "common": {}, "settingsError": refusal})
+        json!({"projects": [], "common": {}, "pluginData": {}, "settingsError": refusal})
     );
     assert_eq!(
         apply(json!({"kind":"settings","patch":{"gap":3}})).unwrap_err(),
@@ -901,4 +903,153 @@ fn projects_writer_writes_format_4() {
         read(&config.path().join("projects.json"))["format"],
         json!(4)
     );
+}
+
+/// Runs a store request and returns its answer or its error.
+fn attempt(store: &Workspace, request: Value) -> Result<Value, String> {
+    store.apply(serde_json::from_value(request).unwrap())
+}
+
+// The operation pluginData stores one entry of a plugin key in plugin-data.json and leaves the other keys, and the snapshot carries the
+// keys as pluginData; a missing file holds no keys (docs/spec/plugins.md#plugin-data).
+// contract: workspace.plugin-data.stores-one-entry
+#[test]
+fn the_plugin_data_operation_stores_one_entry_and_the_snapshot_carries_it() {
+    let config = folder::Folder::new();
+    let snapshot = || {
+        apply(
+            &Workspace::new(config.path().into()),
+            json!({"kind":"snapshot"}),
+        )
+    };
+    assert_eq!(snapshot()["pluginData"], json!({}));
+    let store = Workspace::new(config.path().into());
+    for (plugin, key, value) in [
+        ("probe", "accounts", json!(["a"])),
+        ("probe", "chosen", json!("a")),
+        ("other", "accounts", json!([])),
+    ] {
+        let request = json!({"kind":"pluginData", "plugin":plugin, "key":key, "entry":{"format":1, "value":value}});
+        assert_eq!(apply(&store, request), json!(true), "{plugin} {key}");
+    }
+    assert_eq!(
+        snapshot()["pluginData"],
+        json!({"other":{"accounts":{"format":1,"value":[]}},"probe":{"accounts":{"format":1,"value":["a"]},"chosen":{"format":1,"value":"a"}}})
+    );
+    assert_eq!(
+        read(&config.path().join("plugin-data.json"))["format"],
+        json!(1)
+    );
+    for (request, text) in [
+        (
+            json!({"kind":"pluginData", "key":"k", "entry":{"format":1, "value":1}}),
+            "pluginData requires plugin",
+        ),
+        (
+            json!({"kind":"pluginData", "plugin":"probe", "entry":{"format":1, "value":1}}),
+            "pluginData requires key",
+        ),
+        (
+            json!({"kind":"pluginData", "plugin":"probe", "key":"k", "entry":{"value":1}}),
+            "pluginData requires entry",
+        ),
+        (
+            json!({"kind":"pluginData", "plugin":"probe", "key":"k", "entry":{"format":0, "value":1}}),
+            "pluginData requires entry",
+        ),
+        (
+            json!({"kind":"pluginData", "plugin":"probe", "key":"k", "entry":{"format":1, "value":1}, "base":1}),
+            "pluginData requires base and default",
+        ),
+    ] {
+        assert_eq!(
+            attempt(&store, request.clone()),
+            Err(text.into()),
+            "{request}"
+        );
+    }
+}
+
+// With base and default the operation stores the entry only when the stored value, or default for a key that stores no entry, equals
+// base as a JSON value, and answers false and stores nothing otherwise (docs/spec/plugins.md#plugin-data).
+// contract: workspace.plugin-data.replace-compares-base
+#[test]
+fn a_plugin_data_replace_stores_only_on_its_base() {
+    let config = folder::Folder::new();
+    let store = Workspace::new(config.path().into());
+    let steps = [
+        (json!({"n":1, "s":"x"}), json!([]), Value::Null, false),
+        (
+            json!({"n":1, "s":"x"}),
+            json!({}),
+            json!({"format":1,"value":{"n":1,"s":"x"}}),
+            true,
+        ),
+        (
+            json!("second"),
+            json!({}),
+            json!({"format":1,"value":{"n":1,"s":"x"}}),
+            false,
+        ),
+        (
+            json!("second"),
+            serde_json::from_str(r#"{"s":"\u0078","n":1.0}"#).unwrap(),
+            json!({"format":1,"value":"second"}),
+            true,
+        ),
+    ];
+    for (i, (value, base, want, stored)) in steps.into_iter().enumerate() {
+        let request = json!({"kind":"pluginData", "plugin":"probe", "key":"marks", "entry":{"format":1, "value":value}, "base":base, "default":{}});
+        assert_eq!(apply(&store, request), json!(stored), "step {i}");
+        let snapshot = apply(
+            &Workspace::new(config.path().into()),
+            json!({"kind":"snapshot"}),
+        );
+        assert_eq!(snapshot["pluginData"]["probe"]["marks"], want, "step {i}");
+    }
+}
+
+// A plugin-data.json that is refused is reported as pluginDataError of the snapshot, which still carries the projects, and refuses each
+// operation with its error and stays unchanged (docs/spec/plugins.md#plugin-data).
+// contract: workspace.plugin-data.refused-file
+#[test]
+fn a_refused_plugin_data_file_is_reported_and_refuses_writes() {
+    let config = folder::Folder::new();
+    let path = config.path().join("plugin-data.json");
+    let shown = path.display().to_string();
+    for (text, error) in [
+        (
+            r#"{"format":2,"plugins":{}}"#,
+            format!("{shown}: plugin-data.json: format must be 1"),
+        ),
+        (
+            r#"{"format":1,"plugins":{"probe":[]}}"#,
+            format!("{shown}: plugins.probe must be an object"),
+        ),
+        (
+            r#"{"format":1}"#,
+            format!("{shown}: plugin-data.json must hold only format and the object plugins"),
+        ),
+    ] {
+        fs::write(&path, text).unwrap();
+        let store = Workspace::new(config.path().into());
+        let snapshot = apply(&store, json!({"kind":"snapshot"}));
+        assert_eq!(snapshot["pluginDataError"], json!(error), "{text}");
+        assert!(snapshot.get("pluginData").is_none(), "{text}");
+        assert_eq!(snapshot["projects"], json!([]), "{text}");
+        let request = json!({"kind":"pluginData", "plugin":"probe", "key":"marks", "entry":{"format":1, "value":1}});
+        assert_eq!(attempt(&store, request), Err(error.clone()), "{text}");
+        assert_eq!(fs::read_to_string(&path).unwrap(), text);
+    }
+}
+
+// The host answers each stored entry of a plugin key with workspace-changed to every window, and a replace that stored nothing notifies
+// no window (docs/spec/plugins.md#plugin-data).
+// contract: workspace.plugin-data.notifies-stored-entries
+#[test]
+fn a_stored_plugin_entry_notifies_every_window_and_a_refused_replace_none() {
+    assert!(notifies_windows("pluginData", &json!(true)));
+    assert!(!notifies_windows("pluginData", &json!(false)));
+    assert!(notifies_windows("patch", &json!(true)));
+    assert!(!notifies_windows("snapshot", &json!({})));
 }

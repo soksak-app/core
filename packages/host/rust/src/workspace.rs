@@ -81,6 +81,21 @@ pub struct Request {
     roles: Option<Map<String, Value>>,
     role: Option<Value>,
     fingerprint: Option<String>,
+    /// plugin, key, base and default are the members of the operation pluginData (docs/spec/plugins.md#plugin-data); base and
+    /// default keep a JSON null as a value, so only an absent member is None.
+    plugin: Option<String>,
+    key: Option<String>,
+    #[serde(default, deserialize_with = "present_value")]
+    base: Option<Value>,
+    #[serde(default, deserialize_with = "present_value")]
+    default: Option<Value>,
+}
+
+/// Deserializes a member that is present, also when it holds null, as Some.
+fn present_value<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<Value>, D::Error> {
+    Value::deserialize(deserializer).map(Some)
 }
 
 /// Reads the projects of projects.json, which holds them under the `projects` member beside the format member of the
@@ -164,9 +179,131 @@ fn snapshot(directory: &Path, listed: Result<Vec<Value>, String>) -> Result<Valu
         }
     }
     common.remove("format");
+    match read_plugin_data(&directory.join("plugin-data.json")) {
+        Ok(plugins) => document.insert("pluginData".into(), plugins.into()),
+        Err(error) => document.insert("pluginDataError".into(), error.into()),
+    };
     document.insert("projects".into(), projects.into());
     document.insert("common".into(), common.into());
     Ok(Value::Object(document))
+}
+
+/// The format of plugin-data.json (docs/spec/installation.md#stored-data-formats).
+const PLUGIN_DATA_FORMAT: u64 = 1;
+
+/// Reads the plugin keys of plugin-data.json: an object of plugin ids, each an object of keys. A missing file holds no keys
+/// (docs/spec/plugins.md#plugin-data).
+fn read_plugin_data(path: &Path) -> Result<Map<String, Value>, String> {
+    let Some(document) = read_stored(path, "plugin-data.json", PLUGIN_DATA_FORMAT)? else {
+        return Ok(Map::new());
+    };
+    let plugins = match document.get("plugins") {
+        Some(Value::Object(plugins)) if document.len() == 2 => plugins.clone(),
+        _ => {
+            return Err(format!(
+                "{}: plugin-data.json must hold only format and the object plugins",
+                path.display()
+            ));
+        }
+    };
+    if let Some((plugin, _)) = plugins.iter().find(|(_, keys)| !keys.is_object()) {
+        return Err(format!(
+            "{}: plugins.{plugin} must be an object",
+            path.display()
+        ));
+    }
+    Ok(plugins)
+}
+
+/// Stores one entry of a plugin key in plugin-data.json and leaves the other keys. With base and default it stores the entry only when
+/// the stored value, or default for a key that stores no entry, equals base as a JSON value, and answers whether it stored the entry
+/// (docs/spec/plugins.md#plugin-data).
+fn put_plugin_data(path: &Path, req: Request) -> Result<Value, String> {
+    let plugin = req
+        .plugin
+        .filter(|plugin| !plugin.is_empty())
+        .ok_or("pluginData requires plugin")?;
+    let key = req
+        .key
+        .filter(|key| !key.is_empty())
+        .ok_or("pluginData requires key")?;
+    let entry = req
+        .entry
+        .filter(is_data_entry)
+        .ok_or("pluginData requires entry")?;
+    if req.base.is_some() != req.default.is_some() {
+        return Err("pluginData requires base and default".into());
+    }
+    let mut plugins = read_plugin_data(path)?;
+    let keys = plugins
+        .entry(plugin.clone())
+        .or_insert_with(|| Value::Object(Map::new())); // default: a plugin that stores no keys starts from none.
+    let Value::Object(keys) = keys else {
+        return Err(format!(
+            "{}: plugins.{plugin} must be an object",
+            path.display()
+        ));
+    };
+    if let (Some(base), Some(default)) = (&req.base, &req.default) {
+        // default: a key that stores no entry stands at the default of its declaration, which the request carries.
+        let standing = keys
+            .get(&key)
+            .and_then(|stored| stored.get("value"))
+            .unwrap_or(default);
+        if !same_value(standing, base) {
+            return Ok(false.into());
+        }
+    }
+    keys.insert(key.clone(), Value::Object(entry));
+    write(
+        path,
+        &json!({"format": PLUGIN_DATA_FORMAT, "plugins": plugins}),
+    )?;
+    crate::event_record::emit_host(
+        crate::event_log::Level::Info,
+        "host.workspace.plugin-data",
+        json!({"plugin": plugin, "key": key}),
+    );
+    Ok(true.into())
+}
+
+/// Tells whether a stored entry has the current form: exactly a positive integer format and a value.
+fn is_data_entry(entry: &Map<String, Value>) -> bool {
+    entry.len() == 2
+        && entry.contains_key("value")
+        && entry
+            .get("format")
+            .and_then(Value::as_f64)
+            .is_some_and(|format| format >= 1.0 && format.fract() == 0.0)
+}
+
+/// Tells whether two JSON values are the same value: the order of the members of an object makes no difference, and numbers compare as
+/// double-precision numbers, as the Go host compares them.
+fn same_value(one: &Value, other: &Value) -> bool {
+    match (one, other) {
+        (Value::Number(a), Value::Number(b)) => a.as_f64() == b.as_f64(),
+        (Value::Array(a), Value::Array(b)) => {
+            a.len() == b.len() && a.iter().zip(b).all(|(a, b)| same_value(a, b))
+        }
+        (Value::Object(a), Value::Object(b)) => {
+            a.len() == b.len()
+                && a.iter()
+                    .all(|(key, value)| b.get(key).is_some_and(|other| same_value(value, other)))
+        }
+        _ => one == other,
+    }
+}
+
+/// Tells whether a store request that succeeded with result sends workspace-changed to every window: each request that changes a project
+/// or a setting, and an operation pluginData only when it stored its entry; the tab state store, the tab sessions and the reads of the
+/// role definitions change no project or setting (docs/spec/plugins.md#plugin-data).
+pub fn notifies_windows(kind: &str, result: &Value) -> bool {
+    match kind {
+        "snapshot" | "tabState" | "tabStatePut" | "tabSession" | "tabSessionPut"
+        | "tabSessions" | "roles" | "rolesPut" | "rolesStatus" | "role" => false,
+        "pluginData" => result == &Value::Bool(true),
+        _ => true,
+    }
 }
 
 /// Reads the overrides of the project settings file at path; a missing file holds no override.
@@ -569,6 +706,7 @@ impl Workspace {
                 );
             }
             "tabSessions" => return list_tab_sessions(&self.directory),
+            "pluginData" => return put_plugin_data(&self.directory.join("plugin-data.json"), req),
             "roles" => return read_roles(&self.directory.join("roles.json")),
             "rolesPut" => {
                 return write_roles(&self.directory.join("roles.json"), req.roles);
@@ -775,21 +913,7 @@ pub fn handle(app: &AppHandle, mut request: Request) -> Result<Value, String> {
         project["root"] = folder["root"].clone();
         project["identity"] = folder["identity"].clone();
     }
-    // The tab state store, the tab sessions and the reads of the role definitions change no project or setting, so no window is
-    // notified; a define or a removal of a role changes the role definitions, so the windows are notified.
-    let tab_state = matches!(
-        request.kind.as_str(),
-        "tabState"
-            | "tabStatePut"
-            | "tabSession"
-            | "tabSessionPut"
-            | "tabSessions"
-            | "roles"
-            | "rolesPut"
-            | "rolesStatus"
-            | "role"
-    );
-    let changed = request.kind != "snapshot" && !tab_state;
+    let kind = request.kind.clone();
     let snapshot = request.kind == "snapshot";
     let define = request.kind == "roleDefine";
     let applied = app.state::<Workspace>().apply(request);
@@ -804,7 +928,7 @@ pub fn handle(app: &AppHandle, mut request: Request) -> Result<Value, String> {
     if snapshot {
         result["open"] = serde_json::to_value(opened(app)?).map_err(|e| e.to_string())?;
     }
-    if changed {
+    if notifies_windows(&kind, &result) {
         for window in app.windows().values() {
             emit_window(window, "workspace-changed", ()).map_err(|e| e.to_string())?;
         }

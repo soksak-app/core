@@ -13,6 +13,7 @@
             "call": "info"
           }
         },
+        "pluginData": {},
         "projects": [
           {
             "id": "prj-one",
@@ -96,6 +97,7 @@
             "call": "info"
           }
         },
+        "pluginData": {},
         "projects": [],
         "open": []
       }

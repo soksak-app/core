@@ -14,6 +14,7 @@
           },
           "left": false
         },
+        "pluginData": {},
         "projects": [
           {
             "id": "prj-one",
@@ -48,6 +49,7 @@
           },
           "left": false
         },
+        "pluginData": {},
         "projects": [],
         "open": []
       }

@@ -16,6 +16,7 @@
       "reply": {
         "result": {
           "common": {},
+          "pluginData": {},
           "projects": [
             {
               "id": "prj-aaaaaa",

@@ -11,7 +11,7 @@
   },
   "steps": [
     { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
-    { "reply": { "result": { "common": { "gap": 8, "absent.option": 3 }, "projects": [ { "id": "prj-a", "settings": { "absent.option": 4 } } ] } } },
+    { "reply": { "result": { "common": { "gap": 8, "absent.option": 3 }, "pluginData": {}, "projects": [ { "id": "prj-a", "settings": { "absent.option": 4 } } ] } } },
     { "call": { "name": "setTheme", "payload": "$theme-1" } },
     { "reply": { "result": null } },
     { "call": { "name": "performance", "payload": { "action": "off" } } },
@@ -25,6 +25,6 @@
     { "call": { "name": "setMenuLanguage", "payload": "$language" } },
     { "reply": { "result": null } },
     { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
-    { "reply": { "result": { "common": { "gap": 9, "absent.option": 3 }, "projects": [ { "id": "prj-a", "settings": { "absent.option": 4 } } ] } } }
+    { "reply": { "result": { "common": { "gap": 9, "absent.option": 3 }, "pluginData": {}, "projects": [ { "id": "prj-a", "settings": { "absent.option": 4 } } ] } } }
   ]
 }

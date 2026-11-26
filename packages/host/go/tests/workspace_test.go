@@ -756,7 +756,7 @@ func TestEarlierStoredFormsAreReportedBySnapshotAndRefusedByWrites(t *testing.T)
 	}
 	refusal := projects + ": projects: format must be 4, found null"
 	snapshot, err := store.Apply(host.WorkspaceRequest{Kind: "snapshot"})
-	if want := (host.Record{"projects": []host.Record{}, "common": host.Record{}, "projectsError": refusal}); err != nil || !reflect.DeepEqual(snapshot, want) {
+	if want := (host.Record{"projects": []host.Record{}, "common": host.Record{}, "pluginData": host.Record{}, "projectsError": refusal}); err != nil || !reflect.DeepEqual(snapshot, want) {
 		t.Fatalf("a bare array of projects returned %#v, %v; want %#v", snapshot, err, want)
 	}
 	// A file of format 3 holds tabs without the member role (docs/spec/agent-roles.md#tab-role-state), so it is refused as a whole.
@@ -767,7 +767,7 @@ func TestEarlierStoredFormsAreReportedBySnapshotAndRefusedByWrites(t *testing.T)
 	}
 	refusal = projects + ": projects: format must be 4, found 3"
 	snapshot, err = store.Apply(host.WorkspaceRequest{Kind: "snapshot"})
-	if want := (host.Record{"projects": []host.Record{}, "common": host.Record{}, "projectsError": refusal}); err != nil || !reflect.DeepEqual(snapshot, want) {
+	if want := (host.Record{"projects": []host.Record{}, "common": host.Record{}, "pluginData": host.Record{}, "projectsError": refusal}); err != nil || !reflect.DeepEqual(snapshot, want) {
 		t.Fatalf("a projects.json of format 3 returned %#v, %v; want %#v", snapshot, err, want)
 	}
 	if _, err := store.Apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-b", "root": "/y", "identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:2"}}); err == nil || err.Error() != refusal {
@@ -807,7 +807,7 @@ func TestEarlierStoredFormsAreReportedBySnapshotAndRefusedByWrites(t *testing.T)
 	}
 	refusal = settings + ": settings.json: format must be 1"
 	snapshot, err = store.Apply(host.WorkspaceRequest{Kind: "snapshot"})
-	if want := (host.Record{"projects": []host.Record{}, "common": host.Record{}, "settingsError": refusal}); err != nil || !reflect.DeepEqual(snapshot, want) {
+	if want := (host.Record{"projects": []host.Record{}, "common": host.Record{}, "pluginData": host.Record{}, "settingsError": refusal}); err != nil || !reflect.DeepEqual(snapshot, want) {
 		t.Fatalf("settings.json without the format member returned %#v, %v; want %#v", snapshot, err, want)
 	}
 	if _, err := store.Apply(host.WorkspaceRequest{Kind: "settings", Patch: map[string]any{"gap": 3}}); err == nil || err.Error() != refusal {
@@ -848,7 +848,7 @@ func TestAProjectWithAnIdentityOfAnotherFormIsRefusedByName(t *testing.T) {
 	}
 	refusal := "projects.json: project /x has the identity 1:1, not " + current.DirectoryIdentityForm()
 	snapshot, err := store.Apply(host.WorkspaceRequest{Kind: "snapshot"})
-	if want := (host.Record{"projects": []host.Record{}, "common": host.Record{}, "projectsError": refusal}); err != nil || !reflect.DeepEqual(snapshot, want) {
+	if want := (host.Record{"projects": []host.Record{}, "common": host.Record{}, "pluginData": host.Record{}, "projectsError": refusal}); err != nil || !reflect.DeepEqual(snapshot, want) {
 		t.Fatalf("a projects.json with an identity of another form returned %#v, %v; want %#v", snapshot, err, want)
 	}
 	add := host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-b", "root": "/y", "identity": "6F1D2C3B-4A5B-4C6D-8E9F-0A1B2C3D4E5F:9"}}
@@ -878,5 +878,146 @@ func TestProjectsWriterWritesFormat4(t *testing.T) {
 	}
 	if written["format"] != float64(4) {
 		t.Fatalf("projects.json is written with format %v, want 4", written["format"])
+	}
+}
+
+// pluginDataSnapshot reads the snapshot of the store at config as JSON text members.
+func pluginDataSnapshot(t *testing.T, config string) map[string]json.RawMessage {
+	t.Helper()
+	snapshot, err := host.NewWorkspace(config).Apply(host.WorkspaceRequest{Kind: "snapshot"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var members map[string]json.RawMessage
+	if err := json.Unmarshal(encoded, &members); err != nil {
+		t.Fatal(err)
+	}
+	return members
+}
+
+// putPluginData runs the operation pluginData on store and returns its answer.
+func putPluginData(store *host.Workspace, plugin, key string, value any, base, fallback string) (any, error) {
+	req := host.WorkspaceRequest{Kind: "pluginData", Plugin: plugin, Key: key, Entry: host.Record{"format": 1, "value": value}}
+	if base != "" {
+		req.Base = json.RawMessage(base)
+	}
+	if fallback != "" {
+		req.Default = json.RawMessage(fallback)
+	}
+	return store.Apply(req)
+}
+
+// The operation pluginData stores one entry of a plugin key in plugin-data.json and leaves the other keys, and the snapshot carries the
+// keys as pluginData; a missing file holds no keys (docs/spec/plugins.md#plugin-data).
+// contract: workspace.plugin-data.stores-one-entry
+func TestThePluginDataOperationStoresOneEntryAndTheSnapshotCarriesIt(t *testing.T) {
+	config := t.TempDir()
+	if got := string(pluginDataSnapshot(t, config)["pluginData"]); got != "{}" {
+		t.Fatalf("the snapshot of a configuration without plugin-data.json carries pluginData %s, want {}", got)
+	}
+	store := host.NewWorkspace(config)
+	for _, write := range []struct {
+		plugin, key string
+		value       any
+	}{{"probe", "accounts", []any{"a"}}, {"probe", "chosen", "a"}, {"other", "accounts", []any{}}} {
+		if stored, err := putPluginData(store, write.plugin, write.key, write.value, "", ""); err != nil || stored != true {
+			t.Fatalf("pluginData %s %s = %v %v, want true", write.plugin, write.key, stored, err)
+		}
+	}
+	want := `{"other":{"accounts":{"format":1,"value":[]}},"probe":{"accounts":{"format":1,"value":["a"]},"chosen":{"format":1,"value":"a"}}}`
+	if got := string(pluginDataSnapshot(t, config)["pluginData"]); got != want {
+		t.Fatalf("the snapshot carries pluginData %s, want %s", got, want)
+	}
+	var file host.Record
+	if err := readJSON(t, filepath.Join(config, "plugin-data.json"), &file); err != nil || file["format"] != float64(1) {
+		t.Fatalf("plugin-data.json holds %v: %v, want the format 1", file, err)
+	}
+	for _, refused := range []struct {
+		req  host.WorkspaceRequest
+		text string
+	}{
+		{host.WorkspaceRequest{Kind: "pluginData", Key: "k", Entry: host.Record{"format": 1, "value": 1}}, "pluginData requires plugin"},
+		{host.WorkspaceRequest{Kind: "pluginData", Plugin: "probe", Entry: host.Record{"format": 1, "value": 1}}, "pluginData requires key"},
+		{host.WorkspaceRequest{Kind: "pluginData", Plugin: "probe", Key: "k", Entry: host.Record{"value": 1}}, "pluginData requires entry"},
+		{host.WorkspaceRequest{Kind: "pluginData", Plugin: "probe", Key: "k", Entry: host.Record{"format": 0, "value": 1}}, "pluginData requires entry"},
+		{host.WorkspaceRequest{Kind: "pluginData", Plugin: "probe", Key: "k", Entry: host.Record{"format": 1, "value": 1}, Base: json.RawMessage("1")}, "pluginData requires base and default"},
+	} {
+		if _, err := store.Apply(refused.req); err == nil || err.Error() != refused.text {
+			t.Fatalf("pluginData %+v fails with %v, want %s", refused.req, err, refused.text)
+		}
+	}
+}
+
+// With base and default the operation stores the entry only when the stored value, or default for a key that stores no entry, equals
+// base as a JSON value, and answers false and stores nothing otherwise (docs/spec/plugins.md#plugin-data).
+// contract: workspace.plugin-data.replace-compares-base
+func TestAPluginDataReplaceStoresOnlyOnItsBase(t *testing.T) {
+	config := t.TempDir()
+	store := host.NewWorkspace(config)
+	steps := []struct {
+		value                any
+		base, fallback, want string
+		stored               bool
+	}{
+		{map[string]any{"n": 1, "s": "x"}, `[]`, `{}`, `{}`, false},
+		{map[string]any{"n": 1, "s": "x"}, `{}`, `{}`, `{"format":1,"value":{"n":1,"s":"x"}}`, true},
+		{"second", `{}`, `{}`, `{"format":1,"value":{"n":1,"s":"x"}}`, false},
+		{"second", `{"s":"x","n":1.0}`, `{}`, `{"format":1,"value":"second"}`, true},
+	}
+	for i, step := range steps {
+		stored, err := putPluginData(store, "probe", "marks", step.value, step.base, step.fallback)
+		if err != nil || stored != step.stored {
+			t.Fatalf("step %d: pluginData with base %s = %v %v, want %v", i, step.base, stored, err, step.stored)
+		}
+		var keys map[string]json.RawMessage
+		if raw := pluginDataSnapshot(t, config)["pluginData"]; string(raw) != "{}" {
+			var plugins map[string]map[string]json.RawMessage
+			if err := json.Unmarshal(raw, &plugins); err != nil {
+				t.Fatal(err)
+			}
+			keys = plugins["probe"]
+		}
+		got := "{}"
+		if entry, held := keys["marks"]; held {
+			got = string(entry)
+		}
+		if got != step.want {
+			t.Fatalf("step %d: the key holds %s, want %s", i, got, step.want)
+		}
+	}
+}
+
+// A plugin-data.json that is refused is reported as pluginDataError of the snapshot, which still carries the projects, and refuses each
+// operation with its error and stays unchanged (docs/spec/plugins.md#plugin-data).
+// contract: workspace.plugin-data.refused-file
+func TestARefusedPluginDataFileIsReportedAndRefusesWrites(t *testing.T) {
+	config := t.TempDir()
+	path := filepath.Join(config, "plugin-data.json")
+	for _, refused := range []struct{ text, err string }{
+		{`{"format":2,"plugins":{}}`, path + ": plugin-data.json: format must be 1"},
+		{`{"format":1,"plugins":{"probe":[]}}`, path + ": plugins.probe must be an object"},
+		{`{"format":1}`, path + ": plugin-data.json must hold only format and the object plugins"},
+	} {
+		if err := os.WriteFile(path, []byte(refused.text), 0600); err != nil {
+			t.Fatal(err)
+		}
+		members := pluginDataSnapshot(t, config)
+		var reported string
+		if err := json.Unmarshal(members["pluginDataError"], &reported); err != nil || reported != refused.err {
+			t.Fatalf("the snapshot of %s reports %s, want %s", refused.text, members["pluginDataError"], refused.err)
+		}
+		if _, held := members["pluginData"]; held || string(members["projects"]) != "[]" {
+			t.Fatalf("the snapshot of %s carries pluginData %s and projects %s, want no pluginData and the projects", refused.text, members["pluginData"], members["projects"])
+		}
+		if _, err := putPluginData(host.NewWorkspace(config), "probe", "marks", 1, "", ""); err == nil || err.Error() != refused.err {
+			t.Fatalf("a write over %s fails with %v, want %s", refused.text, err, refused.err)
+		}
+		if after, err := os.ReadFile(path); err != nil || string(after) != refused.text {
+			t.Fatalf("the refused file holds %s after a write: %v", after, err)
+		}
 	}
 }

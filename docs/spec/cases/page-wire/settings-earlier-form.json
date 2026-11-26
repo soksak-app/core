@@ -6,6 +6,6 @@
   "variables": {},
   "steps": [
     { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
-    { "reply": { "result": { "common": { "gap": 8, "cardSidebar": "inset" }, "projects": [] } } }
+    { "reply": { "result": { "common": { "gap": 8, "cardSidebar": "inset" }, "pluginData": {}, "projects": [] } } }
   ]
 }

@@ -228,6 +228,15 @@ View는 plugin이 `dependencies`에 적은 의존 plugin의 프로젝트 데이�
 
 `change`는 다른 writer가 있을 때만 새 읽기부터 다시 시작한다. 새 읽기가 직전 읽기와 같으면 값을 바꾼 writer가 없다는 뜻이므로 change는 `runtime.data.change <key>: the store refused the value that it answered`로 실패한다. 64번 읽은 뒤에는 `runtime.data.change <key>: other writers changed the value 64 times`로 실패한다. 각 실패는 change를 부른 쪽에 전달되어 view가 보여 주고, 값은 다른 writer가 남긴 대로 있다.
 
+## Plugin 데이터
+`"scope": "plugin"`인 `data` key는 project 대신 plugin에 속한다. 그 값은 모든 project와 project 없는 window에서 같다. plugin의 계정이 그런 예다. `scope`는 선택이고, 생략했을 때의 값 `"project"`는 key를 [프로젝트 데이터](#프로젝트-데이터)의 key로 둔다. 다른 값은 plugin을 `data <key> scope must be project or plugin`으로 실패시킨다. plugin key는 project key와 같은 schema, default, per-key format, 저장 entry `{ "format": <format>, "value": <value> }`, check와 실패를 가진다. 실패는 project key가 `project <id> plugin <plugin> data <key>`를 말하는 자리에 `plugin <plugin> data <key>`를 말한다.
+
+host는 plugin key를 설정 directory의 `plugin-data.json`에 `{ "format": 1, "plugins": { "<plugin id>": { "<key>": <entry> } } }`로 저장한다. 없는 file은 key를 갖지 않는다. workspace snapshot은 그것을 plugin id의 object인 `pluginData`로 싣고, 거부된 file은 `pluginData` 없이 그 오류를 `pluginDataError`로 싣는다. snapshot의 project와 settings는 그것에 의존하지 않는다. workspace operation `pluginData {plugin, key, entry}`는 현재 형태의 entry 하나를 저장하고 다른 key는 그대로 둔다. 함께 오는 `base`와 `default`가 있으면, key의 저장된 값이, key에 entry가 없으면 `default`가 JSON 값으로 `base`와 같을 때만 entry를 저장하고([프로젝트 데이터](#프로젝트-데이터)), 아니면 아무것도 저장하지 않는다. entry를 저장하면 `true`, 아니면 `false`로 답한다. `plugin`과 `key`는 비어 있지 않은 text이고, 다른 요청은 `pluginData requires <member>`로 거부된다. 거부된 file은 각 operation을 그 오류로 거부한다. host는 저장된 각 entry에 registry의 쓰기처럼 모든 window에 `workspace-changed`로 답한다([저장](projects.ko.md#저장)).
+
+project가 있든 없든 어느 window의 view든 project data의 view call로 자기 plugin의 plugin key를 읽고, 쓰고, replace하고, 따르며, dependency의 plugin key를 읽는다. workbench는 `runtime.data.set`을 `base` 없는 operation으로, `runtime.data.replace`를 `base`와 선언된 default가 있는 operation으로 보내므로, store가 모든 window의 쓰기에 대해 replace를 결정한다. window는 store가 받아들인 저장 entry를 자기가 가진 key에 넣고 변경을 알린다. 이 window의 entry가 저장되기 전에 시작한 store 읽기는 plugin key를 window가 가진 대로 둔다. host가 그 entry에 다시 `workspace-changed`로 답하기 때문이다. 다른 window가 값을 바꾼 key는 window가 snapshot을 읽을 때 window의 view에 알려진다. project 없는 view의 `runtime.data.on`은 plugin key만 따르고, project 있는 view는 두 종류를 모두 따른다. project 없는 view의 project key는 `view call <command> requires a project`로 실패한다. plugin을 제거해도 project data처럼 그 entry는 남는다.
+
+Rejected: `settings.json`의 member. 거부된 `settings.json`은 window에 common settings를 남기지 않고, plugin의 key는 settings window에 속하지 않기 때문이다. project마다 key의 사본 하나. project 없는 window는 그것을 갖지 못하고 사본이 서로 달라지기 때문이다. window만의 `base` 비교. 두 window가 같은 값에 대한 replace를 둘 다 받아들이기 때문이다.
+
 ## 확장 지점
 
 plugin은 다른 plugin이 선언한 확장 지점으로 그 plugin을 확장한다. 제공자는 `extends`에 지점을 선언하고, 기여자는 `contributes`에 항목을 선언하며, workbench는 이 선언만으로 둘을 잇는다. 어떤 plugin도 코드에서 다른 plugin의 이름을 쓰지 않는다.

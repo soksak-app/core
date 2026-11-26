@@ -14,7 +14,7 @@
   },
   "steps": [
     { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
-    { "reply": { "result": { "common": {}, "projects": [] } } },
+    { "reply": { "result": { "common": {}, "pluginData": {}, "projects": [] } } },
     { "call": { "name": "performance", "payload": { "action": "off" } } },
     { "reply": { "result": null } },
 
@@ -29,7 +29,7 @@
     { "call": { "name": "workspace", "payload": { "kind": "settings", "id": null, "patch": { "diagnostics.performance": true, "diagnostics.log": { "lifecycle": "trace", "input": "trace", "call": "trace", "io": "trace", "frame": "trace" } }, "remove": [] }, "cids": ["$cid-1"] } },
     { "reply": { "result": null } },
     { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
-    { "reply": { "result": { "common": { "diagnostics.performance": true, "diagnostics.log": { "lifecycle": "trace", "input": "trace", "call": "trace", "io": "trace", "frame": "trace" } }, "projects": [] } } },
+    { "reply": { "result": { "common": { "diagnostics.performance": true, "diagnostics.log": { "lifecycle": "trace", "input": "trace", "call": "trace", "io": "trace", "frame": "trace" } }, "pluginData": {}, "projects": [] } } },
 
     { "call": { "name": "log", "payload": { "action": "policy", "classes": { "lifecycle": "error", "input": "error", "call": "error", "io": "error", "frame": "error" }, "cids": ["$cid-2"] } } },
     { "reply": { "result": null } },
@@ -42,7 +42,7 @@
     { "call": { "name": "workspace", "payload": { "kind": "settings", "id": null, "patch": { "diagnostics.performance": false, "diagnostics.log": {} }, "remove": [] }, "cids": ["$cid-2"] } },
     { "reply": { "result": null } },
     { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
-    { "reply": { "result": { "common": { "diagnostics.performance": false, "diagnostics.log": {} }, "projects": [] } } },
+    { "reply": { "result": { "common": { "diagnostics.performance": false, "diagnostics.log": {} }, "pluginData": {}, "projects": [] } } },
 
     { "call": { "name": "log", "payload": { "action": "policy", "classes": { "lifecycle": "error", "input": "error", "call": "trace", "io": "error", "frame": "error" }, "cids": ["$cid-3"] } } },
     { "reply": { "result": null } },
@@ -55,6 +55,6 @@
     { "call": { "name": "workspace", "payload": { "kind": "settings", "id": null, "patch": { "diagnostics.performance": true, "diagnostics.log": { "call": "trace" } }, "remove": [] }, "cids": ["$cid-3"] } },
     { "reply": { "result": null } },
     { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
-    { "reply": { "result": { "common": { "diagnostics.performance": true, "diagnostics.log": { "call": "trace" } }, "projects": [] } } }
+    { "reply": { "result": { "common": { "diagnostics.performance": true, "diagnostics.log": { "call": "trace" } }, "pluginData": {}, "projects": [] } } }
   ]
 }

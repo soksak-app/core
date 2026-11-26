@@ -1122,6 +1122,10 @@ fn invalid_json_closes_connection() {
 | `workspace.projects.move-reorders` | 프로젝트를 옮기면 저장된 순서의 위치가 바뀐다. | all |
 | `workspace.projects.move-requires-delta` | `delta`가 없거나 `null`인 `move` 요청은 `move delta is missing`으로 실패하고 순서를 바꾸지 않는다. | all |
 | `workspace.projects.plugin-data-patched` | 프로젝트 patch는 `plugins` 객체를 저장하고, 알 수 없는 다른 필드의 patch는 거부된다. | all |
+| `workspace.plugin-data.stores-one-entry` | operation `pluginData`는 plugin key의 entry 하나를 `plugin-data.json`에 저장하고 다른 key는 그대로 두며, snapshot은 key를 `pluginData`로 싣고, 없는 file은 key를 갖지 않는다. 비어 있지 않은 `plugin`이나 `key`, 현재 형태의 entry가 없거나 `base`와 `default` 중 하나만 있는 요청은 `pluginData requires <member>`로 거부된다. | all |
+| `workspace.plugin-data.replace-compares-base` | `base`와 `default`가 있으면 operation은 저장된 값이, entry가 없는 key는 `default`가 JSON 값으로 `base`와 같을 때만 entry를 저장하고, 아니면 `false`로 답하고 아무것도 저장하지 않는다. | all |
+| `workspace.plugin-data.refused-file` | 거부된 `plugin-data.json`은 snapshot의 `pluginDataError`로 보고되고 snapshot은 project를 계속 싣는다. 각 operation은 그 오류로 실패하고 file을 바꾸지 않는다. | all |
+| `workspace.plugin-data.notifies-stored-entries` | host는 plugin key의 저장된 각 entry에 모든 window로 `workspace-changed`를 보내고, 아무것도 저장하지 않은 replace는 어느 window에도 알리지 않는다. | all |
 | `workspace.projects.remove-keeps-remaining-order` | 프로젝트를 제거해도 남은 프로젝트의 순서는 유지된다. | all |
 | `workspace.folder.aliases-share-identity` | 디렉터리와 그 심볼릭 링크는 같은 프로젝트 폴더로 해석된다. | all |
 | `workspace.folder.rejects-file` | 일반 파일은 프로젝트 폴더로 거부된다. | all |

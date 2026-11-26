@@ -5,6 +5,6 @@
   "variables": {},
   "steps": [
     { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
-    { "reply": { "result": { "common": {}, "projects": [], "open": [] } } }
+    { "reply": { "result": { "common": {}, "pluginData": {}, "projects": [], "open": [] } } }
   ]
 }
