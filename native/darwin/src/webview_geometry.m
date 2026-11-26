@@ -673,6 +673,27 @@ bool sp_surface_seat_over_modal(void *handle, void *modalHandle, double x, doubl
     return true;
 }
 
+void sp_surface_set_clip(void *handle, bool clipped, double x, double y, double width, double height) {
+    NSCAssert(NSThread.isMainThread, @"surface hosts belong to the main thread");
+    SPSurfaceHost *host = (SPSurfaceHost *)handle;
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    if (!clipped) {
+        host.layer.mask = nil;
+    } else {
+        CALayer *mask = host.layer.mask;
+        if (!mask) {
+            mask = [CALayer layer];
+            mask.backgroundColor = NSColor.blackColor.CGColor;
+            host.layer.mask = mask;
+        }
+        // The rectangle has its origin at the top left of the host, and the layer of the host follows the view geometry.
+        NSRect rect = NSMakeRect(x, host.isFlipped ? y : NSHeight(host.bounds) - y - height, width, height);
+        mask.frame = [host convertRectToLayer:rect];
+    }
+    [CATransaction commit];
+}
+
 void sp_view_give_up_keyboard(void *handle) {
     NSCAssert(NSThread.isMainThread, @"the keyboard belongs to the main thread");
     NSView *view = (NSView *)handle;

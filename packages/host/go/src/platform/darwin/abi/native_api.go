@@ -199,6 +199,7 @@ type NativeFunctions struct {
 	MainSpSurfaceFocusForRegion            func(unsafe.Pointer)
 	MainSpSurfaceMarkDialog                func(unsafe.Pointer)
 	MainSpSurfaceSeatOverModal             func(unsafe.Pointer, unsafe.Pointer, float64, float64, float64, float64) bool
+	MainSpSurfaceSetClip                   func(unsafe.Pointer, bool, float64, float64, float64, float64)
 	MainSpSurfaceSetWindowOverlays         func(unsafe.Pointer, *float64, uint64)
 	MainSpViewImportMapSet                 func(*byte)
 	MainSpWebviewCollectGarbage            func(unsafe.Pointer) bool
@@ -548,6 +549,9 @@ func (functions NativeFunctions) Validate() error {
 	}
 	if functions.MainSpSurfaceSeatOverModal == nil {
 		return fmt.Errorf("native API function is missing: main_sp_surface_seat_over_modal")
+	}
+	if functions.MainSpSurfaceSetClip == nil {
+		return fmt.Errorf("native API function is missing: main_sp_surface_set_clip")
 	}
 	if functions.MainSpSurfaceSetWindowOverlays == nil {
 		return fmt.Errorf("native API function is missing: main_sp_surface_set_window_overlays")

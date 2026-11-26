@@ -104,9 +104,19 @@ func (f *Frontend) placeSurfaces(system platform.Platform, surface func(view uin
 				continue
 			}
 		}
-		placed[view.View] = placedSurface{surface: handle, box: view.Box}
+		// The host shows only the clip of its element: the part of the box inside the scroll and the bounds of what holds the element.
+		clip := view.Clip
+		clipped := clip != view.Box
+		placed[view.View] = placedSurface{surface: handle, box: view.Box, clip: clip, clipped: clipped}
 		if !shown || last.box != view.Box {
 			system.SetSurfaceBounds(handle, view.Box.X, view.Box.Y, view.Box.W, view.Box.H)
+		}
+		if !shown || last.clipped != clipped || (clipped && (last.clip != clip || last.box != view.Box)) {
+			if clipped {
+				system.SetSurfaceClip(handle, true, clip.X-view.Box.X, clip.Y-view.Box.Y, clip.W, clip.H)
+			} else {
+				system.SetSurfaceClip(handle, false, 0, 0, 0, 0)
+			}
 		}
 		if !shown {
 			system.SetSurfaceHiddenHandle(handle, false)
@@ -120,10 +130,13 @@ func (f *Frontend) placeSurfaces(system platform.Platform, surface func(view uin
 	f.placed = placed
 }
 
-// placedSurface is a surface host that a native view element placed and the box that the element last gave it.
+// placedSurface is a surface host that a native view element placed and the box and the clip that the element last gave it.
 type placedSurface struct {
 	surface unsafe.Pointer
 	box     mygo.RectF
+	// clip is the part of the box that the element shows, and clipped tells that it is smaller than the box.
+	clip    mygo.RectF
+	clipped bool
 }
 
 // OpenLayout opens the surface layout transaction of the window for the frame being built, before the frame sets the frames of the

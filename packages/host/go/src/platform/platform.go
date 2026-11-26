@@ -543,6 +543,9 @@ type Platform interface {
 	ReleaseView(view unsafe.Pointer)
 	CloseSurface(surface unsafe.Pointer)
 	SetSurfaceBounds(surface unsafe.Pointer, x, y, width, height float64)
+	// SetSurfaceClip clips the surface host to the rectangle x, y, width, height of its own bounds, top left origin, when clipped is
+	// true, and removes the clip when it is false; the views in the host draw only inside it. Call it on the main thread.
+	SetSurfaceClip(surface unsafe.Pointer, clipped bool, x, y, width, height float64)
 	SurfaceFrame(surface unsafe.Pointer) Rect
 	SetSurfaceHiddenHandle(surface unsafe.Pointer, hidden bool)
 	SetSurfaceAlphaHandle(surface unsafe.Pointer, alpha float64)

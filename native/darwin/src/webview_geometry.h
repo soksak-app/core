@@ -17,6 +17,11 @@ void sp_surface_mark_dialog(void *surface);
 // window of the host. Call it on the main thread, before the frame of the host is set, because the frame of the host is relative to
 // its container.
 bool sp_surface_seat_over_modal(void *surface, void *modal, double x, double y, double width, double height);
+// Clips the surface host to the rectangle x, y, width, height in its own bounds, top left origin, when clipped is true, and removes the
+// clip when it is false: the host and every view in it, such as its native plane and the document regions there, draw only inside the
+// rectangle. A window without a main page places a surface host at the box of its native view element and clips it to the part of the
+// box that the element shows (docs/spec/native-surfaces.md#settings-seat). Call it on the main thread.
+void sp_surface_set_clip(void *surface, bool clipped, double x, double y, double width, double height);
 // Whether view is a surface host that sp_surface_create made. Call it on the main thread.
 bool sp_surface_is_host(void *view);
 // Wraps the main web view in the window composition, which holds the window overlays, the file drop view and, above the web

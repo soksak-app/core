@@ -554,6 +554,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1205",
+    implementation: [
+      { file: "packages/host/mygo/src/frontend.go", symbol: "system.SetSurfaceClip(handle, true, clip.X-view.Box.X, clip.Y-view.Box.Y, clip.W, clip.H)" },
+      { file: "native/darwin/src/webview_geometry.m", symbol: "void sp_surface_set_clip(void *handle, bool clipped, double x, double y, double width, double height) {" },
+    ],
+    tests: [{ file: "packages/host/mygo/src/frames_test.go", id: "TestASurfaceHostShowsOnlyTheClipOfItsElement" }],
+    expected: "A surface host of the mygo application shows only the clip of its native view element.",
+    levels: ["unit"],
+  },
+  {
     id: "F1204",
     implementation: [{ file: "packages/workbench-mygo/src/surfaces.go", symbol: "surface.project = &projectStart{ID: project.ID, Root: project.Root}" }],
     tests: [{ file: "packages/workbench-mygo/tests/settings_surface_test.go", id: "TestTheSettingsSurfaceOfAWindowWithoutAProjectStartsWithANullProject" }],

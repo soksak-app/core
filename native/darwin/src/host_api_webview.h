@@ -27,6 +27,7 @@ void *main_sp_surface_create(uintptr_t window);
 void main_sp_surface_close(void *surface);
 void main_sp_surface_mark_dialog(void *surface);
 bool main_sp_surface_seat_over_modal(void *surface, void *modal, double x, double y, double width, double height);
+void main_sp_surface_set_clip(void *surface, bool clipped, double x, double y, double width, double height);
 void main_webviewSetFrame(void *view, double x, double y, double width, double height);
 void main_sp_surface_focus(void *surface);
 void main_sp_surface_focus_for_region(void *surface);

@@ -461,6 +461,10 @@ func (implementation) SetSurfaceBounds(unsafe.Pointer, float64, float64, float64
 	unreachable("surface host placement")
 }
 
+func (implementation) SetSurfaceClip(unsafe.Pointer, bool, float64, float64, float64, float64) {
+	unreachable("surface host clip")
+}
+
 func (implementation) SurfaceFrame(unsafe.Pointer) platform.Rect {
 	unreachable("surface host frame")
 	return platform.Rect{}

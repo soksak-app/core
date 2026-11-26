@@ -30,8 +30,9 @@ func TestRecordStepsEndsWhenItsStopReturns(t *testing.T) {
 // placementPlatform takes the placement of the surface hosts.
 type placementPlatform struct{ platform.Platform }
 
-func (placementPlatform) SetSurfaceBounds(unsafe.Pointer, float64, float64, float64, float64) {}
-func (placementPlatform) SetSurfaceHiddenHandle(unsafe.Pointer, bool)                         {}
+func (placementPlatform) SetSurfaceBounds(unsafe.Pointer, float64, float64, float64, float64)     {}
+func (placementPlatform) SetSurfaceHiddenHandle(unsafe.Pointer, bool)                             {}
+func (placementPlatform) SetSurfaceClip(unsafe.Pointer, bool, float64, float64, float64, float64) {}
 
 // contract: window.frames.native-views-of-the-last-placement
 func TestAPlacementStoresTheNativeViewElementsOfTheWindow(t *testing.T) {
@@ -207,4 +208,64 @@ func TestTheHoldEndsWithTheLastOpenTransaction(t *testing.T) {
 	if f.transaction {
 		t.Fatal("the end of the last open transaction kept the hold")
 	}
+}
+
+// clipPlatform records the clips of the surface hosts that a placement sets.
+type clipPlatform struct {
+	placementPlatform
+	clips map[unsafe.Pointer][]surfaceClip
+}
+
+func (p *clipPlatform) SetSurfaceClip(surface unsafe.Pointer, clipped bool, x, y, width, height float64) {
+	p.clips[surface] = append(p.clips[surface], surfaceClip{clipped: clipped, rect: mygo.RectF{X: x, Y: y, W: width, H: height}})
+}
+
+type surfaceClip struct {
+	clipped bool
+	rect    mygo.RectF
+}
+
+// A surface host shows only the part of its native view element that the frame shows: an element whose clip is smaller than its box,
+// such as the seat of the settings surface below the bottom of the pane, clips its host to the clip in the bounds of the host, and an
+// element that shows whole clips nothing (docs/spec/native-surfaces.md#settings-seat, F1205).
+// contract: mygo.framework.surface-host-follows-the-clip-of-its-element
+func TestASurfaceHostShowsOnlyTheClipOfItsElement(t *testing.T) {
+	var settings, tab int
+	surfaces := map[uintptr]unsafe.Pointer{1: unsafe.Pointer(&settings), 2: unsafe.Pointer(&tab)}
+	surface := func(view uintptr) (unsafe.Pointer, bool) {
+		handle, ok := surfaces[view]
+		return handle, ok
+	}
+	system := &clipPlatform{clips: map[unsafe.Pointer][]surfaceClip{}}
+	f := &Frontend{frames: host.NewWindowFrames("main")}
+	seat := mygo.RectF{X: 475, Y: 388, W: 386, H: 516}
+	tabBox := mygo.RectF{X: 0, Y: 40, W: 200, H: 300}
+	f.placeSurfaces(system, surface, []mygo.NativePlacement{
+		{View: 1, Box: seat, Clip: mygo.RectF{X: 475, Y: 388, W: 386, H: 245}},
+		{View: 2, Box: tabBox, Clip: tabBox},
+	})
+	if got, want := system.clips[surfaces[1]], []surfaceClip{{clipped: true, rect: mygo.RectF{X: 0, Y: 0, W: 386, H: 245}}}; !equalClips(got, want) {
+		t.Fatalf("the settings surface host has the clips %+v, want %+v", got, want)
+	}
+	if got, want := system.clips[surfaces[2]], []surfaceClip{{clipped: false}}; !equalClips(got, want) {
+		t.Fatalf("the tab surface host has the clips %+v, want %+v", got, want)
+	}
+	// A scroll that shows the whole seat removes the clip, and the same placement again sets nothing.
+	f.placeSurfaces(system, surface, []mygo.NativePlacement{{View: 1, Box: seat, Clip: seat}, {View: 2, Box: tabBox, Clip: tabBox}})
+	f.placeSurfaces(system, surface, []mygo.NativePlacement{{View: 1, Box: seat, Clip: seat}, {View: 2, Box: tabBox, Clip: tabBox}})
+	if got, want := system.clips[surfaces[1]], []surfaceClip{{clipped: true, rect: mygo.RectF{X: 0, Y: 0, W: 386, H: 245}}, {clipped: false}}; !equalClips(got, want) {
+		t.Fatalf("the settings surface host has the clips %+v, want %+v", got, want)
+	}
+}
+
+func equalClips(got, want []surfaceClip) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
 }

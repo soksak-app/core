@@ -842,6 +842,16 @@ func Functions(library uintptr) (abi.NativeFunctions, error) {
 		purego.RegisterFunc(&functions.MainSpSurfaceSeatOverModal, address)
 	}
 	{
+		address, err := purego.Dlsym(library, "main_sp_surface_set_clip")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_surface_set_clip: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_surface_set_clip: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.MainSpSurfaceSetClip, address)
+	}
+	{
 		address, err := purego.Dlsym(library, "main_sp_surface_set_window_overlays")
 		if err != nil {
 			return abi.NativeFunctions{}, fmt.Errorf("native API main_sp_surface_set_window_overlays: %w", err)

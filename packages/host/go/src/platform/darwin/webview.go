@@ -157,6 +157,10 @@ func (implementation) SetSurfaceBounds(surface unsafe.Pointer, x, y, width, heig
 	native.MainWebviewSetFrame(surface, float64(x), float64(y), float64(width), float64(height))
 }
 
+func (implementation) SetSurfaceClip(surface unsafe.Pointer, clipped bool, x, y, width, height float64) {
+	native.MainSpSurfaceSetClip(surface, clipped, x, y, width, height)
+}
+
 // SurfaceFrame returns the current region of a surface. The host fits the declared region to pixels, so
 // it can differ from the region that the page sent, and the page receives that difference.
 func (implementation) SurfaceFrame(surface unsafe.Pointer) platform.Rect {

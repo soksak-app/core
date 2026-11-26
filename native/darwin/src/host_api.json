@@ -83,6 +83,7 @@
     "main_sp_surface_focus_for_region",
     "main_sp_surface_mark_dialog",
     "main_sp_surface_seat_over_modal",
+    "main_sp_surface_set_clip",
     "main_sp_surface_set_window_overlays",
     "main_sp_view_import_map_set",
     "main_sp_webview_collect_garbage",

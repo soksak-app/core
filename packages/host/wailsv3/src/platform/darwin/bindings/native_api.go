@@ -154,6 +154,9 @@ func Functions() abi.NativeFunctions {
 		MainSpSurfaceSeatOverModal: func(a0 unsafe.Pointer, a1 unsafe.Pointer, a2 float64, a3 float64, a4 float64, a5 float64) bool {
 			return bool(C.main_sp_surface_seat_over_modal(a0, a1, C.double(a2), C.double(a3), C.double(a4), C.double(a5)))
 		},
+		MainSpSurfaceSetClip: func(a0 unsafe.Pointer, a1 bool, a2 float64, a3 float64, a4 float64, a5 float64) {
+			C.main_sp_surface_set_clip(a0, C.bool(a1), C.double(a2), C.double(a3), C.double(a4), C.double(a5))
+		},
 		MainSpSurfaceSetWindowOverlays: func(a0 unsafe.Pointer, a1 *float64, a2 uint64) {
 			C.main_sp_surface_set_window_overlays(a0, (*C.double)(unsafe.Pointer(a1)), C.size_t(a2))
 		},
