@@ -17,6 +17,11 @@ void sp_surface_mark_dialog(void *surface);
 // window of the host. Call it on the main thread, before the frame of the host is set, because the frame of the host is relative to
 // its container.
 bool sp_surface_seat_over_modal(void *surface, void *modal, double x, double y, double width, double height);
+// Passes a wheel event that the page of the web view did not use to the content behind it: a document region to the web view of its
+// surface, the web view of a surface over the modal to the modal web view, and the web view of another surface to the main web view
+// of the window or the view that draws its workbench. Answers false for a web view outside every surface host and for a dialog host,
+// whose content behind it is not the content of the dialog (docs/spec/native-surfaces.md#unused-wheels).
+bool sp_surface_pass_unused_wheel(void *webview, void *event);
 // Clips the surface host to the rectangle x, y, width, height in its own bounds, top left origin, when clipped is true, and removes the
 // clip when it is false: the host and every view in it, such as its native plane and the document regions there, draw only inside the
 // rectangle. A window without a main page places a surface host at the box of its native view element and clips it to the part of the

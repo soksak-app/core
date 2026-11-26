@@ -554,6 +554,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1209",
+    implementation: [
+      { file: "native/darwin/src/webview_geometry.m", symbol: "bool sp_surface_pass_unused_wheel(void *webviewHandle, void *eventHandle) {" },
+      { file: "native/darwin/src/webview_dialogs.m", symbol: "- (void)_webView:(WKWebView *)webView didNotHandleWheelEvent:(NSEvent *)event {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/webview_geometry_test.m", id: "checkUnusedWheel" },
+    ],
+    expected: "A wheel that the page of a surface does not use scrolls the content behind the surface, and a dialog host passes none.",
+    levels: ["unit"],
+  },
+  {
     id: "F1207",
     implementation: [
       { file: "packages/workbench-mygo/src/settings_draw.go", symbol: "func settingsSeatHeight(w *settingsWindow, pane settingsPane) float32 {" },

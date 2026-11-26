@@ -2,6 +2,8 @@
 #import "application_log.h"
 #import "observe.h"
 #import "webview_dialogs.h"
+#import "webview_geometry.h"
+#import "private/webkit.h"
 
 // A request of a held window that waits for its answer, or a download whose answer waits for its end.
 @interface SPDialogRequest : NSObject {
@@ -304,7 +306,16 @@ static BOOL isAttachment(WKNavigationResponse *response) {
 // The route answers each method with a handler itself, as the navigation route does.
 - (BOOL)handles:(SEL)selector {
     return selector == @selector(webView:runOpenPanelWithParameters:initiatedByFrame:completionHandler:) ||
-        selector == @selector(webView:requestMediaCapturePermissionForOrigin:initiatedByFrame:type:decisionHandler:);
+        selector == @selector(webView:requestMediaCapturePermissionForOrigin:initiatedByFrame:type:decisionHandler:) ||
+        selector == @selector(_webView:didNotHandleWheelEvent:);
+}
+
+// A wheel that the page did not use goes to the content behind the surface of the web view; a web view outside every surface
+// gives it to the framework delegate (docs/spec/native-surfaces.md#unused-wheels).
+- (void)_webView:(WKWebView *)webView didNotHandleWheelEvent:(NSEvent *)event {
+    if (sp_surface_pass_unused_wheel(webView, event)) return;
+    id current = self.target;
+    if ([current respondsToSelector:_cmd]) [(id<SPUIDelegateUnusedWheel>)current _webView:webView didNotHandleWheelEvent:event];
 }
 
 - (void)webView:(WKWebView *)webView requestMediaCapturePermissionForOrigin:(WKSecurityOrigin *)origin

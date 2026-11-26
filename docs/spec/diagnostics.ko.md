@@ -156,6 +156,7 @@ Still은 녹화 창과 그 child window를 window server가 합성한 그대로 
 | image region이 프레임을 표시할 수 없거나, region의 입력기가 적용할 수 없는 텍스트를 받는다 | `error native image region: <reason> (state <state>)`, `error native input method: <reason>: state <state>`. region은 이 실패를 page에도 type이 `error`인 event로 알린다 |
 | 표면 배치의 문서 완료를 기다리다 실패한다 | `error native surface settle: DOM completion failed: <reason>` |
 | 창의 키보드를 surface나 워크벤치로 옮길 수 없다. view가 창에 없거나, 키보드를 받는 view가 없거나, view가 거부한다 | `error native surface keyboard: <reason>` |
+| surface의 page가 쓰지 않은 wheel을 받을 view가 surface host 뒤에 없다 | `error native surface wheel: <reason>` |
 | native 호출이 입력을 거부하거나 플랫폼이 거부한다. 대상은 web view의 appearance, clipboard, dock menu, file drop, input source, link, surface, web view의 WebContent process, 창이 가려진 동안의 web view 렌더링, 창의 controls, 창의 facts와 menu다 | `error native appearance`, `error native clipboard`, `error native dock menu`, `error native file drop`, `error native input source`, `error native link`, `error native surface`, `error native webview process`, `error native webview rendering`, `error native window controls`, `error native window facts`, `error native window color-space facts`. 각각 뒤에 `: <reason>`이 붙는다 |
 | native 진입점이 등록을 거부한다 (handler 없음, 대상 없음, 유효하지 않은 source 이름, 플랫폼이 token을 돌려주지 않음) | level `error`인 event `native.observe.failed`에 `source`, 등록의 `kind`, `reason`이 붙는다. 성공한 등록은 event `native.observe.registered`다 |
 | process의 종료 대기가 process가 끝나기 전에 그 요청의 연결, 그 창, 그 page로 끝난다 | level `info`인 event `native.process.exit_wait_ended`에 `pid`가 붙는다 |

@@ -675,6 +675,36 @@ bool sp_surface_seat_over_modal(void *handle, void *modalHandle, double x, doubl
     return true;
 }
 
+static NSView *frameworkKeyView(NSView *view);
+
+// The view that draws the content behind a surface host: the modal web view below the settings container, else the main web view of
+// the window or the view that draws its workbench.
+static NSView *behindSurface(SPSurfaceHost *host) {
+    NSView *container = host.superview;
+    if ([container isKindOfClass:SPSurfaceCoordinates.class] && ((SPSurfaceCoordinates *)container).overModal) {
+        NSArray<NSView *> *siblings = container.superview.subviews;
+        NSUInteger index = [siblings indexOfObjectIdenticalTo:container];
+        return index != NSNotFound && index > 0 ? siblings[index - 1] : nil;
+    }
+    NSWindow *window = host.window;
+    return (NSView *)sp_window_main_webview(window) ?: frameworkKeyView(window.contentView);
+}
+
+bool sp_surface_pass_unused_wheel(void *webviewHandle, void *eventHandle) {
+    NSCAssert(NSThread.isMainThread, @"surface hosts belong to the main thread");
+    NSView *source = (NSView *)webviewHandle;
+    NSEvent *event = (NSEvent *)eventHandle;
+    SPSurfaceHost *host = surfaceHost(source);
+    if (!host || host.dialogHost) return false;
+    NSView *target = source != host.webview && host.webview ? host.webview : behindSurface(host);
+    if (!target) {
+        sp_log_error("surface wheel", "the surface host has no view behind it that takes an unused wheel");
+        return false;
+    }
+    [target scrollWheel:event];
+    return true;
+}
+
 void sp_surface_set_clip(void *handle, bool clipped, double x, double y, double width, double height) {
     NSCAssert(NSThread.isMainThread, @"surface hosts belong to the main thread");
     SPSurfaceHost *host = (SPSurfaceHost *)handle;

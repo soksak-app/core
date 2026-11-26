@@ -650,6 +650,99 @@ static void checkHitTesting(WKWebView *main) {
     sp_surface_close(hiddenSurface);
 }
 
+// The CSS pixels that view scrolled after a wheel, read at its presentations until it moved or a bounded number of presentations
+// passed: a wheel that reaches no view of the check leaves view at 0.
+static double scrolledWithin(WKWebView *view, int presentations) {
+    for (int i = 0; i < presentations; i++) {
+        double top = [evaluate(view, @"document.scrollingElement.scrollTop") doubleValue];
+        if (top > 0) return top;
+        nextPresentation(view);
+    }
+    return [evaluate(view, @"document.scrollingElement.scrollTop") doubleValue];
+}
+
+// Sends a 120-point wheel to the point x, y from the top of the content view of the window.
+static void wheelAt(NSWindow *window, double x, double y) {
+    sp_input_result result = SP_INPUT_REJECTED, *resultRef = &result;
+    sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, x, y, 4, 0, 0, 120, 1, scrollDone, &result);
+    eventWait(@"the wheel completes", ^BOOL { return *resultRef != SP_INPUT_REJECTED; });
+    check(result == SP_INPUT_DELIVERED, [NSString stringWithFormat:@"the wheel at %g,%g is delivered", x, y]);
+}
+
+// contract: surface-host.passes-unused-wheel
+// A wheel that the page of a web view in a surface host does not use goes to the content behind it, as a wheel at the end of an
+// iframe scrolls its parent document: the web view of a surface passes it to the main web view of the window, the web view of a
+// settings surface over the modal to the modal web view, and a document region to the web view of its surface
+// (docs/spec/native-surfaces.md#unused-wheels).
+static void checkUnusedWheel(NSWindow *window, WKWebView *main) {
+    currentStep = __func__;
+    NSString *tall = @"<!doctype html><body style='margin:0'><div style='height:5000px'></div></body>";
+    NSString *shortPage = @"<!doctype html><body style='margin:0'>short</body>";
+    load(main, tall);
+    void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
+    WKWebView *view = [[[WKWebView alloc] initWithFrame:NSZeroRect] autorelease];
+    check(SPPlaceSurfaceView(surface, view), @"the unused wheel check places its web view");
+    webviewInputRegister(view);
+    load(view, shortPage);
+    webviewSetFrame(surface, 40, 30, 300, 200);
+    webviewSetSurfaceHidden(surface, false);
+    nextPresentation(view);
+    wheelAt(window, 190, 130);
+    double behind = scrolledWithin(main, 20);
+    check(behind > 0, [NSString stringWithFormat:@"a wheel that the page of a surface does not use scrolls the main web view behind it (%g)", behind]);
+
+    // A dialog host passes no wheel: the content behind it is not the content of the dialog.
+    load(main, tall);
+    sp_surface_mark_dialog(surface);
+    wheelAt(window, 190, 130);
+    double underDialog = scrolledWithin(main, 5);
+    check(underDialog == 0, [NSString stringWithFormat:@"a wheel that the page of a dialog host does not use scrolls nothing behind it (%g)", underDialog]);
+    sp_surface_unplace_view(view);
+    sp_surface_close(surface);
+    surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
+    check(SPPlaceSurfaceView(surface, view), @"the unused wheel check places its web view again");
+    webviewSetFrame(surface, 40, 30, 300, 200);
+    webviewSetSurfaceHidden(surface, false);
+
+    // The document region of a surface passes the wheel that its page does not use to the web view of the surface.
+    load(view, tall);
+    load(main, tall);
+    NSString *store = temporaryFolder(@"soksak-geometry-wheel-");
+    WKWebView *region = (WKWebView *)sp_document_create(surface, store.fileSystemRepresentation, NULL, NULL, NULL, NULL, false, ignoreState, NULL);
+    check(region != NULL, @"the unused wheel check creates a document region");
+    sp_document_place(region, 10, 10, 10, 10, true);
+    evaluate(region, @"document.body.style.margin = '0'; document.body.innerHTML = 'short'; null");
+    nextPresentation(region);
+    wheelAt(window, 190, 130);
+    double page = scrolledWithin(view, 20);
+    check(page > 0, [NSString stringWithFormat:@"a wheel that a document region does not use scrolls the web view of its surface (%g)", page]);
+    sp_document_close(region);
+    webviewInputUnregister(view);
+    sp_surface_unplace_view(view);
+    sp_surface_close(surface);
+
+    // A settings surface over the modal passes the wheel that its page does not use to the modal web view below its container.
+    WKWebView *modal = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 600, 400)] autorelease];
+    [window.contentView addSubview:modal positioned:NSWindowAbove relativeTo:nil];
+    load(modal, tall);
+    void *settings = sp_surface_create(sp_window_set_main_webview(main.window, main));
+    WKWebView *settingsView = [[[WKWebView alloc] initWithFrame:NSZeroRect] autorelease];
+    check(SPPlaceSurfaceView(settings, settingsView), @"the unused wheel check places the web view of the settings surface");
+    webviewInputRegister(settingsView);
+    load(settingsView, shortPage);
+    check(sp_surface_seat_over_modal(settings, modal, 40, 30, 300, 200), @"the settings surface seats over the modal");
+    webviewSetFrame(settings, 40, 30, 300, 200);
+    webviewSetSurfaceHidden(settings, false);
+    nextPresentation(settingsView);
+    wheelAt(window, 190, 130);
+    double over = scrolledWithin(modal, 20);
+    check(over > 0, [NSString stringWithFormat:@"a wheel that the page of a settings surface does not use scrolls the modal web view below it (%g)", over]);
+    webviewInputUnregister(settingsView);
+    sp_surface_unplace_view(settingsView);
+    sp_surface_close(settings);
+    [modal removeFromSuperview];
+}
+
 int main(void) { @autoreleasepool {
     [SPOverridingApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
@@ -815,6 +908,7 @@ int main(void) { @autoreleasepool {
             reference.absoluteString, expected, drops]);
     [board releaseGlobally];
 
+    checkUnusedWheel(window, main);
     [window close];
     [window release];
     return failures ? 1 : 0;

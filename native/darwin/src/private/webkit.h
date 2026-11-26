@@ -10,6 +10,13 @@
 - (void)_setRelatedWebView:(WKWebView *)relatedWebView;
 @end
 
+// WKUIDelegatePrivate.h (macOS): WebKit calls it on the UI delegate for a wheel event that the page did not use, at the end of the
+// scroll of the page or on a page without one; WebKit passes such an event to no other view.
+@protocol SPUIDelegateUnusedWheel <WKUIDelegate>
+@optional
+- (void)_webView:(WKWebView *)webView didNotHandleWheelEvent:(NSEvent *)event;
+@end
+
 // _WKInspector.h
 @protocol SPInspector <NSObject>
 - (void)connect;
