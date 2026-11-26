@@ -313,7 +313,6 @@ static void checkSettingsContainer(void) {
     [window release];
 }
 
-// contract: surface-host.fills-the-window-background
 // A window without a main page shows the surfaces below its settings window in the holes that it draws, so the settings surface
 // host fills itself with the background of its window, which the workbench sets to the color of the pane, and fills itself again when
 // the window changes its background; a host that stops filling shows what is below it again (docs/spec/native-surfaces.md#settings-seat).

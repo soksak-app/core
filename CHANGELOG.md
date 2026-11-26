@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1211: The contract table no longer lists the two behaviors of the native library alone that F1206 and F1209 added with the scope all; their native tests keep the checks, and the host inventory check passes again.
 - F1209: A wheel that the page of a surface does not use scrolls the content behind the surface: the pane of the settings window under a short or ended settings view, the web view of the surface under a document region, and the main web view or the workbench under other surfaces; a dialog host passes none.
 - F1208-1: Every declared workspace version names the core release 0.0.61, which publishes F1204, F1205, F1206 and F1207.
 - F1207: The seat of a settings view stands below the heading of the plugin page and takes the height that the pane leaves below it, so the whole page of the view and its end show inside the pane, and a wheel outside the view scrolls the pane; Red and Green in workbench-mygo and workbench unit tests.

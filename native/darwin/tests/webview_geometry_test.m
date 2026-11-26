@@ -669,7 +669,6 @@ static void wheelAt(NSWindow *window, double x, double y) {
     check(result == SP_INPUT_DELIVERED, [NSString stringWithFormat:@"the wheel at %g,%g is delivered", x, y]);
 }
 
-// contract: surface-host.passes-unused-wheel
 // A wheel that the page of a web view in a surface host does not use goes to the content behind it, as a wheel at the end of an
 // iframe scrolls its parent document: the web view of a surface passes it to the main web view of the window, the web view of a
 // settings surface over the modal to the modal web view, and a document region to the web view of its surface
