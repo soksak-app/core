@@ -281,14 +281,14 @@ View는 plugin이 선언한 프로그램을 view call `runtime.program.run`으�
 
 ### 계정 실행
 
-workbench는 plugin의 view가 실행되지 않는 settings window를 위해 plugin [계정](plugins.ko.md#accounts)의 프로그램을 실행한다. surface 대신 `{window, plugin, programs, run, name, args}`로 host 명령 `programRun`에 넘긴다. `programs`는 workbench가 `plugin.json`을 읽을 때 검증한 plugin의 member `programs`이고, `run`은 workbench가 고르는 양의 정수이며 창에서 그 plugin의 열린 실행 사이에서 유일하다. host 명령 `programCancel {window, plugin, run}`이 그런 실행을 취소한다.
+workbench는 plugin의 view가 실행되지 않는 settings window를 위해 plugin [계정](plugins.ko.md#accounts)의 프로그램을 실행한다. host 명령 `accountRun {plugin, programs, run, name, args}`에 넘기며, host는 그것을 page의 창에서 실행한다. `programs`는 workbench가 `plugin.json`을 읽을 때 검증한 plugin의 member `programs`이고, `run`은 workbench가 고르는 양의 정수이며 창에서 그 plugin의 열린 실행 사이에서 유일하다. host 명령 `accountRunCancel {plugin, run}`이 그런 실행을 취소하며, 열리지 않은 실행은 그대로 둔다.
 
 - host는 view 실행의 거부([프로그램 실행](#프로그램-실행))로 실행을 `programs`에 대조해 검사하고, 한 창에서 plugin의 열린 실행을 최대 네 개로 세어 `program run: <n> runs are open on plugin <plugin>`로 거부하며, 열린 실행을 가리키는 `run`은 `program run: run <run> is already open on plugin <plugin>`로 거부한다.
 - 프로그램의 작업 folder는 plugin data folder `<configuration directory>/plugin-data/<plugin id>`다. 실행에 project folder가 없으므로, `program`의 구분자가 있는 경로는 `program <name> must be a plugin path or a bare name in an account run`으로 거부된다. 창에 project가 없어도 된다.
-- 응답, 출력 한도, event는 view 실행과 같다. event는 `surface`와 `call` 대신 `plugin`과 `run`을 싣는다. 실행은 종료, `programCancel`, 창의 끝(`window-closed`)에서 끝난다.
-- host 명령 `accountHomes {plugin}`, `accountHomeCreate {plugin, id}`, `accountHomeRemove {plugin, id}`는 plugin data folder의 `accounts/`에 있는 folder 이름을 나열하고, folder `accounts/<id>`를 그 위 folder와 함께 mode 0700으로 만들고, 그 folder를 내용과 함께 지운다. `id`는 `^[a-z][a-z0-9-]{0,39}$`에 맞아야 하며, 다른 값은 `account home <id> is not an account identifier`로 거부된다. file system 실패는 `account home <id>: <reason>`로 답한다.
+- 응답, 출력 한도, event는 view 실행과 같다. event는 `surface`와 `call` 대신 `plugin`과 `run`을 싣는다. 실행은 종료, `accountRunCancel`, 창의 끝(`window-closed`)에서 끝난다.
+- host 명령 `accountHomes {plugin}`, `accountHomeCreate {plugin, id}`, `accountHomeRemove {plugin, id}`는 plugin data folder의 folder `accounts/`를 읽고 바꾼다. `accountHomes`는 `{folder, names}`로 답한다. `folder`는 `accounts/`의 절대 경로이고, `names`는 그 안 folder의 이름을 byte 순서로 담으며 `accounts/`가 없으면 비어 있다. `accountHomeCreate`는 folder `accounts/<id>`를 그 위 folder와 함께 mode 0700으로 만들고, `accountHomeRemove`는 그 folder를 내용과 함께 지우며 없으면 아무것도 바꾸지 않는다. 둘 다 `null`로 답한다. `plugin`은 `^[a-z][a-z0-9-]*$`에 맞아야 하며 다른 값은 `account home: plugin <plugin> is not a plugin identifier`로 거부되므로 어떤 경로도 data folder 밖으로 나가지 않는다. `id`는 `^[a-z][a-z0-9-]{0,39}$`에 맞아야 하며 다른 값은 `account home <id> is not an account identifier`로 거부된다. file system 실패는 `account home <id>: <reason>`로, `accountHomes`에서는 `account homes: <reason>`로 답한다.
 
-이유: settings window는 plugin의 계정을 core control로 그리고 plugin의 page를 실행하지 않으므로 workbench가 선언된 프로그램을 직접 실행하며, data folder는 모든 창에서 plugin에 속한 하나의 folder다.
+이유: settings window는 plugin의 계정을 core control로 그리고 plugin의 page를 실행하지 않으므로 workbench가 선언된 프로그램을 직접 실행하며, data folder는 모든 창에서 plugin에 속한 하나의 folder다. 계정 실행은 `programRun`의 두 번째 형식이 아니라 자기 host 명령을 갖는다. host는 형식의 member가 빠진 요청을 거부하므로([host 호출](native-host.ko.md#host-호출)), 두 형식을 갖는 한 명령은 선택 member와 형식마다 두 번째 검사가 필요하기 때문이다.
 
 ## Surface host container
 

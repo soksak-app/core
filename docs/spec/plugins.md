@@ -182,7 +182,7 @@ A plugin whose programs need the login of a person, such as an agent CLI, declar
 
 A record of another form fails the page with `plugin <id> data accounts: <reason>` through the error display. The home of an account is the folder `accounts/<id>` of the data folder of the plugin, which the workbench creates with mode 0700 before it stores the account and removes with the account; the CLI keeps its login in the home, and core holds no token.
 
-**Programs.** The workbench runs a program of `accounts` for the settings window, with no surface and no project: the host command `programRun` with the plugin in place of a surface ([program runs](native-surfaces.md#program-runs)), the arguments `<kind>` and `<home>`, the absolute path of the home, and the data folder of the plugin as its working folder.
+**Programs.** The workbench runs a program of `accounts` for the settings window, with no surface and no project: the host command `accountRun` ([account runs](native-surfaces.md#account-runs)), the arguments `<kind>` and `<home>`, the absolute path of the home, and the data folder of the plugin as its working folder.
 
 - `status` prints one JSON object `{login, until, usage}` and exits 0. `login` is `true`, `false`, or `null` for a kind without a login state; `until` is an ISO 8601 text of the end of the login, or `null`; `usage` is a list of `{label, used, resets}`, where `label` is 1 to 40 characters, `used` a number from 0 to 100, the percent of a limit that is used, and `resets` an ISO 8601 text of the next reset, or `null`.
 - `login` runs the login of the CLI in the home, which opens the default browser of the system; exit 0 is a finished login. 취소 cancels the run.

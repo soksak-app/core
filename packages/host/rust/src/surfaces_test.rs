@@ -157,6 +157,7 @@ mod declaration_table {
                 project: Some(project.path().to_path_buf()),
                 plugin_folder: Ok(project.path().join("plugin")),
                 environment: std::env::vars_os().collect(),
+                account: None,
             })
             .expect("the declared program of the sync surface runs");
         assert_eq!(finished.code, Some(0));

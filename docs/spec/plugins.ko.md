@@ -212,7 +212,7 @@ agent CLI처럼 프로그램이 사람의 login을 필요로 하는 plugin은 `p
 
 다른 형식의 기록은 error display를 통해 `plugin <id> data accounts: <reason>`로 page를 실패시킨다. 계정의 home은 plugin data folder의 folder `accounts/<id>`다. workbench는 계정을 저장하기 전에 mode 0700으로 그것을 만들고, 계정과 함께 지운다. CLI가 home에 login을 두며, core는 token을 갖지 않는다.
 
-**프로그램.** workbench는 settings window를 위해 surface와 project 없이 `accounts`의 프로그램을 실행한다. surface 대신 plugin을 받는 host 명령 `programRun`([program runs](native-surfaces.ko.md#프로그램-실행))으로, 인자 `<kind>`와 home의 절대 경로 `<home>`을 주고, plugin data folder를 작업 folder로 쓴다.
+**프로그램.** workbench는 settings window를 위해 surface와 project 없이 `accounts`의 프로그램을 실행한다. host 명령 `accountRun`([계정 실행](native-surfaces.ko.md#계정-실행))으로, 인자 `<kind>`와 home의 절대 경로 `<home>`을 주고, plugin data folder를 작업 folder로 쓴다.
 
 - `status`는 JSON object 하나 `{login, until, usage}`를 출력하고 0으로 끝난다. `login`은 `true`, `false`, 또는 login 상태가 없는 종류의 `null`이다. `until`은 login이 끝나는 시각의 ISO 8601 text 또는 `null`이다. `usage`는 `{label, used, resets}`의 목록이다. `label`은 1~40자, `used`는 한도 중 쓴 비율인 0~100의 수, `resets`는 다음 초기화 시각의 ISO 8601 text 또는 `null`이다.
 - `login`은 home에서 CLI의 login을 실행하며, CLI는 system 기본 browser를 연다. 0으로 끝나면 login이 끝난 것이다. 취소가 실행을 취소한다.

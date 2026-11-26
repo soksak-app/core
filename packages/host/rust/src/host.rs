@@ -54,6 +54,7 @@ pub mod endpoint_record;
 pub mod event_log;
 pub mod framework;
 pub use framework::{Framework, Frontend};
+pub mod account_run;
 pub mod event_record;
 pub mod event_relay;
 pub mod exposure;

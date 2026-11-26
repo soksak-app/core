@@ -433,6 +433,11 @@ func checkProgramRun(declared map[string]programDeclaration, plugin, name string
 	if project == nil {
 		return programRunSpec{}, fmt.Errorf("program run: the window shows no project")
 	}
+	return checkDeclaredRun(declared, plugin, name, args, project.Root)
+}
+
+// checkDeclaredRun checks a run against the declarations of its plugin and returns it with the working directory directory.
+func checkDeclaredRun(declared map[string]programDeclaration, plugin, name string, args []string, directory string) (programRunSpec, error) {
 	decl, ok := declared[name]
 	if !ok {
 		return programRunSpec{}, fmt.Errorf("program %s is not declared by %s", name, plugin)
@@ -458,13 +463,15 @@ func checkProgramRun(declared map[string]programDeclaration, plugin, name string
 	if args == nil {
 		args = []string{}
 	}
-	return programRunSpec{Program: decl.Program, Directory: project.Root, Args: args}, nil
+	return programRunSpec{Program: decl.Program, Directory: directory, Args: args}, nil
 }
 
-// programRunKey names one open run: the surface and the identifier of its view call.
+// programRunKey names one open run: the surface and the identifier of its view call, or for an account run the plugin and its
+// run (docs/spec/native-surfaces.md#account-runs).
 type programRunKey struct {
 	surface string
 	id      uint64
+	account bool
 }
 
 // programRuns holds the open runs of a window, with the cancel of each. Its zero value is ready to use.
@@ -481,14 +488,8 @@ func (r *programRuns) begin(surface string, id uint64, cancel context.CancelCaus
 	if r.open == nil {
 		r.open = map[programRunKey]context.CancelCauseFunc{}
 	}
-	key := programRunKey{surface, id}
-	count := 0
-	for other := range r.open {
-		if other.surface == surface {
-			count++
-		}
-	}
-	if count >= programRunsPerSurface {
+	key := programRunKey{surface: surface, id: id}
+	if r.count(key) >= programRunsPerSurface {
 		return fmt.Errorf("program run: %d runs are open on surface %s", programRunsPerSurface, surface)
 	}
 	if _, ok := r.open[key]; ok {
@@ -498,17 +499,56 @@ func (r *programRuns) begin(surface string, id uint64, cancel context.CancelCaus
 	return nil
 }
 
-// finish removes a run that ended.
-func (r *programRuns) finish(surface string, id uint64) {
+// beginAccount records an account run of plugin as open. It refuses a run whose identifier is open already, and the run that would
+// exceed programRunsPerSurface open account runs of the plugin; the runs of surfaces are not counted.
+func (r *programRuns) beginAccount(plugin string, run uint64, cancel context.CancelCauseFunc) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	delete(r.open, programRunKey{surface, id})
+	if r.open == nil {
+		r.open = map[programRunKey]context.CancelCauseFunc{}
+	}
+	key := programRunKey{surface: plugin, id: run, account: true}
+	if r.count(key) >= programRunsPerSurface {
+		return fmt.Errorf("program run: %d runs are open on plugin %s", programRunsPerSurface, plugin)
+	}
+	if _, ok := r.open[key]; ok {
+		return fmt.Errorf("program run: run %d is already open on plugin %s", run, plugin)
+	}
+	r.open[key] = cancel
+	return nil
 }
 
-// cancel ends one open run with ProgramCancelled. A run that is not open is left alone.
-func (r *programRuns) cancel(surface string, id uint64) {
+// count returns the number of open runs of the owner of key. The caller holds the lock.
+func (r *programRuns) count(key programRunKey) int {
+	count := 0
+	for other := range r.open {
+		if other.surface == key.surface && other.account == key.account {
+			count++
+		}
+	}
+	return count
+}
+
+// finish removes a run that ended.
+func (r *programRuns) finish(key programRunKey) {
 	r.mu.Lock()
-	cancel := r.open[programRunKey{surface, id}]
+	defer r.mu.Unlock()
+	delete(r.open, key)
+}
+
+// cancel ends the open run of a view call with ProgramCancelled. A run that is not open is left alone.
+func (r *programRuns) cancel(surface string, id uint64) {
+	r.cancelKey(programRunKey{surface: surface, id: id})
+}
+
+// cancelAccount ends the open account run of plugin with ProgramCancelled. A run that is not open is left alone.
+func (r *programRuns) cancelAccount(plugin string, run uint64) {
+	r.cancelKey(programRunKey{surface: plugin, id: run, account: true})
+}
+
+func (r *programRuns) cancelKey(key programRunKey) {
+	r.mu.Lock()
+	cancel := r.open[key]
 	r.mu.Unlock()
 	if cancel != nil {
 		cancel(ProgramCancelled)
@@ -520,7 +560,7 @@ func (r *programRuns) end(surface string, cause ProgramEnd) {
 	r.mu.Lock()
 	var cancels []context.CancelCauseFunc
 	for key, cancel := range r.open {
-		if key.surface == surface {
+		if key.surface == surface && !key.account {
 			cancels = append(cancels, cancel)
 		}
 	}
@@ -594,26 +634,40 @@ func (h *Host) ProgramRun(ctx context.Context, reqJSON json.RawMessage) (Program
 	if err := s.programs.begin(req.Surface, req.ID, cancel); err != nil {
 		return ProgramRunReply{}, refuseProgramRun(req.Surface, view, req.Name, err)
 	}
-	defer s.programs.finish(req.Surface, req.ID)
+	defer s.programs.finish(programRunKey{surface: req.Surface, id: req.ID})
+	return s.executeProgramRun(runContext, map[string]any{"plugin": view.plugin, "surface": req.Surface, "name": req.Name}, view.plugin, req.Name, spec)
+}
+
+// executeProgramRun starts the checked run spec of a declared program of plugin, writes its events with the fields owner, which
+// name the plugin, the surface or the account run and the declared name, and answers the exit of the program.
+func (s *Surfaces) executeProgramRun(runContext context.Context, owner map[string]any, plugin, name string, spec programRunSpec) (ProgramRunReply, error) {
+	fields := func(more map[string]any) map[string]any {
+		out := map[string]any{}
+		for key, value := range owner {
+			out[key] = value
+		}
+		for key, value := range more {
+			out[key] = value
+		}
+		return out
+	}
 	environment, err := s.sidecars.environment()
 	if err != nil {
-		return ProgramRunReply{}, fmt.Errorf("program %s: environment: %w", req.Name, err)
+		return ProgramRunReply{}, fmt.Errorf("program %s: environment: %w", name, err)
 	}
 	// A program of the form plugin:<path> resolves in the installed version folder of the plugin, which the view folder uses.
 	folder := ""
 	if strings.HasPrefix(spec.Program, sok.ProgramPluginPrefix) {
-		folder, err = PluginFolder(s.sidecars.configDir, view.plugin)
+		folder, err = PluginFolder(s.sidecars.configDir, plugin)
 		if err != nil {
-			EmitHost(LevelError, "host.program.failed", map[string]any{"plugin": view.plugin, "surface": req.Surface, "name": req.Name, "reason": err.Error()})
+			EmitHost(LevelError, "host.program.failed", fields(map[string]any{"reason": err.Error()}))
 			return ProgramRunReply{}, err
 		}
 	}
 	outcome, err := RunProgram(runContext, ProgramRun{
-		Name: req.Name, Program: spec.Program, Args: spec.Args, Directory: spec.Directory, Environment: environment, PluginFolder: folder,
+		Name: name, Program: spec.Program, Args: spec.Args, Directory: spec.Directory, Environment: environment, PluginFolder: folder,
 		OnStart: func(int) {
-			EmitHost(LevelInfo, "host.program.start", map[string]any{
-				"plugin": view.plugin, "surface": req.Surface, "name": req.Name, "program": spec.Program, "args": spec.Args, "cwd": spec.Directory,
-			})
+			EmitHost(LevelInfo, "host.program.start", fields(map[string]any{"program": spec.Program, "args": spec.Args, "cwd": spec.Directory}))
 		},
 	})
 	if outcome.Result != "" {
@@ -621,14 +675,14 @@ func (h *Host) ProgramRun(ctx context.Context, reqJSON json.RawMessage) (Program
 		if outcome.Signal != "" {
 			signal = outcome.Signal
 		}
-		EmitHost(LevelInfo, "host.program.end", map[string]any{
-			"plugin": view.plugin, "surface": req.Surface, "name": req.Name, "result": outcome.Result, "code": outcome.Code, "signal": signal,
+		EmitHost(LevelInfo, "host.program.end", fields(map[string]any{
+			"result": outcome.Result, "code": outcome.Code, "signal": signal,
 			"stdoutBytes": outcome.StdoutBytes, "stderrBytes": outcome.StderrBytes,
 			"stdoutTruncated": outcome.StdoutTruncated, "stderrTruncated": outcome.StderrTruncated, "durationUs": outcome.Duration.Microseconds(),
-		})
+		}))
 	}
 	if err != nil {
-		EmitHost(LevelError, "host.program.failed", map[string]any{"plugin": view.plugin, "surface": req.Surface, "name": req.Name, "reason": err.Error()})
+		EmitHost(LevelError, "host.program.failed", fields(map[string]any{"reason": err.Error()}))
 		return ProgramRunReply{}, err
 	}
 	if outcome.Result != "exited" {

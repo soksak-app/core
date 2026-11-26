@@ -474,6 +474,65 @@ async fn program_run(
     .await
 }
 
+/// Runs an account program of a plugin in the window (docs/spec/native-surfaces.md#account-runs). The answer is the reply of an
+/// exit, and null for a run that ended before its exit.
+#[tauri::command]
+async fn account_run(
+    window: Window,
+    request: Argument<soksak_host::program_run::AccountRunCall>,
+) -> Result<Option<serde_json::Value>, String> {
+    let Argument(request) = request;
+    blocking(move || {
+        let data = soksak_host::windows::window_data(&window)?;
+        let sidecars = window.state::<WindowSidecars>();
+        let environment = sidecars.program_environment()?;
+        documents::account_run(&data, environment, &sidecars.config_directory(), request)
+    })
+    .await
+}
+
+/// Ends the open account run of a plugin (docs/spec/native-surfaces.md#account-runs).
+#[tauri::command]
+fn account_run_cancel(
+    window: Window,
+    request: Argument<soksak_host::program_run::AccountRunCancelCall>,
+) -> Result<(), String> {
+    let Argument(request) = request;
+    let data = soksak_host::windows::window_data(&window)?;
+    documents::account_run_cancel(&data, request);
+    Ok(())
+}
+
+/// Answers the folder accounts/ of the data folder of a plugin and the names of its folders.
+#[tauri::command]
+fn account_homes(
+    window: Window,
+    request: Argument<soksak_host::account_run::HomesCall>,
+) -> Result<serde_json::Value, String> {
+    let Argument(request) = request;
+    soksak_host::account_run::homes(&window.state::<WindowSidecars>().config_directory(), &request.plugin)
+}
+
+/// Creates the home of an account of a plugin.
+#[tauri::command]
+fn account_home_create(
+    window: Window,
+    request: Argument<soksak_host::account_run::HomeCall>,
+) -> Result<(), String> {
+    let Argument(request) = request;
+    soksak_host::account_run::create(&window.state::<WindowSidecars>().config_directory(), &request.plugin, &request.id)
+}
+
+/// Removes the home of an account of a plugin with its content.
+#[tauri::command]
+fn account_home_remove(
+    window: Window,
+    request: Argument<soksak_host::account_run::HomeCall>,
+) -> Result<(), String> {
+    let Argument(request) = request;
+    soksak_host::account_run::remove(&window.state::<WindowSidecars>().config_directory(), &request.plugin, &request.id)
+}
+
 /// Ends the open run of a view call (docs/spec/native-surfaces.md#program-runs).
 #[tauri::command]
 fn program_cancel(

@@ -1648,6 +1648,15 @@ fn invalid_json_closes_connection() {
 | `program.run.accepts-matching-arguments` | 인자가 text slot과 같고 pattern slot에 전체로 맞는 run은 선언된 program을 그 인자로 project 폴더에서 시작한다. | all |
 | `program.run.cancel-is-idempotent` | 같은 run의 두 번째 cancel이나 열려 있지 않은 식별자의 cancel은 아무것도 바꾸지 않으며, run은 결과 `cancelled`로 한 번 끝난다. | all |
 | `program.run.call-id-is-an-integer` | run과 cancel call의 `id`는 view call의 정수 식별자이고, `id`가 text인 call은 decode할 때 거부된다. | all |
+| `account.run.working-folder-is-the-plugin-data-folder` | account run은 project 없는 창에서도 plugin data folder에서, pattern slot이 받아들이는 인자로 시작한다. | all |
+| `account.run.refuses-a-path-program` | `program`에 구분자가 있고 `plugin:` 경로가 아닌 선언된 프로그램의 account run은 `program <name> must be a plugin path or a bare name in an account run`으로 거부된다. | all |
+| `account.run.refuses-fifth-open-run` | 창에서 plugin의 다섯 번째 열린 account run은 `program run: 4 runs are open on plugin <plugin>`로 거부되며, 다른 plugin과 surface의 실행은 세지 않는다. | all |
+| `account.run.refuses-an-open-run-identifier` | `run`이 plugin의 열린 실행을 가리키는 account run은 `program run: run <run> is already open on plugin <plugin>`로 거부된다. | all |
+| `account.run.cancel-is-idempotent` | `accountRunCancel`은 열린 account run을 결과 `cancelled`로 끝낸다. 두 번째 cancel이나 열리지 않은 실행의 cancel은 아무것도 바꾸지 않는다. | all |
+| `account.run.window-close-ends-the-run` | 창의 끝은 열린 account run을 각각 결과 `window-closed`로 끝내고, surface의 끝은 어느 것도 끝내지 않는다. | all |
+| `account.home.lists-the-folders` | `accountHomes`는 plugin data folder의 `accounts/` 절대 경로와 그 안 folder 이름을 byte 순서로 답하며, `accounts/`가 없으면 이름이 없다. | all |
+| `account.home.creates-a-private-folder` | `accountHomeCreate`는 `accounts/<id>`를 mode 0700으로 만들고, `accountHomeRemove`는 그것을 내용과 함께 지우며 없으면 아무것도 바꾸지 않는다. | all |
+| `account.home.refuses-an-identifier` | `id`가 `^[a-z][a-z0-9-]{0,39}$`에 맞지 않는 account home은 `account home <id> is not an account identifier`로, plugin 식별자가 아닌 `plugin`은 `account home: plugin <plugin> is not a plugin identifier`로 거부된다. | all |
 | `sidecars.environment.start-records-the-sok-folder` | 설치된 sidecar의 sidecar channel의 시작은 level `info`의 event `host.sidecar.path` 하나를 기록하고, 그 `folder`는 host 실행 파일의 폴더이며 `sok`은 그 폴더의 `sok`이다. | all |
 
 ## Workbench cases

@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1215-3: The Go and Rust hosts run the account programs of a plugin with `accountRun` and `accountRunCancel` in the data folder of the plugin, apart from the runs of the surfaces, and serve `accountHomes`, `accountHomeCreate` and `accountHomeRemove`; the `host.program` events of an account run carry `run` instead of `surface`.
 - F1210-5: The Rust notice test of the plugin keys stands in `packages/host/rust/src/plugin_data_notice_test.rs`, beside the Go test of the same name, so the host file check passes.
 - F1215-2: The plugin.json checks of the plugin SDK and of the Go and Rust `sok` check the member `accounts`: its kinds, its programs `status`, `login` and `logout`, which must be declared programs with two pattern arguments, and the data key `accounts` with the scope plugin and the default `[]`, and refuse another form with `plugin <id>: accounts <reason>`.
 - F1215-1: The specification states the accounts of a plugin: the manifest member `accounts`, the records `{id, name, kind}` of the plugin key `accounts`, the account homes, the runs of the programs `status`, `login` and `logout` without a surface, the commands `core.accounts.*`, the status `core.accounts` and the group 계정 of the plugin page.

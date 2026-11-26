@@ -98,6 +98,33 @@ pub struct Request {
     pub plugin_folder: Result<PathBuf, String>,
     /// The complete environment of the program as name and value pairs.
     pub environment: Vec<(OsString, OsString)>,
+    /// The programs declaration of an account run, whose `surface` is the plugin, `id` the run and `project` the data folder of
+    /// the plugin (docs/spec/native-surfaces.md#account-runs); None for the run of a view call.
+    pub account: Option<Declarations>,
+}
+
+impl Request {
+    /// The fields of the events of the run: the plugin, the surface of a view run or the run of an account run, and the name.
+    fn owner(&self) -> serde_json::Map<String, Value> {
+        let mut fields = serde_json::Map::new();
+        fields.insert("plugin".into(), json!(self.plugin));
+        if self.account.is_some() {
+            fields.insert("run".into(), json!(self.id));
+        } else {
+            fields.insert("surface".into(), json!(self.surface));
+        }
+        fields.insert("name".into(), json!(self.name));
+        fields
+    }
+
+    /// The owner fields with more.
+    fn fields(&self, more: Value) -> Value {
+        let mut fields = self.owner();
+        if let Value::Object(more) = more {
+            fields.extend(more);
+        }
+        Value::Object(fields)
+    }
 }
 
 /// A message to the thread that runs a program: its exit, or the cause that ends it.
@@ -124,6 +151,8 @@ struct SurfaceRuns {
 #[derive(Default)]
 pub struct ProgramRuns {
     surfaces: Mutex<BTreeMap<String, SurfaceRuns>>,
+    /// The open account runs of each plugin (docs/spec/native-surfaces.md#account-runs), apart from the runs of the surfaces.
+    accounts: Mutex<BTreeMap<String, SurfaceRuns>>,
 }
 
 /// The token of each run, which tells runs of one call identifier apart.
@@ -135,9 +164,19 @@ impl ProgramRuns {
     }
 
     fn lock(&self) -> MutexGuard<'_, BTreeMap<String, SurfaceRuns>> {
+        self.table(false)
+    }
+
+    /// The runs of the surfaces, or the account runs of the plugins when account is true.
+    fn table(&self, account: bool) -> MutexGuard<'_, BTreeMap<String, SurfaceRuns>> {
+        let table = if account {
+            &self.accounts
+        } else {
+            &self.surfaces
+        };
         // default: a lock that a panicking thread poisoned still holds the declarations and the open runs, which the panic
         // hook records.
-        self.surfaces.lock().unwrap_or_else(PoisonError::into_inner)
+        table.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     /// Stores the declared programs of surface of plugin, which replace the declarations of the surface.
@@ -159,18 +198,18 @@ impl ProgramRuns {
                 emit_host(
                     Level::Error,
                     "host.program.refused",
-                    json!({
-                        "plugin": request.plugin,
-                        "surface": request.surface,
-                        "name": request.name,
-                        "reason": reason,
-                    }),
+                    request.fields(json!({ "reason": reason })),
                 );
                 return Err(reason);
             }
         };
         let result = execute(&request, &declaration, sender, receiver);
-        self.leave(&request.surface, request.id, token);
+        self.leave(
+            request.account.is_some(),
+            &request.surface,
+            request.id,
+            token,
+        );
         result
     }
 
@@ -184,24 +223,33 @@ impl ProgramRuns {
         if request.project.is_none() {
             return Err("program run: the window shows no project".to_string());
         }
-        let mut surfaces = self.lock();
+        let account = request.account.is_some();
+        let mut surfaces = self.table(account);
         let not_declared = || {
             format!(
                 "program {} is not declared by {}",
                 request.name, request.plugin
             )
         };
-        let state = surfaces
-            .get(&request.surface)
-            .ok_or_else(|| format!("program run: surface {} has no view", request.surface))?;
-        if state.plugin != request.plugin {
-            return Err(not_declared());
-        }
-        let declaration = state
-            .declarations
-            .get(&request.name)
-            .cloned()
-            .ok_or_else(not_declared)?;
+        let declaration = match &request.account {
+            Some(declarations) => declarations
+                .get(&request.name)
+                .cloned()
+                .ok_or_else(not_declared)?,
+            None => {
+                let state = surfaces.get(&request.surface).ok_or_else(|| {
+                    format!("program run: surface {} has no view", request.surface)
+                })?;
+                if state.plugin != request.plugin {
+                    return Err(not_declared());
+                }
+                state
+                    .declarations
+                    .get(&request.name)
+                    .cloned()
+                    .ok_or_else(not_declared)?
+            }
+        };
         if declaration.slots.len() != request.args.len() {
             return Err(format!(
                 "program {} takes {} arguments, {} given",
@@ -235,22 +283,46 @@ impl ProgramRuns {
                 }
             }
         }
-        let open = state.open.len();
+        // An account run has no project folder, so its program is a plugin path or a bare name.
+        if account
+            && !declaration.program.starts_with(PLUGIN_PROGRAM_PREFIX)
+            && declaration.program.contains('/')
+        {
+            return Err(format!(
+                "program {} must be a plugin path or a bare name in an account run",
+                request.name
+            ));
+        }
+        let (owner, call) = if account {
+            ("plugin", "run")
+        } else {
+            ("surface", "call")
+        };
+        let open = surfaces
+            .get(&request.surface)
+            .map_or(0, |state| state.open.len());
         if open >= RUNS_PER_SURFACE {
             return Err(format!(
-                "program run: {RUNS_PER_SURFACE} runs are open on surface {}",
+                "program run: {RUNS_PER_SURFACE} runs are open on {owner} {}",
                 request.surface
             ));
         }
-        if state.open.contains_key(&request.id) {
+        if surfaces
+            .get(&request.surface)
+            .is_some_and(|state| state.open.contains_key(&request.id))
+        {
             return Err(format!(
-                "program run: call {} is already open on surface {}",
+                "program run: {call} {} is already open on {owner} {}",
                 request.id, request.surface
             ));
         }
-        let state = surfaces
-            .get_mut(&request.surface)
-            .ok_or_else(not_declared)?;
+        let state = if account {
+            surfaces.entry(request.surface.clone()).or_default()
+        } else {
+            surfaces
+                .get_mut(&request.surface)
+                .ok_or_else(not_declared)?
+        };
         state.open.insert(
             request.id,
             Open {
@@ -262,8 +334,8 @@ impl ProgramRuns {
     }
 
     /// Removes the open run of id when it is the run of token, and removes the surface when it holds nothing.
-    fn leave(&self, surface: &str, id: u64, token: u64) {
-        let mut surfaces = self.lock();
+    fn leave(&self, account: bool, surface: &str, id: u64, token: u64) {
+        let mut surfaces = self.table(account);
         if let Some(state) = surfaces.get_mut(surface)
             && state.open.get(&id).is_some_and(|open| open.token == token)
         {
@@ -274,7 +346,12 @@ impl ProgramRuns {
 
     /// Sends the cause to the open runs of surface, or to the open run id only.
     fn end_runs(&self, surface: &str, id: Option<u64>, cause: End) {
-        let surfaces = self.lock();
+        self.end_runs_in(false, surface, id, cause);
+    }
+
+    /// Sends the cause to the open runs of surface, or of the plugin of account runs, or to the open run id only.
+    fn end_runs_in(&self, account: bool, surface: &str, id: Option<u64>, cause: End) {
+        let surfaces = self.table(account);
         let Some(state) = surfaces.get(surface) else {
             return;
         };
@@ -305,11 +382,20 @@ impl ProgramRuns {
         self.close(surface, End::SurfaceClosed);
     }
 
-    /// Ends the open runs of every surface with End::WindowClosed and removes their declarations.
+    /// Ends the open account run of plugin with End::Cancelled. A cancel of a run that is not open does nothing.
+    pub fn cancel_account(&self, plugin: &str, run: u64) {
+        self.end_runs_in(true, plugin, Some(run), End::Cancelled);
+    }
+
+    /// Ends the open runs of every surface and every account run with End::WindowClosed and removes their declarations.
     pub fn end_window(&self) {
         let surfaces: Vec<String> = self.lock().keys().cloned().collect();
         for surface in surfaces {
             self.close(&surface, End::WindowClosed);
+        }
+        let plugins: Vec<String> = self.table(true).keys().cloned().collect();
+        for plugin in plugins {
+            self.end_runs_in(true, &plugin, None, End::WindowClosed);
         }
     }
 
@@ -514,12 +600,7 @@ fn execute(
         emit_host(
             Level::Error,
             "host.program.failed",
-            json!({
-                "plugin": request.plugin,
-                "surface": request.surface,
-                "name": request.name,
-                "reason": reason,
-            }),
+            request.fields(json!({ "reason": reason })),
         );
     };
     let Some(directory) = request.project.as_deref() else {
@@ -550,14 +631,11 @@ fn execute(
     emit_host(
         Level::Info,
         "host.program.start",
-        json!({
-            "plugin": request.plugin,
-            "surface": request.surface,
-            "name": request.name,
+        request.fields(json!({
             "program": declaration.program,
             "args": request.args,
             "cwd": directory.to_string_lossy(),
-        }),
+        })),
     );
     let pid = child.id();
     let (stdout, stderr) = match (child.stdout.take(), child.stderr.take()) {
@@ -603,10 +681,7 @@ fn execute(
     emit_host(
         Level::Info,
         "host.program.end",
-        json!({
-            "plugin": request.plugin,
-            "surface": request.surface,
-            "name": request.name,
+        request.fields(json!({
             "result": ran.finished.end.map_or("exited", End::name),
             "code": ran.finished.code,
             "signal": ran.finished.signal,
@@ -616,7 +691,7 @@ fn execute(
             "stderrTruncated": ran.finished.stderr.truncated,
             // default: a duration beyond u64::MAX microseconds, about 584,000 years, is reported as u64::MAX.
             "durationUs": u64::try_from(ran.finished.duration.as_micros()).unwrap_or(u64::MAX),
-        }),
+        })),
     );
     match ran.invalid {
         Some(reason) => {
@@ -857,6 +932,25 @@ pub struct RunCall {
     pub id: u64,
     pub name: String,
     pub args: Vec<String>,
+}
+
+/// An account run, as the workbench sends it to the host command accountRun (docs/spec/native-surfaces.md#account-runs).
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AccountRunCall {
+    pub plugin: String,
+    pub programs: Value,
+    pub run: u64,
+    pub name: String,
+    pub args: Vec<String>,
+}
+
+/// The cancel of an account run, as the workbench sends it to the host command accountRunCancel.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AccountRunCancelCall {
+    pub plugin: String,
+    pub run: u64,
 }
 
 /// The cancel of a view call, as the page sends it to the host command programCancel.

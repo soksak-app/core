@@ -4193,6 +4193,7 @@ pub fn program_run(
         project,
         plugin_folder,
         environment,
+        account: None,
     };
     let finished = data.program_runs.run(request)?;
     Ok(crate::program_run::reply(&finished))
@@ -4201,6 +4202,67 @@ pub fn program_run(
 /// Ends the open run of a view call of its surface (docs/spec/native-surfaces.md#program-runs).
 pub fn program_cancel(data: &crate::windows::WindowData, call: crate::program_run::CancelCall) {
     data.program_runs.cancel(&call.surface, call.id);
+}
+
+/// Runs an account program of a plugin in the window, in the data folder of the plugin
+/// (docs/spec/native-surfaces.md#account-runs). It answers the reply of an exit, and None for a run that ended before its exit.
+pub fn account_run(
+    data: &crate::windows::WindowData,
+    environment: Vec<(std::ffi::OsString, std::ffi::OsString)>,
+    config: &std::path::Path,
+    call: crate::program_run::AccountRunCall,
+) -> Result<Option<serde_json::Value>, String> {
+    let refuse = |reason: String| {
+        crate::event_record::emit_host(
+            crate::event_log::Level::Error,
+            "host.program.refused",
+            serde_json::json!({"plugin": call.plugin, "run": call.run, "name": call.name, "reason": reason}),
+        );
+        reason
+    };
+    if call.run == 0 {
+        return Err(refuse(
+            "program run: run must be a positive integer".to_string(),
+        ));
+    }
+    let valid_plugin = call
+        .plugin
+        .as_bytes()
+        .first()
+        .is_some_and(u8::is_ascii_lowercase)
+        && call
+            .plugin
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-');
+    if !valid_plugin {
+        return Err(refuse(format!(
+            "account home: plugin {} is not a plugin identifier",
+            call.plugin
+        )));
+    }
+    let declarations = crate::program_run::parse_declarations(&call.programs).map_err(refuse)?;
+    let data_folder = plugin_data_folder(config, &call.plugin).map_err(refuse)?;
+    let request = crate::program_run::Request {
+        surface: call.plugin.clone(),
+        plugin_folder: crate::installed::plugin_folder(config, &call.plugin),
+        plugin: call.plugin.clone(),
+        id: call.run,
+        name: call.name.clone(),
+        args: call.args.clone(),
+        project: Some(data_folder),
+        environment,
+        account: Some(declarations),
+    };
+    let finished = data.program_runs.run(request)?;
+    Ok(crate::program_run::reply(&finished))
+}
+
+/// Ends the open account run of a plugin (docs/spec/native-surfaces.md#account-runs).
+pub fn account_run_cancel(
+    data: &crate::windows::WindowData,
+    call: crate::program_run::AccountRunCancelCall,
+) {
+    data.program_runs.cancel_account(&call.plugin, call.run);
 }
 
 /// Generic window/background boundary. Native-view sends use view_sidecar_send.

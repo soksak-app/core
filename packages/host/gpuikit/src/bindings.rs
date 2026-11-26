@@ -111,6 +111,28 @@ fn answer(app: &AppHandle, label: &str, body: &str) -> Result<(), String> {
             }
         }
     }
+    // An account run lasts until its program ends, as a program run does.
+    if wire.method == "account_run" {
+        let result =
+            argument::<soksak_host::program_run::AccountRunCall>(&wire.method, "request", &body)
+                .map(|request| (request, window.clone()));
+        match result {
+            Ok((request, window)) => {
+                let page = label.to_string();
+                crate::runtime().spawn_blocking(move || {
+                    let result = run_account(&window, request);
+                    call.finish(&["request"], &result);
+                    deliver_reply(&reply, &page, &result);
+                });
+                return Ok(());
+            }
+            Err(error) => {
+                call.finish(&["request"], &Err::<Value, String>(error.clone()));
+                deliver_reply(&reply, label, &Err(error));
+                return Ok(());
+            }
+        }
+    }
     // A program run lasts until its program ends, so it runs on the blocking pool and the dispatcher stays free for its cancel.
     if wire.method == "program_run" {
         let result = argument::<soksak_host::program_run::RunCall>(&wire.method, "request", &body)
@@ -147,6 +169,18 @@ fn run_program(
     let sidecars = window.state::<WindowSidecars>();
     let environment = sidecars.program_environment()?;
     documents::program_run(&data, environment, &sidecars.config_directory(), request)
+        .map(|reply| json!(reply))
+}
+
+/// Runs an account program of a plugin with the environment of the sidecars of the window, and answers its reply.
+fn run_account(
+    window: &port::Window,
+    request: soksak_host::program_run::AccountRunCall,
+) -> Result<Value, String> {
+    let data = soksak_host::windows::window_data(window)?;
+    let sidecars = window.state::<WindowSidecars>();
+    let environment = sidecars.program_environment()?;
+    documents::account_run(&data, environment, &sidecars.config_directory(), request)
         .map(|reply| json!(reply))
 }
 
@@ -359,6 +393,38 @@ fn dispatch(
             let request: soksak_host::program_run::CancelCall = argument(method, "request", body)?;
             let data = soksak_host::windows::window_data(window)?;
             documents::program_cancel(&data, request);
+            Value::Null
+        }
+        "account_run_cancel" => {
+            let request: soksak_host::program_run::AccountRunCancelCall =
+                argument(method, "request", body)?;
+            let data = soksak_host::windows::window_data(window)?;
+            documents::account_run_cancel(&data, request);
+            Value::Null
+        }
+        "account_homes" => {
+            let request: soksak_host::account_run::HomesCall = argument(method, "request", body)?;
+            soksak_host::account_run::homes(
+                &window.state::<WindowSidecars>().config_directory(),
+                &request.plugin,
+            )?
+        }
+        "account_home_create" => {
+            let request: soksak_host::account_run::HomeCall = argument(method, "request", body)?;
+            soksak_host::account_run::create(
+                &window.state::<WindowSidecars>().config_directory(),
+                &request.plugin,
+                &request.id,
+            )?;
+            Value::Null
+        }
+        "account_home_remove" => {
+            let request: soksak_host::account_run::HomeCall = argument(method, "request", body)?;
+            soksak_host::account_run::remove(
+                &window.state::<WindowSidecars>().config_directory(),
+                &request.plugin,
+                &request.id,
+            )?;
             Value::Null
         }
         "sidecars_outdated" => json!(window.state::<WindowSidecars>().outdated()),

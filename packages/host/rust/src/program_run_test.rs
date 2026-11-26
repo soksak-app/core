@@ -53,6 +53,7 @@ fn request(id: u64, name: &str, args: &[&str], project: &Path) -> Request {
         project: Some(project.to_path_buf()),
         plugin_folder: Ok(project.join("plugin")),
         environment: environment(project),
+        account: None,
     }
 }
 

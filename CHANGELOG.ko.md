@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1215-3: Go와 Rust host는 plugin의 계정 프로그램을 surface의 실행과 따로 plugin data folder에서 `accountRun`과 `accountRunCancel`로 실행하고 `accountHomes`, `accountHomeCreate`, `accountHomeRemove`를 제공한다. 계정 실행의 `host.program` event는 `surface` 대신 `run`을 싣는다.
 - F1210-5: plugin key의 Rust 알림 테스트는 같은 이름의 Go 테스트 옆인 `packages/host/rust/src/plugin_data_notice_test.rs`에 있어서 host 파일 검사가 통과한다.
 - F1215-2: plugin SDK와 Go, Rust `sok`의 plugin.json 검사는 member `accounts`를 검사한다. 종류, 선언된 프로그램이면서 pattern 인자 두 개를 받아야 하는 프로그램 `status`, `login`, `logout`, scope plugin과 기본값 `[]`인 data key `accounts`를 보고, 다른 형식은 `plugin <id>: accounts <reason>`로 거부한다.
 - F1215-1: 명세가 plugin의 계정을 정한다. manifest member `accounts`, plugin key `accounts`의 기록 `{id, name, kind}`, 계정 home, surface 없는 프로그램 `status`, `login`, `logout`의 실행, 명령 `core.accounts.*`, status `core.accounts`, plugin 페이지의 그룹 계정이다.

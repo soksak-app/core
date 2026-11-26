@@ -1648,6 +1648,15 @@ Items:
 | `program.run.accepts-matching-arguments` | A run whose arguments equal the text slots and match the pattern slots in full starts the declared program with those arguments in the project folder. | all |
 | `program.run.cancel-is-idempotent` | A second cancel of the same run, or a cancel of an identifier that is not open, changes nothing: the run ends once with the result `cancelled`. | all |
 | `program.run.call-id-is-an-integer` | The `id` of the run and cancel calls is the integer identifier of the view call, and a call whose `id` is a text is refused when it is decoded. | all |
+| `account.run.working-folder-is-the-plugin-data-folder` | An account run starts in the data folder of the plugin, also in a window without a project, with the arguments that its pattern slots accept. | all |
+| `account.run.refuses-a-path-program` | An account run of a declared program whose `program` has a separator and is no `plugin:` path is refused with `program <name> must be a plugin path or a bare name in an account run`. | all |
+| `account.run.refuses-fifth-open-run` | The fifth open account run of a plugin in a window is refused with `program run: 4 runs are open on plugin <plugin>`, and the runs of other plugins and of surfaces are not counted. | all |
+| `account.run.refuses-an-open-run-identifier` | An account run whose `run` names an open run of the plugin is refused with `program run: run <run> is already open on plugin <plugin>`. | all |
+| `account.run.cancel-is-idempotent` | `accountRunCancel` ends an open account run with the result `cancelled`; a second cancel, or a cancel of a run that is not open, changes nothing. | all |
+| `account.run.window-close-ends-the-run` | The end of the window ends each open account run with the result `window-closed`, and the end of a surface ends none. | all |
+| `account.home.lists-the-folders` | `accountHomes` answers the absolute path of `accounts/` of the data folder of the plugin and the names of its folders in byte order, and no names while `accounts/` does not exist. | all |
+| `account.home.creates-a-private-folder` | `accountHomeCreate` creates `accounts/<id>` with mode 0700, and `accountHomeRemove` removes it with its content and changes nothing when it does not exist. | all |
+| `account.home.refuses-an-identifier` | An account home whose `id` does not match `^[a-z][a-z0-9-]{0,39}$` is refused with `account home <id> is not an account identifier`, and a `plugin` that is not a plugin identifier with `account home: plugin <plugin> is not a plugin identifier`. | all |
 | `sidecars.environment.start-records-the-sok-folder` | The start of the sidecar channel of the installed sidecars records one event `host.sidecar.path` at the level `info` whose `folder` is the folder of the host executable and whose `sok` is the `sok` in that folder. | all |
 
 ## Workbench cases
