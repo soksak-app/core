@@ -1673,7 +1673,15 @@ fn check_data(where_: &str, manifest: &Map<String, Value>, raw: &Value) -> Resul
             _ => return Err(format!("{where_}: data {key} requires schema and default")),
         };
         let at = format!("{where_} data {key}");
-        only(&at, entry, &["schema", "default", "format"])?;
+        only(&at, entry, &["schema", "default", "format", "scope"])?;
+        // A key of the plugin scope belongs to the plugin instead of a project (docs/spec/plugins.md#plugin-data).
+        if let Some(scope) = entry.get("scope")
+            && !matches!(scope.as_str(), Some("project" | "plugin"))
+        {
+            return Err(format!(
+                "{where_}: data {key} scope must be project or plugin"
+            ));
+        }
         check_schema(&format!("{at} schema"), entry.get("schema"))?;
         // default: check_data refused an entry without a schema object before this point.
         if !matches_schema(schema.unwrap_or(&Map::new()), &entry["default"]) {

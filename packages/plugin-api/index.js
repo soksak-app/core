@@ -847,7 +847,11 @@ export function validateManifest(manifest) {
       if (!isObject(entry) || !isObject(entry.schema) || !Object.hasOwn(entry, "default")) {
         throw new Error(`${where}: data ${key} requires schema and default`);
       }
-      only(`${where} data ${key}`, entry, ["schema", "default", "format"]);
+      only(`${where} data ${key}`, entry, ["schema", "default", "format", "scope"]);
+      // A key of the plugin scope belongs to the plugin instead of a project (docs/spec/plugins.md#plugin-data).
+      if (Object.hasOwn(entry, "scope") && entry.scope !== "project" && entry.scope !== "plugin") {
+        throw new Error(`${where}: data ${key} scope must be project or plugin`);
+      }
       checkSchema(`${where} data ${key} schema`, entry.schema);
       if (!matchesSchema(entry.schema, entry.default)) throw new Error(`${where}: data ${key} default does not match its schema`);
       if (Object.hasOwn(entry, "format") && !(Number.isInteger(entry.format) && entry.format > 0)) {

@@ -738,8 +738,12 @@ func checkData(where string, manifest map[string]any) error {
 		if !isSchema || !hasDefault {
 			return fmt.Errorf("%s: data %s requires schema and default", where, key)
 		}
-		if err := only(where+" data "+key, entry, "schema", "default", "format"); err != nil {
+		if err := only(where+" data "+key, entry, "schema", "default", "format", "scope"); err != nil {
 			return err
+		}
+		// A key of the plugin scope belongs to the plugin instead of a project (docs/spec/plugins.md#plugin-data).
+		if scope, has := entry["scope"]; has && scope != "project" && scope != "plugin" {
+			return fmt.Errorf("%s: data %s scope must be project or plugin", where, key)
 		}
 		if err := checkSchema(where+" data "+key+" schema", entry["schema"]); err != nil {
 			return err

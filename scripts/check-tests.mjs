@@ -554,6 +554,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1210-2",
+    implementation: [
+      { file: "packages/sok/go/src/manifest.go", symbol: "func checkData(where string, manifest map[string]any) error {" },
+      { file: "packages/sok/rust/src/manifest.rs", symbol: "fn check_data(where_: &str, manifest: &Map<String, Value>, raw: &Value) -> Result<(), String> {" },
+      { file: "packages/plugin-api/index.js", symbol: "only(`${where} data ${key}`, entry, [\"schema\", \"default\", \"format\", \"scope\"]);" },
+    ],
+    tests: [
+      { file: "docs/spec/cases/manifest-validation.json", id: "data.scope-plugin" },
+      { file: "docs/spec/cases/manifest-validation.json", id: "data.scope-other" },
+    ],
+    expected: "The plugin.json checks accept scope project or plugin on a key of data and refuse another value.",
+    levels: ["unit"],
+  },
+  {
     id: "F1213-3",
     implementation: [
       { file: "packages/workbench-mygo/src/settings_surface.go", symbol: "func (s *Shell) drawSettingsSeat(c *ui.Context) {" },
