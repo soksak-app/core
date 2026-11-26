@@ -921,6 +921,7 @@ fn check_accounts(where_: &str, manifest: &Map<String, Value>) -> Result<(), Str
         .ok_or_else(|| format!("{at} programs must be {{status, login, logout}}"))?;
     let declared = manifest.get("programs").and_then(Value::as_object);
     for role in roles {
+        // default: the filter above holds a text for each role, so the empty name never stands.
         let name = programs[role].as_str().unwrap_or_default();
         let entry = declared
             .and_then(|declared| declared.get(name))

@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1215-6: Rust `sok`의 accounts 검사는 계정 프로그램 이름에 기본값이 쓰이지 않는 이유를 적어서 event source 검사가 통과한다.
 - F1210-6: event 목록과 logging 정책은 두 host가 plugin key의 entry를 저장할 때마다 내보내는 `host.workspace.plugin-data`(`plugin`, `key`)를 선언한다.
 - F1215-3: Go와 Rust host는 plugin의 계정 프로그램을 surface의 실행과 따로 plugin data folder에서 `accountRun`과 `accountRunCancel`로 실행하고 `accountHomes`, `accountHomeCreate`, `accountHomeRemove`를 제공한다. 계정 실행의 `host.program` event는 `surface` 대신 `run`을 싣는다.
 - F1210-5: plugin key의 Rust 알림 테스트는 같은 이름의 Go 테스트 옆인 `packages/host/rust/src/plugin_data_notice_test.rs`에 있어서 host 파일 검사가 통과한다.

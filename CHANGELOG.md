@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1215-6: The accounts check of the Rust `sok` states why the name of an account program needs no default, so the event source check passes.
 - F1210-6: The event catalog and the logging policy declare `host.workspace.plugin-data` with `plugin` and `key`, which both hosts emit for each stored entry of a plugin key.
 - F1215-3: The Go and Rust hosts run the account programs of a plugin with `accountRun` and `accountRunCancel` in the data folder of the plugin, apart from the runs of the surfaces, and serve `accountHomes`, `accountHomeCreate` and `accountHomeRemove`; the `host.program` events of an account run carry `run` instead of `surface`.
 - F1210-5: The Rust notice test of the plugin keys stands in `packages/host/rust/src/plugin_data_notice_test.rs`, beside the Go test of the same name, so the host file check passes.
