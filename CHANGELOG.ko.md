@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1203: Rust case runner는 case connection이 열릴 때 read limit을 설정하므로, macOS에서 read 전에 온 host의 close를 close로 읽는다.
 - F1202: F1200의 host test가 contract case `surfaces-geometry.sync.settings-seat-over-modal-needs-a-main-page`를 선언하고, F1200 기록은 plugin 이름을 적지 않는다.
 - F1201-1: 선언된 모든 workspace 버전이 core 릴리즈 0.0.60을 가리킨다.
 - F1200: plugin의 settings view가 mygo application에 보인다. mygo workbench는 pane을 settings surface의 clip으로 보내고, host는 main page가 있는 window에서만 settings surface를 modal web view 위에 둔다.

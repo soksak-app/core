@@ -824,11 +824,21 @@ fn send_frame(send: &Value) -> Result<Vec<u8>, String> {
     Ok(frame)
 }
 
-/// Reads one frame of the host. The end of the connection at a frame boundary is Ok(None), and so is a reset at a frame boundary.
-fn read_host_frame(connection: &mut Connection) -> Result<Option<Value>, String> {
+/// Opens a connection of a case to the endpoint at address with the read limit READ_LIMIT. The limit is set when the connection
+/// opens, before any request: macOS refuses a socket option of a socket whose peer has closed with EINVAL, so setting it before a read
+/// fails when the host closed the connection first.
+pub fn case_connection(address: &str) -> Connection {
+    let connection = endpoint_client::connect(address);
     connection
         .set_read_timeout(Some(READ_LIMIT))
-        .map_err(|error| error.to_string())?;
+        .unwrap_or_else(|error| {
+            panic!("cannot set the read limit of a connection to {address}: {error}")
+        });
+    connection
+}
+
+/// Reads one frame of the host. The end of the connection at a frame boundary is Ok(None), and so is a reset at a frame boundary.
+pub fn read_host_frame(connection: &mut Connection) -> Result<Option<Value>, String> {
     let mut prefix = [0u8; 4];
     let mut filled = 0;
     while filled < prefix.len() {
@@ -876,7 +886,7 @@ impl Run<'_> {
         let address = &self.address;
         self.connections
             .entry(name)
-            .or_insert_with(|| endpoint_client::connect(address))
+            .or_insert_with(|| case_connection(address))
     }
 
     /// Removes the connection of a step after its close.

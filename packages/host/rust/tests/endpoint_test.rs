@@ -1339,3 +1339,24 @@ fn a_release_refused_for_another_pointer_is_delivered_at_the_end_of_a_press() {
     request(&mut other, 2, "input.pointer", second("up"));
     served.finish();
 }
+
+// contract: endpoint.transport.undeclared-method-closes
+// The case runner reads a close of the host that came before the read as the close: macOS refuses a socket option of a socket whose
+// peer has closed with EINVAL, so a case connection sets its read limit when it opens, while the host cannot have closed it yet.
+#[test]
+fn a_case_connection_reads_a_close_that_came_before_the_read() {
+    let folder = folder::Folder::new();
+    let socket = folder.path().join("s");
+    let listener = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+    let mut connection = endpoint_case::case_connection(socket.to_str().unwrap());
+    let (host, _) = listener.accept().unwrap();
+    drop(host);
+    let mut byte = [0u8; 1];
+    // The peer of the connection has closed once a read of the connection ends with no byte.
+    let mut peek = connection.try_clone().unwrap();
+    assert_eq!(std::io::Read::read(&mut peek, &mut byte).unwrap(), 0);
+    match endpoint_case::read_host_frame(&mut connection) {
+        Ok(None) => {}
+        other => panic!("the case runner read {other:?} where the host closed the connection"),
+    }
+}
