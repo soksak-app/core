@@ -194,3 +194,19 @@ func TestTheSettingsSurfaceCarriesThePaneAsItsClip(t *testing.T) {
 		}
 	}
 }
+
+// A window without a project shows the settings view of a plugin, whose start value project is null
+// (docs/spec/plugins.md#settings-views, F1204).
+func TestTheSettingsSurfaceOfAWindowWithoutAProjectStartsWithANullProject(t *testing.T) {
+	f, stored := settingsViewShell(t)
+	f.run("core.project.close", map[string]string{"id": f.host.projects[0]["id"].(string)})
+	showPluginPage(f)
+	placed := stored.lastSurfaces(t)[settingsSurfaceID]
+	if placed == nil || placed["visible"] != true {
+		t.Fatalf("the settings surface of a window without a project is not placed visible: %v", placed)
+	}
+	start := placed["start"].(map[string]any)
+	if project, held := start["project"]; !held || project != nil {
+		t.Fatalf("the settings surface of a window without a project starts with the project %v, want null", start["project"])
+	}
+}

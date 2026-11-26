@@ -554,6 +554,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1204",
+    implementation: [{ file: "packages/workbench-mygo/src/surfaces.go", symbol: "surface.project = &projectStart{ID: project.ID, Root: project.Root}" }],
+    tests: [{ file: "packages/workbench-mygo/tests/settings_surface_test.go", id: "TestTheSettingsSurfaceOfAWindowWithoutAProjectStartsWithANullProject" }],
+    expected: "The settings surface of a mygo window without a project starts with the project null.",
+    levels: ["unit"],
+  },
+  {
     id: "F1200",
     implementation: [
       { file: "packages/workbench-mygo/src/surfaces.go", symbol: "entry[\"clip\"] = map[string]any{\"x\": held.clip.X, \"y\": held.clip.Y, \"w\": held.clip.W, \"h\": held.clip.H}" },

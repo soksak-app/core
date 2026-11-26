@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1204: mygo application은 project가 없는 window에서 끝나지 않고 plugin의 settings view를 보이며, 그 settings surface는 project null로 시작한다.
 - F1201-2: core 0.0.60의 release 실행이 success로 끝났고, v0.0.60은 애플리케이션 zip 세 개와 package release 다섯 개를 나열한다.
 - F1203: Rust case runner는 case connection이 열릴 때 read limit을 설정하므로, macOS에서 read 전에 온 host의 close를 close로 읽는다.
 - F1202: F1200의 host test가 contract case `surfaces-geometry.sync.settings-seat-over-modal-needs-a-main-page`를 선언하고, F1200 기록은 plugin 이름을 적지 않는다.

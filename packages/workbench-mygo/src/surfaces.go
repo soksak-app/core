@@ -204,7 +204,8 @@ type heldSurface struct {
 	tab         layout.Tab
 	composition json.RawMessage
 	box         layout.Rect
-	project     projectStart
+	// project is the project of the window that holds the surface, and nil for the settings surface of a window without a project.
+	project *projectStart
 	// owner is the project whose layout holds the surface.
 	owner string
 	// section is the start value of a section surface, and nil for the surface of a tab.
@@ -437,11 +438,15 @@ func (s *Shell) holdSurface(surface *heldSurface) {
 	if s.surfaces.held[id] != nil {
 		return
 	}
+	// A window without a project shows only the settings surface, whose start value project is null
+	// (docs/spec/plugins.md#settings-views).
 	project := s.opened()
-	surface.project = projectStart{ID: project.ID, Root: project.Root}
-	// A surface drawn in the plane belongs to the shown project, and a hidden one names the project of its layout.
-	if surface.owner == "" {
-		surface.owner = project.ID
+	if project != nil {
+		surface.project = &projectStart{ID: project.ID, Root: project.Root}
+		// A surface drawn in the plane belongs to the shown project, and a hidden one names the project of its layout.
+		if surface.owner == "" {
+			surface.owner = project.ID
+		}
 	}
 	s.surfaces.held[id] = surface
 	s.surfaces.order = append(s.surfaces.order, id)

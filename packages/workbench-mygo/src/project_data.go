@@ -150,7 +150,7 @@ func (s *Shell) writeProjectData(project *projectRecord, unit *installedUnit, ke
 func (s *Shell) dataChanged(project, plugin, key string) {
 	for surface, view := range s.surfaces.views {
 		held := s.surfaces.held[surface]
-		if held == nil || held.project.ID != project {
+		if held == nil || held.project == nil || held.project.ID != project {
 			continue
 		}
 		if view.data && held.tab.Plugin == plugin {
@@ -204,7 +204,7 @@ func onDataPlugin(call viewCallEvent) (json.RawMessage, error) {
 func (s *Shell) runDataCall(call viewCallEvent, unit *installedUnit, view *viewState, answer viewAnswer) error {
 	held := s.surfaces.held[call.Surface]
 	var project *projectRecord
-	if held != nil {
+	if held != nil && held.project != nil {
 		project = s.project(held.project.ID)
 	}
 	if project == nil {
