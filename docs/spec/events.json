@@ -4525,6 +4525,28 @@
       },
       "description": "The host showed the window of a project owner after another window opened the project: key tells whether the window is the key window after it was shown, and app_active whether the application is active (null when that state could not be read). The host does not activate the application (docs/spec/projects.md)."
     },
+    "host.workspace.plugin-data": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "plugin": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plugin",
+          "key"
+        ]
+      },
+      "description": "An entry of a plugin key was stored in plugin-data.json; plugin and key name the entry, never its value (docs/spec/plugins.md#plugin-data)."
+    },
     "host.workspace.settings": {
       "layer": "host",
       "class": "lifecycle",
