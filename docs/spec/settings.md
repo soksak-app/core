@@ -80,6 +80,7 @@ The page of a plugin replaces the search field and the list. It shows:
 
 - 목록: a button that runs `core.settings-modal.plugin {plugin: null}` and returns to the list with the same query.
 - The plugin name, with the plugin id as its caption.
+- 계정: for a plugin that declares [accounts](plugins.md#accounts), the group 계정 below the button 목록 and before the rows of 설정, the account list of the plugin with its rows, buttons and the row 새 계정, which the window draws with its own controls; the scrolling pane is the element `core.settings-modal.pane`. A plugin without accounts has no such group, and no plugin page shows a page of its plugin.
 - 설정: one row per setting the manifest declares, in manifest order, named with its `label` and followed by its `description` when it has one. Each row has the [control](#controls) of its form: an `enum` a select box, an `integer` a slider between its bounds, and a `string` or an `address` a text field. A plugin without settings shows "이 플러그인에는 설정이 없습니다."
 - 섹션: the names of the sections the plugin declares, as one line of text.
 - 사이드바: every plugin has window-left, window-right, window-top and window-bottom selectors, under the statement that the set replaces the content of the fixed sidebar of that side while a tab of the plugin is the active tab of the focused card. A plugin with a surface also has four internal card-side selectors. Every selector offers 사용 안 함 and all sets, and runs `core.settings.link {place, plugin, set}`.
@@ -120,6 +121,7 @@ The window draws every setting with one control of a fixed set, chosen by the fo
 | A string or an address (a plugin `string` or `address`) | One-line text field | `core.settings.change {key, value, scope}` |
 | A set reference (a link of [sidebar choices](#sidebar-choices)) | Select box of 사용 안 함 and every set | `core.settings.link {place, plugin, set, scope}` |
 | An order of listed values (`sidebarOrder`) | One row per value in the current order, named by the value, with ▲, absent on the first row, and ▼, absent on the last row; a button swaps its row with the row above or below | `core.settings.change {key, value, scope}` with the whole new list as `value` |
+| An account list (the [accounts](plugins.md#accounts) of a plugin) | One row per account with its name, kind, login and usage and the buttons 로그인, 취소, 로그아웃, 이름 변경 and 삭제, and the row 새 계정 with a name field, a kind select and 추가 | `core.accounts.add`, `core.accounts.rename`, `core.accounts.remove`, `core.accounts.login`, `core.accounts.login-cancel` and `core.accounts.logout` with `{plugin, ...}` |
 
 The set editor uses the same controls: 이름 is a text field, 배치 a select box and each section row a select box. Buttons run actions (전역값 사용, 편집, 삭제, 새 세트, the ▲ ▼ − + of a set row, 목록, 플러그인 관리) and are not setting controls; the ▲ ▼ of an order row are its control; the scope tabs select the shown scope and are not a setting. A setting without a control in this table, such as `textSize`, `sets`, `diagnostics.performance` and `diagnostics.log`, is changed by its own command or the settings file.
 

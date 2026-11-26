@@ -80,6 +80,7 @@ chrome 버튼과 app 메뉴의 항목 설정…(Settings…), 단축키 `cmd+,`�
 
 - 목록: `core.settings-modal.plugin {plugin: null}`을 실행해 같은 검색어의 목록으로 돌아가는 버튼.
 - 플러그인 이름과, 그 아래 설명 줄의 플러그인 id.
+- 계정: [계정](plugins.ko.md#accounts)을 선언한 plugin에는 목록 버튼 아래, 설정 행 앞에 그룹 계정이 있다. 그 행, 버튼, 행 새 계정을 가진 plugin의 계정 목록이며, 창이 자기 control로 그린다. scroll하는 pane은 element `core.settings-modal.pane`이다. 계정이 없는 plugin에는 그 그룹이 없고, 어떤 plugin page도 그 plugin의 page를 보이지 않는다.
 - 설정: manifest가 선언한 설정마다 한 행을 manifest 순서로 보여 주고, 행 이름은 `label`이며 `description`이 있으면 행 아래에 보인다. 각 행은 그 형식의 [컨트롤](#컨트롤)이다. `enum`은 선택 상자, `integer`는 경계 사이의 슬라이더, `string`과 `address`는 글자 입력이다. 설정이 없는 플러그인은 "이 플러그인에는 설정이 없습니다."를 보여 준다.
 - 섹션: 플러그인이 선언한 섹션의 이름을 한 줄 글로 보여 준다.
 - 사이드바: 모든 플러그인은 window-left, window-right, window-top, window-bottom 선택이 있고, 그 플러그인의 탭이 포커스 카드의 활성 탭인 동안 세트가 그 변 고정 사이드바의 내용을 바꾼다는 설명 아래에 있다. 표면이 있는 플러그인은 카드 내부 네 변 선택도 있다. 모든 선택은 사용 안 함과 모든 세트를 제공하고 `core.settings.link {place, plugin, set}`을 실행한다.
@@ -120,6 +121,7 @@ chrome 버튼과 app 메뉴의 항목 설정…(Settings…), 단축키 `cmd+,`�
 | 문자열 또는 주소 (plugin `string` 또는 `address`) | 한 줄 글자 입력 | `core.settings.change {key, value, scope}` |
 | 세트 참조 ([사이드바 선택](#사이드바-선택)의 연결) | 사용 안 함과 모든 세트의 선택 상자 | `core.settings.link {place, plugin, set, scope}` |
 | 목록 값의 순서 (`sidebarOrder`) | 현재 순서대로 값마다 값의 이름이 붙은 줄 하나와, 첫 줄에 없는 ▲, 끝 줄에 없는 ▼. 버튼은 자기 줄을 위나 아래 줄과 바꾼다 | 새 목록 전체를 `value`로 한 `core.settings.change {key, value, scope}` |
+| 계정 목록 (plugin의 [계정](plugins.ko.md#accounts)) | 계정마다 이름, 종류, login, 사용량과 버튼 로그인, 취소, 로그아웃, 이름 변경, 삭제를 가진 행 하나, 그리고 이름 field, 종류 select, 추가를 가진 행 새 계정 | `{plugin, ...}`를 받는 `core.accounts.add`, `core.accounts.rename`, `core.accounts.remove`, `core.accounts.login`, `core.accounts.login-cancel`, `core.accounts.logout` |
 
 세트 편집도 같은 컨트롤을 쓴다. 이름은 글자 입력, 배치는 선택 상자, 섹션 행은 각각 선택 상자다. 버튼(전역값 사용, 편집, 삭제, 새 세트, 세트 행의 ▲ ▼ − +, 목록, 플러그인 관리)은 동작을 실행하며 설정 컨트롤이 아니다. 순서 줄의 ▲ ▼는 그 컨트롤이다. 범위 탭은 보이는 범위를 고르며 설정이 아니다. `textSize`, `sets`, `diagnostics.performance`, `diagnostics.log`처럼 이 표에 컨트롤이 없는 설정은 자기 명령이나 설정 파일로 바꾼다.
 

@@ -90,6 +90,7 @@ plugin 동작의 창 검사는 그 plugin의 repository에서 실행된다([검�
 | `sessions` | 아니오 | `true`: 플러그인의 표면이 소유 세션을 열 수 있음을 선언한다([소유 세션](#소유-세션)). 표면과 `dependencies`에 선언한 사이드카 하나가 필요하며, 이 사이드카가 `transport: "persistent"`인지는 세션 요청마다 host가 확인한다. `background`는 이 선언으로 바뀌지 않는다 |
 | `background` | 아니오 | `{ "sidecar": "<선언한 사이드카>", "operation": "<동작 이름>", "settings"?: { "<요청 필드>": "<선언한 설정>" }, "directory"?: "<요청 필드>", "params"?: { "<요청 필드>": "<탭 매개변수>" } }`: 표면이 마운트되지 않은 비활성 탭마다 네이티브 표면을 만들지 않고 선언한 사이드카 세션 하나를 유지한다. 워크벤치는 대응한 플러그인 설정의 현재 값을 요청 필드에 넣고, 탭의 시작 디렉터리를 `directory`가 가리키는 필드에, 탭이 가진 대응 탭 매개변수의 값을 그 요청 필드에 넣는다([background sessions](#background-sessions)). `settings`, `directory`, `params`는 `operation`을 가리킬 수 없고, `settings`는 선언하지 않은 설정을 가리킬 수 없으며, `directory`와 `params`는 `settings`의 필드를 가리킬 수 없고, `params`의 각 탭 매개변수는 비어 있지 않은 이름이다. `surface`와 `dependencies`가 필요하다 |
 | `programs` | 아니오 | `{ "<name>": { "program": "<text>", "args"?: [ <slot>, ... ] } }`: plugin의 페이지가 이름으로 실행할 수 있는 외부 프로그램([프로그램 실행](native-surfaces.ko.md#프로그램-실행))이다. `name`은 `[a-z][a-z0-9-]*` 형식이다. `program`은 1~255 byte이며 제어 문자가 없는 text다. PATH에서 찾는 bare name, 프로젝트 폴더를 기준으로 하는 구분자가 있는 상대 경로, 절대 경로, 또는 plugin 자신의 파일을 가리키는 `plugin:<path>` 중 하나다. `<path>`는 `/`로 구분한 상대 경로이며, 빈 segment, `.`, `..` segment가 없고 backslash가 없다. slot은 인자가 같아야 하는 text이거나, 인자 전체가 맞아야 하는 `{ "pattern": "<정규 표현식>" }`(512 byte 이하)다. `args`는 최대 16개 slot이며 인자를 받지 않는 프로그램은 생략한다. `surface`나 `sections`가 필요하며, plugin의 모든 view surface, 곧 tab, section, dialog surface가 이 선언을 담는다 |
+| `accounts` | 아니오 | `{ "kinds": [ { "value": "<kind>", "label": "<text>" }, ... ], "programs": { "status": "<program>", "login": "<program>", "logout": "<program>" } }`: settings window의 plugin page가 그리는 plugin의 [계정](#accounts)이다. 이름이 붙은 프로그램을 가진 `programs`와 scope가 `plugin`인 data key `accounts`가 필요하다 |
 
 이 표에 없는 manifest member는 알 수 없는 member이며 그 manifest는 거부된다. 제거된 member `host`와 `hostOperations`는 `plugin <id>: <member> is removed; a section is a view of the plugin`으로 거부된다. 0.0.x release version인 동안은 저장 데이터 마이그레이션을 싣지 않으므로 어떤 manifest도 migration member를 선언하지 않는다.
 
@@ -191,6 +192,48 @@ installer는 view page가 없는 release를 거부하듯 dialog page가 없는 r
 - document region을 통해 native modal의 복사된 문서 안에 두는 page: document region은 surface의 web document를 보여 주며, view channel을 가진 page를 보여 주지 않는다.
 - dialog surface 아래에 main page가 그리는 backdrop: surface는 main web view 위에 있다.
 - 호출에서 경로로 지정하는 dialog page: 선언된 page는 호출이 실행되기 전에 reader가 검사하는 계약이다.
+
+## Accounts
+
+agent CLI처럼 프로그램이 사람의 login을 필요로 하는 plugin은 `plugin.json`에 `accounts`를 선언하고, settings window의 plugin page는 core의 control로 그 계정을 그린다([settings window](settings.ko.md#플러그인)). plugin은 settings window에 자기 page를 보이지 않는다. plugin의 모든 설정은 core가 그리는 선언이며, 그래서 모든 plugin page는 같은 모양, 하나의 scroll, 하나의 keyboard 경로를 가진다. 없앤 member `settingsView`가 있는 manifest는 `plugin <id>: settingsView is removed; a plugin declares its settings`로 거부된다.
+
+`accounts`는 `{ "kinds": [ { "value": "<kind>", "label": "<text>" }, ... ], "programs": { "status": "<program>", "login": "<program>", "logout": "<program>" } }`다.
+
+- `kinds`는 비어 있지 않은 목록이다. 각 `value`는 `[a-z][a-z0-9-]*` 형식이고 유일하며, 각 `label`은 1~40자다.
+- 각 프로그램은 plugin의 `programs` 항목을 가리킨다. 그 항목의 `program`은 `plugin:` 경로나 bare name이고, `args`는 정확히 pattern slot 두 개다. workbench가 계정의 종류와 home folder를 넘기기 때문이다.
+- plugin은 data key `accounts`를 `"scope": "plugin"`과 기본값 `[]`로 선언한다([plugin data](#plugin-데이터)). workbench는 그 기록을 아래 형식으로 검사한다.
+- `@soksak/plugin-api`의 validator와 Go, Rust의 `sok`은 다른 형식을 `plugin <id>: accounts <reason>`로 거부한다. `<reason>`은 `must be {kinds, programs}`, `kinds must be a non-empty list of {value, label}`, `kind <value> is not of the form [a-z][a-z0-9-]*`, `kind <value> repeats`, `kind <value> label must be 1 to 40 characters`, `programs must be {status, login, logout}`, `program <name> is not declared`, `program <name> must take two pattern arguments`, `requires the data key accounts with the scope plugin and the default []` 중 하나다.
+
+**기록.** plugin key `accounts`의 값은 다른 member가 없는 `{id, name, kind}`의 배열이다.
+
+- `id`는 `account-<n>` 형식이며, `n`은 어떤 기록도 갖지 않고 plugin data folder의 `accounts/`에 folder도 없는 가장 작은 양수다. 또는 저장된 계정이 이미 가진 `^[a-z][a-z0-9-]{0,39}$` 형식의 식별자다. `id`는 바뀌지 않으므로, plugin의 기록은 계정을 `id`로 가리키고 이름 변경은 그 기록과 home을 유지한다.
+- `name`은 제어 문자가 없는 1~40자이고 기록 사이에서 유일하다. 사람이 보고 바꾸는 식별자다.
+- `kind`는 선언된 종류다.
+
+다른 형식의 기록은 error display를 통해 `plugin <id> data accounts: <reason>`로 page를 실패시킨다. 계정의 home은 plugin data folder의 folder `accounts/<id>`다. workbench는 계정을 저장하기 전에 mode 0700으로 그것을 만들고, 계정과 함께 지운다. CLI가 home에 login을 두며, core는 token을 갖지 않는다.
+
+**프로그램.** workbench는 settings window를 위해 surface와 project 없이 `accounts`의 프로그램을 실행한다. surface 대신 plugin을 받는 host 명령 `programRun`([program runs](native-surfaces.ko.md#프로그램-실행))으로, 인자 `<kind>`와 home의 절대 경로 `<home>`을 주고, plugin data folder를 작업 folder로 쓴다.
+
+- `status`는 JSON object 하나 `{login, until, usage}`를 출력하고 0으로 끝난다. `login`은 `true`, `false`, 또는 login 상태가 없는 종류의 `null`이다. `until`은 login이 끝나는 시각의 ISO 8601 text 또는 `null`이다. `usage`는 `{label, used, resets}`의 목록이다. `label`은 1~40자, `used`는 한도 중 쓴 비율인 0~100의 수, `resets`는 다음 초기화 시각의 ISO 8601 text 또는 `null`이다.
+- `login`은 home에서 CLI의 login을 실행하며, CLI는 system 기본 browser를 연다. 0으로 끝나면 login이 끝난 것이다. 취소가 실행을 취소한다.
+- `logout`은 home의 login을 끝내고 0으로 끝난다.
+
+다른 종료 상태, 잘린 출력, 다른 형식의 출력은 place `settings <plugin>`의 error display에 `account <name>: <program> <reason>`로 보인다. workbench는 plugin page가 보일 때, 추가, login, logout, 이름 변경 뒤, 그리고 창이 key window가 될 때 각 계정의 `status`를 실행하며, 한 plugin에서 한 번에 하나씩 실행한다. terminal에서나 그 끝에 맞아 애플리케이션 밖에서 바뀐 login은 event를 보내지 않으므로, key window가 되는 창이 다시 읽는다. timer는 읽지 않는다.
+
+**Plugin page.** plugin page는 머리 아래, 그룹 설정 위에 그룹 계정을 계정 목록의 [control](settings.ko.md#컨트롤)로 보인다.
+
+- `name` 순서로 계정마다 행 하나: 이름, 종류의 label, login, 그리고 `usage` 항목마다 줄 하나. login은 `until`이 `null`이 아니면 `· <until>까지`가 붙은 `로그인됨`, `로그인 필요`, login이 실행되는 동안 `로그인 중`, 또는 `null`의 `-`다. usage 줄은 `<label> <used>%`이고, `resets`가 `null`이 아니면 `· <resets> 초기화`가 붙는다.
+- 행의 버튼: login `false`의 로그인, login이 실행되는 동안의 취소, login `true`의 로그아웃, 이름 변경, 삭제. 이름 변경은 이름을 text field에 저장, 취소 버튼과 함께 보인다.
+- 행 새 계정: 이름 field, label로 보이는 종류 select, 버튼 추가.
+
+**명령.** 각 버튼은 core 명령을 실행한다. 각 명령은 저장된 값을 base로 plugin key를 바꾸고([plugin data](#plugin-데이터)), 다른 창이 먼저 저장했으면 `runtime.data.change`의 한도까지 다시 읽는다.
+
+- `core.accounts.add {plugin, name, kind}`는 home을 만들고 계정을 저장하며 `{id}`로 답한다.
+- `core.accounts.rename {plugin, id, name}`, home을 지우는 `core.accounts.remove {plugin, id}`, `core.accounts.login {plugin, id}`, `core.accounts.login-cancel {plugin, id}`, `core.accounts.logout {plugin, id}`는 `null`로 답한다.
+- 거부: `plugin <plugin> declares no accounts`, `account name must be 1 to 40 characters without a control character`, `account name <name> is already used`, `account kind <kind> is not declared by <plugin>`, `account <id> is not defined`, login이 실행되는 동안의 login, logout, 이름 변경, 삭제에 `the login of account <name> is running`, 취소에 `no login of account <name> is running`.
+- status `core.accounts`는 보이는 page의 plugin에 대한 `{plugin, accounts: [{id, name, kind, login, until, usage, running}]}`, 또는 `accounts`가 있는 plugin의 page가 보이지 않는 동안 `null`이다. `running`은 login이 실행되는 동안 `true`이고, `login`, `until`, `usage`는 첫 `status` 실행 전까지 `null`, `null`, `[]`이다.
+
+이유: 행 동작이 있는 계정 목록은 설정 형식이 다루지 않는 유일한 plugin 설정이고, login이 있는 CLI를 실행하는 모든 plugin이 필요로 하므로 core가 한 번 정하고, 각 CLI를 아는 부분은 plugin이 프로그램에 둔다. plugin은 settings window에서 코드를 실행하지 않으므로, CLI가 필요한 동작은 선언된 프로그램이다. CLI가 login을 home 경로에 묶을 수 있고 plugin의 기록이 계정을 가리키므로 `id`는 바뀌지 않는다. owner의 열린 실행 수에 한도가 있으므로 plugin의 실행은 차례로 이어진다.
 
 ## 프로젝트 데이터
 per-key 형식은 코어가 소유한 file 안의 값마다 형태를 정하며, 다른 형태의 값은 변환되지 않고 거부된다([저장 데이터 형식](installation.ko.md#저장-데이터-형식)).

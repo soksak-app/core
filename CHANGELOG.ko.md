@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1215-1: 명세가 plugin의 계정을 정한다. manifest member `accounts`, plugin key `accounts`의 기록 `{id, name, kind}`, 계정 home, surface 없는 프로그램 `status`, `login`, `logout`의 실행, 명령 `core.accounts.*`, status `core.accounts`, plugin 페이지의 그룹 계정이다.
 - F1214: plugin의 settings view를 없앤다. `settingsView`는 manifest, host, `sok`, plugin SDK, 두 workbench에서 settings surface, 그 seat, clip, 창 배경 채우기, element `core.settings-modal.plugin-view`, `runtime.seat.height`와 `followSeatHeight()`와 함께 빠진다. `settingsView`가 있는 manifest는 `plugin <id>: settingsView is removed; a plugin declares its settings`로 거부된다. Red: plugin SDK의 이전 reader는 사례 `settingsView.removed`를 받아들였다(pass 310, fail 1). Green: pass 311.
 - F1210-4: mygo workbench는 `plugin-data.json`의 plugin key를 project가 있든 없든 모든 창의 view에 제공한다. project 없는 view의 project key는 `view call <command> requires a project`로 거부된다.
 - F1210-3: web workbench와 SDK의 test host는 `plugin-data.json`의 plugin key를 project가 있든 없든 모든 창의 view에 제공한다. project 없는 view의 project key는 `view call <command> requires a project`로 거부된다.

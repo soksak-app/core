@@ -279,6 +279,17 @@ View는 plugin이 선언한 프로그램을 view call `runtime.program.run`으�
 - **종료.** 실행은 다음 중 먼저 일어나는 것으로 끝난다: 프로그램의 종료, 그 view call의 cancel, view process의 끝(`process-ended`), surface의 닫힘(`surface-closed`), 창의 끝(`window-closed`). 종료가 아닌 끝은 프로그램의 process group에 `SIGKILL`을 보낸다. Process group은 host가 프로그램을 시작할 때 만들므로 프로그램의 자식도 함께 끝난다. Host는 프로그램이 회수될 때까지 기다린 뒤 끝을 기록한다. 이 kill은 유예 시간과 시간 제한이 없다. 종료가 아닌 끝은 응답을 보내지 않는데, 그 view call은 이미 끝났기 때문이다. 실행에는 시간 제한이 없다. 끝나지 않는 프로그램은 위 끝 중 하나가 올 때까지 열린 채로 남으며, `core.plugin.open-calls`가 그 call을 열린 것으로 보고한다.
 - **프로그램 실행 이벤트.** 프로그램이 시작한 실행은 시작할 때 `host.program.start`, 끝날 때 `host.program.end`를 하나씩 기록하며, 시작하지 못한 실행은 `host.program.failed`만 기록한다. `host.program.end`의 결과는 `exited`, `cancelled`, `process-ended`, `surface-closed`, `window-closed` 중 하나이며, 신호가 끝냈으면 신호 이름을 함께 기록한다. 거부는 `host.program.refused`, 시작 실패나 UTF-8이 아닌 스트림은 `host.program.failed`를 기록한다. 이벤트와 필드는 카탈로그가 선언한다([events](events.json)).
 
+### 계정 실행
+
+workbench는 plugin의 view가 실행되지 않는 settings window를 위해 plugin [계정](plugins.ko.md#accounts)의 프로그램을 실행한다. surface 대신 `{window, plugin, programs, run, name, args}`로 host 명령 `programRun`에 넘긴다. `programs`는 workbench가 `plugin.json`을 읽을 때 검증한 plugin의 member `programs`이고, `run`은 workbench가 고르는 양의 정수이며 창에서 그 plugin의 열린 실행 사이에서 유일하다. host 명령 `programCancel {window, plugin, run}`이 그런 실행을 취소한다.
+
+- host는 view 실행의 거부([프로그램 실행](#프로그램-실행))로 실행을 `programs`에 대조해 검사하고, 한 창에서 plugin의 열린 실행을 최대 네 개로 세어 `program run: <n> runs are open on plugin <plugin>`로 거부하며, 열린 실행을 가리키는 `run`은 `program run: run <run> is already open on plugin <plugin>`로 거부한다.
+- 프로그램의 작업 folder는 plugin data folder `<configuration directory>/plugin-data/<plugin id>`다. 실행에 project folder가 없으므로, `program`의 구분자가 있는 경로는 `program <name> must be a plugin path or a bare name in an account run`으로 거부된다. 창에 project가 없어도 된다.
+- 응답, 출력 한도, event는 view 실행과 같다. event는 `surface`와 `call` 대신 `plugin`과 `run`을 싣는다. 실행은 종료, `programCancel`, 창의 끝(`window-closed`)에서 끝난다.
+- host 명령 `accountHomes {plugin}`, `accountHomeCreate {plugin, id}`, `accountHomeRemove {plugin, id}`는 plugin data folder의 `accounts/`에 있는 folder 이름을 나열하고, folder `accounts/<id>`를 그 위 folder와 함께 mode 0700으로 만들고, 그 folder를 내용과 함께 지운다. `id`는 `^[a-z][a-z0-9-]{0,39}$`에 맞아야 하며, 다른 값은 `account home <id> is not an account identifier`로 거부된다. file system 실패는 `account home <id>: <reason>`로 답한다.
+
+이유: settings window는 plugin의 계정을 core control로 그리고 plugin의 page를 실행하지 않으므로 workbench가 선언된 프로그램을 직접 실행하며, data folder는 모든 창에서 plugin에 속한 하나의 folder다.
+
 ## Surface host container
 
 window의 surface host는 container(`SPSurfaceCoordinates`) 안에 있고, `sp_surface_create`는 그 container를 담는 `NSView`를 받는다. 그 view에 container가 없으면 만들고, 없는 view와 window 밖의 view는 거부한다. container는 surface host를 담고, 그 web view에 backing scale을 적용하며(`updateScale`), 그 web view에서 올라온 `cursorUpdate:`에 대해 현재 위치의 pointer move를 그 web view의 tracking area owner에게 보낸다. 이는 모든 host에서 같다. pointer가 어느 view 위에 있는지는 container를 담는 view의 hit test가 정한다.
