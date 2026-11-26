@@ -23,11 +23,10 @@ import { SIDE_NAMES, WINDOW_SIDES } from "./window-sidebars.js";
 import { matchPlugins } from "./plugin-search.js";
 import { restoreScroll, scrollPositions } from "./scroll-keep.js";
 import { setupParts } from "./setup-exposure.js";
-import { seatHeight } from "./settings-view.js";
 import { missingKinds } from "./setup-parts.js";
 import { errorToasts, hideError, showError } from "./shown-errors.js";
 import { hasSection, section, sectionNames } from "./registry.js";
-import { showSettingsView } from "./settings-view.js";
+import { onSettingsViewChange, seatContentHeight, showSettingsView } from "./settings-view.js";
 import {
   CHOICES, ERROR_TOAST_DISMISS_SECONDS, FONTS, LAYOUT_RANGES, MEMORY_SAVER_DELAY, MENU_LANGUAGES, SHAPE_RANGES, THEMES, debugOn, scopedValue, settingProject, settingProjectRoot, overridden, sourceScope,
   settingDefinitions,
@@ -539,7 +538,7 @@ function drawPluginList() {
 function drawPluginPage(unit) {
   const back = button("plugins:list", "core.settings-modal.back", "목록", "core.settings-modal.plugin", { plugin: null });
   // The seat of the settings view of the plugin stands below the back button, so only the heading and the scope tabs stand above it and
-  // every other group follows it; it takes the height that the pane leaves below them (docs/spec/plugins.md#settings-views).
+  // every other group follows it; it takes the content height that the view reports (docs/spec/plugins.md#settings-views).
   const heading = [row("", back)];
   let seat = null;
   if (unit.settingsView) {
@@ -575,25 +574,16 @@ function drawPluginPage(unit) {
   if (seat) sizeSeat(seat);
 }
 
-/**
- * Sets the height of the seat of the settings view from the pane and the rows above it (docs/spec/plugins.md#settings-views). The visible
- * height of the pane is its largest height, the largest height of the card minus its head and its borders, because the card ends with its
- * content.
- */
+/** Sets the height of the seat of the settings view to the content height that its view reported (docs/spec/plugins.md#settings-views). */
 function sizeSeat(view) {
-  const cardStyle = getComputedStyle(card);
-  const head = card.querySelector(".set-card__head");
-  const visible = parseFloat(cardStyle.maxHeight) - head.offsetHeight - parseFloat(cardStyle.borderTopWidth) - parseFloat(cardStyle.borderBottomWidth);
-  const paneStyle = getComputedStyle(body);
-  const tabs = body.querySelector(".set-scope-tabs");
-  view.style.height = `${seatHeight({
-    visible,
-    top: view.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop,
-    paddingTop: parseFloat(paneStyle.paddingTop),
-    paddingBottom: parseFloat(paneStyle.paddingBottom),
-    scope: tabs.offsetHeight + parseFloat(getComputedStyle(tabs).marginBottom),
-  })}px`;
+  view.style.height = `${seatContentHeight()}px`;
 }
+
+// A new content height of the view sets the height of the seat that the plugin page shows.
+onSettingsViewChange(() => {
+  const seat = body?.querySelector('[data-expose="core.settings-modal.plugin-view"]');
+  if (seat) sizeSeat(seat);
+});
 
 function drawPlugins() {
   const unit = pluginUnits().find((u) => u.id === chosen);

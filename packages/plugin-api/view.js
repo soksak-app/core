@@ -640,5 +640,30 @@ export function createViewBridge({ handler, report }) {
       expose.dispose().catch(recordError("core surface entries"));
     }, { once: true });
   }
-  return { calls, runtime, commands, exposure, contributions, composition };
+  // The seat of a settings view takes the content height of its page (docs/spec/plugins.md#settings-views): the root element of the
+  // document is observed from the next animation frame, which runs before the observation round of that frame, so the first observation
+  // comes in that round, and each new height, rounded up to a whole pixel, is sent with runtime.seat.height. The returned function ends
+  // the observation. A refused call is reported as every other call of the view that nothing awaits.
+  const followSeatHeight = () => {
+    const root = window.document.documentElement;
+    let sent = null;
+    let ended = false;
+    const send = () => {
+      if (ended) return;
+      const height = Math.ceil(root.getBoundingClientRect().height);
+      if (height === sent) return;
+      sent = height;
+      calls.request("runtime.seat.height", { height }).catch((error) => report({ where: "settings seat", text: `height ${height}`, error }));
+    };
+    const observer = new window.ResizeObserver(send);
+    const frame = window.requestAnimationFrame(() => {
+      if (!ended) observer.observe(root);
+    });
+    return () => {
+      ended = true;
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  };
+  return { calls, runtime, commands, exposure, contributions, composition, followSeatHeight };
 }

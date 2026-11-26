@@ -168,14 +168,12 @@ func (s *Shell) drawSettingsBody(c *ui.Context, model *settingsModel, width, mos
 		w.scrollKey, w.scroll.X, w.scroll.Y = key, 0, 0
 	}
 	scroll := ui.Scroll(c.Key(Exposed{Name: "core.settings-modal.pane"}))
-	w.paneBounds, w.paneHeight = scroll.Bounds(), most
+	w.paneBounds = scroll.Bounds()
 	scroll.TrackScroll(&w.scroll).Width(width).MaxHeight(most).Children(func() {
 		// The pane fills the room the scroll container gives it, beside its classic bar when the content overflows, as the pane of
 		// packages/workbench/app.css does.
 		ui.Column(c).FillWidth().Padding(pane.paneTop, pane.paneX, pane.paneBottom, pane.paneX).Children(func() {
-			scopes := ui.Row(c).FillWidth().Gap(pane.scopeGap).Margin(0, 0, pane.scopeGap, 0).BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.Edge).Role(ui.RoleGroup).Label("설정 범위")
-			w.scopeHeight = scopes.Bounds().H + pane.scopeGap
-			scopes.Children(func() {
+			ui.Row(c).FillWidth().Gap(pane.scopeGap).Margin(0, 0, pane.scopeGap, 0).BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.Edge).Role(ui.RoleGroup).Label("설정 범위").Children(func() {
 				for _, control := range model.scopes {
 					s.drawSettingsScope(c, control, pane)
 				}
@@ -222,20 +220,9 @@ func (s *Shell) drawSettingsGroup(c *ui.Context, group settingsGroup, pane setti
 			s.drawSettingsRow(c, row, pane)
 		}
 		if group.view {
-			s.drawSettingsSeat(c, pane)
+			s.drawSettingsSeat(c)
 		}
 	})
-}
-
-// settingsSeatHeight is the height of the seat of a settings view: the height that the pane leaves below the heading, so the whole seat
-// shows. When the heading leaves less than the scope tabs, it is the visible height of the pane minus the scope tabs and both paddings, so
-// a scroll of the pane shows the whole seat below a strip of rows as high as the scope tabs, where the wheel scrolls the pane. It depends on the
-// heading above the seat, the scope tabs and the pane of the last frame, never on the seat itself (docs/spec/plugins.md#settings-views).
-func settingsSeatHeight(w *settingsWindow, pane settingsPane) float32 {
-	if rest := w.paneHeight - w.seatTop - pane.paneBottom; rest >= w.scopeHeight {
-		return rest
-	}
-	return w.paneHeight - w.scopeHeight - pane.paneTop - pane.paneBottom
 }
 
 func (s *Shell) drawSettingsRow(c *ui.Context, row settingsRow, pane settingsPane) {

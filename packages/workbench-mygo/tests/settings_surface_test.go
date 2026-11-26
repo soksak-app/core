@@ -29,13 +29,28 @@ func settingsViewShell(t *testing.T) (*shellFixture, *surfaceHost) {
 }
 
 // showPluginPage opens the settings window on the plugin page of textprobe.
-func showPluginPage(f *shellFixture) {
+func openPluginPage(f *shellFixture) {
 	f.t.Helper()
 	// The search of the plugins section draws a symbol of the system, which the surface fixture does not set.
 	f.tester.SetSystemSymbols(squareSymbols)
 	f.click("core.chrome.settings", "")
 	f.run("core.settings-modal.nav", map[string]any{"section": "plugins"})
 	f.run("core.settings-modal.plugin", map[string]any{"plugin": "textprobe"})
+}
+
+// showPluginPage opens the plugin page of textprobe and reports the content height of its settings view, so the seat shows the view
+// (docs/spec/plugins.md#settings-views).
+func showPluginPage(f *shellFixture) {
+	f.t.Helper()
+	openPluginPage(f)
+	reportSeatHeight(f)
+}
+
+// reportSeatHeight sends the content height 120 of the settings view of textprobe, as followSeatHeight of the view bridge sends it.
+func reportSeatHeight(f *shellFixture) {
+	f.t.Helper()
+	f.shell.Event("view-call", []any{map[string]any{"surface": settingsSurfaceID, "plugin": "textprobe", "generation": 1, "id": 9, "command": "runtime.seat.height", "params": map[string]any{"height": 120}}})
+	f.settle()
 }
 
 func TestThePluginPageShowsTheSettingsViewOfItsPluginAsASettingsSurface(t *testing.T) {
@@ -125,6 +140,7 @@ func TestAStoppedSettingsViewIsRemovedUntilItsPageIsShownAgain(t *testing.T) {
 	}
 	f.run("core.settings-modal.plugin", map[string]any{"plugin": nil})
 	f.run("core.settings-modal.plugin", map[string]any{"plugin": "textprobe"})
+	reportSeatHeight(f)
 	if placed := stored.lastSurfaces(t)[settingsSurfaceID]; placed == nil || placed["visible"] != true {
 		t.Fatal("the settings surface is not created again when its page is shown again")
 	}
@@ -217,46 +233,76 @@ func TestTheSettingsSurfaceOfAWindowWithoutAProjectStartsWithANullProject(t *tes
 	}
 }
 
-// The seat of a settings view stands below the heading and takes the height that the pane leaves below it, so the whole seat shows inside the
-// pane and the page of the view scrolls its own content to its end; a wheel over the view never scrolls the pane
-// (docs/spec/plugins.md#settings-views, F1207).
-func TestTheSeatBelowTheHeadingEndsInsideThePane(t *testing.T) {
-	f, _ := settingsViewShell(t)
-	showPluginPage(f)
+// The seat of a settings view takes the content height that its view reports with runtime.seat.height, 0 before the first report, so the
+// groups below follow the content of the view without a gap; a height that is negative or absent and a call of another surface are
+// refused (docs/spec/plugins.md#settings-views, F1213).
+func TestTheSeatTakesTheContentHeightThatTheViewReports(t *testing.T) {
+	f, stored := settingsViewShell(t)
+	openPluginPage(f)
 	f.settle()
-	pane := element(t, f.tester, "core.settings-modal.pane", "").Bounds
-	seat := element(t, f.tester, "core.settings-modal.plugin-view", "").Bounds
-	if seat.H <= 0 {
-		t.Fatalf("the seat has the height %v", seat.H)
+	seat := func() float32 { return element(t, f.tester, "core.settings-modal.plugin-view", "").Bounds.H }
+	if got := seat(); got != 0 {
+		t.Fatalf("the seat has the height %v before the view reports its content height, want 0", got)
 	}
-	if seat.Y+seat.H > pane.Y+pane.H {
-		t.Fatalf("the seat ends at %v, below the bottom %v of the pane", seat.Y+seat.H, pane.Y+pane.H)
+	// The first control of the page below the seat: the plugin page holds only the button 목록 above the seat.
+	below := func() float32 {
+		node, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.set", "")
+		if !ok {
+			t.Fatal("the plugin page shows no control below the seat")
+		}
+		return node.Bounds.Y
 	}
-	if pane.Y+pane.H-(seat.Y+seat.H) > 40 {
-		t.Fatalf("the seat ends at %v and leaves %v of the pane below it", seat.Y+seat.H, pane.Y+pane.H-(seat.Y+seat.H))
+	settings := below()
+	if reply := viewCall(t, f, stored, settingsSurfaceID, "runtime.seat.height", map[string]any{"height": 180}); reply["error"] != nil {
+		t.Fatalf("runtime.seat.height replied %v", reply)
+	}
+	f.settle()
+	if got := seat(); got != 180 {
+		t.Fatalf("the seat has the height %v after the report of 180", got)
+	}
+	if moved := below() - settings; moved != 180 {
+		t.Fatalf("the group below the seat moved by %v after the report of 180, want 180", moved)
+	}
+	for _, params := range []any{map[string]any{"height": -1}, map[string]any{}, map[string]any{"height": "180"}} {
+		reply := viewCall(t, f, stored, settingsSurfaceID, "runtime.seat.height", params)
+		if message, _ := reply["error"].(map[string]any)["message"].(string); message != "view call runtime.seat.height requires a height that is not negative" {
+			t.Fatalf("runtime.seat.height %v replied %v", params, reply)
+		}
+	}
+	if got := seat(); got != 180 {
+		t.Fatalf("a refused report changed the seat height to %v", got)
 	}
 }
 
-// When the rows above the seat leave less than the scope tabs, the seat is as high as the visible pane minus the scope tabs and both
-// paddings: the pane overflows, and a scroll of the pane shows the whole seat below a strip of rows as high as the scope tabs
-// (docs/spec/plugins.md#settings-views, F1207).
-func TestTheSeatOfAShortPaneShowsWholeBelowAStripOfRows(t *testing.T) {
-	f, _ := settingsViewShell(t)
+// The height of the seat depends on the page of the view alone, so a wheel at the end of the pane leaves the seat, the content and the
+// scroll offset of the pane where they stand (docs/spec/plugins.md#settings-views, F1213).
+func TestTheSeatHoldsItsHeightWhileThePaneScrollsToItsEnd(t *testing.T) {
+	f, stored := settingsViewShell(t)
 	f.tester.SetSize(1200, 300)
 	showPluginPage(f)
 	f.settle()
+	viewCall(t, f, stored, settingsSurfaceID, "runtime.seat.height", map[string]any{"height": 240})
+	f.settle()
 	pane := element(t, f.tester, "core.settings-modal.pane", "").Bounds
-	scopes := element(t, f.tester, "core.settings-modal.scope", "pick:scope:common").Bounds
-	for range 80 {
-		seat := element(t, f.tester, "core.settings-modal.plugin-view", "").Bounds
-		if seat.Y >= pane.Y+scopes.H && seat.Y+seat.H <= pane.Y+pane.H {
-			return
-		}
-		if seat.Y < pane.Y {
-			t.Fatalf("the pane scrolled the seat %+v past its top without showing it whole in the pane %+v", seat, pane)
-		}
-		f.tester.Scroll(float32(pane.X+10), float32(pane.Y+10), 0, 4)
+	offset := func() float64 { return status[struct{ Scroll float64 }](t, f, "core.settings-modal").Scroll }
+	var ends []float64
+	for step := range 60 {
+		before := offset()
+		f.tester.Scroll(float32(pane.X+10), float32(pane.Y+10), 0, 40)
 		f.settle()
+		seat := element(t, f.tester, "core.settings-modal.plugin-view", "").Bounds
+		if seat.H != 240 {
+			t.Fatalf("step %d: the seat has the height %v while the pane scrolls, want 240", step, seat.H)
+		}
+		after := offset()
+		if after < before {
+			t.Fatalf("step %d: a wheel down moved the scroll offset of the pane back from %v to %v", step, before, after)
+		}
+		if after == before {
+			ends = append(ends, after)
+		}
 	}
-	t.Fatalf("no scroll of the pane %+v shows the whole seat below the scope tabs", pane)
+	if len(ends) < 10 || ends[0] != ends[len(ends)-1] {
+		t.Fatalf("the scroll offset at the end of the pane is %v, want one offset that holds", ends)
+	}
 }

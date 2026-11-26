@@ -5,6 +5,7 @@ import { surfaceErrorText } from "./surface-status.js";
 import { isSectionSurface, markViewSurface, registry } from "./exposure.js";
 import { shownSectionSurfaces } from "./section-surfaces.js";
 import { onDataChange, viewDataOf } from "./plugin-data.js";
+import { setSeatHeight } from "./settings-view.js";
 import { answerViewCall, pluginNativeGate, viewStopState } from "@soksak/plugin-api/view-answer";
 import { createViewSubscriptions } from "@soksak/plugin-api/view-events";
 import { createViewCommands } from "@soksak/plugin-api/view-commands";
@@ -592,6 +593,8 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
       },
       // The project data of the plugin for a project, which the data calls of the view read and write (view-answer.js of @soksak/plugin-api).
       data: { of: viewDataOf },
+      // The seat of a settings view, whose height is the content height that the view reports (docs/spec/plugins.md#settings-views).
+      seat: { height: setSeatHeight },
       // The clipboard of the view (view-answer.js of @soksak/plugin-api): text and file URLs as the surface context reads them, and a PNG through the binary
       // store of the view.
       clipboard: {

@@ -563,6 +563,22 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 			return err
 		}
 		done()
+	case "runtime.seat.height":
+		// The content height of the page of a settings view, which sets the height of its seat (docs/spec/plugins.md#settings-views).
+		fields, err := viewFields[struct {
+			Height json.RawMessage `json:"height"`
+		}](call)
+		if err != nil {
+			return err
+		}
+		var height float64
+		if json.Unmarshal(fields.Height, &height) != nil || height < 0 || math.IsInf(height, 0) {
+			return fmt.Errorf("view call %s requires a height that is not negative", call.Command)
+		}
+		if err := s.setSeatHeight(call.Surface, float32(height)); err != nil {
+			return err
+		}
+		answer(nil, nil)
 	case "runtime.links.open":
 		url, err := text()
 		if err != nil {

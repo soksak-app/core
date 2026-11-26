@@ -12,7 +12,8 @@ import { hideError, showError } from "./shown-errors.js";
 const SEAT = "core.settings-modal.plugin-view";
 const PANE = "core.settings-modal.pane";
 
-/* The settings surface of the shown plugin page: {surface, plugin, slot, mounted, seat}, or null. seat is the last measured seat. */
+/* The settings surface of the shown plugin page: {surface, plugin, slot, mounted, seat, height}, or null. seat is the last measured seat and
+   height the content height that its view reported, 0 before the first report. */
 let open = null;
 /* The plugin whose plugin page the settings window shows, or null. */
 let shownPlugin = null;
@@ -59,7 +60,7 @@ export function showSettingsView(plugin) {
     slot.dataset.nativePlugin = plugin;
     slot.dataset.nativeTitle = "settings";
     slot.dataset.nativeDim = "false";
-    open = { surface, plugin, slot, mounted: false, seat: null };
+    open = { surface, plugin, slot, mounted: false, seat: null, height: 0 };
   }
   changed();
 }
@@ -71,14 +72,18 @@ export const settingsSurfacePlugin = (surface) => (open !== null && open.surface
 export const settingsSurface = () => (open === null ? null : open.surface.surfaceId);
 
 /**
- * The height of the seat of a settings view (docs/spec/plugins.md#settings-views): the height that the pane leaves below the rows, the
- * visible height of the pane minus the top of the seat in its content and its bottom padding; when that is less than the scope tabs with
- * their margin, the visible height minus the scope tabs and both paddings.
+ * Sets the height of the seat of the settings surface to the content height that its view reports with runtime.seat.height
+ * (docs/spec/plugins.md#settings-views), and tells the listeners when it changes. A surface that is not the open settings surface is refused.
  */
-export function seatHeight({ visible, top, paddingTop, paddingBottom, scope }) {
-  const rest = visible - top - paddingBottom;
-  return rest >= scope ? rest : visible - scope - paddingTop - paddingBottom;
+export function setSeatHeight(surface, height) {
+  if (settingsSurfacePlugin(surface) === null) throw new Error("view call runtime.seat.height is served only for a settings surface");
+  if (open.height === height) return;
+  open.height = height;
+  changed();
 }
+
+/** The height of the seat of the open settings surface: the content height that its view reported, 0 before the first report or without a surface. */
+export const seatContentHeight = () => (open === null ? 0 : open.height);
 
 /**
  * The seat of the settings surface: frame is the rectangle of the element core.settings-modal.plugin-view and clip the rectangle of the

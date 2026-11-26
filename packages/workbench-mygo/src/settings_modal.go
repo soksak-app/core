@@ -157,13 +157,8 @@ type settingsWindow struct {
 	viewPage    string
 	viewStopped bool
 	viewKeys    bool
-	// paneBounds is the pane in the last frame, in window DIPs, and paneHeight the height of its visible box.
+	// paneBounds is the pane in the last frame, in window DIPs.
 	paneBounds ui.Rect
-	paneHeight float32
-	// scopeHeight is the height of the scope tabs with their margin, and seatTop the top of the seat in the content of the pane, both
-	// in the last frame; the seat takes its height from them (docs/spec/plugins.md#settings-views).
-	scopeHeight float32
-	seatTop     float32
 }
 
 func newSettingsWindow() settingsWindow {

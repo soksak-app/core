@@ -2,6 +2,7 @@ package workbench
 
 import (
 	"encoding/json"
+	"errors"
 
 	"github.com/egoist/mygo/ui"
 
@@ -14,6 +15,9 @@ import (
 type settingsSurface struct {
 	surface *heldSurface
 	plugin  string
+	// height is the content height that the view reports with runtime.seat.height, 0 before the first report
+	// (docs/spec/plugins.md#settings-views).
+	height float32
 }
 
 // id is the surface id of the settings surface, settings/<plugin>.
@@ -92,25 +96,37 @@ func (s *Shell) failSettingsSurface(reason string) {
 	s.errors.Show(settingsErrorPlace(plugin), reason, "")
 }
 
+// setSeatHeight sets the height of the seat of the open settings surface to the content height that its view reports with
+// runtime.seat.height, and draws the window again when it changes; a view that is not the open settings surface is refused
+// (docs/spec/plugins.md#settings-views).
+func (s *Shell) setSeatHeight(surface string, height float32) error {
+	if !s.isSettingsSurface(surface) {
+		return errors.New("view call runtime.seat.height is served only for a settings surface")
+	}
+	if s.settingsView.height != height {
+		s.settingsView.height = height
+		s.options.Invalidate()
+	}
+	return nil
+}
+
 // isSettingsSurface tells whether surface is the open settings surface.
 func (s *Shell) isSettingsSurface(surface string) bool {
 	return s.settingsView != nil && s.settingsView.id() == surface && host.IsSettingsSurface(surface)
 }
 
 // drawSettingsSeat draws the seat of the settings view in the plugin page: the element core.settings-modal.plugin-view in the width of the
-// pane and the height of settingsSeatHeight, which holds the native view of the settings surface. The seat of the frame is the bounds of the
-// element clipped to the bounds of the pane in the last frame; a change of either draws the frame again, so a scroll and a resize of the
-// window measure it again (docs/spec/native-surfaces.md#settings-seat).
-func (s *Shell) drawSettingsSeat(c *ui.Context, pane settingsPane) {
+// pane and the content height that the view reports, which holds the native view of the settings surface; the height depends on the page of
+// the view alone, never on the position of the seat or the scroll of the pane. The seat of the frame is the bounds of the element clipped to
+// the bounds of the pane in the last frame; a change of either draws the frame again, so a scroll and a resize of the window measure it
+// again (docs/spec/plugins.md#settings-views, docs/spec/native-surfaces.md#settings-seat).
+func (s *Shell) drawSettingsSeat(c *ui.Context) {
 	view := s.settingsView
-	seat := s.exposedBox(c, "core.settings-modal.plugin-view", "", "")
-	// The top of the seat in the content of the pane, from the last frame, gives the seat its height; the height does not move the top,
-	// so the second frame of a page draws the seat at its height.
-	if top := seat.Bounds().Y - s.settingsWindow.paneBounds.Y + s.settingsWindow.scroll.Y; top != s.settingsWindow.seatTop {
-		s.settingsWindow.seatTop = top
-		s.options.Invalidate()
+	var height float32
+	if view != nil {
+		height = view.height
 	}
-	seat.FillWidth().Height(settingsSeatHeight(&s.settingsWindow, pane)).Role(ui.RoleGroup).Label("설정 view")
+	seat := s.exposedBox(c, "core.settings-modal.plugin-view", "", "").FillWidth().Height(height).Role(ui.RoleGroup).Label("설정 view")
 	if view == nil {
 		return
 	}

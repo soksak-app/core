@@ -499,7 +499,7 @@ const FEATURE_LINKS = [
     id: "F1128-2",
     implementation: [
       { file: "packages/workbench-mygo/src/settings_surface.go", symbol: "func (s *Shell) followSettingsSurface() {" },
-      { file: "packages/workbench-mygo/src/settings_surface.go", symbol: "func (s *Shell) drawSettingsSeat(c *ui.Context, pane settingsPane) {" },
+      { file: "packages/workbench-mygo/src/settings_surface.go", symbol: "func (s *Shell) drawSettingsSeat(c *ui.Context) {" },
       { file: "packages/host/go/src/modals.go", symbol: "func IsSettingsSurface(surface string) bool {" },
       { file: "packages/host/rust/src/modals.rs", symbol: "pub fn is_settings_surface(surface: &str) -> bool {" },
     ],
@@ -554,6 +554,23 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1213-1",
+    implementation: [
+      { file: "packages/plugin-api/view.js", symbol: "const followSeatHeight = () => {" },
+      { file: "packages/workbench/settings-view.js", symbol: "export function setSeatHeight(surface, height) {" },
+      { file: "packages/workbench-mygo/src/settings_surface.go", symbol: "func (s *Shell) setSeatHeight(surface string, height float32) error {" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/view.test.mjs", id: "followSeatHeight sends the height of the root element from the first observation and at each change" },
+      { file: "packages/plugin-api/test/view-answer-seat.test.mjs", id: "runtime.seat.height refuses a height that is negative, not finite or not a number, and sets no seat" },
+      { file: "packages/workbench/test/settings-seat-height.test.mjs", id: "the seat of the settings view takes the content height that the view reports" },
+      { file: "packages/workbench-mygo/tests/settings_surface_test.go", id: "TestTheSeatTakesTheContentHeightThatTheViewReports" },
+      { file: "packages/workbench-mygo/tests/settings_surface_test.go", id: "TestTheSeatHoldsItsHeightWhileThePaneScrollsToItsEnd" },
+    ],
+    expected: "The seat of a settings view takes the content height that its view reports and holds it while the pane scrolls.",
+    levels: ["unit"],
+  },
+  {
     id: "F1210-1",
     implementation: [
       { file: "packages/host/go/src/workspace.go", symbol: "func putPluginData(path string, req WorkspaceRequest) (bool, error) {" },
@@ -576,20 +593,6 @@ const FEATURE_LINKS = [
       { file: "native/darwin/tests/webview_geometry_test.m", id: "checkUnusedWheel" },
     ],
     expected: "A wheel that the page of a surface does not use scrolls the content behind the surface, and a dialog host passes none.",
-    levels: ["unit"],
-  },
-  {
-    id: "F1207",
-    implementation: [
-      { file: "packages/workbench-mygo/src/settings_draw.go", symbol: "func settingsSeatHeight(w *settingsWindow, pane settingsPane) float32 {" },
-      { file: "packages/workbench/settings-view.js", symbol: "export function seatHeight({ visible, top, paddingTop, paddingBottom, scope }) {" },
-    ],
-    tests: [
-      { file: "packages/workbench-mygo/tests/settings_surface_test.go", id: "TestTheSeatBelowTheHeadingEndsInsideThePane" },
-      { file: "packages/workbench-mygo/tests/settings_surface_test.go", id: "TestTheSeatOfAShortPaneShowsWholeBelowAStripOfRows" },
-      { file: "packages/workbench/test/settings-view.test.mjs", id: "the seat takes the height that the pane leaves below the heading" },
-    ],
-    expected: "The seat of a settings view stands below the heading and takes the height that the pane leaves below it, so the whole page of the view shows inside the pane.",
     levels: ["unit"],
   },
   {
@@ -18951,7 +18954,8 @@ const MOVED_COMPLETIONS = new Set(["F1135", "F6", "F596","F239-170", "F239-197",
 // a recording and of a drag. F239-47-40-3, F239-123, F239-234, F239-75, F750, F698, F239-136, F239-143, F239-144, F239-146,
 // F239-148, F239-149, F239-178, F239-245, F239-259, F610 and F239-242 wrote those parts, so they have no implementation left.
 // F239-194 loads the diagnostic modules at startup, which stays; its only check was the drag identity check that F746 removes.
-const REMOVED_COMPLETIONS = new Set(["F239-189", "F239-47-40-3", "F239-123", "F239-234", "F239-75", "F750", "F698", "F239-136",
+// F1213 replaces the seat height of F1207, the height that the pane leaves below the heading, with the content height of the view.
+const REMOVED_COMPLETIONS = new Set(["F1207", "F239-189", "F239-47-40-3", "F239-123", "F239-234", "F239-75", "F750", "F698", "F239-136",
   "F239-143", "F239-144", "F239-146", "F239-148", "F239-149", "F239-178", "F239-245", "F239-259", "F610", "F239-242", "F239-194", "F747", "F749", "F160.26", "F239-98", "F239-98-1", "F239-98-1-1", "F239-98-2", "F239-98-3", "F239-98-4", "F239-47-17",
   "F239-153", "F239-221-2", "F239-233", "F442", "F701", "F652", "F652-1", "F652-2", "F668", "F343", "F430", "F437", "F35", "F594", "F755",
   "F239-47-19", "F239-134", "F239-158", "F239-175", "F239-47-10", "F239-47-12", "F239-47-13", "F239-47-14", "F212.12-1-15-5", "F212.9-3-1", "F212.9a-1", "F239-107-1", "F239-220", "F239-40", "F239-43",

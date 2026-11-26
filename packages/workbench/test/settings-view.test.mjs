@@ -88,10 +88,24 @@ test("the settings surface is no section, has the kind settings and keeps no tab
   assert.deepEqual(surfaceKindOf(surface()), { kind: "settings", sidebar: null, dialog: null });
 });
 
-// The seat takes the height that the pane leaves below the heading, and when the heading leaves less than the scope tabs, the visible height
-// minus the scope tabs and both paddings (docs/spec/plugins.md#settings-views, F1207).
-test("the seat takes the height that the pane leaves below the heading", () => {
-  assert.equal(view.seatHeight({ visible: 516, top: 271, paddingTop: 20, paddingBottom: 24, scope: 50 }), 221);
-  assert.equal(view.seatHeight({ visible: 516, top: 271 + 171, paddingTop: 20, paddingBottom: 24, scope: 50 }), 50);
-  assert.equal(view.seatHeight({ visible: 516, top: 271 + 172, paddingTop: 20, paddingBottom: 24, scope: 50 }), 422);
+// The seat takes the content height that its settings view reports with runtime.seat.height: 0 before the first report and again for the
+// surface of a page shown again, and a surface that is not the open settings surface is refused (docs/spec/plugins.md#settings-views, F1213).
+test("the seat takes the content height that its settings view reports", () => {
+  let changes = 0;
+  const stop = view.onSettingsViewChange(() => changes++);
+  view.showSettingsView("probe");
+  assert.equal(view.seatContentHeight(), 0);
+  const before = changes;
+  view.setSeatHeight("settings/probe", 180);
+  assert.equal(view.seatContentHeight(), 180);
+  view.setSeatHeight("settings/probe", 180);
+  assert.equal(changes, before + 1, "a repeated height changes nothing");
+  assert.throws(() => view.setSeatHeight("tab-a", 10), /^Error: view call runtime.seat.height is served only for a settings surface$/);
+  view.showSettingsView(null);
+  assert.equal(view.seatContentHeight(), 0);
+  assert.throws(() => view.setSeatHeight("settings/probe", 10), /served only for a settings surface/);
+  view.showSettingsView("probe");
+  assert.equal(view.seatContentHeight(), 0, "the surface of a page shown again starts without a report");
+  view.showSettingsView(null);
+  stop();
 });
