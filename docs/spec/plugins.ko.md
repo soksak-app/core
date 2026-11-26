@@ -91,6 +91,8 @@ plugin 동작의 창 검사는 그 plugin의 repository에서 실행된다([검�
 | `background` | 아니오 | `{ "sidecar": "<선언한 사이드카>", "operation": "<동작 이름>", "settings"?: { "<요청 필드>": "<선언한 설정>" }, "directory"?: "<요청 필드>", "params"?: { "<요청 필드>": "<탭 매개변수>" } }`: 표면이 마운트되지 않은 비활성 탭마다 네이티브 표면을 만들지 않고 선언한 사이드카 세션 하나를 유지한다. 워크벤치는 대응한 플러그인 설정의 현재 값을 요청 필드에 넣고, 탭의 시작 디렉터리를 `directory`가 가리키는 필드에, 탭이 가진 대응 탭 매개변수의 값을 그 요청 필드에 넣는다([background sessions](#background-sessions)). `settings`, `directory`, `params`는 `operation`을 가리킬 수 없고, `settings`는 선언하지 않은 설정을 가리킬 수 없으며, `directory`와 `params`는 `settings`의 필드를 가리킬 수 없고, `params`의 각 탭 매개변수는 비어 있지 않은 이름이다. `surface`와 `dependencies`가 필요하다 |
 | `programs` | 아니오 | `{ "<name>": { "program": "<text>", "args"?: [ <slot>, ... ] } }`: plugin의 페이지가 이름으로 실행할 수 있는 외부 프로그램([프로그램 실행](native-surfaces.ko.md#프로그램-실행))이다. `name`은 `[a-z][a-z0-9-]*` 형식이다. `program`은 1~255 byte이며 제어 문자가 없는 text다. PATH에서 찾는 bare name, 프로젝트 폴더를 기준으로 하는 구분자가 있는 상대 경로, 절대 경로, 또는 plugin 자신의 파일을 가리키는 `plugin:<path>` 중 하나다. `<path>`는 `/`로 구분한 상대 경로이며, 빈 segment, `.`, `..` segment가 없고 backslash가 없다. slot은 인자가 같아야 하는 text이거나, 인자 전체가 맞아야 하는 `{ "pattern": "<정규 표현식>" }`(512 byte 이하)다. `args`는 최대 16개 slot이며 인자를 받지 않는 프로그램은 생략한다. `surface`나 `sections`가 필요하며, plugin의 모든 view surface, 곧 tab, section, dialog surface가 이 선언을 담는다 |
 | `accounts` | 아니오 | `{ "kinds": [ { "value": "<kind>", "label": "<text>" }, ... ], "programs": { "status": "<program>", "login": "<program>", "logout": "<program>" } }`: settings window의 plugin page가 그리는 plugin의 [계정](#accounts)이다. 이름이 붙은 프로그램을 가진 `programs`와 scope가 `plugin`인 data key `accounts`가 필요하다 |
+| `categories` | 아니오 | `[ "<category>", ... ]`: 플러그인의 [plugin categories](#plugin-categories)이며, 각각 core의 plugin category이고 한 번씩 나열한다. `surface`가 필요하다 |
+| `requires` | 아니오 | `[ "<category>", ... ]`: 플러그인이 요구하는 [plugin categories](#plugin-categories)이며, 각각 core의 plugin category이고 플러그인이 `categories`에 나열하지 않은 것이며 한 번씩 나열한다. `surface` 또는 `sections`가 필요하다 |
 
 이 표에 없는 manifest member는 알 수 없는 member이며 그 manifest는 거부된다. 제거된 member `host`와 `hostOperations`는 `plugin <id>: <member> is removed; a section is a view of the plugin`으로 거부된다. 0.0.x release version인 동안은 저장 데이터 마이그레이션을 싣지 않으므로 어떤 manifest도 migration member를 선언하지 않는다.
 
@@ -277,6 +279,23 @@ plugin은 다른 plugin이 선언한 확장 지점으로 그 plugin을 확장한
 - **제공자 interface.** 제공자 page의 surface context는 `contributions(point)`를 가지며, 그 지점의 연결된 항목을 `{plugin, index, item, module, folder, fail(reason)}`로 돌려준다. `index`는 그 plugin의 `contributes` 안에서 항목의 위치이고, `module`은 import할 URL이며, `folder`는 contributor가 설치된 folder의 절대 경로로 `/installed-plugins.json`에서 그 항목의 `folder`다([설치된 plugin 제공](installation.md#serving-installed-plugins)). 그래서 제공자는 자기가 실행하는 program에 contributor의 file을 지정할 수 있다. 제공자는 각 module을 import하고 지점 interface가 정한 export를 호출한다. 실패한 export는 그 항목을 `invalid`로 만들고 다른 항목은 연결된 채로 둔다.
 - **권한.** 기여 module은 제공자 page 안에서 그 page의 권한으로 실행된다. 기여자를 설치하면 그 기여자는 제공자의 문서와 입력처럼 제공자 page가 받는 것을 받는다.
 
+## Plugin categories
+
+plugin category는 여러 plugin이 제공할 수 있는 기능이다. 그래서 그 기능이 필요한 plugin은 같은 category의 어떤 plugin과도 함께 동작한다. `dependencies`는 한 package와 그 version을 적으므로 여러 plugin 중 하나를 요구할 수 없고, 그래서 plugin category는 `dependencies`와 따로 선언한다. Core가 plugin category를 정의하며, category 이름은 plugin id가 아니다:
+
+- `terminal`: surface가 terminal session에서 program을 실행하는 plugin이며, `core.layout.open`이 `program`, `args`, `role` parameter로 시작한다([agent roles](agent-roles.ko.md)).
+
+category의 interface는 고정되며, 바뀌면 다른 이름의 새 category다. category 목록은 case 파일 `docs/spec/cases/plugin-categories.json`이며, `@soksak/plugin-api`와 Go, Rust의 `sok` validator가 이 파일에 대해 시험한다.
+
+- `categories`와 `requires`는 각각 core의 plugin category를 한 번씩 나열하며, plugin은 `categories`에 나열한 category를 `requires`로 요구하지 않는다. validator는 다른 값을 `plugin <id>: <member> <reason>`으로 거부하며, `<reason>`은 `must be a list of plugin categories`, `category <name> is not a plugin category of core`, `category <name> repeats`이거나, `requires`이면 `category <name> is in categories`다.
+- `sok plugin install`, `sok plugin enable`, `sok plugin update`는 작업 뒤에 설치되고 켜진 plugin과 작업이 설치하는 plugin 중에서 그 category를 제공하는 다른 plugin이 없는 category를 요구하는 plugin을 `plugin <id> requires a <category> plugin, and no installed and enabled plugin is one`으로 거부한다. `sok plugin disable`, `sok plugin remove`, `sok plugin update`는 켜진 plugin이 요구하는 category의 켜진 plugin을 남기지 않는 작업을 `plugin <id> is the last <category> plugin, which <requirer> requires`로 거부하며, requirer는 id 순서로 나열한다. installer는 사용자를 대신해 category의 plugin을 고르지 않는다.
+- 시작할 때 workbench는 manifest를 읽은 뒤 category를 검사한다. 창의 불러오고 켜진 plugin 중 어떤 것도 제공하지 않는 category를 요구하는 켜진 plugin은 불러오지 않으며, 이유는 [불러오지 않은 플러그인](#불러오지-않은-플러그인)의 `requires`다. 오류 표시는 `plugin <id> requires a <category> plugin, and no loaded plugin is one`을 보인다. 나머지 plugin은 시작한다.
+- 상태 `core.plugin-categories`는 `{ "<category>": [ { "id", "name" }, ... ] }`이며, core의 각 plugin category와 창의 불러오고 켜진 그 category의 plugin을 id 순서로 담는다.
+
+`{ "type": "plugin", "category": "<category>" }` 형식의 설정은 그 category의 plugin 하나를 가리킨다([설정 선언](#설정-선언)). 이 설정은 `default`를 갖지 않는다. 값은 저장된 값이며 모든 저장 값과 같이 검사한다. 불러오고 켜진 그 category의 plugin을 가리키지 않는 값은 명시적인 로딩 오류 `<plugin>.<key>: plugin <value> is not a <category> plugin`이며 대체하지 않는다. `environment.json`의 값도 같은 방식으로 검사한다. 저장된 값이 없는 동안 값은 창에 그 category의 plugin이 정확히 하나 있을 때 그 plugin이다. 그 밖에는 설정에 값이 없고, 사용자가 고를 때까지 오류 표시가 `<plugin>.<key>: choose a <category> plugin`을 보인다. 설정 창은 category의 plugin을 이름으로 가진 선택 상자를 보인다.
+
+이유: category의 plugin을 요구하는 plugin에서 그 category의 plugin을 없애는 작업은 다음 시작에서 실패하므로 installer가 먼저 거부한다. 시작은 요구하는 plugin만 거부하는데, 다른 plugin이 그 plugin에 의존하지 않기 때문이다. `plugin` 형식의 설정은 `default`가 없는데, 어떤 plugin도 애플리케이션이 설치한 plugin을 알지 못하고, 같은 category의 plugin을 하나 더 설치해도 저장된 값이 가리키는 plugin이 바뀌지 않기 때문이다.
+
 ## 외부 라이브러리
 
 스테이징은 패키지 `files`를 복사하고 페이지 import map은 코어 모듈과 `@soksak/shared/`만 가리키므로, 플러그인 페이지는 자기 plugin 안의 파일과 [확장 지점](#확장-지점)의 공유 module만 불러오고, 제공자 페이지는 자기 지점의 기여 module도 불러온다. 외부 브라우저 라이브러리를 쓰는 플러그인은 자기 `scripts/build-vendor.mjs`(esbuild)로 라이브러리를 `ui/vendor/` 아래 ES 모듈 하나로 번들하고, 번들에 든 모든 패키지의 라이선스와 고지를 담은 `.LICENSE.txt` 파일과 함께 커밋하며, `ui`를 통해 `files`에 나열한다. 라이브러리와 esbuild는 정확한 버전의 `devDependencies`다. 플러그인의 `pnpm test`는 스크립트를 `--check`로 실행하며, 커밋된 파일이 새 빌드와 다르면 실패한다. 파일 플러그인은 바닐라 진입점 `@pierre/trees`로 `@pierre/trees` 1.0.0-beta.4(Apache-2.0)와 그 의존성 `preact`(MIT)를 번들한다.
@@ -432,8 +451,9 @@ plugin 저장소의 catalog 검사(`sok-check events`)는 `runtime.log.<level>(`
 | `reload` | 창을 다시 불러오면 <plugin> 플러그인이 열립니다. | 없음. plugin 카드의 적용이 창을 다시 불러온다([변경 적용](installation.ko.md#변경-적용)) |
 | `host` | <plugin> 플러그인은 네이티브 호스트가 있어야 설치됩니다. | 없음. 애플리케이션에 host가 없다 |
 | `unread` | <plugin> 플러그인의 설치 상태를 읽지 못했습니다. | 없음. plugin 상태를 읽지 못했다 |
+| `requires` | <plugin> 플러그인에 필요한 <category> 플러그인이 없습니다. | 없음. plugin 화면이 그 category의 plugin을 설치하거나 켜며, 시작 때 오류 표시가 그 오류를 보였다 |
 
-  이유는 `installed.json`이 플러그인을 끈 상태로 나열하면 `disabled`, 켠 상태로 나열하고 창이 그 entry나 manifest를 거부했으면 `refused`, 그 밖에 켠 상태로 나열하면 `reload`, 나열하지 않으면 `missing`, host가 없으면 `host`, [plugin 상태](installation.ko.md#애플리케이션-안의-plugin-작업)를 읽지 못하면 `unread`다. 워크벤치는 첫 스페이스를 열기 전에 plugin 상태를 읽는다. 카드는 `plugins-changed` event마다 이유를 다시 정한다.
+  이유는 `installed.json`이 플러그인을 끈 상태로 나열하면 `disabled`, 켠 상태로 나열하고 창이 그 entry나 manifest를 거부했으면 `refused`, `installed.json`이 플러그인을 켠 상태로 나열하는데 창의 불러오고 켜진 plugin 중 그 plugin이 요구하는 category의 plugin이 없으면 `requires`([plugin categories](#plugin-categories)), 그 밖에 켠 상태로 나열하면 `reload`, 나열하지 않으면 `missing`, host가 없으면 `host`, [plugin 상태](installation.ko.md#애플리케이션-안의-plugin-작업)를 읽지 못하면 `unread`다. 워크벤치는 첫 스페이스를 열기 전에 plugin 상태를 읽는다. 카드는 `plugins-changed` event마다 이유를 다시 정한다.
 - 그런 플러그인을 가리키는 사이드바 연결은 유지하며 아무 내용도 고르지 않는다. 플러그인(첫 `.` 앞의 id)을 불러오지 않은 세트 섹션은 세트에 유지하되 보이지 않으며 어떤 layout도 그 surface를 쥐지 않는다. 세트 편집은 그 행을 "<section id> (불러오지 않음)"과 ▲, ▼, −로 보여 준다.
 - 그런 플러그인의 `plugins.<plugin id>` 아래 프로젝트 데이터는 바꾸지 않고 유지한다.
 - 그런 플러그인을 가리키는 `environment.json` 항목은 유지한다. 그 `settings`는 검사하지도 적용하지도 않고, 그 `workspace` 탭은 placeholder 카드로 열린다. 그래서 환경이 가리키는 플러그인을 끄거나 제거해도 애플리케이션은 시작한다.
@@ -525,7 +545,7 @@ surface 구성의 image region은 자체 배치를 갖지 않는다. 워크벤�
 
 ### 설정 선언
 
-플러그인은 `plugin.json`의 `settings`에 타입이 있는 설정을 선언할 수 있다. 객체 키는 플러그인 내부 설정 이름이며 워크벤치는 이를 `<플러그인 id>.<키>`로 노출한다. 각 선언은 설정 창의 한국어 행 이름인 1자에서 40자 사이의 `label`을 가지며, 행 아래에 보이는 1자에서 200자 사이의 `description`을 가질 수 있다. 이름과 값 이름만으로 값이 무엇을 하는지 알 수 없으면 설명이 필요하다. 각 선언은 또 열거형이면 `type`, `default`, `values`를, 범위가 있는 정수면 `type`, `default`, `minimum`, `maximum`을, 최대 `maxLength`자의 비어 있지 않은 문자열이면 `type`, `default`, `maxLength`를, 주소면 `type`과 `default`를 가진다. 주소는 빈 문자열이거나 최대 2048자의 `http` 또는 `https` 주소다. 설정 창은 문자열과 주소를 한 줄 글자 입력으로 보인다. 타입과 검증 규칙의 유일한 출처는 선언이며 모르는 설정 키와 잘못된 기본값은 manifest 검증을 실패시킨다.
+플러그인은 `plugin.json`의 `settings`에 타입이 있는 설정을 선언할 수 있다. 객체 키는 플러그인 내부 설정 이름이며 워크벤치는 이를 `<플러그인 id>.<키>`로 노출한다. 각 선언은 설정 창의 한국어 행 이름인 1자에서 40자 사이의 `label`을 가지며, 행 아래에 보이는 1자에서 200자 사이의 `description`을 가질 수 있다. 이름과 값 이름만으로 값이 무엇을 하는지 알 수 없으면 설명이 필요하다. 각 선언은 또 열거형이면 `type`, `default`, `values`를, 범위가 있는 정수면 `type`, `default`, `minimum`, `maximum`을, 최대 `maxLength`자의 비어 있지 않은 문자열이면 `type`, `default`, `maxLength`를, 주소면 `type`과 `default`를 가진다. 주소는 빈 문자열이거나 최대 2048자의 `http` 또는 `https` 주소다. `type`이 `plugin`인 선언은 `type`, `category`, `label`, `description`을 가지며 `default`를 갖지 않는다([plugin categories](#plugin-categories)). 설정 창은 문자열과 주소를 한 줄 글자 입력으로 보인다. 타입과 검증 규칙의 유일한 출처는 선언이며 모르는 설정 키와 잘못된 기본값은 manifest 검증을 실패시킨다.
 
 애플리케이션은 `environment.json`의 `settings`에 플러그인 id와 내부 설정 이름별 초기값을 제공할 수 있다. 값은 선언된 설정을 가리키고 선언 규칙을 통과해야 한다. 우선순위는 플러그인 기본값, 애플리케이션 값, 저장된 공통값, 저장된 프로젝트 덮어쓰기 순서다. 저장값은 유효 설정이 되기 전에 선언 규칙으로 검증하며 잘못된 저장 데이터는 명시적인 로딩 오류이고 대체하지 않는다.
 

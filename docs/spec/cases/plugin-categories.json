@@ -1,0 +1,4 @@
+{
+  "description": "The plugin categories of core (docs/spec/plugins.md#plugin-categories). The validators of packages/plugin-api and of sok in Go and Rust hold the same list, and their tests compare it with this file.",
+  "categories": ["terminal"]
+}

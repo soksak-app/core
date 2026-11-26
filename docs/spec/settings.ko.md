@@ -119,6 +119,7 @@ chrome 버튼과 app 메뉴의 항목 설정…(Settings…), 단축키 `cmd+,`�
 | Catalog의 theme (`theme`) | Theme마다 그 theme의 색과 형태로 그린 견본 하나가 있는 견본 격자 | `core.settings.theme {name, scope}` |
 | 경계가 있는 정수 (`gap`, `radius`, `size`, `memorySaverDelay`, [배치 값](#배치-값), plugin `integer`) | 경계 사이의 슬라이더와 그 뒤의 값과 단위. drag는 각 값을 슬라이더 옆에 보이고, 놓을 때의 값으로 command를 한 번 실행한다 | `core.settings.change {key, value, scope}` |
 | 문자열 또는 주소 (plugin `string` 또는 `address`) | 한 줄 글자 입력 | `core.settings.change {key, value, scope}` |
+| category의 plugin (plugin `plugin`, [plugin categories](plugins.ko.md#plugin-categories)) | 불러오고 켜진 해당 category의 plugin마다 이름을 붙인 항목 하나를 가진 선택 상자 | `core.settings.change {key, value, scope}` |
 | 세트 참조 ([사이드바 선택](#사이드바-선택)의 연결) | 사용 안 함과 모든 세트의 선택 상자 | `core.settings.link {place, plugin, set, scope}` |
 | 목록 값의 순서 (`sidebarOrder`) | 현재 순서대로 값마다 값의 이름이 붙은 줄 하나와, 첫 줄에 없는 ▲, 끝 줄에 없는 ▼. 버튼은 자기 줄을 위나 아래 줄과 바꾼다 | 새 목록 전체를 `value`로 한 `core.settings.change {key, value, scope}` |
 | 계정 목록 (plugin의 [계정](plugins.ko.md#accounts)) | 계정마다 이름, 종류, login, 사용량과 버튼 로그인, 취소, 로그아웃, 이름 변경, 삭제를 가진 행 하나, 그리고 이름 field, 종류 select, 추가를 가진 행 새 계정 | `{plugin, ...}`를 받는 `core.accounts.add`, `core.accounts.rename`, `core.accounts.remove`, `core.accounts.login`, `core.accounts.login-cancel`, `core.accounts.logout` |
