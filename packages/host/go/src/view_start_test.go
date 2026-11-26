@@ -521,6 +521,7 @@ func TestDecodedSyncRequestKeepsTheClipOfTheSettingsSurface(t *testing.T) {
 // A window without a main page draws its settings window itself and holds the settings surface in the native view element of the seat,
 // which the pane clips, so the host seats the settings surface over a modal web view only in a window with a main page
 // (docs/spec/native-modals.md#settings-surface, F1200).
+// contract: surfaces-geometry.sync.settings-seat-over-modal-needs-a-main-page
 func TestOnlyAWindowWithAMainPageSeatsTheSettingsSurfaceOverItsModal(t *testing.T) {
 	previous := framework
 	t.Cleanup(func() { framework = previous })
