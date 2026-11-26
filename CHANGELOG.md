@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1215-4, F1215-5: The web and mygo workbenches draw the group 계정 of the plugin page of a plugin that declares accounts: a row per account with its kind, login and usage lines and the buttons 로그인, 취소, 로그아웃, 이름 변경 and 삭제, and the row 새 계정. The commands `core.accounts.add`, `rename`, `remove`, `login`, `login-cancel` and `logout` change the plugin key accounts and run the account programs of the plugin, the status `core.accounts` reports the accounts of the shown page, and the fields of the group run `core.settings-modal.account-name`, `account-kind`, `account-edit` and `account-edit-name`.
 - F1215-6: The accounts check of the Rust `sok` states why the name of an account program needs no default, so the event source check passes.
 - F1210-6: The event catalog and the logging policy declare `host.workspace.plugin-data` with `plugin` and `key`, which both hosts emit for each stored entry of a plugin key.
 - F1215-3: The Go and Rust hosts run the account programs of a plugin with `accountRun` and `accountRunCancel` in the data folder of the plugin, apart from the runs of the surfaces, and serve `accountHomes`, `accountHomeCreate` and `accountHomeRemove`; the `host.program` events of an account run carry `run` instead of `surface`.

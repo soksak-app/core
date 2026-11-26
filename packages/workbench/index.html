@@ -88,6 +88,7 @@ import { applyFrameText, chromeRow, drawnFrameText } from "./frame-text.js";
 import { activityState, coreChanged, followPlugins, installCoreExposure, installErrorExposure, onActivity, onActivityError, onProgramError, redrawSettings, setVerify, syncActivity } from "./core-exposure.js";
 /* The setup parts of the agents of this machine, which the settings window shows (docs/spec/settings.md#agents). */
 import { installSetupExposure } from "./setup-exposure.js";
+import { installAccountsExposure } from "./accounts-exposure.js";
 /* Only a diagnostic build contains the diagnostic methods. In other builds this is an empty module. */
 import "./diagnostics.js";
 
@@ -620,6 +621,8 @@ const coreExposure = installCoreExposure({
   }),
 });
 installSetupExposure({ showError, changed: redrawSettings });
+// An account error belongs to the plugin page of the settings window, whose place is settings <plugin> (docs/spec/plugins.md#accounts).
+installAccountsExposure({ showError: (plugin, text) => showError(text, "", `settings ${plugin}`, `settings ${plugin}`), changed: redrawSettings });
 // Every wait of the start can fail, and a failure rejects the memory readiness, so no drawn placement waits for a readiness that
 // never comes.
 try {

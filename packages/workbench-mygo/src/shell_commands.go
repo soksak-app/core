@@ -137,6 +137,7 @@ func (s *Shell) register() {
 	s.registerCardSidebars()
 	s.registerPlugins()
 	s.registerSetup()
+	s.registerAccounts()
 	s.registerDebug()
 	// The project list shows the library and selects its page of the projects (docs/spec/installation.md#plugin-screen).
 	act(s, "core.projects.browse", func(struct{}) error {

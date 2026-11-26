@@ -61,6 +61,12 @@ func (s *Shell) settingsForFrame(c *ui.Context, width, height float32) *settings
 	// Showing the agent group reads the setup parts (docs/spec/settings.md#agents); the group stands in the common scope of
 	// the general section, and the scope is common while no project is selected.
 	s.setupOperations.Show(w.open && w.section == "general" && (w.scope == "common" || s.settings.Project() == ""))
+	// Showing the page of a plugin with accounts reads their state (docs/spec/plugins.md#accounts).
+	shown := ""
+	if w.open && w.section == "plugins" {
+		shown = w.chosen
+	}
+	s.accounts.Show(shown)
 	if !w.open {
 		return nil
 	}
@@ -68,6 +74,7 @@ func (s *Shell) settingsForFrame(c *ui.Context, width, height float32) *settings
 	if err != nil {
 		s.closeSettings()
 		s.setupOperations.Show(false)
+		s.accounts.Show("")
 		s.fail(err)
 		return nil
 	}
@@ -322,6 +329,8 @@ func (s *Shell) drawControl(c *ui.Context, control *SettingsControl, pane settin
 		})
 	case controlSetup:
 		s.drawSetupRow(c, control, pane)
+	case controlAccount:
+		s.drawAccountRow(c, control, pane)
 	case controlMark:
 		// The mark that the project value applies, the .set-applied of packages/workbench/app.css (docs/spec/settings.md#scope-of-a-control).
 		s.exposedBox(c, control.Name, "", control.item()).Shrink(0).Role(ui.RoleGroup).Label(control.Label).Children(func() {
@@ -619,5 +628,21 @@ func (s *Shell) drawSetupRow(c *ui.Context, control *SettingsControl, pane setti
 		if row.action != nil {
 			s.drawButton(c, row.action, pane)
 		}
+	})
+}
+
+// drawAccountRow draws a row of the group 계정: the line of the account, its usage lines, and its controls in one line.
+func (s *Shell) drawAccountRow(c *ui.Context, control *SettingsControl, pane settingsPane) {
+	row := control.account
+	s.exposedBox(c, control.Name, "", control.item()).FillWidth().Column().Gap(pane.captionGap).Padding(pane.captionGap).Role(ui.RoleGroup).Label(control.Label).Children(func() {
+		ui.Text(c, row.line).Wrap().FontSize(s.textControl()).TextColor(s.palette.Fg)
+		for _, line := range row.usage {
+			ui.Text(c, line).Wrap().FontSize(s.textSmall()).TextColor(s.palette.Muted)
+		}
+		ui.Row(c).FillWidth().Wrap().Gap(pane.rowGap).AlignItems(ui.Center).Children(func() {
+			for _, item := range row.controls {
+				s.drawControl(c, item, pane)
+			}
+		})
 	})
 }

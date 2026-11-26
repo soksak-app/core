@@ -61,6 +61,8 @@ type installedUnit struct {
 	Drop string
 	// Programs holds the programs member of plugin.json as it stands there, which the view sync request declares (docs/spec/native-surfaces.md#program-runs).
 	Programs json.RawMessage
+	// Accounts is the member accounts of plugin.json, and nil for a plugin without accounts (docs/spec/plugins.md#accounts).
+	Accounts *accountsDeclaration
 	// Program is the status that carries the program state of the tabs of the plugin, "" when it declares none (docs/spec/program-state.md).
 	Program string
 	// Opens holds the extensions of surface.opens, and Background the background declaration, or nil.
@@ -109,6 +111,7 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 				Background   *BackgroundDeclaration       `json:"background"`
 				Sessions     bool                         `json:"sessions"`
 				Programs     json.RawMessage              `json:"programs"`
+				Accounts     *accountsDeclaration         `json:"accounts"`
 				Exposes      json.RawMessage              `json:"exposes"`
 				Dependencies map[string]any               `json:"dependencies"`
 				Settings     map[string]json.RawMessage   `json:"settings"`
@@ -137,6 +140,7 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 		unit.Background = plugin.Manifest.Background
 		unit.Sessions = plugin.Manifest.Sessions
 		unit.Programs = plugin.Manifest.Programs
+		unit.Accounts = plugin.Manifest.Accounts
 		for name, dialog := range plugin.Manifest.Dialogs {
 			if unit.Dialogs == nil {
 				unit.Dialogs = map[string]dialogDeclaration{}

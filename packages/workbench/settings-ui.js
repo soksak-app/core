@@ -18,7 +18,8 @@ import { native, overlay } from "./host.js";
 import { icon } from "./icons.js";
 import { onGripDrag, showValue } from "./card.js";
 import { commandOf, delegate, mark, run } from "./commands.js";
-import { pluginUnits } from "./environment.js";
+import { pluginAccounts, pluginUnits } from "./environment.js";
+import { accounts } from "./accounts-exposure.js";
 import { SIDE_NAMES, WINDOW_SIDES } from "./window-sidebars.js";
 import { matchPlugins } from "./plugin-search.js";
 import { restoreScroll, scrollPositions } from "./scroll-keep.js";
@@ -47,6 +48,11 @@ let chosen = null;
 let query = "";
 /** The id of the set being edited in the sidebar section. null when there is none. */
 let editing = null;
+/**
+ * The fields of the group 계정 of the shown plugin page (docs/spec/plugins.md#accounts): the name and the kind of the row 새 계정, the
+ * id of the account whose name is edited, and the text of its field. Another page clears them.
+ */
+let accountDraft = { plugin: null, name: "", kind: null, edit: null, editName: "" };
 /** The setting of the key of a control: links for a link, sets for a control of the set editor, and the key itself otherwise. */
 const settingOf = (key) => key.startsWith("link:") ? "links"
   : ["title:", "layout:", "row:"].some((prefix) => key.startsWith(prefix)) ? "sets" : key;
@@ -533,14 +539,100 @@ function drawPluginList() {
     [row("", manage), row("찾기", search), list]));
 }
 
+/** The login of an account as the row shows it. */
+function loginText(account) {
+  if (account.running) return "로그인 중";
+  if (account.login === true) return account.until === null ? "로그인됨" : `로그인됨 · ${account.until}까지`;
+  if (account.login === false) return "로그인 필요";
+  return "-";
+}
+
+/** A text field of the group 계정 that runs command with its text as name. */
+function accountField(key, command, now) {
+  const el = document.createElement("input");
+  el.type = "text";
+  el.className = "text-field";
+  el.dataset.set = key;
+  el.dataset.expose = `core.settings-modal.${key}`;
+  mark(el, command, {}, "name");
+  el.maxLength = 40;
+  el.setAttribute("value", now);
+  return el;
+}
+
+/** One row of an account: its name, kind, login and usage lines, and its buttons. */
+function accountRow(plugin, kinds, account) {
+  const el = document.createElement("div");
+  el.className = "set-account";
+  el.dataset.expose = "core.settings-modal.account";
+  el.dataset.account = account.id;
+  const line = document.createElement("p");
+  line.className = "set-account__line";
+  // default: a stored kind is a declared kind, which the check of the records holds.
+  const kind = kinds.find((item) => item.value === account.kind).label;
+  line.textContent = `${account.name} · ${kind} · ${loginText(account)}`;
+  el.append(line);
+  for (const usage of account.usage) {
+    const used = document.createElement("p");
+    used.className = "set-caption";
+    used.textContent = usage.resets === null ? `${usage.label} ${usage.used}%` : `${usage.label} ${usage.used}% · ${usage.resets} 초기화`;
+    el.append(used);
+  }
+  const params = { plugin, id: account.id };
+  const buttons = document.createElement("div");
+  buttons.className = "set-account__buttons";
+  if (accountDraft.edit === account.id) {
+    buttons.append(
+      accountField("account-edit-name", "core.settings-modal.account-edit-name", accountDraft.editName),
+      button(`account-save:${account.id}`, "core.settings-modal.account-save", "저장", "core.accounts.rename", { ...params, name: accountDraft.editName }),
+      button(`account-edit-cancel:${account.id}`, "core.settings-modal.account-edit-cancel", "취소", "core.settings-modal.account-edit", { id: null }));
+  } else {
+    if (account.running) buttons.append(button(`account-login-cancel:${account.id}`, "core.settings-modal.account-login-cancel", "취소", "core.accounts.login-cancel", params));
+    else if (account.login === false) buttons.append(button(`account-login:${account.id}`, "core.settings-modal.account-login", "로그인", "core.accounts.login", params));
+    else if (account.login === true) buttons.append(button(`account-logout:${account.id}`, "core.settings-modal.account-logout", "로그아웃", "core.accounts.logout", params));
+    buttons.append(
+      button(`account-edit:${account.id}`, "core.settings-modal.account-edit", "이름 변경", "core.settings-modal.account-edit", { id: account.id }),
+      button(`account-remove:${account.id}`, "core.settings-modal.account-remove", "삭제", "core.accounts.remove", params));
+  }
+  el.append(buttons);
+  return el;
+}
+
+/** The group 계정 of a plugin that declares accounts: a row per account and the row 새 계정 (docs/spec/plugins.md#accounts). */
+function accountsGroup(unit, declared) {
+  let listed;
+  try {
+    listed = accounts.list(unit.id);
+  } catch (error) {
+    // A record of another form fails the page through the error display, and the group shows no account.
+    showError(document, `settings ${unit.id}`, error.message);
+    listed = [];
+  }
+  const rows = listed.map((account) => accountRow(unit.id, declared.kinds, account));
+  const kind = selectBox("account-kind", declared.kinds.map((item) => [item.value, item.label]), accountDraft.kind);
+  kind.firstChild.dataset.expose = "core.settings-modal.account-kind";
+  mark(kind.firstChild, "core.settings-modal.account-kind", {}, "kind");
+  const add = button("account-add", "core.settings-modal.account-add", "추가", "core.accounts.add",
+    { plugin: unit.id, name: accountDraft.name, kind: accountDraft.kind });
+  const fresh = document.createElement("div");
+  fresh.className = "set-account set-account--new";
+  fresh.append(accountField("account-name", "core.settings-modal.account-name", accountDraft.name), kind, add);
+  return group("계정", `${unit.name} 플러그인이 실행하는 CLI의 계정. 로그인은 시스템 브라우저에서 한다.`, [...rows, row("새 계정", fresh)]);
+}
+
 /** The settings page of one loaded plugin: the button that returns to the list, the settings, the sections and the sidebar choices. */
 function drawPluginPage(unit) {
   const back = button("plugins:list", "core.settings-modal.back", "목록", "core.settings-modal.plugin", { plugin: null });
   body.append(group(unit.name, unit.id, [row("", back)]));
+  const declared = pluginAccounts(unit.id).accounts;
+  if (declared) {
+    if (accountDraft.plugin !== unit.id) accountDraft = { plugin: unit.id, name: "", kind: declared.kinds[0].value, edit: null, editName: "" };
+    body.append(accountsGroup(unit, declared));
+  }
 
-  const declared = Object.entries(settingDefinitions()).filter(([, d]) => d.plugin === unit.id);
-  if (declared.length) {
-    body.append(group("설정", `${unit.name} 플러그인이 선언한 설정.`, declared.flatMap(([key, d]) => declaredRow(key, d))));
+  const settings = Object.entries(settingDefinitions()).filter(([, d]) => d.plugin === unit.id);
+  if (settings.length) {
+    body.append(group("설정", `${unit.name} 플러그인이 선언한 설정.`, settings.flatMap(([key, d]) => declaredRow(key, d))));
   } else {
     const none = document.createElement("p");
     none.className = "set-caption";
@@ -785,6 +877,49 @@ export function showPlugin(id) {
   drawSettings();
 }
 
+/** The shown plugin page with accounts; the fields of the group 계정 exist only there. */
+function accountPage() {
+  if (!card) throw new Error("settings are not open");
+  if (here !== "plugins" || chosen === null || !pluginAccounts(chosen)?.accounts) throw new Error("no page of a plugin with accounts shows");
+}
+
+/** Sets the text of the name field of the row 새 계정. */
+export function setAccountName(name) {
+  accountPage();
+  if (typeof name !== "string") throw new Error("name must be a string");
+  accountDraft = { ...accountDraft, name };
+  drawSettings();
+}
+
+/** Sets the kind of the row 새 계정. */
+export function setAccountKind(kind) {
+  accountPage();
+  if (!pluginAccounts(chosen).accounts.kinds.some((item) => item.value === kind)) throw new Error(`account kind ${kind} is not declared by ${chosen}`);
+  accountDraft = { ...accountDraft, kind };
+  drawSettings();
+}
+
+/** Shows the name field of the account id with its name, or ends the edit with null. */
+export function editAccount(id) {
+  accountPage();
+  if (id === null) accountDraft = { ...accountDraft, edit: null, editName: "" };
+  else {
+    const account = accounts.list(chosen).find((item) => item.id === id);
+    if (!account) throw new Error(`account ${id} is not defined`);
+    accountDraft = { ...accountDraft, edit: id, editName: account.name };
+  }
+  drawSettings();
+}
+
+/** Sets the text of the name field of the edited account. */
+export function setAccountEditName(name) {
+  accountPage();
+  if (accountDraft.edit === null) throw new Error("no account name is edited");
+  if (typeof name !== "string") throw new Error("name must be a string");
+  accountDraft = { ...accountDraft, editName: name };
+  drawSettings();
+}
+
 /** Changes the search term of the plugin list. */
 export function searchPlugins(text) {
   if (!card) throw new Error("settings are not open");
@@ -861,6 +996,8 @@ export function drawSettings() {
   SECTIONS.find(([id]) => id === here)[2]();
   // Showing the agent group reads the setup parts (docs/spec/settings.md#agents).
   setupParts.show(here === "general" && scope === "common");
+  // Showing the page of a plugin with accounts reads their state (docs/spec/plugins.md#accounts).
+  accounts.show(here === "plugins" ? chosen : null);
   overlay.update(card);
   // When the content changes, the size of the card changes too. If the position is not notified again, the view
   // keeps the previous size and the card inside it grows or is cut off.
@@ -898,8 +1035,25 @@ function answer(key, val) {
   const field = pressed ? null : card.querySelector(`[data-set="${CSS.escape(key)}"]`);
   const found = pressed ? commandOf(pressed) : field ? commandOf(field, val) : null;
   if (!found) throw new Error(`settings control ${key} is not in the card`);
+  if (found.name.startsWith("core.accounts.")) return runAccount(found);
   return run(found.name, found.params);
 }
+
+/** Runs a pressed command of the group 계정; a failure shows its error with the place settings <plugin> (docs/spec/plugins.md#accounts). */
+async function runAccount({ name, params }) {
+  try {
+    await run(name, params);
+  } catch (error) {
+    showError(document, `settings ${params.plugin}`, error.message);
+  }
+}
+
+// A finished add clears the name of the row 새 계정 of its page, and a finished rename ends the edit (docs/spec/plugins.md#accounts).
+accounts.onFinished((command, plugin) => {
+  if (accountDraft.plugin !== plugin) return;
+  accountDraft = command === "core.accounts.add" ? { ...accountDraft, name: "" } : { ...accountDraft, edit: null, editName: "" };
+  drawSettings();
+});
 
 /** Measures the position and size of the card relative to the plane and returns them. The host places the view with these coordinates. */
 function cardRect() {
@@ -955,6 +1109,7 @@ export function closeSettings() {
   if (!card) return;
   queueMicrotask(() => drawn());
   setupParts.show(false);
+  accounts.show(null);
   if (native) overlay.hide(card);
   else {
     errorToasts(document).place(document.body);

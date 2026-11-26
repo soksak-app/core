@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1215-4, F1215-5: web과 mygo workbench는 계정을 선언한 plugin의 plugin page에 그룹 계정을 그린다. 계정마다 종류, login, 사용량 줄과 버튼 로그인, 취소, 로그아웃, 이름 변경, 삭제를 가진 행 하나와 행 새 계정이 있다. 명령 `core.accounts.add`, `rename`, `remove`, `login`, `login-cancel`, `logout`은 plugin key accounts를 바꾸고 plugin의 계정 프로그램을 실행하며, status `core.accounts`는 보이는 page의 계정을 알리고, 그룹의 field는 `core.settings-modal.account-name`, `account-kind`, `account-edit`, `account-edit-name`을 실행한다.
 - F1215-6: Rust `sok`의 accounts 검사는 계정 프로그램 이름에 기본값이 쓰이지 않는 이유를 적어서 event source 검사가 통과한다.
 - F1210-6: event 목록과 logging 정책은 두 host가 plugin key의 entry를 저장할 때마다 내보내는 `host.workspace.plugin-data`(`plugin`, `key`)를 선언한다.
 - F1215-3: Go와 Rust host는 plugin의 계정 프로그램을 surface의 실행과 따로 plugin data folder에서 `accountRun`과 `accountRunCancel`로 실행하고 `accountHomes`, `accountHomeCreate`, `accountHomeRemove`를 제공한다. 계정 실행의 `host.program` event는 `surface` 대신 `run`을 싣는다.

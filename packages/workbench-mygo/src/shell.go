@@ -475,6 +475,7 @@ type Shell struct {
 	appUpdates       *AppUpdates
 	// setupOperations are the setup parts of the agents of the machine (docs/spec/settings.md#agents).
 	setupOperations *SetupOperations
+	accounts        *Accounts
 	starter         pluginStarter
 
 	text *TextSize
@@ -585,7 +586,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.registry.Follow(s.followCommand)
 	s.registry.Watch(s.watchLayout)
 	s.errors = NewShownErrors(s.events.Error)
-	s.binder = NewBinder(s.registry, func(_ string, err error) { s.fail(err) })
+	s.binder = NewBinder(s.registry, func(_ string, err error) { s.pressFailed(err) })
 	s.pointer = NewPointerSequence(options.Elements, func() { s.options.Invalidate() }, s.fail)
 	s.pointer.released = s.keyboardPressed
 	s.binder.Attach(s.pointer, s.exposedFocus)
@@ -593,6 +594,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.pluginOperations = NewPluginOperations(s.calls, s.events.BeginOperation, func() []LoadedPlugin { return s.plugins }, func() map[string]bool { return s.refused }, s.options.Invalidate)
 	s.appUpdates = NewAppUpdates(s.calls, s.events.BeginOperation, s.pluginOperations.State, s.options.Invalidate)
 	s.setupOperations = NewSetupOperations(s.calls, s.options.Invalidate, s.fail)
+	s.accounts = NewAccounts(s)
 	s.registry.Elements(options.Elements)
 	// An installation that cannot be read has no installed plugin, and the window shows why (docs/spec/installation.md#serving-installed-plugins).
 	installed, refused, err := acceptInstalled(options.Installed)

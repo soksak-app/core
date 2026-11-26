@@ -369,6 +369,7 @@ func (s *Shell) event(name string, data []any) {
 		s.pluginOperations.Refresh(func() {})
 		s.appUpdates.Refresh(func() {})
 		s.setupOperations.Event()
+		s.accounts.Event()
 	case "setup-changed":
 		s.setupOperations.Event()
 	case "project-close-request":

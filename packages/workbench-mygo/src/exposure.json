@@ -1411,6 +1411,64 @@
         }
       },
       {
+        "name": "core.accounts",
+        "description": "The accounts of the plugin whose page the settings window shows, in the order of their names, with the login, the end of the login and the usage lines that the status program of each account printed last, null, null and [] before its first run, and running while its login runs; null while no page of a plugin with accounts shows (docs/spec/plugins.md#accounts).",
+        "schema": {
+          "type": ["object", "null"],
+          "properties": {
+            "plugin": {
+              "type": "string"
+            },
+            "accounts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string"
+                  },
+                  "login": {
+                    "type": ["boolean", "null"]
+                  },
+                  "until": {
+                    "type": ["string", "null"]
+                  },
+                  "usage": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "label": {
+                          "type": "string"
+                        },
+                        "used": {
+                          "type": "number"
+                        },
+                        "resets": {
+                          "type": ["string", "null"]
+                        }
+                      },
+                      "required": ["label", "used", "resets"]
+                    }
+                  },
+                  "running": {
+                    "type": "boolean"
+                  }
+                },
+                "required": ["id", "name", "kind", "login", "until", "usage", "running"]
+              }
+            }
+          },
+          "required": ["plugin", "accounts"]
+        }
+      },
+      {
         "name": "core.debug",
         "description": "The debug view: whether it is open, the path of the state file that opening wrote or null, the files of the logs folder with their path, size in bytes and modification time in milliseconds, the file that the view shows with its kind text or image or null, the timeline of the host event files with its files, the files whose reading stopped at the row limit, whether it follows the growing files and the number of rows appended since it was shown, the greatest seq of each process in the page that showed it and in its last read, the counts of all rows, rows that pass the filter and shown lines with the context rows, the number of selected rows and the warning that a saved file can hold typed text, and its filter or null, the shown state file with its path, the number of tree lines, the state file it is compared with or null and the number of differences, or null, the scroll position of the shown content in points, the running or last save operation with, for a save of the logs folder, the bytes written and the bytes listed, and the error of the last failed step or operation or null.",
         "schema": {
@@ -2532,6 +2590,132 @@
         }
       },
       {
+        "name": "core.accounts.add",
+        "description": "Creates the home of a new account of a plugin with the least free identifier account-<n>, stores the account {id, name, kind} in the plugin key accounts and answers {id}; it refuses a plugin without accounts, a name that is not 1 to 40 characters without a control character, a used name and an undeclared kind.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "plugin": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string"
+            }
+          },
+          "required": ["plugin", "name", "kind"]
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": ["id"]
+        }
+      },
+      {
+        "name": "core.accounts.rename",
+        "description": "Changes the name of an account of a plugin and keeps its identifier and its home; it refuses an undefined account, an invalid or used name and an account whose login runs.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "plugin": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": ["plugin", "id", "name"]
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.accounts.remove",
+        "description": "Removes an account of a plugin from the plugin key accounts and removes its home; it refuses an undefined account and an account whose login runs.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "plugin": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": ["plugin", "id"]
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.accounts.login",
+        "description": "Runs the login program of the plugin for an account in its home, which opens the default browser of the system, and answers when the login ends; a cancelled login answers null. It refuses an account whose login runs.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "plugin": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": ["plugin", "id"]
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.accounts.login-cancel",
+        "description": "Ends the login that runs for an account of a plugin; it refuses an account whose login does not run.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "plugin": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": ["plugin", "id"]
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.accounts.logout",
+        "description": "Runs the logout program of the plugin for an account in its home; it refuses an account whose login runs.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "plugin": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": ["plugin", "id"]
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
         "name": "core.settings.open",
         "description": "Opens the settings modal.",
         "params": {
@@ -3621,6 +3805,70 @@
             }
           },
           "required": ["query"]
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings-modal.account-name",
+        "description": "Sets the text of the name field of the row 새 계정 of the shown plugin page with accounts.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": ["name"]
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings-modal.account-kind",
+        "description": "Sets the kind of the row 새 계정 of the shown plugin page with accounts to a declared kind.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string"
+            }
+          },
+          "required": ["kind"]
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings-modal.account-edit",
+        "description": "Shows the name field of an account of the shown plugin page with its name, or ends the edit with null.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": ["string", "null"]
+            }
+          },
+          "required": ["id"]
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings-modal.account-edit-name",
+        "description": "Sets the text of the name field of the account whose name the shown plugin page edits.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": ["name"]
         },
         "result": {
           "type": "null"
@@ -6059,6 +6307,60 @@
       {
         "name": "core.settings-modal.search",
         "description": "The plugin search field."
+      },
+      {
+        "name": "core.settings-modal.account",
+        "description": "The rows of the accounts of the shown plugin page in the order of their names, each with the identifier of its account in data-account.",
+        "many": true
+      },
+      {
+        "name": "core.settings-modal.account-login",
+        "description": "The 로그인 buttons of the accounts whose login is false, bound to core.accounts.login.",
+        "many": true
+      },
+      {
+        "name": "core.settings-modal.account-login-cancel",
+        "description": "The 취소 buttons of the accounts whose login runs, bound to core.accounts.login-cancel.",
+        "many": true
+      },
+      {
+        "name": "core.settings-modal.account-logout",
+        "description": "The 로그아웃 buttons of the accounts whose login is true, bound to core.accounts.logout.",
+        "many": true
+      },
+      {
+        "name": "core.settings-modal.account-edit",
+        "description": "The 이름 변경 buttons of the accounts, bound to core.settings-modal.account-edit.",
+        "many": true
+      },
+      {
+        "name": "core.settings-modal.account-remove",
+        "description": "The 삭제 buttons of the accounts, bound to core.accounts.remove.",
+        "many": true
+      },
+      {
+        "name": "core.settings-modal.account-edit-name",
+        "description": "The name field of the account whose name is edited, bound to core.settings-modal.account-edit-name."
+      },
+      {
+        "name": "core.settings-modal.account-save",
+        "description": "The 저장 button of the account whose name is edited, bound to core.accounts.rename."
+      },
+      {
+        "name": "core.settings-modal.account-edit-cancel",
+        "description": "The 취소 button of the account whose name is edited, bound to core.settings-modal.account-edit with null."
+      },
+      {
+        "name": "core.settings-modal.account-name",
+        "description": "The name field of the row 새 계정, bound to core.settings-modal.account-name."
+      },
+      {
+        "name": "core.settings-modal.account-kind",
+        "description": "The kind select of the row 새 계정, bound to core.settings-modal.account-kind."
+      },
+      {
+        "name": "core.settings-modal.account-add",
+        "description": "The 추가 button of the row 새 계정, bound to core.accounts.add."
       },
       {
         "name": "core.card.placeholder-action",

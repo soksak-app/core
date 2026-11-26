@@ -1,0 +1,22 @@
+{
+  "name": "accounts-login",
+  "description": "A login runs the login program while the account reports running, a cancel ends that run with accountRunCancel and the run answers null, a finished login and a logout run the status program after them.",
+  "replay": false,
+  "reason": "The account programs belong to a plugin that the Go producer does not install; the host tests of the account runs hold the replies (packages/host/go/src/account_run_test.go).",
+  "steps": [
+    {"call":{"name":"accountHomes","payload":{"plugin":"agents"}}},
+    {"reply":{"result":{"folder":"/Users/person/Library/Application Support/soksak/plugin-data/agents/accounts","names":[]}}},
+    {"call":{"name":"accountRun","payload":{"plugin":"agents","programs":{"account-status":{"program":"plugin:bin/account.mjs","args":[{"pattern":"[a-z]+"},{"pattern":"/.+"}]},"account-login":{"program":"plugin:bin/account.mjs","args":[{"pattern":"[a-z]+"},{"pattern":"/.+"}]},"account-logout":{"program":"plugin:bin/account.mjs","args":[{"pattern":"[a-z]+"},{"pattern":"/.+"}]}},"run":1,"name":"account-login","args":["claude","/Users/person/Library/Application Support/soksak/plugin-data/agents/accounts/account-1"]}}},
+    {"reply":{"result":null,"held":true}},
+    {"call":{"name":"accountRunCancel","payload":{"plugin":"agents","run":1}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"accountRun","payload":{"plugin":"agents","programs":{"account-status":{"program":"plugin:bin/account.mjs","args":[{"pattern":"[a-z]+"},{"pattern":"/.+"}]},"account-login":{"program":"plugin:bin/account.mjs","args":[{"pattern":"[a-z]+"},{"pattern":"/.+"}]},"account-logout":{"program":"plugin:bin/account.mjs","args":[{"pattern":"[a-z]+"},{"pattern":"/.+"}]}},"run":2,"name":"account-login","args":["claude","/Users/person/Library/Application Support/soksak/plugin-data/agents/accounts/account-1"]}}},
+    {"reply":{"result":{"code":0,"stdout":"","stderr":"","truncated":{"stdout":false,"stderr":false}}}},
+    {"call":{"name":"accountRun","payload":{"plugin":"agents","programs":{"account-status":{"program":"plugin:bin/account.mjs","args":[{"pattern":"[a-z]+"},{"pattern":"/.+"}]},"account-login":{"program":"plugin:bin/account.mjs","args":[{"pattern":"[a-z]+"},{"pattern":"/.+"}]},"account-logout":{"program":"plugin:bin/account.mjs","args":[{"pattern":"[a-z]+"},{"pattern":"/.+"}]}},"run":3,"name":"account-status","args":["claude","/Users/person/Library/Application Support/soksak/plugin-data/agents/accounts/account-1"]}}},
+    {"reply":{"result":{"code":0,"stdout":"{\"login\":true,\"until\":\"2026-12-01T09:00:00+09:00\",\"usage\":[{\"label\":\"5시간\",\"used\":42,\"resets\":\"2026-11-26T15:00:00+09:00\"}]}\n","stderr":"","truncated":{"stdout":false,"stderr":false}}}},
+    {"call":{"name":"accountRun","payload":{"plugin":"agents","programs":{"account-status":{"program":"plugin:bin/account.mjs","args":[{"pattern":"[a-z]+"},{"pattern":"/.+"}]},"account-login":{"program":"plugin:bin/account.mjs","args":[{"pattern":"[a-z]+"},{"pattern":"/.+"}]},"account-logout":{"program":"plugin:bin/account.mjs","args":[{"pattern":"[a-z]+"},{"pattern":"/.+"}]}},"run":4,"name":"account-logout","args":["claude","/Users/person/Library/Application Support/soksak/plugin-data/agents/accounts/account-1"]}}},
+    {"reply":{"result":{"code":0,"stdout":"","stderr":"","truncated":{"stdout":false,"stderr":false}}}},
+    {"call":{"name":"accountRun","payload":{"plugin":"agents","programs":{"account-status":{"program":"plugin:bin/account.mjs","args":[{"pattern":"[a-z]+"},{"pattern":"/.+"}]},"account-login":{"program":"plugin:bin/account.mjs","args":[{"pattern":"[a-z]+"},{"pattern":"/.+"}]},"account-logout":{"program":"plugin:bin/account.mjs","args":[{"pattern":"[a-z]+"},{"pattern":"/.+"}]}},"run":5,"name":"account-status","args":["claude","/Users/person/Library/Application Support/soksak/plugin-data/agents/accounts/account-1"]}}},
+    {"reply":{"result":{"code":0,"stdout":"{\"login\":false,\"until\":null,\"usage\":[]}\n","stderr":"","truncated":{"stdout":false,"stderr":false}}}}
+  ]
+}

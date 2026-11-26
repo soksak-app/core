@@ -70,6 +70,8 @@ const (
 	controlMark
 	// controlSetup is a row of the agent group, with the name, state, file and optional action of a setup part.
 	controlSetup
+	// controlAccount is a row of the group 계정, with the line and the usage lines of an account and its buttons.
+	controlAccount
 )
 
 // ControlCommand is the command of a control, without the value that the control adds.
@@ -103,8 +105,16 @@ type SettingsControl struct {
 	unit       string
 	theme      *CatalogTheme // the theme of a swatch
 	maxLength  int
-	searchable bool      // a field that runs its command for each change, as the plugin search does
-	setup      *setupRow // the content of a row of the agent group
+	searchable bool        // a field that runs its command for each change, as the plugin search does
+	setup      *setupRow   // the content of a row of the agent group
+	account    *accountRow // the content of a row of the group 계정
+}
+
+// accountRow is the content of a row of the group 계정: the line of the account, its usage lines and its controls.
+type accountRow struct {
+	line     string
+	usage    []string
+	controls []*SettingsControl
 }
 
 // settingsRow is a row of a group: a name and its controls, with the key and the description of a declared setting.
@@ -150,6 +160,9 @@ type settingsWindow struct {
 	scroll          ui.ScrollState
 	scrollKey       string
 	drafts          map[string]string
+	// The fields of the group 계정 of the shown plugin page (docs/spec/plugins.md#accounts): the plugin of the page, the name and the
+	// kind of the row 새 계정, the account whose name is edited and the text of its field. Another page clears them.
+	accountPlugin, accountName, accountKind, accountEdit, accountEditName string
 }
 
 func newSettingsWindow() settingsWindow {
@@ -578,10 +591,106 @@ func (s *Shell) declaredControl(b *settingsBuilder, definition SettingDefinition
 	return nil, fmt.Errorf("setting %s has no control for type %s", definition.Key, definition.Type)
 }
 
+// accountLogin is the login of an account as its row shows it.
+func accountLogin(account AccountView) string {
+	switch {
+	case account.Running:
+		return "로그인 중"
+	case account.Login == nil:
+		return "-"
+	case *account.Login && account.Until != nil:
+		return "로그인됨 · " + *account.Until + "까지"
+	case *account.Login:
+		return "로그인됨"
+	}
+	return "로그인 필요"
+}
+
+// accountField is a text field of the group 계정 that runs command with its text as name.
+func accountField(b *settingsBuilder, key, command, now string) *SettingsControl {
+	return b.add(SettingsControl{Name: "core.settings-modal." + key, Key: text(key), Value: text(now), Command: settingCommand(command, nil), kind: controlText, param: "name", maxLength: 40})
+}
+
+// buildAccounts adds the group 계정 of a plugin that declares accounts: a row per account and the row 새 계정.
+func (s *Shell) buildAccounts(b *settingsBuilder, plugin *LoadedPlugin, declared *accountsDeclaration) {
+	w := &s.settingsWindow
+	accounts, err := s.accounts.List(plugin.ID)
+	if err != nil {
+		// A record of another form fails the page through the error display, and the group shows no account.
+		s.accounts.fail(plugin.ID, err)
+		accounts = []AccountView{}
+	}
+	rows := make([]settingsRow, 0, len(accounts)+1)
+	for _, account := range accounts {
+		kind := ""
+		for _, item := range declared.Kinds {
+			if item.Value == account.Kind {
+				kind = item.Label
+			}
+		}
+		content := &accountRow{line: account.Name + " · " + kind + " · " + accountLogin(account)}
+		for _, usage := range account.Usage {
+			line := fmt.Sprintf("%s %s%%", usage.Label, strconv.FormatFloat(usage.Used, 'f', -1, 64))
+			if usage.Resets != nil {
+				line += " · " + *usage.Resets + " 초기화"
+			}
+			content.usage = append(content.usage, line)
+		}
+		// The row stands before its controls in document order, as the element of the page holds them.
+		row := b.add(SettingsControl{Name: "core.settings-modal.account", kind: controlAccount, account: content})
+		params := map[string]any{"plugin": plugin.ID, "id": account.ID}
+		if w.accountEdit == account.ID {
+			content.controls = append(content.controls,
+				accountField(b, "account-edit-name", "core.settings-modal.account-edit-name", w.accountEditName),
+				b.button("account-save:"+account.ID, "core.settings-modal.account-save", "저장", "core.accounts.rename", map[string]any{"plugin": plugin.ID, "id": account.ID, "name": w.accountEditName}),
+				b.button("account-edit-cancel:"+account.ID, "core.settings-modal.account-edit-cancel", "취소", "core.settings-modal.account-edit", map[string]any{"id": nil}))
+		} else {
+			switch {
+			case account.Running:
+				content.controls = append(content.controls, b.button("account-login-cancel:"+account.ID, "core.settings-modal.account-login-cancel", "취소", "core.accounts.login-cancel", params))
+			case account.Login != nil && !*account.Login:
+				content.controls = append(content.controls, b.button("account-login:"+account.ID, "core.settings-modal.account-login", "로그인", "core.accounts.login", params))
+			case account.Login != nil && *account.Login:
+				content.controls = append(content.controls, b.button("account-logout:"+account.ID, "core.settings-modal.account-logout", "로그아웃", "core.accounts.logout", params))
+			}
+			content.controls = append(content.controls,
+				b.button("account-edit:"+account.ID, "core.settings-modal.account-edit", "이름 변경", "core.settings-modal.account-edit", map[string]any{"id": account.ID}),
+				b.button("account-remove:"+account.ID, "core.settings-modal.account-remove", "삭제", "core.accounts.remove", params))
+		}
+		// The label is the text of the row in document order, as the page reports the textContent of its row.
+		row.Label = content.line + strings.Join(content.usage, "")
+		for _, control := range content.controls {
+			if control.kind == controlButton {
+				row.Label += control.Label
+			}
+		}
+		rows = append(rows, settingsRow{controls: []*SettingsControl{row}})
+	}
+	options := make([][2]string, len(declared.Kinds))
+	values := make([]string, len(declared.Kinds))
+	labels := make(map[string]string, len(declared.Kinds))
+	for i, item := range declared.Kinds {
+		options[i], values[i], labels[item.Value] = [2]string{item.Value, item.Label}, item.Value, item.Label
+	}
+	name := accountField(b, "account-name", "core.settings-modal.account-name", w.accountName)
+	kind := b.add(SettingsControl{Name: "core.settings-modal.account-kind", Key: text("account-kind"), Value: text(w.accountKind), Command: settingCommand("core.settings-modal.account-kind", nil),
+		Options: values, kind: controlSelect, param: "kind", labels: labels})
+	add := b.button("account-add", "core.settings-modal.account-add", "추가", "core.accounts.add", map[string]any{"plugin": plugin.ID, "name": w.accountName, "kind": w.accountKind})
+	rows = append(rows, settingsRow{name: "새 계정", controls: []*SettingsControl{name, kind, add}})
+	b.group("계정", plugin.Name+" 플러그인이 실행하는 CLI의 계정. 로그인은 시스템 브라우저에서 한다.", rows...)
+}
+
 func (s *Shell) buildPluginPage(b *settingsBuilder, plugin *LoadedPlugin) error {
 	scope := s.controlScope("links")
 	back := b.button("plugins:list", "core.settings-modal.back", "목록", "core.settings-modal.plugin", map[string]any{"plugin": nil})
 	b.group(plugin.Name, plugin.ID, settingsRow{controls: []*SettingsControl{back}})
+	if unit := s.units[plugin.ID]; unit != nil && unit.Accounts != nil {
+		w := &s.settingsWindow
+		if w.accountPlugin != plugin.ID {
+			w.accountPlugin, w.accountName, w.accountKind, w.accountEdit, w.accountEditName = plugin.ID, "", unit.Accounts.Kinds[0].Value, "", ""
+		}
+		s.buildAccounts(b, plugin, unit.Accounts)
+	}
 	var rows []settingsRow
 	for _, definition := range s.settings.Definitions {
 		if definition.Plugin != plugin.ID {
@@ -1283,6 +1392,9 @@ type windowParam struct {
 	Plugin  *string `json:"plugin,omitempty"`
 	Query   *string `json:"query,omitempty"`
 	Set     *string `json:"set,omitempty"`
+	Name    *string `json:"name,omitempty"`
+	Kind    *string `json:"kind,omitempty"`
+	ID      *string `json:"id,omitempty"`
 	DX      float64 `json:"dx"`
 	DY      float64 `json:"dy"`
 }
@@ -1361,10 +1473,90 @@ func (s *Shell) registerSettingsWindow() {
 		w.editing = *value.Set
 		return nil
 	})
+	windowAct(s, "core.settings-modal.account-name", func(value windowParam) error {
+		if err := s.accountPage(); err != nil {
+			return err
+		}
+		if value.Name == nil {
+			return errors.New("name must be a string")
+		}
+		w.accountName = *value.Name
+		return nil
+	})
+	windowAct(s, "core.settings-modal.account-kind", func(value windowParam) error {
+		if err := s.accountPage(); err != nil {
+			return err
+		}
+		if value.Kind == nil || !slices.ContainsFunc(s.units[w.chosen].Accounts.Kinds, func(item accountKind) bool { return item.Value == *value.Kind }) {
+			kind := ""
+			if value.Kind != nil {
+				kind = *value.Kind
+			}
+			return fmt.Errorf("account kind %s is not declared by %s", kind, w.chosen)
+		}
+		w.accountKind = *value.Kind
+		return nil
+	})
+	windowAct(s, "core.settings-modal.account-edit", func(value windowParam) error {
+		if err := s.accountPage(); err != nil {
+			return err
+		}
+		if value.ID == nil {
+			w.accountEdit, w.accountEditName = "", ""
+			return nil
+		}
+		accounts, err := s.accounts.List(w.chosen)
+		if err != nil {
+			return err
+		}
+		index := slices.IndexFunc(accounts, func(account AccountView) bool { return account.ID == *value.ID })
+		if index < 0 {
+			return fmt.Errorf("account %s is not defined", *value.ID)
+		}
+		w.accountEdit, w.accountEditName = *value.ID, accounts[index].Name
+		return nil
+	})
+	windowAct(s, "core.settings-modal.account-edit-name", func(value windowParam) error {
+		if err := s.accountPage(); err != nil {
+			return err
+		}
+		if w.accountEdit == "" {
+			return errors.New("no account name is edited")
+		}
+		if value.Name == nil {
+			return errors.New("name must be a string")
+		}
+		w.accountEditName = *value.Name
+		return nil
+	})
 	windowAct(s, "core.settings-modal.move", func(value windowParam) error {
 		s.moveCard(value.DX, value.DY)
 		return nil
 	})
+}
+
+// accountPage refuses a field command of the group 계정 while no page of a plugin with accounts shows.
+func (s *Shell) accountPage() error {
+	w := &s.settingsWindow
+	if w.section != "plugins" || w.chosen == "" || !s.accounts.Declares(w.chosen) {
+		return errors.New("no page of a plugin with accounts shows")
+	}
+	return nil
+}
+
+// accountFinished clears the name of the row 새 계정 after a finished add and ends the edit after a finished rename, on the page of
+// the plugin (docs/spec/plugins.md#accounts).
+func (s *Shell) accountFinished(command, plugin string) {
+	w := &s.settingsWindow
+	if w.accountPlugin != plugin {
+		return
+	}
+	if command == "core.accounts.add" {
+		w.accountName = ""
+	} else {
+		w.accountEdit, w.accountEditName = "", ""
+	}
+	s.options.Invalidate()
 }
 
 // beginSettings takes the common settings and the stored settings of the project of the window. The library selects no project, so it

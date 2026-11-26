@@ -535,6 +535,37 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1215-4",
+    implementation: [
+      { file: "packages/workbench/accounts.js", symbol: "export function createAccounts({ host, declarations, data, changed, failed }) {" },
+      { file: "packages/workbench/accounts-exposure.js", symbol: "export function installAccountsExposure({ showError, changed }) {" },
+      { file: "packages/workbench/settings-ui.js", symbol: "function accountsGroup(unit, declared) {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/accounts.test.mjs", id: "showing a page runs status for each account in turn, a failure keeps the state before, and window-active reads again" },
+      { file: "packages/workbench/test/accounts.test.mjs", id: "an add takes the least identifier that no record and no home has, and a remove removes the record and the home" },
+      { file: "packages/workbench/test/accounts.test.mjs", id: "a login reports running until it ends, a cancel ends it, and a login and a logout read the status after them" },
+      { file: "packages/workbench/test/accounts.test.mjs", id: "the commands refuse what the contract refuses before any host call" },
+      { file: "packages/workbench/test/settings-accounts.test.mjs", id: "the plugin page draws a row per account with the buttons of its login, and the fields keep their text for 추가 and 저장" },
+    ],
+    expected: "The web workbench draws the group 계정 of a plugin page from the stored records and the status runs, serves the core.accounts commands and status, and keeps the fields of the group in the settings window.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1215-5",
+    implementation: [
+      { file: "packages/workbench-mygo/src/accounts.go", symbol: "func (s *Shell) registerAccounts() {" },
+      { file: "packages/workbench-mygo/src/settings_modal.go", symbol: "func (s *Shell) buildAccounts(b *settingsBuilder, plugin *LoadedPlugin, declared *accountsDeclaration) {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/accounts_test.go", id: "TestThePluginPageReadsTheAccountsAndDrawsTheirRows" },
+      { file: "packages/workbench-mygo/tests/accounts_test.go", id: "TestAnAccountIsAddedLoggedInCancelledLoggedOutAndRemoved" },
+      { file: "packages/workbench-mygo/tests/accounts_test.go", id: "TestTheAccountCommandsRefuseWhatTheContractRefuses" },
+    ],
+    expected: "The mygo workbench draws the group 계정 of a plugin page, serves the core.accounts commands and status with the texts of the web workbench, and keeps the fields of the group in the settings window.",
+    levels: ["unit"],
+  },
+  {
     id: "F1215-3",
     implementation: [
       { file: "packages/host/go/src/account_run.go", symbol: "func (h *Host) AccountRun(ctx context.Context, reqJSON json.RawMessage) (ProgramRunReply, error) {" },

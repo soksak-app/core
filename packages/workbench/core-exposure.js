@@ -757,6 +757,10 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   registry.command("core.settings-modal.scope", onSettings((screen, { scope }) => { screen.showScope(scope); }));
   registry.command("core.settings-modal.plugin", onSettings((screen, { plugin: id = null }) => { screen.showPlugin(id); }));
   registry.command("core.settings-modal.search", onSettings((screen, { query }) => { screen.searchPlugins(query); }));
+  registry.command("core.settings-modal.account-name", onSettings((screen, { name }) => { screen.setAccountName(name); }));
+  registry.command("core.settings-modal.account-kind", onSettings((screen, { kind }) => { screen.setAccountKind(kind); }));
+  registry.command("core.settings-modal.account-edit", onSettings((screen, { id }) => { screen.editAccount(id); }));
+  registry.command("core.settings-modal.account-edit-name", onSettings((screen, { name }) => { screen.setAccountEditName(name); }));
   registry.command("core.plugins.install", pluginCommand("install"));
   registry.command("core.plugins.update", pluginCommand("update"));
   registry.command("core.plugins.remove", pluginCommand("remove"));

@@ -1,0 +1,16 @@
+{
+  "name": "accounts-add-remove",
+  "description": "An add creates the home of the least free identifier that no record and no folder has, stores the account and runs its status; a remove stores the records without it and removes its home.",
+  "replay": false,
+  "reason": "The account programs belong to a plugin that the Go producer does not install; the host tests of the account runs hold the replies (packages/host/go/src/account_run_test.go).",
+  "steps": [
+    {"call":{"name":"accountHomes","payload":{"plugin":"agents"}}},
+    {"reply":{"result":{"folder":"/Users/person/Library/Application Support/soksak/plugin-data/agents/accounts","names":["account-1"]}}},
+    {"call":{"name":"accountHomeCreate","payload":{"plugin":"agents","id":"account-2"}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"accountRun","payload":{"plugin":"agents","programs":{"account-status":{"program":"plugin:bin/account.mjs","args":[{"pattern":"[a-z]+"},{"pattern":"/.+"}]},"account-login":{"program":"plugin:bin/account.mjs","args":[{"pattern":"[a-z]+"},{"pattern":"/.+"}]},"account-logout":{"program":"plugin:bin/account.mjs","args":[{"pattern":"[a-z]+"},{"pattern":"/.+"}]}},"run":1,"name":"account-status","args":["claude","/Users/person/Library/Application Support/soksak/plugin-data/agents/accounts/account-2"]}}},
+    {"reply":{"result":{"code":0,"stdout":"{\"login\":false,\"until\":null,\"usage\":[]}\n","stderr":"","truncated":{"stdout":false,"stderr":false}}}},
+    {"call":{"name":"accountHomeRemove","payload":{"plugin":"agents","id":"account-2"}}},
+    {"reply":{"result":null}}
+  ]
+}

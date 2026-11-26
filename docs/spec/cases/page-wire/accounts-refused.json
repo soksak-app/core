@@ -1,0 +1,7 @@
+{
+  "name": "accounts-refused",
+  "description": "The commands of the accounts refuse a plugin without accounts, an invalid or used name, an undeclared kind, an undefined account, stored records of another form and a cancel of a login that does not run before any host call.",
+  "replay": false,
+  "reason": "The account programs belong to a plugin that the Go producer does not install; the host tests of the account runs hold the replies (packages/host/go/src/account_run_test.go).",
+  "steps": []
+}

@@ -225,6 +225,8 @@ agent CLI처럼 프로그램이 사람의 login을 필요로 하는 plugin은 `p
 - `name` 순서로 계정마다 행 하나: 이름, 종류의 label, login, 그리고 `usage` 항목마다 줄 하나. login은 `until`이 `null`이 아니면 `· <until>까지`가 붙은 `로그인됨`, `로그인 필요`, login이 실행되는 동안 `로그인 중`, 또는 `null`의 `-`다. usage 줄은 `<label> <used>%`이고, `resets`가 `null`이 아니면 `· <resets> 초기화`가 붙는다.
 - 행의 버튼: login `false`의 로그인, login이 실행되는 동안의 취소, login `true`의 로그아웃, 이름 변경, 삭제. 이름 변경은 이름을 text field에 저장, 취소 버튼과 함께 보인다.
 - 행 새 계정: 이름 field, label로 보이는 종류 select, 버튼 추가.
+- field의 글자는 settings window가 가진다. 이름 field는 `core.settings-modal.account-name {name}`을, select는 처음 선언된 종류에서 시작하는 `core.settings-modal.account-kind {kind}`를 실행하고, 추가는 그 값으로 `core.accounts.add`를 실행한다. 이름 변경은 `core.settings-modal.account-edit {id}`를, 그 field는 `core.settings-modal.account-edit-name {name}`을 실행하며, 저장은 그 글자로 `core.accounts.rename`을, 취소는 `core.settings-modal.account-edit {id: null}`을 실행한다. 끝난 추가는 이름을 비우고, 끝난 이름 변경은 편집을 끝내며, 다른 page는 둘 다 비운다. 창은 card의 사본을 native view에 그리고, 사본의 field는 글자가 바뀔 때, 곧 Enter나 focus를 잃을 때 글자를 보내므로 글자는 다음 버튼을 누르기 전에 온다.
+- 누른 버튼의 명령이 실패하면 place `settings <plugin>`의 error display에 그 error가 보인다.
 
 **명령.** 각 버튼은 core 명령을 실행한다. 각 명령은 저장된 값을 base로 plugin key를 바꾸고([plugin data](#plugin-데이터)), 다른 창이 먼저 저장했으면 `runtime.data.change`의 한도까지 다시 읽는다.
 

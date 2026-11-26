@@ -175,9 +175,23 @@ export function installEnvironment(environmentDocument, installedDocument) {
     sections: (manifest.sections ?? []).map((s) => s.id),
     // default: dependencies is an optional field of plugin.json; without it there are no sidecars.
     dependencies: manifest.dependencies ?? {},
+    // default: accounts is an optional field of plugin.json; without it the plugin keeps no accounts (docs/spec/plugins.md#accounts).
+    accounts: manifest.accounts ?? null,
+    // default: programs is an optional field of plugin.json; without it the plugin runs no program.
+    programs: manifest.programs ?? {},
   }));
   loaded = environment;
   return errors;
+}
+
+/**
+ * The accounts and the programs of an installed plugin, {accounts, programs}, whose accounts is null for a plugin without accounts; null
+ * for a plugin that is not installed (docs/spec/plugins.md#accounts).
+ */
+export function pluginAccounts(id) {
+  const unit = units.find((item) => item.id === id);
+  // default: a plugin that the window did not load has no accounts in this window.
+  return unit ? { accounts: unit.accounts, programs: unit.programs } : null;
 }
 
 /** Diagnostic module of a plugin id. It exists only in some plugins of a diagnostic build; without it the value is null. A load failure is a rejection. */

@@ -95,6 +95,8 @@
     "operations.js",
     "plugin-operations.js",
     "setup-exposure.js",
+    "accounts.js",
+    "accounts-exposure.js",
     "setup-parts.js",
     "plugin-search.js",
     "settings-scope.js",
