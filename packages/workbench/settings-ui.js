@@ -29,7 +29,7 @@ import { errorToasts, hideError, showError } from "./shown-errors.js";
 import { hasSection, section, sectionNames } from "./registry.js";
 import {
   CHOICES, ERROR_TOAST_DISMISS_SECONDS, FONTS, LAYOUT_RANGES, MEMORY_SAVER_DELAY, MENU_LANGUAGES, SHAPE_RANGES, THEMES, debugOn, scopedValue, settingProject, settingProjectRoot, overridden, sourceScope,
-  settingDefinitions,
+  settingDefinitions, pluginsOfCategory,
 } from "./settings.js";
 
 /* It exists only while open. If it were kept hidden, CSS would decide whether it is shown, and
@@ -489,6 +489,11 @@ const DECLARED_CONTROLS = {
   integer: (key, definition, now) => slide(key, definition.minimum, definition.maximum, now, ""),
   string: (key, definition, now) => text(key, definition.maxLength, now),
   address: (key, definition, now) => text(key, 2048, now),
+  // The plugins of the category by name. Without a value an empty choice is selected, so the select shows that no plugin is chosen.
+  plugin: (key, definition, now) => choose(key, [
+    ...(now === undefined ? [["", "선택"]] : []),
+    ...pluginsOfCategory(definition.category).map(({ id, name }) => [id, name]),
+  ], now ?? ""),
 };
 
 /** One setting row. It is the control of the declared format. */

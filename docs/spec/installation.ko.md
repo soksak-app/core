@@ -212,6 +212,7 @@ Host가 시작할 때마다 registry index를 읽은 뒤 한 번, 실행 중인 
 | `available` | 설치 안 됨 | Registry index만 plugin을 나열한다 |
 | `reload` | 창을 다시 불러오면 적용 | 수정된 탭을 유지해 창이 워크벤치를 유지했으므로 `installed.json`이 창이 불러온 것과 다르다([변경 적용](#변경-적용)) |
 | `refused` | 불러오지 못함 | `installed.json`이 plugin을 켠 상태로 나열하고, 창이 그 entry나 manifest를 거부했다([설치된 plugin 제공](#설치된-plugin-제공)). 다시 불러와도 불러오지 않으므로 이 상태는 page가 다시 불러오기를 기다리게 하지 않는다 |
+| `requires` | 필요한 플러그인 없음 | `installed.json`이 plugin을 켠 상태로 나열하고, 창에 불러온 켜진 plugin 중 그 plugin이 요구하는 category의 plugin이 없다([plugin categories](plugins.ko.md#plugin-categories)). 그 category의 plugin을 설치하거나 켜고 다시 불러오면 불러온다 |
 
 - 불러온 manifest의 설명, 없으면 registry 항목의 설명([plugins](plugins.ko.md)와 [registry index](#registry-index)가 설명을 요구한다). `installed.json`만 나열한 plugin은 설명이 없고 id를 이름으로 보여 준다.
 - 설치된 버전 <version>과 최신 버전 <version>(설치가 실행 중인 core에 고르는 버전, [version 선택](#version-선택))을 있을 때 보여 주고, plugin이 `incompatible`이면 core <version>에 맞는 버전 없음을 보여 주는 버전 줄.

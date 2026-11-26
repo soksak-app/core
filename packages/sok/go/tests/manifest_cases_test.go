@@ -78,8 +78,11 @@ func TestPluginInstallReplaysTheManifestCases(t *testing.T) {
 			installed := exists(filepath.Join(config, "plugins", "installed.json"))
 			if c.Accepted {
 				// The index holds no dependency of the plugin, so an accepted manifest with dependencies passes the
-				// reader and stops at the dependency check of the registry.
-				if !(code == 0 && installed) && !(code == 1 && strings.HasPrefix(stderr, "sok: probe 0.2.0: dependency ") && !installed) {
+				// reader and stops at the dependency check of the registry. A manifest that requires a plugin category stops at
+				// the category check of the install, because the index holds no plugin of that category.
+				requiresCategory := "sok: plugin probe requires a terminal plugin, and no installed and enabled plugin is one\n"
+				if !(code == 0 && installed) && !(code == 1 && strings.HasPrefix(stderr, "sok: probe 0.2.0: dependency ") && !installed) &&
+					!(code == 1 && stderr == requiresCategory && !installed) {
 					t.Fatalf("install refused an accepted manifest: code %d stderr %q", code, stderr)
 				}
 				return

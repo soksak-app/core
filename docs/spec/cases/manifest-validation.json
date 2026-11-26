@@ -6862,7 +6862,7 @@
         }
       },
       "accepted": false,
-      "error": "plugin probe.x: setting type must be enum, integer, string, or address",
+      "error": "plugin probe.x: setting type must be enum, integer, string, address, or plugin",
       "packageFiles": [
         "plugin.json",
         "ui/page.html"
@@ -10702,6 +10702,393 @@
         "plugin.json",
         "ui/page.html",
         "bin/account.mjs"
+      ]
+    },
+    {
+      "id": "categories.accepts-terminal",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "categories": [
+          "terminal"
+        ]
+      },
+      "accepted": true,
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "requires.accepts-terminal-with-sections",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "sections": [
+          {
+            "id": "probe.a",
+            "name": "A",
+            "composition": {
+              "kind": "view",
+              "page": "ui/page.html"
+            },
+            "height": "fill"
+          }
+        ],
+        "requires": [
+          "terminal"
+        ]
+      },
+      "accepted": true,
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "categories.not-list",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "categories": "terminal"
+      },
+      "accepted": false,
+      "error": "plugin probe: categories must be a list of plugin categories",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "categories.not-category",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "categories": [
+          "shell"
+        ]
+      },
+      "accepted": false,
+      "error": "plugin probe: categories category shell is not a plugin category of core",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "categories.repeats",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "categories": [
+          "terminal",
+          "terminal"
+        ]
+      },
+      "accepted": false,
+      "error": "plugin probe: categories category terminal repeats",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "categories.requires-surface",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "sections": [
+          {
+            "id": "probe.a",
+            "name": "A",
+            "composition": {
+              "kind": "view",
+              "page": "ui/page.html"
+            },
+            "height": "fill"
+          }
+        ],
+        "categories": [
+          "terminal"
+        ]
+      },
+      "accepted": false,
+      "error": "plugin probe: categories require a surface",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "requires.not-list",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "requires": "terminal"
+      },
+      "accepted": false,
+      "error": "plugin probe: requires must be a list of plugin categories",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "requires.not-category",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "requires": [
+          "shell"
+        ]
+      },
+      "accepted": false,
+      "error": "plugin probe: requires category shell is not a plugin category of core",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "requires.repeats",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "requires": [
+          "terminal",
+          "terminal"
+        ]
+      },
+      "accepted": false,
+      "error": "plugin probe: requires category terminal repeats",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "requires.in-categories",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "categories": [
+          "terminal"
+        ],
+        "requires": [
+          "terminal"
+        ]
+      },
+      "accepted": false,
+      "error": "plugin probe: requires category terminal is in categories",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "requires.placement",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "requires": [
+          "terminal"
+        ]
+      },
+      "accepted": false,
+      "error": "plugin probe: requires require a surface or sections",
+      "packageFiles": [
+        "plugin.json"
+      ]
+    },
+    {
+      "id": "settings.plugin-accepts",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "settings": {
+          "shell": {
+            "type": "plugin",
+            "category": "terminal",
+            "label": "Shell",
+            "description": "The terminal plugin that runs the shell."
+          }
+        }
+      },
+      "accepted": true,
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "settings.plugin-label-missing",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "settings": {
+          "shell": {
+            "type": "plugin",
+            "category": "terminal"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe.shell: label must be 1 to 40 characters",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "settings.plugin-category-unknown",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "settings": {
+          "shell": {
+            "label": "Shell",
+            "type": "plugin",
+            "category": "shell"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe.shell: category shell is not a plugin category of core",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "settings.plugin-default-refused",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "settings": {
+          "shell": {
+            "label": "Shell",
+            "type": "plugin",
+            "category": "terminal",
+            "default": "x"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe.shell: unknown field default",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
       ]
     }
   ]

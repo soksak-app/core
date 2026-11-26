@@ -35,7 +35,7 @@ import {
   applyTheme, controlValue, defaults, link, onSaved, overridden, reset, saving, scopedValue, set, setDebug, settingProject, THEMES, value,
 } from "./settings.js";
 import { changeRow, createSet, deleteSet, updateSet } from "./sidebar-sets.js";
-import { pluginUnits } from "./environment.js";
+import { pluginCategories, pluginUnits } from "./environment.js";
 import { latest, seated } from "./compositor.js";
 import {
   behindDialog, filePlace, modalState, onFilesDropped, onModalState, onWindowResponder, orderedCallsAnswered, overlayElementRect,
@@ -598,6 +598,8 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   status("core.contributions", contributionsState);
   onContributionsChange(coreChanged);
   status("core.plugins", () => pluginOperations.status());
+  // The categories are fixed when the environment is installed, so the status is read once and never changes while the window runs.
+  status("core.plugin-categories", () => pluginCategories());
   status("core.app", () => appUpdate.status());
   status("core.picker", pickerState);
   status("core.library", () => library.state());

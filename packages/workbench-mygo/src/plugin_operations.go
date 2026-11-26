@@ -130,7 +130,9 @@ func sidecarRows(ranges map[string]string, state *PluginsState) []PluginSidecar 
 	return rows
 }
 
-func rowState(unit *LoadedPlugin, record *sok.InstalledPlugin, refused bool) string {
+// rowState returns the state of a plugin row. requires is the plugin category that an enabled plugin requires and no loaded plugin
+// serves, or "" (docs/spec/installation.md#plugin-screen); such a plugin stays unloaded after a reload, so its state asks for none.
+func rowState(unit *LoadedPlugin, record *sok.InstalledPlugin, refused bool, requires string) string {
 	switch {
 	case unit != nil && record != nil && record.Enabled && record.Version == unit.Version:
 		return "loaded"
@@ -140,6 +142,8 @@ func rowState(unit *LoadedPlugin, record *sok.InstalledPlugin, refused bool) str
 		return "available"
 	case unit == nil && record.Enabled && refused: // A refused plugin is not loaded by a reload either.
 		return "refused"
+	case unit == nil && record.Enabled && requires != "":
+		return "requires"
 	}
 	return "reload"
 }
@@ -147,6 +151,11 @@ func rowState(unit *LoadedPlugin, record *sok.InstalledPlugin, refused bool) str
 // PluginRows returns the rows of `core.plugins` in id order. state is nil before it was read, and refused holds the installed
 // plugins that the window refused.
 func PluginRows(loaded []LoadedPlugin, state *PluginsState, refused map[string]bool) ([]PluginRow, error) {
+	return pluginRows(loaded, state, refused, nil)
+}
+
+// pluginRows is PluginRows with the category that each plugin of requirers requires and no loaded plugin serves, by plugin id.
+func pluginRows(loaded []LoadedPlugin, state *PluginsState, refused map[string]bool, requirers map[string]string) ([]PluginRow, error) {
 	units := map[string]*LoadedPlugin{}
 	for i := range loaded {
 		units[loaded[i].ID] = &loaded[i]
@@ -178,7 +187,7 @@ func PluginRows(loaded []LoadedPlugin, state *PluginsState, refused map[string]b
 	ids = slices.Compact(ids)
 	rows := make([]PluginRow, 0, len(ids))
 	for _, id := range ids {
-		row, err := pluginRow(id, units[id], state, listed, refused[id])
+		row, err := pluginRow(id, units[id], state, listed, refused[id], requirers[id])
 		if err != nil {
 			return nil, err
 		}
@@ -187,7 +196,7 @@ func PluginRows(loaded []LoadedPlugin, state *PluginsState, refused map[string]b
 	return rows, nil
 }
 
-func pluginRow(id string, unit *LoadedPlugin, state *PluginsState, listed map[string]sok.RegistryPlugin, refused bool) (PluginRow, error) {
+func pluginRow(id string, unit *LoadedPlugin, state *PluginsState, listed map[string]sok.RegistryPlugin, refused bool, requires string) (PluginRow, error) {
 	var record *sok.InstalledPlugin
 	if found, ok := state.Installed.Plugins[id]; ok {
 		record = &found
@@ -197,7 +206,7 @@ func pluginRow(id string, unit *LoadedPlugin, state *PluginsState, listed map[st
 	if err != nil {
 		return PluginRow{}, err
 	}
-	row := PluginRow{ID: id, Name: id, State: rowState(unit, record, refused), Incompatible: len(entry.Versions) > 0 && selected == nil}
+	row := PluginRow{ID: id, Name: id, State: rowState(unit, record, refused, requires), Incompatible: len(entry.Versions) > 0 && selected == nil}
 	if indexed {
 		row.Name, row.Description = entry.Name, entry.Description
 	}
@@ -228,7 +237,9 @@ type PluginOperations struct {
 	begin   BeginOperation
 	loaded  func() []LoadedPlugin
 	refused func() map[string]bool
-	changed func()
+	// requirers returns the category that each enabled plugin requires and no loaded plugin serves, by plugin id.
+	requirers func() map[string]string
+	changed   func()
 
 	state     *PluginsState
 	failure   *PluginFailure
@@ -239,8 +250,8 @@ type PluginOperations struct {
 }
 
 // NewPluginOperations returns the operations of a window over its host calls.
-func NewPluginOperations(calls *Calls, begin BeginOperation, loaded func() []LoadedPlugin, refused func() map[string]bool, changed func()) *PluginOperations {
-	return &PluginOperations{calls: calls, begin: begin, loaded: loaded, refused: refused, changed: changed, outdated: []OutdatedSidecar{}}
+func NewPluginOperations(calls *Calls, begin BeginOperation, loaded func() []LoadedPlugin, refused func() map[string]bool, requirers func() map[string]string, changed func()) *PluginOperations {
+	return &PluginOperations{calls: calls, begin: begin, loaded: loaded, refused: refused, requirers: requirers, changed: changed, outdated: []OutdatedSidecar{}}
 }
 
 // State returns the plugin state of the host, and nil before it was read.
@@ -366,7 +377,7 @@ func (p *PluginOperations) Status() PluginsStatus {
 	if p.state.Held != nil {
 		status.Held = p.state.Held
 	}
-	rows, err := PluginRows(p.loaded(), p.state, p.refused())
+	rows, err := pluginRows(p.loaded(), p.state, p.refused(), p.requirers())
 	if err != nil {
 		message := err.Error()
 		status.Error = &message

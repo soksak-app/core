@@ -6,10 +6,14 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 )
+
+// pluginID is the form of a plugin id, which the value of a plugin setting must have (docs/spec/plugins.md#settings-declarations).
+var pluginID = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 
 // The settings of the workbench (docs/spec/settings.md): the values of workbench.json, the common values, the overrides
 // of the shown project, and the plugin settings, in one store that every change goes through.
@@ -23,6 +27,8 @@ var logLevels = []string{"off", "error", "warn", "info", "debug", "trace"}
 // SettingDefinition is a setting that a plugin declares.
 type SettingDefinition struct {
 	Key, Plugin, Type, Label, Description string
+	// Category is the plugin category of a setting of the type plugin (docs/spec/plugins.md#settings-declarations).
+	Category string
 	// Values are the choices of an enum, Minimum and Maximum the bounds of an integer, and MaxLength the length of a string.
 	Values           []string
 	Minimum, Maximum float64
@@ -221,6 +227,9 @@ func NewSettingsStore(definitions []SettingDefinition, save SaveSettings) (*Sett
 	}
 	store := &SettingsStore{Catalog: catalog, Definitions: definitions, defaults: defaults, common: map[string]any{}, overrides: map[string]any{}, save: save, loaded: map[string]bool{}}
 	for _, definition := range definitions {
+		if err := store.pluginForm("environment.json: settings "+definition.Key, definition.Key, definition.Default); err != nil {
+			return nil, err
+		}
 		if err := store.validate(definition.Key, definition.Default); err != nil {
 			return nil, err
 		}
@@ -307,6 +316,11 @@ func orEmpty(values map[string]any) map[string]any {
 // effective is the settings in the order defaults, common values, project overrides. projectOpening has only a common value.
 func (s *SettingsStore) effective(common, overrides map[string]any) map[string]any {
 	values := maps.Clone(s.defaults)
+	for _, definition := range s.Definitions {
+		if definition.Type == "plugin" {
+			values[definition.Key] = s.defaultOf(definition.Key)
+		}
+	}
 	for _, layer := range []map[string]any{common, overrides} {
 		for key := range layer {
 			if !s.kept(key) {
@@ -330,7 +344,58 @@ func (s *SettingsStore) effectiveValue(common, overrides map[string]any, key str
 	if value, ok := common[key]; ok {
 		return value
 	}
-	return s.defaults[key]
+	return s.defaultOf(key)
+}
+
+// pluginSetting returns the declaration of the setting of a plugin category that key names, or nil.
+func (s *SettingsStore) pluginSetting(key string) *SettingDefinition {
+	for i := range s.Definitions {
+		if s.Definitions[i].Key == key && s.Definitions[i].Type == "plugin" {
+			return &s.Definitions[i]
+		}
+	}
+	return nil
+}
+
+// defaultOf returns the default of key. A plugin setting without a declared default takes the one loaded plugin of its category when the
+// window loaded exactly one, and no value otherwise (docs/spec/plugins.md#plugin-categories).
+func (s *SettingsStore) defaultOf(key string) any {
+	if value := s.defaults[key]; value != nil {
+		return value
+	}
+	definition := s.pluginSetting(key)
+	if definition == nil {
+		return nil
+	}
+	var served []string
+	for _, plugin := range s.plugins {
+		if slices.Contains(plugin.Categories, definition.Category) {
+			served = append(served, plugin.ID)
+		}
+	}
+	if len(served) == 1 {
+		return served[0]
+	}
+	return nil
+}
+
+// pluginForm refuses an environment value of a plugin setting that is not a plugin id. The place names the environment declaration, as
+// the reader of the plugin SDK names it; a stored value is refused by validate (docs/spec/plugins.md#settings-declarations).
+func (s *SettingsStore) pluginForm(where, key string, value any) error {
+	if s.pluginSetting(key) == nil || value == nil {
+		return nil
+	}
+	if text, ok := value.(string); !ok || !pluginID.MatchString(text) {
+		return fmt.Errorf("%s: plugin value must be a plugin id", where)
+	}
+	return nil
+}
+
+// servesCategory tells that the loaded plugin id serves category.
+func (s *SettingsStore) servesCategory(category, id string) bool {
+	return slices.ContainsFunc(s.plugins, func(plugin LoadedPlugin) bool {
+		return plugin.ID == id && slices.Contains(plugin.Categories, category)
+	})
 }
 
 // Project returns the project that project changes apply to.
@@ -358,7 +423,7 @@ func (s *SettingsStore) Scoped(key, scope string) any {
 	if value, ok := s.common[key]; ok {
 		return value
 	}
-	return s.defaults[key]
+	return s.defaultOf(key)
 }
 
 // Overridden tells that the shown project overrides key.
@@ -515,6 +580,10 @@ func validateDeclared(definition SettingDefinition, value any) error {
 		if !ok || text != "" && !strings.HasPrefix(text, "http://") && !strings.HasPrefix(text, "https://") {
 			return fmt.Errorf("Invalid setting %s: address value must be empty or an http or https address", key)
 		}
+	case "plugin":
+		if text, ok := value.(string); value != nil && (!ok || !pluginID.MatchString(text)) {
+			return fmt.Errorf("Invalid setting %s: plugin value must be a plugin id", key)
+		}
 	}
 	return nil
 }
@@ -522,6 +591,18 @@ func validateDeclared(definition SettingDefinition, value any) error {
 // check holds what no single value tells: the widths in order, and the sets and links with the functions of the page that also
 // check the sidebars of environment.json (docs/spec/settings.md#stored-sets-and-links).
 func (s *SettingsStore) check(values map[string]any) error {
+	// Each plugin value names a loaded and enabled plugin of its category; a value that names none is a load error and replaces nothing
+	// (docs/spec/plugins.md#plugin-categories). A value that is no plugin id was refused by validate before this check runs.
+	for _, definition := range s.Definitions {
+		if definition.Type != "plugin" || values[definition.Key] == nil {
+			continue
+		}
+		// silent: validate checked the form of the value before check runs.
+		id, _ := values[definition.Key].(string)
+		if !s.servesCategory(definition.Category, id) {
+			return fmt.Errorf("%s: plugin %s is not a %s plugin", definition.Key, id, definition.Category)
+		}
+	}
 	// A command passes the lists in their typed form, so the check reads each one in its stored form.
 	storedSets, err := decode[any](values["sets"])
 	if err != nil {

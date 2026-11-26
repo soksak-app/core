@@ -402,6 +402,12 @@ const SETTING_LABEL_MAX = 40;
 const SETTING_DESCRIPTION_MAX = 200;
 const ADDRESS_MAX = 2048;
 
+/**
+ * The plugin categories of core (docs/spec/plugins.md#plugin-categories). The test plugin-categories.test.mjs compares this list
+ * with docs/spec/cases/plugin-categories.json, which the validators of sok in Go and Rust are tested against.
+ */
+export const PLUGIN_CATEGORIES = Object.freeze(["terminal"]);
+
 /** Address setting value: an empty string or an http or https address of at most 2048 characters. */
 export function isSettingAddress(value) {
   return value === "" || (typeof value === "string" && value.length <= ADDRESS_MAX && /^https?:\/\/[^/]/i.test(value));
@@ -417,6 +423,14 @@ function checkSettingDeclaration(where, full) {
   if (description !== undefined &&
       (typeof description !== "string" || description.length < 1 || description.length > SETTING_DESCRIPTION_MAX)) {
     throw new Error(`${where}: description must be 1 to ${SETTING_DESCRIPTION_MAX} characters`);
+  }
+  // A plugin setting names the plugin category whose plugin the setting selects; a plugin setting has no default.
+  if (declaration.type === "plugin") {
+    only(where, declaration, ["type", "category"]);
+    if (!PLUGIN_CATEGORIES.includes(declaration.category)) {
+      throw new Error(`${where}: category ${declaration.category} is not a plugin category of core`);
+    }
+    return;
   }
   if (declaration.type === "enum") {
     only(where, declaration, ["type", "default", "values"]);
@@ -455,7 +469,7 @@ function checkSettingDeclaration(where, full) {
     }
     return;
   }
-  throw new Error(`${where}: setting type must be enum, integer, string, or address`);
+  throw new Error(`${where}: setting type must be enum, integer, string, address, or plugin`);
 }
 
 function checkSettings(where, settings) {
@@ -481,6 +495,9 @@ function checkSettingValue(where, declaration, value) {
   }
   if (declaration.type === "address" && !isSettingAddress(value)) {
     throw new Error(`${where}: address value must be empty or an http or https address`);
+  }  // The window checks that the plugin is a loaded and enabled plugin of the category (docs/spec/plugins.md#plugin-categories).
+  if (declaration.type === "plugin" && !(typeof value === "string" && ID.test(value))) {
+    throw new Error(`${where}: plugin value must be a plugin id`);
   }
 }
 
@@ -843,6 +860,21 @@ export function validateReleaseFiles(pkg) {
   return pkg.files;
 }
 
+/**
+ * Checks the list of categories and the list of requires of plugin.json: each entry is a plugin category of core and occurs once.
+ * An entry of requires may not be one that categories lists (docs/spec/plugins.md#plugin-categories).
+ */
+function checkPluginCategories(where, member, categories, listed = []) {
+  if (!Array.isArray(categories)) throw new Error(`${where}: ${member} must be a list of plugin categories`);
+  const seen = new Set();
+  for (const category of categories) {
+    if (!PLUGIN_CATEGORIES.includes(category)) throw new Error(`${where}: ${member} category ${category} is not a plugin category of core`);
+    if (seen.has(category)) throw new Error(`${where}: ${member} category ${category} repeats`);
+    if (listed.includes(category)) throw new Error(`${where}: ${member} category ${category} is in categories`);
+    seen.add(category);
+  }
+}
+
 export function validateManifest(manifest) {
   if (!isObject(manifest)) throw new Error("plugin.json: expected an object");
   // The state module is removed: a plugin declares its project data with data (docs/spec/plugins.md#project-data).
@@ -856,7 +888,7 @@ export function validateManifest(manifest) {
   // The settings view is removed: a plugin declares its settings, which the settings window draws (docs/spec/settings.md#controls).
   if (manifest.settingsView !== undefined) throw new Error(`plugin ${manifest.id}: settingsView is removed; a plugin declares its settings`);
   only("plugin.json", manifest, ["id", "name", "description", "mark", "icon", "surface", "sections", "preview", "dependencies", "background", "programs", "exposes", "settings",
-    "data", "sidebars", "dialogs", "extends", "contributes", "events", "sessions", "accounts"]);
+    "data", "sidebars", "dialogs", "extends", "contributes", "events", "sessions", "accounts", "categories", "requires"]);
   validateEventsPath("plugin.json", manifest.events);
   const { id } = manifest;
   if (typeof id !== "string" || !ID.test(id)) throw new Error(`plugin.json: invalid id ${id}`);
@@ -897,6 +929,15 @@ export function validateManifest(manifest) {
       throw new Error(`${where}: dependencies require a surface, sections or contributes`);
     }
     checkDependencies(where, manifest.dependencies);
+  }
+  // A plugin serves the plugin categories it lists and requires the ones it lists in requires (docs/spec/plugins.md#plugin-categories).
+  if (manifest.categories !== undefined) {
+    if (manifest.surface === undefined) throw new Error(`${where}: categories require a surface`);
+    checkPluginCategories(where, "categories", manifest.categories);
+  }
+  if (manifest.requires !== undefined) {
+    if (manifest.surface === undefined && manifest.sections === undefined) throw new Error(`${where}: requires require a surface or sections`);
+    checkPluginCategories(where, "requires", manifest.requires, manifest.categories);
   }
   if (manifest.dialogs !== undefined) {
     if (manifest.surface === undefined && manifest.sections === undefined) throw new Error(`${where}: dialogs requires a surface or sections`);

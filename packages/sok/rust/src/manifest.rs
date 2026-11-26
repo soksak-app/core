@@ -21,7 +21,7 @@ const SET_TITLE_MAX: usize = 40;
 const MENU_TITLE_MAX: usize = 40;
 
 /// The members that plugin.json may hold (validateManifest).
-const TOP_LEVEL_KEYS: [&str; 21] = [
+const TOP_LEVEL_KEYS: [&str; 23] = [
     "id",
     "name",
     "description",
@@ -43,7 +43,60 @@ const TOP_LEVEL_KEYS: [&str; 21] = [
     "sessions",
     "events",
     "accounts",
+    "categories",
+    "requires",
 ];
+
+/// The plugin categories of core (docs/spec/plugins.md#plugin-categories); docs/spec/cases/plugin-categories.json holds the same list.
+pub const PLUGIN_CATEGORIES: [&str; 1] = ["terminal"];
+
+/// The entries of the categories or the requires member of a plugin.json that the installation reads. A member that is absent
+/// holds no entry; a member that is not a list of text is refused, because the reader refused it at install.
+pub fn plugin_category_list(value: &Value, member: &str) -> Result<Vec<String>, String> {
+    let Some(raw) = value.get(member) else {
+        return Ok(vec![]);
+    };
+    let refused = || format!("{member} must be a list of plugin categories");
+    raw.as_array()
+        .ok_or_else(refused)?
+        .iter()
+        .map(|item| item.as_str().map(str::to_string).ok_or_else(refused))
+        .collect()
+}
+
+/// Checks a list of plugin categories of plugin.json, the categories or the requires member (checkPluginCategories of the
+/// reader). Each entry is a plugin category of core and occurs once; an entry of requires may not be one that categories
+/// lists, so listed holds the categories for requires and None for categories. It returns the entries in order.
+fn check_plugin_categories(
+    member: &str,
+    raw: &Value,
+    listed: Option<&[String]>,
+) -> Result<Vec<String>, String> {
+    let items = raw
+        .as_array()
+        .ok_or_else(|| format!("{member} must be a list of plugin categories"))?;
+    let mut seen = BTreeSet::new();
+    let mut names = vec![];
+    for item in items {
+        // A value that is not text names no plugin category of core, so it is refused as one.
+        let name = item
+            .as_str()
+            .map_or_else(|| item.to_string(), str::to_string);
+        if !PLUGIN_CATEGORIES.contains(&name.as_str()) {
+            return Err(format!(
+                "{member} category {name} is not a plugin category of core"
+            ));
+        }
+        if !seen.insert(name.clone()) {
+            return Err(format!("{member} category {name} repeats"));
+        }
+        if listed.is_some_and(|listed| listed.contains(&name)) {
+            return Err(format!("{member} category {name} is in categories"));
+        }
+        names.push(name);
+    }
+    Ok(names)
+}
 
 /// The keywords that a schema may hold (checkSchema of packages/plugin-api).
 const SCHEMA_KEYWORDS: [&str; 5] = ["type", "properties", "required", "items", "enum"];
@@ -1623,8 +1676,11 @@ fn check_setting_declaration(where_: &str, raw: &Value) -> Result<(), String> {
     let full = raw
         .as_object()
         .ok_or_else(|| format!("{where_}: setting must be an object"))?;
-    let label = full.get("label").and_then(Value::as_str);
-    if !label.is_some_and(|l| (1..=SETTING_LABEL_MAX).contains(&utf16_length(l))) {
+    let label_ok = full
+        .get("label")
+        .and_then(Value::as_str)
+        .is_some_and(|l| (1..=SETTING_LABEL_MAX).contains(&utf16_length(l)));
+    if !label_ok {
         return Err(format!(
             "{where_}: label must be 1 to {SETTING_LABEL_MAX} characters"
         ));
@@ -1712,8 +1768,27 @@ fn check_setting_declaration(where_: &str, raw: &Value) -> Result<(), String> {
             }
             Ok(())
         }
+        // A plugin setting names the plugin category whose plugin it selects, and has no default (checkSettingDeclaration of the reader).
+        Some("plugin") => {
+            only(where_, &declaration, &["type", "category"])?;
+            let category = declaration.get("category").map_or_else(
+                || "undefined".to_string(),
+                |value| {
+                    value
+                        .as_str()
+                        .map_or_else(|| value.to_string(), str::to_string)
+                },
+            );
+            if PLUGIN_CATEGORIES.contains(&category.as_str()) {
+                Ok(())
+            } else {
+                Err(format!(
+                    "{where_}: category {category} is not a plugin category of core"
+                ))
+            }
+        }
         _ => Err(format!(
-            "{where_}: setting type must be enum, integer, string, or address"
+            "{where_}: setting type must be enum, integer, string, address, or plugin"
         )),
     }
 }
@@ -1972,6 +2047,21 @@ pub fn validate_manifest(value: &Value) -> Result<(), String> {
         }
         dependencies = check_dependencies(&where_, raw)?;
     }
+    let mut categories = vec![];
+    if let Some(raw) = manifest.get("categories") {
+        if !has("surface") {
+            return Err(format!("{where_}: categories require a surface"));
+        }
+        categories = check_plugin_categories("categories", raw, None)
+            .map_err(|error| format!("{where_}: {error}"))?;
+    }
+    if let Some(raw) = manifest.get("requires") {
+        if !has("surface") && !has("sections") {
+            return Err(format!("{where_}: requires require a surface or sections"));
+        }
+        check_plugin_categories("requires", raw, Some(&categories))
+            .map_err(|error| format!("{where_}: {error}"))?;
+    }
     let sidecars: Vec<&str> = sorted_keys(&dependencies)
         .into_iter()
         .map(String::as_str)
@@ -2061,3 +2151,7 @@ pub fn validate_manifest(value: &Value) -> Result<(), String> {
 #[cfg(test)]
 #[path = "manifest_programs_test.rs"]
 mod programs_tests;
+
+#[cfg(test)]
+#[path = "manifest_categories_test.rs"]
+mod categories_tests;

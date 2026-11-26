@@ -43,7 +43,7 @@ const PAGES = [['projects', '프로젝트'], ['plugins', '플러그인']];
 /** Status text of a plugin card. */
 // The label of the operation that a held entry runs (docs/spec/installation.md#plugin-screen).
 const HELD_ACTIONS = { install: '설치', update: '업데이트', enable: '사용' };
-const PLUGIN_STATES = { loaded: '사용 중', disabled: '사용 안 함', available: '설치 안 됨', reload: '창을 다시 불러오면 적용', refused: '불러오지 못함' };
+const PLUGIN_STATES = { loaded: '사용 중', disabled: '사용 안 함', available: '설치 안 됨', reload: '창을 다시 불러오면 적용', refused: '불러오지 못함', requires: '필요한 플러그인 없음' };
 // The states of contributions to extension points (docs/spec/plugins.md#extension-points); invalid shows through the error display.
 const CONTRIBUTION_STATES = { connected: '연결됨', 'provider-missing': '제공자 없음', 'version-mismatch': 'version 불일치', invalid: '오류' };
 

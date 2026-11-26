@@ -464,7 +464,11 @@ func (s *Shell) drawSwitch(c *ui.Context, control *SettingsControl, pane setting
 }
 
 func (s *Shell) drawSelect(c *ui.Context, control *SettingsControl, pane settingsPane) {
-	value := *control.Value
+	// A select of a plugin setting has no value while nothing is chosen, and then it shows no option.
+	value := ""
+	if control.Value != nil {
+		value = *control.Value
+	}
 	s.binder.Control(c, control.Name, control.Command.Name, control.item())
 	selector := ui.SelectBase(c, &value)
 	s.binder.Bound(selector.Trigger, control.Name)

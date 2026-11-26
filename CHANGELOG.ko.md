@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1216: `plugin.json`이 `categories`와 `requires`를 선언한다. `sok`는 요구하는 plugin에 그 category의 plugin이 남지 않게 하는 작업을 거부하고, workbench는 그런 plugin을 `requires` 상태로 불러오지 않으며, `core.plugin-categories`를 보고하고, type `plugin` 설정을 그 category의 plugin select로 그린다.
 - F1215-4, F1215-5: web과 mygo workbench는 계정을 선언한 plugin의 plugin page에 그룹 계정을 그린다. 계정마다 종류, login, 사용량 줄과 버튼 로그인, 취소, 로그아웃, 이름 변경, 삭제를 가진 행 하나와 행 새 계정이 있다. 명령 `core.accounts.add`, `rename`, `remove`, `login`, `login-cancel`, `logout`은 plugin key accounts를 바꾸고 plugin의 계정 프로그램을 실행하며, status `core.accounts`는 보이는 page의 계정을 알리고, 그룹의 field는 `core.settings-modal.account-name`, `account-kind`, `account-edit`, `account-edit-name`을 실행한다.
 - F1215-6: Rust `sok`의 accounts 검사는 계정 프로그램 이름에 기본값이 쓰이지 않는 이유를 적어서 event source 검사가 통과한다.
 - F1210-6: event 목록과 logging 정책은 두 host가 plugin key의 entry를 저장할 때마다 내보내는 `host.workspace.plugin-data`(`plugin`, `key`)를 선언한다.

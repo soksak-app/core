@@ -184,7 +184,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("mygo framework adapter", "go", ["packages/host/mygo/src/**/*.go"], ["packages/host/mygo/tests/**/*.go", "packages/host/mygo/src/frames_test.go", "packages/host/mygo/src/frontend_test.go", "packages/host/mygo/src/workbench_test.go"], { sharedTests: true }),
   lane("empty mygo window benchmark", "go", ["packages/host/mygo/benchmark/empty_window.go", "packages/host/mygo/benchmark/platform/darwin/main.go"], ["packages/host/mygo/benchmark/empty_window_test.go"], { sharedTests: true }),
   lane("Wails command line", "go", ["packages/sok/go/src/**/*.go"], ["packages/sok/go/tests/**/*.go", "packages/sok/go/src/manifest_programs_test.go", "packages/sok/go/src/diagnostics_test.go", "packages/sok/go/src/dev_test.go", "packages/sok/go/src/wailsv3_test.go", "packages/sok/go/src/mygo_test.go", "packages/sok/go/src/identity_test.go", "packages/sok/go/src/debug_test.go", "packages/sok/go/src/event_log_loss_test.go", "packages/sok/go/src/event_log_idle_test.go"], { sharedTests: true }),
-  lane("Tauri command line", "rust", ["packages/sok/rust/src/**/*.rs"], ["packages/sok/rust/tests/**/*.rs", "packages/sok/rust/src/manifest_programs_test.rs", "packages/sok/rust/src/event_log_lock_test.rs", "packages/sok/rust/src/event_log_flush_test.rs", "packages/sok/rust/src/debug_test.rs", "packages/sok/rust/src/event_log_loss_test.rs", "packages/sok/rust/src/process_wait_test.rs", "packages/sok/rust/src/platform/*/process_wait_signal_test.rs"]),
+  lane("Tauri command line", "rust", ["packages/sok/rust/src/**/*.rs"], ["packages/sok/rust/tests/**/*.rs", "packages/sok/rust/src/manifest_programs_test.rs", "packages/sok/rust/src/manifest_categories_test.rs", "packages/sok/rust/src/event_log_lock_test.rs", "packages/sok/rust/src/event_log_flush_test.rs", "packages/sok/rust/src/debug_test.rs", "packages/sok/rust/src/event_log_loss_test.rs", "packages/sok/rust/src/process_wait_test.rs", "packages/sok/rust/src/platform/*/process_wait_signal_test.rs"]),
   lane("Wails application bootstrap", "go", ["apps/wailsv3/src/main.go"], ["e2e/**/*.mjs", "e2e/platform/platform.js", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js", "e2e/fixtures/*/*/ui/*.html", "e2e/fixtures/sidecars/*/sidecar.json", "e2e/fixtures/sidecars/*/build.rs", "e2e/fixtures/sidecars/*/src/*.rs"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
   lane("mygo application bootstrap", "go", ["apps/mygo/src/main.go"], ["packages/host/mygo/tests/framework_test.go"], { sharedTests: true }),
 
@@ -532,6 +532,19 @@ const FEATURE_LINKS = [
       { file: "packages/plugin-api/test/view-answer-plugin-keys.test.mjs", id: "a view without a project reads, writes, replaces and follows a plugin key" },
     ],
     expected: "The web workbench serves the plugin keys to the views of any window, with or without a project.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1216",
+    implementation: [{ file: "packages/sok/rust/src/manifest.rs", symbol: "pub const PLUGIN_CATEGORIES" }],
+    tests: [
+      { file: "packages/sok/rust/src/manifest_categories_test.rs", id: "plugin_categories_are_the_list_of_the_case_file" },
+      { file: "packages/sok/rust/src/manifest_categories_test.rs", id: "categories_and_requires_that_are_valid_are_accepted" },
+      { file: "packages/sok/rust/src/manifest_categories_test.rs", id: "categories_and_requires_refuse_each_invalid_value_with_its_reason" },
+      { file: "packages/sok/rust/src/manifest_categories_test.rs", id: "plugin_setting_accepts_a_category_of_core_with_label_and_description" },
+      { file: "packages/sok/rust/src/manifest_categories_test.rs", id: "plugin_setting_refuses_an_unknown_category_a_default_and_an_unknown_type" },
+    ],
+    expected: "The Rust sok holds the plugin categories of the case file and validates categories, requires and the setting type plugin with the texts of the shared cases.",
     levels: ["unit"],
   },
   {
@@ -12004,7 +12017,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F209",
-    implementation: [{ file: "packages/workbench/plugin-operations.js", symbol: "export function pluginRows(loaded, state, refused)" }],
+    implementation: [{ file: "packages/workbench/plugin-operations.js", symbol: "export function pluginRows(loaded, state, refused, unmet = new Map())" }],
     tests: [{ file: "packages/workbench/test/plugin-operations.test.mjs", id: "a plugin whose every registry version is revoked is not offered, and an installed one keeps its row without an update" }],
     expected: "A plugin whose every registry version is revoked has no install action and no latest version.",
     levels: ["unit"],
@@ -14868,7 +14881,7 @@ const FEATURE_LINKS = [
     id: "F321-3",
     implementation: [
       { file: "packages/plugin-api/index.js", symbol: "export function acceptInstalledPlugins(" },
-      { file: "packages/workbench/environment.js", symbol: "const { plugins: installed, errors, refused: refusedIds } = acceptInstalledPlugins(installedDocument);" },
+      { file: "packages/workbench/environment.js", symbol: "const { plugins: accepted, errors: refusals, refused: refusedIds } = acceptInstalledPlugins(installedDocument);" },
     ],
     tests: [
       { file: "packages/workbench/test/environment-refused-plugins.test.mjs", id: "an installed plugin whose manifest is refused is left out with its error and the other plugins are registered" },

@@ -269,7 +269,7 @@ type pluginStarter struct {
 // when that is what the tab waits for.
 func (s *Shell) drawPluginPlaceholder(c *ui.Context, tab layout.Tab) {
 	reason := s.placeholderReason(tab.Plugin)
-	line, action, label := placeholderOf(tab.Plugin, reason, reason == "missing" && s.registryListsPlugin(tab.Plugin))
+	line, action, label := placeholderOf(tab.Plugin, reason, s.requirers[tab.Plugin], reason == "missing" && s.registryListsPlugin(tab.Plugin))
 	// The line is a paragraph of the page, whose margin of one line stands under it as well as the gap of the placeholder.
 	gap := s.options.Declared.ChromeNumber("placeholder-gap", "px")
 	ui.Column(c).Fill().Gap(float32(gap) + s.textBody()).Center().Children(func() {
@@ -308,8 +308,9 @@ func (s *Shell) placeholderRows() ([]placeholderStatus, error) {
 }
 
 // placeholderReason returns the reason of the placeholder of a tab of plugin (docs/spec/plugins.md): unread when the install state
-// was not read, missing when the plugin is not installed, refused when its installed version was refused, reload when it is
-// enabled and loads with the next window, and disabled otherwise.
+// was not read, missing when the plugin is not installed, refused when its installed version was refused, requires when it is enabled
+// and requires a plugin category that no loaded plugin serves, reload when it is enabled and loads with the next window, and disabled
+// otherwise.
 func (s *Shell) placeholderReason(plugin string) string {
 	if failure := s.pluginOperations.Failure(); failure != nil && failure.Kind == "state" {
 		return "unread"
@@ -321,6 +322,8 @@ func (s *Shell) placeholderReason(plugin string) string {
 		return "missing"
 	case rows[index].State == "refused":
 		return "refused"
+	case rows[index].Installed.Enabled && s.requirers[plugin] != "":
+		return "requires"
 	case rows[index].Installed.Enabled:
 		return "reload"
 	}
@@ -335,8 +338,9 @@ func (s *Shell) registryListsPlugin(plugin string) bool {
 }
 
 // placeholderOf returns the line of the placeholder of plugin for reason, and its action and the label of the action when it has one:
-// install for a missing plugin that is installable, and enable for a disabled one.
-func placeholderOf(plugin, reason string, installable bool) (line, action, label string) {
+// install for a missing plugin that is installable, and enable for a disabled one. category is the plugin category that plugin requires
+// for the reason requires.
+func placeholderOf(plugin, reason, category string, installable bool) (line, action, label string) {
 	switch reason {
 	case "unread":
 		return plugin + " 플러그인의 설치 상태를 읽지 못했습니다.", "", ""
@@ -347,6 +351,8 @@ func placeholderOf(plugin, reason string, installable bool) (line, action, label
 		return plugin + " 플러그인이 설치되어 있지 않습니다.", "", ""
 	case "refused":
 		return plugin + " 플러그인의 설치된 버전을 불러오지 못했습니다.", "", ""
+	case "requires":
+		return plugin + " 플러그인에 필요한 " + category + " 플러그인이 없습니다.", "", ""
 	case "reload":
 		return "창을 다시 불러오면 " + plugin + " 플러그인이 열립니다.", "", ""
 	}

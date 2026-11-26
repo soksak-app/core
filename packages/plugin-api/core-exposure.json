@@ -25,6 +25,7 @@
     "core.plugins",
     "core.settings-modal",
     "core.setup",
+    "core.plugin-categories",
     "core.accounts",
     "core.debug",
     "core.picker",

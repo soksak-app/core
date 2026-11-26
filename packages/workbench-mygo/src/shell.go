@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"math"
 	"path"
 	"slices"
@@ -447,6 +448,9 @@ type Shell struct {
 	plugins             []LoadedPlugin
 	// refused holds the ids of the installed plugins whose manifest the window refused.
 	refused map[string]bool
+	// requirers holds the category that each enabled plugin requires and no loaded plugin serves, by plugin id; such a plugin is not loaded
+	// (docs/spec/plugins.md#plugin-categories).
+	requirers map[string]string
 	// settingsActor is the command of the settings change that runs.
 	settingsActor string
 
@@ -591,7 +595,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.pointer.released = s.keyboardPressed
 	s.binder.Attach(s.pointer, s.exposedFocus)
 	s.starter = environment.pluginStarter
-	s.pluginOperations = NewPluginOperations(s.calls, s.events.BeginOperation, func() []LoadedPlugin { return s.plugins }, func() map[string]bool { return s.refused }, s.options.Invalidate)
+	s.pluginOperations = NewPluginOperations(s.calls, s.events.BeginOperation, func() []LoadedPlugin { return s.plugins }, func() map[string]bool { return s.refused }, func() map[string]string { return s.requirers }, s.options.Invalidate)
 	s.appUpdates = NewAppUpdates(s.calls, s.events.BeginOperation, s.pluginOperations.State, s.options.Invalidate)
 	s.setupOperations = NewSetupOperations(s.calls, s.options.Invalidate, s.fail)
 	s.accounts = NewAccounts(s)
@@ -601,6 +605,15 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.refused = refused
 	if err != nil {
 		s.fail(err)
+	}
+	// A plugin that requires a category which no loaded plugin serves is not loaded, and the others start (docs/spec/plugins.md#plugin-categories).
+	var requirers map[string]string
+	if installed, requirers, err = dropRequirers(installed); err != nil {
+		return nil, err
+	}
+	s.requirers = requirers
+	for _, id := range slices.Sorted(maps.Keys(requirers)) {
+		s.fail(fmt.Errorf("plugin %s requires a %s plugin, and no loaded plugin is one", id, requirers[id]))
 	}
 	if s.installed, err = readInstalled(installed); err != nil {
 		s.fail(err)
@@ -622,6 +635,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.surfaces = newSurfaceState()
 	s.notices = newSystemNotices()
 	s.registry.Status("core.drop", func() any { return s.lastDrop })
+	s.registry.Status("core.plugin-categories", func() any { return categoryStatus(s.plugins) })
 	s.registry.Status("core.notifications", func() any {
 		return notificationStatus{Authorization: s.notices.authorization, Error: s.notices.failure, Posted: slices.Clone(s.notices.accepted)}
 	})

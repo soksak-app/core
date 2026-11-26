@@ -429,3 +429,12 @@ test("a read that finds what the page holds calls no listener, and a read that f
   assert.equal(await counted(operations.refreshOutdated), 0, "the same outdated sidecar");
   wire.finish();
 });
+
+test("an installed and enabled plugin that the window does not load because a plugin category it requires is unserved has the state requires", () => {
+  const state = { core: "0.0.24", registry: null, index: null,
+    installed: { format: 3, plugins: { gamma: { version: "0.1.0", enabled: true, sidecars: {} } }, sidecars: {} } };
+  assert.deepEqual(pluginRows([], state, new Set(), new Map([["gamma", "terminal"]])).map((row) => [row.id, row.state]),
+    [["gamma", "requires"]]);
+  // Without the unmet requirement the same enabled plugin waits for a page reload, as before.
+  assert.deepEqual(pluginRows([], state, new Set()).map((row) => [row.id, row.state]), [["gamma", "reload"]]);
+});

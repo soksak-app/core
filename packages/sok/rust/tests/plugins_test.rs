@@ -1024,6 +1024,8 @@ struct Dependent {
     id: &'static str,
     version: &'static str,
     dependencies: Vec<(&'static str, &'static str)>,
+    categories: Vec<&'static str>,
+    requires: Vec<&'static str>,
 }
 
 fn base(version: &'static str) -> Dependent {
@@ -1031,6 +1033,8 @@ fn base(version: &'static str) -> Dependent {
         id: "base",
         version,
         dependencies: vec![("@scope/sidecar-worker", "^0.1.0")],
+        categories: vec![],
+        requires: vec![],
     }
 }
 
@@ -1039,6 +1043,24 @@ fn ext(range: &'static str) -> Dependent {
         id: "ext",
         version: "1.0.0",
         dependencies: vec![("@scope/plugin-base", range)],
+        categories: vec![],
+        requires: vec![],
+    }
+}
+
+/// A test plugin version that serves the plugin categories and requires the plugin categories given.
+fn category_plugin(
+    id: &'static str,
+    version: &'static str,
+    categories: &[&'static str],
+    requires: &[&'static str],
+) -> Dependent {
+    Dependent {
+        id,
+        version,
+        dependencies: vec![],
+        categories: categories.to_vec(),
+        requires: requires.to_vec(),
     }
 }
 
@@ -1057,14 +1079,27 @@ fn dependency_registry(versions: &[Dependent]) -> Registry {
             .iter()
             .map(|(name, range)| (name.to_string(), Value::from(*range)))
             .collect();
-        let package = json!({"name": format!("@scope/plugin-{}", item.id), "version": item.version,
-            "engines": {"soksak": "^0.0.2"}, "files": ["plugin.json"]})
-        .to_string();
-        let manifest = json!({"id": item.id, "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": dependencies}).to_string();
-        write_tree(
-            dir.path(),
-            &[("package.json", &package), ("plugin.json", &manifest)],
-        );
+        let mut package = json!({"name": format!("@scope/plugin-{}", item.id), "version": item.version,
+            "engines": {"soksak": "^0.0.2"}, "files": ["plugin.json"]});
+        let mut manifest = json!({"id": item.id, "name": "Probe", "description": "Sample.", "contributes": {"lib.point": [{"range": "^1.0.0", "module": "ui/b.js"}]}, "dependencies": dependencies});
+        let mut files: Vec<(&str, String)> = vec![];
+        // A plugin that serves or requires a category has a view surface, which the reader requires for both members.
+        if !item.categories.is_empty() || !item.requires.is_empty() {
+            manifest["mark"] = json!("P");
+            manifest["icon"] = json!("<svg></svg>");
+            manifest["surface"] = json!({"composition": {"kind": "view", "page": "ui/page.html"}});
+            manifest["categories"] = json!(item.categories);
+            manifest["requires"] = json!(item.requires);
+            package["files"] = json!(["plugin.json", "ui/page.html"]);
+            files.push(("ui/page.html", "<!doctype html>".to_string()));
+        }
+        files.push(("package.json", package.to_string()));
+        files.push(("plugin.json", manifest.to_string()));
+        let files: Vec<(&str, &str)> = files
+            .iter()
+            .map(|(name, text)| (*name, text.as_str()))
+            .collect();
+        write_tree(dir.path(), &files);
         let result = package_release::pack(dir.path(), releases.path());
         let sidecars: serde_json::Map<String, Value> = dependencies
             .into_iter()
@@ -1246,6 +1281,8 @@ fn plugin_install_reads_a_union_in_the_plugin_dependencies() {
                 ("@scope/plugin-base", "1.0.0 || ^2.0.0"),
                 ("@scope/sidecar-worker", "^0.3.0 || ^0.1.0"),
             ],
+            categories: vec![],
+            requires: vec![],
         },
     ]);
     let config = Folder::new("plugins");
@@ -1280,6 +1317,8 @@ fn plugin_install_rejects_unresolvable_plugin_dependencies() {
                 id: "ext",
                 version: "1.0.0",
                 dependencies: vec![("@scope/plugin-gone", "^1.0.0")],
+                categories: vec![],
+                requires: vec![],
             }],
             "sok: ext 1.0.0: dependency @scope/plugin-gone is neither a plugin nor a sidecar of the registry\n",
         ),
@@ -1295,11 +1334,15 @@ fn plugin_install_rejects_unresolvable_plugin_dependencies() {
                     id: "first",
                     version: "1.0.0",
                     dependencies: vec![("@scope/plugin-second", "^1.0.0")],
+                    categories: vec![],
+                    requires: vec![],
                 },
                 Dependent {
                     id: "second",
                     version: "1.0.0",
                     dependencies: vec![("@scope/plugin-first", "^1.0.0")],
+                    categories: vec![],
+                    requires: vec![],
                 },
             ],
             "sok: plugin dependency cycle: first -> second -> first\n",
@@ -1611,4 +1654,177 @@ fn manifest_declaring_migrations_is_refused_as_an_unknown_member() {
         "{stderr}"
     );
     assert!(!config.path().join("plugins/installed.json").exists());
+}
+
+// A plugin that requires a category that no installed and enabled plugin serves is refused at install, before anything is
+// extracted; once a plugin of the category is installed, the requirer installs.
+#[test]
+fn plugin_install_refuses_a_plugin_whose_required_category_no_enabled_plugin_serves() {
+    let config = Folder::new("plugins");
+    let registry = dependency_registry(&[
+        category_plugin("shell", "1.0.0", &[], &["terminal"]),
+        category_plugin("term", "1.0.0", &["terminal"], &[]),
+    ]);
+    use_registry(&config, &registry);
+    let (code, _, stderr) = run(&["plugin", "install", "shell", "--config-dir", config.text()]);
+    assert_eq!(
+        (code, stderr.as_str()),
+        (
+            1,
+            "sok: plugin shell requires a terminal plugin, and no installed and enabled plugin is one\n"
+        )
+    );
+    assert!(!config.path().join("plugins/installed.json").exists());
+    assert!(!config.path().join("plugins/shell").exists());
+    succeeds(&["plugin", "install", "term", "--config-dir", config.text()]);
+    succeeds(&["plugin", "install", "shell", "--config-dir", config.text()]);
+    let state = installed_of(&config);
+    assert!(state.plugins["shell"].enabled && state.plugins["term"].enabled);
+}
+
+// Disabling or removing the last enabled plugin of a category that an enabled plugin requires is refused, and the refusal
+// names the requirers in the order of their ids. The provider leaves once the requirers are disabled.
+#[test]
+fn plugin_remove_and_disable_refuse_the_last_plugin_of_a_required_category() {
+    let config = Folder::new("plugins");
+    let registry = dependency_registry(&[
+        category_plugin("term", "1.0.0", &["terminal"], &[]),
+        category_plugin("zed", "1.0.0", &[], &["terminal"]),
+        category_plugin("alpha", "1.0.0", &[], &["terminal"]),
+    ]);
+    use_registry(&config, &registry);
+    for id in ["term", "zed", "alpha"] {
+        succeeds(&["plugin", "install", id, "--config-dir", config.text()]);
+    }
+    let before = read_text(&config.path().join("plugins/installed.json"));
+    for action in ["remove", "disable"] {
+        let (code, _, stderr) = run(&["plugin", action, "term", "--config-dir", config.text()]);
+        assert_eq!(
+            (code, stderr.as_str()),
+            (
+                1,
+                "sok: plugin term is the last terminal plugin, which alpha, zed requires\n"
+            ),
+            "{action} term"
+        );
+        assert_eq!(
+            read_text(&config.path().join("plugins/installed.json")),
+            before
+        );
+        assert!(
+            config
+                .path()
+                .join("plugins/term/1.0.0/plugin.json")
+                .exists()
+        );
+    }
+    for id in ["zed", "alpha"] {
+        succeeds(&["plugin", "disable", id, "--config-dir", config.text()]);
+    }
+    let (code, _, stderr) = run(&["plugin", "disable", "term", "--config-dir", config.text()]);
+    assert_eq!(
+        (code, stderr.as_str()),
+        (0, ""),
+        "term has no enabled requirer"
+    );
+}
+
+// Enabling a disabled plugin that requires a category with no other enabled plugin of it is refused, and the state keeps the
+// disabled plugin.
+#[test]
+fn plugin_enable_refuses_a_plugin_whose_required_category_no_enabled_plugin_serves() {
+    let config = Folder::new("plugins");
+    let registry = dependency_registry(&[
+        category_plugin("shell", "1.0.0", &[], &["terminal"]),
+        category_plugin("term", "1.0.0", &["terminal"], &[]),
+    ]);
+    use_registry(&config, &registry);
+    succeeds(&["plugin", "install", "term", "--config-dir", config.text()]);
+    succeeds(&["plugin", "install", "shell", "--config-dir", config.text()]);
+    succeeds(&["plugin", "disable", "shell", "--config-dir", config.text()]);
+    succeeds(&["plugin", "disable", "term", "--config-dir", config.text()]);
+    let before = read_text(&config.path().join("plugins/installed.json"));
+    let (code, _, stderr) = run(&["plugin", "enable", "shell", "--config-dir", config.text()]);
+    assert_eq!(
+        (code, stderr.as_str()),
+        (
+            1,
+            "sok: plugin shell requires a terminal plugin, and no installed and enabled plugin is one\n"
+        )
+    );
+    assert_eq!(
+        read_text(&config.path().join("plugins/installed.json")),
+        before
+    );
+    succeeds(&["plugin", "enable", "term", "--config-dir", config.text()]);
+    succeeds(&["plugin", "enable", "shell", "--config-dir", config.text()]);
+}
+
+// An update that removes the category of the last enabled plugin that a plugin requires is refused, and an update that keeps
+// the category is accepted.
+#[test]
+fn plugin_update_refuses_to_remove_the_last_plugin_of_a_required_category() {
+    let config = Folder::new("plugins");
+    let registry = dependency_registry(&[
+        category_plugin("term", "1.0.0", &["terminal"], &[]),
+        category_plugin("zed", "1.0.0", &[], &["terminal"]),
+    ]);
+    use_registry(&config, &registry);
+    succeeds(&["plugin", "install", "term", "--config-dir", config.text()]);
+    succeeds(&["plugin", "install", "zed", "--config-dir", config.text()]);
+    let before = read_text(&config.path().join("plugins/installed.json"));
+    let registry = dependency_registry(&[
+        category_plugin("term", "1.0.0", &["terminal"], &[]),
+        category_plugin("term", "2.0.0", &[], &[]),
+        category_plugin("zed", "1.0.0", &[], &["terminal"]),
+    ]);
+    use_registry(&config, &registry);
+    let (code, _, stderr) = run(&["plugin", "update", "term", "--config-dir", config.text()]);
+    assert_eq!(
+        (code, stderr.as_str()),
+        (
+            1,
+            "sok: plugin term is the last terminal plugin, which zed requires\n"
+        )
+    );
+    assert_eq!(
+        read_text(&config.path().join("plugins/installed.json")),
+        before
+    );
+    assert_eq!(installed_of(&config).plugins["term"].version, "1.0.0");
+    let registry = dependency_registry(&[
+        category_plugin("term", "1.0.0", &["terminal"], &[]),
+        category_plugin("term", "1.1.0", &["terminal"], &[]),
+        category_plugin("zed", "1.0.0", &[], &["terminal"]),
+    ]);
+    use_registry(&config, &registry);
+    succeeds(&["plugin", "update", "term", "--config-dir", config.text()]);
+    assert_eq!(installed_of(&config).plugins["term"].version, "1.1.0");
+}
+
+// An update to a version that requires a category with no other enabled plugin of it is refused at update.
+#[test]
+fn plugin_update_refuses_a_version_whose_required_category_no_enabled_plugin_serves() {
+    let config = Folder::new("plugins");
+    let registry = dependency_registry(&[
+        category_plugin("shell", "1.0.0", &[], &[]),
+        category_plugin("term", "1.0.0", &["terminal"], &[]),
+    ]);
+    use_registry(&config, &registry);
+    succeeds(&["plugin", "install", "shell", "--config-dir", config.text()]);
+    let registry = dependency_registry(&[
+        category_plugin("shell", "1.0.0", &[], &[]),
+        category_plugin("shell", "2.0.0", &[], &["terminal"]),
+        category_plugin("term", "1.0.0", &["terminal"], &[]),
+    ]);
+    use_registry(&config, &registry);
+    let (code, _, stderr) = run(&["plugin", "update", "shell", "--config-dir", config.text()]);
+    assert_eq!(
+        (code, stderr.as_str()),
+        (
+            1,
+            "sok: plugin shell requires a terminal plugin, and no installed and enabled plugin is one\n"
+        )
+    );
+    assert_eq!(installed_of(&config).plugins["shell"].version, "1.0.0");
 }

@@ -40,6 +40,8 @@ type LoadedPlugin struct {
 	Surface  bool
 	// Params is surface.params, the schema of the parameters of a tab, and nil for a plugin that opens tabs without them.
 	Params any
+	// Categories are the plugin categories that the plugin serves (docs/spec/plugins.md#plugin-categories).
+	Categories []string
 }
 
 // settingsSections are the sections of the window in order, with their labels.
@@ -336,6 +338,38 @@ func (s *Shell) choose(b *settingsBuilder, key string, options [][2]string, now 
 	return b.add(SettingsControl{Name: "core.settings-modal.set", Key: text(key), Value: text(now), Command: command, Options: values, kind: controlSelect, param: param, labels: labels}), nil
 }
 
+// choosePlugin is the select box of a plugin setting: its options are the loaded plugins of the category by id, labeled with their names,
+// and it has no selected value while nothing is chosen (docs/spec/settings.md#controls).
+func (s *Shell) choosePlugin(b *settingsBuilder, key string, options [][2]string, now any) *SettingsControl {
+	values := make([]string, len(options))
+	labels := make(map[string]string, len(options))
+	for i, option := range options {
+		values[i], labels[option[0]] = option[0], option[1]
+	}
+	var value *string
+	if id, ok := now.(string); ok {
+		value = text(id)
+	}
+	command, param := s.setting(key)
+	return b.add(SettingsControl{Name: "core.settings-modal.set", Key: text(key), Value: value, Command: command, Options: values, kind: controlSelect, param: param, labels: labels})
+}
+
+// syncPluginChoices shows the error that asks for a choice of each plugin setting that has no value, and withdraws it when the setting
+// has one (docs/spec/plugins.md#settings-declarations).
+func (s *Shell) syncPluginChoices() {
+	for _, definition := range s.settings.Definitions {
+		if definition.Type != "plugin" {
+			continue
+		}
+		source := "plugin choice " + definition.Key
+		if s.settings.Value(definition.Key) != nil {
+			s.errors.HideFrom(workbenchErrorPlace, source)
+		} else if !s.errors.ShownFrom(workbenchErrorPlace, source) {
+			s.errors.ShowFrom(workbenchErrorPlace, source, definition.Key+": choose a "+definition.Category+" plugin", "")
+		}
+	}
+}
+
 func (s *Shell) toggle(b *settingsBuilder, key string) *SettingsControl {
 	on, _ := s.value(key).(bool) // silent: the settings store checks the type of the value.
 	command, param := s.setting(key)
@@ -581,6 +615,14 @@ func (s *Shell) declaredControl(b *settingsBuilder, definition SettingDefinition
 			options[i] = [2]string{value, value}
 		}
 		return s.choose(b, definition.Key, options, valueText(s.value(definition.Key)))
+	case "plugin":
+		var options [][2]string
+		for _, plugin := range s.plugins {
+			if slices.Contains(plugin.Categories, definition.Category) {
+				options = append(options, [2]string{plugin.ID, plugin.Name})
+			}
+		}
+		return s.choosePlugin(b, definition.Key, options, s.value(definition.Key)), nil
 	case "integer":
 		return s.slide(b, definition.Key, [2]float64{definition.Minimum, definition.Maximum}, ""), nil
 	case "string":
@@ -1077,6 +1119,7 @@ func (s *Shell) applySettings() error {
 		return fmt.Errorf("settings: errorToastDismissSeconds is %s, not a number", jsonText(s.settings.Value("errorToastDismissSeconds")))
 	}
 	s.errors.ConfigureToastDeadline(auto, int64(seconds)*1000)
+	s.syncPluginChoices()
 	return nil
 }
 

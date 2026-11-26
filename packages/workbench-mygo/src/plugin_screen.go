@@ -139,7 +139,7 @@ type PluginAction struct {
 }
 
 var pluginStates = map[string]string{
-	"loaded": "사용 중", "disabled": "사용 안 함", "available": "설치 안 됨", "reload": "창을 다시 불러오면 적용", "refused": "불러오지 못함",
+	"loaded": "사용 중", "disabled": "사용 안 함", "available": "설치 안 됨", "reload": "창을 다시 불러오면 적용", "refused": "불러오지 못함", "requires": "필요한 플러그인 없음",
 }
 
 var contributionStates = map[string]string{

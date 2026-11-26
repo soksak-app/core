@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+
+	sok "github.com/soksak-app/core/packages/sok/go/src"
 )
 
 // The plugins that a window loaded, read from the document of the installed plugins: what the settings window and the menus show
@@ -28,6 +30,7 @@ type declaredSetting struct {
 	Maximum     float64  `json:"maximum"`
 	MaxLength   int      `json:"maxLength"`
 	Default     any      `json:"default"`
+	Category    string   `json:"category"`
 }
 
 // declaredSettings keeps the members of the settings of plugin.json in their order, which is the order of the rows of the plugin.
@@ -81,7 +84,8 @@ func readLoadedPlugins(installed, environment []byte) ([]LoadedPlugin, []Setting
 					ID   string `json:"id"`
 					Name string `json:"name"`
 				} `json:"sections"`
-				Settings declaredSettings `json:"settings"`
+				Settings   declaredSettings `json:"settings"`
+				Categories []string         `json:"categories"`
 			} `json:"manifest"`
 		} `json:"plugins"`
 	}
@@ -98,7 +102,8 @@ func readLoadedPlugins(installed, environment []byte) ([]LoadedPlugin, []Setting
 	var definitions []SettingDefinition
 	for _, entry := range document.Plugins {
 		plugin := LoadedPlugin{ID: entry.ID, Name: entry.Manifest.Name, Description: entry.Manifest.Description, Mark: entry.Manifest.Mark,
-			Icon: entry.Manifest.Icon, Surface: entry.Manifest.Surface != nil, Version: entry.Version, Dependencies: entry.Manifest.Dependencies}
+			Icon: entry.Manifest.Icon, Surface: entry.Manifest.Surface != nil, Version: entry.Version, Dependencies: entry.Manifest.Dependencies,
+			Categories: entry.Manifest.Categories}
 		if entry.Manifest.Preview != nil {
 			plugin.Ink = entry.Manifest.Preview.Ink
 		}
@@ -116,7 +121,7 @@ func readLoadedPlugins(installed, environment []byte) ([]LoadedPlugin, []Setting
 		for _, item := range entry.Manifest.Settings {
 			definition := SettingDefinition{Key: entry.ID + "." + item.Local, Plugin: entry.ID, Type: item.Type, Label: item.Label,
 				Description: item.Description, Values: item.Values, Minimum: item.Minimum, Maximum: item.Maximum, MaxLength: item.MaxLength,
-				Default: item.Default}
+				Default: item.Default, Category: item.Category}
 			if value, ok := declared.Settings[entry.ID][item.Local]; ok {
 				definition.Default = value
 			}
@@ -125,4 +130,95 @@ func readLoadedPlugins(installed, environment []byte) ([]LoadedPlugin, []Setting
 	}
 	slices.SortStableFunc(plugins, func(a, b LoadedPlugin) int { return strings.Compare(a.ID, b.ID) })
 	return plugins, definitions, nil
+}
+
+// dropRequirers removes each plugin of the installed document that requires a category which no other plugin of the document serves,
+// and repeats the check until no plugin is removed, because a removed plugin serves no category. It returns the document of the plugins
+// that remain and the category that each removed plugin requires, by plugin id (docs/spec/plugins.md#plugin-categories).
+func dropRequirers(document []byte) ([]byte, map[string]string, error) {
+	var read struct {
+		Plugins []json.RawMessage `json:"plugins"`
+	}
+	if err := json.Unmarshal(document, &read); err != nil {
+		return nil, nil, fmt.Errorf("installed plugins: %w", err)
+	}
+	type entry struct {
+		id               string
+		raw              json.RawMessage
+		serves, requires []string
+	}
+	entries := make([]entry, 0, len(read.Plugins))
+	for _, raw := range read.Plugins {
+		var head struct {
+			ID       string         `json:"id"`
+			Manifest map[string]any `json:"manifest"`
+		}
+		if err := json.Unmarshal(raw, &head); err != nil {
+			return nil, nil, fmt.Errorf("installed plugins: %w", err)
+		}
+		serves, requires, err := sok.ManifestCategories(head.Manifest)
+		if err != nil {
+			return nil, nil, err
+		}
+		entries = append(entries, entry{id: head.ID, raw: raw, serves: serves, requires: requires})
+	}
+	missing := map[string]string{}
+	for {
+		served := map[string]bool{}
+		for _, e := range entries {
+			if _, gone := missing[e.id]; !gone {
+				for _, category := range e.serves {
+					served[category] = true
+				}
+			}
+		}
+		removed := false
+		for _, e := range entries {
+			if _, gone := missing[e.id]; gone {
+				continue
+			}
+			for _, category := range e.requires {
+				if !served[category] {
+					missing[e.id] = category
+					removed = true
+					break
+				}
+			}
+		}
+		if !removed {
+			break
+		}
+	}
+	kept := []json.RawMessage{}
+	for _, e := range entries {
+		if _, gone := missing[e.id]; !gone {
+			kept = append(kept, e.raw)
+		}
+	}
+	encoded, err := json.Marshal(map[string]any{"plugins": kept})
+	if err != nil {
+		return nil, nil, err
+	}
+	return encoded, missing, nil
+}
+
+// categoryPlugin is a plugin of a plugin category in the status core.plugin-categories.
+type categoryPlugin struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// categoryStatus returns the status core.plugin-categories: each plugin category of core with the loaded plugins that serve it, in the
+// order of plugins, which is the order of their ids (docs/spec/plugins.md#plugin-categories).
+func categoryStatus(plugins []LoadedPlugin) map[string][]categoryPlugin {
+	status := map[string][]categoryPlugin{}
+	for _, category := range sok.PluginCategories() {
+		status[category] = []categoryPlugin{}
+	}
+	for _, plugin := range plugins {
+		for _, category := range plugin.Categories {
+			status[category] = append(status[category], categoryPlugin{ID: plugin.ID, Name: plugin.Name})
+		}
+	}
+	return status
 }

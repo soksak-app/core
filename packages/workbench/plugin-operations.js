@@ -37,7 +37,7 @@ export function hasUpdate(row) {
  * of pluginsState of the host, and null if there is no host; refused holds the ids of the installed plugins whose entry or
  * manifest the window refused (docs/spec/installation.md#serving-installed-plugins).
  */
-export function pluginRows(loaded, state, refused) {
+export function pluginRows(loaded, state, refused, unmet = new Map()) {
   const byId = new Map(loaded.map((unit) => [unit.id, unit]));
   if (!state) {
     return [...byId.values()].sort((a, b) => a.id.localeCompare(b.id)).map((unit) => ({
@@ -67,6 +67,9 @@ export function pluginRows(loaded, state, refused) {
     else if (!unit && !record) status = "available";
     // A refused plugin is not loaded by a reload either, so it does not wait for one.
     else if (!unit && record.enabled && refused.has(id)) status = "refused";
+    // An enabled plugin that requires a plugin category which no loaded plugin serves is not loaded, and a page reload does not load it
+    // (docs/spec/plugins.md#plugin-categories).
+    else if (!unit && record.enabled && unmet.has(id)) status = "requires";
     else status = "reload";
     // The latest version is the one that installation selects: the newest whose range contains the running core
     // (docs/spec/installation.md#version-selection).
@@ -91,7 +94,7 @@ export function pluginRows(loaded, state, refused) {
  * Plugin operation state. If host is null, it reports only the loaded plugins, without operations. changed is called
  * whenever the state changes.
  */
-export function createPluginOperations({ host, loaded, refused, changed }) {
+export function createPluginOperations({ host, loaded, refused, unmet = () => new Map(), changed }) {
   let state = null;
   // A read failure is {kind, message}. kind is index if the registry index could not be read, or state if the plugin state could not be read.
   let failure = null;
@@ -197,7 +200,7 @@ export function createPluginOperations({ host, loaded, refused, changed }) {
 
   /** Value of the core.plugins status. */
   function status() {
-    const rows = host && !state ? [] : pluginRows(loaded(), state, refused());
+    const rows = host && !state ? [] : pluginRows(loaded(), state, refused(), unmet());
     return {
       // default: before the state is read, if it could not be read, or without a host, the running core is unknown (null).
       core: state?.core ?? null,

@@ -212,6 +212,7 @@ A card shows:
 | `available` | 설치 안 됨 | Only the registry index lists the plugin |
 | `reload` | 창을 다시 불러오면 적용 | `installed.json` differs from what the window loaded, because the window kept its workbench when a modified tab was kept ([applying a change](#applying-a-change)) |
 | `refused` | 불러오지 못함 | `installed.json` lists the plugin enabled, and the window refused its entry or manifest ([serving installed plugins](#serving-installed-plugins)); a reload does not load it, so the state does not make the page wait for one |
+| `requires` | 필요한 플러그인 없음 | `installed.json` lists the plugin enabled, and no loaded and enabled plugin of the window is of a category that it requires ([plugin categories](plugins.md#plugin-categories)); installing or enabling a plugin of the category and reloading loads it |
 
 - The description of the loaded manifest, else of the registry entry ([plugins](plugins.md) and [registry index](#registry-index) require one); a plugin that only `installed.json` lists has no description and shows its id as its name.
 - A version line with 설치된 버전 <version> and 최신 버전 <version>, the version that installation selects for the running core ([version selection](#version-selection)), each when present, and core <version>에 맞는 버전 없음 when the plugin is `incompatible`.

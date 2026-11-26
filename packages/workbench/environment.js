@@ -10,12 +10,16 @@ import { compositionKindOf } from "./surface-composition-kind.js";
 import { setPluginSettings, setSidebarDefaults } from "./settings.js";
 import {
   checkReferences, manifestSidecars, mergeExposes, modulePath, validateDiagnostics, normalizeSidebarDefaults, validateEnvironment,
-  acceptInstalledPlugins,
+  acceptInstalledPlugins, PLUGIN_CATEGORIES,
 } from "@soksak/plugin-api";
 
 let loaded = null;
 let units = [];
 let refused = new Set();
+// The plugin of each unserved requirement: plugin id -> the plugin category that no loaded plugin serves (docs/spec/plugins.md#plugin-categories).
+let unserved = new Map();
+// The loaded and enabled plugins of each plugin category, {category: [{id, name}]}, in the order of their ids.
+let categories = {};
 let starter = null;
 let registry = null;
 
@@ -71,6 +75,34 @@ function dialogSurfaceOf(pluginId, name, { page, regions }, declarations, diagno
 let diagnosticModules = Promise.resolve(new Map());
 
 /**
+ * Leaves out each plugin that requires a plugin category which no plugin still loaded serves, and repeats until every loaded plugin's
+ * requirements are served. A plugin of a category does not require that category (plugin-api), so a plugin is left out only when the
+ * plugins that remain do not serve it. It returns the loaded plugins and the category of each left-out plugin's unserved requirement.
+ */
+function loadServing(plugins) {
+  const left = new Map();
+  let candidates = plugins;
+  for (;;) {
+    const served = new Set(candidates.flatMap((plugin) => plugin.manifest.categories ?? []));
+    const missing = candidates.filter((plugin) => (plugin.manifest.requires ?? []).some((category) => !served.has(category)));
+    if (missing.length === 0) return { plugins: candidates, unserved: left };
+    for (const plugin of missing) {
+      const category = plugin.manifest.requires.find((item) => !served.has(item));
+      left.set(plugin.id, category);
+    }
+    candidates = candidates.filter((plugin) => !missing.includes(plugin));
+  }
+}
+
+/** The loaded plugins that serve each plugin category of core, {category: [{id, name}]}, in the order of their ids (docs/spec/plugins.md#plugin-categories). */
+function servingPlugins(plugins) {
+  return Object.fromEntries(PLUGIN_CATEGORIES.map((category) => [category, plugins
+    .filter((plugin) => (plugin.manifest.categories ?? []).includes(category))
+    .toSorted((a, b) => a.manifest.id.localeCompare(b.manifest.id))
+    .map((plugin) => ({ id: plugin.manifest.id, name: plugin.manifest.name }))]));
+}
+
+/**
  * Validates environment.json and the list of installed plugins (with manifests) and registers the plugins, sections and sidebar defaults.
  * It returns the errors of the installed plugins that it refuses and leaves out, which the page shows; an environment.json that it cannot
  * use throws.
@@ -84,8 +116,14 @@ export function installEnvironment(environmentDocument, installedDocument) {
   starter = environment.starter ?? null;
   // default: if environment.json has no registry, there is no default registry for the first run to set.
   registry = environment.registry ?? null;
-  const { plugins: installed, errors, refused: refusedIds } = acceptInstalledPlugins(installedDocument);
+  const { plugins: accepted, errors: refusals, refused: refusedIds } = acceptInstalledPlugins(installedDocument);
   refused = new Set(refusedIds);
+  // A plugin whose required category no loaded plugin serves is not loaded, and the other plugins start (docs/spec/plugins.md#plugin-categories).
+  const serving = loadServing(accepted);
+  const installed = serving.plugins;
+  unserved = serving.unserved;
+  categories = servingPlugins(installed);
+  const errors = [...refusals, ...[...unserved].map(([id, category]) => `plugin ${id} requires a ${category} plugin, and no loaded plugin is one`)];
   const manifests = installed.map(({ package: name, version, manifest }) => ({ name, manifest, version }));
   // A dependency that names the package of an installed plugin is a plugin dependency, not a sidecar (docs/spec/plugins.md#pluginjson).
   const pluginNames = new Set(installed.map((plugin) => plugin.package));
@@ -96,7 +134,7 @@ export function installEnvironment(environmentDocument, installedDocument) {
   const diagnosticPlugins = Object.fromEntries(installed.filter((plugin) => plugin.diagnostics)
     .map((plugin) => [plugin.package, validateDiagnostics(plugin.manifest, plugin.diagnostics)]));
   // default: settings is an optional field of environment.json; without it no plugin settings are overridden.
-  setPluginSettings(manifests.map((m) => m.manifest), environment.settings ?? {});
+  setPluginSettings(manifests.map((m) => m.manifest), environment.settings ?? {}, categories);
   diagnosticModules = Promise.all(installed.filter((plugin) => diagnosticPlugins[plugin.package]).map(async (plugin) =>
     [plugin.id, await import(`/${modulePath(plugin.package, diagnosticPlugins[plugin.package].module)}`)]))
     .then((entries) => new Map(entries));
@@ -206,6 +244,12 @@ export const pluginUnits = () => units;
 
 /** Returns the ids of the installed plugins whose entry or manifest the window refused (docs/spec/installation.md#serving-installed-plugins). */
 export const refusedPlugins = () => refused;
+
+/** Returns the plugins that are not loaded because a plugin category they require is unserved: a Map of plugin id to the category (docs/spec/plugins.md#plugin-categories). */
+export const unmetPlugins = () => unserved;
+
+/** Returns the loaded and enabled plugins of each plugin category of core, {category: [{id, name}]}, in the order of their ids (docs/spec/plugins.md#plugin-categories). */
+export const pluginCategories = () => categories;
 
 /** Returns the loaded environment.json. Throws before it is loaded. */
 export function environment() {

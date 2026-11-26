@@ -795,6 +795,9 @@ fn install_plugin_unless(
         return Err(format!("plugin {id} is not installed"));
     }
     let recorded = recorded_versions(&state);
+    // The categories that the target serves before the operation: an update or an install over it may end that service.
+    let roles_before = installed_roles(config_dir, &state, &manifests)?;
+    let serving_before = serving_categories(&state, &roles_before, id)?;
     let mut plan = DependencyPlan {
         config_dir,
         core,
@@ -803,6 +806,7 @@ fn install_plugin_unless(
         state,
         manifests,
         dependencies: BTreeMap::new(),
+        roles: BTreeMap::new(),
         providers: BTreeMap::new(),
         releases: BTreeMap::new(),
         order: vec![],
@@ -811,6 +815,28 @@ fn install_plugin_unless(
         changed: false,
     };
     plan.place(id, false, &[])?;
+    // The plugins that the plan placed and the enabled plugins of the plan are checked after the whole plan, before anything is
+    // extracted: a requirer must have an enabled plugin of its category, and the target must not end the last one.
+    let enabled: Vec<String> = plan
+        .state
+        .plugins
+        .iter()
+        .filter(|(_, plugin)| plugin.enabled)
+        .map(|(other, _)| other.clone())
+        .collect();
+    let mut roles = BTreeMap::new();
+    for other in enabled {
+        let planned = plan.planned_roles(&other)?;
+        roles.insert(other, planned);
+    }
+    let placed: Vec<String> = plan.placed.iter().cloned().collect();
+    check_requirements(&plan.state, &roles, &placed)?;
+    let serving_after = serving_categories(&plan.state, &roles, id)?;
+    let lost: Vec<String> = serving_before
+        .into_iter()
+        .filter(|category| !serving_after.contains(category))
+        .collect();
+    check_last_of(&plan.state, &roles, id, &lost)?;
     let DependencyPlan {
         mut state,
         releases,
@@ -905,6 +931,7 @@ struct DependencyPlan<'a> {
     state: InstalledState,
     manifests: BTreeMap<String, InstalledManifest>,
     dependencies: BTreeMap<String, BTreeMap<String, String>>,
+    roles: BTreeMap<String, Roles>,
     providers: BTreeMap<String, BTreeMap<String, String>>,
     releases: BTreeMap<String, Vec<u8>>,
     order: Vec<String>,
@@ -946,7 +973,158 @@ pub fn installed_name(config_dir: &Path, plugin: &InstalledPlugin) -> Result<Str
         .map_err(|error| format!("{}: {error}", file.display()))
 }
 
+/// The plugin categories that a plugin serves (categories) and requires (requires) (docs/spec/plugins.md#plugin-categories).
+#[derive(Clone, Default)]
+struct Roles {
+    categories: Vec<String>,
+    requires: Vec<String>,
+}
+
+/// Reads the plugin categories of a plugin.json. file is the location for errors.
+fn roles_of(file: &str, value: &Value) -> Result<Roles, String> {
+    let read = |member: &str| {
+        crate::manifest::plugin_category_list(value, member)
+            .map_err(|error| format!("{file}: {error}"))
+    };
+    Ok(Roles {
+        categories: read("categories")?,
+        requires: read("requires")?,
+    })
+}
+
+/// The plugin categories of each installed plugin, read from the manifests that read_installed_manifests returned.
+fn installed_roles(
+    config_dir: &Path,
+    state: &InstalledState,
+    manifests: &BTreeMap<String, InstalledManifest>,
+) -> Result<BTreeMap<String, Roles>, String> {
+    let mut roles = BTreeMap::new();
+    for (id, manifest) in manifests {
+        let plugin = state
+            .plugins
+            .get(id)
+            .ok_or_else(|| format!("plugin {id} has no installed record"))?;
+        let file = manifest_file(config_dir, plugin);
+        roles.insert(
+            id.clone(),
+            roles_of(&file.display().to_string(), &manifest.value)?,
+        );
+    }
+    Ok(roles)
+}
+
+/// The roles of a plugin in roles. Every enabled plugin of a state has an entry, so a missing entry is a defect in the caller.
+fn roles_at<'a>(roles: &'a BTreeMap<String, Roles>, id: &str) -> Result<&'a Roles, String> {
+    roles
+        .get(id)
+        .ok_or_else(|| format!("plugin {id} has no plugin categories"))
+}
+
+/// The categories that the plugin id serves in state: none unless the plugin is installed and enabled.
+fn serving_categories(
+    state: &InstalledState,
+    roles: &BTreeMap<String, Roles>,
+    id: &str,
+) -> Result<Vec<String>, String> {
+    match state.plugins.get(id) {
+        Some(plugin) if plugin.enabled => Ok(roles_at(roles, id)?.categories.clone()),
+        _ => Ok(vec![]),
+    }
+}
+
+/// Whether an enabled plugin other than id serves the category in state.
+fn served_by_other(
+    state: &InstalledState,
+    roles: &BTreeMap<String, Roles>,
+    id: &str,
+    category: &str,
+) -> Result<bool, String> {
+    for (other, plugin) in &state.plugins {
+        if other != id
+            && plugin.enabled
+            && roles_at(roles, other)?
+                .categories
+                .iter()
+                .any(|c| c == category)
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// Refuses each plugin of ids that is enabled and requires a category that no other enabled plugin of state serves.
+fn check_requirements(
+    state: &InstalledState,
+    roles: &BTreeMap<String, Roles>,
+    ids: &[String],
+) -> Result<(), String> {
+    for id in ids {
+        if !state.plugins.get(id).is_some_and(|plugin| plugin.enabled) {
+            continue;
+        }
+        for category in &roles_at(roles, id)?.requires {
+            if !served_by_other(state, roles, id, category)? {
+                return Err(format!(
+                    "plugin {id} requires a {category} plugin, and no installed and enabled plugin is one"
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Refuses the loss of each category in lost by the plugin id when no other enabled plugin serves it and an enabled plugin
+/// requires it. The requirers are named in the order of their ids.
+fn check_last_of(
+    state: &InstalledState,
+    roles: &BTreeMap<String, Roles>,
+    id: &str,
+    lost: &[String],
+) -> Result<(), String> {
+    for category in lost {
+        if served_by_other(state, roles, id, category)? {
+            continue;
+        }
+        let mut requirers = vec![];
+        for (other, plugin) in &state.plugins {
+            if other != id
+                && plugin.enabled
+                && roles_at(roles, other)?
+                    .requires
+                    .iter()
+                    .any(|c| c == category)
+            {
+                requirers.push(other.as_str());
+            }
+        }
+        if !requirers.is_empty() {
+            return Err(format!(
+                "plugin {id} is the last {category} plugin, which {} requires",
+                requirers.join(", ")
+            ));
+        }
+    }
+    Ok(())
+}
+
 impl DependencyPlan<'_> {
+    /// The plugin categories of a planned plugin: those of the version that the plan selected, or those of the installed
+    /// version of a plugin that the plan did not change.
+    fn planned_roles(&mut self, id: &str) -> Result<Roles, String> {
+        if let Some(roles) = self.roles.get(id) {
+            return Ok(roles.clone());
+        }
+        let installed = self
+            .manifests
+            .get(id)
+            .ok_or_else(|| format!("plugin {id} has no installed manifest"))?;
+        let file = manifest_file(self.config_dir, &self.state.plugins[id]);
+        let roles = roles_of(&file.display().to_string(), &installed.value)?;
+        self.roles.insert(id.to_string(), roles.clone());
+        Ok(roles)
+    }
+
     /// The plugin.json dependencies of the version in use of a planned plugin.
     fn manifest(&mut self, id: &str) -> Result<BTreeMap<String, String>, String> {
         if let Some(dependencies) = self.dependencies.get(id) {
@@ -1116,6 +1294,8 @@ impl DependencyPlan<'_> {
         if let Some(release) = self.releases.get(id) {
             check_release_modules(release, &manifest).map_err(|error| format!("{at}: {error}"))?;
         }
+        self.roles
+            .insert(id.to_string(), roles_of(&file, &manifest)?);
         let dependencies = manifest_dependencies_of(&file, &manifest)?;
         let (providers, _) =
             install::classify_dependencies(self.index, id, &version, &dependencies)?;
@@ -1256,6 +1436,9 @@ pub fn change_plugin(
                 return Err(format!("plugin {id} is required by {other} {range}"));
             }
         }
+        let roles = installed_roles(config_dir, &state, &manifests)?;
+        let lost = serving_categories(&state, &roles, id)?;
+        check_last_of(&state, &roles, id, &lost)?;
     }
     if action == "remove" {
         state.plugins.remove(id);
@@ -1264,6 +1447,8 @@ pub fn change_plugin(
         plugin.enabled = action == "enable";
     }
     if action == "enable" {
+        let roles = installed_roles(config_dir, &state, &manifests)?;
+        check_requirements(&state, &roles, &[id.to_string()])?;
         let held = held_by(id, &state, &recorded_versions(&state), &running.services);
         end_held(held.as_ref(), running)?;
     }

@@ -20,7 +20,7 @@ import { targetCardInsets } from "./card-insets.js";
 import { CARD_TOOL_MENUS, createCardTools, updateCardTools } from "./card-tools.js";
 import { SIDEBAR_SIDES, deviceGridSize, presentSidebars, effectiveSidebar, resolveSidebarSet, setSidebar, sideName, sizeSidebar, spaceFoldText, toggleSidebar } from "./card-sidebars.js";
 import { arrangeWindowSidebars, SIDE_NAMES, FOLD_ICONS, keepWindowSidebarWidths, railSidebars, restoreWindowSidebars, sizeKey, standingLink, windowOrientation, windowSidebar, windowSidebarCards } from "./window-sidebars.js";
-import { environment, pluginUnits } from "./environment.js";
+import { environment, pluginUnits, unmetPlugins } from "./environment.js";
 import { checkStoredLayout, recordStoredOrigins } from "./stored-layout.js";
 import { cardNumber, memberId, readGroupTree, targetIds } from "./group-tree.js";
 import { drawGroupCards } from "./group-cards.js";
@@ -568,6 +568,7 @@ const PLACEHOLDER_LINES = {
   disabled: (id) => `${id} 플러그인을 사용하지 않습니다.`,
   reload: (id) => `창을 다시 불러오면 ${id} 플러그인이 열립니다.`,
   refused: (id) => `${id} 플러그인의 설치된 버전을 불러오지 못했습니다.`,
+  requires: (id) => `${id} 플러그인에 필요한 ${unmetPlugins().get(id)} 플러그인이 없습니다.`,
   host: (id) => `${id} 플러그인은 네이티브 호스트가 있어야 설치됩니다.`,
   unread: (id) => `${id} 플러그인의 설치 상태를 읽지 못했습니다.`,
 };
@@ -579,6 +580,7 @@ function placeholderReason(id) {
   const row = pluginOperations.status().plugins.find((entry) => entry.id === id);
   if (!row?.installed) return "missing";
   if (row.state === "refused") return "refused";
+  if (row.state === "requires") return "requires";
   return row.installed.enabled ? "reload" : "disabled";
 }
 

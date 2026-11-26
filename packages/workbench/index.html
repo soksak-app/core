@@ -48,7 +48,7 @@ import { installTheme } from "soksak";
 /* Values outside the plane belong to settings. This document recreates the plane when a value changes.
    If settings called the plane directly, a function to call would have to be chosen for each added setting. */
 import {
-  appliedPatch, halfGap, install, installTokens, modeName, onSettingsChange, value, connectSettings,
+  appliedPatch, halfGap, install, installTokens, modeName, onSettingsChange, value, connectSettings, pluginChoiceErrors,
 } from "./settings.js";
 
 /* Simulates and reports the surfaces. The plane only records values on the slot elements, and measuring and reporting
@@ -588,6 +588,17 @@ onImageDetachEnded((event) => {
 // the layout request, so the last request is forgotten and the plane draws again: the host fits each surface to the new device pixels.
 observePlaneGrid(plane, () => { host.forget(); settle(); });
 projects.begin(start.workspace);
+/* A plugin setting that has no value shows the choice of the person until the value is chosen (docs/spec/plugins.md#plugin-categories). Each
+   error is shown under the origin of its setting, and an error whose setting now has a value is withdrawn. */
+let shownChoices = new Set();
+function showChoices() {
+  const needed = pluginChoiceErrors();
+  const keys = new Set(needed.map(({ key }) => key));
+  for (const key of shownChoices) if (!keys.has(key)) withdrawError(`settings ${key}`);
+  for (const { key, text } of needed) showError(text, "", `settings ${key}`, `settings ${key}`);
+  shownChoices = keys;
+}
+showChoices();
 // The first draw of the plane writes the frame scale to the document. The first screen without a plane (library) has no such draw, so it is written here.
 applyFrameText(value("textSize"));
 onLayout(pageLayout.onLayout);
@@ -605,6 +616,7 @@ onSettingsChange(() => {
   if (currentGrid() || drawnFrameText() !== value("textSize")) pageLayout.drawFrame();
   drawBars();
   redrawSettings();
+  showChoices();
   coreChanged();
   memorySaver.settingsChanged();
 });

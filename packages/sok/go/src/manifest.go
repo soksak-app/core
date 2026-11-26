@@ -46,7 +46,17 @@ const (
 
 // topLevelKeys are the members that plugin.json may hold (validateManifest).
 var topLevelKeys = []string{"id", "name", "description", "mark", "icon", "surface", "sections", "preview", "dependencies", "background",
-	"programs", "exposes", "settings", "data", "sidebars", "dialogs", "extends", "contributes", "events", "sessions", "accounts"}
+	"programs", "exposes", "settings", "data", "sidebars", "dialogs", "extends", "contributes", "events", "sessions", "accounts",
+	"categories", "requires"}
+
+// pluginCategories are the plugin categories of core (docs/spec/plugins.md#plugin-categories). docs/spec/cases/plugin-categories.json
+// holds the same list, and a test compares the two.
+var pluginCategories = []string{"terminal"}
+
+// PluginCategories returns the plugin categories of core.
+func PluginCategories() []string {
+	return slices.Clone(pluginCategories)
+}
 
 // utf16Length is the length of a string in UTF-16 code units, the length that the reader's string checks count.
 func utf16Length(s string) int {
@@ -609,6 +619,15 @@ func ValidateManifest(value any) error {
 		dependencies = deps
 	}
 	sidecars := sortedKeys(dependencies)
+	if _, has := manifest["categories"]; has && !hasSurface {
+		return fmt.Errorf("%s: categories require a surface", where)
+	}
+	if _, has := manifest["requires"]; has && !hasSurface && !hasSections {
+		return fmt.Errorf("%s: requires require a surface or sections", where)
+	}
+	if _, _, err := ManifestCategories(manifest); err != nil {
+		return err
+	}
 	if raw, ok := manifest["dialogs"]; ok {
 		if _, hasSections := manifest["sections"]; !hasSurface && !hasSections {
 			return fmt.Errorf("%s: dialogs requires a surface or sections", where)
@@ -762,6 +781,54 @@ func checkData(where string, manifest map[string]any) error {
 		}
 	}
 	return nil
+}
+
+// ManifestCategories checks the categories and requires members of plugin.json and returns the categories that the plugin
+// serves and the categories that it requires. A member that is absent is an empty list. The errors name the plugin, as the
+// reader's texts do (docs/spec/plugins.md#plugin-categories).
+func ManifestCategories(manifest map[string]any) (categories, requires []string, err error) {
+	where := "plugin " + jsFieldText(manifest, "id")
+	if raw, ok := manifest["categories"]; ok {
+		if categories, err = checkCategoryList(where, "categories", raw, nil); err != nil {
+			return nil, nil, err
+		}
+	}
+	if raw, ok := manifest["requires"]; ok {
+		if requires, err = checkCategoryList(where, "requires", raw, categories); err != nil {
+			return nil, nil, err
+		}
+	}
+	return categories, requires, nil
+}
+
+// checkCategoryList checks one member that lists plugin categories. member is categories or requires, and served is the
+// list of categories that the plugin serves, which a requires member must not name.
+func checkCategoryList(where, member string, raw any, served []string) ([]string, error) {
+	list, ok := raw.([]any)
+	if !ok {
+		return nil, fmt.Errorf("%s: %s must be a list of plugin categories", where, member)
+	}
+	names := []string{}
+	for _, item := range list {
+		name := jsValueText(item)
+		if !isPluginCategory(item) {
+			return nil, fmt.Errorf("%s: %s category %s is not a plugin category of core", where, member, name)
+		}
+		if slices.Contains(names, name) {
+			return nil, fmt.Errorf("%s: %s category %s repeats", where, member, name)
+		}
+		if slices.Contains(served, name) {
+			return nil, fmt.Errorf("%s: %s category %s is in categories", where, member, name)
+		}
+		names = append(names, name)
+	}
+	return names, nil
+}
+
+// isPluginCategory reports whether the value is a text that names a plugin category of core.
+func isPluginCategory(value any) bool {
+	name, ok := value.(string)
+	return ok && slices.Contains(pluginCategories, name)
 }
 
 // checkDependencies checks the dependencies of plugin.json and returns them as a map.
@@ -1580,8 +1647,15 @@ func checkSettingDeclaration(where string, raw any) error {
 		if !isSettingAddress(declaration["default"]) {
 			return fmt.Errorf("%s: address default must be empty or an http or https address", where)
 		}
+	case "plugin":
+		if err := only(where, declaration, "type", "category"); err != nil {
+			return err
+		}
+		if !isPluginCategory(declaration["category"]) {
+			return fmt.Errorf("%s: category %s is not a plugin category of core", where, jsFieldText(declaration, "category"))
+		}
 	default:
-		return fmt.Errorf("%s: setting type must be enum, integer, string, or address", where)
+		return fmt.Errorf("%s: setting type must be enum, integer, string, address, or plugin", where)
 	}
 	return nil
 }

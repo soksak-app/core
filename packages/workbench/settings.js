@@ -167,6 +167,8 @@ let settings = structuredClone(defaults);
 const pluginDefinitions = new Map();
 /* The manifest of the environment. The sections of the stored sets and the plugins of the links are validated against this list. */
 let manifestList = [];
+/* The loaded and enabled plugins of each plugin category, {category: [{id, name}]}. The values of the type plugin name one of them. */
+let categories = {};
 
 /** Validates the sets and links of the effective settings with the same function as the sidebars of environment.json. */
 function checkSidebars(values) {
@@ -238,6 +240,13 @@ function validateValue(key, value) {
   if (definition.type === "address" && !isSettingAddress(value)) {
     throw new Error(`Invalid setting ${key}: address value must be empty or an http or https address`);
   }
+  if (definition.type === "plugin" && !(typeof value === "string" && /^[a-z][a-z0-9-]*$/.test(value))) {
+    throw new Error(`Invalid setting ${key}: plugin value must be a plugin id`);
+  }
+  // A plugin setting names a loaded and enabled plugin of its category, and a value of another plugin is an error (docs/spec/plugins.md#plugin-categories).
+  if (definition.type === "plugin" && !pluginsOfCategory(definition.category).some((plugin) => plugin.id === value)) {
+    throw new Error(`${key}: plugin ${value} is not a ${definition.category} plugin`);
+  }
 }
 
 /** The JavaScript type of the values of a setting, which its declaration decides. */
@@ -302,10 +311,29 @@ function validateValues(values, where) {
   }
 }
 
-/** Registers the validated plugin settings before the persistent settings are loaded. */
-export function setPluginSettings(manifests, applicationValues = {}) {
+/** The loaded and enabled plugins of a plugin category, {id, name} in the order of their ids. */
+export function pluginsOfCategory(category) {
+  return categories[category] ?? [];
+}
+
+/**
+ * The errors of the plugin settings that have no value: each setting of the type plugin whose value is not chosen and whose plugin category does
+ * not have exactly one plugin shows the choice of the person (docs/spec/plugins.md#plugin-categories).
+ */
+export function pluginChoiceErrors() {
+  return [...pluginDefinitions.entries()]
+    .filter(([key, definition]) => definition.type === "plugin" && settings[key] === undefined)
+    .map(([key, definition]) => ({ key, text: `${key}: choose a ${definition.category} plugin` }));
+}
+
+/**
+ * Registers the validated plugin settings before the persistent settings are loaded. categoryPlugins is the loaded and enabled plugins of each
+ * plugin category, {category: [{id, name}]}, which the values of the type plugin name.
+ */
+export function setPluginSettings(manifests, applicationValues = {}, categoryPlugins = {}) {
   if (store) throw new Error("plugin settings must be set before settings are connected");
   manifestList = manifests;
+  categories = categoryPlugins;
   for (const manifest of manifests) {
     // default: settings is an optional field of plugin.json, and without it the plugin has no settings (docs/spec/plugins.md).
     for (const [local, definition] of Object.entries(manifest.settings ?? {})) {
@@ -314,7 +342,10 @@ export function setPluginSettings(manifests, applicationValues = {}) {
         throw new Error(`duplicate setting: ${key}`);
       }
       pluginDefinitions.set(key, Object.freeze({ ...definition, plugin: manifest.id, local }));
-      defaults[key] = definition.default;
+      // default: a plugin setting has no default; without a value it names the one plugin of its category when there is exactly one (undefined otherwise).
+      defaults[key] = definition.type === "plugin"
+        ? (pluginsOfCategory(definition.category).length === 1 ? pluginsOfCategory(definition.category)[0].id : undefined)
+        : definition.default;
       // default: a plugin to which environment.json gives no initial value has no initial value.
       if (Object.hasOwn(applicationValues[manifest.id] ?? {}, local)) {
         validateValue(key, applicationValues[manifest.id][local]);

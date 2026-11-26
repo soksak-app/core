@@ -628,8 +628,20 @@ func installPlugin(configDir, id, core, platform string, update bool, running Ru
 	recorded := recordedVersions(state)
 	plan := &dependencyPlan{configDir: configDir, core: core, platform: platform, index: index, state: state,
 		manifests: manifests, dependencies: map[string]map[string]string{}, providers: map[string]map[string]string{},
-		releases: map[string][]byte{}, sidecars: map[string]SelectedSidecar{}, placed: map[string]bool{}}
+		categories: map[string]categoryDecl{}, releases: map[string][]byte{}, sidecars: map[string]SelectedSidecar{}, placed: map[string]bool{}}
+	// An update that replaces an enabled plugin may drop a category that it served (checkCategories).
+	var before *categoryDecl
+	if current, ok := state.Plugins[id]; update && ok && current.Enabled {
+		decl, err := plan.categoriesOf(id)
+		if err != nil {
+			return nil, err
+		}
+		before = &decl
+	}
 	if err := plan.place(id, false, nil); err != nil {
+		return nil, err
+	}
+	if err := checkCategories(state, plan.categoriesOf, id, before); err != nil {
 		return nil, err
 	}
 	if !plan.changed {
@@ -792,6 +804,7 @@ type dependencyPlan struct {
 	state                     *InstalledState
 	manifests                 map[string]InstalledManifest
 	dependencies              map[string]map[string]string
+	categories                map[string]categoryDecl
 	providers                 map[string]map[string]string
 	releases                  map[string][]byte
 	order                     []string
@@ -914,6 +927,84 @@ func InstalledName(configDir string, plugin InstalledPlugin) (string, error) {
 		return "", fmt.Errorf("%s: %w", file, err)
 	}
 	return pkg["name"].(string), nil
+}
+
+// categoryDecl is the plugin categories of a plugin.json: the categories that the plugin serves and the categories that it requires.
+type categoryDecl struct {
+	serves, requires []string
+}
+
+// manifestCategoriesOf checks and returns the plugin categories of a parsed plugin.json. file is the location for errors.
+func manifestCategoriesOf(file string, manifest map[string]any) (categoryDecl, error) {
+	serves, requires, err := ManifestCategories(manifest)
+	if err != nil {
+		return categoryDecl{}, fmt.Errorf("%s: %w", file, err)
+	}
+	return categoryDecl{serves: serves, requires: requires}, nil
+}
+
+// categoriesOf returns the plugin categories of the version of a planned plugin in use.
+func (p *dependencyPlan) categoriesOf(id string) (categoryDecl, error) {
+	if decl, ok := p.categories[id]; ok {
+		return decl, nil
+	}
+	installed, ok := p.manifests[id]
+	if !ok {
+		return categoryDecl{}, fmt.Errorf("plugin %s has no installed manifest", id)
+	}
+	decl, err := manifestCategoriesOf(manifestFile(p.configDir, p.state.Plugins[id]), installed.Value)
+	if err != nil {
+		return categoryDecl{}, err
+	}
+	p.categories[id] = decl
+	return decl, nil
+}
+
+// checkCategories refuses a state in which an enabled plugin requires a category that no enabled plugin serves
+// (docs/spec/plugins.md#plugin-categories). declared returns the categories of an installed plugin. left is the plugin whose
+// enabled state or version the operation changes; before is its categories when it was enabled before the operation, or nil.
+// A category that left stops being served is reported with the enabled plugins that require it.
+func checkCategories(state *InstalledState, declared func(id string) (categoryDecl, error), left string, before *categoryDecl) error {
+	decls := map[string]categoryDecl{}
+	served := map[string]bool{}
+	for _, id := range sortedPluginIDs(state.Plugins) {
+		if !state.Plugins[id].Enabled {
+			continue
+		}
+		decl, err := declared(id)
+		if err != nil {
+			return err
+		}
+		decls[id] = decl
+		for _, category := range decl.serves {
+			served[category] = true
+		}
+	}
+	ids := slices.Sorted(maps.Keys(decls))
+	if before != nil {
+		for _, category := range before.serves {
+			if served[category] {
+				continue
+			}
+			var requirers []string
+			for _, id := range ids {
+				if slices.Contains(decls[id].requires, category) {
+					requirers = append(requirers, id)
+				}
+			}
+			if len(requirers) > 0 {
+				return fmt.Errorf("plugin %s is the last %s plugin, which %s requires", left, category, strings.Join(requirers, ", "))
+			}
+		}
+	}
+	for _, id := range ids {
+		for _, category := range decls[id].requires {
+			if !served[category] {
+				return fmt.Errorf("plugin %s requires a %s plugin, and no installed and enabled plugin is one", id, category)
+			}
+		}
+	}
+	return nil
 }
 
 // manifest is the plugin.json dependencies of the version in use of a planned plugin.
@@ -1097,6 +1188,11 @@ func (p *dependencyPlan) replace(id string, current InstalledPlugin, installed b
 		return err
 	}
 	p.dependencies[id], p.providers[id] = dependencies, providers
+	decl, err := manifestCategoriesOf(file, manifest)
+	if err != nil {
+		return err
+	}
+	p.categories[id] = decl
 	entry := InstalledPlugin{Version: version, Path: pluginPath, Enabled: true, Sidecars: maps.Clone(selection.Version.Sidecars)}
 	if installed {
 		entry.Enabled = current.Enabled
@@ -1240,6 +1336,18 @@ func ChangePlugin(configDir, id, action string, running Running) (any, error) {
 			}
 		}
 	}
+	// The categories of an installed plugin are read from its recorded plugin.json.
+	declared := func(other string) (categoryDecl, error) {
+		return manifestCategoriesOf(manifestFile(configDir, state.Plugins[other]), manifests[other].Value)
+	}
+	var before *categoryDecl
+	if plugin.Enabled {
+		decl, err := declared(id)
+		if err != nil {
+			return nil, err
+		}
+		before = &decl
+	}
 	switch action {
 	case "remove":
 		delete(state.Plugins, id)
@@ -1247,6 +1355,9 @@ func ChangePlugin(configDir, id, action string, running Running) (any, error) {
 	case "enable", "disable":
 		plugin.Enabled = action == "enable"
 		state.Plugins[id] = plugin
+	}
+	if err := checkCategories(state, declared, id, before); err != nil {
+		return nil, err
 	}
 	if action == "enable" {
 		if err := endHeld(heldBy(id, state, recordedVersions(state), running.Services), running); err != nil {

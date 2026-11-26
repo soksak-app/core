@@ -124,9 +124,14 @@ fn plugin_install_replays_the_manifest_cases() {
         let installed = config.path().join("plugins/installed.json").exists();
         let ok = if case.accepted {
             // The index holds no dependency of the plugin, so an accepted manifest with dependencies passes the reader
-            // and stops at the dependency check of the registry.
+            // and stops at the dependency check of the registry. A manifest that requires a plugin category stops at the
+            // category check of the install, because the index holds no plugin of that category.
             (code == 0 && installed)
                 || (code == 1 && stderr.starts_with("sok: probe 0.2.0: dependency ") && !installed)
+                || (code == 1
+                    && stderr
+                        == "sok: plugin probe requires a terminal plugin, and no installed and enabled plugin is one\n"
+                    && !installed)
         } else {
             // Install parses plugin.json before the reader runs and refuses a value that is not an object with its
             // location; the reader text of that case names plugin.json itself.
