@@ -6,7 +6,7 @@ The debug view lets a person who meets a defect hand over every diagnostic recor
 
 ## Opening
 
-The Help menu of both hosts has 디버그 (Debug) ([host contract](host-contract.md#application-menu)). It runs `core.debug.open` in the main page of the application's main window, the same window as the text-size items of the View menu ([text size](text-size.md)). The view is a `dialog` [native modal](native-modals.md) that closes with its × button (`core.debug.close`); opening it closes the settings modal, and opening the settings modal closes it. A page without the application host has no debug view, and `core.debug.open` fails there with an error.
+The Help menu of both hosts has 디버그 (Debug) ([host contract](host-contract.md#application-menu)). It runs `core.debug.open` in the main page of the application's main window, the same window as the text-size items of the View menu ([text size](text-size.md)). The view is a `dialog` [native modal](native-modals.md) that closes with its × button (`core.debug.close`). A page without the application host has no debug view, and `core.debug.open` fails there with an error.
 
 Opening records the state, then lists the files:
 

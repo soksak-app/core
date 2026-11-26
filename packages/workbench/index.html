@@ -548,7 +548,7 @@ const layoutButtons = [
   // Keeps the layout and gives the cards a fair share (packages/soksak/docs/layout.md#balancing).
   balanceButton,
 ];
-// The switch of each side shows or hides its window sidebar, in the order left, right, top, bottom (docs/spec/external-sidebars.md#window-controls),
+// The switch of each side shows or hides its window sidebar, in the order left, right, top, bottom (docs/spec/external-sidebars.md#window-tools),
 // and writes the scope that the applied value of the side comes from (docs/spec/settings.md#scope-of-a-control).
 const sidebarSwitches = chromeSwitches().map(({ side, icon: name, title, expose }) =>
   ({ side, button: act(name, title, value(side), "core.settings.set", () => appliedPatch(side, !value(side)), expose) }));

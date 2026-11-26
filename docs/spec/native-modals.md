@@ -6,11 +6,11 @@ This specification defines `data-native-modal`. [Features](../features.md) recor
 
 The mygo host creates no modal web view: a modal of its workbench is native UI ([native views](hosts.md#native-views)). This specification applies to the Wails and the Tauri host.
 
-The application owns the existing settings and picker DOM. `overlay.show()` renders a marked element in another native webview inside the main OS window. The element requires `dialog` or `menu`, a unique `id`, and an `aria-label`.
+The application owns the existing debug view and picker DOM. `overlay.show()` renders a marked element in another native webview inside the main OS window. The element requires `dialog` or `menu`, a unique `id`, and an `aria-label`.
 
 | Mode | Webview area | Background | Dismissal |
 | --- | --- | --- | --- |
-| `dialog` | Main content viewport | Black at 50% opacity; 3px blur on each background web document and image region | Settings closes with its × button |
+| `dialog` | Main content viewport | Black at 50% opacity; 3px blur on each background web document and image region | The debug view closes with its × button |
 | dialog surface | Content of the window, sidebars included | Black at 50% opacity drawn by the page of the dialog; 3px blur on each other document and image region | The page closes it ([dialogs](plugins.md#dialogs)) |
 | `menu` | Picker rectangle | No backdrop or blur | Selection, outside click, or Escape |
 
@@ -20,7 +20,7 @@ The dialog document draws the translucent backdrop with its `body::before` pseud
 
 Opening, closing, surface creation, and surface navigation must apply the current background state. Closing removes the applied stylesheet without changing the page's existing styles. Reloading main removes its modal and background effect. Modal webviews and their initial documents are transparent; the card paints its own background. No additional OS window or platform visual-effect view is required.
 
-Acceptance requires blur and translucent shading, clear dialog content, blocked background clicks and scrolling, ×-only settings dismissal, and restored appearance and input after closing. `e2e/modal.test.mjs` judges them from the values that the host and the documents report: the `blurred` of each document and image region of a view surface in `host.window` and the CSS filter of the document of a module surface, the scrim background of the dialog document and no filter on it, the native hit of a point behind the dialog and the refusal of the elements behind it, and after the close no blur and the native hit of the document again (`settings blocks background input and closes only through its close button`, `an open modal's document receives the content the page updates`). Card movement, content updates, surface replacement and navigation, parent resizing, and main-document reload must preserve these requirements. Add and split menus apply neither background effect. The same window check also judges the blocked background clicks and scrolling by input events: a click and a wheel over a view behind open settings are delivered to the settings webview and not that view, which records no wheel (`core.surface.input`), and a wheel at that view after settings closes is delivered to it.
+Acceptance requires blur and translucent shading, clear dialog content, blocked background clicks and scrolling, ×-only debug view dismissal, and restored appearance and input after closing. `e2e/modal.test.mjs` judges them from the values that the host and the documents report: the `blurred` of each document and image region of a view surface in `host.window` and the CSS filter of the document of a module surface, the scrim background of the dialog document and no filter on it, the native hit of a point behind the dialog and the refusal of the elements behind it, and after the close no blur and the native hit of the document again (`settings blocks background input and closes only through its close button`, `an open modal's document receives the content the page updates`). Card movement, content updates, surface replacement and navigation, parent resizing, and main-document reload must preserve these requirements. Add and split menus apply neither background effect. The same window check also judges the blocked background clicks and scrolling by input events: a click and a wheel over a view behind open settings are delivered to the settings webview and not that view, which records no wheel (`core.surface.input`), and a wheel at that view after settings closes is delivered to it.
 
 The visual definition is shared web code. Each platform still requires a working native webview host and behavior verification. Current Wails additional-webview creation is implemented only on macOS. Windows and Linux execution is unverified.
 
@@ -63,11 +63,11 @@ scrim itself. The main document's background paint must not be copied into that
 document.
 
 ```html
-<div class="set-scrim" id="preferences-scrim">
-  <div id="preferences" class="set-card" data-native-modal="dialog"
-       role="dialog" aria-modal="true" aria-label="Preferences">
+<div class="set-scrim" id="debug-scrim">
+  <div id="debug" class="set-card" data-native-modal="dialog"
+       role="dialog" aria-modal="true" aria-label="Debug">
     <header class="set-card__head">
-      <span class="set-card__title">Preferences</span>
+      <span class="set-card__title">Debug</span>
       <button class="act" type="button" data-key="close" aria-label="Close">×</button>
     </header>
   </div>
@@ -79,8 +79,8 @@ In a native host, open that element after inserting it into the main document:
 ```js
 import { overlay } from "./host.js";
 
-const el = document.getElementById("preferences");
-const scrim = document.getElementById("preferences-scrim");
+const el = document.getElementById("debug");
+const scrim = document.getElementById("debug-scrim");
 const plane = document.getElementById("plane").getBoundingClientRect();
 const r = el.getBoundingClientRect();
 overlay.show(el, {

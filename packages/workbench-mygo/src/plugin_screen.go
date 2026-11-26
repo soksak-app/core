@@ -12,7 +12,7 @@ import (
 	sok "github.com/soksak-app/core/packages/sok/go/src"
 )
 
-// The plugin screen, the plugin page of the library (docs/spec/installation.md#plugin-screen). Its values are those of
+// The plugin state of the settings tab (docs/spec/installation.md#plugin-state-and-commands). Its values are those of
 // `core.plugins`, and it runs the plugin operations through their commands.
 
 // PluginInstalled is what installed.json records of a plugin.
@@ -521,7 +521,7 @@ func drawCardActions(c *ui.Context, binder *Binder, page PluginPage, row PluginR
 	})
 }
 
-// heldActions are the labels of the operations that a held entry runs (docs/spec/installation.md#plugin-screen).
+// heldActions are the labels of the operations that a held entry runs (docs/spec/installation.md#plugin-state-and-commands).
 var heldActions = map[string]string{"install": "설치", "update": "업데이트", "enable": "사용"}
 
 // heldOf returns the held operation of the plugin, or nil.

@@ -214,7 +214,7 @@ The statuses `core.plugin.open-calls`, `core.plugin.losses` and `core.plugin.vie
 **Event levels in a release.** A 0.0.x release stores only error events (AGENTS.md, Diagnostic code). Each occurrence of this design is therefore classified once:
 (a) a failure or a rejected operation is an event at level `error`;
 (b) a loss, a skip, a transient state or a presentation degradation is not an event. It is counted in the declared status `core.plugin.losses {plugin, abandoned, lateReplies, peerLost}`, and it is a state of the declared status `core.plugin.views {plugin, surface, responsive, queued}`. Each count is notified to status watchers when it changes. The counts are per plugin and are kept until the application ends; they are not reset when a surface closes.
-While the performance trace is on (the 디버그 switch of the settings window), each change of a count also writes the trace event named in the table. The event log of a release stores only errors.
+While the performance trace is on (the 디버그 switch of the settings tab), each change of a count also writes the trace event named in the table. The event log of a release stores only errors.
 
 The identifiers in code use the names as written here.
 ## Boundary (no coupling)

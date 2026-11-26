@@ -14,11 +14,11 @@ The scope is the place the user pressed last:
 
 A press on a card stops being the scope when that card leaves the layout or the window stops showing its space, and the focused card is the scope again. A press on the frame stays the scope.
 
-The window starts with the focused card as the scope. A window without a focused card, such as the library before a space opens, has the frame as the scope, because the frame is the only place whose text it shows.
+The window starts with the focused card as the scope. A window without a focused card, such as the project home before a space opens, has the frame as the scope, because the frame is the only place whose text it shows.
 
 ## Steps and values
 
-A text size is a factor. The steps are 0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, and 3, the text size steps of `packages/workbench/workbench.json` ([settings window](settings.md#values)). Enlarging moves to the next larger step, reducing to the next smaller step, and restoring sets 1. Enlarging at 3 and reducing at 0.5 leave the value unchanged.
+A text size is a factor. The steps are 0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, and 3, the text size steps of `packages/workbench/workbench.json` ([settings tab](settings.md#values)). Enlarging moves to the next larger step, reducing to the next smaller step, and restoring sets 1. Enlarging at 3 and reducing at 0.5 leave the value unchanged.
 
 - The frame factor applies to the frame chrome and to every card.
 - A card factor applies to that card only.

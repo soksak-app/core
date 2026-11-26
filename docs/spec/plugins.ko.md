@@ -73,7 +73,7 @@ plugin 동작의 창 검사는 그 plugin의 repository에서 실행된다([검�
 | --- | --- | --- |
 | `id` | 예 | `[a-z][a-z0-9-]*` 형식의 소문자 식별자. 탭과 설정이 참조한다. `core`는 core root가 예약하므로 거부한다 |
 | `name` | 예 | 표시 이름 |
-| `description` | 예 | 플러그인이 하는 일을 말하는 1자에서 200자 사이의 한두 문장. [plugin 화면](installation.ko.md#plugin-화면)이 보여 주고, plugin 화면과 설정 창이 검색한다 |
+| `description` | 예 | 플러그인이 하는 일을 말하는 1자에서 200자 사이의 한두 문장. [설정 탭](settings.ko.md#플러그인)이 보여 주고, 설정 탭이 검색한다 |
 | `surface` | 아니오 | `{ "composition": ... }`: 필수 [표면 합성](surface-composition.ko.md). `view` 합성은 페이지를 합성 안에 선언한다([view 표면](#view-표면)). 표면에는 `module`이 없다 |
 | `surface.unload` | 아니오. `background`와 함께 쓰면 거부 | 코어가 탭을 unload하고 탭이 쓴 상태로 restore할 수 있는 plugin의 `{ "format": <양의 정수>, "maxBytes": <양의 정수> }`([메모리 절약](#메모리-절약)). `background`와 함께 쓰면 거부한다. 선언이 없는 표면은 unload하지 않는다(`undeclared`) |
 | `mark` | `surface`가 있으면 | 추가 메뉴와 새 탭 제목에 표시하는 짧은 텍스트 |
@@ -81,7 +81,7 @@ plugin 동작의 창 검사는 그 plugin의 repository에서 실행된다([검�
 | `sections` | 아니오 | 사이드바 섹션 `{ "id": "<플러그인 id>.<이름>", "name", "composition", "height", "unload"?, "actions"? }`. 각 섹션은 [section surface](#섹션), 즉 사이드바에 그려지는 plugin의 view다. `composition`은 `view` 합성이고, `height`는 `"fill"` 또는 포인트 단위 양의 정수다 |
 | `dialogs` | 아니오 | `{ "<name>": { "page": "<path>", "regions"?: [ ... ] } }`: plugin의 view가 [dialog](#dialogs)로 여는 page. `name`은 `[a-z0-9][a-z0-9-]{0,63}` 형식이고, `page`는 view composition의 `page`와 같은 page 경로이며, `regions`는 view composition의 `regions`와 같은 dialog page의 region이다. `surface`나 `sections`가 필요하다 |
 | `sidebars` | 아니오 | 로컬 기본 세트와 선택적인 네 변 `card` 연결([기본 사이드바 세트](#기본-사이드바-세트)) |
-| `preview` | 아니오 | `{ "ink": "--<토큰>" }`: 라이브러리 미리보기에서 플러그인 카드의 색을 정하는 테마 토큰 이름. `surface`가 필요하다 |
+| `preview` | 아니오 | `{ "ink": "--<토큰>" }`: 프로젝트 홈 미리보기에서 플러그인 카드의 색을 정하는 테마 토큰 이름. `surface`가 필요하다 |
 | `dependencies` | 아니오 | `{ "<package>": "<version range>" }`: plugin이 필요로 하는 sidecar와 plugin, 그리고 plugin이 함께 동작하는 그 version의 범위([version과 범위](installation.ko.md#version과-범위)). 의존은 plugin의 view나 상태 모듈이 쓰는 [사이드카](sidecars.ko.md)를 가리키며 그때 `surface`, `sections`나 `state`가 필요하거나, plugin이 기여하는 [확장 지점](#확장-지점)을 가진 plugin이나, 그 plugin의 선언된 status나 프로젝트 데이터를 plugin의 view가 따라가거나 읽는 plugin을 가리키며 plugin을 설치하면 그것도 설치된다. status를 위해 가리킨 plugin은 `exposes.status`에 선언한 status만 plugin의 view에 준다([view calls](native-surfaces.ko.md#view-표면)). command, element나 다른 항목은 주지 않는다. 프로젝트 데이터를 위해 가리킨 plugin은 `data`에 선언한 key만 plugin의 view에 준다([프로젝트 데이터](#프로젝트-데이터)). registry index나 `installed.json`의 plugin이 그 package 이름을 가지면 의존은 plugin을 가리키고, 아니면 sidecar를 가리킨다. Plugin 의존의 key는 그 plugin의 package(예: `@soksak/plugin-agents`)이며 plugin id가 아니다. 각 host는 key를 그 package의 load된 plugin id로 풀고, 의존을 읽거나 따라가는 view call은 그 plugin id(예: `agents`)를 명명한다. plugin이 다른 sidecar와 plugin에 요구하는 것의 유일한 선언이다 |
 | `events` | 아니오 | plugin의 event catalog 파일의 패키지 안 경로([logging](logging.ko.md#catalog)). 릴리스는 그 파일을 담는다 |
 | `extends` | 아니오 | `{ "<point>": { "version": "x.y.z", "schema": <스키마>, "modules"?: { "<bare specifier>": "<경로>" } } }`: 다른 plugin이 기여하는 [확장 지점](#확장-지점). `surface` 또는 `sections`가 필요하다 |
@@ -90,7 +90,7 @@ plugin 동작의 창 검사는 그 plugin의 repository에서 실행된다([검�
 | `sessions` | 아니오 | `true`: 플러그인의 표면이 소유 세션을 열 수 있음을 선언한다([소유 세션](#소유-세션)). 표면과 `dependencies`에 선언한 사이드카 하나가 필요하며, 이 사이드카가 `transport: "persistent"`인지는 세션 요청마다 host가 확인한다. `background`는 이 선언으로 바뀌지 않는다 |
 | `background` | 아니오 | `{ "sidecar": "<선언한 사이드카>", "operation": "<동작 이름>", "settings"?: { "<요청 필드>": "<선언한 설정>" }, "directory"?: "<요청 필드>", "params"?: { "<요청 필드>": "<탭 매개변수>" } }`: 표면이 마운트되지 않은 비활성 탭마다 네이티브 표면을 만들지 않고 선언한 사이드카 세션 하나를 유지한다. 워크벤치는 대응한 플러그인 설정의 현재 값을 요청 필드에 넣고, 탭의 시작 디렉터리를 `directory`가 가리키는 필드에, 탭이 가진 대응 탭 매개변수의 값을 그 요청 필드에 넣는다([background sessions](#background-sessions)). `settings`, `directory`, `params`는 `operation`을 가리킬 수 없고, `settings`는 선언하지 않은 설정을 가리킬 수 없으며, `directory`와 `params`는 `settings`의 필드를 가리킬 수 없고, `params`의 각 탭 매개변수는 비어 있지 않은 이름이다. `surface`와 `dependencies`가 필요하다 |
 | `programs` | 아니오 | `{ "<name>": { "program": "<text>", "args"?: [ <slot>, ... ] } }`: plugin의 페이지가 이름으로 실행할 수 있는 외부 프로그램([프로그램 실행](native-surfaces.ko.md#프로그램-실행))이다. `name`은 `[a-z][a-z0-9-]*` 형식이다. `program`은 1~255 byte이며 제어 문자가 없는 text다. PATH에서 찾는 bare name, 프로젝트 폴더를 기준으로 하는 구분자가 있는 상대 경로, 절대 경로, 또는 plugin 자신의 파일을 가리키는 `plugin:<path>` 중 하나다. `<path>`는 `/`로 구분한 상대 경로이며, 빈 segment, `.`, `..` segment가 없고 backslash가 없다. slot은 인자가 같아야 하는 text이거나, 인자 전체가 맞아야 하는 `{ "pattern": "<정규 표현식>" }`(512 byte 이하)다. `args`는 최대 16개 slot이며 인자를 받지 않는 프로그램은 생략한다. `surface`나 `sections`가 필요하며, plugin의 모든 view surface, 곧 tab, section, dialog surface가 이 선언을 담는다 |
-| `accounts` | 아니오 | `{ "kinds": [ { "value": "<kind>", "label": "<text>" }, ... ], "programs": { "status": "<program>", "login": "<program>", "logout": "<program>" } }`: settings window의 plugin page가 그리는 plugin의 [계정](#accounts)이다. 이름이 붙은 프로그램을 가진 `programs`와 scope가 `plugin`인 data key `accounts`가 필요하다 |
+| `accounts` | 아니오 | `{ "kinds": [ { "value": "<kind>", "label": "<text>" }, ... ], "programs": { "status": "<program>", "login": "<program>", "logout": "<program>" } }`: 설정 탭의 plugin page가 그리는 plugin의 [계정](#accounts)이다. 이름이 붙은 프로그램을 가진 `programs`와 scope가 `plugin`인 data key `accounts`가 필요하다 |
 | `categories` | 아니오 | `[ "<category>", ... ]`: 플러그인의 [plugin categories](#plugin-categories)이며, 각각 core의 plugin category이고 한 번씩 나열한다. `surface`가 필요하다 |
 | `requires` | 아니오 | `[ "<category>", ... ]`: 플러그인이 요구하는 [plugin categories](#plugin-categories)이며, 각각 core의 plugin category이고 플러그인이 `categories`에 나열하지 않은 것이며 한 번씩 나열한다. `surface` 또는 `sections`가 필요하다 |
 
@@ -139,7 +139,7 @@ section surface는 보이는 스페이스의 사이드바가 그 섹션을 가�
 
 세트는 어느 플러그인의 섹션이든 순서대로 묶고, 세트를 만들 때 고른 `layout`을 가진다. `list`에서 사이드바는 세트의 모든 섹션을 세로 방향에서는 위에서 아래로, 가로 방향에서는 왼쪽에서 오른쪽으로 보이며, 각 섹션은 이름 머리 아래에 있고 머리로 접고 편다. `tabs`에서 사이드바는 섹션 이름의 탭 줄과 고른 탭의 섹션 하나만 보인다. 고른 탭과 접은 섹션은 사이드바마다 유지되고 스페이스와 함께 저장되므로([프로젝트](projects.ko.md#저장)) 다시 불러오기와 다시 시작 뒤에도 그대로 보인다.
 
-코어는 사이드바의 틀만 그린다. 틀은 섹션 머리와 그 이름, 접기, 탭, 높이, 상태 줄이다. 사이드바는 세트 제목이나 자리 이름을 보이지 않으며 섹션은 사이드바 맨 위에서 시작한다. 창 사이드바는 자리를 말하고 끝에 접기 컨트롤(`core.sidebar.fold`)을 둔 상태 줄로 끝난다. 접기 컨트롤은 `core.settings.set`(`left`, `right`, `top`, `bottom` 중 하나를 false로)으로 사이드바를 끄고, 그 변의 창 머리 컨트롤이 다시 켠다([창 컨트롤](external-sidebars.ko.md#창-컨트롤)). 카드 안 사이드바는 자기 면과 세트를 말하는 상태 줄로 끝난다([카드 배치](example-model.ko.md)). 접은 섹션은 머리만 남는다. 정수 `height`를 가진 펼친 섹션은 그 높이를 가지며, `height`가 `"fill"`인 펼친 섹션은 다른 섹션이 쓰고 남은 사이드바 높이를 나눠 갖는다. 접힌 fill 섹션은 그 자리를 다른 fill 섹션에 준다. 높이를 선언으로 정하는 이유는 코어가 section view의 내용 높이를 읽지 않으므로, 내용이 바뀌어도 사이드바의 레이아웃이 시작되지 않기 때문이다. 사이드바가 머리와 선언된 높이보다 작으면 섹션을 줄이지 않고 세트 전체를 스크롤한다. 섹션 머리는 카드 머리의 높이, 상태 줄은 카드 발의 높이를 가져 선이 이웃 카드의 선과 한 줄에 놓인다. 코어는 섹션의 action마다 버튼 하나를 `actions` 순서대로 섹션 header의 오른쪽 끝에 그린다. 버튼을 누르면 그 action의 command를 shared binder로 실행하며, 그 섹션 view의 surface를 `--surface`로 넘긴다. 각 버튼은 접근성 이름이 `label`인 `core.sidebar.section.action` element로 노출된다.
+코어는 사이드바의 틀만 그린다. 틀은 섹션 머리와 그 이름, 접기, 탭, 높이, 상태 줄이다. 사이드바는 세트 제목이나 자리 이름을 보이지 않으며 섹션은 사이드바 맨 위에서 시작한다. 창 사이드바는 자리를 말하고 끝에 접기 컨트롤(`core.sidebar.fold`)을 둔 상태 줄로 끝난다. 접기 컨트롤은 `core.settings.set`(`left`, `right`, `top`, `bottom` 중 하나를 false로)으로 사이드바를 끄고, 그 변의 창 머리 컨트롤이 다시 켠다([창 컨트롤](external-sidebars.ko.md#창-도구)). 카드 안 사이드바는 자기 면과 세트를 말하는 상태 줄로 끝난다([카드 배치](example-model.ko.md)). 접은 섹션은 머리만 남는다. 정수 `height`를 가진 펼친 섹션은 그 높이를 가지며, `height`가 `"fill"`인 펼친 섹션은 다른 섹션이 쓰고 남은 사이드바 높이를 나눠 갖는다. 접힌 fill 섹션은 그 자리를 다른 fill 섹션에 준다. 높이를 선언으로 정하는 이유는 코어가 section view의 내용 높이를 읽지 않으므로, 내용이 바뀌어도 사이드바의 레이아웃이 시작되지 않기 때문이다. 사이드바가 머리와 선언된 높이보다 작으면 섹션을 줄이지 않고 세트 전체를 스크롤한다. 섹션 머리는 카드 머리의 높이, 상태 줄은 카드 발의 높이를 가져 선이 이웃 카드의 선과 한 줄에 놓인다. 코어는 섹션의 action마다 버튼 하나를 `actions` 순서대로 섹션 header의 오른쪽 끝에 그린다. 버튼을 누르면 그 action의 command를 shared binder로 실행하며, 그 섹션 view의 surface를 `--surface`로 넘긴다. 각 버튼은 접근성 이름이 `label`인 `core.sidebar.section.action` element로 노출된다.
 
 정수 높이의 section은 sidebar가 section들보다 짧으면 줄어든다. view는 overflow가 잘라내지 않는 native view이기 때문이다. fill section은 head와 최소 높이 32 point를 유지한다.
 
@@ -197,7 +197,7 @@ installer는 view page가 없는 release를 거부하듯 dialog page가 없는 r
 
 ## Accounts
 
-agent CLI처럼 프로그램이 사람의 login을 필요로 하는 plugin은 `plugin.json`에 `accounts`를 선언하고, settings window의 plugin page는 core의 control로 그 계정을 그린다([settings window](settings.ko.md#플러그인)). plugin은 settings window에 자기 page를 보이지 않는다. plugin의 모든 설정은 core가 그리는 선언이며, 그래서 모든 plugin page는 같은 모양, 하나의 scroll, 하나의 keyboard 경로를 가진다. 없앤 member `settingsView`가 있는 manifest는 `plugin <id>: settingsView is removed; a plugin declares its settings`로 거부된다.
+agent CLI처럼 프로그램이 사람의 login을 필요로 하는 plugin은 `plugin.json`에 `accounts`를 선언하고, 설정 탭의 plugin page는 core의 control로 그 계정을 그린다([설정 탭](settings.ko.md#플러그인)). plugin은 설정 탭에 자기 page를 보이지 않는다. plugin의 모든 설정은 core가 그리는 선언이며, 그래서 모든 plugin page는 같은 모양, 하나의 scroll, 하나의 keyboard 경로를 가진다. 없앤 member `settingsView`가 있는 manifest는 `plugin <id>: settingsView is removed; a plugin declares its settings`로 거부된다.
 
 `accounts`는 `{ "kinds": [ { "value": "<kind>", "label": "<text>" }, ... ], "programs": { "status": "<program>", "login": "<program>", "logout": "<program>" } }`다.
 
@@ -214,7 +214,7 @@ agent CLI처럼 프로그램이 사람의 login을 필요로 하는 plugin은 `p
 
 다른 형식의 기록은 error display를 통해 `plugin <id> data accounts: <reason>`로 page를 실패시킨다. 계정의 home은 plugin data folder의 folder `accounts/<id>`다. workbench는 계정을 저장하기 전에 mode 0700으로 그것을 만들고, 계정과 함께 지운다. CLI가 home에 login을 두며, core는 token을 갖지 않는다.
 
-**프로그램.** workbench는 settings window를 위해 surface와 project 없이 `accounts`의 프로그램을 실행한다. host 명령 `accountRun`([계정 실행](native-surfaces.ko.md#계정-실행))으로, 인자 `<kind>`와 home의 절대 경로 `<home>`을 주고, plugin data folder를 작업 folder로 쓴다.
+**프로그램.** workbench는 설정 탭을 위해 surface와 project 없이 `accounts`의 프로그램을 실행한다. host 명령 `accountRun`([계정 실행](native-surfaces.ko.md#계정-실행))으로, 인자 `<kind>`와 home의 절대 경로 `<home>`을 주고, plugin data folder를 작업 folder로 쓴다.
 
 - `status`는 JSON object 하나 `{login, until, usage}`를 출력하고 0으로 끝난다. `login`은 `true`, `false`, 또는 login 상태가 없는 종류의 `null`이다. `until`은 login이 끝나는 시각의 ISO 8601 text 또는 `null`이다. `usage`는 `{label, used, resets}`의 목록이다. `label`은 1~40자, `used`는 한도 중 쓴 비율인 0~100의 수, `resets`는 다음 초기화 시각의 ISO 8601 text 또는 `null`이다.
 - `login`은 home에서 CLI의 login을 실행하며, CLI는 system 기본 browser를 연다. 0으로 끝나면 login이 끝난 것이다. 취소가 실행을 취소한다.
@@ -227,7 +227,7 @@ agent CLI처럼 프로그램이 사람의 login을 필요로 하는 plugin은 `p
 - `name` 순서로 계정마다 행 하나: 이름, 종류의 label, login, 그리고 `usage` 항목마다 줄 하나. login은 `until`이 `null`이 아니면 `· <until>까지`가 붙은 `로그인됨`, `로그인 필요`, login이 실행되는 동안 `로그인 중`, 또는 `null`의 `-`다. usage 줄은 `<label> <used>%`이고, `resets`가 `null`이 아니면 `· <resets> 초기화`가 붙는다.
 - 행의 버튼: login `false`의 로그인, login이 실행되는 동안의 취소, login `true`의 로그아웃, 이름 변경, 삭제. 이름 변경은 이름을 text field에 저장, 취소 버튼과 함께 보인다.
 - 행 새 계정: 이름 field, label로 보이는 종류 select, 버튼 추가.
-- field의 글자는 settings window가 가진다. 이름 field는 `core.settings-modal.account-name {name}`을, select는 처음 선언된 종류에서 시작하는 `core.settings-modal.account-kind {kind}`를 실행하고, 추가는 그 값으로 `core.accounts.add`를 실행한다. 이름 변경은 `core.settings-modal.account-edit {id}`를, 그 field는 `core.settings-modal.account-edit-name {name}`을 실행하며, 저장은 그 글자로 `core.accounts.rename`을, 취소는 `core.settings-modal.account-edit {id: null}`을 실행한다. 끝난 추가는 이름을 비우고, 끝난 이름 변경은 편집을 끝내며, 다른 page는 둘 다 비운다. 창은 card의 사본을 native view에 그리고, 사본의 field는 글자가 바뀔 때, 곧 Enter나 focus를 잃을 때 글자를 보내므로 글자는 다음 버튼을 누르기 전에 온다.
+- field의 글자는 설정 탭이 가진다. 이름 field는 `core.settings-tab.account-name {name}`을, select는 처음 선언된 종류에서 시작하는 `core.settings-tab.account-kind {kind}`를 실행하고, 추가는 그 값으로 `core.accounts.add`를 실행한다. 이름 변경은 `core.settings-tab.account-edit {id}`를, 그 field는 `core.settings-tab.account-edit-name {name}`을 실행하며, 저장은 그 글자로 `core.accounts.rename`을, 취소는 `core.settings-tab.account-edit {id: null}`을 실행한다. 끝난 추가는 이름을 비우고, 끝난 이름 변경은 편집을 끝내며, 다른 page는 둘 다 비운다. 창은 card의 사본을 native view에 그리고, 사본의 field는 글자가 바뀔 때, 곧 Enter나 focus를 잃을 때 글자를 보내므로 글자는 다음 버튼을 누르기 전에 온다.
 - 누른 버튼의 명령이 실패하면 place `settings <plugin>`의 error display에 그 error가 보인다.
 
 **명령.** 각 버튼은 core 명령을 실행한다. 각 명령은 저장된 값을 base로 plugin key를 바꾸고([plugin data](#plugin-데이터)), 다른 창이 먼저 저장했으면 `runtime.data.change`의 한도까지 다시 읽는다.
@@ -237,7 +237,7 @@ agent CLI처럼 프로그램이 사람의 login을 필요로 하는 plugin은 `p
 - 거부: `plugin <plugin> declares no accounts`, `account name must be 1 to 40 characters without a control character`, `account name <name> is already used`, `account kind <kind> is not declared by <plugin>`, `account <id> is not defined`, login이 실행되는 동안의 login, logout, 이름 변경, 삭제에 `the login of account <name> is running`, 취소에 `no login of account <name> is running`.
 - status `core.accounts`는 보이는 page의 plugin에 대한 `{plugin, accounts: [{id, name, kind, login, until, usage, running}]}`, 또는 `accounts`가 있는 plugin의 page가 보이지 않는 동안 `null`이다. `running`은 login이 실행되는 동안 `true`이고, `login`, `until`, `usage`는 첫 `status` 실행 전까지 `null`, `null`, `[]`이다.
 
-이유: 행 동작이 있는 계정 목록은 설정 형식이 다루지 않는 유일한 plugin 설정이고, login이 있는 CLI를 실행하는 모든 plugin이 필요로 하므로 core가 한 번 정하고, 각 CLI를 아는 부분은 plugin이 프로그램에 둔다. plugin은 settings window에서 코드를 실행하지 않으므로, CLI가 필요한 동작은 선언된 프로그램이다. CLI가 login을 home 경로에 묶을 수 있고 plugin의 기록이 계정을 가리키므로 `id`는 바뀌지 않는다. owner의 열린 실행 수에 한도가 있으므로 plugin의 실행은 차례로 이어진다.
+이유: 행 동작이 있는 계정 목록은 설정 형식이 다루지 않는 유일한 plugin 설정이고, login이 있는 CLI를 실행하는 모든 plugin이 필요로 하므로 core가 한 번 정하고, 각 CLI를 아는 부분은 plugin이 프로그램에 둔다. plugin은 설정 탭에서 코드를 실행하지 않으므로, CLI가 필요한 동작은 선언된 프로그램이다. CLI가 login을 home 경로에 묶을 수 있고 plugin의 기록이 계정을 가리키므로 `id`는 바뀌지 않는다. owner의 열린 실행 수에 한도가 있으므로 plugin의 실행은 차례로 이어진다.
 
 ## 프로젝트 데이터
 per-key 형식은 코어가 소유한 file 안의 값마다 형태를 정하며, 다른 형태의 값은 변환되지 않고 거부된다([저장 데이터 형식](installation.ko.md#저장-데이터-형식)).
@@ -265,7 +265,7 @@ host는 plugin key를 설정 directory의 `plugin-data.json`에 `{ "format": 1, 
 
 project가 있든 없든 어느 window의 view든 project data의 view call로 자기 plugin의 plugin key를 읽고, 쓰고, replace하고, 따르며, dependency의 plugin key를 읽는다. workbench는 `runtime.data.set`을 `base` 없는 operation으로, `runtime.data.replace`를 `base`와 선언된 default가 있는 operation으로 보내므로, store가 모든 window의 쓰기에 대해 replace를 결정한다. window는 store가 받아들인 저장 entry를 자기가 가진 key에 넣고 변경을 알린다. 이 window의 entry가 저장되기 전에 시작한 store 읽기는 plugin key를 window가 가진 대로 둔다. host가 그 entry에 다시 `workspace-changed`로 답하기 때문이다. 다른 window가 값을 바꾼 key는 window가 snapshot을 읽을 때 window의 view에 알려진다. project 없는 view의 `runtime.data.on`은 plugin key만 따르고, project 있는 view는 두 종류를 모두 따른다. project 없는 view의 project key는 `view call <command> requires a project`로 실패한다. plugin을 제거해도 project data처럼 그 entry는 남는다.
 
-Rejected: `settings.json`의 member. 거부된 `settings.json`은 window에 common settings를 남기지 않고, plugin의 key는 settings window에 속하지 않기 때문이다. project마다 key의 사본 하나. project 없는 window는 그것을 갖지 못하고 사본이 서로 달라지기 때문이다. window만의 `base` 비교. 두 window가 같은 값에 대한 replace를 둘 다 받아들이기 때문이다.
+Rejected: `settings.json`의 member. 거부된 `settings.json`은 window에 common settings를 남기지 않고, plugin의 key는 설정 탭에 속하지 않기 때문이다. project마다 key의 사본 하나. project 없는 window는 그것을 갖지 못하고 사본이 서로 달라지기 때문이다. window만의 `base` 비교. 두 window가 같은 값에 대한 replace를 둘 다 받아들이기 때문이다.
 
 ## 확장 지점
 
@@ -292,7 +292,7 @@ category의 interface는 고정되며, 바뀌면 다른 이름의 새 category�
 - 시작할 때 workbench는 manifest를 읽은 뒤 category를 검사한다. 창의 불러오고 켜진 plugin 중 어떤 것도 제공하지 않는 category를 요구하는 켜진 plugin은 불러오지 않으며, 이유는 [불러오지 않은 플러그인](#불러오지-않은-플러그인)의 `requires`다. 오류 표시는 `plugin <id> requires a <category> plugin, and no loaded plugin is one`을 보인다. 나머지 plugin은 시작한다.
 - 상태 `core.plugin-categories`는 `{ "<category>": [ { "id", "name" }, ... ] }`이며, core의 각 plugin category와 창의 불러오고 켜진 그 category의 plugin을 id 순서로 담는다.
 
-`{ "type": "plugin", "category": "<category>" }` 형식의 설정은 그 category의 plugin 하나를 가리킨다([설정 선언](#설정-선언)). 이 설정은 `default`를 갖지 않는다. 값은 저장된 값이며 모든 저장 값과 같이 검사한다. 불러오고 켜진 그 category의 plugin을 가리키지 않는 값은 명시적인 로딩 오류 `<plugin>.<key>: plugin <value> is not a <category> plugin`이며 대체하지 않는다. `environment.json`의 값도 같은 방식으로 검사한다. 저장된 값이 없는 동안 값은 창에 그 category의 plugin이 정확히 하나 있을 때 그 plugin이다. 그 밖에는 설정에 값이 없고, 사용자가 고를 때까지 오류 표시가 `<plugin>.<key>: choose a <category> plugin`을 보인다. 설정 창은 category의 plugin을 이름으로 가진 선택 상자를 보인다.
+`{ "type": "plugin", "category": "<category>" }` 형식의 설정은 그 category의 plugin 하나를 가리킨다([설정 선언](#설정-선언)). 이 설정은 `default`를 갖지 않는다. 값은 저장된 값이며 모든 저장 값과 같이 검사한다. 불러오고 켜진 그 category의 plugin을 가리키지 않는 값은 명시적인 로딩 오류 `<plugin>.<key>: plugin <value> is not a <category> plugin`이며 대체하지 않는다. `environment.json`의 값도 같은 방식으로 검사한다. 저장된 값이 없는 동안 값은 창에 그 category의 plugin이 정확히 하나 있을 때 그 plugin이다. 그 밖에는 설정에 값이 없고, 사용자가 고를 때까지 오류 표시가 `<plugin>.<key>: choose a <category> plugin`을 보인다. 설정 탭은 category의 plugin을 이름으로 가진 선택 상자를 보인다.
 
 이유: category의 plugin을 요구하는 plugin에서 그 category의 plugin을 없애는 작업은 다음 시작에서 실패하므로 installer가 먼저 거부한다. 시작은 요구하는 plugin만 거부하는데, 다른 plugin이 그 plugin에 의존하지 않기 때문이다. `plugin` 형식의 설정은 `default`가 없는데, 어떤 plugin도 애플리케이션이 설치한 plugin을 알지 못하고, 같은 category의 plugin을 하나 더 설치해도 저장된 값이 가리키는 plugin이 바뀌지 않기 때문이다.
 
@@ -435,7 +435,7 @@ plugin 저장소의 catalog 검사(`sok-check events`)는 `runtime.log.<level>(`
 | `registry` | 선택. registry가 정해지지 않았을 때 첫 실행이 정하는 기본 registry index의 `https:` 또는 절대 `file:` URL([첫 실행](installation.ko.md#첫-실행)) |
 | `sidebars.links` | 기본 사이드바 선택: 일반 변(left, right, top, bottom) 연결, 카드 네 변 연결, window-left/window-right/window-top/window-bottom 연결. 플러그인 변 형식, null 세트, 레일 연결은 거부한다. |
 
-워크벤치는 설정을 적용하거나 스페이스를 만들기 전에 `environment.json`과 id 순서(추가 메뉴 순서)의 [설치된 플러그인](installation.ko.md#설치된-plugin-제공)을 그 manifest와 함께 등록한다. 표면이 없는 불러온 플러그인을 가리키는 탭이나 카드 변 연결, 불러온 플러그인이 선언하지 않은 섹션을 가리키는 세트, 불러오지 않은 플러그인을 가리키는 것은 [불러오지 않은 플러그인](#불러오지-않은-플러그인)을 따른다. 사이드카를 선언한 플러그인 표면은 그런 환경에도 나열할 수 있다. 호스트가 없으면 워크벤치가 그런 표면을 마운트하지 않기 때문이다([런타임 모듈](#런타임-모듈)). 저장된 스페이스는 환경 파일이 아니며 열 때 잘못되거나 오래된 창 사이드바 상태를 거부한다([프로젝트](projects.ko.md#저장)). 저장된 사이드바 세트와 연결은 설정이며 `environment.json`과 같은 사이드바 검사를 거친다. 불러온 플러그인이 선언하지 않은 섹션을 가리키는 저장된 세트나 표면이 없는 불러온 플러그인을 가리키는 카드 변 연결은 설정 불러오기를 오류로 실패시킨다([설정 창](settings.ko.md#저장되는-세트와-연결)).
+워크벤치는 설정을 적용하거나 스페이스를 만들기 전에 `environment.json`과 id 순서(추가 메뉴 순서)의 [설치된 플러그인](installation.ko.md#설치된-plugin-제공)을 그 manifest와 함께 등록한다. 표면이 없는 불러온 플러그인을 가리키는 탭이나 카드 변 연결, 불러온 플러그인이 선언하지 않은 섹션을 가리키는 세트, 불러오지 않은 플러그인을 가리키는 것은 [불러오지 않은 플러그인](#불러오지-않은-플러그인)을 따른다. 사이드카를 선언한 플러그인 표면은 그런 환경에도 나열할 수 있다. 호스트가 없으면 워크벤치가 그런 표면을 마운트하지 않기 때문이다([런타임 모듈](#런타임-모듈)). 저장된 스페이스는 환경 파일이 아니며 열 때 잘못되거나 오래된 창 사이드바 상태를 거부한다([프로젝트](projects.ko.md#저장)). 저장된 사이드바 세트와 연결은 설정이며 `environment.json`과 같은 사이드바 검사를 거친다. 불러온 플러그인이 선언하지 않은 섹션을 가리키는 저장된 세트나 표면이 없는 불러온 플러그인을 가리키는 카드 변 연결은 설정 불러오기를 오류로 실패시킨다([설정 탭](settings.ko.md#저장되는-세트와-연결)).
 
 ## 불러오지 않은 플러그인
 
@@ -451,7 +451,7 @@ plugin 저장소의 catalog 검사(`sok-check events`)는 `runtime.log.<level>(`
 | `reload` | 창을 다시 불러오면 <plugin> 플러그인이 열립니다. | 없음. plugin 카드의 적용이 창을 다시 불러온다([변경 적용](installation.ko.md#변경-적용)) |
 | `host` | <plugin> 플러그인은 네이티브 호스트가 있어야 설치됩니다. | 없음. 애플리케이션에 host가 없다 |
 | `unread` | <plugin> 플러그인의 설치 상태를 읽지 못했습니다. | 없음. plugin 상태를 읽지 못했다 |
-| `requires` | <plugin> 플러그인에 필요한 <category> 플러그인이 없습니다. | 없음. plugin 화면이 그 category의 plugin을 설치하거나 켜며, 시작 때 오류 표시가 그 오류를 보였다 |
+| `requires` | <plugin> 플러그인에 필요한 <category> 플러그인이 없습니다. | 없음. 설정 탭이 그 category의 plugin을 설치하거나 켜며, 시작 때 오류 표시가 그 오류를 보였다 |
 
   이유는 `installed.json`이 플러그인을 끈 상태로 나열하면 `disabled`, 켠 상태로 나열하고 창이 그 entry나 manifest를 거부했으면 `refused`, `installed.json`이 플러그인을 켠 상태로 나열하는데 창의 불러오고 켜진 plugin 중 그 plugin이 요구하는 category의 plugin이 없으면 `requires`([plugin categories](#plugin-categories)), 그 밖에 켠 상태로 나열하면 `reload`, 나열하지 않으면 `missing`, host가 없으면 `host`, [plugin 상태](installation.ko.md#애플리케이션-안의-plugin-작업)를 읽지 못하면 `unread`다. 워크벤치는 첫 스페이스를 열기 전에 plugin 상태를 읽는다. 카드는 `plugins-changed` event마다 이유를 다시 정한다.
 - 그런 플러그인을 가리키는 사이드바 연결은 유지하며 아무 내용도 고르지 않는다. 플러그인(첫 `.` 앞의 id)을 불러오지 않은 세트 섹션은 세트에 유지하되 보이지 않으며 어떤 layout도 그 surface를 쥐지 않는다. 세트 편집은 그 행을 "<section id> (불러오지 않음)"과 ▲, ▼, −로 보여 준다.
@@ -541,11 +541,11 @@ surface 구성의 image region은 자체 배치를 갖지 않는다. 워크벤�
 
 브라우저 주소 칸은 포커스를 얻을 때 선언된 `browser.address.select` 명령으로 전체 값을 선택한다. 첫 포인터를 뗄 때 선택을 유지하여 입력이 이전 주소를 대체하게 한다. 이미 포커스된 칸의 후속 클릭에서는 다시 전체 선택하지 않고 캐럿을 옮길 수 있다. 플러그인은 소유 Shadow Root로 포커스를 판단하고 dispose 시 모든 처리기를 해제한다. 칸에 입력한 글자는 칸이 포커스를 잃거나 선언된 이동 명령(`browser.navigate`, `browser.back`, `browser.forward`, `browser.reload`)이 실행될 때까지 유지되며, 문서 상태 갱신이 이를 바꾸지 않는다. 그 밖에는 Enter 뒤 포커스를 유지하는 동안에도 상태가 갱신될 때마다 칸이 `browser.location.url`을 보인다. 상태 `browser.address.text`는 칸이 보이는 글자와 포커스 여부 `{value, focused}`를 보고한다. 네이티브 키보드 검사는 대체할 주소를 바로 입력하며 누락된 동작을 보정하려고 텍스트를 직접 선택하지 않는다.
 
-각 디렉터리는 `pnpm test`로 자기 테스트를 실행한다. 패키지는 fixture로 자기 경계를 검사하고 다른 패키지의 소스나 실제 이름을 읽지 않는다. 플러그인 API는 형식을, 워크벤치는 fixture 파일로 로드를, 각 플러그인은 자기 `plugin.json`과 페이지를, 각 애플리케이션은 실제 플러그인 의존성으로 `environment.json`이 해석되는지를 검사한다. 워크벤치는 각 플러그인의 `preview.ink`로 라이브러리 미리보기 색을 정하고 플러그인별 CSS를 두지 않는다.
+각 디렉터리는 `pnpm test`로 자기 테스트를 실행한다. 패키지는 fixture로 자기 경계를 검사하고 다른 패키지의 소스나 실제 이름을 읽지 않는다. 플러그인 API는 형식을, 워크벤치는 fixture 파일로 로드를, 각 플러그인은 자기 `plugin.json`과 페이지를, 각 애플리케이션은 실제 플러그인 의존성으로 `environment.json`이 해석되는지를 검사한다. 워크벤치는 각 플러그인의 `preview.ink`로 프로젝트 홈 미리보기 색을 정하고 플러그인별 CSS를 두지 않는다.
 
 ### 설정 선언
 
-플러그인은 `plugin.json`의 `settings`에 타입이 있는 설정을 선언할 수 있다. 객체 키는 플러그인 내부 설정 이름이며 워크벤치는 이를 `<플러그인 id>.<키>`로 노출한다. 각 선언은 설정 창의 한국어 행 이름인 1자에서 40자 사이의 `label`을 가지며, 행 아래에 보이는 1자에서 200자 사이의 `description`을 가질 수 있다. 이름과 값 이름만으로 값이 무엇을 하는지 알 수 없으면 설명이 필요하다. 각 선언은 또 열거형이면 `type`, `default`, `values`를, 범위가 있는 정수면 `type`, `default`, `minimum`, `maximum`을, 최대 `maxLength`자의 비어 있지 않은 문자열이면 `type`, `default`, `maxLength`를, 주소면 `type`과 `default`를 가진다. 주소는 빈 문자열이거나 최대 2048자의 `http` 또는 `https` 주소다. `type`이 `plugin`인 선언은 `type`, `category`, `label`, `description`을 가지며 `default`를 갖지 않는다([plugin categories](#plugin-categories)). 설정 창은 문자열과 주소를 한 줄 글자 입력으로 보인다. 타입과 검증 규칙의 유일한 출처는 선언이며 모르는 설정 키와 잘못된 기본값은 manifest 검증을 실패시킨다.
+플러그인은 `plugin.json`의 `settings`에 타입이 있는 설정을 선언할 수 있다. 객체 키는 플러그인 내부 설정 이름이며 워크벤치는 이를 `<플러그인 id>.<키>`로 노출한다. 각 선언은 설정 탭의 한국어 행 이름인 1자에서 40자 사이의 `label`을 가지며, 행 아래에 보이는 1자에서 200자 사이의 `description`을 가질 수 있다. 이름과 값 이름만으로 값이 무엇을 하는지 알 수 없으면 설명이 필요하다. 각 선언은 또 열거형이면 `type`, `default`, `values`를, 범위가 있는 정수면 `type`, `default`, `minimum`, `maximum`을, 최대 `maxLength`자의 비어 있지 않은 문자열이면 `type`, `default`, `maxLength`를, 주소면 `type`과 `default`를 가진다. 주소는 빈 문자열이거나 최대 2048자의 `http` 또는 `https` 주소다. `type`이 `plugin`인 선언은 `type`, `category`, `label`, `description`을 가지며 `default`를 갖지 않는다([plugin categories](#plugin-categories)). 설정 탭은 문자열과 주소를 한 줄 글자 입력으로 보인다. 타입과 검증 규칙의 유일한 출처는 선언이며 모르는 설정 키와 잘못된 기본값은 manifest 검증을 실패시킨다.
 
 애플리케이션은 `environment.json`의 `settings`에 플러그인 id와 내부 설정 이름별 초기값을 제공할 수 있다. 값은 선언된 설정을 가리키고 선언 규칙을 통과해야 한다. 우선순위는 플러그인 기본값, 애플리케이션 값, 저장된 공통값, 저장된 프로젝트 덮어쓰기 순서다. 저장값은 유효 설정이 되기 전에 선언 규칙으로 검증하며 잘못된 저장 데이터는 명시적인 로딩 오류이고 대체하지 않는다.
 

@@ -1,5 +1,5 @@
 // core.plugins.install, core.plugins.update and core.plugins.enable take end: true, which runs an operation that a running persistent
-// service holds, and refuse any other end (docs/spec/installation.md#plugin-screen).
+// service holds, and refuse any other end (docs/spec/installation.md#plugin-state-and-commands).
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";

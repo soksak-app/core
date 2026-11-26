@@ -1,5 +1,5 @@
 // The press of a window sidebar switch applies the value in its own turn: the listeners that draw the plane run before the host
-// writes the settings, and the change answers once the host wrote them (docs/spec/external-sidebars.md#window-controls).
+// writes the settings, and the change answers once the host wrote them (docs/spec/external-sidebars.md#window-tools).
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";

@@ -1,5 +1,5 @@
 // A window sidebar that its switch hides keeps its section surfaces as hidden surfaces, and the frame after the press draws the plane
-// before the settings write answers (docs/spec/plugins.md#sections, docs/spec/external-sidebars.md#window-controls).
+// before the settings write answers (docs/spec/plugins.md#sections, docs/spec/external-sidebars.md#window-tools).
 package workbench_test
 
 import (

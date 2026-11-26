@@ -21,7 +21,7 @@ export const FOLD_ICONS = Object.freeze({ left: "chevron-left", right: "chevron-
 
 /**
  * The switches of the window sidebars in the window chrome, one per side in the fixed order left, right, top, bottom: the side, the icon,
- * the tooltip and the exposure element of each (docs/spec/external-sidebars.md#window-controls).
+ * the tooltip and the exposure element of each (docs/spec/external-sidebars.md#window-tools).
  */
 export function chromeSwitches() {
   return [

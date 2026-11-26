@@ -12,7 +12,7 @@ import (
 )
 
 // The plugin operations of a window and the value of `core.plugins`, as packages/workbench/plugin-operations.js has them
-// (docs/spec/installation.md#plugin-screen). The host keeps the state; a window reads it and runs its operations.
+// (docs/spec/installation.md#plugin-state-and-commands). The host keeps the state; a window reads it and runs its operations.
 
 // PluginIndex is `index` of the plugin state: the checked registry index, or the error of its read.
 type PluginIndex struct {
@@ -131,7 +131,7 @@ func sidecarRows(ranges map[string]string, state *PluginsState) []PluginSidecar 
 }
 
 // rowState returns the state of a plugin row. requires is the plugin category that an enabled plugin requires and no loaded plugin
-// serves, or "" (docs/spec/installation.md#plugin-screen); such a plugin stays unloaded after a reload, so its state asks for none.
+// serves, or "" (docs/spec/installation.md#plugin-states); such a plugin stays unloaded after a reload, so its state asks for none.
 func rowState(unit *LoadedPlugin, record *sok.InstalledPlugin, refused bool, requires string) string {
 	switch {
 	case unit != nil && record != nil && record.Enabled && record.Version == unit.Version:

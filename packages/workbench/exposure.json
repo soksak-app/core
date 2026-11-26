@@ -2742,7 +2742,7 @@
       },
       {
         "name": "core.settings.open",
-        "description": "Opens the settings modal.",
+        "description": "Opens the settings tab.",
         "params": {
           "type": "object",
           "properties": {}

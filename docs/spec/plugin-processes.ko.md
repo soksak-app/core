@@ -214,7 +214,7 @@ status `core.plugin.open-calls`, `core.plugin.losses`, `core.plugin.views`는 `p
 **릴리스의 event level.** 0.0.x 릴리스는 error event만 저장한다(AGENTS.md, Diagnostic code). 따라서 이 설계의 각 발생은 한 번 분류한다.
 (a) 실패나 거부된 연산은 level `error`의 event다.
 (b) 손실, 건너뜀, 일시 상태, 표시 품질 저하는 event가 아니다. 선언된 status `core.plugin.losses {plugin, abandoned, lateReplies, peerLost}`에 센다. 이것은 선언된 status `core.plugin.views {plugin, surface, responsive, queued}`의 상태이기도 하다. 각 수는 바뀔 때마다 status 구독자에게 알린다. 수는 plugin마다 세며 앱이 끝날 때까지 유지한다. 표면이 닫힐 때 0으로 되돌리지 않는다.
-성능 trace가 켜져 있으면(설정 창의 디버그 switch) 수가 바뀔 때마다 표에 적힌 trace event도 쓴다. 릴리스의 event log는 error event만 저장한다.
+성능 trace가 켜져 있으면(설정 탭의 디버그 switch) 수가 바뀔 때마다 표에 적힌 trace event도 쓴다. 릴리스의 event log는 error event만 저장한다.
 
 코드의 식별자는 여기에 적은 이름을 그대로 쓴다.
 ## 경계 (결합 금지)

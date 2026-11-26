@@ -113,7 +113,7 @@ func TestASidebarWithoutRoomDocksAtTheLargestFittingSize(t *testing.T) {
 }
 
 // TestTheLastWindowSidebarLeavesWhenItsSwitchTurnsOff checks that the sidebar of the only side that is on leaves the plane when its switch
-// turns off (docs/spec/external-sidebars.md#window-controls): an arrangement without any side is not the refused arrangement of an
+// turns off (docs/spec/external-sidebars.md#window-tools): an arrangement without any side is not the refused arrangement of an
 // earlier plane state.
 func TestTheLastWindowSidebarLeavesWhenItsSwitchTurnsOff(t *testing.T) {
 	order := []string{"left", "right", "top", "bottom"}

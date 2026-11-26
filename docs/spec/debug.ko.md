@@ -6,7 +6,7 @@
 
 ## 열기
 
-두 host의 도움말 메뉴에 디버그(Debug)가 있다([host contract](host-contract.ko.md#애플리케이션-메뉴)). 디버그는 애플리케이션 main 창의 메인 page에서 `core.debug.open`을 실행한다. 보기 메뉴의 글자 크기 항목과 같은 창이다([글자 크기](text-size.ko.md)). 화면은 × 버튼(`core.debug.close`)으로 닫는 `dialog` [native modal](native-modals.ko.md)이다. 화면을 열면 설정 modal이 닫히고, 설정 modal을 열면 화면이 닫힌다. 애플리케이션 host가 없는 page에는 디버그 화면이 없고, 거기서 `core.debug.open`은 오류로 실패한다.
+두 host의 도움말 메뉴에 디버그(Debug)가 있다([host contract](host-contract.ko.md#애플리케이션-메뉴)). 디버그는 애플리케이션 main 창의 메인 page에서 `core.debug.open`을 실행한다. 보기 메뉴의 글자 크기 항목과 같은 창이다([글자 크기](text-size.ko.md)). 화면은 × 버튼(`core.debug.close`)으로 닫는 `dialog` [native modal](native-modals.ko.md)이다. 애플리케이션 host가 없는 page에는 디버그 화면이 없고, 거기서 `core.debug.open`은 오류로 실패한다.
 
 열기는 상태를 기록한 뒤 파일을 나열한다.
 

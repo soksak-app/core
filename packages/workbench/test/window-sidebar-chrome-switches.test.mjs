@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { chromeSwitches } from "../window-sidebars.js";
 
-// The window chrome has one switch per side in the fixed order left, right, top, bottom (docs/spec/external-sidebars.md#window-controls).
+// The window chrome has one switch per side in the fixed order left, right, top, bottom (docs/spec/external-sidebars.md#window-tools).
 test("the chrome has a switch for each window side, named for showing its sidebar", () => {
   assert.deepEqual(chromeSwitches(), [
     { side: "left", icon: "panel-left", title: "왼쪽 사이드바 보이기", expose: "core.chrome.left" },

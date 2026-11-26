@@ -82,7 +82,7 @@ func (s *Shell) drawChromeActs(c *ui.Context, browsing bool) {
 	}
 	if !browsing {
 		// The switch of each side shows or hides its window sidebar, in the order left, right, top, bottom
-		// (docs/spec/external-sidebars.md#window-controls).
+		// (docs/spec/external-sidebars.md#window-tools).
 		for _, side := range layout.WindowSides {
 			on, _ := s.settings.Value(side).(bool) // silent: the settings store checks the type of the value.
 			// The switch writes the scope that the applied value comes from (docs/spec/settings.md#scope-of-a-control).

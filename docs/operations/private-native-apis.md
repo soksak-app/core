@@ -179,7 +179,7 @@ Inventory entries describe active or explicitly conditional application paths, n
 
 [`dock_menu.m`](../../native/darwin/src/dock_menu.m) registers the public `NSApplicationDelegate.applicationDockMenu:` callback and an `NSMenu` action for New Window. Neither host exposes Dock-menu registration. The application adds this missing callback with public Objective-C runtime `class_addMethod`; it does not replace the framework delegate or an existing method. Registration fails if the delegate is unavailable or already implements the callback. Wails and Tauri callbacks invoke their existing public window creation APIs outside the AppKit callback. No private selector or framework fork is added.
 
-After a framework update, check whether it supplies this callback or a Dock-menu API. Verify the menu item and creation of a library window, including after closing all windows. This integration concerns application menus, not surface rendering or webview input.
+After a framework update, check whether it supplies this callback or a Dock-menu API. Verify the menu item and creation of a window that shows the project home, including after closing all windows. This integration concerns application menus, not surface rendering or webview input.
 
 ## mygo host
 
@@ -236,7 +236,7 @@ Wails v3.0.0-beta.19 moved its private WebKit calls (webview transparency, the `
 
 Project windows add no private selectors. Public framework APIs create top-level windows and identify the calling window. Public filesystem APIs store settings. The existing private geometry, presentation, pointer, and transparency corrections remain necessary for their stated purposes. Their host state and lifetime now belong to each project window. Native mouse monitors are removed on window closure.
 
-The standalone overlapping-input baseline and registered runs passed after the project-window integration; the library change does not modify that input code. Rebuilt macOS hosts passed 39 example checks with 0 failures and 2 display-transition skips in the library verification. This includes independent project windows, library window reuse, Dock actions, concurrent duplicate opens, modal isolation, fractional rendering, and native input. Application quit saves settings, and startup displays saved projects in the library. [Features](../features.md) records validation and platform limits. Source links identify review locations; a current source declaration does not prove that an installed WebKit build contains the same implementation.
+The standalone overlapping-input baseline and registered runs passed after the project-window integration; the library change does not modify that input code. Rebuilt macOS hosts passed 39 example checks with 0 failures and 2 display-transition skips in the project home verification. This includes independent project windows, project home window reuse, Dock actions, concurrent duplicate opens, modal isolation, fractional rendering, and native input. Application quit saves settings, and startup displays saved projects in the project home. [Features](../features.md) records validation and platform limits. Source links identify review locations; a current source declaration does not prove that an installed WebKit build contains the same implementation.
 
 Prepared Tauri surface-frame reads share one framework main-thread callback. The callback only reads registered native frames and records placement trace data; presentation commits continue through the native main queue outside the Tao event lock. This batching adds no native or private API.
 

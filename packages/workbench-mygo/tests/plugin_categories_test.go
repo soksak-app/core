@@ -230,7 +230,7 @@ func TestAStoredPluginSettingMustNameALoadedPluginOfItsCategory(t *testing.T) {
 }
 
 // The plugin screen shows an enabled plugin that requires a category which no loaded plugin serves with the state requires, which
-// asks for no reload: installing or enabling a plugin of the category and reloading loads it (docs/spec/installation.md#plugin-screen).
+// asks for no reload: installing or enabling a plugin of the category and reloading loads it (docs/spec/installation.md#plugin-states).
 func TestThePluginScreenShowsAPluginThatRequiresAMissingCategoryAsRequires(t *testing.T) {
 	f := categoryShell(t, enabledPlugins("boxprobe", "textprobe"), categoryDocument)
 	type screen struct {

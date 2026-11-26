@@ -24,9 +24,31 @@ Save sizes in `windowSidebars`, keyed by side: `left` and `right` hold `{width}`
 
 A sidebar without a saved size starts at the size of the setting `sidebarWidth` on its axis. The sidebars of a new space take the `width` (left and right) or `height` (top and bottom) of their cards in `environment.json` `workspace.grid`.
 
-## Window controls
+## Window tools
 
-The window chrome has one switch for each side, in the fixed order `left`, `right`, `top`, `bottom`, with the elements `core.chrome.left`, `core.chrome.right`, `core.chrome.top` and `core.chrome.bottom`, the icons `panel-left`, `panel-right`, `panel-top` and `panel-bottom`, and the tooltips 왼쪽 사이드바 보이기, 오른쪽 사이드바 보이기, 위 사이드바 보이기 and 아래 사이드바 보이기. A switch shows the applied value of its side and runs `core.settings.set {patch: {<side>: <the negated applied value>}, scope}` with the scope that the applied value comes from: `project` while the selected project overrides the side, otherwise `common`. So a press changes the value that the switch shows and adds no project value ([scope of a control](settings.md#scope-of-a-control)), and the switch is pressed while the applied value is true. The press applies the value in its own turn: the frame that follows the press draws the plane with the switched sidebar and places its section surfaces, and neither that frame nor its placement waits for the write of the settings, which follows it; the command answers once the host wrote the settings. A window sidebar ends in a status line that names its side and ends in a fold control, `core.sidebar.fold`, which runs `core.settings.set {patch: {<side>: false}, scope}` with the scope that the applied value of its side comes from.
+The title bar row of a window shows only the tools that apply to the screen in front of the window. The screens are the work screen, the settings tab ([settings](settings.md)) and the project home ([project home](projects.md#project-home)):
+
+| Screen in front | Tools, from left to right |
+| --- | --- |
+| Work screen | The four side switches, a separator, and the settings button |
+| Settings tab | None |
+| Project home | The settings button |
+
+The SOKSAK logo is the first element of the row on every screen. It runs `core.projects.browse`, which shows the project home in the window and keeps the current work. The row has no other element: the card auto-arrange button, the light and dark mode switch and the plugin update control are not in the row.
+
+The settings button is the element `core.chrome.settings`. It runs `core.settings.open` and has the tooltip 설정 열기. Each screen has one settings entry, so the settings button is absent while the settings tab is in front.
+
+The work screen title bar has one switch for each side, in the fixed order `left`, `right`, `top`, `bottom`, with the elements `core.chrome.left`, `core.chrome.right`, `core.chrome.top` and `core.chrome.bottom`, the icons `panel-left`, `panel-right`, `panel-top` and `panel-bottom`, and the tooltips 왼쪽 사이드바 보이기, 오른쪽 사이드바 보이기, 위 사이드바 보이기 and 아래 사이드바 보이기. A switch shows the applied value of its side and runs `core.settings.change {key: <side>, value: <the negated applied value>, scope}` with the scope that the applied value comes from: `project` while the selected project overrides the side, otherwise `common`. So a press changes the value that the switch shows and adds no project value ([scope of a control](settings.md#scope-of-a-control)), and the switch is pressed while the applied value is true. The press applies the value in its own turn: the frame that follows the press draws the plane with the switched sidebar and places its section surfaces, and neither that frame nor its placement waits for the write of the settings, which follows it; the command answers once the host wrote the settings.
+
+The window tools declare these elements and commands: the elements `core.chrome.settings`, `core.chrome.left`, `core.chrome.right`, `core.chrome.top`, `core.chrome.bottom`, `core.sidebar.fold` and `core.sidebar.edge`, and the commands `core.settings.open`, `core.settings.change` and `core.projects.browse`.
+
+## Sidebar head and edge
+
+The head of each drawn window sidebar shows the position of its side in the placement order, as the number of the side in `sidebarOrder` counted from 1. While the pointer is over the sidebar or the sidebar has focus, the head also shows a × button. It is the element `core.sidebar.fold`, and it runs `core.settings.change {key: <side>, value: false, scope}` with the scope that the applied value of its side comes from.
+
+A side that is hidden and has a choice shows a button `+ <side>` while the pointer is over its edge, where the sidebar would stand. The side names are 왼쪽, 오른쪽, 위 and 아래. The button runs `core.settings.change {key: <side>, value: true, scope}`, the command of the side switch, with the scope of the side. Its element is `core.sidebar.edge`, which the implementation declares with the button.
+
+The head and the edge carry no order control. The order of the sides changes only in the settings tab, and the placement follows the order as the placement rules above state.
 
 ## Override context and rail border
 

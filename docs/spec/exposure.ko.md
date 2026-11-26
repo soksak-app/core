@@ -94,10 +94,10 @@ view는 넘길 수 있는 행을 view call `runtime.shortcuts.read`로 읽는다
 | `cmd+0` | native menu | core.text.reset | view/text-default | 모든 포커스 |
 | `shift+cmd+n` | native menu | core.window.new | window/new-window | 모든 포커스 |
 | `shift+cmd+n` | workbench | core.window.new | — | host 크롬이 없음(브라우저 빌드) |
-| `cmd+k` | workbench | core.library.search.focus | — | 라이브러리가 보임 |
+| `cmd+k` | workbench | core.home.search.focus | — | 프로젝트 홈 또는 설정 탭의 플러그인 페이지가 보임 |
 | `Enter` | workbench | core.rename.commit | — | 탭 이름 변경 필드에 포커스가 있음 |
 | `Escape` | workbench | core.rename.cancel | — | 탭 이름 변경 필드에 포커스가 있음 |
-| `Enter` | workbench | core.library.form.submit | — | 라이브러리 양식 필드에 포커스가 있음 |
+| `Enter` | workbench | core.home.form.submit | — | 프로젝트 홈 양식 필드에 포커스가 있음 |
 | `Escape` | workbench | core.picker.close | — | 선택 layer가 열려 있음 |
 | `Escape` | workbench | core.modal.dismiss | — | 네이티브 modal 메뉴가 열려 있고 키보드 포커스가 있음 |
 | `Escape` | view | none | — | 플러그인 view가 키보드 포커스를 가짐. view가 키를 직접 처리하며, 넘길 때만 열린 picker의 Escape 명령을 실행한다 |
@@ -105,7 +105,7 @@ view는 넘길 수 있는 행을 view call `runtime.shortcuts.read`로 읽는다
 
 네이티브 modal 메뉴는 mode가 `menu`인 modal web view이며([네이티브 modal](native-modals.ko.md)), Wails host와 Tauri host만 만든다. mygo workbench는 picker를 직접 그리고 키보드를 유지하므로, 그 host에서는 열린 picker의 Escape와 바깥 press가 registry를 거쳐 `core.picker.close`를 실행하고, `core.modal.dismiss`는 키의 답이 아니다.
 
-`core.library.search.focus`는 인자 없이 현재 표시된 library page의 검색 필드에 focus한다. Projects page에서는 `core.library.search`, plugins page에서는 `core.library.plugins.search`를 선택한다. Library가 표시되지 않으면 명시적으로 거부하며 library를 열거나 page를 바꾸지 않는다. Main-page keyboard handler와 전달된 shortcut command는 같은 동작을 사용한다. `core.focus.set`은 이름으로 노출 DOM을 선택하는 일반 명령으로 유지한다.
+`core.home.search.focus`는 인자 없이 현재 표시된 page의 검색 필드에 focus한다. 프로젝트 홈에서는 `core.home.search`, 설정 탭의 플러그인 페이지에서는 `core.settings-tab.plugins.search`를 선택한다. 표시되지 않은 프로젝트 홈이나 플러그인 페이지가 없는 설정 탭은 명시적으로 거부하며, 그 화면을 열거나 page를 바꾸지 않는다. Main-page keyboard handler와 전달된 shortcut command는 같은 동작을 사용한다. `core.focus.set`은 이름으로 노출 DOM을 선택하는 일반 명령으로 유지한다.
 
 ## 키보드 포커스
 
@@ -122,8 +122,8 @@ status `core.focus`는 창의 first responder를 가진 문서에서 키보드 �
 창이 key이고 modal이 열려 있지 않은 동안 focus ring이 있는 card의 active surface가 키보드를 가지며, 둘은 어긋나지 않는다. ring을 옮기거나 그 card의 active surface를 바꾸는 모든 경로는 키보드도 옮긴다. 새 탭, 탭 press, `core.tab.select`, `core.card.focus`, card가 남는 동안 focus된 card의 탭 닫기, 프로젝트 열기, space 복원이 여기에 든다. 각 워크벤치는 ring을 한 함수에서 옮기고, 하나의 host call `surfaceFocus {surface}`([surface의 키보드](native-surfaces.ko.md#surface의-키보드))를 보낸다. 앞선 placement가 호스트에 준 surface는 보이든 숨겨졌든 그것을 보여 주는 placement보다 먼저 호출을 보낸다. 그래서 호스트는 ring을 옮긴 press의 release에서 키보드를 주고, release 뒤의 키는 surface에 전달된다. 호스트가 아직 갖지 않은 surface는 그것을 보여 주는 placement 뒤에 호출을 받아, 준비되는 때에 키보드를 받는다. ring을 옮긴 명령은 그 이동을 보여 주는 placement와, 그 뒤 키보드 호출에 대한 호스트의 응답이 끝난 뒤에 답한다. 그래서 호출자가 응답 뒤에 보낸 키는 surface에 전달된다. surface가 키보드를 가져야 하는 동안 first responder가 워크벤치에 들어오면 surface로 돌아간다. 워크벤치 위 left press의 release는 각각 워크벤치에 decided 호출 `surfaceFocus {surface, decided: true}`를 요청하고, 워크벤치는 press의 handler들이 실행된 뒤, page는 그 release를 dispatch하는 턴에, mygo 워크벤치는 click을 실행하는 pass에, press가 바꾼 것을 반영해 그 호출을 보낸다. 대상이 그대로이거나 워크벤치가 키보드를 가질 때도 보낸다([surface의 키보드](native-surfaces.ko.md#surface의-키보드)). 빈 곳, scroll bar, divider 등 워크벤치의 어떤 element에 대한 press도 press로 센다. 반면 surface가 담지 않는 app의 child web view, 곧 native modal 문서 위의 press는 press로 세지 않는다. 그 문서는 키보드 결정에 응답하지 않으므로 그 release는 결정을 요청하지 않고 어떤 키도 기다리지 않는다.
 
 - modal이 열려 있는 동안 키보드는 modal에 머물고, modal이 닫히면 surface로 돌아간다. 이 규칙에서 [dialog surface](plugins.ko.md#dialogs)는 종류가 `dialog`인 modal이다. 열려 있는 동안 ring이 움직여도 키보드는 움직이지 않고, 닫히면 focus ring을 가진 card의 active surface가 키보드를 받는다.
-- surface가 없는 card(빈 card, 설치되지 않은 플러그인의 placeholder)와 library는 키보드를 워크벤치에 둔다(`surface: null`).
-- 워크벤치의 편집 가능한 element(library 양식 필드, 이름 변경 필드)는 포커스가 있는 동안 키보드를 가진다. [키보드 단축키](#키보드-단축키)에서 그 필드를 조건으로 하는 단축키가 이를 요구하기 때문이다. 필드가 포커스를 잃거나 닫히면 키보드는 surface로 돌아간다.
+- surface가 없는 card(빈 card, 설치되지 않은 플러그인의 placeholder)와 프로젝트 홈은 키보드를 워크벤치에 둔다(`surface: null`).
+- 워크벤치의 편집 가능한 element(프로젝트 홈 양식 필드, 이름 변경 필드)는 포커스가 있는 동안 키보드를 가진다. [키보드 단축키](#키보드-단축키)에서 그 필드를 조건으로 하는 단축키가 이를 요구하기 때문이다. 필드가 포커스를 잃거나 닫히면 키보드는 surface로 돌아간다.
 - 탭 pointer press는 element focus를 남기지 않는다. `Tab` 키는 여전히 탭에 멈추고, 키보드가 워크벤치에 있는 동안 그 멈춤을 유지한다.
 - 사용자가 press한 sidebar의 section view는 키보드를 유지한다. ring이 그 위에 있지 않기 때문이다.
 - ring은 어느 level의 content card에도 서며, group card는 ring을 받지 않는다([group card의 focus](groups.ko.md#focus)).
@@ -144,7 +144,7 @@ status `core.focus`는 창의 first responder를 가진 문서에서 키보드 �
 | `core.workbench.audit` | `{unbound}`: audit이 나열한 워크벤치의 조작 요소([사용자 인터페이스](#사용자-인터페이스)) |
 | `core.error.dismiss` | `{text}` | `null`. workbench의 열린 error toast 가운데 그 문장의 것을 닫는다. 열린 toast가 없는 문장이나 빈 문장은 -32602다. toast는 화면에서 닫히고 오류의 기록은 log에 남는다 |
 | `core.activity` | `{projects, tabs}`: 창이 연 각 project, 그 각 space, content card, group card, 각 tab의 activity로, activity가 있는 것만 나열한다([activity](activity.ko.md#status)) |
-| `core.pointer` | `{sequence, down, up, pressedConnected, click}`: workbench가 받은 마지막 pointer sequence다. press는 `sequence`를 늘리고 나머지 member를 새로 시작한다. `down`, `up`, `click`은 대상을 가리킨다. 대상을 둘러싼 가장 가까운 exposed element의 이름이고, 없으면 tag다. Wails와 Tauri host에서 대상은 page의 element이고 tag는 tag name이다. mygo host에는 tag가 없다. 대상은 마지막 frame의 element tree에서 pointer 위치의 가장 안쪽 element이고, tag는 그 ARIA role이며, tree의 어떤 element도 없는 자리는 `unknown`이고 `pressedConnected`는 `null`이다. 빈 자리에는 document와 workbench 모두 이름을 선언하지 않는다. tab 옆의 space 줄, plane의 여백, control 옆의 library 하단 줄은 여기서 `unknown`이고 page에서는 일반 tag이며, library 본문은 여기서 scroll 영역의 role `region`이고 page에서는 일반 tag다. release는 press와 release를 둘러싼 가장 가까운 element를 click하고, primary button만 click하며, press한 element가 release 전에 workbench를 떠나면 click이 없다. 버튼을 누르는 key나 assistive technology action은 press 없이 `click`을 기록한다. sequence는 workbench와 그것이 그리는 overlay를 다룬다. native view와 native modal은 별개의 document다. 이 값은 관찰을 식별할 뿐 판정에 쓰지 않는다 |
+| `core.pointer` | `{sequence, down, up, pressedConnected, click}`: workbench가 받은 마지막 pointer sequence다. press는 `sequence`를 늘리고 나머지 member를 새로 시작한다. `down`, `up`, `click`은 대상을 가리킨다. 대상을 둘러싼 가장 가까운 exposed element의 이름이고, 없으면 tag다. Wails와 Tauri host에서 대상은 page의 element이고 tag는 tag name이다. mygo host에는 tag가 없다. 대상은 마지막 frame의 element tree에서 pointer 위치의 가장 안쪽 element이고, tag는 그 ARIA role이며, tree의 어떤 element도 없는 자리는 `unknown`이고 `pressedConnected`는 `null`이다. 빈 자리에는 document와 workbench 모두 이름을 선언하지 않는다. tab 옆의 space 줄, plane의 여백, control 옆의 프로젝트 홈 하단 줄은 여기서 `unknown`이고 page에서는 일반 tag이며, 프로젝트 홈 본문은 여기서 scroll 영역의 role `region`이고 page에서는 일반 tag다. release는 press와 release를 둘러싼 가장 가까운 element를 click하고, primary button만 click하며, press한 element가 release 전에 workbench를 떠나면 click이 없다. 버튼을 누르는 key나 assistive technology action은 press 없이 `click`을 기록한다. sequence는 workbench와 그것이 그리는 overlay를 다룬다. native view와 native modal은 별개의 document다. 이 값은 관찰을 식별할 뿐 판정에 쓰지 않는다 |
 
 mygo host에서는 워크벤치의 step이 native window가 닫힌 뒤에 실행될 수 있다. 그런 step의 `core.verify`와 `core.window.workbench` read는 native code를 부르지 않고 워크벤치 오류도 표시하지 않는다. 그 밖의 read 실패는 `core.workbench.error`로 표시한다.
 
@@ -152,18 +152,19 @@ mygo host에서는 워크벤치의 step이 native window가 닫힌 뒤에 실행
 
 ### 오류 표시
 
-사용자에게 표시하는 애플리케이션 실패는 workbench, library, settings, card, sidebar, modal view에서 같은 오류 toast component를 사용한다. 활성 document 또는 native view는 하단 중앙 근처에 작은 floating card로 toast를 표시한다. Layout 공간을 차지하지 않고 기존 focus를 유지하며 닫기 control을 둔다. 자동 닫기 설정을 켜면 열린 toast가 지정한 시간 뒤 만료된다([설정](settings.ko.md#오류-toast)). 다시 그리거나 modal로 옮겨도 표시 시간은 다시 시작하지 않는다. Plugin surface는 선언된 애플리케이션 인터페이스로 작업 실패를 보고하고 host가 같은 component로 표시한다. Terminal program 출력과 document 콘텐츠는 각각의 표시 방식을 유지한다.
+사용자에게 표시하는 애플리케이션 실패는 workbench, 프로젝트 홈, 설정 탭, card, sidebar, modal view에서 같은 오류 toast component를 사용한다. 활성 document 또는 native view는 하단 중앙 근처에 작은 floating card로 toast를 표시한다. Layout 공간을 차지하지 않고 기존 focus를 유지하며 닫기 control을 둔다. 자동 닫기 설정을 켜면 열린 toast가 지정한 시간 뒤 만료된다([설정](settings.ko.md#오류-toast)). 다시 그리거나 modal로 옮겨도 표시 시간은 다시 시작하지 않는다. Plugin surface는 선언된 애플리케이션 인터페이스로 작업 실패를 보고하고 host가 같은 component로 표시한다. Terminal program 출력과 document 콘텐츠는 각각의 표시 방식을 유지한다.
 
-Component는 오류 style과 닫기 동작을 맡는다. 오류를 보고한 작업의 출처는 log, status, 철회에 유지한다. Toast를 닫으면 표시가 닫히고 애플리케이션 log 기록은 남는다. 실패한 작업의 control은 label과 복구 동작을 계속 제공한다. 오류 글은 toast에만 나타난다. card, library card, plugin card, surface 상태 행, placeholder, 설정 행, debug view는 `실패`, `표면 오류`, `열 수 없음` 같은 짧은 상태 label을 muted 색으로 보이고, toast 밖의 어떤 element도 오류 색을 쓰지 않는다.
+Component는 오류 style과 닫기 동작을 맡는다. 오류를 보고한 작업의 출처는 log, status, 철회에 유지한다. Toast를 닫으면 표시가 닫히고 애플리케이션 log 기록은 남는다. 실패한 작업의 control은 label과 복구 동작을 계속 제공한다. 오류 글은 toast에만 나타난다. card, 프로젝트 카드, plugin card, surface 상태 행, placeholder, 설정 행, debug view는 `실패`, `표면 오류`, `열 수 없음` 같은 짧은 상태 label을 muted 색으로 보이고, toast 밖의 어떤 element도 오류 색을 쓰지 않는다.
 
 | 출처 | 표시 소유자 |
 | --- | --- |
 | 시작, workspace 또는 layout 실패 | Workbench view |
-| Library 동작, registry, 설치, 업데이트, project 폴더 또는 미리보기 실패 | Library view |
+| 프로젝트 홈 동작, project 폴더 또는 미리보기 실패 | 프로젝트 홈 |
+| 플러그인 registry, 설치 또는 업데이트 실패 | 설정 탭 |
 | 설정 변경, setup 또는 debug 동작 실패 | 활성 modal document 또는 native modal |
 | Card, tab, sidebar 또는 plugin surface 실패와 읽을 수 없는 plugin 또는 session | Surface를 소유한 workbench view |
 
-활성 view는 전면 focus 범위 안에 toast component를 배치한다. Library와 workbench는 창 경계 안에 toast를 배치한다. Modal은 modal focus 순서 안에 닫기 control을 둔다. 진행 중이거나 복구된 애플리케이션 상태는 자신이 소유한 오류만 제거한다. Tab을 닫으면 그 tab을 가리키는 오류, 곧 tab의 작업 오류, 복원된 session의 오류, 멈춘 surface의 오류, program과 activity 오류를 철회한다. 각 오류가 설명하는 상태가 tab과 함께 끝났기 때문이다. 다른 tab과 workbench의 오류는 유지한다. 한 tab의 tab state나 tab session 쓰기가 실패하면 그것은 그 tab의 그 store의 오류이고, 같은 tab의 같은 store에 대한 다음 쓰기가 성공하면 그 오류를 거둔다. 그 오류가 말하는 실패가 끝났기 때문이다. 계속 유지되는 각 오류 발생에는 안정적인 출처가 있다. 같은 view의 두 출처에 같은 글이 있으면 출처 기록을 각각 유지하며 toast 하나를 공유한다. 글로 닫으면 그 toast가 닫히고 닫힌 오류를 다시 그려도 닫힌 채로 유지된다. 상태가 변하거나 복구된 출처에서 다음 오류가 발생하면 toast를 다시 열 수 있으며 그 오류의 애플리케이션 log 기록을 쓴다.
+활성 view는 전면 focus 범위 안에 toast component를 배치한다. 프로젝트 홈과 workbench는 창 경계 안에 toast를 배치한다. Modal은 modal focus 순서 안에 닫기 control을 둔다. 진행 중이거나 복구된 애플리케이션 상태는 자신이 소유한 오류만 제거한다. Tab을 닫으면 그 tab을 가리키는 오류, 곧 tab의 작업 오류, 복원된 session의 오류, 멈춘 surface의 오류, program과 activity 오류를 철회한다. 각 오류가 설명하는 상태가 tab과 함께 끝났기 때문이다. 다른 tab과 workbench의 오류는 유지한다. 한 tab의 tab state나 tab session 쓰기가 실패하면 그것은 그 tab의 그 store의 오류이고, 같은 tab의 같은 store에 대한 다음 쓰기가 성공하면 그 오류를 거둔다. 그 오류가 말하는 실패가 끝났기 때문이다. 계속 유지되는 각 오류 발생에는 안정적인 출처가 있다. 같은 view의 두 출처에 같은 글이 있으면 출처 기록을 각각 유지하며 toast 하나를 공유한다. 글로 닫으면 그 toast가 닫히고 닫힌 오류를 다시 그려도 닫힌 채로 유지된다. 상태가 변하거나 복구된 출처에서 다음 오류가 발생하면 toast를 다시 열 수 있으며 그 오류의 애플리케이션 log 기록을 쓴다.
 
 ## 등록
 
@@ -294,7 +295,7 @@ window check 는 이것을 쓰지 않는다. check 는 사람의 창 뒤에서 �
 
 | 메서드 | 매개변수 | 결과 |
 | --- | --- | --- |
-| `windows.list` | 없음 | `[{window, title, project, key, ready}]`. `project`는 창에 마지막으로 열린 프로젝트의 루트 디렉터리이며, 창에 열린 프로젝트가 없으면 `null`이다. 창의 마지막 프로젝트를 해제하면 창 제목도 라이브러리 제목으로 돌아간다. `ready`는 창의 메인 페이지가 준비를 알린 뒤 참이고 로드하는 동안 거짓이다. 페이지가 로드 중인 창에 대한 요청은 1003으로 실패한다 |
+| `windows.list` | 없음 | `[{window, title, project, key, ready}]`. `project`는 창에 마지막으로 열린 프로젝트의 루트 디렉터리이며, 창에 열린 프로젝트가 없으면 `null`이다. 창의 마지막 프로젝트를 해제하면 창 제목도 프로젝트 홈의 제목으로 돌아간다. `ready`는 창의 메인 페이지가 준비를 알린 뒤 참이고 로드하는 동안 거짓이다. 페이지가 로드 중인 창에 대한 요청은 1003으로 실패한다 |
 | `log.query` | 질의 매개변수, `window` 없음 | `{rows, next, tail, scanned, rejected}`: 설정 폴더의 event 파일의 event page 하나([endpoint](endpoint.ko.md#log-query), [logging](logging.ko.md#질의)) |
 | `exposure.list` | `{window, owner?}` | `{status, commands, element}`: 코어, 호스트, 로드된 플러그인의 선언 항목을 선언 형식으로 반환한다. 각 항목에 `registered`가 있다. `owner`가 `host`이면 호스트 항목만 반환하며, 호스트가 main page 없이 답하므로 page가 시작하지 않은 동안에도 목록이 나온다. 다른 `owner`는 `exposure.list owner must be host`로 거부한다. `sok command`는 `host.` 명령을 호스트 항목으로 검사한다 |
 | `exposure.snapshot` | `{window, surface?}` | [창 snapshot](#창-snapshot): 창의 모든 선언 항목을 owner와 그것을 등록한 surface로 묶고, 등록된 각 status의 현재 값과 각 element 항목의 element를 함께 담는다 |
@@ -314,7 +315,7 @@ window check 는 이것을 쓰지 않는다. check 는 사람의 창 뒤에서 �
 
 `index`는 0 이상의 정수이며, 타입이 다른 `index`를 준 요청은 -32602로 거부한다.
 
-열린 dialog 는 그 바깥의 모든 element 를 inert 로 만든다. dialog 는 종류가 `dialog` 인 modal, 곧 settings 와 debug view, 또는 [dialog surface](plugins.ko.md#dialogs) 이고, 종류가 `menu` 인 modal 인 picker 는 어떤 element 도 inert 로 만들지 않는다. main page의 error toast는 창의 가장 위 layer이므로 dialog surface 뒤에서 inert가 아니다([toast overlay](native-modals.ko.md#toast-overlay)). inert element 는 layout 을 유지하므로 dialog 가 덮고 있어도 `element.rect` 는 그 사각형을 답하고, 어떤 점이 무엇을 가리키는지는 `host.hit` 이 답한다. inert element 에 대한 `element.act` 는 어느 document 에서든 1010 과 메시지 `element <name> is behind the open dialog and takes no action` 을 돌려준다.
+열린 dialog 는 그 바깥의 모든 element 를 inert 로 만든다. dialog 는 종류가 `dialog` 인 modal, 곧 debug view, 또는 [dialog surface](plugins.ko.md#dialogs) 이고, 종류가 `menu` 인 modal 인 picker 는 어떤 element 도 inert 로 만들지 않는다. main page의 error toast는 창의 가장 위 layer이므로 dialog surface 뒤에서 inert가 아니다([toast overlay](native-modals.ko.md#toast-overlay)). inert element 는 layout 을 유지하므로 dialog 가 덮고 있어도 `element.rect` 는 그 사각형을 답하고, 어떤 점이 무엇을 가리키는지는 `host.hit` 이 답한다. inert element 에 대한 `element.act` 는 어느 document 에서든 1010 과 메시지 `element <name> is behind the open dialog and takes no action` 을 돌려준다.
 
 네이티브 포인터 주입은 pointer와 버튼별로 누름을 받은 뷰를 누름의 창과 함께 유지한다. 포인터가 다른 뷰를 가로질러도 끌기와 뗌을 그 뷰에 전달하며 뗌의 수신 확인은 누름을 받은 문서를 기다린다. 그 창에서 pointer의 일치하는 누름 없는 끌기·뗌, pointer가 같은 버튼을 누른 상태에서의 추가 누름, 제거된 누름 대상 뷰는 명시적 입력 거부를 반환한다. 스크롤과 버튼 없는 이동은 현재 포인터 위치를 사용한다.
 

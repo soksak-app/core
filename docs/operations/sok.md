@@ -6,7 +6,7 @@
 
 ## Run `sok` from a shell
 
-The `Contents/MacOS` folder of each application bundle has the executable of the application and the `sok` executable of that application. Each start of the application reconciles the user PATH registration, which makes the shells of the person find that `sok` on `PATH` without administrator rights; the settings window turns it on and off ([user PATH registration](../spec/cli.md#user-path-registration)). A new shell then finds `sok`, and that `sok` connects to that application and uses its configuration directory. To control an application started with `--config-dir`, give `sok` the same `--config-dir`.
+The `Contents/MacOS` folder of each application bundle has the executable of the application and the `sok` executable of that application. Each start of the application reconciles the user PATH registration, which makes the shells of the person find that `sok` on `PATH` without administrator rights; the settings tab turns it on and off ([user PATH registration](../spec/cli.md#user-path-registration)). A new shell then finds `sok`, and that `sok` connects to that application and uses its configuration directory. To control an application started with `--config-dir`, give `sok` the same `--config-dir`.
 
 ## Control a window
 
