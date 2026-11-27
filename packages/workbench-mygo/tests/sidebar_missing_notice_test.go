@@ -39,7 +39,7 @@ func newSidebarsWithPlugin(t *testing.T, state *string, notices *workbench.Shown
 	binder := workbench.NewBinder(fixture.registry, func(command string, err error) { t.Errorf("%s: %v", command, err) })
 	fixture.sidebars, err = workbench.NewSidebars(workbench.SidebarsOptions{Look: func() (float32, float32) { return 1, 10 }, Declared: declared, Registry: fixture.registry, Binder: binder,
 		Environment: []byte(sidebarsEnvironment), Installed: []byte(sidebarsInstalled), Notices: notices,
-		Plugin: func(string) workbench.PluginLine { return workbench.PluginLine{Name: "gone", State: *state} },
+		Plugin:  func(string) workbench.PluginLine { return workbench.PluginLine{Name: "gone", State: *state} },
 		Changed: func() { fixture.changes++ }, Seat: func(_ *ui.Context, seat workbench.SidebarSeat) { fixture.seats = append(fixture.seats, seat) }})
 	if err != nil {
 		t.Fatal(err)

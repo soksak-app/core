@@ -26,7 +26,7 @@ const (
 
 // ShownErrors records the error of an origin when it appears and holds the error notices that the window displays.
 type ShownErrors struct {
-	report      func(line string)
+	report func(line string)
 	// focusOf returns the card that has the focus; a card sidebar's notice shows no toast while that card has the focus.
 	focusOf     func() string
 	occurrences map[errorOrigin]string
