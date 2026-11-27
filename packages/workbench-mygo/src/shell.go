@@ -726,20 +726,27 @@ func (s *Shell) shortcutConditions() map[string]func() bool {
 	// The home has no form field focus of its own: while its form is open, the field takes the keys of the form.
 	formOpen := func() bool { return s.inHome() && s.home.formMode != "" }
 	noForm := func() bool { return s.inHome() && s.home.formMode == "" }
+	rowSelected := func() bool { return noForm() && len(s.homeRows()) > 0 }
+	// The side keys hold on the work screen while no text input has focus, which keeps the letters for its typing.
+	work := func() bool { return !s.inHome() && !s.textFocused }
 	return map[string]func() bool{
 		"No host chrome (browser build)": never,
 		"The project home is shown":      home,
 		"The project home is shown and no form field has focus; the command gets step -1":        noForm,
 		"The project home is shown and no form field has focus; the command gets step 1":         noForm,
 		"The project home search field holds a non-empty query; the command gets an empty query": func() bool { return home() && s.home.query != "" },
-		"The tab rename field has focus":                                           never,
-		"A project home form field has focus":                                      formOpen,
-		"The project home is shown, a row is selected and no form field has focus": func() bool { return noForm() && len(s.homeRows()) > 0 },
-		"A picker layer is open":                                                   never,
-		"The work screen is shown and no text input has focus":                     func() bool { return !s.inHome() && !s.textFocused },
-		"The notice center is open":                                                func() bool { return s.errors.noticeOpen },
-		"The toast list is open; the command gets open false":                      func() bool { return s.errors.toastListOpen },
-		"A native modal menu is open and has keyboard focus":                       never,
+		"The tab rename field has focus":                                                                        never,
+		"A project home form field has focus":                                                                   formOpen,
+		"The project home is shown, a row is selected and no form field has focus":                              rowSelected,
+		"The project home is shown, a row is selected and no form field has focus; the command gets answer ask": rowSelected,
+		"A picker layer is open":                                                                                never,
+		"The work screen is shown and no text input has focus; the command gets side left":                      work,
+		"The work screen is shown and no text input has focus; the command gets side right":                     work,
+		"The work screen is shown and no text input has focus; the command gets side top":                       work,
+		"The work screen is shown and no text input has focus; the command gets side bottom":                    work,
+		"The notice center is open":                                                                             func() bool { return s.errors.noticeOpen },
+		"The toast list is open; the command gets open false":                                                   func() bool { return s.errors.toastListOpen },
+		"A native modal menu is open and has keyboard focus":                                                    never,
 	}
 }
 

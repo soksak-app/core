@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1254: shortcuts.json의 mygo copy가 다시 source와 같고, mygo 조건 map이 F1242가 side key와 cmd+Backspace에 준 매개변수 글을 가리키며, side-key 테스트가 명세의 글을 기대한다.
 - F1217-7-2-3-1: 가져오기 폼이 복제 중 git의 출력 줄을 각각 보인다. 호스트는 각 줄을 호출을 보낸 창에 이벤트 project-clone {line}으로 보낸다.
 - F1236-4: plugin item struct의 Badge field 정렬을 gofmt 형식으로 고쳐 Go 소스가 다시 gofmt 형식이다.
 - F1239-6: window의 모든 ⚙는 title bar ⚙의 크기와 stroke로 그린 설정 icon이다. web과 mygo 모두.

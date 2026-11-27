@@ -19,7 +19,8 @@ test("the shortcut table holds one row of core.sidebar.toggle for each side, wit
     const row = shortcutTable.shortcuts.find((entry) => entry.key === key && entry.owner === "workbench");
     assert.equal(row?.command, "core.sidebar.toggle", `the workbench row ${key} does not name core.sidebar.toggle`);
     assert.deepEqual(row.params, { side }, `the workbench row ${key} does not pass the side ${side}`);
-    assert.equal(row.when, "The work screen is shown and no text input has focus", `the workbench row ${key} has another condition`);
+    // The When column of docs/spec/exposure.md#keyboard-shortcuts states the parameter of a row with parameters.
+    assert.equal(row.when, `The work screen is shown and no text input has focus; the command gets side ${side}`, `the workbench row ${key} has another condition`);
   }
 });
 
